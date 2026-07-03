@@ -1,0 +1,47 @@
+# ── Dependencies ─────────────────────────────────────────────
+# Restored with `npm install`; never committed.
+node_modules/
+
+# ── Build output ─────────────────────────────────────────────
+# Vite build; regenerate with `npm run build`.
+# NOTE: if you ever want to version a shippable build, remove this line.
+dist/
+dist-ssr/
+*.tsbuildinfo
+
+# ── Game saves ───────────────────────────────────────────────
+# Personal runtime state that changes every session. Ignored so
+# your play history doesn't bloat the repo. To keep ONE sample
+# save on purpose:  git add -f saves/save_0.json
+saves/
+
+# ── Claude Code local settings ───────────────────────────────
+# Machine-specific paths/permissions — do not share.
+.claude/settings.local.json
+
+# ── Claude Code scratch / one-off verification scripts ───────
+# Created at the project root during debugging. Anchored to root
+# with a leading slash so nothing inside src/ is affected.
+/*_verify.*
+/*_probe.*
+/*_repro.*
+/colossus_*
+
+# ── Environment / secrets ────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ── Editor / OS junk ─────────────────────────────────────────
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.sw?

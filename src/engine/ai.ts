@@ -1,0 +1,1717 @@
+// ---------------------------------------------------------------------------
+// AI RUNTIME — drives monsters AND player minions through the same skill
+// pipeline the player uses. Conduct is DATA (see brain.ts): a BrainDef bundles
+// orthogonal axes (move / target / perception / skillUse / morale / squad) and
+// three machines (HP-ladder phases, the script FSM, condition rules). The 13
+// classic archetypes are presets expressed in that vocabulary.
+//
+// Each tick, an actor resolves its EFFECTIVE tuning (base ← ladder phase ←
+// script phase ← active rules ← impulse), then runs the pipeline:
+//
+//   gates → machines → morale → reserves → orders → perception/threat →
+//   idle life (heel, patrol, formation, wander) → squad gates → the
+//   movement KERNEL (which owns the cast/move interleave, like the old
+//   brains did — kernels are a REGISTRY, extensible by packages).
+//
+// All of it reads skills' `ai` hints from data, so any catalog skill works
+// on any brain with zero AI changes.
+// ---------------------------------------------------------------------------
+
+import { angleDiff, angleTo, dist, rand, vec, type Vec2 } from '../core/math';
+import { MONSTERS } from '../data/monsters';
+import { mod } from './stats';
+import type { Actor } from './actor';
+import {
+  alertScale, ARCHETYPES, evalCondition, mergeTuning, normalizeBrain, tuningOf,
+  type AICtx, type BrainDef, type BrainTuning, type MoveSpec,
+  type NormalizedBrain, type PhaseCadence, type SkillPolicy,
+} from './brain';
+import { runAIActions } from './aiActions';
+import type { SkillInstance } from './skills';
+import type { World } from './world';
+
+/** Tags whose actor stays NEUTRAL — no targeting, movement, or casting — until a
+ *  wounding strike ROUSES it (World.resolveHit sets the per-actor aiAwakened latch).
+ *  ONE registry so a new neutral (Conclave cultists, Migration herds, the Holdfast
+ *  toll-wardens) is a data entry here, not another hardcoded `if (tag === …)` branch. */
+export const DORMANT_TAGS = new Set<string>(['ritual_cultist', 'migrant', 'toll_bandit', 'brigand']);
+
+/** A roused neutral COOLS BACK to dormant after disengagement. */
+export interface NeutralResetRule {
+  /** Seconds out of combat (no hit dealt OR taken) before it may re-dormant. */
+  coolDownSecs: number;
+  /** ...AND the nearest live player must be beyond this distance (you must RETREAT). */
+  disengageDist: number;
+}
+/** LEASH-RECALL tunables: when a heeling minion is stuck or hopelessly far,
+ *  it teleports home instead of perpetually locking its reservation away. */
+const RECALL = {
+  /** "No progress" = moved less than this since the window started. */
+  stuckEps: 30,
+  /** Seconds of no progress before the port. */
+  stuckAfter: 3.0,
+  /** Beyond this distance from the owner, port immediately. */
+  hardDist: 2200,
+  /** Per-minion re-port cooldown. */
+  cooldown: 5,
+};
+
+/** Returns true when the minion was just recalled (skip normal heeling). */
+function updateRecall(actor: Actor, world: World, dt: number): boolean {
+  const owner = actor.owner;
+  if (!owner || MONSTERS[actor.defId ?? '']?.noRecall) return false;
+  actor.recallTimer -= dt;
+  const port = (): boolean => {
+    if (actor.recallTimer > 0) return false;
+    actor.recallTimer = RECALL.cooldown;
+    actor.lastProgress = undefined;
+    const ang = rand(0, Math.PI * 2);
+    world.teleportActor(actor, vec(
+      owner.pos.x + Math.cos(ang) * 50, owner.pos.y + Math.sin(ang) * 50), '#b8a0e0');
+    return true;
+  };
+  if (dist(actor.pos, owner.pos) > RECALL.hardDist) return port();
+  const lp = actor.lastProgress;
+  if (!lp) {
+    actor.lastProgress = { x: actor.pos.x, y: actor.pos.y, at: world.time };
+    return false;
+  }
+  if (Math.hypot(actor.pos.x - lp.x, actor.pos.y - lp.y) >= RECALL.stuckEps) {
+    actor.lastProgress = { x: actor.pos.x, y: actor.pos.y, at: world.time };
+    return false;
+  }
+  if (world.time - lp.at >= RECALL.stuckAfter) return port();
+  return false;
+}
+
+/** Per-tag rouse-RESET rules (World.updateNeutralCooldown reads these generically). A
+ *  DORMANT_TAGS tag ABSENT here NEVER cools down — latched-once (a betrayed ritual
+ *  cultist never forgives). The toll wardens / migration herd / brigands lose interest
+ *  if you back off without a fight — their aim is profit / passage, not slaughter. */
+export const NEUTRAL_RESET: Record<string, NeutralResetRule> = {
+  toll_bandit: { coolDownSecs: 8, disengageDist: 360 }, // wardens settle back to the gate (parley re-opens)
+  migrant: { coolDownSecs: 6, disengageDist: 320 },     // the herd calms and resumes the march
+  brigand: { coolDownSecs: 7, disengageDist: 420 },     // the band loses interest if you outrun them (must exceed aggroRadius)
+  // ritual_cultist intentionally omitted — a roused cultist stays hostile.
+};
+
+/** Default frontal sight-cone width (degrees) and rear-hearing fraction of
+ *  detection range — PerceptionSpec / MonsterDef.vision override per monster. */
+const VISION_ARC_DEG = 150;
+const VISION_REAR_MUL = 0.35;
+/** How hard stealth charges shroud their bearer (× detection reach). */
+const STEALTH_DETECT_MUL = 0.35;
+/** Brainless actors run the plain approach-and-attack bundle. */
+const DEFAULT_BRAIN: BrainDef = {};
+
+// === THE PIPELINE ==============================================================
+
+export function updateAI(actor: Actor, world: World, dt: number): void {
+  // Skip ANY player seat (the local hero AND co-op allies) — they're driven by
+  // World.applyInputs (OS / scripted / remote intent), never the monster brain.
+  if (actor.dead || world.seatOf(actor)) return;
+  // Constructs (decoys included) act through the world, not the brain.
+  if (actor.construct) return;
+  // Scenery doesn't scheme: barrels, caches and townsfolk hold still.
+  if (actor.passive) return;
+  // DRIVEN actors (the caravan cart) are wheeled by an event tick, not a brain.
+  if (actor.defId && MONSTERS[actor.defId]?.driven) return;
+  // NEUTRAL-until-roused (Conclave cultists chanting in place, Migration herds ambling
+  // through — wheeled by World.updateMigrants — and the Holdfast toll-wardens holding
+  // the gate): dormant until a wounding hit sets aiAwakened (World.resolveHit). Per-
+  // actor + tag-keyed (DORMANT_TAGS), so only the provoked one wakes and its kin hold,
+  // and it's inert to every other actor. Once roused it falls through to its own brain.
+  if (actor.tag && DORMANT_TAGS.has(actor.tag) && !actor.aiAwakened) return;
+
+  // An armed fuse burns down no matter what else is happening.
+  if (actor.fuse !== undefined) {
+    actor.fuse -= dt;
+    if (actor.fuse <= 0) {
+      actor.fuse = undefined;
+      world.kill(actor); // a real death: xp, and the explodeOnDeath payload
+    }
+    return;
+  }
+  if (actor.leap) return; // airborne
+
+  // The spawn ANCHOR: stamped on the first tick (the PLACED position), so
+  // arena-relative choreography (teleport-to-anchor, anchored rings) has a home.
+  actor.aiAnchor ??= vec(actor.pos.x, actor.pos.y);
+
+  // WARD WATCHER (the add-gate): the moment no live actor carries the ward
+  // tag, the ward SHATTERS — targetable again, with the promised announce.
+  if (actor.aiWardTag && !world.actors.some(x => !x.dead && x.tag === actor.aiWardTag)) {
+    actor.untargetable = false;
+    if (actor.aiWardNote) {
+      world.text(vec(actor.pos.x, actor.pos.y - 50), actor.aiWardNote, '#ffd060', 20);
+    }
+    world.flashes.push({
+      pos: vec(actor.pos.x, actor.pos.y), radius: 170,
+      color: '#ffd060', life: 0.7, maxLife: 0.7,
+    });
+    actor.aiWardTag = undefined;
+    actor.aiWardNote = undefined;
+  }
+
+  // Resolve the EFFECTIVE tuning this tick and run the machines (ladder,
+  // script, rules, impulses) — phase transitions, cadences and rule actions
+  // all fire in here.
+  const norm = normalizeBrain(actor.brain ?? DEFAULT_BRAIN);
+  const tuning = resolveMachines(actor, world, norm);
+
+  // Threat is a LEDGER, not a grudge: entries melt while unfed.
+  if (actor.threat.size) {
+    const decay = tuning.target?.threat?.decay ?? 0.08;
+    for (const [id, v] of actor.threat) {
+      const left = v * (1 - decay * dt);
+      if (left < 0.5) actor.threat.delete(id); else actor.threat.set(id, left);
+    }
+  }
+
+  // TEMPO bookkeeping: stamp this tick's kite spec (the retreat gate reads
+  // it), and let the wind RECOVER while the actor isn't backpedaling.
+  actor.aiKiteSpec = tuning.tempo?.kite !== undefined
+    ? { kite: tuning.tempo.kite, windedFor: tuning.tempo.windedFor }
+    : undefined;
+  if (actor.aiKiteAcc > 0 && world.time - actor.aiLastRetreatAt > 0.15) {
+    actor.aiKiteAcc = Math.max(0, actor.aiKiteAcc - dt * 0.6);
+  }
+  // The movement DUTY CYCLE: locomotion breathes in bursts with dead stops
+  // between (animal hesitation, human repositioning). A paused entity still
+  // CASTS — the pause is your window, not its disarmament.
+  let tempoPaused = false;
+  const tp = tuning.tempo;
+  if (tp?.moveFor && tp.pauseFor) {
+    if (world.time >= actor.aiTempoUntil) {
+      actor.aiTempoPaused = !actor.aiTempoPaused;
+      const win = actor.aiTempoPaused ? tp.pauseFor : tp.moveFor;
+      actor.aiTempoUntil = world.time + rand(win[0], win[1]);
+    }
+    tempoPaused = actor.aiTempoPaused;
+  }
+
+  // A flee is a TRANSIENT retreat (the flag) OR a whole disposition (the
+  // 'flee' archetype: roused calves bolting down the herd's march line) —
+  // either way it overrides everything until the actor escapes, then it
+  // FIGHTS in the next zone.
+  if (actor.aiFleeing || tuning.type === 'flee') return fleeStep(actor, world, dt);
+
+  // MORALE: a broken actor routs — no casts, no schemes, just distance.
+  if (updateMorale(actor, world, tuning, dt)) return;
+
+  // MENDER PRE-PASS + RESERVES: an ally-targeted kit piece (clerics, spirit
+  // menders) outranks the fight, and policy-reserved skills fire the moment
+  // their condition holds. Actors without either fall through instantly.
+  if (tryReserves(actor, world, tuning)) return;
+
+  // COMMANDED minions (Attack!): march on the mark, fight what holds it.
+  // The order clears on arrival or expiry; an enemy at blade's length
+  // overrides the march (they fight their way there, not through walls
+  // of teeth). Player-owned only — wild monsters take no orders.
+  if (actor.owner && actor.aiCommandPos && actor.aiCommandUntil > world.time) {
+    const goal = actor.aiCommandPos;
+    if (dist(actor.pos, goal) < 70) {
+      actor.aiCommandPos = undefined;
+    } else {
+      const engaged = world.enemiesOf(actor)
+        .some(e => !e.passive && dist(e.pos, actor.pos) < 120);
+      if (!engaged) {
+        actor.facing = angleTo(actor.pos, goal);
+        moveToward(actor, world, goal, dt);
+        return;
+      }
+    }
+  } else if (actor.aiCommandPos && actor.aiCommandUntil <= world.time) {
+    actor.aiCommandPos = undefined;
+  }
+
+  // ---- PERCEPTION → the threat chart → a target --------------------------
+  let { target, d: best } = acquireTarget(actor, world, tuning);
+
+  // LEASH (TargetSpec.leash): guardians give up the marathon. Beyond the
+  // tether they drop the lock and walk home (with hysteresis, so the edge
+  // reads as straining at the chain, not flip-flop) — mending en route when
+  // the data says so.
+  const leash = tuning.target?.leash;
+  if (leash && actor.aiAnchor && !actor.isMinion()) {
+    const dHome = dist(actor.pos, actor.aiAnchor);
+    if (actor.aiPhase === 'leash_home') {
+      if (dHome < leash.radius * 0.55) {
+        actor.aiPhase = '';
+      } else {
+        if (leash.heal) actor.healBy(actor.maxLife() * dt * 0.25);
+        actor.facing = angleTo(actor.pos, actor.aiAnchor);
+        moveToward(actor, world, actor.aiAnchor, dt);
+        return;
+      }
+    } else if (dHome > leash.radius) {
+      actor.aiPhase = 'leash_home';
+      actor.aiTargetId = undefined;
+      actor.aggroed = false;
+      actor.threat.clear();
+      actor.facing = angleTo(actor.pos, actor.aiAnchor);
+      moveToward(actor, world, actor.aiAnchor, dt);
+      return;
+    }
+  }
+
+  // Minions with nothing to fight heel back to their owner. Guard-stance
+  // minions (Meat Shield) keep a SHORT leash — they disengage anything that
+  // would drag them off their master's flank.
+  if (!target || (actor.isMinion() && best > (actor.guardMode ? 260 : 700))) {
+    if (actor.owner && dist(actor.pos, actor.owner.pos) > 90) {
+      // LEASH RECALL: a minion that can't make progress home (snagged on
+      // terrain) or fell impossibly far behind TELEPORTS to its owner —
+      // a reserved golem must never rot in a wall. Safe by construction:
+      // this branch only runs with NO target, and an armed bomber fuse
+      // early-returns long before the heel.
+      if (actor.isMinion() && updateRecall(actor, world, dt)) return;
+      actor.facing = angleTo(actor.pos, actor.owner.pos);
+      moveToward(actor, world, actor.owner.pos, dt);
+    }
+    if (!target) {
+      // Idle stalkers fade back into their shroud.
+      if (tuning.move?.shroud) setShroud(actor, true);
+      // ALERTED but blind: stalk toward where the blow came from, searching.
+      if (world.time < actor.alertUntil && actor.alertFrom && !actor.isMinion()) {
+        if (dist(actor.pos, actor.alertFrom) > 40) {
+          actor.facing = angleTo(actor.pos, actor.alertFrom);
+          moveToward(actor, world, actor.alertFrom, dt);
+        } else {
+          actor.alertFrom = null; // arrived — nothing here; back to the watch
+        }
+        return;
+      }
+      // PATROL: route-followers march their loop, camp to camp, until they
+      // sight a foe (then they fall through to their brain and fight).
+      if (actor.patrolRoute && actor.patrolRoute.length >= 2) {
+        const node = actor.patrolRoute[actor.patrolIdx ?? 0];
+        if (dist(actor.pos, node) < 40) {
+          actor.patrolIdx = ((actor.patrolIdx ?? 0) + 1) % actor.patrolRoute.length;
+        }
+        actor.facing = angleTo(actor.pos, node);
+        moveToward(actor, world, node, dt); // a full march, not the idle stroll
+        return;
+      }
+      // Patrol rank-and-file heel to their leader — in FORMATION when the
+      // squad drills one (ring / line / wedge / column / loose).
+      if (actor.patrolFollow !== undefined) {
+        const lead = world.actorById(actor.patrolFollow);
+        if (lead && !lead.dead) {
+          const post = formationPost(actor, world, lead, tuning) ?? lead.pos;
+          if (dist(actor.pos, post) > (tuning.squad?.formation ? 24 : 60)) {
+            actor.facing = angleTo(actor.pos, post);
+            moveToward(actor, world, post, dt);
+          }
+        }
+        return;
+      }
+      // Squad IDLE DEMEANOR: how the group carries itself with no foe in
+      // sight — the militant drill, the lackadaisical amble with stragglers,
+      // the idol-circling vigil, the stable stand/wander mix. Consumes the
+      // tick when the demeanor moved (or deliberately stilled) this member.
+      if (squadIdle(actor, world, tuning, dt)) return;
+      // Idle WANDER: the zone lives whether or not you're watching.
+      if (!actor.isMinion()) {
+        actor.aiTimer -= dt;
+        if (actor.aiTimer <= 0) {
+          actor.aiTimer = rand(1.5, 4.5);
+          actor.wanderDir = Math.random() < 0.35 ? undefined : rand(0, Math.PI * 2);
+        }
+        if (actor.wanderDir !== undefined) {
+          actor.facing = actor.wanderDir;
+          // a stroll, not a march
+          world.moveActor(actor, Math.cos(actor.wanderDir), Math.sin(actor.wanderDir), dt * 0.35);
+        }
+      }
+      return;
+    }
+    // A minion whose only prey sits BEYOND its leash heels and lets it go —
+    // it does not tug two ways at once (the v1 double-move quirk, retired).
+    return;
+  }
+  actor.wanderDir = undefined; // combat focuses the mind
+
+  // A stalker that swapped to an unshrouded style de-cloaks.
+  if (!tuning.move?.shroud && actor.aiShrouded) setShroud(actor, false);
+
+  actor.facing = angleTo(actor.pos, target.pos);
+
+  // FUSE ARMING: ordnance arms at range regardless of archetype — the bomber
+  // preset carries the defaults; ANY brain can declare fuseRange and become
+  // a walking bomb.
+  const fuseActive = tuning.type === 'bomber' || norm.fuseRange !== undefined;
+  if (fuseActive) {
+    const trigger = (norm.fuseRange ?? 50) + actor.radius + target.radius;
+    if (best <= trigger) {
+      actor.fuse = norm.fuseTime ?? 0.7;
+      world.text(vec(actor.pos.x, actor.pos.y - 14), '!!', '#ff5050', 16);
+      return;
+    }
+  }
+
+  // ---- SQUAD GATES ---------------------------------------------------------
+  const squad = tuning.squad;
+  if (squad && target) {
+    // Focus fire: the rank-and-file adopt the leader's prey.
+    if (squad.focusLeader && !actor.squadLeader && actor.squadId !== undefined) {
+      const lead = world.actors.find(x =>
+        !x.dead && x.squadId === actor.squadId && x.squadLeader);
+      const lt = lead?.aiTargetId !== undefined ? world.actorById(lead.aiTargetId) : undefined;
+      if (lt && !lt.dead && !lt.passive && lt.team !== actor.team
+        && lt.sheet.get('invisible') <= 0) {
+        target = lt;
+        best = dist(actor.pos, target.pos);
+        actor.aiTargetId = lt.id;
+        actor.facing = angleTo(actor.pos, target.pos);
+      }
+    }
+    // MUSTER: hold the prowl ring until the band has numbers (blood up
+    // commits early). Squadless muster counts nearby KIN, like the old
+    // pack brain, so summoned hunters still coordinate.
+    if (squad.muster) {
+      const m = squad.muster;
+      let engaged = 0;
+      for (const a of world.actors) {
+        if (a.dead || a.team !== actor.team) continue;
+        if (actor.squadId !== undefined
+          ? a.squadId !== actor.squadId
+          : (a.faction !== actor.faction || a === actor)) continue;
+        if (dist(a.pos, target.pos) < m.radius) engaged++;
+      }
+      if (actor.squadId === undefined) engaged++; // self, kin-counted implicitly above otherwise
+      const bloodied = actor.life < actor.maxLife() * (m.bloodiedAt ?? 0.9);
+      if (engaged < m.count && !bloodied) {
+        // not yet: prowl a wide circle around the prey — and no casting;
+        // a waiting wolf doesn't spend its teeth.
+        runKernel('prowl', makeCtx(actor, world, target, best, dt, tuning, norm, true, tempoPaused));
+        return;
+      }
+    }
+    // ENGAGE TOKENS: only so many blades in the target's face at once; the
+    // unlucky orbit the ring, casting what reaches, until a slot frees.
+    if (squad.tokens && actor.squadId !== undefined
+      && !world.requestEngage(actor, target.id, squad.tokens)) {
+      const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused);
+      ctx.spec = { ...ctx.spec, style: 'orbit', ring: Math.max(190, standoff(actor).desired + 90) };
+      runKernel('orbit', ctx);
+      return;
+    }
+  }
+
+  // ---- THE KERNEL: cast/move interleave, per style ---------------------------
+  const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused);
+  runKernel(ctx.spec.style, ctx);
+}
+
+// === MACHINES ==================================================================
+// Ladder phases (v1, kept one-way), the script FSM (re-entrant, goto-driven),
+// rules (condition→behavior), impulses (periodic sugar) — resolved into ONE
+// effective tuning per tick; scripted beats fire from in here.
+
+function aiCtxOf(world: World): AICtx {
+  return {
+    time: world.time,
+    actors: world.actors,
+    lineOfSight: (a, b) => world.lineOfSight(vec(a.x, a.y), vec(b.x, b.y)),
+  };
+}
+
+function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): BrainTuning {
+  const t = world.time;
+  const lastTarget = actor.aiTargetId !== undefined
+    ? (world.actorById(actor.aiTargetId) ?? null) : null;
+  const ctx = aiCtxOf(world);
+  const layers: (BrainTuning | undefined)[] = [norm.base];
+
+  // --- the CYCLE: a strict looping duty cycle of tunings --------------------
+  // "Hold off, rush, hold off" — exact alternation on rolled windows, never
+  // drifting. Beneath phases/rules, so sharper machines override it.
+  if (norm.cycle && norm.cycle.length) {
+    if (actor.aiCycleAt === 0) {
+      actor.aiCycleIdx = 0;
+      actor.aiCycleAt = t + rand(norm.cycle[0].for[0], norm.cycle[0].for[1]);
+    } else if (t >= actor.aiCycleAt) {
+      actor.aiCycleIdx = (actor.aiCycleIdx + 1) % norm.cycle.length;
+      const step = norm.cycle[actor.aiCycleIdx];
+      actor.aiCycleAt = t + rand(step.for[0], step.for[1]);
+    }
+    layers.push(norm.cycle[actor.aiCycleIdx % norm.cycle.length].use);
+  }
+
+  // --- the HP LADDER (v1): one-way, deepest-entered wins -------------------
+  if (!norm.script && norm.phases && norm.phases.length) {
+    const frac = actor.life / Math.max(1, actor.maxLife());
+    let deepest = -1;
+    for (let i = 0; i < norm.phases.length; i++) if (frac <= norm.phases[i].atLifeFrac) deepest = i;
+    if (deepest > actor.aiPhaseIdx) {
+      actor.aiPhaseIdx = deepest;
+      const ph = norm.phases[deepest];
+      actor.sheet.setSource('aiPhase', ph.mods ?? []);
+      world.onBrainPhaseEnter(actor, ph); // sets aiFleeing for flee phases
+      if (ph.onEnter) runAIActions(world, actor, ph.onEnter, lastTarget);
+      resetCadences(actor, ph.cadences, t);
+    }
+    const phase = actor.aiPhaseIdx >= 0 ? norm.phases[actor.aiPhaseIdx] : undefined;
+    if (phase) {
+      tickCadences(actor, world, phase.cadences, lastTarget);
+      layers.push(phase.use ?? (phase.type ? { type: phase.type } : undefined));
+    }
+  }
+
+  // --- the SCRIPT FSM: explicit goto transitions, re-entrant phases ---------
+  if (norm.script && norm.script.length) {
+    if (actor.aiScriptIdx < 0) {
+      enterScriptPhase(actor, world, norm, 0, lastTarget);
+    } else {
+      const cur = norm.script[actor.aiScriptIdx];
+      for (const g of cur.goto ?? []) {
+        if (g.atLifeFrac !== undefined
+          && actor.life / Math.max(1, actor.maxLife()) > g.atLifeFrac) continue;
+        if (g.after !== undefined && t - actor.aiPhaseAt < g.after) continue;
+        if (g.tagCleared !== undefined
+          && world.actors.some(x => !x.dead && x.tag === g.tagCleared)) continue;
+        if (g.when !== undefined && !evalCondition(g.when, actor, lastTarget, ctx)) continue;
+        if (g.when?.chance !== undefined && Math.random() >= g.when.chance) continue;
+        const to = typeof g.to === 'number'
+          ? g.to : norm.script.findIndex(p => p.id === g.to);
+        if (to >= 0 && to < norm.script.length) {
+          if (cur.onExit) runAIActions(world, actor, cur.onExit, lastTarget);
+          enterScriptPhase(actor, world, norm, to, lastTarget);
+        }
+        break;
+      }
+    }
+    const cur = norm.script[actor.aiScriptIdx];
+    if (cur) {
+      tickCadences(actor, world, cur.cadences, lastTarget);
+      layers.push(cur.use);
+    }
+  }
+
+  // --- RULES: the condition→behavior DSL ------------------------------------
+  if (norm.rules.length) {
+    const states = actor.aiRuleState ??= [];
+    for (let i = 0; i < norm.rules.length; i++) {
+      const rule = norm.rules[i];
+      const st = states[i] ??= { until: 0, readyAt: 0, fired: false };
+      let active: boolean;
+      if (rule.once && st.fired) {
+        // A fired once-rule LATCHES its overrides forever (the enrage that
+        // never cools) — its actions never repeat.
+        active = !!rule.use;
+      } else {
+        const holdActive = st.until > t;
+        const level = evalCondition(rule.when, actor, lastTarget, ctx);
+        // Plain rules are LEVEL-triggered (active while true); hold/every
+        // rules are WINDOW-triggered (active only inside their hold).
+        active = holdActive || (!rule.every && !rule.hold && level);
+        if (level && !holdActive && t >= st.readyAt) {
+          if (rule.when.chance === undefined || Math.random() < rule.when.chance) {
+            st.fired = true;
+            const hold = rule.hold ? rand(rule.hold[0], rule.hold[1]) : 0;
+            st.until = t + hold;
+            st.readyAt = rule.every
+              ? st.until + rand(rule.every[0], rule.every[1])
+              : t + (rule.cooldown ?? 1);
+            if (rule.announce) {
+              world.text(vec(actor.pos.x, actor.pos.y - 20), rule.announce, '#e8d44a', 13);
+            }
+            if (rule.actions) runAIActions(world, actor, rule.actions, lastTarget);
+            if (hold > 0) active = true;
+          } else {
+            st.readyAt = t + (rule.cooldown ?? 1); // failed the roll: try again later
+          }
+        }
+      }
+      if (active && rule.use) layers.push(rule.use);
+    }
+  }
+
+  // --- IMPULSES (v1 sugar): periodic archetype bursts ------------------------
+  if (norm.impulses && norm.impulses.length && !actor.aiFleeing) {
+    if (actor.aiImpulseType && t >= actor.aiImpulseUntil) actor.aiImpulseType = undefined;
+    if (!actor.aiImpulseType && t >= actor.aiImpulseNext) {
+      const imp = norm.impulses[Math.floor(Math.random() * norm.impulses.length)];
+      actor.aiImpulseType = imp.type;
+      actor.aiImpulseUntil = t + rand(imp.duration[0], imp.duration[1]);
+      actor.aiImpulseNext = actor.aiImpulseUntil + rand(imp.every[0], imp.every[1]);
+      if (imp.announce) world.text(vec(actor.pos.x, actor.pos.y - 20), imp.announce, '#e8d44a', 13);
+    }
+  } else if (actor.aiImpulseType) {
+    actor.aiImpulseType = undefined; // a flee cancels any active impulse
+  }
+  if (actor.aiImpulseType) layers.push({ type: actor.aiImpulseType });
+
+  // Resolve each layer's preset (its `type`) into axes, then merge in order.
+  return mergeTuning(...layers.map(l => (l ? tuningOf(l) : undefined)));
+}
+
+function enterScriptPhase(
+  actor: Actor, world: World, norm: NormalizedBrain, idx: number, lastTarget: Actor | null,
+): void {
+  const ph = norm.script![idx];
+  actor.aiScriptIdx = idx;
+  actor.aiPhaseAt = world.time;
+  actor.sheet.setSource('aiPhase', ph.mods ?? []);
+  if (ph.announce) world.text(vec(actor.pos.x, actor.pos.y - 26), ph.announce, '#ffd700', 16);
+  if (ph.rewardGems) for (let i = 0; i < ph.rewardGems; i++) world.dropGemAt(actor.pos);
+  if (ph.onEnter) runAIActions(world, actor, ph.onEnter, lastTarget);
+  resetCadences(actor, ph.cadences, world.time);
+}
+
+function resetCadences(actor: Actor, cadences: PhaseCadence[] | undefined, t: number): void {
+  actor.aiCadenceAt = cadences?.map(c => t + (c.first ?? c.every) + rand(0, c.jitter ?? 0));
+}
+
+function tickCadences(
+  actor: Actor, world: World, cadences: PhaseCadence[] | undefined, lastTarget: Actor | null,
+): void {
+  if (!cadences || !actor.aiCadenceAt) return;
+  for (let i = 0; i < cadences.length && i < actor.aiCadenceAt.length; i++) {
+    if (world.time < actor.aiCadenceAt[i]) continue;
+    actor.aiCadenceAt[i] = world.time + cadences[i].every
+      + rand(-(cadences[i].jitter ?? 0), cadences[i].jitter ?? 0);
+    runAIActions(world, actor, cadences[i].actions, lastTarget);
+  }
+}
+
+// === MORALE ====================================================================
+
+/** Whether it dares. Returns true while ROUTING (the tick is consumed: run). */
+function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
+  const m = tuning.morale;
+  /** The nearest thing worth fleeing: enemies normally; for the SKITTISH,
+   *  ANY non-kin body counts — a hare doesn't check allegiances. */
+  const nearestThreat = (): Vec2 | null => {
+    let from: Vec2 | null = null;
+    let bd = Infinity;
+    if (m?.skittish) {
+      for (const a of world.actors) {
+        if (a === actor || a.dead || a.passive || a.construct || a.untargetable) continue;
+        if (a.defId === actor.defId) continue; // kin don't spook kin
+        if (actor.squadId !== undefined && a.squadId === actor.squadId) continue;
+        if (a.sheet.get('invisible') > 0) continue;
+        const d = dist(actor.pos, a.pos);
+        if (d < bd) { bd = d; from = a.pos; }
+      }
+      return from ?? actor.aiLastSeen ?? null;
+    }
+    for (const e of world.enemiesOf(actor)) {
+      if (e.passive || e.sheet.get('invisible') > 0) continue;
+      const d = dist(actor.pos, e.pos);
+      if (d < bd) { bd = d; from = e.pos; }
+    }
+    return from ?? actor.aiLastSeen ?? null;
+  };
+  const rout = (): boolean => {
+    // Run from the nearest visible threat (memory of the last target serves
+    // when nothing is in sight — panic doesn't reason). JUKE-movers flee in
+    // hooks and freezes (the hare's flight); everyone else runs straight.
+    const from = nearestThreat();
+    if (from) {
+      if (tuning.move?.style === 'juke') {
+        jukeAway(actor, world, from, dt, tuning.move);
+      } else {
+        actor.facing = angleTo(actor.pos, from);
+        moveAway(actor, world, from, dt);
+      }
+    }
+    return true;
+  };
+  if (actor.aiMoraleUntil > world.time) return rout();
+  if (!m || (m.breakAtLife === undefined && !m.breakOutnumbered && !m.skittish)) return false;
+  // SKITTISH: anything non-kin inside the bubble is reason enough to bolt.
+  if (m.skittish) {
+    for (const a of world.actors) {
+      if (a === actor || a.dead || a.passive || a.construct || a.untargetable) continue;
+      if (a.defId === actor.defId) continue;
+      if (actor.squadId !== undefined && a.squadId === actor.squadId) continue;
+      if (a.sheet.get('invisible') > 0) continue;
+      if (dist(actor.pos, a.pos) > m.skittish.radius) continue;
+      const dur = m.skittish.duration ?? [1.2, 2.2];
+      actor.aiMoraleUntil = world.time + rand(dur[0], dur[1]);
+      return rout();
+    }
+  }
+  // Courage holds while the squad leader stands close.
+  if (m.boldNearLeader && actor.squadId !== undefined && !actor.squadLeader) {
+    const lead = world.actors.find(x =>
+      !x.dead && x.squadId === actor.squadId && x.squadLeader);
+    if (lead && dist(actor.pos, lead.pos) <= m.boldNearLeader) return false;
+  }
+  let breaks = false;
+  if (m.breakAtLife !== undefined) {
+    const frac = actor.life / Math.max(1, actor.maxLife());
+    if (frac >= m.breakAtLife) {
+      actor.aiMoraleBroke = false; // recovered above the line: courage re-arms
+    } else if (!actor.aiMoraleBroke) {
+      // ONE rout per crossing — a coward that already ran and is still
+      // cornered turns desperate rather than fleeing forever.
+      actor.aiMoraleBroke = true;
+      breaks = true;
+    }
+  }
+  if (!breaks && m.breakOutnumbered) {
+    const { deficit, radius } = m.breakOutnumbered;
+    let foes = 0, friends = 0;
+    for (const a of world.actors) {
+      if (a.dead || a.passive || a.construct) continue;
+      if (dist(a.pos, actor.pos) > radius) continue;
+      if (a.team === actor.team) friends++; else foes++;
+    }
+    if (foes - friends >= deficit) breaks = true;
+  }
+  if (!breaks) return false;
+  actor.aiMoraleUntil = world.time + (m.rallyAfter ?? 3);
+  world.text(vec(actor.pos.x, actor.pos.y - 18), '!!', '#e8d44a', 14);
+  return rout();
+}
+
+// === PERCEPTION & THE THREAT CHART =============================================
+
+/** Score a candidate — bigger is better; all scores are positive so kind
+ *  bias and stickiness compose multiplicatively. */
+function scoreTarget(
+  prefer: NonNullable<import('./brain').TargetSpec['prefer']>,
+  actor: Actor, e: Actor, d: number,
+): number {
+  switch (prefer) {
+    case 'nearest': return 1 / (d + 24);
+    case 'farthest': return d + 1;
+    case 'highestThreat': return (actor.threat.get(e.id) ?? 0) + 1 / (d + 24);
+    case 'lowestLife': return (1 - e.life / Math.max(1, e.maxLife())) + 0.05 / (d + 24);
+    case 'highestLife': return e.life / Math.max(1, e.maxLife()) + 0.05 / (d + 24);
+    case 'random': {
+      // Stable per-pair pseudo-random: preference without per-tick thrash.
+      const h = Math.sin(actor.id * 374761.393 + e.id * 668265.263) * 43758.5453;
+      return 0.1 + (h - Math.floor(h));
+    }
+  }
+}
+
+function acquireTarget(
+  actor: Actor, world: World, tuning: BrainTuning,
+): { target: Actor | null; d: number } {
+  // Sight is a CONE: full detection range inside the frontal arc, a short
+  // all-around HEARING radius behind it — so flanking and backstabs are real
+  // tactics, not wishes. Stealth charges SHROUD their bearer hard on top;
+  // `invisible` removes them entirely. An ALERTED actor (struck from the
+  // shadows, or its kin was) watches all around at heightened range instead.
+  const per = tuning.perception;
+  // ATTENTION SPAN (dim brains): the lock LAPSES — forget the target and
+  // stumble into a short daze. A landed hit since the daze began snaps the
+  // actor out of it (pain is a great teacher, briefly).
+  if (per?.attentionSpan && actor.aiTargetId !== undefined
+    && world.time >= actor.aiAttendUntil) {
+    actor.aiTargetId = undefined;
+    actor.aggroed = false;
+    actor.aiDazeFrom = world.time;
+    actor.aiDazeUntil = world.time + rand(1.5, 3);
+  }
+  if (actor.aiDazeUntil > world.time && actor.lastCombatAt >= actor.aiDazeFrom) {
+    actor.aiDazeUntil = 0; // re-stimulated: the haze lifts
+  }
+  const dazed = actor.aiDazeUntil > world.time;
+  let detect = actor.sheet.get('detectionRange') * (tuning.target?.detectMul ?? 1);
+  if (tuning.target?.relentless && actor.aggroed) detect = Infinity;
+  // The daze is a HARD lapse — the thread is gone even with the quarry at
+  // arm's length; only pain (the re-stimulation above) or its passing
+  // restores the eyes. Walk on; it has forgotten you.
+  if (dazed) detect = 0;
+  const vis = actor.defId ? MONSTERS[actor.defId]?.vision : undefined;
+  const arcHalf = ((per?.arcDeg ?? vis?.arcDeg ?? VISION_ARC_DEG) * Math.PI / 180) / 2;
+  const rearMul = per?.rearMul ?? vis?.rearMul ?? VISION_REAR_MUL;
+  const alerted = world.time < actor.alertUntil;
+  const prefer = tuning.target?.prefer ?? 'nearest';
+  const bias = tuning.target?.kindBias;
+
+  let target: Actor | null = null;
+  let bestScore = -Infinity;
+  let bestD = Infinity;
+  let current: Actor | null = null;
+  let currentScore = 0;
+  let currentD = 0;
+  let tauntTarget: Actor | null = null;
+  let tauntBest = Infinity;
+  for (const e of world.enemiesOf(actor)) {
+    if (e.sheet.get('invisible') > 0) continue;
+    // Scenery is not prey: nobody dedicates their life to a barrel,
+    // and the townsfolk are not on the menu.
+    if (e.passive) continue;
+    const d = dist(actor.pos, e.pos);
+    let reach = detect * e.sheet.get('detectability');
+    if ((e.charges.get('stealth') ?? 0) > 0) reach *= STEALTH_DETECT_MUL;
+    if (alerted) reach *= 1.5;
+    else if (Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) > arcHalf) reach *= rearMul;
+    if (d > reach) continue;
+    if (e.taunt && d < tauntBest) { tauntBest = d; tauntTarget = e; }
+    let score = scoreTarget(prefer, actor, e, d);
+    if (bias) score *= bias[e.kind ?? 'monster'] ?? 1;
+    if (e.id === actor.aiTargetId) { current = e; currentScore = score; currentD = d; }
+    if (score > bestScore) { bestScore = score; target = e; bestD = d; }
+  }
+  // STICKINESS: a challenger must beat the held lock by the margin, or the
+  // lock holds (taunts still override below).
+  const stick = tuning.target?.stickiness ?? 1;
+  if (current && target && target !== current && bestScore <= currentScore * stick) {
+    target = current;
+    bestD = currentD;
+  }
+  if (tauntTarget && !tuning.target?.ignoreTaunt) { target = tauntTarget; bestD = tauntBest; }
+  if (target && tuning.target?.relentless) actor.aggroed = true;
+  // Fighting resets the leash-recall stuck window — a stationary brawl must
+  // never read as "snagged on terrain" the moment it ends.
+  if (target) actor.lastProgress = undefined;
+
+  if (target) {
+    if (actor.aiTargetId === undefined) {
+      // A FRESH engagement (openers key off it) — and the sentry's CALLOUT:
+      // kin within the shout radius go on alert toward the prey.
+      if (actor.aiEngagedAt < 0
+        || world.time - Math.max(actor.lastCombatAt, actor.aiEngagedAt) > 8) {
+        actor.aiEngagedAt = world.time;
+      }
+      // Dim brains roll how long this lock can HOLD their attention.
+      if (per?.attentionSpan) {
+        actor.aiAttendUntil = world.time + rand(per.attentionSpan[0], per.attentionSpan[1]);
+      }
+      const shout = tuning.perception?.alertShout;
+      if (shout) {
+        for (const a of world.actors) {
+          if (a.dead || a === actor || a.team !== actor.team || a.passive || a.construct) continue;
+          if (dist(a.pos, actor.pos) > shout) continue;
+          a.alertUntil = Math.max(a.alertUntil, world.time + 5 * alertScale(a));
+          a.alertFrom ??= vec(target.pos.x, target.pos.y);
+        }
+      }
+    }
+    actor.aiTargetId = target.id;
+    actor.aiLastSeen = vec(target.pos.x, target.pos.y);
+  } else if (actor.aiTargetId !== undefined) {
+    // LOST the lock: with perception memory, stalk the last-seen position
+    // (rides the alert-investigate walk); without, shrug back to the watch.
+    actor.aiTargetId = undefined;
+    const memory = tuning.perception?.memory ?? 0;
+    if (memory > 0 && actor.aiLastSeen && !actor.isMinion()) {
+      actor.alertUntil = Math.max(actor.alertUntil, world.time + memory);
+      actor.alertFrom = vec(actor.aiLastSeen.x, actor.aiLastSeen.y);
+    }
+  }
+  return { target, d: bestD };
+}
+
+// === SKILL POLICY ===============================================================
+
+/** Weighted / priority / rotation pick among usable skills (in range, off
+ *  cooldown, affordable), honoring openers, combos, reserves, and the
+ *  commander's support range. */
+function pickSkill(
+  actor: Actor, world: World, best: number, tuning: BrainTuning,
+): SkillInstance | null {
+  if (actor.aiCooldown > 0 || !actor.canAct()) return null;
+  const policy: SkillPolicy = tuning.skillUse ?? {};
+  const reserved = policy.reserve?.length
+    ? new Set(policy.reserve.map(r => r.skill)) : undefined;
+  const rangeOf = (s: SkillInstance): number => {
+    if (policy.supportRange) {
+      const support = s.def.tags.includes('buff') || s.def.delivery.type === 'summon';
+      if (support) return Math.max(s.def.ai!.range, policy.supportRange);
+    }
+    return s.def.ai!.range;
+  };
+  const usable = actor.skills.filter((s): s is SkillInstance =>
+    !!s && !!s.def.ai && !reserved?.has(s.def.id)
+    && actor.canUse(s) && best <= rangeOf(s)
+    && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id)));
+  if (!usable.length) return null;
+  // OPENER: the first cast of a fresh engagement, when it reaches.
+  if (policy.opener && (!actor.aiLastSkill || actor.aiLastSkill.at < actor.aiEngagedAt)) {
+    const open = usable.find(s => s.def.id === policy.opener);
+    if (open) return open;
+  }
+  // COMBOS: a landed `after` begs its `then` within the window.
+  const last = actor.aiLastSkill;
+  if (policy.combos && last) {
+    for (const c of policy.combos) {
+      if (c.after !== last.id || world.time - last.at > (c.window ?? 4)) continue;
+      const then = usable.find(s => s.def.id === c.then);
+      if (then) return then;
+    }
+  }
+  if (policy.mode === 'priority' && policy.order) {
+    for (const id of policy.order) {
+      const s = usable.find(u => u.def.id === id);
+      if (s) return s;
+    }
+    return null;
+  }
+  if (policy.mode === 'rotation' && policy.order?.length) {
+    const order = policy.order;
+    for (let k = 0; k < order.length; k++) {
+      const idx = (actor.aiRotIdx + k) % order.length;
+      const s = usable.find(u => u.def.id === order[idx]);
+      if (s) { actor.aiRotIdx = idx + 1; return s; }
+    }
+    return null;
+  }
+  // WEIGHTED (the default): each skill's declared ai.weight.
+  let totalWeight = 0;
+  for (const s of usable) totalWeight += s.def.ai!.weight;
+  let roll = rand(0, totalWeight);
+  for (const s of usable) {
+    roll -= s.def.ai!.weight;
+    if (roll <= 0) return s;
+  }
+  return usable[usable.length - 1];
+}
+
+function useOn(
+  actor: Actor, world: World, inst: SkillInstance, target: Actor, tuning?: BrainTuning,
+): void {
+  world.useSkill(actor, inst, target.pos);
+  const cad = tuning?.skillUse?.cadence ?? [0.15, 0.4];
+  actor.aiCooldown = rand(cad[0], cad[1]);
+  actor.aiLastSkill = { id: inst.def.id, at: world.time };
+}
+
+/** The healer's instinct + policy RESERVES. Ally-targeted kit pieces mend the
+ *  most wounded friend in reach (below 85%) before any fighting; reserved
+ *  skills fire the moment their declared condition holds. Returns true when
+ *  a cast was made this tick. */
+function tryReserves(actor: Actor, world: World, tuning: BrainTuning): boolean {
+  if (actor.aiCooldown > 0 || !actor.canAct()) return false;
+  const reserves = tuning.skillUse?.reserve;
+  const reservedIds = reserves?.length ? new Set(reserves.map(r => r.skill)) : undefined;
+  // Policy reserves first — the sharper intent wins.
+  if (reserves) {
+    const ctx = aiCtxOf(world);
+    const lastTarget = actor.aiTargetId !== undefined
+      ? (world.actorById(actor.aiTargetId) ?? null) : null;
+    for (const r of reserves) {
+      const inst = actor.skills.find(s => s?.def.id === r.skill);
+      if (!inst?.def.ai || !actor.canUse(inst)) continue;
+      if (!evalCondition(r.when, actor, lastTarget, ctx)) continue;
+      if (r.when.chance !== undefined && Math.random() >= r.when.chance) continue;
+      if (inst.def.targeting?.target === 'ally') {
+        const sick = mostWoundedAlly(actor, world, inst, 1.01); // any ally in reach
+        if (!sick) continue;
+        useOn(actor, world, inst, sick, tuning);
+        return true;
+      }
+      if (lastTarget && !lastTarget.dead
+        && dist(actor.pos, lastTarget.pos) <= inst.def.ai.range) {
+        useOn(actor, world, inst, lastTarget, tuning);
+        return true;
+      }
+      // Self-shaped skills (novas, buffs, guards) fire in place.
+      if (inst.def.tags.includes('buff') || inst.def.delivery.type === 'nova'
+        || inst.def.delivery.type === 'aura') {
+        useOn(actor, world, inst, actor, tuning);
+        return true;
+      }
+    }
+  }
+  // The generic mender pre-pass: any ally-targeted skill NOT explicitly
+  // reserved mends the most wounded friend below 85% — owner included.
+  for (const s of actor.skills) {
+    if (!s?.def.ai || s.def.targeting?.target !== 'ally') continue;
+    if (reservedIds?.has(s.def.id)) continue;
+    if (!actor.canUse(s)) continue;
+    const sick = mostWoundedAlly(actor, world, s, 0.85);
+    if (!sick) continue;
+    useOn(actor, world, s, sick, tuning);
+    return true;
+  }
+  return false;
+}
+
+function mostWoundedAlly(
+  actor: Actor, world: World, inst: SkillInstance, below: number,
+): Actor | null {
+  const reach = inst.def.targeting?.castRange ?? inst.def.ai!.range;
+  let sick: Actor | null = null;
+  let worst = below;
+  for (const a of world.actors) {
+    if (a.dead || a === actor || a.team !== actor.team
+      || a.construct || a.untargetable) continue;
+    if (dist(actor.pos, a.pos) > reach) continue;
+    const frac = a.life / Math.max(1, a.maxLife());
+    if (frac < worst) { worst = frac; sick = a; }
+  }
+  return sick;
+}
+
+// === SHARED MOVEMENT HELPERS =====================================================
+
+function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt: number): void {
+  // NON-CONVEX zones (Phase 2): steer toward the next cell along the walkable
+  // flow-field instead of straight at the target — so melee routes through tunnels
+  // and around gaps instead of jamming a wall. NULL walk (plains + every existing
+  // zone) keeps the original straight-line steer (zero behaviour change).
+  let goal = to;
+  if (world.walk?.pathStep) {
+    const step = world.walk.pathStep(actor.pos, to);
+    if (step) goal = step;
+  }
+  let dx = goal.x - actor.pos.x, dy = goal.y - actor.pos.y;
+  // Worms slither: the approach weaves side to side.
+  if (actor.worm) {
+    const wob = Math.sin(world.time * 4 + actor.id * 1.3) * 0.55;
+    const cos = Math.cos(wob), sin = Math.sin(wob);
+    [dx, dy] = [dx * cos - dy * sin, dx * sin + dy * cos];
+  }
+  world.moveActor(actor, dx, dy, dt);
+}
+
+/** THE RETREAT GATE: every backpedal flows through here. A WINDED actor
+ *  (kite budget spent — TempoSpec.kite) cannot retreat at all until the
+ *  breath returns; otherwise the retreat runs AND drains the budget. This
+ *  is what turns kiters from an exercise in futility into a rhythm: chase,
+ *  wind them, capitalize. Returns true when movement actually happened. */
+function retreatMove(actor: Actor, world: World, dx: number, dy: number, dt: number): boolean {
+  if (actor.aiWindedUntil > world.time) return false; // the legs gave out
+  const ks = actor.aiKiteSpec;
+  if (ks && dt > 0) {
+    actor.aiKiteAcc += dt;
+    actor.aiLastRetreatAt = world.time;
+    if (actor.aiKiteAcc >= ks.kite) {
+      actor.aiKiteAcc = 0;
+      const w = ks.windedFor ?? [1.0, 1.6];
+      actor.aiWindedUntil = world.time + rand(w[0], w[1]);
+      world.text(vec(actor.pos.x, actor.pos.y - 16), 'winded!', '#e8d44a', 12);
+      return false;
+    }
+  }
+  world.moveActor(actor, dx, dy, dt);
+  return true;
+}
+
+function moveAway(actor: Actor, world: World, from: { x: number; y: number }, dt: number): void {
+  retreatMove(actor, world, actor.pos.x - from.x, actor.pos.y - from.y, dt);
+}
+
+/** The thrown-off-the-scent flight: run FROM a point while HOOKING the
+ *  bearing at random beats — sometimes freezing dead for a blink — so
+ *  pursuit is theater instead of a solved straight line. Shares the retreat
+ *  gate: juking prey TIRES, pants, and can be caught (which is what makes a
+ *  faster-than-you creature fair). Used by the 'juke' kernel in combat and
+ *  by the morale rout when the mover's style is 'juke'. */
+function jukeAway(
+  actor: Actor, world: World, from: { x: number; y: number }, dt: number, spec: MoveSpec,
+): void {
+  const t = world.time;
+  if (actor.aiWindedUntil > t) return;       // panting — the catch window
+  if (t < actor.aiJukeFreezeUntil) return;   // frozen mid-flight
+  if (t >= actor.aiJukeAt) {
+    const he = spec.hookEvery ?? [0.35, 0.8];
+    actor.aiJukeAt = t + rand(he[0], he[1]);
+    if (Math.random() < (spec.freezeChance ?? 0.18)) {
+      const fz = spec.freeze ?? [0.2, 0.5];
+      actor.aiJukeFreezeUntil = t + rand(fz[0], fz[1]);
+      return;
+    }
+    const arc = spec.hookArc ?? 1.2;
+    actor.aiJukeAng = rand(-arc, arc);
+  }
+  const ang = angleTo(from, actor.pos) + actor.aiJukeAng;
+  if (retreatMove(actor, world, Math.cos(ang), Math.sin(ang), dt)) {
+    actor.facing = ang; // it looks where it runs, not over its shoulder
+  }
+}
+
+/**
+ * The standoff distance the actor's KIT asks for: kiters honor their
+ * largest keepDistance; everyone else closes to their SHORTEST-range
+ * skill — a warden whose Shield Up rests still walks in to Cleave.
+ */
+function standoff(actor: Actor): { keep: number; desired: number } {
+  let keep = 0;
+  let minRange = Infinity;
+  for (const s of actor.skills) {
+    if (!s?.def.ai) continue;
+    keep = Math.max(keep, s.def.ai.keepDistance ?? 0);
+    minRange = Math.min(minRange, s.def.ai.range);
+  }
+  if (minRange === Infinity) minRange = 40;
+  return { keep, desired: keep > 0 ? keep : Math.max(20, minRange * 0.8) };
+}
+
+function setShroud(actor: Actor, on: boolean): void {
+  actor.aiShrouded = on;
+  actor.sheet.setSource('shroud', on ? [mod('invisible', 'flat', 1)] : []);
+}
+
+/** FLEE: bolt for the exit chosen when the flee phase opened (the world set the
+ *  goal + the speed/damage-reduction mods). On arrival the world removes the
+ *  actor from the zone (and, for the Hunt beast, migrates it to the next zone
+ *  with its health preserved). */
+function fleeStep(actor: Actor, world: World, dt: number): void {
+  const goal = actor.aiFleeGoal;
+  if (!goal) return; // the world assigns it when the flee phase opens
+  actor.facing = angleTo(actor.pos, goal);
+  moveToward(actor, world, goal, dt);
+  if (dist(actor.pos, goal) < 70) world.onFleeArrive(actor);
+}
+
+/** The blocked-lane strafe: circle the blocker, biased toward the target so
+ *  the arc eventually rounds the corner; flip direction if it isn't working.
+ *  Returns true while the lane is blocked (the tick is consumed). */
+function losStrafe(ctx: KernelCtx): boolean {
+  const { a, world, target, dt } = ctx;
+  // IMPLICIT LOS-seek in GRID zones for kits with ANY projectile: once masonry
+  // can stop shots (rampart walls), a basic-brained shooter must reposition
+  // instead of dumping arrows into a wall forever. Mixed kits strafe too — a
+  // blocked archer-with-a-dagger rounding the corner beats one idling at the
+  // wall (LOS regained exits the strafe instantly, so the melee answer still
+  // fires the moment the lane opens). Pure-melee kits keep their old conduct;
+  // data losSeek behaves exactly as before; convex zones (no grid) untouched.
+  const implicit = !ctx.spec.losSeek && !!world.walk
+    && a.skills.some(s => s?.def.delivery.type === 'projectile');
+  if (!ctx.spec.losSeek && !implicit) return false;
+  if (world.lineOfSight(a.pos, target.pos)) {
+    a.aiLosTimer = rand(1.4, 2.2); // LOS regained: reset the patience clock
+    return false;
+  }
+  // The strafe patience clock lives on ITS OWN field — a.aiTimer is owned by
+  // the kernels' phase machines (slideCast's slide/withdraw), and stomping it
+  // on every LOS-clear tick froze strafers solid after their first cast.
+  if (a.aiSign === 0) a.aiSign = Math.random() < 0.5 ? 1 : -1;
+  a.aiLosTimer -= dt;
+  if (a.aiLosTimer <= 0) {
+    a.aiSign = -a.aiSign;
+    a.aiLosTimer = rand(1.4, 2.2);
+  }
+  const ang = angleTo(a.pos, target.pos) + a.aiSign * 1.15;
+  moveToward(a, world, vec(
+    a.pos.x + Math.cos(ang) * 80 + (target.pos.x - a.pos.x) * 0.15,
+    a.pos.y + Math.sin(ang) * 80 + (target.pos.y - a.pos.y) * 0.15), dt);
+  return true;
+}
+
+/** The SURROUND slot: squadmates fan their approach bearings around the prey
+ *  instead of forming a conga line. Stable world-absolute slots by member
+ *  order, so the ring doesn't churn. */
+function surroundGoal(actor: Actor, world: World, target: Actor, ring: number): Vec2 {
+  const mates: number[] = [];
+  for (const a of world.actors) {
+    if (!a.dead && a.squadId === actor.squadId) mates.push(a.id);
+  }
+  mates.sort((x, y) => x - y);
+  const i = Math.max(0, mates.indexOf(actor.id));
+  const n = Math.max(1, mates.length);
+  const ang = (i / n) * Math.PI * 2;
+  return vec(target.pos.x + Math.cos(ang) * ring, target.pos.y + Math.sin(ang) * ring);
+}
+
+/** Stable per-actor pseudo-random in [0,1) — demeanor rolls that never
+ *  reshuffle frame to frame. */
+function stableRoll(id: number, salt: number): number {
+  const h = Math.sin(id * 127.1 + salt * 311.7) * 43758.5453;
+  return h - Math.floor(h);
+}
+
+/** SQUAD IDLE DEMEANOR (SquadSpec.idle): the group's out-of-combat carriage.
+ *  Returns true when it consumed this member's idle tick (moved it into
+ *  place, or deliberately stilled it); false lets the generic wander run. */
+function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
+  const sq = tuning.squad;
+  if (!sq || actor.squadId === undefined) return false;
+  // Legacy sugar: a formation with no idle spec drills (the old behavior).
+  const style = sq.idle?.style ?? (sq.formation ? 'drill' : undefined);
+  if (!style || style === 'wander') return false;
+  const spacing = sq.spacing ?? 46;
+  if (actor.squadLeader) {
+    // The IDOL stands its ground; drill/loose leaders wander normally and
+    // the band dresses on them.
+    return style === 'circle';
+  }
+  const lead = world.actors.find(x =>
+    !x.dead && x.squadId === actor.squadId && x.squadLeader);
+  if (!lead) return false;
+  switch (style) {
+    case 'drill': {
+      // The militant column: tight posts, full march to keep them.
+      const post = formationPost(actor, world, lead, tuning, 'column') ?? lead.pos;
+      if (dist(actor.pos, post) > 24) {
+        actor.facing = angleTo(actor.pos, post);
+        moveToward(actor, world, post, dt);
+      } else {
+        actor.facing = lead.facing; // dressed: face the line of march
+      }
+      return true;
+    }
+    case 'loose': {
+      // The lackadaisical amble: a wide slack bubble, STRAGGLERS wider
+      // still — members only bestir themselves when truly left behind,
+      // and inside the bubble they mill about (the generic wander).
+      const straggler = stableRoll(actor.id, 3.7) < (sq.idle?.stragglerChance ?? 0.35);
+      const slack = spacing * (straggler ? 5 : 2.6);
+      const d = dist(actor.pos, lead.pos);
+      if (d > slack * 1.7) {
+        actor.facing = angleTo(actor.pos, lead.pos);
+        moveToward(actor, world, lead.pos, dt); // the catch-up jog
+        return true;
+      }
+      if (d > slack) {
+        actor.facing = angleTo(actor.pos, lead.pos);
+        world.moveActor(actor,
+          lead.pos.x - actor.pos.x, lead.pos.y - actor.pos.y, dt * 0.4); // the amble
+        return true;
+      }
+      return false; // close enough: mill about
+    }
+    case 'circle': {
+      // The vigil: a slow orbit around the standing idol.
+      if (actor.aiSign === 0) actor.aiSign = Math.random() < 0.5 ? 1 : -1;
+      const ring = sq.idle?.ring ?? spacing * 2.4;
+      const d = dist(actor.pos, lead.pos);
+      const toMe = angleTo(lead.pos, actor.pos);
+      const tangent = toMe + actor.aiSign * (Math.PI / 2);
+      const radial = d > ring * 1.2 ? -0.9 : d < ring * 0.8 ? 0.9 : 0;
+      world.moveActor(actor,
+        Math.cos(tangent) + Math.cos(toMe) * radial,
+        Math.sin(tangent) + Math.sin(toMe) * radial, dt * 0.35);
+      actor.facing = angleTo(actor.pos, lead.pos); // eyes on the idol
+      return true;
+    }
+    case 'mixed':
+      // A stable split: some stand vigil where they are, some drift.
+      return stableRoll(actor.id, 9.13) < 0.5;
+  }
+  return false;
+}
+
+/** A follower's drilled post relative to its leader (null = no formation).
+ *  `fallback` names the shape when the squad drills but declares none. */
+function formationPost(
+  actor: Actor, world: World, lead: Actor, tuning: BrainTuning,
+  fallback?: 'ring' | 'line' | 'wedge' | 'column' | 'loose',
+): Vec2 | null {
+  const f = tuning.squad?.formation ?? fallback;
+  if (!f) return null;
+  const spacing = tuning.squad?.spacing ?? 46;
+  const mates: number[] = [];
+  for (const a of world.actors) {
+    if (!a.dead && a.squadId === actor.squadId && !a.squadLeader) mates.push(a.id);
+  }
+  mates.sort((x, y) => x - y);
+  const i = Math.max(0, mates.indexOf(actor.id));
+  const n = Math.max(1, mates.length);
+  const fx = Math.cos(lead.facing), fy = Math.sin(lead.facing);
+  const px = -fy, py = fx; // perpendicular
+  switch (f) {
+    case 'ring': {
+      const ang = (i / n) * Math.PI * 2;
+      const r = Math.max(spacing * 1.4, spacing * n * 0.35);
+      return vec(lead.pos.x + Math.cos(ang) * r, lead.pos.y + Math.sin(ang) * r);
+    }
+    case 'line': {
+      const off = (i - (n - 1) / 2) * spacing;
+      return vec(lead.pos.x + px * off - fx * spacing, lead.pos.y + py * off - fy * spacing);
+    }
+    case 'wedge': {
+      const row = Math.floor(i / 2) + 1;
+      const side = i % 2 === 0 ? 1 : -1;
+      return vec(
+        lead.pos.x - fx * row * spacing + px * side * row * spacing * 0.8,
+        lead.pos.y - fy * row * spacing + py * side * row * spacing * 0.8);
+    }
+    case 'column':
+      return vec(lead.pos.x - fx * (i + 1) * spacing, lead.pos.y - fy * (i + 1) * spacing);
+    case 'loose': {
+      // Stable per-member jitter around the leader — a rabble, not a drill.
+      const h = Math.sin(actor.id * 127.1) * 43758.5453;
+      const j = h - Math.floor(h);
+      const ang = j * Math.PI * 2;
+      const r = spacing * (1 + j * 1.6);
+      return vec(lead.pos.x + Math.cos(ang) * r, lead.pos.y + Math.sin(ang) * r);
+    }
+  }
+}
+
+// === MOVEMENT KERNELS ===========================================================
+// Each kernel owns its cast/move interleave, exactly like the v1 brains did —
+// a REGISTRY, so packages can add locomotion styles without touching this file.
+
+export interface KernelCtx {
+  a: Actor;
+  world: World;
+  target: Actor;
+  /** Distance to the target this tick. */
+  d: number;
+  dt: number;
+  spec: MoveSpec;
+  tuning: BrainTuning;
+  norm: NormalizedBrain;
+  /** True when a squad gate forbids casting this tick (mustering prowl). */
+  noCast: boolean;
+  /** True while the TEMPO duty cycle holds the feet still (casting stays
+   *  free) — runKernel zeroes the movement dt. */
+  paused: boolean;
+  /** The point to close on — the target, or the surround slot when drilled. */
+  goal: Vec2;
+  pick(): SkillInstance | null;
+  cast(inst: SkillInstance): void;
+}
+
+export type MoveKernel = (ctx: KernelCtx) => void;
+
+function makeCtx(
+  actor: Actor, world: World, target: Actor, d: number, dt: number,
+  tuning: BrainTuning, norm: NormalizedBrain, noCast: boolean, paused = false,
+): KernelCtx {
+  const spec = tuning.move ?? { style: 'approach' };
+  const goal = tuning.squad?.surround && actor.squadId !== undefined
+    ? surroundGoal(actor, world, target,
+      Math.max(40, target.radius + actor.radius + 4))
+    : target.pos;
+  return {
+    a: actor, world, target, d, dt, spec, tuning, norm, noCast, paused, goal,
+    pick: () => noCast ? null : pickSkill(actor, world, d, tuning),
+    cast: inst => useOn(actor, world, inst, target, tuning),
+  };
+}
+
+function runKernel(style: string, ctx: KernelCtx): void {
+  const pace = ctx.spec.pace;
+  if (pace !== undefined && pace !== 1) {
+    // Paced locomotion rides a scaled dt for MOVEMENT only (casting reads
+    // the real clock elsewhere) — a stalking prowl at 0.6, a frenzy at 1.
+    ctx = { ...ctx, dt: ctx.dt * Math.max(0, pace) };
+  }
+  // A tempo PAUSE stills the feet, not the hands: movement dt collapses to
+  // zero, the pick/cast path keeps its real clock.
+  if (ctx.paused) ctx = { ...ctx, dt: 0 };
+  (MOVE_KERNELS[style] ?? MOVE_KERNELS.approach)(ctx);
+}
+
+/** approach — the original generic conduct: close to the kit's standoff,
+ *  attack what reaches, kite when the kit keeps distance. */
+function approachKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt } = ctx;
+  if (losStrafe(ctx)) return;
+  const chosen = ctx.pick();
+  if (chosen) return ctx.cast(chosen);
+  const { keep, desired } = standoff(a);
+  if (d > desired) {
+    moveToward(a, world, ctx.goal, dt);
+  } else if (keep > 0 && d < keep * 0.65) {
+    moveAway(a, world, target.pos, dt);
+  }
+}
+
+/** direct — relentless closing: casts on the move, never disengages. */
+function directKernel(ctx: KernelCtx): void {
+  const { a, world, d, dt } = ctx;
+  const chosen = ctx.pick();
+  if (chosen) {
+    ctx.cast(chosen);
+    // The juggernaut's discipline: strike, THEN step (v1 returned here);
+    // pressers (swarm, closeFrac < 1) keep crowding through the swing.
+    if ((ctx.spec.closeFrac ?? 1) >= 1) return;
+  }
+  const { desired } = standoff(a);
+  if (d > desired * (ctx.spec.closeFrac ?? 1)) moveToward(a, world, ctx.goal, dt);
+}
+
+/** orbit — strafing melee: circle the prey at blade's length, cutting as
+ *  you go. */
+function orbitKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt, spec } = ctx;
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen);
+  if (a.aiSign === 0) a.aiSign = Math.random() < 0.5 ? 1 : -1;
+  a.aiTimer -= dt;
+  if (a.aiTimer <= 0) {
+    const fe = spec.flipEvery ?? [1.2, 2.8];
+    a.aiTimer = rand(fe[0], fe[1]);
+    if (Math.random() < (spec.flipChance ?? 0.4)) a.aiSign = -a.aiSign;
+  }
+  const { desired } = standoff(a);
+  const ring = spec.ring ?? Math.max(desired, 46);
+  // spiral: orbit tangent + a radial correction toward the ring
+  const toMe = angleTo(target.pos, a.pos);
+  const tangent = toMe + a.aiSign * (Math.PI / 2);
+  const radial = d > ring * 1.15 ? -1 : d < ring * 0.8 ? 1 : 0;
+  world.moveActor(a,
+    Math.cos(tangent) + Math.cos(toMe) * radial * 0.9,
+    Math.sin(tangent) + Math.sin(toMe) * radial * 0.9, dt);
+  a.facing = angleTo(a.pos, target.pos);
+}
+
+/** weave — the lunatic zigzag: wobbles in hard (bombers arm their fuse
+ *  before this ever reaches blade range). */
+function weaveKernel(ctx: KernelCtx): void {
+  const { a, world, dt, spec } = ctx;
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen);
+  const wob = Math.sin(world.time * (spec.weaveFreq ?? 9) + a.id * 1.7) * (spec.weaveAmp ?? 0.9);
+  const ang = angleTo(a.pos, ctx.goal) + wob;
+  world.moveActor(a, Math.cos(ang), Math.sin(ang), dt);
+}
+
+/** hitAndRun — one strike, then break away before the answer comes. */
+function hitAndRunKernel(ctx: KernelCtx): void {
+  const { a, world, target, dt, spec } = ctx;
+  if (a.aiPhase === 'withdraw') {
+    a.aiTimer -= dt;
+    moveAway(a, world, target.pos, dt);
+    if (a.aiTimer <= 0) a.aiPhase = '';
+    return;
+  }
+  const chosen = ctx.pick();
+  if (chosen) {
+    ctx.cast(chosen);
+    a.aiPhase = 'withdraw';
+    const w = spec.withdraw ?? [1.6, 1.6];
+    a.aiTimer = rand(w[0], w[1]);
+    return;
+  }
+  moveToward(a, world, ctx.goal, dt);
+}
+
+/** slideCast — the strafer's fire-and-SLIDE cycle: casting roots the body,
+ *  so a true strafer holds its spells back to keep its feet moving. */
+function slideCastKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt, spec } = ctx;
+  if (losStrafe(ctx)) return;
+  if (a.aiSign === 0) a.aiSign = Math.random() < 0.5 ? 1 : -1;
+  // Sliding: spells stay holstered until the step finishes. The clock only
+  // runs once the cast that triggered it lets go of the feet.
+  if (a.aiPhase === 'slide') {
+    if (a.useLock > 0 || a.casting) return;
+    a.aiTimer -= dt;
+    if (a.aiTimer <= 0) {
+      a.aiPhase = '';
+      if (Math.random() < 0.5) a.aiSign = -a.aiSign;
+    }
+    const { keep } = standoff(a);
+    const ring = spec.ring ?? (keep > 0 ? keep : 240);
+    const toMe = angleTo(target.pos, a.pos);
+    const tangent = toMe + a.aiSign * (Math.PI / 2);
+    const radial = d > ring * 1.2 ? -1 : d < ring * 0.7 ? 1 : 0;
+    world.moveActor(a,
+      Math.cos(tangent) + Math.cos(toMe) * radial,
+      Math.sin(tangent) + Math.sin(toMe) * radial, dt);
+    a.facing = angleTo(a.pos, target.pos);
+    return;
+  }
+  const chosen = ctx.pick();
+  const slide = spec.slide ?? [0.5, 1.0];
+  if (chosen) {
+    ctx.cast(chosen);
+    a.aiPhase = 'slide';
+    a.aiTimer = rand(slide[0], slide[1]);
+    return;
+  }
+  // Nothing castable yet: slide anyway, toward the ring.
+  a.aiPhase = 'slide';
+  a.aiTimer = rand(slide[0] * 0.8, slide[1] * 0.8);
+}
+
+/** holdRange — artillery: extreme range, and it does NOT let you close the
+ *  gap. Too close means HOLD FIRE and run — a rooted cast is a death
+ *  sentence with the enemy at the muzzle. */
+function holdRangeKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt, spec } = ctx;
+  const { keep } = standoff(a);
+  const hold = spec.hold ?? Math.max(keep, 380);
+  const [panicF, approachF] = spec.band ?? [0.75, 1.4];
+  // The panic band OUTRANKS the sight-line: cornered artillery flees first —
+  // circling a blocker at the player's feet is the opposite of its contract.
+  if (d < hold * panicF) {
+    moveAway(a, world, target.pos, dt);
+    a.facing = angleTo(a.pos, target.pos);
+    return;
+  }
+  // Artillery behind castle masonry repositions too (implicit in grid zones).
+  if (losStrafe(ctx)) return;
+  const chosen = ctx.pick();
+  if (chosen) return ctx.cast(chosen);
+  if (d < hold) {
+    moveAway(a, world, target.pos, dt);
+    a.facing = angleTo(a.pos, target.pos);
+  } else if (d > hold * approachF) {
+    moveToward(a, world, ctx.goal, dt);
+  }
+}
+
+/** backstab — the stealth assassin: shrouded stalk to the target's back,
+ *  strike, melt away. */
+function backstabKernel(ctx: KernelCtx): void {
+  const { a, world, target, dt, spec } = ctx;
+  if (a.aiPhase === 'withdraw') {
+    a.aiTimer -= dt;
+    moveAway(a, world, target.pos, dt);
+    if (a.aiTimer <= 0) {
+      a.aiPhase = '';
+      if (spec.shroud) setShroud(a, true); // gone again
+    }
+    return;
+  }
+  // Stalking: shrouded, circling toward the victim's back.
+  if (spec.shroud) setShroud(a, true);
+  const chosen = ctx.pick();
+  if (chosen) {
+    if (spec.shroud) setShroud(a, false); // the strike reveals them
+    ctx.cast(chosen);
+    a.aiPhase = 'withdraw';
+    const w = spec.withdraw ?? [1.5, 1.5];
+    a.aiTimer = rand(w[0], w[1]);
+    return;
+  }
+  const behind = vec(
+    target.pos.x + Math.cos(target.facing + Math.PI) * (target.radius + a.radius + 6),
+    target.pos.y + Math.sin(target.facing + Math.PI) * (target.radius + a.radius + 6));
+  moveToward(a, world, behind, dt);
+}
+
+/** interpose — the bodyguard: put yourself between the threat and your ward. */
+function interposeKernel(ctx: KernelCtx): void {
+  const { a, world, target, dt } = ctx;
+  const chosen = ctx.pick();
+  if (chosen) return ctx.cast(chosen);
+  // The ward: nearest same-faction ally, weighted by how worth guarding it is —
+  // MonsterDef.wardPriority when declared, else commanders rank above casters
+  // above the line troops. Data decides who gets a bodyguard.
+  let ward: Actor | null = null;
+  let bd = 600;
+  for (const x of world.actors) {
+    if (x === a || x.dead || x.team !== a.team || x.construct || x.passive) continue;
+    if (a.faction && x.faction !== a.faction) continue;
+    const d = dist(a.pos, x.pos);
+    const worth = (x.defId ? MONSTERS[x.defId]?.wardPriority : undefined)
+      ?? (x.brain?.type === 'commander' ? 2 : x.brain?.type === 'caster' ? 1 : 0);
+    const priority = worth > 0 ? d * (1 - Math.min(0.5, worth * 0.25)) : d;
+    if (priority < bd) { bd = priority; ward = x; }
+  }
+  if (ward) {
+    // stand on the line between the threat and the ward
+    const ang = angleTo(ward.pos, target.pos);
+    const post = vec(
+      ward.pos.x + Math.cos(ang) * Math.min(120, dist(ward.pos, target.pos) * 0.4),
+      ward.pos.y + Math.sin(ang) * Math.min(120, dist(ward.pos, target.pos) * 0.4));
+    if (dist(a.pos, post) > 26) moveToward(a, world, post, dt);
+    a.facing = angleTo(a.pos, target.pos);
+  } else {
+    approachKernel(ctx);
+  }
+}
+
+/** hoverAllies — the commander: hangs behind the warband, blessing and
+ *  reinforcing it (support skills fire from way back — see SkillPolicy
+ *  .supportRange, which the commander preset carries). */
+function hoverAlliesKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt } = ctx;
+  const chosen = ctx.pick();
+  if (chosen) return ctx.cast(chosen);
+  // Positioning: stay out of the brawl, but keep the warband in reach.
+  if (d < 340) {
+    moveAway(a, world, target.pos, dt);
+  } else if (d > 520) {
+    moveToward(a, world, ctx.goal, dt);
+  } else {
+    const allies = world.actors.filter(x =>
+      x !== a && !x.dead && x.team === a.team && !x.construct
+      && dist(a.pos, x.pos) < 700);
+    if (allies.length) {
+      let cx = 0, cy = 0;
+      for (const x of allies) { cx += x.pos.x; cy += x.pos.y; }
+      const centroid = vec(cx / allies.length, cy / allies.length);
+      if (dist(a.pos, centroid) > 240) moveToward(a, world, centroid, dt);
+    }
+  }
+}
+
+/** prowl — the waiting circle: wide, patient, no teeth spent (pack hunters
+ *  mustering; token-less wolves ride orbit instead so they can still cast). */
+function prowlKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt, spec } = ctx;
+  if (a.aiSign === 0) a.aiSign = Math.random() < 0.5 ? 1 : -1;
+  const ring = spec.ring ?? 270;
+  const width = 50;
+  const toMe = angleTo(target.pos, a.pos);
+  const tangent = toMe + a.aiSign * (Math.PI / 2);
+  const radial = d > ring + width ? -0.8 : d < ring - width ? 0.8 : 0;
+  world.moveActor(a,
+    Math.cos(tangent) + Math.cos(toMe) * radial,
+    Math.sin(tangent) + Math.sin(toMe) * radial, dt);
+  a.facing = angleTo(a.pos, target.pos);
+}
+
+/** hold — stand ground: face and fight, feet planted. */
+function holdKernel(ctx: KernelCtx): void {
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen);
+  ctx.a.facing = angleTo(ctx.a.pos, ctx.target.pos);
+}
+
+/** retreat — run straight away (morale breaks, cowards, juveniles). */
+function retreatKernel(ctx: KernelCtx): void {
+  const { a, world, target, dt } = ctx;
+  a.facing = angleTo(a.pos, target.pos);
+  moveAway(a, world, target.pos, dt);
+}
+
+/** skitter — darting bursts with dead-stop pauses: the sand-leaper scuttle.
+ *  Each dart re-rolls a jitter bearing, so the approach crackles sideways. */
+function skitterKernel(ctx: KernelCtx): void {
+  const { a, world, dt, spec } = ctx;
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen);
+  const dart = spec.dart ?? [0.28, 0.5];
+  const pause = spec.pause ?? [0.15, 0.45];
+  if (a.aiPhase !== 'dart' && a.aiPhase !== 'skitter_rest') {
+    a.aiPhase = 'dart';
+    a.aiTimer = rand(dart[0], dart[1]);
+    a.aiSign = rand(-0.8, 0.8); // this dart's sideways lean
+  }
+  a.aiTimer -= dt;
+  if (a.aiPhase === 'skitter_rest') {
+    if (a.aiTimer <= 0) {
+      a.aiPhase = 'dart';
+      a.aiTimer = rand(dart[0], dart[1]);
+      a.aiSign = rand(-0.8, 0.8);
+    }
+    a.facing = angleTo(a.pos, ctx.goal);
+    return; // dead stop between darts
+  }
+  if (a.aiTimer <= 0) {
+    a.aiPhase = 'skitter_rest';
+    a.aiTimer = rand(pause[0], pause[1]);
+    return;
+  }
+  const ang = angleTo(a.pos, ctx.goal) + a.aiSign;
+  world.moveActor(a, Math.cos(ang), Math.sin(ang), dt * 1.55);
+  a.facing = angleTo(a.pos, ctx.goal);
+}
+
+/** charge — stalk into range, then a LOCKED headlong sprint (a dash the
+ *  world resolves with collision), a breather, and again. Goring beasts. */
+function chargeKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt, spec } = ctx;
+  if (a.dash) return; // mid-charge: the world carries us
+  if (a.aiPhase === 'charge_recover') {
+    a.aiTimer -= dt;
+    if (a.aiTimer <= 0) a.aiPhase = '';
+    // winded: shoulder slowly toward the prey, swinging what reaches
+    const chosen = ctx.pick();
+    if (chosen) return ctx.cast(chosen);
+    if (d > standoff(a).desired) moveToward(a, world, ctx.goal, dt * 0.45);
+    return;
+  }
+  const chosen = ctx.pick();
+  if (chosen) return ctx.cast(chosen);
+  const commit = spec.commitRange ?? 320;
+  const { desired } = standoff(a);
+  // A tempo-paused beast doesn't LAUNCH (dt 0 = its feet are planted).
+  if (dt > 0 && d <= commit && d > desired * 1.2) {
+    // LOCK AND GO: overshoot a touch past the prey's position.
+    const speed = a.sheet.get('moveSpeed') * (spec.chargeSpeed ?? 2.4);
+    a.dash = {
+      dir: angleTo(a.pos, target.pos),
+      speed,
+      remaining: Math.min(1.2, (d + 70) / Math.max(1, speed)),
+    };
+    const cd = spec.chargeCooldown ?? [2.5, 4.5];
+    a.aiPhase = 'charge_recover';
+    a.aiTimer = rand(cd[0], cd[1]);
+    return;
+  }
+  if (d > desired) moveToward(a, world, ctx.goal, dt);
+}
+
+/** juke — combat-flight: hooks and freezes away from the target (prey whose
+ *  whole fight IS the flight; the retreat gate makes it tire and be caught). */
+function jukeKernel(ctx: KernelCtx): void {
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen); // a cornered thing still bites
+  jukeAway(ctx.a, ctx.world, ctx.target.pos, ctx.dt, ctx.spec);
+}
+
+/** lurk — patience with teeth: hold the ring and WATCH; commit the moment
+ *  the target's eyes leave you (or it strays into your lap). The pounce
+ *  holds until you face it down at distance. */
+function lurkKernel(ctx: KernelCtx): void {
+  const { a, world, target, d, dt, spec } = ctx;
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen);
+  const unseenArc = spec.unseenArc ?? 1.75;
+  const unseen = Math.abs(angleDiff(target.facing, angleTo(target.pos, a.pos))) > unseenArc;
+  const commit = spec.commitRange ?? 260;
+  if (a.aiPhase === 'lurk_rush') {
+    if (!unseen && d > commit) {
+      a.aiPhase = ''; // stared down at range: break off, resume the watch
+    } else {
+      moveToward(a, world, ctx.goal, dt);
+      a.facing = angleTo(a.pos, target.pos);
+      return;
+    }
+  }
+  if (unseen || d <= commit * 0.5) {
+    a.aiPhase = 'lurk_rush';
+    moveToward(a, world, ctx.goal, dt);
+    a.facing = angleTo(a.pos, target.pos);
+    return;
+  }
+  // Watched: sidle the ring at a creep, all eyes and patience.
+  if (a.aiSign === 0) a.aiSign = Math.random() < 0.5 ? 1 : -1;
+  const ring = spec.ring ?? Math.max(commit, 240);
+  const toMe = angleTo(target.pos, a.pos);
+  const tangent = toMe + a.aiSign * (Math.PI / 2);
+  const radial = d > ring * 1.2 ? -0.8 : d < ring * 0.85 ? 0.8 : 0;
+  world.moveActor(a,
+    Math.cos(tangent) + Math.cos(toMe) * radial,
+    Math.sin(tangent) + Math.sin(toMe) * radial, dt * 0.4);
+  a.facing = angleTo(a.pos, target.pos);
+}
+
+/** garrison — hold a claimed structure slot (a tower core): face the prey and
+ *  cast what reaches from the perch (parapets pass shots + sight, so the fire
+ *  rains out while feet stay unreachable). A PENDING walk-entry claim marches
+ *  to the perch first and finalizes (anchor + mods) on arrival. Without a
+ *  claimed slot (none free / released), behaves as approach — never idle. */
+function garrisonKernel(ctx: KernelCtx): void {
+  const { a, world, target, dt } = ctx;
+  if (!a.garrison) return approachKernel(ctx);
+  if (a.garrison.pending) {
+    const slot = world.garrisonSlotById(a.garrison.slotId);
+    if (!slot) { a.garrison = undefined; return approachKernel(ctx); }
+    if (dist(a.pos, slot.pos) > 22) { moveToward(a, world, slot.pos, dt); return; }
+    world.finalizeGarrison(a);
+  }
+  a.facing = angleTo(a.pos, target.pos);
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen);
+}
+
+export const MOVE_KERNELS: Record<string, MoveKernel> = {
+  approach: approachKernel,
+  direct: directKernel,
+  orbit: orbitKernel,
+  weave: weaveKernel,
+  hitAndRun: hitAndRunKernel,
+  slideCast: slideCastKernel,
+  holdRange: holdRangeKernel,
+  backstab: backstabKernel,
+  interpose: interposeKernel,
+  hoverAllies: hoverAlliesKernel,
+  prowl: prowlKernel,
+  hold: holdKernel,
+  retreat: retreatKernel,
+  skitter: skitterKernel,
+  charge: chargeKernel,
+  garrison: garrisonKernel,
+  juke: jukeKernel,
+  lurk: lurkKernel,
+};
+
+/** Packages register new locomotion styles here — a MoveSpec.style naming it
+ *  brings it to any monster, no engine changes. */
+export function registerMoveStyle(id: string, kernel: MoveKernel): void {
+  MOVE_KERNELS[id] = kernel;
+}
+
+// Re-export the vocabulary's preset table for tooling/dev inspection.
+export { ARCHETYPES };

@@ -1,0 +1,823 @@
+// ---------------------------------------------------------------------------
+// The layered stat & modifier engine.
+//
+// Every number in the game flows through this file. A StatSheet owns a set of
+// base values plus any number of named *modifier sources* (attributes, class
+// bonuses, level, buffs, statuses, items...). A stat is computed as:
+//
+//     value = (base + sum of FLAT) * (1 + sum of INCREASED) * product(1 + MORE)
+//
+// Modifiers may carry tag filters: a modifier with tags ['fire'] only applies
+// when the stat is queried in a context containing the 'fire' tag (e.g. while
+// computing damage of a fire-tagged skill). This is the single mechanism that
+// makes "40% increased fire damage", "20% increased melee attack speed", etc.
+// possible without any special-case code.
+// ---------------------------------------------------------------------------
+
+/** Tags describe what a skill / damage context *is*. Add freely. */
+export type SkillTag =
+  | 'attack' | 'spell' | 'melee' | 'projectile' | 'aoe' | 'duration'
+  | 'movement' | 'summon' | 'minion' | 'warcry' | 'buff' | 'storm'
+  | 'aura' | 'totem' | 'trap' | 'mine' | 'corpse'
+  | 'channel' | 'instant' | 'curse' | 'guard' | 'targeted'
+  | 'mirage' | 'clone' | 'sweep' | 'overdrive' | 'overcharge' | 'heal'
+  // 'persistent' marks contract summons that REVIVE on a timer (golems) —
+  // the gate that keeps hard-resummonable-only supports (Self-Destruct)
+  // out of skills whose bodies were never meant to be spent.
+  | 'persistent'
+  // 'javelin' marks the Impaler family (spears, lances, volleys) so
+  // family-wide supports and tag-filtered investment can find them.
+  | 'javelin'
+  | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
+
+export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
+export const DAMAGE_TYPES: readonly DamageType[] = ['physical', 'fire', 'cold', 'lightning', 'chaos'];
+
+/** Canonical per-element tint — the single source of truth for damage-flavored
+ *  FX (death-burst orbs/implosions, martyrdom blasts, …) so a re-theme touches
+ *  one place and every element (incl. `physical`) renders distinctly. */
+export const DAMAGE_COLOR: Record<DamageType, string> = {
+  // One distinct hue per element so colour alone tells the player what to mitigate.
+  // chaos is PURPLE (the genre convention for chaos/poison) rather than green — green
+  // collided with the Mycelia spore haze, muddying the read inside fungal zones.
+  physical: '#cfd2d6', fire: '#ff8a4a', cold: '#7ab8d8', lightning: '#ffe14a', chaos: '#c45ae0',
+};
+
+export type ModKind = 'flat' | 'increased' | 'more' | 'override';
+
+/**
+ * Actor-state conditions a modifier can demand ("40% more damage while on
+ * low life"). The actor recomputes its active set each frame and pushes it
+ * into its StatSheet; conditional modifiers apply only while theirs holds.
+ */
+export type ConditionId =
+  | 'lowLife' | 'fullLife' | 'lowMana' | 'fullMana'
+  | 'hasEs' | 'fullEs' | 'lowEs' | 'guarding'
+  // Planted vs on the move (Actor.idleFor: >0.6s still / <0.15s since a step)
+  | 'stationary' | 'moving';
+
+export interface Modifier {
+  stat: string;
+  kind: ModKind;
+  value: number;
+  /** If present, the modifier only applies when the query context contains ALL of these tags. */
+  tags?: SkillTag[];
+  /** If present, the modifier only applies while the actor satisfies this condition. */
+  when?: ConditionId;
+}
+
+/** Convenience constructor so data files read nicely. */
+export function mod(stat: string, kind: ModKind, value: number, tags?: SkillTag[], when?: ConditionId): Modifier {
+  return { stat, kind, value, tags, when };
+}
+
+// ---------------------------------------------------------------------------
+// Stat registry. Defines defaults + display metadata. New stats are added
+// here and immediately usable by any modifier in any data file.
+// ---------------------------------------------------------------------------
+
+export interface StatDef {
+  label: string;
+  base: number;
+  min?: number;
+  max?: number;
+  /** Display as percentage in the character sheet. */
+  percent?: boolean;
+}
+
+export const STAT_DEFS: Record<string, StatDef> = {
+  // Resources
+  life:           { label: 'Maximum Life', base: 20, min: 1 },
+  lifeRegen:      { label: 'Life Regeneration /s', base: 0.6 },
+  /** Fraction of MAXIMUM life regenerated per second (adds to flat lifeRegen). */
+  lifeRegenPct:   { label: 'Life Regeneration %', base: 0, min: 0, percent: true },
+  mana:           { label: 'Maximum Mana', base: 30, min: 0 },
+  manaRegen:      { label: 'Mana Regeneration /s', base: 2 },
+  /** Fraction of MAXIMUM mana regenerated per second (adds to flat manaRegen). */
+  manaRegenPct:   { label: 'Mana Regeneration %', base: 0, min: 0, percent: true },
+
+  // Mobility & action speed
+  moveSpeed:      { label: 'Movement Speed', base: 200, min: 30 },
+  /** Grip on the ground: below 1, movement becomes momentum that carries
+   *  and slides (ice). A STAT, so anything — terrain status, curse, gear —
+   *  can make anyone slip. */
+  traction:       { label: 'Traction', base: 1, min: 0.05, max: 1, percent: true },
+  attackSpeed:    { label: 'Attack Speed', base: 1, min: 0.1 },
+  castSpeed:      { label: 'Cast Speed', base: 1, min: 0.1 },
+  cooldownRecovery: { label: 'Cooldown Recovery', base: 1, min: 0.1 },
+  // USE-CHARGES (SkillDef.useCharges): skills that bank N uses and recover
+  // them one at a time on their own clock instead of a cooldown. Both are
+  // queried with the skill's tags, so "+1 melee skill charge" is a filter.
+  /** Flat bonus to a skill's use-charge maximum. */
+  skillCharges:   { label: 'Additional Skill Charges', base: 0 },
+  /** Multiplier on use-charge recovery speed. */
+  skillChargeRate:{ label: 'Skill Charge Recovery', base: 1, min: 0.1 },
+
+  // Offense
+  accuracy:       { label: 'Accuracy Rating', base: 80, min: 1 },
+  critChance:     { label: 'Critical Strike Chance', base: 0.03, min: 0, max: 0.95, percent: true },
+  critMulti:      { label: 'Critical Strike Multiplier', base: 1.3, min: 1 },
+  /** Generic damage multiplier bucket — always queried with context tags. */
+  damage:         { label: 'Damage', base: 1, min: 0 },
+  // Flat added damage buckets (also tag-filtered, e.g. "adds fire damage to attacks").
+  addedPhysical:  { label: 'Added Physical Damage', base: 0 },
+  addedFire:      { label: 'Added Fire Damage', base: 0 },
+  addedCold:      { label: 'Added Cold Damage', base: 0 },
+  addedLightning: { label: 'Added Lightning Damage', base: 0 },
+  addedChaos:     { label: 'Added Chaos Damage', base: 0 },
+
+  // Defense
+  armor:          { label: 'Armor', base: 0, min: 0 },
+  evasion:        { label: 'Evasion Rating', base: 40, min: 0 },
+  fireRes:        { label: 'Fire Resistance', base: 0, max: 0.75, percent: true },
+  coldRes:        { label: 'Cold Resistance', base: 0, max: 0.75, percent: true },
+  lightningRes:   { label: 'Lightning Resistance', base: 0, max: 0.75, percent: true },
+  chaosRes:       { label: 'Chaos Resistance', base: 0, max: 0.75, percent: true },
+  /** Multiplier on damage received (shock raises it, fortification lowers it). */
+  damageTaken:    { label: 'Damage Taken', base: 1, min: 0.1 },
+  /** Multiplier on LIFE HEALING received — regen, leech, restores, pulses,
+   *  bond heals, everything through Actor.healBy (the damageTaken mirror:
+   *  a "seared wounds" debuff is pure status data). */
+  healTaken:      { label: 'Healing Received', base: 1, min: 0 },
+  /** Multiplier on healing the actor GIVES (heal effects, siphons, tree
+   *  bursts) — the healer's damage stat. Tag-filtered like damage, so
+   *  "increased healing with channelled skills" is a modifier away. */
+  healPower:      { label: 'Healing Power', base: 1, min: 0 },
+  /** Fraction of OVERHEAL (healing past full) hardened into an absorption
+   *  shield on the target — the support player's answer to topped bars. */
+  overheal:       { label: 'Overheal to Ward', base: 0, min: 0 },
+  /** Victim-side chance to SHRUG an incoming ailment outright — queried
+   *  with the status's element tag, so Purity of Fire resists ignites
+   *  specifically while Purity of Elements resists the lot. */
+  ailmentResist:  { label: 'Ailment Resistance', base: 0, min: 0, max: 0.9, percent: true },
+  /** PASSIVE block: chance any hit is flatly stopped. Independent of Guard. */
+  blockChance:    { label: 'Block Chance', base: 0, min: 0, max: 0.6, percent: true },
+  /** Multiplier on guard-skill shield health. */
+  guardStrength:  { label: 'Guard Strength', base: 1, min: 0.1 },
+
+  // Thorns — the retaliation suite (#14). All victim-side.
+  /** Flat damage returned to ANY attacker whose hit lands on you —
+   *  always-on thorns (auras, buffs, passives grant it). */
+  thorns:         { label: 'Thorns', base: 0, min: 0 },
+  /** Fraction of the LANDED damage you take returned to the attacker —
+   *  reflect scales with the wound where flat thorns scale with count. */
+  thornsReflect:  { label: 'Thorns Reflection', base: 0, min: 0 },
+  /** CASTER-side conversion: this fraction of your total flat thorns rides
+   *  your hits as added physical damage (Bristling Riposte — the spikes
+   *  swing with you). Queried with the skill's context, so it's a support. */
+  thornsToHit:    { label: 'Thorns to On-Hit', base: 0, min: 0 },
+  /** Fraction of incoming LANDED damage redirected onto your minions,
+   *  split evenly among the living (Soul Link — the wall of bones is a
+   *  defensive layer, if you keep it fed). */
+  minionShare:    { label: 'Minion Damage Sharing', base: 0, min: 0, max: 0.8, percent: true },
+
+  // Channeling supports (apply while a channel or guard is held)
+  /** Flat damage returned to attackers who strike you while channeling. */
+  channelThorns:  { label: 'Channelled Thorns', base: 0 },
+  /** > 0: periodic nova while channeling, at this damage multiplier.
+   *  The interval scales with attack/cast speed. */
+  channelBurst:   { label: 'Channelled Eruption', base: 0 },
+  /** > 0: periodic strikes land around you while channeling. */
+  channelStorm:   { label: 'Channelled Tempest', base: 0 },
+  /** Channel pulse damage grows by this much per second held (cap +150%). */
+  channelRamp:    { label: 'Channel Ramping', base: 0 },
+  /** Channeled projectile skills gain this many projectiles per second held. */
+  channelSpool:   { label: 'Channel Spooling', base: 0 },
+  /** CAP on spooled bonus projectiles (time-fed and hit-fed alike) — the
+   *  self-stacking ceiling, investable like everything else. */
+  channelSpoolCap: { label: 'Channel Spool Limit', base: 3, min: 0 },
+  /** Channeled projectile skills gain this many projectiles per LANDED HIT
+   *  during the unbroken channel — the inverse of time-based spooling:
+   *  connection feeds the barrage, whiffing feeds nothing. */
+  channelHitSpool: { label: 'Channel Blood-Spooling', base: 0, min: 0 },
+  /** Overcharge stage count (each OverchargeSpec's `stages` is this
+   *  query's BASE — gems and passives add stages). */
+  overchargeStages: { label: 'Overcharge Stages', base: 0, min: 0 },
+  /** SPARK RELEASE window, seconds: >0 lets an overcharge release land
+   *  empowered when it comes within this long of a stage BANKING (the
+   *  after-spark discipline — Spark Discipline grants it; an innate
+   *  OverchargeSpec.window seeds the query base). */
+  sparkWindow:     { label: 'Spark Release Window', base: 0, min: 0 },
+  /** MORE multiplier a spark release earns (spec windowBonus seeds it). */
+  sparkBonus:      { label: 'Spark Release Power', base: 0.35, min: 0 },
+  /** > 0: your guard also absorbs hits against nearby minions. */
+  guardAegis:     { label: 'Guardian\'s Aegis', base: 0 },
+  /** > 0: your protection domes DEFLECT projectiles instead of dissolving
+   *  them — they fly back wearing your colors. */
+  domeDeflects:   { label: 'Domes Deflect', base: 0 },
+
+  // WARD — the decaying shield (LE-style): a pool soaked before EVERYTHING
+  // (even absorb), with no ceiling — only its own decay holds it down. The
+  // whole game is accumulation vs depletion; both knobs are investable.
+  /** Fraction of current ward lost per second (retention investment LOWERS it). */
+  wardDecay:      { label: 'Ward Decay Rate', base: 0.35, min: 0.02, percent: true },
+  /** Multiplier on all ward GAINED (the ward-build damage stat). */
+  wardGain:       { label: 'Ward Gained', base: 1, min: 0 },
+  /** Fraction of post-mitigation LIFE damage staggered into a pool that
+   *  drains over ~3s instead of landing at once (Mortis Seal's mercy —
+   *  the blood-mage stagger; a status or seal is all it takes). */
+  staggerFrac:    { label: 'Damage Staggering', base: 0, min: 0, max: 0.85, percent: true },
+  /** >0: incoming HITS are dodged outright — attacks, spells, projectiles
+   *  alike (DoTs still tick; costs still bleed). Cerement's shroud. */
+  hitImmune:      { label: 'Hit Immunity', base: 0, min: 0 },
+
+  // Layered defenses
+  /** Fraction of incoming damage paid from mana before life (capped 90%). */
+  manaShield:     { label: 'Mana Shield', base: 0, min: 0, max: 0.9, percent: true },
+  /** Maximum energy shield: a pool soaked before mana shield and life.
+   *  Recharges fast — but only after esRechargeDelay seconds untouched. */
+  energyShield:   { label: 'Maximum Energy Shield', base: 0, min: 0 },
+  /** Fraction of max energy shield recharged per second (once recharging). */
+  esRechargeRate: { label: 'Energy Shield Recharge Rate', base: 0.33, min: 0.01, percent: true },
+  /** Seconds without taking damage before energy shield begins recharging. */
+  esRechargeDelay:{ label: 'Energy Shield Recharge Delay', base: 2.5, min: 0.2 },
+  /** Fraction of life regeneration converted to flat ES regeneration —
+   *  which trickles even during the recharge delay, and stacks with the
+   *  recharge once it starts. */
+  lifeRegenToEs:  { label: 'Life Regen to Energy Shield', base: 0, min: 0, max: 1, percent: true },
+  /** > 0: mana costs can be paid from energy shield when mana runs dry. */
+  esToMana:       { label: 'Energy Shield Pays Mana Costs', base: 0 },
+
+  // OVERDRIVE — the debt economy (all base 0; each toggle's OverdriveSpec
+  // feeds the query's base, trajectory-axis style). Unaffordable casts
+  // OVERDRAFT their cost into reservation; repayment flows after a breather.
+  overdriveCap:          { label: 'Overdrive Debt Limit', base: 0, min: 0, max: 0.9, percent: true },
+  overdriveIdleDelay:    { label: 'Overdrive Repayment Delay', base: 0, min: 0.5, max: 8 },
+  overdriveRecovery:     { label: 'Overdrive Repayment %/s', base: 0, min: 0.05, percent: true },
+  overdriveRecoveryFlat: { label: 'Overdrive Repayment /s', base: 0, min: 0 },
+  /** > 0: repayment trickles EVEN WHILE casting, at this fraction of rate. */
+  overdriveFlow:         { label: 'Overdrive Flow', base: 0, min: 0, max: 1, percent: true },
+  /** Life lane: repayment = total life regen × this × attack speed. */
+  overdriveLifeFactor:   { label: 'Blood Debt Metabolism', base: 0, min: 0 },
+
+  // Resource orbs (on-hit procs from Harvest supports)
+  orbDropLife:    { label: 'Life Orb Drop Chance', base: 0, percent: true },
+  orbDropMana:    { label: 'Mana Orb Drop Chance', base: 0, percent: true },
+  orbDropEs:      { label: 'Energy Orb Drop Chance', base: 0, percent: true },
+  /** Hits may shed an elemental remnant; picking it up empowers the next
+   *  cast of that element (Elemental Remnants support). */
+  remnantChance:  { label: 'Remnant Drop Chance', base: 0, percent: true },
+
+  // Fire-archetype mechanics (usable by anything, as ever)
+  /** > 0: projectiles passing through elemental fields and hazardous
+   *  ground INHERIT the element — added damage + a status chance. */
+  conduction:     { label: 'Elemental Conduction', base: 0 },
+  /** > 0: projectiles crossing YOUR ground effects CARRY them onward —
+   *  the field re-blooms where the flight ends (Suffusion: the inverse
+   *  of the field-dropping trail supports). */
+  suffusion:      { label: 'Suffusion', base: 0, min: 0 },
+  /** Extra targets resolved by targeted (single-target) skills. */
+  multiTarget:    { label: 'Additional Targets', base: 0 },
+  /** > 0: ignites applied by the skill deal NO damage over time — instead
+   *  the victim detonates for the burn's full payload when it expires. */
+  igniteToBomb:   { label: 'Ignites Detonate', base: 0 },
+  /** Extra projectiles, fired in a full NOVA around the caster instead of
+   *  toward the aim (Nova Release support). */
+  projNova:       { label: 'Nova Projectiles', base: 0 },
+  /** > 0: movement skills EXPLODE at their start and end points, dealing
+   *  this fraction of the skill's damage (Dive Bomb support). */
+  moveExplode:    { label: 'Movement Explosions', base: 0 },
+  /** > 0: dashes leave a burning trail dealing this damage fraction
+   *  (Fire Walker support — Trailblaze as a graft). */
+  moveTrail:      { label: 'Movement Trail', base: 0 },
+
+  // Stat-granted parry (Perfect Timing support — any guard skill)
+  /** Parry window in seconds granted to guard skills lacking their own. */
+  guardParry:     { label: 'Parry Window', base: 0 },
+  /** Riposte multiplier on parried damage. */
+  guardParryPower:{ label: 'Parry Power', base: 1.5 },
+
+  // Aura-channelled energy shield tuning (Capacitor / Insulation supports
+  // socketed into aura skills inject these into the aura's ally modifiers)
+  auraEsRecharge: { label: 'Aura: ES Recharge Bonus', base: 0 },
+  auraEsDelay:    { label: 'Aura: ES Delay Reduction', base: 0, max: 0.7 },
+
+  // Skill shaping
+  aoeRadius:      { label: 'Area of Effect', base: 1, min: 0.2 },
+  projectileCount:{ label: 'Additional Projectiles', base: 0 },
+  /** Chance (0..1) to fire ONE additional projectile, rolled at fire time —
+   *  the random counterpart to the deterministic projectileCount. */
+  projectileCountChance: { label: 'Additional Projectile Chance', base: 0, min: 0, max: 1, percent: true },
+  /** Impulse applied to a target struck by a MELEE hit — shoves it away. */
+  knockback:      { label: 'Knockback Strength', base: 0, min: 0 },
+  /** Signed on-hit displacement impulse: + pushes the target away, − pulls in. */
+  displaceForce:  { label: 'Displace Force', base: 0 },
+  projectileSpeed:{ label: 'Projectile Speed', base: 1, min: 0.2 },
+  pierceCount:    { label: 'Additional Pierces', base: 0 },
+  projectileSize: { label: 'Projectile Size', base: 1, min: 0.2, max: 5 },
+  // Trajectory ATTRIBUTES — composable flight axes (see TrajectorySpec in
+  // skills.ts and World.advanceProjectile). A skill's innate trajectory is
+  // fed to each query as its BASE, so flat mods create an axis from nothing
+  // and increased/more mods scale or dampen an innate one. All floor at 0.
+  /** Homing turn rate in radians/second — low = loose drift, high = surefire. */
+  homingPower:    { label: 'Homing Power', base: 0, min: 0 },
+  /** Erratic jitter strength in radians/second of random steering. */
+  erraticPower:   { label: 'Erratic Flight', base: 0, min: 0 },
+  /** Revolve around the cast point, radius growing — rad/s (and growth scales
+   *  with projectile speed). With orbit active, contributes only the growth. */
+  spiralPower:    { label: 'Spiral Flight', base: 0, min: 0 },
+  /** Revolve TETHERED to the caster at held radius; 1 ≈ tangential speed
+   *  equal to projectile speed. */
+  orbitPower:     { label: 'Orbiting Flight', base: 0, min: 0 },
+  /** Spin around the flight axis (a tight epicycle) — rad/s. */
+  spinPower:      { label: 'Spinning Flight', base: 0, min: 0 },
+  /** Weave a figure-eight along the travel line — rad/s. */
+  weavePower:     { label: 'Weaving Flight', base: 0, min: 0 },
+  /** Impact SHARDS: shatter this many shard projectiles past the first
+   *  victim (adds to a skill's innate shatter count — Shrapnel support). */
+  projShrapnel:   { label: 'Impact Shards', base: 0, min: 0 },
+  /** >0: an explosive payload detonates on EVERY hit the projectile
+   *  survives, not just where it dies (Fulminate support). */
+  projHitDetonate:{ label: 'Detonate on Hit', base: 0, min: 0 },
+  /** Fraction of the parent's RESOLVED flight axes that spawned children
+   *  (shatter shards, emitted projectiles) inherit (Lineage support). Skill
+   *  data can add its own via shatter.inherit / emit.inherit. */
+  projInherit:    { label: 'Child Flight Inheritance', base: 0, min: 0, max: 1, percent: true },
+  /** >0: a projectile's spent shatter RE-ARMS on every chain leg, and fork
+   *  children split with theirs unspent (Cascade of Knives). */
+  projReShatter:  { label: 'Shatter Cascade', base: 0, min: 0 },
+  /** Fractional projectile speed change per second of FLIGHT (+ gathers,
+   *  − bleeds; innate TrajectorySpec.accel seeds the query — Momentum). */
+  projAccel:      { label: 'Projectile Acceleration', base: 0 },
+  /** TERRAIN RICOCHETS: bounces off rocks/walls/masonry before dying
+   *  (innate TrajectorySpec.bounce seeds the query — Ricochet). */
+  projBounce:     { label: 'Projectile Ricochets', base: 0, min: 0 },
+  /** RECURVE chance: on a survived hit, whip around and strike the SAME
+   *  victim again (× the spec's decay per miracle; innate recurve.chance
+   *  seeds the query — Heartchaser, the Recurve gem). */
+  projRecurve:    { label: 'Recurve Chance', base: 0, min: 0, max: 0.95, percent: true },
+  /** Shards shed OUTWARD when a returning projectile arrives home — the
+   *  caught blade splinters in the hand (Shredding Return). */
+  returnShrapnel: { label: 'Return Shrapnel', base: 0, min: 0 },
+  /** Additional maximum CONSTRUCTS (totems, sentries, traps, mines) — the
+   *  construct family's own cap stat, deliberately DISTINCT from
+   *  minionMaxCount so "+1 maximum minions" never mints free totems (#53). */
+  constructMaxCount: { label: 'Additional Maximum Constructs', base: 0 },
+  /** Multiplier on the strength (DoT dps) of every ailment the actor
+   *  APPLIES — hit-derived and baseline alike. The potency crank. Queried
+   *  with the status's damage-type tag in context, so tag-filtered mods
+   *  ("more fire ailment magnitude") invest in ONE ailment family. */
+  statusMagnitude:{ label: 'Ailment Magnitude', base: 1, min: 0 },
+  /** Flat bonus to the stacking CAP of ailments the actor APPLIES (poison
+   *  past 8, bleed past 5...). Queried with the status's damage-type tag,
+   *  so it tag-filters per family like statusMagnitude. */
+  ailmentStacks:  { label: 'Ailment Stack Limit', base: 0, min: 0 },
+  /** Damage-taken multiplier mapped onto minions at summon (Meat Shield:
+   *  a negative-more makes the wall of bones an actual wall). */
+  minionDamageTaken: { label: 'Minion Damage Taken', base: 1, min: 0 },
+  /** >0: minions fight DEFENSIVELY — a short leash around their owner
+   *  instead of chasing across the field (Meat Shield). */
+  minionGuard:    { label: 'Minion Guard Stance', base: 0, min: 0 },
+  /** Multiplier on tether-beam dps (Taut Wire; on top of `damage`). */
+  tetherDamage:   { label: 'Tether Damage', base: 1, min: 0 },
+  /** Multiplier on tether-band width (on top of aoeRadius). */
+  tetherWidth:    { label: 'Tether Width', base: 1, min: 0.2 },
+  /** Flat ADD to a channel's movement factor: immobile starts at 0, so
+   *  enough investment strolls through any maelstrom (Walking Meditation). */
+  channelMobility:{ label: 'Channel Mobility', base: 0, min: 0 },
+  /** Multiplier on a channel's facing turn-rate cap (Weathervane). */
+  channelTurnRate:{ label: 'Channel Turn Rate', base: 1, min: 0.1 },
+  /** >0: knockbacks the actor deals BUFFET — random direction, battering
+   *  targets around instead of shoving them away (Turbulence). */
+  knockBuffet:    { label: 'Buffeting Knockback', base: 0, min: 0 },
+  /** Multiplier on a random-aim sector's spread (AimSpec.random — Wild
+   *  Abandon doubles the flurry's arc; a negative-more focuses it). */
+  randomArc:      { label: 'Random-Strike Arc', base: 1, min: 0 },
+  /** Multiplier on a swing's ARC WIDTH — melee arcs, cone wedges, and
+   *  crescent zones all ride this one width lever (the geometry twin of
+   *  randomArc: that stat bends WHERE a strike lands, this one how WIDE
+   *  it lands). Composes with channel rampArc convergence. */
+  swingArc:       { label: 'Swing Arc', base: 1, min: 0.1 },
+  /** Multiplier on melee REACH and cone RANGE — the strike-distance lever
+   *  swingArc trades against (Reckless Breadth: wider, shorter). */
+  meleeReach:     { label: 'Melee Reach', base: 1, min: 0.3 },
+  /** >0: the channel's aim LOCKS at press — pulses and release land at the
+   *  original mark, wherever the cursor wanders (Anchored Focus; the
+   *  Event-Horizon-style Flame Blast is this stat on that skill). */
+  channelLockAim: { label: 'Channel Locked Aim', base: 0, min: 0 },
+  /** CURSOR-steering turn rate, rad/s: projectiles bend toward the caster's
+   *  LIVE aim point — marionettes on the cursor's string (Puppet Strings;
+   *  construct-fired missiles follow their owner's cursor). */
+  guidePower:     { label: 'Guided Flight', base: 0, min: 0 },
+  /** >0: the volley MATERIALIZES at the aim point instead of leaving the
+   *  caster's hands (Displaced Conjuring; Cold Spot has it innately). */
+  castAtCursor:   { label: 'Cast at Cursor', base: 0, min: 0 },
+  /** >0: the volley converts to a SALVO — one shot per beat after the cast,
+   *  each re-aimed at the live cursor (Rattling Salvo; Barrage innately). */
+  fireSalvo:      { label: 'Salvo Fire', base: 0, min: 0 },
+  /** >0: the volley converts to a VOLLEY — a firing squad of side-by-side
+   *  parallel shots (Firing Line). Salvo wins when both are granted. */
+  fireVolley:     { label: 'Volley Fire', base: 0, min: 0 },
+  /** Multiplier on the volley's rank spacing (Close Order tightens the wall). */
+  volleySpacing:  { label: 'Volley Spacing', base: 1, min: 0.2 },
+  /** Multiplier on the fan's spread cone (Choked Spread concentrates it;
+   *  a positive-increased splays it wide). */
+  spreadAngle:    { label: 'Fan Spread', base: 1, min: 0.1 },
+  /** MORE multiplier on UNSEEN strikes — the attacker is stealthed and the
+   *  victim not yet alerted (the ambush reward; stacks with backstabMult
+   *  for the positional art). Base 30% for everyone; investable. */
+  ambushBonus:    { label: 'Ambush Damage', base: 0.3, min: 0 },
+  /** Multiplier on the CAST TIME a Spirit-Totem placement inherits (base 2 —
+   *  planting the totem costs DOUBLE the spell's bar; investable down). */
+  totemPlaceTime: { label: 'Totem Placement Time', base: 2, min: 0.25 },
+  /** Rate multiplier on a construct's own casting interval (totems, pylons,
+   *  eruptors cast this much faster). */
+  constructCastRate: { label: 'Construct Cast Rate', base: 1, min: 0.2 },
+  // THE SWEEP (Sweeping Blow): >0 converts melee arcs into forward-traveling
+  // crescent waves built from the cone's own geometry; the two knobs scale
+  // the conversion's travel distance and wave speed.
+  meleeSweep:     { label: 'Sweeping Blow', base: 0, min: 0 },
+  sweepRange:     { label: 'Sweep Travel', base: 1, min: 0.2 },
+  sweepSpeed:     { label: 'Sweep Speed', base: 1, min: 0.2 },
+  /** Multiplier on damage-pool CAPS (DamagePoolSpec — bank more venom
+   *  before the aura overflows). */
+  poolCap:        { label: 'Damage Pool Capacity', base: 1, min: 0.1 },
+  /** Flat bonus to CHARGE maximums the actor banks (gainCharge effects,
+   *  chargeGain triggers, procs — queried with the granting skill's tags,
+   *  so "+2 maximum Rage on melee skills" is a tag filter, not code). */
+  chargeCap:      { label: 'Charge Capacity', base: 0 },
+  /** RUNE capacity (the Invocation sequence's length ceiling) — queried
+   *  with the invoking skill's tags; base 5, investable like any cap. */
+  runeCap:        { label: 'Rune Capacity', base: 5, min: 1, max: 10 },
+  /** Extra CASCADE placements for ground skills — displaced repeats rippling
+   *  from the impact (adds to any innate/grafted GroundCascadeSpec). */
+  aoeCascade:     { label: 'Cascade Placements', base: 0, min: 0 },
+  /** ZONE REVOLUTION, rad/s: faced zones (crescents, triangles) SPIN
+   *  (innate GroundDelivery.rotate seeds the query — Whirling Sigil). */
+  aoeSpin:        { label: 'Area Revolution', base: 0 },
+  /** Extra whole FISSURES fanned out per cast (Splintered Earth). */
+  fissureCount:   { label: 'Additional Fissures', base: 0, min: 0 },
+  /** Extra BRANCHES forked off each fissure (innate branches seed it). */
+  fissureBranches:{ label: 'Fissure Branches', base: 0, min: 0 },
+  /** >0: a held channel's facing REVOLVES at this rate (rad/s) instead of
+   *  tracking the aim — the beam becomes a lighthouse (Orbital Sweep). */
+  channelAutoSpin:{ label: 'Channel Revolution', base: 0 },
+  /** >0: run-over embeds RE-ARM on this per-object internal cooldown
+   *  instead of being consumed (Enduring Snares; innate EmbedSpec.icd
+   *  seeds the query) — the internal-cooldown lever, investable. */
+  embedIcd:       { label: 'Embed Re-arm Time', base: 0, min: 0 },
+  /** Multiplier on the cascade's step distance (tighter or farther ripples). */
+  cascadeStep:    { label: 'Cascade Reach', base: 1, min: 0.2 },
+  /** Flat ADD to a skill's cast-bar movement factor (SkillDef.castMove
+   *  starts rooted at 0) — walking casters by investment (Fleetfoot). */
+  castMobility:   { label: 'Cast Mobility', base: 0, min: 0 },
+  effectDuration: { label: 'Skill Effect Duration', base: 1, min: 0.1 },
+  statusChance:   { label: 'Ailment Chance', base: 0, percent: true },
+  manaCost:       { label: 'Mana Cost Multiplier', base: 1, min: 0 },
+  /** Flat cost adders — a support's teeth on cheap skills (Mana Feeder). */
+  addedManaCost:  { label: 'Added Mana Cost', base: 0, min: 0 },
+  addedLifeCost:  { label: 'Added Life Cost', base: 0, min: 0 },
+  // RESOURCE-AS-DAMAGE: flat damage per point of resource ACTUALLY PAID on
+  // the use (the paid cost travels with the cast — echoes/totems pay nothing
+  // and earn nothing). Typed pro-rata over the skill's own base damage, so
+  // it converts like everything else. One stat per payable lane.
+  costDamage_mana:{ label: 'Damage per Mana Spent', base: 0, min: 0 },
+  costDamage_life:{ label: 'Damage per Life Spent', base: 0, min: 0 },
+
+  // Sustain
+  lifeOnHit:      { label: 'Life Gained on Hit', base: 0 },
+  lifeLeech:      { label: 'Damage Leeched as Life', base: 0, max: 0.2, percent: true },
+  /** Fraction of hit damage gained as WARD (the decaying shell — Soulflay's
+   *  tithe). Feeds gainWard, so wardGain investment multiplies it. */
+  wardLeech:      { label: 'Damage Leeched as Ward', base: 0, max: 0.3, percent: true },
+  /** FLAT seconds added to a skill's cooldown — the trade-off levy
+   *  (Austerity / Apotheosis buy power with a long clock). Still divided
+   *  by cooldownRecovery: an imposed cooldown stays a reducible one. */
+  addedCooldown:  { label: 'Added Cooldown', base: 0, min: 0 },
+  /** Seconds a STAGGERED wound takes to finish landing (base = the classic
+   *  3s window) — investable: the monk-stagger toggle stretches it. */
+  staggerWindow:  { label: 'Stagger Window', base: 3, min: 1 },
+
+  // Echoes (mirage riders / ancestral ghosts / shadow clones — ghosts that
+  // cast YOUR skills with YOUR scaling; deliberately NOT the minion family)
+  /** Rider count per echo family — each EchoRiderSpec's `count` is this
+   *  query's BASE, so gems/thresholds/passives add archers and ghosts. */
+  mirageCount:    { label: 'Additional Mirages', base: 0, min: 0 },
+  /** Multiplier on every echo's damageFactor (and its status potency) —
+   *  THE investable crank for the whole echo economy. */
+  mirageDamage:   { label: 'Echo Damage', base: 1, min: 0.1 },
+
+  // Minions (queried on the OWNER; minions inherit these as multipliers)
+  minionDamage:   { label: 'Minion Damage', base: 1, min: 0 },
+  minionLife:     { label: 'Minion Life', base: 1, min: 0.1 },
+  minionMaxCount: { label: 'Additional Maximum Minions', base: 0 },
+  minionSize:     { label: 'Minion Size', base: 1, min: 0.3, max: 3 },
+  minionMoveSpeed:{ label: 'Minion Movement Speed', base: 1, min: 0.2 },
+  /** Multiplier on decay-minion drain (Enduring Bond slows the rot). */
+  minionDecayRate:{ label: 'Minion Decay Rate', base: 1, min: 0.25 },
+  // Minion regeneration (owner-queried with the SUMMON skill's tags — the
+  // minionDamage pattern, so gems/passives split by skill or tag freely:
+  // "skeletons heal, Revive minions don't" is a tag filter, not code).
+  minionRegen:    { label: 'Minion Life Regeneration', base: 0 },
+  minionRegenPct: { label: 'Minion Life Regeneration %', base: 0, min: 0, percent: true },
+  /** Chance to drop an elemental REMNANT on a real cast of that school. */
+  remnantOnCast:  { label: 'Remnant on Cast Chance', base: 0, min: 0, percent: true },
+  /** Fraction of minion max life dealt as fire damage on death (0 = off). */
+  minionExplodeDeath:   { label: 'Minion Death Explosion', base: 0, percent: true },
+  /** Same, but the minion detonates itself upon reaching low life (0 = off). */
+  minionExplodeLowLife: { label: 'Minion Low-Life Detonation', base: 0, percent: true },
+  /** Extra summons per cast. */
+  summonCount:    { label: 'Additional Summons per Cast', base: 0 },
+  /** >0: minions EMERGE AT THE CURSOR instead of beside their summoner
+   *  (Beckon from Beyond — Bombardment's portal as a graft). */
+  summonAtCursor: { label: 'Summon at Cursor', base: 0, min: 0 },
+  /** Fraction of a minion's max life dealt as damage around it AS IT
+   *  EMERGES (Violent Arrival — the inverse Martyrdom). */
+  summonImpact:   { label: 'Summoning Impact', base: 0, min: 0, percent: true },
+  /** >0: the CHANNEL converts to a cast that PLANTS a channeler at the
+   *  mark — the held beam persists at the location for this many seconds,
+   *  independent of the caster (Ritual Ground: an unchanneled channel). */
+  channelPersist: { label: 'Channel Persistence', base: 0, min: 0 },
+  /** > 0: extra summons emerge in sequence instead of all at once. */
+  summonSequence: { label: 'Sequential Summoning', base: 0 },
+  /** Multiplier on persistent minions' respawn timers (lower = faster). */
+  minionRespawnTime: { label: 'Minion Respawn Time', base: 1, min: 0.1 },
+  /** Fraction of a minion-buff's effect (BuffEffect.affects 'minions') ALSO
+   *  granted to the caster — offerings shared with the officiant
+   *  (Communal Rites; PoE's Mistress of Sacrifice shape). */
+  offeringShare:  { label: 'Offering Share', base: 0, min: 0, max: 1, percent: true },
+
+  // Cost conversion (0..1 fractions of one resource paid as the other)
+  costToLife:     { label: 'Mana Cost Paid as Life', base: 0, min: 0, max: 1, percent: true },
+  costToMana:     { label: 'Life Cost Paid as Mana', base: 0, min: 0, max: 1, percent: true },
+
+  // Mechanic-warping flags & counters (set by supports / passives)
+  chainCount:     { label: 'Projectile Chains', base: 0 },
+  /** 0 = circle, 1 = square, 2 = triangle (override-style flag). */
+  aoeShape:       { label: 'Area Shape', base: 0 },
+  /** Number of secondary explosions an area skill scatters into. */
+  aoeScatter:     { label: 'Area Aftershocks', base: 0 },
+  /** Extra strikes for storm skills (applies to min and max of the range). */
+  stormCount:     { label: 'Additional Storm Strikes', base: 0 },
+  /** > 0: storm skills release all strikes at once. */
+  stormImmediate: { label: 'Immediate Storm', base: 0 },
+  /** > 0: the skill is cast by a spawned totem instead of its user. */
+  castAsTotem:    { label: 'Cast as Totem', base: 0 },
+  /** > 0: corpse-targeting skills may kill your own minion for a corpse. */
+  sacrificeMinions: { label: 'Sacrifice Minions', base: 0 },
+  /** > 0: corpse-targeting skills may target a minion when no corpse exists
+   *  (without harming it) — e.g. Corpse Shift teleporting to a minion. */
+  targetMinionFallback: { label: 'Target Minions as Fallback', base: 0 },
+
+  // Stealth & perception
+  /** Multiplier on the range at which enemies detect this actor. */
+  detectability:  { label: 'Detectability', base: 1, min: 0 },
+  /** > 0: enemies will not see or deliberately target this actor at all
+   *  (area effects and projectiles still connect geometrically). */
+  invisible:      { label: 'Invisible', base: 0 },
+  /** Range at which THIS actor notices enemies (per-monster `detection`
+   *  multiplier varies it: zombies shamble, blood mites sense you afar). */
+  detectionRange: { label: 'Detection Range', base: 520, min: 50 },
+
+  // DoT & curse mechanics
+  /** > 0: DoTs applied by the skill spread on the victim's death. */
+  dotPropagates:  { label: 'Damage over Time Propagates', base: 0 },
+  /** Curse statuses rupture at expiry for this multiple of the skill's roll. */
+  curseRupture:   { label: 'Curse Rupture', base: 0 },
+  /** DoT statuses rupture at expiry for this fraction of their total damage. */
+  dotRupture:     { label: 'DoT Rupture', base: 0 },
+  /** > 0: cursed areas detonate shortly after cast (Hex Blast). */
+  hexBlast:       { label: 'Hex Blast', base: 0 },
+  /** Seconds of lingering damage field left behind by the skill's area. */
+  lingerField:    { label: 'Lingering Field', base: 0 },
+  /** > 0: curses also grant Hedonism haste, but may afflict your allies. */
+  hedonism:       { label: 'Hedonism', base: 0 },
+
+  // Projectile impact behaviors
+  /** Forks on impact into this many extra split-pairs. */
+  forkCount:      { label: 'Projectile Forks', base: 0 },
+  /** 0 none / 1 return to cast point / 2 return to the (moving) caster. */
+  projReturn:     { label: 'Projectile Return', base: 0 },
+
+  // Repeats & salvos
+  /** Extra executions after the real one (Multistrike, Spell Echo, Cascade). */
+  repeatCount:    { label: 'Skill Repeats', base: 0 },
+  /** Per-repeat size & damage growth (+0.25 = each repeat 25% bigger). */
+  repeatScale:    { label: 'Repeat Scaling', base: 0 },
+  /** > 0: repeats re-aim at the nearest enemy (Multistrike). */
+  repeatRetarget: { label: 'Repeats Retarget', base: 0 },
+  /** > 0: the user is locked in place while the repeats play out. */
+  repeatLock:     { label: 'Repeats Lock User', base: 0 },
+  /** Unleash: max seals banked while the skill rests (1 salvo shot each). */
+  unleashMax:     { label: 'Maximum Unleash Seals', base: 0 },
+
+  // Melee impact behaviors
+  /** Melee hits chain to this many extra nearby enemies. */
+  meleeReverb:    { label: 'Melee Reverberation', base: 0 },
+  /** Hits splash to enemies within this radius at half damage. */
+  splashRadius:   { label: 'Damage Splash Radius', base: 0 },
+
+  // More minion shaping (baked at summon time)
+  minionDetectionRange: { label: 'Minion Detection Range', base: 1, min: 0.2 },
+  minionHaste:    { label: 'Minion Action Speed', base: 1, min: 0.2 },
+  /** Seconds a slain minion clings to unlife after death effects fire. */
+  minionUndying:  { label: 'Minion Undying Duration', base: 0 },
+};
+
+// Damage conversion stats: convert_<from>_<to> = fraction of <from> damage
+// dealt as <to> instead. Total conversion per source type caps at 100%.
+// Usable by supports, passives, or skill leveling alike.
+for (const from of DAMAGE_TYPES) {
+  for (const to of DAMAGE_TYPES) {
+    if (from === to) continue;
+    STAT_DEFS[`convert_${from}_${to}`] = {
+      label: `${from[0].toUpperCase()}${from.slice(1)} Converted to ${to[0].toUpperCase()}${to.slice(1)}`,
+      base: 0, min: 0, max: 1, percent: true,
+    };
+  }
+}
+
+export function conversionStat(from: DamageType, to: DamageType): string {
+  return `convert_${from}_${to}`;
+}
+
+const ADDED_DAMAGE_STAT: Record<DamageType, string> = {
+  physical: 'addedPhysical',
+  fire: 'addedFire',
+  cold: 'addedCold',
+  lightning: 'addedLightning',
+  chaos: 'addedChaos',
+};
+export function addedDamageStat(type: DamageType): string { return ADDED_DAMAGE_STAT[type]; }
+
+// ---------------------------------------------------------------------------
+// StatSheet
+// ---------------------------------------------------------------------------
+
+export class StatSheet {
+  private sources = new Map<string, Modifier[]>();
+  private baseOverrides = new Map<string, number>();
+  private cache = new Map<string, number>();
+  /** Active actor-state conditions (lowLife, fullEs...). */
+  private conditions = new Set<ConditionId>();
+  private conditionKey = '';
+
+  /** Replace the active condition set (cache clears only on real change). */
+  setConditions(active: ConditionId[]): void {
+    const key = active.slice().sort().join(',');
+    if (key === this.conditionKey) return;
+    this.conditionKey = key;
+    this.conditions = new Set(active);
+    this.cache.clear();
+  }
+
+  hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
+
+  /** Add or replace a named bundle of modifiers (e.g. 'class', 'buff:warcry'). */
+  setSource(name: string, mods: Modifier[]): void {
+    this.sources.set(name, mods);
+    this.cache.clear();
+  }
+
+  removeSource(name: string): void {
+    if (this.sources.delete(name)) this.cache.clear();
+  }
+
+  hasSource(name: string): boolean { return this.sources.has(name); }
+
+  sourceNames(): string[] { return [...this.sources.keys()]; }
+
+  getSourceMods(name: string): Modifier[] | undefined { return this.sources.get(name); }
+
+  /** Override a stat's base value (used by monster definitions). */
+  setBase(stat: string, value: number): void {
+    this.baseOverrides.set(stat, value);
+    this.cache.clear();
+  }
+
+  /**
+   * Compute a stat. `contextTags` describes the action being evaluated
+   * (skill tags + damage type); tag-filtered modifiers apply only when all
+   * their tags are present in the context.
+   *
+   * `extra` carries skill-local modifiers (skill levels, socketed support
+   * gems) that participate in the same layered formula but exist only for
+   * this one query — the mechanism behind per-skill customization.
+   *
+   * `baseValue` overrides the stat's base for this query — used when a
+   * skill brings its own base (e.g. a summon's maxActive) and modifiers
+   * like "50% fewer maximum minions" should multiply it.
+   */
+  get(stat: string, contextTags?: ReadonlySet<SkillTag>, extra?: readonly Modifier[], baseValue?: number): number {
+    const key = contextTags && contextTags.size
+      ? stat + '|' + [...contextTags].sort().join(',')
+      : stat;
+    const cacheable = (!extra || !extra.length) && baseValue === undefined;
+    if (cacheable) {
+      const cached = this.cache.get(key);
+      if (cached !== undefined) return cached;
+    }
+
+    const def = STAT_DEFS[stat];
+    let base = baseValue ?? this.baseOverrides.get(stat) ?? def?.base ?? 0;
+    let flat = 0, increased = 0, moreMult = 1;
+    let override: number | undefined;
+
+    const apply = (m: Modifier): void => {
+      if (m.stat !== stat) return;
+      if (m.when && !this.conditions.has(m.when)) return;
+      if (m.tags && m.tags.length) {
+        if (!contextTags) return;
+        for (const t of m.tags) if (!contextTags.has(t)) return;
+      }
+      switch (m.kind) {
+        case 'flat': flat += m.value; break;
+        case 'increased': increased += m.value; break;
+        case 'more': moreMult *= 1 + m.value; break;
+        case 'override': override = m.value; break;
+      }
+    };
+    for (const mods of this.sources.values()) for (const m of mods) apply(m);
+    if (extra) for (const m of extra) apply(m);
+
+    let value = override !== undefined ? override : (base + flat) * (1 + increased) * moreMult;
+    if (def) {
+      if (def.min !== undefined) value = Math.max(def.min, value);
+      if (def.max !== undefined) value = Math.min(def.max, value);
+    }
+    if (cacheable) this.cache.set(key, value);
+    return value;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Attributes — fully data-driven. Each point of an attribute grants the
+// listed modifiers. Adding a new attribute (or changing what one does) is a
+// pure data edit; the character sheet and allocation UI pick it up
+// automatically.
+// ---------------------------------------------------------------------------
+
+export type AttributeId = 'strength' | 'dexterity' | 'intelligence' | 'vitality' | 'willpower';
+
+export interface AttributeDef {
+  label: string;
+  short: string;
+  description: string;
+  perPoint: Modifier[];
+}
+
+export const ATTRIBUTES: Record<AttributeId, AttributeDef> = {
+  strength: {
+    label: 'Strength', short: 'STR',
+    description: '+3 life, +1 melee damage per 4 pts, 0.5% increased melee damage',
+    perPoint: [
+      mod('life', 'flat', 3),
+      mod('addedPhysical', 'flat', 0.25, ['melee']),
+      mod('damage', 'increased', 0.005, ['melee']),
+    ],
+  },
+  dexterity: {
+    label: 'Dexterity', short: 'DEX',
+    description: '+5 accuracy, +4 evasion, 0.4% increased attack speed',
+    perPoint: [
+      mod('accuracy', 'flat', 5),
+      mod('evasion', 'flat', 4),
+      mod('attackSpeed', 'increased', 0.004, ['attack']),
+      mod('damage', 'increased', 0.004, ['projectile', 'attack']),
+    ],
+  },
+  intelligence: {
+    label: 'Intelligence', short: 'INT',
+    description: '+3 mana, 0.6% increased spell damage',
+    perPoint: [
+      mod('mana', 'flat', 3),
+      mod('damage', 'increased', 0.006, ['spell']),
+      mod('critChance', 'flat', 0.0008, ['spell']),
+    ],
+  },
+  vitality: {
+    label: 'Vitality', short: 'VIT',
+    description: '+6 life, +0.15 life regen/s',
+    perPoint: [
+      mod('life', 'flat', 6),
+      mod('lifeRegen', 'flat', 0.15),
+    ],
+  },
+  willpower: {
+    label: 'Willpower', short: 'WIL',
+    description: '+2 mana, +0.1 mana regen, 0.8% minion damage, 0.5% effect duration',
+    perPoint: [
+      mod('mana', 'flat', 2),
+      mod('manaRegen', 'flat', 0.1),
+      mod('minionDamage', 'increased', 0.008),
+      mod('effectDuration', 'increased', 0.005),
+    ],
+  },
+};
+
+export const ATTRIBUTE_IDS = Object.keys(ATTRIBUTES) as AttributeId[];
+
+export type Attributes = Record<AttributeId, number>;
+
+/** Expand an attribute spread into the flat modifier list it grants. */
+export function attributeModifiers(attrs: Attributes): Modifier[] {
+  const out: Modifier[] = [];
+  for (const id of ATTRIBUTE_IDS) {
+    const pts = attrs[id];
+    if (!pts) continue;
+    for (const m of ATTRIBUTES[id].perPoint) {
+      out.push({ ...m, value: m.value * pts });
+    }
+  }
+  return out;
+}

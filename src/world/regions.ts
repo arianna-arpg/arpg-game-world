@@ -1,0 +1,288 @@
+// ---------------------------------------------------------------------------
+// REGION KINDS — the unified, data-driven "what is this ground/space, and what
+// does being in it DO" registry. The Phase-3 spine.
+//
+// Before this, three things were hardcoded: the terrain-status switch
+// (updateTerrainEffects), the GROUND_KINDS list, and the binary walk mask. They
+// all collapse into ONE open registry of RegionKind rows. Each row is pure DATA:
+//   • collision policy  — walkable? blocks at the boundary, or enter-then-resolve?
+//   • boundary policy    — what happens when a MOVE enters it (void → fall)
+//   • standing effect    — a per-tick status / survival drain / speed scale
+//   • enter effect       — a once-on-entry status + floating text (bog poison…)
+//   • visual             — a purely-graphical region needs NO behaviour
+//   • escape-hatch hooks — onEnter/onStand/onExit for arbitrary future behaviour
+//
+// So void-damage, underwater-breath, an environmental slow, and a visual-only
+// shimmer are all just ROWS here — and the example future mechanics (a knockback-
+// collision support, a void-fall-respawn, a flicker teleport, env effects) plug
+// into the same seams (procs, RecoveryPolicy, DisplacementPolicy) without engine
+// surgery. Adding a kind = registerRegion(...), never an engine edit.
+//
+// Pure data + types: imports only TYPES (Actor/World) for the optional handler
+// signatures, so it stays a leaf with no runtime cycle (mirrors traits/biomes).
+// ---------------------------------------------------------------------------
+
+import type { Actor } from '../engine/actor';
+import type { World } from '../engine/world';
+import type { DamageType } from '../engine/stats';
+
+/** How much a recovery/collision outcome hurts. */
+export interface DamageSpec {
+  /** Flat amount, OR a fraction of the victim's max life. */
+  amount: number;
+  pctMaxLife?: number;
+  type: DamageType;
+  /** May this damage kill (a fatal fall flows into the normal death path)? */
+  canKill?: boolean;
+}
+
+/** What happens when an actor LEAVES the survivable region (enters a non-blocking
+ *  non-walkable region like void). A discriminated union, resolved by `kind`.
+ *  `block` is the Phase-2 default (confine at the boundary). NO literal "void rule"
+ *  exists anywhere — void is just a RegionKind whose boundaryPolicy is `fall`. */
+export type RecoveryPolicy =
+  | { kind: 'block' }
+  | { kind: 'eject'; to: 'edge'; damage?: DamageSpec }
+  | { kind: 'fall'; to: 'edge' | 'lastNode'; damage?: DamageSpec }
+  | { kind: 'instakill' }
+  | { kind: 'teleport'; to: 'lastNode' | 'waypoint' };
+
+/** Per-DISPLACEMENT override so no movement ability is ever boxed in by the
+ *  walkability model. A flicker teleport / wall-phase / future "insane mechanic"
+ *  declares which confinements it ignores. Default {} = full confinement (today). */
+export interface DisplacementPolicy {
+  /** Pass through walls / region boundaries (don't confine to walkable). */
+  ignoreConfine?: boolean;
+  /** Cross a fall region (void) without triggering its boundary policy. */
+  ignoreFall?: boolean;
+  /** Ignore standing hazards/effects during the move. */
+  ignoreHazard?: boolean;
+}
+
+/** What clampPos can OPTIONALLY report about a move that was arrested — the seam
+ *  the collision-proc (knockback-collision support) reads. Opt-in: omit `out` and
+ *  clampPos costs exactly what it did before. */
+export interface CollisionResult {
+  hit: 'none' | 'bounds' | 'wall' | 'void' | 'entity';
+  at: { x: number; y: number };
+  /** Outward normal from the blocker (for impact direction), when known. */
+  normal?: { x: number; y: number };
+  /** The region kind / doodad kind that stopped the move. */
+  blockedKind?: string;
+}
+
+/** A purely-graphical region's render hint (consumed by a generic renderer pass). */
+export interface RegionVisualSpec {
+  fill: string;
+  /** 0..1 opacity of the wash. */
+  alpha?: number;
+  /** A gentle animated shimmer/pulse (renderer interprets). */
+  animate?: 'shimmer' | 'pulse' | 'drift';
+}
+
+/** A once-on-enter status (bog poison, tentacle stun). amount scales with zone
+ *  level via amountPerLevel so the migration reproduces today's numbers exactly. */
+export interface RegionEnterStatus {
+  id: string;
+  amount?: number;
+  amountPerLevel?: number;
+  duration: number;
+}
+
+export interface RegionKind {
+  id: string;
+  /** Does NORMAL movement stay inside walkable cells (i.e. is THIS cell standable)? */
+  walkable: boolean;
+  /** When !walkable: confine at the boundary (wall) vs let a move ENTER then resolve
+   *  via boundaryPolicy (void). Ignored when walkable. */
+  blocks: boolean;
+  /** Outcome when a move enters a non-blocking non-walkable region (void → fall). */
+  boundaryPolicy?: RecoveryPolicy;
+  /** applyStatus source label, to reproduce today's "the mud" / "the bog" text. */
+  label?: string;
+  /** Per-tick status while standing in (mud→mired, water→wading). */
+  standStatus?: string;
+  /** Depth-aware variant (water deep → swimming). */
+  standStatusDeep?: string;
+  /** Once-on-enter status (bog→poison, tentacle_field→stun). */
+  enterStatus?: RegionEnterStatus;
+  /** Floating text on enter ("bogged!"). */
+  enterText?: { text: string; color: string };
+  /** Drains a survival resource while standing in (deep_water → breath). */
+  survival?: { resource: string; drain: number };
+  /** Direct move-speed multiplier while standing in (for kinds that don't use a
+   *  status). Existing grounds keep using statuses; this is for new kinds. */
+  moveScale?: number;
+  /** Pure-graphical region — no gameplay effect at all. */
+  visualOnly?: boolean;
+  visual?: RegionVisualSpec;
+  /** Data-driven crossing exception: which displacements may pass despite !walkable
+   *  (a bridge, a teleport). Replaces the hardcoded chasm/bridge branch. */
+  crossableBy?: (disp: DisplacementPolicy) => boolean;
+  /** Escape-hatch handlers for ARBITRARY behaviour the declarative fields can't
+   *  express — the open door for future "insane mechanics" (type-only World use). */
+  onEnter?: (actor: Actor, world: World) => void;
+  onStand?: (actor: Actor, world: World, dt: number) => void;
+  onExit?: (actor: Actor, world: World) => void;
+  /** Cells of this kind STOP projectiles (swept per sub-cell step). Default FALSE
+   *  = a CHASM-LIKE: bodies can't cross but shots sail over (void/chasm/water/
+   *  ledges). TRUE WALLS opt in — rampart masonry plus wall/flesh_wall/
+   *  fungal_wall: an arrow has no business flying through a rock face. */
+  blocksShot?: boolean;
+  /** Cells of this kind block AI LINE OF SIGHT (ray-marched). Default FALSE (a
+   *  chasm-like: you see across the pit). The true walls above opt in; parapet/
+   *  window stay see-through — the arrow-slit: a wall you can shoot and see
+   *  through but never walk through. */
+  blocksSight?: boolean;
+}
+
+/** A generic ENVIRONMENTAL-SURVIVAL meter (breath today; heat/cold/corruption
+ *  later). A RegionKind.survival drains it while you stand in; out of it you take
+ *  underflow damage. Lives on Actor.survival as a Map (NOT a hardcoded field). */
+export interface SurvivalResourceDef {
+  id: string;
+  label: string;
+  max: number;
+  /** Regen per second while NOT being drained. */
+  regen: number;
+  /** While empty, lose this fraction of MAX life per second (drowning) — the STARTING
+   *  rate. If underflowRampTo/Secs are set, the rate RAMPS from here up to underflowRampTo
+   *  over underflowRampSecs of continuous underflow (the dread of staying down too long). */
+  underflowPctLifePerSec: number;
+  /** Peak per-sec %max-life damage the underflow ramps to (omit = no ramp, flat rate). */
+  underflowRampTo?: number;
+  /** Seconds of continuous underflow to reach underflowRampTo (omit = no ramp). */
+  underflowRampSecs?: number;
+  /** HUD meter fill colour (the readout loops this table, so a new resource draws
+   *  for free — just add a row + a colour). */
+  color: string;
+}
+
+export const SURVIVAL_RESOURCES: Record<string, SurvivalResourceDef> = {
+  // Drowning RAMPS: ~5%/s at first, climbing to ~25%/s after 10s under without air —
+  // a tightening panic, not a flat tax. Refilling breath (an air pocket) resets it.
+  breath: { id: 'breath', label: 'Breath', max: 12, regen: 5, underflowPctLifePerSec: 0.05, underflowRampTo: 0.25, underflowRampSecs: 10, color: '#6ac0f8' },
+  // LIGHT — the Descent's encroaching-darkness countdown. It only ever DRAINS (no
+  // passive regen); running over a light spot bursts it back up. underflow does NO
+  // life damage — at zero the dark CONSUMES you and the engine resurfaces you
+  // (handled explicitly in updateDescent), a cleaner "the dark takes you" than chip
+  // damage. The HUD survival readout draws this meter for free (it loops this table).
+  light: { id: 'light', label: 'Light', max: 100, regen: 0, underflowPctLifePerSec: 0, color: '#ffe08a' },
+};
+
+export function survivalResource(id: string): SurvivalResourceDef | undefined { return SURVIVAL_RESOURCES[id]; }
+
+const REGION_KINDS: Record<string, RegionKind> = {};
+
+/** Register a region kind under an open-string id. */
+export function registerRegion(def: RegionKind): void { REGION_KINDS[def.id] = def; }
+
+/** Look up a region kind (undefined for an unknown id). */
+export function regionKind(id: string | undefined): RegionKind | undefined {
+  return id ? REGION_KINDS[id] : undefined;
+}
+
+/** Every registered region id (GROUND_KINDS etc. derive from this — no literals). */
+export function regionIds(): string[] { return Object.keys(REGION_KINDS); }
+
+/** Region ids that are sensed from DOODAD grounds (the old GROUND_KINDS), i.e. a
+ *  walkable overlay terrain a `groundAt` disc reports. Derived, not a literal list
+ *  (moveScale counts: the road's speed boost is an effect too — a new legend/fx
+ *  ground kind registered with any effect auto-joins the ground sensing). */
+export function doodadGroundIds(): string[] {
+  return Object.keys(REGION_KINDS).filter(id => REGION_KINDS[id].walkable && !REGION_KINDS[id].visualOnly
+    && (REGION_KINDS[id].standStatus || REGION_KINDS[id].enterStatus || REGION_KINDS[id].survival
+      || REGION_KINDS[id].moveScale !== undefined));
+}
+
+// --- DEFAULT ROWS -----------------------------------------------------------
+// Grid substrate kinds (no terrain effect; pure collision policy).
+registerRegion({ id: 'ground', walkable: true, blocks: false });
+// TRUE WALLS: a mountain pass's rock face stops arrows and sight — a shot has
+// no business flying "over" a cliff wall (a valley or a void is different: see
+// 'void'/'chasm', which bodies cannot cross but shots sail over). Flipped in
+// the primitives pass now that AI reposition (implicit losSeek) exists.
+registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, blocksSight: true });
+
+// Existing DOODAD grounds, migrated VERBATIM from the updateTerrainEffects switch
+// (same statuses, sources, durations, and zone-level-scaled bog poison).
+registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired' });
+registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired' });
+registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden' });
+registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming' });
+registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery' });
+registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
+registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged',
+  enterStatus: { id: 'poison', amount: 1.5, amountPerLevel: 0.7, duration: 1 }, enterText: { text: 'bogged!', color: '#6a8a3a' } });
+registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'the tentacles', standStatus: 'ensnared',
+  enterStatus: { id: 'stun', duration: 0.6 }, enterText: { text: 'ensnared!', color: '#7fce6a' } });
+// ROAD: a packed gravel path — a VERY mild move-speed boost (moveScale, NOT a status, so
+// there's no status icon for so minor an effect). The first consumer of the moveScale seam.
+registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', moveScale: 1.04 });
+
+// --- PHASE-3 INSTANCE ROWS --------------------------------------------------
+// VOID: not walkable, does NOT block (you can be shoved/walk in) → its boundary
+// policy makes you FALL: respawn at the chasm edge taking a chunk of max life.
+// A bridge or a fall-ignoring displacement crosses it (crossableBy).
+registerRegion({
+  id: 'void', walkable: false, blocks: false, label: 'the void',
+  boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'physical', canKill: true } },
+  crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  visual: { fill: '#050507', alpha: 1 },
+});
+// DEEP WATER: walkable but you SWIM (slowed) and your BREATH drains; out of air
+// you start drowning (the survival system). The underwater zones' open sea.
+registerRegion({
+  id: 'deep_water', walkable: true, blocks: false, label: 'the depths',
+  // The ocean FLOOR: a mild slow + a slippery, low-traction step ('seabed') — trudging
+  // the seabed, not the heavier 'swimming' wade. Breath still drains down here.
+  standStatus: 'seabed', survival: { resource: 'breath', drain: 1 },
+  visual: { fill: '#0c2740', alpha: 0.55, animate: 'drift' },
+});
+// FLESH: a writhing organic chamber floor (the flesh biome's circular chambers).
+// Walkable; a pulsing red visual makes the ground throb like living tissue.
+registerRegion({ id: 'flesh', walkable: true, blocks: false, label: 'the flesh', visual: { fill: '#6a1f2a', alpha: 0.4, animate: 'pulse' } });
+// FLESH WALL: the living TISSUE between chambers (the flesh biome's negative space).
+// Non-walkable + blocks like a wall, but a deep organic-red visual so the warren
+// reads as carved-from-meat ("Belly of the Beast") — NOT the black void/fall region.
+// A solid wash (no pulse) keeps the walls reading as solid; the floor does the throb.
+registerRegion({ id: 'flesh_wall', walkable: false, blocks: true, label: 'the flesh',
+  blocksShot: true, blocksSight: true, visual: { fill: '#3a0e16', alpha: 1 } });
+// FUNGAL WALL: the dense living MYCELIUM between a mycelia grotto's chambers (the negative
+// space the myceliaLayout carves into). Non-walkable + blocks like a wall, but a deep
+// purple-fungal visual so the warren reads as carved-from-mushroom, NOT the black void.
+registerRegion({ id: 'fungal_wall', walkable: false, blocks: true, label: 'the mycelium',
+  blocksShot: true, blocksSight: true, visual: { fill: '#241634', alpha: 1 } });
+// AIR POCKET: a safe walkable bubble in an underwater zone — breath refills here
+// (no drain), the player's lifeline. Pure walkable + a visual tell.
+registerRegion({ id: 'air_pocket', walkable: true, blocks: false, label: 'air', visual: { fill: '#2a6a8a', alpha: 0.35, animate: 'pulse' } });
+// SHIMMER: the PROOF that a purely-graphical environmental region is just a row —
+// walkable, no gameplay effect at all, only a render wash (mechanic (d)). Adding an
+// ambient visual env effect needs zero engine code.
+registerRegion({ id: 'shimmer', walkable: true, blocks: false, visualOnly: true, visual: { fill: '#3a7a9a', alpha: 0.16, animate: 'shimmer' } });
+// TALLGRASS: the FIELD mega-zone's natural boundary — the off-blob area outside the
+// contiguous Field heat-map shape. Non-walkable + blocks (an impenetrable hedgerow of
+// tall grass marking the expanse's edge), but a deep grassy visual so the zone EDGE
+// reads as overgrown meadow, NOT a cave wall or the black void. The walkable interior
+// is plain 'ground' (the grassland floor); this paints only the silhouette's outside.
+registerRegion({ id: 'tallgrass', walkable: false, blocks: true, label: 'the tall grass', visual: { fill: '#1c3312', alpha: 1 },
+  // Explicit, deliberate: the Field's hedge is a SOFT boundary — never an arrow-stopper.
+  blocksShot: false, blocksSight: false });
+
+// --- STRUCTURE REGIONS (the plan-structure framework) ------------------------
+// RAMPART: dressed structural stone — a castle/fortress curtain wall. A TRUE
+// WALL (stops shots and sight, like wall/flesh_wall/fungal_wall): storming a
+// keep means finding the gate or a window line, not trading arrows through
+// masonry.
+registerRegion({ id: 'rampart', walkable: false, blocks: true, label: 'the rampart',
+  blocksShot: true, blocksSight: true, visual: { fill: '#3b3f4c', alpha: 1 } });
+// PARAPET: a waist-high battlement rim (tower crowns, wall walks). Blocks MOVEMENT
+// only — shots and sight sail over, which is what lets a garrisoned archer rain
+// fire from a tower while staying unreachable (the Arreat-plateau imp fantasy).
+registerRegion({ id: 'parapet', walkable: false, blocks: true, label: 'the parapet',
+  blocksShot: false, blocksSight: false, visual: { fill: '#4a4f5e', alpha: 0.9 } });
+// WINDOW: an arrow-slit in a rampart line. Same policy as parapet (see + shoot
+// through, never walk through) — a distinct id so blueprints, renders, and future
+// rules can tell a slit from a battlement.
+registerRegion({ id: 'window', walkable: false, blocks: true, label: 'the window',
+  blocksShot: false, blocksSight: false, visual: { fill: '#2b3140', alpha: 0.85 } });
