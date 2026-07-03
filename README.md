@@ -4,41 +4,83 @@ A top-down action RPG prototype built around one idea: **every system is open,
 modular data**. Classes are starting points, not cages; skills, monsters,
 attributes, statuses, and stats are all plain data entries that compose through
 a single shared engine — and monsters, minions, and the player all act through
-the exact same skill pipeline.
+the exact same skill pipeline (`World.useSkill`).
 
-## Running it
+> **For contributors (human or AI):** the counts below reflect what is actually
+> in `src/data/` right now, not a roadmap. If you add or remove content, update
+> them so this file stays a reliable source of truth.
+
+## Quick start
 
 ```
 npm install
-npm run dev        # then open http://localhost:5173
+npm run dev          # then open http://localhost:5173
 ```
 
-**Controls:** WASD move · LMB / RMB / 1-3 use skills · C character sheet ·
-B skill book · P passive tree · M world map · Esc close panels.
+On Windows you can instead double-click **Play Game.bat** (it installs
+dependencies on first run). Type-check with `npx tsc --noEmit`; make a production
+build with `npm run build` (output in `dist/`).
+
+**Controls:** WASD move · LMB / RMB / 1–6 use the eight skill slots ·
+C character sheet · B skill book · P passive tree · M world map · Esc menu.
+Keybinds are rebindable from the Esc menu.
+
+## What's in it
+
+A data-driven build sandbox at real scale. Approximate current content, all
+defined under `src/data/` and `src/engine/`:
+
+- **~377 skills** and **~209 support gems.** Skills are *loot*; supports socket
+  into them. Each skill picks a delivery — projectile, melee, nova, cone, ground,
+  self, summon, dash, aura, construct, storm, beam, leap, blink… — and composes
+  typed effects.
+- **156 monsters** over **13 AI archetypes** plus fully-scripted bosses, with
+  squad tactics (muster, engage tokens, formations), morale, five rarity tiers
+  (normal → magic → rare → champion → crowned) and rolled affixes.
+- **13 classes**, a **233-node passive tree** (9 keystones, 42 notables) around an
+  attribute travel ring, and **5 attributes**. Progression twist: **skill points
+  come from sacrificing gems at fonts, not from levelling** (levels grant passive
+  points).
+- **5 damage types** with conversion, **37 status effects / ailments**, **12
+  charge (combo) resources**, and **9 procs**.
+- A world that grows: **14 hand-authored zones** plus an **effectively infinite
+  procedural world** — 25 tileset recipes, biomes, continents with sea travel,
+  and alternate dimensions — over a living map with day/night, drifting weather,
+  and faction warfare.
+- **17 optional per-run world-event packages** (Warbands, Breach, Demon Invasion,
+  Contagion, Conclave, Descent, Migration…), chosen on the Expedition screen and
+  unlocked through the account Vault.
+- **Permadeath with corpse-run recovery**, an account/Vault meta-layer, saves to
+  both disk and localStorage, and **host-authoritative co-op** (local or
+  copy-paste WebRTC).
+
+Rendering is HTML5 **Canvas 2D** with deliberate placeholder geometry art — every
+visual reads its shape and color from the data. There is no audio yet, and loot
+is currently gems only (equipment is a planned extension).
 
 ## Architecture — where everything lives
 
-| Layer | File | What it does |
+| Layer | Where | What it does |
 |---|---|---|
-| Stat engine | `src/engine/stats.ts` | Layered modifiers (`flat` → `increased` → `more` → `override`) with tag filters; stat registry; data-driven attributes |
-| Damage | `src/engine/damage.ts` | One pipeline: roll → added damage → tag-scaled multipliers → crit → evasion/armor/resists |
-| Skills | `src/engine/skills.ts` | The skill *schema*: deliveries + effects |
-| Statuses | `src/engine/status.ts` | Ailment registry (burn, poison, chill, shock, stun, weaken) |
+| Stat engine | `src/engine/stats.ts` | Layered modifiers (`flat`→`increased`→`more`→`override`) with tag filters; 5 attributes; stat registry |
+| Damage | `src/engine/damage.ts` | One pipeline: roll → added → tag-scaled multipliers → crit → evasion / armor / resists / ward |
+| Skills | `src/engine/skills.ts` | The skill *schema*: deliveries + effects, per-level growth, support sockets |
+| Statuses | `src/engine/status.ts` | 37 ailments (burn, poison, bleed, chill, freeze, shock, stun, weaken…) |
+| Charges | `src/engine/charges.ts` | 12 combo/resource meters (fury, static, rage, souls…) |
 | Actors | `src/engine/actor.ts` | ONE entity model for player, monsters, and minions |
-| World | `src/engine/world.ts` | `useSkill()` — the single path through which anyone acts; projectiles, zones, waves, XP |
-| AI | `src/engine/ai.ts` | Generic brain + 7 archetype brains (swarm, skirmish, LOS caster, bomber, juggernaut, assassin, commander) |
-| Rng | `src/core/rng.ts` | Seeded randomness — one seed reproduces an entire layout |
-| Level gen | `src/engine/levelgen.ts` | Doodad terrain + set-piece stamps (cliffs, ravines, rivers, camps...) |
+| World | `src/engine/world.ts` | `useSkill()` — the single path anyone acts through; projectiles, zones, waves, XP |
+| AI | `src/engine/ai.ts`, `src/engine/brain.ts` | Generic brain + 13 archetypes across move / target / perception / skill / morale / squad axes; scripted boss phases |
+| Rng | `src/core/rng.ts` | Seeded randomness — one seed reproduces a whole layout |
+| Level gen | `src/engine/levelgen.ts` | Doodad terrain + set-piece stamps (cliffs, ravines, rivers, camps…) |
+| World gen | `src/engine/worldgen.ts`, `src/world/` | Mints zones behind frontier portals; biomes, continents, dimensions, weather |
+| Packages | `src/packages/` | 17 optional per-run world-event overlays |
+| Meta | `src/meta/` | Account/Vault unlocks, saves, permadeath + corpse recovery |
+| Net | `src/net/` | Host-authoritative co-op (`LocalTransport`, `WebRtcTransport`) |
+| Render / UI | `src/render/`, `src/ui/` | Canvas 2D renderer; DOM overlay panels (sheet, skill book, tree, map) |
 | Validation | `src/data/validate.ts` | Boot-time content cross-checks (warns on silent authoring mistakes) |
-| World gen | `src/engine/worldgen.ts` | Mints new zones behind frontier portals from tileset data |
-| **Content** | `src/data/zones.ts` | The hand-authored world: zone graph, layouts, objectives, exits |
-| | `src/data/tilesets.ts` | Recipes for generated zones (names, themes, packs, objectives) |
-| | `src/data/skills.ts` | The skill catalog (~24 skills, each with optional per-level growth) |
-| | `src/data/supports.ts` | Support gem catalog (drop-based skill modifiers) |
-| | `src/data/passives.ts` | The passive tree (six class wedges + attribute travel ring) |
-| | `src/data/procs.ts` | Proc registry (chance-based triggered effects) |
-| | `src/data/monsters.ts` | The bestiary + wave table |
-| | `src/data/classes.ts` | Class templates + progression rules |
+| **Content** | `src/data/*.ts` | `skills` (~377), `supports` (~209), `monsters` (156), `passives` (233 nodes), `classes` (13), `zones` (14), `tilesets` (25), `procs`, `invocations` |
+
+Entry point: `index.html` → `src/main.ts`.
 
 ## The core mechanism: tagged modifiers
 
@@ -1233,37 +1275,43 @@ with the graph.
 **Adding a tileset** is one data entry; **adding a stamp kind** is one
 generator function. No other engine changes.
 
-## Current gameplay slice
+## Current state — what's playable now
 
-- 6 class templates: Warrior, Berserker, Sorcerer, Summoner, Swashbuckler, Ranger
-- ~24 skills across melee / fire / cold / lightning / chaos / bows / mobility / summoning,
-  each unlockable and levelable with skill points
-- 14 support gems dropping from monsters, socketable 3-per-skill, levelable
-- A 54-node passive tree with attributes, notables, and 6 keystones
-- A connected 8-zone hand-authored world that grows procedurally at its
-  frontiers (3 tilesets, 5 objective kinds, terrain set pieces: cliffs,
-  ravines + bridges, slowing mud, ruins, spawner objects, gem caches);
-  The Pit keeps the escalating arena waves (boss every 5th wave)
-- ~50 monsters across 12 AI archetypes + the basic brain, with shapes
-  (and adorns: ears, horns, spikes) as the type language (stars stalk
-  you, crosses command, diamonds explode, kites hunt in packs,
-  multi-circle worms slither) — all sharing the player's skill catalog
-- Six factions on a diplomacy matrix: hostile pairs brawl wherever they
-  meet, allies march together, and idle monsters wander their ground
-- Minions are bestiary monsters fighting on your team with your minion stats
-  (and monster skills level up with wave level — same leveling system)
-- Statuses: burn, stacking poison, chill, shock, stun, weaken
+- **13 classes** (Warrior, Magician, Rogue, Berserker, Sorcerer, Ranger,
+  Guardian, Summoner, Swashbuckler, Juggernaut, Pyromancer, Assassin, Cleric) —
+  thin templates (a starting attribute spread, a pre-bound skill bar, a tree
+  start node); nothing is class-locked.
+- **~377 skills** and **~209 support gems** dropping from monsters, socketable
+  into skills and levelled with skill points earned by sacrificing gems.
+- A **233-node passive tree** (9 keystones, 42 notables) with raw attributes on
+  the tree, plus **5 attributes** that gate skills.
+- **156 monsters** across **13 AI archetypes + the basic brain**, with
+  shape/adorn telegraphing, squad tactics, morale, five rarity tiers and rolled
+  affixes — all drawing from the same skill catalog the player uses. Minions are
+  bestiary monsters fighting on your side with your minion stats.
+- **37 status effects**, **5 damage types** with conversion, **12 charge
+  resources**, and **9 procs**.
+- **14 hand-authored zones** anchored by the town **Lastlight** (vendor +
+  storage) and the Crossroads, opening onto an effectively infinite procedural
+  world (25 tileset recipes; biomes, continents with sea travel, alternate
+  dimensions; clear / boss / waves / spawner objectives; terrain set pieces).
+- **17 per-run world-event packages** configured on the Expedition screen and
+  unlocked through the account Vault.
+- **Permadeath with corpse-run recovery** and an account/Vault meta-layer that
+  persists across runs; saves to disk and localStorage.
+- **Co-op**: host-authoritative, local or over WebRTC.
+- Faction warfare: hostile packs brawl where they meet, allies march together,
+  idle monsters wander their ground.
 
 ## Natural next steps
 
-- Items & affixes (drop tables are just more modifier bundles; skill-gem
-  rarity is the template)
-- The town hub: a safe zone on the waypoint network with a vendor (buy /
-  reroll skill gems deterministically) and storage
-- Zone modifiers ("monsters here are hasted") — area-level modifier bundles
-  rolled by the worldgen, displayed on the uncharted portal
-- More stamp kinds (rivers + fords, walled camps, shrine POIs granting buffs)
-- Rare/magic monster affixes on pack leaders
-- A bigger tree (the polar builder in `passives.ts` makes wedges cheap)
-- Skill-granting gems, triggered skills, conditional modifiers ("when low life")
-- An in-game content editor writing to the data files
+- **Equipment & currency** — loot is gems only today; the `DropItem` / `SavedLoot`
+  unions and `DeathLootPolicy` are shaped to grow into affix-rolled gear, flasks,
+  and currency.
+- **Audio** — there is currently no sound system.
+- **Class identity** — `ClassDef.innate` fields exist but are unpopulated,
+  awaiting a balance pass.
+- **Mercenaries** — the party / EventBus layer is pre-wired for hired allies.
+- **Networking hardening** — WebRTC co-op is MVP (STUN-only, no TURN, copy-paste
+  signalling).
+- **Art** — all visuals are placeholder geometry driven by data colors.
