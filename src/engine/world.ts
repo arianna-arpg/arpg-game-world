@@ -8471,6 +8471,11 @@ export class World {
 
     // USE-CHARGES: the press spends one round off the bank (canUse already
     // refused an empty one) — the pacing device for the cadence family.
+    // stepsFromBank (Riftstep): the bank AT PRESS TIME is the step count —
+    // 3 banked = a 3-step flicker off ONE spent round. Captured before the
+    // spend; deeper reserves buy quadratic storms (more steps AND presses).
+    const bankSteps = def.useCharges?.stepsFromBank
+      ? Math.max(1, caster.skillChargeBank(inst).count) : undefined;
     if (def.useCharges) caster.spendSkillCharge(inst);
 
     // A committed BASE press arms the combo chain's first step.
@@ -8597,10 +8602,12 @@ export class World {
 
     const castTime = caster.skillUseTime(inst);
     if (effMode === 'cast' && castTime <= 0.001) {
-      // Instant: resolves on press.
+      // Instant: resolves on press. A stepsFromBank flicker resolves once
+      // per BANKED round (movement deliveries stagger into the train).
       this.executeSkill(caster, inst, aim, {
         targetInfo: targetInfo ?? undefined, dmgMult: baseMult, paidCost: paid,
         chargesSpent: cc.consumed,
+        repeat: bankSteps,
       });
       caster.useLock = 0.12;
       return true;
@@ -10160,10 +10167,12 @@ export class World {
       }
       // SELF-DESTRUCT (detonateMinions): the horde's last instruction —
       // hard-resummonables only; contract bodies were never theirs to spend.
+      // UNTARGETABLE minions (Raging Spirits) still obey: untargetability
+      // shields them from ENEMIES, never from their own summoner's order.
       if (fx.type === 'detonateMinions') {
         let spent = 0;
         for (const m of [...this.actors]) {
-          if (m.owner !== caster || m.dead || m.construct || m.untargetable) continue;
+          if (m.owner !== caster || m.dead || m.construct) continue;
           if (m.manaReserved > 0) continue; // persistent contracts refuse
           const sd2 = m.summonInst?.def.delivery;
           if (sd2?.type === 'summon' && sd2.persistent) continue;
@@ -11420,8 +11429,10 @@ export class World {
       ledger: d.ledger ? { balance: 0 } : undefined,
     });
     // LIFE SEAL (Mortis Seal): the pool's top locks where it stands —
-    // heals pour against the seal until the toggle releases.
-    if (d.seal) caster.lifeSealAt = caster.life;
+    // heals pour against the seal until the toggle releases. A SECOND seal
+    // can only lock LOWER: stacked seals never raise a standing lock (the
+    // Seal of Death → Mortis Seal regen-past-the-lock bug).
+    if (d.seal) caster.lifeSealAt = Math.min(caster.lifeSealAt ?? Infinity, caster.life);
     // Bearer-only Form mods (AuraSpec.selfMods): Stormbind's surge — set
     // once here, stripped in deactivateAura. Static by design.
     if (d.aura.selfMods) {
@@ -11506,7 +11517,13 @@ export class World {
       if (dv0.type === 'aura') {
         if (dv0.aura.selfMods) bearer.sheet.removeSource('auraself:' + skillId);
         if (dv0.seal) {
-          bearer.lifeSealAt = undefined;
+          // The lock only lifts when the LAST standing seal releases —
+          // dropping one of two stacked seals must not free the pool.
+          const otherSeal = [...bearer.activeAuras.values()].some(a2 => {
+            const d2 = a2.inst.def.delivery;
+            return a2.inst.def.id !== skillId && d2.type === 'aura' && !!d2.seal;
+          });
+          if (!otherSeal) bearer.lifeSealAt = undefined;
           bearer.sheet.removeSource('seal:' + skillId);
         }
         const od = dv0.onDeactivate;
@@ -12669,15 +12686,26 @@ export class World {
     }
 
     // Procs: chance-based triggered effects. Top-level damaging hits only.
-    // 'hit' procs fire on any damaging hit; 'kill' procs when the hit slays.
+    // 'hit' procs fire on any damaging hit; 'kill' procs when the hit slays
+    // — and, against ELITE prey (rare+, bosses), on-kill procs ALSO roll on
+    // plain hits at chance × killProcOnHit, so Corpsefire and kin still
+    // matter across a long single-target fight.
     const lethal = target.life <= 0 && !target.dead;
+    const elite = target.rarity === 'rare' || target.rarity === 'champion'
+      || target.rarity === 'crowned'
+      || !!(target.defId && MONSTERS[target.defId]?.boss);
     if (dealt > 0 && depth === 0) {
+      const eliteFactor = elite
+        ? caster.sheet.get('killProcOnHit', tags, extra) : 0;
       for (const proc of PROC_LIST) {
         // Only the hit-family triggers roll here (collision procs roll at
         // arrested knockbacks; statusApply procs at status application).
         if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
-        if (proc.trigger === 'kill' && !lethal) continue;
-        const procChance = caster.sheet.get(procStat(proc.id), tags, extra);
+        let procChance = caster.sheet.get(procStat(proc.id), tags, extra);
+        if (proc.trigger === 'kill' && !lethal) {
+          if (eliteFactor <= 0) continue;
+          procChance *= eliteFactor;
+        }
         if (procChance <= 0 || !chance(Math.min(0.95, procChance))) continue;
         this.executeProc(proc, caster, inst, target);
       }
@@ -13865,7 +13893,9 @@ export class World {
             if (hits.has(enemy.id)) continue;
             if (dist(a.pos, enemy.pos) - enemy.radius <= inst.def.delivery.width / 2 + a.radius) {
               hits.add(enemy.id);
-              this.resolveHit(a, inst, enemy);
+              // Corridor grazes can be tuned down (Closing Fang: the
+              // arrival is the bite, not the trip past).
+              this.resolveHit(a, inst, enemy, inst.def.delivery.corridorScale ?? 1);
             }
           }
         }
@@ -14718,8 +14748,25 @@ export class World {
           break;
         }
         case 'eruptor': {
-          // Volcano: spit the payload at RANDOM points around itself.
           if (!st.castInst) break;
+          // HOLD-ONCE channelers (Ritual Ground): the vessel holds ONE
+          // complete channel — start it, release it just before the
+          // persist window closes, and be SPENT when it ends. No re-cast,
+          // no reconsume loop, no cooldown laundering.
+          if (st.holdOnce) {
+            if (c.casting && c.lifespan > 0 && c.lifespan < 0.25) {
+              c.casting.held = false; // the vessel exhales before it crumbles
+            }
+            if (st.started && !c.casting) { this.kill(c, true); break; }
+            if (!st.started) {
+              st.started = true;
+              c.useLock = 0; c.mana = c.maxMana();
+              this.useSkill(c, st.castInst, vec(
+                c.pos.x + Math.cos(c.facing) * 40, c.pos.y + Math.sin(c.facing) * 40));
+            }
+            break;
+          }
+          // Volcano: spit the payload at RANDOM points around itself.
           st.timer -= dt;
           if (st.timer <= 0) {
             st.timer = st.castInterval ?? 0.8;
@@ -15594,12 +15641,15 @@ export class World {
           if (cs.plantChannel) {
             const persist = a.sheet.get('channelPersist',
               skillContextTags(def), instanceMods(cs.inst));
-            this.spawnConstruct(a, cs.inst, {
+            const vessel = this.spawnConstruct(a, cs.inst, {
               type: 'construct', kind: 'eruptor',
               range: 240, duration: Math.max(1.5, persist),
               maxActive: 2, life: 40, placeRange: 440,
               interval: 0.4,
             }, cs.aim, cs.inst);
+            // ONE channel per vessel: it holds the working for the persist
+            // window and releases as it crumbles — never a re-cast loop.
+            if (vessel?.construct) vessel.construct.holdOnce = true;
             if (def.cooldown > 0) a.cooldowns.set(def.id, def.cooldown);
             break;
           }
@@ -15795,6 +15845,20 @@ export class World {
     this.minionMetaScan -= dt;
     if (this.minionMetaScan > 0) return;
     this.minionMetaScan = 0.4;
+    // UNLEARN SWEEP: a player minion/construct whose ANCHOR skill has left
+    // the bar simply CEASES — silently (no Martyrdom, no drops, no
+    // Deadwake): a body whose reason was unlearned never really died.
+    // The anchor is the payload's HOST when one exists (brood_hatch's pods
+    // answer to Broodpod), else the source skill itself; engine-internal
+    // sources ('__proc:*') are exempt.
+    for (const m of [...this.actors]) {
+      if (m.dead || !m.owner || m.owner.kind !== 'player') continue;
+      const anchor = m.summonInst?.hostSkillId ?? m.sourceSkillId;
+      if (!anchor || anchor.startsWith('__')) continue;
+      if (m.owner.skills.some(s => s?.def.id === anchor)) continue;
+      this.releaseContract(m, false); // free any reservation, no respawn
+      this.kill(m, true);
+    }
     // Collect, per owner, the live apex presences (one entry per skill).
     const presence = new Map<Actor, { key: string; skillId: string; mods: Modifier[] }[]>();
     for (const a of this.actors) {

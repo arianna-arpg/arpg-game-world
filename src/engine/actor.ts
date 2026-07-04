@@ -106,6 +106,12 @@ export interface ConstructState {
   timer: number;
   /** Eruptors: seconds between spews (charge-scaled at spawn). */
   castInterval?: number;
+  /** HOLD-ONCE channeler (Ritual Ground): the vessel holds ONE complete
+   *  channel and is spent when it ends — never a re-cast, never a
+   *  cooldown-laundering loop (the Amalgam re-consume exploit). */
+  holdOnce?: boolean;
+  /** holdOnce bookkeeping: the single cast has been started. */
+  started?: boolean;
   /** Dome: projectile-interception radius and what happens on contact. */
   domeRadius?: number;
   domeMode?: 'dissolve' | 'deflect' | 'slow';

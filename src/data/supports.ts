@@ -2009,8 +2009,9 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   whirling_sigil: {
     id: 'whirling_sigil', name: 'Whirling Sigil',
-    description: 'FACED areas (crescents, wedges, triangles) REVOLVE — the standing sweep becomes a clock-hand that keeps cutting. Spin an innate whirl faster still.',
+    description: 'FACED ground areas (crescents, wedges, triangles) REVOLVE — the standing sweep becomes a clock-hand that keeps cutting. Melee swings refuse it (Sweeping Blow is the swing-to-sweep conversion); spin belongs to what LINGERS.',
     color: '#d8b8e8', requiresTags: ['aoe'],
+    excludeTags: ['melee'],
     mods: [mod('aoeSpin', 'flat', 2.4)],
     perLevel: [mod('aoeSpin', 'flat', 0.5)],
     weight: 5,
@@ -2029,8 +2030,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   splintered_earth: {
     id: 'splintered_earth', name: 'Splintered Earth',
-    description: 'The cast tears ONE MORE whole fissure, fanned beside the first — the ground splits like dropped crockery. 20% less damage per crack.',
-    color: '#c89868', requiresTags: ['aoe'],
+    description: 'The cast tears ONE MORE whole fissure, fanned beside the first — the ground splits like dropped crockery. 20% less damage per crack. Fits only skills that actually CRACK (the fissure tag).',
+    color: '#c89868', requiresTags: ['fissure'],
     mods: [mod('fissureCount', 'flat', 1), mod('damage', 'more', -0.2)],
     perLevel: [mod('damage', 'increased', 0.06)],
     weight: 5,
@@ -2038,8 +2039,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   branching_fissures: {
     id: 'branching_fissures', name: 'Branching Fissures',
-    description: 'Each fissure FORKS: two child cracks split off the main line at killing angles — the wound becomes a river delta.',
-    color: '#b88858', requiresTags: ['aoe'],
+    description: 'Each fissure FORKS: two child cracks split off the main line at killing angles — the wound becomes a river delta. Fits only skills that actually CRACK (the fissure tag).',
+    color: '#b88858', requiresTags: ['fissure'],
     mods: [mod('fissureBranches', 'flat', 2), mod('manaCost', 'more', 0.3)],
     perLevel: [mod('fissureBranches', 'flat', 0.5)],
     weight: 5,
@@ -2097,9 +2098,9 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   self_destruct: {
     id: 'self_destruct', name: 'Self-Destruct',
-    description: 'GRANTS the socketed summon its LAST instruction (⇧+key): every hard-resummonable minion detonates for most of its life. Refuses persistent contracts outright — a Stone Golem is family, not ammunition.',
+    description: 'GRANTS the socketed summon its LAST instruction (⇧+key): every hard-resummonable minion detonates for most of its life — the untargetable included (invisibility shields them from enemies, never from your order). Refuses persistent contracts and totems outright — a Stone Golem is family, and Shatterrite already owns the totem rite.',
     color: '#e86848', requiresTags: ['summon'],
-    excludeTags: ['persistent'],
+    excludeTags: ['persistent', 'totem'],
     mods: [],
     meta: { skillId: 'command_detonate', label: 'Detonate' },
     perLevel: [mod('minionExplodeDeath', 'flat', 0.08)],
@@ -2157,10 +2158,14 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   closing_instinct: {
     id: 'closing_instinct', name: 'Closing Instinct',
-    description: 'The movement skill PICKS ITS OWN prey: it auto-lunges at the nearest enemy near your aim — Closing Fang\'s jaws, grafted onto any dash, blink or leap. An empty field never refuses the button; you simply move.',
+    description: 'The movement skill PICKS ITS OWN prey — auto-lunging at the nearest enemy near your aim — and the instinct STRIKES TWICE: one extra re-targeted repeat rides every use. On Closing Fang itself (already a hunter) the second lunge IS the gift. An empty field never refuses the button.',
     color: '#c8a068', requiresTags: ['movement'],
     targeting: { target: 'enemy', castRange: 420, searchRadius: 220, fallback: 'aim' },
-    mods: [mod('damage', 'increased', 0.1)],
+    mods: [
+      mod('repeatCount', 'flat', 1),
+      mod('repeatRetarget', 'override', 1),
+      mod('damage', 'increased', 0.1),
+    ],
     perLevel: [mod('damage', 'increased', 0.06)],
     weight: 5,
   },

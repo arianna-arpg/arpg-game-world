@@ -28,6 +28,10 @@ export type SkillTag =
   // 'javelin' marks the Impaler family (spears, lances, volleys) so
   // family-wide supports and tag-filtered investment can find them.
   | 'javelin'
+  // 'fissure' marks skills that TEAR CRACKS (GroundDelivery.fissure /
+  // fissureTrail) — the gate for fissure-fanning supports, so they can
+  // never socket into a skill with no crack to fan.
+  | 'fissure'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -487,6 +491,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Seconds a STAGGERED wound takes to finish landing (base = the classic
    *  3s window) — investable: the monk-stagger toggle stretches it. */
   staggerWindow:  { label: 'Stagger Window', base: 3, min: 1 },
+  /** ON-KILL procs also roll on plain HITS against ELITE prey (rare+,
+   *  bosses) at proc-chance × this — so Corpsefire and kin still matter
+   *  in long single-target fights. Investable like everything else. */
+  killProcOnHit:  { label: 'Kill-Proc Chance vs Elites', base: 0.12, min: 0, percent: true },
 
   // Echoes (mirage riders / ancestral ghosts / shadow clones — ghosts that
   // cast YOUR skills with YOUR scaling; deliberately NOT the minion family)

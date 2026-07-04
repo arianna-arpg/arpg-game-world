@@ -4435,14 +4435,13 @@ export const SKILLS: Record<string, SkillDef> = {
 
   riftstep: {
     id: 'riftstep', name: 'Riftstep',
-    description: 'BLINK into the fray and DETONATE on arrival — then again, and again, each step re-aimed at the nearest living thing. Paid from a bank of three charges that trickle back; spend them like a flicker of knives.',
+    description: 'BLINK into the fray and DETONATE on arrival — and the FULLER the bank, the longer the flicker: each press steps once per charge held (spending only one), every step re-aimed at the nearest living thing. Three banked is a knife-storm; one is a knife.',
     tags: ['spell', 'movement', 'physical', 'aoe'], color: '#9ab0f0',
     manaCost: 6, cooldown: 0, useTime: 0,
-    useCharges: { max: 3, recharge: 4 },
+    useCharges: { max: 3, recharge: 4, stepsFromBank: true },
     baseDamage: { physical: [10, 15] },
     innateMods: [
       mod('moveExplode', 'flat', 1.0),
-      mod('repeatCount', 'flat', 2),
       mod('repeatRetarget', 'override', 1),
     ],
     delivery: { type: 'blink', range: 340 },
@@ -4522,7 +4521,8 @@ export const SKILLS: Record<string, SkillDef> = {
     targeting: { target: 'enemy', castRange: 420, searchRadius: 200 },
     baseDamage: { physical: [11, 16] },
     innateMods: [mod('moveExplode', 'flat', 0.8)],
-    delivery: { type: 'dash', distance: 280, speed: 900, width: 44 },
+    // The trip GRAZES; the arrival bites (no free double-hit on the way in).
+    delivery: { type: 'dash', distance: 280, speed: 900, width: 44, corridorScale: 0.35 },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.3 },
@@ -4962,7 +4962,7 @@ export const SKILLS: Record<string, SkillDef> = {
   fissure: {
     id: 'fissure', name: 'Fissure',
     description: 'TEAR the earth open along your aim: a crack races out segment by segment, hurting everything it opens under — then SNAPS SHUT, zipping home and hurting them again. Supports fan extra cracks and fork branches.',
-    tags: ['spell', 'physical', 'fire', 'aoe', 'duration'], color: '#c87848',
+    tags: ['spell', 'physical', 'fire', 'aoe', 'duration', 'fissure'], color: '#c87848',
     manaCost: 10, cooldown: 2.5, useTime: 0.6,
     baseDamage: { physical: [9, 14], fire: [4, 7] },
     delivery: {
@@ -4984,7 +4984,7 @@ export const SKILLS: Record<string, SkillDef> = {
   earthrender: {
     id: 'earthrender', name: 'Earthrender',
     description: 'Fire the CRACK ITSELF: a shot that is the TEAR-HEAD of a travelling fissure — the ground rips open along its whole flight and SNAPS SHUT behind it, hurting both ways. The wound follows the shot wherever the flight bends: bounce it, curve it, and the crack bounces and curves with it.',
-    tags: ['spell', 'physical', 'projectile', 'aoe', 'duration'], color: '#c8a058',
+    tags: ['spell', 'physical', 'projectile', 'aoe', 'duration', 'fissure'], color: '#c8a058',
     manaCost: 12, cooldown: 2.5, useTime: 0.65,
     baseDamage: { physical: [12, 18] },
     delivery: {
@@ -5006,7 +5006,7 @@ export const SKILLS: Record<string, SkillDef> = {
   netherfissure: {
     id: 'netherfissure', name: 'Netherfissure',
     description: 'Open ONE wound in the world — a crack that stays open, cooking whatever stands over it while SPIRITS rise from its length to hunt the living and lay TORMENT on them. Casting again closes the old wound and opens a new one.',
-    tags: ['spell', 'chaos', 'fire', 'aoe', 'duration'], color: '#9a5ac8',
+    tags: ['spell', 'chaos', 'fire', 'aoe', 'duration', 'fissure'], color: '#9a5ac8',
     manaCost: 14, cooldown: 4, useTime: 0.7,
     baseDamage: { fire: [5, 8], chaos: [5, 8] },
     delivery: {
@@ -6411,9 +6411,10 @@ export const SKILLS: Record<string, SkillDef> = {
 
   bastion_thrust: {
     id: 'bastion_thrust', name: 'Bastion Thrust',
-    description: 'A COMMITTED lance thrust: one razor-narrow line of iron, arm\'s length past your shoulder — no fan, no wash, a POKE with your whole weight behind it. Everything caught along the shaft is opened.',
-    tags: ['attack', 'melee', 'physical', 'javelin'], color: '#d0c0a0',
-    manaCost: 6, cooldown: 1.2, useTime: 0.5,
+    description: 'A COMMITTED lance thrust: one razor-narrow line of iron, arm\'s length past your shoulder — no fan, no wash, a POKE with your whole weight behind it. Thrusts cleanly around a RAISED GUARD without lowering it: the greatshield-and-spear discipline, on its own button.',
+    tags: ['attack', 'melee', 'physical', 'javelin', 'instant'], color: '#d0c0a0',
+    manaCost: 6, cooldown: 1.2, useTime: 0,
+    usableWhileGuarding: true,
     baseDamage: { physical: [16, 26] },
     delivery: { type: 'cone', range: 135, arcDeg: 12 },
     effects: [

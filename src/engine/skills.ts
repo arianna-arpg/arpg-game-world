@@ -786,6 +786,9 @@ export interface DashDelivery {
   distance: number;
   speed: number;          // slow + long = a forced Charge; fast + short = Dash
   width: number;          // hit corridor width (0 = no damage on the way)
+  /** Damage multiplier on CORRIDOR hits (default 1). Closing Fang's
+   *  approach grazes at 0.35 — the arrival is the bite, not the trip. */
+  corridorScale?: number;
   /** Leave a mirage of the caster at the start point that taunts enemies. */
   decoyDuration?: number;
   /** Trailblaze: drop a lingering damage zone every ~40 units of travel. */
@@ -1793,8 +1796,12 @@ export interface SkillDef {
    *  TIME, every `recharge` seconds (÷ skillChargeRate; max + the
    *  skillCharges stat) — spammable down to empty, then a dry spell.
    *  Replaces the cooldown as the pacing device (keep cooldown 0). The
-   *  reference charge economy the flask/cadence family runs on. */
-  useCharges?: { max: number; recharge: number };
+   *  reference charge economy the flask/cadence family runs on.
+   *  `stepsFromBank` (Riftstep): the press resolves ONCE PER BANKED charge
+   *  (3 banked = a 3-step flicker; 1 = a single step) while spending only
+   *  the one — the bank is the multiplier, not the ammunition. Deliberate
+   *  opt-in: most charge skills should just eat a round, not multiply. */
+  useCharges?: { max: number; recharge: number; stepsFromBank?: boolean };
   /** Combo resource consumption: requires and spends charges on use.
    *  'all' consumes everything (min `minimum`); damagePerCharge is a
    *  MORE multiplier per charge consumed. */
