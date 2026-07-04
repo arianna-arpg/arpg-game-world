@@ -272,13 +272,15 @@ function readLocalInput(): PlayerInput | null {
   const skillKeys = [kb.skillSlot2, kb.skillSlot3, kb.skillSlot4, kb.skillSlot5, kb.skillSlot6, kb.skillSlot7];
   const held = [input.lmb, input.rmb, ...skillKeys.map(k => input.keys.has(k))];
   const edge = [input.lmbPressed, input.rmbPressed, ...skillKeys.map(k => input.justPressed(k))];
-  // SHIFT is the META layer: shift+slot fires the slot skill's META-ACTION
-  // (Detonate / Enrage / Attack!) INSTEAD of the skill — presses reroute
-  // wholesale, so the mine never re-arms while you're detonating it.
-  if (input.keys.has('shift')) {
+  // The META layer (rebindable; shift by default): modifier+slot fires the
+  // slot skill's META-ACTION (Detonate / Enrage / Thrust!) INSTEAD of a new
+  // press. HELD states survive the modifier — a raised guard or a running
+  // channel must NOT drop because you reached for the meta button (the
+  // shield-bash-on-shift bug); only fresh EDGES reroute.
+  if (input.keys.has(kb.metaModifier ?? 'shift')) {
     return {
       dx, dy, aim,
-      held: held.map(() => false),
+      held,
       edge: edge.map(() => false),
       metaEdge: edge,
     };
@@ -370,6 +372,7 @@ function frame(now: number): void {
       }
       // Close a lingering toll menu if the wardens were slain / roused mid-bargain.
       if (ui.tollOpen && !world.holdfastParleyOpen()) ui.closeToll();
+      renderer.hudMouse = input.mouse;
       renderer.render(world);
 
       // Broadcast to connected clients. Gated on a REAL wire (never LocalTransport),
@@ -505,6 +508,7 @@ function clientApplyAndRender(dt: number): void {
   // meta change — keep them live on the same 0.5s throttle the host uses.
   uiRefreshTimer -= dt;
   if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; ui.refreshCharSheet(); ui.refreshMap(); }
+  renderer.hudMouse = input.mouse;
   renderer.render(world);
 }
 

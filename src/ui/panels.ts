@@ -1480,7 +1480,19 @@ export class UI {
       <h1>Keybinds</h1>
       <div class="acct-head">LMB / RMB drive skills 1 &amp; 2 (fixed). Click a key, then press a new one (Esc cancels).</div>
       <div class="rebind-list">${rows}</div>
+      <div class="rebind-row">
+        <span>Low-Life Screen Pulse</span>
+        <button id="opt-lowlife">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
+      </div>
       <div class="esc-btns"><button id="esc-back">Back</button></div>`;
+    // The severity-scaled edge pulse is a real build choice (1/1-life and
+    // heavy-reservation heroes live "low" on purpose) — so it's a toggle.
+    root.querySelector<HTMLElement>('#opt-lowlife')!.addEventListener('click', () => {
+      const s = this.getSettings();
+      s.lowLifePulse = !s.lowLifePulse;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
     root.querySelectorAll<HTMLElement>('[data-rebind]').forEach(btn => {
       btn.addEventListener('click', () => {
         this.disarmRebind(); // only one row can be armed at a time

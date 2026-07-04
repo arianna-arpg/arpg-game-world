@@ -31,7 +31,12 @@ export class Input {
       if (e.button === 0) this.lmb = false;
       if (e.button === 2) this.rmb = false;
     });
-    target.addEventListener('contextmenu', e => e.preventDefault());
+    // WINDOW-level, not just the canvas: shift+right-click over any DOM
+    // panel would otherwise open the browser menu, eat the shift keyup,
+    // and ghost the meta layer until the next real press.
+    window.addEventListener('contextmenu', e => e.preventDefault());
+    // A browser popup/menu that slips through anyway blurs us — the blur
+    // handler above already clears every held key and button.
   }
 
   /** True once per physical key press. */

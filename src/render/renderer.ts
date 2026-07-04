@@ -42,6 +42,9 @@ const warnedUnrenderedKinds = new Set<string>();
 export class Renderer {
   ctx: CanvasRenderingContext2D;
   cam = { x: 0, y: 0 };
+  /** Screen-space mouse, fed by main each frame — HUD hover affordances
+   *  (buff-pip names) read it; (-1,-1) = no pointer. */
+  hudMouse = { x: -1, y: -1 };
   /** World→screen scale. >1 zooms in; the bigger zones keep it from cramping. */
   private readonly zoom = 1.3;
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
@@ -649,14 +652,32 @@ export class Renderer {
     ctx.font = '12px Verdana';
   }
 
-  /** Blinking red edge vignette while the low-life hit-flash timer runs. */
+  /** Low-life edge vignette: a CONTINUOUS pulse while life sits low —
+   *  faster and harder the deeper the wound (30% murmurs; 1% pounds) —
+   *  plus the sharper hit-flash blink stacked on top. The pulse honors
+   *  the settings toggle: a 1/1-life or 90%-reserved build would live
+   *  inside a permanent alarm otherwise. */
   private drawLowLifeGlow(world: World): void {
-    const f = world.lowLifeHitFlash;
-    if (f <= 0) return;
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
-    const blink = Math.sin(f * Math.PI * 4) > 0 ? 1 : 0.35; // ~2 blinks over 0.45s
-    const a = (f / 0.45) * blink * 0.42;
+    const p = world.player;
+    let a = 0;
+    const pulseOn = this.getSettings?.().lowLifePulse ?? true;
+    const frac = p.maxLife() > 0 ? Math.max(0, p.life) / p.maxLife() : 1;
+    if (pulseOn && !p.dead && frac < 0.35) {
+      const severity = 1 - frac / 0.35;             // 0 at 35% … 1 at 0%
+      const speed = 2.2 + 7 * severity;             // heartbeat quickens
+      const wave = 0.5 + 0.5 * Math.sin(world.time * speed * Math.PI);
+      a = (0.10 + 0.38 * severity) * (0.45 + 0.55 * wave);
+    }
+    // The hit-flash blink stacks over the pulse (and works alone when the
+    // pulse is toggled off — you always learn you were struck while low).
+    const f = world.lowLifeHitFlash;
+    if (f > 0) {
+      const blink = Math.sin(f * Math.PI * 4) > 0 ? 1 : 0.35;
+      a = Math.max(a, (f / 0.45) * blink * 0.42);
+    }
+    if (a <= 0.005) return;
     const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.28, w / 2, h / 2, Math.hypot(w, h) / 2);
     grd.addColorStop(0, 'rgba(0,0,0,0)');
     grd.addColorStop(0.6, `rgba(200,0,0,${(a * 0.5).toFixed(3)})`);
@@ -2871,6 +2892,13 @@ export class Renderer {
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
       ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
+      // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
+      // finite hire show how much of it remains — swarms stay clean.
+      if (a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
+        ctx.fillStyle = '#b8a0e0';
+        ctx.fillRect(x - bw / 2, y - a.radius - 5.5,
+          bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
+      }
     }
 
     // Layered-defense bars: energy shield (cyan) and absorb (white).
@@ -3527,6 +3555,29 @@ export class Renderer {
       ctx.fillStyle = '#a8ccff';
       ctx.fillText(`${Math.ceil(p.ward)}`, lifeX, orbY - 12);
     }
+    // SEAL MARKER (Mortis Seal / Seal of Death): a gold line across the
+    // life orb at the LOCKED level — where heals stop. QA and honesty both.
+    if (p.lifeSealAt !== undefined && p.maxLife() > 0) {
+      const sf = clamp(p.lifeSealAt / p.maxLife(), 0, 1);
+      const sy = orbY + orbR - sf * orbR * 2;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lifeX, orbY, orbR, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(lifeX - orbR, sy);
+      ctx.lineTo(lifeX + orbR, sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+      ctx.textAlign = 'center';
+      ctx.font = '9px Verdana';
+      ctx.fillStyle = '#ffd700';
+      ctx.fillText('⚿ sealed', lifeX, sy - 3 < orbY - orbR + 8 ? sy + 10 : sy - 3);
+    }
     // Energy shield: a cyan arc wrapping the life orb; absorb: white outer arc.
     if (p.maxEs() > 0 && p.es > 0) {
       ctx.strokeStyle = '#5ad8d8';
@@ -3556,10 +3607,19 @@ export class Renderer {
     for (let i = 0; i < p.skills.length; i++) {
       const x = bx + i * (slot + gap);
       const inst = p.skills[i];
-      const auraOn = inst ? p.activeAuras.has(inst.def.id) : false;
+      // THE TOGGLE GOLDEN RULE: one gold border for EVERY "this is running"
+      // state — auras, summon contracts (Stone Golem's reservation), pool
+      // vents, and toggled curse-fields alike. If a support converts a
+      // skill into a toggle, the glow follows the state, not the tag.
+      const runningOn = inst ? (
+        p.activeAuras.has(inst.def.id)
+        || p.summonToggles.has(inst.def.id)
+        || (inst.def.pool !== undefined && p.venting.has(inst.def.pool.id))
+        || world.zones.some(z => z.caster === p && z.toggled && z.inst.def.id === inst.def.id)
+      ) : false;
       ctx.fillStyle = 'rgba(10,10,16,0.85)';
-      ctx.strokeStyle = auraOn ? '#c8a84b' : '#3a3a52';
-      ctx.lineWidth = auraOn ? 2.5 : 1.5;
+      ctx.strokeStyle = runningOn ? '#c8a84b' : '#3a3a52';
+      ctx.lineWidth = runningOn ? 2.5 : 1.5;
       ctx.fillRect(x, by, slot, slot);
       ctx.strokeRect(x, by, slot, slot);
       if (inst) {
@@ -3571,9 +3631,8 @@ export class Renderer {
         ctx.fillStyle = def.color;
         // A toggled-ON contract is always bright: the off-press is free —
         // "unaffordable" dimming would lie about the one press that helps.
-        const toggledOn = p.summonToggles.has(def.id) || p.activeAuras.has(def.id);
         ctx.globalAlpha = gated ? 0.15
-          : (toggledOn || (p.mana >= cost.mana && p.life > cost.life)) ? 0.9 : 0.3;
+          : (runningOn || (p.mana >= cost.mana && p.life > cost.life)) ? 0.9 : 0.3;
         ctx.fillRect(x + 4, by + 4, slot - 8, slot - 8);
         ctx.globalAlpha = 1;
         ctx.fillStyle = '#0a0a0e';
@@ -3581,11 +3640,13 @@ export class Renderer {
         // Stateful skills can change face: Mark shows REC while armed.
         const label = inst.state?.markPos ? 'REC' : initials(def.name);
         ctx.fillText(label, x + slot / 2, by + slot / 2 + 5);
-        // Cooldown sweep
+        // Cooldown sweep — measured against the clock actually SET (an
+        // Apotheosis-imposed cooldown sweeps too, not just innate ones).
         const cd = p.cooldowns.get(def.id);
-        if (cd !== undefined && def.cooldown > 0) {
+        const cdTotal = p.cooldownTotals.get(def.id) ?? def.cooldown;
+        if (cd !== undefined && cdTotal > 0) {
           ctx.fillStyle = 'rgba(0,0,0,0.65)';
-          const frac = cd / def.cooldown;
+          const frac = clamp(cd / cdTotal, 0, 1);
           ctx.fillRect(x + 4, by + 4, slot - 8, (slot - 8) * frac);
         }
         // USE-CHARGE pips (SkillDef.useCharges): the bank across the slot's
@@ -3609,13 +3670,42 @@ export class Renderer {
         ctx.textAlign = 'right';
         ctx.fillText(String(inst.level), x + slot - 5, by + slot - 5);
         ctx.textAlign = 'center';
-        // META-ACTION mini-button riding the slot (shift+key): Detonate
-        // above the mine, Enrage above the hive, Attack! above the summons —
-        // socketed grants (the Command gem) win over the innate one.
+        // MINION COUNT badge — top-right corner of the ICON itself, so a
+        // socketed meta-button can never hide it. Summons and constructs
+        // both count (turrets, pods, arrows — anything the skill owns).
+        if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
+          const alive = world.minionsOfSkill(p, def.id).length;
+          if (alive > 0) {
+            ctx.fillStyle = 'rgba(8,8,12,0.9)';
+            ctx.beginPath();
+            ctx.arc(x + slot - 9, by + 10, 8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#c8a84b';
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            ctx.fillStyle = '#ffe86a';
+            ctx.font = 'bold 9px Verdana';
+            ctx.fillText(String(alive), x + slot - 9, by + 13);
+          }
+        }
+        // COMBO-WINDOW SLIVER (Trisect): the countdown until the chain
+        // resets, as a thin bar in the gap under the meta button.
+        if (def.comboChain && inst.state?.comboAt !== undefined
+          && (inst.state.comboIdx ?? 0) > 0) {
+          const left = 1 - (world.time - inst.state.comboAt) / def.comboChain.window;
+          if (left > 0) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(x, by - 6, slot, 3);
+            ctx.fillStyle = def.color;
+            ctx.fillRect(x, by - 6, slot * clamp(left, 0, 1), 3);
+          }
+        }
+        // META-ACTION mini-button riding the slot (modifier+key) — raised
+        // clear of the icon so the combo sliver and count badges breathe.
         const meta = instanceMeta(inst);
         if (meta) {
           const mh = 14;
-          const my = by - mh - 3;
+          const my = by - mh - 8;
           const metaCd = p.cooldowns.has(meta.skillId);
           ctx.fillStyle = 'rgba(10,10,16,0.85)';
           ctx.strokeStyle = metaCd ? '#3a3a52' : '#c8a84b';
@@ -3640,15 +3730,23 @@ export class Renderer {
       ctx.fillText(keyLabels[i] ?? '?', x + slot / 2, by + slot + 12);
     }
 
-    // Buff pips above the bar
+    // Buff pips — RAISED above the meta-button row so both always read;
+    // hovering a pip names it (one small label, never a wall of text).
+    const buffY = by - 40;
     let bpx = bx;
-    for (const [, buff] of p.buffs) {
+    let hoverLabel: { x: number; text: string } | null = null;
+    for (const [id, buff] of p.buffs) {
       ctx.fillStyle = '#c8a84b';
-      ctx.fillRect(bpx, by - 16, 10, 10);
+      ctx.fillRect(bpx, buffY, 10, 10);
       if (buff.stacks > 1) {
         ctx.fillStyle = '#fff';
         ctx.font = 'bold 9px Verdana';
-        ctx.fillText(String(buff.stacks), bpx + 5, by - 18);
+        ctx.fillText(String(buff.stacks), bpx + 5, buffY - 2);
+      }
+      const mx = this.hudMouse.x, myv = this.hudMouse.y;
+      if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
+        const rem = Math.max(...buff.expiries ?? [buff.remaining ?? 0]);
+        hoverLabel = { x: bpx + 5, text: `${id.replace(/_/g, ' ')} ${rem > 0 && rem < 900 ? Math.ceil(rem) + 's' : ''}`.trim() };
       }
       bpx += 14;
     }
@@ -3657,15 +3755,27 @@ export class Renderer {
       if (count <= 0) continue;
       ctx.fillStyle = chargeColor(name);
       ctx.beginPath();
-      ctx.arc(bpx + 5, by - 11, 5, 0, Math.PI * 2);
+      ctx.arc(bpx + 5, buffY + 5, 5, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px Verdana';
-      ctx.fillText(`${count}`, bpx + 5, by - 18);
-      ctx.font = '8px Verdana';
-      ctx.fillStyle = '#8a8678';
-      ctx.fillText(name, bpx + 5, by + 2);
+      ctx.fillText(`${count}`, bpx + 5, buffY - 2);
+      const mx = this.hudMouse.x, myv = this.hudMouse.y;
+      if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
+        hoverLabel = { x: bpx + 5, text: name };
+      }
       bpx += 18;
+    }
+    if (hoverLabel) {
+      ctx.font = '10px Verdana';
+      const tw = ctx.measureText(hoverLabel.text).width + 10;
+      ctx.fillStyle = 'rgba(8,8,12,0.92)';
+      ctx.fillRect(hoverLabel.x - tw / 2, buffY - 24, tw, 15);
+      ctx.strokeStyle = '#3a3a52';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(hoverLabel.x - tw / 2, buffY - 24, tw, 15);
+      ctx.fillStyle = '#d8d4c8';
+      ctx.fillText(hoverLabel.text, hoverLabel.x, buffY - 13);
     }
 
     // INVOCATION RUNES: the woven SEQUENCE as ordered diamonds above the
@@ -3674,7 +3784,7 @@ export class Renderer {
       const rx0 = bx + totalW - p.runes.length * 16;
       for (let i = 0; i < p.runes.length; i++) {
         const info = RUNE_INFO[p.runes[i] as keyof typeof RUNE_INFO];
-        const rx = rx0 + i * 16, ry = by - 30;
+        const rx = rx0 + i * 16, ry = by - 54;
         ctx.fillStyle = info?.color ?? '#c8a8e8';
         ctx.beginPath();
         ctx.moveTo(rx, ry - 7);

@@ -572,6 +572,13 @@ export class Actor {
   /** Meta-action payload instances, cached per HOST skill id (a Detonate
    *  minted for Fire Mine's slot; re-minted when the host levels). */
   metaInsts = new Map<string, SkillInstance>();
+  /** The DURATION each running cooldown was set with — the HUD's sweep
+   *  denominator (an Apotheosis-imposed clock has def.cooldown 0). */
+  cooldownTotals = new Map<string, number>();
+  /** High-water mark of `lifespan` — the denominator for hire-clock bars
+   *  (the Amalgam's deterioration sliver). Self-maintained in updateTimers
+   *  so no lifespan assignment site needs to remember it. */
+  lifespanTotal = 0;
   /** COMMANDED (minions): march on this mark until arrival or expiry. */
   aiCommandPos?: Vec2;
   aiCommandUntil = 0;
@@ -970,6 +977,8 @@ export class Actor {
   /** Tick durations; returns total DoT damage to inflict this frame. */
   updateTimers(dt: number): number {
     this.refreshConditions();
+    // Hire-clock high-water mark (the lifespan sliver's denominator).
+    if (this.lifespan > this.lifespanTotal) this.lifespanTotal = this.lifespan;
     // Cooldowns tick faster with cooldownRecovery.
     const cdr = this.sheet.get('cooldownRecovery');
     for (const [id, t] of this.cooldowns) {

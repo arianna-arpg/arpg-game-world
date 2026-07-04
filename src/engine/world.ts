@@ -8905,8 +8905,10 @@ export class World {
     // by cooldownRecovery (an imposed cooldown stays a reducible one).
     const cdBase = def.cooldown + caster.sheet.get('addedCooldown', tags, extra);
     if (cdBase > 0 && !opts.noCooldown) {
-      caster.cooldowns.set(def.id, cdBase / Math.max(0.1,
-        caster.sheet.get('cooldownRecovery', tags, extra) / caster.sheet.get('cooldownRecovery')));
+      const cdSet = cdBase / Math.max(0.1,
+        caster.sheet.get('cooldownRecovery', tags, extra) / caster.sheet.get('cooldownRecovery'));
+      caster.cooldowns.set(def.id, cdSet);
+      caster.cooldownTotals.set(def.id, cdSet); // the HUD sweep's denominator
     }
 
     const d = def.delivery;
