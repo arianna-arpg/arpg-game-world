@@ -284,6 +284,7 @@ export const AMBIENT_TAGS = new Set([
   'mycelia_heart', // the Heartbloom is an OPTIONAL collapse-the-bloom strike
   'critter',       // ambient WILDLIFE prey (hares) — texture, never an objective
   'predator',      // ambient wildlife hunters (wolf packs) — optional trouble
+  'wayfarer',      // neutral human travelers — minding their own way
 ]);
 
 interface Projectile {
@@ -3396,6 +3397,32 @@ export class World {
     actor.aiTokenKey = key;
     actor.aiTokenAt = this.time;
     return true;
+  }
+
+  /** MOUNTS: carry riders on their beasts — the rider's position pins to the
+   *  saddle (dash/push stilled) and both links self-heal: either party dying
+   *  (or vanishing in a zone swap) frees the other. Runs late in update so
+   *  the pin wins the frame. */
+  private updateMounts(): void {
+    for (const a of this.actors) {
+      if (a.mountId !== undefined) {
+        const m = this.actorById(a.mountId);
+        if (!m || m.dead || a.dead) {
+          if (m && m.riderId === a.id) m.riderId = undefined;
+          a.mountId = undefined;
+          continue;
+        }
+        const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
+        a.pos.x = m.pos.x;
+        a.pos.y = m.pos.y - (slot?.offsetY ?? m.radius * 0.9);
+        a.dash = null;
+        a.push = null;
+      }
+      if (a.riderId !== undefined) {
+        const r = this.actorById(a.riderId);
+        if (!r || r.dead || r.mountId !== a.id) a.riderId = undefined;
+      }
+    }
   }
 
   /** Drop dead / stale / retargeted holders so waiting packmates rotate in. */
@@ -8092,6 +8119,7 @@ export class World {
       const supLevel = 1 + Math.floor(lv / 5);
       for (const g of def.grants) {
         if (level < g.atLevel) continue;
+        if (g.chance !== undefined && Math.random() >= g.chance) continue; // per-spawn variant roll
         if (g.skill && SKILLS[g.skill]) a.skills.push(makeSkillInstance(SKILLS[g.skill], skillLevel));
         if (g.support && SUPPORTS[g.support]) {
           const target = g.on ? a.skills.find(s => s?.def.id === g.on) : a.skills[0];
@@ -12191,6 +12219,13 @@ export class World {
       const gd = this.holdfastGuardian();
       return gd ? { woundFrac: gd.woundFrac, radius: gd.rouseRadius, toast: 'The wardens draw steel!', color: '#d8a24a', size: 14 } : null;
     },
+    // Neutral HUMANS on the roads: strike one and the nearby band answers —
+    // hunters draw bows, pilgrims scatter (their morale). They forgive
+    // (NEUTRAL_RESET) once you break off.
+    wayfarer: () => ({
+      woundFrac: 1, radius: 260,
+      toast: 'The wayfarers cry out!', color: '#d8c08a', size: 13,
+    }),
   };
 
   /** Apply the target's rouse rule after a landed hit (no-op for tagless /
@@ -13590,6 +13625,7 @@ export class World {
     this.updateBrigandRaid(dt);
     this.updateNeutralCooldown(); // roused neutrals lose interest + re-dormant on disengage
     this.pruneEngageTokens();     // stale/dead attack-token holders rotate out
+    this.updateMounts();          // riders pin to their beasts; dead links free
     this.maybeOpenDemonPortal();
     this.maybeOpenCrusadePortal();
     // War bulletins: a zone changed hands somewhere on the map.
@@ -15344,6 +15380,32 @@ export class World {
       // open forever (wedged monsters, totems, and echo riders mid-charge).
       const hold = cs.mode === 'charge' ? Math.min(cs.aiHold, cs.total) : cs.aiHold;
       cs.held = (cs.mode === 'charge' ? cs.elapsed : cs.channelTime ?? 0) < hold;
+    }
+    // AI FINESSE: monsters with a practiced hand (skillUse.finesse) work the
+    // PLAYER's timing mechanics — they "click" the perfect/timed bar through
+    // the very same castPress the player uses, earning the same Perfect! /
+    // Flawless! empower on a made roll and fumbling the press on a miss.
+    if (!this.seatOf(a) && (cs.mode === 'perfect' || cs.mode === 'timed') && !cs.pressUsed) {
+      if (cs.aiClickAt === undefined) {
+        const fin = a.brain ? normalizeBrain(a.brain).base.skillUse?.finesse : undefined;
+        if (!fin) {
+          cs.aiClickAt = -1; // an unpracticed hand never presses
+        } else if (Math.random() < fin.chance) {
+          // A made roll: land the press inside the window.
+          cs.aiClickAt = cs.mode === 'perfect'
+            ? rand(0.78, 0.96)
+            : Math.max(0.04, Math.min(0.96, (cs.indicatorAt ?? 0.5) + rand(-0.05, 0.05)));
+        } else {
+          // A fumble: commit the press somewhere it won't land.
+          cs.aiClickAt = cs.mode === 'perfect'
+            ? rand(0.15, 0.6)
+            : Math.max(0.04, Math.min(0.96,
+              (cs.indicatorAt ?? 0.5) + (Math.random() < 0.5 ? -1 : 1) * rand(0.16, 0.35)));
+        }
+      }
+      if (cs.aiClickAt >= 0 && cs.total > 0 && cs.elapsed / cs.total >= cs.aiClickAt) {
+        this.castPress(a);
+      }
     }
 
     switch (cs.mode) {

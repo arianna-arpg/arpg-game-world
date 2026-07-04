@@ -34,7 +34,7 @@ import type { World } from './world';
  *  wounding strike ROUSES it (World.resolveHit sets the per-actor aiAwakened latch).
  *  ONE registry so a new neutral (Conclave cultists, Migration herds, the Holdfast
  *  toll-wardens) is a data entry here, not another hardcoded `if (tag === …)` branch. */
-export const DORMANT_TAGS = new Set<string>(['ritual_cultist', 'migrant', 'toll_bandit', 'brigand']);
+export const DORMANT_TAGS = new Set<string>(['ritual_cultist', 'migrant', 'toll_bandit', 'brigand', 'wayfarer']);
 
 /** A roused neutral COOLS BACK to dormant after disengagement. */
 export interface NeutralResetRule {
@@ -92,6 +92,7 @@ export const NEUTRAL_RESET: Record<string, NeutralResetRule> = {
   toll_bandit: { coolDownSecs: 8, disengageDist: 360 }, // wardens settle back to the gate (parley re-opens)
   migrant: { coolDownSecs: 6, disengageDist: 320 },     // the herd calms and resumes the march
   brigand: { coolDownSecs: 7, disengageDist: 420 },     // the band loses interest if you outrun them (must exceed aggroRadius)
+  wayfarer: { coolDownSecs: 6, disengageDist: 300 },    // travelers FORGIVE — back off and they return to the road
   // ritual_cultist intentionally omitted — a roused cultist stays hostile.
 };
 
@@ -400,8 +401,10 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   }
 
   // ---- THE KERNEL: cast/move interleave, per style ---------------------------
+  // A MOUNTED rider doesn't steer — the beast carries it (updateMounts pins
+  // the saddle); it holds and casts, a walking tower's teeth.
   const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused);
-  runKernel(ctx.spec.style, ctx);
+  runKernel(actor.mountId !== undefined ? 'hold' : ctx.spec.style, ctx);
 }
 
 // === MACHINES ==================================================================
@@ -809,7 +812,13 @@ function acquireTarget(
 function pickSkill(
   actor: Actor, world: World, best: number, tuning: BrainTuning,
 ): SkillInstance | null {
-  if (actor.aiCooldown > 0 || !actor.canAct()) return null;
+  if (actor.aiCooldown > 0) return null;
+  // GUARD COMBOS: a raised shield is not "busy" for the skills drilled to
+  // work around it (usableWhileGuarding / requiresGuard — Bastion and
+  // Phalanx Thrust). The pick narrows to exactly those while guarding;
+  // canUse's guardCombo path clears the cast itself.
+  const guarding = actor.isGuarding();
+  if (!actor.canAct() && !guarding) return null;
   const policy: SkillPolicy = tuning.skillUse ?? {};
   const reserved = policy.reserve?.length
     ? new Set(policy.reserve.map(r => r.skill)) : undefined;
@@ -822,6 +831,7 @@ function pickSkill(
   };
   const usable = actor.skills.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
+    && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard)
     && actor.canUse(s) && best <= rangeOf(s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id)));
   if (!usable.length) return null;

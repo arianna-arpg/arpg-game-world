@@ -59,6 +59,11 @@ export interface CastingState {
   presses?: number;
   /** AI: how long a monster holds a channel/charge before letting go. */
   aiHold?: number;
+  /** AI FINESSE (perfect/timed bars): the bar fraction where the monster
+   *  "clicks" (castPress), pre-rolled once per cast from its brain's
+   *  skillUse.finesse — inside the window on a made roll, a fumble outside
+   *  on a miss. -1 = this monster never presses. */
+  aiClickAt?: number;
   /** Spirit-Totem placement bar: resolution PLANTS the totem instead of
    *  casting the skill (the doubled inherited cast — totemPlaceTime). */
   plantTotem?: boolean;
@@ -362,6 +367,10 @@ export class Actor {
   aiJukeAt = 0;
   aiJukeAng = 0;
   aiJukeFreezeUntil = 0;
+  /** MOUNTS: the beast I ride (my position pins to it) / the rider on my
+   *  back (one slot). World.updateMounts sweeps both links every frame. */
+  mountId?: number;
+  riderId?: number;
   /** CONCLAVE: a ritual cultist is combat-DORMANT (chanting, no targeting/movement)
    *  until a wounding hit rouses it past its threshold (set in World.resolveHit).
    *  Per-actor, so only the wounded retaliate while the rest keep the rite going. */

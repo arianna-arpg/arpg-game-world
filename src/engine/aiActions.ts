@@ -11,6 +11,7 @@
 
 import { angleTo, dist, rand, vec, type Vec2 } from '../core/math';
 import { SKILLS } from '../data/skills';
+import { MONSTERS } from '../data/monsters';
 import { makeSkillInstance, type SkillInstance } from './skills';
 import type { Actor } from './actor';
 import { alertScale, type AIAction } from './brain';
@@ -131,6 +132,40 @@ const HANDLERS: Record<AIAction['do'], Handler> = {
   garrison: (world, actor, act) => {
     if (act.do !== 'garrison') return;
     world.claimGarrisonSlot(actor, act.within, act.kinds);
+  },
+
+  // MOUNT the nearest free same-team beast whose mountSlot accepts this
+  // actor: teleport to the saddle; World.updateMounts carries the rider
+  // from here (position pinned, dash/push stilled) until either dies.
+  mount: (world, actor, act) => {
+    if (act.do !== 'mount') return;
+    if (actor.mountId !== undefined) return; // already in a saddle
+    const reach = act.within ?? 480;
+    let best: Actor | null = null;
+    let bd = Infinity;
+    for (const m of world.actors) {
+      if (m === actor || m.dead || m.team !== actor.team || m.riderId !== undefined) continue;
+      const slot = m.defId ? MONSTERS[m.defId]?.mountSlot : undefined;
+      if (!slot) continue;
+      if (!slot.kinds.some(k => actor.tag === k || actor.defId === k || actor.faction === k)) continue;
+      const d = dist(actor.pos, m.pos);
+      if (d <= reach && d < bd) { bd = d; best = m; }
+    }
+    if (!best) return; // nothing to ride — graceful no-op
+    actor.mountId = best.id;
+    best.riderId = actor.id;
+    world.teleportActor(actor, vec(best.pos.x, best.pos.y - best.radius), '#d8b0ff');
+  },
+
+  dismount: (world, actor, act) => {
+    if (act.do !== 'dismount') return;
+    if (actor.mountId === undefined) return;
+    const m = world.actorById(actor.mountId);
+    if (m && m.riderId === actor.id) m.riderId = undefined;
+    actor.mountId = undefined;
+    const ang = rand(0, Math.PI * 2);
+    world.teleportActor(actor, vec(
+      actor.pos.x + Math.cos(ang) * 50, actor.pos.y + Math.sin(ang) * 50), '#d8b0ff');
   },
 
   teleport: (world, actor, act, target) => {

@@ -257,6 +257,12 @@ export interface SkillPolicy {
   /** Buff/summon skills fire from at least this range (the commander's
    *  bless-from-the-back-line trick). */
   supportRange?: number;
+  /** FINESSE: the AI's simulated hand on PLAYER timing mechanics (perfect /
+   *  timed cast bars — Snipe's golden window). It always commits the press;
+   *  with `chance` the press lands INSIDE the window (the same Perfect! /
+   *  Flawless! empower the player earns), otherwise it fumbles outside —
+   *  a sniper you can hear practicing. Absent = never presses (a plain cast). */
+  finesse?: { chance: number };
 }
 
 // --- SQUADS ----------------------------------------------------------------------
@@ -392,7 +398,13 @@ export type AIAction =
    *  Arreat-plateau imp. `kinds` filters slot kinds (default: any). Pair with
    *  `use: { move: { style: 'garrison' } }` so the holder casts from the perch.
    *  Graceful no-op when no slot is free in range. */
-  | { do: 'garrison'; within?: number; kinds?: string[] };
+  | { do: 'garrison'; within?: number; kinds?: string[] }
+  /** MOUNT the nearest free same-team beast whose MonsterDef.mountSlot
+   *  accepts this actor (within reach): teleport to the saddle and RIDE —
+   *  carried, casting freely — until dismounted or either party dies. The
+   *  D2 siege-beast pattern; graceful no-op with nothing to ride. */
+  | { do: 'mount'; within?: number }
+  | { do: 'dismount' };
 
 // --- RULES ------------------------------------------------------------------------
 
