@@ -2293,6 +2293,17 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4,
   },
 
+  return_stroke: {
+    id: 'return_stroke', name: 'Return Stroke',
+    description: 'Lingering ground areas learn the RETURN STROKE: their facing swings out-and-back, over and over — the exact back-and-forth Reaver\'s Sweep retired when it committed to one pass. Faced shapes feel it; the blade keeps time.',
+    color: '#b06ad8', requiresTags: ['aoe'],
+    excludeTags: ['melee'],
+    pendulum: { arcDeg: 160, period: 1.5 },
+    mods: [mod('effectDuration', 'increased', 0.25)],
+    perLevel: [mod('effectDuration', 'increased', 0.08)],
+    weight: 5,
+  },
+
   phalanx: {
     id: 'phalanx', name: 'Phalanx',
     description: 'GRANTS the socketed guard the THRUST (⇧+key): a razor-narrow lance poked from BEHIND the raised shield, block sustained throughout — greatshield-and-spear discipline. Not ready unless the guard is up.',

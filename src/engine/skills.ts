@@ -381,8 +381,11 @@ export interface ChargeGainSpec {
 /** Named values of the aoeShape stat (0 is the circle default).
  *  crescent: an annular SECTOR aimed along the zone's facing — outer radius
  *  = radius, inner = radius × 0.55, width = the zone's arcRad (default 110°).
- *  The third entry that proves this is a REGISTRY, not an enum. */
-export const AOE_SHAPE = { circle: 0, square: 1, triangle: 2, crescent: 3 } as const;
+ *  sector: the same wedge WITHOUT the hollow heart — a full pie slice from
+ *  the caster's feet out (Scythe Arc's no-deadzone harvest; the crescent
+ *  keeps its deadzone ON PURPOSE — both belong in the vocabulary).
+ *  The registry keeps proving it's a REGISTRY, not an enum. */
+export const AOE_SHAPE = { circle: 0, square: 1, triangle: 2, crescent: 3, sector: 4 } as const;
 /** Named values of the projReturn stat. */
 export const PROJ_RETURN = { none: 0, origin: 1, caster: 2 } as const;
 
@@ -475,6 +478,17 @@ export interface ProjectileDelivery {
    *  at its caster banks charges instead of just dying — fuel for a
    *  follow-up that hurls the caught blades back out. */
   catch?: { charge: string; amount: number; max: number };
+  /** CATCH SPOT (Whirlaxe — the Draven discipline): the first flesh the
+   *  shot finds REDIRECTS it to a marked circle near the caster, where it
+   *  PLANTS as a catchable axe (a run-over embed): stand in the circle,
+   *  collect the charge. Position play as a resource loop. */
+  catchSpot?: {
+    charge: string; amount: number; max: number;
+    /** Seconds the planted axe waits to be caught (default 5). */
+    duration?: number;
+    /** How far from the caster the circle lands (default 70–115). */
+    nearRadius?: number;
+  };
   /** SPREAD BY AIM (Splayshot): the fan's cone interpolates with cursor
    *  DISTANCE — `near` degrees point-blank, `far` degrees at `range` —
    *  so the shape of the volley is aimed, not just its bearing. */
@@ -564,6 +578,11 @@ export interface ConeDelivery {
   arcDeg: number;
   /** Only the FAR EDGE of the cone hits (Surgical Strike). */
   edgeOnly?: number;
+  /** LASER presentation: the strike draws as a crystal-beam LINE down the
+   *  cone's axis instead of a wedge flash — razor cones ARE hitscan
+   *  mechanically; this makes them read that way (Umbral Lance,
+   *  Sunpiercer). Pure visuals; the hit test is unchanged. */
+  beamFx?: true;
 }
 
 export interface GroundDelivery {
@@ -675,10 +694,15 @@ export interface GroundDelivery {
   /** The zone DETONATES as its linger expires: one final burst at
    *  `damageScale` of the roll across radius × radiusScale (default 1). */
   endBurst?: { damageScale: number; radiusScale?: number };
-  /** PENDULUM (Reaver's Sweep): the zone's facing SWINGS ±arc/2 degrees
-   *  around its cast bearing, one full out-and-back per `period` seconds —
-   *  the true side-to-side sweep (faced shapes feel it). */
+  /** PENDULUM: the zone's facing SWINGS ±arc/2 degrees around its cast
+   *  bearing, one full out-and-back per `period` seconds — the metronome
+   *  blade (also graftable onto any lingering ground skill via
+   *  SupportDef.pendulum). */
   pendulum?: { arcDeg: number; period: number };
+  /** ONE SWEEP (Reaver's Sweep): the facing crosses ±arcDeg/2 around the
+   *  cast bearing EXACTLY ONCE over the zone's whole linger — a single
+   *  side-to-side harvest, no return stroke. Faced shapes feel it. */
+  sweep?: { arcDeg: number };
 }
 
 export interface SelfDelivery {
@@ -1021,6 +1045,16 @@ export interface ConstructDelivery {
    *  — the egg dies quietly; Broodpod) or 'hatch' (destruction sets it
    *  off; the Nitrocask powder rule). */
   hatch?: { skillId: string; onBreak?: 'fizzle' | 'hatch' };
+  /** The construct GLIDES at its owner's shoulder instead of standing
+   *  where planted (Holy Relic — the relic that keeps up). */
+  follows?: true;
+  /** THE BELL (Tolling Bell): every landed hit the construct SUFFERS makes
+   *  it cast castSkillId at itself (throttled by `interval`) — pair with
+   *  `taunt` and the enemies ring it for you. */
+  castOnStruck?: true;
+  /** Enemies prefer striking this construct (the decoy's pull, on
+   *  anything) — the bell wants to be hit. */
+  taunt?: true;
 }
 
 // --- Auras / presences -------------------------------------------------------
@@ -1070,6 +1104,12 @@ export interface AuraDelivery {
   /** Toggle upkeep, drained continuously (or reserved while active). */
   upkeep?: {
     manaPerSec?: number;
+    /** Fraction of MAX mana drained per second (the pool-scaled price —
+     *  a big wellspring pays proportionally for its Form). */
+    manaPctMaxPerSec?: number;
+    /** Fraction of CURRENT mana drained per second (the asymptotic drain:
+     *  dear at full, gentle near empty — it can never starve you alone). */
+    manaPctCurPerSec?: number;
     /** Fraction of max life drained per second. */
     lifeFractionPerSec?: number;
     /** Locks out max mana while toggled (like persistent minions). */
@@ -2124,6 +2164,10 @@ export interface SupportDef {
   /** A ground CASCADE this support grafts onto the skill (Spell Cascade's
    *  displaced repeats, Seismic March's rippling wave). See GroundCascadeSpec. */
   cascade?: GroundCascadeSpec;
+  /** A PENDULUM this support grafts onto lingering ground zones (the
+   *  Metronome gem): the facing swings out-and-back — the exact back-and-
+   *  forth stroke Reaver's Sweep retired when it learned the single pass. */
+  pendulum?: { arcDeg: number; period: number };
   /** An ECHO RIDER this support grafts: each completed use of the host
    *  skill raises/refreshes a ghost that re-casts the HOST instance —
    *  sockets and all (Phantasmal Echo's sentry, Ancestral Call's one-swing

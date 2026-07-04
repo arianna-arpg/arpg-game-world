@@ -112,6 +112,11 @@ export interface ConstructState {
   holdOnce?: boolean;
   /** holdOnce bookkeeping: the single cast has been started. */
   started?: boolean;
+  /** FOLLOWER construct (Holy Relic): glides at the owner's shoulder. */
+  follows?: boolean;
+  /** THE BELL: casts its skill at itself when struck; next ring's clock. */
+  castOnStruck?: boolean;
+  bellReadyAt?: number;
   /** Dome: projectile-interception radius and what happens on contact. */
   domeRadius?: number;
   domeMode?: 'dissolve' | 'deflect' | 'slow';

@@ -202,9 +202,11 @@ export function inAoe(center: Vec2, radius: number, shape: AoeShape, facing: num
   if (shape >= 3) {
     // Crescent: an annular SECTOR aimed along facing — the band between
     // inner and outer radius, clipped to the arc, with angular grace so
-    // fat targets clip the horns.
+    // fat targets clip the horns. Shape 4 (SECTOR) is the same wedge with
+    // NO hollow heart — the pie slice that starts at your feet.
     const dd = dist(center, target);
-    if (dd - targetRadius > radius || dd + targetRadius < radius * CRESCENT_INNER) return false;
+    const inner = shape >= 4 ? 0 : radius * CRESCENT_INNER;
+    if (dd - targetRadius > radius || dd + targetRadius < inner) return false;
     const half = (arcRad ?? CRESCENT_ARC) / 2 + Math.atan2(targetRadius, Math.max(dd, 1));
     return Math.abs(angleDiff(facing, angleTo(center, target))) <= half;
   }
@@ -365,6 +367,9 @@ interface Projectile {
   /** TORPOR (dome 'slow'): stall factor for THIS frame's movement — the
    *  dome re-stamps it every frame the flight stays inside. */
   stall?: number;
+  /** CATCH SPOT (Whirlaxe): armed by the first flesh hit — the flight
+   *  redirects here and PLANTS as a catchable axe on arrival. */
+  landAt?: Vec2;
   /** Fraction of this projectile's resolved axes its spawned children carry
    *  (the projInherit stat; shatter/emit specs add their own). */
   inheritFrac: number;
@@ -513,8 +518,11 @@ interface Zone {
   retract?: { at: number; speed: number };
   /** One final burst as the linger expires (damageScale × roll). */
   endBurst?: { damageScale: number; radiusScale?: number };
-  /** The facing SWINGS ±arc/2 around `base` per `period` (Reaver's Sweep). */
+  /** The facing SWINGS ±arc/2 around `base` per `period` (the Metronome). */
   pendulum?: { arc: number; period: number; base: number };
+  /** ONE SWEEP (Reaver's Sweep): the facing crosses ±arc/2 around `base`
+   *  exactly once over the whole linger — no return stroke. */
+  sweep?: { arc: number; base: number };
   /** Linger at birth (retract/pendulum clocks measure from it). */
   linger0?: number;
   /** EMITTER: the lingering zone casts a payload skill on a beat (see
@@ -9344,11 +9352,20 @@ export class World {
           if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, enemy.pos))) > arcRad / 2) continue;
           this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
         }
-        this.flashes.push({
-          pos: vec(caster.pos.x, caster.pos.y), radius: range, color: def.color,
-          life: 0.25, maxLife: 0.25, arc: { facing: caster.facing, arcRad },
-          edgeFrac: d.edgeOnly,
-        });
+        // LASER presentation (beamFx): razor cones ARE hitscan — draw the
+        // crystal-beam line instead of an invisible sliver of wedge.
+        if (d.beamFx) {
+          this.flashes.push({
+            pos: vec(caster.pos.x, caster.pos.y), radius: range, color: def.color,
+            life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
+          });
+        } else {
+          this.flashes.push({
+            pos: vec(caster.pos.x, caster.pos.y), radius: range, color: def.color,
+            life: 0.25, maxLife: 0.25, arc: { facing: caster.facing, arcRad },
+            edgeFrac: d.edgeOnly,
+          });
+        }
         // A cone's area is the wedge — the field settles on its centroid.
         fieldAt = vec(caster.pos.x + Math.cos(caster.facing) * range * 0.55,
                       caster.pos.y + Math.sin(caster.facing) * range * 0.55);
@@ -9500,8 +9517,16 @@ export class World {
           follow: d.follow,
           retract: d.retract,
           endBurst: d.endBurst,
-          pendulum: d.pendulum
-            ? { arc: d.pendulum.arcDeg * Math.PI / 180, period: d.pendulum.period, base: caster.facing }
+          // A socketed Metronome grafts the back-and-forth onto any
+          // lingering zone; the delivery's own spec is the innate base.
+          pendulum: (() => {
+            const ps = inst.sockets.find(s => s?.def.pendulum)?.def.pendulum ?? d.pendulum;
+            return ps
+              ? { arc: ps.arcDeg * Math.PI / 180, period: ps.period, base: caster.facing }
+              : undefined;
+          })(),
+          sweep: d.sweep
+            ? { arc: d.sweep.arcDeg * Math.PI / 180, base: caster.facing }
             : undefined,
           linger0: (d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra),
           leaveTerrain: d.leaveTerrain,
@@ -11331,6 +11356,10 @@ export class World {
     // INCUBATION (kind 'pod'): the payload hatched at maturity — or, under
     // the powder rule, when the pod is broken (see hatchPod).
     if (d.hatch) c.construct.hatch = d.hatch;
+    // Follower relics glide; bells ring when struck; taunt bells beg for it.
+    if (d.follows) c.construct.follows = true;
+    if (d.castOnStruck) c.construct.castOnStruck = true;
+    if (d.taunt) c.taunt = true;
 
     // Gates arrive looking for a partner: pair with an unpaired gate from
     // the same skill, or stand alone awaiting the second cast.
@@ -12683,6 +12712,19 @@ export class World {
           });
         }
       }
+    }
+
+    // THE BELL (castOnStruck): a struck bell ANSWERS — it casts its skill
+    // at itself on a throttle; the taunt begs enemies to keep ringing it.
+    if (dealt > 0 && target.construct?.castOnStruck && target.construct.castInst
+      && !target.dead && this.time >= (target.construct.bellReadyAt ?? 0)) {
+      target.construct.bellReadyAt = this.time
+        + (target.summonInst?.def.delivery.type === 'construct'
+          ? (target.summonInst.def.delivery.interval ?? 0.6) : 0.6);
+      target.useLock = 0;
+      target.mana = target.maxMana();
+      this.executeSkill(target, target.construct.castInst,
+        vec(target.pos.x, target.pos.y), { keepFacing: true, noRepeat: true });
     }
 
     // Procs: chance-based triggered effects. Top-level damaging hits only.
@@ -14478,6 +14520,21 @@ export class World {
     for (const c of this.actors) {
       if (c.dead || !c.construct) continue;
       const st = c.construct;
+      // FOLLOWER constructs (Holy Relic): glide to the owner's shoulder —
+      // a relic that keeps up, not furniture left at the last fight.
+      if (st.follows && c.owner && !c.owner.dead) {
+        const slot = c.owner.facing + Math.PI * 0.78;
+        const want = vec(
+          c.owner.pos.x + Math.cos(slot) * 36,
+          c.owner.pos.y + Math.sin(slot) * 36);
+        const dd = dist(c.pos, want);
+        if (dd > 5) {
+          const step = Math.min(dd, Math.max(140, dd * 3.2) * dt);
+          const ang = angleTo(c.pos, want);
+          c.pos.x += Math.cos(ang) * step;
+          c.pos.y += Math.sin(ang) * step;
+        }
+      }
       // CONSTRUCT FX pulse (innate or grafted): the standing object COOKS
       // its surroundings on a beat — the host skill's roll at a scale,
       // effects and all (a chilling wall chills; a burning one ignites).
@@ -14823,8 +14880,13 @@ export class World {
         if (d?.mode === 'toggle' && d.upkeep) {
           // The RAMP: the seal's price mounts the longer it holds.
           const rampMul = 1 + (d.upkeep.rampPerSec ?? 0) * held;
-          if (d.upkeep.manaPerSec) {
-            bearer.mana -= d.upkeep.manaPerSec * rampMul * dt;
+          // Flat + pool-scaled drains stack (flat, % of max, % of current)
+          // — the one mana-degeneration primitive every Form variant taps.
+          const manaDrain = (d.upkeep.manaPerSec ?? 0)
+            + (d.upkeep.manaPctMaxPerSec ? bearer.maxMana() * d.upkeep.manaPctMaxPerSec : 0)
+            + (d.upkeep.manaPctCurPerSec ? bearer.mana * d.upkeep.manaPctCurPerSec : 0);
+          if (manaDrain > 0) {
+            bearer.mana -= manaDrain * rampMul * dt;
             if (bearer.mana <= 0) { bearer.mana = 0; this.deactivateAura(bearer, skillId); continue; }
           }
           if (d.upkeep.lifeFractionPerSec) {
@@ -16446,6 +16508,12 @@ export class World {
     p.stall = undefined;
     p.age += dt;
     p.traveled += step;
+    // CATCH-SPOT flight (Whirlaxe): once armed, the axe flies STRAIGHT to
+    // its marked circle — no more axes, no more prey.
+    if (p.landAt) {
+      p.dir = p.guideDir = angleTo(p.pos, p.landAt);
+      return vec(p.pos.x + Math.cos(p.dir) * step, p.pos.y + Math.sin(p.dir) * step);
+    }
     // Homeward flight overrides the axes: straight back, re-hitting.
     if (p.returnPhase) {
       p.dir = p.guideDir = angleTo(p.pos, this.returnTarget(p));
@@ -16583,6 +16651,27 @@ export class World {
       p.pos = this.advanceProjectile(p, dt);
       // Keep `dir` pointing along actual motion for rendering & chains.
       if (p.guided && dist(prev, p.pos) > 0.5) p.dir = angleTo(prev, p.pos);
+
+      // CATCH-SPOT ARRIVAL (Whirlaxe): the axe PLANTS as a catchable
+      // embed at its marked circle — the run-over collect machinery pays
+      // the charge to whoever walks it (i.e., you, if you make the catch).
+      if (p.landAt && dist(p.pos, p.landAt) < 16) {
+        const cspec = (p.inst.def.delivery as ProjectileDelivery).catchSpot;
+        if (cspec && !p.caster.dead) {
+          this.spawnConstruct(p.caster, p.inst, {
+            type: 'construct', kind: 'embed',
+            range: 0, duration: cspec.duration ?? 5, maxActive: 4,
+            invulnerable: true, placeRange: 9999,
+            embed: {
+              runOver: 'collect',
+              collect: { charge: cspec.charge, amount: cspec.amount, max: cspec.max },
+            },
+          }, p.pos, undefined, vec(p.landAt.x, p.landAt.y));
+        }
+        p.dissolved = true;
+        this.projectiles.splice(i, 1);
+        continue;
+      }
 
       const tethered = p.orbit > 0 || p.spiral > 0 || p.returnPhase;
       // BOUNDLESS zones (the Descent) have no arena edge — a projectile lives until
@@ -16916,6 +17005,27 @@ export class World {
               const zz = (p.inst.def.delivery as ProjectileDelivery).trajectory?.zigzag;
               if (p.zig && zz?.onHit) this.kinkProjectile(p, zz);
             }
+            // CATCH SPOT (Whirlaxe): the FIRST flesh struck redirects the
+            // axe to a marked circle near the caster — catch it there.
+            {
+              const cspec = (p.inst.def.delivery as ProjectileDelivery).catchSpot;
+              if (cspec && !p.landAt && !p.caster.dead) {
+                const ang = rand(0, Math.PI * 2);
+                const r = rand(70, cspec.nearRadius ?? 115);
+                p.landAt = this.clampPos(vec(
+                  p.caster.pos.x + Math.cos(ang) * r,
+                  p.caster.pos.y + Math.sin(ang) * r), 12);
+                p.traveled = 0;
+                p.range = 1e9;          // the trip to the circle is free
+                p.maxAge = undefined;
+                this.flashes.push({
+                  pos: vec(p.landAt.x, p.landAt.y), radius: 26, color: p.color,
+                  life: 0.9, maxLife: 0.9, edgeFrac: 0.8,
+                });
+                if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
+                break;
+              }
+            }
             // FULMINATE (projHitDetonate): an explosive payload detonates on
             // every hit the projectile SURVIVES — each rehit, pierce, and
             // chain — not just where the flight ends (which still bursts).
@@ -17182,12 +17292,18 @@ export class World {
         // Revolving zones sweep their facing around (Cinderwhirl's flame
         // hand) — faced shapes only feel it; discs spin invisibly.
         if (z.rotate) z.facing += z.rotate * dt;
-        // PENDULUM (Reaver's Sweep): the facing swings side-to-side across
+        // PENDULUM (the Metronome): the facing swings side-to-side across
         // the cast bearing — the wedge scythes east-west, not forward.
         if (z.pendulum) {
           const lived = (z.linger0 ?? 0) - z.linger;
           z.facing = z.pendulum.base
             + Math.sin((lived / z.pendulum.period) * Math.PI * 2) * (z.pendulum.arc / 2);
+        }
+        // ONE SWEEP (Reaver's Sweep): a single crossing over the whole
+        // linger — the blade passes once and is done.
+        if (z.sweep && (z.linger0 ?? 0) > 0) {
+          const prog = clamp(1 - z.linger / z.linger0!, 0, 1);
+          z.facing = z.sweep.base - z.sweep.arc / 2 + z.sweep.arc * prog;
         }
         // Vortex zones drag victims toward their center — the suction may
         // reach past the damage disc (pullRadius: the event horizon).

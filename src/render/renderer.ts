@@ -2280,10 +2280,18 @@ export class Renderer {
     }
   }
 
-  /** Trace a circle / square / triangle / crescent area outline (aoeShape values). */
+  /** Trace a circle / square / triangle / crescent / sector area outline
+   *  (aoeShape values). */
   private traceAoe(x: number, y: number, radius: number, shape?: number, facing = 0, arcRad?: number): void {
     const { ctx } = this;
-    if (shape && shape >= 3) {
+    if (shape && shape >= 4) {
+      // Sector: a full PIE wedge — the crescent without its hollow heart
+      // (Scythe Arc's no-deadzone harvest).
+      const half = (arcRad ?? 110 * Math.PI / 180) / 2;
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, radius, facing - half, facing + half);
+      ctx.closePath();
+    } else if (shape && shape >= 3) {
       // Crescent: an annular sector aimed along facing (inner rim 0.55R —
       // must match the inAoe hit test's CRESCENT_INNER).
       const half = (arcRad ?? 110 * Math.PI / 180) / 2;
@@ -2320,18 +2328,25 @@ export class Renderer {
         ctx.fillStyle = z.color;
         ctx.fill();
       } else if (z.edge && z.edge > 0.02) {
-        // Fill-in cage (Pillar of Flame): only the closing band burns.
+        // Fill-in cage (Pillar of Flame / Wildfire Sweep): only the closing
+        // band burns — CLIPPED to the zone's faced shape, so a crescent
+        // fill-in draws a crescent band, never a whole phantom circle.
         const mid = z.radius * (1 + z.edge) / 2;
         ctx.globalAlpha = 0.35;
         ctx.strokeStyle = z.color;
         ctx.lineWidth = Math.max(3, z.radius * (1 - z.edge));
         ctx.beginPath();
-        ctx.arc(z.pos.x, z.pos.y, mid, 0, Math.PI * 2);
+        if (z.shape >= 3) {
+          const half = (z.arcRad ?? 110 * Math.PI / 180) / 2;
+          ctx.arc(z.pos.x, z.pos.y, mid, z.facing - half, z.facing + half);
+        } else {
+          ctx.arc(z.pos.x, z.pos.y, mid, 0, Math.PI * 2);
+        }
         ctx.stroke();
         ctx.globalAlpha = 0.5;
         ctx.lineWidth = 1.5;
         ctx.beginPath();
-        this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing);
+        this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
         ctx.stroke();
       } else {
         ctx.globalAlpha = 0.22;

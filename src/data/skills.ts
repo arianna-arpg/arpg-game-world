@@ -675,7 +675,7 @@ export const SKILLS: Record<string, SkillDef> = {
     // full gather converges it back to the killing line (#49's duality).
     chargeUp: { maxTime: 1.8, minScale: 0.25, maxScale: 3.2, aoeScaleMax: 1.6, arcTaper: 6 },
     baseDamage: { fire: [20, 32] },
-    delivery: { type: 'cone', range: 420, arcDeg: 7 },
+    delivery: { type: 'cone', range: 420, arcDeg: 7, beamFx: true },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'burn', chance: 0.4, magnitude: 0.5 },
@@ -757,7 +757,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 6, cooldown: 0.4, useTime: 0.25,
     castMove: 0.5,
     baseDamage: { chaos: [8, 13] },
-    delivery: { type: 'cone', range: 560, arcDeg: 3 },
+    delivery: { type: 'cone', range: 560, arcDeg: 3, beamFx: true },
     effects: [{ type: 'damage' }],
     requirements: { intelligence: 16 },
     ai: { range: 520, weight: 2, keepDistance: 380 },
@@ -4857,15 +4857,16 @@ export const SKILLS: Record<string, SkillDef> = {
 
   reavers_sweep: {
     id: 'reavers_sweep', name: "Reaver's Sweep",
-    description: 'The TRUE side-to-side harvest: face north and the blade fills east↔west — a crescent that SWINGS across your whole front and back again, reaping on every pass. The circular reap, finally taught its footwork.',
+    description: 'The TRUE side-to-side harvest: face north and the blade crosses east→west in ONE committed pass — a crescent at arm\'s length (the near deadzone is the discipline: keep them at blade\'s reach). Socket Return Stroke to teach it the way back.',
     tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#b06ad8',
     manaCost: 10, cooldown: 2, useTime: 0.6,
     baseDamage: { physical: [10, 15] },
     delivery: {
       type: 'ground', radius: 150, castRange: 0, delay: 0,
-      lingerDuration: 1.3, tickInterval: 0.22,
+      lingerDuration: 1.1, tickInterval: 0.2,
       shape: 'crescent', arcDeg: 85,
-      pendulum: { arcDeg: 200, period: 1.3 },
+      sweep: { arcDeg: 200 },
+      hitOnce: true,
     },
     effects: [
       { type: 'damage' },
@@ -4873,6 +4874,27 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     requirements: { strength: 18 },
     ai: { range: 130, weight: 2 },
+  },
+
+  scythe_arc: {
+    id: 'scythe_arc', name: 'Scythe Arc',
+    description: 'The close harvest: a SOLID wedge — no hollow heart, no deadzone — swung once across your front from hip to hip. Everything from your boots to a blade-length out is cut exactly once. Reaver\'s Sweep keeps the longer reach and the gap; this one keeps nothing off the edge.',
+    tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#c87ae0',
+    manaCost: 9, cooldown: 1.8, useTime: 0.5,
+    baseDamage: { physical: [11, 16] },
+    delivery: {
+      type: 'ground', radius: 115, castRange: 0, delay: 0,
+      lingerDuration: 0.9, tickInterval: 0.18,
+      shape: 'sector', arcDeg: 80,
+      sweep: { arcDeg: 190 },
+      hitOnce: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.25, magnitude: 0.25 },
+    ],
+    requirements: { strength: 16 },
+    ai: { range: 100, weight: 2 },
   },
 
   sparkfield: {
@@ -5847,7 +5869,10 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 5, cooldown: 2, useTime: 0,
     delivery: {
       type: 'aura', mode: 'toggle',
-      upkeep: { manaPerSec: 2.5 },
+      // A REAL drain: flat + a slice of the pool per second, so it visibly
+      // outpaces base regeneration — the Form costs something to wear
+      // (the pct levers are the resource-degen primitive, reusable).
+      upkeep: { manaPerSec: 2.5, manaPctMaxPerSec: 0.03 },
       aura: {
         radius: 12,
         selfMods: [
@@ -6049,9 +6074,11 @@ export const SKILLS: Record<string, SkillDef> = {
     baseDamage: { chaos: [11, 17] },
     innateMods: [mod('wardLeech', 'flat', 0.1)],
     delivery: {
-      type: 'projectile', speed: 400, radius: 10, range: 560, pierce: 4,
-      trajectory: { homing: 2.6 },
-      aura: { radius: 60, dps: 16, damageType: 'chaos' },
+      // SLOW and getting hungrier: a twisting bolt that starts at a crawl
+      // and gathers — the wake needs dwell time to actually rot the pack.
+      type: 'projectile', speed: 190, radius: 10, range: 560, pierce: 4,
+      trajectory: { homing: 2.6, spin: 4, accel: 0.32 },
+      aura: { radius: 62, dps: 16, damageType: 'chaos' },
     },
     effects: [
       { type: 'damage' },
@@ -6512,6 +6539,111 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [],
     requirements: { intelligence: 22 },
     leveling: { perLevel: [mod('mana', 'increased', 0.04)] },
+  },
+
+  glacier_crown: {
+    id: 'glacier_crown', name: 'Glacier Crown',
+    description: 'The BACKLOADED crown: channel and NOTHING falls — the orb only gathers, silent overhead. Release, and everything you banked comes down at once: a burst at the exhale, then seconds of autonomous hail that follow you and fade. Patience first, weather after.',
+    tags: ['spell', 'cold', 'aoe', 'storm', 'channel', 'duration'], color: '#b8e8ff',
+    manaCost: 4, cooldown: 3, useTime: 0,
+    castMode: 'channel',
+    channel: {
+      interval: 0.32, windup: 0.25, move: 'slowed', moveFactor: 0.6,
+      trackAim: false, cooldownOnEnd: true, maxHold: 6,
+      ramp: { per: 0.16, max: 1.1 },
+      release: { pulses: false, minHold: 0.6, dmgRamp: { per: 0.28, max: 1.6 } },
+      persist: { perHeldSec: 1.4, maxDuration: 7, minHold: 0.6, fade: 0.45 },
+    },
+    baseDamage: { cold: [9, 14] },
+    delivery: {
+      type: 'storm', count: 2, interval: 0, areaRadius: 200, hitRadius: 44,
+      castRange: 0, atEnemies: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.5 },
+    ],
+    requirements: { intelligence: 24 },
+    ai: { range: 180, weight: 2 },
+  },
+
+  whirlaxe: {
+    id: 'whirlaxe', name: 'Whirlaxe',
+    description: 'Hurl the axe — and the first flesh it FINDS flings it onward to a marked circle near you. Stand in the circle, CATCH the returning steel, bank a Gyre. Miss the catch and the axe lies where it fell until its time runs out. Aim is half the skill; footwork is the other half.',
+    tags: ['attack', 'projectile', 'physical', 'duration'], color: '#d8b878',
+    manaCost: 5, cooldown: 0, useTime: 0.45,
+    baseDamage: { physical: [13, 20] },
+    delivery: {
+      type: 'projectile', speed: 520, radius: 10, range: 460,
+      catchSpot: { charge: 'gyre', amount: 1, max: 5, duration: 5 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.3 },
+    ],
+    requirements: { dexterity: 20 },
+    ai: { range: 380, weight: 2, keepDistance: 240 },
+  },
+
+  holy_relic: {
+    id: 'holy_relic', name: 'Holy Relic',
+    description: 'A relic that KEEPS UP: it glides at your shoulder, and every attack you complete it ANSWERS — a ring of consecrated force that cuts the enemy and mends the faithful around it. The warden that walks.',
+    tags: ['spell', 'summon', 'minion', 'totem', 'duration', 'heal'], color: '#f0e0b0',
+    manaCost: 14, cooldown: 6, useTime: 0.55,
+    baseDamage: { physical: [3, 5] },
+    delivery: {
+      type: 'construct', kind: 'relic', castSkillId: 'relic_pulse',
+      range: 0, duration: 14, maxActive: 1, life: 45, placeRange: 60,
+      interval: 0.8,
+      follows: true,
+    },
+    effects: [{ type: 'damage' }],
+    requirements: { willpower: 18 },
+    ai: { range: 200, weight: 1 },
+  },
+
+  relic_pulse: {
+    id: 'relic_pulse', name: 'Relic Pulse', noDrop: true,
+    description: 'The walking relic\'s answer: harm around it, mending in it.',
+    tags: ['spell', 'physical', 'aoe', 'heal'], color: '#f0e0b0',
+    manaCost: 0, cooldown: 0.55, useTime: 0,
+    baseDamage: { physical: [5, 8] },
+    delivery: { type: 'nova', radius: 95 },
+    effects: [
+      { type: 'damage' },
+      { type: 'heal', amount: 4 },
+    ],
+  },
+
+  tolling_bell: {
+    id: 'tolling_bell', name: 'Tolling Bell',
+    description: 'Raise a great bell that WANTS to be struck: it taunts the room, and every blow it takes RINGS a shockwave off its skin. Park it in the melee and let their own violence do your work — the bell tolls for whoever hits it.',
+    tags: ['spell', 'physical', 'aoe', 'totem', 'duration'], color: '#c8a858',
+    manaCost: 15, cooldown: 9, useTime: 0.6,
+    baseDamage: { physical: [7, 11] },
+    delivery: {
+      type: 'construct', kind: 'barrier', castSkillId: 'bell_toll',
+      range: 0, duration: 10, maxActive: 1, life: 150, placeRange: 280,
+      interval: 0.6,
+      castOnStruck: true,
+      taunt: true,
+    },
+    effects: [{ type: 'damage' }],
+    requirements: { strength: 18, willpower: 12 },
+    ai: { range: 220, weight: 1 },
+  },
+
+  bell_toll: {
+    id: 'bell_toll', name: 'Bell Toll', noDrop: true,
+    description: 'The bell answers the blow.',
+    tags: ['spell', 'physical', 'aoe'], color: '#c8a858',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [9, 14] },
+    delivery: { type: 'nova', radius: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 90 },
+    ],
   },
 
   claw: {
