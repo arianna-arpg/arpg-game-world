@@ -4905,6 +4905,9 @@ export const SKILLS: Record<string, SkillDef> = {
       shape: 'sector', arcDeg: 80,
       sweep: { arcDeg: 190 },
       hitOnce: true,
+      // The blade hurts where it PASSES — no opening hit on the whole
+      // sector (the impact stays a lever for skills that want one).
+      noImpact: true,
     },
     effects: [
       { type: 'damage' },
@@ -6233,6 +6236,28 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [],
     requirements: { willpower: 18 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.1)] },
+  },
+
+  war_horn: {
+    id: 'war_horn', name: 'War Horn',
+    description: 'Sound the horn and the WHOLE court marches: every minion you own converges on your mark and fights whatever holds it. The socketed Assault metas order one skill\'s retinue; the horn is the universal call — its own slot, your explicit choice.',
+    tags: ['spell', 'minion', 'warcry', 'instant'], color: '#c8a04b',
+    manaCost: 7, cooldown: 6, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'commandMinions', duration: 6 }],
+    requirements: { willpower: 14 },
+    leveling: { perLevel: [mod('minionMoveSpeed', 'increased', 0.06)] },
+  },
+
+  last_rite: {
+    id: 'last_rite', name: 'Last Rite',
+    description: 'The universal LAST instruction: every hard-resummonable minion you own detonates for most of its life — the whole congregation spent in one breath. Socketed Self-Destruct metas spend one skill\'s bodies; the Rite spends everyone, from its own slot, because you chose it.',
+    tags: ['spell', 'minion', 'fire', 'instant'], color: '#e86848',
+    manaCost: 12, cooldown: 10, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'detonateMinions', fraction: 0.65 }],
+    requirements: { willpower: 18 },
+    leveling: { perLevel: [mod('minionExplodeDeath', 'flat', 0.04)] },
   },
 
   skeletal_lunge: {

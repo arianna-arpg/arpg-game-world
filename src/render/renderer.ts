@@ -3685,12 +3685,23 @@ export class Renderer {
         ctx.textAlign = 'right';
         ctx.fillText(String(inst.level), x + slot - 5, by + slot - 5);
         ctx.textAlign = 'center';
-        // MINION COUNT badge — top-right corner of the ICON itself, so a
-        // socketed meta-button can never hide it. Summons and constructs
-        // both count (turrets, pods, arrows — anything the skill owns).
-        if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
-          const alive = world.minionsOfSkill(p, def.id).length;
-          if (alive > 0) {
+        // COUNT badge — top-right corner of the ICON itself, so a socketed
+        // meta-button can never hide it. The golden rule: the badge shows
+        // WHATEVER the skill currently has ALIVE — minions and constructs
+        // (turrets, pods, arrows), stacked worn fields (Blizzard Coil's
+        // layers), or the stacks of the buff the skill grants (Carve).
+        {
+          let count = 0;
+          if (def.delivery.type === 'summon' || def.delivery.type === 'construct') {
+            count = world.minionsOfSkill(p, def.id).length;
+          } else if (def.delivery.type === 'ground' && def.delivery.follow) {
+            count = world.zones.filter(z =>
+              z.caster === p && z.inst.def.id === def.id && z.exploded).length;
+          } else {
+            const bfx = def.effects.find(f => f.type === 'buff' && (f.maxStacks ?? 1) > 1);
+            if (bfx && bfx.type === 'buff') count = p.buffs.get(bfx.id)?.stacks ?? 0;
+          }
+          if (count > 0) {
             ctx.fillStyle = 'rgba(8,8,12,0.9)';
             ctx.beginPath();
             ctx.arc(x + slot - 9, by + 10, 8, 0, Math.PI * 2);
@@ -3700,19 +3711,28 @@ export class Renderer {
             ctx.stroke();
             ctx.fillStyle = '#ffe86a';
             ctx.font = 'bold 9px Verdana';
-            ctx.fillText(String(alive), x + slot - 9, by + 13);
+            ctx.fillText(String(count), x + slot - 9, by + 13);
           }
         }
-        // COMBO-WINDOW SLIVER (Trisect): the countdown until the chain
-        // resets, as a thin bar in the gap under the meta button.
-        if (def.comboChain && inst.state?.comboAt !== undefined
-          && (inst.state.comboIdx ?? 0) > 0) {
-          const left = 1 - (world.time - inst.state.comboAt) / def.comboChain.window;
-          if (left > 0) {
+        // The SLIVER under the meta button — the golden rule: whatever the
+        // slot is still DOING shows its countdown here. Combo windows
+        // (Trisect's reset clock) take the bar first; otherwise a released
+        // persist-and-decay (Hailcrown / Glacier Crown still raining).
+        {
+          let sliver = 0;
+          if (def.comboChain && inst.state?.comboAt !== undefined
+            && (inst.state.comboIdx ?? 0) > 0) {
+            sliver = 1 - (world.time - inst.state.comboAt) / def.comboChain.window;
+          } else {
+            const pp = world.pendingPersists.find(q =>
+              q.caster === p && q.inst.def.id === def.id);
+            if (pp && pp.total > 0) sliver = pp.remaining / pp.total;
+          }
+          if (sliver > 0) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.fillRect(x, by - 6, slot, 3);
             ctx.fillStyle = def.color;
-            ctx.fillRect(x, by - 6, slot * clamp(left, 0, 1), 3);
+            ctx.fillRect(x, by - 6, slot * clamp(sliver, 0, 1), 3);
           }
         }
         // META-ACTION mini-button riding the slot (modifier+key) — raised

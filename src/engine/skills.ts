@@ -617,6 +617,11 @@ export interface GroundDelivery {
   /** The lingering zone GROWS as it lives (radius units/s) — pair with
    *  drift for a traveling, swelling upchurn (Upheaval). */
   grow?: number;
+  /** Skip the placement IMPACT entirely — the zone begins already LIVE,
+   *  and only its linger (ticks, sweep crossings) ever deals damage:
+   *  Scythe Arc hurts where the blade PASSES, never where it appears.
+   *  The impact stays available to every skill that wants an opening hit. */
+  noImpact?: true;
   /** SWEEP semantics: the zone is a moving HIT SURFACE — each victim is
    *  struck ONCE per zone life, never per tick (zones are FIELDS, damage
    *  per time inside; a sweep is damage per CROSSING). Pair with drift and

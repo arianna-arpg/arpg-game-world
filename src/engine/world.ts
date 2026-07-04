@@ -1792,11 +1792,17 @@ export class World {
         const inst = a.skills[i];
         if (!inst) continue;
         const toggle = inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle';
-        if (toggle ? inp.edge[i] : inp.held[i]) this.useSkill(a, inst, aim);
-        // META-ACTIONS (shift+slot): the mini-button riding the slot —
-        // Detonate above the mine, Enrage above the hive, Attack! above
-        // the summons. A second ability that never costs a bar slot.
-        if (inp.metaEdge?.[i] && instanceMeta(inst)) this.useMetaSkill(a, inst, aim);
+        // META-ACTIONS (shift+slot): the mini-button riding the slot — and
+        // the meta OWNS the slot on its frame: the physical button is still
+        // down during a modifier press (held[] is deliberately preserved for
+        // running guards), so without this else-if the HOST would start its
+        // own cast in the same beat and the payload would find the caster
+        // "busy" — metas only worked while the host was on cooldown.
+        if (inp.metaEdge?.[i] && instanceMeta(inst)) {
+          this.useMetaSkill(a, inst, aim);
+        } else if (toggle ? inp.edge[i] : inp.held[i]) {
+          this.useSkill(a, inst, aim);
+        }
       }
       // Face the cursor/target while able, so swings read right.
       if (a.canAct()) a.facing = Math.atan2(aim.y - a.pos.y, aim.x - a.pos.x);
@@ -9250,6 +9256,20 @@ export class World {
           dist(caster.pos, a.pos) - a.radius <= reach
           && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
           useMult);
+        // RING YOUR OWN BELL: the caster's swings FORCE a castOnStruck
+        // construct in the arc to answer — walk up and play it on purpose
+        // instead of waiting for the enemy to oblige (the PoE2 bell combo).
+        for (const c of this.actors) {
+          if (c.dead || c.owner !== caster || !c.construct?.castOnStruck) continue;
+          if (dist(caster.pos, c.pos) - c.radius > reach) continue;
+          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, c.pos))) > arcRad / 2) continue;
+          if (this.ringBell(c)) {
+            this.flashes.push({
+              pos: vec(c.pos.x, c.pos.y), radius: c.radius + 10,
+              color: c.color, life: 0.2, maxLife: 0.2,
+            });
+          }
+        }
         break;
       }
 
@@ -9525,7 +9545,9 @@ export class World {
           pos: at, radius: d.radius * aoeScale,
           caster, inst, color: def.color,
           marker: d.marker ? true : undefined,
-          delay: d.delay ?? 0, exploded: false,
+          // noImpact (Scythe Arc): the zone begins LIVE — no opening hit,
+          // no telegraph pop; the linger does all the cutting.
+          delay: d.delay ?? 0, exploded: !!d.noImpact,
           linger: (d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra),
           tickInterval: d.tickInterval ?? 0.5, tickTimer: 0,
           shape: groundShape,
@@ -10130,11 +10152,15 @@ export class World {
         if (sent === 0) this.failNote(caster, def.id + ':nominions', 'no minions to command');
       }
       // COMMAND (Attack! / the inverse Bombardment): every mobile minion
-      // marches on the MARK and fights whatever holds it.
+      // marches on the MARK and fights whatever holds it. Fired as a META
+      // (hostSkillId set), the order scopes to THAT skill's retinue alone —
+      // your bruisers charge without dragging the fragile casters along;
+      // the bar-skill form (War Horn) commands the whole court.
       if (fx.type === 'commandMinions') {
         let sent = 0;
         for (const m of this.actors) {
           if (m.owner !== caster || m.dead || m.construct) continue;
+          if (inst.hostSkillId && m.sourceSkillId !== inst.hostSkillId) continue;
           m.aiCommandPos = vec(aim.x, aim.y);
           m.aiCommandUntil = this.time + (fx.duration ?? 5);
           sent++;
@@ -10222,10 +10248,14 @@ export class World {
       // hard-resummonables only; contract bodies were never theirs to spend.
       // UNTARGETABLE minions (Raging Spirits) still obey: untargetability
       // shields them from ENEMIES, never from their own summoner's order.
+      // Fired as a META (hostSkillId set), the order spends ONLY that
+      // skill's bodies — Apotheosis'd spirits pop, the skeletons stand.
+      // The bar-skill form (Last Rite) spends the whole congregation.
       if (fx.type === 'detonateMinions') {
         let spent = 0;
         for (const m of [...this.actors]) {
           if (m.owner !== caster || m.dead || m.construct) continue;
+          if (inst.hostSkillId && m.sourceSkillId !== inst.hostSkillId) continue;
           if (m.manaReserved > 0) continue; // persistent contracts refuse
           const sd2 = m.summonInst?.def.delivery;
           if (sd2?.type === 'summon' && sd2.persistent) continue;
@@ -11622,6 +11652,23 @@ export class World {
     bearer.activeAuras.delete(skillId);
   }
 
+  /** RING a castOnStruck construct (Tolling Bell): it casts its skill at
+   *  itself on its own throttle. One gate for every mallet — enemy blows
+   *  (resolveHit) and the owner's deliberate swings (the melee case). */
+  private ringBell(bell: Actor): boolean {
+    const st = bell.construct;
+    if (!st?.castOnStruck || !st.castInst || bell.dead) return false;
+    if (this.time < (st.bellReadyAt ?? 0)) return false;
+    st.bellReadyAt = this.time
+      + (bell.summonInst?.def.delivery.type === 'construct'
+        ? (bell.summonInst.def.delivery.interval ?? 0.6) : 0.6);
+    bell.useLock = 0;
+    bell.mana = bell.maxMana();
+    this.executeSkill(bell, st.castInst,
+      vec(bell.pos.x, bell.pos.y), { keepFacing: true, noRepeat: true });
+    return true;
+  }
+
   /** Scatter an exploding area skill into smaller secondary explosions. */
   private spawnAftershocks(caster: Actor, inst: SkillInstance, at: Vec2, radius: number, shape: AoeShape, depth = 0): void {
     if (depth > 0) return; // aftershocks don't scatter further
@@ -12750,16 +12797,10 @@ export class World {
     }
 
     // THE BELL (castOnStruck): a struck bell ANSWERS — it casts its skill
-    // at itself on a throttle; the taunt begs enemies to keep ringing it.
-    if (dealt > 0 && target.construct?.castOnStruck && target.construct.castInst
-      && !target.dead && this.time >= (target.construct.bellReadyAt ?? 0)) {
-      target.construct.bellReadyAt = this.time
-        + (target.summonInst?.def.delivery.type === 'construct'
-          ? (target.summonInst.def.delivery.interval ?? 0.6) : 0.6);
-      target.useLock = 0;
-      target.mana = target.maxMana();
-      this.executeSkill(target, target.construct.castInst,
-        vec(target.pos.x, target.pos.y), { keepFacing: true, noRepeat: true });
+    // at itself on a throttle; the taunt begs enemies to keep ringing it
+    // (and the melee case lets the OWNER ring it deliberately).
+    if (dealt > 0 && target.construct?.castOnStruck && !target.dead) {
+      this.ringBell(target);
     }
 
     // Procs: chance-based triggered effects. Top-level damaging hits only.
@@ -17383,8 +17424,12 @@ export class World {
           }
         }
         // Pillar of Flame: the cage closes — the safe center shrinks away.
+        // CRESCENT fills stop at the crescent's own inner rim (0.55R): the
+        // deadzone in front of the caster is real, and the visual must
+        // never promise damage the annulus won't deliver (Wildfire Sweep).
         if (z.edge !== undefined && z.fillRate) {
-          z.edge = Math.max(0, z.edge - z.fillRate * dt);
+          const floor = z.shape === AOE_SHAPE.crescent ? 0.55 : 0;
+          z.edge = Math.max(floor, z.edge - z.fillRate * dt);
         }
         // EMITTER zones cast their payload on the beat: at random ground
         // inside ('point' — fissure bursts) or at random enemies standing

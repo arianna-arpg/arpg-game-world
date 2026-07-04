@@ -1071,12 +1071,14 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   wild_abandon: {
     id: 'wild_abandon', name: 'Wild Abandon',
-    description: '100% increased random-strike arc AND swing arc — flurries round toward a full circle, and anchored swings (Cleave, Buckler Strike) widen the same way. Strike wherever the fight is.',
+    description: 'The strike goes WHEREVER: anchored swings (Cleave, Buckler Strike) are GRAFTED a random bearing across a wide sector — Wild Strike\'s chaos, teachable — and innately-wild flurries round further toward the full circle. Width stays Reckless Breadth\'s trade; this gem sells direction.',
     color: '#78c0e8',
-    // Both width levers: randomArc bends WHERE random strikes land,
-    // swingArc widens HOW WIDE every melee arc / cone wedge cuts.
-    mods: [mod('randomArc', 'increased', 1.0), mod('swingArc', 'increased', 1.0)],
-    perLevel: [mod('damage', 'increased', 0.05)],
+    // The GRAFT is the identity (AimSpec.random on any strike — a socketed
+    // transform wins over the innate one); randomArc then widens the
+    // sector, here and on innately-random skills alike.
+    aim: { random: { spreadDeg: 220 } },
+    mods: [mod('randomArc', 'increased', 0.5)],
+    perLevel: [mod('randomArc', 'increased', 0.12)],
     weight: 5,
   },
 
