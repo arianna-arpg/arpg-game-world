@@ -2030,8 +2030,13 @@ export interface SkillDef {
   gate?: GateSpec;
   /** Usable ONLY while holding a guard stance (Transgression's combo). */
   requiresGuard?: boolean;
-  /** May be pressed MID-GUARD without dropping the stance: the skill
-   *  executes instantly around the raised shield (must be instant). */
+  /** May be pressed MID-HOLD without dropping the running cast: the skill
+   *  executes instantly around a raised guard, a channel, a charge-up or
+   *  an overcharge (must be instant; pair with requiresGuard when the
+   *  skill demands the SHIELD specifically). The held skill's own meta
+   *  payloads get this implicitly — pressing the meta modifier ALONE
+   *  during a hold fires the held skill's meta (Phalanx while Shield Up:
+   *  you can't re-press a button you're already holding). */
   usableWhileGuarding?: boolean;
 
   /** RETALIATION (Pain Hounds): while equipped, every landed hit the

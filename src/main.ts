@@ -277,13 +277,21 @@ function readLocalInput(): PlayerInput | null {
   // press. HELD states survive the modifier — a raised guard or a running
   // channel must NOT drop because you reached for the meta button (the
   // shield-bash-on-shift bug); only fresh EDGES reroute.
-  if (input.keys.has(kb.metaModifier ?? 'shift')) {
-    return {
-      dx, dy, aim,
-      held,
-      edge: edge.map(() => false),
-      metaEdge: edge,
-    };
+  const metaKey = kb.metaModifier ?? 'shift';
+  if (input.keys.has(metaKey)) {
+    const metaEdge = edge.map(() => false);
+    for (let i = 0; i < edge.length; i++) if (edge[i]) metaEdge[i] = true;
+    // HELD-CAST META (Phalanx while Shield Up): you can't re-press a
+    // button you're already HOLDING — so during a held cast (guard /
+    // channel / charge / overcharge), pressing the MODIFIER ALONE fires
+    // the HELD skill's meta. Scoped to exactly that slot: three channel
+    // skills on the bar never fire three metas — only the one in hand.
+    if (input.justPressed(metaKey) && p.casting
+      && ['guard', 'channel', 'charge', 'overcharge'].includes(p.casting.mode)) {
+      const ci = p.skills.findIndex(s => s === p.casting!.inst);
+      if (ci >= 0) metaEdge[ci] = true;
+    }
+    return { dx, dy, aim, held, edge: edge.map(() => false), metaEdge };
   }
   return { dx, dy, aim, held, edge };
 }

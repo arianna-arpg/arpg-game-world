@@ -1394,10 +1394,21 @@ export class Actor {
   }
 
   canUse(inst: SkillInstance): boolean {
-    // GUARD COMBOS (Transgression): a usableWhileGuarding skill may fire
-    // around the raised shield — the stance is not "busy" for it.
-    const guardCombo = this.casting?.mode === 'guard' && !!inst.def.usableWhileGuarding;
-    if (guardCombo) {
+    // HOLD COMBOS: a held cast (guard / channel / charge / overcharge) is
+    // not "busy" for everything —
+    //  - a usableWhileGuarding skill fires around the hold (Transgression,
+    //    Bastion Thrust; requiresGuard still demands the guard where declared);
+    //  - the HELD skill's OWN meta payload fires through it (Phalanx while
+    //    Shield Up: hostSkillId names the hold that spawned the button).
+    // Instant payloads only — a cast bar would clobber the running hold.
+    const heldMode = !!this.casting
+      && ['guard', 'channel', 'charge', 'overcharge'].includes(this.casting.mode);
+    const holdCombo = heldMode
+      && this.skillUseTime(inst) <= 0.001
+      && (!!inst.def.usableWhileGuarding
+        || (inst.hostSkillId !== undefined
+          && this.casting!.inst.def.id === inst.hostSkillId));
+    if (holdCombo) {
       if (this.dead || this.useLock > 0 || this.isStunned()) return false;
     } else if (!this.canAct()) return false;
     if (this.cooldowns.has(inst.def.id)) return false;
