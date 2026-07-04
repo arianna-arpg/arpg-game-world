@@ -97,6 +97,9 @@ export interface MonsterGrant {
   support?: string;
   /** Skill id to socket `support` into (default: the monster's FIRST skill). */
   on?: string;
+  /** Rolled PER SPAWN: the grant lands with this chance (absent = always) —
+   *  "some wardens carry the lance drill, some don't" without a second def. */
+  chance?: number;
 }
 
 export interface MonsterDef {
@@ -193,6 +196,13 @@ export interface MonsterDef {
    *  'predator' — AMBIENT_TAGS keeps them off objectives). Event spawners
    *  may overwrite for their own roles (patrol, siege, brigand...). */
   tag?: string;
+  /** A RIDER SLOT on this creature's back: same-team actors whose tag /
+   *  defId / faction matches `kinds` may MOUNT it (the {do:'mount'} verb) —
+   *  the rider is carried (position pinned, dash/push stilled) and casts
+   *  freely from the saddle until either party dies. One rider at a time.
+   *  The D2 siege-beast pattern: a walking tower for its faction's fragile
+   *  teeth. */
+  mountSlot?: { kinds: string[]; offsetY?: number };
 }
 
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls
@@ -204,16 +214,23 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
   plains: [
     { id: 'meadow_hare', chance: 0.75, count: [3, 5] },
     { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
+    { id: 'lash_maiden', chance: 0.2, count: [2, 3] },
+    { id: 'wayfarer_hunter', chance: 0.2, count: [1, 2] },
+    { id: 'wayfarer_pilgrim', chance: 0.2, count: [2, 3] },
   ],
   forest: [
     { id: 'meadow_hare', chance: 0.6, count: [2, 4] },
     { id: 'plains_wolf', chance: 0.5, count: [2, 4] },
     { id: 'thicket_stalker', chance: 0.35, count: [1, 2] },
+    { id: 'broodmother', chance: 0.25, count: [1, 1] },
+    { id: 'wayfarer_hunter', chance: 0.15, count: [1, 2] },
   ],
   desert: [
     { id: 'meadow_hare', chance: 0.3, count: [1, 2] },
     { id: 'sand_skitterer', chance: 0.55, count: [3, 5] },
     { id: 'dune_vulture', chance: 0.45, count: [1, 2] },
+    { id: 'lash_maiden', chance: 0.3, count: [2, 3] },
+    { id: 'broodmother', chance: 0.2, count: [1, 1] },
   ],
 };
 
@@ -737,7 +754,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
       mod('damage', 'increased', 0.3),
       mod('aoeRadius', 'increased', 0.3),
     ],
-    skills: ['ground_slam', 'infernal_rift', 'heavy_strike', 'war_cry'],
+    // The balrog CHANNELS: infernal_ray is the compounding siege beam —
+    // aiHold keeps it burning a couple of seconds a pass (D2 pit-demon
+    // inferno, through the exact skill the player channels).
+    skills: ['ground_slam', 'infernal_rift', 'heavy_strike', 'war_cry', 'infernal_ray'],
     xp: 150,
     boss: true,
   },
@@ -1038,6 +1058,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'artillery',
       impulses: [{ type: 'strafer', every: [6, 9], duration: [2.5, 3.5], announce: 'A dirge rises…' }],
+      // A dead marksman has had CENTURIES of practice: 60% Perfect! snipes.
+      skillUse: { finesse: { chance: 0.6 } },
     },
     faction: 'undead',
     adorn: 'wings',
@@ -1663,6 +1685,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // garrison verb — teleports in, anchors, rains arrows from the crown).
     brain: {
       type: 'artillery', perception: { memory: 4 },
+      // A PRACTICED HAND (skillUse.finesse): it works Snipe's golden window —
+      // the same second-press the player clicks — landing Perfect! a tunable
+      // 45% of the time and fumbling the rest.
+      skillUse: { finesse: { chance: 0.45 } },
       rules: [{
         when: { distUnder: 720 },
         actions: [{ do: 'garrison', within: 680 }],
@@ -1857,6 +1883,254 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE HOMAGE BATCH: bestiary archetypes from the classics, each one a
+  // COMPOSITION over existing levers — no new engine code below this line.
+
+  // The wisp (D2 Gloam): fades from sight, blinks, and lashes lightning
+  // from the dark — the fade is a plain buff (invisible mod), the blink a
+  // teleport verb, both on rule clocks. Undead roster.
+  gloam: {
+    id: 'gloam', name: 'Gloam',
+    color: '#cfe86a', shape: 'star', radius: 10,
+    base: { life: 26, moveSpeed: 150, evasion: 90, mana: 140, manaRegen: 12 },
+    mods: [mod('lightningRes', 'flat', 0.6), mod('chaosRes', 'flat', 0.3)],
+    skills: ['spark'],
+    xp: 18,
+    faction: 'undead',
+    detection: 1.3,
+    brain: {
+      type: 'artillery',
+      move: { style: 'holdRange', hold: 420 },
+      rules: [
+        { // the wisp-drift: fade out, reappear on a new firing line
+          when: {}, every: [3.5, 6], hold: [0.2, 0.3],
+          actions: [
+            { do: 'buff', buff: { type: 'buff', id: 'gloam_fade', duration: 1.1, mods: [mod('invisible', 'flat', 1)] } },
+            { do: 'teleport', to: 'nearTarget', range: 380 },
+          ],
+        },
+        { // crowded: flicker hard AWAY
+          when: { distUnder: 180 }, every: [2.5, 4], hold: [0.1, 0.2],
+          actions: [
+            { do: 'buff', buff: { type: 'buff', id: 'gloam_fade', duration: 0.9, mods: [mod('invisible', 'flat', 1)] } },
+            { do: 'teleport', to: 'awayFromTarget', range: 420 },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The dark blade (D2 Oblivion Knight): curse FIRST, then the vicious
+  // work — and it smells a kill, quickening on wounded prey.
+  oblivion_knight: {
+    id: 'oblivion_knight', name: 'Oblivion Knight',
+    color: '#5a4a6a', shape: 'pentagon', radius: 16,
+    base: { life: 120, moveSpeed: 140, accuracy: 115, armor: 45, mana: 120, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3)],
+    skills: ['heavy_strike', 'cleave', 'despair'],
+    xp: 34,
+    faction: 'undead',
+    adorn: 'horns',
+    detection: 1.1,
+    brain: {
+      type: 'flanker',
+      skillUse: { mode: 'priority', order: ['despair', 'heavy_strike', 'cleave'] },
+      rules: [{ when: { targetLifeBelow: 0.35 }, use: { skillUse: { cadence: [0.08, 0.18] } } }],
+    },
+  },
+
+  // The finger mage (D2 homage): volleys of slow, LOOSELY-TRACKING motes
+  // (spectral_finger's weak cursor guide + wobble) from a held line.
+  finger_mage: {
+    id: 'finger_mage', name: 'Finger Mage',
+    color: '#b8d0a0', shape: 'cross', radius: 12,
+    base: { life: 44, moveSpeed: 120, mana: 200, manaRegen: 14 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['spectral_finger'],
+    xp: 24,
+    faction: 'demon',
+    adorn: 'tentacles',
+    detection: 1.2,
+    brain: {
+      type: 'artillery',
+      move: { style: 'holdRange', hold: 460 },
+      skillUse: { cadence: [0.25, 0.5] },
+    },
+  },
+
+  // The walking tower (D2 Siege Beast): a lumbering melee engine with a
+  // RIDER SLOT on its back — demonkin mount it and cast from the saddle
+  // while it romps and mauls. Mobile defense, two health bars deep.
+  siege_hulk: {
+    id: 'siege_hulk', name: 'Siege Hulk',
+    color: '#8a5a3a', shape: 'octagon', radius: 24,
+    base: { life: 260, moveSpeed: 95, accuracy: 110, armor: 55, mana: 60, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['ground_slam', 'heavy_strike'],
+    xp: 46,
+    faction: 'demon',
+    adorn: 'horns',
+    detection: 1.0,
+    mountSlot: { kinds: ['demonkin'] },
+    brain: { type: 'juggernaut', enrage: 0.35 },
+  },
+
+  // The fragile teeth (D2 Arreat demonkin): blinks about, and when the
+  // fight turns it TAKES COVER — onto a hulk's back (mount) or into a
+  // free watchtower slot (garrison), raining fire from whichever perch.
+  demonkin_darter: {
+    id: 'demonkin_darter', name: 'Demonkin Darter',
+    color: '#e07a48', shape: 'triangle', radius: 10,
+    base: { life: 22, moveSpeed: 185, evasion: 70, mana: 120, manaRegen: 10 },
+    skills: ['firebolt'],
+    xp: 16,
+    faction: 'demon',
+    tag: 'demonkin',
+    adorn: 'horns',
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.0,
+      rules: [
+        { // the blink: never where you swung
+          when: { distUnder: 160 }, every: [3, 5], hold: [0.1, 0.2],
+          actions: [{ do: 'teleport', to: 'awayFromTarget', range: 300 }],
+        },
+        { // pressed: take cover — a saddle first, a tower crown second
+          when: { lifeBelow: 0.75 }, every: [5, 9], hold: [0.2, 0.3],
+          actions: [
+            { do: 'mount', within: 560 },
+            { do: 'garrison', within: 520 },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The creeping cold (D2 frost horrors): barely walks, doesn't need to —
+  // grinding fields of frost CRAWL at you instead (creeping_ice's drift).
+  glacial_horror: {
+    id: 'glacial_horror', name: 'Glacial Horror',
+    color: '#8ac8e8', shape: 'octagon', radius: 18,
+    base: { life: 150, moveSpeed: 55, accuracy: 105, armor: 40, mana: 180, manaRegen: 12 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.3)],
+    skills: ['creeping_ice', 'frostbolt'],
+    xp: 32,
+    faction: 'elemental',
+    detection: 1.1,
+    brain: {
+      type: 'artillery',
+      move: { style: 'holdRange', hold: 300, band: [0.5, 1.2] },
+      skillUse: { mode: 'priority', order: ['creeping_ice', 'frostbolt'] },
+    },
+  },
+
+  // --- The BROOD CHAIN (D2 spider caves): broodmother lays NESTS, nests
+  // hatch spiderlings — three defs and two summon rules; the infestation
+  // is emergent, not scripted. All ambient ('predator') wildlife.
+  spiderling: {
+    id: 'spiderling', name: 'Spiderling',
+    color: '#6a5a48', shape: 'cross', radius: 6,
+    base: { life: 10, moveSpeed: 195, accuracy: 75, evasion: 50, mana: 0 },
+    skills: ['claw'],
+    xp: 2,
+    tag: 'predator',
+    faction: 'beast',
+    drops: 0,
+    brain: { type: 'swarm', move: { style: 'skitter', dart: [0.25, 0.45], pause: [0.08, 0.2] } },
+  },
+  spider_nest: {
+    id: 'spider_nest', name: 'Spider Nest',
+    color: '#9a8a70', shape: 'oval', radius: 14,
+    base: { life: 55, moveSpeed: 0, armor: 20, mana: 0 },
+    skills: [],
+    xp: 8,
+    tag: 'predator',
+    faction: 'beast',
+    drops: 0,
+    brain: {
+      type: 'basic',
+      rules: [{
+        when: {}, every: [5, 8], hold: [0.1, 0.2],
+        actions: [{ do: 'summon', monster: 'spiderling', count: 2, ring: 44, lifespan: 25 }],
+      }],
+    },
+  },
+  broodmother: {
+    id: 'broodmother', name: 'Broodmother',
+    color: '#7a6a52', shape: 'cross', radius: 17,
+    base: { life: 130, moveSpeed: 120, accuracy: 95, armor: 25, mana: 40, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'],
+    xp: 30,
+    tag: 'predator',
+    faction: 'beast',
+    adorn: 'spikes',
+    detection: 1.2,
+    brain: {
+      type: 'pack',
+      move: { style: 'skitter', dart: [0.35, 0.6], pause: [0.2, 0.5] },
+      rules: [{
+        when: {}, every: [10, 16], hold: [0.2, 0.3],
+        actions: [{ do: 'summon', monster: 'spider_nest', count: 1, ring: 90, lifespan: 40, announce: 'The brood takes root!' }],
+      }],
+    },
+  },
+
+  // The huntress (D2 Lacuni): javelins from a lope, and every so often the
+  // whole line RUSHES in, cuts, and melts back out — the impulse rhythm.
+  lash_maiden: {
+    id: 'lash_maiden', name: 'Lash Maiden',
+    color: '#d8b078', shape: 'kite', radius: 13,
+    base: { life: 48, moveSpeed: 180, accuracy: 105, evasion: 65, mana: 60, manaRegen: 6 },
+    skills: ['voltspear', 'claw'],
+    xp: 20,
+    tag: 'predator',
+    faction: 'beast',
+    adorn: 'ears',
+    detection: 1.3,
+    scaleVariance: [0.9, 1.15],
+    brain: {
+      type: 'skirmish', withdraw: 1.3,
+      target: { prey: ['critter'] },
+      impulses: [{ type: 'swarm', every: [6, 9], duration: [1.2, 1.8] }],
+    },
+  },
+
+  // --- THE WAYFARERS: neutral HUMANS on the roads — not brigands, not
+  // bandits; hunters and pilgrims minding their own way (DORMANT until a
+  // wounding hit rouses them: engine dormancy on the 'wayfarer' tag, and
+  // they FORGIVE — NEUTRAL_RESET cools a roused wayfarer back down).
+  wayfarer_hunter: {
+    id: 'wayfarer_hunter', name: 'Wayfarer Hunter',
+    color: '#b09868', shape: 'pentagon', radius: 13,
+    base: { life: 60, moveSpeed: 150, accuracy: 110, evasion: 40, mana: 40, manaRegen: 4 },
+    skills: ['bone_arrow', 'snipe'],
+    xp: 18,
+    tag: 'wayfarer',
+    detection: 1.1,
+    brain: {
+      type: 'artillery',
+      // A living marksman's hand: 55% Perfect! snipes when provoked.
+      skillUse: { finesse: { chance: 0.55 } },
+      morale: { breakOutnumbered: { deficit: 3, radius: 300 }, rallyAfter: 4 },
+    },
+  },
+  wayfarer_pilgrim: {
+    id: 'wayfarer_pilgrim', name: 'Wayfarer Pilgrim',
+    color: '#c8b898', shape: 'circle', radius: 12,
+    base: { life: 40, moveSpeed: 140, evasion: 30, mana: 0 },
+    skills: [],
+    xp: 6,
+    tag: 'wayfarer',
+    detection: 0.3,
+    drops: 0,
+    brain: {
+      type: 'basic',
+      // A roused pilgrim doesn't fight — it scatters (and forgives later).
+      morale: { skittish: { radius: 220, duration: [2, 3.5] } },
+    },
+  },
+
   // --- Elementals: raw forces wearing a body. Slow to anger — they keep to
   // themselves unless someone (anyone) starts something.
 
@@ -1904,6 +2178,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // gives up the chase, turns, and grinds back to its post, mending —
     // bait it out or fight it on its ground; it won't marathon after you.
     brain: { type: 'protector', target: { leash: { radius: 520, heal: true } } },
+    // HALF the sentinels drill the LANCE (MonsterGrant.chance): those roll
+    // Phalanx Thrust and POKE from behind the raised shield — the exact
+    // guard-combo the player runs; the rest hold the classic wall.
+    grants: [{ atLevel: 1, chance: 0.5, skill: 'phalanx_thrust' }],
     faction: 'elemental',
   },
 
@@ -1915,6 +2193,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#68b878', shape: 'rectangle', radius: 17,
     base: { life: 140, moveSpeed: 105, accuracy: 100, armor: 45, mana: 80, manaRegen: 7 },
     mods: [mod('blockChance', 'flat', 0.15)],
+    // A third of the wardens drill the lance: shield up, then the poke
+    // AROUND the guard (phalanx_thrust's guard-combo — rolled per spawn).
+    grants: [{ atLevel: 1, chance: 0.35, skill: 'phalanx_thrust' }],
     skills: ['shield_up', 'cleave'],
     xp: 32,
     brain: { type: 'protector' },
@@ -2748,6 +3029,8 @@ export const FACTIONS: Record<string, { name: string; table: { id: string; weigh
       { id: 'crypt_warden', weight: 1 },
       { id: 'bone_serpent', weight: 1 },
       { id: 'lich_marshal', weight: 1 },
+      { id: 'gloam', weight: 1 },
+      { id: 'oblivion_knight', weight: 1 },
     ],
   },
   gnoll: {
@@ -2796,6 +3079,11 @@ export const FACTIONS: Record<string, { name: string; table: { id: string; weigh
       { id: 'searing_spawn', weight: 2 },
       { id: 'dread_fiend', weight: 1 },
       { id: 'balor_warlord', weight: 1 },
+      // The siege line: fragile darters that blink, then take cover on a
+      // hulk's back or in a tower crown — a garrison worth breaking up.
+      { id: 'finger_mage', weight: 2 },
+      { id: 'demonkin_darter', weight: 2 },
+      { id: 'siege_hulk', weight: 1 },
     ],
   },
   deep: {

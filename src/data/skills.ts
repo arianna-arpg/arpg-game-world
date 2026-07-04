@@ -523,6 +523,23 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 600, weight: 2, keepDistance: 350 },
   },
 
+  // A slow pale mote on a WEAK cursor guide with a drunken wobble — it
+  // wanders after its mark rather than flying at it (the finger-mage bolt:
+  // what it lacks in aim it makes up in numbers). Monster-only.
+  spectral_finger: {
+    id: 'spectral_finger', name: 'Spectral Finger', noDrop: true,
+    description: 'A pale mote that WANDERS loosely after its mark — weak guidance, endless patience.',
+    tags: ['spell', 'projectile', 'chaos'], color: '#b8d0a0',
+    manaCost: 5, cooldown: 0, useTime: 0.5,
+    baseDamage: { chaos: [7, 12] },
+    delivery: {
+      type: 'projectile', speed: 215, radius: 8, range: 900, pierce: 0,
+      trajectory: { guide: 1.5, erratic: 0.5 },
+    },
+    effects: [{ type: 'damage' }],
+    ai: { range: 620, weight: 3, keepDistance: 420 },
+  },
+
   // --- Curses: area-cast debuff fields -------------------------------------
   // All carry a small chaos roll that normally never lands as damage — it
   // exists for Hex Blast detonations and Malfeasance ruptures to scale from.
@@ -6454,6 +6471,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   phalanx_thrust: {
     id: 'phalanx_thrust', name: 'Phalanx Thrust', noDrop: true,
+    // The AI hint lets shield-drilled MONSTERS poke from behind the wall
+    // (pickSkill's guard-combo path) — the same discipline the player runs.
+    ai: { range: 120, weight: 3 },
     description: 'The lance from BEHIND the wall: thrust around the raised guard without lowering it — greatshield discipline. Not ready until the guard is up.',
     tags: ['attack', 'melee', 'physical', 'javelin', 'instant'], color: '#c8b890',
     manaCost: 6, cooldown: 1.5, useTime: 0,
