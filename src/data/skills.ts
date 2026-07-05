@@ -268,6 +268,266 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 2, keepDistance: 240 },
   },
 
+  // ======================= Paladin =========================================
+  // The oath-sworn kit: judgement and mercy, crowd-fed zeal, and blessings
+  // that arm OTHER hands — every piece an exhibit of the trigger fabric.
+
+  // The SILENCE hard-cast: one target, one word, no spells. (apply_silence
+  // exists for the proc route; this is the deliberate, long-clock version.)
+  judgement: {
+    id: 'judgement', name: 'Judgement',
+    description: 'Pass sentence on one foe: holy fire, and three seconds of enforced quiet — no spells while silenced.',
+    tags: ['spell', 'fire', 'targeted'], color: '#ffe8b0',
+    manaCost: 14, cooldown: 16, useTime: 0.6,
+    baseDamage: { fire: [18, 30] },
+    targeting: { target: 'enemy', castRange: 440 },
+    delivery: { type: 'target' },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'silence', chance: 1 },
+    ],
+    requirements: { willpower: 14, strength: 8 },
+    ai: { range: 420, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12, ['fire'])] },
+  },
+
+  // The mercy hard-cast: one ally made whole, once a fight.
+  lay_on_hands: {
+    id: 'lay_on_hands', name: 'Lay on Hands',
+    description: 'Press both palms to an ally\'s wounds and give everything: a massive heal on a long clock.',
+    tags: ['spell', 'heal', 'targeted', 'instant'], color: '#ffe8b0',
+    manaCost: 30, cooldown: 45, useTime: 0,
+    targeting: { target: 'ally', castRange: 380, fallback: 'self' },
+    delivery: { type: 'target' },
+    effects: [{ type: 'heal', amount: 60, pctMax: 0.4 }],
+    requirements: { willpower: 20 },
+    ai: { range: 360, weight: 4 },
+    leveling: { perLevel: [mod('healPower', 'increased', 0.12)] },
+  },
+
+  // The ALLY-ARMED next-hit rider: bless a minion (the Amalgam!) or a
+  // friend — their next three blows land extra consecrated weight.
+  blessing_of_might: {
+    id: 'blessing_of_might', name: 'Blessing of Might',
+    description: 'Anoint an ally or minion: their next 3 landed blows carry heavy added physical damage.',
+    tags: ['spell', 'buff', 'targeted', 'duration'], color: '#e8d44a',
+    manaCost: 12, cooldown: 8, useTime: 0.4,
+    targeting: { target: 'ally', castRange: 420, fallback: 'self' },
+    delivery: { type: 'target' },
+    effects: [{
+      type: 'buff', id: 'blessing_of_might', duration: 12,
+      maxStacks: 3, stacksOnApply: 3,
+      mods: [],
+      nextHit: { addedDamage: { physical: 26 } },
+    }],
+    requirements: { willpower: 12, strength: 10 },
+    ai: { range: 400, weight: 2 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.1)] },
+  },
+
+  // CROWD EMPOWERMENT made visible: the swing grows with the weighted mob
+  // (a boss counts for six men — DEFENSE_CFG.empower).
+  zeal: {
+    id: 'zeal', name: 'Zeal',
+    description: 'A consecrated arc that burns brighter for every foe pressing in — 5% more damage per point of crowd power (bosses count for many), and the fervor quickens your hands.',
+    tags: ['attack', 'melee', 'physical', 'fire'], color: '#ffd24a',
+    manaCost: 7, cooldown: 0, useTime: 0.55,
+    baseDamage: { physical: [8, 14], fire: [6, 10] },
+    delivery: { type: 'melee', range: 92, arcDeg: 130 },
+    empower: {
+      radius: 240, dmgPerPower: 0.05,
+      buffPerPower: {
+        type: 'buff', id: 'zealous', duration: 6, maxStacks: 10,
+        mods: [mod('attackSpeed', 'increased', 0.02)],
+      },
+    },
+    effects: [{ type: 'damage' }],
+    requirements: { strength: 14, willpower: 8 },
+    ai: { range: 90, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1, ['melee'])] },
+  },
+
+  // The WoW-VE shape: while the embrace holds, your violence mends the
+  // faithful around you (the vampiricShare stat, worn as a buff).
+  vampiric_embrace: {
+    id: 'vampiric_embrace', name: 'Vampiric Embrace',
+    description: 'For 10 seconds, 12% of the damage you deal flows as healing to allies near you — the congregation drinks from your wrath.',
+    tags: ['spell', 'buff', 'duration'], color: '#c85878',
+    manaCost: 16, cooldown: 14, useTime: 0.4,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'vampiric_embrace', duration: 10,
+      mods: [mod('vampiricShare', 'flat', 0.12)],
+    }],
+    requirements: { willpower: 16 },
+    ai: { range: 300, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.1)] },
+  },
+
+  // ======================= Angelic =========================================
+
+  // A holy javelin that tithes its violence to the nearby faithful
+  // (innate vampiricShare — the stat rides the skill's own queries).
+  seraph_lance: {
+    id: 'seraph_lance', name: 'Seraph Lance',
+    description: 'Hurl a lance of dawnlight. A share of its damage mends allies around you.',
+    tags: ['spell', 'projectile', 'fire', 'javelin'], color: '#ffeecc',
+    manaCost: 9, cooldown: 0, useTime: 0.6,
+    baseDamage: { fire: [10, 17] },
+    delivery: { type: 'projectile', speed: 420, radius: 9, range: 520, pierce: 1 },
+    innateMods: [mod('vampiricShare', 'flat', 0.08)],
+    effects: [{ type: 'damage' }],
+    requirements: { willpower: 12, finesse: 6 },
+    ai: { range: 480, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12, ['fire'])] },
+  },
+
+  // THE CHLOROMANCER BOND: tie yourself to one ally — your damage heals
+  // them (bondShare, granted while this sits on your bar). Pair with Ruin.
+  guardian_bond: {
+    id: 'guardian_bond', name: 'Guardian Bond',
+    description: 'Bond your light to an ally: while the bond holds, 20% of the damage you deal heals them. One bond at a time; skills like Ruin feed it far harder.',
+    tags: ['spell', 'buff', 'targeted', 'duration'], color: '#7ee0b8',
+    manaCost: 14, cooldown: 6, useTime: 0.4,
+    targeting: { target: 'ally', castRange: 460 },
+    delivery: { type: 'target' },
+    equipMods: [mod('bondShare', 'flat', 0.2)],
+    effects: [{
+      type: 'buff', id: 'life_bond', duration: 18, bond: true,
+      mods: [mod('healTaken', 'increased', 0.1)],
+    }],
+    requirements: { willpower: 14, charisma: 6 },
+    ai: { range: 420, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.12)] },
+  },
+
+  // The bond-feeder: modest chaos bolt, TRIPLE bond feed — "Ruin heals the
+  // bonded far more when it hits" (SkillDef.bondFeed).
+  ruin: {
+    id: 'ruin', name: 'Ruin',
+    description: 'A bolt of consuming twilight. Feeds your Guardian Bond at triple share — ruin for them, renewal for yours.',
+    tags: ['spell', 'projectile', 'chaos'], color: '#9a78c8',
+    manaCost: 8, cooldown: 0, useTime: 0.65,
+    baseDamage: { chaos: [9, 15] },
+    delivery: { type: 'projectile', speed: 360, radius: 8, range: 480 },
+    bondFeed: 3,
+    effects: [{ type: 'damage' }],
+    requirements: { willpower: 12, intelligence: 8 },
+    ai: { range: 440, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12, ['chaos'])] },
+  },
+
+  // A held hymn: pulses of mending over everyone in the circle — the
+  // channel that Grace of Dawn (frenzy every 3s held) loves to ride.
+  choir_of_light: {
+    id: 'choir_of_light', name: 'Choir of Light',
+    description: 'Hold the note: every beat, allies in the circle are mended. Channel supports (and channel-fed charges) ride the held hymn.',
+    tags: ['spell', 'heal', 'channel', 'aoe', 'duration'], color: '#f8f0d0',
+    manaCost: 4, cooldown: 0, useTime: 0,
+    channel: { interval: 0.7, move: 'slowed', moveFactor: 0.4 },
+    delivery: { type: 'nova', radius: 170, affects: 'allies' },
+    effects: [{ type: 'heal', amount: 7, pctMax: 0.015 }],
+    requirements: { willpower: 18 },
+    ai: { range: 240, weight: 2 },
+    leveling: { perLevel: [mod('healPower', 'increased', 0.1)] },
+  },
+
+  // ======================= Samurai =========================================
+
+  // THE CAST CYCLE exhibit: every third cut ARMS the next with a
+  // guaranteed deep bleed (castCycle + a next-hit rider).
+  zanshin_cut: {
+    id: 'zanshin_cut', name: 'Zanshin Cut',
+    description: 'A disciplined slash. Every third cut settles the mind: the NEXT blow opens a deep, guaranteed bleed.',
+    tags: ['attack', 'melee', 'physical'], color: '#d8d0c0',
+    manaCost: 4, cooldown: 0, useTime: 0.5,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'melee', range: 96, arcDeg: 100 },
+    castCycle: {
+      count: 3,
+      buff: {
+        type: 'buff', id: 'zanshin', duration: 8, maxStacks: 1,
+        mods: [],
+        nextHit: { tags: ['melee'], status: 'bleed', statusScale: 2.5 },
+      },
+    },
+    effects: [{ type: 'damage' }],
+    requirements: { dexterity: 12, prowess: 8 },
+    ai: { range: 92, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11, ['melee'])] },
+  },
+
+  // The DISARM hard-cast: one drawing cut, and the sword arm forgets.
+  iai_strike: {
+    id: 'iai_strike', name: 'Iai Strike',
+    description: 'The draw IS the cut: heavy single-target damage, and the victim is DISARMED — no attacks for three seconds.',
+    tags: ['attack', 'melee', 'physical', 'targeted'], color: '#e8e4d8',
+    manaCost: 9, cooldown: 12, useTime: 0.7,
+    baseDamage: { physical: [30, 46] },
+    targeting: { target: 'enemy', castRange: 120 },
+    delivery: { type: 'target' },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'disarm', chance: 1 },
+    ],
+    requirements: { dexterity: 16, prowess: 10 },
+    ai: { range: 110, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12, ['melee'])] },
+  },
+
+  // ======================= Plague line ======================================
+
+  // NESTED COMPLEXITY: a brief plague-priest whose META-ACTION (shift-press)
+  // endows your WHOLE flock with poisoned blades — a summon carrying a
+  // command carrying a rider. Rising, nested, all data.
+  summon_plaguefather: {
+    id: 'summon_plaguefather', name: 'Summon Plaguefather',
+    description: 'Call a bloated plague-priest for a time. His meta-action, Endow, anoints ALL your minions: their next blows drip virulent poison.',
+    tags: ['spell', 'summon', 'minion', 'chaos', 'duration'], color: '#7ec850',
+    manaCost: 28, cooldown: 10, useTime: 0.9,
+    delivery: { type: 'summon', monsterId: 'plaguefather', count: 1, maxActive: 1, duration: 20 },
+    meta: { skillId: 'plague_benediction', label: 'Endow' },
+    effects: [],
+    requirements: { wisdom: 18 },
+    ai: { range: 400, weight: 2, keepDistance: 300 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.12), mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  // The endowment itself (the Plaguefather's meta payload — also castable
+  // as its own skill, because every meta payload is an ordinary skill).
+  plague_benediction: {
+    id: 'plague_benediction', name: 'Plague Benediction',
+    description: 'Anoint every minion you command: their next 3 landed blows apply a heavy poison.',
+    tags: ['spell', 'buff', 'minion', 'chaos', 'duration'], color: '#5ea838',
+    manaCost: 15, cooldown: 8, useTime: 0.5,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'plague_blades', duration: 12,
+      maxStacks: 3, stacksOnApply: 3, affects: 'minions',
+      mods: [],
+      nextHit: { status: 'poison', statusScale: 2.5 },
+    }],
+    requirements: { wisdom: 14 },
+    ai: { range: 300, weight: 1 },
+    leveling: { perLevel: [mod('statusMagnitude', 'increased', 0.08)] },
+  },
+
+  // STORED VERDICT's release (the support's meta payload): free, but only
+  // the banked uses of the HOST skill pay for it — three casts, one nova.
+  verdict_release: {
+    id: 'verdict_release', name: 'Verdict',
+    description: 'Spend three banked Verdict charges (earned by real uses of the hosting skill) for a free consecrated nova.',
+    tags: ['spell', 'fire', 'aoe', 'instant'], color: '#e8d44a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { fire: [22, 34] },
+    gate: { charge: { id: 'verdict', amount: 3 } },
+    chargeCost: { charge: 'verdict', amount: 'all' },
+    delivery: { type: 'nova', radius: 150 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 140, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12, ['fire'])] },
+  },
+
   // The PHANTASM's own volley (see monsters.ts `phantasm` + the
   // summon_phantasm proc/support): a spectral dart the brief spirit lashes
   // out while it persists. Costed at zero and AI-hinted for its wielder.

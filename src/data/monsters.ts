@@ -360,6 +360,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 0,
   },
 
+  // (Broodclutch's hatchlings reuse the bestiary's existing `broodling` —
+  // one body, two doors in: the spider-kin spawn it, and so do your poisons.)
+  // THE PLAGUEFATHER — Summon Plaguefather's bloated priest: he spits
+  // venom on his own, and his summoner's meta-action (Endow) anoints the
+  // whole flock through him.
+  plaguefather: {
+    id: 'plaguefather', name: 'Plaguefather',
+    color: '#5ea838', shape: 'pentagon', radius: 16,
+    base: { life: 90, moveSpeed: 105, mana: 120, manaRegen: 8, poise: 40 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['venom_bolt'],
+    xp: 0,
+  },
+
   // THE PHANTASM — the summon_phantasm proc's brief raging spirit: a pale
   // dart-thrower that exists for a few heartbeats and spends them all
   // throwing. Weightless and phasing (it is barely THERE), so a crowd of

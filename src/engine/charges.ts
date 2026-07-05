@@ -110,6 +110,25 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
     decay: { perSec: 0.5, delay: 8 },
   },
 
+  // VERDICT (Stored Verdict): completed real uses of the hosting skill
+  // bank toward the meta-release. Mute fuel; the release is the payoff.
+  verdict: {
+    label: 'Verdict', color: '#e8d44a',
+  },
+
+  // COMMUNION (the ebb-and-flow summoner): banked by YOUR minions' blows
+  // (the Communion of Flesh tithe), each held charge feeding both the
+  // shepherd's hand and the flock — and any spender graft can burn the
+  // bank for its own payoff. Fades if the flock stops swinging.
+  communion: {
+    label: 'Communion', color: '#b06bd4',
+    perCharge: [
+      mod('damage', 'increased', 0.012),
+      mod('minionDamage', 'increased', 0.02),
+    ],
+    decay: { perSec: 0.5, delay: 6 },
+  },
+
   // FLASK FOUNTS: scooped orbs bank a sip alongside their instant pour
   // (ChargeGainSpec on 'orbPickup'); the flask skill drinks the bank as a
   // restore-over-time. Mute counters — the payoff lives on the drink.

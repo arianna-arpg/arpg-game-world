@@ -130,6 +130,11 @@ export interface ProcDef {
    *  Strike has a chance to..." lives on the proc, so ANY grantor (passive,
    *  gem, affix) is automatically skill-scoped. Omit = every skill. */
   skills?: string[];
+  /** CRIT GATE (hit/kill triggers): only CRITICAL hits roll this proc —
+   *  "gain Rage when this skill crits" is a def flag + a chance grant.
+   *  Distinct proc ids roll independently, so a gem's crit-rage and a
+   *  passive's crit-fury stack as separate dice by construction. */
+  crit?: true;
   /** ONCE PER CAST: at most one firing per world tick per owner — a
    *  multi-target swing's simultaneous contacts count as ONE trigger
    *  (hits that resolve on later frames, like a piercing arrow's second
@@ -412,6 +417,29 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'summon_phantasm', name: 'Phantasm',
     color: '#9ad8e8', trigger: 'hit', ppm: 10, minionCarry: true,
     effect: { type: 'summon', monsterId: 'phantasm', duration: 8, max: 5 },
+  },
+
+  // CRIT-GATED gains: two ids, two grantors, two independent dice — a
+  // gem's crit-rage and a passive's crit-fury stack by construction.
+  crimson_edge: {
+    id: 'crimson_edge', name: 'Crimson Edge',
+    color: '#e04030', trigger: 'hit', crit: true,
+    effect: { type: 'gainCharge', charge: 'rage', amount: 1, max: 8 },
+  },
+  battle_insight: {
+    id: 'battle_insight', name: 'Battle Insight',
+    color: '#8ae06a', trigger: 'hit', crit: true,
+    effect: { type: 'gainCharge', charge: 'fury', amount: 1, max: 5 },
+  },
+
+  // COMMUNION TITHE (the ebb-and-flow summoner): your minions' blows bank
+  // COMMUNION on YOU (minionCarry reads the summon skill's sockets) — the
+  // flock empowers the shepherd; spend it back into them, or into anything
+  // (a spender graft away). The front-line summoner's loop.
+  communion_tithe: {
+    id: 'communion_tithe', name: 'Communion',
+    color: '#b06bd4', trigger: 'hit', minionCarry: true,
+    effect: { type: 'gainCharge', charge: 'communion', amount: 1, max: 8 },
   },
 
   // SAINTED ASH — the boss-viable on-kill shape: kills bloom into a

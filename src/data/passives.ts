@@ -317,6 +317,12 @@ const nodes: PassiveNode[] = [
   { id: "surging_frenzy_n", name: "Surging Frenzy", description: "Gaining Bloodlust has a 35% chance to grant a Fury charge — the loop closes only as deep as your proc layers reach; it can never turn forever", kind: "notable", x: 210, y: 1620, mods: [mod("proc_surging_frenzy", "flat", 0.35)], links: ["crimson_thirst_n"] },
   { id: "battle_chorus_n", name: "Battle Chorus", description: "Gaining ANY buff has a 25% chance to grant a Fury charge (6s cooldown)", kind: "notable", x: 720, y: 1500, mods: [mod("proc_battle_chorus", "flat", 0.25)], links: ["chain_reaction"] },
   { id: "perpetual_motion", name: "Perpetual Motion", description: "KEYSTONE: one further proc layer (stacks with Chain Reaction to the absolute lid; each layer fires at half the last's rate)", kind: "keystone", x: 240, y: 780, mods: [mod("procDepth", "flat", 1)], links: ["gamblers_touch"] },
+  // --- THE COMMUNION REACH (east): shared-life sustain, crit dice, minion
+  // rites, and the silence brand — the paladin/shepherd neighbourhood.
+  { id: "transfusion", name: "Transfusion", description: "5% of your damage dealt heals allies near you (Vampiric Share)", kind: "notable", x: 5460, y: 2520, mods: [mod("vampiricShare", "flat", 0.05)], links: ["cl_acc_p0"] },
+  { id: "oathbound_insight", name: "Oathbound Insight", description: "Critical hits have a 35% chance to grant a Fury charge (independent of any gem's crit dice)", kind: "notable", x: 5640, y: 2640, mods: [mod("proc_battle_insight", "flat", 0.35)], links: ["transfusion"] },
+  { id: "shepherds_rites", name: "Shepherd's Rites", description: "Minions heal 8% of a dying kin's life; summons mend nearby allies 4 on arrival", kind: "notable", x: 5520, y: 2760, mods: [mod("minionDeathHeal", "flat", 0.08), mod("summonMend", "flat", 4)], links: ["transfusion"] },
+  { id: "silencing_brand", name: "Silencing Brand", description: "Your spells have an 8% chance to Silence (no spells for the afflicted)", kind: "notable", x: 5700, y: 2460, mods: [mod("apply_silence", "flat", 0.08, ["spell"])], links: ["oathbound_insight"] },
 ];
 
 // --- Exports -----------------------------------------------------------------

@@ -30,6 +30,78 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- Channeling & guard supports -------------------------------------------
 
+  // CRIT-GATED gain (ProcDef.crit): rage from this skill's critical hits —
+  // stacks independently with any passive's crit-fury (distinct proc ids
+  // are distinct dice, by construction).
+  wrathful_edge: {
+    id: 'wrathful_edge', name: 'Wrathful Edge',
+    description: 'Critical hits with this skill grant a Rage charge (50% chance).',
+    color: '#e04030', requiresTags: ['attack'],
+    mods: [mod('proc_crimson_edge', 'flat', 0.5)],
+    perLevel: [mod('proc_crimson_edge', 'flat', 0.08)],
+    weight: 6,
+  },
+
+  // CHANNEL-FED charges (ChargeGainSpec 'channelSecond'): holding the
+  // socketed channel banks Frenzy on a metronome — the user-asked shape.
+  grace_of_dawn: {
+    id: 'grace_of_dawn', name: 'Grace of Dawn',
+    description: 'While channeling this skill, gain a Frenzy charge every 3 seconds held.',
+    color: '#8ae06a', requiresTags: ['channel'],
+    chargeGain: [{ charge: 'frenzy', amount: 1, max: 5, on: 'channelSecond', everySeconds: 3 }],
+    mods: [],
+    weight: 6,
+  },
+
+  // BROODCLUTCH (SupportDef.brood): this skill's ailments HATCH — every
+  // point of tick damage has a 2% chance to birth a broodling serving you
+  // (potency IS fecundity; capped so the bloom never becomes a bomb).
+  broodclutch: {
+    id: 'broodclutch', name: 'Broodclutch',
+    description: 'Damage over time from this skill\'s ailments has a chance per point dealt to hatch a broodling (10s, up to 4).',
+    color: '#7ec850', requiresTags: ['chaos'],
+    brood: { monsterId: 'broodling', perDamage: 0.02, duration: 10, max: 4 },
+    mods: [],
+    perLevel: [mod('statusMagnitude', 'increased', 0.05)],
+    weight: 5,
+  },
+
+  // COMMUNION OF FLESH (the ebb-and-flow summoner): the flock's blows bank
+  // Communion on YOU — each charge feeds your hand and theirs, and any
+  // spender graft can burn the bank for its payoff. Front-line summoning.
+  communion_of_flesh: {
+    id: 'communion_of_flesh', name: 'Communion of Flesh',
+    description: 'This skill\'s minions bank a Communion charge on you when their blows land (35% chance) — each charge empowers you AND the flock.',
+    color: '#b06bd4', requiresTags: ['summon'],
+    mods: [mod('proc_communion_tithe', 'flat', 0.35)],
+    perLevel: [mod('proc_communion_tithe', 'flat', 0.05)],
+    weight: 5,
+  },
+
+  // LAST RITES (the raging-spirits lever + death heals): expiry counts as
+  // DEATH, and every death mends the flock — the swarm that heals itself
+  // by dying on schedule.
+  last_rites: {
+    id: 'last_rites', name: 'Last Rites',
+    description: 'This skill\'s minions treat expiry as death, and each death heals your other minions for 20% of the deceased\'s life.',
+    color: '#9a86e8', requiresTags: ['summon'],
+    mods: [mod('minionDeathHeal', 'flat', 0.2), mod('minionExpiryIsDeath', 'flat', 1)],
+    perLevel: [mod('minionDeathHeal', 'flat', 0.03)],
+    weight: 5,
+  },
+
+  // STORED VERDICT (the charge-banked meta): real uses of the host bank
+  // Verdict; the granted META-ACTION spends three for a free nova.
+  stored_verdict: {
+    id: 'stored_verdict', name: 'Stored Verdict',
+    description: 'Real uses of this skill bank a Verdict charge (up to 3). Grants the Verdict meta-action: spend all three for a free consecrated nova.',
+    color: '#e8d44a',
+    chargeGain: [{ charge: 'verdict', amount: 1, max: 3, on: 'use' }],
+    meta: { skillId: 'verdict_release', label: 'Verdict' },
+    mods: [],
+    weight: 5,
+  },
+
   // SUMMON PHANTASM (the PPM discipline in gem form): the socketed skill's
   // hits conjure brief raging spirits at ~10 per minute — a strobing
   // Barrage and a glacial maul FEEL different but spend the same budget.
