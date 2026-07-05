@@ -125,6 +125,8 @@ export interface HitResult {
   crit: boolean;
   /** This hit SHATTERED the target's poise bar (the world prints it). */
   poiseBroke?: boolean;
+  /** This hit EXECUTED via the attacker's cullThreshold (the world prints it). */
+  culled?: boolean;
 }
 
 const RES_STAT: Record<DamageType, string | null> = {
@@ -240,6 +242,20 @@ export function mitigateTyped(
       opts.out.poiseBroke = true;
     }
   }
+  // ENDURANCE (the break-less wall): while ANY of the pool holds, its flat
+  // reduction applies and the pool SPENDS what it prevents — no wear curve,
+  // no break status; present = protected, empty = nothing (the deliberate
+  // contrast with poise). Innermost of the three pools: the deep reserve.
+  if (total > 0 && target.endurance > 0) {
+    const prevented = Math.min(
+      total * target.sheet.get('enduranceDR'),
+      target.endurance / DEFENSE_CFG.endurance.spendRatio);
+    if (prevented > 0) {
+      total -= prevented;
+      target.endurance = Math.max(0, target.endurance - prevented * DEFENSE_CFG.endurance.spendRatio);
+      target.enduranceDelay = target.sheet.get('enduranceRegenDelay');
+    }
+  }
   // THE LEDGER, damage lane (Arrears): a slice of every mitigated hit is
   // NOT taken now — it BANKS on the toggle's account (settled at the
   // lapse). Skimmed before the soak chain so ward/ES defer their share
@@ -340,6 +356,18 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
   target.life -= total;
   target.hitFlash = 0.15;
 
+  // CULLING STRIKE: a landed hit EXECUTES prey at or below the attacker's
+  // cullThreshold fraction of max life — checked after the wound, so any
+  // connecting hit that leaves them in the band finishes them.
+  let culled = false;
+  if (total > 0 && target.life > 0 && !target.invulnerable) {
+    const cull = attacker.sheet.get('cullThreshold', packet.tags, packet.extra);
+    if (cull > 0 && target.life <= target.maxLife() * cull) {
+      target.life = 0;
+      culled = true;
+    }
+  }
+
   // Sustain for the attacker — real HEALING, so healBy gates it (seared
   // attackers leech at half; the ceiling respects overdrive blood-debt).
   // packet.extra carries the SKILL-LOCAL mods, so a leech gem socketed in
@@ -364,7 +392,7 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
   }
   return {
     evaded: false, immune: false, blocked: false, total, crit: packet.crit,
-    poiseBroke: out.poiseBroke,
+    poiseBroke: out.poiseBroke, culled,
   };
 }
 

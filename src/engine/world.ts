@@ -1997,6 +1997,7 @@ export class World {
     this.tethers = [];
     this.texts = [];
     this.flashes = [];
+    this.pendingBursts = [];
     this.drops = [];
     this.orbs = [];
     this.remnants = [];
@@ -12502,6 +12503,10 @@ export class World {
       }
       this.text(target.pos, Math.round(dealt).toString(),
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13);
+      // CULLED: the executing threshold fired inside applyHit.
+      if (result.culled) {
+        this.text(vec(target.pos.x, target.pos.y - 20), 'CULLED!', '#c8a0e8', 14);
+      }
       // The poise bar SHATTERED under this blow — announce the window, and
       // fire both sides' break procs: the breaker's payoff loop
       // (poiseBreakDealt, with the breaking skill's context) and the
@@ -12865,6 +12870,16 @@ export class World {
     // plain hits at chance × killProcOnHit, so Corpsefire and kin still
     // matter across a long single-target fight.
     const lethal = target.life <= 0 && !target.dead;
+    // On-kill sustain (the classic trio): life/mana/ES per kill, queried
+    // with the slaying skill's context so tag filters apply.
+    if (lethal && dealt > 0 && !caster.dead) {
+      const lk = caster.sheet.get('lifeOnKill', tags, extra);
+      if (lk > 0) caster.healBy(lk);
+      const mk = caster.sheet.get('manaOnKill', tags, extra);
+      if (mk > 0) caster.mana = Math.min(caster.availableMaxMana(), caster.mana + mk);
+      const ek = caster.sheet.get('esOnKill', tags, extra);
+      if (ek > 0) caster.es = Math.min(caster.maxEs(), caster.es + ek);
+    }
     const elite = target.rarity === 'rare' || target.rarity === 'champion'
       || target.rarity === 'crowned'
       || !!(target.defId && MONSTERS[target.defId]?.boss);
@@ -12875,6 +12890,7 @@ export class World {
         // Only the hit-family triggers roll here (collision procs roll at
         // arrested knockbacks; statusApply procs at status application).
         if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
+        if (!this.procGates(caster, proc, inst)) continue;
         let procChance = caster.sheet.get(procStat(proc.id), tags, extra);
         if (proc.trigger === 'kill' && !lethal) {
           if (eliteFactor <= 0) continue;
@@ -12967,6 +12983,7 @@ export class World {
     const extra = instanceMods(inst);
     for (const proc of PROC_LIST) {
       if (proc.trigger !== 'collision') continue;
+      if (!this.procGates(caster, proc, inst)) continue;
       const c = caster.sheet.get(procStat(proc.id), tags, extra);
       if (c <= 0 || !chance(Math.min(0.95, c))) continue;
       if (!this.procReady(caster, proc)) continue;
@@ -12988,6 +13005,7 @@ export class World {
         const list = Array.isArray(proc.status) ? proc.status : [proc.status];
         if (!list.includes(statusId)) continue;
       }
+      if (!this.procGates(caster, proc, inst)) continue;
       const c = caster.sheet.get(procStat(proc.id), tags, extra);
       if (c <= 0 || !chance(Math.min(0.95, c))) continue;
       if (!this.procReady(caster, proc)) continue;
@@ -13005,6 +13023,20 @@ export class World {
     return true;
   }
 
+  /** The shared pre-roll gates every proc site honours:
+   *  - SKILL GATE (ProcDef.skills): the proc belongs to named skills only.
+   *  - ONCE PER CAST (ProcDef.oncePerCast): one ROLL per world tick per
+   *    owner — a whole swing's simultaneous contacts share that roll, so
+   *    striking five targets never inflates a per-cast chance. */
+  private procGates(owner: Actor, proc: ProcDef, inst: SkillInstance | null): boolean {
+    if (proc.skills && (!inst || !proc.skills.includes(inst.def.id))) return false;
+    if (proc.oncePerCast) {
+      if (owner.procFiredAt.get(proc.id) === this.time) return false;
+      owner.procFiredAt.set(proc.id, this.time);
+    }
+    return true;
+  }
+
   /** Roll an actor's OWN procs for a self-owned trigger (block / evade /
    *  esBreak / poiseBroken / poiseBreakDealt). Defensive triggers query the
    *  GLOBAL sheet (passives, buffs, worn equipMods) — golden rule 3; the
@@ -13016,6 +13048,7 @@ export class World {
     if (owner.dead) return;
     for (const proc of PROC_LIST) {
       if (proc.trigger !== trigger) continue;
+      if (!this.procGates(owner, proc, opts?.inst ?? null)) continue;
       const c = owner.sheet.get(procStat(proc.id), opts?.tags, opts?.extra);
       if (c <= 0 || !chance(Math.min(0.95, c))) continue;
       if (!this.procReady(owner, proc)) continue;
@@ -13070,6 +13103,36 @@ export class World {
         }
         break;
       }
+      // A telegraphed bloom: schedule it (the flash IS the telegraph — an
+      // honest circle for the full delay), resolved by updatePendingBursts.
+      case 'delayedBurst': {
+        const spot = fx.at === 'self' || !target ? caster.pos : target.pos;
+        this.pendingBursts.push({
+          at: vec(spot.x, spot.y), when: this.time + fx.delay,
+          owner: caster, fx, color: proc.color,
+        });
+        this.flashes.push({
+          pos: vec(spot.x, spot.y), radius: fx.radius,
+          color: proc.color, life: fx.delay, maxLife: fx.delay, edgeFrac: 0.94,
+        });
+        break;
+      }
+      case 'fortify': {
+        const banked = caster.gainEndurance(
+          (fx.flat ?? 0) + (fx.pctMaxLife ?? 0) * caster.maxLife());
+        if (banked > 0) {
+          this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: caster.radius + 8, color: proc.color, life: 0.2, maxLife: 0.2 });
+        }
+        break;
+      }
+      case 'cooldown': {
+        for (const [id, t] of caster.cooldowns) {
+          const left = t - fx.seconds;
+          if (left <= 0) caster.cooldowns.delete(id);
+          else caster.cooldowns.set(id, left);
+        }
+        break;
+      }
       case 'extraHit':
         if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8, color: proc.color, life: 0.2, maxLife: 0.2 });
@@ -13114,6 +13177,47 @@ export class World {
           target.pos.x + rand(-30, 30), target.pos.y + rand(-30, 30)), forged.radius);
         this.actors.push(forged);
         break;
+      }
+    }
+  }
+
+  /** Scheduled delayedBurst payloads awaiting their telegraph (see the
+   *  'delayedBurst' proc effect) — resolved by updatePendingBursts. */
+  private pendingBursts: {
+    at: Vec2; when: number; owner: Actor; color: string;
+    fx: Extract<ProcDef['effect'], { type: 'delayedBurst' }>;
+  }[] = [];
+
+  /** Resolve due delayed bursts: heal the owner's side and wound the other
+   *  in one circle. Damage is BASELINE-scaled (flat + perLevel — golden
+   *  rule 4) and mitigated per victim; heals ride each ally's healBy. The
+   *  bloom fires even if its owner has since fallen — the light was
+   *  already loosed. */
+  private updatePendingBursts(): void {
+    for (let i = this.pendingBursts.length - 1; i >= 0; i--) {
+      const b = this.pendingBursts[i];
+      if (this.time < b.when) continue;
+      this.pendingBursts.splice(i, 1);
+      const lvl = Math.max(0, b.owner.level - 1);
+      this.flashes.push({ pos: vec(b.at.x, b.at.y), radius: b.fx.radius, color: b.color, life: 0.3, maxLife: 0.3 });
+      for (const a of this.actors) {
+        if (a.dead || a.untargetable) continue;
+        if (dist(b.at, a.pos) - a.radius > b.fx.radius) continue;
+        if (a.team === b.owner.team) {
+          if (b.fx.healAllies) {
+            const healed = a.healBy(b.fx.healAllies.base + b.fx.healAllies.perLevel * lvl);
+            if (healed > 0.5) this.text(a.pos, '+' + Math.round(healed), '#8ae0a8', 11);
+          }
+        } else if (b.fx.damage) {
+          const landed = mitigateTyped(a, {
+            [b.fx.damage.type]: b.fx.damage.base + b.fx.damage.perLevel * lvl,
+          });
+          if (landed <= 0 || a.invulnerable) continue;
+          a.life -= landed;
+          a.hitFlash = 0.15;
+          this.text(a.pos, Math.round(landed).toString(), b.color, 12);
+          if (a.life <= 0 && !a.dead) this.kill(a);
+        }
       }
     }
   }
@@ -14222,6 +14326,7 @@ export class World {
     }
 
     this.updateTempGrounds(dt);
+    this.updatePendingBursts();
     this.updateTerrainEffects(dt);
     this.updateShrines();
     this.updateAltars();

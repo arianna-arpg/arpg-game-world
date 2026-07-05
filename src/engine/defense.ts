@@ -78,6 +78,16 @@ export const DEFENSE_CFG = {
     bossPerLevel: 6,
   },
 
+  /** ENDURANCE — the break-less pool (D4-Fortify / LE-Endurance shape):
+   *  while it holds, hits are reduced by enduranceDR flat — no wear, no
+   *  break status, no CC shrug, no weight anchor (poise owns those). The
+   *  pool spends what it PREVENTS (× spendRatio): 100 endurance at 20% DR
+   *  absorbs 100 damage-worth of protection, then the wall is simply gone.
+   *  Refill: a lean delay-gated trickle (stats) + FORTIFY effects. */
+  endurance: {
+    spendRatio: 1,
+  },
+
   /** INSIGHT — the momentum-fed avoidance pool (Charisma's pool): reading
    *  the enemy's body language and pre-emptively slipping the brunt. On each
    *  incoming hit, up to insightDR × momentum of the damage is avoided by

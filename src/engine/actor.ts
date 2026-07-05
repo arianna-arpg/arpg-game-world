@@ -394,6 +394,9 @@ export class Actor {
   /** Per-proc internal-cooldown clocks (world time each proc is next
    *  ready) — the hard frequency limit under stacked chance (ProcDef.icd). */
   procReadyAt = new Map<string, number>();
+  /** oncePerCast bookkeeping: the world time each proc last ROLLED — one
+   *  roll per tick, so a multi-target swing can't inflate the chance. */
+  procFiredAt = new Map<string, number>();
   /** DAMAGE POOLS (DamagePoolSpec): banked fuel keyed by pool id — fed by
    *  the damage this actor deals, spent by its pool skills. */
   pools = new Map<string, number>();
@@ -503,6 +506,12 @@ export class Actor {
    *  incoming hits to slip the brunt, refilled only while MOVING. The live
    *  reduction is insightDR × insightMomentum() (the velocity taper). */
   insight = 0;
+  /** ENDURANCE — the break-less pool (D4-Fortify shape): flat enduranceDR
+   *  while ANY of it holds, spending what it prevents; empty = nothing.
+   *  No break state, no status — the deliberate contrast with poise. */
+  endurance = 0;
+  /** Seconds until endurance may begin recovering (reset by every spend). */
+  enduranceDelay = 0;
   /** EVASION ENTROPY: the deterministic dodge accumulator (each incoming
    *  attack adds its chance-to-hit; a crossing of 1 lands and pays 1 back)
    *  plus the freshness window that re-seeds it between fights. */
@@ -670,6 +679,17 @@ export class Actor {
   maxEs(): number { return this.sheet.get('energyShield'); }
   maxPoise(): number { return this.sheet.get('poise'); }
   maxInsight(): number { return this.sheet.get('insight'); }
+  maxEndurance(): number { return this.sheet.get('endurance'); }
+
+  /** FORTIFY: bank endurance (the pool's real refill — proc payloads and
+   *  skill effects call this). Capped at max; a 0-max sheet banks nothing. */
+  gainEndurance(amount: number): number {
+    if (amount <= 0 || this.dead) return 0;
+    const max = this.maxEndurance();
+    const before = this.endurance;
+    this.endurance = Math.min(max, this.endurance + amount);
+    return this.endurance - before;
+  }
 
   /** The insight VELOCITY TAPER: 1 while moving (within the grace window),
    *  easing to 0 over the insightTaper stat's seconds once planted. Dashes,
@@ -760,6 +780,7 @@ export class Actor {
     this.es = this.maxEs();
     this.poise = this.maxPoise();
     this.insight = this.maxInsight();
+    this.endurance = this.maxEndurance();
     this.poiseBroken = false;
   }
 
@@ -1359,6 +1380,20 @@ export class Actor {
         if (this.insight > maxInsight) this.insight = maxInsight;
       } else if (this.insight > 0) {
         this.insight = 0;
+      }
+
+      // ENDURANCE trickles back after its delay — deliberately lean; the
+      // fortify effects are the real refill (gainEndurance).
+      const maxEnd = this.maxEndurance();
+      if (maxEnd > 0) {
+        if (this.enduranceDelay > 0) this.enduranceDelay -= dt;
+        else if (this.endurance < maxEnd) {
+          this.endurance = Math.min(maxEnd,
+            this.endurance + maxEnd * this.sheet.get('enduranceRegenPct') * dt);
+        }
+        if (this.endurance > maxEnd) this.endurance = maxEnd;
+      } else if (this.endurance > 0) {
+        this.endurance = 0;
       }
     }
     return dot;

@@ -59,7 +59,22 @@ export type ProcEffect =
   /** A typed BURST around the proc's OWNER: baseline-scaled damage
    *  (flat + perLevel × owner level), mitigated per victim like any typed
    *  source — never derived from a skill roll (golden rule 4). */
-  | { type: 'burst'; damage: DamageType; base: number; perLevel: number; radius: number };
+  | { type: 'burst'; damage: DamageType; base: number; perLevel: number; radius: number }
+  /** A TELEGRAPHED burst that lands after `delay` seconds at the struck
+   *  point ('target') or the owner ('self') — optionally damaging enemies
+   *  (baseline-scaled) AND healing allies in the same circle (through each
+   *  ally's healBy). The "radiant explosion 0.5s after contact" shape. */
+  | {
+      type: 'delayedBurst'; delay: number; radius: number; at: 'target' | 'self';
+      damage?: { type: DamageType; base: number; perLevel: number };
+      healAllies?: { base: number; perLevel: number };
+    }
+  /** FORTIFY: bank endurance on the proc's OWNER (Actor.gainEndurance —
+   *  a 0-max sheet banks nothing; the pool is the investment). */
+  | { type: 'fortify'; flat?: number; pctMaxLife?: number }
+  /** Tick every running cooldown on the proc's OWNER down by `seconds`
+   *  (the on-kill rhythm classic). */
+  | { type: 'cooldown'; seconds: number };
 
 export interface ProcDef {
   id: string;
@@ -80,6 +95,15 @@ export interface ProcDef {
     | 'block' | 'evade' | 'esBreak' | 'poiseBreakDealt' | 'poiseBroken';
   /** statusApply only: fires when one of THESE statuses lands (omit = any). */
   status?: string | string[];
+  /** SKILL GATE: the proc only rolls for these skill ids — "Sanctified
+   *  Strike has a chance to..." lives on the proc, so ANY grantor (passive,
+   *  gem, affix) is automatically skill-scoped. Omit = every skill. */
+  skills?: string[];
+  /** ONCE PER CAST: at most one firing per world tick per owner — a
+   *  multi-target swing's simultaneous contacts count as ONE trigger
+   *  (hits that resolve on later frames, like a piercing arrow's second
+   *  victim, are distinct contacts). Omit = rolls per target struck. */
+  oncePerCast?: true;
   /** INTERNAL COOLDOWN, seconds — the hard frequency limit no amount of
    *  stacked chance can beat (golden rule 2). */
   icd?: number;
@@ -255,6 +279,52 @@ export const PROCS: Record<string, ProcDef> = {
         mods: [mod('damageTaken', 'more', -0.15), mod('healTaken', 'increased', 0.2)],
       },
     },
+  },
+
+  // --- Skill-gated, cast-scoped, and delayed shapes ---------------------------
+
+  // RADIANT REPRISAL — the SKILL-GATED, ONCE-PER-CAST shape: only
+  // Sanctified Strike rolls it, and a whole arc's simultaneous contacts
+  // count as one trigger. The blast is TELEGRAPHED (0.5s), then heals
+  // allies and burns enemies in the same circle.
+  radiant_reprisal: {
+    id: 'radiant_reprisal', name: 'Radiant Reprisal',
+    color: '#ffe8b0', trigger: 'hit',
+    skills: ['sanctified_strike'], oncePerCast: true,
+    effect: {
+      type: 'delayedBurst', delay: 0.5, radius: 120, at: 'target',
+      damage: { type: 'fire', base: 12, perLevel: 2.5 },
+      healAllies: { base: 8, perLevel: 1.5 },
+    },
+  },
+
+  // RADIANT CASCADE — the PER-CONTACT sibling: every struck target hosts
+  // its own (smaller) delayed bloom. Same skill gate; the two variants are
+  // one flag apart, which is the point.
+  radiant_cascade: {
+    id: 'radiant_cascade', name: 'Radiant Cascade',
+    color: '#ffd890', trigger: 'hit',
+    skills: ['sanctified_strike'],
+    effect: {
+      type: 'delayedBurst', delay: 0.5, radius: 70, at: 'target',
+      damage: { type: 'fire', base: 6, perLevel: 1.2 },
+      healAllies: { base: 4, perLevel: 0.8 },
+    },
+  },
+
+  // EXECUTIONER'S RHYTHM: a kill hastens everything still cooling down.
+  executioners_rhythm: {
+    id: 'executioners_rhythm', name: "Executioner's Rhythm",
+    color: '#e8a24a', trigger: 'kill',
+    effect: { type: 'cooldown', seconds: 1.5 },
+  },
+
+  // BASTION FORTIFY: a made block banks ENDURANCE (the break-less pool's
+  // real refill — worthless without investing in the pool, by design).
+  bastion_fortify: {
+    id: 'bastion_fortify', name: 'Bastion',
+    color: '#a8c86a', trigger: 'block',
+    effect: { type: 'fortify', flat: 6, pctMaxLife: 0.02 },
   },
 };
 

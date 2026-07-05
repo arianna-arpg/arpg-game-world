@@ -216,6 +216,33 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Damage avoided per point of insight spent. */
   insightEfficiency: { label: 'Insight Efficiency', base: 1, min: 0.1 },
 
+  // ENDURANCE — the break-less third pool (the D4-Fortify / LE-Endurance
+  // shape): while the bar holds, hits are reduced by enduranceDR, FLAT —
+  // no wear curve, no break status, no re-arm; pool present = protected,
+  // pool empty = nothing (the deliberate contrast with poise). The pool
+  // SPENDS what it prevents (banked prevention), trickles back slowly on
+  // its own (delay-gated), and is really refilled by FORTIFY effects
+  // (the 'fortify' proc payload and future skill effects). Base 0 = a
+  // fully opt-in archetype.
+  endurance:      { label: 'Maximum Endurance', base: 0, min: 0 },
+  /** Hit-damage reduction while ANY endurance holds (flat, binary-on). */
+  enduranceDR:    { label: 'Endurance Damage Reduction', base: 0.2, min: 0, max: 0.6, percent: true },
+  /** Fraction of max endurance recovered per second (after the delay) —
+   *  deliberately lean: fortify effects are the real refill. */
+  enduranceRegenPct: { label: 'Endurance Recovery %', base: 0.08, min: 0, percent: true },
+  /** Seconds after spending endurance before recovery begins. */
+  enduranceRegenDelay: { label: 'Endurance Recovery Delay', base: 2.5, min: 0.2 },
+
+  // On-kill sustain (the classic "+X per kill" trio) — tag-queried with
+  // the slaying skill's context, so "life per kill with melee" is a filter.
+  lifeOnKill:     { label: 'Life Gained on Kill', base: 0, min: 0 },
+  manaOnKill:     { label: 'Mana Gained on Kill', base: 0, min: 0 },
+  esOnKill:       { label: 'Energy Shield Gained on Kill', base: 0, min: 0 },
+
+  /** CULLING: your hits EXECUTE enemies at or below this fraction of max
+   *  life (the classic culling strike). Hard-capped well short of half. */
+  cullThreshold:  { label: 'Culling Threshold', base: 0, min: 0, max: 0.3, percent: true },
+
   // BODY MASS & SUBSTANCE
   /** How shovable this body is: knockback and crowd separation divide by
    *  it. Monsters default it from body radius (DEFENSE_CFG.weight). */
