@@ -5348,7 +5348,7 @@ export class World {
   private effectDescentTrap(d: Doodad, eff: DoodadEffect): void {
     const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
     if (!victim || !chance(eff.chance)) return;
-    const taken = (eff.power + this.zone.level * 0.8) * (1 - victim.sheet.get('chaosRes')) * victim.sheet.get('damageTaken');
+    const taken = (eff.power + this.zone.level * 0.8) * (1 - resistValue(victim, 'chaos')) * victim.sheet.get('damageTaken');
     victim.life -= taken;
     victim.hitFlash = 0.15;
     this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), '#a06ad8', 12);
@@ -9821,7 +9821,11 @@ export class World {
             : vec(caster.pos.x + Math.cos(caster.facing) * d.castRange,
                   caster.pos.y + Math.sin(caster.facing) * d.castRange), 10);
         const strikes = rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)));
-        const immediate = d.interval <= 0 || caster.sheet.get('stormImmediate', tags, extra) > 0;
+        // stormImmediate is a FRACTION: that share of the strikes crashes
+        // down up-front (nearest enemies first via the sparkfield sort),
+        // the rest keep the cadence. 1 = the old all-at-once flag.
+        const immFrac = d.interval <= 0 ? 1 : caster.sheet.get('stormImmediate', tags, extra);
+        const immCount = Math.round(strikes * immFrac);
         const shape = caster.sheet.get('aoeShape', tags, extra);
         // TELEGRAPHED AREA (Levinfall): the whole scatter disc is SHOWN
         // first — an honest circle every strike then lands inside.
@@ -9850,7 +9854,7 @@ export class World {
               : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
             radius: d.hitRadius * aoeScale,
             caster, inst, color: def.color,
-            delay: fuse + (immediate ? rand(0.15, 0.3) : 0.3 + i * d.interval),
+            delay: fuse + (i < immCount ? rand(0.15, 0.3) : 0.3 + (i - immCount) * d.interval),
             exploded: false, linger: 0, tickInterval: 0.5, tickTimer: 0,
             shape, facing: ang,
             dmgMult: useMult, depth: 0, // storms compose with Aftershocks etc.
@@ -11848,9 +11852,10 @@ export class World {
   pushActor(target: Actor, dir: number, strength: number, caster?: Actor, inst?: SkillInstance): void {
     if (target.construct || target.anchored || target.leap) return;
     // WEIGHT: mass divides the shove — a knockback that sends a goblin
-    // flying nudges an ogre. Weight is a stat (Fortitude raises it, curses
-    // can shed it), floored so a shredded husk never launches to infinity.
-    const eff = strength / Math.max(DEFENSE_CFG.weight.min, target.sheet.get('weight'));
+    // flying nudges an ogre. effectiveWeight folds in CURRENT unbroken
+    // poise (a poised colossus is an anchor; break the bar to move it) on
+    // top of the weight stat (Fortitude raises it, curses can shed it).
+    const eff = strength / target.effectiveWeight();
     const vx = Math.cos(dir) * eff * PUSH_DAMPING;
     const vy = Math.sin(dir) * eff * PUSH_DAMPING;
     const p = target.push;
@@ -12390,12 +12395,23 @@ export class World {
       const result = applyHit(caster, target, packet);
       if (result.evaded) {
         this.text(target.pos, 'evade', '#9ab0c8', 12);
+        // The evader's rewards: the deterministic lifeOnEvade floor plus
+        // their own 'evade' procs (global sheet — golden rule 3).
+        const mend = target.sheet.get('lifeOnEvade');
+        if (mend > 0) target.healBy(mend);
+        if (depth === 0) this.rollOwnProcs(target, 'evade');
         return; // an evaded attack applies nothing
       }
       if (result.blocked) {
         this.text(target.pos, 'block!', '#8ab8d8', 12);
         this.applyThorns(target, caster);
         if (depth === 0) this.tapCharges(target, 'block');
+        const mend = target.sheet.get('lifeOnBlock');
+        if (mend > 0) target.healBy(mend);
+        if (depth === 0) this.rollOwnProcs(target, 'block');
+        // blockPower < 1 leaks CHIP damage through (result.total) — the
+        // chip can finish a wounded blocker.
+        if (target.life <= 0 && !target.dead) this.kill(target);
         return; // a passively blocked hit applies nothing either
       }
       if (result.immune) {
@@ -12486,13 +12502,25 @@ export class World {
       }
       this.text(target.pos, Math.round(dealt).toString(),
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13);
-      // The poise bar SHATTERED under this blow — announce the window.
+      // The poise bar SHATTERED under this blow — announce the window, and
+      // fire both sides' break procs: the breaker's payoff loop
+      // (poiseBreakDealt, with the breaking skill's context) and the
+      // victim's own steel-yourself reactions (poiseBroken).
       if (result.poiseBroke) {
         this.text(vec(target.pos.x, target.pos.y - 24), 'BROKEN!', '#d8b06a', 15);
         this.flashes.push({
           pos: vec(target.pos.x, target.pos.y), radius: target.radius + 12,
           color: '#d8b06a', life: 0.3, maxLife: 0.3,
         });
+        if (depth === 0) {
+          this.rollOwnProcs(caster, 'poiseBreakDealt', { tags: packet.tags, extra, inst, target });
+          this.rollOwnProcs(target, 'poiseBroken');
+        }
+      }
+      // The hit emptied the shield — the victim's esBreak reactions fire.
+      if (target.esBroke) {
+        target.esBroke = false;
+        if (depth === 0) this.rollOwnProcs(target, 'esBreak');
       }
       // Striking the thorned costs blood (thorns / reflect / Nettles).
       this.applyThorns(target, caster, dealt);
@@ -12648,13 +12676,14 @@ export class World {
           let ruptureType: DamageType | undefined;
           let dpsOut = dps;
           if (sdef?.dotType && dps > 0) {
-            // Powderkeg: the ignite ticks NOTHING — its whole payload
-            // arrives as an explosion when the burn expires.
-            if (fx.status === 'burn'
-              && caster.sheet.get('igniteToBomb', tags, extra) > 0) {
-              rupture = dps * sdef.duration * durScale;
+            // Powderkeg: a FRACTION of the ignite converts from ticking
+            // burn into a detonation at expiry (1 = no ticks, all blast;
+            // 0.5 = half burns, half banks — a dial, not a flag).
+            const bombFrac = caster.sheet.get('igniteToBomb', tags, extra);
+            if (fx.status === 'burn' && bombFrac > 0) {
+              rupture = dps * sdef.duration * durScale * bombFrac;
               ruptureType = 'fire';
-              dpsOut = 0;
+              dpsOut = dps * (1 - bombFrac);
             } else {
               const r = caster.sheet.get('dotRupture', tags, extra);
               if (r > 0) {
@@ -12681,7 +12710,9 @@ export class World {
             ? fx.durationOverride / (STATUS_DEFS[fx.status]?.duration || 1)
             : durScale) * hexDur;
           target.applyStatus(fx.status, dpsOut, fxScale, caster.name, {
-            propagates: caster.sheet.get('dotPropagates', tags, extra) > 0 || undefined,
+            // Propagation is a CHANCE rolled once at application (1 = the
+            // old always-spreads flag).
+            propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
             rupture, ruptureType,
             stacksBonus: stacksBonusFor(fx.status),
           });
@@ -12759,7 +12790,7 @@ export class World {
             * potencyFor(sid) / Math.max(0.5, durScale)
           : 0;
         target.applyStatus(sid, dps, durScale, caster.name, {
-          propagates: caster.sheet.get('dotPropagates', tags, extra) > 0 || undefined,
+          propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
         });
         // Stat-granted applications trigger statusApply procs too.
@@ -12850,6 +12881,7 @@ export class World {
           procChance *= eliteFactor;
         }
         if (procChance <= 0 || !chance(Math.min(0.95, procChance))) continue;
+        if (!this.procReady(caster, proc)) continue;
         this.executeProc(proc, caster, inst, target);
       }
     }
@@ -12937,6 +12969,7 @@ export class World {
       if (proc.trigger !== 'collision') continue;
       const c = caster.sheet.get(procStat(proc.id), tags, extra);
       if (c <= 0 || !chance(Math.min(0.95, c))) continue;
+      if (!this.procReady(caster, proc)) continue;
       this.executeProc(proc, caster, inst, target);
     }
   }
@@ -12957,27 +12990,93 @@ export class World {
       }
       const c = caster.sheet.get(procStat(proc.id), tags, extra);
       if (c <= 0 || !chance(Math.min(0.95, c))) continue;
+      if (!this.procReady(caster, proc)) continue;
       this.executeProc(proc, caster, inst, target);
     }
   }
 
-  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance, target: Actor): void {
-    this.text(vec(target.pos.x, target.pos.y - 14), proc.name + '!', proc.color, 12);
+  /** ICD gate (ProcDef.icd): true when the proc may fire for this owner —
+   *  and stamps the next-ready clock when it does. The hard frequency
+   *  limit no amount of stacked proc-chance can beat. */
+  private procReady(owner: Actor, proc: ProcDef): boolean {
+    if (!proc.icd) return true;
+    if (this.time < (owner.procReadyAt.get(proc.id) ?? 0)) return false;
+    owner.procReadyAt.set(proc.id, this.time + proc.icd);
+    return true;
+  }
+
+  /** Roll an actor's OWN procs for a self-owned trigger (block / evade /
+   *  esBreak / poiseBroken / poiseBreakDealt). Defensive triggers query the
+   *  GLOBAL sheet (passives, buffs, worn equipMods) — golden rule 3; the
+   *  attacker-owned poiseBreakDealt may pass its skill context in. */
+  rollOwnProcs(
+    owner: Actor, trigger: ProcDef['trigger'],
+    opts?: { tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor },
+  ): void {
+    if (owner.dead) return;
+    for (const proc of PROC_LIST) {
+      if (proc.trigger !== trigger) continue;
+      const c = owner.sheet.get(procStat(proc.id), opts?.tags, opts?.extra);
+      if (c <= 0 || !chance(Math.min(0.95, c))) continue;
+      if (!this.procReady(owner, proc)) continue;
+      this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null);
+    }
+  }
+
+  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null): void {
+    const at = target ?? caster;
+    this.text(vec(at.pos.x, at.pos.y - 14), proc.name + '!', proc.color, 12);
     const fx = proc.effect;
     switch (fx.type) {
       case 'gainCharge': {
-        caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
+        caster.gainCharge(fx.charge, fx.amount, fx.max, inst ?? undefined);
         break;
       }
       case 'buff':
         caster.addBuff(fx.buff, caster.sheet.get('effectDuration',
-          skillContextTags(inst.def), instanceMods(inst)));
+          inst ? skillContextTags(inst.def) : undefined,
+          inst ? instanceMods(inst) : undefined));
         break;
+      // The proc's OWNER mends — through healBy, so healTaken gates it
+      // like every heal (golden rule 5).
+      case 'heal':
+        caster.healBy((fx.flat ?? 0) + (fx.pctMax ?? 0) * caster.maxLife());
+        break;
+      case 'restore': {
+        const amount = (fx.flat ?? 0) + (fx.pctMax ?? 0)
+          * (fx.resource === 'mana' ? caster.maxMana() : caster.maxEs());
+        if (fx.resource === 'mana') {
+          caster.mana = Math.min(caster.availableMaxMana(), caster.mana + amount);
+        } else {
+          caster.es = Math.min(caster.maxEs(), caster.es + amount);
+        }
+        break;
+      }
+      // A typed burst around the OWNER — baseline-scaled (flat + perLevel),
+      // never a skill roll (golden rule 4), mitigated per victim like any
+      // typed source.
+      case 'burst': {
+        const dmg = fx.base + fx.perLevel * Math.max(0, caster.level - 1);
+        this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: fx.radius, color: proc.color, life: 0.3, maxLife: 0.3 });
+        for (const enemy of this.enemiesOf(caster)) {
+          if (enemy.dead || enemy.untargetable) continue;
+          if (dist(caster.pos, enemy.pos) - enemy.radius > fx.radius) continue;
+          const landed = mitigateTyped(enemy, { [fx.damage]: dmg });
+          if (landed <= 0 || enemy.invulnerable) continue;
+          enemy.life -= landed;
+          enemy.hitFlash = 0.15;
+          this.text(enemy.pos, Math.round(landed).toString(), proc.color, 12);
+          if (enemy.life <= 0 && !enemy.dead) this.kill(enemy);
+        }
+        break;
+      }
       case 'extraHit':
+        if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8, color: proc.color, life: 0.2, maxLife: 0.2 });
         this.resolveHit(caster, inst, target, fx.damageScale, 1);
         break;
       case 'explosion': {
+        if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: fx.radius, color: proc.color, life: 0.3, maxLife: 0.3 });
         for (const enemy of this.enemiesOf(caster)) {
           if (dist(target.pos, enemy.pos) - enemy.radius <= fx.radius) {
@@ -12987,16 +13086,19 @@ export class World {
         break;
       }
       case 'displace': {
+        if (!target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: 60, color: proc.color, life: 0.25, maxLife: 0.25 });
         const dir = fx.force > 0 ? angleTo(caster.pos, target.pos) : angleTo(target.pos, caster.pos);
         this.pushActor(target, dir, Math.abs(fx.force));
         break;
       }
       case 'collisionDamage':
+        if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 10, color: proc.color, life: 0.2, maxLife: 0.2 });
         this.resolveHit(caster, inst, target, fx.damageScale, 1);
         break;
       case 'summon': {
+        if (!target) break;
         // FORGEBOUND: the hit conscripts — a minion rises beside the
         // victim (per-proc cap via sourceSkillId '__proc:<id>').
         const key = '__proc:' + proc.id;
@@ -13006,7 +13108,8 @@ export class World {
         const forged = this.createMonster(fx.monsterId, owner.level, owner.team, owner);
         forged.sourceSkillId = key;
         forged.lifespan = fx.duration * owner.sheet.get('effectDuration',
-          skillContextTags(inst.def), instanceMods(inst));
+          inst ? skillContextTags(inst.def) : undefined,
+          inst ? instanceMods(inst) : undefined);
         forged.pos = this.clampPos(vec(
           target.pos.x + rand(-30, 30), target.pos.y + rand(-30, 30)), forged.radius);
         this.actors.push(forged);
@@ -13018,18 +13121,13 @@ export class World {
   /** A rupturing status detonates around its (surviving) victim. */
   private ruptureStatus(victim: Actor, s: ActiveStatus): void {
     const type: DamageType = s.ruptureType ?? 'chaos';
-    const RES: Record<DamageType, string | null> = {
-      physical: null, fire: 'fireRes', cold: 'coldRes',
-      lightning: 'lightningRes', chaos: 'chaosRes',
-    };
     const radius = 90;
     this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius, color: '#b06bd4', life: 0.3, maxLife: 0.3 });
     for (const e of this.actors) {
       if (e.dead || e.team !== victim.team || e.untargetable) continue;
       if (dist(victim.pos, e.pos) - e.radius > radius) continue;
       let amount = s.rupture! * e.sheet.get('damageTaken');
-      const res = RES[type];
-      if (res) amount *= 1 - e.sheet.get(res);
+      amount *= 1 - resistValue(e, type);
       if (e.invulnerable || amount <= 0) continue;
       e.life -= amount;
       e.hitFlash = 0.15;
@@ -13936,9 +14034,22 @@ export class World {
         }
       }
       const dot = a.updateTimers(dt);
-      if (dot > 0) {
-        applyDot(a, dot);
-        this.accumulateDotText(a, dot, dt);
+      if (dot) {
+        // TYPED ticks: each element pools separately so tag-filtered DoT
+        // interactions (esDotBypass per element, tagged damageTaken) apply.
+        // The floating text keeps showing the pre-soak total, as ever.
+        let raw = 0;
+        for (const [ty, amt] of Object.entries(dot)) {
+          if (!amt || amt <= 0) continue;
+          raw += amt;
+          applyDot(a, amt, ty === 'untyped' ? undefined : ty as DamageType);
+        }
+        if (raw > 0) this.accumulateDotText(a, raw, dt);
+        // A DoT emptied the shield — the esBreak proc seam fires here too.
+        if (a.esBroke) {
+          a.esBroke = false;
+          this.rollOwnProcs(a, 'esBreak');
+        }
       }
       // THE LEDGER's beat: escalating upkeep + the low-mana vent.
       this.updateActorLedgers(a, dt);
@@ -15051,15 +15162,10 @@ export class World {
             if (!aura.affected.has(e.id)) e.sheet.setSource(sourceName, aura.spec.enemyMods);
           }
           if (dps && dpsBase > 0) {
-            const RES: Record<DamageType, string | null> = {
-              physical: null, fire: 'fireRes', cold: 'coldRes',
-              lightning: 'lightningRes', chaos: 'chaosRes',
-            };
             let amount = 0;
             for (const [k, v] of Object.entries(auraAmounts)) {
               let part = (v ?? 0) * dt * e.sheet.get('damageTaken');
-              const res = RES[k as DamageType];
-              if (res) part *= 1 - e.sheet.get(res);
+              part *= 1 - resistValue(e, k as DamageType);
               amount += part;
             }
             if (e.invulnerable) amount = 0;
@@ -17630,10 +17736,11 @@ export class World {
           const bFixed = !!b.construct || b.anchored;
           if (aFixed && bFixed) continue;
           // WEIGHT decides who yields: the overlap splits by INVERSE mass —
-          // an ogre wading through goblins parts the goblins.
+          // an ogre wading through goblins parts the goblins. Poise anchors
+          // (effectiveWeight), so the unbroken hold their ground here too.
           const overlap = minD - d;
-          const wa = Math.max(DEFENSE_CFG.weight.min, a.sheet.get('weight'));
-          const wb = Math.max(DEFENSE_CFG.weight.min, b.sheet.get('weight'));
+          const wa = a.effectiveWeight();
+          const wb = b.effectiveWeight();
           const aShare = aFixed ? 0 : bFixed ? 1 : wb / (wa + wb);
           if (!aFixed && aShare > 0) {
             a.pos.x -= Math.cos(ang) * overlap * aShare;

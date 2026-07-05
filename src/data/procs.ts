@@ -1,22 +1,34 @@
 // ---------------------------------------------------------------------------
-// PROC REGISTRY — triggered on-hit effects.
+// PROC REGISTRY — triggered effects.
 //
-// A proc is a chance-based extra that fires when a skill hit deals damage.
-// The CHANCE is an ordinary stat named `proc_<id>` (base 0), which means any
-// support gem, passive node, buff, or class innate can grant or scale a proc
-// with a normal tag-filtered modifier:
+// A proc is a chance-based extra that fires on a trigger. The CHANCE is an
+// ordinary stat named `proc_<id>` (base 0), which means any support gem,
+// passive node, buff, or class innate can grant or scale a proc with a
+// normal tag-filtered modifier:
 //
 //     mod('proc_brutal_strike', 'flat', 0.25, ['melee'])
 //
-// ...is "melee skills have 25% chance to trigger Brutal Strike". The engine
-// rolls each registered proc after a damaging hit and executes its effect.
-// Procs cannot trigger from other procs (depth-capped), so they can't loop.
+// ...is "melee skills have 25% chance to trigger Brutal Strike".
+//
+// GOLDEN RULES (the anti-exploit constitution — engine-enforced):
+//  1. Procs never trigger procs. Proc'd hits execute at depth 1, and every
+//     roll site is depth-0-gated — no loops, no chains, no machine guns.
+//  2. Chance is capped at 95% per roll; a per-proc `icd` (internal cooldown,
+//     seconds) hard-limits frequency however many sources stack the chance.
+//  3. DEFENSIVE triggers (block / evade / esBreak / poiseBroken) roll on the
+//     DEFENDER's GLOBAL sheet — passives, buffs, worn equipMods — never on
+//     the attacker's skill context.
+//  4. 'burst' payloads scale from a caster-less BASELINE (flat + perLevel),
+//     never from a skill's rolled damage — a proc can't double-dip a crit.
+//  5. Heals flow through Actor.healBy (healTaken gates them like any heal);
+//     restores respect their pool maxima.
 //
 // To add a proc: register it here, then grant `proc_<id>` chance from any
 // modifier source. No engine changes needed.
 // ---------------------------------------------------------------------------
 
 import { mod } from '../engine/stats';
+import type { DamageType } from '../engine/stats';
 import type { BuffEffect } from '../engine/skills';
 
 export type ProcEffect =
@@ -31,13 +43,23 @@ export type ProcEffect =
   /** Deals damage to the entity whose displacement was arrested by a wall/void —
    *  the "knockback that hurts on impact" effect (Phase-3 collision trigger). */
   | { type: 'collisionDamage'; damageScale: number }
-  /** Banks a combo charge on the CASTER (Frenzy on bleed). */
+  /** Banks a combo charge on the proc's OWNER (Frenzy on bleed). */
   | { type: 'gainCharge'; charge: string; amount: number; max: number }
-  /** Grants the CASTER a buff (Tempo stacks on hit). */
+  /** Grants the proc's OWNER a buff (Tempo stacks on hit; a temporary
+   *  life-regen surge on bleed — flat and increased mods both work). */
   | { type: 'buff'; buff: BuffEffect }
   /** SUMMONS a minion beside the struck target (Forgebound's animated
    *  weapon — the hit itself does the conscripting). Capped per caster. */
-  | { type: 'summon'; monsterId: string; duration: number; max: number };
+  | { type: 'summon'; monsterId: string; duration: number; max: number }
+  /** HEALS the proc's OWNER — flat and/or a fraction of max life (through
+   *  healBy, so healTaken gates it like every heal). */
+  | { type: 'heal'; flat?: number; pctMax?: number }
+  /** Restores mana or energy shield on the proc's OWNER. */
+  | { type: 'restore'; resource: 'mana' | 'es'; flat?: number; pctMax?: number }
+  /** A typed BURST around the proc's OWNER: baseline-scaled damage
+   *  (flat + perLevel × owner level), mitigated per victim like any typed
+   *  source — never derived from a skill roll (golden rule 4). */
+  | { type: 'burst'; damage: DamageType; base: number; perLevel: number; radius: number };
 
 export interface ProcDef {
   id: string;
@@ -45,13 +67,22 @@ export interface ProcDef {
   /** Shown as floating text + flash color when the proc fires. */
   color: string;
   /** When the proc rolls:
-   *   'hit'          any damaging hit
-   *   'kill'         a hit that slays
-   *   'collision'    a knockback/displacement arrested by a wall or void
-   *   'statusApply'  the caster applies a status (see `status` filter) */
-  trigger: 'hit' | 'kill' | 'collision' | 'statusApply';
+   *   'hit'             any damaging hit you land
+   *   'kill'            a hit of yours that slays
+   *   'collision'       a knockback you dealt, arrested by a wall or void
+   *   'statusApply'     you apply a status (see `status` filter)
+   *   'block'           you block a hit (passive block)
+   *   'evade'           you evade an attack
+   *   'esBreak'         your energy shield is emptied
+   *   'poiseBreakDealt' your hit breaks an enemy's poise bar
+   *   'poiseBroken'     your own poise bar breaks */
+  trigger: 'hit' | 'kill' | 'collision' | 'statusApply'
+    | 'block' | 'evade' | 'esBreak' | 'poiseBreakDealt' | 'poiseBroken';
   /** statusApply only: fires when one of THESE statuses lands (omit = any). */
   status?: string | string[];
+  /** INTERNAL COOLDOWN, seconds — the hard frequency limit no amount of
+   *  stacked chance can beat (golden rule 2). */
+  icd?: number;
   effect: ProcEffect;
 }
 
@@ -123,6 +154,105 @@ export const PROCS: Record<string, ProcDef> = {
       type: 'buff', buff: {
         type: 'buff', id: 'tempo', duration: 5, maxStacks: 8, clearOnHit: true,
         mods: [mod('attackSpeed', 'increased', 0.04), mod('castSpeed', 'increased', 0.04)],
+      },
+    },
+  },
+
+  // --- The interaction fabric: defensive & threshold triggers -----------------
+
+  // ADRENAL RUSH: opening a vein quickens your own blood — inflicting a
+  // bleed surges your life regeneration (flat AND increased, stacking to 3).
+  adrenal_rush: {
+    id: 'adrenal_rush', name: 'Adrenal Rush',
+    color: '#e06060', trigger: 'statusApply', status: 'bleed', icd: 1,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'adrenal_rush', duration: 4, maxStacks: 3,
+        mods: [mod('lifeRegen', 'flat', 2), mod('lifeRegen', 'increased', 0.15)],
+      },
+    },
+  },
+
+  // BULWARK NOVA: the block ITSELF detonates — a small physical burst
+  // around you (baseline-scaled; golden rule 4).
+  bulwark_nova: {
+    id: 'bulwark_nova', name: 'Bulwark Nova',
+    color: '#d8c8a0', trigger: 'block', icd: 1.5,
+    effect: { type: 'burst', damage: 'physical', base: 10, perLevel: 2.2, radius: 110 },
+  },
+
+  // GUARDED HEART: a made block closes a wound — flat plus a sliver of max.
+  guarded_heart: {
+    id: 'guarded_heart', name: 'Guarded Heart',
+    color: '#8ae0a8', trigger: 'block', icd: 1,
+    effect: { type: 'heal', flat: 6, pctMax: 0.02 },
+  },
+
+  // SECOND WIND: slipping a blow steadies the breath — a heal on evade.
+  second_wind: {
+    id: 'second_wind', name: 'Second Wind',
+    color: '#9ad8e8', trigger: 'evade', icd: 2,
+    effect: { type: 'heal', flat: 4, pctMax: 0.02 },
+  },
+
+  // QUICKENING: an evade rolls straight into momentum — brief haste that
+  // feeds the insight loop (movement refills the pool; the weave sustains).
+  quickening: {
+    id: 'quickening', name: 'Quickening',
+    color: '#6ad8b8', trigger: 'evade', icd: 3,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'quickening', duration: 2.5,
+        mods: [mod('moveSpeed', 'increased', 0.12)],
+      },
+    },
+  },
+
+  // CAPACITOR BURST: the shield doesn't die quietly — its collapse arcs
+  // out as a lightning nova (baseline-scaled).
+  capacitor_burst: {
+    id: 'capacitor_burst', name: 'Capacitor Burst',
+    color: '#ffe14a', trigger: 'esBreak', icd: 4,
+    effect: { type: 'burst', damage: 'lightning', base: 14, perLevel: 3, radius: 140 },
+  },
+
+  // PHASE SURGE: the popped shield leaves you briefly BODILESS — phasing
+  // through the pack that broke it (the escape the moment begs for).
+  phase_surge: {
+    id: 'phase_surge', name: 'Phase Surge',
+    color: '#9ad8e8', trigger: 'esBreak', icd: 6,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'phase_surge', duration: 2,
+        mods: [mod('phasing', 'flat', 1), mod('moveSpeed', 'increased', 0.1)],
+      },
+    },
+  },
+
+  // BREAKER'S MOMENTUM: shattering a poise bar feeds the next shatter —
+  // the poise-breaker specialization's payoff loop.
+  breakers_momentum: {
+    id: 'breakers_momentum', name: "Breaker's Momentum",
+    color: '#d8b06a', trigger: 'poiseBreakDealt',
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'breakers_momentum', duration: 6, maxStacks: 3,
+        mods: [mod('poiseDamage', 'increased', 0.15), mod('damage', 'increased', 0.06)],
+      },
+    },
+  },
+
+  // LAST STAND: your own bar breaking steels you instead of sinking you —
+  // a burst of resilience that softens the Sundered window (the smooth-
+  // transition dial in proc form; grant it baseline-adjacent if breaks
+  // ever feel too punishing).
+  last_stand: {
+    id: 'last_stand', name: 'Last Stand',
+    color: '#e8d44a', trigger: 'poiseBroken', icd: 8,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'last_stand', duration: 2.5,
+        mods: [mod('damageTaken', 'more', -0.15), mod('healTaken', 'increased', 0.2)],
       },
     },
   },
