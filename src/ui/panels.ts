@@ -205,6 +205,23 @@ export class UI {
    *  Called when a run ends (death) — NOT on menu navigation. */
   resetClassRoster(): void { this.classRoster = null; }
 
+  /** Forget the per-run VIEW state (map zoom/pan/tab/dimension, zone pin, book
+   *  tab). Called whenever a NEW World is built (start/resume/co-op join) — a
+   *  fresh run must not inherit the last run's 300% map zoom, its quest-journal
+   *  tab, or a pin aimed at the old world's zone ids (ids recur across worlds,
+   *  so a stale pin can point at a real-but-never-visited zone). */
+  resetRunView(): void {
+    this.mapZoom = 1;
+    this.mapPan = { x: 0, y: 0 };
+    this.mapTab = 'map';
+    this.mapDimension = 'surface';
+    this.hoveredZone = null;
+    this.pinnedZone = null;
+    this.oceanCache = null;
+    this.bookTab = 'known';
+    this.lastBookTab = null;
+  }
+
   showClassSelect(onPick: (def: ClassDef) => void): void {
     this.hideAll();
     const acc = this.getAccount();

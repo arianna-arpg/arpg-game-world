@@ -153,6 +153,7 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest): void {
   if (COOP_ALLY) spawnCoopAlly();
   saveCharacter(world);     // baseline snapshot so a fresh run is resumable
   ui.setContinueSave(null); // the previous run's continue cache is now stale
+  ui.resetRunView();        // a new world must not inherit the old run's map zoom/tabs/pin
   deathShown = false;
   running = true;
 }
@@ -180,6 +181,7 @@ function resumeGame(preloaded?: CharacterSave | null): void {
     return;
   }
   if (COOP_ALLY) spawnCoopAlly();
+  ui.resetRunView();        // same rule as startGame: fresh World, fresh view state
   deathShown = false;
   running = true;
 }
@@ -748,6 +750,7 @@ function startAsClient(classDef: ClassDef, selfSeat: string): void {
   // Reset movement-prediction state so our input seq realigns with the host's fresh
   // per-seat ack (a new run = a fresh World on the host = an empty lastInputSeq).
   inputSeq = 0; predictHistory.length = 0; predZoneId = '';
+  ui.resetRunView();        // the client's shell world is new too — reset the view state
   deathShown = false;
   running = true;
   ui.hideAll();
