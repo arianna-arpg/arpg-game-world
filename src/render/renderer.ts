@@ -25,7 +25,7 @@ const RENDER_CULL_PAD = 150;
 const EMPTY_DOODADS: readonly Doodad[] = [];
 import { roofStyle } from '../data/structures';
 import { WEATHER_COLORS } from '../world/palette';
-import type { Settings } from '../meta/settings';
+import { keyDisplay, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 
@@ -72,7 +72,7 @@ export class Renderer {
     const kb = this.getSettings?.().keybinds;
     if (!kb) return SLOT_KEYS;
     return ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
-      kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(s => s.toUpperCase());
+      kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
   }
 
   resize(): void {

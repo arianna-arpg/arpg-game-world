@@ -28,7 +28,7 @@ import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { World } from '../engine/world';
 import { featureEnabled, FEATURE, selectableSlotCount, type Account } from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, isUnlockOwned } from '../meta/unlocks';
-import { ACTION_IDS, ACTION_LABELS, type ActionId, type Settings } from '../meta/settings';
+import { ACTION_IDS, ACTION_LABELS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
 import type { CharacterSave } from '../meta/character';
 import { bound } from '../packages/manifest';
 import { isConfigured, PACKAGES } from '../packages/registry';
@@ -169,6 +169,7 @@ export class UI {
     // their innerHTML re-renders); content is read from live data each hover.
     bindTooltips(this.charSheet, (el) => el.dataset.tip === 'class' ? this.classTooltip() : null);
     bindTooltips(this.skillBook, (el) => el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
+    this.updateHintBar(); // replace the static index.html placeholder with live binds
   }
 
   /** Tooltip for the class label in the character sheet. */
@@ -196,7 +197,22 @@ export class UI {
   private slotLabels(): string[] {
     const kb = this.getSettings().keybinds;
     return ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
-      kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(s => s.toUpperCase());
+      kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
+  }
+
+  /** Rewrite the bottom hint strip from the LIVE binds — every key it names is
+   *  rebindable, so the static index.html text goes stale after any remap.
+   *  Called at construction and from the keybind view after each change. */
+  updateHintBar(): void {
+    const el = document.getElementById('hint-bar');
+    if (!el) return;
+    const kb = this.getSettings().keybinds;
+    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
+    const k = (a: ActionId): string => esc(keyDisplay(kb[a]));
+    const move = (['moveUp', 'moveLeft', 'moveDown', 'moveRight'] as const).map(k).join('');
+    const slots = (['skillSlot2', 'skillSlot3', 'skillSlot4', 'skillSlot5', 'skillSlot6', 'skillSlot7'] as const).map(k).join('/');
+    el.innerHTML = `[${move}] move &nbsp; [LMB/RMB/${slots}] skills &nbsp; [${k('panelChar')}] character &nbsp; `
+      + `[${k('panelBook')}] skill book &nbsp; [${k('panelTree')}] passive tree &nbsp; [${k('panelMap')}] world map &nbsp; [Esc] menu`;
   }
 
   // ---------------------------------------------------------- class select
@@ -1616,7 +1632,7 @@ export class UI {
     const rows = ACTION_IDS.map(a => `
       <div class="rebind-row">
         <span>${ACTION_LABELS[a]}</span>
-        <button data-rebind="${a}">${kb[a].toUpperCase()}</button>
+        <button data-rebind="${a}">${keyDisplay(kb[a])}</button>
       </div>`).join('');
     root.innerHTML = `
       <h1>Keybinds</h1>
@@ -1644,8 +1660,19 @@ export class UI {
           e.stopImmediatePropagation();  // keep the key out of the game's input
           this.disarmRebind();           // removes this very listener
           if (e.key !== 'Escape') {
-            this.getSettings().keybinds[btn.dataset.rebind as ActionId] = e.key.toLowerCase();
+            const binds = this.getSettings().keybinds;
+            const action = btn.dataset.rebind as ActionId;
+            const nk = e.key.toLowerCase();
+            // SWAP-ON-CONFLICT: one key must drive ONE action. justPressed()
+            // is consumed by the first checker each frame, so a silent
+            // duplicate leaves the second action unreachable (bind the char
+            // sheet to B and the skill book can never open again). The action
+            // that held the key inherits this row's old key instead.
+            const other = ACTION_IDS.find(a => a !== action && binds[a] === nk);
+            if (other) binds[other] = binds[action];
+            binds[action] = nk;
             this.saveSettings();
+            this.updateHintBar();        // the strip mirrors whatever changed
           }
           this.renderKeybinds(root, onBack); // re-render the (possibly updated) labels
         };

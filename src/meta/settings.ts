@@ -49,6 +49,21 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   panelChar: 'Character Sheet', panelBook: 'Skill Book', panelTree: 'Passive Tree', panelMap: 'World Map',
 };
 
+/** Named keys whose stored value (KeyboardEvent.key, lowercased) is unreadable
+ *  or invisible as a raw label — ' ' rendered rebind buttons and HUD slot keys
+ *  BLANK. Every surface that shows a bind goes through keyDisplay. */
+const KEY_DISPLAY_NAMES: Record<string, string> = {
+  ' ': 'SPACE',
+  'arrowup': '↑', 'arrowdown': '↓', 'arrowleft': '←', 'arrowright': '→',
+  'control': 'CTRL', 'escape': 'ESC', 'delete': 'DEL', 'insert': 'INS',
+  'pageup': 'PGUP', 'pagedown': 'PGDN', 'capslock': 'CAPS', 'contextmenu': 'MENU',
+};
+
+/** Human-readable label for a stored key value. */
+export function keyDisplay(key: string): string {
+  return KEY_DISPLAY_NAMES[key] ?? key.toUpperCase();
+}
+
 export const makeSettings = (): Settings => ({
   schemaVersion: SETTINGS_SCHEMA_VERSION,
   keybinds: { ...DEFAULT_KEYBINDS },
