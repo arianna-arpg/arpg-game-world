@@ -30,6 +30,18 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- Channeling & guard supports -------------------------------------------
 
+  // THE INTERACTION FABRIC, gem form: attacker-side per-stack scaling vs an
+  // afflicted target (the generated damageVs_<status> family) — skill-local,
+  // so only the socketed skill hunts the poisoned.
+  opportunist: {
+    id: 'opportunist', name: 'Opportunist',
+    description: 'This skill deals 3% increased damage per stack of poison on the target.',
+    color: '#7ec850',
+    mods: [mod('damageVs_poison', 'flat', 0.03)],
+    perLevel: [mod('damageVs_poison', 'flat', 0.005)],
+    weight: 7,
+  },
+
   nettles: {
     id: 'nettles', name: 'Nettles',
     description: 'While channeling or guarding, anything that strikes you takes 8 damage. Blocked hits prick too.',

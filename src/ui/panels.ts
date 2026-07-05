@@ -44,7 +44,7 @@ const SHEET_STATS = [
   'life', 'lifeRegen', 'lifeRegenPct', 'mana', 'manaRegen', 'manaRegenPct', 'moveSpeed',
   'attackSpeed', 'castSpeed', 'accuracy', 'evasion', 'armor',
   'poise', 'poiseDR', 'insight', 'insightDR', 'weight',
-  'blockChance', 'guardStrength', 'energyShield', 'esDotResist', 'manaShield',
+  'blockChance', 'blockPower', 'guardStrength', 'energyShield', 'esDotResist', 'manaShield',
   'critChance', 'critMulti',
   'fireRes', 'coldRes', 'lightningRes', 'chaosRes',
   'aoeRadius', 'effectDuration', 'cooldownRecovery',

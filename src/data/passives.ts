@@ -5,7 +5,7 @@
 // (The prior version is preserved alongside as passives.ts.bak.)
 // ---------------------------------------------------------------------------
 
-import { mod, type Attributes, type Modifier } from '../engine/stats';
+import { gaugeMod, linkMod, mod, type Attributes, type Modifier } from '../engine/stats';
 import { CLASSES } from './classes';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr';
@@ -277,6 +277,16 @@ const nodes: PassiveNode[] = [
   // The ES-DoT lever, socketed into the tree: baseline shields no longer
   // blank damage over time — this keystone BUYS a big slice of it back.
   { id: "wil_x1", name: "Still Mind", description: "KEYSTONE: While you have energy shield, take 60% less damage over time. +15 maximum energy shield", kind: "keystone", x: 196, y: 466, mods: [mod("esDotResist", "flat", 0.6), mod("energyShield", "flat", 15)], links: ["node_42", "node_52"] },
+  // --- The INTERACTION FABRIC exemplars: stat links (single-hop siphons),
+  // gauges (per-stack self-scaling), and the defensive proc triggers. Each
+  // of these is one ordinary modifier — the pattern is the point.
+  { id: "sanguine_lattice", name: "Sanguine Lattice", description: "Gain 40% of your life regeneration per second as thorns", kind: "notable", x: 662, y: 862, mods: [linkMod("thorns", "lifeRegen", 0.4)], links: ["cl_lreg_p0"] },
+  { id: "vicious_cycle", name: "Vicious Cycle", description: "Gain 20% of your thorns as life regeneration per second", kind: "notable", x: 700, y: 890, mods: [linkMod("lifeRegen", "thorns", 0.2)], links: ["sanguine_lattice"] },
+  { id: "fevered_blood", name: "Fevered Blood", description: "For each stack of poison on YOU: 2% increased damage dealt, 2% increased damage taken", kind: "notable", x: 520, y: 258, mods: [gaugeMod("damage", "increased", 0.02, "status:poison"), gaugeMod("damageTaken", "increased", 0.02, "status:poison")], links: ["node_32"] },
+  { id: "riposte_doctrine", name: "Riposte Doctrine", description: "+3% block chance; 35% chance on block to erupt (Bulwark Nova); 30% chance on block to mend (Guarded Heart)", kind: "notable", x: 345, y: 905, mods: [mod("blockChance", "flat", 0.03), mod("proc_bulwark_nova", "flat", 0.35), mod("proc_guarded_heart", "flat", 0.3)], links: ["cl_block_p1"] },
+  { id: "break_the_line", name: "Break the Line", description: "20% increased poise damage; breaking an enemy's poise grants Breaker's Momentum", kind: "notable", x: 700, y: 640, mods: [mod("poiseDamage", "increased", 0.2), mod("proc_breakers_momentum", "flat", 1)], links: ["brz_n2"] },
+  { id: "eva_pr1", name: "Second Wind", description: "+3 life gained on evade; 40% chance on evade to catch your breath (heal)", kind: "notable", x: 600, y: 90, mods: [mod("lifeOnEvade", "flat", 3), mod("proc_second_wind", "flat", 0.4)], links: ["node_5"] },
+  { id: "stored_lightning", name: "Stored Lightning", description: "+15 maximum energy shield; your energy shield breaking releases a Capacitor Burst, and half the time a Phase Surge", kind: "notable", x: 150, y: 140, mods: [mod("energyShield", "flat", 15), mod("proc_capacitor_burst", "flat", 1), mod("proc_phase_surge", "flat", 0.5)], links: ["node_21"] },
 ];
 
 // --- Exports -----------------------------------------------------------------

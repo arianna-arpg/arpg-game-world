@@ -2226,7 +2226,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
   briar_beast: {
     id: 'briar_beast', name: 'Briar Beast',
     color: '#588848', shape: 'oval', radius: 26,
-    base: { life: 300, moveSpeed: 75, accuracy: 90, armor: 35, mana: 60, manaRegen: 5 },
+    // Rooted, thorny bulk: an explicit poise pool on top of its size-derived
+    // weight — poise IS mass (Actor.effectiveWeight), so the beast shrugs
+    // shoves until its bar is broken. The per-monster heft dial, as data.
+    base: { life: 300, moveSpeed: 75, accuracy: 90, armor: 35, mana: 60, manaRegen: 5, poise: 60 },
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['acid_spray', 'ground_slam'],
     xp: 56,
