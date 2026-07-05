@@ -20,6 +20,10 @@
       color: var(--text);
       user-select: none;
     }
+    /* Nothing in the game is ever a native drag source — a stray drag ghost
+       "grabs the window" (input.ts suppresses dragstart too; this is the
+       belt-and-suspenders layer for any future <img> content). */
+    img, svg, canvas { -webkit-user-drag: none; }
     #game { display: block; width: 100vw; height: 100vh; }
 
     .panel {

@@ -243,6 +243,7 @@ export function mountPassiveEditor(ui: UI): void {
     let drag: { id: string; start: { x: number; y: number }; nodeStart: { x: number; y: number }; moved: boolean } | null = null;
 
     svg.addEventListener('pointerdown', (e: PointerEvent) => {
+      if (e.button !== 0) return; // node drags are LMB-only (RMB is a skill button)
       const el = (e.target as Element).closest('.tree-node') as SVGCircleElement | null;
       if (!el || !el.dataset.node) return;
       const id = el.dataset.node;
@@ -252,6 +253,9 @@ export function mountPassiveEditor(ui: UI): void {
     });
     svg.addEventListener('pointermove', (e: PointerEvent) => {
       if (!drag) return;
+      // Chord self-heal: LMB is up but pointerup never fired (another button
+      // still held) — finish the drag rather than trailing the cursor forever.
+      if ((e.buttons & 1) === 0) { endDrag(e); return; }
       const p = svgPoint(svg, e.clientX, e.clientY);
       const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
       if (Math.hypot(dx, dy) > 3) drag.moved = true;
@@ -275,6 +279,7 @@ export function mountPassiveEditor(ui: UI): void {
     };
     svg.addEventListener('pointerup', endDrag);
     svg.addEventListener('pointercancel', endDrag);
+    svg.addEventListener('lostpointercapture', endDrag); // SVG swapped mid-drag
 
     // CREATE a node on a double-click in EMPTY space. Coordinate HIT-TEST (not
     // e.target): a node's pointer-capture corrupts the dblclick target to the SVG,

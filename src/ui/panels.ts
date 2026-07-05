@@ -35,6 +35,7 @@ import type { ContentPackage } from '../packages/types';
 import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import type { ZoneDef } from '../data/zones';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
+import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
@@ -778,7 +779,8 @@ export class UI {
   /** Wire the tree's zoom buttons + wheel-zoom + drag-pan onto the freshly rendered
    *  SVG (listeners live on the re-created SVG, GC'd each refresh — no leak). A
    *  pointerdown ON a node is let through so the allocate click still fires; drags
-   *  start only on empty space. Mirrors wireMapControls. */
+   *  start only on empty space, and only on the pan buttons (LMB/MMB — never RMB,
+   *  the skill button). Gesture rules live in attachPanZoom. Mirrors wireMapControls. */
   private wireTreeControls(): void {
     const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
     if (!svg) return;
@@ -791,40 +793,20 @@ export class UI {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const tz = btn.dataset.tz;
-        if (tz === 'in') this.treeZoom *= 1.4;
-        else if (tz === 'out') this.treeZoom /= 1.4;
+        if (tz === 'in') this.treeZoom = clampZoom(this.treeZoom * PANZOOM_DEFAULTS.buttonFactor);
+        else if (tz === 'out') this.treeZoom = clampZoom(this.treeZoom / PANZOOM_DEFAULTS.buttonFactor);
         else { this.treeZoom = 1; this.treePan = { x: 0, y: 0 }; }
         apply();
       });
     });
-    svg.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      this.treeZoom *= e.deltaY < 0 ? 1.18 : 1 / 1.18;
-      apply();
-    }, { passive: false });
-    let dragging = false, lastX = 0, lastY = 0;
-    svg.addEventListener('pointerdown', (e) => {
-      if ((e.target as Element).closest('.tree-node')) return; // let node clicks through
-      dragging = true; lastX = e.clientX; lastY = e.clientY;
-      svg.setPointerCapture(e.pointerId); svg.style.cursor = 'grabbing';
+    attachPanZoom(svg, {
+      getZoom: () => this.treeZoom,
+      setZoom: (z) => { this.treeZoom = z; },
+      panBy: (dx, dy) => { this.treePan.x += dx; this.treePan.y += dy; },
+      box: () => this.treeBox,
+      apply,
+      ignore: '.tree-node',
     });
-    svg.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      const rect = svg.getBoundingClientRect();
-      const vw = this.treeBox.w / this.treeZoom, vh = this.treeBox.h / this.treeZoom;
-      this.treePan.x -= (e.clientX - lastX) * (vw / Math.max(1, rect.width));
-      this.treePan.y -= (e.clientY - lastY) * (vh / Math.max(1, rect.height));
-      lastX = e.clientX; lastY = e.clientY;
-      apply();
-    });
-    const end = (e: PointerEvent): void => {
-      if (!dragging) return;
-      dragging = false;
-      try { svg.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-      svg.style.cursor = 'grab';
-    };
-    svg.addEventListener('pointerup', end);
-    svg.addEventListener('pointercancel', end);
   }
 
   // -------------------------------------------------------------- world map
@@ -1340,7 +1322,10 @@ export class UI {
   /** Wire the map's zoom buttons + wheel-zoom + drag-pan onto the freshly
    *  rendered SVG. All listeners live ON THE SVG (re-created each refresh, so the
    *  old ones are GC'd — no leak), and pointer-capture keeps a drag alive off the
-   *  edge, so we never attach a leaky window-level listener. */
+   *  edge, so we never attach a leaky window-level listener. Gesture rules
+   *  (pan buttons, chord/capture-loss self-healing) live in attachPanZoom —
+   *  the self-healing is what guarantees mapDragging always returns to false,
+   *  so the 0.5s auto-refresh can never be wedged off permanently. */
   private wireMapControls(): void {
     const svg = this.worldMap.querySelector<SVGSVGElement>('#world-map-svg');
     if (!svg) return;
@@ -1353,64 +1338,43 @@ export class UI {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const mz = btn.dataset.mz;
-        if (mz === 'in') this.mapZoom *= 1.4;
-        else if (mz === 'out') this.mapZoom /= 1.4;
+        if (mz === 'in') this.mapZoom = clampZoom(this.mapZoom * PANZOOM_DEFAULTS.buttonFactor);
+        else if (mz === 'out') this.mapZoom = clampZoom(this.mapZoom / PANZOOM_DEFAULTS.buttonFactor);
         else { this.mapZoom = 1; this.mapPan = { x: 0, y: 0 }; }
         apply();
       });
     });
-    svg.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      this.mapZoom *= e.deltaY < 0 ? 1.18 : 1 / 1.18;
-      apply();
-    }, { passive: false });
-    let dragging = false, moved = false, lastX = 0, lastY = 0;
-    svg.addEventListener('pointerdown', (e) => {
-      if ((e.target as Element).closest('.wp-node')) return; // let waypoint clicks through
-      dragging = true; this.mapDragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
-      svg.setPointerCapture(e.pointerId); svg.style.cursor = 'grabbing';
-    });
     const zoneAt = (e: Event): string | null =>
       (e.target as Element).closest('[data-zone]')?.getAttribute('data-zone') ?? null;
-    svg.addEventListener('pointermove', (e) => {
-      if (dragging) {
-        moved = true;
-        const rect = svg.getBoundingClientRect();
-        const vw = this.mapBox.w / this.mapZoom, vh = this.mapBox.h / this.mapZoom;
-        this.mapPan.x -= (e.clientX - lastX) * (vw / Math.max(1, rect.width));
-        this.mapPan.y -= (e.clientY - lastY) * (vh / Math.max(1, rect.height));
-        lastX = e.clientX; lastY = e.clientY;
-        apply();
-        return;
-      }
+    attachPanZoom(svg, {
+      getZoom: () => this.mapZoom,
+      setZoom: (z) => { this.mapZoom = z; },
+      panBy: (dx, dy) => { this.mapPan.x += dx; this.mapPan.y += dy; },
+      box: () => this.mapBox,
+      apply,
+      ignore: '.wp-node', // let waypoint travel-clicks through
       // HOVER preview — update only the side box (a pin, if set, takes precedence
       // inside boxZoneId, so hovering elsewhere while pinned leaves the box alone).
-      const zid = zoneAt(e);
-      if (zid !== this.hoveredZone) { this.hoveredZone = zid; this.renderZoneBox(); }
+      onIdleMove: (e) => {
+        const zid = zoneAt(e);
+        if (zid !== this.hoveredZone) { this.hoveredZone = zid; this.renderZoneBox(); }
+      },
+      onLeave: () => {
+        if (this.hoveredZone !== null) { this.hoveredZone = null; this.renderZoneBox(); }
+      },
+      // CLICK a zone to PIN it (toggle) — so the cursor can leave to scroll the box.
+      // Drag-ending clicks are already swallowed by attachPanZoom; waypoint nodes
+      // keep their travel click. Pin flips a node highlight, so a full refresh is OK
+      // here (it's a click, not the hover path) and preserves zoom/pan.
+      onClick: (e) => {
+        if ((e.target as Element).closest('.wp-node')) return;
+        const zid = zoneAt(e);
+        if (!zid) return;
+        this.pinnedZone = this.pinnedZone === zid ? null : zid;
+        this.refreshMap();
+      },
+      onDragState: (d) => { this.mapDragging = d; },
     });
-    svg.addEventListener('pointerleave', () => {
-      if (this.hoveredZone !== null) { this.hoveredZone = null; this.renderZoneBox(); }
-    });
-    // CLICK a zone to PIN it (toggle) — so the cursor can leave to scroll the box.
-    // A pan-drag ends in a click too, so skip if the pointer moved; waypoint nodes
-    // keep their travel click. Pin flips a node highlight, so a full refresh is OK
-    // here (it's a click, not the hover path) and preserves zoom/pan.
-    svg.addEventListener('click', (e) => {
-      if (moved) { moved = false; return; }
-      if ((e.target as Element).closest('.wp-node')) return;
-      const zid = zoneAt(e);
-      if (!zid) return;
-      this.pinnedZone = this.pinnedZone === zid ? null : zid;
-      this.refreshMap();
-    });
-    const end = (e: PointerEvent): void => {
-      if (!dragging) return;
-      dragging = false; this.mapDragging = false;
-      try { svg.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
-      svg.style.cursor = 'grab';
-    };
-    svg.addEventListener('pointerup', end);
-    svg.addEventListener('pointercancel', end);
 
     // UNPIN via the box's "unpin" affordance (delegated on the aside, which is
     // recreated each refresh so the listener GC's with it — no leak).

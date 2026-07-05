@@ -37,6 +37,17 @@ export class Input {
     window.addEventListener('contextmenu', e => e.preventDefault());
     // A browser popup/menu that slips through anyway blurs us — the blur
     // handler above already clears every held key and button.
+
+    // NATIVE-DRAG + AUTOSCROLL SUPPRESSION — the window must never be
+    // "grabbed". A native HTML5 drag (of a stray text selection, image, or
+    // link) swallows all mouse input and floats a ghost snapshot of the
+    // dragged element under the cursor — with the context menu suppressed it
+    // reads as the whole frozen screen being dragged around. Middle-click
+    // similarly arms the browser's autoscroll mode. Neither has any meaning
+    // inside the game, so both are cut off at the source; panel wheel-scroll
+    // and the SVG pan gestures (pointer events) are unaffected.
+    window.addEventListener('dragstart', e => e.preventDefault());
+    window.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
   }
 
   /** True once per physical key press. */
