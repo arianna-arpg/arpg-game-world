@@ -14,6 +14,8 @@
 // possible without any special-case code.
 // ---------------------------------------------------------------------------
 
+import { DEFENSE_CFG } from './defense';
+
 /** Tags describe what a skill / damage context *is*. Add freely. */
 export type SkillTag =
   | 'attack' | 'spell' | 'melee' | 'projectile' | 'aoe' | 'duration'
@@ -58,7 +60,10 @@ export type ConditionId =
   | 'lowLife' | 'fullLife' | 'lowMana' | 'fullMana'
   | 'hasEs' | 'fullEs' | 'lowEs' | 'guarding'
   // Planted vs on the move (Actor.idleFor: >0.6s still / <0.15s since a step)
-  | 'stationary' | 'moving';
+  | 'stationary' | 'moving'
+  // The poise break-bar stands unbroken (Actor.poise > 0 and not broken) —
+  // "while poised" mods are the fortress-stance investment hook.
+  | 'poised';
 
 export interface Modifier {
   stat: string;
@@ -133,10 +138,66 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // Defense
   armor:          { label: 'Armor', base: 0, min: 0 },
   evasion:        { label: 'Evasion Rating', base: 40, min: 0 },
-  fireRes:        { label: 'Fire Resistance', base: 0, max: 0.75, percent: true },
-  coldRes:        { label: 'Cold Resistance', base: 0, max: 0.75, percent: true },
-  lightningRes:   { label: 'Lightning Resistance', base: 0, max: 0.75, percent: true },
-  chaosRes:       { label: 'Chaos Resistance', base: 0, max: 0.75, percent: true },
+  // Resistances are UNCAPPED raw values — overcap buffers against shred.
+  // The EFFECTIVE value is clamped at query time (damage.ts resistValue) by
+  // the per-element SOFT-CAP stat below, itself ceilinged by the absolute
+  // hard cap (DEFENSE_CFG.resistance.hardCap) so immunity is unreachable.
+  fireRes:        { label: 'Fire Resistance', base: 0, percent: true },
+  coldRes:        { label: 'Cold Resistance', base: 0, percent: true },
+  lightningRes:   { label: 'Lightning Resistance', base: 0, percent: true },
+  chaosRes:       { label: 'Chaos Resistance', base: 0, percent: true },
+  // The investable soft caps ("+5% to maximum fire resistance" is a flat mod).
+  fireResMax:      { label: 'Maximum Fire Resistance', base: 0.75, min: 0, max: DEFENSE_CFG.resistance.hardCap, percent: true },
+  coldResMax:      { label: 'Maximum Cold Resistance', base: 0.75, min: 0, max: DEFENSE_CFG.resistance.hardCap, percent: true },
+  lightningResMax: { label: 'Maximum Lightning Resistance', base: 0.75, min: 0, max: DEFENSE_CFG.resistance.hardCap, percent: true },
+  chaosResMax:     { label: 'Maximum Chaos Resistance', base: 0.75, min: 0, max: DEFENSE_CFG.resistance.hardCap, percent: true },
+
+  // POISE — the break-bar (Fortitude's lane; see DEFENSE_CFG.poise for the
+  // break rules). While the pool stands the bearer takes poiseDR less HIT
+  // damage and shrugs hard CC at poiseCcAvoid; every hit drains it, a break
+  // strips the benefits until it recovers past the re-arm line.
+  poise:          { label: 'Maximum Poise', base: 25, min: 0 },
+  /** Fraction of max poise recovered per second (after the delay). */
+  poiseRegenPct:  { label: 'Poise Recovery %', base: 0.25, min: 0, percent: true },
+  /** Seconds after a poise-draining hit before recovery begins. */
+  poiseRegenDelay:{ label: 'Poise Recovery Delay', base: 1.5, min: 0.2 },
+  /** Hit-damage reduction while the bar is unbroken. */
+  poiseDR:        { label: 'Poise Damage Reduction', base: 0.15, min: 0, max: 0.75, percent: true },
+  /** Chance to ignore hard crowd control while the bar is unbroken. */
+  poiseCcAvoid:   { label: 'Poise Stun Avoidance', base: 0.35, min: 0, max: 1, percent: true },
+  /** ATTACKER-side multiplier on the poise damage your hits inflict —
+   *  tag-queried, so "40% more poise damage with maces" is a filter. */
+  poiseDamage:    { label: 'Poise Damage Dealt', base: 1, min: 0 },
+
+  // INSIGHT — the momentum-fed avoidance pool (Charisma's lane): reading the
+  // opponent's body language and slipping the brunt. Reduction scales with
+  // MOMENTUM (1 while moving, tapering to 0 over insightTaper seconds after
+  // stopping) and SPENDS the pool; it only refills while moving.
+  insight:        { label: 'Maximum Insight', base: 30, min: 0 },
+  /** Damage reduction at FULL momentum (tapers with it). */
+  insightDR:      { label: 'Insight Damage Reduction', base: 0.5, min: 0, max: 0.9, percent: true },
+  /** Fraction of max insight recovered per second of MOVEMENT. Deliberately
+   *  lean at base: an uninvested pool runs dry in the first exchange and
+   *  stays functionally dry — investment in the pool raises the ABSOLUTE
+   *  refill with it, which is what buys sustained weaving. */
+  insightRegenPct:{ label: 'Insight Recovery %', base: 0.12, min: 0, percent: true },
+  /** Seconds the reduction takes to taper to zero after stopping. */
+  insightTaper:   { label: 'Insight Taper Time', base: 2.5, min: 0.1 },
+  /** Damage avoided per point of insight spent. */
+  insightEfficiency: { label: 'Insight Efficiency', base: 1, min: 0.1 },
+
+  // BODY MASS & SUBSTANCE
+  /** How shovable this body is: knockback and crowd separation divide by
+   *  it. Monsters default it from body radius (DEFENSE_CFG.weight). */
+  weight:         { label: 'Weight', base: 1, min: 0.05 },
+  /** > 0: no body collision at all — walks THROUGH actors (and they through
+   *  it). Hits and targeting are unaffected; this is substance, not stealth. */
+  phasing:        { label: 'Phasing', base: 0, min: 0 },
+
+  /** While holding energy shield (es > 0), damage over time is reduced by
+   *  this fraction — the INVESTABLE lever that rebuilds "ES ignores DoT" at
+   *  100%. Baseline 0: DoTs bypass the shield and gnaw life directly. */
+  esDotResist:    { label: 'DoT Resistance while on Energy Shield', base: 0, min: 0, max: 1, percent: true },
   /** Multiplier on damage received (shock raises it, fortification lowers it). */
   damageTaken:    { label: 'Damage Taken', base: 1, min: 0.1 },
   /** Multiplier on LIFE HEALING received — regen, leech, restores, pulses,
@@ -753,62 +814,132 @@ export class StatSheet {
 // listed modifiers. Adding a new attribute (or changing what one does) is a
 // pure data edit; the character sheet and allocation UI pick it up
 // automatically.
+//
+// TEN attributes in three triads plus one universal:
+//   RAW FORCE   — strength, dexterity, intelligence (how hard you swing)
+//   EXECUTION   — prowess, finesse, wisdom (how well you wield it)
+//   RESILIENCE  — fortitude, charisma, willpower (what you weather:
+//                 armor/poise, evasion/insight, energy shield/resistance)
+//   LIFE        — vitality (ubiquitous; deliberately NOT a tree start)
+// Declaration order below IS the display order: each raw attribute is
+// followed by its execution and resilience siblings.
 // ---------------------------------------------------------------------------
 
-export type AttributeId = 'strength' | 'dexterity' | 'intelligence' | 'vitality' | 'willpower';
+export type AttributeId =
+  | 'strength' | 'prowess' | 'fortitude'
+  | 'dexterity' | 'finesse' | 'charisma'
+  | 'intelligence' | 'wisdom' | 'willpower'
+  | 'vitality';
+
+/** The triad axes — UI grouping/theming only; mechanics live in perPoint. */
+export type AttributeGroup = 'force' | 'execution' | 'resilience' | 'life';
 
 export interface AttributeDef {
   label: string;
   short: string;
   description: string;
+  group: AttributeGroup;
   perPoint: Modifier[];
 }
 
 export const ATTRIBUTES: Record<AttributeId, AttributeDef> = {
+  // --- The STRENGTH triad ---------------------------------------------------
   strength: {
-    label: 'Strength', short: 'STR',
-    description: '+3 life, +1 melee damage per 4 pts, 0.5% increased melee damage',
+    label: 'Strength', short: 'STR', group: 'force',
+    description: '+2 life, +1 melee damage per 4 pts, 0.5% increased melee damage',
     perPoint: [
-      mod('life', 'flat', 3),
+      mod('life', 'flat', 2),
       mod('addedPhysical', 'flat', 0.25, ['melee']),
       mod('damage', 'increased', 0.005, ['melee']),
     ],
   },
-  dexterity: {
-    label: 'Dexterity', short: 'DEX',
-    description: '+5 accuracy, +4 evasion, 0.4% increased attack speed',
+  prowess: {
+    label: 'Prowess', short: 'PRW', group: 'execution',
+    description: '0.4% increased attack speed, 0.6% increased poise damage, +0.2% crit multiplier',
     perPoint: [
-      mod('accuracy', 'flat', 5),
-      mod('evasion', 'flat', 4),
       mod('attackSpeed', 'increased', 0.004, ['attack']),
+      mod('poiseDamage', 'increased', 0.006),
+      mod('critMulti', 'flat', 0.002),
+    ],
+  },
+  fortitude: {
+    label: 'Fortitude', short: 'FOR', group: 'resilience',
+    description: '+4 armor, +2 poise, 0.2% increased weight',
+    perPoint: [
+      mod('armor', 'flat', 4),
+      mod('poise', 'flat', 2),
+      mod('weight', 'increased', 0.002),
+    ],
+  },
+
+  // --- The DEXTERITY triad --------------------------------------------------
+  dexterity: {
+    label: 'Dexterity', short: 'DEX', group: 'force',
+    description: '+4 accuracy, +2 evasion, 0.4% increased attack & projectile damage',
+    perPoint: [
+      mod('accuracy', 'flat', 4),
+      mod('evasion', 'flat', 2),
       mod('damage', 'increased', 0.004, ['projectile', 'attack']),
     ],
   },
+  finesse: {
+    label: 'Finesse', short: 'FIN', group: 'execution',
+    description: '+0.05% crit chance, +0.3% ailment chance, 0.4% increased ailment magnitude',
+    perPoint: [
+      mod('critChance', 'flat', 0.0005),
+      mod('statusChance', 'flat', 0.003),
+      mod('statusMagnitude', 'increased', 0.004),
+    ],
+  },
+  charisma: {
+    label: 'Charisma', short: 'CHA', group: 'resilience',
+    description: '+3 evasion, +2 insight',
+    perPoint: [
+      mod('evasion', 'flat', 3),
+      mod('insight', 'flat', 2),
+    ],
+  },
+
+  // --- The INTELLIGENCE triad -----------------------------------------------
   intelligence: {
-    label: 'Intelligence', short: 'INT',
-    description: '+3 mana, 0.6% increased spell damage',
+    label: 'Intelligence', short: 'INT', group: 'force',
+    description: '+3 mana, 0.6% increased spell damage, +0.08% spell crit chance',
     perPoint: [
       mod('mana', 'flat', 3),
       mod('damage', 'increased', 0.006, ['spell']),
       mod('critChance', 'flat', 0.0008, ['spell']),
     ],
   },
+  wisdom: {
+    label: 'Wisdom', short: 'WIS', group: 'execution',
+    description: '+0.12 mana regen, 0.8% minion damage, 0.5% effect duration, 0.3% cast speed',
+    perPoint: [
+      mod('manaRegen', 'flat', 0.12),
+      mod('minionDamage', 'increased', 0.008),
+      mod('effectDuration', 'increased', 0.005),
+      mod('castSpeed', 'increased', 0.003),
+    ],
+  },
+  willpower: {
+    label: 'Willpower', short: 'WIL', group: 'resilience',
+    description: '+1.5 energy shield, +1 mana, +0.15% all resistances',
+    perPoint: [
+      mod('energyShield', 'flat', 1.5),
+      mod('mana', 'flat', 1),
+      mod('fireRes', 'flat', 0.0015),
+      mod('coldRes', 'flat', 0.0015),
+      mod('lightningRes', 'flat', 0.0015),
+      mod('chaosRes', 'flat', 0.0015),
+    ],
+  },
+
+  // --- LIFE -------------------------------------------------------------------
   vitality: {
-    label: 'Vitality', short: 'VIT',
+    label: 'Vitality', short: 'VIT', group: 'life',
     description: '+6 life, +0.15 life regen/s',
     perPoint: [
       mod('life', 'flat', 6),
       mod('lifeRegen', 'flat', 0.15),
-    ],
-  },
-  willpower: {
-    label: 'Willpower', short: 'WIL',
-    description: '+2 mana, +0.1 mana regen, 0.8% minion damage, 0.5% effect duration',
-    perPoint: [
-      mod('mana', 'flat', 2),
-      mod('manaRegen', 'flat', 0.1),
-      mod('minionDamage', 'increased', 0.008),
-      mod('effectDuration', 'increased', 0.005),
     ],
   },
 };
