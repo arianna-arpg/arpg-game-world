@@ -32,7 +32,15 @@ export function bindTooltips(
 
   container.addEventListener('mouseover', (e) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tip]');
-    if (!el) return;
+    if (!el) {
+      // The cursor is over plain panel area. Normally mouseout already hid the
+      // box — but a panel re-render (the 0.5s char-sheet refresh, a co-op meta
+      // re-render) DETACHES the hovered element, and no mouseout ever fires for
+      // a removed node, so the box would stick and trail the cursor until it
+      // left the whole panel. A non-tip hover is therefore treated as a leave.
+      if (cur) { cur = null; tip.classList.add('hidden'); }
+      return;
+    }
     const c = getContent(el);
     if (!c) return;
     cur = el;
@@ -43,7 +51,13 @@ export function bindTooltips(
     tip.classList.remove('hidden');
     place(e);
   });
-  container.addEventListener('mousemove', (e) => { if (cur) place(e); });
+  container.addEventListener('mousemove', (e) => {
+    if (!cur) return;
+    // The anchor was torn out by a re-render: hide rather than trail the cursor.
+    // (The next mouseover re-shows it if the pointer is over the rebuilt target.)
+    if (!cur.isConnected) { cur = null; tip.classList.add('hidden'); return; }
+    place(e);
+  });
   container.addEventListener('mouseout', (e) => {
     const to = e.relatedTarget as HTMLElement | null;
     if (cur && (!to || !cur.contains(to))) { cur = null; tip.classList.add('hidden'); }
