@@ -287,6 +287,23 @@ const nodes: PassiveNode[] = [
   { id: "break_the_line", name: "Break the Line", description: "20% increased poise damage; breaking an enemy's poise grants Breaker's Momentum", kind: "notable", x: 700, y: 640, mods: [mod("poiseDamage", "increased", 0.2), mod("proc_breakers_momentum", "flat", 1)], links: ["brz_n2"] },
   { id: "eva_pr1", name: "Second Wind", description: "+3 life gained on evade; 40% chance on evade to catch your breath (heal)", kind: "notable", x: 600, y: 90, mods: [mod("lifeOnEvade", "flat", 3), mod("proc_second_wind", "flat", 0.4)], links: ["node_5"] },
   { id: "stored_lightning", name: "Stored Lightning", description: "+15 maximum energy shield; your energy shield breaking releases a Capacitor Burst, and half the time a Phase Surge", kind: "notable", x: 150, y: 140, mods: [mod("energyShield", "flat", 15), mod("proc_capacitor_burst", "flat", 1), mod("proc_phase_surge", "flat", 0.5)], links: ["node_21"] },
+  // --- DEMO CONSTELLATION, round two: every shape the fabric can take.
+  // One-sided gauge (contrast with Fevered Blood's paired bargain):
+  { id: "venom_focus", name: "Venom Focus", description: "For each stack of poison on YOU: 2% increased damage dealt (and nothing else — the poison is fuel, not a bargain)", kind: "notable", x: 556, y: 175, mods: [gaugeMod("damage", "increased", 0.02, "status:poison")], links: ["node_13"] },
+  // Charge-count gauge with a tag filter and a MORE multiplier:
+  { id: "furious_momentum", name: "Furious Momentum", description: "1% more physical damage per Fury charge", kind: "notable", x: 760, y: 630, mods: [gaugeMod("damage", "more", 0.01, "charge:fury", ["physical"])], links: ["brz_s4"] },
+  // Resource->damage links ("for every N of X, gain Y"):
+  { id: "iron_sinews", name: "Iron Sinews", description: "Gain 1 added physical damage with melee skills per 100 armor", kind: "notable", x: 540, y: 740, mods: [linkMod("addedPhysical", "armor", 0.01, ["melee"])], links: ["war_s4"] },
+  { id: "blood_arcana", name: "Blood Arcana", description: "Gain 1 added chaos damage with spells per 50 maximum life", kind: "notable", x: 360, y: 390, mods: [linkMod("addedChaos", "life", 0.02, ["spell"])], links: ["attr_vit"] },
+  // The break-less third pool + its fortify refill:
+  { id: "enduring_bulwark", name: "Enduring Bulwark", description: "+40 maximum endurance; blocking banks endurance (Bastion)", kind: "notable", x: 452, y: 700, mods: [mod("endurance", "flat", 40), mod("proc_bastion_fortify", "flat", 1)], links: ["war_s3"] },
+  // Skill-gated procs, both cast disciplines (the two variants are one flag apart):
+  { id: "radiant_reprisal_n", name: "Radiant Reprisal", description: "Sanctified Strike: 25% chance on hit (once per swing) to bloom after 0.5s — healing allies and burning enemies in the circle", kind: "notable", x: 600, y: 920, mods: [mod("proc_radiant_reprisal", "flat", 0.25)], links: ["cl_lreg_p2"] },
+  { id: "radiant_cascade_n", name: "Radiant Cascade", description: "Sanctified Strike: 15% chance per target struck to host its own smaller bloom", kind: "notable", x: 708, y: 930, mods: [mod("proc_radiant_cascade", "flat", 0.15)], links: ["node_71"] },
+  // On-kill rhythm + sustain:
+  { id: "executioners_rhythm_n", name: "Executioner's Rhythm", description: "+8 life gained on kill; kills tick your cooldowns down 1.5s", kind: "notable", x: 835, y: 700, mods: [mod("lifeOnKill", "flat", 8), mod("proc_executioners_rhythm", "flat", 1)], links: ["cl_phys_p0"] },
+  // Culling keystone:
+  { id: "reapers_due", name: "Reaper's Due", description: "KEYSTONE: your hits EXECUTE enemies at or below 10% of their maximum life", kind: "keystone", x: 648, y: 726, mods: [mod("cullThreshold", "flat", 0.1)], links: ["cl_melee_c"] },
 ];
 
 // --- Exports -----------------------------------------------------------------

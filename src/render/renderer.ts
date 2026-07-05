@@ -3629,6 +3629,16 @@ export class Renderer {
         -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / p.maxPoise(), 0, 1));
       ctx.stroke();
     }
+    // ENDURANCE (opt-in pool): the fortify-green outermost ring — binary
+    // protection, so the ring simply IS or ISN'T there.
+    if (p.maxEndurance() > 0) {
+      ctx.strokeStyle = '#a8c86a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(lifeX, orbY, orbR + 21, -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * clamp(p.endurance / p.maxEndurance(), 0, 1));
+      ctx.stroke();
+    }
     this.drawOrb(manaX, orbY, orbR, p.maxMana() > 0 ? p.mana / p.maxMana() : 0,
       '#2858b8', '#101848', `${Math.ceil(p.mana)}`, 'Mana',
       p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
