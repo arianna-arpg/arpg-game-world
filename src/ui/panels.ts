@@ -143,6 +143,11 @@ export class UI {
   /** True while the Escape menu / rebind overlay is up — gameplay input pauses. */
   escapeMenuOpen = false;
   bookTab: 'known' | 'skills' | 'gems' = 'known';
+  /** The tab the skill book last RENDERED — compared against bookTab at the next
+   *  render so scroll restores only within the same tab (a switch starts at top).
+   *  Comparing against bookTab itself is vacuous: the tab click mutates it before
+   *  refreshSkillBook runs, so the old tab's offset bled into the new tab. */
+  private lastBookTab: 'known' | 'skills' | 'gems' | null = null;
   /** DEV passive-tree editor hook: invoked at the end of every refreshTree so the
    *  editor can re-attach its select/drag/link handlers to the freshly-drawn SVG
    *  (set by mountPassiveEditor when DEV.passiveTreeEditor is on; else unused). */
@@ -275,6 +280,9 @@ export class UI {
     this.hideAll(); // close whatever opened it (start menu / class select / …) so it never overlaps
     const acc = this.getAccount();
     const render = (): void => {
+      // A purchase re-renders in place — keep the list where the player left it
+      // (the bought card is usually mid-list; snapping to top loses their spot).
+      const prevScroll = this.accountScreen.querySelector<HTMLElement>('.vault-body')?.scrollTop ?? 0;
       const avail = availableUnlocks(acc);
       const owned = allUnlockables().filter(u => isUnlockOwned(acc, u));
       const cards = avail.length === 0
@@ -312,6 +320,8 @@ export class UI {
           ${owned.length ? `<h3 class="vault-sub">Owned</h3><div class="unlock-grid">${ownedCards}</div>` : ''}
           <div class="acct-btns"><button id="acct-close">Back</button></div>
         </div>`;
+      const bodyEl = this.accountScreen.querySelector<HTMLElement>('.vault-body');
+      if (bodyEl) bodyEl.scrollTop = prevScroll;
       this.accountScreen.querySelectorAll<HTMLElement>('[data-unlock]').forEach(btn => {
         btn.addEventListener('click', () => {
           const u = availableUnlocks(acc).find(x => x.id === btn.dataset.unlock);
@@ -571,7 +581,7 @@ export class UI {
     // co-op client (which re-renders this panel whenever its meta re-replicates)
     // would yank the list back to the top on every scroll attempt.
     const prevScroll = this.skillBook.querySelector<HTMLElement>('.book-body')?.scrollTop ?? 0;
-    const prevTab = this.bookTab;
+    const sameTab = this.lastBookTab === this.bookTab;
 
     this.skillBook.innerHTML = `
       <div class="book-head">
@@ -588,7 +598,8 @@ export class UI {
 
     // Restore the prior scroll offset (same tab only — a tab SWITCH starts at top).
     const bodyEl = this.skillBook.querySelector<HTMLElement>('.book-body');
-    if (bodyEl && this.bookTab === prevTab) bodyEl.scrollTop = prevScroll;
+    if (bodyEl && sameTab) bodyEl.scrollTop = prevScroll;
+    this.lastBookTab = this.bookTab;
 
     this.skillBook.querySelectorAll<HTMLButtonElement>('.book-tab').forEach(btn => {
       btn.addEventListener('click', () => {
