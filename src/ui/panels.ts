@@ -10,8 +10,9 @@ import { clamp } from '../core/math';
 import { DEV } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
-  type AttributeId,
+  type AttributeId, type DamageType,
 } from '../engine/stats';
+import { resistValue } from '../engine/damage';
 import {
   effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel, supportFitsInst, supportMaxLevel,
   type SkillDef, type SkillInstance,
@@ -42,12 +43,19 @@ const PKG_FALLBACK_COLOR = '#888';
 const SHEET_STATS = [
   'life', 'lifeRegen', 'lifeRegenPct', 'mana', 'manaRegen', 'manaRegenPct', 'moveSpeed',
   'attackSpeed', 'castSpeed', 'accuracy', 'evasion', 'armor',
-  'blockChance', 'guardStrength', 'energyShield', 'manaShield',
+  'poise', 'poiseDR', 'insight', 'insightDR', 'weight',
+  'blockChance', 'guardStrength', 'energyShield', 'esDotResist', 'manaShield',
   'critChance', 'critMulti',
   'fireRes', 'coldRes', 'lightningRes', 'chaosRes',
   'aoeRadius', 'effectDuration', 'cooldownRecovery',
   'minionDamage', 'minionLife',
 ];
+
+/** Resistance rows display the EFFECTIVE (soft/hard-capped) value, with the
+ *  raw overcap alongside when it exceeds the cap (shred insurance). */
+const SHEET_RES: Record<string, DamageType> = {
+  fireRes: 'fire', coldRes: 'cold', lightningRes: 'lightning', chaosRes: 'chaos',
+};
 
 export function meetsRequirements(world: World, def: SkillDef): boolean {
   if (!def.requirements) return true;
@@ -218,7 +226,7 @@ export class UI {
         ${locked ? 'style="opacity:.5"' : ''}>
         <div class="cname" style="color:${c.color}">${c.name}</div>
         <div class="cdesc">${c.description}</div>
-        <div class="cattrs">${ATTRIBUTE_IDS.map(a =>
+        <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (c.attributes[a] ?? 0) > 0).map(a =>
           `${ATTRIBUTES[a].short} ${c.attributes[a]}`).join(' &nbsp; ')}</div>
         ${c.innateText ? `<div class="cskills">Innate: ${c.innateText}</div>` : ''}
         ${locked ? '<div class="class-lock">🔒 Unlock more Class Slots in the Vault</div>' : ''}
@@ -331,11 +339,12 @@ export class UI {
     const m = world.meta;
 
     const attrRows = ATTRIBUTE_IDS.map(id => {
-      const bonus = m.attrs[id] - m.baseAttrs[id];
+      const total = m.attrs[id] ?? 0;
+      const bonus = total - (m.baseAttrs[id] ?? 0);
       return `
       <div class="attr-row" title="${ATTRIBUTES[id].description}">
         <span>${ATTRIBUTES[id].label}</span>
-        <span class="val">${m.attrs[id]}
+        <span class="val">${total}
           ${bonus > 0 ? `<span style="color:#c8a84b;font-size:10px">(+${bonus} tree)</span>` : ''}
         </span>
       </div>`;
@@ -343,10 +352,15 @@ export class UI {
 
     const statRows = SHEET_STATS.map(id => {
       const def = STAT_DEFS[id];
-      const v = p.sheet.get(id);
-      const text = def.percent ? `${Math.round(v * 100)}%`
+      const resType = SHEET_RES[id];
+      const raw = p.sheet.get(id);
+      const v = resType ? resistValue(p, resType) : raw;
+      let text = def.percent ? `${Math.round(v * 100)}%`
         : def.base === 1 ? `${Math.round(v * 100)}%`     // multiplier-style stats
         : (Math.round(v * 10) / 10).toString();
+      if (resType && raw > v + 0.0001) {
+        text += ` <span style="color:#8a8678;font-size:10px">(${Math.round(raw * 100)}% raw)</span>`;
+      }
       return `<div class="stat-row"><span>${def.label}</span><span class="val">${text}</span></div>`;
     }).join('');
 

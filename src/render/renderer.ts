@@ -2927,6 +2927,17 @@ export class Renderer {
       ctx.fillStyle = '#e8f0f8';
       ctx.fillRect(x - bw / 2, y - a.radius - 16, bw * Math.min(1, a.absorb / 60), 2.5);
     }
+    // POISE sliver (bronze): shown once the break-bar is DENTED — full bars
+    // stay invisible so ordinary mobs read clean. A broken bar dims while
+    // it climbs back to the re-arm line.
+    if (a !== world.player) {
+      const mp = a.maxPoise();
+      if (mp > 0 && a.poise < mp - 0.5) {
+        const bw = a.radius * 2.2;
+        ctx.fillStyle = a.poiseBroken ? '#7a6438' : '#d8b06a';
+        ctx.fillRect(x - bw / 2, y - a.radius - 19, bw * clamp(a.poise / mp, 0, 1), 2.5);
+      }
+    }
 
     // Townsfolk wear their names.
     if (a.team === 'player' && a.defId?.startsWith('townsfolk')) {
@@ -3608,9 +3619,31 @@ export class Renderer {
       ctx.arc(lifeX, orbY, orbR + 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.absorb / 60));
       ctx.stroke();
     }
+    // POISE: a bronze arc outside the tank layers — dims while broken so
+    // the lapse of its protection is readable at a glance.
+    if (p.maxPoise() > 0) {
+      ctx.strokeStyle = p.poiseBroken ? 'rgba(216,176,106,0.35)' : '#d8b06a';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(lifeX, orbY, orbR + 16, -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / p.maxPoise(), 0, 1));
+      ctx.stroke();
+    }
     this.drawOrb(manaX, orbY, orbR, p.maxMana() > 0 ? p.mana / p.maxMana() : 0,
       '#2858b8', '#101848', `${Math.ceil(p.mana)}`, 'Mana',
       p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
+    // INSIGHT wraps the MANA orb (the agility resource keeps the agile
+    // company): a teal arc whose BRIGHTNESS breathes with momentum — full
+    // glow at a sprint, fading over the taper once you plant.
+    if (p.maxInsight() > 0) {
+      const momentum = p.insightMomentum();
+      ctx.strokeStyle = `rgba(106,216,184,${(0.3 + 0.7 * momentum).toFixed(2)})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(manaX, orbY, orbR + 6, -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * clamp(p.insight / p.maxInsight(), 0, 1));
+      ctx.stroke();
+    }
 
     // Environmental-survival meters (breath underwater; future heat/cold) — tucked
     // under the mana orb, shown only while a resource is below max (i.e. active).
