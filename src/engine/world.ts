@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
+import { DiscIndex } from './spatial';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, type ActiveStatus } from './status';
 import { Actor, type BrainPhase, type CastingState, type Team } from './actor';
@@ -65,7 +66,7 @@ import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
-import { regionKind, survivalResource, doodadGroundIds } from '../world/regions';
+import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../world/regions';
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt } from '../world/dimensions';
@@ -1452,6 +1453,19 @@ export class World {
   zone: ZoneDef = this.zoneMap[START_ZONE];
   arena: Bounds = makeArena(this.zoneMap[START_ZONE]);
   doodads: Doodad[] = [];
+  /** Spatial index over `doodads` (see spatial.ts) — the O(1) candidate set
+   *  behind movement clamping, projectile flight, and ground sensing. Rebuilt
+   *  lazily whenever the list's identity/length changes (zone loads, terrain
+   *  patches, breakables) or a mutation site bumps `doodadsRev` (in-place
+   *  splices that don't change the count). Never query `doodads` linearly in
+   *  per-frame code — go through doodadsAt(). */
+  private doodadIdx = new DiscIndex<Doodad>();
+  private doodadIdxArr: Doodad[] | null = null;
+  private doodadIdxLen = -1;
+  private doodadIdxRev = -1;
+  private doodadsRev = 0;
+  /** Frame counter for the amortized unstuck sentinel (updateTerrainEffects). */
+  private terrainTick = 0;
   /** The zone's walkability model (Phase 2), set by a NON-CONVEX layout generator
    *  (rooms/maze/islands). NULL for plains and every existing zone → clampPos and
    *  the spawn samplers take the untouched convex path (zero regression). When
@@ -3322,7 +3336,10 @@ export class World {
         if (k === 0 && leaderRarity !== 'normal') this.promoteRarity(m, leaderRarity);
         m.squadId = squadId;
         m.squadLeader = k === 0;
-        m.pos = this.clampPos(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
+        // findFreeSpot: the jittered point can land deep inside a rock/thicket
+        // blob that clampPos's passes can't escape — a monster BORN embedded
+        // pingpongs against the collision resolve forever (cost + nonsense).
+        m.pos = this.findFreeSpot(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
         this.actors.push(m);
       }
     }
@@ -3345,7 +3362,7 @@ export class World {
         const m = this.createMonster(w.id, Math.max(1, def.level), 'enemy');
         m.squadId = squadId;
         m.squadLeader = k === 0;
-        m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+        m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
         this.actors.push(m);
       }
     }
@@ -6662,6 +6679,7 @@ export class World {
       const sp = samplePoint(this.arena, 90, rand);
       const p = vec(sp.x, sp.y);
       if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
+      if (this.pointInSolid(p.x, p.y, 16)) continue; // never anchor an event/pack inside a rock blob
       const dPlayer = dist(p, this.player.pos);
       let dEvents = Infinity;
       if (spaceFromEvents) for (const a of this.eventAnchors) dEvents = Math.min(dEvents, dist(p, a));
@@ -15525,6 +15543,22 @@ export class World {
    * pips, scale with the stat engine, and anything else can apply them.
    */
   private updateTerrainEffects(dt: number): void {
+    this.terrainTick++;
+    // UNSTUCK SENTINEL (amortized: each actor probed ~every 16 frames). An
+    // actor whose CENTER sits inside a solid — a legacy spawn, a knockback
+    // into a rock blob, a summon minted on a wall — pingpongs against the
+    // collision resolve forever: broken to watch and a per-frame cost. The
+    // probe is one spatial-index bucket; the rescue is a snap to the nearest
+    // free ground. Runs before the grounds early-out (rocks exist in zones
+    // with no ground overlays at all).
+    for (let i = 0; i < this.actors.length; i++) {
+      if (((this.terrainTick + i) & 15) !== 0) continue;
+      const a = this.actors[i];
+      if (a.dead || a.construct || a.leap || a.dash || a.anchored || a.passive) continue;
+      if (!this.pointInSolid(a.pos.x, a.pos.y, -a.radius * 0.3)) continue;
+      const free = this.findFreeSpot(a.pos, a.radius);
+      a.pos.x = free.x; a.pos.y = free.y;
+    }
     const hasGrid = !!this.walk;
     if (this.grounds.length === 0 && !hasGrid) return;
     for (const a of this.actors) {
@@ -17167,7 +17201,7 @@ export class World {
       // (chasms don't — you can shoot across a gap you can't walk) — or
       // BOUNCE it (Galewisp): reflect off the obstacle's normal and fly on.
       if (!dead) {
-        for (const o of this.doodads) {
+        for (const o of this.doodadsAt(p.pos.x, p.pos.y)) {
           if (!blocksProjectiles(o)) continue;
           if (dist(p.pos, o.pos) <= p.radius + o.radius) {
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
@@ -18152,6 +18186,7 @@ export class World {
       const sp = samplePoint(this.arena, 60, rand);
       const p = vec(sp.x, sp.y);
       if (this.walk && !this.walk.isWalkable(p.x, p.y)) continue; // walk zones: on-mesh only
+      if (this.pointInSolid(p.x, p.y, radius * 0.5)) continue;    // not inside a wall/rock/thicket
       // Zones with plan structures: AMBIENT spawns must not strand inside a
       // sealed interior (a walkable-but-unreachable courtyard would jam clear/
       // wave objectives). Explicit garrison/slot spawns bypass this by design.
@@ -18170,6 +18205,62 @@ export class World {
 
   // ---------------------------------------------------------------- misc ----
 
+  /** The spatial-index candidate set at a point (every doodad whose disc,
+   *  grown by the index pad, covers x/y). Rebuilds the index lazily when the
+   *  doodad list changed — see the field doc. THE way per-frame code touches
+   *  doodads; the full-list scans it replaced were the caldera frame drops. */
+  doodadsAt(x: number, y: number): readonly Doodad[] {
+    if (this.doodadIdxArr !== this.doodads || this.doodadIdxLen !== this.doodads.length
+      || this.doodadIdxRev !== this.doodadsRev) {
+      this.doodadIdx.build(this.doodads);
+      this.doodadIdxArr = this.doodads;
+      this.doodadIdxLen = this.doodads.length;
+      this.doodadIdxRev = this.doodadsRev;
+    }
+    return this.doodadIdx.at(x, y);
+  }
+
+  /** In-place doodad mutations that DON'T change the list length (kind swaps,
+   *  radius edits) must call this so the index re-syncs. Pushes and splices
+   *  are covered by the length check and need nothing. */
+  markDoodadsChanged(): void { this.doodadsRev++; }
+
+  /** The blocking doodad whose disc (± margin) covers this point, if any —
+   *  bridged chasm spans excepted, exactly like clampPos. Powers spawn
+   *  placement rejection and the unstuck sentinel. */
+  private pointInSolid(x: number, y: number, margin = 0): Doodad | null {
+    for (const o of this.doodadsAt(x, y)) {
+      if (!blocksMovement(o)) continue;
+      const dx = x - o.pos.x, dy = y - o.pos.y;
+      const reach = o.radius + margin;
+      if (dx * dx + dy * dy >= reach * reach) continue;
+      if (o.kind === 'chasm' && this.bridges.some(b => dist(vec(x, y), b.pos) <= b.radius)) continue;
+      return o;
+    }
+    return null;
+  }
+
+  /** A clear stand-spot at/near `at`: bounds+walk clamped, then — if the point
+   *  is still EMBEDDED in a solid (deep inside a rock blob clampPos's passes
+   *  can't escape) — probe outward rings for the nearest free, walkable spot.
+   *  Spawn placement and the unstuck sentinel both come through here, so an
+   *  actor can never be born into (or left inside) a wall to pingpong forever. */
+  findFreeSpot(at: Vec2, radius: number): Vec2 {
+    const p = this.clampPos(vec(at.x, at.y), radius);
+    if (!this.pointInSolid(p.x, p.y, radius * 0.4)) return p;
+    for (let ring = 1; ring <= 7; ring++) {
+      const rr = ring * 55;
+      for (let k = 0; k < 10; k++) {
+        const a = (k / 10) * Math.PI * 2 + ring * 0.73;
+        const q = this.clampPos(vec(at.x + Math.cos(a) * rr, at.y + Math.sin(a) * rr), radius);
+        if (this.pointInSolid(q.x, q.y, radius * 0.4)) continue;
+        if (this.walk && !this.walk.isWalkable(q.x, q.y)) continue;
+        return q;
+      }
+    }
+    return p; // no clear ground within ~385u — keep the clamp (never loop forever)
+  }
+
   /**
    * Clamp to the zone bounds, then push out of blocking terrain (radial
    * slide). Chasms don't block where a bridge spans them — and because
@@ -18183,9 +18274,11 @@ export class World {
     // + walk confinement (a flicker/teleport lands past rocks, walls, the void).
     if (!opts?.disp?.ignoreConfine) {
     // Iterate: escaping one circle of a blob can land inside its neighbor.
+    // Candidates come from the spatial index, re-queried per pass (a push can
+    // slide the point toward discs the first bucket didn't see).
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
-      for (const o of this.doodads) {
+      for (const o of this.doodadsAt(out.x, out.y)) {
         if (!blocksMovement(o)) continue;
         const d = dist(out, o.pos);
         const minD = o.radius + radius;
@@ -18383,17 +18476,25 @@ export class World {
    */
   groundAt(p: Vec2): { kind: string; deep: boolean } | null {
     if (this.bridges.some(b => dist(p, b.pos) <= b.radius)) return null;
-    let water: { kind: string; deep: boolean } | null = null;
     let soft: { kind: string; deep: boolean } | null = null;
-    for (const d of this.grounds) {
+    // WATER DEPTH is BODY-aware, not per-stamp: deep = penetrating past the
+    // configured inset of ANY covering non-ford disc. A lake laid down as many
+    // overlapping discs reads as one contiguous body — the seam between two
+    // discs is as deep as their centers (it used to strobe shallow↔deep per
+    // disc while wading across) — while the true shore ring stays wadeable.
+    // A ford disc covering the point forces wading depth outright: shallows
+    // are shallow no matter how deep the channel they cross.
+    let inWater = false, ford = false, pen = 0;
+    for (const d of this.doodadsAt(p.x, p.y)) {
       const dd = dist(p, d.pos);
       if (dd > d.radius) continue;
       if (d.kind === 'bog' || d.kind === 'swamp' || d.kind === 'ice' || d.kind === 'tentacle_field') {
         return { kind: d.kind, deep: false }; // the nastiest grounds win outright
       }
       if (d.kind === 'water') {
-        const deep = !d.shallow && dd < d.radius * 0.55;
-        if (!water || (deep && !water.deep)) water = { kind: 'water', deep };
+        inWater = true;
+        if (d.shallow) ford = true;
+        else pen = Math.max(pen, d.radius - dd);
       } else if (d.kind === 'mud' || d.kind === 'sand') {
         soft = { kind: d.kind, deep: false };
       } else if (d.kind === 'brush' && !soft) {
@@ -18402,7 +18503,8 @@ export class World {
         soft = { kind: 'road', deep: false }; // benign — only when no nastier ground covers the point
       }
     }
-    return water ?? soft;
+    if (inWater) return { kind: 'water', deep: !ford && pen > LIQUID_CFG.deepInset };
+    return soft;
   }
 
   /** CLIENT terrain rebuild: `bridges`/`grounds` aren't shipped as their own arrays,

@@ -195,6 +195,17 @@ export function doodadGroundIds(): string[] {
       || REGION_KINDS[id].moveScale !== undefined));
 }
 
+/** LIQUID DEPTH tuning for doodad-disc water (groundAt). `deepInset` is how far
+ *  past a covering disc's rim (its penetration, in world units) a point must be
+ *  before the water counts as DEEP: the shore ring shallower than this wades,
+ *  everything further in swims. Body-aware by construction — the seam between
+ *  two overlapping stamped discs measures penetration into EITHER, so a lake
+ *  built from many discs never strobes wade↔swim mid-crossing. Tuned to match
+ *  the old per-disc 0.55×radius feel on typical pool/river stamp sizes. */
+export const LIQUID_CFG = {
+  deepInset: 22,
+};
+
 // --- DEFAULT ROWS -----------------------------------------------------------
 // Grid substrate kinds (no terrain effect; pure collision policy).
 registerRegion({ id: 'ground', walkable: true, blocks: false });
