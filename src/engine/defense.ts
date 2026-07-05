@@ -101,6 +101,22 @@ export const DEFENSE_CFG = {
     graceWindow: 0.15,
   },
 
+  /** PROCS — the combat-wide governor for triggered effects (data lives in
+   *  src/data/procs.ts; the RULES live here).
+   *  - depthFalloff: each proc LAYER rolls at this multiple of its chance —
+   *    geometric damping, so even a max-depth cascade converges instead of
+   *    exploding. Layer 0 (real casts) is unscaled.
+   *  - maxExtraDepth: the hard ceiling on the procDepth stat — the absolute
+   *    lid on proc-in-proc chains no investment can lift.
+   *  - ppmCatchup: a PPM proc's per-attempt chance grows with time since
+   *    the last attempt, but never banks more than this many average
+   *    intervals — bounded bad-luck protection, no guaranteed openers. */
+  procs: {
+    depthFalloff: 0.5,
+    maxExtraDepth: 2,
+    ppmCatchup: 4,
+  },
+
   /** WEIGHT — how shovable a body is. Knockback impulses and crowd
    *  separation divide by the victim's `weight` stat (heavy things barely
    *  budge; light things fly). Monsters default their weight from body

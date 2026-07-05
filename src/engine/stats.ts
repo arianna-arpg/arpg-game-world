@@ -243,6 +243,13 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  life (the classic culling strike). Hard-capped well short of half. */
   cullThreshold:  { label: 'Culling Threshold', base: 0, min: 0, max: 0.3, percent: true },
 
+  /** PROC CHAIN DEPTH: how many LAYERS of proc-in-proc your triggers may
+   *  run (0 = procs fire from real actions only — the classic rule). Each
+   *  extra layer rolls at DEFENSE_CFG.procs.depthFalloff of its chance,
+   *  and the hard ceiling (maxExtraDepth) is absolute — the proc-combat
+   *  archetype's investment lane, exploit-proof by geometry. */
+  procDepth:      { label: 'Proc Chain Depth', base: 0, min: 0, max: DEFENSE_CFG.procs.maxExtraDepth },
+
   // BODY MASS & SUBSTANCE
   /** How shovable this body is: knockback and crowd separation divide by
    *  it. Monsters default it from body radius (DEFENSE_CFG.weight). */

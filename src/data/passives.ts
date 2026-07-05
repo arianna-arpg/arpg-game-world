@@ -304,6 +304,9 @@ const nodes: PassiveNode[] = [
   { id: "executioners_rhythm_n", name: "Executioner's Rhythm", description: "+8 life gained on kill; kills tick your cooldowns down 1.5s", kind: "notable", x: 835, y: 700, mods: [mod("lifeOnKill", "flat", 8), mod("proc_executioners_rhythm", "flat", 1)], links: ["cl_phys_p0"] },
   // Culling keystone:
   { id: "reapers_due", name: "Reaper's Due", description: "KEYSTONE: your hits EXECUTE enemies at or below 10% of their maximum life", kind: "keystone", x: 648, y: 726, mods: [mod("cullThreshold", "flat", 0.1)], links: ["cl_melee_c"] },
+  // The proc-combat archetype's gate: one extra proc LAYER (deeper layers
+  // roll at half rate — DEFENSE_CFG.procs.depthFalloff keeps it convergent).
+  { id: "chain_reaction", name: "Chain Reaction", description: "KEYSTONE: your triggered effects can themselves trigger effects (one extra layer; deeper layers fire at half rate)", kind: "keystone", x: 95, y: 205, mods: [mod("procDepth", "flat", 1)], links: ["stored_lightning"] },
 ];
 
 // --- Exports -----------------------------------------------------------------

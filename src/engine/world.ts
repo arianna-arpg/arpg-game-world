@@ -12400,7 +12400,7 @@ export class World {
         // their own 'evade' procs (global sheet — golden rule 3).
         const mend = target.sheet.get('lifeOnEvade');
         if (mend > 0) target.healBy(mend);
-        if (depth === 0) this.rollOwnProcs(target, 'evade');
+        this.rollOwnProcs(target, 'evade', { depth });
         return; // an evaded attack applies nothing
       }
       if (result.blocked) {
@@ -12409,7 +12409,7 @@ export class World {
         if (depth === 0) this.tapCharges(target, 'block');
         const mend = target.sheet.get('lifeOnBlock');
         if (mend > 0) target.healBy(mend);
-        if (depth === 0) this.rollOwnProcs(target, 'block');
+        this.rollOwnProcs(target, 'block', { depth });
         // blockPower < 1 leaks CHIP damage through (result.total) — the
         // chip can finish a wounded blocker.
         if (target.life <= 0 && !target.dead) this.kill(target);
@@ -12517,15 +12517,13 @@ export class World {
           pos: vec(target.pos.x, target.pos.y), radius: target.radius + 12,
           color: '#d8b06a', life: 0.3, maxLife: 0.3,
         });
-        if (depth === 0) {
-          this.rollOwnProcs(caster, 'poiseBreakDealt', { tags: packet.tags, extra, inst, target });
-          this.rollOwnProcs(target, 'poiseBroken');
-        }
+        this.rollOwnProcs(caster, 'poiseBreakDealt', { tags: packet.tags, extra, inst, target, depth });
+        this.rollOwnProcs(target, 'poiseBroken', { depth });
       }
       // The hit emptied the shield — the victim's esBreak reactions fire.
       if (target.esBroke) {
         target.esBroke = false;
-        if (depth === 0) this.rollOwnProcs(target, 'esBreak');
+        this.rollOwnProcs(target, 'esBreak', { depth });
       }
       // Striking the thorned costs blood (thorns / reflect / Nettles).
       this.applyThorns(target, caster, dealt);
@@ -12883,7 +12881,7 @@ export class World {
     const elite = target.rarity === 'rare' || target.rarity === 'champion'
       || target.rarity === 'crowned'
       || !!(target.defId && MONSTERS[target.defId]?.boss);
-    if (dealt > 0 && depth === 0) {
+    if (dealt > 0 && depth < this.procDepthAllowed(caster)) {
       const eliteFactor = elite
         ? caster.sheet.get('killProcOnHit', tags, extra) : 0;
       for (const proc of PROC_LIST) {
@@ -12891,14 +12889,43 @@ export class World {
         // arrested knockbacks; statusApply procs at status application).
         if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
         if (!this.procGates(caster, proc, inst)) continue;
-        let procChance = caster.sheet.get(procStat(proc.id), tags, extra);
+        let procChance = this.procChance(caster, proc, depth, tags, extra);
         if (proc.trigger === 'kill' && !lethal) {
           if (eliteFactor <= 0) continue;
           procChance *= eliteFactor;
         }
-        if (procChance <= 0 || !chance(Math.min(0.95, procChance))) continue;
+        if (procChance <= 0 || !chance(procChance)) continue;
         if (!this.procReady(caster, proc)) continue;
         this.executeProc(proc, caster, inst, target);
+      }
+    }
+    // MINION CARRY (golden rule 6): the minion's landed hit rolls its
+    // OWNER's minionCarry procs, read through the SUMMONING skill's context
+    // — Summon Phantasm socketed in Summon Skeleton makes the skeleton's
+    // blows conjure phantasms FOR THE PLAYER, up to the player's caps and
+    // clocks (ICD / PPM / oncePerCast all live on the owner).
+    if (dealt > 0 && caster.owner && !caster.owner.dead) {
+      const owner = caster.owner;
+      const carryInst = caster.summonInst
+        ?? owner.skills.find(s => s?.def.id === caster.sourceSkillId) ?? null;
+      if (carryInst && depth < this.procDepthAllowed(owner)) {
+        const cTags = skillContextTags(carryInst.def);
+        const cExtra = instanceMods(carryInst);
+        const ownerElite = elite
+          ? owner.sheet.get('killProcOnHit', cTags, cExtra) : 0;
+        for (const proc of PROC_LIST) {
+          if (!proc.minionCarry) continue;
+          if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
+          if (!this.procGates(owner, proc, carryInst)) continue;
+          let cc = this.procChance(owner, proc, depth, cTags, cExtra);
+          if (proc.trigger === 'kill' && !lethal) {
+            if (ownerElite <= 0) continue;
+            cc *= ownerElite;
+          }
+          if (cc <= 0 || !chance(cc)) continue;
+          if (!this.procReady(owner, proc)) continue;
+          this.executeProc(proc, owner, carryInst, target);
+        }
       }
     }
 
@@ -12984,8 +13011,8 @@ export class World {
     for (const proc of PROC_LIST) {
       if (proc.trigger !== 'collision') continue;
       if (!this.procGates(caster, proc, inst)) continue;
-      const c = caster.sheet.get(procStat(proc.id), tags, extra);
-      if (c <= 0 || !chance(Math.min(0.95, c))) continue;
+      const c = this.procChance(caster, proc, 0, tags, extra);
+      if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(caster, proc)) continue;
       this.executeProc(proc, caster, inst, target);
     }
@@ -12998,7 +13025,7 @@ export class World {
     caster: Actor, inst: SkillInstance, target: Actor, statusId: string,
     tags: Set<SkillTag>, extra: Modifier[], depth: number,
   ): void {
-    if (depth > 0) return;
+    if (depth >= this.procDepthAllowed(caster)) return;
     for (const proc of PROC_LIST) {
       if (proc.trigger !== 'statusApply') continue;
       if (proc.status !== undefined) {
@@ -13006,8 +13033,8 @@ export class World {
         if (!list.includes(statusId)) continue;
       }
       if (!this.procGates(caster, proc, inst)) continue;
-      const c = caster.sheet.get(procStat(proc.id), tags, extra);
-      if (c <= 0 || !chance(Math.min(0.95, c))) continue;
+      const c = this.procChance(caster, proc, depth, tags, extra);
+      if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(caster, proc)) continue;
       this.executeProc(proc, caster, inst, target);
     }
@@ -13037,20 +13064,55 @@ export class World {
     return true;
   }
 
+  /** How many proc LAYERS this owner may run: 1 (real actions only) plus
+   *  the procDepth stat, under the absolute lid. An event at depth d rolls
+   *  procs only while d < this. */
+  private procDepthAllowed(owner: Actor): number {
+    return 1 + Math.min(DEFENSE_CFG.procs.maxExtraDepth,
+      Math.floor(owner.sheet.get('procDepth')));
+  }
+
+  /** The effective roll chance for one attempt, honouring the def's RATE
+   *  DISCIPLINE and the depth falloff:
+   *  - chance procs: the stat is the chance;
+   *  - ppm procs: the stat multiplies the listed rate, and the per-attempt
+   *    chance scales with time since the LAST attempt (catch-up bounded) —
+   *    fast and slow skills converge on the same procs/minute;
+   *  - every layer past 0 rolls at depthFalloff^depth (golden rule 1). */
+  private procChance(
+    owner: Actor, proc: ProcDef, depth: number,
+    tags?: Set<SkillTag>, extra?: readonly Modifier[],
+  ): number {
+    let c = owner.sheet.get(procStat(proc.id), tags, extra as Modifier[] | undefined);
+    if (c <= 0) return 0;
+    if (proc.ppm) {
+      const mean = 60 / proc.ppm;
+      const last = owner.procAttemptAt.get(proc.id);
+      const dt = Math.min(mean * DEFENSE_CFG.procs.ppmCatchup,
+        last === undefined ? mean : this.time - last);
+      owner.procAttemptAt.set(proc.id, this.time);
+      c = c * proc.ppm * dt / 60;
+    }
+    if (depth > 0) c *= Math.pow(DEFENSE_CFG.procs.depthFalloff, depth);
+    return Math.min(0.95, c);
+  }
+
   /** Roll an actor's OWN procs for a self-owned trigger (block / evade /
    *  esBreak / poiseBroken / poiseBreakDealt). Defensive triggers query the
    *  GLOBAL sheet (passives, buffs, worn equipMods) — golden rule 3; the
    *  attacker-owned poiseBreakDealt may pass its skill context in. */
   rollOwnProcs(
     owner: Actor, trigger: ProcDef['trigger'],
-    opts?: { tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor },
+    opts?: { tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor; depth?: number },
   ): void {
     if (owner.dead) return;
+    const depth = opts?.depth ?? 0;
+    if (depth >= this.procDepthAllowed(owner)) return;
     for (const proc of PROC_LIST) {
       if (proc.trigger !== trigger) continue;
       if (!this.procGates(owner, proc, opts?.inst ?? null)) continue;
-      const c = owner.sheet.get(procStat(proc.id), opts?.tags, opts?.extra);
-      if (c <= 0 || !chance(Math.min(0.95, c))) continue;
+      const c = this.procChance(owner, proc, depth, opts?.tags, opts?.extra);
+      if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(owner, proc)) continue;
       this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null);
     }
@@ -13099,6 +13161,12 @@ export class World {
           enemy.life -= landed;
           enemy.hitFlash = 0.15;
           this.text(enemy.pos, Math.round(landed).toString(), proc.color, 12);
+          // The burst emptied a shield: the victim's esBreak reactions
+          // fire at proc depth 1 (this damage IS proc output).
+          if (enemy.esBroke) {
+            enemy.esBroke = false;
+            this.rollOwnProcs(enemy, 'esBreak', { depth: 1 });
+          }
           if (enemy.life <= 0 && !enemy.dead) this.kill(enemy);
         }
         break;
@@ -13216,6 +13284,10 @@ export class World {
           a.life -= landed;
           a.hitFlash = 0.15;
           this.text(a.pos, Math.round(landed).toString(), b.color, 12);
+          if (a.esBroke) {
+            a.esBroke = false;
+            this.rollOwnProcs(a, 'esBreak', { depth: 1 });
+          }
           if (a.life <= 0 && !a.dead) this.kill(a);
         }
       }

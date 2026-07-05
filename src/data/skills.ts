@@ -268,6 +268,23 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 2, keepDistance: 240 },
   },
 
+  // The PHANTASM's own volley (see monsters.ts `phantasm` + the
+  // summon_phantasm proc/support): a spectral dart the brief spirit lashes
+  // out while it persists. Costed at zero and AI-hinted for its wielder.
+  phantasm_bolt: {
+    id: 'phantasm_bolt', name: 'Phantasmal Bolt',
+    description: 'A dart of pale spirit-stuff. Phantasms throw these; so could you, in theory.',
+    tags: ['spell', 'projectile', 'cold'], color: '#9ad8e8',
+    manaCost: 0, cooldown: 0.4, useTime: 0.45,
+    baseDamage: { cold: [5, 9] },
+    delivery: { type: 'projectile', speed: 380, radius: 7, range: 440 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.15 },
+    ],
+    ai: { range: 400, weight: 2, keepDistance: 200 },
+  },
+
   toxic_cloud: {
     id: 'toxic_cloud', name: 'Toxic Cloud',
     description: 'Conjure a lingering miasma that poisons enemies standing in it.',

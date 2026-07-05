@@ -397,6 +397,10 @@ export class Actor {
   /** oncePerCast bookkeeping: the world time each proc last ROLLED — one
    *  roll per tick, so a multi-target swing can't inflate the chance. */
   procFiredAt = new Map<string, number>();
+  /** PPM clocks: world time of each ppm-proc's last roll ATTEMPT — the
+   *  per-attempt chance scales with the gap, so fast and slow skills
+   *  converge on the same procs-per-minute (ProcDef.ppm). */
+  procAttemptAt = new Map<string, number>();
   /** DAMAGE POOLS (DamagePoolSpec): banked fuel keyed by pool id — fed by
    *  the damage this actor deals, spent by its pool skills. */
   pools = new Map<string, number>();

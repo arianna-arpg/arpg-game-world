@@ -360,6 +360,22 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 0,
   },
 
+  // THE PHANTASM — the summon_phantasm proc's brief raging spirit: a pale
+  // dart-thrower that exists for a few heartbeats and spends them all
+  // throwing. Weightless and phasing (it is barely THERE), so a crowd of
+  // them never bodies anyone off a doorway.
+  phantasm: {
+    id: 'phantasm', name: 'Phantasm',
+    color: '#9ad8e8', shape: 'kite', radius: 10,
+    base: {
+      life: 26, moveSpeed: 165, accuracy: 110, evasion: 60, mana: 0,
+      weight: 0.2, phasing: 1, poise: 0,
+    },
+    skills: ['phantasm_bolt'],
+    xp: 0,
+    noRecall: true,
+  },
+
   skeleton_archer: {
     id: 'skeleton_archer', name: 'Skeleton Archer',
     color: '#d8d0b0', shape: 'ribcage', radius: 12,

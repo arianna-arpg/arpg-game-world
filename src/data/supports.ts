@@ -30,6 +30,33 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- Channeling & guard supports -------------------------------------------
 
+  // SUMMON PHANTASM (the PPM discipline in gem form): the socketed skill's
+  // hits conjure brief raging spirits at ~10 per minute — a strobing
+  // Barrage and a glacial maul FEEL different but spend the same budget.
+  // Socketed into a SUMMON skill, the minions' own blows do the conjuring
+  // for their owner (proc minionCarry — the minion-support seam).
+  summon_phantasm: {
+    id: 'summon_phantasm', name: 'Summon Phantasm',
+    description: 'Hits with this skill summon a brief phantasm (~10/minute, up to 5). In a summon skill, your minions\' hits conjure them for you.',
+    color: '#9ad8e8',
+    mods: [mod('proc_summon_phantasm', 'flat', 1)],
+    perLevel: [mod('proc_summon_phantasm', 'flat', 0.15)], // rate multiplier
+    weight: 6,
+  },
+
+  // SAINTED ASH (the boss-viable on-kill shape): kills with the socketed
+  // skill bloom into a consecrated burst. The engine's killProcOnHit rule
+  // keeps it alive against bosses — on-kill rolls on plain hits vs elite
+  // prey at a fraction, so the gem still matters when nothing dies.
+  sainted_ash: {
+    id: 'sainted_ash', name: 'Sainted Ash',
+    description: 'Kills with this skill bloom after a beat — healing allies and burning enemies in the circle. Also rolls on hits against rare and boss enemies.',
+    color: '#ffe8b0',
+    mods: [mod('proc_sainted_ash', 'flat', 0.4)],
+    perLevel: [mod('proc_sainted_ash', 'flat', 0.06)],
+    weight: 6,
+  },
+
   // THE INTERACTION FABRIC, gem form: attacker-side per-stack scaling vs an
   // afflicted target (the generated damageVs_<status> family) — skill-local,
   // so only the socketed skill hunts the poisoned.

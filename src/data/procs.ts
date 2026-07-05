@@ -10,21 +10,45 @@
 //
 // ...is "melee skills have 25% chance to trigger Brutal Strike".
 //
+// RATE DISCIPLINES — three ways a proc can be paced, chosen per def:
+//  - CHANCE (default): the proc_<id> stat IS the roll chance. Fast skills
+//    proc more often in absolute terms — the classic slot machine.
+//  - 100% + ICD: grant chance 1 and set `icd` — a metronome: fires every
+//    hit until the internal cooldown gates it. Reliable, rhythm-driven.
+//  - PPM (`ppm` field): the def names a procs-per-MINUTE rate; the stat
+//    becomes a MULTIPLIER on it (grant 1 = listed rate, 2 = double). Each
+//    attempt's chance scales with time since the last attempt, so Barrage
+//    and a slow two-hander CONVERGE on the same procs/minute — the feel
+//    differs (many small rolls vs few fat ones), the budget doesn't.
+//
 // GOLDEN RULES (the anti-exploit constitution — engine-enforced):
-//  1. Procs never trigger procs. Proc'd hits execute at depth 1, and every
-//     roll site is depth-0-gated — no loops, no chains, no machine guns.
-//  2. Chance is capped at 95% per roll; a per-proc `icd` (internal cooldown,
-//     seconds) hard-limits frequency however many sources stack the chance.
+//  1. Proc'd actions execute at depth+1, and rolls are DEPTH-GATED: layer
+//     0 (real actions) always rolls; deeper layers require the owner's
+//     procDepth stat (the Chain Reaction archetype), each layer rolls at
+//     DEFENSE_CFG.procs.depthFalloff of its chance (geometric damping),
+//     and maxExtraDepth is an absolute lid. No infinite cascades — but
+//     "built entirely around procs" is now a real, investable build.
+//  2. Chance is capped at 95% per roll; `icd` (internal cooldown, seconds)
+//     hard-limits frequency however many sources stack the chance; PPM
+//     catch-up is bounded (no banked guaranteed openers).
 //  3. DEFENSIVE triggers (block / evade / esBreak / poiseBroken) roll on the
 //     DEFENDER's GLOBAL sheet — passives, buffs, worn equipMods — never on
 //     the attacker's skill context.
-//  4. 'burst' payloads scale from a caster-less BASELINE (flat + perLevel),
-//     never from a skill's rolled damage — a proc can't double-dip a crit.
+//  4. 'burst'/'delayedBurst' payloads scale from a caster-less BASELINE
+//     (flat + perLevel), never from a skill's rolled damage — a proc can't
+//     double-dip a crit.
 //  5. Heals flow through Actor.healBy (healTaken gates them like any heal);
 //     restores respect their pool maxima.
+//  6. MINION CARRY (`minionCarry`): a flagged proc rolls on the OWNER when
+//     their minion lands a hit, read through the SUMMONING skill's context
+//     (its sockets and tags — Summon Phantasm socketed in Summon Skeleton
+//     makes the skeleton's blows conjure phantasms FOR THE PLAYER, up to
+//     the player's caps). Unflagged procs never ride minion hits — the
+//     seam for the full minion-support pass later.
 //
 // To add a proc: register it here, then grant `proc_<id>` chance from any
-// modifier source. No engine changes needed.
+// modifier source — passive node, SUPPORT GEM (skill-local), buff, affix.
+// No engine changes needed.
 // ---------------------------------------------------------------------------
 
 import { mod } from '../engine/stats';
@@ -107,6 +131,13 @@ export interface ProcDef {
   /** INTERNAL COOLDOWN, seconds — the hard frequency limit no amount of
    *  stacked chance can beat (golden rule 2). */
   icd?: number;
+  /** PROCS PER MINUTE: per-attempt chance = stat × ppm × (time since last
+   *  attempt)/60, catch-up bounded — fast and slow skills converge on the
+   *  same rate (see RATE DISCIPLINES above). The stat is a multiplier. */
+  ppm?: number;
+  /** This proc RIDES MINION HITS: it rolls on the minion's OWNER, read
+   *  through the summoning skill's sockets/tags (golden rule 6). */
+  minionCarry?: true;
   effect: ProcEffect;
 }
 
@@ -325,6 +356,35 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'bastion_fortify', name: 'Bastion',
     color: '#a8c86a', trigger: 'block',
     effect: { type: 'fortify', flat: 6, pctMaxLife: 0.02 },
+  },
+
+  // --- Rate-discipline & minion-carry showcases -------------------------------
+
+  // SUMMON PHANTASM — the PPM discipline made visible: ~10 phantasms a
+  // minute whether the socketed skill is a strobing Barrage or a glacial
+  // two-hander (per-attempt chance scales with the gap between attempts).
+  // minionCarry: socketed into a SUMMON skill, the minions' own blows
+  // conjure phantasms FOR THEIR OWNER — the first stone of the wider
+  // minion-support pass.
+  summon_phantasm: {
+    id: 'summon_phantasm', name: 'Phantasm',
+    color: '#9ad8e8', trigger: 'hit', ppm: 10, minionCarry: true,
+    effect: { type: 'summon', monsterId: 'phantasm', duration: 8, max: 5 },
+  },
+
+  // SAINTED ASH — the boss-viable on-kill shape: kills bloom into a
+  // consecrated burst (heals allies, burns enemies). Against ELITE prey
+  // (rare+, bosses) the engine's killProcOnHit rule already lets on-kill
+  // procs roll on plain HITS — so the gem stays alive in the one fight
+  // where nothing dies until the end.
+  sainted_ash: {
+    id: 'sainted_ash', name: 'Sainted Ash',
+    color: '#ffe8b0', trigger: 'kill',
+    effect: {
+      type: 'delayedBurst', delay: 0.35, radius: 110, at: 'target',
+      damage: { type: 'fire', base: 10, perLevel: 2 },
+      healAllies: { base: 6, perLevel: 1.2 },
+    },
   },
 };
 
