@@ -307,9 +307,14 @@ function handleLocalPanels(): void {
   if (world.player.dead || world.player.downed) return;
   const kb = settings.keybinds;
   // Escape toggles the pause/menu (hardwired — never rebindable). While it's up,
-  // gameplay intent is suppressed (readLocalInput returns null).
+  // gameplay intent is suppressed (readLocalInput returns null). An open DWELL
+  // dialog (caravan / toll / sail) is dismissed FIRST and the press stops there —
+  // Esc on a dialog means "close this", not "pause the game on top of it".
   if (input.justPressed('escape')) {
     if (ui.escapeMenuOpen) ui.hideEscapeMenu();
+    else if (ui.caravanOpen) ui.closeCaravan();
+    else if (ui.tollOpen) ui.closeToll();
+    else if (ui.sailOpen) ui.closeSail();
     else { ui.hideAll(); ui.showEscapeMenu(); }
     return;
   }
