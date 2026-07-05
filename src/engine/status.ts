@@ -366,9 +366,17 @@ export function baselineStatusDps(id: string, level: number): number {
 // gem, passive node, future affix — can grant "chance to apply <status> on
 // hit" through the ordinary stat engine. Registered here (not stats.ts) so
 // the stat family always matches the status registry, with no import cycle.
+//
+// `damageVs_<id>` is its attacker-side sibling: increased damage PER STACK
+// of <status> already riding the victim ("8% increased damage per poison
+// stack on the target" is one flat modifier). Bounded by each status's own
+// stack cap — the anti-runaway golden rule comes free with the registry.
 for (const [id, def] of Object.entries(STATUS_DEFS)) {
   STAT_DEFS['apply_' + id] = {
     label: `Chance to apply ${def.label}`, base: 0, min: 0, max: 1, percent: true,
+  };
+  STAT_DEFS['damageVs_' + id] = {
+    label: `Damage vs ${def.label} (per stack)`, base: 0, percent: true,
   };
 }
 

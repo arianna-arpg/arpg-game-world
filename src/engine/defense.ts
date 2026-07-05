@@ -31,6 +31,9 @@ export const DEFENSE_CFG = {
    *  reads through resistValue(), which applies both ceilings at query time. */
   resistance: {
     hardCap: 0.9,
+    /** PENETRATION digs below the cap — but never below this floor, so
+     *  "takes double damage" is reachable and "takes infinite" is not. */
+    floor: -0.75,
   },
 
   /** EVASION — deterministic ENTROPY instead of independent rolls: each
@@ -62,6 +65,13 @@ export const DEFENSE_CFG = {
     drainFlat: 1,
     breakStatus: 'sundered',
     rearmFrac: 0.35,
+    /** The SMOOTH WEAR dial: poiseDR scales with the remaining bar, from
+     *  full reduction at a full bar down to drFloor × DR at a sliver — so
+     *  protection erodes readably as the bar chips instead of vanishing in
+     *  one cliff at the break. 1 restores the old flat behavior; 0 is a
+     *  fully linear fade. The break itself still matters: Sundered lands,
+     *  the CC shrug lapses, and the poise-weight anchor lets go. */
+    drFloor: 0.35,
     /** Bosses hold their ground by default: a poise pool seeded at spawn
      *  when their def declares none (base + perLevel × level). */
     bossBase: 120,
@@ -92,5 +102,10 @@ export const DEFENSE_CFG = {
     min: 0.05,
     refRadius: 14,
     radiusPow: 1.4,
+    /** POISE IS MASS: each point of CURRENT (unbroken) poise multiplies
+     *  effective weight by this much — a poised colossus is an anchor, a
+     *  BROKEN one is suddenly shovable. Actor.effectiveWeight() is the one
+     *  read; pushes and crowd separation both honour it. */
+    perPoise: 0.012,
   },
 } as const;

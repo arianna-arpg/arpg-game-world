@@ -141,12 +141,24 @@ const RES_STAT: Record<DamageType, string | null> = {
  * stat (<elem>ResMax, base 75%, investable), itself ceilinged by the
  * absolute hard cap — so no entity ever becomes immune to a damage type.
  * THE one read every consumer goes through (mitigation, UI, world effects).
+ *
+ * With an attacker present, their tag-filtered PENETRATION applies AFTER
+ * the caps (pen digs below the cap, floored at cfg.resistance.floor) —
+ * the counter to resistance stacking that never re-opens immunity.
  */
-export function resistValue(target: Actor, type: DamageType): number {
+export function resistValue(
+  target: Actor, type: DamageType,
+  pen?: { attacker: Actor; tags?: Set<SkillTag>; extra?: Modifier[] },
+): number {
   const stat = RES_STAT[type];
   if (!stat) return 0;
   const cap = Math.min(target.sheet.get(stat + 'Max'), DEFENSE_CFG.resistance.hardCap);
-  return Math.min(target.sheet.get(stat), cap);
+  let res = Math.min(target.sheet.get(stat), cap);
+  if (pen) {
+    const p = pen.attacker.sheet.get(type + 'Pen', pen.tags, pen.extra);
+    if (p > 0) res = Math.max(DEFENSE_CFG.resistance.floor, res - p);
+  }
+  return res;
 }
 
 /** Attacker context threaded into mitigation so victim pools can honour
@@ -172,6 +184,8 @@ export function mitigateTyped(
   target: Actor, amounts: Partial<Record<DamageType, number>>,
   opts?: MitigateOpts,
 ): number {
+  const pen = opts?.attacker
+    ? { attacker: opts.attacker, tags: opts.tags, extra: opts.extra } : undefined;
   let total = 0;
   for (const type of Object.keys(amounts) as DamageType[]) {
     let dmg = amounts[type]!;
@@ -179,11 +193,13 @@ export function mitigateTyped(
     if (type === 'physical') {
       // PoE-shaped armor: hyperbolic, UNCAPPED — small hits bounce off high
       // armor, huge hits punch through proportionally. Self-limiting (< 100%),
-      // so no clamp ever flattens investment (DEFENSE_CFG.armor).
-      const armor = target.sheet.get('armor');
+      // so no clamp ever flattens investment (DEFENSE_CFG.armor). The
+      // attacker's armorPen shears a fraction of the plate off first.
+      let armor = target.sheet.get('armor');
+      if (pen) armor *= 1 - pen.attacker.sheet.get('armorPen', pen.tags, pen.extra);
       dmg *= 1 - armor / (armor + DEFENSE_CFG.armor.k * dmg);
     } else {
-      dmg *= 1 - resistValue(target, type);
+      dmg *= 1 - resistValue(target, type, pen);
     }
     total += dmg;
   }
@@ -204,17 +220,25 @@ export function mitigateTyped(
       }
     }
   }
-  // POISE (the Fortitude bar): while unbroken it grants its flat reduction —
-  // and every hit CHIPS it (drain honours the attacker's poiseDamage stat).
-  // The bar breaking is the moment worth building around, both ways.
-  if (total > 0 && target.maxPoise() > 0) {
+  // POISE (the Fortitude bar): while unbroken its reduction WEARS WITH THE
+  // BAR — full at a full bar, easing toward drFloor × DR at a sliver
+  // (DEFENSE_CFG.poise.drFloor), so the protection erodes readably instead
+  // of vanishing in one cliff. Every hit CHIPS it (drain honours the
+  // attacker's poiseDamage stat); the break is still the moment worth
+  // building around, both ways.
+  const maxPoise = target.maxPoise();
+  if (total > 0 && maxPoise > 0) {
     if (target.poise > 0 && !target.poiseBroken) {
-      total *= 1 - target.sheet.get('poiseDR');
+      const f = DEFENSE_CFG.poise.drFloor;
+      const wear = f + (1 - f) * Math.min(1, target.poise / maxPoise);
+      total *= 1 - target.sheet.get('poiseDR') * wear;
     }
     const mult = opts?.attacker
       ? opts.attacker.sheet.get('poiseDamage', opts.tags, opts.extra) : 1;
     const drain = (total * DEFENSE_CFG.poise.drainRatio + DEFENSE_CFG.poise.drainFlat) * mult;
-    if (target.damagePoise(drain) && opts?.out) opts.out.poiseBroke = true;
+    if (target.damagePoise(drain, opts?.attacker, opts?.tags, opts?.extra) && opts?.out) {
+      opts.out.poiseBroke = true;
+    }
   }
   // THE LEDGER, damage lane (Arrears): a slice of every mitigated hit is
   // NOT taken now — it BANKS on the toggle's account (settled at the
@@ -262,10 +286,52 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
     }
     target.evadeEntropy -= 1;
   }
-  // Passive block: a flat chance to stop ANY hit cold. Independent of (and
-  // checked after) evasion; nothing to do with the Guard stance.
+  // Passive block: a flat chance to intercept ANY hit. blockPower is the
+  // FRACTION actually stopped (base 1 = the classic full stop); anything
+  // under 1 leaks through as mitigated CHIP damage — but a block always
+  // stops the hit's effects (statuses, knockback), full or not.
   if (chance(target.sheet.get('blockChance'))) {
-    return { evaded: false, immune: false, blocked: true, total: 0, crit: false };
+    const stop = target.sheet.get('blockPower');
+    let leaked = 0;
+    if (stop < 0.999) {
+      const chip: Partial<Record<DamageType, number>> = {};
+      for (const t of Object.keys(packet.amounts) as DamageType[]) {
+        chip[t] = packet.amounts[t]! * (1 - stop);
+      }
+      leaked = mitigateTyped(target, chip,
+        { attacker, tags: packet.tags, extra: packet.extra });
+      target.life -= leaked;
+      target.hitFlash = 0.1;
+    }
+    return { evaded: false, immune: false, blocked: true, total: leaked, crit: false };
+  }
+
+  // CRIT AVOIDANCE (victim-side): a made roll downgrades the crit to a
+  // normal hit — the multiplier is unwound with the attacker's own query,
+  // so what lands is exactly the uncritical roll.
+  if (packet.crit && chance(target.sheet.get('critAvoid'))) {
+    const multi = attacker.sheet.get('critMulti', packet.tags, packet.extra);
+    if (multi > 1) {
+      for (const t of Object.keys(packet.amounts) as DamageType[]) {
+        packet.amounts[t]! /= multi;
+      }
+    }
+    packet.crit = false;
+  }
+
+  // DAMAGE VS AFFLICTED (the generated damageVs_<status> family): the
+  // attacker's per-stack multiplier against whatever already rides the
+  // victim — "8% increased damage per poison stack on the target" is one
+  // modifier. Bounded by each status's own stack cap (the golden rule).
+  let vsMult = 1;
+  for (const s of target.statuses) {
+    const v = attacker.sheet.get('damageVs_' + s.id, packet.tags, packet.extra);
+    if (v !== 0) vsMult *= 1 + v * s.stacks;
+  }
+  if (vsMult !== 1) {
+    for (const t of Object.keys(packet.amounts) as DamageType[]) {
+      packet.amounts[t]! *= vsMult;
+    }
   }
 
   const out: { poiseBroke?: boolean } = {};
@@ -286,6 +352,15 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
     // decaying shell — gainWard is the one gate, so wardGain scales it.
     const wleech = attacker.sheet.get('wardLeech', packet.tags, packet.extra) * total;
     if (wleech > 0) attacker.gainWard(wleech);
+    // The other pools' sustain lanes (completing the family): energy
+    // shield on-hit/leech and mana leech, each capped by its own max.
+    const esGain = attacker.sheet.get('esOnHit', packet.tags, packet.extra)
+      + attacker.sheet.get('esLeech', packet.tags, packet.extra) * total;
+    if (esGain > 0) attacker.es = Math.min(attacker.maxEs(), attacker.es + esGain);
+    const mLeech = attacker.sheet.get('manaLeech', packet.tags, packet.extra) * total;
+    if (mLeech > 0) {
+      attacker.mana = Math.min(attacker.availableMaxMana(), attacker.mana + mLeech);
+    }
   }
   return {
     evaded: false, immune: false, blocked: false, total, crit: packet.crit,
@@ -302,14 +377,20 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
  * damage taken — even fully absorbed — resets the energy shield's recharge
  * delay. Returns the life damage that lands NOW.
  *
- * `skipEs` (DoT ticks): the wound seeps PAST the energy shield — it neither
- * drains the pool nor resets its recharge ("damage that never touches the
- * shield never wakes it"). The esDotResist stat is the lever that buys the
- * old immunity back, applied by applyDot before the chain.
+ * `esBypass` (DoT ticks): the fraction of what reaches the ES gate that
+ * SEEPS PAST the shield to the layers beneath — 0 (baseline) treats ES as
+ * a true second life pool that DoT drains; 1 is the full ghost-through
+ * (grantable per element via the tag-filtered esDotBypass stat).
+ * `delayOnDrainOnly` (DoT ticks): the recharge delay resets only when the
+ * shield actually absorbs something — a fully-seeping DoT never wakes it.
+ * The chain flags `target.esBroke` when it empties the shield (proc seam).
  */
-function soakDamage(target: Actor, total: number, opts?: { skipEs?: boolean }): number {
+function soakDamage(
+  target: Actor, total: number,
+  opts?: { esBypass?: number; delayOnDrainOnly?: boolean },
+): number {
   if (total <= 0) return total;
-  if (!opts?.skipEs && target.sheet.get('energyShield') > 0) {
+  if (!opts?.delayOnDrainOnly && target.sheet.get('energyShield') > 0) {
     target.esDelay = target.sheet.get('esRechargeDelay');
   }
   // 0) WARD — the decaying shield, spent before everything else.
@@ -333,11 +414,21 @@ function soakDamage(target: Actor, total: number, opts?: { skipEs?: boolean }): 
       }
     }
   }
-  // 2) Energy shield (DoTs seep past it — see skipEs above).
-  if (!opts?.skipEs && total > 0 && target.es > 0) {
-    const e = Math.min(target.es, total);
-    target.es -= e;
-    total -= e;
+  // 2) Energy shield — a second life pool. A bypass fraction of what
+  // arrives seeps past the gate (esDotBypass); the rest drains the shield.
+  if (total > 0 && target.es > 0) {
+    const bypass = Math.min(1, Math.max(0, opts?.esBypass ?? 0));
+    const e = Math.min(target.es, total * (1 - bypass));
+    if (e > 0) {
+      const hadShield = target.es > 0.5;
+      target.es -= e;
+      total -= e;
+      if (opts?.delayOnDrainOnly) {
+        target.esDelay = target.sheet.get('esRechargeDelay');
+      }
+      // The shield EMPTIED under this wound — the esBreak proc seam.
+      if (hadShield && target.es <= 0.001) target.esBroke = true;
+    }
   }
   // 3) Mana shield — a fraction of what remains is paid from mana.
   if (total > 0) {
@@ -362,23 +453,34 @@ function soakDamage(target: Actor, total: number, opts?: { skipEs?: boolean }): 
   return total;
 }
 
-/** Untyped damage that bypasses the hit pipeline (DoT ticks).
+/** Damage over time, bypassing the hit pipeline (no evasion, no block, no
+ *  armor — the wound is already inside). Typed when the ticking status has
+ *  a dotType, so element-tagged interactions apply:
  *
- *  Baseline, damage over time SEEPS PAST the energy shield: it lands on the
- *  soak chain with the ES layer skipped (and without waking the recharge
- *  delay), so a shielded target still bleeds, burns, and rots. The
- *  esDotResist stat is the INVESTABLE counter — while any shield holds, DoT
- *  is reduced by that fraction; at 100% the old "ES ignores DoT" behavior is
- *  deliberately reconstructed as a build, not a freebie. Insight and poise
- *  sit this out: they read attacks, not afflictions. */
-export function applyDot(target: Actor, amount: number): number {
+ *  - damageTaken is queried WITH the element tag ("10% reduced fire damage
+ *    taken" slows burns too).
+ *  - The energy shield is a true SECOND LIFE POOL: baseline, DoT drains it
+ *    (waking its recharge delay only when it actually absorbs).
+ *  - esDotResist: while any shield holds, DoT is reduced by that fraction —
+ *    at 100% the shield shrugs DoT entirely (Still Mind's promise).
+ *  - esDotBypass: that fraction SEEPS PAST the shield to what's beneath —
+ *    tag-filterable, so "chaos DoT ghosts through energy shields" is one
+ *    modifier, on an attacker's curse or a defender's keystone alike.
+ *
+ *  Insight and poise sit this out: they read attacks, not afflictions. */
+export function applyDot(target: Actor, amount: number, type?: DamageType): number {
   if (target.invulnerable) return 0;
-  let total = amount * target.sheet.get('damageTaken');
-  if (total > 0 && target.es > 0.5) {
-    const resist = target.sheet.get('esDotResist');
+  const tags = type ? new Set<SkillTag>([type]) : undefined;
+  let total = amount * target.sheet.get('damageTaken', tags);
+  if (total <= 0) return 0;
+  if (target.es > 0.5) {
+    const resist = target.sheet.get('esDotResist', tags);
     if (resist > 0) total *= 1 - resist;
   }
-  total = soakDamage(target, total, { skipEs: true });
+  total = soakDamage(target, total, {
+    esBypass: target.sheet.get('esDotBypass', tags),
+    delayOnDrainOnly: true,
+  });
   target.life -= total;
   return total;
 }

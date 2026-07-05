@@ -8,7 +8,7 @@
 import { chance, vec, type Vec2 } from '../core/math';
 import {
   StatSheet, attributeModifiers,
-  type Attributes, type ConditionId, type Modifier,
+  type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
 import { DEFENSE_CFG } from './defense';
 import {
@@ -391,6 +391,9 @@ export class Actor {
    *  stalking toward `alertFrom` — where the blow came from. */
   alertUntil = 0;
   alertFrom: Vec2 | null = null;
+  /** Per-proc internal-cooldown clocks (world time each proc is next
+   *  ready) — the hard frequency limit under stacked chance (ProcDef.icd). */
+  procReadyAt = new Map<string, number>();
   /** DAMAGE POOLS (DamagePoolSpec): banked fuel keyed by pool id — fed by
    *  the damage this actor deals, spent by its pool skills. */
   pools = new Map<string, number>();
@@ -505,6 +508,10 @@ export class Actor {
    *  plus the freshness window that re-seeds it between fights. */
   evadeEntropy = 0;
   evadeWindow = 0;
+  /** TRANSIENT: the energy shield was emptied since the world last looked —
+   *  set by the soak chain, consumed by the world's esBreak proc roll
+   *  (the expiredStatuses pattern). */
+  esBroke = false;
   /** Absorption shield: temporary pool eaten before EVERYTHING else. */
   absorb = 0;
   absorbTimer = 0;
@@ -678,8 +685,11 @@ export class Actor {
    *  Resets the recovery delay; at the bottom the bar BREAKS — the break
    *  status (DEFENSE_CFG.poise.breakStatus) lands and the benefits lapse
    *  until the pool recovers past the re-arm fraction (updateTimers).
+   *  The BREAKER's sunderDuration stat stretches the Sundered they inflict
+   *  (the poise-breaker specialization dial); their effectDuration does
+   *  not — sunder is its own investment, not a free rider.
    *  Returns true only on the breaking drain (for the world's fanfare). */
-  damagePoise(amount: number): boolean {
+  damagePoise(amount: number, breaker?: Actor, tags?: Set<SkillTag>, extra?: readonly Modifier[]): boolean {
     if (amount <= 0 || this.maxPoise() <= 0) return false;
     this.poiseDelay = this.sheet.get('poiseRegenDelay');
     const before = this.poise;
@@ -687,10 +697,24 @@ export class Actor {
     if (this.poise <= 0 && before > 0 && !this.poiseBroken) {
       this.poiseBroken = true;
       const bs = DEFENSE_CFG.poise.breakStatus;
-      if (bs && STATUS_DEFS[bs]) this.applyStatus(bs, 0, 1, 'Poise Break');
+      if (bs && STATUS_DEFS[bs]) {
+        const durScale = breaker ? breaker.sheet.get('sunderDuration', tags, extra) : 1;
+        this.applyStatus(bs, 0, durScale, breaker?.name ?? 'Poise Break');
+      }
       return true;
     }
     return false;
+  }
+
+  /** The one WEIGHT read (pushes, crowd separation): the weight stat,
+   *  anchored by CURRENT unbroken poise (DEFENSE_CFG.weight.perPoise) — a
+   *  poised colossus holds its ground; break the bar and it moves. */
+  effectiveWeight(): number {
+    let w = this.sheet.get('weight');
+    if (this.poise > 0 && !this.poiseBroken) {
+      w *= 1 + this.poise * DEFENSE_CFG.weight.perPoise;
+    }
+    return Math.max(DEFENSE_CFG.weight.min, w);
   }
 
   /** THE one gate every life heal flows through: scaled by the healTaken
@@ -949,7 +973,10 @@ export class Actor {
       && chance(this.sheet.get('poiseCcAvoid'))) {
       return;
     }
-    const duration = def.duration * durationScale;
+    // AFFLICTION RECOVERY (victim-side): hostile statuses run out faster —
+    // the defender's twin of the attacker's effectDuration.
+    const expiry = def.beneficial ? 1 : this.sheet.get('afflictionExpiry');
+    const duration = def.duration * durationScale / expiry;
     const existing = this.statuses.find(s => s.id === id);
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
     // postpones the blast — the timer set when the keg was armed runs down no
@@ -1054,10 +1081,26 @@ export class Actor {
     if (this.idleFor > STANCE_PLANT_TIME) active.push('stationary');
     else if (this.idleFor < STANCE_MOVE_WINDOW) active.push('moving');
     this.sheet.setConditions(active);
+
+    // LIVE GAUGES for gauge-scaled modifiers ("2% increased damage per
+    // poison stack on you"): own status stacks + banked charges. Integer,
+    // event-driven quantities ONLY — per-frame floats would churn the stat
+    // cache every tick (the gauge golden rule).
+    const gauges: [string, number][] = [];
+    for (const s of this.statuses) {
+      if (s.stacks > 0) gauges.push(['status:' + s.id, s.stacks]);
+    }
+    for (const [id, n] of this.charges) {
+      if (n > 0) gauges.push(['charge:' + id, n]);
+    }
+    this.sheet.setGauges(gauges);
   }
 
-  /** Tick durations; returns total DoT damage to inflict this frame. */
-  updateTimers(dt: number): number {
+  /** Tick durations; returns the frame's DoT damage to inflict, BY DAMAGE
+   *  TYPE (statuses without a dotType pool under 'untyped') — so the DoT
+   *  pipeline can honour element-tagged interactions (esDotBypass per
+   *  element, tagged damageTaken). Null when nothing ticked. */
+  updateTimers(dt: number): Partial<Record<DamageType | 'untyped', number>> | null {
     this.refreshConditions();
     // Hire-clock high-water mark (the lifespan sliver's denominator).
     if (this.lifespan > this.lifespanTotal) this.lifespanTotal = this.lifespan;
@@ -1106,12 +1149,16 @@ export class Actor {
       }
     }
 
-    // Statuses + DoT accumulation
-    let dot = 0;
+    // Statuses + DoT accumulation, pooled BY TYPE (the status's dotType).
+    let dot: Partial<Record<DamageType | 'untyped', number>> | null = null;
     for (let i = this.statuses.length - 1; i >= 0; i--) {
       const s = this.statuses[i];
       s.remaining -= dt;
-      if (s.dps > 0) dot += s.dps * s.stacks * dt;
+      if (s.dps > 0) {
+        const key = STATUS_DEFS[s.id]?.dotType ?? 'untyped';
+        dot ??= {};
+        dot[key] = (dot[key] ?? 0) + s.dps * s.stacks * dt;
+      }
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);
         this.expiredStatuses.push(s); // world processes ruptures
@@ -1418,10 +1465,11 @@ export class Actor {
       : Math.max(0, room);
   }
 
-  /** Can the cost be paid — counting energy shield if esToMana is up,
-   *  and OVERDRIVE debt headroom when a lane's toggle is running? */
+  /** Can the cost be paid — counting the esToMana FRACTION of the energy
+   *  shield as a battery, and OVERDRIVE debt headroom when a lane's toggle
+   *  is running? */
   canAfford(cost: { mana: number; life: number }): boolean {
-    const esMana = this.sheet.get('esToMana') > 0 ? this.es : 0;
+    const esMana = this.es * this.sheet.get('esToMana');
     const manaOk = this.mana + esMana >= cost.mana
       || cost.mana - (this.mana + esMana) <= this.overdraftHeadroom('mana');
     const lifeOk = this.life > cost.life
@@ -1429,17 +1477,21 @@ export class Actor {
     return manaOk && lifeOk;
   }
 
-  /** Pay a cost: mana first, then energy shield (Thought Siphon), then life —
-   *  and, under OVERDRIVE, any shortfall books as DEBT (reservation). */
+  /** Pay a cost: mana first, then energy shield (Thought Siphon — only the
+   *  esToMana FRACTION of the pool is usable), then life — and, under
+   *  OVERDRIVE, any shortfall books as DEBT (reservation). */
   payCost(cost: { mana: number; life: number }): void {
     let due = cost.mana;
     const fromMana = Math.min(this.mana, due);
     this.mana -= fromMana;
     due -= fromMana;
-    if (due > 0 && this.sheet.get('esToMana') > 0) {
-      const fromEs = Math.min(this.es, due);
-      this.es -= fromEs;
-      due -= fromEs;
+    if (due > 0) {
+      const usable = this.es * this.sheet.get('esToMana');
+      const fromEs = Math.min(usable, due);
+      if (fromEs > 0) {
+        this.es -= fromEs;
+        due -= fromEs;
+      }
     }
     if (due > 0) {
       const od = this.overdrive.mana;

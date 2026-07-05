@@ -49,7 +49,11 @@ export const DAMAGE_COLOR: Record<DamageType, string> = {
   physical: '#cfd2d6', fire: '#ff8a4a', cold: '#7ab8d8', lightning: '#ffe14a', chaos: '#c45ae0',
 };
 
-export type ModKind = 'flat' | 'increased' | 'more' | 'override';
+/** 'link' is the STAT SIPHON: "gain `value` × <fromStat> as <stat>". The
+ *  granted amount joins the target's BASE layer (so its own increased/more
+ *  modifiers scale it), and the source is read at its links-disabled
+ *  BASELINE — the single-hop golden rule (see StatSheet.compute). */
+export type ModKind = 'flat' | 'increased' | 'more' | 'override' | 'link';
 
 /**
  * Actor-state conditions a modifier can demand ("40% more damage while on
@@ -69,6 +73,17 @@ export interface Modifier {
   stat: string;
   kind: ModKind;
   value: number;
+  /** kind 'link' only: the SOURCE stat siphoned from — the grant is
+   *  value × the source's links-disabled baseline. */
+  fromStat?: string;
+  /** Scale `value` by a live GAUGE — a numeric quantity the actor samples
+   *  each frame ('status:poison' = own stacks, 'charge:fury' = banked
+   *  count). "2% increased damage per poison stack on you" is
+   *  gaugeMod('damage','increased',0.02,'status:poison'). GOLDEN RULES:
+   *  gauges are integer, event-driven quantities (stacks, charges) — never
+   *  per-frame floats (cache health) and never stat queries (no loops);
+   *  every gauge is bounded by its own cap (maxStacks, chargeCap). */
+  gauge?: string;
   /** If present, the modifier only applies when the query context contains ALL of these tags. */
   tags?: SkillTag[];
   /** If present, the modifier only applies while the actor satisfies this condition. */
@@ -78,6 +93,21 @@ export interface Modifier {
 /** Convenience constructor so data files read nicely. */
 export function mod(stat: string, kind: ModKind, value: number, tags?: SkillTag[], when?: ConditionId): Modifier {
   return { stat, kind, value, tags, when };
+}
+
+/** STAT LINK constructor: "gain `ratio` of <fromStat> as <stat>" —
+ *  linkMod('thorns', 'lifeRegen', 0.4) is "gain 40% of life regeneration
+ *  as thorns". Single-hop by engine rule: the granted amount can never
+ *  feed another link, so A→B and B→A coexist without compounding. */
+export function linkMod(stat: string, fromStat: string, ratio: number, tags?: SkillTag[], when?: ConditionId): Modifier {
+  return { stat, kind: 'link', value: ratio, fromStat, tags, when };
+}
+
+/** GAUGE-SCALED modifier: `value` multiplies by the live gauge each query —
+ *  gaugeMod('damageTaken','increased',0.02,'status:poison') is "2%
+ *  increased damage taken per stack of poison on you". */
+export function gaugeMod(stat: string, kind: ModKind, value: number, gauge: string, tags?: SkillTag[], when?: ConditionId): Modifier {
+  return { stat, kind, value, gauge, tags, when };
 }
 
 // ---------------------------------------------------------------------------
@@ -195,9 +225,49 @@ export const STAT_DEFS: Record<string, StatDef> = {
   phasing:        { label: 'Phasing', base: 0, min: 0 },
 
   /** While holding energy shield (es > 0), damage over time is reduced by
-   *  this fraction — the INVESTABLE lever that rebuilds "ES ignores DoT" at
-   *  100%. Baseline 0: DoTs bypass the shield and gnaw life directly. */
+   *  this fraction — the INVESTABLE lever toward "ES shrugs DoT" at 100%. */
   esDotResist:    { label: 'DoT Resistance while on Energy Shield', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of damage over time that SEEPS PAST the energy shield straight
+   *  to what's beneath (base 0: ES is a true second life pool and DoT drains
+   *  it). Tag-filtered like everything — "chaos DoT fully bypasses energy
+   *  shield" is linkable to one element; victim-side curses can grant it too. */
+  esDotBypass:    { label: 'DoT Bypasses Energy Shield', base: 0, min: 0, max: 1, percent: true },
+
+  // PENETRATION — attacker-side, tag-filtered. Applied AFTER the victim's
+  // resistance caps (the classic model: pen digs below the cap, down to the
+  // DEFENSE_CFG.resistance.floor), so it is the counter to res stacking
+  // without ever re-opening the immunity door on the defender's side.
+  firePen:        { label: 'Fire Penetration', base: 0, min: 0, percent: true },
+  coldPen:        { label: 'Cold Penetration', base: 0, min: 0, percent: true },
+  lightningPen:   { label: 'Lightning Penetration', base: 0, min: 0, percent: true },
+  chaosPen:       { label: 'Chaos Penetration', base: 0, min: 0, percent: true },
+  /** Fraction of the victim's armor ignored by your physical hits. */
+  armorPen:       { label: 'Armor Penetration', base: 0, min: 0, max: 1, percent: true },
+
+  // Sustain for the OTHER pools (life has lifeOnHit/lifeLeech; ward has
+  // wardLeech — these complete the family).
+  esOnHit:        { label: 'Energy Shield Gained on Hit', base: 0, min: 0 },
+  esLeech:        { label: 'Damage Leeched as Energy Shield', base: 0, min: 0, max: 0.2, percent: true },
+  manaLeech:      { label: 'Damage Leeched as Mana', base: 0, min: 0, max: 0.15, percent: true },
+
+  // Block & evade texture
+  /** Fraction of a blocked hit actually STOPPED (base 1 = the classic full
+   *  block; below 1 the remainder lands as chip damage — bosses can carry
+   *  high block chance with low power and stay pressureable). */
+  blockPower:     { label: 'Block Power', base: 1, min: 0, max: 1, percent: true },
+  /** Flat life gained when you block a hit (the deterministic floor under
+   *  the chance-based on-block procs). */
+  lifeOnBlock:    { label: 'Life Gained on Block', base: 0, min: 0 },
+  /** Flat life gained when you evade an attack. */
+  lifeOnEvade:    { label: 'Life Gained on Evade', base: 0, min: 0 },
+  /** Victim-side chance an incoming CRIT lands as a normal hit instead. */
+  critAvoid:      { label: 'Critical Strike Avoidance', base: 0, min: 0, max: 1, percent: true },
+  /** Afflictions (non-beneficial statuses) applied to you run out this much
+   *  faster (duration ÷ this) — the victim-side twin of effectDuration. */
+  afflictionExpiry: { label: 'Affliction Recovery', base: 1, min: 0.2 },
+  /** ATTACKER-side multiplier on the duration of the Sundered you inflict
+   *  when YOUR hit breaks a poise bar — the breaker's specialization dial. */
+  sunderDuration: { label: 'Sunder Duration', base: 1, min: 0.1 },
   /** Multiplier on damage received (shock raises it, fortification lowers it). */
   damageTaken:    { label: 'Damage Taken', base: 1, min: 0.1 },
   /** Multiplier on LIFE HEALING received — regen, leech, restores, pulses,
@@ -300,8 +370,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  which trickles even during the recharge delay, and stacks with the
    *  recharge once it starts. */
   lifeRegenToEs:  { label: 'Life Regen to Energy Shield', base: 0, min: 0, max: 1, percent: true },
-  /** > 0: mana costs can be paid from energy shield when mana runs dry. */
-  esToMana:       { label: 'Energy Shield Pays Mana Costs', base: 0 },
+  /** FRACTION of the energy shield usable as a mana battery when mana runs
+   *  dry (0.5 = half the shield may be spent on costs; 1 = the whole pool —
+   *  the old Thought Siphon). A dial, not a flag. */
+  esToMana:       { label: 'Energy Shield Usable as Mana', base: 0, min: 0, max: 1, percent: true },
 
   // OVERDRIVE — the debt economy (all base 0; each toggle's OverdriveSpec
   // feeds the query's base, trajectory-axis style). Unaffordable casts
@@ -333,9 +405,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   suffusion:      { label: 'Suffusion', base: 0, min: 0 },
   /** Extra targets resolved by targeted (single-target) skills. */
   multiTarget:    { label: 'Additional Targets', base: 0 },
-  /** > 0: ignites applied by the skill deal NO damage over time — instead
-   *  the victim detonates for the burn's full payload when it expires. */
-  igniteToBomb:   { label: 'Ignites Detonate', base: 0 },
+  /** FRACTION of an ignite's payload converted from ticking burn into a
+   *  detonation when it expires (1 = the classic Powderkeg: no ticks, all
+   *  blast; 0.5 = half burns, half banks). A dial, not a flag. */
+  igniteToBomb:   { label: 'Ignites Detonate', base: 0, min: 0, max: 1, percent: true },
   /** Extra projectiles, fired in a full NOVA around the caster instead of
    *  toward the aim (Nova Release support). */
   projNova:       { label: 'Nova Projectiles', base: 0 },
@@ -618,8 +691,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   aoeScatter:     { label: 'Area Aftershocks', base: 0 },
   /** Extra strikes for storm skills (applies to min and max of the range). */
   stormCount:     { label: 'Additional Storm Strikes', base: 0 },
-  /** > 0: storm skills release all strikes at once. */
-  stormImmediate: { label: 'Immediate Storm', base: 0 },
+  /** FRACTION of a storm's strikes released at once, up front; the rest
+   *  keep the cadence (1 = the whole storm lands immediately — the old
+   *  flag; 0.5 = an opening crash, then the drumming). */
+  stormImmediate: { label: 'Immediate Storm', base: 0, min: 0, max: 1, percent: true },
   /** > 0: the skill is cast by a spawned totem instead of its user. */
   castAsTotem:    { label: 'Cast as Totem', base: 0 },
   /** > 0: corpse-targeting skills may kill your own minion for a corpse. */
@@ -639,8 +714,9 @@ export const STAT_DEFS: Record<string, StatDef> = {
   detectionRange: { label: 'Detection Range', base: 520, min: 50 },
 
   // DoT & curse mechanics
-  /** > 0: DoTs applied by the skill spread on the victim's death. */
-  dotPropagates:  { label: 'Damage over Time Propagates', base: 0 },
+  /** CHANCE that a DoT applied by the skill spreads on the victim's death
+   *  (rolled once at application; 1 = always — the old flag value). */
+  dotPropagates:  { label: 'Damage over Time Propagation Chance', base: 0, min: 0, max: 1, percent: true },
   /** Curse statuses rupture at expiry for this multiple of the skill's roll. */
   curseRupture:   { label: 'Curse Rupture', base: 0 },
   /** DoT statuses rupture at expiry for this fraction of their total damage. */
@@ -720,6 +796,10 @@ export class StatSheet {
   /** Active actor-state conditions (lowLife, fullEs...). */
   private conditions = new Set<ConditionId>();
   private conditionKey = '';
+  /** Live GAUGES (status stacks, charge counts) gauge-scaled mods read.
+   *  Integer, event-driven quantities only — see Modifier.gauge. */
+  private gauges = new Map<string, number>();
+  private gaugeKey = '';
 
   /** Replace the active condition set (cache clears only on real change). */
   setConditions(active: ConditionId[]): void {
@@ -731,6 +811,18 @@ export class StatSheet {
   }
 
   hasCondition(id: ConditionId): boolean { return this.conditions.has(id); }
+
+  /** Replace the live gauge set (cache clears only on real change — keep
+   *  gauges INTEGER and event-driven or the cache churns every frame). */
+  setGauges(entries: [string, number][]): void {
+    const key = entries.map(([k, v]) => k + ':' + v).sort().join('|');
+    if (key === this.gaugeKey) return;
+    this.gaugeKey = key;
+    this.gauges = new Map(entries);
+    this.cache.clear();
+  }
+
+  gauge(id: string): number { return this.gauges.get(id) ?? 0; }
 
   /** Add or replace a named bundle of modifiers (e.g. 'class', 'buff:warcry'). */
   setSource(name: string, mods: Modifier[]): void {
@@ -768,9 +860,25 @@ export class StatSheet {
    * like "50% fewer maximum minions" should multiply it.
    */
   get(stat: string, contextTags?: ReadonlySet<SkillTag>, extra?: readonly Modifier[], baseValue?: number): number {
-    const key = contextTags && contextTags.size
+    return this.compute(stat, contextTags, extra, baseValue, false);
+  }
+
+  /**
+   * The real computation behind get(). `noLinks` is the STAT-LINK golden
+   * rule: a link ("gain 40% of life regen as thorns") reads its source at
+   * the links-disabled BASELINE, so granted amounts can never feed further
+   * grants — no chains (A→B→C), no cycles (A→B→A compounding), no
+   * quadratic loops; every siphon is strictly single-hop. Linked amounts
+   * join the target's BASE layer, so the target's own increased/more
+   * modifiers scale them, and min/max clamps apply after everything.
+   */
+  private compute(
+    stat: string, contextTags?: ReadonlySet<SkillTag>,
+    extra?: readonly Modifier[], baseValue?: number, noLinks = false,
+  ): number {
+    const key = (noLinks ? '§' : '') + (contextTags && contextTags.size
       ? stat + '|' + [...contextTags].sort().join(',')
-      : stat;
+      : stat);
     const cacheable = (!extra || !extra.length) && baseValue === undefined;
     if (cacheable) {
       const cached = this.cache.get(key);
@@ -781,6 +889,7 @@ export class StatSheet {
     let base = baseValue ?? this.baseOverrides.get(stat) ?? def?.base ?? 0;
     let flat = 0, increased = 0, moreMult = 1;
     let override: number | undefined;
+    let links: Modifier[] | undefined;
 
     const apply = (m: Modifier): void => {
       if (m.stat !== stat) return;
@@ -789,15 +898,35 @@ export class StatSheet {
         if (!contextTags) return;
         for (const t of m.tags) if (!contextTags.has(t)) return;
       }
+      // Gauge-scaled modifiers ride a live quantity (status stacks, charge
+      // counts) — a zero gauge is an inert modifier.
+      let v = m.value;
+      if (m.gauge) {
+        const g = this.gauges.get(m.gauge) ?? 0;
+        if (g === 0) return;
+        v *= g;
+      }
       switch (m.kind) {
-        case 'flat': flat += m.value; break;
-        case 'increased': increased += m.value; break;
-        case 'more': moreMult *= 1 + m.value; break;
-        case 'override': override = m.value; break;
+        case 'flat': flat += v; break;
+        case 'increased': increased += v; break;
+        case 'more': moreMult *= 1 + v; break;
+        case 'override': override = v; break;
+        case 'link':
+          if (!noLinks && m.fromStat) (links ??= []).push({ ...m, value: v });
+          break;
       }
     };
     for (const mods of this.sources.values()) for (const m of mods) apply(m);
     if (extra) for (const m of extra) apply(m);
+
+    // STAT LINKS: each siphon adds ratio × the source's baseline into the
+    // BASE layer (before increased/more), read with the same context and
+    // skill-local extras so a skill-scoped link sees its skill's world.
+    if (links) {
+      for (const l of links) {
+        flat += l.value * this.compute(l.fromStat!, contextTags, extra, undefined, true);
+      }
+    }
 
     let value = override !== undefined ? override : (base + flat) * (1 + increased) * moreMult;
     if (def) {
