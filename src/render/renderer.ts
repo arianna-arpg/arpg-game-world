@@ -16,7 +16,13 @@ import { BIOMES } from '../world/biomes';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
-import { doodadRuleOf } from '../engine/levelgen';
+import { doodadRuleOf, type Doodad } from '../engine/levelgen';
+
+/** View-cull margin beyond a doodad's own radius: canopy crowns, vent rims,
+ *  and blob `grow` passes all overdraw past the disc — the pad keeps their
+ *  edges from popping at the screen border. */
+const RENDER_CULL_PAD = 150;
+const EMPTY_DOODADS: readonly Doodad[] = [];
 import { roofStyle } from '../data/structures';
 import { WEATHER_COLORS } from '../world/palette';
 import type { Settings } from '../meta/settings';
@@ -104,6 +110,10 @@ export class Renderer {
 
     ctx.fillStyle = '#0a0a0e';
     ctx.fillRect(0, 0, w, h);
+
+    // Per-frame doodad culling: everything the ground/canopy doodad passes
+    // draw comes from this view-clipped, kind-grouped set (see cullDoodads).
+    this.cullDoodads(world, vw, vh);
 
     ctx.save();
     ctx.scale(z, z);
@@ -826,12 +836,35 @@ export class Renderer {
   }
 
   /** One merged silhouette for a set of circles (overlaps fill uniformly). */
-  private blobPath(doodads: { pos: Vec2; radius: number }[], grow = 0): void {
+  private blobPath(doodads: readonly { pos: Vec2; radius: number }[], grow = 0): void {
     const { ctx } = this;
     ctx.beginPath();
     for (const d of doodads) {
       ctx.moveTo(d.pos.x + d.radius + grow, d.pos.y);
       ctx.arc(d.pos.x, d.pos.y, d.radius + grow, 0, Math.PI * 2);
+    }
+  }
+
+  /** Per-frame VIEW CULL over the zone's doodads, grouped by kind. The ground
+   *  pass used to run ~40 full-list filter passes and build blob paths for
+   *  every disc in the ZONE — a landmark that pours a liquid (a caldera's
+   *  lava pool is one disc per grid cell, hundreds of them) paid that cost
+   *  every frame for geometry nowhere near the screen. Pad covers crown/rim
+   *  overdraw beyond a doodad's radius (canopy crowns, vent rims, blob grow). */
+  private culled = new Map<string, Doodad[]>();
+  private culledAll: Doodad[] = [];
+  private cullDoodads(world: World, vw: number, vh: number): void {
+    const pad = RENDER_CULL_PAD;
+    const L = this.cam.x - pad, T = this.cam.y - pad;
+    const R = this.cam.x + vw + pad, B = this.cam.y + vh + pad;
+    this.culled.clear();
+    this.culledAll.length = 0;
+    for (const d of world.doodads) {
+      if (d.pos.x + d.radius < L || d.pos.x - d.radius > R
+        || d.pos.y + d.radius < T || d.pos.y - d.radius > B) continue;
+      this.culledAll.push(d);
+      const arr = this.culled.get(d.kind);
+      if (arr) arr.push(d); else this.culled.set(d.kind, [d]);
     }
   }
 
@@ -845,21 +878,8 @@ export class Renderer {
   private drawDoodads(world: World): void {
     const { ctx } = this;
     const theme = world.zone.theme;
-    const byKind = (k: string): typeof world.doodads =>
-      world.doodads.filter(d => d.kind === k);
-
-    // Chasms: a faint rim, then the void.
-    const chasms = byKind('chasm');
-    if (chasms.length) {
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = theme.obstacleEdge;
-      this.blobPath(chasms, 5);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = theme.chasm ?? '#040409';
-      this.blobPath(chasms);
-      ctx.fill();
-    }
+    // View-culled, pre-grouped (cullDoodads) — never a full-list filter.
+    const byKind = (k: string): readonly Doodad[] => this.culled.get(k) ?? EMPTY_DOODADS;
 
     // Water: shore rim, deep fill, and pale shallow-ford overlays.
     const water = byKind('water');
@@ -1254,6 +1274,23 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
+    // Chasms: a faint rim, then the void. Drawn AFTER every ground overlay so
+    // the pit punches through whatever it cut across at generation — a water
+    // disc lapping a chasm's edge must never read as water floating over the
+    // abyss (the void wins; the pool visibly drains INTO it). Bridges follow,
+    // planking over the top.
+    const chasms = byKind('chasm');
+    if (chasms.length) {
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = theme.obstacleEdge;
+      this.blobPath(chasms, 5);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = theme.chasm ?? '#040409';
+      this.blobPath(chasms);
+      ctx.fill();
+    }
+
     // Bridges: planks across the void.
     for (const b of byKind('bridge')) {
       ctx.save();
@@ -1431,28 +1468,16 @@ export class Renderer {
       ctx.restore();
     }
 
-    // Thickets: dense spiky brambles — an impassable dark disc, spun per-clump.
+    // Thickets render in the CANOPY pass now (the bramble mass rides the same
+    // proximity fade as tree crowns — walk into the brake's shadow and it
+    // opens up); only a ground shadow stays down here.
     for (const o of byKind('thicket')) {
-      ctx.save();
-      ctx.translate(o.pos.x, o.pos.y);
-      if (o.rot !== undefined) ctx.rotate(o.rot);
-      ctx.fillStyle = '#16401c';
-      ctx.strokeStyle = '#0a2410';
-      ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#101c10';
       ctx.beginPath();
-      ctx.arc(0, 0, o.radius, 0, Math.PI * 2);
+      ctx.arc(o.pos.x, o.pos.y, o.radius * 0.5, 0, Math.PI * 2);
       ctx.fill();
-      ctx.stroke();
-      ctx.strokeStyle = '#2c5a26';
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < 7; i++) {
-        const a = (i / 7) * Math.PI * 2;
-        ctx.beginPath();
-        ctx.moveTo(Math.cos(a) * o.radius * 0.4, Math.sin(a) * o.radius * 0.4);
-        ctx.lineTo(Math.cos(a) * o.radius * 1.05, Math.sin(a) * o.radius * 1.05);
-        ctx.stroke();
-      }
-      ctx.restore();
+      ctx.globalAlpha = 1;
     }
 
     // Palms render in the CANOPY pass (above actors, proximity-faded); their
@@ -1548,7 +1573,7 @@ export class Renderer {
 
     // Eldritch-mutated doodads: writhing tentacles grafted onto the silhouette (a
     // faint pulse marks one that also carries a SWING effect — an ambient hazard).
-    for (const o of world.doodads) {
+    for (const o of this.culledAll) {
       if (o.adorn !== 'tentacles') continue;
       const t = performance.now() / 1000;
       if (o.effect) {
@@ -1814,24 +1839,26 @@ export class Renderer {
     // registered doodad rule, a structure-legend kind): a themed disc with a rim
     // + rot tick, so new DATA kinds are visible engine-wide before (or without)
     // ever earning a bespoke render. Warned once so authors know it's the stub.
-    for (const o of world.doodads) {
-      if (RENDERED_DOODAD_KINDS.has(o.kind)) continue;
-      if (!warnedUnrenderedKinds.has(o.kind)) {
-        warnedUnrenderedKinds.add(o.kind);
-        console.warn(`[render] doodad kind '${o.kind}' has no bespoke branch — generic disc fallback`);
+    for (const [kind, list] of this.culled) {
+      if (RENDERED_DOODAD_KINDS.has(kind)) continue;
+      if (!warnedUnrenderedKinds.has(kind)) {
+        warnedUnrenderedKinds.add(kind);
+        console.warn(`[render] doodad kind '${kind}' has no bespoke branch — generic disc fallback`);
       }
-      ctx.save();
-      ctx.translate(o.pos.x, o.pos.y);
-      if (o.rot !== undefined) ctx.rotate(o.rot);
-      ctx.fillStyle = theme.obstacle;
-      ctx.beginPath(); ctx.arc(0, 0, o.radius, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = theme.obstacleEdge;
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(0, 0, o.radius, 0, Math.PI * 2); ctx.stroke();
-      ctx.globalAlpha = 0.4;
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(o.radius * 0.8, 0); ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.restore();
+      for (const o of list) {
+        ctx.save();
+        ctx.translate(o.pos.x, o.pos.y);
+        if (o.rot !== undefined) ctx.rotate(o.rot);
+        ctx.fillStyle = theme.obstacle;
+        ctx.beginPath(); ctx.arc(0, 0, o.radius, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = theme.obstacleEdge;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.arc(0, 0, o.radius, 0, Math.PI * 2); ctx.stroke();
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(o.radius * 0.8, 0); ctx.stroke();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+      }
     }
   }
 
@@ -1847,7 +1874,7 @@ export class Renderer {
     const theme = world.zone.theme;
     const hero = world.player;
     const dt = this.frameDt;
-    for (const o of world.doodads) {
+    for (const o of this.culledAll) {
       const occ = doodadRuleOf(o.kind).occlude;
       if (!occ) continue;
       const near = dist(hero.pos, o.pos) < o.radius + hero.radius + (occ.pad ?? 10);
@@ -1855,52 +1882,70 @@ export class Renderer {
       const cur = this.canopyFade.get(o) ?? 1;
       const fade = cur + (target - cur) * Math.min(1, dt * 10);
       this.canopyFade.set(o, fade);
-      if (o.kind === 'tree' || o.kind === 'palm') this.drawCanopyTree(o, theme, fade);
+      // Trees and thickets both wear the BRAMBLE MASS (the preferred organic
+      // silhouette): thickets in their own deep bramble green, tree crowns in
+      // the zone theme's canopy colour — biome identity stays in the tint.
+      if (o.kind === 'tree') this.drawCanopyBramble(o, theme.tree ?? '#2c4424', 'rgba(0,0,0,0.4)', 'rgba(255,255,255,0.22)', fade);
+      else if (o.kind === 'thicket') this.drawCanopyBramble(o, '#16401c', '#0a2410', '#2c5a26', fade);
+      else if (o.kind === 'palm') this.drawCanopyTree(o, theme, fade);
       else if (o.kind === 'giant_mushroom' || o.kind === 'fruiting_tower') this.drawCanopyMushroom(o, world.time, fade);
       else this.drawCanopyGeneric(o, theme, fade);
     }
   }
 
-  /** Tree/palm crowns (the trunk shadow stays in the ground pass). */
+  /** The BRAMBLE MASS silhouette — a dark tangled disc with radiating spines
+   *  (grown from the old thicket ground draw, promoted to the canopy layer so
+   *  it rides the proximity fade like every other crown). */
+  private drawCanopyBramble(o: { pos: Vec2; radius: number; rot?: number }, fill: string, edge: string, spine: string, alpha: number): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = spine;
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * o.radius * 0.4, Math.sin(a) * o.radius * 0.4);
+      ctx.lineTo(Math.cos(a) * o.radius * 1.05, Math.sin(a) * o.radius * 1.05);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  /** Palm crowns (the trunk shadow stays in the ground pass). */
   private drawCanopyTree(o: { pos: Vec2; radius: number; rot?: number; kind: string }, theme: World['zone']['theme'], alpha: number): void {
     const { ctx } = this;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     if (o.rot !== undefined) ctx.rotate(o.rot);
-    if (o.kind === 'palm') {
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = '#5a4326';
-      ctx.fillRect(-o.radius * 0.1, -o.radius * 0.2, o.radius * 0.2, o.radius * 0.6);
-      ctx.strokeStyle = theme.tree ?? '#2c7a3a';
-      ctx.lineWidth = 3;
-      for (let i = 0; i < 6; i++) {
-        const a = (i / 6) * Math.PI * 2 + 0.3;
-        ctx.beginPath();
-        ctx.moveTo(0, -o.radius * 0.15);
-        ctx.quadraticCurveTo(
-          Math.cos(a) * o.radius * 0.7, -o.radius * 0.4 + Math.sin(a) * o.radius * 0.5,
-          Math.cos(a) * o.radius * 1.1, -o.radius * 0.2 + Math.sin(a) * o.radius * 0.8);
-        ctx.stroke();
-      }
-      ctx.fillStyle = '#3a6a2a';
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#5a4326';
+    ctx.fillRect(-o.radius * 0.1, -o.radius * 0.2, o.radius * 0.2, o.radius * 0.6);
+    ctx.strokeStyle = theme.tree ?? '#2c7a3a';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.3;
       ctx.beginPath();
-      ctx.arc(0, -o.radius * 0.2, o.radius * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      ctx.globalAlpha = alpha;
-      ctx.fillStyle = theme.tree ?? '#2c4424';
-      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(-o.radius * 0.1, -o.radius * 0.15, o.radius, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(0, -o.radius * 0.15);
+      ctx.quadraticCurveTo(
+        Math.cos(a) * o.radius * 0.7, -o.radius * 0.4 + Math.sin(a) * o.radius * 0.5,
+        Math.cos(a) * o.radius * 1.1, -o.radius * 0.2 + Math.sin(a) * o.radius * 0.8);
       ctx.stroke();
-      ctx.globalAlpha = 0.25 * alpha;
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(-o.radius * 0.35, -o.radius * 0.4, o.radius * 0.4, 0, Math.PI * 2);
-      ctx.fill();
     }
+    ctx.fillStyle = '#3a6a2a';
+    ctx.beginPath();
+    ctx.arc(0, -o.radius * 0.2, o.radius * 0.22, 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = 1;
     ctx.restore();
   }

@@ -319,7 +319,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
   tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 } },
   palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 } },
-  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28 },
+  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 } },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22 },
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
   // read as distinct shards/vents (crystal bumped 30→60 so two never near-touch).
@@ -1772,25 +1772,30 @@ function stamp(ctx: GenCtx, spec: StampSpec): void {
   }
 }
 
-registerStamp('rocks', (ctx, spec) => stampRock(ctx, spec.radius ?? [18, 46]));
+// DEFAULT SIZE RANGES are deliberately WIDE (roughly ±40% past the old
+// bounds, skewed larger): the same stamp rolls a puddle in one zone and a
+// proper lake in the next, a pebble field here and a boulder run there —
+// terrain features stop reading as same-sized cookie cutters. A layout entry
+// that wants a tight band still overrides via `spec.radius`.
+registerStamp('rocks', (ctx, spec) => stampRock(ctx, spec.radius ?? [14, 58]));
 registerStamp('cliff', (ctx) => stampCliff(ctx));
-registerStamp('mud', (ctx) => stampBlob(ctx, 'mud', [26, 48], [5, 9], false));
-registerStamp('swamp', (ctx) => stampBlob(ctx, 'swamp', [30, 52], [7, 12], false));
-registerStamp('bog', (ctx) => stampBlob(ctx, 'bog', [28, 46], [5, 9], false));
-registerStamp('water', (ctx, spec) => stampBlob(ctx, 'water', spec.radius ?? [36, 64], [6, 12], false));
-registerStamp('ice', (ctx) => stampBlob(ctx, 'ice', [34, 60], [6, 11], false));
-registerStamp('chasm', (ctx) => stampBlob(ctx, 'chasm', [34, 58], [6, 12], true));
+registerStamp('mud', (ctx) => stampBlob(ctx, 'mud', [20, 62], [5, 9], false));
+registerStamp('swamp', (ctx) => stampBlob(ctx, 'swamp', [24, 68], [7, 12], false));
+registerStamp('bog', (ctx) => stampBlob(ctx, 'bog', [22, 60], [5, 9], false));
+registerStamp('water', (ctx, spec) => stampBlob(ctx, 'water', spec.radius ?? [26, 92], [6, 12], false));
+registerStamp('ice', (ctx) => stampBlob(ctx, 'ice', [26, 80], [6, 11], false));
+registerStamp('chasm', (ctx) => stampBlob(ctx, 'chasm', [28, 76], [6, 12], true));
 registerStamp('ravine', (ctx) => stampRavine(ctx));
 registerStamp('river', (ctx) => stampRiver(ctx));
 registerStamp('ruin', (ctx) => stampRuin(ctx));
 registerStamp('camp', (ctx) => stampCamp(ctx));
-registerStamp('trees', (ctx, spec) => stampTree(ctx, spec.radius ?? [14, 26]));
+registerStamp('trees', (ctx, spec) => stampTree(ctx, spec.radius ?? [12, 30]));
 registerStamp('grove', (ctx) => stampGrove(ctx));
-registerStamp('grass', (ctx) => stampBlob(ctx, 'grass', [20, 42], [4, 8], false));
-registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [24, 44], [3, 6], false));
-registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [30, 56], [5, 9], false));
-registerStamp('vines', (ctx) => stampBlob(ctx, 'vines', [24, 44], [4, 8], true));
-registerStamp('lava', (ctx) => stampBlob(ctx, 'lava', [30, 54], [5, 9], true));
+registerStamp('grass', (ctx) => stampBlob(ctx, 'grass', [16, 54], [4, 8], false));
+registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false));
+registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
+registerStamp('vines', (ctx) => stampBlob(ctx, 'vines', [20, 56], [4, 8], true));
+registerStamp('lava', (ctx) => stampBlob(ctx, 'lava', [26, 68], [5, 9], true));
 registerStamp('shallows', (ctx) => stampShallows(ctx));
 registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'));
 registerStamp('thicket', (ctx) => stampThicket(ctx));
@@ -2188,7 +2193,7 @@ function stampGraves(ctx: GenCtx): void {
 /** A shallow swathe: a wading-depth water patch (beaches and isle shores). It
  *  reuses the water kind with `shallow:true`, so groundAt wades it, never swims. */
 function stampShallows(ctx: GenCtx): void {
-  const R = ctx.rng.range(34, 60);
+  const R = ctx.rng.range(26, 78);
   const center = findSpot(ctx, R * 1.6, false, 16, false); // ground: merges over solids
   if (!center) return;
   const n = ctx.rng.int(5, 9);
@@ -2415,7 +2420,10 @@ function stampRiver(ctx: GenCtx): void {
     arena.w * rng.range(0.35, 0.65),
     arena.h * rng.range(0.35, 0.65));
   const half = Math.min(arena.w, arena.h) * rng.range(0.3, 0.45);
-  const r = rng.range(38, 50);
+  // Channel width varies river-to-river (a creek here, a broad flow there);
+  // step stays proportional so the discs always overlap into ONE body and
+  // the deep channel never strobes at the seams (see groundAt's deepInset).
+  const r = rng.range(32, 60);
   const step = r * 0.95;
 
   const placed: Doodad[] = [];
