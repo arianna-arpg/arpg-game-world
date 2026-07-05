@@ -127,6 +127,19 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   stun: {
     label: 'Stunned', color: '#cccccc', duration: 0.8, hardCC: true,
   },
+  // SUNDERED — the poise break (DEFENSE_CFG.poise.breakStatus): the bar
+  // shatters and the body is briefly OPEN — reeling, slower, hit harder.
+  // Deliberately not a hard stun: the break strips poise's own benefits
+  // (DR + CC shrug) at the same moment, so a follow-up stun lands honestly
+  // through this window instead of being bundled into it. Pure data — any
+  // skill/curse can apply it directly (apply_sundered exists like the rest).
+  sundered: {
+    label: 'Sundered', color: '#d8b06a', duration: 2.5,
+    mods: [
+      mod('damageTaken', 'more', 0.15),
+      mod('moveSpeed', 'more', -0.15),
+    ],
+  },
   weaken: {
     label: 'Weakened', color: '#b06bd4', duration: 5,
     mods: [mod('damage', 'more', -0.25)],
@@ -236,6 +249,15 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('damage', 'increased', 0.25),
       mod('moveSpeed', 'increased', 0.15),
     ],
+  },
+  // PHASING: the bearer has no BODY for a while — walks through the pack
+  // and the pack through it (crowd separation skips phasing actors; hits
+  // and targeting are untouched). One stat, so movement skills, potions,
+  // or a whole ghost-monster (base.phasing 1) grant it identically.
+  phasing: {
+    label: 'Phasing', color: '#9ad8e8', duration: 4,
+    beneficial: true,
+    mods: [mod('phasing', 'flat', 1)],
   },
 
   living_bomb: {

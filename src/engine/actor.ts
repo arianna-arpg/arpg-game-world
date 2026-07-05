@@ -5,11 +5,12 @@
 // controls them (input vs AI) and which team they fight for.
 // ---------------------------------------------------------------------------
 
-import { vec, type Vec2 } from '../core/math';
+import { chance, vec, type Vec2 } from '../core/math';
 import {
   StatSheet, attributeModifiers,
   type Attributes, type ConditionId, type Modifier,
 } from './stats';
+import { DEFENSE_CFG } from './defense';
 import {
   instanceMods, skillContextTags, instanceGates, instanceChargeCost,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
@@ -486,6 +487,24 @@ export class Actor {
   es = 0;
   /** Seconds until the energy shield may begin recharging. */
   esDelay = 0;
+  /** POISE — the break-bar (Fortitude's pool): while it stands, hits are
+   *  reduced by poiseDR and hard CC is shrugged at poiseCcAvoid; every hit
+   *  drains it. At zero it BREAKS (benefits lost, `sundered` worn) until it
+   *  recovers past the re-arm line. See DEFENSE_CFG.poise for the rules. */
+  poise = 0;
+  /** Seconds until poise may begin recovering (reset by every drain). */
+  poiseDelay = 0;
+  /** Broken until the pool climbs back past the re-arm fraction. */
+  poiseBroken = false;
+  /** INSIGHT — the momentum-fed avoidance pool (Charisma's lane): spent by
+   *  incoming hits to slip the brunt, refilled only while MOVING. The live
+   *  reduction is insightDR × insightMomentum() (the velocity taper). */
+  insight = 0;
+  /** EVASION ENTROPY: the deterministic dodge accumulator (each incoming
+   *  attack adds its chance-to-hit; a crossing of 1 lands and pays 1 back)
+   *  plus the freshness window that re-seeds it between fights. */
+  evadeEntropy = 0;
+  evadeWindow = 0;
   /** Absorption shield: temporary pool eaten before EVERYTHING else. */
   absorb = 0;
   absorbTimer = 0;
@@ -642,6 +661,37 @@ export class Actor {
   maxLife(): number { return this.sheet.get('life'); }
   maxMana(): number { return this.sheet.get('mana'); }
   maxEs(): number { return this.sheet.get('energyShield'); }
+  maxPoise(): number { return this.sheet.get('poise'); }
+  maxInsight(): number { return this.sheet.get('insight'); }
+
+  /** The insight VELOCITY TAPER: 1 while moving (within the grace window),
+   *  easing to 0 over the insightTaper stat's seconds once planted. Dashes,
+   *  leaps, and live knockback all count as motion (they zero idleFor), so
+   *  the momentum window survives a dodge-roll through the pack. */
+  insightMomentum(): number {
+    const idle = this.idleFor - DEFENSE_CFG.insight.graceWindow;
+    if (idle <= 0) return 1;
+    return Math.max(0, 1 - idle / Math.max(0.1, this.sheet.get('insightTaper')));
+  }
+
+  /** Drain the poise bar (damage.ts mitigation + any future data source).
+   *  Resets the recovery delay; at the bottom the bar BREAKS — the break
+   *  status (DEFENSE_CFG.poise.breakStatus) lands and the benefits lapse
+   *  until the pool recovers past the re-arm fraction (updateTimers).
+   *  Returns true only on the breaking drain (for the world's fanfare). */
+  damagePoise(amount: number): boolean {
+    if (amount <= 0 || this.maxPoise() <= 0) return false;
+    this.poiseDelay = this.sheet.get('poiseRegenDelay');
+    const before = this.poise;
+    this.poise = Math.max(0, this.poise - amount);
+    if (this.poise <= 0 && before > 0 && !this.poiseBroken) {
+      this.poiseBroken = true;
+      const bs = DEFENSE_CFG.poise.breakStatus;
+      if (bs && STATUS_DEFS[bs]) this.applyStatus(bs, 0, 1, 'Poise Break');
+      return true;
+    }
+    return false;
+  }
 
   /** THE one gate every life heal flows through: scaled by the healTaken
    *  stat (seared wounds halve it — a status is all it takes) and capped
@@ -684,6 +734,9 @@ export class Actor {
     this.life = this.maxLife();
     this.mana = this.maxMana();
     this.es = this.maxEs();
+    this.poise = this.maxPoise();
+    this.insight = this.maxInsight();
+    this.poiseBroken = false;
   }
 
   isMinion(): boolean { return !!this.owner; }
@@ -889,6 +942,13 @@ export class Actor {
   ): void {
     const def = STATUS_DEFS[id];
     if (!def) return;
+    // POISE holds the line: while the break-bar stands, incoming HARD CC
+    // may be shrugged outright (the poiseCcAvoid stat). One gate for every
+    // stun path — hit effects, pulls, chill's freeze buildup alike.
+    if (def.hardCC && !def.beneficial && this.poise > 0.5 && !this.poiseBroken
+      && chance(this.sheet.get('poiseCcAvoid'))) {
+      return;
+    }
     const duration = def.duration * durationScale;
     const existing = this.statuses.find(s => s.id === id);
     // ARMED (rupture-bearing) statuses run a FIXED FUSE: re-application never
@@ -986,6 +1046,8 @@ export class Actor {
     if (maxEs > 0 && this.es >= maxEs * 0.99) active.push('fullEs');
     if (maxEs > 0 && this.es < maxEs * 0.35) active.push('lowEs');
     if (this.casting?.mode === 'guard') active.push('guarding');
+    // The break-bar stands: "while poised" mods hold (lapse on the break).
+    if (this.poise > 0.5 && !this.poiseBroken) active.push('poised');
     // Planted vs on the move (Colossus Stance): idleFor accrues in
     // updateTimers and is zeroed by every deliberate step. Between the two
     // windows sits a NEUTRAL transition band — neither bonus nor malus.
@@ -1008,6 +1070,9 @@ export class Actor {
     if (this.useLock > 0) this.useLock -= dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.aiCooldown > 0) this.aiCooldown -= dt;
+    // Evasion-entropy freshness: unattacked long enough, the accumulator
+    // re-seeds on the next check (a fresh fight reads fresh).
+    if (this.evadeWindow > 0) this.evadeWindow -= dt;
 
     // Charge personalities: decay clocks, drains, per-second taps.
     this.updateCharges(dt);
@@ -1214,6 +1279,40 @@ export class Actor {
         this.es = 0; // the granting buff expired
       }
       if (this.es > maxEs) this.es = maxEs;
+
+      // POISE recovery: delay-gated like the energy shield — a fraction of
+      // max per second once the drains stop. A broken bar RE-ARMS when the
+      // pool climbs back past the re-arm line (DEFENSE_CFG.poise.rearmFrac).
+      const maxPoise = this.maxPoise();
+      if (maxPoise > 0) {
+        if (this.poiseDelay > 0) this.poiseDelay -= dt;
+        else if (this.poise < maxPoise) {
+          this.poise = Math.min(maxPoise,
+            this.poise + maxPoise * this.sheet.get('poiseRegenPct') * dt);
+        }
+        if (this.poiseBroken && this.poise >= maxPoise * DEFENSE_CFG.poise.rearmFrac) {
+          this.poiseBroken = false;
+        }
+        if (this.poise > maxPoise) this.poise = maxPoise;
+      } else if (this.poise > 0 || this.poiseBroken) {
+        this.poise = 0;
+        this.poiseBroken = false;
+      }
+
+      // INSIGHT refills with MOTION only: the regen rides the same momentum
+      // taper as the reduction, so a sprint refills briskly, the lingering
+      // window trickles, and a statue reads nothing.
+      const maxInsight = this.maxInsight();
+      if (maxInsight > 0) {
+        const momentum = this.insightMomentum();
+        if (momentum > 0 && this.insight < maxInsight) {
+          this.insight = Math.min(maxInsight,
+            this.insight + maxInsight * this.sheet.get('insightRegenPct') * momentum * dt);
+        }
+        if (this.insight > maxInsight) this.insight = maxInsight;
+      } else if (this.insight > 0) {
+        this.insight = 0;
+      }
     }
     return dot;
   }
