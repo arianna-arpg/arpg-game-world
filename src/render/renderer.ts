@@ -3635,9 +3635,12 @@ export class Renderer {
     const m = world.meta;
 
     // Skill-bar geometry — computed FIRST so the resource orbs can flank it.
+    // The cluster sits high enough that its three text strips stay distinct:
+    // slot key labels (by+slot+12), the XP bar (by+slot+18) and the DOM hint
+    // bar hugging the bottom edge — at by = h-78 all three overlapped.
     const slot = 54, gap = 6;
     const totalW = p.skills.length * slot + (p.skills.length - 1) * gap;
-    const bx = w / 2 - totalW / 2, by = h - 78;
+    const bx = w / 2 - totalW / 2, by = h - 92;
 
     // Resource orbs FLANK the centered bar (life just-left, mana just-right) so
     // life / mana / skills read as ONE central cluster — vital info isn't shoved
@@ -3964,11 +3967,12 @@ export class Renderer {
       }
     }
 
-    // XP bar
+    // XP bar — tucked between the key-label row above and the DOM hint bar
+    // below (its box top sits at ~h-17; +16 keeps the bar fully clear of it).
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
-    ctx.fillRect(bx, by + slot + 18, totalW, 5);
+    ctx.fillRect(bx, by + slot + 16, totalW, 5);
     ctx.fillStyle = '#b8a0e0';
-    ctx.fillRect(bx, by + slot + 18, totalW * clamp(m.xp / m.xpNeeded, 0, 1), 5);
+    ctx.fillRect(bx, by + slot + 16, totalW * clamp(m.xp / m.xpNeeded, 0, 1), 5);
 
     // Top-left status block
     ctx.textAlign = 'left';
@@ -4079,13 +4083,13 @@ export class Renderer {
     const { ctx } = this;
     // Stack the bars ABOVE the orb (the orbs hug the bottom edge, so a below-orb
     // bar renders off-screen — same reason drawOrb's caption sits above). Clear the
-    // orb's own caption (at orbY - orbR - 18) and grow upward.
+    // orb's own caption (at orbY - orbR - 26) and grow upward.
     let dy = 0;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
       const cur = p.survival.get(def.id);
       if (cur === undefined || cur >= def.max) continue; // full / inactive → hidden
       const frac = clamp(cur / def.max, 0, 1);
-      const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - 34 - dy;
+      const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - 46 - dy;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, bw, bh);
       ctx.fillStyle = frac < 0.34 ? '#e85050' : def.color; ctx.fillRect(x, y, bw * frac, bh);
       ctx.strokeStyle = '#3a3a52'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh);
@@ -4124,10 +4128,11 @@ export class Renderer {
     ctx.fillText(text, x, y + 5);
     // Caption sits ABOVE the orb: the orbs now flank the bar near the bottom
     // edge, so a below-orb label (y + r + 14) would render off-screen. Cleared
-    // above the ES/absorb arcs (which reach orbR + 11).
+    // above ALL the tank arcs — the outermost (endurance) rides at orbR + 21,
+    // which struck through the caption at the old -18 offset.
     ctx.font = '10px Verdana';
     ctx.fillStyle = '#8a8678';
-    ctx.fillText(label, x, y - r - 18);
+    ctx.fillText(label, x, y - r - 26);
   }
 }
 
