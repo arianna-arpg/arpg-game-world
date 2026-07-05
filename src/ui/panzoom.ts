@@ -32,6 +32,11 @@ export interface PanZoomConfig {
   /** Zoom clamp — keeps wheel spam from zooming into oblivion. */
   minZoom: number;
   maxZoom: number;
+  /** Pixels the pointer must travel (from pointerdown) before the gesture
+   *  counts as a DRAG. Real clicks jitter a pixel or two between down and up;
+   *  without a dead zone that jitter both nudged the pan and marked the
+   *  gesture `moved`, which swallowed the click (zone pins, node clicks). */
+  dragThresholdPx: number;
   cursorIdle: string;
   cursorDrag: string;
 }
@@ -42,6 +47,7 @@ export const PANZOOM_DEFAULTS: PanZoomConfig = {
   buttonFactor: 1.4,
   minZoom: 0.2,
   maxZoom: 16,
+  dragThresholdPx: 4,
   cursorIdle: 'grab',
   cursorDrag: 'grabbing',
 };
@@ -92,6 +98,7 @@ export function attachPanZoom(
   }, { passive: false });
 
   let dragging = false, moved = false, lastX = 0, lastY = 0;
+  let downX = 0, downY = 0;   // pointerdown origin — the drag-threshold anchor
   const end = (e: PointerEvent): void => {
     if (!dragging) return;
     dragging = false;
@@ -105,6 +112,7 @@ export function attachPanZoom(
     if (!cfg.panButtons.includes(e.button)) return;
     e.preventDefault(); // MMB pan must not arm the browser's autoscroll
     dragging = true; moved = false; lastX = e.clientX; lastY = e.clientY;
+    downX = e.clientX; downY = e.clientY;
     try { svg.setPointerCapture(e.pointerId); } catch { /* synthetic pointer */ }
     svg.style.cursor = cfg.cursorDrag;
     host.onDragState?.(true);
@@ -114,7 +122,15 @@ export function attachPanZoom(
     // Chord release (rule 2): the pan button is up but pointerup never came.
     if (dragging && (e.buttons & panMask) === 0) end(e);
     if (!dragging) { host.onIdleMove?.(e); return; }
-    moved = true;
+    // Dead zone: inside the threshold the gesture is still a CLICK — don't pan
+    // and don't mark it moved (which would swallow the click on pointerup).
+    if (!moved) {
+      if (Math.hypot(e.clientX - downX, e.clientY - downY) < cfg.dragThresholdPx) {
+        lastX = e.clientX; lastY = e.clientY;
+        return;
+      }
+      moved = true;
+    }
     const rect = svg.getBoundingClientRect();
     const b = host.box(), z = host.getZoom();
     const vw = b.w / z, vh = b.h / z;
