@@ -15,7 +15,8 @@ import { Actor, type BrainPhase, type CastingState, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
-import { applyConversion, applyDot, applyHit, mitigateTyped, rollSkillDamage, type DamagePacket } from './damage';
+import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
+import { DEFENSE_CFG } from './defense';
 import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
@@ -5332,7 +5333,7 @@ export class World {
     const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
     if (!victim) return;                 // only when a target is actually in reach
     if (!chance(eff.chance)) return;     // …and not even then, every time
-    const taken = eff.power * (1 - victim.sheet.get('chaosRes')) * victim.sheet.get('damageTaken');
+    const taken = eff.power * (1 - resistValue(victim, 'chaos')) * victim.sheet.get('damageTaken');
     victim.life -= taken;
     victim.hitFlash = 0.15;
     this.pushActor(victim, angleTo(d.pos, victim.pos), 60);
@@ -6685,7 +6686,10 @@ export class World {
     const m = seat.meta;
 
     // Effective attributes = class base + everything granted by the tree.
-    const attrs = { ...m.baseAttrs };
+    // Seeded over EVERY registered attribute id (missing keys read 0), so a
+    // save written before an attribute existed never poisons the math.
+    const attrs = {} as Attributes;
+    for (const a of ATTRIBUTE_IDS) attrs[a] = m.baseAttrs[a] ?? 0;
     const passiveMods = [];
     for (const id of m.allocated) {
       const node = PASSIVE_NODES[id];
@@ -8094,6 +8098,19 @@ export class World {
       a.radius = def.radius * s;
       if (def.scaleStats) a.sheet.setSource('scaleVar', [mod('life', 'more', s - 1), mod('damage', 'more', s - 1)]);
       if (def.juvenileBelow !== undefined && s <= def.juvenileBelow && def.juvenileBrain) a.brain = def.juvenileBrain;
+    }
+    // WEIGHT defaults from the BODY: mass grows with the (post-variance)
+    // radius unless the def brings its own base.weight — so the bestiary
+    // gets heft for free and any monster can still override it as data.
+    if (def.base.weight === undefined) {
+      a.sheet.setBase('weight',
+        Math.pow(a.radius / DEFENSE_CFG.weight.refRadius, DEFENSE_CFG.weight.radiusPow));
+    }
+    // Bosses hold their ground: a default poise pool (levels with them)
+    // unless the def declares one. Rank-and-file keep the registry base.
+    if (def.boss && def.base.poise === undefined) {
+      a.sheet.setBase('poise',
+        DEFENSE_CFG.poise.bossBase + DEFENSE_CFG.poise.bossPerLevel * lv);
     }
     // Zone Memory: flag the zone's BASE population (spawned inside the tagging
     // window in loadZone) so it can be snapshotted + restored on re-entry. Overlay
@@ -11830,8 +11847,12 @@ export class World {
    */
   pushActor(target: Actor, dir: number, strength: number, caster?: Actor, inst?: SkillInstance): void {
     if (target.construct || target.anchored || target.leap) return;
-    const vx = Math.cos(dir) * strength * PUSH_DAMPING;
-    const vy = Math.sin(dir) * strength * PUSH_DAMPING;
+    // WEIGHT: mass divides the shove — a knockback that sends a goblin
+    // flying nudges an ogre. Weight is a stat (Fortitude raises it, curses
+    // can shed it), floored so a shredded husk never launches to infinity.
+    const eff = strength / Math.max(DEFENSE_CFG.weight.min, target.sheet.get('weight'));
+    const vx = Math.cos(dir) * eff * PUSH_DAMPING;
+    const vy = Math.sin(dir) * eff * PUSH_DAMPING;
     const p = target.push;
     if (p) {
       p.vx += vx; p.vy += vy;
@@ -12465,6 +12486,14 @@ export class World {
       }
       this.text(target.pos, Math.round(dealt).toString(),
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13);
+      // The poise bar SHATTERED under this blow — announce the window.
+      if (result.poiseBroke) {
+        this.text(vec(target.pos.x, target.pos.y - 24), 'BROKEN!', '#d8b06a', 15);
+        this.flashes.push({
+          pos: vec(target.pos.x, target.pos.y), radius: target.radius + 12,
+          color: '#d8b06a', life: 0.3, maxLife: 0.3,
+        });
+      }
       // Striking the thorned costs blood (thorns / reflect / Nettles).
       this.applyThorns(target, caster, dealt);
       // IRON WARD: the warded bank what still lands — the bill comes due
@@ -12531,17 +12560,13 @@ export class World {
     }
 
     // Static Shock: strip a fraction of the target's CURRENT life — typed,
-    // resisted, scaled by damage taken, and it can never kill.
+    // resisted (through the capped resistValue like everything else),
+    // scaled by damage taken, and it can never kill.
     if (def.currentLifeDamage && !target.invulnerable && target.life > 1) {
-      const RES2: Record<DamageType, string | null> = {
-        physical: null, fire: 'fireRes', cold: 'coldRes',
-        lightning: 'lightningRes', chaos: 'chaosRes',
-      };
       const elem = (['lightning', 'fire', 'cold', 'chaos'] as const)
         .find(e => def.tags.includes(e)) ?? 'lightning';
       let amt = target.life * def.currentLifeDamage * target.sheet.get('damageTaken');
-      const res = RES2[elem];
-      if (res) amt *= 1 - target.sheet.get(res);
+      amt *= 1 - resistValue(target, elem);
       amt = Math.min(amt, target.life - 1);
       if (amt > 0) {
         target.life -= amt;
@@ -17595,19 +17620,29 @@ export class World {
         const d = dist(a.pos, b.pos);
         const minD = a.radius + b.radius;
         if (d < minD && d > 0.01) {
+          // PHASING: no body, no shoulder — a phasing actor passes through
+          // the crowd (and it through them). Hits/targeting are untouched.
+          if (a.sheet.get('phasing') > 0 || b.sheet.get('phasing') > 0) continue;
           // Constructs and rooted objects (spawners, caches) are anchored:
           // only the mobile party gets pushed.
           const ang = angleTo(a.pos, b.pos);
           const aFixed = !!a.construct || a.anchored;
           const bFixed = !!b.construct || b.anchored;
           if (aFixed && bFixed) continue;
-          const push = aFixed || bFixed ? (minD - d) : (minD - d) / 2;
-          if (!aFixed) {
-            a.pos.x -= Math.cos(ang) * push; a.pos.y -= Math.sin(ang) * push;
+          // WEIGHT decides who yields: the overlap splits by INVERSE mass —
+          // an ogre wading through goblins parts the goblins.
+          const overlap = minD - d;
+          const wa = Math.max(DEFENSE_CFG.weight.min, a.sheet.get('weight'));
+          const wb = Math.max(DEFENSE_CFG.weight.min, b.sheet.get('weight'));
+          const aShare = aFixed ? 0 : bFixed ? 1 : wb / (wa + wb);
+          if (!aFixed && aShare > 0) {
+            a.pos.x -= Math.cos(ang) * overlap * aShare;
+            a.pos.y -= Math.sin(ang) * overlap * aShare;
             a.pos = this.clampPos(a.pos, a.radius);
           }
-          if (!bFixed) {
-            b.pos.x += Math.cos(ang) * push; b.pos.y += Math.sin(ang) * push;
+          if (!bFixed && aShare < 1) {
+            b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
+            b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
             b.pos = this.clampPos(b.pos, b.radius);
           }
         }
