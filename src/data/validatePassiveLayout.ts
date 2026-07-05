@@ -20,8 +20,10 @@ const RADII: Record<PassiveNode['kind'], number> =
   { start: 13, small: 9, notable: 14, keystone: 17, attr: 11 };
 
 const PAD = 10;       // breathing room required between any two node edges
-const CENTER = 500;   // tree centre (matches passives.ts CENTER)
-const HALF = 500;     // half the viewBox (0 0 1000 1000)
+// The tree lives in a 6000×6000 space (the 6× expansion — room to grow for
+// years; the panel auto-fits to node bounds and opens centred on the start).
+const CENTER = 3000;
+const HALF = 3000;
 const MARGIN = 12;    // keep nodes this far inside the edge
 
 /** A node introduced by the batch-8 expansion (cluster or exotic). Overlaps

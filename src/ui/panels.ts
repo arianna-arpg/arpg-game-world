@@ -19,7 +19,7 @@ import {
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
 import { CLASSES, type ClassDef } from '../data/classes';
-import { PASSIVE_ADJACENCY, PASSIVE_NODES, type PassiveNode } from '../data/passives';
+import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, type PassiveNode } from '../data/passives';
 import { BIOMES, biomeOf } from '../world/biomes';
 import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
@@ -646,16 +646,14 @@ export class UI {
   toggleTree(): void {
     this.treeOpen = !this.treeOpen;
     this.passiveTree.classList.toggle('hidden', !this.treeOpen);
-    if (this.treeOpen) this.refreshTree();
+    if (this.treeOpen) {
+      this.centerTreeOnStart();
+      this.refreshTree();
+    }
   }
 
-  refreshTree(): void {
-    if (!this.treeOpen) return;
-    const world = this.getWorld();
-    const m = world.meta;
-
-    // Fit the view to the NODE BOUNDS (not a fixed 1000×1000) so the tree stays
-    // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
+  /** Fit box over every node (+padding) — the zoom/pan reference frame. */
+  private computeTreeBox(): void {
     const allNodes = Object.values(PASSIVE_NODES);
     const PAD = 45;
     const bMinX = Math.min(...allNodes.map(n => n.x)) - PAD;
@@ -663,6 +661,33 @@ export class UI {
     const bMinY = Math.min(...allNodes.map(n => n.y)) - PAD;
     const bMaxY = Math.max(...allNodes.map(n => n.y)) + PAD;
     this.treeBox = { minX: bMinX, minY: bMinY, w: bMaxX - bMinX, h: bMaxY - bMinY };
+  }
+
+  /** DEFAULT VIEW on open: centred on this class's START NODE at a readable
+   *  zoom (a ~1200-unit window), instead of the whole 6000-unit expanse —
+   *  the tree can grow without the first impression shrinking. Zoom out /
+   *  reset to survey everything; pan clamps keep the window on the tree. */
+  private centerTreeOnStart(): void {
+    this.computeTreeBox();
+    const start = PASSIVE_NODES[classStartNode(this.getWorld().meta.classDef.id)];
+    if (!start) return;
+    const b = this.treeBox;
+    const VIEW = 1200;
+    this.treeZoom = clamp(Math.max(b.w, b.h) / VIEW, 1, 8);
+    this.treePan = {
+      x: start.x - (b.minX + b.w / 2),
+      y: start.y - (b.minY + b.h / 2),
+    };
+  }
+
+  refreshTree(): void {
+    if (!this.treeOpen) return;
+    const world = this.getWorld();
+    const m = world.meta;
+
+    // Fit the view to the NODE BOUNDS (not a fixed viewBox) so the tree stays
+    // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
+    this.computeTreeBox();
 
     const RADII: Record<PassiveNode['kind'], number> = {
       start: 13, small: 9, notable: 14, keystone: 17, attr: 11,
@@ -705,9 +730,9 @@ export class UI {
       </circle>`;
     }
 
-    // The DEV editor assumes a fixed 1000×1000 coordinate space for its hit-tests;
+    // The DEV editor works in the raw 6000×6000 coordinate space;
     // play mode uses the auto-fit + zoom/pan viewBox.
-    const viewBox = DEV.passiveTreeEditor ? '0 0 1000 1000' : this.treeViewBox();
+    const viewBox = DEV.passiveTreeEditor ? '0 0 6000 6000' : this.treeViewBox();
     const zPct = Math.round(this.treeZoom * 100);
     this.passiveTree.innerHTML = `
       <h2>Passive Tree — <span style="color:#ffd700">${m.passivePoints} points</span>

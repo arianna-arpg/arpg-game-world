@@ -114,11 +114,18 @@ export interface ProcDef {
    *   'evade'           you evade an attack
    *   'esBreak'         your energy shield is emptied
    *   'poiseBreakDealt' your hit breaks an enemy's poise bar
-   *   'poiseBroken'     your own poise bar breaks */
+   *   'poiseBroken'     your own poise bar breaks
+   *   'chargeGain'      you actually gain a charge (see `charge` filter)
+   *   'buffGain'        a buff is applied to you (see `buff` filter) */
   trigger: 'hit' | 'kill' | 'collision' | 'statusApply'
-    | 'block' | 'evade' | 'esBreak' | 'poiseBreakDealt' | 'poiseBroken';
+    | 'block' | 'evade' | 'esBreak' | 'poiseBreakDealt' | 'poiseBroken'
+    | 'chargeGain' | 'buffGain';
   /** statusApply only: fires when one of THESE statuses lands (omit = any). */
   status?: string | string[];
+  /** chargeGain only: fires for THESE charge ids (omit = any charge). */
+  charge?: string | string[];
+  /** buffGain only: fires for THESE buff ids (omit = any buff). */
+  buff?: string | string[];
   /** SKILL GATE: the proc only rolls for these skill ids — "Sanctified
    *  Strike has a chance to..." lives on the proc, so ANY grantor (passive,
    *  gem, affix) is automatically skill-scoped. Omit = every skill. */
@@ -356,6 +363,41 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'bastion_fortify', name: 'Bastion',
     color: '#a8c86a', trigger: 'block',
     effect: { type: 'fortify', flat: 6, pctMaxLife: 0.02 },
+  },
+
+  // --- GAIN CHAINS (chargeGain / buffGain): resources begetting resources.
+  // Each link's grant lands ONE CHAIN-DEPTH deeper, so the ladder below is
+  // procDepth-governed exactly like hit chains: base allowance runs one
+  // link; Chain Reaction and Perpetual Motion buy the deeper rungs; and
+  // Surging Frenzy closing the loop back into Fury DIES at the lid — the
+  // perpetual-motion machine is structurally impossible.
+
+  // Fury → Rage ("10% chance to gain a Rage stack when gaining Frenzy" —
+  // the chance lives on the grantor, e.g. Kindled Rage's 0.1).
+  kindled_rage: {
+    id: 'kindled_rage', name: 'Kindled Rage',
+    color: '#e04030', trigger: 'chargeGain', charge: 'fury',
+    effect: { type: 'gainCharge', charge: 'rage', amount: 1, max: 8 },
+  },
+  // Rage → Bloodlust (the second rung).
+  crimson_thirst: {
+    id: 'crimson_thirst', name: 'Crimson Thirst',
+    color: '#c02848', trigger: 'chargeGain', charge: 'rage',
+    effect: { type: 'gainCharge', charge: 'bloodlust', amount: 2, max: 10 },
+  },
+  // Bloodlust → Fury — the deliberate LOOP CLOSER, included to prove the
+  // rule: at the depth lid the wheel stops turning on its own.
+  surging_frenzy: {
+    id: 'surging_frenzy', name: 'Surging Frenzy',
+    color: '#e87838', trigger: 'chargeGain', charge: 'bloodlust',
+    effect: { type: 'gainCharge', charge: 'fury', amount: 1, max: 5 },
+  },
+  // ANY buff gained → a beat of Fury (the omit-filter showcase; the ICD is
+  // the metronome so buff-spam can't machine-gun it).
+  battle_chorus: {
+    id: 'battle_chorus', name: 'Battle Chorus',
+    color: '#e8a040', trigger: 'buffGain', icd: 6,
+    effect: { type: 'gainCharge', charge: 'fury', amount: 1, max: 5 },
   },
 
   // --- Rate-discipline & minion-carry showcases -------------------------------

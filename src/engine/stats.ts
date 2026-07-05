@@ -247,8 +247,15 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  run (0 = procs fire from real actions only — the classic rule). Each
    *  extra layer rolls at DEFENSE_CFG.procs.depthFalloff of its chance,
    *  and the hard ceiling (maxExtraDepth) is absolute — the proc-combat
-   *  archetype's investment lane, exploit-proof by geometry. */
+   *  archetype's investment lane, exploit-proof by geometry. Governs hit
+   *  chains AND gain chains (charge/buff procs granting charges/buffs)
+   *  with the same numbers — one rule, no bespoke variants. */
   procDepth:      { label: 'Proc Chain Depth', base: 0, min: 0, max: DEFENSE_CFG.procs.maxExtraDepth },
+  /** LUCK — the proc-rate multiplier (deliberately NOT drop rates): every
+   *  proc roll's chance is × (1 + luck), on top of its rate discipline.
+   *  Tag-queried where a skill context exists, so "lucky with melee
+   *  skills" is a filter. Negative luck is a real curse lever. */
+  luck:           { label: 'Luck', base: 0, min: -0.9, max: 1, percent: true },
 
   // BODY MASS & SUBSTANCE
   /** How shovable this body is: knockback and crowd separation divide by

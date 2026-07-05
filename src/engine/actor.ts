@@ -401,6 +401,13 @@ export class Actor {
    *  per-attempt chance scales with the gap, so fast and slow skills
    *  converge on the same procs-per-minute (ProcDef.ppm). */
   procAttemptAt = new Map<string, number>();
+  /** GAIN EVENTS (the chargeGain/buffGain proc triggers): every charge or
+   *  buff actually gained this frame, with its CHAIN DEPTH — 0 for gains
+   *  from real play, +1 per proc-payload link, so Frenzy→Rage→Bloodlust
+   *  chains are governed by the same procDepth/falloff rules as hit chains
+   *  and a loop back into Frenzy dies at the lid. Swept by the world each
+   *  frame (the expiredStatuses pattern); capped so nothing can flood it. */
+  gainEvents: { kind: 'charge' | 'buff'; id: string; depth: number }[] = [];
   /** DAMAGE POOLS (DamagePoolSpec): banked fuel keyed by pool id — fed by
    *  the damage this actor deals, spent by its pool skills. */
   pools = new Map<string, number>();
@@ -822,7 +829,14 @@ export class Actor {
     this.sheet.setSource('attributes', attributeModifiers(attrs));
   }
 
-  addBuff(def: BuffEffect, durationScale = 1): void {
+  /** `chainDepth`: proc links behind this application (0 = real play) —
+   *  the buffGain event carries it so buff→buff chains obey depth rules. */
+  addBuff(def: BuffEffect, durationScale = 1, chainDepth = 0): void {
+    // Every application — fresh, stacking, or refresh — counts as GAINING
+    // the buff (the buffGain trigger's event).
+    if (this.gainEvents.length < 64) {
+      this.gainEvents.push({ kind: 'buff', id: def.id, depth: chainDepth });
+    }
     const existing = this.buffs.get(def.id);
     const duration = def.duration * durationScale;
     const grant = def.stacksOnApply ?? 1;
@@ -868,15 +882,22 @@ export class Actor {
   /** Bank charges, honoring the registry: refused outright while the
    *  charge is DRAINING (the one-way valve), capped at max + the owner's
    *  chargeCap stat (queried with the granting skill's tags — "+2 max Rage
-   *  on melee skills" is a tag filter), and per-charge mods re-synced. */
-  gainCharge(charge: string, amount: number, max: number, inst?: SkillInstance): void {
+   *  on melee skills" is a tag filter), and per-charge mods re-synced.
+   *  `chainDepth`: how many proc links produced this gain (0 = real play) —
+   *  stamped onto the gain EVENT so chargeGain procs obey the depth rules. */
+  gainCharge(charge: string, amount: number, max: number, inst?: SkillInstance, chainDepth = 0): void {
     const st = this.chargeState.get(charge);
     if (st?.drain !== undefined) return;
     const cap = Math.max(0, Math.round(max + this.sheet.get('chargeCap',
       inst ? skillContextTags(inst.def) : undefined,
       inst ? instanceMods(inst) : undefined)));
     const cur = this.charges.get(charge) ?? 0;
-    this.charges.set(charge, Math.min(cap, cur + amount));
+    const next = Math.min(cap, cur + amount);
+    this.charges.set(charge, next);
+    // An ACTUAL increase is a gain event (a full bank refreshing isn't).
+    if (next > cur && this.gainEvents.length < 64) {
+      this.gainEvents.push({ kind: 'charge', id: charge, depth: chainDepth });
+    }
     // A fresh gain resets the decay clock.
     const state = st ?? { idle: 0, acc: 0, tick: 0 };
     state.idle = 0;

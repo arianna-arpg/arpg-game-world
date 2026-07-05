@@ -12896,7 +12896,7 @@ export class World {
         }
         if (procChance <= 0 || !chance(procChance)) continue;
         if (!this.procReady(caster, proc)) continue;
-        this.executeProc(proc, caster, inst, target);
+        this.executeProc(proc, caster, inst, target, depth);
       }
     }
     // MINION CARRY (golden rule 6): the minion's landed hit rolls its
@@ -12924,7 +12924,7 @@ export class World {
           }
           if (cc <= 0 || !chance(cc)) continue;
           if (!this.procReady(owner, proc)) continue;
-          this.executeProc(proc, owner, carryInst, target);
+          this.executeProc(proc, owner, carryInst, target, depth);
         }
       }
     }
@@ -13014,7 +13014,7 @@ export class World {
       const c = this.procChance(caster, proc, 0, tags, extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(caster, proc)) continue;
-      this.executeProc(proc, caster, inst, target);
+      this.executeProc(proc, caster, inst, target, 0);
     }
   }
 
@@ -13036,7 +13036,7 @@ export class World {
       const c = this.procChance(caster, proc, depth, tags, extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(caster, proc)) continue;
-      this.executeProc(proc, caster, inst, target);
+      this.executeProc(proc, caster, inst, target, depth);
     }
   }
 
@@ -13093,8 +13093,36 @@ export class World {
       owner.procAttemptAt.set(proc.id, this.time);
       c = c * proc.ppm * dt / 60;
     }
+    // LUCK: the universal proc-rate multiplier (never drop rates) — the
+    // proc-build's investment lane, tag-filterable via the query context.
+    c *= 1 + owner.sheet.get('luck', tags, extra as Modifier[] | undefined);
     if (depth > 0) c *= Math.pow(DEFENSE_CFG.procs.depthFalloff, depth);
     return Math.min(0.95, c);
+  }
+
+  /** Sweep an actor's GAIN EVENTS (charges/buffs gained since last frame)
+   *  against the chargeGain / buffGain triggers. Each event carries its
+   *  CHAIN DEPTH — payload-granted gains are one link deeper, so a
+   *  Fury→Rage→Bloodlust ladder is procDepth-governed like every chain,
+   *  and Bloodlust→Fury can never close the loop past the lid. Payload
+   *  grants land as NEW events swept next frame (one link per frame —
+   *  chains propagate visibly, never recurse). */
+  private rollGainProcs(owner: Actor, ev: { kind: 'charge' | 'buff'; id: string; depth: number }): void {
+    if (owner.dead || ev.depth >= this.procDepthAllowed(owner)) return;
+    const want = ev.kind === 'charge' ? 'chargeGain' : 'buffGain';
+    for (const proc of PROC_LIST) {
+      if (proc.trigger !== want) continue;
+      const filter = ev.kind === 'charge' ? proc.charge : proc.buff;
+      if (filter !== undefined) {
+        const list = Array.isArray(filter) ? filter : [filter];
+        if (!list.includes(ev.id)) continue;
+      }
+      if (!this.procGates(owner, proc, null)) continue;
+      const c = this.procChance(owner, proc, ev.depth);
+      if (c <= 0 || !chance(c)) continue;
+      if (!this.procReady(owner, proc)) continue;
+      this.executeProc(proc, owner, null, null, ev.depth);
+    }
   }
 
   /** Roll an actor's OWN procs for a self-owned trigger (block / evade /
@@ -13114,23 +13142,27 @@ export class World {
       const c = this.procChance(owner, proc, depth, opts?.tags, opts?.extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(owner, proc)) continue;
-      this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null);
+      this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null, depth);
     }
   }
 
-  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null): void {
+  /** Execute a proc's payload. `depth` is the CHAIN DEPTH of the event
+   *  that fired it — everything this payload causes (hits, charge/buff
+   *  gains, scheduled bursts) is stamped depth + 1, so the one depth rule
+   *  governs hit chains and gain chains identically (no bespoke paths). */
+  private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0): void {
     const at = target ?? caster;
     this.text(vec(at.pos.x, at.pos.y - 14), proc.name + '!', proc.color, 12);
     const fx = proc.effect;
     switch (fx.type) {
       case 'gainCharge': {
-        caster.gainCharge(fx.charge, fx.amount, fx.max, inst ?? undefined);
+        caster.gainCharge(fx.charge, fx.amount, fx.max, inst ?? undefined, depth + 1);
         break;
       }
       case 'buff':
         caster.addBuff(fx.buff, caster.sheet.get('effectDuration',
           inst ? skillContextTags(inst.def) : undefined,
-          inst ? instanceMods(inst) : undefined));
+          inst ? instanceMods(inst) : undefined), depth + 1);
         break;
       // The proc's OWNER mends — through healBy, so healTaken gates it
       // like every heal (golden rule 5).
@@ -13162,10 +13194,10 @@ export class World {
           enemy.hitFlash = 0.15;
           this.text(enemy.pos, Math.round(landed).toString(), proc.color, 12);
           // The burst emptied a shield: the victim's esBreak reactions
-          // fire at proc depth 1 (this damage IS proc output).
+          // fire one link deeper (this damage IS proc output).
           if (enemy.esBroke) {
             enemy.esBroke = false;
-            this.rollOwnProcs(enemy, 'esBreak', { depth: 1 });
+            this.rollOwnProcs(enemy, 'esBreak', { depth: depth + 1 });
           }
           if (enemy.life <= 0 && !enemy.dead) this.kill(enemy);
         }
@@ -13177,7 +13209,7 @@ export class World {
         const spot = fx.at === 'self' || !target ? caster.pos : target.pos;
         this.pendingBursts.push({
           at: vec(spot.x, spot.y), when: this.time + fx.delay,
-          owner: caster, fx, color: proc.color,
+          owner: caster, fx, color: proc.color, depth: depth + 1,
         });
         this.flashes.push({
           pos: vec(spot.x, spot.y), radius: fx.radius,
@@ -13204,14 +13236,14 @@ export class World {
       case 'extraHit':
         if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8, color: proc.color, life: 0.2, maxLife: 0.2 });
-        this.resolveHit(caster, inst, target, fx.damageScale, 1);
+        this.resolveHit(caster, inst, target, fx.damageScale, depth + 1);
         break;
       case 'explosion': {
         if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: fx.radius, color: proc.color, life: 0.3, maxLife: 0.3 });
         for (const enemy of this.enemiesOf(caster)) {
           if (dist(target.pos, enemy.pos) - enemy.radius <= fx.radius) {
-            this.resolveHit(caster, inst, enemy, fx.damageScale, 1);
+            this.resolveHit(caster, inst, enemy, fx.damageScale, depth + 1);
           }
         }
         break;
@@ -13226,7 +13258,7 @@ export class World {
       case 'collisionDamage':
         if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 10, color: proc.color, life: 0.2, maxLife: 0.2 });
-        this.resolveHit(caster, inst, target, fx.damageScale, 1);
+        this.resolveHit(caster, inst, target, fx.damageScale, depth + 1);
         break;
       case 'summon': {
         if (!target) break;
@@ -13250,9 +13282,10 @@ export class World {
   }
 
   /** Scheduled delayedBurst payloads awaiting their telegraph (see the
-   *  'delayedBurst' proc effect) — resolved by updatePendingBursts. */
+   *  'delayedBurst' proc effect) — resolved by updatePendingBursts. `depth`
+   *  is the burst's chain depth (its consequences fire one link deeper). */
   private pendingBursts: {
-    at: Vec2; when: number; owner: Actor; color: string;
+    at: Vec2; when: number; owner: Actor; color: string; depth: number;
     fx: Extract<ProcDef['effect'], { type: 'delayedBurst' }>;
   }[] = [];
 
@@ -13286,7 +13319,7 @@ export class World {
           this.text(a.pos, Math.round(landed).toString(), b.color, 12);
           if (a.esBroke) {
             a.esBroke = false;
-            this.rollOwnProcs(a, 'esBreak', { depth: 1 });
+            this.rollOwnProcs(a, 'esBreak', { depth: b.depth });
           }
           if (a.life <= 0 && !a.dead) this.kill(a);
         }
@@ -14226,6 +14259,15 @@ export class World {
           a.esBroke = false;
           this.rollOwnProcs(a, 'esBreak');
         }
+      }
+      // GAIN EVENTS: charges/buffs gained since last frame feed the
+      // chargeGain/buffGain triggers. Payload grants land as NEW events
+      // (one link deeper) swept NEXT frame — chains propagate a link per
+      // frame and die at the depth lid, never recurse.
+      if (a.gainEvents.length) {
+        const evs = a.gainEvents;
+        a.gainEvents = [];
+        for (const ev of evs) this.rollGainProcs(a, ev);
       }
       // THE LEDGER's beat: escalating upkeep + the low-mana vent.
       this.updateActorLedgers(a, dt);

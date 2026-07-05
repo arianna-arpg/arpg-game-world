@@ -444,6 +444,42 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mimicOwnerForm: true,
   },
 
+  // --- PROC KITS: monsters wielding the trigger fabric AGAINST the player.
+  // Pure data — a proc_<id> grant in `mods` is the whole kit, so every
+  // discipline (chance / ICD / PPM) reads from both sides of the fight.
+
+  // Its bolts CRACKLE: each landed hit may echo as a Thunderstruck burst —
+  // dress lightning resistance and don't clump.
+  voltaic_shade: {
+    id: 'voltaic_shade', name: 'Voltaic Shade',
+    color: '#b8a8f8', shape: 'diamond', radius: 12,
+    base: { life: 30, moveSpeed: 145, mana: 110, manaRegen: 8, evasion: 55 },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('proc_thunderstruck', 'flat', 0.3)],
+    skills: ['spark'],
+    xp: 16,
+  },
+  // Its KILLS bloom into Sainted Ash — consecrated bursts that HEAL ITS
+  // ALLIES and burn yours. A summoner-hunter: feed it minions and it feeds
+  // its pack. Cut it down first.
+  pyre_acolyte: {
+    id: 'pyre_acolyte', name: 'Pyre Acolyte',
+    color: '#e8b06a', shape: 'diamond', radius: 13,
+    base: { life: 32, moveSpeed: 120, mana: 90, manaRegen: 7 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('proc_sainted_ash', 'flat', 1)],
+    skills: ['firebolt'],
+    xp: 15,
+  },
+  // A piper whose darts CONJURE: its hits summon phantasms serving IT, at
+  // the PPM discipline's pace — kill the piper and the tune ends.
+  wraith_piper: {
+    id: 'wraith_piper', name: 'Wraith Piper',
+    color: '#9ad8e8', shape: 'kite', radius: 13,
+    base: { life: 34, moveSpeed: 135, mana: 80, manaRegen: 6, weight: 0.6 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('proc_summon_phantasm', 'flat', 1)],
+    skills: ['phantasm_bolt'],
+    xp: 18,
+  },
+
   fire_cultist: {
     id: 'fire_cultist', name: 'Fire Cultist',
     color: '#d86a3a', shape: 'diamond', radius: 13,
@@ -3121,9 +3157,9 @@ export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
   { minWave: 1, ids: ['zombie', 'skeleton_warrior'] },
   { minWave: 2, ids: ['skeleton_archer', 'blood_mite'] },
   { minWave: 3, ids: ['fire_cultist', 'storm_acolyte'] },
-  { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker'] },
-  { minWave: 5, ids: ['brute', 'hex_weaver'] },
-  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden'] },
+  { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker', 'pyre_acolyte'] },
+  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade'] },
+  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper'] },
   { minWave: 7, ids: ['warband_chieftain', 'bone_serpent'] },
   { minWave: 8, ids: ['bone_colossus', 'javelin_skirmisher'] },
 ];
