@@ -6,7 +6,7 @@
 // referenced from any skill's `status` effect by id.
 // ---------------------------------------------------------------------------
 
-import { mod, STAT_DEFS, type DamageType, type Modifier } from './stats';
+import { mod, STAT_DEFS, type DamageType, type Modifier, type SkillTag } from './stats';
 
 export interface StatusDef {
   label: string;
@@ -40,6 +40,11 @@ export interface StatusDef {
   /** Hard crowd control: the victim cannot move or act while afflicted
    *  (checked by Actor.isStunned — stun, frozen). */
   hardCC?: true;
+  /** SELECTIVE CC: while afflicted, the victim cannot USE skills carrying
+   *  ANY of these tags (Actor.canUse is the one gate — player, monster,
+   *  and minion alike). Silence forbids 'spell', Disarm forbids 'attack',
+   *  Rooted forbids 'movement' — and any future lock is one entry. */
+  forbidsTags?: SkillTag[];
   /** BUILDUP: reaching maxStacks consumes every stack into this status
    *  instead (chill → frozen). Requires stacking + maxStacks. */
   buildup?: { into: string };
@@ -126,6 +131,24 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   },
   stun: {
     label: 'Stunned', color: '#cccccc', duration: 0.8, hardCC: true,
+  },
+  // SELECTIVE CC — the forbidsTags family: each locks ONE verb and leaves
+  // the rest of the kit alive (the counterplay IS switching verbs).
+  // All three are ordinary statuses: hard-cast them, proc them
+  // (apply_silence / apply_disarm / apply_rooted exist like every apply_),
+  // shrug them with ailmentResist — nothing bespoke anywhere.
+  silence: {
+    label: 'Silenced', color: '#b8b8e8', duration: 3,
+    forbidsTags: ['spell'],
+  },
+  disarm: {
+    label: 'Disarmed', color: '#e8c8a0', duration: 3,
+    forbidsTags: ['attack'],
+  },
+  rooted: {
+    label: 'Rooted', color: '#8a9a4a', duration: 2,
+    forbidsTags: ['movement'],
+    mods: [mod('moveSpeed', 'more', -0.95)],
   },
   // SUNDERED — the poise break (DEFENSE_CFG.poise.breakStatus): the bar
   // shatters and the body is briefly OPEN — reeling, slower, hit harder.
@@ -397,4 +420,12 @@ export interface ActiveStatus {
   window?: { lo: number; hi: number };
   /** BRAND ZAP clock (StatusDef.zapNearby): world time of the next lash. */
   zapAt?: number;
+  /** The APPLIER's actor id (stamped where the world applies statuses) —
+   *  brood hatchlings and future caster-attributed clauses read it. */
+  casterId?: number;
+  /** BROOD clause riding this affliction (BroodSpec, stamped from the
+   *  applying skill's graft) + the tick-damage accumulated toward the
+   *  next hatch roll (fed by Actor.updateTimers, spent by the world). */
+  brood?: { monsterId: string; perDamage: number; duration: number; max: number };
+  broodAcc?: number;
 }

@@ -12,7 +12,7 @@ import {
 } from './stats';
 import { DEFENSE_CFG } from './defense';
 import {
-  instanceMods, skillContextTags, instanceGates, instanceChargeCost,
+  instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
   type EchoRiderSpec, type LedgerSpec,
 } from './skills';
@@ -408,6 +408,19 @@ export class Actor {
    *  and a loop back into Frenzy dies at the lid. Swept by the world each
    *  frame (the expiredStatuses pattern); capped so nothing can flood it. */
   gainEvents: { kind: 'charge' | 'buff'; id: string; depth: number }[] = [];
+  /** LIFE BOND (BuffEffect.bond): the ally this actor's damage feeds as
+   *  healing (bondShare × the skill's bondFeed) — held while the named
+   *  buff still rides the target; one bond per caster, newest wins. */
+  bond?: { targetId: number; buffId: string };
+  /** CAST CYCLES (SkillDef.castCycle): completed real uses counted per
+   *  skill id toward the every-Nth-cast grant. */
+  castCycles = new Map<string, number>();
+  /** Minion life-cycle rites, baked at summon from the OWNER's stats:
+   *  on death, the flock heals (deathHealPct × max life + flat); expiry
+   *  may count as death (the raging-spirits lever). */
+  deathHealPct = 0;
+  deathHealFlat = 0;
+  expiryTriggersDeath = false;
   /** DAMAGE POOLS (DamagePoolSpec): banked fuel keyed by pool id — fed by
    *  the damage this actor deals, spent by its pool skills. */
   pools = new Map<string, number>();
@@ -969,14 +982,17 @@ export class Actor {
       }
       this.syncChargeMods(id);
     }
-    // Per-second + per-distance taps on equipped skills (chargeGain
-    // on:'second' / on:'move'). Move taps share the frame's walked
-    // distance (moveAcc, fed by World.moveActor), each on its own meter.
+    // Per-second / per-distance / per-channel-second taps on equipped
+    // skills (chargeGain, skill-innate AND support-grafted — the merged
+    // instanceChargeGain list). Move taps share the frame's walked
+    // distance (moveAcc, fed by World.moveActor), each on its own meter;
+    // channelSecond clocks only advance while a channel/guard is HELD.
     const walked = this.moveAcc;
     for (const inst of this.skills) {
-      if (!inst?.def.chargeGain) continue;
-      for (const spec of inst.def.chargeGain) {
-        if (spec.on !== 'second' && spec.on !== 'move') continue;
+      if (!inst) continue;
+      const specs = instanceChargeGain(inst);
+      for (const spec of specs) {
+        if (spec.on !== 'second' && spec.on !== 'move' && spec.on !== 'channelSecond') continue;
         if (spec.whileToggled && !this.activeAuras.has(inst.def.id)
           && !this.summonToggles.has(inst.def.id)) continue;
         // Distinct meters per (skill, charge, tap): a 'second' clock and a
@@ -984,8 +1000,17 @@ export class Actor {
         const key = spec.charge + ':' + spec.on + ':' + inst.def.id;
         const st = this.chargeState.get(key) ?? { idle: 0, acc: 0, tick: 0 };
         this.chargeState.set(key, st);
-        st.tick += spec.on === 'second' ? dt : walked;
-        const unit = spec.on === 'second' ? 1 : (spec.perDistance ?? 60);
+        if (spec.on === 'channelSecond') {
+          // The meditative tap: the clock runs only while the hold is real
+          // — and only while THIS skill is the one being held.
+          if (this.isChanneling() && this.casting?.inst.def.id === inst.def.id) {
+            st.tick += dt;
+          }
+        } else {
+          st.tick += spec.on === 'second' ? dt : walked;
+        }
+        const unit = spec.on === 'move' ? (spec.perDistance ?? 60)
+          : (spec.everySeconds ?? 1);
         while (st.tick >= unit) {
           st.tick -= unit;
           this.gainCharge(spec.charge, spec.amount, spec.max, inst);
@@ -1008,6 +1033,10 @@ export class Actor {
       propagates?: boolean; rupture?: number; ruptureType?: ActiveStatus['ruptureType'];
       /** Applier-side bonus to the stacking cap (the ailmentStacks stat). */
       stacksBonus?: number;
+      /** The applier's actor id (brood attribution and kin). */
+      casterId?: number;
+      /** BROOD clause from the applying skill's graft (BroodSpec). */
+      brood?: ActiveStatus['brood'];
     },
   ): void {
     const def = STATUS_DEFS[id];
@@ -1067,6 +1096,8 @@ export class Actor {
         propagates: opts?.propagates || def.propagateOnDeath,
         rupture: opts?.rupture,
         ruptureType: opts?.ruptureType,
+        casterId: opts?.casterId,
+        brood: opts?.brood,
         // WEAK SPOT: the window paints just below the CURRENT wound.
         window: def.weakSpot ? (() => {
           const frac = this.life / Math.max(1, this.maxLife());
@@ -1083,6 +1114,8 @@ export class Actor {
       // max — hitting harder and hitting often both matter.
       existing.rupture = ((existing.rupture ?? 0) + (opts.rupture ?? 0)) || undefined;
       existing.ruptureType = existing.ruptureType ?? opts.ruptureType;
+      existing.casterId = existing.casterId ?? opts.casterId;
+      existing.brood = existing.brood ?? opts.brood;
     }
   }
 
@@ -1204,6 +1237,8 @@ export class Actor {
         const key = STATUS_DEFS[s.id]?.dotType ?? 'untyped';
         dot ??= {};
         dot[key] = (dot[key] ?? 0) + s.dps * s.stacks * dt;
+        // BROOD clauses bank the tick toward the world's hatch roll.
+        if (s.brood) s.broodAcc = (s.broodAcc ?? 0) + s.dps * s.stacks * dt;
       }
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);
@@ -1613,7 +1648,20 @@ export class Actor {
     return true;
   }
 
+  /** SELECTIVE CC (StatusDef.forbidsTags): any carried status that forbids
+   *  one of the skill's tags locks it — Silenced spells, Disarmed attacks,
+   *  Rooted movement. One gate for player, monster, and minion alike. */
+  private tagsForbidden(inst: SkillInstance): boolean {
+    for (const s of this.statuses) {
+      const forbids = STATUS_DEFS[s.id]?.forbidsTags;
+      if (!forbids) continue;
+      for (const t of forbids) if (inst.def.tags.includes(t)) return true;
+    }
+    return false;
+  }
+
   canUse(inst: SkillInstance): boolean {
+    if (this.tagsForbidden(inst)) return false;
     // HOLD COMBOS: a held cast (guard / channel / charge / overcharge) is
     // not "busy" for everything —
     //  - a usableWhileGuarding skill fires around the hold (Transgression,

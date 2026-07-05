@@ -117,6 +117,19 @@ export const DEFENSE_CFG = {
     ppmCatchup: 4,
   },
 
+  /** SUSTAIN — shared-healing reach: how far vampiricShare's transferred
+   *  leech carries around the striker. */
+  sustain: {
+    vampiricRadius: 180,
+  },
+
+  /** CROWD EMPOWERMENT (SkillDef.empower — the warcry-power shape): what a
+   *  body is WORTH when tallying the crowd. A boss counts for six men; the
+   *  ladder is the whole "bosses still feed your warcries" golden rule. */
+  empower: {
+    weights: { normal: 1, magic: 2, rare: 3, champion: 4, crowned: 5, boss: 6 },
+  },
+
   /** WEIGHT — how shovable a body is. Knockback impulses and crowd
    *  separation divide by the victim's `weight` stat (heavy things barely
    *  budge; light things fly). Monsters default their weight from body

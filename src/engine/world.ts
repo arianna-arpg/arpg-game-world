@@ -22,7 +22,7 @@ import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  effectiveSkillLevel, grantedTags, instanceAim, instanceCascade, instanceChargeCost, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, makeSkillInstance, rampValue, rollCount, rollSkillRarity,
+  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, makeSkillInstance, rampValue, rollCount, rollSkillRarity,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, supportFitsInst,
   supportMaxLevel,
@@ -37,7 +37,7 @@ import { PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES } from '../data/passives';
-import { PROC_LIST, procStat, type ProcDef } from '../data/procs';
+import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
@@ -8775,8 +8775,32 @@ export class World {
     // Tags granted by socketed supports count here too: a Dive-Bombed
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(def, grantedTags(inst));
-    const useMult = opts.dmgMult ?? 1;
+    let useMult = opts.dmgMult ?? 1;
     const targetInfo = opts.targetInfo ?? null;
+    // CROWD EMPOWERMENT (SkillDef.empower — the warcry-power shape): tally
+    // the weighted enemies in reach (a boss counts for six men) and let
+    // the POWER score feed the use's damage and/or a stacked buff.
+    if (def.empower && !opts.noRepeat) {
+      const w = DEFENSE_CFG.empower.weights;
+      let power = 0;
+      for (const e of this.enemiesOf(caster)) {
+        if (e.dead || e.untargetable) continue;
+        if (dist(caster.pos, e.pos) > def.empower.radius) continue;
+        power += e.defId && MONSTERS[e.defId]?.boss ? w.boss
+          : e.rarity === 'crowned' ? w.crowned
+          : e.rarity === 'champion' ? w.champion
+          : e.rarity === 'rare' ? w.rare
+          : e.rarity === 'magic' ? w.magic : w.normal;
+      }
+      if (power > 0) {
+        if (def.empower.dmgPerPower) useMult *= 1 + def.empower.dmgPerPower * power;
+        if (def.empower.buffPerPower) {
+          caster.addBuff({ ...def.empower.buffPerPower, stacksOnApply: power },
+            caster.sheet.get('effectDuration', tags, extra));
+        }
+        this.text(vec(caster.pos.x, caster.pos.y - 22), `power ${power}`, def.color, 11);
+      }
+    }
     // MOVEMENT AUTO-TARGETING (Closing Fang / the Closing Instinct graft):
     // a resolved enemy REDIRECTS the movement itself — the lunge, blink or
     // leap re-aims at the prey's LIVE position, not the fumbled cursor.
@@ -10414,6 +10438,28 @@ export class World {
     // spends one round off every consumeOnUse buff (same predicate as
     // remnants — echo/pulse/repeat executions never eat a round).
     if (!opts.noRepeat && !opts.noCooldown) this.consumeAmmunition(caster, def);
+    // CAST CYCLE (SkillDef.castCycle): every Nth completed REAL use grants
+    // the cycle's buff, then the count resets — "the third cast imbues".
+    if (!opts.noRepeat && !opts.noCooldown && def.castCycle) {
+      const n = (caster.castCycles.get(def.id) ?? 0) + 1;
+      if (n >= def.castCycle.count) {
+        caster.castCycles.set(def.id, 0);
+        caster.addBuff(def.castCycle.buff, caster.sheet.get('effectDuration', tags, extra));
+        this.text(vec(caster.pos.x, caster.pos.y - 18),
+          def.castCycle.buff.id.replace(/_/g, ' ') + '!', def.color, 12);
+      } else {
+        caster.castCycles.set(def.id, n);
+      }
+    }
+    // 'use' CHARGE TAPS (skill-innate + support grafts): a completed real
+    // use banks its charges — the meta-banking discipline (Stored Verdict).
+    if (!opts.noRepeat && !opts.noCooldown) {
+      for (const spec of instanceChargeGain(inst)) {
+        if (spec.on !== 'use') continue;
+        if (spec.chance !== undefined && !chance(spec.chance)) continue;
+        caster.gainCharge(spec.charge, spec.amount, spec.max, inst);
+      }
+    }
     // REMNANT ON CAST (Remnant Conduit): a real use of an elemental school
     // may leave a remnant a step away — collect it to empower the NEXT cast.
     // Sits AFTER consume so this cast's drop can't feed itself.
@@ -11072,6 +11118,30 @@ export class World {
       if (impact > 0) {
         this.burstDamage(vec(minion.pos.x, minion.pos.y), 70,
           minion.maxLife() * impact, 'physical', inst.def.color, caster.team);
+      }
+    }
+    // LIFE-CYCLE RITES (owner stats, queried with the SUMMON skill's
+    // context so a support blesses only its own flock): death heals, the
+    // expiry-counts-as-death lever, and the arrival MEND — summonImpact's
+    // twin, the entrance as balm instead of blast.
+    {
+      const tags2 = skillContextTags(inst.def);
+      const extra2 = instanceMods(inst);
+      minion.deathHealPct = caster.sheet.get('minionDeathHeal', tags2, extra2);
+      minion.deathHealFlat = caster.sheet.get('minionDeathHealFlat', tags2, extra2);
+      minion.expiryTriggersDeath = caster.sheet.get('minionExpiryIsDeath', tags2, extra2) > 0;
+      const mend = caster.sheet.get('summonMend', tags2, extra2);
+      if (mend > 0) {
+        for (const ally of this.actors) {
+          if (ally.dead || ally.team !== caster.team) continue;
+          if (dist(minion.pos, ally.pos) > 90) continue;
+          const got = ally.healBy(mend);
+          if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+        }
+        this.flashes.push({
+          pos: vec(minion.pos.x, minion.pos.y), radius: 90,
+          color: '#8ae0a8', life: 0.25, maxLife: 0.25,
+        });
       }
     }
     // DEVOURER (innate or the Ravenous Pact graft): the apex economy —
@@ -12409,9 +12479,11 @@ export class World {
 
     const hasDamage = forceDamage || def.effects.some(e => e.type === 'damage');
     let dealt = 0;
+    let wasCrit = false;
 
     if (hasDamage) {
       const result = applyHit(caster, target, packet);
+      wasCrit = result.crit;
       if (result.evaded) {
         this.text(target.pos, 'evade', '#9ab0c8', 12);
         // The evader's rewards: the deterministic lifeOnEvade floor plus
@@ -12450,6 +12522,38 @@ export class World {
       if (dealt > 0 && def.siphon && !caster.dead) {
         caster.healBy(dealt * def.siphon
           * caster.sheet.get('healPower', skillContextTags(def), extra));
+      }
+      // VAMPIRIC SHARE (the transferred leech): a slice of the landed hit
+      // heals ALLIES around the striker — the WoW-VE shape, worn as a stat
+      // (a buff's mods grant it), tag-filterable like everything.
+      if (dealt > 0 && depth === 0 && !caster.dead) {
+        const vamp = caster.sheet.get('vampiricShare', skillContextTags(def), extra);
+        if (vamp > 0) {
+          const heal = dealt * vamp
+            * caster.sheet.get('healPower', skillContextTags(def), extra);
+          for (const ally of this.actors) {
+            if (ally.dead || ally.team !== caster.team || ally === caster) continue;
+            if (dist(caster.pos, ally.pos) > DEFENSE_CFG.sustain.vampiricRadius) continue;
+            const got = ally.healBy(heal);
+            if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+          }
+        }
+        // LIFE BOND (the Chloromancer shape): the caster's damage feeds the
+        // bonded ally — bondShare × the skill's bondFeed × healPower. The
+        // bond lapses with its buff (or its bearer).
+        if (caster.bond) {
+          const bonded = this.actors.find(a => a.id === caster.bond!.targetId);
+          if (!bonded || bonded.dead || !bonded.buffs.has(caster.bond.buffId)) {
+            caster.bond = undefined;
+          } else {
+            const share = caster.sheet.get('bondShare', skillContextTags(def), extra);
+            if (share > 0) {
+              const got = bonded.healBy(dealt * share * (def.bondFeed ?? 1)
+                * caster.sheet.get('healPower', skillContextTags(def), extra));
+              if (got > 0.5) this.text(bonded.pos, '+' + Math.round(got), '#7ee0b8', 11);
+            }
+          }
+        }
       }
       // TREES OF LIFE drink the violence: same-side trees in range bank the
       // landed damage toward their healing burst (and visibly swell).
@@ -12664,6 +12768,44 @@ export class World {
       const dt = sdef.dotType;
       return Math.round(caster.sheet.get('ailmentStacks', dt ? skillContextTags(def, [dt]) : tags, extra));
     };
+    // NEXT-HIT RIDERS (BuffEffect.nextHit): the bearer's loaded blows spend
+    // one stack per LANDED hit, firing the rider's lanes — a baseline-
+    // scaled status (never the hit's roll — golden rule), extra typed
+    // damage mitigated like any source, and/or a proc payload one link
+    // deep. Works identically for a blessed MINION swinging its own blows.
+    if (dealt > 0 && depth === 0 && caster.buffs.size) {
+      for (const [bid, b] of [...caster.buffs]) {
+        const rider = b.def.nextHit;
+        if (!rider) continue;
+        if (rider.tags && !rider.tags.every(t => packet.tags.has(t))) continue;
+        if (rider.status) {
+          const sdef = STATUS_DEFS[rider.status];
+          const dps = sdef?.dotType
+            ? baselineStatusDps(rider.status, this.zone.level)
+              * (rider.statusScale ?? 1.5) * potencyFor(rider.status)
+            : 0;
+          target.applyStatus(rider.status, dps, durScale, caster.name,
+            { casterId: caster.id, stacksBonus: stacksBonusFor(rider.status) });
+        }
+        if (rider.addedDamage && !target.invulnerable) {
+          const landed = mitigateTyped(target, { ...rider.addedDamage },
+            { attacker: caster, tags: packet.tags, extra });
+          if (landed > 0) {
+            target.life -= landed;
+            this.text(vec(target.pos.x, target.pos.y - 10),
+              Math.round(landed).toString(), '#e8d44a', 12);
+          }
+        }
+        if (rider.procId && PROCS[rider.procId]) {
+          this.executeProc(PROCS[rider.procId], caster, inst, target, 1);
+        }
+        caster.consumeBuffStacks(bid, 1);
+        this.flashes.push({
+          pos: vec(target.pos.x, target.pos.y), radius: target.radius + 10,
+          color: '#e8d44a', life: 0.2, maxLife: 0.2,
+        });
+      }
+    }
     for (const fx of def.effects) {
       if (fx.type === 'heal') {
         // Ally-resolving deliveries (blessing novas, curseAllies edges)
@@ -12673,6 +12815,13 @@ export class World {
         }
       } else if (fx.type === 'cleanse') {
         if (target.team === caster.team) this.cleanseActor(target, fx.count ?? 2);
+      } else if (fx.type === 'buff' && target.team === caster.team && target !== caster) {
+        // ALLY-TARGETED buffs (blessings): a targeted/ally-resolving
+        // delivery lands the buff on the RESOLVED ally — next-hit riders
+        // arm a minion's blow, and a bond-marked buff TIES the caster to
+        // this one ally (one bond per caster; newest wins).
+        target.addBuff(fx, durScale);
+        if (fx.bond) caster.bond = { targetId: target.id, buffId: fx.id };
       } else if (fx.type === 'status') {
         // AILMENT RESISTANCE (victim-side, element-tagged): Purity of Fire
         // shrugs ignites; Purity of Elements shrugs the lot.
@@ -12736,6 +12885,8 @@ export class World {
             propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
             rupture, ruptureType,
             stacksBonus: stacksBonusFor(fx.status),
+            casterId: caster.id,
+            brood: instanceBrood(inst),
           });
           // Applying a status is a trigger (Bloodletter's Rhythm).
           this.rollStatusProcs(caster, inst, target, fx.status, tags, extra, depth);
@@ -12813,6 +12964,8 @@ export class World {
         target.applyStatus(sid, dps, durScale, caster.name, {
           propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
+          casterId: caster.id,
+          brood: instanceBrood(inst),
         });
         // Stat-granted applications trigger statusApply procs too.
         this.rollStatusProcs(caster, inst, target, sid, tags, extra, depth);
@@ -12906,6 +13059,7 @@ export class World {
         // Only the hit-family triggers roll here (collision procs roll at
         // arrested knockbacks; statusApply procs at status application).
         if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
+        if (proc.crit && !wasCrit) continue;
         if (!this.procGates(caster, proc, inst)) continue;
         let procChance = this.procChance(caster, proc, depth, tags, extra);
         if (proc.trigger === 'kill' && !lethal) {
@@ -12934,6 +13088,7 @@ export class World {
         for (const proc of PROC_LIST) {
           if (!proc.minionCarry) continue;
           if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
+          if (proc.crit && !wasCrit) continue;
           if (!this.procGates(owner, proc, carryInst)) continue;
           let cc = this.procChance(owner, proc, depth, cTags, cExtra);
           if (proc.trigger === 'kill' && !lethal) {
@@ -13417,6 +13572,22 @@ export class World {
     // the watcher nothing — pick off the survivors instead.
     const credit = !killer || killer.team === 'player';
 
+    // DEATH RITES (minionDeathHeal): the flock closes over the wound — the
+    // deceased's kin heal a share of its life (+ flat). Duration lapses
+    // reach here only when the raging-spirits lever counts them as deaths.
+    if (!silent && actor.isMinion() && actor.owner
+      && (actor.deathHealPct > 0 || actor.deathHealFlat > 0)) {
+      const amount = actor.maxLife() * actor.deathHealPct + actor.deathHealFlat;
+      for (const m of this.actors) {
+        if (m.dead || m === actor || m.owner !== actor.owner || m.construct) continue;
+        const got = m.healBy(amount);
+        if (got > 0.5) this.text(m.pos, '+' + Math.round(got), '#8ae0a8', 10);
+      }
+      this.flashes.push({
+        pos: vec(actor.pos.x, actor.pos.y), radius: 70,
+        color: '#8ae0a8', life: 0.3, maxLife: 0.3,
+      });
+    }
     // Undying Loyalty: a slain minion's death effects fire (Martyrdom!),
     // then it claws back to unlife for a few seconds. Once.
     if (!silent && actor.isMinion() && actor.undyingTime > 0 && !actor.undyingSpent) {
@@ -14256,7 +14427,10 @@ export class World {
           // payload hatches before the shell is swept away.
           if (a.construct?.hatch) this.hatchPod(a);
           this.releaseContract(a, true);
-          this.kill(a, true);
+          // THE RAGING-SPIRITS LEVER (minionExpiryIsDeath): a flagged
+          // minion's duration lapse IS a death — every on-death rite
+          // (explosions, death heals, allyDeath taps) fires on schedule.
+          this.kill(a, !a.expiryTriggersDeath);
           continue;
         }
       }
@@ -14286,6 +14460,29 @@ export class World {
         const evs = a.gainEvents;
         a.gainEvents = [];
         for (const ev of evs) this.rollGainProcs(a, ev);
+      }
+      // BROOD clauses (BroodSpec): banked tick-damage rolls to HATCH a
+      // short-lived creature serving the APPLIER. Chance scales with the
+      // damage dealt — the ailment's strength IS its fecundity; capped
+      // alive per applier so a poison bloom never becomes a swarm bomb.
+      for (const s of a.statuses) {
+        if (!s.brood || !((s.broodAcc ?? 0) > 0)) continue;
+        const p = (s.broodAcc ?? 0) * s.brood.perDamage;
+        s.broodAcc = 0;
+        if (!chance(Math.min(0.35, p))) continue;
+        const owner = s.casterId !== undefined
+          ? this.actors.find(x => x.id === s.casterId && !x.dead) : undefined;
+        if (!owner) continue;
+        const key = '__brood:' + s.brood.monsterId;
+        if (this.actors.filter(m => m.owner === owner && !m.dead
+          && m.sourceSkillId === key).length >= s.brood.max) continue;
+        const hatch = this.createMonster(s.brood.monsterId, owner.level, owner.team, owner);
+        hatch.sourceSkillId = key;
+        hatch.lifespan = s.brood.duration;
+        hatch.pos = this.clampPos(
+          vec(a.pos.x + rand(-24, 24), a.pos.y + rand(-24, 24)), hatch.radius);
+        this.actors.push(hatch);
+        this.text(hatch.pos, 'brood!', '#7ec850', 11);
       }
       // THE LEDGER's beat: escalating upkeep + the low-mana vent.
       this.updateActorLedgers(a, dt);

@@ -204,6 +204,31 @@ export function instanceOvercharge(inst: SkillInstance): OverchargeSpec | undefi
   return inst.def.overcharge;
 }
 
+/** Every charge tap riding an instance: the skill's own + socket grafts. */
+export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
+  const out = [...(inst.def.chargeGain ?? [])];
+  for (const s of inst.sockets) if (s?.def.chargeGain) out.push(...s.def.chargeGain);
+  return out;
+}
+
+/** The brood clause riding an instance (first socket graft wins). */
+export function instanceBrood(inst: SkillInstance): BroodSpec | undefined {
+  for (const s of inst.sockets) if (s?.def.brood) return s.def.brood;
+  return undefined;
+}
+
+/** A status-tick SPAWN clause (Broodclutch): while a status carrying it
+ *  ticks, every point of damage dealt has `perDamage` chance to hatch
+ *  `monsterId` serving the applier, living `duration` seconds, at most
+ *  `max` alive per applier. Chance-per-damage means the clause scales
+ *  with investment in the ailment itself — potency IS fecundity. */
+export interface BroodSpec {
+  monsterId: string;
+  perDamage: number;
+  duration: number;
+  max: number;
+}
+
 /** The targeting a use resolves with: a socketed support's graft wins over
  *  the skill's innate spec (Closing Instinct on a plain dash). */
 export function instanceTargeting(inst: SkillInstance): TargetingSpec | undefined {
@@ -362,13 +387,19 @@ export interface ChargeGainSpec {
    *   'move'       per `perDistance` units of deliberate walking (the
    *                movement-as-accumulation tap — Galvanic Reserve)
    *   'orbPickup'  a resource orb scooped by the owner (kind-filtered via
-   *                `orbKind` — the flask FOUNT tap) */
+   *                `orbKind` — the flask FOUNT tap)
+   *   'channelSecond' once per `everySeconds` WHILE the owner holds any
+   *                channel or guard ("gain Frenzy every 3s of channeling")
+   *   'use'        every completed REAL use of THIS skill (echo/repeat
+   *                executions never tap — the meta-banking discipline) */
   on: 'hit' | 'kill' | 'takeHit' | 'block' | 'enemyDeath' | 'allyDeath' | 'second'
-    | 'move' | 'orbPickup';
+    | 'move' | 'orbPickup' | 'channelSecond' | 'use';
   /** enemyDeath: harvest radius around the owner (default 360). */
   radius?: number;
   /** move: units walked per bank (default 60). */
   perDistance?: number;
+  /** second / channelSecond: seconds per bank (default 1). */
+  everySeconds?: number;
   /** orbPickup: only orbs of this kind feed the tap (omit = any). */
   orbKind?: 'life' | 'mana' | 'es';
   /** Chance per trigger (default 1). */
@@ -1569,6 +1600,33 @@ export interface BuffEffect {
    *  have "the next X uses are imbued". NOTE: the granting skill's own tags
    *  must NOT match, or the grant press eats its first round. */
   consumeOnUse?: { tags?: SkillTag[] };
+  /** NEXT-HIT RIDER: the bearer's next landed hit(s) carry a payload —
+   *  one stack spent per landed hit. Because buffs land on ALLIES and
+   *  MINIONS too (affects: 'minions' / targeted deliveries), "bless the
+   *  Amalgam so its next blow poisons hugely" is one buff. */
+  nextHit?: NextHitRider;
+  /** LIFE BOND (the Chloromancer shape): applying this buff to an ALLY
+   *  bonds the CASTER to them — a share of the caster's damage dealt
+   *  (their bondShare stat × the striking skill's bondFeed) flows to the
+   *  bonded as healing while the buff holds. One bond per caster. */
+  bond?: true;
+}
+
+/** The payload a NEXT-HIT buff loads onto the bearer's landed hits. All
+ *  three lanes are optional and compose; each landed hit spends ONE stack.
+ *  Golden rules: the status fires at its caster-less BASELINE (× the
+ *  bearer's potency crank) and addedDamage is mitigated like any typed
+ *  source — a rider can never double-dip the carrying hit's roll. */
+export interface NextHitRider {
+  /** Only hits carrying ALL these tags consume/fire the rider (omit = any). */
+  tags?: SkillTag[];
+  /** Apply this status to the victim (baseline dps × statusScale × potency). */
+  status?: string;
+  statusScale?: number;
+  /** Extra typed damage landed alongside the hit (mitigated normally). */
+  addedDamage?: Partial<Record<DamageType, number>>;
+  /** Execute a registered proc's payload at the victim (depth rules apply). */
+  procId?: string;
 }
 
 /** Teleport every MOBILE minion to an even ring at the caster (Convocation).
@@ -2001,6 +2059,23 @@ export interface SkillDef {
    *  and every step is independently tunable data. */
   comboChain?: { skills: string[]; window: number };
 
+  /** CAST CYCLE: every `count`-th completed REAL use grants `buff`, then
+   *  the counter resets — "casting this three times imbues the next cast"
+   *  baked innately (pairs with BuffEffect.nextHit for guaranteed riders). */
+  castCycle?: { count: number; buff: BuffEffect };
+
+  /** CROWD EMPOWERMENT (the warcry-power shape): at execution, tally the
+   *  WEIGHTED enemies within `radius` (DEFENSE_CFG.empower weights — a
+   *  boss counts for several men) into a POWER score; the use deals
+   *  `dmgPerPower` more damage per point, and/or grants `buffPerPower`
+   *  with one stack per point (its maxStacks caps the crowd bonus). */
+  empower?: { radius: number; dmgPerPower?: number; buffPerPower?: BuffEffect };
+
+  /** LIFE-BOND FEED: this skill's damage feeds the caster's bond at this
+   *  multiple of bondShare ("Ruin heals the bonded far more when it hits").
+   *  Default 1; meaningless without an active bond (BuffEffect.bond). */
+  bondFeed?: number;
+
   /** INVOCATION (the rune-weaver): while this skill sits on the bar, every
    *  real elemental cast banks a RUNE of its school (channels bank one per
    *  held second; capacity rides the runeCap stat). Using it CONSUMES the
@@ -2116,6 +2191,14 @@ export interface SupportDef {
    *  owner's other minions on a beat for healing and a feast-buff (see
    *  DevourSpec — the apex economy, grafted onto any summon). */
   devour?: DevourSpec;
+  /** CHARGE-TAP grafts: the host gains these ChargeGainSpec taps while
+   *  socketed ("gain Frenzy every 3s while channeling this skill" is a
+   *  support). Merged with the skill's own by instanceChargeGain. */
+  chargeGain?: ChargeGainSpec[];
+  /** BROOD graft: statuses this skill applies carry a spawn clause — the
+   *  ticking damage has a chance, per point dealt, to hatch a short-lived
+   *  creature serving the applier ("your poisons brood"). See BroodSpec. */
+  brood?: BroodSpec;
   /** SUPPORT LEVIES — the infrastructure letting ANY support attach costs
    *  and requirements to its host (PoE's "makes it cost more," generalized):
    *  `gate` demands a threshold before the skill may fire (see GateSpec);

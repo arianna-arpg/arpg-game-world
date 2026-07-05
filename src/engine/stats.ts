@@ -654,6 +654,15 @@ export const STAT_DEFS: Record<string, StatDef> = {
   costDamage_life:{ label: 'Damage per Life Spent', base: 0, min: 0 },
 
   // Sustain
+  /** VAMPIRIC EMBRACE (transferred leech): this fraction of your landed
+   *  damage heals ALLIES near you (DEFENSE_CFG.sustain.vampiricRadius) —
+   *  not you; siphon/leech stay the selfish lanes. Tag-filterable, buff-
+   *  grantable (the WoW-VE shape is a buff whose mods carry this stat). */
+  vampiricShare:  { label: 'Vampiric Share', base: 0, min: 0, max: 0.5, percent: true },
+  /** LIFE BOND (the Chloromancer shape): while your bond stands
+   *  (BuffEffect.bond on an ally), this fraction of your damage dealt
+   *  heals the BONDED — × the striking skill's bondFeed, × healPower. */
+  bondShare:      { label: 'Life Bond Share', base: 0, min: 0, max: 1, percent: true },
   lifeOnHit:      { label: 'Life Gained on Hit', base: 0 },
   lifeLeech:      { label: 'Damage Leeched as Life', base: 0, max: 0.2, percent: true },
   /** Fraction of hit damage gained as WARD (the decaying shell — Soulflay's
@@ -695,6 +704,20 @@ export const STAT_DEFS: Record<string, StatDef> = {
   minionRegenPct: { label: 'Minion Life Regeneration %', base: 0, min: 0, percent: true },
   /** Chance to drop an elemental REMNANT on a real cast of that school. */
   remnantOnCast:  { label: 'Remnant on Cast Chance', base: 0, min: 0, percent: true },
+  // Minion life-cycle rites (queried at SUMMON time with the skill's tags,
+  // so a support socketed into ONE summon blesses only its own).
+  /** On a minion's DEATH: your other minions heal this fraction of the
+   *  deceased's maximum life (the flock closes over the wound). */
+  minionDeathHeal: { label: 'Minion Death Heal %', base: 0, min: 0, percent: true },
+  /** Flat companion to minionDeathHeal. */
+  minionDeathHealFlat: { label: 'Minion Death Heal', base: 0, min: 0 },
+  /** > 0: a minion's DURATION LAPSE counts as a DEATH — expiry fires every
+   *  on-death effect (explosions, death heals, allyDeath taps). The
+   *  raging-spirits lever: the swarm's whole point is dying on schedule. */
+  minionExpiryIsDeath: { label: 'Minion Expiry Counts as Death', base: 0, min: 0 },
+  /** On EMERGENCE: allies within the arrival's reach heal this flat amount
+   *  (the mirror of summonImpact — arrival as balm instead of blast). */
+  summonMend:     { label: 'Summoning Mend', base: 0, min: 0 },
   /** Fraction of minion max life dealt as fire damage on death (0 = off). */
   minionExplodeDeath:   { label: 'Minion Death Explosion', base: 0, percent: true },
   /** Same, but the minion detonates itself upon reaching low life (0 = off). */
