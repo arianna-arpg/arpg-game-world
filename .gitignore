@@ -19,6 +19,11 @@ saves/
 # Machine-specific paths/permissions — do not share.
 .claude/settings.local.json
 
+# ── Desktop launcher local overrides ─────────────────────────
+# Machine-specific window/port/update preferences; deep-merged
+# over the committed launcher.config.json defaults.
+launcher.config.local.json
+
 # ── Claude Code scratch / one-off verification scripts ───────
 # Created at the project root during debugging. Anchored to root
 # with a leading slash so nothing inside src/ is affected.

@@ -11,13 +11,24 @@ and the player, monsters, and minions all act through a single skill pipeline
 (`World.useSkill()` in `src/engine/world.ts`).
 
 ## Commands
-- `npm install` — first-time setup (also run automatically by `Play Game.bat`).
-- `npm run dev` — Vite dev server at http://localhost:5173.
+- `npm install` — first-time setup (also run automatically by the .bat launchers).
+- `npm run dev` — Vite dev server at http://localhost:5173 (browser dev mode, `Play Game.bat`).
+- `npm run game` — the DESKTOP APP: Electron launcher window (shows installed
+  version, checks the GitHub remote for updates, one-click pull → install →
+  build) then the game in its own window. `Launch Game.bat` is the double-click
+  wrapper; `npm run game:play` skips the launcher.
 - `npx tsc --noEmit` — fast type-check with no output. Primary correctness gate.
+- `npm run check` — type-checks the game AND the launcher (`tsconfig.launcher.json`
+  runs strict checkJs over `launcher/*.cjs`).
 - `npm run build` — `tsc --noEmit && vite build` (type-check + production build to `dist/`).
+- `npm run smoke` / `npm run smoke:launcher` — headless Electron self-checks:
+  boot the real game window (or launcher), assert `__game` / start menu /
+  `/__save` endpoint (or the IPC status round-trip), print `SMOKE … OK`, exit
+  0/1. Run these after touching `launcher/` or anything boot-related.
 - `npm run preview` — serve the built `dist/`.
 
-No test runner is configured; `tsc --noEmit` is how we verify changes compile.
+No unit-test runner is configured; `tsc --noEmit` plus the smoke checks are how
+we verify changes.
 
 ## Layout
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
@@ -32,6 +43,14 @@ No test runner is configured; `tsc --noEmit` is how we verify changes compile.
 - `src/render/` — Canvas 2D renderer (placeholder geometry art driven by data).
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer.
+- `launcher/` — the Electron desktop shell (plain CJS, type-checked via
+  `tsconfig.launcher.json`): `main.cjs` (windows, git update flow, build
+  stamping, IPC, smoke modes), `server.cjs` (loopback HTTP server for `dist/`
+  that re-implements the Vite disk-save `/__save/:slot` endpoints — SAME
+  `saves/` folder as dev; keep the two implementations in sync), `preload.cjs`
+  + `launcher.html` (the launcher UI). Tunables live in `launcher.config.json`
+  (committed defaults) deep-merged with `launcher.config.local.json`
+  (gitignored, machine-local) — never hardcode window/port/repo values.
 - Entry point: `index.html` → `src/main.ts`.
 
 Some data files are very large (`src/data/skills.ts`, `src/engine/world.ts`).

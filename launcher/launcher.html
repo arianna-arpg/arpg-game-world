@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Launcher</title>
+  <style>
+    /* Same palette as the game (index.html) so the launcher feels like the
+       game's front door, not a build tool. */
+    :root {
+      --panel-bg: rgba(12, 12, 18, 0.92);
+      --panel-border: #3a3a52;
+      --gold: #c8a84b;
+      --text: #d8d4c8;
+      --text-dim: #8a8678;
+      --good: #6fc06f;
+      --bad: #d05050;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #0a0a0e; overflow: hidden;
+      font-family: 'Segoe UI', Verdana, sans-serif;
+      color: var(--text); user-select: none;
+      display: flex; flex-direction: column;
+    }
+    #wrap { display: flex; flex-direction: column; height: 100%; padding: 22px 26px 16px; gap: 12px; }
+    h1 { color: var(--gold); font-size: 24px; letter-spacing: 3px; margin: 0; text-align: center; text-transform: uppercase; }
+    #build-line { text-align: center; font-size: 12px; color: var(--text-dim); min-height: 16px; }
+    #build-line b { color: var(--text); font-weight: 600; }
+    #build-line .dirty { color: var(--gold); }
+
+    #update-area {
+      border: 1px solid var(--panel-border); border-radius: 6px;
+      background: var(--panel-bg); padding: 10px 12px; font-size: 12px;
+      min-height: 58px; max-height: 170px; overflow-y: auto;
+    }
+    #update-status { font-size: 13px; }
+    #update-status.good { color: var(--good); }
+    #update-status.avail { color: var(--gold); font-weight: bold; }
+    #update-status.bad { color: var(--bad); }
+    #changes { margin: 6px 0 0 0; padding: 0; list-style: none; }
+    #changes li { padding: 1px 0; color: var(--text); }
+    #changes li code { color: var(--text-dim); font-size: 11px; margin-right: 7px; }
+
+    #btns { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+    #btns button {
+      width: 300px; padding: 10px 0; font-size: 14px; font-family: inherit; cursor: pointer;
+      background: linear-gradient(180deg, #30304a, #232338);
+      color: var(--gold); border: 1px solid var(--gold); border-radius: 5px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.45);
+      transition: background 0.15s, box-shadow 0.15s, transform 0.05s;
+    }
+    #btns button:hover:not(:disabled) {
+      background: linear-gradient(180deg, #3d3d5c, #2b2b46);
+      box-shadow: 0 0 9px rgba(200,168,75,0.4);
+    }
+    #btns button:active:not(:disabled) { transform: translateY(1px); }
+    #btns button:disabled { opacity: 0.4; cursor: default; border-color: var(--panel-border); color: var(--text-dim); box-shadow: none; }
+    #btns #play { font-size: 17px; letter-spacing: 2px; padding: 13px 0; }
+    #btns #update-btn { border-color: var(--good); color: #b6f0b6; background: linear-gradient(180deg, #2c3a2c, #223022); }
+    #btns .minor { width: 300px; display: flex; gap: 8px; }
+    #btns .minor button { flex: 1; width: auto; font-size: 12px; padding: 7px 0; }
+    .hidden { display: none !important; }
+
+    #log {
+      flex: 1 1 auto; min-height: 90px;
+      border: 1px solid var(--panel-border); border-radius: 6px;
+      background: #08080c; padding: 8px 10px; overflow-y: auto;
+      font: 11px Consolas, monospace; color: var(--text-dim);
+      white-space: pre-wrap; word-break: break-word; user-select: text;
+    }
+    #hint { text-align: center; font-size: 10px; color: var(--text-dim); }
+  </style>
+</head>
+<body>
+  <div id="wrap">
+    <h1 id="title">ARPG</h1>
+    <div id="build-line">Reading build info…</div>
+    <div id="update-area">
+      <div id="update-status">Update check pending…</div>
+      <ul id="changes"></ul>
+    </div>
+    <div id="btns">
+      <button id="play">▶&nbsp; PLAY</button>
+      <button id="update-btn" class="hidden">⬇&nbsp; Update &amp; Play</button>
+      <div class="minor">
+        <button id="check">Check for updates</button>
+        <button id="rebuild">Rebuild</button>
+        <button id="quit">Quit</button>
+      </div>
+    </div>
+    <div id="log"></div>
+    <div id="hint">Updates pull from GitHub, then the game rebuilds itself. Play works offline.</div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const logEl = $('log');
+    const buttons = ['play', 'update-btn', 'check', 'rebuild', 'quit'].map($);
+
+    function appendLog(line) {
+      logEl.textContent += line + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    function setBusy(b) { buttons.forEach(el => { el.disabled = b; }); }
+
+    function renderStatus(s) {
+      $('title').textContent = s.title;
+      document.title = s.title + ' — Launcher';
+      $('build-line').innerHTML =
+        `v${s.version} · <b>${s.branch}</b> @ <b>${s.hash || '?'}</b>` +
+        (s.subject ? ` — “${s.subject}”` : '') +
+        (s.dirty ? ' <span class="dirty">(modified locally)</span>' : '');
+    }
+
+    function renderCheck(r) {
+      const st = $('update-status'), list = $('changes');
+      list.innerHTML = '';
+      $('update-btn').classList.add('hidden');
+      if (!r.ok) {
+        st.className = 'bad';
+        st.textContent = 'Could not reach GitHub — playing the installed version is fine.';
+        return;
+      }
+      if (r.behind === 0) {
+        st.className = 'good';
+        st.textContent = 'Up to date.' + (r.ahead > 0 ? ` (${r.ahead} local commit${r.ahead === 1 ? '' : 's'} not pushed yet)` : '');
+        return;
+      }
+      st.className = 'avail';
+      st.textContent = `${r.behind} update${r.behind === 1 ? '' : 's'} available:`;
+      for (const c of r.changes.slice(0, 12)) {
+        const li = document.createElement('li');
+        const code = document.createElement('code'); code.textContent = c.hash;
+        li.appendChild(code); li.appendChild(document.createTextNode(c.subject));
+        list.appendChild(li);
+      }
+      if (r.changes.length > 12) {
+        const li = document.createElement('li');
+        li.textContent = `… and ${r.changes.length - 12} more`;
+        list.appendChild(li);
+      }
+      $('update-btn').classList.remove('hidden');
+    }
+
+    async function refresh() { renderStatus(await window.launcher.status()); }
+    async function doCheck() {
+      setBusy(true);
+      try { renderCheck(await window.launcher.check()); } finally { setBusy(false); }
+    }
+    async function doPlay() {
+      setBusy(true);
+      try {
+        const r = await window.launcher.play();
+        if (!r.ok) { appendLog('PLAY FAILED: ' + (r.error || 'unknown error')); }
+      } finally { setBusy(false); }
+    }
+
+    $('play').addEventListener('click', doPlay);
+    $('check').addEventListener('click', doCheck);
+    $('update-btn').addEventListener('click', async () => {
+      setBusy(true);
+      try {
+        const r = await window.launcher.update();
+        if (!r.ok) { appendLog('UPDATE FAILED: ' + (r.error || 'unknown error')); return; }
+        await refresh();
+        renderCheck({ ok: true, behind: 0, ahead: 0, changes: [] });
+        const p = await window.launcher.play();
+        if (!p.ok) appendLog('PLAY FAILED: ' + (p.error || 'unknown error'));
+      } finally { setBusy(false); }
+    });
+    $('rebuild').addEventListener('click', async () => {
+      setBusy(true);
+      try {
+        const r = await window.launcher.rebuild();
+        appendLog(r.ok ? 'Rebuild complete.' : 'REBUILD FAILED: ' + (r.error || 'unknown error'));
+      } finally { setBusy(false); }
+    });
+    $('quit').addEventListener('click', () => window.launcher.quit());
+    window.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !$('play').disabled) doPlay(); });
+
+    window.launcher.onLog(appendLog);
+    window.launcher.onState(async (s) => { if (s && s.t === 'game-closed') { await refresh(); } });
+
+    (async () => {
+      const s = await window.launcher.status();
+      renderStatus(s);
+      if (s.checkOnLaunch) await doCheck();
+      else $('update-status').textContent = 'Automatic update checks are off (launcher.config.json).';
+    })();
+  </script>
+</body>
+</html>

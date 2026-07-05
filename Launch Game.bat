@@ -1,10 +1,12 @@
 @echo off
-title ARPG Test Game (browser dev mode)
+title ARPG Test Game - Launcher
 cd /d "%~dp0"
 
 rem =====================================================================
-rem  BROWSER / DEV MODE - runs the Vite dev server with live reload.
-rem  For normal play use "Launch Game.bat" (desktop window + updater).
+rem  DESKTOP LAUNCHER - the normal way to play.
+rem  Opens the game's own window (no browser), shows the installed
+rem  version, checks GitHub for updates, and can update+rebuild itself.
+rem  ("Play Game.bat" remains the browser/dev-server mode.)
 rem =====================================================================
 
 rem --- Check that Node.js is installed ---
@@ -20,7 +22,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem --- First run only: install dependencies ---
+rem --- First run only: install dependencies (includes the desktop shell) ---
 if not exist "node_modules" (
     echo Setting up the game - this only happens the first time...
     echo.
@@ -34,8 +36,8 @@ if not exist "node_modules" (
 )
 
 echo.
-echo  Starting the game - your browser will open automatically.
-echo  Keep this window open while playing. Close it to quit.
+echo  Opening the launcher... keep this window open while playing.
+echo  (Build and update progress also appears here.)
 echo.
-call npm run dev -- --open
-pause
+call npx electron .
+if errorlevel 1 pause

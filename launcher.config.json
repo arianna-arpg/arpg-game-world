@@ -1,0 +1,29 @@
+{
+  "game": {
+    "title": "ARPG Test Game"
+  },
+  "repo": {
+    "remote": "origin",
+    "branch": "main"
+  },
+  "updates": {
+    "checkOnLaunch": true
+  },
+  "window": {
+    "width": 1600,
+    "height": 900,
+    "maximized": true,
+    "fullscreen": false,
+    "devtools": true,
+    "zoom": 1
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 0
+  },
+  "launcher": {
+    "width": 700,
+    "height": 680,
+    "returnToLauncher": true
+  }
+}

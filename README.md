@@ -12,14 +12,26 @@ the exact same skill pipeline (`World.useSkill`).
 
 ## Quick start
 
+**Desktop app (the normal way to play):** double-click **Launch Game.bat**
+(Windows; installs dependencies on first run), or run `npm run game`. A
+launcher window shows the installed version, checks GitHub for updates —
+one click pulls, rebuilds, and plays — then opens the game in its own
+window, no browser involved. Machine-local preferences (fullscreen, ports,
+update policy) go in `launcher.config.local.json`, deep-merged over the
+committed `launcher.config.json` defaults.
+
+**Browser dev mode (live reload):**
+
 ```
 npm install
 npm run dev          # then open http://localhost:5173
 ```
 
-On Windows you can instead double-click **Play Game.bat** (it installs
-dependencies on first run). Type-check with `npx tsc --noEmit`; make a production
-build with `npm run build` (output in `dist/`).
+On Windows you can instead double-click **Play Game.bat**. Type-check with
+`npx tsc --noEmit` (or `npm run check` to include the launcher); make a
+production build with `npm run build` (output in `dist/`); `npm run smoke`
+boots the built game headlessly in Electron and asserts it works. Saves land
+in `saves/` from both modes — the desktop app and the dev server share them.
 
 **Controls:** WASD move · LMB / RMB / 1–6 use the eight skill slots ·
 C character sheet · B skill book · P passive tree · M world map · Esc menu.
