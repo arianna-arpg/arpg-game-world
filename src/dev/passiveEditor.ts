@@ -361,8 +361,8 @@ for (const n of nodes) {
 /** Resolved from ClassDef.startNode — the tree never hardcodes class ids. */
 export function classStartNode(classId: string): string {
   const c = CLASSES.find(cd => cd.id === classId);
-  if (!c) console.warn(\`[passives] unknown class '\${classId}' — starting at war_start\`);
-  return c?.startNode ?? 'war_start';
+  if (!c) console.warn(\`[passives] unknown class '\${classId}' — starting at str_start\`);
+  return c?.startNode ?? 'str_start';
 }
 `;
   };

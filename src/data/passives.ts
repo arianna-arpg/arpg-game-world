@@ -23,49 +23,54 @@ export interface PassiveNode {
 }
 
 const nodes: PassiveNode[] = [
-  { id: "war_start", name: "Warrior's Path", description: "A class starting point. Other classes may path through it.", kind: "start", x: 500, y: 570, attributes: { strength: 3 }, links: [] },
-  { id: "war_s1", name: "Sword Mastery", description: "10% increased melee damage", kind: "small", x: 531, y: 626, mods: [mod("damage", "increased", 0.1, ["melee"])], links: ["war_start"] },
-  { id: "war_s2", name: "Toughness", description: "+20 maximum life", kind: "small", x: 469, y: 626, mods: [mod("life", "flat", 20)], links: ["war_s3", "war_start"] },
+  // --- THE NINE-POINTED STAR: one start per attribute (Vitality deliberately
+  // has no point — it is ubiquitous, not an identity). 40° spacing, r=85 from
+  // the hub at (500,500); each triad's three points sit adjacent (STR family
+  // bottom, INT family left, DEX family top-right). Classes reference these
+  // via ClassDef.startNode; any class may path through any point.
+  { id: "str_start", name: "Way of Strength", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 500, y: 585, attributes: { strength: 3 }, links: [] },
+  { id: "war_s1", name: "Sword Mastery", description: "10% increased melee damage", kind: "small", x: 531, y: 626, mods: [mod("damage", "increased", 0.1, ["melee"])], links: ["str_start"] },
+  { id: "war_s2", name: "Toughness", description: "+20 maximum life", kind: "small", x: 469, y: 626, mods: [mod("life", "flat", 20)], links: ["war_s3", "str_start", "for_start"] },
   { id: "war_n1", name: "Crushing Blows", description: "25% increased melee damage, +10% ailment chance with melee skills", kind: "notable", x: 579, y: 678, mods: [mod("damage", "increased", 0.25, ["melee"]), mod("statusChance", "flat", 0.1, ["melee"])], links: ["war_s1", "war_s4"] },
   { id: "war_s3", name: "Plated Armor", description: "+35 armor, 4% chance to block", kind: "small", x: 421, y: 678, mods: [mod("armor", "flat", 35), mod("blockChance", "flat", 0.04)], links: [] },
   { id: "war_s4", name: "Sword Expertise", description: "12% increased melee damage, adds 3 physical damage to melee skills", kind: "small", x: 540, y: 705, mods: [mod("damage", "increased", 0.12, ["melee"]), mod("addedPhysical", "flat", 3, ["melee"])], links: [] },
   { id: "war_n2", name: "Juggernaut", description: "+50 armor, 8% less damage taken, 8% block chance, 30% increased guard strength", kind: "notable", x: 392, y: 789, mods: [mod("armor", "flat", 50), mod("damageTaken", "more", -0.08), mod("blockChance", "flat", 0.08), mod("guardStrength", "increased", 0.3)], links: ["war_s3"] },
   { id: "war_key", name: "Unstoppable", description: "KEYSTONE: 25% less damage taken, but 20% less damage dealt", kind: "keystone", x: 575, y: 752, mods: [mod("damageTaken", "more", -0.25), mod("damage", "more", -0.2)], links: ["war_s4"] },
-  { id: "brz_start", name: "Berserker's Path", description: "A class starting point. Other classes may path through it.", kind: "start", x: 561, y: 535, attributes: { strength: 3 }, links: [] },
-  { id: "brz_s1", name: "Ferocity", description: "10% increased attack damage", kind: "small", x: 625, y: 536, mods: [mod("damage", "increased", 0.1, ["attack"])], links: ["brz_start"] },
-  { id: "brz_s2", name: "Quick Slashes", description: "8% increased attack speed", kind: "small", x: 594, y: 590, mods: [mod("attackSpeed", "increased", 0.08, ["attack"])], links: ["brz_s3", "brz_start"] },
+  { id: "prw_start", name: "Way of Prowess", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 555, y: 565, attributes: { prowess: 3 }, links: [] },
+  { id: "brz_s1", name: "Ferocity", description: "10% increased attack damage", kind: "small", x: 625, y: 536, mods: [mod("damage", "increased", 0.1, ["attack"])], links: ["prw_start"] },
+  { id: "brz_s2", name: "Quick Slashes", description: "8% increased attack speed", kind: "small", x: 594, y: 590, mods: [mod("attackSpeed", "increased", 0.08, ["attack"])], links: ["brz_s3", "prw_start"] },
   { id: "brz_n1", name: "Bloodlust", description: "20% increased attack damage, 1% of damage leeched as life", kind: "notable", x: 688, y: 563, mods: [mod("damage", "increased", 0.2, ["attack"]), mod("lifeLeech", "flat", 0.01)], links: ["brz_s1", "brz_s4", "cl_phys_c"] },
   { id: "brz_s3", name: "Adrenaline", description: "8% increased attack speed", kind: "small", x: 615, y: 658, mods: [mod("attackSpeed", "increased", 0.08, ["attack"])], links: [] },
   { id: "brz_s4", name: "Carnage", description: "12% increased attack damage", kind: "small", x: 756, y: 578, mods: [mod("damage", "increased", 0.12, ["attack"])], links: [] },
   { id: "brz_n2", name: "Frenzied Assault", description: "12% increased attack speed, 10% increased damage", kind: "notable", x: 674, y: 676, mods: [mod("attackSpeed", "increased", 0.12, ["attack"]), mod("damage", "increased", 0.1)], links: ["brz_s3"] },
   { id: "brz_key", name: "Reckless Abandon", description: "KEYSTONE: 30% more damage, but 25% more damage taken", kind: "keystone", x: 940, y: 748, mods: [mod("damage", "more", 0.3), mod("damageTaken", "more", 0.25)], links: ["brz_s4"] },
-  { id: "sor_start", name: "Sorcerer's Path", description: "A class starting point. Other classes may path through it.", kind: "start", x: 439, y: 535, attributes: { intelligence: 3 }, links: [] },
-  { id: "sor_s1", name: "Arcane Insight", description: "12% increased spell damage", kind: "small", x: 406, y: 590, mods: [mod("damage", "increased", 0.12, ["spell"])], links: ["sor_start"] },
-  { id: "sor_s2", name: "Deep Reserves", description: "+20 maximum mana", kind: "small", x: 374, y: 536, mods: [mod("mana", "flat", 20)], links: ["sor_start"] },
+  { id: "int_start", name: "Way of Intelligence", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 416, y: 515, attributes: { intelligence: 3 }, links: [] },
+  { id: "sor_s1", name: "Arcane Insight", description: "12% increased spell damage", kind: "small", x: 406, y: 590, mods: [mod("damage", "increased", 0.12, ["spell"])], links: ["int_start", "for_start"] },
+  { id: "sor_s2", name: "Deep Reserves", description: "+20 maximum mana", kind: "small", x: 374, y: 536, mods: [mod("mana", "flat", 20)], links: ["int_start"] },
   { id: "sor_n1", name: "Spellweaver", description: "20% increased spell damage, +10% ailment chance with spells", kind: "notable", x: 268, y: 725, mods: [mod("damage", "increased", 0.2, ["spell"]), mod("statusChance", "flat", 0.1, ["spell"])], links: [] },
   { id: "sor_s3", name: "Mental Acuity", description: "+15 mana, +1 mana regeneration per second", kind: "small", x: 264, y: 556, mods: [mod("mana", "flat", 15), mod("manaRegen", "flat", 1)], links: [] },
   { id: "sor_s4", name: "Focused Mind", description: "12% increased spell damage, +3% spell critical strike chance", kind: "small", x: 74, y: 711, mods: [mod("damage", "increased", 0.12, ["spell"]), mod("critChance", "flat", 0.03, ["spell"])], links: [] },
   { id: "sor_n2", name: "Archmage", description: "25% increased spell damage, 10% increased cast speed", kind: "notable", x: 173, y: 846, mods: [mod("damage", "increased", 0.25, ["spell"]), mod("castSpeed", "increased", 0.1)], links: ["sor_x1"] },
   { id: "sor_key", name: "Glass Cannon", description: "KEYSTONE: 40% more damage, but 30% more damage taken", kind: "keystone", x: 37, y: 756, mods: [mod("damage", "more", 0.4), mod("damageTaken", "more", 0.3)], links: ["sor_s4"] },
-  { id: "sum_start", name: "Summoner's Path", description: "A class starting point. Other classes may path through it.", kind: "start", x: 439, y: 465, attributes: { willpower: 3 }, links: [] },
-  { id: "sum_s1", name: "Minion Fury", description: "15% increased minion damage", kind: "small", x: 375, y: 464, mods: [mod("minionDamage", "increased", 0.15)], links: ["sum_start"] },
-  { id: "sum_s2", name: "Minion Vigor", description: "15% increased minion life", kind: "small", x: 406, y: 410, mods: [mod("minionLife", "increased", 0.15)], links: ["sum_start"] },
+  { id: "wis_start", name: "Way of Wisdom", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 426, y: 458, attributes: { wisdom: 3 }, links: [] },
+  { id: "sum_s1", name: "Minion Fury", description: "15% increased minion damage", kind: "small", x: 375, y: 464, mods: [mod("minionDamage", "increased", 0.15)], links: ["wis_start"] },
+  { id: "sum_s2", name: "Minion Vigor", description: "15% increased minion life", kind: "small", x: 406, y: 410, mods: [mod("minionLife", "increased", 0.15)], links: ["wis_start", "wil_start"] },
   { id: "sum_n1", name: "Lord of Legions", description: "+1 maximum minion for all summon skills, 10% increased minion damage", kind: "notable", x: 142, y: 411, mods: [mod("minionMaxCount", "flat", 1), mod("minionDamage", "increased", 0.1)], links: ["sum_x1"] },
   { id: "sum_s3", name: "Skill Effect Duration", description: "8% increased skill effect duration", kind: "small", x: 439, y: 313, mods: [mod("effectDuration", "increased", 0.08)], links: [] },
   { id: "sum_s4", name: "Dark Pact", description: "12% increased chaos damage", kind: "small", x: 489, y: 200, mods: [mod("damage", "increased", 0.12, ["chaos"])], links: [] },
   { id: "sum_n2", name: "Plaguebearer", description: "22% increased chaos damage, +15% ailment chance", kind: "notable", x: 460, y: 227, mods: [mod("damage", "increased", 0.22, ["chaos"]), mod("statusChance", "flat", 0.15)], links: ["sum_s4"] },
   { id: "sum_key", name: "Necromantic Pact", description: "KEYSTONE: +2 maximum minions, but 25% less maximum life", kind: "keystone", x: 228, y: 296, mods: [mod("minionMaxCount", "flat", 2), mod("life", "more", -0.25)], links: [] },
-  { id: "swb_start", name: "Swashbuckler's Path", description: "A class starting point. Other classes may path through it.", kind: "start", x: 500, y: 430, attributes: { dexterity: 3 }, links: [] },
-  { id: "swb_s1", name: "Evasion", description: "15% increased evasion", kind: "small", x: 469, y: 372, mods: [mod("evasion", "increased", 0.15)], links: ["swb_start"] },
-  { id: "swb_s2", name: "Fleet Foot", description: "6% increased movement speed", kind: "small", x: 531, y: 374, mods: [mod("moveSpeed", "increased", 0.06)], links: ["swb_s3", "swb_start"] },
+  { id: "fin_start", name: "Way of Finesse", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 529, y: 420, attributes: { finesse: 3 }, links: [] },
+  { id: "swb_s1", name: "Evasion", description: "15% increased evasion", kind: "small", x: 469, y: 372, mods: [mod("evasion", "increased", 0.15)], links: ["fin_start", "wil_start"] },
+  { id: "swb_s2", name: "Fleet Foot", description: "6% increased movement speed", kind: "small", x: 531, y: 374, mods: [mod("moveSpeed", "increased", 0.06)], links: ["swb_s3", "fin_start"] },
   { id: "swb_n1", name: "Wind Dancer", description: "30% increased evasion", kind: "notable", x: 509, y: 31, mods: [mod("evasion", "increased", 0.3)], links: [] },
   { id: "swb_s3", name: "Keen Eye", description: "+3% critical strike chance", kind: "small", x: 546, y: 327, mods: [mod("critChance", "flat", 0.03)], links: [] },
   { id: "swb_s4", name: "Critical Strike Multiplier", description: "+15% critical strike multiplier", kind: "small", x: 788, y: 145, mods: [mod("critMulti", "flat", 0.15)], links: [] },
   { id: "swb_n2", name: "Opportunist", description: "+6% critical strike chance, +25% critical strike multiplier", kind: "notable", x: 759, y: 193, mods: [mod("critChance", "flat", 0.06), mod("critMulti", "flat", 0.25)], links: ["swb_s4"] },
   { id: "swb_key", name: "Phantom Step", description: "KEYSTONE: 80% more evasion, but 15% less maximum life", kind: "keystone", x: 460, y: 5, mods: [mod("evasion", "more", 0.8), mod("life", "more", -0.15)], links: ["swb_n1"] },
-  { id: "rng_start", name: "Ranger's Path", description: "A class starting point. Other classes may path through it.", kind: "start", x: 561, y: 465, attributes: { dexterity: 3 }, links: [] },
-  { id: "rng_s1", name: "Steady Aim", description: "12% increased projectile damage", kind: "small", x: 594, y: 410, mods: [mod("damage", "increased", 0.12, ["projectile"])], links: ["rng_start"] },
-  { id: "rng_s2", name: "Eagle Eye", description: "+40 accuracy", kind: "small", x: 625, y: 464, mods: [mod("accuracy", "flat", 40)], links: ["rng_s3", "rng_start"] },
+  { id: "dex_start", name: "Way of Dexterity", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 574, y: 458, attributes: { dexterity: 3 }, links: [] },
+  { id: "rng_s1", name: "Steady Aim", description: "12% increased projectile damage", kind: "small", x: 594, y: 410, mods: [mod("damage", "increased", 0.12, ["projectile"])], links: ["dex_start"] },
+  { id: "rng_s2", name: "Eagle Eye", description: "+40 accuracy", kind: "small", x: 625, y: 464, mods: [mod("accuracy", "flat", 40)], links: ["rng_s3", "dex_start", "cha_start"] },
   { id: "rng_n1", name: "Sniper", description: "20% increased projectile damage and speed", kind: "notable", x: 680, y: 353, mods: [mod("damage", "increased", 0.2, ["projectile"]), mod("projectileSpeed", "increased", 0.2)], links: ["rng_s1", "rng_s4"] },
   { id: "rng_s3", name: "Swift Draw", description: "8% increased attack speed", kind: "small", x: 694, y: 480, mods: [mod("attackSpeed", "increased", 0.08, ["attack"])], links: [] },
   { id: "rng_s4", name: "Barbed Tips", description: "Adds 3 physical damage to projectile skills", kind: "small", x: 712, y: 291, mods: [mod("addedPhysical", "flat", 3, ["projectile"])], links: [] },
@@ -83,7 +88,7 @@ const nodes: PassiveNode[] = [
   { id: "attr_wil", name: "Resolve", description: "+10 Willpower", kind: "attr", x: 350, y: 500, attributes: { willpower: 10 }, links: ["node_43", "sor_s2", "sum_s1"] },
   { id: "attr_vit", name: "Vigor", description: "+10 Vitality", kind: "attr", x: 425, y: 370, attributes: { vitality: 10 }, links: ["node_18", "sum_s2", "swb_s1"] },
   { id: "attr_dex", name: "Grace", description: "+10 Dexterity", kind: "attr", x: 575, y: 370, attributes: { dexterity: 10 }, links: ["node_16", "rng_s1", "swb_s2"] },
-  { id: "attr_all", name: "Harmony", description: "+4 to all attributes", kind: "attr", x: 650, y: 500, attributes: { strength: 4, dexterity: 4, intelligence: 4, vitality: 4, willpower: 4 }, links: ["brz_s1", "cl_acc_c", "cl_attr_c", "rng_s2"] },
+  { id: "attr_all", name: "Harmony", description: "+4 to all attributes", kind: "attr", x: 650, y: 500, attributes: { strength: 4, prowess: 4, fortitude: 4, dexterity: 4, finesse: 4, charisma: 4, intelligence: 4, wisdom: 4, willpower: 4, vitality: 4 }, links: ["brz_s1", "cl_acc_c", "cl_attr_c", "rng_s2", "cha_start"] },
   { id: "cl_phys_c", name: "Brutality", description: "30% increased physical damage; adds 10 physical damage to attacks", kind: "notable", x: 730, y: 721, mods: [mod("damage", "increased", 0.3, ["physical"]), mod("addedPhysical", "flat", 10, ["attack"])], links: ["cl_phys_p0", "cl_phys_p1", "cl_phys_p2", "cl_phys_p3"] },
   { id: "cl_phys_p0", name: "Hard Knocks", description: "Adds 8 physical damage to attacks", kind: "small", x: 784, y: 704, mods: [mod("addedPhysical", "flat", 8, ["attack"])], links: [] },
   { id: "cl_phys_p1", name: "Bludgeon", description: "12% increased attack damage", kind: "small", x: 690, y: 750, mods: [mod("damage", "increased", 0.12, ["attack"])], links: [] },
@@ -169,7 +174,7 @@ const nodes: PassiveNode[] = [
   { id: "cl_proj_p1", name: "Piercing Shots", description: "Projectiles pierce +1 target, 8% increased projectile speed", kind: "small", x: 799, y: 434, mods: [mod("pierceCount", "flat", 1), mod("projectileSpeed", "increased", 0.08)], links: ["cl_proj_p3"] },
   { id: "cl_proj_p2", name: "Fletching", description: "12% increased projectile speed", kind: "small", x: 870, y: 394, mods: [mod("projectileSpeed", "increased", 0.12)], links: ["rng_pc1"] },
   { id: "cl_proj_p3", name: "Volley Fire", description: "10% increased projectile damage", kind: "small", x: 860, y: 432, mods: [mod("damage", "increased", 0.1, ["projectile"])], links: ["rng_pc1"] },
-  { id: "cl_attr_c", name: "Versatility", description: "+5 to all attributes", kind: "notable", x: 895, y: 608, attributes: { strength: 5, dexterity: 5, intelligence: 5, vitality: 5, willpower: 5 }, links: ["cl_attr_p0", "cl_attr_p1", "cl_attr_p2", "cl_attr_p3"] },
+  { id: "cl_attr_c", name: "Versatility", description: "+5 to all attributes", kind: "notable", x: 895, y: 608, attributes: { strength: 5, prowess: 5, fortitude: 5, dexterity: 5, finesse: 5, charisma: 5, intelligence: 5, wisdom: 5, willpower: 5, vitality: 5 }, links: ["cl_attr_p0", "cl_attr_p1", "cl_attr_p2", "cl_attr_p3"] },
   { id: "cl_attr_p0", name: "Brawn", description: "+5 Strength", kind: "small", x: 938, y: 546, attributes: { strength: 5 }, links: [] },
   { id: "cl_attr_p1", name: "Agility", description: "+5 Dexterity", kind: "small", x: 902, y: 679, attributes: { dexterity: 5 }, links: [] },
   { id: "cl_attr_p2", name: "Intellect", description: "+5 Intelligence", kind: "small", x: 967, y: 582, attributes: { intelligence: 5 }, links: [] },
@@ -256,6 +261,22 @@ const nodes: PassiveNode[] = [
   { id: "node_71", name: "Strength", description: "", kind: "attr", x: 647, y: 902, attributes: { strength: 2 }, links: ["node_72"] },
   { id: "node_72", name: "Intelligence", description: "", kind: "attr", x: 529, y: 915, attributes: { intelligence: 2 }, links: ["node_73"] },
   { id: "node_73", name: "Strength", description: "", kind: "attr", x: 418, y: 911, attributes: { strength: 2 }, links: [] },
+  // --- The three star points the six-wedge tree never had (Fortitude /
+  // Willpower / Charisma) + their entry wedges. Each wedge introduces its
+  // attribute's SIGNATURE pools (poise / energy shield & resistance /
+  // insight) right at the doorstep, then hooks into the existing mesh.
+  { id: "for_start", name: "Way of Fortitude", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 445, y: 565, attributes: { fortitude: 3 }, links: [] },
+  { id: "for_p0", name: "Stonefast", description: "+25 armor", kind: "small", x: 388, y: 630, mods: [mod("armor", "flat", 25)], links: ["for_start"] },
+  { id: "for_p1", name: "Unbreakable", description: "+20 maximum poise", kind: "small", x: 408, y: 555, mods: [mod("poise", "flat", 20)], links: ["for_start"] },
+  { id: "wil_start", name: "Way of Willpower", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 471, y: 420, attributes: { willpower: 3 }, links: [] },
+  { id: "wil_p0", name: "Warded Mind", description: "+12 maximum energy shield", kind: "small", x: 405, y: 335, mods: [mod("energyShield", "flat", 12)], links: ["wil_start"] },
+  { id: "wil_p1", name: "Iron Will", description: "+5% to all resistances", kind: "small", x: 330, y: 270, mods: [mod("fireRes", "flat", 0.05), mod("coldRes", "flat", 0.05), mod("lightningRes", "flat", 0.05), mod("chaosRes", "flat", 0.05)], links: ["wil_p0", "cl_fireres_c"] },
+  { id: "cha_start", name: "Way of Charisma", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 584, y: 515, attributes: { charisma: 3 }, links: [] },
+  { id: "cha_p0", name: "Foresight", description: "+10 maximum insight", kind: "small", x: 680, y: 525, mods: [mod("insight", "flat", 10)], links: ["cha_start"] },
+  { id: "cha_p1", name: "Read the Room", description: "10% increased evasion, +5 maximum insight", kind: "small", x: 724, y: 522, mods: [mod("evasion", "increased", 0.1), mod("insight", "flat", 5)], links: ["cha_p0"] },
+  // The ES-DoT lever, socketed into the tree: baseline shields no longer
+  // blank damage over time — this keystone BUYS a big slice of it back.
+  { id: "wil_x1", name: "Still Mind", description: "KEYSTONE: While you have energy shield, take 60% less damage over time. +15 maximum energy shield", kind: "keystone", x: 196, y: 466, mods: [mod("esDotResist", "flat", 0.6), mod("energyShield", "flat", 15)], links: ["node_42", "node_52"] },
 ];
 
 // --- Exports -----------------------------------------------------------------
@@ -277,6 +298,6 @@ for (const n of nodes) {
 /** Resolved from ClassDef.startNode — the tree never hardcodes class ids. */
 export function classStartNode(classId: string): string {
   const c = CLASSES.find(cd => cd.id === classId);
-  if (!c) console.warn(`[passives] unknown class '${classId}' — starting at war_start`);
-  return c?.startNode ?? 'war_start';
+  if (!c) console.warn(`[passives] unknown class '${classId}' — starting at str_start`);
+  return c?.startNode ?? 'str_start';
 }
