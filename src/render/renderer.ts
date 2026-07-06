@@ -5,6 +5,7 @@
 
 import { clamp, dist, type Vec2 } from '../core/math';
 import { instanceMeta, instanceStrikeTiming, SKILL_RARITIES } from '../engine/skills';
+import { ITEM_RARITIES } from '../engine/items';
 import { STATUS_DEFS } from '../engine/status';
 import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { chargeColor } from '../engine/charges';
@@ -3387,12 +3388,41 @@ export class Renderer {
     }
   }
 
-  /** Gems on the ground: bobbing diamonds — skill gems wear a rarity ring. */
+  /** Gems on the ground: bobbing diamonds — skill gems wear a rarity ring.
+   *  GEAR draws bigger in its rarity color and floats a NAME LABEL (the
+   *  ARPG ground-read: what dropped, from across the room). The client
+   *  render-shell only carries {name, rarity}, so gear touches nothing else. */
   private drawDrops(world: World): void {
     const { ctx } = this;
     for (const d of world.drops) {
       const y = d.pos.y + Math.sin(d.bob) * 3;
       const item = d.item;
+      if (item.kind === 'gear') {
+        const rc = ITEM_RARITIES[item.item.rarity] ?? ITEM_RARITIES.common;
+        const half = item.item.rarity === 'unique' ? 11 : 9;
+        ctx.save();
+        ctx.translate(d.pos.x, y);
+        ctx.rotate(Math.PI / 4);
+        ctx.shadowColor = rc.color;
+        ctx.shadowBlur = item.item.rarity === 'unique' ? 20 : 12;
+        ctx.fillStyle = '#23202a';
+        ctx.fillRect(-half, -half, half * 2, half * 2);
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = rc.color;
+        ctx.lineWidth = 2.5;
+        ctx.strokeRect(-half, -half, half * 2, half * 2);
+        ctx.restore();
+        // The floating label — dark pill + rarity-colored name.
+        ctx.font = 'bold 11px Verdana';
+        ctx.textAlign = 'center';
+        const label = item.item.name;
+        const w = ctx.measureText(label).width;
+        ctx.fillStyle = 'rgba(10,8,14,0.78)';
+        ctx.fillRect(d.pos.x - w / 2 - 5, y - 34, w + 10, 16);
+        ctx.fillStyle = rc.color;
+        ctx.fillText(label, d.pos.x, y - 22);
+        continue;
+      }
       const fill = item.kind === 'support' ? item.gem.def.color : item.inst.def.color;
       const half = item.kind === 'support' ? 7 : 9;
       ctx.save();

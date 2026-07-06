@@ -74,4 +74,10 @@ export type MetaAction =
   | { t: 'dropSupport'; index: number }                        // inventory idx → world
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
   | { t: 'payToll'; index: number }                            // Holdfast: surrender support idx (-1 = random) to open the gate
-  | { t: 'vocationQuest'; questId: string };                   // Vocation menu: undertake a chain step
+  | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
+  // GEAR (items are addressed by uid — stable across bag re-sorts and the wire).
+  | { t: 'equipItem'; uid: number; slot?: string }             // bag item → doll slot (auto-picks when omitted)
+  | { t: 'unequipItem'; slot: string }                         // doll slot → bag (fails full)
+  | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
+  | { t: 'dropItem'; uid: number }                             // bag item → ground
+  | { t: 'pickupItem' };                                       // nearest ground gear within reach → bag

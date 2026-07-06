@@ -16,6 +16,8 @@ import {
   makeSkillInstance,
   type SkillInstance, type SupportInstance, type SkillRarity,
 } from '../engine/skills';
+import { rebuildItem } from '../engine/itemgen';
+import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
 import type { PlayerMeta, World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
@@ -46,6 +48,12 @@ export interface CharacterSave {
   knownSkills: SavedSkill[];
   skillInv: SavedSkill[];
   inventory: SavedSocket[]; // unsocketed support gems
+  /** GEAR: bag + doll. ItemInstances are already pure JSON (base/affix ids +
+   *  0..1 rolls), so they serialize verbatim and rebuildItem re-validates
+   *  against live registries on load (unknown base → item dropped; unknown
+   *  affix → line dropped). Optional → pre-item saves still load. */
+  items?: ItemInstance[];
+  equipped?: Record<string, ItemInstance>;
   offerings: number;
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
   level: number;            // Actor level (display + xp continuity)
@@ -80,6 +88,10 @@ export function serializeCharacter(world: World): CharacterSave {
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
     skillInv: m.skillInv.map(saveSkill),
     inventory: m.inventory.map(s => ({ supportId: s.def.id, level: s.level })),
+    items: m.items.map(i => ({ ...i })),
+    equipped: Object.fromEntries(
+      Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
+    ),
     offerings: m.offerings,
     bar: world.player.skills.map(s => s ? s.def.id : null),
     level: world.player.level,
@@ -126,6 +138,17 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     .map(s => { const d = SUPPORTS[s.supportId]; return d ? ({ def: d, level: s.level } as SupportInstance) : null; })
     .filter((x): x is SupportInstance => x !== null);
 
+  // GEAR: rebuild every saved item against the live registries (tolerant —
+  // a removed base drops the item, a removed affix drops the line).
+  const items = (save.items ?? [])
+    .map(rebuildItem)
+    .filter((x): x is ItemInstance => x !== null);
+  const equipped: Partial<Record<string, ItemInstance>> = {};
+  for (const [slot, it] of Object.entries(save.equipped ?? {})) {
+    const item = rebuildItem(it);
+    if (item) equipped[slot] = item;
+  }
+
   const meta: PlayerMeta = {
     classDef,
     baseAttrs: { ...save.baseAttrs },
@@ -136,6 +159,7 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     vocations: [...(save.vocations ?? [])],
     vocationPoints: save.vocationPoints ?? 0,
     knownSkills, inventory, skillInv, offerings: save.offerings,
+    items, equipped,
   };
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);

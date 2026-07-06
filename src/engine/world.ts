@@ -31,6 +31,11 @@ import {
   type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec,
 } from './skills';
+import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
+import { compileItemMods, itemLevelReq } from './itemgen';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, type ItemInstance } from './items';
+import { DROP_CFG, resolveLootTable } from './loot';
+import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { CLASSES, PROGRESSION, type ClassDef } from '../data/classes';
@@ -628,7 +633,8 @@ interface PendingBlink {
  */
 export type DropItem =
   | { kind: 'support'; gem: SupportInstance }
-  | { kind: 'skill'; inst: SkillInstance };
+  | { kind: 'skill'; inst: SkillInstance }
+  | { kind: 'gear'; item: ItemInstance };
 
 export interface GemDrop {
   pos: Vec2;
@@ -751,6 +757,12 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'payToll': return Number.isInteger(a.index) && a.index >= -1; // -1 = a random gem
+    // GEAR intents — uids/cells are untrusted client numbers, ids plain strings.
+    case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
+    case 'unequipItem': return isStr(a.slot);
+    case 'moveItem': return isIdx(a.uid) && isIdx(a.x) && isIdx(a.y);
+    case 'dropItem': return isIdx(a.uid);
+    case 'pickupItem': return true;
     default: return false;
   }
 }
@@ -784,6 +796,11 @@ export interface PlayerMeta {
   skillInv: SkillInstance[];
   /** Skill gems fed to a Sacrificial Font toward the next skill point. */
   offerings: number;
+  /** GEAR bag — the tetris grid; every entry carries its cell x/y. */
+  items: ItemInstance[];
+  /** GEAR worn on the doll, by EQUIP_SLOTS id. Each slot syncs one
+   *  attributable StatSheet source ('gear:<slot>') in recalcSeat. */
+  equipped: Partial<Record<string, ItemInstance>>;
 }
 
 /** A PLAYER SEAT — one controllable hero in the run. Bundles the per-player
@@ -1733,6 +1750,8 @@ export class World {
       inventory: [],
       skillInv: [],
       offerings: 0,
+      items: [],
+      equipped: {},
     };
     // Class bar skills come pre-learned as 2-socket magic gems.
     for (const sid of classDef.bar) {
@@ -6914,6 +6933,13 @@ export class World {
     p.setAttributes(attrs);
     p.sheet.setSource('class', m.classDef.innate ?? []);
     p.sheet.setSource('passives', passiveMods);
+    // GEAR: one attributable source per doll slot — equip/unequip/retune all
+    // converge here, and removeSource keeps empty slots contributing nothing.
+    for (const slot of EQUIP_SLOTS) {
+      const worn = m.equipped[slot.id];
+      if (worn) p.sheet.setSource('gear:' + slot.id, compileItemMods(worn));
+      else p.sheet.removeSource('gear:' + slot.id);
+    }
     p.sheet.setSource('level', [
       mod('life', 'flat', (p.level - 1) * PROGRESSION.lifePerLevel),
       mod('mana', 'flat', (p.level - 1) * PROGRESSION.manaPerLevel),
@@ -8476,6 +8502,11 @@ export class World {
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
+      case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
+      case 'unequipItem': this.unequipItem(seat, action.slot); break;
+      case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
+      case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
+      case 'pickupItem': this.pickupNearestGear(seat); break;
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
@@ -14858,6 +14889,132 @@ export class World {
     return item;
   }
 
+  // ------------------------------------------------------------- gear ops ---
+  // All bag/doll mutations are META intents (requestMeta → applyAction), so
+  // they validate, replicate to co-op clients, and stay index/uid-addressed.
+
+  private bagItem(seat: Seat, uid: number): ItemInstance | undefined {
+    return seat.meta.items.find(i => i.uid === uid);
+  }
+
+  /** Wear a bag item. Slot omitted → first enabled compatible slot, favoring
+   *  an empty one (the two-ring rule falls out of the registry, not code). */
+  equipItem(seat: Seat, uid: number, slotId?: string): void {
+    const m = seat.meta;
+    const p = seat.actor;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    const base = ITEM_BASES[item.baseId];
+    if (!base) return;
+    let slot = slotId ? SLOT_BY_ID[slotId] : undefined;
+    if (slot && (!slot.enabled || !slot.accepts.includes(base.category))) slot = undefined;
+    if (!slot) {
+      const options = slotsForCategory(base.category);
+      if (options.length === 0) return;
+      slot = options.find(s => !m.equipped[s.id]) ?? options[0];
+    }
+    const req = itemLevelReq(item);
+    if (p.level < req) {
+      this.failNote(p, 'equip:' + uid, `requires level ${req}`);
+      return;
+    }
+    removeFromBag(m.items, uid);
+    const prev = m.equipped[slot.id];
+    m.equipped[slot.id] = item;
+    delete item.x;
+    delete item.y;
+    // The swap-out returns to the bag — or the floor, never the void.
+    if (prev && !autoPlace(m.items, prev)) this.dropGearAt(p.pos, prev, seat.id);
+    this.recalcSeat(seat);
+    this.text(p.pos, item.name, ITEM_RARITIES[item.rarity].color, 13);
+    this.markMetaDirty(seat);
+  }
+
+  unequipItem(seat: Seat, slotId: string): void {
+    const m = seat.meta;
+    const item = m.equipped[slotId];
+    if (!item) return;
+    if (!autoPlace(m.items, item)) {
+      this.failNote(seat.actor, 'unequip:' + slotId, 'no room in the bag');
+      return;
+    }
+    delete m.equipped[slotId];
+    this.recalcSeat(seat);
+    this.markMetaDirty(seat);
+  }
+
+  /** Re-place a bag item at a cell; a single blocker swaps into the vacated
+   *  spot when it fits — the tetris shuffle without an item ever vanishing. */
+  moveBagItem(seat: Seat, uid: number, x: number, y: number): void {
+    const m = seat.meta;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    if (placeAt(m.items, item, x, y)) { this.markMetaDirty(seat); return; }
+    const blockers = overlappingItems(m.items, item, x, y);
+    if (blockers.length !== 1 || item.x === undefined || item.y === undefined) return;
+    const other = blockers[0];
+    const from = { x: item.x, y: item.y };
+    const otherFrom = { x: other.x, y: other.y };
+    delete other.x;
+    delete other.y;
+    if (placeAt(m.items, item, x, y) && placeAt(m.items, other, from.x, from.y)) {
+      this.markMetaDirty(seat);
+      return;
+    }
+    item.x = from.x; item.y = from.y;
+    other.x = otherFrom.x; other.y = otherFrom.y;
+  }
+
+  dropGearFromBag(seat: Seat, uid: number): void {
+    const m = seat.meta;
+    if (!this.bagItem(seat, uid)) return;
+    const item = removeFromBag(m.items, uid);
+    if (!item) return;
+    this.dropGearAt(seat.actor.pos, item, seat.id);
+    this.markMetaDirty(seat);
+  }
+
+  /** Mint a ground gear drop. Kill loot announces itself; player discards
+   *  carry the same grace/dropper guards as discarded gems. */
+  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string): void {
+    const pos = this.clampPos(vec(at.x + rand(-16, 16), at.y + rand(-16, 16)), 10);
+    delete item.x;
+    delete item.y;
+    const drop: GemDrop = { pos, item: { kind: 'gear', item }, bob: rand(0, Math.PI * 2) };
+    if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
+    this.drops.push(drop);
+    if (!droppedBy) {
+      this.text(at, `${item.name}!`, ITEM_RARITIES[item.rarity].color, item.rarity === 'unique' ? 17 : 14);
+    }
+  }
+
+  /** The pickup keybind: nearest grabbable gear within reach → bag. Gear is
+   *  a DELIBERATE grab (unlike vacuumed gems) — choosing is the mini-game. */
+  pickupNearestGear(seat: Seat): void {
+    const p = seat.actor;
+    let bestIdx = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < this.drops.length; i++) {
+      const d = this.drops[i];
+      if (d.item.kind !== 'gear') continue;
+      if (d.grace !== undefined && d.grace > 0) continue;
+      if (d.droppedBy === seat.id && !d.dropperCleared) continue;
+      const dd = dist(d.pos, p.pos);
+      if (dd <= p.radius + ITEM_CFG.pickupRadius && dd < bestD) { bestD = dd; bestIdx = i; }
+    }
+    if (bestIdx < 0) return;
+    const drop = this.drops[bestIdx];
+    if (drop.item.kind !== 'gear') return;
+    const item = drop.item.item;
+    if (!autoPlace(seat.meta.items, item)) {
+      this.failNote(p, 'bagfull', 'inventory full');
+      return;
+    }
+    this.drops.splice(bestIdx, 1);
+    this.text(p.pos, item.name, ITEM_RARITIES[item.rarity].color, 13);
+    this.markMetaDirty(seat);
+  }
+
   // --- Brandt the smith: time-based, account-scaled stock -------------------
 
   private vendorSize(): number {
@@ -14893,6 +15050,21 @@ export class World {
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
     const count = def?.drops ?? (def?.boss ? 3 : chance(0.16) ? 1 : 0);
     for (let i = 0; i < count; i++) this.dropGemAt(actor.pos);
+    // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
+    // table; elite leaders add bonus rolls (crowned promote to the apex table).
+    const tables: string[] = [];
+    if (def?.loot) tables.push(def.loot);
+    else if (def?.boss) tables.push(DROP_CFG.bossTable);
+    else if (chance(DROP_CFG.killItemChance)) tables.push(DROP_CFG.killTable);
+    const tier = actor.rarity ?? 'normal';
+    const bonus = DROP_CFG.eliteBonusItemRolls[tier] ?? 0;
+    for (let i = 0; i < bonus; i++) tables.push(DROP_CFG.eliteBonusTable[tier]);
+    for (const t of tables) {
+      for (const res of resolveLootTable(t, { ilvl: this.zone.level })) {
+        if (res.kind === 'gem') this.dropGemAt(actor.pos);
+        else this.dropGearAt(actor.pos, res.item);
+      }
+    }
   }
 
   // --------------------------------------------------------------- update ---
@@ -17737,6 +17909,8 @@ export class World {
         const dropper = this.seats.find(s => s.id === drop.droppedBy);
         if (!dropper || dist(dropper.actor.pos, drop.pos) > dropper.actor.radius + 22) drop.dropperCleared = true;
       }
+      // GEAR is a DELIBERATE pickup (pickup key / panel) — never vacuumed.
+      if (drop.item.kind === 'gear') continue;
       const exclude = drop.droppedBy && !drop.dropperCleared ? drop.droppedBy : undefined;
       const seat = this.pickupSeat(drop.pos, 22, exclude);
       if (!seat) continue;
