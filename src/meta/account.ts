@@ -20,6 +20,8 @@ import type { RosterEntry } from './modes';
 // Safe VALUE import: mercs.ts only type-imports from this file, so the edge
 // is one-directional at runtime (account → mercs → data/classes).
 import { MERC_SCHEMA, type MercRosterEntry } from './mercs';
+// Same one-directional stance (nemesis.ts only type-imports Account).
+import { NEMESIS_SCHEMA, type SagaRecord } from './nemesis';
 
 export const SCHEMA_VERSION = 1;
 
@@ -160,6 +162,12 @@ export interface Account {
    *  captured at outpost retirement, offered back as hireable veterans.
    *  Capped at MERC_CFG.rosterCap (overflow replaces a random pooled one). */
   mercRoster: MercRosterEntry[];
+  /** THE WORLD'S MEMORY (meta/nemesis.ts): sagas keyed by normalized character
+   *  NAME — faction grudges, risen nemeses, fallen bearers. LRU-capped. */
+  sagas: Record<string, SagaRecord>;
+  /** The last character name the player TYPED at class select (sticky default;
+   *  null = name characters for their class). The Nameless button clears it. */
+  namePref: string | null;
   /** CRAFT LORE: affix-family → {rank, progress} study ledger. Progress is
    *  TIER-TRUE (crafting.ts studySalvage): only salvaged lines at or above
    *  the NEXT unlock tier teach. Knowledge survives every death — the
@@ -186,6 +194,8 @@ export interface AccountSave {
   deaths?: DeathRecord[];
   roster?: RosterEntry[];
   mercRoster?: MercRosterEntry[];
+  sagas?: Record<string, SagaRecord>;
+  namePref?: string | null;
   /** Current shape {rank, progress}; LEGACY saves held a flat count. */
   craftLore?: Record<string, number | { rank: number; progress: number }>;
 }
@@ -205,6 +215,8 @@ export function makeAccount(): Account {
     deaths: [],
     roster: [],
     mercRoster: [],
+    sagas: {},
+    namePref: null,
     craftLore: {},
   };
 }
@@ -225,6 +237,8 @@ export function serializeAccount(a: Account): AccountSave {
     deaths: a.deaths,
     roster: a.roster,
     mercRoster: a.mercRoster,
+    sagas: a.sagas,
+    namePref: a.namePref,
     craftLore: a.craftLore,
   };
 }
@@ -266,6 +280,11 @@ export function deserializeAccount(s: AccountSave): Account | null {
     // sheds stale veterans without ever wiping credits or the account.
     mercRoster: (s.mercRoster ?? []).filter(m =>
       m?.schema === MERC_SCHEMA && typeof m.mercId === 'string' && !!m.snapshot),
+    // Per-SAGA schema stance: a nemesis-format change forgets old grudges
+    // (the world's memory fades), never the account.
+    sagas: Object.fromEntries(Object.entries(s.sagas ?? {})
+      .filter(([, v]) => v?.schema === NEMESIS_SCHEMA && typeof v.name === 'string')),
+    namePref: typeof s.namePref === 'string' && s.namePref.trim() ? s.namePref : null,
     craftLore: migrateLore(s.craftLore),
   };
 }

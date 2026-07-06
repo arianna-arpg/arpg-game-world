@@ -128,6 +128,10 @@ export class UI {
   /** The LIFE-CONTRACT selected on the class screen (meta/modes.ts). Sticky
    *  across menu navigation like the class hand; reset with it each new offer. */
   private pendingModeId: string = DEFAULT_MODE_ID;
+  /** THE NAME typed on the class screen this offer. null = untouched (falls
+   *  back to account.namePref); '' = explicitly Nameless. Survives the mode
+   *  picker's re-renders; reset with the hand. */
+  private pendingCharName: string | null = null;
   /** Start-menu callbacks, retained so Vault/Keybinds sub-views can return. */
   private startHandlers: {
     onStart: (d: ClassDef, modeId?: string) => void;
@@ -361,7 +365,11 @@ export class UI {
 
   /** Clear the cached class roster so the NEXT class select deals a fresh roll.
    *  Called when a run ends (death) — NOT on menu navigation. */
-  resetClassRoster(): void { this.classRoster = null; this.pendingModeId = DEFAULT_MODE_ID; }
+  resetClassRoster(): void {
+    this.classRoster = null;
+    this.pendingModeId = DEFAULT_MODE_ID;
+    this.pendingCharName = null;   // back to the sticky account preference
+  }
 
   /** Forget the per-run VIEW state (map zoom/pan/tab/dimension, zone pin, book
    *  tab). Called whenever a NEW World is built (start/resume/co-op join) — a
@@ -380,7 +388,13 @@ export class UI {
     this.lastInvTab = null;
   }
 
-  showClassSelect(onPick: (def: ClassDef, modeId?: string) => void): void {
+  showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string) => void): void {
+    // Whatever is in the name field RIGHT NOW survives every route back here
+    // (mode picks, Vault detours, weight edits): the old input still exists
+    // until the innerHTML rebuild below, so capture it first — belt to the
+    // per-keystroke listener's suspenders.
+    const liveName = this.classSelect.querySelector<HTMLInputElement>('#char-name');
+    if (liveName) this.pendingCharName = liveName.value;
     this.hideAll();
     const acc = this.getAccount();
     const TEASER_COUNT = 4;
@@ -480,8 +494,21 @@ export class UI {
           ${modes.map(modeCard).join('')}</div>`
       : '';
 
+    // THE NAME ROW (Naming/Nemesis): typed name > sticky account preference >
+    // named-for-its-class. The world's memory follows whatever ends up chosen.
+    const escAttr = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
+    const nameValue = this.pendingCharName ?? acc.namePref ?? '';
     this.classSelect.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
+      <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:2px 0 8px 0">
+        <span style="font-size:12px;color:#c8a84b">⚜ Name</span>
+        <input id="char-name" type="text" maxlength="24" spellcheck="false"
+          placeholder="named for its class" value="${escAttr(nameValue)}"
+          style="width:220px;padding:5px 9px;font-size:13px;background:#16121c;color:#e8dcc8;
+            border:1px solid #6a5a38;border-radius:8px;outline:none;text-align:center">
+        <button id="name-clear" title="Forget the name — characters go back to being named for their class"
+          style="font-size:11px;padding:5px 10px">Nameless</button>
+      </div>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
         Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL} &nbsp;·&nbsp;
         hand of ${picks.length} &nbsp;·&nbsp; ${pool.length} of ${CLASSES.length} classes unlocked &nbsp;(re-deals each new run)</div>
@@ -499,6 +526,18 @@ export class UI {
         <button id="account-btn">Unlocks (Vault)</button>
       </div>`;
     this.classSelect.classList.remove('hidden');
+
+    // THE NAME ROW handlers: keystrokes track into pendingCharName (so the
+    // mode picker's re-renders keep the text); Nameless clears the text AND
+    // the sticky account preference — back to class-named until typed anew.
+    const nameInput = this.classSelect.querySelector<HTMLInputElement>('#char-name');
+    nameInput?.addEventListener('input', () => { this.pendingCharName = nameInput.value; });
+    this.classSelect.querySelector<HTMLElement>('#name-clear')?.addEventListener('click', () => {
+      this.pendingCharName = '';
+      if (nameInput) nameInput.value = '';
+      const a = this.getAccount();
+      if (a.namePref !== null) { a.namePref = null; this.saveAccount(); }
+    });
 
     // A mode card selects the life-contract (a full roster mode routes to the
     // Vault instead — its remedy is sold there). Re-render keeps the same hand.
@@ -525,8 +564,17 @@ export class UI {
           this.showAccountScreen(() => this.showClassSelect(onPick));
           return;
         }
+        // Resolve THE NAME at the moment of picking: a typed name is used and
+        // becomes the sticky preference; an emptied field means nameless (the
+        // preference clears — what the player sees is what persists).
+        const typed = (this.classSelect.querySelector<HTMLInputElement>('#char-name')?.value ?? '').trim();
+        const a = this.getAccount();
+        if ((a.namePref ?? '') !== typed) {
+          a.namePref = typed || null;
+          this.saveAccount();
+        }
         this.classSelect.classList.add('hidden');
-        onPick(CLASSES.find(c => c.id === el.dataset.id!)!, this.pendingModeId);
+        onPick(CLASSES.find(c => c.id === el.dataset.id!)!, this.pendingModeId, typed || undefined);
       });
     });
     document.getElementById('account-btn')!.addEventListener('click',
@@ -2569,9 +2617,10 @@ export class UI {
     const deed = retired
       ? `hangs up the blade at ${world.zone.name} — and joins the mercenary roster (${acc.mercRoster.length} retired)`
       : `fell in ${world.zone.name}`;
+    const who = world.meta.name !== world.meta.classDef.name ? `${world.meta.name} — ` : '';
     this.deathScreen.innerHTML = `
       <h1>${title}</h1>
-      <div>Level ${world.player.level} ${world.meta.classDef.name}
+      <div>${who}Level ${world.player.level} ${world.meta.classDef.name}
         &nbsp;·&nbsp; ${deed} &nbsp;·&nbsp;
         ${world.visited.size} zones explored &nbsp;·&nbsp; ${world.kills} kills</div>
       ${retired ? `<div style="margin-top:6px;color:#b8a0e0">Some future run will find them at an outpost, sword-arm for hire.</div>` : ''}

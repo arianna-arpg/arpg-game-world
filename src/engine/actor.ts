@@ -477,6 +477,13 @@ export class Actor {
   /** Elite tier (magic/rare/champion/crowned) — buffed stats + affixes + drops.
    *  Undefined = a normal monster. A 'crowned' kill drives the Warbands unlock. */
   rarity?: MonsterRarity;
+  /** NEMESIS (meta/nemesis.ts): set on a MANIFESTED remembered foe — the saga
+   *  it haunts + its record id (fate resolution on kill) + rank tint (the
+   *  renderer's ring and title label). */
+  nemesis?: { sagaKey: string; id: string; tint: string };
+  /** The world noticed this foe trade blows with a named hero — the survivor
+   *  trigger's eligibility stamp (transient; set by resolveHit both ways). */
+  grudgeMark?: boolean;
 
   /** Momentum (units/s) — meaningful when traction < 1 (ice). */
   vel: Vec2 = vec(0, 0);

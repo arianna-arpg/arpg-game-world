@@ -146,11 +146,14 @@ let deathShown = false;
 let uiRefreshTimer = 0;
 let autosaveTimer = 0;
 
-function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string): void {
+function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string, name?: string): void {
   // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
   const mode = modeById(modeId);
+  // THE NAME (Naming/Nemesis): player-given, else named for its class — the
+  // thread the world's memory follows across runs.
+  const charName = name?.trim() || classDef.name;
   // EVERY character gets an identity — mercenary engagements (and any future
   // cross-character bookkeeping) key off it, mortal or vessel alike.
   const charId = mintCharId();
@@ -158,7 +161,7 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
     const slot = freeRosterSlot(account, mode);
     if (slot == null) { toStartMenu(); return; } // picker greys full modes; this is the belt
     account.roster.push({
-      charId, modeId: mode.id, slot, classId: classDef.id, name: classDef.name,
+      charId, modeId: mode.id, slot, classId: classDef.id, name: charName,
       level: 1, stage: 0, savedAt: Date.now(),
     });
     saveAccount(account);
@@ -174,7 +177,7 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   // passes a configured one; otherwise build it from the account's saved prefs.
   const m = manifest ?? buildManifest(account, rollSeed());
   world = new World(account, Object.freeze(m));
-  world.createPlayer(classDef, { modeId: mode.id, charId });
+  world.createPlayer(classDef, { modeId: mode.id, charId, name: charName });
   lastSentZone = '';        // force a fresh terrain broadcast for (re)joining clients
   if (COOP_ALLY) spawnCoopAlly();
   persistRun(account, world); // baseline snapshot so a fresh run is resumable
@@ -186,9 +189,10 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   running = true;
 }
 
-/** Class-select adapter: the picker hands back (class, sworn mode); startGame
- *  wants (class, manifest, mode). One arrow so no call site can transpose them. */
-const startPicked = (d: ClassDef, modeId?: string): void => startGame(d, undefined, modeId);
+/** Class-select adapter: the picker hands back (class, sworn mode, name);
+ *  startGame wants (class, manifest, mode, name). One arrow so no call site
+ *  can transpose them. */
+const startPicked = (d: ClassDef, modeId?: string, name?: string): void => startGame(d, undefined, modeId, name);
 
 /** Resume an account-roster character (an Immortal vessel) from its own slot.
  *  Async (disk-first load); a missing/corrupt slot just returns to the menu —

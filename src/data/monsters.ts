@@ -108,6 +108,10 @@ export interface MonsterDef {
   color: string;
   shape: ActorShape;
   radius: number;
+  /** Opt OUT of the world's memory (meta/nemesis.ts): this kind can never be
+   *  remembered as a nemesis — for fixtures, uber set-pieces, and anything
+   *  whose promotion would read as nonsense. Default: rememberable. */
+  noNemesis?: boolean;
   /** Base stat overrides at level 1 (anything omitted uses STAT_DEFS defaults). */
   base: Record<string, number>;
   /** Innate modifiers (resistances, speed quirks...). */

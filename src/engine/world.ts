@@ -138,6 +138,12 @@ import {
 } from '../meta/mercs';
 import { MERC_TEMPLATES, MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
 import { MercInput } from './mercbrain';
+import {
+  NEMESIS_CFG, bumpGrudge, formNemesis, grudgeTier, nemesisTitle, peekSaga,
+  promoteNemesis, recordDeed, resolveNemesisSlain, sagaKey, touchSaga,
+  type NemesisRecord,
+} from '../meta/nemesis';
+import { NEMESIS_RANKS } from '../data/nemesis';
 import { saveCharacter, rebuildSkill } from '../meta/character';
 import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
@@ -807,6 +813,11 @@ export const OFFERINGS_PER_POINT = 3;
 
 export interface PlayerMeta {
   classDef: ClassDef;
+  /** THE NAME (Naming, meta/nemesis.ts): the player-given name — or the class
+   *  name when unnamed — that threads this character into the world's memory
+   *  (sagas key off its normalized form) and labels it everywhere a person
+   *  would be named (HUD, death screens, rosters, retirement). */
+  name: string;
   /** Class starting attributes — the permanent base. */
   baseAttrs: Attributes;
   /** Effective attributes = base + passive tree grants (recomputed). */
@@ -1751,6 +1762,16 @@ export class World {
   /** World time of the last blow landed by/on the player's side — the
    *  outpost's "no recent combat" gate (and any future calm-gated dwell). */
   lastCombatAt = -999;
+  // --- the WORLD'S MEMORY (meta/nemesis.ts) --------------------------------
+  /** The foe whose blow last dropped a player seat — the slayer-formation
+   *  seed consumed by concludeWipe (kill() stamps it; may be null). */
+  private lastPlayerKiller: Actor | null = null;
+  /** Nemesis record ids already fielded THIS RUN (zone re-entry / memory
+   *  restores never double-manifest the same grudge in one run). */
+  private manifestedThisRun = new Set<string>();
+  /** Grudge bumps are per-kill — flush them to the account save on a slow
+   *  cadence rather than per blow (formations/promotions save immediately). */
+  private lastSagaFlushAt = -999;
   kills = 0;
   /** Seconds remaining on the low-life "took a hit" red screen blink (renderer). */
   lowLifeHitFlash = 0;
@@ -1860,6 +1881,7 @@ export class World {
     p.kind = 'player';
     const meta: PlayerMeta = {
       classDef,
+      name: classDef.name,
       baseAttrs: { ...classDef.attributes },
       attrs: { ...classDef.attributes },
       xp: 0,
@@ -1898,7 +1920,7 @@ export class World {
     return seat;
   }
 
-  createPlayer(classDef: ClassDef, opts?: { modeId?: string; charId?: string }): void {
+  createPlayer(classDef: ClassDef, opts?: { modeId?: string; charId?: string; name?: string }): void {
     // The local seat is this client's own hero (camera + input anchor). Input is
     // a placeholder until main.ts wires the OS reader (Phase 4); single-player
     // reads it through the `player`/`meta` getters exactly as before.
@@ -1907,6 +1929,11 @@ export class World {
     // overwrites it via applySavedCharacter (the save is the authority).
     if (opts?.modeId) this.localSeat.meta.modeId = opts.modeId;
     if (opts?.charId) this.localSeat.meta.charId = opts.charId;
+    // THE NAME: the world remembers it (meta/nemesis.ts sagas key off it).
+    if (opts?.name?.trim()) {
+      this.localSeat.meta.name = opts.name.trim();
+      this.localSeat.actor.name = this.localSeat.meta.name;
+    }
     this.seats = [this.localSeat];
     this.indexSeats();
     this.actors.push(this.localSeat.actor);
@@ -1951,6 +1978,7 @@ export class World {
    *  rebinding tolerates a saved id no longer in knownSkills → an empty slot. */
   adoptSavedMeta(meta: PlayerMeta, bar: (string | null)[], level: number): void {
     this.localSeat.meta = meta;
+    this.player.name = meta.name;   // the save's name is the actor's name
     this.player.level = level;
     this.player.skills = padBar(bar.map(id => (id ? this.meta.knownSkills.get(id) ?? null : null)));
     this.recalcPlayer();
@@ -2111,6 +2139,16 @@ export class World {
     actor.casting = null;
     const seat = this.seatOf(actor);
     if (seat) seat.reviveDwellBy.clear();
+    // A NAMED HIRELING felled: the foe may join the HIRELING'S saga — the
+    // mercenary lives in the world's memory too, and carries the grudge home.
+    if (seat?.merc && killer && this.nemesisEligible(killer) && !killer.nemesis
+      && this.nemesisActive() && Math.random() < NEMESIS_CFG.mercFelledChance) {
+      const saga = touchSaga(this.account, seat.merc.name);
+      const n = formNemesis(saga, killer.defId!, killer.faction ?? '', 'felled_hireling', Math.random);
+      this.text(vec(killer.pos.x, killer.pos.y - 30), `${nemesisTitle(n)} marks ${seat.merc.name}.`, '#e07840', 13);
+      this.events.emit('nemesis/formed', { saga: sagaKey(seat.merc.name), nemesis: n.name, deed: 'felled_hireling' });
+      this.sagaDirty(true);
+    }
     this.events.emit('player/downed', { actor, killer });
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: actor.radius * 2, color: '#d05050', life: 0.4, maxLife: 0.4 });
     this.text(actor.pos, 'downed — an ally must revive you!', '#e88080', 14);
@@ -2181,6 +2219,9 @@ export class World {
    *  death-surviving mode stage respawns, and permadeath ends the run. */
   private concludeWipe(): void {
     if (this.descentRun) { this.resurfaceFromDescent('died'); return; }
+    // The world remembers the fall BEFORE the mode decides what it costs —
+    // an Undying death feeds the saga exactly as a mortal one does.
+    this.recordNemesisFall();
     if (this.modeStageDef().onDeath !== 'end') { this.beginModeRespawn(); return; }
     this.onRunEnded(this.runEndReason);
   }
@@ -2328,6 +2369,9 @@ export class World {
    * visit (constructs, drops, and corpses stay behind).
    */
   loadZone(zoneId: string, from?: string): void {
+    // THE SURVIVOR TRIGGER: before the zone we're LEAVING is torn down, the
+    // world may decide to remember a foe we bloodied and left standing.
+    this.scanNemesisSurvivors();
     // ZONE MEMORY: snapshot the zone we're LEAVING (its seed + surviving base
     // enemies) before we switch away, so returning within the TTL restores it.
     this.captureZoneMemory();
@@ -2849,6 +2893,13 @@ export class World {
     this.mercDwell = 0;
     this.mercDwellFired = false;
     if (!isCave) this.placeMercOutpost(def);
+
+    // THE WORLD'S MEMORY: a remembered foe may step out of it (manifestation),
+    // and a grudged faction's members fight the name a little harder.
+    if (!isCave) {
+      this.manifestNemeses(def);
+      this.applyGrudgeEffects(def);
+    }
 
     // CORPSE RUN: spawn any prior death whose coordinate matches this zone.
     this.spawnPlayerCorpses(def);
@@ -8391,6 +8442,7 @@ export class World {
 
     return {
       classDef,
+      name: classDef.name, // the seat's DISPLAY name is stamped by the spawner
       baseAttrs: { ...snapshot.baseAttrs },
       attrs: { ...snapshot.baseAttrs },
       xp: 0, xpNeeded: PROGRESSION.xpForLevel(targetLevel),
@@ -8438,6 +8490,9 @@ export class World {
     const targetLevel = this.mercTargetLevel();
     const meta = this.normalizeMercMeta(snapshot, targetLevel);
     if (!meta) return false;
+    // The blade's given name survives every re-normalization (resyncs replace
+    // the whole meta — the identity must not reset to the class name).
+    if (seat.merc) meta.name = seat.merc.name;
     const a = seat.actor;
     const frac = a.maxLife() > 0 ? a.life / a.maxLife() : 1;
     seat.meta = meta;
@@ -8571,7 +8626,7 @@ export class World {
     const entry: MercRosterEntry = {
       schema: MERC_SCHEMA,
       mercId: mintMercId(),
-      name: m.classDef.name,          // the Naming system will write here
+      name: m.name,                   // the given name retires with them
       classId: m.classDef.id,
       retiredLevel: this.player.level,
       retiredAt: Date.now(),
@@ -8586,6 +8641,218 @@ export class World {
     for (const s of this.seats) { s.actor.downed = false; s.actor.dead = true; }
     this.onRunEnded('retire');
     return true;
+  }
+
+  // ------------------------------------------------------ the world's memory ---
+  //
+  // NEMESIS (meta/nemesis.ts): the world keeps a ledger per NAME. Kills feed
+  // faction GRUDGES; the foe that fells a name's bearer (and the bloodied one
+  // left standing) is REMEMBERED — minted a name, ranked, and liable to step
+  // back out of the memory into any later run that bears the name. All the
+  // chances/caps are NEMESIS_CFG; all the vocabulary is data/nemesis.ts; every
+  // mutation is announced on the event bus for future hooks (assassins,
+  // bounties, contracts) — build on the records, never on this flow.
+
+  /** Does the world's memory watch this character? (Mode-stage policy;
+   *  defaults ON — world bookkeeping, not player progression.) */
+  private nemesisActive(): boolean {
+    return this.modeStageDef().nemesisMemory ?? true;
+  }
+
+  /** The names the world watches this run: the hero's — and, THE HIRELING
+   *  SEAM, a hired mercenary's own (a retired "Arianna" drags her old
+   *  grudges into her patron's run). */
+  private watchedSagas(): { name: string; role: 'self' | 'merc' }[] {
+    const out: { name: string; role: 'self' | 'merc' }[] = [{ name: this.meta.name, role: 'self' }];
+    if (this.hiredMerc && sagaKey(this.hiredMerc.name) !== sagaKey(this.meta.name)) {
+      out.push({ name: this.hiredMerc.name, role: 'merc' });
+    }
+    return out;
+  }
+
+  /** Saga persistence throttle: grudge bumps ride a slow flush (they happen
+   *  per kill); formations/promotions/fates pass `important` and save now. */
+  private sagaDirty(important = false): void {
+    if (important || this.time - this.lastSagaFlushAt > 30) {
+      this.lastSagaFlushAt = this.time;
+      this.accountDirty = true;
+    }
+  }
+
+  /** May the world remember this foe? Fixtures, minions, doors, and anything
+   *  flagged noNemesis are beneath memory. */
+  private nemesisEligible(a: Actor): boolean {
+    if (a.team !== 'enemy' || a.passive || a.untargetable || a.owner || a.doorId) return false;
+    if (!a.defId || !MONSTERS[a.defId]) return false;
+    if (MONSTERS[a.defId].noNemesis) return false;
+    return true;
+  }
+
+  /** Player-credited kill bookkeeping: the grudge ledger, and a manifested
+   *  nemesis's FATE — it cheats death (retained, marked) or the grudge ends
+   *  (trophy + the rank's gem bounty). */
+  private noteNemesisKill(victim: Actor): void {
+    if (!this.localSeat || !this.nemesisActive()) return;
+    const saga = touchSaga(this.account, this.meta.name);
+    if (victim.faction && victim.team === 'enemy' && !victim.owner) {
+      bumpGrudge(saga, victim.faction);
+      this.sagaDirty();
+    }
+    const tag = victim.nemesis;
+    if (!tag) return;
+    const holder = this.account.sagas[tag.sagaKey];
+    if (!holder) return;
+    const rec = holder.nemeses.find(n => n.id === tag.id);
+    const fate = resolveNemesisSlain(holder, tag.id, Math.random);
+    if (fate === 'cheated') {
+      this.text(vec(victim.pos.x, victim.pos.y - 30), `${victim.name} will not die so easily…`, tag.tint, 15);
+      this.events.emit('nemesis/slain', { saga: tag.sagaKey, nemesis: victim.name, cheated: true });
+    } else if (fate === 'slain') {
+      const rank = NEMESIS_RANKS[Math.max(0, Math.min(rec?.rank ?? 0, NEMESIS_RANKS.length - 1))];
+      for (let i = 0; i < rank.gemDrops; i++) this.dropGemAt(victim.pos);
+      this.text(vec(victim.pos.x, victim.pos.y - 30), `The grudge dies with ${victim.name}.`, '#ffd700', 16);
+      this.events.emit('nemesis/slain', { saga: tag.sagaKey, nemesis: victim.name, cheated: false });
+    }
+    this.sagaDirty(true);
+  }
+
+  /** A concluded wipe: the saga records the fall, and the foe that landed it
+   *  is remembered — PROMOTED if it already haunts this name, else formed
+   *  fresh at the slayer's chance. (kill() stamped the killer of record.) */
+  private recordNemesisFall(): void {
+    const killer = this.lastPlayerKiller;
+    this.lastPlayerKiller = null;
+    if (!this.localSeat || !this.nemesisActive()) return;
+    const saga = touchSaga(this.account, this.meta.name);
+    saga.fallen++;
+    if (killer && this.nemesisEligible(killer)) {
+      const tag = killer.nemesis;
+      if (tag && tag.sagaKey === sagaKey(this.meta.name)) {
+        const rec = saga.nemeses.find(n => n.id === tag.id);
+        if (rec) {
+          rec.slays++;
+          promoteNemesis(rec, 'slayer', `slew ${this.meta.name} again`);
+          killer.name = nemesisTitle(rec); // the promotion is worn on the spot
+          this.text(vec(killer.pos.x, killer.pos.y - 34), `${killer.name} RISES.`, tag.tint, 17);
+          this.events.emit('nemesis/promoted', { saga: tag.sagaKey, nemesis: rec.name, rank: rec.rank });
+        }
+      } else if (Math.random() < NEMESIS_CFG.slayerChance) {
+        const n = formNemesis(saga, killer.defId!, killer.faction ?? '', 'slayer', Math.random);
+        this.text(vec(killer.pos.x, killer.pos.y - 34),
+          `${nemesisTitle(n)} will remember the name ${this.meta.name}.`, '#e07840', 15);
+        this.events.emit('nemesis/formed', { saga: sagaKey(this.meta.name), nemesis: n.name, deed: 'slayer' });
+      }
+    }
+    this.sagaDirty(true);
+  }
+
+  /** Zone-leave: an already-manifested nemesis left standing ESCAPES (and may
+   *  promote); and the world may remember ONE bloodied ordinary survivor. */
+  private scanNemesisSurvivors(): void {
+    if (!this.localSeat || this.gameOver || !this.nemesisActive()) return;
+    let formed = 0;
+    for (const a of this.actors) {
+      if (a.dead || !this.nemesisEligible(a)) continue;
+      const tag = a.nemesis;
+      if (tag) {
+        const holder = this.account.sagas[tag.sagaKey];
+        const rec = holder?.nemeses.find(n => n.id === tag.id);
+        if (rec && holder) {
+          rec.encounters++;
+          recordDeed(rec, 'escaped', `slipped away from ${holder.name}`);
+          if (Math.random() < NEMESIS_CFG.escapePromoteChance) {
+            promoteNemesis(rec, 'escaped');
+            this.events.emit('nemesis/promoted', { saga: tag.sagaKey, nemesis: rec.name, rank: rec.rank });
+          }
+          this.sagaDirty(true);
+        }
+        continue;
+      }
+      if (formed >= NEMESIS_CFG.survivorPerZone || !a.grudgeMark) continue;
+      if (Math.random() >= NEMESIS_CFG.survivorChance) continue;
+      const saga = touchSaga(this.account, this.meta.name);
+      const n = formNemesis(saga, a.defId!, a.faction ?? '', 'escaped', Math.random);
+      formed++;
+      this.text(vec(this.player.pos.x, this.player.pos.y - 40),
+        `Something you left alive will remember the name ${this.meta.name}.`, '#c8a84b', 13);
+      this.events.emit('nemesis/formed', { saga: sagaKey(this.meta.name), nemesis: n.name, deed: 'escaped' });
+      this.sagaDirty(true);
+    }
+  }
+
+  /** loadZone tail: one remembered foe may STEP OUT of the memory into this
+   *  zone, hunting whichever watched name it holds a grudge against. Zone
+   *  faction and grudge tier raise the odds; each record fields once per run. */
+  private manifestNemeses(def: ZoneDef): void {
+    if (!this.localSeat || !this.nemesisActive()) return;
+    if (def.objective.kind === 'safe') return;
+    let placed = 0;
+    for (const watch of this.watchedSagas()) {
+      if (placed >= NEMESIS_CFG.maxManifestPerZone) break;
+      const saga = peekSaga(this.account, watch.name);
+      if (!saga) continue;
+      const owner = this.sim.faction.owner(def.id).faction;
+      for (const rec of saga.nemeses) {
+        if (placed >= NEMESIS_CFG.maxManifestPerZone) break;
+        if (this.manifestedThisRun.has(rec.id)) continue;
+        if (!MONSTERS[rec.defId]) continue; // a patched-out foe stays a story
+        let chance: number = NEMESIS_CFG.manifestChance;
+        if (owner && owner === rec.faction) chance += NEMESIS_CFG.manifestFactionBonus;
+        chance += grudgeTier(saga, rec.faction)?.manifestBonus ?? 0;
+        if (Math.random() >= chance) continue;
+        this.spawnNemesisActor(rec, watch, def);
+        placed++;
+      }
+    }
+  }
+
+  /** Field one remembered foe: the base monster at zone level, swollen by its
+   *  rank (life/damage 'more' mods, size, tint), wearing its minted name —
+   *  and already hunting (it came here for you). */
+  private spawnNemesisActor(rec: NemesisRecord, watch: { name: string; role: 'self' | 'merc' }, def: ZoneDef): void {
+    const rank = NEMESIS_RANKS[Math.max(0, Math.min(rec.rank, NEMESIS_RANKS.length - 1))];
+    const a = this.createMonster(rec.defId, Math.max(1, def.level), 'enemy');
+    a.name = nemesisTitle(rec);
+    a.nemesis = { sagaKey: sagaKey(watch.name), id: rec.id, tint: rank.tint };
+    a.radius = Math.round(a.radius * rank.sizeMult);
+    a.sheet.setSource('nemesis', [mod('life', 'more', rank.lifeMore), mod('damage', 'more', rank.damageMore)]);
+    a.life = a.maxLife();
+    a.aggroed = true;
+    a.pos = this.findFreeSpot(vec(
+      this.arena.w * (0.25 + Math.random() * 0.5),
+      this.arena.h * (0.25 + Math.random() * 0.5)), a.radius);
+    this.actors.push(a);
+    this.manifestedThisRun.add(rec.id);
+    rec.encounters++;
+    rec.lastSeenAt = Date.now();
+    const hunts = watch.role === 'merc'
+      ? `hunts your hireling, ${watch.name}` : `remembers the name ${watch.name}`;
+    this.text(vec(this.player.pos.x, this.player.pos.y - 44), `${a.name} ${hunts}.`, rank.tint, 15);
+    this.text(vec(a.pos.x, a.pos.y - a.radius - 14), '…found you.', rank.tint, 12);
+    this.events.emit('nemesis/manifested', { saga: sagaKey(watch.name), nemesis: rec.name });
+    this.sagaDirty();
+  }
+
+  /** Grudged-faction pressure: members of a people that KNOWS this name fight
+   *  it harder (the tier's flat data-driven edge), and the zone whispers the
+   *  standing on entry — once per faction per load. */
+  private applyGrudgeEffects(def: ZoneDef): void {
+    if (!this.localSeat || !this.nemesisActive()) return;
+    const saga = peekSaga(this.account, this.meta.name);
+    if (!saga) return;
+    const announced = new Set<string>();
+    for (const a of this.actors) {
+      if (a.dead || a.team !== 'enemy' || !a.faction || a.owner) continue;
+      const tier = grudgeTier(saga, a.faction);
+      if (!tier) continue;
+      a.sheet.setSource('grudge', [mod('damage', 'more', tier.damageMore)]);
+      if (!announced.has(a.faction)) {
+        announced.add(a.faction);
+        const fac = (FACTIONS[a.faction]?.name ?? a.faction).replace(/^the /, '');
+        this.text(vec(this.player.pos.x, this.player.pos.y - 58),
+          tier.entryLine.replace('{faction}', fac).replace('{name}', this.meta.name), '#c88888', 13);
+      }
+    }
   }
 
   // ----------------------------------------------------------- quest giver ---
@@ -13973,7 +14240,13 @@ export class World {
     const def = inst.def;
     // The CALM clock: any blow involving the player's side is "recent combat"
     // for calm-gated dwells (the mercenary outpost's parley).
-    if (caster.team === 'player' || target.team === 'player') this.lastCombatAt = this.time;
+    if (caster.team === 'player' || target.team === 'player') {
+      this.lastCombatAt = this.time;
+      // THE GRUDGE STAMP (survivor trigger eligibility): the world notices a
+      // foe that traded blows with a hero — in either direction.
+      if (caster.team === 'enemy' && this.seatOf(target)) caster.grudgeMark = true;
+      else if (target.team === 'enemy' && this.seatOf(caster)) target.grudgeMark = true;
+    }
     const extra = instanceMods(inst);
     // Status shatter (Absolute Zero): consume the listed statuses for a
     // MORE multiplier — chilled and frozen things break beautifully.
@@ -15281,7 +15554,13 @@ export class World {
     // ANY player seat (the local hero OR a co-op ally) routes through the
     // downed/run-end seam — not just the local one — so allies can be downed
     // and revived too. Single-player has one seat, so this is the old behavior.
-    if (this.seatOf(actor)) { this.onPlayerDown(actor, killer); return; }
+    if (this.seatOf(actor)) {
+      // The slayer-formation seed: whoever landed this blow is what the world
+      // will remember if the wipe concludes (consumed by recordNemesisFall).
+      this.lastPlayerKiller = killer ?? null;
+      this.onPlayerDown(actor, killer);
+      return;
+    }
     // Death-spawn auras (e.g. Unholy Aura): enemies dying inside an aura
     // radius can rise as the bearer's minions.
     if (!silent) {
@@ -15383,6 +15662,9 @@ export class World {
     if (!silent && actor.team === 'enemy') {
       if (credit) {
         this.kills++;
+        // THE WORLD'S MEMORY: grudges accrue to the name; a manifested
+        // nemesis meets its fate (cheat death or the grudge ends).
+        this.noteNemesisKill(actor);
         // Kill-fed encounters: a foe slain inside an open breach extends it.
         if (this.encounters.length) this.feedEncounters(actor);
         this.grantXp(actor.xpValue);

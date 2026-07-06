@@ -153,6 +153,7 @@ export class Renderer {
     for (const f of world.flashes) this.drawFlash(f);
     for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
     for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
+    for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
     this.drawProjectiles(world);
     this.drawCanopies(world);      // fake-2D depth: crowns above actors, faded near the hero
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
@@ -169,6 +170,29 @@ export class Renderer {
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
     this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
     this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
+  }
+
+  /** A MANIFESTED NEMESIS (meta/nemesis.ts) wears its memory openly: a dashed
+   *  ring in its rank tint and its minted name + title overhead — a remembered
+   *  foe must read as one at a glance. */
+  private drawNemesisMark(a: Actor): void {
+    const { ctx } = this;
+    const tint = a.nemesis!.tint;
+    ctx.save();
+    ctx.strokeStyle = tint;
+    ctx.globalAlpha = 0.8;
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([7, 5]);
+    ctx.beginPath();
+    ctx.arc(a.pos.x, a.pos.y, a.radius + 7, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = tint;
+    ctx.font = 'bold 12px Verdana';
+    ctx.textAlign = 'center';
+    ctx.fillText(`☠ ${a.name}`, a.pos.x, a.pos.y - a.radius - 16);
+    ctx.restore();
   }
 
   /** CHARACTER-MODE fade (a survived death, meta/modes.ts): the whole screen —
@@ -4083,7 +4107,11 @@ export class Renderer {
     ctx.textAlign = 'left';
     ctx.font = 'bold 14px Verdana';
     ctx.fillStyle = '#c8a84b';
-    const titleLine = `${m.classDef.name}  —  Level ${p.level}`;
+    // THE NAME leads; the class rides along only when they differ (an unnamed
+    // "Rogue — Level 5 Rogue" would read as a stutter).
+    const titleLine = m.name !== m.classDef.name
+      ? `${m.name}  —  Level ${p.level} ${m.classDef.name}`
+      : `${m.classDef.name}  —  Level ${p.level}`;
     ctx.fillText(titleLine, 16, 26);
     // CHARACTER-MODE chip (data-driven — any stage that declares a badge shows
     // one): the Immortal's SWORN → UNDYING standing, at a glance, in mode color.

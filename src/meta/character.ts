@@ -44,6 +44,9 @@ interface SavedSkill {
 export interface CharacterSave {
   schemaVersion: number;
   classId: string;
+  /** THE NAME (Naming/Nemesis): player-given, or the class name when unnamed.
+   *  Optional → pre-naming saves load named for their class. */
+  name?: string;
   baseAttrs: Attributes;
   xp: number; xpNeeded: number;
   skillPoints: number; passivePoints: number;
@@ -106,6 +109,7 @@ export function serializeCharacter(world: World): CharacterSave {
   return {
     schemaVersion: CHAR_SCHEMA_VERSION,
     classId: m.classDef.id,
+    name: m.name,
     baseAttrs: { ...m.baseAttrs },
     xp: m.xp, xpNeeded: m.xpNeeded,
     skillPoints: m.skillPoints, passivePoints: m.passivePoints,
@@ -194,6 +198,7 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
 
   const meta: PlayerMeta = {
     classDef,
+    name: save.name?.trim() || classDef.name,
     baseAttrs: { ...save.baseAttrs },
     attrs: { ...save.baseAttrs }, // recomputed by recalcPlayer() inside adoptSavedMeta
     xp: save.xp, xpNeeded: save.xpNeeded,
@@ -307,7 +312,7 @@ export function syncRosterEntry(account: Account, world: World): RosterEntry | n
   const entry = account.roster.find(r => r.charId === world.meta.charId);
   if (!entry) return null;
   entry.classId = world.meta.classDef.id;
-  entry.name = world.meta.classDef.name;
+  entry.name = world.meta.name;
   entry.level = world.player.level;
   entry.stage = world.meta.modeStage;
   entry.savedAt = Date.now();

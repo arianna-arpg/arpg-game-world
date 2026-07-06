@@ -29,6 +29,13 @@ export interface GameEvents {
    *  packages that feed on deaths (Deadwake, a future Nemesis) can hook it
    *  without touching the death flow itself. */
   'player/modeDeath': { stage: string; earned: number };
+  /** THE WORLD'S MEMORY (meta/nemesis.ts) — rare saga moments, announced so
+   *  future content (assassin packages, bounty boards, contracts) hooks the
+   *  records without touching the kill/death flows that write them. */
+  'nemesis/formed': { saga: string; nemesis: string; deed: string };
+  'nemesis/promoted': { saga: string; nemesis: string; rank: number };
+  'nemesis/manifested': { saga: string; nemesis: string };
+  'nemesis/slain': { saga: string; nemesis: string; cheated: boolean };
 }
 
 type Handler<K extends keyof GameEvents> = (payload: GameEvents[K]) => void;

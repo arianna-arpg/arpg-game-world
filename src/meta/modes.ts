@@ -74,6 +74,12 @@ export interface ModeStageDef {
    *  A mortal-loop privilege: retirement is meta-progression, and a sworn
    *  covenant is not walked away from. Default false. */
   canRetire?: boolean;
+  /** Does the world's memory (meta/nemesis.ts sagas — grudges, nemeses)
+   *  watch this stage? WORLD-STATE bookkeeping, not player progression, so
+   *  it defaults ON for every stage — a sealed Undying character still
+   *  makes enemies; it just can't make PROGRESS. Declared here so a future
+   *  ghost-mode that the world forgets is one flag, not a hunt. */
+  nemesisMemory?: boolean;
   /** Flavor line floated over the character on waking (fade respawns only). */
   wakeText?: string;
 }

@@ -23,6 +23,8 @@ import { STARTER_CLASSES } from '../meta/account';
 import { DEFAULT_MODE_ID, MODE_BY_ID, MODES } from '../meta/modes';
 import { MERC_CFG } from '../meta/mercs';
 import { MERC_TEMPLATES } from './mercenaries';
+import { NEMESIS_CFG } from '../meta/nemesis';
+import { GRUDGE_TIERS, NEMESIS_NAMES, NEMESIS_RANKS } from './nemesis';
 import {
   validateStamps, doodadRuleOf, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs,
@@ -324,6 +326,25 @@ export function validateContent(): void {
   }
   if (MERC_CFG.rosterCap < 1) warn('MERC_CFG.rosterCap must be ≥ 1');
   if (!MONSTERS['merc_captain']) warn('mercs: merc_captain MonsterDef missing (outposts cannot spawn)');
+
+  // THE WORLD'S MEMORY: the nemesis vocabulary must be speakable — an empty
+  // rank ladder or name pool would mint blank foes; grudge tiers must ascend
+  // (the highest-met-tier scan assumes it).
+  if (!NEMESIS_RANKS.length) warn('nemesis: NEMESIS_RANKS is EMPTY (no promotion ladder)');
+  if (!NEMESIS_NAMES.first.length || !NEMESIS_NAMES.epithets.length) {
+    warn('nemesis: default name pools must not be empty');
+  }
+  for (let i = 1; i < GRUDGE_TIERS.length; i++) {
+    if (GRUDGE_TIERS[i].kills <= GRUDGE_TIERS[i - 1].kills) {
+      warn(`nemesis: GRUDGE_TIERS must ascend by kills ('${GRUDGE_TIERS[i].label}' does not)`);
+    }
+  }
+  for (const [k, v] of Object.entries({
+    slayerChance: NEMESIS_CFG.slayerChance, survivorChance: NEMESIS_CFG.survivorChance,
+    cheatDeathChance: NEMESIS_CFG.cheatDeathChance, manifestChance: NEMESIS_CFG.manifestChance,
+  })) {
+    if (v < 0 || v > 1) warn(`nemesis: NEMESIS_CFG.${k} out of [0,1]`);
+  }
 
   // CHARACTER MODES: the death-policy ladders must be walkable and every gate
   // they reference must exist. A mode with an unreachable unlock flag or an
