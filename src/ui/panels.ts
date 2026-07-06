@@ -105,6 +105,7 @@ export class UI {
   private vendorMenu = document.getElementById('vendor-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
+  private mercMenu = document.getElementById('merc-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
   private accountScreen = document.getElementById('account-screen')!;
   private escapeMenu = document.getElementById('escape-menu')!;
@@ -166,6 +167,7 @@ export class UI {
   treeOpen = false;
   mapOpen = false;
   caravanOpen = false;
+  mercOpen = false;
   tollOpen = false;
   salvageOpen = false;
   /** Station view state: which tab, and the craft tab's chosen piece. */
@@ -1954,6 +1956,83 @@ export class UI {
     this.caravanMenu.querySelector<HTMLButtonElement>('[data-caravan-close]')?.addEventListener('click', () => this.closeCaravan());
   }
 
+  // ----------------------------------------------------------- mercenary menu
+
+  /** Open the MERCENARY OUTPOST menu (the captain's calm-parley dwell asked). */
+  showMercMenu(): void {
+    this.hideAll();
+    this.mercOpen = true;
+    this.mercMenu.classList.remove('hidden');
+    this.refreshMercMenu();
+  }
+
+  closeMercMenu(): void {
+    this.mercOpen = false;
+    this.mercMenu.classList.add('hidden');
+    // Re-arm is the dwell's: it fired once and stays consumed until the player
+    // steps away from the captain (the caravan pattern).
+  }
+
+  /** Render the offer sheet: baseline blades + player-retired VETERANS (cost
+   *  live off the patron's level — power normalizes to it either way), the
+   *  current contract, and — for mortal-loop characters — RETIREMENT. */
+  refreshMercMenu(): void {
+    if (!this.mercOpen) return;
+    const world = this.getWorld();
+    const acc = this.getAccount();
+    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
+    const post = world.mercOutpost;
+    if (!post) { this.closeMercMenu(); return; }
+    const L = world.mercTargetLevel();
+    const hired = world.hiredMerc;
+    const rows = post.offers.length
+      ? post.offers.map((o, i) => {
+        const cost = world.mercHireCost(o);
+        const afford = acc.credits >= cost;
+        const vet = o.kind === 'retired';
+        return `<div class="skill-entry">
+          <div class="name">${esc(o.name)}
+            ${vet ? `<span class="tags" style="color:#b8a0e0">· VETERAN — retired at level ${o.retiredLevel}</span>` : ''}</div>
+          <div class="desc">${esc(o.blurb)}</div>
+          <div class="desc" style="color:#8a9a8a">Fights at your measure (level ${L}) — a blade is fitted to its patron.</div>
+          <div class="bind-btns"><button data-merc-hire="${i}" ${hired || !afford ? 'disabled' : ''}>
+            Hire — ${cost} ${META_CURRENCY_LABEL}</button>
+            ${!afford && !hired ? `<span class="tags">you carry ${acc.credits}</span>` : ''}</div>
+        </div>`;
+      }).join('')
+      : `<div class="skill-entry"><div class="desc">The sign-board hangs empty — every blade is spoken for.</div></div>`;
+    const contract = hired
+      ? `<div class="skill-entry"><div class="name" style="color:#c8b048">Under contract: ${esc(hired.name)}</div>
+          <div class="desc">Their hire ends when your run does — however it does.</div></div>`
+      : '';
+    const retire = world.canRetireHere()
+      ? `<div class="skill-entry" style="border-top:1px solid #3a3644;margin-top:10px;padding-top:10px">
+          <div class="name" style="color:#b8a0e0">Retire from the wake</div>
+          <div class="desc">End this run here, in good order: the run's ${META_CURRENCY_LABEL} banks as ever,
+            no corpse is left and no death is counted — and this character, exactly as built,
+            joins the mercenary roster (${acc.mercRoster.length} retired) for future runs to hire.</div>
+          <div class="bind-btns"><button data-merc-retire>Retire this character</button></div>
+        </div>`
+      : '';
+    this.mercMenu.innerHTML = `<h2>The Mercenary Outpost</h2>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Every blade here has a story. Buy one — or become one."</div>`
+      + contract + rows + retire
+      + `<div class="bind-btns" style="margin-top:10px"><button data-merc-close>Close</button></div>`;
+    this.mercMenu.querySelectorAll<HTMLButtonElement>('button[data-merc-hire]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.hireMercenary(Number(btn.dataset.mercHire));
+        this.refreshMercMenu(); // re-render: the offer struck, the contract line, the purse
+      });
+    });
+    this.mercMenu.querySelector<HTMLButtonElement>('button[data-merc-retire]')?.addEventListener('click', () => {
+      if (!window.confirm('Retire this character? The run ends (essence banks as on death), and the character '
+        + 'joins the mercenary roster — met again wherever an outpost offers them.')) return;
+      this.closeMercMenu();
+      world.retireCharacter(); // the run-end flow takes over (retire-flavored screen)
+    });
+    this.mercMenu.querySelector<HTMLButtonElement>('button[data-merc-close]')?.addEventListener('click', () => this.closeMercMenu());
+  }
+
   // ------------------------------------------------------------ vocation menu
 
   /** Open the VOCATION CHOICE menu (the quartermaster's dwell requested it —
@@ -2483,17 +2562,25 @@ export class UI {
     this.hideAll();
     const world = this.getWorld();
     const acc = this.getAccount();
+    // RETIREMENT is the death flow wearing its good clothes: same tithe, same
+    // account banking — but the character walked, and the copy says so.
+    const retired = world.runEndReason === 'retire';
+    const title = retired ? 'RETIRED FROM THE WAKE' : 'YOU HAVE DIED';
+    const deed = retired
+      ? `hangs up the blade at ${world.zone.name} — and joins the mercenary roster (${acc.mercRoster.length} retired)`
+      : `fell in ${world.zone.name}`;
     this.deathScreen.innerHTML = `
-      <h1>YOU HAVE DIED</h1>
+      <h1>${title}</h1>
       <div>Level ${world.player.level} ${world.meta.classDef.name}
-        &nbsp;·&nbsp; fell in ${world.zone.name} &nbsp;·&nbsp;
+        &nbsp;·&nbsp; ${deed} &nbsp;·&nbsp;
         ${world.visited.size} zones explored &nbsp;·&nbsp; ${world.kills} kills</div>
+      ${retired ? `<div style="margin-top:6px;color:#b8a0e0">Some future run will find them at an outpost, sword-arm for hire.</div>` : ''}
       <div style="margin:14px 0;color:var(--gold);font-weight:bold">
         <span id="death-run-ess">+${creditsEarned}</span> ${META_CURRENCY_LABEL} of the run
         &nbsp;·&nbsp; Account Level ${acc.level} &nbsp;·&nbsp;
         <span id="death-pool-ess">${acc.credits - creditsEarned}</span> ${META_CURRENCY_LABEL}</div>
       <button id="unlocks-btn">Unlocks</button>
-      <button id="restart-btn">Rise Again</button>`;
+      <button id="restart-btn">${retired ? 'Onward' : 'Rise Again'}</button>`;
     this.deathScreen.classList.remove('hidden');
 
     // THE DUMP: the run's Mortal Essence visibly DRAINS into the account
@@ -2949,6 +3036,8 @@ export class UI {
     this.treeOpen = false;
     this.mapOpen = false;
     this.caravanOpen = false;
+    this.mercOpen = false;
+    this.mercMenu.classList.add('hidden');
     this.tollOpen = false;
     this.sailOpen = false;
     this.vocationOpen = false;

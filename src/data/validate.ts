@@ -21,6 +21,8 @@ import { validatePassiveLayout } from './validatePassiveLayout';
 import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
 import { STARTER_CLASSES } from '../meta/account';
 import { DEFAULT_MODE_ID, MODE_BY_ID, MODES } from '../meta/modes';
+import { MERC_CFG } from '../meta/mercs';
+import { MERC_TEMPLATES } from './mercenaries';
 import {
   validateStamps, doodadRuleOf, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs,
@@ -298,6 +300,30 @@ export function validateContent(): void {
       warn(`class ${c.id}: ${bundles} class bundles (needs exactly ONE to join the roll pool)`);
     }
   }
+
+  // MERCENARY MARKET: every baseline template must resolve (class + any
+  // explicit bar skills), and the offer/scaling knobs must be sane — a bad
+  // share range or an empty template pool starves every outpost silently.
+  const mercIds = new Set<string>();
+  for (const t of MERC_TEMPLATES) {
+    if (mercIds.has(t.id)) warn(`merc template ${t.id}: duplicate id`);
+    mercIds.add(t.id);
+    if (!CLASSES.some(c => c.id === t.classId)) warn(`merc template ${t.id}: unknown class '${t.classId}'`);
+    for (const sid of t.bar ?? []) {
+      if (sid && !SKILLS[sid]) warn(`merc template ${t.id}: bar names unknown skill '${sid}'`);
+    }
+    if (!t.names.length) warn(`merc template ${t.id}: empty name pool`);
+  }
+  if (!MERC_TEMPLATES.length) warn('merc templates: pool is EMPTY (outposts would offer only veterans)');
+  if (MERC_CFG.offers.retiredShareMin < 0 || MERC_CFG.offers.retiredShareMax > 1
+    || MERC_CFG.offers.retiredShareMin > MERC_CFG.offers.retiredShareMax) {
+    warn('MERC_CFG.offers: retired share range must be 0 ≤ min ≤ max ≤ 1');
+  }
+  if (MERC_CFG.offers.min < 1 || MERC_CFG.offers.min > MERC_CFG.offers.max) {
+    warn('MERC_CFG.offers: need 1 ≤ min ≤ max');
+  }
+  if (MERC_CFG.rosterCap < 1) warn('MERC_CFG.rosterCap must be ≥ 1');
+  if (!MONSTERS['merc_captain']) warn('mercs: merc_captain MonsterDef missing (outposts cannot spawn)');
 
   // CHARACTER MODES: the death-policy ladders must be walkable and every gate
   // they reference must exist. A mode with an unreachable unlock flag or an

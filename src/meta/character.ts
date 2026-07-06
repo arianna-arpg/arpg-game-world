@@ -23,7 +23,8 @@ import { emptyEssences, type PlayerMeta, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
 import { diskBeacon, diskGet, diskPut, saveAccount } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
-import { DEFAULT_MODE_ID, modeById, type RosterEntry } from './modes';
+import { DEFAULT_MODE_ID, mintCharId, modeById, type RosterEntry } from './modes';
+import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
 
 export const CHAR_SCHEMA_VERSION = 1;
@@ -88,6 +89,9 @@ export interface CharacterSave {
    *  falls live HERE — inside its own save — so no other character can ever
    *  see or loot them. Same per-record schema tolerance as the account ring. */
   deaths?: DeathRecord[];
+  /** THE HIRED BLADE (meta/mercs.ts): the contract rides the patron's save —
+   *  snapshot INLINE (resilient to roster churn), refs for pool release. */
+  mercenary?: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string };
 }
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
@@ -130,6 +134,14 @@ export function serializeCharacter(world: World): CharacterSave {
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: world.charDeaths.map(d => ({ ...d })),
+    ...(world.hiredMerc ? {
+      mercenary: {
+        name: world.hiredMerc.name,
+        snapshot: world.hiredMerc.snapshot,
+        ...(world.hiredMerc.mercId ? { mercId: world.hiredMerc.mercId } : {}),
+        ...(world.hiredMerc.templateId ? { templateId: world.hiredMerc.templateId } : {}),
+      },
+    } : {}),
   };
 }
 
@@ -194,16 +206,19 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
     vestiges: { ...(save.vestiges ?? {}) },
     // The SAVE is the authority on the life-contract — createPlayer's stamp is
-    // only for fresh characters. Pre-mode saves load as plain mortals.
+    // only for fresh characters. Pre-mode saves load as plain mortals; a save
+    // predating character ids mints one (merc engagements key off it).
     modeId: save.modeId ?? DEFAULT_MODE_ID,
     modeStage: save.modeStage ?? 0,
-    charId: save.charId ?? '',
+    charId: save.charId || mintCharId(),
   };
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);
   // The character's own corpse ring (same per-record tolerance as the account's).
   world.charDeaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
   world.adoptSavedMeta(meta, save.bar, save.level);
+  // Re-field a saved mercenary contract (already paid + pool-marked).
+  if (save.mercenary?.snapshot) world.restoreHiredMerc(save.mercenary);
   return true;
 }
 

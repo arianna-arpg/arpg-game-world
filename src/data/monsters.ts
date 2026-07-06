@@ -2540,6 +2540,18 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
+  // THE MERCENARY OUTPOST's quartermaster (meta/mercs.ts): a neutral fixture,
+  // not a foe — dwell nearby (zone cleared, blades sheathed) to parley.
+  merc_captain: {
+    id: 'merc_captain', name: 'the Outpost Captain',
+    color: '#c8a84b', shape: 'pentagon', radius: 15,
+    base: { life: 400, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
   // A point of interest, not a foe: crack it open for a guaranteed gem.
   gem_cache: {
     id: 'gem_cache', name: 'Gem Cache',

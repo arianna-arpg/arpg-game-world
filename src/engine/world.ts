@@ -28,7 +28,7 @@ import {
   supportMaxLevel,
   type AuraDelivery, type BuffEffect, type ConstructDelivery, type GroundDelivery, type GuardSpec,
   type ProjectileDelivery, type ProjectileShape, type SkillDef,
-  type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance,
+  type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec,
 } from './skills';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
@@ -131,6 +131,13 @@ import {
   modeById, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
   type CharacterModeDef, type ModeStageDef,
 } from '../meta/modes';
+import {
+  MERC_CFG, MERC_SCHEMA, addRetiredMerc, availableRetired, engageMerc, mintMercId,
+  releaseMercsOf, retiredShare, snapshotBuild,
+  type MercRosterEntry, type MercSnapshot,
+} from '../meta/mercs';
+import { MERC_TEMPLATES, MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
+import { MercInput } from './mercbrain';
 import { saveCharacter, rebuildSkill } from '../meta/character';
 import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
@@ -866,6 +873,10 @@ export interface Seat {
   meta: PlayerMeta;
   /** Where this seat's per-frame intent comes from (OS / scripted / remote). */
   input: PlayerInputSource;
+  /** Set on a HIRED MERCENARY's seat (meta/mercs.ts): the blade's identity.
+   *  Gates XP grants (mercs track the patron's level, never earn their own),
+   *  the party-scale lever, and the rescue-count policy. */
+  merc?: { name: string; mercId?: string; templateId?: string };
   /** World time of this seat's last deliberate action — its private dwell clock. */
   lastActedAt: number;
   /** Revive progress while this seat is DOWNED: ally seat id → seconds dwelt. */
@@ -985,6 +996,20 @@ interface PlayerCorpse {
   who: { classId: string; level: number };
   dwell: number;
   reclaimed: boolean;
+}
+
+/** One blade on an outpost's offer sheet (meta/mercs.ts): a baseline template
+ *  or a player-retired VETERAN. Cost is computed live at menu time (it tracks
+ *  the patron's level); the sheet itself is seeded per zone + run. */
+export interface MercOffer {
+  kind: 'template' | 'retired';
+  /** templateId or mercId, per kind. */
+  refId: string;
+  name: string;
+  classId: string;
+  blurb: string;
+  /** Veterans: the level they retired at (card flavor — power normalizes). */
+  retiredLevel?: number;
 }
 
 /** Resolve a zone's playable bounds. Shape comes from the def if authored,
@@ -1711,6 +1736,21 @@ export class World {
   screenFade = 0;
   /** Essence paid by the most recent mode death (the wake-text receipt). */
   private lastRespawnPayout = 0;
+  // --- the MERCENARY MARKET (meta/mercs.ts) --------------------------------
+  /** This zone's outpost, if one seeded here (per-zone-load transient). */
+  mercOutpost: { captain: Actor; offers: MercOffer[] } | null = null;
+  private mercDwell = 0;
+  private mercDwellFired = false;
+  private mercHintAt = -999;
+  /** The captain's parley dwell completed — main.ts opens the outpost menu. */
+  mercOutpostRequested = false;
+  /** The blade currently under contract (rides the character save). */
+  hiredMerc: { seat: Seat; name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string } | null = null;
+  /** The merc's power was last normalized to this patron level (resync guard). */
+  private mercSyncedLevel = 0;
+  /** World time of the last blow landed by/on the player's side — the
+   *  outpost's "no recent combat" gate (and any future calm-gated dwell). */
+  lastCombatAt = -999;
   kills = 0;
   /** Seconds remaining on the low-life "took a hit" red screen blink (renderer). */
   lowLifeHitFlash = 0;
@@ -2003,9 +2043,17 @@ export class World {
     }
   }
 
+  /** Party size for ENEMY SCALING purposes. Human seats always count; a hired
+   *  mercenary counts only when the MERC_CFG.partyScale lever is on — the
+   *  co-op-scaling-for-hirelings knob, pulled in one place. */
+  private partyScaleCount(): number {
+    return Math.max(1, this.seats.reduce((n, s) =>
+      n + (s.actor.dead || (s.merc && !MERC_CFG.partyScale) ? 0 : 1), 0));
+  }
+
   /** Set (or clear) the co-op party-size scaling source on one hostile enemy. */
   private applyPartyScale(a: Actor): void {
-    const s = coopScale(this.playerCount());
+    const s = coopScale(this.partyScaleCount());
     if (s.life > 0 || s.damage > 0) {
       a.sheet.setSource('partyScale', [mod('life', 'more', s.life), mod('damage', 'more', s.damage)]);
     } else {
@@ -2049,8 +2097,12 @@ export class World {
    *  standing): no ally alive → the run ends immediately, byte-identical to the
    *  original behavior (the corpse is recorded by main.ts). */
   protected onPlayerDown(actor: Actor, killer?: Actor): void {
+    // A standing ally converts this to a revivable DOWNED state. A hired
+    // MERC counts as that ally only while the revive lever is on — else a
+    // merc who can't kneel would strand its downed patron forever.
     const anyAllyUp = this.seats.some(s =>
-      s.actor !== actor && !s.actor.dead && !s.actor.downed);
+      s.actor !== actor && !s.actor.dead && !s.actor.downed
+      && (!s.merc || MERC_CFG.mercsCanRevive));
     if (!anyAllyUp) { this.concludeWipe(); return; }
     // Downed, not dead: undo kill()'s dead flag, zero life, await revival.
     actor.dead = false;
@@ -2153,18 +2205,22 @@ export class World {
     if (stage.metaProgression) mergeLedger(this.account.ledger, this.ledger);
     if (stage.countsAccountDeath) bumpLedger(this.account.ledger, LEDGER_ACCOUNT_DEATHS);
     this.accountDirty = true;
-    // 3. THE CORPSE: captured BEFORE the carry is stripped, routed by the
+    // 3. THE CONTRACT: a survived death still concludes the retainer's hire —
+    //    the blade returns to the world's pool (never destroyed; an Undying
+    //    patron must engage the mortal economy again to afford the next one).
+    if (this.hiredMerc) this.dismissMercenary();
+    // 4. THE CORPSE: captured BEFORE the carry is stripped, routed by the
     //    DYING stage's ring (the immortalizing corpse is already self-only).
     this.recordDeath();
-    // 4. THE PRICE: death still takes the carry — bag, doll, gems, materials —
+    // 5. THE PRICE: death still takes the carry — bag, doll, gems, materials —
     //    while the build (skills, supports, passives, level) walks away.
     this.stripCarryOnDeath();
-    // 5. THE CROSSING: advance the ladder (an Immortal's first death seals it).
+    // 6. THE CROSSING: advance the ladder (an Immortal's first death seals it).
     if (stage.onDeath === 'advance') {
       this.meta.modeStage = Math.min(this.meta.modeStage + 1, this.modeDef().stages.length - 1);
     }
     this.charDirty = true;
-    // 6. The dark takes the screen; update() wakes the character once it's full.
+    // 7. The dark takes the screen; update() wakes the character once it's full.
     this.pendingRespawn = { phase: 'out', t: 0 };
     this.events.emit('player/modeDeath', { stage: stage.id, earned });
   }
@@ -2786,6 +2842,13 @@ export class World {
     // SECRET VOCATION SITES: a qualifying zone may host a hidden calling's
     // shrine (deterministic per zone + run seed) — see data/vocations.ts.
     this.placeVocationSites(def);
+
+    // MERCENARY OUTPOST: a qualifying wild zone may host the market's camp
+    // (same deterministic per-zone/run roll as the shrine sites).
+    this.mercOutpost = null;
+    this.mercDwell = 0;
+    this.mercDwellFired = false;
+    if (!isCave) this.placeMercOutpost(def);
 
     // CORPSE RUN: spawn any prior death whose coordinate matches this zone.
     this.spawnPlayerCorpses(def);
@@ -7179,6 +7242,9 @@ export class World {
   grantXp(amount: number): void {
     for (const seat of this.seats) {
       if (seat.actor.dead) continue;
+      // A hired blade never earns its own levels — its power is NORMALIZED to
+      // the patron (MERC_CFG.scale), re-synced on the patron's level-ups.
+      if (seat.merc) continue;
       this.grantSeatXp(seat, amount);
     }
   }
@@ -7205,6 +7271,8 @@ export class World {
       // ally's revive restores it (to REVIVE_LIFE_FRAC). Mirrors the regen guard.
       if (!p.downed) p.fillResources();
       this.text(p.pos, 'LEVEL UP!', '#ffd700', 24);
+      // LIVE PARITY: the patron levelled — re-normalize the hired blade.
+      if (seat === this.localSeat) this.resyncMercenary();
     }
     // Reaching character level 5 surfaces the Quest Package in the Vault next run.
     // Account-level progression belongs to the LOCAL hero only (it's the host's
@@ -8161,6 +8229,363 @@ export class World {
     c.untargetable = true; // the band's monsters ignore the escort
     c.pos = this.clampPos(vec(this.player.pos.x + 54, this.player.pos.y + 28), c.radius);
     this.actors.push(c);
+  }
+
+  // ----------------------------------------------------- mercenary outpost ---
+  //
+  // The MARKET (meta/mercs.ts): a camp that seeds itself into qualifying wild
+  // zones (the vocation-site roll), whose captain parleys on a CALM dwell —
+  // zone objective done, no live foe near, no recent combat. The menu offers
+  // blades to HIRE (baseline templates + player-retired VETERANS, the veteran
+  // share growing with roster fill) and, to mortal-loop characters, RETIREMENT:
+  // end the run as a death that pays the tithe but counts no death and leaves
+  // no corpse — the character walks into the world's supply instead.
+
+  /** Seeded outpost roll for this zone (loadZone tail; wilds only). */
+  private placeMercOutpost(def: ZoneDef): void {
+    const cfg = MERC_CFG.outpost;
+    if (!this.zoneMatchesSiteFilter(def, cfg.filter)) return;
+    if (!MONSTERS['merc_captain']) return;
+    const rng = new Rng((this.manifest.seed ^ hashStr(`mercpost_${def.id}`)) >>> 0);
+    if (rng.range(0, 1) >= cfg.chance) return;
+    const captain = this.createMonster('merc_captain', Math.max(1, def.level), 'enemy');
+    captain.pos = this.findFreeSpot(vec(
+      this.arena.w * rng.range(0.25, 0.75),
+      this.arena.h * rng.range(0.25, 0.75)), captain.radius);
+    this.actors.push(captain);
+    // Camp dressing: a banner and a ring of bedrolls (generic-disc fallback
+    // renders unknown kinds — dedicated art can come later without data changes).
+    this.doodads.push({ pos: this.findFreeSpot(vec(captain.pos.x + 34, captain.pos.y - 26), 10), radius: 9, kind: 'merc_banner', rot: 0 });
+    for (let i = 0; i < 3; i++) {
+      const a = rng.range(0, Math.PI * 2), r = rng.range(46, 84);
+      this.doodads.push({
+        pos: this.findFreeSpot(vec(captain.pos.x + Math.cos(a) * r, captain.pos.y + Math.sin(a) * r), 14),
+        radius: rng.range(11, 15), kind: 'merc_bedroll', rot: rng.range(0, Math.PI * 2),
+      });
+    }
+    this.mercOutpost = { captain, offers: this.buildMercOffers(rng) };
+  }
+
+  /** Deal this outpost's offer sheet: seeded count, the roster-fill-scaled
+   *  veteran share (drawn from POOLED veterans only), baselines for the rest. */
+  private buildMercOffers(rng: Rng): MercOffer[] {
+    const { min, max } = MERC_CFG.offers;
+    const count = min + Math.floor(rng.range(0, max - min + 1));
+    const shuffle = <T,>(arr: T[]): T[] => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(rng.range(0, i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    };
+    const offers: MercOffer[] = [];
+    const veterans = shuffle([...availableRetired(this.account)]);
+    const wantRetired = Math.min(veterans.length, Math.round(count * retiredShare(this.account)));
+    for (let i = 0; i < wantRetired; i++) {
+      const v = veterans[i];
+      offers.push({
+        kind: 'retired', refId: v.mercId, name: v.name, classId: v.classId,
+        blurb: 'A veteran of the wake — a life someone lived, sword-arm for hire.',
+        retiredLevel: v.retiredLevel,
+      });
+    }
+    const templates = shuffle([...MERC_TEMPLATES]);
+    for (let i = 0; offers.length < count && i < templates.length; i++) {
+      const t = templates[i];
+      offers.push({
+        kind: 'template', refId: t.id,
+        name: t.names[Math.floor(rng.range(0, t.names.length))] ?? t.id,
+        classId: t.classId, blurb: t.blurb,
+      });
+    }
+    return shuffle(offers);
+  }
+
+  /** The calm-parley dwell: fires the menu request ONCE per approach; backing
+   *  off (or trouble arriving) re-arms it. Gates, in order: captain standing,
+   *  in radius, zone objective settled, no live foe near, blades cold, idle. */
+  private updateMercOutpost(dt: number): void {
+    const post = this.mercOutpost;
+    if (!post || post.captain.dead) return;
+    if (this.player.dead || this.player.downed) { this.mercDwell = 0; return; }
+    const cfg = MERC_CFG.outpost;
+    const near = dist(post.captain.pos, this.player.pos) <= cfg.radius;
+    if (!near) { this.mercDwell = 0; this.mercDwellFired = false; return; }
+    const foeNear = this.actors.some(a =>
+      a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
+      && dist(a.pos, this.player.pos) <= cfg.enemyRadius);
+    const calm = this.time - this.lastCombatAt >= cfg.calmSec;
+    if (!this.objectiveDone || foeNear || !calm) {
+      this.mercDwell = 0;
+      // A quiet word about WHY the captain won't talk yet (throttled).
+      if (this.time - this.mercHintAt > 6) {
+        this.mercHintAt = this.time;
+        const why = !this.objectiveDone ? 'Settle this ground’s business first.'
+          : foeNear ? 'Not with company like that about.' : 'Let the blood cool a moment.';
+        this.text(vec(post.captain.pos.x, post.captain.pos.y - 34), why, '#c8b048', 12);
+      }
+      return;
+    }
+    if (this.mercDwellFired || !this.playerIdle()) return;
+    this.mercDwell += dt;
+    if (this.mercDwell >= cfg.dwellSec) {
+      this.mercDwell = 0;
+      this.mercDwellFired = true;   // consumed until the player steps away
+      this.mercOutpostRequested = true;
+    }
+  }
+
+  /** The level the market measures the patron by (MERC_CFG.scale.anchor). */
+  mercTargetLevel(): number {
+    return MERC_CFG.scale.anchor === 'zoneLevel'
+      ? Math.max(1, this.zone.level)
+      : Math.max(1, this.player.level);
+  }
+
+  /** Live hire price for an offer (tracks the patron's level; veterans premium). */
+  mercHireCost(o: MercOffer): number {
+    const L = this.mercTargetLevel();
+    const base = MERC_CFG.hireCostBase + MERC_CFG.hireCostPerLevel * L;
+    return Math.round(base * (o.kind === 'retired' ? MERC_CFG.retiredCostMult : 1));
+  }
+
+  /** May the CURRENT character retire here? (Stage policy — mortal loop only.) */
+  canRetireHere(): boolean {
+    return (this.modeStageDef().canRetire ?? false) && !!this.mercOutpost && !this.mercOutpost.captain.dead;
+  }
+
+  // --- power normalization (THE anti-steamroll contract) --------------------
+
+  /** Build a normalized PlayerMeta from a snapshot at the target level. Every
+   *  axis is a MERC_CFG.scale policy: gem levels scale PROPORTIONALLY to the
+   *  level-cap curve (a build's deliberate low-level gems stay relatively
+   *  low, both up- and down-scaling), tree allocations trim breadth-first to
+   *  the level's passive budget (always a legal connected sub-tree), and worn
+   *  gear above its level requirement sits out (it grows back on resync as
+   *  the patron levels). */
+  private normalizeMercMeta(snapshot: MercSnapshot, targetLevel: number): PlayerMeta | null {
+    const classDef = CLASSES.find(c => c.id === snapshot.classId);
+    if (!classDef) return null;
+    const scale = MERC_CFG.scale;
+    const capNow = scale.gemLevelCap(targetLevel);
+    const capThen = Math.max(1, scale.gemLevelCap(Math.max(1, snapshot.level)));
+    const gemLevel = (orig: number): number =>
+      Math.max(1, Math.min(capNow, Math.round(orig * (capNow / capThen))));
+
+    const knownSkills = new Map<string, SkillInstance>();
+    for (const ss of snapshot.knownSkills) {
+      const inst = rebuildSkill({
+        skillId: ss.skillId, level: gemLevel(ss.level), rarity: ss.rarity,
+        sockets: ss.sockets.map(s => s ? { supportId: s.supportId, level: gemLevel(s.level) } : null),
+      });
+      if (inst) knownSkills.set(inst.def.id, inst);
+    }
+
+    const equipped: Partial<Record<string, ItemInstance>> = {};
+    for (const [slot, it] of Object.entries(snapshot.equipped ?? {})) {
+      const item = rebuildItem(it);
+      if (!item) continue;
+      if (scale.respectGearLevelReq && itemLevelReq(item) > targetLevel) continue;
+      equipped[slot] = item;
+    }
+
+    return {
+      classDef,
+      baseAttrs: { ...snapshot.baseAttrs },
+      attrs: { ...snapshot.baseAttrs },
+      xp: 0, xpNeeded: PROGRESSION.xpForLevel(targetLevel),
+      skillPoints: 0, passivePoints: 0,
+      allocated: this.trimAllocated(snapshot, scale.passiveBudget(targetLevel)),
+      vocations: [...(snapshot.vocations ?? [])],
+      vocationPoints: 0,
+      knownSkills,
+      inventory: [], skillInv: [], offerings: 0,
+      items: [], equipped,
+      essences: emptyEssences(), vestiges: {},
+      modeId: DEFAULT_MODE_ID, modeStage: 0, charId: '',
+    };
+  }
+
+  /** Trim a snapshot's allocations to a budget: breadth-first from the class
+   *  start (plus any earned vocation roots — their clusters are adjacency-
+   *  islands off the main tree), visiting only nodes the build actually took.
+   *  Start/root seeds are free, mirroring character creation. */
+  private trimAllocated(snapshot: MercSnapshot, budget: number): Set<string> {
+    const want = new Set(snapshot.allocated);
+    const seeds = [
+      classStartNode(snapshot.classId),
+      ...(snapshot.vocations ?? []).map(v => `voc_${v}_root`),
+    ].filter(id => want.has(id));
+    const out = new Set(seeds);
+    const queue = [...seeds];
+    let spent = 0;
+    while (queue.length && spent < budget) {
+      const cur = queue.shift()!;
+      for (const nb of PASSIVE_ADJACENCY[cur] ?? []) {
+        if (spent >= budget) break;
+        if (!want.has(nb) || out.has(nb)) continue;
+        out.add(nb);
+        queue.push(nb);
+        spent++;
+      }
+    }
+    return out;
+  }
+
+  /** Graft normalized power onto the merc's seat (spawn + every resync). The
+   *  life FRACTION is preserved so a mid-fight level-up never heals or gibs. */
+  private applyMercNormalization(seat: Seat, snapshot: MercSnapshot, firstSpawn: boolean): boolean {
+    const targetLevel = this.mercTargetLevel();
+    const meta = this.normalizeMercMeta(snapshot, targetLevel);
+    if (!meta) return false;
+    const a = seat.actor;
+    const frac = a.maxLife() > 0 ? a.life / a.maxLife() : 1;
+    seat.meta = meta;
+    a.level = targetLevel;
+    a.skills = padBar(snapshot.bar.map(id => (id ? meta.knownSkills.get(id) ?? null : null)));
+    this.recalcSeat(seat);
+    if (firstSpawn) a.fillResources();
+    else {
+      a.life = Math.max(1, a.maxLife() * Math.min(1, frac));
+      a.mana = Math.min(a.mana, a.maxMana());
+    }
+    this.mercSyncedLevel = targetLevel;
+    this.markMetaDirty(seat);
+    return true;
+  }
+
+  /** LIVE PARITY: re-normalize the hired blade when the patron's level moves
+   *  (grantSeatXp hook; MERC_CFG.scale.trackLevel). Cheap no-op otherwise. */
+  resyncMercenary(): void {
+    if (!this.hiredMerc || !MERC_CFG.scale.trackLevel) return;
+    if (this.mercTargetLevel() === this.mercSyncedLevel) return;
+    this.applyMercNormalization(this.hiredMerc.seat, this.hiredMerc.snapshot, false);
+  }
+
+  // --- hire / restore / dismiss / retire ------------------------------------
+
+  /** Synthesize a baseline template's snapshot at the target level: the class
+   *  bar as its gems, the class start on the tree, no gear — the yardstick. */
+  private templateSnapshot(t: MercTemplateDef, targetLevel: number): MercSnapshot {
+    const classDef = CLASSES.find(c => c.id === t.classId);
+    const bar = [...(t.bar ?? classDef?.bar ?? [])];
+    const cap = MERC_CFG.scale.gemLevelCap(targetLevel);
+    return {
+      classId: t.classId,
+      level: targetLevel,
+      baseAttrs: { ...(classDef?.attributes ?? { }) } as Attributes,
+      allocated: [classStartNode(t.classId)],
+      vocations: [],
+      knownSkills: [...new Set(bar.filter((s): s is string => !!s))].map(sid => ({
+        skillId: sid, level: cap, rarity: 'magic' as SkillRarity,
+        sockets: [null, null],
+      })),
+      bar,
+      equipped: {},
+    };
+  }
+
+  /** Field a blade from a snapshot: a REAL SEAT (the co-op rails — party
+   *  strip, downed/revive, shared targeting) driven by the merc brain. */
+  private spawnMercSeat(
+    snapshot: MercSnapshot, name: string, ref: { mercId?: string; templateId?: string },
+  ): Seat | null {
+    const classDef = CLASSES.find(c => c.id === snapshot.classId);
+    if (!classDef) return null;
+    const seat = this.addSeat('m0', classDef, new MercInput());
+    seat.merc = { name, ...ref };
+    seat.actor.name = name;
+    if (!this.applyMercNormalization(seat, snapshot, true)) {
+      this.removeSeat(seat.id);
+      return null;
+    }
+    return seat;
+  }
+
+  /** HIRE from the outpost sheet (UI-driven): pay the essence, field the
+   *  blade, mark a veteran engaged, and strike the offer from the sheet. */
+  hireMercenary(index: number): boolean {
+    const post = this.mercOutpost;
+    const offer = post?.offers[index];
+    if (!post || !offer) return false;
+    if (this.hiredMerc) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 30), 'One retainer at a time.', '#c8b048', 13);
+      return false;
+    }
+    const cost = this.mercHireCost(offer);
+    if (this.account.credits < cost) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 30),
+        `The captain wants ${cost} ${META_CURRENCY_LABEL}.`, '#c8b048', 13);
+      return false;
+    }
+    const snapshot = offer.kind === 'retired'
+      ? this.account.mercRoster.find(r => r.mercId === offer.refId)?.snapshot
+      : this.templateSnapshot(MERC_TEMPLATE_BY_ID[offer.refId], this.mercTargetLevel());
+    if (!snapshot) return false;
+    const ref = offer.kind === 'retired' ? { mercId: offer.refId } : { templateId: offer.refId };
+    const seat = this.spawnMercSeat(snapshot, offer.name, ref);
+    if (!seat) return false;
+    this.account.credits -= cost;
+    if (offer.kind === 'retired') engageMerc(this.account, offer.refId, this.meta.charId);
+    this.accountDirty = true;
+    this.hiredMerc = { seat, name: offer.name, snapshot, ...ref };
+    this.charDirty = true;   // the contract rides the character save
+    post.offers.splice(index, 1);
+    this.text(vec(this.player.pos.x, this.player.pos.y - 34),
+      `${offer.name} takes your coin.`, '#c8b048', 15);
+    return true;
+  }
+
+  /** Re-field a saved engagement on resume (applySavedCharacter). No cost,
+   *  no pool mutation — the contract was already paid and marked. */
+  restoreHiredMerc(m: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string }): void {
+    const seat = this.spawnMercSeat(m.snapshot, m.name,
+      m.mercId ? { mercId: m.mercId } : { templateId: m.templateId });
+    if (seat) this.hiredMerc = { seat, name: m.name, snapshot: m.snapshot, mercId: m.mercId, templateId: m.templateId };
+  }
+
+  /** The contract ends (patron death, forfeit, retirement, an Undying fall):
+   *  the blade leaves the field and a VETERAN returns to the pool — never
+   *  destroyed, only waiting for some future outpost to offer them again. */
+  dismissMercenary(note?: string): void {
+    const hm = this.hiredMerc;
+    if (!hm) return;
+    releaseMercsOf(this.account, this.meta.charId);
+    this.accountDirty = true;
+    this.removeSeat(hm.seat.id);
+    this.hiredMerc = null;
+    this.charDirty = true;
+    if (note) this.text(vec(this.player.pos.x, this.player.pos.y - 48), note, '#c8b048', 13);
+  }
+
+  /** RETIRE the character at this outpost: snapshot the build onto the
+   *  account's veteran roster and end the run through the death flow with
+   *  reason 'retire' — the tithe pays, the ledger merges, but no corpse drops
+   *  and no death counts. The character has joined the world's supply. */
+  retireCharacter(): boolean {
+    if (this.player.dead || this.gameOver || this.pendingRespawn) return false;
+    if (!this.canRetireHere()) return false;
+    // The retiree's own retainer is released first (back to the pool).
+    if (this.hiredMerc) this.dismissMercenary();
+    const m = this.meta;
+    const entry: MercRosterEntry = {
+      schema: MERC_SCHEMA,
+      mercId: mintMercId(),
+      name: m.classDef.name,          // the Naming system will write here
+      classId: m.classDef.id,
+      retiredLevel: this.player.level,
+      retiredAt: Date.now(),
+      snapshot: snapshotBuild(
+        m.classDef.id, m.baseAttrs, m.allocated, m.vocations,
+        m.knownSkills.values(), this.player.skills.map(s => s ? s.def.id : null),
+        m.equipped, this.player.level),
+    };
+    addRetiredMerc(this.account, entry);
+    // Main.ts's run-end block persists the account durably alongside the tithe.
+    this.runEndReason = 'retire';
+    for (const s of this.seats) { s.actor.downed = false; s.actor.dead = true; }
+    this.onRunEnded('retire');
+    return true;
   }
 
   // ----------------------------------------------------------- quest giver ---
@@ -13546,6 +13971,9 @@ export class World {
     forceDamage = false,
   ): void {
     const def = inst.def;
+    // The CALM clock: any blow involving the player's side is "recent combat"
+    // for calm-gated dwells (the mercenary outpost's parley).
+    if (caster.team === 'player' || target.team === 'player') this.lastCombatAt = this.time;
     const extra = instanceMods(inst);
     // Status shatter (Absolute Zero): consume the listed statuses for a
     // MORE multiplier — chilled and frozen things break beautifully.
@@ -15736,6 +16164,8 @@ export class World {
     // The quartermaster hands you a hunt for lingering (auto-accept on dwell).
     this.updateQuestGiver(dt);
     this.updateVocationSites();
+    // The mercenary outpost's calm parley dwell (hire blades / retire here).
+    this.updateMercOutpost(dt);
     // The Bonewright hands out amalgamation hunts + part picks (dwell-driven).
     this.updateAmalgamation(dt);
     // The Delver: dwell the shaft to descend; the abyss tick runs the dark + streaming.
@@ -15753,7 +16183,8 @@ export class World {
     // never double-fires, and on !pendingRespawn so a mode respawn mid-fade
     // (every seat still flagged dead until the wake) isn't re-concluded.
     if (!this.gameOver && !this.pendingRespawn && this.seats.length > 0
-      && !this.seats.some(s => !s.actor.dead && !s.actor.downed)) {
+      && !this.seats.some(s => !s.actor.dead && !s.actor.downed
+        && (!s.merc || MERC_CFG.mercsCanRevive))) {
       for (const s of this.seats) { s.actor.downed = false; s.actor.dead = true; }
       this.concludeWipe();
     }

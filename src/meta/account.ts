@@ -17,6 +17,9 @@ import { clampFrequency, DEFAULT_FREQUENCY, type FrequencyProfile } from '../pac
 // Type-only — modes.ts value-imports from this file; a runtime import back
 // would be a cycle. RosterEntry is pure data, so the type is all we need.
 import type { RosterEntry } from './modes';
+// Safe VALUE import: mercs.ts only type-imports from this file, so the edge
+// is one-directional at runtime (account → mercs → data/classes).
+import { MERC_SCHEMA, type MercRosterEntry } from './mercs';
 
 export const SCHEMA_VERSION = 1;
 
@@ -153,6 +156,10 @@ export interface Account {
    *  index cards pointing at roster disk slots. Display metadata only — each
    *  slot's CharacterSave is the authority. See meta/modes.ts. */
   roster: RosterEntry[];
+  /** RETIRED HEROES — the mercenary supply (meta/mercs.ts): build snapshots
+   *  captured at outpost retirement, offered back as hireable veterans.
+   *  Capped at MERC_CFG.rosterCap (overflow replaces a random pooled one). */
+  mercRoster: MercRosterEntry[];
   /** CRAFT LORE: affix-family → {rank, progress} study ledger. Progress is
    *  TIER-TRUE (crafting.ts studySalvage): only salvaged lines at or above
    *  the NEXT unlock tier teach. Knowledge survives every death — the
@@ -178,6 +185,7 @@ export interface AccountSave {
   frequencyProfile?: FrequencyProfile;
   deaths?: DeathRecord[];
   roster?: RosterEntry[];
+  mercRoster?: MercRosterEntry[];
   /** Current shape {rank, progress}; LEGACY saves held a flat count. */
   craftLore?: Record<string, number | { rank: number; progress: number }>;
 }
@@ -196,6 +204,7 @@ export function makeAccount(): Account {
     frequencyProfile: { ...DEFAULT_FREQUENCY },
     deaths: [],
     roster: [],
+    mercRoster: [],
     craftLore: {},
   };
 }
@@ -215,6 +224,7 @@ export function serializeAccount(a: Account): AccountSave {
     frequencyProfile: a.frequencyProfile,
     deaths: a.deaths,
     roster: a.roster,
+    mercRoster: a.mercRoster,
     craftLore: a.craftLore,
   };
 }
@@ -252,6 +262,10 @@ export function deserializeAccount(s: AccountSave): Account | null {
       typeof r?.charId === 'string' && r.charId.length > 0
       && typeof r.modeId === 'string'
       && typeof r.slot === 'number' && r.slot >= ROSTER_SLOT_BASE),
+    // Same per-entry schema stance for retired heroes — a merc-format change
+    // sheds stale veterans without ever wiping credits or the account.
+    mercRoster: (s.mercRoster ?? []).filter(m =>
+      m?.schema === MERC_SCHEMA && typeof m.mercId === 'string' && !!m.snapshot),
     craftLore: migrateLore(s.craftLore),
   };
 }

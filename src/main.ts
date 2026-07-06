@@ -40,6 +40,7 @@ import {
   type CharacterSave,
 } from './meta/character';
 import { freeRosterSlot, mintCharId, modeById, type RosterEntry } from './meta/modes';
+import { healMercEngagements, releaseMercsOf } from './meta/mercs';
 import type { Settings } from './meta/settings';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -150,16 +151,24 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   // A roster mode binds an account VESSEL at creation — the character saves
   // cross-session into its own slot from its first breath.
   const mode = modeById(modeId);
-  let charId = '';
+  // EVERY character gets an identity — mercenary engagements (and any future
+  // cross-character bookkeeping) key off it, mortal or vessel alike.
+  const charId = mintCharId();
   if (mode.save === 'roster') {
     const slot = freeRosterSlot(account, mode);
     if (slot == null) { toStartMenu(); return; } // picker greys full modes; this is the belt
-    charId = mintCharId();
     account.roster.push({
       charId, modeId: mode.id, slot, classId: classDef.id, name: classDef.name,
       level: 1, stage: 0, savedAt: Date.now(),
     });
     saveAccount(account);
+  }
+  // A run-slot start OVERWRITES the previous run save — release any merc
+  // contract that run held (its patron ceases to exist right here, not at
+  // the next boot's self-heal).
+  if (mode.save !== 'roster') {
+    const prev = loadCharacter();
+    if (prev?.charId && releaseMercsOf(account, prev.charId) > 0) saveAccount(account);
   }
   // The manifest is the run-LOCKED package config. Phase 4's Expedition screen
   // passes a configured one; otherwise build it from the account's saved prefs.
@@ -305,6 +314,11 @@ void (async (): Promise<void> => {
   Object.assign(account, a);                  // mutate-in-place: shared refs stay valid
   Object.assign(settings, s);
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
+  // SELF-HEAL: release merc engagements whose patron no longer exists anywhere
+  // (a run save wiped without its death flow ever running).
+  if (healMercEngagements(account, [c?.charId, ...account.roster.map(r => r.charId)]) > 0) {
+    saveAccount(account);
+  }
 })();
 
 /** Read the OS into the LOCAL seat's intent for this frame (or null when there's
@@ -383,6 +397,7 @@ function handleLocalPanels(): void {
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
     if (ui.oracleOpen) { ui.closeOracle(); return; }
     if (ui.sailOpen) { ui.closeSail(); return; }
+    if (ui.mercOpen) { ui.closeMercMenu(); return; }
     // The vocation choice menu closes through its OWN close (not hideAll):
     // closeVocationMenu also DECLINES the offer, else the dwell re-pops the
     // menu the instant the pause menu comes down.
@@ -480,6 +495,11 @@ function frame(now: number): void {
       if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
         world.vocationOfferRequested = false;
         if (!ui.vocationOpen) ui.showVocationMenu();
+      }
+      // The mercenary outpost's calm parley asks to open the hire/retire menu.
+      if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
+        world.mercOutpostRequested = false;
+        if (!ui.mercOpen) ui.showMercMenu();
       }
       // The run wrote an ACCOUNT-scoped unlock (a vocation grant) — persist it
       // now, so closing the game without dying can't lose it.
@@ -613,6 +633,9 @@ function hostTail(dt: number): void {
       world.recordDeath();
       if (stage.countsAccountDeath) bumpLedger(account.ledger, LEDGER_ACCOUNT_DEATHS);
     }
+    // ANY conclusion — death, forfeit, retirement — ends the merc contract:
+    // the veteran returns to the pool, waiting on some future outpost.
+    releaseMercsOf(account, world.meta.charId);
     // Durable write (sendBeacon) so the death record survives a tab-close on
     // the death screen, matching clearCharacter's durable wipe.
     saveAccountDurable(account);

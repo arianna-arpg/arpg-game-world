@@ -69,6 +69,11 @@ export interface ModeStageDef {
   /** Does a death from this stage tick the account's lifetime death counter
    *  (the ledger key Vault unlocks like Immortal itself gate on)? */
   countsAccountDeath: boolean;
+  /** May this stage RETIRE at a mercenary outpost (end the run, bank the
+   *  tithe, and join the account's hireable-veteran roster — meta/mercs.ts)?
+   *  A mortal-loop privilege: retirement is meta-progression, and a sworn
+   *  covenant is not walked away from. Default false. */
+  canRetire?: boolean;
   /** Flavor line floated over the character on waking (fade respawns only). */
   wakeText?: string;
 }
@@ -136,6 +141,7 @@ export const MODES: CharacterModeDef[] = [
       corpseRing: 'account',
       corpseSource: 'account',
       countsAccountDeath: true,
+      canRetire: true,
     }],
   },
   {
