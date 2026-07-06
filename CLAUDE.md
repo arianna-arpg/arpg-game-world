@@ -41,8 +41,8 @@ we verify changes.
 - `src/data/` — content as data: `skills.ts`, `supports.ts`, `monsters.ts`,
   `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`; items:
   `itembases.ts` (base families), `itemaffixes.ts` (the affix gamut via
-  `fam()`), `uniques.ts`, `loottables.ts`. Adding content here needs no
-  engine changes.
+  `fam()`), `uniques.ts`, `loottables.ts`, `vestiges.ts` (socketables +
+  Epitaph words). Adding content here needs no engine changes.
 - `src/packages/` — optional per-run world-event overlays (Warbands, Breach,
   Contagion, …).
 - `src/render/` — Canvas 2D renderer (placeholder geometry art driven by data).

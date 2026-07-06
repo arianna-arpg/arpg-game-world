@@ -29,6 +29,7 @@ import { SUPPORTS } from '../data/supports';
 import { makeSkillInstance, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
+import { VESTIGES } from '../data/vestiges';
 import type { Attributes } from '../engine/stats';
 
 export type Vec2W = [number, number];
@@ -76,7 +77,7 @@ export interface CastW {
 export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear'; color: string; rarity?: string; name?: string; }
+export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige'; color: string; rarity?: string; name?: string; vid?: string; }
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: 'life' | 'mana' | 'es'; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string; }
 export interface FlashW { p: Vec2W; radius: number; color: string; life: number; maxLife: number; }
@@ -128,6 +129,8 @@ export interface SeatMetaW {
   gear?: { items: ItemInstance[]; equipped: Record<string, ItemInstance> };
   /** Essence wallet (salvage currency), per essence id. */
   ess?: Record<string, number>;
+  /** Vestige wallet (socket material), per vestige id. */
+  vest?: Record<string, number>;
 }
 
 const supW = (s: SupportInstance): SupportInstW => ({ id: s.def.id, lvl: s.level });
@@ -160,6 +163,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
       ),
     },
     ess: { ...m.essences },
+    vest: { ...m.vestiges },
   };
 }
 
@@ -223,6 +227,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
     if (item) m.equipped[slot] = item;
   }
   m.essences = { ...emptyEssences(), ...(w.ess ?? {}) };
+  m.vestiges = { ...(w.vest ?? {}) };
   // Rebuild the action bar from slot ids → the (just-rehydrated) learned instances.
   seat.actor.skills = w.bar.map(id => (id ? (known.get(id) ?? null) : null));
   world.recalcSeat(seat);            // derive attrs + the full stat sheet from the build
@@ -337,10 +342,12 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       p: v2(d.pos), bob: d.bob, kind: d.item.kind,
       color: d.item.kind === 'support' ? d.item.gem.def.color
         : d.item.kind === 'gear' ? ITEM_RARITIES[d.item.item.rarity].color
+        : d.item.kind === 'vestige' ? (VESTIGES[d.item.id]?.color ?? '#b06bd4')
         : d.item.inst.def.color,
       rarity: d.item.kind === 'skill' ? (d.item.inst.rarity ?? 'common')
         : d.item.kind === 'gear' ? d.item.item.rarity : undefined,
       name: d.item.kind === 'gear' ? d.item.item.name : undefined,
+      vid: d.item.kind === 'vestige' ? d.item.id : undefined,
     })),
     orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind })),
     texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text })),
@@ -502,7 +509,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       : d.kind === 'gear'
         // Render-shell gear: name + rarity is all the client draws (label/icon).
         ? { kind: 'gear', item: { name: d.name ?? '?', rarity: (d.rarity ?? 'common') } }
-        : { kind: 'skill', inst: { def: { color: d.color }, rarity: d.rarity ?? 'common' } },
+        : d.kind === 'vestige'
+          ? { kind: 'vestige', id: d.vid ?? '', count: 1 }
+          : { kind: 'skill', inst: { def: { color: d.color }, rarity: d.rarity ?? 'common' } },
   })) as unknown as World['drops'];
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text })) as unknown as World['texts'];

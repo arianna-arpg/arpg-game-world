@@ -22,10 +22,11 @@
 import { ITEM_AFFIXES, ITEM_AFFIX_LIST } from '../data/itemaffixes';
 import { ITEM_BASES } from '../data/itembases';
 import { UNIQUES, UNIQUE_LIST } from '../data/uniques';
+import { epitaphFor, VESTIGES, type VestigeLine } from '../data/vestiges';
 import {
   DEFENSE_KINDS, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS,
   baseBonusFor, defenseBudget, formatModLine, lerpRange, levelReqForTier,
-  roundStatValue, slotsForCategory, tierForIlvl, tieredBaseName,
+  roundStatValue, slotsForCategory, socketCap, tierForIlvl, tieredBaseName,
   type AffixDef, type AffixRollState, type AffixTierDef, type ItemBaseDef,
   type ItemCategory, type ItemInstance, type ItemRarity, type RangedLineDef,
   type UniqueDef,
@@ -330,6 +331,13 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
     affixes,
   };
   if (superior) item.superior = rng();
+  // SOCKETS: a low-weight bonus — whites both chance-richer AND count-fatter
+  // (ITEM_CFG.sockets), clamped to the category's absolute cap.
+  const cap = socketCap(base.category);
+  if (cap > 0 && rng() < ITEM_CFG.sockets.chanceByRarity[rarity]) {
+    const n = Math.min(cap, pickWeighted(ITEM_CFG.sockets.countWeights[rarity], rng)?.n ?? 1);
+    item.sockets = new Array<string | null>(n).fill(null);
+  }
   if (unique) {
     item.uniqueId = unique.id;
     item.uniqueRolls = rollLineSet(unique.lines.length, rng);
@@ -403,6 +411,26 @@ export function compileItemMods(item: ItemInstance): Modifier[] {
       });
     });
   }
+
+  // SOCKETED VESTIGES: deterministic lines by the HOST's category ('default'
+  // fallback) — the same Kessa reads differently in a chest than in gloves,
+  // but identically in every chest. An activated EPITAPH (white base, exact
+  // sequence — epitaphFor owns the whole contract) adds its word's lines ON
+  // TOP of every vestige's own.
+  if (item.sockets) {
+    for (const vid of item.sockets) {
+      if (!vid) continue;
+      const v = VESTIGES[vid];
+      const lines: VestigeLine[] = v?.effects[base.category] ?? v?.effects.default ?? [];
+      for (const ln of lines) {
+        out.push({ stat: ln.stat, kind: ln.kind, value: ln.value, tags: ln.tags, when: ln.when });
+      }
+    }
+    const epi = epitaphFor(item.rarity, base.category, item.sockets);
+    for (const ln of epi?.effects ?? []) {
+      out.push({ stat: ln.stat, kind: ln.kind, value: ln.value, tags: ln.tags, when: ln.when });
+    }
+  }
   return out;
 }
 
@@ -420,6 +448,10 @@ export interface ItemDescription {
   /** Rolled affix lines with their tier tag ('T2', 'EX'). */
   affix: { text: string; tag: string }[];
   unique: string[];
+  /** One entry per socket (glyph ◇ when empty; the vestige's line here). */
+  sockets?: { glyph: string; color: string; name: string; line: string }[];
+  /** The activated word (white base, exact sequence) — name + its lines. */
+  epitaph?: { name: string; lines: string[]; flavor?: string };
   flavor?: string;
 }
 
@@ -478,6 +510,25 @@ export function describeItem(item: ItemInstance): ItemDescription {
     });
     d.flavor = u?.flavor;
   }
+  if (item.sockets) {
+    d.sockets = item.sockets.map(vid => {
+      if (!vid) return { glyph: '◇', color: '#5a5668', name: 'Empty socket', line: 'Empty — inlay a vestige' };
+      const v = VESTIGES[vid];
+      const lines: VestigeLine[] = v?.effects[base.category] ?? v?.effects.default ?? [];
+      return {
+        glyph: v?.glyph ?? '?', color: v?.color ?? '#888', name: v?.name ?? vid,
+        line: lines.map(ln => formatModLine(ln, ln.value)).join(' · '),
+      };
+    });
+    const epi = epitaphFor(item.rarity, base.category, item.sockets);
+    if (epi) {
+      d.epitaph = {
+        name: epi.name,
+        lines: epi.effects.map(ln => formatModLine(ln, ln.value)),
+        flavor: epi.flavor,
+      };
+    }
+  }
   return d;
 }
 
@@ -510,6 +561,13 @@ export function rebuildItem(saved: ItemInstance): ItemInstance | null {
     }),
     implicitRolls: saved.implicitRolls ?? [],
   };
+  // Sockets: clamp to the (possibly retuned) cap; unknown vestiges empty out.
+  if (item.sockets) {
+    item.sockets = item.sockets
+      .slice(0, Math.max(1, socketCap(base.category)))
+      .map(v => (v && VESTIGES[v] ? v : null));
+    if (item.sockets.length === 0) delete item.sockets;
+  }
   bumpItemUidFloor(item.uid);
   return item;
 }

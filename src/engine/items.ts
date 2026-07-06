@@ -282,6 +282,16 @@ export interface ItemInstance {
   uniqueId?: string;
   /** 0..1 per unique line (present iff uniqueId). */
   uniqueRolls?: number[];
+  /** SOCKETS: one entry per socket — a VESTIGE id, or null while empty.
+   *  Rolled at mint (whites richest: ITEM_CFG.sockets) or chiseled at the
+   *  bench (craftedSockets tracks those against the crafted-slot budget).
+   *  Vestige effects and EPITAPH activation both derive from this array —
+   *  no other socket state exists anywhere. */
+  sockets?: (string | null)[];
+  /** How many of the sockets were BENCH-ADDED — they share the one
+   *  crafted-slot budget with crafted affixes (you chisel OR you inscribe,
+   *  not both, unless the Vault sells you a second slot). */
+  craftedSockets?: number;
   /** Bag grid position while carried (absent when equipped / on the ground). */
   x?: number;
   y?: number;
@@ -354,6 +364,22 @@ export const ITEM_CFG = {
   /** Drop-time item rarity weights (loot tables may override per entry). */
   rarityWeights: { common: 52, magic: 33, rare: 13, unique: 2 } as Record<ItemRarity, number>,
 
+  /** SOCKETS: the low-weight bonus. Whites are the socket-bearers — the
+   *  highest chance AND the fattest counts (their crafting-canvas identity;
+   *  epitaphs demand them). Caps are per-category and absolute: rolling and
+   *  bench-chiseling both respect them. */
+  sockets: {
+    cap: { chest: 3, helmet: 2, legs: 2, gloves: 1, boots: 1, belt: 1 } as Partial<Record<ItemCategory, number>>,
+    chanceByRarity: { common: 0.4, magic: 0.16, rare: 0.1, unique: 0.08 } as Record<ItemRarity, number>,
+    /** Socket-count weights once the chance lands (clamped to the cap). */
+    countWeights: {
+      common: [{ n: 1, weight: 50 }, { n: 2, weight: 35 }, { n: 3, weight: 15 }],
+      magic: [{ n: 1, weight: 85 }, { n: 2, weight: 15 }],
+      rare: [{ n: 1, weight: 90 }, { n: 2, weight: 10 }],
+      unique: [{ n: 1, weight: 100 }],
+    } as Record<ItemRarity, { n: number; weight: number }[]>,
+  },
+
   /** Bag grid (the tetris board). */
   inventory: { w: 12, h: 6 },
   /** Manual pickup reach (the pickup keybind), world units. */
@@ -375,6 +401,11 @@ export const ITEM_CFG = {
 };
 
 // ------------------------------------------------------------- tier math ---
+
+/** The absolute socket cap for a category (0 = never socketed). */
+export function socketCap(category: ItemCategory): number {
+  return ITEM_CFG.sockets.cap[category] ?? 0;
+}
 
 /** Item level → base tier (1-based) on the global ladder. */
 export function tierForIlvl(ilvl: number): number {

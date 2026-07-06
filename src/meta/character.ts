@@ -61,6 +61,8 @@ export interface CharacterSave {
   equipped?: Record<string, ItemInstance>;
   /** Salvage-currency wallet (per essence id). Optional → pre-essence saves. */
   essences?: Record<string, number>;
+  /** Vestige wallet (socket material, per vestige id). Optional. */
+  vestiges?: Record<string, number>;
   offerings: number;
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
   level: number;            // Actor level (display + xp continuity)
@@ -102,6 +104,7 @@ export function serializeCharacter(world: World): CharacterSave {
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
     ),
     essences: { ...m.essences },
+    vestiges: { ...m.vestiges },
     offerings: m.offerings,
     bar: world.player.skills.map(s => s ? s.def.id : null),
     level: world.player.level,
@@ -173,6 +176,7 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     knownSkills, inventory, skillInv, offerings: save.offerings,
     items, equipped,
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
+    vestiges: { ...(save.vestiges ?? {}) },
   };
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);

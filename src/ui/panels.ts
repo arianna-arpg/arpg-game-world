@@ -18,7 +18,8 @@ import {
   type SkillDef, type SkillInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, type ItemInstance } from '../engine/items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, socketCap, type ItemInstance } from '../engine/items';
+import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { describeItem, itemGridSize } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
 import { ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, type EssenceCost } from '../data/essences';
@@ -228,7 +229,8 @@ export class UI {
         : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     bindTooltips(this.inventory, (el) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid))
-        : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
+        : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!)
+        : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null);
     bindTooltips(this.salvageMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.oracleMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.vendorMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
@@ -744,11 +746,37 @@ export class UI {
         <span style="color:${a.tag === 'EX' ? '#7a9ae8' : '#5a5668'};font-size:9px;font-weight:bold">${a.tag}</span></div>`);
     }
     for (const s of d.unique) lines.push(`<div style="color:#e8a878">${s}</div>`);
+    if (d.sockets) {
+      for (const s of d.sockets) {
+        lines.push(`<div><span style="color:${s.color}">${s.glyph}</span>
+          <span style="color:#9a94a8;font-size:10px">${s.line}</span></div>`);
+      }
+    }
+    if (d.epitaph) {
+      lines.push(`<div style="color:#ffd700;font-weight:bold;margin-top:4px;letter-spacing:1px">✦ ${d.epitaph.name}</div>`);
+      for (const s of d.epitaph.lines) lines.push(`<div style="color:#ffe9a8">${s}</div>`);
+      if (d.epitaph.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic">${d.epitaph.flavor}</div>`);
+    }
     if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
     return {
-      title: `<span style="color:${d.color}">${d.title}</span>`,
+      title: `<span style="color:${d.color}">${d.epitaph ? `${d.epitaph.name} — ` : ''}${d.title}</span>`,
       description: lines.join(''),
       meta: `${d.reqLine} · ${ITEM_RARITIES[item.rarity].label}`,
+    };
+  }
+
+  /** Vestige card — the per-category grant table derives LIVE from the def,
+   *  so every copy reads identically and retunes never stale. */
+  private vestigeTooltip(id: string): TooltipContent | null {
+    const v = VESTIGES[id];
+    if (!v) return null;
+    const rows = Object.entries(v.effects).map(([cat, lines]) =>
+      `<div><span style="color:#9a94a8;font-size:10px;text-transform:capitalize">${cat === 'default' ? 'elsewhere' : cat}:</span>
+        ${(lines ?? []).map(ln => formatModLine(ln, ln.value)).join(' · ')}</div>`).join('');
+    return {
+      title: `<span style="color:${v.color}">${v.glyph} ${v.name}</span>`,
+      description: rows,
+      meta: 'Drag onto a socket — consumed on inlay; overwriting destroys the old vestige. Exact sequences on WHITE gear awaken Epitaphs.',
     };
   }
 
@@ -767,8 +795,13 @@ export class UI {
       const worn = m.equipped[slot.id];
       const takes = heldBase && slot.accepts.includes(heldBase.category);
       const border = worn ? ITEM_RARITIES[worn.rarity].color : takes ? '#7ec8a0' : '#3a3644';
+      const wornPips = worn?.sockets?.length ? ` <span style="font-size:10px">${worn.sockets.map((vid, si) => {
+        const v = vid ? VESTIGES[vid] : null;
+        return `<span data-sock="${worn.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
+          style="color:${v?.color ?? '#5a5668'};padding:0 1px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
+      }).join('')}</span>` : '';
       const label = worn
-        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>`
+        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>${wornPips}`
         : `<span style="color:#5a5668">${slot.label}</span>`;
       return `<button data-doll="${slot.id}" ${worn ? `data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:170px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
@@ -787,6 +820,18 @@ export class UI {
       helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
       ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹',
     };
+    // Socket pips: each socket renders as a DROP TARGET pip on its tile —
+    // filled shows the vestige's glyph in its color, empty shows ◇.
+    const pipRow = (i: ItemInstance): string => {
+      if (!i.sockets?.length) return '';
+      return `<div style="position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:10px;line-height:11px">
+        ${i.sockets.map((vid, si) => {
+          const v = vid ? VESTIGES[vid] : null;
+          return `<span data-sock="${i.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
+            style="color:${v?.color ?? '#5a5668'};padding:0 1px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
+        }).join('')}
+      </div>`;
+    };
     const tiles = m.items.map(i => {
       if (i.x === undefined || i.y === undefined) return '';
       const s = itemGridSize(i);
@@ -799,7 +844,7 @@ export class UI {
         border:2px solid ${r.color};border-radius:3px;cursor:pointer;box-sizing:border-box;
         display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
         ${isHeld ? 'outline:2px dashed #e8e0d0;opacity:0.7;' : ''}
-        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${GLYPH[cat] ?? '?'}</div>`;
+        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${GLYPH[cat] ?? '?'}${pipRow(i)}</div>`;
     }).join('');
 
     // The SATCHEL: a little pouch flap on the panel's edge holding the
@@ -816,6 +861,21 @@ export class UI {
             const n = this.getWorld().meta.essences[id] ?? 0;
             return `<div style="font-size:11px;color:${e.color};margin:2px 0" title="${e.label}">${e.glyph} ${n} <span style="color:#6a6478;font-size:9px">${e.label.replace(' Essence', '')}</span></div>`;
           }).join('')}
+          ${(() => {
+            // VESTIGES ride the satchel too — stackable socket material.
+            // Drag one onto a socket pip to inlay it (consumed on use).
+            const owned = VESTIGE_LIST.filter(v => (this.getWorld().meta.vestiges[v.id] ?? 0) > 0);
+            if (!owned.length) return '';
+            return `<div style="border-top:1px dashed #4a3a5a;margin-top:6px;padding-top:5px">
+              ${owned.map(v => {
+                const n = this.getWorld().meta.vestiges[v.id];
+                return `<div draggable="true" data-vestige="${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
+                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:grab">${v.glyph} ${n}
+                  <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
+              }).join('')}
+              <div style="color:#5a5668;font-size:8px;margin-top:3px">drag a vestige onto a socket ◇</div>
+            </div>`;
+          })()}
         </div>` : ''}`;
     const pickupHint = this.getSettings().gearPickup === 'key'
       ? `[${keyDisplay(this.getSettings().keybinds.pickup)}] grabs nearby gear`
@@ -898,6 +958,28 @@ export class UI {
     this.inventory.querySelector<HTMLButtonElement>('[data-satchel]')?.addEventListener('click', () => {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
+    });
+    // VESTIGE drag-and-drop: satchel rows are the sources, socket pips the
+    // targets. Dropping consumes the vestige into that exact socket (an
+    // occupied one is overwritten — the old vestige is destroyed).
+    q<HTMLElement>('[data-vestige]').forEach(el => el.addEventListener('dragstart', (e) => {
+      e.dataTransfer?.setData('text/plain', el.dataset.vestige!);
+      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+    }));
+    q<HTMLElement>('[data-sock]').forEach(el => {
+      el.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const vid = e.dataTransfer?.getData('text/plain');
+        if (!vid || !VESTIGES[vid]) return;
+        const [uid, sock] = el.dataset.sock!.split(':');
+        world.requestMeta({ t: 'socketVestige', uid: Number(uid), socket: Number(sock), vestigeId: vid });
+        this.refreshInventory();
+        this.refreshCharSheet();
+      });
+      // A pip click must never lift the tile underneath.
+      el.addEventListener('click', (e) => e.stopPropagation());
     });
     q<HTMLButtonElement>('button[data-invtab]').forEach(btn => btn.addEventListener('click', () => {
       this.invTab = btn.dataset.invtab as typeof this.invTab;
@@ -1037,8 +1119,20 @@ export class UI {
           style="color:${ITEM_RARITIES[i.rarity].color}">${i.name}${m.equipped && Object.values(m.equipped).some(w => w?.uid === i.uid) ? ' (worn)' : ''}</button>`,
       ).join(' ') || '<span style="color:#8a8678;font-size:11px">Nothing carried or worn.</span>';
       const target = targets.find(i => i.uid === this.craftTargetUid);
+      let chisel = '';
       let affixRows = '<div style="color:#8a8678;font-size:11px">Pick a piece above.</div>';
       if (target) {
+        // CHISEL: +1 socket, sharing the crafted-slot budget with affixes.
+        const cap = socketCap(ITEM_BASES[target.baseId]?.category ?? 'ring');
+        const have = target.sockets?.length ?? 0;
+        const chiselable = cap > 0 && have < cap && craftedCount(target) < world.craftSlots();
+        const affordChisel = world.canAffordEssence(world.localSeat, CRAFT_CFG.socketCost);
+        chisel = cap > 0 ? `
+          <div class="bind-btns" style="margin:4px 0 8px">
+            <button data-chisel="${target.uid}" ${chiselable && affordChisel ? '' : 'disabled'}>
+              ⛏ Chisel a socket (${this.essCostText(CRAFT_CFG.socketCost)}) — ${have}/${cap}
+              ${!chiselable && have >= cap ? ' · at cap' : !chiselable ? ' · no craft slot' : !affordChisel ? ' · not enough' : ''}</button>
+          </div>` : '';
         const slotsLeft = world.craftSlots() - craftedCount(target);
         if (slotsLeft <= 0) {
           affixRows = '<div style="color:#8a8678;font-size:11px">This piece holds no more craft.</div>';
@@ -1069,7 +1163,7 @@ export class UI {
           One crafted line per piece${world.craftSlots() > 1 ? ` (yours: ${world.craftSlots()})` : ''}; expertise raises the roll CEILING — the roll itself stays wild.
         </div>
         <h3>Piece</h3><div class="bind-btns">${targetRows}</div>
-        <h3>Craft onto it</h3>${affixRows}
+        <h3>Craft onto it</h3>${chisel}${affixRows}
         <h3>Expertise <span style="color:#8a8678;font-weight:normal;font-size:10px">— only salvaged lines at or ABOVE your next tier teach you anything</span></h3>${loreRows}`;
     }
 
@@ -1096,6 +1190,11 @@ export class UI {
     q<HTMLButtonElement>('button[data-ctar]').forEach(btn => btn.addEventListener('click', () => {
       this.craftTargetUid = Number(btn.dataset.ctar);
       this.refreshSalvage();
+    }));
+    q<HTMLButtonElement>('button[data-chisel]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'craftSocket', uid: Number(btn.dataset.chisel) });
+      this.refreshSalvage();
+      this.refreshInventory();
     }));
     q<HTMLButtonElement>('button[data-craft]').forEach(btn => btn.addEventListener('click', () => {
       // THE SMITHING MINIGAME: the strike-timing bar decides how far the

@@ -37,8 +37,9 @@ import {
   ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, VENDOR_ESSENCE_PRICE, VENDOR_SUPPORT_PRICE,
   type EssenceCost, type EssenceId,
 } from '../data/essences';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, type ItemInstance } from './items';
-import { DROP_CFG, GEM_DROP_CFG, resolveLootTable } from './loot';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance } from './items';
+import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId } from './loot';
+import { epitaphFor, VESTIGES } from '../data/vestiges';
 import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
@@ -646,7 +647,8 @@ interface PendingBlink {
 export type DropItem =
   | { kind: 'support'; gem: SupportInstance }
   | { kind: 'skill'; inst: SkillInstance }
-  | { kind: 'gear'; item: ItemInstance };
+  | { kind: 'gear'; item: ItemInstance }
+  | { kind: 'vestige'; id: string; count: number };
 
 export interface GemDrop {
   pos: Vec2;
@@ -780,6 +782,8 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'craftAffix':
       return isIdx(a.uid) && isStr(a.affixId)
         && (a.score === undefined || (typeof a.score === 'number' && Number.isFinite(a.score)));
+    case 'socketVestige': return isIdx(a.uid) && isIdx(a.socket) && isStr(a.vestigeId);
+    case 'craftSocket': return isIdx(a.uid);
     case 'rerollAffix':
       return isIdx(a.uid) && isIdx(a.affix) && typeof a.score === 'number' && Number.isFinite(a.score);
     default: return false;
@@ -824,6 +828,9 @@ export interface PlayerMeta {
    *  rest of the bag — lost to death (knowledge persists on the account as
    *  craftLore; the raw material does not). */
   essences: Record<EssenceId, number>;
+  /** VESTIGES (socket material) — stackable, satchel-borne, consumed on
+   *  socketing. Lost to death like every other carried material. */
+  vestiges: Record<string, number>;
 }
 
 /** A zeroed essence wallet (fresh seats, wire fallbacks). */
@@ -1797,6 +1804,7 @@ export class World {
       items: [],
       equipped: {},
       essences: emptyEssences(),
+      vestiges: {},
     };
     // Class bar skills come pre-learned as 2-socket magic gems.
     for (const sid of classDef.bar) {
@@ -8743,6 +8751,8 @@ export class World {
       case 'salvageSupport': this.salvageSupportGem(seat, action.index); break;
       case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId, action.score ?? 0); break;
       case 'rerollAffix': this.rerollAffix(seat, action.uid, action.affix, action.score); break;
+      case 'socketVestige': this.socketVestige(seat, action.uid, action.socket, action.vestigeId); break;
+      case 'craftSocket': this.craftSocket(seat, action.uid); break;
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
@@ -15250,6 +15260,79 @@ export class World {
     }
   }
 
+  // ---------------------------------------------------- sockets & vestiges --
+
+  grantVestige(seat: Seat, id: string, count: number): void {
+    const def = VESTIGES[id];
+    if (!def || count <= 0) return;
+    seat.meta.vestiges[id] = (seat.meta.vestiges[id] ?? 0) + count;
+    this.text(seat.actor.pos, `${def.glyph} ${def.name}${count > 1 ? ` ×${count}` : ''}`, def.color, 13);
+    this.markMetaDirty(seat);
+  }
+
+  /** Shed a vestige on the ground (kill path / tables) — vacuumed on touch. */
+  dropVestigeAt(at: Vec2, id: string, count = 1): void {
+    if (!VESTIGES[id]) return;
+    const pos = this.clampPos(vec(at.x + rand(-14, 14), at.y + rand(-14, 14)), 10);
+    this.drops.push({ pos, item: { kind: 'vestige', id, count }, bob: rand(0, Math.PI * 2) });
+  }
+
+  /** INLAY a vestige into a socket: consumes one from the satchel; whatever
+   *  held the socket before is DESTROYED (the dead are spent, not refunded).
+   *  Works anywhere — adapting gear is a town ritual by convenience, not law. */
+  socketVestige(seat: Seat, uid: number, socketIdx: number, vestigeId: string): void {
+    const m = seat.meta;
+    const def = VESTIGES[vestigeId];
+    if (!def || (m.vestiges[vestigeId] ?? 0) < 1) return;
+    const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
+    const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
+    if (!item?.sockets || socketIdx < 0 || socketIdx >= item.sockets.length) return;
+    const replaced = item.sockets[socketIdx];
+    m.vestiges[vestigeId] -= 1;
+    item.sockets[socketIdx] = vestigeId;
+    if (replaced) {
+      const old = VESTIGES[replaced];
+      this.text(seat.actor.pos, `${old?.glyph ?? ''} ${old?.name ?? replaced} crumbles away`, '#8a8678', 12);
+    }
+    this.text(seat.actor.pos, `${def.glyph} inlaid`, def.color, 13);
+    // The WORD may have just completed — announce an awakened epitaph.
+    const base = ITEM_BASES[item.baseId];
+    const epi = base ? epitaphFor(item.rarity, base.category, item.sockets) : null;
+    if (epi) {
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
+        `✦ the ${epi.name} awakens on ${item.name}`, '#ffd700', 15);
+    }
+    if (wornSlot) this.recalcSeat(seat);
+    this.markMetaDirty(seat);
+  }
+
+  /** CHISEL a socket at the bench — shares the crafted-slot budget with
+   *  bench affixes (one craft per piece, Vault-widened). */
+  craftSocket(seat: Seat, uid: number): void {
+    if (!this.nearSalvage(seat)) return;
+    const m = seat.meta;
+    const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
+    const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
+    if (!item) return;
+    const base = ITEM_BASES[item.baseId];
+    if (!base) return;
+    const cap = socketCap(base.category);
+    if ((item.sockets?.length ?? 0) >= cap) {
+      this.failNote(seat.actor, 'chisel:' + uid, 'this piece can hold no more sockets');
+      return;
+    }
+    if (craftedCount(item) >= this.craftSlots()) {
+      this.failNote(seat.actor, 'chisel:' + uid, 'this piece holds no more craft');
+      return;
+    }
+    if (!this.spendEssence(seat, CRAFT_CFG.socketCost, 'chisel:' + uid)) return;
+    item.sockets = [...(item.sockets ?? []), null];
+    item.craftedSockets = (item.craftedSockets ?? 0) + 1;
+    if (wornSlot) this.recalcSeat(seat);
+    this.text(seat.actor.pos, 'a socket opens in the steel', '#b06bd4', 13);
+    this.markMetaDirty(seat);
+  }
+
   /** The pickup keybind: nearest grabbable gear within reach → bag. Gear is
    *  a DELIBERATE grab (unlike vacuumed gems) — choosing is the mini-game. */
   pickupNearestGear(seat: Seat): void {
@@ -15411,8 +15494,14 @@ export class World {
     for (const t of tables) {
       for (const res of resolveLootTable(t, { ilvl: this.zone.level, miTheme })) {
         if (res.kind === 'gem') this.dropGemAt(actor.pos);
+        else if (res.kind === 'vestige') this.dropVestigeAt(actor.pos, res.id, res.count);
         else this.dropGearAt(actor.pos, res.item);
       }
+    }
+    // VESTIGES shed on their own low chance — the socket economy's trickle.
+    if (chance(DROP_CFG.vestigeChance)) {
+      const vid = rollVestigeId();
+      if (vid) this.dropVestigeAt(actor.pos, vid);
     }
   }
 
@@ -18265,6 +18354,14 @@ export class World {
         if (!dropper || dist(dropper.actor.pos, drop.pos) > dropper.actor.radius + 22) drop.dropperCleared = true;
       }
       const exclude = drop.droppedBy && !drop.dropperCleared ? drop.droppedBy : undefined;
+      // VESTIGES always vacuum — stackable satchel material, zero bag cost.
+      if (drop.item.kind === 'vestige') {
+        const seat = this.pickupSeat(drop.pos, 22, exclude);
+        if (!seat) continue;
+        this.grantVestige(seat, drop.item.id, drop.item.count);
+        this.drops.splice(i, 1);
+        continue;
+      }
       // GEAR: vacuum mode (default) hoovers it like a gem — into the grid if
       // it fits, else it stays lying with a throttled note. Key mode makes it
       // a deliberate press (pickupNearestGear); the key works in both modes.

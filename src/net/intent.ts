@@ -87,4 +87,7 @@ export type MetaAction =
   | { t: 'salvageSkill'; index: number }                       // skillInv gem → essence (granted: nothing)
   | { t: 'salvageSupport'; index: number }                     // loose support → essence
   | { t: 'craftAffix'; uid: number; affixId: string; score?: number } // essence + SMITHING score → a studied affix
-  | { t: 'rerollAffix'; uid: number; affix: number; score: number };  // Oracle COMMUNION: reroll + seal one line
+  | { t: 'rerollAffix'; uid: number; affix: number; score: number }   // Oracle COMMUNION: reroll + seal one line
+  // SOCKETS & VESTIGES (deterministic craft):
+  | { t: 'socketVestige'; uid: number; socket: number; vestigeId: string } // consume a vestige into a socket (overwrites destroy)
+  | { t: 'craftSocket'; uid: number };                                // bench-chisel +1 socket (shares the crafted slot)

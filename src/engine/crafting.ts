@@ -51,6 +51,8 @@ export const CRAFT_CFG = {
     if (rank === 2) return { essence: 'brilliant', count: 5 };
     return { essence: 'pristine', count: 4 };
   },
+  /** Chiseling a SOCKET at the bench (shares the crafted-slot budget). */
+  socketCost: { essence: 'brilliant', count: 6 } as EssenceCost,
 
   // --- THE MINIGAME CONTRACT: skill, not magic-find -------------------------
   /** The UNSKILLED roll across the unlocked span: 'inverse' piles weight on
@@ -211,8 +213,11 @@ export function craftableAffixesFor(
   return out;
 }
 
+/** Crafted-slot usage: bench affixes AND chiseled sockets share the one
+ *  budget — you inscribe OR you chisel, not both (unless the Vault's
+ *  second slot is owned). */
 export function craftedCount(item: ItemInstance): number {
-  return item.affixes.filter(a => a.crafted).length;
+  return item.affixes.filter(a => a.crafted).length + (item.craftedSockets ?? 0);
 }
 
 /** Land a value in the span [worstIdx..bestIdx] (tier indices, best-first)

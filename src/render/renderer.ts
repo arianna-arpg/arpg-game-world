@@ -6,6 +6,7 @@
 import { clamp, dist, type Vec2 } from '../core/math';
 import { instanceMeta, instanceStrikeTiming, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
+import { VESTIGES } from '../data/vestiges';
 import { STATUS_DEFS } from '../engine/status';
 import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { chargeColor } from '../engine/charges';
@@ -3405,6 +3406,19 @@ export class Renderer {
     for (const d of world.drops) {
       const y = d.pos.y + Math.sin(d.bob) * 3;
       const item = d.item;
+      if (item.kind === 'vestige') {
+        // A glowing glyph — vestiges vacuum on touch, so no label pill.
+        const v = VESTIGES[item.id];
+        ctx.save();
+        ctx.font = 'bold 15px Verdana';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = v?.color ?? '#b06bd4';
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = v?.color ?? '#b06bd4';
+        ctx.fillText(v?.glyph ?? '؟', d.pos.x, y + 5);
+        ctx.restore();
+        continue;
+      }
       if (item.kind === 'gear') {
         const rc = ITEM_RARITIES[item.item.rarity] ?? ITEM_RARITIES.common;
         const half = item.item.rarity === 'unique' ? 11 : 9;

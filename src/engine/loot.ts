@@ -16,6 +16,7 @@
 
 import { LOOT_TABLES } from '../data/loottables';
 import { MI_CFG } from '../data/infrequents';
+import { VESTIGE_LIST } from '../data/vestiges';
 import { pickThemedBase, rollItem } from './itemgen';
 import type { ItemCategory, ItemInstance, ItemRarity } from './items';
 import type { MonsterRarity } from './rarity';
@@ -33,6 +34,8 @@ export type LootEntry =
       ilvlBonus?: number;
     }
   | { weight: number; kind: 'unique'; uniqueId?: string; category?: ItemCategory; ilvlBonus?: number }
+  /** A VESTIGE bundle (id omitted = weighted pick from the registry). */
+  | { weight: number; kind: 'vestige'; id?: string; count?: number | [number, number] }
   | { weight: number; kind: 'table'; table: string };
 
 export interface LootRoll {
@@ -48,7 +51,8 @@ export interface LootTableDef {
 
 export type LootResult =
   | { kind: 'item'; item: ItemInstance }
-  | { kind: 'gem' };
+  | { kind: 'gem' }
+  | { kind: 'vestige'; id: string; count: number };
 
 export interface LootCtx {
   ilvl: number;
@@ -71,6 +75,8 @@ export const DROP_CFG = {
    *  guaranteed gem count on bosses — the old world.ts literals, now levers. */
   killGemChance: 0.08,
   bossGemDrops: 2,
+  /** Baseline chance a credited kill sheds a VESTIGE (socket material). */
+  vestigeChance: 0.05,
   /** Bonus gear rolls by ELITE tier — the item-side mirror of RarityDef.drops. */
   eliteBonusItemRolls: { normal: 0, magic: 0, rare: 1, champion: 1, crowned: 2 } as Record<MonsterRarity, number>,
   /** Crowned leaders promote their bonus rolls onto the apex table. */
@@ -89,6 +95,20 @@ export const GEM_DROP_CFG = {
    *  (MonsterDef.gemBias — the shaman drops caster gems rule). */
   biasMult: 2.5,
 };
+
+/** Weighted vestige pick from the registry — the kill path and every
+ *  loot table share the one distribution. */
+export function rollVestigeId(rng: () => number = Math.random): string | null {
+  let total = 0;
+  for (const v of VESTIGE_LIST) total += v.weight;
+  if (total <= 0) return null;
+  let r = rng() * total;
+  for (const v of VESTIGE_LIST) {
+    r -= v.weight;
+    if (r <= 0) return v.id;
+  }
+  return VESTIGE_LIST[VESTIGE_LIST.length - 1]?.id ?? null;
+}
 
 const warned = new Set<string>();
 function warnOnce(key: string, msg: string): void {
@@ -144,6 +164,11 @@ function resolveEntry(entry: LootEntry, ctx: LootCtx, depth: number, out: LootRe
         rarity: 'unique', uniqueId: entry.uniqueId, category: entry.category,
       });
       if (item) out.push({ kind: 'item', item });
+      return;
+    }
+    case 'vestige': {
+      const vid = entry.id ?? rollVestigeId(rng);
+      if (vid) out.push({ kind: 'vestige', id: vid, count: drawCount(entry.count ?? 1, rng) });
       return;
     }
     case 'table':
