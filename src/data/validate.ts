@@ -18,6 +18,8 @@ import { STATUS_DEFS } from '../engine/status';
 import { ZONES, type StampSpec, type StructureRoll } from './zones';
 import { TILESETS } from './tilesets';
 import { validatePassiveLayout } from './validatePassiveLayout';
+import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
+import { STARTER_CLASSES } from '../meta/account';
 import {
   validateStamps, doodadRuleOf, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs,
@@ -262,4 +264,37 @@ export function validateContent(): void {
     if (!MONSTERS[t.spawnerId]) warn(`tileset ${t.id}: unknown spawner '${t.spawnerId}'`);
   }
   for (const tier of WAVE_TABLE) checkTable(`wave table (wave ${tier.minWave}+)`, tier.ids);
+
+  // UNLOCK CATALOG: ids unique, every gem/class id resolves against the live
+  // registries, requiresUnlock ladders point at real entries, and every
+  // NON-STARTER class is reachable through EXACTLY ONE class bundle — a class
+  // with none can never join the character-select roll (dead content), and a
+  // starter with one would sell the player something they already own.
+  const unlocks = allUnlockables();
+  const unlockIds = new Set<string>();
+  for (const u of unlocks) {
+    if (unlockIds.has(u.id)) warn(`unlock ${u.id}: duplicate id`);
+    unlockIds.add(u.id);
+  }
+  for (const u of unlocks) {
+    const skillIds = u.kind === 'skill' || u.kind === 'class' ? u.payload.skillIds : [];
+    const supportIds = u.kind === 'support' || u.kind === 'class' ? u.payload.supportIds : [];
+    for (const id of skillIds) if (!SKILLS[id]) warn(`unlock ${u.id}: unknown skill '${id}'`);
+    for (const id of supportIds) if (!SUPPORTS[id]) warn(`unlock ${u.id}: unknown support '${id}'`);
+    if (u.kind === 'class' && !CLASSES.some(c => c.id === u.payload.classId)) {
+      warn(`unlock ${u.id}: unknown class '${u.payload.classId}'`);
+    }
+    const reqs = !u.requiresUnlock ? [] : Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
+    for (const req of reqs) {
+      if (!unlockIds.has(req)) warn(`unlock ${u.id}: requiresUnlock names unknown unlock '${req}'`);
+    }
+  }
+  for (const c of CLASSES) {
+    const bundles = CLASS_BUNDLES.filter(b => b.classId === c.id).length;
+    if (STARTER_CLASSES.includes(c.id)) {
+      if (bundles > 0) warn(`class ${c.id}: starter class has a class bundle (already always in the roll)`);
+    } else if (bundles !== 1) {
+      warn(`class ${c.id}: ${bundles} class bundles (needs exactly ONE to join the roll pool)`);
+    }
+  }
 }

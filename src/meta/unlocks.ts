@@ -1,42 +1,158 @@
 // ---------------------------------------------------------------------------
 // UNLOCK CATALOG — the spendable meta-progression, as data.
 //
-// Each entry is one thing the player can buy with account credits: a class, a
-// bundle of gems that may then drop, or a town FEATURE flag. Adding a new
-// unlock is one entry here. Modelled as a discriminated union on `kind` so the
-// apply/own switches narrow `payload` with no casts under strict mode.
+// Each entry is one thing the player can buy with account credits: a class
+// slot, a CLASS BUNDLE (class + its thematic gems, one purchase), a bundle of
+// gems that may then drop, or a town FEATURE flag. Adding a new unlock is one
+// entry here. Modelled as a discriminated union on `kind` so the apply/own
+// switches narrow `payload` with no casts under strict mode.
 // ---------------------------------------------------------------------------
 
 import { FEATURE, type Account } from './account';
+import { CLASSES } from '../data/classes';
+import { SKILLS } from '../data/skills';
+import { SUPPORTS } from '../data/supports';
 import { PACKAGES, PACKAGE_BY_ID, unlockMet } from '../packages/registry';
 
-export type Unlockable =
-  | { id: string; kind: 'slot'; label: string; description: string; cost: number; reqLevel?: number; payload: { slotCount: number } }
-  | { id: string; kind: 'skill'; label: string; description: string; cost: number; reqLevel?: number; payload: { skillIds: string[] } }
-  | { id: string; kind: 'support'; label: string; description: string; cost: number; reqLevel?: number; payload: { supportIds: string[] } }
-  | { id: string; kind: 'feature'; label: string; description: string; cost: number; reqLevel?: number; reqLedger?: string | string[]; requiresFeature?: string; payload: { flag: string } }
-  | { id: string; kind: 'package'; label: string; description: string; cost: number; reqLevel?: number; payload: { packageId: string; tierId?: string } };
+/** Fields every unlock shares. `requiresUnlock` is the GENERIC sequencing
+ *  gate: the entry stays hidden until the named catalog unlock(s) are OWNED —
+ *  ladders (class slots, feature chains) are authored as data, never as
+ *  account-level walls. Catalog ids only (package tiers have their own
+ *  stagger inside isUnlockVisible). */
+interface UnlockBase {
+  id: string;
+  label: string;
+  description: string;
+  cost: number;
+  /** Minimum ACCOUNT level. Prefer `requiresUnlock` sequencing for ladders —
+   *  reserve this for genuine lifetime-milestone rewards. */
+  reqLevel?: number;
+  /** Other unlock id(s) that must be OWNED before this one surfaces (ANDed). */
+  requiresUnlock?: string | string[];
+}
 
-/** Class SLOTS, data-driven and ordered ascending. Each tier surfaces one more
- *  SELECTABLE class at character select (the roster is then rolled at random,
- *  so you can't be sure which classes appear). Trivially extended — works the
- *  same for 12 or 40 classes. Cost/level thresholds are pure data; tune freely. */
-export const SLOT_TIERS: readonly { id: string; slots: number; cost: number; reqLevel: number }[] = [
-  { id: 'slot_tier_4', slots: 4, cost: 40,  reqLevel: 0 },
-  { id: 'slot_tier_5', slots: 5, cost: 80,  reqLevel: 0 },
-  { id: 'slot_tier_6', slots: 6, cost: 130, reqLevel: 1 },
-  { id: 'slot_tier_7', slots: 7, cost: 200, reqLevel: 2 },
-  { id: 'slot_tier_8', slots: 8, cost: 300, reqLevel: 3 },
+export type Unlockable =
+  | (UnlockBase & { kind: 'slot'; payload: { slotCount: number } })
+  | (UnlockBase & { kind: 'class'; payload: { classId: string; skillIds: string[]; supportIds: string[] } })
+  | (UnlockBase & { kind: 'skill'; payload: { skillIds: string[] } })
+  | (UnlockBase & { kind: 'support'; payload: { supportIds: string[] } })
+  | (UnlockBase & { kind: 'feature'; reqLedger?: string | string[]; requiresFeature?: string; payload: { flag: string } })
+  | (UnlockBase & { kind: 'package'; payload: { packageId: string; tierId?: string } });
+
+/** Class SLOTS, data-driven and ordered ascending — the HAND SIZE at character
+ *  select (the hand itself is dealt at random from the account's UNLOCKED
+ *  classes; class bundles below deepen that pool). Bought STRICTLY IN
+ *  SEQUENCE: each tier requires the previous tier owned and nothing else — no
+ *  account-level gate of any kind. Trivially extended — works the same for 12
+ *  or 40 classes. Costs are pure data; tune freely. */
+export const SLOT_TIERS: readonly { id: string; slots: number; cost: number }[] = [
+  { id: 'slot_tier_4', slots: 4, cost: 40 },
+  { id: 'slot_tier_5', slots: 5, cost: 80 },
+  { id: 'slot_tier_6', slots: 6, cost: 130 },
+  { id: 'slot_tier_7', slots: 7, cost: 200 },
+  { id: 'slot_tier_8', slots: 8, cost: 300 },
 ];
 
+/** CLASS BUNDLES — one purchase, several unlocks that grow together:
+ *    1. the class joins the RANDOM ROLL at character select (the pool the
+ *       slot-sized hand is dealt from),
+ *    2. its thematic skill/support gems join the DROP pool (which also makes
+ *       the class's own kit re-droppable — bar gems are granted on pick, but
+ *       only unlocked gems can be found again),
+ *    3. and, downstream for free, realizing the class in a run opens its home
+ *       VOCATION chain at the quartermaster (vocations key off the character's
+ *       class — no extra wiring here).
+ *  Adding a class to the game = one ClassDef + one entry here. Gem-name lists
+ *  in the Vault card are generated from the live registries, so renames never
+ *  go stale. Starter classes (account.ts STARTER_CLASSES) need no bundle. */
+export interface ClassBundleDef {
+  classId: string;
+  cost: number;
+  /** Flavor lead-in; the mechanical tail of the description is generated. */
+  blurb: string;
+  skillIds: string[];
+  supportIds?: string[];
+}
+
+export const CLASS_BUNDLES: readonly ClassBundleDef[] = [
+  { classId: 'berserker', cost: 240,
+    blurb: 'Fury as a fighting style: heavy arcs, boiling blood, and the whole rage-fed Warpath.',
+    skillIds: ['heavy_strike', 'whirlwind', 'dash',
+      'berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'] },
+  { classId: 'sorcerer', cost: 150,
+    blurb: 'The scholar of annihilation steps forward, frost ward in hand.',
+    skillIds: ['ice_shield'],
+    supportIds: ['spark_discipline'] },
+  { classId: 'ranger', cost: 200,
+    blurb: 'Death from afar — and the field disciplines that perfect the shot.',
+    skillIds: ['quickstep'],
+    supportIds: ['perfect_draw', 'wandering_mark'] },
+  { classId: 'guardian', cost: 300,
+    blurb: 'The unmoved wall, raised together with the Bulwark\'s wards, pacts, and reprisals.',
+    skillIds: ['hammer_of_judgment', 'aegis_ward', 'rallying_howl',
+      'iron_ward', 'magma_ward', 'transgression', 'pain_hounds', 'bristleback', 'soul_link'] },
+  { classId: 'summoner', cost: 260,
+    blurb: 'The shepherd of monsters, with the Hive\'s swarm and the voice that commands it.',
+    skillIds: ['venom_bolt', 'summon_swarmlings', 'command_assault'] },
+  { classId: 'swashbuckler', cost: 240,
+    blurb: 'The duelist\'s stage: four blades\' worth of flourish, and the momentum to keep it rolling.',
+    skillIds: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike'],
+    supportIds: ['momentum'] },
+  { classId: 'juggernaut', cost: 160,
+    blurb: 'It hits, it takes hits, and it does not stop.',
+    skillIds: ['reckoning', 'stone_skin'] },
+  { classId: 'pyromancer', cost: 220,
+    blurb: 'Everything burns eventually — these are the words for "now".',
+    skillIds: ['flame_arrow', 'ignite', 'pillar_of_flame'] },
+  { classId: 'assassin', cost: 320,
+    blurb: 'The quiet trade, with the Verdict\'s marks, dooms, and executions in its kit.',
+    skillIds: ['rend', 'eviscerate', 'invisibility',
+      'expose_weakness', 'word_of_doom', 'execution'],
+    supportIds: ['exposure', 'bristling_riposte'] },
+  { classId: 'necromancer', cost: 420,
+    blurb: 'Death as a resource: the corpse-and-poison artisan, with the whole Harvest & Hordes gamut.',
+    skillIds: ['poison_nova', 'raise_dead', 'despair',
+      'reap', 'whirling_reap', 'summon_raging_spirit', 'spirit_pyre',
+      'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst'],
+    supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond'] },
+  { classId: 'cleric', cost: 450,
+    blurb: 'The support archetype, played straight: Communion\'s mending arts and the Devout\'s sanctified arsenal, bundled with the one class built to carry them.',
+    skillIds: ['sanctified_strike', 'mend', 'consecration', 'benediction',
+      'greater_mending', 'communion', 'healing_rain', 'healing_stream', 'cleansing_light',
+      'lifedrain', 'soul_volley', 'tree_of_life', 'font_of_renewal', 'summon_cleric', 'spirit_mender'],
+    supportIds: ['intensive_care', 'mending_chain', 'overmend'] },
+];
+
+const gemNames = (ids: readonly string[], reg: Record<string, { name: string }>): string =>
+  ids.map(i => reg[i]?.name ?? i).join(', ');
+
+function classBundleEntry(b: ClassBundleDef): Unlockable {
+  const cls = CLASSES.find(c => c.id === b.classId);
+  const name = cls?.name ?? b.classId;
+  const sups = b.supportIds ?? [];
+  return {
+    id: `class_${b.classId}`, kind: 'class', cost: b.cost,
+    label: `Class — ${name}`,
+    description: `${b.blurb} The ${name} joins the class roll at character select`
+      + ` — and once realized in a run, its Vocation chain opens.`
+      + ` Gems added to the drop pool: ${gemNames(b.skillIds, SKILLS)}`
+      + (sups.length ? ` · supports: ${gemNames(sups, SUPPORTS)}` : '') + '.',
+    payload: { classId: b.classId, skillIds: [...b.skillIds], supportIds: [...sups] },
+  };
+}
+
 export const UNLOCK_CATALOG: Unlockable[] = [
-  // --- Class slots: buy more SELECTABLE class options at character select ----
-  ...SLOT_TIERS.map((t): Unlockable => ({
-    id: t.id, kind: 'slot', cost: t.cost, reqLevel: t.reqLevel,
+  // --- Class slots: a bigger HAND at character select, bought in sequence ----
+  ...SLOT_TIERS.map((t, i): Unlockable => ({
+    id: t.id, kind: 'slot', cost: t.cost,
+    ...(i > 0 ? { requiresUnlock: SLOT_TIERS[i - 1].id } : {}),
     label: `Class Slot ${t.slots}`,
-    description: `Surface a ${t.slots}th selectable class at character select (chosen at random each visit).`,
+    description: `Surface a ${t.slots}th selectable class at character select, dealt at random from your unlocked classes (Class unlocks below deepen that pool).`,
     payload: { slotCount: t.slots },
   })),
+
+  // --- Class bundles: class + thematic gems + (once realized) its vocation ---
+  ...CLASS_BUNDLES.map(classBundleEntry),
 
   // --- Skill drop bundles (tier-1 are starters; these add more to the pool) -
   { id: 'gem_skills_t2', kind: 'skill', cost: 75, reqLevel: 0, label: 'Skill Pool II',
@@ -49,46 +165,18 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_echoes', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — Echoes',
     description: 'Mirage Archer and Shadow Clone may drop.',
     payload: { skillIds: ['mirage_archer', 'shadow_clone'] } },
-  { id: 'gem_skills_harvest', kind: 'skill', cost: 200, reqLevel: 1, label: 'Skill Pool — Harvest & Hordes',
-    description: 'Reap, Whirling Reap, Summon Raging Spirit, Spirit Pyre, Summon Wraith, Infernal Bombardment, Archon Lance, Sanguine Burst may drop.',
-    payload: { skillIds: ['reap', 'whirling_reap', 'summon_raging_spirit', 'spirit_pyre',
-      'summon_wraith', 'infernal_bombardment', 'archon_lance', 'sanguine_burst'] } },
   { id: 'gem_skills_covenants', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool — Covenants',
     description: 'Convocation, Overclock, Blood Mortgage may drop.',
     payload: { skillIds: ['convocation', 'overclock', 'blood_mortgage'] } },
-  { id: 'gem_skills_warpath', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — Warpath',
-    description: 'Berserk, Bloodlust, Soul Harvest, Flame Imbuement, Venom Ammunition, Flame Blast may drop.',
-    payload: { skillIds: ['berserk', 'bloodlust', 'soul_harvest', 'flame_imbuement', 'venom_ammunition', 'flame_blast'] } },
   { id: 'gem_skills_groundwork', kind: 'skill', cost: 200, reqLevel: 1, label: 'Skill Pool — Groundwork',
     description: 'Volcanic Fissure, Eruption, Thunderstorm, Entangle, Rune of Power, Toxic Domain may drop.',
     payload: { skillIds: ['volcanic_fissure', 'eruption', 'thunderstorm', 'entangle', 'rune_of_power', 'toxic_domain'] } },
-  { id: 'gem_skills_communion', kind: 'skill', cost: 200, reqLevel: 1, label: 'Skill Pool — Communion',
-    description: 'Mend, Greater Mending, Benediction, Communion, Healing Rain, Consecration, Healing Stream, Cleansing Light may drop.',
-    payload: { skillIds: ['mend', 'greater_mending', 'benediction', 'communion', 'healing_rain', 'consecration', 'healing_stream', 'cleansing_light'] } },
-  { id: 'gem_skills_devout', kind: 'skill', cost: 220, reqLevel: 1, label: 'Skill Pool — Devout',
-    description: 'Sanctified Strike, Lifedrain, Soul Volley, Tree of Life, Font of Renewal, Summon Skeletal Cleric, Bind Spirit Mender may drop.',
-    payload: { skillIds: ['sanctified_strike', 'lifedrain', 'soul_volley', 'tree_of_life', 'font_of_renewal', 'summon_cleric', 'spirit_mender'] } },
   { id: 'gem_skills_purity', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — Purity',
     description: 'Purity of Elements / Fire / Cold / Lightning and Determination may drop.',
     payload: { skillIds: ['purity_of_elements', 'purity_of_fire', 'purity_of_cold', 'purity_of_lightning', 'determination'] } },
-  { id: 'gem_skills_hive', kind: 'skill', cost: 160, reqLevel: 1, label: 'Skill Pool — Hive & Command',
-    description: 'Hivecall (swarmlings + Enrage meta) and Command: Assault may drop.',
-    payload: { skillIds: ['summon_swarmlings', 'command_assault'] } },
-  { id: 'gem_skills_bulwark', kind: 'skill', cost: 200, reqLevel: 1, label: 'Skill Pool — Bulwark',
-    description: 'Iron Ward, Magma Ward, Transgression, Pain Hounds, Bristleback, Soul Link may drop.',
-    payload: { skillIds: ['iron_ward', 'magma_ward', 'transgression', 'pain_hounds', 'bristleback', 'soul_link'] } },
-  { id: 'gem_skills_verdict', kind: 'skill', cost: 180, reqLevel: 1, label: 'Skill Pool — Verdict',
-    description: 'Expose Weakness, Word of Doom, Execution may drop.',
-    payload: { skillIds: ['expose_weakness', 'word_of_doom', 'execution'] } },
   { id: 'gem_skills_arsenal', kind: 'skill', cost: 220, reqLevel: 1, label: 'Skill Pool — Arsenal',
     description: 'Powderkeg Arrow, Orbital Blades, Pinning Spear, Groundswell, Mower\'s Arc, Summon Blade Wraith, Rolling Cannonade, Time Dilation may drop.',
     payload: { skillIds: ['powderkeg_arrow', 'orbital_blades', 'pinning_spear', 'groundswell', 'scythe_sweep', 'summon_blade_wraith', 'rolling_cannonade', 'time_dilation'] } },
-  { id: 'sup_arsenal', kind: 'support', cost: 120, reqLevel: 1, label: 'Support Pool — Arsenal',
-    description: 'Momentum may drop.',
-    payload: { supportIds: ['momentum'] } },
-  { id: 'sup_verdict', kind: 'support', cost: 140, reqLevel: 1, label: 'Support Pool — Verdict',
-    description: 'Exposure and Bristling Riposte may drop.',
-    payload: { supportIds: ['exposure', 'bristling_riposte'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
@@ -100,18 +188,12 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_echoes', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool — Echoes',
     description: 'Phantasmal Echo, Ancestral Call, Vessel of Shadow, Synchronicity may drop.',
     payload: { supportIds: ['phantasmal_echo', 'ancestral_call', 'vessel_of_shadow', 'synchronicity'] } },
-  { id: 'sup_harvest', kind: 'support', cost: 180, reqLevel: 1, label: 'Support Pool — Harvest',
-    description: 'Sweeping Blow, Mana Feeder, Enduring Bond may drop.',
-    payload: { supportIds: ['sweeping_blow', 'mana_feeder', 'enduring_bond'] } },
   { id: 'sup_fragments', kind: 'support', cost: 150, reqLevel: 1, label: 'Support Pool — Fragments',
     description: 'Fragmentation, Bulwark Shards, Rage Remnant may drop.',
     payload: { supportIds: ['fragmentation', 'bulwark_shards', 'rage_remnants'] } },
-  { id: 'sup_overcharge', kind: 'support', cost: 220, reqLevel: 1, label: 'Support Pool — Overcharge & Disciplines',
-    description: 'Overcharge, Mounting Frenzy, Perfect Draw, Wandering Mark, Spark Discipline may drop.',
-    payload: { supportIds: ['overcharge', 'mounting_frenzy', 'perfect_draw', 'wandering_mark', 'spark_discipline'] } },
-  { id: 'sup_mender', kind: 'support', cost: 180, reqLevel: 1, label: 'Support Pool — Mender',
-    description: 'Intensive Care, Mending Chain, Overmend may drop.',
-    payload: { supportIds: ['intensive_care', 'mending_chain', 'overmend'] } },
+  { id: 'sup_overcharge', kind: 'support', cost: 140, reqLevel: 1, label: 'Support Pool — Overcharge',
+    description: 'Overcharge and Mounting Frenzy may drop.',
+    payload: { supportIds: ['overcharge', 'mounting_frenzy'] } },
   { id: 'sup_covenants', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool — Covenants',
     description: 'Vital Bond, Bloodletter\'s Rhythm, Remnant Conduit, Metronome, Colossus Stance, Transfusion Bond, Controlled Burn may drop.',
     payload: { supportIds: ['vital_bond', 'bloodletters_rhythm', 'remnant_conduit',
@@ -205,13 +287,26 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   // --- Master gem unlock: everything obtainable (a deliberate, expensive flip) -
   { id: 'feat_unlock_all_gems', kind: 'feature', cost: 500, reqLevel: 2,
     label: 'Grand Codex — Unlock All Gems',
-    description: 'EVERY skill and support gem becomes obtainable (drops, chests, Brandt) — including anything added in the future. One deliberate unlock so new content is always reachable.',
+    description: 'EVERY skill and support gem becomes obtainable (drops, chests, Brandt) — including anything added in the future. One deliberate unlock so new content is always reachable. (Classes are unlocked apart — each Class bundle also widens the roll at character select.)',
     payload: { flag: FEATURE.UNLOCK_ALL_GEMS } },
 ];
+
+/** Static catalog by id — the resolution table for `requiresUnlock` ladders. */
+const CATALOG_BY_ID = new Map(UNLOCK_CATALOG.map(u => [u.id, u] as const));
+
+/** The class-bundle entry that unlocks a given class (undefined for starters).
+ *  The class-select teasers use it to point a locked class at its exact
+ *  Vault purchase. */
+export function classUnlockFor(classId: string): Unlockable | undefined {
+  return CATALOG_BY_ID.get(`class_${classId}`);
+}
 
 export function isUnlockOwned(a: Account, u: Unlockable): boolean {
   switch (u.kind) {
     case 'slot':    return a.unlockedSlots.has(u.payload.slotCount);
+    // Owning the CLASS is the bundle's identity — gem overlap with old saves'
+    // pool purchases never blocks the class itself from being purchasable.
+    case 'class':   return a.unlockedClasses.has(u.payload.classId);
     case 'skill':   return u.payload.skillIds.every(id => a.unlockedSkills.has(id));
     case 'support': return u.payload.supportIds.every(id => a.unlockedSupports.has(id));
     case 'feature': return a.features.has(u.payload.flag);
@@ -250,8 +345,8 @@ export function allUnlockables(): Unlockable[] {
 }
 
 /** Is this unlock visible/purchasable yet (its gate met)? Static entries gate on
- *  account level; package BASE entries on the unlock predicate; package TIER
- *  entries on (base owned + every prior tier owned + this tier's milestone). */
+ *  sequencing/level/ledger; package BASE entries on the unlock predicate; package
+ *  TIER entries on (base owned + every prior tier owned + this tier's milestone). */
 export function isUnlockVisible(a: Account, u: Unlockable): boolean {
   if (u.kind !== 'package') return staticGateMet(a, u);
   const pkg = PACKAGE_BY_ID[u.payload.packageId];
@@ -265,9 +360,19 @@ export function isUnlockVisible(a: Account, u: Unlockable): boolean {
   return tiers[idx].test({ account: a, ledger: a.ledger });
 }
 
-/** Account-level + (for features) a lifetime-ledger milestone gate. Non-package. */
+/** Sequencing + account-level + (for features) a lifetime-ledger milestone
+ *  gate. Non-package. */
 function staticGateMet(a: Account, u: Unlockable): boolean {
   if ((u.reqLevel ?? 0) > a.level) return false;
+  // GENERIC LADDERS: hidden until the named catalog unlock(s) are OWNED — the
+  // class-slot sequence is pure prior-purchase gating, no account level at all.
+  if (u.requiresUnlock) {
+    const needs = Array.isArray(u.requiresUnlock) ? u.requiresUnlock : [u.requiresUnlock];
+    for (const id of needs) {
+      const dep = CATALOG_BY_ID.get(id);
+      if (!dep || !isUnlockOwned(a, dep)) return false;
+    }
+  }
   // reqLedger may be a SINGLE key or MANY (all required, ANDed) — e.g. a far caravan
   // tier needs BOTH a level milestone AND unmade_slain.
   if (u.kind === 'feature' && u.reqLedger) {
@@ -295,14 +400,22 @@ export function lockedPackages(a: Account): { label: string; requirement: string
 }
 
 /** Spend credits to apply an unlock. Mutates the account; returns false if
- *  unaffordable / already owned / below the level requirement. Caller saves. */
+ *  unaffordable / already owned / gate unmet. Caller saves. */
 export function applyUnlock(a: Account, u: Unlockable): boolean {
-  // The buy gate is exactly the visibility gate (account level, package tier
-  // staggering, or a feature's ledger milestone).
+  // The buy gate is exactly the visibility gate (sequencing, account level,
+  // package tier staggering, or a feature's ledger milestone).
   if (a.credits < u.cost || isUnlockOwned(a, u) || !isUnlockVisible(a, u)) return false;
   a.credits -= u.cost;
   switch (u.kind) {
     case 'slot':    a.unlockedSlots.add(u.payload.slotCount); break;
+    // A class bundle is SEVERAL unlocks in one: the class enters the roll pool,
+    // its gems enter the drop pool (Sets dedupe any overlap with owned pools) —
+    // and realizing the class later opens its vocation chain for free.
+    case 'class':
+      a.unlockedClasses.add(u.payload.classId);
+      for (const id of u.payload.skillIds) a.unlockedSkills.add(id);
+      for (const id of u.payload.supportIds) a.unlockedSupports.add(id);
+      break;
     case 'skill':   for (const id of u.payload.skillIds) a.unlockedSkills.add(id); break;
     case 'support': for (const id of u.payload.supportIds) a.unlockedSupports.add(id); break;
     case 'feature': a.features.add(u.payload.flag); break;

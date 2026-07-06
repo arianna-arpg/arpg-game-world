@@ -35,8 +35,8 @@ import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { World } from '../engine/world';
-import { featureEnabled, FEATURE, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
-import { allUnlockables, applyUnlock, availableUnlocks, isUnlockOwned } from '../meta/unlocks';
+import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
+import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isUnlockOwned } from '../meta/unlocks';
 import { ACTION_IDS, ACTION_LABELS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
 import type { CharacterSave } from '../meta/character';
 import { bound } from '../packages/manifest';
@@ -111,7 +111,14 @@ export class UI {
   /** The rolled class roster for the CURRENT new-run offer. Cached so menu
    *  navigation (Vault, Event Weights, Back) doesn't re-roll it; reset only when
    *  a run ends (resetClassRoster, called on death) so each new run deals fresh. */
-  private classRoster: { picks: ClassDef[]; teasers: ClassDef[] } | null = null;
+  /** The dealt hand + locked teasers, cached per offer. `dealtFor` fingerprints
+   *  the deal INPUTS (hand size + unlocked-class pool) so buying a Class Slot
+   *  OR a Class bundle mid-offer re-deals; menu navigation keeps the hand. */
+  private classRoster: {
+    picks: ClassDef[];
+    teasers: { def: ClassDef; reason: 'slots' | 'class' }[];
+    dealtFor: string;
+  } | null = null;
   /** Start-menu callbacks, retained so Vault/Keybinds sub-views can return. */
   private startHandlers: { onStart: (d: ClassDef) => void; onContinue: (s?: CharacterSave | null) => void; onCoop?: () => void } | null = null;
   /** The pending rebind keydown-capture listener (armed when a row is clicked,
@@ -358,23 +365,39 @@ export class UI {
     const acc = this.getAccount();
     const TEASER_COUNT = 4;
     const selectable = selectableSlotCount(acc);
-    // Roguelike roll: shuffle the roster, surface `selectable` PICKABLE classes
-    // plus a few locked TEASERS. Rolled ONCE per new-run offer + CACHED, so menu
-    // navigation (Vault / Event Weights / Back) keeps the same offer; only a
-    // death (resetClassRoster) deals a fresh hand — OR buying a Class Slot in the
-    // Vault mid-offer, which widens the field and re-deals so the new slot shows.
-    if (this.classRoster && this.classRoster.picks.length !== Math.min(selectable, CLASSES.length)) {
+    // THE POOL: the hand is dealt ONLY from account-unlocked classes (starters
+    // + purchased Class bundles). Class Slots set the HAND SIZE; Class unlocks
+    // deepen the pool the hand is dealt from.
+    const pool = CLASSES.filter(c => isClassUnlocked(acc, c.id));
+    const lockedClasses = CLASSES.filter(c => !isClassUnlocked(acc, c.id));
+    // Roguelike roll: shuffle the pool, surface the hand plus a few locked
+    // TEASERS. Rolled ONCE per new-run offer + CACHED, so menu navigation
+    // (Vault / Event Weights / Back) keeps the same offer; only a death
+    // (resetClassRoster) deals a fresh hand — OR a mid-offer Vault purchase
+    // that changes the deal inputs (a Class Slot widens the hand, a Class
+    // bundle deepens the pool), which re-deals so the purchase shows.
+    const dealtFor = `${selectable}|${pool.map(c => c.id).join(',')}`;
+    if (this.classRoster && this.classRoster.dealtFor !== dealtFor) {
       this.classRoster = null;
     }
     if (!this.classRoster) {
-      const shuffled = [...CLASSES];
-      for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-      }
-      const pickN = Math.min(selectable, shuffled.length);
-      const teaserN = Math.min(TEASER_COUNT, shuffled.length - pickN);
-      this.classRoster = { picks: shuffled.slice(0, pickN), teasers: shuffled.slice(pickN, pickN + teaserN) };
+      const shuffle = <T,>(arr: T[]): T[] => {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+        return arr;
+      };
+      const shuffled = shuffle([...pool]);
+      const picks = shuffled.slice(0, Math.min(selectable, shuffled.length));
+      // Teasers, by WHAT unlocks them: pool classes beyond the hand first
+      // (more Class Slots surface those), then locked classes (their Class
+      // bundle in the Vault does) — each card names its remedy.
+      const teasers = [
+        ...shuffled.slice(picks.length).map(def => ({ def, reason: 'slots' as const })),
+        ...shuffle([...lockedClasses]).map(def => ({ def, reason: 'class' as const })),
+      ].slice(0, TEASER_COUNT);
+      this.classRoster = { picks, teasers, dealtFor };
     }
     const { picks, teasers } = this.classRoster;
 
@@ -389,29 +412,39 @@ export class UI {
       }).join('');
       return chips ? `<div style="margin-top:3px">${chips}</div>` : '';
     };
-    const classCard = (c: ClassDef, locked: boolean): string => `
-      <div class="class-card ${locked ? 'locked' : ''}" data-id="${c.id}" data-locked="${locked}"
-        ${locked ? 'style="opacity:.5"' : ''}>
+    // A teaser card names its exact remedy: more Class Slots (hand size) or
+    // the specific Class bundle in the Vault (pool depth) — never a dead lock.
+    const lockNote = (t: { def: ClassDef; reason: 'slots' | 'class' }): string => {
+      if (t.reason === 'slots') return '🔒 Unlock more Class Slots in the Vault';
+      const u = classUnlockFor(t.def.id);
+      return u ? `🔒 Locked — “${u.label}” in the Vault (${u.cost} ${META_CURRENCY_LABEL})`
+        : '🔒 Unlocked in the Vault';
+    };
+    const classCard = (c: ClassDef, note?: string): string => `
+      <div class="class-card ${note ? 'locked' : ''}" data-id="${c.id}" data-locked="${!!note}"
+        ${note ? 'style="opacity:.5"' : ''}>
         <div class="cname" style="color:${c.color}">${c.name}</div>
         <div class="cdesc">${c.description}</div>
         <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (c.attributes[a] ?? 0) > 0).map(a =>
           `${ATTRIBUTES[a].short} ${c.attributes[a]}`).join(' &nbsp; ')}</div>
         ${skillChips(c)}
         ${c.innateText ? `<div class="cskills">Innate: ${c.innateText}</div>` : ''}
-        ${locked ? '<div class="class-lock">🔒 Unlock more Class Slots in the Vault</div>' : ''}
+        ${note ? `<div class="class-lock">${note}</div>` : ''}
       </div>`;
 
     this.classSelect.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
         Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL} &nbsp;·&nbsp;
-        ${selectable} of ${CLASSES.length} classes offered &nbsp;(re-rolls each new run)</div>
+        hand of ${picks.length} &nbsp;·&nbsp; ${pool.length} of ${CLASSES.length} classes unlocked &nbsp;(re-deals each new run)</div>
       <div class="subtitle">
-        A random roster is dealt each run — unlock more Class Slots to widen the field.
+        A random hand is dealt each run from the classes your account has unlocked.
+        Class Slots widen the hand; Class unlocks (each bundling its thematic gems)
+        deepen the pool — and every class you realize opens its Vocation.
         Classes are only starting points; the tree and every skill stay open to any build.
         Pick a class to begin; tune the world mix under Event Weights first if you like.
       </div>
-      <div class="class-grid">${picks.map(c => classCard(c, false)).join('')}${teasers.map(c => classCard(c, true)).join('')}</div>
+      <div class="class-grid">${picks.map(c => classCard(c)).join('')}${teasers.map(t => classCard(t.def, lockNote(t))).join('')}</div>
       <div class="acct-btns">
         <button id="event-weights-btn">⚙ Event Weights</button>
         <button id="account-btn">Unlocks (Vault)</button>

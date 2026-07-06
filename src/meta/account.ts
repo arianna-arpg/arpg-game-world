@@ -11,25 +11,30 @@
 // ---------------------------------------------------------------------------
 
 import type { CraftLore } from '../engine/crafting';
+import { CLASSES } from '../data/classes';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { clampFrequency, DEFAULT_FREQUENCY, type FrequencyProfile } from '../packages/frequency';
 
 export const SCHEMA_VERSION = 1;
 
-/** Starter skills = the UNION of the three default classes' bars, so a default
- *  character can always re-drop its own kit. Verified ids from data/classes.ts. */
-export const STARTER_SKILLS: readonly string[] = [
-  'cleave', 'shield_up', 'war_cry',       // warrior
-  'firebolt', 'frost_nova', 'shockfront', // magician
-  'frenzy', 'cloak', 'shadow_step',       // rogue
-];
+/** The classes every account starts with — always in the character-select roll.
+ *  Every OTHER class enters the roll pool through its Vault class bundle
+ *  (unlocks.ts CLASS_BUNDLES: class + thematic gems in one purchase). */
+export const STARTER_CLASSES: readonly string[] = ['warrior', 'magician', 'rogue'];
+
+/** Starter skills = the UNION of the starter classes' LIVE bars, derived so a
+ *  default character can always re-drop its own kit. Re-bar a starter class
+ *  and this follows with zero edits here (the old hand-copied list had already
+ *  drifted — the Rogue's Stealth was missing, so it could never drop again). */
+export const STARTER_SKILLS: readonly string[] = [...new Set(
+  CLASSES.filter(c => STARTER_CLASSES.includes(c.id))
+    .flatMap(c => c.bar.filter((s): s is string => s !== null)),
+)];
 
 /** Starter support gems (verified ids from data/supports.ts). */
 export const STARTER_SUPPORTS: readonly string[] = [
   'arcing', 'splitting', 'piercing', 'concentrated', 'precision', 'slow_burn',
 ];
-
-export const STARTER_CLASSES: readonly string[] = ['warrior', 'magician', 'rogue'];
 
 /** Selectable class SLOTS a brand-new account has at character select. More are
  *  bought via SLOT_TIERS (see unlocks.ts); the roster is then rolled randomly. */
@@ -101,6 +106,8 @@ export interface Account {
   credits: number;
   lifetimeCredits: number;
   level: number;
+  /** THE CLASS POOL: the character-select hand is dealt ONLY from this set
+   *  (starters + every purchased class bundle). Also gates the co-op lobby. */
   unlockedClasses: Set<string>;
   unlockedSkills: Set<string>;
   unlockedSupports: Set<string>;
@@ -227,8 +234,9 @@ function migrateLore(raw?: Record<string, number | { rank: number; progress: num
   return out;
 }
 
-/** How many classes are selectable at character select: the starter count, or
- *  the highest owned slot tier (whichever is greater). */
+/** The HAND SIZE at character select: the starter count, or the highest owned
+ *  slot tier (whichever is greater). The hand is dealt from the account's
+ *  unlockedClasses pool, so the classes actually shown = min(this, pool). */
 export function selectableSlotCount(a: Account): number {
   return a.unlockedSlots.size === 0
     ? STARTER_SLOT_COUNT
