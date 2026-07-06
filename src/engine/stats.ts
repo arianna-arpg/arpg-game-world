@@ -122,6 +122,10 @@ export interface StatDef {
   max?: number;
   /** Display as percentage in the character sheet. */
   percent?: boolean;
+  /** One sheet-tooltip line on what the stat DOES (assigned from
+   *  STAT_BLURBS below — the mechanics live in defense.ts/damage.ts; this
+   *  is the player-facing why). */
+  desc?: string;
 }
 
 export const STAT_DEFS: Record<string, StatDef> = {
@@ -1075,6 +1079,56 @@ export type AttributeId =
 
 /** The triad axes — UI grouping/theming only; mechanics live in perPoint. */
 export type AttributeGroup = 'force' | 'execution' | 'resilience' | 'life';
+
+// --- Sheet blurbs ------------------------------------------------------------
+// One line per SHEET-VISIBLE stat on what it does, assigned into STAT_DEFS
+// (UI reads STAT_DEFS[id].desc — one registry, any surface). Deliberately
+// mechanical-but-unnumbered: curves live in defense.ts/damage.ts and retune
+// freely without staling a word here. ATTRIBUTES carry NO blurbs at all —
+// their tooltips derive LIVE from perPoint modifiers, so what Strength
+// grants is always exactly what Strength grants.
+const STAT_BLURBS: Record<string, string> = {
+  life: 'Your health pool. Reaching zero downs you — and death here is permanent.',
+  lifeRegen: 'Flat life restored every second.',
+  lifeRegenPct: 'A fraction of your MAXIMUM life restored every second, on top of flat regeneration.',
+  mana: 'The casting pool skills spend.',
+  manaRegen: 'Flat mana restored every second.',
+  manaRegenPct: 'A fraction of your MAXIMUM mana restored every second, on top of flat regeneration.',
+  moveSpeed: 'How fast you travel.',
+  traction: 'Grip on the ground — below full, movement becomes momentum that slides (ice).',
+  attackSpeed: 'Multiplies how quickly attack skills swing.',
+  castSpeed: 'Multiplies how quickly spells cast.',
+  accuracy: 'Contests enemy evasion — the higher it is, the less you whiff.',
+  evasion: 'Entropy-based avoidance: dodges bank on a deterministic meter, never pure dice, and a hit is always eventually due.',
+  armor: 'Physical mitigation on a self-limiting curve — big hits punch through more; investment is uncapped and never reaches immunity.',
+  poise: 'A break-bar hits wear down. While it holds you shrug stagger and keep some damage reduction; broken, it must re-arm.',
+  poiseDR: 'The damage reduction granted while your poise holds.',
+  insight: 'A momentum pool that refills only while you are MOVING — it spends itself to blunt incoming hits.',
+  insightDR: 'The damage reduction granted while insight remains.',
+  endurance: 'A break-less stamina pool: it shaves damage flat off every hit, spending what it prevents.',
+  enduranceDR: 'The flat damage shaved per hit while endurance lasts.',
+  weight: 'Mass. The heavy resist knockback and poise wear; the light get shoved.',
+  blockChance: 'The odds an incoming hit is blocked.',
+  blockPower: 'The fraction of a blocked hit that is stopped.',
+  guardStrength: 'How much punishment a raised guard absorbs before it breaks.',
+  energyShield: 'A second life pool that soaks damage first and recharges after a quiet moment.',
+  esDotResist: 'How much of a damage-over-time seep the shield stops before it reaches life.',
+  manaShield: 'A fraction of incoming damage paid from mana instead of life.',
+  critChance: 'The odds a hit strikes critically.',
+  critMulti: 'The damage multiplier a critical strike applies.',
+  fireRes: 'Fire damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
+  coldRes: 'Cold damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
+  lightningRes: 'Lightning damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
+  chaosRes: 'Chaos damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
+  aoeRadius: 'Widens every area effect you create.',
+  effectDuration: 'Lengthens your timed effects — buffs, ailments you inflict, lingering zones.',
+  cooldownRecovery: 'Speeds the return of every cooldown.',
+  minionDamage: 'Scales the damage everything you summon deals.',
+  minionLife: 'Scales the life of everything you summon.',
+};
+for (const [id, d] of Object.entries(STAT_BLURBS)) {
+  if (STAT_DEFS[id]) STAT_DEFS[id].desc = d;
+}
 
 export interface AttributeDef {
   label: string;

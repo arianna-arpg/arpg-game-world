@@ -58,21 +58,12 @@
     .attr-row button:hover { background: #3a3a55; }
     .attr-row button:disabled { opacity: 0.3; cursor: default; }
 
-    /* Inventory (the doll + tetris bag; the satchel flap anchors to it) */
+    /* Inventory (doll + tetris bag; the satchel + Build drawer anchor to it —
+       the drawer hangs OUTSIDE the panel, so the panel itself must not clip:
+       scrolling lives on the inner .inv-scroll wrapper instead). */
     #inventory {
-      top: 56px; right: 16px; width: 660px; max-width: 94vw;
-      max-height: calc(100vh - 160px); overflow-y: auto; font-size: 12px;
+      top: 56px; right: 16px; width: 660px; max-width: 94vw; font-size: 12px;
     }
-
-    /* Skill book */
-    #skill-book {
-      top: 60px; right: 16px; width: 380px; max-height: calc(100vh - 220px);
-      overflow: hidden; display: flex; flex-direction: column; font-size: 12px;
-    }
-    /* Frozen header (title + tabs) stays put; only the body scrolls, so you can
-       swap tabs from anywhere without scrolling back to the top. */
-    #skill-book .book-head { flex: 0 0 auto; background: var(--panel-bg); }
-    #skill-book .book-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
     .skill-entry {
       border: 1px solid var(--panel-border); border-radius: 4px;
       padding: 8px; margin-bottom: 6px; cursor: default;
@@ -385,7 +376,6 @@
   <div id="class-select" class="panel hidden"></div>
   <div id="char-sheet" class="panel hidden"></div>
   <div id="inventory" class="panel hidden"></div>
-  <div id="skill-book" class="panel hidden"></div>
   <div id="passive-tree" class="panel hidden"></div>
   <div id="world-map" class="panel hidden"></div>
   <div id="caravan-menu" class="panel hidden"></div>
@@ -401,7 +391,7 @@
   <div id="start-menu" class="panel hidden"></div>
   <div id="expedition-setup" class="panel hidden"></div>
   <div id="tooltip" class="tooltip hidden"></div>
-  <div id="hint-bar">[WASD] move &nbsp; [LMB/RMB/1-6] skills &nbsp; [C] character &nbsp; [B] skill book &nbsp; [P] passive tree &nbsp; [M] world map &nbsp; [Esc] menu</div>
+  <div id="hint-bar">[WASD] move &nbsp; [LMB/RMB/1-6] skills &nbsp; [C] character &nbsp; [I] inventory &nbsp; [P] passive tree &nbsp; [M] world map &nbsp; [Esc] menu</div>
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -51,7 +51,7 @@
 // No engine changes needed.
 // ---------------------------------------------------------------------------
 
-import { mod } from '../engine/stats';
+import { mod, STAT_DEFS } from '../engine/stats';
 import type { DamageType } from '../engine/stats';
 import type { BuffEffect } from '../engine/skills';
 
@@ -477,4 +477,14 @@ export const PROC_LIST: ProcDef[] = Object.values(PROCS);
 /** The stat id whose value is this proc's trigger chance. */
 export function procStat(id: string): string {
   return 'proc_' + id;
+}
+
+// Register every proc's chance stat with a DISPLAY identity (label +
+// percent), so any surface that prints a Modifier — item affixes, the
+// sheet, tooltips — renders "28% Chance to trigger Brutal Strike" instead
+// of a raw stat id and a naked fraction. New procs join automatically.
+for (const def of PROC_LIST) {
+  STAT_DEFS[procStat(def.id)] = {
+    label: `Chance to trigger ${def.name}`, base: 0, min: 0, percent: true,
+  };
 }

@@ -91,7 +91,6 @@ export class UI {
   private classSelect = document.getElementById('class-select')!;
   private charSheet = document.getElementById('char-sheet')!;
   private inventory = document.getElementById('inventory')!;
-  private skillBook = document.getElementById('skill-book')!;
   private passiveTree = document.getElementById('passive-tree')!;
   private worldMap = document.getElementById('world-map')!;
   private caravanMenu = document.getElementById('caravan-menu')!;
@@ -140,7 +139,6 @@ export class UI {
    *  slot / another item to swap with). Uid-addressed so it survives the
    *  panel's innerHTML re-renders; self-heals if the item vanishes. */
   private heldItemUid: number | null = null;
-  skillBookOpen = false;
   treeOpen = false;
   mapOpen = false;
   caravanOpen = false;
@@ -217,8 +215,10 @@ export class UI {
   ) {
     // Tooltips: bound ONCE on the stable panel containers (delegation survives
     // their innerHTML re-renders); content is read from live data each hover.
-    bindTooltips(this.charSheet, (el) => el.dataset.tip === 'class' ? this.classTooltip() : null);
-    bindTooltips(this.skillBook, (el) => el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.charSheet, (el) =>
+      el.dataset.tip === 'class' ? this.classTooltip()
+        : el.dataset.tip === 'stat' ? this.statTooltip(el.dataset.statId!)
+        : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
     bindTooltips(this.inventory, (el) =>
       el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid))
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
@@ -236,6 +236,28 @@ export class UI {
       title: c.name, description: c.description,
       meta: `${c.innateText ? `Innate: ${c.innateText} — ` : ''}A class is only a starting point; you can allocate any attributes and bind any skill you qualify for.`,
     };
+  }
+
+  /** Sheet stat blurb: registry-homed (STAT_DEFS.desc), value-free by
+   *  design — curves retune without staling a word. */
+  private statTooltip(id: string): TooltipContent | null {
+    const def = STAT_DEFS[id];
+    if (!def) return null;
+    return {
+      title: def.label,
+      description: def.desc ?? 'No notes on this one yet.',
+      meta: `base ${def.percent ? `${Math.round(def.base * 100)}%` : def.base}`,
+    };
+  }
+
+  /** Attribute blurb — the per-point grants derive LIVE from the registry's
+   *  perPoint modifiers, so what Strength grants is always EXACTLY what
+   *  Strength grants, however the balance pass retunes it. */
+  private attrTooltip(id: AttributeId): TooltipContent | null {
+    const a = ATTRIBUTES[id];
+    if (!a) return null;
+    const perPoint = a.perPoint.map(mo => formatModLine(mo, mo.value)).join(' · ');
+    return { title: a.label, description: `Each point: ${perPoint}`, meta: a.description };
   }
 
   /** Tooltip for a learned skill row (full description + key stats). */
@@ -284,7 +306,7 @@ export class UI {
   /** Any ORDINARY panel open? (Dwell dialogs and the pause menu are tracked
    *  apart — the Escape cascade treats each class differently.) */
   anyPanelOpen(): boolean {
-    return this.charSheetOpen || this.skillBookOpen || this.treeOpen
+    return this.charSheetOpen || this.treeOpen
       || this.mapOpen || this.inventoryOpen;
   }
 
@@ -305,7 +327,7 @@ export class UI {
     el.innerHTML = `[${move}] move &nbsp; [LMB/RMB/${slots}] skills &nbsp; [${k('panelChar')}] character &nbsp; `
       + `[${k('panelInv')}] inventory &nbsp; `
       + (this.getSettings().gearPickup === 'key' ? `[${k('pickup')}] pick up &nbsp; ` : '')
-      + `[${k('panelBook')}] skill book &nbsp; [${k('panelTree')}] passive tree &nbsp; [${k('panelMap')}] world map &nbsp; [Esc] menu`;
+      + `[${k('panelTree')}] passive tree &nbsp; [${k('panelMap')}] world map &nbsp; [Esc] menu`;
   }
 
   // ---------------------------------------------------------- class select
@@ -494,7 +516,7 @@ export class UI {
       const total = m.attrs[id] ?? 0;
       const bonus = total - (m.baseAttrs[id] ?? 0);
       return `
-      <div class="attr-row" title="${ATTRIBUTES[id].description}">
+      <div class="attr-row" data-tip="attr" data-attr-id="${id}" style="cursor:help">
         <span>${ATTRIBUTES[id].label}</span>
         <span class="val">${total}
           ${bonus > 0 ? `<span style="color:#c8a84b;font-size:10px">(+${bonus} tree)</span>` : ''}
@@ -513,7 +535,7 @@ export class UI {
       if (resType && raw > v + 0.0001) {
         text += ` <span style="color:#8a8678;font-size:10px">(${Math.round(raw * 100)}% raw)</span>`;
       }
-      return `<div class="stat-row"><span>${def.label}</span><span class="val">${text}</span></div>`;
+      return `<div class="stat-row" data-tip="stat" data-stat-id="${id}" style="cursor:help"><span>${def.label}</span><span class="val">${text}</span></div>`;
     }).join('');
 
     // The vocation TITLE rides the class name once granted — "Warrior, Warbringer".
@@ -765,22 +787,34 @@ export class UI {
     const pickupHint = this.getSettings().gearPickup === 'key'
       ? `[${keyDisplay(this.getSettings().keybinds.pickup)}] grabs nearby gear`
       : 'walk over gear to collect it';
-    // The BUILD flap: learned skills docked on the gear tab's LEFT edge —
-    // gear, gems, and the build itself, one cohesive inventory.
-    const buildFlap = `
-      <div style="flex:0 0 auto;display:flex;align-items:flex-start;gap:8px">
-        <button data-buildflap title="Your learned skills — the whole build at a glance"
-          style="writing-mode:vertical-rl;text-orientation:mixed;padding:12px 4px;font-size:11px;
-          background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 2px 2px 6px;cursor:pointer">
-          📖 Build ${this.buildFlapOpen ? '▾' : '▸'}</button>
-        ${this.buildFlapOpen ? `
-          <div style="width:340px;max-height:560px;overflow-y:auto;padding-right:4px;font-size:12px">
-            ${this.learnedListHtml()}
-          </div>` : ''}
-      </div>`;
+    // THE BUILD DRAWER: the whole Skill Book, docked. A handle rides the
+    // panel's left edge; the drawer POPS OUT beside the panel (absolute —
+    // the gear layout never shifts an inch) with the full learned-skills
+    // management view. State persists like the satchel's.
+    const wf = this.getWorld().nearFont();
+    const drawerHandle = `
+      <button data-buildflap title="Your learned skills — the whole build, full management"
+        style="position:absolute;left:-27px;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
+        padding:12px 4px;font-size:11px;letter-spacing:1px;background:#241d2e;color:#c8a8ff;
+        border:1px solid #4a3a5a;border-right:none;border-radius:6px 0 0 6px;cursor:pointer;z-index:4">
+        📖 BUILD ${this.buildFlapOpen ? '▸' : '◂'}</button>`;
+    const drawer = this.buildFlapOpen ? `
+      <div style="position:absolute;right:100%;top:0;margin-right:2px;width:360px;
+        max-height:calc(100vh - 220px);display:flex;flex-direction:column;z-index:3;
+        background:var(--panel-bg);border:1px solid var(--panel-border);border-radius:6px 0 0 6px;
+        box-shadow:-6px 5px 22px rgba(0,0,0,0.6);padding:10px 12px">
+        <div style="flex:0 0 auto;color:var(--gold);font-size:12px;letter-spacing:1.2px;text-transform:uppercase;
+          border-bottom:1px solid var(--panel-border);padding-bottom:5px;margin-bottom:6px">
+          📖 Build — <span style="color:#7ec8a0">${m.skillPoints} pts</span>
+          <span style="float:right;color:#b06bd4;font-size:10px;letter-spacing:0">
+            ${wf ? 'FONT NEARBY · ' : ''}offerings ${m.offerings}/${OFFERINGS_PER_POINT}</span>
+        </div>
+        <div class="build-scroll" style="flex:1 1 auto;overflow-y:auto;font-size:12px;padding-right:4px">
+          ${this.learnedListHtml()}
+        </div>
+      </div>` : '';
     const gearBody = `
       <div style="display:flex;gap:18px;align-items:flex-start">
-        ${buildFlap}
         <div>
           <h3>Equipped</h3>
           ${doll}
@@ -807,12 +841,19 @@ export class UI {
     </div>`;
     const body = this.invTab === 'gear' ? gearBody : this.gemInventoryHtml(this.invTab);
 
-    // Same-tab scroll restore (the book's golden rule — a re-render must
-    // never yank the list to the top mid-read).
-    const prevScroll = this.inventory.scrollTop;
+    // Same-tab scroll restore (the golden rule — a re-render must never
+    // yank a list to the top mid-read). The panel itself no longer scrolls
+    // (the drawer hangs OUTSIDE it); the inner wrapper does, and the
+    // drawer's own list keeps its offset too.
+    const prevScroll = this.inventory.querySelector<HTMLElement>('.inv-scroll')?.scrollTop ?? 0;
+    const prevBuildScroll = this.inventory.querySelector<HTMLElement>('.build-scroll')?.scrollTop ?? 0;
     const sameTab = this.lastInvTab === this.invTab;
-    this.inventory.innerHTML = `${satchel}<h2>Inventory</h2>${tabs}${body}`;
-    if (sameTab) this.inventory.scrollTop = prevScroll;
+    this.inventory.innerHTML = `${drawer}${drawerHandle}${satchel}<h2>Inventory</h2>${tabs}
+      <div class="inv-scroll" style="max-height:calc(100vh - 240px);overflow-y:auto">${body}</div>`;
+    const scrollEl = this.inventory.querySelector<HTMLElement>('.inv-scroll');
+    if (scrollEl && sameTab) scrollEl.scrollTop = prevScroll;
+    const buildEl = this.inventory.querySelector<HTMLElement>('.build-scroll');
+    if (buildEl) buildEl.scrollTop = prevBuildScroll;
     this.lastInvTab = this.invTab;
     this.wireInventory();
   }
@@ -830,25 +871,20 @@ export class UI {
       this.heldItemUid = null; // a lifted item has no meaning off the gear tab
       this.refreshInventory();
     }));
-    // The gem tabs re-use the shared list wiring; learning/socketing moves
-    // gems into knownSkills, so the open book refreshes alongside.
-    if (this.invTab !== 'gear') {
-      this.wireGemInventory(this.inventory, () => {
-        this.refreshInventory();
-        this.refreshSkillBook();
-      });
-      return; // no gear handlers to attach on gem tabs
-    }
-    // The Build flap: toggle + (when open) the learned list's full wiring.
+    // The Build drawer rides EVERY tab (its handle hangs on the panel edge):
+    // toggle + — when open — the learned list's full management wiring.
     this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => {
       this.buildFlapOpen = !this.buildFlapOpen;
       this.refreshInventory();
     });
     if (this.buildFlapOpen) {
-      this.wireLearnedList(this.inventory, () => {
-        this.refreshInventory();
-        this.refreshSkillBook();
-      });
+      this.wireLearnedList(this.inventory, () => this.refreshInventory());
+    }
+    // The gem tabs re-use the shared list wiring (learning moves gems into
+    // knownSkills — the drawer re-renders with the same refresh).
+    if (this.invTab !== 'gear') {
+      this.wireGemInventory(this.inventory, () => this.refreshInventory());
+      return; // no gear handlers to attach on gem tabs
     }
 
     q<HTMLElement>('[data-bag-item]').forEach(el => {
@@ -1250,13 +1286,6 @@ export class UI {
 
   // -------------------------------------------------------------- skill book
 
-  toggleSkillBook(): void {
-    this.skillBookOpen = !this.skillBookOpen;
-    this.skillBook.classList.toggle('hidden', !this.skillBookOpen);
-    if (this.skillBookOpen) this.refreshSkillBook();
-    else hideTooltip();
-  }
-
   private costText(cost: { mana: number; life: number }): string {
     const parts: string[] = [];
     if (cost.mana > 0) parts.push(`${cost.mana} mana`);
@@ -1352,32 +1381,9 @@ export class UI {
     }));
   }
 
-  refreshSkillBook(): void {
-    if (!this.skillBookOpen) return;
-    const world = this.getWorld();
-    const m = world.meta;
-    const nearFont = world.nearFont();
-
-    // Preserve the scroll position across the innerHTML rebuild — otherwise a
-    // co-op client (which re-renders this panel whenever its meta re-replicates)
-    // would yank the list back to the top on every scroll attempt.
-    const prevScroll = this.skillBook.querySelector<HTMLElement>('.book-body')?.scrollTop ?? 0;
-
-    this.skillBook.innerHTML = `
-      <div class="book-head">
-        <h2>Skill Book — <span style="color:#7ec8a0">${m.skillPoints} skill points</span>
-          <span style="float:right;color:#b06bd4;font-size:11px;font-weight:normal">
-            ${nearFont ? `FONT NEARBY · offerings ${m.offerings}/${OFFERINGS_PER_POINT}` : `offerings ${m.offerings}/${OFFERINGS_PER_POINT}`}</span></h2>
-        <div style="color:#8a8678;font-size:10px;padding:2px 0 6px">Learned (${m.knownSkills.size}/${MAX_LEARNED_SKILLS}) — carried gems live in the Inventory (${keyDisplay(this.getSettings().keybinds.panelInv)})</div>
-      </div>
-      <div class="book-body">${this.learnedListHtml()}</div>`;
-
-    // Restore the prior scroll offset across the rebuild.
-    const bodyEl = this.skillBook.querySelector<HTMLElement>('.book-body');
-    if (bodyEl) bodyEl.scrollTop = prevScroll;
-
-    this.wireLearnedList(this.skillBook, () => this.refreshSkillBook());
-  }
+  // (The Skill Book panel is GONE — the Build drawer on the Inventory now
+  // hosts the identical learnedListHtml/wireLearnedList management view.
+  // One panel, one key; the extracted builders made the move free.)
 
   // ------------------------------------------------------------ passive tree
 
@@ -2237,10 +2243,44 @@ export class UI {
         &nbsp;·&nbsp; fell in ${world.zone.name} &nbsp;·&nbsp;
         ${world.visited.size} zones explored &nbsp;·&nbsp; ${world.kills} kills</div>
       <div style="margin:14px 0;color:var(--gold);font-weight:bold">
-        +${creditsEarned} ${META_CURRENCY_LABEL} &nbsp;·&nbsp; Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL}</div>
+        <span id="death-run-ess">+${creditsEarned}</span> ${META_CURRENCY_LABEL} of the run
+        &nbsp;·&nbsp; Account Level ${acc.level} &nbsp;·&nbsp;
+        <span id="death-pool-ess">${acc.credits - creditsEarned}</span> ${META_CURRENCY_LABEL}</div>
       <button id="unlocks-btn">Unlocks</button>
       <button id="restart-btn">Rise Again</button>`;
     this.deathScreen.classList.remove('hidden');
+
+    // THE DUMP: the run's Mortal Essence visibly DRAINS into the account
+    // pool — an eased transfer with a scrambling tail, landing on the exact
+    // banked totals (applyCredits already ran; this is pure theater). The
+    // interval self-heals: it dies the moment its spans leave the DOM.
+    const runEl = document.getElementById('death-run-ess');
+    const poolEl = document.getElementById('death-pool-ess');
+    if (runEl && poolEl && creditsEarned > 0) {
+      const poolStart = acc.credits - creditsEarned;
+      const dur = 1400;
+      const start = performance.now();
+      const timer = window.setInterval(() => {
+        if (!runEl.isConnected) { window.clearInterval(timer); return; }
+        const t = Math.min(1, (performance.now() - start) / dur);
+        const ease = 1 - Math.pow(1 - t, 3);
+        const moved = Math.round(creditsEarned * ease);
+        // A flicker of un-settled digits while essence is mid-flight.
+        const jitter = t < 1 && moved < creditsEarned ? (Math.random() < 0.5 ? 1 : 0) : 0;
+        runEl.textContent = `+${creditsEarned - moved}`;
+        poolEl.textContent = `${poolStart + moved - jitter}`;
+        if (t >= 1) {
+          window.clearInterval(timer);
+          runEl.textContent = '+0';
+          poolEl.textContent = `${acc.credits}`;
+          poolEl.animate(
+            [{ textShadow: '0 0 18px var(--gold)', color: '#ffe9a8' }, { textShadow: 'none' }],
+            { duration: 600 },
+          );
+        }
+      }, 40);
+    }
+
     document.getElementById('unlocks-btn')!.addEventListener('click',
       () => this.showAccountScreen(() => this.showDeath(creditsEarned, onRestart)));
     document.getElementById('restart-btn')!.addEventListener('click', () => {
@@ -2607,7 +2647,6 @@ export class UI {
     this.scrapMode = false;
     this.vendorMenu.style.cursor = '';
     this.vendorMenu.classList.add('hidden');
-    this.skillBookOpen = false;
     this.treeOpen = false;
     this.mapOpen = false;
     this.caravanOpen = false;
@@ -2616,7 +2655,6 @@ export class UI {
     this.vocationOpen = false;
     this.classSelect.classList.add('hidden');
     this.charSheet.classList.add('hidden');
-    this.skillBook.classList.add('hidden');
     this.passiveTree.classList.add('hidden');
     this.worldMap.classList.add('hidden');
     this.caravanMenu.classList.add('hidden');

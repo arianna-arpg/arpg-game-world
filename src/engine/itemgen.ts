@@ -412,8 +412,10 @@ export interface ItemDescription {
 }
 
 /** The tier tag for an affix roll: EXQUISITE tiers show 'EX'; numbered tiers
- *  count only the normally-rollable ladder (T1 = best rare-legal tier). */
+ *  count only the normally-rollable ladder (T1 = best rare-legal tier). A
+ *  WHOLLY magic-exclusive family numbers M1.. instead — every tier is blue. */
 function tierTag(def: AffixDef, tierIndex: number): string {
+  if (def.tiers.every(t => t.magicOnly)) return `M${tierIndex + 1}`;
   const t = def.tiers[tierIndex];
   if (t?.magicOnly) return 'EX';
   let n = 0;
@@ -504,7 +506,7 @@ export function rebuildItem(saved: ItemInstance): ItemInstance | null {
 
 /** Stats minted at runtime by other registries (status families, conversion
  *  lanes) — absent from STAT_DEFS at module load yet perfectly valid. */
-const GENERATED_STAT = /^(apply|damageVs|minionApply|popPower|dotLeech|convert|addedMin|addedMax)_/;
+const GENERATED_STAT = /^(apply|damageVs|minionApply|popPower|dotLeech|convert|addedMin|addedMax|proc|classSkill)_/;
 
 let validated = false;
 

@@ -341,7 +341,6 @@ function handleLocalPanels(): void {
   }
   if (ui.escapeMenuOpen) return;
   if (input.justPressed(kb.panelChar)) ui.toggleCharSheet();
-  if (input.justPressed(kb.panelBook)) ui.toggleSkillBook();
   if (input.justPressed(kb.panelTree)) ui.toggleTree();
   if (input.justPressed(kb.panelMap)) ui.toggleMap();
   if (input.justPressed(kb.panelInv)) ui.toggleInventory();
@@ -579,7 +578,7 @@ function clientApplyAndRender(dt: number): void {
   // no-op when their panel is closed, so this is cheap.
   if (clientMetaDirty) {
     clientMetaDirty = false;
-    ui.refreshCharSheet(); ui.refreshSkillBook(); ui.refreshTree();
+    ui.refreshCharSheet(); ui.refreshInventory(); ui.refreshTree();
   }
   // Resource/stat values on the char sheet + map drift every frame even with no
   // meta change — keep them live on the same 0.5s throttle the host uses.

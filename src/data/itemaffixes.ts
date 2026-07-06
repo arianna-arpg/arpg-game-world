@@ -55,6 +55,9 @@ interface FamOpts {
   excludeTags?: string[];
   /** Opt out of the auto EXQUISITE tier. */
   exquisite?: boolean;
+  /** The WHOLE family is magic-exclusive (every tier magicOnly) — a class
+   *  of power blues alone can carry, beyond the per-family EX tier. */
+  magicOnly?: boolean;
   /** ilvl at which T1 unlocks (ladder spreads 1..this). Defaults to the
    *  second-to-last tier break so T1 affixes arrive before endgame bases. */
   maxIlvl?: number;
@@ -86,6 +89,7 @@ function fam(o: FamOpts): AffixDef {
       ilvl: Math.max(1, Math.round(1 + (maxIlvl - 1) * ((k - 1) / Math.max(1, count - 1)))),
       ranges: tops.map(top => [post(top, k - 1), post(top, k)] as [number, number]),
       weight: 100,
+      ...(o.magicOnly ? { magicOnly: true } : {}),
     });
   }
   if (o.exquisite !== false) {
@@ -297,6 +301,25 @@ const PREFIXES: AffixDef[] = [
     top: [0.35, 3], floor: 0.25, count: 4, baseTags: ['mi_undead'], weight: 90,
   }),
 
+  // PROC AFFIXES — chance stats from the PROC registry (proc_<id>; procs.ts
+  // golden rules cap and depth-gate them). The two MAGIC-ONLY families are a
+  // rarity identity, not a top tier: blues alone can carry them at all — the
+  // D2 Crushing-Blow class of power, kept exclusive to keep blues forever
+  // worth the look.
+  fam({
+    id: 'proc_concussive', kind: 'prefix', magicOnly: true,
+    names: ['Skullcracking', 'Concussive', 'Jarring'],
+    stat: 'proc_brutal_strike', tags: ['attack'],
+    top: 0.25, floor: 0.3, count: 3,
+    baseTags: ['gloves', 'belt', 'ring'], weight: 55,
+  }),
+  fam({
+    id: 'proc_stormlit', kind: 'prefix', magicOnly: true,
+    names: ['Stormlit', 'Static-Laced'],
+    stat: 'proc_thunderstruck', tags: ['spell'],
+    top: 0.18, floor: 0.3, count: 3,
+    baseTags: ['amulet', 'ring', 'helmet'], weight: 55,
+  }),
   // Hybrid demos — multi-line families with per-line tops.
   fam({
     id: 'hybrid_life_mana', kind: 'prefix',
@@ -447,6 +470,23 @@ const SUFFIXES: AffixDef[] = [
     })),
     top: DAMAGE_TYPES.filter(t => t !== 'physical').map(() => 0.12),
     floor: 0.3, count: 3, weight: 40,
+  }),
+  // SKILL-SPECIFIC rolls — gear carrying ONE skill's signature proc (the
+  // registry already scopes these procs to Sanctified Strike; any rarity
+  // may roll them — the seam every future per-skill affix rides).
+  fam({
+    id: 'proc_radiant_oath', kind: 'suffix',
+    names: ['of the Radiant Oath', 'of the Sworn Light'],
+    stat: 'proc_radiant_reprisal',
+    top: 0.2, floor: 0.3, count: 3,
+    baseTags: ['amulet', 'gloves'], weight: 40,
+  }),
+  fam({
+    id: 'proc_cascading_light', kind: 'suffix',
+    names: ['of Cascading Light'],
+    stat: 'proc_radiant_cascade',
+    top: 0.12, floor: 0.35, count: 2,
+    baseTags: ['amulet', 'helmet'], weight: 30,
   }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
