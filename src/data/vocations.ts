@@ -556,6 +556,7 @@ const GREENWARDEN: VocationDef = {
     { id: 'n3', name: 'Briar Pact', description: 'Projectiles have 15% chance to Root; 25% increased damage against Rooted enemies', kind: 'notable', ...GREENWARDEN_LAYOUT.n3, mods: [mod('apply_rooted', 'flat', 0.15, ['projectile']), mod('damageVs_rooted', 'flat', 0.25)], links: ['s3', 's2'] },
     { id: 'n4', name: 'Wildveined', description: 'Projectiles: 20% chance to Poison; 15% increased ailment magnitude', kind: 'notable', ...GREENWARDEN_LAYOUT.n4, mods: [mod('apply_poison', 'flat', 0.2, ['projectile']), mod('statusMagnitude', 'increased', 0.15, ['projectile'])], links: ['s2'] },
     { id: 'k1', name: 'Heart of the Forest', description: 'Your saplings spring up twice as fast; +2% of maximum life regenerated per second; 10% more projectile damage', kind: 'keystone', ...GREENWARDEN_LAYOUT.k1, mods: [mod('terraform_sapling_ring', 'flat', 1), mod('lifeRegenPct', 'flat', 0.02), mod('damage', 'more', 0.1, ['projectile'])], links: ['n2', 'n3'] },
+    { id: 'n5', name: 'Bramble Ward', description: 'Your saplings FIGHT — thorned canes lash your enemies while the growth stands', kind: 'notable', ...p(330 + 90, 210), mods: [mod('terraformFx_sapling_ring', 'flat', 1)], links: ['s2'] },
   ],
   quest: {
     offerAtLevel: 28,
@@ -613,6 +614,635 @@ const GREENWARDEN: VocationDef = {
   },
 };
 
+// --- the roster fill (one vocation per remaining class) -------------------------
+
+/** PLAGUELORD — the Necromancer's calling: the rot as ecosystem. Longer
+ *  poisons, poisoned legions, curses that hold, +2 chaos ailment stacks. */
+const PLAGUELORD_LAYOUT = fan(210); // spine → wis_start
+const PLAGUELORD: VocationDef = {
+  id: 'plaguelord', name: 'Plaguelord',
+  blurb: 'The rot is not a weapon, it is a kingdom. Everything that breathes near you is already a subject in waiting.',
+  color: '#7ea84a',
+  classId: 'necromancer',
+  tree: [
+    { id: 's1', name: 'Grave Chill', description: '15% increased minion damage; 10% increased chaos damage', kind: 'small', ...PLAGUELORD_LAYOUT.s1, mods: [mod('minionDamage', 'increased', 0.15), mod('damage', 'increased', 0.1, ['chaos'])], links: ['root'] },
+    { id: 's2', name: 'Carrion Feast', description: 'Minions regenerate 1.5% life per second; +1 life regeneration', kind: 'small', ...PLAGUELORD_LAYOUT.s2, mods: [mod('minionRegenPct', 'flat', 0.015), mod('lifeRegen', 'flat', 1)], links: ['root'] },
+    { id: 's3', name: 'Hexweaver', description: '12% increased skill effect duration', kind: 'small', ...PLAGUELORD_LAYOUT.s3, mods: [mod('effectDuration', 'increased', 0.12)], links: ['root'] },
+    { id: 'n1', name: 'Virulence', description: '30% increased chaos ailment magnitude; spells have +15% chance to Poison', kind: 'notable', ...PLAGUELORD_LAYOUT.n1, mods: [mod('statusMagnitude', 'increased', 0.3, ['chaos']), mod('apply_poison', 'flat', 0.15, ['spell'])], links: ['s1'] },
+    { id: 'n2', name: 'Legion of the Rot', description: 'Minions have 20% chance to Poison on hit; +1 maximum minion', kind: 'notable', ...PLAGUELORD_LAYOUT.n2, mods: [mod('minionApply_poison', 'flat', 0.2), mod('minionMaxCount', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Dread Liturgy', description: '15% increased damage against Despairing enemies; spells have 15% chance to Weaken', kind: 'notable', ...PLAGUELORD_LAYOUT.n3, mods: [mod('damageVs_despair', 'flat', 0.15), mod('apply_weaken', 'flat', 0.15, ['spell'])], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Bone Harvest', description: '8% of poison damage leeched as life; 20% increased minion life', kind: 'notable', ...PLAGUELORD_LAYOUT.n4, mods: [mod('dotLeech_poison', 'flat', 0.08), mod('minionLife', 'increased', 0.2)], links: ['s2'] },
+    { id: 'k1', name: 'Epidemic', description: '+2 chaos ailment stacks; 15% more chaos ailment magnitude', kind: 'keystone', ...PLAGUELORD_LAYOUT.k1, mods: [mod('ailmentStacks', 'flat', 2, ['chaos']), mod('statusMagnitude', 'more', 0.15, ['chaos'])], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Walk among the plague-dead of the wastes',
+        zone: {
+          tileset: 'wasteland', direction: 'e', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'deadwake_ghoul', weight: 3 }, { id: 'deadwake_plague_bearer', weight: 2 },
+              { id: 'zombie', weight: 2 }, { id: 'plague_carrier', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The dead lie counted — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Shatter the altars feeding the blight',
+        zone: {
+          tileset: 'marsh', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'spawners', spawnerId: 'bone_altar', count: [3, 4] },
+          packsOverride: {
+            count: [4, 6], size: [3, 4], table: [
+              { id: 'plague_spitter', weight: 2 }, { id: 'decay_wraith', weight: 2 },
+              { id: 'bone_serpent', weight: 1 }, { id: 'skeletal_cleric', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The altars are yours now — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Usurp the Lich Marshal',
+        zone: {
+          tileset: 'crypt', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'lich_marshal', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'The Marshal kneels or rots — return, Plaguelord.',
+      },
+    ],
+  },
+};
+
+/** SHADOWDANCER — the Rogue's calling: never seen twice in the same place. */
+const SHADOWDANCER_LAYOUT = fan(290); // spine → fin_start
+const SHADOWDANCER: VocationDef = {
+  id: 'shadowdancer', name: 'Shadowdancer',
+  blurb: 'The blow you saw was the feint. The dance is being elsewhere when the answer comes.',
+  color: '#6a6a9a',
+  classId: 'rogue',
+  tree: [
+    { id: 's1', name: 'Soft Step', description: '15% increased evasion; 4% increased movement speed', kind: 'small', ...SHADOWDANCER_LAYOUT.s1, mods: [mod('evasion', 'increased', 0.15), mod('moveSpeed', 'increased', 0.04)], links: ['root'] },
+    { id: 's2', name: 'Killer Instinct', description: '+4% critical strike chance', kind: 'small', ...SHADOWDANCER_LAYOUT.s2, mods: [mod('critChance', 'flat', 0.04)], links: ['root'] },
+    { id: 's3', name: 'Quick Hands', description: '8% increased attack speed', kind: 'small', ...SHADOWDANCER_LAYOUT.s3, mods: [mod('attackSpeed', 'increased', 0.08)], links: ['root'] },
+    { id: 'n1', name: 'Ambusher', description: '+30% critical strike multiplier; melee hits have 15% chance to Weaken', kind: 'notable', ...SHADOWDANCER_LAYOUT.n1, mods: [mod('critMulti', 'flat', 0.3), mod('apply_weaken', 'flat', 0.15, ['melee'])], links: ['s1'] },
+    { id: 'n2', name: 'Phase Veil', description: 'Gain Phase Surge; 20% increased evasion', kind: 'notable', ...SHADOWDANCER_LAYOUT.n2, mods: [mod('proc_phase_surge', 'flat', 1), mod('evasion', 'increased', 0.2)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Twist the Knife', description: 'Melee hits have 15% chance to apply Vulnerable; 6% increased damage per Vulnerable stack', kind: 'notable', ...SHADOWDANCER_LAYOUT.n3, mods: [mod('apply_vulnerable', 'flat', 0.15, ['melee']), mod('damageVs_vulnerable', 'flat', 0.06)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Fleetblade', description: 'While moving: 15% increased melee damage; 5% increased movement speed', kind: 'notable', ...SHADOWDANCER_LAYOUT.n4, mods: [mod('damage', 'increased', 0.15, ['melee'], 'moving'), mod('moveSpeed', 'increased', 0.05)], links: ['s2'] },
+    { id: 'k1', name: 'Death from Shadow', description: 'At full life: 20% more melee damage. +6% critical strike chance', kind: 'keystone', ...SHADOWDANCER_LAYOUT.k1, mods: [mod('damage', 'more', 0.2, ['melee'], 'fullLife'), mod('critChance', 'flat', 0.06)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Cut the bandit road in the highlands',
+        zone: {
+          tileset: 'highland', direction: 's', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'bandit_cutthroat', weight: 3 }, { id: 'bandit_bruiser', weight: 2 },
+              { id: 'bandit_keeper', weight: 1 }, { id: 'gnoll_prowler', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The road is quiet — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Slip the dunes before the hunters close',
+        zone: {
+          tileset: 'desert', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'escape', interval: [4, 7] },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'dune_stalker', weight: 3 }, { id: 'sand_skitterer', weight: 2 },
+              { id: 'dune_vulture', weight: 2 }, { id: 'javelin_skirmisher', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'Not a footprint left — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'End the Keeper of the toll roads',
+        zone: {
+          tileset: 'highland', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'bandit_keeper', levelBonus: 1, promote: { rarity: 'crowned', stacks: 2 } },
+          packsOverride: {
+            count: [5, 7], size: [3, 4], table: [
+              { id: 'bandit_cutthroat', weight: 3 }, { id: 'bandit_bruiser', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'The Keeper kept nothing — return, Shadowdancer.',
+      },
+    ],
+  },
+};
+
+/** BLOODREAVER — the Berserker's calling: the wound is the fuel gauge. */
+const BLOODREAVER_LAYOUT = fan(50); // spine → prw_start
+const BLOODREAVER: VocationDef = {
+  id: 'bloodreaver', name: 'Bloodreaver',
+  blurb: 'Pain is just the body counting what it owes. Collect in red, spend it faster than it bleeds.',
+  color: '#d84838',
+  classId: 'berserker',
+  tree: [
+    { id: 's1', name: 'Sharpened Fury', description: '15% increased melee damage', kind: 'small', ...BLOODREAVER_LAYOUT.s1, mods: [mod('damage', 'increased', 0.15, ['melee'])], links: ['root'] },
+    { id: 's2', name: 'Thick Blood', description: '+25 maximum life; 1% of damage leeched as life', kind: 'small', ...BLOODREAVER_LAYOUT.s2, mods: [mod('life', 'flat', 25), mod('lifeLeech', 'flat', 0.01)], links: ['root'] },
+    { id: 's3', name: 'Frenzy Rhythm', description: '10% increased attack speed', kind: 'small', ...BLOODREAVER_LAYOUT.s3, mods: [mod('attackSpeed', 'increased', 0.1)], links: ['root'] },
+    { id: 'n1', name: 'Red Rapture', description: '3% of melee damage leeched as life; on low life: 15% increased damage', kind: 'notable', ...BLOODREAVER_LAYOUT.n1, mods: [mod('lifeLeech', 'flat', 0.03, ['melee']), mod('damage', 'increased', 0.15, undefined, 'lowLife')], links: ['s1'] },
+    { id: 'n2', name: "Reaver's Momentum", description: 'Gain Crimson Thirst; 10% increased attack speed', kind: 'notable', ...BLOODREAVER_LAYOUT.n2, mods: [mod('proc_crimson_thirst', 'flat', 1), mod('attackSpeed', 'increased', 0.1)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Painfuel', description: 'On low life: 25% increased damage and 5% less damage taken', kind: 'notable', ...BLOODREAVER_LAYOUT.n3, mods: [mod('damage', 'increased', 0.25, undefined, 'lowLife'), mod('damageTaken', 'more', -0.05, undefined, 'lowLife')], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Whirl of Ruin', description: '20% increased melee area of effect; 10% increased melee damage', kind: 'notable', ...BLOODREAVER_LAYOUT.n4, mods: [mod('aoeRadius', 'increased', 0.2, ['melee']), mod('damage', 'increased', 0.1, ['melee'])], links: ['s2'] },
+    { id: 'k1', name: 'Deathwish', description: '25% more melee damage; 12% more damage taken', kind: 'keystone', ...BLOODREAVER_LAYOUT.k1, mods: [mod('damage', 'more', 0.25, ['melee']), mod('damageTaken', 'more', 0.12)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Answer the warhorns in the highlands',
+        zone: {
+          tileset: 'highland', direction: 'w', distance: 1, level: 'character',
+          objective: { kind: 'waves', waves: 4 },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'orc_ravager', weight: 3 }, { id: 'gnoll_butcher', weight: 2 },
+              { id: 'troll_mauler', weight: 1 }, { id: 'goblin_brute', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The horns are silent — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Carve through the cinder pits',
+        zone: {
+          tileset: 'cinderlands', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'hellhound', weight: 3 }, { id: 'imp', weight: 2 },
+              { id: 'cinder_fiend', weight: 2 }, { id: 'searing_spawn', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The pits burned hotter with you in them — return.',
+      },
+      {
+        offerLabel: 'Drag the Pit Lord from his throne',
+        zone: {
+          tileset: 'volcanic', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'pit_lord', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'The throne is ash — return, Bloodreaver.',
+      },
+    ],
+  },
+};
+
+/** STORMWEAVER — the Sorcerer's calling: the sky, weaponized wholesale. */
+const STORMWEAVER_LAYOUT = fan(170); // spine → int_start
+const STORMWEAVER: VocationDef = {
+  id: 'stormweaver', name: 'Stormweaver',
+  blurb: 'Thunder is not a warning. It is the paperwork arriving after the decision.',
+  color: '#5ac8e8',
+  classId: 'sorcerer',
+  tree: [
+    { id: 's1', name: 'Charged Air', description: '15% increased lightning damage', kind: 'small', ...STORMWEAVER_LAYOUT.s1, mods: [mod('damage', 'increased', 0.15, ['lightning'])], links: ['root'] },
+    { id: 's2', name: 'Conductor', description: '8% increased cast speed', kind: 'small', ...STORMWEAVER_LAYOUT.s2, mods: [mod('castSpeed', 'increased', 0.08)], links: ['root'] },
+    { id: 's3', name: 'Deep Current', description: '12% increased maximum mana', kind: 'small', ...STORMWEAVER_LAYOUT.s3, mods: [mod('mana', 'increased', 0.12)], links: ['root'] },
+    { id: 'n1', name: 'Static Field', description: 'Spells have 20% chance to Shock; 10% increased damage against Shocked enemies', kind: 'notable', ...STORMWEAVER_LAYOUT.n1, mods: [mod('apply_shock', 'flat', 0.2, ['spell']), mod('damageVs_shock', 'flat', 0.1)], links: ['s1'] },
+    { id: 'n2', name: 'Living Capacitance', description: 'Spell hits have 15% chance to call Thunderstruck; gain Capacitor Burst', kind: 'notable', ...STORMWEAVER_LAYOUT.n2, mods: [mod('proc_thunderstruck', 'flat', 0.15, ['spell']), mod('proc_capacitor_burst', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Tempest Reach', description: '25% increased spell area of effect', kind: 'notable', ...STORMWEAVER_LAYOUT.n3, mods: [mod('aoeRadius', 'increased', 0.25, ['spell'])], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Stormsight', description: '+5% spell critical strike chance; +20% critical strike multiplier', kind: 'notable', ...STORMWEAVER_LAYOUT.n4, mods: [mod('critChance', 'flat', 0.05, ['spell']), mod('critMulti', 'flat', 0.2)], links: ['s2'] },
+    { id: 'k1', name: 'Eye of the Storm', description: '18% more lightning damage; 10% reduced mana cost', kind: 'keystone', ...STORMWEAVER_LAYOUT.k1, mods: [mod('damage', 'more', 0.18, ['lightning']), mod('manaCost', 'increased', -0.1)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Scatter the storm cult on the tundra',
+        zone: {
+          tileset: 'tundra', direction: 'n', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'storm_acolyte', weight: 3 }, { id: 'frost_witch', weight: 2 },
+              { id: 'voltaic_shade', weight: 2 }, { id: 'glacial_horror', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The cult is scattered to the wind — return.',
+      },
+      {
+        offerLabel: 'Hold the crystal spires through the surge',
+        zone: {
+          tileset: 'crystal', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 4 },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'gale_elemental', weight: 3 }, { id: 'frost_elemental', weight: 2 },
+              { id: 'spirit_wisp', weight: 2 }, { id: 'stone_sentinel', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The spires still sing — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Break the Abyssal Tyrant beneath the gale',
+        zone: {
+          tileset: 'tundra', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'abyssal_tyrant' },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'The storm answers to you now — return, Stormweaver.',
+      },
+    ],
+  },
+};
+
+/** BASTION — the Guardian's calling: the wall that hits back. */
+const BASTION_LAYOUT = fan(130); // spine → for_start
+const BASTION: VocationDef = {
+  id: 'bastion', name: 'Bastion',
+  blurb: 'Ground is not given. It is loaned at interest, and you are the collector.',
+  color: '#c8d8e8',
+  classId: 'guardian',
+  tree: [
+    { id: 's1', name: 'Plated Discipline', description: '20% increased armor', kind: 'small', ...BASTION_LAYOUT.s1, mods: [mod('armor', 'increased', 0.2)], links: ['root'] },
+    { id: 's2', name: 'Broad Frame', description: '+30 maximum life', kind: 'small', ...BASTION_LAYOUT.s2, mods: [mod('life', 'flat', 30)], links: ['root'] },
+    { id: 's3', name: 'Shield Drill', description: '+3% block chance', kind: 'small', ...BASTION_LAYOUT.s3, mods: [mod('blockChance', 'flat', 0.03)], links: ['root'] },
+    { id: 'n1', name: 'Shieldwall', description: '+5% block chance; gain Bastion Fortify', kind: 'notable', ...BASTION_LAYOUT.n1, mods: [mod('blockChance', 'flat', 0.05), mod('proc_bastion_fortify', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Guarded Heart', description: 'Gain Guarded Heart; +20 thorns', kind: 'notable', ...BASTION_LAYOUT.n2, mods: [mod('proc_guarded_heart', 'flat', 1), mod('thorns', 'flat', 20)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Immovable', description: '35% increased stagger window; 20% increased armor', kind: 'notable', ...BASTION_LAYOUT.n3, mods: [mod('staggerWindow', 'increased', 0.35), mod('armor', 'increased', 0.2)], links: ['s3', 's2'] },
+    { id: 'n4', name: "Warden's Resolve", description: 'Gain Last Stand; 8% increased maximum life', kind: 'notable', ...BASTION_LAYOUT.n4, mods: [mod('proc_last_stand', 'flat', 1), mod('life', 'increased', 0.08)], links: ['s2'] },
+    { id: 'k1', name: 'Living Fortress', description: '10% less damage taken; +15 thorns; 5% reduced movement speed', kind: 'keystone', ...BASTION_LAYOUT.k1, mods: [mod('damageTaken', 'more', -0.1), mod('thorns', 'flat', 15), mod('moveSpeed', 'increased', -0.05)], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Hold the pass against the goblin siege',
+        zone: {
+          tileset: 'highland', direction: 'e', distance: 1, level: 'character',
+          objective: { kind: 'waves', waves: 5 },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'goblin_skirmisher', weight: 3 }, { id: 'goblin_brute', weight: 2 },
+              { id: 'goblin_shaman', weight: 1 }, { id: 'orc_ravager', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The pass held — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Tear down the ember rifts shelling the road',
+        zone: {
+          tileset: 'cinderlands', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'spawners', spawnerId: 'ember_rift', count: [3, 4] },
+          packsOverride: {
+            count: [4, 6], size: [3, 4], table: [
+              { id: 'imp', weight: 3 }, { id: 'hellhound', weight: 2 }, { id: 'cinder_fiend', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The shelling has stopped — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Stand down the Siege Hulk',
+        zone: {
+          tileset: 'wasteland', direction: 'e', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'siege_hulk', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'It broke before you did — return, Bastion.',
+      },
+    ],
+  },
+};
+
+/** CORSAIR — the Swashbuckler's calling: the duel as theatre. */
+const CORSAIR_LAYOUT = fan(290); // spine → fin_start
+const CORSAIR: VocationDef = {
+  id: 'corsair', name: 'Corsair',
+  blurb: 'Every fight is a stage and every audience pays in the same coin. Take a bow between strokes.',
+  color: '#e8c86a',
+  classId: 'swashbuckler',
+  tree: [
+    { id: 's1', name: 'Duelist\'s Eye', description: '+4% critical strike chance', kind: 'small', ...CORSAIR_LAYOUT.s1, mods: [mod('critChance', 'flat', 0.04)], links: ['root'] },
+    { id: 's2', name: 'Footwork', description: '15% increased evasion', kind: 'small', ...CORSAIR_LAYOUT.s2, mods: [mod('evasion', 'increased', 0.15)], links: ['root'] },
+    { id: 's3', name: 'Tempo', description: '5% increased movement speed', kind: 'small', ...CORSAIR_LAYOUT.s3, mods: [mod('moveSpeed', 'increased', 0.05)], links: ['root'] },
+    { id: 'n1', name: 'Adrenal Rush', description: 'Gain Adrenal Rush; 8% increased attack speed', kind: 'notable', ...CORSAIR_LAYOUT.n1, mods: [mod('proc_adrenal_rush', 'flat', 1), mod('attackSpeed', 'increased', 0.08)], links: ['s1'] },
+    { id: 'n2', name: 'Perfect Form', description: '+35% critical strike multiplier', kind: 'notable', ...CORSAIR_LAYOUT.n2, mods: [mod('critMulti', 'flat', 0.35)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Flourish', description: 'Melee hits have 20% chance to apply Vulnerable; 6% increased damage per Vulnerable stack', kind: 'notable', ...CORSAIR_LAYOUT.n3, mods: [mod('apply_vulnerable', 'flat', 0.2, ['melee']), mod('damageVs_vulnerable', 'flat', 0.06)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Untouchable', description: '25% increased evasion; 5% increased movement speed', kind: 'notable', ...CORSAIR_LAYOUT.n4, mods: [mod('evasion', 'increased', 0.25), mod('moveSpeed', 'increased', 0.05)], links: ['s2'] },
+    { id: 'k1', name: 'En Garde', description: 'While moving: 18% more melee damage. +8% critical strike chance with melee', kind: 'keystone', ...CORSAIR_LAYOUT.k1, mods: [mod('damage', 'more', 0.18, ['melee'], 'moving'), mod('critChance', 'flat', 0.08, ['melee'])], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Clear the corsair coves on the coast',
+        zone: {
+          tileset: 'beach', direction: 'w', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'bandit_cutthroat', weight: 3 }, { id: 'bandit_bruiser', weight: 2 },
+              { id: 'javelin_skirmisher', weight: 2 }, { id: 'bandit_keeper', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The coves are quiet — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Run the jungle gauntlet to the far shore',
+        zone: {
+          tileset: 'jungle', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'escape', interval: [4, 7] },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'spiderling', weight: 3 }, { id: 'thicket_stalker', weight: 2 },
+              { id: 'briar_beast', weight: 1 }, { id: 'blood_mite', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'A clean exit, as always — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Duel the Lash Maiden',
+        zone: {
+          tileset: 'peninsula', direction: 'w', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'lash_maiden', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'She bowed first — return, Corsair.',
+      },
+    ],
+  },
+};
+
+/** ASHBORN — the Pyromancer's calling: THE ignite investment house (the
+ *  baseline rebalance's fire half lives here — see engine/status.ts). */
+const ASHBORN_LAYOUT = fan(170); // spine → int_start
+const ASHBORN: VocationDef = {
+  id: 'ashborn', name: 'Ashborn',
+  blurb: 'Everything burns eventually. Your gift is the word "now" — and the patience to watch it finish.',
+  color: '#ff8a3a',
+  classId: 'pyromancer',
+  tree: [
+    { id: 's1', name: 'Fire-Eater', description: '15% increased fire damage', kind: 'small', ...ASHBORN_LAYOUT.s1, mods: [mod('damage', 'increased', 0.15, ['fire'])], links: ['root'] },
+    { id: 's2', name: 'Quick Match', description: '8% increased cast speed', kind: 'small', ...ASHBORN_LAYOUT.s2, mods: [mod('castSpeed', 'increased', 0.08)], links: ['root'] },
+    { id: 's3', name: 'Ashen Skin', description: '+15% fire resistance', kind: 'small', ...ASHBORN_LAYOUT.s3, mods: [mod('fireRes', 'flat', 0.15)], links: ['root'] },
+    { id: 'n1', name: 'Kindler', description: 'Fire skills have +25% chance to Ignite', kind: 'notable', ...ASHBORN_LAYOUT.n1, mods: [mod('apply_burn', 'flat', 0.25, ['fire'])], links: ['s1'] },
+    { id: 'n2', name: 'Stoke the Coals', description: '30% increased fire ailment magnitude; 15% increased fire effect duration', kind: 'notable', ...ASHBORN_LAYOUT.n2, mods: [mod('statusMagnitude', 'increased', 0.3, ['fire']), mod('effectDuration', 'increased', 0.15, ['fire'])], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Cinderfeed', description: '8% of burn damage leeched as life; 12% increased damage against Burning enemies', kind: 'notable', ...ASHBORN_LAYOUT.n3, mods: [mod('dotLeech_burn', 'flat', 0.08), mod('damageVs_burn', 'flat', 0.12)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Wildfire', description: 'Fire ailments have 25% chance to spread when their victim dies', kind: 'notable', ...ASHBORN_LAYOUT.n4, mods: [mod('dotPropagates', 'flat', 0.25, ['fire'])], links: ['s2'] },
+    { id: 'k1', name: 'Ashborn Truth', description: '15% more fire damage; 20% more fire ailment magnitude', kind: 'keystone', ...ASHBORN_LAYOUT.k1, mods: [mod('damage', 'more', 0.15, ['fire']), mod('statusMagnitude', 'more', 0.2, ['fire'])], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Burn out the cinder warrens',
+        zone: {
+          tileset: 'cinderlands', direction: 's', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'imp', weight: 3 }, { id: 'hellhound', weight: 2 },
+              { id: 'flame_sprite', weight: 2 }, { id: 'searing_spawn', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The warrens are cinders — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Feed the volcano its own children',
+        zone: {
+          tileset: 'volcanic', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'waves', waves: 4 },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'magma_worm', weight: 2 }, { id: 'fire_golem', weight: 1 },
+              { id: 'cinder_fiend', weight: 2 }, { id: 'ember_elemental', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The mountain is satisfied — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Outburn Balor, the Rift-Tyrant',
+        zone: {
+          tileset: 'volcanic', direction: 's', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'balor_warlord', levelBonus: 1 },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'Even tyrants burn — return, Ashborn.',
+      },
+    ],
+  },
+};
+
+/** EXSANGUINATOR — the Assassin's calling: the baseline rebalance's counter-
+ *  weight. Plain blows bleed again — and deeper: Hemorrhage, loaded and
+ *  popped on rhythm (engine/status.ts pop-on-reapply). */
+const EXSANGUINATOR_LAYOUT = fan(290); // spine → fin_start
+const EXSANGUINATOR: VocationDef = {
+  id: 'exsanguinator', name: 'Exsanguinator',
+  blurb: 'Anyone can spill blood. The craft is in the ledger — every vein an account, every wound a withdrawal on schedule.',
+  color: '#c03a4a',
+  classId: 'assassin',
+  tree: [
+    { id: 's1', name: 'First Cut', description: 'Attacks have 20% chance to Bleed (the old red baseline, reclaimed)', kind: 'small', ...EXSANGUINATOR_LAYOUT.s1, mods: [mod('apply_bleed', 'flat', 0.2, ['attack'])], links: ['root'] },
+    { id: 's2', name: 'Surgical Care', description: '+4% critical strike chance', kind: 'small', ...EXSANGUINATOR_LAYOUT.s2, mods: [mod('critChance', 'flat', 0.04)], links: ['root'] },
+    { id: 's3', name: 'Steady Wrist', description: '8% increased attack speed', kind: 'small', ...EXSANGUINATOR_LAYOUT.s3, mods: [mod('attackSpeed', 'increased', 0.08)], links: ['root'] },
+    { id: 'n1', name: 'Opened Veins', description: 'Attacks have +15% chance to Bleed; 25% increased physical ailment magnitude', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n1, mods: [mod('apply_bleed', 'flat', 0.15, ['attack']), mod('statusMagnitude', 'increased', 0.25, ['physical'])], links: ['s1'] },
+    { id: 'n2', name: 'Ruptured Veins', description: 'Gain Ruptured Veins — your hits load Hemorrhage, and reloading it POPS the damage still owed', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n2, mods: [mod('proc_ruptured_veins', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'The Deep Wound', description: '50% increased Hemorrhage pop damage; attacks have 10% chance to Hemorrhage', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n3, mods: [mod('popPower_hemorrhage', 'flat', 0.5), mod('apply_hemorrhage', 'flat', 0.1, ['attack'])], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Bloodletting', description: '8% of bleed damage leeched as life; 5% increased damage per Bleed stack', kind: 'notable', ...EXSANGUINATOR_LAYOUT.n4, mods: [mod('dotLeech_bleed', 'flat', 0.08), mod('damageVs_bleed', 'flat', 0.05)], links: ['s2'] },
+    { id: 'k1', name: 'Exsanguination', description: '+2 physical ailment stacks; 50% increased Hemorrhage pop damage; 12% more physical ailment magnitude', kind: 'keystone', ...EXSANGUINATOR_LAYOUT.k1, mods: [mod('ailmentStacks', 'flat', 2, ['physical']), mod('popPower_hemorrhage', 'flat', 0.5), mod('statusMagnitude', 'more', 0.12, ['physical'])], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    steps: [
+      {
+        offerLabel: 'Silence the desert watch, blade by blade',
+        zone: {
+          tileset: 'desert', direction: 'n', distance: 1, level: 'character',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'dune_stalker', weight: 3 }, { id: 'javelin_skirmisher', weight: 2 },
+              { id: 'hex_weaver', weight: 1 }, { id: 'sand_skitterer', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'No alarms were raised — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Bleed the mire of its profane altars',
+        zone: {
+          tileset: 'mire', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'spawners', spawnerId: 'bone_altar', count: [3, 4] },
+          packsOverride: {
+            count: [4, 6], size: [3, 4], table: [
+              { id: 'decay_wraith', weight: 2 }, { id: 'fen_hound', weight: 2 },
+              { id: 'plague_carrier', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The altars bled out — return to the quartermaster.',
+      },
+      {
+        offerLabel: 'Mark and end the untouchable Templar',
+        zone: {
+          tileset: 'highland', direction: 'n', distance: 2, level: 'character',
+          objective: { kind: 'boss', id: 'crusade_templar', levelBonus: 1, promote: { rarity: 'crowned', stacks: 2 } },
+          packsOverride: {
+            count: [5, 7], size: [3, 4], table: [
+              { id: 'crusade_footman', weight: 3 }, { id: 'crusade_zealot', weight: 2 },
+              { id: 'crusade_arbalest', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'The contract is closed — return, Exsanguinator.',
+      },
+    ],
+  },
+};
+
+/** STONEWROUGHT — the Juggernaut's SECRET calling (the second hidden path):
+ *  a Stonefather menhir remembers itself into highland and volcanic stone
+ *  country. Stone Communion + raised cairns — the walking mountain, the
+ *  mineral twin of the Greenwarden's walking forest. */
+const STONEWROUGHT_LAYOUT = fan(130); // spine → for_start
+const STONEWROUGHT: VocationDef = {
+  id: 'stonewrought', name: 'Stonewrought',
+  blurb: 'The mountain does not hurry, does not doubt, and does not move aside. Neither, now, do you.',
+  color: '#b0a890',
+  classId: 'juggernaut',
+  secret: {
+    site: {
+      npc: 'stonefather_menhir',
+      filter: { biomes: ['highland', 'volcanic'], minLevel: 24 },
+      chance: 0.45,
+      doodads: [
+        { kind: 'rock', count: 5, radius: 90, size: [14, 20] },
+        { kind: 'stone_cairn', count: 4, radius: 55, size: [8, 11] },
+      ],
+    },
+    classLockedDiscovery: true,
+    unlockedOffer: 'menu',
+    offerFlavor: 'The menhir does not speak so much as WEIGH. "You stand like something worth carving," the pressure says. "Prove the stone remembers you."',
+    discoveryText: 'The menhir grinds awake — the stone takes your measure.',
+  },
+  tree: [
+    { id: 's1', name: 'Granite Skin', description: '20% increased armor', kind: 'small', ...STONEWROUGHT_LAYOUT.s1, mods: [mod('armor', 'increased', 0.2)], links: ['root'] },
+    { id: 's2', name: 'Bones of the Hill', description: '+30 maximum life', kind: 'small', ...STONEWROUGHT_LAYOUT.s2, mods: [mod('life', 'flat', 30)], links: ['root'] },
+    { id: 's3', name: 'Patient Weight', description: '20% increased stagger window', kind: 'small', ...STONEWROUGHT_LAYOUT.s3, mods: [mod('staggerWindow', 'increased', 0.2)], links: ['root'] },
+    { id: 'n1', name: 'Stone Communion', description: 'Linger near living rock (cliffs, boulders, your own cairns) and take the mountain\'s patience: armor, poise, and quiet endurance', kind: 'notable', ...STONEWROUGHT_LAYOUT.n1, mods: [mod('attune_stone_communion', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Cairnraiser', description: 'Waymarks of raised stone follow your steps and crumble behind you — the mountain travels with its child', kind: 'notable', ...STONEWROUGHT_LAYOUT.n2, mods: [mod('terraform_stone_cairns', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n3', name: "Mountain's Grip", description: '+40 knockback strength; 30% increased poise damage', kind: 'notable', ...STONEWROUGHT_LAYOUT.n3, mods: [mod('knockback', 'flat', 40), mod('poiseDamage', 'increased', 0.3)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Bedrock Blood', description: '+3 life regeneration per second; 15% increased armor', kind: 'notable', ...STONEWROUGHT_LAYOUT.n4, mods: [mod('lifeRegen', 'flat', 3), mod('armor', 'increased', 0.15)], links: ['s2'] },
+    { id: 'k1', name: 'The Mountain Walks', description: 'Your cairns rise twice as fast. While standing still: 20% more armor and 8% less damage taken', kind: 'keystone', ...STONEWROUGHT_LAYOUT.k1, mods: [mod('terraform_stone_cairns', 'flat', 1), mod('armor', 'more', 0.2, undefined, 'stationary'), mod('damageTaken', 'more', -0.08, undefined, 'stationary')], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    offerAtLevel: 28,
+    steps: [
+      {
+        offerLabel: 'Quiet the hills that forgot their shape',
+        zone: {
+          tileset: 'highland', direction: 'e', distance: 1, level: 'character', anchor: 'accept',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'stone_golem', weight: 2 }, { id: 'stone_sentinel', weight: 2 },
+              { id: 'gnoll_butcher', weight: 2 }, { id: 'troll_mauler', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The hills hold their shape — return to the menhir.',
+      },
+      {
+        offerLabel: 'Endure the mountain\'s tantrum',
+        zone: {
+          tileset: 'volcanic', direction: 'e', distance: 2, level: 'character', anchor: 'accept',
+          objective: { kind: 'waves', waves: 5 },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'magma_worm', weight: 2 }, { id: 'fire_golem', weight: 1 },
+              { id: 'ember_elemental', weight: 2 }, { id: 'cinder_fiend', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The tantrum passed; you did not — return to the menhir.',
+      },
+      {
+        offerLabel: 'Fell the Bone Colossus',
+        zone: {
+          tileset: 'tundra', direction: 'e', distance: 2, level: 'character', anchor: 'accept',
+          objective: { kind: 'boss', id: 'bone_colossus', levelBonus: 1, promote: { rarity: 'crowned' } },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'It fell; you stood — return, Stonewrought.',
+      },
+    ],
+  },
+};
+
 // --- registry -----------------------------------------------------------------
 
 /** Every vocation, keyed by id. Adding one = one def above + one entry here. */
@@ -623,6 +1253,15 @@ export const VOCATIONS: Record<string, VocationDef> = {
   [ARCHMAGE.id]: ARCHMAGE,
   [HIEROPHANT.id]: HIEROPHANT,
   [GREENWARDEN.id]: GREENWARDEN,
+  [PLAGUELORD.id]: PLAGUELORD,
+  [SHADOWDANCER.id]: SHADOWDANCER,
+  [BLOODREAVER.id]: BLOODREAVER,
+  [STORMWEAVER.id]: STORMWEAVER,
+  [BASTION.id]: BASTION,
+  [CORSAIR.id]: CORSAIR,
+  [ASHBORN.id]: ASHBORN,
+  [EXSANGUINATOR.id]: EXSANGUINATOR,
+  [STONEWROUGHT.id]: STONEWROUGHT,
 };
 
 export const VOCATION_LIST: VocationDef[] = Object.values(VOCATIONS);

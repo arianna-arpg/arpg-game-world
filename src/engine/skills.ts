@@ -461,6 +461,13 @@ export interface ProjectileDelivery {
   salvoInterval?: number;
   /** Volley rank spacing in units (default 34; × the volleySpacing stat). */
   volleySpacing?: number;
+  /** RING NOVA: the volley leaves in a full 360° circle of EVENLY-spaced rays
+   *  around the origin (spreadDeg and the aim direction are ignored). By
+   *  default the whole ring ROTATES by a random phase within one slice per
+   *  cast — the D2 Poison Nova feel: a distant, stationary target sits
+   *  between rays on one cast and square on one the next, while point-blank
+   *  nothing escapes. `phaseJitter: false` pins the rays for a fixed ring. */
+  ring?: { phaseJitter?: boolean };
   /** DURATION-DRIVEN flight: the projectile lives this many seconds
    *  (× effectDuration) and RANGE FALLS OUT of speed × time — the honest
    *  frame for accel/decel flights (Momentum shots outrun their brothers;

@@ -194,6 +194,19 @@ export const CLASSES: ClassDef[] = [
     startNode: 'fin_start', // ailments from the dark → the Finesse point
   },
   {
+    id: 'necromancer', name: 'Necromancer',
+    description: 'Death is a resource. Raise what falls, curse what stands, and exhale a ring of venom that outlasts every argument — the classic corpse-and-poison artisan.',
+    color: '#a6c87a',
+    attributes: {
+      strength: 2, prowess: 0, fortitude: 2,
+      dexterity: 2, finesse: 2, charisma: 2,
+      intelligence: 12, wisdom: 14, willpower: 14,
+      vitality: 10,
+    },
+    bar: ['poison_nova', 'raise_dead', 'despair', null, null, null, null, null],
+    startNode: 'wis_start', // death-shepherding is Wisdom's craft, like the Summoner
+  },
+  {
     id: 'cleric', name: 'Cleric',
     description: 'The line holds because someone holds it together. Mends the wounded, sanctifies the ground, and swings a blessed arc when the fight closes in — the support archetype, played straight.',
     color: '#8ae0a8',

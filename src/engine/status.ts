@@ -90,6 +90,41 @@ export interface StatusDef {
    *  or foe — every `interval` seconds within `radius`, for the status's
    *  baseline × `factor`. The cursed-ground betrayal. */
   lashOut?: { interval: number; radius: number; factor: number };
+  /** POP-ON-REAPPLY (Hemorrhage): re-applying this status DETONATES
+   *  `fraction` of the REMAINING banked DoT (dps × stacks × time left) as an
+   *  immediate burst through the ordinary DoT pipeline, then the NEW
+   *  application takes over wholesale (dps and timer both replaced — refresh,
+   *  not max). The applier's generated popPower_<id> stat scales the
+   *  fraction, so the pop is as investable as everything else. Best on long,
+   *  non-stacking DoTs — the whole loop is "load the wound, then strike it". */
+  pop?: { fraction: number };
+}
+
+/** GLOBAL AILMENT BASELINE TUNING — the "physical damage is physical damage"
+ *  rebalance, as one config table instead of a 60-entry data sweep.
+ *
+ *  Skills author their own status chances (identity data). At the ROLL site
+ *  (world.resolveHit → tuneAilmentChance) an authored chance BELOW the
+ *  status's identityThreshold is treated as INCIDENTAL — a generic attack
+ *  that happened to carry a splash of bleed/burn — and is scaled by
+ *  incidentalScale. At/above the threshold the skill's ailment IS its
+ *  identity (Rend, Ignite) and the authored value stands untouched.
+ *
+ *  bleed 0×: plain hits never bleed — bleeding now comes from investment
+ *  (the generated apply_bleed family: passives, gems, vocation nodes — the
+ *  Exsanguinator restores-and-raises the old innate feel) or identity skills.
+ *  burn 0.35×: embers still catch, but real ignition is an investment.
+ *  Absent status id = untouched. Retune freely; monsters obey the same rule. */
+export const AILMENT_TUNING: Record<string, { identityThreshold: number; incidentalScale: number }> = {
+  bleed: { identityThreshold: 0.7, incidentalScale: 0 },
+  burn: { identityThreshold: 0.6, incidentalScale: 0.35 },
+};
+
+/** The effective chance for a skill-authored status effect (see AILMENT_TUNING). */
+export function tuneAilmentChance(id: string, authored: number): number {
+  const t = AILMENT_TUNING[id];
+  if (!t || authored >= t.identityThreshold) return authored;
+  return authored * t.incidentalScale;
 }
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
@@ -113,6 +148,19 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     element: 'physical',
     dotType: 'physical', stacking: true, maxStacks: 5,
     hitMagnitude: 0.3, baseline: { dps: 2.5, perLevel: 1 },
+  },
+  // HEMORRHAGE — bleed's antithesis: ONE deep wound instead of many shallow
+  // cuts. A long, slow, non-stacking physical drip whose REAPPLICATION pops
+  // a fraction of whatever damage was still owed (see StatusDef.pop), then
+  // reloads the wound with the new application. Reached like any ailment:
+  // apply_hemorrhage / minionApply_hemorrhage stats, skill effects, or the
+  // ruptured_veins proc — the Exsanguinator vocation is built on it.
+  hemorrhage: {
+    label: 'Hemorrhage', color: '#e04858', duration: 14,
+    element: 'physical',
+    dotType: 'physical',
+    hitMagnitude: 0.45, baseline: { dps: 2, perLevel: 0.9 },
+    pop: { fraction: 0.4 },
   },
   // Chill BUILDS UP: each application stacks intensity, and at max stacks
   // the chill is consumed into a FREEZE — a long, hard stun.
@@ -327,6 +375,18 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('manaRegen', 'increased', 0.25),
     ],
   },
+  // STONE COMMUNION — the mountain's patience while you stand among rock
+  // (the stone_communion attunement, data/attunements.ts): armored, harder
+  // to stagger, harder to shove. Wilts moments after you leave the stone.
+  stone_communion: {
+    label: 'Stone Communion', color: '#a8a090', duration: 1.6,
+    beneficial: true,
+    mods: [
+      mod('armor', 'increased', 0.45),
+      mod('staggerWindow', 'increased', 0.3),
+      mod('damageTaken', 'more', -0.06),
+    ],
+  },
   // PHASING: the bearer has no BODY for a while — walks through the pack
   // and the pack through it (crowd separation skips phasing actors; hits
   // and targeting are untouched). One stat, so movement skills, potions,
@@ -463,6 +523,13 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
   STAT_DEFS['minionApply_' + id] = {
     label: `Minions: Chance to apply ${def.label}`, base: 0, min: 0, max: 1, percent: true,
   };
+  // POP POWER — pop-bearing statuses only: scales the fraction of remaining
+  // DoT a reapplication detonates ("50% increased Hemorrhage pop" is one mod).
+  if (def.pop) {
+    STAT_DEFS['popPower_' + id] = {
+      label: `${def.label} Pop Damage`, base: 0, percent: true,
+    };
+  }
   // DOT LEECH — per ticking family: "5% of bleed damage leeched as life"
   // is one modifier on this generated stat, stamped at application and
   // paid to the APPLIER as the affliction ticks.
@@ -506,4 +573,8 @@ export interface ActiveStatus {
    *  dotLeech_<id> stat) + ticks banked toward the applier's healing. */
   leech?: number;
   leechAcc?: number;
+  /** POP-ON-REAPPLY (StatusDef.pop): burst damage banked by a reapplication —
+   *  paid out INSTANTLY by the next DoT tick through the ordinary typed
+   *  pipeline (mitigation discipline, DoT text, kill handling all standard). */
+  popAcc?: number;
 }

@@ -2514,6 +2514,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // the sylvan theming lives on the VocationDef that plants it.
   },
 
+  // THE STONEFATHER — the Stonewrought secret vocation's shrine (a standing
+  // menhir that remembers). Same passive+invulnerable factionless giver shape
+  // as the Heartwood.
+  stonefather_menhir: {
+    id: 'stonefather_menhir', name: 'the Stonefather',
+    color: '#b0a890', shape: 'octagon', radius: 16,
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
   // A point of interest, not a foe: crack it open for a guaranteed gem.
   gem_cache: {
     id: 'gem_cache', name: 'Gem Cache',

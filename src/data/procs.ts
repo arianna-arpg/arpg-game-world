@@ -75,6 +75,10 @@ export type ProcEffect =
   /** SUMMONS a minion beside the struck target (Forgebound's animated
    *  weapon — the hit itself does the conscripting). Capped per caster. */
   | { type: 'summon'; monsterId: string; duration: number; max: number }
+  /** Applies a STATUS to the struck target. DoT power is the status's
+   *  caster-less baseline × `magnitude` (golden rule 4: never the hit's own
+   *  roll) — potency/pop investment still applies at the application site. */
+  | { type: 'status'; status: string; magnitude?: number }
   /** HEALS the proc's OWNER — flat and/or a fraction of max life (through
    *  healBy, so healTaken gates it like every heal). */
   | { type: 'heal'; flat?: number; pctMax?: number }
@@ -417,6 +421,16 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'summon_phantasm', name: 'Phantasm',
     color: '#9ad8e8', trigger: 'hit', ppm: 10, minionCarry: true,
     effect: { type: 'summon', monsterId: 'phantasm', duration: 8, max: 5 },
+  },
+
+  // RUPTURED VEINS — the Hemorrhage loader (see engine/status.ts): steady
+  // hits keep re-opening the deep wound, and every re-application POPS a
+  // fraction of the damage still owed. The proc is the rhythm; popPower_
+  // investment is the amplitude. The Exsanguinator's signature grant.
+  ruptured_veins: {
+    id: 'ruptured_veins', name: 'Ruptured Veins',
+    color: '#e04858', trigger: 'hit', ppm: 9,
+    effect: { type: 'status', status: 'hemorrhage', magnitude: 1.4 },
   },
 
   // CRIT-GATED gains: two ids, two grantors, two independent dice — a

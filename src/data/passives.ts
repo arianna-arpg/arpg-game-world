@@ -331,6 +331,11 @@ const nodes: PassiveNode[] = [
   // RECUPERATION exemplar (the stagger-heal stat is GLOBAL — a passive,
   // a status, or a monster's innate can all carry it):
   { id: "stalwart_recovery", name: "Stalwart Recovery", description: "30% of hits that land on your life flow back as healing over the next 6 seconds", kind: "notable", x: 2560, y: 4360, mods: [mod("recuperate", "flat", 0.3)], links: ["enduring_bulwark"] },
+  // AILMENT INVESTMENT (the baseline rebalance's other half — see
+  // engine/status.ts AILMENT_TUNING): plain hits no longer bleed and barely
+  // ignite; these notables are the tree's way to buy the chances back.
+  { id: "exsanguinate", name: "Exsanguinate", description: "Attacks have 20% chance to Bleed; 20% increased physical ailment magnitude", kind: "notable", x: 3480, y: 1560, mods: [mod("apply_bleed", "flat", 0.2, ["attack"]), mod("statusMagnitude", "increased", 0.2, ["physical"])], links: ["swb_s3"] },
+  { id: "kindling_doctrine", name: "Kindling Doctrine", description: "Spells have 15% chance to Ignite; 20% increased fire ailment magnitude", kind: "notable", x: 1230, y: 3300, mods: [mod("apply_burn", "flat", 0.15, ["spell"]), mod("statusMagnitude", "increased", 0.2, ["fire"])], links: ["sor_s3"] },
 ];
 
 // --- VOCATION MINI-TREES -------------------------------------------------------

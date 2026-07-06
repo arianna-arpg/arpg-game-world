@@ -268,6 +268,32 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 2, keepDistance: 240 },
   },
 
+  // POISON NOVA — the D2 Necromancer heirloom: ONE cast, a wall of venom in
+  // every direction. Feeble direct hits; the POISON is the payload — long,
+  // stacking, and cruel. The rays are evenly spaced but the whole ring
+  // rotates randomly each cast (ProjectileDelivery.ring): a distant loiterer
+  // slips between rays one breath and eats one the next, while at melee
+  // reach nothing escapes. The Necromancer's signature.
+  poison_nova: {
+    id: 'poison_nova', name: 'Poison Nova',
+    description: 'Exhale a ring of virulence — a circle of slow venom bolts that leave a long, merciless poison. The ring settles differently with every breath.',
+    tags: ['spell', 'projectile', 'chaos', 'aoe'], color: '#66c83c',
+    manaCost: 26, cooldown: 3.5, useTime: 0.8,
+    baseDamage: { chaos: [2, 4] },
+    delivery: {
+      type: 'projectile', speed: 240, radius: 9, range: 380,
+      count: 24, ring: {},
+    },
+    effects: [
+      { type: 'damage' },
+      // The nova's poison runs nearly twice the ailment's book length — the
+      // "very long, nasty" D2 tail (durationOverride is the fixed-clock lever).
+      { type: 'status', status: 'poison', chance: 1, magnitude: 0.9, durationOverride: 11 },
+    ],
+    requirements: { willpower: 14, intelligence: 10 }, // the Necromancer's level-1 signature
+    ai: { range: 200, weight: 3 },
+  },
+
   // SPARKFIELD (the channel-and-release): held, it PLANTS sparks under the
   // enemies in reach — semi-randomly (the scatter variance) — and every
   // spark waits, ARMED. Let go and the whole field discharges in the order

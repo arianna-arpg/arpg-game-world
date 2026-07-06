@@ -11,7 +11,7 @@
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
-import { baselineStatusDps, STATUS_DEFS, type ActiveStatus } from './status';
+import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, type BrainPhase, type CastingState, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
@@ -38,7 +38,7 @@ import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
-import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformStat } from '../data/attunements';
+import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat } from './stats';
@@ -1417,6 +1417,7 @@ export class World {
     lava_orb: (d, eff) => this.effectLavaOrb(d, eff),
     descent_trap: (d, eff) => this.effectDescentTrap(d, eff),
     spore_puff: (d, eff) => this.effectSporePuff(d, eff),
+    growth_lash: (d, eff) => this.effectGrowthLash(d, eff),
   };
   /** Reusable hidden caster for environmental hazards (lava orbs) — like demonCaster. */
   private hazardCaster: Actor | null = null;
@@ -1467,6 +1468,11 @@ export class World {
    *  asks the main loop to open the CHOICE menu (same flag indirection as the
    *  Caravanner — a subclass pick must never dwell-auto-accept at random). */
   vocationOfferRequested = false;
+  /** ONE-SHOT: the run wrote something ACCOUNT-scoped mid-run (a vocation
+   *  unlock's ledger key) — the main loop persists the account when it sees
+   *  this, so quitting without dying can't lose the unlock. World stays
+   *  persistence-free (it can't import the save layer); main.ts owns disk. */
+  accountDirty = false;
   /** The player closed the vocation menu without choosing — stop re-offering
    *  until they step away from the giver (cleared when the dwell breaks). */
   private vocationOfferDeclined = false;
@@ -5460,6 +5466,17 @@ export class World {
           pos: at, radius: rand(def.size[0], def.size[1]),
           kind: def.doodadKind, rot: rand(0, Math.PI * 2), wilt: 0,
         };
+        // ARMED GROWTHS (TerraformDef.effect + the terraformFx_<id> gate): the
+        // growth carries an owner-serving combat effect — Bramble Ward's
+        // lashing saplings. Power stamped from the planter's level at growth.
+        if (def.effect && a.sheet.get(terraformFxStat(def.id)) > 0) {
+          d.effect = {
+            id: def.effect.id, target: 'owner', ownerId: a.id,
+            interval: def.effect.interval, radius: def.effect.radius,
+            chance: def.effect.chance,
+            power: def.effect.base + def.effect.perLevel * Math.max(0, a.level - 1),
+          };
+        }
         this.doodads.push(d);
         const life = rand(def.ttl[0], def.ttl[1]);
         this.transientDoodads.push({ d, ttl: life, maxTtl: life, owner: a, kind: def.id });
@@ -5468,10 +5485,19 @@ export class World {
   }
 
   /** Does an actor match a doodad effect's target side? 'ally' = a `faction` member;
-   *  'opponent' (default) = the player or an enemy NOT of the faction (never its kin).
+   *  'opponent' (default) = the player or an enemy NOT of the faction (never its kin);
+   *  'owner' = the effect SERVES the actor whose id it carries (a terraform
+   *  growth fighting for its planter) — it reaches that owner's enemies.
    *  Shared by every effect so a new one (the Thicket-heal) reuses the scan. */
   private isEffectTarget(x: Actor, eff: DoodadEffect): boolean {
     if (x.dead || x.downed || x.passive || x.construct) return false;
+    if (eff.target === 'owner') {
+      const owner = this.actors.find(a => a.id === eff.ownerId && !a.dead);
+      if (!owner) return false;
+      return owner.team === 'player'
+        ? x.team === 'enemy'
+        : x.team === 'player' && x.kind !== 'minion' && x.kind !== 'mercenary';
+    }
     if (eff.target === 'ally') return !!eff.faction && x.faction === eff.faction;
     // Opponents: the hero(es) — but NOT the player's own minions/mercs (match the
     // hitAll convention) — and enemies not of the effect's OWN faction. A faction-
@@ -5491,6 +5517,22 @@ export class World {
       if (dd < bd) { bd = dd; best = x; }
     }
     return best;
+  }
+
+  /** A terraform GROWTH lashes the nearest enemy of its PLANTER (target:'owner' —
+   *  the sapling fights for its Greenwarden). Physical, mitigated like any typed
+   *  source; power stamped at growth from the TerraformDef (base + perLevel). */
+  private effectGrowthLash(d: Doodad, eff: DoodadEffect): void {
+    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
+    if (!victim) return;
+    if (!chance(eff.chance)) return;
+    const taken = mitigateTyped(victim, { physical: eff.power });
+    if (taken <= 0 || victim.invulnerable) return;
+    victim.life -= taken;
+    victim.hitFlash = 0.15;
+    this.text(victim.pos, Math.round(taken).toString(), '#6ac860', 12);
+    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: eff.radius * 0.7, color: '#6ac860', life: 0.22, maxLife: 0.22 });
+    if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
 
   /** A tentacle-adorned doodad lashes at the nearest OPPONENT in reach (resolved by
@@ -7958,6 +8000,7 @@ export class World {
     m.allocated.add(vocationRootId(vocId)); // the crest is free — its NODES cost points
     bumpLedger(this.ledger, vocationLedgerKey(vocId));
     this.account.ledger[vocationLedgerKey(vocId)] = 1;
+    this.accountDirty = true; // main.ts persists — the unlock must survive a quit-without-dying
     this.recalcSeat(seat);
     this.markMetaDirty(seat);
     this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 40),
@@ -9650,6 +9693,18 @@ export class World {
               origin.x + Math.cos(perp) * gap * rank,
               origin.y + Math.sin(perp) * gap * rank), d.radius);
             this.spawnProjectile(caster, inst, at, caster.facing, { mult: useMult, flat: flatBonus });
+          }
+          break;
+        }
+        // RING NOVA (ProjectileDelivery.ring): a full circle of EVENLY spaced
+        // rays; the whole ring rotates by a random phase within one slice per
+        // cast (unless pinned) — the D2 Poison Nova coverage lottery at range.
+        if (d.ring) {
+          const phase = d.ring.phaseJitter === false
+            ? 0 : rand(0, (Math.PI * 2) / Math.max(1, count));
+          for (let i = 0; i < count; i++) {
+            const ang = phase + (i / Math.max(1, count)) * Math.PI * 2;
+            this.spawnProjectile(caster, inst, origin, ang, { mult: useMult, flat: flatBonus });
           }
           break;
         }
@@ -13476,7 +13531,11 @@ export class World {
           this.text(target.pos, 'resisted', '#9ab0c8', 11);
           continue;
         }
-        if (chance(Math.min(1, fx.chance + bonusChance))) {
+        // GLOBAL BASELINE TUNING: incidental (sub-identity-threshold) authored
+        // chances are scaled per AILMENT_TUNING — plain physical hits no longer
+        // bleed, embers barely catch; investment (statusChance, the apply_
+        // family) and identity skills carry ailments now. See engine/status.ts.
+        if (chance(Math.min(1, tuneAilmentChance(fx.status, fx.chance) + bonusChance))) {
           // Hit-derived dps, FLOORED by the status's caster-less baseline (a
           // feeble hit still ignites like an ignite), × the potency crank —
           // × the linked-hex swell (Malediction: each hex fattens the debuff).
@@ -13530,6 +13589,7 @@ export class World {
           const fxScale = (fx.durationOverride !== undefined
             ? fx.durationOverride / (STATUS_DEFS[fx.status]?.duration || 1)
             : durScale) * hexDur;
+          this.notePopFx(target, fx.status);
           target.applyStatus(fx.status, dpsOut, fxScale, caster.name, {
             // Propagation is a CHANCE rolled once at application (1 = the
             // old always-spreads flag).
@@ -13539,6 +13599,7 @@ export class World {
             casterId: caster.id,
             brood: instanceBrood(inst),
             leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
+            popBonus: caster.sheet.get('popPower_' + fx.status, tags, extra) || undefined,
           });
           // Applying a status is a trigger (Bloodletter's Rhythm).
           this.rollStatusProcs(caster, inst, target, fx.status, tags, extra, depth);
@@ -13624,6 +13685,7 @@ export class World {
           armedType = 'chaos';
           dpsOut2 = armed * caster.sheet.get('doomDot', tags, extra);
         }
+        this.notePopFx(target, sid);
         target.applyStatus(sid, dpsOut2, durScale, caster.name, {
           propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
@@ -13631,6 +13693,7 @@ export class World {
           brood: instanceBrood(inst),
           leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
+          popBonus: caster.sheet.get('popPower_' + sid, tags, extra) || undefined,
         });
         // Stat-granted applications trigger statusApply procs too.
         this.rollStatusProcs(caster, inst, target, sid, tags, extra, depth);
@@ -13988,6 +14051,18 @@ export class World {
    *  that fired it — everything this payload causes (hits, charge/buff
    *  gains, scheduled bursts) is stamped depth + 1, so the one depth rule
    *  governs hit chains and gain chains identically (no bespoke paths). */
+  /** The POP flourish: a reapplication of a pop-bearing status (StatusDef.pop)
+   *  is about to detonate the wound — flash it before applyStatus banks the
+   *  burst (the damage itself pays out through the DoT pipeline next tick). */
+  private notePopFx(target: Actor, sid: string): void {
+    const sdef = STATUS_DEFS[sid];
+    if (!sdef?.pop) return;
+    const live = target.statuses.find(s => s.id === sid && s.dps > 0 && s.remaining > 0);
+    if (!live) return;
+    this.text(vec(target.pos.x, target.pos.y - 20), `${sdef.label} POPS!`, sdef.color ?? '#e04858', 14);
+    this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14, color: sdef.color ?? '#e04858', life: 0.2, maxLife: 0.2 });
+  }
+
   private executeProc(proc: ProcDef, caster: Actor, inst: SkillInstance | null, target: Actor | null, depth = 0): void {
     const at = target ?? caster;
     this.text(vec(at.pos.x, at.pos.y - 14), proc.name + '!', proc.color, 12);
@@ -14002,6 +14077,29 @@ export class World {
           inst ? skillContextTags(inst.def) : undefined,
           inst ? instanceMods(inst) : undefined), depth + 1);
         break;
+      // Applies a status to the STRUCK target — DoT power from the status's
+      // caster-less baseline × magnitude (golden rule 4), pop/potency
+      // investment honored exactly like a stat-granted application.
+      case 'status': {
+        if (!target || target.dead) break;
+        const sdef = STATUS_DEFS[fx.status];
+        if (!sdef) break;
+        const tags = inst ? skillContextTags(inst.def) : undefined;
+        const extra = inst ? instanceMods(inst) : undefined;
+        const dps = sdef.dotType
+          ? baselineStatusDps(fx.status, this.zone.level) * (fx.magnitude ?? 1)
+            * caster.sheet.get('statusMagnitude',
+              sdef.dotType && inst ? skillContextTags(inst.def, [sdef.dotType]) : tags, extra)
+          : 0;
+        this.notePopFx(target, fx.status);
+        target.applyStatus(fx.status, dps,
+          caster.sheet.get('effectDuration', tags, extra), proc.name, {
+            casterId: caster.id,
+            leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
+            popBonus: caster.sheet.get('popPower_' + fx.status, tags, extra) || undefined,
+          });
+        break;
+      }
       // The proc's OWNER mends — through healBy, so healTaken gates it
       // like every heal (golden rule 5).
       case 'heal':

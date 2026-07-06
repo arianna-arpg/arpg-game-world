@@ -1052,6 +1052,9 @@ export class Actor {
       brood?: ActiveStatus['brood'];
       /** DOT-LEECH fraction (the applier's dotLeech_<id> stat). */
       leech?: number;
+      /** POP scaling from the applier (the popPower_<id> stat) — additive to
+       *  the StatusDef.pop fraction's implicit 1× (0.5 = 50% bigger pops). */
+      popBonus?: number;
     },
   ): void {
     const def = STATUS_DEFS[id];
@@ -1108,6 +1111,17 @@ export class Actor {
         existing.dps = dps;
         existing.remaining = duration;
       }
+    } else if (existing && def.pop && !fixedFuse) {
+      // POP-ON-REAPPLY (Hemorrhage): detonate a fraction of the REMAINING
+      // banked DoT — paid out by the next tick through the ordinary typed
+      // pipeline — then the NEW application takes the wound over wholesale
+      // (dps AND timer replaced: reload, not top-up).
+      const owed = existing.dps * existing.stacks * existing.remaining;
+      const frac = def.pop.fraction * (1 + Math.max(0, opts?.popBonus ?? 0));
+      if (owed > 0 && frac > 0) existing.popAcc = (existing.popAcc ?? 0) + owed * frac;
+      existing.dps = dps;
+      existing.remaining = duration;
+      existing.total = duration;
     } else if (existing) {
       if (!fixedFuse) existing.remaining = Math.max(existing.remaining, duration);
       existing.dps = Math.max(existing.dps, dps);
@@ -1274,6 +1288,15 @@ export class Actor {
         if (s.brood) s.broodAcc = (s.broodAcc ?? 0) + tick;
         // DOT LEECH banks toward the applier's healing (world pays it).
         if (s.leech) s.leechAcc = (s.leechAcc ?? 0) + tick * s.leech;
+      }
+      // POP payout (StatusDef.pop): a reapplication's banked burst lands NOW,
+      // one-shot, through the same typed pool as the ticks themselves.
+      if (s.popAcc) {
+        const key = STATUS_DEFS[s.id]?.dotType ?? 'untyped';
+        dot ??= {};
+        dot[key] = (dot[key] ?? 0) + s.popAcc;
+        if (s.leech) s.leechAcc = (s.leechAcc ?? 0) + s.popAcc * s.leech;
+        s.popAcc = 0;
       }
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);

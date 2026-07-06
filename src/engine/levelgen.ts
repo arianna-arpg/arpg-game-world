@@ -105,9 +105,13 @@ export interface DoodadEffect {
   /** The side this effect serves. */
   faction?: string;
   /** Who the effect reaches for, resolved by the shared target scan: 'opponent'
-   *  (the default — the player or a non-`faction` enemy, e.g. a tentacle SWING) or
-   *  'ally' (a `faction` member, e.g. a Thicket pulsing HEAL to its Sylvan kin). */
-  target?: 'opponent' | 'ally';
+   *  (the default — the player or a non-`faction` enemy, e.g. a tentacle SWING),
+   *  'ally' (a `faction` member, e.g. a Thicket pulsing HEAL to its Sylvan kin),
+   *  or 'owner' — the effect SERVES the actor `ownerId` names and reaches that
+   *  owner's enemies (a terraform growth fighting for its planter). */
+  target?: 'opponent' | 'ally' | 'owner';
+  /** target:'owner' only — the actor id the effect fights for. */
+  ownerId?: number;
   /** Seconds between attempts. */
   interval: number;
   /** Live countdown, managed by the engine tick (omit at authoring). */

@@ -63,6 +63,19 @@ export interface TerraformDef {
   size: [number, number];
   /** Living growths per bearer — the oldest is released past the cap. */
   maxAlive: number;
+  /** OPT-IN combat effect stamped onto growths (target:'owner' — the growth
+   *  fights for its planter) — ONLY for bearers whose `terraformFx_<id>` stat
+   *  is > 0, so the aggression is its own investment on top of the growing.
+   *  Power scales with the planter's level at growth time. */
+  effect?: {
+    /** world.ts doodadEffects registry id (e.g. 'growth_lash'). */
+    id: string;
+    interval: number;
+    radius: number;
+    chance: number;
+    base: number;
+    perLevel: number;
+  };
 }
 
 // --- registries ----------------------------------------------------------------
@@ -73,6 +86,16 @@ export const ATTUNEMENTS: Record<string, DoodadAttunementDef> = {
     kinds: ['tree', 'sapling', 'thicket', 'palm'],
     radius: 90,
     status: 'verdant_communion',
+    attuneTime: 1.2,
+  },
+  // STONE COMMUNION — the Stonewrought's twin of the verdant rite: near
+  // living rock (or your own raised cairns) the flesh takes the mountain's
+  // patience — armor and poise-stubbornness while you hold ground.
+  stone_communion: {
+    id: 'stone_communion', label: 'Stone Communion',
+    kinds: ['rock', 'cliff', 'stone_cairn'],
+    radius: 90,
+    status: 'stone_communion',
     attuneTime: 1.2,
   },
 };
@@ -86,6 +109,22 @@ export const TERRAFORMS: Record<string, TerraformDef> = {
     radius: [55, 130],
     size: [7, 11],
     maxAlive: 4,
+    // Bramble Ward (terraformFx_sapling_ring > 0): the warden's saplings
+    // LASH — thorned canes whip the planter's enemies while they stand.
+    effect: { id: 'growth_lash', interval: 1.3, radius: 85, chance: 0.8, base: 5, perLevel: 1.4 },
+  },
+  // STONE CAIRNS — the Stonewrought's terraform: raised waymarks of rock
+  // that count as stone for attunement (the walking mountain, like the
+  // walking forest). Non-blocking rubble; the renderer's generic disc reads
+  // as stone until it earns a bespoke branch.
+  stone_cairns: {
+    id: 'stone_cairns', label: 'Cairnraiser',
+    doodadKind: 'stone_cairn',
+    interval: 6,
+    ttl: [10, 15],
+    radius: [50, 110],
+    size: [8, 12],
+    maxAlive: 3,
   },
 };
 
@@ -96,6 +135,8 @@ export const TERRAFORM_LIST: TerraformDef[] = Object.values(TERRAFORMS);
 export function attuneStat(id: string): string { return 'attune_' + id; }
 /** The stat whose value multiplies a terraform's growth RATE for its bearer. */
 export function terraformStat(id: string): string { return 'terraform_' + id; }
+/** The stat whose value (> 0) arms a terraform's authored combat effect. */
+export function terraformFxStat(id: string): string { return 'terraformFx_' + id; }
 
 // Register the generated stat families (the status.ts apply_<id> idiom: the
 // stats live beside the registry they mirror, so they can never drift).
@@ -108,11 +149,20 @@ for (const def of TERRAFORM_LIST) {
   STAT_DEFS[terraformStat(def.id)] = {
     label: `Terraform: ${def.label}`, base: 0, min: 0,
   };
+  // The aggression gate: growths carry the def's combat effect only for
+  // bearers invested in terraformFx_<id> (Bramble Ward and kin).
+  if (def.effect) {
+    STAT_DEFS[terraformFxStat(def.id)] = {
+      label: `Terraform: ${def.label} — growths fight`, base: 0, min: 0,
+    };
+  }
 }
 
 // The sapling: a young, NON-blocking tree (a wilting solid would fence the
 // arena). Registered here so the kind exists wherever attunements load.
 registerDoodadRule('sapling', { overlap: 'ground' });
+// Cairn rubble: non-blocking raised stone (the Stonewrought's terraform).
+registerDoodadRule('stone_cairn', { overlap: 'ground' });
 
 /** Authoring guard used by validateContent — attunement reach must stay inside
  *  the spatial index's one-bucket completeness guarantee. */

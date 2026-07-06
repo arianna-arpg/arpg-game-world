@@ -383,6 +383,12 @@ function frame(now: number): void {
         world.vocationOfferRequested = false;
         if (!ui.vocationOpen) ui.showVocationMenu();
       }
+      // The run wrote an ACCOUNT-scoped unlock (a vocation grant) — persist it
+      // now, so closing the game without dying can't lose it.
+      if (world.accountDirty) {
+        world.accountDirty = false;
+        saveAccount(account);
+      }
       // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
       if (world.caravanReturnRequested) {
         world.caravanReturnRequested = false;
