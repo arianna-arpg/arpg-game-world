@@ -211,6 +211,12 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     dpsCurve: 'ramp',
     hitMagnitude: 0.45, baseline: { dps: 3.5, perLevel: 1.3 },
   },
+  // JINXED (the unlucky mark): the afflicted's own damage rolls twice and
+  // keeps the LOWER — misfortune as a debuff (the dark twin of Lucky).
+  jinxed: {
+    label: 'Jinxed', color: '#8a78a8', duration: 5,
+    mods: [mod('unluckyChance', 'flat', 1)],
+  },
   // MADDENED (the cursed-ground betrayal): the afflicted lashes at
   // whatever is NEAREST — friend or foe alike — until the fog lifts.
   maddened: {
@@ -437,6 +443,14 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
   STAT_DEFS['damageVs_' + id] = {
     label: `Damage vs ${def.label} (per stack)`, base: 0, percent: true,
   };
+  // DOT LEECH — per ticking family: "5% of bleed damage leeched as life"
+  // is one modifier on this generated stat, stamped at application and
+  // paid to the APPLIER as the affliction ticks.
+  if (def.dotType) {
+    STAT_DEFS['dotLeech_' + id] = {
+      label: `${def.label} Damage Leeched as Life`, base: 0, min: 0, max: 0.5, percent: true,
+    };
+  }
 }
 
 export interface ActiveStatus {
@@ -468,4 +482,8 @@ export interface ActiveStatus {
    *  next hatch roll (fed by Actor.updateTimers, spent by the world). */
   brood?: { monsterId: string; perDamage: number; duration: number; max: number };
   broodAcc?: number;
+  /** DOT LEECH fraction stamped at application (the applier's
+   *  dotLeech_<id> stat) + ticks banked toward the applier's healing. */
+  leech?: number;
+  leechAcc?: number;
 }

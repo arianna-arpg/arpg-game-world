@@ -268,6 +268,86 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 2, keepDistance: 240 },
   },
 
+  // SPARKFIELD (the channel-and-release): held, it PLANTS sparks under the
+  // enemies in reach — semi-randomly (the scatter variance) — and every
+  // spark waits, ARMED. Let go and the whole field discharges in the order
+  // you laid it, one crack after another (Chaotic Discharge shuffles it).
+  sparklattice: {
+    id: 'sparklattice', name: 'Sparklattice',
+    description: 'Channel to plant sparks beneath your enemies — loosely, where the storm decides. RELEASE, and every spark detonates in the order it was laid.',
+    tags: ['spell', 'lightning', 'aoe', 'channel', 'duration'], color: '#ffe94a',
+    manaCost: 5, cooldown: 0, useTime: 0,
+    baseDamage: { lightning: [9, 16] },
+    channel: { interval: 0.55, move: 'slowed', moveFactor: 0.5 },
+    delivery: {
+      type: 'storm', count: [1, 2], interval: 0.2,
+      areaRadius: 240, hitRadius: 62, castRange: 360,
+      atEnemies: true, scatter: 55,
+      awaitRelease: { order: 'placed', interval: 0.09 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.2 },
+    ],
+    requirements: { intelligence: 18 },
+    ai: { range: 320, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11, ['lightning'])] },
+  },
+
+  // RENEW (the priest's whisper): a single-target mend-over-time — the
+  // buff IS lifeRegen for a while (heal-as-stat, nothing bespoke).
+  renew: {
+    id: 'renew', name: 'Renew',
+    description: 'A whispered mending on one ally: strong regeneration over 8 seconds. Quiet, portable, stackable with everything.',
+    tags: ['spell', 'heal', 'buff', 'targeted', 'duration', 'instant'], color: '#8ae0a8',
+    manaCost: 10, cooldown: 2, useTime: 0,
+    targeting: { target: 'ally', castRange: 460, fallback: 'self' },
+    delivery: { type: 'target' },
+    effects: [{
+      type: 'buff', id: 'renew', duration: 8,
+      mods: [mod('lifeRegen', 'flat', 6)],
+    }],
+    requirements: { willpower: 12 },
+    ai: { range: 420, weight: 3 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.1)] },
+  },
+
+  // ======================= The Guard hall ===================================
+  // SHIELD CHARGE: the wall moves — a shield-first dash that bowls through.
+  shield_charge: {
+    id: 'shield_charge', name: 'Shield Charge',
+    description: 'Put the shield up and RUN: a bowling charge that batters everything in the corridor aside, with a chance to stun.',
+    tags: ['attack', 'melee', 'movement', 'physical', 'guard'], color: '#c8d8e8',
+    manaCost: 8, cooldown: 5, useTime: 0,
+    baseDamage: { physical: [12, 20] },
+    delivery: { type: 'dash', distance: 260, speed: 900, width: 46 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 160 },
+      { type: 'status', status: 'stun', chance: 0.35 },
+    ],
+    requirements: { strength: 12, fortitude: 8 },
+    ai: { range: 240, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1, ['melee'])] },
+  },
+
+  // AEGIS OF DAWN: the guard that SHELTERS — while held, allies in its
+  // shadow mend (the guardMend stat, worn innately here and grantable
+  // anywhere).
+  aegis_of_dawn: {
+    id: 'aegis_of_dawn', name: 'Aegis of Dawn',
+    description: 'Raise a consecrated guard: while you hold it, allies near you heal steadily. The wall that keeps the line alive.',
+    tags: ['guard', 'heal', 'duration'], color: '#f8e8c8',
+    manaCost: 6, cooldown: 3, useTime: 0,
+    delivery: { type: 'self' },
+    guard: { shieldLife: 70, arcDeg: 150, moveFactor: 0.35 },
+    innateMods: [mod('guardMend', 'flat', 9)],
+    effects: [],
+    requirements: { willpower: 14, fortitude: 8 },
+    ai: { range: 160, weight: 1 },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.12), mod('healPower', 'increased', 0.06)] },
+  },
+
   // HALO (the expansion-only ring): a circle of dawnlight races outward,
   // striking each enemy ONCE as it crosses them and washing allies as it
   // goes — then FIZZLES at the apex (retract.fizzle: no contraction, the

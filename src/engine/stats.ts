@@ -318,6 +318,23 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  block; below 1 the remainder lands as chip damage — bosses can carry
    *  high block chance with low power and stay pressureable). */
   blockPower:     { label: 'Block Power', base: 1, min: 0, max: 1, percent: true },
+  /** FLAT damage a block eats before blockPower's fraction (the WoW-style
+   *  block VALUE) — the two lanes scale independently: flat mitigation on
+   *  a chance, and percentage mitigation on a chance. */
+  blockValue:     { label: 'Block Value', base: 0, min: 0 },
+  /** RECUPERATION (the stagger-heal): this fraction of every hit that
+   *  lands on LIFE flows back as healing over recuperateTime seconds —
+   *  wounds that half-close if you survive them. */
+  recuperate:     { label: 'Recuperation', base: 0, min: 0, max: 0.75, percent: true },
+  recuperateTime: { label: 'Recuperation Time', base: 6, min: 1 },
+  /** LUCKY HITS: chance to roll damage twice and keep the HIGHER —
+   *  texture for wide-variance builds (its dark twin below can be
+   *  inflicted: the jinxed roll twice and keep the LOWER). */
+  luckyChance:    { label: 'Lucky Hit Chance', base: 0, min: 0, max: 1, percent: true },
+  unluckyChance:  { label: 'Unlucky Hit Chance', base: 0, min: 0, max: 1, percent: true },
+  /** GUARD MEND: allies near you heal this much per second WHILE you hold
+   *  a guard stance — the aegis that shelters, not just blocks. */
+  guardMend:      { label: 'Guard Mending', base: 0, min: 0 },
   /** Flat life gained when you block a hit (the deterministic floor under
    *  the chance-based on-block procs). */
   lifeOnBlock:    { label: 'Life Gained on Block', base: 0, min: 0 },
@@ -860,6 +877,16 @@ for (const from of DAMAGE_TYPES) {
 
 export function conversionStat(from: DamageType, to: DamageType): string {
   return `convert_${from}_${to}`;
+}
+
+// MIN/MAX added damage (the D2 lane): addedMin_<type> raises only the
+// bottom of the roll, addedMax_<type> only the top — so "+30 to maximum
+// lightning damage" builds the huge-variance thunder D2 promised, while
+// min-investment steadies the floor. Flat added<Type> still moves both.
+for (const t of DAMAGE_TYPES) {
+  const cap = t[0].toUpperCase() + t.slice(1);
+  STAT_DEFS[`addedMin_${t}`] = { label: `Minimum ${cap} Damage`, base: 0, min: 0 };
+  STAT_DEFS[`addedMax_${t}`] = { label: `Maximum ${cap} Damage`, base: 0, min: 0 };
 }
 
 const ADDED_DAMAGE_STAT: Record<DamageType, string> = {

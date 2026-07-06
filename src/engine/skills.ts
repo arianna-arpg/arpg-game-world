@@ -850,6 +850,14 @@ export interface StormDelivery {
   /** SPARKFIELD: strikes plant UNDER enemies inside the scatter disc
    *  (nearest first; leftovers scatter at random ground as usual). */
   atEnemies?: true;
+  /** PLACEMENT VARIANCE: under-target strikes land within this many units
+   *  of the enemy instead of dead-on — the semi-random sparkfield feel. */
+  scatter?: number;
+  /** AWAIT RELEASE (the channeled sparkfield): strikes placed by a held
+   *  CHANNEL arm silently and detonate only when the channel ENDS — in
+   *  placement order (or shuffled: `order` 'random' / the Chaotic
+   *  Discharge support flip), one every `interval` seconds. */
+  awaitRelease?: { order?: 'placed' | 'random'; interval?: number };
   /** TELEGRAPHED AREA (Levinfall): the whole scatter disc is SHOWN for
    *  this many seconds before the first strike lands — the honest circle.
    *  Distinct from target-seeking storms: the RADIUS is the promise. */
@@ -2251,6 +2259,13 @@ export interface SupportDef {
    *  `after` accumulated seconds is driven MAD (the `maddened` status —
    *  it lashes at whatever is nearest, friend or foe). */
   madden?: { after: number };
+  /** SPARK RELEASE ORDER flip (Chaotic Discharge): armed await-release
+   *  sparks detonate SHUFFLED instead of in placement order. */
+  releaseOrder?: 'placed' | 'random';
+  /** HEAL-OVER-TIME conversion (Mending Echoes): the host's direct heals
+   *  pour as a restore stream instead — total × `factor` over `seconds`
+   *  (slightly stronger, meaningfully slower; the Renew-maker). */
+  healOverTime?: { seconds: number; factor: number };
   /** CHARGE-TAP grafts: the host gains these ChargeGainSpec taps while
    *  socketed ("gain Frenzy every 3s while channeling this skill" is a
    *  support). Merged with the skill's own by instanceChargeGain. */

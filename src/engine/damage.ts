@@ -80,13 +80,35 @@ export function rollSkillDamage(
   const effectiveness = def.addedEffectiveness ?? 1;
   const amounts: Partial<Record<DamageType, number>> = {};
 
+  // LUCKY / UNLUCKY rolls: a made lucky roll doubles the dice and keeps
+  // the HIGHER; unlucky (usually inflicted — the jinxed) keeps the LOWER.
+  // Both at once cancel out. Rolled once per use, applied to every range.
+  const lucky = chance(caster.sheet.get('luckyChance', baseTags, extra));
+  const unlucky = chance(caster.sheet.get('unluckyChance', baseTags, extra));
+  const rollRange = (lo: number, hi: number): number => {
+    let r = rand(lo, hi);
+    if (lucky !== unlucky) {
+      const second = rand(lo, hi);
+      r = lucky ? Math.max(r, second) : Math.min(r, second);
+    }
+    return r;
+  };
   for (const type of DAMAGE_TYPES) {
     // Context for this damage type = skill tags + the type itself,
     // so "increased fire damage" applies to the fire portion only.
     const tags = skillContextTags(def, [type]);
     let base = flatBonus?.[type] ?? 0;
+    // MIN/MAX added (the D2 lane) stretches the roll's ends independently
+    // — max-only investment is the wide-variance thunder, min-only the
+    // steady floor. A skill with no base range grows one from them.
     const range = def.baseDamage?.[type];
-    if (range) base += rand(range[0], range[1]);
+    const minAdd = caster.sheet.get(`addedMin_${type}`, tags, extra) * effectiveness;
+    const maxAdd = caster.sheet.get(`addedMax_${type}`, tags, extra) * effectiveness;
+    if (range || minAdd > 0 || maxAdd > 0) {
+      const lo = (range?.[0] ?? 0) + minAdd;
+      const hi = Math.max(lo, (range?.[1] ?? 0) + maxAdd);
+      base += rollRange(lo, hi);
+    }
     const added = caster.sheet.get(addedDamageStat(type), tags, extra) * effectiveness;
     const total = (base + added) * caster.sheet.get('damage', tags, extra);
     if (total > 0) amounts[type] = total;
@@ -319,6 +341,10 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
   // FRACTION actually stopped (base 1 = the classic full stop); anything
   // under 1 leaks through as mitigated CHIP damage — but a block always
   // stops the hit's effects (statuses, knockback), full or not.
+  // Two independent block lanes: blockPower stops a FRACTION, blockValue
+  // eats a FLAT amount off what still got through (post-mitigation, so
+  // value reads in the same currency as the wound it prevents). Defaults
+  // (power 1) keep the classic full stop; effects always stay blocked.
   if (chance(target.sheet.get('blockChance'))) {
     const stop = target.sheet.get('blockPower');
     let leaked = 0;
@@ -327,8 +353,9 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
       for (const t of Object.keys(packet.amounts) as DamageType[]) {
         chip[t] = packet.amounts[t]! * (1 - stop);
       }
-      leaked = mitigateTyped(target, chip,
-        { attacker, tags: packet.tags, extra: packet.extra });
+      leaked = Math.max(0, mitigateTyped(target, chip,
+        { attacker, tags: packet.tags, extra: packet.extra })
+        - target.sheet.get('blockValue'));
       target.life -= leaked;
       target.hitFlash = 0.1;
     }
@@ -368,6 +395,21 @@ export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): 
     { attacker, tags: packet.tags, extra: packet.extra, out });
   target.life -= total;
   target.hitFlash = 0.15;
+
+  // RECUPERATION (the stagger-heal): a fraction of what landed on LIFE
+  // flows back over recuperateTime seconds — a restore stream, so
+  // healTaken gates every sip and sear still bites it.
+  if (total > 0) {
+    const rec = target.sheet.get('recuperate');
+    if (rec > 0) {
+      const back = total * rec;
+      target.restoreStreams.push({
+        resource: 'life',
+        perSec: back / target.sheet.get('recuperateTime'),
+        remaining: back,
+      });
+    }
+  }
 
   // CULLING STRIKE: a landed hit EXECUTES prey at or below the attacker's
   // cullThreshold fraction of max life — checked after the wound, so any

@@ -30,6 +30,123 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   // --- Channeling & guard supports -------------------------------------------
 
+  // --- Sparks, luck & the roll's ends -------------------------------------------
+  chaotic_discharge: {
+    id: 'chaotic_discharge', name: 'Chaotic Discharge',
+    description: 'This skill\'s armed sparks detonate SHUFFLED instead of in placement order — the field forgets its own sequence.',
+    color: '#ffe94a', requiresTags: ['channel'],
+    releaseOrder: 'random',
+    mods: [mod('damage', 'increased', 0.1)],
+    weight: 5,
+  },
+  fortunes_favor: {
+    id: 'fortunes_favor', name: "Fortune's Favor",
+    description: '25% of this skill\'s uses roll damage TWICE and keep the higher — the gambler\'s edge.',
+    color: '#e8d44a',
+    mods: [mod('luckyChance', 'flat', 0.25)],
+    perLevel: [mod('luckyChance', 'flat', 0.04)],
+    weight: 6,
+  },
+  jinxing_touch: {
+    id: 'jinxing_touch', name: 'Jinxing Touch',
+    description: 'Hits with this skill have a 20% chance to JINX the victim: their own damage rolls twice and keeps the lower for 5 seconds.',
+    color: '#8a78a8',
+    mods: [mod('apply_jinxed', 'flat', 0.2)],
+    perLevel: [mod('apply_jinxed', 'flat', 0.03)],
+    weight: 5,
+  },
+  tempest_range: {
+    id: 'tempest_range', name: 'Tempest Range',
+    description: 'The D2 thunder: +25 to this skill\'s MAXIMUM lightning damage (the floor stays where it was — variance is the point).',
+    color: '#ffe14a', requiresTags: ['lightning'],
+    mods: [mod('addedMax_lightning', 'flat', 25)],
+    perLevel: [mod('addedMax_lightning', 'flat', 5)],
+    weight: 6,
+  },
+  steady_current: {
+    id: 'steady_current', name: 'Steady Current',
+    description: '+8 to this skill\'s MINIMUM lightning damage — the reliable hum under the thunder.',
+    color: '#c8e84a', requiresTags: ['lightning'],
+    mods: [mod('addedMin_lightning', 'flat', 8)],
+    perLevel: [mod('addedMin_lightning', 'flat', 2)],
+    weight: 6,
+  },
+  // The Spell Power / Spell Damage split, as a pair of gems: umbral_power
+  // adds chaos to EVERYTHING this skill is (untagged mod — the universal
+  // lane); umbral_focus adds MORE, but only when the skill is chaos-tagged
+  // (the school-specific lane). One mechanism, two scopes: tag filters.
+  umbral_power: {
+    id: 'umbral_power', name: 'Umbral Power',
+    description: 'Adds 3 chaos damage to this skill, whatever it is — the universal lane.',
+    color: '#b06bd4',
+    mods: [mod('addedChaos', 'flat', 3)],
+    perLevel: [mod('addedChaos', 'flat', 1)],
+    weight: 6,
+  },
+  umbral_focus: {
+    id: 'umbral_focus', name: 'Umbral Focus',
+    description: 'Adds 7 chaos damage — but only a CHAOS skill can drink from this well (the school-specific lane).',
+    color: '#8a48c8', requiresTags: ['chaos'],
+    mods: [mod('addedChaos', 'flat', 7, ['chaos'])],
+    perLevel: [mod('addedChaos', 'flat', 2, ['chaos'])],
+    weight: 6,
+  },
+
+  // --- Blood, mending & the guard hall --------------------------------------------
+  sanguine_feast: {
+    id: 'sanguine_feast', name: 'Sanguine Feast',
+    description: 'Bleeds this skill inflicts LEECH: 5% of their tick damage flows back to you as life.',
+    color: '#b03030', requiresTags: ['physical', 'attack'],
+    mods: [mod('dotLeech_bleed', 'flat', 0.05)],
+    perLevel: [mod('dotLeech_bleed', 'flat', 0.01)],
+    weight: 5,
+  },
+  mending_echoes: {
+    id: 'mending_echoes', name: 'Mending Echoes',
+    description: 'This skill\'s direct heals POUR instead: 130% of the mend, over 6 seconds — slower, stronger, stackable (the Renew-maker).',
+    color: '#7ec88a', requiresTags: ['heal'],
+    healOverTime: { seconds: 6, factor: 1.3 },
+    mods: [],
+    perLevel: [mod('healPower', 'increased', 0.06)],
+    weight: 5,
+  },
+  unyielding_stance: {
+    id: 'unyielding_stance', name: 'Unyielding Stance',
+    description: 'WHILE GUARDING with this skill: 40% increased guard strength, +20 poise, and your poise recovers twice as fast.',
+    color: '#c8d8e8', requiresTags: ['guard'],
+    mods: [
+      mod('guardStrength', 'increased', 0.4),
+      mod('poise', 'flat', 20, undefined, 'guarding'),
+      mod('poiseRegenPct', 'increased', 1, undefined, 'guarding'),
+    ],
+    weight: 5,
+  },
+  bulwark_of_thorns: {
+    id: 'bulwark_of_thorns', name: 'Bulwark of Thorns',
+    description: 'While this guard is raised, anything that strikes you takes 14 damage back.',
+    color: '#9ec83a', requiresTags: ['guard'],
+    mods: [mod('channelThorns', 'flat', 14)],
+    perLevel: [mod('channelThorns', 'flat', 5)],
+    weight: 6,
+  },
+  counterweight: {
+    id: 'counterweight', name: 'Counterweight',
+    description: 'Grants this guard a 0.3s PARRY window: a hit met in the window ripostes at doubled power.',
+    color: '#e8e4d8', requiresTags: ['guard'],
+    mods: [mod('guardParry', 'flat', 0.3), mod('guardParryPower', 'flat', 0.5)],
+    weight: 5,
+  },
+  shieldwall_doctrine: {
+    id: 'shieldwall_doctrine', name: 'Shieldwall Doctrine',
+    description: 'WHILE GUARDING: +20% passive block chance and +12 block value — the wall behind the wall.',
+    color: '#8a9ab8', requiresTags: ['guard'],
+    mods: [
+      mod('blockChance', 'flat', 0.2, undefined, 'guarding'),
+      mod('blockValue', 'flat', 12, undefined, 'guarding'),
+    ],
+    perLevel: [mod('blockValue', 'flat', 3, undefined, 'guarding')],
+    weight: 5,
+  },
   // --- The fissure texture gems -----------------------------------------------
   volcanic_heart: {
     id: 'volcanic_heart', name: 'Volcanic Heart',

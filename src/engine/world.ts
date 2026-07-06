@@ -540,6 +540,10 @@ interface Zone {
   /** MADDENING GROUND (SupportDef.madden): accumulated seconds standing
    *  inside, per occupant — past `after`, the `maddened` status lands. */
   madden?: { after: number; dwell: Map<number, number> };
+  /** ARMED SPARK (StormDelivery.awaitRelease): waits for its channel to
+   *  END, then detonates in sequence (armSeq = placement order). */
+  armed?: boolean;
+  armSeq?: number;
   /** One final burst as the linger expires (damageScale × roll). */
   endBurst?: { damageScale: number; radiusScale?: number };
   /** The facing SWINGS ±arc/2 around `base` per `period` (the Metronome). */
@@ -9940,14 +9944,22 @@ export class World {
           });
         }
         // SPARKFIELD (atEnemies): strikes plant UNDER the enemies standing
-        // in the disc, nearest-first; leftovers scatter as usual.
+        // in the disc, nearest-first; leftovers scatter as usual. The
+        // `scatter` variance offsets each planting — semi-random placement,
+        // honest about where it actually lands.
+        const sVar = d.scatter ?? 0;
         const under: Vec2[] = d.atEnemies
           ? this.enemiesOf(caster)
             .filter(e => dist(at, e.pos) <= d.areaRadius * aoeScale)
             .sort((e1, e2) => dist(at, e1.pos) - dist(at, e2.pos))
             .slice(0, strikes)
-            .map(e => vec(e.pos.x, e.pos.y))
+            .map(e => vec(e.pos.x + rand(-sVar, sVar), e.pos.y + rand(-sVar, sVar)))
           : [];
+        // AWAIT RELEASE: strikes placed by a HELD CHANNEL of this skill arm
+        // silently — the release sweep detonates them when the hold ends.
+        const arming = d.awaitRelease !== undefined
+          && caster.casting?.mode === 'channel'
+          && caster.casting.inst.def.id === def.id;
         for (let i = 0; i < strikes; i++) {
           const ang = rand(0, Math.PI * 2);
           const r = Math.sqrt(Math.random()) * d.areaRadius * aoeScale;
@@ -9957,7 +9969,10 @@ export class World {
               : vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 10),
             radius: d.hitRadius * aoeScale,
             caster, inst, color: def.color,
-            delay: fuse + (i < immCount ? rand(0.15, 0.3) : 0.3 + (i - immCount) * d.interval),
+            delay: arming ? 9999
+              : fuse + (i < immCount ? rand(0.15, 0.3) : 0.3 + (i - immCount) * d.interval),
+            armed: arming || undefined,
+            armSeq: arming ? this.sparkSeq++ : undefined,
             exploded: false, linger: 0, tickInterval: 0.5, tickTimer: 0,
             shape, facing: ang,
             dmgMult: useMult, depth: 0, // storms compose with Aftershocks etc.
@@ -12277,6 +12292,18 @@ export class World {
     const raw = ((fx.amount ?? 0) + (fx.pctMax ?? 0) * target.maxLife())
       * caster.sheet.get('healPower', tags, extra) * mult;
     if (raw <= 0) return 0;
+    // HEAL-OVER-TIME conversion (Mending Echoes): the direct mend POURS
+    // instead — total × factor over the graft's seconds, riding the
+    // restore-stream machinery (healTaken gates each sip via healBy).
+    const hot = socketSpec(inst, 'healOverTime');
+    if (hot) {
+      const total = raw * hot.factor;
+      target.restoreStreams.push({
+        resource: 'life', perSec: total / hot.seconds, remaining: total,
+      });
+      if (!quiet) this.text(target.pos, 'renewing', '#7ec88a', 11);
+      return 0;
+    }
     const landed = target.healBy(raw);
     // OVERMEND: spilled healing becomes a ward (grantAbsorb keeps the max).
     const spill = raw * target.sheet.get('healTaken') - landed;
@@ -13128,6 +13155,7 @@ export class World {
             stacksBonus: stacksBonusFor(fx.status),
             casterId: caster.id,
             brood: instanceBrood(inst),
+            leech: caster.sheet.get('dotLeech_' + fx.status, tags, extra) || undefined,
           });
           // Applying a status is a trigger (Bloodletter's Rhythm).
           this.rollStatusProcs(caster, inst, target, fx.status, tags, extra, depth);
@@ -13218,6 +13246,7 @@ export class World {
           stacksBonus: stacksBonusFor(sid),
           casterId: caster.id,
           brood: instanceBrood(inst),
+          leech: caster.sheet.get('dotLeech_' + sid, tags, extra) || undefined,
           rupture: armed, ruptureType: armedType,
         });
         // Stat-granted applications trigger statusApply procs too.
@@ -14736,6 +14765,15 @@ export class World {
           vec(a.pos.x + rand(-24, 24), a.pos.y + rand(-24, 24)), hatch.radius);
         this.actors.push(hatch);
         this.text(hatch.pos, 'brood!', '#7ec850', 11);
+      }
+      // DOT LEECH: banked ticks flow home to the APPLIER as healing —
+      // "5% of bleed damage leeched as life", paid quietly on the beat.
+      for (const s of a.statuses) {
+        if (!s.leechAcc || s.leechAcc <= 0 || s.casterId === undefined) continue;
+        const sip = s.leechAcc;
+        s.leechAcc = 0;
+        const applier = this.actors.find(x => x.id === s.casterId && !x.dead);
+        if (applier) applier.healBy(sip);
       }
       // THE LEDGER's beat: escalating upkeep + the low-mana vent.
       this.updateActorLedgers(a, dt);
@@ -16705,6 +16743,20 @@ export class World {
     const extra = instanceMods(cs.inst);
     const speed = a.speedFactor(cs.inst);
 
+    // GUARD MEND: while the stance is HELD, allies in the aegis' shadow
+    // heal per second — the shield that shelters, not just blocks.
+    if (cs.mode === 'guard') {
+      const mend = a.sheet.get('guardMend', tags, extra);
+      if (mend > 0) {
+        const hp = a.sheet.get('healPower', tags, extra);
+        for (const ally of this.actors) {
+          if (ally.dead || ally.team !== a.team || ally === a) continue;
+          if (dist(a.pos, ally.pos) > 160) continue;
+          ally.healBy(mend * hp * dt);
+        }
+      }
+    }
+
     const burst = a.sheet.get('channelBurst', tags, extra);
     if (burst > 0) {
       cs.burstTimer = (cs.burstTimer ?? 2 / speed) - dt;
@@ -18182,7 +18234,46 @@ export class World {
     }
   }
 
+  /** Monotone spark counter (StormDelivery.awaitRelease placement order). */
+  private sparkSeq = 0;
+
   private updateZones(dt: number): void {
+    // SPARKFIELD RELEASE: armed sparks wait for their channel to END —
+    // release OR interrupt, either way the field discharges. Detonation
+    // runs in PLACEMENT order (or shuffled — the Chaotic Discharge flip),
+    // one spark per interval: the chain the player wound up, played back.
+    {
+      let releasing: Map<string, typeof this.zones> | null = null;
+      for (const z of this.zones) {
+        if (!z.armed) continue;
+        const holding = !z.caster.dead && z.caster.casting?.mode === 'channel'
+          && z.caster.casting.inst.def.id === z.inst.def.id;
+        if (holding) continue;
+        releasing ??= new Map();
+        const key = z.caster.id + ':' + z.inst.def.id;
+        if (!releasing.has(key)) releasing.set(key, []);
+        releasing.get(key)!.push(z);
+      }
+      if (releasing) {
+        for (const zs of releasing.values()) {
+          const d0 = zs[0].inst.def.delivery;
+          const spec = d0.type === 'storm' ? d0.awaitRelease : undefined;
+          const order = socketSpec(zs[0].inst, 'releaseOrder') ?? spec?.order ?? 'placed';
+          const interval = spec?.interval ?? 0.08;
+          zs.sort((a2, b2) => (a2.armSeq ?? 0) - (b2.armSeq ?? 0));
+          if (order === 'random') {
+            for (let k = zs.length - 1; k > 0; k--) {
+              const j = Math.floor(Math.random() * (k + 1));
+              [zs[k], zs[j]] = [zs[j], zs[k]];
+            }
+          }
+          zs.forEach((z2, k) => {
+            z2.armed = undefined;
+            z2.delay = 0.05 + k * interval;
+          });
+        }
+      }
+    }
     for (let i = this.zones.length - 1; i >= 0; i--) {
       const z = this.zones[i];
       if (!z.exploded) {

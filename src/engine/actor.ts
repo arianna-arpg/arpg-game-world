@@ -1045,6 +1045,8 @@ export class Actor {
       casterId?: number;
       /** BROOD clause from the applying skill's graft (BroodSpec). */
       brood?: ActiveStatus['brood'];
+      /** DOT-LEECH fraction (the applier's dotLeech_<id> stat). */
+      leech?: number;
     },
   ): void {
     const def = STATUS_DEFS[id];
@@ -1112,6 +1114,7 @@ export class Actor {
         ruptureType: opts?.ruptureType,
         casterId: opts?.casterId,
         brood: opts?.brood,
+        leech: opts?.leech,
         total: duration,
         // WEAK SPOT: the window paints just below the CURRENT wound.
         window: def.weakSpot ? (() => {
@@ -1131,6 +1134,7 @@ export class Actor {
       existing.ruptureType = existing.ruptureType ?? opts.ruptureType;
       existing.casterId = existing.casterId ?? opts.casterId;
       existing.brood = existing.brood ?? opts.brood;
+      if (opts.leech) existing.leech = Math.max(existing.leech ?? 0, opts.leech);
     }
   }
 
@@ -1263,6 +1267,8 @@ export class Actor {
         dot[key] = (dot[key] ?? 0) + tick;
         // BROOD clauses bank the tick toward the world's hatch roll.
         if (s.brood) s.broodAcc = (s.broodAcc ?? 0) + tick;
+        // DOT LEECH banks toward the applier's healing (world pays it).
+        if (s.leech) s.leechAcc = (s.leechAcc ?? 0) + tick * s.leech;
       }
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);

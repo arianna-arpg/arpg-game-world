@@ -323,6 +323,9 @@ const nodes: PassiveNode[] = [
   { id: "oathbound_insight", name: "Oathbound Insight", description: "Critical hits have a 35% chance to grant a Fury charge (independent of any gem's crit dice)", kind: "notable", x: 5640, y: 2640, mods: [mod("proc_battle_insight", "flat", 0.35)], links: ["transfusion"] },
   { id: "shepherds_rites", name: "Shepherd's Rites", description: "Minions heal 8% of a dying kin's life; summons mend nearby allies 4 on arrival", kind: "notable", x: 5520, y: 2760, mods: [mod("minionDeathHeal", "flat", 0.08), mod("summonMend", "flat", 4)], links: ["transfusion"] },
   { id: "silencing_brand", name: "Silencing Brand", description: "Your spells have an 8% chance to Silence (no spells for the afflicted)", kind: "notable", x: 5700, y: 2460, mods: [mod("apply_silence", "flat", 0.08, ["spell"])], links: ["oathbound_insight"] },
+  // RECUPERATION exemplar (the stagger-heal stat is GLOBAL — a passive,
+  // a status, or a monster's innate can all carry it):
+  { id: "stalwart_recovery", name: "Stalwart Recovery", description: "30% of hits that land on your life flow back as healing over the next 6 seconds", kind: "notable", x: 2560, y: 4360, mods: [mod("recuperate", "flat", 0.3)], links: ["enduring_bulwark"] },
 ];
 
 // --- Exports -----------------------------------------------------------------
