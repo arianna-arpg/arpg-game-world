@@ -249,6 +249,9 @@ export interface AffixRollState {
    *  tooltips. Sits OUTSIDE the rarity's natural prefix/suffix caps — a
    *  white with one crafted line is the promised customizable base. */
   crafted?: boolean;
+  /** ORACLE-LOCKED: this line has been communed over (rerolled) once and is
+   *  sealed — the stone answers each question only once. */
+  locked?: boolean;
 }
 
 /** A live item — PURE JSON (ids + numbers only), which makes it the save

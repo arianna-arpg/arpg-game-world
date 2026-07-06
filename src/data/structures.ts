@@ -303,6 +303,20 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
   },
 
+  // The Oracle Stone: a ring of leaning monoliths. Dwelling here opens the
+  // communion (affix-reroll) menu — the World reads proximity to ORACLE_SITE.
+  oracle_site: {
+    id: 'oracle_site', halfW: 68, halfH: 68,
+    props: [
+      { kind: 'tombstone', x: 0, y: -46, radius: 11 },
+      { kind: 'tombstone', x: 44, y: -14, radius: 10 },
+      { kind: 'tombstone', x: 28, y: 40, radius: 10 },
+      { kind: 'tombstone', x: -28, y: 40, radius: 10 },
+      { kind: 'tombstone', x: -44, y: -14, radius: 10 },
+      { kind: 'rock', x: 0, y: 0, radius: 13 }, // the altar slab
+    ],
+  },
+
   // A traveller's campfire: a ring of stones round a fire. Dwelling here REFRESHES
   // the wilds (the World reads the player's proximity to CAMPFIRE_SITE).
   campfire_site: {

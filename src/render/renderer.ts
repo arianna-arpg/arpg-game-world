@@ -2195,6 +2195,7 @@ export class Renderer {
     const hints: { h: { pos: Vec2; text: string } | null; ring: string; ink: string }[] = [
       { h: world.campfireHint(), ring: '#ff9a3a', ink: '#ffc878' },
       { h: world.salvageHint(), ring: '#7a9ae8', ink: '#aac0f0' },
+      { h: world.oracleHint(), ring: '#b06bd4', ink: '#d0a8e8' },
     ];
     const { ctx } = this;
     const t = world.time;

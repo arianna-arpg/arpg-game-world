@@ -62,12 +62,13 @@ import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord,
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE } from '../data/townBuild';
-import { SALVAGE_CFG } from '../data/essences';
+import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE } from '../data/townBuild';
+import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
-  salvageItemYield, salvageLoreGain, salvageSkillYield, salvageSupportYield,
+  rollRerolledAffix, salvageItemYield, salvageLoreGain, salvageSkillYield, salvageSupportYield,
 } from './crafting';
+import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
@@ -775,7 +776,11 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'dropItem': case 'salvageItem': return isIdx(a.uid);
     case 'pickupItem': return true;
     case 'salvageSkill': case 'salvageSupport': return isIdx(a.index);
-    case 'craftAffix': return isIdx(a.uid) && isStr(a.affixId);
+    case 'craftAffix':
+      return isIdx(a.uid) && isStr(a.affixId)
+        && (a.score === undefined || (typeof a.score === 'number' && Number.isFinite(a.score)));
+    case 'rerollAffix':
+      return isIdx(a.uid) && isIdx(a.affix) && typeof a.score === 'number' && Number.isFinite(a.score);
     default: return false;
   }
 }
@@ -1508,6 +1513,9 @@ export class World {
    *  indirection as the Caravanner — World can't import the UI). */
   salvageDwellRequested = false;
   private salvageGate = new Dwell();
+  /** ONE-SHOT: the Oracle-stone dwell (same idiom). */
+  oracleDwellRequested = false;
+  private oracleGate = new Dwell();
   /** ONE-SHOT: dwelling by the quartermaster with FRESH vocation chains on offer
    *  asks the main loop to open the CHOICE menu (same flag indirection as the
    *  Caravanner — a subclass pick must never dwell-auto-accept at random). */
@@ -7324,6 +7332,55 @@ export class World {
     return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
   }
 
+  // --------------------------------------------------------- oracle stone ----
+
+  /** Among the standing stones? (Feature owned + in town + near ORACLE_SITE.) */
+  nearOracle(seat: Seat = this.localSeat): boolean {
+    return featureEnabled(this.account, FEATURE.ORACLE_STONE)
+      && this.zone.id === START_ZONE
+      && dist(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y)) <= SALVAGE_CFG.stationRadius;
+  }
+
+  private updateOracle(dt: number): void {
+    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearOracle();
+    if (!this.oracleGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    this.oracleDwellRequested = true;
+  }
+
+  oracleHint(): { pos: Vec2; text: string } | null {
+    if (!this.nearOracle()) return null;
+    return { pos: vec(ORACLE_SITE.x, ORACLE_SITE.y), text: 'Linger to commune with the stone.' };
+  }
+
+  /** COMMUNE: reroll ONE natural affix on a bag/worn item, then SEAL it —
+   *  the stone answers each line once. Score comes from the rune minigame
+   *  (host-clamped); the reroll lands within the tiers the ITEM could
+   *  legally roll, lifted toward their ceiling by the score. */
+  rerollAffix(seat: Seat, uid: number, affixIdx: number, score: number): void {
+    if (!this.nearOracle(seat)) return;
+    const m = seat.meta;
+    const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
+    const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
+    if (!item) return;
+    const a = item.affixes[affixIdx];
+    if (!a || a.crafted || a.locked) {
+      this.failNote(seat.actor, 'oracle:' + uid, a?.locked ? 'the stone has spoken on this line' : 'the stone will not touch bench-work');
+      return;
+    }
+    const def = ITEM_AFFIXES[a.id];
+    if (!def) return;
+    const rolled = rollRerolledAffix(def, item, Math.random, Math.max(0, Math.min(1, score)));
+    if (!rolled) {
+      this.failNote(seat.actor, 'oracle:' + uid, 'the runes refuse this line');
+      return;
+    }
+    if (!this.spendEssence(seat, oracleRerollCost(item.rarity), 'oracle:' + uid)) return;
+    item.affixes[affixIdx] = rolled;
+    if (wornSlot) this.recalcSeat(seat);
+    this.text(seat.actor.pos, 'the stone reshapes it — and seals it', '#b06bd4', 13);
+    this.markMetaDirty(seat);
+  }
+
   // ------------------------------------------------------------- caravan ------
   //
   // The Caravanner (in town, and waiting at each minted destination) escorts the
@@ -8650,7 +8707,8 @@ export class World {
       case 'salvageItem': this.salvageItem(seat, action.uid); break;
       case 'salvageSkill': this.salvageSkillGem(seat, action.index); break;
       case 'salvageSupport': this.salvageSupportGem(seat, action.index); break;
-      case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId); break;
+      case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId, action.score ?? 0); break;
+      case 'rerollAffix': this.rerollAffix(seat, action.uid, action.affix, action.score); break;
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
@@ -15216,7 +15274,7 @@ export class World {
    *  priced, one crafted line per item (craftSlots widens it). The roll is
    *  uniform across the whole unlocked span — expertise raises the ceiling,
    *  never guarantees it. */
-  craftAffix(seat: Seat, uid: number, affixId: string): void {
+  craftAffix(seat: Seat, uid: number, affixId: string, score = 0): void {
     if (!this.nearSalvage(seat)) return;
     const m = seat.meta;
     const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
@@ -15230,7 +15288,9 @@ export class World {
     if (!option) return;
     const rank = expertiseRank(this.account.craftLore, option.def.family);
     if (!this.spendEssence(seat, CRAFT_CFG.cost(rank), 'craft:' + affixId)) return;
-    const rolled = rollCraftedAffix(option.def, rank);
+    // The SMITHING score (host-clamped) lifts the roll toward the unlocked
+    // ceiling — quality is the player's hands, never a worn stat.
+    const rolled = rollCraftedAffix(option.def, rank, Math.random, Math.max(0, Math.min(1, score)));
     if (!rolled) return;
     item.affixes.push(rolled);
     if (wornSlot) this.recalcSeat(seat); // live stats move the instant worn gear changes
@@ -15309,6 +15369,8 @@ export class World {
     this.updateCampfire(dt);
     // The salvage bench opens the break/craft menu on a dwell (same flag idiom).
     this.updateSalvage(dt);
+    // The Oracle stone opens the communion menu on a dwell.
+    this.updateOracle(dt);
     // The Caravanner opens the band-travel menu on a dwell (a UI callback).
     this.updateCaravan(dt);
     // The port dock's linger-to-sail (naval travel menu).

@@ -45,6 +45,10 @@ import type { ContentPackage } from '../packages/types';
 import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import type { ZoneDef } from '../data/zones';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
+import { runRuneMinigame, runSmithMinigame } from './minigames';
+import { oracleRerollCost } from '../data/essences';
+import { ITEM_AFFIXES } from '../data/itemaffixes';
+import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 
 /** Neutral accent for packages that declare no colour of their own. */
@@ -86,6 +90,7 @@ export class UI {
   private caravanMenu = document.getElementById('caravan-menu')!;
   private tollMenu = document.getElementById('toll-menu')!;
   private salvageMenu = document.getElementById('salvage-menu')!;
+  private oracleMenu = document.getElementById('oracle-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
@@ -110,6 +115,9 @@ export class UI {
 
   charSheetOpen = false;
   inventoryOpen = false;
+  /** The essence SATCHEL flap on the inventory panel (persists across
+   *  re-renders — a satchel stays however you left it). */
+  private satchelOpen = false;
   /** Bag item LIFTED by a click, awaiting its next click (a cell / a doll
    *  slot / another item to swap with). Uid-addressed so it survives the
    *  panel's innerHTML re-renders; self-heals if the item vanishes. */
@@ -123,6 +131,10 @@ export class UI {
   /** Station view state: which tab, and the craft tab's chosen piece. */
   private salvageTab: 'salvage' | 'craft' = 'salvage';
   private craftTargetUid: number | null = null;
+  oracleOpen = false;
+  private oracleTargetUid: number | null = null;
+  /** A minigame overlay is running — the panels beneath hold still. */
+  private minigameActive = false;
   sailOpen = false;
   vocationOpen = false;
   /** World-map zoom (1 = fit-all; >1 = zoomed in) + pan offset (user-units from
@@ -191,6 +203,7 @@ export class UI {
     bindTooltips(this.skillBook, (el) => el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
     bindTooltips(this.inventory, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.salvageMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
+    bindTooltips(this.oracleMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     this.updateHintBar(); // replace the static index.html placeholder with live binds
   }
@@ -479,8 +492,23 @@ export class UI {
       .join('');
     const vocPts = m.vocations.length
       ? ` · <span style="color:#e8c860">${m.vocationPoints} vocation</span>` : '';
+    // The ANCHORED header: class identity + the (deliberately tiny) starter
+    // safety net stay visible however far the sheet scrolls. Negative margins
+    // eat the panel padding so the sticky band hugs the panel's top edge.
+    const starterChips = m.classDef.bar.filter((s): s is string => !!s).map(sid => {
+      const def = SKILLS[sid];
+      if (!def) return '';
+      const carried = m.knownSkills.has(sid) || m.skillInv.some(i => i.def.id === sid);
+      return `<span style="display:inline-block;margin:0 5px 0 0;font-size:9px;color:${carried ? '#6a6478' : def.color}"
+        title="${def.name}${carried ? ' — carried' : ' — LOST: ↺ re-kindles a granted copy (worthless to salvage or the font)'}">
+        ${def.name}${carried ? '' : ` <button data-reacquire="${sid}" style="font-size:9px;padding:0 4px" title="re-kindle (granted)">↺</button>`}</span>`;
+    }).join('');
     this.charSheet.innerHTML = `
-      <h2><span data-tip="class" style="cursor:help;border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
+      <div style="position:sticky;top:-14px;z-index:2;background:var(--panel-bg);
+        margin:-14px -14px 8px;padding:14px 14px 5px;border-bottom:1px solid var(--panel-border)">
+        <h2 style="border-bottom:none;margin:0;padding-bottom:2px"><span data-tip="class" style="cursor:help;border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
+        <div style="font-size:9px;color:#6a6478">starters: ${starterChips}</div>
+      </div>
       <div style="font-size:11px;margin-bottom:6px">
         <span style="color:#ffd700">${m.passivePoints} passive</span> ·
         <span style="color:#7ec8a0">${m.skillPoints} skill</span>${vocPts} points available
@@ -489,16 +517,6 @@ export class UI {
       ${attrRows}
       <h3>Statistics</h3>
       ${statRows}
-      <h3>Essences <span style="color:#8a8678;font-weight:normal">(salvage currency — dies with you)</span></h3>
-      <div style="margin:4px 0 6px">${this.essWallet()}</div>
-      <h3>Starting Skills <span style="color:#8a8678;font-weight:normal">(re-kindle a lost starter — granted copies are worth nothing)</span></h3>
-      <div>${m.classDef.bar.filter((s): s is string => !!s).map(sid => {
-        const def = SKILLS[sid];
-        if (!def) return '';
-        const carried = m.knownSkills.has(sid) || m.skillInv.some(i => i.def.id === sid);
-        return `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border:1px solid ${def.color};border-radius:8px;font-size:10px;color:${def.color}">
-          ${def.name} <button data-reacquire="${sid}" ${carried ? 'disabled title="still carried"' : 'title="mint a granted copy into your bag"'}>↺</button></span>`;
-      }).join('')}</div>
       <div style="margin-top:8px;color:#8a8678;font-size:10px">
         Tag-scaled stats (damage, speed) shown without skill context — each skill
         applies its own tags, level, and socketed supports on use.
@@ -598,7 +616,23 @@ export class UI {
         ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${GLYPH[cat] ?? '?'}</div>`;
     }).join('');
 
+    // The SATCHEL: a little pouch flap on the panel's edge holding the
+    // essence wallet — click to flip it open/closed.
+    const satchel = `
+      <button data-satchel style="position:absolute;top:10px;right:14px;font-size:11px;
+        background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 6px 2px 2px;padding:3px 9px;cursor:pointer"
+        title="Essence satchel (salvage currency — dies with you)">🎒 ${this.satchelOpen ? '▾' : '▸'}</button>
+      ${this.satchelOpen ? `
+        <div style="position:absolute;top:38px;right:14px;z-index:3;background:#1b1524;
+          border:1px solid #4a3a5a;border-radius:6px 2px 6px 6px;padding:8px 12px;box-shadow:0 3px 14px rgba(0,0,0,0.6)">
+          ${ESSENCE_IDS.map(id => {
+            const e = ESSENCES[id];
+            const n = this.getWorld().meta.essences[id] ?? 0;
+            return `<div style="font-size:11px;color:${e.color};margin:2px 0" title="${e.label}">${e.glyph} ${n} <span style="color:#6a6478;font-size:9px">${e.label.replace(' Essence', '')}</span></div>`;
+          }).join('')}
+        </div>` : ''}`;
     this.inventory.innerHTML = `
+      ${satchel}
       <h2>Inventory</h2>
       <div style="display:flex;gap:18px;align-items:flex-start">
         <div>
@@ -622,6 +656,10 @@ export class UI {
   private wireInventory(): void {
     const world = this.getWorld();
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.inventory.querySelectorAll<T>(sel)];
+    this.inventory.querySelector<HTMLButtonElement>('[data-satchel]')?.addEventListener('click', () => {
+      this.satchelOpen = !this.satchelOpen;
+      this.refreshInventory();
+    });
 
     q<HTMLElement>('[data-bag-item]').forEach(el => {
       const uid = Number(el.dataset.itemUid);
@@ -799,12 +837,98 @@ export class UI {
       this.refreshSalvage();
     }));
     q<HTMLButtonElement>('button[data-craft]').forEach(btn => btn.addEventListener('click', () => {
+      // THE SMITHING MINIGAME: the strike-timing bar decides how far the
+      // roll lifts toward the unlocked ceiling — skill, not magic-find.
+      if (this.minigameActive) return;
       const [uid, affixId] = btn.dataset.craft!.split(':');
-      world.requestMeta({ t: 'craftAffix', uid: Number(uid), affixId });
-      this.refreshSalvage();
-      this.refreshCharSheet(); // a worn-piece craft moves live stats
+      this.minigameActive = true;
+      runSmithMinigame(({ score }) => {
+        this.minigameActive = false;
+        world.requestMeta({ t: 'craftAffix', uid: Number(uid), affixId, score });
+        this.refreshSalvage();
+        this.refreshCharSheet(); // a worn-piece craft moves live stats
+      });
     }));
     this.salvageMenu.querySelector<HTMLButtonElement>('[data-salv-close]')?.addEventListener('click', () => this.closeSalvage());
+  }
+
+  // ------------------------------------------------------------ oracle stone
+
+  showOracle(): void {
+    this.oracleOpen = true;
+    this.oracleMenu.classList.remove('hidden');
+    this.refreshOracle();
+  }
+
+  closeOracle(): void {
+    this.oracleOpen = false;
+    this.oracleMenu.classList.add('hidden');
+    this.oracleTargetUid = null;
+    hideTooltip();
+  }
+
+  refreshOracle(): void {
+    if (!this.oracleOpen) return;
+    const world = this.getWorld();
+    const m = world.meta;
+    const targets = [...m.items, ...Object.values(m.equipped).filter((x): x is ItemInstance => !!x)]
+      .filter(i => i.affixes.some(a => !a.crafted));
+    const targetRows = targets.map(i =>
+      `<button data-otar="${i.uid}" class="${this.oracleTargetUid === i.uid ? 'bound' : ''}"
+        data-tip="item" data-item-uid="${i.uid}"
+        style="color:${ITEM_RARITIES[i.rarity].color}">${i.name}</button>`,
+    ).join(' ') || '<span style="color:#8a8678;font-size:11px">Nothing you carry bears a natural affix.</span>';
+    const target = targets.find(i => i.uid === this.oracleTargetUid);
+    let affixRows = '<div style="color:#8a8678;font-size:11px">Lay a piece on the stone (pick one above).</div>';
+    if (target) {
+      const cost = oracleRerollCost(target.rarity);
+      const afford = world.canAffordEssence(world.localSeat, cost);
+      affixRows = target.affixes.map((a, idx) => {
+        const def = ITEM_AFFIXES[a.id];
+        const tierDef = def?.tiers[a.tier];
+        if (!def || !tierDef) return '';
+        const line = def.lines.map((ln, i) => {
+          const roll = ln.sharedRoll ? a.rolls[0] : a.rolls[i];
+          return formatModLine(ln, roundStatValue(lerpRange(tierDef.ranges[i], roll ?? 0.5)));
+        }).join(' · ');
+        const state = a.crafted ? '<span style="color:#8a8678">bench-work — the stone will not touch it</span>'
+          : a.locked ? '<span style="color:#8a8678">🔒 sealed — the stone has spoken</span>'
+          : `<button data-commune="${target.uid}:${idx}" ${afford ? '' : 'disabled'}>
+              Commune (${this.essCostText(cost)})${afford ? '' : ' — not enough'}</button>`;
+        return `<div class="skill-entry">
+          <div class="name" style="font-size:11px">${line}</div>
+          <div class="bind-btns">${state}</div>
+        </div>`;
+      }).join('');
+      affixRows += `<div style="color:#8a8678;font-size:10px;margin-top:4px">
+        A communed line rerolls within what this item could legally carry — then SEALS forever. Trace well.</div>`;
+    }
+    this.oracleMenu.innerHTML = `
+      <h2>The Oracle Stone</h2>
+      <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
+        ${this.essWallet()}</div>
+      <h3>Piece</h3><div class="bind-btns">${targetRows}</div>
+      <h3>Lines</h3>${affixRows}
+      <div class="bind-btns" style="margin-top:8px"><button data-oracle-close>Step back</button></div>`;
+
+    const q = <T extends HTMLElement>(sel: string): T[] => [...this.oracleMenu.querySelectorAll<T>(sel)];
+    q<HTMLButtonElement>('button[data-otar]').forEach(btn => btn.addEventListener('click', () => {
+      this.oracleTargetUid = Number(btn.dataset.otar);
+      this.refreshOracle();
+    }));
+    q<HTMLButtonElement>('button[data-commune]').forEach(btn => btn.addEventListener('click', () => {
+      // THE COMMUNION MINIGAME: trace the runes; precision + haste = score.
+      if (this.minigameActive) return;
+      const [uid, idx] = btn.dataset.commune!.split(':');
+      this.minigameActive = true;
+      runRuneMinigame(({ score }) => {
+        this.minigameActive = false;
+        world.requestMeta({ t: 'rerollAffix', uid: Number(uid), affix: Number(idx), score });
+        this.refreshOracle();
+        this.refreshCharSheet();
+      });
+    }));
+    this.oracleMenu.querySelector<HTMLButtonElement>('[data-oracle-close]')?.addEventListener('click', () => this.closeOracle());
   }
 
   /** Class-select starting-skill chip tooltip (name + quick description). */
@@ -2303,6 +2427,9 @@ export class UI {
     this.salvageOpen = false;
     this.craftTargetUid = null;
     this.salvageMenu.classList.add('hidden');
+    this.oracleOpen = false;
+    this.oracleTargetUid = null;
+    this.oracleMenu.classList.add('hidden');
     this.skillBookOpen = false;
     this.treeOpen = false;
     this.mapOpen = false;

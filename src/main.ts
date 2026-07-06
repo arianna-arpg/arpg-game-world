@@ -315,6 +315,7 @@ function handleLocalPanels(): void {
     else if (ui.caravanOpen) ui.closeCaravan();
     else if (ui.tollOpen) ui.closeToll();
     else if (ui.salvageOpen) ui.closeSalvage();
+    else if (ui.oracleOpen) ui.closeOracle();
     else if (ui.sailOpen) ui.closeSail();
     // The vocation choice menu closes through its OWN close (not hideAll):
     // closeVocationMenu also DECLINES the offer, else the dwell re-pops the
@@ -389,6 +390,11 @@ function frame(now: number): void {
       if (world.salvageDwellRequested) {
         world.salvageDwellRequested = false;
         if (!ui.salvageOpen) ui.showSalvage();
+      }
+      // The Oracle-stone dwell asks to open the communion menu.
+      if (world.oracleDwellRequested) {
+        world.oracleDwellRequested = false;
+        if (!ui.oracleOpen) ui.showOracle();
       }
       // The quartermaster dwell with FRESH vocation chains on offer asks to open
       // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).

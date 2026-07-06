@@ -452,7 +452,8 @@ export function describeItem(item: ItemInstance): ItemDescription {
     def.lines.forEach((line, i) => {
       const roll = line.sharedRoll ? a.rolls[0] : a.rolls[i];
       const v = roundStatValue(lerpRange(tierDef.ranges[i], roll ?? 0.5));
-      d.affix.push({ text: formatModLine(line, v), tag: a.crafted ? 'CRAFT' : tierTag(def, a.tier) });
+      const tag = (a.crafted ? 'CRAFT' : tierTag(def, a.tier)) + (a.locked ? ' 🔒' : '');
+      d.affix.push({ text: formatModLine(line, v), tag });
     });
   }
   if (item.uniqueId) {

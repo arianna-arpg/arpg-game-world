@@ -78,6 +78,9 @@ export const FEATURE = {
   /** A second CRAFTED affix slot per item (see engine/crafting.ts
    *  CRAFT_CFG.extraSlotFeature — the golden one-craft rule, sold apart). */
   CRAFT_SECOND_AFFIX: 'craft_second_affix',
+  /** THE ORACLE STONE: standing stones in Lastlight — commune (a rune
+   *  minigame) to REROLL one affix on an item, which seals it forever. */
+  ORACLE_STONE: 'oracle_stone',
 } as const;
 
 /** The display name of the account meta-currency (earned on death, spent in

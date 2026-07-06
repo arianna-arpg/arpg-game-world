@@ -154,6 +154,10 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     label: 'Salvage Station — Twin Anvils',
     description: 'The bench learns to hold TWO crafted affixes on one item (the one-craft rule, bought apart).',
     payload: { flag: FEATURE.CRAFT_SECOND_AFFIX } },
+  { id: 'feat_oracle_stone', kind: 'feature', cost: 90, reqLevel: 0, reqLedger: 'reached_level_5',
+    label: 'Oracle Stone — Town',
+    description: 'Standing stones rise in Lastlight. Commune over an item (trace the runes — precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
+    payload: { flag: FEATURE.ORACLE_STONE } },
 
   // --- The Caravan: four broad tiers, each opening a wider band of escorted travel.
   //     Base tier (the Caravanner settles in town) at L10; far tiers ALSO need the

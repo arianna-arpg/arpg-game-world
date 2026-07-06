@@ -86,4 +86,5 @@ export type MetaAction =
   | { t: 'salvageItem'; uid: number }                          // bag gear → essence + craft lore
   | { t: 'salvageSkill'; index: number }                       // skillInv gem → essence (granted: nothing)
   | { t: 'salvageSupport'; index: number }                     // loose support → essence
-  | { t: 'craftAffix'; uid: number; affixId: string };         // essence → a studied affix on the item
+  | { t: 'craftAffix'; uid: number; affixId: string; score?: number } // essence + SMITHING score → a studied affix
+  | { t: 'rerollAffix'; uid: number; affix: number; score: number };  // Oracle COMMUNION: reroll + seal one line

@@ -37,6 +37,11 @@ export const CARAVAN_SITE = { x: 1300, y: 220 };
  *  break your loot, then spend it at his counter three steps away. */
 export const SALVAGE_SITE = { x: 620, y: 250 };
 
+/** Where the Oracle's standing stones rise — shared by the fixture and the
+ *  World's nearOracle dwell check. The expanded south, past the campfire:
+ *  magic happens at the town's quiet edge. */
+export const ORACLE_SITE = { x: 1080, y: 1010 };
+
 export const TOWN_ADDITIONS: TownAddition[] = [
   // The Quest Package: a quartermaster's house raised in the town's expanded
   // south-east quarter (clear of the original cottages so it never walls one in).
@@ -72,6 +77,13 @@ export const TOWN_ADDITIONS: TownAddition[] = [
   {
     feature: FEATURE.SALVAGE_STATION,
     fixtures: [{ structure: 'salvage_bench', x: SALVAGE_SITE.x, y: SALVAGE_SITE.y }],
+  },
+  // The Oracle Stone — the expanded south edge. Dwell among the stones for
+  // the communion (reroll) menu (the World reads proximity to ORACLE_SITE).
+  {
+    feature: FEATURE.ORACLE_STONE,
+    fixtures: [{ structure: 'oracle_site', x: ORACLE_SITE.x, y: ORACLE_SITE.y }],
+    grow: { w: 1700, h: 1200 },
   },
 ];
 

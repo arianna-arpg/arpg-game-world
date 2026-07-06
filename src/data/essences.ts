@@ -94,3 +94,14 @@ export const VENDOR_ESSENCE_PRICE: Record<SkillRarity, EssenceCost> = {
 
 /** Support gems on the counter (no rarity of their own) price as magic. */
 export const VENDOR_SUPPORT_PRICE: EssenceCost = { essence: 'glimmering', count: 3 };
+
+/** The Oracle's fee for communing over (rerolling) one affix, by the item's
+ *  rarity — the stone charges what the piece is worth. */
+export function oracleRerollCost(rarity: ItemRarity): EssenceCost {
+  switch (rarity) {
+    case 'common': return { essence: 'glimmering', count: 3 };
+    case 'magic': return { essence: 'glimmering', count: 5 };
+    case 'rare': return { essence: 'brilliant', count: 4 };
+    case 'unique': return { essence: 'pristine', count: 3 };
+  }
+}

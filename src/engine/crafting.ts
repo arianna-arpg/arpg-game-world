@@ -45,7 +45,43 @@ export const CRAFT_CFG = {
     if (rank === 2) return { essence: 'brilliant', count: 5 };
     return { essence: 'pristine', count: 4 };
   },
+
+  // --- THE MINIGAME CONTRACT: skill, not magic-find -------------------------
+  /** The UNSKILLED roll across the unlocked span: 'inverse' piles weight on
+   *  the LOW end (min of two uniforms — the anti-rare rule), 'uniform' is
+   *  flat chaos. Player skill is the only ladder out. */
+  baseWeighting: 'inverse' as 'inverse' | 'uniform',
+  /** How far a PERFECT minigame (score 1) lifts the roll toward the unlocked
+   *  ceiling: t' = t + (1−t)·score·skillLift. */
+  skillLift: 0.85,
+  /** SMITHING (the bench): heat-bar timing game. */
+  smith: {
+    duration: 6,        // seconds of work
+    sweepPeriod: 1.1,   // slider full oscillation
+    sweetWidth: 0.16,   // the bright band, as a fraction of the track
+    passiveRate: 0.05,  // fill/second while the metal rests
+    clickBoost: 0.09,   // a struck sweet-spot's surge
+    missPenalty: 0.02,  // a mistimed strike's cooling
+  },
+  /** COMMUNION (the Oracle): rune-chase precision game. */
+  runes: {
+    count: 5,           // runes per communion
+    perRuneTime: 1.4,   // seconds before a rune gutters out
+    hitRadius: 30,      // px — how close the cursor must pass
+    speedWeight: 0.4,   // share of each rune's credit paid for swiftness
+  },
 };
+
+/** The unskilled 0..1 roll position per CRAFT_CFG.baseWeighting. */
+function baseRollT(rng: () => number): number {
+  return CRAFT_CFG.baseWeighting === 'inverse' ? Math.min(rng(), rng()) : rng();
+}
+
+/** Minigame lift: score pulls the roll toward the ceiling, never past it. */
+function liftT(t: number, score: number): number {
+  const s = Math.max(0, Math.min(1, score));
+  return t + (1 - t) * s * CRAFT_CFG.skillLift;
+}
 
 // ---------------------------------------------------------------- salvage ---
 
@@ -146,18 +182,16 @@ export function craftedCount(item: ItemInstance): number {
   return item.affixes.filter(a => a.crafted).length;
 }
 
-/** Roll a crafted line: uniform across the WHOLE unlocked span (worst tier's
- *  floor → the rank-unlocked tier's ceiling), then stored as (tier, fraction)
- *  so it lives in the same shape as every natural roll. Returns null only on
- *  malformed data. The caller enforces slots, lore, and cost. */
-export function rollCraftedAffix(def: AffixDef, rank: number, rng: () => number = Math.random): AffixRollState | null {
-  const bestIdx = bestUnlockedTier(def, rank);
-  const worstIdx = def.tiers.length - 1;
-  if (bestIdx < 0 || worstIdx < 0) return null;
-  // Line 0 picks the landing tier; other lines ride the same tier.
+/** Land a value in the span [worstIdx..bestIdx] (tier indices, best-first)
+ *  and store it as (tier, fraction) — the same shape as every natural roll. */
+function rollIntoSpan(
+  def: AffixDef, bestIdx: number, worstIdx: number,
+  rng: () => number, score: number,
+): { tier: number; rolls: number[] } | null {
+  if (bestIdx < 0 || worstIdx < 0 || bestIdx > worstIdx) return null;
   const lo = def.tiers[worstIdx].ranges[0][0];
   const hi = def.tiers[bestIdx].ranges[0][1];
-  const v = lo + (hi - lo) * rng();
+  const v = lo + (hi - lo) * liftT(baseRollT(rng), score);
   let tier = worstIdx;
   for (let i = worstIdx; i >= bestIdx; i--) {
     const [tLo, tHi] = def.tiers[i].ranges[0];
@@ -167,5 +201,34 @@ export function rollCraftedAffix(def: AffixDef, rank: number, rng: () => number 
   const [tLo, tHi] = def.tiers[tier].ranges[0];
   const frac0 = tHi > tLo ? Math.max(0, Math.min(1, (v - tLo) / (tHi - tLo))) : 0.5;
   const rolls = def.lines.map((line, i) => (i === 0 || line.sharedRoll ? frac0 : rng()));
-  return { id: def.id, tier, rolls, crafted: true };
+  return { tier, rolls };
+}
+
+/** Roll a crafted line across the unlocked span (worst floor → the rank's
+ *  ceiling). The tier is NEVER chosen — the minigame score lifts an
+ *  otherwise low-weighted roll (baseWeighting), and expertise only raises
+ *  where the ceiling sits. Returns null only on malformed data. */
+export function rollCraftedAffix(
+  def: AffixDef, rank: number, rng: () => number = Math.random, score = 0,
+): AffixRollState | null {
+  const landed = rollIntoSpan(def, bestUnlockedTier(def, rank), def.tiers.length - 1, rng, score);
+  return landed ? { id: def.id, ...landed, crafted: true } : null;
+}
+
+/** ORACLE REROLL: re-land a NATURAL affix across the tiers the ITEM itself
+ *  could legally roll (its ilvl gates; exquisite only if it is magic) — and
+ *  the caller LOCKS it after, so the stone cannot be farmed. */
+export function rollRerolledAffix(
+  def: AffixDef, item: ItemInstance, rng: () => number = Math.random, score = 0,
+): AffixRollState | null {
+  const elig: number[] = [];
+  for (let i = 0; i < def.tiers.length; i++) {
+    const t = def.tiers[i];
+    if (t.ilvl > item.ilvl) continue;
+    if (t.magicOnly && item.rarity !== 'magic') continue;
+    elig.push(i);
+  }
+  if (elig.length === 0) return null;
+  const landed = rollIntoSpan(def, elig[0], elig[elig.length - 1], rng, score);
+  return landed ? { id: def.id, ...landed, locked: true } : null;
 }
