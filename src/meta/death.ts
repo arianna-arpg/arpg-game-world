@@ -9,9 +9,11 @@
 // player dwell on it to reclaim their EXACT lost gems — a corpse run.
 //
 // The two extensibility hinges the design turns on:
-//  (1) WHAT drops is a configurable DeathLootPolicy, never hardcoded — today only
-//      the Learned Skills (bar gems + their socketed supports) drop; flip a flag
-//      to add the backpack, or later drop equipment items instead of skills.
+//  (1) WHAT drops is a configurable DeathLootPolicy, never hardcoded. THE GEAR
+//      ERA RULE: only EQUIPPED items ride the corpse — skills, supports, and
+//      the carried bag are lost to the death (a build's knowledge dies with
+//      its bearer; only worn steel survives). Yesterday's skills-drop rule is
+//      one flag away, as is adding future carries (currency, relics, idols…).
 //  (2) WHAT is recorded is gated by a run-end REASON (only 'death' for now) — a
 //      future "Retire" event (corpse → mercenary) or re-including forfeit is just
 //      another reason, not a rewrite.
@@ -19,6 +21,7 @@
 // Pure data + a pure capture helper. Type-only imports keep it acyclic.
 // ---------------------------------------------------------------------------
 
+import type { ItemInstance } from '../engine/items';
 import type { SkillInstance, SkillRarity } from '../engine/skills';
 import type { PlayerMeta } from '../engine/world';
 
@@ -39,7 +42,11 @@ export interface SavedSocket { supportId: string; level: number; }
  *  captureLoot, one branch in the engine's drop rebuild. */
 export type SavedLoot =
   | { kind: 'skill'; skillId: string; level: number; rarity: SkillRarity; sockets: (SavedSocket | null)[] }
-  | { kind: 'support'; supportId: string; level: number };
+  | { kind: 'support'; supportId: string; level: number }
+  // Equipped gear rides VERBATIM (ItemInstance is already pure JSON — ids +
+  // 0..1 rolls); the reclaim rebuilds it through rebuildItem, so a data patch
+  // between death and reclaim retunes (or tolerantly drops) it like any load.
+  | { kind: 'gear'; item: ItemInstance };
 
 /** The carried bundle — a flat ordered array the corpse drops one by one. */
 export interface LootPayload { items: SavedLoot[]; }
@@ -53,14 +60,18 @@ export interface DeathLootPolicy {
   skillInv: boolean;
   /** Unsocketed support gems. */
   inventory: boolean;
-  // FUTURE: items?: boolean; currency?: boolean; …
+  /** EQUIPPED gear (the doll — never the carried bag). */
+  equipment: boolean;
+  // FUTURE: bagItems?: boolean; currency?: boolean; relics?: boolean; …
 }
 
-/** To start: only the Learned Skills drop. Tune freely; this is the single knob. */
+/** THE GEAR ERA: the corpse carries only what was WORN. Skills, supports, and
+ *  the carried bag are lost to the death. Tune freely; this is the single knob. */
 export const DEFAULT_LOOT_POLICY: DeathLootPolicy = {
-  knownSkills: true,
+  knownSkills: false,
   skillInv: false,
   inventory: false,
+  equipment: true,
 };
 
 /** The persistent, attributable death spot carried on the account across the
@@ -101,5 +112,12 @@ export function captureLoot(meta: PlayerMeta, policy: DeathLootPolicy = DEFAULT_
   if (policy.knownSkills) for (const inst of meta.knownSkills.values()) items.push(skillToLoot(inst));
   if (policy.skillInv) for (const inst of meta.skillInv) items.push(skillToLoot(inst));
   if (policy.inventory) for (const g of meta.inventory) items.push({ kind: 'support', supportId: g.def.id, level: g.level });
+  if (policy.equipment) {
+    for (const worn of Object.values(meta.equipped)) {
+      if (!worn) continue;
+      const { x: _x, y: _y, ...item } = worn; // a corpse item has no bag cell
+      items.push({ kind: 'gear', item });
+    }
+  }
   return { items };
 }

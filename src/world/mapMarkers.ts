@@ -110,7 +110,7 @@ registerMarkerSource((world): MapMarker[] => {
     out.push({
       id: `corpse-${node.id}`, zoneId: node.id, glyph: '☠', fill: '#1a0e12', stroke: '#d05050',
       text: '#e8a0a0', r: 9, fog: 'charted', z: 10,
-      title: `Your ${d.classId} (lv ${d.charLevel}) fell in ${d.zoneName} — reclaim your gems`,
+      title: `Your ${d.classId} (lv ${d.charLevel}) fell in ${d.zoneName} — reclaim your gear`,
     });
   }
   return out;

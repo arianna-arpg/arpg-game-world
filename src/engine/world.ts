@@ -32,7 +32,7 @@ import {
   type TetherSpec,
 } from './skills';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
-import { compileItemMods, itemLevelReq } from './itemgen';
+import { compileItemMods, itemLevelReq, rebuildItem } from './itemgen';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, type ItemInstance } from './items';
 import { DROP_CFG, resolveLootTable } from './loot';
 import { ITEM_BASES } from '../data/itembases';
@@ -8339,10 +8339,17 @@ export class World {
     saveAccount(this.account); // fire-and-forget OK: a lost reclaim self-heals (corpse re-spawns)
   }
 
-  /** Rebuild ONE saved loot item as its EXACT gem and drop it (NOT dropGemAt,
+  /** Rebuild ONE saved loot item as its EXACT self and drop it (NOT dropGemAt,
    *  which rolls random). Unknown ids skip (same tolerance as character load). */
   private dropSavedLoot(at: Vec2, it: SavedLoot): void {
     const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
+    if (it.kind === 'gear') {
+      // The EXACT worn item — same uid, same rolls; rebuildItem re-validates
+      // against live registries (a patched-out base simply stays lost).
+      const item = rebuildItem(it.item);
+      if (item) this.dropGearAt(at, item);
+      return;
+    }
     if (it.kind === 'skill') {
       const inst = rebuildSkill({ skillId: it.skillId, level: it.level, rarity: it.rarity, sockets: it.sockets });
       if (inst) this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
