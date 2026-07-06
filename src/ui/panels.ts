@@ -46,6 +46,7 @@ import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import type { ZoneDef } from '../data/zones';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
+import { VENDORS } from '../data/vendors';
 import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
@@ -53,6 +54,12 @@ import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
+
+/** The SCRAP-WHEEL cursor (vendor salvage mode): a gear glyph rendered into
+ *  an SVG data-URI, crosshair fallback where custom cursors are refused. */
+const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><text x="2" y="20" font-size="19">⚙</text></svg>',
+)}") 13 13, crosshair`;
 
 /** Stats worth showing on the sheet, in display order. */
 const SHEET_STATS = [
@@ -91,6 +98,7 @@ export class UI {
   private tollMenu = document.getElementById('toll-menu')!;
   private salvageMenu = document.getElementById('salvage-menu')!;
   private oracleMenu = document.getElementById('oracle-menu')!;
+  private vendorMenu = document.getElementById('vendor-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
@@ -118,6 +126,10 @@ export class UI {
   /** The essence SATCHEL flap on the inventory panel (persists across
    *  re-renders — a satchel stays however you left it). */
   private satchelOpen = false;
+  /** The BUILD flap on the gear tab: the learned-skills list riding the
+   *  left edge of the inventory — the whole build in one glance. Remembers
+   *  its state across panel closes, satchel-style. */
+  private buildFlapOpen = false;
   /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
    *  support gems — one panel, one key, zero overlapping windows. */
   invTab: 'gear' | 'skills' | 'gems' = 'gear';
@@ -139,6 +151,10 @@ export class UI {
   private craftTargetUid: number | null = null;
   oracleOpen = false;
   private oracleTargetUid: number | null = null;
+  vendorOpen = false;
+  /** The scrap wheel: while ON, the vendor screen's sell-half is live and
+   *  clicks BREAK your things for essence. Reset on close — never sticky. */
+  private scrapMode = false;
   /** A minigame overlay is running — the panels beneath hold still. */
   private minigameActive = false;
   sailOpen = false;
@@ -203,9 +219,12 @@ export class UI {
     // their innerHTML re-renders); content is read from live data each hover.
     bindTooltips(this.charSheet, (el) => el.dataset.tip === 'class' ? this.classTooltip() : null);
     bindTooltips(this.skillBook, (el) => el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
-    bindTooltips(this.inventory, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
+    bindTooltips(this.inventory, (el) =>
+      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid))
+        : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
     bindTooltips(this.salvageMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.oracleMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
+    bindTooltips(this.vendorMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     this.updateHintBar(); // replace the static index.html placeholder with live binds
   }
@@ -580,56 +599,8 @@ export class UI {
     }
 
     const nearFont = world.nearFont();
-    const nearSmith = world.nearSmith();
-    const restockIn = Math.max(0, Math.ceil(world.vendorRestockAt - world.time));
-    const wares = nearSmith && world.vendorStock.length ? `
-      <div style="border:1px solid #6a5638;border-radius:4px;padding:8px;margin-bottom:8px;background:rgba(232,200,122,0.05)">
-        <div style="color:#e8c87a;font-weight:bold;font-size:12px;margin-bottom:4px">
-          BRANDT'S WARES — priced in Essence
-          <span style="color:#c8a84b;font-size:10px;font-weight:normal"> · restock ${restockIn}s</span></div>
-        ${world.vendorStock.map((e, idx) => {
-          const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
-          const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
-          const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
-          const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
-          const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
-          const price = world.vendorPrice(e);
-          const broke = !world.canAffordEssence(world.localSeat, price);
-          return `
-          <div class="skill-entry" style="border-left:3px solid ${col}">
-            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
-            <div class="tags">${tags}</div>
-            <div class="bind-btns">
-              <button data-buy="${idx}" ${broke ? 'disabled' : ''}>
-                Buy (${this.essCostText(price)})${broke ? ' — not enough' : ''}</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>` : '';
-    const nearDelver = world.nearDelver();
-    const delverWares = nearDelver && world.descentStock.length ? `
-      <div style="border:1px solid #2f5e5a;border-radius:4px;padding:8px;margin-bottom:8px;background:rgba(127,224,216,0.06)">
-        <div style="color:#7fe0d8;font-weight:bold;font-size:12px;margin-bottom:4px">
-          THE DELVER'S WARES — 30 ◈ each
-          <span style="color:#5fb8b0;font-size:10px;font-weight:normal"> · ◈ ${world.descentEchoes} Echoes</span></div>
-        ${world.descentStock.map((e, idx) => {
-          const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
-          const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
-          const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
-          const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
-          const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
-          const broke = world.descentEchoes < 30;
-          return `
-          <div class="skill-entry" style="border-left:3px solid ${col}">
-            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
-            <div class="tags">${tags}</div>
-            <div class="bind-btns">
-              <button data-delve="${idx}" ${broke ? 'disabled' : ''}>
-                Buy (30 ◈)${broke ? ' — no Echoes' : ''}</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>` : '';
+    // (The Brandt/Delver counters moved to the dedicated VENDOR screen —
+    // dwell at a stocked counter to open it; data/vendors.ts is the registry.)
     const slotsFull = m.knownSkills.size >= MAX_LEARNED_SKILLS;
     const skillGems = m.skillInv.map((inst, idx) => {
       const def = inst.def;
@@ -658,7 +629,7 @@ export class UI {
     }).join('') || `<div style="color:#8a8678;font-size:11px">
       No skill gems carried. Monsters drop them — rarity decides their sockets (1-4).
       ${nearFont ? '' : 'Find a Sacrificial Font to trade unwanted gems for skill points.'}</div>`;
-    return wares + delverWares + skillGems;
+    return skillGems;
   }
 
   /** Wire the carried-gem lists' buttons (whichever container renders them). */
@@ -670,12 +641,6 @@ export class UI {
     }));
     q<HTMLButtonElement>('button[data-sacrifice]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'sacrifice', index: Number(btn.dataset.sacrifice) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-buy]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'buyVendor', index: Number(btn.dataset.buy) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-delve]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'buyDelver', index: Number(btn.dataset.delve) }); refresh();
     }));
     q<HTMLButtonElement>('button[data-invlvl]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvl) }); refresh();
@@ -800,8 +765,22 @@ export class UI {
     const pickupHint = this.getSettings().gearPickup === 'key'
       ? `[${keyDisplay(this.getSettings().keybinds.pickup)}] grabs nearby gear`
       : 'walk over gear to collect it';
+    // The BUILD flap: learned skills docked on the gear tab's LEFT edge —
+    // gear, gems, and the build itself, one cohesive inventory.
+    const buildFlap = `
+      <div style="flex:0 0 auto;display:flex;align-items:flex-start;gap:8px">
+        <button data-buildflap title="Your learned skills — the whole build at a glance"
+          style="writing-mode:vertical-rl;text-orientation:mixed;padding:12px 4px;font-size:11px;
+          background:#241d2e;border:1px solid #4a3a5a;border-radius:6px 2px 2px 6px;cursor:pointer">
+          📖 Build ${this.buildFlapOpen ? '▾' : '▸'}</button>
+        ${this.buildFlapOpen ? `
+          <div style="width:340px;max-height:560px;overflow-y:auto;padding-right:4px;font-size:12px">
+            ${this.learnedListHtml()}
+          </div>` : ''}
+      </div>`;
     const gearBody = `
       <div style="display:flex;gap:18px;align-items:flex-start">
+        ${buildFlap}
         <div>
           <h3>Equipped</h3>
           ${doll}
@@ -859,6 +838,17 @@ export class UI {
         this.refreshSkillBook();
       });
       return; // no gear handlers to attach on gem tabs
+    }
+    // The Build flap: toggle + (when open) the learned list's full wiring.
+    this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => {
+      this.buildFlapOpen = !this.buildFlapOpen;
+      this.refreshInventory();
+    });
+    if (this.buildFlapOpen) {
+      this.wireLearnedList(this.inventory, () => {
+        this.refreshInventory();
+        this.refreshSkillBook();
+      });
     }
 
     q<HTMLElement>('[data-bag-item]').forEach(el => {
@@ -1133,6 +1123,124 @@ export class UI {
     this.oracleMenu.querySelector<HTMLButtonElement>('[data-oracle-close]')?.addEventListener('click', () => this.closeOracle());
   }
 
+  // ---------------------------------------------------------- vendor screen
+
+  showVendor(): void {
+    this.vendorOpen = true;
+    this.vendorMenu.classList.remove('hidden');
+    this.refreshVendor();
+  }
+
+  closeVendor(): void {
+    this.vendorOpen = false;
+    this.scrapMode = false;
+    this.vendorMenu.style.cursor = '';
+    this.vendorMenu.classList.add('hidden');
+    hideTooltip();
+  }
+
+  /** The player's things as scrap-wheel targets — the SELL half. Clicking
+   *  one salvages it exactly as the station would (same META intents; the
+   *  world's gates accept salvage-capable vendor counters). */
+  private scrapListHtml(): string {
+    const m = this.getWorld().meta;
+    const chip = (attr: string, color: string, label: string, yieldHtml: string): string =>
+      `<button ${attr} style="margin:2px 4px 2px 0;border-color:${color};color:${color}">
+        ${label} <span style="color:#8a8678">→ ${yieldHtml}</span></button>`;
+    const gear = m.items.map(i =>
+      chip(`data-scrap-item="${i.uid}" data-tip="item" data-item-uid="${i.uid}"`,
+        ITEM_RARITIES[i.rarity].color, i.name, this.essCostText(salvageItemYield(i)))).join('');
+    const skills = m.skillInv.map((inst, idx) => {
+      const y = salvageSkillYield(inst);
+      return chip(`data-scrap-skill="${idx}"`, SKILL_RARITIES[inst.rarity ?? 'common'].color,
+        `${inst.def.name} Lv${inst.level}`, y ? this.essCostText(y) : 'nothing (granted)');
+    }).join('');
+    const sups = m.inventory.map((gem, idx) =>
+      chip(`data-scrap-sup="${idx}"`, gem.def.color, `${gem.def.name} Lv${gem.level}`,
+        this.essCostText(salvageSupportYield(gem)))).join('');
+    const all = gear + skills + sups;
+    return all || '<div style="color:#8a8678;font-size:11px">Nothing carried worth breaking.</div>';
+  }
+
+  refreshVendor(): void {
+    if (!this.vendorOpen) return;
+    const world = this.getWorld();
+    const near = VENDORS.filter(v => v.near(world, world.localSeat));
+
+    const sections = near.map(v => {
+      const rows = v.stock(world).map((e, idx) => {
+        const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+        const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
+        const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
+        const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
+        const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
+        const price = v.priceOf(world, e);
+        const afford = price.essence
+          ? world.canAffordEssence(world.localSeat, price.essence)
+          : world.descentEchoes >= (price.echoes ?? 0);
+        const priceHtml = price.essence ? this.essCostText(price.essence) : `${price.echoes} ◈`;
+        return `
+          <div class="skill-entry" style="border-left:3px solid ${col}">
+            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
+            <div class="tags">${tags}</div>
+            <div class="bind-btns">
+              <button data-vbuy="${v.id}:${idx}" ${afford ? '' : 'disabled'}>
+                Buy (${priceHtml})${afford ? '' : ' — not enough'}</button>
+            </div>
+          </div>`;
+      }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out — come back after the restock.</div>';
+
+      // The SELL half: only counters that buy scrap offer the wheel.
+      const scrap = v.salvage ? `
+        <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px">
+          <button data-scrapmode class="${this.scrapMode ? 'bound' : ''}">
+            ⚙ ${this.scrapMode ? 'Scrap wheel ON — click your things to break them' : 'Flip the scrap wheel (sell for Essence)'}</button>
+          ${this.scrapMode ? `<div style="margin-top:6px">${this.scrapListHtml()}</div>` : ''}
+        </div>` : '';
+
+      return `
+        <div style="border:1px solid ${v.accent}44;border-radius:4px;padding:8px;margin-bottom:10px;background:${v.bg}">
+          <div style="color:${v.accent};font-weight:bold;font-size:12px;margin-bottom:4px">
+            ${v.label}${v.headline ? ` <span style="opacity:0.7;font-size:10px;font-weight:normal">· ${v.headline(world)}</span>` : ''}</div>
+          ${rows}
+          ${scrap}
+        </div>`;
+    }).join('') || '<div style="color:#8a8678;font-size:11px">No counter at hand — find a vendor and linger.</div>';
+
+    this.vendorMenu.innerHTML = `
+      <h2>Vendors</h2>
+      <div style="margin-bottom:6px">${this.essWallet()}</div>
+      ${sections}
+      <div class="bind-btns" style="margin-top:8px"><button data-vendor-close>Step away</button></div>`;
+    // The wheel turns the whole screen's cursor into the scrap gear.
+    this.vendorMenu.style.cursor = this.scrapMode ? SCRAP_CURSOR : '';
+
+    const q = <T extends HTMLElement>(sel: string): T[] => [...this.vendorMenu.querySelectorAll<T>(sel)];
+    const refresh = (): void => { this.refreshVendor(); this.refreshInventory(); };
+    q<HTMLButtonElement>('button[data-vbuy]').forEach(btn => btn.addEventListener('click', () => {
+      const [vid, idx] = btn.dataset.vbuy!.split(':');
+      const vendor = VENDORS.find(v => v.id === vid);
+      if (!vendor) return;
+      if (vendor.buyT === 'buyVendor') world.requestMeta({ t: 'buyVendor', index: Number(idx) });
+      else world.requestMeta({ t: 'buyDelver', index: Number(idx) });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-scrapmode]').forEach(btn => btn.addEventListener('click', () => {
+      this.scrapMode = !this.scrapMode;
+      this.refreshVendor();
+    }));
+    q<HTMLButtonElement>('button[data-scrap-item]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.scrapItem) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-scrap-skill]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.scrapSkill) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-scrap-sup]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.scrapSup) }); refresh();
+    }));
+    this.vendorMenu.querySelector<HTMLButtonElement>('[data-vendor-close]')?.addEventListener('click', () => this.closeVendor());
+  }
+
   /** Class-select starting-skill chip tooltip (name + quick description). */
   private classSkillTooltip(skillId: string): TooltipContent | null {
     const def = SKILLS[skillId];
@@ -1156,15 +1264,14 @@ export class UI {
     return parts.join(' + ') || 'free';
   }
 
-  refreshSkillBook(): void {
-    if (!this.skillBookOpen) return;
+  /** The LEARNED-SKILLS list — the skill book's body AND the gear tab's
+   *  Build flap render this same full-management view (one build, two
+   *  vantages; every button works in both). */
+  private learnedListHtml(): string {
     const world = this.getWorld();
     const p = world.player;
     const m = world.meta;
-
-    // --- Learned skills (the book's ONE view — carried gems live in the
-    // Inventory's tabs now; build management stays here) ----------------------
-    const known = [...m.knownSkills.values()].map(inst => {
+    return [...m.knownSkills.values()].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
       const binds = this.slotLabels().map((label, slot) => {
@@ -1204,33 +1311,12 @@ export class UI {
           <div class="sockets">${sockets}</div>
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters — learn them from the Inventory (I) → Skill Gems tab.</div>';
+  }
 
-    // Carried skill/support gems (and the Brandt/Delver counters) MOVED to
-    // the Inventory panel's tabs — one bag, one key, no overlapping windows.
-    const nearFont = world.nearFont();
-
-    // Preserve the scroll position across the innerHTML rebuild — otherwise a
-    // co-op client (which re-renders this panel whenever its meta re-replicates)
-    // would yank the list back to the top on every scroll attempt.
-    const prevScroll = this.skillBook.querySelector<HTMLElement>('.book-body')?.scrollTop ?? 0;
-
-    this.skillBook.innerHTML = `
-      <div class="book-head">
-        <h2>Skill Book — <span style="color:#7ec8a0">${m.skillPoints} skill points</span>
-          <span style="float:right;color:#b06bd4;font-size:11px;font-weight:normal">
-            ${nearFont ? `FONT NEARBY · offerings ${m.offerings}/${OFFERINGS_PER_POINT}` : `offerings ${m.offerings}/${OFFERINGS_PER_POINT}`}</span></h2>
-        <div style="color:#8a8678;font-size:10px;padding:2px 0 6px">Learned (${m.knownSkills.size}/${MAX_LEARNED_SKILLS}) — carried gems live in the Inventory (${keyDisplay(this.getSettings().keybinds.panelInv)})</div>
-      </div>
-      <div class="book-body">${known}</div>`;
-
-    // Restore the prior scroll offset across the rebuild.
-    const bodyEl = this.skillBook.querySelector<HTMLElement>('.book-body');
-    if (bodyEl) bodyEl.scrollTop = prevScroll;
-
-    const refresh = (): void => this.refreshSkillBook();
-    const q = <T extends HTMLElement>(sel: string): T[] =>
-      [...this.skillBook.querySelectorAll<T>(sel)];
-
+  /** Wire the learned-list buttons in whichever container rendered it. */
+  private wireLearnedList(container: HTMLElement, refresh: () => void): void {
+    const world = this.getWorld();
+    const q = <T extends HTMLElement>(sel: string): T[] => [...container.querySelectorAll<T>(sel)];
     // Every button routes the mutation through world.requestMeta — on the host /
     // single-player it applies immediately to the local seat; on a render-shell
     // CLIENT it ships the intent to the host (which mutates OUR seat + replicates
@@ -1264,6 +1350,33 @@ export class UI {
       world.requestMeta({ t: 'unsocket', skillId, socket: Number(sock) });
       refresh();
     }));
+  }
+
+  refreshSkillBook(): void {
+    if (!this.skillBookOpen) return;
+    const world = this.getWorld();
+    const m = world.meta;
+    const nearFont = world.nearFont();
+
+    // Preserve the scroll position across the innerHTML rebuild — otherwise a
+    // co-op client (which re-renders this panel whenever its meta re-replicates)
+    // would yank the list back to the top on every scroll attempt.
+    const prevScroll = this.skillBook.querySelector<HTMLElement>('.book-body')?.scrollTop ?? 0;
+
+    this.skillBook.innerHTML = `
+      <div class="book-head">
+        <h2>Skill Book — <span style="color:#7ec8a0">${m.skillPoints} skill points</span>
+          <span style="float:right;color:#b06bd4;font-size:11px;font-weight:normal">
+            ${nearFont ? `FONT NEARBY · offerings ${m.offerings}/${OFFERINGS_PER_POINT}` : `offerings ${m.offerings}/${OFFERINGS_PER_POINT}`}</span></h2>
+        <div style="color:#8a8678;font-size:10px;padding:2px 0 6px">Learned (${m.knownSkills.size}/${MAX_LEARNED_SKILLS}) — carried gems live in the Inventory (${keyDisplay(this.getSettings().keybinds.panelInv)})</div>
+      </div>
+      <div class="book-body">${this.learnedListHtml()}</div>`;
+
+    // Restore the prior scroll offset across the rebuild.
+    const bodyEl = this.skillBook.querySelector<HTMLElement>('.book-body');
+    if (bodyEl) bodyEl.scrollTop = prevScroll;
+
+    this.wireLearnedList(this.skillBook, () => this.refreshSkillBook());
   }
 
   // ------------------------------------------------------------ passive tree
@@ -2490,6 +2603,10 @@ export class UI {
     this.oracleOpen = false;
     this.oracleTargetUid = null;
     this.oracleMenu.classList.add('hidden');
+    this.vendorOpen = false;
+    this.scrapMode = false;
+    this.vendorMenu.style.cursor = '';
+    this.vendorMenu.classList.add('hidden');
     this.skillBookOpen = false;
     this.treeOpen = false;
     this.mapOpen = false;

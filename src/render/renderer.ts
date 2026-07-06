@@ -4058,9 +4058,9 @@ export class Renderer {
     ctx.font = '12px Verdana';
     ctx.fillStyle = world.objectiveDone ? '#ffd700' : '#9a96b8';
     ctx.fillText(world.objectiveText(), 16, 82);
-    ctx.fillStyle = '#d8d4c8';
-    ctx.fillText(`Kills ${world.kills}`, 16, 100);
-    let hintY = 120;
+    // The kill counter is RUN-END information (credits math, the death
+    // screen) — mid-run it's clutter, so the HUD no longer carries it.
+    let hintY = 100;
     if (m.passivePoints > 0) {
       ctx.fillStyle = '#ffd700';
       ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press P`, 16, hintY);

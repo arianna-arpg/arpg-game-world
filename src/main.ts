@@ -326,6 +326,7 @@ function handleLocalPanels(): void {
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     if (ui.caravanOpen) { ui.closeCaravan(); return; }
     if (ui.tollOpen) { ui.closeToll(); return; }
+    if (ui.vendorOpen) { ui.closeVendor(); return; }
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
     if (ui.oracleOpen) { ui.closeOracle(); return; }
     if (ui.sailOpen) { ui.closeSail(); return; }
@@ -416,6 +417,11 @@ function frame(now: number): void {
       if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
         world.oracleDwellRequested = false;
         if (!ui.oracleOpen) ui.showOracle();
+      }
+      // A stocked vendor counter's dwell asks to open the Vendor screen.
+      if (world.vendorDwellRequested && !ui.escapeMenuOpen) {
+        world.vendorDwellRequested = false;
+        if (!ui.vendorOpen) ui.showVendor();
       }
       // The quartermaster dwell with FRESH vocation chains on offer asks to open
       // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).

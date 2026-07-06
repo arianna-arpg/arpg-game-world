@@ -40,6 +40,7 @@ import {
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, type ItemInstance } from './items';
 import { DROP_CFG, resolveLootTable } from './loot';
 import { MONSTER_THEMES } from '../data/infrequents';
+import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
@@ -1516,6 +1517,10 @@ export class World {
   /** ONE-SHOT: the Oracle-stone dwell (same idiom). */
   oracleDwellRequested = false;
   private oracleGate = new Dwell();
+  /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
+   *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
+  vendorDwellRequested = false;
+  private vendorGate = new Dwell();
   /** GEAR pickup style, mirrored from Settings each frame by main.ts (the
    *  World can't import UI/settings): true = walk-over hoover like gems;
    *  false = the deliberate pickup keybind only. */
@@ -7354,6 +7359,31 @@ export class World {
   oracleHint(): { pos: Vec2; text: string } | null {
     if (!this.nearOracle()) return null;
     return { pos: vec(ORACLE_SITE.x, ORACLE_SITE.y), text: 'Linger to commune with the stone.' };
+  }
+
+  // --------------------------------------------------------------- vendors ---
+
+  /** The Delver's per-ware price (Depth Echoes) — surfaced for the vendor
+   *  registry so the tunable stays exactly where it lives. */
+  delverPrice(): number { return DELVER_WARE_COST; }
+
+  /** Any registered vendor at hand for this seat? (The Vendor screen gate.) */
+  nearAnyVendor(seat: Seat = this.localSeat): boolean {
+    return VENDORS.some(v => v.near(this, seat));
+  }
+
+  /** A SALVAGE-capable vendor at hand — widens the station-only salvage
+   *  gates: the smith buys scrap too (the sell half of the essence economy). */
+  nearScrapVendor(seat: Seat = this.localSeat): boolean {
+    return VENDORS.some(v => v.salvage && v.near(this, seat));
+  }
+
+  /** Linger at a stocked counter → open the Vendor screen (flag → main). */
+  private updateVendors(dt: number): void {
+    const active = !this.player.dead && !this.player.downed && this.playerIdle()
+      && VENDORS.some(v => v.near(this, this.localSeat) && v.stock(this).length > 0);
+    if (!this.vendorGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    this.vendorDwellRequested = true;
   }
 
   /** COMMUNE: reroll ONE natural affix on a bag/worn item, then SEAL it —
@@ -15227,10 +15257,11 @@ export class World {
   // spends essence to stamp a studied affix onto gear within expertise's
   // ceiling. Account writes persist fire-and-forget (the reclaim pattern).
 
-  /** Break a BAG item into essence + lore. (Worn gear must be unequipped
-   *  first — a deliberate two-step, no accidental doll salvage.) */
+  /** Break a BAG item into essence + lore. Works at the station OR any
+   *  salvage-capable vendor counter (the scrap wheel). Worn gear must be
+   *  unequipped first — a deliberate two-step, no accidental doll salvage. */
   salvageItem(seat: Seat, uid: number): void {
-    if (!this.nearSalvage(seat)) return;
+    if (!this.nearSalvage(seat) && !this.nearScrapVendor(seat)) return;
     const item = this.bagItem(seat, uid);
     if (!item) return;
     removeFromBag(seat.meta.items, uid);
@@ -15248,7 +15279,7 @@ export class World {
   /** Break a CARRIED skill gem (skillInv). Granted sparks yield nothing —
    *  deleted outright, exactly as promised. Sockets are pried out first. */
   salvageSkillGem(seat: Seat, index: number): void {
-    if (!this.nearSalvage(seat)) return;
+    if (!this.nearSalvage(seat) && !this.nearScrapVendor(seat)) return;
     const m = seat.meta;
     const inst = m.skillInv[index];
     if (!inst) return;
@@ -15262,7 +15293,7 @@ export class World {
 
   /** Break a loose support gem (inventory). */
   salvageSupportGem(seat: Seat, index: number): void {
-    if (!this.nearSalvage(seat)) return;
+    if (!this.nearSalvage(seat) && !this.nearScrapVendor(seat)) return;
     const m = seat.meta;
     const gem = m.inventory[index];
     if (!gem) return;
@@ -15378,6 +15409,8 @@ export class World {
     this.updateSalvage(dt);
     // The Oracle stone opens the communion menu on a dwell.
     this.updateOracle(dt);
+    // Any stocked, registered vendor counter opens the Vendor screen on a dwell.
+    this.updateVendors(dt);
     // The Caravanner opens the band-travel menu on a dwell (a UI callback).
     this.updateCaravan(dt);
     // The port dock's linger-to-sail (naval travel menu).
