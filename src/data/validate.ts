@@ -25,6 +25,8 @@ import { MERC_CFG } from '../meta/mercs';
 import { MERC_TEMPLATES } from './mercenaries';
 import { NEMESIS_CFG } from '../meta/nemesis';
 import { GRUDGE_TIERS, NEMESIS_NAMES, NEMESIS_RANKS } from './nemesis';
+import { MONSTER_NAME_CFG, MONSTER_NAMES } from './monsterNames';
+import { RARITY_DEFS } from '../engine/rarity';
 import {
   validateStamps, doodadRuleOf, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs,
@@ -326,6 +328,16 @@ export function validateContent(): void {
   }
   if (MERC_CFG.rosterCap < 1) warn('MERC_CFG.rosterCap must be ≥ 1');
   if (!MONSTERS['merc_captain']) warn('mercs: merc_captain MonsterDef missing (outposts cannot spawn)');
+
+  // THE NOMENCLATURE MILL: pools must be speakable, and every named tier must
+  // be a real rarity — an empty pool would weld blank compounds silently.
+  if (MONSTER_NAMES.prefixes.length < 10 || MONSTER_NAMES.suffixes.length < 10) {
+    warn('monster names: prefix/suffix pools thinner than 10 (name variety collapses)');
+  }
+  if (!MONSTER_NAMES.epithets.length) warn('monster names: epithet pool is EMPTY');
+  for (const r of MONSTER_NAME_CFG.namedRarities) {
+    if (!RARITY_DEFS[r]) warn(`monster names: namedRarities lists unknown tier '${r}'`);
+  }
 
   // THE WORLD'S MEMORY: the nemesis vocabulary must be speakable — an empty
   // rank ladder or name pool would mint blank foes; grudge tiers must ascend

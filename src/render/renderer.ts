@@ -31,6 +31,7 @@ import { WEATHER_COLORS } from '../world/palette';
 import { keyDisplay, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
+import { MONSTERS } from '../data/monsters';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
 
@@ -154,6 +155,7 @@ export class Renderer {
     for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
     for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
     for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
+    this.drawEliteNameHover(world);
     this.drawProjectiles(world);
     this.drawCanopies(world);      // fake-2D depth: crowns above actors, faded near the hero
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
@@ -170,6 +172,40 @@ export class Renderer {
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
     this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
     this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
+  }
+
+  /** D2-style hover nameplate: the DISTINCTLY-NAMED foe nearest the cursor
+   *  (one at a time — no label storms) shows its minted name over a tier/genus
+   *  subtitle ("Goresnap the Bilious" / "Rare Goblin"). Nemeses are skipped —
+   *  they wear their own permanent mark. */
+  private drawEliteNameHover(world: World): void {
+    const cur = this.toWorld(this.hudMouse);
+    let best: Actor | null = null;
+    let bd = 80;
+    for (const a of world.actors) {
+      if (a.dead || a.team !== 'enemy' || a.nemesis || !a.defId) continue;
+      const def = MONSTERS[a.defId];
+      if (!def || a.name === def.name) continue;
+      const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
+      if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
+      const d = Math.hypot(a.pos.x - cur.x, a.pos.y - cur.y) - a.radius;
+      if (d < bd) { bd = d; best = a; }
+    }
+    if (!best) return;
+    const { ctx } = this;
+    const def = MONSTERS[best.defId!];
+    const tint = (best.rarity ? RARITY_DEFS[best.rarity].ring : '') || '#e8dcc8';
+    const sub = best.rarity && RARITY_DEFS[best.rarity].label
+      ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name;
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.fillStyle = tint;
+    ctx.font = 'bold 12px Verdana';
+    ctx.fillText(best.name, best.pos.x, best.pos.y - best.radius - 20);
+    ctx.globalAlpha = 0.75;
+    ctx.font = '10px Verdana';
+    ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
+    ctx.restore();
   }
 
   /** A MANIFESTED NEMESIS (meta/nemesis.ts) wears its memory openly: a dashed

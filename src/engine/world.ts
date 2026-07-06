@@ -113,6 +113,7 @@ import { allEncounterSpecs, packageSeed } from '../packages/registry';
 import { gateOf } from '../packages/weighting';
 import type { ActiveEncounter } from './encounter';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
+import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
 import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherStrike } from '../world/weather';
@@ -1113,6 +1114,9 @@ interface ZoneEnemyMemo {
   faction?: string;
   rarity?: MonsterRarity;
   tag?: string;
+  /** Display name at capture — a named elite ("Goresnap the Bilious") must be
+   *  the SAME foe on re-entry, or the memorability the mill buys evaporates. */
+  name?: string;
 }
 
 /** What a left zone remembers, per run, for ZONE_MEMORY_TTL game-seconds: the
@@ -2144,7 +2148,8 @@ export class World {
     if (seat?.merc && killer && this.nemesisEligible(killer) && !killer.nemesis
       && this.nemesisActive() && Math.random() < NEMESIS_CFG.mercFelledChance) {
       const saga = touchSaga(this.account, seat.merc.name);
-      const n = formNemesis(saga, killer.defId!, killer.faction ?? '', 'felled_hireling', Math.random);
+      const n = formNemesis(saga, killer.defId!, killer.faction ?? '', 'felled_hireling', Math.random,
+        { name: this.distinctNameOf(killer), bornRarity: killer.rarity });
       this.text(vec(killer.pos.x, killer.pos.y - 30), `${nemesisTitle(n)} marks ${seat.merc.name}.`, '#e07840', 13);
       this.events.emit('nemesis/formed', { saga: sagaKey(seat.merc.name), nemesis: n.name, deed: 'felled_hireling' });
       this.sagaDirty(true);
@@ -3125,7 +3130,7 @@ export class World {
     let leader: Actor | null = null;
     for (let k = 0; k < n; k++) {
       const m = this.createMonster(this.weightedPick(roster.table), lvl, 'enemy');
-      if (k === 0) { const r = rollRarity(crowned); if (r !== 'normal') this.promoteRarity(m, r); leader = m; }
+      if (k === 0) { const r = rollRarity(crowned); if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true }); leader = m; }
       m.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
       this.actors.push(m);
       pack.push(m);
@@ -3743,7 +3748,7 @@ export class World {
       const squadId = this.nextSquadId();
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(type, def.level, 'enemy');
-        if (k === 0 && leaderRarity !== 'normal') this.promoteRarity(m, leaderRarity);
+        if (k === 0 && leaderRarity !== 'normal') this.promoteRarity(m, leaderRarity, { distinctName: true });
         m.squadId = squadId;
         m.squadLeader = k === 0;
         // findFreeSpot: the jittered point can land deep inside a rock/thicket
@@ -3781,29 +3786,40 @@ export class World {
   /** Promote a freshly-created monster to an elite tier: buffed life/damage +
    *  rolled affixes (a 'rarity' stat source), a bigger body, more xp, and a
    *  display prefix. Drops + the crowned-kill ledger are handled on death. */
-  private promoteRarity(a: Actor, rarity: MonsterRarity): void {
+  /** `distinctName`: THE NOMENCLATURE MILL (data/monsterNames.ts). `true` =
+   *  a RANDOM elite roll — named tiers mint a compound ("Goresnap the
+   *  Bilious"); a STRING = restore this exact remembered name (zone memory);
+   *  absent = the authored path — set-piece bosses keep their identity under
+   *  the plain tier label, exactly as before. */
+  private promoteRarity(a: Actor, rarity: MonsterRarity, opts?: { distinctName?: string | boolean }): void {
     const def = RARITY_DEFS[rarity];
     a.rarity = rarity;
     a.sheet.setSource('rarity', rarityMods(rarity));
     a.radius *= def.sizeMul;
     a.xpValue = Math.round(a.xpValue * def.xpMul);
-    if (def.label) a.name = `${def.label} ${a.name}`;
+    if (typeof opts?.distinctName === 'string') {
+      a.name = opts.distinctName;
+    } else if (opts?.distinctName && MONSTER_NAME_CFG.namedRarities.includes(rarity)) {
+      a.name = rollMonsterName(Math.random, a.faction);
+    } else if (def.label) {
+      a.name = `${def.label} ${a.name}`;
+    }
     a.fillResources(); // re-fill now that max life has grown
   }
 
   /** Promote, then STACK the rarity's stat mods `stacks-1` more times (each as its own
    *  compounding source) — the difficulty-spike lever for bosses. stacks=1 is a plain
    *  single promote; 2+ multiplies life/damage hard (e.g. a double-Crowned uber). */
-  private promoteRarityStacked(a: Actor, rarity: MonsterRarity, stacks: number): void {
-    this.promoteRarity(a, rarity);
+  private promoteRarityStacked(a: Actor, rarity: MonsterRarity, stacks: number, opts?: { distinctName?: string | boolean }): void {
+    this.promoteRarity(a, rarity, opts);
     for (let i = 1; i < stacks; i++) a.sheet.setSource('rarityStack' + i, rarityMods(rarity));
     if (stacks > 1) a.fillResources();
   }
 
   /** Public promotion seam — AI choreography (the `summon` verb's rarity
    *  option) and packages elevate spawns through the same one door. */
-  promoteMonster(a: Actor, rarity: MonsterRarity, stacks = 1): void {
-    this.promoteRarityStacked(a, rarity, stacks);
+  promoteMonster(a: Actor, rarity: MonsterRarity, stacks = 1, opts?: { distinctName?: string | boolean }): void {
+    this.promoteRarityStacked(a, rarity, stacks, opts);
   }
 
   // --- SQUAD TACTICS: engage tokens + death reactions -------------------------
@@ -6066,6 +6082,7 @@ export class World {
       enemies.push({
         defId: a.defId, level: a.level, x: a.pos.x, y: a.pos.y,
         life: a.life, faction: a.faction, rarity: a.rarity, tag: a.tag,
+        name: a.name,
       });
     }
     // Structure-door states (id → open/broken): the doodads carry the live state;
@@ -6087,6 +6104,7 @@ export class World {
       const m = this.createMonster(e.defId, Math.max(1, e.level), 'enemy');
       if (e.faction) m.faction = e.faction;
       if (e.rarity) this.promoteRarity(m, e.rarity);
+      if (e.name) m.name = e.name; // the exact remembered name, never a re-roll
       if (e.tag) m.tag = e.tag;
       m.fromZoneGen = true;
       m.pos = this.clampPos(vec(e.x, e.y), m.radius);
@@ -8688,6 +8706,19 @@ export class World {
     return true;
   }
 
+  /** The identity this foe ALREADY carries, if any — a mill-named elite (or a
+   *  future authored unique) enters the saga AS ITSELF instead of being minted
+   *  a fresh name. Plain kinds and tier-labelled bodies ("Rare Goblin") don't
+   *  count; a manifested nemesis needs no capture (its record IS the identity). */
+  private distinctNameOf(a: Actor): string | undefined {
+    if (a.nemesis || !a.defId) return undefined;
+    const def = MONSTERS[a.defId];
+    if (!def || a.name === def.name) return undefined;
+    const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
+    if (label && a.name === `${label} ${def.name}`) return undefined;
+    return a.name;
+  }
+
   /** Player-credited kill bookkeeping: the grudge ledger, and a manifested
    *  nemesis's FATE — it cheats death (retained, marked) or the grudge ends
    *  (trophy + the rank's gem bounty). */
@@ -8737,7 +8768,8 @@ export class World {
           this.events.emit('nemesis/promoted', { saga: tag.sagaKey, nemesis: rec.name, rank: rec.rank });
         }
       } else if (Math.random() < NEMESIS_CFG.slayerChance) {
-        const n = formNemesis(saga, killer.defId!, killer.faction ?? '', 'slayer', Math.random);
+        const n = formNemesis(saga, killer.defId!, killer.faction ?? '', 'slayer', Math.random,
+          { name: this.distinctNameOf(killer), bornRarity: killer.rarity });
         this.text(vec(killer.pos.x, killer.pos.y - 34),
           `${nemesisTitle(n)} will remember the name ${this.meta.name}.`, '#e07840', 15);
         this.events.emit('nemesis/formed', { saga: sagaKey(this.meta.name), nemesis: n.name, deed: 'slayer' });
@@ -8771,7 +8803,8 @@ export class World {
       if (formed >= NEMESIS_CFG.survivorPerZone || !a.grudgeMark) continue;
       if (Math.random() >= NEMESIS_CFG.survivorChance) continue;
       const saga = touchSaga(this.account, this.meta.name);
-      const n = formNemesis(saga, a.defId!, a.faction ?? '', 'escaped', Math.random);
+      const n = formNemesis(saga, a.defId!, a.faction ?? '', 'escaped', Math.random,
+        { name: this.distinctNameOf(a), bornRarity: a.rarity });
       formed++;
       this.text(vec(this.player.pos.x, this.player.pos.y - 40),
         `Something you left alive will remember the name ${this.meta.name}.`, '#c8a84b', 13);
@@ -8812,6 +8845,9 @@ export class World {
   private spawnNemesisActor(rec: NemesisRecord, watch: { name: string; role: 'self' | 'merc' }, def: ZoneDef): void {
     const rank = NEMESIS_RANKS[Math.max(0, Math.min(rec.rank, NEMESIS_RANKS.length - 1))];
     const a = this.createMonster(rec.defId, Math.max(1, def.level), 'enemy');
+    // A foe that was an ELITE in life returns at that tier (ring, affixes,
+    // stats) — the nemesis rank then stacks its own menace on top.
+    if (rec.bornRarity && rec.bornRarity !== 'normal') this.promoteRarity(a, rec.bornRarity);
     a.name = nemesisTitle(rec);
     a.nemesis = { sagaKey: sagaKey(watch.name), id: rec.id, tint: rank.tint };
     a.radius = Math.round(a.radius * rank.sizeMult);

@@ -21,6 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { GRUDGE_TIERS, NEMESIS_NAMES, NEMESIS_RANKS, type GrudgeTierDef } from '../data/nemesis';
+import type { MonsterRarity } from '../engine/rarity';
 import type { Account } from './account';
 
 export const NEMESIS_SCHEMA = 1;
@@ -37,6 +38,9 @@ export interface NemesisRecord {
   /** The monster it is (MonsterDef id) — a removed def skips manifesting. */
   defId: string;
   faction: string;
+  /** Elite tier it held IN LIFE (a named rare that killed you) — manifested
+   *  again at that tier, ring and all, on top of its nemesis rank. */
+  bornRarity?: MonsterRarity;
   /** Index into NEMESIS_RANKS (clamped on read — a shortened ladder tolerates). */
   rank: number;
   /** Deed-mark kinds it carries (data/nemesis.ts NEMESIS_MARKS vocabulary). */
@@ -171,15 +175,19 @@ export function recordDeed(n: NemesisRecord, kind: string, note?: string): void 
 
 /** FORM a new nemesis in a saga (the world decides to remember this foe).
  *  Beyond the cap the LOWEST-ranked active nemesis is replaced — the memory
- *  keeps its most dangerous grudges. Returns the new record. */
+ *  keeps its most dangerous grudges. `opts.name` carries an identity the foe
+ *  ALREADY had (a named rare keeps being itself — the nomenclature mill and
+ *  the memory compound); absent, one is minted. Returns the new record. */
 export function formNemesis(
   saga: SagaRecord, defId: string, faction: string, deedKind: string, rand: () => number,
+  opts?: { name?: string; bornRarity?: MonsterRarity },
 ): NemesisRecord {
   const n: NemesisRecord = {
     schema: NEMESIS_SCHEMA,
     id: 'n' + Date.now().toString(36) + Math.floor(rand() * 0xffffff).toString(36),
-    name: mintNemesisName(faction, rand),
+    name: opts?.name?.trim() || mintNemesisName(faction, rand),
     defId, faction,
+    ...(opts?.bornRarity && opts.bornRarity !== 'normal' ? { bornRarity: opts.bornRarity } : {}),
     rank: 0, marks: [], slays: 0, encounters: 1,
     bornAt: Date.now(), lastSeenAt: Date.now(), deeds: [],
   };
