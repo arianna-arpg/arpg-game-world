@@ -5506,7 +5506,11 @@ export const SKILLS: Record<string, SkillDef> = {
       type: 'ground', radius: 44, castRange: 160, delay: 0.12,
       lingerDuration: 6, tickInterval: 0.5,
       exclusive: true,
-      emit: { skillId: 'nether_spirit', interval: 1.4, at: 'point' },
+      // Spirits RISE FROM THE CRACK (origin 'cursor' on the payload plants
+      // each one at the emit point) and scatter on random bearings — the
+      // homing does the hunting from there. A river of souls, not a
+      // fountain out of the caster.
+      emit: { skillId: 'nether_spirit', interval: 1.4, at: 'point', bearing: 'random' },
       fissure: { length: 340, speed: 480 },
     },
     effects: [
@@ -5524,9 +5528,12 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 0, cooldown: 0, useTime: 0,
     baseDamage: { chaos: [5, 8] },
     delivery: {
-      type: 'projectile', speed: 240, radius: 10, range: 600,
-      duration: 3.5,
-      trajectory: { homing: 3.2, erratic: 1.5 },
+      // Rises AT the crack point it was emitted from (never streams out of
+      // the far-away caster), drifts a beat, then LATCHES onto the living.
+      type: 'projectile', speed: 200, radius: 10, range: 600,
+      duration: 4,
+      origin: 'cursor', originRange: 9999,
+      trajectory: { homing: 3.4, erratic: 2 },
     },
     effects: [
       { type: 'damage' },

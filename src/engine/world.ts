@@ -594,7 +594,7 @@ interface Zone {
   linger0?: number;
   /** EMITTER: the lingering zone casts a payload skill on a beat (see
    *  GroundDelivery.emit — fissure bursts, storm bolts, lashing tendrils). */
-  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy' };
+  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out' };
   emitTimer?: number;
   /** The payload instance, minted once per zone (rides the placer's level). */
   emitInst?: SkillInstance;
@@ -20531,9 +20531,22 @@ export class World {
                 at = vec(z.pos.x + Math.cos(ang) * r, z.pos.y + Math.sin(ang) * r);
               }
               if (!at) break;
+              // BEARING: projectile payloads with a cursor origin rise AT
+              // the point and fly this way — 'random' scatters each spirit,
+              // 'out' fires outward through the point. The facing is
+              // borrowed for the one call (keepFacing leaves it alone
+              // inside), then handed straight back.
+              const keepDir = z.caster.facing;
+              if (z.emit.bearing === 'random') {
+                z.caster.facing = rand(0, Math.PI * 2);
+              } else if (z.emit.bearing === 'out') {
+                z.caster.facing = dist(z.pos, at) < 1
+                  ? rand(0, Math.PI * 2) : angleTo(z.pos, at);
+              }
               this.executeSkill(z.caster, z.emitInst, at, {
                 dmgMult: z.dmgMult, noCooldown: true, noRepeat: true, keepFacing: true,
               });
+              z.caster.facing = keepDir;
             }
           }
         }

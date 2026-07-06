@@ -699,8 +699,14 @@ export interface GroundDelivery {
    *  standing in it ('enemy': Thunderstorm's bolts, Entangle's lashes —
    *  the beat is skipped when nothing stands inside). Payloads execute
    *  with the placer's full build; give them castRange 9999 so a
-   *  far-travelled zone doesn't clamp its bursts back toward the caster. */
-  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy' };
+   *  far-travelled zone doesn't clamp its bursts back toward the caster.
+   *  PROJECTILE payloads want `origin: 'cursor'` + originRange 9999 on
+   *  their delivery so they MATERIALIZE at the emit point instead of
+   *  streaming from the far-away caster (Netherfissure's spirits rise
+   *  from the crack itself). `bearing` sets the flight direction of such
+   *  payloads: 'random' scatters each one, 'out' fires it outward through
+   *  the emit point (default: the caster's current facing). */
+  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out' };
   /** The lingering zone is a DOMAIN: occupants wear these modifiers while
    *  they stand inside (ground-anchored auras — Rune of Power's circle,
    *  Toxic Domain's oppression). Applied per-actor as a sheet source,
@@ -2267,8 +2273,9 @@ export interface SupportDef {
   spawnBuff?: BuffEffect;
   /** ZONE EMITTER graft: the host's lingering ground CASTS `skillId` every
    *  `interval` seconds (the pulse-cadence cursed ground — 2/1/0.5s are
-   *  three gems of one shape). */
-  zoneEmit?: { skillId: string; interval: number; at?: 'point' | 'enemy' };
+   *  three gems of one shape). `bearing` aims projectile payloads (see
+   *  GroundDelivery.emit). */
+  zoneEmit?: { skillId: string; interval: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out' };
   /** MADDENING GROUND: anything standing in the host's lingering field for
    *  `after` accumulated seconds is driven MAD (the `maddened` status —
    *  it lashes at whatever is nearest, friend or foe). */
