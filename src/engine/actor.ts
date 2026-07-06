@@ -76,6 +76,9 @@ export interface CastingState {
   chargesSpent?: number;
   /** INVOCATION weave clock: held channels bank one rune per second. */
   runeTick?: number;
+  /** CAST-WHILE-CHANNELING metronome: counts down to the next channelBeat
+   *  trigger event while the channel is held (TRIGGER_CFG.channelInterval). */
+  trigBeat?: number;
   /** RITUAL GROUND: this cast bar PLANTS a channeler construct at the aim
    *  instead of resolving the skill (the channel-to-cast conversion). */
   plantChannel?: boolean;
@@ -439,6 +442,10 @@ export class Actor {
    *  stance re-casts its placement on a world-driven beat while it burns;
    *  `reserved` max mana is locked out, refunded on release or death. */
   strobes = new Map<string, { inst: SkillInstance; timer: number; reserved: number }>();
+  /** TRIGGER GEM round-robin cursors by TriggerKind: the hotbar slot the
+   *  LAST event fired, so the next event takes the next armed gem in slot
+   *  order — one cast per event, taken in turn (trigger golden rule 1). */
+  triggerRR = new Map<string, number>();
   /** EXPONENTIAL UNLIFE (decay minions): stamped at spawn; life drains at
    *  dps0 × growth^t once t > 0 — a survival meter, not damage. */
   decay?: { t: number; dps0: number; growth: number };
@@ -1719,8 +1726,10 @@ export class Actor {
 
   /** SELECTIVE CC (StatusDef.forbidsTags): any carried status that forbids
    *  one of the skill's tags locks it — Silenced spells, Disarmed attacks,
-   *  Rooted movement. One gate for player, monster, and minion alike. */
-  private tagsForbidden(inst: SkillInstance): boolean {
+   *  Rooted movement. One gate for player, monster, and minion alike
+   *  (public: the trigger artery consults it without the canUse casting
+   *  gate — a Silenced hero's Cast-on-Crit stays silenced too). */
+  tagsForbidden(inst: SkillInstance): boolean {
     for (const s of this.statuses) {
       const forbids = STATUS_DEFS[s.id]?.forbidsTags;
       if (!forbids) continue;

@@ -22,8 +22,8 @@ import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
-  ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, type EchoRiderSpec, AOE_SHAPE,
+  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
+  ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, supportFitsInst,
   supportMaxLevel,
   type AuraDelivery, type BuffEffect, type ConstructDelivery, type GroundDelivery, type GuardSpec,
@@ -2062,7 +2062,8 @@ export class World {
         const inst = a.skills[i];
         if (!inst) continue;
         const toggle = (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
-          || (inst.def.delivery.type === 'ground' && !!inst.def.delivery.strobe);
+          || (inst.def.delivery.type === 'ground' && !!inst.def.delivery.strobe)
+          || instanceTrigger(inst) !== undefined;
         // META-ACTIONS (shift+slot): the mini-button riding the slot — and
         // the meta OWNS the slot on its frame: the physical button is still
         // down during a modifier press (held[] is deliberately preserved for
@@ -10068,6 +10069,25 @@ export class World {
         return false;
       }
     }
+    // TRIGGER-SOCKETED skills (SupportDef.trigger) are no longer castable:
+    // a seat press TOGGLES the trigger armed/disarmed — free, instant,
+    // always available (a disarmed trigger neither fires nor drains). AI
+    // presses fail outright and the brain moves on to a real button.
+    {
+      const trig = instanceTrigger(inst);
+      if (trig) {
+        if (!seatPress) return false;
+        const st = (inst.state ??= {});
+        st.triggerOff = !st.triggerOff;
+        this.text(vec(caster.pos.x, caster.pos.y - 16),
+          st.triggerOff ? 'disarmed' : 'armed', inst.def.color, 11);
+        caster.useLock = 0.25;
+        return true;
+      }
+      // A stale chain-depth stamp on a NO-LONGER-triggered skill must not
+      // dampen its events — direct casts always count as real actions.
+      if (inst.state?.trigDepth) inst.state.trigDepth = 0;
+    }
     // PREREQUISITE GATES: an unmet gate is the ONE canUse refusal worth a
     // note — the player should learn "not ready", not wonder about mana.
     if (!caster.gatesMet(inst)) {
@@ -14672,6 +14692,18 @@ export class World {
         target.esBroke = false;
         this.rollOwnProcs(target, 'esBreak', { depth });
       }
+      // THE TRIGGER GEMS (SupportDef.trigger): the landed hit raises its
+      // events. A CRIT rolls the attacker's crit-triggers at the victim —
+      // chain depth rides the SOURCE instance's trigDepth stamp, so a
+      // triggered cast's crits fire one layer deeper and die at the cap.
+      // The damage BANKS toward the victim's damage-taken triggers.
+      if (wasCrit) {
+        this.rollTriggers(caster, 'crit', {
+          depth: inst.state?.trigDepth ?? 0,
+          aim: vec(target.pos.x, target.pos.y), sourceInst: inst,
+        });
+      }
+      if (dealt > 0) this.bankDamageTakenTriggers(target, dealt, caster);
       // ECHOING MIGHT (the inverse-ignite buff): the landed blow feeds the
       // NEXT — added physical equal to a fraction of what this one dealt,
       // re-priced on every refresh (dynamic-value buffs).
@@ -16938,6 +16970,8 @@ export class World {
           a.esBroke = false;
           this.rollOwnProcs(a, 'esBreak');
         }
+        // Pain is pain: DoT feeds the damage-taken trigger banks too.
+        if (raw > 0) this.bankDamageTakenTriggers(a, raw);
       }
       // GAIN EVENTS: charges/buffs gained since last frame feed the
       // chargeGain/buffGain triggers. Payload grants land as NEW events
@@ -18623,6 +18657,16 @@ export class World {
           * a.sheet.get('effectDuration', skillContextTags(def), instanceMods(cs.inst))) {
           cs.held = false;
         }
+        // CAST-WHILE-CHANNELING metronome: the held channel raises a
+        // channelBeat trigger event every TRIGGER_CFG.channelInterval —
+        // depth 0 (channels can never themselves be triggered), aimed at
+        // the live channel aim. Each gem's own ICD paces it further.
+        cs.trigBeat = (cs.trigBeat ?? TRIGGER_CFG.channelInterval) - dt;
+        if (cs.trigBeat <= 0) {
+          cs.trigBeat += TRIGGER_CFG.channelInterval;
+          this.rollTriggers(a, 'channelBeat',
+            { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
+        }
         // INVOCATION weave: a held ELEMENTAL channel banks one rune per
         // second (its pulses stay silent — this tick is the channel's rate).
         cs.runeTick = (cs.runeTick ?? 0) + dt;
@@ -18881,6 +18925,11 @@ export class World {
                   pos: vec(a.pos.x, a.pos.y), radius: 18 + 7 * cs.stage,
                   color: '#ffd700', life: 0.18, maxLife: 0.18,
                 });
+                // CAST-ON-OVERCHARGE: every stage BANKED raises a trigger
+                // event (depth 0 — a held overcharge is a real action),
+                // aimed at the live hold aim.
+                this.rollTriggers(a, 'overchargeStage',
+                  { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
               }
             }
           }
@@ -19691,11 +19740,136 @@ export class World {
     this.text(a.pos, msg, '#8a8678', 11);
   }
 
+  /** THE TRIGGER ARTERY (SupportDef.trigger — the "Cast on X" gems): one
+   *  event, at most ONE cast. Candidates are the owner's hotbar instances
+   *  wearing a matching armed trigger, taken ROUND-ROBIN from the cursor;
+   *  the first eligible slot is SELECTED (cursor advances), its chance is
+   *  rolled once (a miss consumes the event), costs are paid honestly and
+   *  the skill executes at the event's aim. Chain depth (rule 4): the
+   *  fired instance is stamped state.trigDepth = depth + 1, and events it
+   *  raises pass that stamp back in — at TRIGGER_CFG.maxChainDepth the
+   *  chain is dead. Quick skills fire instantly; heavier bars need a
+   *  triggerPermit gem and answer as a REAL rooted cast in succession
+   *  (skipped while the owner is already casting or channeling). */
+  rollTriggers(owner: Actor, kind: TriggerKind, ctx: {
+    depth?: number; aim?: Vec2; sourceInst?: SkillInstance;
+  } = {}): void {
+    const skills = owner.skills;
+    if (!skills?.length || owner.dead) return;
+    const depth = ctx.depth ?? 0;
+    if (depth >= TRIGGER_CFG.maxChainDepth) return;
+    const start = ((owner.triggerRR.get(kind) ?? -1) + 1) % skills.length;
+    for (let k = 0; k < skills.length; k++) {
+      const idx = (start + k) % skills.length;
+      const inst = skills[idx];
+      if (!inst || inst === ctx.sourceInst) continue;
+      const spec = instanceTrigger(inst);
+      if (!spec || spec.on !== kind) continue;
+      const st = (inst.state ??= {});
+      if (st.triggerOff) continue;
+      if (this.time < (st.trigReadyAt ?? 0)) continue;
+      const tags = skillContextTags(inst.def, grantedTags(inst));
+      const extra = instanceMods(inst);
+      // damageTaken: this gem's bank must be full (filled at the hit site;
+      // an unfired full bank keeps its place in the rotation for the next
+      // event — sequential, one-at-a-time down the slots).
+      if (kind === 'damageTaken') {
+        const frac = Math.max(0.05, owner.sheet.get('triggerThreshold', tags, extra,
+          spec.lifeFrac ?? TRIGGER_CFG.lifeFrac));
+        if ((st.trigAccum ?? 0) < frac * owner.maxLife()) continue;
+      }
+      if (!this.triggerEligible(owner, inst)) continue;
+      // SELECTED: the cursor advances here whatever the dice say.
+      owner.triggerRR.set(kind, idx);
+      const p = owner.sheet.get('triggerChance', tags, extra, spec.chance ?? 1);
+      if (!chance(Math.min(TRIGGER_CFG.chanceCap, p))) return;
+      st.trigReadyAt = this.time + (spec.icd ?? TRIGGER_CFG.icd[kind]);
+      if (kind === 'damageTaken') st.trigAccum = 0;
+      st.trigDepth = depth + 1;
+      const cost = owner.skillCost(inst);
+      owner.payCost({ mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult });
+      const aim = ctx.aim ?? owner.aimPos ?? vec(
+        owner.pos.x + Math.cos(owner.facing) * 140,
+        owner.pos.y + Math.sin(owner.facing) * 140);
+      this.text(vec(owner.pos.x, owner.pos.y - 24), inst.def.name + '!', inst.def.color, 11);
+      if (inst.def.useTime > TRIGGER_CFG.maxUseTime) {
+        // PERMIT path: the heavy spell answers as a REAL bar in
+        // succession — rooted like any bar; castMove investments walk it.
+        owner.casting = {
+          inst, mode: 'cast', aim: vec(aim.x, aim.y),
+          elapsed: 0, total: Math.max(0.2, owner.skillUseTime(inst)),
+          held: false, baseMult: 1,
+          paidCost: { mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult },
+        };
+      } else {
+        this.executeSkill(owner, inst, vec(aim.x, aim.y), {
+          paidCost: { mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult },
+        });
+      }
+      return;
+    }
+  }
+
+  /** Can this instance be trigger-cast at all right now? Untriggerable
+   *  KINDS are refused here even if granted tags smuggled the gem in
+   *  (rule 3), the cast-time gate applies unless a permit rides beside
+   *  the trigger (rule 2), and cooldown/cost must clear (rule 5). */
+  private triggerEligible(owner: Actor, inst: SkillInstance): boolean {
+    const def = inst.def;
+    if (def.channel || def.castMode === 'guard'
+      || def.delivery.type === 'aura' || def.delivery.type === 'dash'
+      || def.delivery.type === 'blink' || def.delivery.type === 'leap'
+      || def.pool || def.invokes || def.comboChain
+      || (def.delivery.type === 'ground' && def.delivery.strobe)) return false;
+    // Status locks still bind (a Silenced hero's spells stay silenced) and
+    // a stunned owner triggers nothing. Deliberately NOT canUse: its
+    // casting gate would break the whole point of Cast-while-Channeling
+    // (instant executions never clobber a held cast).
+    if (owner.isStunned() || owner.tagsForbidden(inst)) return false;
+    if (def.useTime > TRIGGER_CFG.maxUseTime) {
+      if (!instanceTriggerPermit(inst)) return false;
+      // A bar cast needs the caster FREE — never interrupt a held channel
+      // or a running bar for a trigger.
+      if (owner.casting) return false;
+    }
+    if (owner.cooldowns.has(def.id)) return false;
+    const cost = owner.skillCost(inst);
+    return owner.canAfford({
+      mana: cost.mana * TRIGGER_CFG.costMult,
+      life: cost.life * TRIGGER_CFG.costMult,
+    });
+  }
+
+  /** Bank post-mitigation damage the owner TOOK into every armed
+   *  damage-taken trigger gem, then let the rotation offer ONE a firing.
+   *  DoT and hits share this seam — pain is pain. */
+  bankDamageTakenTriggers(owner: Actor, amount: number, from?: Actor): void {
+    if (amount <= 0 || !owner.skills?.length) return;
+    let any = false;
+    for (const inst of owner.skills) {
+      if (!inst) continue;
+      const spec = instanceTrigger(inst);
+      if (!spec || spec.on !== 'damageTaken') continue;
+      const st = (inst.state ??= {});
+      if (st.triggerOff) continue;
+      st.trigAccum = (st.trigAccum ?? 0) + amount;
+      any = true;
+    }
+    if (any) {
+      this.rollTriggers(owner, 'damageTaken', {
+        aim: from && !from.dead ? vec(from.pos.x, from.pos.y) : undefined,
+      });
+    }
+  }
+
   /** HUD gating: is the skill usable RIGHT NOW beyond cost/cooldown — a
    *  qualified target in range for debuff-gated skills, fuel for pool
    *  skills? The bar greys the slot when this says no. */
   skillUsable(a: Actor, inst: SkillInstance): boolean {
     const def = inst.def;
+    // Trigger-socketed skills are never hand-castable: the slot greys and
+    // the key becomes the arm/disarm latch (the border glow shows state).
+    if (instanceTrigger(inst)) return false;
     if (def.pool && !a.venting.has(def.pool.id)
       && (a.pools.get(def.pool.id) ?? 0) < (def.pool.min ?? 1)) return false;
     // Unmet PREREQUISITE gates grey the slot ("not ready").

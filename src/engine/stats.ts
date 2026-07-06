@@ -671,6 +671,12 @@ export const STAT_DEFS: Record<string, StatDef> = {
   fissureCount:   { label: 'Additional Fissures', base: 0, min: 0 },
   /** Extra BRANCHES forked off each fissure (innate branches seed it). */
   fissureBranches:{ label: 'Fissure Branches', base: 0, min: 0 },
+  /** TRIGGER GEMS: chance per event that an armed trigger fires (the gem's
+   *  spec chance seeds the query; TRIGGER_CFG.chanceCap lids it). */
+  triggerChance:  { label: 'Trigger Chance', base: 0, min: 0, percent: true },
+  /** TRIGGER GEMS (damageTaken): max-life fraction that must accumulate
+   *  per firing — LOWER fires quicker (the spec's lifeFrac seeds it). */
+  triggerThreshold:{ label: 'Trigger Damage Threshold', base: 0, min: 0.05, percent: true },
   /** >0: a held channel's facing REVOLVES at this rate (rad/s) instead of
    *  tracking the aim — the beam becomes a lighthouse (Orbital Sweep). */
   channelAutoSpin:{ label: 'Channel Revolution', base: 0 },

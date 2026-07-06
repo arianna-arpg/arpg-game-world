@@ -582,6 +582,82 @@ export interface FissureTrailSpec {
   close?: { delay: number; damageScale: number };
 }
 
+// ---------------------------------------------------------------------------
+// THE TRIGGER DISCIPLINE — the "Cast on X" meta-gems (SupportDef.trigger).
+//
+// A trigger-socketed skill is NO LONGER CASTABLE: its key only ARMS and
+// DISARMS it (disarmed = never fires, never drains), and the skill instead
+// casts itself when the owner's play raises its event — a critical strike,
+// damage taken, the beats of a held channel, an overcharge stage banked.
+//
+// GOLDEN RULES (engine-enforced in world.rollTriggers — the anti-exploit
+// constitution, sibling to the proc rules in data/procs.ts):
+//  1. ONE cast per event, chosen ROUND-ROBIN down the hotbar: the cursor
+//     advances to the fired slot, so several trigger gems TAKE TURNS in
+//     slot order — never a simultaneous volley.
+//  2. CAST-TIME GATE: only skills at or under maxUseTime BASE use time may
+//     be trigger-cast instantly. A triggerPermit gem beside the trigger
+//     lifts the gate by casting the heavy skill as a REAL BAR in
+//     succession — rooted like any bar (castMove/castMobility still walk).
+//  3. UNTRIGGERABLE KINDS: channels, guards, auras, movement deliveries,
+//     strobe stances, pool releases, invocations and combo chains can
+//     never be triggered — enforced at socket time (excludeTags) AND
+//     re-checked at fire time (granted tags can't smuggle one in).
+//  4. CHAIN DEPTH: a fired cast stamps state.trigDepth = event depth + 1;
+//     events it raises carry that stamp and die past maxChainDepth.
+//     Channel → CwC skill → its crits → CoC meteor is the allowed comedy
+//     (depth 2); the meteor's own crits trigger nothing further.
+//  5. Honest economics: triggered casts pay costs (× costMult), respect
+//     and set their cooldowns, and every gem wears an ICD no amount of
+//     stacked chance can beat. Trigger chance caps at 95% per event.
+// ---------------------------------------------------------------------------
+
+export type TriggerKind = 'crit' | 'damageTaken' | 'channelBeat' | 'overchargeStage';
+
+export const TRIGGER_CFG = {
+  /** Max BASE use time (def.useTime) a skill may have and still be
+   *  trigger-cast instantly — heavier bars need a triggerPermit gem. */
+  maxUseTime: 0.5,
+  /** How deep trigger chains may nest (rule 4). */
+  maxChainDepth: 2,
+  /** Cost multiplier on triggered casts (1 = full honest price). */
+  costMult: 1,
+  /** Per-kind fallback internal cooldowns, seconds (a spec's icd wins). */
+  icd: { crit: 0.15, damageTaken: 0.25, channelBeat: 0.35, overchargeStage: 0 } as Record<TriggerKind, number>,
+  /** damageTaken: fraction of MAX LIFE that must accumulate per firing
+   *  (a spec's lifeFrac wins; the triggerThreshold stat scales either). */
+  lifeFrac: 0.3,
+  /** channelBeat: the global metronome — seconds of held channel between
+   *  event beats (each gem's own ICD paces it further). */
+  channelInterval: 0.4,
+  /** Trigger chance is capped here per event, however stacked. */
+  chanceCap: 0.95,
+} as const;
+
+export interface TriggerSpec {
+  on: TriggerKind;
+  /** Chance per event — the BASE of the triggerChance stat query
+   *  (tag-filtered, so gems/passives can scale it). Default 1. */
+  chance?: number;
+  /** Internal cooldown, seconds (default TRIGGER_CFG.icd[on]). */
+  icd?: number;
+  /** damageTaken only: max-life fraction to accumulate before a firing —
+   *  the BASE of the triggerThreshold stat query (default cfg.lifeFrac). */
+  lifeFrac?: number;
+}
+
+/** The trigger conversion riding an instance (first socketed wins). */
+export function instanceTrigger(inst: SkillInstance): TriggerSpec | undefined {
+  for (const s of inst.sockets) if (s?.def.trigger) return s.def.trigger;
+  return undefined;
+}
+
+/** True when a permit gem rides the instance (lifts the cast-time gate —
+ *  the heavy spell answers as a REAL rooted bar in succession). */
+export function instanceTriggerPermit(inst: SkillInstance): boolean {
+  return inst.sockets.some(s => !!s?.def.triggerPermit);
+}
+
 /** A PATH WARP for ground-laid fissures (SupportDef.fissurePath): the
  *  crack keeps its length, speed and textures but abandons the straight
  *  line. 'orbit' tears a RING around the CASTER at the aim distance —
@@ -2311,6 +2387,16 @@ export interface SupportDef {
    *  fissure gems (volatility, arming, warps, recloses) all ride it — and
    *  the graft grants the 'fissure' tag so they may socket in beside it. */
   meleeFissure?: MeleeFissureSpec;
+  /** A TRIGGER conversion (the "Cast on X" meta-gems): the host is no
+   *  longer castable — its key ARMS/DISARMS it, and the skill fires when
+   *  the owner's play raises the event. See THE TRIGGER DISCIPLINE block
+   *  for the engine-enforced golden rules. */
+  trigger?: TriggerSpec;
+  /** TRIGGER PERMIT (Sequenced Invocation): rides BESIDE a trigger gem and
+   *  lifts its cast-time gate — the heavy skill answers the event as a
+   *  REAL cast bar in succession, rooted like any bar (castMove /
+   *  castMobility investments still walk it). */
+  triggerPermit?: true;
   /** CORPSE SPAWN (Hiveborn): corpses this skill CONSUMES crawl back out —
    *  `perCorpse` births one per body eaten; `count` instead births a fixed
    *  brood per use (the ghost variant pairs it with an imposed cooldown
@@ -2526,6 +2612,13 @@ export interface SkillInstance {
     /** CAROMS: anchors collected so far + the last press's time (window). */
     anchors?: { x: number; y: number }[];
     anchorsAt?: number;
+    /** TRIGGER GEMS (SupportDef.trigger — all transient, reset on load):
+     *  the key's arm/disarm latch, the ICD clock, the damage-taken bank,
+     *  and the chain-depth stamp of the last trigger-firing (rule 4). */
+    triggerOff?: boolean;
+    trigReadyAt?: number;
+    trigAccum?: number;
+    trigDepth?: number;
   };
 }
 

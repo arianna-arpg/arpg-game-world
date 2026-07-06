@@ -222,6 +222,58 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The trigger meta-gems (the "Cast on X" family) --------------------------
+  // SupportDef.trigger converts the host: its key only ARMS/DISARMS it, and
+  // the skill casts itself when the owner's play raises the event. The
+  // golden rules (one cast per event round-robin down the bar, cast-time
+  // gate, chain-depth cap, ICDs, honest costs) live in TRIGGER_CFG and
+  // world.rollTriggers — see THE TRIGGER DISCIPLINE in engine/skills.ts.
+  cast_on_crit: {
+    id: 'cast_on_crit', name: 'Cast on Critical Strike',
+    description: 'This skill is NO LONGER YOURS to press — its key only arms and disarms it. While armed, your critical strikes with OTHER skills cast it for you: one trigger per crit, taken in turn down the bar, honest mana, brief internal cooldown. Quick skills only (0.5s base or less) — heavier bars need Sequenced Invocation beside this.',
+    color: '#e8c84a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'crit', chance: 0.7, icd: 0.15 },
+    mods: [],
+    perLevel: [mod('triggerChance', 'flat', 0.06)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_on_damage_taken: {
+    id: 'cast_on_damage_taken', name: 'Cast when Damage Taken',
+    description: 'The skill arms itself against your PAIN: once you have taken 30% of your max life (hits and DoT alike), the next wound casts it for you — aimed back at whatever hurt you. Its key only arms and disarms it. Quick skills only, unless Sequenced Invocation rides beside it.',
+    color: '#d87a6a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'damageTaken', chance: 1, icd: 0.25, lifeFrac: 0.3 },
+    mods: [],
+    perLevel: [mod('triggerThreshold', 'flat', -0.02)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_while_channeling: {
+    id: 'cast_while_channeling', name: 'Cast while Channelling',
+    description: 'Socket this into a QUICK skill and it fires itself on a steady beat while you hold ANY channel — the maelstrom you sustain, punctuated by the spell you never press. Its key only arms and disarms it. Channels themselves refuse this gem: a channel cannot channel.',
+    color: '#8ab8e8', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'channelBeat', chance: 1, icd: 0.35 },
+    mods: [],
+    perLevel: [mod('triggerChance', 'flat', 0.05)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_on_overcharge: {
+    id: 'cast_on_overcharge', name: 'Cast on Overcharge',
+    description: 'Every overcharge STAGE you bank casts this skill for you — the held greed pays out as you climb, not just when you let go. Its key only arms and disarms it. Quick skills only, unless Sequenced Invocation rides beside it.',
+    color: '#ffd24a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'overchargeStage', chance: 1 },
+    mods: [],
+    perLevel: [mod('triggerChance', 'flat', 0.05)],
+    weight: 4, minDropLevel: 10,
+  },
+  sequenced_invocation: {
+    id: 'sequenced_invocation', name: 'Sequenced Invocation',
+    description: 'Rides BESIDE a trigger gem and lifts its cast-time gate: the heavy spell answers the moment as a REAL cast in succession — feet planted for the bar (castMove and mobility investments still walk it). No trigger gem beside it, no effect.',
+    color: '#b8a8e8', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    triggerPermit: true,
+    mods: [],
+    perLevel: [mod('castSpeed', 'increased', 0.05)],
+    weight: 4, minDropLevel: 10,
+  },
+
   // --- The offering ecology -----------------------------------------------------
   hiveborn: {
     id: 'hiveborn', name: 'Hiveborn',

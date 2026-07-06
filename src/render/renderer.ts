@@ -4,7 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { clamp, dist, type Vec2 } from '../core/math';
-import { instanceMeta, instanceStrikeTiming, SKILL_RARITIES } from '../engine/skills';
+import { instanceMeta, instanceStrikeTiming, instanceTrigger, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { STATUS_DEFS } from '../engine/status';
@@ -3943,6 +3943,9 @@ export class Renderer {
         p.activeAuras.has(inst.def.id)
         || p.summonToggles.has(inst.def.id)
         || p.strobes.has(inst.def.id)
+        // ARMED trigger gems (the "Cast on X" family): the slot itself is
+        // greyed (never hand-castable), but the border glow says "live".
+        || (instanceTrigger(inst) !== undefined && !inst.state?.triggerOff)
         || (inst.def.pool !== undefined && p.venting.has(inst.def.pool.id))
         || world.zones.some(z => z.caster === p && z.toggled && z.inst.def.id === inst.def.id)
       ) : false;
