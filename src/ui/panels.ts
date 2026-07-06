@@ -18,6 +18,9 @@ import {
   type SkillDef, type SkillInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, type ItemInstance } from '../engine/items';
+import { describeItem, itemGridSize } from '../engine/itemgen';
+import { ITEM_BASES } from '../data/itembases';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -70,6 +73,7 @@ export function meetsRequirements(world: World, def: SkillDef): boolean {
 export class UI {
   private classSelect = document.getElementById('class-select')!;
   private charSheet = document.getElementById('char-sheet')!;
+  private inventory = document.getElementById('inventory')!;
   private skillBook = document.getElementById('skill-book')!;
   private passiveTree = document.getElementById('passive-tree')!;
   private worldMap = document.getElementById('world-map')!;
@@ -98,6 +102,11 @@ export class UI {
   private armedRebind: ((e: KeyboardEvent) => void) | null = null;
 
   charSheetOpen = false;
+  inventoryOpen = false;
+  /** Bag item LIFTED by a click, awaiting its next click (a cell / a doll
+   *  slot / another item to swap with). Uid-addressed so it survives the
+   *  panel's innerHTML re-renders; self-heals if the item vanishes. */
+  private heldItemUid: number | null = null;
   skillBookOpen = false;
   treeOpen = false;
   mapOpen = false;
@@ -169,6 +178,7 @@ export class UI {
     // their innerHTML re-renders); content is read from live data each hover.
     bindTooltips(this.charSheet, (el) => el.dataset.tip === 'class' ? this.classTooltip() : null);
     bindTooltips(this.skillBook, (el) => el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
+    bindTooltips(this.inventory, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     this.updateHintBar(); // replace the static index.html placeholder with live binds
   }
 
@@ -212,6 +222,7 @@ export class UI {
     const move = (['moveUp', 'moveLeft', 'moveDown', 'moveRight'] as const).map(k).join('');
     const slots = (['skillSlot2', 'skillSlot3', 'skillSlot4', 'skillSlot5', 'skillSlot6', 'skillSlot7'] as const).map(k).join('/');
     el.innerHTML = `[${move}] move &nbsp; [LMB/RMB/${slots}] skills &nbsp; [${k('panelChar')}] character &nbsp; `
+      + `[${k('panelInv')}] inventory &nbsp; [${k('pickup')}] pick up &nbsp; `
       + `[${k('panelBook')}] skill book &nbsp; [${k('panelTree')}] passive tree &nbsp; [${k('panelMap')}] world map &nbsp; [Esc] menu`;
   }
 
@@ -433,6 +444,174 @@ export class UI {
         Tag-scaled stats (damage, speed) shown without skill context — each skill
         applies its own tags, level, and socketed supports on use.
       </div>`;
+  }
+
+  // --------------------------------------------------------------- inventory
+
+  toggleInventory(): void {
+    this.inventoryOpen = !this.inventoryOpen;
+    this.inventory.classList.toggle('hidden', !this.inventoryOpen);
+    if (this.inventoryOpen) this.refreshInventory();
+    else { this.heldItemUid = null; hideTooltip(); }
+  }
+
+  /** An item anywhere on this seat — bag or doll (tooltips serve both). */
+  private findItem(uid: number): ItemInstance | undefined {
+    const m = this.getWorld().meta;
+    return m.items.find(i => i.uid === uid)
+      ?? Object.values(m.equipped).find(i => i?.uid === uid) ?? undefined;
+  }
+
+  /** Rich item card — every line derives live from the instance's rolls, so
+   *  a data retune re-prices the tooltip the same instant it re-prices play. */
+  private itemTooltip(uid: number): TooltipContent | null {
+    const item = this.findItem(uid);
+    if (!item) return null;
+    const d = describeItem(item);
+    const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
+    for (const s of d.defense) lines.push(`<div style="color:#e0d8c8">${s}</div>`);
+    for (const s of d.implicit) lines.push(`<div style="color:#b8a8e0">${s}</div>`);
+    for (const a of d.affix) {
+      lines.push(`<div style="color:#8fa3e8">${a.text}
+        <span style="color:${a.tag === 'EX' ? '#7a9ae8' : '#5a5668'};font-size:9px;font-weight:bold">${a.tag}</span></div>`);
+    }
+    for (const s of d.unique) lines.push(`<div style="color:#e8a878">${s}</div>`);
+    if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
+    return {
+      title: `<span style="color:${d.color}">${d.title}</span>`,
+      description: lines.join(''),
+      meta: `${d.reqLine} · ${ITEM_RARITIES[item.rarity].label}`,
+    };
+  }
+
+  refreshInventory(): void {
+    if (!this.inventoryOpen) return;
+    const m = this.getWorld().meta;
+    const CELL = 34;
+    const W = ITEM_CFG.inventory.w;
+    const H = ITEM_CFG.inventory.h;
+    const held = this.heldItemUid !== null ? m.items.find(i => i.uid === this.heldItemUid) : undefined;
+    if (this.heldItemUid !== null && !held) this.heldItemUid = null; // vanished (equipped/dropped) — self-heal
+
+    // --- the doll: every ENABLED slot from the registry, in registry order ---
+    const heldBase = held ? ITEM_BASES[held.baseId] : undefined;
+    const doll = EQUIP_SLOTS.filter(s => s.enabled).map(slot => {
+      const worn = m.equipped[slot.id];
+      const takes = heldBase && slot.accepts.includes(heldBase.category);
+      const border = worn ? ITEM_RARITIES[worn.rarity].color : takes ? '#7ec8a0' : '#3a3644';
+      const label = worn
+        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>`
+        : `<span style="color:#5a5668">${slot.label}</span>`;
+      return `<button data-doll="${slot.id}" ${worn ? `data-tip="item" data-item-uid="${worn.uid}"` : ''}
+        style="display:block;width:170px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
+        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:pointer">${label}</button>`;
+    }).join('');
+
+    // --- the bag: cells (click targets) under absolutely-positioned tiles ---
+    let cells = '';
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        cells += `<div data-cell="${x}:${y}" style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
+          width:${CELL - 2}px;height:${CELL - 2}px;background:#16131d;border:1px solid #2a2634"></div>`;
+      }
+    }
+    const GLYPH: Record<string, string> = {
+      helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
+      ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹',
+    };
+    const tiles = m.items.map(i => {
+      if (i.x === undefined || i.y === undefined) return '';
+      const s = itemGridSize(i);
+      const r = ITEM_RARITIES[i.rarity];
+      const isHeld = i.uid === this.heldItemUid;
+      const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
+      return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1"
+        style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
+        width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
+        border:2px solid ${r.color};border-radius:3px;cursor:pointer;box-sizing:border-box;
+        display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
+        ${isHeld ? 'outline:2px dashed #e8e0d0;opacity:0.7;' : ''}
+        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${GLYPH[cat] ?? '?'}</div>`;
+    }).join('');
+
+    this.inventory.innerHTML = `
+      <h2>Inventory</h2>
+      <div style="display:flex;gap:18px;align-items:flex-start">
+        <div>
+          <h3>Equipped</h3>
+          ${doll}
+        </div>
+        <div>
+          <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
+          <div style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
+          <div style="margin-top:8px;color:#8a8678;font-size:10px">
+            click: lift / place (a lone blocker swaps) · double-click: equip ·
+            lifted → doll slot: equip there · worn slot click: unequip ·
+            shift-click: drop to ground · [${keyDisplay(this.getSettings().keybinds.pickup)}] grabs nearby gear
+          </div>
+        </div>
+      </div>`;
+    this.wireInventory();
+  }
+
+  /** Re-attach bag/doll click handlers after a re-render (the panels' idiom). */
+  private wireInventory(): void {
+    const world = this.getWorld();
+    const q = <T extends HTMLElement>(sel: string): T[] => [...this.inventory.querySelectorAll<T>(sel)];
+
+    q<HTMLElement>('[data-bag-item]').forEach(el => {
+      const uid = Number(el.dataset.itemUid);
+      el.addEventListener('click', (e) => {
+        if (e.shiftKey) {
+          world.requestMeta({ t: 'dropItem', uid });
+          if (this.heldItemUid === uid) this.heldItemUid = null;
+          this.refreshInventory();
+          return;
+        }
+        if (this.heldItemUid !== null && this.heldItemUid !== uid) {
+          // Held → clicked item: try the tetris SWAP at its cells.
+          const target = this.findItem(uid);
+          const heldUid = this.heldItemUid;
+          if (target?.x !== undefined && target.y !== undefined) {
+            const tx = target.x;
+            const ty = target.y;
+            world.requestMeta({ t: 'moveItem', uid: heldUid, x: tx, y: ty });
+            // Applied synchronously (host / optimistic client) — drop the lift
+            // only if the swap actually landed; otherwise stay lifted.
+            const moved = this.findItem(heldUid);
+            if (moved && moved.x === tx && moved.y === ty) this.heldItemUid = null;
+          }
+        } else {
+          this.heldItemUid = this.heldItemUid === uid ? null : uid;
+        }
+        this.refreshInventory();
+      });
+      el.addEventListener('dblclick', () => {
+        world.requestMeta({ t: 'equipItem', uid });
+        this.heldItemUid = null;
+        this.refreshInventory();
+      });
+    });
+
+    q<HTMLElement>('[data-cell]').forEach(el => el.addEventListener('click', () => {
+      if (this.heldItemUid === null) return;
+      const [x, y] = el.dataset.cell!.split(':').map(Number);
+      world.requestMeta({ t: 'moveItem', uid: this.heldItemUid, x, y });
+      this.heldItemUid = null;
+      this.refreshInventory();
+    }));
+
+    q<HTMLElement>('[data-doll]').forEach(el => el.addEventListener('click', () => {
+      const slot = el.dataset.doll!;
+      if (this.heldItemUid !== null) {
+        world.requestMeta({ t: 'equipItem', uid: this.heldItemUid, slot });
+        this.heldItemUid = null;
+      } else if (this.getWorld().meta.equipped[slot]) {
+        world.requestMeta({ t: 'unequipItem', slot });
+      }
+      this.refreshInventory();
+      this.refreshCharSheet(); // worn stats moved — keep the open sheet honest
+    }));
   }
 
   // -------------------------------------------------------------- skill book
@@ -1899,6 +2078,9 @@ export class UI {
 
   hideAll(): void {
     this.charSheetOpen = false;
+    this.inventoryOpen = false;
+    this.heldItemUid = null;
+    this.inventory.classList.add('hidden');
     this.skillBookOpen = false;
     this.treeOpen = false;
     this.mapOpen = false;

@@ -327,6 +327,13 @@ function handleLocalPanels(): void {
   if (input.justPressed(kb.panelBook)) ui.toggleSkillBook();
   if (input.justPressed(kb.panelTree)) ui.toggleTree();
   if (input.justPressed(kb.panelMap)) ui.toggleMap();
+  if (input.justPressed(kb.panelInv)) ui.toggleInventory();
+  // GEAR pickup — a META intent (host-validated, co-op-replicated), not raw
+  // world poking; the open bag re-renders so the grab appears instantly.
+  if (input.justPressed(kb.pickup)) {
+    world.requestMeta({ t: 'pickupItem' });
+    if (ui.inventoryOpen) ui.refreshInventory();
+  }
 }
 
 /** Spawn a local stand-in ally (scripted: follow + auto-attack) to exercise the
