@@ -8,6 +8,10 @@
 import { MONSTERS, WAVE_TABLE } from './monsters';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
+import { PROCS } from './procs';
+import { CLASSES } from './classes';
+import { VOCATIONS, VOCATION_CFG } from './vocations';
+import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { STAT_DEFS } from '../engine/stats';
 import { ZONES, type StampSpec, type StructureRoll } from './zones';
 import { TILESETS } from './tilesets';
@@ -132,6 +136,46 @@ export function validateContent(): void {
       if (!hasLandmark(r.landmark)) warn(`voyage island ${isle.id}: unknown landmark '${r.landmark}'`);
     }
     if (!isle.nameFirst.length || !isle.nameSecond.length) warn(`voyage island ${isle.id}: empty name pool`);
+  }
+
+  // VOCATIONS: home class exists, tree links resolve locally, the tree fits the
+  // star's empty centre, node mods name real stats (STAT_DEFS or a registered
+  // proc's generated `proc_<id>` chance), the spending gate resolves to a real
+  // node, and every quest step's tileset / boss / spawner / pack ids are live.
+  for (const v of Object.values(VOCATIONS)) {
+    if (!CLASSES.some(c => c.id === v.classId)) warn(`vocation ${v.id}: unknown class '${v.classId}'`);
+    const gate = vocationGateNodeId(v.id);
+    if (gate !== null && !PASSIVE_NODES[gate]) warn(`vocation ${v.id}: gate node '${gate}' is not on the tree`);
+    const localIds = new Set<string>(['root']);
+    for (const n of v.tree) {
+      if (localIds.has(n.id)) warn(`vocation ${v.id}: duplicate tree node id '${n.id}'`);
+      localIds.add(n.id);
+    }
+    for (const n of v.tree) {
+      for (const l of n.links) {
+        if (!localIds.has(l)) warn(`vocation ${v.id}: node '${n.id}' links to unknown local id '${l}'`);
+      }
+      if (Math.hypot(n.x, n.y) > VOCATION_CFG.treeRadius) {
+        warn(`vocation ${v.id}: node '${n.id}' at r=${Math.hypot(n.x, n.y).toFixed(0)} pokes past the star's centre (max ${VOCATION_CFG.treeRadius})`);
+      }
+      for (const md of n.mods ?? []) {
+        const isProcChance = md.stat.startsWith('proc_') && PROCS[md.stat.slice('proc_'.length)] !== undefined;
+        if (!STAT_DEFS[md.stat] && !isProcChance) {
+          warn(`vocation ${v.id}: node '${n.id}' mods unknown stat '${md.stat}'`);
+        }
+      }
+    }
+    if (!v.quest.steps.length) warn(`vocation ${v.id}: quest chain has no steps`);
+    v.quest.steps.forEach((s, i) => {
+      const src = `vocation ${v.id} step ${i + 1}`;
+      if (!TILESETS[s.zone.tileset]) warn(`${src}: unknown tileset '${s.zone.tileset}'`);
+      const o = s.zone.objective;
+      if (o.kind === 'boss' && !MONSTERS[o.id]) warn(`${src}: boss '${o.id}' is not a monster`);
+      if (o.kind === 'spawners' && !MONSTERS[o.spawnerId]) warn(`${src}: spawner '${o.spawnerId}' is not a monster`);
+      for (const e of s.zone.packsOverride?.table ?? []) {
+        if (!MONSTERS[e.id]) warn(`${src}: pack table names unknown monster '${e.id}'`);
+      }
+    });
   }
 
   for (const m of Object.values(MONSTERS)) {

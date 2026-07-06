@@ -366,6 +366,12 @@ function frame(now: number): void {
         world.caravanDwellRequested = false;
         if (!ui.caravanOpen) ui.showCaravan();
       }
+      // The quartermaster dwell with FRESH vocation chains on offer asks to open
+      // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
+      if (world.vocationOfferRequested) {
+        world.vocationOfferRequested = false;
+        if (!ui.vocationOpen) ui.showVocationMenu();
+      }
       // Dwelling by the return-Caravanner IN THE WILDS ports straight home — no menu.
       if (world.caravanReturnRequested) {
         world.caravanReturnRequested = false;

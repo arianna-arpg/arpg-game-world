@@ -19,7 +19,8 @@ import {
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
 import { CLASSES, type ClassDef } from '../data/classes';
-import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, type PassiveNode } from '../data/passives';
+import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
+import { VOCATIONS, vocationRootId } from '../data/vocations';
 import { BIOMES, biomeOf } from '../world/biomes';
 import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
@@ -75,6 +76,7 @@ export class UI {
   private caravanMenu = document.getElementById('caravan-menu')!;
   private tollMenu = document.getElementById('toll-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
+  private vocationMenu = document.getElementById('vocation-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
   private accountScreen = document.getElementById('account-screen')!;
   private escapeMenu = document.getElementById('escape-menu')!;
@@ -102,6 +104,7 @@ export class UI {
   caravanOpen = false;
   tollOpen = false;
   sailOpen = false;
+  vocationOpen = false;
   /** World-map zoom (1 = fit-all; >1 = zoomed in) + pan offset (user-units from
    *  the fitted centre). Persist across opens; reset via the map's % button. As
    *  the charted map grows and the fixed-size text shrinks, zoom in to read it. */
@@ -365,11 +368,19 @@ export class UI {
       return `<div class="stat-row"><span>${def.label}</span><span class="val">${text}</span></div>`;
     }).join('');
 
+    // The vocation TITLE rides the class name once granted — "Warrior, Warbringer".
+    const vocTitle = m.vocations
+      .map(vid => VOCATIONS[vid])
+      .filter((v): v is NonNullable<typeof v> => !!v)
+      .map(v => `, <span style="color:${v.color}">${v.name}</span>`)
+      .join('');
+    const vocPts = m.vocations.length
+      ? ` · <span style="color:#e8c860">${m.vocationPoints} vocation</span>` : '';
     this.charSheet.innerHTML = `
-      <h2><span data-tip="class" style="cursor:help;border-bottom:1px dotted var(--gold)">${m.classDef.name}</span> — Level ${p.level}</h2>
+      <h2><span data-tip="class" style="cursor:help;border-bottom:1px dotted var(--gold)">${m.classDef.name}</span>${vocTitle} — Level ${p.level}</h2>
       <div style="font-size:11px;margin-bottom:6px">
         <span style="color:#ffd700">${m.passivePoints} passive</span> ·
-        <span style="color:#7ec8a0">${m.skillPoints} skill</span> points available
+        <span style="color:#7ec8a0">${m.skillPoints} skill</span>${vocPts} points available
       </div>
       <h3>Attributes <span style="color:#8a8678;font-weight:normal">(allocated on the passive tree — P)</span></h3>
       ${attrRows}
@@ -691,43 +702,84 @@ export class UI {
     this.computeTreeBox();
 
     const RADII: Record<PassiveNode['kind'], number> = {
-      start: 13, small: 9, notable: 14, keystone: 17, attr: 11,
+      start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15,
     };
+    // VOCATION nodes exist for every defined vocation, but only the ones this
+    // character has EARNED render (they share the star's central space).
+    const visibleNode = (n: PassiveNode): boolean =>
+      n.vocation === undefined || m.vocations.includes(n.vocation);
     const drawnEdges = new Set<string>();
     let edges = '';
     let circles = '';
 
     for (const node of Object.values(PASSIVE_NODES)) {
+      if (!visibleNode(node)) continue;
       for (const other of PASSIVE_ADJACENCY[node.id]) {
+        const b = PASSIVE_NODES[other];
+        if (!visibleNode(b)) continue;
         const key = node.id < other ? node.id + '|' + other : other + '|' + node.id;
         if (drawnEdges.has(key)) continue;
         drawnEdges.add(key);
-        const b = PASSIVE_NODES[other];
         const active = m.allocated.has(node.id) && m.allocated.has(other);
+        const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
         edges += `<line x1="${node.x}" y1="${node.y}" x2="${b.x}" y2="${b.y}"
           data-a="${node.id}" data-b="${other}"
-          stroke="${active ? '#c8a84b' : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
+          stroke="${active ? (voc?.color ?? '#c8a84b') : '#3a3a52'}" stroke-width="${active ? 3 : 1.5}"/>`;
       }
     }
 
+    // THE GATE LINK: a dashed thread from each earned vocation's crest to its
+    // gate start node — the visual "this tree is attached to that starting
+    // point". Bright while the gate is still closed (path there to spend),
+    // faint once it's open. Render-only: never part of the adjacency graph,
+    // so it can't be walked or leaked onto (allocation stays tree-legal).
+    for (const vid of m.vocations) {
+      const gate = vocationGateNodeId(vid);
+      const root = PASSIVE_NODES[vocationRootId(vid)];
+      const gateNode = gate ? PASSIVE_NODES[gate] : undefined;
+      const voc = VOCATIONS[vid];
+      if (!root || !gateNode || !voc) continue;
+      const open = vocationGateOpen(m.allocated, vid);
+      edges += `<line x1="${root.x}" y1="${root.y}" x2="${gateNode.x}" y2="${gateNode.y}"
+        stroke="${voc.color}" stroke-width="${open ? 1.5 : 2.5}" stroke-dasharray="6 7"
+        opacity="${open ? 0.25 : 0.8}"/>`;
+    }
+
     for (const node of Object.values(PASSIVE_NODES)) {
+      if (!visibleNode(node)) continue;
       const allocated = m.allocated.has(node.id);
-      const available = !allocated && m.passivePoints > 0
-        && PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n));
-      const fill = allocated ? '#c8a84b'
+      const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
+      const gateOpen = node.vocation === undefined || vocationGateOpen(m.allocated, node.vocation);
+      // Vocation nodes spend the VOCATION pool behind the (toggleable) gate;
+      // everything else spends normal passive points. Same adjacency walk.
+      const available = !allocated
+        && (voc
+          ? m.vocationPoints > 0 && gateOpen && PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))
+          : m.passivePoints > 0 && PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n)));
+      const fill = allocated ? (voc?.color ?? '#c8a84b')
         : node.kind === 'keystone' ? '#5a2a3a'
         : node.kind === 'notable' ? '#3a3a5a'
         : node.kind === 'attr' ? '#2a4a3a'
+        : node.kind === 'vocation' ? '#241f33'
         : '#26262e';
-      const stroke = allocated ? '#ffe9a0' : available ? '#d8d4c8' : '#4a4a5e';
+      const stroke = node.kind === 'vocation' ? (voc?.color ?? '#ffe9a0')
+        : allocated ? '#ffe9a0'
+        : available ? '#d8d4c8'
+        : voc && !gateOpen ? '#3a3648'
+        : '#4a4a5e';
       const attrText = node.attributes
         ? '\n' + Object.entries(node.attributes).map(([a, v]) =>
             `+${v} ${ATTRIBUTES[a as AttributeId].label}`).join(', ')
         : '';
+      const gateName = node.vocation !== undefined
+        ? PASSIVE_NODES[vocationGateNodeId(node.vocation) ?? '']?.name : undefined;
+      const vocText = voc
+        ? `\n[${voc.name} vocation — spends vocation points${gateOpen ? '' : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`}]`
+        : '';
       circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind]}"
-        fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' ? 2.5 : 1.5}"
+        fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' ? 2.5 : 1.5}"
         data-node="${node.id}" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}">
-        <title>${node.name} — ${node.description}${attrText}</title>
+        <title>${node.name} — ${node.description}${attrText}${vocText}</title>
       </circle>`;
     }
 
@@ -735,8 +787,18 @@ export class UI {
     // play mode uses the auto-fit + zoom/pan viewBox.
     const viewBox = DEV.passiveTreeEditor ? '0 0 6000 6000' : this.treeViewBox();
     const zPct = Math.round(this.treeZoom * 100);
+    // Vocation header chip: the separate point pool, plus a "path to the gate"
+    // nudge while the spending gate is still closed.
+    const vocChips = m.vocations.map(vid => {
+      const voc = VOCATIONS[vid];
+      if (!voc) return '';
+      const open = vocationGateOpen(m.allocated, vid);
+      const gateName = PASSIVE_NODES[vocationGateNodeId(vid) ?? '']?.name;
+      return ` · <span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
+        + (open ? '' : ` <span style="color:#8a8678;font-size:11px">— locked: allocate ${gateName ?? 'its class start'}</span>`);
+    }).join('');
     this.passiveTree.innerHTML = `
-      <h2>Passive Tree — <span style="color:#ffd700">${m.passivePoints} points</span>
+      <h2>Passive Tree — <span style="color:#ffd700">${m.passivePoints} points</span>${vocChips}
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
           ${DEV.passiveTreeEditor ? '' : `<span class="tree-zoom-grp">
             <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
@@ -912,6 +974,55 @@ export class UI {
       });
     });
     this.caravanMenu.querySelector<HTMLButtonElement>('[data-caravan-close]')?.addEventListener('click', () => this.closeCaravan());
+  }
+
+  // ------------------------------------------------------------ vocation menu
+
+  /** Open the VOCATION CHOICE menu (the quartermaster's dwell requested it —
+   *  a specialization is a deliberate pick, never a random dwell auto-accept). */
+  showVocationMenu(): void {
+    this.hideAll();
+    this.vocationOpen = true;
+    this.vocationMenu.classList.remove('hidden');
+    this.refreshVocationMenu();
+  }
+
+  closeVocationMenu(): void {
+    this.vocationOpen = false;
+    this.vocationMenu.classList.add('hidden');
+    // Suppress re-offer until the player breaks the dwell (walks away) — else
+    // the menu would pop right back open while they stand by the giver.
+    this.getWorld().declineVocationOffer();
+  }
+
+  /** One card per offered vocation chain: name, home class, blurb, first step.
+   *  Undertaking routes through requestMeta (host-authoritative, like caravanTo). */
+  refreshVocationMenu(): void {
+    if (!this.vocationOpen) return;
+    const world = this.getWorld();
+    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
+    const offers = world.vocationMenuOffers();
+    const rows = offers.length
+      ? offers.map(o => `<div class="skill-entry">
+          <div class="name" style="color:${esc(o.color)}">${esc(o.name)}
+            <span class="tags">· ${esc(o.className)}'s calling${o.ownClass ? ' (your class)' : ' · unlocked by a past hero'}</span></div>
+          <div class="desc">${esc(o.blurb)}</div>
+          <div class="desc" style="font-style:italic">A chain of ${o.steps} trials begins: “${esc(o.offerLabel)}”</div>
+          <div class="bind-btns"><button data-vocation-quest="${esc(o.questId)}">Undertake</button></div>
+        </div>`).join('')
+      : `<div class="skill-entry"><div class="desc">No callings are open to you right now.</div></div>`;
+    this.vocationMenu.innerHTML = `<h2>A Calling</h2>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Not work this time, traveller — a VOCATION. Finish its trials and the heart of the star opens to you. One calling per lifetime; choose it well."</div>`
+      + rows
+      + `<div class="desc" style="margin-top:8px;color:#8a8678">Completing a vocation unlocks its trials for EVERY future hero, whatever their class. Vocation points spend only inside its tree${offers.length ? '' : ''} — press P to see the star.</div>`
+      + `<div class="bind-btns" style="margin-top:10px"><button data-vocation-close>Not yet</button></div>`;
+    this.vocationMenu.querySelectorAll<HTMLButtonElement>('button[data-vocation-quest]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'vocationQuest', questId: btn.dataset.vocationQuest! });
+        this.closeVocationMenu();
+      });
+    });
+    this.vocationMenu.querySelector<HTMLButtonElement>('[data-vocation-close]')?.addEventListener('click', () => this.closeVocationMenu());
   }
 
   showToll(): void {
@@ -1735,6 +1846,7 @@ export class UI {
     this.caravanOpen = false;
     this.tollOpen = false;
     this.sailOpen = false;
+    this.vocationOpen = false;
     this.classSelect.classList.add('hidden');
     this.charSheet.classList.add('hidden');
     this.skillBook.classList.add('hidden');
@@ -1743,6 +1855,7 @@ export class UI {
     this.caravanMenu.classList.add('hidden');
     this.tollMenu.classList.add('hidden');
     this.sailMenu.classList.add('hidden');
+    this.vocationMenu.classList.add('hidden');
     this.deathScreen.classList.add('hidden');
     this.accountScreen.classList.add('hidden');
     this.escapeMenu.classList.add('hidden');

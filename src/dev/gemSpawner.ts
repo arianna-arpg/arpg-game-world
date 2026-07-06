@@ -21,6 +21,7 @@ import type { OverlayView } from '../world/overlay';
 import type { FrequencyProfile } from '../packages/frequency';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { VOCATION_CFG, VOCATION_LIST } from '../data/vocations';
 import { makeSkillInstance, SKILL_RARITIES, type SkillRarity } from '../engine/skills';
 
 /** Default rarity for spawned skill gems — 3 sockets, plenty for testing. */
@@ -114,13 +115,47 @@ export function mountDevGemSpawner(getWorld: () => World): void {
     w.meta.passivePoints += n;
     flash(`+${n} passive point${n > 1 ? 's' : ''} (${w.meta.passivePoints} total) — press P`);
   };
+  const grantVocationPts = (n: number): void => {
+    const w = runActive();
+    if (!w) { flash('start a run first'); return; }
+    w.meta.vocationPoints += n;
+    flash(`+${n} vocation point${n > 1 ? 's' : ''} (${w.meta.vocationPoints} total) — press P`);
+  };
   cheats.append(
     cheatBtn('+1 Lvl', () => grantLevels(1)),
     cheatBtn('+5 Lvl', () => grantLevels(5)),
     cheatBtn('+1 Skill Pt', () => grantSkillPts(1)),
     cheatBtn('+10 Skill Pt', () => grantSkillPts(10)),
     cheatBtn('+1 Passive Pt', () => grantPassivePts(1)),
+    cheatBtn('+1 Voc Pt', () => grantVocationPts(1)),
   );
+
+  // --- VOCATION playtest row: instant-grant any vocation + the LIVE spending-
+  // gate toggle (VOCATION_CFG.requireGateNode is read on every check, so the
+  // flip takes effect immediately — the user's A/B lever for how ascendancy
+  // spending should feel). ---
+  const vocRow = document.createElement('div');
+  css(vocRow, { display: 'flex', gap: '5px', marginBottom: '6px', alignItems: 'center' });
+  const vocSel = document.createElement('select');
+  css(vocSel, { flex: '1', background: '#0e0c14', color: '#d8d4e0', border: '1px solid #3a3450', borderRadius: '4px', padding: '4px', font: '11px Verdana' });
+  for (const v of VOCATION_LIST) {
+    const o = document.createElement('option');
+    o.value = v.id; o.textContent = `${v.name} (${v.classId})`;
+    vocSel.append(o);
+  }
+  const vocGrant = cheatBtn('Grant Vocation', () => {
+    const w = runActive();
+    if (!w) { flash('start a run first'); return; }
+    flash(w.grantVocation(vocSel.value)
+      ? `${vocSel.value} granted — press P (root crest allocated)`
+      : 'refused (already granted / per-character cap reached)');
+  });
+  const gateBtn = cheatBtn(`Gate req: ${VOCATION_CFG.requireGateNode ? 'ON' : 'OFF'}`, () => {
+    VOCATION_CFG.requireGateNode = !VOCATION_CFG.requireGateNode;
+    gateBtn.textContent = `Gate req: ${VOCATION_CFG.requireGateNode ? 'ON' : 'OFF'}`;
+    flash(`vocation spending gate ${VOCATION_CFG.requireGateNode ? 'REQUIRES the class start node' : 'open immediately on grant'}`);
+  });
+  vocRow.append(vocSel, vocGrant, gateBtn);
 
   const spawnSkill = (id: string): void => {
     const w = runActive();
@@ -161,7 +196,7 @@ export function mountDevGemSpawner(getWorld: () => World): void {
       el.style.display = !q || el.dataset.search.includes(q) ? 'flex' : 'none';
     }
   });
-  gemsPane.append(header, cheats, list);
+  gemsPane.append(header, cheats, vocRow, list);
 
   // =================================================================== EVENTS
   const eventsPane = document.createElement('div');

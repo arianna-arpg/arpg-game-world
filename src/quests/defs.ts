@@ -5,6 +5,7 @@
 // ---------------------------------------------------------------------------
 
 import type { QuestDef } from './types';
+import { vocationQuestDefs } from './vocations';
 
 /** The level-5 exemplar: "go slay the rising undead to the south" — a crypt zone
  *  placed south of town, undead horde + gravecaller boss, always a waypoint. */
@@ -114,4 +115,7 @@ export const QUESTS: Record<string, QuestDef> = {
   [Q_RELIC_EAST.id]: Q_RELIC_EAST,
   [Q_RELIC_DEPTHS.id]: Q_RELIC_DEPTHS,
   [Q_UNMADE.id]: Q_UNMADE,
+  // VOCATION CHAINS — generated from data/vocations.ts (one sequential chain
+  // per vocation; class-thematic zones; the final step grants the vocation).
+  ...Object.fromEntries(vocationQuestDefs().map(q => [q.id, q])),
 };

@@ -111,6 +111,8 @@ export interface SeatMetaW {
   level: number;
   xp: number; xpNeeded: number;
   skillPoints: number; passivePoints: number; offerings: number;
+  vocationPoints: number;
+  vocations: string[];              // granted vocations (center-tree render + gates)
   baseAttrs: Attributes;            // recalcSeat derives `attrs` from this + allocated
   allocated: string[];              // passive node ids
   known: Record<string, SkillInstW>;
@@ -133,6 +135,8 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     level: seat.actor.level,
     xp: m.xp, xpNeeded: m.xpNeeded,
     skillPoints: m.skillPoints, passivePoints: m.passivePoints, offerings: m.offerings,
+    vocationPoints: m.vocationPoints,
+    vocations: [...m.vocations],
     baseAttrs: { ...m.baseAttrs },
     allocated: [...m.allocated],
     known: Object.fromEntries([...m.knownSkills].map(([id, inst]) => [id, skillInstW(inst)])),
@@ -182,6 +186,9 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   seat.actor.level = w.level;
   m.xp = w.xp; m.xpNeeded = w.xpNeeded;
   m.skillPoints = w.skillPoints; m.passivePoints = w.passivePoints; m.offerings = w.offerings;
+  // Tolerant of a host one wire-version behind (fields absent from old JSON).
+  m.vocationPoints = w.vocationPoints ?? 0;
+  m.vocations = [...(w.vocations ?? [])];
   m.baseAttrs = { ...w.baseAttrs };
   m.allocated = new Set(w.allocated);
   const known = new Map<string, SkillInstance>();

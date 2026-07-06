@@ -37,6 +37,12 @@ export interface CharacterSave {
   xp: number; xpNeeded: number;
   skillPoints: number; passivePoints: number;
   allocated: string[];
+  /** Vocations GRANTED to this character + unspent vocation points. Optional →
+   *  pre-vocation saves still load (`?? []` / `?? 0`). Allocated vocation-tree
+   *  nodes ride the ordinary `allocated` list; a removed VocationDef's ids are
+   *  skipped by recalc like any unknown node. */
+  vocations?: string[];
+  vocationPoints?: number;
   knownSkills: SavedSkill[];
   skillInv: SavedSkill[];
   inventory: SavedSocket[]; // unsocketed support gems
@@ -69,6 +75,8 @@ export function serializeCharacter(world: World): CharacterSave {
     xp: m.xp, xpNeeded: m.xpNeeded,
     skillPoints: m.skillPoints, passivePoints: m.passivePoints,
     allocated: [...m.allocated],
+    vocations: [...m.vocations],
+    vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
     skillInv: m.skillInv.map(saveSkill),
     inventory: m.inventory.map(s => ({ supportId: s.def.id, level: s.level })),
@@ -125,6 +133,8 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     xp: save.xp, xpNeeded: save.xpNeeded,
     skillPoints: save.skillPoints, passivePoints: save.passivePoints,
     allocated: new Set(save.allocated),
+    vocations: [...(save.vocations ?? [])],
+    vocationPoints: save.vocationPoints ?? 0,
     knownSkills, inventory, skillInv, offerings: save.offerings,
   };
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters

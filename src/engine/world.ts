@@ -33,10 +33,11 @@ import {
 } from './skills';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
-import { PROGRESSION, type ClassDef } from '../data/classes';
+import { CLASSES, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
-import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES } from '../data/passives';
+import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
+import { VOCATIONS, VOCATION_CFG, vocationLedgerKey, vocationRootId, vocationStepKey } from '../data/vocations';
 import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat } from './stats';
@@ -54,7 +55,7 @@ import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE } from '../data/townBuild';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
 import { QUESTS } from '../quests/defs';
-import type { QuestDef } from '../quests/types';
+import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from '../quests/types';
 import { Rng, rollSeed } from '../core/rng';
 import { ALTARS, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
@@ -745,6 +746,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
     case 'unlearn': case 'levelSkill': return isStr(a.skillId);
     case 'allocate': return isStr(a.nodeId);
+    case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'payToll': return Number.isInteger(a.index) && a.index >= -1; // -1 = a random gem
@@ -766,6 +768,12 @@ export interface PlayerMeta {
   skillPoints: number;
   passivePoints: number;
   allocated: Set<string>;
+  /** Vocations GRANTED to this character (quest-chain completions). Capped at
+   *  VOCATION_CFG.maxPerCharacter; an array so the cap is pure config. */
+  vocations: string[];
+  /** The vocation-tree currency — earned from vocation quest steps (and any
+   *  future QuestReward.vocationPoints source), spent in world.allocateNode. */
+  vocationPoints: number;
   /** LEARNED skills (max MAX_LEARNED_SKILLS), keyed by skill id. Bar slots
    *  reference these. Learning is free; the limit is the cost. */
   knownSkills: Map<string, SkillInstance>;
@@ -1441,6 +1449,13 @@ export class World {
    *  polls this (a flag, not a callback, so it survives world re-creation), opens the
    *  menu, and clears it. World can't import the UI, hence the indirection. */
   caravanDwellRequested = false;
+  /** ONE-SHOT: dwelling by the quartermaster with FRESH vocation chains on offer
+   *  asks the main loop to open the CHOICE menu (same flag indirection as the
+   *  Caravanner — a subclass pick must never dwell-auto-accept at random). */
+  vocationOfferRequested = false;
+  /** The player closed the vocation menu without choosing — stop re-offering
+   *  until they step away from the giver (cleared when the dwell breaks). */
+  private vocationOfferDeclined = false;
   /** THE LIVE VOYAGE — the sailing traversal context: the hero IS the boat on
    *  a boundless pseudo-zone streaming the continent field as coast. Entered
    *  at a port dock (dwell); exited by LANDING on any shore. Host-side state
@@ -1692,6 +1707,8 @@ export class World {
       skillPoints: 0,
       passivePoints: 1,
       allocated: new Set([classStartNode(classDef.id)]),
+      vocations: [],
+      vocationPoints: 0,
       knownSkills: new Map(),
       inventory: [],
       skillInv: [],
@@ -7652,6 +7669,7 @@ export class World {
     if (this.getQuestGiver() === null) return null;
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
     if (this.nextAcceptableQuest()) return 'Linger, and I have work for you…';
+    if (this.vocationChoiceOffers().length) return 'Linger — a CALLING awaits you.';
     if (this.activeQuests.length) return 'Your hunts await out in the wilds.';
     return 'No work for you yet, traveller.';
   }
@@ -7677,12 +7695,23 @@ export class World {
     return c;
   }
 
+  /** The read-only slice of run state a QuestDef.gate predicate may consult. */
+  private questGateCtx(): QuestGateCtx {
+    return {
+      classId: this.meta.classDef.id,
+      vocations: this.meta.vocations,
+      runLedger: this.ledger,
+      accountLedger: this.account.ledger,
+    };
+  }
+
   /** Every quest acceptable RIGHT NOW from a present giver: not already active or
-   *  completed, level + ledger gates met, and its category still under its active cap.
-   *  The chain (requiresLedger) still gates chained links; un-chained quests (the
-   *  Unmade) are offered independently — no prior quest required. */
+   *  completed, level + ledger gates met, its optional gate predicate satisfied,
+   *  and its category still under its active cap. The chain (requiresLedger) still
+   *  gates chained links; un-chained quests (the Unmade) are offered independently. */
   private acceptableQuests(): QuestDef[] {
     const counts = this.activeCategoryCounts();
+    const gateCtx = this.questGateCtx();
     return Object.values(QUESTS).filter(q => {
       if (this.completedQuests.has(q.id)) return false;
       if (this.activeQuests.some(e => e.questId === q.id)) return false;
@@ -7691,6 +7720,7 @@ export class World {
       if (q.requiresLedger
         && (this.ledger[q.requiresLedger] ?? 0) < 1
         && (this.account.ledger[q.requiresLedger] ?? 0) < 1) return false;
+      if (q.gate && !q.gate(gateCtx)) return false;
       const cat = q.category ?? DEFAULT_QUEST_CATEGORY;
       const cap = QUEST_CATEGORY_CAPS[cat];
       if (cap != null && (counts[cat] ?? 0) >= cap) return false;
@@ -7698,10 +7728,33 @@ export class World {
     });
   }
 
+  /** Has this character ENGAGED a vocation's chain this run (any step done)?
+   *  Engaged chains auto-continue at the giver; un-engaged ones are a CHOICE
+   *  and only ever offered through the vocation menu. Step keys are read from
+   *  the RUN ledger only — chain progress is per-character by design. */
+  private vocationEngaged(vocId: string): boolean {
+    const v = VOCATIONS[vocId];
+    if (!v) return false;
+    return v.quest.steps.some((_, i) => (this.ledger[vocationStepKey(vocId, i + 1)] ?? 0) >= 1);
+  }
+
+  /** A vocation quest whose chain this character has NOT yet engaged — the
+   *  "pick your calling" offers. Never dwell-auto-accepted. */
+  private isVocationChoice(q: QuestDef): boolean {
+    return q.vocation !== undefined && !this.vocationEngaged(q.vocation);
+  }
+
+  /** Fresh vocation chains currently on offer (the choice menu's list). */
+  private vocationChoiceOffers(): QuestDef[] {
+    return this.acceptableQuests().filter(q => this.isVocationChoice(q));
+  }
+
   /** The next quest to hand out: lowest offer-level first; ties broken RANDOMLY (a
-   *  pre-shuffle then a stable sort leaves same-level offers in random order). */
+   *  pre-shuffle then a stable sort leaves same-level offers in random order).
+   *  FRESH vocation chains are excluded — a specialization is a deliberate CHOICE
+   *  (the menu), never a random dwell pull; engaged chains continue normally. */
   private nextAcceptableQuest(): QuestDef | null {
-    const avail = this.acceptableQuests();
+    const avail = this.acceptableQuests().filter(q => !this.isVocationChoice(q));
     if (!avail.length) return null;
     for (let i = avail.length - 1; i > 0; i--) { const j = randInt(0, i); [avail[i], avail[j]] = [avail[j], avail[i]]; }
     avail.sort((a, b) => a.offerAtLevel - b.offerAtLevel); // stable → equal-level ties keep shuffled order
@@ -7709,18 +7762,83 @@ export class World {
   }
 
   /** Linger by a quest giver → FIRST turn in a finished quest (low→high level), ELSE
-   *  accept the next available quest (low→high, random ties; per-category capped).
-   *  ONE action per dwell, so a stack resolves a step at a time. */
+   *  accept the next available quest (low→high, random ties; per-category capped),
+   *  ELSE — with fresh vocation chains on offer — ask the main loop to open the
+   *  CHOICE menu. ONE action per dwell, so a stack resolves a step at a time. */
   private updateQuestGiver(dt: number): void {
-    if (this.player.dead || this.player.downed || !this.playerIdle()) { this.questGiverDwell = 0; return; }
+    if (this.player.dead || this.player.downed || !this.playerIdle()) {
+      this.questGiverDwell = 0;
+      // Stepping away re-arms the choice menu (a decline lasts one visit).
+      this.vocationOfferDeclined = false;
+      return;
+    }
     const turnIns = this.pendingTurnIns();
     const next = turnIns.length ? null : this.nextAcceptableQuest();
-    if (!turnIns.length && !next) { this.questGiverDwell = 0; return; }
+    const choices = (!turnIns.length && !next && !this.vocationOfferDeclined)
+      ? this.vocationChoiceOffers() : [];
+    if (!turnIns.length && !next && !choices.length) { this.questGiverDwell = 0; return; }
     this.questGiverDwell += dt;
     if (this.questGiverDwell < QUESTGIVER_DWELL) return;
     this.questGiverDwell = 0;
     if (turnIns.length) this.onQuestZoneCleared(turnIns[0]);
     else if (next) this.acceptQuest(next);
+    else this.vocationOfferRequested = true; // main loop opens the menu (once per dwell)
+  }
+
+  /** Menu-accept a vocation chain step (routed through requestMeta like every
+   *  meta mutation). Validated against the live acceptable set — a stale menu
+   *  click after conditions changed no-ops instead of corrupting state. */
+  acceptVocationQuest(questId: string, _seat: Seat = this.localSeat): boolean {
+    const q = QUESTS[questId];
+    if (!q || q.vocation === undefined) return false;
+    if (!this.acceptableQuests().some(x => x.id === questId)) return false;
+    this.acceptQuest(q);
+    return true;
+  }
+
+  /** The vocation CHOICE MENU's card list (UI view). Fresh chains only —
+   *  engaged chains continue through the ordinary dwell auto-accept. */
+  vocationMenuOffers(): {
+    questId: string; vocationId: string; name: string; blurb: string; color: string;
+    className: string; ownClass: boolean; steps: number; offerLabel: string;
+  }[] {
+    return this.vocationChoiceOffers().map(q => {
+      const v = VOCATIONS[q.vocation!];
+      return {
+        questId: q.id, vocationId: v.id, name: v.name, blurb: v.blurb, color: v.color,
+        className: CLASSES.find(c => c.id === v.classId)?.name ?? v.classId,
+        ownClass: v.classId === this.meta.classDef.id,
+        steps: v.quest.steps.length, offerLabel: q.offerLabel,
+      };
+    });
+  }
+
+  /** The player closed the vocation menu without choosing — don't re-open it
+   *  until the dwell breaks (they step away and return). */
+  declineVocationOffer(): void { this.vocationOfferDeclined = true; }
+
+  /** GRANT a vocation to a seat's character (the chain's final reward): respects
+   *  the per-character cap, allocates the free root crest at the star's centre,
+   *  and writes the ACCOUNT unlock key so every future character — any class —
+   *  may take this chain. The account write mirrors the uber-kill precedent
+   *  (idempotent `= 1`; the run-ledger copy merges on death regardless). */
+  grantVocation(vocId: string, seat: Seat = this.localSeat): boolean {
+    const v = VOCATIONS[vocId];
+    if (!v) return false;
+    const m = seat.meta;
+    if (m.vocations.includes(vocId)) return false;
+    if (m.vocations.length >= VOCATION_CFG.maxPerCharacter) return false;
+    m.vocations.push(vocId);
+    m.allocated.add(vocationRootId(vocId)); // the crest is free — its NODES cost points
+    bumpLedger(this.ledger, vocationLedgerKey(vocId));
+    this.account.ledger[vocationLedgerKey(vocId)] = 1;
+    this.recalcSeat(seat);
+    this.markMetaDirty(seat);
+    this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 40),
+      `VOCATION: ${v.name}!`, v.color, 24);
+    this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 12),
+      'Its tree awakens at the heart of the star (P).', '#d8d4c8', 13);
+    return true;
   }
 
   /** The quest journal for the map's Quests tab: active (in-progress / ready-to-claim)
@@ -7841,6 +7959,15 @@ export class World {
         this.text(vec(this.player.pos.x, this.player.pos.y - 64),
           `+${q.reward.passivePoints} passive point`, '#a0e0ff', 16);
       }
+      if (q.reward.vocationPoints) {
+        this.meta.vocationPoints += q.reward.vocationPoints;
+        const vocColor = q.vocation ? VOCATIONS[q.vocation]?.color : undefined;
+        this.text(vec(this.player.pos.x, this.player.pos.y - 44),
+          `+${q.reward.vocationPoints} vocation point${q.reward.vocationPoints > 1 ? 's' : ''}`,
+          vocColor ?? '#e8c860', 16);
+        this.markMetaDirty(this.localSeat);
+      }
+      if (q.reward.grantVocation) this.grantVocation(q.reward.grantVocation);
       if (q.reward.ledger) {
         for (const [k, v] of Object.entries(q.reward.ledger)) bumpLedger(this.ledger, k, v);
       }
@@ -7970,7 +8097,10 @@ export class World {
     return true;
   }
 
-  /** Allocate a passive node adjacent to the existing allocation. */
+  /** Allocate a passive node adjacent to the existing allocation. VOCATION
+   *  nodes are the same graph walk but spend VOCATION points, belong only to a
+   *  character who EARNED that vocation, and (behind the playtest toggle) wait
+   *  for the vocation's gate start node — see data/vocations.ts. */
   allocateNode(nodeId: string, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     // hasOwnProperty guard: a prototype-chain key ('__proto__', 'constructor', …)
@@ -7978,7 +8108,19 @@ export class World {
     // and then crash on PASSIVE_ADJACENCY[nodeId].some — an untrusted-id vector.
     if (!Object.prototype.hasOwnProperty.call(PASSIVE_NODES, nodeId)) return false;
     const node = PASSIVE_NODES[nodeId];
-    if (!node || m.passivePoints < 1 || m.allocated.has(nodeId)) return false;
+    if (!node || m.allocated.has(nodeId)) return false;
+    if (node.vocation !== undefined) {
+      if (!m.vocations.includes(node.vocation)) return false;   // not earned (or another's tree)
+      if (m.vocationPoints < 1) return false;                   // the separate currency
+      if (!vocationGateOpen(m.allocated, node.vocation)) return false; // the toggle-able gate
+      const adjacent = PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n));
+      if (!adjacent) return false;                              // pathing from the free root
+      m.vocationPoints--;
+      m.allocated.add(nodeId);
+      this.recalcSeat(seat);
+      return true;
+    }
+    if (m.passivePoints < 1) return false;
     const adjacent = PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n));
     if (!adjacent) return false;
     m.passivePoints--;
@@ -8020,9 +8162,10 @@ export class World {
       // snapshot reconciles, reverting anything the host rejected.
       this.clientActionHook(action);
       // EXCEPT zone-changing actions: caravanTo runs a full loadZone (heavy regen,
-      // and the client would mint with its OWN seed → a divergent flicker). Forward
-      // only; the host's authoritative snapshot/zone broadcast moves the client.
-      if (action.t !== 'caravanTo') this.applyAction(this.localSeat, action);
+      // and the client would mint with its OWN seed → a divergent flicker), and
+      // vocationQuest MINTS a quest zone into the world map. Forward only; the
+      // host's authoritative snapshot/zone broadcast moves the client.
+      if (action.t !== 'caravanTo' && action.t !== 'vocationQuest') this.applyAction(this.localSeat, action);
     } else {
       this.applyAction(this.localSeat, action);
     }
@@ -8059,6 +8202,7 @@ export class World {
       case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
+      case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
@@ -11190,7 +11334,7 @@ export class World {
     const size = caster.sheet.get('minionSize', tags, extra);
     minion.radius = Math.max(5, minion.radius * size);
     const haste = caster.sheet.get('minionHaste', tags, extra);
-    minion.sheet.setSource('owner', [
+    const ownerMods = [
       mod('damage', 'more', caster.sheet.get('minionDamage', tags, extra) - 1),
       mod('life', 'more', caster.sheet.get('minionLife', tags, extra) - 1),
       mod('damageTaken', 'more', caster.sheet.get('minionDamageTaken', tags, extra) - 1),
@@ -11203,7 +11347,16 @@ export class World {
       // split freely by skill or type.
       mod('lifeRegen', 'flat', caster.sheet.get('minionRegen', tags, extra)),
       mod('lifeRegenPct', 'flat', caster.sheet.get('minionRegenPct', tags, extra)),
-    ]);
+    ];
+    // MINION STATUS CARRY: the owner's minionApply_<status> investment becomes
+    // the minion's own apply_<status> chance — "minions poison on hit" is one
+    // modifier anywhere on the owner (gem, passive, vocation node). Generated
+    // per-status alongside apply_<id> in engine/status.ts.
+    for (const sid of STATUS_IDS) {
+      const carry = caster.sheet.get('minionApply_' + sid, tags, extra);
+      if (carry > 0) ownerMods.push(mod('apply_' + sid, 'flat', carry));
+    }
+    minion.sheet.setSource('owner', ownerMods);
     // Meat Shield: guarded minions keep a short leash and fight defensively.
     minion.guardMode = caster.sheet.get('minionGuard', tags, extra) > 0;
     // RAMPED SUMMONS: a channel's held ramp (Spirit Pyre's quadratic climb)

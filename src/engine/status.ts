@@ -443,6 +443,14 @@ for (const [id, def] of Object.entries(STATUS_DEFS)) {
   STAT_DEFS['damageVs_' + id] = {
     label: `Damage vs ${def.label} (per stack)`, base: 0, percent: true,
   };
+  // MINION CARRY — the owner-side sibling of apply_<id>: "your MINIONS have
+  // X% chance to apply <status> on hit". Queried on the OWNER with the summon
+  // skill's tags at summon time and transferred onto the minion's own
+  // apply_<id> (world.summonMinion), so gems, passives and vocation nodes can
+  // arm whole armies with any status through the ordinary stat engine.
+  STAT_DEFS['minionApply_' + id] = {
+    label: `Minions: Chance to apply ${def.label}`, base: 0, min: 0, max: 1, percent: true,
+  };
   // DOT LEECH — per ticking family: "5% of bleed damage leeched as life"
   // is one modifier on this generated stat, stamped at application and
   // paid to the APPLIER as the affliction ticks.

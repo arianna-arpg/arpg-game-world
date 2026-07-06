@@ -314,7 +314,10 @@ export function mountPassiveEditor(ui: UI): void {
   };
 
   const serializeTree = (): string => {
-    const list = Object.values(PASSIVE_NODES);
+    // VOCATION nodes are GENERATED from data/vocations.ts at load — never
+    // serialized (a save that inlined them would duplicate every tree on the
+    // next boot). Edit vocation trees in their VocationDef, not here.
+    const list = Object.values(PASSIVE_NODES).filter(n => n.vocation === undefined);
     const usesMod = list.some(n => n.mods && n.mods.length);
     const importLine = usesMod
       ? `import { mod, type Attributes, type Modifier } from '../engine/stats';`
@@ -328,8 +331,9 @@ export function mountPassiveEditor(ui: UI): void {
 
 ${importLine}
 import { CLASSES } from './classes';
+import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
 
-export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr';
+export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation';
 
 export interface PassiveNode {
   id: string;
@@ -341,11 +345,46 @@ export interface PassiveNode {
   attributes?: Partial<Attributes>;
   mods?: Modifier[];
   links: string[];
+  /** Set on VOCATION mini-tree nodes (the owning VocationDef id). These render
+   *  and allocate ONLY for a character who has EARNED that vocation, and they
+   *  spend vocation points — see world.allocateNode / panels.refreshTree. */
+  vocation?: string;
 }
 
 const nodes: PassiveNode[] = [
 ${list.map(serNode).join('\n')}
 ];
+
+// --- VOCATION MINI-TREES -------------------------------------------------------
+// Each VocationDef's tree (authored in LOCAL coords around 0,0) is offset into
+// the EMPTY CENTRE of the nine-point star and merged into the ordinary node
+// registry — adjacency, recalc, save and the validator all work unchanged.
+
+const starNodes = nodes.filter(n => n.kind === 'start');
+/** The hub of the nine-point star — where vocation trees anchor. Derived from
+ *  the live start nodes (never a hardcoded coordinate). */
+export const STAR_CENTER = {
+  x: Math.round(starNodes.reduce((s, n) => s + n.x, 0) / Math.max(1, starNodes.length)),
+  y: Math.round(starNodes.reduce((s, n) => s + n.y, 0) / Math.max(1, starNodes.length)),
+};
+
+for (const v of Object.values(VOCATIONS)) {
+  nodes.push({
+    id: vocationRootId(v.id), name: v.name,
+    description: \`\${v.blurb} — the \${v.name}'s crest, granted with the vocation. Its nodes spend vocation points.\`,
+    kind: 'vocation', vocation: v.id,
+    x: STAR_CENTER.x, y: STAR_CENTER.y, links: [],
+  });
+  for (const n of v.tree) {
+    nodes.push({
+      id: vocationNodeId(v.id, n.id), name: n.name, description: n.description,
+      kind: n.kind, vocation: v.id,
+      x: STAR_CENTER.x + n.x, y: STAR_CENTER.y + n.y,
+      attributes: n.attributes, mods: n.mods,
+      links: n.links.map(l => vocationNodeId(v.id, l)),
+    });
+  }
+}
 
 // --- Exports -----------------------------------------------------------------
 
@@ -368,6 +407,25 @@ export function classStartNode(classId: string): string {
   const c = CLASSES.find(cd => cd.id === classId);
   if (!c) console.warn(\`[passives] unknown class '\${classId}' — starting at str_start\`);
   return c?.startNode ?? 'str_start';
+}
+
+/** The start node that GATES a vocation's point-spending (when the
+ *  VOCATION_CFG.requireGateNode playtest toggle is on): the def's authored
+ *  override, else the home class's startNode. Registry-resolved — no ids. */
+export function vocationGateNodeId(vocId: string): string | null {
+  const v = VOCATIONS[vocId];
+  if (!v) return null;
+  return v.gateNode ?? classStartNode(v.classId);
+}
+
+/** May a character with these allocations SPEND points in \`vocId\`'s tree?
+ *  True when the gate toggle is off, or once the gate start node is taken.
+ *  (A home-class character passes from birth — its start node is allocated
+ *  at creation; an off-class character must path to it first.) */
+export function vocationGateOpen(allocated: ReadonlySet<string>, vocId: string): boolean {
+  if (!VOCATION_CFG.requireGateNode) return true;
+  const gate = vocationGateNodeId(vocId);
+  return gate === null || allocated.has(gate);
 }
 `;
   };

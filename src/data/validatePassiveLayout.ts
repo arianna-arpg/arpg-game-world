@@ -17,7 +17,7 @@
 import { PASSIVE_NODES, type PassiveNode } from './passives';
 
 const RADII: Record<PassiveNode['kind'], number> =
-  { start: 13, small: 9, notable: 14, keystone: 17, attr: 11 };
+  { start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15 };
 
 const PAD = 10;       // breathing room required between any two node edges
 // The tree lives in a 6000×6000 space (the 6× expansion — room to grow for
@@ -26,10 +26,11 @@ const CENTER = 3000;
 const HALF = 3000;
 const MARGIN = 12;    // keep nodes this far inside the edge
 
-/** A node introduced by the batch-8 expansion (cluster or exotic). Overlaps
- *  among purely-legacy nodes are pre-existing and deliberately not flagged. */
+/** A node introduced by the batch-8 expansion (cluster or exotic) or by a
+ *  vocation mini-tree. Overlaps among purely-legacy nodes are pre-existing
+ *  and deliberately not flagged. */
 function isNew(id: string): boolean {
-  return id.startsWith('cl_') || /_(pc|kb|df|pd)\d+$/.test(id);
+  return id.startsWith('cl_') || id.startsWith('voc_') || /_(pc|kb|df|pd)\d+$/.test(id);
 }
 
 /** Warn on any overlapping or out-of-bounds NEW passive node. Cheap O(n^2);
@@ -40,6 +41,10 @@ export function validatePassiveLayout(warn: (msg: string) => void): void {
     for (let j = i + 1; j < ns.length; j++) {
       const a = ns[i], b = ns[j];
       if (!isNew(a.id) && !isNew(b.id)) continue; // skip legacy-vs-legacy
+      // DIFFERENT vocations deliberately share the star's central space — at
+      // most one renders per character, so cross-vocation overlap is by design.
+      // Same-vocation and vocation-vs-main-tree overlaps ARE still policed.
+      if (a.vocation && b.vocation && a.vocation !== b.vocation) continue;
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       const min = RADII[a.kind] + RADII[b.kind] + PAD;
       if (d < min) warn(`passive overlap: ${a.id}/${b.id} ${d.toFixed(1)} < ${min.toFixed(1)}`);

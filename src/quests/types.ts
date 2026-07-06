@@ -16,8 +16,11 @@ import type { ObjectiveSpec, PackSpec } from '../data/zones';
  *  hands out a category while it's under its cap). Extensible: add a kind + a cap row.
  *   • campaign — the authored main/side chains (no cap by default).
  *   • bounty   — repeatable board work (future Bounty Boards): a small cap.
- *   • odyssey  — a grand questline (future): only ONE may run at a time. */
-export type QuestCategory = 'campaign' | 'bounty' | 'odyssey';
+ *   • odyssey  — a grand questline (future): only ONE may run at a time.
+ *   • vocation — a specialization chain (data/vocations.ts). A FRESH chain is
+ *     never auto-accepted — the giver opens the CHOICE menu instead; engaged
+ *     chains auto-continue like any quest. One active vocation step at a time. */
+export type QuestCategory = 'campaign' | 'bounty' | 'odyssey' | 'vocation';
 
 /** How many quests of each category may be ACTIVE at once. null = no limit. Pure,
  *  configurable data — retune without touching the dwell logic. */
@@ -25,6 +28,7 @@ export const QUEST_CATEGORY_CAPS: Record<QuestCategory, number | null> = {
   campaign: null, // the authored chains aren't capped
   bounty: 2,      // board work: hold a couple at a time (configurable default)
   odyssey: 1,     // one grand questline at a time
+  vocation: 1,    // one vocation step in flight at a time (the chain is sequential anyway)
 };
 
 /** Badge colour per category (journal UI). Typed against QuestCategory so a
@@ -33,6 +37,7 @@ export const QUEST_CATEGORY_COLORS: Record<QuestCategory, string> = {
   campaign: '#c8a8e8',
   bounty: '#e0b060',
   odyssey: '#6ad8c0',
+  vocation: '#e8c860',
 };
 
 /** The default category when a QuestDef omits one. */
@@ -78,9 +83,31 @@ export interface QuestReward {
   /** Skill/passive points granted on completion (paid into the player's meta,
    *  the same pool a level-up grants). Optional → existing quests unaffected. */
   passivePoints?: number;
+  /** VOCATION points granted on completion — the separate currency spent on
+   *  vocation mini-trees (data/vocations.ts). Any quest may pay them (the
+   *  extensible seam for future point sources beyond the chains themselves). */
+  vocationPoints?: number;
+  /** GRANT this vocation to the character on completion (the chain's final
+   *  step). Routed through world.grantVocation: allocates the free root crest,
+   *  writes the account-wide unlock key, respects the per-character cap. */
+  grantVocation?: string;
   /** Counters bumped on completion (per-run → per-account on death). Drives the
    *  chain: a later quest's requiresLedger points at one of these keys. */
   ledger?: Record<string, number>;
+}
+
+/** Everything a QuestDef.gate predicate may consult — a read-only slice of the
+ *  run handed in by the engine (quests stay a pure data leaf; no World import).
+ *  Extend this ctx rather than importing engine state into quest defs. */
+export interface QuestGateCtx {
+  /** The local hero's class id. */
+  classId: string;
+  /** Vocations already GRANTED to this character. */
+  vocations: readonly string[];
+  /** Per-run trigger counters (world.ledger). */
+  runLedger: Readonly<Record<string, number>>;
+  /** Lifetime account counters (account.ledger). */
+  accountLedger: Readonly<Record<string, number>>;
 }
 
 /** The optional RETURN leg of a quest — town as a hub. After the zone objective
@@ -106,6 +133,14 @@ export interface QuestDef {
   /** Ledger key (per-run OR per-account) that must be ≥1 to offer this — the
    *  chain mechanism (a follow-up quest requires a prior quest's reward key). */
   requiresLedger?: string;
+  /** Arbitrary extra availability predicate over the run's read-only gate ctx —
+   *  the seam for gates requiresLedger can't express (class checks, RUN-only
+   *  step chains, per-character caps). ANDed with every other gate. */
+  gate?: (ctx: QuestGateCtx) => boolean;
+  /** The vocation chain this quest belongs to (generated vocation steps only).
+   *  Drives the choice-menu routing: a FRESH chain's step is offered through
+   *  the vocation menu, an ENGAGED chain's next step auto-accepts. */
+  vocation?: string;
   zone: QuestZoneSpec;
   reward: QuestReward;
   /** Optional return-to-giver leg: the reward is held until the player comes home
