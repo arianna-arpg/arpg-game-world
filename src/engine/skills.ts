@@ -1990,6 +1990,13 @@ export interface SkillDef {
 
   /** Never drops as a skill gem (monster-only kit pieces). */
   noDrop?: boolean;
+  /** Relative drop weight in the gem pool (default 100) — the power
+   *  hierarchy lever: rarer ≠ stronger by accident, but CAN by design.
+   *  Composes with GEM_DROP_CFG.tagWeights and a killer's gemBias. */
+  dropWeight?: number;
+  /** Never drops below this ZONE level (the bracket lever — deep-world
+   *  skills stay deep; 0/absent = drops anywhere). */
+  minDropLevel?: number;
 
   /** Skill-local modifiers the skill carries innately at every level
    *  (Ice Blade's high base crit). Joined into instanceMods. */
@@ -2361,6 +2368,12 @@ export interface SupportDef {
   maxLevel?: number;      // default MAX_SUPPORT_LEVEL
   /** Relative drop weight. */
   weight: number;
+  /** Never drops below this ZONE level (bracket lever; absent = anywhere). */
+  minDropLevel?: number;
+  /** Tags used for DROP weighting (GEM_DROP_CFG.tagWeights / gemBias).
+   *  Defaults to requiresTags — override when a support's drop identity
+   *  differs from what it sockets into. */
+  dropTags?: SkillTag[];
 }
 
 export const MAX_SUPPORT_LEVEL = 5;

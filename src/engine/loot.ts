@@ -19,6 +19,7 @@ import { MI_CFG } from '../data/infrequents';
 import { pickThemedBase, rollItem } from './itemgen';
 import type { ItemCategory, ItemInstance, ItemRarity } from './items';
 import type { MonsterRarity } from './rarity';
+import type { SkillTag } from './stats';
 
 export type LootEntry =
   | { weight: number; kind: 'nothing' }
@@ -76,6 +77,17 @@ export const DROP_CFG = {
   eliteBonusTable: { normal: 'world_gear', magic: 'world_gear', rare: 'world_gear', champion: 'world_gear', crowned: 'crowned_gear' } as Record<MonsterRarity, string>,
   /** Nesting rope — a cyclic table chain stops, never hangs a kill burst. */
   maxTableDepth: 8,
+};
+
+/** GEM drop-policy levers (skills + supports; gear has its own ladder). */
+export const GEM_DROP_CFG = {
+  /** Global tag→weight multipliers over every gem's drop weight —
+   *  {summon: 0.5} halves every summon gem's frequency without touching a
+   *  single def. Empty = neutral (per-def weights alone decide). */
+  tagWeights: {} as Partial<Record<SkillTag, number>>,
+  /** Weight multiplier when a gem shares a tag with the killer's gemBias
+   *  (MonsterDef.gemBias — the shaman drops caster gems rule). */
+  biasMult: 2.5,
 };
 
 const warned = new Set<string>();

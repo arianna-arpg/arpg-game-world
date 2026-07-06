@@ -34,11 +34,15 @@ export const CATEGORY_SIZE: Record<ItemCategory, { w: number; h: number }> = {
 
 // ----------------------------------------------- armour family generation --
 
-/** One defense-combo column: the mix plus a name per armour category. */
+/** One defense-combo column: the mix, a name per armour category, and the
+ *  combo's AFFIX-THEME AFFINITY — an ES base LEANS caster (multiplier, not
+ *  a gate), so a Vestment fills with spell lines more often than a
+ *  Warplate does, while fortitude-on-Vestment stays possible and rare. */
 interface DefCombo {
   key: string;
   mix: Record<string, number>;
   names: Partial<Record<ItemCategory, string>>;
+  affinity?: Record<string, number>;
 }
 
 const ARMOUR_CATEGORIES: ItemCategory[] = ['helmet', 'chest', 'gloves', 'boots', 'legs'];
@@ -47,26 +51,32 @@ const DEF_COMBOS: DefCombo[] = [
   {
     key: 'armor', mix: { armor: 1 },
     names: { helmet: 'Casque', chest: 'Warplate', gloves: 'Gauntlets', boots: 'Greaves', legs: 'Cuisses' },
+    affinity: { martial: 1.7, defense: 1.5 },
   },
   {
     key: 'evasion', mix: { evasion: 1 },
     names: { helmet: 'Hood', chest: 'Jerkin', gloves: 'Grips', boots: 'Treads', legs: 'Trews' },
+    affinity: { ranger: 1.8, sustain: 1.2 },
   },
   {
     key: 'es', mix: { energyShield: 1 },
     names: { helmet: 'Circlet', chest: 'Vestment', gloves: 'Cuffs', boots: 'Slippers', legs: 'Silks' },
+    affinity: { caster: 2.4 },
   },
   {
     key: 'armor_evasion', mix: { armor: 1, evasion: 1 },
     names: { helmet: 'Sallet', chest: 'Brigandine', gloves: 'Handguards', boots: 'Warboots', legs: 'Chausses' },
+    affinity: { martial: 1.4, ranger: 1.4 },
   },
   {
     key: 'armor_es', mix: { armor: 1, energyShield: 1 },
     names: { helmet: 'Crown', chest: 'Templar Plate', gloves: 'Sigil Fists', boots: 'Bastion Boots', legs: 'Faulds' },
+    affinity: { caster: 1.5, defense: 1.4 },
   },
   {
     key: 'evasion_es', mix: { evasion: 1, energyShield: 1 },
     names: { helmet: 'Cowl', chest: 'Shroud', gloves: 'Wraps', boots: 'Sandals', legs: 'Windtrews' },
+    affinity: { caster: 1.6, ranger: 1.3 },
   },
 ];
 
@@ -81,6 +91,7 @@ function armourBase(cat: ItemCategory, combo: DefCombo): ItemBaseDef {
     // the mix — affixes gate on any of these ("% armor only on armor gear").
     tags: ['armour', cat, ...Object.keys(combo.mix)],
     defense: combo.mix,
+    affinity: combo.affinity,
     dropWeight: 100,
   };
 }
@@ -89,22 +100,22 @@ function armourBase(cat: ItemCategory, combo: DefCombo): ItemBaseDef {
 
 function jewel(
   id: string, name: string, cat: ItemCategory, implicits: RangedLineDef[],
-  dropWeight: number, tags: string[] = [],
+  dropWeight: number, affinity?: Record<string, number>,
 ): ItemBaseDef {
   const size = CATEGORY_SIZE[cat];
   return {
     id, name, category: cat, w: size.w, h: size.h,
-    tags: ['jewelry', cat, ...tags],
-    implicits, dropWeight,
+    tags: ['jewelry', cat],
+    implicits, dropWeight, affinity,
   };
 }
 
-function belt(id: string, name: string, mix: Record<string, number>): ItemBaseDef {
+function belt(id: string, name: string, mix: Record<string, number>, affinity?: Record<string, number>): ItemBaseDef {
   const size = CATEGORY_SIZE.belt;
   return {
     id, name, category: 'belt', w: size.w, h: size.h,
     tags: ['armour', 'belt', ...Object.keys(mix)],
-    defense: mix, dropWeight: 70,
+    defense: mix, dropWeight: 70, affinity,
   };
 }
 
@@ -119,18 +130,18 @@ export const BASE_LIST: ItemBaseDef[] = [
   ...ARMOUR_CATEGORIES.flatMap(cat => DEF_COMBOS.map(combo => armourBase(cat, combo))),
 
   // Belts — the exotic-pool showcase (poise mass, endurance stamina).
-  belt('belt_armor', 'Warbelt', { armor: 1 }),
-  belt('belt_poise', 'Girdle', { poise: 1 }),
-  belt('belt_endurance', 'Cinch', { endurance: 1 }),
+  belt('belt_armor', 'Warbelt', { armor: 1 }, { defense: 1.5, martial: 1.3 }),
+  belt('belt_poise', 'Girdle', { poise: 1 }, { defense: 1.6 }),
+  belt('belt_endurance', 'Cinch', { endurance: 1 }, { sustain: 1.6 }),
 
   // Rings — identity implicits (D2 palette: the gem names the element).
-  jewel('ring_coral', 'Coral Ring', 'ring', [line('life', 'flat', [8, 15])], 40),
-  jewel('ring_lapis', 'Lapis Ring', 'ring', [line('mana', 'flat', [10, 18])], 40),
+  jewel('ring_coral', 'Coral Ring', 'ring', [line('life', 'flat', [8, 15])], 40, { sustain: 1.4 }),
+  jewel('ring_lapis', 'Lapis Ring', 'ring', [line('mana', 'flat', [10, 18])], 40, { caster: 1.7 }),
   jewel('ring_ruby', 'Ruby Ring', 'ring', [line('fireRes', 'flat', [0.1, 0.2])], 40),
   jewel('ring_sapphire', 'Sapphire Ring', 'ring', [line('coldRes', 'flat', [0.1, 0.2])], 40),
   jewel('ring_topaz', 'Topaz Ring', 'ring', [line('lightningRes', 'flat', [0.1, 0.2])], 40),
   jewel('ring_onyx', 'Onyx Ring', 'ring', [line('chaosRes', 'flat', [0.07, 0.15])], 30),
-  jewel('ring_iron', 'Iron Ring', 'ring', [line('addedPhysical', 'flat', [1, 2])], 35),
+  jewel('ring_iron', 'Iron Ring', 'ring', [line('addedPhysical', 'flat', [1, 2])], 35, { martial: 1.8 }),
 
   // MONSTER INFREQUENTS — theme-pool bases (dropWeight 0: only their theme
   // mints them; see data/infrequents.ts). Signature implicits carry the
@@ -184,12 +195,12 @@ export const BASE_LIST: ItemBaseDef[] = [
   },
 
   // Amulets — attribute identities + two build-defining oddballs.
-  jewel('amulet_amber', 'Amber Amulet', 'amulet', [line('strength', 'flat', [3, 6])], 30),
-  jewel('amulet_jade', 'Jade Amulet', 'amulet', [line('dexterity', 'flat', [3, 6])], 30),
-  jewel('amulet_opal', 'Opal Amulet', 'amulet', [line('intelligence', 'flat', [3, 6])], 30),
-  jewel('amulet_bone', 'Bone Amulet', 'amulet', [line('vitality', 'flat', [3, 6])], 30),
-  jewel('amulet_pearl', 'Pearl Amulet', 'amulet', [line('energyShield', 'flat', [10, 18])], 25),
-  jewel('amulet_carnelian', 'Carnelian Amulet', 'amulet', [line('healPower', 'increased', [0.05, 0.1])], 20),
+  jewel('amulet_amber', 'Amber Amulet', 'amulet', [line('strength', 'flat', [3, 6])], 30, { martial: 1.5 }),
+  jewel('amulet_jade', 'Jade Amulet', 'amulet', [line('dexterity', 'flat', [3, 6])], 30, { ranger: 1.5 }),
+  jewel('amulet_opal', 'Opal Amulet', 'amulet', [line('intelligence', 'flat', [3, 6])], 30, { caster: 1.8 }),
+  jewel('amulet_bone', 'Bone Amulet', 'amulet', [line('vitality', 'flat', [3, 6])], 30, { sustain: 1.5 }),
+  jewel('amulet_pearl', 'Pearl Amulet', 'amulet', [line('energyShield', 'flat', [10, 18])], 25, { caster: 2 }),
+  jewel('amulet_carnelian', 'Carnelian Amulet', 'amulet', [line('healPower', 'increased', [0.05, 0.1])], 20, { sustain: 1.8 }),
 ];
 
 export const ITEM_BASES: Record<string, ItemBaseDef> =

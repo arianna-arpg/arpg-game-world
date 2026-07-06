@@ -164,11 +164,23 @@ function rollLineSet(count: number, rng: RngFn): number[] {
   return rolls;
 }
 
+/** The base's affinity multiplier for a family: the PRODUCT of its theme
+ *  matches (a caster+sustain family on a caster:2×sustain:1.5 base = 3×).
+ *  Themeless families and affinity-less bases are neutral (×1). */
+function affinityMult(base: ItemBaseDef, def: AffixDef): number {
+  if (!base.affinity || !def.themes) return 1;
+  let mult = 1;
+  for (const t of def.themes) mult *= base.affinity[t] ?? 1;
+  return mult;
+}
+
 function rollOneAffix(
-  pool: AffixDef[], used: Set<string>, ilvl: number, rarity: ItemRarity, rng: RngFn,
+  base: ItemBaseDef, pool: AffixDef[], used: Set<string>, ilvl: number, rarity: ItemRarity, rng: RngFn,
 ): AffixRollState | null {
-  const open = pool.filter(a => !used.has(a.family) && eligibleTiers(a, ilvl, rarity).length > 0);
-  const def = pickWeighted(open, rng);
+  const open = pool
+    .filter(a => !used.has(a.family) && eligibleTiers(a, ilvl, rarity).length > 0)
+    .map(a => ({ a, weight: a.weight * affinityMult(base, a) }));
+  const def = pickWeighted(open, rng)?.a;
   if (!def) return null;
   const tier = pickTier(def, ilvl, rarity, rng);
   if (tier === null) return null;
@@ -204,11 +216,11 @@ function rollAffixSet(base: ItemBaseDef, ilvl: number, rarity: ItemRarity, rng: 
   const used = new Set<string>();
   const out: AffixRollState[] = [];
   for (let i = 0; i < nPre; i++) {
-    const a = rollOneAffix(pools.prefix, used, ilvl, rarity, rng);
+    const a = rollOneAffix(base, pools.prefix, used, ilvl, rarity, rng);
     if (a) out.push(a);
   }
   for (let i = 0; i < nSuf; i++) {
-    const a = rollOneAffix(pools.suffix, used, ilvl, rarity, rng);
+    const a = rollOneAffix(base, pools.suffix, used, ilvl, rarity, rng);
     if (a) out.push(a);
   }
   return out;

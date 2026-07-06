@@ -172,6 +172,10 @@ export interface ItemBaseDef {
   /** Defense mix as relative weights — {armor:1, evasion:1} splits the slot
    *  budget evenly. Omit for jewelry (implicit-driven, no defense budget). */
   defense?: Record<string, number>;
+  /** AFFIX-THEME AFFINITY: theme → weight multiplier applied when rolling
+   *  affixes onto THIS base ({caster: 2.5} makes caster-themed lines favor
+   *  it). Bias, never a gate — gates stay with AffixDef.tags/excludeTags. */
+  affinity?: Record<string, number>;
   /** Identity lines rolled at EVERY rarity (a Coral Ring is always life). */
   implicits?: RangedLineDef[];
   /** Optional per-tier display names replacing the generic tier prefixes. */
@@ -216,6 +220,10 @@ export interface AffixDef {
   tags?: string[];
   /** Never rolls on bases carrying any of these tags. */
   excludeTags?: string[];
+  /** THEME tags ('caster', 'martial', 'summoner', …) — open strings that
+   *  meet ItemBaseDef.affinity multipliers. A themed family rolls more
+   *  often where the base leans its way; themeless families are neutral. */
+  themes?: string[];
 }
 
 // --------------------------------------------------------------- uniques ---

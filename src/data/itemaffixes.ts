@@ -58,6 +58,9 @@ interface FamOpts {
   /** The WHOLE family is magic-exclusive (every tier magicOnly) — a class
    *  of power blues alone can carry, beyond the per-family EX tier. */
   magicOnly?: boolean;
+  /** THEME tags — meet ItemBaseDef.affinity multipliers, so a 'caster'
+   *  family leans onto energy-shield bases without being gated there. */
+  themes?: string[];
   /** ilvl at which T1 unlocks (ladder spreads 1..this). Defaults to the
    *  second-to-last tier break so T1 affixes arrive before endgame bases. */
   maxIlvl?: number;
@@ -104,8 +107,21 @@ function fam(o: FamOpts): AffixDef {
   return {
     id: o.id, kind: o.kind, family: o.id, names: o.names, lines, tiers,
     weight: o.weight ?? 100, tags: o.baseTags, excludeTags: o.excludeTags,
+    themes: o.themes,
   };
 }
+
+// The theme vocabulary — open strings; these constants only guard typos.
+// A base declares AFFINITY for a theme (itembases.ts); a themed family
+// rolls proportionally more often there. Weights within a themed pool stay
+// per-family (AffixDef.weight), so "spell damage outnumbers fortitude on a
+// caster chest" is both levers composing.
+const CASTER = 'caster';
+const MARTIAL = 'martial';
+const RANGER = 'ranger';
+const SUMMONER = 'summoner';
+const DEFENSE = 'defense';
+const SUSTAIN = 'sustain';
 
 const cap = (s: string): string => s[0].toUpperCase() + s.slice(1);
 
@@ -139,13 +155,17 @@ const ADDED_NAMES: Record<string, string> = {
 
 /** Flat added-damage prefixes — hands, jewelry, and the future weapon lanes. */
 const ADDED_AFFIXES: AffixDef[] = DAMAGE_TYPES.map(t => fam({
-  id: `added_${t}`, kind: 'prefix',
+  id: `added_${t}`, kind: 'prefix', themes: t === 'physical' ? [MARTIAL] : [CASTER, MARTIAL],
   names: [ADDED_NAMES[t] ?? cap(t)],
   stat: `added${cap(t)}`, top: t === 'physical' ? 9 : 11, floor: 0.18,
   baseTags: ['gloves', 'ring', 'amulet', 'quiver', 'weapon'], weight: 80,
 }));
 
 /** %-increased damage prefixes by skill tag — the build-lane amplifiers. */
+const LANE_THEME: Record<string, string[]> = {
+  melee: [MARTIAL], spell: [CASTER], projectile: [RANGER], minion: [SUMMONER],
+  physical: [MARTIAL], fire: [CASTER], cold: [CASTER], lightning: [CASTER], chaos: [CASTER],
+};
 const DAMAGE_LANES: { key: string; tag: SkillTag; name: string }[] = [
   { key: 'melee', tag: 'melee', name: 'Brutal' },
   { key: 'spell', tag: 'spell', name: 'Arcane' },
@@ -159,7 +179,7 @@ const DAMAGE_LANES: { key: string; tag: SkillTag; name: string }[] = [
   { key: 'chaos', tag: 'chaos', name: 'Baleful' },
 ];
 const DAMAGE_AFFIXES: AffixDef[] = DAMAGE_LANES.map(l => fam({
-  id: `dmg_${l.key}`, kind: 'prefix',
+  id: `dmg_${l.key}`, kind: 'prefix', themes: LANE_THEME[l.key],
   names: [l.name],
   stat: 'damage', modKind: 'increased', tags: [l.tag],
   top: 0.24, floor: 0.2, weight: 70,
@@ -209,71 +229,71 @@ const PREFIXES: AffixDef[] = [
     stat: 'life', top: 85, floor: 0.08, count: 6, weight: 130,
   }),
   fam({
-    id: 'mana', kind: 'prefix',
+    id: 'mana', kind: 'prefix', themes: [CASTER],
     names: ['Azure', 'Cerulean', 'Sapphirine', 'Beryl'],
     stat: 'mana', top: 60, floor: 0.1, weight: 100,
   }),
   fam({
-    id: 'es_flat', kind: 'prefix',
+    id: 'es_flat', kind: 'prefix', themes: [CASTER],
     names: ['Radiant', 'Gleaming', 'Shining', 'Glimmering'],
     stat: 'energyShield', top: 45, floor: 0.12, weight: 90,
   }),
   fam({
-    id: 'es_pct', kind: 'prefix',
+    id: 'es_pct', kind: 'prefix', themes: [CASTER],
     names: ['Resplendent', 'Luminous', 'Bright'],
     stat: 'energyShield', modKind: 'increased', top: 0.35, floor: 0.2,
     baseTags: ['armour'], weight: 80,
   }),
   fam({
-    id: 'armor_flat', kind: 'prefix',
+    id: 'armor_flat', kind: 'prefix', themes: [DEFENSE],
     names: ['Adamant', 'Lacquered', 'Studded', 'Boiled'],
     stat: 'armor', top: 160, floor: 0.1, baseTags: ['armour'], weight: 110,
   }),
   fam({
-    id: 'armor_pct', kind: 'prefix',
+    id: 'armor_pct', kind: 'prefix', themes: [DEFENSE],
     names: ['Impregnable', 'Reinforced', 'Riveted'],
     stat: 'armor', modKind: 'increased', top: 0.4, floor: 0.2,
     baseTags: ['armour'], weight: 90,
   }),
   fam({
-    id: 'evasion_flat', kind: 'prefix',
+    id: 'evasion_flat', kind: 'prefix', themes: [DEFENSE, RANGER],
     names: ['Phantasmal', 'Limber', 'Supple', 'Oiled'],
     stat: 'evasion', top: 140, floor: 0.1, baseTags: ['armour'], weight: 110,
   }),
   fam({
-    id: 'evasion_pct', kind: 'prefix',
+    id: 'evasion_pct', kind: 'prefix', themes: [DEFENSE, RANGER],
     names: ['Untouchable', 'Nimble', 'Fleet'],
     stat: 'evasion', modKind: 'increased', top: 0.4, floor: 0.2,
     baseTags: ['armour'], weight: 90,
   }),
   fam({
-    id: 'poise', kind: 'prefix',
+    id: 'poise', kind: 'prefix', themes: [DEFENSE],
     names: ['Immovable', 'Unyielding', 'Braced'],
     stat: 'poise', top: 60, floor: 0.15, baseTags: ['belt', 'chest', 'helmet'], weight: 70,
   }),
   fam({
-    id: 'endurance', kind: 'prefix',
+    id: 'endurance', kind: 'prefix', themes: [DEFENSE],
     names: ['Marathon', 'Tireless', 'Enduring'],
     stat: 'endurance', top: 45, floor: 0.15, baseTags: ['belt'], weight: 70,
   }),
   fam({
-    id: 'insight', kind: 'prefix',
+    id: 'insight', kind: 'prefix', themes: [DEFENSE],
     names: ['Oracular', 'Keen', 'Watchful'],
     stat: 'insight', top: 40, floor: 0.15, baseTags: ['helmet', 'boots'], weight: 70,
   }),
   fam({
-    id: 'thorns', kind: 'prefix',
+    id: 'thorns', kind: 'prefix', themes: [DEFENSE],
     names: ['Bristling', 'Barbed', 'Spiked'],
     stat: 'thorns', top: 25, floor: 0.15, baseTags: ['chest', 'belt'], weight: 60,
   }),
   fam({
-    id: 'minion_damage', kind: 'prefix',
+    id: 'minion_damage', kind: 'prefix', themes: [SUMMONER],
     names: ["Tyrant's", "Overseer's", "Taskmaster's"],
     stat: 'minionDamage', modKind: 'increased', top: 0.3, floor: 0.2,
     baseTags: ['helmet', 'amulet'], weight: 60,
   }),
   fam({
-    id: 'minion_life', kind: 'prefix',
+    id: 'minion_life', kind: 'prefix', themes: [SUMMONER],
     names: ["Warden's", "Shepherd's", "Keeper's"],
     stat: 'minionLife', modKind: 'increased', top: 0.35, floor: 0.2,
     baseTags: ['helmet', 'amulet'], weight: 60,
@@ -307,14 +327,14 @@ const PREFIXES: AffixDef[] = [
   // D2 Crushing-Blow class of power, kept exclusive to keep blues forever
   // worth the look.
   fam({
-    id: 'proc_concussive', kind: 'prefix', magicOnly: true,
+    id: 'proc_concussive', kind: 'prefix', themes: [MARTIAL], magicOnly: true,
     names: ['Skullcracking', 'Concussive', 'Jarring'],
     stat: 'proc_brutal_strike', tags: ['attack'],
     top: 0.25, floor: 0.3, count: 3,
     baseTags: ['gloves', 'belt', 'ring'], weight: 55,
   }),
   fam({
-    id: 'proc_stormlit', kind: 'prefix', magicOnly: true,
+    id: 'proc_stormlit', kind: 'prefix', themes: [CASTER], magicOnly: true,
     names: ['Stormlit', 'Static-Laced'],
     stat: 'proc_thunderstruck', tags: ['spell'],
     top: 0.18, floor: 0.3, count: 3,
@@ -328,7 +348,7 @@ const PREFIXES: AffixDef[] = [
     top: [40, 35], floor: 0.2, count: 3, weight: 45,
   }),
   fam({
-    id: 'hybrid_armor_evasion', kind: 'prefix',
+    id: 'hybrid_armor_evasion', kind: 'prefix', themes: [DEFENSE],
     names: ["Scrapper's", "Skirmisher's"],
     lines: [{ stat: 'armor', kind: 'flat' }, { stat: 'evasion', kind: 'flat' }],
     top: [90, 80], floor: 0.2, count: 3, baseTags: ['armour'], weight: 45,
@@ -341,13 +361,13 @@ const PREFIXES: AffixDef[] = [
 
 const SUFFIXES: AffixDef[] = [
   fam({
-    id: 'attack_speed', kind: 'suffix',
+    id: 'attack_speed', kind: 'suffix', themes: [MARTIAL],
     names: ['of Alacrity', 'of Celerity', 'of Quickness'],
     stat: 'attackSpeed', modKind: 'increased', top: 0.13, floor: 0.3,
     baseTags: ['gloves', 'ring', 'amulet', 'quiver', 'weapon'], weight: 85,
   }),
   fam({
-    id: 'cast_speed', kind: 'suffix',
+    id: 'cast_speed', kind: 'suffix', themes: [CASTER],
     names: ['of Incantation', 'of Recitation', 'of Murmurs'],
     stat: 'castSpeed', modKind: 'increased', top: 0.13, floor: 0.3,
     baseTags: ['gloves', 'ring', 'amulet'], weight: 85,
@@ -360,54 +380,54 @@ const SUFFIXES: AffixDef[] = [
     baseTags: ['boots'], weight: 90,
   }),
   fam({
-    id: 'crit_chance', kind: 'suffix',
+    id: 'crit_chance', kind: 'suffix', themes: [MARTIAL, CASTER],
     names: ['of Precision', 'of Incision', 'of Aim'],
     stat: 'critChance', top: 0.045, floor: 0.22,
     baseTags: ['gloves', 'ring', 'amulet', 'quiver', 'weapon'], weight: 75,
   }),
   fam({
-    id: 'crit_multi', kind: 'suffix',
+    id: 'crit_multi', kind: 'suffix', themes: [MARTIAL, CASTER],
     names: ['of Ruin', 'of Havoc', 'of Malice'],
     stat: 'critMulti', top: 0.35, floor: 0.2,
     baseTags: ['gloves', 'ring', 'amulet', 'quiver', 'weapon'], weight: 70,
   }),
   fam({
-    id: 'accuracy', kind: 'suffix',
+    id: 'accuracy', kind: 'suffix', themes: [MARTIAL, RANGER],
     names: ['of the Hawk', 'of the Kestrel', 'of Marksmanship'],
     stat: 'accuracy', top: 120, floor: 0.15, weight: 80,
   }),
   fam({
-    id: 'life_regen', kind: 'suffix',
+    id: 'life_regen', kind: 'suffix', themes: [SUSTAIN],
     names: ['of Mending', 'of Knitting', 'of Scabbing'],
     stat: 'lifeRegen', top: 6, floor: 0.15, weight: 90,
   }),
   fam({
-    id: 'mana_regen', kind: 'suffix',
+    id: 'mana_regen', kind: 'suffix', themes: [CASTER, SUSTAIN],
     names: ['of the Font', 'of the Spring', 'of the Trickle'],
     stat: 'manaRegen', top: 4, floor: 0.15, weight: 90,
   }),
   fam({
-    id: 'life_leech', kind: 'suffix',
+    id: 'life_leech', kind: 'suffix', themes: [SUSTAIN, MARTIAL],
     names: ['of the Leech', 'of the Tick'],
     stat: 'lifeLeech', top: 0.03, floor: 0.3, count: 3, weight: 50,
   }),
   fam({
-    id: 'mana_leech', kind: 'suffix',
+    id: 'mana_leech', kind: 'suffix', themes: [SUSTAIN, CASTER],
     names: ['of the Lamprey', 'of the Mosquito'],
     stat: 'manaLeech', top: 0.03, floor: 0.3, count: 3, weight: 50,
   }),
   fam({
-    id: 'life_on_hit', kind: 'suffix',
+    id: 'life_on_hit', kind: 'suffix', themes: [SUSTAIN],
     names: ['of Biting', 'of Gnawing'],
     stat: 'lifeOnHit', top: 4, floor: 0.25, count: 3, weight: 55,
   }),
   fam({
-    id: 'life_on_kill', kind: 'suffix',
+    id: 'life_on_kill', kind: 'suffix', themes: [SUSTAIN],
     names: ['of Reaping', 'of Harvesting'],
     stat: 'lifeOnKill', top: 12, floor: 0.2, count: 3, weight: 55,
   }),
   fam({
-    id: 'mana_on_kill', kind: 'suffix',
+    id: 'mana_on_kill', kind: 'suffix', themes: [SUSTAIN, CASTER],
     names: ['of Osmosis', 'of Sipping'],
     stat: 'manaOnKill', top: 8, floor: 0.2, count: 3, weight: 55,
   }),
@@ -422,7 +442,7 @@ const SUFFIXES: AffixDef[] = [
     stat: 'aoeRadius', modKind: 'increased', top: 0.18, floor: 0.3, weight: 60,
   }),
   fam({
-    id: 'proj_speed', kind: 'suffix',
+    id: 'proj_speed', kind: 'suffix', themes: [RANGER],
     names: ['of Flight', 'of Loft'],
     stat: 'projectileSpeed', modKind: 'increased', top: 0.25, floor: 0.25,
     baseTags: ['quiver', 'ring', 'gloves'], weight: 60,
@@ -433,7 +453,7 @@ const SUFFIXES: AffixDef[] = [
     stat: 'effectDuration', modKind: 'increased', top: 0.2, floor: 0.25, weight: 60,
   }),
   fam({
-    id: 'heal_power', kind: 'suffix',
+    id: 'heal_power', kind: 'suffix', themes: [SUSTAIN],
     names: ['of Benediction', 'of Grace'],
     stat: 'healPower', modKind: 'increased', top: 0.25, floor: 0.25,
     baseTags: ['amulet', 'gloves', 'ring'], weight: 55,

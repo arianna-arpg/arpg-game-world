@@ -38,7 +38,7 @@ import {
   type EssenceCost, type EssenceId,
 } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, type ItemInstance } from './items';
-import { DROP_CFG, resolveLootTable } from './loot';
+import { DROP_CFG, GEM_DROP_CFG, resolveLootTable } from './loot';
 import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
@@ -14755,9 +14755,10 @@ export class World {
         this.grantXp(actor.xpValue);
         this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11);
         this.rollDrops(actor);
-        // Elites spill extra gems on top of the base roll.
+        // Elites spill extra gems on top of the base roll (bias rides along).
         if (actor.rarity) {
-          for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos);
+          const bias = actor.defId ? MONSTERS[actor.defId]?.gemBias : undefined;
+          for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias);
         }
         // A slain warlord pays the player a bounty and a rival's gratitude.
         // (Its faction's power breaks below — credit or not, the body counts.)
@@ -15055,14 +15056,40 @@ export class World {
    */
   /** Mint a random dropped skill gem (rarity → sockets; deep zones can
    *  pre-level it). Shared by monster drops, chests, and the vendor. */
-  rollSkillGem(): SkillInstance {
-    // Only UNLOCKED skills may drop (account gating). The fallback STILL
-    // respects gating — STARTER_SKILLS are always unlocked, so it can never leak
+  /** Weighted gem pick — the drop-POLICY composition point: per-def weight
+   *  × global tag multipliers × the killer's bias (GEM_DROP_CFG). One
+   *  helper serves skills and supports so the policy can never fork. */
+  private pickGem<T>(
+    pool: T[], tagsOf: (x: T) => readonly SkillTag[], weightOf: (x: T) => number,
+    bias?: SkillTag[],
+  ): T | null {
+    if (pool.length === 0) return null;
+    const weights = pool.map(x => {
+      let w = weightOf(x);
+      for (const t of tagsOf(x)) w *= GEM_DROP_CFG.tagWeights[t] ?? 1;
+      if (bias && tagsOf(x).some(t => bias.includes(t))) w *= GEM_DROP_CFG.biasMult;
+      return Math.max(0, w);
+    });
+    const total = weights.reduce((s, w) => s + w, 0);
+    if (total <= 0) return pool[0];
+    let r = Math.random() * total;
+    for (let i = 0; i < pool.length; i++) {
+      r -= weights[i];
+      if (r <= 0) return pool[i];
+    }
+    return pool[pool.length - 1];
+  }
+
+  rollSkillGem(bias?: SkillTag[]): SkillInstance {
+    // Only UNLOCKED skills may drop (account gating), inside their level
+    // BRACKET (minDropLevel vs the zone). The fallback STILL respects
+    // gating — STARTER_SKILLS are always unlocked, so it can never leak
     // a LOCKED gem even if the unlocked set were somehow emptied; it only keeps
     // the contract (a non-empty pool, since no starter is noDrop).
-    let pool = SKILL_LIST.filter(s => !s.noDrop && isSkillUnlockedForDrop(this.account, s.id));
+    let pool = SKILL_LIST.filter(s => !s.noDrop && isSkillUnlockedForDrop(this.account, s.id)
+      && (s.minDropLevel ?? 0) <= this.zone.level);
     if (pool.length === 0) pool = SKILL_LIST.filter(s => !s.noDrop && STARTER_SKILLS.includes(s.id));
-    const skillDef = pick(pool);
+    const skillDef = this.pickGem(pool, s => s.tags, s => s.dropWeight ?? 100, bias) ?? pick(pool);
     const rarity = rollSkillRarity(Math.random());
     const level = 1 + (this.zone.level >= 4 && chance(0.2)
       ? randInt(1, Math.max(1, Math.floor(this.zone.level / 3)))
@@ -15072,26 +15099,25 @@ export class World {
     return inst;
   }
 
-  /** Pick a support gem from the UNLOCKED pool (weighted), or null if none. */
-  private rollSupportDropGated(): SupportDef | null {
-    const pool = SUPPORT_LIST.filter(d => isSupportUnlockedForDrop(this.account, d.id));
-    if (pool.length === 0) return null;
-    const total = pool.reduce((s, d) => s + d.weight, 0);
-    let r = Math.random() * total;
-    for (const d of pool) { r -= d.weight; if (r <= 0) return d; }
-    return pool[pool.length - 1];
+  /** Pick a support gem from the UNLOCKED pool (weighted, bracketed,
+   *  bias-aware — dropTags default to what the gem sockets into), or null. */
+  private rollSupportDropGated(bias?: SkillTag[]): SupportDef | null {
+    const pool = SUPPORT_LIST.filter(d => isSupportUnlockedForDrop(this.account, d.id)
+      && (d.minDropLevel ?? 0) <= this.zone.level);
+    return this.pickGem(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, bias);
   }
 
-  /** Drop one random gem (skill or support) at a point — gated by account unlocks. */
-  dropGemAt(at: Vec2): void {
+  /** Drop one random gem (skill or support) at a point — gated by account
+   *  unlocks; `bias` is the killer's gemBias (the shaman-drops-caster rule). */
+  dropGemAt(at: Vec2, bias?: SkillTag[]): void {
     const pos = this.clampPos(vec(at.x + rand(-20, 20), at.y + rand(-20, 20)), 10);
     const dropSkill = (): void => {
-      const inst = this.rollSkillGem();
+      const inst = this.rollSkillGem(bias);
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15);
     };
     if (chance(0.4)) { dropSkill(); return; }
-    const gemDef = this.rollSupportDropGated();
+    const gemDef = this.rollSupportDropGated(bias);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: rand(0, Math.PI * 2) });
     this.text(at, `${gemDef.name}!`, gemDef.color, 14);
@@ -15370,7 +15396,7 @@ export class World {
   private rollDrops(actor: Actor): void {
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
     const count = def?.drops ?? (def?.boss ? DROP_CFG.bossGemDrops : chance(DROP_CFG.killGemChance) ? 1 : 0);
-    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos);
+    for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
     // table; elite leaders add bonus rolls (crowned promote to the apex table).
     const tables: string[] = [];

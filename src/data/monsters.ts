@@ -7,7 +7,7 @@
 // player minion (see Summon Skeleton / Flame Sprite) — same definition.
 // ---------------------------------------------------------------------------
 
-import { mod, type Modifier, type DamageType } from '../engine/stats';
+import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
 import type { ActorAdorn, ActorShape, BrainDef } from '../engine/actor';
 
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
@@ -122,6 +122,10 @@ export interface MonsterDef {
   /** MONSTER-INFREQUENT theme (mi_<theme> base pool). Wins over the
    *  data/infrequents.ts MONSTER_THEMES registry when both name this def. */
   infrequentTheme?: string;
+  /** GEM-DROP bias: gems sharing one of these tags weigh heavier from this
+   *  monster's kills (GEM_DROP_CFG.biasMult) — the shaman drops caster gems,
+   *  the archer projectile ones. Bias, never a gate. */
+  gemBias?: SkillTag[];
   /** Marks wave bosses: bigger, tougher, flagged in the UI. */
   boss?: boolean;
   /** Cannot take damage (hits report immune). */
@@ -433,6 +437,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'skeleton_archer', name: 'Skeleton Archer',
     color: '#d8d0b0', shape: 'ribcage', radius: 12,
     base: { life: 24, moveSpeed: 130, accuracy: 100, evasion: 50, mana: 0 },
+    gemBias: ['projectile'], // the archer's kills lean toward projectile gems
     skills: ['bone_arrow'],
     xp: 11,
     faction: 'undead',
@@ -1663,6 +1668,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'goblin_shaman', name: 'Goblin Shaman',
     color: '#8ec84e', shape: 'diamond', radius: 12,
     base: { life: 30, moveSpeed: 130, mana: 120, manaRegen: 9 },
+    gemBias: ['spell'], // a caster's kills lean toward caster gems
     mods: [mod('lightningRes', 'flat', 0.4)],
     skills: ['spark', 'rallying_howl'],
     xp: 16,
