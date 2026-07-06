@@ -315,6 +315,10 @@ function handleLocalPanels(): void {
     else if (ui.caravanOpen) ui.closeCaravan();
     else if (ui.tollOpen) ui.closeToll();
     else if (ui.sailOpen) ui.closeSail();
+    // The vocation choice menu closes through its OWN close (not hideAll):
+    // closeVocationMenu also DECLINES the offer, else the dwell re-pops the
+    // menu the instant the pause menu comes down.
+    else if (ui.vocationOpen) ui.closeVocationMenu();
     else { ui.hideAll(); ui.showEscapeMenu(); }
     return;
   }
