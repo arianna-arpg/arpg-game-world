@@ -39,7 +39,11 @@ import type { World } from '../engine/world';
 import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isUnlockOwned } from '../meta/unlocks';
 import { ACTION_IDS, ACTION_LABELS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
-import type { CharacterSave } from '../meta/character';
+import { wipeRosterSlot, type CharacterSave } from '../meta/character';
+import {
+  availableModes, DEFAULT_MODE_ID, modeById, rosterCapacity, rosterOf, stageOf,
+  type RosterEntry,
+} from '../meta/modes';
 import { bound } from '../packages/manifest';
 import { isConfigured, PACKAGES } from '../packages/registry';
 import type { ContentPackage } from '../packages/types';
@@ -120,8 +124,16 @@ export class UI {
     teasers: { def: ClassDef; reason: 'slots' | 'class' }[];
     dealtFor: string;
   } | null = null;
+  /** The LIFE-CONTRACT selected on the class screen (meta/modes.ts). Sticky
+   *  across menu navigation like the class hand; reset with it each new offer. */
+  private pendingModeId: string = DEFAULT_MODE_ID;
   /** Start-menu callbacks, retained so Vault/Keybinds sub-views can return. */
-  private startHandlers: { onStart: (d: ClassDef) => void; onContinue: (s?: CharacterSave | null) => void; onCoop?: () => void } | null = null;
+  private startHandlers: {
+    onStart: (d: ClassDef, modeId?: string) => void;
+    onContinue: (s?: CharacterSave | null) => void;
+    onCoop?: () => void;
+    onRoster?: (e: RosterEntry) => void;
+  } | null = null;
   /** The pending rebind keydown-capture listener (armed when a row is clicked,
    *  before a key is pressed). Tracked so it can be torn down on re-render / any
    *  navigation away — a leaked capture would swallow & silently rebind the next
@@ -347,7 +359,7 @@ export class UI {
 
   /** Clear the cached class roster so the NEXT class select deals a fresh roll.
    *  Called when a run ends (death) — NOT on menu navigation. */
-  resetClassRoster(): void { this.classRoster = null; }
+  resetClassRoster(): void { this.classRoster = null; this.pendingModeId = DEFAULT_MODE_ID; }
 
   /** Forget the per-run VIEW state (map zoom/pan/tab/dimension, zone pin, book
    *  tab). Called whenever a NEW World is built (start/resume/co-op join) — a
@@ -366,7 +378,7 @@ export class UI {
     this.lastInvTab = null;
   }
 
-  showClassSelect(onPick: (def: ClassDef) => void): void {
+  showClassSelect(onPick: (def: ClassDef, modeId?: string) => void): void {
     this.hideAll();
     const acc = this.getAccount();
     const TEASER_COUNT = 4;
@@ -438,6 +450,34 @@ export class UI {
         ${note ? `<div class="class-lock">${note}</div>` : ''}
       </div>`;
 
+    // THE LIFE-CONTRACT row (meta/modes.ts): rendered only once a second mode
+    // is unlocked, dealt straight from the registry — a new mode is one data
+    // entry there, zero edits here. Roster modes show their vessel occupancy
+    // and grey out when full (click → the Vault, where more slots are sold).
+    const modes = availableModes(acc);
+    if (!modes.some(md => md.id === this.pendingModeId)) this.pendingModeId = DEFAULT_MODE_ID;
+    const modeCard = (md: (typeof modes)[number]): string => {
+      const roster = md.save === 'roster';
+      const cap = roster ? rosterCapacity(acc, md) : 0;
+      const used = roster ? rosterOf(acc, md.id).length : 0;
+      const full = roster && used >= cap;
+      const sel = this.pendingModeId === md.id;
+      return `
+        <div class="mode-card" data-mode="${md.id}" data-full="${full}"
+          style="flex:1 1 260px;max-width:420px;text-align:left;cursor:pointer;padding:8px 10px;
+            border-radius:8px;background:#16121c;border:1px solid ${sel ? md.color : '#3a3644'};
+            ${sel ? `box-shadow:0 0 10px ${md.color}44;` : ''}${full ? 'opacity:.45;' : ''}">
+          <div style="font-weight:bold;color:${md.color}">${sel ? '◈ ' : ''}${md.name}
+            ${roster ? `<span style="float:right;font-size:10px;color:#a8a494">${used}/${cap} vessel${cap === 1 ? '' : 's'}</span>` : ''}</div>
+          <div style="font-size:10px;color:#a8a494;margin-top:2px">${md.blurb}</div>
+          ${full ? '<div style="font-size:10px;color:#d08a4b;margin-top:3px">🔒 No free vessel — unlock more in the Vault, or release one from the start menu.</div>' : ''}
+        </div>`;
+    };
+    const modeRow = modes.length > 1
+      ? `<div id="mode-row" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:6px 0 10px 0">
+          ${modes.map(modeCard).join('')}</div>`
+      : '';
+
     this.classSelect.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
@@ -450,6 +490,7 @@ export class UI {
         Classes are only starting points; the tree and every skill stay open to any build.
         Pick a class to begin; tune the world mix under Event Weights first if you like.
       </div>
+      ${modeRow}
       <div class="class-grid">${picks.map(c => classCard(c)).join('')}${teasers.map(t => classCard(t.def, lockNote(t))).join('')}</div>
       <div class="acct-btns">
         <button id="event-weights-btn">⚙ Event Weights</button>
@@ -457,14 +498,33 @@ export class UI {
       </div>`;
     this.classSelect.classList.remove('hidden');
 
+    // A mode card selects the life-contract (a full roster mode routes to the
+    // Vault instead — its remedy is sold there). Re-render keeps the same hand.
+    this.classSelect.querySelectorAll<HTMLElement>('.mode-card').forEach(el => {
+      el.addEventListener('click', () => {
+        if (el.dataset.full === 'true') {
+          this.showAccountScreen(() => this.showClassSelect(onPick));
+          return;
+        }
+        this.pendingModeId = el.dataset.mode!;
+        this.showClassSelect(onPick);
+      });
+    });
     this.classSelect.querySelectorAll<HTMLElement>('.class-card').forEach(el => {
       el.addEventListener('click', () => {
         if (el.dataset.locked === 'true') {
           this.showAccountScreen(() => this.showClassSelect(onPick));
           return;
         }
+        // A full roster mode can't be sworn into — the card click above routes
+        // to the Vault, and the pick below re-checks as the belt to that brace.
+        const md = modeById(this.pendingModeId);
+        if (md.save === 'roster' && rosterOf(acc, md.id).length >= rosterCapacity(acc, md)) {
+          this.showAccountScreen(() => this.showClassSelect(onPick));
+          return;
+        }
         this.classSelect.classList.add('hidden');
-        onPick(CLASSES.find(c => c.id === el.dataset.id!)!);
+        onPick(CLASSES.find(c => c.id === el.dataset.id!)!, this.pendingModeId);
       });
     });
     document.getElementById('account-btn')!.addEventListener('click',
@@ -2484,12 +2544,16 @@ export class UI {
     const root = this.escapeMenu;
 
     const showMain = (): void => {
+      // A roster-saved character (an Immortal vessel) persists by design — its
+      // "End Run" is Save & Main Menu (world.endRun reroutes there too). Only
+      // run-saved mortals get the bank-and-permadeath forfeit.
+      const rosterMode = !this.isCoopClient() && modeById(this.getWorld().meta.modeId).save === 'roster';
       root.innerHTML = `
         <h1>Paused</h1>
         <div class="esc-btns">
           <button id="esc-resume">Resume</button>
           <button id="esc-keys">Customize Keybinds</button>
-          <button id="esc-end">${this.isCoopClient() ? 'Leave Co-op' : 'End Run'}</button>
+          <button id="esc-end">${this.isCoopClient() ? 'Leave Co-op' : rosterMode ? 'Save & Main Menu' : 'End Run'}</button>
           <button id="esc-close">Close Game</button>
         </div>`;
       document.getElementById('esc-resume')!.addEventListener('click', () => this.hideEscapeMenu());
@@ -2499,6 +2563,12 @@ export class UI {
         // (it would corrupt the shell with no effect). Leave the session instead.
         if (this.isCoopClient()) {
           if (window.confirm('Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
+          return;
+        }
+        if (rosterMode) {
+          // Non-destructive: endRun() reroutes roster modes to Save & Main Menu.
+          this.hideEscapeMenu();
+          this.getWorld().endRun();
           return;
         }
         if (window.confirm(`End this run and bank your ${META_CURRENCY_LABEL}? Your character will be lost (permadeath).`)) {
@@ -2623,10 +2693,15 @@ export class UI {
     if (!this.startMenu.classList.contains('hidden') && this.startHandlers) this.renderStartMenu();
   }
 
-  /** The launch screen: Start New / Continue / Vault / Keybinds. */
-  showStartMenu(onStart: (d: ClassDef) => void, onContinue: (s?: CharacterSave | null) => void, onCoop?: () => void): void {
+  /** The launch screen: Start New / Continue / the roster / Vault / Keybinds. */
+  showStartMenu(
+    onStart: (d: ClassDef, modeId?: string) => void,
+    onContinue: (s?: CharacterSave | null) => void,
+    onCoop?: () => void,
+    onRoster?: (e: RosterEntry) => void,
+  ): void {
     this.hideAll();
-    this.startHandlers = { onStart, onContinue, onCoop };
+    this.startHandlers = { onStart, onContinue, onCoop, onRoster };
     this.renderStartMenu();
     this.startMenu.classList.remove('hidden');
   }
@@ -2635,12 +2710,29 @@ export class UI {
     const acc = this.getAccount();
     const h = this.startHandlers!;
     const canContinue = !!this.continueSave;
+    // THE ROSTER: account-owned characters (Immortal vessels), listed straight
+    // from the index cards — no slot file is read until one is chosen. Each row
+    // is Continue-as plus a deliberate release (✕, confirmed, durable wipe).
+    const rosterRows = acc.roster.map(e => {
+      const mode = modeById(e.modeId);
+      const badge = stageOf(e.modeId, e.stage).badge ?? mode.name.toUpperCase();
+      return `
+        <div style="display:flex;gap:6px">
+          <button class="sm-roster-go" data-cid="${e.charId}" style="flex:1 1 auto;text-align:left">
+            ⟢ ${e.name} — Level ${e.level}
+            <span style="font-size:10px;color:${mode.color};border:1px solid ${mode.color};
+              border-radius:6px;padding:0 5px;margin-left:6px">${badge}</span></button>
+          <button class="sm-roster-del" data-cid="${e.charId}" style="flex:0 0 auto"
+            title="Release this vessel — the character is permanently discarded">✕</button>
+        </div>`;
+    }).join('');
     this.startMenu.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div class="acct-head">Account Level <b>${acc.level}</b> · <b>${acc.credits}</b> ${META_CURRENCY_LABEL}</div>
       <div class="esc-btns">
         <button id="sm-start">Start New Game</button>
         <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
+        ${rosterRows}
         <button id="sm-vault">Vault (Unlocks)</button>
         <button id="sm-keys">Customize Keybinds</button>
         ${h.onCoop ? '<button id="sm-coop">Co-op (Beta)</button>' : ''}
@@ -2653,10 +2745,31 @@ export class UI {
       if (!this.continueSave) return;
       this.startMenu.classList.add('hidden'); h.onContinue(this.continueSave);
     });
+    this.startMenu.querySelectorAll<HTMLElement>('.sm-roster-go').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const entry = this.getAccount().roster.find(r => r.charId === btn.dataset.cid);
+        if (!entry || !h.onRoster) return;
+        this.startMenu.classList.add('hidden');
+        h.onRoster(entry);
+      });
+    });
+    this.startMenu.querySelectorAll<HTMLElement>('.sm-roster-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const roster = this.getAccount().roster;
+        const i = roster.findIndex(r => r.charId === btn.dataset.cid);
+        if (i < 0) return;
+        const e = roster[i];
+        if (!window.confirm(`Release ${e.name} (Level ${e.level})? The vessel and everything it carries are permanently discarded.`)) return;
+        roster.splice(i, 1);
+        wipeRosterSlot(e.slot);  // durable — the slot must not resurrect on next boot
+        this.saveAccount();
+        this.renderStartMenu();
+      });
+    });
     document.getElementById('sm-vault')!.addEventListener('click', () =>
-      this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop)));
+      this.showAccountScreen(() => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
     document.getElementById('sm-keys')!.addEventListener('click', () =>
-      this.renderKeybinds(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop)));
+      this.renderKeybinds(this.startMenu, () => this.showStartMenu(h.onStart, h.onContinue, h.onCoop, h.onRoster)));
   }
 
   // ------------------------------------------------------- expedition setup

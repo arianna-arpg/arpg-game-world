@@ -21,7 +21,10 @@ import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
 import { emptyEssences, type PlayerMeta, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
-import { diskBeacon, diskGet, diskPut } from './persistence';
+import { diskBeacon, diskGet, diskPut, saveAccount } from './persistence';
+import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
+import { DEFAULT_MODE_ID, modeById, type RosterEntry } from './modes';
+import type { Account } from './account';
 
 export const CHAR_SCHEMA_VERSION = 1;
 const CHAR_KEY = 'arpg_character_v1';
@@ -76,6 +79,15 @@ export interface CharacterSave {
    *  reward-gate (a serialized quest_<id> key would block its own quest reward on
    *  resume), so serializeCharacter filters those prefixes out. Optional. */
   completedObjectives?: string[];
+  /** CHARACTER MODE (meta/modes.ts): the life-contract + ladder stage + roster
+   *  identity. Optional → every pre-mode save loads as a plain mortal. */
+  modeId?: string;
+  modeStage?: number;
+  charId?: string;
+  /** The character's OWN corpse ring (roster-saved modes): an Undying vessel's
+   *  falls live HERE — inside its own save — so no other character can ever
+   *  see or loot them. Same per-record schema tolerance as the account ring. */
+  deaths?: DeathRecord[];
 }
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
@@ -114,6 +126,10 @@ export function serializeCharacter(world: World): CharacterSave {
     // fresh each run from the overlay's re-seeded RNG, so a persisted clear-key
     // would wrongly suppress a re-rolled same-id zone's reward on resume).
     completedObjectives: [...world.completedObjectives].filter(id => !/^(gen_|quest_|cave_|crusade_|demon_)/.test(id)),
+    modeId: m.modeId,
+    modeStage: m.modeStage,
+    charId: m.charId,
+    deaths: world.charDeaths.map(d => ({ ...d })),
   };
 }
 
@@ -177,9 +193,16 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     items, equipped,
     essences: { ...emptyEssences(), ...(save.essences ?? {}) },
     vestiges: { ...(save.vestiges ?? {}) },
+    // The SAVE is the authority on the life-contract — createPlayer's stamp is
+    // only for fresh characters. Pre-mode saves load as plain mortals.
+    modeId: save.modeId ?? DEFAULT_MODE_ID,
+    modeStage: save.modeStage ?? 0,
+    charId: save.charId ?? '',
   };
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);
+  // The character's own corpse ring (same per-record tolerance as the account's).
+  world.charDeaths = (save.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS);
   world.adoptSavedMeta(meta, save.bar, save.level);
   return true;
 }
@@ -207,12 +230,29 @@ export async function loadCharacterAsync(): Promise<CharacterSave | null> {
   return loadCharacter();
 }
 
+/** The localStorage mirror key for a character slot (the shared run slot keeps
+ *  its historical key; roster slots suffix theirs). */
+const charKeyFor = (slot: number): string => slot === CHAR_SLOT ? CHAR_KEY : `${CHAR_KEY}_s${slot}`;
+
+/** The disk slot this world's character persists to. Roster-saved modes
+ *  (Immortal vessels) write their OWN account slot, looked up by charId;
+ *  everything else writes the shared run slot. Returns -1 (save skipped) when
+ *  a roster character has lost its roster card — better no write than
+ *  clobbering the mortal Continue slot with the wrong character. */
+function saveSlotFor(world: World): number {
+  if (modeById(world.meta.modeId).save !== 'roster') return CHAR_SLOT;
+  const entry = world.account.roster.find(r => r.charId === world.meta.charId);
+  return entry ? entry.slot : -1;
+}
+
 export function saveCharacter(world: World): void {
+  const slot = saveSlotFor(world);
+  if (slot < 0) return;
   let body: string;
   try { body = JSON.stringify(serializeCharacter(world)); }
   catch { return; } // quota / serialize errors never crash gameplay
-  try { window.localStorage.setItem(CHAR_KEY, body); } catch { /* ignore */ }
-  diskPut(CHAR_SLOT, body);
+  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  diskPut(slot, body);
 }
 
 export function clearCharacter(): void {
@@ -220,4 +260,51 @@ export function clearCharacter(): void {
   // DURABLE wipe: must survive the player closing the game on the death screen,
   // else the disk-first loader resurrects the dead character (permadeath break).
   diskBeacon(CHAR_SLOT, '{}');
+}
+
+// --- the ROSTER (owned character slots — meta/modes.ts) ----------------------
+
+/** Load a roster character's save from its slot: disk-first (the authority),
+ *  localStorage mirror as the static-host fallback. Null = empty/corrupt. */
+export async function loadRosterSave(slot: number): Promise<CharacterSave | null> {
+  const data = await diskGet<CharacterSave>(slot);
+  if (data && data.schemaVersion === CHAR_SCHEMA_VERSION) {
+    try { window.localStorage.setItem(charKeyFor(slot), JSON.stringify(data)); } catch { /* ignore */ }
+    return data;
+  }
+  try {
+    const raw = window.localStorage.getItem(charKeyFor(slot));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CharacterSave;
+    return parsed && parsed.schemaVersion === CHAR_SCHEMA_VERSION ? parsed : null;
+  } catch { return null; }
+}
+
+/** Durably empty a roster slot (vessel deletion — a deliberate roster action). */
+export function wipeRosterSlot(slot: number): void {
+  try { window.localStorage.removeItem(charKeyFor(slot)); } catch { /* ignore */ }
+  diskBeacon(slot, '{}');
+}
+
+/** Refresh the account's index card for this world's character (level/stage/
+ *  savedAt drive the start-menu roster list). Null if it has no card. */
+export function syncRosterEntry(account: Account, world: World): RosterEntry | null {
+  const entry = account.roster.find(r => r.charId === world.meta.charId);
+  if (!entry) return null;
+  entry.classId = world.meta.classDef.id;
+  entry.name = world.meta.classDef.name;
+  entry.level = world.player.level;
+  entry.stage = world.meta.modeStage;
+  entry.savedAt = Date.now();
+  return entry;
+}
+
+/** THE run-persistence choke point: save the character to its routed slot and,
+ *  for roster characters, refresh the account index card beside it — every
+ *  autosave/baseline/dirty-flag path calls this one helper. */
+export function persistRun(account: Account, world: World): void {
+  saveCharacter(world);
+  if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
+    saveAccount(account);
+  }
 }

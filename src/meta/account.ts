@@ -14,6 +14,9 @@ import type { CraftLore } from '../engine/crafting';
 import { CLASSES } from '../data/classes';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { clampFrequency, DEFAULT_FREQUENCY, type FrequencyProfile } from '../packages/frequency';
+// Type-only — modes.ts value-imports from this file; a runtime import back
+// would be a cycle. RosterEntry is pure data, so the type is all we need.
+import type { RosterEntry } from './modes';
 
 export const SCHEMA_VERSION = 1;
 
@@ -87,7 +90,23 @@ export const FEATURE = {
   /** THE ORACLE STONE: standing stones in Lastlight — commune (a rune
    *  minigame) to REROLL one affix on an item, which seals it forever. */
   ORACLE_STONE: 'oracle_stone',
+  /** THE IMMORTAL COVENANT (meta/modes.ts): unlocks the Immortal character
+   *  mode at character select — earned by dying, not by spending (its Vault
+   *  entry gates on the lifetime death counter). Slots 2/3 add roster vessels. */
+  IMMORTAL: 'immortal_mode',
+  IMMORTAL_SLOT_2: 'immortal_slot_2',
+  IMMORTAL_SLOT_3: 'immortal_slot_3',
 } as const;
+
+/** Account-ledger key: lifetime deaths across every character (bumped by the
+ *  death flow per the dying stage's countsAccountDeath policy). Gates the
+ *  Immortal unlock; any future "die N times" content reads the same counter. */
+export const LEDGER_ACCOUNT_DEATHS = 'account_deaths';
+
+/** First disk save slot the character ROSTER may use (0/1/2 are account /
+ *  run-character / settings). Lives here (not modes.ts) so deserialization can
+ *  sanity-check entries without a value import back into the modes registry. */
+export const ROSTER_SLOT_BASE = 10;
 
 /** The display name of the account meta-currency (earned on death, spent in
  *  the Vault). ONE constant — every panel prints through it. The internal
@@ -126,8 +145,14 @@ export interface Account {
    *  GLOBAL_FREQUENCY unlock surfaces the slider. See packages/frequency.ts. */
   frequencyProfile: FrequencyProfile;
   /** Recent death spots (corpse runs) — a newest-first ring; survives the
-   *  character wipe so the next run can reclaim the lost gems. See meta/death.ts. */
+   *  character wipe so the next run can reclaim the lost gems. See meta/death.ts.
+   *  MORTAL-loop corpses only: an Undying character's corpses live in its OWN
+   *  save (CharacterSave.deaths), structurally invisible to everyone else. */
   deaths: DeathRecord[];
+  /** OWNED characters (Immortal vessels and any future roster-saved mode):
+   *  index cards pointing at roster disk slots. Display metadata only — each
+   *  slot's CharacterSave is the authority. See meta/modes.ts. */
+  roster: RosterEntry[];
   /** CRAFT LORE: affix-family → {rank, progress} study ledger. Progress is
    *  TIER-TRUE (crafting.ts studySalvage): only salvaged lines at or above
    *  the NEXT unlock tier teach. Knowledge survives every death — the
@@ -152,6 +177,7 @@ export interface AccountSave {
   ledger?: Record<string, number>;
   frequencyProfile?: FrequencyProfile;
   deaths?: DeathRecord[];
+  roster?: RosterEntry[];
   /** Current shape {rank, progress}; LEGACY saves held a flat count. */
   craftLore?: Record<string, number | { rank: number; progress: number }>;
 }
@@ -169,6 +195,7 @@ export function makeAccount(): Account {
     ledger: {},
     frequencyProfile: { ...DEFAULT_FREQUENCY },
     deaths: [],
+    roster: [],
     craftLore: {},
   };
 }
@@ -187,6 +214,7 @@ export function serializeAccount(a: Account): AccountSave {
     ledger: a.ledger,
     frequencyProfile: a.frequencyProfile,
     deaths: a.deaths,
+    roster: a.roster,
     craftLore: a.craftLore,
   };
 }
@@ -195,6 +223,13 @@ export function serializeAccount(a: Account): AccountSave {
  *  re-seeded so a partial/tampered save still boots playable. */
 export function deserializeAccount(s: AccountSave): Account | null {
   if (!s || s.schemaVersion !== SCHEMA_VERSION) return null;
+  const ledger = s.ledger ?? {};
+  // MIGRATION SEED: accounts predating the death counter get credited what the
+  // corpse ring still remembers (a floor, not the truth — the ring holds only
+  // MAX_DEATH_RECORDS). New accounts count every death from zero.
+  if (ledger[LEDGER_ACCOUNT_DEATHS] === undefined && (s.deaths?.length ?? 0) > 0) {
+    ledger[LEDGER_ACCOUNT_DEATHS] = s.deaths!.length;
+  }
   return {
     credits: s.credits ?? 0,
     lifetimeCredits: s.lifetimeCredits ?? 0,
@@ -206,11 +241,17 @@ export function deserializeAccount(s: AccountSave): Account | null {
     unlockedSlots: new Set<number>(s.unlockedSlots ?? []),
     packageUnlocks: new Set<string>(s.packageUnlocks ?? []),
     packageDefaults: s.packageDefaults ?? {},
-    ledger: s.ledger ?? {},
+    ledger,
     frequencyProfile: clampFrequency(s.frequencyProfile),
     // Per-RECORD schema filter (drop malformed/stale corpses, cap the ring)
     // WITHOUT touching SCHEMA_VERSION — a death-format change never wipes credits.
     deaths: (s.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS),
+    // Per-ENTRY sanity filter, same stance as deaths: a malformed roster card
+    // is dropped (its slot file simply goes unlisted), never a wipe or a crash.
+    roster: (s.roster ?? []).filter(r =>
+      typeof r?.charId === 'string' && r.charId.length > 0
+      && typeof r.modeId === 'string'
+      && typeof r.slot === 'number' && r.slot >= ROSTER_SLOT_BASE),
     craftLore: migrateLore(s.craftLore),
   };
 }

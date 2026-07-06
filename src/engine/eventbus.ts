@@ -23,6 +23,12 @@ export interface GameEvents {
   'player/downed': { actor: Actor; killer?: Actor };
   /** A downed seat was revived by an ally's dwell. */
   'player/revived': { actor: Actor; seat: string };
+  /** A death the character's MODE survived (meta/modes.ts): the Immortal
+   *  crossing and every Undying fall. Fires at the BANKING moment (corpse,
+   *  tithe, stage advance), before the fade — a rare roster moment, so
+   *  packages that feed on deaths (Deadwake, a future Nemesis) can hook it
+   *  without touching the death flow itself. */
+  'player/modeDeath': { stage: string; earned: number };
 }
 
 type Handler<K extends keyof GameEvents> = (payload: GameEvents[K]) => void;

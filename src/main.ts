@@ -13,7 +13,7 @@ import './engine/layoutRecipes'; // side-effect: registers the composed layout r
 import { updateAI } from './engine/ai';
 import { World } from './engine/world';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';
-import { mergeLedger } from './packages/ledger';
+import { bumpLedger, mergeLedger } from './packages/ledger';
 import { registerAllPackageFactions } from './packages/factionGen';
 import { Renderer } from './render/renderer';
 import { UI } from './ui/panels';
@@ -29,15 +29,17 @@ import { CLASSES, type ClassDef } from './data/classes';
 import { DEV, GAME_TITLE } from './config';
 import { mountDevGemSpawner } from './dev/gemSpawner';
 import { mountPassiveEditor } from './dev/passiveEditor';
-import { applyCredits, creditsForDeath, isClassUnlocked, type Account } from './meta/account';
+import { applyCredits, creditsForDeath, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, type Account } from './meta/account';
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
   saveAccount, saveAccountDurable, saveSettings, resetAccount,
 } from './meta/persistence';
 import {
-  applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync, saveCharacter,
+  applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync,
+  loadRosterSave, persistRun,
   type CharacterSave,
 } from './meta/character';
+import { freeRosterSlot, mintCharId, modeById, type RosterEntry } from './meta/modes';
 import type { Settings } from './meta/settings';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -143,19 +145,70 @@ let deathShown = false;
 let uiRefreshTimer = 0;
 let autosaveTimer = 0;
 
-function startGame(classDef: ClassDef, manifest?: ExpeditionManifest): void {
+function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: string): void {
+  // The LIFE-CONTRACT (meta/modes.ts): class select passes the sworn mode.
+  // A roster mode binds an account VESSEL at creation — the character saves
+  // cross-session into its own slot from its first breath.
+  const mode = modeById(modeId);
+  let charId = '';
+  if (mode.save === 'roster') {
+    const slot = freeRosterSlot(account, mode);
+    if (slot == null) { toStartMenu(); return; } // picker greys full modes; this is the belt
+    charId = mintCharId();
+    account.roster.push({
+      charId, modeId: mode.id, slot, classId: classDef.id, name: classDef.name,
+      level: 1, stage: 0, savedAt: Date.now(),
+    });
+    saveAccount(account);
+  }
   // The manifest is the run-LOCKED package config. Phase 4's Expedition screen
   // passes a configured one; otherwise build it from the account's saved prefs.
   const m = manifest ?? buildManifest(account, rollSeed());
   world = new World(account, Object.freeze(m));
-  world.createPlayer(classDef);
+  world.createPlayer(classDef, { modeId: mode.id, charId });
   lastSentZone = '';        // force a fresh terrain broadcast for (re)joining clients
   if (COOP_ALLY) spawnCoopAlly();
-  saveCharacter(world);     // baseline snapshot so a fresh run is resumable
-  ui.setContinueSave(null); // the previous run's continue cache is now stale
+  persistRun(account, world); // baseline snapshot so a fresh run is resumable
+  // A roster character never touches the shared run slot — the mortal
+  // Continue stays valid beside it (the vessels are additional lives).
+  if (mode.save !== 'roster') ui.setContinueSave(null);
   ui.resetRunView();        // a new world must not inherit the old run's map zoom/tabs/pin
   deathShown = false;
   running = true;
+}
+
+/** Class-select adapter: the picker hands back (class, sworn mode); startGame
+ *  wants (class, manifest, mode). One arrow so no call site can transpose them. */
+const startPicked = (d: ClassDef, modeId?: string): void => startGame(d, undefined, modeId);
+
+/** Resume an account-roster character (an Immortal vessel) from its own slot.
+ *  Async (disk-first load); a missing/corrupt slot just returns to the menu —
+ *  the entry stays listed, deletion is only ever the player's deliberate call. */
+function resumeRosterChar(entry: RosterEntry): void {
+  void (async (): Promise<void> => {
+    const save = await loadRosterSave(entry.slot);
+    const classDef = save && CLASSES.find(c => c.id === save.classId);
+    if (!save || !classDef) {
+      ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
+      return;
+    }
+    const manifest = reconcileManifest(save.expedition, account, rollSeed());
+    world = new World(account, Object.freeze(manifest));
+    world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId });
+    if (!applySavedCharacter(world, save)) {
+      ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
+      return;
+    }
+    // Identity drift heal: the save is the authority on mode/stage, the roster
+    // card on charId — an old save missing its id re-adopts the card's.
+    if (!world.meta.charId) world.meta.charId = entry.charId;
+    lastSentZone = '';
+    if (COOP_ALLY) spawnCoopAlly();
+    ui.resetRunView();
+    deathShown = false;
+    running = true;
+    ui.hideAll();
+  })();
 }
 
 /** Resume the saved in-progress character, or fall back to the start menu.
@@ -167,7 +220,7 @@ function resumeGame(preloaded?: CharacterSave | null): void {
   // (now random, slot-based) class-select roll. Only a missing/invalid save bails.
   if (!save || !classDef) {
     clearCharacter();
-    ui.showStartMenu(startGame, resumeGame, openLobby);
+    ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
     return;
   }
   // Rebuild the run-locked manifest from the save (tolerant of removed packages);
@@ -177,7 +230,7 @@ function resumeGame(preloaded?: CharacterSave | null): void {
   world.createPlayer(classDef);          // builds a valid skeleton in town…
   if (!applySavedCharacter(world, save)) { // …then the save overwrites the build
     clearCharacter();
-    ui.showStartMenu(startGame, resumeGame, openLobby);
+    ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
     return;
   }
   if (COOP_ALLY) spawnCoopAlly();
@@ -214,7 +267,7 @@ document.title = GAME_TITLE; // the one constant names every surface
 window.__game = {
   world: () => world, ui, ai: updateAI, renderer,
   account: () => account, saveAccount: () => saveAccount(account),
-  save: () => saveCharacter(world),
+  save: () => persistRun(account, world),
   settings: () => settings, saveSettings: () => saveSettings(settings),
   addAlly: () => spawnCoopAlly(),
   net: () => net,
@@ -245,7 +298,7 @@ if (DEV.passiveTreeEditor) mountPassiveEditor(ui);
 // loaders so it appears instantly), THEN reconcile against the disk files in the
 // background — the authoritative cross-session save. The disk loads warm the
 // shared account/settings refs and enable Continue if a disk character exists.
-ui.showStartMenu(startGame, resumeGame, openLobby);
+ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
 ui.setContinueSave(loadCharacter());          // instant: localStorage cache
 void (async (): Promise<void> => {
   const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), loadCharacterAsync()]);
@@ -512,9 +565,27 @@ function hostTail(dt: number): void {
 
   // Autosave the in-progress character periodically (cheap; survives a crash
   // or an abrupt close). Skipped once dead (the run save is wiped on death).
+  // persistRun routes the write to the character's slot (run vs roster vessel)
+  // and keeps the roster index card fresh alongside it.
   if (!world.gameOver) {
     autosaveTimer -= dt;
-    if (autosaveTimer <= 0) { autosaveTimer = 20; saveCharacter(world); }
+    if (autosaveTimer <= 0) { autosaveTimer = 20; persistRun(account, world); }
+  }
+
+  // The sim mutated character save-state OUTSIDE the autosave cadence — a mode
+  // respawn banked a death (corpse/stage/strip), an own-ring corpse was
+  // reclaimed. Persist immediately: the same promptness accountDirty gets.
+  if (world.charDirty) {
+    world.charDirty = false;
+    persistRun(account, world);
+  }
+
+  // A roster-saved character chose Save & Main Menu (their "End Run" — the
+  // vessel persists; only a deliberate roster deletion ever discards it).
+  if (world.menuExitRequested) {
+    world.menuExitRequested = false;
+    persistRun(account, world);
+    toStartMenu();
   }
 
   if (world.gameOver && !deathShown) {
@@ -523,16 +594,25 @@ function hostTail(dt: number): void {
     // render shell and offer a fresh class pick — no reload, the session lives on.
     if (coopActive()) net.sendSession({ t: 'runEnd' });
     ui.hideAll();
-    // PERMADEATH: award account credits from how far the run got, persist the
+    // PERMADEATH: award account credits from how far the run got — at the
+    // dying stage's payout rate (mortal = ×1, byte-identical; a future
+    // reduced-tithe hardcore variant is pure mode data) — persist the
     // account, and WIPE the character save (the account survives, the run doesn't).
-    const earned = creditsForDeath(world.player.level, world.visited.size, world.kills);
+    const stage = world.modeStageDef();
+    const earned = Math.floor(
+      creditsForDeath(world.player.level, world.visited.size, world.kills) * stage.deathPayoutMult);
     applyCredits(account, earned);
     // PERMANENT progression: fold this run's trigger counters (crowned_killed,
-    // …) into the account ledger so package unlocks stick like credits do.
-    mergeLedger(account.ledger, world.ledger);
-    // CORPSE RUN: only an actual death (not a forfeit) records a reclaimable
-    // corpse — captured BEFORE clearCharacter wipes the gems.
-    if (world.runEndReason === 'death') world.recordDeath();
+    // …) into the account ledger so package unlocks stick like credits do —
+    // unless the dying stage is sealed outside the account loop (mode policy).
+    if (stage.metaProgression) mergeLedger(account.ledger, world.ledger);
+    // CORPSE RUN + the lifetime death tally: only an actual death (not a
+    // forfeit) records a corpse or counts toward death-gated unlocks — both
+    // captured BEFORE clearCharacter wipes the gems.
+    if (world.runEndReason === 'death') {
+      world.recordDeath();
+      if (stage.countsAccountDeath) bumpLedger(account.ledger, LEDGER_ACCOUNT_DEATHS);
+    }
     // Durable write (sendBeacon) so the death record survives a tab-close on
     // the death screen, matching clearCharacter's durable wipe.
     saveAccountDurable(account);
@@ -833,7 +913,7 @@ function resetToLocal(): void {
 function toStartMenu(): void {
   resetToLocal();
   running = false;
-  ui.showStartMenu(startGame, resumeGame, openLobby);
+  ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
 }
 
 /** Leave a co-op session and return to the menu (client or host). */

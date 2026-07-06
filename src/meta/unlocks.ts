@@ -8,7 +8,8 @@
 // switches narrow `payload` with no casts under strict mode.
 // ---------------------------------------------------------------------------
 
-import { FEATURE, type Account } from './account';
+import { FEATURE, LEDGER_ACCOUNT_DEATHS, type Account } from './account';
+import { IMMORTAL_CFG } from './modes';
 import { CLASSES } from '../data/classes';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
@@ -29,6 +30,13 @@ interface UnlockBase {
   reqLevel?: number;
   /** Other unlock id(s) that must be OWNED before this one surfaces (ANDed). */
   requiresUnlock?: string | string[];
+  /** Lifetime-ledger milestone key(s) that must be PRESENT (≥1, ANDed) —
+   *  e.g. reached_level_40 + unmade_slain. Generic to every unlock kind. */
+  reqLedger?: string | string[];
+  /** Lifetime-ledger COUNT thresholds (ANDed): each key must have accrued at
+   *  least its value. The presence form above is sugar for `{key: 1}`; this is
+   *  for genuine tallies — the Immortal covenant's "die 20 times". */
+  reqLedgerCounts?: Record<string, number>;
 }
 
 export type Unlockable =
@@ -36,7 +44,7 @@ export type Unlockable =
   | (UnlockBase & { kind: 'class'; payload: { classId: string; skillIds: string[]; supportIds: string[] } })
   | (UnlockBase & { kind: 'skill'; payload: { skillIds: string[] } })
   | (UnlockBase & { kind: 'support'; payload: { supportIds: string[] } })
-  | (UnlockBase & { kind: 'feature'; reqLedger?: string | string[]; requiresFeature?: string; payload: { flag: string } })
+  | (UnlockBase & { kind: 'feature'; requiresFeature?: string; payload: { flag: string } })
   | (UnlockBase & { kind: 'package'; payload: { packageId: string; tierId?: string } });
 
 /** Class SLOTS, data-driven and ordered ascending — the HAND SIZE at character
@@ -241,6 +249,30 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'Standing stones rise in Lastlight. Commune over an item (trace the runes — precision and haste decide the outcome) to REROLL one of its affixes; the stone answers each line only once, sealing it forever.',
     payload: { flag: FEATURE.ORACLE_STONE } },
 
+  // --- THE IMMORTAL COVENANT (meta/modes.ts): a character MODE, not a town
+  //     feature — earned by dying. Surfaces once the account has fallen
+  //     IMMORTAL_CFG.unlockDeaths times; the two vessel slots ladder off it. ---
+  { id: 'feat_immortal', kind: 'feature', cost: 100, reqLevel: 0,
+    reqLedgerCounts: { [LEDGER_ACCOUNT_DEATHS]: IMMORTAL_CFG.unlockDeaths },
+    label: 'The Immortal Covenant',
+    description: `Death has seen you ${IMMORTAL_CFG.unlockDeaths} times, and blinked. `
+      + 'Unlocks the IMMORTAL mode at character select: a sworn character plays the wake as any '
+      + 'other — until its first death, which pays a reduced essence tithe and seals it OUTSIDE '
+      + 'the mortal ledger. It wakes in town, build intact, carry lost; it persists across '
+      + 'sessions in an account vessel; its later deaths feed the account nothing, and its '
+      + 'corpses are visible only to itself. A life kept purely for the playing of it.',
+    payload: { flag: FEATURE.IMMORTAL } },
+  { id: 'feat_immortal_slot_2', kind: 'feature', cost: 200, reqLevel: 0,
+    requiresUnlock: 'feat_immortal',
+    label: 'Immortal — Second Vessel',
+    description: 'The covenant holds a second sworn character (two Immortal save slots).',
+    payload: { flag: FEATURE.IMMORTAL_SLOT_2 } },
+  { id: 'feat_immortal_slot_3', kind: 'feature', cost: 350, reqLevel: 0,
+    requiresUnlock: 'feat_immortal_slot_2',
+    label: 'Immortal — Third Vessel',
+    description: 'The covenant holds a third sworn character (three Immortal save slots).',
+    payload: { flag: FEATURE.IMMORTAL_SLOT_3 } },
+
   // --- The Caravan: four broad tiers, each opening a wider band of escorted travel.
   //     Base tier (the Caravanner settles in town) at L10; far tiers ALSO need the
   //     Unmade slain. Each tier requires the previous (a growing route network). ----
@@ -374,10 +406,17 @@ function staticGateMet(a: Account, u: Unlockable): boolean {
     }
   }
   // reqLedger may be a SINGLE key or MANY (all required, ANDed) — e.g. a far caravan
-  // tier needs BOTH a level milestone AND unmade_slain.
-  if (u.kind === 'feature' && u.reqLedger) {
+  // tier needs BOTH a level milestone AND unmade_slain. Generic to every kind.
+  if (u.reqLedger) {
     const keys = Array.isArray(u.reqLedger) ? u.reqLedger : [u.reqLedger];
     if (keys.some(k => (a.ledger[k] ?? 0) < 1)) return false;
+  }
+  // reqLedgerCounts gates on accumulated TALLIES (die 20 times, sail 5 voyages)
+  // rather than mere presence — the counted-milestone form of the same seam.
+  if (u.reqLedgerCounts) {
+    for (const [k, n] of Object.entries(u.reqLedgerCounts)) {
+      if ((a.ledger[k] ?? 0) < n) return false;
+    }
   }
   // Sequential feature ladders (e.g. Mireille life → mana → XP buff).
   if (u.kind === 'feature' && u.requiresFeature && !a.features.has(u.requiresFeature)) return false;

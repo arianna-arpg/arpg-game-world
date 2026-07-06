@@ -20,6 +20,7 @@ import { TILESETS } from './tilesets';
 import { validatePassiveLayout } from './validatePassiveLayout';
 import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
 import { STARTER_CLASSES } from '../meta/account';
+import { DEFAULT_MODE_ID, MODE_BY_ID, MODES } from '../meta/modes';
 import {
   validateStamps, doodadRuleOf, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs,
@@ -297,4 +298,34 @@ export function validateContent(): void {
       warn(`class ${c.id}: ${bundles} class bundles (needs exactly ONE to join the roll pool)`);
     }
   }
+
+  // CHARACTER MODES: the death-policy ladders must be walkable and every gate
+  // they reference must exist. A mode with an unreachable unlock flag or an
+  // 'advance' on its LAST stage would strand the death flow at runtime.
+  const catalogFlags = new Set(unlocks.flatMap(u => u.kind === 'feature' ? [u.payload.flag] : []));
+  const modeIds = new Set<string>();
+  for (const m of MODES) {
+    if (modeIds.has(m.id)) warn(`mode ${m.id}: duplicate id`);
+    modeIds.add(m.id);
+    if (!m.stages.length) { warn(`mode ${m.id}: has NO stages`); continue; }
+    if (m.stages[m.stages.length - 1].onDeath === 'advance') {
+      warn(`mode ${m.id}: last stage '${m.stages[m.stages.length - 1].id}' advances off the end of the ladder`);
+    }
+    if (m.unlockFlag && !catalogFlags.has(m.unlockFlag)) {
+      warn(`mode ${m.id}: unlockFlag '${m.unlockFlag}' is sold by no Vault feature entry (unreachable mode)`);
+    }
+    if (m.save === 'roster' && !m.rosterPool) warn(`mode ${m.id}: roster-saved but has no rosterPool`);
+    for (const f of m.rosterPool?.extraFlags ?? []) {
+      if (!catalogFlags.has(f)) warn(`mode ${m.id}: roster slot flag '${f}' is sold by no Vault feature entry`);
+    }
+    for (const st of m.stages) {
+      // An account-progressing stage writing self-only corpses is legal (the
+      // Immortal crossing); the REVERSE — a sealed stage feeding the shared
+      // ring — would leak the sandbox back into the mortal economy.
+      if (!st.metaProgression && st.corpseRing === 'account') {
+        warn(`mode ${m.id}/${st.id}: metaProgression off but corpses write the ACCOUNT ring (economy leak)`);
+      }
+    }
+  }
+  if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
 }

@@ -101,10 +101,12 @@ registerMarkerSource((world): MapMarker[] => {
 });
 
 /** A skull on the charted node holding each unreclaimed corpse (fog:'charted' —
- *  no spoilers; only visited ground reveals where you fell). */
+ *  no spoilers; only visited ground reveals where you fell). Reads the
+ *  character's interaction-scoped ring (corpseRecords): the shared account
+ *  graveyard for mortals, the save's own ring for the Undying. */
 registerMarkerSource((world): MapMarker[] => {
   const out: MapMarker[] = [];
-  for (const d of world.account.deaths) {
+  for (const d of world.corpseRecords()) {
     const node = world.corpseZoneOf(d);
     if (!node) continue;
     out.push({

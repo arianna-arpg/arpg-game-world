@@ -168,6 +168,29 @@ export class Renderer {
     this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
     this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
+    this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
+  }
+
+  /** CHARACTER-MODE fade (a survived death, meta/modes.ts): the whole screen —
+   *  world and HUD alike — sinks to black, holds a beat, and returns as the
+   *  character wakes in town. While the dark is near-full, the mode's crossing
+   *  line hangs centered in it. */
+  private drawModeFade(world: World): void {
+    if (world.screenFade <= 0) return;
+    const { ctx, canvas } = this;
+    ctx.save();
+    ctx.globalAlpha = clamp(world.screenFade, 0, 1);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const line = world.modeDef().crossingText;
+    if (line && world.screenFade > 0.85) {
+      ctx.globalAlpha = clamp((world.screenFade - 0.85) / 0.15, 0, 1) * 0.9;
+      ctx.fillStyle = '#b8a0e0';
+      ctx.font = '20px Georgia';
+      ctx.textAlign = 'center';
+      ctx.fillText(line, canvas.width / 2, canvas.height / 2);
+    }
+    ctx.restore();
   }
 
   /** THE DESCENT readout (screen-space): the encroaching-darkness vignette around the
@@ -4060,7 +4083,25 @@ export class Renderer {
     ctx.textAlign = 'left';
     ctx.font = 'bold 14px Verdana';
     ctx.fillStyle = '#c8a84b';
-    ctx.fillText(`${m.classDef.name}  —  Level ${p.level}`, 16, 26);
+    const titleLine = `${m.classDef.name}  —  Level ${p.level}`;
+    ctx.fillText(titleLine, 16, 26);
+    // CHARACTER-MODE chip (data-driven — any stage that declares a badge shows
+    // one): the Immortal's SWORN → UNDYING standing, at a glance, in mode color.
+    const stage = world.modeStageDef();
+    if (stage.badge) {
+      const titleW = ctx.measureText(titleLine).width;
+      ctx.font = 'bold 10px Verdana';
+      const bw = ctx.measureText(stage.badge).width + 12;
+      const chipX = 16 + titleW + 12;
+      const col = world.modeDef().color;
+      ctx.fillStyle = '#16121c';
+      ctx.fillRect(chipX, 14, bw, 15);
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(chipX, 14, bw, 15);
+      ctx.fillStyle = col;
+      ctx.fillText(stage.badge, chipX + 6, 25);
+    }
     ctx.font = '12px Verdana';
     ctx.fillStyle = world.zone.theme.accent;
     const lvText = world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';

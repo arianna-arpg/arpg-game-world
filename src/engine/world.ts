@@ -100,7 +100,7 @@ interface ClampOpts { disp?: DisplacementPolicy; out?: CollisionResult; }
 const NOCLIP_DISP: DisplacementPolicy = { ignoreConfine: true };
 import type { ExpeditionManifest } from '../packages/manifest';
 import type { Ledger } from '../packages/types';
-import { bumpLedger } from '../packages/ledger';
+import { bumpLedger, mergeLedger } from '../packages/ledger';
 import type { InvasionInfo } from '../packages/overlays/demonInvasion';
 import type { CrusadeInfo } from '../packages/overlays/crusade';
 import type { DeadwakeInfo, DeadwakeSurge, NecropolisCfg } from '../packages/overlays/deadwake';
@@ -124,8 +124,13 @@ import { chooseEvent, type EventContext, type EventReward } from './events';
 import { ActiveZoneEvent } from './zoneEvent';
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
-  STARTER_SKILLS, type Account,
+  STARTER_SKILLS, applyCredits, creditsForDeath, META_CURRENCY_LABEL,
+  LEDGER_ACCOUNT_DEATHS, type Account,
 } from '../meta/account';
+import {
+  modeById, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
+  type CharacterModeDef, type ModeStageDef,
+} from '../meta/modes';
 import { saveCharacter, rebuildSkill } from '../meta/character';
 import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
@@ -831,6 +836,14 @@ export interface PlayerMeta {
   /** VESTIGES (socket material) — stackable, satchel-borne, consumed on
    *  socketing. Lost to death like every other carried material. */
   vestiges: Record<string, number>;
+  /** CHARACTER MODE (meta/modes.ts): the life-contract sworn at creation.
+   *  Every death-flow decision reads the CURRENT stage's policy, never an id. */
+  modeId: string;
+  /** Index into the mode's stage ladder (0 = as created; the Immortal's first
+   *  death advances it to 'undying'). */
+  modeStage: number;
+  /** Account-roster identity for roster-saved modes ('' = the shared run slot). */
+  charId: string;
 }
 
 /** A zeroed essence wallet (fresh seats, wire fallbacks). */
@@ -1679,6 +1692,25 @@ export class World {
   /** Why the run ended — 'death' (records a corpse) or 'forfeit' (does not).
    *  An overridable seam: a future 'retire' reason or co-op rules slot in here. */
   runEndReason = 'death';
+  /** The character's OWN corpse ring (roster-saved modes): save-backed via
+   *  CharacterSave.deaths, so an Undying character's corpses exist ONLY inside
+   *  its own save — structurally invisible to every other character. */
+  charDeaths: DeathRecord[] = [];
+  /** The sim mutated character save-state OUTSIDE the autosave cadence (a mode
+   *  respawn, an own-ring corpse reclaim) — main.ts persists promptly, the same
+   *  contract accountDirty keeps for account writes. */
+  charDirty = false;
+  /** A roster-saved character asked to leave for the main menu (the pause
+   *  menu's Save & Main Menu — their "End Run"). main.ts saves + exits. */
+  menuExitRequested = false;
+  /** A mode respawn in flight: fade to black, wake in town, fade back in.
+   *  While set, the death is already BANKED (corpse/stage/payout) — only the
+   *  presentation remains, so a mid-fade quit loses nothing. */
+  pendingRespawn: { phase: 'out' | 'in'; t: number } | null = null;
+  /** Full-screen black overlay 0..1 (renderer drawScreenFade). */
+  screenFade = 0;
+  /** Essence paid by the most recent mode death (the wake-text receipt). */
+  private lastRespawnPayout = 0;
   kills = 0;
   /** Seconds remaining on the low-life "took a hit" red screen blink (renderer). */
   lowLifeHitFlash = 0;
@@ -1805,6 +1837,11 @@ export class World {
       equipped: {},
       essences: emptyEssences(),
       vestiges: {},
+      // Ally seats are mode-less passengers of the host's run; only the LOCAL
+      // hero's mode drives the death flow (createPlayer stamps the real one).
+      modeId: DEFAULT_MODE_ID,
+      modeStage: 0,
+      charId: '',
     };
     // Class bar skills come pre-learned as 2-socket magic gems.
     for (const sid of classDef.bar) {
@@ -1821,11 +1858,15 @@ export class World {
     return seat;
   }
 
-  createPlayer(classDef: ClassDef): void {
+  createPlayer(classDef: ClassDef, opts?: { modeId?: string; charId?: string }): void {
     // The local seat is this client's own hero (camera + input anchor). Input is
     // a placeholder until main.ts wires the OS reader (Phase 4); single-player
     // reads it through the `player`/`meta` getters exactly as before.
     this.localSeat = this.makePlayerSeat('p0', classDef, new NullInput(), vec(this.arena.w / 2, this.arena.h / 2));
+    // The LIFE-CONTRACT (meta/modes.ts): stamped at creation; a resumed save
+    // overwrites it via applySavedCharacter (the save is the authority).
+    if (opts?.modeId) this.localSeat.meta.modeId = opts.modeId;
+    if (opts?.charId) this.localSeat.meta.charId = opts.charId;
     this.seats = [this.localSeat];
     this.indexSeats();
     this.actors.push(this.localSeat.actor);
@@ -1874,6 +1915,10 @@ export class World {
     this.player.skills = padBar(bar.map(id => (id ? this.meta.knownSkills.get(id) ?? null : null)));
     this.recalcPlayer();
     this.player.fillResources();
+    // The graft may have CHANGED the corpse ring (mode stage + own-ring
+    // records land here, after createPlayer's loadZone already spawned from
+    // fresh-character defaults) — re-spawn this zone's corpses from the truth.
+    this.spawnPlayerCorpses(this.zone);
   }
 
   // --------------------------------------------------------------- seats ----
@@ -1985,6 +2030,10 @@ export class World {
    *  as a real death would — no duplicated credit logic. */
   endRun(): void {
     if (this.player.dead || this.gameOver) return;
+    // A roster-saved character (an Immortal vessel) has no run to forfeit —
+    // its whole point is persisting. Route to Save & Main Menu instead; DELETING
+    // a vessel is a deliberate roster action on the start menu, never this path.
+    if (this.modeDef().save === 'roster') { this.menuExitRequested = true; return; }
     this.runEndReason = 'forfeit'; // a voluntary exit leaves NO corpse (extensible)
     // A forfeit ends the WHOLE party run immediately — it must NOT route through
     // the down/revive seam (an ally being up would otherwise turn "End Run" into a
@@ -2002,13 +2051,7 @@ export class World {
   protected onPlayerDown(actor: Actor, killer?: Actor): void {
     const anyAllyUp = this.seats.some(s =>
       s.actor !== actor && !s.actor.dead && !s.actor.downed);
-    if (!anyAllyUp) {
-      // DESCENT: a wipe in the abyss doesn't END the run — the deep spits you back
-      // out (resurface), banking your haul at the reduced rate. Otherwise: run over.
-      if (this.descentRun) { this.resurfaceFromDescent('died'); return; }
-      this.onRunEnded(this.runEndReason);
-      return;
-    }
+    if (!anyAllyUp) { this.concludeWipe(); return; }
     // Downed, not dead: undo kill()'s dead flag, zero life, await revival.
     actor.dead = false;
     actor.downed = true;
@@ -2056,6 +2099,136 @@ export class World {
     }
   }
 
+  // ------------------------------------------------------ character modes ---
+  //
+  // The life-contract layer (meta/modes.ts): every death-flow decision below
+  // reads the local character's CURRENT mode stage — a pure policy record —
+  // so new life-contracts (hardcore variants, seasonal leagues, a Mercenary's
+  // second wind) are data entries, never new branches here.
+
+  /** The local character's mode definition (unknown/legacy ids ⇒ mortal). */
+  modeDef(): CharacterModeDef { return modeById(this.meta.modeId); }
+
+  /** The stage the local character currently stands on. */
+  modeStageDef(): ModeStageDef { return stageOf(this.meta.modeId, this.meta.modeStage); }
+
+  /** May this character still write ACCOUNT progression (ledger milestones,
+   *  vocation unlocks, uber trophies, craft lore)? An Undying character reads
+   *  the account freely — town features, drop pools — but never feeds it. */
+  metaProgressionActive(): boolean { return this.modeStageDef().metaProgression; }
+
+  /** The corpse ring this character's zones SPAWN from — the interaction
+   *  scope. Mortals share the account graveyard; the Undying see only their
+   *  own falls (and theirs exist only in their own save). */
+  corpseRecords(): DeathRecord[] {
+    return this.modeStageDef().corpseSource === 'own' ? this.charDeaths : this.account.deaths;
+  }
+
+  /** The party has no one left standing — conclude per context, in order:
+   *  the Descent resurfaces (the deep spits you out, never a run end), a
+   *  death-surviving mode stage respawns, and permadeath ends the run. */
+  private concludeWipe(): void {
+    if (this.descentRun) { this.resurfaceFromDescent('died'); return; }
+    if (this.modeStageDef().onDeath !== 'end') { this.beginModeRespawn(); return; }
+    this.onRunEnded(this.runEndReason);
+  }
+
+  /** A death this mode SURVIVES. Everything of consequence is banked HERE, at
+   *  the moment of death — the tithe, the ledger merge, the corpse, the strip,
+   *  the stage advance — so the fade that follows is pure presentation and a
+   *  mid-fade quit can never dupe or lose anything (the character save carries
+   *  corpse+stage+strip atomically; charDirty persists it this same frame). */
+  private beginModeRespawn(): void {
+    if (this.pendingRespawn) return;
+    const stage = this.modeStageDef();
+    // 1. THE TITHE: essence for how far the run got, at the stage's rate — the
+    //    Immortal opt-in pays reduced on the crossing and nothing after.
+    const earned = Math.floor(
+      creditsForDeath(this.player.level, this.visited.size, this.kills) * stage.deathPayoutMult);
+    if (earned > 0) applyCredits(this.account, earned);
+    this.lastRespawnPayout = earned;
+    // 2. THE LEDGER: a stage still inside the account loop banks its run
+    //    counters exactly as the mortal death handler would have (once —
+    //    the sealed stage after it never merges again).
+    if (stage.metaProgression) mergeLedger(this.account.ledger, this.ledger);
+    if (stage.countsAccountDeath) bumpLedger(this.account.ledger, LEDGER_ACCOUNT_DEATHS);
+    this.accountDirty = true;
+    // 3. THE CORPSE: captured BEFORE the carry is stripped, routed by the
+    //    DYING stage's ring (the immortalizing corpse is already self-only).
+    this.recordDeath();
+    // 4. THE PRICE: death still takes the carry — bag, doll, gems, materials —
+    //    while the build (skills, supports, passives, level) walks away.
+    this.stripCarryOnDeath();
+    // 5. THE CROSSING: advance the ladder (an Immortal's first death seals it).
+    if (stage.onDeath === 'advance') {
+      this.meta.modeStage = Math.min(this.meta.modeStage + 1, this.modeDef().stages.length - 1);
+    }
+    this.charDirty = true;
+    // 6. The dark takes the screen; update() wakes the character once it's full.
+    this.pendingRespawn = { phase: 'out', t: 0 };
+    this.events.emit('player/modeDeath', { stage: stage.id, earned });
+  }
+
+  /** What a survived death TAKES: the whole carry (bag + doll + carried gems +
+   *  materials + font offerings), mirroring exactly what a mortal wipe loses —
+   *  minus what recordDeath just banked onto the corpse. The BUILD (learned
+   *  skills with their sockets, bar, passives, vocations, level) is untouched. */
+  private stripCarryOnDeath(): void {
+    const m = this.meta;
+    m.items = [];
+    m.equipped = {};
+    m.skillInv = [];
+    m.inventory = [];
+    m.essences = emptyEssences();
+    m.vestiges = {};
+    m.offerings = 0;
+    this.recalcPlayer(); // the doll's gear sources vanish from the sheet
+    this.markMetaDirty(this.localSeat);
+  }
+
+  /** Drive an in-flight mode respawn: fade out → wake in town → fade in. */
+  private updateModeRespawn(dt: number): void {
+    const pr = this.pendingRespawn!;
+    const fx = this.modeDef().respawnFx ?? FADE_DEFAULTS;
+    pr.t += dt;
+    if (pr.phase === 'out') {
+      this.screenFade = Math.min(1, pr.t / Math.max(0.01, fx.fadeOutSec));
+      if (pr.t >= fx.fadeOutSec + fx.holdSec) {
+        this.performModeRespawn();
+        pr.phase = 'in';
+        pr.t = 0;
+      }
+    } else {
+      this.screenFade = Math.max(0, 1 - pr.t / Math.max(0.01, fx.fadeInSec));
+      if (pr.t >= fx.fadeInSec) { this.pendingRespawn = null; this.screenFade = 0; }
+    }
+  }
+
+  /** The waking: every seat back on its feet (statuses shed, resources full),
+   *  the party landed in the sanctuary, and the stage's own words overhead. */
+  private performModeRespawn(): void {
+    const stage = this.modeStageDef();
+    for (const s of this.seats) {
+      s.actor.dead = false;
+      s.actor.downed = false;
+      s.actor.casting = null;
+      s.actor.statuses.length = 0;
+      s.reviveDwellBy.clear();
+    }
+    this.loadZone(START_ZONE);
+    const p = this.player;
+    for (const s of this.seats) {
+      if (s.actor !== p) s.actor.pos = this.clampPos(vec(p.pos.x + rand(-60, 60), p.pos.y + rand(30, 70)), s.actor.radius);
+      s.actor.fillResources();
+    }
+    this.text(vec(p.pos.x, p.pos.y - 52), stage.wakeText ?? 'You wake in the sanctuary.', '#b8a0e0', 16);
+    if (this.lastRespawnPayout > 0) {
+      this.text(vec(p.pos.x, p.pos.y - 28),
+        `+${this.lastRespawnPayout} ${META_CURRENCY_LABEL} — the crossing's tithe`, '#d8b048', 13);
+    }
+    this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius * 2.4, color: '#b8a0e0', life: 0.5, maxLife: 0.5 });
+  }
+
   /** The run has ended. Sets gameOver; main.ts books credits and (only for a
    *  'death' reason) records a corpse. Reason-gated so forfeit/Retire differ. */
   protected onRunEnded(reason: string): void {
@@ -2063,9 +2236,13 @@ export class World {
     this.gameOver = true;
   }
 
-  /** Snapshot WHERE the run ended + WHAT it carried onto the ACCOUNT before the
-   *  character is wiped — the corpse-run seed. Called by main.ts only for an
-   *  actual death. Skips caves (off-graph, no stable node) + empty loot. */
+  /** Snapshot WHERE the character fell + WHAT it carried — the corpse-run
+   *  seed. Routed by the DYING stage's corpseRing: the shared ACCOUNT ring
+   *  (any later mortal reclaims it) or the character's OWN save-backed ring
+   *  (self-only — no other character ever sees it, so a deathless farm of
+   *  "perfect" corpses into the mortal economy is structurally impossible).
+   *  Called by main.ts for a mortal death and by beginModeRespawn for a
+   *  survived one. Skips caves (off-graph, no stable node) + empty loot. */
   recordDeath(): void {
     if (this.inCave) return;
     const loot = captureLoot(this.meta);
@@ -2080,8 +2257,11 @@ export class World {
       owner: this.localSeat.id,
       timestamp: Date.now(),
     };
-    this.account.deaths.push(rec);
-    while (this.account.deaths.length > MAX_DEATH_RECORDS) this.account.deaths.shift();
+    const own = this.modeStageDef().corpseRing === 'own';
+    const ring = own ? this.charDeaths : this.account.deaths;
+    ring.push(rec);
+    while (ring.length > MAX_DEATH_RECORDS) ring.shift();
+    if (own) this.charDirty = true; // rides the character save, not the account
   }
 
   // ---------------------------------------------------------------- zones ---
@@ -2607,32 +2787,8 @@ export class World {
     // shrine (deterministic per zone + run seed) — see data/vocations.ts.
     this.placeVocationSites(def);
 
-    // CORPSE RUN: spawn any prior-run death whose MAP COORDINATE matches this
-    // zone (static zones also exact-match on id). Coordinate-first, so the
-    // gen_/quest_ id churn between runs is irrelevant. Caves never anchor a corpse.
-    this.playerCorpses = [];
-    if (!isCave) {
-      for (let i = 0; i < this.account.deaths.length; i++) {
-        const d = this.account.deaths[i];
-        if (d.loot.items.length === 0 || d.owner !== 'p0') continue; // reclaimed / other seat
-        const exact = d.zoneId === def.id;
-        // STATIC zones keep a stable id across runs → match by id ONLY (a radius
-        // test would false-match an adjacent static zone, which can sit ~55 apart).
-        // GENERATED/quest/cave ids churn each run → re-bind by COORDINATE instead.
-        const generated = /^(gen_|quest_|cave_)/.test(d.zoneId);
-        if (generated) {
-          if (!exact && Math.hypot(def.map.x - d.mapX, def.map.y - d.mapY) > CORPSE_MATCH_RADIUS) continue;
-        } else if (!exact) {
-          continue;
-        }
-        this.playerCorpses.push({
-          pos: this.clampPos(vec(d.pos.x, d.pos.y), 16),
-          recordIndex: i, owner: d.owner,
-          who: { classId: d.classId, level: d.charLevel },
-          dwell: 0, reclaimed: false,
-        });
-      }
-    }
+    // CORPSE RUN: spawn any prior death whose coordinate matches this zone.
+    this.spawnPlayerCorpses(def);
 
     // WARBANDS: fresh zone visit → no host materialized yet. If a host has ALREADY
     // reached this zone (you walked into an invasion in progress), its warband
@@ -8222,8 +8378,13 @@ export class World {
     m.vocations.push(vocId);
     m.allocated.add(vocationRootId(vocId)); // the crest is free — its NODES cost points
     bumpLedger(this.ledger, vocationLedgerKey(vocId));
-    this.account.ledger[vocationLedgerKey(vocId)] = 1;
-    this.accountDirty = true; // main.ts persists — the unlock must survive a quit-without-dying
+    // THE CHARACTER always receives the vocation (tree, points, title). The
+    // ACCOUNT-wide unlock is meta-progression — an Undying character earns it
+    // for itself alone (the user's canonical example of the sealed ledger).
+    if (this.metaProgressionActive()) {
+      this.account.ledger[vocationLedgerKey(vocId)] = 1;
+      this.accountDirty = true; // main.ts persists — the unlock must survive a quit-without-dying
+    }
     this.recalcSeat(seat);
     this.markMetaDirty(seat);
     this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 40),
@@ -8480,6 +8641,37 @@ export class World {
   // the EXACT gems it carried — rebuilt, not random-rolled — into the ground
   // drops you then walk over. Reuses the playerIdle() dwell gate.
 
+  /** (Re)build this zone's reclaimable corpses from the character's ring —
+   *  the loadZone tail, RE-RUN by adoptSavedMeta: a resumed save can change
+   *  the ring entirely (its mode stage + own-ring records graft in AFTER
+   *  createPlayer's first loadZone already spawned from the fresh-character
+   *  defaults). Matching is COORDINATE-FIRST: static zones re-match by their
+   *  stable id ONLY (a radius test would false-match an adjacent static zone,
+   *  which can sit ~55 apart); gen_/quest_/cave_ ids churn each run and
+   *  re-bind by map coordinate instead. Caves never anchor a corpse. */
+  private spawnPlayerCorpses(def: ZoneDef): void {
+    this.playerCorpses = [];
+    if (!this.zoneMap[def.id]) return; // a cave (off-graph): no stable node
+    const ring = this.corpseRecords();
+    for (let i = 0; i < ring.length; i++) {
+      const d = ring[i];
+      if (d.loot.items.length === 0 || d.owner !== 'p0') continue; // reclaimed / other seat
+      const exact = d.zoneId === def.id;
+      const generated = /^(gen_|quest_|cave_)/.test(d.zoneId);
+      if (generated) {
+        if (!exact && Math.hypot(def.map.x - d.mapX, def.map.y - d.mapY) > CORPSE_MATCH_RADIUS) continue;
+      } else if (!exact) {
+        continue;
+      }
+      this.playerCorpses.push({
+        pos: this.clampPos(vec(d.pos.x, d.pos.y), 16),
+        recordIndex: i, owner: d.owner,
+        who: { classId: d.classId, level: d.charLevel },
+        dwell: 0, reclaimed: false,
+      });
+    }
+  }
+
   /** Is the player by a not-yet-reclaimed corpse? (Renderer prompt.) */
   nearPlayerCorpse(): boolean {
     return this.playerCorpses.some(c => !c.reclaimed && dist(c.pos, this.player.pos) <= CORPSE_RADIUS);
@@ -8524,16 +8716,19 @@ export class World {
   }
 
   /** Reclaim: drop the EXACT lost gems onto the ground, empty the record (so the
-   *  marker vanishes + it never re-spawns), and persist the account. */
+   *  marker vanishes + it never re-spawns), and persist whichever store holds
+   *  the ring — the account (mortal loop) or the character save (own ring). */
   private reclaimCorpse(c: PlayerCorpse): void {
-    const rec = this.account.deaths[c.recordIndex];
+    const own = this.modeStageDef().corpseSource === 'own';
+    const rec = this.corpseRecords()[c.recordIndex];
     if (!rec) { c.reclaimed = true; return; }
     for (const it of rec.loot.items) this.dropSavedLoot(c.pos, it);
     rec.loot.items = [];
     c.reclaimed = true;
     this.text(vec(c.pos.x, c.pos.y - 24), 'You reclaim what death took.', '#d8b048', 16);
     this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 64, color: '#d8b048', life: 0.5, maxLife: 0.5 });
-    saveAccount(this.account); // fire-and-forget OK: a lost reclaim self-heals (corpse re-spawns)
+    if (own) this.charDirty = true; // the ring rides the character save
+    else saveAccount(this.account); // fire-and-forget OK: a lost reclaim self-heals (corpse re-spawns)
   }
 
   /** Rebuild ONE saved loot item as its EXACT self and drop it (NOT dropGemAt,
@@ -15376,12 +15571,17 @@ export class World {
     removeFromBag(seat.meta.items, uid);
     this.grantEssence(seat, salvageItemYield(item));
     // TIER-TRUE study: only lines at/above each family's NEXT ceiling teach.
-    const taught = studySalvage(this.account.craftLore, item);
-    for (const t of taught.filter(x => x.rankedUp)) {
-      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
-        `craft expertise deepens: ${t.family}`, '#c8a84b', 12);
+    // Craft lore is ACCOUNT knowledge (meta-progression): a sealed character
+    // still salvages for essence and crafts from what the account already
+    // knows — it just teaches the account nothing new.
+    if (this.metaProgressionActive()) {
+      const taught = studySalvage(this.account.craftLore, item);
+      for (const t of taught.filter(x => x.rankedUp)) {
+        this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
+          `craft expertise deepens: ${t.family}`, '#c8a84b', 12);
+      }
+      saveAccount(this.account); // lore is account knowledge — survive the run
     }
-    saveAccount(this.account); // lore is account knowledge — survive the run
     this.markMetaDirty(seat);
   }
 
@@ -15510,6 +15710,9 @@ export class World {
   update(dt: number): void {
     if (this.gameOver) return;
     this.time += dt;
+    // A survived death's fade/wake sequence (character modes). The world keeps
+    // simulating beneath the dark — the death itself was already banked.
+    if (this.pendingRespawn) this.updateModeRespawn(dt);
     if (this.lowLifeHitFlash > 0) this.lowLifeHitFlash = Math.max(0, this.lowLifeHitFlash - dt);
     if (this.mireilleXpBuff > 0) this.mireilleXpBuff = Math.max(0, this.mireilleXpBuff - dt);
 
@@ -15544,13 +15747,15 @@ export class World {
     this.updatePlayerCorpses(dt);
     // Co-op: an ally lingering by a downed seat revives them.
     this.updateDownedSeats(dt);
-    // ALL-DOWN terminator: once no seat is left standing, the run ends (and the
-    // local corpse records). Guarded on !gameOver so single-player — where
-    // onPlayerDown already ended the run this same frame — never double-fires.
-    if (!this.gameOver && this.seats.length > 0
+    // ALL-DOWN terminator: once no seat is left standing, the wipe concludes
+    // (per mode: resurface / respawn / run over). Guarded on !gameOver so
+    // single-player — where onPlayerDown already concluded this same frame —
+    // never double-fires, and on !pendingRespawn so a mode respawn mid-fade
+    // (every seat still flagged dead until the wake) isn't re-concluded.
+    if (!this.gameOver && !this.pendingRespawn && this.seats.length > 0
       && !this.seats.some(s => !s.actor.dead && !s.actor.downed)) {
       for (const s of this.seats) { s.actor.downed = false; s.actor.dead = true; }
-      this.onRunEnded(this.runEndReason);
+      this.concludeWipe();
     }
 
     // MYCELIA: feed the bloom per-zone event activity (it can't reach the sim) BEFORE the
@@ -19811,8 +20016,10 @@ export class World {
     if (this.objectiveDone) return;
     this.objectiveDone = true; // per-load latch: unseals this zone's exits
     // ONE-SHOT UBER: record an account-scoped kill so the boss is forever dead.
+    // Meta-progression — a sealed (Undying) character's trophy is its own; the
+    // account never learns of it (and the uber re-spawns for mortal successors).
     const obj = this.zone.objective;
-    if (obj.kind === 'boss' && obj.uber?.scope === 'account') {
+    if (obj.kind === 'boss' && obj.uber?.scope === 'account' && this.metaProgressionActive()) {
       this.account.ledger[obj.uber.key ?? `uber:${obj.id}`] = 1;
       saveAccountDurable(this.account); // a forever-dead uber must survive a permadeath wipe
     }
