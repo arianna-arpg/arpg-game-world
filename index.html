@@ -58,6 +58,12 @@
     .attr-row button:hover { background: #3a3a55; }
     .attr-row button:disabled { opacity: 0.3; cursor: default; }
 
+    /* Inventory (the doll + tetris bag; the satchel flap anchors to it) */
+    #inventory {
+      top: 56px; right: 16px; width: 660px; max-width: 94vw;
+      max-height: calc(100vh - 160px); overflow-y: auto; font-size: 12px;
+    }
+
     /* Skill book */
     #skill-book {
       top: 60px; right: 16px; width: 380px; max-height: calc(100vh - 220px);
@@ -178,12 +184,15 @@
     .class-card .cskills { font-size: 10px; color: var(--gold); margin-top: 4px; }
 
     /* Account / unlock screen */
-    #caravan-menu, #toll-menu, #sail-menu, #vocation-menu {
+    #caravan-menu, #toll-menu, #sail-menu, #vocation-menu, #salvage-menu, #oracle-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 420px; max-width: 92vw; max-height: 80vh;
       overflow-y: auto; font-size: 12px;
     }
     #vocation-menu { width: 500px; }
+    /* The station menus list whole bags — wider, taller. */
+    #salvage-menu { width: 540px; max-height: 84vh; }
+    #oracle-menu { width: 520px; max-height: 84vh; }
     #account-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 820px; max-width: 95vw; max-height: 90vh;
