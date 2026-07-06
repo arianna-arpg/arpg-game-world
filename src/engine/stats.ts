@@ -677,6 +677,9 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** TRIGGER GEMS (damageTaken): max-life fraction that must accumulate
    *  per firing — LOWER fires quicker (the spec's lifeFrac seeds it). */
   triggerThreshold:{ label: 'Trigger Damage Threshold', base: 0, min: 0.05, percent: true },
+  /** TRIGGER GEMS (statusApply): applications banked per firing — LOWER
+   *  fires quicker (the spec's power seeds it; floor one). */
+  triggerPower:   { label: 'Trigger Power Threshold', base: 0, min: 1 },
   /** >0: a held channel's facing REVOLVES at this rate (rad/s) instead of
    *  tracking the aim — the beam becomes a lighthouse (Orbital Sweep). */
   channelAutoSpin:{ label: 'Channel Revolution', base: 0 },

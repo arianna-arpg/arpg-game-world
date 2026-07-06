@@ -273,6 +273,54 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('castSpeed', 'increased', 0.05)],
     weight: 4, minDropLevel: 10,
   },
+  // The AILMENT-POWER trio: laying the status BANKS power into the gem;
+  // at the threshold the next application fires the socketed skill and the
+  // bank begins anew. Leveling erodes the threshold (triggerPower).
+  cast_on_ignition: {
+    id: 'cast_on_ignition', name: 'Cast on Ignition',
+    description: 'Fires you set BANK POWER: every third burn you lay casts this skill for you (its key only arms and disarms it; the bank then begins anew). Quick skills only, unless Sequenced Invocation rides beside it.',
+    color: '#ff9a4a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'statusApply', status: 'burn', power: 3, chance: 1, icd: 0.2 },
+    mods: [],
+    perLevel: [mod('triggerPower', 'flat', -0.25)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_on_poison: {
+    id: 'cast_on_poison', name: 'Cast on Poison',
+    description: 'Venom is POWER: every fifth poison you lay casts this skill for you (its key only arms and disarms it; the bank then begins anew). Quick skills only, unless Sequenced Invocation rides beside it.',
+    color: '#7ec850', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'statusApply', status: 'poison', power: 5, chance: 1, icd: 0.2 },
+    mods: [],
+    perLevel: [mod('triggerPower', 'flat', -0.4)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_on_bleed: {
+    id: 'cast_on_bleed', name: 'Cast on Laceration',
+    description: 'Open veins BANK POWER: every fourth bleed you lay casts this skill for you (its key only arms and disarms it; the bank then begins anew). Quick skills only, unless Sequenced Invocation rides beside it.',
+    color: '#b03030', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'statusApply', status: 'bleed', power: 4, chance: 1, icd: 0.2 },
+    mods: [],
+    perLevel: [mod('triggerPower', 'flat', -0.3)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_on_block: {
+    id: 'cast_on_block', name: 'Cast on Block',
+    description: 'Every hit you BLOCK — raised shield, passive block, or parry — casts this skill for you, aimed back at whoever swung (its key only arms and disarms it). The wall that answers. Quick skills only, unless Sequenced Invocation rides beside it.',
+    color: '#8ab8d8', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'block', chance: 1, icd: 0.5 },
+    mods: [],
+    perLevel: [mod('triggerChance', 'flat', 0.05)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_on_kill: {
+    id: 'cast_on_kill', name: 'Cast on Kill',
+    description: 'Every kill your own blows take casts this skill for you at where the victim fell (its key only arms and disarms it) — the harvest that reaps onward. Quick skills only, unless Sequenced Invocation rides beside it.',
+    color: '#c8a0e8', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'kill', chance: 1, icd: 0.4 },
+    mods: [],
+    perLevel: [mod('triggerChance', 'flat', 0.05)],
+    weight: 4, minDropLevel: 10,
+  },
 
   // --- The offering ecology -----------------------------------------------------
   hiveborn: {

@@ -13863,6 +13863,11 @@ export class World {
         color: '#ffd700', life: 0.25, maxLife: 0.25,
       });
       if (attacker.life <= 0 && !attacker.dead) this.kill(attacker);
+      // A parry IS a block — the finest one; block taps, procs and
+      // trigger gems all answer it.
+      this.tapCharges(guardian, 'block');
+      this.rollOwnProcs(guardian, 'block', {});
+      this.rollTriggers(guardian, 'block', { aim: vec(attacker.pos.x, attacker.pos.y) });
       // Riposte-style stances spend themselves on the answer.
       if (spec.endOnParry) {
         guardian.casting = null;
@@ -13884,6 +13889,8 @@ export class World {
     this.text(guardian.pos, 'blocked', '#8ab8d8', 11);
     this.applyThorns(guardian, attacker);
     this.tapCharges(guardian, 'block');
+    // CAST-ON-BLOCK trigger gems answer the raised-shield block too.
+    this.rollTriggers(guardian, 'block', { aim: vec(attacker.pos.x, attacker.pos.y) });
     if ((cs.shield ?? 0) <= 0) {
       guardian.casting = null;
       guardian.useLock = 0.3;
@@ -14545,6 +14552,10 @@ export class World {
         const mend = target.sheet.get('lifeOnBlock');
         if (mend > 0) target.healBy(mend);
         this.rollOwnProcs(target, 'block', { depth });
+        // CAST-ON-BLOCK trigger gems: the made block is the event, aimed
+        // back at whoever swung (passive block; guard blocks fire from
+        // tryGuardBlock).
+        this.rollTriggers(target, 'block', { aim: vec(caster.pos.x, caster.pos.y) });
         // blockPower < 1 leaks CHIP damage through (result.total) — the
         // chip can finish a wounded blocker.
         if (target.life <= 0 && !target.dead) this.kill(target);
@@ -15249,6 +15260,12 @@ export class World {
       // visible from a skill-context query — this is that site.
       this.tapCharges(caster, 'kill');
       this.rollKillRemnants(caster, inst, target.pos);
+      // CAST-ON-KILL trigger gems ride the killing hit (chain depth from
+      // the slaying instance's stamp, aimed at where the victim fell).
+      this.rollTriggers(caster, 'kill', {
+        depth: inst.state?.trigDepth ?? 0,
+        aim: vec(target.pos.x, target.pos.y), sourceInst: inst,
+      });
       this.kill(target, false, caster);
     }
   }
@@ -15318,6 +15335,12 @@ export class World {
     caster: Actor, inst: SkillInstance, target: Actor, statusId: string,
     tags: Set<SkillTag>, extra: Modifier[], depth: number,
   ): void {
+    // THE AILMENT-POWER BANKS ("Cast on <status>" trigger gems): every
+    // application the owner lays feeds matching gems — banked BEFORE the
+    // proc depth gate (power is power, however the wound was made); the
+    // trigger chain cap rides the applying instance's own stamp instead.
+    this.bankStatusTriggers(caster, statusId,
+      vec(target.pos.x, target.pos.y), inst.state?.trigDepth ?? 0, inst);
     if (depth >= this.procDepthAllowed(caster)) return;
     for (const proc of PROC_LIST) {
       if (proc.trigger !== 'statusApply') continue;
@@ -19778,13 +19801,20 @@ export class World {
           spec.lifeFrac ?? TRIGGER_CFG.lifeFrac));
         if ((st.trigAccum ?? 0) < frac * owner.maxLife()) continue;
       }
+      // statusApply: the POWER bank must be full (filled per matching
+      // application by bankStatusTriggers — the filter matched at bank
+      // time, so only the threshold is judged here).
+      if (kind === 'statusApply') {
+        const need = Math.max(1, owner.sheet.get('triggerPower', tags, extra, spec.power ?? 1));
+        if ((st.trigAccum ?? 0) < need) continue;
+      }
       if (!this.triggerEligible(owner, inst)) continue;
       // SELECTED: the cursor advances here whatever the dice say.
       owner.triggerRR.set(kind, idx);
       const p = owner.sheet.get('triggerChance', tags, extra, spec.chance ?? 1);
       if (!chance(Math.min(TRIGGER_CFG.chanceCap, p))) return;
       st.trigReadyAt = this.time + (spec.icd ?? TRIGGER_CFG.icd[kind]);
-      if (kind === 'damageTaken') st.trigAccum = 0;
+      if (kind === 'damageTaken' || kind === 'statusApply') st.trigAccum = 0;
       st.trigDepth = depth + 1;
       const cost = owner.skillCost(inst);
       owner.payCost({ mana: cost.mana * TRIGGER_CFG.costMult, life: cost.life * TRIGGER_CFG.costMult });
@@ -19838,6 +19868,29 @@ export class World {
       mana: cost.mana * TRIGGER_CFG.costMult,
       life: cost.life * TRIGGER_CFG.costMult,
     });
+  }
+
+  /** Bank one APPLICATION into every armed statusApply trigger gem whose
+   *  filter matches the status the owner just laid, then let the rotation
+   *  offer ONE a firing — the ailment-POWER mechanism ("cast on ignite").
+   *  Chain depth rides the APPLYING instance's stamp like every event. */
+  bankStatusTriggers(owner: Actor, statusId: string, at?: Vec2, depth = 0, sourceInst?: SkillInstance): void {
+    if (!owner.skills?.length || owner.dead) return;
+    let any = false;
+    for (const inst of owner.skills) {
+      if (!inst) continue;
+      const spec = instanceTrigger(inst);
+      if (!spec || spec.on !== 'statusApply') continue;
+      if (spec.status !== undefined) {
+        const list = Array.isArray(spec.status) ? spec.status : [spec.status];
+        if (!list.includes(statusId)) continue;
+      }
+      const st = (inst.state ??= {});
+      if (st.triggerOff) continue;
+      st.trigAccum = (st.trigAccum ?? 0) + 1;
+      any = true;
+    }
+    if (any) this.rollTriggers(owner, 'statusApply', { aim: at, depth, sourceInst });
   }
 
   /** Bank post-mitigation damage the owner TOOK into every armed

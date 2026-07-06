@@ -612,7 +612,15 @@ export interface FissureTrailSpec {
 //     stacked chance can beat. Trigger chance caps at 95% per event.
 // ---------------------------------------------------------------------------
 
-export type TriggerKind = 'crit' | 'damageTaken' | 'channelBeat' | 'overchargeStage';
+export type TriggerKind =
+  | 'crit' | 'damageTaken' | 'channelBeat' | 'overchargeStage'
+  /** A status the owner APPLIES banks power (see TriggerSpec.status/.power)
+   *  — "every third burn you set casts this" (the ailment-power gems). */
+  | 'statusApply'
+  /** The owner BLOCKS a hit — guard stance, passive block, or parry. */
+  | 'block'
+  /** A kill credited to the owner's landed hits. */
+  | 'kill';
 
 export const TRIGGER_CFG = {
   /** Max BASE use time (def.useTime) a skill may have and still be
@@ -623,7 +631,10 @@ export const TRIGGER_CFG = {
   /** Cost multiplier on triggered casts (1 = full honest price). */
   costMult: 1,
   /** Per-kind fallback internal cooldowns, seconds (a spec's icd wins). */
-  icd: { crit: 0.15, damageTaken: 0.25, channelBeat: 0.35, overchargeStage: 0 } as Record<TriggerKind, number>,
+  icd: {
+    crit: 0.15, damageTaken: 0.25, channelBeat: 0.35, overchargeStage: 0,
+    statusApply: 0.2, block: 0.5, kill: 0.4,
+  } as Record<TriggerKind, number>,
   /** damageTaken: fraction of MAX LIFE that must accumulate per firing
    *  (a spec's lifeFrac wins; the triggerThreshold stat scales either). */
   lifeFrac: 0.3,
@@ -644,6 +655,13 @@ export interface TriggerSpec {
   /** damageTaken only: max-life fraction to accumulate before a firing —
    *  the BASE of the triggerThreshold stat query (default cfg.lifeFrac). */
   lifeFrac?: number;
+  /** statusApply only: which status(es) bank POWER (omit = any the owner
+   *  applies) — the "cast on ignite / on poison" filter. */
+  status?: string | string[];
+  /** statusApply only: applications banked per firing — the POWER
+   *  mechanism (BASE of the triggerPower stat query; default 1). The bank
+   *  fills as the owner lays the status and RESETS when the gem fires. */
+  power?: number;
 }
 
 /** The trigger conversion riding an instance (first socketed wins). */
