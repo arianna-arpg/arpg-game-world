@@ -60,6 +60,8 @@
     #btns #update-btn { border-color: var(--good); color: #b6f0b6; background: linear-gradient(180deg, #2c3a2c, #223022); }
     #btns .minor { width: 300px; display: flex; gap: 8px; }
     #btns .minor button { flex: 1; width: auto; font-size: 12px; padding: 7px 0; }
+    #btns button.danger { border-color: #8a4040; color: #d08080; background: linear-gradient(180deg, #34242c, #251b21); }
+    #btns button.danger:hover:not(:disabled) { background: linear-gradient(180deg, #46282f, #2f1e24); box-shadow: 0 0 9px rgba(208,80,80,0.4); }
     .hidden { display: none !important; }
 
     #log {
@@ -88,6 +90,11 @@
         <button id="rebuild">Rebuild</button>
         <button id="quit">Quit</button>
       </div>
+      <div class="minor">
+        <button id="reset" class="danger"
+          title="Factory reset: erase the account, every character and roster slot, settings, and all cached game data. A confirm dialog follows.">
+          Erase all saved data…</button>
+      </div>
     </div>
     <div id="log"></div>
     <div id="hint">Updates pull from GitHub, then the game rebuilds itself. Play works offline.</div>
@@ -95,7 +102,7 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const logEl = $('log');
-    const buttons = ['play', 'update-btn', 'check', 'rebuild', 'quit'].map($);
+    const buttons = ['play', 'update-btn', 'check', 'rebuild', 'reset', 'quit'].map($);
 
     function appendLog(line) {
       logEl.textContent += line + '\n';
@@ -173,6 +180,15 @@
       try {
         const r = await window.launcher.rebuild();
         appendLog(r.ok ? 'Rebuild complete.' : 'REBUILD FAILED: ' + (r.error || 'unknown error'));
+      } finally { setBusy(false); }
+    });
+    $('reset').addEventListener('click', async () => {
+      setBusy(true);
+      try {
+        // Outcome lines stream from the main process into the log; only the
+        // error path needs surfacing here (e.g. "close the game first").
+        const r = await window.launcher.reset();
+        if (!r.ok) appendLog('RESET FAILED: ' + (r.error || 'unknown error'));
       } finally { setBusy(false); }
     });
     $('quit').addEventListener('click', () => window.launcher.quit());

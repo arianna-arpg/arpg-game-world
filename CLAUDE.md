@@ -50,7 +50,8 @@ we verify changes.
   account / save / permadeath meta-layer.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
   `tsconfig.launcher.json`): `main.cjs` (windows, git update flow, build
-  stamping, IPC, smoke modes), `server.cjs` (loopback HTTP server for `dist/`
+  stamping, IPC, smoke modes, and the full-reset wipe: `saves/` + Chromium
+  storage behind a native confirm), `server.cjs` (loopback HTTP server for `dist/`
   that re-implements the Vite disk-save `/__save/:slot` endpoints — SAME
   `saves/` folder as dev; keep the two implementations in sync), `preload.cjs`
   + `launcher.html` (the launcher UI). Tunables live in `launcher.config.json`

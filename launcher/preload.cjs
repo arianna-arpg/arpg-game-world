@@ -19,6 +19,9 @@ contextBridge.exposeInMainWorld('launcher', {
   play: () => ipcRenderer.invoke('launcher:play'),
   /** Force a rebuild of dist/ even if the stamp says it's fresh. */
   rebuild: () => ipcRenderer.invoke('launcher:rebuild'),
+  /** FULL RESET: erase saves/ + all browser-side storage. The destructive
+   *  confirm is a native dialog owned by the main process, not this page. */
+  reset: () => ipcRenderer.invoke('launcher:reset'),
   quit: () => ipcRenderer.invoke('launcher:quit'),
   /** Streamed progress lines from git/npm/build child processes. */
   onLog: (/** @type {(line: string) => void} */ cb) => {

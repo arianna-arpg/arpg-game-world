@@ -26,7 +26,7 @@
 // @ts-check
 'use strict';
 
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } = require('electron');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -211,6 +211,72 @@ async function update() {
   return ensureBuilt(true);
 }
 
+// --------------------------------------------------------------- full reset
+
+/**
+ * FULL RESET — erase every trace of play so the next boot is a first boot.
+ * A desktop install persists play state in exactly two places; wipe both:
+ *   1. saves/ on disk — the /__save slots (account with its unlocks, sagas,
+ *      nemeses and corpses; the active character; settings; the roster) plus
+ *      any future artifact that lands in the folder: the wipe is
+ *      pattern-blind on purpose, so new persistence never needs changes here.
+ *   2. The Chromium profile's storage — the game's synchronous localStorage
+ *      mirrors of those slots. The disk-first loaders fall back to the
+ *      mirrors when a slot 404s, so skipping this would resurrect the
+ *      account on next boot. Clearing per-origin also catches stale copies
+ *      left by earlier random server ports.
+ * dist/, launcher.config*.json and the repo are build/machine state, not
+ * play state, and are deliberately untouched. The confirm lives HERE in the
+ * main process: a renderer bug can never wipe data without the user
+ * clicking through a native dialog.
+ * @returns {Promise<{ ok: boolean, cancelled?: boolean, removed?: number, error?: string }>}
+ */
+async function resetAllData() {
+  if (gameWin && !gameWin.isDestroyed()) {
+    return { ok: false, error: 'Close the game window first — a running game would just re-save itself over the wipe.' };
+  }
+  const entries = fs.existsSync(SAVES) ? fs.readdirSync(SAVES) : [];
+  /** @type {Electron.MessageBoxOptions} */
+  const box = {
+    type: 'warning',
+    title: 'Reset everything?',
+    message: 'Erase ALL saved data and start from a fresh slate?',
+    detail:
+      'This permanently deletes:\n\n' +
+      `  •  ${entries.length} file${entries.length === 1 ? '' : 's'} in saves/ — the account (unlocks, sagas, nemeses, corpses), every character and roster slot, and settings\n` +
+      '  •  All of the game\'s cached browser data (the localStorage save mirrors)\n\n' +
+      'The game itself — code, build, launcher settings — is not touched.',
+    buttons: ['Cancel', 'Erase everything'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+    checkboxLabel: 'I understand this permanently erases all progress.',
+  };
+  const win = (launcherWin && !launcherWin.isDestroyed()) ? launcherWin : null;
+  const choice = win ? await dialog.showMessageBox(win, box) : await dialog.showMessageBox(box);
+  if (choice.response !== 1) { log('Reset cancelled — nothing was erased.'); return { ok: true, cancelled: true }; }
+  if (!choice.checkboxChecked) {
+    log('Reset aborted — the "I understand" box was not ticked; nothing was erased.');
+    return { ok: true, cancelled: true };
+  }
+
+  /** @type {string[]} */
+  const failures = [];
+  let removed = 0;
+  for (const name of entries) {
+    try { fs.rmSync(path.join(SAVES, name), { recursive: true, force: true }); removed++; }
+    catch (e) { failures.push(`${name}: ${String(e)}`); }
+  }
+  try { await session.defaultSession.clearStorageData(); }
+  catch (e) { failures.push(`browser storage: ${String(e)}`); }
+  log(`Fresh slate — erased ${removed}/${entries.length} save file${entries.length === 1 ? '' : 's'} and cleared the game's browser storage.`);
+  if (failures.length) {
+    for (const f of failures) log('  reset failure — ' + f);
+    return { ok: false, removed, error: `Some data could not be erased: ${failures.join('; ')}` };
+  }
+  return { ok: true, removed };
+}
+
 // ------------------------------------------------------------------ windows
 
 async function ensureServer() {
@@ -315,6 +381,7 @@ function wireIpc() {
   ipcMain.handle('launcher:update', () => exclusive('update', () => update()));
   ipcMain.handle('launcher:play', () => exclusive('play', () => play()));
   ipcMain.handle('launcher:rebuild', () => exclusive('rebuild', () => ensureBuilt(true)));
+  ipcMain.handle('launcher:reset', () => exclusive('reset', () => resetAllData()));
   ipcMain.handle('launcher:quit', () => { app.quit(); });
 }
 
@@ -359,6 +426,12 @@ async function smoke() {
         `(document.getElementById('build-line')?.textContent ?? '').length > 0`);
       if (api !== 'object') errors.push(`preload bridge missing (typeof window.launcher = ${api})`);
       if (!version) errors.push('status round-trip never populated the build line');
+      // Presence only — NEVER invoke reset from a smoke run (it would erase
+      // this machine's real saves behind the headless window).
+      const resetApi = await launcherWin.webContents.executeJavaScript('typeof window.launcher.reset');
+      const resetBtn = await launcherWin.webContents.executeJavaScript(`!!document.getElementById('reset')`);
+      if (resetApi !== 'function') errors.push(`reset bridge missing (typeof window.launcher.reset = ${resetApi})`);
+      if (!resetBtn) errors.push('reset button missing from the launcher page');
       await watcherSelfTest(launcherWin.webContents);
     } else {
       if (!fs.existsSync(path.join(DIST, 'index.html'))) {

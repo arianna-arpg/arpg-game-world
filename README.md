@@ -18,7 +18,10 @@ launcher window shows the installed version, checks GitHub for updates —
 one click pulls, rebuilds, and plays — then opens the game in its own
 window, no browser involved. Machine-local preferences (fullscreen, ports,
 update policy) go in `launcher.config.local.json`, deep-merged over the
-committed `launcher.config.json` defaults.
+committed `launcher.config.json` defaults. The launcher is also the factory
+reset: **Erase all saved data…** deletes every save slot (account, characters,
+roster, settings — corpses, stashes and sagas included) plus the game's cached
+browser storage behind a native confirm, leaving a truly fresh slate.
 
 **Browser dev mode (live reload):**
 
