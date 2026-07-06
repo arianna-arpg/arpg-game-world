@@ -467,6 +467,9 @@ export class Actor {
   reservedLife = 0;
   /** Seconds since the last step (the stationary/moving conditions). */
   idleFor = 0;
+  /** Seconds since last TAKING damage (GateSpec.recentDamage — the
+   *  counter-blow's license; zeroed at both damage seams). */
+  recentHurt = 999;
   /** Idle wander heading — the world doesn't stand at attention. */
   wanderDir?: number;
   /** Patrol route (world points) marched between when no foe is in sight. */
@@ -1245,6 +1248,10 @@ export class Actor {
    *  element, tagged damageTaken). Null when nothing ticked. */
   updateTimers(dt: number): Partial<Record<DamageType | 'untyped', number>> | null {
     this.refreshConditions();
+    // The RECENT-WOUND clock (GateSpec.recentDamage — Reprisal's license):
+    // seconds since this actor last took damage; the world zeroes it at
+    // both damage seams (hits and DoT alike).
+    this.recentHurt = Math.min(999, this.recentHurt + dt);
     // Hire-clock high-water mark (the lifespan sliver's denominator).
     if (this.lifespan > this.lifespanTotal) this.lifespanTotal = this.lifespan;
     // Cooldowns tick faster with cooldownRecovery.
@@ -1728,6 +1735,9 @@ export class Actor {
       }
       if (g.guard && this.casting?.mode !== 'guard') return false;
       if (g.active && !this.activeAuras.has(g.active) && !this.summonToggles.has(g.active)) return false;
+      // RECENT-DAMAGE window (Reprisal): the counter-blow answers only
+      // wounds — usable within `within` seconds of last taking damage.
+      if (g.recentDamage && this.recentHurt > g.recentDamage.within) return false;
     }
     return true;
   }

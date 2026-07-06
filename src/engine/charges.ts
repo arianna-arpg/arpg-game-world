@@ -43,6 +43,14 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
     label: 'Stealth', color: '#4a5a78',
   },
 
+  // RIPOSTE (Answering Steel): banked by MADE BLOCKS — guard, passive, or
+  // parry — and spent by the answering thrust. Mute fuel; the meta-skill
+  // is the payoff. Fades once the shield stops working.
+  riposte: {
+    label: 'Riposte', color: '#d8e8f8',
+    decay: { perSec: 1, delay: 6 },
+  },
+
   // RAGE (Berserk): every charge quickens and hardens the swing — flat
   // attack damage AND speed per charge, cooling fast once the hitting
   // stops. Fed by Berserk's melee blows and by rage remnants; capacity is

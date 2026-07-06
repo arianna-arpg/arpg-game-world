@@ -374,6 +374,15 @@ export const PROCS: Record<string, ProcDef> = {
     effect: { type: 'fortify', flat: 6, pctMaxLife: 0.02 },
   },
 
+  // STALWART RHYTHM: the wall keeps time — every made block winds the
+  // rest of the kit forward (the greatshield-and-poke tempo: block,
+  // answer, block, answer).
+  stalwart_rhythm: {
+    id: 'stalwart_rhythm', name: 'Stalwart Rhythm',
+    color: '#8ab8d8', trigger: 'block', icd: 1.5,
+    effect: { type: 'cooldown', seconds: 1 },
+  },
+
   // --- GAIN CHAINS (chargeGain / buffGain): resources begetting resources.
   // Each link's grant lands ONE CHAIN-DEPTH deeper, so the ladder below is
   // procDepth-governed exactly like hit chains: base allowance runs one

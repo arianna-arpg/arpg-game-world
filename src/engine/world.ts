@@ -13990,8 +13990,12 @@ export class World {
     const fullCircle = arcRad >= Math.PI * 1.9;
     const elem = (['fire', 'cold', 'lightning'] as const)
       .find(e => inst.def.tags.includes(e));
+    // The bashPower stat is the investable lever on the payload — Reckless
+    // Rampart cranks it in trade against the guard itself.
+    const power = a.sheet.get('bashPower',
+      skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst));
     const flat: Partial<Record<DamageType, number>> =
-      { [elem ?? 'physical']: payloadShield * bash.mult };
+      { [elem ?? 'physical']: payloadShield * bash.mult * power };
     for (const e of this.enemiesOf(a)) {
       if (dist(a.pos, e.pos) - e.radius > reach) continue;
       if (!fullCircle
@@ -14709,6 +14713,9 @@ export class World {
       // early-returns, so a fully-absorbed swing doesn't count — only a landed hit is "live".
       caster.lastCombatAt = this.time;
       target.lastCombatAt = this.time;
+      // The RECENT-WOUND clock (GateSpec.recentDamage): a landed hit
+      // licenses the victim's counter-blows.
+      if (dealt > 0) target.recentHurt = 0;
       // THE THREAT CHART: a landed hit books aggro against the attacker —
       // weighted by the victim's brain (TargetSpec.threat.damage), melted by
       // the AI tick's decay, and READ only by prefer:'highestThreat' brains.
@@ -17208,8 +17215,12 @@ export class World {
           a.esBroke = false;
           this.rollOwnProcs(a, 'esBreak');
         }
-        // Pain is pain: DoT feeds the damage-taken trigger banks too.
-        if (raw > 0) this.bankDamageTakenTriggers(a, raw);
+        // Pain is pain: DoT feeds the damage-taken trigger banks too —
+        // and licenses the counter-blow window like any wound.
+        if (raw > 0) {
+          this.bankDamageTakenTriggers(a, raw);
+          a.recentHurt = 0;
+        }
       }
       // GAIN EVENTS: charges/buffs gained since last frame feed the
       // chargeGain/buffGain triggers. Payload grants land as NEW events

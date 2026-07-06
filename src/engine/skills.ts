@@ -1699,6 +1699,9 @@ export interface GateSpec {
   guard?: true;
   /** A running TOGGLE (aura or summon contract) by skill id. */
   active?: string;
+  /** A RECENT WOUND: usable only within `within` seconds of the caster
+   *  last TAKING damage (Reprisal — the counter-blow's license). */
+  recentDamage?: { within: number };
 }
 
 /** Every gate a use must clear: the skill's own plus each socketed levy's. */

@@ -2058,6 +2058,57 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('guardStrength', 'increased', 0.18)] },
   },
 
+  spiked_bulwark: {
+    id: 'spiked_bulwark', name: 'Spiked Bulwark',
+    description: 'Raise a WALL OF POINTS: a heavy guard whose face bites back — every blow you block bleeds the striker on the spikes, and the release still bashes. The greatshield made spiteful: stand, take, answer.',
+    tags: ['guard', 'channel', 'duration', 'physical'], color: '#a8988a',
+    manaCost: 9, cooldown: 5, useTime: 0,
+    castMode: 'guard',
+    guard: {
+      arcDeg: 150, shieldLife: 85, moveFactor: 0.35, turnRate: 2.2,
+      bash: { mult: 1.15, range: 95, arcDeg: 120, stunChance: 0.3, knockback: 30 },
+    },
+    innateMods: [mod('thorns', 'flat', 8, undefined, 'guarding')],
+    delivery: { type: 'self' },
+    effects: [],
+    requirements: { strength: 18 },
+    ai: { range: 220, weight: 2 },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.14), mod('thorns', 'flat', 2, undefined, 'guarding')] },
+  },
+
+  reprisal: {
+    id: 'reprisal', name: 'Reprisal',
+    description: 'The counter-blow\'s license: usable only within three heartbeats of TAKING damage — then it lands like a verdict, a heavy staggering arc that answers what was done to you. The slow style\'s exclamation mark: be hit, then be heard.',
+    tags: ['attack', 'melee', 'aoe', 'physical'], color: '#d8b070',
+    manaCost: 10, cooldown: 6, useTime: 0.55,
+    baseDamage: { physical: [26, 40] },
+    gate: { recentDamage: { within: 3 } },
+    delivery: { type: 'melee', range: 105, arcDeg: 120 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.35 },
+      { type: 'knockback', strength: 30 },
+    ],
+    requirements: { strength: 20 },
+    ai: { range: 100, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  // The Answering Steel meta-payload: spends a block-banked Riposte charge.
+  riposte_thrust: {
+    id: 'riposte_thrust', name: 'Riposte Thrust', noDrop: true,
+    description: 'The answer the block bought: a narrow, vicious poke over the shield rim.',
+    tags: ['attack', 'melee', 'physical', 'instant'], color: '#d8e8f8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [16, 26] },
+    chargeCost: { charge: 'riposte', amount: 1 },
+    delivery: { type: 'melee', range: 110, arcDeg: 34 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.3 },
+    ],
+  },
+
   riposte: {
     id: 'riposte', name: 'Riposte',
     description: 'A heartbeat of perfect readiness: any frontal blow inside the window is ignored entirely and answered at 220% of its damage. The stance spends itself on the answer.',

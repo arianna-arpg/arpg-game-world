@@ -353,6 +353,34 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The retaliation gems (the greatshield-and-poke kit) ----------------------
+  answering_steel: {
+    id: 'answering_steel', name: 'Answering Steel',
+    description: 'Every blow this guard BLOCKS banks a Riposte (up to 3, fading out of combat) — and GRANTS the Riposte Thrust order (⇧+key): spend one for a narrow, vicious poke over the shield rim. Block, answer, block, answer.',
+    color: '#d8e8f8', requiresTags: ['guard'],
+    chargeGain: [{ charge: 'riposte', amount: 1, max: 3, on: 'block' }],
+    meta: { skillId: 'riposte_thrust', label: 'Riposte' },
+    mods: [],
+    perLevel: [mod('damage', 'increased', 0.06)],
+    weight: 5,
+  },
+  reckless_rampart: {
+    id: 'reckless_rampart', name: 'Reckless Rampart',
+    description: 'The wall leans FORWARD: +60% shield-bash power, but the guard itself holds a quarter less — offense bought with the very thing you hide behind.',
+    color: '#d8a878', requiresTags: ['guard'],
+    mods: [mod('bashPower', 'increased', 0.6), mod('guardStrength', 'increased', -0.25)],
+    perLevel: [mod('bashPower', 'increased', 0.1)],
+    weight: 5,
+  },
+  stalwart_rhythm: {
+    id: 'stalwart_rhythm', name: 'Stalwart Rhythm',
+    description: 'The wall keeps TIME: every made block winds every OTHER cooldown forward a second — the patient style\'s tempo, earned one answer at a time.',
+    color: '#8ab8d8', requiresTags: ['guard'],
+    mods: [mod('proc_stalwart_rhythm', 'flat', 1)],
+    perLevel: [mod('blockValue', 'flat', 2)],
+    weight: 5,
+  },
+
   // --- The offering ecology -----------------------------------------------------
   hiveborn: {
     id: 'hiveborn', name: 'Hiveborn',

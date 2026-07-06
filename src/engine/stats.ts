@@ -680,6 +680,9 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** TRIGGER GEMS (statusApply): applications banked per firing — LOWER
    *  fires quicker (the spec's power seeds it; floor one). */
   triggerPower:   { label: 'Trigger Power Threshold', base: 0, min: 1 },
+  /** SHIELD-BASH payload multiplier (base 1) — Reckless Rampart's crank,
+   *  investable by anything that can grant a modifier. */
+  bashPower:      { label: 'Shield Bash Power', base: 1, min: 0 },
   /** >0: a held channel's facing REVOLVES at this rate (rad/s) instead of
    *  tracking the aim — the beam becomes a lighthouse (Orbital Sweep). */
   channelAutoSpin:{ label: 'Channel Revolution', base: 0 },
