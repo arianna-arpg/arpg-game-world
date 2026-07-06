@@ -137,6 +137,10 @@ export class UI {
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
   private buildFlapOpen = false;
+  /** True while a vestige drag is in flight — refreshInventory HOLDS STILL
+   *  (an innerHTML rebuild destroys the drag source, which cancels a native
+   *  drag mid-gesture; the world map's drag uses the same discipline). */
+  private invDragging = false;
   /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
    *  support gems — one panel, one key, zero overlapping windows. */
   invTab: 'gear' | 'skills' | 'gems' = 'gear';
@@ -782,6 +786,7 @@ export class UI {
 
   refreshInventory(): void {
     if (!this.inventoryOpen) return;
+    if (this.invDragging) return; // a rebuild mid-drag kills the native drag
     const m = this.getWorld().meta;
     const CELL = 34;
     const W = ITEM_CFG.inventory.w;
@@ -795,10 +800,10 @@ export class UI {
       const worn = m.equipped[slot.id];
       const takes = heldBase && slot.accepts.includes(heldBase.category);
       const border = worn ? ITEM_RARITIES[worn.rarity].color : takes ? '#7ec8a0' : '#3a3644';
-      const wornPips = worn?.sockets?.length ? ` <span style="font-size:10px">${worn.sockets.map((vid, si) => {
+      const wornPips = worn?.sockets?.length ? ` <span style="font-size:12px">${worn.sockets.map((vid, si) => {
         const v = vid ? VESTIGES[vid] : null;
         return `<span data-sock="${worn.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
-          style="color:${v?.color ?? '#5a5668'};padding:0 1px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
+          style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
       }).join('')}</span>` : '';
       const label = worn
         ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>${wornPips}`
@@ -824,11 +829,11 @@ export class UI {
     // filled shows the vestige's glyph in its color, empty shows ◇.
     const pipRow = (i: ItemInstance): string => {
       if (!i.sockets?.length) return '';
-      return `<div style="position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:10px;line-height:11px">
+      return `<div style="position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:12px;line-height:13px">
         ${i.sockets.map((vid, si) => {
           const v = vid ? VESTIGES[vid] : null;
           return `<span data-sock="${i.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
-            style="color:${v?.color ?? '#5a5668'};padding:0 1px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
+            style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
         }).join('')}
       </div>`;
     };
@@ -959,28 +964,77 @@ export class UI {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
     });
-    // VESTIGE drag-and-drop: satchel rows are the sources, socket pips the
-    // targets. Dropping consumes the vestige into that exact socket (an
-    // occupied one is overwritten — the old vestige is destroyed).
-    q<HTMLElement>('[data-vestige]').forEach(el => el.addEventListener('dragstart', (e) => {
-      e.dataTransfer?.setData('text/plain', el.dataset.vestige!);
-      if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
-    }));
+    // VESTIGE drag-and-drop — a first-class gesture (core/input.ts waves
+    // draggable-marked elements past its anti-grab kill-switch):
+    //  · satchel rows are the SOURCES;
+    //  · every socket PIP is a precise target — dropping there inlays THAT
+    //    socket, occupied or not (an aimed, deliberate overwrite);
+    //  · the whole TILE / worn chip is the forgiving target — the first
+    //    EMPTY socket takes it; if none is empty the pips flash gold, and
+    //    overwriting is never guessed on the player's behalf.
+    const dropVid = (e: DragEvent): string | null => {
+      const vid = e.dataTransfer?.getData('text/plain') ?? '';
+      return vid && VESTIGES[vid] ? vid : null;
+    };
+    const socketDrop = (uid: number, socket: number, vid: string): void => {
+      this.invDragging = false; // drop fires before dragend — unfreeze first
+      world.requestMeta({ t: 'socketVestige', uid, socket, vestigeId: vid });
+      this.refreshInventory();
+      this.refreshCharSheet();
+    };
+    const highlight = (el: HTMLElement, on: boolean): void => {
+      el.style.outline = on ? '2px solid var(--gold, #c8a84b)' : '';
+    };
+    q<HTMLElement>('[data-vestige]').forEach(el => {
+      el.addEventListener('dragstart', (e) => {
+        e.stopPropagation(); // never let a window-level suppressor see it
+        e.dataTransfer?.setData('text/plain', el.dataset.vestige!);
+        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
+        hideTooltip();       // the hover card must not shadow the drop path
+        this.invDragging = true;
+      });
+      el.addEventListener('dragend', () => {
+        if (!this.invDragging) return; // a landed drop already refreshed
+        this.invDragging = false;
+        this.refreshInventory();       // clear lingering highlights
+      });
+    });
     q<HTMLElement>('[data-sock]').forEach(el => {
       el.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
+      el.addEventListener('dragenter', () => highlight(el, true));
+      el.addEventListener('dragleave', () => highlight(el, false));
       el.addEventListener('drop', (e) => {
         e.preventDefault();
-        e.stopPropagation();
-        const vid = e.dataTransfer?.getData('text/plain');
-        if (!vid || !VESTIGES[vid]) return;
+        e.stopPropagation(); // the tile beneath must not double-handle it
+        const vid = dropVid(e);
+        if (!vid) return;
         const [uid, sock] = el.dataset.sock!.split(':');
-        world.requestMeta({ t: 'socketVestige', uid: Number(uid), socket: Number(sock), vestigeId: vid });
-        this.refreshInventory();
-        this.refreshCharSheet();
+        socketDrop(Number(uid), Number(sock), vid);
       });
       // A pip click must never lift the tile underneath.
       el.addEventListener('click', (e) => e.stopPropagation());
     });
+    const wireItemTarget = (el: HTMLElement, uid: number): void => {
+      if (!this.findItem(uid)?.sockets?.length) return; // socketless ≠ target
+      el.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
+      el.addEventListener('dragenter', () => highlight(el, true));
+      el.addEventListener('dragleave', () => highlight(el, false));
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const vid = dropVid(e);
+        if (!vid) return;
+        highlight(el, false);
+        const empty = this.findItem(uid)?.sockets?.findIndex(s => s === null) ?? -1;
+        if (empty >= 0) { socketDrop(uid, empty, vid); return; }
+        // Every socket full: flash the pips — pick one to overwrite, aimed.
+        el.querySelectorAll<HTMLElement>('[data-sock]').forEach(p => {
+          p.style.textShadow = '0 0 8px #ffd700';
+          window.setTimeout(() => { p.style.textShadow = ''; }, 650);
+        });
+      });
+    };
+    q<HTMLElement>('[data-bag-item]').forEach(el => wireItemTarget(el, Number(el.dataset.itemUid)));
+    q<HTMLElement>('[data-doll][data-item-uid]').forEach(el => wireItemTarget(el, Number(el.dataset.itemUid)));
     q<HTMLButtonElement>('button[data-invtab]').forEach(btn => btn.addEventListener('click', () => {
       this.invTab = btn.dataset.invtab as typeof this.invTab;
       this.heldItemUid = null; // a lifted item has no meaning off the gear tab

@@ -46,7 +46,16 @@ export class Input {
     // similarly arms the browser's autoscroll mode. Neither has any meaning
     // inside the game, so both are cut off at the source; panel wheel-scroll
     // and the SVG pan gestures (pointer events) are unaffected.
-    window.addEventListener('dragstart', e => e.preventDefault());
+    //
+    // EXCEPTION — DELIBERATE drag-and-drop: anything marked draggable="true"
+    // (vestige inlaying today; every dnd mechanic to come) is a real game
+    // gesture, not a stray grab. The kill-switch waves those through; the
+    // accidental-drag classes (selections, images, links) stay suppressed.
+    window.addEventListener('dragstart', e => {
+      const el = e.target as HTMLElement | null;
+      if (el && typeof el.closest === 'function' && el.closest('[draggable="true"]')) return;
+      e.preventDefault();
+    });
     window.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
   }
 
