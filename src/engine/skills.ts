@@ -1257,6 +1257,26 @@ export interface ConstructDelivery {
    *  — the egg dies quietly; Broodpod) or 'hatch' (destruction sets it
    *  off; the Nitrocask powder rule). */
   hatch?: { skillId: string; onBreak?: 'fizzle' | 'hatch' };
+  /** BREAKABLE BY DESIGN (the conjured-object game): the construct joins
+   *  its OWNER's hostile pool — the owner's own hits (skills, zones,
+   *  projectiles: everything) can strike it, demolishing at ownerMult ×
+   *  damage; hits carrying one of affinityTags swing ×affinityMult harder
+   *  on top (frost spells vs the frost wall). Enemies damage it at the
+   *  ordinary rate. Pair with deathBurst to make breaking it the POINT. */
+  breakable?: { ownerMult: number; affinityTags?: SkillTag[]; affinityMult?: number };
+  /** The construct DETONATES as it dies — broken by its owner, shattered
+   *  by the rite, evicted by a recast, or simply expired: unstable
+   *  masonry has ONE rule, so conjure deliberately. `damageScale`
+   *  re-rolls the HOST skill against enemies in `radius` (statuses and
+   *  effects ride the ordinary hit pipeline); `fraction` instead bursts
+   *  max life × fraction as typed damage (damageType, default physical).
+   *  Sibling breakables are never victims — no free chain demolitions
+   *  (a sympathetic-charges support may sell that later). */
+  deathBurst?: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
+  /** The placement SHOVES overlapping actors out of its footprint — a
+   *  wall rising under a goblin puts the goblin somewhere else (and the
+   *  frost wall's push-back genesis). */
+  clearway?: true;
   /** The construct GLIDES at its owner's shoulder instead of standing
    *  where planted (Holy Relic — the relic that keeps up). */
   follows?: true;
@@ -2470,6 +2490,14 @@ export interface SupportDef {
    *  ONE random status from the struck victim to its nearest neighbor —
    *  the hit-borne contagion, with the transplant knobs inline. */
   spreadOnHit?: { chance: number; radius: number; strengthScale?: number; duration?: 'remaining' | 'refresh'; durationScale?: number };
+  /** LOAD-BEARING FLAW: the host skill's constructs become BREAKABLE by
+   *  their owner and DETONATE as they die (see ConstructDelivery.breakable
+   *  / .deathBurst — the delivery's own specs win where present). Any
+   *  totem skill becomes the conjured-ordnance game, one socket deep. */
+  breakableGraft?: {
+    ownerMult: number;
+    deathBurst: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
+  };
   /** CORPSE SPAWN (Hiveborn): corpses this skill CONSUMES crawl back out —
    *  `perCorpse` births one per body eaten; `count` instead births a fixed
    *  brood per use (the ghost variant pairs it with an imposed cooldown

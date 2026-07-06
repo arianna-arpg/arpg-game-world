@@ -169,6 +169,14 @@ export interface ConstructState {
   // CONSTRUCT FX (innate or support-grafted): the standing pulse's clock.
   fx?: import('./skills').ConstructFxSpec;
   fxAt?: number;
+  /** BREAKABLE BY DESIGN (ConstructDelivery.breakable / the Load-Bearing
+   *  Flaw graft, stamped at spawn): the OWNER's hits demolish this object
+   *  at ownerMult × damage (affinity tags harder still). */
+  breakable?: { ownerMult: number; affinityTags?: SkillTag[]; affinityMult?: number };
+  /** DEATH BURST (ConstructDelivery.deathBurst): the object detonates
+   *  however it ends — fired once through the kill artery. */
+  deathBurst?: { radius: number; damageScale?: number; fraction?: number; damageType?: DamageType };
+  burstFired?: boolean;
 }
 
 /** A running aura on its bearer. */

@@ -5656,6 +5656,64 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('effectDuration', 'increased', 0.04)] },
   },
 
+  // ======================= Conjured objects =================================
+  // BREAKABLE furniture (ConstructDelivery.breakable + deathBurst): the
+  // object joins its OWNER's hostile pool — your own skills demolish it at
+  // a privileged rate (affinity tags harder still) and the death detonates
+  // the host skill's roll. Tagged 'totem' so the Rite of Shattering meta
+  // detonates them on demand — activation variety by composition. The
+  // Juggernaut's secret vocation is expected to build on stone_spires
+  // (grants/warps via vocation nodes — no engine work needed, it's data).
+
+  stone_spires: {
+    id: 'stone_spires', name: 'Stone Spires',
+    description: 'SLAM the earth and raise a crown of stone around the mark — spires that stand in the way, and BREAK the way you choose: your own blows demolish them at four times the rate, and every spire DETONATES as it dies, stone shrapnel and staggered flesh. Conjure the wall; then decide it was ammunition.',
+    tags: ['spell', 'physical', 'aoe', 'totem', 'duration'], color: '#b0a08a',
+    manaCost: 15, cooldown: 6, useTime: 0.6,
+    baseDamage: { physical: [10, 16] },
+    delivery: {
+      type: 'construct', kind: 'barrier',
+      range: 0, duration: 12, maxActive: 10, life: 44,
+      placeRange: 240,
+      ring: { segments: 5, radius: 85 },
+      breakable: { ownerMult: 4 },
+      deathBurst: { radius: 95, damageScale: 1 },
+      clearway: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.2 },
+    ],
+    requirements: { strength: 18, willpower: 12 },
+    ai: { range: 200, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
+  frost_wall: {
+    id: 'frost_wall', name: 'Frost Wall',
+    description: 'Raise a rampart of ICE across the way: the segments SHOVE the crowd out as they rise and chill whatever presses close — and they answer to YOUR frost: cold spells crack them at a savage rate, each broken segment bursting into freezing shrapnel. A wall first; a volley whenever you say so.',
+    tags: ['spell', 'cold', 'aoe', 'totem', 'duration'], color: '#9ad4f0',
+    manaCost: 16, cooldown: 7, useTime: 0.6,
+    baseDamage: { cold: [8, 13] },
+    delivery: {
+      type: 'construct', kind: 'barrier',
+      range: 0, duration: 9, maxActive: 12, life: 32,
+      placeRange: 340,
+      wallSegments: 6,
+      breakable: { ownerMult: 2.5, affinityTags: ['cold'], affinityMult: 2 },
+      deathBurst: { radius: 85, damageScale: 0.8 },
+      clearway: true,
+      fx: { pulse: { interval: 0.8, radius: 70, damageScale: 0.25 } },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.9 },
+    ],
+    requirements: { intelligence: 18, willpower: 10 },
+    ai: { range: 300, weight: 2, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
   shardrift: {
     id: 'shardrift', name: 'Shardrift',
     description: 'Crack a rift in the air that FIRES ice-shard barrages down its lane for a few seconds — a persistent emitter you place like artillery and feed with position.',

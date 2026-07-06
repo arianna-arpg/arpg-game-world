@@ -340,6 +340,18 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('dotPropagates', 'flat', 0.1)],
     weight: 5,
   },
+  load_bearing_flaw: {
+    id: 'load_bearing_flaw', name: 'Load-Bearing Flaw',
+    description: 'This skill\'s constructs are built WRONG on purpose: your own hits demolish them at four times the rate, and each one DETONATES as it dies — broken, shattered, evicted or expired alike. Any totem becomes the conjured-ordnance game.',
+    color: '#c8b090', requiresTags: ['totem'],
+    breakableGraft: {
+      ownerMult: 4,
+      deathBurst: { radius: 100, fraction: 1.1 },
+    },
+    mods: [],
+    perLevel: [mod('damage', 'increased', 0.06)],
+    weight: 5,
+  },
 
   // --- The offering ecology -----------------------------------------------------
   hiveborn: {

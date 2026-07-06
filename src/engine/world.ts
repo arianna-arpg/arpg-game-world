@@ -9979,7 +9979,14 @@ export class World {
   }
 
   enemiesOf(actor: Actor): Actor[] {
-    return this.actors.filter(a => this.hostileTo(actor, a) && !a.dead && !a.untargetable && !a.downed);
+    return this.actors.filter(a =>
+      (this.hostileTo(actor, a)
+        // BREAKABLE conjured objects join their OWNER's hostile pool — the
+        // owner's every damage path (swings, zones, projectiles, homing)
+        // can find and demolish them. Never anyone else's pool: minions
+        // and allies see furniture, the owner sees a target.
+        || (a.construct?.breakable !== undefined && a.owner === actor))
+      && !a.dead && !a.untargetable && !a.downed);
   }
 
   /** Resolve an actor by id (patrol followers heel to a leader id; events
@@ -12167,6 +12174,14 @@ export class World {
         let blown = 0;
         for (const t of [...this.actors]) {
           if (t.owner !== caster || t.dead || !t.construct) continue;
+          // BREAKABLE ORDNANCE: burst-bearing objects (spires, walls) are
+          // rite-detonable too — their own deathBurst rides the kill
+          // artery, so the rite is an ACTIVATION, not a second payload.
+          if (t.construct.deathBurst) {
+            this.kill(t, true);
+            blown++;
+            continue;
+          }
           if (!['totem', 'sentry', 'pylon'].includes(t.construct.kind)) continue;
           this.burstDamage(vec(t.pos.x, t.pos.y), fx.radius,
             t.maxLife() * fx.fraction, 'physical', def.color, caster.team);
@@ -13488,6 +13503,17 @@ export class World {
     c.explodeOnDeath = caster.sheet.get('minionExplodeDeath', tags, extra);
     c.fillResources();
 
+    // BREAKABLE OBJECTS + DEATH BURSTS: the delivery's own specs, or the
+    // Load-Bearing Flaw graft where the delivery brings none — any totem
+    // skill becomes the conjured-ordnance game, one socket deep.
+    {
+      const flaw = socketSpec(sourceInst, 'breakableGraft');
+      const breakable = d.breakable ?? (flaw ? { ownerMult: flaw.ownerMult } : undefined);
+      const burst = d.deathBurst ?? flaw?.deathBurst;
+      if (breakable) c.construct.breakable = breakable;
+      if (burst) c.construct.deathBurst = burst;
+    }
+
     // Placement: at the cursor (clamped to placeRange), facing the aim —
     // or at an explicit override (barrier wall segments).
     const placeRange = d.placeRange ?? 100;
@@ -13498,6 +13524,17 @@ export class World {
       caster.pos.x + Math.cos(ang) * reach,
       caster.pos.y + Math.sin(ang) * reach), c.radius);
     c.facing = ang;
+    // CLEARWAY: the rising object SHOVES overlapping actors out of its
+    // footprint — a wall arriving under a goblin relocates the goblin.
+    if (d.clearway) {
+      for (const e of this.actors) {
+        if (e === c || e.dead || e.construct || e.anchored || e.leap) continue;
+        const gap = c.radius + e.radius + 6 - dist(c.pos, e.pos);
+        if (gap <= 0) continue;
+        this.pushActor(e, dist(c.pos, e.pos) < 1
+          ? rand(0, Math.PI * 2) : angleTo(c.pos, e.pos), gap + 12, caster, sourceInst);
+      }
+    }
 
     // Domes intercept projectiles in a radius scaled by area modifiers.
     // Mirror Coating (domeDeflects stat) flips dissolve into deflect.
@@ -14552,6 +14589,15 @@ export class World {
         const near = 1 - Math.min(1, dist(caster.pos, target.pos) / DEFENSE_CFG.proximity.radius);
         if (near > 0) dmgMult *= 1 + prox * near;
       }
+    }
+    // BREAKABLE OBJECTS: the OWNER's own hits demolish flagged constructs
+    // at a privileged rate — and hits carrying an affinity tag swing the
+    // wrecking ball harder still (frost spells vs the frost wall).
+    if (target.construct?.breakable && target.owner === caster) {
+      const b = target.construct.breakable;
+      const aff = b.affinityTags?.some(t => def.tags.includes(t))
+        ? (b.affinityMult ?? 2) : 1;
+      dmgMult *= b.ownerMult * aff;
     }
     const packet: DamagePacket = rollSkillDamage(caster, inst, flatBonus);
     if (dmgMult !== 1) {
@@ -15848,6 +15894,39 @@ export class World {
     // A garrisoned monster frees its tower slot as it falls (occupancy also
     // self-heals on evaluation — this is just the tidy fast path).
     if (actor.garrison) this.releaseGarrison(actor);
+    // BREAKABLE-OBJECT DEATH BURSTS: an unstable construct detonates
+    // HOWEVER it ends — broken by its owner, shattered by the rite,
+    // evicted by a recast, or simply expired. One rule, fired once.
+    // damageScale re-rolls the host skill (statuses ride the ordinary
+    // pipeline); fraction bursts typed damage off max life. Sibling
+    // breakables are never victims — no free chain demolitions.
+    {
+      const cb = actor.construct?.deathBurst;
+      if (cb && !actor.construct!.burstFired) {
+        actor.construct!.burstFired = true;
+        const owner = actor.owner ?? actor;
+        const src = actor.summonInst;
+        const radius = cb.radius * (src && !owner.dead
+          ? owner.sheet.get('aoeRadius',
+            skillContextTags(src.def, grantedTags(src)), instanceMods(src))
+          : 1);
+        this.flashes.push({
+          pos: vec(actor.pos.x, actor.pos.y), radius,
+          color: actor.color, life: 0.3, maxLife: 0.3,
+        });
+        if (cb.damageScale && src && !owner.dead) {
+          for (const e of this.enemiesOf(owner)) {
+            if (e === actor || (e.construct?.breakable && e.owner === owner)) continue;
+            if (dist(actor.pos, e.pos) - e.radius > radius) continue;
+            this.resolveHit(owner, src, e, cb.damageScale, 1, undefined, true);
+          }
+        } else if (cb.fraction) {
+          this.burstDamage(vec(actor.pos.x, actor.pos.y), radius,
+            actor.maxLife() * cb.fraction, cb.damageType ?? 'physical',
+            actor.color, actor.team);
+        }
+      }
+    }
     // ARMED RUPTURES fire on DEATH as well as expiry (Doombrand's "whichever
     // comes first"; a Living Bomb pops with its host) — the keg never rots
     // in the corpse. Statuses are cleared as they blow so loops can't form.
