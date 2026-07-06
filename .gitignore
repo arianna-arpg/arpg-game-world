@@ -18,6 +18,12 @@ saves/
 # ── Claude Code local settings ───────────────────────────────
 # Machine-specific paths/permissions — do not share.
 .claude/settings.local.json
+.claude/worktrees/
+
+# ── Generated editor backups ─────────────────────────────────
+# The dev passive-tree editor writes passives.ts.bak before each
+# save; git history is the real backup, so these never ship.
+*.bak
 
 # ── Desktop launcher local overrides ─────────────────────────
 # Machine-specific window/port/update preferences; deep-merged
