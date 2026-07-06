@@ -260,6 +260,16 @@ export class UI {
       kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
   }
 
+  /** Any ORDINARY panel open? (Dwell dialogs and the pause menu are tracked
+   *  apart — the Escape cascade treats each class differently.) */
+  anyPanelOpen(): boolean {
+    return this.charSheetOpen || this.skillBookOpen || this.treeOpen
+      || this.mapOpen || this.inventoryOpen;
+  }
+
+  /** A crafting minigame overlay is live (Escape and panels hold still). */
+  minigameRunning(): boolean { return this.minigameActive; }
+
   /** Rewrite the bottom hint strip from the LIVE binds — every key it names is
    *  rebindable, so the static index.html text goes stale after any remap.
    *  Called at construction and from the keybind view after each change. */
@@ -272,7 +282,8 @@ export class UI {
     const move = (['moveUp', 'moveLeft', 'moveDown', 'moveRight'] as const).map(k).join('');
     const slots = (['skillSlot2', 'skillSlot3', 'skillSlot4', 'skillSlot5', 'skillSlot6', 'skillSlot7'] as const).map(k).join('/');
     el.innerHTML = `[${move}] move &nbsp; [LMB/RMB/${slots}] skills &nbsp; [${k('panelChar')}] character &nbsp; `
-      + `[${k('panelInv')}] inventory &nbsp; [${k('pickup')}] pick up &nbsp; `
+      + `[${k('panelInv')}] inventory &nbsp; `
+      + (this.getSettings().gearPickup === 'key' ? `[${k('pickup')}] pick up &nbsp; ` : '')
       + `[${k('panelBook')}] skill book &nbsp; [${k('panelTree')}] passive tree &nbsp; [${k('panelMap')}] world map &nbsp; [Esc] menu`;
   }
 
@@ -2168,6 +2179,11 @@ export class UI {
         <span>Low-Life Screen Pulse</span>
         <button id="opt-lowlife">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
       </div>
+      <div class="rebind-row">
+        <span>Gear Pickup</span>
+        <button id="opt-gearpickup">${this.getSettings().gearPickup === 'key'
+          ? `PRESS ${keyDisplay(this.getSettings().keybinds.pickup)}` : 'WALK OVER'}</button>
+      </div>
       <div class="esc-btns"><button id="esc-back">Back</button></div>`;
     // The severity-scaled edge pulse is a real build choice (1/1-life and
     // heavy-reservation heroes live "low" on purpose) — so it's a toggle.
@@ -2175,6 +2191,14 @@ export class UI {
       const s = this.getSettings();
       s.lowLifePulse = !s.lowLifePulse;
       this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
+    // Gear pickup feel: hoover it like gems, or keep it a deliberate press.
+    root.querySelector<HTMLElement>('#opt-gearpickup')!.addEventListener('click', () => {
+      const s = this.getSettings();
+      s.gearPickup = s.gearPickup === 'key' ? 'vacuum' : 'key';
+      this.saveSettings();
+      this.updateHintBar();
       this.renderKeybinds(root, onBack);
     });
     root.querySelectorAll<HTMLElement>('[data-rebind]').forEach(btn => {

@@ -1516,6 +1516,10 @@ export class World {
   /** ONE-SHOT: the Oracle-stone dwell (same idiom). */
   oracleDwellRequested = false;
   private oracleGate = new Dwell();
+  /** GEAR pickup style, mirrored from Settings each frame by main.ts (the
+   *  World can't import UI/settings): true = walk-over hoover like gems;
+   *  false = the deliberate pickup keybind only. */
+  gearVacuum = true;
   /** ONE-SHOT: dwelling by the quartermaster with FRESH vocation chains on offer
    *  asks the main loop to open the CHOICE menu (same flag indirection as the
    *  Caravanner — a subclass pick must never dwell-auto-accept at random). */
@@ -18198,9 +18202,23 @@ export class World {
         const dropper = this.seats.find(s => s.id === drop.droppedBy);
         if (!dropper || dist(dropper.actor.pos, drop.pos) > dropper.actor.radius + 22) drop.dropperCleared = true;
       }
-      // GEAR is a DELIBERATE pickup (pickup key / panel) — never vacuumed.
-      if (drop.item.kind === 'gear') continue;
       const exclude = drop.droppedBy && !drop.dropperCleared ? drop.droppedBy : undefined;
+      // GEAR: vacuum mode (default) hoovers it like a gem — into the grid if
+      // it fits, else it stays lying with a throttled note. Key mode makes it
+      // a deliberate press (pickupNearestGear); the key works in both modes.
+      if (drop.item.kind === 'gear') {
+        if (!this.gearVacuum) continue;
+        const seat = this.pickupSeat(drop.pos, 22, exclude);
+        if (!seat) continue;
+        if (!autoPlace(seat.meta.items, drop.item.item)) {
+          this.failNote(seat.actor, 'bagfull', 'inventory full');
+          continue;
+        }
+        this.text(seat.actor.pos, drop.item.item.name, ITEM_RARITIES[drop.item.item.rarity].color, 13);
+        this.markMetaDirty(seat);
+        this.drops.splice(i, 1);
+        continue;
+      }
       const seat = this.pickupSeat(drop.pos, 22, exclude);
       if (!seat) continue;
       const item = drop.item;

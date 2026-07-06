@@ -23,11 +23,16 @@ export interface Settings {
    *  build choice: a 1/1-life or 90%-reserved hero would otherwise live
    *  inside a permanent alarm. */
   lowLifePulse: boolean;
+  /** GEAR pickup style: 'vacuum' (default) hoovers ground gear by walking
+   *  over it, exactly like gems; 'key' keeps it a deliberate press (the
+   *  pickup bind). A feel preference — both stay first-class. */
+  gearPickup: 'vacuum' | 'key';
 }
 export interface SettingsSave {
   schemaVersion: number;
   keybinds: Record<string, string>;
   lowLifePulse?: boolean;
+  gearPickup?: 'vacuum' | 'key';
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -69,12 +74,14 @@ export const makeSettings = (): Settings => ({
   schemaVersion: SETTINGS_SCHEMA_VERSION,
   keybinds: { ...DEFAULT_KEYBINDS },
   lowLifePulse: true,
+  gearPickup: 'vacuum',
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
   schemaVersion: s.schemaVersion,
   keybinds: { ...s.keybinds },
   lowLifePulse: s.lowLifePulse,
+  gearPickup: s.gearPickup,
 });
 
 /** null ⇒ schema mismatch → caller wipes. Unknown/partial keybinds fall back
@@ -86,5 +93,6 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
   return {
     schemaVersion: SETTINGS_SCHEMA_VERSION, keybinds,
     lowLifePulse: s.lowLifePulse ?? true,
+    gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
   };
 }
