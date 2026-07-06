@@ -37,7 +37,8 @@ import { CLASSES, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
-import { VOCATIONS, VOCATION_CFG, vocationLedgerKey, vocationRootId, vocationStepKey } from '../data/vocations';
+import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
+import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat } from './stats';
@@ -54,7 +55,7 @@ import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE } from '../data/townBuild';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
-import { QUESTS } from '../quests/defs';
+import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from '../quests/types';
 import { Rng, rollSeed } from '../core/rng';
@@ -876,6 +877,9 @@ const MIREILLE_XP_BUFF_MULT = 0.05; // +5% experience while it lasts
 const MIREILLE_XP_REFRESH = 240;    // only (re)grant when below this (no spam)
 const QUESTGIVER_RADIUS = 150;   // how close to stand to the quartermaster
 const QUESTGIVER_DWELL = 0.9;    // seconds lingering before he hands you a quest
+/** Cadence of the attunement/terraform passes (data/attunements.ts) — terrain
+ *  resonance needs no per-frame precision. */
+const ATTUNE_TICK = 0.3;
 const CAMPFIRE_RADIUS = 80;      // how close to the campfire to rest by it
 const CAMPFIRE_DWELL = 1.1;      // seconds lingering before the wilds refresh
 const CAMPFIRE_COOLDOWN = 4;     // seconds before the fire can be banked again
@@ -1190,6 +1194,16 @@ export class World {
   /** Live in-zone ENCOUNTERS (Breach diamonds + their open fields). Zone-local,
    *  rebuilt each loadZone, never serialized — re-rolls from the run seed. */
   encounters: ActiveEncounter[] = [];
+  /** TERRAFORM growths alive in this zone (data/attunements.ts): each entry
+   *  tracks a doodad this pass PUSHED into `doodads` plus its lifespan. Zone-
+   *  local, never serialized; cleared each loadZone (the doodad list itself is
+   *  rebuilt then). `kind` is the TerraformDef id (per-def per-bearer caps). */
+  private transientDoodads: { d: Doodad; ttl: number; maxTtl: number; owner: Actor; kind: string }[] = [];
+  /** Shared throttle for the attunement/terraform passes. */
+  private attuneTimer = 0;
+  /** SECRET-vocation shrines standing in THIS zone (spirit NPC + which calling).
+   *  Zone-local, re-placed deterministically each load — never serialized. */
+  private vocationSites: { vocId: string; npc: Actor; silentNoted?: boolean }[] = [];
   /** Prior-run death spots present in THIS zone (coord-matched from account.deaths
    *  each loadZone). Reclaimed by dwelling. Distinct from necromancy corpses[]. */
   playerCorpses: PlayerCorpse[] = [];
@@ -2071,6 +2085,8 @@ export class World {
     this.pendingPersists = [];
     this.event = null;
     this.encounters = [];
+    this.transientDoodads = []; // terraform growths are zone-local (the doodad list itself was just rebuilt)
+    this.vocationSites = [];    // secret-vocation shrines re-place per load (deterministic)
     this.wave = 0;
     this.waveTimer = 3;
     this.waveActive = false;
@@ -2508,6 +2524,10 @@ export class World {
     // In-zone ENCOUNTERS (Breach diamonds): rolled per package gate (pressure +
     // start level), so they begin appearing once a feature is live (Breach at L10).
     this.placeEncounters(def);
+
+    // SECRET VOCATION SITES: a qualifying zone may host a hidden calling's
+    // shrine (deterministic per zone + run seed) — see data/vocations.ts.
+    this.placeVocationSites(def);
 
     // CORPSE RUN: spawn any prior-run death whose MAP COORDINATE matches this
     // zone (static zones also exact-match on id). Coordinate-first, so the
@@ -5360,6 +5380,93 @@ export class World {
     }
   }
 
+  // --- ATTUNEMENT / TERRAFORM framework (data/attunements.ts) -----------------
+  //  The inverse coupling of doodad effects: there the TERRAIN acts on actors;
+  //  here an ACTOR's investment acts through the terrain. Both passes are
+  //  throttled to ATTUNE_TICK and iterate only living actors; a zero stat
+  //  short-circuits, so the passes are ~free until something invests.
+
+  /** Standing near a resonant doodad kind long enough applies (and then keeps
+   *  refreshing) the attunement's status — its own short duration is the
+   *  linger once the bearer walks away. Progress lives on the actor and
+   *  decays instantly out of range. */
+  private updateAttunements(dt: number): void {
+    this.attuneTimer -= dt;
+    if (this.attuneTimer > 0) return;
+    const step = ATTUNE_TICK - this.attuneTimer + dt; // elapsed since last pass ran
+    this.attuneTimer = ATTUNE_TICK;
+    for (const a of this.actors) {
+      if (a.dead) continue;
+      for (const def of ATTUNEMENT_LIST) {
+        if (a.sheet.get(attuneStat(def.id)) <= 0) continue;
+        // One-bucket candidate set is complete because def.radius ≤ queryPad
+        // (validated at boot) — never a full doodad scan.
+        let near = false;
+        for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
+          if (!def.kinds.includes(d.kind)) continue;
+          const dx = a.pos.x - d.pos.x, dy = a.pos.y - d.pos.y;
+          const reach = def.radius + d.radius;
+          if (dx * dx + dy * dy <= reach * reach) { near = true; break; }
+        }
+        const prog = a.attuneProgress ?? (a.attuneProgress = {});
+        if (!near) { prog[def.id] = 0; continue; }
+        prog[def.id] = (prog[def.id] ?? 0) + step;
+        if (prog[def.id] >= def.attuneTime) {
+          a.applyStatus(def.status, 0, 1, def.label); // re-apply = refresh the linger
+        }
+      }
+    }
+  }
+
+  /** Bearers of a terraform stat GROW transient doodads nearby on the def's
+   *  cadence (stat value multiplies the rate). Growths are real doodads —
+   *  pushed into the zone list (the spatial index rebuilds lazily off the
+   *  length change), wilting via `wilt` until this pass releases them. */
+  private updateTerraforms(dt: number): void {
+    // Age every growth each pass (cheap: the list is tiny and zone-local).
+    if (this.transientDoodads.length) {
+      let expired = false;
+      for (const t of this.transientDoodads) {
+        t.ttl -= dt;
+        t.d.wilt = clamp(1 - t.ttl / t.maxTtl, 0, 1);
+        if (t.ttl <= 0) expired = true;
+      }
+      if (expired) {
+        const dead = new Set(this.transientDoodads.filter(t => t.ttl <= 0).map(t => t.d));
+        this.transientDoodads = this.transientDoodads.filter(t => t.ttl > 0);
+        this.doodads = this.doodads.filter(d => !dead.has(d)); // length change → index re-syncs
+      }
+    }
+    for (const a of this.actors) {
+      if (a.dead) continue;
+      for (const def of TERRAFORM_LIST) {
+        const rate = a.sheet.get(terraformStat(def.id));
+        if (rate <= 0) continue;
+        const cds = a.terraformCd ?? (a.terraformCd = {});
+        cds[def.id] = (cds[def.id] ?? def.interval * 0.4) - dt * rate; // first growth arrives fast
+        if (cds[def.id] > 0) continue;
+        cds[def.id] = def.interval;
+        // Per-bearer cap: release the OLDEST growth early (fast-wilt, not pop).
+        const mine = this.transientDoodads.filter(t => t.owner === a && t.kind === def.id);
+        if (mine.length >= def.maxAlive) {
+          const oldest = mine.reduce((m, t) => (t.ttl < m.ttl ? t : m));
+          oldest.ttl = Math.min(oldest.ttl, 0.8);
+        }
+        const ang = rand(0, Math.PI * 2);
+        const r = rand(def.radius[0], def.radius[1]);
+        const at = this.findFreeSpot(
+          vec(a.pos.x + Math.cos(ang) * r, a.pos.y + Math.sin(ang) * r), def.size[1]);
+        const d: Doodad = {
+          pos: at, radius: rand(def.size[0], def.size[1]),
+          kind: def.doodadKind, rot: rand(0, Math.PI * 2), wilt: 0,
+        };
+        this.doodads.push(d);
+        const life = rand(def.ttl[0], def.ttl[1]);
+        this.transientDoodads.push({ d, ttl: life, maxTtl: life, owner: a, kind: def.id });
+      }
+    }
+  }
+
   /** Does an actor match a doodad effect's target side? 'ally' = a `faction` member;
    *  'opponent' (default) = the player or an enemy NOT of the faction (never its kin).
    *  Shared by every effect so a new one (the Thicket-heal) reuses the scan. */
@@ -7648,6 +7755,16 @@ export class World {
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS) ?? null;
   }
 
+  /** ANY of these giver defIds standing near the player (quests may list
+   *  several — a secret chain's field shrine plus the quartermaster). */
+  private giverPresent(g: string | string[]): Actor | null {
+    for (const id of Array.isArray(g) ? g : [g]) {
+      const a = this.getQuestGiver(id);
+      if (a) return a;
+    }
+    return null;
+  }
+
   /** World-map FOG POLICY — the single seam the map renderer consults to decide
    *  whether a zone is shown. GENTLE for now: the whole charted graph is on the
    *  map (today's behavior), and a quest's target is implicitly covered (it's
@@ -7664,9 +7781,16 @@ export class World {
   /** Is the player by the quartermaster? (Renderer prompt box.) */
   nearQuestGiver(): boolean { return this.getQuestGiver() !== null; }
 
-  /** Prompt text above the quartermaster while the player is near, or null. */
+  /** Is the player near ANY quest-giving NPC (quartermaster, a secret
+   *  vocation's shrine spirit, future field boards)? Registry-derived. */
+  nearAnyQuestGiver(): boolean {
+    return this.actors.some(a => !a.dead && a.defId && QUEST_GIVER_IDS.has(a.defId)
+      && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS);
+  }
+
+  /** Prompt text above a nearby quest giver, or null. */
   questGiverPrompt(): string | null {
-    if (this.getQuestGiver() === null) return null;
+    if (!this.nearAnyQuestGiver()) return null;
     if (this.pendingTurnIns().length) return 'Linger — a bounty is yours to claim.';
     if (this.nextAcceptableQuest()) return 'Linger, and I have work for you…';
     if (this.vocationChoiceOffers().length) return 'Linger — a CALLING awaits you.';
@@ -7680,7 +7804,7 @@ export class World {
     return this.activeQuests
       .filter(e => {
         const q = QUESTS[e.questId];
-        return e.fieldDone && q?.turnIn && this.getQuestGiver(q.turnIn.giver) !== null;
+        return e.fieldDone && q?.turnIn && this.giverPresent(q.turnIn.giver) !== null;
       })
       .sort((a, b) => (QUESTS[a.questId]?.offerAtLevel ?? 0) - (QUESTS[b.questId]?.offerAtLevel ?? 0));
   }
@@ -7716,7 +7840,7 @@ export class World {
       if (this.completedQuests.has(q.id)) return false;
       if (this.activeQuests.some(e => e.questId === q.id)) return false;
       if (this.player.level < q.offerAtLevel) return false;
-      if (this.getQuestGiver(q.giver) === null) return false; // its offering NPC must be present
+      if (this.giverPresent(q.giver) === null) return false; // one of its offering NPCs must be present
       if (q.requiresLedger
         && (this.ledger[q.requiresLedger] ?? 0) < 1
         && (this.account.ledger[q.requiresLedger] ?? 0) < 1) return false;
@@ -7801,6 +7925,7 @@ export class World {
   vocationMenuOffers(): {
     questId: string; vocationId: string; name: string; blurb: string; color: string;
     className: string; ownClass: boolean; steps: number; offerLabel: string;
+    secret: boolean; flavor?: string;
   }[] {
     return this.vocationChoiceOffers().map(q => {
       const v = VOCATIONS[q.vocation!];
@@ -7809,6 +7934,7 @@ export class World {
         className: CLASSES.find(c => c.id === v.classId)?.name ?? v.classId,
         ownClass: v.classId === this.meta.classDef.id,
         steps: v.quest.steps.length, offerLabel: q.offerLabel,
+        secret: v.secret !== undefined, flavor: v.secret?.offerFlavor,
       };
     });
   }
@@ -7841,6 +7967,107 @@ export class World {
     return true;
   }
 
+  // ---------------------------------------------- secret vocation sites ------
+  //  A SECRET vocation's chain is never posted in town: its SITE (a shrine
+  //  spirit + dressing) seeds itself into qualifying zones, deterministically
+  //  per zone + run seed. Walking into its aura RECEIVES the calling (a run-
+  //  ledger key the chain's gates require) — then the ordinary giver-dwell /
+  //  choice-menu machinery takes over, because the spirit IS a quest giver.
+
+  /** Does this zone qualify to host `filter`? Axes AND; within an axis any id
+   *  matches. Registry-resolved (biomes' patron factions, the LIVE territory
+   *  sim) — never a hardcoded zone list. */
+  private zoneMatchesSiteFilter(def: ZoneDef, filter: VocationSiteFilter): boolean {
+    if (def.objective.kind === 'safe') return false; // never in sanctuaries
+    if (filter.minLevel !== undefined && def.level < filter.minLevel) return false;
+    if (filter.biomes && !(def.biome && filter.biomes.includes(def.biome))) return false;
+    if (filter.patronFactions) {
+      const pf = def.biome ? patronFaction(def.biome) : null;
+      if (!pf || !filter.patronFactions.includes(pf)) return false;
+    }
+    if (filter.controllingFactions) {
+      const own = this.sim.faction.owner(def.id);
+      if (!own.faction || !own.owned || !filter.controllingFactions.includes(own.faction)) return false;
+    }
+    if (filter.layouts && !(def.layoutType && filter.layouts.includes(def.layoutType))) return false;
+    return true;
+  }
+
+  /** Roll + place every secret vocation's site for this zone (loadZone tail).
+   *  WHETHER is deterministic per (run seed, vocation, zone id); WHERE is a
+   *  seeded spot in the zone's midlands, nudged onto clear ground. */
+  private placeVocationSites(def: ZoneDef): void {
+    for (const v of Object.values(VOCATIONS)) {
+      if (!v.secret) continue;
+      if (!this.zoneMatchesSiteFilter(def, v.secret.site.filter)) continue;
+      const rng = new Rng((this.manifest.seed ^ hashStr(`vocsite_${v.id}_${def.id}`)) >>> 0);
+      if (rng.range(0, 1) >= v.secret.site.chance) continue;
+      this.spawnVocationSite(v.id, vec(
+        this.arena.w * rng.range(0.3, 0.7),
+        this.arena.h * rng.range(0.3, 0.7)), rng);
+    }
+  }
+
+  /** Materialize one site: the shrine spirit (an ordinary passive giver NPC)
+   *  plus its grown dressing. Shared by the seeded roll and the dev cheat. */
+  private spawnVocationSite(vocId: string, at: Vec2, rng: Rng): boolean {
+    const v = VOCATIONS[vocId];
+    if (!v?.secret) return false;
+    const npcDef = MONSTERS[v.secret.site.npc];
+    if (!npcDef) return false;
+    const npc = this.createMonster(v.secret.site.npc, Math.max(1, this.zone.level), 'enemy');
+    npc.pos = this.findFreeSpot(at, npc.radius);
+    this.actors.push(npc);
+    this.vocationSites.push({ vocId, npc });
+    for (const dress of v.secret.site.doodads ?? []) {
+      for (let i = 0; i < dress.count; i++) {
+        const a = rng.range(0, Math.PI * 2);
+        const r = rng.range(dress.radius * 0.5, dress.radius);
+        const p = this.findFreeSpot(
+          vec(npc.pos.x + Math.cos(a) * r, npc.pos.y + Math.sin(a) * r), dress.size[1]);
+        this.doodads.push({
+          pos: p, radius: rng.range(dress.size[0], dress.size[1]),
+          kind: dress.kind, rot: rng.range(0, Math.PI * 2),
+        });
+      }
+    }
+    return true;
+  }
+
+  /** Proximity DISCOVERY: walking into a site's aura RECEIVES the calling —
+   *  for a qualifying character — via the run-ledger discovery key the chain's
+   *  gates require. A non-qualifying visitor gets one quiet line instead. */
+  private updateVocationSites(): void {
+    for (const site of this.vocationSites) {
+      const v = VOCATIONS[site.vocId];
+      if (!v?.secret || site.npc.dead) continue;
+      if ((this.ledger[vocationDiscoveryKey(site.vocId)] ?? 0) >= 1) continue;
+      if (dist(site.npc.pos, this.player.pos) > VOCATION_CFG.discoveryRadius) continue;
+      const unlocked = (this.account.ledger[vocationLedgerKey(site.vocId)] ?? 0) >= 1;
+      const heard = unlocked || !(v.secret.classLockedDiscovery ?? true)
+        || this.meta.classDef.id === v.classId;
+      if (!heard) {
+        if (!site.silentNoted) {
+          site.silentNoted = true;
+          this.text(vec(site.npc.pos.x, site.npc.pos.y - 40),
+            'It does not stir for you.', '#8a8678', 13);
+        }
+        continue;
+      }
+      bumpLedger(this.ledger, vocationDiscoveryKey(site.vocId));
+      this.text(vec(site.npc.pos.x, site.npc.pos.y - 44),
+        v.secret.discoveryText ?? `A calling takes notice of you. (${v.name})`, v.color, 16);
+      this.markMetaDirty(this.localSeat);
+    }
+  }
+
+  /** Dev cheat: force a secret vocation's site into the CURRENT zone. */
+  devForceVocationSite(vocId: string): boolean {
+    const rng = new Rng((hashStr(`dev_vocsite_${vocId}_${this.zone.id}`)) >>> 0);
+    return this.spawnVocationSite(vocId,
+      vec(this.player.pos.x + 140, this.player.pos.y), rng);
+  }
+
   /** The quest journal for the map's Quests tab: active (in-progress / ready-to-claim)
    *  + completed this run. Read-only view; labels/categories from the QuestDefs. */
   questLog(): {
@@ -7866,6 +8093,9 @@ export class World {
    *  explored graph via placeZoneAt; the player then travels there. */
   private acceptQuest(q: QuestDef): void {
     const town = this.zoneMap[START_ZONE];
+    // ANCHOR 'accept': the projection starts from the zone the player STOOD IN
+    // when accepting (a field-given chain unfolds around its site), else town.
+    const from = q.zone.anchor === 'accept' ? (this.zoneMap[this.zone.id] ?? town) : town;
     const questSeed = (this.manifest.seed ^ hashStr(q.id)) >>> 0;
     // BAND PLACEMENT: the location is dictated by the LEVEL field — the zone lands where
     // the radial difficulty ≈ its level, so it sits in its proper band surrounded by
@@ -7873,7 +8103,7 @@ export class World {
     // step from town). Else the classic directional projection.
     const target = (q.zone.bandPlacement && typeof q.zone.level === 'number')
       ? this.findBandCoord(q.zone.level, questSeed)
-      : projectCoord(town.map, q.zone.direction, q.zone.distance ?? 1);
+      : projectCoord(from.map, q.zone.direction, q.zone.distance ?? 1);
     const anchor = nearestNode(this.zoneMap, target) ?? this.zone;
     // 'character' quests now obey the radial field at the quest's coord (the standard
     // ruleset) instead of flat-locking to the player's level; an authored number wins.
@@ -7903,7 +8133,7 @@ export class World {
     this.activeQuests.push({ questId: q.id, zoneId, fieldDone: false });
     bumpLedger(this.ledger, 'quests_accepted');
     // Name the bearing from the actual placement (band placement has no fixed compass).
-    const ddx = target.x - town.map.x, ddy = target.y - town.map.y;
+    const ddx = target.x - from.map.x, ddy = target.y - from.map.y;
     const dirName = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 'east' : 'west') : (ddy > 0 ? 'south' : 'north');
     this.text(vec(this.player.pos.x, this.player.pos.y - 60),
       `Quest: ${q.offerLabel} — head ${dirName}.`, '#c8a8e8', 16);
@@ -14588,6 +14818,7 @@ export class World {
     this.updateSail(dt);
     // The quartermaster hands you a hunt for lingering (auto-accept on dwell).
     this.updateQuestGiver(dt);
+    this.updateVocationSites();
     // The Bonewright hands out amalgamation hunts + part picks (dwell-driven).
     this.updateAmalgamation(dt);
     // The Delver: dwell the shaft to descend; the abyss tick runs the dark + streaming.
@@ -14820,6 +15051,8 @@ export class World {
     this.updateHoldfastSite();
     this.updateIncursionEvents(dt);
     this.updateDoodadEffects(dt);
+    this.updateAttunements(dt);
+    this.updateTerraforms(dt);
     if (this.event && !this.event.done) this.event.tick(dt);
     this.updateRepeats(dt);
     this.updateAmbushes();

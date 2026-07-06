@@ -155,7 +155,14 @@ export function mountDevGemSpawner(getWorld: () => World): void {
     gateBtn.textContent = `Gate req: ${VOCATION_CFG.requireGateNode ? 'ON' : 'OFF'}`;
     flash(`vocation spending gate ${VOCATION_CFG.requireGateNode ? 'REQUIRES the class start node' : 'open immediately on grant'}`);
   });
-  vocRow.append(vocSel, vocGrant, gateBtn);
+  const siteBtn = cheatBtn('Force Site', () => {
+    const w = runActive();
+    if (!w) { flash('start a run first'); return; }
+    flash(w.devForceVocationSite(vocSel.value)
+      ? `${vocSel.value} site raised beside you — walk to it`
+      : 'not a secret vocation (no site to raise)');
+  });
+  vocRow.append(vocSel, vocGrant, gateBtn, siteBtn);
 
   const spawnSkill = (id: string): void => {
     const w = runActive();

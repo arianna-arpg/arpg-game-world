@@ -11,8 +11,10 @@ import { SUPPORTS } from './supports';
 import { PROCS } from './procs';
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
+import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunements';
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { STAT_DEFS } from '../engine/stats';
+import { STATUS_DEFS } from '../engine/status';
 import { ZONES, type StampSpec, type StructureRoll } from './zones';
 import { TILESETS } from './tilesets';
 import { validatePassiveLayout } from './validatePassiveLayout';
@@ -138,12 +140,49 @@ export function validateContent(): void {
     if (!isle.nameFirst.length || !isle.nameSecond.length) warn(`voyage island ${isle.id}: empty name pool`);
   }
 
+  // ATTUNEMENTS / TERRAFORMS: statuses exist, doodad kinds are ruled, and the
+  // attunement reach honors the spatial index's one-bucket guarantee.
+  for (const at of ATTUNEMENT_LIST) {
+    if (!STATUS_DEFS[at.status]) warn(`attunement ${at.id}: unknown status '${at.status}'`);
+    if (at.radius > MAX_ATTUNE_RADIUS) {
+      warn(`attunement ${at.id}: radius ${at.radius} exceeds the spatial queryPad ${MAX_ATTUNE_RADIUS} (near-checks would MISS doodads)`);
+    }
+    for (const k of at.kinds) {
+      if (!hasDoodadRule(k)) warn(`attunement ${at.id}: doodad kind '${k}' has no registered rule (typo?)`);
+    }
+  }
+  for (const tf of TERRAFORM_LIST) {
+    if (!hasDoodadRule(tf.doodadKind)) warn(`terraform ${tf.id}: doodad kind '${tf.doodadKind}' has no registered rule (typo?)`);
+    if (doodadRuleOf(tf.doodadKind).blocksMove) {
+      warn(`terraform ${tf.id}: grows BLOCKING kind '${tf.doodadKind}' — wilting solids fence the arena; use a ground-overlap kind`);
+    }
+  }
+
   // VOCATIONS: home class exists, tree links resolve locally, the tree fits the
   // star's empty centre, node mods name real stats (STAT_DEFS or a registered
   // proc's generated `proc_<id>` chance), the spending gate resolves to a real
   // node, and every quest step's tileset / boss / spawner / pack ids are live.
+  // SECRET vocations additionally: the site NPC is a real monster, filter axes
+  // name live registries, and dressing kinds are ruled.
+  if (!MONSTERS[VOCATION_CFG.giver]) warn(`vocations: default giver '${VOCATION_CFG.giver}' is not a monster`);
   for (const v of Object.values(VOCATIONS)) {
     if (!CLASSES.some(c => c.id === v.classId)) warn(`vocation ${v.id}: unknown class '${v.classId}'`);
+    if (v.secret) {
+      const s = v.secret.site;
+      if (!MONSTERS[s.npc]) warn(`vocation ${v.id}: site npc '${s.npc}' is not a monster`);
+      for (const b of s.filter.biomes ?? []) {
+        if (!BIOMES[b]) warn(`vocation ${v.id}: site filter names unknown biome '${b}'`);
+      }
+      for (const pf of s.filter.patronFactions ?? []) {
+        if (!Object.values(BIOMES).some(bi => bi.patronFaction === pf)) {
+          warn(`vocation ${v.id}: site filter patron faction '${pf}' patronizes no biome — the site can never place`);
+        }
+      }
+      for (const dr of s.doodads ?? []) {
+        if (!hasDoodadRule(dr.kind)) warn(`vocation ${v.id}: site dressing kind '${dr.kind}' has no doodad rule`);
+      }
+      if (s.chance <= 0) warn(`vocation ${v.id}: site chance ${s.chance} — the calling can never be found`);
+    }
     const gate = vocationGateNodeId(v.id);
     if (gate !== null && !PASSIVE_NODES[gate]) warn(`vocation ${v.id}: gate node '${gate}' is not on the tree`);
     const localIds = new Set<string>(['root']);

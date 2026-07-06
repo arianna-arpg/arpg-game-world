@@ -1049,14 +1049,18 @@ export class UI {
     const rows = offers.length
       ? offers.map(o => `<div class="skill-entry">
           <div class="name" style="color:${esc(o.color)}">${esc(o.name)}
-            <span class="tags">· ${esc(o.className)}'s calling${o.ownClass ? ' (your class)' : ' · unlocked by a past hero'}</span></div>
+            <span class="tags">· ${esc(o.className)}'s calling${o.secret ? ' · a HIDDEN path' : ''}${o.ownClass ? ' (your class)' : o.secret ? '' : ' · unlocked by a past hero'}</span></div>
           <div class="desc">${esc(o.blurb)}</div>
           <div class="desc" style="font-style:italic">A chain of ${o.steps} trials begins: “${esc(o.offerLabel)}”</div>
           <div class="bind-btns"><button data-vocation-quest="${esc(o.questId)}">Undertake</button></div>
         </div>`).join('')
       : `<div class="skill-entry"><div class="desc">No callings are open to you right now.</div></div>`;
+    // A discovered SECRET calling speaks with its own voice; the quartermaster's
+    // patter covers the ordinary chains.
+    const flavor = offers.find(o => o.flavor)?.flavor
+      ?? '"Not work this time, traveller — a VOCATION. Finish its trials and the heart of the star opens to you. One calling per lifetime; choose it well."';
     this.vocationMenu.innerHTML = `<h2>A Calling</h2>`
-      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"Not work this time, traveller — a VOCATION. Finish its trials and the heart of the star opens to you. One calling per lifetime; choose it well."</div>`
+      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">${esc(flavor)}</div>`
       + rows
       + `<div class="desc" style="margin-top:8px;color:#8a8678">Completing a vocation unlocks its trials for EVERY future hero, whatever their class. Vocation points spend only inside its tree${offers.length ? '' : ''} — press P to see the star.</div>`
       + `<div class="bind-btns" style="margin-top:10px"><button data-vocation-close>Not yet</button></div>`;

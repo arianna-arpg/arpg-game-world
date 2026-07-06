@@ -153,6 +153,10 @@ export interface Doodad {
   adorn?: string;
   /** A ticking AREA effect this doodad carries (the doodad-effect framework). */
   effect?: DoodadEffect;
+  /** TRANSIENT growths only (the terraform framework, data/attunements.ts):
+   *  0→1 as the lifespan runs out — the renderer shrinks/fades by it, so the
+   *  growth visibly "wilts and withers away". Absent on permanent terrain. */
+  wilt?: number;
   /** A 'chasm' marked FALL-ABLE (Phase 3): instead of just blocking at its rim, a
    *  move arrested here reports a 'void' collision → the void RegionKind's recovery
    *  (respawn-on-edge + damage). Default (absent) = today's blocking chasm. Per-chasm

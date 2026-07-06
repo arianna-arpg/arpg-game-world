@@ -2497,6 +2497,23 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
+  // THE HEARTWOOD — a secret vocation's shrine spirit (data/vocations.ts:
+  // Greenwarden). Seeds itself into sylvan-patron groves; the same passive+
+  // invulnerable giver shape as the townsfolk, so the whole quest machinery
+  // (dwell offers, turn-ins, prompt box) works in the wild unchanged.
+  heartwood_warden: {
+    id: 'heartwood_warden', name: 'the Heartwood',
+    color: '#4aa85a', shape: 'star', radius: 15,
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+    // Deliberately FACTIONLESS: a faction tag would enrol the shrine in the
+    // territory census / ally-targeted doodad effects. It is neutral scenery;
+    // the sylvan theming lives on the VocationDef that plants it.
+  },
+
   // A point of interest, not a foe: crack it open for a guaranteed gem.
   gem_cache: {
     id: 'gem_cache', name: 'Gem Cache',

@@ -17,6 +17,7 @@ import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { doodadRuleOf, type Doodad } from '../engine/levelgen';
+import { QUEST_GIVER_IDS } from '../quests/defs';
 
 /** View-cull margin beyond a doodad's own radius: canopy crowns, vent rims,
  *  and blob `grow` passes all overdraw past the disc — the pad keeps their
@@ -936,6 +937,33 @@ export class Renderer {
             ctx.fill();
           }
         }
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // Saplings: young transient trees (the terraform framework's growths) — a
+    // slender stem under a small crown, SHRINKING and FADING by `wilt` so each
+    // one visibly withers away. Tinted by the zone's canopy colour.
+    const saplings = byKind('sapling');
+    if (saplings.length) {
+      const crown = theme.tree ?? '#2c4424';
+      for (const d of saplings) {
+        const vigor = 1 - clamp(d.wilt ?? 0, 0, 1);
+        const r = d.radius * (0.45 + 0.55 * vigor);
+        ctx.globalAlpha = 0.25 + 0.65 * vigor;
+        ctx.strokeStyle = '#5a4630';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(d.pos.x, d.pos.y + r * 0.9);
+        ctx.lineTo(d.pos.x, d.pos.y - r * 0.4);
+        ctx.stroke();
+        ctx.fillStyle = crown;
+        ctx.beginPath();
+        ctx.arc(d.pos.x, d.pos.y - r * 0.55, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
       ctx.globalAlpha = 1;
     }
@@ -3048,8 +3076,10 @@ export class Renderer {
       ctx.fillText(msg, x, y - a.radius - 22);
     }
 
-    // The quartermaster posts his offer above his head while you're near.
-    if (a.defId === 'townsfolk_questgiver') {
+    // Any quest-giving NPC posts its offer above its head while you're near —
+    // the id set derives from the QUESTS registry (quartermaster, a secret
+    // vocation's shrine spirit, future field boards), never a hand list.
+    if (a.defId && QUEST_GIVER_IDS.has(a.defId)) {
       const msg = world.questGiverPrompt();
       if (msg) {
         ctx.textAlign = 'center';

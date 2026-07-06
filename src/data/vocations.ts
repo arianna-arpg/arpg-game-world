@@ -56,7 +56,56 @@ export const VOCATION_CFG = {
   treeRadius: 430,
   /** Monster defId of the NPC that offers vocation chains. */
   giver: 'townsfolk_questgiver',
+  /** Coming within this range of a SECRET vocation's site NPC reveals the
+   *  calling (the discovery run-ledger key + flavor line). */
+  discoveryRadius: 150,
 };
+
+/** Which zones may host a secret vocation's site. Axes are ANDed; within an
+ *  axis, any listed id matches. Every axis optional — an empty filter matches
+ *  any combat zone at/above minLevel. */
+export interface VocationSiteFilter {
+  /** ZoneDef.biome ids (e.g. 'grove'). */
+  biomes?: string[];
+  /** Match any biome whose BIOMES patronFaction is listed — "a sylvan-patron
+   *  forest" without enumerating biome ids. */
+  patronFactions?: string[];
+  /** Match zones the LIVE territory sim says these factions currently hold
+   *  (sim.faction.owner) — sites that move with the war. */
+  controllingFactions?: string[];
+  /** ZoneDef.layoutType ids. */
+  layouts?: string[];
+  /** Minimum zone level. */
+  minLevel?: number;
+}
+
+/** A SECRET vocation (the PoE2 Abyssal-Lich shape): never offered in town
+ *  until earned — its chain is DISCOVERED at a site that seeds itself into
+ *  qualifying zones (deterministically per zone + run seed). */
+export interface SecretVocationSpec {
+  site: {
+    /** The site's giver NPC (a passive, invulnerable spirit — monsters.ts). */
+    npc: string;
+    /** Zones that may host the site. */
+    filter: VocationSiteFilter;
+    /** Seeded per-zone chance a qualifying zone hosts the site. */
+    chance: number;
+    /** Shrine dressing grown around the NPC at spawn (visual, per-load). */
+    doodads?: { kind: string; count: number; radius: number; size: [number, number] }[];
+  };
+  /** Pre-unlock, only the HOME CLASS receives the calling (default true) —
+   *  a Warrior finding the heartwood hears nothing. */
+  classLockedDiscovery?: boolean;
+  /** Once the ACCOUNT has unlocked it: 'menu' (default) = future characters
+   *  are offered it by the quartermaster like any vocation; 'site' = it must
+   *  still be FOUND in the world every run (the purist variant). */
+  unlockedOffer?: 'menu' | 'site';
+  /** Flavor line the choice menu leads with when this calling is offered at
+   *  its site (replaces the quartermaster's patter). */
+  offerFlavor?: string;
+  /** Flavor line shown once on discovery. */
+  discoveryText?: string;
+}
 
 /** One node of a vocation's mini-tree, in LOCAL coordinates around (0,0).
  *  The root node is generated (id 'root', free, allocated on grant) — authored
@@ -101,6 +150,9 @@ export interface VocationDef {
   classId: string;
   /** Override the spending-gate node (defaults to the home class's startNode). */
   gateNode?: string;
+  /** A SECRET vocation: hidden until its site is discovered in the world —
+   *  see SecretVocationSpec. Absent = an ordinary quartermaster chain. */
+  secret?: SecretVocationSpec;
   tree: VocationNodeDef[];
   quest: {
     /** Character level the chain surfaces at (default VOCATION_CFG.offerAtLevel). */
@@ -466,6 +518,101 @@ const HIEROPHANT: VocationDef = {
   },
 };
 
+// --- the SECRET vocations -------------------------------------------------------
+
+/** GREENWARDEN — the Ranger's hidden calling (the Abyssal-Lich shape): never
+ *  posted in town. A heartwood site seeds itself into sylvan-patron groves;
+ *  a level-28+ RANGER who finds it receives the calling. Its nodes lean on
+ *  the attunement/terraform primitives (data/attunements.ts): commune with
+ *  living wood for rapid regeneration, and GROW your own wilting saplings so
+ *  the communion travels with you — a walking pocket of forest. */
+const GREENWARDEN_LAYOUT = fan(330); // spine points at dex_start, like its public sibling
+const GREENWARDEN: VocationDef = {
+  id: 'greenwarden', name: 'Greenwarden',
+  blurb: 'The forest keeps its own, and now it keeps you. Roots close your wounds, seeds follow your steps, and the green goes wherever you go.',
+  color: '#4aa85a',
+  classId: 'ranger',
+  secret: {
+    site: {
+      npc: 'heartwood_warden',
+      filter: { patronFactions: ['sylvan'], minLevel: 24 },
+      chance: 0.45,
+      doodads: [
+        { kind: 'tree', count: 4, radius: 95, size: [16, 22] },
+        { kind: 'sapling', count: 5, radius: 55, size: [7, 10] },
+      ],
+    },
+    classLockedDiscovery: true,
+    unlockedOffer: 'menu',
+    offerFlavor: '"You came following wounds and left them living," the Heartwood murmurs. "Stay a while, warden-to-be. The green has trials for you."',
+    discoveryText: 'The heartwood stirs — something ancient takes notice of you.',
+  },
+  tree: [
+    { id: 's1', name: 'Rootsense', description: '15% increased evasion; 4% increased movement speed', kind: 'small', ...GREENWARDEN_LAYOUT.s1, mods: [mod('evasion', 'increased', 0.15), mod('moveSpeed', 'increased', 0.04)], links: ['root'] },
+    { id: 's2', name: 'Thorn-Calloused', description: '+10 thorns; 10% increased armor', kind: 'small', ...GREENWARDEN_LAYOUT.s2, mods: [mod('thorns', 'flat', 10), mod('armor', 'increased', 0.1)], links: ['root'] },
+    { id: 's3', name: 'Sap-Blooded', description: '+2 life regeneration per second', kind: 'small', ...GREENWARDEN_LAYOUT.s3, mods: [mod('lifeRegen', 'flat', 2)], links: ['root'] },
+    { id: 'n1', name: 'Verdant Communion', description: 'Linger near living wood (trees, thickets, your own saplings) and the green knits you: rapid life regeneration while you commune', kind: 'notable', ...GREENWARDEN_LAYOUT.n1, mods: [mod('attune_verdant_communion', 'flat', 1)], links: ['s1'] },
+    { id: 'n2', name: 'Seedbearer', description: 'Living saplings spring up in your footsteps and wilt away behind you — the forest travels with its warden', kind: 'notable', ...GREENWARDEN_LAYOUT.n2, mods: [mod('terraform_sapling_ring', 'flat', 1)], links: ['s1', 's3'] },
+    { id: 'n3', name: 'Briar Pact', description: 'Projectiles have 15% chance to Root; 25% increased damage against Rooted enemies', kind: 'notable', ...GREENWARDEN_LAYOUT.n3, mods: [mod('apply_rooted', 'flat', 0.15, ['projectile']), mod('damageVs_rooted', 'flat', 0.25)], links: ['s3', 's2'] },
+    { id: 'n4', name: 'Wildveined', description: 'Projectiles: 20% chance to Poison; 15% increased ailment magnitude', kind: 'notable', ...GREENWARDEN_LAYOUT.n4, mods: [mod('apply_poison', 'flat', 0.2, ['projectile']), mod('statusMagnitude', 'increased', 0.15, ['projectile'])], links: ['s2'] },
+    { id: 'k1', name: 'Heart of the Forest', description: 'Your saplings spring up twice as fast; +2% of maximum life regenerated per second; 10% more projectile damage', kind: 'keystone', ...GREENWARDEN_LAYOUT.k1, mods: [mod('terraform_sapling_ring', 'flat', 1), mod('lifeRegenPct', 'flat', 0.02), mod('damage', 'more', 0.1, ['projectile'])], links: ['n2', 'n3'] },
+  ],
+  quest: {
+    offerAtLevel: 28,
+    steps: [
+      {
+        offerLabel: 'Drive the gnoll packs from the grove',
+        zone: {
+          tileset: 'deepwood', direction: 'n', distance: 1, level: 'character', anchor: 'accept',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'gnoll_prowler', weight: 3 }, { id: 'gnoll_butcher', weight: 2 },
+              { id: 'gnoll_longshot', weight: 2 }, { id: 'gnoll_howler', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 800, gems: 3,
+        turnInPrompt: 'The packs are broken — return to the heartwood.',
+      },
+      {
+        offerLabel: 'Cleanse the sporebound thicket',
+        zone: {
+          tileset: 'mycelia', direction: 'n', distance: 2, level: 'character', anchor: 'accept',
+          objective: { kind: 'clear' },
+          packsOverride: {
+            count: [6, 8], size: [3, 5], table: [
+              { id: 'fungal_sporeling', weight: 3 }, { id: 'fungal_spitter', weight: 2 },
+              { id: 'fungal_brute', weight: 2 }, { id: 'fungal_tender', weight: 1 },
+            ],
+          },
+          forceWaypoint: true,
+        },
+        xp: 1200, gems: 4,
+        turnInPrompt: 'The rot is cut out — return to the heartwood.',
+      },
+      {
+        offerLabel: 'Slay the Broodmother gnawing the roots',
+        zone: {
+          tileset: 'jungle', direction: 'n', distance: 2, level: 'character', anchor: 'accept',
+          objective: { kind: 'boss', id: 'broodmother', levelBonus: 1, promote: { rarity: 'crowned' } },
+          packsOverride: {
+            count: [5, 7], size: [3, 5], table: [
+              { id: 'spiderling', weight: 4 }, { id: 'spider_nest', weight: 1 },
+              { id: 'thicket_stalker', weight: 2 },
+            ],
+          },
+          forceWaypoint: true,
+          floating: true,
+        },
+        xp: 2000, gems: 6,
+        turnInPrompt: 'The roots are safe — return, and be named Greenwarden.',
+      },
+    ],
+  },
+};
+
 // --- registry -----------------------------------------------------------------
 
 /** Every vocation, keyed by id. Adding one = one def above + one entry here. */
@@ -475,6 +622,7 @@ export const VOCATIONS: Record<string, VocationDef> = {
   [WILDSTALKER.id]: WILDSTALKER,
   [ARCHMAGE.id]: ARCHMAGE,
   [HIEROPHANT.id]: HIEROPHANT,
+  [GREENWARDEN.id]: GREENWARDEN,
 };
 
 export const VOCATION_LIST: VocationDef[] = Object.values(VOCATIONS);
@@ -494,6 +642,15 @@ export function vocationLedgerKey(vocId: string): string {
  *  per-character even though these keys harmlessly merge to the account. */
 export function vocationStepKey(vocId: string, step: number): string {
   return `voc_${vocId}_step_${step}`;
+}
+
+/** The RUN-ledger key a SECRET vocation's site sets when the calling is
+ *  received (walked into its discovery radius by a qualifying character).
+ *  Pre-unlock, the chain's gates require it — the quest exists only for those
+ *  who have FOUND it. Run-scoped in the gates (re-find it each run) though it
+ *  merges to the account like everything (harmless; gates read the run copy). */
+export function vocationDiscoveryKey(vocId: string): string {
+  return `vocation_discovered_${vocId}`;
 }
 
 /** Namespaced PASSIVE_NODES id for a vocation-tree node. */

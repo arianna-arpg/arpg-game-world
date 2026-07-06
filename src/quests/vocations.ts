@@ -24,7 +24,7 @@
 // ---------------------------------------------------------------------------
 
 import {
-  VOCATION_CFG, VOCATION_LIST, vocationLedgerKey, vocationStepKey,
+  VOCATION_CFG, VOCATION_LIST, vocationDiscoveryKey, vocationLedgerKey, vocationStepKey,
   vocationUnlockedOnAccount, type VocationDef,
 } from '../data/vocations';
 import type { QuestDef, QuestGateCtx } from './types';
@@ -40,8 +40,24 @@ function stepGate(v: VocationDef, stepIndex: number): (ctx: QuestGateCtx) => boo
     if (ctx.vocations.includes(v.id)) return false;
     // Per-character cap: a fully-vocationed character is offered no more chains.
     if (ctx.vocations.length >= VOCATION_CFG.maxPerCharacter) return false;
-    // Own-class chains are always offered; foreign chains need the account unlock.
-    if (ctx.classId !== v.classId && !vocationUnlockedOnAccount(ctx.accountLedger, v.id)) return false;
+    const unlocked = vocationUnlockedOnAccount(ctx.accountLedger, v.id);
+    if (v.secret) {
+      // SECRET chains exist only for those who have FOUND them. Pre-unlock:
+      // the calling must be received THIS RUN (the site's discovery key) and —
+      // with classLockedDiscovery (default) — only the home class hears it.
+      // Post-unlock: 'menu' behaves like any earned vocation; 'site' still
+      // demands the pilgrimage every run.
+      const discovered = (ctx.runLedger[vocationDiscoveryKey(v.id)] ?? 0) >= 1;
+      if (!unlocked) {
+        if (!discovered) return false;
+        if ((v.secret.classLockedDiscovery ?? true) && ctx.classId !== v.classId) return false;
+        return stepIndex === 0 || (ctx.runLedger[vocationStepKey(v.id, stepIndex)] ?? 0) >= 1;
+      }
+      if ((v.secret.unlockedOffer ?? 'menu') === 'site' && !discovered) return false;
+    } else if (ctx.classId !== v.classId && !unlocked) {
+      // Ordinary chains: own class always; foreign classes need the unlock.
+      return false;
+    }
     // Steps 2+ require the PREVIOUS step completed THIS RUN (per-character chains).
     if (stepIndex > 0 && (ctx.runLedger[vocationStepKey(v.id, stepIndex)] ?? 0) < 1) return false;
     return true;
@@ -52,9 +68,13 @@ function stepQuest(v: VocationDef, stepIndex: number): QuestDef {
   const step = v.quest.steps[stepIndex];
   const last = stepIndex === v.quest.steps.length - 1;
   const stepNo = stepIndex + 1;
+  // A secret chain is offered (and turned in) at its SITE first, with the
+  // quartermaster as the home fallback — the discovery gate keeps the town
+  // silent until the calling has actually been received.
+  const givers = v.secret ? [v.secret.site.npc, VOCATION_CFG.giver] : VOCATION_CFG.giver;
   return {
     id: vocationStepQuestId(v.id, stepNo),
-    giver: VOCATION_CFG.giver,
+    giver: givers,
     offerLabel: step.offerLabel,
     category: 'vocation',
     vocation: v.id,
@@ -71,7 +91,7 @@ function stepQuest(v: VocationDef, stepIndex: number): QuestDef {
       ledger: { [vocationStepKey(v.id, stepNo)]: 1, quests_completed: 1 },
     },
     turnIn: {
-      giver: VOCATION_CFG.giver,
+      giver: givers,
       prompt: step.turnInPrompt
         ?? `The deed is done — return to the quartermaster (${v.name}, step ${stepNo}).`,
     },

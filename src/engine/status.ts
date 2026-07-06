@@ -315,6 +315,18 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('moveSpeed', 'increased', 0.15),
     ],
   },
+  // VERDANT COMMUNION — the tree-attunement boon (data/attunements.ts): while
+  // rooted near living wood the flesh knits fast. Applied and refreshed by the
+  // attunement tick while in range; the short duration IS the linger — step
+  // away from the green and it wilts off in moments.
+  verdant_communion: {
+    label: 'Verdant Communion', color: '#6ac860', duration: 1.6,
+    beneficial: true,
+    mods: [
+      mod('lifeRegenPct', 'flat', 0.05),
+      mod('manaRegen', 'increased', 0.25),
+    ],
+  },
   // PHASING: the bearer has no BODY for a while — walks through the pack
   // and the pack through it (crowd separation skips phasing actors; hits
   // and targeting are untouched). One stat, so movement skills, potions,

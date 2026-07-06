@@ -51,6 +51,11 @@ export interface QuestZoneSpec {
   direction: 'n' | 's' | 'e' | 'w';
   /** Cardinal steps from town (default 1). */
   distance?: number;
+  /** Where the directional projection starts: 'town' (default — today's
+   *  behavior) or 'accept' — the zone the player STOOD IN when accepting, so
+   *  a field-given chain (a secret vocation's heartwood) unfolds around its
+   *  discovery site instead of teleporting home. */
+  anchor?: 'town' | 'accept';
   /** 'character' = the player's current level when accepted; or a fixed level. */
   level: 'character' | number;
   objective: ObjectiveSpec;
@@ -115,16 +120,20 @@ export interface QuestGateCtx {
  *  home. Absent = the reward pays the moment the zone clears (today's behavior).
  *  A quest/giver concern, kept off the zone's terrain ObjectiveSpec by design. */
 export interface QuestTurnIn {
-  /** Monster defId of the NPC the player returns to (e.g. townsfolk_questgiver). */
-  giver: string;
+  /** Monster defId(s) of the NPC the player returns to — ANY listed giver
+   *  present pays out (a secret chain turns in at its field shrine OR home
+   *  at the quartermaster). */
+  giver: string | string[];
   /** Bulletin shown when the field objective completes ("Return to …"). */
   prompt?: string;
 }
 
 export interface QuestDef {
   id: string;
-  /** Monster defId of the giver NPC that offers this (e.g. townsfolk_questgiver). */
-  giver: string;
+  /** Monster defId(s) of the giver NPC that offers this — ANY listed giver
+   *  present may offer (e.g. a secret chain's field shrine plus, once the
+   *  discovery gate passes, the quartermaster back home). */
+  giver: string | string[];
   offerLabel: string;
   /** Quest kind → the active-cap it counts against (default 'campaign'). */
   category?: QuestCategory;

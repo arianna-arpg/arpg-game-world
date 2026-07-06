@@ -119,3 +119,13 @@ export const QUESTS: Record<string, QuestDef> = {
   // per vocation; class-thematic zones; the final step grants the vocation).
   ...Object.fromEntries(vocationQuestDefs().map(q => [q.id, q])),
 };
+
+/** Every giver defId any quest references (offer or turn-in) — the NPCs that
+ *  earn a prompt box and dwell attention. Derived, never hand-listed: a new
+ *  giver (a secret vocation's shrine spirit, a future bounty board) joins the
+ *  moment a QuestDef names it. */
+export const QUEST_GIVER_IDS: ReadonlySet<string> = new Set(
+  Object.values(QUESTS).flatMap(q => [
+    ...(Array.isArray(q.giver) ? q.giver : [q.giver]),
+    ...(q.turnIn ? (Array.isArray(q.turnIn.giver) ? q.turnIn.giver : [q.turnIn.giver]) : []),
+  ]));

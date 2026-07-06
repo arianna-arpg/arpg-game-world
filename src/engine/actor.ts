@@ -689,6 +689,11 @@ export class Actor {
   /** Undying Loyalty: seconds of unlife granted after a lethal blow. */
   undyingTime = 0;
   undyingSpent = false;
+  /** ATTUNEMENT progress per DoodadAttunementDef id (seconds stood near a
+   *  resonant doodad; resets out of range). Transient — never serialized. */
+  attuneProgress?: Record<string, number>;
+  /** TERRAFORM growth countdowns per TerraformDef id. Transient. */
+  terraformCd?: Record<string, number>;
 
   dead = false;
 
