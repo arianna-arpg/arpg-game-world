@@ -1,4 +1,4 @@
-# ARPG Test Game
+# Hollow Wake
 
 A top-down action RPG prototype built around one idea: **every system is open,
 modular data**. Classes are starting points, not cages; skills, monsters,

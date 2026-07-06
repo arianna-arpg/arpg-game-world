@@ -7,7 +7,7 @@
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../core/math';
-import { DEV } from '../config';
+import { DEV, GAME_TITLE } from '../config';
 import {
   ATTRIBUTES, ATTRIBUTE_IDS, STAT_DEFS,
   type AttributeId, type DamageType,
@@ -118,6 +118,12 @@ export class UI {
   /** The essence SATCHEL flap on the inventory panel (persists across
    *  re-renders — a satchel stays however you left it). */
   private satchelOpen = false;
+  /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
+   *  support gems — one panel, one key, zero overlapping windows. */
+  invTab: 'gear' | 'skills' | 'gems' = 'gear';
+  /** Tab last RENDERED — scroll restores only within the same tab (the
+   *  skill book's golden rule, applied here). */
+  private lastInvTab: 'gear' | 'skills' | 'gems' | null = null;
   /** Bag item LIFTED by a click, awaiting its next click (a cell / a doll
    *  slot / another item to swap with). Uid-addressed so it survives the
    *  panel's innerHTML re-renders; self-heals if the item vanishes. */
@@ -174,12 +180,8 @@ export class UI {
   private treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 };
   /** True while the Escape menu / rebind overlay is up — gameplay input pauses. */
   escapeMenuOpen = false;
-  bookTab: 'known' | 'skills' | 'gems' = 'known';
-  /** The tab the skill book last RENDERED — compared against bookTab at the next
-   *  render so scroll restores only within the same tab (a switch starts at top).
-   *  Comparing against bookTab itself is vacuous: the tab click mutates it before
-   *  refreshSkillBook runs, so the old tab's offset bled into the new tab. */
-  private lastBookTab: 'known' | 'skills' | 'gems' | null = null;
+  // (The book is single-view now — its old gem tabs live on the Inventory
+  // panel as invTab; see that field's scroll-restore discipline.)
   /** DEV passive-tree editor hook: invoked at the end of every refreshTree so the
    *  editor can re-attach its select/drag/link handlers to the freshly-drawn SVG
    *  (set by mountPassiveEditor when DEV.passiveTreeEditor is on; else unused). */
@@ -306,8 +308,8 @@ export class UI {
     this.hoveredZone = null;
     this.pinnedZone = null;
     this.oceanCache = null;
-    this.bookTab = 'known';
-    this.lastBookTab = null;
+    this.invTab = 'gear';
+    this.lastInvTab = null;
   }
 
   showClassSelect(onPick: (def: ClassDef) => void): void {
@@ -359,7 +361,7 @@ export class UI {
       </div>`;
 
     this.classSelect.innerHTML = `
-      <h1>ARPG TEST GAME</h1>
+      <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
         Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL} &nbsp;·&nbsp;
         ${selectable} of ${CLASSES.length} classes offered &nbsp;(re-rolls each new run)</div>
@@ -541,6 +543,159 @@ export class UI {
 
   // --------------------------------------------------------------- inventory
 
+  /** Rarity chip for a gem instance (the book + the inventory tabs share it). */
+  private rarityTagHtml(inst: SkillInstance): string {
+    const r = SKILL_RARITIES[inst.rarity ?? 'common'];
+    return `<span style="color:${r.color};font-size:10px;font-weight:bold">${r.label}</span>
+      <span style="color:#8a8678;font-size:10px">· ${inst.sockets.length} socket${inst.sockets.length > 1 ? 's' : ''}</span>`;
+  }
+
+  /** The CARRIED-GEM inventories (moved here from the skill book — one
+   *  inventory panel, tabs instead of overlapping windows). 'skills' also
+   *  hosts the contextual counters (Brandt / the Delver) since buying puts
+   *  gems into exactly these bags. */
+  private gemInventoryHtml(kind: 'skills' | 'gems'): string {
+    const world = this.getWorld();
+    const m = world.meta;
+    if (kind === 'gems') {
+      return m.inventory.map((gem, idx) => {
+        const targets = [...m.knownSkills.values()]
+          .filter(inst => supportFitsInst(gem.def, inst) && inst.sockets.includes(null))
+          .map(inst => `<button data-socket="${idx}:${inst.def.id}">${inst.def.name}</button>`)
+          .join('') || '<span style="color:#8a8678">no socketable skill</span>';
+        return `
+          <div class="skill-entry" style="border-left:3px solid ${gem.def.color}">
+            <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
+              <span style="color:#8a8678;font-weight:normal;font-size:10px">support gem</span></div>
+            <div class="desc">${gem.def.description}</div>
+            <div class="bind-btns">
+              <button data-invlvl="${idx}" ${m.skillPoints < 1 || gem.level >= supportMaxLevel(gem.def) ? 'disabled' : ''}>
+                Level Up (1 pt)</button>
+              ${this.essLevelBtn(`data-invlvl-ess="${idx}"`, gem.level, gem.level >= supportMaxLevel(gem.def))}
+              <button data-drop-support="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
+              Socket into: ${targets}
+            </div>
+          </div>`;
+      }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems — walk over one to collect it.</div>';
+    }
+
+    const nearFont = world.nearFont();
+    const nearSmith = world.nearSmith();
+    const restockIn = Math.max(0, Math.ceil(world.vendorRestockAt - world.time));
+    const wares = nearSmith && world.vendorStock.length ? `
+      <div style="border:1px solid #6a5638;border-radius:4px;padding:8px;margin-bottom:8px;background:rgba(232,200,122,0.05)">
+        <div style="color:#e8c87a;font-weight:bold;font-size:12px;margin-bottom:4px">
+          BRANDT'S WARES — priced in Essence
+          <span style="color:#c8a84b;font-size:10px;font-weight:normal"> · restock ${restockIn}s</span></div>
+        ${world.vendorStock.map((e, idx) => {
+          const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+          const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
+          const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
+          const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
+          const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
+          const price = world.vendorPrice(e);
+          const broke = !world.canAffordEssence(world.localSeat, price);
+          return `
+          <div class="skill-entry" style="border-left:3px solid ${col}">
+            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
+            <div class="tags">${tags}</div>
+            <div class="bind-btns">
+              <button data-buy="${idx}" ${broke ? 'disabled' : ''}>
+                Buy (${this.essCostText(price)})${broke ? ' — not enough' : ''}</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : '';
+    const nearDelver = world.nearDelver();
+    const delverWares = nearDelver && world.descentStock.length ? `
+      <div style="border:1px solid #2f5e5a;border-radius:4px;padding:8px;margin-bottom:8px;background:rgba(127,224,216,0.06)">
+        <div style="color:#7fe0d8;font-weight:bold;font-size:12px;margin-bottom:4px">
+          THE DELVER'S WARES — 30 ◈ each
+          <span style="color:#5fb8b0;font-size:10px;font-weight:normal"> · ◈ ${world.descentEchoes} Echoes</span></div>
+        ${world.descentStock.map((e, idx) => {
+          const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
+          const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
+          const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
+          const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
+          const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
+          const broke = world.descentEchoes < 30;
+          return `
+          <div class="skill-entry" style="border-left:3px solid ${col}">
+            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
+            <div class="tags">${tags}</div>
+            <div class="bind-btns">
+              <button data-delve="${idx}" ${broke ? 'disabled' : ''}>
+                Buy (30 ◈)${broke ? ' — no Echoes' : ''}</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>` : '';
+    const slotsFull = m.knownSkills.size >= MAX_LEARNED_SKILLS;
+    const skillGems = m.skillInv.map((inst, idx) => {
+      const def = inst.def;
+      const ok = meetsRequirements(world, def);
+      const dupe = m.knownSkills.has(def.id);
+      const reqText = def.requirements
+        ? Object.entries(def.requirements).map(([a, n]) => {
+            const met = (m.attrs[a as AttributeId] ?? 0) >= (n ?? 0);
+            return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${ATTRIBUTES[a as AttributeId].short} ${n}</span>`;
+          }).join(', ')
+        : 'No requirements';
+      const blocker = dupe ? 'already learned' : slotsFull ? 'all slots full' : !ok ? 'requirements unmet' : '';
+      return `
+        <div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
+          <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}</div>
+          <div class="tags">${def.tags.join(' · ')}</div>
+          <div class="desc">${def.description}</div>
+          <div class="req">Requires: ${reqText}</div>
+          <div class="bind-btns">
+            <button data-learn="${idx}" ${blocker ? 'disabled' : ''}>
+              Learn${blocker ? ` (${blocker})` : ''}</button>
+            ${nearFont ? `<button data-sacrifice="${idx}">Sacrifice${inst.level > 1 ? ` (+${inst.level - 1} pt back)` : ''}</button>` : ''}
+            <button data-drop-skill="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
+          </div>
+        </div>`;
+    }).join('') || `<div style="color:#8a8678;font-size:11px">
+      No skill gems carried. Monsters drop them — rarity decides their sockets (1-4).
+      ${nearFont ? '' : 'Find a Sacrificial Font to trade unwanted gems for skill points.'}</div>`;
+    return wares + delverWares + skillGems;
+  }
+
+  /** Wire the carried-gem lists' buttons (whichever container renders them). */
+  private wireGemInventory(container: HTMLElement, refresh: () => void): void {
+    const world = this.getWorld();
+    const q = <T extends HTMLElement>(sel: string): T[] => [...container.querySelectorAll<T>(sel)];
+    q<HTMLButtonElement>('button[data-learn]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'learn', index: Number(btn.dataset.learn) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-sacrifice]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'sacrifice', index: Number(btn.dataset.sacrifice) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-buy]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'buyVendor', index: Number(btn.dataset.buy) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-delve]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'buyDelver', index: Number(btn.dataset.delve) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-invlvl]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvl) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-invlvl-ess]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvlEss), pay: 'essence' }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-drop-skill]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'dropSkill', index: Number(btn.dataset.dropSkill) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-drop-support]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'dropSupport', index: Number(btn.dataset.dropSupport) }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-socket]').forEach(btn => btn.addEventListener('click', () => {
+      const [idx, skillId] = btn.dataset.socket!.split(':');
+      world.requestMeta({ t: 'socket', index: Number(idx), skillId });
+      refresh();
+    }));
+  }
+
   toggleInventory(): void {
     this.inventoryOpen = !this.inventoryOpen;
     this.inventory.classList.toggle('hidden', !this.inventoryOpen);
@@ -642,9 +797,10 @@ export class UI {
             return `<div style="font-size:11px;color:${e.color};margin:2px 0" title="${e.label}">${e.glyph} ${n} <span style="color:#6a6478;font-size:9px">${e.label.replace(' Essence', '')}</span></div>`;
           }).join('')}
         </div>` : ''}`;
-    this.inventory.innerHTML = `
-      ${satchel}
-      <h2>Inventory</h2>
+    const pickupHint = this.getSettings().gearPickup === 'key'
+      ? `[${keyDisplay(this.getSettings().keybinds.pickup)}] grabs nearby gear`
+      : 'walk over gear to collect it';
+    const gearBody = `
       <div style="display:flex;gap:18px;align-items:flex-start">
         <div>
           <h3>Equipped</h3>
@@ -656,10 +812,29 @@ export class UI {
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
             click: lift / place (a lone blocker swaps) · double-click: equip ·
             lifted → doll slot: equip there · worn slot click: unequip ·
-            shift-click: drop to ground · [${keyDisplay(this.getSettings().keybinds.pickup)}] grabs nearby gear
+            shift-click: drop to ground · ${pickupHint}
           </div>
         </div>
       </div>`;
+
+    // ONE inventory, tabbed: the gear grid and the carried gem bags share the
+    // panel (and the key) instead of overlapping as separate windows.
+    const tabBtn = (id: 'gear' | 'skills' | 'gems', label: string): string =>
+      `<button class="book-tab ${this.invTab === id ? 'active' : ''}" data-invtab="${id}">${label}</button>`;
+    const tabs = `<div class="book-tabs" style="margin-bottom:8px">
+      ${tabBtn('gear', `Gear (${m.items.length})`)}
+      ${tabBtn('skills', `Skill Gems (${m.skillInv.length})`)}
+      ${tabBtn('gems', `Support Gems (${m.inventory.length})`)}
+    </div>`;
+    const body = this.invTab === 'gear' ? gearBody : this.gemInventoryHtml(this.invTab);
+
+    // Same-tab scroll restore (the book's golden rule — a re-render must
+    // never yank the list to the top mid-read).
+    const prevScroll = this.inventory.scrollTop;
+    const sameTab = this.lastInvTab === this.invTab;
+    this.inventory.innerHTML = `${satchel}<h2>Inventory</h2>${tabs}${body}`;
+    if (sameTab) this.inventory.scrollTop = prevScroll;
+    this.lastInvTab = this.invTab;
     this.wireInventory();
   }
 
@@ -671,6 +846,20 @@ export class UI {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
     });
+    q<HTMLButtonElement>('button[data-invtab]').forEach(btn => btn.addEventListener('click', () => {
+      this.invTab = btn.dataset.invtab as typeof this.invTab;
+      this.heldItemUid = null; // a lifted item has no meaning off the gear tab
+      this.refreshInventory();
+    }));
+    // The gem tabs re-use the shared list wiring; learning/socketing moves
+    // gems into knownSkills, so the open book refreshes alongside.
+    if (this.invTab !== 'gear') {
+      this.wireGemInventory(this.inventory, () => {
+        this.refreshInventory();
+        this.refreshSkillBook();
+      });
+      return; // no gear handlers to attach on gem tabs
+    }
 
     q<HTMLElement>('[data-bag-item]').forEach(el => {
       const uid = Number(el.dataset.itemUid);
@@ -808,19 +997,21 @@ export class UI {
           }).join('') || '<div style="color:#8a8678;font-size:11px">No studied affix fits this piece yet — salvage more of what you want to learn.</div>';
         }
       }
-      const loreRows = Object.entries(acc.craftLore).sort((a, b) => b[1] - a[1]).slice(0, 24).map(([fam]) => {
-        const [have, need] = expertiseProgress(acc.craftLore, fam);
-        const rank = expertiseRank(acc.craftLore, fam);
-        return `<div class="stat-row"><span>${fam}</span>
-          <span class="val">${rank > 0 ? `rank ${rank}` : 'unstudied'}${need > 0 ? ` · ${have}/${need}` : ' · MAX'}</span></div>`;
-      }).join('') || '<div style="color:#8a8678;font-size:11px">Salvage affixed gear to begin studying.</div>';
+      const loreRows = Object.entries(acc.craftLore)
+        .sort((a, b) => (b[1].rank - a[1].rank) || (b[1].progress - a[1].progress))
+        .slice(0, 24).map(([fam]) => {
+          const [have, need] = expertiseProgress(acc.craftLore, fam);
+          const rank = expertiseRank(acc.craftLore, fam);
+          return `<div class="stat-row"><span>${fam}</span>
+            <span class="val">${rank > 0 ? `rank ${rank}` : 'unstudied'}${need > 0 ? ` · ${have}/${need}` : ' · MAX'}</span></div>`;
+        }).join('') || '<div style="color:#8a8678;font-size:11px">Salvage affixed gear to begin studying.</div>';
       body = `<div style="margin-bottom:6px">${this.essWallet()}</div>
         <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
           One crafted line per piece${world.craftSlots() > 1 ? ` (yours: ${world.craftSlots()})` : ''}; expertise raises the roll CEILING — the roll itself stays wild.
         </div>
         <h3>Piece</h3><div class="bind-btns">${targetRows}</div>
         <h3>Craft onto it</h3>${affixRows}
-        <h3>Expertise</h3>${loreRows}`;
+        <h3>Expertise <span style="color:#8a8678;font-weight:normal;font-size:10px">— only salvaged lines at or ABOVE your next tier teach you anything</span></h3>${loreRows}`;
     }
 
     this.salvageMenu.innerHTML = `<h2>Salvage Station</h2>${tabs}${body}
@@ -971,13 +1162,8 @@ export class UI {
     const p = world.player;
     const m = world.meta;
 
-    const rarityTag = (inst: SkillInstance): string => {
-      const r = SKILL_RARITIES[inst.rarity ?? 'common'];
-      return `<span style="color:${r.color};font-size:10px;font-weight:bold">${r.label}</span>
-        <span style="color:#8a8678;font-size:10px">· ${inst.sockets.length} socket${inst.sockets.length > 1 ? 's' : ''}</span>`;
-    };
-
-    // --- Learned skills tab ---------------------------------------------------
+    // --- Learned skills (the book's ONE view — carried gems live in the
+    // Inventory's tabs now; build management stays here) ----------------------
     const known = [...m.knownSkills.values()].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
@@ -1003,7 +1189,7 @@ export class UI {
           <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
             ${reached.map(t => `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#2a2438;color:#c8a8ff;margin-left:4px" title="Lv ${t.level} threshold">${t.label}</span>`).join('')}
             ${nextThresh ? `<span style="font-size:9px;color:#6a6478;margin-left:4px">Lv ${nextThresh.level}: ${nextThresh.label}</span>` : ''}
-            ${rarityTag(inst)}
+            ${this.rarityTagHtml(inst)}
             <span style="color:#8a8678;font-weight:normal;font-size:10px">
               ${this.costText(p.skillCost(inst))}${def.cooldown ? `, ${def.cooldown}s cd` : ''}</span>
           </div>
@@ -1017,150 +1203,29 @@ export class UI {
           </div>
           <div class="sockets">${sockets}</div>
         </div>`;
-    }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters — learn them from the Skill Gems tab.</div>';
+    }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters — learn them from the Inventory (I) → Skill Gems tab.</div>';
 
-    // --- Skill gem inventory tab ------------------------------------------------
+    // Carried skill/support gems (and the Brandt/Delver counters) MOVED to
+    // the Inventory panel's tabs — one bag, one key, no overlapping windows.
     const nearFont = world.nearFont();
-    const nearSmith = world.nearSmith();
-    // Brandt's counter: visible only while you stand at the forge.
-    const restockIn = Math.max(0, Math.ceil(world.vendorRestockAt - world.time));
-    const wares = nearSmith && world.vendorStock.length ? `
-      <div style="border:1px solid #6a5638;border-radius:4px;padding:8px;margin-bottom:8px;background:rgba(232,200,122,0.05)">
-        <div style="color:#e8c87a;font-weight:bold;font-size:12px;margin-bottom:4px">
-          BRANDT'S WARES — priced in Essence
-          <span style="color:#c8a84b;font-size:10px;font-weight:normal"> · restock ${restockIn}s</span></div>
-        ${world.vendorStock.map((e, idx) => {
-          const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
-          const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
-          const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
-          const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
-          const tag = e.kind === 'skill' ? rarityTag(e.inst) : '';
-          const price = world.vendorPrice(e);
-          const broke = !world.canAffordEssence(world.localSeat, price);
-          return `
-          <div class="skill-entry" style="border-left:3px solid ${col}">
-            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
-            <div class="tags">${tags}</div>
-            <div class="bind-btns">
-              <button data-buy="${idx}" ${broke ? 'disabled' : ''}>
-                Buy (${this.essCostText(price)})${broke ? ' — not enough' : ''}</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>` : '';
-    // The Delver's counter: visible only while you stand by the Delver (in a cave).
-    const nearDelver = world.nearDelver();
-    const delverWares = nearDelver && world.descentStock.length ? `
-      <div style="border:1px solid #2f5e5a;border-radius:4px;padding:8px;margin-bottom:8px;background:rgba(127,224,216,0.06)">
-        <div style="color:#7fe0d8;font-weight:bold;font-size:12px;margin-bottom:4px">
-          THE DELVER'S WARES — 30 ◈ each
-          <span style="color:#5fb8b0;font-size:10px;font-weight:normal"> · ◈ ${world.descentEchoes} Echoes</span></div>
-        ${world.descentStock.map((e, idx) => {
-          const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
-          const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
-          const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
-          const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
-          const tag = e.kind === 'skill' ? rarityTag(e.inst) : '';
-          const broke = world.descentEchoes < 30;
-          return `
-          <div class="skill-entry" style="border-left:3px solid ${col}">
-            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
-            <div class="tags">${tags}</div>
-            <div class="bind-btns">
-              <button data-delve="${idx}" ${broke ? 'disabled' : ''}>
-                Buy (30 ◈)${broke ? ' — no Echoes' : ''}</button>
-            </div>
-          </div>`;
-        }).join('')}
-      </div>` : '';
-    const slotsFull = m.knownSkills.size >= MAX_LEARNED_SKILLS;
-    const skillGems = m.skillInv.map((inst, idx) => {
-      const def = inst.def;
-      const ok = meetsRequirements(world, def);
-      const dupe = m.knownSkills.has(def.id);
-      // Colour EACH requirement by whether THIS attribute is met (green) or not
-      // (red) — so an unmet prerequisite is spotted at a glance even when others pass.
-      const reqText = def.requirements
-        ? Object.entries(def.requirements).map(([a, n]) => {
-            const met = (m.attrs[a as AttributeId] ?? 0) >= (n ?? 0);
-            return `<span style="color:${met ? '#6fc06f' : '#d05050'}">${ATTRIBUTES[a as AttributeId].short} ${n}</span>`;
-          }).join(', ')
-        : 'No requirements';
-      const blocker = dupe ? 'already learned' : slotsFull ? 'all slots full' : !ok ? 'requirements unmet' : '';
-      return `
-        <div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
-          <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${rarityTag(inst)}</div>
-          <div class="tags">${def.tags.join(' · ')}</div>
-          <div class="desc">${def.description}</div>
-          <div class="req">Requires: ${reqText}</div>
-          <div class="bind-btns">
-            <button data-learn="${idx}" ${blocker ? 'disabled' : ''}>
-              Learn${blocker ? ` (${blocker})` : ''}</button>
-            ${nearFont ? `<button data-sacrifice="${idx}">Sacrifice${inst.level > 1 ? ` (+${inst.level - 1} pt back)` : ''}</button>` : ''}
-            <button data-drop-skill="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
-          </div>
-        </div>`;
-    }).join('') || `<div style="color:#8a8678;font-size:11px">
-      No skill gems carried. Monsters drop them — rarity decides their sockets (1-4).
-      ${nearFont ? '' : 'Find a Sacrificial Font to trade unwanted gems for skill points.'}</div>`;
-
-    // --- Support gems tab ------------------------------------------------------
-    const gems = m.inventory.map((gem, idx) => {
-      const targets = [...m.knownSkills.values()]
-        .filter(inst => supportFitsInst(gem.def, inst) && inst.sockets.includes(null))
-        .map(inst => `<button data-socket="${idx}:${inst.def.id}">${inst.def.name}</button>`)
-        .join('') || '<span style="color:#8a8678">no socketable skill</span>';
-      return `
-        <div class="skill-entry" style="border-left:3px solid ${gem.def.color}">
-          <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
-            <span style="color:#8a8678;font-weight:normal;font-size:10px">support gem</span></div>
-          <div class="desc">${gem.def.description}</div>
-          <div class="bind-btns">
-            <button data-invlvl="${idx}" ${m.skillPoints < 1 || gem.level >= supportMaxLevel(gem.def) ? 'disabled' : ''}>
-              Level Up (1 pt)</button>
-            ${this.essLevelBtn(`data-invlvl-ess="${idx}"`, gem.level, gem.level >= supportMaxLevel(gem.def))}
-            <button data-drop-support="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
-            Socket into: ${targets}
-          </div>
-        </div>`;
-    }).join('') || '<div style="color:#8a8678;font-size:11px">Slain monsters drop support gems — walk over one to collect it.</div>';
-
-    const tab = (id: string, label: string): string =>
-      `<button class="book-tab ${this.bookTab === id ? 'active' : ''}" data-tab="${id}">${label}</button>`;
-    const body = this.bookTab === 'known' ? known
-      : this.bookTab === 'skills' ? wares + delverWares + skillGems
-      : gems;
 
     // Preserve the scroll position across the innerHTML rebuild — otherwise a
     // co-op client (which re-renders this panel whenever its meta re-replicates)
     // would yank the list back to the top on every scroll attempt.
     const prevScroll = this.skillBook.querySelector<HTMLElement>('.book-body')?.scrollTop ?? 0;
-    const sameTab = this.lastBookTab === this.bookTab;
 
     this.skillBook.innerHTML = `
       <div class="book-head">
         <h2>Skill Book — <span style="color:#7ec8a0">${m.skillPoints} skill points</span>
           <span style="float:right;color:#b06bd4;font-size:11px;font-weight:normal">
             ${nearFont ? `FONT NEARBY · offerings ${m.offerings}/${OFFERINGS_PER_POINT}` : `offerings ${m.offerings}/${OFFERINGS_PER_POINT}`}</span></h2>
-        <div class="book-tabs">
-          ${tab('known', `Learned (${m.knownSkills.size}/${MAX_LEARNED_SKILLS})`)}
-          ${tab('skills', `Skill Gems (${m.skillInv.length})`)}
-          ${tab('gems', `Support Gems (${m.inventory.length})`)}
-        </div>
+        <div style="color:#8a8678;font-size:10px;padding:2px 0 6px">Learned (${m.knownSkills.size}/${MAX_LEARNED_SKILLS}) — carried gems live in the Inventory (${keyDisplay(this.getSettings().keybinds.panelInv)})</div>
       </div>
-      <div class="book-body">${body}</div>`;
+      <div class="book-body">${known}</div>`;
 
-    // Restore the prior scroll offset (same tab only — a tab SWITCH starts at top).
+    // Restore the prior scroll offset across the rebuild.
     const bodyEl = this.skillBook.querySelector<HTMLElement>('.book-body');
-    if (bodyEl && sameTab) bodyEl.scrollTop = prevScroll;
-    this.lastBookTab = this.bookTab;
-
-    this.skillBook.querySelectorAll<HTMLButtonElement>('.book-tab').forEach(btn => {
-      btn.addEventListener('click', () => {
-        this.bookTab = btn.dataset.tab as typeof this.bookTab;
-        this.refreshSkillBook();
-      });
-    });
+    if (bodyEl) bodyEl.scrollTop = prevScroll;
 
     const refresh = (): void => this.refreshSkillBook();
     const q = <T extends HTMLElement>(sel: string): T[] =>
@@ -1174,26 +1239,11 @@ export class UI {
       world.requestMeta({ t: 'bindSkill', slot: Number(btn.dataset.slot), skillId: btn.dataset.bind! });
       refresh();
     }));
-    q<HTMLButtonElement>('button[data-learn]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'learn', index: Number(btn.dataset.learn) }); refresh();
-    }));
     q<HTMLButtonElement>('button[data-unlearn]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'unlearn', skillId: btn.dataset.unlearn! }); refresh();
     }));
-    q<HTMLButtonElement>('button[data-buy]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'buyVendor', index: Number(btn.dataset.buy) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-delve]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'buyDelver', index: Number(btn.dataset.delve) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-sacrifice]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'sacrifice', index: Number(btn.dataset.sacrifice) }); refresh();
-    }));
     q<HTMLButtonElement>('button[data-levelup]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'levelSkill', skillId: btn.dataset.levelup! }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-invlvl]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvl) }); refresh();
     }));
     q<HTMLButtonElement>('button[data-gemlvl]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.gemlvl!.split(':');
@@ -1204,9 +1254,6 @@ export class UI {
     q<HTMLButtonElement>('button[data-levelup-ess]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'levelSkill', skillId: btn.dataset.levelupEss!, pay: 'essence' }); refresh();
     }));
-    q<HTMLButtonElement>('button[data-invlvl-ess]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvlEss), pay: 'essence' }); refresh();
-    }));
     q<HTMLButtonElement>('button[data-gemlvl-ess]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.gemlvlEss!.split(':');
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock), pay: 'essence' });
@@ -1216,17 +1263,6 @@ export class UI {
       const [skillId, sock] = btn.dataset.unsocket!.split(':');
       world.requestMeta({ t: 'unsocket', skillId, socket: Number(sock) });
       refresh();
-    }));
-    q<HTMLButtonElement>('button[data-socket]').forEach(btn => btn.addEventListener('click', () => {
-      const [idx, skillId] = btn.dataset.socket!.split(':');
-      world.requestMeta({ t: 'socket', index: Number(idx), skillId });
-      refresh();
-    }));
-    q<HTMLButtonElement>('button[data-drop-skill]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'dropSkill', index: Number(btn.dataset.dropSkill) }); refresh();
-    }));
-    q<HTMLButtonElement>('button[data-drop-support]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'dropSupport', index: Number(btn.dataset.dropSupport) }); refresh();
     }));
   }
 
@@ -2261,7 +2297,7 @@ export class UI {
     const h = this.startHandlers!;
     const canContinue = !!this.continueSave;
     this.startMenu.innerHTML = `
-      <h1>ARPG TEST GAME</h1>
+      <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div class="acct-head">Account Level <b>${acc.level}</b> · <b>${acc.credits}</b> ${META_CURRENCY_LABEL}</div>
       <div class="esc-btns">
         <button id="sm-start">Start New Game</button>

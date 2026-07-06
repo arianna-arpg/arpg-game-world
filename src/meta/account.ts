@@ -10,6 +10,7 @@
 // injected (by reference) into the World and UI. It is never re-loaded mid-run.
 // ---------------------------------------------------------------------------
 
+import type { CraftLore } from '../engine/crafting';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { clampFrequency, DEFAULT_FREQUENCY, type FrequencyProfile } from '../packages/frequency';
 
@@ -120,11 +121,11 @@ export interface Account {
   /** Recent death spots (corpse runs) — a newest-first ring; survives the
    *  character wipe so the next run can reclaim the lost gems. See meta/death.ts. */
   deaths: DeathRecord[];
-  /** CRAFT LORE: affix-family → items salvaged carrying it. Crossing
-   *  CRAFT_CFG.loreThresholds earns expertise ranks (craftability, then a
-   *  rising roll ceiling). Knowledge survives every death — the material
-   *  (essence) does not. */
-  craftLore: Record<string, number>;
+  /** CRAFT LORE: affix-family → {rank, progress} study ledger. Progress is
+   *  TIER-TRUE (crafting.ts studySalvage): only salvaged lines at or above
+   *  the NEXT unlock tier teach. Knowledge survives every death — the
+   *  material (essence) does not. */
+  craftLore: CraftLore;
 }
 
 /** Serializable form (Sets → arrays) written to localStorage. */
@@ -144,7 +145,8 @@ export interface AccountSave {
   ledger?: Record<string, number>;
   frequencyProfile?: FrequencyProfile;
   deaths?: DeathRecord[];
-  craftLore?: Record<string, number>;
+  /** Current shape {rank, progress}; LEGACY saves held a flat count. */
+  craftLore?: Record<string, number | { rank: number; progress: number }>;
 }
 
 export function makeAccount(): Account {
@@ -202,8 +204,27 @@ export function deserializeAccount(s: AccountSave): Account | null {
     // Per-RECORD schema filter (drop malformed/stale corpses, cap the ring)
     // WITHOUT touching SCHEMA_VERSION — a death-format change never wipes credits.
     deaths: (s.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS),
-    craftLore: s.craftLore ?? {},
+    craftLore: migrateLore(s.craftLore),
   };
+}
+
+/** LEGACY craft lore was a flat lifetime salvage count against cumulative
+ *  thresholds; today it's a tier-true {rank, progress} ledger. Convert old
+ *  counts by replaying the old ladder — earned ranks are honored, leftover
+ *  count becomes progress toward the next. */
+const LEGACY_LORE_THRESHOLDS = [3, 8, 16, 28, 44];
+function migrateLore(raw?: Record<string, number | { rank: number; progress: number }>): CraftLore {
+  const out: CraftLore = {};
+  for (const [family, v] of Object.entries(raw ?? {})) {
+    if (typeof v === 'number') {
+      let rank = 0;
+      for (const t of LEGACY_LORE_THRESHOLDS) if (v >= t) rank++;
+      out[family] = { rank, progress: Math.max(0, v - (rank > 0 ? LEGACY_LORE_THRESHOLDS[rank - 1] : 0)) };
+    } else if (v && typeof v.rank === 'number') {
+      out[family] = { rank: v.rank, progress: v.progress ?? 0 };
+    }
+  }
+  return out;
 }
 
 /** How many classes are selectable at character select: the starter count, or

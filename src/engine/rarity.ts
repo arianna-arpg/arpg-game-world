@@ -32,11 +32,13 @@ export interface RarityDef {
 }
 
 export const RARITY_DEFS: Record<MonsterRarity, RarityDef> = {
+  // Drops tuned SCARCE alongside DROP_CFG (loot.ts): an elite guarantees a
+  // find without burying the floor in gems.
   normal:   { label: '',         weight: 100, affixes: 0, lifeMul: 1,    dmgMul: 1,    sizeMul: 1,    xpMul: 1,  drops: 0, ring: '' },
   magic:    { label: 'Magic',    weight: 22,  affixes: 1, lifeMul: 1.7,  dmgMul: 1.2,  sizeMul: 1.08, xpMul: 2,  drops: 0, ring: '#6c9cff' },
   rare:     { label: 'Rare',     weight: 7,   affixes: 3, lifeMul: 2.8,  dmgMul: 1.45, sizeMul: 1.16, xpMul: 4,  drops: 1, ring: '#ffd34d' },
-  champion: { label: 'Champion', weight: 2,   affixes: 4, lifeMul: 4.6,  dmgMul: 1.7,  sizeMul: 1.28, xpMul: 8,  drops: 2, ring: '#ff8a3d' },
-  crowned:  { label: 'Crowned',  weight: 0,   affixes: 5, lifeMul: 7.5,  dmgMul: 2.0,  sizeMul: 1.42, xpMul: 14, drops: 3, ring: '#e64db4' },
+  champion: { label: 'Champion', weight: 2,   affixes: 4, lifeMul: 4.6,  dmgMul: 1.7,  sizeMul: 1.28, xpMul: 8,  drops: 1, ring: '#ff8a3d' },
+  crowned:  { label: 'Crowned',  weight: 0,   affixes: 5, lifeMul: 7.5,  dmgMul: 2.0,  sizeMul: 1.42, xpMul: 14, drops: 2, ring: '#e64db4' },
 };
 
 export interface Affix { id: string; label: string; mods: Modifier[]; }

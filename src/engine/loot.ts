@@ -58,12 +58,18 @@ export interface LootCtx {
   miTheme?: string;
 }
 
-/** The kill-path levers (world.rollDrops reads these — never literals there). */
+/** The kill-path levers (world.rollDrops reads these — never literals there).
+ *  Tuned SCARCE on purpose: a drop that happens less often reads as a find,
+ *  not as noise — rarity of the EVENT is the cheapest quality multiplier. */
 export const DROP_CFG = {
   /** Baseline chance a credited kill rolls the gear table at all. */
-  killItemChance: 0.09,
+  killItemChance: 0.05,
   killTable: 'world_gear',
   bossTable: 'boss_gear',
+  /** Baseline chance a credited kill drops a GEM (skill/support), and the
+   *  guaranteed gem count on bosses — the old world.ts literals, now levers. */
+  killGemChance: 0.08,
+  bossGemDrops: 2,
   /** Bonus gear rolls by ELITE tier — the item-side mirror of RarityDef.drops. */
   eliteBonusItemRolls: { normal: 0, magic: 0, rare: 1, champion: 1, crowned: 2 } as Record<MonsterRarity, number>,
   /** Crowned leaders promote their bonus rolls onto the apex table. */

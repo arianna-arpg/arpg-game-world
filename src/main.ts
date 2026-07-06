@@ -26,7 +26,7 @@ import { RemoteInput } from './net/remote';
 import { WebRtcTransport } from './net/webrtc';
 import { openCoopLobby } from './ui/lobby';
 import { CLASSES, type ClassDef } from './data/classes';
-import { DEV } from './config';
+import { DEV, GAME_TITLE } from './config';
 import { mountDevGemSpawner } from './dev/gemSpawner';
 import { mountPassiveEditor } from './dev/passiveEditor';
 import { applyCredits, creditsForDeath, isClassUnlocked, type Account } from './meta/account';
@@ -209,6 +209,8 @@ declare global {
     };
   }
 }
+document.title = GAME_TITLE; // the one constant names every surface
+
 window.__game = {
   world: () => world, ui, ai: updateAI, renderer,
   account: () => account, saveAccount: () => saveAccount(account),

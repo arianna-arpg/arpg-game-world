@@ -58,7 +58,7 @@ function readJson(file) {
 
 // Hard fallbacks so a missing/broken config file can never brick the launcher.
 const CONFIG_DEFAULTS = {
-  game: { title: 'ARPG Test Game' },
+  game: { title: 'Hollow Wake' },
   repo: { remote: 'origin', branch: 'main' },
   updates: { checkOnLaunch: true },
   window: { width: 1600, height: 900, maximized: true, fullscreen: false, devtools: true, zoom: 1 },

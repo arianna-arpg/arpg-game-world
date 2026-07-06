@@ -1,4 +1,4 @@
-# CLAUDE.md — ARPG Test Game
+# CLAUDE.md — Hollow Wake (ARPG)
 
 Guidance for Claude Code working in this repository. This file is committed and
 shared with everyone who clones the repo.

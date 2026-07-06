@@ -30,11 +30,17 @@ import {
 } from './items';
 import { affixPoolsFor } from './itemgen';
 
-export type CraftLore = Record<string, number>;
+/** One family's study ledger: the unlocked RANK and the progress toward the
+ *  next. Progress is TIER-TRUE — only salvaged lines at or above the NEXT
+ *  ceiling teach (see studySalvage) — so rank+progress is the whole state;
+ *  a flat lifetime count can't express "your weak salvage stopped counting". */
+export interface LoreEntry { rank: number; progress: number; }
+
+export type CraftLore = Record<string, LoreEntry>;
 
 export const CRAFT_CFG = {
-  /** Salvage-count thresholds per expertise RANK (index 0 → rank 1 …). */
-  loreThresholds: [3, 8, 16, 28, 44],
+  /** Studies required to cross INTO each rank (index 0 → rank 1 …). */
+  stepsPerRank: [3, 5, 8, 12, 16],
   /** Crafted lines allowed per item (the golden rule: one). */
   maxCraftedAffixes: 1,
   /** Account feature id granting +1 crafted slot (Vault-ready seam). */
@@ -127,27 +133,54 @@ export function salvageSupportYield(gem: SupportInstance): EssenceCost {
   return { essence: 'glimmering' satisfies EssenceId, count };
 }
 
-/** The lore a salvage teaches: +1 per NATURAL affix line family on the item
- *  (crafted lines are excluded — no studying your own handiwork). */
-export function salvageLoreGain(item: ItemInstance): string[] {
-  return item.affixes.filter(a => !a.crafted && ITEM_AFFIXES[a.id]).map(a => ITEM_AFFIXES[a.id].family);
-}
-
 // -------------------------------------------------------------- expertise ---
 
-/** Expertise rank for a family: how many thresholds its lore count crossed. */
 export function expertiseRank(lore: CraftLore, family: string): number {
-  const n = lore[family] ?? 0;
-  let rank = 0;
-  for (const t of CRAFT_CFG.loreThresholds) if (n >= t) rank++;
-  return rank;
+  return lore[family]?.rank ?? 0;
 }
 
 /** Progress toward the NEXT rank: [have, need] (need = 0 at max rank). */
 export function expertiseProgress(lore: CraftLore, family: string): [number, number] {
-  const n = lore[family] ?? 0;
-  const next = CRAFT_CFG.loreThresholds.find(t => n < t);
-  return [n, next ?? 0];
+  const e = lore[family];
+  const rank = e?.rank ?? 0;
+  return [e?.progress ?? 0, CRAFT_CFG.stepsPerRank[rank] ?? 0];
+}
+
+/** The rank ceiling a family can ever reach (its ladder length caps it). */
+function maxRankFor(def: AffixDef): number {
+  return Math.min(CRAFT_CFG.stepsPerRank.length, normalTiers(def));
+}
+
+/** STUDY a salvaged item's natural lines — the TIER-TRUE rule: a line
+ *  teaches only if its tier is AT LEAST as strong as the NEXT ceiling being
+ *  worked toward. A T1 salvage counts toward every unlock on the way up; a
+ *  T5 salvage stops teaching the moment your ceiling passes it — mastery
+ *  demands studying work BETTER than what you already understand. Crafted
+ *  lines never teach (no studying your own handiwork). Mutates `lore`;
+ *  returns the families that advanced (rank-ups flagged). */
+export function studySalvage(
+  lore: CraftLore, item: ItemInstance,
+): { family: string; rankedUp: boolean }[] {
+  const out: { family: string; rankedUp: boolean }[] = [];
+  for (const a of item.affixes) {
+    if (a.crafted) continue;
+    const def = ITEM_AFFIXES[a.id];
+    if (!def) continue;
+    const entry = lore[def.family] ?? (lore[def.family] = { rank: 0, progress: 0 });
+    if (entry.rank >= maxRankFor(def)) continue;
+    // The tier this study must match or beat: the NEXT rank's ceiling.
+    const nextCeiling = bestUnlockedTier(def, entry.rank + 1);
+    if (a.tier > nextCeiling) continue; // weaker than the ceiling — teaches nothing
+    entry.progress++;
+    let rankedUp = false;
+    if (entry.progress >= CRAFT_CFG.stepsPerRank[entry.rank]) {
+      entry.rank++;
+      entry.progress = 0;
+      rankedUp = true;
+    }
+    out.push({ family: def.family, rankedUp });
+  }
+  return out;
 }
 
 /** The tier index (into def.tiers) of the BEST tier `rank` unlocks — climbing

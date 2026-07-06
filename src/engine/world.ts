@@ -66,7 +66,7 @@ import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE }
 import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
-  rollRerolledAffix, salvageItemYield, salvageLoreGain, salvageSkillYield, salvageSupportYield,
+  rollRerolledAffix, salvageItemYield, salvageSkillYield, salvageSupportYield, studySalvage,
 } from './crafting';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
@@ -15235,8 +15235,11 @@ export class World {
     if (!item) return;
     removeFromBag(seat.meta.items, uid);
     this.grantEssence(seat, salvageItemYield(item));
-    for (const family of salvageLoreGain(item)) {
-      this.account.craftLore[family] = (this.account.craftLore[family] ?? 0) + 1;
+    // TIER-TRUE study: only lines at/above each family's NEXT ceiling teach.
+    const taught = studySalvage(this.account.craftLore, item);
+    for (const t of taught.filter(x => x.rankedUp)) {
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
+        `craft expertise deepens: ${t.family}`, '#c8a84b', 12);
     }
     saveAccount(this.account); // lore is account knowledge — survive the run
     this.markMetaDirty(seat);
@@ -15335,7 +15338,7 @@ export class World {
 
   private rollDrops(actor: Actor): void {
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
-    const count = def?.drops ?? (def?.boss ? 3 : chance(0.16) ? 1 : 0);
+    const count = def?.drops ?? (def?.boss ? DROP_CFG.bossGemDrops : chance(DROP_CFG.killGemChance) ? 1 : 0);
     for (let i = 0; i < count; i++) this.dropGemAt(actor.pos);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
     // table; elite leaders add bonus rolls (crowned promote to the apex table).

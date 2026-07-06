@@ -4,6 +4,11 @@
 // play. Kept in one place so there's a single obvious switchboard.
 // ---------------------------------------------------------------------------
 
+/** THE GAME'S NAME — every display surface prints through this one constant
+ *  (menus, the browser tab, the launcher window). Save keys and file paths
+ *  deliberately do NOT: renames must never orphan a player's saves. */
+export const GAME_TITLE = 'Hollow Wake';
+
 export const DEV = {
   /** 1 = show the in-game DEV PANEL (bottom-left "🔧 Dev" button): a TABBED tool —
    *  GEMS (drop any skill/support gem + grant levels/points) and EVENTS (force-spawn
