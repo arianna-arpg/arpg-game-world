@@ -204,6 +204,19 @@ export function instanceOvercharge(inst: SkillInstance): OverchargeSpec | undefi
   return inst.def.overcharge;
 }
 
+/** The FIRST socketed graft of a given SupportDef field — the generic
+ *  reader behind the one-per-use grafts (sacrifice, dominate, corpseSpawn,
+ *  auraDuration, healField, zoneEmit, madden, fissure volatility…). */
+export function socketSpec<K extends keyof SupportDef>(
+  inst: SkillInstance, key: K,
+): NonNullable<SupportDef[K]> | undefined {
+  for (const s of inst.sockets) {
+    const v = s?.def[key];
+    if (v !== undefined) return v as NonNullable<SupportDef[K]>;
+  }
+  return undefined;
+}
+
 /** Every charge tap riding an instance: the skill's own + socket grafts. */
 export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
   const out = [...(inst.def.chargeGain ?? [])];
@@ -725,8 +738,10 @@ export interface GroundDelivery {
   follow?: true;
   /** EXPANDING-RETRACTING (Squall Rune): after `at` lingered seconds the
    *  zone RETRACTS at `speed` units/s (pairs with grow for the out-then-
-   *  in breath; floors small, never vanishes early). */
-  retract?: { at: number; speed: number };
+   *  in breath; floors small, never vanishes early). `fizzle` instead ENDS
+   *  the zone at the apex — the endBurst fires at full spread and the ring
+   *  is gone (the expansion-only Squall; Halo's whole life). */
+  retract?: { at: number; speed?: number; fizzle?: true };
   /** The zone DETONATES as its linger expires: one final burst at
    *  `damageScale` of the roll across radius × radiusScale (default 1). */
   endBurst?: { damageScale: number; radiusScale?: number };
@@ -2191,6 +2206,51 @@ export interface SupportDef {
    *  owner's other minions on a beat for healing and a feast-buff (see
    *  DevourSpec — the apex economy, grafted onto any summon). */
   devour?: DevourSpec;
+  /** FISSURE VOLATILITY: lingering fissure segments randomly RE-LIGHT —
+   *  every `interval` seconds each live segment has `chance` to erupt
+   *  again at `damageScale` of the roll (the volcanic crag hazard). */
+  fissureVolatile?: { interval: number; chance: number; damageScale: number };
+  /** FISSURE AFTERSHOCKS (the whack-a-mole movement game): lingering
+   *  segments GLOW armed; the CASTER running over one detonates an
+   *  aftershock around it (damageScale × the roll, radius × radiusScale),
+   *  re-arming after `rearm` seconds. */
+  fissureAftershock?: { damageScale: number; radiusScale?: number; rearm: number };
+  /** CORPSE SPAWN (Hiveborn): corpses this skill CONSUMES crawl back out —
+   *  `perCorpse` births one per body eaten; `count` instead births a fixed
+   *  brood per use (the ghost variant pairs it with an imposed cooldown
+   *  via addedCooldown mods). Capped alive per caster. */
+  corpseSpawn?: { monsterId: string; perCorpse?: true; count?: number; duration: number; max: number };
+  /** RANDOM WEAK AURA: each minion of the host is born wearing ONE aura
+   *  rolled from this pool, shared with allies in its radius. */
+  minionAuraPool?: AuraSpec[];
+  /** DOMINATING BLOW: kills with this skill may RAISE the slain to fight
+   *  for you (`chance`, living `duration` seconds, at most `max` thralls). */
+  dominate?: { chance: number; duration: number; max: number };
+  /** SACRIFICE: each cast CONSUMES your nearest minion within `radius`,
+   *  dealing `dmgPerLife` MORE damage per point of its remaining life. */
+  sacrifice?: { radius: number; dmgPerLife: number };
+  /** DURATION AURAS: the host aura no longer reserves — it COSTS its mana
+   *  and burns for `seconds` instead. The durationAuraCap stat bounds how
+   *  many duration-auras may burn at once (oldest gives way). */
+  auraDuration?: { seconds: number };
+  /** LIFE RESERVATION: the host aura reserves LIFE instead of mana (the
+   *  blood pact — rides the same reservedLife ceiling as overdrive). */
+  reserveLife?: true;
+  /** HEALING GROUND: the host's No Man's Land field MENDS allies standing
+   *  in it (per tick) instead of burning enemies — warcries drop
+   *  consecrations (the cleric's slam). */
+  healField?: { amount: number };
+  /** FRESH RANKS: minions of the host are born wearing this buff — "the
+   *  recently summoned fight harder" as one graft. */
+  spawnBuff?: BuffEffect;
+  /** ZONE EMITTER graft: the host's lingering ground CASTS `skillId` every
+   *  `interval` seconds (the pulse-cadence cursed ground — 2/1/0.5s are
+   *  three gems of one shape). */
+  zoneEmit?: { skillId: string; interval: number; at?: 'point' | 'enemy' };
+  /** MADDENING GROUND: anything standing in the host's lingering field for
+   *  `after` accumulated seconds is driven MAD (the `maddened` status —
+   *  it lashes at whatever is nearest, friend or foe). */
+  madden?: { after: number };
   /** CHARGE-TAP grafts: the host gains these ChargeGainSpec taps while
    *  socketed ("gain Frenzy every 3s while channeling this skill" is a
    *  support). Merged with the skill's own by instanceChargeGain. */

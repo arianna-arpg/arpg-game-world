@@ -243,6 +243,28 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  life (the classic culling strike). Hard-capped well short of half. */
   cullThreshold:  { label: 'Culling Threshold', base: 0, min: 0, max: 0.3, percent: true },
 
+  /** PULSATING projectiles: flight-time size oscillation amplitude (±this
+   *  fraction of base radius, on a fixed breath — the living missile). */
+  projPulse:      { label: 'Projectile Pulsation', base: 0, min: 0, max: 1, percent: true },
+  /** ECHOING MIGHT: after a landed hit, gain added physical damage equal
+   *  to this fraction of what it dealt, for a few seconds — the previous
+   *  blow feeds the next (the inverse-ignite buff). */
+  echoMight:      { label: 'Echoing Might', base: 0, min: 0, percent: true },
+  /** PROXIMITY damage: up to this much MORE damage at touch range,
+   *  tapering to nothing at DEFENSE_CFG.proximity.radius. */
+  proximityDamage:{ label: 'Proximity Damage', base: 0, min: 0, percent: true },
+  /** Flat damage per point of RESERVED mana, pro-rata over the skill's
+   *  rolled types (the dominion artery — locked power IS power). */
+  reservedDamage: { label: 'Damage per Reserved Mana', base: 0, min: 0 },
+  /** Flat damage per point of MAXIMUM mana, pro-rata (the archmage base). */
+  maxManaDamage:  { label: 'Damage per Maximum Mana', base: 0, min: 0 },
+  /** DOOM also TICKS: chaos dps equal to this fraction of the armed
+   *  payload while the fuse runs (it still culls at lethal). */
+  doomDot:        { label: 'Doom Damage over Time', base: 0, min: 0, percent: true },
+  /** How many DURATION-mode auras (the auraDuration graft) may burn at
+   *  once — the oldest gives way past the cap. */
+  durationAuraCap:{ label: 'Duration Aura Limit', base: 2, min: 1 },
+
   /** PROC CHAIN DEPTH: how many LAYERS of proc-in-proc your triggers may
    *  run (0 = procs fire from real actions only — the classic rule). Each
    *  extra layer rolls at DEFENSE_CFG.procs.depthFalloff of its chance,

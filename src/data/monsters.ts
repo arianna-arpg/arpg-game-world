@@ -360,6 +360,38 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 0,
   },
 
+  // THE CHERUB — Summon Cherub's winged mender (the mender_sprite craft,
+  // given wings and a hire clock).
+  cherub: {
+    id: 'cherub', name: 'Cherub',
+    color: '#f8e8c8', shape: 'diamond', radius: 9,
+    base: { life: 20, moveSpeed: 185, mana: 999, manaRegen: 18, weight: 0.3 },
+    skills: ['soothing_touch'],
+    xp: 0,
+  },
+  // THE QUIET SIBYL — selective CC from the other side: her sparks SILENCE
+  // (no spells for the struck) — swap verbs or close the distance.
+  quiet_sibyl: {
+    id: 'quiet_sibyl', name: 'Quiet Sibyl',
+    color: '#b8b8e8', shape: 'diamond', radius: 12,
+    base: { life: 28, moveSpeed: 140, mana: 110, manaRegen: 8 },
+    mods: [mod('lightningRes', 'flat', 0.3), mod('apply_silence', 'flat', 0.25)],
+    skills: ['spark'],
+    xp: 16,
+  },
+  // THE GRAVE SHAMAN — it does not summon: it RESURRECTS. Every corpse in
+  // reach is a soldier again until the bodies are spent or the caller is.
+  grave_shaman: {
+    id: 'grave_shaman', name: 'Grave Shaman',
+    color: '#9a86e8', shape: 'pentagon', radius: 14,
+    base: { life: 44, moveSpeed: 110, mana: 140, manaRegen: 9, poise: 45 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['shamans_call', 'venom_bolt'],
+    xp: 20,
+    faction: 'undead',
+    brain: { type: 'caster' },
+  },
+
   // (Broodclutch's hatchlings reuse the bestiary's existing `broodling` —
   // one body, two doors in: the spider-kin spawn it, and so do your poisons.)
   // THE PLAGUEFATHER — Summon Plaguefather's bloated priest: he spits
@@ -3172,8 +3204,8 @@ export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
   { minWave: 2, ids: ['skeleton_archer', 'blood_mite'] },
   { minWave: 3, ids: ['fire_cultist', 'storm_acolyte'] },
   { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker', 'pyre_acolyte'] },
-  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade'] },
-  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper'] },
+  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade', 'quiet_sibyl'] },
+  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper', 'grave_shaman'] },
   { minWave: 7, ids: ['warband_chieftain', 'bone_serpent'] },
   { minWave: 8, ids: ['bone_colossus', 'javelin_skirmisher'] },
 ];

@@ -110,6 +110,13 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
     decay: { perSec: 0.5, delay: 8 },
   },
 
+  // BREW (Slow Brew): time itself banks the next big swing — mute fuel on
+  // a slow drip; the spender graft drinks the pot for more damage.
+  brew: {
+    label: 'Brew', color: '#c8a848',
+    decay: { perSec: 0.25, delay: 10 },
+  },
+
   // VERDICT (Stored Verdict): completed real uses of the hosting skill
   // bank toward the meta-release. Mute fuel; the release is the payoff.
   verdict: {

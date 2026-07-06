@@ -268,6 +268,74 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 2, keepDistance: 240 },
   },
 
+  // HALO (the expansion-only ring): a circle of dawnlight races outward,
+  // striking each enemy ONCE as it crosses them and washing allies as it
+  // goes — then FIZZLES at the apex (retract.fizzle: no contraction, the
+  // endBurst is the ring's last word at full spread).
+  halo_of_light: {
+    id: 'halo_of_light', name: 'Halo',
+    description: 'A ring of light races outward from you, striking each foe once as it passes and mending allies it washes over — gone at its widest breath.',
+    tags: ['spell', 'fire', 'aoe', 'heal', 'duration'], color: '#ffeecc',
+    manaCost: 13, cooldown: 7, useTime: 0.4,
+    baseDamage: { fire: [12, 19] },
+    delivery: {
+      type: 'ground', radius: 34, castRange: 0, delay: 0, noImpact: true,
+      lingerDuration: 1.2, tickInterval: 0.1,
+      follow: true, grow: 300,
+      retract: { at: 1.15, fizzle: true },
+      endBurst: { damageScale: 0.6, radiusScale: 1 },
+      hitOnce: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'heal', amount: 2, excludeCaster: true },
+    ],
+    requirements: { willpower: 16, intelligence: 8 },
+    ai: { range: 200, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1, ['fire'])] },
+  },
+
+  // The cherub: a fluttering mender on a hire clock (the healer-minion AI
+  // already tends the wounded — mender_sprite's craft, given wings).
+  summon_cherub: {
+    id: 'summon_cherub', name: 'Summon Cherub',
+    description: 'Call down a small winged mender for a while: it flits to the wounded and closes what it can.',
+    tags: ['spell', 'summon', 'minion', 'heal', 'duration'], color: '#f8e8c8',
+    manaCost: 24, cooldown: 8, useTime: 0.8,
+    delivery: { type: 'summon', monsterId: 'cherub', count: 1, maxActive: 1, duration: 30 },
+    effects: [],
+    requirements: { willpower: 16, charisma: 6 },
+    ai: { range: 400, weight: 2, keepDistance: 280 },
+    leveling: { perLevel: [mod('minionLife', 'increased', 0.15), mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  // THE SHAMAN'S ANSWER (and the grave_shaman's whole kit): raise the
+  // fallen FROM THEIR CORPSE — the risen is whatever died there. Obliterate
+  // the bodies or kill the caller, or the war never ends.
+  shamans_call: {
+    id: 'shamans_call', name: "Shaman's Call",
+    description: 'Call a corpse back to its feet: the risen is whatever fell there. The grave shamans will not stop until the bodies are spent — or they are.',
+    tags: ['spell', 'summon', 'minion', 'corpse'], color: '#9a86e8',
+    manaCost: 20, cooldown: 3, useTime: 0.9,
+    targeting: { target: 'corpse', castRange: 400 },
+    delivery: { type: 'summon', monsterId: 'zombie', fromCorpse: true, count: 1, maxActive: 5 },
+    effects: [],
+    requirements: { wisdom: 16 },
+    ai: { range: 380, weight: 4, keepDistance: 260 },
+    leveling: { perLevel: [mod('minionLife', 'increased', 0.12)] },
+  },
+
+  // PULSE-HEX payload (the pulsing-ground gems cast this on their beat).
+  hex_pulse: {
+    id: 'hex_pulse', name: 'Hex Pulse',
+    description: 'A soft snap of hexed air (the pulse-cadence grounds\' own beat).',
+    tags: ['spell', 'chaos', 'aoe', 'instant'], color: '#b06bd4',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { chaos: [4, 7] },
+    delivery: { type: 'nova', radius: 90 },
+    effects: [{ type: 'damage' }],
+  },
+
   // ======================= Paladin =========================================
   // The oath-sworn kit: judgement and mercy, crowd-fed zeal, and blessings
   // that arm OTHER hands — every piece an exhibit of the trigger fabric.

@@ -2361,6 +2361,48 @@ export class Renderer {
   private drawZones(world: World): void {
     const { ctx } = this;
     for (const z of world.zones) {
+      // FISSURE FRACTURES (Zone.seg): the crack IS the hitbox — a jagged
+      // line the capsule's width, not a disc. Deterministic jitter (seeded
+      // off the segment's own coordinates) keeps every frame's crack the
+      // same crack. Volatile segments run hot; armed aftershock segments
+      // glow gold for the run-over game.
+      if (z.seg) {
+        const s = z.seg;
+        const dx = s.bx - s.ax, dy = s.by - s.ay;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, ny = dx / len;
+        const seed = (s.ax * 13.37 + s.ay * 7.77) % Math.PI;
+        const armed = z.aftershock && z.exploded && z.linger > 0
+          && world.time >= z.aftershock.readyAt;
+        const hot = z.volatile && z.exploded && z.linger > 0;
+        ctx.beginPath();
+        ctx.moveTo(s.ax, s.ay);
+        for (let k = 1; k <= 3; k++) {
+          const t = k / 4;
+          const off = Math.sin(seed + k * 2.4) * z.radius * 0.55;
+          ctx.lineTo(s.ax + dx * t + nx * off, s.ay + dy * t + ny * off);
+        }
+        ctx.lineTo(s.bx, s.by);
+        if (!z.exploded) {
+          ctx.strokeStyle = z.color;
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = 2;
+        } else {
+          ctx.strokeStyle = armed ? '#ffd24a' : hot ? '#ff8a4a' : z.color;
+          ctx.globalAlpha = armed ? 0.95 : 0.8;
+          ctx.lineWidth = Math.max(3, z.radius * (armed ? 0.8 : 0.6));
+        }
+        ctx.stroke();
+        // The molten heart: a thin bright core down the same jag.
+        if (z.exploded) {
+          ctx.globalAlpha = 0.9;
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = '#fff0c8';
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        continue;
+      }
       ctx.beginPath();
       this.traceAoe(z.pos.x, z.pos.y, z.radius, z.shape, z.facing, z.arcRad);
       if (!z.exploded) {

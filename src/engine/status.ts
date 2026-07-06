@@ -82,6 +82,14 @@ export interface StatusDef {
    *  for the status's caster-less baseline × `factor` — the mark that
    *  makes standing NEXT to the marked the mistake. */
   zapNearby?: { interval: number; radius: number; factor: number };
+  /** DPS CURVE over the status's life: 'ramp' opens weak and finishes hard
+   *  (Curse-of-Agony), 'taper' opens hard and bleeds out. Both average the
+   *  flat total (factor 0→2 / 2→0), so investment reads the same. */
+  dpsCurve?: 'ramp' | 'taper';
+  /** MADNESS (lashOut): the afflicted STRIKES whatever is nearest — friend
+   *  or foe — every `interval` seconds within `radius`, for the status's
+   *  baseline × `factor`. The cursed-ground betrayal. */
+  lashOut?: { interval: number; radius: number; factor: number };
 }
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
@@ -182,6 +190,34 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   doom: {
     label: 'Doomed', color: '#7a48c8', duration: 6,
     cullsAtLethal: true,
+    // hitMagnitude routes STAT-GRANTED dooms (apply_doom — Creeping Doom)
+    // into the ARMED PAYLOAD rather than a tick: a weak keg per hit,
+    // pumped by repetition, culling at lethal like every doom.
+    hitMagnitude: 0.4,
+  },
+  // SCORCH (Hallowed Flames): a short, non-stacking searing — refreshed by
+  // every fresh application, INDEPENDENT of ignite (its own id, its own
+  // clock; the two burns coexist by construction).
+  scorch: {
+    label: 'Scorched', color: '#ffb056', duration: 2.5,
+    element: 'fire', dotType: 'fire',
+    hitMagnitude: 0.25, baseline: { dps: 3, perLevel: 1.1 },
+  },
+  // WITHER-AGONY (Curse of Agony): a chaos rot that opens as a whisper and
+  // ENDS as a scream — the ramp curve (weak→strong, same flat total).
+  wither_agony: {
+    label: 'Withering Agony', color: '#8a5ad8', duration: 8,
+    element: 'chaos', dotType: 'chaos',
+    dpsCurve: 'ramp',
+    hitMagnitude: 0.45, baseline: { dps: 3.5, perLevel: 1.3 },
+  },
+  // MADDENED (the cursed-ground betrayal): the afflicted lashes at
+  // whatever is NEAREST — friend or foe alike — until the fog lifts.
+  maddened: {
+    label: 'Maddened', color: '#d84a9a', duration: 4,
+    baseline: { dps: 4, perLevel: 1.2 },
+    lashOut: { interval: 0.8, radius: 120, factor: 1.2 },
+    mods: [mod('detectionRange', 'more', -0.4)],
   },
   // EXPOSED (#12): a weak spot painted on the health bar just below the
   // wound — hit them INTO the window for 40% more; punch through it and
@@ -420,6 +456,10 @@ export interface ActiveStatus {
   window?: { lo: number; hi: number };
   /** BRAND ZAP clock (StatusDef.zapNearby): world time of the next lash. */
   zapAt?: number;
+  /** MADNESS clock (StatusDef.lashOut): world time of the next strike. */
+  lashAt?: number;
+  /** The status's FULL span, stamped at application — dpsCurve's clock. */
+  total?: number;
   /** The APPLIER's actor id (stamped where the world applies statuses) —
    *  brood hatchlings and future caster-attributed clauses read it. */
   casterId?: number;

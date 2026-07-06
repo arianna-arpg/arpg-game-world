@@ -22,7 +22,7 @@ import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, makeSkillInstance, rampValue, rollCount, rollSkillRarity,
+  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, supportFitsInst,
   supportMaxLevel,
@@ -290,6 +290,10 @@ export const AMBIENT_TAGS = new Set([
 ]);
 
 interface Projectile {
+  /** PULSATION (projPulse): breathe the hit radius ±this fraction of
+   *  radius0 on a fixed rhythm. */
+  pulse?: number;
+  radius0?: number;
   pos: Vec2; dir: number; speed: number; radius: number;
   /** Fractional speed change per second of flight (Momentum; floors low). */
   accel?: number;
@@ -517,8 +521,25 @@ interface Zone {
   /** With struck: leaving the surface RE-ARMS the victim — damage per
    *  crossing, EVERY crossing (GroundDelivery.rearmOnExit). */
   rearm?: boolean;
-  /** Squall Rune's breath: retract at `speed` after `at` lingered seconds. */
-  retract?: { at: number; speed: number };
+  /** Squall Rune's breath: retract at `speed` after `at` lingered seconds
+   *  — or `fizzle`: END at the apex (the endBurst fires at full spread). */
+  retract?: { at: number; speed?: number; fizzle?: true };
+  /** FISSURE SEGMENT: the zone is a LINE (a capsule of `radius` half-width
+   *  from a to b), not a disc — hit tests and rendering both honour it.
+   *  The crack IS the hitbox. */
+  seg?: { ax: number; ay: number; bx: number; by: number };
+  /** VOLATILE fissure segment (SupportDef.fissureVolatile): re-lights on
+   *  its own clock while lingering. */
+  volatile?: { interval: number; chance: number; damageScale: number; next: number };
+  /** ARMED aftershock segment (SupportDef.fissureAftershock): the CASTER
+   *  running over it detonates an aftershock; re-arms after `rearm`. */
+  aftershock?: { damageScale: number; radiusScale?: number; rearm: number; readyAt: number };
+  /** HEALING GROUND (SupportDef.healField): the tick MENDS allies in the
+   *  area instead of striking enemies. */
+  healTick?: number;
+  /** MADDENING GROUND (SupportDef.madden): accumulated seconds standing
+   *  inside, per occupant — past `after`, the `maddened` status lands. */
+  madden?: { after: number; dwell: Map<number, number> };
   /** One final burst as the linger expires (damageScale × roll). */
   endBurst?: { damageScale: number; radiusScale?: number };
   /** The facing SWINGS ±arc/2 around `base` per `period` (the Metronome). */
@@ -8801,6 +8822,30 @@ export class World {
         this.text(vec(caster.pos.x, caster.pos.y - 22), `power ${power}`, def.color, 11);
       }
     }
+    // SACRIFICE (support graft): the cast CONSUMES your nearest minion —
+    // its remaining life becomes MORE damage on this use. The altar always
+    // takes; a flock-less cast just casts.
+    {
+      const sac = socketSpec(inst, 'sacrifice');
+      if (sac && !opts.noRepeat) {
+        let pick2: Actor | null = null;
+        let best = sac.radius;
+        for (const m of this.actors) {
+          if (m.owner !== caster || m.dead || m.construct) continue;
+          const dd = dist(caster.pos, m.pos);
+          if (dd <= best) { best = dd; pick2 = m; }
+        }
+        if (pick2) {
+          useMult *= 1 + pick2.life * sac.dmgPerLife;
+          this.text(pick2.pos, 'consumed!', '#c45ae0', 12);
+          this.flashes.push({
+            pos: vec(pick2.pos.x, pick2.pos.y), radius: pick2.radius + 12,
+            color: '#c45ae0', life: 0.3, maxLife: 0.3,
+          });
+          this.kill(pick2, true);
+        }
+      }
+    }
     // MOVEMENT AUTO-TARGETING (Closing Fang / the Closing Instinct graft):
     // a resolved enemy REDIRECTS the movement itself — the lunge, blink or
     // leap re-aims at the prey's LIVE position, not the fumbled cursor.
@@ -8961,6 +9006,9 @@ export class World {
         }
         if (t.consumesCorpse !== false && def.delivery.type !== 'summon') {
           this.removeCorpse(targetInfo.corpse);
+          // HIVEBORN (corpseSpawn graft): the body eaten by this offering
+          // crawls back out changed — one crawler per corpse consumed.
+          this.corpseSpawn(caster, inst, targetInfo.corpse.pos, 1);
         }
       }
       if (targetInfo.actor && t.requiresStatus && t.consumesStatus) {
@@ -9626,6 +9674,12 @@ export class World {
           })(),
           follow: d.follow,
           retract: d.retract,
+          // Pulse-cadence + maddening cursed-ground grafts ride ANY
+          // lingering ground skill (SupportDef.zoneEmit / madden).
+          madden: (() => {
+            const m = socketSpec(inst, 'madden');
+            return m ? { after: m.after, dwell: new Map<number, number>() } : undefined;
+          })(),
           endBurst: d.endBurst,
           // A socketed Metronome grafts the back-and-forth onto any
           // lingering zone; the delivery's own spec is the innate base.
@@ -9644,7 +9698,12 @@ export class World {
           fillRate: d.fillFrom ? d.fillFrom / Math.max(0.2, fillTime) : undefined,
           // Emitters & domains ride the PRIMARY placement only — cascades'
           // ripples stay plain zones (no source spam, no bolt storms²).
-          emit: d.emit,
+          // A zoneEmit graft (the pulse-cadence cursed ground) supplies an
+          // emitter where the skill brings none.
+          emit: d.emit ?? (() => {
+            const ze = socketSpec(inst, 'zoneEmit');
+            return ze ? { skillId: ze.skillId, interval: ze.interval, at: ze.at } : undefined;
+          })(),
           domain: d.domain,
           domainKey: d.domain ? `domain:${this.domainSeq++}` : undefined,
           // Sweep vocabulary: crescent width (melee-style arc scaling) and
@@ -9767,6 +9826,7 @@ export class World {
           if (!targetInfo?.corpse) break;
           const corpse = targetInfo.corpse;
           this.removeCorpse(corpse);
+          this.corpseSpawn(caster, inst, corpse.pos, 1);
           this.spawnMinion(caster, inst, { monsterId: corpse.defId, pos: corpse.pos });
           break;
         }
@@ -10611,6 +10671,10 @@ export class World {
     const spin = caster.sheet.get('spinPower', tags, extra, t?.spin ?? 0) + (inh?.spin ?? 0);
     const weave = caster.sheet.get('weavePower', tags, extra, t?.weave ?? 0) + (inh?.weave ?? 0);
     const accel = caster.sheet.get('projAccel', tags, extra, t?.accel ?? 0);
+    // PULSATION (projPulse): the flight BREATHES — its hit radius swells
+    // and shrinks around the base on a fixed rhythm (a living missile;
+    // expansion-and-contraction as a projectile modifier).
+    const pulse = caster.sheet.get('projPulse', tags, extra);
 
     this.projectiles.push({
       pos: vec(origin.x, origin.y),
@@ -10618,6 +10682,8 @@ export class World {
       guided: spiral > 0 || orbit > 0 || spin > 0 || weave > 0,
       speed,
       radius: d.radius * size,
+      pulse: pulse > 0 ? pulse : undefined,
+      radius0: pulse > 0 ? d.radius * size : undefined,
       traveled: 0, range: maxAge !== undefined ? 1e9 : d.range, age: 0,
       maxAge,
       pierce: (d.pierce ?? 0) + Math.round(caster.sheet.get('pierceCount', tags, extra)),
@@ -10874,18 +10940,38 @@ export class World {
     const durScale = caster.sheet.get('effectDuration', tags, extra);
     const step = fz.step ?? d.radius * 1.1;
     const n = Math.min(28, Math.max(2, Math.ceil(fz.length / step)));
-    const lay = (px: number, py: number, delay: number, mult: number, linger: number): void => {
+    // The crack's TEXTURE grafts (SupportDef): volatile re-lighting and
+    // caster-run-over aftershocks ride every lingering segment — and they
+    // IMPOSE a linger where the skill brings none (a texture needs a
+    // surface; the crack stays open long enough to matter).
+    const volatile = socketSpec(inst, 'fissureVolatile');
+    const aftershock = socketSpec(inst, 'fissureAftershock');
+    const segLinger = (secs: number): number =>
+      (volatile || aftershock) ? Math.max(secs, 5) : secs;
+    // Each placement is a true LINE SEGMENT (a capsule the width of the
+    // crack) — the fracture IS the hitbox, laid bearing-wise from its
+    // start point. Branches and the closing pass carry their own bearings.
+    const lay = (px: number, py: number, segAng: number, delay: number, mult: number, linger: number): void => {
+      const half = step / 2;
       this.zones.push({
         pos: this.clampPos(vec(px, py), 10),
         radius: d.radius * aoeScale,
+        seg: {
+          ax: px - Math.cos(segAng) * half, ay: py - Math.sin(segAng) * half,
+          bx: px + Math.cos(segAng) * half, by: py + Math.sin(segAng) * half,
+        },
         caster, inst, color: inst.def.color,
         delay, exploded: false,
         linger, tickInterval: d.tickInterval ?? 0.5, tickTimer: 0,
-        shape: 0, facing: ang,
+        shape: 0, facing: segAng,
         dmgMult: mult, depth: 1,
         // The PRIMARY chain carries the emitter (spirits rise from the
         // whole crack); the closing pass and branches stay plain.
         emit: linger > 0 ? d.emit : undefined,
+        volatile: linger > 0 && volatile
+          ? { ...volatile, next: this.time + delay + volatile.interval } : undefined,
+        aftershock: linger > 0 && aftershock
+          ? { ...aftershock, readyAt: this.time + delay } : undefined,
         flatBonus,
       });
     };
@@ -10893,7 +10979,7 @@ export class World {
       const px = from.x + Math.cos(ang) * step * (i + 0.5);
       const py = from.y + Math.sin(ang) * step * (i + 0.5);
       const delay = (d.delay ?? 0.1) + (step * i) / fz.speed;
-      lay(px, py, delay, useMult, (d.lingerDuration ?? 0) * durScale);
+      lay(px, py, ang, delay, useMult, segLinger(d.lingerDuration ?? 0) * durScale);
       // BRANCHES fork off evenly spaced segments, alternating sides —
       // half-length child cracks, barren of further forks.
       if (branches > 0 && i > 0 && i % Math.max(1, Math.floor(n / (branches + 1))) === 0) {
@@ -10903,18 +10989,56 @@ export class World {
         for (let k = 0; k < bn; k++) {
           lay(px + Math.cos(bAng) * step * (k + 0.5),
             py + Math.sin(bAng) * step * (k + 0.5),
+            bAng,
             delay + (step * k) / fz.speed,
             useMult * 0.75,
-            (d.lingerDuration ?? 0) * durScale * 0.7);
+            segLinger((d.lingerDuration ?? 0) * 0.7) * durScale);
         }
       }
       // THE CLOSING PASS: the crack zips shut from the far end home.
       if (fz.close) {
-        lay(px, py,
+        lay(px, py, ang,
           (d.delay ?? 0.1) + (step * n) / fz.speed + fz.close.delay
           + (step * (n - 1 - i)) / (fz.speed * 1.4),
           useMult * fz.close.damageScale, 0);
       }
+    }
+  }
+
+  /** Zone containment: SEGMENT zones (fissure fractures) are CAPSULES —
+   *  the crack line is the hitbox; everything else keeps the shaped test. */
+  private zoneHas(z: { seg?: { ax: number; ay: number; bx: number; by: number }; pos: Vec2; radius: number; shape: number; facing: number; arcRad?: number }, pos: Vec2, radius: number): boolean {
+    if (z.seg) {
+      const dx = z.seg.bx - z.seg.ax, dy = z.seg.by - z.seg.ay;
+      const len2 = dx * dx + dy * dy;
+      const t = len2 <= 0.0001 ? 0
+        : clamp(((pos.x - z.seg.ax) * dx + (pos.y - z.seg.ay) * dy) / len2, 0, 1);
+      const cx = z.seg.ax + dx * t, cy = z.seg.ay + dy * t;
+      return Math.hypot(pos.x - cx, pos.y - cy) <= z.radius + radius;
+    }
+    return inAoe(z.pos, z.radius, z.shape, z.facing, pos, radius, z.arcRad);
+  }
+
+  /** HIVEBORN (SupportDef.corpseSpawn): bodies consumed by the host skill
+   *  crawl back out as servants — `perCorpse` births `n` per body eaten,
+   *  `count` a fixed brood per use instead (the ghost variant pairs that
+   *  with an imposed cooldown via ordinary addedCooldown mods). Capped
+   *  alive per caster per skill. */
+  private corpseSpawn(caster: Actor, inst: SkillInstance, at: Vec2, n: number): void {
+    const cs = socketSpec(inst, 'corpseSpawn');
+    if (!cs) return;
+    const births = cs.perCorpse ? n : (cs.count ?? 1);
+    const key = '__hive:' + inst.def.id;
+    for (let i = 0; i < births; i++) {
+      if (this.actors.filter(m => m.owner === caster && !m.dead
+        && m.sourceSkillId === key).length >= cs.max) return;
+      const crawler = this.createMonster(cs.monsterId, caster.level, caster.team, caster);
+      crawler.sourceSkillId = key;
+      crawler.lifespan = cs.duration;
+      crawler.pos = this.clampPos(
+        vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), crawler.radius);
+      this.actors.push(crawler);
+      this.text(crawler.pos, 'hiveborn!', '#a8c860', 11);
     }
   }
 
@@ -11150,6 +11274,30 @@ export class World {
       const devourSpec = d.devour ?? inst.sockets.find(s => s?.def.devour)?.def.devour;
       if (devourSpec) {
         minion.devour = { spec: devourSpec, next: this.time + devourSpec.interval };
+      }
+    }
+    // FRESH RANKS (SupportDef.spawnBuff): the newly summoned are born
+    // wearing the graft's buff — "the recently raised fight harder".
+    {
+      const sb = socketSpec(inst, 'spawnBuff');
+      if (sb) minion.addBuff(sb);
+    }
+    // RANDOM WEAK AURA (SupportDef.minionAuraPool): each minion is born
+    // humming ONE aura rolled from the pool, shared with allies around it.
+    {
+      const pool = socketSpec(inst, 'minionAuraPool');
+      if (pool && pool.length) {
+        const spec2 = pick(pool);
+        minion.activeAuras.set(inst.def.id + ':gift', {
+          inst, spec: spec2,
+          allyMods: spec2.allyMods,
+          radius: spec2.radius,
+          shape: 0,
+          remaining: Infinity,
+          reserved: 0, pulseTimer: 0,
+          affected: new Set(),
+          since: this.time,
+        });
       }
     }
     // PYRE LEGION (SupportDef.minionAura): the ranks wear a baked aura —
@@ -11586,15 +11734,41 @@ export class World {
     }
     const tags = skillContextTags(inst.def);
     const extra = instanceMods(inst);
+    // DURATION AURAS (auraDuration graft): the aura burns for a span and
+    // COSTS its mana (paid by the press) instead of reserving — capped by
+    // the durationAuraCap stat; the OLDEST burning duration-aura gives way.
+    const asDuration = socketSpec(inst, 'auraDuration');
+    // LIFE RESERVATION (reserveLife graft): the toggle locks LIFE instead
+    // of mana — the blood pact rides the same ceiling as overdrive.
+    const bloodPact = !asDuration && socketSpec(inst, 'reserveLife') !== undefined;
     let reserved = 0;
-    if (d.mode === 'toggle' && d.upkeep?.reserveMana) {
+    if (d.mode === 'toggle' && d.upkeep?.reserveMana && !asDuration) {
       reserved = d.upkeep.reserveMana * caster.sheet.get('manaCost', tags, extra);
-      if (caster.reservedMana + reserved > caster.maxMana()) {
-        this.text(caster.pos, 'cannot sustain', '#d05050', 12);
-        return;
+      if (bloodPact) {
+        if (caster.reservedLife + reserved > caster.maxLife() * 0.9) {
+          this.text(caster.pos, 'cannot sustain', '#d05050', 12);
+          return;
+        }
+        caster.reservedLife += reserved;
+        caster.life = Math.min(caster.life, caster.lifeCeiling());
+      } else {
+        if (caster.reservedMana + reserved > caster.maxMana()) {
+          this.text(caster.pos, 'cannot sustain', '#d05050', 12);
+          return;
+        }
+        caster.reservedMana += reserved;
+        caster.mana = Math.min(caster.mana, caster.availableMaxMana());
       }
-      caster.reservedMana += reserved;
-      caster.mana = Math.min(caster.mana, caster.availableMaxMana());
+    }
+    if (asDuration) {
+      // Enforce the burning-aura cap: finite-remaining auras count.
+      const cap = Math.max(1, Math.round(caster.sheet.get('durationAuraCap', tags, extra)));
+      const burning = [...caster.activeAuras.entries()]
+        .filter(([, a2]) => Number.isFinite(a2.remaining));
+      while (burning.length >= cap) {
+        const [oldId] = burning.shift()!;
+        this.deactivateAura(caster, oldId);
+      }
     }
     if (d.overdrive) {
       caster.overdrive[d.overdrive.lane] = { inst, debt: 0, idle: 0 };
@@ -11616,9 +11790,12 @@ export class World {
       radius: d.aura.radius * aoeScale,
       // Sigils shape auras too: the area test and the rendering both honor it.
       shape: caster.sheet.get('aoeShape', tags, extra),
-      remaining: d.mode === 'duration'
-        ? (d.duration ?? 5) * caster.sheet.get('effectDuration', tags, extra)
-        : Infinity,
+      remaining: asDuration
+        ? asDuration.seconds * caster.sheet.get('effectDuration', tags, extra)
+        : d.mode === 'duration'
+          ? (d.duration ?? 5) * caster.sheet.get('effectDuration', tags, extra)
+          : Infinity,
+      lifeLane: bloodPact || undefined,
       reserved, pulseTimer: 0,
       affected: new Set(),
       since: this.time,
@@ -11704,7 +11881,12 @@ export class World {
       if (aura.affected.has(a.id)) a.sheet.removeSource(sourceName);
     }
     if (aura.reserved > 0) {
-      bearer.reservedMana = Math.max(0, bearer.reservedMana - aura.reserved);
+      // The blood pact frees its LIFE lane; everything else frees mana.
+      if (aura.lifeLane) {
+        bearer.reservedLife = Math.max(0, bearer.reservedLife - aura.reserved);
+      } else {
+        bearer.reservedMana = Math.max(0, bearer.reservedMana - aura.reserved);
+      }
     }
     // SEALS & FORMS teardown: unlock the sealed pool, strip the dynamic
     // seal source, and — for a LIVING bearer — toll the deactivation
@@ -11996,18 +12178,27 @@ export class World {
     const tags = skillContextTags(inst.def, grantedTags(inst));
     const extra = instanceMods(inst);
     const fieldSecs = caster.sheet.get('lingerField', tags, extra);
-    if (fieldSecs <= 0) return;
+    const healField = socketSpec(inst, 'healField');
+    if (fieldSecs <= 0 && !healField) return;
+    const zoneEmit = socketSpec(inst, 'zoneEmit');
+    const madden = socketSpec(inst, 'madden');
     this.zones.push({
       pos: vec(at.x, at.y),
       radius: 80 * caster.sheet.get('aoeRadius', tags, extra),
-      caster, inst, color: inst.def.color,
+      caster, inst, color: healField ? '#8ae0a8' : inst.def.color,
       delay: 0, exploded: true,
-      linger: fieldSecs * caster.sheet.get('effectDuration', tags, extra),
+      linger: Math.max(fieldSecs, healField ? 4 : 0)
+        * caster.sheet.get('effectDuration', tags, extra),
       tickInterval: 0.5, tickTimer: 0.5,
       shape: caster.sheet.get('aoeShape', tags, extra),
       facing: caster.facing,
-      dmgMult: 0.4 * useMult, depth: 1,
-      forceDamage: true,
+      // HEALING GROUND (healField graft): the field mends instead of burns
+      // — warcries and slams drop consecrations (the cleric's echo).
+      healTick: healField?.amount,
+      dmgMult: healField ? 0 : 0.4 * useMult, depth: 1,
+      forceDamage: !healField,
+      emit: zoneEmit ? { skillId: zoneEmit.skillId, interval: zoneEmit.interval, at: zoneEmit.at } : undefined,
+      madden: madden ? { after: madden.after, dwell: new Map() } : undefined,
     });
   }
 
@@ -12466,6 +12657,15 @@ export class World {
         this.text(vec(target.pos.x, target.pos.y - 12), 'backstab!', '#d8c8ff', 12);
       }
     }
+    // PROXIMITY (the point-blank graft): up to the stat's bonus at touch,
+    // tapering linearly to nothing at DEFENSE_CFG.proximity.radius.
+    {
+      const prox = caster.sheet.get('proximityDamage', skillContextTags(def), extra);
+      if (prox > 0) {
+        const near = 1 - Math.min(1, dist(caster.pos, target.pos) / DEFENSE_CFG.proximity.radius);
+        if (near > 0) dmgMult *= 1 + prox * near;
+      }
+    }
     const packet: DamagePacket = rollSkillDamage(caster, inst, flatBonus);
     if (dmgMult !== 1) {
       for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
@@ -12646,6 +12846,40 @@ export class World {
       if (target.esBroke) {
         target.esBroke = false;
         this.rollOwnProcs(target, 'esBreak', { depth });
+      }
+      // ECHOING MIGHT (the inverse-ignite buff): the landed blow feeds the
+      // NEXT — added physical equal to a fraction of what this one dealt,
+      // re-priced on every refresh (dynamic-value buffs).
+      if (dealt > 0 && depth === 0) {
+        const echo = caster.sheet.get('echoMight', packet.tags, extra);
+        if (echo > 0) {
+          caster.addBuff({
+            type: 'buff', id: 'echoing_might', duration: 4,
+            mods: [mod('addedPhysical', 'flat', dealt * echo)],
+          });
+        }
+      }
+      // DOMINATING BLOW (support graft): the slain may RISE for you —
+      // the kill converts the body into a thrall on a clock.
+      if (target.life <= 0 && !target.dead && depth === 0) {
+        const dom = socketSpec(inst, 'dominate');
+        if (dom && target.defId && !target.isMinion() && MONSTERS[target.defId]
+          && !MONSTERS[target.defId].boss && chance(dom.chance)) {
+          const key = '__dominate:' + inst.def.id;
+          if (this.actors.filter(m => m.owner === caster && !m.dead
+            && m.sourceSkillId === key).length < dom.max) {
+            const thrall = this.createMonster(target.defId, target.level, caster.team, caster);
+            thrall.sourceSkillId = key;
+            thrall.lifespan = dom.duration;
+            thrall.pos = this.clampPos(vec(target.pos.x, target.pos.y), thrall.radius);
+            this.actors.push(thrall);
+            this.text(thrall.pos, 'dominated!', '#e8d44a', 13);
+            this.flashes.push({
+              pos: vec(thrall.pos.x, thrall.pos.y), radius: thrall.radius + 14,
+              color: '#e8d44a', life: 0.35, maxLife: 0.35,
+            });
+          }
+        }
       }
       // Striking the thorned costs blood (thorns / reflect / Nettles).
       this.applyThorns(target, caster, dealt);
@@ -12845,7 +13079,14 @@ export class World {
           let rupture: number | undefined;
           let ruptureType: DamageType | undefined;
           let dpsOut = dps;
-          if (sdef?.dotType && dps > 0) {
+          // DOOM-family statuses (cullsAtLethal) route their derived power
+          // into the ARMED PAYLOAD — and the doomDot stat lets a share of
+          // that keg TICK as chaos while the fuse runs (Lingering Doom).
+          if (sdef?.cullsAtLethal && dps > 0) {
+            rupture = dps * sdef.duration * durScale;
+            ruptureType = 'chaos';
+            dpsOut = rupture * caster.sheet.get('doomDot', tags, extra);
+          } else if (sdef?.dotType && dps > 0) {
             // Powderkeg: a FRACTION of the ignite converts from ticking
             // burn into a detonation at expiry (1 = no ticks, all blast;
             // 0.5 = half burns, half banks — a dial, not a flag).
@@ -12961,11 +13202,23 @@ export class World {
           ? Math.max((sdef.hitMagnitude ?? 0) * dealt, baselineStatusDps(sid, this.zone.level))
             * potencyFor(sid) / Math.max(0.5, durScale)
           : 0;
-        target.applyStatus(sid, dps, durScale, caster.name, {
+        // Stat-granted DOOMS (Creeping Doom): the derived power ARMS the
+        // keg instead of ticking — pumped by repetition, culling at lethal.
+        let armed: number | undefined;
+        let armedType: DamageType | undefined;
+        let dpsOut2 = dps;
+        if (sdef.cullsAtLethal) {
+          armed = Math.max((sdef.hitMagnitude ?? 0.4) * dealt,
+            baselineStatusDps(sid, this.zone.level)) * potencyFor(sid);
+          armedType = 'chaos';
+          dpsOut2 = armed * caster.sheet.get('doomDot', tags, extra);
+        }
+        target.applyStatus(sid, dpsOut2, durScale, caster.name, {
           propagates: chance(caster.sheet.get('dotPropagates', tags, extra)) || undefined,
           stacksBonus: stacksBonusFor(sid),
           casterId: caster.id,
           brood: instanceBrood(inst),
+          rupture: armed, ruptureType: armedType,
         });
         // Stat-granted applications trigger statusApply procs too.
         this.rollStatusProcs(caster, inst, target, sid, tags, extra, depth);
@@ -14527,6 +14780,37 @@ export class World {
             color: STATUS_DEFS[s.id]?.color ?? '#e8e05a', life: 0.15, maxLife: 0.15,
           });
         }
+      }
+      // MADNESS (StatusDef.lashOut — the cursed-ground betrayal): the
+      // afflicted STRIKES whatever is nearest, friend or foe alike, on the
+      // fog's beat. Caster-less baseline damage, mitigated normally.
+      for (const s of a.statuses) {
+        const lo = STATUS_DEFS[s.id]?.lashOut;
+        if (!lo || a.dead || a.isStunned()) continue;
+        s.lashAt ??= this.time + lo.interval;
+        if (this.time < s.lashAt) continue;
+        s.lashAt = this.time + lo.interval;
+        let prey: Actor | null = null;
+        let best = lo.radius;
+        for (const other of this.actors) {
+          if (other === a || other.dead || other.untargetable || other.passive
+            || other.invulnerable || other.construct) continue;
+          const dd = dist(a.pos, other.pos);
+          if (dd <= best) { best = dd; prey = other; }
+        }
+        if (!prey) continue;
+        const dmg = baselineStatusDps(s.id, this.zone.level) * lo.factor;
+        const taken = mitigateTyped(prey, { physical: dmg });
+        if (taken > 0) {
+          prey.life -= taken;
+          prey.hitFlash = 0.12;
+          this.text(prey.pos, Math.round(taken).toString(), '#d84a9a', 12);
+          if (prey.life <= 0 && !prey.dead) this.kill(prey);
+        }
+        this.flashes.push({
+          pos: vec(a.pos.x, a.pos.y), radius: a.radius + 10,
+          color: '#d84a9a', life: 0.15, maxLife: 0.15,
+        });
       }
       // IRON WARD: the ward ends — everything it banked DETONATES.
       if (a.ironWard && this.time >= a.ironWard.until) {
@@ -17192,6 +17476,11 @@ export class World {
     p.stall = undefined;
     p.age += dt;
     p.traveled += step;
+    // PULSATION: the hit radius breathes ± its amplitude on a fixed
+    // rhythm — the renderer draws the same live radius it hits with.
+    if (p.pulse && p.radius0) {
+      p.radius = p.radius0 * (1 + p.pulse * Math.sin(p.age * Math.PI * 2 / 0.7));
+    }
     // CATCH-SPOT flight (Whirlaxe): once armed, the axe flies STRAIGHT to
     // its marked circle — no more axes, no more prey.
     if (p.landAt) {
@@ -17960,19 +18249,59 @@ export class World {
         if (z.struck && z.rearm && z.struck.size) {
           for (const id of [...z.struck]) {
             const v = this.actorById(id);
-            if (!v || v.dead
-              || !inAoe(z.pos, z.radius, z.shape, z.facing, v.pos, v.radius, z.arcRad)) {
+            if (!v || v.dead || !this.zoneHas(z, v.pos, v.radius)) {
               z.struck.delete(id);
             }
           }
         }
         // The Squall's breath: growth until the mark, then the ring pulls
         // back in — retraction SUPERSEDES growth (one direction at a time).
+        // `fizzle` instead ENDS the zone at the apex: the endBurst fires at
+        // full spread and the ring is gone (the expansion-only Squall).
         const retracting = z.retract !== undefined
           && (z.linger0 ?? 0) - z.linger >= z.retract.at;
-        // Growing zones swell as they live — the upchurn gathers ground.
-        if (z.grow && !retracting) z.radius += z.grow * dt;
-        if (retracting) z.radius = Math.max(10, z.radius - z.retract!.speed * dt);
+        if (retracting && z.retract!.fizzle) {
+          z.linger = Math.min(z.linger, 0);
+        } else {
+          // Growing zones swell as they live — the upchurn gathers ground.
+          if (z.grow && !retracting) z.radius += z.grow * dt;
+          if (retracting) z.radius = Math.max(10, z.radius - (z.retract!.speed ?? 100) * dt);
+        }
+        // VOLATILE fissure segments re-light on their own clock — the
+        // volcanic crag: unpredictable, re-armed, still honest (the flash
+        // leads the wound by a beat via the telegraph below).
+        if (z.volatile && z.exploded && z.linger > 0 && this.time >= z.volatile.next) {
+          z.volatile.next = this.time + z.volatile.interval;
+          if (chance(z.volatile.chance)) {
+            this.flashes.push({
+              pos: vec(z.pos.x, z.pos.y), radius: z.radius + 10,
+              color: '#ff8a4a', life: 0.3, maxLife: 0.3,
+            });
+            for (const v of this.zoneVictims(z)) {
+              if (!this.zoneHas(z, v.pos, v.radius)) continue;
+              this.resolveHit(z.caster, z.inst, v,
+                z.dmgMult * z.volatile.damageScale, z.depth, z.flatBonus, true);
+            }
+          }
+        }
+        // AFTERSHOCK segments (the whack-a-mole): the CASTER running over
+        // an armed stretch of crack detonates it around that piece.
+        if (z.aftershock && z.exploded && z.linger > 0 && !z.caster.dead
+          && this.time >= z.aftershock.readyAt
+          && this.zoneHas(z, z.caster.pos, z.caster.radius)) {
+          z.aftershock.readyAt = this.time + z.aftershock.rearm;
+          const radius = z.radius * (z.aftershock.radiusScale ?? 2.4);
+          const at = z.seg
+            ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
+            : vec(z.pos.x, z.pos.y);
+          this.text(at, 'aftershock!', z.color, 12);
+          this.flashes.push({ pos: vec(at.x, at.y), radius, color: z.color, life: 0.3, maxLife: 0.3 });
+          for (const v of this.zoneVictims(z)) {
+            if (dist(at, v.pos) - v.radius > radius) continue;
+            this.resolveHit(z.caster, z.inst, v,
+              z.dmgMult * z.aftershock.damageScale, z.depth, z.flatBonus, true);
+          }
+        }
         // Revolving zones sweep their facing around (Cinderwhirl's flame
         // hand) — faced shapes only feel it; discs spin invisibly.
         if (z.rotate) z.facing += z.rotate * dt;
@@ -18025,7 +18354,7 @@ export class World {
               let at: Vec2 | null = null;
               if ((z.emit.at ?? 'point') === 'enemy') {
                 const pool = this.zoneVictims(z).filter(v =>
-                  inAoe(z.pos, z.radius, z.shape, z.facing, v.pos, v.radius, z.arcRad));
+                  this.zoneHas(z, v.pos, v.radius));
                 if (pool.length) { const v = pick(pool); at = vec(v.pos.x, v.pos.y); }
               } else {
                 const ang = rand(0, Math.PI * 2);
@@ -18047,8 +18376,20 @@ export class World {
         z.tickTimer -= dt;
         if (z.tickTimer <= 0) {
           z.tickTimer = z.tickInterval;
+          // HEALING GROUND (healField graft): the tick mends the
+          // congregation instead of striking the trespassers.
+          if (z.healTick) {
+            const hp = z.caster.sheet.get('healPower',
+              skillContextTags(z.inst.def), instanceMods(z.inst));
+            for (const ally of this.actors) {
+              if (ally.dead || ally.team !== z.caster.team) continue;
+              if (!this.zoneHas(z, ally.pos, ally.radius)) continue;
+              const got = ally.healBy(z.healTick * hp);
+              if (got > 0.5) this.text(ally.pos, '+' + Math.round(got), '#8ae0a8', 10);
+            }
+          } else {
           for (const victim of this.zoneVictims(z)) {
-            if (!inAoe(z.pos, z.radius, z.shape, z.facing, victim.pos, victim.radius, z.arcRad)) continue;
+            if (!this.zoneHas(z, victim.pos, victim.radius)) continue;
             if (z.edge && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edge) continue;
             // Sweep surfaces: one hit per crossing, never per tick.
             if (z.struck) {
@@ -18057,11 +18398,26 @@ export class World {
             }
             this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage);
           }
+          }
+          // MADDENING GROUND: dwell long enough inside and the fog takes
+          // you — the maddened lash at whatever is nearest, either side.
+          if (z.madden) {
+            for (const v of this.zoneVictims(z)) {
+              if (!this.zoneHas(z, v.pos, v.radius)) continue;
+              const dwelt = (z.madden.dwell.get(v.id) ?? 0) + z.tickInterval;
+              z.madden.dwell.set(v.id, dwelt);
+              if (dwelt >= z.madden.after && !v.statuses.some(s => s.id === 'maddened')) {
+                v.applyStatus('maddened', baselineStatusDps('maddened', this.zone.level),
+                  1, z.inst.def.name, { casterId: z.caster.id });
+                this.text(v.pos, 'maddened!', '#d84a9a', 12);
+              }
+            }
+          }
           // CONSECRATIONS: the field's mend side washes allies inside, per
           // tick and quietly (Healing Rain, Consecration — heal-and-harm
           // fields damage the trespassers and mend the congregation).
           this.healAlliesInArea(z.caster, z.inst, a =>
-            inAoe(z.pos, z.radius, z.shape, z.facing, a.pos, a.radius, z.arcRad),
+            this.zoneHas(z, a.pos, a.radius),
             z.dmgMult, true);
         }
         if (z.linger <= 0) {

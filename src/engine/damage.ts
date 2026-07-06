@@ -103,6 +103,19 @@ export function rollSkillDamage(
     }
   }
 
+  // DOMINION (reservedDamage / maxManaDamage): locked and maximum mana
+  // feed the roll, pro-rata over the rolled types — a zero-damage utility
+  // skill stays zero (the artery needs a vein).
+  const dominion = caster.sheet.get('reservedDamage', baseTags, extra) * caster.reservedMana
+    + caster.sheet.get('maxManaDamage', baseTags, extra) * caster.sheet.get('mana');
+  if (dominion > 0) {
+    const cur = (Object.values(amounts) as number[]).reduce((s, v) => s + v, 0);
+    if (cur > 0) {
+      const scale = (cur + dominion) / cur;
+      for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= scale;
+    }
+  }
+
   applyConversion(caster, amounts, baseTags, extra);
 
   let crit = false;

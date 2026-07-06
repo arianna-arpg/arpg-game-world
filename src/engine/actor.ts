@@ -181,6 +181,8 @@ export interface ActiveAura {
   /** Seconds left (duration mode); Infinity while toggled on. */
   remaining: number;
   reserved: number;        // mana locked while active
+  /** The reservation sits on the LIFE pool (the blood-pact graft). */
+  lifeLane?: boolean;
   pulseTimer: number;
   /** Actors currently carrying this aura's modifier source. */
   affected: Set<number>;
@@ -870,8 +872,14 @@ export class Actor {
     if (existing && (def.maxStacks ?? 1) > 1) {
       existing.stacks = Math.min(def.maxStacks ?? 1, existing.stacks + grant);
       existing.remaining = duration;
+      existing.def = def; // dynamic-value buffs re-price on refresh
+      this.buffs.set(def.id, existing);
     } else if (existing) {
       existing.remaining = duration;
+      // DYNAMIC-VALUE refresh (Echoing Might): the newest application's
+      // def replaces the old, so computed mod values re-price each grant.
+      existing.def = def;
+      this.buffs.set(def.id, existing);
     } else {
       this.buffs.set(def.id, {
         def, remaining: duration,
@@ -1048,6 +1056,12 @@ export class Actor {
       && chance(this.sheet.get('poiseCcAvoid'))) {
       return;
     }
+    // SELECTIVE CC INTERRUPT: a forbidsTags status landing MID-CAST cuts
+    // the forbidden cast short — silence doesn't wait for the next press.
+    if (def.forbidsTags && this.casting
+      && def.forbidsTags.some(t => this.casting!.inst.def.tags.includes(t))) {
+      this.casting = null;
+    }
     // AFFLICTION RECOVERY (victim-side): hostile statuses run out faster —
     // the defender's twin of the attacker's effectDuration.
     const expiry = def.beneficial ? 1 : this.sheet.get('afflictionExpiry');
@@ -1098,6 +1112,7 @@ export class Actor {
         ruptureType: opts?.ruptureType,
         casterId: opts?.casterId,
         brood: opts?.brood,
+        total: duration,
         // WEAK SPOT: the window paints just below the CURRENT wound.
         window: def.weakSpot ? (() => {
           const frac = this.life / Math.max(1, this.maxLife());
@@ -1234,11 +1249,20 @@ export class Actor {
       const s = this.statuses[i];
       s.remaining -= dt;
       if (s.dps > 0) {
-        const key = STATUS_DEFS[s.id]?.dotType ?? 'untyped';
+        const sdef = STATUS_DEFS[s.id];
+        const key = sdef?.dotType ?? 'untyped';
+        // DPS CURVES (Curse-of-Agony ramps, dying tapers): the tick scales
+        // 0→2 or 2→0 across the status's span — same flat total either way.
+        let curve = 1;
+        if (sdef?.dpsCurve && s.total) {
+          const prog = Math.min(1, Math.max(0, 1 - s.remaining / s.total));
+          curve = sdef.dpsCurve === 'ramp' ? 2 * prog : 2 * (1 - prog);
+        }
+        const tick = s.dps * s.stacks * curve * dt;
         dot ??= {};
-        dot[key] = (dot[key] ?? 0) + s.dps * s.stacks * dt;
+        dot[key] = (dot[key] ?? 0) + tick;
         // BROOD clauses bank the tick toward the world's hatch roll.
-        if (s.brood) s.broodAcc = (s.broodAcc ?? 0) + s.dps * s.stacks * dt;
+        if (s.brood) s.broodAcc = (s.broodAcc ?? 0) + tick;
       }
       if (s.remaining <= 0) {
         this.statuses.splice(i, 1);

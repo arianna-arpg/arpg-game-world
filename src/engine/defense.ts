@@ -123,6 +123,12 @@ export const DEFENSE_CFG = {
     vampiricRadius: 180,
   },
 
+  /** PROXIMITY damage (the proximityDamage stat): full bonus at touch,
+   *  linear taper to zero at this range. */
+  proximity: {
+    radius: 320,
+  },
+
   /** CROWD EMPOWERMENT (SkillDef.empower — the warcry-power shape): what a
    *  body is WORTH when tallying the crowd. A boss counts for six men; the
    *  ladder is the whole "bosses still feed your warcries" golden rule. */
