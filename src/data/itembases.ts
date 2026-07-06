@@ -132,6 +132,57 @@ export const BASE_LIST: ItemBaseDef[] = [
   jewel('ring_onyx', 'Onyx Ring', 'ring', [line('chaosRes', 'flat', [0.07, 0.15])], 30),
   jewel('ring_iron', 'Iron Ring', 'ring', [line('addedPhysical', 'flat', [1, 2])], 35),
 
+  // MONSTER INFREQUENTS — theme-pool bases (dropWeight 0: only their theme
+  // mints them; see data/infrequents.ts). Signature implicits carry the
+  // monster's flavor; the mi_<theme> tag opens the theme-only affixes.
+  {
+    id: 'boots_mi_goblin', name: 'Goblin Scrappers', category: 'boots',
+    w: CATEGORY_SIZE.boots.w, h: CATEGORY_SIZE.boots.h,
+    tags: ['armour', 'boots', 'evasion', 'mi_goblin'],
+    defense: { evasion: 1 },
+    implicits: [line('luck', 'increased', [0.08, 0.15])],
+    dropWeight: 0,
+  },
+  {
+    id: 'amulet_mi_goblin', name: 'Goblin Fetish', category: 'amulet',
+    w: CATEGORY_SIZE.amulet.w, h: CATEGORY_SIZE.amulet.h,
+    tags: ['jewelry', 'amulet', 'mi_goblin'],
+    implicits: [line('apply_poison', 'flat', [0.06, 0.12])],
+    dropWeight: 0,
+  },
+  {
+    id: 'belt_mi_bandit', name: "Toll-Keeper's Cinch", category: 'belt',
+    w: CATEGORY_SIZE.belt.w, h: CATEGORY_SIZE.belt.h,
+    tags: ['armour', 'belt', 'endurance', 'mi_bandit'],
+    defense: { endurance: 1 },
+    implicits: [line('lifeOnKill', 'flat', [3, 6])],
+    dropWeight: 0,
+  },
+  {
+    id: 'gloves_mi_bandit', name: 'Cutpurse Grips', category: 'gloves',
+    w: CATEGORY_SIZE.gloves.w, h: CATEGORY_SIZE.gloves.h,
+    tags: ['armour', 'gloves', 'evasion', 'mi_bandit'],
+    defense: { evasion: 1 },
+    implicits: [line('attackSpeed', 'increased', [0.04, 0.08])],
+    dropWeight: 0,
+  },
+  {
+    id: 'chest_mi_undead', name: 'Cerecloth Shroud', category: 'chest',
+    w: CATEGORY_SIZE.chest.w, h: CATEGORY_SIZE.chest.h,
+    tags: ['armour', 'chest', 'energyShield', 'mi_undead'],
+    defense: { energyShield: 1 },
+    implicits: [line('chaosRes', 'flat', [0.08, 0.16])],
+    dropWeight: 0,
+  },
+  {
+    id: 'helmet_mi_undead', name: 'Gravebound Casque', category: 'helmet',
+    w: CATEGORY_SIZE.helmet.w, h: CATEGORY_SIZE.helmet.h,
+    tags: ['armour', 'helmet', 'armor', 'energyShield', 'mi_undead'],
+    defense: { armor: 1, energyShield: 1 },
+    implicits: [line('minionLife', 'increased', [0.08, 0.15])],
+    dropWeight: 0,
+  },
+
   // Amulets — attribute identities + two build-defining oddballs.
   jewel('amulet_amber', 'Amber Amulet', 'amulet', [line('strength', 'flat', [3, 6])], 30),
   jewel('amulet_jade', 'Jade Amulet', 'amulet', [line('dexterity', 'flat', [3, 6])], 30),

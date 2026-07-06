@@ -244,6 +244,11 @@ export interface AffixRollState {
   id: string;
   tier: number;
   rolls: number[];
+  /** Player-crafted line (the bench, not the drop): capped per item by
+   *  CRAFT_CFG.maxCraftedAffixes, excluded from salvage lore, tagged in
+   *  tooltips. Sits OUTSIDE the rarity's natural prefix/suffix caps — a
+   *  white with one crafted line is the promised customizable base. */
+  crafted?: boolean;
 }
 
 /** A live item — PURE JSON (ids + numbers only), which makes it the save
@@ -301,8 +306,18 @@ export const ITEM_CFG = {
   } as Record<ItemRarity, { prefixes: number; suffixes: number }>,
 
   /** Magic rolls: chance the blue takes BOTH slots; weight multiplier pulling
-   *  its tier pick toward the exquisite tier when one is eligible. */
-  magic: { bothChance: 0.55, exquisiteWeightMult: 2.2 },
+   *  its tier pick toward the exquisite tier when one is eligible; and the
+   *  OVERROLL — the low-level lottery. A magic item may roll an affix tier
+   *  ABOVE its item-level gate: up to maxSteps tiers past the cutoff, each
+   *  further step's weight multiplied by stepDecay. Blues are therefore
+   *  worth a look at EVERY depth — early ones can outroll their level, and
+   *  at depth the EXQUISITE tier (its own gate; excluded from overroll
+   *  unless canReachExquisite flips) remains the rare-proof ceiling. */
+  magic: {
+    bothChance: 0.55,
+    exquisiteWeightMult: 2.2,
+    overroll: { chance: 0.25, maxSteps: 2, stepDecay: 0.45, canReachExquisite: false },
+  },
 
   /** Rare rolls: total affix count distribution, and the ilvl-scaled tier
    *  bias — each step DOWN the eligible ladder multiplies weight by bias, and

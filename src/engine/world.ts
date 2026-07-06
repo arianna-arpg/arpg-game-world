@@ -33,12 +33,17 @@ import {
 } from './skills';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
 import { compileItemMods, itemLevelReq, rebuildItem } from './itemgen';
+import {
+  ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, VENDOR_ESSENCE_PRICE, VENDOR_SUPPORT_PRICE,
+  type EssenceCost, type EssenceId,
+} from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, type ItemInstance } from './items';
 import { DROP_CFG, resolveLootTable } from './loot';
+import { MONSTER_THEMES } from '../data/infrequents';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
-import { CLASSES, PROGRESSION, type ClassDef } from '../data/classes';
+import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
@@ -751,7 +756,8 @@ function isValidMetaAction(a: MetaAction): boolean {
       return isIdx(a.index);
     case 'socket': return isIdx(a.index) && isStr(a.skillId);
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
-    case 'unlearn': case 'levelSkill': return isStr(a.skillId);
+    case 'unlearn': case 'reacquireSkill': return isStr(a.skillId);
+    case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
     case 'allocate': return isStr(a.nodeId);
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
@@ -801,6 +807,15 @@ export interface PlayerMeta {
   /** GEAR worn on the doll, by EQUIP_SLOTS id. Each slot syncs one
    *  attributable StatSheet source ('gear:<slot>') in recalcSeat. */
   equipped: Partial<Record<string, ItemInstance>>;
+  /** SALVAGE currency, per essence tint. Carried, spendable, and — like the
+   *  rest of the bag — lost to death (knowledge persists on the account as
+   *  craftLore; the raw material does not). */
+  essences: Record<EssenceId, number>;
+}
+
+/** A zeroed essence wallet (fresh seats, wire fallbacks). */
+export function emptyEssences(): Record<EssenceId, number> {
+  return Object.fromEntries(ESSENCE_IDS.map(id => [id, 0])) as Record<EssenceId, number>;
 }
 
 /** A PLAYER SEAT — one controllable hero in the run. Bundles the per-player
@@ -1752,6 +1767,7 @@ export class World {
       offerings: 0,
       items: [],
       equipped: {},
+      essences: emptyEssences(),
     };
     // Class bar skills come pre-learned as 2-socket magic gems.
     for (const sid of classDef.bar) {
@@ -6940,6 +6956,17 @@ export class World {
       if (worn) p.sheet.setSource('gear:' + slot.id, compileItemMods(worn));
       else p.sheet.removeSource('gear:' + slot.id);
     }
+    // "+N to <Class> Skills": sum every classSkill_<id> stat whose class bar
+    // holds this skill — dynamic against the LIVE registry, so re-barring a
+    // class retunes every such affix with zero data edits. Written onto the
+    // instance (bonusLevels) so effectiveSkillLevel needs no actor threading.
+    for (const inst of m.knownSkills.values()) {
+      let bonus = 0;
+      for (const c of CLASSES) {
+        if (c.bar.includes(inst.def.id)) bonus += p.sheet.get(classSkillStat(c.id));
+      }
+      inst.bonusLevels = bonus;
+    }
     p.sheet.setSource('level', [
       mod('life', 'flat', (p.level - 1) * PROGRESSION.lifePerLevel),
       mod('mana', 'flat', (p.level - 1) * PROGRESSION.manaPerLevel),
@@ -7083,7 +7110,14 @@ export class World {
     m.skillInv.splice(invIndex, 1);
     // Socketed supports are pried out, never burned.
     for (const s of inst.sockets) if (s) m.inventory.push(s);
-    const refund = inst.level - 1;
+    // A GRANTED spark (reacquired class starter) burns to nothing: no
+    // offering, no refund — the rescue hatch is not a mint.
+    if (inst.granted) {
+      this.text(p.pos, 'the font takes the granted spark — and gives nothing', '#8a8678', 12);
+      return true;
+    }
+    // Essence-bought levels never refund POINTS (no cross-currency arbitrage).
+    const refund = inst.level - 1 - (inst.essenceLevels ?? 0);
     if (refund > 0) m.skillPoints += refund;
     m.offerings++;
     if (m.offerings >= OFFERINGS_PER_POINT) {
@@ -7101,6 +7135,28 @@ export class World {
     return true;
   }
 
+  // ------------------------------------------------------------- essences ---
+
+  canAffordEssence(seat: Seat, cost: EssenceCost): boolean {
+    return (seat.meta.essences[cost.essence] ?? 0) >= cost.count;
+  }
+
+  /** Spend, or refuse with a throttled note naming what's missing. */
+  private spendEssence(seat: Seat, cost: EssenceCost, noteKey: string): boolean {
+    if (!this.canAffordEssence(seat, cost)) {
+      this.failNote(seat.actor, noteKey, `needs ${cost.count}× ${ESSENCES[cost.essence].label}`);
+      return false;
+    }
+    seat.meta.essences[cost.essence] -= cost.count;
+    return true;
+  }
+
+  grantEssence(seat: Seat, gain: EssenceCost): void {
+    seat.meta.essences[gain.essence] = (seat.meta.essences[gain.essence] ?? 0) + gain.count;
+    const def = ESSENCES[gain.essence];
+    this.text(seat.actor.pos, `+${gain.count} ${def.label}`, def.color, 12);
+  }
+
   /** Is the seat's hero standing close enough to a Sacrificial Font to use it? */
   nearFont(seat: Seat = this.localSeat): boolean {
     return this.fonts.some(f => dist(f.pos, seat.actor.pos) <= 150);
@@ -7113,13 +7169,21 @@ export class World {
       && dist(a.pos, seat.actor.pos) <= 160);
   }
 
-  /** Buy one of Brandt's wares — a skill point over the counter. Skill gems go
-   *  to the skill inventory; support gems to the support inventory. */
+  /** The essence price on one of Brandt's wares (data/essences.ts tables). */
+  vendorPrice(entry: VendorEntry): EssenceCost {
+    return entry.kind === 'skill'
+      ? VENDOR_ESSENCE_PRICE[entry.inst.rarity ?? 'common']
+      : VENDOR_SUPPORT_PRICE;
+  }
+
+  /** Buy one of Brandt's wares — priced in ESSENCE by the gem's rarity (the
+   *  salvage loop closes at the counter). Skill gems go to the skill
+   *  inventory; support gems to the support inventory. */
   buyVendorGem(index: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const entry = this.vendorStock[index];
-    if (!entry || !this.nearSmith(seat) || m.skillPoints < 1) return false;
-    m.skillPoints--;
+    if (!entry || !this.nearSmith(seat)) return false;
+    if (!this.spendEssence(seat, this.vendorPrice(entry), 'vendor:' + index)) return false;
     this.vendorStock.splice(index, 1);
     if (entry.kind === 'skill') {
       m.skillInv.push(entry.inst);
@@ -8359,23 +8423,57 @@ export class World {
     }
   }
 
-  /** Spend a skill point to level up an unlocked skill. */
-  levelUpSkill(skillId: string, seat: Seat = this.localSeat): boolean {
+  /** Level up an unlocked skill — a skill point, or (pay:'essence') the
+   *  salvage-currency curve (skillLevelEssenceCost; the WHOLE cost policy is
+   *  that one config function). Essence-bought levels are tracked so the
+   *  font never refunds them as points. */
+  levelUpSkill(skillId: string, seat: Seat = this.localSeat, pay: 'points' | 'essence' = 'points'): boolean {
     const m = seat.meta;
     const inst = m.knownSkills.get(skillId);
-    if (!inst || m.skillPoints < 1 || inst.level >= skillMaxLevel(inst.def)) return false;
-    m.skillPoints--;
+    if (!inst || inst.level >= skillMaxLevel(inst.def)) return false;
+    if (pay === 'essence') {
+      if (!this.spendEssence(seat, skillLevelEssenceCost(inst.level + 1), 'esslvl:' + skillId)) return false;
+      inst.essenceLevels = (inst.essenceLevels ?? 0) + 1;
+    } else {
+      if (m.skillPoints < 1) return false;
+      m.skillPoints--;
+    }
     inst.level++;
     return true;
   }
 
-  /** Spend a skill point to level up a support gem (socketed or carried). The gem
-   *  ref must belong to `seat`'s meta — applyAction resolves it from the wire. */
-  levelUpSupport(gem: SupportInstance, seat: Seat = this.localSeat): boolean {
+  /** Level up a support gem (socketed or carried) — point or essence path.
+   *  The gem ref must belong to `seat`'s meta — applyAction resolves it. */
+  levelUpSupport(gem: SupportInstance, seat: Seat = this.localSeat, pay: 'points' | 'essence' = 'points'): boolean {
     const m = seat.meta;
-    if (m.skillPoints < 1 || gem.level >= supportMaxLevel(gem.def)) return false;
-    m.skillPoints--;
+    if (gem.level >= supportMaxLevel(gem.def)) return false;
+    if (pay === 'essence') {
+      if (!this.spendEssence(seat, skillLevelEssenceCost(gem.level + 1), 'esslvl:' + gem.def.id)) return false;
+    } else {
+      if (m.skillPoints < 1) return false;
+      m.skillPoints--;
+    }
     gem.level++;
+    return true;
+  }
+
+  /** REACQUIRE a class starting skill — the softlock rescue hatch. Mints a
+   *  fresh level-1 copy of a bar skill the seat no longer carries anywhere,
+   *  marked GRANTED (zero salvage essence, zero font offerings, no refunds).
+   *  Dynamic against the class's LIVE bar — re-bar a class and this follows. */
+  reacquireSkill(skillId: string, seat: Seat = this.localSeat): boolean {
+    const m = seat.meta;
+    if (!m.classDef.bar.includes(skillId)) return false;
+    if (m.knownSkills.has(skillId)) return false;
+    if (m.skillInv.some(i => i.def.id === skillId)) return false;
+    const def = SKILLS[skillId];
+    if (!def) return false;
+    const inst = makeSkillInstance(def, 1, SKILL_RARITIES.magic.sockets);
+    inst.rarity = 'magic';
+    inst.granted = true;
+    m.skillInv.push(inst);
+    this.text(seat.actor.pos, `${def.name} re-kindled`, '#b06bd4', 13);
+    this.markMetaDirty(seat);
     return true;
   }
 
@@ -8489,17 +8587,18 @@ export class World {
       case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
       case 'buyDelver': this.buyDelverGem(action.index, seat); break;
-      case 'levelSkill': this.levelUpSkill(action.skillId, seat); break;
+      case 'levelSkill': this.levelUpSkill(action.skillId, seat, action.pay ?? 'points'); break;
       case 'levelSupportInv': {
         const gem = seat.meta.inventory[action.index];
-        if (gem) this.levelUpSupport(gem, seat);
+        if (gem) this.levelUpSupport(gem, seat, action.pay ?? 'points');
         break;
       }
       case 'levelSupportSocket': {
         const gem = seat.meta.knownSkills.get(action.skillId)?.sockets[action.socket];
-        if (gem) this.levelUpSupport(gem, seat);
+        if (gem) this.levelUpSupport(gem, seat, action.pay ?? 'points');
         break;
       }
+      case 'reacquireSkill': this.reacquireSkill(action.skillId, seat); break;
       case 'socket': this.socketSupport(action.index, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat); break;
@@ -15066,8 +15165,10 @@ export class World {
     const tier = actor.rarity ?? 'normal';
     const bonus = DROP_CFG.eliteBonusItemRolls[tier] ?? 0;
     for (let i = 0; i < bonus; i++) tables.push(DROP_CFG.eliteBonusTable[tier]);
+    // MONSTER INFREQUENT theme: per-def declaration wins, else the registry.
+    const miTheme = def?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
     for (const t of tables) {
-      for (const res of resolveLootTable(t, { ilvl: this.zone.level })) {
+      for (const res of resolveLootTable(t, { ilvl: this.zone.level, miTheme })) {
         if (res.kind === 'gem') this.dropGemAt(actor.pos);
         else this.dropGearAt(actor.pos, res.item);
       }

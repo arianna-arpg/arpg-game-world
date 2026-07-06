@@ -15,7 +15,8 @@
 // ---------------------------------------------------------------------------
 
 import { LOOT_TABLES } from '../data/loottables';
-import { rollItem } from './itemgen';
+import { MI_CFG } from '../data/infrequents';
+import { pickThemedBase, rollItem } from './itemgen';
 import type { ItemCategory, ItemInstance, ItemRarity } from './items';
 import type { MonsterRarity } from './rarity';
 
@@ -51,6 +52,10 @@ export type LootResult =
 export interface LootCtx {
   ilvl: number;
   rng?: () => number;
+  /** MONSTER INFREQUENT theme of the source kill (data/infrequents.ts):
+   *  unconstrained item pulls may swap into the theme's base pool at
+   *  MI_CFG.chance — through every nested table. */
+  miTheme?: string;
 }
 
 /** The kill-path levers (world.rollDrops reads these — never literals there). */
@@ -101,9 +106,15 @@ function resolveEntry(entry: LootEntry, ctx: LootCtx, depth: number, out: LootRe
       out.push({ kind: 'gem' });
       return;
     case 'item': {
+      // An UNCONSTRAINED pull from a themed kill may become an infrequent —
+      // same rarity pipeline, themed base pool (exclusive implicit + lines).
+      let baseId = entry.baseId;
+      if (!baseId && !entry.category && ctx.miTheme && rng() < MI_CFG.chance) {
+        baseId = pickThemedBase(ctx.miTheme, ctx.ilvl + (entry.ilvlBonus ?? 0), rng) ?? undefined;
+      }
       const item = rollItem({
         ilvl: ctx.ilvl + (entry.ilvlBonus ?? 0), rng,
-        category: entry.category, baseId: entry.baseId,
+        category: entry.category, baseId,
         rarity: entry.rarity, rarityWeights: entry.rarityWeights,
       });
       if (item) out.push({ kind: 'item', item });

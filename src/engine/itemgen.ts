@@ -75,6 +75,18 @@ function basePool(ilvl: number, category?: ItemCategory): ItemBaseDef[] {
     (b.minIlvl === undefined || ilvl >= b.minIlvl));
 }
 
+/** MONSTER-INFREQUENT pool: bases tagged mi_<theme>. Deliberately IGNORES
+ *  dropWeight (theme bases sit at 0 to stay out of the world pool) — the
+ *  theme itself is the gate; picks are uniform within it. */
+export function pickThemedBase(theme: string, ilvl: number, rng: () => number = Math.random): string | null {
+  const tag = `mi_${theme}`;
+  const pool = Object.values(ITEM_BASES).filter(b =>
+    b.tags.includes(tag) && (b.minIlvl === undefined || ilvl >= b.minIlvl)
+    && slotsForCategory(b.category).length > 0);
+  if (pool.length === 0) return null;
+  return pool[Math.floor(rng() * pool.length)].id;
+}
+
 const affixPoolCache = new Map<string, { prefix: AffixDef[]; suffix: AffixDef[] }>();
 
 /** The prefix/suffix families this base can roll (tag-gated), cached. */
@@ -110,7 +122,10 @@ function eligibleTiers(def: AffixDef, ilvl: number, rarity: ItemRarity): Eligibl
 
 /** Weighted tier pick. Rares multiply each step DOWN the eligible ladder by
  *  an ilvl-shrinking bias (deep rares roll top-heavy); magic items pull
- *  toward an eligible EXQUISITE tier. */
+ *  toward an eligible EXQUISITE tier — and may OVERROLL: reach tiers ABOVE
+ *  the item-level gate (ITEM_CFG.magic.overroll), the surprise that keeps a
+ *  low blue interesting. Overroll extends WITHIN an already-pickable family;
+ *  families whose every tier gates above the ilvl stay out of the pool. */
 function pickTier(def: AffixDef, ilvl: number, rarity: ItemRarity, rng: RngFn): number | null {
   const elig = eligibleTiers(def, ilvl, rarity);
   if (elig.length === 0) return null;
@@ -123,6 +138,21 @@ function pickTier(def: AffixDef, ilvl: number, rarity: ItemRarity, rng: RngFn): 
       * (rarity === 'rare' ? Math.pow(bias, rank) : 1)
       * (e.def.magicOnly ? ITEM_CFG.magic.exquisiteWeightMult : 1),
   }));
+  const over = ITEM_CFG.magic.overroll;
+  if (rarity === 'magic' && over.chance > 0 && rng() < over.chance) {
+    // Walk UP from the best normally-eligible tier (tiers are best-first).
+    const bestElig = elig[0].index;
+    for (let step = 1; step <= over.maxSteps; step++) {
+      const idx = bestElig - step;
+      if (idx < 0) break;
+      const above = def.tiers[idx];
+      if (above.magicOnly && !over.canReachExquisite) continue;
+      weighted.push({
+        e: { index: idx, def: above },
+        weight: above.weight * Math.pow(over.stepDecay, step),
+      });
+    }
+  }
   return pickWeighted(weighted, rng)?.e.index ?? null;
 }
 
@@ -422,7 +452,7 @@ export function describeItem(item: ItemInstance): ItemDescription {
     def.lines.forEach((line, i) => {
       const roll = line.sharedRoll ? a.rolls[0] : a.rolls[i];
       const v = roundStatValue(lerpRange(tierDef.ranges[i], roll ?? 0.5));
-      d.affix.push({ text: formatModLine(line, v), tag: tierTag(def, a.tier) });
+      d.affix.push({ text: formatModLine(line, v), tag: a.crafted ? 'CRAFT' : tierTag(def, a.tier) });
     });
   }
   if (item.uniqueId) {

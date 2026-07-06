@@ -27,6 +27,7 @@ import {
   ATTRIBUTE_IDS, ATTRIBUTES, DAMAGE_TYPES,
   type ConditionId, type ModKind, type SkillTag,
 } from '../engine/stats';
+import { CLASSES, classSkillStat } from './classes';
 
 // ------------------------------------------------------------ generation ---
 
@@ -172,6 +173,29 @@ const APPLY_AFFIXES: AffixDef[] = Object.keys(APPLY_NAMES).map(s => fam({
   stat: `apply_${s}`, top: 0.22, floor: 0.25, count: 4, weight: 55,
 }));
 
+/** "+1 to <Class> Skills" — one family per registered class, resolving
+ *  DYNAMICALLY against that class's live starting bar (classes.ts
+ *  classSkillStat + recalcSeat). Integer ladder: T1 grants +1; the
+ *  EXQUISITE grants +2 — a chase blue amulet for every archetype. */
+const CLASS_SKILL_AFFIXES: AffixDef[] = CLASSES.map(c => ({
+  id: `class_skills_${c.id}`,
+  kind: 'suffix' as AffixKind,
+  family: `class_skills_${c.id}`,
+  names: [`of the ${c.name}`],
+  lines: [{ stat: classSkillStat(c.id), kind: 'flat' as ModKind }],
+  tiers: [
+    {
+      ilvl: ITEM_CFG.tierBreaks[Math.max(0, ITEM_CFG.tierBreaks.length - 2)] + ITEM_CFG.exquisite.ilvlPad,
+      ranges: [[2, 2]] as [number, number][],
+      weight: Math.round(100 * ITEM_CFG.exquisite.weightFrac),
+      magicOnly: true,
+    },
+    { ilvl: 8, ranges: [[1, 1]] as [number, number][], weight: 100 },
+  ],
+  weight: 22,
+  tags: ['amulet', 'helmet'],
+}));
+
 // ------------------------------------------------------------- prefixes ----
 
 const PREFIXES: AffixDef[] = [
@@ -250,6 +274,29 @@ const PREFIXES: AffixDef[] = [
     stat: 'minionLife', modKind: 'increased', top: 0.35, floor: 0.2,
     baseTags: ['helmet', 'amulet'], weight: 60,
   }),
+  // MONSTER-INFREQUENT lines — roll ONLY on mi_<theme> bases (the same tag
+  // gate as everything else; see data/infrequents.ts). Each theme gets one
+  // signature family, exquisite included: a magic Goblin Scrapper can carry
+  // the greediest Scavenger's roll in the game.
+  fam({
+    id: 'mi_goblin_scavenger', kind: 'prefix',
+    names: ["Kleptocrat's", "Scavenger's", "Mudgrubber's"],
+    lines: [{ stat: 'lifeOnKill', kind: 'flat' }, { stat: 'manaOnKill', kind: 'flat' }],
+    top: [10, 7], floor: 0.25, count: 4, baseTags: ['mi_goblin'], weight: 90,
+  }),
+  fam({
+    id: 'mi_bandit_extortion', kind: 'prefix',
+    names: ["Highwayman's", "Extortioner's", "Footpad's"],
+    lines: [{ stat: 'lifeLeech', kind: 'flat' }, { stat: 'manaLeech', kind: 'flat' }],
+    top: [0.035, 0.035], floor: 0.3, count: 3, baseTags: ['mi_bandit'], weight: 90,
+  }),
+  fam({
+    id: 'mi_undead_gravecaller', kind: 'prefix',
+    names: ["Lichgate", "Gravecaller's", "Mournful"],
+    lines: [{ stat: 'minionDamage', kind: 'increased' }, { stat: 'minionRegen', kind: 'flat' }],
+    top: [0.35, 3], floor: 0.25, count: 4, baseTags: ['mi_undead'], weight: 90,
+  }),
+
   // Hybrid demos — multi-line families with per-line tops.
   fam({
     id: 'hybrid_life_mana', kind: 'prefix',
@@ -404,6 +451,7 @@ const SUFFIXES: AffixDef[] = [
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
   ...APPLY_AFFIXES,
+  ...CLASS_SKILL_AFFIXES,
 ];
 
 // ---------------------------------------------------------------- export ---
