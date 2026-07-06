@@ -573,6 +573,10 @@ interface Zone {
   /** ARMED aftershock segment (SupportDef.fissureAftershock): the CASTER
    *  running over it detonates an aftershock; re-arms after `rearm`. */
   aftershock?: { damageScale: number; radiusScale?: number; rearm: number; readyAt: number };
+  /** ROULETTE segment (SupportDef.fissureRoulette): randomly ARMS for a
+   *  window on its own clock; the caster crossing while armed detonates
+   *  it and the step goes quiet until the floor deals again. */
+  roulette?: { interval: number; chance: number; window: number; damageScale: number; radiusScale?: number; next: number; armedUntil: number };
   /** HEALING GROUND (SupportDef.healField): the tick MENDS allies in the
    *  area instead of striking enemies. */
   healTick?: number;
@@ -10701,6 +10705,26 @@ export class World {
      *  because the delivery kind forgot to say where its area was. */
     let fieldAt: Vec2 | null = null;
 
+    // MELEE FISSURE LASH (SupportDef.meleeFissure — Faultfinder): the blow
+    // has a chance to PROJECT a crack out along the strike bearing. The
+    // lash is laid through the HOST instance, so the host's OTHER fissure
+    // gems (volatility, arming, warps, recloses) all ride the tear — and
+    // fissureBranches forks it. Primary uses only: repeats, echoes and
+    // emitted payloads never roll (opts.noRepeat).
+    {
+      const lash = socketSpec(inst, 'meleeFissure');
+      if (lash && !opts.noRepeat && chance(lash.chance)) {
+        const lashD: GroundDelivery = {
+          type: 'ground', radius: lash.radius, castRange: 0,
+          lingerDuration: lash.linger, tickInterval: lash.tickInterval ?? 0.5,
+          fissure: { length: lash.length, speed: lash.speed, close: lash.close },
+        };
+        this.layFissure(caster, inst, vec(caster.pos.x, caster.pos.y), caster.facing,
+          lashD, useMult * lash.damageScale, flatBonus,
+          Math.round(caster.sheet.get('fissureBranches', tags, extra)));
+      }
+    }
+
     // (Spirit Totem interception now happens in useSkill, so it covers
     // guard stances, channels and charges too.)
 
@@ -11211,7 +11235,7 @@ export class World {
           for (let f = 0; f < fans; f++) {
             const off = fans === 1 ? 0 : (f / (fans - 1) - 0.5) * fanSpread * (fans - 1);
             this.layFissure(caster, inst, from, baseAng + off, d, useMult, flatBonus,
-              Math.round(caster.sheet.get('fissureBranches', tags, extra, d.fissure.branches ?? 0)));
+              Math.round(caster.sheet.get('fissureBranches', tags, extra, d.fissure.branches ?? 0)), f);
           }
           fieldAt = at;
           break;
@@ -12566,16 +12590,20 @@ export class World {
   }
 
   /** Lay one FISSURE (GroundDelivery.fissure): a chain of zones tearing
-   *  open head-to-tail along `ang` on the crack's travel clock — each
+   *  open head-to-tail along a PATH on the crack's travel clock — each
    *  inheriting the delivery's radius/linger/ticks — with optional child
-   *  branches forked off the line and an optional CLOSING pass zipping
-   *  back down the length. Zones flash + linger, so rendering, damage,
-   *  domains and supports all ride the ordinary zone machinery. */
+   *  branches forked off the line and CLOSING passes zipping back down
+   *  the length. The path is a straight tear by default; a socketed
+   *  fissurePath warp bends the same length into an orbit ring around the
+   *  caster / a spiral / a weaving serpent, and `fan` (the fissureCount
+   *  index) turns orbit fans into CONCENTRIC rings and spiral fans into
+   *  extra arms. Zones flash + linger, so rendering, damage, domains and
+   *  supports all ride the ordinary zone machinery. */
   private layFissure(
     caster: Actor, inst: SkillInstance, from: Vec2, ang: number,
     d: GroundDelivery,
     useMult: number, flatBonus: Partial<Record<DamageType, number>> | undefined,
-    branches: number,
+    branches: number, fan = 0,
   ): void {
     const fz = d.fissure!;
     const tags = skillContextTags(inst.def, grantedTags(inst));
@@ -12584,17 +12612,63 @@ export class World {
     const durScale = caster.sheet.get('effectDuration', tags, extra);
     const step = fz.step ?? d.radius * 1.1;
     const n = Math.min(28, Math.max(2, Math.ceil(fz.length / step)));
-    // The crack's TEXTURE grafts (SupportDef): volatile re-lighting and
-    // caster-run-over aftershocks ride every lingering segment — and they
-    // IMPOSE a linger where the skill brings none (a texture needs a
-    // surface; the crack stays open long enough to matter).
+    // THE PATH: n points with tangents, walked at the tear speed. A warp
+    // keeps the crack's length and textures but abandons the straight line.
+    const warp = socketSpec(inst, 'fissurePath');
+    const pts: { x: number; y: number; ang: number }[] = [];
+    if (warp?.kind === 'orbit') {
+      // Ring around the CASTER: the aim distance sets the radius; the fan
+      // index lays concentric rings outward — the crack tears AROUND you.
+      const R = Math.max(56, dist(caster.pos, from)) + fan * step * 2.2;
+      const cx = caster.pos.x, cy = caster.pos.y;
+      for (let i = 0; i < n; i++) {
+        const th = ang + (step * (i + 0.5)) / R;
+        pts.push({ x: cx + Math.cos(th) * R, y: cy + Math.sin(th) * R, ang: th + Math.PI / 2 });
+      }
+    } else if (warp?.kind === 'spiral') {
+      // Archimedean unwind out of the impact point; fans rotate the arms
+      // (the crack galaxy). Radius grows linearly with the swept angle.
+      const turns = warp.turns ?? 1.6;
+      const rMax = Math.max(40, fz.length / (Math.PI * turns));
+      const r0 = Math.max(14, step * 0.6);
+      const grow = (rMax - r0) / (Math.PI * 2 * turns);
+      let th = ang, r = r0;
+      for (let i = 0; i < n; i++) {
+        pts.push({ x: from.x + Math.cos(th) * r, y: from.y + Math.sin(th) * r, ang: th + Math.PI / 2 });
+        const dth = step / Math.max(16, r);
+        th += dth; r = Math.min(rMax, r + grow * dth);
+      }
+    } else if (warp?.kind === 'serpent') {
+      // The drunk tear: each step's heading weaves around the bearing.
+      const amp = ((warp.waveDeg ?? 38) * Math.PI) / 180;
+      let px = from.x, py = from.y;
+      for (let i = 0; i < n; i++) {
+        const h = ang + Math.sin(i * 0.85) * amp;
+        px += Math.cos(h) * step; py += Math.sin(h) * step;
+        pts.push({ x: px, y: py, ang: h });
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        pts.push({
+          x: from.x + Math.cos(ang) * step * (i + 0.5),
+          y: from.y + Math.sin(ang) * step * (i + 0.5),
+          ang,
+        });
+      }
+    }
+    // The crack's TEXTURE grafts (SupportDef): volatile re-lighting,
+    // caster-run-over aftershocks and the roulette's dealt steps ride
+    // every lingering segment — and they IMPOSE a linger where the skill
+    // brings none (a texture needs a surface; the crack stays open long
+    // enough to matter).
     const volatile = socketSpec(inst, 'fissureVolatile');
     const aftershock = socketSpec(inst, 'fissureAftershock');
+    const roulette = socketSpec(inst, 'fissureRoulette');
     const segLinger = (secs: number): number =>
-      (volatile || aftershock) ? Math.max(secs, 5) : secs;
+      (volatile || aftershock || roulette) ? Math.max(secs, 5) : secs;
     // Each placement is a true LINE SEGMENT (a capsule the width of the
-    // crack) — the fracture IS the hitbox, laid bearing-wise from its
-    // start point. Branches and the closing pass carry their own bearings.
+    // crack) — the fracture IS the hitbox, laid tangent-wise at its path
+    // point. Branches and the closing passes carry their own bearings.
     const lay = (px: number, py: number, segAng: number, delay: number, mult: number, linger: number): void => {
       const half = step / 2;
       this.zones.push({
@@ -12610,41 +12684,61 @@ export class World {
         shape: 0, facing: segAng,
         dmgMult: mult, depth: 1,
         // The PRIMARY chain carries the emitter (spirits rise from the
-        // whole crack); the closing pass and branches stay plain.
+        // whole crack); the closing passes and branches stay plain.
         emit: linger > 0 ? d.emit : undefined,
         volatile: linger > 0 && volatile
           ? { ...volatile, next: this.time + delay + volatile.interval } : undefined,
         aftershock: linger > 0 && aftershock
           ? { ...aftershock, readyAt: this.time + delay } : undefined,
+        roulette: linger > 0 && roulette
+          ? { ...roulette, next: this.time + delay + roulette.interval, armedUntil: 0 } : undefined,
         flatBonus,
       });
     };
     for (let i = 0; i < n; i++) {
-      const px = from.x + Math.cos(ang) * step * (i + 0.5);
-      const py = from.y + Math.sin(ang) * step * (i + 0.5);
+      const pt = pts[i];
       const delay = (d.delay ?? 0.1) + (step * i) / fz.speed;
-      lay(px, py, ang, delay, useMult, segLinger(d.lingerDuration ?? 0) * durScale);
+      lay(pt.x, pt.y, pt.ang, delay, useMult, segLinger(d.lingerDuration ?? 0) * durScale);
       // BRANCHES fork off evenly spaced segments, alternating sides —
-      // half-length child cracks, barren of further forks.
+      // half-length STRAIGHT child cracks (contrast against a warped
+      // spine reads as real forks), barren of further forks.
       if (branches > 0 && i > 0 && i % Math.max(1, Math.floor(n / (branches + 1))) === 0) {
         const side = (Math.floor(i / Math.max(1, Math.floor(n / (branches + 1)))) % 2 === 0) ? 1 : -1;
-        const bAng = ang + side * (fz.branchDeg ?? 42) * Math.PI / 180;
+        const bAng = pt.ang + side * (fz.branchDeg ?? 42) * Math.PI / 180;
         const bn = Math.max(2, Math.floor(n / 2));
         for (let k = 0; k < bn; k++) {
-          lay(px + Math.cos(bAng) * step * (k + 0.5),
-            py + Math.sin(bAng) * step * (k + 0.5),
+          lay(pt.x + Math.cos(bAng) * step * (k + 0.5),
+            pt.y + Math.sin(bAng) * step * (k + 0.5),
             bAng,
             delay + (step * k) / fz.speed,
             useMult * 0.75,
             segLinger((d.lingerDuration ?? 0) * 0.7) * durScale);
         }
       }
-      // THE CLOSING PASS: the crack zips shut from the far end home.
-      if (fz.close) {
-        lay(px, py, ang,
-          (d.delay ?? 0.1) + (step * n) / fz.speed + fz.close.delay
-          + (step * (n - 1 - i)) / (fz.speed * 1.4),
-          useMult * fz.close.damageScale, 0);
+    }
+    // THE CLOSING PASSES: the crack zips shut from the far end home — once
+    // by the skill's own close, and AGAIN per Restless Wound (the graft
+    // grants a first pass where the skill brings none; each FURTHER pass
+    // is rolled at its chance, and the first miss ends the chain).
+    const reclose = socketSpec(inst, 'fissureReclose');
+    const closeSpec = fz.close
+      ?? (reclose ? { delay: reclose.interval, damageScale: reclose.damageScale } : undefined);
+    if (closeSpec) {
+      let passes = 1;
+      if (reclose) {
+        for (let k = 0; k < reclose.times && chance(reclose.chance); k++) passes++;
+      }
+      const openDone = (d.delay ?? 0.1) + (step * n) / fz.speed;
+      const zipDur = (step * n) / (fz.speed * 1.4);
+      for (let pass = 0; pass < passes; pass++) {
+        const start = openDone + closeSpec.delay + pass * (zipDur + (reclose?.interval ?? 0.8));
+        const scale = pass === 0 ? closeSpec.damageScale : reclose!.damageScale;
+        for (let i = 0; i < n; i++) {
+          const pt = pts[i];
+          lay(pt.x, pt.y, pt.ang,
+            start + (step * (n - 1 - i)) / (fz.speed * 1.4),
+            useMult * scale, 0);
+        }
       }
     }
   }
@@ -13615,6 +13709,27 @@ export class World {
   }
 
   /** Scatter an exploding area skill into smaller secondary explosions. */
+  /** One armed fissure segment DETONATES under the caster's step (the
+   *  aftershock / roulette movement games): true when the caster stands on
+   *  the crack and the blast fired. Routed through spawnAftershocks at
+   *  depth 0, so the Aftershocks gem's aoeScatter scatters the dance-step
+   *  into secondaries — aftershock flavors by composition, not by variant. */
+  private detonateFissureSegment(z: Zone, damageScale: number, radiusScale: number): boolean {
+    if (z.caster.dead || !this.zoneHas(z, z.caster.pos, z.caster.radius)) return false;
+    const radius = z.radius * radiusScale;
+    const at = z.seg
+      ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
+      : vec(z.pos.x, z.pos.y);
+    this.text(at, 'aftershock!', z.color, 12);
+    this.flashes.push({ pos: vec(at.x, at.y), radius, color: z.color, life: 0.3, maxLife: 0.3 });
+    for (const v of this.zoneVictims(z)) {
+      if (dist(at, v.pos) - v.radius > radius) continue;
+      this.resolveHit(z.caster, z.inst, v, z.dmgMult * damageScale, z.depth, z.flatBonus, true);
+    }
+    this.spawnAftershocks(z.caster, z.inst, at, radius, z.shape, 0);
+    return true;
+  }
+
   private spawnAftershocks(caster: Actor, inst: SkillInstance, at: Vec2, radius: number, shape: AoeShape, depth = 0): void {
     if (depth > 0) return; // aftershocks don't scatter further
     const tags = skillContextTags(inst.def);
@@ -19933,15 +20048,31 @@ export class World {
         (p.fisChain ??= []).push(vec(p.pos.x, p.pos.y));
         const fTags = skillContextTags(p.inst.def, grantedTags(p.inst));
         const fExtra = instanceMods(p.inst);
+        // The crack's TEXTURE grafts ride the travelling tear exactly as
+        // they ride a laid fissure (parity with layFissure): volatility,
+        // arming and the roulette all work on Earthrender's wound — and
+        // impose a linger where the trail's own is too brief for a game.
+        const volatile = socketSpec(p.inst, 'fissureVolatile');
+        const aftershock = socketSpec(p.inst, 'fissureAftershock');
+        const roulette = socketSpec(p.inst, 'fissureRoulette');
+        const baseLinger = (volatile || aftershock || roulette)
+          ? Math.max(fs.linger, 5) : fs.linger;
+        const linger = baseLinger * p.caster.sheet.get('effectDuration', fTags, fExtra);
         this.zones.push({
           pos: vec(p.pos.x, p.pos.y),
           radius: fs.radius * p.caster.sheet.get('aoeRadius', fTags, fExtra),
           caster: p.caster, inst: p.inst, color: p.color,
           delay: 0.05, exploded: false,
-          linger: fs.linger * p.caster.sheet.get('effectDuration', fTags, fExtra),
+          linger,
           tickInterval: fs.tickInterval ?? 0.4, tickTimer: 0,
           shape: 0, facing: p.dir,
           dmgMult: (fs.damageScale ?? 0.7) * p.mult, depth: 1,
+          volatile: volatile
+            ? { ...volatile, next: this.time + 0.05 + volatile.interval } : undefined,
+          aftershock: aftershock
+            ? { ...aftershock, readyAt: this.time + 0.05 } : undefined,
+          roulette: roulette
+            ? { ...roulette, next: this.time + 0.05 + roulette.interval, armedUntil: 0 } : undefined,
           flatBonus: p.flat,
         });
       }
@@ -20267,10 +20398,14 @@ export class World {
             });
           }
         }
-        // FISSURE TRAIL closing pass: the crack SNAPS SHUT — a second pass
+        // FISSURE TRAIL closing passes: the crack SNAPS SHUT — a pass
         // zipping from the death point back HOME over the recorded chain,
-        // faster than it opened (the layFissure close-pass cadence).
-        const fclose = p.fisSpec?.close;
+        // faster than it opened (the layFissure close-pass cadence). A
+        // socketed Restless Wound grants the pass where the skill brings
+        // none and rolls FURTHER re-closings, first miss ending the chain.
+        const freclose = socketSpec(p.inst, 'fissureReclose');
+        const fclose = p.fisSpec?.close
+          ?? (freclose ? { delay: freclose.interval, damageScale: freclose.damageScale } : undefined);
         if (fclose && p.fisSpec && p.fisChain?.length && !p.caster.dead) {
           const fs = p.fisSpec;
           const fTags = skillContextTags(p.inst.def, grantedTags(p.inst));
@@ -20278,17 +20413,25 @@ export class World {
           const closeRadius = fs.radius * p.caster.sheet.get('aoeRadius', fTags, fExtra);
           const beat = (fs.radius * 1.1) / (Math.max(60, p.speed) * 1.4);
           const n = p.fisChain.length;
-          for (let k = 0; k < n; k++) {
-            const pt = p.fisChain[n - 1 - k]; // far end first: zip home
-            this.zones.push({
-              pos: vec(pt.x, pt.y), radius: closeRadius,
-              caster: p.caster, inst: p.inst, color: p.color,
-              delay: fclose.delay + beat * k, exploded: false,
-              linger: 0, tickInterval: 0.5, tickTimer: 0,
-              shape: 0, facing: p.dir,
-              dmgMult: fclose.damageScale * p.mult, depth: 1,
-              flatBonus: p.flat,
-            });
+          let passes = 1;
+          if (freclose) {
+            for (let k = 0; k < freclose.times && chance(freclose.chance); k++) passes++;
+          }
+          for (let pass = 0; pass < passes; pass++) {
+            const start = fclose.delay + pass * (beat * n + (freclose?.interval ?? 0.8));
+            const scale = pass === 0 ? fclose.damageScale : freclose!.damageScale;
+            for (let k = 0; k < n; k++) {
+              const pt = p.fisChain[n - 1 - k]; // far end first: zip home
+              this.zones.push({
+                pos: vec(pt.x, pt.y), radius: closeRadius,
+                caster: p.caster, inst: p.inst, color: p.color,
+                delay: start + beat * k, exploded: false,
+                linger: 0, tickInterval: 0.5, tickTimer: 0,
+                shape: 0, facing: p.dir,
+                dmgMult: scale * p.mult, depth: 1,
+                flatBonus: p.flat,
+              });
+            }
           }
         }
         // PLANT ON LAND (#17): the spent projectile stands where it fell —
@@ -20444,7 +20587,7 @@ export class World {
           if (chance(z.volatile.chance)) {
             this.flashes.push({
               pos: vec(z.pos.x, z.pos.y), radius: z.radius + 10,
-              color: '#ff8a4a', life: 0.3, maxLife: 0.3,
+              color: z.color, life: 0.3, maxLife: 0.3,
             });
             for (const v of this.zoneVictims(z)) {
               if (!this.zoneHas(z, v.pos, v.radius)) continue;
@@ -20455,20 +20598,24 @@ export class World {
         }
         // AFTERSHOCK segments (the whack-a-mole): the CASTER running over
         // an armed stretch of crack detonates it around that piece.
-        if (z.aftershock && z.exploded && z.linger > 0 && !z.caster.dead
+        if (z.aftershock && z.exploded && z.linger > 0
           && this.time >= z.aftershock.readyAt
-          && this.zoneHas(z, z.caster.pos, z.caster.radius)) {
+          && this.detonateFissureSegment(z, z.aftershock.damageScale, z.aftershock.radiusScale ?? 2.4)) {
           z.aftershock.readyAt = this.time + z.aftershock.rearm;
-          const radius = z.radius * (z.aftershock.radiusScale ?? 2.4);
-          const at = z.seg
-            ? vec((z.seg.ax + z.seg.bx) / 2, (z.seg.ay + z.seg.by) / 2)
-            : vec(z.pos.x, z.pos.y);
-          this.text(at, 'aftershock!', z.color, 12);
-          this.flashes.push({ pos: vec(at.x, at.y), radius, color: z.color, life: 0.3, maxLife: 0.3 });
-          for (const v of this.zoneVictims(z)) {
-            if (dist(at, v.pos) - v.radius > radius) continue;
-            this.resolveHit(z.caster, z.inst, v,
-              z.dmgMult * z.aftershock.damageScale, z.depth, z.flatBonus, true);
+        }
+        // ROULETTE segments (Seismic Waltz): the floor deals a fresh armed
+        // step on its own clock; crossing while the window holds detonates
+        // — then that stretch goes quiet until it's dealt again.
+        if (z.roulette && z.exploded && z.linger > 0) {
+          if (this.time >= z.roulette.next) {
+            z.roulette.next = this.time + z.roulette.interval;
+            if (this.time >= z.roulette.armedUntil && chance(z.roulette.chance)) {
+              z.roulette.armedUntil = this.time + z.roulette.window;
+            }
+          }
+          if (this.time < z.roulette.armedUntil
+            && this.detonateFissureSegment(z, z.roulette.damageScale, z.roulette.radiusScale ?? 2.2)) {
+            z.roulette.armedUntil = 0;
           }
         }
         // Revolving zones sweep their facing around (Cinderwhirl's flame

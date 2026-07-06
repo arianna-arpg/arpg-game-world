@@ -582,6 +582,43 @@ export interface FissureTrailSpec {
   close?: { delay: number; damageScale: number };
 }
 
+/** A PATH WARP for ground-laid fissures (SupportDef.fissurePath): the
+ *  crack keeps its length, speed and textures but abandons the straight
+ *  line. 'orbit' tears a RING around the CASTER at the aim distance —
+ *  the ground-crack answer to Tethered Orbit (fissureCount fans become
+ *  CONCENTRIC rings). 'spiral' unwinds out of the impact point over
+ *  `turns` revolutions (fans rotate extra arms — the crack galaxy).
+ *  'serpent' weaves ±waveDeg around the bearing — the drunk tear. */
+export interface FissurePathSpec {
+  kind: 'orbit' | 'spiral' | 'serpent';
+  /** spiral: total revolutions across the crack's length (default 1.6). */
+  turns?: number;
+  /** serpent: weave amplitude in degrees off the bearing (default 38). */
+  waveDeg?: number;
+}
+
+/** The melee-lash fissure a support projects off a strike (see
+ *  SupportDef.meleeFissure). Deliberately shaped like the GroundDelivery
+ *  fissure fields — the graft is compiled into a synthetic ground
+ *  delivery and laid through the ordinary layFissure machinery. */
+export interface MeleeFissureSpec {
+  /** Roll per PRIMARY use of the host skill (repeats/echoes never roll). */
+  chance: number;
+  /** Crack length, units. */
+  length: number;
+  /** Tear speed, units/s. */
+  speed: number;
+  /** Segment half-width (the capsule radius). */
+  radius: number;
+  /** Segment linger seconds (× effectDuration). */
+  linger: number;
+  tickInterval?: number;
+  /** The lash's segments hit at this fraction of the host's roll. */
+  damageScale: number;
+  /** Optional snap-shut pass (same shape as GroundDelivery.fissure.close). */
+  close?: { delay: number; damageScale: number };
+}
+
 /** The fissure trail a projectile tears: a socketed support's graft wins
  *  over the skill's own (one crack per flight — they don't stack). */
 export function instanceFissureTrail(inst: SkillInstance): FissureTrailSpec | undefined {
@@ -2243,6 +2280,28 @@ export interface SupportDef {
    *  aftershock around it (damageScale × the roll, radius × radiusScale),
    *  re-arming after `rearm` seconds. */
   fissureAftershock?: { damageScale: number; radiusScale?: number; rearm: number };
+  /** FISSURE ROULETTE (Seismic Waltz — Volcanic Heart's dancing cousin):
+   *  every `interval` seconds each live segment may ARM (`chance`) for a
+   *  `window`-second beat; the CASTER crossing an armed stretch detonates
+   *  it (damageScale × the roll, radius × radiusScale) and the step goes
+   *  quiet until the floor deals again. The dance picks the dancer's feet. */
+  fissureRoulette?: { interval: number; chance: number; window: number; damageScale: number; radiusScale?: number };
+  /** FISSURE RECLOSE (Restless Wound): the wounds REMAIN and close AGAIN —
+   *  after the closing pass (granted at `interval`/`damageScale` when the
+   *  skill brings none), up to `times` FURTHER passes zip home, each rolled
+   *  at `chance` (first miss ends the chain), `interval` seconds apart. */
+  fissureReclose?: { chance: number; times: number; interval: number; damageScale: number };
+  /** FISSURE PATH WARP: the crack abandons the straight tear (see
+   *  FissurePathSpec — 'orbit' rings the caster, 'spiral' unwinds from the
+   *  impact, 'serpent' weaves the bearing). First socketed warp wins;
+   *  fissureCount fans lay concentric rings / extra spiral arms. */
+  fissurePath?: FissurePathSpec;
+  /** MELEE FISSURE LASH (Faultfinder): each primary use of the host melee
+   *  skill has `chance` to PROJECT a crack out along the strike bearing.
+   *  The lash is laid through the HOST instance, so the host's other
+   *  fissure gems (volatility, arming, warps, recloses) all ride it — and
+   *  the graft grants the 'fissure' tag so they may socket in beside it. */
+  meleeFissure?: MeleeFissureSpec;
   /** CORPSE SPAWN (Hiveborn): corpses this skill CONSUMES crawl back out —
    *  `perCorpse` births one per body eaten; `count` instead births a fixed
    *  brood per use (the ghost variant pairs it with an imposed cooldown

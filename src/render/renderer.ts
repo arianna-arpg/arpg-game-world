@@ -2493,8 +2493,9 @@ export class Renderer {
         const len = Math.hypot(dx, dy) || 1;
         const nx = -dy / len, ny = dx / len;
         const seed = (s.ax * 13.37 + s.ay * 7.77) % Math.PI;
-        const armed = z.aftershock && z.exploded && z.linger > 0
-          && world.time >= z.aftershock.readyAt;
+        const armed = z.exploded && z.linger > 0
+          && ((z.aftershock && world.time >= z.aftershock.readyAt)
+            || (z.roulette && world.time < z.roulette.armedUntil));
         const hot = z.volatile && z.exploded && z.linger > 0;
         ctx.beginPath();
         ctx.moveTo(s.ax, s.ay);
@@ -2506,19 +2507,33 @@ export class Renderer {
         ctx.lineTo(s.bx, s.by);
         if (!z.exploded) {
           ctx.strokeStyle = z.color;
-          ctx.globalAlpha = 0.5;
+          ctx.globalAlpha = 0.4;
           ctx.lineWidth = 2;
+        } else if (armed) {
+          // ARMED (Tectonic Echoes / the waltz): a LIGHTER gradient of the
+          // skill's own color, gently pulsing — readable as "step here",
+          // never a palette hijack.
+          ctx.strokeStyle = shade(z.color, 0.45);
+          ctx.globalAlpha = 0.55 + 0.25 * Math.sin(world.time * 5 + seed);
+          ctx.lineWidth = Math.max(3, z.radius * 0.65);
+        } else if (hot) {
+          // VOLATILE (Volcanic Heart): the live sections run a DARKER shade
+          // of the same skill color — banked heat, not a second skin.
+          ctx.strokeStyle = shade(z.color, -0.3);
+          ctx.globalAlpha = 0.65;
+          ctx.lineWidth = Math.max(3, z.radius * 0.55);
         } else {
-          ctx.strokeStyle = armed ? '#ffd24a' : hot ? '#ff8a4a' : z.color;
-          ctx.globalAlpha = armed ? 0.95 : 0.8;
-          ctx.lineWidth = Math.max(3, z.radius * (armed ? 0.8 : 0.6));
+          ctx.strokeStyle = z.color;
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = Math.max(3, z.radius * 0.5);
         }
         ctx.stroke();
-        // The molten heart: a thin bright core down the same jag.
+        // The molten heart: a thin pale core down the same jag — in the
+        // skill's own family, brightest where the crack is armed.
         if (z.exploded) {
-          ctx.globalAlpha = 0.9;
+          ctx.globalAlpha = armed ? 0.7 : 0.45;
           ctx.lineWidth = 1.5;
-          ctx.strokeStyle = '#fff0c8';
+          ctx.strokeStyle = shade(z.color, armed ? 0.85 : 0.7);
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
@@ -4330,4 +4345,14 @@ function initials(name: string): string {
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** Shade a #rrggbb color toward white (t > 0) or black (t < 0). The fissure
+ *  textures ride this so every state — armed, volatile, molten core — stays
+ *  a GRADIENT of its own skill's color instead of hijacking the palette. */
+function shade(hex: string, t: number): string {
+  const [r, g, b] = hexToRgb(hex);
+  const to = t >= 0 ? 255 : 0;
+  const f = Math.min(1, Math.abs(t));
+  return `rgb(${Math.round(r + (to - r) * f)},${Math.round(g + (to - g) * f)},${Math.round(b + (to - b) * f)})`;
 }
