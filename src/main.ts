@@ -310,16 +310,30 @@ function handleLocalPanels(): void {
   // gameplay intent is suppressed (readLocalInput returns null). An open DWELL
   // dialog (caravan / toll / sail) is dismissed FIRST and the press stops there —
   // Esc on a dialog means "close this", not "pause the game on top of it".
+  // ESCAPE is a strict, predictable CASCADE — every press does exactly ONE
+  // legible thing, in order of how "modal" the thing is:
+  //   0. a running crafting minigame owns the screen (Esc waits it out),
+  //   1. the pause menu closes,
+  //   2. an open DWELL dialog dismisses (their closes carry semantics —
+  //      closing the vocation offer DECLINES it; one dialog per press),
+  //   3. any ordinary panels (sheet/book/tree/map/inventory) all clear —
+  //      Esc here means "give me my screen back", NEVER "pause on top",
+  //   4. a clear screen: NOW Esc is the pause menu.
   if (input.justPressed('escape')) {
-    if (ui.escapeMenuOpen) ui.hideEscapeMenu();
-    else if (ui.caravanOpen) ui.closeCaravan();
-    else if (ui.tollOpen) ui.closeToll();
-    else if (ui.sailOpen) ui.closeSail();
+    if (ui.minigameRunning()) return;
+    if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
+    if (ui.caravanOpen) { ui.closeCaravan(); return; }
+    if (ui.tollOpen) { ui.closeToll(); return; }
+    if (ui.salvageOpen) { ui.closeSalvage(); return; }
+    if (ui.oracleOpen) { ui.closeOracle(); return; }
+    if (ui.sailOpen) { ui.closeSail(); return; }
     // The vocation choice menu closes through its OWN close (not hideAll):
     // closeVocationMenu also DECLINES the offer, else the dwell re-pops the
     // menu the instant the pause menu comes down.
-    else if (ui.vocationOpen) ui.closeVocationMenu();
-    else { ui.hideAll(); ui.showEscapeMenu(); }
+    if (ui.vocationOpen) { ui.closeVocationMenu(); return; }
+    if (ui.anyPanelOpen()) { ui.hideAll(); return; }
+    ui.hideAll();
+    ui.showEscapeMenu();
     return;
   }
   if (ui.escapeMenuOpen) return;
@@ -327,6 +341,13 @@ function handleLocalPanels(): void {
   if (input.justPressed(kb.panelBook)) ui.toggleSkillBook();
   if (input.justPressed(kb.panelTree)) ui.toggleTree();
   if (input.justPressed(kb.panelMap)) ui.toggleMap();
+  if (input.justPressed(kb.panelInv)) ui.toggleInventory();
+  // GEAR pickup — a META intent (host-validated, co-op-replicated), not raw
+  // world poking; the open bag re-renders so the grab appears instantly.
+  if (input.justPressed(kb.pickup)) {
+    world.requestMeta({ t: 'pickupItem' });
+    if (ui.inventoryOpen) ui.refreshInventory();
+  }
 }
 
 /** Spawn a local stand-in ally (scripted: follow + auto-attack) to exercise the
@@ -371,15 +392,32 @@ function frame(now: number): void {
       drainMetaActions();
 
       for (const a of world.actors) updateAI(a, world, dt);
+      // Mirror the gear-pickup feel preference onto the sim (Settings is a
+      // UI concern the World can't import; a boolean crosses the seam).
+      world.gearVacuum = settings.gearPickup !== 'key';
       world.update(dt);
+      // DWELL → MENU polls. The world keeps simulating under the pause menu,
+      // so a dwell can fire while it's up — HOLD the request (don't clear)
+      // until the pause menu closes, else a station menu pops OVER the pause
+      // screen and Escape starts fighting through stacked surprises.
       // The Caravanner dwell (in TOWN) asks to open the band-travel menu.
-      if (world.caravanDwellRequested) {
+      if (world.caravanDwellRequested && !ui.escapeMenuOpen) {
         world.caravanDwellRequested = false;
         if (!ui.caravanOpen) ui.showCaravan();
       }
+      // The salvage-bench dwell asks to open the break/craft menu.
+      if (world.salvageDwellRequested && !ui.escapeMenuOpen) {
+        world.salvageDwellRequested = false;
+        if (!ui.salvageOpen) ui.showSalvage();
+      }
+      // The Oracle-stone dwell asks to open the communion menu.
+      if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
+        world.oracleDwellRequested = false;
+        if (!ui.oracleOpen) ui.showOracle();
+      }
       // The quartermaster dwell with FRESH vocation chains on offer asks to open
       // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).
-      if (world.vocationOfferRequested) {
+      if (world.vocationOfferRequested && !ui.escapeMenuOpen) {
         world.vocationOfferRequested = false;
         if (!ui.vocationOpen) ui.showVocationMenu();
       }

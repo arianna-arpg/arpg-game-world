@@ -31,9 +31,19 @@ import {
   type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec,
 } from './skills';
+import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
+import { compileItemMods, itemLevelReq, rebuildItem } from './itemgen';
+import {
+  ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, VENDOR_ESSENCE_PRICE, VENDOR_SUPPORT_PRICE,
+  type EssenceCost, type EssenceId,
+} from '../data/essences';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, type ItemInstance } from './items';
+import { DROP_CFG, resolveLootTable } from './loot';
+import { MONSTER_THEMES } from '../data/infrequents';
+import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
-import { CLASSES, PROGRESSION, type ClassDef } from '../data/classes';
+import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
@@ -52,7 +62,13 @@ import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord,
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE } from '../data/townBuild';
+import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE } from '../data/townBuild';
+import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
+import {
+  CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
+  rollRerolledAffix, salvageItemYield, salvageLoreGain, salvageSkillYield, salvageSupportYield,
+} from './crafting';
+import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
@@ -628,7 +644,8 @@ interface PendingBlink {
  */
 export type DropItem =
   | { kind: 'support'; gem: SupportInstance }
-  | { kind: 'skill'; inst: SkillInstance };
+  | { kind: 'skill'; inst: SkillInstance }
+  | { kind: 'gear'; item: ItemInstance };
 
 export interface GemDrop {
   pos: Vec2;
@@ -745,12 +762,25 @@ function isValidMetaAction(a: MetaAction): boolean {
       return isIdx(a.index);
     case 'socket': return isIdx(a.index) && isStr(a.skillId);
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
-    case 'unlearn': case 'levelSkill': return isStr(a.skillId);
+    case 'unlearn': case 'reacquireSkill': return isStr(a.skillId);
+    case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
     case 'allocate': return isStr(a.nodeId);
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
     case 'payToll': return Number.isInteger(a.index) && a.index >= -1; // -1 = a random gem
+    // GEAR intents — uids/cells are untrusted client numbers, ids plain strings.
+    case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
+    case 'unequipItem': return isStr(a.slot);
+    case 'moveItem': return isIdx(a.uid) && isIdx(a.x) && isIdx(a.y);
+    case 'dropItem': case 'salvageItem': return isIdx(a.uid);
+    case 'pickupItem': return true;
+    case 'salvageSkill': case 'salvageSupport': return isIdx(a.index);
+    case 'craftAffix':
+      return isIdx(a.uid) && isStr(a.affixId)
+        && (a.score === undefined || (typeof a.score === 'number' && Number.isFinite(a.score)));
+    case 'rerollAffix':
+      return isIdx(a.uid) && isIdx(a.affix) && typeof a.score === 'number' && Number.isFinite(a.score);
     default: return false;
   }
 }
@@ -784,6 +814,20 @@ export interface PlayerMeta {
   skillInv: SkillInstance[];
   /** Skill gems fed to a Sacrificial Font toward the next skill point. */
   offerings: number;
+  /** GEAR bag — the tetris grid; every entry carries its cell x/y. */
+  items: ItemInstance[];
+  /** GEAR worn on the doll, by EQUIP_SLOTS id. Each slot syncs one
+   *  attributable StatSheet source ('gear:<slot>') in recalcSeat. */
+  equipped: Partial<Record<string, ItemInstance>>;
+  /** SALVAGE currency, per essence tint. Carried, spendable, and — like the
+   *  rest of the bag — lost to death (knowledge persists on the account as
+   *  craftLore; the raw material does not). */
+  essences: Record<EssenceId, number>;
+}
+
+/** A zeroed essence wallet (fresh seats, wire fallbacks). */
+export function emptyEssences(): Record<EssenceId, number> {
+  return Object.fromEntries(ESSENCE_IDS.map(id => [id, 0])) as Record<EssenceId, number>;
 }
 
 /** A PLAYER SEAT — one controllable hero in the run. Bundles the per-player
@@ -1464,6 +1508,18 @@ export class World {
    *  polls this (a flag, not a callback, so it survives world re-creation), opens the
    *  menu, and clears it. World can't import the UI, hence the indirection. */
   caravanDwellRequested = false;
+  /** ONE-SHOT: set when the player dwells at the Salvage Station bench. The
+   *  main loop polls it and opens the salvage/craft menu (same flag
+   *  indirection as the Caravanner — World can't import the UI). */
+  salvageDwellRequested = false;
+  private salvageGate = new Dwell();
+  /** ONE-SHOT: the Oracle-stone dwell (same idiom). */
+  oracleDwellRequested = false;
+  private oracleGate = new Dwell();
+  /** GEAR pickup style, mirrored from Settings each frame by main.ts (the
+   *  World can't import UI/settings): true = walk-over hoover like gems;
+   *  false = the deliberate pickup keybind only. */
+  gearVacuum = true;
   /** ONE-SHOT: dwelling by the quartermaster with FRESH vocation chains on offer
    *  asks the main loop to open the CHOICE menu (same flag indirection as the
    *  Caravanner — a subclass pick must never dwell-auto-accept at random). */
@@ -1733,6 +1789,9 @@ export class World {
       inventory: [],
       skillInv: [],
       offerings: 0,
+      items: [],
+      equipped: {},
+      essences: emptyEssences(),
     };
     // Class bar skills come pre-learned as 2-socket magic gems.
     for (const sid of classDef.bar) {
@@ -6914,6 +6973,24 @@ export class World {
     p.setAttributes(attrs);
     p.sheet.setSource('class', m.classDef.innate ?? []);
     p.sheet.setSource('passives', passiveMods);
+    // GEAR: one attributable source per doll slot — equip/unequip/retune all
+    // converge here, and removeSource keeps empty slots contributing nothing.
+    for (const slot of EQUIP_SLOTS) {
+      const worn = m.equipped[slot.id];
+      if (worn) p.sheet.setSource('gear:' + slot.id, compileItemMods(worn));
+      else p.sheet.removeSource('gear:' + slot.id);
+    }
+    // "+N to <Class> Skills": sum every classSkill_<id> stat whose class bar
+    // holds this skill — dynamic against the LIVE registry, so re-barring a
+    // class retunes every such affix with zero data edits. Written onto the
+    // instance (bonusLevels) so effectiveSkillLevel needs no actor threading.
+    for (const inst of m.knownSkills.values()) {
+      let bonus = 0;
+      for (const c of CLASSES) {
+        if (c.bar.includes(inst.def.id)) bonus += p.sheet.get(classSkillStat(c.id));
+      }
+      inst.bonusLevels = bonus;
+    }
     p.sheet.setSource('level', [
       mod('life', 'flat', (p.level - 1) * PROGRESSION.lifePerLevel),
       mod('mana', 'flat', (p.level - 1) * PROGRESSION.manaPerLevel),
@@ -7057,7 +7134,14 @@ export class World {
     m.skillInv.splice(invIndex, 1);
     // Socketed supports are pried out, never burned.
     for (const s of inst.sockets) if (s) m.inventory.push(s);
-    const refund = inst.level - 1;
+    // A GRANTED spark (reacquired class starter) burns to nothing: no
+    // offering, no refund — the rescue hatch is not a mint.
+    if (inst.granted) {
+      this.text(p.pos, 'the font takes the granted spark — and gives nothing', '#8a8678', 12);
+      return true;
+    }
+    // Essence-bought levels never refund POINTS (no cross-currency arbitrage).
+    const refund = inst.level - 1 - (inst.essenceLevels ?? 0);
     if (refund > 0) m.skillPoints += refund;
     m.offerings++;
     if (m.offerings >= OFFERINGS_PER_POINT) {
@@ -7075,6 +7159,28 @@ export class World {
     return true;
   }
 
+  // ------------------------------------------------------------- essences ---
+
+  canAffordEssence(seat: Seat, cost: EssenceCost): boolean {
+    return (seat.meta.essences[cost.essence] ?? 0) >= cost.count;
+  }
+
+  /** Spend, or refuse with a throttled note naming what's missing. */
+  private spendEssence(seat: Seat, cost: EssenceCost, noteKey: string): boolean {
+    if (!this.canAffordEssence(seat, cost)) {
+      this.failNote(seat.actor, noteKey, `needs ${cost.count}× ${ESSENCES[cost.essence].label}`);
+      return false;
+    }
+    seat.meta.essences[cost.essence] -= cost.count;
+    return true;
+  }
+
+  grantEssence(seat: Seat, gain: EssenceCost): void {
+    seat.meta.essences[gain.essence] = (seat.meta.essences[gain.essence] ?? 0) + gain.count;
+    const def = ESSENCES[gain.essence];
+    this.text(seat.actor.pos, `+${gain.count} ${def.label}`, def.color, 12);
+  }
+
   /** Is the seat's hero standing close enough to a Sacrificial Font to use it? */
   nearFont(seat: Seat = this.localSeat): boolean {
     return this.fonts.some(f => dist(f.pos, seat.actor.pos) <= 150);
@@ -7087,13 +7193,21 @@ export class World {
       && dist(a.pos, seat.actor.pos) <= 160);
   }
 
-  /** Buy one of Brandt's wares — a skill point over the counter. Skill gems go
-   *  to the skill inventory; support gems to the support inventory. */
+  /** The essence price on one of Brandt's wares (data/essences.ts tables). */
+  vendorPrice(entry: VendorEntry): EssenceCost {
+    return entry.kind === 'skill'
+      ? VENDOR_ESSENCE_PRICE[entry.inst.rarity ?? 'common']
+      : VENDOR_SUPPORT_PRICE;
+  }
+
+  /** Buy one of Brandt's wares — priced in ESSENCE by the gem's rarity (the
+   *  salvage loop closes at the counter). Skill gems go to the skill
+   *  inventory; support gems to the support inventory. */
   buyVendorGem(index: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const entry = this.vendorStock[index];
-    if (!entry || !this.nearSmith(seat) || m.skillPoints < 1) return false;
-    m.skillPoints--;
+    if (!entry || !this.nearSmith(seat)) return false;
+    if (!this.spendEssence(seat, this.vendorPrice(entry), 'vendor:' + index)) return false;
     this.vendorStock.splice(index, 1);
     if (entry.kind === 'skill') {
       m.skillInv.push(entry.inst);
@@ -7198,6 +7312,77 @@ export class World {
   campfireHint(): { pos: Vec2; text: string } | null {
     if (!this.nearCampfire()) return null;
     return { pos: vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y), text: 'Linger to refresh the wilds.' };
+  }
+
+  // ------------------------------------------------------ salvage station ----
+
+  /** At the breaker's bench? (Feature owned + in town + near SALVAGE_SITE.) */
+  nearSalvage(seat: Seat = this.localSeat): boolean {
+    return featureEnabled(this.account, FEATURE.SALVAGE_STATION)
+      && this.zone.id === START_ZONE
+      && dist(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y)) <= SALVAGE_CFG.stationRadius;
+  }
+
+  /** Linger at the bench → open the salvage/craft menu (flag → main loop). */
+  private updateSalvage(dt: number): void {
+    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearSalvage();
+    if (!this.salvageGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    this.salvageDwellRequested = true;
+  }
+
+  /** The bench's prompt while the player is near (renderer), or null. */
+  salvageHint(): { pos: Vec2; text: string } | null {
+    if (!this.nearSalvage()) return null;
+    return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
+  }
+
+  // --------------------------------------------------------- oracle stone ----
+
+  /** Among the standing stones? (Feature owned + in town + near ORACLE_SITE.) */
+  nearOracle(seat: Seat = this.localSeat): boolean {
+    return featureEnabled(this.account, FEATURE.ORACLE_STONE)
+      && this.zone.id === START_ZONE
+      && dist(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y)) <= SALVAGE_CFG.stationRadius;
+  }
+
+  private updateOracle(dt: number): void {
+    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearOracle();
+    if (!this.oracleGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    this.oracleDwellRequested = true;
+  }
+
+  oracleHint(): { pos: Vec2; text: string } | null {
+    if (!this.nearOracle()) return null;
+    return { pos: vec(ORACLE_SITE.x, ORACLE_SITE.y), text: 'Linger to commune with the stone.' };
+  }
+
+  /** COMMUNE: reroll ONE natural affix on a bag/worn item, then SEAL it —
+   *  the stone answers each line once. Score comes from the rune minigame
+   *  (host-clamped); the reroll lands within the tiers the ITEM could
+   *  legally roll, lifted toward their ceiling by the score. */
+  rerollAffix(seat: Seat, uid: number, affixIdx: number, score: number): void {
+    if (!this.nearOracle(seat)) return;
+    const m = seat.meta;
+    const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
+    const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
+    if (!item) return;
+    const a = item.affixes[affixIdx];
+    if (!a || a.crafted || a.locked) {
+      this.failNote(seat.actor, 'oracle:' + uid, a?.locked ? 'the stone has spoken on this line' : 'the stone will not touch bench-work');
+      return;
+    }
+    const def = ITEM_AFFIXES[a.id];
+    if (!def) return;
+    const rolled = rollRerolledAffix(def, item, Math.random, Math.max(0, Math.min(1, score)));
+    if (!rolled) {
+      this.failNote(seat.actor, 'oracle:' + uid, 'the runes refuse this line');
+      return;
+    }
+    if (!this.spendEssence(seat, oracleRerollCost(item.rarity), 'oracle:' + uid)) return;
+    item.affixes[affixIdx] = rolled;
+    if (wornSlot) this.recalcSeat(seat);
+    this.text(seat.actor.pos, 'the stone reshapes it — and seals it', '#b06bd4', 13);
+    this.markMetaDirty(seat);
   }
 
   // ------------------------------------------------------------- caravan ------
@@ -8313,10 +8498,17 @@ export class World {
     saveAccount(this.account); // fire-and-forget OK: a lost reclaim self-heals (corpse re-spawns)
   }
 
-  /** Rebuild ONE saved loot item as its EXACT gem and drop it (NOT dropGemAt,
+  /** Rebuild ONE saved loot item as its EXACT self and drop it (NOT dropGemAt,
    *  which rolls random). Unknown ids skip (same tolerance as character load). */
   private dropSavedLoot(at: Vec2, it: SavedLoot): void {
     const pos = this.clampPos(vec(at.x + rand(-22, 22), at.y + rand(-22, 22)), 10);
+    if (it.kind === 'gear') {
+      // The EXACT worn item — same uid, same rolls; rebuildItem re-validates
+      // against live registries (a patched-out base simply stays lost).
+      const item = rebuildItem(it.item);
+      if (item) this.dropGearAt(at, item);
+      return;
+    }
     if (it.kind === 'skill') {
       const inst = rebuildSkill({ skillId: it.skillId, level: it.level, rarity: it.rarity, sockets: it.sockets });
       if (inst) this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
@@ -8326,23 +8518,57 @@ export class World {
     }
   }
 
-  /** Spend a skill point to level up an unlocked skill. */
-  levelUpSkill(skillId: string, seat: Seat = this.localSeat): boolean {
+  /** Level up an unlocked skill — a skill point, or (pay:'essence') the
+   *  salvage-currency curve (skillLevelEssenceCost; the WHOLE cost policy is
+   *  that one config function). Essence-bought levels are tracked so the
+   *  font never refunds them as points. */
+  levelUpSkill(skillId: string, seat: Seat = this.localSeat, pay: 'points' | 'essence' = 'points'): boolean {
     const m = seat.meta;
     const inst = m.knownSkills.get(skillId);
-    if (!inst || m.skillPoints < 1 || inst.level >= skillMaxLevel(inst.def)) return false;
-    m.skillPoints--;
+    if (!inst || inst.level >= skillMaxLevel(inst.def)) return false;
+    if (pay === 'essence') {
+      if (!this.spendEssence(seat, skillLevelEssenceCost(inst.level + 1), 'esslvl:' + skillId)) return false;
+      inst.essenceLevels = (inst.essenceLevels ?? 0) + 1;
+    } else {
+      if (m.skillPoints < 1) return false;
+      m.skillPoints--;
+    }
     inst.level++;
     return true;
   }
 
-  /** Spend a skill point to level up a support gem (socketed or carried). The gem
-   *  ref must belong to `seat`'s meta — applyAction resolves it from the wire. */
-  levelUpSupport(gem: SupportInstance, seat: Seat = this.localSeat): boolean {
+  /** Level up a support gem (socketed or carried) — point or essence path.
+   *  The gem ref must belong to `seat`'s meta — applyAction resolves it. */
+  levelUpSupport(gem: SupportInstance, seat: Seat = this.localSeat, pay: 'points' | 'essence' = 'points'): boolean {
     const m = seat.meta;
-    if (m.skillPoints < 1 || gem.level >= supportMaxLevel(gem.def)) return false;
-    m.skillPoints--;
+    if (gem.level >= supportMaxLevel(gem.def)) return false;
+    if (pay === 'essence') {
+      if (!this.spendEssence(seat, skillLevelEssenceCost(gem.level + 1), 'esslvl:' + gem.def.id)) return false;
+    } else {
+      if (m.skillPoints < 1) return false;
+      m.skillPoints--;
+    }
     gem.level++;
+    return true;
+  }
+
+  /** REACQUIRE a class starting skill — the softlock rescue hatch. Mints a
+   *  fresh level-1 copy of a bar skill the seat no longer carries anywhere,
+   *  marked GRANTED (zero salvage essence, zero font offerings, no refunds).
+   *  Dynamic against the class's LIVE bar — re-bar a class and this follows. */
+  reacquireSkill(skillId: string, seat: Seat = this.localSeat): boolean {
+    const m = seat.meta;
+    if (!m.classDef.bar.includes(skillId)) return false;
+    if (m.knownSkills.has(skillId)) return false;
+    if (m.skillInv.some(i => i.def.id === skillId)) return false;
+    const def = SKILLS[skillId];
+    if (!def) return false;
+    const inst = makeSkillInstance(def, 1, SKILL_RARITIES.magic.sockets);
+    inst.rarity = 'magic';
+    inst.granted = true;
+    m.skillInv.push(inst);
+    this.text(seat.actor.pos, `${def.name} re-kindled`, '#b06bd4', 13);
+    this.markMetaDirty(seat);
     return true;
   }
 
@@ -8456,17 +8682,18 @@ export class World {
       case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
       case 'buyDelver': this.buyDelverGem(action.index, seat); break;
-      case 'levelSkill': this.levelUpSkill(action.skillId, seat); break;
+      case 'levelSkill': this.levelUpSkill(action.skillId, seat, action.pay ?? 'points'); break;
       case 'levelSupportInv': {
         const gem = seat.meta.inventory[action.index];
-        if (gem) this.levelUpSupport(gem, seat);
+        if (gem) this.levelUpSupport(gem, seat, action.pay ?? 'points');
         break;
       }
       case 'levelSupportSocket': {
         const gem = seat.meta.knownSkills.get(action.skillId)?.sockets[action.socket];
-        if (gem) this.levelUpSupport(gem, seat);
+        if (gem) this.levelUpSupport(gem, seat, action.pay ?? 'points');
         break;
       }
+      case 'reacquireSkill': this.reacquireSkill(action.skillId, seat); break;
       case 'socket': this.socketSupport(action.index, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat); break;
@@ -8476,6 +8703,16 @@ export class World {
       case 'caravanTo': this.startCaravan(action.band, seat); break;
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
+      case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
+      case 'unequipItem': this.unequipItem(seat, action.slot); break;
+      case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
+      case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
+      case 'pickupItem': this.pickupNearestGear(seat); break;
+      case 'salvageItem': this.salvageItem(seat, action.uid); break;
+      case 'salvageSkill': this.salvageSkillGem(seat, action.index); break;
+      case 'salvageSupport': this.salvageSupportGem(seat, action.index); break;
+      case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId, action.score ?? 0); break;
+      case 'rerollAffix': this.rerollAffix(seat, action.uid, action.affix, action.score); break;
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
@@ -14858,6 +15095,213 @@ export class World {
     return item;
   }
 
+  // ------------------------------------------------------------- gear ops ---
+  // All bag/doll mutations are META intents (requestMeta → applyAction), so
+  // they validate, replicate to co-op clients, and stay index/uid-addressed.
+
+  private bagItem(seat: Seat, uid: number): ItemInstance | undefined {
+    return seat.meta.items.find(i => i.uid === uid);
+  }
+
+  /** Wear a bag item. Slot omitted → first enabled compatible slot, favoring
+   *  an empty one (the two-ring rule falls out of the registry, not code). */
+  equipItem(seat: Seat, uid: number, slotId?: string): void {
+    const m = seat.meta;
+    const p = seat.actor;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    const base = ITEM_BASES[item.baseId];
+    if (!base) return;
+    let slot = slotId ? SLOT_BY_ID[slotId] : undefined;
+    if (slot && (!slot.enabled || !slot.accepts.includes(base.category))) slot = undefined;
+    if (!slot) {
+      const options = slotsForCategory(base.category);
+      if (options.length === 0) return;
+      slot = options.find(s => !m.equipped[s.id]) ?? options[0];
+    }
+    const req = itemLevelReq(item);
+    if (p.level < req) {
+      this.failNote(p, 'equip:' + uid, `requires level ${req}`);
+      return;
+    }
+    removeFromBag(m.items, uid);
+    const prev = m.equipped[slot.id];
+    m.equipped[slot.id] = item;
+    delete item.x;
+    delete item.y;
+    // The swap-out returns to the bag — or the floor, never the void.
+    if (prev && !autoPlace(m.items, prev)) this.dropGearAt(p.pos, prev, seat.id);
+    this.recalcSeat(seat);
+    this.text(p.pos, item.name, ITEM_RARITIES[item.rarity].color, 13);
+    this.markMetaDirty(seat);
+  }
+
+  unequipItem(seat: Seat, slotId: string): void {
+    const m = seat.meta;
+    const item = m.equipped[slotId];
+    if (!item) return;
+    if (!autoPlace(m.items, item)) {
+      this.failNote(seat.actor, 'unequip:' + slotId, 'no room in the bag');
+      return;
+    }
+    delete m.equipped[slotId];
+    this.recalcSeat(seat);
+    this.markMetaDirty(seat);
+  }
+
+  /** Re-place a bag item at a cell; a single blocker swaps into the vacated
+   *  spot when it fits — the tetris shuffle without an item ever vanishing. */
+  moveBagItem(seat: Seat, uid: number, x: number, y: number): void {
+    const m = seat.meta;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    if (placeAt(m.items, item, x, y)) { this.markMetaDirty(seat); return; }
+    const blockers = overlappingItems(m.items, item, x, y);
+    if (blockers.length !== 1 || item.x === undefined || item.y === undefined) return;
+    const other = blockers[0];
+    const from = { x: item.x, y: item.y };
+    const otherFrom = { x: other.x, y: other.y };
+    delete other.x;
+    delete other.y;
+    if (placeAt(m.items, item, x, y) && placeAt(m.items, other, from.x, from.y)) {
+      this.markMetaDirty(seat);
+      return;
+    }
+    item.x = from.x; item.y = from.y;
+    other.x = otherFrom.x; other.y = otherFrom.y;
+  }
+
+  dropGearFromBag(seat: Seat, uid: number): void {
+    const m = seat.meta;
+    if (!this.bagItem(seat, uid)) return;
+    const item = removeFromBag(m.items, uid);
+    if (!item) return;
+    this.dropGearAt(seat.actor.pos, item, seat.id);
+    this.markMetaDirty(seat);
+  }
+
+  /** Mint a ground gear drop. Kill loot announces itself; player discards
+   *  carry the same grace/dropper guards as discarded gems. */
+  dropGearAt(at: Vec2, item: ItemInstance, droppedBy?: string): void {
+    const pos = this.clampPos(vec(at.x + rand(-16, 16), at.y + rand(-16, 16)), 10);
+    delete item.x;
+    delete item.y;
+    const drop: GemDrop = { pos, item: { kind: 'gear', item }, bob: rand(0, Math.PI * 2) };
+    if (droppedBy) { drop.grace = DROP_PICKUP_GRACE; drop.droppedBy = droppedBy; }
+    this.drops.push(drop);
+    if (!droppedBy) {
+      this.text(at, `${item.name}!`, ITEM_RARITIES[item.rarity].color, item.rarity === 'unique' ? 17 : 14);
+    }
+  }
+
+  /** The pickup keybind: nearest grabbable gear within reach → bag. Gear is
+   *  a DELIBERATE grab (unlike vacuumed gems) — choosing is the mini-game. */
+  pickupNearestGear(seat: Seat): void {
+    const p = seat.actor;
+    let bestIdx = -1;
+    let bestD = Infinity;
+    for (let i = 0; i < this.drops.length; i++) {
+      const d = this.drops[i];
+      if (d.item.kind !== 'gear') continue;
+      if (d.grace !== undefined && d.grace > 0) continue;
+      if (d.droppedBy === seat.id && !d.dropperCleared) continue;
+      const dd = dist(d.pos, p.pos);
+      if (dd <= p.radius + ITEM_CFG.pickupRadius && dd < bestD) { bestD = dd; bestIdx = i; }
+    }
+    if (bestIdx < 0) return;
+    const drop = this.drops[bestIdx];
+    if (drop.item.kind !== 'gear') return;
+    const item = drop.item.item;
+    if (!autoPlace(seat.meta.items, item)) {
+      this.failNote(p, 'bagfull', 'inventory full');
+      return;
+    }
+    this.drops.splice(bestIdx, 1);
+    this.text(p.pos, item.name, ITEM_RARITIES[item.rarity].color, 13);
+    this.markMetaDirty(seat);
+  }
+
+  // ------------------------------------------------------ salvage & craft ---
+  // Station-gated META intents. Salvage pays essence (quality-priced) and
+  // TEACHES the account each natural affix it breaks (craftLore); crafting
+  // spends essence to stamp a studied affix onto gear within expertise's
+  // ceiling. Account writes persist fire-and-forget (the reclaim pattern).
+
+  /** Break a BAG item into essence + lore. (Worn gear must be unequipped
+   *  first — a deliberate two-step, no accidental doll salvage.) */
+  salvageItem(seat: Seat, uid: number): void {
+    if (!this.nearSalvage(seat)) return;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    removeFromBag(seat.meta.items, uid);
+    this.grantEssence(seat, salvageItemYield(item));
+    for (const family of salvageLoreGain(item)) {
+      this.account.craftLore[family] = (this.account.craftLore[family] ?? 0) + 1;
+    }
+    saveAccount(this.account); // lore is account knowledge — survive the run
+    this.markMetaDirty(seat);
+  }
+
+  /** Break a CARRIED skill gem (skillInv). Granted sparks yield nothing —
+   *  deleted outright, exactly as promised. Sockets are pried out first. */
+  salvageSkillGem(seat: Seat, index: number): void {
+    if (!this.nearSalvage(seat)) return;
+    const m = seat.meta;
+    const inst = m.skillInv[index];
+    if (!inst) return;
+    m.skillInv.splice(index, 1);
+    for (const s of inst.sockets) if (s) m.inventory.push(s);
+    const yieldd = salvageSkillYield(inst);
+    if (yieldd) this.grantEssence(seat, yieldd);
+    else this.text(seat.actor.pos, 'the granted spark breaks into nothing', '#8a8678', 12);
+    this.markMetaDirty(seat);
+  }
+
+  /** Break a loose support gem (inventory). */
+  salvageSupportGem(seat: Seat, index: number): void {
+    if (!this.nearSalvage(seat)) return;
+    const m = seat.meta;
+    const gem = m.inventory[index];
+    if (!gem) return;
+    m.inventory.splice(index, 1);
+    this.grantEssence(seat, salvageSupportYield(gem));
+    this.markMetaDirty(seat);
+  }
+
+  /** Crafted-affix capacity for this account (the Vault can widen it). */
+  craftSlots(): number {
+    return CRAFT_CFG.maxCraftedAffixes
+      + (featureEnabled(this.account, CRAFT_CFG.extraSlotFeature) ? 1 : 0);
+  }
+
+  /** Stamp a STUDIED affix onto a bag or worn item: expertise-gated, essence-
+   *  priced, one crafted line per item (craftSlots widens it). The roll is
+   *  uniform across the whole unlocked span — expertise raises the ceiling,
+   *  never guarantees it. */
+  craftAffix(seat: Seat, uid: number, affixId: string, score = 0): void {
+    if (!this.nearSalvage(seat)) return;
+    const m = seat.meta;
+    const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
+    const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
+    if (!item) return;
+    if (craftedCount(item) >= this.craftSlots()) {
+      this.failNote(seat.actor, 'craft:' + uid, 'this piece holds no more craft');
+      return;
+    }
+    const option = craftableAffixesFor(item, this.account.craftLore).find(o => o.def.id === affixId);
+    if (!option) return;
+    const rank = expertiseRank(this.account.craftLore, option.def.family);
+    if (!this.spendEssence(seat, CRAFT_CFG.cost(rank), 'craft:' + affixId)) return;
+    // The SMITHING score (host-clamped) lifts the roll toward the unlocked
+    // ceiling — quality is the player's hands, never a worn stat.
+    const rolled = rollCraftedAffix(option.def, rank, Math.random, Math.max(0, Math.min(1, score)));
+    if (!rolled) return;
+    item.affixes.push(rolled);
+    if (wornSlot) this.recalcSeat(seat); // live stats move the instant worn gear changes
+    this.text(seat.actor.pos, `crafted: ${option.def.names[option.def.names.length - 1] ?? option.def.id}`, '#b06bd4', 13);
+    this.markMetaDirty(seat);
+  }
+
   // --- Brandt the smith: time-based, account-scaled stock -------------------
 
   private vendorSize(): number {
@@ -14893,6 +15337,23 @@ export class World {
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
     const count = def?.drops ?? (def?.boss ? 3 : chance(0.16) ? 1 : 0);
     for (let i = 0; i < count; i++) this.dropGemAt(actor.pos);
+    // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
+    // table; elite leaders add bonus rolls (crowned promote to the apex table).
+    const tables: string[] = [];
+    if (def?.loot) tables.push(def.loot);
+    else if (def?.boss) tables.push(DROP_CFG.bossTable);
+    else if (chance(DROP_CFG.killItemChance)) tables.push(DROP_CFG.killTable);
+    const tier = actor.rarity ?? 'normal';
+    const bonus = DROP_CFG.eliteBonusItemRolls[tier] ?? 0;
+    for (let i = 0; i < bonus; i++) tables.push(DROP_CFG.eliteBonusTable[tier]);
+    // MONSTER INFREQUENT theme: per-def declaration wins, else the registry.
+    const miTheme = def?.infrequentTheme ?? (actor.defId ? MONSTER_THEMES[actor.defId] : undefined);
+    for (const t of tables) {
+      for (const res of resolveLootTable(t, { ilvl: this.zone.level, miTheme })) {
+        if (res.kind === 'gem') this.dropGemAt(actor.pos);
+        else this.dropGearAt(actor.pos, res.item);
+      }
+    }
   }
 
   // --------------------------------------------------------------- update ---
@@ -14910,6 +15371,10 @@ export class World {
     this.updateMireille(dt);
     // The campfire refreshes the wilds for lingering by it (town, feature-gated).
     this.updateCampfire(dt);
+    // The salvage bench opens the break/craft menu on a dwell (same flag idiom).
+    this.updateSalvage(dt);
+    // The Oracle stone opens the communion menu on a dwell.
+    this.updateOracle(dt);
     // The Caravanner opens the band-travel menu on a dwell (a UI callback).
     this.updateCaravan(dt);
     // The port dock's linger-to-sail (naval travel menu).
@@ -17738,6 +18203,22 @@ export class World {
         if (!dropper || dist(dropper.actor.pos, drop.pos) > dropper.actor.radius + 22) drop.dropperCleared = true;
       }
       const exclude = drop.droppedBy && !drop.dropperCleared ? drop.droppedBy : undefined;
+      // GEAR: vacuum mode (default) hoovers it like a gem — into the grid if
+      // it fits, else it stays lying with a throttled note. Key mode makes it
+      // a deliberate press (pickupNearestGear); the key works in both modes.
+      if (drop.item.kind === 'gear') {
+        if (!this.gearVacuum) continue;
+        const seat = this.pickupSeat(drop.pos, 22, exclude);
+        if (!seat) continue;
+        if (!autoPlace(seat.meta.items, drop.item.item)) {
+          this.failNote(seat.actor, 'bagfull', 'inventory full');
+          continue;
+        }
+        this.text(seat.actor.pos, drop.item.item.name, ITEM_RARITIES[drop.item.item.rarity].color, 13);
+        this.markMetaDirty(seat);
+        this.drops.splice(i, 1);
+        continue;
+      }
       const seat = this.pickupSeat(drop.pos, 22, exclude);
       if (!seat) continue;
       const item = drop.item;

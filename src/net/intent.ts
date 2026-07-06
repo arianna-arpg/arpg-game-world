@@ -63,9 +63,10 @@ export type MetaAction =
   | { t: 'sacrifice'; index: number }                          // skillInv idx → font
   | { t: 'buyVendor'; index: number }                          // vendorStock idx
   | { t: 'buyDelver'; index: number }                          // descentStock idx (Echoes)
-  | { t: 'levelSkill'; skillId: string }
-  | { t: 'levelSupportInv'; index: number }                    // loose support gem
-  | { t: 'levelSupportSocket'; skillId: string; socket: number } // socketed support
+  | { t: 'levelSkill'; skillId: string; pay?: 'points' | 'essence' }
+  | { t: 'levelSupportInv'; index: number; pay?: 'points' | 'essence' } // loose support gem
+  | { t: 'levelSupportSocket'; skillId: string; socket: number; pay?: 'points' | 'essence' } // socketed support
+  | { t: 'reacquireSkill'; skillId: string }                   // re-kindle a lost class starter (GRANTED copy)
   | { t: 'socket'; index: number; skillId: string }            // inv gem → skill socket
   | { t: 'unsocket'; skillId: string; socket: number }
   | { t: 'allocate'; nodeId: string }
@@ -74,4 +75,16 @@ export type MetaAction =
   | { t: 'dropSupport'; index: number }                        // inventory idx → world
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
   | { t: 'payToll'; index: number }                            // Holdfast: surrender support idx (-1 = random) to open the gate
-  | { t: 'vocationQuest'; questId: string };                   // Vocation menu: undertake a chain step
+  | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
+  // GEAR (items are addressed by uid — stable across bag re-sorts and the wire).
+  | { t: 'equipItem'; uid: number; slot?: string }             // bag item → doll slot (auto-picks when omitted)
+  | { t: 'unequipItem'; slot: string }                         // doll slot → bag (fails full)
+  | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
+  | { t: 'dropItem'; uid: number }                             // bag item → ground
+  | { t: 'pickupItem' }                                        // nearest ground gear within reach → bag
+  // SALVAGE STATION (dwell-gated): break things into essence; craft studied affixes.
+  | { t: 'salvageItem'; uid: number }                          // bag gear → essence + craft lore
+  | { t: 'salvageSkill'; index: number }                       // skillInv gem → essence (granted: nothing)
+  | { t: 'salvageSupport'; index: number }                     // loose support → essence
+  | { t: 'craftAffix'; uid: number; affixId: string; score?: number } // essence + SMITHING score → a studied affix
+  | { t: 'rerollAffix'; uid: number; affix: number; score: number };  // Oracle COMMUNION: reroll + seal one line

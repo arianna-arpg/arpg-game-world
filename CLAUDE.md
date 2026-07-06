@@ -34,10 +34,15 @@ we verify changes.
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
   (layered modifier engine), `damage.ts`, `status.ts`, `skills.ts` (skill
   schema), `actor.ts` (one entity model for player/monsters/minions),
-  `ai.ts` + `brain.ts` (composable enemy AI), `levelgen.ts`, `worldgen.ts`.
+  `ai.ts` + `brain.ts` (composable enemy AI), `levelgen.ts`, `worldgen.ts`;
+  items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
+  (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),
+  `loot.ts` (nestable loot tables + DROP_CFG kill-path levers).
 - `src/data/` — content as data: `skills.ts`, `supports.ts`, `monsters.ts`,
-  `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`. Adding
-  content here needs no engine changes.
+  `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`; items:
+  `itembases.ts` (base families), `itemaffixes.ts` (the affix gamut via
+  `fam()`), `uniques.ts`, `loottables.ts`. Adding content here needs no
+  engine changes.
 - `src/packages/` — optional per-run world-event overlays (Warbands, Breach,
   Contagion, …).
 - `src/render/` — Canvas 2D renderer (placeholder geometry art driven by data).

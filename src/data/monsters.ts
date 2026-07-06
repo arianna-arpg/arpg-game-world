@@ -115,6 +115,13 @@ export interface MonsterDef {
   /** Skill ids from the shared catalog. */
   skills: string[];
   xp: number;
+  /** GEAR loot-table override (LOOT_TABLES id). Omitted ⇒ the kill path uses
+   *  DROP_CFG defaults (boss table for bosses, chance-gated world table
+   *  otherwise) — set this to give a monster its own hoard. */
+  loot?: string;
+  /** MONSTER-INFREQUENT theme (mi_<theme> base pool). Wins over the
+   *  data/infrequents.ts MONSTER_THEMES registry when both name this def. */
+  infrequentTheme?: string;
   /** Marks wave bosses: bigger, tougher, flagged in the UI. */
   boss?: boolean;
   /** Cannot take damage (hits report immune). */
