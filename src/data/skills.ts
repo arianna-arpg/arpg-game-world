@@ -5541,6 +5541,71 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  faultbreak: {
+    id: 'faultbreak', name: 'Faultbreak',
+    description: 'SLAM the ground at your feet and PROJECT the break: a fissure tears out from within arm\'s reach, splitting whatever stands along the line. The crack is the weapon — warp it, arm it, fan it.',
+    tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'fissure'], color: '#b8905e',
+    manaCost: 11, cooldown: 3, useTime: 0.65,
+    baseDamage: { physical: [14, 22] },
+    delivery: {
+      type: 'ground', radius: 30, castRange: 55, delay: 0.08,
+      lingerDuration: 2.4, tickInterval: 0.5,
+      fissure: { length: 300, speed: 540 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.12 },
+    ],
+    requirements: { strength: 20 },
+    ai: { range: 110, weight: 2 },
+  },
+
+  restless_earth: {
+    id: 'restless_earth', name: 'Restless Earth',
+    description: 'A STANCE, not a spell: while it burns, the ground near you refuses to stay whole — every few heartbeats a fissure TEARS OUT from you in a random direction, all on its own. Your crack gems ride every beat; extra fissures fan every tear. Press again to let the earth rest.',
+    tags: ['spell', 'physical', 'aoe', 'duration', 'fissure'], color: '#a88a5a',
+    manaCost: 12, cooldown: 1.5, useTime: 0.4,
+    baseDamage: { physical: [8, 13] },
+    delivery: {
+      type: 'ground', radius: 26, castRange: 55, delay: 0.1,
+      lingerDuration: 2.2, tickInterval: 0.5,
+      fissure: { length: 260, speed: 470 },
+      strobe: { interval: 2.6, bearing: 'random', reservePct: 0.2 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.08 },
+    ],
+    requirements: { strength: 16, willpower: 14 },
+    ai: { range: 200, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  wandering_spirits: {
+    id: 'wandering_spirits', name: 'Wandering Spirits',
+    description: 'REVEAL the restless dead around you for a few seconds: spirits that wander where they will, withering whatever they drift through with Torment. They answer to no aim — only to the crowd of them (more projectiles, more ghosts) and to how long the veil stays open.',
+    tags: ['spell', 'chaos', 'projectile', 'duration'], color: '#9ab8d8',
+    manaCost: 16, cooldown: 6, useTime: 0.55,
+    baseDamage: { chaos: [4, 7] },
+    delivery: {
+      // A ring of slow ghosts loosed around the caster; huge erratic and a
+      // whisper of homing = the drunken drift that still finds the living.
+      // pierce ∞ + rehit: they pass THROUGH crowds, withering on the way.
+      type: 'projectile', speed: 80, radius: 12, range: 4000,
+      duration: 5,
+      count: 4, ring: {},
+      pierce: 999, rehit: 0.6,
+      trajectory: { erratic: 4, homing: 0.3 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'torment', chance: 1, magnitude: 0.5 },
+    ],
+    requirements: { willpower: 18, intelligence: 12 },
+    ai: { range: 160, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('effectDuration', 'increased', 0.04)] },
+  },
+
   shardrift: {
     id: 'shardrift', name: 'Shardrift',
     description: 'Crack a rift in the air that FIRES ice-shard barrages down its lane for a few seconds — a persistent emitter you place like artillery and feed with position.',

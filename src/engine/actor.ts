@@ -435,6 +435,10 @@ export class Actor {
   /** TOGGLED SUMMON CONTRACTS by skill id (PoE2 Spirit style): the skill —
    *  not the minion — owns the reservation, held across every death. */
   summonToggles = new Map<string, { inst: SkillInstance; reserved: number }>();
+  /** TOGGLED STROBE STANCES by skill id (GroundDelivery.strobe): the
+   *  stance re-casts its placement on a world-driven beat while it burns;
+   *  `reserved` max mana is locked out, refunded on release or death. */
+  strobes = new Map<string, { inst: SkillInstance; timer: number; reserved: number }>();
   /** EXPONENTIAL UNLIFE (decay minions): stamped at spawn; life drains at
    *  dps0 × growth^t once t > 0 — a survival meter, not damage. */
   decay?: { t: number; dps0: number; growth: number };
@@ -1761,6 +1765,11 @@ export class Actor {
     // Same rule for toggled summon contracts — dismissal FREES mana, so a
     // reservation squeeze must never softlock the off-switch.
     if (d0.type === 'summon' && d0.persistent?.toggle && this.summonToggles.has(inst.def.id)) {
+      return true;
+    }
+    // And for strobe stances (Restless Earth): the off-press frees its
+    // reserve — never let an empty pool softlock the release.
+    if (d0.type === 'ground' && d0.strobe && this.strobes.has(inst.def.id)) {
       return true;
     }
     // USE-CHARGES: an empty bank is the dry spell (recovery ticks it back).

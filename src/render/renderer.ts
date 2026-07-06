@@ -3942,6 +3942,7 @@ export class Renderer {
       const runningOn = inst ? (
         p.activeAuras.has(inst.def.id)
         || p.summonToggles.has(inst.def.id)
+        || p.strobes.has(inst.def.id)
         || (inst.def.pool !== undefined && p.venting.has(inst.def.pool.id))
         || world.zones.some(z => z.caster === p && z.toggled && z.inst.def.id === inst.def.id)
       ) : false;

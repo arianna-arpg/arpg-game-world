@@ -804,6 +804,15 @@ export interface GroundDelivery {
    *  cast bearing EXACTLY ONCE over the zone's whole linger — a single
    *  side-to-side harvest, no return stroke. Faced shapes feel it. */
   sweep?: { arcDeg: number };
+  /** STROBE STANCE (Restless Earth): the press TOGGLES a worn rhythm
+   *  instead of placing — every `interval` seconds the placement re-casts
+   *  ITSELF (through the live instance: sockets, path warps, textures and
+   *  fissureCount fans all ride each beat) at `bearing` around the caster
+   *  ('random' scatters the beats, 'facing' follows the eyes), reserving
+   *  `reservePct` of max mana while it burns (default 0.2). Released by a
+   *  re-press (seat presses only — AI re-presses simply fail) or the
+   *  caster's death; the stance survives zone travel. */
+  strobe?: { interval: number; bearing?: 'random' | 'facing'; reservePct?: number };
 }
 
 export interface SelfDelivery {

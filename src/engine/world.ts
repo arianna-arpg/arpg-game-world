@@ -2061,7 +2061,8 @@ export class World {
       for (let i = 0; i < a.skills.length; i++) {
         const inst = a.skills[i];
         if (!inst) continue;
-        const toggle = inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle';
+        const toggle = (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
+          || (inst.def.delivery.type === 'ground' && !!inst.def.delivery.strobe);
         // META-ACTIONS (shift+slot): the mini-button riding the slot — and
         // the meta OWNS the slot on its frame: the physical button is still
         // down during a modifier press (held[] is deliberately preserved for
@@ -2071,7 +2072,7 @@ export class World {
         if (inp.metaEdge?.[i] && instanceMeta(inst)) {
           this.useMetaSkill(a, inst, aim);
         } else if (toggle ? inp.edge[i] : inp.held[i]) {
-          this.useSkill(a, inst, aim);
+          this.useSkill(a, inst, aim, true);
         }
       }
       // Face the cursor/target while able, so swings read right.
@@ -10042,8 +10043,12 @@ export class World {
    * The one path through which ANYONE uses ANY skill. Validates, pays, and
    * either executes instantly (cast time 0) or starts a cast / channel /
    * charge-up that the casting system resolves.
+   *
+   * `seatPress` marks a DELIBERATE press from a player/merc seat
+   * (applyInputs) — toggle-off semantics (strobe stances, trigger arming)
+   * answer only to seats, so AI re-presses can never thrash a toggle.
    */
-  useSkill(caster: Actor, inst: SkillInstance, aim: Vec2): boolean {
+  useSkill(caster: Actor, inst: SkillInstance, aim: Vec2, seatPress = false): boolean {
     this.markSeatActed(caster); // a cast/attack interrupts THAT seat's dwell
     // An overdrive toggle with debt outstanding is LOCKED ON — canUse would
     // refuse silently; this supplies the why.
@@ -10129,6 +10134,37 @@ export class World {
     if (def.delivery.type === 'summon' && def.delivery.persistent?.toggle
       && caster.summonToggles.has(def.id)) {
       this.dismissSummonToggle(caster, def.id);
+      caster.useLock = 0.25;
+      return true;
+    }
+    // STROBE STANCE (GroundDelivery.strobe — Restless Earth): the press is
+    // a TOGGLE. On: pay the ignition cost, reserve the stance's mana, and
+    // let updateStrobes re-cast the placement on the beat. Off: seat
+    // presses only (an AI re-press fails and it moves on) — refund + rest.
+    if (def.delivery.type === 'ground' && def.delivery.strobe) {
+      const strobe = def.delivery.strobe;
+      const held = caster.strobes.get(def.id);
+      if (held) {
+        if (!seatPress) return false;
+        caster.reservedMana = Math.max(0, caster.reservedMana - held.reserved);
+        caster.strobes.delete(def.id);
+        this.text(caster.pos, 'the earth rests', def.color, 11);
+        caster.useLock = 0.25;
+        return true;
+      }
+      const reserve = Math.round(caster.maxMana() * (strobe.reservePct ?? 0.2));
+      if (caster.reservedMana + reserve > caster.maxMana()) {
+        this.failNote(caster, def.id + ':reserve', 'mana locked');
+        return false;
+      }
+      caster.payCost(caster.skillCost(inst));
+      caster.reservedMana += reserve;
+      // First beat lands almost at once — the toggle should feel alive.
+      caster.strobes.set(def.id, { inst, timer: 0.05, reserved: reserve });
+      if (def.cooldown > 0) {
+        caster.cooldowns.set(def.id, def.cooldown);
+        caster.cooldownTotals.set(def.id, def.cooldown);
+      }
       caster.useLock = 0.25;
       return true;
     }
@@ -17162,6 +17198,7 @@ export class World {
     this.updateDischarges();
     this.updateConstructs(dt);
     this.updateAuras(dt);
+    this.updateStrobes(dt);
     this.updateDetonations(dt);
     this.updateDeathBursts(dt);
     this.updatePendingSummons(dt);
@@ -17986,6 +18023,34 @@ export class World {
           }
           break;
         }
+      }
+    }
+  }
+
+  /** THE STROBE STANCES (GroundDelivery.strobe — Restless Earth): toggled
+   *  placements re-casting THEMSELVES on a beat, through the live instance
+   *  — sockets, path warps, textures and fissureCount fans ride every lay.
+   *  The stance survives zone travel; death releases it (reserve refunded). */
+  private updateStrobes(dt: number): void {
+    for (const a of this.actors) {
+      if (!a.strobes.size) continue;
+      for (const [id, st] of a.strobes) {
+        const d = st.inst.def.delivery;
+        if (a.dead || d.type !== 'ground' || !d.strobe) {
+          a.reservedMana = Math.max(0, a.reservedMana - st.reserved);
+          a.strobes.delete(id);
+          continue;
+        }
+        st.timer -= dt;
+        if (st.timer > 0) continue;
+        st.timer += d.strobe.interval;
+        const bearing = (d.strobe.bearing ?? 'random') === 'facing'
+          ? a.facing : rand(0, Math.PI * 2);
+        const reach = Math.max(24, d.castRange);
+        const aim = vec(a.pos.x + Math.cos(bearing) * reach,
+          a.pos.y + Math.sin(bearing) * reach);
+        this.executeSkill(a, st.inst, aim,
+          { noCooldown: true, noRepeat: true, keepFacing: true });
       }
     }
   }
