@@ -5187,6 +5187,56 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'shatterConstructs', fraction: 1.2, radius: 110 }],
   },
 
+  // ======================= Status puppeteering ==============================
+  // The condition-necromancer archetype (the GW1 homage): afflictions are
+  // MATERIEL, not just damage — spread what rides the enemy (Epidemic),
+  // draw what rides your allies onto yourself (Draw Corruption), then pour
+  // everything you carry into a chosen vessel (Transfusion). All three ride
+  // world.transplantStatus, so strength/duration knobs stay uniform.
+
+  epidemic: {
+    id: 'epidemic', name: 'Epidemic',
+    description: 'The afflicted are ANNOUNCEMENTS: strike the marked ground and every status riding every victim there LEAPS to the flesh around them — full strength, clocks wound fresh. You do not cure a plague. You deliver it.',
+    tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#8ac860',
+    manaCost: 14, cooldown: 5, useTime: 0.55,
+    baseDamage: { chaos: [3, 5] },
+    delivery: { type: 'ground', radius: 130, castRange: 440, delay: 0.15 },
+    effects: [
+      { type: 'damage' },
+      { type: 'spreadStatus', radius: 180, duration: 'refresh' },
+    ],
+    requirements: { intelligence: 16, willpower: 12 },
+    ai: { range: 400, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  draw_corruption: {
+    id: 'draw_corruption', name: 'Draw Corruption',
+    description: 'The vessel opens: every affliction on every ally near you is PULLED onto your own flesh, clocks still running — and each drawn wound closes a little of yours. Carry it well; you decide where it all goes next.',
+    tags: ['spell', 'chaos', 'instant'], color: '#9a78b8',
+    manaCost: 10, cooldown: 4, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'siphonStatus', radius: 280, from: 'allies', healPer: 8 }],
+    requirements: { willpower: 18 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  transfusion: {
+    id: 'transfusion', name: 'Transfusion',
+    description: 'Empty the vessel INTO the marked: every affliction you carry pours onto the target at full strength on a fresh clock — and gushes over whoever crowds them. What was yours is now very much theirs.',
+    tags: ['spell', 'chaos', 'targeted', 'duration'], color: '#b06bd4',
+    manaCost: 12, cooldown: 3, useTime: 0.4,
+    baseDamage: { chaos: [6, 10] },
+    targeting: { target: 'enemy', castRange: 340 },
+    delivery: { type: 'target' },
+    effects: [
+      { type: 'damage' },
+      { type: 'transfuseStatus', duration: 'refresh', splash: 130 },
+    ],
+    requirements: { willpower: 16, intelligence: 12 },
+    ai: { range: 320, weight: 2 },
+  },
+
   // ======================= Curses & hexes ==================================
   // §8: linked hexes, hex-eaters, brands that punish proximity, and dooms
   // that answer at death or expiry — whichever comes first.

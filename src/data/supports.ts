@@ -322,6 +322,25 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4, minDropLevel: 10,
   },
 
+  // --- The status-puppeteer gems ------------------------------------------------
+  carrier_strain: {
+    id: 'carrier_strain', name: 'Carrier Strain',
+    description: 'Hits with this skill have a 30% chance to CARRY one random affliction off the victim to its nearest untouched neighbor — three-quarter strength, clocks still running. Every swing a vector.',
+    color: '#a0c878',
+    spreadOnHit: { chance: 0.3, radius: 200, strengthScale: 0.75, duration: 'remaining' },
+    mods: [],
+    perLevel: [mod('damage', 'increased', 0.05)],
+    weight: 5,
+  },
+  final_bloom: {
+    id: 'final_bloom', name: 'Final Bloom',
+    description: 'DoTs this skill lays have a 60% chance to PROPAGATE: when the afflicted die still carrying them, the rot jumps to their nearby kin — and keeps jumping, death after death.',
+    color: '#78c878',
+    mods: [mod('dotPropagates', 'flat', 0.6)],
+    perLevel: [mod('dotPropagates', 'flat', 0.1)],
+    weight: 5,
+  },
+
   // --- The offering ecology -----------------------------------------------------
   hiveborn: {
     id: 'hiveborn', name: 'Hiveborn',

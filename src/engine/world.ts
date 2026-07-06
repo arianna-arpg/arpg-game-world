@@ -12073,6 +12073,41 @@ export class World {
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
       }
+      // STATUS SIPHON (Draw Corruption — the martyr's draw): PULL the
+      // afflictions off nearby flesh onto the CASTER, clocks still
+      // running; each drawn wound pays a little healing. The vessel
+      // fills itself — Transfusion is how it empties.
+      if (fx.type === 'siphonStatus') {
+        const radius = fx.radius * aoeScale;
+        let drawn = 0;
+        for (const a of this.actors) {
+          if (a === caster || a.dead || a.untargetable || a.construct) continue;
+          const ally = a.team === caster.team;
+          if (fx.from === 'allies' && !ally) continue;
+          if (fx.from === 'enemies' && ally) continue;
+          if (dist(caster.pos, a.pos) - a.radius > radius) continue;
+          for (let i = a.statuses.length - 1; i >= 0; i--) {
+            const s = a.statuses[i];
+            if (fx.statuses && !fx.statuses.includes(s.id)) continue;
+            this.transplantStatus(caster, s, def.name, { duration: 'remaining' });
+            a.statuses.splice(i, 1);
+            a.sheet.removeSource('status:' + s.id);
+            drawn++;
+            if (fx.healPer) {
+              caster.healBy(fx.healPer * caster.sheet.get('healPower', tags, extra));
+            }
+          }
+        }
+        if (drawn > 0) {
+          this.text(vec(caster.pos.x, caster.pos.y - 22), drawn + ' drawn', def.color, 13);
+          this.flashes.push({
+            pos: vec(caster.pos.x, caster.pos.y), radius,
+            color: def.color, life: 0.3, maxLife: 0.3,
+          });
+        } else {
+          this.failNote(caster, def.id + ':nothing', 'nothing to draw');
+        }
+      }
       // UNLEASH (Bloodlust): start the one-way burn — the bank drains and
       // cannot be fed until empty (per-charge mods fade as it goes).
       if (fx.type === 'drainCharge') {
@@ -14715,6 +14750,26 @@ export class World {
         });
       }
       if (dealt > 0) this.bankDamageTakenTriggers(target, dealt, caster);
+      // CARRIER STRAIN (SupportDef.spreadOnHit): the hit itself is a
+      // VECTOR — a chance to hand ONE random affliction from the victim
+      // to its nearest untouched neighbor. Top-level hits only.
+      if (dealt > 0 && depth === 0 && target.statuses.length) {
+        const strain = socketSpec(inst, 'spreadOnHit');
+        if (strain && chance(strain.chance)) {
+          const s = pick(target.statuses);
+          let best: Actor | null = null;
+          let bd = strain.radius;
+          for (const e of this.enemiesOf(caster)) {
+            if (e === target || e.statuses.some(x => x.id === s.id)) continue;
+            const dd = dist(target.pos, e.pos);
+            if (dd <= bd) { bd = dd; best = e; }
+          }
+          if (best) {
+            this.transplantStatus(best, s, 'Carrier Strain', strain);
+            this.text(best.pos, 'carried!', STATUS_DEFS[s.id]?.color ?? def.color, 11);
+          }
+        }
+      }
       // ECHOING MIGHT (the inverse-ignite buff): the landed blow feeds the
       // NEXT — added physical equal to a fraction of what this one dealt,
       // re-priced on every refresh (dynamic-value buffs).
@@ -15059,6 +15114,65 @@ export class World {
             homeTo: caster.owner ?? caster,
           });
         }
+      } else if (fx.type === 'spreadStatus') {
+        // EPIDEMIC (status puppeteering): everything riding the struck
+        // victim LEAPS to the flesh around it. Effect order matters and is
+        // the author's lever: listed after this skill's own status, the
+        // fresh affliction spreads with the rest.
+        if (!target.dead || target.statuses.length) {
+          const radius = fx.radius * caster.sheet.get('aoeRadius', tags, extra);
+          const carried = target.statuses.filter(s =>
+            !fx.statuses || fx.statuses.includes(s.id));
+          if (carried.length) {
+            let spread = 0;
+            const cap = fx.maxTargets ?? 8;
+            for (const e of this.enemiesOf(caster)) {
+              if (e === target || spread >= cap) continue;
+              if (dist(target.pos, e.pos) - e.radius > radius) continue;
+              for (const s of carried) this.transplantStatus(e, s, def.name, fx);
+              spread++;
+            }
+            if (spread > 0) {
+              this.text(vec(target.pos.x, target.pos.y - 20), 'contagion!', def.color, 12);
+              this.flashes.push({
+                pos: vec(target.pos.x, target.pos.y), radius,
+                color: def.color, life: 0.3, maxLife: 0.3,
+              });
+            }
+          }
+        }
+      } else if (fx.type === 'transfuseStatus') {
+        // TRANSFUSION (status puppeteering): the vessel EMPTIES — every
+        // affliction the caster carries pours onto the target (and gushes
+        // over the splash radius), then leaves the caster clean.
+        const donors = caster.statuses.filter(s =>
+          !fx.statuses || fx.statuses.includes(s.id));
+        if (donors.length) {
+          const victims: Actor[] = [target];
+          if (fx.splash) {
+            const splash = fx.splash * caster.sheet.get('aoeRadius', tags, extra);
+            for (const e of this.enemiesOf(caster)) {
+              if (e !== target && dist(target.pos, e.pos) - e.radius <= splash) victims.push(e);
+            }
+          }
+          for (const v of victims) {
+            for (const s of donors) this.transplantStatus(v, s, def.name, fx);
+          }
+          for (const s of donors) {
+            const i = caster.statuses.indexOf(s);
+            if (i >= 0) {
+              caster.statuses.splice(i, 1);
+              caster.sheet.removeSource('status:' + s.id);
+            }
+          }
+          this.text(vec(target.pos.x, target.pos.y - 20), 'transfused!', def.color, 13);
+          this.flashes.push({
+            pos: vec(target.pos.x, target.pos.y), radius: (fx.splash ?? 60),
+            color: def.color, life: 0.3, maxLife: 0.3,
+          });
+        } else {
+          this.failNote(caster, def.id + ':clean', 'nothing to pour');
+        }
       }
     }
 
@@ -15331,6 +15445,28 @@ export class World {
   /** Roll the caster's 'statusApply' procs when a status LANDS on a victim
    *  (both the skill-effect and the stat-granted apply_<id> paths call this).
    *  Depth-0 only: proc'd hits applying statuses can never re-proc. */
+  /** THE TRANSPLANT SEAM (status puppeteering): re-apply a live status
+   *  onto `to` at strength/duration knobs — spread, siphon, transfuse and
+   *  the Carrier Strain graft are four verbs over this one hand-off.
+   *  Stacked afflictions re-apply stack by stack, so caps, strongest-wins
+   *  and buildup personalities all stay honest on the receiving flesh. */
+  private transplantStatus(
+    to: Actor, s: ActiveStatus, sourceName: string,
+    o?: { strengthScale?: number; duration?: 'remaining' | 'refresh'; durationScale?: number },
+  ): void {
+    const sdef = STATUS_DEFS[s.id];
+    if (!sdef || to.dead) return;
+    const baseDur = sdef.duration || 1;
+    const durScale = (o?.durationScale ?? 1)
+      * ((o?.duration ?? 'remaining') === 'remaining'
+        ? Math.max(0.05, s.remaining) / baseDur : 1);
+    const n = Math.max(1, s.stacks);
+    for (let i = 0; i < n; i++) {
+      to.applyStatus(s.id, s.dps * (o?.strengthScale ?? 1), durScale, sourceName,
+        { casterId: s.casterId, rupture: s.rupture, ruptureType: s.ruptureType });
+    }
+  }
+
   private rollStatusProcs(
     caster: Actor, inst: SkillInstance, target: Actor, statusId: string,
     tags: Set<SkillTag>, extra: Modifier[], depth: number,

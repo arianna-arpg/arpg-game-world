@@ -2042,6 +2042,56 @@ export interface ShatterConstructsEffect {
   radius: number;
 }
 
+// --- STATUS PUPPETEERING (the condition-necromancer arteries) ----------------
+// Three verbs over ONE transplant seam (world.transplantStatus): SPREAD
+// copies what rides a struck victim onto its neighbors; SIPHON pulls
+// afflictions off nearby actors ONTO the caster (the martyr's draw);
+// TRANSFUSE pours everything the caster carries onto a target (the vessel
+// empties). Strength and duration are knobs on every hand-off — full or
+// partial power, remaining or refreshed clocks — so the puppeteer chooses
+// how much of each affliction survives the exchange.
+
+export interface SpreadStatusEffect {
+  type: 'spreadStatus';
+  /** Contagion radius around each STRUCK victim (× area modifiers). */
+  radius: number;
+  /** Only these statuses spread (omit = everything the victim carries). */
+  statuses?: string[];
+  /** Copied dps × this (default 1 — full strength). */
+  strengthScale?: number;
+  /** 'remaining' hands off the victim's leftover clock; 'refresh' winds
+   *  the status's full base duration fresh (default 'remaining'). */
+  duration?: 'remaining' | 'refresh';
+  /** × on top of whichever clock (default 1). */
+  durationScale?: number;
+  /** Max neighbors afflicted per victim (default 8). */
+  maxTargets?: number;
+}
+
+export interface SiphonStatusEffect {
+  type: 'siphonStatus';
+  /** Harvest radius around the caster (× area modifiers). */
+  radius: number;
+  /** Whose afflictions are DRAWN: 'allies' (the martyr's cleanse — their
+   *  wounds become yours), 'enemies' (steal the ailments off their flesh),
+   *  or 'all'. Drawn statuses keep their remaining clocks. */
+  from: 'allies' | 'enemies' | 'all';
+  statuses?: string[];
+  /** Healing per status drawn (through healBy, × healPower). */
+  healPer?: number;
+}
+
+export interface TransfuseStatusEffect {
+  type: 'transfuseStatus';
+  statuses?: string[];
+  /** Pushed dps × this (default 1). */
+  strengthScale?: number;
+  /** Default 'refresh' — the vessel pours each affliction FRESH. */
+  duration?: 'remaining' | 'refresh';
+  /** Also afflict enemies within this radius of the target (the gush). */
+  splash?: number;
+}
+
 export type SkillEffect =
   | DamageEffect | StatusEffect | BuffEffect | KnockbackEffect
   | PullEffect | SpawnZoneEffect | GainChargeEffect | AbsorbEffect
@@ -2050,7 +2100,8 @@ export type SkillEffect =
   | IronWardEffect | GuardSurgeEffect | ReduceCooldownsEffect
   | RestoreOverTimeEffect | WardEffect | SiphonOrbEffect
   | DetonateMinionsEffect | SpawnCorpseEffect | ShatterConstructsEffect
-  | MinionCastEffect | PayLedgerEffect;
+  | MinionCastEffect | PayLedgerEffect
+  | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect;
 
 // --- The skill definition ---------------------------------------------------
 
@@ -2415,6 +2466,10 @@ export interface SupportDef {
    *  REAL cast bar in succession, rooted like any bar (castMove /
    *  castMobility investments still walk it). */
   triggerPermit?: true;
+  /** CARRIER STRAIN: top-level hits with this skill have `chance` to hand
+   *  ONE random status from the struck victim to its nearest neighbor —
+   *  the hit-borne contagion, with the transplant knobs inline. */
+  spreadOnHit?: { chance: number; radius: number; strengthScale?: number; duration?: 'remaining' | 'refresh'; durationScale?: number };
   /** CORPSE SPAWN (Hiveborn): corpses this skill CONSUMES crawl back out —
    *  `perCorpse` births one per body eaten; `count` instead births a fixed
    *  brood per use (the ghost variant pairs it with an imposed cooldown
