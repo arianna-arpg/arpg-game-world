@@ -62,7 +62,12 @@ import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord,
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE } from '../data/townBuild';
+import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE } from '../data/townBuild';
+import { SALVAGE_CFG } from '../data/essences';
+import {
+  CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
+  salvageItemYield, salvageLoreGain, salvageSkillYield, salvageSupportYield,
+} from './crafting';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
 import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
@@ -767,8 +772,10 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
     case 'unequipItem': return isStr(a.slot);
     case 'moveItem': return isIdx(a.uid) && isIdx(a.x) && isIdx(a.y);
-    case 'dropItem': return isIdx(a.uid);
+    case 'dropItem': case 'salvageItem': return isIdx(a.uid);
     case 'pickupItem': return true;
+    case 'salvageSkill': case 'salvageSupport': return isIdx(a.index);
+    case 'craftAffix': return isIdx(a.uid) && isStr(a.affixId);
     default: return false;
   }
 }
@@ -1496,6 +1503,11 @@ export class World {
    *  polls this (a flag, not a callback, so it survives world re-creation), opens the
    *  menu, and clears it. World can't import the UI, hence the indirection. */
   caravanDwellRequested = false;
+  /** ONE-SHOT: set when the player dwells at the Salvage Station bench. The
+   *  main loop polls it and opens the salvage/craft menu (same flag
+   *  indirection as the Caravanner — World can't import the UI). */
+  salvageDwellRequested = false;
+  private salvageGate = new Dwell();
   /** ONE-SHOT: dwelling by the quartermaster with FRESH vocation chains on offer
    *  asks the main loop to open the CHOICE menu (same flag indirection as the
    *  Caravanner — a subclass pick must never dwell-auto-accept at random). */
@@ -7290,6 +7302,28 @@ export class World {
     return { pos: vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y), text: 'Linger to refresh the wilds.' };
   }
 
+  // ------------------------------------------------------ salvage station ----
+
+  /** At the breaker's bench? (Feature owned + in town + near SALVAGE_SITE.) */
+  nearSalvage(seat: Seat = this.localSeat): boolean {
+    return featureEnabled(this.account, FEATURE.SALVAGE_STATION)
+      && this.zone.id === START_ZONE
+      && dist(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y)) <= SALVAGE_CFG.stationRadius;
+  }
+
+  /** Linger at the bench → open the salvage/craft menu (flag → main loop). */
+  private updateSalvage(dt: number): void {
+    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearSalvage();
+    if (!this.salvageGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    this.salvageDwellRequested = true;
+  }
+
+  /** The bench's prompt while the player is near (renderer), or null. */
+  salvageHint(): { pos: Vec2; text: string } | null {
+    if (!this.nearSalvage()) return null;
+    return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
+  }
+
   // ------------------------------------------------------------- caravan ------
   //
   // The Caravanner (in town, and waiting at each minted destination) escorts the
@@ -8613,6 +8647,10 @@ export class World {
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
       case 'pickupItem': this.pickupNearestGear(seat); break;
+      case 'salvageItem': this.salvageItem(seat, action.uid); break;
+      case 'salvageSkill': this.salvageSkillGem(seat, action.index); break;
+      case 'salvageSupport': this.salvageSupportGem(seat, action.index); break;
+      case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId); break;
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
@@ -15121,6 +15159,85 @@ export class World {
     this.markMetaDirty(seat);
   }
 
+  // ------------------------------------------------------ salvage & craft ---
+  // Station-gated META intents. Salvage pays essence (quality-priced) and
+  // TEACHES the account each natural affix it breaks (craftLore); crafting
+  // spends essence to stamp a studied affix onto gear within expertise's
+  // ceiling. Account writes persist fire-and-forget (the reclaim pattern).
+
+  /** Break a BAG item into essence + lore. (Worn gear must be unequipped
+   *  first — a deliberate two-step, no accidental doll salvage.) */
+  salvageItem(seat: Seat, uid: number): void {
+    if (!this.nearSalvage(seat)) return;
+    const item = this.bagItem(seat, uid);
+    if (!item) return;
+    removeFromBag(seat.meta.items, uid);
+    this.grantEssence(seat, salvageItemYield(item));
+    for (const family of salvageLoreGain(item)) {
+      this.account.craftLore[family] = (this.account.craftLore[family] ?? 0) + 1;
+    }
+    saveAccount(this.account); // lore is account knowledge — survive the run
+    this.markMetaDirty(seat);
+  }
+
+  /** Break a CARRIED skill gem (skillInv). Granted sparks yield nothing —
+   *  deleted outright, exactly as promised. Sockets are pried out first. */
+  salvageSkillGem(seat: Seat, index: number): void {
+    if (!this.nearSalvage(seat)) return;
+    const m = seat.meta;
+    const inst = m.skillInv[index];
+    if (!inst) return;
+    m.skillInv.splice(index, 1);
+    for (const s of inst.sockets) if (s) m.inventory.push(s);
+    const yieldd = salvageSkillYield(inst);
+    if (yieldd) this.grantEssence(seat, yieldd);
+    else this.text(seat.actor.pos, 'the granted spark breaks into nothing', '#8a8678', 12);
+    this.markMetaDirty(seat);
+  }
+
+  /** Break a loose support gem (inventory). */
+  salvageSupportGem(seat: Seat, index: number): void {
+    if (!this.nearSalvage(seat)) return;
+    const m = seat.meta;
+    const gem = m.inventory[index];
+    if (!gem) return;
+    m.inventory.splice(index, 1);
+    this.grantEssence(seat, salvageSupportYield(gem));
+    this.markMetaDirty(seat);
+  }
+
+  /** Crafted-affix capacity for this account (the Vault can widen it). */
+  craftSlots(): number {
+    return CRAFT_CFG.maxCraftedAffixes
+      + (featureEnabled(this.account, CRAFT_CFG.extraSlotFeature) ? 1 : 0);
+  }
+
+  /** Stamp a STUDIED affix onto a bag or worn item: expertise-gated, essence-
+   *  priced, one crafted line per item (craftSlots widens it). The roll is
+   *  uniform across the whole unlocked span — expertise raises the ceiling,
+   *  never guarantees it. */
+  craftAffix(seat: Seat, uid: number, affixId: string): void {
+    if (!this.nearSalvage(seat)) return;
+    const m = seat.meta;
+    const wornSlot = Object.keys(m.equipped).find(k => m.equipped[k]?.uid === uid);
+    const item = this.bagItem(seat, uid) ?? (wornSlot ? m.equipped[wornSlot] : undefined);
+    if (!item) return;
+    if (craftedCount(item) >= this.craftSlots()) {
+      this.failNote(seat.actor, 'craft:' + uid, 'this piece holds no more craft');
+      return;
+    }
+    const option = craftableAffixesFor(item, this.account.craftLore).find(o => o.def.id === affixId);
+    if (!option) return;
+    const rank = expertiseRank(this.account.craftLore, option.def.family);
+    if (!this.spendEssence(seat, CRAFT_CFG.cost(rank), 'craft:' + affixId)) return;
+    const rolled = rollCraftedAffix(option.def, rank);
+    if (!rolled) return;
+    item.affixes.push(rolled);
+    if (wornSlot) this.recalcSeat(seat); // live stats move the instant worn gear changes
+    this.text(seat.actor.pos, `crafted: ${option.def.names[option.def.names.length - 1] ?? option.def.id}`, '#b06bd4', 13);
+    this.markMetaDirty(seat);
+  }
+
   // --- Brandt the smith: time-based, account-scaled stock -------------------
 
   private vendorSize(): number {
@@ -15190,6 +15307,8 @@ export class World {
     this.updateMireille(dt);
     // The campfire refreshes the wilds for lingering by it (town, feature-gated).
     this.updateCampfire(dt);
+    // The salvage bench opens the break/craft menu on a dwell (same flag idiom).
+    this.updateSalvage(dt);
     // The Caravanner opens the band-travel menu on a dwell (a UI callback).
     this.updateCaravan(dt);
     // The port dock's linger-to-sail (naval travel menu).

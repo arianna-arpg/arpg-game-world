@@ -2190,26 +2190,33 @@ export class Renderer {
   /** The town campfire's "linger to refresh" prompt + a warm inviting ring while
    *  the player rests near it (the fire itself is a campfire doodad). */
   private drawCampfireHint(world: World): void {
-    const h = world.campfireHint();
-    if (!h) return;
+    // Both town linger-prompts share one draw: the campfire (warm) and the
+    // salvage bench (steel) — a pulsing ring + a named invitation.
+    const hints: { h: { pos: Vec2; text: string } | null; ring: string; ink: string }[] = [
+      { h: world.campfireHint(), ring: '#ff9a3a', ink: '#ffc878' },
+      { h: world.salvageHint(), ring: '#7a9ae8', ink: '#aac0f0' },
+    ];
     const { ctx } = this;
     const t = world.time;
-    ctx.save();
-    ctx.globalAlpha = 0.25 + 0.1 * Math.sin(t * 3);
-    ctx.strokeStyle = '#ff9a3a';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(h.pos.x, h.pos.y, 26 + 2 * Math.sin(t * 3), 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 11px Verdana';
-    ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-    ctx.lineWidth = 3;
-    ctx.strokeText(h.text, h.pos.x, h.pos.y - 36);
-    ctx.fillStyle = '#ffc878';
-    ctx.fillText(h.text, h.pos.x, h.pos.y - 36);
-    ctx.restore();
+    for (const { h, ring, ink } of hints) {
+      if (!h) continue;
+      ctx.save();
+      ctx.globalAlpha = 0.25 + 0.1 * Math.sin(t * 3);
+      ctx.strokeStyle = ring;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(h.pos.x, h.pos.y, 26 + 2 * Math.sin(t * 3), 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 11px Verdana';
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(h.text, h.pos.x, h.pos.y - 36);
+      ctx.fillStyle = ink;
+      ctx.fillText(h.text, h.pos.x, h.pos.y - 36);
+      ctx.restore();
+    }
   }
 
   private drawExits(world: World): void {

@@ -22,7 +22,7 @@ import type { Doodad, DoodadDoor, PlacedStructure } from '../engine/levelgen';
 import type { ZoneTheme } from '../data/zones';
 import type { ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
-import { BOSS_BAR_XP_MIN } from '../engine/world';
+import { BOSS_BAR_XP_MIN, emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
@@ -106,7 +106,7 @@ export interface SeatW {
 // + level/sockets/rarity and rehydrate via the SKILLS/SUPPORTS catalogs on apply.
 // Sent only when a seat's meta CHANGES (dirty-flagged), so it's nearly free.
 export interface SupportInstW { id: string; lvl: number; }
-export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; }
+export interface SkillInstW { id: string; lvl: number; rarity?: string; sockets: (SupportInstW | null)[]; mark?: { x: number; y: number } | null; g?: boolean; eLv?: number; }
 /** The client OWN-seat build: enough to render the char-sheet / skill-book / tree
  *  and re-derive the stat sheet (recalcSeat) on the client. */
 export interface SeatMetaW {
@@ -126,6 +126,8 @@ export interface SeatMetaW {
    *  re-validates against the client's registries on apply. Optional →
    *  tolerant of a host one wire-version behind. */
   gear?: { items: ItemInstance[]; equipped: Record<string, ItemInstance> };
+  /** Essence wallet (salvage currency), per essence id. */
+  ess?: Record<string, number>;
 }
 
 const supW = (s: SupportInstance): SupportInstW => ({ id: s.def.id, lvl: s.level });
@@ -133,6 +135,7 @@ const skillInstW = (s: SkillInstance): SkillInstW => ({
   id: s.def.id, lvl: s.level, rarity: s.rarity,
   sockets: s.sockets.map(x => (x ? supW(x) : null)),
   mark: s.state?.markPos ?? undefined,
+  g: s.granted || undefined, eLv: s.essenceLevels || undefined,
 });
 
 /** Host: serialize one seat's build/progression for its owning client. */
@@ -156,6 +159,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
         Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
       ),
     },
+    ess: { ...m.essences },
   };
 }
 
@@ -170,6 +174,8 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
   inst.rarity = w.rarity as SkillRarity | undefined;
   inst.sockets = w.sockets.map(s => (s ? rehydrateSupport(s) : null));
   if (w.mark) inst.state = { markPos: w.mark };
+  if (w.g) inst.granted = true;
+  if (w.eLv) inst.essenceLevels = w.eLv;
   return inst;
 };
 
@@ -216,6 +222,7 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
     const item = rebuildItem(it);
     if (item) m.equipped[slot] = item;
   }
+  m.essences = { ...emptyEssences(), ...(w.ess ?? {}) };
   // Rebuild the action bar from slot ids → the (just-rehydrated) learned instances.
   seat.actor.skills = w.bar.map(id => (id ? (known.get(id) ?? null) : null));
   world.recalcSeat(seat);            // derive attrs + the full stat sheet from the build

@@ -314,6 +314,7 @@ function handleLocalPanels(): void {
     if (ui.escapeMenuOpen) ui.hideEscapeMenu();
     else if (ui.caravanOpen) ui.closeCaravan();
     else if (ui.tollOpen) ui.closeToll();
+    else if (ui.salvageOpen) ui.closeSalvage();
     else if (ui.sailOpen) ui.closeSail();
     // The vocation choice menu closes through its OWN close (not hideAll):
     // closeVocationMenu also DECLINES the offer, else the dwell re-pops the
@@ -383,6 +384,11 @@ function frame(now: number): void {
       if (world.caravanDwellRequested) {
         world.caravanDwellRequested = false;
         if (!ui.caravanOpen) ui.showCaravan();
+      }
+      // The salvage-bench dwell asks to open the break/craft menu.
+      if (world.salvageDwellRequested) {
+        world.salvageDwellRequested = false;
+        if (!ui.salvageOpen) ui.showSalvage();
       }
       // The quartermaster dwell with FRESH vocation chains on offer asks to open
       // the CHOICE menu (a subclass pick is deliberate — never auto-accepted).

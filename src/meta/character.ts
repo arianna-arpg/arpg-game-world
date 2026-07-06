@@ -19,7 +19,7 @@ import {
 import { rebuildItem } from '../engine/itemgen';
 import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
-import type { PlayerMeta, World } from '../engine/world';
+import { emptyEssences, type PlayerMeta, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
 import { diskBeacon, diskGet, diskPut } from './persistence';
 
@@ -31,6 +31,11 @@ interface SavedSocket { supportId: string; level: number; }
 interface SavedSkill {
   skillId: string; level: number; rarity: SkillRarity;
   sockets: (SavedSocket | null)[];
+  /** GRANTED (reacquired starter — worthless to salvage/sacrifice) and the
+   *  essence-bought level count (excluded from font refunds). Optional →
+   *  older saves load unchanged. */
+  granted?: boolean;
+  essenceLevels?: number;
 }
 export interface CharacterSave {
   schemaVersion: number;
@@ -54,6 +59,8 @@ export interface CharacterSave {
    *  affix → line dropped). Optional → pre-item saves still load. */
   items?: ItemInstance[];
   equipped?: Record<string, ItemInstance>;
+  /** Salvage-currency wallet (per essence id). Optional → pre-essence saves. */
+  essences?: Record<string, number>;
   offerings: number;
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
   level: number;            // Actor level (display + xp continuity)
@@ -72,6 +79,8 @@ export interface CharacterSave {
 const saveSkill = (i: SkillInstance): SavedSkill => ({
   skillId: i.def.id, level: i.level, rarity: i.rarity ?? 'common',
   sockets: i.sockets.map(s => s ? { supportId: s.def.id, level: s.level } : null),
+  ...(i.granted ? { granted: true } : {}),
+  ...(i.essenceLevels ? { essenceLevels: i.essenceLevels } : {}),
 });
 
 export function serializeCharacter(world: World): CharacterSave {
@@ -92,6 +101,7 @@ export function serializeCharacter(world: World): CharacterSave {
     equipped: Object.fromEntries(
       Object.entries(m.equipped).flatMap(([k, v]) => (v ? [[k, { ...v }] as const] : [])),
     ),
+    essences: { ...m.essences },
     offerings: m.offerings,
     bar: world.player.skills.map(s => s ? s.def.id : null),
     level: world.player.level,
@@ -112,6 +122,8 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   if (!def) return null;
   const inst = makeSkillInstance(def, s.level, Math.max(1, s.sockets.length));
   inst.rarity = s.rarity;
+  if (s.granted) inst.granted = true;
+  if (s.essenceLevels) inst.essenceLevels = s.essenceLevels;
   inst.sockets = s.sockets.map(sock => {
     if (!sock) return null;
     const sd = SUPPORTS[sock.supportId];
@@ -160,6 +172,7 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     vocationPoints: save.vocationPoints ?? 0,
     knownSkills, inventory, skillInv, offerings: save.offerings,
     items, equipped,
+    essences: { ...emptyEssences(), ...(save.essences ?? {}) },
   };
   world.ledger = { ...(save.ledger ?? {}) }; // restore per-run trigger counters
   world.completedObjectives = new Set(save.completedObjectives ?? []);

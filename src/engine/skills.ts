@@ -2413,6 +2413,19 @@ export interface SkillInstance {
   /** The HOST skill this instance was minted to serve (meta payloads,
    *  combo steps) — minionCast orders scope to the host's minions. */
   hostSkillId?: string;
+  /** GRANTED: a reacquired class-starter spark. Worth NOTHING everywhere
+   *  value is minted — zero salvage essence, zero font offerings — so the
+   *  softlock rescue hatch can never become a currency loop. */
+  granted?: boolean;
+  /** Levels bought with ESSENCE (vs skill points). Excluded from the font's
+   *  point refund on sacrifice — no essence→points arbitrage. */
+  essenceLevels?: number;
+  /** DERIVED, never saved: +levels granted by the OWNER's gear/passives
+   *  (the classSkill_<classId> stat family — "+1 to Summoner Skills").
+   *  recalcSeat recomputes it from the live sheet whenever the build moves;
+   *  effectiveSkillLevel simply reads it, so all sixteen call sites see the
+   *  bonus without threading an actor through them. */
+  bonusLevels?: number;
   /** Per-instance state for stateful skills (Mark/Recall's stored point,
    *  Unleash's last-use timestamp, the combo chain's cursor). */
   state?: {
@@ -2474,7 +2487,7 @@ export function supportFitsInst(sup: SupportDef, inst: SkillInstance): boolean {
  * cap and unlocks over-cap thresholds.
  */
 export function effectiveSkillLevel(inst: SkillInstance): number {
-  let lv = inst.level;
+  let lv = inst.level + Math.floor(inst.bonusLevels ?? 0);
   for (const s of inst.sockets) {
     if (!s?.def.levelBonus) continue;
     lv += Math.floor(s.def.levelBonus + (s.def.levelBonusPer ?? 0) * (s.level - 1));

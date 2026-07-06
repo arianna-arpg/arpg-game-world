@@ -32,6 +32,11 @@ export const CAMPFIRE_SITE = { x: 850, y: 1010 };
  *  exit portal to Wayfarer's Crossroads (and the other townsfolk). */
 export const CARAVAN_SITE = { x: 1300, y: 220 };
 
+/** Where the Salvage Station's bench stands — shared by the fixture and the
+ *  World's nearSalvage dwell check. Beside the blacksmith (Brandt at ~450,320):
+ *  break your loot, then spend it at his counter three steps away. */
+export const SALVAGE_SITE = { x: 620, y: 250 };
+
 export const TOWN_ADDITIONS: TownAddition[] = [
   // The Quest Package: a quartermaster's house raised in the town's expanded
   // south-east quarter (clear of the original cottages so it never walls one in).
@@ -61,6 +66,12 @@ export const TOWN_ADDITIONS: TownAddition[] = [
     feature: FEATURE.CARAVAN,
     fixtures: [{ structure: 'caravan', x: CARAVAN_SITE.x, y: CARAVAN_SITE.y }],
     grow: { w: 1700, h: 1200 },
+  },
+  // The Salvage Station — beside the blacksmith. Dwell at the bench for the
+  // salvage/craft menu (the World reads proximity to SALVAGE_SITE).
+  {
+    feature: FEATURE.SALVAGE_STATION,
+    fixtures: [{ structure: 'salvage_bench', x: SALVAGE_SITE.x, y: SALVAGE_SITE.y }],
   },
 ];
 

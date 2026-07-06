@@ -287,6 +287,22 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
   },
 
+  // The Salvage Station: a breaker's bench — slab, scrap heaps, tool crates.
+  // Dwelling here opens the salvage/craft menu (the World reads proximity to
+  // SALVAGE_SITE in townBuild.ts). Placeholder geometry like everything else.
+  salvage_bench: {
+    id: 'salvage_bench', halfW: 70, halfH: 58,
+    props: [
+      { kind: 'rock', x: 0, y: -6, radius: 16 },   // the bench slab
+      { kind: 'rock', x: -44, y: 22, radius: 9 },  // scrap heap
+      { kind: 'rock', x: 46, y: 18, radius: 8 },   // scrap heap
+    ],
+    breakables: [
+      { id: 'crate', x: 40, y: -34 },
+      { id: 'barrel', x: -44, y: -28 },
+    ],
+  },
+
   // A traveller's campfire: a ring of stones round a fire. Dwelling here REFRESHES
   // the wilds (the World reads the player's proximity to CAMPFIRE_SITE).
   campfire_site: {

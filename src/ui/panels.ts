@@ -21,6 +21,12 @@ import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { describeItem, itemGridSize } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
+import { ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, type EssenceCost } from '../data/essences';
+import {
+  CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseProgress, expertiseRank,
+  salvageItemYield, salvageSkillYield, salvageSupportYield,
+} from '../engine/crafting';
+import { SKILLS } from '../data/skills';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -29,7 +35,7 @@ import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { World } from '../engine/world';
-import { featureEnabled, FEATURE, selectableSlotCount, type Account } from '../meta/account';
+import { featureEnabled, FEATURE, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, isUnlockOwned } from '../meta/unlocks';
 import { ACTION_IDS, ACTION_LABELS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
 import type { CharacterSave } from '../meta/character';
@@ -79,6 +85,7 @@ export class UI {
   private worldMap = document.getElementById('world-map')!;
   private caravanMenu = document.getElementById('caravan-menu')!;
   private tollMenu = document.getElementById('toll-menu')!;
+  private salvageMenu = document.getElementById('salvage-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
   private deathScreen = document.getElementById('death-screen')!;
@@ -112,6 +119,10 @@ export class UI {
   mapOpen = false;
   caravanOpen = false;
   tollOpen = false;
+  salvageOpen = false;
+  /** Station view state: which tab, and the craft tab's chosen piece. */
+  private salvageTab: 'salvage' | 'craft' = 'salvage';
+  private craftTargetUid: number | null = null;
   sailOpen = false;
   vocationOpen = false;
   /** World-map zoom (1 = fit-all; >1 = zoomed in) + pan offset (user-units from
@@ -179,6 +190,8 @@ export class UI {
     bindTooltips(this.charSheet, (el) => el.dataset.tip === 'class' ? this.classTooltip() : null);
     bindTooltips(this.skillBook, (el) => el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!) : null);
     bindTooltips(this.inventory, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
+    bindTooltips(this.salvageMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
+    bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     this.updateHintBar(); // replace the static index.html placeholder with live binds
   }
 
@@ -201,6 +214,30 @@ export class UI {
       description: d.description,
       meta: `${d.tags.join(' · ')}${d.cooldown ? ` · ${d.cooldown}s cd` : ''}`,
     };
+  }
+
+  /** '4◆' cost chip for an essence price, colored + titled by the essence. */
+  private essCostText(cost: EssenceCost): string {
+    const e = ESSENCES[cost.essence];
+    return `<span style="color:${e.color}" title="${e.label}">${cost.count}${e.glyph}</span>`;
+  }
+
+  /** The essence-pay Level Up button (skills + supports share the curve). */
+  private essLevelBtn(attr: string, level: number, atMax: boolean): string {
+    const cost = skillLevelEssenceCost(level + 1);
+    const afford = this.getWorld().canAffordEssence(this.getWorld().localSeat, cost);
+    return `<button ${attr} ${!afford || atMax ? 'disabled' : ''}
+      title="Level up by spending ${cost.count}× ${ESSENCES[cost.essence].label}">
+      Level Up (${this.essCostText(cost)})</button>`;
+  }
+
+  /** The seat's essence wallet as colored chips (sheet + station headers). */
+  private essWallet(): string {
+    const m = this.getWorld().meta;
+    return ESSENCE_IDS.map(id => {
+      const e = ESSENCES[id];
+      return `<span style="color:${e.color};margin-right:10px" title="${e.label}">${e.glyph} ${m.essences[id] ?? 0}</span>`;
+    }).join('');
   }
 
   /** Bar-slot key labels from the live keybinds (slots 0/1 fixed to mouse). */
@@ -274,6 +311,17 @@ export class UI {
     }
     const { picks, teasers } = this.classRoster;
 
+    // Starting-skill chips — hover for the full name + description (the bar
+    // read straight from ClassDef, so a re-barred class shows its truth).
+    const skillChips = (c: ClassDef): string => {
+      const chips = c.bar.filter((s): s is string => !!s).map(sid => {
+        const d = SKILLS[sid];
+        return d ? `<span data-tip="cskill" data-skill-id="${sid}"
+          style="display:inline-block;padding:1px 7px;margin:1px 3px 1px 0;border:1px solid ${d.color};
+          border-radius:8px;font-size:9px;color:${d.color};cursor:help">${d.name}</span>` : '';
+      }).join('');
+      return chips ? `<div style="margin-top:3px">${chips}</div>` : '';
+    };
     const classCard = (c: ClassDef, locked: boolean): string => `
       <div class="class-card ${locked ? 'locked' : ''}" data-id="${c.id}" data-locked="${locked}"
         ${locked ? 'style="opacity:.5"' : ''}>
@@ -281,6 +329,7 @@ export class UI {
         <div class="cdesc">${c.description}</div>
         <div class="cattrs">${ATTRIBUTE_IDS.filter(a => (c.attributes[a] ?? 0) > 0).map(a =>
           `${ATTRIBUTES[a].short} ${c.attributes[a]}`).join(' &nbsp; ')}</div>
+        ${skillChips(c)}
         ${c.innateText ? `<div class="cskills">Innate: ${c.innateText}</div>` : ''}
         ${locked ? '<div class="class-lock">🔒 Unlock more Class Slots in the Vault</div>' : ''}
       </div>`;
@@ -288,7 +337,7 @@ export class UI {
     this.classSelect.innerHTML = `
       <h1>ARPG TEST GAME</h1>
       <div style="font-size:12px;color:var(--gold);margin-bottom:4px">
-        Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} credits &nbsp;·&nbsp;
+        Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL} &nbsp;·&nbsp;
         ${selectable} of ${CLASSES.length} classes offered &nbsp;(re-rolls each new run)</div>
       <div class="subtitle">
         A random roster is dealt each run — unlock more Class Slots to widen the field.
@@ -331,7 +380,7 @@ export class UI {
       const owned = allUnlockables().filter(u => isUnlockOwned(acc, u));
       const cards = avail.length === 0
         ? `<div style="color:var(--text-dim);grid-column:1/-1;padding:20px">
-             Nothing available to unlock right now — earn more credits and account levels by playing.
+             Nothing available to unlock right now — earn more ${META_CURRENCY_LABEL} and account levels by playing.
            </div>`
         : avail.map(u => {
             // availableUnlocks() already excludes owned + un-gated entries,
@@ -356,7 +405,7 @@ export class UI {
         <div class="vault-head">
           <h1>The Vault — Account Unlocks</h1>
           <div class="acct-head">Account Level <b>${acc.level}</b> &nbsp;·&nbsp;
-            <b>${acc.credits}</b> credits &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime</div>
+            <b>${acc.credits}</b> ${META_CURRENCY_LABEL} &nbsp;·&nbsp; ${acc.lifetimeCredits} lifetime</div>
         </div>
         <div class="vault-body">
           <h3 class="vault-sub">Available</h3>
@@ -440,10 +489,25 @@ export class UI {
       ${attrRows}
       <h3>Statistics</h3>
       ${statRows}
+      <h3>Essences <span style="color:#8a8678;font-weight:normal">(salvage currency — dies with you)</span></h3>
+      <div style="margin:4px 0 6px">${this.essWallet()}</div>
+      <h3>Starting Skills <span style="color:#8a8678;font-weight:normal">(re-kindle a lost starter — granted copies are worth nothing)</span></h3>
+      <div>${m.classDef.bar.filter((s): s is string => !!s).map(sid => {
+        const def = SKILLS[sid];
+        if (!def) return '';
+        const carried = m.knownSkills.has(sid) || m.skillInv.some(i => i.def.id === sid);
+        return `<span style="display:inline-block;margin:2px 6px 2px 0;padding:2px 8px;border:1px solid ${def.color};border-radius:8px;font-size:10px;color:${def.color}">
+          ${def.name} <button data-reacquire="${sid}" ${carried ? 'disabled title="still carried"' : 'title="mint a granted copy into your bag"'}>↺</button></span>`;
+      }).join('')}</div>
       <div style="margin-top:8px;color:#8a8678;font-size:10px">
         Tag-scaled stats (damage, speed) shown without skill context — each skill
         applies its own tags, level, and socketed supports on use.
       </div>`;
+    this.charSheet.querySelectorAll<HTMLButtonElement>('button[data-reacquire]').forEach(btn =>
+      btn.addEventListener('click', () => {
+        world.requestMeta({ t: 'reacquireSkill', skillId: btn.dataset.reacquire! });
+        this.refreshCharSheet();
+      }));
   }
 
   // --------------------------------------------------------------- inventory
@@ -614,6 +678,142 @@ export class UI {
     }));
   }
 
+  // ---------------------------------------------------------- salvage station
+
+  showSalvage(): void {
+    this.salvageOpen = true;
+    this.salvageMenu.classList.remove('hidden');
+    this.refreshSalvage();
+  }
+
+  closeSalvage(): void {
+    this.salvageOpen = false;
+    this.salvageMenu.classList.add('hidden');
+    this.craftTargetUid = null;
+    hideTooltip();
+  }
+
+  refreshSalvage(): void {
+    if (!this.salvageOpen) return;
+    const world = this.getWorld();
+    const m = world.meta;
+    const acc = this.getAccount();
+
+    const tabs = `<div class="bind-btns" style="margin-bottom:8px">
+      <button data-stab="salvage" class="${this.salvageTab === 'salvage' ? 'bound' : ''}">Salvage</button>
+      <button data-stab="craft" class="${this.salvageTab === 'craft' ? 'bound' : ''}">Craft</button>
+    </div>`;
+    let body: string;
+
+    if (this.salvageTab === 'salvage') {
+      const gearRows = m.items.map(i => {
+        const y = salvageItemYield(i);
+        return `<div class="skill-entry" style="border-left:3px solid ${ITEM_RARITIES[i.rarity].color}">
+          <div class="name" data-tip="item" data-item-uid="${i.uid}" style="color:${ITEM_RARITIES[i.rarity].color}">${i.name}</div>
+          <div class="bind-btns"><button data-salv-item="${i.uid}">Break down (${this.essCostText(y)})</button></div>
+        </div>`;
+      }).join('') || '<div style="color:#8a8678;font-size:11px">No gear in the bag. (Worn pieces must be unequipped first.)</div>';
+      const skillRows = m.skillInv.map((inst, idx) => {
+        const y = salvageSkillYield(inst);
+        return `<div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
+          <div class="name">${inst.def.name} <span style="color:#ffd700">Lv ${inst.level}</span>${inst.granted ? ' <span style="color:#8a8678;font-size:10px">(granted)</span>' : ''}</div>
+          <div class="bind-btns"><button data-salv-skill="${idx}">${y ? `Break down (${this.essCostText(y)})` : 'Break down (nothing — granted)'}</button></div>
+        </div>`;
+      }).join('') || '<div style="color:#8a8678;font-size:11px">No skill gems carried.</div>';
+      const supRows = m.inventory.map((gem, idx) => {
+        const y = salvageSupportYield(gem);
+        return `<div class="skill-entry" style="border-left:3px solid ${gem.def.color}">
+          <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span></div>
+          <div class="bind-btns"><button data-salv-sup="${idx}">Break down (${this.essCostText(y)})</button></div>
+        </div>`;
+      }).join('') || '<div style="color:#8a8678;font-size:11px">No loose support gems.</div>';
+      body = `<div style="margin-bottom:6px">${this.essWallet()}</div>
+        <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
+          Breaking gear pays Essence by its quality — and STUDIES each affix on it (expertise, on the account, survives death).
+        </div>
+        <h3>Gear</h3>${gearRows}<h3>Skill Gems</h3>${skillRows}<h3>Support Gems</h3>${supRows}`;
+    } else {
+      const targets = [...m.items, ...Object.values(m.equipped).filter((x): x is ItemInstance => !!x)];
+      const targetRows = targets.map(i =>
+        `<button data-ctar="${i.uid}" class="${this.craftTargetUid === i.uid ? 'bound' : ''}"
+          data-tip="item" data-item-uid="${i.uid}"
+          style="color:${ITEM_RARITIES[i.rarity].color}">${i.name}${m.equipped && Object.values(m.equipped).some(w => w?.uid === i.uid) ? ' (worn)' : ''}</button>`,
+      ).join(' ') || '<span style="color:#8a8678;font-size:11px">Nothing carried or worn.</span>';
+      const target = targets.find(i => i.uid === this.craftTargetUid);
+      let affixRows = '<div style="color:#8a8678;font-size:11px">Pick a piece above.</div>';
+      if (target) {
+        const slotsLeft = world.craftSlots() - craftedCount(target);
+        if (slotsLeft <= 0) {
+          affixRows = '<div style="color:#8a8678;font-size:11px">This piece holds no more craft.</div>';
+        } else {
+          const options = craftableAffixesFor(target, acc.craftLore);
+          affixRows = options.map(o => {
+            const cost = CRAFT_CFG.cost(o.rank);
+            const afford = world.canAffordEssence(world.localSeat, cost);
+            return `<div class="skill-entry">
+              <div class="name">${o.def.names[o.def.names.length - 1]}
+                <span style="color:#c8a84b;font-size:10px">expertise rank ${o.rank}</span></div>
+              <div class="bind-btns"><button data-craft="${target.uid}:${o.def.id}" ${afford ? '' : 'disabled'}>
+                Craft (${this.essCostText(cost)})${afford ? '' : ' — not enough'}</button></div>
+            </div>`;
+          }).join('') || '<div style="color:#8a8678;font-size:11px">No studied affix fits this piece yet — salvage more of what you want to learn.</div>';
+        }
+      }
+      const loreRows = Object.entries(acc.craftLore).sort((a, b) => b[1] - a[1]).slice(0, 24).map(([fam]) => {
+        const [have, need] = expertiseProgress(acc.craftLore, fam);
+        const rank = expertiseRank(acc.craftLore, fam);
+        return `<div class="stat-row"><span>${fam}</span>
+          <span class="val">${rank > 0 ? `rank ${rank}` : 'unstudied'}${need > 0 ? ` · ${have}/${need}` : ' · MAX'}</span></div>`;
+      }).join('') || '<div style="color:#8a8678;font-size:11px">Salvage affixed gear to begin studying.</div>';
+      body = `<div style="margin-bottom:6px">${this.essWallet()}</div>
+        <div class="desc" style="color:#8a8678;font-size:10px;margin-bottom:6px">
+          One crafted line per piece${world.craftSlots() > 1 ? ` (yours: ${world.craftSlots()})` : ''}; expertise raises the roll CEILING — the roll itself stays wild.
+        </div>
+        <h3>Piece</h3><div class="bind-btns">${targetRows}</div>
+        <h3>Craft onto it</h3>${affixRows}
+        <h3>Expertise</h3>${loreRows}`;
+    }
+
+    this.salvageMenu.innerHTML = `<h2>Salvage Station</h2>${tabs}${body}
+      <div class="bind-btns" style="margin-top:8px"><button data-salv-close>Step away</button></div>`;
+
+    const q = <T extends HTMLElement>(sel: string): T[] => [...this.salvageMenu.querySelectorAll<T>(sel)];
+    q<HTMLButtonElement>('button[data-stab]').forEach(btn => btn.addEventListener('click', () => {
+      this.salvageTab = btn.dataset.stab as 'salvage' | 'craft';
+      this.refreshSalvage();
+    }));
+    q<HTMLButtonElement>('button[data-salv-item]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.salvItem) });
+      this.refreshSalvage();
+    }));
+    q<HTMLButtonElement>('button[data-salv-skill]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.salvSkill) });
+      this.refreshSalvage();
+    }));
+    q<HTMLButtonElement>('button[data-salv-sup]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.salvSup) });
+      this.refreshSalvage();
+    }));
+    q<HTMLButtonElement>('button[data-ctar]').forEach(btn => btn.addEventListener('click', () => {
+      this.craftTargetUid = Number(btn.dataset.ctar);
+      this.refreshSalvage();
+    }));
+    q<HTMLButtonElement>('button[data-craft]').forEach(btn => btn.addEventListener('click', () => {
+      const [uid, affixId] = btn.dataset.craft!.split(':');
+      world.requestMeta({ t: 'craftAffix', uid: Number(uid), affixId });
+      this.refreshSalvage();
+      this.refreshCharSheet(); // a worn-piece craft moves live stats
+    }));
+    this.salvageMenu.querySelector<HTMLButtonElement>('[data-salv-close]')?.addEventListener('click', () => this.closeSalvage());
+  }
+
+  /** Class-select starting-skill chip tooltip (name + quick description). */
+  private classSkillTooltip(skillId: string): TooltipContent | null {
+    const def = SKILLS[skillId];
+    if (!def) return null;
+    return { title: def.name, description: def.description, meta: def.tags.join(' · ') };
+  }
+
   // -------------------------------------------------------------- skill book
 
   toggleSkillBook(): void {
@@ -655,6 +855,9 @@ export class UI {
         <span class="gem-chip" style="border-color:${s.def.color}" title="${s.def.description}">
           ${s.def.name} <b>L${s.level}</b>
           <button data-gemlvl="${def.id}:${i}" ${m.skillPoints < 1 || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}>+</button>
+          <button data-gemlvl-ess="${def.id}:${i}"
+            ${!this.getWorld().canAffordEssence(this.getWorld().localSeat, skillLevelEssenceCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}
+            title="Level up for ${skillLevelEssenceCost(s.level + 1).count}× ${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].label}">+${ESSENCES[skillLevelEssenceCost(s.level + 1).essence].glyph}</button>
           <button data-unsocket="${def.id}:${i}">✕</button>
         </span>` : `<span class="gem-chip empty">empty socket</span>`).join('');
       const eff = effectiveSkillLevel(inst);
@@ -673,6 +876,7 @@ export class UI {
           <div class="bind-btns">
             <button data-levelup="${def.id}" ${m.skillPoints < 1 || inst.level >= maxLv ? 'disabled' : ''}>
               Level Up (1 pt)</button>
+            ${this.essLevelBtn(`data-levelup-ess="${def.id}"`, inst.level, inst.level >= maxLv)}
             ${binds}
             <button data-unlearn="${def.id}">Unlearn</button>
           </div>
@@ -688,7 +892,7 @@ export class UI {
     const wares = nearSmith && world.vendorStock.length ? `
       <div style="border:1px solid #6a5638;border-radius:4px;padding:8px;margin-bottom:8px;background:rgba(232,200,122,0.05)">
         <div style="color:#e8c87a;font-weight:bold;font-size:12px;margin-bottom:4px">
-          BRANDT'S WARES — 1 skill point each
+          BRANDT'S WARES — priced in Essence
           <span style="color:#c8a84b;font-size:10px;font-weight:normal"> · restock ${restockIn}s</span></div>
         ${world.vendorStock.map((e, idx) => {
           const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
@@ -696,13 +900,15 @@ export class UI {
           const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
           const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
           const tag = e.kind === 'skill' ? rarityTag(e.inst) : '';
+          const price = world.vendorPrice(e);
+          const broke = !world.canAffordEssence(world.localSeat, price);
           return `
           <div class="skill-entry" style="border-left:3px solid ${col}">
             <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
             <div class="tags">${tags}</div>
             <div class="bind-btns">
-              <button data-buy="${idx}" ${m.skillPoints < 1 ? 'disabled' : ''}>
-                Buy (1 pt)${m.skillPoints < 1 ? ' — no points' : ''}</button>
+              <button data-buy="${idx}" ${broke ? 'disabled' : ''}>
+                Buy (${this.essCostText(price)})${broke ? ' — not enough' : ''}</button>
             </div>
           </div>`;
         }).join('')}
@@ -777,6 +983,7 @@ export class UI {
           <div class="bind-btns">
             <button data-invlvl="${idx}" ${m.skillPoints < 1 || gem.level >= supportMaxLevel(gem.def) ? 'disabled' : ''}>
               Level Up (1 pt)</button>
+            ${this.essLevelBtn(`data-invlvl-ess="${idx}"`, gem.level, gem.level >= supportMaxLevel(gem.def))}
             <button data-drop-support="${idx}" title="Drop this gem on the ground (any nearby player can pick it up)">Drop</button>
             Socket into: ${targets}
           </div>
@@ -856,6 +1063,18 @@ export class UI {
     q<HTMLButtonElement>('button[data-gemlvl]').forEach(btn => btn.addEventListener('click', () => {
       const [skillId, sock] = btn.dataset.gemlvl!.split(':');
       world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock) });
+      refresh();
+    }));
+    // Essence-pay level-ups (the salvage loop feeding back into the build).
+    q<HTMLButtonElement>('button[data-levelup-ess]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'levelSkill', skillId: btn.dataset.levelupEss!, pay: 'essence' }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-invlvl-ess]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'levelSupportInv', index: Number(btn.dataset.invlvlEss), pay: 'essence' }); refresh();
+    }));
+    q<HTMLButtonElement>('button[data-gemlvl-ess]').forEach(btn => btn.addEventListener('click', () => {
+      const [skillId, sock] = btn.dataset.gemlvlEss!.split(':');
+      world.requestMeta({ t: 'levelSupportSocket', skillId, socket: Number(sock), pay: 'essence' });
       refresh();
     }));
     q<HTMLButtonElement>('button[data-unsocket]').forEach(btn => btn.addEventListener('click', () => {
@@ -1734,7 +1953,7 @@ export class UI {
         &nbsp;·&nbsp; fell in ${world.zone.name} &nbsp;·&nbsp;
         ${world.visited.size} zones explored &nbsp;·&nbsp; ${world.kills} kills</div>
       <div style="margin:14px 0;color:var(--gold);font-weight:bold">
-        +${creditsEarned} credits &nbsp;·&nbsp; Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} credits</div>
+        +${creditsEarned} ${META_CURRENCY_LABEL} &nbsp;·&nbsp; Account Level ${acc.level} &nbsp;·&nbsp; ${acc.credits} ${META_CURRENCY_LABEL}</div>
       <button id="unlocks-btn">Unlocks</button>
       <button id="restart-btn">Rise Again</button>`;
     this.deathScreen.classList.remove('hidden');
@@ -1772,7 +1991,7 @@ export class UI {
           if (window.confirm('Leave this co-op session?')) { this.hideEscapeMenu(); this.onLeaveCoop(); }
           return;
         }
-        if (window.confirm('End this run and bank your account credits? Your character will be lost (permadeath).')) {
+        if (window.confirm(`End this run and bank your ${META_CURRENCY_LABEL}? Your character will be lost (permadeath).`)) {
           this.hideEscapeMenu();
           this.getWorld().endRun();   // reuses the death → credits → permadeath flow
         }
@@ -1895,7 +2114,7 @@ export class UI {
     const canContinue = !!this.continueSave;
     this.startMenu.innerHTML = `
       <h1>ARPG TEST GAME</h1>
-      <div class="acct-head">Account Level <b>${acc.level}</b> · <b>${acc.credits}</b> credits</div>
+      <div class="acct-head">Account Level <b>${acc.level}</b> · <b>${acc.credits}</b> ${META_CURRENCY_LABEL}</div>
       <div class="esc-btns">
         <button id="sm-start">Start New Game</button>
         <button id="sm-continue" ${canContinue ? '' : 'disabled'}>${canContinue ? 'Continue' : 'No Save Found'}</button>
@@ -2081,6 +2300,9 @@ export class UI {
     this.inventoryOpen = false;
     this.heldItemUid = null;
     this.inventory.classList.add('hidden');
+    this.salvageOpen = false;
+    this.craftTargetUid = null;
+    this.salvageMenu.classList.add('hidden');
     this.skillBookOpen = false;
     this.treeOpen = false;
     this.mapOpen = false;

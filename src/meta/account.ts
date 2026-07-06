@@ -72,7 +72,18 @@ export const FEATURE = {
   SHIP_SLOOP: 'ship_sloop',
   SHIP_BRIGANTINE: 'ship_brigantine',
   SHIP_GALLEON: 'ship_galleon',
+  /** THE SALVAGE STATION: a breaker's bench raised in Lastlight — dwell to
+   *  break items/gems into Essence and craft studied affixes onto gear. */
+  SALVAGE_STATION: 'salvage_station',
+  /** A second CRAFTED affix slot per item (see engine/crafting.ts
+   *  CRAFT_CFG.extraSlotFeature — the golden one-craft rule, sold apart). */
+  CRAFT_SECOND_AFFIX: 'craft_second_affix',
 } as const;
+
+/** The display name of the account meta-currency (earned on death, spent in
+ *  the Vault). ONE constant — every panel prints through it. The internal
+ *  field stays `credits` (save compatibility); the WORLD calls it this. */
+export const META_CURRENCY_LABEL = 'Mortal Essence';
 
 /** Per-package run configuration the player last chose (Expedition Setup). */
 export interface PackagePref {
@@ -106,6 +117,11 @@ export interface Account {
   /** Recent death spots (corpse runs) — a newest-first ring; survives the
    *  character wipe so the next run can reclaim the lost gems. See meta/death.ts. */
   deaths: DeathRecord[];
+  /** CRAFT LORE: affix-family → items salvaged carrying it. Crossing
+   *  CRAFT_CFG.loreThresholds earns expertise ranks (craftability, then a
+   *  rising roll ceiling). Knowledge survives every death — the material
+   *  (essence) does not. */
+  craftLore: Record<string, number>;
 }
 
 /** Serializable form (Sets → arrays) written to localStorage. */
@@ -125,6 +141,7 @@ export interface AccountSave {
   ledger?: Record<string, number>;
   frequencyProfile?: FrequencyProfile;
   deaths?: DeathRecord[];
+  craftLore?: Record<string, number>;
 }
 
 export function makeAccount(): Account {
@@ -140,6 +157,7 @@ export function makeAccount(): Account {
     ledger: {},
     frequencyProfile: { ...DEFAULT_FREQUENCY },
     deaths: [],
+    craftLore: {},
   };
 }
 
@@ -157,6 +175,7 @@ export function serializeAccount(a: Account): AccountSave {
     ledger: a.ledger,
     frequencyProfile: a.frequencyProfile,
     deaths: a.deaths,
+    craftLore: a.craftLore,
   };
 }
 
@@ -180,6 +199,7 @@ export function deserializeAccount(s: AccountSave): Account | null {
     // Per-RECORD schema filter (drop malformed/stale corpses, cap the ring)
     // WITHOUT touching SCHEMA_VERSION — a death-format change never wipes credits.
     deaths: (s.deaths ?? []).filter(d => d?.schema === DEATH_SCHEMA).slice(-MAX_DEATH_RECORDS),
+    craftLore: s.craftLore ?? {},
   };
 }
 

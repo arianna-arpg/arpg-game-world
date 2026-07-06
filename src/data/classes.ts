@@ -18,7 +18,7 @@
 // the seam): they return, properly differentiated, in the class balance pass.
 // ---------------------------------------------------------------------------
 
-import type { Attributes, Modifier } from '../engine/stats';
+import { STAT_DEFS, type Attributes, type Modifier } from '../engine/stats';
 
 export interface ClassDef {
   id: string;
@@ -220,6 +220,20 @@ export const CLASSES: ClassDef[] = [
     startNode: 'wil_start', // the devout ward → the Willpower point
   }
 ];
+
+// --- The class-skill stat lane ----------------------------------------------
+// One generated stat per class — classSkill_<id> — meaning "+N levels to this
+// class's STARTING skills", resolved against the LIVE bar above: re-order or
+// swap a class's starters and every "+1 to <Class> Skills" affix, unique, or
+// passive keeps working with zero data edits. recalcSeat sweeps each known
+// skill against every class bar and writes the summed bonus onto the instance
+// (SkillInstance.bonusLevels); gear grants the stat like any other modifier.
+
+export const classSkillStat = (classId: string): string => `classSkill_${classId}`;
+
+for (const c of CLASSES) {
+  STAT_DEFS[classSkillStat(c.id)] = { label: `${c.name} Skill Levels`, base: 0 };
+}
 
 // --- Shared progression rules ----------------------------------------------
 

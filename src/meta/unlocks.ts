@@ -145,6 +145,16 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'A campfire is laid in Lastlight. Zones already remember their layout and surviving foes as you cross between them; dwell by the fire to REFRESH the wilds on command — every zone repopulates fresh (your cleared objectives stay claimed).',
     payload: { flag: FEATURE.CAMPFIRE } },
 
+  // --- The Salvage Station (the essence economy's front door) ----------------
+  { id: 'feat_salvage_station', kind: 'feature', cost: 60, reqLevel: 0, reqLedger: 'reached_level_5',
+    label: 'Salvage Station — Town',
+    description: 'A breaker\'s bench is raised in Lastlight. Dwell there to break gear and carried gems into Essence — spend it levelling skills, at Brandt\'s counter, and (as salvaging teaches you each affix) crafting studied affixes directly onto your gear.',
+    payload: { flag: FEATURE.SALVAGE_STATION } },
+  { id: 'feat_craft_second', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_15', requiresFeature: FEATURE.SALVAGE_STATION,
+    label: 'Salvage Station — Twin Anvils',
+    description: 'The bench learns to hold TWO crafted affixes on one item (the one-craft rule, bought apart).',
+    payload: { flag: FEATURE.CRAFT_SECOND_AFFIX } },
+
   // --- The Caravan: four broad tiers, each opening a wider band of escorted travel.
   //     Base tier (the Caravanner settles in town) at L10; far tiers ALSO need the
   //     Unmade slain. Each tier requires the previous (a growing route network). ----
