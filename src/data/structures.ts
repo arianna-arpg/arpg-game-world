@@ -102,6 +102,12 @@ export interface StructureDef {
   roofs?: 'auto';
   /** ROOF_STYLES id (default 'timber'). */
   roofStyle?: string;
+  /** FLOOR_STYLES id — bakes a real floor (boards, cobble…) under the
+   *  plan's interior cells, doorways included. Omitted = bare ground. */
+  floorStyle?: string;
+  /** FLOOR_STYLES id for COURTYARD cells (a paved work apron, a parade
+   *  ground). Omitted = courtyards stay natural ground. */
+  courtyardFloorStyle?: string;
   /** Eligible for the 'bastion' whole-zone layout roll, at this weight. */
   bastion?: { weight: number };
   /** Reserved-rect margin around the footprint (default 1.5 × cellSize). */
@@ -146,6 +152,16 @@ registerLegendChar('~', { doodad: { kind: 'lava' }, courtyard: true }); // molte
 registerLegendChar(',', { doodad: { kind: 'cinder' }, courtyard: true }); // ash floor
 registerLegendChar('B', { breakable: 'barrel', interior: true });
 registerLegendChar('C', { breakable: 'crate', interior: true });
+// FURNITURE — the settlement clutter wave, blueprint-placeable. Any plan
+// anywhere can now furnish a room with one character.
+registerLegendChar('b', { doodad: { kind: 'bench', radius: 13 }, interior: true });
+registerLegendChar('p', { doodad: { kind: 'pot_cluster', radius: 12 }, interior: true });
+registerLegendChar('f', { doodad: { kind: 'firewood_pile', radius: 13 }, interior: true });
+registerLegendChar('z', { doodad: { kind: 'brazier', radius: 10 }, interior: true });
+registerLegendChar('L', { doodad: { kind: 'lantern_post', radius: 10 }, courtyard: true });
+registerLegendChar('H', { doodad: { kind: 'hay_bale', radius: 14 }, courtyard: true });
+registerLegendChar('M', { doodad: { kind: 'market_stall', radius: 24 }, courtyard: true });
+registerLegendChar('G', { doodad: { kind: 'banner_post', radius: 10 }, courtyard: true });
 
 // --- ROOF STYLES (registry) ----------------------------------------------------
 // How a roof rect renders (Batch D drawRoofs consumes): fill + edge + rest alpha.
@@ -178,39 +194,70 @@ registerRoofStyle({ id: 'timber', fill: '#4a3a28', edge: '#2e2418', alpha: 0.96,
 registerRoofStyle({ id: 'slate', fill: '#39404e', edge: '#232833', alpha: 0.96, pattern: 'shingles' });
 registerRoofStyle({ id: 'stone', fill: '#474b52', edge: '#2c2f35', alpha: 0.96, pattern: 'stone' });
 
+// --- FLOOR STYLES (registry) ---------------------------------------------------
+// How a structure's INTERIOR ground renders — townsfolk don't live in the mud.
+// Floors bake into the terrain chunks under each placed structure's footprint
+// (render/vis/floors.ts painters): boards with staggered butt joints, cobble
+// with grout, flagstone slabs, temple tile, packed earth. One registry row +
+// `floorStyle` on a def = a floored building; `courtyardFloorStyle` paves the
+// open-air cells (a smith's work apron, a keep's parade ground).
+export interface FloorStyle {
+  id: string;
+  /** Base surface tone. */
+  fill: string;
+  /** Seam/grout tone between units. */
+  seam: string;
+  /** Pattern the painter renders: 'boards' | 'cobble' | 'flagstone' | 'tile' | 'packed'. */
+  pattern: string;
+  /** Unit size in world units (plank width / stone diameter / tile edge). */
+  unit?: number;
+}
+
+const FLOOR_STYLES: Record<string, FloorStyle> = {};
+
+export function registerFloorStyle(def: FloorStyle): void {
+  if (FLOOR_STYLES[def.id]) console.warn(`[structures] re-registering floor style '${def.id}' — overriding`);
+  FLOOR_STYLES[def.id] = def;
+}
+
+export function floorStyleOf(id: string | undefined): FloorStyle | undefined {
+  return id ? FLOOR_STYLES[id] : undefined;
+}
+
+registerFloorStyle({ id: 'boards', fill: '#5c4630', seam: '#3a2c1c', pattern: 'boards', unit: 11 });
+registerFloorStyle({ id: 'cobble', fill: '#565048', seam: '#38332c', pattern: 'cobble', unit: 13 });
+registerFloorStyle({ id: 'flagstone', fill: '#4e4a42', seam: '#322f28', pattern: 'flagstone', unit: 24 });
+registerFloorStyle({ id: 'tile', fill: '#5a5248', seam: '#3c362e', pattern: 'tile', unit: 16 });
+registerFloorStyle({ id: 'packed', fill: '#3a3022', seam: '#2c2418', pattern: 'packed', unit: 20 });
+
 export const STRUCTURES: Record<string, StructureDef> = {
 
-  // A one-room cottage: three walls and a south-facing doorway.
+  // A one-room cottage — a PLAN now: boarded floor, a dwell-open door, a
+  // hearth-warm interior that reveals as you step beneath the roof.
   house_small: {
-    id: 'house_small', halfW: 70, halfH: 60,
-    walls: [
-      { x: -70, y: -60, dir: 'h', length: 140 },  // north
-      { x: -70, y: -60, dir: 'v', length: 120 },  // west
-      { x: 70, y: -60, dir: 'v', length: 120 },   // east
-      { x: -70, y: 60, dir: 'h', length: 30 },    // south, left of the WIDE door
-      { x: 50, y: 60, dir: 'h', length: 20 },     // south, right of the door
+    id: 'house_small', halfW: 91, halfH: 65, cellSize: 26,
+    plan: [
+      '#######',
+      '#p...C#',
+      '#.....#',
+      '#b....#',
+      '###D###',
     ],
-    breakables: [
-      { id: 'crate', x: -45, y: -35 },
-      { id: 'barrel', x: 48, y: -38 },
-    ],
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
   },
 
-  // The quartermaster's house: a cottage like house_small, but the quest-giver
-  // stands inside. Added to Lastlight only once the Quest Package is bought.
+  // The quartermaster's house: the cottage with the quest-giver inside.
+  // Added to Lastlight only once the Quest Package is bought.
   quest_house: {
-    id: 'quest_house', halfW: 70, halfH: 60,
-    walls: [
-      { x: -70, y: -60, dir: 'h', length: 140 },
-      { x: -70, y: -60, dir: 'v', length: 120 },
-      { x: 70, y: -60, dir: 'v', length: 120 },
-      { x: -70, y: 60, dir: 'h', length: 30 },
-      { x: 50, y: 60, dir: 'h', length: 20 },
+    id: 'quest_house', halfW: 91, halfH: 65, cellSize: 26,
+    plan: [
+      '#######',
+      '#C...p#',
+      '#.....#',
+      '#....b#',
+      '###D###',
     ],
-    breakables: [
-      { id: 'crate', x: -45, y: -35 },
-      { id: 'barrel', x: 48, y: -38 },
-    ],
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
     npcs: [{ id: 'townsfolk_questgiver', x: 0, y: 10 }],
   },
 
@@ -232,43 +279,39 @@ export const STRUCTURES: Record<string, StructureDef> = {
     npcs: [{ id: 'townsfolk_caravanner', x: 0, y: -18 }],
   },
 
-  // The forge: an open-fronted workshop, anvil stone and a roaring fire.
+  // The forge — an open-fronted PLAN: flagstone shop floor, a COBBLED work
+  // apron out the open east side, the brazier roaring, firewood stacked.
+  // The anvil stone keeps its old spot as a prop.
   blacksmith: {
-    id: 'blacksmith', halfW: 90, halfH: 70,
-    walls: [
-      { x: -90, y: -70, dir: 'h', length: 180 },  // north
-      { x: -90, y: -70, dir: 'v', length: 140 },  // west
-      { x: 90, y: -70, dir: 'v', length: 80 },    // east (half: open front)
+    id: 'blacksmith', halfW: 104, halfH: 78, cellSize: 26,
+    plan: [
+      '########',
+      '#z....._',
+      '#......_',
+      '#Bf...._',
+      '#......_',
+      '########',
     ],
-    props: [
-      { kind: 'campfire', x: -40, y: -20, radius: 14 }, // the forge
-      { kind: 'rock', x: 20, y: -10, radius: 12 },      // the anvil stone
-    ],
-    breakables: [
-      { id: 'crate', x: 55, y: -40 },
-      { id: 'barrel', x: -65, y: 30 },
-    ],
+    roofs: 'auto', roofStyle: 'slate',
+    floorStyle: 'flagstone', courtyardFloorStyle: 'cobble',
+    props: [{ kind: 'rock', x: 20, y: -10, radius: 12 }], // the anvil stone
     npcs: [{ id: 'townsfolk_smith', x: -10, y: 15 }],
   },
 
-  // The inn: a long hall, door on the east, hearth and stacked stores.
+  // The inn — the long hall as a PLAN: boarded floor, benches down the
+  // common room, the hearth-brazier, stores in the corner, a south door
+  // opening onto the town square.
   inn: {
-    id: 'inn', halfW: 110, halfH: 75,
-    walls: [
-      { x: -110, y: -75, dir: 'h', length: 220 }, // north
-      { x: -110, y: 75, dir: 'h', length: 220 },  // south
-      { x: -110, y: -75, dir: 'v', length: 150 }, // west
-      { x: 110, y: -75, dir: 'v', length: 35 },   // east above the WIDE door
-      { x: 110, y: 50, dir: 'v', length: 25 },    // east below the door
+    id: 'inn', halfW: 130, halfH: 78, cellSize: 26,
+    plan: [
+      '##########',
+      '#z......B#',
+      '#.b....p.#',
+      '#........#',
+      '#.b....b.#',
+      '#####D####',
     ],
-    props: [
-      { kind: 'campfire', x: -70, y: 0, radius: 13 },   // the hearth
-    ],
-    breakables: [
-      { id: 'barrel', x: 60, y: -45 },
-      { id: 'barrel', x: 80, y: -45 },
-      { id: 'crate', x: 70, y: 45 },
-    ],
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
     npcs: [{ id: 'townsfolk_innkeep', x: -30, y: -30 }],
   },
 

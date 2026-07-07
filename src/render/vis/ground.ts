@@ -18,6 +18,7 @@ import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
+import { paintStructureFloors } from './floors';
 import { VIS_CFG } from './visConfig';
 
 function strSeed(s: string): number {
@@ -165,6 +166,11 @@ export class GroundRenderer {
       }
     }
     ctx.globalAlpha = 1;
+
+    // --- STRUCTURE FLOORS: boards/cobble/flagstone under buildings --------
+    // (vis/floors.ts) — townsfolk don't live in the mud. Painted over the
+    // mottle, under the walk-grid walls, baked once like everything here.
+    paintStructureFloors(ctx, world, ox, oy, C);
 
     // --- The reference grid, now a whisper. -------------------------------
     if (CFG.gridAlpha > 0) {

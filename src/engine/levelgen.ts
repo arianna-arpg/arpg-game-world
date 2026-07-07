@@ -267,6 +267,14 @@ export interface PlacedStructure {
   cellSize: number;
   roofs: { x: number; y: number; w: number; h: number }[];
   roofStyle: string;
+  /** REAL FLOORS under the interior (doorways included) — baked into the
+   *  terrain chunks by the renderer (FLOOR_STYLES pattern). Empty style =
+   *  bare ground, exactly as before. */
+  floors: { x: number; y: number; w: number; h: number }[];
+  floorStyle?: string;
+  /** Paved courtyard cells (work aprons, parade grounds). */
+  courtyards: { x: number; y: number; w: number; h: number }[];
+  courtyardFloorStyle?: string;
   doors: PlacedDoor[];
   slots: PlacedSlot[];
 }
@@ -1601,7 +1609,10 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   const sid = `${def.id}#${ctx.structures?.length ?? 0}`;
   const placed: PlacedStructure = {
     id: sid, defId: def.id, rect, cellSize: cell,
-    roofs: [], roofStyle: def.roofStyle ?? 'timber', doors: [], slots: [],
+    roofs: [], roofStyle: def.roofStyle ?? 'timber',
+    floors: [], floorStyle: def.floorStyle,
+    courtyards: [], courtyardFloorStyle: def.courtyardFloorStyle,
+    doors: [], slots: [],
   };
 
   // Doodads / breakables / npcs / slots from cells.
@@ -1658,17 +1669,15 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     placed.doors.push({ door, pos, normal: n });
   }
 
-  // Roofs: merge roofed cells (interior, not courtyard, NOT doors — a roofed
-  // gate hides the closed-gate art + its guard's health bar exactly while the
-  // door render matters most) into row runs, then stack identical runs
-  // vertically into rects.
-  if (def.roofs === 'auto') {
-    const roofed = new Set(cells.filter(c => c.spec.interior && !c.spec.courtyard && !c.spec.door).map(c => c.cy * planW + c.cx));
+  // CELL-RECT MERGER: rows of matching cells → runs → vertically stacked
+  // rects. Roofs, floors and paved courtyards all reduce through it.
+  const mergeCells = (member: (c: (typeof cells)[number]) => boolean): { x: number; y: number; w: number; h: number }[] => {
+    const set = new Set(cells.filter(member).map(c => c.cy * planW + c.cx));
     const runs: { cx0: number; cx1: number; cy: number }[] = [];
     for (let cy = 0; cy < planH; cy++) {
       let start = -1;
       for (let cx = 0; cx <= planW; cx++) {
-        if (cx < planW && roofed.has(cy * planW + cx)) { if (start < 0) start = cx; }
+        if (cx < planW && set.has(cy * planW + cx)) { if (start < 0) start = cx; }
         else if (start >= 0) { runs.push({ cx0: start, cx1: cx - 1, cy }); start = -1; }
       }
     }
@@ -1678,10 +1687,24 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
       if (prev) prev.cy1 = run.cy;
       else merged.push({ cx0: run.cx0, cx1: run.cx1, cy0: run.cy, cy1: run.cy });
     }
-    placed.roofs = merged.map(m => ({
+    return merged.map(m => ({
       x: rect.x + m.cx0 * cell, y: rect.y + m.cy0 * cell,
       w: (m.cx1 - m.cx0 + 1) * cell, h: (m.cy1 - m.cy0 + 1) * cell,
     }));
+  };
+  // Roofs: interior, not courtyard, NOT doors — a roofed gate hides the
+  // closed-gate art + its guard's health bar exactly while the door render
+  // matters most.
+  if (def.roofs === 'auto') {
+    placed.roofs = mergeCells(c => !!c.spec.interior && !c.spec.courtyard && !c.spec.door);
+  }
+  // Floors run under the whole interior AND through its doorways (a
+  // threshold is floored); paved courtyards merge separately.
+  if (def.floorStyle) {
+    placed.floors = mergeCells(c => !!(c.spec.interior || c.spec.door));
+  }
+  if (def.courtyardFloorStyle) {
+    placed.courtyards = mergeCells(c => !!c.spec.courtyard);
   }
 
   // FX LAYERS — the interwoven ground effects (a fire-laden siege: cinder floors
