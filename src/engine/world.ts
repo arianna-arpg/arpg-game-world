@@ -15549,6 +15549,36 @@ export class World {
             baselineStatusDps(sid, this.zone.level)) * potencyFor(sid);
           armedType = 'chaos';
           dpsOut2 = armed * caster.sheet.get('doomDot', tags, extra);
+        } else if (sdef.dotType && dps > 0) {
+          // Rupture parity with the skill path (the doom mirror above set
+          // the precedent): a stat-granted bleed with Malpractice banks the
+          // same detonation a skill-applied one does — the socketed gem's
+          // mods are in scope here (same tags/extra), only the arming was
+          // missing. Powderkeg's ignite split rides along.
+          const bombFrac = caster.sheet.get('igniteToBomb', tags, extra);
+          if (sid === 'burn' && bombFrac > 0) {
+            armed = dps * sdef.duration * durScale * bombFrac;
+            armedType = 'fire';
+            dpsOut2 = dps * (1 - bombFrac);
+          } else {
+            const r = caster.sheet.get('dotRupture', tags, extra);
+            if (r > 0) {
+              armed = dps * sdef.duration * durScale * r;
+              armedType = sdef.dotType;
+            }
+          }
+        } else if (!sdef.dotType) {
+          // Curse ruptures (Living Bomb) arm off the ROLLED hit, skill-path
+          // rules — the element comes from the skill's own tags.
+          const r = caster.sheet.get('curseRupture', tags, extra);
+          if (r > 0) {
+            const rolled = Object.values(packet.amounts).reduce((s, v) => s + (v ?? 0), 0);
+            if (rolled > 0) {
+              armed = rolled * r;
+              armedType = (['fire', 'cold', 'lightning'] as const)
+                .find(e => def.tags.includes(e)) ?? 'chaos';
+            }
+          }
         }
         this.notePopFx(target, sid);
         target.applyStatus(sid, dpsOut2, durScale, caster.name, {
