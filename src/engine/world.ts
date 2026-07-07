@@ -15443,8 +15443,11 @@ export class World {
   private tapCharges(a: Actor, on: NonNullable<SkillDef['chargeGain']>[number]['on'],
     at?: Vec2, orbKind?: 'life' | 'mana' | 'es'): void {
     for (const inst of a.skills) {
-      if (!inst?.def.chargeGain) continue;
-      for (const spec of inst.def.chargeGain) {
+      if (!inst) continue;
+      // instanceChargeGain, not def.chargeGain: SOCKETED taps (Answering
+      // Steel's block-banked Riposte) merge with the skill's own — the
+      // schema's promise, honored at the event taps too.
+      for (const spec of instanceChargeGain(inst)) {
         if (spec.on !== on) continue;
         if (spec.whileToggled && !a.activeAuras.has(inst.def.id)
           && !a.summonToggles.has(inst.def.id)) continue;
