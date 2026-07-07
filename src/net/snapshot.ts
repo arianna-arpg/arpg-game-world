@@ -51,6 +51,8 @@ export interface ActorW {
   adorn?: ActorAdorn;
   /** Surface material (render bake key) — the client skins bodies identically. */
   mat?: string;
+  /** Part-grammar look id — same reason. */
+  lk?: string;
   rarity?: string;
   defId?: string;
   faction?: string;
@@ -283,6 +285,7 @@ function actorToW(a: Actor): ActorW {
   if (a.kind === 'player') { const s = SEAT_OF(a); if (s) w.seat = s; }
   if (a.adorn) w.adorn = a.adorn;
   if (a.material) w.mat = a.material;
+  if (a.look) w.lk = a.look;
   if (a.rarity) w.rarity = a.rarity;
   if (a.defId) w.defId = a.defId;
   if (a.faction) w.faction = a.faction;
@@ -451,6 +454,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.kind = aw.seat ? 'player' : undefined;
     a.adorn = aw.adorn;
     a.material = aw.mat;
+    a.look = aw.lk;
     a.rarity = aw.rarity as Actor['rarity'];
     a.defId = aw.defId;
     a.faction = aw.faction;

@@ -283,6 +283,9 @@ export class Actor {
   /** Surface material (render/vis/materials.ts registry key) — shapes the
    *  shading ramp/texture the renderer bakes. Omitted = the flesh default. */
   material?: string;
+  /** Part-grammar portrait (data/looks.ts registry key) — the composed
+   *  top-down body (skull + ribs + scythe…). Omitted = legacy shape body. */
+  look?: string;
 
   sheet = new StatSheet();
   level = 1;

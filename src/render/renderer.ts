@@ -31,7 +31,7 @@ import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { MONSTERS } from '../data/monsters';
 import { hexToRgb, shade, withAlpha } from './vis/color';
-import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawShadow } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, PAINTERS, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
@@ -1782,13 +1782,15 @@ export class Renderer {
     // always tracking it) are unchanged.
     const look: BodyLook = {
       shape: a.shape, radius: a.radius, color: a.color,
-      material: a.material, adorn: a.adorn,
+      material: a.material, adorn: a.adorn, look: a.look,
       outline: a.isMinion() ? '#b06bd4' : undefined,
       demonHorns: a.faction === 'demon',
     };
     const half = spriteHalf(a.radius);
     const flash = a.hitFlash > 0;
-    const rot = shapeIsOriented(a.shape) ? a.facing : 0;
+    const lookDef = lookOf(a.look);
+    // Part-grammar portraits are whole-body poses: they ALWAYS track facing.
+    const rot = lookDef || shapeIsOriented(a.shape) ? a.facing : 0;
     ctx.save();
     // Idle breathing — a live transform over the static bake. Scenery
     // (barrels, spawners) holds still; living things never quite do.
@@ -1799,6 +1801,8 @@ export class Renderer {
     }
     if (rot !== 0) ctx.rotate(rot);
     ctx.drawImage(flash ? bodyFlashSprite(look) : bodySprite(look), -half, -half);
+    // Animated look parts (wisps, flames) ride in the same facing space.
+    if (lookDef?.live && !flash) drawLiveParts(ctx, look, lookDef, world.time);
     if (rot !== 0) ctx.rotate(-rot);
     const adornImg = flash ? adornFlashSprite(look) : adornSprite(look);
     if (adornImg) {

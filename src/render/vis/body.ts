@@ -11,8 +11,10 @@
 // ---------------------------------------------------------------------------
 
 import type { ActorAdorn, ActorShape } from '../../engine/actor';
+import { LOOKS } from '../../data/looks';
 import { hash01, withAlpha } from './color';
 import { materialOf, rampOf, type MaterialDef, type Ramp } from './materials';
+import { lookPalette, paintLiveParts, paintLook, type LookDef } from './parts';
 import { baked } from './sprites';
 import { VIS_CFG } from './visConfig';
 
@@ -22,10 +24,27 @@ export interface BodyLook {
   color: string;
   material?: string;
   adorn?: ActorAdorn;
+  /** A LOOKS registry id — the part-grammar portrait. When set it OWNS the
+   *  body (legacy shape + adorn are skipped; the whole sprite rotates with
+   *  facing). Unknown ids fall back to the legacy body, so a look tag can
+   *  ship before its entry. */
+  look?: string;
   /** Outline override (minions wear their binding color). */
   outline?: string;
   /** Demon-style nub horns instead of swept horns. */
   demonHorns?: boolean;
+}
+
+/** Resolve a look id to its def (undefined = legacy body path). */
+export function lookOf(id?: string): LookDef | undefined {
+  return id ? LOOKS[id] : undefined;
+}
+
+/** Draw a look's LIVE animated parts (wisps, flames) — call per frame with
+ *  the context already translated to the actor and rotated to its facing. */
+export function drawLiveParts(ctx: CanvasRenderingContext2D, look: BodyLook,
+  def: LookDef, t: number): void {
+  paintLiveParts(ctx, look.radius, def, lookPalette(look.color, look.material), t);
 }
 
 /** Shapes that rotate with facing at draw time (the rest hold their pose). */
@@ -288,7 +307,7 @@ function strSeed(s: string): number {
 }
 
 function bodyKey(look: BodyLook): string {
-  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}`;
+  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}`;
 }
 
 /** The baked, shaded body sprite for a look (facing-0 pose, center origin). */
@@ -296,6 +315,23 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
   const half = spriteHalf(look.radius);
   return baked(`body|${bodyKey(look)}`, half * 2, half * 2, (ctx) => {
     const r = look.radius;
+    // PART-GRAMMAR PORTRAIT: a look id composes the whole body from the
+    // part kit (skull/ribs/hood/scythe/…) — the legacy shape never draws.
+    const lookDef = lookOf(look.look);
+    if (lookDef) {
+      paintLook(ctx, r, lookDef, lookPalette(look.color, look.material));
+      if (look.outline) {
+        // Minion binding: a thin ring, since a part stack has no one path.
+        ctx.strokeStyle = look.outline;
+        ctx.lineWidth = 1.6;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(0, 0, r + 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      return;
+    }
     const mat = materialOf(look.material);
     const ramp = rampOf(look.color, mat);
     const seed = strSeed(bodyKey(look));
@@ -341,10 +377,11 @@ export function bodyFlashSprite(look: BodyLook): HTMLCanvasElement {
 }
 
 /** Adorn overlay sprite (facing-0 pose; always rotated to facing at draw).
- *  'tentacles' is NOT baked — its writhe animates live in the renderer. */
+ *  'tentacles' is NOT baked — its writhe animates live in the renderer.
+ *  A part-grammar look owns its whole silhouette, so adorns skip. */
 export function adornSprite(look: BodyLook): HTMLCanvasElement | null {
   const adorn = look.adorn;
-  if (!adorn || adorn === 'tentacles') return null;
+  if (!adorn || adorn === 'tentacles' || lookOf(look.look)) return null;
   const half = spriteHalf(look.radius);
   const key = `adorn|${adorn}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.demonHorns ? 'd' : ''}`;
   return baked(key, half * 2, half * 2, (ctx) => {

@@ -25,6 +25,8 @@ export interface ClassDef {
   name: string;
   description: string;
   color: string;
+  /** Part-grammar portrait (data/looks.ts) worn by heroes of this class. */
+  look?: string;
   attributes: Attributes;
   /** Innate modifiers — small, flavorful nudges, not hard locks. Currently
    *  unpopulated everywhere; the balance pass will repopulate per class. */
@@ -39,6 +41,7 @@ export interface ClassDef {
 export const CLASSES: ClassDef[] = [
   {
     id: 'warrior', name: 'Warrior',
+    look: 'class_warrior',
     description: 'A disciplined front-line fighter. Heavy blows, heavier armor, and a war cry that turns the tide.',
     color: '#d8b06a',
     attributes: {
@@ -52,6 +55,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'magician', name: 'Magician',
+    look: 'class_magician',
     description: 'A mystic mage that flings forth the destructive elemental powers of fire, frost and storm.',
     color: '#7a9aff',
     attributes: {
@@ -65,6 +69,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'rogue', name: 'Rogue',
+    look: 'class_rogue',
     description: 'A renegade rogue that dispatches its enemies with no one around being any the wiser.',
     color: '#5a5c57',
     attributes: {
@@ -78,6 +83,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'berserker', name: 'Berserker',
+    look: 'class_berserker',
     description: 'Trades safety for speed and fury. Heavy strikes stack into a whirlwind of carnage — and leech life back.',
     color: '#e05545',
     attributes: {
@@ -91,6 +97,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'sorcerer', name: 'Sorcerer',
+    look: 'class_sorcerer',
     description: 'A scholar of the destructive elements that has mastered the way of decimating clusters of enemies at once.',
     color: '#ce7eac',
     attributes: {
@@ -104,6 +111,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'ranger', name: 'Ranger',
+    look: 'class_ranger',
     description: 'Death from afar. Arrows that pierce ranks, knives that fan across the field.',
     color: '#8ac860',
     attributes: {
@@ -117,6 +125,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'guardian', name: 'Guardian',
+    look: 'class_guardian',
     description: 'A bulky defender of the front-lines, hard to ignore and even harder to put down.',
     color: '#EAF6F9',
     attributes: {
@@ -130,6 +139,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'summoner', name: 'Summoner',
+    look: 'class_summoner',
     description: 'Commands the dead and the elemental. Your minions run on the same skills monsters do — because they are monsters.',
     color: '#b06bd4',
     attributes: {
@@ -143,6 +153,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'swashbuckler', name: 'Swashbuckler',
+    look: 'class_swashbuckler',
     description: 'A duelist who is never where the blow lands. Dashes through enemy lines, blades first.',
     color: '#6ab8d8',
     attributes: {
@@ -156,6 +167,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'juggernaut', name: 'Juggernaut',
+    look: 'class_juggernaut',
     description: 'It hits and it takes hits. And it does not stop.',
     color: '#80ccff',
     attributes: {
@@ -169,6 +181,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'pyromancer', name: 'Pyromancer',
+    look: 'class_pyromancer',
     description: 'The pyric pyromancer is fueled by explosions and fire and burns it. Burns it all with fire.',
     color: '#ffa64d',
     attributes: {
@@ -182,6 +195,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'assassin', name: 'Assassin',
+    look: 'class_assassin',
     description: 'The assassin bleeds their enemies dry before moving in for the kill, all the while being unseen.',
     color: '#2d4f83',
     attributes: {
@@ -195,6 +209,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'necromancer', name: 'Necromancer',
+    look: 'class_necromancer',
     description: 'Death is a resource. Raise what falls, curse what stands, and exhale a ring of venom that outlasts every argument — the classic corpse-and-poison artisan.',
     color: '#a6c87a',
     attributes: {
@@ -208,6 +223,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'cleric', name: 'Cleric',
+    look: 'class_cleric',
     description: 'The line holds because someone holds it together. Mends the wounded, sanctifies the ground, and swings a blessed arc when the fight closes in — the support archetype, played straight.',
     color: '#8ae0a8',
     attributes: {

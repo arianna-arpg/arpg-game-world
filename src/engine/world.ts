@@ -1891,6 +1891,7 @@ export class World {
     p.color = classDef.color;
     p.radius = 15;
     p.kind = 'player';
+    p.look = classDef.look;
     const meta: PlayerMeta = {
       classDef,
       name: classDef.name,
@@ -9816,6 +9817,7 @@ export class World {
     a.faction = def.faction;
     a.adorn = def.adorn;
     a.material = def.material;
+    a.look = def.look;
     if (def.worm) {
       a.worm = {
         length: def.worm.length,
@@ -13120,6 +13122,8 @@ export class World {
       minion.color = caster.color;
       minion.radius = caster.radius;
       minion.facing = caster.facing;
+      minion.look = caster.look;
+      minion.material = caster.material;
     }
     minion.sourceSkillId = inst.def.id;
     minion.sourcePoolGroup = d.poolGroup;
