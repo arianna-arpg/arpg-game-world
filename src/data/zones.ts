@@ -235,6 +235,11 @@ export interface ZoneTheme {
     bias?: number;
     /** Mottle alpha override (how much the pattern covers the base floor). */
     alpha?: number;
+    /** Palette coverage EVENNESS (0..1). At 0 (default) mid-gradient cells
+     *  go translucent so the floor patches through — the mottled look. At 1
+     *  the whole gradient lays down at uniform strength — a PURE two-color
+     *  (or N-color) blend with no floor bleed-through in the middle. */
+    evenness?: number;
   };
 }
 

@@ -116,7 +116,12 @@ export class GroundRenderer {
           const t = n * (pal.length - 1);
           const i = Math.min(pal.length - 2, Math.floor(t));
           ctx.fillStyle = mix(pal[i], pal[i + 1], t - i);
-          ctx.globalAlpha = alphaCap * strength * (0.4 + 0.6 * Math.abs(n - 0.5) * 2);
+          // Coverage shaping: by default the gradient's MIDDLE thins so the
+          // base floor patches through (mottle); `evenness` flattens that
+          // toward uniform strength — a pure color-to-color blend.
+          const shaped = 0.4 + 0.6 * Math.abs(n - 0.5) * 2;
+          const even = clamp(gs.evenness ?? 0, 0, 1);
+          ctx.globalAlpha = alphaCap * strength * (shaped + (1 - shaped) * even);
         } else if (n < 0.5) {
           ctx.globalAlpha = Math.min(1, (0.5 - n) * 2) * alphaCap;
           ctx.fillStyle = dark;
