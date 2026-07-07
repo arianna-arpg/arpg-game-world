@@ -25,10 +25,18 @@ and the player, monsters, and minions all act through a single skill pipeline
   boot the real game window (or launcher), assert `__game` / start menu /
   `/__save` endpoint (or the IPC status round-trip), print `SMOKE … OK`, exit
   0/1. Run these after touching `launcher/` or anything boot-related.
+- `npm run sim -- …` — the BALANCE HARNESS: the real engine headless and
+  deterministic (seeded), running scenario suites over reference builds.
+  `run --suite smoke` after any `src/data/` change; `sweep skills` ranks every
+  attack/spell skill at equal investment; `baseline check --suite smoke` is
+  the regression gate (exit 2 on breach). Docs: `docs/balance/README.md`
+  (framework + metrics glossary) and `docs/balance/AGENT_PLAYBOOK.md` (the
+  contract for agent-driven mass balance passes). Type-checked by
+  `tsconfig.sim.json` inside `npm run check`.
 - `npm run preview` — serve the built `dist/`.
 
-No unit-test runner is configured; `tsc --noEmit` plus the smoke checks are how
-we verify changes.
+No unit-test runner is configured; `tsc --noEmit`, the smoke checks, and the
+balance harness's smoke suite are how we verify changes.
 
 ## Layout
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
@@ -45,6 +53,15 @@ we verify changes.
   Epitaph words). Adding content here needs no engine changes.
 - `src/packages/` — optional per-run world-event overlays (Warbands, Breach,
   Contagion, …).
+- `src/sim/` — the browser-safe half of the balance harness: headless boot
+  (`arena.ts`: shims + the quiet `sim_arena` zone), build injection through
+  `world.adoptSavedMeta` (`builds.ts`), input-source pilots, the seeded
+  episode runner, tap-fed metrics; scenario/build/target LIBRARIES as data
+  in `src/sim/data/`. Observation flows through `src/engine/tap.ts` —
+  optional chokepoint taps in `damage.ts`/`world.ts`, observe-only,
+  null-cost when unset. Node stops at `balance/cli.ts`; per-run reports
+  land in `balance/reports/` (gitignored), committed baselines in
+  `balance/baselines/`.
 - `src/render/` — Canvas 2D renderer (placeholder geometry art driven by data).
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer.
