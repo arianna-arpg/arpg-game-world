@@ -1257,6 +1257,14 @@ export const ATTRIBUTES: Record<AttributeId, AttributeDef> = {
 
 export const ATTRIBUTE_IDS = Object.keys(ATTRIBUTES) as AttributeId[];
 
+/** Is this open stat name a registered ATTRIBUTE id? Gear/vestige mod lines
+ *  may grant attributes (+12 Strength); those lines route through the one
+ *  Actor.setAttributes artery, never the StatSheet — this guard is how the
+ *  seams (recalcSeat, the item validator) tell the two apart. */
+export function isAttributeId(stat: string): stat is AttributeId {
+  return stat in ATTRIBUTES;
+}
+
 export type Attributes = Record<AttributeId, number>;
 
 /** Expand an attribute spread into the flat modifier list it grants. */

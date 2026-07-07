@@ -37,7 +37,7 @@
 // ---------------------------------------------------------------------------
 
 import { SKILL_RARITIES } from './skills';
-import { STAT_DEFS, type ConditionId, type ModKind, type SkillTag } from './stats';
+import { ATTRIBUTES, STAT_DEFS, type AttributeId, type ConditionId, type ModKind, type SkillTag } from './stats';
 
 // ------------------------------------------------------------- rarities ----
 
@@ -477,7 +477,9 @@ const CONDITION_LABELS: Record<ConditionId, string> = {
 };
 
 function statLabel(stat: string): string {
-  return STAT_DEFS[stat]?.label ?? stat;
+  // Attribute grants (+12 Strength) are legal mod lines with no STAT_DEFS
+  // entry — their display name lives on the attribute registry instead.
+  return STAT_DEFS[stat]?.label ?? ATTRIBUTES[stat as AttributeId]?.label ?? stat;
 }
 
 /** Format a rolled value for a stat: percent-flagged stats (and all

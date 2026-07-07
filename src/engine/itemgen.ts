@@ -31,7 +31,7 @@ import {
   type ItemCategory, type ItemInstance, type ItemRarity, type RangedLineDef,
   type UniqueDef,
 } from './items';
-import { STAT_DEFS, type Modifier } from './stats';
+import { STAT_DEFS, isAttributeId, type Modifier } from './stats';
 
 type RngFn = () => number;
 
@@ -588,7 +588,11 @@ function ensureValidated(): void {
   const warn = (msg: string): void => { console.warn(`[items] ${msg}`); };
   for (const a of ITEM_AFFIX_LIST) {
     for (const line of a.lines) {
-      if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
+      if (isAttributeId(line.stat)) {
+        // Attribute grants route through Actor.setAttributes (recalcSeat
+        // splits them out of the sheet) — only FLAT has meaning there.
+        if (line.kind !== 'flat') warn(`affix '${a.id}': attribute '${line.stat}' supports only flat lines (got '${line.kind}')`);
+      } else if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
         warn(`affix '${a.id}' references unknown stat '${line.stat}'`);
       }
     }
@@ -601,7 +605,9 @@ function ensureValidated(): void {
   for (const u of UNIQUE_LIST) {
     if (!ITEM_BASES[u.baseId]) warn(`unique '${u.id}' pinned to unknown base '${u.baseId}'`);
     for (const line of u.lines) {
-      if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
+      if (isAttributeId(line.stat)) {
+        if (line.kind !== 'flat') warn(`unique '${u.id}': attribute '${line.stat}' supports only flat lines (got '${line.kind}')`);
+      } else if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
         warn(`unique '${u.id}' references unknown stat '${line.stat}'`);
       }
     }

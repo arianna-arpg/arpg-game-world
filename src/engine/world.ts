@@ -53,7 +53,7 @@ import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocat
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
-import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat } from './stats';
+import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import {
   blocksMovement, blocksProjectiles, blocksSightOf, generateLayout, structureDoodads,
@@ -7280,16 +7280,37 @@ export class World {
       }
       if (node.mods) passiveMods.push(...node.mods);
     }
+    // GEAR: attribute-granting lines (+12 Strength — stat names registered in
+    // ATTRIBUTES, not STAT_DEFS) are ATTRIBUTE grants, not sheet stats. They
+    // join the attrs accumulation here so they flow through the ONE
+    // setAttributes artery — derived stats, the char sheet, and skill
+    // attribute gates (meetsRequirements reads meta.attrs) all see them.
+    // Everything else on the item stays an ordinary per-slot sheet mod.
+    // Flat is the only kind with meaning on an attribute (validator enforces).
+    const gearSheetMods = new Map<string, Modifier[]>();
+    for (const slot of EQUIP_SLOTS) {
+      const worn = m.equipped[slot.id];
+      if (!worn) continue;
+      const sheetMods: Modifier[] = [];
+      for (const gm of compileItemMods(worn)) {
+        if (isAttributeId(gm.stat)) {
+          if (gm.kind === 'flat') attrs[gm.stat] += gm.value;
+        } else {
+          sheetMods.push(gm);
+        }
+      }
+      gearSheetMods.set(slot.id, sheetMods);
+    }
     m.attrs = attrs;
 
     p.setAttributes(attrs);
     p.sheet.setSource('class', m.classDef.innate ?? []);
     p.sheet.setSource('passives', passiveMods);
-    // GEAR: one attributable source per doll slot — equip/unequip/retune all
+    // One attributable source per doll slot — equip/unequip/retune all
     // converge here, and removeSource keeps empty slots contributing nothing.
     for (const slot of EQUIP_SLOTS) {
-      const worn = m.equipped[slot.id];
-      if (worn) p.sheet.setSource('gear:' + slot.id, compileItemMods(worn));
+      const mods = gearSheetMods.get(slot.id);
+      if (mods) p.sheet.setSource('gear:' + slot.id, mods);
       else p.sheet.removeSource('gear:' + slot.id);
     }
     // "+N to <Class> Skills": sum every classSkill_<id> stat whose class bar
