@@ -578,6 +578,9 @@ interface Zone {
    *  window on its own clock; the caster crossing while armed detonates
    *  it and the step goes quiet until the floor deals again. */
   roulette?: { interval: number; chance: number; window: number; damageScale: number; radiusScale?: number; next: number; armedUntil: number };
+  /** SEEKING GROUND (Creeping Frost): the zone slinks toward the nearest
+   *  living enemy — a patch of winter with intent (see GroundDelivery.seek). */
+  seek?: { speed: number; range: number };
   /** HEALING GROUND (SupportDef.healField): the tick MENDS allies in the
    *  area instead of striking enemies. */
   healTick?: number;
@@ -11396,6 +11399,8 @@ export class World {
           })(),
           follow: d.follow,
           retract: d.retract,
+          // Seeking grounds (Creeping Frost's slinking winter).
+          seek: d.seek ? { speed: d.seek.speed, range: d.seek.range ?? 420 } : undefined,
           // Pulse-cadence + maddening cursed-ground grafts ride ANY
           // lingering ground skill (SupportDef.zoneEmit / madden).
           madden: (() => {
@@ -20918,6 +20923,8 @@ export class World {
               tickInterval: ez.tickInterval ?? 0.5, tickTimer: 0,
               shape: 0, facing: p.dir,
               dmgMult: (ez.damageScale ?? 0.5) * p.mult, depth: 1,
+              // Creeping Frost: the bloom HUNTS (see GroundDelivery.seek).
+              seek: ez.seek ? { speed: ez.seek.speed, range: ez.seek.range ?? 420 } : undefined,
               flatBonus: p.flat,
             });
           }
@@ -21063,10 +21070,29 @@ export class World {
         }
       } else {
         // Creeping zones advance along their facing.
-        if (z.drift) {
+        if (z.drift && !z.seek) {
           z.pos = this.clampPos(vec(
             z.pos.x + Math.cos(z.facing) * z.drift * dt,
             z.pos.y + Math.sin(z.facing) * z.drift * dt), 10);
+        }
+        // SEEKING GROUNDS (Creeping Frost): the lingering field SLINKS
+        // toward the nearest living enemy — a patch of winter with
+        // intent. Nothing in reach, nothing moves; breakable furniture
+        // is never prey. Where seek exists, drift's straight line yields.
+        if (z.seek) {
+          let prey: Actor | null = null;
+          let bd = z.seek.range;
+          for (const e of this.enemiesOf(z.caster)) {
+            if (e.construct?.breakable) continue;
+            const dd = dist(z.pos, e.pos);
+            if (dd < bd) { bd = dd; prey = e; }
+          }
+          if (prey && bd > 6) {
+            const ang = angleTo(z.pos, prey.pos);
+            z.pos = this.clampPos(vec(
+              z.pos.x + Math.cos(ang) * z.seek.speed * dt,
+              z.pos.y + Math.sin(ang) * z.seek.speed * dt), 10);
+          }
         }
         // WORN fields ride their caster (Blizzard Coil's mantle) — the
         // field dies with them, mid-linger.
