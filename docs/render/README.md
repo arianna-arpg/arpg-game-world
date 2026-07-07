@@ -71,9 +71,49 @@ src/data/
    Weather kinds get particles from `WEATHER_FX` (streaks, flakes, fog
    banks, motes) — stateless, deterministic, intensity-scaled.
 
+## The part grammar — entity portraits (`vis/parts.ts` + `data/looks.ts`)
+
+Entities graduated from "geometry as graphics" to composed top-down
+portraits. `PART_PAINTERS` speaks anatomy — `skull` (dome, brow, eye pits,
+nasal notch, jaw), `ribs` (spine + curved spokes), `hood`, `tatters`,
+`scythe`, `staff` (orb or skull-tipped), `crown`, `claws`, `maw`, `snout`,
+`mandibles`, `fins`, `wings`, `torso` (head + shoulders), `robe`, live
+`wisps`/`flames`, ~45 parts — and a `LookDef` stacks them with placement in
+body radii (+X = facing), palette ROLES (base/bone/metal/cloth/glow/dark;
+each part has a sensible default), per-part scale/rot/mirror, and painter
+params. `LOOKS` composes the portraits: skeleton = ribs + skull + sword;
+reaper = cowl + tatters + scythe; lich = crowned glowing skull over burial
+cloth. Identity lives in silhouette, so families read even desaturated.
+
+Defs opt in with `look: '<id>'` (MonsterDef, ClassDef, replicated to co-op);
+no look = the legacy shape+adorn body. Looks bake through the sprite cache,
+always rotate with facing, and `live` parts animate per frame. Composing a
+new monster is a few lines of part specs; add a painter only for a new limb
+of vocabulary.
+
+## Composite monsters — plural hitboxes (`MonsterDef.parts`)
+
+A root def may declare `parts: MonsterPartDef[]`: each part names its OWN
+monster def (body, life, skills, look) plus an anchor `(dx, dy)` in root
+radii within the root's facing frame. Parts lazy-attach on the root's first
+update tick (any spawn path), fight through the normal skill pipeline, and
+BREAK individually — `breakDamage` chunks the root (SUNDERED), `breakMods`
+layer torn-guard modifiers, `breakDisables` disarm root skills. `lifeFrac`
+pools rescale through the level curve; the root's death cascades its parts;
+pristine parts wear no health bar. The Marsh Leviathan (body + venomous
+head + two claws + reaping tail) is the shipped exemplar — dragons and
+world bosses are data from here, and huge creatures keep moderate root
+bodies (sane casting cones) while their bulk lives in parts.
+
 ## How to…
 
 - **Give a monster family a surface**: `material: 'chitin'` on the def.
+- **Give a monster a portrait**: `look: 'reaper'` on the def — or compose a
+  new `LOOKS` entry from parts.
+- **Build a world boss with plural hitboxes**: `parts: [...]` on the root
+  def, one part def per hitbox.
+- **Shape a biome's floor**: `ground: { scale, stretchX, strength, speckles }`
+  in its theme (desert dunes = scale 2.6, stretchX 2.1).
 - **Add a new material**: one row in `MATERIALS`.
 - **Skin a new doodad kind**: one entry in `DOODAD_VISUALS` naming a painter;
   add a painter only for a genuinely new *vocabulary* of look.
