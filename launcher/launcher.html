@@ -114,9 +114,17 @@
       $('title').textContent = s.title;
       document.title = s.title + ' — Launcher';
       $('build-line').innerHTML =
-        `v${s.version} · <b>${s.branch}</b> @ <b>${s.hash || '?'}</b>` +
+        `v${s.version} · <b>${s.branch || 'release'}</b> @ <b>${s.hash || '?'}</b>` +
         (s.subject ? ` — “${s.subject}”` : '') +
         (s.dirty ? ' <span class="dirty">(modified locally)</span>' : '');
+      // PACKAGED install (no repo, no toolchain): the rebuild button is
+      // meaningless, and Update means "open the newest GitHub Release".
+      if (s.packaged) {
+        $('rebuild').classList.add('hidden');
+        $('update-btn').textContent = '⬇  Get Update (opens browser)';
+        $('hint').textContent = 'Playing is fully offline. Updates come from GitHub Releases.';
+      }
+      if (s.updateMode === 'none') $('check').classList.add('hidden');
     }
 
     function renderCheck(r) {
@@ -126,6 +134,11 @@
       if (!r.ok) {
         st.className = 'bad';
         st.textContent = 'Could not reach GitHub — playing the installed version is fine.';
+        return;
+      }
+      if (r.mode === 'none') {
+        st.className = '';
+        st.textContent = 'Update checks are disabled (updates.mode in launcher.config.json).';
         return;
       }
       if (r.behind === 0) {
@@ -169,6 +182,9 @@
       try {
         const r = await window.launcher.update();
         if (!r.ok) { appendLog('UPDATE FAILED: ' + (r.error || 'unknown error')); return; }
+        // Release mode opened the download page — this install stays as-is
+        // until the player runs the new one; don't auto-play the old build.
+        if (r.opened) { appendLog('Download page opened — install the new version, then relaunch.'); return; }
         await refresh();
         renderCheck({ ok: true, behind: 0, ahead: 0, changes: [] });
         const p = await window.launcher.play();

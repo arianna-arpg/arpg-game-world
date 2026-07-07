@@ -15,8 +15,17 @@
 // deep-merged with launcher.config.local.json (gitignored, machine-local) —
 // window mode, ports, repo remote/branch, update policy. No hardcoding.
 //
+// PACKAGED (npm run dist → NSIS installer / Linux AppImage): the SAME trio,
+// minus the repo. dist/ + the committed config ship as extraResources beside
+// the exe, saves move to userData, and updates become a GitHub-Releases
+// version probe with a download link (a package can't rebuild itself). Every
+// path resolves through the PACKAGED/REPO/BASE seam below — nothing else
+// changes, and the smoke modes run against a packaged exe unmodified.
+//
 // Flags:
 //   --play                 skip the launcher, straight into the game
+//   --fullscreen           force the game window fullscreen (gamescope/Steam
+//                          Deck sessions auto-detect via window.fullscreen 'auto')
 //   --smoke-test[=game|launcher]  headless self-check: boot, assert, exit.
 //
 // Build staleness is stamped: dist/.build-head records the HEAD hash + a
@@ -30,13 +39,9 @@ const { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } = require('e
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const { startGameServer } = require('./server.cjs');
-
-const ROOT = path.join(__dirname, '..');
-const DIST = path.join(ROOT, 'dist');
-const SAVES = path.join(ROOT, 'saves');
-const STAMP = path.join(DIST, '.build-head');
 
 // ------------------------------------------------------------------- config
 
@@ -56,19 +61,81 @@ function readJson(file) {
   try { return JSON.parse(fs.readFileSync(file, 'utf-8')); } catch { return null; }
 }
 
+// ---------------------------------------------- environment (checkout vs pkg)
+// ONE seam decides where everything lives. A CHECKOUT (dev) runs git/npm and
+// keeps dist/, config and saves in the repo. A PACKAGED install
+// (app.isPackaged — `npm run dist`) has no repo: dist/ + the committed config
+// ship as extraResources, machine-local config overrides load from beside the
+// exe and from userData, saves live in userData (an AppImage mount is
+// read-only, and Program Files should never hold saves), and updates switch
+// from `git pull` to a GitHub-Releases version probe.
+const PACKAGED = app.isPackaged;
+/** Repo root in a checkout; null when packaged (nowhere to run git/npm). */
+const REPO = PACKAGED ? null : path.join(__dirname, '..');
+/** Where the built game + committed launcher.config.json live. */
+const BASE = PACKAGED ? process.resourcesPath : path.join(__dirname, '..');
+const DIST = path.join(BASE, 'dist');
+const STAMP = path.join(DIST, '.build-head');
+/** Packaged identity (version/hash/branch/date), stamped at dist time by
+ *  scripts/make-build-info.mjs; null in a checkout — git answers live. */
+const BUILD_INFO = PACKAGED ? readJson(path.join(BASE, 'build-info.json')) : null;
+
 // Hard fallbacks so a missing/broken config file can never brick the launcher.
 const CONFIG_DEFAULTS = {
   game: { title: 'Hollow Wake' },
-  repo: { remote: 'origin', branch: 'main' },
-  updates: { checkOnLaunch: true },
-  window: { width: 1600, height: 900, maximized: true, fullscreen: false, devtools: true, zoom: 1 },
+  repo: { remote: 'origin', branch: 'main', github: 'arianna-arpg/arpg-game-world' },
+  updates: { checkOnLaunch: true, mode: 'auto' },
+  window: { width: 1600, height: 900, maximized: true, fullscreen: 'auto', devtools: true, zoom: 1 },
   server: { host: '127.0.0.1', port: 0 },
   launcher: { width: 700, height: 680, returnToLauncher: true },
+  paths: { saves: 'auto' },
 };
-const cfg = merge(
-  merge(CONFIG_DEFAULTS, readJson(path.join(ROOT, 'launcher.config.json'))),
-  readJson(path.join(ROOT, 'launcher.config.local.json')),
-);
+// Merge order (later wins): hard defaults ← committed defaults (ship with the
+// install) ← machine-local overrides. A checkout keeps the single repo-root
+// local file; a packaged install accepts one BESIDE THE EXE (portable
+// tweaks), then one in USERDATA (survives reinstalls — the last word).
+let cfg = merge(CONFIG_DEFAULTS, readJson(path.join(BASE, 'launcher.config.json')));
+// A packaged install's IDENTITY (the userData home for saves/storage, the
+// single-instance scope) follows the configured game title — set BEFORE any
+// userData-relative path resolves, or Electron files everything under the
+// internal package name ("arpg-test-game") and collides with dev profiles.
+// Dev keeps the package-name default so existing dev storage stays put.
+if (PACKAGED) app.setName(String(cfg.game.title));
+const LOCAL_CONFIGS = PACKAGED
+  ? [
+    path.join(path.dirname(app.getPath('exe')), 'launcher.config.local.json'),
+    path.join(app.getPath('userData'), 'launcher.config.local.json'),
+  ]
+  : [path.join(BASE, 'launcher.config.local.json')];
+for (const f of LOCAL_CONFIGS) cfg = merge(cfg, readJson(f));
+
+/** 'git' (pull + rebuild the checkout) | 'release' (GitHub-Releases version
+ *  probe + download link) | 'none'. 'auto' picks by environment. */
+const UPDATE_MODE = (() => {
+  const m = String(cfg.updates.mode ?? 'auto');
+  return (m === 'git' || m === 'release' || m === 'none') ? m : (PACKAGED ? 'release' : 'git');
+})();
+
+/**
+ * The saves directory, from cfg.paths.saves. 'auto' = <repo>/saves in a
+ * checkout (the same folder dev-server play writes), <userData>/saves when
+ * packaged. Explicit values may template ${repo} (checkout only), ${data}
+ * (userData), ${exe} (beside the executable) and ${home}; a relative result
+ * resolves against the install base.
+ */
+function resolveSavesDir() {
+  const spec = String((cfg.paths && cfg.paths.saves) || 'auto');
+  if (spec === 'auto') {
+    return REPO ? path.join(REPO, 'saves') : path.join(app.getPath('userData'), 'saves');
+  }
+  const expanded = spec
+    .replace(/\$\{repo\}/g, REPO ?? app.getPath('userData'))
+    .replace(/\$\{data\}/g, app.getPath('userData'))
+    .replace(/\$\{exe\}/g, path.dirname(app.getPath('exe')))
+    .replace(/\$\{home\}/g, os.homedir());
+  return path.resolve(BASE, expanded);
+}
+const SAVES = resolveSavesDir();
 
 // -------------------------------------------------------------------- flags
 
@@ -81,6 +148,16 @@ const flagValue = (flag) => {
 };
 const SMOKE = flagValue('--smoke-test') !== null ? (flagValue('--smoke-test') || 'game') : null;
 const PLAY_DIRECT = flagValue('--play') !== null;
+
+/** window.fullscreen: true/false, or 'auto' → fullscreen exactly when running
+ *  inside a Steam Deck / gamescope session. `--fullscreen` forces it on. */
+function resolveFullscreen() {
+  if (flagValue('--fullscreen') !== null) return true;
+  const v = cfg.window.fullscreen;
+  if (typeof v === 'boolean') return v;
+  return !!(process.env.SteamDeck || process.env.SteamOS
+    || process.env.XDG_CURRENT_DESKTOP === 'gamescope' || process.env.GAMESCOPE_WAYLAND_DISPLAY);
+}
 
 // -------------------------------------------------------- child process runs
 
@@ -109,10 +186,12 @@ function log(line) {
  */
 function run(cmd, args, opts) {
   return new Promise((resolve) => {
+    // A packaged install has no repo and no toolchain — nothing to spawn into.
+    if (!REPO) { resolve({ code: -1, out: '', err: 'child processes are unavailable in a packaged install' }); return; }
     const useShell = process.platform === 'win32' && cmd === 'npm';
     const child = useShell
-      ? spawn([cmd, ...args].join(' '), { cwd: ROOT, shell: true, windowsHide: true })
-      : spawn(cmd, args, { cwd: ROOT, windowsHide: true });
+      ? spawn([cmd, ...args].join(' '), { cwd: REPO, shell: true, windowsHide: true })
+      : spawn(cmd, args, { cwd: REPO, windowsHide: true });
     let out = '', err = '';
     const feed = (/** @type {Buffer} */ chunk, /** @type {boolean} */ isErr) => {
       const s = chunk.toString();
@@ -136,7 +215,23 @@ const npm = (args) => run('npm', args);
 // ------------------------------------------------------------ repo & builds
 
 async function repoStatus() {
-  const pkg = readJson(path.join(ROOT, 'package.json')) ?? {};
+  if (PACKAGED) {
+    // No repo to interrogate — the dist-time stamp IS this install's identity.
+    const b = BUILD_INFO ?? {};
+    return {
+      title: cfg.game.title,
+      version: app.getVersion(),
+      branch: String(b.branch ?? ''), hash: String(b.hash ?? ''),
+      subject: String(b.subject ?? ''), date: String(b.date ?? ''),
+      dirty: !!b.dirty,
+      remoteUrl: cfg.repo.github ? `https://github.com/${cfg.repo.github}` : null,
+      distBuilt: fs.existsSync(path.join(DIST, 'index.html')),
+      checkOnLaunch: !!cfg.updates.checkOnLaunch,
+      repo: { remote: cfg.repo.remote, branch: cfg.repo.branch },
+      packaged: true, updateMode: UPDATE_MODE, savesDir: SAVES,
+    };
+  }
+  const pkg = readJson(path.join(/** @type {string} */ (REPO), 'package.json')) ?? {};
   const branch = (await git(['rev-parse', '--abbrev-ref', 'HEAD'])).out.trim();
   const headRaw = (await git(['log', '-1', '--format=%h%x09%s%x09%ci'])).out.trim();
   const [hash = '', subject = '', date = ''] = headRaw.split('\t');
@@ -150,10 +245,11 @@ async function repoStatus() {
     distBuilt: fs.existsSync(path.join(DIST, 'index.html')),
     checkOnLaunch: !!cfg.updates.checkOnLaunch,
     repo: { remote: cfg.repo.remote, branch: cfg.repo.branch },
+    packaged: false, updateMode: UPDATE_MODE, savesDir: SAVES,
   };
 }
 
-async function checkUpdates() {
+async function checkGitUpdates() {
   log(`Checking ${cfg.repo.remote}/${cfg.repo.branch} for updates…`);
   const fetch = await git(['fetch', cfg.repo.remote, cfg.repo.branch], { quiet: false });
   if (fetch.code !== 0) {
@@ -169,7 +265,66 @@ async function checkUpdates() {
     return { hash, subject };
   }) : [];
   log(behind === 0 ? 'Up to date.' : `${behind} update${behind === 1 ? '' : 's'} available.`);
-  return { ok: true, behind, ahead, changes };
+  return { ok: true, behind, ahead, changes, mode: 'git' };
+}
+
+// ----------------------------------------------- release-mode update checks
+
+/** The newest release's page URL, remembered by the last successful check so
+ *  the Update button can open exactly what it announced. */
+/** @type {string | null} */ let latestReleaseUrl = null;
+
+/** @param {unknown} s @returns {number[] | null} */
+function parseVer(s) {
+  const m = /(\d+)\.(\d+)\.(\d+)/.exec(String(s ?? ''));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+/** @param {number[]} a @param {number[]} b — true when a > b */
+function newerVersion(a, b) {
+  for (let i = 0; i < 3; i++) {
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) > (b[i] ?? 0);
+  }
+  return false;
+}
+
+/** Packaged installs can't rebuild themselves — instead: is there a NEWER
+ *  GitHub Release than the version stamped into this install? */
+async function checkReleaseUpdates() {
+  const gh = String(cfg.repo.github ?? '');
+  if (!gh) return { ok: false, error: 'Release checks need repo.github ("owner/name") in launcher.config.json.' };
+  log(`Checking github.com/${gh} for a newer release…`);
+  try {
+    const res = await fetch(`https://api.github.com/repos/${gh}/releases/latest`, {
+      headers: { accept: 'application/vnd.github+json', 'user-agent': 'hollow-wake-launcher' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.status === 404) {
+      log('No releases published yet — you are on the newest thing there is.');
+      return { ok: true, behind: 0, ahead: 0, changes: [], mode: 'release' };
+    }
+    if (!res.ok) return { ok: false, error: `GitHub API answered HTTP ${res.status}.` };
+    const rel = /** @type {any} */ (await res.json());
+    latestReleaseUrl = typeof rel.html_url === 'string' ? rel.html_url : null;
+    const current = parseVer(app.getVersion());
+    const latest = parseVer(rel.tag_name);
+    const behind = current && latest && newerVersion(latest, current) ? 1 : 0;
+    log(behind ? `Release ${rel.tag_name} is available.` : 'Up to date.');
+    return {
+      ok: true, behind, ahead: 0, mode: 'release',
+      changes: behind
+        ? [{ hash: String(rel.tag_name ?? ''), subject: String(rel.name || rel.tag_name || 'New release') }]
+        : [],
+    };
+  } catch (e) {
+    log('Update check failed (offline, or GitHub is unreachable).');
+    return { ok: false, error: String(e) };
+  }
+}
+
+async function checkUpdates() {
+  if (UPDATE_MODE === 'none') return { ok: true, behind: 0, ahead: 0, changes: [], mode: 'none' };
+  if (UPDATE_MODE === 'release') return checkReleaseUpdates();
+  return checkGitUpdates();
 }
 
 /** The build stamp: HEAD + a digest of what's uncommitted. Any pull or local
@@ -183,6 +338,12 @@ async function buildStamp() {
 
 /** @param {boolean} [force] @returns {Promise<{ ok: boolean, error?: string }>} */
 async function ensureBuilt(force) {
+  if (PACKAGED) {
+    // The package ships its dist; there is no compiler out here to run.
+    return fs.existsSync(path.join(DIST, 'index.html'))
+      ? { ok: true }
+      : { ok: false, error: 'This install is missing its game files (resources/dist) — reinstall it.' };
+  }
   const stamp = await buildStamp();
   const have = fs.existsSync(STAMP) ? fs.readFileSync(STAMP, 'utf-8') : null;
   const fresh = fs.existsSync(path.join(DIST, 'index.html')) && stamp !== null && have === stamp;
@@ -200,6 +361,16 @@ async function ensureBuilt(force) {
 }
 
 async function update() {
+  if (UPDATE_MODE === 'release') {
+    // No self-mutation in a packaged install — hand the player the download.
+    const gh = String(cfg.repo.github ?? '');
+    const url = latestReleaseUrl ?? (gh ? `https://github.com/${gh}/releases/latest` : null);
+    if (!url) return { ok: false, error: 'No release URL known — set repo.github in launcher.config.json.' };
+    log('Opening the latest release in your browser — install it, then relaunch.');
+    shell.openExternal(url);
+    return { ok: true, opened: true };
+  }
+  if (UPDATE_MODE === 'none') return { ok: false, error: 'Updates are disabled for this install (updates.mode).' };
   const pull = await run('git', ['pull', '--ff-only', cfg.repo.remote, cfg.repo.branch]);
   if (pull.code !== 0) {
     log('PULL FAILED — you may have local changes; commit or stash them first.');
@@ -293,6 +464,7 @@ async function ensureServer() {
 
 /** @param {{ show?: boolean }} [opts] */
 function createGameWindow(opts) {
+  const fullscreen = resolveFullscreen();
   const w = new BrowserWindow({
     width: cfg.window.width,
     height: cfg.window.height,
@@ -300,10 +472,10 @@ function createGameWindow(opts) {
     autoHideMenuBar: true,
     backgroundColor: '#0a0a0e',
     title: cfg.game.title,
-    fullscreen: !!cfg.window.fullscreen,
+    fullscreen,
     webPreferences: { devTools: !!cfg.window.devtools },
   });
-  if (cfg.window.maximized && !cfg.window.fullscreen && opts?.show !== false) w.maximize();
+  if (cfg.window.maximized && !fullscreen && opts?.show !== false) w.maximize();
   w.webContents.on('did-finish-load', () => {
     if (cfg.window.zoom && cfg.window.zoom !== 1) w.webContents.setZoomFactor(cfg.window.zoom);
   });

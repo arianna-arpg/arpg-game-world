@@ -2,6 +2,9 @@
   "name": "arpg-test-game",
   "private": true,
   "version": "0.1.0",
+  "description": "Hollow Wake — a data-driven top-down action RPG (TypeScript + Canvas 2D + Electron).",
+  "author": "Arianna",
+  "repository": "github:arianna-arpg/arpg-game-world",
   "type": "module",
   "main": "launcher/main.cjs",
   "scripts": {
@@ -12,11 +15,16 @@
     "game": "electron .",
     "game:play": "electron . --play",
     "smoke": "electron . --smoke-test=game",
-    "smoke:launcher": "electron . --smoke-test=launcher"
+    "smoke:launcher": "electron . --smoke-test=launcher",
+    "icon": "node scripts/make-icon.mjs",
+    "dist": "npm run build && node scripts/make-build-info.mjs && electron-builder --win --publish never",
+    "dist:linux": "npm run build && node scripts/make-build-info.mjs && electron-builder --linux --publish never",
+    "dist:all": "npm run build && node scripts/make-build-info.mjs && electron-builder --win --linux --publish never"
   },
   "devDependencies": {
     "@types/node": "^26.1.0",
     "electron": "^43.0.0",
+    "electron-builder": "^26.15.3",
     "typescript": "^5.6.0",
     "vite": "^6.0.0"
   }

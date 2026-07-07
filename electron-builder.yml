@@ -1,0 +1,74 @@
+# ---------------------------------------------------------------------------
+# PACKAGING — `npm run dist` (Windows) / `npm run dist:linux` (AppImage, the
+# Steam Deck artifact) / `npm run dist:all`. Output lands in release/
+# (gitignored). The packaged app is the SAME launcher+server+dist trio as a
+# checkout — launcher/main.cjs just resolves its paths from resourcesPath
+# instead of the repo root when app.isPackaged (and saves move to userData).
+#
+# The game build (dist/) and the committed launcher.config.json ship as
+# extraResources — real files next to the exe, NOT inside app.asar — so the
+# loopback server streams them exactly like dev, and a curious player can
+# still read (or locally override) the config next to their install.
+# ---------------------------------------------------------------------------
+appId: com.hollowwake.game
+productName: Hollow Wake
+# Icon + build inputs live in build/ (icon.png is committed; build-info.json
+# is stamped by scripts/make-build-info.mjs on every dist run).
+directories:
+  buildResources: build
+  output: release
+
+# The app itself is tiny: the launcher trio + package.json (for main/version).
+# No runtime npm dependencies exist — everything else ships as extraResources.
+files:
+  - launcher/**/*
+  - package.json
+
+extraResources:
+  - from: dist
+    to: dist
+    filter:
+      - "**/*"
+      - "!.build-head"        # the dev rebuild stamp is meaningless in a package
+  - from: launcher.config.json
+    to: launcher.config.json
+  - from: build/build-info.json
+    to: build-info.json
+
+asar: true
+# Nothing native to rebuild (zero deps) — skip the postinstall dance entirely.
+npmRebuild: false
+
+win:
+  icon: build/icon.png
+  target:
+    - nsis                     # installer; win-unpacked/ also lands in release/
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Hollow Wake
+  artifactName: HollowWake-Setup-${version}.${ext}
+
+linux:
+  icon: build/icon.png
+  target:
+    - AppImage                 # single-file, chmod +x, runs on SteamOS as-is
+  category: Game
+  executableName: hollow-wake
+  synopsis: Hollow Wake — a top-down action RPG
+  description: >-
+    Hollow Wake: a data-driven top-down action RPG. Every system — skills,
+    monsters, statuses, passives, zones — is open, modular data composed by
+    one shared engine.
+appImage:
+  artifactName: HollowWake-${version}-${arch}.AppImage
+
+# Tag-triggered CI (release.yml) publishes these artifacts to GitHub Releases;
+# local dist runs pass --publish never and just leave files in release/.
+publish:
+  provider: github
+  owner: arianna-arpg
+  repo: arpg-game-world

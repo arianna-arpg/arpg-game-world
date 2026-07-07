@@ -4,16 +4,18 @@
   },
   "repo": {
     "remote": "origin",
-    "branch": "main"
+    "branch": "main",
+    "github": "arianna-arpg/arpg-game-world"
   },
   "updates": {
-    "checkOnLaunch": true
+    "checkOnLaunch": true,
+    "mode": "auto"
   },
   "window": {
     "width": 1600,
     "height": 900,
     "maximized": true,
-    "fullscreen": false,
+    "fullscreen": "auto",
     "devtools": true,
     "zoom": 1
   },
@@ -25,5 +27,8 @@
     "width": 700,
     "height": 680,
     "returnToLauncher": true
+  },
+  "paths": {
+    "saves": "auto"
   }
 }
