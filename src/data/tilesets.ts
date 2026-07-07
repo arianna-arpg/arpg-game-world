@@ -1065,15 +1065,29 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Hollow', 'Womb', 'Gut', 'Maw', 'Warren', 'Tract', 'Gullet', 'Cavity', 'Innards', 'Bowel', 'Chamber', 'Sac', 'Viscera', 'Atrium', 'Sinew', 'Antrum'],
     theme: {
       ambientDark: 0.35,
-      floor: '#1a0e12', grid: '#2a141a', border: '#7a3340',
+      nightDark: 0.6,
+      floor: '#180a10', grid: '#2a141a', border: '#7a3340',
       obstacle: '#5a2230', obstacleEdge: '#8a3848', accent: '#e86a7a', wall: '#5a2230',
+      // RAW MUSCLE underfoot: a meat gradient stretched along the fiber
+      // direction, blended smooth — tissue, not terrain.
+      ground: {
+        scale: 0.95, stretchX: 1.4, strength: 1.2, bias: 0.46, evenness: 0.6, speckles: 0.5,
+        palette: ['#10050a', '#1c0910', '#2c0e17', '#3c1420', '#4c1a26'],
+      },
+      // A faint drift of shed cells catching what light there is.
+      ambientFx: [{ kind: 'motes', intensity: 0.5, color: '#e86a7a' }],
     },
     sizeW: [2000, 2800], sizeH: [1500, 2200], ellipseChance: 0,
     // Organic clutter scattered INSIDE the carved chambers (fleshLayout walk-gates it):
-    // bulbous pods, bone struts, viscera pools — the "Belly of the Beast" furnishing.
+    // pods and bone struts, viscera pools, then the flesh kit — membranes and
+    // veins throbbing to the warren's ONE heartbeat, eye stalks tracking you,
+    // rib arches, and (rarely) a row of teeth. The "Belly of the Beast" furnished.
     layout: [
       { kind: 'flesh_pod', count: [3, 6] }, { kind: 'bone', count: [2, 4] },
       { kind: 'gore', count: [2, 4] },
+      { kind: 'flesh_membrane', count: [2, 4] }, { kind: 'vein_cluster', count: [3, 5] },
+      { kind: 'eye_stalk', count: [2, 4] }, { kind: 'rib_arch', count: [1, 3] },
+      { kind: 'tooth_row', count: [0, 2] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],

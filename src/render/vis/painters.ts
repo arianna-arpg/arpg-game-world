@@ -1976,6 +1976,340 @@ const toadstools: GroupPainter = (env, group, def) => {
   }
 };
 
+// --- THE FLESH KIT ------------------------------------------------------------
+// The warren is ONE CREATURE, and everything here says so: membranes breathe
+// and veins pulse to the SAME shared heartbeat, eye stalks track the hero,
+// rib arches remember a tenant, tooth rows remember a mouth. All palette on
+// params — any organic horror biome can borrow the vocabulary.
+
+/** The warren's shared pulse: a lub-dub heartbeat on one clock — two beats
+ *  per cycle, the second softer. Everything living here throbs to the SAME
+ *  heart, which is the unsettling part. */
+function heartbeat(t: number, rate = 0.85): number {
+  const c = (t * rate) % 1;
+  const beat = (at: number, w: number, amp: number): number => {
+    const d = (c - at) / w;
+    return amp * Math.exp(-d * d * 4);
+  };
+  return Math.min(1, beat(0.12, 0.09, 1) + beat(0.34, 0.11, 0.55));
+}
+
+/** LIVING MEMBRANE — a stretched skin sheet breathing to the shared
+ *  heartbeat: striations radiating from a puckered sphincter heart, a welt
+ *  rim, one wet sheen. Ground you'd rather not stand on. */
+const membrane: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { skin?: ColorSpec; rim?: ColorSpec; stria?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const skin = resolveColor(p.skin, theme, '#7a2a38');
+  const rim = resolveColor(p.rim, theme, '#8a3848');
+  const stria = resolveColor(p.stria, theme, '#4a0f1c');
+  const hb = heartbeat(time);
+  ctx.globalAlpha = 0.5;
+  ctx.fillStyle = rim;
+  blobPath(ctx, group, 3);
+  ctx.fill();
+  ctx.globalAlpha = 0.3 + 0.12 * hb; // the sheet TIGHTENS on the beat
+  ctx.fillStyle = skin;
+  blobPath(ctx, group, -3);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  for (const d of group) {
+    const seed = ((d.pos.x * 27 + d.pos.y * 13) | 0) >>> 0;
+    // Striations: stretched tissue fanning out of the pucker.
+    ctx.strokeStyle = withAlpha(stria, 0.35);
+    ctx.lineWidth = 1.2;
+    const rays = Math.max(7, Math.round(d.radius / 7));
+    for (let i = 0; i < rays; i++) {
+      const a = (i / rays) * Math.PI * 2 + hash01(i, seed) * 0.4;
+      const r0 = d.radius * 0.16, r1 = d.radius * (0.68 + hash01(i, seed + 5) * 0.2);
+      ctx.beginPath();
+      ctx.moveTo(d.pos.x + Math.cos(a) * r0, d.pos.y + Math.sin(a) * r0);
+      ctx.quadraticCurveTo(
+        d.pos.x + Math.cos(a + 0.14) * r1 * 0.6, d.pos.y + Math.sin(a + 0.14) * r1 * 0.6,
+        d.pos.x + Math.cos(a) * r1, d.pos.y + Math.sin(a) * r1);
+      ctx.stroke();
+    }
+    // The pucker: concentric wrinkle rings closing on a dark heart.
+    ctx.strokeStyle = withAlpha(stria, 0.55);
+    for (const f of [0.16, 0.11, 0.06]) {
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.arc(d.pos.x, d.pos.y, d.radius * f * (1 + hb * 0.12), 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = withAlpha('#2a060c', 0.8);
+    ctx.beginPath();
+    ctx.arc(d.pos.x, d.pos.y, d.radius * 0.035 + 1, 0, Math.PI * 2);
+    ctx.fill();
+    // One wet sheen arc.
+    ctx.globalAlpha = 0.14 + 0.1 * hb;
+    ctx.strokeStyle = '#f0c8cc';
+    ctx.lineWidth = Math.max(1.4, d.radius * 0.05);
+    ctx.beginPath();
+    ctx.arc(d.pos.x, d.pos.y, d.radius * 0.5, VIS_CFG.lightAngle - 0.7, VIS_CFG.lightAngle + 0.5);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+};
+
+/** VEIN CLUSTERS — vessels branching off a heart-node, the PULSE riding them
+ *  outward on the same lub-dub the membranes breathe to. The floor has a
+ *  circulatory system, and you can watch it work. */
+const veins: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { vessel?: ColorSpec; pulse?: ColorSpec; node?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const vessel = resolveColor(p.vessel, theme, '#5a1522');
+  const pulseCol = resolveColor(p.pulse, theme, '#ff7a86');
+  const nodeCol = resolveColor(p.node, theme, '#6a1a28');
+  const hb = heartbeat(time);
+  const cyc = (time * 0.85) % 1; // the front's travel clock — one heart, one wave
+  ctx.lineCap = 'round';
+  for (const d of group) {
+    const seed = ((d.pos.x * 31 + d.pos.y * 7) | 0) >>> 0;
+    const vesselsN = 4 + (seed % 3);
+    const paths: { x: number; y: number }[][] = [];
+    for (let i = 0; i < vesselsN; i++) {
+      const a0 = (i / vesselsN) * Math.PI * 2 + hash01(i, seed) * 0.7;
+      const pts: { x: number; y: number }[] = [{ x: d.pos.x, y: d.pos.y }];
+      let ang = a0;
+      for (let s = 0; s < 3; s++) {
+        ang += (hash01(i * 7 + s, seed + 9) - 0.5) * 0.8;
+        pts.push({
+          x: pts[s].x + Math.cos(ang) * d.radius * 0.3,
+          y: pts[s].y + Math.sin(ang) * d.radius * 0.3,
+        });
+      }
+      paths.push(pts);
+      // The vessel: thick near the node, tapering out, one fork.
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = vessel;
+      ctx.lineWidth = 2.4;
+      ctx.beginPath();
+      ctx.moveTo(pts[0].x, pts[0].y);
+      ctx.lineTo(pts[1].x, pts[1].y);
+      ctx.lineTo(pts[2].x, pts[2].y);
+      ctx.stroke();
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.moveTo(pts[2].x, pts[2].y);
+      ctx.lineTo(pts[3].x, pts[3].y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(pts[2].x, pts[2].y);
+      ctx.lineTo(pts[2].x + Math.cos(ang + 1) * d.radius * 0.18,
+        pts[2].y + Math.sin(ang + 1) * d.radius * 0.18);
+      ctx.stroke();
+    }
+    // The heart-node, swelling on the beat.
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = nodeCol;
+    ctx.beginPath();
+    ctx.arc(d.pos.x, d.pos.y, d.radius * 0.13 * (1 + hb * 0.3), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = shade(nodeCol, 0.35);
+    ctx.beginPath();
+    ctx.arc(d.pos.x - d.radius * 0.03, d.pos.y - d.radius * 0.03, d.radius * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+    // THE PULSE FRONT: each thump radiates node → tips along every vessel.
+    for (let i = 0; i < paths.length; i++) {
+      const pts = paths[i];
+      const fs = cyc * (pts.length - 1);
+      const si = Math.min(pts.length - 2, Math.floor(fs));
+      const ft = fs - si;
+      const px = pts[si].x + (pts[si + 1].x - pts[si].x) * ft;
+      const py = pts[si].y + (pts[si + 1].y - pts[si].y) * ft;
+      ctx.globalAlpha = 0.5 * hb + 0.08;
+      ctx.fillStyle = pulseCol;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.14 * hb;
+      ctx.beginPath();
+      ctx.arc(px, py, 4.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+};
+
+/** AN EYE STALK — the warren looks back: a fleshy nub whose iris TRACKS the
+ *  hero live, blinking on its own clock, bloodshot at the edges. The flesh
+ *  biome's signature "this place is one creature" tell. */
+const eyeStalk: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { flesh?: ColorSpec; sclera?: ColorSpec; iris?: ColorSpec };
+  const { ctx, theme, time, world } = env;
+  const flesh = resolveColor(p.flesh, theme, '#8a3848');
+  const sclera = resolveColor(p.sclera, theme, '#e8dcd0');
+  const iris = resolveColor(p.iris, theme, '#d8b04a');
+  const hero = world.player;
+  for (const o of group) {
+    const seed = ((o.pos.x * 9 + o.pos.y * 23) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The stalk nub: stacked flesh rolls with wrinkle rings.
+    ctx.fillStyle = shade(flesh, -0.12);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.92, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(flesh, -0.5), 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    ctx.fillStyle = flesh;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.74, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(flesh, -0.4), 0.6);
+    ctx.lineWidth = 1;
+    for (const f of [0.86, 0.62]) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r * f, 0.4, 2.4);
+      ctx.stroke();
+    }
+    // The eye. Blink rides its own clock; the iris rides the hero.
+    const blinkCyc = (time * 0.32 + hash01(seed, 5)) % 1;
+    const lid = blinkCyc > 0.92 ? Math.sin(((blinkCyc - 0.92) / 0.08) * Math.PI) : 0;
+    ctx.fillStyle = sclera;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    // Bloodshot squiggles creeping in from the rim.
+    ctx.strokeStyle = withAlpha('#b83a42', 0.55);
+    ctx.lineWidth = 0.8;
+    for (let i = 0; i < 3; i++) {
+      const a = hash01(i, seed + 11) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.48, Math.sin(a) * r * 0.48);
+      ctx.quadraticCurveTo(Math.cos(a + 0.3) * r * 0.36, Math.sin(a + 0.3) * r * 0.36,
+        Math.cos(a + 0.1) * r * 0.26, Math.sin(a + 0.1) * r * 0.26);
+      ctx.stroke();
+    }
+    // Iris + pupil, offset toward whoever's watching it back.
+    const la = Math.atan2(hero.pos.y - o.pos.y, hero.pos.x - o.pos.x);
+    const ix = Math.cos(la) * r * 0.16, iy = Math.sin(la) * r * 0.16;
+    ctx.fillStyle = iris;
+    ctx.beginPath();
+    ctx.arc(ix, iy, r * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#14080a';
+    ctx.beginPath();
+    ctx.arc(ix, iy, r * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = withAlpha('#ffffff', 0.85);
+    ctx.beginPath();
+    ctx.arc(ix - r * 0.06, iy - r * 0.07, r * 0.045, 0, Math.PI * 2);
+    ctx.fill();
+    // The lid: flesh sweeping over the eye mid-blink.
+    if (lid > 0.02) {
+      ctx.fillStyle = flesh;
+      ctx.beginPath();
+      ctx.ellipse(0, -r * 0.5 * (1 - lid), r * 0.52, r * 0.52 * lid, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/** RIB ARCHES — the last tenant's cage jutting from the meat: paired bone
+ *  hoops with knuckled ends, aged down the middle. */
+const ribArch: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bone?: ColorSpec };
+  const { ctx, theme } = env;
+  const bone = resolveColor(p.bone, theme, '#d8cdb8');
+  for (const o of group) {
+    const seed = ((o.pos.x * 5 + o.pos.y * 17) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.lineCap = 'round';
+    const ribs = 2 + (seed % 2);
+    for (let i = 0; i < ribs; i++) {
+      const off = (i - (ribs - 1) / 2) * r * 0.62;
+      const rr = r * (0.72 - Math.abs(i - (ribs - 1) / 2) * 0.14);
+      const tone = shade(bone, (hash01(i, seed) - 0.6) * 0.16);
+      ctx.strokeStyle = tone;
+      ctx.lineWidth = Math.max(3, r * 0.16);
+      ctx.beginPath();
+      ctx.arc(off, 0, rr, Math.PI * 0.82, Math.PI * 2.18);
+      ctx.stroke();
+      // Aged shadow along each hoop.
+      ctx.strokeStyle = withAlpha(shade(bone, -0.42), 0.5);
+      ctx.lineWidth = Math.max(1, r * 0.05);
+      ctx.beginPath();
+      ctx.arc(off, r * 0.04, rr, Math.PI * 0.9, Math.PI * 2.1);
+      ctx.stroke();
+      // Knuckled ends where the bone sinks back into the floor.
+      ctx.fillStyle = shade(tone, 0.12);
+      for (const ea of [Math.PI * 0.82, Math.PI * 2.18]) {
+        ctx.beginPath();
+        ctx.arc(off + Math.cos(ea) * rr, Math.sin(ea) * rr, Math.max(2, r * 0.1), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+};
+
+/** A TOOTH ROW — enamel cones erupting along an arc of raw gum: the floor
+ *  remembering it has a mouth somewhere. One is always cracked. */
+const teethRow: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { gum?: ColorSpec; enamel?: ColorSpec };
+  const { ctx, theme } = env;
+  const gum = resolveColor(p.gum, theme, '#6a1a28');
+  const enamel = resolveColor(p.enamel, theme, '#e8e0d0');
+  for (const o of group) {
+    const seed = ((o.pos.x * 21 + o.pos.y * 3) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The gum bed: a raw ridge following the arc.
+    const a0 = -Math.PI * 0.55, a1 = Math.PI * 0.55;
+    ctx.strokeStyle = gum;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(5, r * 0.34);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.66, a0, a1);
+    ctx.stroke();
+    ctx.strokeStyle = withAlpha(shade(gum, -0.4), 0.7);
+    ctx.lineWidth = Math.max(1.4, r * 0.07);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.82, a0, a1);
+    ctx.stroke();
+    // The teeth: cones leaning inward, one of them cracked short.
+    const teeth = 5 + (seed % 3);
+    const cracked = seed % teeth;
+    for (let i = 0; i < teeth; i++) {
+      const a = a0 + ((i + 0.5) / teeth) * (a1 - a0);
+      const bx = Math.cos(a) * r * 0.66, by = Math.sin(a) * r * 0.66;
+      const len = r * (i === cracked ? 0.2 : 0.4 + hash01(i, seed) * 0.14);
+      const wid = r * 0.13;
+      const tx = bx - Math.cos(a) * len, ty = by - Math.sin(a) * len;
+      ctx.fillStyle = i % 2 ? enamel : shade(enamel, -0.08);
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(a + Math.PI / 2) * wid, by + Math.sin(a + Math.PI / 2) * wid);
+      ctx.lineTo(bx - Math.cos(a + Math.PI / 2) * wid, by - Math.sin(a + Math.PI / 2) * wid);
+      ctx.lineTo(tx, ty);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(enamel, -0.5), 0.6);
+      ctx.lineWidth = 0.9;
+      ctx.stroke();
+      if (i !== cracked) {
+        ctx.strokeStyle = withAlpha('#ffffff', 0.7);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(tx + Math.cos(a) * len * 0.2, ty + Math.sin(a) * len * 0.2);
+        ctx.lineTo(tx, ty);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+};
+
 /** HEAT SHIMMER — wavering desert air: rising serpentine heat-lines and a
  *  faint hot lens over the ground. Barely-there by design; the sunscorch
  *  stacks it feeds are the teeth (World.updateHeat). */
@@ -3049,6 +3383,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
   campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
+  membrane, veins, eyeStalk, ribArch, teethRow,
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,

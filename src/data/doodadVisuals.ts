@@ -368,6 +368,30 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   flesh_pod: {
     painter: 'pod', order: 52, shadow: 0.5,
     params: { body: 'theme:obstacle', glow: 'theme:accent|#e86a7a', aspectY: 0.82, glowY: -0.1, glowR: 0.42, pulseRate: 1.9 },
+    light: { radius: -2.2, color: '#e86a7a', intensity: 0.14, flicker: 1.3 },
+  },
+  // THE FLESH KIT: the warren is one creature — membranes and veins throb to
+  // a SHARED heartbeat, the eye stalks watch you cross the room.
+  flesh_membrane: {
+    painter: 'membrane', order: 27,
+    params: { skin: '#7a2a38', rim: '#8a3848', stria: '#4a0f1c' },
+  },
+  vein_cluster: {
+    painter: 'veins', order: 29,
+    params: { vessel: '#5a1522', pulse: '#ff7a86', node: '#6a1a28' },
+    light: { radius: -1.7, color: '#e86a7a', intensity: 0.12, flicker: 1.1 },
+  },
+  eye_stalk: {
+    painter: 'eyeStalk', order: 53, shadow: 0.5,
+    params: { flesh: '#8a3848', sclera: '#e8dcd0', iris: '#d8b04a' },
+  },
+  rib_arch: {
+    painter: 'ribArch', order: 53, shadow: 0.5, longShadow: 0.8,
+    params: { bone: '#d8cdb8' },
+  },
+  tooth_row: {
+    painter: 'teethRow', order: 52, shadow: 0.45,
+    params: { gum: '#6a1a28', enamel: '#e8e0d0' },
   },
   spore_pod: {
     painter: 'pod', order: 52, shadow: 0.5,

@@ -127,7 +127,13 @@ export type KnownDoodadKind =
   | 'fern'        // feathery understory fronds (pure decoration)
   // The fungal kit (Mycelia identity round)
   | 'shelf_fungus' // blocks feet not shots — bracket shelves off a woody heart
-  | 'toadstool';   // ground decoration: speckled little caps (fairy-ring folk)
+  | 'toadstool'    // ground decoration: speckled little caps (fairy-ring folk)
+  // The flesh kit (Belly-of-the-Beast identity round)
+  | 'flesh_membrane' // ground overlay: stretched skin breathing to the shared heartbeat
+  | 'vein_cluster'   // ground overlay: branching vessels, the pulse rides them
+  | 'eye_stalk'      // blocks feet not shots — a fleshy nub whose iris TRACKS the hero
+  | 'rib_arch'       // blocks feet not shots — the last tenant's cage
+  | 'tooth_row';     // blocks feet not shots — enamel cones on an arc of gum
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -511,6 +517,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // toadstools are walkable fairy-ring decoration.
   shelf_fungus: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 36, forbidOn: ['water', 'lava', 'chasm'] },
   toadstool:    { overlap: 'ground', walkOnly: true },
+  // The flesh kit: membranes + veins are walkable tissue (kept inside the
+  // carved chambers); stalks, ribs and teeth are LOW solids — cover you can
+  // shoot over, growing out of the meat.
+  flesh_membrane: { overlap: 'ground', walkOnly: true },
+  vein_cluster:   { overlap: 'ground', walkOnly: true },
+  eye_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'] },
+  rib_arch:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 50, forbidOn: ['water', 'lava', 'chasm'] },
+  tooth_row: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, forbidOn: ['water', 'lava', 'chasm'] },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -1967,6 +1981,13 @@ registerStamp('fern', (ctx, spec) => stampBlob(ctx, 'fern', spec.radius ?? [14, 
 // The fungal kit: bracket shelves + toadstool huddles.
 registerStamp('shelf_fungus', (ctx, spec) => stampSolid(ctx, 'shelf_fungus', spec.radius ?? [12, 22]));
 registerStamp('toadstool', (ctx, spec) => stampBlob(ctx, 'toadstool', spec.radius ?? [10, 20], [2, 4], false));
+// The flesh kit: breathing membranes, pulsing veins, watching stalks, the
+// last tenant's ribs, and (rarely) a row of teeth.
+registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));
+registerStamp('vein_cluster', (ctx, spec) => stampBlob(ctx, 'vein_cluster', spec.radius ?? [22, 42], [2, 4], false));
+registerStamp('eye_stalk', (ctx, spec) => stampSolid(ctx, 'eye_stalk', spec.radius ?? [11, 18]));
+registerStamp('rib_arch', (ctx, spec) => stampSolid(ctx, 'rib_arch', spec.radius ?? [16, 28]));
+registerStamp('tooth_row', (ctx, spec) => stampSolid(ctx, 'tooth_row', spec.radius ?? [18, 30]));
 registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
 registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
 registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));
