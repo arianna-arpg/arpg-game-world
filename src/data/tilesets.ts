@@ -640,6 +640,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Dripstone', 'Gloom', 'Hollow', 'Sunless', 'Blackrock', 'Echoing', 'Lightless', 'Dampstone', 'Crawlway', 'Stalactite', 'Deepdark', 'Mossgrot', 'Whispering', 'Coldstone', 'Slickrock', 'Veiled', 'Mirefoot', 'Lampless'],
     nameSecond: ['Cave', 'Grotto', 'Burrow', 'Den', 'Tunnels', 'Deep', 'Cavern', 'Warren', 'Crawl', 'Pocket', 'Undercroft', 'Gallery', 'Shaft', 'Vault', 'Maw', 'Reaches'],
     theme: {
+      ambientDark: 0.5,
       floor: '#0c0c10', grid: '#15151c', border: '#3a3a4e',
       obstacle: '#26263a', obstacleEdge: '#44445e', accent: '#8a9ac8',
       chasm: '#040406', mud: '#16161e', water: '#12202c', lava: '#5a1606',
@@ -710,6 +711,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Yawning', 'Sunless', 'Hungering', 'Lightless', 'Riven', 'Devouring', 'Gnashing', 'Voidtorn', 'Maddening', 'Eldergloom', 'Soulrent', 'Unmade', 'Screaming', 'Blacktide', 'Annihilent', 'Coilshadow', 'Abyssborn', 'Witherdark'],
     nameSecond: ['Abyss', 'Maw', 'Deep', 'Descent', 'Hollow', 'Rift', 'Gulf', 'Void', 'Throat', 'Sink', 'Chasm', 'Tear', 'Vortex', 'Wound', 'Pit', 'Nadir'],
     theme: {
+      ambientDark: 0.45,
       floor: '#0a0610', grid: '#150b20', border: '#3a2150',
       obstacle: '#281838', obstacleEdge: '#5a3a7a', accent: '#b060e8',
       chasm: '#050108', mud: '#160c1e', water: '#1a0f2c', lava: '#5a1c8a',
@@ -774,6 +776,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Smouldering', 'Hellforged', 'Ashen', 'Brimstone', 'Charred', 'Molten', 'Infernal', 'Cinderwrought', 'Damned', 'Pyreborn', 'Searing', 'Slagbound', 'Hellcracked', 'Emberlit', 'Scorchfiend', 'Soulforged', 'Magmaheart', 'Wrathkindled'],
     nameSecond: ['Pit', 'Maw', 'Crucible', 'Inferno', 'Foundry', 'Hellmouth', 'Forge', 'Pyre', 'Furnace', 'Cauldron', 'Gehenna', 'Smeltery', 'Cinderpit', 'Hollow', 'Abyss', 'Coals'],
     theme: {
+      ambientDark: 0.3,
       floor: '#140706', grid: '#1f0d0a', border: '#5a1f12',
       obstacle: '#3a1408', obstacleEdge: '#7a2c12', accent: '#ff6a2a',
       chasm: '#0a0302', mud: '#1e0e08', water: '#3a1208', lava: '#7a1a08',
@@ -809,6 +812,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Writhing', 'Unblinking', 'Gibbering', 'Squamous', 'Whispering', 'Fathomless', 'Maddening', 'Coiling', 'Slithering', 'Unknowable', 'Pallid', 'Eyeless', 'Murmuring', 'Tendril-Choked', 'Cyclopean', 'Nameless', 'Aberrant', 'Star-Spawned'],
     nameSecond: ['Reach', 'Maw', 'Hollow', 'Gaze', 'Tangle', 'Verge', 'Coil', 'Tangleweb', 'Sprawl', 'Murmur', 'Whorl', 'Brood', 'Snarl', 'Wound', 'Threshold', 'Tendrils'],
     theme: {
+      ambientDark: 0.35,
       floor: '#0a0f0b', grid: '#0f1810', border: '#3a5a44',
       obstacle: '#1c3a2c', obstacleEdge: '#3a6a4e', accent: '#7fce6a',
       chasm: '#040806', mud: '#10180e', water: '#0c2620', tree: '#2a4a36', wall: '#3a3a52',
@@ -847,6 +851,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunken', 'Abyssal', 'Drowned', 'Fathomless', 'Tide-Lost', 'Lightless', 'Pressuredark', 'Brineblack', 'Leviathan', 'Pelagic', 'Sunless', 'Cold-Crushed', 'Hadal', 'Stillwater', 'Deepswell', 'Saltgloom', 'Trenchborn', 'Drownward'],
     nameSecond: ['Deep', 'Trench', 'Shelf', 'Reach', 'Sound', 'Gulf', 'Abyss', 'Fathoms', 'Current', 'Depths', 'Hollow', 'Sink', 'Drift', 'Brine', 'Maw', 'Shoals'],
     theme: {
+      ambientDark: 0.35,
       floor: '#08151f', grid: '#0d2030', border: '#2a6a8a',
       obstacle: '#163a4e', obstacleEdge: '#2f6a86', accent: '#5ad8e8',
       water: '#0c2740', chasm: '#02060a',
@@ -932,6 +937,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Pulsing', 'Writhing', 'Fleshborn', 'Gorged', 'Throbbing', 'Visceral', 'Sinewed', 'Bilegorged', 'Tumorous', 'Marrow-Deep', 'Quivering', 'Membranous', 'Engorged', 'Pus-Slick', 'Heartbound', 'Glistening', 'Distended', 'Wet-Walled'],
     nameSecond: ['Hollow', 'Womb', 'Gut', 'Maw', 'Warren', 'Tract', 'Gullet', 'Cavity', 'Innards', 'Bowel', 'Chamber', 'Sac', 'Viscera', 'Atrium', 'Sinew', 'Antrum'],
     theme: {
+      ambientDark: 0.35,
       floor: '#1a0e12', grid: '#2a141a', border: '#7a3340',
       obstacle: '#5a2230', obstacleEdge: '#8a3848', accent: '#e86a7a', wall: '#5a2230',
     },
@@ -960,6 +966,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Prismatic', 'Shardbound', 'Glittering', 'Faceted', 'Resonant', 'Lucent', 'Refractive', 'Gleaming', 'Crystalline', 'Spectral', 'Glassgrown', 'Iridescent', 'Singing', 'Brilliant', 'Geodebound', 'Glasswrought', 'Sparkling', 'Light-Riven'],
     nameSecond: ['Geode', 'Spires', 'Lattice', 'Vault', 'Reach', 'Hollow', 'Shards', 'Facets', 'Cluster', 'Prism', 'Spindle', 'Fields', 'Cavern', 'Array', 'Bloom', 'Drift'],
     theme: {
+      ambientDark: 0.3,
       floor: '#0e1320', grid: '#16203a', border: '#4a6aa8',
       obstacle: '#2a3a6a', obstacleEdge: '#5a7ad0', accent: '#9fd8ff', water: '#1a3a6a',
     },
@@ -1018,6 +1025,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sporebound', 'Mycelial', 'Fruiting', 'Rotcap', 'Luminous', 'Creeping', 'Hyphal', 'Glowcap', 'Mouldgrown', 'Spore-Choked', 'Fungal', 'Damprot', 'Capshadow', 'Bloomrot', 'Pulsefungus', 'Veilspore', 'Mushroomed', 'Softrot'],
     nameSecond: ['Bloom', 'Hollow', 'Warren', 'Thicket', 'Grotto', 'Spread', 'Flush', 'Tangle', 'Sprawl', 'Mat', 'Patch', 'Colony', 'Reach', 'Mire', 'Beds', 'Veil'],
     theme: {
+      ambientDark: 0.25,
       floor: '#160d1a', grid: '#221432', border: '#6a4a8a',
       obstacle: '#3a2a5a', obstacleEdge: '#7a5aa8', accent: '#8fd06f', wall: '#3a2a5a',
       tree: '#4a6a3a', grass: '#5a7a3a',

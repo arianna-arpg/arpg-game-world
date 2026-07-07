@@ -37,6 +37,7 @@ import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, PAINTERS, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
+import { drawWeatherFx } from './vis/weatherFx';
 import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
@@ -802,6 +803,8 @@ export class Renderer {
       const [r, g, b] = hexToRgb(WEATHER_COLORS[f.kind]);
       ctx.fillStyle = `rgba(${r},${g},${b},${(0.05 + 0.12 * f.intensity).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
+      // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts).
+      drawWeatherFx(ctx, f.kind, f.intensity, w, h, world.time);
     }
     // ARENA WASH: a boss fight recolours the room per phase (intensity is capped at
     // the source so the climax stays readable — drama without blinding the player).
@@ -1077,6 +1080,27 @@ export class Renderer {
       for (const r of st.roofs) {
         ctx.fillStyle = style.fill;
         ctx.fillRect(r.x, r.y, r.w, r.h);
+        // PITCHED READ: the two roof planes shade off a ridge down the long
+        // axis — lit side toward the global light, shaded side away — so
+        // roofs stop reading as flat lids. Derived from the style's own fill.
+        const lit = shade(style.fill, 0.16), dark = shade(style.fill, -0.22);
+        ctx.globalAlpha = fade * 0.55;
+        if (r.w >= r.h) {
+          ctx.fillStyle = lit; ctx.fillRect(r.x, r.y, r.w, r.h / 2);
+          ctx.fillStyle = dark; ctx.fillRect(r.x, r.y + r.h / 2, r.w, r.h / 2);
+        } else {
+          ctx.fillStyle = lit; ctx.fillRect(r.x, r.y, r.w / 2, r.h);
+          ctx.fillStyle = dark; ctx.fillRect(r.x + r.w / 2, r.y, r.w / 2, r.h);
+        }
+        // Ridge line.
+        ctx.globalAlpha = fade * 0.7;
+        ctx.strokeStyle = shade(style.fill, 0.3);
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (r.w >= r.h) { ctx.moveTo(r.x + 3, r.y + r.h / 2); ctx.lineTo(r.x + r.w - 3, r.y + r.h / 2); }
+        else { ctx.moveTo(r.x + r.w / 2, r.y + 3); ctx.lineTo(r.x + r.w / 2, r.y + r.h - 3); }
+        ctx.stroke();
+        ctx.globalAlpha = fade;
         ctx.strokeStyle = style.edge;
         ctx.lineWidth = 3;
         ctx.strokeRect(r.x + 1.5, r.y + 1.5, r.w - 3, r.h - 3);
