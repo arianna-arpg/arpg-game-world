@@ -105,6 +105,34 @@ head + two claws + reaping tail) is the shipped exemplar — dragons and
 world bosses are data from here, and huge creatures keep moderate root
 bodies (sane casting cones) while their bulk lives in parts.
 
+## Climates — ambient FX, desert heat, living skies
+
+`ZoneTheme.ambientFx` declares a zone's standing sensory weather
+(`vis/ambientFx.ts`): underwater `caustics` (sweeping light bands) +
+`bubbles` (drifting columns + periodic splay-bursts), desert `heatHaze`,
+generic `motes`. Stateless, deterministic, one draw branch per kind.
+
+DESERT HEAT is a doodad + a status + one world loop: `heat_shimmer` fields
+(painter `shimmer`, stamped by desert layouts) bake `sunscorched` stacks
+onto players (fire res −5%/stack, cap on the status def); SHADE — a canopy
+crown, a roof, or night — dwindles them. Cadence in `HEAT_CFG`; the loop is
+`World.updateHeat` / `World.isShaded`, reusable by any future heat hazard.
+
+WEATHER TRANSITIONS are configurable at two levels: `WeatherDef.rampFrac`
+shapes how much of a front's life is spent gathering/clearing (storms break
+fast, fog seeps), and `WEATHER_FX.fadeIn` crossfades the DISPLAYED weather
+per kind in the renderer (`smoothWeather`) — a kind may still slam in by
+design with a small fadeIn.
+
+## The `compound` structure generator
+
+The room-grammar composer (`engine/structureGen.ts`): a footprint BSP-split
+into rooms, every partition door-punched (always connected), leaf rooms
+opened to courtyards, exterior gates/windows/towers, clutter by density —
+every knob a genParam; fixed values are deterministic, ranges roll on the
+zone seed either way. `walled_manor`, `dungeon_block` and `market_row` ship
+as templates; a dungeon or metropolis biome is a layout pass from here.
+
 ## How to…
 
 - **Give a monster family a surface**: `material: 'chitin'` on the def.
