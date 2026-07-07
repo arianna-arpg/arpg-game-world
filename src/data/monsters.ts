@@ -183,6 +183,9 @@ export interface MonsterDef {
   faction?: string;
   /** Silhouette accent: goblin ears, orc horns, briar spikes. */
   adorn?: ActorAdorn;
+  /** Surface material (render/vis/materials.ts) — bone, chitin, stone,
+   *  ethereal… Shapes the baked shading/texture; omitted = flesh. */
+  material?: string;
   /** Multiplier on detection range (1 = baseline). Low shambles past you
    *  (zombie 0.55); high senses you from afar (blood mite 1.6). */
   detection?: number;

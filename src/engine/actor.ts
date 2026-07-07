@@ -280,6 +280,9 @@ export class Actor {
   shape: ActorShape = 'circle';
   /** Silhouette accent (goblin ears, orc horns, briar spikes). */
   adorn?: ActorAdorn;
+  /** Surface material (render/vis/materials.ts registry key) — shapes the
+   *  shading ramp/texture the renderer bakes. Omitted = the flesh default. */
+  material?: string;
 
   sheet = new StatSheet();
   level = 1;

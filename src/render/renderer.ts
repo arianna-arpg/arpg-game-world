@@ -32,6 +32,10 @@ import { keyDisplay, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { MONSTERS } from '../data/monsters';
+import { hexToRgb, shade, withAlpha } from './vis/color';
+import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
+import { drawGlow, drawShadow } from './vis/sprites';
+import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
 
@@ -2706,48 +2710,61 @@ export class Renderer {
       ctx.lineCap = 'butt';
       ctx.globalAlpha = t * 0.5;
     }
-    ctx.beginPath();
-    if (f.arc) {
-      ctx.moveTo(f.pos.x, f.pos.y);
-      ctx.arc(f.pos.x, f.pos.y, f.radius, f.arc.facing - f.arc.arcRad / 2, f.arc.facing + f.arc.arcRad / 2);
-      ctx.closePath();
-    } else if (f.shape) {
-      this.traceAoe(f.pos.x, f.pos.y, f.radius, f.shape, f.facing ?? 0);
+    // The blast body. Faced shapes keep their exact footprint (fill + a hot
+    // rim); plain circles get a hot-centered radial falloff + an expanding
+    // shockwave ring — impacts POP, then breathe out.
+    if (f.arc || f.shape) {
+      ctx.beginPath();
+      if (f.arc) {
+        ctx.moveTo(f.pos.x, f.pos.y);
+        ctx.arc(f.pos.x, f.pos.y, f.radius, f.arc.facing - f.arc.arcRad / 2, f.arc.facing + f.arc.arcRad / 2);
+        ctx.closePath();
+      } else {
+        this.traceAoe(f.pos.x, f.pos.y, f.radius, f.shape!, f.facing ?? 0);
+      }
+      ctx.fill();
+      ctx.globalAlpha = t * VIS_CFG.fx.flashRimAlpha;
+      ctx.strokeStyle = shade(f.color, 0.5);
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
     } else {
-      ctx.arc(f.pos.x, f.pos.y, f.radius * (1.2 - 0.2 * t), 0, Math.PI * 2);
+      const r = f.radius * (1.2 - 0.2 * t);
+      const g = ctx.createRadialGradient(f.pos.x, f.pos.y, 0, f.pos.x, f.pos.y, r);
+      g.addColorStop(0, withAlpha('#ffffff', t * 0.55));
+      g.addColorStop(0.25, withAlpha(f.color, t * 0.6));
+      g.addColorStop(1, withAlpha(f.color, 0));
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(f.pos.x, f.pos.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      const ring = f.radius * (0.5 + 0.62 * (1 - t));
+      ctx.globalAlpha = t * VIS_CFG.fx.flashRimAlpha;
+      ctx.strokeStyle = shade(f.color, 0.45);
+      ctx.lineWidth = 2 + 2 * t;
+      ctx.beginPath();
+      ctx.arc(f.pos.x, f.pos.y, ring, 0, Math.PI * 2);
+      ctx.stroke();
     }
-    ctx.fill();
     ctx.globalAlpha = 1;
   }
 
-  /** Trace a regular n-gon of radius r, rotated by rot. */
-  private polyPath(n: number, r: number, rot: number): void {
-    const { ctx } = this;
-    for (let i = 0; i < n; i++) {
-      const a = rot + (i / n) * Math.PI * 2;
-      if (i === 0) ctx.moveTo(Math.cos(a) * r, Math.sin(a) * r);
-      else ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-    }
-    ctx.closePath();
-  }
-
-  /** A worm's trailing body, drawn tail-first so the head sits on top. */
+  /** A worm's trailing body, drawn tail-first so the head sits on top. One
+   *  shaded circle bake (the head's look) scales down the whole spine. */
   private drawWormTail(a: Actor): void {
     const { ctx } = this;
     const w = a.worm!;
-    let r = a.radius;
+    const look: BodyLook = { shape: 'circle', radius: a.radius, color: a.color, material: a.material };
+    const img = a.hitFlash > 0 ? bodyFlashSprite(look) : bodySprite(look);
+    const half = spriteHalf(a.radius);
     for (let i = w.segments.length - 1; i >= 0; i--) {
       // (radius shrinks front-to-back; iterate display back-to-front)
-      r = a.radius * Math.pow(w.taper, i + 1);
+      const r = a.radius * Math.pow(w.taper, i + 1);
       const seg = w.segments[i];
+      const k = r / a.radius;
+      drawShadow(ctx, seg.x, seg.y, r, 0.7);
       ctx.globalAlpha = 0.55 + 0.35 * (1 - (i + 1) / (w.segments.length + 1));
-      ctx.fillStyle = a.hitFlash > 0 ? '#ffffff' : a.color;
-      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(seg.x, seg.y, r, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+      ctx.drawImage(img, seg.x - half * k, seg.y - half * k, half * 2 * k, half * 2 * k);
     }
     ctx.globalAlpha = 1;
   }
@@ -2766,6 +2783,15 @@ export class Renderer {
     // Body (untouchable spirits ghostly; stealthed/invisible actors faded)
     ctx.save();
     ctx.translate(x, y);
+    // Grounding: the soft contact shadow under every body — drawn BEFORE the
+    // leap swell so an airborne leaper's shadow stays put while the body rises.
+    drawShadow(ctx, 0, 0, a.radius, a.untargetable ? 0.4 : 1);
+    // The hero wears a soft class-colored ground halo — you find yourself in a
+    // brawl by presence, not by hunting the cursor.
+    if (a === world.player) {
+      drawGlow(ctx, 0, a.radius * 0.3, a.radius * VIS_CFG.body.heroHaloScale,
+        a.color, VIS_CFG.body.heroHaloAlpha, false);
+    }
     // Airborne leapers swell along the arc.
     if (a.leap) {
       const t = 1 - a.leap.timer / a.leap.total;
@@ -2775,112 +2801,69 @@ export class Renderer {
     if (a.untargetable) ctx.globalAlpha = 0.55;
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;
     else if (a.sheet.get('detectability') < 1) ctx.globalAlpha = 0.55;
-    // Echo riders: a ghost-faded copy of their owner with a dashed seam —
-    // the lie stays legible (construct.kind ships on the co-op wire).
+    // Echo riders: a ghost-faded copy of their owner — the dashed seam ring
+    // after the body keeps the lie legible (construct.kind ships on the wire).
+    if (a.construct?.kind === 'echo') ctx.globalAlpha = 0.45;
+    // Every overlay from here rides the same fade as the body itself.
+    const baseAlpha = ctx.globalAlpha;
+
+    // THE BAKED BODY (vis/body.ts): the def's own shape/color/adorn — plus an
+    // optional material — compiled once into a shaded sprite: volume light,
+    // surface texture, gloss, emissive halo and silhouette outline. Runtime
+    // is a blit; identity semantics (which shapes rotate with facing, adorns
+    // always tracking it) are unchanged.
+    const look: BodyLook = {
+      shape: a.shape, radius: a.radius, color: a.color,
+      material: a.material, adorn: a.adorn,
+      outline: a.isMinion() ? '#b06bd4' : undefined,
+      demonHorns: a.faction === 'demon',
+    };
+    const half = spriteHalf(a.radius);
+    const flash = a.hitFlash > 0;
+    const rot = shapeIsOriented(a.shape) ? a.facing : 0;
+    ctx.save();
+    // Idle breathing — a live transform over the static bake. Scenery
+    // (barrels, spawners) holds still; living things never quite do.
+    if (!a.passive) {
+      const breathe = 1 + VIS_CFG.body.breatheAmp
+        * Math.sin(world.time * VIS_CFG.body.breatheRate + a.id * 1.31);
+      ctx.scale(breathe, breathe);
+    }
+    if (rot !== 0) ctx.rotate(rot);
+    ctx.drawImage(flash ? bodyFlashSprite(look) : bodySprite(look), -half, -half);
+    if (rot !== 0) ctx.rotate(-rot);
+    const adornImg = flash ? adornFlashSprite(look) : adornSprite(look);
+    if (adornImg) {
+      ctx.rotate(a.facing);
+      ctx.drawImage(adornImg, -half, -half);
+      ctx.rotate(-a.facing);
+    }
+    ctx.restore();
     if (a.construct?.kind === 'echo') {
-      ctx.globalAlpha = 0.45;
       ctx.setLineDash([4, 3]);
-    }
-    ctx.fillStyle = a.hitFlash > 0 ? '#ffffff' : a.color;
-    if (a.isMinion()) {
-      ctx.strokeStyle = '#b06bd4';
-      ctx.lineWidth = 2;
-    } else {
-      ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
       ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(0, 0, a.radius + 2.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
-    ctx.beginPath();
-    switch (a.shape) {
-      case 'circle':
-        ctx.arc(0, 0, a.radius, 0, Math.PI * 2);
-        break;
-      case 'diamond':
-        ctx.moveTo(0, -a.radius); ctx.lineTo(a.radius, 0);
-        ctx.lineTo(0, a.radius); ctx.lineTo(-a.radius, 0);
-        ctx.closePath();
-        break;
-      case 'triangle':
-        ctx.rotate(a.facing + Math.PI / 2);
-        ctx.moveTo(0, -a.radius); ctx.lineTo(a.radius * 0.9, a.radius);
-        ctx.lineTo(-a.radius * 0.9, a.radius);
-        ctx.closePath();
-        ctx.rotate(-(a.facing + Math.PI / 2));
-        break;
-      case 'square':
-        ctx.rect(-a.radius * 0.85, -a.radius * 0.85, a.radius * 1.7, a.radius * 1.7);
-        break;
-      case 'pentagon':
-        this.polyPath(5, a.radius, a.facing);
-        break;
-      case 'hexagon':
-        this.polyPath(6, a.radius, a.facing);
-        break;
-      case 'octagon':
-        this.polyPath(8, a.radius, a.facing + Math.PI / 8);
-        break;
-      case 'star': {
-        const inner = a.radius * 0.45;
-        for (let i = 0; i < 10; i++) {
-          const r = i % 2 === 0 ? a.radius : inner;
-          const ang = a.facing + (i / 10) * Math.PI * 2;
-          if (i === 0) ctx.moveTo(Math.cos(ang) * r, Math.sin(ang) * r);
-          else ctx.lineTo(Math.cos(ang) * r, Math.sin(ang) * r);
-        }
-        ctx.closePath();
-        break;
+
+    // Ailment tint: the strongest active status wears its color as a thin
+    // pulsing ring — the pip row tells the list, the ring tells it at range.
+    if (a.statuses.length > 0) {
+      const sd = STATUS_DEFS[a.statuses[0].id];
+      if (sd) {
+        const pulse = 0.6 + 0.4 * Math.sin(world.time * 5 + a.id);
+        ctx.strokeStyle = sd.color;
+        ctx.globalAlpha = Math.min(baseAlpha, VIS_CFG.body.statusRingAlpha * pulse);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, a.radius + 2, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = baseAlpha;
       }
-      case 'cross': {
-        const arm = a.radius * 0.38;
-        ctx.rotate(a.facing);
-        ctx.rect(-a.radius, -arm, a.radius * 2, arm * 2);
-        ctx.rect(-arm, -a.radius, arm * 2, a.radius * 2);
-        ctx.rotate(-a.facing);
-        break;
-      }
-      case 'trapezoid': {
-        // broad shoulders facing forward, narrowing behind
-        const r = a.radius;
-        ctx.rotate(a.facing);
-        ctx.moveTo(r * 0.7, -r * 0.95); ctx.lineTo(r * 0.7, r * 0.95);
-        ctx.lineTo(-r * 0.8, r * 0.55); ctx.lineTo(-r * 0.8, -r * 0.55);
-        ctx.closePath();
-        ctx.rotate(-a.facing);
-        break;
-      }
-      case 'rhombus': {
-        // a lean diamond skewed along its heading
-        const r = a.radius;
-        ctx.rotate(a.facing);
-        ctx.moveTo(r * 1.1, 0); ctx.lineTo(r * 0.15, r * 0.75);
-        ctx.lineTo(-r * 1.1, 0); ctx.lineTo(-r * 0.15, -r * 0.75);
-        ctx.closePath();
-        ctx.rotate(-a.facing);
-        break;
-      }
-      case 'oval':
-        ctx.ellipse(0, 0, a.radius * 1.15, a.radius * 0.75, a.facing, 0, Math.PI * 2);
-        break;
-      case 'kite': {
-        // long nose forward, short tail back — built to point somewhere
-        const r = a.radius;
-        ctx.rotate(a.facing);
-        ctx.moveTo(r * 1.2, 0); ctx.lineTo(-r * 0.15, r * 0.8);
-        ctx.lineTo(-r * 0.7, 0); ctx.lineTo(-r * 0.15, -r * 0.8);
-        ctx.closePath();
-        ctx.rotate(-a.facing);
-        break;
-      }
-      case 'rectangle':
-        ctx.rotate(a.facing);
-        ctx.rect(-a.radius * 1.05, -a.radius * 0.65, a.radius * 2.1, a.radius * 1.3);
-        ctx.rotate(-a.facing);
-        break;
-      case 'ribcage':
-        ctx.arc(0, 0, a.radius, 0, Math.PI * 2); // body disc; rib spokes overlaid after fill
-        break;
     }
-    ctx.fill();
-    ctx.stroke();
 
     // Elite rarity: a glowing outline ring (colour by tier) + a crown for the
     // apex Crowned champions whose fall unlocks the Warbands package.
@@ -2906,22 +2889,7 @@ export class Renderer {
       }
     }
 
-    // Skeleton ribcage: a top-down spine + tapering rib spokes over the body
-    // disc, no facing rotation so it reads as bone from any direction.
-    if (a.shape === 'ribcage') {
-      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
-      ctx.lineWidth = 1.5;
-      const r = a.radius;
-      ctx.beginPath();
-      ctx.moveTo(0, -r * 0.85); ctx.lineTo(0, r * 0.85);          // spine
-      for (let i = -2; i <= 2; i++) {
-        const yy = (i / 2.4) * r * 0.8;
-        const half = Math.cos((yy / (r * 0.9)) * (Math.PI / 2)) * r * 0.78; // ribs shorten at the ends
-        ctx.moveTo(-half, yy); ctx.lineTo(0, yy - r * 0.12);
-        ctx.moveTo(half, yy); ctx.lineTo(0, yy - r * 0.12);
-      }
-      ctx.stroke();
-    }
+    // (The skeleton's rib overlay now bakes into the ribcage body sprite.)
 
     // Guard stance: the raised shield arc, fading as its health drains.
     if (a.casting?.mode === 'guard' && a.casting.inst.def.guard) {
@@ -3032,92 +3000,23 @@ export class Renderer {
       ctx.stroke();
     }
 
-    // Adorns: silhouette add-ons that mark a kind at a glance.
-    if (a.adorn) {
-      ctx.fillStyle = a.color;
-      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-      ctx.lineWidth = 1.2;
-      if (a.adorn === 'ears') {
-        // two perky triangles at the sides (goblinoids, gnolls)
-        for (const side of [-1, 1]) {
-          const ang = a.facing + side * 1.9;
-          const bx = Math.cos(ang) * a.radius * 0.85;
-          const by = Math.sin(ang) * a.radius * 0.85;
-          const tx = Math.cos(ang) * a.radius * 1.75;
-          const ty = Math.sin(ang) * a.radius * 1.75;
-          const px = Math.cos(ang + Math.PI / 2) * a.radius * 0.3;
-          const py = Math.sin(ang + Math.PI / 2) * a.radius * 0.3;
-          ctx.beginPath();
-          ctx.moveTo(bx - px, by - py); ctx.lineTo(tx, ty); ctx.lineTo(bx + px, by + py);
-          ctx.closePath();
-          ctx.fill(); ctx.stroke();
-        }
-      } else if (a.adorn === 'horns') {
-        if (a.faction === 'demon') {
-          // demon horns: a pair of small circle nubs at the brow
-          ctx.fillStyle = a.color; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.2;
-          for (const side of [-1, 1]) {
-            const ang = a.facing + side * 0.7;
-            ctx.beginPath();
-            ctx.arc(Math.cos(ang) * a.radius * 1.05, Math.sin(ang) * a.radius * 1.05, a.radius * 0.3, 0, Math.PI * 2);
-            ctx.fill(); ctx.stroke();
-          }
-        } else {
-          // forward-swept horns (orcs and worse)
-          for (const side of [-1, 1]) {
-            const ang = a.facing + side * 0.9;
-            ctx.beginPath();
-            ctx.moveTo(Math.cos(ang) * a.radius * 0.7, Math.sin(ang) * a.radius * 0.7);
-            ctx.quadraticCurveTo(
-              Math.cos(ang) * a.radius * 1.5, Math.sin(ang) * a.radius * 1.5,
-              Math.cos(ang - side * 0.5) * a.radius * 1.7, Math.sin(ang - side * 0.5) * a.radius * 1.7);
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = a.color;
-            ctx.stroke();
-          }
-        }
-      } else if (a.adorn === 'spikes') {
-        // a ring of nubs (trolls, briar things)
-        for (let s = 0; s < 6; s++) {
-          const ang = a.facing + (s / 6) * Math.PI * 2;
-          ctx.beginPath();
-          ctx.arc(Math.cos(ang) * a.radius * 1.05, Math.sin(ang) * a.radius * 1.05, a.radius * 0.18, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      } else if (a.adorn === 'wings') {
-        // branching membrane triangles swept to the BACK (demons, winged things)
-        const back = a.facing + Math.PI;
-        ctx.fillStyle = a.color; ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.2;
-        for (const side of [-1, 1]) {
-          const base = back + side * 0.45;
-          const bx = Math.cos(base) * a.radius * 0.5, by = Math.sin(base) * a.radius * 0.5;
-          for (const [spread, len] of [[0.95, 1.7], [0.55, 2.1], [0.2, 1.6]] as const) {
-            const ang = back + side * spread;
-            const tx = Math.cos(ang) * a.radius * len, ty = Math.sin(ang) * a.radius * len;
-            const mx = Math.cos(ang - side * 0.25) * a.radius * (len * 0.6);
-            const my = Math.sin(ang - side * 0.25) * a.radius * (len * 0.6);
-            ctx.beginPath();
-            ctx.moveTo(bx, by); ctx.lineTo(tx, ty); ctx.lineTo(mx, my);
-            ctx.closePath(); ctx.fill(); ctx.stroke();
-          }
-        }
-      } else if (a.adorn === 'tentacles') {
-        // ELDRITCH corruption: writhing tentacles curling out around the body.
-        const t = performance.now() / 1000;
-        ctx.strokeStyle = a.color;
-        ctx.lineWidth = 2;
-        for (let s = 0; s < 6; s++) {
-          const base = a.facing + (s / 6) * Math.PI * 2;
-          const wob = Math.sin(t * 3 + s) * 0.5;
-          const bx0 = Math.cos(base) * a.radius, by0 = Math.sin(base) * a.radius;
-          const tx0 = Math.cos(base + wob) * a.radius * 1.9, ty0 = Math.sin(base + wob) * a.radius * 1.9;
-          const cx0 = Math.cos(base + wob * 0.5) * a.radius * 1.5;
-          const cy0 = Math.sin(base + wob * 0.5) * a.radius * 1.5;
-          ctx.beginPath();
-          ctx.moveTo(bx0, by0);
-          ctx.quadraticCurveTo(cx0, cy0, tx0, ty0);
-          ctx.stroke();
-        }
+    // Ears/horns/spikes/wings bake into the adorn sprite above. TENTACLES
+    // stay live — the eldritch writhe is per-frame motion no bake can hold.
+    if (a.adorn === 'tentacles') {
+      const t = performance.now() / 1000;
+      ctx.strokeStyle = a.color;
+      ctx.lineWidth = 2;
+      for (let s = 0; s < 6; s++) {
+        const base = a.facing + (s / 6) * Math.PI * 2;
+        const wob = Math.sin(t * 3 + s) * 0.5;
+        const bx0 = Math.cos(base) * a.radius, by0 = Math.sin(base) * a.radius;
+        const tx0 = Math.cos(base + wob) * a.radius * 1.9, ty0 = Math.sin(base + wob) * a.radius * 1.9;
+        const cx0 = Math.cos(base + wob * 0.5) * a.radius * 1.5;
+        const cy0 = Math.sin(base + wob * 0.5) * a.radius * 1.5;
+        ctx.beginPath();
+        ctx.moveTo(bx0, by0);
+        ctx.quadraticCurveTo(cx0, cy0, tx0, ty0);
+        ctx.stroke();
       }
     }
     ctx.restore();
@@ -3703,6 +3602,24 @@ export class Renderer {
     const t = performance.now() / 1000;
     this.drawTethers(world);
     for (const p of world.projectiles) {
+      // Every projectile is ENERGY IN FLIGHT now: an additive glow underlay
+      // in its own color + a motion streak trailing the heading. The shape
+      // language on top is unchanged — behavior stays readable, it just
+      // stopped looking like construction paper.
+      drawGlow(ctx, p.pos.x, p.pos.y, p.radius * VIS_CFG.fx.glowScale, p.color, VIS_CFG.fx.glowAlpha);
+      const sx = p.pos.x - Math.cos(p.dir) * p.radius * VIS_CFG.fx.streakLen;
+      const sy = p.pos.y - Math.sin(p.dir) * p.radius * VIS_CFG.fx.streakLen;
+      const streak = ctx.createLinearGradient(sx, sy, p.pos.x, p.pos.y);
+      streak.addColorStop(0, withAlpha(p.color, 0));
+      streak.addColorStop(1, withAlpha(p.color, VIS_CFG.fx.streakAlpha));
+      ctx.strokeStyle = streak;
+      ctx.lineWidth = Math.max(2, p.radius * 0.85);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(p.pos.x, p.pos.y);
+      ctx.stroke();
+      ctx.lineCap = 'butt';
       ctx.fillStyle = p.color;
       ctx.save();
       ctx.translate(p.pos.x, p.pos.y);
@@ -3779,15 +3696,15 @@ export class Renderer {
           ctx.beginPath();
           ctx.arc(0, 0, r, 0, Math.PI * 2);
           ctx.fill();
+          // White-hot core — the orb reads as a charge, not a dot.
+          ctx.globalAlpha = VIS_CFG.fx.coreAlpha;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(-r * 0.12, -r * 0.12, r * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
       }
       ctx.restore();
-      // Tail
-      ctx.globalAlpha = 0.35;
-      ctx.beginPath();
-      ctx.arc(p.pos.x - Math.cos(p.dir) * p.radius * 1.6,
-        p.pos.y - Math.sin(p.dir) * p.radius * 1.6, p.radius * 0.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
     }
   }
 
@@ -4347,17 +4264,5 @@ function initials(name: string): string {
   return name.split(' ').map(s => s[0]).join('').slice(0, 3).toUpperCase();
 }
 
-function hexToRgb(hex: string): [number, number, number] {
-  const n = parseInt(hex.slice(1), 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-}
-
-/** Shade a #rrggbb color toward white (t > 0) or black (t < 0). The fissure
- *  textures ride this so every state — armed, volatile, molten core — stays
- *  a GRADIENT of its own skill's color instead of hijacking the palette. */
-function shade(hex: string, t: number): string {
-  const [r, g, b] = hexToRgb(hex);
-  const to = t >= 0 ? 255 : 0;
-  const f = Math.min(1, Math.abs(t));
-  return `rgb(${Math.round(r + (to - r) * f)},${Math.round(g + (to - g) * f)},${Math.round(b + (to - b) * f)})`;
-}
+// hexToRgb / shade now live in vis/color.ts (imported above) — every draw
+// path derives washes and gradients from the SAME color math as the bakes.

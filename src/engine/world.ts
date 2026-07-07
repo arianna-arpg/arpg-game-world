@@ -9815,6 +9815,7 @@ export class World {
     a.anchored = (def.base.moveSpeed ?? 1) <= 0 && !def.orbDrops;
     a.faction = def.faction;
     a.adorn = def.adorn;
+    a.material = def.material;
     if (def.worm) {
       a.worm = {
         length: def.worm.length,
