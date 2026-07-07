@@ -6,7 +6,16 @@
 // remappable. ESCAPE is deliberately NOT an action — it is hardwired to open
 // the menu so you can never lock yourself out of rebinding. Lives in its own
 // localStorage key; wipes to defaults on schema mismatch (no migration).
+//
+// CONTROLLER: a SECOND, parallel map (padBinds) binds the same actions to pad
+// buttons ('pad:a' codes — core/gamepad.ts), so keyboard and controller
+// coexist; either may drive any action at any moment. The pad map also carries
+// skillSlot0/1 (on keyboard those are LMB/RMB, fixed). Sticks are not binds —
+// they're axes (move / aim / menu pointer) tuned via the pad options below.
+// START is the pad's hardwired Escape, mirroring the keyboard rule.
 // ---------------------------------------------------------------------------
+
+import { PAD_CFG } from '../core/gamepad';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -16,9 +25,31 @@ export type ActionId =
   | 'metaModifier' | 'pickup'
   | 'panelChar' | 'panelTree' | 'panelMap' | 'panelInv';
 
+/** Pad-bindable actions: everything the keyboard binds, PLUS bar slots 0/1
+ *  (fixed to LMB/RMB on mouse, free to live on any button on a pad). */
+export type PadActionId = ActionId | 'skillSlot0' | 'skillSlot1';
+
+/** The player-tunable controller feel — persisted; PAD_CFG holds the engine
+ *  defaults these start from (and the internals players never need). */
+export interface PadOptions {
+  /** Radial stick deadzone, fraction of full deflection. */
+  deadzone: number;
+  /** Aim reach at FULL right-stick deflection, world units (half-tilt aims
+   *  proportionally closer — analog range control). */
+  aimRadius: number;
+  /** Menu pointer speed, px/sec at full deflection. */
+  pointerSpeed: number;
+  /** Southpaw: swap the move and aim sticks. */
+  swapSticks: boolean;
+}
+
 export interface Settings {
   schemaVersion: number;
   keybinds: Record<ActionId, string>;
+  /** Controller bindings, parallel to keybinds ('' = unbound). */
+  padBinds: Record<PadActionId, string>;
+  /** Controller feel tunables (deadzone, aim reach, pointer speed, swap). */
+  pad: PadOptions;
   /** The continuous low-life edge pulse (severity-scaled). OFF is a real
    *  build choice: a 1/1-life or 90%-reserved hero would otherwise live
    *  inside a permanent alarm. */
@@ -31,6 +62,8 @@ export interface Settings {
 export interface SettingsSave {
   schemaVersion: number;
   keybinds: Record<string, string>;
+  padBinds?: Record<string, string>;
+  pad?: Partial<PadOptions>;
   lowLifePulse?: boolean;
   gearPickup?: 'vacuum' | 'key';
 }
@@ -47,6 +80,30 @@ export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
 
 export const ACTION_IDS = Object.keys(DEFAULT_KEYBINDS) as ActionId[];
 
+/** Default controller layout. The left stick IS movement (an axis, not a
+ *  bind), which frees the D-pad for the four panels; the movement actions
+ *  ship unbound on pad — bindable for D-pad-movement styles. Triggers carry
+ *  the two primary slots (twin-stick feel), face + bumpers the rest. */
+export const DEFAULT_PAD_BINDS: Record<PadActionId, string> = {
+  moveUp: '', moveDown: '', moveLeft: '', moveRight: '',
+  skillSlot0: 'pad:rt', skillSlot1: 'pad:lt',
+  skillSlot2: 'pad:a', skillSlot3: 'pad:b', skillSlot4: 'pad:x', skillSlot5: 'pad:y',
+  skillSlot6: 'pad:rb', skillSlot7: 'pad:lb',
+  metaModifier: 'pad:select', pickup: 'pad:r3',
+  panelChar: 'pad:up', panelTree: 'pad:right', panelMap: 'pad:left', panelInv: 'pad:down',
+};
+
+/** Rebind-UI order for the controller section: the bar first (incl. the two
+ *  mouse-fixed slots that only a pad can rebind), then verbs, then movement. */
+export const PAD_ACTION_IDS = Object.keys(DEFAULT_PAD_BINDS) as PadActionId[];
+
+export const DEFAULT_PAD_OPTIONS: PadOptions = {
+  deadzone: PAD_CFG.deadzone,
+  aimRadius: PAD_CFG.aim.maxRadius,
+  pointerSpeed: PAD_CFG.pointer.speed,
+  swapSticks: false,
+};
+
 /** Human labels for the rebind UI, in display order. */
 export const ACTION_LABELS: Record<ActionId, string> = {
   moveUp: 'Move Up', moveDown: 'Move Down', moveLeft: 'Move Left', moveRight: 'Move Right',
@@ -55,6 +112,12 @@ export const ACTION_LABELS: Record<ActionId, string> = {
   metaModifier: 'Meta-Skill Modifier', pickup: 'Pick Up Item',
   panelChar: 'Character Sheet', panelTree: 'Passive Tree', panelMap: 'World Map',
   panelInv: 'Inventory',
+};
+
+/** Labels for the pad-only actions; everything else reuses ACTION_LABELS. */
+export const PAD_ACTION_LABELS: Record<PadActionId, string> = {
+  ...ACTION_LABELS,
+  skillSlot0: 'Skill 1 (Primary)', skillSlot1: 'Skill 2',
 };
 
 /** Named keys whose stored value (KeyboardEvent.key, lowercased) is unreadable
@@ -75,6 +138,8 @@ export function keyDisplay(key: string): string {
 export const makeSettings = (): Settings => ({
   schemaVersion: SETTINGS_SCHEMA_VERSION,
   keybinds: { ...DEFAULT_KEYBINDS },
+  padBinds: { ...DEFAULT_PAD_BINDS },
+  pad: { ...DEFAULT_PAD_OPTIONS },
   lowLifePulse: true,
   gearPickup: 'vacuum',
 });
@@ -82,18 +147,36 @@ export const makeSettings = (): Settings => ({
 export const serializeSettings = (s: Settings): SettingsSave => ({
   schemaVersion: s.schemaVersion,
   keybinds: { ...s.keybinds },
+  padBinds: { ...s.padBinds },
+  pad: { ...s.pad },
   lowLifePulse: s.lowLifePulse,
   gearPickup: s.gearPickup,
 });
 
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+
 /** null ⇒ schema mismatch → caller wipes. Unknown/partial keybinds fall back
- *  to the default per-action, so a partial save still yields a complete map. */
+ *  to the default per-action, so a partial save still yields a complete map.
+ *  The pad fields are ADDITIVE (older saves simply lack them) — they fill
+ *  from defaults, and the numeric options re-clamp on load so a hand-edited
+ *  save can't smuggle in a 0 deadzone or a 10⁶-px pointer. */
 export function deserializeSettings(s: SettingsSave): Settings | null {
   if (!s || s.schemaVersion !== SETTINGS_SCHEMA_VERSION) return null;
   const keybinds = { ...DEFAULT_KEYBINDS };
   for (const a of ACTION_IDS) if (s.keybinds?.[a]) keybinds[a] = s.keybinds[a];
+  const padBinds = { ...DEFAULT_PAD_BINDS };
+  for (const a of PAD_ACTION_IDS) {
+    if (typeof s.padBinds?.[a] === 'string') padBinds[a] = s.padBinds[a];
+  }
+  const d = DEFAULT_PAD_OPTIONS;
   return {
-    schemaVersion: SETTINGS_SCHEMA_VERSION, keybinds,
+    schemaVersion: SETTINGS_SCHEMA_VERSION, keybinds, padBinds,
+    pad: {
+      deadzone: clamp(s.pad?.deadzone ?? d.deadzone, 0.02, 0.6),
+      aimRadius: clamp(s.pad?.aimRadius ?? d.aimRadius, 100, 1200),
+      pointerSpeed: clamp(s.pad?.pointerSpeed ?? d.pointerSpeed, 200, 3000),
+      swapSticks: !!(s.pad?.swapSticks ?? d.swapSticks),
+    },
     lowLifePulse: s.lowLifePulse ?? true,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
   };

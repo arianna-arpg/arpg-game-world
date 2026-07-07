@@ -38,7 +38,11 @@ import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
 import type { World } from '../engine/world';
 import { featureEnabled, FEATURE, isClassUnlocked, META_CURRENCY_LABEL, selectableSlotCount, type Account } from '../meta/account';
 import { allUnlockables, applyUnlock, availableUnlocks, classUnlockFor, isUnlockOwned } from '../meta/unlocks';
-import { ACTION_IDS, ACTION_LABELS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
+import {
+  ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
+  type ActionId, type PadActionId, type Settings,
+} from '../meta/settings';
+import { PAD_CFG, padDisplay } from '../core/gamepad';
 import { wipeRosterSlot, type CharacterSave } from '../meta/character';
 import {
   availableModes, DEFAULT_MODE_ID, modeById, rosterCapacity, rosterOf, stageOf,
@@ -144,6 +148,12 @@ export class UI {
    *  navigation away — a leaked capture would swallow & silently rebind the next
    *  gameplay keystroke. */
   private armedRebind: ((e: KeyboardEvent) => void) | null = null;
+  /** Pad-capture bridge, injected by main (panels never touch the device layer):
+   *  arm = the NEXT pad button press is swallowed and delivered as a binding
+   *  code; disarm = cancel. Same leak discipline as armedRebind — disarmRebind
+   *  tears both down on every re-render / navigation. */
+  armPadCapture: ((cb: (code: string) => void) => void) | null = null;
+  disarmPadCapture: (() => void) | null = null;
 
   charSheetOpen = false;
   inventoryOpen = false;
@@ -339,6 +349,17 @@ export class UI {
   anyPanelOpen(): boolean {
     return this.charSheetOpen || this.treeOpen
       || this.mapOpen || this.inventoryOpen;
+  }
+
+  /** ANY blocking DOM surface is up — panels, dwell dialogs, the pause menu,
+   *  a minigame, the start menu. The ONE seam device layers ask before
+   *  switching habits (the pad flips to menu-pointer mode on this); new
+   *  surfaces join here and every input layer follows for free. */
+  uiBlocking(): boolean {
+    return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
+      || this.caravanOpen || this.mercOpen || this.tollOpen || this.salvageOpen
+      || this.oracleOpen || this.vendorOpen || this.sailOpen || this.vocationOpen
+      || !this.startMenu.classList.contains('hidden');
   }
 
   /** A crafting minigame overlay is live (Escape and panels hold still). */
@@ -2732,30 +2753,65 @@ export class UI {
     this.escapeMenu.classList.add('hidden');
   }
 
-  /** Tear down any pending rebind capture listener (see `armedRebind`). Safe to
-   *  call when none is armed. Invoked on every re-render and on any navigation
-   *  away from the keybind view. */
+  /** Tear down any pending rebind capture listener (see `armedRebind`) — the
+   *  keyboard one AND the pad one. Safe to call when none is armed. Invoked on
+   *  every re-render and on any navigation away from the keybind view. */
   private disarmRebind(): void {
     if (this.armedRebind) {
       window.removeEventListener('keydown', this.armedRebind, true);
       this.armedRebind = null;
     }
+    this.disarmPadCapture?.();
   }
 
   /** Shared keybind rebind view, rendered into `root` (escape menu OR start
    *  menu). `onBack` returns to whichever menu opened it. */
   private renderKeybinds(root: HTMLElement, onBack: () => void): void {
     this.disarmRebind(); // drop any capture left armed by a prior render
-    const kb = this.getSettings().keybinds;
+    const s = this.getSettings();
+    const kb = s.keybinds;
     const rows = ACTION_IDS.map(a => `
       <div class="rebind-row">
         <span>${ACTION_LABELS[a]}</span>
         <button data-rebind="${a}">${keyDisplay(kb[a])}</button>
       </div>`).join('');
+    // The CONTROLLER half: the same actions on a second map (plus bar slots
+    // 0/1, which only a pad can rebind — the mouse owns them otherwise), and
+    // the analog feel tunables. All persisted in Settings alongside keybinds.
+    const padRows = PAD_ACTION_IDS.map(a => `
+      <div class="rebind-row">
+        <span>${PAD_ACTION_LABELS[a]}</span>
+        <button data-padrebind="${a}">${padDisplay(s.padBinds[a])}</button>
+      </div>`).join('');
     root.innerHTML = `
       <h1>Keybinds</h1>
       <div class="acct-head">LMB / RMB drive skills 1 &amp; 2 (fixed). Click a key, then press a new one (Esc cancels).</div>
       <div class="rebind-list">${rows}</div>
+      <h1>Controller</h1>
+      <div class="acct-head">Left stick moves · right stick aims (tilt = reach) · MENU pauses.
+        In menus the left stick drives a pointer: Ⓐ clicks, Ⓑ backs out.
+        Click a row, then press a pad button (MENU or Esc cancels).</div>
+      <div class="rebind-list">${padRows}</div>
+      <div class="rebind-row">
+        <span>Stick Deadzone</span>
+        <span class="pad-opt"><input type="range" id="opt-deadzone" min="5" max="50" step="1"
+          value="${Math.round(s.pad.deadzone * 100)}"> <b id="val-deadzone">${Math.round(s.pad.deadzone * 100)}%</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Aim Reach (full tilt)</span>
+        <span class="pad-opt"><input type="range" id="opt-aimreach" min="150" max="900" step="10"
+          value="${Math.round(s.pad.aimRadius)}"> <b id="val-aimreach">${Math.round(s.pad.aimRadius)}</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Menu Pointer Speed</span>
+        <span class="pad-opt"><input type="range" id="opt-padspeed" min="300" max="2500" step="50"
+          value="${Math.round(s.pad.pointerSpeed)}"> <b id="val-padspeed">${Math.round(s.pad.pointerSpeed)}</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Swap Sticks (southpaw)</span>
+        <button id="opt-swapsticks">${s.pad.swapSticks ? 'ON' : 'OFF'}</button>
+      </div>
+      <h1>Options</h1>
       <div class="rebind-row">
         <span>Low-Life Screen Pulse</span>
         <button id="opt-lowlife">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
@@ -2776,11 +2832,66 @@ export class UI {
     });
     // Gear pickup feel: hoover it like gems, or keep it a deliberate press.
     root.querySelector<HTMLElement>('#opt-gearpickup')!.addEventListener('click', () => {
-      const s = this.getSettings();
-      s.gearPickup = s.gearPickup === 'key' ? 'vacuum' : 'key';
+      const st = this.getSettings();
+      st.gearPickup = st.gearPickup === 'key' ? 'vacuum' : 'key';
       this.saveSettings();
       this.updateHintBar();
       this.renderKeybinds(root, onBack);
+    });
+    // Controller feel sliders: drag = immediate (padTuning reads Settings live
+    // every frame), release = persist. Ranges live in the markup; loads re-clamp.
+    const slider = (id: string, apply: (v: number) => void, label: (v: number) => string): void => {
+      const el = root.querySelector<HTMLInputElement>('#opt-' + id);
+      const val = root.querySelector<HTMLElement>('#val-' + id);
+      if (!el || !val) return;
+      el.addEventListener('input', () => {
+        const v = Number(el.value);
+        apply(v);
+        val.textContent = label(v);
+      });
+      el.addEventListener('change', () => this.saveSettings());
+    };
+    slider('deadzone', v => { this.getSettings().pad.deadzone = v / 100; }, v => `${v}%`);
+    slider('aimreach', v => { this.getSettings().pad.aimRadius = v; }, v => String(v));
+    slider('padspeed', v => { this.getSettings().pad.pointerSpeed = v; }, v => String(v));
+    root.querySelector<HTMLElement>('#opt-swapsticks')!.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.pad.swapSticks = !st.pad.swapSticks;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
+    // Pad rebind rows: arm the pad capture (main injects the bridge) — the
+    // next button press binds. MENU/START is the pad's hardwired Escape, so
+    // capturing it CANCELS (mirror of the Esc rule below: you can never bind
+    // your way out of pausing). Esc on the keyboard cancels too.
+    root.querySelectorAll<HTMLElement>('[data-padrebind]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.disarmRebind();           // one live capture at a time, either kind
+        btn.textContent = 'press a button…';
+        this.armPadCapture?.(code => {
+          if (code !== PAD_CFG.escapeButton) {
+            const binds = this.getSettings().padBinds;
+            const action = btn.dataset.padrebind as PadActionId;
+            // SWAP-ON-CONFLICT, the keyboard map's rule — scoped to the pad
+            // map (the two maps are separate universes; a key and a button
+            // never collide).
+            const other = PAD_ACTION_IDS.find(a => a !== action && binds[a] === code);
+            if (other) binds[other] = binds[action];
+            binds[action] = code;
+            this.saveSettings();
+          }
+          this.renderKeybinds(root, onBack);
+        });
+        const onKey = (e: KeyboardEvent): void => {
+          if (e.key !== 'Escape') return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          this.disarmRebind();
+          this.renderKeybinds(root, onBack);
+        };
+        this.armedRebind = onKey;
+        window.addEventListener('keydown', onKey, true);
+      });
     });
     root.querySelectorAll<HTMLElement>('[data-rebind]').forEach(btn => {
       btn.addEventListener('click', () => {

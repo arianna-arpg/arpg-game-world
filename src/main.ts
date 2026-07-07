@@ -4,6 +4,8 @@
 // ---------------------------------------------------------------------------
 
 import { Input } from './core/input';
+import { PAD_CFG, PadState, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
+import { PadPointer } from './ui/padpointer';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
 import './data/clusters'; // side-effect: registers the data-driven cluster stamps
@@ -53,6 +55,25 @@ const account: Account = loadAccount();
 const settings: Settings = loadSettings();
 
 const renderer = new Renderer(canvas, () => settings);
+
+// CONTROLLER: polled once at the top of each frame. Buttons ride the padBinds
+// settings map; sticks feed movement/aim as axes. Feel numbers resolve here —
+// PAD_CFG engine defaults overlaid by the player's persisted Settings.pad.
+const padTuning = (): PadTuning => ({
+  deadzone: settings.pad.deadzone,
+  stickCurve: PAD_CFG.stickCurve,
+  triggerThreshold: PAD_CFG.triggerThreshold,
+  aimMinRadius: PAD_CFG.aim.minRadius,
+  aimMaxRadius: settings.pad.aimRadius,
+  pointerSpeed: settings.pad.pointerSpeed,
+  swapSticks: settings.pad.swapSticks,
+});
+const pad = new PadState(padTuning);
+const padPointer = new PadPointer(pad, padTuning);
+// AIM ARBITRATION: the last device to speak owns the reticle. Mouse motion
+// reclaims it instantly; any right-stick deflection hands it to the pad.
+let aimSource: 'mouse' | 'pad' = 'mouse';
+const lastMouse = { x: -1, y: -1 };
 
 // Networking transport. LocalTransport runs single-player + local co-op (host
 // with one machine); a WebRtcTransport (same NetTransport contract) swaps in for
@@ -140,6 +161,10 @@ const ui = new UI(
   () => !net.isHost,        // a network co-op CLIENT (world is a render shell)
   () => leaveCoop(),        // tear down a co-op session → back to the menu
 );
+// The rebind view captures pad buttons through these (panels never touch the
+// device layer directly — same altitude as its getSettings/saveSettings deps).
+ui.armPadCapture = (cb) => pad.armCapture(cb);
+ui.disarmPadCapture = () => pad.disarmCapture();
 
 let running = false;
 let deathShown = false;
@@ -272,6 +297,10 @@ declare global {
       openLobby: () => void;
       leaveCoop: () => void;
       resetAccount: () => void;
+      pad: () => PadState;
+      padPointer: () => PadPointer;
+      fakePad: (p: FakePad | null) => void;
+      step: (frames?: number, dtMs?: number) => void;
     };
   }
 }
@@ -297,6 +326,12 @@ window.__game = {
   applyZoneMsg: (z: ZoneMsg) => applyZone(world, z),
   openLobby, leaveCoop,
   resetAccount: () => { resetAccount(); location.reload(); },
+  // Controller state + the hardware stand-in (tests: __game.fakePad({axes,buttons})).
+  pad: () => pad, padPointer: () => padPointer,
+  fakePad: (p) => { window.__fakePad = p; },
+  // Drive N frames synchronously — the antidote to rAF freezing in hidden
+  // tabs; the ONLY way input polling (incl. the pad) runs under a harness.
+  step: (frames = 1, dtMs = 16.7) => { for (let i = 0; i < frames; i++) tick(last + dtMs); },
 };
 
 // Cross-check the data files; authoring mistakes warn instead of failing silently.
@@ -336,24 +371,61 @@ function readLocalInput(): PlayerInput | null {
   if (ui.escapeMenuOpen) return null;
 
   const kb = settings.keybinds;
+  const pb = settings.padBinds;
+  // While the menu pointer owns the pad, its buttons/sticks are UI gestures,
+  // not gameplay intent (Ⓐ under an inventory must never also swing a sword).
+  // The keyboard/mouse half keeps flowing either way.
+  const padLive = !padPointer.active;
   let dx = 0, dy = 0;
-  if (input.keys.has(kb.moveUp)) dy -= 1;
-  if (input.keys.has(kb.moveDown)) dy += 1;
-  if (input.keys.has(kb.moveLeft)) dx -= 1;
-  if (input.keys.has(kb.moveRight)) dx += 1;
-  const aim = renderer.toWorld(input.mouse);
+  if (input.keys.has(kb.moveUp) || (padLive && pad.isDown(pb.moveUp))) dy -= 1;
+  if (input.keys.has(kb.moveDown) || (padLive && pad.isDown(pb.moveDown))) dy += 1;
+  if (input.keys.has(kb.moveLeft) || (padLive && pad.isDown(pb.moveLeft))) dx -= 1;
+  if (input.keys.has(kb.moveRight) || (padLive && pad.isDown(pb.moveRight))) dx += 1;
+  // The move stick adds its ANALOG vector — deflection rides straight into
+  // moveActor, so half-tilt is a slow stalk without any new movement path.
+  if (padLive) { dx += pad.move.x; dy += pad.move.y; }
 
-  // Slots 0/1 are LMB/RMB (fixed); slots 2–7 are the rebindable keys.
+  // Aim: the mouse cursor — unless the pad owns the reticle (last device to
+  // speak wins). Pad aim is the stick's direction at deflection-scaled reach
+  // from the hero, STICKY on release so the reticle holds where you left it.
+  let aim = renderer.toWorld(input.mouse);
+  if (aimSource === 'pad' && padLive) {
+    const t = padTuning();
+    const reach = pad.aimReach(pad.aimMag > 0 ? pad.aimMag : pad.lastAimMag, t);
+    aim = { x: p.pos.x + pad.lastAimDir.x * reach, y: p.pos.y + pad.lastAimDir.y * reach };
+  }
+
+  // Slots 0/1 are LMB/RMB (fixed) — on a pad they're ordinary binds; slots
+  // 2–7 merge the rebindable keys with their pad buttons. Keyboard OR pad,
+  // per slot, per frame — the intent downstream can't tell which spoke.
+  const slotActs = [
+    'skillSlot0', 'skillSlot1', 'skillSlot2', 'skillSlot3',
+    'skillSlot4', 'skillSlot5', 'skillSlot6', 'skillSlot7',
+  ] as const;
   const skillKeys = [kb.skillSlot2, kb.skillSlot3, kb.skillSlot4, kb.skillSlot5, kb.skillSlot6, kb.skillSlot7];
-  const held = [input.lmb, input.rmb, ...skillKeys.map(k => input.keys.has(k))];
-  const edge = [input.lmbPressed, input.rmbPressed, ...skillKeys.map(k => input.justPressed(k))];
+  const held = [
+    input.lmb || (padLive && pad.isDown(pb.skillSlot0)),
+    input.rmb || (padLive && pad.isDown(pb.skillSlot1)),
+    ...skillKeys.map((k, i) => input.keys.has(k) || (padLive && pad.isDown(pb[slotActs[i + 2]]))),
+  ];
+  const edge = [
+    input.lmbPressed || (padLive && pad.justPressed(pb.skillSlot0)),
+    input.rmbPressed || (padLive && pad.justPressed(pb.skillSlot1)),
+    ...skillKeys.map((k, i) => {
+      const fromKey = input.justPressed(k);
+      const fromPad = padLive && pad.justPressed(pb[slotActs[i + 2]]);
+      return fromKey || fromPad;
+    }),
+  ];
   // The META layer (rebindable; shift by default): modifier+slot fires the
   // slot skill's META-ACTION (Detonate / Enrage / Thrust!) INSTEAD of a new
   // press. HELD states survive the modifier — a raised guard or a running
   // channel must NOT drop because you reached for the meta button (the
   // shield-bash-on-shift bug); only fresh EDGES reroute.
   const metaKey = kb.metaModifier ?? 'shift';
-  if (input.keys.has(metaKey)) {
+  const metaEdgePressed = input.justPressed(metaKey)
+    || (padLive && pad.justPressed(pb.metaModifier));
+  if (input.keys.has(metaKey) || (padLive && pad.isDown(pb.metaModifier))) {
     const metaEdge = edge.map(() => false);
     for (let i = 0; i < edge.length; i++) if (edge[i]) metaEdge[i] = true;
     // HELD-CAST META (Phalanx while Shield Up): you can't re-press a
@@ -361,7 +433,7 @@ function readLocalInput(): PlayerInput | null {
     // channel / charge / overcharge), pressing the MODIFIER ALONE fires
     // the HELD skill's meta. Scoped to exactly that slot: three channel
     // skills on the bar never fire three metas — only the one in hand.
-    if (input.justPressed(metaKey) && p.casting
+    if (metaEdgePressed && p.casting
       && ['guard', 'channel', 'charge', 'overcharge'].includes(p.casting.mode)) {
       const ci = p.skills.findIndex(s => s === p.casting!.inst);
       if (ci >= 0) metaEdge[ci] = true;
@@ -412,13 +484,16 @@ function handleLocalPanels(): void {
     return;
   }
   if (ui.escapeMenuOpen) return;
-  if (input.justPressed(kb.panelChar)) ui.toggleCharSheet();
-  if (input.justPressed(kb.panelTree)) ui.toggleTree();
-  if (input.justPressed(kb.panelMap)) ui.toggleMap();
-  if (input.justPressed(kb.panelInv)) ui.toggleInventory();
+  // Panel toggles answer to key OR pad bind — and the pad ones deliberately
+  // stay live in pointer mode (the D-pad flips panels while browsing them).
+  const pb = settings.padBinds;
+  if (input.justPressed(kb.panelChar) || pad.justPressed(pb.panelChar)) ui.toggleCharSheet();
+  if (input.justPressed(kb.panelTree) || pad.justPressed(pb.panelTree)) ui.toggleTree();
+  if (input.justPressed(kb.panelMap) || pad.justPressed(pb.panelMap)) ui.toggleMap();
+  if (input.justPressed(kb.panelInv) || pad.justPressed(pb.panelInv)) ui.toggleInventory();
   // GEAR pickup — a META intent (host-validated, co-op-replicated), not raw
   // world poking; the open bag re-renders so the grab appears instantly.
-  if (input.justPressed(kb.pickup)) {
+  if (input.justPressed(kb.pickup) || pad.justPressed(pb.pickup)) {
     world.requestMeta({ t: 'pickupItem' });
     if (ui.inventoryOpen) ui.refreshInventory();
   }
@@ -439,9 +514,31 @@ function spawnCoopAlly(): void {
 }
 
 let last = performance.now();
+/** The rAF pump: one tick, then re-arm. All work lives in tick() so tests can
+ *  drive frames SYNCHRONOUSLY via __game.step() — a hidden tab freezes rAF
+ *  entirely (the tab-throttle gotcha), which would otherwise freeze input
+ *  polling, the pad, and the sim under any headless/backgrounded harness. */
 function frame(now: number): void {
+  tick(now);
+  requestAnimationFrame(frame);
+}
+function tick(now: number): void {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
+
+  // CONTROLLER, before anything reads input: poll the device, settle who owns
+  // the reticle, run the menu pointer (it consumes Ⓐ/Ⓑ while active), and fire
+  // the pad's hardwired Escape — a synthetic keystroke, so the entire close-
+  // cascade stays single-sourced in handleLocalPanels.
+  const nowSec = now / 1000;
+  pad.poll(nowSec);
+  if (input.mouse.x !== lastMouse.x || input.mouse.y !== lastMouse.y) {
+    lastMouse.x = input.mouse.x; lastMouse.y = input.mouse.y;
+    aimSource = 'mouse';
+  }
+  if (pad.aimMag > 0) aimSource = 'pad';
+  padPointer.update(dt, ui.uiBlocking() || !running, nowSec);
+  if (pad.justPressed(PAD_CFG.escapeButton)) synthEscape();
 
   if (running) {
     if (net.isHost) {
@@ -573,7 +670,7 @@ function frame(now: number): void {
   }
 
   input.endFrame();
-  requestAnimationFrame(frame);
+  pad.endFrame();
 }
 
 /** Host-only end-of-frame work: live panels, autosave, and the permadeath/death
