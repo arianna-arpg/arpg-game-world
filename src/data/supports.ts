@@ -353,6 +353,16 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The impale gems ------------------------------------------------------------
+  skewering_blows: {
+    id: 'skewering_blows', name: 'Skewering Blows',
+    description: 'Hits with this skill leave STEEL BEHIND: 20% of their physical damage lodges as an impalement, and the victim\'s next taken hit drives it through as its own separate blow. Any attack learns to bank violence.',
+    color: '#c8ccd8', requiresTags: ['attack'],
+    mods: [mod('impalePower', 'flat', 0.2)],
+    perLevel: [mod('impalePower', 'flat', 0.04)],
+    weight: 6,
+  },
+
   // --- The hex-delivery gems ------------------------------------------------------
   curse_on_hit: {
     id: 'curse_on_hit', name: 'Hexbrand',

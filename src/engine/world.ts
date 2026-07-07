@@ -12154,6 +12154,53 @@ export class World {
           this.failNote(caster, def.id + ':nothing', 'nothing to draw');
         }
       }
+      // EXTRACTION (recallImpales): every lodged spear in reach is
+      // WRENCHED FREE — the bank pops on its host at damageScale, and the
+      // spear flies HOME as a real projectile flat-loaded with a share of
+      // the bank, piercing whatever stands along the way to the caster.
+      if (fx.type === 'recallImpales') {
+        const radius = fx.radius * aoeScale;
+        let wrenched = 0;
+        for (const e of this.enemiesOf(caster)) {
+          if (e.construct?.breakable) continue;
+          if (dist(caster.pos, e.pos) - e.radius > radius) continue;
+          for (let si = e.statuses.length - 1; si >= 0; si--) {
+            const s = e.statuses[si];
+            if (!STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+            e.statuses.splice(si, 1);
+            e.sheet.removeSource('status:' + s.id);
+            const bank = s.rupture;
+            const burst: Partial<Record<DamageType, number>> = {
+              [s.ruptureType ?? 'physical']: bank * (fx.damageScale ?? 1),
+            };
+            const taken = mitigateTyped(e, burst);
+            if (taken > 0) {
+              e.life -= taken;
+              e.hitFlash = 0.12;
+              this.text(e.pos, Math.round(taken).toString(), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 12);
+              if (e.life <= 0 && !e.dead) this.kill(e, false, caster);
+            }
+            // The spear itself, homeward: minted once per caster, re-aimed
+            // per wrench, its flat payload the bank's share.
+            if (SKILLS.impale_spear) {
+              let spear = caster.metaInsts.get('__impale_spear');
+              if (!spear || spear.level !== effectiveSkillLevel(inst)) {
+                spear = makeSkillInstance(SKILLS.impale_spear, effectiveSkillLevel(inst));
+                caster.metaInsts.set('__impale_spear', spear);
+              }
+              this.spawnProjectile(caster, spear, vec(e.pos.x, e.pos.y),
+                angleTo(e.pos, caster.pos),
+                { flat: { physical: bank * (fx.spearShare ?? 0.5) } });
+            }
+            wrenched++;
+          }
+        }
+        if (wrenched > 0) {
+          this.text(vec(caster.pos.x, caster.pos.y - 22), wrenched + ' wrenched free!', def.color, 13);
+        } else {
+          this.failNote(caster, def.id + ':nospears', 'nothing lodged');
+        }
+      }
       // UNLEASH (Bloodlust): start the one-way burn — the bank drains and
       // cannot be fed until empty (per-charge mods fade as it goes).
       if (fx.type === 'drainCharge') {
@@ -14872,6 +14919,45 @@ export class World {
           const coh = socketSpec(hex.inst, 'curseOnHit');
           if (!coh) continue;
           this.resolveHit(caster, hex.inst, target, coh.damageScale ?? 0.3, depth + 1, undefined, true);
+        }
+      }
+      // IMPALE DISCHARGE (StatusDef.dischargeOnHit): the lodged spear is
+      // DRIVEN THROUGH by this fresh top-level hit — the whole bank lands
+      // as its own separate mitigated blow, then the spear is spent. The
+      // pop is not a hit (no banking, no procs): structurally loop-free.
+      if (dealt > 0 && depth === 0 && !target.dead) {
+        for (let si = target.statuses.length - 1; si >= 0; si--) {
+          const s = target.statuses[si];
+          if (!STATUS_DEFS[s.id]?.dischargeOnHit || !s.rupture || s.rupture <= 0) continue;
+          target.statuses.splice(si, 1);
+          target.sheet.removeSource('status:' + s.id);
+          const burst: Partial<Record<DamageType, number>> = {
+            [s.ruptureType ?? 'physical']: s.rupture,
+          };
+          const taken = mitigateTyped(target, burst);
+          if (taken > 0) {
+            target.life -= taken;
+            target.hitFlash = 0.12;
+            this.text(vec(target.pos.x, target.pos.y - 26),
+              'IMPALED ' + Math.round(taken), STATUS_DEFS[s.id]?.color ?? '#c8ccd8', 13);
+            if (target.life <= 0 && !target.dead) this.kill(target, false, caster);
+          }
+        }
+      }
+      // IMPALE DRIVE-IN (the impalePower stat): a fraction of THIS hit's
+      // rolled PHYSICAL damage lodges in the victim as the spear's bank —
+      // banked AFTER any discharge above, so one blow pops the old spear
+      // and plants the next (the inverse Echoing Might).
+      if (dealt > 0 && depth === 0 && !target.dead) {
+        const ip = caster.sheet.get('impalePower', packet.tags, extra);
+        const phys = packet.amounts.physical ?? 0;
+        if (ip > 0 && phys > 0) {
+          target.applyStatus('impaled', 0, 1, def.name, { casterId: caster.id });
+          const lodged = target.statuses.find(x => x.id === 'impaled');
+          if (lodged) {
+            lodged.rupture = (lodged.rupture ?? 0) + phys * ip;
+            lodged.ruptureType = 'physical';
+          }
         }
       }
       // ECHOING MIGHT (the inverse-ignite buff): the landed blow feeds the

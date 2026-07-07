@@ -51,6 +51,12 @@ export interface StatusDef {
   /** Shatters early if the absorption shield that granted it breaks
    *  (Aegis Ward's Warded armor). */
   boundToAbsorb?: true;
+  /** IMPALE personality: the status's banked `rupture` DISCHARGES into
+   *  the bearer's NEXT qualifying top-level hit as its own separate
+   *  mitigated blow (then the status is spent) — instead of waiting for
+   *  expiry or death. The pop is not a hit and can never bank, so the
+   *  economy is structurally loop-free (the inverse Echoing Might). */
+  dischargeOnHit?: true;
   /** Canonical fraction-of-the-hit dealt per second when this status is
    *  applied by a STAT-GRANTED chance (the apply_<id> stat family) rather
    *  than a skill's own status effect. Element-agnostic by design: a
@@ -148,6 +154,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     element: 'physical',
     dotType: 'physical', stacking: true, maxStacks: 5,
     hitMagnitude: 0.3, baseline: { dps: 2.5, perLevel: 1 },
+  },
+  // IMPALED — the lodged spear (the PoE homage, single-pop form): a hit
+  // with impalePower DRIVES IN a fraction of its physical damage as the
+  // bank (ActiveStatus.rupture); the NEXT top-level hit discharges the
+  // whole bank as a separate mitigated blow (dischargeOnHit). Death and
+  // expiry still pop the keg through the ordinary rupture machinery —
+  // a spear never rots in the corpse.
+  impaled: {
+    label: 'Impaled', color: '#c8ccd8', duration: 8,
+    element: 'physical',
+    dischargeOnHit: true,
   },
   // HEMORRHAGE — bleed's antithesis: ONE deep wound instead of many shallow
   // cuts. A long, slow, non-stacking physical drip whose REAPPLICATION pops

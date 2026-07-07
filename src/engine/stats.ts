@@ -683,6 +683,9 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** SHIELD-BASH payload multiplier (base 1) — Reckless Rampart's crank,
    *  investable by anything that can grant a modifier. */
   bashPower:      { label: 'Shield Bash Power', base: 1, min: 0 },
+  /** IMPALE: fraction of a hit's PHYSICAL damage DRIVEN IN as the lodged
+   *  spear's bank (the impaled status) — discharged by the next hit. */
+  impalePower:    { label: 'Impale Effect', base: 0, min: 0, percent: true },
   /** >0: a held channel's facing REVOLVES at this rate (rad/s) instead of
    *  tracking the aim — the beam becomes a lighthouse (Orbital Sweep). */
   channelAutoSpin:{ label: 'Channel Revolution', base: 0 },

@@ -2123,6 +2123,21 @@ export interface TransfuseStatusEffect {
   splash?: number;
 }
 
+/** EXTRACTION (the impale economy's recall): every lodged spear
+ *  (dischargeOnHit status) within `radius` of the caster is WRENCHED
+ *  FREE — its bank pops on its host at `damageScale`, and the spear
+ *  flies home as a REAL projectile (impale_spear, flat-loaded with a
+ *  share of the bank), piercing whatever stands along the way. */
+export interface RecallImpalesEffect {
+  type: 'recallImpales';
+  radius: number;
+  /** The pop on the host, × the lodged bank (default 1). */
+  damageScale?: number;
+  /** Fraction of the bank the homeward spear carries as flat physical
+   *  (default 0.5). */
+  spearShare?: number;
+}
+
 export type SkillEffect =
   | DamageEffect | StatusEffect | BuffEffect | KnockbackEffect
   | PullEffect | SpawnZoneEffect | GainChargeEffect | AbsorbEffect
@@ -2132,7 +2147,8 @@ export type SkillEffect =
   | RestoreOverTimeEffect | WardEffect | SiphonOrbEffect
   | DetonateMinionsEffect | SpawnCorpseEffect | ShatterConstructsEffect
   | MinionCastEffect | PayLedgerEffect
-  | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect;
+  | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
+  | RecallImpalesEffect;
 
 // --- The skill definition ---------------------------------------------------
 

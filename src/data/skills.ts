@@ -2764,6 +2764,53 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('effectDuration', 'increased', 0.05)] },
   },
 
+  // --- The impale economy (the PoE homage, single-pop form) -----------------
+  // impalePower banks a fraction of each hit's PHYSICAL roll as a lodged
+  // spear (the 'impaled' status); the NEXT top-level hit discharges the
+  // whole bank as its own separate mitigated blow. Skewer carries it
+  // innately, Skewering Blows grafts it onto any attack, and Extraction
+  // wrenches every lodged spear home — pops and all.
+
+  skewer: {
+    id: 'skewer', name: 'Skewer',
+    description: 'A driving thrust that leaves STEEL BEHIND: a third of the blow\'s physical force lodges in the wound as a spearhead, and your NEXT hit drives it through — the stored violence landing as its own separate blow. Stack the steel, then knock it home.',
+    tags: ['attack', 'melee', 'physical'], color: '#c8ccd8',
+    manaCost: 6, cooldown: 0, useTime: 0.5,
+    baseDamage: { physical: [12, 18] },
+    innateMods: [mod('impalePower', 'flat', 0.35)],
+    delivery: { type: 'melee', range: 100, arcDeg: 40 },
+    effects: [{ type: 'damage' }],
+    requirements: { strength: 14, dexterity: 12 },
+    ai: { range: 95, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09)] },
+  },
+
+  spear_recall: {
+    id: 'spear_recall', name: 'Extraction',
+    description: 'WRENCH every lodged spear free at once: each impalement in reach pops its whole stored violence into its host — and the steel itself flies HOME to your hand, piercing whatever stands between. The harvest, called back through the crowd.',
+    tags: ['attack', 'physical', 'aoe', 'instant'], color: '#aab4c8',
+    manaCost: 10, cooldown: 5, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'recallImpales', radius: 460, damageScale: 1.2, spearShare: 0.5 }],
+    requirements: { strength: 14, dexterity: 14 },
+    ai: { range: 300, weight: 2 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  // Extraction's homeward shaft (flat-loaded with the wrenched bank).
+  impale_spear: {
+    id: 'impale_spear', name: 'Wrenched Spear', noDrop: true,
+    description: 'Lodged steel, recalled the hard way.',
+    tags: ['attack', 'projectile', 'physical'], color: '#c8ccd8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [3, 5] },
+    delivery: { type: 'projectile', speed: 640, radius: 8, range: 760, pierce: 99 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.25, magnitude: 0.3 },
+    ],
+  },
+
   pinning_spear: {
     id: 'pinning_spear', name: 'Pinning Spear',
     description: 'Hurl a spear that punches through one rank and PLANTS where it lands — a standing shaft the rest of your kit can use (Tripwire Web strings killing fences between planted spears). The battlefield remembers where you threw.',
