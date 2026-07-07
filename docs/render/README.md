@@ -124,6 +124,27 @@ fast, fog seeps), and `WEATHER_FX.fadeIn` crossfades the DISPLAYED weather
 per kind in the renderer (`smoothWeather`) — a kind may still slam in by
 design with a small fadeIn.
 
+## Walk-under trees, sun shadows, fog, Foresight
+
+TREES have TRUNKS: `DoodadRule.bodyScale` makes movement/projectiles/spawn
+clearance use `bodyRadiusOf` (the bole) while sight, occlusion, and shade
+keep the full canopy radius. Crowns come from the canopy registry —
+`leafCrown` (deciduous), `pineCrown` (conifer), `bramble` (thicket) — and
+the `conifer` + `ancient_tree` kinds anchor dense forests. Anyone beneath an
+unfaded crown is unseen until the hero steps under too.
+
+SUN SHADOWS: `sunCast(time)` gives a direction that spins through daylight
+and a reach that stretches at low sun; kinds opt in via
+`DoodadVisualDef.longShadow` (a radius multiplier).
+
+FOG BANKS: `fog_bank` doodads billow on the canopy pass and apply FOGVEILED
+(detectability −35%) through the region registry — `groundAt` now falls back
+to ANY registered ground kind, so new sensed terrains (webbing, reeds) are
+one `registerRegion` row.
+
+FORESIGHT: enemy ground-delivery wind-ups mark their landing with a dashed
+ring firming toward impact (`Settings.castTelegraphs`, in the options panel).
+
 ## The `compound` structure generator
 
 The room-grammar composer (`engine/structureGen.ts`): a footprint BSP-split
