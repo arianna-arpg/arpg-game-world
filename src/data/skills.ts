@@ -1107,6 +1107,32 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 400, weight: 2, keepDistance: 280 },
   },
 
+  inferno: {
+    id: 'inferno', name: 'Inferno',
+    description: 'CHANNELED: the mouth of the furnace opens — individual GOUTS of rolling flame pour out toward your aim, one after another, each a wave that travels and burns on its own. Let go and the mouth closes; the gouts already loosed keep rolling. The Pit Lord\'s breath.',
+    tags: ['spell', 'fire', 'projectile', 'channel', 'duration'], color: '#ff7a30',
+    manaCost: 3, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    // Each pulse IS a gout: the channel's interval is the spawn cadence,
+    // and ending the channel only stops SPAWNING — live gouts fly on.
+    // Mobile-ish and quick-turning (D2's hose, not the siege beam).
+    channel: {
+      interval: 0.16, move: 'slowed', moveFactor: 0.45, turnRate: 3.4, trackAim: true,
+    },
+    baseDamage: { fire: [4, 7] },
+    delivery: {
+      type: 'projectile', speed: 250, radius: 14, range: 300, pierce: 3,
+      shape: 'wave',
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.3, magnitude: 0.3 },
+    ],
+    requirements: { intelligence: 20 },
+    ai: { range: 260, weight: 2, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09)] },
+  },
+
   infernal_ray: {
     id: 'infernal_ray', name: 'Infernal Ray',
     description: 'CHANNELED (immobile, ponderous turning): a ray of fire that COMPOUNDS the longer it is held — feeble at first, up to +200% damage and double area for the patient. Commit or don\'t.',
@@ -5704,6 +5730,29 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     requirements: { willpower: 18, intelligence: 12 },
     ai: { range: 160, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('effectDuration', 'increased', 0.04)] },
+  },
+
+  creeping_frost: {
+    id: 'creeping_frost', name: 'Creeping Frost',
+    description: 'Loose a bolt of packed ice — STRAIGHT, no seeking — that BURSTS where it lands and leaves a patch of murderous winter. The bolt flies dumb; the WINTER does the hunting: the patch slinks after whatever lives nearby, gnawing and chilling everything it slides beneath.',
+    tags: ['spell', 'cold', 'projectile', 'aoe', 'duration'], color: '#7ad4e8',
+    manaCost: 13, cooldown: 3, useTime: 0.6,
+    baseDamage: { cold: [8, 13] },
+    delivery: {
+      type: 'projectile', speed: 460, radius: 9, range: 420, pierce: 0,
+      explode: { radius: 70, damageScale: 0.8 },
+      endZone: {
+        radius: 80, duration: 4.5, tickInterval: 0.5, damageScale: 0.35,
+        seek: { speed: 55, range: 380 },
+      },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.6 },
+    ],
+    requirements: { intelligence: 18 },
+    ai: { range: 380, weight: 2, keepDistance: 240 },
     leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('effectDuration', 'increased', 0.04)] },
   },
 

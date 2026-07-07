@@ -523,8 +523,10 @@ export interface ProjectileDelivery {
   aura?: { radius: number; dps: number; damageType?: DamageType };
   /** END ZONE (Blightspear): a lingering cloud blooms where the flight
    *  DIES — impact or spent range alike (the always-bursting lob; explode
-   *  is its hit-damage sibling). damageScale defaults 0.5. */
-  endZone?: { radius: number; duration: number; tickInterval?: number; damageScale?: number };
+   *  is its hit-damage sibling). damageScale defaults 0.5. `seek` makes
+   *  the bloom HUNT (Creeping Frost's slinking winter — see
+   *  GroundDelivery.seek for the semantics). */
+  endZone?: { radius: number; duration: number; tickInterval?: number; damageScale?: number; seek?: { speed: number; range?: number } };
   /** The RETURN is CATCHABLE (Gyreblade): a homeward projectile arriving
    *  at its caster banks charges instead of just dying — fuel for a
    *  follow-up that hurls the caught blades back out. */
@@ -791,6 +793,12 @@ export interface GroundDelivery {
   line?: { segments: number; spacing: number };
   /** The lingering zone CREEPS forward along the cast facing (units/s). */
   drift?: number;
+  /** SEEKING GROUND (Creeping Frost): the lingering zone SLINKS toward
+   *  the nearest living enemy at `speed` units/s (hunting within `range`,
+   *  default 420; with nothing to stalk it stands). Breakable furniture
+   *  is never prey. Composes with grow/retract; where both exist, seek
+   *  steers and drift's straight-line creep gives way. */
+  seek?: { speed: number; range?: number };
   /** The lingering zone REVOLVES: its facing spins at this rate (rad/s) —
    *  meaningful for FACED shapes (crescents, triangles): Cinderwhirl's
    *  rotating flame. BASE of the aoeSpin stat query, so a support can
