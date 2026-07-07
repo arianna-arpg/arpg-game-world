@@ -87,12 +87,14 @@ export function luminance(hex: string): number {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
-/** Tiny deterministic hash → 0..1 (speckle/texture jitter without RNG state). */
+/** Tiny deterministic hash → 0..1 (speckle/texture jitter without RNG state).
+ *  imul-mixed with UNSIGNED shifts — the first draft sign-extended and
+ *  clustered below 0.5, which flattened every noise consumer. */
 export function hash01(x: number, y: number, seed = 0): number {
-  let h = (x * 374761393 + y * 668265263 + seed * 2147483647) | 0;
-  h = (h ^ (h >> 13)) | 0;
-  h = Math.imul(h, 1274126177);
-  return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+  let h = (Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(seed, 69068069)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
 }
 
 /** 2-octave value noise on a lattice — smooth, deterministic, allocation-free.

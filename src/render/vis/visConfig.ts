@@ -48,11 +48,11 @@ export const VIS_CFG = {
   /** Ground texture chunks. */
   ground: {
     /** Chunk edge in world units (one baked canvas per chunk). */
-    chunk: 512,
+    chunk: 448,
     /** Baked mottle cell size (world units) — the flat-shaded grain. */
     cell: 8,
     /** Base-noise frequency (world units → noise lattice). */
-    noiseScale: 0.012,
+    noiseScale: 0.0085,
     /** Mottle strength: how far cells swing between grid-dark & floor-light. */
     mottleAlpha: 0.5,
     /** Sparse speckle details per chunk (pebbles, tufts, grit). */
@@ -64,8 +64,9 @@ export const VIS_CFG = {
     /** The old reference grid, now whisper-faint (0 = off). */
     gridAlpha: 0.045,
     gridStep: 96,
-    /** LRU cap on live chunks (boundless zones stream forever). */
-    maxChunks: 110,
+    /** LRU cap on live chunks (boundless zones stream forever) — ~0.8 MB
+     *  each at 448², so the cap bounds the floor cache near 50 MB. */
+    maxChunks: 60,
   },
 
   /** Dynamic light layer. */

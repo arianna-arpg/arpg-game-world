@@ -34,6 +34,9 @@ export class GridWalkField implements WalkField {
   /** byte → region-kind id. Byte 0 is always 'wall' (the unpainted default), so an
    *  all-zero kind array = an all-blocked grid (byte-identical to Phase 2). */
   private kindList: string[] = ['wall'];
+  /** Bumped on every region repaint (door breaks, terraforms) — cache-keying
+   *  seam for anything that bakes the grid (the renderer's ground chunks). */
+  version = 0;
   /** Connected-component label per cell (-1 = blocked / unlabeled). Lazy. */
   private region: Int32Array | null = null;
   /** LRU of BFS distance-fields keyed by target cell — so the common mix of the
@@ -80,7 +83,7 @@ export class GridWalkField implements WalkField {
       const i = cy * this.cols + cx;
       this.kind[i] = byte; this.mask[i] = walkable;
     }
-    this.region = null; this.distCache.clear();
+    this.region = null; this.distCache.clear(); this.version++;
   }
 
   /** Paint walkable ('ground') or blocked ('wall') — the Phase-2 wrapper over
@@ -102,7 +105,7 @@ export class GridWalkField implements WalkField {
       const i = gy * this.cols + gx;
       this.kind[i] = byte; this.mask[i] = walkable;
     }
-    this.region = null; this.distCache.clear();
+    this.region = null; this.distCache.clear(); this.version++;
   }
 
   /** Paint a WORLD-space thick line (corridor) walkable, `halfW` to each side. */

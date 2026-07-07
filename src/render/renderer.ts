@@ -35,6 +35,7 @@ import { MONSTERS } from '../data/monsters';
 import { hexToRgb, shade, withAlpha } from './vis/color';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawShadow } from './vis/sprites';
+import { GroundRenderer } from './vis/ground';
 import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
@@ -848,35 +849,53 @@ export class Renderer {
     const { ctx } = this;
     const { w, h } = world.arena;
     const theme = world.zone.theme;
-    // BOUNDLESS (the Descent): no edges — fill + grid the VISIBLE window around the
-    // camera (the floor scrolls with the player forever), and draw NO border.
+    const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
+    // BOUNDLESS (the Descent): no edges — stream baked chunks around the
+    // camera forever, and draw NO border.
     if (world.arena.boundless) {
-      const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
-      const x0 = this.cam.x, y0 = this.cam.y, x1 = x0 + vw, y1 = y0 + vh;
-      ctx.fillStyle = theme.floor;
-      ctx.fillRect(x0, y0, vw, vh);
-      ctx.strokeStyle = theme.grid;
-      ctx.lineWidth = 1;
-      const grid = 96;
-      ctx.beginPath();
-      for (let x = Math.floor(x0 / grid) * grid; x <= x1; x += grid) { ctx.moveTo(x, y0); ctx.lineTo(x, y1); }
-      for (let y = Math.floor(y0 / grid) * grid; y <= y1; y += grid) { ctx.moveTo(x0, y); ctx.lineTo(x1, y); }
-      ctx.stroke();
+      this.ground.draw(ctx, world, this.cam.x, this.cam.y, vw, vh);
+      this.drawAnimatedRegions(world);
       return;
     }
     const ell = world.arena.shape === 'ellipse';
     ctx.save();
-    if (ell) { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2); ctx.clip(); }
-    ctx.fillStyle = theme.floor;
-    ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = theme.grid;
-    ctx.lineWidth = 1;
-    const grid = 96;
     ctx.beginPath();
-    for (let x = 0; x <= w; x += grid) { ctx.moveTo(x, 0); ctx.lineTo(x, h); }
-    for (let y = 0; y <= h; y += grid) { ctx.moveTo(0, y); ctx.lineTo(w, y); }
-    ctx.stroke();
-    this.drawWalkMask(world); // NON-CONVEX zones: paint the non-walkable cells as void
+    if (ell) ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+    else ctx.rect(0, 0, w, h);
+    ctx.clip();
+    // The floor itself: baked noise-mottled chunks (vis/ground.ts) — texture,
+    // speckle, wall bevels and contact AO all land in one drawImage per chunk.
+    this.ground.draw(ctx, world, this.cam.x, this.cam.y, vw, vh);
+    this.drawAnimatedRegions(world);
+    // Soft edge vignette — the world settles into its bounds instead of
+    // ending on a hairline.
+    const D = 90;
+    if (ell) {
+      ctx.save();
+      ctx.translate(w / 2, h / 2);
+      ctx.scale(1, h / w);
+      const R = w / 2;
+      const g = ctx.createRadialGradient(0, 0, Math.max(1, R - D), 0, 0, R);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.38)');
+      ctx.fillStyle = g;
+      ctx.fillRect(-R, -R * (w / h), R * 2, (R * (w / h)) * 2);
+      ctx.restore();
+    } else {
+      const edges: [number, number, number, number, number, number, number, number][] = [
+        [0, 0, w, D, 0, 0, 0, D],          // top
+        [0, h - D, w, D, 0, h, 0, h - D],  // bottom
+        [0, 0, D, h, 0, 0, D, 0],          // left
+        [w - D, 0, D, h, w, 0, w - D, 0],  // right
+      ];
+      for (const [rx, ry, rw, rh, gx0, gy0, gx1, gy1] of edges) {
+        const g = ctx.createLinearGradient(gx0, gy0, gx1, gy1);
+        g.addColorStop(0, 'rgba(0,0,0,0.32)');
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(rx, ry, rw, rh);
+      }
+    }
     ctx.restore();
     ctx.strokeStyle = theme.border;
     ctx.lineWidth = 4;
@@ -884,20 +903,13 @@ export class Renderer {
     else ctx.strokeRect(0, 0, w, h);
   }
 
-  /** NON-CONVEX zones (Phase 2/3): paint each grid cell by its REGION KIND — walls
-   *  as void-black, and any kind with a `visual` (void, deep_water, air_pocket, a
-   *  shimmer…) with its data-driven wash. So rooms read as carved space and water/
-   *  void/visual regions render distinctly — all from the registry, no per-kind draw
-   *  branch. Only viewport cells. Null walk (plains + existing) → nothing happens. */
-  private drawWalkMask(world: World): void {
+  /** ANIMATED region visuals (flesh throb, water drift) — the only per-frame
+   *  cell painting left. Every STATIC cell (walls, still visuals, bevels,
+   *  contact AO) bakes into the ground chunks; see vis/ground.ts. */
+  private drawAnimatedRegions(world: World): void {
     const wf = world.walk;
     if (!(wf instanceof GridWalkField)) return;
     const { ctx } = this;
-    // Solid wall cells take the ZONE THEME's wall/obstacle colour (so rooms read as
-    // carved stone, flesh as fleshy tissue, etc.) instead of a hardcoded void-black.
-    // The actual void/fall region is UNAFFECTED — it carries its own dark `visual`
-    // and takes the branch above, so it stays distinct from a themed wall.
-    const wallFill = world.zone.theme.wall ?? world.zone.theme.obstacle ?? '#07070b';
     const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
     const cell = wf.cell;
     const c0 = Math.max(0, Math.floor(this.cam.x / cell));
@@ -907,18 +919,14 @@ export class Renderer {
     for (let cy = r0; cy < r1; cy++) {
       for (let cx = c0; cx < c1; cx++) {
         const id = wf.regionAt((cx + 0.5) * cell, (cy + 0.5) * cell);
-        if (id === 'ground') continue; // plain walkable floor — leave the theme fill
-        const def = regionKind(id);
-        const vis = def?.visual;
-        if (vis) {
-          let alpha = vis.alpha ?? 1;
-          // Animated regions (flesh throb, water drift) breathe via a sine on the clock.
-          if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(performance.now() / 650 + cx * 0.3 + cy * 0.3);
-          else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(performance.now() / 900 + cx * 0.2);
-          ctx.globalAlpha = Math.max(0, alpha); ctx.fillStyle = vis.fill;
-        }
-        else if (def?.walkable) continue;          // a walkable kind w/o visual — leave floor
-        else { ctx.globalAlpha = 1; ctx.fillStyle = wallFill; } // wall default — themed
+        if (id === 'ground') continue;
+        const vis = regionKind(id)?.visual;
+        if (!vis?.animate) continue;
+        let alpha = vis.alpha ?? 1;
+        if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(performance.now() / 650 + cx * 0.3 + cy * 0.3);
+        else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(performance.now() / 900 + cx * 0.2);
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.fillStyle = vis.fill;
         ctx.fillRect(cx * cell, cy * cell, cell + 0.6, cell + 0.6);
       }
     }
@@ -943,6 +951,8 @@ export class Renderer {
    *  overdraw beyond a doodad's radius (canopy crowns, vent rims, blob grow). */
   private culled = new Map<string, Doodad[]>();
   private culledAll: Doodad[] = [];
+  /** The baked-floor chunk cache (vis/ground.ts). */
+  private ground = new GroundRenderer();
   private cullDoodads(world: World, vw: number, vh: number): void {
     const pad = RENDER_CULL_PAD;
     const L = this.cam.x - pad, T = this.cam.y - pad;
