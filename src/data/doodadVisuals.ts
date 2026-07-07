@@ -92,12 +92,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       glisten: { color: '#e8a8b0' },
     },
   },
+  // THE HYPHAL NETWORK: the fungal floor is a living circuit — filaments
+  // crawl out of the mat and nutrient pulses travel the strands.
   mycelial_mat: {
-    painter: 'liquid', order: 28,
-    params: {
-      rim: { color: '#2a3a1e', alpha: 0.5, grow: 3 },
-      core: { color: '#6fae4a', alpha: 0.36 },
-    },
+    painter: 'hyphae', order: 28,
+    params: { base: '#6fae4a', strand: '#9fd47a', pulse: '#d8ffb0' },
     light: { radius: -1.3, color: '#8fd06f', intensity: 0.14 },
   },
   vines: {
@@ -255,14 +254,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   giant_mushroom: {
     longShadow: 0.8,
     painter: 'groundShadow', order: 50, params: { scale: 0.34, color: '#241c2e' },
-    canopy: { painter: 'mushroomCrown', params: { caps: 1 } },
+    canopy: {
+      painter: 'mushroomCrown',
+      params: { caps: 1, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
+    },
     light: { radius: -1.6, color: '#8fd06f', intensity: 0.18 },
   },
   fruiting_tower: {
     longShadow: 0.9,
     painter: 'groundShadow', order: 50, params: { scale: 0.34, color: '#241c2e' },
-    canopy: { painter: 'mushroomCrown', params: { caps: 3 } },
+    canopy: {
+      painter: 'mushroomCrown',
+      params: { caps: 3, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
+    },
     light: { radius: -1.8, color: '#8fd06f', intensity: 0.2 },
+  },
+  shelf_fungus: {
+    painter: 'shelfFungus', order: 52, shadow: 0.5,
+    params: { wood: '#4a3626', shelf: '#c8a05a', ring: '#8a6a3a', glow: '#e8c87f' },
+    light: { radius: -1.7, color: '#e8c87f', intensity: 0.12 },
+  },
+  toadstool: {
+    painter: 'toadstools', order: 47,
+    params: { cap: '#b8434e', speck: '#f0e6d8' },
   },
   kelp: { painter: 'kelp', order: 48 },
   coral: { painter: 'coral', order: 52, shadow: 0.5 },

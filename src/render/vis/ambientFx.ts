@@ -12,7 +12,7 @@ import { dayCycle } from '../../world/daynight';
 import { hash01, withAlpha } from './color';
 
 export interface AmbientFxSpec {
-  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora';
+  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores';
   /** 0..1 strength (default 1). */
   intensity?: number;
   color?: string;
@@ -27,7 +27,59 @@ export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec
     case 'heatHaze': return heatHaze(ctx, w, h, t, k, spec.color ?? '#ffe8c0');
     case 'motes': return motes(ctx, w, h, t, k, spec.color ?? '#e8f0d8');
     case 'aurora': return aurora(ctx, w, h, t, k, spec.color ?? '#7fe8b8');
+    case 'spores': return spores(ctx, w, h, t, k, spec.color ?? '#b8e88f');
   }
+}
+
+/** FUNGAL SPORES — luminous motes on their own slow convection: bigger and
+ *  lazier than dust, each breathing its glow, falling more than flying. Every
+ *  few seconds a PUFF lets go somewhere and a loose cluster rides up through
+ *  the view together — a cap exhaling just off-screen. */
+function spores(ctx: CanvasRenderingContext2D, w: number, h: number,
+  t: number, k: number, color: string): void {
+  ctx.save();
+  const n = Math.round(24 * k);
+  for (let i = 0; i < n; i++) {
+    const sink = 8 + hash01(i, 3) * 12;
+    const x = (hash01(i, 7) * w + Math.sin(t * 0.5 + i * 2.1) * 46 + t * 4 + w) % w;
+    const y = (hash01(i, 11) * h + t * sink + Math.sin(t * 0.8 + i) * 18) % h;
+    const r = 1.3 + hash01(i, 13) * 1.9;
+    const breathe = 0.5 + 0.5 * Math.sin(t * 1.1 + i * 1.7);
+    // Soft halo, then the mote itself.
+    ctx.globalAlpha = 0.07 * k * breathe;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.34 * k * (0.4 + 0.6 * breathe);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // The puff: a deterministic window picks a spot; a cluster rises and spreads.
+  const PERIOD = 9;
+  const win = Math.floor(t / PERIOD);
+  const age = (t - win * PERIOD) / PERIOD;
+  if (age < 0.6) {
+    const bx = hash01(win, 29) * w * 0.8 + w * 0.1;
+    const by = hash01(win, 31) * h * 0.6 + h * 0.3;
+    const burst = 8 + (win % 5);
+    ctx.fillStyle = color;
+    for (let i = 0; i < burst; i++) {
+      const a = -Math.PI / 2 + (hash01(i, win) - 0.5) * 1.7;
+      const d = age * (90 + hash01(i, win + 5) * 130);
+      const x = bx + Math.cos(a) * d + Math.sin(t * 2 + i) * 6;
+      const y = by + Math.sin(a) * d;
+      const r = (2.2 - age * 1.6) * (0.7 + hash01(i, win + 9) * 0.6);
+      if (r <= 0.3) continue;
+      ctx.globalAlpha = 0.4 * k * (1 - age / 0.6);
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 /** THE AURORA — slow luminous curtains waving across the upper sky, only

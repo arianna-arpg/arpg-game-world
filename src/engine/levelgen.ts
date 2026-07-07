@@ -124,7 +124,10 @@ export type KnownDoodadKind =
   | 'rock_spire'  // a standing pinnacle — solid, blocks shots, casts long
   // Flora clarity (bush-vs-canopy round)
   | 'berry_bush'  // a fruiting shrub — CONCEALS like brush, wears berries
-  | 'fern';       // feathery understory fronds (pure decoration)
+  | 'fern'        // feathery understory fronds (pure decoration)
+  // The fungal kit (Mycelia identity round)
+  | 'shelf_fungus' // blocks feet not shots — bracket shelves off a woody heart
+  | 'toadstool';   // ground decoration: speckled little caps (fairy-ring folk)
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -504,6 +507,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // are pure understory decoration.
   berry_bush: { overlap: 'ground' },
   fern:       { overlap: 'ground', walkOnly: true },
+  // The fungal kit: shelves are low solids (step behind, shoot over);
+  // toadstools are walkable fairy-ring decoration.
+  shelf_fungus: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 36, forbidOn: ['water', 'lava', 'chasm'] },
+  toadstool:    { overlap: 'ground', walkOnly: true },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -1957,6 +1964,9 @@ registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
 // Flora clarity: fruiting bush clumps + feathery fern understory.
 registerStamp('berry_bush', (ctx, spec) => stampBlob(ctx, 'berry_bush', spec.radius ?? [16, 34], [2, 4], false));
 registerStamp('fern', (ctx, spec) => stampBlob(ctx, 'fern', spec.radius ?? [14, 30], [3, 6], false));
+// The fungal kit: bracket shelves + toadstool huddles.
+registerStamp('shelf_fungus', (ctx, spec) => stampSolid(ctx, 'shelf_fungus', spec.radius ?? [12, 22]));
+registerStamp('toadstool', (ctx, spec) => stampBlob(ctx, 'toadstool', spec.radius ?? [10, 20], [2, 4], false));
 registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
 registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
 registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));
@@ -1966,12 +1976,16 @@ registerStamp('mushroom_ring', (ctx, spec) => {
   const R = ctx.rng.range((spec.radius ?? [34, 60])[0], (spec.radius ?? [34, 60])[1]);
   const center = findSpot(ctx, R + 14, true, 24, true, 'glow_cap');
   if (!center) return;
+  // The FAIRY RING proper: glow-caps alternating with speckled toadstool
+  // huddles around the circle — folklore says don't stand in the middle.
   const n = ctx.rng.int(5, 8);
   for (let i = 0; i < n; i++) {
     const a = (i / n) * Math.PI * 2 + ctx.rng.range(-0.15, 0.15);
+    const toad = i % 2 === 1;
     ctx.doodads.push({
       pos: vec(center.x + Math.cos(a) * R, center.y + Math.sin(a) * R),
-      radius: ctx.rng.range(6, 10), kind: 'glow_cap',
+      radius: toad ? ctx.rng.range(8, 13) : ctx.rng.range(6, 10),
+      kind: toad ? 'toadstool' : 'glow_cap',
     });
   }
 });

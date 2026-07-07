@@ -1793,6 +1793,189 @@ const fern: GroupPainter = (env, group, def) => {
   }
 };
 
+// --- THE FUNGAL KIT -----------------------------------------------------------
+// Mycelia's identity vocabulary: the floor is a NETWORK (hyphae with nutrient
+// pulses traveling the strands), the walls grow SHELVES, and the fairy rings
+// crowd with speckled TOADSTOOLS. Every color is a param — any biome can grow
+// its own fungus by saying different words.
+
+/** THE HYPHAL NETWORK — the mycelial mat as living tissue: a translucent loam
+ *  wash, branching luminous filaments crawling out of each disc's heart, and
+ *  bright PULSES traveling the strands — nutrients on the move. The fungal
+ *  floor becomes a circuit you can read. */
+const hyphae: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { base?: ColorSpec; strand?: ColorSpec; pulse?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const baseCol = resolveColor(p.base, theme, '#6fae4a');
+  const strandCol = resolveColor(p.strand, theme, '#9fd47a');
+  const pulseCol = resolveColor(p.pulse, theme, '#d8ffb0');
+  ctx.globalAlpha = 0.28;
+  ctx.fillStyle = shade(baseCol, -0.4);
+  blobPath(ctx, group, 3);
+  ctx.fill();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = baseCol;
+  blobPath(ctx, group, -4);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.lineCap = 'round';
+  for (const d of group) {
+    const seed = ((d.pos.x * 23 + d.pos.y * 9) | 0) >>> 0;
+    const strands = Math.min(12, Math.max(4, Math.round(d.radius / 9)));
+    for (let i = 0; i < strands; i++) {
+      const a0 = (i / strands) * Math.PI * 2 + hash01(i, seed) * 0.8;
+      const pts: { x: number; y: number }[] = [{
+        x: d.pos.x + Math.cos(a0) * d.radius * 0.1,
+        y: d.pos.y + Math.sin(a0) * d.radius * 0.1,
+      }];
+      let ang = a0;
+      for (let s = 0; s < 3; s++) {
+        ang += (hash01(i * 5 + s, seed + 7) - 0.5) * 0.9;
+        pts.push({
+          x: pts[s].x + Math.cos(ang) * d.radius * 0.27,
+          y: pts[s].y + Math.sin(ang) * d.radius * 0.27,
+        });
+      }
+      ctx.globalAlpha = 0.42;
+      ctx.strokeStyle = strandCol;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      pts.forEach((q, qi) => { if (qi === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y); });
+      ctx.stroke();
+      // One fork off the elbow, thinner.
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(pts[2].x, pts[2].y);
+      ctx.lineTo(pts[2].x + Math.cos(ang + 1) * d.radius * 0.18,
+        pts[2].y + Math.sin(ang + 1) * d.radius * 0.18);
+      ctx.stroke();
+      // THE PULSE: a bright nutrient packet sliding root-to-tip on its own clock.
+      const cyc = (time * (0.22 + hash01(i, seed + 11) * 0.18) + hash01(i, seed + 13)) % 1;
+      const fs = cyc * (pts.length - 1);
+      const si = Math.min(pts.length - 2, Math.floor(fs));
+      const ft = fs - si;
+      const px = pts[si].x + (pts[si + 1].x - pts[si].x) * ft;
+      const py = pts[si].y + (pts[si + 1].y - pts[si].y) * ft;
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = pulseCol;
+      ctx.beginPath();
+      ctx.arc(px, py, 4.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath();
+      ctx.arc(px, py, 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+};
+
+/** BRACKET SHELVES — half-disc fungal steps fanned off a woody heart, each
+ *  growth-ringed like the tree it ate, rim-lit by a faint breathing glow. */
+const shelfFungus: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; shelf?: ColorSpec; ring?: ColorSpec; glow?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const wood = resolveColor(p.wood, theme, '#4a3626');
+  const shelf = resolveColor(p.shelf, theme, '#c8a05a');
+  const ring = resolveColor(p.ring, theme, '#8a6a3a');
+  const glow = resolveColor(p.glow, theme, '#e8c87f');
+  for (const o of group) {
+    const seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    // The woody heart the shelves stepped out of.
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(wood, -0.4), 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    const shelves = 3 + (seed % 3);
+    const breathe = 0.5 + 0.5 * Math.sin(time * 1.4 + o.pos.x * 0.05);
+    for (let i = 0; i < shelves; i++) {
+      const a = (i / shelves) * Math.PI * 2 + hash01(i, seed) * 0.6;
+      const sr = o.radius * (0.42 + hash01(i, seed + 5) * 0.24);
+      const sx = Math.cos(a) * o.radius * 0.32, sy = Math.sin(a) * o.radius * 0.32;
+      // The bracket: a D-shaped half-disc opening outward.
+      ctx.fillStyle = shade(shelf, (hash01(i, seed + 9) - 0.5) * 0.2);
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, sr, sr * 0.66, a, -Math.PI / 2, Math.PI / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(shelf, -0.45), 0.8);
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      // Growth bands following the rim.
+      ctx.strokeStyle = withAlpha(ring, 0.7);
+      ctx.lineWidth = 1;
+      for (const f of [0.72, 0.45]) {
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, sr * f, sr * f * 0.66, a, -Math.PI / 2, Math.PI / 2);
+        ctx.stroke();
+      }
+      // The lip's living glow.
+      ctx.globalAlpha = 0.25 + 0.3 * breathe;
+      ctx.strokeStyle = glow;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(sx, sy, sr * 0.94, sr * 0.62, a, -Math.PI / 2.4, Math.PI / 2.4);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+};
+
+/** A TOADSTOOL CLUMP — little speckled caps huddling two-to-four: the fairy
+ *  ring's citizens. Cap tone jitters per cap; specks ring the crown. */
+const toadstools: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { cap?: ColorSpec; speck?: ColorSpec };
+  const { ctx, theme } = env;
+  const cap = resolveColor(p.cap, theme, '#b8434e');
+  const speck = resolveColor(p.speck, theme, '#f0e6d8');
+  for (const o of group) {
+    const seed = ((o.pos.x * 7 + o.pos.y * 19) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    const n = 2 + (seed % 3);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, seed) * 1.1;
+      const d = i === 0 ? 0 : o.radius * (0.4 + hash01(i, seed + 3) * 0.3);
+      const cr = o.radius * (0.3 + hash01(i, seed + 7) * 0.16);
+      const cx = Math.cos(a) * d, cy = Math.sin(a) * d;
+      // Cap with an off-center sun catch, rimmed dark.
+      ctx.fillStyle = shade(cap, (hash01(i, seed + 9) - 0.4) * 0.24);
+      ctx.beginPath();
+      ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(cap, -0.5), 0.75);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = shade(cap, 0.3);
+      ctx.beginPath();
+      ctx.ellipse(cx - cr * 0.28, cy - cr * 0.28, cr * 0.42, cr * 0.3, -0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      // The warts.
+      ctx.fillStyle = speck;
+      const specks = 3 + ((seed + i) % 3);
+      for (let k = 0; k < specks; k++) {
+        const ka = hash01(k, seed + i * 11) * Math.PI * 2;
+        const kd = Math.sqrt(hash01(k, seed + i * 13)) * cr * 0.7;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(ka) * kd, cy + Math.sin(ka) * kd, 0.5 + cr * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+};
+
 /** HEAT SHIMMER — wavering desert air: rising serpentine heat-lines and a
  *  faint hot lens over the ground. Barely-there by design; the sunscorch
  *  stacks it feeds are the teeth (World.updateHeat). */
@@ -2865,6 +3048,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
   campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,
+  hyphae, shelfFungus, toadstools,
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
@@ -2939,25 +3123,64 @@ const palmCrown: CanopyPainter = (env, o, alpha) => {
   ctx.restore();
 };
 
-/** Fungal crowns (giant mushroom / fruiting tower). */
+/** Fungal crowns (giant mushroom / fruiting tower) — the whole palette rides
+ *  params now (cap/glow/stalk/speck), plus GILL fringes under each rim and
+ *  wart SPECKS on the dome: one crown painter, every biome's mushroom. */
 const mushroomCrown: CanopyPainter = (env, o, alpha, params) => {
-  const p = params as { caps?: number };
-  const { ctx, time } = env;
+  const p = params as {
+    caps?: number; cap?: ColorSpec; glow?: ColorSpec; stalk?: ColorSpec;
+    speck?: ColorSpec; specks?: boolean; gills?: boolean;
+  };
+  const { ctx, theme, time } = env;
   const r = o.radius, caps = p.caps ?? 1;
+  const capCol = resolveColor(p.cap, theme, '#5a8a3a');
+  const glowCol = resolveColor(p.glow, theme, '#8fd06f');
+  const stalkCol = resolveColor(p.stalk, theme, '#3a2a5a');
+  const seed = ((o.pos.x * 13 + o.pos.y * 11) | 0) >>> 0;
   const glow = 0.55 + 0.35 * Math.sin(time * 1.6 + o.pos.x * 0.04);
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
   ctx.globalAlpha = alpha;
-  ctx.fillStyle = '#3a2a5a';
+  ctx.fillStyle = stalkCol;
   ctx.beginPath(); ctx.ellipse(0, r * 0.3, r * 0.34, r * (caps > 1 ? 1.1 : 0.7), 0, 0, Math.PI * 2); ctx.fill();
   for (let i = 0; i < caps; i++) {
     const cy = -r * (0.5 + i * 0.5), cr = r * (1 - i * 0.22);
+    // Gill fringe hanging under the rim.
+    if (p.gills !== false) {
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.strokeStyle = shade(stalkCol, 0.24);
+      ctx.lineWidth = 1;
+      const gills = Math.max(6, Math.round(cr / 5));
+      for (let g = 0; g <= gills; g++) {
+        const gx = -cr + (g / gills) * cr * 2;
+        const droop = Math.sqrt(Math.max(0, 1 - (gx / cr) * (gx / cr)));
+        ctx.beginPath();
+        ctx.moveTo(gx * 0.96, cy);
+        ctx.lineTo(gx * 0.96, cy + cr * 0.12 * droop);
+        ctx.stroke();
+      }
+    }
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = '#5a8a3a';
+    ctx.fillStyle = capCol;
     ctx.beginPath(); ctx.ellipse(0, cy, cr, cr * 0.6, 0, Math.PI, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = glow * alpha;
-    ctx.fillStyle = '#8fd06f';
+    ctx.fillStyle = glowCol;
     ctx.beginPath(); ctx.ellipse(0, cy, cr * 0.7, cr * 0.42, 0, Math.PI, Math.PI * 2); ctx.fill();
+    // Wart specks across the dome.
+    if (p.specks) {
+      const sc = resolveColor(p.speck, theme, '#e8f2da');
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.fillStyle = sc;
+      const n = 3 + ((seed + i) % 3);
+      for (let k = 0; k < n; k++) {
+        const ka = Math.PI + hash01(k, seed + i * 17) * Math.PI;
+        const kd = (0.3 + hash01(k, seed + i * 19) * 0.55);
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(ka) * cr * kd, cy + Math.sin(ka) * cr * 0.6 * kd,
+          cr * 0.06 + 0.6, cr * 0.045 + 0.5, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
   }
   ctx.globalAlpha = 1;
   ctx.restore();

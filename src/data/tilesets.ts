@@ -1158,16 +1158,28 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Bloom', 'Hollow', 'Warren', 'Thicket', 'Grotto', 'Spread', 'Flush', 'Tangle', 'Sprawl', 'Mat', 'Patch', 'Colony', 'Reach', 'Mire', 'Beds', 'Veil'],
     theme: {
       ambientDark: 0.25,
-      floor: '#160d1a', grid: '#221432', border: '#6a4a8a',
+      nightDark: 0.72,
+      floor: '#150c1c', grid: '#221432', border: '#6a4a8a',
       obstacle: '#3a2a5a', obstacleEdge: '#7a5aa8', accent: '#8fd06f', wall: '#3a2a5a',
       tree: '#4a6a3a', grass: '#5a7a3a',
+      // Bruised violet LOAM, blended smooth — the dark stage the biome's own
+      // bioluminescence (mats, crowns, spores) performs against.
+      ground: {
+        scale: 1.2, strength: 1.15, bias: 0.44, evenness: 0.55, speckles: 1.4,
+        palette: ['#0e0714', '#190f24', '#241536', '#372247', '#4a3358'],
+      },
+      // Luminous spores adrift on the grotto's own slow convection.
+      ambientFx: [{ kind: 'spores', intensity: 0.9, color: '#b8e88f' }],
     },
     sizeW: [2100, 2900], sizeH: [1500, 2200], ellipseChance: 0,
     // Organic fungal clutter scattered INSIDE the carved grotto chambers (myceliaLayout
-    // walk-gates them): towering caps, spore-pods that puff, glow-caps, a hyphal carpet.
+    // walk-gates them): towering caps, spore-pods that puff, glow-caps, the hyphal
+    // network, bracket shelves, fairy rings and their toadstool folk, pale ferns.
     layout: [
       { kind: 'giant_mushroom', count: [3, 6] }, { kind: 'spore_pod', count: [2, 4] },
       { kind: 'glow_cap', count: [4, 7] }, { kind: 'mycelial_mat', count: [3, 5] },
+      { kind: 'shelf_fungus', count: [2, 4] }, { kind: 'toadstool', count: [3, 6] },
+      { kind: 'mushroom_ring', count: [1, 2] }, { kind: 'fern', count: [1, 3] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
