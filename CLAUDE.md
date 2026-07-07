@@ -62,7 +62,13 @@ balance harness's smoke suite are how we verify changes.
   null-cost when unset. Node stops at `balance/cli.ts`; per-run reports
   land in `balance/reports/` (gitignored), committed baselines in
   `balance/baselines/`.
-- `src/render/` — Canvas 2D renderer (placeholder geometry art driven by data).
+- `src/render/` — Canvas 2D renderer + the VISUAL FABRIC (`render/vis/`):
+  materials registry (one flat def color → full shaded look), sprite bake
+  cache, baked actor bodies, ground texture chunks, the doodad painter
+  library (kinds map to painters via `src/data/doodadVisuals.ts` — a new
+  doodad kind needs ONE data entry, no renderer edits), the dynamic light
+  layer (doodad `light` specs as data), and weather particles. Tunables in
+  `render/vis/visConfig.ts`; docs in `docs/render/README.md`.
 - `src/ui/`, `src/net/`, `src/meta/` — DOM panels, co-op transport, and the
   account / save / permadeath meta-layer.
 - `launcher/` — the Electron desktop shell (plain CJS, type-checked via
