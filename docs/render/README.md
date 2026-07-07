@@ -206,6 +206,21 @@ every knob a genParam; fixed values are deterministic, ranges roll on the
 zone seed either way. `walled_manor`, `dungeon_block` and `market_row` ship
 as templates; a dungeon or metropolis biome is a layout pass from here.
 
+## Structure floors — real interiors underfoot
+
+Townsfolk don't live in the mud. A plan structure naming a `floorStyle`
+(`FLOOR_STYLES` in `data/structures.ts`) gets a real floor baked into the
+terrain chunks under its interior cells (`vis/floors.ts`): `boards` with
+staggered butt joints and per-plank tone, `cobble` set in grout, `flagstone`
+slabs, temple `tile`, `packed` earth. `courtyardFloorStyle` paves the
+open-air cells instead — a smith's work apron, a keep's parade ground.
+Floor rects come out of the same `mergeCells` pass that derives roof rects
+(levelgen), so floors, roofs and courtyards always agree about the building's
+shape, doorways included. Every pattern is deterministic from position, and
+each floor closes with a soft inner AO rim so rooms feel grounded, not
+decaled. The roof hides all of it until the hero steps beneath — then the
+reveal shows a furnished, boarded room, which is the whole trick.
+
 ## How to…
 
 - **Give a monster family a surface**: `material: 'chitin'` on the def.
@@ -218,6 +233,12 @@ as templates; a dungeon or metropolis biome is a layout pass from here.
 - **Add a new material**: one row in `MATERIALS`.
 - **Skin a new doodad kind**: one entry in `DOODAD_VISUALS` naming a painter;
   add a painter only for a genuinely new *vocabulary* of look.
+- **Floor a building**: `floorStyle: 'boards'` on its `StructureDef`
+  (+ `courtyardFloorStyle` to pave the yard). New pattern = one
+  `FLOOR_STYLES` row; new *geometry* = one branch in `vis/floors.ts`.
+- **Furnish a room**: furniture legend chars in the plan rows — `b` bench,
+  `p` pots, `f` firewood, `z` brazier, `L` lantern, `H` hay, `M` stall,
+  `G` banner. `registerLegendChar` adds the next one.
 - **Make something glow**: add `light: { radius, color, intensity, flicker? }`
   to its `DOODAD_VISUALS` entry.
 - **Darken an interior tileset**: `ambientDark: 0.5` in its theme.
