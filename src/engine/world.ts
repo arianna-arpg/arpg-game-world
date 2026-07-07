@@ -339,6 +339,10 @@ export const WIND_CFG = {
   shelterPad: 8,
   /** Gust pulse: extra strength at the crest of the slow gust wave. */
   gustAmp: 0.55,
+  /** PHYSICAL PUSH: world-units/sec a full-strength gale drifts a body of
+   *  weight 1 (divided by effectiveWeight — poise and mass are literal
+   *  anchors; a behemoth barely notices what skids a goblin). */
+  pushPerSec: 24,
 };
 
 /** Tags whose bearers are AMBIENT living-world texture, streamed through zones
@@ -17765,6 +17769,7 @@ export class World {
     this.updatePendingBlinks(dt);
     this.checkMinionDetonations();
     this.separateActors();
+    this.updateWindPush(dt);
     this.updateDrops(dt);
     this.updateOrbs(dt);
     this.updateRemnants(dt);
@@ -21908,6 +21913,26 @@ export class World {
       }
     }
     return out;
+  }
+
+  /** THE WIND IS A FORCE: every unsheltered body drifts with the gale,
+   *  scaled by 1/effectiveWeight — the poise/weight statistic made literal.
+   *  A goblin skids in a storm; a behemoth barely leans; anything anchored
+   *  or behind a windbreak (windAt's shelter probe) feels nothing. Gusts
+   *  arrive as real shoves because strength itself pulses. */
+  private updateWindPush(dt: number): void {
+    if (!this.zoneWind()) return; // calm skies — skip the whole walk
+    for (const a of this.actors) {
+      if (a.dead || a.downed || a.anchored || a.construct || a.leap || a.passive) continue;
+      const gale = this.windAt(a.pos);
+      if (!gale) continue; // sheltered or becalmed
+      const push = WIND_CFG.pushPerSec * dt / Math.max(0.4, a.effectiveWeight());
+      if (push <= 0.001) continue;
+      a.pos = this.clampPos(vec(
+        a.pos.x + gale.x * push,
+        a.pos.y + gale.y * push,
+      ), a.radius);
+    }
   }
 
   /** Soft circle-collision separation so actors don't stack. */

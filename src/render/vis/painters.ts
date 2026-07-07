@@ -102,9 +102,14 @@ export interface LiquidParams {
   ripples?: { color: ColorSpec };
   /** Drifting sine squiggles (bog murk). */
   squiggles?: { color: ColorSpec };
-  /** Pale overlay on `shallow` fords. */
-  fords?: { color: ColorSpec; alpha: number; grow: number };
-  /** Lily pads ringing deep pools, gated to lush biomes (data-listed). */
+  /** Ford overlay on `shallow` discs. `lighten` derives the tone from the
+   *  CORE color (one hue family, depth told by tone); the fill is a soft
+   *  per-disc radial gradient so shallows MELD into the deep, never a
+   *  hard-cut second water. */
+  fords?: { color?: ColorSpec; alpha: number; grow?: number; lighten?: number };
+  /** Lily pads on the COASTLINE of pools: candidate rim spots that face
+   *  open ground (not another water disc) grow pads — randomized, with
+   *  natural clumps. Gated to lush biomes (data-listed). */
   pads?: { color: ColorSpec; biomes: string[] };
   /** Slow ember pulse over the body (cinder). */
   emberPulse?: { color: ColorSpec };
@@ -137,8 +142,9 @@ const liquid: GroupPainter = (env, group, def) => {
     blobPath(ctx, group, p.rim.grow);
     ctx.fill();
   }
+  const coreCol = resolveColor(p.core.color, theme);
   ctx.globalAlpha = p.core.alpha;
-  ctx.fillStyle = resolveColor(p.core.color, theme);
+  ctx.fillStyle = coreCol;
   blobPath(ctx, group, p.core.grow ?? 0);
   ctx.fill();
   if (p.inner) {
@@ -148,11 +154,23 @@ const liquid: GroupPainter = (env, group, def) => {
     ctx.fill();
   }
   if (p.fords) {
-    const fords = group.filter(d => d.shallow);
-    if (fords.length) {
-      ctx.globalAlpha = p.fords.alpha;
-      ctx.fillStyle = resolveColor(p.fords.color, theme);
-      blobPath(ctx, fords, p.fords.grow);
+    // One water, two depths: the ford tone derives from the DEEP color
+    // (lighten) and lays down as soft radial gradients per disc — shallows
+    // breathe into the deep instead of ending on a cut line.
+    const fordCol = p.fords.lighten !== undefined
+      ? shade(coreCol, p.fords.lighten)
+      : resolveColor(p.fords.color, theme, coreCol);
+    for (const d of group) {
+      if (!d.shallow) continue;
+      const r = Math.max(4, d.radius + (p.fords.grow ?? 0));
+      const g = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, r);
+      g.addColorStop(0, withAlpha(fordCol, p.fords.alpha));
+      g.addColorStop(0.62, withAlpha(fordCol, p.fords.alpha * 0.75));
+      g.addColorStop(1, withAlpha(fordCol, 0));
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(d.pos.x, d.pos.y, r, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -189,19 +207,48 @@ const liquid: GroupPainter = (env, group, def) => {
     }
   }
   if (p.pads && p.pads.biomes.includes(env.world.zone.biome ?? '')) {
-    ctx.fillStyle = resolveColor(p.pads.color, theme);
-    ctx.globalAlpha = 0.7;
+    // Lily pads live on the COASTLINE: candidate rim spots that face open
+    // ground (the point just outside is covered by NO other disc of this
+    // body) may grow a pad clump — randomized, floating just inside the
+    // shore, with the classic notch cut toward open water.
+    const padCol = resolveColor(p.pads.color, theme);
     for (const w of group) {
       if (w.shallow) continue;
-      const n = 2 + (((w.pos.x * 73 + w.pos.y * 97) >>> 0) % 3);
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 + (w.pos.x % 6.283);
-        const lx = w.pos.x + Math.cos(a) * (w.radius + 7);
-        const ly = w.pos.y + Math.sin(a) * (w.radius + 7);
-        for (let j = 0; j < 3; j++) {
-          const off = (j - 1) * 4;
+      const seed = ((w.pos.x * 13 + w.pos.y * 29) | 0) >>> 0;
+      const candidates = 10;
+      for (let i = 0; i < candidates; i++) {
+        if (hash01(i, seed) > 0.4) continue; // sparse and irregular
+        const a = (i / candidates) * Math.PI * 2 + hash01(i, seed + 7) * 0.6;
+        const ox = w.pos.x + Math.cos(a) * (w.radius + 9);
+        const oy = w.pos.y + Math.sin(a) * (w.radius + 9);
+        let interior = false;
+        for (const o of group) {
+          if (o === w) continue;
+          const dd = Math.hypot(ox - o.pos.x, oy - o.pos.y);
+          if (dd < o.radius) { interior = true; break; }
+        }
+        if (interior) continue; // mid-lake seam, not a shore
+        const px = w.pos.x + Math.cos(a) * (w.radius - 7);
+        const py = w.pos.y + Math.sin(a) * (w.radius - 7);
+        const clump = 1 + Math.floor(hash01(i, seed + 13) * 3);
+        for (let j = 0; j < clump; j++) {
+          const off = (j - (clump - 1) / 2) * 7.5;
+          const cx = px + Math.cos(a + Math.PI / 2) * off;
+          const cy = py + Math.sin(a + Math.PI / 2) * off;
+          const pr = 2.8 + hash01(i * 5 + j, seed) * 1.9;
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = j % 2 ? padCol : shade(padCol, 0.14);
           ctx.beginPath();
-          ctx.arc(lx + Math.cos(a + Math.PI / 2) * off, ly + Math.sin(a + Math.PI / 2) * off, 3, 0, Math.PI * 2);
+          ctx.arc(cx, cy, pr, 0, Math.PI * 2);
+          ctx.fill();
+          // The notch: a thin wedge of open water cut toward the deep.
+          const na = a + Math.PI + (hash01(j, seed + i) - 0.5);
+          ctx.fillStyle = coreCol;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx + Math.cos(na - 0.3) * pr * 1.1, cy + Math.sin(na - 0.3) * pr * 1.1);
+          ctx.lineTo(cx + Math.cos(na + 0.3) * pr * 1.1, cy + Math.sin(na + 0.3) * pr * 1.1);
+          ctx.closePath();
           ctx.fill();
         }
       }

@@ -19,16 +19,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   landmass: { painter: 'landmass', order: 4 },
 
   // --- Liquid + ground overlays (merged blob silhouettes) -----------------
-  // WATER — one converged family: the same hue for ford and deep, depth told
-  // by tone; a living sheen drifts over the deep, ambient rings ripple, and
-  // moving bodies wake their own rings (renderer motion-FX).
+  // WATER — one hue family, depth told by tone: fords DERIVE from the deep
+  // color and meld in as soft gradients (no second water, no cut line). The
+  // surface is STILL until disturbed — rings come only from moving bodies
+  // (renderer motion-FX wakes) — with just the slow sheen drifting over the
+  // deep. Lily pads grow on true coastline, in randomized clumps.
   water: {
     painter: 'liquid', order: 10,
     params: {
       rim: { color: '#9ab8cc', alpha: 0.5, grow: 4 },
       core: { color: 'theme:water|#1d4264', alpha: 0.85 },
-      fords: { color: '#5c93b4', alpha: 0.6, grow: -6 },
-      ripples: { color: '#bfe0f0' },
+      fords: { lighten: 0.3, alpha: 0.55 },
       sheen: { color: '#d8f0fa' },
       pads: { color: '#6ba036', biomes: ['grove', 'meadow', 'isle'] },
     },
