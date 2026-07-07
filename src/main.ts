@@ -5,6 +5,8 @@
 
 import { Input } from './core/input';
 import { PAD_CFG, PadState, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
+import { applyCursor } from './core/cursor';
+import { assistAim } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
@@ -55,6 +57,9 @@ const account: Account = loadAccount();
 const settings: Settings = loadSettings();
 
 const renderer = new Renderer(canvas, () => settings);
+// The thematic cursor identity (style + tint) — applied at boot; the options
+// view re-applies on change. The pad reticle shares the same tint.
+applyCursor(settings.cursor);
 
 // CONTROLLER: polled once at the top of each frame. Buttons ride the padBinds
 // settings map; sticks feed movement/aim as axes. Feel numbers resolve here —
@@ -70,10 +75,31 @@ const padTuning = (): PadTuning => ({
 });
 const pad = new PadState(padTuning);
 const padPointer = new PadPointer(pad, padTuning);
-// AIM ARBITRATION: the last device to speak owns the reticle. Mouse motion
-// reclaims it instantly; any right-stick deflection hands it to the pad.
+// AIM ARBITRATION: the last device to speak owns the reticle. Any right-stick
+// deflection hands it to the pad instantly; the mouse must accumulate a
+// DELIBERATE bit of travel (PAD_CFG.mouseReclaimPx) to take it back, so an
+// idle arrow nudged by a desk bump can't yank targeting across the screen.
 let aimSource: 'mouse' | 'pad' = 'mouse';
 const lastMouse = { x: -1, y: -1 };
+let mouseReclaim = 0;
+// The pad's visible aim: the assisted reticle point + the soft-lock target,
+// refreshed by readLocalInput and fed to the renderer each frame.
+let padLock: number | null = null;
+let padAimView: { x: number; y: number; lockId: number | null } | null = null;
+
+/** Feed the renderer this frame's aim view: the HUD mouse plus — while the
+ *  PAD owns the reticle in live play — the assisted aim point (and soft-lock
+ *  target) the in-world reticle draws at. The canvas hides the OS arrow
+ *  whenever the reticle is the cursor; deliberate mouse travel (the reclaim
+ *  threshold above) brings the arrow straight back. */
+function feedRendererAim(): void {
+  renderer.hudMouse = input.mouse;
+  const padOwns = aimSource === 'pad' && running && !ui.uiBlocking()
+    && !padPointer.active && !world.player.dead && !world.player.downed;
+  renderer.padAim = padOwns ? padAimView : null;
+  const wantCursor = padOwns ? 'none' : '';
+  if (canvas.style.cursor !== wantCursor) canvas.style.cursor = wantCursor;
+}
 
 // Networking transport. LocalTransport runs single-player + local co-op (host
 // with one machine); a WebRtcTransport (same NetTransport contract) swaps in for
@@ -387,12 +413,19 @@ function readLocalInput(): PlayerInput | null {
 
   // Aim: the mouse cursor — unless the pad owns the reticle (last device to
   // speak wins). Pad aim is the stick's direction at deflection-scaled reach
-  // from the hero, STICKY on release so the reticle holds where you left it.
+  // from the hero, STICKY on release so the reticle holds where you left it,
+  // then bent by the soft aim assist (engine/aimassist.ts) toward the held
+  // target. The assisted point IS the reticle the renderer draws — what you
+  // see is exactly what every castAtCursor skill receives.
   let aim = renderer.toWorld(input.mouse);
   if (aimSource === 'pad' && padLive) {
     const t = padTuning();
     const reach = pad.aimReach(pad.aimMag > 0 ? pad.aimMag : pad.lastAimMag, t);
-    aim = { x: p.pos.x + pad.lastAimDir.x * reach, y: p.pos.y + pad.lastAimDir.y * reach };
+    const raw = { x: p.pos.x + pad.lastAimDir.x * reach, y: p.pos.y + pad.lastAimDir.y * reach };
+    const assisted = assistAim(world, p, raw, padLock, settings.pad.aimAssist);
+    padLock = assisted.targetId;
+    aim = { x: assisted.x, y: assisted.y };
+    padAimView = { x: aim.x, y: aim.y, lockId: padLock };
   }
 
   // Slots 0/1 are LMB/RMB (fixed) — on a pad they're ordinary binds; slots
@@ -533,10 +566,17 @@ function tick(now: number): void {
   const nowSec = now / 1000;
   pad.poll(nowSec);
   if (input.mouse.x !== lastMouse.x || input.mouse.y !== lastMouse.y) {
+    // The mouse reclaims aim only through DELIBERATE travel: motion
+    // accumulates while the pad holds the reticle, and only past the
+    // threshold does the arrow take over (then it owns aim on any motion).
+    const moved = Math.hypot(input.mouse.x - lastMouse.x, input.mouse.y - lastMouse.y);
     lastMouse.x = input.mouse.x; lastMouse.y = input.mouse.y;
-    aimSource = 'mouse';
+    if (aimSource === 'pad') {
+      mouseReclaim += moved;
+      if (mouseReclaim >= PAD_CFG.mouseReclaimPx) { aimSource = 'mouse'; mouseReclaim = 0; }
+    }
   }
-  if (pad.aimMag > 0) aimSource = 'pad';
+  if (pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; }
   padPointer.update(dt, ui.uiBlocking() || !running, nowSec);
   if (pad.justPressed(PAD_CFG.escapeButton)) synthEscape();
 
@@ -622,7 +662,7 @@ function tick(now: number): void {
       }
       // Close a lingering toll menu if the wardens were slain / roused mid-bargain.
       if (ui.tollOpen && !world.holdfastParleyOpen()) ui.closeToll();
-      renderer.hudMouse = input.mouse;
+      feedRendererAim();
       renderer.render(world);
 
       // Broadcast to connected clients. Gated on a REAL wire (never LocalTransport),
@@ -788,7 +828,7 @@ function clientApplyAndRender(dt: number): void {
   // meta change — keep them live on the same 0.5s throttle the host uses.
   uiRefreshTimer -= dt;
   if (uiRefreshTimer <= 0) { uiRefreshTimer = 0.5; ui.refreshCharSheet(); ui.refreshMap(); }
-  renderer.hudMouse = input.mouse;
+  feedRendererAim();
   renderer.render(world);
 }
 

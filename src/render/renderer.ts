@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------------------
 
 import { clamp, dist, type Vec2 } from '../core/math';
+import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { instanceMeta, instanceStrikeTiming, instanceTrigger, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
@@ -52,6 +53,11 @@ export class Renderer {
   /** Screen-space mouse, fed by main each frame — HUD hover affordances
    *  (buff-pip names) read it; (-1,-1) = no pointer. */
   hudMouse = { x: -1, y: -1 };
+  /** The PAD's assisted aim (world point + soft-lock target id), fed by main
+   *  each frame while the pad owns the reticle; null = mouse aim, no reticle.
+   *  Doubles as "where is the cursor, really" for aim-anchored affordances
+   *  (the elite nameplate hover follows it). */
+  padAim: { x: number; y: number; lockId: number | null } | null = null;
   /** World→screen scale. >1 zooms in; the bigger zones keep it from cramping. */
   private readonly zoom = 1.3;
   /** Frame delta off the sim clock (canopy/roof fade smoothing). */
@@ -162,6 +168,7 @@ export class Renderer {
     this.drawCanopies(world);      // fake-2D depth: crowns above actors, faded near the hero
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
     this.drawTexts(world);
+    this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
 
     ctx.restore();
 
@@ -187,7 +194,9 @@ export class Renderer {
    *  subtitle ("Goresnap the Bilious" / "Rare Goblin"). Nemeses are skipped —
    *  they wear their own permanent mark. */
   private drawEliteNameHover(world: World): void {
-    const cur = this.toWorld(this.hudMouse);
+    // "The cursor" is wherever aim truly lives: the pad's reticle when the
+    // pad owns it, else the mouse — nameplates follow the same point skills do.
+    const cur = this.padAim ?? this.toWorld(this.hudMouse);
     let best: Actor | null = null;
     let bd = 80;
     for (const a of world.actors) {
@@ -214,6 +223,21 @@ export class Renderer {
     ctx.font = '10px Verdana';
     ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
     ctx.restore();
+  }
+
+  /** The pad's VISIBLE cursor: the assisted aim reticle, plus soft-lock
+   *  brackets hugging the magnetized target (core/cursor.ts paints both, in
+   *  the player's chosen cursor tint — one identity for mouse and pad).
+   *  Drawn as the last world-space pass so canopy/roof fades never swallow
+   *  the player's aim. */
+  private drawPadReticle(world: World): void {
+    const pa = this.padAim;
+    if (!pa) return;
+    const held = pa.lockId !== null ? world.actorById(pa.lockId) : undefined;
+    const lock = held && !held.dead
+      ? { x: held.pos.x, y: held.pos.y, r: held.radius } : undefined;
+    const color = this.getSettings?.().cursor.color ?? DEFAULT_CURSOR_OPTIONS.color;
+    drawAimReticle(this.ctx, pa.x, pa.y, color, world.time, lock);
   }
 
   /** A MANIFESTED NEMESIS (meta/nemesis.ts) wears its memory openly: a dashed

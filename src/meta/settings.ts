@@ -16,6 +16,7 @@
 // ---------------------------------------------------------------------------
 
 import { PAD_CFG } from '../core/gamepad';
+import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -41,6 +42,10 @@ export interface PadOptions {
   pointerSpeed: number;
   /** Southpaw: swap the move and aim sticks. */
   swapSticks: boolean;
+  /** Soft aim magnetism while the pad owns the reticle: 0 = off, 1 = the
+   *  reticle snaps fully onto the held target. The radii and stickiness live
+   *  in engine/aimassist.ts; this is the one player-facing dial. */
+  aimAssist: number;
 }
 
 export interface Settings {
@@ -50,6 +55,9 @@ export interface Settings {
   padBinds: Record<PadActionId, string>;
   /** Controller feel tunables (deadzone, aim reach, pointer speed, swap). */
   pad: PadOptions;
+  /** The thematic mouse cursor + pad reticle identity (core/cursor.ts):
+   *  a style from the registry and a tint that survives visual clutter. */
+  cursor: CursorOptions;
   /** The continuous low-life edge pulse (severity-scaled). OFF is a real
    *  build choice: a 1/1-life or 90%-reserved hero would otherwise live
    *  inside a permanent alarm. */
@@ -68,6 +76,7 @@ export interface SettingsSave {
   keybinds: Record<string, string>;
   padBinds?: Record<string, string>;
   pad?: Partial<PadOptions>;
+  cursor?: Partial<CursorOptions>;
   lowLifePulse?: boolean;
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
@@ -107,6 +116,7 @@ export const DEFAULT_PAD_OPTIONS: PadOptions = {
   aimRadius: PAD_CFG.aim.maxRadius,
   pointerSpeed: PAD_CFG.pointer.speed,
   swapSticks: false,
+  aimAssist: 0.5,
 };
 
 /** Human labels for the rebind UI, in display order. */
@@ -145,6 +155,7 @@ export const makeSettings = (): Settings => ({
   keybinds: { ...DEFAULT_KEYBINDS },
   padBinds: { ...DEFAULT_PAD_BINDS },
   pad: { ...DEFAULT_PAD_OPTIONS },
+  cursor: { ...DEFAULT_CURSOR_OPTIONS },
   lowLifePulse: true,
   gearPickup: 'vacuum',
   castTelegraphs: true,
@@ -155,6 +166,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   keybinds: { ...s.keybinds },
   padBinds: { ...s.padBinds },
   pad: { ...s.pad },
+  cursor: { ...s.cursor },
   lowLifePulse: s.lowLifePulse,
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
@@ -183,6 +195,13 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
       aimRadius: clamp(s.pad?.aimRadius ?? d.aimRadius, 100, 1200),
       pointerSpeed: clamp(s.pad?.pointerSpeed ?? d.pointerSpeed, 200, 3000),
       swapSticks: !!(s.pad?.swapSticks ?? d.swapSticks),
+      aimAssist: clamp(s.pad?.aimAssist ?? d.aimAssist, 0, 1),
+    },
+    // Cursor identity: unknown styles (a removed mod entry) fall back to the
+    // default; the color takes any CSS-safe #rrggbb, else the default tint.
+    cursor: {
+      style: CURSOR_STYLES[s.cursor?.style ?? ''] ? s.cursor!.style! : DEFAULT_CURSOR_OPTIONS.style,
+      color: /^#[0-9a-f]{6}$/i.test(s.cursor?.color ?? '') ? s.cursor!.color! : DEFAULT_CURSOR_OPTIONS.color,
     },
     lowLifePulse: s.lowLifePulse ?? true,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',

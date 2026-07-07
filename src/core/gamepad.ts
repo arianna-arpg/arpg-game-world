@@ -61,6 +61,10 @@ export const PAD_CFG = {
   pointer: { speed: 1100, scrollSpeed: 900, zoomNotchesPerSec: 6, confirm: 'pad:a', cancel: 'pad:b' },
   /** Pressing START is the pad's hardwired Escape (pause / close cascade). */
   escapeButton: 'pad:start',
+  /** While the PAD owns the reticle, the mouse must travel this many px
+   *  (accumulated) to reclaim aim — a desk bump or sensor drift on an idle
+   *  mouse must never yank targeting to wherever the arrow was abandoned. */
+  mouseReclaimPx: 10,
   /** The pad counts as the ACTIVE input source for this long after its last
    *  activity (seconds) — drives pointer-mode handoff between mouse and pad. */
   activeWindow: 4,
