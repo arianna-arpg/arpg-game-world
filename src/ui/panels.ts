@@ -53,6 +53,7 @@ import { isConfigured, PACKAGES } from '../packages/registry';
 import type { ContentPackage } from '../packages/types';
 import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import type { ZoneDef } from '../data/zones';
+import { esc } from './dom';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
 import { VENDORS } from '../data/vendors';
@@ -399,7 +400,6 @@ export class UI {
     const el = document.getElementById('hint-bar');
     if (!el) return;
     const kb = this.getSettings().keybinds;
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const k = (a: ActionId): string => esc(keyDisplay(kb[a]));
     const move = (['moveUp', 'moveLeft', 'moveDown', 'moveRight'] as const).map(k).join('');
     const slots = (['skillSlot2', 'skillSlot3', 'skillSlot4', 'skillSlot5', 'skillSlot6', 'skillSlot7'] as const).map(k).join('/');
@@ -544,14 +544,13 @@ export class UI {
 
     // THE NAME ROW (Naming/Nemesis): typed name > sticky account preference >
     // named-for-its-class. The world's memory follows whatever ends up chosen.
-    const escAttr = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const nameValue = this.pendingCharName ?? acc.namePref ?? '';
     this.classSelect.innerHTML = `
       <h1>${GAME_TITLE.toUpperCase()}</h1>
       <div id="name-row" style="display:flex;gap:6px;justify-content:center;align-items:center;margin:2px 0 8px 0">
         <span style="font-size:12px;color:#c8a84b">⚜ Name</span>
         <input id="char-name" type="text" maxlength="24" spellcheck="false"
-          placeholder="named for its class" value="${escAttr(nameValue)}"
+          placeholder="named for its class" value="${esc(nameValue)}"
           style="width:220px;padding:5px 9px;font-size:13px;background:#16121c;color:#e8dcc8;
             border:1px solid #6a5a38;border-radius:8px;outline:none;text-align:center">
         <button id="name-clear" title="Forget the name — characters go back to being named for their class"
@@ -2096,7 +2095,6 @@ export class UI {
   refreshSail(): void {
     if (!this.sailOpen) return;
     const world = this.getWorld();
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const ports = world.sailMenuPorts();
     const rows = ports.length
       ? ports.map(p => `<div class="skill-entry">
@@ -2131,7 +2129,6 @@ export class UI {
   refreshCaravan(): void {
     if (!this.caravanOpen) return;
     const world = this.getWorld();
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const bands = world.caravanMenuBands();
     const rows = bands.length
       ? bands.map(b => {
@@ -2181,7 +2178,6 @@ export class UI {
     if (!this.mercOpen) return;
     const world = this.getWorld();
     const acc = this.getAccount();
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const post = world.mercOutpost;
     if (!post) { this.closeMercMenu(); return; }
     const L = world.mercTargetLevel();
@@ -2258,7 +2254,6 @@ export class UI {
   refreshVocationMenu(): void {
     if (!this.vocationOpen) return;
     const world = this.getWorld();
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const offers = world.vocationMenuOffers();
     const rows = offers.length
       ? offers.map(o => `<div class="skill-entry">
@@ -2307,7 +2302,6 @@ export class UI {
   refreshToll(): void {
     if (!this.tollOpen) return;
     const world = this.getWorld();
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const gems = world.holdfastTollGems();
     const rows = gems.length
       ? gems.map((g, i) => `<div class="skill-entry">
@@ -2494,7 +2488,6 @@ export class UI {
     // Marker titles come from authored data (quest labels, class/zone names), so
     // escape them before they land in an SVG <title> — a stray < or & would break
     // the whole map's XML.
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     let deaths = '';
     for (const m of collectMarkers(world)) {
       const node = m.zoneId ? world.zoneMap[m.zoneId] : undefined;
@@ -2580,7 +2573,6 @@ export class UI {
 
   /** The QUESTS view of the map panel: the journal of active + completed quests. */
   private renderQuestsTab(world: World): void {
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const log = world.questLog();
     const badge = (c: string): string => c
       ? `<span style="font-size:9px;padding:1px 6px;border-radius:7px;background:#241f30;color:${QUEST_CATEGORY_COLORS[c as QuestCategory] ?? QUEST_CATEGORY_COLORS.campaign};margin-left:6px">${c}</span>`
@@ -2626,7 +2618,6 @@ export class UI {
   /** Render the right-hand zone-info box for the current selection. Pure HTML —
    *  the icons reuse each event's map glyph/colour for instant correspondence. */
   private zoneBoxHtml(world: World): string {
-    const esc = (s: string): string => s.replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c] ?? c));
     const zoneId = this.boxZoneId(world);
     const zone = world.zoneMap[zoneId];
     const charted = world.visited.has(zoneId);
