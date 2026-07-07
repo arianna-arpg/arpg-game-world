@@ -249,7 +249,7 @@ export class DemonInvasionField implements WorldOverlay {
     const here = view.byId[zoneId];
     // Mirror the production filter (+ the sibling dev seams): never seize a safe
     // town, a cave, or a floating node as an epicenter.
-    if (!here || here.id.startsWith('cave_') || here.floating || here.eventOwned || here.objective.kind === 'safe') return false;
+    if (!here || here.caveDepth != null || here.floating || here.eventOwned || here.objective.kind === 'safe') return false;
     this.invasions.push({
       id: `inv_${this.seq++}`, type: this.rng.weighted(this.cfg.types),
       coord: { x: here.map.x, y: here.map.y }, anchorZoneId: zoneId, zoneId,
@@ -272,7 +272,7 @@ export class DemonInvasionField implements WorldOverlay {
     // epicenter can be uncharted ground inside the visible frontier.)
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, seen = 0;
     for (const n of view.nodes) {
-      if (!view.visited.has(n.id) || n.id.startsWith('cave_')) continue;
+      if (!view.visited.has(n.id) || n.caveDepth != null) continue;
       seen++;
       if (n.map.x < minX) minX = n.map.x; if (n.map.x > maxX) maxX = n.map.x;
       if (n.map.y < minY) minY = n.map.y; if (n.map.y > maxY) maxY = n.map.y;
@@ -328,7 +328,7 @@ export class DemonInvasionField implements WorldOverlay {
     for (const z of view.nodes) {
       // Never seize a sanctuary (the safe town), a cave, or a not-yet-wired
       // floating zone — the epicenter must be real, hostile ground.
-      if (z.id.startsWith('cave_') || z.id === anchorId || z.floating || z.eventOwned || z.objective.kind === 'safe') continue;
+      if (z.caveDepth != null || z.id === anchorId || z.floating || z.eventOwned || z.objective.kind === 'safe') continue;
       const d = coordDist(z.map, c);
       if (d < bd) { bd = d; best = z; }
     }

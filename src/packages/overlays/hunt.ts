@@ -182,7 +182,7 @@ export class HuntField implements WorldOverlay {
   devIgnite(view: OverlayView, zoneId: string): boolean {
     if (this.hunt) return false; // one-at-a-time (matches production; no orphan)
     const lair = view.byId[zoneId];
-    if (!lair || lair.id.startsWith('cave_') || lair.floating || lair.eventOwned || lair.objective.kind === 'safe') return false;
+    if (!lair || lair.caveDepth != null || lair.floating || lair.eventOwned || lair.objective.kind === 'safe') return false;
     const beast = this.pickBeast();
     if (!beast) return false;
     this.hunt = {
@@ -200,7 +200,7 @@ export class HuntField implements WorldOverlay {
     // than where the player stands — so the hunt begins as a zone you navigate to.
     const lairs = view.nodes.filter(n =>
       view.visited.has(n.id) && n.id !== view.currentZoneId
-      && !n.id.startsWith('cave_') && !n.floating && !n.eventOwned && n.objective.kind !== 'safe'
+      && n.caveDepth == null && !n.floating && !n.eventOwned && n.objective.kind !== 'safe'
       && eventAllowed('hunt', n));
     if (!lairs.length) return;
     const beast = this.pickBeast();

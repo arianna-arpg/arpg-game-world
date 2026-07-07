@@ -251,7 +251,7 @@ export class BrigandField implements WorldOverlay {
 
   /** May a raid TARGET / strike this zone? */
   private raidable(z: ZoneDef): boolean {
-    return !z.id.startsWith('cave_') && !z.special && !z.floating && !z.eventOwned
+    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
       && z.objective.kind !== 'safe' && eventAllowed('brigands', z);
   }
 

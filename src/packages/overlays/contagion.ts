@@ -346,7 +346,7 @@ export class ContagionField implements WorldOverlay {
    *  materialize guard: never a cave, special arena, floating / event-owned node, a
    *  sanctuary (the town), or biome-forbidden ground. */
   private streamable(z: ZoneDef): boolean {
-    return !z.id.startsWith('cave_') && !z.special && !z.floating && !z.eventOwned
+    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
       && z.objective.kind !== 'safe' && eventAllowed('contagion', z);
   }
 
@@ -406,7 +406,7 @@ export class ContagionField implements WorldOverlay {
       const zn = view.byId[q[qi]];
       if (!zn) continue;
       for (const e of zn.exits) {
-        if (e.to === '?' || e.to.startsWith('cave_')) continue;
+        if (e.to === '?') continue;
         const nb = view.byId[e.to];
         if (!nb || this.infected.has(nb.id) || !this.streamable(nb)) continue;
         this.infect(nb.id, o.id, z.hops + 1);
@@ -426,7 +426,7 @@ export class ContagionField implements WorldOverlay {
       const zn = view.byId[zid];
       if (!zn) continue;
       for (const e of zn.exits) {
-        if (e.to === '?' || e.to.startsWith('cave_')) continue;
+        if (e.to === '?') continue;
         const nb = view.byId[e.to];
         if (!nb || this.infected.has(nb.id) || !this.streamable(nb)) continue;
         const ph = Math.min(parentHop.get(nb.id) ?? Infinity, z.hops);

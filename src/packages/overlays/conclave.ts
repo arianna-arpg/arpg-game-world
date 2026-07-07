@@ -173,7 +173,7 @@ export class ConclaveField implements WorldOverlay {
   devOpenRitual(view: OverlayView, zoneId: string): boolean {
     if (this.rituals.has(zoneId)) return false;
     const z = view.byId[zoneId];
-    if (!z || z.id.startsWith('cave_') || z.floating
+    if (!z || z.caveDepth != null || z.floating
       || z.objective.kind === 'safe' || z.objective.kind === 'waves'
       || !z.packs?.table?.length) return false;
     this.rituals.set(zoneId, { id: `ritual_${this.seq++}`, zoneId });
@@ -224,7 +224,7 @@ export class ConclaveField implements WorldOverlay {
     // fresh-zone ritual simply appears the first time the player walks in.
     const cands = view.nodes.filter(z =>
       z.id !== view.currentZoneId
-      && !z.id.startsWith('cave_') && !z.floating && !z.eventOwned
+      && z.caveDepth == null && !z.floating && !z.eventOwned
       && z.objective.kind !== 'safe' && z.objective.kind !== 'waves'
       && !!z.packs?.table?.length && !this.rituals.has(z.id)
       && eventAllowed('conclave', z));

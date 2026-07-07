@@ -248,7 +248,7 @@ export class MyceliaField implements WorldOverlay {
     const add = (zid: string) => {
       set.add(zid);
       const zn = this.nodesById[zid];
-      if (zn) for (const e of zn.exits) if (e.to !== '?' && !e.to.startsWith('cave_')) set.add(e.to);
+      if (zn) for (const e of zn.exits) if (e.to !== '?' && this.nodesById[e.to]?.caveDepth == null) set.add(e.to);
     };
     if (this.bloom) { add(this.bloom.coreZoneId); add(this.bloom.homeZoneId); }
     for (const zid of this.spores.keys()) add(zid);
@@ -318,7 +318,7 @@ export class MyceliaField implements WorldOverlay {
   // --- internals -------------------------------------------------------------
 
   private streamable(z: ZoneDef): boolean {
-    return !z.id.startsWith('cave_') && !z.special && !z.floating && !z.eventOwned
+    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
       && z.objective.kind !== 'safe' && eventAllowed(this.id, z);
   }
 
@@ -410,7 +410,7 @@ export class MyceliaField implements WorldOverlay {
       const zn = view.byId[zid];
       if (!zn) continue;
       for (const e of zn.exits) {
-        if (e.to === '?' || e.to.startsWith('cave_')) continue;
+        if (e.to === '?') continue;
         const nb = view.byId[e.to];
         if (!nb || this.spores.has(nb.id) || !this.streamable(nb)) continue;
         cand.set(nb.id, Math.min(cand.get(nb.id) ?? Infinity, z.hops));

@@ -280,7 +280,11 @@ export interface ZoneDef {
    *  one dimension per tab; frontiers inherit their source's dimension. */
   dimension?: string;
   /** CAVE LADDER depth (caves only): 1 = a surface cave, 2 = a cave within a
-   *  cave (the Depths flavor), 3 = the bottom — it holds a BREACH. */
+   *  cave (the Depths flavor), 3 = the bottom — it holds a BREACH.
+   *  Presence IS the cave/off-graph discriminator (mintCave is the sole writer):
+   *  categorize on `caveDepth != null`, never by sniffing the 'cave_' id prefix —
+   *  the prefix survives only as a churn-id namespace for string-only classifiers
+   *  over zones that may no longer exist (corpse records, save strips). */
   caveDepth?: number;
   /** This cave holds a BREACH into the Underworld (dwell it to cross). */
   breach?: boolean;

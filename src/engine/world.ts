@@ -3081,7 +3081,7 @@ export class World {
       if (e.to === '?') return true;
       if (e.to === this.zone.id) return false;
       const z = this.zoneMap[e.to];
-      return !!z && !z.id.startsWith('cave_') && z.objective.kind !== 'safe';
+      return !!z && z.caveDepth == null && z.objective.kind !== 'safe';
     });
     if (!valid.length) return null;
     const e = valid[Math.floor(rand(0, valid.length))];
@@ -3576,7 +3576,7 @@ export class World {
     const uy = side === 's' ? 1 : side === 'n' ? -1 : 0;
     let best: ZoneDef | null = null, bd = CONNECT_DIST;
     for (const z of Object.values(this.zoneMap)) {
-      if (z.id === source.id || z.id.startsWith('cave_') || z.floating || z.concealed) continue;
+      if (z.id === source.id || z.caveDepth != null || z.floating || z.concealed) continue;
       if ((z.dimension ?? 'surface') !== (source.dimension ?? 'surface')) continue; // the web never crosses dimensions
       if (z.objective.kind === 'safe') continue;
       if (source.exits.some(x => x.to === z.id)) continue; // already linked — don't duplicate
@@ -3597,7 +3597,7 @@ export class World {
    *  nodes instead of stray '?' icons. Their OWN frontiers stay lazy (fogged on unvisited
    *  nodes), so it's bounded to one ring. No-op for caves/sanctuaries or with the flag off. */
   private eagerChartNeighbors(zone: ZoneDef): void {
-    if (!EAGER_WORLD_WEB || zone.id.startsWith('cave_') || zone.objective.kind === 'safe') return;
+    if (!EAGER_WORLD_WEB || zone.caveDepth != null || zone.objective.kind === 'safe') return;
     // Snapshot the '?' exits up front, since we rebuild zone.exits at the end (the drop pass)
     // — iterate a stable array, never the one we mutate. A LOCKED frontier (a Holdfast
     // bonus exit) is SKIPPED: it must stay '?' (uncharted) behind its gate, mint-on-unlock.
@@ -4164,7 +4164,7 @@ export class World {
   private pickRovingDest(from: Vec2): string | null {
     const ok = (id: string): boolean => {
       const z = this.zoneMap[id];
-      return !!z && !z.id.startsWith('cave_') && !z.floating && !z.eventOwned && z.objective.kind !== 'safe';
+      return !!z && z.caveDepth == null && !z.floating && !z.eventOwned && z.objective.kind !== 'safe';
     };
     const cands = this.exits.filter(e => e.to !== this.zone.id)
       .sort((a, b) => dist(from, a.pos) - dist(from, b.pos));
@@ -5370,7 +5370,7 @@ export class World {
     const cfg = af.surge();
     const cands = Object.values(this.zoneMap).filter(z =>
       z.id !== site.zoneId
-      && !z.id.startsWith('cave_') && !z.floating && !z.concealed && !z.eventOwned
+      && z.caveDepth == null && !z.floating && !z.concealed && !z.eventOwned
       && z.objective.kind !== 'safe' && z.objective.kind !== 'waves');
     if (!cands.length) return null;
     const rng = new Rng((packageSeed(this.manifest.seed, 'amalgamation') ^ hashStr(`${site.id}:mb:${af.peek()?.stage ?? 0}`)) >>> 0);
@@ -9494,7 +9494,7 @@ export class World {
     if (exactZone) return exactZone;
     let best: ZoneDef | null = null, bestD = CORPSE_MATCH_RADIUS;
     for (const z of Object.values(this.zoneMap)) {
-      if (z.id.startsWith('cave_')) continue;
+      if (z.caveDepth != null) continue;
       const dd = Math.hypot(z.map.x - d.mapX, z.map.y - d.mapY);
       if (dd <= bestD) { bestD = dd; best = z; }
     }

@@ -280,7 +280,7 @@ export class FractureField implements WorldOverlay {
   devIgnite(view: OverlayView, zoneId: string): boolean {
     if (this.fracture) return false; // one-at-a-time (matches production; no orphan)
     const spot = view.byId[zoneId];
-    if (!spot || spot.id.startsWith('cave_') || spot.floating || spot.eventOwned || spot.objective.kind === 'safe') return false;
+    if (!spot || spot.caveDepth != null || spot.floating || spot.eventOwned || spot.objective.kind === 'safe') return false;
     const v = this.pickVariant();
     if (!v) return false;
     const total = this.cfg.zoneSpan[1];
@@ -296,7 +296,7 @@ export class FractureField implements WorldOverlay {
     // A fracture opens in a CHARTED (visited), non-safe, non-cave, non-floating
     // node — ground you can return to (the map marker pulls you back to it).
     const spots = view.nodes.filter(n =>
-      view.visited.has(n.id) && !n.id.startsWith('cave_') && !n.floating && !n.eventOwned && n.objective.kind !== 'safe'
+      view.visited.has(n.id) && n.caveDepth == null && !n.floating && !n.eventOwned && n.objective.kind !== 'safe'
       && eventAllowed('fractures', n));
     if (!spots.length) return;
     const v = this.pickVariant();

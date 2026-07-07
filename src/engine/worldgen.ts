@@ -34,7 +34,7 @@ export function nearestNode(
   let best: ZoneDef | null = null, bestD = Infinity;
   const dim = dimension ?? 'surface';
   for (const z of Object.values(zoneMap)) {
-    if (z.id.startsWith('cave_') || exclude?.has(z.id)) continue;
+    if (z.caveDepth != null || exclude?.has(z.id)) continue;
     // Anchors never cross dimensions: a surface quest/caravan/float must not
     // wire itself to a hell node that happens to share the coordinate plane.
     if ((z.dimension ?? 'surface') !== dim) continue;
@@ -239,7 +239,7 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
       z.id !== fresh.id && z.id !== source &&
       (z.dimension ?? 'surface') === (fresh.dimension ?? 'surface') && // roads never cross dimensions
       z.objective.kind !== 'safe' &&            // never link a sanctuary
-      !z.id.startsWith('cave_') &&              // caves live off-graph anyway
+      z.caveDepth == null &&                    // caves live off-graph anyway
       !z.floating && !z.concealed &&           // never weave into an UNWIRED / HIDDEN zone (a concealed
                                                // Incursion epicenter reveals + wires via connectFloatingZone,
                                                // which clears both flags BEFORE it weaves — so this only blocks

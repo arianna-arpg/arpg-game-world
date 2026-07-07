@@ -252,7 +252,7 @@ export class AmalgamationField implements WorldOverlay {
   devOpen(view: OverlayView, zoneId: string): boolean {
     if (this.active) return false;
     const z = view.byId[zoneId];
-    if (!z || z.id.startsWith('cave_') || z.floating || z.eventOwned
+    if (!z || z.caveDepth != null || z.floating || z.eventOwned
       || z.objective.kind === 'safe' || z.objective.kind === 'waves'
       || !z.packs?.table?.length) return false;
     this.open(zoneId);
@@ -271,7 +271,7 @@ export class AmalgamationField implements WorldOverlay {
     // Bonewright is something you DISCOVER, not something handed to you on the map.
     const cands = view.nodes.filter(z =>
       z.id !== view.currentZoneId
-      && !z.id.startsWith('cave_') && !z.floating && !z.eventOwned
+      && z.caveDepth == null && !z.floating && !z.eventOwned
       && z.objective.kind !== 'safe' && z.objective.kind !== 'waves'
       && !!z.packs?.table?.length
       && eventAllowed('amalgamation', z));

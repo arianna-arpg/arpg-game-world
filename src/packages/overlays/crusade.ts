@@ -525,7 +525,7 @@ export class CrusadeField implements WorldOverlay {
    *  materializes a meaty tier (a fortress by default) immediately, in-place. (QA.) */
   devIgnite(view: OverlayView, zoneId: string, ageSeconds = 130): boolean {
     const here = view.byId[zoneId];
-    if (!here || here.id.startsWith('cave_') || here.floating || here.eventOwned || here.objective.kind === 'safe') return false;
+    if (!here || here.caveDepth != null || here.floating || here.eventOwned || here.objective.kind === 'safe') return false;
     const faction = this.pickFaction();
     if (!faction) return false;
     const id = `cru_${this.seq++}`;
@@ -546,7 +546,7 @@ export class CrusadeField implements WorldOverlay {
     if (this.crusades.filter(c => !c.dead).length >= scaledCap(this.cfg.maxConcurrent, g.concurrencyMul)) return;
     if (!this.rng.chance(clamp(this.cfg.triggerChance * g.ignitionMul, 0, 1))) return;
     const here = view.byId[view.currentZoneId];
-    if (!here || here.id.startsWith('cave_') || here.eventOwned) return;
+    if (!here || here.caveDepth != null || here.eventOwned) return;
     const faction = this.pickFaction();
     if (!faction) return;
     const dir = DIRS[this.rng.int(0, DIRS.length - 1)];
@@ -609,9 +609,9 @@ export class CrusadeField implements WorldOverlay {
       const z = view.byId[zid];
       if (!z) continue;
       for (const e of z.exits) {
-        if (e.to === '?' || e.to.startsWith('cave_')) continue;
+        if (e.to === '?') continue;
         const nb = view.byId[e.to];
-        if (!nb || this.held.has(nb.id) || nb.objective.kind === 'safe' || nb.id.startsWith('cave_') || nb.eventOwned) continue;
+        if (!nb || this.held.has(nb.id) || nb.objective.kind === 'safe' || nb.caveDepth != null || nb.eventOwned) continue;
         if (!eventAllowed('crusade', nb)) continue; // a biome may forbid the crusade (no march into the deep sea)
         cands.add(nb.id);
       }

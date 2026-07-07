@@ -308,7 +308,7 @@ export class MigrationField implements WorldOverlay {
    *  guard (world.ts updateMigrationStream): never a cave, special arena, floating /
    *  event-owned node, sanctuary, or biome-forbidden ground. */
   private streamable(z: ZoneDef): boolean {
-    return !z.id.startsWith('cave_') && !z.special && !z.floating && !z.eventOwned
+    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
       && z.objective.kind !== 'safe' && eventAllowed('migration', z);
   }
 
@@ -371,7 +371,7 @@ export class MigrationField implements WorldOverlay {
   private visibleBounds(view: OverlayView): { minX: number; minY: number; maxX: number; maxY: number } | null {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, seen = 0;
     for (const n of view.nodes) {
-      if (!view.visited.has(n.id) || n.id.startsWith('cave_')) continue;
+      if (!view.visited.has(n.id) || n.caveDepth != null) continue;
       seen++;
       if (n.map.x < minX) minX = n.map.x;
       if (n.map.x > maxX) maxX = n.map.x;
