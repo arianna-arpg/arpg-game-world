@@ -159,6 +159,10 @@ export class DemonInvasionField implements WorldOverlay {
   /** Live config (the engine reads meteorSkillId / telegraph / portal). */
   surge(): DemonSurge { return this.cfg; }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): an active
+   *  demon invasion is heavy turmoil. */
+  activityAt(zoneId: string): number { return this.invasionOn(zoneId) ? 2 : 0; }
+
   /** The strongest invasion affecting a zone (in-radius or its epicenter), with
    *  type + pressure scaled severity — null when the zone is untouched. */
   invasionOn(zoneId: string): InvasionInfo | null {

@@ -155,6 +155,9 @@ export class ConclaveField implements WorldOverlay {
    *  placement geometry, reward). */
   surge(): ConclaveSurge { return this.cfg; }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): a live ritual. */
+  activityAt(zoneId: string): number { return this.ritualIn(zoneId) ? 1 : 0; }
+
   /** The ritual sitting in this zone (engine materializes the pentagram + cultists
    *  from it), or null when the zone holds none. */
   ritualIn(zoneId: string): RitualInfo | null {

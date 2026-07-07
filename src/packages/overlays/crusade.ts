@@ -338,6 +338,10 @@ export class CrusadeField implements WorldOverlay {
   /** Live config (the engine reads sanctum tileset / reward / level bonus). */
   surge(): CrusadeSurge { return this.cfg; }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): held crusade
+   *  ground is heavy turmoil. */
+  activityAt(zoneId: string): number { return this.crusadeOn(zoneId) ? 2 : 0; }
+
   /** The crusade affecting a zone (its held tier resolved into engine info), or
    *  null when the zone is untouched. */
   crusadeOn(zoneId: string): CrusadeInfo | null {

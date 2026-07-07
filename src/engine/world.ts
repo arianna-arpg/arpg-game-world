@@ -6666,20 +6666,13 @@ export class World {
     mf.setEventActivity(map);
   }
 
-  /** A zone's EVENT ACTIVITY — the turmoil the Mycelia bloom feeds on. Sums the live
-   *  per-zone overlay events (severity-weighted) + (for the player's own zone) a running
-   *  ambient event + open encounters. The one place "is something happening here" lives. */
+  /** A zone's EVENT ACTIVITY — the turmoil the Mycelia bloom feeds on. Every
+   *  overlay weighs its own severity (WorldOverlay.activityAt, summed by the
+   *  sim — no per-package table here), plus the two engine-local terms the
+   *  overlays can't see (the player's own zone only): a running ambient event
+   *  + open encounters. */
   private eventActivityAt(zid: string): number {
-    const s = this.sim;
-    let a = 0;
-    if (s.demonField?.invasionOn(zid)) a += 2;
-    if (s.crusadeField?.crusadeOn(zid)) a += 2;
-    if (s.conclaveField?.ritualIn(zid)) a += 1;
-    if (s.fractureField?.fractureIn(zid)) a += 1;
-    if (s.contagionField?.contagionOn(zid)) a += 1;
-    if (s.deadwakeField?.deadwakeOn(zid)) a += 1;
-    if (s.holdfastField?.infoFor(zid)?.locked) a += 1;
-    if (s.invasion.activeHostOn(zid)) a += 1;
+    let a = this.sim.activityAt(zid);
     if (zid === this.zone.id) {
       if (this.event && !this.event.done) a += 1;
       a += this.encounters.length;

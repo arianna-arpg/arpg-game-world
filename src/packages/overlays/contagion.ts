@@ -247,6 +247,9 @@ export class ContagionField implements WorldOverlay {
   /** Live config (the engine reads the faction / boss / pack / reward knobs). */
   surge(): ContagionSurge { return this.cfg; }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): an infected zone. */
+  activityAt(zoneId: string): number { return this.contagionOn(zoneId) ? 1 : 0; }
+
   /** The contagion affecting a zone (intensity + whether it's the source), or null
    *  when uninfected. The engine fields intensity-scaled plague packs off this, and
    *  Patient Zero when isSource. NOT gated on `revealed` — entering an infected zone

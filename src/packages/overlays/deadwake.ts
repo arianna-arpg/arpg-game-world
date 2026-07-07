@@ -352,6 +352,9 @@ export class DeadwakeField implements WorldOverlay {
   /** Live config (the engine reads the stream / consume / necropolis knobs). */
   surge(): DeadwakeSurge { return this.cfg; }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): a washing tide. */
+  activityAt(zoneId: string): number { return this.deadwakeOn(zoneId) ? 1 : 0; }
+
   /** The Deadwake currently washing over a zone, or null. Spares non-streamable
    *  ground (caves / special / event-owned / sanctuaries / forbidden biomes). */
   deadwakeOn(zoneId: string): DeadwakeInfo | null {

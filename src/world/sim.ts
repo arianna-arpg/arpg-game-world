@@ -327,6 +327,15 @@ export class WorldSim {
     }
   }
 
+  /** A zone's EVENT ACTIVITY from the living world: the sum of every overlay's
+   *  own severity-weighted term (WorldOverlay.activityAt). A net-new overlay
+   *  feeds the Mycelia bloom by implementing the hook — no table to edit. */
+  activityAt(zid: string): number {
+    let a = 0;
+    for (const o of this.overlays) a += o.activityAt?.(zid) ?? 0;
+    return a;
+  }
+
   /** Compose day × weather × faction into the zone's effective spawning.
    *  Only overlays of the ZONE'S dimension contribute — a surface storm
    *  cannot bias a hell zone's packs. */

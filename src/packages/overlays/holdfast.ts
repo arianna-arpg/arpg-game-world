@@ -112,6 +112,10 @@ export class HoldfastField implements WorldOverlay {
 
   infoFor(zoneId: string): HoldfastInfo | null { return this.infos.get(zoneId) ?? null; }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): a still-sealed
+   *  holdfast keeps its zone restless. */
+  activityAt(zoneId: string): number { return this.infoFor(zoneId)?.locked ? 1 : 0; }
+
   /** Is the holdfast exit in this zone still sealed? (Optionally match the lock id.) */
   isLocked(zoneId: string, lockId?: string): boolean {
     const i = this.infos.get(zoneId);

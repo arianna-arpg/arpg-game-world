@@ -150,6 +150,10 @@ export class InvasionField implements WorldOverlay {
     return { under: '', over };
   }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): a war host
+   *  bearing down on the zone. */
+  activityAt(zoneId: string): number { return this.activeHostOn(zoneId) ? 1 : 0; }
+
   /** A war host bearing down on (or arrived at) this zone, if any. */
   activeHostOn(zoneId: string): InvasionHost | null {
     for (const h of this.hosts) {

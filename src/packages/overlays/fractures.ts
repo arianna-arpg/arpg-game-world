@@ -206,6 +206,9 @@ export class FractureField implements WorldOverlay {
 
   surge(): FractureSurge { return this.cfg; }
 
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): an open fracture. */
+  activityAt(zoneId: string): number { return this.fractureIn(zoneId) ? 1 : 0; }
+
   /** The fracture info IF one currently sits in this zone — the engine spawns the
    *  dormant fracture object from this. */
   fractureIn(zoneId: string): FractureInfo | null {

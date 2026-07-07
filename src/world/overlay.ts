@@ -89,6 +89,11 @@ export interface WorldOverlay {
   onNodeCharted(zone: ZoneDef, view: OverlayView): void;
   /** This field's contribution to the zone's spawn table. */
   affectSpawns(zone: ZoneDef, view: OverlayView): SpawnBias;
+  /** This field's EVENT-ACTIVITY term at a zone — the severity-weighted "is
+   *  something happening here" the Mycelia bloom feeds on (WorldSim.activityAt
+   *  sums every overlay). Omit it (or return 0) for fields that shouldn't
+   *  stir the bloom; each overlay owns its own weight. */
+  activityAt?(zid: string): number;
   /** Paint the field onto the minimap. */
   renderMap(nodes: ZoneDef[]): MapLayer;
 }
