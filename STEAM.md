@@ -30,10 +30,21 @@ folder above (userData wins). `paths.saves` accepts `${data}`, `${exe}`,
 
 ## Publish a release (what the Deck installs from)
 
-1. Bump `version` in `package.json`, commit.
+1. Bump `version` in `package.json`, commit. The tag must match this version
+   — electron-builder attaches artifacts to the release named `v<version>`.
 2. Tag it and push: `git tag v0.2.0 && git push origin v0.2.0`.
 3. The `release` GitHub Action builds Windows + Linux and attaches both to
-   that release. (Manual dry run: Actions → release → Run workflow.)
+   that release (published immediately — `releaseType: release` in
+   electron-builder.yml; the draft default would hide it from
+   `/releases/latest`, where the launcher and the Deck installer look).
+   Manual dry run: Actions → release → Run workflow.
+
+**Private repo?** Everything above still works, but *consuming* the release
+needs auth: create a fine-grained PAT (repo → Contents: read-only) and use
+the token variant of the Deck one-liner below. The packaged launcher's
+update check will simply report "could not reach GitHub" on a private repo —
+harmless; updates arrive by re-running the installer. Making the repo public
+removes all of this friction.
 
 ## Add to Steam — Windows
 
@@ -50,6 +61,16 @@ One-liner (Desktop Mode → Konsole):
 
 ```
 curl -fsSL https://raw.githubusercontent.com/arianna-arpg/arpg-game-world/main/scripts/steamdeck-install.sh | bash
+```
+
+Private repo? Same thing with your PAT riding along (both to fetch the
+script and inside it, for the release download):
+
+```
+TOKEN=github_pat_XXXX
+curl -fsSL -H "Authorization: Bearer $TOKEN" \
+  https://raw.githubusercontent.com/arianna-arpg/arpg-game-world/main/scripts/steamdeck-install.sh \
+  | GITHUB_TOKEN=$TOKEN bash
 ```
 
 That downloads the latest release AppImage to `~/Applications`, makes it

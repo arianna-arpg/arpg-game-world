@@ -68,7 +68,11 @@ appImage:
 
 # Tag-triggered CI (release.yml) publishes these artifacts to GitHub Releases;
 # local dist runs pass --publish never and just leave files in release/.
+# releaseType 'release' publishes IMMEDIATELY — the default ('draft') hides
+# the release from /releases/latest, which is exactly where the launcher's
+# update probe and the Steam Deck installer look.
 publish:
   provider: github
   owner: arianna-arpg
   repo: arpg-game-world
+  releaseType: release

@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# HOLLOW WAKE — Steam Deck installer. Run this in Desktop Mode's Konsole:
+# HOLLOW WAKE — Steam Deck installer. Run this in Desktop Mode's Konsole.
 #
+# PUBLIC repo:
 #   curl -fsSL https://raw.githubusercontent.com/arianna-arpg/arpg-game-world/main/scripts/steamdeck-install.sh | bash
+#
+# PRIVATE repo — pass a GitHub token (fine-grained PAT with read access to
+# the repo's Contents) both to fetch this script and into it:
+#   TOKEN=github_pat_XXXX
+#   curl -fsSL -H "Authorization: Bearer $TOKEN" \
+#     https://raw.githubusercontent.com/arianna-arpg/arpg-game-world/main/scripts/steamdeck-install.sh \
+#     | GITHUB_TOKEN=$TOKEN bash
 #
 # It downloads the newest AppImage from GitHub Releases into ~/Applications,
 # makes it executable, drops a Desktop-Mode menu entry, and (on SteamOS)
@@ -11,28 +19,60 @@
 # and are never touched.
 #
 # Overrides: HOLLOW_WAKE_REPO=owner/name  HOLLOW_WAKE_DIR=/install/path
+#            GITHUB_TOKEN=…               (required for private repos)
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
 REPO="${HOLLOW_WAKE_REPO:-arianna-arpg/arpg-game-world}"
 DIR="${HOLLOW_WAKE_DIR:-$HOME/Applications}"
 OUT="$DIR/HollowWake.AppImage"
+API="https://api.github.com/repos/$REPO"
+
+AUTH=()
+[ -n "${GITHUB_TOKEN:-}" ] && AUTH=(-H "Authorization: Bearer $GITHUB_TOKEN")
 
 echo "Looking up the latest release of $REPO…"
-URL=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-  | grep -o '"browser_download_url": *"[^"]*\.AppImage"' \
-  | head -1 | sed 's/.*"\(https[^"]*\)"$/\1/')
-
-if [ -z "$URL" ]; then
-  echo "No AppImage found on the latest release of $REPO."
-  echo "Either no release has been published yet, or it carries no Linux build."
-  echo "Ask for a release, or build one: npm run dist:linux (on a Linux machine / CI)."
+JSON=$(curl -fsSL "${AUTH[@]}" -H "Accept: application/vnd.github+json" "$API/releases/latest") || {
+  echo "Could not read the latest release (HTTP error)."
+  echo "  • No release published yet? Push a v* tag and let the release workflow finish."
+  echo "  • Private repo? Re-run with GITHUB_TOKEN=<fine-grained PAT> (see header)."
   exit 1
+}
+
+# Prefer python3 (ships on SteamOS) for real JSON parsing; fall back to a
+# grep for the public browser_download_url if python3 is somehow absent.
+ASSET_ID=""; ASSET_NAME=""
+if command -v python3 >/dev/null 2>&1; then
+  read -r ASSET_ID ASSET_NAME < <(printf '%s' "$JSON" | python3 -c '
+import json, sys
+rel = json.load(sys.stdin)
+for a in rel.get("assets", []):
+    if a.get("name", "").endswith(".AppImage"):
+        print(a["id"], a["name"]); break
+') || true
 fi
 
-echo "Downloading $URL"
-mkdir -p "$DIR"
-curl -fL --progress-bar -o "$OUT" "$URL"
+if [ -n "$ASSET_ID" ]; then
+  echo "Downloading $ASSET_NAME (release $(printf '%s' "$JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("tag_name","?"))'))"
+  mkdir -p "$DIR"
+  # The assets endpoint works for BOTH public and private repos; the plain
+  # browser_download_url only works unauthenticated on public ones.
+  curl -fL --progress-bar "${AUTH[@]}" -H "Accept: application/octet-stream" \
+    -o "$OUT" "$API/releases/assets/$ASSET_ID"
+else
+  URL=$(printf '%s' "$JSON" \
+    | grep -o '"browser_download_url": *"[^"]*\.AppImage"' \
+    | head -1 | sed 's/.*"\(https[^"]*\)"$/\1/')
+  if [ -z "$URL" ]; then
+    echo "The latest release of $REPO carries no AppImage."
+    echo "Build one via the release workflow (push a v* tag) or npm run dist:linux."
+    exit 1
+  fi
+  echo "Downloading $URL"
+  mkdir -p "$DIR"
+  curl -fL --progress-bar "${AUTH[@]}" -o "$OUT" "$URL"
+fi
+
 chmod +x "$OUT"
 echo "Installed to $OUT"
 
