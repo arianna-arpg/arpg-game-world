@@ -1,0 +1,11 @@
+{
+  // Type-checks the BALANCE CLI (Node-side) together with the src/ tree it
+  // imports — same pattern as tsconfig.launcher.json for the Electron shell.
+  // src/sim itself stays browser-safe and is ALSO covered by the main tsc
+  // gate; only balance/ may import node builtins.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"]
+  },
+  "include": ["balance", "src"]
+}

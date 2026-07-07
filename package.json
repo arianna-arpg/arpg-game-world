@@ -11,7 +11,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "check": "tsc --noEmit && tsc -p tsconfig.launcher.json",
+    "check": "tsc --noEmit && tsc -p tsconfig.launcher.json && tsc -p tsconfig.sim.json",
+    "sim": "tsx balance/cli.ts",
     "game": "electron .",
     "game:play": "electron . --play",
     "smoke": "electron . --smoke-test=game",
@@ -25,6 +26,7 @@
     "@types/node": "^26.1.0",
     "electron": "^43.0.0",
     "electron-builder": "^26.15.3",
+    "tsx": "^4.23.0",
     "typescript": "^5.6.0",
     "vite": "^6.0.0"
   }
