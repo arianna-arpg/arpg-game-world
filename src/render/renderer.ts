@@ -2253,16 +2253,16 @@ export class Renderer {
       }
     }
 
-    // Townsfolk wear their names.
-    if (a.team === 'player' && a.defId?.startsWith('townsfolk')) {
+    // NPCs that fill a town role (MonsterDef.npcRole) wear their names.
+    if (a.team === 'player' && a.defId && MONSTERS[a.defId]?.npcRole) {
       ctx.textAlign = 'center';
       ctx.font = '10px Verdana';
       ctx.fillStyle = '#e8c87a';
       ctx.fillText(a.name, x, y - a.radius - 8);
     }
 
-    // Mireille "talks" when her healing isn't unlocked — no free innstay yet.
-    if (a.defId === 'townsfolk_innkeep'
+    // The innkeep "talks" when her healing isn't unlocked — no free innstay yet.
+    if (a.defId && MONSTERS[a.defId]?.npcRole === 'innkeep'
       && world.nearMireille()
       && !world.mireilleUnlocked()) {
       const msg = 'No free innstay — unlock my care in the Vault.';
@@ -2291,7 +2291,7 @@ export class Renderer {
       }
     }
 
-    if (a.defId === 'townsfolk_caravanner') {
+    if (a.defId && MONSTERS[a.defId]?.npcRole === 'caravanner') {
       const msg = world.caravanPrompt();
       if (msg) {
         ctx.textAlign = 'center';

@@ -2642,7 +2642,7 @@ export class World {
     }
     // Where there's a smith, there's a stock — armed on a restock timer that
     // ticks on the world clock in update(), not on re-entering town.
-    if (layout.npcs.some(n => n.id === 'townsfolk_smith')) {
+    if (layout.npcs.some(n => MONSTERS[n.id]?.npcRole === 'vendor')) {
       this.vendorStock = this.buildVendorStock();
       this.vendorRestockAt = this.time + this.restockSeconds();
     } else {
@@ -7567,10 +7567,17 @@ export class World {
     return this.fonts.some(f => dist(f.pos, seat.actor.pos) <= 150);
   }
 
-  /** Is the seat's hero at the smith's counter? */
+  /** Does this live actor's def declare the given open NPC role? Behavior
+   *  sites scan roles (MonsterDef.npcRole), never literal def ids — any body,
+   *  a package's included, can staff any counter. */
+  private hasNpcRole(a: Actor, role: string): boolean {
+    return !a.dead && !!a.defId && MONSTERS[a.defId]?.npcRole === role;
+  }
+
+  /** Is the seat's hero at the vendor's counter? */
   nearSmith(seat: Seat = this.localSeat): boolean {
     return this.actors.some(a =>
-      a.defId === 'townsfolk_smith' && !a.dead
+      this.hasNpcRole(a, 'vendor')
       && dist(a.pos, seat.actor.pos) <= 160);
   }
 
@@ -7614,7 +7621,7 @@ export class World {
   /** Mireille, if the player is standing within her counter's radius. */
   private getMireille(): Actor | null {
     return this.actors.find(a =>
-      a.defId === 'townsfolk_innkeep' && !a.dead
+      this.hasNpcRole(a, 'innkeep')
       && dist(a.pos, this.player.pos) <= MIREILLE_RADIUS) ?? null;
   }
 
@@ -7802,7 +7809,7 @@ export class World {
   /** Is the seat's hero standing at a Caravanner (town OR a minted destination)? */
   nearCaravan(seat: Seat = this.localSeat): boolean {
     if (!featureEnabled(this.account, FEATURE.CARAVAN)) return false;
-    return this.actors.some(a => a.defId === 'townsfolk_caravanner' && !a.dead
+    return this.actors.some(a => this.hasNpcRole(a, 'caravanner')
       && dist(a.pos, seat.actor.pos) <= CARAVAN_RADIUS);
   }
 
@@ -8368,7 +8375,7 @@ export class World {
    *  and untargetable so the band's foes ignore it. */
   private placeCaravanReturn(def: ZoneDef): void {
     if (!def.id.startsWith('caravan_band_')) return;
-    if (this.actors.some(a => a.defId === 'townsfolk_caravanner' && !a.dead)) return;
+    if (this.actors.some(a => this.hasNpcRole(a, 'caravanner'))) return;
     const c = this.createMonster('townsfolk_caravanner', 1, 'player');
     c.untargetable = true; // the band's monsters ignore the escort
     c.pos = this.clampPos(vec(this.player.pos.x + 54, this.player.pos.y + 28), c.radius);
@@ -8973,9 +8980,9 @@ export class World {
   // quest GENERATES its zone at a direction/coordinate and wires it into the map;
   // clearing that zone's objective pays the reward and advances the chain.
 
-  private getQuestGiver(defId = 'townsfolk_questgiver'): Actor | null {
+  private getQuestGiver(defId?: string): Actor | null {
     return this.actors.find(a =>
-      a.defId === defId && !a.dead
+      (defId ? a.defId === defId && !a.dead : this.hasNpcRole(a, 'questgiver'))
       && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS) ?? null;
   }
 
@@ -17192,8 +17199,8 @@ export class World {
   restockVendor(): void {
     this.vendorStock = this.buildVendorStock();
     this.vendorRestockAt = this.time + this.restockSeconds();
-    const smith = this.actors.find(a => a.defId === 'townsfolk_smith' && !a.dead);
-    this.text(smith?.pos ?? this.player.pos, 'Brandt restocks his wares.', '#e8c87a', 13);
+    const smith = this.actors.find(a => this.hasNpcRole(a, 'vendor'));
+    this.text(smith?.pos ?? this.player.pos, `${smith?.name ?? 'The vendor'} restocks the wares.`, '#e8c87a', 13);
   }
 
   private rollDrops(actor: Actor): void {

@@ -223,6 +223,12 @@ export interface MonsterDef {
    *  'predator' — AMBIENT_TAGS keeps them off objectives). Event spawners
    *  may overwrite for their own roles (patrol, siege, brigand...). */
   tag?: string;
+  /** Open TOWN-NPC role this body fills ('vendor', 'innkeep', 'caravanner',
+   *  'questgiver', a package's own...). Behavior sites scan for the role —
+   *  never a literal def id — so any def can staff any counter, and any role
+   *  floats the actor's nameplate. Distinct from `tag`, the spawn-time actor
+   *  label event spawners overwrite at will. */
+  npcRole?: string;
   /** A RIDER SLOT on this creature's back: same-team actors whose tag /
    *  defId / faction matches `kinds` may MOUNT it (the {do:'mount'} verb) —
    *  the rider is carried (position pinned, dash/push stilled) and casts
@@ -2482,10 +2488,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // Friendly scenery folk: they stand at their posts and cannot be harmed.
-  // (Future vendors and questgivers hang off these.)
+  // Behavior binds to npcRole (vendor / innkeep / caravanner / questgiver),
+  // so any body — these or a package's — can staff a counter.
   townsfolk_smith: {
     id: 'townsfolk_smith', name: 'Brandt the Smith',
-    color: '#c89a5e', shape: 'circle', radius: 13, look: 'npc_smith',
+    color: '#c89a5e', shape: 'circle', radius: 13, look: 'npc_smith', npcRole: 'vendor',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2495,7 +2502,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   townsfolk_innkeep: {
     id: 'townsfolk_innkeep', name: 'Mireille the Innkeep',
-    color: '#d8b87a', shape: 'circle', radius: 12, look: 'npc_keeper',
+    color: '#d8b87a', shape: 'circle', radius: 12, look: 'npc_keeper', npcRole: 'innkeep',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2505,7 +2512,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   townsfolk_questgiver: {
     id: 'townsfolk_questgiver', name: 'Aldric the Quartermaster',
-    color: '#9a86c8', shape: 'circle', radius: 13, look: 'npc_scholar',
+    color: '#9a86c8', shape: 'circle', radius: 13, look: 'npc_scholar', npcRole: 'questgiver',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2513,12 +2520,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
-  // The Caravanner — scenery folk (name auto-floats via the 'townsfolk' prefix).
+  // The Caravanner — scenery folk (name auto-floats via npcRole, like all of them).
   // Stands in town (and waits at each minted caravan destination) to escort the
   // player between level bands. Same passive+invulnerable scenery shape as the others.
   townsfolk_caravanner: {
     id: 'townsfolk_caravanner', name: 'Soraya the Caravanner',
-    color: '#c8a06e', shape: 'circle', radius: 13, look: 'npc_trader',
+    color: '#c8a06e', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'caravanner',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
