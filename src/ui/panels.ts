@@ -60,6 +60,7 @@ import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
+import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
@@ -168,6 +169,11 @@ export class UI {
    *  (an innerHTML rebuild destroys the drag source, which cancels a native
    *  drag mid-gesture; the world map's drag uses the same discipline). */
   private invDragging = false;
+  /** CLICK-TO-LIFT vestige: the id lifted by a click, awaiting a socket (or
+   *  a socketed item) click to inlay — the pad-friendly twin of the native
+   *  drag, which script can't synthesize. A ghost chip trails the cursor. */
+  private liftedVestige: string | null = null;
+  private vestigeGhost: HTMLDivElement;
   /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
    *  support gems — one panel, one key, zero overlapping windows. */
   invTab: 'gear' | 'skills' | 'gems' = 'gear';
@@ -269,7 +275,25 @@ export class UI {
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     // Delegation works on SVG descendants too — tree nodes carry data-tip like
     // any DOM row, so mouse AND the pad pointer's synthetic hover both hit it.
-    bindTooltips(this.passiveTree, (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null);
+    // PROXIMITY: zoomed out, nodes shrink toward pixels — the box anchors to
+    // the nearest node within reach of the cursor (sticky, direct hit wins),
+    // so reading the tree never demands surgical hovering.
+    bindTooltips(this.passiveTree,
+      (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null,
+      { proximity: { selector: '.tree-node', radiusPx: 30, hysteresis: 0.35 } });
+    // The lifted-vestige ghost: the glyph rides the cursor while a vestige is
+    // lifted (real mouse moves and the pad pointer's synthetic ones both
+    // bubble to the document, so one listener serves both devices).
+    this.vestigeGhost = document.createElement('div');
+    this.vestigeGhost.style.cssText =
+      'position:fixed;left:0;top:0;pointer-events:none;z-index:10001;display:none;'
+      + 'font:bold 17px Verdana;text-shadow:0 0 6px rgba(0,0,0,0.9)';
+    document.body.appendChild(this.vestigeGhost);
+    document.addEventListener('mousemove', (e) => {
+      if (this.liftedVestige) {
+        this.vestigeGhost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 14}px)`;
+      }
+    });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
   }
 
@@ -860,7 +884,7 @@ export class UI {
     this.inventoryOpen = !this.inventoryOpen;
     this.inventory.classList.toggle('hidden', !this.inventoryOpen);
     if (this.inventoryOpen) this.refreshInventory();
-    else { this.heldItemUid = null; hideTooltip(); }
+    else { this.heldItemUid = null; this.setLiftedVestige(null); hideTooltip(); }
   }
 
   /** An item anywhere on this seat — bag or doll (tooltips serve both). */
@@ -1008,11 +1032,15 @@ export class UI {
             return `<div style="border-top:1px dashed #4a3a5a;margin-top:6px;padding-top:5px">
               ${owned.map(v => {
                 const n = this.getWorld().meta.vestiges[v.id];
+                const lifted = this.liftedVestige === v.id;
                 return `<div draggable="true" data-vestige="${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
-                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:grab">${v.glyph} ${n}
+                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:grab${lifted
+                    ? ';outline:1px solid var(--gold);background:rgba(200,168,75,0.12)' : ''}">${v.glyph} ${n}
                   <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
               }).join('')}
-              <div style="color:#5a5668;font-size:8px;margin-top:3px">drag a vestige onto a socket ◇</div>
+              <div style="color:#5a5668;font-size:8px;margin-top:3px">${this.liftedVestige
+                ? 'lifted — click a socket ◇ (or a socketed item) to inlay · click it again to cancel'
+                : 'drag — or click to lift — a vestige, then a socket ◇'}</div>
             </div>`;
           })()}
         </div>` : ''}`;
@@ -1110,11 +1138,11 @@ export class UI {
       const vid = e.dataTransfer?.getData('text/plain') ?? '';
       return vid && VESTIGES[vid] ? vid : null;
     };
+    // ONE inlay path for both gestures (native drag AND click-to-lift) —
+    // the two may never disagree on what a socket click/drop does.
     const socketDrop = (uid: number, socket: number, vid: string): void => {
       this.invDragging = false; // drop fires before dragend — unfreeze first
-      world.requestMeta({ t: 'socketVestige', uid, socket, vestigeId: vid });
-      this.refreshInventory();
-      this.refreshCharSheet();
+      this.socketVestige(uid, socket, vid);
     };
     const highlight = (el: HTMLElement, on: boolean): void => {
       el.style.outline = on ? '2px solid var(--gold, #c8a84b)' : '';
@@ -1125,12 +1153,21 @@ export class UI {
         e.dataTransfer?.setData('text/plain', el.dataset.vestige!);
         if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
         hideTooltip();       // the hover card must not shadow the drop path
+        this.setLiftedVestige(null); // a real drag supersedes a lift
         this.invDragging = true;
       });
       el.addEventListener('dragend', () => {
         if (!this.invDragging) return; // a landed drop already refreshed
         this.invDragging = false;
         this.refreshInventory();       // clear lingering highlights
+      });
+      // CLICK-TO-LIFT: the pad-friendly (and one-handed-mouse) twin of the
+      // drag — click lifts the vestige onto the cursor, the next socket (or
+      // socketed item) click inlays it, re-clicking the row cancels.
+      el.addEventListener('click', (e) => {
+        const vid = el.dataset.vestige!;
+        this.setLiftedVestige(this.liftedVestige === vid ? null : vid, { x: e.clientX, y: e.clientY });
+        this.refreshInventory();
       });
     });
     q<HTMLElement>('[data-sock]').forEach(el => {
@@ -1145,8 +1182,17 @@ export class UI {
         const [uid, sock] = el.dataset.sock!.split(':');
         socketDrop(Number(uid), Number(sock), vid);
       });
-      // A pip click must never lift the tile underneath.
-      el.addEventListener('click', (e) => e.stopPropagation());
+      // A pip click must never lift the tile underneath — and while a vestige
+      // is LIFTED, the pip click is the precise inlay (occupied or not: an
+      // aimed, deliberate overwrite, exactly like the drag's pip drop).
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const vid = this.liftedVestige;
+        if (!vid) return;
+        const [uid, sock] = el.dataset.sock!.split(':');
+        this.setLiftedVestige(null);
+        socketDrop(Number(uid), Number(sock), vid);
+      });
     });
     const wireItemTarget = (el: HTMLElement, uid: number): void => {
       if (!this.findItem(uid)?.sockets?.length) return; // socketless ≠ target
@@ -1172,6 +1218,7 @@ export class UI {
     q<HTMLButtonElement>('button[data-invtab]').forEach(btn => btn.addEventListener('click', () => {
       this.invTab = btn.dataset.invtab as typeof this.invTab;
       this.heldItemUid = null; // a lifted item has no meaning off the gear tab
+      this.setLiftedVestige(null); // nor does a lifted vestige
       this.refreshInventory();
     }));
     // The Build drawer rides EVERY tab (its handle hangs on the panel edge):
@@ -1193,6 +1240,9 @@ export class UI {
     q<HTMLElement>('[data-bag-item]').forEach(el => {
       const uid = Number(el.dataset.itemUid);
       el.addEventListener('click', (e) => {
+        // A lifted VESTIGE outranks the item-lift gesture: clicking a socketed
+        // tile inlays into its first empty socket (the drag's forgiving rule).
+        if (this.liftedVestige) { this.inlayLifted(el, uid); return; }
         if (e.shiftKey) {
           world.requestMeta({ t: 'dropItem', uid });
           if (this.heldItemUid === uid) this.heldItemUid = null;
@@ -1233,6 +1283,12 @@ export class UI {
     }));
 
     q<HTMLElement>('[data-doll]').forEach(el => el.addEventListener('click', () => {
+      // Same vestige-first rule on worn gear (empty doll slots just no-op).
+      if (this.liftedVestige) {
+        const uid = Number(el.dataset.itemUid ?? NaN);
+        if (Number.isFinite(uid)) this.inlayLifted(el, uid);
+        return;
+      }
       const slot = el.dataset.doll!;
       if (this.heldItemUid !== null) {
         world.requestMeta({ t: 'equipItem', uid: this.heldItemUid, slot });
@@ -1243,6 +1299,48 @@ export class UI {
       this.refreshInventory();
       this.refreshCharSheet(); // worn stats moved — keep the open sheet honest
     }));
+  }
+
+  /** The one socketVestige request path — native drag drops and click-to-lift
+   *  inlays both land here, so the two gestures can never diverge. */
+  private socketVestige(uid: number, socket: number, vestigeId: string): void {
+    this.getWorld().requestMeta({ t: 'socketVestige', uid, socket, vestigeId });
+    this.refreshInventory();
+    this.refreshCharSheet();
+  }
+
+  /** Lift (or drop) a vestige onto the cursor: the ghost glyph trails the
+   *  pointer until a socket click inlays it or the lift is cancelled. */
+  private setLiftedVestige(vid: string | null, at?: { x: number; y: number }): void {
+    this.liftedVestige = vid;
+    const g = this.vestigeGhost;
+    if (!vid) { g.style.display = 'none'; return; }
+    const v = VESTIGES[vid];
+    g.textContent = v?.glyph ?? '◆';
+    g.style.color = v?.color ?? 'var(--gold)';
+    if (at) g.style.transform = `translate(${at.x + 12}px, ${at.y + 14}px)`;
+    g.style.display = 'block';
+  }
+
+  /** Inlay the LIFTED vestige into an item's first EMPTY socket; if every
+   *  socket is full, flash the pips so the overwrite stays an aimed pip-click
+   *  — the native drag's exact forgiving-target rule. Socketless items are
+   *  not targets (the lift survives the misclick). */
+  private inlayLifted(el: HTMLElement, uid: number): void {
+    const vid = this.liftedVestige;
+    if (!vid) return;
+    const sockets = this.findItem(uid)?.sockets;
+    if (!sockets?.length) return;
+    const empty = sockets.findIndex(s => s === null);
+    if (empty >= 0) {
+      this.setLiftedVestige(null);
+      this.socketVestige(uid, empty, vid);
+      return;
+    }
+    el.querySelectorAll<HTMLElement>('[data-sock]').forEach(p => {
+      p.style.textShadow = '0 0 8px #ffd700';
+      window.setTimeout(() => { p.style.textShadow = ''; }, 650);
+    });
   }
 
   // ---------------------------------------------------------- salvage station
@@ -2842,6 +2940,11 @@ export class UI {
           value="${Math.round(s.pad.pointerSpeed)}"> <b id="val-padspeed">${Math.round(s.pad.pointerSpeed)}</b></span>
       </div>
       <div class="rebind-row">
+        <span>Aim Assist (reticle magnetism)</span>
+        <span class="pad-opt"><input type="range" id="opt-aimassist" min="0" max="100" step="5"
+          value="${Math.round(s.pad.aimAssist * 100)}"> <b id="val-aimassist">${s.pad.aimAssist <= 0 ? 'OFF' : `${Math.round(s.pad.aimAssist * 100)}%`}</b></span>
+      </div>
+      <div class="rebind-row">
         <span>Swap Sticks (southpaw)</span>
         <button id="opt-swapsticks">${s.pad.swapSticks ? 'ON' : 'OFF'}</button>
       </div>
@@ -2858,6 +2961,22 @@ export class UI {
       <div class="rebind-row">
         <span>Foresight (enemy cast markers)</span>
         <button id="opt-foresight">${this.getSettings().castTelegraphs ? 'ON' : 'OFF'}</button>
+      </div>
+      <h1>Cursor</h1>
+      <div class="acct-head">One identity for the mouse cursor and the pad's aim reticle —
+        a shape and a tint that stand out against any battlefield.</div>
+      <div class="rebind-row">
+        <span>Style</span>
+        <span>${Object.values(CURSOR_STYLES).map(st =>
+          `<button data-cursor-style="${st.id}" style="margin-left:5px;${st.id === s.cursor.style
+            ? 'border-color:var(--gold);color:var(--gold)' : ''}">${st.label}</button>`).join('')}</span>
+      </div>
+      <div class="rebind-row">
+        <span>Tint</span>
+        <span>${CURSOR_COLORS.map(c =>
+          `<button data-cursor-color="${c.css}" title="${c.label}"
+            style="margin-left:5px;width:26px;height:20px;vertical-align:middle;background:${c.css};
+            border:2px solid ${c.css === s.cursor.color ? '#fff' : 'rgba(255,255,255,0.25)'};border-radius:3px"></button>`).join('')}</span>
       </div>
       <div class="esc-btns"><button id="esc-back">Back</button></div>`;
     // The severity-scaled edge pulse is a real build choice (1/1-life and
@@ -2900,6 +3019,27 @@ export class UI {
     slider('deadzone', v => { this.getSettings().pad.deadzone = v / 100; }, v => `${v}%`);
     slider('aimreach', v => { this.getSettings().pad.aimRadius = v; }, v => String(v));
     slider('padspeed', v => { this.getSettings().pad.pointerSpeed = v; }, v => String(v));
+    slider('aimassist', v => { this.getSettings().pad.aimAssist = v / 100; }, v => v <= 0 ? 'OFF' : `${v}%`);
+    // Cursor identity: style + tint apply INSTANTLY (applyCursor re-paints the
+    // CSS cursor; the pad reticle reads the color live) and persist on click.
+    root.querySelectorAll<HTMLElement>('[data-cursor-style]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const st = this.getSettings();
+        st.cursor.style = btn.dataset.cursorStyle!;
+        this.saveSettings();
+        applyCursor(st.cursor);
+        this.renderKeybinds(root, onBack);
+      });
+    });
+    root.querySelectorAll<HTMLElement>('[data-cursor-color]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const st = this.getSettings();
+        st.cursor.color = btn.dataset.cursorColor!;
+        this.saveSettings();
+        applyCursor(st.cursor);
+        this.renderKeybinds(root, onBack);
+      });
+    });
     root.querySelector<HTMLElement>('#opt-swapsticks')!.addEventListener('click', () => {
       const st = this.getSettings();
       st.pad.swapSticks = !st.pad.swapSticks;
@@ -3228,6 +3368,7 @@ export class UI {
     this.charSheetOpen = false;
     this.inventoryOpen = false;
     this.heldItemUid = null;
+    this.setLiftedVestige(null); // never strand the ghost on a closed panel
     this.inventory.classList.add('hidden');
     this.salvageOpen = false;
     this.craftTargetUid = null;

@@ -5,6 +5,15 @@
 // `data-tip`, the supplied getContent() builds the box from LIVE data. The box
 // follows the cursor, clamps into the viewport, and never eats pointer events.
 // Delegation means it survives the panels' innerHTML re-renders for free.
+//
+// PROXIMITY MODE (opt-in per bind): for surfaces whose targets shrink toward
+// pixels — the zoomed-out passive tree above all — the tooltip can anchor to
+// the NEAREST matching element within a radius of the cursor instead of
+// demanding a direct hit. It is STICKY: the current anchor only yields to a
+// rival that is decisively closer (hysteresis), so the box never flickers
+// between neighbours mid-glide. A direct hit always wins outright, so precise
+// hovering at high zoom behaves exactly like every other panel. Works for the
+// mouse and the pad pointer alike (both speak pointermove).
 // ---------------------------------------------------------------------------
 
 export interface TooltipContent {
@@ -13,14 +22,32 @@ export interface TooltipContent {
   meta?: string;
 }
 
+export interface TooltipProximity {
+  /** Which descendants compete for the nearest-anchor pick. */
+  selector: string;
+  /** Max distance (px) from cursor to an element's center to anchor it. */
+  radiusPx: number;
+  /** Stickiness: the held anchor's distance is discounted by this fraction
+   *  when rivals bid, so a challenger must be CLEARLY closer to steal the
+   *  box (0 = free-for-all, 0.35 = needs ~35% closer). */
+  hysteresis?: number;
+  /** Re-scan cadence (ms) — proximity sweeps rects, so don't do it per event. */
+  intervalMs?: number;
+}
+
+export interface TooltipOpts {
+  proximity?: TooltipProximity;
+}
+
 export function bindTooltips(
   container: HTMLElement,
   getContent: (el: HTMLElement) => TooltipContent | null,
+  opts?: TooltipOpts,
 ): void {
   const tip = document.getElementById('tooltip')!;
   let cur: HTMLElement | null = null;
 
-  const place = (e: MouseEvent): void => {
+  const place = (e: { clientX: number; clientY: number }): void => {
     const pad = 14, vw = window.innerWidth, vh = window.innerHeight;
     const r = tip.getBoundingClientRect();
     let x = e.clientX + pad, y = e.clientY + pad;
@@ -30,6 +57,61 @@ export function bindTooltips(
     tip.style.top = `${Math.max(4, y)}px`;
   };
 
+  const hide = (): void => {
+    if (!cur) return;
+    cur = null;
+    tip.classList.add('hidden');
+  };
+
+  const show = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
+    if (el !== cur) {
+      const c = getContent(el);
+      if (!c) { hide(); return; }
+      cur = el;
+      tip.innerHTML =
+        `${c.title ? `<div class="tt-title">${c.title}</div>` : ''}` +
+        `<div class="tt-desc">${c.description}</div>` +
+        `${c.meta ? `<div class="tt-meta">${c.meta}</div>` : ''}`;
+      tip.classList.remove('hidden');
+    }
+    place(e);
+  };
+
+  // ---- PROXIMITY MODE: pointermove owns every show/hide decision ----------
+  const prox = opts?.proximity;
+  if (prox) {
+    let lastScan = 0;
+    container.addEventListener('pointermove', (e) => {
+      // A re-render tore the anchor out — release it so the scan re-picks the
+      // rebuilt element (content refreshes from live data in the same beat).
+      if (cur && !cur.isConnected) { cur = null; tip.classList.add('hidden'); }
+      // Direct hit wins outright — precision hovering stays precision.
+      const direct = (e.target as HTMLElement).closest?.<HTMLElement>('[data-tip]');
+      if (direct) { show(direct, e); return; }
+      const now = performance.now();
+      if (now - lastScan < (prox.intervalMs ?? 40)) {
+        if (cur) place(e);
+        return;
+      }
+      lastScan = now;
+      const stick = 1 - (prox.hysteresis ?? 0.35);
+      let best: HTMLElement | null = null;
+      let bd = prox.radiusPx;
+      for (const el of container.querySelectorAll<HTMLElement>(prox.selector)) {
+        const r = el.getBoundingClientRect();
+        if (r.width <= 0) continue; // hidden / collapsed candidates never bid
+        const d = Math.hypot(e.clientX - (r.x + r.width / 2), e.clientY - (r.y + r.height / 2));
+        const eff = el === cur ? d * stick : d; // the held anchor bids discounted
+        if (eff < bd) { bd = eff; best = el; }
+      }
+      if (best) show(best, e);
+      else hide();
+    });
+    container.addEventListener('pointerleave', hide);
+    return;
+  }
+
+  // ---- CLASSIC MODE: delegated hover, exactly as every panel expects ------
   container.addEventListener('mouseover', (e) => {
     const el = (e.target as HTMLElement).closest<HTMLElement>('[data-tip]');
     if (!el) {
@@ -38,29 +120,21 @@ export function bindTooltips(
       // re-render) DETACHES the hovered element, and no mouseout ever fires for
       // a removed node, so the box would stick and trail the cursor until it
       // left the whole panel. A non-tip hover is therefore treated as a leave.
-      if (cur) { cur = null; tip.classList.add('hidden'); }
+      hide();
       return;
     }
-    const c = getContent(el);
-    if (!c) return;
-    cur = el;
-    tip.innerHTML =
-      `${c.title ? `<div class="tt-title">${c.title}</div>` : ''}` +
-      `<div class="tt-desc">${c.description}</div>` +
-      `${c.meta ? `<div class="tt-meta">${c.meta}</div>` : ''}`;
-    tip.classList.remove('hidden');
-    place(e);
+    show(el, e);
   });
   container.addEventListener('mousemove', (e) => {
     if (!cur) return;
     // The anchor was torn out by a re-render: hide rather than trail the cursor.
     // (The next mouseover re-shows it if the pointer is over the rebuilt target.)
-    if (!cur.isConnected) { cur = null; tip.classList.add('hidden'); return; }
+    if (!cur.isConnected) { hide(); return; }
     place(e);
   });
   container.addEventListener('mouseout', (e) => {
     const to = e.relatedTarget as HTMLElement | null;
-    if (cur && (!to || !cur.contains(to))) { cur = null; tip.classList.add('hidden'); }
+    if (cur && (!to || !cur.contains(to))) hide();
   });
 }
 
