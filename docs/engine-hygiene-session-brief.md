@@ -23,8 +23,18 @@
 >   their weights beside their predicates; `WorldSim.activityAt` sums; `World.eventActivityAt`
 >   keeps only the two engine-local current-zone tail terms. Per-zid totals identical.
 >
-> **Still open: Items 1 (kill-handler registry, marquee), 2 (chooseEvent registry + PackageEvent
-> wiring), 5 (renderer feature-overlay painters)** — scoped below, unchanged and current.
+> **Item 1 (marquee) SHIPPED `732e740`** — `kill()`'s 21-row ladder became three surfaces:
+> `src/engine/killHandlers.ts` (KillRule registry — tag fast-path + `when` predicate — plus the
+> KillCtx facade: credit/zone/sim + grantXp/dropGemAt/text/bumpLedger/flash/spawnHostileAt/simView;
+> id-keyed re-register = HMR-safe), nine package rows in their own def files, and SEVEN rows that
+> close over World run-state (descentRun, huntBeast, the four realm contexts, amalgamSite) kept as
+> `World.worldKillRules` — the rouseRules pattern — since module rows must stay stateless across
+> every World the process boots. Warlord kept its TWO rows; ledger keys byte-identical; bodies
+> verbatim. Live-verified (crowned / cultist / warlord ledger bumps, inert-package + corrupted
+> no-ops); sim baseline unchanged. A new package's kill-bounty is now one registerKillHandler call.
+>
+> **Still open: Items 2 (chooseEvent registry + PackageEvent wiring) and 5 (renderer
+> feature-overlay painters)** — scoped below, unchanged and current.
 
 > The `quality-pass-jul2026` DEFERRED cleanup list, scoped for hand-off. Every item converts a bespoke
 > branch-chain / closed union / duplicated helper into a **registry or data field**, in service of the
