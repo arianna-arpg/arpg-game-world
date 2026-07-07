@@ -2501,6 +2501,13 @@ export interface SupportDef {
    *  ONE random status from the struck victim to its nearest neighbor —
    *  the hit-borne contagion, with the transplant knobs inline. */
   spreadOnHit?: { chance: number; radius: number; strengthScale?: number; duration?: 'remaining' | 'refresh'; durationScale?: number };
+  /** CURSE ON HIT (Hexbrand): the socketed CURSE stops being a cast — its
+   *  key DRAWS/SHEATHES it (reserving reservePct of max mana, default
+   *  0.25); while drawn, every top-level hit the owner lands ALSO strikes
+   *  the victim with the curse at `damageScale` of its roll (default 0.3)
+   *  — statuses, procs and ruptures ride the ordinary pipeline, one layer
+   *  deep so a hex-strike can never re-apply the hexes. */
+  curseOnHit?: { damageScale?: number; reservePct?: number };
   /** LOAD-BEARING FLAW: the host skill's constructs become BREAKABLE by
    *  their owner and DETONATE as they die (see ConstructDelivery.breakable
    *  / .deathBurst — the delivery's own specs win where present). Any

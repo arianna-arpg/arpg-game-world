@@ -2067,7 +2067,8 @@ export class World {
         if (!inst) continue;
         const toggle = (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
           || (inst.def.delivery.type === 'ground' && !!inst.def.delivery.strobe)
-          || instanceTrigger(inst) !== undefined;
+          || instanceTrigger(inst) !== undefined
+          || socketSpec(inst, 'curseOnHit') !== undefined;
         // META-ACTIONS (shift+slot): the mini-button riding the slot — and
         // the meta OWNS the slot on its frame: the physical button is still
         // down during a modifier press (held[] is deliberately preserved for
@@ -10199,6 +10200,37 @@ export class World {
       caster.useLock = 0.25;
       return true;
     }
+    // CURSE ON HIT (SupportDef.curseOnHit — Hexbrand): the socketed curse
+    // stops being a cast. The press TOGGLES it: while DRAWN (reserving
+    // mana), every top-level hit the owner lands ALSO strikes the victim
+    // with this curse at a scale of its roll — statuses, procs and
+    // ruptures ride the ordinary pipeline. Seat presses toggle; AI
+    // re-presses fail and the brain moves on.
+    {
+      const coh = socketSpec(inst, 'curseOnHit');
+      if (coh) {
+        const drawn = caster.hexToggles.get(def.id);
+        if (drawn) {
+          if (!seatPress) return false;
+          caster.reservedMana = Math.max(0, caster.reservedMana - drawn.reserved);
+          caster.hexToggles.delete(def.id);
+          this.text(caster.pos, 'hex sheathed', def.color, 11);
+          caster.useLock = 0.25;
+          return true;
+        }
+        const reserve = Math.round(caster.maxMana() * (coh.reservePct ?? 0.25));
+        if (caster.reservedMana + reserve > caster.maxMana()) {
+          this.failNote(caster, def.id + ':reserve', 'mana locked');
+          return false;
+        }
+        caster.payCost(caster.skillCost(inst));
+        caster.reservedMana += reserve;
+        caster.hexToggles.set(def.id, { inst, reserved: reserve });
+        this.text(caster.pos, 'hex drawn', def.color, 11);
+        caster.useLock = 0.25;
+        return true;
+      }
+    }
     // MIASMA (curseField 'follow'): the worn curse-field is a TOGGLE —
     // pressing again extinguishes it (the reservation refunds through
     // expireZone, whichever cleanup path ever runs).
@@ -14830,6 +14862,18 @@ export class World {
           }
         }
       }
+      // CURSE ON HIT (hexToggles — Hexbrand): every top-level hit ALSO
+      // strikes the victim with each DRAWN curse at a scale of its roll —
+      // the whole curse (statuses, procs, ruptures), delivered by the
+      // blow. depth+1: a hex-strike can never re-apply the hexes.
+      if (dealt > 0 && depth === 0 && caster.hexToggles.size && !target.dead) {
+        for (const hex of caster.hexToggles.values()) {
+          if (hex.inst === inst) continue;
+          const coh = socketSpec(hex.inst, 'curseOnHit');
+          if (!coh) continue;
+          this.resolveHit(caster, hex.inst, target, coh.damageScale ?? 0.3, depth + 1, undefined, true);
+        }
+      }
       // ECHOING MIGHT (the inverse-ignite buff): the landed blow feeds the
       // NEXT — added physical equal to a fraction of what this one dealt,
       // re-priced on every refresh (dynamic-value buffs).
@@ -18327,6 +18371,13 @@ export class World {
    *  The stance survives zone travel; death releases it (reserve refunded). */
   private updateStrobes(dt: number): void {
     for (const a of this.actors) {
+      // Drawn hexes (curseOnHit) die with their bearer — reserve refunded.
+      if (a.hexToggles.size && a.dead) {
+        for (const [id, hx] of a.hexToggles) {
+          a.reservedMana = Math.max(0, a.reservedMana - hx.reserved);
+          a.hexToggles.delete(id);
+        }
+      }
       if (!a.strobes.size) continue;
       for (const [id, st] of a.strobes) {
         const d = st.inst.def.delivery;

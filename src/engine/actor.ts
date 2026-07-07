@@ -450,6 +450,10 @@ export class Actor {
    *  stance re-casts its placement on a world-driven beat while it burns;
    *  `reserved` max mana is locked out, refunded on release or death. */
   strobes = new Map<string, { inst: SkillInstance; timer: number; reserved: number }>();
+  /** DRAWN HEXES by skill id (SupportDef.curseOnHit — Hexbrand): while a
+   *  curse is drawn, the owner's top-level hits deliver it; `reserved`
+   *  max mana is locked out, refunded on sheathing or death. */
+  hexToggles = new Map<string, { inst: SkillInstance; reserved: number }>();
   /** TRIGGER GEM round-robin cursors by TriggerKind: the hotbar slot the
    *  LAST event fired, so the next event takes the next armed gem in slot
    *  order — one cast per event, taken in turn (trigger golden rule 1). */

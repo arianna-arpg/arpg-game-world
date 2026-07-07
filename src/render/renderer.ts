@@ -3943,6 +3943,7 @@ export class Renderer {
         p.activeAuras.has(inst.def.id)
         || p.summonToggles.has(inst.def.id)
         || p.strobes.has(inst.def.id)
+        || p.hexToggles.has(inst.def.id)
         // ARMED trigger gems (the "Cast on X" family): the slot itself is
         // greyed (never hand-castable), but the border glow says "live".
         || (instanceTrigger(inst) !== undefined && !inst.state?.triggerOff)

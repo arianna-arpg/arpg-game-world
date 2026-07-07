@@ -353,6 +353,17 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The hex-delivery gems ------------------------------------------------------
+  curse_on_hit: {
+    id: 'curse_on_hit', name: 'Hexbrand',
+    description: 'The socketed curse stops being a CAST: its key now DRAWS or SHEATHES it (reserving a quarter of your mana). While drawn, every top-level hit you land also strikes the victim with the whole curse at 30% of its roll — statuses, ruptures and all. Your weapon becomes the hex.',
+    color: '#b06bd4', requiresTags: ['curse'],
+    curseOnHit: { damageScale: 0.3, reservePct: 0.25 },
+    mods: [],
+    perLevel: [mod('damage', 'increased', 0.06)],
+    weight: 4, minDropLevel: 8,
+  },
+
   // --- The retaliation gems (the greatshield-and-poke kit) ----------------------
   answering_steel: {
     id: 'answering_steel', name: 'Answering Steel',
