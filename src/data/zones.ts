@@ -198,6 +198,19 @@ export interface ZoneTheme {
    *  (caves, crypts) set this so they read lightless under an open-sky sun;
    *  omitted = open sky, only night darkens. */
   ambientDark?: number;
+  /** GROUND STYLE — how this theme's floor textures (all optional; defaults
+   *  in VIS_CFG.ground). A desert reads as ROLLING DUNES with scale 2.5 +
+   *  stretchX 2; a grove keeps the fine default mottle. */
+  ground?: {
+    /** Noise feature size multiplier (1 = default grain, 2.5 = dunes). */
+    scale?: number;
+    /** Directional stretch of features along x (dune ridges > 1). */
+    stretchX?: number;
+    /** Mottle strength multiplier (contrast of the tone swing). */
+    strength?: number;
+    /** Speckle count multiplier (0 = bare). */
+    speckles?: number;
+  };
 }
 
 export interface ZoneDef {

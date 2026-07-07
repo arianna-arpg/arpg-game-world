@@ -16,7 +16,7 @@
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
-import { hash01, mix, shade, valueNoise, withAlpha } from './color';
+import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
 import { VIS_CFG } from './visConfig';
 
 function strSeed(s: string): number {
@@ -80,19 +80,26 @@ export class GroundRenderer {
     const ox = cx * C, oy = cy * C; // world coords of the chunk origin
 
     // --- Base + noise mottle: the floor stops being one flat rectangle. ---
-    // Tones derive from the floor itself with FIXED swings (a near-black
-    // theme still textures); theme.grid seasons the dark tone's hue. Value
-    // noise clusters near 0.5, so a contrast curve widens the hump — every
-    // cell gets weighted paint instead of a few threshold survivors.
-    const dark = mix(shade(theme.floor, -0.5), theme.grid, 0.25);
-    const light = shade(theme.floor, 0.16);
+    // The tone swing is HUE-PRESERVING: lightness moves, saturation gets a
+    // small boost, hue drifts warm on the lit side / cool on the shaded side
+    // — so the ground reads as MORE of the biome's color, never a greyscale
+    // grain over it (mixing toward pure white/black desaturates; the first
+    // draft did exactly that and every floor washed out to salt-and-pepper).
+    // Value noise clusters near 0.5, so a contrast curve widens the hump.
+    // Per-theme GROUND STYLE (ZoneTheme.ground) scales the features: a
+    // desert rolls 2.5×-stretched dunes, a grove keeps the fine mottle.
+    const gs = theme.ground ?? {};
+    const strength = gs.strength ?? 1;
+    const dark = mix(adjust(theme.floor, 8, 1.3, -0.075 * strength), theme.grid, 0.18);
+    const light = adjust(theme.floor, -7, 1.22, 0.08 * strength);
     ctx.fillStyle = theme.floor;
     ctx.fillRect(0, 0, C, C);
     const cell = CFG.cell;
-    const ns = CFG.noiseScale;
+    const ns = CFG.noiseScale / (gs.scale ?? 1);
+    const nsx = ns / (gs.stretchX ?? 1);
     for (let gy = 0; gy < C; gy += cell) {
       for (let gx = 0; gx < C; gx += cell) {
-        const nn = valueNoise((ox + gx) * ns, (oy + gy) * ns, this.seed);
+        const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, this.seed);
         const n = 0.5 + (nn - 0.5) * 2.6;
         if (n < 0.5) {
           ctx.globalAlpha = Math.min(1, (0.5 - n) * 2) * CFG.mottleAlpha;
@@ -108,8 +115,9 @@ export class GroundRenderer {
 
     // --- Speckle: sparse details from the theme's own vocabulary. ---------
     // Tufts only where the theme declares grass; embers only where it
-    // declares lava; pebbles from the obstacle tone everywhere.
-    const n = CFG.speckles;
+    // declares lava; pebbles from the obstacle tone everywhere. The ground
+    // style scales density (a dune sea is bare; a forest floor is busy).
+    const n = Math.round(CFG.speckles * (gs.speckles ?? 1));
     for (let i = 0; i < n; i++) {
       const sx = hash01(cx * 31 + i, cy * 17, this.seed) * C;
       const sy = hash01(cx * 13, cy * 41 + i, this.seed + 7) * C;
