@@ -2667,6 +2667,21 @@ export interface SupportDef {
   /** An AURA baked onto the host's MINIONS at summon (Pyre Legion's
    *  burning ranks — the pylon spec, worn by flesh). */
   minionAura?: AuraSpec;
+  /** MINION-BORNE SUPPORTS (the Conjurer's family): support ids injected
+   *  into the sockets of every minion the host skill SUMMONS — the payload
+   *  reaches the minions' OWN skills, not the summon. Conjurer's Splitting
+   *  on Summon Skeleton Archer splits the ARROWS: each listed support
+   *  sockets (at the carrying gem's level) into every minion skill it fits
+   *  by the ordinary tag gate, so a projectile payload finds the archer's
+   *  bow and skips the warrior's sword — supportFitsInst scopes it for
+   *  free. Summon-SCALING investment (minion damage/life/count) stays on
+   *  the summon skill's own mods lane; this lane is strictly "what the
+   *  minions cast". Only MINION-SAFE payloads may ride (the allow-set in
+   *  MINION_SAFE_SUPPORT_FIELDS — no triggers, metas, reservations): the
+   *  content validator flags violations at boot and the spawn injection
+   *  refuses them quietly. Conducted casts (minionCast orders) inherit
+   *  from each minion's own summon instance too. */
+  minionSupports?: string[];
   /** A STRIKE-TIMING discipline this support grafts (see StrikeTimingSpec
    *  — Perfect Draw's golden tail, Wandering Mark's roving marker): a
    *  press inside the zone on bar casts, the RELEASE inside the zone on
@@ -2827,6 +2842,40 @@ export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
   if (sup.excludeTags && sup.excludeTags.some(t => skill.tags.includes(t))) return false;
   if (!sup.requiresTags || !sup.requiresTags.length) return true;
   return sup.requiresTags.some(t => skill.tags.includes(t));
+}
+
+/** SupportDef keys that carry NO payload — identity, socket gating, and
+ *  drop plumbing. Everything else on a def is a payload of some kind. */
+const SUPPORT_IDENTITY_FIELDS: ReadonlySet<string> = new Set([
+  'id', 'name', 'description', 'color', 'requiresTags', 'excludeTags',
+  'maxLevel', 'weight', 'minDropLevel', 'dropTags',
+] satisfies (keyof SupportDef)[]);
+
+/** Payload fields a MINION-BORNE support may carry (SupportDef.minionSupports):
+ *  plain skill-local modifiers, tag grants, and the delivery-scoped grafts a
+ *  minion's own cast pipeline genuinely reads. Deliberately an ALLOW-set —
+ *  everything else (triggers need a seat press, overcharge a held bar, metas
+ *  the shift layer, curse/aura conversions a reservation, charge economies an
+ *  owner) is refused, and NEW structured grafts default to unsafe until
+ *  someone thinks about minions. `minionSupports` itself is excluded on
+ *  purpose: payloads don't chain. */
+export const MINION_SAFE_SUPPORT_FIELDS: ReadonlySet<string> = new Set([
+  'mods', 'perLevel', 'levelBonus', 'levelBonusPer', 'grantsTags',
+  'aim', 'targeting', 'trail', 'fissureTrail', 'cascade', 'pulse',
+] satisfies (keyof SupportDef)[]);
+
+/** Payload fields on `sup` that may NOT ride a minion — empty means safe. */
+export function minionUnsafeSupportFields(sup: SupportDef): string[] {
+  return Object.entries(sup)
+    .filter(([k, v]) => v !== undefined
+      && !SUPPORT_IDENTITY_FIELDS.has(k) && !MINION_SAFE_SUPPORT_FIELDS.has(k))
+    .map(([k]) => k);
+}
+
+/** May this support be listed in another's minionSupports and injected into
+ *  a minion's skills? True when every payload it carries is minion-safe. */
+export function supportRidesMinions(sup: SupportDef): boolean {
+  return minionUnsafeSupportFields(sup).length === 0;
 }
 
 /** Tags granted to a skill instance by its socketed supports. */

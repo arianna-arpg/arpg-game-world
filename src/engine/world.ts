@@ -25,7 +25,7 @@ import {
   effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, supportFitsInst,
-  supportMaxLevel,
+  supportMaxLevel, supportRidesMinions,
   type AuraDelivery, type BuffEffect, type ConstructDelivery, type GroundDelivery, type GuardSpec,
   type ProjectileDelivery, type ProjectileShape, type SkillDef,
   type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
@@ -12150,6 +12150,10 @@ export class World {
           // EXECUTE, never cast (the trap rule): an order with a bar would
           // fight the minion's own AI for the body.
           const order = makeSkillInstance(SKILLS[fx.skillId], effectiveSkillLevel(inst));
+          // Conducted casts inherit the minion's OWN loadout: the summon
+          // skill that minted m may carry minion-borne supports (Conjurer's
+          // gems), and an ordered volley should split like a willed one.
+          this.injectMinionSupports(m.summonInst, [order]);
           m.useLock = 0; m.mana = Math.max(m.mana, m.maxMana());
           this.executeSkill(m, order, orderAt, { noRepeat: true });
           sent++;
@@ -13164,6 +13168,37 @@ export class World {
   }
 
   /**
+   * MINION-BORNE SUPPORTS: gems on a SUMMON skill may carry a
+   * `minionSupports` payload — support ids socketed into the minted
+   * minion's OWN skill instances (at the carrying gem's level), so the
+   * owner's investment reaches what the minions actually cast. Fit is the
+   * ordinary tag gate per minion skill (supportFitsInst): a projectile
+   * payload finds the archer's bow and skips the zombie's bite, with zero
+   * new math — minions already cast through useSkill → instanceMods.
+   * Reuses the MonsterGrant null-slot write: pre-filled kits skip
+   * gracefully when full, and a payload already riding (granted, or two
+   * carriers naming it) never stacks a second copy. Unsafe payloads
+   * (validator-flagged at boot) are refused quietly here. Pure given
+   * stable socket order — no RNG, co-op-replication friendly.
+   */
+  private injectMinionSupports(summonInst: SkillInstance | undefined, skills: (SkillInstance | null)[]): void {
+    if (!summonInst) return;
+    for (const socket of summonInst.sockets) {
+      if (!socket?.def.minionSupports) continue;
+      for (const id of socket.def.minionSupports) {
+        const sup = SUPPORTS[id];
+        if (!sup || !supportRidesMinions(sup)) continue;
+        for (const sk of skills) {
+          if (!sk || !supportFitsInst(sup, sk)) continue;
+          if (sk.sockets.some(x => x?.def.id === id)) continue;
+          const slot = sk.sockets.findIndex(x => x === null);
+          if (slot >= 0) sk.sockets[slot] = { def: sup, level: socket.level };
+        }
+      }
+    }
+  }
+
+  /**
    * Spawn one minion for a summon skill, honoring the cap (with %-more/fewer
    * modifiers applied to the skill's own base) and baking the owner's
    * minion-shaping stats — size, speed, damage, life, explosion payloads,
@@ -13221,6 +13256,10 @@ export class World {
     minion.sourceSkillId = inst.def.id;
     minion.sourcePoolGroup = d.poolGroup;
     minion.summonInst = inst;
+    // MINION-BORNE SUPPORTS (SupportDef.minionSupports): the owner's gems
+    // reach what the minion CASTS — injected before ownerMods so both lanes
+    // (socketed payload, sheet source) are live for the minion's whole life.
+    this.injectMinionSupports(inst, minion.skills);
     const size = caster.sheet.get('minionSize', tags, extra);
     minion.radius = Math.max(5, minion.radius * size);
     const haste = caster.sheet.get('minionHaste', tags, extra);

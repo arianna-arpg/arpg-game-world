@@ -8,7 +8,10 @@
 import { MONSTERS, WAVE_TABLE } from './monsters';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
-import { supportFits, type Delivery, type SkillDef, type SupportDef } from '../engine/skills';
+import {
+  minionUnsafeSupportFields, supportFits,
+  type Delivery, type SkillDef, type SupportDef,
+} from '../engine/skills';
 import { PROCS } from './procs';
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
@@ -362,6 +365,27 @@ export function validateContent(): void {
             + `'${row.key}' payload is never read by a '${target.delivery.type}' delivery`);
         }
       }
+    }
+  }
+
+  // MINION-BORNE SUPPORTS (SupportDef.minionSupports): every listed payload
+  // must exist and be minion-safe — the injection refuses unsafe payloads
+  // QUIETLY at spawn, so the loud line lives here. A carrier whose own tag
+  // gate can never reach a summon skill is dead content the same way.
+  for (const sup of Object.values(SUPPORTS)) {
+    if (!sup.minionSupports) continue;
+    for (const id of sup.minionSupports) {
+      const payload = SUPPORTS[id];
+      if (!payload) { warn(`support ${sup.id}: minionSupports names unknown support '${id}'`); continue; }
+      const unsafe = minionUnsafeSupportFields(payload);
+      if (unsafe.length) {
+        warn(`support ${sup.id}: minionSupports lists '${id}', whose [${unsafe.join(', ')}] payload(s) `
+          + `are not minion-safe — the spawn injection will refuse it (see MINION_SAFE_SUPPORT_FIELDS)`);
+      }
+    }
+    if (sup.requiresTags && !sup.requiresTags.includes('summon')) {
+      warn(`support ${sup.id}: carries minionSupports but requiresTags [${sup.requiresTags.join(', ')}] `
+        + `never reaches a summon skill — the payload can never board a minion`);
     }
   }
 

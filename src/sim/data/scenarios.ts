@@ -107,6 +107,26 @@ for (const m of ['zombie', 'skeleton_warrior', 'blood_mite']) {
   add(monsterDuel('warrior', 5, m));
 }
 
+// MINION-SUPPORT PROBE PAIR: an archer-only summoner under a slow zombie
+// drip, bare vs a Conjurer's Splitting on the summon skill. dps_minions is
+// the headline — the hero carries NO attack skill, the gem's payload sockets
+// into the ARCHERS' bone_arrow, so the split arrows are the whole difference
+// between the two runs. (Not a dummy scenario: minion AI ignores passive
+// scenery, so minion probes need targets that fight back.)
+for (const build of ['summoner_archers_l10', 'summoner_conjurer_l10']) {
+  add({
+    id: `minion_probe_${build}`,
+    label: `Minion-support probe — ${build}`,
+    build,
+    pilot: { kind: 'caster' },
+    parityLevel: 10,
+    waves: [{ monsters: [{ id: 'zombie', count: 2 }], repeatEvery: 8 }],
+    duration: 45,
+    stop: 'duration',
+    notes: 'A/B probe for SupportDef.minionSupports: compare dps_minions across the pair.',
+  });
+}
+
 // ------------------------------------------------------------------ suites --
 
 /** Named bundles: the unit a balance pass (or a CI gate) runs. */

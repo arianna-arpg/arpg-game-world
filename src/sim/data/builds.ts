@@ -71,3 +71,18 @@ for (const cls of CLASSES) {
     BUILDS[b.id] = b;
   }
 }
+
+// MINION-SUPPORT PROBES (SupportDef.minionSupports): the same archer-only
+// summoner twice — bare, and carrying a Conjurer's Splitting on the summon
+// skill. Their A/B is the feature's regression probe: the CONJURER build's
+// dps_minions should sit visibly above the bare one (the archers' arrows
+// split; the summon skill itself never fires a shot).
+const archerSummoner = (id: string, supports?: { id: string; level?: number }[]): BuildSpec => ({
+  id, label: `Skeleton-archer summoner @ L10 (${supports ? 'Conjurer\'s Splitting' : 'bare'})`,
+  classId: 'summoner', level: 10,
+  skills: [{ id: 'summon_skeleton_archer', level: gemLevelAt(10), supports }],
+  passives: greedyPassives('summoner', 10),
+});
+BUILDS['summoner_archers_l10'] = archerSummoner('summoner_archers_l10');
+BUILDS['summoner_conjurer_l10'] = archerSummoner('summoner_conjurer_l10',
+  [{ id: 'conjurers_splitting', level: 1 }]);
