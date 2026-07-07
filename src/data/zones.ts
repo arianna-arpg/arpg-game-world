@@ -194,6 +194,10 @@ export interface ZoneTheme {
   sand?: string;
   /** Molten rock core (wastelands). Default dark ember. */
   lava?: string;
+  /** Baseline darkness for the LIGHT LAYER even at noon (0..1) — interiors
+   *  (caves, crypts) set this so they read lightless under an open-sky sun;
+   *  omitted = open sky, only night darkens. */
+  ambientDark?: number;
 }
 
 export interface ZoneDef {

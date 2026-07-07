@@ -36,6 +36,7 @@ import { drawGlow, drawShadow } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, PAINTERS, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
+import { LightLayer } from './vis/lights';
 import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
@@ -111,6 +112,9 @@ export class Renderer {
     // Per-frame doodad culling: everything the ground/canopy doodad passes
     // draw comes from this view-clipped, kind-grouped set (see cullDoodads).
     this.cullDoodads(world, vw, vh);
+    // Gather this frame's light sources (data-declared doodad emissives,
+    // projectiles, flashes, exits, the hero's lantern) for the light layer.
+    this.lightLayer.collect(world, this.culled, this.cam.x, this.cam.y, vw, vh);
 
     ctx.save();
     ctx.scale(z, z);
@@ -155,6 +159,12 @@ export class Renderer {
     this.drawTexts(world);
 
     ctx.restore();
+
+    // THE LIGHT LAYER: day/night darkness punched by every light in view +
+    // emissive bloom — world-lit, drawn before the screen-space washes. The
+    // world transform was translate(-cam + shake), so the effective camera
+    // the lights must project through is cam - shake.
+    this.lightLayer.render(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
 
     this.drawAtmosphere(world);
     this.drawStatusFx(world);     // status ailment overlays (edge vignettes/frost/stars)
@@ -780,9 +790,11 @@ export class Renderer {
   private drawAtmosphere(world: World): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
+    // The LIGHT LAYER carries the darkness now; this wash is only the cold
+    // blue COLOR GRADE of night, not its blackness.
     const night = 1 - dayCycle(world.time).light; // 0 at noon, 1 at deep night
     if (night > 0.04) {
-      ctx.fillStyle = `rgba(12,16,40,${(0.30 * night).toFixed(3)})`;
+      ctx.fillStyle = `rgba(16,22,52,${(0.12 * night).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
     }
     const f = world.sim.weather.sample(world.zone);
@@ -931,6 +943,8 @@ export class Renderer {
   private culledAll: Doodad[] = [];
   /** The baked-floor chunk cache (vis/ground.ts). */
   private ground = new GroundRenderer();
+  /** The dynamic darkness/emissive compositor (vis/lights.ts). */
+  private lightLayer = new LightLayer();
   private cullDoodads(world: World, vw: number, vh: number): void {
     const pad = RENDER_CULL_PAD;
     const L = this.cam.x - pad, T = this.cam.y - pad;
