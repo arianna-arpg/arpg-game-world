@@ -58,6 +58,10 @@ export interface Settings {
    *  over it, exactly like gems; 'key' keeps it a deliberate press (the
    *  pickup bind). A feel preference — both stay first-class. */
   gearPickup: 'vacuum' | 'key';
+  /** FORESIGHT: enemy casts with a ground footprint mark their landing spot
+   *  during the wind-up (a faint ring firming toward impact). ON by default;
+   *  OFF is the hard-mode read-the-animation purist option. */
+  castTelegraphs: boolean;
 }
 export interface SettingsSave {
   schemaVersion: number;
@@ -66,6 +70,7 @@ export interface SettingsSave {
   pad?: Partial<PadOptions>;
   lowLifePulse?: boolean;
   gearPickup?: 'vacuum' | 'key';
+  castTelegraphs?: boolean;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -142,6 +147,7 @@ export const makeSettings = (): Settings => ({
   pad: { ...DEFAULT_PAD_OPTIONS },
   lowLifePulse: true,
   gearPickup: 'vacuum',
+  castTelegraphs: true,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -151,6 +157,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   pad: { ...s.pad },
   lowLifePulse: s.lowLifePulse,
   gearPickup: s.gearPickup,
+  castTelegraphs: s.castTelegraphs,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -179,5 +186,6 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     },
     lowLifePulse: s.lowLifePulse ?? true,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
+    castTelegraphs: s.castTelegraphs ?? true,
   };
 }

@@ -32,7 +32,7 @@ import { RARITY_DEFS } from '../engine/rarity';
 import { MONSTERS } from '../data/monsters';
 import { hexToRgb, shade, withAlpha } from './vis/color';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
-import { drawGlow, drawShadow } from './vis/sprites';
+import { drawGlow, drawLongShadow, drawShadow, sunCast } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, PAINTERS, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
@@ -1021,6 +1021,9 @@ export class Renderer {
     const groups: Grp[] = [];
     for (const [kind, list] of this.culled) groups.push({ kind, list, def: DOODAD_VISUALS[kind] });
     groups.sort((a, b) => (a.def?.order ?? 50) - (b.def?.order ?? 50));
+    // The sun's cast this frame — directional shadows SPIN through the day
+    // and stretch toward dawn/dusk (null at night).
+    const sun = sunCast(world.time);
     for (const g of groups) {
       if (!g.def) {
         if (!warnedUnrenderedKinds.has(g.kind)) {
@@ -1029,6 +1032,12 @@ export class Renderer {
         }
         PAINTERS.fallback(env, g.list, { painter: 'fallback', order: 50 });
         continue;
+      }
+      if (sun && g.def.longShadow) {
+        for (const d of g.list) {
+          drawLongShadow(ctx, d.pos.x, d.pos.y, d.radius * g.def.longShadow,
+            sun.dir, sun.len, sun.alpha);
+        }
       }
       if (g.def.shadow) paintGroupShadows(env, g.list, g.def.shadow);
       (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, g.list, g.def);
@@ -2180,6 +2189,41 @@ export class Renderer {
       ctx.fillStyle = def.color;
       ctx.fillRect(px, y + a.radius + 4, 6, 6);
       px += 8;
+    }
+
+    // FORESIGHT — an enemy wind-up with a GROUND footprint marks its landing
+    // spot: a faint ring in the skill's color firming toward impact, plus a
+    // center pip. Read it, step out. Toggleable (Settings.castTelegraphs).
+    if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
+      const fc = a.casting;
+      const del = fc.inst.def.delivery;
+      if (del.type === 'ground') {
+        const aim = fc.lockedAim ?? fc.aim;
+        const prog = fc.total > 0 ? clamp(fc.elapsed / fc.total, 0, 1) : 1;
+        const rr = del.radius;
+        ctx.save();
+        ctx.translate(aim.x, aim.y); // world space — the body transform ended above
+        ctx.strokeStyle = fc.inst.def.color;
+        ctx.globalAlpha = 0.18 + 0.3 * prog;
+        ctx.lineWidth = 1.5 + prog * 1.5;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(0, 0, rr, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // The fill breathes in as the cast completes.
+        ctx.globalAlpha = 0.05 + 0.09 * prog;
+        ctx.fillStyle = fc.inst.def.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, rr * (0.35 + 0.65 * prog), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 0.5 + 0.4 * prog;
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = baseAlpha;
+      }
     }
 
     // Cast bar above the head (telegraphs enemy casts, too)

@@ -46,10 +46,26 @@ export type KnownDoodadKind =
   // Biome-expansion terrain (batch 6)
   | 'sand'      // ground overlay: wind-blown grit that slows like mud
   | 'heat_shimmer' // ground overlay: wavering desert air — stacks sunscorch (World.updateHeat)
+  | 'fog_bank'  // ground overlay + canopy clouds: drifting murk that VEILS you (fogveiled)
+  // The doodad kingdom (round 4): biome furniture with playstyle edges.
+  | 'dead_tree' // bare snag — solid, no canopy (swamps, wastes, battlefields)
+  | 'stump'     // cut bole — blocks feet, NOT shots (logging sites, fell groves)
+  | 'log'       // fallen trunk — low cover, blocks feet only
+  | 'flowers'   // meadow color drifts — pure decoration
+  | 'reeds'     // water-edge blades — CONCEALS like brush (ambush margins)
+  | 'cactus'    // desert solid — swollen lobes and spines
+  | 'web'       // sticky sheet — slows like mire (spider country)
+  | 'geyser'    // scalding vent mouth — steams and glows (marsh/tundra)
+  | 'snowdrift' // wind-piled powder — decoration (tundra)
+  | 'bone_pile' // scattered remains — decoration (crypts, lairs)
+  | 'brazier'   // a standing fire bowl — LIGHT in the dark (crypts, camps)
+  | 'standing_stone' // a raised monolith — moor/ritual furniture
   | 'vines'     // blocks movement but NOT shots — a jungle wall you fire through
   | 'thicket'   // blocks movement AND shots — dense impassable bramble
   | 'tombstone' // blocks movement AND shots — a crypt marker
   | 'palm'      // blocks both — a tree variant (beach/jungle canopy)
+  | 'conifer'   // evergreen spire (pine crown; tundra/deepwood)
+  | 'ancient_tree' // a forest ELDER: huge crown, thick bole, packs hide beneath
   | 'lava'      // blocks movement but NOT shots — molten, like a chasm
   | 'cave_entrance' // blocks nothing — a transition trigger into a cave sub-zone
   | 'ritual_pentagram' // blocks nothing — a Conclave ritual circle (walkable; cultists ring it)
@@ -316,6 +332,18 @@ export interface DoodadRule {
    *  draw error). FALSE keeps the lapping look (a pool around its boulders).
    *  Deliberate overlaps stay available via stamp rule-breakers (`keep`). */
   swallowsSolids?: boolean;
+  /** PHYSICAL BODY as a fraction of the visual radius. A tree's TRUNK blocks
+   *  movement and shots at radius × bodyScale while its full-radius CANOPY
+   *  still occludes, shades, and blocks AI sight — so you walk (and fight)
+   *  UNDER the leaves. Omitted = the whole disc is solid (today's kinds). */
+  bodyScale?: number;
+}
+
+/** The PHYSICAL radius of a doodad — the trunk, not the crown. Movement,
+ *  projectile and spawn-clearance checks use this; sight/occlusion/shade
+ *  keep the full visual radius (the canopy is real to eyes, not to feet). */
+export function bodyRadiusOf(d: Doodad): number {
+  return d.radius * (doodadRule(d.kind).bodyScale ?? 1);
 }
 
 const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
@@ -326,8 +354,16 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   wall:      { overlap: 'solid', blocksMove: true, blocksShot: true },
   // Canopy kinds (occlude): their crowns draw ABOVE actors and FADE when the
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
-  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 } },
-  palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 } },
+  // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
+  // eyes respect the canopy — walk under the leaves, fight in the shade,
+  // and never see who waits beneath an unfaded crown until you join them.
+  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3 },
+  palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26 },
+  /** Evergreen spire — tundra/deepwood conifer (pineCrown canopy). */
+  conifer:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26 },
+  /** A forest ELDER: a huge crown over a thick bole — the dense-forest
+   *  anchor (whole packs ambush beneath one). */
+  ancient_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80, occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22 },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 } },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22 },
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
@@ -349,6 +385,22 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   ice:       { overlap: 'ground' },
   sand:      { overlap: 'ground' },
   heat_shimmer: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'chasm'] },
+  // Fog CLOUDS ride the canopy pass (occlude) so the murk covers whoever
+  // stands inside — and parts around the hero like every other crown.
+  fog_bank:  { overlap: 'ground', walkOnly: true, occlude: { pad: 24, alpha: 0.4 } },
+  // The doodad kingdom (round 4).
+  dead_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, bodyScale: 0.35 },
+  stump:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 22 },
+  log:       { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26 },
+  flowers:   { overlap: 'ground' },
+  reeds:     { overlap: 'ground', walkOnly: true },
+  cactus:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30, forbidOn: ['water', 'chasm'] },
+  web:       { overlap: 'ground', walkOnly: true },
+  geyser:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 48, forbidOn: ['water', 'chasm'] },
+  snowdrift: { overlap: 'ground' },
+  bone_pile: { overlap: 'ground', walkOnly: true },
+  brazier:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
+  standing_stone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46 },
   road:      { overlap: 'ground', walkOnly: true }, // a walkable gravel path (stays on walkable ground in grid zones)
   grass:     { overlap: 'ground' },
   brush:     { overlap: 'ground' },
@@ -1806,10 +1858,47 @@ registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false)
 registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
 // Desert heat: shimmering-air patches (sunscorch fields — World.updateHeat).
 registerStamp('heat_shimmer', (ctx, spec) => stampBlob(ctx, 'heat_shimmer', spec.radius ?? [40, 85], [2, 4], false));
+// Volumetric fog: drifting murk banks (fogveiled stealth inside).
+registerStamp('fog_bank', (ctx, spec) => stampBlob(ctx, 'fog_bank', spec.radius ?? [45, 90], [2, 4], false));
+// The doodad kingdom (round 4): singles place like trees; patches blob.
+const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
+  (ctx: GenCtx, spec: StampSpec): void => {
+    const r = ctx.rng.range((spec.radius ?? dflt)[0], (spec.radius ?? dflt)[1]);
+    const p = findSpot(ctx, r, true, doodadRule(kind).spacing ?? 0, true, kind);
+    if (p) ctx.doodads.push({ pos: p, radius: r, kind, rot: ctx.rng.range(0, Math.PI * 2) });
+  };
+registerStamp('dead_tree', stampSingle('dead_tree', [14, 26]));
+registerStamp('stump', stampSingle('stump', [9, 15]));
+registerStamp('log', stampSingle('log', [12, 20]));
+registerStamp('cactus', stampSingle('cactus', [10, 18]));
+registerStamp('geyser', stampSingle('geyser', [12, 17]));
+registerStamp('brazier', stampSingle('brazier', [8, 11]));
+registerStamp('standing_stone', stampSingle('standing_stone', [12, 20]));
+registerStamp('bone_pile', stampSingle('bone_pile', [12, 22]));
+registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
+registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
+registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));
+registerStamp('snowdrift', (ctx, spec) => stampBlob(ctx, 'snowdrift', spec.radius ?? [22, 60], [4, 7], false));
+// A FAIRY RING: glow-caps standing in a circle (grove/mycelia set-piece).
+registerStamp('mushroom_ring', (ctx, spec) => {
+  const R = ctx.rng.range((spec.radius ?? [34, 60])[0], (spec.radius ?? [34, 60])[1]);
+  const center = findSpot(ctx, R + 14, true, 24, true, 'glow_cap');
+  if (!center) return;
+  const n = ctx.rng.int(5, 8);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + ctx.rng.range(-0.15, 0.15);
+    ctx.doodads.push({
+      pos: vec(center.x + Math.cos(a) * R, center.y + Math.sin(a) * R),
+      radius: ctx.rng.range(6, 10), kind: 'glow_cap',
+    });
+  }
+});
 registerStamp('vines', (ctx) => stampBlob(ctx, 'vines', [20, 56], [4, 8], true));
 registerStamp('lava', (ctx) => stampBlob(ctx, 'lava', [26, 68], [5, 9], true));
 registerStamp('shallows', (ctx) => stampShallows(ctx));
 registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'));
+registerStamp('conifers', (ctx, spec) => stampTree(ctx, spec.radius ?? [13, 26], 'conifer'));
+registerStamp('ancient_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [56, 88], 'ancient_tree'));
 registerStamp('thicket', (ctx) => stampThicket(ctx));
 registerStamp('tombstone', (ctx) => stampGraves(ctx));
 registerStamp('cave', (ctx) => stampCaveMouth(ctx));

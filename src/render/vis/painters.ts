@@ -59,6 +59,9 @@ export interface DoodadVisualDef {
   params?: Record<string, unknown>;
   /** Soft contact shadow under each doodad (alpha multiplier). */
   shadow?: number;
+  /** DIRECTIONAL day-cycle shadow (sunCast): the body's cast reach as a
+   *  multiplier on its radius. Trees stretch long; stones squat. */
+  longShadow?: number;
   /** Emissive light contributed to the light layer. */
   light?: LightSpec;
   /** Canopy crown painter (occluding kinds draw this ABOVE actors). */
@@ -800,6 +803,59 @@ const groundShadow: GroupPainter = (env, group, def) => {
   ctx.globalAlpha = 1;
 };
 
+/** A REAL TRUNK on the forest floor — bark disc with growth rings and root
+ *  flares, sized to the kind's PHYSICAL body (walk-under trees). The crown
+ *  rides the canopy pass above; this is what you see standing beneath it. */
+const trunk: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec; scale?: number; roots?: number };
+  const { ctx, theme } = env;
+  const bark = resolveColor(p.color, theme, '#5a4630');
+  const scale = p.scale ?? 0.3;
+  for (const o of group) {
+    const r = o.radius * scale;
+    const seed = ((o.pos.x * 11 + o.pos.y * 5) | 0) >>> 0;
+    // The crown's soft ground shadow first (the floor still reads occupied).
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#12100a';
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, o.radius * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Root flares: short buttress nubs around the bole.
+    const roots = Math.round(p.roots ?? 4);
+    ctx.strokeStyle = shade(bark, -0.22);
+    ctx.lineWidth = Math.max(2.5, r * 0.4);
+    ctx.lineCap = 'round';
+    for (let i = 0; i < roots; i++) {
+      const a = (i / roots) * Math.PI * 2 + hash01(i, seed) * 0.9;
+      ctx.beginPath();
+      ctx.moveTo(o.pos.x + Math.cos(a) * r * 0.6, o.pos.y + Math.sin(a) * r * 0.6);
+      ctx.lineTo(o.pos.x + Math.cos(a) * r * 1.5, o.pos.y + Math.sin(a) * r * 1.5);
+      ctx.stroke();
+    }
+    // The bole: bark disc + growth rings + a lit edge.
+    ctx.fillStyle = bark;
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(bark, -0.45), 0.8);
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.strokeStyle = withAlpha(shade(bark, -0.3), 0.6);
+    ctx.lineWidth = 1;
+    for (const f of [0.62, 0.34]) {
+      ctx.beginPath();
+      ctx.arc(o.pos.x, o.pos.y, r * f, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = withAlpha(shade(bark, 0.28), 0.7);
+    ctx.lineWidth = Math.max(1, r * 0.14);
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, r * 0.82, -2.5, -1.1);
+    ctx.stroke();
+  }
+};
+
 /** A TRUE BUSH — overlapping scallop-edged leaf lobes with vein strokes,
  *  sun-side highlights and a shadowed heart you can vanish into. Reads
  *  LEAFY at a glance: never a bog, never a slime. */
@@ -905,6 +961,252 @@ const shimmer: GroupPainter = (env, group, def) => {
     }
     ctx.globalAlpha = 1;
   }
+};
+
+/** A DESERT CACTUS from above: a swollen central lobe ringed by arms, rib
+ *  lines, and a halo of fine spines. */
+const cactus: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.color, theme, '#4a7a3c');
+  for (const o of group) {
+    const seed = ((o.pos.x * 7 + o.pos.y * 3) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    const arms = 2 + (seed % 3);
+    // Arm lobes first, then the crown lobe over them.
+    for (let i = 0; i < arms; i++) {
+      const a = (i / arms) * Math.PI * 2 + hash01(i, seed);
+      const d = o.radius * 0.58;
+      const r = o.radius * (0.34 + hash01(i, seed + 3) * 0.14);
+      ctx.fillStyle = shade(base, -0.12);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * d, Math.sin(a) * d, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(base, -0.45), 0.7);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+    ctx.fillStyle = base;
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(base, -0.45), 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    // Ribs radiating from the crown + a lit edge.
+    ctx.strokeStyle = withAlpha(shade(base, -0.3), 0.6);
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * o.radius * 0.12, Math.sin(a) * o.radius * 0.12);
+      ctx.lineTo(Math.cos(a) * o.radius * 0.5, Math.sin(a) * o.radius * 0.5);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = withAlpha(shade(base, 0.3), 0.6);
+    ctx.lineWidth = Math.max(1, o.radius * 0.08);
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.42, -2.6, -1.1);
+    ctx.stroke();
+    // Spines: a fine pale halo of ticks.
+    ctx.strokeStyle = withAlpha('#e8e4c8', 0.55);
+    ctx.lineWidth = 1;
+    const spines = 10;
+    for (let i = 0; i < spines; i++) {
+      const a = (i / spines) * Math.PI * 2 + hash01(i, seed) * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * o.radius * 0.58, Math.sin(a) * o.radius * 0.58);
+      ctx.lineTo(Math.cos(a) * o.radius * 0.74, Math.sin(a) * o.radius * 0.74);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** A SPIDER WEB sheet: radial spokes + sagging rings, pale and sticky. */
+const web: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme } = env;
+  const col = resolveColor(p.color, theme, '#d8d4c8');
+  for (const o of group) {
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.4;
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1;
+    const spokes = 7;
+    for (let i = 0; i < spokes; i++) {
+      const a = (i / spokes) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(a) * o.radius, Math.sin(a) * o.radius);
+      ctx.stroke();
+    }
+    // Sagging rings: arcs bowing between spokes.
+    for (let ring = 1; ring <= 3; ring++) {
+      const rr = o.radius * ring / 3.4;
+      ctx.beginPath();
+      for (let i = 0; i <= spokes; i++) {
+        const a = (i / spokes) * Math.PI * 2;
+        const mid = a - Math.PI / spokes;
+        const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.quadraticCurveTo(Math.cos(mid) * rr * 0.86, Math.sin(mid) * rr * 0.86, x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
+/** A DEAD SNAG: bare branching limbs off a dark bole — no canopy, no life. */
+const deadTree: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme } = env;
+  const bark = resolveColor(p.color, theme, '#4a4038');
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 3) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.lineCap = 'round';
+    // Limbs: gnarled two-segment branches radiating.
+    const limbs = 5 + (seed % 3);
+    for (let i = 0; i < limbs; i++) {
+      const a = (i / limbs) * Math.PI * 2 + hash01(i, seed) * 0.6;
+      const bend = (hash01(i, seed + 5) - 0.5) * 1.1;
+      const l1 = o.radius * (0.45 + hash01(i, seed + 9) * 0.25);
+      const l2 = o.radius * (0.3 + hash01(i, seed + 13) * 0.3);
+      ctx.strokeStyle = i % 2 ? bark : shade(bark, -0.14);
+      ctx.lineWidth = Math.max(2, o.radius * 0.11);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * o.radius * 0.16, Math.sin(a) * o.radius * 0.16);
+      const mx = Math.cos(a) * l1, my = Math.sin(a) * l1;
+      ctx.lineTo(mx, my);
+      ctx.lineTo(mx + Math.cos(a + bend) * l2, my + Math.sin(a + bend) * l2);
+      ctx.stroke();
+      // A twig off the elbow.
+      ctx.lineWidth = Math.max(1, o.radius * 0.05);
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx + Math.cos(a - bend) * l2 * 0.5, my + Math.sin(a - bend) * l2 * 0.5);
+      ctx.stroke();
+    }
+    // The bole.
+    ctx.fillStyle = shade(bark, -0.2);
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha('#141210', 0.8);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** A CUT STUMP: growth rings and a split — feet stop, arrows don't. */
+const stump: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.color, theme, '#8a6e48');
+  for (const o of group) {
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.fillStyle = shade(wood, -0.35);
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.82, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(wood, -0.4), 0.7);
+    ctx.lineWidth = 1;
+    for (const f of [0.62, 0.42, 0.22]) {
+      ctx.beginPath();
+      ctx.arc(0, 0, o.radius * f, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // The split.
+    ctx.strokeStyle = withAlpha(shade(wood, -0.5), 0.85);
+    ctx.lineWidth = Math.max(1.4, o.radius * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(o.radius * 0.8, o.radius * 0.25);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** A FALLEN LOG: an elongated mossy trunk lying across the ground. */
+const log: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec; moss?: ColorSpec };
+  const { ctx, theme } = env;
+  const bark = resolveColor(p.color, theme, '#5e4a32');
+  const moss = resolveColor(p.moss, theme, theme.tree ?? '#3c5c2e');
+  for (const o of group) {
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    const L = o.radius * 1.7, W = o.radius * 0.62;
+    // Trunk body.
+    ctx.fillStyle = bark;
+    ctx.beginPath();
+    ctx.roundRect(-L, -W, L * 2, W * 2, W);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(bark, -0.45), 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    // Bark grain.
+    ctx.strokeStyle = withAlpha(shade(bark, -0.3), 0.6);
+    ctx.lineWidth = 1;
+    for (const f of [-0.4, 0, 0.4]) {
+      ctx.beginPath();
+      ctx.moveTo(-L * 0.85, W * f);
+      ctx.lineTo(L * 0.85, W * f);
+      ctx.stroke();
+    }
+    // The sawn end: rings.
+    ctx.fillStyle = shade(bark, 0.22);
+    ctx.beginPath();
+    ctx.ellipse(L, 0, W * 0.42, W, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(bark, -0.35), 0.7);
+    ctx.beginPath();
+    ctx.ellipse(L, 0, W * 0.24, W * 0.55, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    // A moss saddle.
+    ctx.globalAlpha = 0.6;
+    ctx.fillStyle = moss;
+    ctx.beginPath();
+    ctx.ellipse(-L * 0.3, -W * 0.3, L * 0.42, W * 0.5, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
+/** FOG FLOOR — the bank's faint ground wash (the VOLUME rides the canopy
+ *  pass as fogCloud; this just roots it to the terrain). */
+const fogFloor: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme } = env;
+  const col = resolveColor(p.color, theme, '#aab6c2');
+  ctx.globalAlpha = 0.1;
+  ctx.fillStyle = col;
+  blobPath(ctx, group, 4);
+  ctx.fill();
+  ctx.globalAlpha = 1;
 };
 
 /** A GRAVEL PATH — packed track with deterministic grit, worn pale center,
@@ -1187,8 +1489,9 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, mound, shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
-  campfire, groundShadow, brush, gravelPath, shimmer, tentacleField,
-  pentagram, door, breach, landmass, beacon, fallback,
+  campfire, groundShadow, trunk, brush, gravelPath, shimmer, fogFloor,
+  cactus, web, deadTree, stump, log,
+  tentacleField, pentagram, door, breach, landmass, beacon, fallback,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------
@@ -1283,6 +1586,130 @@ const mushroomCrown: CanopyPainter = (env, o, alpha, params) => {
   ctx.restore();
 };
 
+/** A LUSH DECIDUOUS CROWN — layered scallop-edged leaf lobes (the bush's
+ *  grammar at canopy scale) with a sun-lit side and a dark under-heart. */
+const leafCrown: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { fill?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.fill, theme, theme.tree ?? '#2c4424');
+  const seed = ((o.pos.x * 17 + o.pos.y * 3) | 0) >>> 0;
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  if (o.rot !== undefined) ctx.rotate(o.rot);
+  ctx.globalAlpha = alpha;
+  // Under-heart: the crown's own depth.
+  ctx.fillStyle = shade(base, -0.4);
+  ctx.beginPath();
+  ctx.arc(0, 0, o.radius * 0.92, 0, Math.PI * 2);
+  ctx.fill();
+  // Leaf lobes ringing the crown + a center clump, scallop-edged.
+  const lobes = 6 + (seed % 3);
+  const lobe = (lx: number, ly: number, lr: number, tone: string): void => {
+    ctx.fillStyle = tone;
+    ctx.beginPath();
+    for (let k = 0; k <= 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      const rr = lr * (0.84 + 0.16 * Math.abs(Math.sin(a * 4 + lx)));
+      const x = lx + Math.cos(a) * rr, y = ly + Math.sin(a) * rr;
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.quadraticCurveTo(lx + Math.cos(a - 0.4) * rr * 1.1, ly + Math.sin(a - 0.4) * rr * 1.1, x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(base, -0.5), 0.4);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  };
+  for (let i = 0; i < lobes; i++) {
+    const a = (i / lobes) * Math.PI * 2 + (seed % 5) * 0.4;
+    const d = o.radius * 0.55;
+    lobe(Math.cos(a) * d, Math.sin(a) * d, o.radius * (0.4 + hash01(i, seed) * 0.12),
+      i % 2 ? base : shade(base, -0.14));
+  }
+  lobe(-o.radius * 0.1, -o.radius * 0.1, o.radius * 0.5, shade(base, 0.05));
+  // Sun-side lit rim.
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.strokeStyle = shade(base, 0.3);
+  ctx.lineWidth = Math.max(1.5, o.radius * 0.07);
+  ctx.beginPath();
+  ctx.arc(-o.radius * 0.12, -o.radius * 0.12, o.radius * 0.7, -2.7, -1.0);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+};
+
+/** An EVERGREEN SPIRE from above: stacked pointed star-rings tightening to
+ *  a pale tip — conifers read apart from broadleaf at any distance. */
+const pineCrown: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { fill?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.fill, theme, theme.tree ?? '#1e3a28');
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  ctx.rotate(o.rot ?? 0);
+  ctx.globalAlpha = alpha;
+  const layers: [number, string][] = [
+    [1.0, shade(base, -0.18)],
+    [0.66, base],
+    [0.36, shade(base, 0.14)],
+  ];
+  for (const [f, tone] of layers) {
+    ctx.fillStyle = tone;
+    ctx.beginPath();
+    const spikes = 8;
+    for (let i = 0; i < spikes * 2; i++) {
+      const a = (i / (spikes * 2)) * Math.PI * 2;
+      const rr = o.radius * f * (i % 2 === 0 ? 1 : 0.62);
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(base, -0.5), 0.45);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.fillStyle = shade(base, 0.32);
+  ctx.beginPath();
+  ctx.arc(0, 0, o.radius * 0.09, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+};
+
+/** VOLUMETRIC FOG CLOUD — layered soft billows swirling and BREATHING over
+ *  the bank (the dynamic murk). Rides the canopy fade, so it parts around
+ *  the hero while covering everyone else inside. */
+const fogCloud: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { fill?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const col = resolveColor(p.fill, theme, '#aab6c2');
+  const seed = ((o.pos.x * 3 + o.pos.y * 7) | 0) >>> 0;
+  // The whole bank breathes: radius swells and relaxes on a slow clock.
+  const breathe = 1 + 0.07 * Math.sin(time * 0.5 + seed);
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2 + time * (0.1 + hash01(i, seed) * 0.08) * (i % 2 ? 1 : -1);
+    const d = o.radius * 0.42 * breathe;
+    const x = Math.cos(a) * d, y = Math.sin(a) * d;
+    const r = o.radius * (0.5 + hash01(i, seed + 3) * 0.22) * breathe;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, withAlpha(col, 0.34 * alpha));
+    g.addColorStop(0.7, withAlpha(col, 0.16 * alpha));
+    g.addColorStop(1, withAlpha(col, 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  // A brighter core wisp so the bank reads as weather, not a paint smear.
+  const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, o.radius * 0.5 * breathe);
+  cg.addColorStop(0, withAlpha(shade(col, 0.25), 0.2 * alpha));
+  cg.addColorStop(1, withAlpha(col, 0));
+  ctx.fillStyle = cg;
+  ctx.fillRect(-o.radius, -o.radius, o.radius * 2, o.radius * 2);
+  ctx.restore();
+};
+
 /** A data-registered canopy kind with no bespoke crown: a translucent disc. */
 const discCrown: CanopyPainter = (env, o, alpha) => {
   const { ctx, theme } = env;
@@ -1293,5 +1720,5 @@ const discCrown: CanopyPainter = (env, o, alpha) => {
 };
 
 export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
-  bramble, palmCrown, mushroomCrown, discCrown,
+  bramble, palmCrown, mushroomCrown, discCrown, leafCrown, pineCrown, fogCloud,
 };

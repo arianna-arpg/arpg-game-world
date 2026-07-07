@@ -43,6 +43,11 @@ export const VIS_CFG = {
     dropY: 0.5,
     /** Shadow width in radii. */
     scale: 1.12,
+    /** DIRECTIONAL long shadows (sunCast): reach in radii at low sun / high
+     *  noon, and the base alpha. The direction spins with the day. */
+    longMax: 1.7,
+    longMin: 0.25,
+    longAlpha: 0.2,
   },
 
   /** Ground texture chunks. */

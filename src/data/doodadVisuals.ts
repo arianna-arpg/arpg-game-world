@@ -103,6 +103,61 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'shimmer', order: 34,
     params: { color: '#ffe8c0' },
   },
+  /** Volumetric fog: a faint floor wash here; the swirling BILLOWS ride the
+   *  canopy pass (fogCloud) so the murk covers whoever stands inside. */
+  fog_bank: {
+    painter: 'fogFloor', order: 36,
+    params: { color: '#aab6c2' },
+    canopy: { painter: 'fogCloud', params: { fill: '#aab6c2' } },
+  },
+
+  // --- The doodad kingdom (round 4) ----------------------------------------
+  flowers: {
+    painter: 'liquid', order: 46,
+    params: {
+      core: { color: '#5c3a5c', alpha: 0.14 },
+      tufts: { color: '#d88ab8' },
+    },
+  },
+  snowdrift: {
+    painter: 'liquid', order: 21,
+    params: {
+      rim: { color: '#f0f6fc', alpha: 0.4, grow: 3 },
+      core: { color: '#dce8f2', alpha: 0.35 },
+    },
+  },
+  reeds: { painter: 'kelp', order: 48, params: { color: '#5a7a3a' } },
+  web: { painter: 'web', order: 42, params: { color: '#d8d4c8' } },
+  cactus: {
+    painter: 'cactus', order: 53, shadow: 0.6, longShadow: 0.8,
+    params: { color: '#4a7a3c' },
+  },
+  dead_tree: {
+    painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
+    params: { color: '#4a4038' },
+  },
+  stump: {
+    painter: 'stump', order: 52, shadow: 0.5,
+    params: { color: '#8a6e48' },
+  },
+  log: {
+    painter: 'log', order: 52, shadow: 0.55,
+    params: { color: '#5e4a32', moss: 'theme:tree|#3c5c2e' },
+  },
+  geyser: {
+    painter: 'vent', order: 50, longShadow: 0.5,
+    params: { rim: '#3a4a4e', throat: '#152226', hot: '#7fd0e8', core: '#e8fbff' },
+    light: { radius: -2.6, color: '#9fe0f0', intensity: 0.3, flicker: 2.8 },
+  },
+  bone_pile: { painter: 'bones', order: 51, params: { color: '#d8cdb8' } },
+  brazier: {
+    painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,
+    light: { radius: -5.5, color: '#ffb45e', intensity: 0.55, flicker: 5 },
+  },
+  standing_stone: {
+    painter: 'slab', order: 54, shadow: 0.65, longShadow: 1.2,
+    params: { shape: 'monolith', fill: 'theme:obstacle', edge: 'theme:obstacleEdge' },
+  },
   grass: {
     painter: 'liquid', order: 47,
     params: {
@@ -138,24 +193,43 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // --- Flora + cover -------------------------------------------------------
   sapling: { painter: 'sapling', order: 45, params: { crown: 'theme:tree|#2c4424' } },
   brush: { painter: 'brush', order: 49, params: { color: 'theme:tree|#2c4424' } },
+  // WALK-UNDER TREES: the ground pass draws the real TRUNK (the physical
+  // body — DoodadRule.bodyScale); the crown rides the canopy pass above,
+  // fading when the hero steps beneath. Anyone ELSE under an unfaded crown
+  // is simply unseen — the forest ambush, for both sides.
   tree: {
-    painter: 'groundShadow', order: 50, params: { scale: 0.4 },
-    canopy: { painter: 'bramble', params: { fill: 'theme:tree|#2c4424', edge: 'rgba(0,0,0,0.4)', spine: 'rgba(255,255,255,0.22)' } },
+    longShadow: 0.85,
+    painter: 'trunk', order: 50, params: { scale: 0.3, roots: 4 },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
   },
   thicket: {
+    longShadow: 0.7,
     painter: 'groundShadow', order: 50, params: { scale: 0.5, color: '#101c10' },
     canopy: { painter: 'bramble', params: { fill: '#16401c', edge: '#0a2410', spine: '#2c5a26' } },
   },
   palm: {
-    painter: 'groundShadow', order: 50, params: { scale: 0.26 },
+    longShadow: 0.8,
+    painter: 'trunk', order: 50, params: { scale: 0.26, roots: 3 },
     canopy: { painter: 'palmCrown' },
   },
+  conifer: {
+    longShadow: 0.9,
+    painter: 'trunk', order: 50, params: { scale: 0.26, roots: 3, color: '#4a3826' },
+    canopy: { painter: 'pineCrown', params: { fill: 'theme:tree|#1e3a28' } },
+  },
+  ancient_tree: {
+    longShadow: 0.9,
+    painter: 'trunk', order: 50, params: { scale: 0.22, roots: 6 },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
+  },
   giant_mushroom: {
+    longShadow: 0.8,
     painter: 'groundShadow', order: 50, params: { scale: 0.34, color: '#241c2e' },
     canopy: { painter: 'mushroomCrown', params: { caps: 1 } },
     light: { radius: -1.6, color: '#8fd06f', intensity: 0.18 },
   },
   fruiting_tower: {
+    longShadow: 0.9,
     painter: 'groundShadow', order: 50, params: { scale: 0.34, color: '#241c2e' },
     canopy: { painter: 'mushroomCrown', params: { caps: 3 } },
     light: { radius: -1.8, color: '#8fd06f', intensity: 0.2 },
@@ -165,6 +239,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
 
   // --- Standing minerals + organics ---------------------------------------
   rock: {
+    longShadow: 0.7,
     painter: 'mound', order: 55, shadow: 0.7,
     params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', hatch: true },
   },
@@ -173,11 +248,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { color: '#274a52', edge: '#3f7a86', material: 'stone', barnacle: '#5fb0b8' },
   },
   crystal: {
+    longShadow: 0.8,
     painter: 'shard', order: 50, shadow: 0.55,
     params: { points: 5, color: '#3a6a9a', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
     light: { radius: -2.6, color: '#7fc0f0', intensity: 0.3 },
   },
   obsidian: {
+    longShadow: 0.7,
     painter: 'shard', order: 50, shadow: 0.55,
     params: { points: 6, color: '#171015', material: 'stone', edgeGlow: { color: 'theme:accent|#ff7a2a', alpha: 0.5 } },
   },
@@ -206,10 +283,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   bone: { painter: 'bones', order: 52, params: { color: '#d8cdb8' } },
   tombstone: {
+    longShadow: 0.9,
     painter: 'slab', order: 55, shadow: 0.6,
     params: { shape: 'arch', fill: '#8a8a94', edge: '#4a4a54', engraving: '#5a5a64' },
   },
   ruin_obelisk: {
+    longShadow: 1.1,
     painter: 'slab', order: 54, shadow: 0.65,
     params: { shape: 'monolith', fill: '#1c1830', edge: '#7a4fb0', gem: { color: '#a06ad8' } },
     light: { radius: -2.4, color: '#a06ad8', intensity: 0.22 },
@@ -224,7 +303,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
 
   // --- Built things ---------------------------------------------------------
-  wall: { painter: 'palisade', order: 52, params: { fill: 'theme:wall|#5e4c34', edge: '#2c2418' } },
+  wall: { painter: 'palisade', order: 52, longShadow: 0.6, params: { fill: 'theme:wall|#5e4c34', edge: '#2c2418' } },
   window: { painter: 'windowSlit', order: 58 },
   door: { painter: 'door', order: 58 },
   dock: {

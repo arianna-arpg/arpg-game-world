@@ -56,7 +56,7 @@ import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../d
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import {
-  blocksMovement, blocksProjectiles, blocksSightOf, doodadRuleOf, generateLayout, structureDoodads,
+  blocksMovement, blocksProjectiles, blocksSightOf, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
   type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
@@ -20868,7 +20868,8 @@ export class World {
       if (!dead) {
         for (const o of this.doodadsAt(p.pos.x, p.pos.y)) {
           if (!blocksProjectiles(o)) continue;
-          if (dist(p.pos, o.pos) <= p.radius + o.radius) {
+          // Arrows fly UNDER the leaves and stop on the bole (bodyRadiusOf).
+          if (dist(p.pos, o.pos) <= p.radius + bodyRadiusOf(o)) {
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
@@ -22121,7 +22122,7 @@ export class World {
     for (const o of this.doodadsAt(x, y)) {
       if (!blocksMovement(o)) continue;
       const dx = x - o.pos.x, dy = y - o.pos.y;
-      const reach = o.radius + margin;
+      const reach = bodyRadiusOf(o) + margin; // the TRUNK, not the crown
       if (dx * dx + dy * dy >= reach * reach) continue;
       if (o.kind === 'chasm' && this.bridges.some(b => dist(vec(x, y), b.pos) <= b.radius)) continue;
       return o;
@@ -22170,7 +22171,7 @@ export class World {
       for (const o of this.doodadsAt(out.x, out.y)) {
         if (!blocksMovement(o)) continue;
         const d = dist(out, o.pos);
-        const minD = o.radius + radius;
+        const minD = bodyRadiusOf(o) + radius; // walk under canopies; trunks stop you
         if (d >= minD) continue;
         if (o.kind === 'chasm' && this.bridges.some(b => dist(out, b.pos) <= b.radius)) continue;
         moved = true;
@@ -22390,6 +22391,12 @@ export class World {
         soft = { kind: 'brush', deep: false };
       } else if (d.kind === 'road' && !soft) {
         soft = { kind: 'road', deep: false }; // benign — only when no nastier ground covers the point
+      } else if (!soft && regionKind(d.kind)) {
+        // REGISTRY FALLBACK: any OTHER ground kind with a RegionKind row
+        // (fog_bank's veil, webbing's mire, the reeds' concealment — and
+        // every future package kind) reports itself without joining this
+        // hand-priority chain. Registered = sensed.
+        soft = { kind: d.kind, deep: false };
       }
     }
     if (inWater) return { kind: 'water', deep: !ford && pen > LIQUID_CFG.deepInset };

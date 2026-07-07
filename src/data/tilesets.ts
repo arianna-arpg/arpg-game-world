@@ -94,6 +94,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'grove',
     layout: [
+      { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] }, { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [0, 2] },
+      { kind: 'conifers', count: [6, 10] }, { kind: 'ancient_tree', count: [1, 3] },
       { kind: 'trees', count: [14, 20], radius: [14, 28] },
       { kind: 'grove', count: [2, 4] },
       { kind: 'brush', count: [2, 4] },
@@ -154,6 +156,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2600, 3600], sizeH: [1700, 2500], ellipseChance: 0.3, biome: 'tundra',
     layout: [
+      { kind: 'snowdrift', count: [5, 9] }, { kind: 'geyser', count: [0, 2] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'conifers', count: [8, 14] },
       { kind: 'rocks', count: [8, 14], radius: [22, 46] },
       { kind: 'ice', count: [2, 4] },
       { kind: 'mud', count: [3, 4] },
@@ -278,6 +282,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2600, 3600], sizeH: [1700, 2400], ellipseChance: 0.2, biome: 'desert',
     layout: [
+      { kind: 'cactus', count: [5, 9] },
       { kind: 'sand', count: [4, 7] },
       { kind: 'rocks', count: [6, 10], radius: [22, 52] },
       { kind: 'cliff', count: [1, 2] },
@@ -336,6 +341,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'grove',
     layout: [
+      { kind: 'ancient_tree', count: [1, 2] },
       { kind: 'palm', count: [12, 18] },
       { kind: 'vines', count: [3, 6] },
       { kind: 'thicket', count: [3, 5] },
@@ -396,6 +402,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.2, biome: 'grave',
     layout: [
+      { kind: 'dead_tree', count: [4, 8] }, { kind: 'reeds', count: [2, 4] }, { kind: 'fog_bank', count: [2, 4] }, { kind: 'web', count: [0, 2] },
       { kind: 'swamp', count: [3, 5] },
       { kind: 'bog', count: [2, 4] },
       { kind: 'water', count: [1, 2] },
@@ -438,6 +445,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.3, biome: 'rift',
     layout: [
+      { kind: 'dead_tree', count: [3, 6] }, { kind: 'bone_pile', count: [1, 3] },
       { kind: 'lava', count: [2, 3] },
       { kind: 'ravine', count: [1, 1] },
       { kind: 'rocks', count: [10, 16], radius: [24, 52] },
@@ -494,6 +502,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2000, 2900], sizeH: [1500, 2200], ellipseChance: 0.15, biome: 'grave',
     layout: [
+      { kind: 'bone_pile', count: [3, 6] }, { kind: 'brazier', count: [1, 3] }, { kind: 'web', count: [1, 3] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [2, 4] },
       { kind: 'tombstone', count: [14, 22] },
       { kind: 'ruin', count: [2, 3] },
       { kind: 'rocks', count: [6, 10], radius: [16, 30] },
@@ -537,6 +546,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2400, 3200], sizeH: [1600, 2200], ellipseChance: 0.3, biome: 'beach',
     layout: [
+      { kind: 'log', count: [1, 3] }, { kind: 'reeds', count: [1, 3] },
       { kind: 'sand', count: [5, 8] },
       { kind: 'shallows', count: [2, 4] },
       { kind: 'palm', count: [6, 10] },
@@ -579,6 +589,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.2, biome: 'grove',
     layout: [
+      { kind: 'flowers', count: [4, 8] }, { kind: 'log', count: [0, 2] },
+      { kind: 'ancient_tree', count: [0, 1] },
       { kind: 'grass', count: [6, 10] },
       { kind: 'trees', count: [8, 14] },
       { kind: 'grove', count: [2, 3] },
@@ -666,6 +678,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [1200, 1700], sizeH: [900, 1300],
     layout: [
+      { kind: 'web', count: [1, 3] }, { kind: 'bone_pile', count: [1, 3] }, { kind: 'brazier', count: [0, 2] },
       { kind: 'rocks', count: [14, 22], radius: [20, 46] },
       { kind: 'cliff', count: [3, 5] },
       { kind: 'chasm', count: [0, 2] },
@@ -939,6 +952,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.25,
     layout: [
+      { kind: 'reeds', count: [3, 6] }, { kind: 'geyser', count: [1, 3] }, { kind: 'fog_bank', count: [1, 3] }, { kind: 'dead_tree', count: [2, 4] },
       { kind: 'bog', count: [3, 5] }, { kind: 'water', count: [2, 4] },
       { kind: 'swamp', count: [2, 3] }, { kind: 'trees', count: [4, 7] },
       { kind: 'thicket', count: [1, 3] },
@@ -1090,6 +1104,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [3200, 4600], sizeH: [2400, 3400], ellipseChance: 0,
     layout: [
+      { kind: 'flowers', count: [3, 6] }, { kind: 'standing_stone', count: [0, 2] },
       { kind: 'grass', count: [10, 16] },
       { kind: 'rocks', count: [5, 9], radius: [18, 40] },
       { kind: 'mud', count: [2, 4] },

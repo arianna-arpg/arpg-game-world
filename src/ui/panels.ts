@@ -2821,6 +2821,10 @@ export class UI {
         <button id="opt-gearpickup">${this.getSettings().gearPickup === 'key'
           ? `PRESS ${keyDisplay(this.getSettings().keybinds.pickup)}` : 'WALK OVER'}</button>
       </div>
+      <div class="rebind-row">
+        <span>Foresight (enemy cast markers)</span>
+        <button id="opt-foresight">${this.getSettings().castTelegraphs ? 'ON' : 'OFF'}</button>
+      </div>
       <div class="esc-btns"><button id="esc-back">Back</button></div>`;
     // The severity-scaled edge pulse is a real build choice (1/1-life and
     // heavy-reservation heroes live "low" on purpose) — so it's a toggle.
@@ -2836,6 +2840,14 @@ export class UI {
       st.gearPickup = st.gearPickup === 'key' ? 'vacuum' : 'key';
       this.saveSettings();
       this.updateHintBar();
+      this.renderKeybinds(root, onBack);
+    });
+    // FORESIGHT: enemy ground-casts mark their landing during the wind-up.
+    // OFF is the read-the-animation purist mode.
+    root.querySelector<HTMLElement>('#opt-foresight')!.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.castTelegraphs = !st.castTelegraphs;
+      this.saveSettings();
       this.renderKeybinds(root, onBack);
     });
     // Controller feel sliders: drag = immediate (padTuning reads Settings live

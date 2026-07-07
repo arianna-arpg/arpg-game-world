@@ -179,6 +179,13 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     hitMagnitude: 0.45, baseline: { dps: 2, perLevel: 0.9 },
     pop: { fraction: 0.4 },
   },
+  /** FOG-VEILED (the fog_bank region): the murk swallows your outline —
+   *  detectability drops while you stand deep in it. Refreshed per tick
+   *  standing in fog; the short duration is the linger when stepping out. */
+  fogveiled: {
+    label: 'Fog-Veiled', color: '#b8c4cc', duration: 1.2,
+    mods: [mod('detectability', 'more', -0.35)],
+  },
   /** DESERT HEAT (World.updateHeat): standing in a heat-shimmer field bakes
    *  stacks on; shade (a canopy, a roof, the night) dwindles them. Each stack
    *  erodes fire resistance — the desert softens you up for its burns. The

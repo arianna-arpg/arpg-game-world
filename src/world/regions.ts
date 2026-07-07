@@ -230,6 +230,16 @@ registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'th
 // ROAD: a packed gravel path — a VERY mild move-speed boost (moveScale, NOT a status, so
 // there's no status icon for so minor an effect). The first consumer of the moveScale seam.
 registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', moveScale: 1.04 });
+// FOG BANK: volumetric drifting murk (canopy-layer clouds fade near the hero).
+// Standing DEEP in it veils you — detectability drops while the fog holds
+// (fogveiled status) — the graphics ARE the stealth here.
+registerRegion({ id: 'fog_bank', walkable: true, blocks: false, label: 'the fog', standStatus: 'fogveiled',
+  enterText: { text: 'veiled…', color: '#b8c4cc' } });
+// WEBBING: sticky sheets slow like mire (spider country).
+registerRegion({ id: 'web', walkable: true, blocks: false, label: 'the webbing', standStatus: 'mired',
+  enterText: { text: 'webbed!', color: '#d8d4c8' } });
+// REEDS: water-margin blades conceal like brush (the ambush margin).
+registerRegion({ id: 'reeds', walkable: true, blocks: false, label: 'the reeds', standStatus: 'concealed' });
 
 // --- PHASE-3 INSTANCE ROWS --------------------------------------------------
 // VOID: not walkable, does NOT block (you can be shoved/walk in) → its boundary

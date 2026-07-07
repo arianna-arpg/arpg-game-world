@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { withAlpha } from './color';
+import { DAY_LENGTH, dayCycle } from '../../world/daynight';
 import { VIS_CFG } from './visConfig';
 
 // (bodies bake through vis/body.ts; this module owns the cache + primitives)
@@ -82,6 +83,40 @@ export function drawShadow(ctx: CanvasRenderingContext2D, x: number, y: number,
   const h = w * VIS_CFG.shadow.squash;
   ctx.globalAlpha = VIS_CFG.shadow.alpha * alphaMul;
   ctx.drawImage(s, x - w / 2, y + radius * VIS_CFG.shadow.dropY - h / 2, w, h);
+  ctx.globalAlpha = 1;
+}
+
+/** THE SUN'S CAST for a moment of the day: shadow direction SPINS through
+ *  the daylight hours (morning shadows point west, evening east), length
+ *  stretches when the sun rides low, and night retires the effect. Null =
+ *  no directional shadows right now. */
+export function sunCast(time: number): { dir: number; len: number; alpha: number } | null {
+  const cyc = dayCycle(time);
+  if (cyc.light <= 0.12) return null; // night — the moon is too shy for this
+  const dayFrac = ((time % DAY_LENGTH) + DAY_LENGTH) % DAY_LENGTH / DAY_LENGTH;
+  // The sweep: dawn → dusk rotates the cast half a turn (west → east),
+  // biased slightly south so noon shadows still exist.
+  const dir = Math.PI * (1.15 - dayFrac * 1.0);
+  const low = 1 - cyc.light; // 0 at high noon, →1 toward the horizon
+  return {
+    dir,
+    len: VIS_CFG.shadow.longMin + (VIS_CFG.shadow.longMax - VIS_CFG.shadow.longMin) * low,
+    alpha: VIS_CFG.shadow.longAlpha * (0.55 + 0.45 * cyc.light),
+  };
+}
+
+/** An elongated soft shadow cast along `dir` from a standing body — anchored
+ *  at the base so the object stays planted while its shadow reaches. */
+export function drawLongShadow(ctx: CanvasRenderingContext2D, x: number, y: number,
+  radius: number, dir: number, len: number, alpha: number): void {
+  const s = shadowSprite();
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(dir);
+  ctx.globalAlpha = alpha;
+  const reach = radius * (0.8 + len);
+  ctx.drawImage(s, -radius * 0.8, -radius * 0.62, radius * 0.8 + reach, radius * 1.24);
+  ctx.restore();
   ctx.globalAlpha = 1;
 }
 

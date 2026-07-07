@@ -1551,6 +1551,427 @@ const crateBox: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ======================================================= THE ANIMAL KINGDOM
+
+/** Branching antlers swept back off the brow (stags, forest spirits). */
+const antlers: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (const side of [-1, 1]) {
+      const baseA = side * 0.75;
+      c.strokeStyle = ramp.base;
+      c.lineWidth = Math.max(1.8, R * 0.11);
+      // The main beam: brow → back-and-out.
+      const bx = Math.cos(baseA) * R * 0.6, by = Math.sin(baseA) * R * 0.6;
+      const mx = -R * 0.3, my = side * R * 1.15;
+      const tx = -R * 1.1, ty = side * R * 1.35;
+      c.beginPath();
+      c.moveTo(bx, by);
+      c.quadraticCurveTo(mx * 0.3, my * 0.85, mx, my);
+      c.quadraticCurveTo((mx + tx) / 2, (my + ty) / 2 + side * R * 0.1, tx, ty);
+      c.stroke();
+      // Tines forking UP off the beam.
+      c.lineWidth = Math.max(1.2, R * 0.07);
+      for (const f of [0.35, 0.65, 0.9]) {
+        const px = bx + (tx - bx) * f, py = by + (ty - by) * f;
+        c.beginPath();
+        c.moveTo(px, py);
+        c.lineTo(px + R * 0.32, py + side * R * 0.18);
+        c.stroke();
+      }
+    }
+  });
+};
+
+/** Curled ram horns spiraling at the temples. */
+const ramHorns: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    for (const side of [-1, 1]) {
+      const cx = R * 0.15, cy = side * R * 0.85;
+      c.strokeStyle = ramp.base;
+      c.lineWidth = Math.max(2.2, R * 0.16);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.arc(cx, cy, R * 0.34, side > 0 ? -1.2 : 1.2 - Math.PI, side > 0 ? Math.PI * 0.9 : Math.PI * 0.9 - Math.PI);
+      c.stroke();
+      c.strokeStyle = withAlpha(ramp.shadow, 0.6);
+      c.lineWidth = Math.max(1, R * 0.05);
+      c.beginPath();
+      c.arc(cx, cy, R * 0.26, side > 0 ? -1.0 : 1.0 - Math.PI, side > 0 ? Math.PI * 0.8 : Math.PI * 0.8 - Math.PI);
+      c.stroke();
+    }
+  });
+};
+
+/** A hooked raptor beak — birds of prey, not snouts. */
+const beak: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = shade(ramp.base, 0.08);
+    c.beginPath();
+    c.moveTo(R * 0.45, -R * 0.16);
+    c.quadraticCurveTo(R * 0.95, -R * 0.1, R * 1.02, R * 0.05);
+    c.quadraticCurveTo(R * 0.9, R * 0.03, R * 0.82, R * 0.14);
+    c.quadraticCurveTo(R * 0.6, R * 0.16, R * 0.45, R * 0.16);
+    c.closePath();
+    c.fill();
+    outlined(c, ramp, 1.1);
+    c.strokeStyle = withAlpha(ramp.shadow, 0.7);
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(R * 0.5, 0);
+    c.lineTo(R * 0.92, R * 0.02);
+    c.stroke();
+  });
+};
+
+/** FEATHERED wings: layered plume rows (vs the demons' membrane). */
+const featherWings: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    for (const side of [-1, 1]) {
+      for (let row = 0; row < 3; row++) {
+        const len = R * (1.7 - row * 0.35);
+        const tone = row === 0 ? ramp.shadow : row === 1 ? ramp.base : shade(ramp.base, 0.16);
+        c.fillStyle = withAlpha(tone, 0.95);
+        const feathers = 5 - row;
+        for (let i = 0; i < feathers; i++) {
+          const a = Math.PI + side * (0.25 + (i / feathers) * 0.85);
+          const fx = Math.cos(a) * len, fy = Math.sin(a) * len;
+          const px = Math.cos(a + Math.PI / 2) * R * 0.1;
+          const py = Math.sin(a + Math.PI / 2) * R * 0.1;
+          c.beginPath();
+          c.moveTo(-R * 0.15 - px, side * R * 0.3 - py);
+          c.quadraticCurveTo(fx * 0.55, fy * 0.55 - R * 0.08, fx, fy);
+          c.quadraticCurveTo(fx * 0.55 + px * 2, fy * 0.55 + py * 2, -R * 0.15 + px, side * R * 0.3 + py);
+          c.closePath();
+          c.fill();
+        }
+      }
+    }
+  });
+};
+
+/** A sail crest running down the spine (lizards, drakes). params: n. */
+const crest: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = withAlpha(ramp.base, 0.92);
+    for (let i = 0; i < n; i++) {
+      const x = R * 0.5 - (i / (n - 1)) * R * 1.3;
+      const h = R * (0.26 + 0.16 * Math.sin((i + 0.5) / n * Math.PI));
+      c.beginPath();
+      c.moveTo(x + R * 0.1, 0);
+      c.lineTo(x, -h);
+      c.lineTo(x - R * 0.12, 0);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.6);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  });
+};
+
+/** A neck frill fanned behind the head. */
+const frill: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  place(ctx, r, spec, (c, R) => {
+    const cx = R * 0.3;
+    c.fillStyle = withAlpha(ramp.base, 0.9);
+    c.beginPath();
+    c.arc(cx, 0, R * 0.62, Math.PI * 0.62, Math.PI * 1.38);
+    c.closePath();
+    c.fill();
+    outlined(c, ramp, 1.2);
+    c.strokeStyle = withAlpha(ramp.shadow, 0.6);
+    c.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const a = Math.PI * (0.66 + (i / 4) * 0.68);
+      c.beginPath();
+      c.moveTo(cx, 0);
+      c.lineTo(cx + Math.cos(a) * R * 0.6, Math.sin(a) * R * 0.6);
+      c.stroke();
+    }
+  });
+};
+
+/** Gill slits raked along the flanks (the deep's children). */
+const gills: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = withAlpha(ramp.shadow, 0.85);
+    c.lineWidth = Math.max(1.2, R * 0.07);
+    c.lineCap = 'round';
+    for (const side of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const x = R * 0.25 - i * R * 0.2;
+        c.beginPath();
+        c.moveTo(x, side * R * 0.5);
+        c.quadraticCurveTo(x - R * 0.06, side * R * 0.72, x - R * 0.16, side * R * 0.88);
+        c.stroke();
+      }
+    }
+  });
+};
+
+/** A trunk/proboscis curling ahead (mammoths at scale 1, mosquitos thin). */
+const trunkNose: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const w = P(spec, 'w', 0.16);
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(2, R * w);
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(R * 0.5, 0);
+    c.quadraticCurveTo(R * 1.05, R * 0.1, R * 1.15, R * 0.42);
+    c.stroke();
+    c.strokeStyle = withAlpha(ramp.shadow, 0.5);
+    c.lineWidth = Math.max(1, R * w * 0.4);
+    c.beginPath();
+    c.moveTo(R * 0.6, R * 0.02);
+    c.quadraticCurveTo(R * 1.0, R * 0.12, R * 1.1, R * 0.38);
+    c.stroke();
+  });
+};
+
+/** Armored back scutes in offset rows (crocodilians). */
+const scutes: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = shade(ramp.base, -0.12);
+    for (let row = -1; row <= 1; row++) {
+      for (let i = 0; i < 4; i++) {
+        const x = R * 0.45 - i * R * 0.32 + (row === 0 ? R * 0.14 : 0);
+        const y = row * R * 0.3;
+        c.beginPath();
+        c.ellipse(x, y, R * 0.13, R * 0.1, 0, 0, Math.PI * 2);
+        c.fill();
+        c.strokeStyle = withAlpha(ramp.outline, 0.5);
+        c.lineWidth = 1;
+        c.stroke();
+      }
+    }
+    // Center keel highlights.
+    c.fillStyle = withAlpha(ramp.highlight, 0.5);
+    for (let i = 0; i < 4; i++) {
+      c.beginPath();
+      c.arc(R * 0.59 - i * R * 0.32, 0, R * 0.035, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
+/** A forked FISH TAIL sweeping behind (the mer, the deep). */
+const tailFin: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = withAlpha(ramp.base, 0.92);
+    c.beginPath();
+    c.moveTo(-R * 0.6, 0);
+    c.quadraticCurveTo(-R * 1.1, -R * 0.1, -R * 1.5, -R * 0.55);
+    c.quadraticCurveTo(-R * 1.18, -R * 0.08, -R * 1.28, 0);
+    c.quadraticCurveTo(-R * 1.18, R * 0.08, -R * 1.5, R * 0.55);
+    c.quadraticCurveTo(-R * 1.1, R * 0.1, -R * 0.6, 0);
+    c.closePath();
+    c.fill();
+    outlined(c, ramp, 1.2);
+    c.strokeStyle = withAlpha(ramp.shadow, 0.55);
+    c.lineWidth = 1;
+    for (const f of [-0.35, 0, 0.35]) {
+      c.beginPath();
+      c.moveTo(-R * 0.7, f * R * 0.15);
+      c.lineTo(-R * 1.35, f * R * 1.2);
+      c.stroke();
+    }
+  });
+};
+
+/** Stalked eyes periscoping forward (crabs, snails). */
+const eyestalks: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const col = spec.color ?? pal.glow;
+  place(ctx, r, spec, (c, R) => {
+    for (const side of [-1, 1]) {
+      c.strokeStyle = shade(ramp.base, -0.08);
+      c.lineWidth = Math.max(1.6, R * 0.09);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(R * 0.35, side * R * 0.22);
+      c.quadraticCurveTo(R * 0.65, side * R * 0.3, R * 0.8, side * R * 0.42);
+      c.stroke();
+      c.fillStyle = col;
+      c.beginPath();
+      c.arc(R * 0.8, side * R * 0.42, R * 0.09, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = '#ffffff';
+      c.beginPath();
+      c.arc(R * 0.78, side * R * 0.4, R * 0.035, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
+/** A ruffed mane ringing the head (lions, alphas). */
+const mane: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  place(ctx, r, spec, (c, R) => {
+    const cx = R * 0.32;
+    c.fillStyle = withAlpha(ramp.base, 0.9);
+    c.beginPath();
+    for (let i = 0; i <= 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      const rr = R * (0.52 + 0.1 * (i % 2));
+      const x = cx + Math.cos(a) * rr, y = Math.sin(a) * rr;
+      if (i === 0) c.moveTo(x, y); else c.lineTo(x, y);
+    }
+    c.closePath();
+    c.fill();
+    c.strokeStyle = withAlpha(ramp.shadow, 0.6);
+    c.lineWidth = 1.2;
+    c.stroke();
+  });
+};
+
+/** A clutch egg / brood bulb carried behind. */
+const egg: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    const trace = (): void => { c.beginPath(); c.ellipse(0, 0, R * 0.42, R * 0.55, 0, 0, Math.PI * 2); };
+    trace(); c.fillStyle = ramp.base; c.fill();
+    volume(c, R * 0.5, ramp, trace);
+    trace(); outlined(c, ramp, 1.2);
+    c.fillStyle = withAlpha(ramp.shadow, 0.4);
+    for (let i = 0; i < 4; i++) {
+      c.beginPath();
+      c.arc((hash01(i, 3) - 0.5) * R * 0.5, (hash01(i, 7) - 0.5) * R * 0.7, R * 0.05, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
+/** A silk cocoon wrap — banded, slightly translucent. */
+const cocoon: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    const trace = (): void => { c.beginPath(); c.ellipse(0, 0, R * 0.9, R * 0.62, 0, 0, Math.PI * 2); };
+    trace(); c.fillStyle = withAlpha(ramp.base, 0.92); c.fill();
+    volume(c, R * 0.75, ramp, trace);
+    c.strokeStyle = withAlpha(ramp.shadow, 0.5);
+    c.lineWidth = Math.max(1, R * 0.06);
+    for (const f of [-0.5, -0.15, 0.2, 0.55]) {
+      c.beginPath();
+      c.ellipse(f * R * 0.8, 0, R * 0.16, R * 0.6, 0.25, -Math.PI / 2, Math.PI / 2);
+      c.stroke();
+    }
+    trace(); outlined(c, ramp, 1.2);
+  });
+};
+
+/** A carved war-mask over the face — elites and the masked orders. */
+const mask: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    const cx = R * 0.42;
+    const trace = (): void => { c.beginPath(); c.ellipse(cx, 0, R * 0.32, R * 0.4, 0, 0, Math.PI * 2); };
+    trace(); c.fillStyle = ramp.base; c.fill();
+    trace(); outlined(c, ramp, 1.2);
+    // Eye slits + a carved line.
+    c.fillStyle = pal.dark;
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.ellipse(cx + R * 0.1, side * R * 0.15, R * 0.09, R * 0.05, side * 0.4, 0, Math.PI * 2);
+      c.fill();
+    }
+    c.strokeStyle = withAlpha(ramp.shadow, 0.7);
+    c.lineWidth = 1;
+    c.beginPath();
+    c.moveTo(cx - R * 0.05, -R * 0.32);
+    c.lineTo(cx - R * 0.05, R * 0.32);
+    c.stroke();
+  });
+};
+
+/** A back quiver of fletched arrows (archers). */
+const quiver: PartPainter = (ctx, r, spec, pal) => {
+  const wood = pal.wood;
+  place(ctx, r, spec, (c, R) => {
+    c.save();
+    c.translate(-R * 0.45, -R * 0.35);
+    c.rotate(-0.5);
+    c.fillStyle = wood.base;
+    c.fillRect(-R * 0.12, -R * 0.3, R * 0.24, R * 0.6);
+    c.strokeStyle = withAlpha(wood.outline, 0.8);
+    c.lineWidth = 1;
+    c.strokeRect(-R * 0.12, -R * 0.3, R * 0.24, R * 0.6);
+    // Fletching tips poking out.
+    c.fillStyle = pal.accent.base;
+    for (const off of [-0.06, 0.02, 0.1]) {
+      c.beginPath();
+      c.moveTo(off * R, -R * 0.3);
+      c.lineTo(off * R - R * 0.04, -R * 0.44);
+      c.lineTo(off * R + R * 0.04, -R * 0.44);
+      c.closePath();
+      c.fill();
+    }
+    c.restore();
+  });
+};
+
+/** A clean flowing cape (heroes, commanders — the tatters' tidy cousin). */
+const cape: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = withAlpha(ramp.base, 0.94);
+    c.beginPath();
+    c.moveTo(-R * 0.1, -R * 0.62);
+    c.quadraticCurveTo(-R * 0.9, -R * 0.5, -R * 1.15, 0);
+    c.quadraticCurveTo(-R * 0.9, R * 0.5, -R * 0.1, R * 0.62);
+    c.quadraticCurveTo(-R * 0.45, 0, -R * 0.1, -R * 0.62);
+    c.closePath();
+    c.fill();
+    outlined(c, ramp, 1.3);
+    c.strokeStyle = withAlpha(ramp.shadow, 0.55);
+    c.lineWidth = 1;
+    for (const f of [-0.3, 0, 0.3]) {
+      c.beginPath();
+      c.moveTo(-R * 0.25, f * R * 0.5);
+      c.quadraticCurveTo(-R * 0.7, f * R * 0.65, -R * 1.05, f * R * 0.35);
+      c.stroke();
+    }
+  });
+};
+
+/** A knobbed TAIL CLUB (ankylosaurs, bruisers). */
+const tailClub: PartPainter = (ctx, r, spec, pal) => {
+  const body = rampFor(spec, pal, 'base');
+  const bone = pal.bone;
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = body.base;
+    c.lineWidth = Math.max(2.4, R * 0.16);
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(-R * 0.7, 0);
+    c.quadraticCurveTo(-R * 1.15, R * 0.08, -R * 1.45, -R * 0.05);
+    c.stroke();
+    const trace = (): void => { c.beginPath(); c.arc(-R * 1.55, -R * 0.08, R * 0.26, 0, Math.PI * 2); };
+    trace(); c.fillStyle = bone.base; c.fill();
+    volume(c, R * 0.26, bone, trace);
+    trace(); outlined(c, bone, 1.1);
+    c.fillStyle = shade(bone.base, 0.15);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.5;
+      c.beginPath();
+      c.arc(-R * 1.55 + Math.cos(a) * R * 0.27, -R * 0.08 + Math.sin(a) * R * 0.27, R * 0.06, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
 /** Metal helm cap with a nose ridge (knights). */
 const helm: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'metal');
@@ -1578,6 +1999,9 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   apron, pack, lantern, helm,
   tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,
   armorPlates, bloatSacs, chains, barbs, whip, keg, crateBox,
+  antlers, ramHorns, beak, featherWings, crest, frill, gills,
+  trunkNose, scutes, tailFin, eyestalks, mane, egg, cocoon, mask,
+  quiver, cape, tailClub,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */
