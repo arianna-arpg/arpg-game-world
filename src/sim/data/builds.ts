@@ -1,0 +1,73 @@
+// ---------------------------------------------------------------------------
+// REFERENCE BUILDS — the measuring sticks. Open registry: add an entry, and
+// every CLI command (run/sweep/manifest) can see it by id. Keep these HONEST
+// representatives of what a real character has at that level, because target
+// bands are calibrated against them.
+//
+// Naming: <who>_<level-band>. Levels come with an intended gem level via
+// GEM_LEVEL_AT so "a level-10 kit" means the same thing across builds.
+// ---------------------------------------------------------------------------
+
+import { CLASSES } from '../../data/classes';
+import { PASSIVE_ADJACENCY, classStartNode } from '../../data/passives';
+import type { BuildSpec } from '../types';
+
+/** Roughly how a gem keeps pace with character level, absent fancy play.
+ *  A deliberate, documented assumption — change it HERE, not per-build. */
+export function gemLevelAt(charLevel: number): number {
+  return Math.max(1, Math.floor(charLevel / 3) + 1);
+}
+
+/** Deterministic greedy tree: breadth-first from the class start node, ties
+ *  broken alphabetically. Not OPTIMAL play — honest AVERAGE play: a level-L
+ *  character has spent ~L points near home. Derived from the live graph, so
+ *  tree edits reshape every reference build with zero edits here. */
+export function greedyPassives(classId: string, points: number): string[] {
+  const start = classStartNode(classId);
+  const picks: string[] = [];
+  const seen = new Set<string>([start]);
+  let frontier = [start];
+  while (picks.length < points && frontier.length) {
+    const next: string[] = [];
+    for (const at of frontier) {
+      for (const n of [...(PASSIVE_ADJACENCY[at] ?? [])].sort()) {
+        if (seen.has(n)) continue;
+        seen.add(n);
+        picks.push(n);
+        next.push(n);
+        if (picks.length >= points) return picks;
+      }
+    }
+    frontier = next;
+  }
+  return picks;
+}
+
+/** A class's live starting bar, translated into a BuildSpec at a level, with
+ *  a level's worth of nearby passives spent (1/level — PROGRESSION's rate). */
+export function starterBuild(classId: string, level: number): BuildSpec {
+  const cls = CLASSES.find(c => c.id === classId);
+  if (!cls) throw new Error(`sim builds: unknown class '${classId}'`);
+  const skills = cls.bar.filter((s): s is string => s !== null)
+    .map(id => ({ id, level: gemLevelAt(level) }));
+  return {
+    id: `starter_${classId}_l${level}`,
+    label: `${cls.name} starter kit @ L${level}`,
+    classId,
+    level,
+    skills,
+    passives: greedyPassives(classId, level),
+  };
+}
+
+/** The registry. Starter kits at the canonical measurement bands, minted from
+ *  the LIVE class bars (re-bar a class and these follow, zero edits here). */
+export const BUILDS: Record<string, BuildSpec> = {};
+
+const BAND_LEVELS = [1, 5, 10, 20] as const;
+for (const cls of CLASSES) {
+  for (const level of BAND_LEVELS) {
+    const b = starterBuild(cls.id, level);
+    BUILDS[b.id] = b;
+  }
+}
