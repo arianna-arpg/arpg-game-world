@@ -2261,6 +2261,132 @@ const hump: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ================================================================ WINTER
+
+/** ICICLES rimed along the brow/back — hanging frost fangs. params: n. */
+const icicles: PartPainter = (ctx, r, spec, pal) => {
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI * 0.5 + (i / (n - 1) - 0.5) * 1.8; // draped over the rear arc
+      const bx = Math.cos(a) * R * 0.88, by = Math.sin(a) * R * 0.88;
+      const len = R * (0.22 + hash01(i, 41) * 0.22);
+      const tx = bx + Math.cos(a) * len, ty = by + Math.sin(a) * len;
+      const px = Math.cos(a + Math.PI / 2) * R * 0.07, py = Math.sin(a + Math.PI / 2) * R * 0.07;
+      c.fillStyle = withAlpha('#cfe8f6', 0.9);
+      c.beginPath();
+      c.moveTo(bx - px, by - py); c.lineTo(tx, ty); c.lineTo(bx + px, by + py);
+      c.closePath(); c.fill();
+      c.strokeStyle = withAlpha('#ffffff', 0.5);
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(bx, by); c.lineTo(tx, ty); c.stroke();
+    }
+  });
+};
+
+/** A thick FUR RUFF collaring the shoulders (winter beasts). */
+const furRuff: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const r0 = R * 0.62, r1 = R * (0.92 + hash01(i, 73) * 0.2);
+      c.strokeStyle = withAlpha(i % 2 ? shade(ramp.base, 0.2) : shade(ramp.base, -0.1), 0.85);
+      c.lineWidth = Math.max(1.6, R * 0.11);
+      c.beginPath();
+      c.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+      c.lineTo(Math.cos(a + 0.1) * r1, Math.sin(a + 0.1) * r1);
+      c.stroke();
+    }
+  });
+};
+
+/** LIVE: cold breath puffing ahead of the face on a slow rhythm. */
+const breathPuff: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? '#e8f4fa';
+  place(ctx, r, spec, (c, R) => {
+    const PERIOD = 2.8;
+    const cyc = ((t + R) % PERIOD) / PERIOD;
+    if (cyc > 0.55) return; // between breaths
+    const k = cyc / 0.55;
+    const x = R * (0.85 + k * 0.55);
+    const size = R * (0.1 + k * 0.22);
+    c.globalAlpha *= (1 - k) * 0.4;
+    c.fillStyle = col;
+    c.beginPath();
+    c.arc(x, R * 0.06 * Math.sin(t * 2), size, 0, Math.PI * 2);
+    c.arc(x - size * 0.7, -R * 0.05, size * 0.7, 0, Math.PI * 2);
+    c.fill();
+  });
+};
+
+// ================================================================== GEAR
+
+/** WARPAINT stripes raked across the face/brow. params: n. */
+const warpaint: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 3));
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = withAlpha(col, 0.75);
+    c.lineCap = 'round';
+    c.lineWidth = Math.max(1.5, R * 0.08);
+    for (let i = 0; i < n; i++) {
+      const y = (i - (n - 1) / 2) * R * 0.22;
+      c.beginPath();
+      c.moveTo(R * 0.32, y - R * 0.06);
+      c.lineTo(R * 0.72, y + R * 0.06);
+      c.stroke();
+    }
+  });
+};
+
+/** A BANDOLIER strapped across the torso, pouches riding it. */
+const bandolier: PartPainter = (ctx, r, spec, pal) => {
+  const leather = pal.wood;
+  place(ctx, r, spec, (c, R) => {
+    const ax = R * 0.5, ay = -R * 0.62, bx = -R * 0.5, by = R * 0.62;
+    c.strokeStyle = shade(leather.base, -0.15);
+    c.lineWidth = Math.max(2, R * 0.13);
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(ax, ay);
+    c.lineTo(bx, by);
+    c.stroke();
+    for (const f of [0.25, 0.5, 0.75]) {
+      const x = ax + (bx - ax) * f, y = ay + (by - ay) * f;
+      c.fillStyle = shade(leather.base, 0.08);
+      c.fillRect(x - R * 0.09, y - R * 0.09, R * 0.18, R * 0.18);
+      c.strokeStyle = withAlpha(shade(leather.base, -0.4), 0.8);
+      c.lineWidth = 1;
+      c.strokeRect(x - R * 0.09, y - R * 0.09, R * 0.18, R * 0.18);
+    }
+  });
+};
+
+/** A DORSAL RIDGE of plates down the spine (drakes, ridgebacks). params: n. */
+const dorsalRidge: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const n = Math.round(P(spec, 'n', 4));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const x = R * 0.45 - (i / Math.max(1, n - 1)) * R * 1.15;
+      const s = R * (0.16 + 0.08 * Math.sin((i + 0.5) / n * Math.PI));
+      c.fillStyle = i % 2 ? ramp.base : shade(ramp.base, -0.12);
+      c.beginPath();
+      c.moveTo(x - s, 0);
+      c.lineTo(x, -s * 1.4);
+      c.lineTo(x + s, 0);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  });
+};
+
 /** Metal helm cap with a nose ridge (knights). */
 const helm: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'metal');
@@ -2293,6 +2419,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   quiver, cape, tailClub,
   sunburst, laurel, censer, tailSpade, crownOfHorns, brand,
   stripes, spots, rhinoHorn, tuftEars, whiskers, shellSpiral, hump,
+  icicles, furRuff, breathPuff, warpaint, bandolier, dorsalRidge,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

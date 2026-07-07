@@ -1003,7 +1003,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   tundra_behemoth: {
     id: 'tundra_behemoth', name: 'Tundra Behemoth',
-    color: '#a8c8d8', shape: 'hexagon', radius: 28, material: 'fur', look: 'behemoth',
+    color: '#a8c8d8', shape: 'hexagon', radius: 28, material: 'fur', look: 'behemoth_tundra',
     base: { life: 380, moveSpeed: 75, accuracy: 90, armor: 45, mana: 30, manaRegen: 3 },
     mods: [mod('coldRes', 'flat', 0.75)],
     skills: ['ground_slam', 'claw'],
@@ -2632,7 +2632,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   ice_golem: {
     id: 'ice_golem', name: 'Ice Golem',
-    color: '#7ac8e8', shape: 'circle', radius: 16, material: 'ice', look: 'golem',
+    color: '#7ac8e8', shape: 'circle', radius: 16, material: 'ice', look: 'golem_ice',
     base: { life: 110, moveSpeed: 120, mana: 200, manaRegen: 10, armor: 30 },
     mods: [mod('coldRes', 'flat', 0.75)],
     skills: ['frostbolt', 'frost_nova'],

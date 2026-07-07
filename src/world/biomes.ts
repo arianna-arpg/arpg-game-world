@@ -137,6 +137,13 @@ export const BIOMES: Record<string, BiomeInfo> = {
     allowedLayouts: { plains: 3, expanse: 1, riverland: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.45 },
     landmarks: [{ landmark: 'frozen_lake', chance: 0.35 }, { landmark: 'frozen_strand', chance: 0.22 }, { landmark: 'cirque', chance: 0.15 }] },
+  // Taiga: the WINTER FOREST — the tundra's dense-canopied sibling: tight
+  // conifer stands to slip beneath, standing drifts, frozen pools, the
+  // aurora overhead. Wolves and worse den here.
+  taiga:    { patronFaction: 'wild',   mapColor: '#9ec4b4', label: 'Taiga', spacing: 62,
+    allowedLayouts: { plains: 3, riverland: 1 },
+    layoutParams: { riverLiquid: 'water', freezeAt: 0.6 },
+    landmarks: [{ landmark: 'frozen_lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }] },
   // Highland: the mountain-pass maze, now with a bastion chance — a full castle
   // or concentric fortress commanding a pass — plus roadside watchtowers.
   highland: { patronFaction: 'gnoll',  mapColor: '#8a8f6a', label: 'Highland', spacing: 88,

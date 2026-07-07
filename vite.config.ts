@@ -77,4 +77,10 @@ function diskSavePlugin() {
   };
 }
 
-export default defineConfig({ plugins: [diskSavePlugin()] });
+export default defineConfig({
+  plugins: [diskSavePlugin()],
+  // saves/ writes are DATA, not source — without this ignore, every zone-hop's
+  // autosave tripped the watcher into a FULL RELOAD (killing the live world
+  // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).
+  server: { watch: { ignored: ['**/saves/**', '**/*.bak'] } },
+});

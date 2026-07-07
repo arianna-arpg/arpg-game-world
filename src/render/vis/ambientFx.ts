@@ -8,10 +8,11 @@
 // extend: one new kind = one draw branch here + a data row wherever it plays.
 // ---------------------------------------------------------------------------
 
+import { dayCycle } from '../../world/daynight';
 import { hash01, withAlpha } from './color';
 
 export interface AmbientFxSpec {
-  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes';
+  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora';
   /** 0..1 strength (default 1). */
   intensity?: number;
   color?: string;
@@ -25,7 +26,41 @@ export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec
     case 'caustics': return caustics(ctx, w, h, t, k, spec.color ?? '#9fe0e8');
     case 'heatHaze': return heatHaze(ctx, w, h, t, k, spec.color ?? '#ffe8c0');
     case 'motes': return motes(ctx, w, h, t, k, spec.color ?? '#e8f0d8');
+    case 'aurora': return aurora(ctx, w, h, t, k, spec.color ?? '#7fe8b8');
   }
+}
+
+/** THE AURORA — slow luminous curtains waving across the upper sky, only
+ *  when the night is dark enough to carry them (a winter zone's crown). */
+function aurora(ctx: CanvasRenderingContext2D, w: number, h: number,
+  t: number, k: number, color: string): void {
+  const night = 1 - dayCycle(t).light;
+  if (night < 0.45) return; // daylight drowns it
+  const strength = k * ((night - 0.45) / 0.55);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let band = 0; band < 3; band++) {
+    // The high curtain drifts green → violet across the sky.
+    const col = band === 2 ? '#b08ae8' : color;
+    const baseY = h * (0.08 + band * 0.07);
+    const amp = h * (0.03 + band * 0.015);
+    const drift = t * (0.09 + band * 0.05) + band * 2.1;
+    ctx.beginPath();
+    for (let x = -20; x <= w + 20; x += 26) {
+      const y = baseY
+        + Math.sin(x * 0.004 + drift) * amp * 1.6
+        + Math.sin(x * 0.011 - drift * 1.7) * amp;
+      if (x <= -20) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    const grad = ctx.createLinearGradient(0, baseY - amp * 3, 0, baseY + amp * 6);
+    grad.addColorStop(0, withAlpha(col, 0));
+    grad.addColorStop(0.4, withAlpha(col, 0.1 * strength * (0.7 + 0.3 * Math.sin(t * 0.4 + band))));
+    grad.addColorStop(1, withAlpha(col, 0));
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 30 + band * 22;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** Rising bubble columns + a periodic SPLAY: every few seconds a burst pops

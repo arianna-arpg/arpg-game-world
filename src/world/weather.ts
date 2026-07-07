@@ -106,6 +106,15 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     label: 'Blood Moon', color: '#b03038', countMul: 1.6, factionMul: { undead: 2.0, wild: 1.3 },
     wind: 0.18, skyWeight: { night: 2 },
   },
+  /** SNOWFALL — the accumulating front: while it covers a zone, ground snow
+   *  builds (World.snowCover), deepening drifts that slow every walker and
+   *  take pock-mark footprints; the cover then MELTS at the biome's own
+   *  heat (ZoneTheme.heat — a taiga keeps it forever, a desert sheds it in
+   *  moments). Gentle wind; drifts in slowly, day or night. */
+  snow: {
+    label: 'Snowfall', color: '#cfe0f0', countMul: 1.0, factionMul: { wild: 1.2 },
+    wind: 0.45, rampFrac: 0.5, skyWeight: { day: 0.8, dusk: 1, night: 1 },
+  },
 };
 
 /** Register a weather kind under an open-string id (see WeatherKind) — one

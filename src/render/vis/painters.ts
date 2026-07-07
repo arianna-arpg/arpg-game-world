@@ -1712,6 +1712,148 @@ const beacon: GroupPainter = (env, group) => {
   }
 };
 
+/** SOMEONE BUILT A SNOWMAN — two stacked snowballs from above, coal eyes
+ *  toward the facing, stick arms akimbo. Winter's most important doodad. */
+const snowman: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // Base ball, then the head overlapping forward.
+    for (const [f, off] of [[1, -0.15], [0.62, 0.3]] as const) {
+      const R = r * f;
+      const cx = r * off;
+      const g = ctx.createRadialGradient(cx - R * 0.3, -R * 0.3, R * 0.15, cx, 0, R * 1.25);
+      g.addColorStop(0, '#ffffff');
+      g.addColorStop(0.7, '#dfe9f0');
+      g.addColorStop(1, '#b8c9d6');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(cx, 0, R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(90,110,128,0.55)';
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+    }
+    // Stick arms off the base ball.
+    ctx.strokeStyle = '#4a3826';
+    ctx.lineWidth = Math.max(1.5, r * 0.09);
+    ctx.lineCap = 'round';
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.2, side * r * 0.8);
+      ctx.lineTo(-r * 0.5, side * r * 1.45);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.38, side * r * 1.2);
+      ctx.lineTo(-r * 0.55, side * r * 1.1);
+      ctx.stroke();
+    }
+    // Coal eyes + the carrot, looking wherever it was left looking.
+    ctx.fillStyle = '#1a1c22';
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(r * 0.7, side * r * 0.2, r * 0.07, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = '#e08a3a';
+    ctx.beginPath();
+    ctx.moveTo(r * 0.88, -r * 0.05);
+    ctx.lineTo(r * 1.18, 0);
+    ctx.lineTo(r * 0.88, r * 0.05);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** A fingerboard SIGNPOST: post + two weathered boards pointing old ways. */
+const signpost: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#6a5236');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The post's top-down footprint + boards fanned at heights we imagine.
+    ctx.fillStyle = shade(wood, -0.25);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    for (const [ang, len, tone] of [[0.35, 1.35, 0.12], [2.6, 1.1, -0.05]] as const) {
+      ctx.save();
+      ctx.rotate(ang);
+      ctx.fillStyle = shade(wood, tone);
+      ctx.fillRect(0, -r * 0.16, r * len, r * 0.32);
+      ctx.strokeStyle = withAlpha(shade(wood, -0.4), 0.8);
+      ctx.lineWidth = 1.2;
+      ctx.strokeRect(0, -r * 0.16, r * len, r * 0.32);
+      // The pointed tip.
+      ctx.fillStyle = shade(wood, tone);
+      ctx.beginPath();
+      ctx.moveTo(r * len, -r * 0.16);
+      ctx.lineTo(r * (len + 0.22), 0);
+      ctx.lineTo(r * len, r * 0.16);
+      ctx.closePath();
+      ctx.fill();
+      // Faded lettering scratches.
+      ctx.strokeStyle = withAlpha('#1c140c', 0.5);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.2, 0); ctx.lineTo(r * (len - 0.15), 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+};
+
+/** Stacked FIREWOOD: split logs laid in a row, ends facing you. */
+const firewoodPile: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#7a5a34');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 7 + o.pos.y * 3) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // Two courses of log ends (circles with ring + split-line).
+    let i = 0;
+    for (const [row, count] of [[0, 4], [1, 3]] as const) {
+      for (let k = 0; k < count; k++) {
+        const lr = r * (0.26 + hash01(i, seed) * 0.06);
+        const x = (k - (count - 1) / 2) * r * 0.52;
+        const y = (row - 0.5) * r * 0.5;
+        ctx.fillStyle = shade(wood, hash01(i, seed + 3) * 0.16 - 0.05);
+        ctx.beginPath();
+        ctx.arc(x, y, lr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = withAlpha(shade(wood, -0.45), 0.85);
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        // Growth ring + split.
+        ctx.strokeStyle = withAlpha(shade(wood, -0.3), 0.6);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, lr * 0.55, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - lr * 0.8, y);
+        ctx.lineTo(x + lr * 0.8, y);
+        ctx.stroke();
+        i++;
+      }
+    }
+    ctx.restore();
+  }
+};
+
 /** Any kind with no registry entry: a themed disc + rim + rot tick, visible
  *  engine-wide before (or without) ever earning a real look. */
 const fallback: GroupPainter = (env, group) => {
@@ -1741,7 +1883,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   liquid, mound, shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
   campfire, groundShadow, trunk, brush, gravelPath, shimmer, fogFloor,
-  cactus, web, deadTree, stump, log,
+  cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   tentacleField, pentagram, door, breach, landmass, beacon, fallback,
 };
 

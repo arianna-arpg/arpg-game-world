@@ -199,9 +199,14 @@ export interface ZoneTheme {
    *  omitted = open sky, only night darkens. */
   ambientDark?: number;
   /** AMBIENT FX — the zone's standing sensory weather (render/vis/ambientFx):
-   *  underwater caustics + bubble splays, desert heat haze, drifting motes.
-   *  Screen-space, stateless, data-extensible. */
-  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes'; intensity?: number; color?: string }[];
+   *  underwater caustics + bubble splays, desert heat haze, drifting motes,
+   *  the winter AURORA. Screen-space, stateless, data-extensible. */
+  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora'; intensity?: number; color?: string }[];
+  /** BIOME HEAT (0 = frozen … 1 = scorching; default 0.5 temperate) — the
+   *  melt-rate lever for SNOW ACCUMULATION (World.updateSnow): a frozen
+   *  theme keeps a permanent snow floor and lets snowfall deepen it; a hot
+   *  one sheds cover in moments. Future thermal systems read the same dial. */
+  heat?: number;
   /** GROUND STYLE — how this theme's floor textures (all optional; defaults
    *  in VIS_CFG.ground). A desert reads as ROLLING DUNES with scale 2.5 +
    *  stretchX 2; a grove keeps the fine default mottle. */

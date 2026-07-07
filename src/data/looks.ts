@@ -1053,4 +1053,30 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'fins', scale: 0.6, alpha: 0.8 },
     ],
   },
+
+  // ================================================================ WINTER
+  /** The tundra behemoth: ruffed, rime-hung, breath steaming in the cold. */
+  behemoth_tundra: {
+    parts: [
+      { kind: 'disc', scale: 1.02 },
+      { kind: 'furRuff' },
+      { kind: 'snout', scale: 1.05 },
+      { kind: 'horns', scale: 1.1 },
+      { kind: 'icicles', params: { n: 5 } },
+      { kind: 'tail', params: { len: 0.7 } },
+    ],
+    live: [{ kind: 'breathPuff' }],
+    shadowScale: 1.1,
+  },
+  /** The ice golem: runed frost-stone hung with icicles. */
+  golem_ice: {
+    parts: [
+      { kind: 'disc' },
+      { kind: 'claws', params: { len: 0.3, talons: 3 } },
+      { kind: 'icicles', params: { n: 6 } },
+      { kind: 'runes', color: '#bfe8ff', params: { n: 3 } },
+      { kind: 'eyes', color: '#dff4ff', params: { spread: 0.35, dist: 0.55, size: 0.1 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.8, color: '#dff4ff' }],
+  },
 };

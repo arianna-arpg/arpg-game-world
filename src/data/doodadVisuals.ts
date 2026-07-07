@@ -110,8 +110,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   ice: {
     painter: 'liquid', order: 32,
     params: {
-      rim: { color: '#e8f4fc', alpha: 0.5, grow: 3 },
-      core: { color: '#bcd8e8', alpha: 0.3 },
+      rim: { color: '#e8f4fc', alpha: 0.32, grow: 3 },
+      core: { color: '#bcd8e8', alpha: 0.28 },
       glassSheen: { color: '#ffffff' },
     },
   },
@@ -138,8 +138,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   snowdrift: {
     painter: 'liquid', order: 21,
     params: {
-      rim: { color: '#f0f6fc', alpha: 0.4, grow: 3 },
-      core: { color: '#dce8f2', alpha: 0.35 },
+      rim: { color: '#f0f6fc', alpha: 0.22, grow: 3 },
+      core: { color: '#dce8f2', alpha: 0.22 },
     },
   },
   reeds: { painter: 'kelp', order: 48, params: { color: '#5a7a3a' } },
@@ -269,6 +269,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 5, color: '#3a6a9a', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
     light: { radius: -2.6, color: '#7fc0f0', intensity: 0.3 },
   },
+  ice_spike: {
+    painter: 'shard', order: 50, shadow: 0.5, longShadow: 1.3,
+    params: { points: 4, color: '#a8ccdf', material: 'ice', coreGlow: { color: '#e8f6ff' } },
+    light: { radius: -2, color: '#bfe0f0', intensity: 0.14 },
+  },
+  snowman: { painter: 'snowman', order: 54, shadow: 0.55, longShadow: 1.1 },
+  signpost: { painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4 },
+  firewood_pile: { painter: 'firewoodPile', order: 53, shadow: 0.55 },
   obsidian: {
     longShadow: 0.7,
     painter: 'shard', order: 50, shadow: 0.55,

@@ -13,7 +13,7 @@ import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { chargeColor } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { RUNE_INFO } from '../data/invocations';
-import { BOSS_BAR_XP_MIN } from '../engine/world';
+import { BOSS_BAR_XP_MIN, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
@@ -30,7 +30,7 @@ import { keyDisplay, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { MONSTERS } from '../data/monsters';
-import { hexToRgb, shade, withAlpha } from './vis/color';
+import { hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawLongShadow, drawShadow, sunCast } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
@@ -935,6 +935,7 @@ export class Renderer {
     // The floor itself: baked noise-mottled chunks (vis/ground.ts) — texture,
     // speckle, wall bevels and contact AO all land in one drawImage per chunk.
     this.ground.draw(ctx, world, this.cam.x, this.cam.y, vw, vh);
+    this.drawSnowCover(world, vw, vh);
     this.drawAnimatedRegions(world);
     // Soft edge vignette — the world settles into its bounds instead of
     // ending on a hairline.
@@ -970,6 +971,31 @@ export class Renderer {
     ctx.lineWidth = 4;
     if (ell) { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 2 - 2, h / 2 - 2, 0, 0, Math.PI * 2); ctx.stroke(); }
     else ctx.strokeRect(0, 0, w, h);
+  }
+
+  /** SNOW COVER wash (World.snowCover): drifted white laid over the floor,
+   *  deeper in the noise-hollows so a half-melted fall reads patchy, near
+   *  solid at a full blanket. Viewport cells only; a boundless-arena zone
+   *  wears it the same way. */
+  private drawSnowCover(world: World, vw: number, vh: number): void {
+    const cover = world.snowCover;
+    if (cover <= 0.02) return;
+    const { ctx } = this;
+    const cell = 22;
+    const x0 = Math.floor(this.cam.x / cell) * cell, y0 = Math.floor(this.cam.y / cell) * cell;
+    ctx.fillStyle = '#eaf2f7';
+    for (let y = y0; y < this.cam.y + vh + cell; y += cell) {
+      for (let x = x0; x < this.cam.x + vw + cell; x += cell) {
+        // Broad features (~200u) — DRIFTS, not a checkerboard of cells.
+        const n = valueNoise(x * 0.005, y * 0.005, 77);
+        // Snow settles into the low noise first; a full cover whites out all.
+        const depth = clamp(cover * 1.25 - n * 0.55, 0, 1);
+        if (depth <= 0.03) continue;
+        ctx.globalAlpha = depth * SNOW_CFG.washAlpha;
+        ctx.fillRect(x, y, cell + 0.5, cell + 0.5);
+      }
+    }
+    ctx.globalAlpha = 1;
   }
 
   /** ANIMATED region visuals (flesh throb, water drift) — the only per-frame
@@ -1046,19 +1072,23 @@ export class Renderer {
           age: 0, max: 0.85, r0: a.radius * 0.55, kind: 'ripple',
         });
       } else {
-        // Snow isn't a sensed ground — probe the culled drifts directly.
-        const drifts = this.culled.get('snowdrift');
-        if (drifts) {
-          for (const d of drifts) {
-            if (dist(a.pos, d.pos) <= d.radius) {
-              this.lastFxSpawn.set(a.id, world.time);
-              this.liquidFx.push({
-                x: a.pos.x + (Math.random() * 4 - 2), y: a.pos.y + a.radius * 0.4,
-                age: 0, max: 9, r0: a.radius * 0.42, kind: 'pock',
-              });
-              break;
+        // Snow pocks press wherever cover stands deep (accumulated snowfall)
+        // — or inside a standing drift doodad, cover or no cover.
+        let onSnow = world.snowCover >= SNOW_CFG.pockAt;
+        if (!onSnow) {
+          const drifts = this.culled.get('snowdrift');
+          if (drifts) {
+            for (const d of drifts) {
+              if (dist(a.pos, d.pos) <= d.radius) { onSnow = true; break; }
             }
           }
+        }
+        if (onSnow && a.groundKind !== 'water') {
+          this.lastFxSpawn.set(a.id, world.time);
+          this.liquidFx.push({
+            x: a.pos.x + (Math.random() * 4 - 2), y: a.pos.y + a.radius * 0.4,
+            age: 0, max: 9, r0: a.radius * 0.42, kind: 'pock',
+          });
         }
       }
     }

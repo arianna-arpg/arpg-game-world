@@ -346,6 +346,25 @@ export const WIND_CFG = {
   pushPerSec: 24,
 };
 
+/** SNOW ACCUMULATION tunables (World.updateSnow). A snowfall front BUILDS
+ *  ground cover; the biome's heat (ZoneTheme.heat, 0 frozen … 1 scorching)
+ *  MELTS it — a taiga wears snow forever, a desert sheds a flurry in
+ *  moments. Cover slows every walker and takes pock-mark footprints. */
+export const SNOW_CFG = {
+  /** Seconds of full-intensity snowfall to reach full cover. */
+  accumulateSec: 50,
+  /** Seconds for full cover to melt at heat 1 (scales linearly with heat). */
+  meltSecAtHeat1: 45,
+  /** Movement-speed loss at FULL cover (density is the slow). */
+  slowAtFull: 0.26,
+  /** Cover depth where footfalls begin pressing pock marks. */
+  pockAt: 0.3,
+  /** Frozen biomes (heat ≤ 0.05) never drop below this standing cover. */
+  frozenBaseline: 0.55,
+  /** Ground white-wash alpha at full cover (renderer). */
+  washAlpha: 0.42,
+};
+
 /** Tags whose bearers are AMBIENT living-world texture, streamed through zones
  *  by overlay packages — NEVER part of the zone objective, so a waves/clear
  *  zone can't soft-lock behind them. Materializers tag their spawns; a new
@@ -2588,6 +2607,9 @@ export class World {
     this.migrantSquadId = undefined; // each zone's herd is its own squad
     this.arenaWash = null;
     this.shake = 0;
+    // Snow is per-visit: frozen biomes wake already blanketed (their floor),
+    // everyone else starts bare and lets the sky decide.
+    this.snowCover = (this.zone.theme.heat ?? 0.5) <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
     this.tempGrounds = [];
     // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
     // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
@@ -17756,6 +17778,7 @@ export class World {
     this.checkMinionDetonations();
     this.separateActors();
     this.updateWindPush(dt);
+    this.updateSnow(dt);
     this.updateDrops(dt);
     this.updateOrbs(dt);
     this.updateRemnants(dt);
@@ -18988,6 +19011,25 @@ export class World {
       if (scorch && scorch.stacks > 0) scorch.remaining = Math.max(scorch.remaining, 2.5);
       this.heatTimers.set(a.id, t);
     }
+  }
+
+  /** SNOW COVER on this zone's ground right now (0..1). Rises under a
+   *  snowfall front, melts by ZoneTheme.heat, floors at the frozen baseline
+   *  in heat≤0.05 biomes. Renderer washes the floor + presses pocks by it;
+   *  the movement artery slows by it (SNOW_CFG). Transient per visit. */
+  snowCover = 0;
+
+  private updateSnow(dt: number): void {
+    const heat = this.zone.theme.heat ?? 0.5;
+    const f = this.sim.weather.sample(this.zone);
+    if (f?.kind === 'snow') {
+      this.snowCover += dt * f.intensity / SNOW_CFG.accumulateSec;
+    }
+    if (heat > 0.02) {
+      this.snowCover -= dt * heat / SNOW_CFG.meltSecAtHeat1;
+    }
+    const floor = heat <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
+    this.snowCover = clamp(this.snowCover, floor, 1);
   }
 
   /** THE ZONE'S WIND this frame — direction from the covering front's own
@@ -22602,7 +22644,10 @@ export class World {
         1 + dot * (dot < 0 ? WIND_CFG.headwind : WIND_CFG.tailwind),
         WIND_CFG.minScale, WIND_CFG.maxScale);
     }
-    const speed = a.sheet.get('moveSpeed') * channelFactor * regionScale * boatScale * windScale;
+    // SNOW DENSITY: standing cover is heavy going for every walker
+    // (SNOW_CFG.slowAtFull at a full blanket). Boats don't wade snow.
+    const snowScale = this.sailing ? 1 : 1 - this.snowCover * SNOW_CFG.slowAtFull;
+    const speed = a.sheet.get('moveSpeed') * channelFactor * regionScale * boatScale * windScale * snowScale;
     const traction = clamp(a.sheet.get('traction'), 0.05, 1);
     a.lastMoveAt = this.time;
     a.idleFor = 0; // a deliberate step breaks the 'stationary' stance

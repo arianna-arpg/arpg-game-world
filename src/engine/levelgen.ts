@@ -66,6 +66,10 @@ export type KnownDoodadKind =
   | 'palm'      // blocks both — a tree variant (beach/jungle canopy)
   | 'conifer'   // evergreen spire (pine crown; tundra/deepwood)
   | 'ancient_tree' // a forest ELDER: huge crown, thick bole, packs hide beneath
+  | 'ice_spike' // a rimed crystal fang jutting from frozen ground (taiga/tundra)
+  | 'snowman'   // someone built it and left; it watches (winter clutter)
+  | 'signpost'  // a fingerboard post naming ways travelers stopped taking
+  | 'firewood_pile' // stacked split logs — a camp that meant to come back
   | 'lava'      // blocks movement but NOT shots — molten, like a chasm
   | 'cave_entrance' // blocks nothing — a transition trigger into a cave sub-zone
   | 'ritual_pentagram' // blocks nothing — a Conclave ritual circle (walkable; cultists ring it)
@@ -364,6 +368,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   /** A forest ELDER: a huge crown over a thick bole — the dense-forest
    *  anchor (whole packs ambush beneath one). */
   ancient_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80, occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22 },
+  // Winter clutter (the taiga's furniture).
+  ice_spike: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24 },
+  snowman:   { overlap: 'solid', blocksMove: true, spacing: 60 },
+  signpost:  { overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.35 },
+  firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50 },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 } },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22 },
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
@@ -1899,6 +1908,10 @@ registerStamp('shallows', (ctx) => stampShallows(ctx));
 registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'));
 registerStamp('conifers', (ctx, spec) => stampTree(ctx, spec.radius ?? [13, 26], 'conifer'));
 registerStamp('ancient_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [56, 88], 'ancient_tree'));
+registerStamp('ice_spike', stampSingle('ice_spike', [10, 20]));
+registerStamp('snowman', stampSingle('snowman', [11, 14]));
+registerStamp('signpost', stampSingle('signpost', [10, 12]));
+registerStamp('firewood_pile', stampSingle('firewood_pile', [12, 16]));
 registerStamp('thicket', (ctx) => stampThicket(ctx));
 registerStamp('tombstone', (ctx) => stampGraves(ctx));
 registerStamp('cave', (ctx) => stampCaveMouth(ctx));

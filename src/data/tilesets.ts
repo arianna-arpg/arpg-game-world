@@ -144,11 +144,69 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE TAIGA — the winter FOREST: where the tundra is open and howling,
+  // the taiga is close and hushed — dense conifer stands you disappear
+  // beneath, standing drifts, frozen pools, firewood caches of travelers
+  // who never came back, and the aurora breathing over the dark.
+  taiga: {
+    id: 'taiga',
+    nameFirst: ['Silent', 'Whitewood', 'Frostpine', 'Snowveil', 'Winterdeep', 'Rimewood', 'Palegrove', 'Hoarwood', 'Stillfall', 'Coldbough', 'Evergloam', 'Firshadow', 'Icebough', 'Drifthollow'],
+    nameSecond: ['Taiga', 'Firwood', 'Pines', 'Timberland', 'Woods', 'Stands', 'Thickets', 'Wilds', 'Forest', 'Boughs', 'Snowwood', 'Hollow'],
+    theme: {
+      heat: 0,
+      ground: { scale: 1.6, strength: 0.85, speckles: 0.9 },
+      ambientFx: [{ kind: 'aurora' }],
+      floor: '#101820', grid: '#16222c', border: '#2f4a56',
+      obstacle: '#263c48', obstacleEdge: '#41667a', accent: '#9adcc8',
+      mud: '#8aa8ba', chasm: '#03060b', water: '#1a3e54', wall: '#3a4854',
+      tree: '#1c3a30', grass: '#4a6a5c',
+    },
+    sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.2, biome: 'taiga',
+    layout: [
+      { kind: 'conifers', count: [20, 30] },
+      { kind: 'ancient_tree', count: [0, 2] },
+      { kind: 'snowdrift', count: [7, 12] },
+      { kind: 'ice', count: [3, 5] },
+      { kind: 'ice_spike', count: [3, 6] },
+      { kind: 'fog_bank', count: [1, 3] },
+      { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'rocks', count: [6, 10], radius: [20, 40] },
+      { kind: 'brush', count: [2, 4] },
+      { kind: 'cliff', count: [1, 3] },
+      { kind: 'river', count: [0, 1] },
+      { kind: 'firewood_pile', count: [1, 3] },
+      { kind: 'signpost', count: [0, 2] },
+      { kind: 'snowman', count: [0, 1] },
+      { kind: 'ruin', count: [0, 1] },
+      { kind: 'camp', count: [0, 1] },
+    ],
+    packs: {
+      count: [6, 9], size: [3, 6],
+      table: [
+        { id: 'pain_hound', weight: 3 },
+        { id: 'alpha_stalker', weight: 2 },
+        { id: 'gloom_stalker', weight: 2 },
+        { id: 'frost_witch', weight: 2 },
+        { id: 'husk_swarmer', weight: 2 },
+        { id: 'tundra_behemoth', weight: 2 },
+        { id: 'hex_weaver', weight: 1 },
+        { id: 'lich_marshal', weight: 1 },
+      ],
+    },
+    spawnerId: 'rime_stone',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
   tundra: {
     id: 'tundra',
     nameFirst: ['Frostbitten', 'Howling', 'Pale', 'Glacial', 'Whitemourn', 'Rimebound', 'Frostfell', 'Hoarfrost', 'Bitterwind', 'Snowbound', 'Wintermourn', 'Bleakhold', 'Sleetborn', 'Coldcairn', 'Stormriven', 'Frostshard', 'Iceveil', 'Numbing'],
     nameSecond: ['Expanse', 'Steppes', 'Wastes', 'Drifts', 'Pass', 'Fields', 'Tundra', 'Floes', 'Hollow', 'Verge', 'Barrens', 'Plateau', 'Hinterland', 'Snowfields', 'Reach', 'Tarn'],
     theme: {
+      heat: 0.05,
       ground: { scale: 1.9, strength: 0.9, speckles: 0.7 },
       floor: '#0c1115', grid: '#131c24', border: '#33505f',
       obstacle: '#2a4150', obstacleEdge: '#487086', accent: '#8ed0ec',
@@ -201,6 +259,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Cinder', 'Ashen', 'Smoldering', 'Charred', 'Molten', 'Sootveil', 'Emberfall', 'Ashfall', 'Scorchwind', 'Cindergrey', 'Smokeveil', 'Ashmoor', 'Pyreborn', 'Charwood', 'Embergloom', 'Slagborn', 'Sootfall', 'Burning'],
     nameSecond: ['Barrens', 'Flats', 'Scar', 'Caldera', 'Expanse', 'Fields', 'Wastes', 'Ashlands', 'Cinders', 'Smolder', 'Drift', 'Scorch', 'Pyre', 'Hollow', 'Reach', 'Char'],
     theme: {
+      heat: 0.95,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.5, color: '#ffd0a0' }],
       ground: { scale: 1.5, stretchX: 1.3, strength: 1.2, speckles: 0.8 },
       floor: '#150e0a', grid: '#221510', border: '#5c3824',
@@ -274,6 +333,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunscoured', 'Bone-Dry', 'Wind-Carved', 'Mirage', 'Scorchsand', 'Glasswaste', 'Sunbaked', 'Duneshift', 'Saltcrack', 'Heat-Hazed', 'Witherglass', 'Sandlorn', 'Blistering', 'Dustchoke', 'Goldwaste', 'Suncracked', 'Parched', 'Burnglass'],
     nameSecond: ['Dunes', 'Reach', 'Flats', 'Wastes', 'Hollow', 'Expanse', 'Barrens', 'Drift', 'Sands', 'Erg', 'Scour', 'Pan', 'Basin', 'Sprawl', 'Span', 'Verge'],
     theme: {
+      heat: 1,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }],
       ground: { scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45 },
       floor: '#1a160d', grid: '#2a2418', border: '#7a6438',
@@ -539,6 +599,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunbleached', 'Saltworn', 'Tide-Carved', 'Driftwood', 'Coral', 'Surf-Beaten', 'Foamcrest', 'Seawind', 'Brinewashed', 'Pearl-Strewn', 'Wracklittered', 'Sandscoured', 'Glittering', 'Spraylashed', 'Shellbound', 'Tidefall', 'Saltgrass', 'Lowtide'],
     nameSecond: ['Shore', 'Coast', 'Strand', 'Shallows', 'Cove', 'Bar', 'Beach', 'Reach', 'Spit', 'Foreshore', 'Tideline', 'Sands', 'Bay', 'Inlet', 'Surf', 'Margin'],
     theme: {
+      heat: 0.75,
       ground: { scale: 2.0, stretchX: 1.6, strength: 1.1, speckles: 0.6 },
       floor: '#15140e', grid: '#221f16', border: '#7a6e44',
       obstacle: '#5c5230', obstacleEdge: '#8a7a48', accent: '#e8d060',
@@ -1032,6 +1093,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Erupting', 'Molten', 'Scorched', 'Cinderborn', 'Magmatic', 'Searing', 'Smokebelching', 'Fumarole', 'Ashveiled', 'Pyroclastic', 'Sulfur-Reeked', 'Lavaborn', 'Glowembered', 'Boiling', 'Cracked-Earth', 'Emberspewn', 'Furnace-Hot', 'Blistering'],
     nameSecond: ['Caldera', 'Vents', 'Crucible', 'Flows', 'Furnace', 'Maw', 'Fissure', 'Cinderfield', 'Lavaflats', 'Smokes', 'Pyre', 'Cone', 'Scoria', 'Hollow', 'Burn', 'Vent-Field'],
     theme: {
+      heat: 1,
       ground: { scale: 0.75, strength: 1.3 },
       floor: '#160d08', grid: '#241208', border: '#6a3818',
       obstacle: '#48281a', obstacleEdge: '#8a4a26', accent: '#ff7a2a', lava: '#7a1a08', chasm: '#1b0703',
