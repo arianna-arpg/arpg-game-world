@@ -88,7 +88,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Gloomwood', 'Brierwood', 'Mossdark', 'Thornveil', 'Murkroot', 'Feywild', 'Duskbough', 'Tanglewood', 'Shadowmoss', 'Rootdark', 'Witchwood', 'Nightroot', 'Bramblewick', 'Grimwillow', 'Eldergloom', 'Owlmurk', 'Fenshadow', 'Mistbriar'],
     nameSecond: ['Hollow', 'Reach', 'Warrens', 'Glade', 'Crossing', 'Depths', 'Thicket', 'Tangle', 'Shade', 'Boughs', 'Hush', 'Snarl', 'Covert', 'Verge', 'Stand', 'Underwood'],
     theme: {
-      floor: '#0b110b', grid: '#121d12', border: '#2a452a',
+      // The GROVE floor flourishes — greens over greens, barely any black
+      // (palette + light bias) — while its NIGHTS run forest-deep.
+      ground: { palette: ['#101f0d', '#173015', '#20421c', '#2b5424', '#38662e'], bias: 0.58, alpha: 0.55 },
+      nightDark: 0.78,
+      floor: '#0d150c', grid: '#142112', border: '#2a452a',
       obstacle: '#223c1c', obstacleEdge: '#3a6030', accent: '#8ed45e',
       mud: '#1b2914', chasm: '#030703', water: '#173a4a', wall: '#46371f',
     },
@@ -153,6 +157,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Silent', 'Whitewood', 'Frostpine', 'Snowveil', 'Winterdeep', 'Rimewood', 'Palegrove', 'Hoarwood', 'Stillfall', 'Coldbough', 'Evergloam', 'Firshadow', 'Icebough', 'Drifthollow'],
     nameSecond: ['Taiga', 'Firwood', 'Pines', 'Timberland', 'Woods', 'Stands', 'Thickets', 'Wilds', 'Forest', 'Boughs', 'Snowwood', 'Hollow'],
     theme: {
+      nightDark: 0.74,
       heat: 0,
       ground: { scale: 1.6, strength: 0.85, speckles: 0.9 },
       ambientFx: [{ kind: 'aurora' }],
@@ -206,6 +211,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Frostbitten', 'Howling', 'Pale', 'Glacial', 'Whitemourn', 'Rimebound', 'Frostfell', 'Hoarfrost', 'Bitterwind', 'Snowbound', 'Wintermourn', 'Bleakhold', 'Sleetborn', 'Coldcairn', 'Stormriven', 'Frostshard', 'Iceveil', 'Numbing'],
     nameSecond: ['Expanse', 'Steppes', 'Wastes', 'Drifts', 'Pass', 'Fields', 'Tundra', 'Floes', 'Hollow', 'Verge', 'Barrens', 'Plateau', 'Hinterland', 'Snowfields', 'Reach', 'Tarn'],
     theme: {
+      dayLight: 1.12,
       heat: 0.05,
       ground: { scale: 1.9, strength: 0.9, speckles: 0.7 },
       floor: '#0c1115', grid: '#131c24', border: '#33505f',
@@ -333,6 +339,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunscoured', 'Bone-Dry', 'Wind-Carved', 'Mirage', 'Scorchsand', 'Glasswaste', 'Sunbaked', 'Duneshift', 'Saltcrack', 'Heat-Hazed', 'Witherglass', 'Sandlorn', 'Blistering', 'Dustchoke', 'Goldwaste', 'Suncracked', 'Parched', 'Burnglass'],
     nameSecond: ['Dunes', 'Reach', 'Flats', 'Wastes', 'Hollow', 'Expanse', 'Barrens', 'Drift', 'Sands', 'Erg', 'Scour', 'Pan', 'Basin', 'Sprawl', 'Span', 'Verge'],
     theme: {
+      dayLight: 1.6,
       heat: 1,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }],
       ground: { scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45 },
@@ -599,6 +606,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunbleached', 'Saltworn', 'Tide-Carved', 'Driftwood', 'Coral', 'Surf-Beaten', 'Foamcrest', 'Seawind', 'Brinewashed', 'Pearl-Strewn', 'Wracklittered', 'Sandscoured', 'Glittering', 'Spraylashed', 'Shellbound', 'Tidefall', 'Saltgrass', 'Lowtide'],
     nameSecond: ['Shore', 'Coast', 'Strand', 'Shallows', 'Cove', 'Bar', 'Beach', 'Reach', 'Spit', 'Foreshore', 'Tideline', 'Sands', 'Bay', 'Inlet', 'Surf', 'Margin'],
     theme: {
+      dayLight: 1.35,
       heat: 0.75,
       ground: { scale: 2.0, stretchX: 1.6, strength: 1.1, speckles: 0.6 },
       floor: '#15140e', grid: '#221f16', border: '#7a6e44',
@@ -644,6 +652,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunlit', 'Wildflower', 'Greenhollow', 'Honeybrook', 'Dappled', 'Springmoor', 'Cloverhill', 'Larksong', 'Daisychain', 'Goldengrass', 'Breezy', 'Sweetgrass', 'Buttercup', 'Gentlebrook', 'Verdant', 'Mossglen', 'Petalfall', 'Hazysun'],
     nameSecond: ['Meadow', 'Glade', 'Pasture', 'Vale', 'Downs', 'Greens', 'Lea', 'Field', 'Heath', 'Commons', 'Bloom', 'Reach', 'Dell', 'Sward', 'Clearing', 'Holt'],
     theme: {
+      ground: { palette: ['#131f0c', '#1e2f12', '#2a4218', '#3a5522', '#4a682c'], bias: 0.6, alpha: 0.5 },
+      dayLight: 1.15, nightDark: 0.6,
       floor: '#0e130c', grid: '#172013', border: '#3a5a2c',
       obstacle: '#2c4a22', obstacleEdge: '#477534', accent: '#9ed060',
       tree: '#3a7a34', grass: '#4e7a34', mud: '#1d2b16', water: '#1a4a54',
@@ -1006,6 +1016,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Fetid', 'Sunken', 'Miremost', 'Rotbound', 'Stagnant', 'Murkwater', 'Reekwallow', 'Foulreek', 'Dankreed', 'Slumpwater', 'Gnatswarm', 'Greenscum', 'Cloywater', 'Sodden', 'Bogrot', 'Stillreek', 'Mudchurn', 'Drearmoor'],
     nameSecond: ['Marsh', 'Fen', 'Mire', 'Bog', 'Sump', 'Wetland', 'Slough', 'Quag', 'Reeds', 'Morass', 'Lowwater', 'Shallows', 'Mudflat', 'Sink', 'Hollow', 'Mere'],
     theme: {
+      nightDark: 0.72,
       ground: { scale: 1.4, strength: 1.15 },
       floor: '#0e140e', grid: '#16201a', border: '#3a5240',
       obstacle: '#2a3a2c', obstacleEdge: '#496a4e', accent: '#8ad08a',
@@ -1093,6 +1104,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Erupting', 'Molten', 'Scorched', 'Cinderborn', 'Magmatic', 'Searing', 'Smokebelching', 'Fumarole', 'Ashveiled', 'Pyroclastic', 'Sulfur-Reeked', 'Lavaborn', 'Glowembered', 'Boiling', 'Cracked-Earth', 'Emberspewn', 'Furnace-Hot', 'Blistering'],
     nameSecond: ['Caldera', 'Vents', 'Crucible', 'Flows', 'Furnace', 'Maw', 'Fissure', 'Cinderfield', 'Lavaflats', 'Smokes', 'Pyre', 'Cone', 'Scoria', 'Hollow', 'Burn', 'Vent-Field'],
     theme: {
+      dayLight: 1.15,
       heat: 1,
       ground: { scale: 0.75, strength: 1.3 },
       floor: '#160d08', grid: '#241208', border: '#6a3818',

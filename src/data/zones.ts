@@ -207,6 +207,12 @@ export interface ZoneTheme {
    *  theme keeps a permanent snow floor and lets snowfall deepen it; a hot
    *  one sheds cover in moments. Future thermal systems read the same dial. */
   heat?: number;
+  /** DAYTIME BRIGHTNESS multiplier on the noon sun-lift (default 1): a
+   *  desert swelters at 1.6, a canopied wood barely brightens at 0.7. */
+  dayLight?: number;
+  /** NIGHT DARKNESS override (default VIS_CFG.lights.nightDark): deep
+   *  forests sink toward black; open plains keep starlit reads. */
+  nightDark?: number;
   /** GROUND STYLE — how this theme's floor textures (all optional; defaults
    *  in VIS_CFG.ground). A desert reads as ROLLING DUNES with scale 2.5 +
    *  stretchX 2; a grove keeps the fine default mottle. */
@@ -219,6 +225,16 @@ export interface ZoneTheme {
     strength?: number;
     /** Speckle count multiplier (0 = bare). */
     speckles?: number;
+    /** MOTTLE PALETTE: a multi-stop gradient the noise field samples —
+     *  full art direction of the floor in one array. A grove runs deep
+     *  greens; a road-land runs dirt-browns into dull grass. Omitted =
+     *  the classic light/dark derivation from the floor color. */
+    palette?: string[];
+    /** Skew the noise toward the palette's light end (>0.5) or dark end
+     *  (<0.5) — "less black, more flourish" is bias 0.6. Default 0.5. */
+    bias?: number;
+    /** Mottle alpha override (how much the pattern covers the base floor). */
+    alpha?: number;
   };
 }
 
@@ -368,17 +384,29 @@ export const ZONES: Record<string, ZoneDef> = {
     id: 'lastlight', name: 'Lastlight',
     level: 0,
     size: { w: 1400, h: 1000 },
+    // HOME reads warm: lamplit earth tones, flowering verges, a fountain
+    // square, benches by the lanterns — comfort, not another dungeon floor.
     theme: {
-      floor: '#141310', grid: '#1e1c16', border: '#4a4434',
-      obstacle: '#3e3a2e', obstacleEdge: '#5c563e', accent: '#e8c87a',
-      wall: '#6a5638', water: '#1d4254', mud: '#2b261a',
+      floor: '#1c1611', grid: '#2a221a', border: '#5c503a',
+      obstacle: '#4a4030', obstacleEdge: '#6c5e44', accent: '#f0cf82',
+      wall: '#7a6440', water: '#1d4254', mud: '#332a1c',
+      grass: '#546038', tree: '#3a5230',
+      dayLight: 1.15, nightDark: 0.5, // cozy dusk — the lanterns hold it
+      ground: {
+        palette: ['#191207', '#251c10', '#322717', '#3e3320', '#4a3f28'],
+        bias: 0.56, alpha: 0.5, speckles: 1.3,
+      },
     },
     seed: 1187, // the town keeps its shape — it's home
     layout: [
       { kind: 'trees', count: [10, 10], radius: [13, 20] },
       { kind: 'grass', count: [5, 5] },
+      { kind: 'flowers', count: [3, 3] },
       { kind: 'brush', count: [2, 2] },
       { kind: 'river', count: [1, 1] },
+      { kind: 'fountain', count: [1, 1] },
+      { kind: 'lantern_post', count: [5, 5] },
+      { kind: 'bench', count: [3, 3] },
     ],
     fixtures: [
       { structure: 'blacksmith', x: 450, y: 320 },
@@ -404,16 +432,29 @@ export const ZONES: Record<string, ZoneDef> = {
     id: 'crossroads', name: "Wayfarer's Crossroads",
     level: 1,
     size: { w: 1700, h: 1200 },
+    // A WORN meeting of ways: trodden dirt cut with desire paths, dull
+    // grass hanging on between the wheel ruts, a toppled cart, old signs.
     theme: {
-      floor: '#11130f', grid: '#1c2018', border: '#3e4434',
-      obstacle: '#3a3f33', obstacleEdge: '#565e48', accent: '#c8b06b',
+      floor: '#181309', grid: '#251e10', border: '#4a4430',
+      obstacle: '#3e3a2a', obstacleEdge: '#5e5840', accent: '#d8b86b',
+      road: '#4c4130', grass: '#57633c', mud: '#2e2414', tree: '#2e4422',
+      dayLight: 1.05,
+      ground: {
+        palette: ['#1d150a', '#2a210f', '#352b15', '#3a3a1d', '#434d24'],
+        bias: 0.52, alpha: 0.55, stretchX: 1.35, speckles: 1.4,
+      },
     },
     layout: [
+      { kind: 'road', count: [3, 4] },
       { kind: 'rocks', count: [5, 8], radius: [22, 46] },
       { kind: 'trees', count: [5, 8] },
-      { kind: 'grass', count: [3, 5] },
+      { kind: 'grass', count: [5, 7] },
+      { kind: 'flowers', count: [1, 2] },
       { kind: 'mud', count: [1, 2] },
       { kind: 'water', count: [0, 1], radius: [26, 40] },
+      { kind: 'broken_cart', count: [1, 2] },
+      { kind: 'signpost', count: [1, 2] },
+      { kind: 'lantern_post', count: [1, 2] },
     ],
     objective: { kind: 'clear' },
     packs: {

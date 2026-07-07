@@ -2387,6 +2387,127 @@ const dorsalRidge: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** SABRE FANGS overhanging the jaw (dire cats, vampire things). */
+const fangs: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = shade(ramp.base, 0.12);
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(R * 0.62, side * R * 0.22);
+      c.quadraticCurveTo(R * 0.95, side * R * 0.24, R * 1.0, side * R * 0.08);
+      c.lineTo(R * 0.78, side * R * 0.12);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  });
+};
+
+/** A feather PLUME crowning the head (chiefs, champions). params: n. */
+const plume: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 4));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI + (i / (n - 1) - 0.5) * 0.9;
+      const len = R * (0.55 + 0.2 * Math.sin((i + 0.5) / n * Math.PI));
+      c.strokeStyle = withAlpha(i % 2 ? col : shade(col, -0.25), 0.9);
+      c.lineWidth = Math.max(2, R * 0.12);
+      c.beginPath();
+      c.moveTo(R * 0.28 + Math.cos(a) * R * 0.1, Math.sin(a) * R * 0.1);
+      c.quadraticCurveTo(
+        R * 0.28 + Math.cos(a) * len * 0.6, Math.sin(a) * len * 0.8,
+        R * 0.28 + Math.cos(a) * len, Math.sin(a) * len * 1.1);
+      c.stroke();
+    }
+  });
+};
+
+/** An elder's BEARD flowing from the chin. */
+const beard: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? '#cfc8ba';
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = withAlpha(col, 0.92);
+    c.beginPath();
+    c.moveTo(R * 0.5, -R * 0.2);
+    c.quadraticCurveTo(R * 0.95, 0, R * 0.5, R * 0.2);
+    c.quadraticCurveTo(R * 0.78, R * 0.05, R * 0.92, 0);
+    c.quadraticCurveTo(R * 0.78, -R * 0.05, R * 0.5, -R * 0.2);
+    c.closePath();
+    c.fill();
+    c.strokeStyle = withAlpha(shade(col, -0.4), 0.6);
+    c.lineWidth = 1;
+    for (const off of [-0.08, 0, 0.08]) {
+      c.beginPath();
+      c.moveTo(R * 0.55, off * R);
+      c.quadraticCurveTo(R * 0.75, off * R * 1.4, R * 0.9, off * R * 0.6);
+      c.stroke();
+    }
+  });
+};
+
+/** TAIL FEATHERS fanned behind (birds, quetzal things). params: n. */
+const tailFeathers: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI + (i / (n - 1) - 0.5) * 0.85;
+      const len = R * (0.9 + 0.3 * Math.sin((i + 0.5) / n * Math.PI));
+      c.fillStyle = withAlpha(i % 2 ? col : shade(col, -0.2), 0.9);
+      c.beginPath();
+      c.ellipse(Math.cos(a) * len * 0.7, Math.sin(a) * len * 0.7,
+        len * 0.42, R * 0.11, a, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = withAlpha(shade(col, -0.45), 0.6);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  });
+};
+
+/** A held TORCH — flame + halo (village watch, cult processions). */
+const torch: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? '#ff9a42';
+  place(ctx, r, spec, (c, R) => {
+    const x = R * 0.6, y = R * 0.66;
+    const g = c.createRadialGradient(x, y, 0, x, y, R * 0.55);
+    g.addColorStop(0, withAlpha(col, 0.5));
+    g.addColorStop(1, withAlpha(col, 0));
+    c.fillStyle = g;
+    c.fillRect(x - R * 0.55, y - R * 0.55, R * 1.1, R * 1.1);
+    c.strokeStyle = pal.wood.base;
+    c.lineWidth = Math.max(1.6, R * 0.09);
+    c.lineCap = 'round';
+    c.beginPath(); c.moveTo(x - R * 0.28, y + R * 0.14); c.lineTo(x, y); c.stroke();
+    c.fillStyle = col;
+    c.beginPath(); c.arc(x, y, R * 0.12, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffe9b8';
+    c.beginPath(); c.arc(x, y, R * 0.05, 0, Math.PI * 2); c.fill();
+  });
+};
+
+/** A fishing NET slung over the shoulder (coast folk, deep cultists). */
+const net: PartPainter = (ctx, r, spec, pal) => {
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = withAlpha(pal.wood.shadow, 0.75);
+    c.lineWidth = 1;
+    const x0 = -R * 0.75, y0 = R * 0.1, w = R * 0.7, h = R * 0.62;
+    for (let i = 0; i <= 4; i++) {
+      c.beginPath(); c.moveTo(x0 + (i / 4) * w, y0); c.lineTo(x0 + (i / 4) * w - R * 0.12, y0 + h); c.stroke();
+      c.beginPath(); c.moveTo(x0, y0 + (i / 4) * h); c.lineTo(x0 + w, y0 + (i / 4) * h * 0.85); c.stroke();
+    }
+    // A couple of cork floats.
+    c.fillStyle = pal.wood.light;
+    c.beginPath(); c.arc(x0 + w * 0.2, y0 + 2, R * 0.06, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(x0 + w * 0.75, y0 + 1, R * 0.06, 0, Math.PI * 2); c.fill();
+  });
+};
+
 /** Metal helm cap with a nose ridge (knights). */
 const helm: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'metal');
@@ -2420,6 +2541,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   sunburst, laurel, censer, tailSpade, crownOfHorns, brand,
   stripes, spots, rhinoHorn, tuftEars, whiskers, shellSpiral, hump,
   icicles, furRuff, breathPuff, warpaint, bandolier, dorsalRidge,
+  fangs, plume, beard, tailFeathers, torch, net,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

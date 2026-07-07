@@ -70,6 +70,18 @@ export type KnownDoodadKind =
   | 'snowman'   // someone built it and left; it watches (winter clutter)
   | 'signpost'  // a fingerboard post naming ways travelers stopped taking
   | 'firewood_pile' // stacked split logs — a camp that meant to come back
+  | 'fountain'  // a town square's ringed basin (light sparkle; solid)
+  | 'well'      // stone ring over a dark shaft (village water)
+  | 'lantern_post' // a lamp on a post — warm standing light (roads, towns)
+  | 'bench'     // two planks that have heard everything (town comfort)
+  | 'market_stall' // striped awning over a trader's table
+  | 'broken_cart'  // a wayfarer's cart that didn't make it (roadside ruin)
+  | 'scarecrow' // straw sentry of the fields
+  | 'hay_bale'  // rolled fodder (farms, camps)
+  | 'pot_cluster' // clay amphorae huddled together (crypts, markets)
+  | 'rubble'    // walkable ruin-scatter (broken masonry underfoot)
+  | 'banner_post' // a faction's cloth on a pole (camps, war roads)
+  | 'beehive'   // a humming skep (grove flavor; future bee grudges)
   | 'lava'      // blocks movement but NOT shots — molten, like a chasm
   | 'cave_entrance' // blocks nothing — a transition trigger into a cave sub-zone
   | 'ritual_pentagram' // blocks nothing — a Conclave ritual circle (walkable; cultists ring it)
@@ -373,6 +385,19 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   snowman:   { overlap: 'solid', blocksMove: true, spacing: 60 },
   signpost:  { overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.35 },
   firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50 },
+  // Settlement + wayside clutter (towns, roads, farms, ruins).
+  fountain:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 140 },
+  well:      { overlap: 'solid', blocksMove: true, spacing: 110 },
+  lantern_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
+  bench:     { overlap: 'solid', blocksMove: true, spacing: 60 },
+  market_stall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90 },
+  broken_cart:  { overlap: 'solid', blocksMove: true, spacing: 80 },
+  scarecrow: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
+  hay_bale:  { overlap: 'solid', blocksMove: true, spacing: 55 },
+  pot_cluster: { overlap: 'solid', blocksMove: true, spacing: 45 },
+  rubble:    { overlap: 'ground', walkOnly: true },
+  banner_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
+  beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 } },
   tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22 },
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
@@ -1908,10 +1933,41 @@ registerStamp('shallows', (ctx) => stampShallows(ctx));
 registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'));
 registerStamp('conifers', (ctx, spec) => stampTree(ctx, spec.radius ?? [13, 26], 'conifer'));
 registerStamp('ancient_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [56, 88], 'ancient_tree'));
+/** A WORN PATH — road discs marching a jittered line clear across the zone:
+ *  the desire path travelers cut when nobody builds them a road. Crosses the
+ *  whole space so paths INTERSECT into worn crossings when stamped twice. */
+registerStamp('road', (ctx) => {
+  const { w, h } = ctx.arena;
+  const ang = ctx.rng.range(0, Math.PI);
+  const cx = w / 2 + ctx.rng.range(-w * 0.18, w * 0.18);
+  const cy = h / 2 + ctx.rng.range(-h * 0.18, h * 0.18);
+  const reach = Math.hypot(w, h) * 0.6;
+  const step = 34;
+  const R: [number, number] = [20, 30];
+  for (let d = -reach; d <= reach; d += step) {
+    const wob = Math.sin(d * 0.008 + ang * 7) * 46 + ctx.rng.range(-10, 10);
+    const px = cx + Math.cos(ang) * d + Math.cos(ang + Math.PI / 2) * wob;
+    const py = cy + Math.sin(ang) * d + Math.sin(ang + Math.PI / 2) * wob;
+    if (px < 40 || py < 40 || px > w - 40 || py > h - 40) continue;
+    ctx.doodads.push({ pos: vec(px, py), radius: ctx.rng.range(R[0], R[1]), kind: 'road' });
+  }
+});
 registerStamp('ice_spike', stampSingle('ice_spike', [10, 20]));
 registerStamp('snowman', stampSingle('snowman', [11, 14]));
 registerStamp('signpost', stampSingle('signpost', [10, 12]));
 registerStamp('firewood_pile', stampSingle('firewood_pile', [12, 16]));
+registerStamp('fountain', stampSingle('fountain', [34, 42]));
+registerStamp('well', stampSingle('well', [16, 20]));
+registerStamp('lantern_post', stampSingle('lantern_post', [9, 11]));
+registerStamp('bench', stampSingle('bench', [12, 15]));
+registerStamp('market_stall', stampSingle('market_stall', [22, 28]));
+registerStamp('broken_cart', stampSingle('broken_cart', [18, 24]));
+registerStamp('scarecrow', stampSingle('scarecrow', [10, 13]));
+registerStamp('hay_bale', stampSingle('hay_bale', [13, 17]));
+registerStamp('pot_cluster', stampSingle('pot_cluster', [11, 15]));
+registerStamp('rubble', (ctx, spec) => stampBlob(ctx, 'rubble', spec.radius ?? [22, 48], [2, 4], false));
+registerStamp('banner_post', stampSingle('banner_post', [9, 11]));
+registerStamp('beehive', stampSingle('beehive', [10, 13]));
 registerStamp('thicket', (ctx) => stampThicket(ctx));
 registerStamp('tombstone', (ctx) => stampGraves(ctx));
 registerStamp('cave', (ctx) => stampCaveMouth(ctx));

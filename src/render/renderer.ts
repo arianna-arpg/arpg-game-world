@@ -818,6 +818,20 @@ export class Renderer {
   private drawAtmosphere(world: World): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
+    // THE SUN-LIFT: high day brightens the whole scene with a warm additive
+    // breath — days finally feel like days. Scaled by the biome's own
+    // dayLight (a desert SWELTERS at 1.6; a canopied wood barely lifts).
+    const sunUp = dayCycle(world.time).light;
+    if (sunUp > 0.55) {
+      const lift = 0.055 * ((sunUp - 0.55) / 0.45) * (world.zone.theme.dayLight ?? 1);
+      if (lift > 0.004) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = `rgba(255,238,210,${lift.toFixed(3)})`;
+        ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+      }
+    }
     // The LIGHT LAYER carries the darkness now; this wash is only the cold
     // blue COLOR GRADE of night, not its blackness.
     const night = 1 - dayCycle(world.time).light; // 0 at noon, 1 at deep night

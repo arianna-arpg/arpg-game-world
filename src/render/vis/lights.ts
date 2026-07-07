@@ -143,7 +143,10 @@ export class LightLayer {
   private ambientDark(world: World): number {
     const night = 1 - dayCycle(world.time).light;
     // Ease the curve so dusk arrives gently and deep night lands hard.
-    let dark = VIS_CFG.lights.nightDark * night * night * (3 - 2 * night);
+    // Per-biome depth: a canopied forest's night is not a steppe's
+    // (ZoneTheme.nightDark overrides the global lever).
+    let dark = (world.zone.theme.nightDark ?? VIS_CFG.lights.nightDark)
+      * night * night * (3 - 2 * night);
     const floor = world.zone.theme.ambientDark;
     if (floor !== undefined) dark = Math.max(dark, floor);
     if (world.descentView()) dark = Math.min(dark, 0.12);

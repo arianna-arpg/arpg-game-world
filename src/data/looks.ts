@@ -300,6 +300,7 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'robe' },
       { kind: 'hood', x: 0.3 },
       { kind: 'daggers', params: { len: 0.4 } },
+      { kind: 'torch', mirror: true, alpha: 0.95 },
     ],
   },
   fire_caster: {
@@ -384,6 +385,8 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'torso', scale: 1.02 },
       { kind: 'pauldrons' },
       { kind: 'axe' },
+      { kind: 'plume', x: 0.38, scale: 0.8 },
+      { kind: 'warpaint', params: { n: 3 } },
       { kind: 'crown', x: 0.38, scale: 0.62 },
     ],
   },

@@ -13,6 +13,7 @@
 // overlays them live.
 // ---------------------------------------------------------------------------
 
+import { clamp } from '../../core/math';
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
@@ -90,8 +91,17 @@ export class GroundRenderer {
     // desert rolls 2.5×-stretched dunes, a grove keeps the fine mottle.
     const gs = theme.ground ?? {};
     const strength = gs.strength ?? 1;
+    const alphaCap = gs.alpha ?? CFG.mottleAlpha;
     const dark = mix(adjust(theme.floor, 8, 1.3, -0.075 * strength), theme.grid, 0.18);
     const light = adjust(theme.floor, -7, 1.22, 0.08 * strength);
+    // BIAS: skew the noise toward the light end (>0.5) or the dark end
+    // (<0.5) via a power curve — "less black, more flourish" is one number.
+    const bias = clamp(gs.bias ?? 0.5, 0.08, 0.92);
+    const biasExp = Math.log(1 - bias) / Math.log(0.5);
+    // PALETTE: a multi-stop gradient the noise samples — full floor art
+    // direction as data. Alpha rises toward the swatch ends so mid-noise
+    // stays translucent and the base floor breathes through.
+    const pal = gs.palette && gs.palette.length >= 2 ? gs.palette : null;
     ctx.fillStyle = theme.floor;
     ctx.fillRect(0, 0, C, C);
     const cell = CFG.cell;
@@ -100,12 +110,18 @@ export class GroundRenderer {
     for (let gy = 0; gy < C; gy += cell) {
       for (let gx = 0; gx < C; gx += cell) {
         const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, this.seed);
-        const n = 0.5 + (nn - 0.5) * 2.6;
-        if (n < 0.5) {
-          ctx.globalAlpha = Math.min(1, (0.5 - n) * 2) * CFG.mottleAlpha;
+        let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
+        if (biasExp !== 1) n = 1 - Math.pow(1 - n, biasExp);
+        if (pal) {
+          const t = n * (pal.length - 1);
+          const i = Math.min(pal.length - 2, Math.floor(t));
+          ctx.fillStyle = mix(pal[i], pal[i + 1], t - i);
+          ctx.globalAlpha = alphaCap * strength * (0.4 + 0.6 * Math.abs(n - 0.5) * 2);
+        } else if (n < 0.5) {
+          ctx.globalAlpha = Math.min(1, (0.5 - n) * 2) * alphaCap;
           ctx.fillStyle = dark;
         } else {
-          ctx.globalAlpha = Math.min(1, (n - 0.5) * 2) * CFG.mottleAlpha;
+          ctx.globalAlpha = Math.min(1, (n - 0.5) * 2) * alphaCap;
           ctx.fillStyle = light;
         }
         ctx.fillRect(gx, gy, cell, cell);

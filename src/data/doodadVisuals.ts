@@ -277,6 +277,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   snowman: { painter: 'snowman', order: 54, shadow: 0.55, longShadow: 1.1 },
   signpost: { painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4 },
   firewood_pile: { painter: 'firewoodPile', order: 53, shadow: 0.55 },
+
+  // --- Settlement + wayside clutter ----------------------------------------
+  fountain: {
+    painter: 'fountain', order: 54, shadow: 0.5,
+    light: { radius: -1.8, color: '#bfe8f4', intensity: 0.14 },
+  },
+  well: { painter: 'well', order: 54, shadow: 0.55, longShadow: 0.9 },
+  lantern_post: {
+    painter: 'lanternPost', order: 55, shadow: 0.35, longShadow: 1.5,
+    light: { radius: -11, color: '#ffd898', intensity: 0.5, flicker: 4 },
+  },
+  bench: { painter: 'bench', order: 53, shadow: 0.4 },
+  market_stall: { painter: 'marketStall', order: 55, shadow: 0.55, longShadow: 0.9 },
+  broken_cart: { painter: 'brokenCart', order: 53, shadow: 0.5, longShadow: 0.9 },
+  scarecrow: { painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.6 },
+  hay_bale: { painter: 'hayBale', order: 53, shadow: 0.55, longShadow: 0.8 },
+  pot_cluster: { painter: 'potCluster', order: 53, shadow: 0.5 },
+  rubble: { painter: 'rubble', order: 36 },
+  banner_post: { painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.5 },
+  beehive: {
+    painter: 'pod', order: 53, shadow: 0.5,
+    params: { body: '#c8a24a', glow: '#e8cf7a', aspectY: 1.15, glowY: -0.2, glowR: 0.34, pulseRate: 1.4 },
+  },
   obsidian: {
     longShadow: 0.7,
     painter: 'shard', order: 50, shadow: 0.55,

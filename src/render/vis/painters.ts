@@ -1854,6 +1854,367 @@ const firewoodPile: GroupPainter = (env, group, def) => {
   }
 };
 
+/** THE TOWN FOUNTAIN — ringed stone basin, living water, a soft sparkle. */
+const fountain: GroupPainter = (env, group) => {
+  const { ctx, time } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Outer rim → walk ledge → water.
+    ctx.fillStyle = '#5c564a';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2e2a22';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#6c6656';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.82, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#1d4254';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.66, 0, Math.PI * 2); ctx.fill();
+    // Center plinth + upwelling shimmer rings.
+    ctx.fillStyle = '#565044';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.16, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = withAlpha('#bfe8f4', 0.5);
+    ctx.lineWidth = 1.4;
+    for (let k = 0; k < 2; k++) {
+      const rr = ((time * 0.35 + k * 0.5) % 1) * r * 0.44 + r * 0.18;
+      ctx.globalAlpha = 0.5 * (1 - (rr - r * 0.18) / (r * 0.48));
+      ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.stroke();
+    }
+    // Sparkle glints hopping around the water.
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = '#e8f6ff';
+    for (let i = 0; i < 3; i++) {
+      const a = time * 0.8 + i * 2.1;
+      ctx.globalAlpha = 0.4 + 0.3 * Math.sin(time * 5 + i * 2);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.42, Math.sin(a) * r * 0.42, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
+/** A village WELL: stone ring over the dark shaft, crossbar + bucket rope. */
+const well: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.fillStyle = '#5a544a';
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2c2822';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Stone segmenting.
+    ctx.strokeStyle = withAlpha('#2c2822', 0.6);
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.7);
+      ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#060a10';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2); ctx.fill();
+    // Crossbar + the rope into the dark.
+    ctx.strokeStyle = '#4a3826';
+    ctx.lineWidth = Math.max(2, r * 0.14);
+    ctx.beginPath(); ctx.moveTo(-r * 1.05, 0); ctx.lineTo(r * 1.05, 0); ctx.stroke();
+    ctx.strokeStyle = '#8a7a5c';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r * 0.18, r * 0.3); ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** A LANTERN POST — the town's standing warmth (light layer carries the glow). */
+const lanternPost: GroupPainter = (env, group) => {
+  const { ctx, time } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The warm pool the lamp throws (the light layer amplifies at night).
+    const flick = 0.9 + 0.1 * Math.sin(time * 6 + o.pos.x);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 2.6 * flick);
+    g.addColorStop(0, withAlpha('#ffd898', 0.22));
+    g.addColorStop(1, withAlpha('#ffd898', 0));
+    ctx.fillStyle = g;
+    ctx.fillRect(-r * 2.8, -r * 2.8, r * 5.6, r * 5.6);
+    // Post base + arm + the lamp box.
+    ctx.fillStyle = '#2e2a26';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#2e2a26';
+    ctx.lineWidth = Math.max(2, r * 0.18);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(r * 0.75, -r * 0.4); ctx.stroke();
+    ctx.fillStyle = '#3a342c';
+    ctx.fillRect(r * 0.55, -r * 0.62, r * 0.42, r * 0.46);
+    ctx.fillStyle = `rgba(255,220,150,${0.75 + 0.25 * Math.sin(time * 6 + o.pos.x)})`;
+    ctx.fillRect(r * 0.62, -r * 0.55, r * 0.28, r * 0.32);
+    ctx.restore();
+  }
+};
+
+/** A BENCH: two worn planks on stone feet. */
+const bench: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    ctx.fillStyle = '#4a4038';
+    ctx.fillRect(-r * 0.95, -r * 0.42, r * 0.24, r * 0.84);
+    ctx.fillRect(r * 0.71, -r * 0.42, r * 0.24, r * 0.84);
+    for (const off of [-0.18, 0.14]) {
+      ctx.fillStyle = off < 0 ? '#6a5a40' : '#75644a';
+      ctx.fillRect(-r, r * off, r * 2, r * 0.26);
+      ctx.strokeStyle = withAlpha('#2c2418', 0.8);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(-r, r * off, r * 2, r * 0.26);
+    }
+    ctx.restore();
+  }
+};
+
+/** A MARKET STALL: trader's table under a striped awning. */
+const marketStall: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stripe?: ColorSpec };
+  const { ctx, theme } = env;
+  const stripe = resolveColor(p.stripe, theme, '#a84a3a');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The table peeking out front.
+    ctx.fillStyle = '#5c4a32';
+    ctx.fillRect(r * 0.3, -r * 0.7, r * 0.55, r * 1.4);
+    // The awning: striped canopy with a scalloped front edge.
+    const stripes = 5;
+    for (let i = 0; i < stripes; i++) {
+      ctx.fillStyle = i % 2 ? '#e8dcc2' : stripe;
+      ctx.fillRect(-r * 0.9, -r * 0.85 + (i / stripes) * r * 1.7, r * 1.1, r * 1.7 / stripes + 0.5);
+    }
+    ctx.strokeStyle = withAlpha('#2c2013', 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.strokeRect(-r * 0.9, -r * 0.85, r * 1.1, r * 1.7);
+    // Scallops on the leading edge.
+    ctx.fillStyle = stripe;
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.arc(r * 0.2, -r * 0.85 + (i + 0.5) * r * 0.425, r * 0.1, -Math.PI / 2, Math.PI / 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/** A BROKEN CART: tilted bed, spilled boards, one wheel off and resting. */
+const brokenCart: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((o.rot ?? 0) + 0.22); // always slumped a little off-true
+    // The bed.
+    ctx.fillStyle = '#5a4630';
+    ctx.fillRect(-r * 0.8, -r * 0.5, r * 1.6, r);
+    ctx.strokeStyle = '#2c2013';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-r * 0.8, -r * 0.5, r * 1.6, r);
+    for (let x = -r * 0.5; x < r * 0.8; x += r * 0.32) {
+      ctx.beginPath(); ctx.moveTo(x, -r * 0.5); ctx.lineTo(x, r * 0.5); ctx.stroke();
+    }
+    // The surviving wheel + the one that rolled off.
+    ctx.strokeStyle = '#3a2c1c';
+    ctx.lineWidth = Math.max(2, r * 0.12);
+    ctx.beginPath(); ctx.arc(-r * 0.85, r * 0.35, r * 0.3, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(r * 1.05, r * 0.55, r * 0.3, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(r * 0.75, r * 0.25); ctx.lineTo(r * 1.35, r * 0.85);
+    ctx.moveTo(r * 1.35, r * 0.25); ctx.lineTo(r * 0.75, r * 0.85);
+    ctx.stroke();
+    // A spilled board.
+    ctx.fillStyle = '#4c3a26';
+    ctx.save();
+    ctx.rotate(-0.5);
+    ctx.fillRect(-r * 1.15, r * 0.4, r * 0.7, r * 0.16);
+    ctx.restore();
+    ctx.restore();
+  }
+};
+
+/** The SCARECROW: cross-frame, straw head, a coat the wind never fills. */
+const scarecrow: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { coat?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const coat = resolveColor(p.coat, theme, '#5a4a5e');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // Cross arms + the coat draped square.
+    ctx.strokeStyle = '#4a3826';
+    ctx.lineWidth = Math.max(2, r * 0.16);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-r * 1.1, 0); ctx.lineTo(r * 1.1, 0); ctx.stroke();
+    ctx.fillStyle = coat;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.85, -r * 0.14);
+    ctx.lineTo(r * 0.85, -r * 0.14);
+    ctx.lineTo(r * 0.55, r * 0.5);
+    ctx.lineTo(-r * 0.55, r * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha('#241c26', 0.8);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // Straw head + hat brim; a few straws poking loose, twitching.
+    ctx.fillStyle = '#c8a85c';
+    ctx.beginPath(); ctx.arc(0, -r * 0.3, r * 0.3, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#8a6c34';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const a = -Math.PI / 2 + (i - 2) * 0.4 + Math.sin(time * 2 + i) * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.28, -r * 0.3 + Math.sin(a) * r * 0.28);
+      ctx.lineTo(Math.cos(a) * r * 0.48, -r * 0.3 + Math.sin(a) * r * 0.48);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#3a2e1c';
+    ctx.lineWidth = Math.max(1.5, r * 0.1);
+    ctx.beginPath(); ctx.arc(0, -r * 0.3, r * 0.38, -Math.PI * 0.95, -Math.PI * 0.05); ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** A rolled HAY BALE with binding straps. */
+const hayBale: GroupPainter = (env, group) => {
+  const { ctx } = env;
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    const trace = (): void => { ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.75, 0, 0, Math.PI * 2); };
+    trace();
+    ctx.fillStyle = '#b89a4e';
+    ctx.fill();
+    ctx.strokeStyle = '#6c5626';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    // The roll: concentric swirl.
+    ctx.strokeStyle = withAlpha('#8a6c2e', 0.7);
+    ctx.lineWidth = 1.2;
+    for (const f of [0.66, 0.36]) {
+      ctx.beginPath(); ctx.ellipse(0, 0, r * f, r * f * 0.75, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    // Straps.
+    ctx.strokeStyle = withAlpha('#4c3a1a', 0.85);
+    ctx.lineWidth = Math.max(1.5, r * 0.09);
+    for (const x of [-r * 0.4, r * 0.4]) {
+      ctx.beginPath(); ctx.moveTo(x, -r * 0.72); ctx.lineTo(x, r * 0.72); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** Clay POTS huddled together (markets, crypts, kitchens of the dead). */
+const potCluster: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { clay?: ColorSpec };
+  const { ctx, theme } = env;
+  const clay = resolveColor(p.clay, theme, '#9a6a44');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 3 + o.pos.y * 7) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    const n = 2 + (seed % 2);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, seed) * 1.2;
+      const d = i === 0 ? 0 : r * 0.5;
+      const pr = r * (0.4 + hash01(i, seed + 3) * 0.18);
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      ctx.fillStyle = shade(clay, hash01(i, seed + 7) * 0.2 - 0.06);
+      ctx.beginPath(); ctx.arc(x, y, pr, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(clay, -0.45), 0.85);
+      ctx.lineWidth = 1.3;
+      ctx.stroke();
+      // The mouth ring + a lip highlight.
+      ctx.strokeStyle = withAlpha(shade(clay, -0.3), 0.7);
+      ctx.beginPath(); ctx.arc(x, y, pr * 0.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = withAlpha(shade(clay, 0.3), 0.6);
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(x - pr * 0.2, y - pr * 0.2, pr * 0.62, -2.4, -1.1); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** RUBBLE: walkable ruin-scatter — angular masonry chips underfoot. */
+const rubble: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stone?: ColorSpec };
+  const { ctx, theme } = env;
+  const stone = resolveColor(p.stone, theme, theme.obstacle);
+  ctx.save();
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 5) | 0) >>> 0;
+    const n = Math.max(4, Math.round(o.radius * 0.22));
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, seed + 3)) * o.radius * 0.9;
+      const x = o.pos.x + Math.cos(a) * d, y = o.pos.y + Math.sin(a) * d;
+      const s = 2.5 + hash01(i, seed + 7) * 4.5;
+      const rot = hash01(i, seed + 11) * Math.PI;
+      ctx.globalAlpha = 0.75;
+      ctx.fillStyle = shade(stone, hash01(i, seed + 13) * 0.24 - 0.08);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(rot);
+      ctx.fillRect(-s / 2, -s / 3, s, s * 0.66);
+      ctx.restore();
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+};
+
+/** A BANNER POST: a pole flying somebody's cloth (faction-tintable). */
+const bannerPost: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { cloth?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const cloth = resolveColor(p.cloth, theme, theme.accent);
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.fillStyle = '#3a3028';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.26, 0, Math.PI * 2); ctx.fill();
+    // The cloth streams with the moment (a lazy ripple even in calm).
+    const sway = Math.sin(time * 1.8 + o.pos.x * 0.05) * r * 0.2;
+    ctx.fillStyle = withAlpha(cloth, 0.92);
+    ctx.beginPath();
+    ctx.moveTo(0, -r * 0.1);
+    ctx.quadraticCurveTo(r * 0.7, -r * 0.35 + sway * 0.5, r * 1.35, -r * 0.15 + sway);
+    ctx.lineTo(r * 1.28, r * 0.12 + sway);
+    ctx.quadraticCurveTo(r * 0.65, r * 0.2 + sway * 0.4, 0, r * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(cloth, -0.4), 0.7);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
 /** Any kind with no registry entry: a themed disc + rim + rot tick, visible
  *  engine-wide before (or without) ever earning a real look. */
 const fallback: GroupPainter = (env, group) => {
@@ -1884,6 +2245,8 @@ export const PAINTERS: Record<string, GroupPainter> = {
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
   campfire, groundShadow, trunk, brush, gravelPath, shimmer, fogFloor,
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
+  fountain, well, lanternPost, bench, marketStall, brokenCart,
+  scarecrow, hayBale, potCluster, rubble, bannerPost,
   tentacleField, pentagram, door, breach, landmass, beacon, fallback,
 };
 
