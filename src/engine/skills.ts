@@ -320,6 +320,42 @@ export function instanceCascade(inst: SkillInstance): GroundCascadeSpec | undefi
   return inst.def.delivery.type === 'ground' ? inst.def.delivery.cascade : undefined;
 }
 
+/**
+ * A ground PULSE: the placement lies DORMANT after its impact and DETONATES
+ * AGAIN — the earthquake's aftershock as a first-class axis. The first pulse
+ * lands `delay` seconds after the impact, later ones every `interval`
+ * (default: the same beat). Each pulse re-runs the placement's full hit
+ * (damage, statuses, knockback) at `dmgMult` × the placement's roll across
+ * the zone's live radius × `radiusMult`, and rides the ordinary explosion
+ * arteries — the Aftershocks gem's aoeScatter scatters every pulse, procs
+ * see the zone's normal depth. The pulseCount stat ADDS pulses to either
+ * (innate spec or graft — the aoeCascade rule). A pulse whose skill brings
+ * no linger IMPOSES one just long enough to quake (the fissure-texture
+ * "a texture needs a surface" rule) — and an imposed surface carries NO
+ * ordinary ticks: the pulse is the zone's whole life. The pulse clock is
+ * FIXED (unscaled by effectDuration): an armed charge, not a duration.
+ */
+export interface GroundPulseSpec {
+  /** Seconds after the impact until the first pulse. */
+  delay: number;
+  /** Total pulses (default 1; the pulseCount stat adds more). */
+  count?: number;
+  /** Seconds between later pulses (default `delay`). */
+  interval?: number;
+  /** Damage multiplier per pulse, × the placement's roll (default 1). */
+  dmgMult?: number;
+  /** Pulse blast reach, × the zone's live radius (default 1) — the armed
+   *  warning ring renders at the TRUE reach, honest-telegraph rule. */
+  radiusMult?: number;
+}
+
+/** The pulse a ground placement obeys: a socketed support's graft wins
+ *  over the skill's own; the pulseCount stat adds beats to either. */
+export function instancePulse(inst: SkillInstance): GroundPulseSpec | undefined {
+  for (const s of inst.sockets) if (s?.def.pulse) return s.def.pulse;
+  return inst.def.delivery.type === 'ground' ? inst.def.delivery.pulse : undefined;
+}
+
 /** Every tether an instance carries: the skill's own plus socketed gems'. */
 export function instanceTethers(inst: SkillInstance): TetherSpec[] {
   const out: TetherSpec[] = [];
@@ -776,6 +812,15 @@ export interface GroundDelivery {
   delay?: number;         // telegraph time before impact
   lingerDuration?: number;// if set, leaves a zone dealing damage each tick
   tickInterval?: number;  // seconds between linger ticks (default 0.5)
+  /** LINGERING FUME (Toxic Cloud): an occupant must stand inside this many
+   *  CONTINUOUS seconds before the zone's ticks bite them — stepping out
+   *  clears the lungs, re-entry restarts the clock. Gates the TICK hits
+   *  only (damage and their on-hit statuses); impacts, pulses, emitters
+   *  and domains keep their own clocks — a blast is a blast, only breath
+   *  takes time. Pair with noImpact for a pure fume. THE framework line
+   *  between a lingering effect and an instant-damage area: fumes need
+   *  breathing, explosions don't. */
+  exposure?: number;
   /** While lingering, drag victims toward the zone center at this speed
    *  (units/s) — Cold Vortex. */
   pull?: number;
@@ -832,6 +877,11 @@ export interface GroundDelivery {
    *  (see GroundCascadeSpec — supports graft the same via SupportDef.cascade,
    *  and the aoeCascade stat adds placements to either). */
   cascade?: GroundCascadeSpec;
+  /** The placement PULSES: dormant ground that DETONATES AGAIN on a beat
+   *  (see GroundPulseSpec — supports graft the same via SupportDef.pulse,
+   *  and the pulseCount stat adds beats to either). Cascade ripples carry
+   *  the pulse too: each displaced placement quakes on its own clock. */
+  pulse?: GroundPulseSpec;
   /** The lingering zone is an EMITTER: every `interval` seconds it casts
    *  `count` copies of a payload skill — each at a random point inside the
    *  zone ('point': Volcanic Fissure's magma bursts) or at a random enemy
@@ -2642,6 +2692,10 @@ export interface SupportDef {
   /** A ground CASCADE this support grafts onto the skill (Spell Cascade's
    *  displaced repeats, Seismic March's rippling wave). See GroundCascadeSpec. */
   cascade?: GroundCascadeSpec;
+  /** A ground PULSE this support grafts onto the skill (Buried Charge's
+   *  second detonation): any placement becomes dormant ground that blows
+   *  AGAIN. A socketed graft wins over the skill's own. See GroundPulseSpec. */
+  pulse?: GroundPulseSpec;
   /** A PENDULUM this support grafts onto lingering ground zones (the
    *  Metronome gem): the facing swings out-and-back — the exact back-and-
    *  forth stroke Reaver's Sweep retired when it learned the single pass. */

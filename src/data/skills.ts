@@ -721,11 +721,15 @@ export const SKILLS: Record<string, SkillDef> = {
 
   toxic_cloud: {
     id: 'toxic_cloud', name: 'Toxic Cloud',
-    description: 'Conjure a lingering miasma that poisons enemies standing in it.',
+    description: 'Conjure a lingering miasma that poisons those who BREATHE it: the fumes take a beat to reach the blood — a short stand inside before the sickening starts, and stepping out clears the lungs. The cloud does not strike; it seeps.',
     tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#5ea838',
     manaCost: 13, cooldown: 6, useTime: 0.85,
     baseDamage: { chaos: [4, 6] },
-    delivery: { type: 'ground', radius: 80, castRange: 420, lingerDuration: 4, tickInterval: 0.5 },
+    // The reference FUME (the exposure framework): no impact blast at all
+    // (noImpact), and the ticks bite only occupants 0.3s deep into the
+    // smoke — the data line between a lingering effect and an
+    // instant-damage area. Blasts don't need breathing; fumes do.
+    delivery: { type: 'ground', radius: 80, castRange: 420, lingerDuration: 4, tickInterval: 0.5, noImpact: true, exposure: 0.3 },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'poison', chance: 0.35, magnitude: 0.4 },
@@ -2706,6 +2710,70 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     requirements: { strength: 18 },
     ai: { range: 120, weight: 2 },
+  },
+
+  tolling_ruin: {
+    id: 'tolling_ruin', name: 'Tolling Ruin',
+    description: 'Sunder with the patience of a BELL: each shock lands a full beat after the last — a toll, a step farther out, heavier for the wait. The routed can outrun the knell; whatever stands and fights is standing in it.',
+    tags: ['attack', 'melee', 'aoe', 'physical'], color: '#d0a468',
+    manaCost: 14, cooldown: 4, useTime: 0.7,
+    baseDamage: { physical: [16, 25] },
+    delivery: {
+      type: 'ground', radius: 90, castRange: 60, delay: 0.1,
+      // Sunder's grammar at a funeral tempo: the SAME cascade spec with the
+      // interval knob turned from ripple (0.12s) to TOLL (0.5s) — every
+      // shock a readable, dodgeable telegraph that grows for the wait.
+      cascade: { count: 4, dir: 'forward', step: 115, scaleStep: 1.0, dmgStep: 1.12, interval: 0.5 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 32 },
+      { type: 'status', status: 'stun', chance: 0.18 },
+    ],
+    requirements: { strength: 20 },
+    ai: { range: 120, weight: 2 },
+  },
+
+  earthquake: {
+    id: 'earthquake', name: 'Earthquake',
+    description: 'Drive the blow into the ground at your feet: the impact is the WARNING — a modest crack, a shove — while the real violence gathers below. One breath later the broken earth ERUPTS, harder and wider. The lesson never changes: leave where you were.',
+    tags: ['attack', 'melee', 'aoe', 'physical', 'pulse'], color: '#b89058',
+    manaCost: 15, cooldown: 5, useTime: 0.8,
+    baseDamage: { physical: [12, 19] },
+    delivery: {
+      type: 'ground', radius: 110, castRange: 40,
+      // The slam family's dormant year: minor opening hit, then the TRUE
+      // quake one second later at 2.4× across a wider ring (GroundPulseSpec
+      // — Aftershocks scatters the pulse, Unsettled Earth adds beats).
+      pulse: { delay: 1.0, dmgMult: 2.4, radiusMult: 1.25 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 22 },
+      { type: 'status', status: 'stun', chance: 0.12 },
+    ],
+    requirements: { strength: 22 },
+    ai: { range: 110, weight: 2 },
+  },
+
+  epicenter: {
+    id: 'epicenter', name: 'Epicenter',
+    description: 'Declare the fault line ELSEWHERE: the named ground cracks at a word — a warning tremor — then detonates TWICE on a rising beat. The far earth obeys the same law as the near: leave where the crack is.',
+    tags: ['spell', 'physical', 'aoe', 'pulse'], color: '#c8a070',
+    manaCost: 18, cooldown: 6, useTime: 0.7,
+    baseDamage: { physical: [10, 16] },
+    delivery: {
+      type: 'ground', radius: 100, castRange: 420, delay: 0.15,
+      // Earthquake's ranged cousin: two pulses on a 0.9s beat, each 1.8×
+      // the warning tremor — remote artillery you must LEAD, not land.
+      pulse: { delay: 0.9, count: 2, interval: 0.9, dmgMult: 1.8, radiusMult: 1.15 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.1 },
+    ],
+    requirements: { strength: 14, intelligence: 14 },
+    ai: { range: 380, weight: 2, keepDistance: 220 },
   },
 
   upheaval: {

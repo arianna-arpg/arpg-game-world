@@ -1225,6 +1225,29 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 7,
   },
 
+  buried_charge: {
+    id: 'buried_charge', name: 'Buried Charge',
+    description: 'Ground placements BURY a charge beneath themselves: one second after the impact, the same ground detonates AGAIN at full effect. Grants the pulse tag — Unsettled Earth seats beside it, the way Faultfinder seats the crack gems.',
+    color: '#d8a858', requiresTags: ['aoe'],
+    grantsTags: ['pulse'],
+    // The graft-wins rule (instancePulse): socketed into a skill that
+    // already pulses, THIS spec replaces the innate one — Buried Charge
+    // is for ground that only ever blew once.
+    pulse: { delay: 1.0 },
+    mods: [mod('manaCost', 'more', 0.25)],
+    perLevel: [mod('damage', 'increased', 0.06)],
+    weight: 6,
+  },
+
+  unsettled_earth: {
+    id: 'unsettled_earth', name: 'Unsettled Earth',
+    description: 'The quake refuses to SETTLE: pulsing ground beats twice more before it stills — every pulse a fresh detonation, and every detonation still scatters its Aftershocks. 20% less damage; the earth pays in instalments.',
+    color: '#c8b068', requiresTags: ['pulse'],
+    mods: [mod('pulseCount', 'flat', 2), mod('damage', 'more', -0.2)],
+    perLevel: [mod('pulseCount', 'flat', 0.5)],
+    weight: 5,
+  },
+
   square_sigil: {
     id: 'square_sigil', name: 'Square Sigil',
     description: 'Converts the area of effect into a square, covering the corners.',

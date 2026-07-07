@@ -22,7 +22,7 @@ import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
+  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, supportFitsInst,
   supportMaxLevel,
@@ -587,6 +587,15 @@ interface Zone {
   /** MADDENING GROUND (SupportDef.madden): accumulated seconds standing
    *  inside, per occupant — past `after`, the `maddened` status lands. */
   madden?: { after: number; dwell: Map<number, number> };
+  /** ARMED PULSE (GroundDelivery.pulse / SupportDef.pulse): the dormant
+   *  placement DETONATES AGAIN — `left` beats remain, the next at `next`
+   *  (world time). Carries its resolved spec so the renderer can draw the
+   *  charge at the TRUE reach (radiusMult). */
+  pulse?: { delay: number; interval: number; dmgMult: number; radiusMult: number; left: number; next: number };
+  /** LINGERING FUME (GroundDelivery.exposure): per-occupant CONTINUOUS
+   *  dwell, seconds — ticks bite only past `after`; leaving clears the
+   *  lungs (the madden dwell pattern, frame-accurate). */
+  exposure?: { after: number; dwell: Map<number, number> };
   /** ARMED SPARK (StormDelivery.awaitRelease): waits for its channel to
    *  END, then detonates in sequence (armSeq = placement order). */
   armed?: boolean;
@@ -11369,6 +11378,42 @@ export class World {
         // traveling wall; the registry composes).
         const groundShape = caster.sheet.get('aoeShape', tags, extra,
           AOE_SHAPE[d.shape ?? 'circle']);
+        // GROUND PULSE (innate, support-grafted, or purely stat-granted):
+        // the placement lies DORMANT and detonates AGAIN on a beat — the
+        // earthquake's aftershock. Bare pulseCount with no spec anywhere
+        // conjures a 1s-beat pulse from nothing (the aoeCascade "adds to
+        // either" rule). A pulse whose skill brings no linger IMPOSES one
+        // just long enough to quake (the fissure-texture "a texture needs
+        // a surface" rule) — and an imposed surface carries NO ordinary
+        // ticks (tick clocks pinned to Infinity): the pulse is the zone's
+        // whole life, not a lingering field's. The `next` minted here is
+        // refreshed at the actual impact, so delay-collapsed placements
+        // (Thundermark's ripple) keep an honest clock; noImpact zones are
+        // born live and keep this one. Every zone this case places —
+        // primary, wall segment, cascade ripple — quakes on its own clock.
+        const pSpec = instancePulse(inst);
+        const pulseN = Math.max(0, (pSpec ? (pSpec.count ?? 1) : 0)
+          + Math.round(caster.sheet.get('pulseCount', tags, extra)));
+        const pDelay = pSpec?.delay ?? 1;
+        const pInterval = pSpec?.interval ?? pDelay;
+        const mintPulse = (telegraph: number): Zone['pulse'] => pulseN > 0
+          ? {
+            delay: pDelay, interval: pInterval,
+            dmgMult: pSpec?.dmgMult ?? 1, radiusMult: pSpec?.radiusMult ?? 1,
+            left: pulseN, next: this.time + Math.max(0, telegraph) + pDelay,
+          } : undefined;
+        // The pulse clock is FIXED (an armed charge, not a duration) — the
+        // imposed linger is exactly the beats + a settling breath, and an
+        // effectDuration-shortened innate linger is still floored to it.
+        const pulseSpan = pulseN > 0 ? pDelay + (pulseN - 1) * pInterval + 0.1 : 0;
+        const pulseLinger = (secs: number): number => Math.max(secs, pulseSpan);
+        const ownLinger = (d.lingerDuration ?? 0) > 0;
+        const groundTick = ownLinger || pulseN === 0 ? (d.tickInterval ?? 0.5) : Infinity;
+        const groundTick0 = ownLinger || pulseN === 0 ? 0 : Infinity;
+        // LINGERING FUME (GroundDelivery.exposure): each placement carries
+        // its own per-occupant dwell ledger — breath is local to a surface.
+        const mintExposure = (): Zone['exposure'] =>
+          d.exposure ? { after: d.exposure, dwell: new Map<number, number>() } : undefined;
         if (d.line) {
           // Flame Wall: segments across the facing — or, with a sigil
           // socketed, arranged around a square / triangle outline.
@@ -11401,8 +11446,8 @@ export class World {
               pos: this.clampPos(pt, 10), radius: d.radius * aoeScale,
               caster, inst, color: def.color,
               delay: d.delay ?? 0, exploded: (d.delay ?? 0) <= 0,
-              linger: (d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra),
-              tickInterval: d.tickInterval ?? 0.5, tickTimer: 0,
+              linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
+              tickInterval: groundTick, tickTimer: groundTick0,
               shape: 0, facing: caster.facing,
               dmgMult: useMult, depth: 0,
               curseAllies,
@@ -11410,6 +11455,9 @@ export class World {
               // each segment is its own hit surface, re-armed on exit.
               struck: d.hitOnce ? new Set() : undefined,
               rearm: d.rearmOnExit || undefined,
+              // Each wall segment quakes and breathes on its own ledger.
+              pulse: mintPulse(d.delay ?? 0),
+              exposure: mintExposure(),
               flatBonus,
             });
           }
@@ -11437,12 +11485,14 @@ export class World {
           // noImpact (Scythe Arc): the zone begins LIVE — no opening hit,
           // no telegraph pop; the linger does all the cutting.
           delay: d.delay ?? 0, exploded: !!d.noImpact,
-          linger: (d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra),
-          tickInterval: d.tickInterval ?? 0.5, tickTimer: 0,
+          linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
+          tickInterval: groundTick, tickTimer: groundTick0,
           shape: groundShape,
           facing: caster.facing,
           dmgMult: useMult, depth: 0,
           curseAllies,
+          pulse: mintPulse(d.delay ?? 0),
+          exposure: mintExposure(),
           pull: d.pull,
           pullRadius: d.pullRadius ? d.pullRadius * aoeScale : undefined,
           drift: d.drift,
@@ -11475,7 +11525,7 @@ export class World {
           sweep: d.sweep
             ? { arc: d.sweep.arcDeg * Math.PI / 180, base: caster.facing }
             : undefined,
-          linger0: (d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra),
+          linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
           leaveTerrain: d.leaveTerrain,
           edge: d.fillFrom,
           fillRate: d.fillFrom ? d.fillFrom / Math.max(0.2, fillTime) : undefined,
@@ -11537,8 +11587,8 @@ export class World {
                 radius: d.radius * aoeScale * Math.pow(scaleStep, k),
                 caster, inst, color: def.color,
                 delay: (d.delay ?? 0) + beat * k, exploded: false,
-                linger: (d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra),
-                tickInterval: d.tickInterval ?? 0.5, tickTimer: 0,
+                linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
+                tickInterval: groundTick, tickTimer: groundTick0,
                 shape: groundShape,
                 facing: axisAng,
                 dmgMult: useMult * Math.pow(dmgStep, k), depth: 0,
@@ -11546,6 +11596,10 @@ export class World {
                 pull: d.pull,
                 drift: d.drift,
                 grow: d.grow,
+                // Ripples quake too — each on its own displaced clock, its
+                // pulse damage riding the ripple's own dmgStep falloff.
+                pulse: mintPulse((d.delay ?? 0) + beat * k),
+                exposure: mintExposure(),
                 // Ripples inherit the sweep vocabulary — each with a FRESH
                 // struck set (per-zone crossing semantics).
                 arcRad: d.arcDeg !== undefined
@@ -12902,6 +12956,12 @@ export class World {
         // The PRIMARY chain carries the emitter (spirits rise from the
         // whole crack); the closing passes and branches stay plain.
         emit: linger > 0 ? d.emit : undefined,
+        // LINGERING FUME: a venting crack — each segment keeps its own
+        // dwell ledger (breath is local to the stretch you stand on).
+        // Cracks do NOT carry GroundDelivery.pulse: re-lighting is the
+        // fissure-texture gems' vocabulary (volatility, arming, waltz).
+        exposure: d.exposure && linger > 0
+          ? { after: d.exposure, dwell: new Map<number, number>() } : undefined,
         volatile: linger > 0 && volatile
           ? { ...volatile, next: this.time + delay + volatile.interval } : undefined,
         aftershock: linger > 0 && aftershock
@@ -21297,6 +21357,9 @@ export class World {
         z.delay -= dt;
         if (z.delay <= 0) {
           z.exploded = true;
+          // The pulse clock starts at the ACTUAL impact — placements whose
+          // telegraph was collapsed (Thundermark's ripple) stay honest.
+          if (z.pulse) z.pulse.next = this.time + z.pulse.delay;
           for (const victim of this.zoneVictims(z)) {
             if (!inAoe(z.pos, z.radius, z.shape, z.facing, victim.pos, victim.radius, z.arcRad)) continue;
             // Fill-in zones: the hollow center is (briefly) safe.
@@ -21433,6 +21496,36 @@ export class World {
             z.roulette.armedUntil = 0;
           }
         }
+        // ARMED PULSE (GroundDelivery.pulse / SupportDef.pulse): the
+        // dormant placement DETONATES AGAIN on its clock — the quake after
+        // the blow. Each pulse re-runs the placement's full hit (damage,
+        // statuses, knockback ride resolveHit as at impact) and the
+        // ordinary explosion arteries: Aftershocks' aoeScatter scatters
+        // every pulse, procs see the zone's normal depth. Discs quake at
+        // radius × radiusMult (the warning ring's TRUE reach); segments
+        // stay capsules (a crack's width is its width). A sweep's
+        // once-per-life ledger is NOT consulted — the pulse is a fresh
+        // blast, not a crossing — and a fill-in cage's hollow stays safe
+        // mid-pulse exactly as at impact.
+        if (z.pulse && z.pulse.left > 0 && z.linger > 0 && this.time >= z.pulse.next) {
+          z.pulse.left--;
+          z.pulse.next = this.time + z.pulse.interval;
+          const pr = z.seg ? z.radius : z.radius * z.pulse.radiusMult;
+          for (const v of this.zoneVictims(z)) {
+            const caught = z.seg
+              ? this.zoneHas(z, v.pos, v.radius)
+              : inAoe(z.pos, pr, z.shape, z.facing, v.pos, v.radius, z.arcRad);
+            if (!caught) continue;
+            if (z.edge && dist(z.pos, v.pos) + v.radius < z.radius * z.edge) continue;
+            this.resolveHit(z.caster, z.inst, v,
+              z.dmgMult * z.pulse.dmgMult, z.depth, z.flatBonus, z.forceDamage);
+          }
+          this.flashes.push({
+            pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
+            life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
+          });
+          this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
+        }
         // Revolving zones sweep their facing around (Cinderwhirl's flame
         // hand) — faced shapes only feel it; discs spin invisibly.
         if (z.rotate) z.facing += z.rotate * dt;
@@ -21514,6 +21607,19 @@ export class World {
         }
         // DOMAIN zones dress and strip occupants as they cross the rim.
         if (z.domain && z.domainKey) this.updateZoneDomain(z);
+        // LINGERING FUME (GroundDelivery.exposure): breath before bite —
+        // each occupant's CONTINUOUS dwell accrues per frame (the madden
+        // ledger, frame-accurate: the grace is shorter than a tick), and
+        // stepping out clears the lungs — re-entry restarts the clock.
+        if (z.exposure && z.linger > 0) {
+          for (const v of this.zoneVictims(z)) {
+            if (this.zoneHas(z, v.pos, v.radius)) {
+              z.exposure.dwell.set(v.id, (z.exposure.dwell.get(v.id) ?? 0) + dt);
+            } else {
+              z.exposure.dwell.delete(v.id);
+            }
+          }
+        }
         // TOGGLED fields (Miasma) freeze their clock — they end by choice
         // (re-press), by their caster's death, or with the zone itself.
         if (!z.toggled) z.linger -= dt;
@@ -21535,6 +21641,10 @@ export class World {
           for (const victim of this.zoneVictims(z)) {
             if (!this.zoneHas(z, victim.pos, victim.radius)) continue;
             if (z.edge && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edge) continue;
+            // Fume zones: the unexposed breathe free. Gated BEFORE the
+            // sweep ledger so an unbitten crossing never burns its
+            // once-per-life entry on a hit that didn't land.
+            if (z.exposure && (z.exposure.dwell.get(victim.id) ?? 0) < z.exposure.after) continue;
             // Sweep surfaces: one hit per crossing, never per tick.
             if (z.struck) {
               if (z.struck.has(victim.id)) continue;

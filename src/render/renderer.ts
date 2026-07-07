@@ -1552,6 +1552,21 @@ export class Renderer {
         ctx.lineWidth = 1.5;
         ctx.stroke();
       }
+      // ARMED PULSE (GroundDelivery.pulse): dormant ground CHARGES — a
+      // warning ring at the pulse's TRUE reach (radius × radiusMult, the
+      // honest-telegraph rule) stands faint the whole dormancy and
+      // brightens through the last 0.45s before the beat, in the lighter
+      // shade of the skill's own color (the armed-fissure grammar, disc
+      // edition — never a palette hijack).
+      if (z.exploded && z.pulse && z.pulse.left > 0 && z.linger > 0) {
+        const g = Math.max(0, Math.min(1, 1 - (z.pulse.next - world.time) / 0.45));
+        ctx.beginPath();
+        this.traceAoe(z.pos.x, z.pos.y, z.radius * z.pulse.radiusMult, z.shape, z.facing, z.arcRad);
+        ctx.strokeStyle = shade(z.color, 0.45);
+        ctx.globalAlpha = 0.14 + 0.55 * g;
+        ctx.lineWidth = 1.5 + 2.5 * g;
+        ctx.stroke();
+      }
       ctx.globalAlpha = 1;
     }
   }

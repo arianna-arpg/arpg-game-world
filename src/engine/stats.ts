@@ -34,6 +34,11 @@ export type SkillTag =
   // fissureTrail) — the gate for fissure-fanning supports, so they can
   // never socket into a skill with no crack to fan.
   | 'fissure'
+  // 'pulse' marks skills whose placements DETONATE AGAIN after a dormant
+  // beat (GroundDelivery.pulse) — the gate for pulse-extending supports,
+  // so they never socket into ground that only ever blows once. Granted
+  // by the pulse-grafting gem the way Faultfinder grants 'fissure'.
+  | 'pulse'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -811,6 +816,10 @@ export const STAT_DEFS: Record<string, StatDef> = {
   aoeShape:       { label: 'Area Shape', base: 0 },
   /** Number of secondary explosions an area skill scatters into. */
   aoeScatter:     { label: 'Area Aftershocks', base: 0 },
+  /** Extra dormant-ground PULSES (GroundDelivery.pulse): adds beats to an
+   *  innate or grafted pulse spec — or, alone, conjures a one-beat pulse
+   *  from nothing (the aoeCascade "adds to either" rule, for pulses). */
+  pulseCount:     { label: 'Additional Pulses', base: 0 },
   /** Extra strikes for storm skills (applies to min and max of the range). */
   stormCount:     { label: 'Additional Storm Strikes', base: 0 },
   /** FRACTION of a storm's strikes released at once, up front; the rest
