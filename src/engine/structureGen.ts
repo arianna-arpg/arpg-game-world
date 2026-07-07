@@ -191,6 +191,141 @@ registerStructureGen('labyrinth', (rng, p) => {
   return g.out();
 });
 
+// --- COMPOUND -------------------------------------------------------------------
+// The ROOM-GRAMMAR COMPOSER: a footprint recursively split into rooms (BSP),
+// every partition door-punched so the whole interior is connected, some leaf
+// rooms opened to the sky as courtyards, exterior gates + windows, optional
+// corner towers, and furniture sprinkled by density. This is the seam future
+// DUNGEON and METROPOLIS biomes compose from: one def = one building style,
+// and every knob below is a genParam — fixed numbers make it deterministic,
+// ranges make it varied, the zone rng makes both replayable.
+//
+//   w, h                footprint in cells        [14, 22] × [11, 17]
+//   minRoom             smallest room span        3
+//   splitBias           0..1 preference for cutting the LONG axis   0.75
+//   courtyardChance     leaf rooms opened to sky  0.25
+//   doorChar / gateChar interior + exterior doors 'D' / 'X'
+//   gates               exterior gate count       [1, 2]
+//   windows             slit spacing (0 = none)   5
+//   towers              corner parapet blocks     false
+//   loops               extra interior doors      [1, 3]
+//   clutterPer100       B/C per 100 floor cells   [2, 5]
+registerStructureGen('compound', (rng, p) => {
+  const w = roll(rng, p.w, [14, 22]);
+  const h = roll(rng, p.h, [11, 17]);
+  const minRoom = roll(rng, p.minRoom, 3);
+  const splitBias = typeof p.splitBias === 'number' ? p.splitBias : 0.75;
+  const doorChar = typeof p.doorChar === 'string' ? p.doorChar : 'D';
+  const gateChar = typeof p.gateChar === 'string' ? p.gateChar : 'X';
+  const courtyardChance = typeof p.courtyardChance === 'number' ? p.courtyardChance : 0.25;
+  const windows = roll(rng, p.windows, 5);
+  const g = new PlanGrid(w, h);
+
+  // Shell: interior floor ringed by the outer wall.
+  g.rect(1, 1, w - 2, h - 2, '.');
+  g.ring(0, 0, w - 1, h - 1, '#');
+
+  // BSP split: cut regions with interior walls, door-punch every cut.
+  interface Region { x0: number; y0: number; x1: number; y1: number }
+  const leaves: Region[] = [];
+  const split = (rgn: Region, depth: number): void => {
+    const rw = rgn.x1 - rgn.x0 + 1, rh = rgn.y1 - rgn.y0 + 1;
+    const canV = rw >= minRoom * 2 + 1;
+    const canH = rh >= minRoom * 2 + 1;
+    if ((!canV && !canH) || depth > 5) { leaves.push(rgn); return; }
+    let vertical: boolean;
+    if (canV && canH) vertical = rng.chance(rw >= rh ? splitBias : 1 - splitBias);
+    else vertical = canV;
+    if (vertical) {
+      const cx = rgn.x0 + minRoom + rng.int(0, rw - minRoom * 2 - 1);
+      for (let y = rgn.y0; y <= rgn.y1; y++) g.set(cx, y, '#');
+      g.set(cx, rgn.y0 + rng.int(0, rh - 1), doorChar);
+      split({ x0: rgn.x0, y0: rgn.y0, x1: cx - 1, y1: rgn.y1 }, depth + 1);
+      split({ x0: cx + 1, y0: rgn.y0, x1: rgn.x1, y1: rgn.y1 }, depth + 1);
+    } else {
+      const cy = rgn.y0 + minRoom + rng.int(0, rh - minRoom * 2 - 1);
+      for (let x = rgn.x0; x <= rgn.x1; x++) g.set(x, cy, '#');
+      g.set(rgn.x0 + rng.int(0, rw - 1), cy, doorChar);
+      split({ x0: rgn.x0, y0: rgn.y0, x1: rgn.x1, y1: cy - 1 }, depth + 1);
+      split({ x0: rgn.x0, y0: cy + 1, x1: rgn.x1, y1: rgn.y1 }, depth + 1);
+    }
+  };
+  split({ x0: 1, y0: 1, x1: w - 2, y1: h - 2 }, 0);
+
+  // Courtyards: open some leaf rooms to the sky (unroofed floor).
+  for (const rgn of leaves) {
+    if (!rng.chance(courtyardChance)) continue;
+    for (let y = rgn.y0; y <= rgn.y1; y++) {
+      for (let x = rgn.x0; x <= rgn.x1; x++) if (g.get(x, y) === '.') g.set(x, y, '_');
+    }
+  }
+
+  // Extra interior doors: loops so rooms offer choices, not one hallway.
+  const loops = roll(rng, p.loops, [1, 3]);
+  for (let i = 0; i < loops; i++) {
+    const x = 1 + rng.int(0, w - 3), y = 1 + rng.int(0, h - 3);
+    const horizWall = g.get(x, y) === '#' && g.get(x - 1, y) !== '#' && g.get(x + 1, y) !== '#';
+    const vertWall = g.get(x, y) === '#' && g.get(x, y - 1) !== '#' && g.get(x, y + 1) !== '#';
+    if (horizWall || vertWall) g.set(x, y, doorChar);
+  }
+
+  // Exterior gates on rolled sides, adjacent to real floor.
+  const gates = roll(rng, p.gates, [1, 2]);
+  for (let i = 0; i < gates; i++) {
+    for (let tries = 0; tries < 12; tries++) {
+      const side = rng.int(0, 3);
+      if (side < 2) {
+        const gx = 2 + rng.int(0, w - 5);
+        const gy = side === 0 ? 0 : h - 1;
+        const iy = side === 0 ? 1 : h - 2;
+        if (g.get(gx, iy) !== '#') { g.set(gx, gy, gateChar); break; }
+      } else {
+        const gy = 2 + rng.int(0, h - 5);
+        const gx = side === 2 ? 0 : w - 1;
+        const ix = side === 2 ? 1 : w - 2;
+        if (g.get(ix, gy) !== '#') { g.set(gx, gy, gateChar); break; }
+      }
+    }
+  }
+
+  // Arrow-slit windows along the shell.
+  if (windows > 0) {
+    for (let x = 3; x < w - 3; x += windows) {
+      if (g.get(x, 0) === '#') g.set(x, 0, 'W');
+      if (g.get(x, h - 1) === '#') g.set(x, h - 1, 'W');
+    }
+    for (let y = 3; y < h - 3; y += windows) {
+      if (g.get(0, y) === '#') g.set(0, y, 'W');
+      if (g.get(w - 1, y) === '#') g.set(w - 1, y, 'W');
+    }
+  }
+
+  // Optional corner towers (metropolis keeps, dungeon bastions).
+  if (p.towers === true) {
+    for (const [tx, ty] of [[0, 0], [w - 3, 0], [0, h - 3], [w - 3, h - 3]] as const) {
+      g.rect(tx, ty, tx + 2, ty + 2, 'P');
+      g.set(tx + 1, ty + 1, 'T');
+    }
+  }
+
+  // Furniture: crates/barrels sprinkled over floor cells; a courtyard fire.
+  const floors: [number, number][] = [];
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    if (g.get(x, y) === '.' || g.get(x, y) === '_') floors.push([x, y]);
+  }
+  const clutter = Math.round(floors.length / 100 * roll(rng, p.clutterPer100, [2, 5]));
+  for (let i = 0; i < clutter && floors.length; i++) {
+    const [cx, cy] = floors[rng.int(0, floors.length - 1)];
+    if (g.get(cx, cy) === '.') g.set(cx, cy, rng.chance(0.5) ? 'B' : 'C');
+  }
+  const court = floors.filter(([x, y]) => g.get(x, y) === '_');
+  if (court.length) {
+    const [fx, fy] = court[rng.int(0, court.length - 1)];
+    g.set(fx, fy, 'F');
+  }
+  return g.out();
+});
+
 // --- WATCHTOWER -----------------------------------------------------------------
 // A single free-standing tower: parapet ring, slot core, one door — the minimal
 // garrison structure (roadside outposts, siege camps, D2 Arreat-plateau towers).

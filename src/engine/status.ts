@@ -179,6 +179,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     hitMagnitude: 0.45, baseline: { dps: 2, perLevel: 0.9 },
     pop: { fraction: 0.4 },
   },
+  /** DESERT HEAT (World.updateHeat): standing in a heat-shimmer field bakes
+   *  stacks on; shade (a canopy, a roof, the night) dwindles them. Each stack
+   *  erodes fire resistance — the desert softens you up for its burns. The
+   *  world manages stacks directly; duration is only a safety TTL. */
+  sunscorched: {
+    label: 'Sunscorched', color: '#ffb64a', duration: 8,
+    element: 'fire',
+    stacking: true, maxStacks: 8,
+    mods: [mod('fireRes', 'flat', -0.05)],
+    modsPerStack: true,
+  },
   // Chill BUILDS UP: each application stacks intensity, and at max stacks
   // the chill is consumed into a FREEZE — a long, hard stun.
   chill: {

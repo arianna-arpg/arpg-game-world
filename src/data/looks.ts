@@ -699,6 +699,327 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ============================================== ROUND-2 EXPANSION LOOKS
+  /** A pit brute: tusked lump of muscle, all forward menace. */
+  brute: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.12, seed: 14 } },
+      { kind: 'tusks', x: 0.3, scale: 1.15 },
+      { kind: 'claws', params: { len: 0.4 } },
+      { kind: 'eyes', params: { spread: 0.35, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  /** A cultist alight — robes that burn and never char. */
+  zealot_burning: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'hood', x: 0.3, params: { eyes: true, eyeColor: '#ffd24a' } },
+    ],
+    live: [{ kind: 'flames', params: { n: 3 } }],
+  },
+  /** Plague bearers: swollen flesh crowded with pustules. */
+  plague_bearer: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.16, seed: 27 } },
+      { kind: 'bloatSacs', params: { n: 6 } },
+      { kind: 'eyes', color: '#c8e07a', params: { spread: 0.45, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  bloat: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.1, seed: 33 } },
+      { kind: 'bloatSacs', scale: 1.1, params: { n: 8 } },
+    ],
+  },
+  /** The magma worm's head — a molten maw splitting crusted rock. */
+  magma_worm_head: {
+    parts: [
+      { kind: 'serpentHead' },
+      { kind: 'maw', scale: 0.85, params: { arc: 0.75 } },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.8, dist: 0.55, size: 0.09 } },
+    ],
+    live: [{ kind: 'flames', x: -0.2, scale: 0.5, params: { n: 2 } }],
+  },
+  /** The apex beast (the Hunt's crown): barbed, clawed, all predator. */
+  apex_beast: {
+    parts: [
+      { kind: 'disc', scale: 1.0 },
+      { kind: 'snout', scale: 1.05 },
+      { kind: 'barbs', params: { n: 6 } },
+      { kind: 'claws', params: { len: 0.5, talons: 4 } },
+      { kind: 'tail', params: { len: 1.0, tuft: true } },
+    ],
+    shadowScale: 1.1,
+  },
+  /** Bone altar: a dark slab crowned with a watching skull. */
+  bone_altar: {
+    parts: [
+      { kind: 'disc', role: 'dark' },
+      { kind: 'runes', role: 'bone', params: { n: 5 } },
+      { kind: 'skull', x: 0, scale: 1.05, params: { jaw: false } },
+    ],
+  },
+  /** Rift hearts (ember/rime/flame cores): a raw element held in a ring. */
+  elemental_rift: {
+    parts: [
+      { kind: 'orb' },
+      { kind: 'runes', params: { n: 4 } },
+      { kind: 'halo', scale: 1.05, alpha: 0.6 },
+    ],
+  },
+  gnoll_archer: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'snout' },
+      { kind: 'bow' },
+      { kind: 'tail', params: { len: 0.7, tuft: true } },
+    ],
+  },
+  gnoll_howler: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'snout' },
+      { kind: 'halo', scale: 0.95, alpha: 0.4 },
+      { kind: 'tail', params: { len: 0.7, tuft: true } },
+    ],
+  },
+  hare: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'ears', scale: 1.2 },
+      { kind: 'eyes', params: { spread: 0.5, dist: 0.55, size: 0.09 } },
+      { kind: 'tail', scale: 0.6, params: { len: 0.4, tuft: true } },
+    ],
+  },
+  /** Chitin skitterers: low carapace, feelers, too many legs. */
+  skitterer: {
+    parts: [
+      { kind: 'legs', params: { pairs: 3 } },
+      { kind: 'carapace', scale: 0.9, params: { segs: 3 } },
+      { kind: 'antennae' },
+      { kind: 'eyes', params: { n: 4, spread: 0.7, dist: 0.6, size: 0.06 } },
+    ],
+  },
+  barbed_stalker: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'snout' },
+      { kind: 'barbs', params: { n: 5 } },
+      { kind: 'claws', params: { len: 0.45 } },
+      { kind: 'tail', params: { len: 0.85 } },
+    ],
+  },
+  /** Carrion bird: swept wings, hooked beak, fanned tail feathers. */
+  vulture: {
+    parts: [
+      { kind: 'fronds', role: 'base', scale: 0.7, params: { n: 3 } },
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'wings', scale: 0.9 },
+      { kind: 'snout', scale: 0.75, params: { ears: false } },
+      { kind: 'eyes', params: { spread: 0.5, dist: 0.5, size: 0.08 } },
+    ],
+  },
+  /** Heavy void knight: plate over plate, glowing visor slit. */
+  dread_knight: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'armorPlates' },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'sword', params: { len: 1.15, w: 0.13 } },
+      { kind: 'helm' },
+      { kind: 'eyes', params: { n: 2, spread: 0.25, dist: 0.55, size: 0.07 } },
+    ],
+  },
+  /** Finger mage / ritualists: a tome, orbiting script, unsettling calm. */
+  ritual_mage: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'book' },
+      { kind: 'runes', params: { n: 5 } },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+    ],
+  },
+  /** Siege hulk: armored mass swinging a maul, core burning in its chest. */
+  siege_hulk: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'armorPlates', params: { n: 4 } },
+      { kind: 'pauldrons', scale: 1.2 },
+      { kind: 'hammer' },
+      { kind: 'gem', x: -0.1 },
+    ],
+    shadowScale: 1.1,
+  },
+  glacial_horror: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.14, seed: 51 } },
+      { kind: 'fins' },
+      { kind: 'spikes', role: 'accent', scale: 0.8, params: { n: 5 } },
+      { kind: 'eyes', color: '#bfe8ff', params: { n: 3, spread: 0.7, dist: 0.62, size: 0.08 } },
+    ],
+  },
+  /** Spiders — legs first, then everything else. */
+  spider_small: {
+    parts: [
+      { kind: 'legs', params: { pairs: 4 } },
+      { kind: 'carapace', scale: 0.75, params: { segs: 2 } },
+      { kind: 'eyes', params: { n: 4, spread: 0.6, dist: 0.55, size: 0.06 } },
+    ],
+  },
+  spider_big: {
+    parts: [
+      { kind: 'legs', scale: 1.1, params: { pairs: 4 } },
+      { kind: 'bloatSacs', x: -0.55, scale: 0.7, role: 'bone', params: { n: 4 } },
+      { kind: 'carapace', params: { segs: 3 } },
+      { kind: 'mandibles', scale: 0.85 },
+      { kind: 'eyes', params: { n: 6, spread: 0.9, dist: 0.6, size: 0.055 } },
+    ],
+    shadowScale: 1.15,
+  },
+  spider_nest: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.12, seed: 61 } },
+      { kind: 'bloatSacs', scale: 1.05, role: 'bone', params: { n: 7 } },
+    ],
+  },
+  lash_maiden: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'tatters', scale: 0.6, params: { n: 3 } },
+      { kind: 'whip' },
+      { kind: 'chains', alpha: 0.8 },
+    ],
+  },
+  hunter: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.32, scale: 0.85 },
+      { kind: 'bow' },
+      { kind: 'pack', scale: 0.7 },
+    ],
+  },
+  pilgrim: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'staff', params: { orb: '#d8cfa0' } },
+      { kind: 'pack', scale: 0.8 },
+    ],
+  },
+  gale_elemental: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'halo', scale: 1.0, alpha: 0.55 },
+      { kind: 'eyes', params: { spread: 0.4, dist: 0.4, size: 0.09 } },
+    ],
+    live: [{ kind: 'wisps', params: { n: 4 } }],
+  },
+  frost_elemental: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'spikes', role: 'accent', params: { n: 6 } },
+      { kind: 'eyes', color: '#dff4ff', params: { spread: 0.42, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** Stone sentinel: plated guardian with a burning core. */
+  sentinel: {
+    parts: [
+      { kind: 'disc' },
+      { kind: 'armorPlates' },
+      { kind: 'gem' },
+      { kind: 'eyes', params: { spread: 0.35, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  menhir: {
+    parts: [
+      { kind: 'disc', role: 'dark', scale: 0.95 },
+      { kind: 'runes', role: 'bone', params: { n: 5 } },
+      { kind: 'gem', alpha: 0.85 },
+    ],
+  },
+  sylvan_warden: {
+    parts: [
+      { kind: 'disc', scale: 0.95 },
+      { kind: 'fronds', params: { n: 5 } },
+      { kind: 'staff', params: { orb: '#9fe07a' } },
+      { kind: 'eyes', params: { spread: 0.45, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  thorn_sprite: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'halo', scale: 0.8, alpha: 0.5 },
+      { kind: 'barbs', scale: 0.75, params: { n: 5 } },
+      { kind: 'eyes', params: { spread: 0.45, dist: 0.45, size: 0.09 } },
+    ],
+  },
+  grove_singer: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'fronds', scale: 0.8, params: { n: 4 } },
+      { kind: 'halo', scale: 0.9, alpha: 0.5 },
+    ],
+  },
+  briar_beast: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.15, seed: 19 } },
+      { kind: 'barbs', params: { n: 6 } },
+      { kind: 'claws', params: { len: 0.5 } },
+      { kind: 'eyes', params: { spread: 0.5, dist: 0.58, size: 0.08 } },
+    ],
+  },
+  /** The mimic: a crate until it isn't. */
+  mimic: {
+    parts: [
+      { kind: 'crateBox' },
+      { kind: 'maw', scale: 0.55, x: 0.25, params: { arc: 0.55 } },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.5, size: 0.06 } },
+    ],
+  },
+  keg: { parts: [{ kind: 'keg' }] },
+  crate: { parts: [{ kind: 'crateBox' }] },
+  training_dummy: {
+    parts: [
+      { kind: 'torso', role: 'wood' },
+      { kind: 'apron', role: 'cloth', alpha: 0.85 },
+    ],
+  },
+  gem_cache: {
+    parts: [
+      { kind: 'crateBox', scale: 0.95 },
+      { kind: 'gem', scale: 1.3 },
+    ],
+  },
+  cart: {
+    parts: [
+      { kind: 'crateBox', scale: 1.05 },
+      { kind: 'keg', x: -0.45, y: 0.35, scale: 0.42 },
+      { kind: 'keg', x: -0.45, y: -0.35, scale: 0.42 },
+      { kind: 'pack', x: 0.4, scale: 0.7 },
+    ],
+    shadowScale: 1.15,
+  },
+  /** THE UNMADE — the chronophage: a cowled void around a devoured hour. */
+  chronophage: {
+    parts: [
+      { kind: 'tatters', scale: 1.1, params: { n: 6 } },
+      { kind: 'robe', scale: 1.05 },
+      { kind: 'orb', x: -0.35, scale: 0.75 },
+      { kind: 'hood', x: 0.3, scale: 1.1, params: { eyes: true } },
+      { kind: 'runes', scale: 1.1, params: { n: 6 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.5, params: { n: 4 } }],
+  },
+  /** Vhal'Serrat — the eldritch tyrant wears its own arms. */
+  eldritch_tyrant: {
+    parts: [
+      { kind: 'tentacleRing', params: { n: 7, len: 1.6 } },
+      { kind: 'blob', params: { irr: 0.13, seed: 77 } },
+      { kind: 'maw', scale: 0.7, params: { arc: 0.65 } },
+      { kind: 'eyes', params: { n: 5, spread: 1.1, dist: 0.72, size: 0.07 } },
+    ],
+    shadowScale: 1.15,
+  },
+
   // ================================================== COMPOSITE-BOSS PARTS
   /** The leviathan's bulk: plated shell over fins — the root hitbox. */
   leviathan_body: {

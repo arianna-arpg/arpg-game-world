@@ -137,6 +137,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
     ],
+    structures: [
+      { structure: 'walled_manor', chance: 0.18 },
+    ],
   },
 
   tundra: {
@@ -194,6 +197,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Cinder', 'Ashen', 'Smoldering', 'Charred', 'Molten', 'Sootveil', 'Emberfall', 'Ashfall', 'Scorchwind', 'Cindergrey', 'Smokeveil', 'Ashmoor', 'Pyreborn', 'Charwood', 'Embergloom', 'Slagborn', 'Sootfall', 'Burning'],
     nameSecond: ['Barrens', 'Flats', 'Scar', 'Caldera', 'Expanse', 'Fields', 'Wastes', 'Ashlands', 'Cinders', 'Smolder', 'Drift', 'Scorch', 'Pyre', 'Hollow', 'Reach', 'Char'],
     theme: {
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.5, color: '#ffd0a0' }],
       ground: { scale: 1.5, stretchX: 1.3, strength: 1.2, speckles: 0.8 },
       floor: '#150e0a', grid: '#221510', border: '#5c3824',
       obstacle: '#47291c', obstacleEdge: '#7a452c', accent: '#ff9650',
@@ -250,6 +254,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { name: 'dunes', layout: [
         { kind: 'sand', count: [8, 12] }, { kind: 'rocks', count: [3, 5], radius: [22, 52] },
         { kind: 'cliff', count: [0, 1] }, { kind: 'ruin', count: [0, 1] },
+        { kind: 'heat_shimmer', count: [3, 6] },
         { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
       ] },
@@ -257,6 +262,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'water', count: [2, 3], radius: [40, 70] }, { kind: 'shallows', count: [2, 3] },
         { kind: 'palm', count: [8, 12] }, { kind: 'sand', count: [4, 6] },
         { kind: 'rocks', count: [2, 4], radius: [20, 44] }, { kind: 'grass', count: [1, 2] },
+        { kind: 'heat_shimmer', count: [1, 3] },
         { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
       ] },
@@ -264,6 +270,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunscoured', 'Bone-Dry', 'Wind-Carved', 'Mirage', 'Scorchsand', 'Glasswaste', 'Sunbaked', 'Duneshift', 'Saltcrack', 'Heat-Hazed', 'Witherglass', 'Sandlorn', 'Blistering', 'Dustchoke', 'Goldwaste', 'Suncracked', 'Parched', 'Burnglass'],
     nameSecond: ['Dunes', 'Reach', 'Flats', 'Wastes', 'Hollow', 'Expanse', 'Barrens', 'Drift', 'Sands', 'Erg', 'Scour', 'Pan', 'Basin', 'Sprawl', 'Span', 'Verge'],
     theme: {
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }],
       ground: { scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45 },
       floor: '#1a160d', grid: '#2a2418', border: '#7a6438',
       obstacle: '#5c4a2c', obstacleEdge: '#8a6e40', accent: '#e8c060',
@@ -275,6 +282,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [6, 10], radius: [22, 52] },
       { kind: 'cliff', count: [1, 2] },
       { kind: 'ruin', count: [0, 2] },
+      { kind: 'heat_shimmer', count: [2, 5] },
       { kind: 'camp', count: [0, 1] },
       { kind: 'cave', count: [0, 2] },
       { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
@@ -511,6 +519,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'spawners', weight: 3 },
       { kind: 'waves', weight: 1 },
     ],
+    structures: [
+      { structure: 'dungeon_block', chance: 0.3 },
+    ],
   },
 
   // BEACH — a sun-bleached coast: sand, wading shallows, palms, scattered wilds.
@@ -594,6 +605,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'waves', weight: 2 },
     ],
+    structures: [
+      { structure: 'walled_manor', chance: 0.3 },
+    ],
   },
 
   // PENINSULA — a near-round isle ringed by water: always an ellipse, all shore.
@@ -671,6 +685,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     spawnerId: 'bone_altar',
     objectives: [
       { kind: 'clear', weight: 1 },
+    ],
+    structures: [
+      { structure: 'dungeon_block', chance: 0.22 },
     ],
   },
 
@@ -856,6 +873,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunken', 'Abyssal', 'Drowned', 'Fathomless', 'Tide-Lost', 'Lightless', 'Pressuredark', 'Brineblack', 'Leviathan', 'Pelagic', 'Sunless', 'Cold-Crushed', 'Hadal', 'Stillwater', 'Deepswell', 'Saltgloom', 'Trenchborn', 'Drownward'],
     nameSecond: ['Deep', 'Trench', 'Shelf', 'Reach', 'Sound', 'Gulf', 'Abyss', 'Fathoms', 'Current', 'Depths', 'Hollow', 'Sink', 'Drift', 'Brine', 'Maw', 'Shoals'],
     theme: {
+      ambientFx: [{ kind: 'caustics' }, { kind: 'bubbles' }],
       ground: { scale: 1.8, stretchX: 1.4, strength: 0.9, speckles: 0.6 },
       ambientDark: 0.35,
       floor: '#08151f', grid: '#0d2030', border: '#2a6a8a',
@@ -1100,6 +1118,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'spawners', weight: 1 }],
+    structures: [
+      { structure: 'market_row', chance: 0.14 },
+    ],
   },
 };
 

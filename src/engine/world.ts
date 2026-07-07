@@ -56,7 +56,7 @@ import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../d
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import {
-  blocksMovement, blocksProjectiles, blocksSightOf, generateLayout, structureDoodads,
+  blocksMovement, blocksProjectiles, blocksSightOf, doodadRuleOf, generateLayout, structureDoodads,
   type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
@@ -311,6 +311,15 @@ function isStealthed(a: Actor): boolean {
  *  of the screen; shipped over the wire for co-op clients). One threshold, one
  *  place — the renderer and the snapshot both read it. */
 export const BOSS_BAR_XP_MIN = 100;
+
+/** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
+ *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched). */
+export const HEAT_CFG = {
+  /** Seconds per stack gained while standing in a heat shimmer, unshaded. */
+  stackEvery: 1.4,
+  /** Seconds per stack shed while in shade (canopy, roof, or night). */
+  dwindleEvery: 0.9,
+};
 
 /** Tags whose bearers are AMBIENT living-world texture, streamed through zones
  *  by overlay packages — NEVER part of the zone objective, so a waves/clear
@@ -17711,6 +17720,7 @@ export class World {
     this.updateTempGrounds(dt);
     this.updatePendingBursts();
     this.updateTerrainEffects(dt);
+    this.updateHeat(dt);
     this.updateShrines();
     this.updateAltars();
     this.updateChests(dt);
@@ -18914,6 +18924,76 @@ export class World {
    * poison on ENTRY. Because these are ordinary statuses, they show as
    * pips, scale with the stat engine, and anything else can apply them.
    */
+  /** DESERT HEAT — the sunscorch loop. Standing in a heat-shimmer field
+   *  bakes stacks on (each eroding fire resistance, capped by the status
+   *  def); SHADE dwindles them — under a canopy crown, beneath a roof, or
+   *  once night falls. Neither shimmer nor shade = the heat holds. Player
+   *  seats only (monsters live here). All cadence knobs in HEAT_CFG. */
+  private heatTimers = new Map<number, number>();
+  private updateHeat(dt: number): void {
+    for (const s of this.seats) {
+      const a = s.actor;
+      if (a.dead || a.downed) continue;
+      const scorch = a.statuses.find(x => x.id === 'sunscorched');
+      let t = (this.heatTimers.get(a.id) ?? 0) + dt;
+      // The shimmer check rides the same spatial buckets terrain uses.
+      let inField = false;
+      for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
+        if (d.kind === 'heat_shimmer' && dist(a.pos, d.pos) <= d.radius + a.radius * 0.5) {
+          inField = true;
+          break;
+        }
+      }
+      const shaded = this.isShaded(a);
+      if (inField && !shaded) {
+        if (t >= HEAT_CFG.stackEvery) {
+          t = 0;
+          a.applyStatus('sunscorched', 0, 1, 'the desert sun');
+          if ((a.statuses.find(x => x.id === 'sunscorched')?.stacks ?? 0) === 1) {
+            this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'sunscorched!', '#ffb64a', 12);
+          }
+        }
+      } else if (scorch && shaded) {
+        if (t >= HEAT_CFG.dwindleEvery) {
+          t = 0;
+          scorch.stacks--;
+          // Keep the sheet honest: per-stack mods re-sync on every shed, and
+          // the source LIFTS with the last stack (splicing alone would leave
+          // the fire-res erosion stuck on the sheet forever).
+          const def = STATUS_DEFS.sunscorched;
+          if (scorch.stacks <= 0) {
+            a.statuses.splice(a.statuses.indexOf(scorch), 1);
+            a.sheet.removeSource('status:sunscorched');
+          } else if (def?.mods) {
+            a.sheet.setSource('status:sunscorched',
+              def.mods.map(m => ({ ...m, value: m.value * scorch.stacks })));
+          }
+        }
+      } else {
+        t = Math.min(t, Math.max(HEAT_CFG.stackEvery, HEAT_CFG.dwindleEvery));
+      }
+      // While any stacks remain, the world owns the clock (the def duration
+      // is only a safety TTL for stacks earned some other way).
+      if (scorch && scorch.stacks > 0) scorch.remaining = Math.max(scorch.remaining, 2.5);
+      this.heatTimers.set(a.id, t);
+    }
+  }
+
+  /** Is this actor in SHADE — under a canopy crown, inside a roof, or in
+   *  the night? (The desert's mercy; also any future heat hazard's.) */
+  private isShaded(a: Actor): boolean {
+    if (dayCycle(this.time).phase === 'night') return true;
+    for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
+      if (doodadRuleOf(d.kind).occlude && dist(a.pos, d.pos) <= d.radius) return true;
+    }
+    for (const st of this.structures) {
+      for (const r of st.roofs) {
+        if (a.pos.x > r.x && a.pos.x < r.x + r.w && a.pos.y > r.y && a.pos.y < r.y + r.h) return true;
+      }
+    }
+    return false;
+  }
+
   private updateTerrainEffects(dt: number): void {
     this.terrainTick++;
     // UNSTUCK SENTINEL (amortized: each actor probed ~every 16 frames). An

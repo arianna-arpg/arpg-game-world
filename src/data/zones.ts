@@ -198,6 +198,10 @@ export interface ZoneTheme {
    *  (caves, crypts) set this so they read lightless under an open-sky sun;
    *  omitted = open sky, only night darkens. */
   ambientDark?: number;
+  /** AMBIENT FX — the zone's standing sensory weather (render/vis/ambientFx):
+   *  underwater caustics + bubble splays, desert heat haze, drifting motes.
+   *  Screen-space, stateless, data-extensible. */
+  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes'; intensity?: number; color?: string }[];
   /** GROUND STYLE — how this theme's floor textures (all optional; defaults
    *  in VIS_CFG.ground). A desert reads as ROLLING DUNES with scale 2.5 +
    *  stretchX 2; a grove keeps the fine default mottle. */

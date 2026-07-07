@@ -616,4 +616,43 @@ export const STRUCTURES: Record<string, StructureDef> = {
     cellSize: 30,
     roofs: 'auto', roofStyle: 'timber',
   },
+
+  // --- COMPOUND SHOWCASES (the room-grammar composer) -------------------------
+  // A country manor: BSP-split rooms around open courtyards, timber roofs —
+  // wander in, and the roof reveal walks you room to room. The template for
+  // every future estate/inn/guildhall: same generator, different knobs.
+  walled_manor: {
+    id: 'walled_manor', halfW: 300, halfH: 240,
+    generator: 'compound', cellSize: 30,
+    genParams: { w: [14, 19], h: [11, 15], courtyardChance: 0.3, windows: 5, clutterPer100: [3, 6] },
+    roofs: 'auto', roofStyle: 'timber',
+    bastion: { weight: 2 },
+  },
+
+  // A dungeon block: windowless warren of breakable-door cells under stone —
+  // the DUNGEON biome's bread-and-butter building, shipped early so the
+  // biome is a layout pass, not an engine pass.
+  dungeon_block: {
+    id: 'dungeon_block', halfW: 330, halfH: 270,
+    generator: 'compound', cellSize: 30,
+    genParams: {
+      w: [16, 22], h: [13, 17], minRoom: 3, courtyardChance: 0.08,
+      windows: 0, doorChar: 'X', gateChar: 'X', loops: [2, 4], clutterPer100: [4, 8],
+    },
+    roofs: 'auto', roofStyle: 'stone',
+    garrison: 'undead', garrisonSize: [3, 5],
+    bastion: { weight: 2 },
+  },
+
+  // A market row: long open-court stalls crowded with goods — the METROPOLIS
+  // seed alongside metro_house (streets of these + houses = a district).
+  market_row: {
+    id: 'market_row', halfW: 300, halfH: 180,
+    generator: 'compound', cellSize: 30,
+    genParams: {
+      w: [18, 24], h: [8, 11], minRoom: 3, splitBias: 0.95,
+      courtyardChance: 0.55, windows: 0, gates: [2, 3], clutterPer100: [8, 14],
+    },
+    roofs: 'auto', roofStyle: 'timber',
+  },
 };

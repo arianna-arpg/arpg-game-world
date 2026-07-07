@@ -52,6 +52,10 @@ interface WeatherDef {
   factionMul: Record<string, number>;
   /** Environmental strikes while you stand under this front (optional). */
   strike?: WeatherStrike;
+  /** Fraction of the front's LIFE spent ramping in/out (default 0.4) — a
+   *  storm that gathers in minutes vs one that breaks all at once is this
+   *  one number. Pairs with the renderer's per-kind display crossfade. */
+  rampFrac?: number;
 }
 
 export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
@@ -61,8 +65,9 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     label: 'Storm', countMul: 1.25, factionMul: { elemental: 1.8 },
     // The sky calls lightning down at random — more often the harder it rages.
     strike: { skillId: 'storm_call', radius: 80, telegraph: 0.7, ratePerSec: 1.3 },
+    rampFrac: 0.15, // storms BREAK — a short gather, then full rage
   },
-  fog: { label: 'Fog', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 } },
+  fog: { label: 'Fog', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 }, rampFrac: 0.5 },
   ashfall: { label: 'Ashfall', countMul: 1.2, factionMul: { elemental: 1.4, goblin: 1.2 } },
   bloodmoon: { label: 'Blood Moon', countMul: 1.6, factionMul: { undead: 2.0, wild: 1.3 } },
 };
@@ -101,9 +106,10 @@ export class WeatherField implements WorldOverlay {
       f.pos.x += f.vel.x * dt;
       f.pos.y += f.vel.y * dt;
       f.age += dt;
-      // Smooth ease in/out (smoothstep) over a long ramp, so a front gathers
-      // and clears gently rather than snapping to full strength.
-      const u = clamp(Math.min(f.age, f.life - f.age) / (f.life * 0.4), 0, 1);
+      // Smooth ease in/out (smoothstep) over the kind's own ramp fraction,
+      // so a fog seeps in over minutes while a storm gathers fast and BREAKS.
+      const rampFrac = WEATHER_DEFS[f.kind].rampFrac ?? 0.4;
+      const u = clamp(Math.min(f.age, f.life - f.age) / (f.life * rampFrac), 0, 1);
       f.intensity = u * u * (3 - 2 * u);
     }
     // Cull the spent.

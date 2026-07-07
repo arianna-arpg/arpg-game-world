@@ -800,41 +800,155 @@ const groundShadow: GroupPainter = (env, group, def) => {
   ctx.globalAlpha = 1;
 };
 
-/** Leafy stipple cover you can vanish into (brush). */
+/** A TRUE BUSH — overlapping scallop-edged leaf lobes with vein strokes,
+ *  sun-side highlights and a shadowed heart you can vanish into. Reads
+ *  LEAFY at a glance: never a bog, never a slime. */
 const brush: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
   const { ctx, theme } = env;
   for (const b of group) {
+    const base = resolveColor(p.color, theme, '#2c4424');
+    const lobeDark = shade(base, -0.22);
+    const lobeLight = shade(base, 0.16);
+    const seed = ((b.pos.x * 13 + b.pos.y * 7) | 0) >>> 0;
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     if (b.rot !== undefined) ctx.rotate(b.rot);
-    ctx.globalAlpha = 0.45;
-    ctx.fillStyle = resolveColor(p.color, theme, '#2c4424');
+    // The shadowed heart first — depth you could hide in.
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = shade(base, -0.45);
     ctx.beginPath();
-    ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+    ctx.arc(0, 0, b.radius * 0.82, 0, Math.PI * 2);
     ctx.fill();
-    ctx.beginPath();
-    ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
-    ctx.clip();
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = '#1a2414';
-    const sp = b.radius * 0.25;
-    for (let dx = -b.radius; dx < b.radius; dx += sp) {
-      for (let dy = -b.radius; dy < b.radius; dy += sp) {
-        const ds = 1.5 + ((((dx * 13 + dy * 7 + b.pos.x + b.pos.y) % 2.5) + 2.5) % 2.5);
-        ctx.beginPath();
-        ctx.arc(dx, dy, ds, 0, Math.PI * 2);
-        ctx.fill();
+    // Leaf lobes: a ring of scallop-edged clumps + a crown clump, each with
+    // veins and a lit rim on the sun side.
+    const lobes = 5 + (seed % 2);
+    const drawLobe = (lx: number, ly: number, lr: number, i: number): void => {
+      const tone = i % 2 ? base : lobeDark;
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = tone;
+      ctx.beginPath();
+      // Scalloped silhouette: 7 bumps around the lobe.
+      for (let k = 0; k <= 7; k++) {
+        const a = (k / 7) * Math.PI * 2;
+        const rr = lr * (0.82 + 0.18 * Math.abs(Math.sin(a * 3.5 + i)));
+        const x = lx + Math.cos(a) * rr, y = ly + Math.sin(a) * rr;
+        if (k === 0) ctx.moveTo(x, y); else ctx.quadraticCurveTo(
+          lx + Math.cos(a - 0.45) * rr * 1.12, ly + Math.sin(a - 0.45) * rr * 1.12, x, y);
       }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(base, -0.5), 0.5);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // Center vein + two side veins.
+      ctx.strokeStyle = withAlpha(lobeLight, 0.6);
+      ctx.lineWidth = Math.max(1, lr * 0.08);
+      ctx.beginPath();
+      ctx.moveTo(lx - lr * 0.5, ly + lr * 0.3);
+      ctx.quadraticCurveTo(lx, ly - lr * 0.1, lx + lr * 0.55, ly - lr * 0.4);
+      ctx.stroke();
+      // Sun-side lit rim.
+      ctx.strokeStyle = withAlpha(lobeLight, 0.5);
+      ctx.lineWidth = Math.max(1.2, lr * 0.12);
+      ctx.beginPath();
+      ctx.arc(lx, ly, lr * 0.72, -2.6, -1.1);
+      ctx.stroke();
+    };
+    for (let i = 0; i < lobes; i++) {
+      const a = (i / lobes) * Math.PI * 2 + (seed % 7) * 0.3;
+      const d = b.radius * 0.52;
+      drawLobe(Math.cos(a) * d, Math.sin(a) * d, b.radius * (0.42 + hash01(i, seed) * 0.12), i);
     }
-    ctx.globalAlpha = 0.3;
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(0, 0, b.radius - 10, 0, Math.PI * 2);
-    ctx.fill();
+    drawLobe(-b.radius * 0.08, -b.radius * 0.08, b.radius * 0.5, 1);
     ctx.globalAlpha = 1;
     ctx.restore();
   }
+};
+
+/** HEAT SHIMMER — wavering desert air: rising serpentine heat-lines and a
+ *  faint hot lens over the ground. Barely-there by design; the sunscorch
+ *  stacks it feeds are the teeth (World.updateHeat). */
+const shimmer: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, time } = env;
+  const col = resolveColor(p.color, env.theme, '#ffe8c0');
+  for (const d of group) {
+    // The hot lens: a soft warm wash that marks the field's true extent.
+    const g = ctx.createRadialGradient(d.pos.x, d.pos.y, d.radius * 0.2, d.pos.x, d.pos.y, d.radius);
+    g.addColorStop(0, withAlpha(col, 0.11));
+    g.addColorStop(1, withAlpha(col, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(d.pos.x, d.pos.y, d.radius, 0, Math.PI * 2);
+    ctx.fill();
+    // Rising heat-lines: short serpentine strokes drifting upward, wrapping.
+    const seed = ((d.pos.x * 7 + d.pos.y * 13) | 0) >>> 0;
+    const n = Math.max(3, Math.round(d.radius / 22));
+    ctx.strokeStyle = withAlpha(col, 0.16);
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < n; i++) {
+      const bx = d.pos.x + (hash01(i, seed) - 0.5) * d.radius * 1.5;
+      const rise = d.radius * 1.1;
+      const phase = ((time * 26 + hash01(i, seed + 3) * rise * 2) % rise);
+      const by = d.pos.y + d.radius * 0.55 - phase;
+      const len = d.radius * 0.34;
+      ctx.globalAlpha = 0.5 * (1 - phase / rise) + 0.1;
+      ctx.beginPath();
+      for (let s = 0; s <= 5; s++) {
+        const t = s / 5;
+        const x = bx + Math.sin(t * Math.PI * 2 + time * 3 + i) * 3.2;
+        const y = by - t * len;
+        if (s === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+};
+
+/** A GRAVEL PATH — packed track with deterministic grit, worn pale center,
+ *  and edge stones so the road reads maintained, not spilled. */
+const gravelPath: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.color, theme, '#574f44');
+  // Bed + worn center (the two-pass rim/core).
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = base;
+  blobPath(ctx, group);
+  ctx.fill();
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = shade(base, 0.16);
+  blobPath(ctx, group, -7);
+  ctx.fill();
+  // Deterministic grit + edge stones per disc.
+  for (const d of group) {
+    const seed = ((d.pos.x * 31 + d.pos.y * 17) | 0) >>> 0;
+    // Grit: small two-tone pebbles scattered over the bed.
+    for (let i = 0; i < 7; i++) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const rr = Math.sqrt(hash01(i, seed + 5)) * d.radius * 0.8;
+      const x = d.pos.x + Math.cos(a) * rr, y = d.pos.y + Math.sin(a) * rr;
+      ctx.globalAlpha = 0.4;
+      ctx.fillStyle = i % 2 ? shade(base, 0.28) : shade(base, -0.25);
+      ctx.beginPath();
+      ctx.ellipse(x, y, 1.6 + hash01(i, seed + 9) * 1.6, 1.2 + hash01(i, seed + 13), a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Edge stones: darker kerb dots around the rim.
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = shade(base, -0.35);
+    const n = Math.max(4, Math.round(d.radius / 9));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, seed + 21) * 0.5;
+      ctx.beginPath();
+      ctx.arc(d.pos.x + Math.cos(a) * d.radius * 0.94, d.pos.y + Math.sin(a) * d.radius * 0.94,
+        1.4 + hash01(i, seed + 27) * 1.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
 };
 
 /** Writhing eldritch tentacle patches. */
@@ -1073,8 +1187,8 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, mound, shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
-  campfire, groundShadow, brush, tentacleField, pentagram, door, breach,
-  landmass, beacon, fallback,
+  campfire, groundShadow, brush, gravelPath, shimmer, tentacleField,
+  pentagram, door, breach, landmass, beacon, fallback,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------

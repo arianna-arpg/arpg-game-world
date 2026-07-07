@@ -97,5 +97,8 @@ export const VIS_CFG = {
   /** Screen-space weather + ambient particles. */
   weather: {
     maxParticles: 150,
+    /** Default crossfade seconds for a full 0→1 weather swing — each kind
+     *  may override via WEATHER_FX.fadeIn (a storm can SLAM by design). */
+    fadeSec: 5,
   },
 } as const;

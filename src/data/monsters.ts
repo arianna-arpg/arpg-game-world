@@ -426,7 +426,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // whole flock through him.
   plaguefather: {
     id: 'plaguefather', name: 'Plaguefather',
-    color: '#5ea838', shape: 'pentagon', radius: 16, material: 'slime',
+    color: '#5ea838', shape: 'pentagon', radius: 16, material: 'slime', look: 'plague_bearer',
     base: { life: 90, moveSpeed: 105, mana: 120, manaRegen: 8, poise: 40 },
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['venom_bolt'],
@@ -863,7 +863,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   brute: {
     id: 'brute', name: 'Pit Brute',
-    color: '#a85848', shape: 'circle', radius: 20,
+    color: '#a85848', shape: 'circle', radius: 20, look: 'brute',
     base: { life: 90, moveSpeed: 105, accuracy: 90, armor: 30, mana: 60, manaRegen: 6 },
     skills: ['heavy_strike', 'cleave'],
     xp: 26,
@@ -962,7 +962,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   pyroclast_magus: {
     id: 'pyroclast_magus', name: 'Pyroclast Magus',
-    color: '#ff8438', shape: 'octagon', radius: 14, material: 'cloth',
+    color: '#ff8438', shape: 'octagon', radius: 14, material: 'cloth', look: 'fire_caster',
     base: { life: 44, moveSpeed: 120, mana: 160, manaRegen: 10 },
     mods: [mod('fireRes', 'flat', 0.6)],
     skills: ['firebolt', 'meteor_storm'],
@@ -972,7 +972,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   volatile_zealot: {
     id: 'volatile_zealot', name: 'Volatile Zealot',
-    color: '#ff6446', shape: 'diamond', radius: 11,
+    color: '#ff6446', shape: 'diamond', radius: 11, look: 'zealot_burning',
     base: { life: 26, moveSpeed: 185, accuracy: 60, mana: 0 },
     mods: [mod('fireRes', 'flat', 0.5)],
     skills: [],
@@ -1094,7 +1094,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // A bloated carrier that BURSTS on death — each casualty still bites the line.
   deadwake_plague_bearer: {
     id: 'deadwake_plague_bearer', name: 'Plague Bearer',
-    color: '#8aa04a', shape: 'hexagon', radius: 17,
+    color: '#8aa04a', shape: 'hexagon', radius: 17, look: 'plague_bearer',
     base: { life: 78, moveSpeed: 80, accuracy: 80, armor: 10, mana: 70, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.7)],
     skills: ['claw', 'venom_bolt'],
@@ -1255,7 +1255,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // `world.createMonster('vhal_serrat', level, 'enemy')`.
   vhal_serrat: {
     id: 'vhal_serrat', name: 'Vhal-Serrat, the Convergence',
-    color: '#9a3aa8', shape: 'star', radius: 26,
+    color: '#9a3aa8', shape: 'star', radius: 26, look: 'eldritch_tyrant',
     base: { life: 640, moveSpeed: 122, accuracy: 120, armor: 40, mana: 320, manaRegen: 20 },
     mods: [mod('chaosRes', 'flat', 0.6), mod('fireRes', 'flat', 0.3), mod('coldRes', 'flat', 0.3)],
     skills: ['venom_bolt', 'despair', 'bone_cage', 'cleave'],
@@ -1452,7 +1452,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // retreats (juggernaut), rupturing into a wide toxic burst when it finally drops.
   plague_bloat: {
     id: 'plague_bloat', name: 'Bloated Husk',
-    color: '#6e8a3e', shape: 'octagon', radius: 21, material: 'slime',
+    color: '#6e8a3e', shape: 'octagon', radius: 21, material: 'slime', look: 'bloat',
     base: { life: 130, moveSpeed: 84, accuracy: 96, armor: 30, mana: 60, manaRegen: 6 },
     mods: [mod('chaosRes', 'flat', 0.8)],
     skills: ['ground_slam', 'toxic_cloud'],
@@ -1612,7 +1612,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   magma_worm: {
     id: 'magma_worm', name: 'Magma Worm',
-    color: '#ff7a3a', shape: 'circle', radius: 15, material: 'ember',
+    color: '#ff7a3a', shape: 'circle', radius: 15, material: 'ember', look: 'magma_worm_head',
     base: { life: 110, moveSpeed: 135, accuracy: 90, mana: 120, manaRegen: 8 },
     mods: [mod('fireRes', 'flat', 0.75)],
     skills: ['firebolt', 'claw'],
@@ -1628,7 +1628,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   bone_altar: {
     id: 'bone_altar', name: 'Bone Altar',
-    color: '#b8b09a', shape: 'square', radius: 21, material: 'bone',
+    color: '#b8b09a', shape: 'square', radius: 21, material: 'bone', look: 'bone_altar',
     base: { life: 150, moveSpeed: 0, armor: 25, evasion: 0, mana: 999, manaRegen: 50 },
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['spew_dead'],
@@ -1638,7 +1638,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   ember_rift: {
     id: 'ember_rift', name: 'Ember Rift',
-    color: '#ff6a2a', shape: 'diamond', radius: 19, material: 'ember',
+    color: '#ff6a2a', shape: 'diamond', radius: 19, material: 'ember', look: 'elemental_rift',
     base: { life: 120, moveSpeed: 0, armor: 10, evasion: 0, mana: 999, manaRegen: 50 },
     mods: [mod('fireRes', 'flat', 0.75)],
     skills: ['spew_flame'],
@@ -1648,7 +1648,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   rime_stone: {
     id: 'rime_stone', name: 'Rime Stone',
-    color: '#9accdf', shape: 'square', radius: 20, material: 'ice',
+    color: '#9accdf', shape: 'square', radius: 20, material: 'ice', look: 'elemental_rift',
     base: { life: 170, moveSpeed: 0, armor: 35, evasion: 0, mana: 999, manaRegen: 50 },
     mods: [mod('coldRes', 'flat', 0.75)],
     skills: ['spew_rime'],
@@ -1802,7 +1802,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   gnoll_longshot: {
     id: 'gnoll_longshot', name: 'Gnoll Longshot',
-    color: '#c8a058', shape: 'kite', radius: 12,
+    color: '#c8a058', shape: 'kite', radius: 12, look: 'gnoll_archer',
     base: { life: 32, moveSpeed: 145, accuracy: 115, evasion: 50, mana: 60, manaRegen: 5 },
     skills: ['snipe', 'bone_arrow'],
     xp: 20,
@@ -1829,7 +1829,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   gnoll_howler: {
     id: 'gnoll_howler', name: 'Gnoll Howler',
-    color: '#d8b068', shape: 'trapezoid', radius: 14,
+    color: '#d8b068', shape: 'trapezoid', radius: 14, look: 'gnoll_howler',
     base: { life: 90, moveSpeed: 130, accuracy: 95, mana: 100, manaRegen: 8 },
     skills: ['rallying_howl', 'war_cry', 'claw'],
     xp: 34,
@@ -1852,7 +1852,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // casually acquires it; wolves find it anyway (their detection is keen).
   meadow_hare: {
     id: 'meadow_hare', name: 'Meadow Hare',
-    color: '#c8b494', shape: 'oval', radius: 7,
+    color: '#c8b494', shape: 'oval', radius: 7, look: 'hare',
     base: { life: 8, moveSpeed: 215, evasion: 80, mana: 0 },
     mods: [mod('detectability', 'more', -0.7)],
     skills: [],
@@ -1881,7 +1881,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // falls. Keen-nosed (high detection beats the hare's low detectability).
   plains_wolf: {
     id: 'plains_wolf', name: 'Plains Wolf',
-    color: '#9a9088', shape: 'kite', radius: 12,
+    color: '#9a9088', shape: 'kite', radius: 12, look: 'hound',
     base: { life: 34, moveSpeed: 188, accuracy: 95, evasion: 40, mana: 0 },
     skills: ['claw'],
     xp: 12,
@@ -1908,7 +1908,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // Same body, three personalities; the spawn roll decides which walked in.
   sand_skitterer: {
     id: 'sand_skitterer', name: 'Sand Skitterer',
-    color: '#d0b070', shape: 'trapezoid', radius: 11,
+    color: '#d0b070', shape: 'trapezoid', radius: 11, look: 'skitterer',
     base: { life: 30, moveSpeed: 196, accuracy: 90, evasion: 70, mana: 0 },
     skills: ['claw'],
     xp: 13,
@@ -1959,7 +1959,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // packmate and the thicket moves. Hunts hares when you're not around.
   thicket_stalker: {
     id: 'thicket_stalker', name: 'Thicket Stalker',
-    color: '#6a7a58', shape: 'kite', radius: 13,
+    color: '#6a7a58', shape: 'kite', radius: 13, look: 'barbed_stalker',
     base: { life: 44, moveSpeed: 200, accuracy: 100, evasion: 70, mana: 0 },
     skills: ['claw'],
     xp: 16,
@@ -1981,7 +1981,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // it rules aiming one data skill. It also stoops on hares.
   dune_vulture: {
     id: 'dune_vulture', name: 'Dune Vulture',
-    color: '#b09a80', shape: 'kite', radius: 13,
+    color: '#b09a80', shape: 'kite', radius: 13, look: 'vulture',
     base: { life: 38, moveSpeed: 170, accuracy: 95, evasion: 60, mana: 0 },
     skills: ['claw', 'take_wing'],
     xp: 14,
@@ -2018,7 +2018,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // teleport verb, both on rule clocks. Undead roster.
   gloam: {
     id: 'gloam', name: 'Gloam',
-    color: '#cfe86a', shape: 'star', radius: 10,
+    color: '#cfe86a', shape: 'star', radius: 10, look: 'wraith',
     base: { life: 26, moveSpeed: 150, evasion: 90, mana: 140, manaRegen: 12 },
     mods: [mod('lightningRes', 'flat', 0.6), mod('chaosRes', 'flat', 0.3)],
     skills: ['spark'],
@@ -2051,7 +2051,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // work — and it smells a kill, quickening on wounded prey.
   oblivion_knight: {
     id: 'oblivion_knight', name: 'Oblivion Knight',
-    color: '#5a4a6a', shape: 'pentagon', radius: 16,
+    color: '#5a4a6a', shape: 'pentagon', radius: 16, look: 'dread_knight',
     base: { life: 120, moveSpeed: 140, accuracy: 115, armor: 45, mana: 120, manaRegen: 9 },
     mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3)],
     skills: ['heavy_strike', 'cleave', 'despair'],
@@ -2070,7 +2070,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // (spectral_finger's weak cursor guide + wobble) from a held line.
   finger_mage: {
     id: 'finger_mage', name: 'Finger Mage',
-    color: '#b8d0a0', shape: 'cross', radius: 12,
+    color: '#b8d0a0', shape: 'cross', radius: 12, look: 'ritual_mage',
     base: { life: 44, moveSpeed: 120, mana: 200, manaRegen: 14 },
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['spectral_finger'],
@@ -2090,7 +2090,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // while it romps and mauls. Mobile defense, two health bars deep.
   siege_hulk: {
     id: 'siege_hulk', name: 'Siege Hulk',
-    color: '#8a5a3a', shape: 'octagon', radius: 24,
+    color: '#8a5a3a', shape: 'octagon', radius: 24, look: 'siege_hulk',
     base: { life: 260, moveSpeed: 95, accuracy: 110, armor: 55, mana: 60, manaRegen: 6 },
     mods: [mod('fireRes', 'flat', 0.4)],
     skills: ['ground_slam', 'heavy_strike'],
@@ -2107,7 +2107,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // free watchtower slot (garrison), raining fire from whichever perch.
   demonkin_darter: {
     id: 'demonkin_darter', name: 'Demonkin Darter',
-    color: '#e07a48', shape: 'triangle', radius: 10,
+    color: '#e07a48', shape: 'triangle', radius: 10, look: 'imp',
     base: { life: 22, moveSpeed: 185, evasion: 70, mana: 120, manaRegen: 10 },
     skills: ['firebolt'],
     xp: 16,
@@ -2137,7 +2137,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // grinding fields of frost CRAWL at you instead (creeping_ice's drift).
   glacial_horror: {
     id: 'glacial_horror', name: 'Glacial Horror',
-    color: '#8ac8e8', shape: 'octagon', radius: 18,
+    color: '#8ac8e8', shape: 'octagon', radius: 18, look: 'glacial_horror',
     base: { life: 150, moveSpeed: 55, accuracy: 105, armor: 40, mana: 180, manaRegen: 12 },
     mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.3)],
     skills: ['creeping_ice', 'frostbolt'],
@@ -2156,7 +2156,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // is emergent, not scripted. All ambient ('predator') wildlife.
   spiderling: {
     id: 'spiderling', name: 'Spiderling',
-    color: '#6a5a48', shape: 'cross', radius: 6,
+    color: '#6a5a48', shape: 'cross', radius: 6, look: 'spider_small',
     base: { life: 10, moveSpeed: 195, accuracy: 75, evasion: 50, mana: 0 },
     skills: ['claw'],
     xp: 2,
@@ -2167,7 +2167,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   spider_nest: {
     id: 'spider_nest', name: 'Spider Nest',
-    color: '#9a8a70', shape: 'oval', radius: 14,
+    color: '#9a8a70', shape: 'oval', radius: 14, look: 'spider_nest',
     base: { life: 55, moveSpeed: 0, armor: 20, mana: 0 },
     skills: [],
     xp: 8,
@@ -2184,7 +2184,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   broodmother: {
     id: 'broodmother', name: 'Broodmother',
-    color: '#7a6a52', shape: 'cross', radius: 17,
+    color: '#7a6a52', shape: 'cross', radius: 17, look: 'spider_big',
     base: { life: 130, moveSpeed: 120, accuracy: 95, armor: 25, mana: 40, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['claw'],
@@ -2207,7 +2207,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // whole line RUSHES in, cuts, and melts back out — the impulse rhythm.
   lash_maiden: {
     id: 'lash_maiden', name: 'Lash Maiden',
-    color: '#d8b078', shape: 'kite', radius: 13,
+    color: '#d8b078', shape: 'kite', radius: 13, look: 'lash_maiden',
     base: { life: 48, moveSpeed: 180, accuracy: 105, evasion: 65, mana: 60, manaRegen: 6 },
     skills: ['voltspear', 'claw'],
     xp: 20,
@@ -2229,7 +2229,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // they FORGIVE — NEUTRAL_RESET cools a roused wayfarer back down).
   wayfarer_hunter: {
     id: 'wayfarer_hunter', name: 'Wayfarer Hunter',
-    color: '#b09868', shape: 'pentagon', radius: 13,
+    color: '#b09868', shape: 'pentagon', radius: 13, look: 'hunter',
     base: { life: 60, moveSpeed: 150, accuracy: 110, evasion: 40, mana: 40, manaRegen: 4 },
     skills: ['bone_arrow', 'snipe'],
     xp: 18,
@@ -2244,7 +2244,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   wayfarer_pilgrim: {
     id: 'wayfarer_pilgrim', name: 'Wayfarer Pilgrim',
-    color: '#c8b898', shape: 'circle', radius: 12,
+    color: '#c8b898', shape: 'circle', radius: 12, look: 'pilgrim',
     base: { life: 40, moveSpeed: 140, evasion: 30, mana: 0 },
     skills: [],
     xp: 6,
@@ -2263,7 +2263,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   ember_elemental: {
     id: 'ember_elemental', name: 'Ember Elemental',
-    color: '#ff9040', shape: 'rhombus', radius: 13,
+    color: '#ff9040', shape: 'rhombus', radius: 13, look: 'flame_elemental',
     base: { life: 48, moveSpeed: 150, mana: 140, manaRegen: 10 },
     mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
     skills: ['firebolt', 'cinder_swarm'],
@@ -2274,7 +2274,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   gale_elemental: {
     id: 'gale_elemental', name: 'Gale Elemental',
-    color: '#b8e0d8', shape: 'oval', radius: 12,
+    color: '#b8e0d8', shape: 'oval', radius: 12, look: 'gale_elemental',
     base: { life: 40, moveSpeed: 195, accuracy: 100, evasion: 90, mana: 100, manaRegen: 9 },
     mods: [mod('lightningRes', 'flat', 0.5)],
     skills: ['thunderclap', 'claw'],
@@ -2285,7 +2285,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   frost_elemental: {
     id: 'frost_elemental', name: 'Frost Elemental',
-    color: '#8ad0e8', shape: 'rhombus', radius: 14,
+    color: '#8ad0e8', shape: 'rhombus', radius: 14, look: 'frost_elemental',
     base: { life: 56, moveSpeed: 115, mana: 160, manaRegen: 10 },
     mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.3)],
     skills: ['ice_spear', 'frostbolt'],
@@ -2296,7 +2296,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   stone_sentinel: {
     id: 'stone_sentinel', name: 'Stone Sentinel',
-    color: '#9a988a', shape: 'rectangle', radius: 19,
+    color: '#9a988a', shape: 'rectangle', radius: 19, look: 'sentinel',
     base: { life: 180, moveSpeed: 90, accuracy: 95, armor: 70, mana: 60, manaRegen: 6 },
     mods: [mod('blockChance', 'flat', 0.2)],
     skills: ['shield_up', 'heavy_strike', 'cleave'],
@@ -2317,7 +2317,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   sylvan_warden: {
     id: 'sylvan_warden', name: 'Sylvan Warden',
-    color: '#68b878', shape: 'rectangle', radius: 17,
+    color: '#68b878', shape: 'rectangle', radius: 17, look: 'sylvan_warden',
     base: { life: 140, moveSpeed: 105, accuracy: 100, armor: 45, mana: 80, manaRegen: 7 },
     mods: [mod('blockChance', 'flat', 0.15)],
     // A third of the wardens drill the lance: shield up, then the poke
@@ -2331,7 +2331,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   thorn_sprite: {
     id: 'thorn_sprite', name: 'Thorn Sprite',
-    color: '#8ad868', shape: 'kite', radius: 9,
+    color: '#8ad868', shape: 'kite', radius: 9, look: 'thorn_sprite',
     base: { life: 24, moveSpeed: 185, evasion: 80, mana: 90, manaRegen: 8 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['venom_bolt'],
@@ -2342,7 +2342,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   grove_singer: {
     id: 'grove_singer', name: 'Grove Singer',
-    color: '#a8e8a0', shape: 'oval', radius: 13,
+    color: '#a8e8a0', shape: 'oval', radius: 13, look: 'grove_singer',
     base: { life: 70, moveSpeed: 120, mana: 160, manaRegen: 11 },
     skills: ['rallying_howl', 'creeping_ice', 'despair'],
     xp: 30,
@@ -2352,7 +2352,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   briar_beast: {
     id: 'briar_beast', name: 'Briar Beast',
-    color: '#588848', shape: 'oval', radius: 26,
+    color: '#588848', shape: 'oval', radius: 26, look: 'briar_beast',
     // Rooted, thorny bulk: an explicit poise pool on top of its size-derived
     // weight — poise IS mass (Actor.effectiveWeight), so the beast shrugs
     // shoves until its bar is broken. The per-monster heft dial, as data.
@@ -2424,7 +2424,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // and carries the loot it pretended to be.
   mimic: {
     id: 'mimic', name: 'Mimic',
-    color: '#a8743e', shape: 'square', radius: 14, material: 'wood',
+    color: '#a8743e', shape: 'square', radius: 14, material: 'wood', look: 'mimic',
     base: { life: 160, moveSpeed: 165, accuracy: 110, armor: 25, mana: 30, manaRegen: 4 },
     skills: ['claw', 'heavy_strike'],
     xp: 40,
@@ -2436,7 +2436,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // Breakables are passive "monsters": smash a barrel, drink what spills.
   barrel: {
     id: 'barrel', name: 'Barrel',
-    color: '#8a6a3e', shape: 'circle', radius: 10, material: 'wood',
+    color: '#8a6a3e', shape: 'circle', radius: 10, material: 'wood', look: 'keg',
     base: { life: 20, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2446,7 +2446,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   crate: {
     id: 'crate', name: 'Crate',
-    color: '#9a7a4e', shape: 'square', radius: 11, material: 'wood',
+    color: '#9a7a4e', shape: 'square', radius: 11, material: 'wood', look: 'crate',
     base: { life: 25, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2474,7 +2474,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // letting it die, so it's an immortal target to test effects + modifiers.
   target_dummy: {
     id: 'target_dummy', name: 'Training Dummy',
-    color: '#b08850', shape: 'rectangle', radius: 18, material: 'wood',
+    color: '#b08850', shape: 'rectangle', radius: 18, material: 'wood', look: 'training_dummy',
     base: { life: 20000, lifeRegen: 1500, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2548,7 +2548,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // as the Heartwood.
   stonefather_menhir: {
     id: 'stonefather_menhir', name: 'the Stonefather',
-    color: '#b0a890', shape: 'octagon', radius: 16, material: 'stone',
+    color: '#b0a890', shape: 'octagon', radius: 16, material: 'stone', look: 'menhir',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2571,7 +2571,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // A point of interest, not a foe: crack it open for a guaranteed gem.
   gem_cache: {
     id: 'gem_cache', name: 'Gem Cache',
-    color: '#c8a84b', shape: 'square', radius: 13, material: 'crystal',
+    color: '#c8a84b', shape: 'square', radius: 13, material: 'crystal', look: 'gem_cache',
     base: { life: 50, moveSpeed: 0, armor: 0, evasion: 0, mana: 0 },
     skills: [],
     xp: 5,
@@ -2584,7 +2584,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // faction troops fielded on your side, and a hostile pack may ambush it.
   caravan_cart: {
     id: 'caravan_cart', name: 'Caravan',
-    color: '#b8904e', shape: 'square', radius: 18, material: 'wood',
+    color: '#b8904e', shape: 'square', radius: 18, material: 'wood', look: 'cart',
     base: { life: 130, moveSpeed: 70, armor: 6, evasion: 0, mana: 0 },
     skills: [],
     xp: 0,
@@ -2644,7 +2644,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // Flame Core: an untouchable mote of fire that shadows its summoner.
   flame_core: {
     id: 'flame_core', name: 'Flame Core',
-    color: '#ffc05a', shape: 'octagon', radius: 8, material: 'ember',
+    color: '#ffc05a', shape: 'octagon', radius: 8, material: 'ember', look: 'elemental_rift',
     base: { life: 10, moveSpeed: 200, mana: 999, manaRegen: 25 },
     mods: [mod('fireRes', 'flat', 0.75)],
     skills: ['firebolt'],
@@ -2996,7 +2996,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   //     remains the closing cage.
   unmade_chronophage: {
     id: 'unmade_chronophage', name: 'the Unmade',
-    color: '#c050d0', shape: 'star', radius: 34, material: 'void',
+    color: '#c050d0', shape: 'star', radius: 34, material: 'void', look: 'chronophage',
     // No longer Crowned by default (that 7.5x is gone) — base trimmed for a leaner
     // ~10-13k HP across the level band; spike it later via objective.promote (stack Crowned).
     base: { life: 1000, moveSpeed: 118, accuracy: 150, armor: 80, mana: 320, manaRegen: 18 },

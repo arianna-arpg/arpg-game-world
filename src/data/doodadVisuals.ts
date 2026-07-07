@@ -50,11 +50,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { core: { color: 'theme:sand|#c9a86a', alpha: 0.4 } },
   },
   road: {
-    painter: 'liquid', order: 20,
-    params: {
-      core: { color: 'theme:road|#574f44', alpha: 0.55 },
-      inner: { color: '#79705f', alpha: 0.4, grow: -7 },
-    },
+    painter: 'gravelPath', order: 20,
+    params: { color: 'theme:road|#574f44' },
   },
   lava: {
     painter: 'liquid', order: 22,
@@ -101,6 +98,10 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       rim: { color: '#e8f4fc', alpha: 0.5, grow: 3 },
       core: { color: '#bcd8e8', alpha: 0.3 },
     },
+  },
+  heat_shimmer: {
+    painter: 'shimmer', order: 34,
+    params: { color: '#ffe8c0' },
   },
   grass: {
     painter: 'liquid', order: 47,

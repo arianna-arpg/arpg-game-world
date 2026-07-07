@@ -1177,6 +1177,380 @@ const lantern: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** BAKED curling tentacle ring (eldritch bodies; the live adorn still
+ *  writhes — this is anatomy, not corruption). params: n, len. */
+const tentacleRing: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 6));
+  const len = P(spec, 'len', 1.5);
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.3;
+      const curl = (i % 2 ? 1 : -1) * 0.55;
+      c.strokeStyle = i % 2 ? ramp.base : shade(ramp.base, -0.12);
+      c.lineWidth = Math.max(2, R * 0.14);
+      c.beginPath();
+      c.moveTo(Math.cos(a) * R * 0.65, Math.sin(a) * R * 0.65);
+      c.quadraticCurveTo(
+        Math.cos(a + curl * 0.4) * R * len * 0.7, Math.sin(a + curl * 0.4) * R * len * 0.7,
+        Math.cos(a + curl) * R * len, Math.sin(a + curl) * R * len);
+      c.stroke();
+      // Sucker dots down the arm.
+      c.fillStyle = withAlpha(ramp.highlight, 0.5);
+      const sx = Math.cos(a + curl * 0.5) * R * len * 0.62;
+      const sy = Math.sin(a + curl * 0.5) * R * len * 0.62;
+      c.beginPath(); c.arc(sx, sy, R * 0.05, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** A floating glowing core — rift hearts, wisp bodies, construct nuclei. */
+const orb: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  place(ctx, r, spec, (c, R) => {
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, R * 0.9);
+    g.addColorStop(0, withAlpha(col, 0.75));
+    g.addColorStop(0.5, withAlpha(col, 0.25));
+    g.addColorStop(1, withAlpha(col, 0));
+    c.fillStyle = g;
+    c.fillRect(-R, -R, R * 2, R * 2);
+    c.fillStyle = col;
+    c.beginPath(); c.arc(0, 0, R * 0.32, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffffff';
+    c.beginPath(); c.arc(-R * 0.08, -R * 0.08, R * 0.12, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = withAlpha(col, 0.6);
+    c.lineWidth = Math.max(1, R * 0.05);
+    c.beginPath(); c.arc(0, 0, R * 0.5, 0.4, 2.4); c.stroke();
+  });
+};
+
+/** Chunky crab pincers held forward — unmistakably crustacean. */
+const pincers: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    for (const side of [-1, 1]) {
+      const bx = R * 0.55, by = side * R * 0.75;
+      // Arm.
+      c.strokeStyle = shade(ramp.base, -0.1);
+      c.lineWidth = Math.max(2.5, R * 0.16);
+      c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(R * 0.15, side * R * 0.55);
+      c.lineTo(bx, by);
+      c.stroke();
+      // The claw: two opposing crescents.
+      c.fillStyle = ramp.base;
+      c.beginPath();
+      c.moveTo(bx, by);
+      c.quadraticCurveTo(bx + R * 0.55, by - side * R * 0.05, bx + R * 0.62, by - side * R * 0.3);
+      c.quadraticCurveTo(bx + R * 0.3, by - side * R * 0.22, bx, by);
+      c.closePath(); c.fill();
+      outlined(c, ramp, 1.1);
+      c.fillStyle = shade(ramp.base, -0.12);
+      c.beginPath();
+      c.moveTo(bx + R * 0.05, by + side * R * 0.05);
+      c.quadraticCurveTo(bx + R * 0.5, by + side * R * 0.18, bx + R * 0.55, by + side * R * 0.05);
+      c.quadraticCurveTo(bx + R * 0.28, by - side * R * 0.02, bx + R * 0.05, by + side * R * 0.05);
+      c.closePath(); c.fill();
+    }
+  });
+};
+
+/** Paired feelers sweeping forward. */
+const antennae: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    c.strokeStyle = shade(ramp.base, 0.08);
+    c.lineWidth = Math.max(1.2, R * 0.06);
+    for (const side of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(R * 0.5, side * R * 0.2);
+      c.quadraticCurveTo(R * 1.1, side * R * 0.3, R * 1.35, side * R * 0.7);
+      c.stroke();
+      c.fillStyle = shade(ramp.base, 0.2);
+      c.beginPath();
+      c.arc(R * 1.35, side * R * 0.7, R * 0.07, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
+/** ARACHNID LEGS: paired arcs reaching out and forward — the spider read.
+ *  params: pairs. */
+const legs: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const pairs = Math.round(P(spec, 'pairs', 4));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < pairs; i++) {
+      const t = pairs === 1 ? 0.5 : i / (pairs - 1);
+      const a0 = 0.9 - t * 1.9; // fan from forward to back
+      for (const side of [-1, 1]) {
+        const ang = side * a0 * -1 + (side < 0 ? Math.PI : 0);
+        const bx = Math.cos(ang) * R * 0.7, by = Math.sin(ang) * R * 0.7;
+        const kx = Math.cos(ang) * R * 1.35, ky = Math.sin(ang) * R * 1.35 - R * 0.12;
+        const tx = Math.cos(ang) * R * 1.7, ty = Math.sin(ang) * R * 1.7 + R * 0.22;
+        c.strokeStyle = i % 2 ? ramp.base : shade(ramp.base, -0.14);
+        c.lineWidth = Math.max(1.6, R * 0.09);
+        c.beginPath();
+        c.moveTo(bx, by);
+        c.quadraticCurveTo(kx, ky, tx, ty);
+        c.stroke();
+      }
+    }
+  });
+};
+
+/** A rallying banner: pole + waving flag in the accent. */
+const banner: PartPainter = (ctx, r, spec, pal) => {
+  const flag = rampFor(spec, pal, 'accent');
+  place(ctx, r, spec, (c, R) => {
+    const x = -R * 0.35, y = -R * 0.62;
+    c.lineCap = 'round';
+    c.strokeStyle = pal.wood.base;
+    c.lineWidth = Math.max(2, R * 0.09);
+    c.beginPath(); c.moveTo(x - R * 0.4, y); c.lineTo(x + R * 0.9, y); c.stroke();
+    c.fillStyle = flag.base;
+    c.beginPath();
+    c.moveTo(x + R * 0.9, y);
+    c.quadraticCurveTo(x + R * 0.75, y + R * 0.35, x + R * 0.85, y + R * 0.62);
+    c.lineTo(x + R * 0.35, y + R * 0.5);
+    c.quadraticCurveTo(x + R * 0.45, y + R * 0.2, x + R * 0.35, y);
+    c.closePath(); c.fill();
+    outlined(c, flag, 1.1);
+  });
+};
+
+/** A two-handed maul — haft across, massive head. */
+const hammer: PartPainter = (ctx, r, spec, pal) => {
+  const metal = pal.metal;
+  place(ctx, r, spec, (c, R) => {
+    const y = R * 0.66;
+    c.lineCap = 'round';
+    c.strokeStyle = pal.wood.base;
+    c.lineWidth = Math.max(2.2, R * 0.12);
+    c.beginPath(); c.moveTo(-R * 0.6, y); c.lineTo(R * 0.68, y); c.stroke();
+    const trace = (): void => {
+      c.beginPath();
+      c.rect(R * 0.55, y - R * 0.3, R * 0.42, R * 0.6);
+    };
+    trace(); c.fillStyle = metal.base; c.fill();
+    volume(c, R * 0.35, metal, trace);
+    trace(); outlined(c, metal, 1.3);
+    c.strokeStyle = withAlpha(metal.highlight, 0.6);
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(R * 0.6, y - R * 0.22); c.lineTo(R * 0.92, y - R * 0.22); c.stroke();
+  });
+};
+
+/** A held open tome — ritualists and scholars. */
+const book: PartPainter = (ctx, r, spec, pal) => {
+  const cover = rampFor(spec, pal, 'accent');
+  place(ctx, r, spec, (c, R) => {
+    const x = R * 0.58, y = R * 0.55;
+    c.save();
+    c.translate(x, y);
+    c.rotate(0.3);
+    c.fillStyle = cover.base;
+    c.fillRect(-R * 0.3, -R * 0.22, R * 0.6, R * 0.44);
+    c.fillStyle = '#e8e2d0';
+    c.fillRect(-R * 0.25, -R * 0.17, R * 0.5, R * 0.34);
+    c.strokeStyle = withAlpha(cover.outline, 0.8);
+    c.lineWidth = 1;
+    c.strokeRect(-R * 0.3, -R * 0.22, R * 0.6, R * 0.44);
+    c.beginPath(); c.moveTo(0, -R * 0.17); c.lineTo(0, R * 0.17); c.stroke();
+    c.strokeStyle = withAlpha('#8a8474', 0.7);
+    for (const off of [-0.09, 0, 0.09]) {
+      c.beginPath(); c.moveTo(-R * 0.2, off * R); c.lineTo(-R * 0.05, off * R); c.stroke();
+      c.beginPath(); c.moveTo(R * 0.05, off * R); c.lineTo(R * 0.2, off * R); c.stroke();
+    }
+    c.restore();
+  });
+};
+
+/** An inset power gem — golem cores, caches, menhirs. */
+const gem: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  place(ctx, r, spec, (c, R) => {
+    const s = R * 0.3;
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, s * 2.2);
+    g.addColorStop(0, withAlpha(col, 0.5));
+    g.addColorStop(1, withAlpha(col, 0));
+    c.fillStyle = g;
+    c.fillRect(-s * 2.2, -s * 2.2, s * 4.4, s * 4.4);
+    c.fillStyle = col;
+    c.beginPath();
+    c.moveTo(0, -s); c.lineTo(s * 0.8, 0); c.lineTo(0, s); c.lineTo(-s * 0.8, 0);
+    c.closePath(); c.fill();
+    c.strokeStyle = withAlpha('#ffffff', 0.65);
+    c.lineWidth = Math.max(1, s * 0.16);
+    c.beginPath(); c.moveTo(-s * 0.3, -s * 0.35); c.lineTo(s * 0.15, -s * 0.1); c.stroke();
+  });
+};
+
+/** Segmented armor strips across the torso — heavy plate reads at a glance. */
+const armorPlates: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'metal');
+  const n = Math.round(P(spec, 'n', 3));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const x = R * 0.28 - (i / Math.max(1, n - 1)) * R * 0.75;
+      const w = R * (0.86 - i * 0.08);
+      const trace = (): void => {
+        c.beginPath();
+        c.ellipse(x, 0, R * 0.14, w, 0, 0, Math.PI * 2);
+      };
+      trace();
+      c.fillStyle = i % 2 ? ramp.base : shade(ramp.base, 0.08);
+      c.fill();
+      trace(); outlined(c, ramp, 1.1);
+    }
+    // A rivet line down the middle.
+    c.fillStyle = withAlpha(ramp.highlight, 0.7);
+    for (let i = 0; i < n; i++) {
+      const x = R * 0.28 - (i / Math.max(1, n - 1)) * R * 0.75;
+      c.beginPath(); c.arc(x, 0, R * 0.045, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** Pustule cluster — plague bloats, egg sacs. params: n. */
+const bloatSacs: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, 41) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, 43)) * R * 0.62;
+      const s = R * (0.14 + hash01(i, 47) * 0.16);
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      c.fillStyle = i % 3 ? ramp.base : shade(ramp.base, 0.15);
+      c.beginPath(); c.arc(x, y, s, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.55);
+      c.lineWidth = 1;
+      c.stroke();
+      c.fillStyle = withAlpha('#ffffff', 0.35);
+      c.beginPath(); c.arc(x - s * 0.3, y - s * 0.3, s * 0.3, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** Draped chains swinging off the frame — jailers, wardens, the bound. */
+const chains: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'metal');
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(1.2, R * 0.06);
+    for (const side of [-1, 1]) {
+      const sag = R * 0.3;
+      c.beginPath();
+      c.moveTo(R * 0.2, side * R * 0.55);
+      c.quadraticCurveTo(-R * 0.35, side * R * 0.75 + sag * 0.4, -R * 0.9, side * R * 0.6);
+      c.stroke();
+      // Links.
+      c.fillStyle = shade(ramp.base, 0.12);
+      for (let i = 1; i <= 3; i++) {
+        const t = i / 4;
+        const x = R * 0.2 + (-R * 0.9 - R * 0.2) * t;
+        const y = side * (R * 0.55 + Math.sin(t * Math.PI) * sag * 0.35);
+        c.beginPath(); c.arc(x, y, R * 0.055, 0, Math.PI * 2); c.fill();
+      }
+    }
+  });
+};
+
+/** A quill/bramble row along the spine — barbed beasts. params: n. */
+const barbs: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(1.6, R * 0.09);
+    for (let i = 0; i < n; i++) {
+      const x = R * 0.45 - (i / (n - 1)) * R * 1.15;
+      const lean = -0.5 - (i / n) * 0.5;
+      const len = R * (0.34 + 0.14 * Math.sin((i + 0.5) / n * Math.PI));
+      c.beginPath();
+      c.moveTo(x, 0);
+      c.lineTo(x + Math.cos(lean + Math.PI / 2) * 0, -len);
+      c.stroke();
+      c.beginPath();
+      c.moveTo(x, 0);
+      c.lineTo(x, len);
+      c.stroke();
+    }
+  });
+};
+
+/** A coiled whip at the hip — lashers. */
+const whip: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  place(ctx, r, spec, (c, R) => {
+    const x = R * 0.3, y = R * 0.68;
+    c.lineCap = 'round';
+    c.strokeStyle = shade(ramp.base, -0.15);
+    c.lineWidth = Math.max(1.6, R * 0.08);
+    c.beginPath();
+    c.arc(x, y, R * 0.22, 0, Math.PI * 1.8);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(x + R * 0.2, y);
+    c.quadraticCurveTo(x + R * 0.6, y + R * 0.1, x + R * 0.85, y - R * 0.18);
+    c.stroke();
+    c.fillStyle = shade(ramp.base, 0.15);
+    c.beginPath(); c.arc(x + R * 0.85, y - R * 0.18, R * 0.05, 0, Math.PI * 2); c.fill();
+  });
+};
+
+/** A barrel from above: staves, two iron bands, a lid boss. */
+const keg: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  place(ctx, r, spec, (c, R) => {
+    const trace = (): void => { c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2); };
+    trace(); c.fillStyle = wood.base; c.fill();
+    volume(c, R, wood, trace);
+    // Staves radiating from the bung.
+    c.save(); trace(); c.clip();
+    c.strokeStyle = withAlpha(wood.shadow, 0.55);
+    c.lineWidth = Math.max(1, R * 0.05);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      c.beginPath(); c.moveTo(Math.cos(a) * R * 0.25, Math.sin(a) * R * 0.25);
+      c.lineTo(Math.cos(a) * R, Math.sin(a) * R); c.stroke();
+    }
+    c.restore();
+    // Iron bands.
+    c.strokeStyle = pal.metal.shadow;
+    c.lineWidth = Math.max(1.5, R * 0.09);
+    c.beginPath(); c.arc(0, 0, R * 0.72, 0, Math.PI * 2); c.stroke();
+    c.beginPath(); c.arc(0, 0, R * 0.38, 0, Math.PI * 2); c.stroke();
+    trace(); outlined(c, wood, 1.5);
+  });
+};
+
+/** A crate from above: boarded square + cross braces. */
+const crateBox: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  place(ctx, r, spec, (c, R) => {
+    const s = R * 0.88;
+    const trace = (): void => { c.beginPath(); c.rect(-s, -s, s * 2, s * 2); };
+    trace(); c.fillStyle = wood.base; c.fill();
+    volume(c, s, wood, trace);
+    c.strokeStyle = withAlpha(wood.shadow, 0.6);
+    c.lineWidth = Math.max(1, R * 0.05);
+    for (const off of [-0.33, 0.33]) {
+      c.beginPath(); c.moveTo(-s, off * s * 2); c.lineTo(s, off * s * 2); c.stroke();
+    }
+    c.strokeStyle = shade(wood.base, 0.14);
+    c.lineWidth = Math.max(1.4, R * 0.08);
+    c.beginPath(); c.moveTo(-s, -s); c.lineTo(s, s); c.moveTo(-s, s); c.lineTo(s, -s); c.stroke();
+    trace(); outlined(c, wood, 1.5);
+  });
+};
+
 /** Metal helm cap with a nose ridge (knights). */
 const helm: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'metal');
@@ -1202,6 +1576,8 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   halo, runes, wisps, flames,
   shell, caps, fronds, tail, stinger, fins,
   apron, pack, lantern, helm,
+  tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,
+  armorPlates, bloatSacs, chains, barbs, whip, keg, crateBox,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

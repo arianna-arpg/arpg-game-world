@@ -37,7 +37,9 @@ import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, PAINTERS, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
-import { drawWeatherFx } from './vis/weatherFx';
+import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
+import { drawAmbientFx } from './vis/ambientFx';
+import type { WeatherKind } from '../world/weather';
 import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
@@ -798,13 +800,22 @@ export class Renderer {
       ctx.fillStyle = `rgba(16,22,52,${(0.12 * night).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
     }
-    const f = world.sim.weather.sample(world.zone);
+    // WEATHER, CROSSFADED: the raw sample can pop (a zone hop, a kind flip
+    // where two fronts overlap) — the smoother eases the DISPLAYED wash and
+    // particles toward it at each kind's own configured ramp, so a fog bank
+    // seeps in over seconds while a storm may still SLAM by design.
+    const f = this.smoothWeather(world);
     if (f) {
       const [r, g, b] = hexToRgb(WEATHER_COLORS[f.kind]);
       ctx.fillStyle = `rgba(${r},${g},${b},${(0.05 + 0.12 * f.intensity).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
       // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts).
       drawWeatherFx(ctx, f.kind, f.intensity, w, h, world.time);
+    }
+    // The zone's STANDING ambience — underwater caustics + bubble splays,
+    // desert heat haze — declared on the theme (vis/ambientFx.ts).
+    for (const fx of world.zone.theme.ambientFx ?? []) {
+      drawAmbientFx(ctx, fx, w, h, world.time);
     }
     // ARENA WASH: a boss fight recolours the room per phase (intensity is capped at
     // the source so the climax stays readable — drama without blinding the player).
@@ -948,6 +959,38 @@ export class Renderer {
   private ground = new GroundRenderer();
   /** The dynamic darkness/emissive compositor (vis/lights.ts). */
   private lightLayer = new LightLayer();
+  /** Crossfaded DISPLAYED weather (the raw sample can pop on zone hops and
+   *  kind flips; each kind ramps at its own WEATHER_FX.fadeIn). */
+  private wx: { kind: WeatherKind | null; intensity: number } = { kind: null, intensity: 0 };
+
+  private smoothWeather(world: World): { kind: WeatherKind; intensity: number } | null {
+    const target = world.sim.weather.sample(world.zone);
+    const dt = this.frameDt;
+    const rampOf = (k: WeatherKind | null): number =>
+      Math.max(0.05, (k ? WEATHER_FX[k]?.fadeIn : undefined) ?? VIS_CFG.weather.fadeSec);
+    if (this.wx.kind && target?.kind !== this.wx.kind) {
+      // The old kind clears at its own pace before the new one gathers.
+      this.wx.intensity -= dt / rampOf(this.wx.kind);
+      if (this.wx.intensity <= 0.02) {
+        this.wx.kind = target?.kind ?? null;
+        this.wx.intensity = 0.02;
+      }
+    } else if (target) {
+      this.wx.kind = target.kind;
+      const d = target.intensity - this.wx.intensity;
+      const step = dt / rampOf(target.kind);
+      this.wx.intensity += Math.sign(d) * Math.min(Math.abs(d), step);
+    } else if (this.wx.kind) {
+      this.wx.intensity -= dt / rampOf(this.wx.kind);
+      if (this.wx.intensity <= 0.02) {
+        this.wx.kind = null;
+        this.wx.intensity = 0;
+      }
+    }
+    return this.wx.kind && this.wx.intensity > 0.02
+      ? { kind: this.wx.kind, intensity: clamp(this.wx.intensity, 0, 1) }
+      : null;
+  }
   private cullDoodads(world: World, vw: number, vh: number): void {
     const pad = RENDER_CULL_PAD;
     const L = this.cam.x - pad, T = this.cam.y - pad;

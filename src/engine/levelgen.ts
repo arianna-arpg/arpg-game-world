@@ -45,6 +45,7 @@ export type KnownDoodadKind =
   | 'road'      // ground overlay: a walkable gravel path — a mild move-speed boost (no status)
   // Biome-expansion terrain (batch 6)
   | 'sand'      // ground overlay: wind-blown grit that slows like mud
+  | 'heat_shimmer' // ground overlay: wavering desert air — stacks sunscorch (World.updateHeat)
   | 'vines'     // blocks movement but NOT shots — a jungle wall you fire through
   | 'thicket'   // blocks movement AND shots — dense impassable bramble
   | 'tombstone' // blocks movement AND shots — a crypt marker
@@ -347,6 +348,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   water:     { overlap: 'ground' },
   ice:       { overlap: 'ground' },
   sand:      { overlap: 'ground' },
+  heat_shimmer: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'chasm'] },
   road:      { overlap: 'ground', walkOnly: true }, // a walkable gravel path (stays on walkable ground in grid zones)
   grass:     { overlap: 'ground' },
   brush:     { overlap: 'ground' },
@@ -1802,6 +1804,8 @@ registerStamp('grove', (ctx) => stampGrove(ctx));
 registerStamp('grass', (ctx) => stampBlob(ctx, 'grass', [16, 54], [4, 8], false));
 registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false));
 registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
+// Desert heat: shimmering-air patches (sunscorch fields — World.updateHeat).
+registerStamp('heat_shimmer', (ctx, spec) => stampBlob(ctx, 'heat_shimmer', spec.radius ?? [40, 85], [2, 4], false));
 registerStamp('vines', (ctx) => stampBlob(ctx, 'vines', [20, 56], [4, 8], true));
 registerStamp('lava', (ctx) => stampBlob(ctx, 'lava', [26, 68], [5, 9], true));
 registerStamp('shallows', (ctx) => stampShallows(ctx));

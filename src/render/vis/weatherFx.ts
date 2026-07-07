@@ -28,14 +28,18 @@ export interface WeatherFxDef {
   alpha: number;
   /** Color override; defaults to the WEATHER_COLORS tint. */
   color?: string;
+  /** Crossfade seconds for a full 0→1 swing of the DISPLAYED weather
+   *  (renderer.smoothWeather). Small = the front slams in BY DESIGN;
+   *  omitted = VIS_CFG.weather.fadeSec. */
+  fadeIn?: number;
 }
 
 export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
-  rain:      { form: 'streak', count: 90, vel: [-140, 620], len: 14, alpha: 0.38, color: '#8fb8e8' },
-  storm:     { form: 'streak', count: 130, vel: [-320, 760], len: 20, alpha: 0.45, color: '#a8b8f0' },
-  fog:       { form: 'bank', count: 9, vel: [18, 2], size: 220, alpha: 0.16 },
-  ashfall:   { form: 'flake', count: 60, vel: [-24, 46], size: 2.2, alpha: 0.5, color: '#c8a88a' },
-  bloodmoon: { form: 'mote', count: 34, vel: [6, -14], size: 1.8, alpha: 0.45, color: '#e86a72' },
+  rain:      { form: 'streak', count: 90, vel: [-140, 620], len: 14, alpha: 0.38, color: '#8fb8e8', fadeIn: 4 },
+  storm:     { form: 'streak', count: 130, vel: [-320, 760], len: 20, alpha: 0.45, color: '#a8b8f0', fadeIn: 0.6 },
+  fog:       { form: 'bank', count: 9, vel: [18, 2], size: 220, alpha: 0.16, fadeIn: 9 },
+  ashfall:   { form: 'flake', count: 60, vel: [-24, 46], size: 2.2, alpha: 0.5, color: '#c8a88a', fadeIn: 6 },
+  bloodmoon: { form: 'mote', count: 34, vel: [6, -14], size: 1.8, alpha: 0.45, color: '#e86a72', fadeIn: 12 },
 };
 
 /** Draw a weather front's particles over the scene (screen space). Every
