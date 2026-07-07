@@ -176,6 +176,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'fog_bank', count: [1, 3] },
       { kind: 'dead_tree', count: [1, 3] },
       { kind: 'rocks', count: [6, 10], radius: [20, 40] },
+      { kind: 'cairn', count: [0, 2] }, { kind: 'boulder_field', count: [0, 1] },
+      { kind: 'scree', count: [1, 2] },
       { kind: 'brush', count: [2, 4] },
       { kind: 'cliff', count: [1, 3] },
       { kind: 'river', count: [0, 1] },
@@ -223,6 +225,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'snowdrift', count: [5, 9] }, { kind: 'geyser', count: [0, 2] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [1, 3] },
       { kind: 'conifers', count: [8, 14] },
       { kind: 'rocks', count: [8, 14], radius: [22, 46] },
+      { kind: 'cairn', count: [1, 2] }, { kind: 'scree', count: [1, 3] },
+      { kind: 'boulder_field', count: [0, 1] },
       { kind: 'ice', count: [2, 4] },
       { kind: 'mud', count: [3, 4] },
       { kind: 'cliff', count: [2, 4] },
@@ -352,6 +356,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cactus', count: [5, 9] },
       { kind: 'sand', count: [4, 7] },
       { kind: 'rocks', count: [6, 10], radius: [22, 52] },
+      { kind: 'rock_spire', count: [1, 3] }, { kind: 'scree', count: [1, 2] },
       { kind: 'cliff', count: [1, 2] },
       { kind: 'ruin', count: [0, 2] },
       { kind: 'heat_shimmer', count: [2, 5] },
@@ -516,6 +521,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'lava', count: [2, 3] },
       { kind: 'ravine', count: [1, 1] },
       { kind: 'rocks', count: [10, 16], radius: [24, 52] },
+      { kind: 'rock_spire', count: [1, 2] }, { kind: 'scree', count: [1, 3] },
       { kind: 'cliff', count: [2, 3] },
       { kind: 'sand', count: [1, 2] },
       { kind: 'ruin', count: [0, 2] },
@@ -668,6 +674,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'brush', count: [3, 5] },
       { kind: 'water', count: [0, 1] },
       { kind: 'rocks', count: [3, 6], radius: [16, 32] },
+      { kind: 'cairn', count: [0, 1] },
       { kind: 'cave', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
     ],
@@ -751,6 +758,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     layout: [
       { kind: 'web', count: [1, 3] }, { kind: 'bone_pile', count: [1, 3] }, { kind: 'brazier', count: [0, 2] },
       { kind: 'rocks', count: [14, 22], radius: [20, 46] },
+      { kind: 'scree', count: [2, 4] }, { kind: 'rock_spire', count: [0, 2] },
       { kind: 'cliff', count: [3, 5] },
       { kind: 'chasm', count: [0, 2] },
       { kind: 'water', count: [0, 1] },
@@ -996,7 +1004,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       wall: '#4a4436', mud: '#3a3428',
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0,
-    layout: [{ kind: 'rocks', count: [4, 8], radius: [20, 42] }],
+    layout: [
+      { kind: 'rocks', count: [4, 8], radius: [20, 42] },
+      { kind: 'boulder_field', count: [1, 2] }, { kind: 'cairn', count: [1, 2] },
+      { kind: 'scree', count: [1, 3] },
+    ],
     packs: {
       count: [6, 9], size: [3, 5],
       table: [
@@ -1084,6 +1096,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.2,
     layout: [
       { kind: 'crystal', count: [5, 9] }, { kind: 'rocks', count: [3, 6], radius: [18, 38] },
+      { kind: 'scree', count: [1, 3] },
       { kind: 'cliff', count: [1, 3] },
     ],
     packs: {
@@ -1119,6 +1132,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'lava', count: [2, 3] }, { kind: 'ravine', count: [0, 1] },
       { kind: 'lava_vent', count: [2, 3] }, { kind: 'ember_vent', count: [2, 4] },
       { kind: 'obsidian', count: [4, 7] }, { kind: 'cinder', count: [2, 4] },
+      { kind: 'rock_spire', count: [1, 2] }, { kind: 'scree', count: [1, 2] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1181,6 +1195,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'flowers', count: [3, 6] }, { kind: 'standing_stone', count: [0, 2] },
       { kind: 'grass', count: [10, 16] },
       { kind: 'rocks', count: [5, 9], radius: [18, 40] },
+      { kind: 'boulder_field', count: [0, 2] }, { kind: 'cairn', count: [0, 1] },
       { kind: 'mud', count: [2, 4] },
       { kind: 'brush', count: [2, 4] },
     ],

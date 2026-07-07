@@ -16,8 +16,9 @@ import type { World } from '../../engine/world';
 import type { ZoneTheme } from '../../data/zones';
 import { BIOMES } from '../../world/biomes';
 import { hash01, shade, withAlpha } from './color';
-import { materialOf, rampOf } from './materials';
+import { materialOf, rampOf, type Ramp } from './materials';
 import { drawShadow } from './sprites';
+import { VIS_CFG } from './visConfig';
 
 export interface PaintEnv {
   ctx: CanvasRenderingContext2D;
@@ -36,6 +37,17 @@ export function resolveColor(spec: ColorSpec | undefined, theme: ZoneTheme, fall
   const [key, fb] = spec.slice(6).split('|');
   const v = (theme as unknown as Record<string, string | undefined>)[key];
   return v ?? fb ?? fallback;
+}
+
+/** Resolve a color ONLY if the spec actually yields one: a 'theme:key' with no
+ *  fallback resolves to undefined when the theme lacks the key. Biome-conditional
+ *  accents ride this — moss on grove stone simply skips in the desert instead of
+ *  painting the grey placeholder. */
+export function resolveColorOpt(spec: ColorSpec | undefined, theme: ZoneTheme): string | undefined {
+  if (!spec) return undefined;
+  if (!spec.startsWith('theme:')) return spec;
+  const [key, fb] = spec.slice(6).split('|');
+  return (theme as unknown as Record<string, string | undefined>)[key] ?? fb ?? undefined;
 }
 
 export type GroupPainter = (env: PaintEnv, group: readonly Doodad[], def: DoodadVisualDef) => void;
@@ -532,6 +544,448 @@ const mound: GroupPainter = (env, group, def) => {
     }
     ctx.restore();
     ctx.restore();
+  }
+};
+
+// --- THE ROCK GRAMMAR ---------------------------------------------------------
+// Rocks stopped being circles. Every stone rolls a deterministic FORM from its
+// position — mono boulder, split pair, or a clustered outcrop with shoulder
+// stones — builds an angular low-frequency silhouette, and shades it facet by
+// facet against the one shared sun (VIS_CFG.lightAngle). Everything else is a
+// composable accent on params, each one CHANCE-ROLLED per stone so no two
+// neighbours dress alike: strata bedding, fracture seams, mineral grain, moss
+// and lichen (theme-gated — they skip biomes without the key), quartz glints,
+// barnacle crusts, wet surf-shine, pebble skirts, and a snow cap that follows
+// World.snowCover. One painter, every biome's stone: a new rock look is a
+// params row, never new code.
+
+export interface RockParams {
+  color: ColorSpec;
+  edge?: ColorSpec;
+  material?: string;
+  /** Facet light/shadow swing multiplier (spires push past 1). */
+  contrast?: number;
+  /** Chance a stone renders as a split pair / shoulder outcrop (default 0.45). */
+  cluster?: number;
+  /** PINNACLE mode: one tight body, harder apex light, a bright sun-catch. */
+  spire?: boolean;
+  /** Sedimentary bedding bands (~30% of stones). */
+  strata?: { color?: ColorSpec; alpha?: number };
+  /** Dark fracture seams (approximate count per stone). */
+  cracks?: number;
+  /** Mineral stipple. */
+  grain?: boolean;
+  /** Soft moss blotches hugging the shade side (~55% of stones where the
+   *  theme resolves the color). */
+  moss?: { color: ColorSpec };
+  /** Pale lichen rosettes on the weather side (~40% of stones). */
+  lichen?: { color?: ColorSpec };
+  /** Crusted tide-line rings on the low side (sea stones). */
+  barnacle?: ColorSpec;
+  /** A glinting mineral vein catching the light on a slow cycle (~18%). */
+  quartz?: { color?: ColorSpec };
+  /** Wet specular arcs (surf-washed stone). */
+  wet?: boolean;
+  /** Ground-contact scatter: a dust shadow + pebbles tying the stone down. */
+  skirt?: { color?: ColorSpec; alpha?: number };
+  /** Snow settles on the crown as World.snowCover builds — taiga stones whiten
+   *  under a falling front and shed it again as the melt runs. */
+  snowCap?: { color?: ColorSpec };
+}
+
+interface RockBody { cx: number; cy: number; r: number; seed: number; squash: number }
+
+/** Trace one stone's silhouette path and return its rim points. Low-frequency
+ *  bulges + per-vert jitter: craggy but MASSIVE — never star-spiky. */
+function traceRock(ctx: CanvasRenderingContext2D, b: RockBody): { x: number; y: number }[] {
+  const verts = 9 + (b.seed % 3);
+  const bulgeA = hash01(b.seed, 51) * Math.PI * 2;
+  const pts: { x: number; y: number }[] = [];
+  for (let i = 0; i < verts; i++) {
+    const a = (i / verts) * Math.PI * 2;
+    const bulge = 0.11 * Math.sin(a * 2 + bulgeA) + 0.07 * Math.sin(a * 3 - bulgeA * 1.7);
+    const jit = (hash01(i, b.seed) - 0.5) * 0.18;
+    const rr = b.r * (0.88 + bulge + jit);
+    pts.push({ x: b.cx + Math.cos(a) * rr, y: b.cy + Math.sin(a) * rr * b.squash });
+  }
+  ctx.beginPath();
+  pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+  ctx.closePath();
+  return pts;
+}
+
+/** One stone body: silhouette, sun-keyed facets, ridge seams, apex sun-catch,
+ *  rim stroke. Returns the rim points for accent placement. */
+function drawRockBody(ctx: CanvasRenderingContext2D, b: RockBody, ramp: Ramp,
+  edge: string, contrast: number, spire: boolean): { x: number; y: number }[] {
+  const pts = traceRock(ctx, b);
+  ctx.fillStyle = ramp.base;
+  ctx.fill();
+  // FACETS: wedges from a sun-side apex, each toned by its outward bearing —
+  // the up-left faces catch light, the down-right faces fall into shade.
+  const L = VIS_CFG.lightAngle;
+  const ax = b.cx + Math.cos(L) * b.r * (spire ? 0.14 : 0.28);
+  const ay = b.cy + Math.sin(L) * b.r * (spire ? 0.14 : 0.28) * b.squash;
+  for (let i = 0; i < pts.length; i++) {
+    const v0 = pts[i], v1 = pts[(i + 1) % pts.length];
+    const mid = Math.atan2((v0.y + v1.y) / 2 - b.cy, (v0.x + v1.x) / 2 - b.cx);
+    const lit = Math.cos(mid - L) + (hash01(i, b.seed + 7) - 0.5) * 0.55;
+    ctx.fillStyle = shade(ramp.base, lit * (lit >= 0 ? 0.2 : 0.26) * contrast);
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(v0.x, v0.y);
+    ctx.lineTo(v1.x, v1.y);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Ridge seams running off the apex, then the crown's bright sun-catch.
+  ctx.strokeStyle = withAlpha(ramp.outline, 0.3);
+  ctx.lineWidth = 1;
+  for (let i = 0; i < pts.length; i += 3) {
+    ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(pts[i].x, pts[i].y); ctx.stroke();
+  }
+  ctx.fillStyle = withAlpha(ramp.highlight, spire ? 0.5 : 0.26);
+  ctx.beginPath();
+  ctx.ellipse(ax, ay, b.r * (spire ? 0.3 : 0.24), b.r * (spire ? 0.2 : 0.16) * b.squash, L, 0, Math.PI * 2);
+  ctx.fill();
+  traceRock(ctx, b);
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 1.6;
+  ctx.stroke();
+  return pts;
+}
+
+const boulder: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as RockParams;
+  const { ctx, theme, time, world } = env;
+  const base = resolveColor(p.color, theme);
+  const ramp = rampOf(base, materialOf(p.material ?? 'stone'));
+  const edgeCol = p.edge ? resolveColor(p.edge, theme) : withAlpha(ramp.outline, 0.9);
+  const contrast = p.contrast ?? 1;
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    const squash = 0.86 + hash01(seed, 3) * 0.14;
+    // Dust skirt under everything: the stone sits IN the ground, not on it.
+    if (p.skirt) {
+      ctx.globalAlpha = p.skirt.alpha ?? 0.16;
+      ctx.fillStyle = p.skirt.color ? resolveColor(p.skirt.color, theme) : shade(base, -0.4);
+      ctx.beginPath();
+      ctx.ellipse(0, o.radius * 0.06, o.radius * 1.12, o.radius * 0.98, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // FORM ROLL: mono boulder / split pair / shoulder outcrop.
+    const roll = hash01(seed, 91);
+    const clusterChance = p.spire ? 0 : (p.cluster ?? 0.45);
+    const bodies: RockBody[] = [];
+    if (roll < clusterChance * 0.4 && o.radius > 12) {
+      const a = hash01(seed, 27) * Math.PI * 2;
+      const g = o.radius * 0.34;
+      bodies.push({ cx: Math.cos(a) * g, cy: Math.sin(a) * g, r: o.radius * 0.64, seed, squash });
+      bodies.push({ cx: -Math.cos(a) * g, cy: -Math.sin(a) * g, r: o.radius * 0.52, seed: seed + 13, squash });
+    } else if (roll < clusterChance && o.radius > 14) {
+      bodies.push({ cx: -o.radius * 0.12, cy: -o.radius * 0.08, r: o.radius * 0.72, seed, squash });
+      const sats = 2 + (seed % 2);
+      for (let i = 0; i < sats; i++) {
+        const a = hash01(i, seed + 41) * Math.PI * 2;
+        const d = o.radius * (0.62 + hash01(i, seed + 47) * 0.16);
+        bodies.push({
+          cx: Math.cos(a) * d, cy: Math.sin(a) * d,
+          r: o.radius * (0.24 + hash01(i, seed + 53) * 0.14), seed: seed + i * 7 + 3, squash,
+        });
+      }
+    } else {
+      bodies.push({ cx: 0, cy: 0, r: o.radius * (p.spire ? 0.9 : 0.94), seed, squash });
+    }
+    let mainPts: { x: number; y: number }[] = [];
+    bodies.forEach((b, bi) => {
+      const pts = drawRockBody(ctx, b, ramp, edgeCol, contrast * (bi === 0 ? 1 : 0.85), !!p.spire);
+      if (bi === 0) mainPts = pts;
+    });
+    const main = bodies[0];
+    // --- Accents (main body only; each chance-rolled per stone) -----------
+    if (p.strata && main.r > 10 && hash01(seed, 101) < 0.3) {
+      ctx.save();
+      traceRock(ctx, main);
+      ctx.clip();
+      const sc = p.strata.color ? resolveColor(p.strata.color, theme) : shade(base, -0.3);
+      const sa = hash01(seed, 61) * Math.PI;
+      ctx.strokeStyle = withAlpha(sc, p.strata.alpha ?? 0.3);
+      ctx.lineWidth = Math.max(1.2, main.r * 0.08);
+      for (let k = -2; k <= 2; k++) {
+        const off = k * main.r * 0.3 + (hash01(k + 2, seed + 67) - 0.5) * main.r * 0.12;
+        const px = Math.cos(sa + Math.PI / 2) * off, py = Math.sin(sa + Math.PI / 2) * off;
+        ctx.beginPath();
+        ctx.moveTo(main.cx + px - Math.cos(sa) * main.r * 1.1, main.cy + py - Math.sin(sa) * main.r * 1.1);
+        ctx.quadraticCurveTo(main.cx + px + Math.cos(sa + Math.PI / 2) * main.r * 0.12,
+          main.cy + py + Math.sin(sa + Math.PI / 2) * main.r * 0.12,
+          main.cx + px + Math.cos(sa) * main.r * 1.1, main.cy + py + Math.sin(sa) * main.r * 1.1);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    const crackN = Math.round((p.cracks ?? 0) * (0.4 + hash01(seed, 71) * 1.3));
+    if (crackN > 0 && mainPts.length) {
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.55);
+      ctx.lineWidth = 1.1;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < crackN; i++) {
+        const start = mainPts[(seed + i * 4) % mainPts.length];
+        let x = start.x, y = start.y;
+        let ang = Math.atan2(main.cy - y, main.cx - x);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let s = 0; s < 3; s++) {
+          ang += (hash01(i * 5 + s, seed + 77) - 0.5) * 1.2;
+          x += Math.cos(ang) * main.r * 0.3;
+          y += Math.sin(ang) * main.r * 0.3;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        if (hash01(i, seed + 83) > 0.6) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + Math.cos(ang + 1.1) * main.r * 0.18, y + Math.sin(ang + 1.1) * main.r * 0.18);
+          ctx.stroke();
+        }
+      }
+    }
+    if (p.grain && main.r > 8) {
+      ctx.save();
+      traceRock(ctx, main);
+      ctx.clip();
+      const n = Math.min(18, Math.max(5, Math.round(main.r * 0.55)));
+      for (let i = 0; i < n; i++) {
+        const a = hash01(i, seed + 111) * Math.PI * 2;
+        const d = Math.sqrt(hash01(i, seed + 117)) * main.r * 0.85;
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = i % 2 ? shade(base, 0.3) : shade(base, -0.32);
+        ctx.fillRect(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d, 1.2, 1.2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+    }
+    if (p.moss && main.r > 9 && hash01(seed, 121) < 0.55) {
+      const mc = resolveColorOpt(p.moss.color, theme);
+      if (mc) {
+        const shadeSide = VIS_CFG.lightAngle + Math.PI;
+        for (let i = 0; i < 2 + (seed % 2); i++) {
+          const a = shadeSide + (hash01(i, seed + 127) - 0.5) * 1.8;
+          const d = main.r * (0.4 + hash01(i, seed + 131) * 0.4);
+          ctx.globalAlpha = 0.42;
+          ctx.fillStyle = mc;
+          ctx.beginPath();
+          ctx.ellipse(main.cx + Math.cos(a) * d, main.cy + Math.sin(a) * d * squash,
+            main.r * (0.2 + hash01(i, seed + 137) * 0.16), main.r * 0.14,
+            hash01(i, seed + 139) * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        // A velvet fringe where the stone meets the ground on the shade side.
+        ctx.globalAlpha = 0.4;
+        ctx.strokeStyle = mc;
+        ctx.lineWidth = Math.max(1.4, main.r * 0.1);
+        ctx.beginPath();
+        ctx.arc(main.cx, main.cy, main.r * 0.86, shadeSide - 0.7, shadeSide + 0.7);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+    if (p.lichen && main.r > 9 && hash01(seed, 151) < 0.4) {
+      const lc = resolveColor(p.lichen.color, theme, '#aab89a');
+      for (let i = 0; i < 2 + (seed % 3); i++) {
+        const a = hash01(i, seed + 157) * Math.PI * 2;
+        const d = Math.sqrt(hash01(i, seed + 163)) * main.r * 0.6;
+        const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d;
+        ctx.globalAlpha = 0.55;
+        ctx.fillStyle = lc;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 1.1, 0, Math.PI * 2);
+        ctx.fill();
+        for (let k = 0; k < 5; k++) {
+          const ka = (k / 5) * Math.PI * 2 + i;
+          ctx.beginPath();
+          ctx.arc(cx + Math.cos(ka) * 2.4, cy + Math.sin(ka) * 2.4, 0.9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.globalAlpha = 1;
+    }
+    if (p.quartz && main.r > 10 && hash01(seed, 171) < 0.18) {
+      const qc = resolveColor(p.quartz.color, theme, ramp.highlight);
+      const a0 = hash01(seed, 177) * Math.PI * 2;
+      let x = main.cx + Math.cos(a0) * main.r * 0.7, y = main.cy + Math.sin(a0) * main.r * 0.7 * squash;
+      let ang = a0 + Math.PI;
+      ctx.strokeStyle = withAlpha(qc, 0.32 + 0.24 * Math.sin(time * 1.1 + seed));
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      for (let s = 0; s < 3; s++) {
+        ang += (hash01(s, seed + 181) - 0.5) * 0.9;
+        x += Math.cos(ang) * main.r * 0.42;
+        y += Math.sin(ang) * main.r * 0.42;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    if (p.barnacle) {
+      const bc = resolveColor(p.barnacle, theme);
+      const n = 4 + (seed % 4);
+      for (let i = 0; i < n; i++) {
+        const a = Math.PI / 2 + (hash01(i, seed + 191) - 0.5) * 2;
+        const d = main.r * (0.55 + hash01(i, seed + 197) * 0.32);
+        const cx = main.cx + Math.cos(a) * d, cy = main.cy + Math.sin(a) * d * squash;
+        const br = 1.2 + hash01(i, seed + 199) * 1.4;
+        ctx.globalAlpha = 0.6;
+        ctx.strokeStyle = bc;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, br, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = shade(bc, -0.3);
+        ctx.beginPath();
+        ctx.arc(cx, cy, br * 0.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    if (p.wet) {
+      ctx.strokeStyle = withAlpha('#eef8ff', 0.28);
+      ctx.lineCap = 'round';
+      for (const f of [0.56, 0.74]) {
+        ctx.lineWidth = Math.max(1.2, main.r * 0.07);
+        ctx.beginPath();
+        ctx.arc(main.cx, main.cy, main.r * f, VIS_CFG.lightAngle - 0.7, VIS_CFG.lightAngle + 0.5);
+        ctx.stroke();
+      }
+    }
+    if (p.snowCap) {
+      const cover = world.snowCover;
+      if (cover > 0.04) {
+        const sc = resolveColor(p.snowCap.color, theme, '#edf5fb');
+        ctx.save();
+        traceRock(ctx, main);
+        ctx.clip();
+        const L = VIS_CFG.lightAngle;
+        const sx = main.cx + Math.cos(L) * main.r * 0.32;
+        const sy = main.cy + Math.sin(L) * main.r * 0.32 * squash;
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, main.r * 1.02);
+        g.addColorStop(0, withAlpha(sc, 0.85 * cover));
+        g.addColorStop(0.6, withAlpha(sc, 0.5 * cover));
+        g.addColorStop(1, withAlpha(sc, 0));
+        ctx.fillStyle = g;
+        ctx.fillRect(main.cx - main.r, main.cy - main.r, main.r * 2, main.r * 2);
+        ctx.restore();
+      }
+    }
+    // Skirt pebbles last: loose change scattered at the foot.
+    if (p.skirt && o.radius > 10) {
+      const n = 3 + (seed % 4);
+      for (let i = 0; i < n; i++) {
+        const a = hash01(i, seed + 211) * Math.PI * 2;
+        const d = o.radius * (0.95 + hash01(i, seed + 217) * 0.18);
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = shade(base, hash01(i, seed + 223) * 0.36 - 0.16);
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d, 1.5 + hash01(i, seed + 227) * 1.6,
+          1.1 + hash01(i, seed + 229), a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+};
+
+/** A CAIRN — somebody STACKED these: courses of rounded stones tightening to a
+ *  lit capstone. Deliberately regular against the rock grammar's wild outcrops —
+ *  a waymark on moors, passes and pilgrim roads. */
+const cairnPainter: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec; edge?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.color, theme, theme.obstacle);
+  const ramp = rampOf(base, materialOf('stone'));
+  const edge = p.edge ? resolveColor(p.edge, theme) : ramp.outline;
+  for (const o of group) {
+    const seed = ((o.pos.x * 11 + o.pos.y * 3) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    // Courses climb inward — higher stones draw LIGHTER (closer to the sun).
+    const courses: { n: number; ring: number; r: number; tone: string }[] = [
+      { n: 4 + (seed % 2), ring: o.radius * 0.56, r: o.radius * 0.4, tone: shade(ramp.base, -0.08) },
+      { n: 3, ring: o.radius * 0.27, r: o.radius * 0.36, tone: shade(ramp.base, 0.07) },
+      { n: 1, ring: 0, r: o.radius * 0.34, tone: shade(ramp.base, 0.2) },
+    ];
+    courses.forEach((c, ci) => {
+      for (let i = 0; i < c.n; i++) {
+        const a = (i / c.n) * Math.PI * 2 + ci * 0.6 + hash01(i, seed + ci) * 0.3;
+        const x = Math.cos(a) * c.ring, y = Math.sin(a) * c.ring;
+        const rr = c.r * (0.85 + hash01(i * 3 + ci, seed) * 0.3);
+        ctx.fillStyle = shade(c.tone, (hash01(i, seed + ci * 7) - 0.5) * 0.1);
+        ctx.beginPath();
+        ctx.ellipse(x, y, rr, rr * 0.84, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = withAlpha(edge, 0.7);
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
+    });
+    // The capstone's sun-catch: this pile was BALANCED, and it shows.
+    ctx.strokeStyle = withAlpha(ramp.highlight, 0.6);
+    ctx.lineWidth = Math.max(1.2, o.radius * 0.08);
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.26, VIS_CFG.lightAngle - 0.9, VIS_CFG.lightAngle + 0.7);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** SCREE — a walkable spill of weather-rounded gravel: the mountain's loose
+ *  change. Two-tone pebbles with sun-side crescents over a faint bed wash —
+ *  rounder and denser than masonry rubble; natural where rubble is ruin. */
+const scree: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.color, theme, theme.obstacle);
+  ctx.globalAlpha = 0.14;
+  ctx.fillStyle = shade(base, -0.25);
+  blobPath(ctx, group, 2);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  for (const d of group) {
+    const seed = ((d.pos.x * 29 + d.pos.y * 11) | 0) >>> 0;
+    const n = Math.min(22, Math.max(6, Math.round(d.radius * 0.38)));
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const dd = Math.sqrt(hash01(i, seed + 5)) * d.radius * 0.9;
+      const x = d.pos.x + Math.cos(a) * dd, y = d.pos.y + Math.sin(a) * dd;
+      const pr = 1.6 + hash01(i, seed + 9) * 2.6;
+      ctx.globalAlpha = 0.8;
+      ctx.fillStyle = shade(base, hash01(i, seed + 13) * 0.36 - 0.14);
+      ctx.beginPath();
+      ctx.ellipse(x, y, pr, pr * 0.8, a, 0, Math.PI * 2);
+      ctx.fill();
+      if (pr > 2.6) {
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = shade(base, 0.3);
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.arc(x, y, pr * 0.6, VIS_CFG.lightAngle - 0.8, VIS_CFG.lightAngle + 0.6);
+        ctx.stroke();
+      }
+    }
+    // Fine grit between the stones.
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = shade(base, -0.3);
+    for (let i = 0; i < n >> 1; i++) {
+      const a = hash01(i, seed + 31) * Math.PI * 2;
+      const dd = Math.sqrt(hash01(i, seed + 37)) * d.radius * 0.85;
+      ctx.fillRect(d.pos.x + Math.cos(a) * dd, d.pos.y + Math.sin(a) * dd, 1.1, 1.1);
+    }
+    ctx.globalAlpha = 1;
   }
 };
 
@@ -2241,7 +2695,8 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
 }
 
 export const PAINTERS: Record<string, GroupPainter> = {
-  liquid, mound, shard, vent, pod, dome, bones, slab, sparkle, platformRing,
+  liquid, mound, boulder, cairn: cairnPainter, scree,
+  shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
   campfire, groundShadow, trunk, brush, gravelPath, shimmer, fogFloor,
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,

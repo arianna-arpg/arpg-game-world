@@ -117,7 +117,11 @@ export type KnownDoodadKind =
   | 'dock'    // a port's harbor planks — dwell to cast off (the Voyage)
   | 'breach'  // the torn way into the Underworld (bottom of the cave ladder)
   | 'landmass'    // the Voyage's streamed COASTLINE (a shore-collision blob)
-  | 'isle_beacon'; // a Voyage Island's guiding light + name (pure signage)
+  | 'isle_beacon' // a Voyage Island's guiding light + name (pure signage)
+  // The rock grammar's kin (stone-variety round)
+  | 'cairn'       // stacked waymark stones — solid, blocks feet not shots
+  | 'scree'       // walkable gravel spill (pure decoration)
+  | 'rock_spire'; // a standing pinnacle — solid, blocks shots, casts long
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -488,6 +492,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // shot arcs over the shallows (sight too — you can see the beach you round).
   landmass: { overlap: 'inert', blocksMove: true, blocksShot: false },
   isle_beacon: { overlap: 'trigger', spacing: 0 },
+  // The rock grammar's kin: a cairn is low (step behind it, shoot over it),
+  // scree is decoration underfoot, a spire is a full standing block.
+  cairn:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80, forbidOn: ['water', 'lava', 'chasm'] },
+  scree:      { overlap: 'ground', walkOnly: true },
+  rock_spire: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm'] },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -1932,6 +1941,12 @@ registerStamp('geyser', stampSingle('geyser', [12, 17]));
 registerStamp('brazier', stampSingle('brazier', [8, 11]));
 registerStamp('standing_stone', stampSingle('standing_stone', [12, 20]));
 registerStamp('bone_pile', stampSingle('bone_pile', [12, 22]));
+// The rock grammar's kin: waymark cairns, gravel spills, standing pinnacles,
+// and the composed BOULDER FIELD outcrop.
+registerStamp('cairn', stampSingle('cairn', [11, 16]));
+registerStamp('scree', (ctx, spec) => stampBlob(ctx, 'scree', spec.radius ?? [18, 46], [3, 6], false));
+registerStamp('rock_spire', (ctx, spec) => stampSolid(ctx, 'rock_spire', spec.radius ?? [14, 26]));
+registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
 registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
 registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
 registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));
@@ -2505,6 +2520,41 @@ function stampSolid(ctx: GenCtx, kind: DoodadKind, radius: [number, number]): vo
 }
 
 function stampRock(ctx: GenCtx, radius: [number, number]): void { stampSolid(ctx, 'rock', radius); }
+
+/** A BOULDER FIELD — an outcrop shrugging out of the ground: one anchor stone,
+ *  shoulder rocks packed around it, scree spilling away downhill, and sometimes
+ *  a cairn somebody balanced on the mess. The composed set-piece the lone
+ *  'rocks' stamp scatters toward. */
+function stampBoulderField(ctx: GenCtx): void {
+  const center = findSpot(ctx, 90, true, doodadRule('rock').spacing ?? 0, true, 'rock');
+  if (!center) return;
+  const before = ctx.doodads.length;
+  ctx.doodads.push({ pos: center, radius: ctx.rng.range(34, 54), kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2) });
+  const shoulders = ctx.rng.int(2, 4);
+  for (let i = 0; i < shoulders; i++) {
+    const ang = ctx.rng.range(0, Math.PI * 2), off = ctx.rng.range(50, 94);
+    const r = ctx.rng.range(14, 28);
+    const p = vec(center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off);
+    if (!clearOf(ctx, p, r, true) || inReserved(ctx, p, r)) continue;
+    if (overlapsSolidBefore(ctx, p, r, before)) continue;
+    ctx.doodads.push({ pos: p, radius: r, kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2) });
+  }
+  const spills = ctx.rng.int(1, 3);
+  for (let i = 0; i < spills; i++) {
+    const ang = ctx.rng.range(0, Math.PI * 2), off = ctx.rng.range(64, 124);
+    const p = vec(center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off);
+    if (inReserved(ctx, p, 30)) continue;
+    ctx.doodads.push({ pos: p, radius: ctx.rng.range(20, 34), kind: 'scree' });
+  }
+  if (ctx.rng.range(0, 1) < 0.25) {
+    const ang = ctx.rng.range(0, Math.PI * 2);
+    const p = vec(center.x + Math.cos(ang) * 132, center.y + Math.sin(ang) * 132);
+    const r = ctx.rng.range(11, 15);
+    if (clearOf(ctx, p, r, true) && !inReserved(ctx, p, r) && !overlapsSolidBefore(ctx, p, r, before)) {
+      ctx.doodads.push({ pos: p, radius: r, kind: 'cairn', rot: ctx.rng.range(0, Math.PI * 2) });
+    }
+  }
+}
 
 /**
  * A cliff run: overlapping circles deposited along a wandering walk, so the

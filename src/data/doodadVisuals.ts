@@ -254,14 +254,36 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   coral: { painter: 'coral', order: 52, shadow: 0.5 },
 
   // --- Standing minerals + organics ---------------------------------------
+  // THE ROCK GRAMMAR: every stone rolls its own form (mono/split/outcrop) and
+  // chance-rolled accents — same entry, endless variety, tinted per biome.
   rock: {
     longShadow: 0.7,
-    painter: 'mound', order: 55, shadow: 0.7,
-    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', hatch: true },
+    painter: 'boulder', order: 55, shadow: 0.7,
+    params: {
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      cluster: 0.45, cracks: 1, grain: true, strata: {},
+      moss: { color: 'theme:tree' }, lichen: {}, quartz: {}, skirt: {}, snowCap: {},
+    },
   },
   sea_rock: {
-    painter: 'mound', order: 52, shadow: 0.6,
-    params: { color: '#274a52', edge: '#3f7a86', material: 'stone', barnacle: '#5fb0b8' },
+    painter: 'boulder', order: 52, shadow: 0.6,
+    params: {
+      color: '#274a52', edge: '#3f7a86', material: 'stone', contrast: 0.75,
+      cluster: 0.3, grain: true, barnacle: '#5fb0b8', wet: true, skirt: {},
+    },
+  },
+  cairn: {
+    painter: 'cairn', order: 54, shadow: 0.55, longShadow: 1.0,
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge' },
+  },
+  scree: { painter: 'scree', order: 37, params: { color: 'theme:obstacle' } },
+  rock_spire: {
+    longShadow: 1.7,
+    painter: 'boulder', order: 55, shadow: 0.65,
+    params: {
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      spire: true, contrast: 1.25, cracks: 1, grain: true, strata: {}, skirt: {}, snowCap: {},
+    },
   },
   crystal: {
     longShadow: 0.8,
