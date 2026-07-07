@@ -1,0 +1,58 @@
+# ---------------------------------------------------------------------------
+# RELEASE BUILDS — push a version tag (v0.2.0) and this attaches a Windows
+# installer + a Linux AppImage (the Steam Deck artifact) to that GitHub
+# Release. electron-builder's github publisher does the uploading; the tag
+# should match package.json's version (bump it in the same commit you tag).
+#
+# Manual runs (workflow_dispatch) build the same artifacts and stash them as
+# workflow artifacts instead of publishing — a dry run for the pipeline.
+# ---------------------------------------------------------------------------
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # electron-builder uploads release assets
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win
+          - os: ubuntu-latest
+            args: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Same pipeline as `npm run dist`, split so CI logs separate the stages.
+      - run: npm run build
+      - run: node scripts/make-build-info.mjs
+
+      - name: Package (and publish on tag builds)
+        run: npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Stash artifacts (manual dry runs)
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.AppImage
+          if-no-files-found: error
