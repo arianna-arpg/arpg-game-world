@@ -859,7 +859,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
 
   spitting_horror: {
     id: 'spitting_horror', name: 'Spitting Horror',
-    color: '#86a848', shape: 'triangle', radius: 15, material: 'chitin', look: 'spitter_bug',
+    color: '#86a848', shape: 'triangle', radius: 15, material: 'chitin', look: 'spitting_horror',
     base: { life: 40, moveSpeed: 110, mana: 80, manaRegen: 6 },
     mods: [mod('chaosRes', 'flat', 0.6)],
     skills: ['venom_bolt', 'claw'],
@@ -1564,7 +1564,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   fungal_spitter: {
     id: 'fungal_spitter', name: 'Spore Spitter',
-    color: '#9aae3a', shape: 'star', radius: 13, material: 'verdant', look: 'fungal_beast',
+    color: '#9aae3a', shape: 'star', radius: 13, material: 'verdant', look: 'spore_spitter',
     base: { life: 44, moveSpeed: 118, accuracy: 100, mana: 130, manaRegen: 9 },
     mods: [mod('chaosRes', 'flat', 0.7)],
     skills: ['venom_bolt', 'toxic_cloud'],
@@ -1574,7 +1574,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
   fungal_brute: {
     id: 'fungal_brute', name: 'Mycelial Brute',
-    color: '#6e8a4a', shape: 'octagon', radius: 21, material: 'verdant', look: 'fungal_beast',
+    color: '#6e8a4a', shape: 'octagon', radius: 21, material: 'verdant', look: 'mycelial_brute',
     base: { life: 150, moveSpeed: 86, accuracy: 100, armor: 36, mana: 50, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.8)],
     skills: ['heavy_strike', 'ground_slam'],

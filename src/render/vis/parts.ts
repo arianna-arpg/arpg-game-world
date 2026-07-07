@@ -2524,6 +2524,297 @@ const helm: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ==================================================== THE ORGANIC-HORROR WAVE
+// Ten new limbs of vocabulary for the entity creator: fungal vents and moss,
+// flesh maws and veins, deep-sea lures and polyps, ooze trails, sails, horns
+// and drowned drapes. Same contract as everything above — parametric, role-
+// paletted, composed from data.
+
+/** A LAMPREY MAW: concentric gum rings around a dark gullet, inward-leaning
+ *  teeth all the way round. params: teeth. */
+const mawRing: PartPainter = (ctx, r, spec, pal) => {
+  const gum = rampFor(spec, pal, 'base');
+  const teeth = Math.round(P(spec, 'teeth', 9));
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = shade(gum.base, -0.18);
+    c.beginPath(); c.arc(0, 0, R * 0.62, 0, Math.PI * 2); c.fill();
+    outlined(c, gum, 1.2);
+    c.strokeStyle = withAlpha(gum.shadow, 0.7);
+    c.lineWidth = 1;
+    for (const f of [0.5, 0.38]) {
+      c.beginPath(); c.arc(0, 0, R * f, 0, Math.PI * 2); c.stroke();
+    }
+    c.fillStyle = '#0c0508';
+    c.beginPath(); c.arc(0, 0, R * 0.2, 0, Math.PI * 2); c.fill();
+    // The tooth ring, every point aimed at the middle.
+    c.fillStyle = pal.bone.light;
+    for (let i = 0; i < teeth; i++) {
+      const a = (i / teeth) * Math.PI * 2;
+      const bx = Math.cos(a) * R * 0.42, by = Math.sin(a) * R * 0.42;
+      const tx = Math.cos(a) * R * 0.16, ty = Math.sin(a) * R * 0.16;
+      const w = R * 0.07;
+      c.beginPath();
+      c.moveTo(bx + Math.cos(a + Math.PI / 2) * w, by + Math.sin(a + Math.PI / 2) * w);
+      c.lineTo(bx - Math.cos(a + Math.PI / 2) * w, by - Math.sin(a + Math.PI / 2) * w);
+      c.lineTo(tx, ty);
+      c.closePath();
+      c.fill();
+    }
+  });
+};
+
+/** LIVE: the angler's LURE — a stalk arcing ahead of the face, glow bulb
+ *  bobbing on the current. params: len. */
+const lure: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.glow;
+  const len = P(spec, 'len', 1.15);
+  place(ctx, r, spec, (c, R) => {
+    const bob = Math.sin(t * 1.9) * R * 0.14;
+    const ex = R * len, ey = bob;
+    c.strokeStyle = withAlpha(pal.dark, 0.85);
+    c.lineWidth = Math.max(1.2, R * 0.07);
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(R * 0.3, 0);
+    c.quadraticCurveTo(R * (0.3 + len * 0.5), -R * 0.42 + bob * 0.4, ex, ey);
+    c.stroke();
+    const pulse = 0.5 + 0.5 * Math.sin(t * 3.1);
+    c.fillStyle = withAlpha(col, 0.22 + 0.2 * pulse);
+    c.beginPath(); c.arc(ex, ey, R * 0.3, 0, Math.PI * 2); c.fill();
+    c.fillStyle = withAlpha(col, 0.95);
+    c.beginPath(); c.arc(ex, ey, R * 0.1 + pulse * R * 0.03, 0, Math.PI * 2); c.fill();
+  });
+};
+
+/** LIVE: SPORE VENTS — paired blowholes puffing rings on their own clocks.
+ *  params: n. */
+const sporeVents: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.glow;
+  const ramp = rampFor(spec, pal, 'accent');
+  const n = Math.round(P(spec, 'n', 2));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const side = n === 1 ? 0 : (i / (n - 1) - 0.5) * 2;
+      const x = -R * 0.3, y = side * R * 0.42;
+      c.fillStyle = shade(ramp.base, -0.3);
+      c.beginPath(); c.ellipse(x, y, R * 0.14, R * 0.11, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+      c.fillStyle = '#100a14';
+      c.beginPath(); c.ellipse(x, y, R * 0.06, R * 0.045, 0, 0, Math.PI * 2); c.fill();
+      // The puff: an expanding fading ring + a mote or two riding it.
+      const cyc = (t * 0.55 + i * 0.37) % 1;
+      if (cyc < 0.55) {
+        const grow = cyc / 0.55;
+        c.globalAlpha = 0.5 * (1 - grow);
+        c.strokeStyle = col;
+        c.lineWidth = 1.3;
+        c.beginPath(); c.arc(x, y, R * (0.08 + grow * 0.4), 0, Math.PI * 2); c.stroke();
+        c.globalAlpha = 0.6 * (1 - grow);
+        c.fillStyle = col;
+        c.beginPath();
+        c.arc(x - grow * R * 0.3, y - grow * R * 0.24, R * 0.035, 0, Math.PI * 2);
+        c.fill();
+        c.globalAlpha = 1;
+      }
+    }
+  });
+};
+
+/** MOSS PATCHES — velvet growth blotches with spore-dot freckles: the body
+ *  something else has started living on. params: n. */
+const mossPatch: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const n = Math.round(P(spec, 'n', 3));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, 53) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, 59)) * R * 0.55;
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      const s = R * (0.16 + hash01(i, 61) * 0.14);
+      c.globalAlpha = 0.65;
+      c.fillStyle = i % 2 ? ramp.base : shade(ramp.base, -0.14);
+      c.beginPath();
+      c.ellipse(x, y, s, s * 0.7, hash01(i, 67) * 3, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 0.8;
+      c.fillStyle = ramp.highlight;
+      for (let k = 0; k < 3; k++) {
+        c.beginPath();
+        c.arc(x + (hash01(k, i * 9 + 1) - 0.5) * s * 1.4, y + (hash01(k, i * 9 + 5) - 0.5) * s, R * 0.02 + 0.5, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.globalAlpha = 1;
+    }
+  });
+};
+
+/** LIVE: VEINWEB — surface vessels webbing the body, throbbing brighter on
+ *  the beat. params: n. */
+const veinweb: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.accent.light;
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    const throb = 0.5 + 0.5 * Math.sin(t * 2.6);
+    c.strokeStyle = withAlpha(col, 0.3 + 0.25 * throb);
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2 + hash01(i, 71) * 0.8;
+      let x = Math.cos(a0) * R * 0.16, y = Math.sin(a0) * R * 0.16;
+      let ang = a0;
+      c.lineWidth = Math.max(1, R * 0.05);
+      c.beginPath();
+      c.moveTo(x, y);
+      for (let s = 0; s < 3; s++) {
+        ang += (hash01(i * 5 + s, 77) - 0.5) * 1.1;
+        x += Math.cos(ang) * R * 0.26;
+        y += Math.sin(ang) * R * 0.26;
+        c.lineTo(x, y);
+      }
+      c.stroke();
+      c.lineWidth = Math.max(0.8, R * 0.03);
+      c.beginPath();
+      c.moveTo(x, y);
+      c.lineTo(x + Math.cos(ang + 0.9) * R * 0.14, y + Math.sin(ang + 0.9) * R * 0.14);
+      c.stroke();
+    }
+  });
+};
+
+/** POLYPS — glow-tipped nubs clustered like an anemone bed. params: n. */
+const polyps: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const glow = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 6));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, 83) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, 89)) * R * 0.6;
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      const s = R * (0.08 + hash01(i, 97) * 0.07);
+      c.fillStyle = shade(ramp.base, (hash01(i, 101) - 0.5) * 0.2);
+      c.beginPath(); c.arc(x, y, s, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.5);
+      c.lineWidth = 0.8;
+      c.stroke();
+      c.fillStyle = withAlpha(glow, 0.85);
+      c.beginPath(); c.arc(x, y, s * 0.4, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** LIVE: SLIME TRAIL — ooze blobs shed behind the body, sagging and fading
+ *  as they age. params: n. */
+const slimeTrail: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.base.base;
+  const n = Math.round(P(spec, 'n', 4));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const age = ((t * 0.5 + i / n) % 1);
+      const x = -R * (0.6 + age * 1.5);
+      const y = Math.sin(i * 2.7 + Math.floor(t * 0.5 + i / n) * 3.3) * R * 0.3;
+      const s = R * 0.2 * (1 - age * 0.6);
+      c.globalAlpha = 0.4 * (1 - age);
+      c.fillStyle = col;
+      c.beginPath();
+      c.ellipse(x, y, s * 1.25, s * 0.85, 0, 0, Math.PI * 2);
+      c.fill();
+      c.globalAlpha = 0.3 * (1 - age);
+      c.fillStyle = shade(col, 0.3);
+      c.beginPath(); c.arc(x - s * 0.3, y - s * 0.25, s * 0.3, 0, Math.PI * 2); c.fill();
+      c.globalAlpha = 1;
+    }
+  });
+};
+
+/** A SAILFIN — a spined membrane running the spine, translucent between the
+ *  rays: the silhouette you see coming across the water. params: spines. */
+const sailfin: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const spines = Math.round(P(spec, 'spines', 5));
+  place(ctx, r, spec, (c, R) => {
+    // The membrane: a scalloped ridge from tail to crown along the axis.
+    c.beginPath();
+    c.moveTo(-R * 0.95, 0);
+    for (let i = 0; i < spines; i++) {
+      const f = i / (spines - 1);
+      const x = -R * 0.95 + f * R * 1.25;
+      const h = R * (0.26 + Math.sin(f * Math.PI) * 0.3);
+      c.quadraticCurveTo(x - R * 0.06, -h, x, -h * (i === spines - 1 ? 0.4 : 0.72));
+    }
+    c.lineTo(R * 0.3, 0);
+    c.closePath();
+    c.globalAlpha = 0.55;
+    c.fillStyle = ramp.base;
+    c.fill();
+    c.globalAlpha = 1;
+    outlined(c, ramp, 1);
+    // The rays.
+    c.strokeStyle = withAlpha(ramp.outline, 0.7);
+    c.lineWidth = Math.max(1, R * 0.045);
+    for (let i = 0; i < spines; i++) {
+      const f = i / (spines - 1);
+      const x = -R * 0.95 + f * R * 1.25;
+      const h = R * (0.26 + Math.sin(f * Math.PI) * 0.3);
+      c.beginPath();
+      c.moveTo(x, 0);
+      c.lineTo(x, -h);
+      c.stroke();
+    }
+  });
+};
+
+/** A WARHORN slung at the flank — a curled spiral with a banded mouth: the
+ *  raid about to be announced. */
+const warhorn: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(2.5, R * 0.16);
+    c.beginPath();
+    c.arc(-R * 0.35, R * 0.55, R * 0.3, -0.6, Math.PI * 1.05);
+    c.stroke();
+    c.strokeStyle = ramp.light;
+    c.lineWidth = Math.max(1, R * 0.05);
+    c.beginPath();
+    c.arc(-R * 0.35, R * 0.55, R * 0.36, -0.4, 0.9);
+    c.stroke();
+    // The bell mouth + binding band.
+    c.fillStyle = shade(ramp.base, -0.25);
+    c.beginPath();
+    c.ellipse(-R * 0.06, R * 0.48, R * 0.11, R * 0.08, -0.5, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = withAlpha(pal.metal.base, 0.9);
+    c.lineWidth = Math.max(1.2, R * 0.06);
+    c.beginPath();
+    c.arc(-R * 0.35, R * 0.55, R * 0.3, Math.PI * 0.55, Math.PI * 0.8);
+    c.stroke();
+  });
+};
+
+/** DRAPE — limp weed/cloth strands trailing off the body: the drowned look,
+ *  or a banner nobody washed. params: n. */
+const drape: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'cloth');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const off = (i / Math.max(1, n - 1) - 0.5) * R * 1.1;
+      const len = R * (0.5 + hash01(i, 103) * 0.5);
+      const droop = (hash01(i, 107) - 0.3) * R * 0.3;
+      c.strokeStyle = shade(ramp.base, (hash01(i, 109) - 0.6) * 0.24);
+      c.lineWidth = Math.max(1.4, R * (0.09 - i * 0.008));
+      c.beginPath();
+      c.moveTo(-R * 0.3, off);
+      c.quadraticCurveTo(-R * 0.7, off + droop, -R * 0.3 - len, off + droop * 1.6);
+      c.stroke();
+    }
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -2542,6 +2833,8 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   stripes, spots, rhinoHorn, tuftEars, whiskers, shellSpiral, hump,
   icicles, furRuff, breathPuff, warpaint, bandolier, dorsalRidge,
   fangs, plume, beard, tailFeathers, torch, net,
+  mawRing, lure, sporeVents, mossPatch, veinweb, polyps, slimeTrail,
+  sailfin, warhorn, drape,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

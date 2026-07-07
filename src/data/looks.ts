@@ -480,6 +480,17 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', params: { n: 3, spread: 0.7, dist: 0.66, size: 0.07 } },
     ],
   },
+  // The Spitting Horror finally looks like its name: a veined lump of legs
+  // around a lamprey mouth, throbbing while it ranges you.
+  spitting_horror: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.18, seed: 33 } },
+      { kind: 'legs', params: { pairs: 3 } },
+      { kind: 'mawRing', x: 0.4, scale: 0.62, params: { teeth: 9 } },
+      { kind: 'eyes', params: { n: 3, spread: 0.6, dist: 0.5, size: 0.06 } },
+    ],
+    live: [{ kind: 'veinweb', alpha: 0.8, params: { n: 5 } }],
+  },
   scorpion: {
     parts: [
       { kind: 'carapace', params: { segs: 4 } },
@@ -504,6 +515,8 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'maw', scale: 0.75, params: { arc: 0.7 } },
       { kind: 'eyes', color: '#bfffe8', params: { n: 1, dist: 1.15, size: 0.14 } },
     ],
+    // The LURE: the deep's oldest lie, bobbing ahead of the teeth.
+    live: [{ kind: 'lure', color: '#bfffe8', params: { len: 1.2 } }],
   },
 
   // ================================================================ FUNGAL
@@ -526,6 +539,29 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'caps', x: -0.2, scale: 0.9, params: { n: 3 } },
       { kind: 'claws', params: { len: 0.4 } },
     ],
+  },
+  // The spitter earns its own portrait: a mossy hunched thing, blowholes
+  // puffing, a pale toothless maw stretched forward to spit.
+  spore_spitter: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.16, seed: 12 } },
+      { kind: 'mossPatch', scale: 0.95, params: { n: 3 } },
+      { kind: 'caps', x: -0.28, scale: 0.75, params: { n: 2 } },
+      { kind: 'maw', x: 0.42, scale: 0.62, params: { arc: 0.6 } },
+      { kind: 'eyes', params: { spread: 0.5, dist: 0.62, size: 0.08 } },
+    ],
+    live: [{ kind: 'sporeVents', params: { n: 2 } }],
+  },
+  // The brute: a walking log of moss and shelf-caps, claws first.
+  mycelial_brute: {
+    parts: [
+      { kind: 'blob', scale: 1.02, params: { irr: 0.12, seed: 21 } },
+      { kind: 'mossPatch', params: { n: 4 } },
+      { kind: 'caps', x: -0.3, params: { n: 3 } },
+      { kind: 'claws', params: { len: 0.5 } },
+      { kind: 'eyes', params: { spread: 0.4, dist: 0.64, size: 0.08 } },
+    ],
+    live: [{ kind: 'sporeVents', x: -0.15, params: { n: 2 } }],
   },
   fungal_tender: {
     parts: [
@@ -727,6 +763,8 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'bloatSacs', params: { n: 6 } },
       { kind: 'eyes', color: '#c8e07a', params: { spread: 0.45, dist: 0.6, size: 0.08 } },
     ],
+    // It leaves a trail you could follow. You shouldn't.
+    live: [{ kind: 'slimeTrail', params: { n: 4 } }],
   },
   bloat: {
     parts: [
