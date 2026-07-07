@@ -24,6 +24,8 @@
 // All escalation is DATA on the surge below; the Vault tunes purely via pressure.
 // ---------------------------------------------------------------------------
 
+import { vec } from '../../core/math';
+import { registerKillHandler } from '../../engine/killHandlers';
 import { CrusadeField, type CrusadeSurge } from '../overlays/crusade';
 import type { ContentPackage, FactionSpec } from '../types';
 
@@ -144,3 +146,20 @@ export const CRUSADE: ContentPackage = {
     { a: 'warbands', b: 'crusade', kind: 'amplifies', strength: 1.15 },
   ],
 };
+
+// A Crusade camp / fortress COMMANDER — felling it LIBERATES the zone (its
+// influence obliterated), for a tier-scaled bounty. (Whoever lands the blow.)
+// (The LEADER in its sanctum consumes World.crusadeRealmContext, so its row
+// lives on World.worldKillRules.)
+registerKillHandler({
+  id: 'crusade_camp',
+  when: ctx => ctx.actor.tag === 'crusade_camp' || ctx.actor.tag === 'crusade_fortress',
+  run: ctx => {
+    const mul = ctx.sim.crusadeField?.resolveCrusadeZone(ctx.zone.id) ?? 1;
+    ctx.bumpLedger('crusade_zones_cleared');
+    ctx.grantXp(Math.round((150 + ctx.zone.level * 30) * mul));
+    for (let i = 0; i < 1 + Math.floor(mul); i++) ctx.dropGemAt(ctx.actor.pos);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
+      `The crusade is driven from ${ctx.zone.name}! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18);
+  },
+});

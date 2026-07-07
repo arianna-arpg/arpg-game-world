@@ -24,6 +24,8 @@
 // without touching the engine.
 // ---------------------------------------------------------------------------
 
+import { vec } from '../../core/math';
+import { registerKillHandler } from '../../engine/killHandlers';
 import { DeadwakeField, type DeadwakeSurge } from '../overlays/deadwake';
 import type { ContentPackage } from '../types';
 
@@ -150,3 +152,38 @@ export const DEADWAKE: ContentPackage = {
     { a: 'warbands', b: 'deadwake', kind: 'amplifies', strength: 1.1 },
   ],
 };
+
+// A streamed Deadwake undead fell — the tide SWELLS (death is everlasting;
+// each casualty feeds the next pour). Only ROUTING (the leader) ends it.
+registerKillHandler({
+  id: 'deadwake_spawn',
+  tag: 'deadwake_spawn',
+  run: ctx => {
+    ctx.sim.deadwakeField?.bolster(ctx.zone.map);
+  },
+});
+
+// THE DEADWAKE HOST-LEADER — felling it ROUTS the roaming tide (the wake
+// covering this ground recedes) for a bounty. The wake is resolved by the
+// player's node coordinate (it isn't bound to a zone — it drifts). Counts
+// whoever lands the blow; the routed ledger gates the package's Vault tiers.
+// (The fused-tide NECROPOLIS boss consumes World.necropolisRealmContext, so
+// its row lives on World.worldKillRules.)
+registerKillHandler({
+  id: 'deadwake_leader',
+  tag: 'deadwake_leader',
+  run: ctx => {
+    const routed = ctx.sim.deadwakeField?.routeWakeAt(ctx.zone.map) ?? false;
+    // Only credit a rout that ACTUALLY happened — the tide may have drifted on,
+    // leaving its leader behind (the ledger gates the package's Vault tiers).
+    if (routed) ctx.bumpLedger('deadwake_routed');
+    const rr = ctx.sim.deadwakeField?.surge().routReward;
+    if (rr) {
+      ctx.grantXp(Math.round(rr.xpBase + ctx.zone.level * rr.xpPerLevel));
+      for (let i = 0; i < rr.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+    }
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
+      routed ? 'The Deadwake breaks — its tide recedes!' : 'The undead host-leader falls!',
+      '#c8a8e8', 18);
+  },
+});

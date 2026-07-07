@@ -20,6 +20,8 @@
 // DATA on the surge below, so it tunes + extends without touching the engine.
 // ---------------------------------------------------------------------------
 
+import { vec } from '../../core/math';
+import { registerKillHandler } from '../../engine/killHandlers';
 import { ContagionField, type ContagionSurge } from '../overlays/contagion';
 import type { ContentPackage, FactionSpec } from '../types';
 
@@ -94,3 +96,24 @@ export const CONTAGION: ContentPackage = {
   world: { overlay: (ctx) => new ContagionField(ctx, CONTAGION_SURGE) },
   factions: [PLAGUE_FACTION],
 };
+
+// PATIENT ZERO — felling the source boss does NOT cure the infected zones at
+// once; it destroys the SOURCE, and the contagion then recedes OUTWARD from here
+// over time (the slow chain-reaction cleanse). Big, level-scaled spoils; the
+// cleansed ledger gates the Vault tiers. (Counts whoever lands the blow.)
+registerKillHandler({
+  id: 'patient_zero',
+  tag: 'patient_zero',
+  run: ctx => {
+    const cured = ctx.sim.contagionField?.onPatientZeroSlain(ctx.zone.id) ?? false;
+    if (cured) ctx.bumpLedger('contagion_cleansed');
+    ctx.bumpLedger('patient_zero_slain');
+    const cgn = ctx.sim.contagionField?.surge();
+    if (cgn?.reward) {
+      ctx.grantXp(Math.round(cgn.reward.xpBase + ctx.zone.level * cgn.reward.xpPerLevel));
+      for (let i = 0; i < cgn.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+    }
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
+      'Patient Zero falls — the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18);
+  },
+});

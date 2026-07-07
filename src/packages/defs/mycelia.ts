@@ -12,6 +12,8 @@
 // bloom's spawn. The whole mechanic is DATA on MYCELIA_SURGE.
 // ---------------------------------------------------------------------------
 
+import { vec } from '../../core/math';
+import { registerKillHandler } from '../../engine/killHandlers';
 import { MyceliaField, type MyceliaSurge } from '../overlays/mycelia';
 import type { ContentPackage, FactionSpec } from '../types';
 
@@ -92,3 +94,31 @@ export const MYCELIA: ContentPackage = {
   world: { overlay: (ctx) => new MyceliaField(ctx, MYCELIA_SURGE) },
   factions: [FUNGAL_FACTION],
 };
+
+// MYCELIA: a slain fungal CULLS the bloom's grip on this zone (density drops; sustained
+// culling recoils + relocates the bloom — the player pushing it back).
+registerKillHandler({
+  id: 'mycelia_cull',
+  tag: 'mycelia',
+  run: ctx => {
+    ctx.sim.myceliaField?.cull(ctx.zone.id, 1);
+  },
+});
+
+// THE HEARTBLOOM — felling the core FORCES the bloom to collapse to dormant (the
+// high-risk shortcut), for the bloom-scale spoils.
+registerKillHandler({
+  id: 'mycelia_heart',
+  tag: 'mycelia_heart',
+  run: ctx => {
+    ctx.sim.myceliaField?.onHeartbloomSlain();
+    ctx.bumpLedger('heartblooms_slain');
+    const myc = ctx.sim.myceliaField?.surge();
+    if (myc?.reward) {
+      ctx.grantXp(Math.round(myc.reward.xpBase + ctx.zone.level * myc.reward.xpPerLevel));
+      for (let i = 0; i < myc.reward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+    }
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
+      'The Heartbloom bursts — the Bloom collapses back into itself!', myc?.color ?? '#8fd06f', 18);
+  },
+});

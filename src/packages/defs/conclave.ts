@@ -18,6 +18,8 @@
 // incubation threshold — is DATA on the surge below; the Vault tunes via pressure.
 // ---------------------------------------------------------------------------
 
+import { chance, vec } from '../../core/math';
+import { registerKillHandler } from '../../engine/killHandlers';
 import { ConclaveField, type ConclaveSurge } from '../overlays/conclave';
 import type { ContentPackage, FactionSpec } from '../types';
 
@@ -111,3 +113,23 @@ export const CONCLAVE: ContentPackage = {
   world: { overlay: (ctx) => new ConclaveField(ctx, CONCLAVE_SURGE) },
   factions: [OCCULT_FACTION, ELDRITCH_FACTION],
 };
+
+// CONCLAVE: a slain cultist may erupt into an Eldritch blood-demon — the
+// ritual's backlash. "Fairly low" per-death chance, data-driven. The demon is
+// hostile to the player AND (via faction relations) to the surviving Occult,
+// so the rite can turn on its own. Fires whoever lands the blow.
+registerKillHandler({
+  id: 'ritual_cultist',
+  tag: 'ritual_cultist',
+  run: ctx => {
+    // Tier progress counts PLAYER-side kills only — a turncoat blood-demon
+    // culling its own cultists must not pad the "Slay N cultists" tier.
+    if (ctx.credit) ctx.bumpLedger('cultists_slain');
+    const rf = ctx.sim.conclaveField?.surge().ritual;
+    if (rf && chance(rf.bloodDemonChance)) {
+      ctx.spawnHostileAt(rf.bloodDemonId, Math.max(1, ctx.actor.level), ctx.actor.pos);
+      ctx.flash(ctx.actor.pos, 64, '#e8003a', 0.6);
+      ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 40), 'Blood erupts — something crawls forth!', '#e85050', 16);
+    }
+  },
+});

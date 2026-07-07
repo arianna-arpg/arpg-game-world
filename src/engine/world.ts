@@ -45,6 +45,7 @@ import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
@@ -16213,6 +16214,172 @@ export class World {
     }
   }
 
+  /** The kill-time facade handed to bounty rows (engine/killHandlers.ts) — the
+   *  only window a row gets onto this World. */
+  private killCtx(actor: Actor, killer: Actor | null, credit: boolean): KillCtx {
+    return {
+      actor, killer, credit, zone: this.zone, sim: this.sim, time: this.time,
+      grantXp: n => this.grantXp(n),
+      dropGemAt: at => this.dropGemAt(at),
+      text: (at, msg, color, size) => this.text(at, msg, color, size),
+      bumpLedger: (key, by) => bumpLedger(this.ledger, key, by),
+      flash: (at, radius, color, life = 0.3) =>
+        this.flashes.push({ pos: vec(at.x, at.y), radius, color, life, maxLife: life }),
+      spawnHostileAt: (defId, level, at) => {
+        const m = this.createMonster(defId, level, 'enemy');
+        m.pos = this.clampPos(vec(at.x, at.y), m.radius);
+        this.actors.push(m);
+        return m;
+      },
+      simView: () => this.simView(),
+    };
+  }
+
+  /** KILL RULES bound to this World's RUN-STATE (the dive's haul, the hunt's
+   *  beast ref, realm contexts, the built-boss site). Module rows in
+   *  killHandlers.ts must stay stateless — one registry serves every World the
+   *  process boots — so these live here instead, same KillRule shape (the
+   *  rouseRules pattern). A package whose state lives on its overlay registers
+   *  through registerKillHandler from its def file, never here. */
+  private readonly worldKillRules: KillRule[] = [
+    // DESCENT: a slain Depthkin pays Echoes (× depth) into the dive's haul.
+    {
+      id: 'descent_depthkin',
+      when: ctx => !!this.descentRun && ctx.credit && ctx.actor.faction === 'depthkin',
+      run: ctx => {
+        const dr = this.descentRun;
+        if (!dr) return;
+        const cfg = ctx.sim.descentField?.surge();
+        if (cfg) dr.payout += Math.round(cfg.payoutPerKill * (1 + dr.depth * cfg.payoutDepthBonus));
+        ctx.bumpLedger('depthkin_slain');
+      },
+    },
+    // THE HUNT: the great beast falls (you ran it down — or out-DPSed a flee).
+    // Big payout + the ledger that gates the package tiers (whoever lands it).
+    {
+      id: 'hunt_beast',
+      tag: 'hunt_beast',
+      run: ctx => {
+        ctx.sim.huntField?.endHunt();
+        if (this.huntBeast === ctx.actor) this.huntBeast = null;
+        ctx.bumpLedger('hunt_beasts_slain');
+        ctx.bumpLedger('hunt_seen');
+        ctx.grantXp(Math.round(300 + ctx.zone.level * 52));
+        for (let i = 0; i < 5; i++) ctx.dropGemAt(ctx.actor.pos);
+        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
+          `${ctx.actor.name} is slain — the hunt is won!`, '#ffd700', 20);
+      },
+    },
+    // The Balor in its home realm — felling it repels the OVERWORLD invasion it
+    // spawned from (off-graph), for the biggest, stage-scaled spoils. The deep
+    // risk/reward payoff for letting the invasion fester to a portal.
+    {
+      id: 'balor_realm',
+      tag: 'balor_realm',
+      run: ctx => {
+        const rctx = this.realmContext;
+        this.realmContext = null;
+        if (rctx) ctx.sim.demonField?.resolveInvasionById(rctx.invId);
+        const mul = rctx?.rewardMul ?? 1;
+        ctx.bumpLedger('demon_invasions_repelled');
+        ctx.bumpLedger('balor_slain');
+        ctx.grantXp(Math.round((300 + ctx.zone.level * 52) * mul));
+        const gems = 3 + Math.floor(mul);
+        for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
+        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
+          `The demon realm is purged! (×${mul.toFixed(1)} spoils)`, '#ffd700', 20);
+      },
+    },
+    // The Crusade LEADER in its sanctum — felling it COLLAPSES the whole crusade
+    // (every held zone reverts), for the fattest, network-scaled spoils.
+    {
+      id: 'crusade_leader',
+      tag: 'crusade_leader',
+      run: ctx => {
+        const rctx = this.crusadeRealmContext;
+        this.crusadeRealmContext = null;
+        const mul = rctx ? (ctx.sim.crusadeField?.resolveCrusade(rctx.crusadeId) ?? 1) : 1;
+        ctx.bumpLedger('crusade_leaders_slain');
+        ctx.grantXp(Math.round((320 + ctx.zone.level * 52) * mul));
+        const gems = 3 + Math.floor(mul);
+        for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
+        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
+          `The Crusade is broken! (×${mul.toFixed(1)} spoils)`, '#ffd700', 20);
+      },
+    },
+    // THE NECROPOLIS BONELORD (the uber) — purging it DISPERSES every active tide
+    // and refreshes the whole cycle, for the combined-event spoils. The climax of
+    // letting two Deadwakes fuse and chasing the travelling seat down.
+    {
+      id: 'necropolis_boss',
+      tag: 'necropolis_boss',
+      run: ctx => {
+        const rctx = this.necropolisRealmContext;
+        // The seat is DEFEATED — it holds + stops generating, but only fully crumbles
+        // (the tides disperse, the icon vanishes, the cycle resets) when the player
+        // LEAVES its halls (handled in loadZone). The spoils land now, for the kill.
+        const defeated = ctx.sim.deadwakeField?.markNecropolisDefeated() ?? false;
+        if (defeated) ctx.bumpLedger('necropolis_purged');
+        const rr = rctx?.reward;
+        if (rr) {
+          ctx.grantXp(Math.round(rr.xpBase + ctx.zone.level * rr.xpPerLevel));
+          for (let i = 0; i < rr.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+        }
+        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
+          defeated ? 'The Bonelord falls — leave the Necropolis and the cycle breaks anew!' : 'The Bonelord falls!',
+          '#f0e8cc', 20);
+      },
+    },
+    // THE FRACTURE CAPSTONE BOSS in its reward rift — felling it claims the
+    // realm-scale spoils (the climax of running a full max-span fracture chain).
+    {
+      id: 'fracture_boss',
+      tag: 'fracture_boss',
+      run: ctx => {
+        const rctx = this.fractureRealmContext;
+        this.fractureRealmContext = null;
+        ctx.sim.fractureField?.consumeRift(); // the rift is spent — stop re-materializing it
+        const mul = rctx?.rewardMul ?? 1.5;
+        ctx.bumpLedger('fracture_boss_slain');
+        ctx.grantXp(Math.round((300 + ctx.zone.level * 52) * mul));
+        const gems = 3 + Math.floor(mul);
+        for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
+        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
+          `The ${rctx?.variant ?? 'fracture'} rift collapses! (×${mul.toFixed(1)} spoils)`,
+          rctx?.color ?? '#ffd700', 20);
+      },
+    },
+    // AMALGAMATION: the assembled boss falls — claim the part-themed spoils you
+    // BUILT, bank the completion (a future Uber-Bonewright seam), and the
+    // Bonewright fades, to re-appear uncharted somewhere new on a later roll.
+    {
+      id: 'amalgam_boss',
+      tag: 'amalgam_boss',
+      run: ctx => {
+        const af = ctx.sim.amalgamationField;
+        const info = af ? af.peek() : null;
+        ctx.bumpLedger('amalgamations_completed');
+        const cfg = af?.surge();
+        if (cfg) {
+          ctx.grantXp(Math.round(cfg.bossReward.xpBase + ctx.zone.level * cfg.bossReward.xpPerLevel));
+          for (let i = 0; i < cfg.bossReward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+          if (af && info) for (const pid of info.chosenParts) this.dropAmalgamPart(af, pid, ctx.actor.pos);
+        }
+        af?.endAmalgamation();
+        // The Bonewright was untargetable (it never died in the fight) — despawn it
+        // now so the site is gone and a fresh one can re-open uncharted later.
+        if (this.amalgamSite) {
+          const necro = this.actorById(this.amalgamSite.necroId);
+          if (necro) { const i = this.actors.indexOf(necro); if (i >= 0) this.actors.splice(i, 1); }
+          this.amalgamSite = null;
+        }
+        ctx.flash(ctx.actor.pos, 170, '#9ad0b0', 0.9);
+        ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
+          'The Amalgamation falls — the Bonewright fades, its study complete.', '#ffd700', 18);
+      },
+    },
+  ];
+
   kill(actor: Actor, silent = false, killer?: Actor): void {
     if (actor.dead) return;
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
@@ -16485,15 +16652,6 @@ export class World {
           const bias = actor.defId ? MONSTERS[actor.defId]?.gemBias : undefined;
           for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias);
         }
-        // A slain warlord pays the player a bounty and a rival's gratitude.
-        // (Its faction's power breaks below — credit or not, the body counts.)
-        if (actor.tag === 'warlord' && actor.faction) {
-          this.grantXp(200 + this.zone.level * 40);
-          this.dropGemAt(actor.pos);
-          this.dropGemAt(actor.pos);
-          const rival = Object.keys(FACTIONS).find(o => factionStance(actor.faction!, o) === 'hostile');
-          if (rival) this.sim.reputation.add(rival, 25);
-        }
         // Breakables can spill something drinkable.
         const mdef = actor.defId ? MONSTERS[actor.defId] : undefined;
         if (mdef?.orbDrops && chance(mdef.orbDrops)) {
@@ -16505,257 +16663,16 @@ export class World {
           });
         }
       }
-      // Whoever lands the blow, a warlord's fall breaks its faction's power and
-      // stills its wars — the field state must track the body, credit or not.
-      if (actor.tag === 'warlord' && actor.faction) {
-        this.sim.warlord.onWarlordKilled(actor.faction, this.time, this.simView());
-        bumpLedger(this.ledger, 'warlords_killed'); // → unlocks Demon Invasions
-        const fname = (FACTIONS[actor.faction]?.name ?? actor.faction).replace(/^the /, '');
-        this.text(vec(actor.pos.x, actor.pos.y - 40),
-          `${fname} warlord slain! Their power breaks.`, '#ffd700', 18);
-      }
-      // A Crowned champion's fall drives the Warbands package unlock (counts
-      // whoever lands the blow, like a warlord).
-      if (actor.rarity === 'crowned') {
-        bumpLedger(this.ledger, 'crowned_killed');
-        this.text(vec(actor.pos.x, actor.pos.y - 40), 'A Crowned champion falls!', '#e64db4', 16);
-      }
-      // DESCENT: a slain Depthkin pays Echoes (× depth) into the dive's haul.
-      if (this.descentRun && credit && actor.faction === 'depthkin') {
-        const cfg = this.sim.descentField?.surge();
-        if (cfg) this.descentRun.payout += Math.round(cfg.payoutPerKill * (1 + this.descentRun.depth * cfg.payoutDepthBonus));
-        bumpLedger(this.ledger, 'depthkin_slain');
-      }
-      // THE HUNT: the great beast falls (you ran it down — or out-DPSed a flee).
-      // Big payout + the ledger that gates the package tiers (whoever lands it).
-      if (actor.tag === 'hunt_beast') {
-        this.sim.huntField?.endHunt();
-        if (this.huntBeast === actor) this.huntBeast = null;
-        bumpLedger(this.ledger, 'hunt_beasts_slain');
-        bumpLedger(this.ledger, 'hunt_seen');
-        this.grantXp(Math.round(300 + this.zone.level * 52));
-        for (let i = 0; i < 5; i++) this.dropGemAt(actor.pos);
-        this.text(vec(actor.pos.x, actor.pos.y - 58),
-          `${actor.name} is slain — the hunt is won!`, '#ffd700', 20);
-      }
-      // The Balor at a Demon Invasion's epicenter — felling it REPELS the whole
-      // invasion (the storm stops, the radius lifts). Reward scales with the
-      // stage it reached, so daring to let it fester pays off (whoever lands it).
-      if (actor.tag === 'balor_epicenter') {
-        const mul = this.sim.demonField?.resolveInvasion(this.zone.id) ?? 1;
-        bumpLedger(this.ledger, 'demon_invasions_repelled');
-        bumpLedger(this.ledger, 'balor_slain');
-        this.grantXp(Math.round((220 + this.zone.level * 44) * mul));
-        const gems = 2 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) this.dropGemAt(actor.pos);
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          `The invasion is broken! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18);
-      }
-      // The Balor in its home realm — felling it repels the OVERWORLD invasion it
-      // spawned from (off-graph), for the biggest, stage-scaled spoils. The deep
-      // risk/reward payoff for letting the invasion fester to a portal.
-      if (actor.tag === 'balor_realm') {
-        const ctx = this.realmContext;
-        this.realmContext = null;
-        if (ctx) this.sim.demonField?.resolveInvasionById(ctx.invId);
-        const mul = ctx?.rewardMul ?? 1;
-        bumpLedger(this.ledger, 'demon_invasions_repelled');
-        bumpLedger(this.ledger, 'balor_slain');
-        this.grantXp(Math.round((300 + this.zone.level * 52) * mul));
-        const gems = 3 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) this.dropGemAt(actor.pos);
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          `The demon realm is purged! (×${mul.toFixed(1)} spoils)`, '#ffd700', 20);
-      }
-      // A Crusade camp / fortress COMMANDER — felling it LIBERATES the zone (its
-      // influence obliterated), for a tier-scaled bounty. (Whoever lands the blow.)
-      if (actor.tag === 'crusade_camp' || actor.tag === 'crusade_fortress') {
-        const mul = this.sim.crusadeField?.resolveCrusadeZone(this.zone.id) ?? 1;
-        bumpLedger(this.ledger, 'crusade_zones_cleared');
-        this.grantXp(Math.round((150 + this.zone.level * 30) * mul));
-        for (let i = 0; i < 1 + Math.floor(mul); i++) this.dropGemAt(actor.pos);
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          `The crusade is driven from ${this.zone.name}! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18);
-      }
-      // The Crusade LEADER in its sanctum — felling it COLLAPSES the whole crusade
-      // (every held zone reverts), for the fattest, network-scaled spoils.
-      if (actor.tag === 'crusade_leader') {
-        const ctx = this.crusadeRealmContext;
-        this.crusadeRealmContext = null;
-        const mul = ctx ? (this.sim.crusadeField?.resolveCrusade(ctx.crusadeId) ?? 1) : 1;
-        bumpLedger(this.ledger, 'crusade_leaders_slain');
-        this.grantXp(Math.round((320 + this.zone.level * 52) * mul));
-        const gems = 3 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) this.dropGemAt(actor.pos);
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          `The Crusade is broken! (×${mul.toFixed(1)} spoils)`, '#ffd700', 20);
-      }
-      // A streamed Deadwake undead fell — the tide SWELLS (death is everlasting;
-      // each casualty feeds the next pour). Only ROUTING (the leader) ends it.
-      if (actor.tag === 'deadwake_spawn') {
-        this.sim.deadwakeField?.bolster(this.zone.map);
-      }
-      // THE DEADWAKE HOST-LEADER — felling it ROUTS the roaming tide (the wake
-      // covering this ground recedes) for a bounty. The wake is resolved by the
-      // player's node coordinate (it isn't bound to a zone — it drifts). Counts
-      // whoever lands the blow; the routed ledger gates the package's Vault tiers.
-      if (actor.tag === 'deadwake_leader') {
-        const routed = this.sim.deadwakeField?.routeWakeAt(this.zone.map) ?? false;
-        // Only credit a rout that ACTUALLY happened — the tide may have drifted on,
-        // leaving its leader behind (the ledger gates the package's Vault tiers).
-        if (routed) bumpLedger(this.ledger, 'deadwake_routed');
-        const rr = this.sim.deadwakeField?.surge().routReward;
-        if (rr) {
-          this.grantXp(Math.round(rr.xpBase + this.zone.level * rr.xpPerLevel));
-          for (let i = 0; i < rr.gems; i++) this.dropGemAt(actor.pos);
-        }
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          routed ? 'The Deadwake breaks — its tide recedes!' : 'The undead host-leader falls!',
-          '#c8a8e8', 18);
-      }
-      // THE NECROPOLIS BONELORD (the uber) — purging it DISPERSES every active tide
-      // and refreshes the whole cycle, for the combined-event spoils. The climax of
-      // letting two Deadwakes fuse and chasing the travelling seat down.
-      if (actor.tag === 'necropolis_boss') {
-        const ctx = this.necropolisRealmContext;
-        // The seat is DEFEATED — it holds + stops generating, but only fully crumbles
-        // (the tides disperse, the icon vanishes, the cycle resets) when the player
-        // LEAVES its halls (handled in loadZone). The spoils land now, for the kill.
-        const defeated = this.sim.deadwakeField?.markNecropolisDefeated() ?? false;
-        if (defeated) bumpLedger(this.ledger, 'necropolis_purged');
-        const rr = ctx?.reward;
-        if (rr) {
-          this.grantXp(Math.round(rr.xpBase + this.zone.level * rr.xpPerLevel));
-          for (let i = 0; i < rr.gems; i++) this.dropGemAt(actor.pos);
-        }
-        this.text(vec(actor.pos.x, actor.pos.y - 58),
-          defeated ? 'The Bonelord falls — leave the Necropolis and the cycle breaks anew!' : 'The Bonelord falls!',
-          '#f0e8cc', 20);
-      }
-      // PATIENT ZERO — felling the source boss does NOT cure the infected zones at
-      // once; it destroys the SOURCE, and the contagion then recedes OUTWARD from here
-      // over time (the slow chain-reaction cleanse). Big, level-scaled spoils; the
-      // cleansed ledger gates the Vault tiers. (Counts whoever lands the blow.)
-      if (actor.tag === 'patient_zero') {
-        const cured = this.sim.contagionField?.onPatientZeroSlain(this.zone.id) ?? false;
-        if (cured) bumpLedger(this.ledger, 'contagion_cleansed');
-        bumpLedger(this.ledger, 'patient_zero_slain');
-        const cgn = this.sim.contagionField?.surge();
-        if (cgn?.reward) {
-          this.grantXp(Math.round(cgn.reward.xpBase + this.zone.level * cgn.reward.xpPerLevel));
-          for (let i = 0; i < cgn.reward.gems; i++) this.dropGemAt(actor.pos);
-        }
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          'Patient Zero falls — the contagion begins to recede!', cgn?.color ?? '#8fd24a', 18);
-      }
-      // MYCELIA: a slain fungal CULLS the bloom's grip on this zone (density drops; sustained
-      // culling recoils + relocates the bloom — the player pushing it back).
-      if (actor.tag === 'mycelia') {
-        this.sim.myceliaField?.cull(this.zone.id, 1);
-      }
-      // THE HEARTBLOOM — felling the core FORCES the bloom to collapse to dormant (the
-      // high-risk shortcut), for the bloom-scale spoils.
-      if (actor.tag === 'mycelia_heart') {
-        this.sim.myceliaField?.onHeartbloomSlain();
-        bumpLedger(this.ledger, 'heartblooms_slain');
-        const myc = this.sim.myceliaField?.surge();
-        if (myc?.reward) {
-          this.grantXp(Math.round(myc.reward.xpBase + this.zone.level * myc.reward.xpPerLevel));
-          for (let i = 0; i < myc.reward.gems; i++) this.dropGemAt(actor.pos);
-        }
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          'The Heartbloom bursts — the Bloom collapses back into itself!', myc?.color ?? '#8fd06f', 18);
-      }
-      // THE FRACTURE CAPSTONE BOSS in its reward rift — felling it claims the
-      // realm-scale spoils (the climax of running a full max-span fracture chain).
-      if (actor.tag === 'fracture_boss') {
-        const ctx = this.fractureRealmContext;
-        this.fractureRealmContext = null;
-        this.sim.fractureField?.consumeRift(); // the rift is spent — stop re-materializing it
-        const mul = ctx?.rewardMul ?? 1.5;
-        bumpLedger(this.ledger, 'fracture_boss_slain');
-        this.grantXp(Math.round((300 + this.zone.level * 52) * mul));
-        const gems = 3 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) this.dropGemAt(actor.pos);
-        this.text(vec(actor.pos.x, actor.pos.y - 58),
-          `The ${ctx?.variant ?? 'fracture'} rift collapses! (×${mul.toFixed(1)} spoils)`,
-          ctx?.color ?? '#ffd700', 20);
-      }
-      // THE OBSERVER at an Eldritch Incursion's epicenter — felling it COLLAPSES that
-      // epicenter (and the whole incursion once its last falls), for festering-scaled
-      // spoils. The deep payoff for tracking the blight to its hidden source.
-      if (actor.tag === 'eldritch_observer') {
-        const mul = this.sim.incursionField.resolveEpicenter(this.zone.id);
-        bumpLedger(this.ledger, 'eldritch_repelled');
-        this.grantXp(Math.round((300 + this.zone.level * 52) * mul));
-        const gems = 3 + Math.floor(mul);
-        for (let i = 0; i < gems; i++) this.dropGemAt(actor.pos);
-        this.text(vec(actor.pos.x, actor.pos.y - 56),
-          `The Eldritch presence recoils! (×${mul.toFixed(1)} spoils)`, '#7fce6a', 20);
-      }
-      // CLEANSE: culling a corrupted foe or an Eldritch spawn RETRACTS the reach in
-      // this zone — fighting the blight pushes the tentacles back (the tug-of-war).
-      if (actor.corrupted || actor.tag === 'eldritch_spawn') {
-        const ctx = this.sim.incursionField.eventContext(this.zone.id);
-        if (ctx?.archetype.termination.cleanseRetract) {
-          this.sim.incursionField.cleanse(this.zone.id, ctx.archetype.termination.cleanseRetract);
-        }
-      }
-      // CONCLAVE: a slain cultist may erupt into an Eldritch blood-demon — the
-      // ritual's backlash. "Fairly low" per-death chance, data-driven. The demon is
-      // hostile to the player AND (via faction relations) to the surviving Occult,
-      // so the rite can turn on its own. Fires whoever lands the blow.
-      if (actor.tag === 'ritual_cultist') {
-        // Tier progress counts PLAYER-side kills only — a turncoat blood-demon
-        // culling its own cultists must not pad the "Slay N cultists" tier.
-        if (credit) bumpLedger(this.ledger, 'cultists_slain');
-        const rf = this.sim.conclaveField?.surge().ritual;
-        if (rf && chance(rf.bloodDemonChance)) {
-          const demon = this.createMonster(rf.bloodDemonId, Math.max(1, actor.level), 'enemy');
-          demon.pos = this.clampPos(vec(actor.pos.x, actor.pos.y), demon.radius);
-          this.actors.push(demon);
-          this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 64, color: '#e8003a', life: 0.6, maxLife: 0.6 });
-          this.text(vec(actor.pos.x, actor.pos.y - 40), 'Blood erupts — something crawls forth!', '#e85050', 16);
-        }
-      }
-      // AMALGAMATION: the marked undead falls — return to the Bonewright to graft a
-      // part (the overlay advances to 'choose'; the bone marker clears).
-      if (actor.tag === 'amalgam_miniboss') {
-        const af = this.sim.amalgamationField;
-        af?.onMinibossSlain();
-        bumpLedger(this.ledger, 'amalgam_parts_gathered');
-        const cfg = af?.surge();
-        if (cfg) {
-          this.grantXp(Math.round(cfg.minibossReward.xpBase + this.zone.level * cfg.minibossReward.xpPerLevel));
-          for (let i = 0; i < cfg.minibossReward.gems; i++) this.dropGemAt(actor.pos);
-        }
-        this.text(vec(actor.pos.x, actor.pos.y - 52), 'Slain — return to the Bonewright to choose a part. (M)', '#9ad0b0', 16);
-      }
-      // AMALGAMATION: the assembled boss falls — claim the part-themed spoils you
-      // BUILT, bank the completion (a future Uber-Bonewright seam), and the
-      // Bonewright fades, to re-appear uncharted somewhere new on a later roll.
-      if (actor.tag === 'amalgam_boss') {
-        const af = this.sim.amalgamationField;
-        const info = af ? af.peek() : null;
-        bumpLedger(this.ledger, 'amalgamations_completed');
-        const cfg = af?.surge();
-        if (cfg) {
-          this.grantXp(Math.round(cfg.bossReward.xpBase + this.zone.level * cfg.bossReward.xpPerLevel));
-          for (let i = 0; i < cfg.bossReward.gems; i++) this.dropGemAt(actor.pos);
-          if (af && info) for (const pid of info.chosenParts) this.dropAmalgamPart(af, pid, actor.pos);
-        }
-        af?.endAmalgamation();
-        // The Bonewright was untargetable (it never died in the fight) — despawn it
-        // now so the site is gone and a fresh one can re-open uncharted later.
-        if (this.amalgamSite) {
-          const necro = this.actorById(this.amalgamSite.necroId);
-          if (necro) { const i = this.actors.indexOf(necro); if (i >= 0) this.actors.splice(i, 1); }
-          this.amalgamSite = null;
-        }
-        this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 170, color: '#9ad0b0', life: 0.9, maxLife: 0.9 });
-        this.text(vec(actor.pos.x, actor.pos.y - 58),
-          'The Amalgamation falls — the Bonewright fades, its study complete.', '#ffd700', 18);
-      }
+      // PER-KIND KILL BOUNTIES — the open registry (engine/killHandlers.ts).
+      // Core rows (the warlord pair, the Crowned, the Eldritch cleanse)
+      // self-seed there and package rows register from their def files;
+      // worldKillRules holds the rows that close over this World's run-state
+      // (realm contexts, the dive, the hunt, the built-boss site). Every
+      // matching row runs; rows are independent by contract. Ledger keys
+      // inside rows are cross-file contracts consumed by unlock predicates.
+      const kctx = this.killCtx(actor, killer ?? null, credit);
+      for (const r of killRules()) if (killRuleMatches(r, kctx)) r.run(kctx);
+      for (const r of this.worldKillRules) if (killRuleMatches(r, kctx)) r.run(kctx);
       // The ephemeral remnant of their passing — briefly usable (corpses
       // drop regardless of who did the killing; necromancy isn't picky).
       if (actor.defId) {

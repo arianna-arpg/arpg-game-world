@@ -16,6 +16,8 @@
 // invasion TYPE (or a bespoke sub-faction) is one more entry here — pure data.
 // ---------------------------------------------------------------------------
 
+import { vec } from '../../core/math';
+import { registerKillHandler } from '../../engine/killHandlers';
 import type { DemonSurge, InvasionStage, InvasionType } from '../encounters';
 import { DemonInvasionField } from '../overlays/demonInvasion';
 import type { ContentPackage } from '../types';
@@ -120,3 +122,23 @@ export const DEMON_INVASION: ContentPackage = {
     overlay: (ctx) => new DemonInvasionField(ctx, BALOR_SURGE),
   },
 };
+
+// The Balor at a Demon Invasion's epicenter — felling it REPELS the whole
+// invasion (the storm stops, the radius lifts). Reward scales with the
+// stage it reached, so daring to let it fester pays off (whoever lands it).
+// (The realm-side Balor consumes World.realmContext, so its row lives on
+// World.worldKillRules.)
+registerKillHandler({
+  id: 'balor_epicenter',
+  tag: 'balor_epicenter',
+  run: ctx => {
+    const mul = ctx.sim.demonField?.resolveInvasion(ctx.zone.id) ?? 1;
+    ctx.bumpLedger('demon_invasions_repelled');
+    ctx.bumpLedger('balor_slain');
+    ctx.grantXp(Math.round((220 + ctx.zone.level * 44) * mul));
+    const gems = 2 + Math.floor(mul);
+    for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
+      `The invasion is broken! (×${mul.toFixed(1)} spoils)`, '#ffd700', 18);
+  },
+});

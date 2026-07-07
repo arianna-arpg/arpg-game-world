@@ -20,6 +20,8 @@
 //     brawls or holds territory; it is pure event content).
 // ---------------------------------------------------------------------------
 
+import { vec } from '../../core/math';
+import { registerKillHandler } from '../../engine/killHandlers';
 import { mod } from '../../engine/stats';
 import { AmalgamationField, type AmalgamationSurge, type AmalgamPartSpec } from '../overlays/amalgamation';
 import type { ContentPackage, FactionSpec } from '../types';
@@ -140,3 +142,23 @@ export const AMALGAMATION: ContentPackage = {
   world: { overlay: (ctx) => new AmalgamationField(ctx, AMALGAMATION_SURGE) },
   factions: [AMALGAM_FACTION],
 };
+
+// AMALGAMATION: the marked undead falls — return to the Bonewright to graft a
+// part (the overlay advances to 'choose'; the bone marker clears).
+// (The assembled BOSS's fall despawns the Bonewright via World.amalgamSite, so
+// its row lives on World.worldKillRules.)
+registerKillHandler({
+  id: 'amalgam_miniboss',
+  tag: 'amalgam_miniboss',
+  run: ctx => {
+    const af = ctx.sim.amalgamationField;
+    af?.onMinibossSlain();
+    ctx.bumpLedger('amalgam_parts_gathered');
+    const cfg = af?.surge();
+    if (cfg) {
+      ctx.grantXp(Math.round(cfg.minibossReward.xpBase + ctx.zone.level * cfg.minibossReward.xpPerLevel));
+      for (let i = 0; i < cfg.minibossReward.gems; i++) ctx.dropGemAt(ctx.actor.pos);
+    }
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 52), 'Slain — return to the Bonewright to choose a part. (M)', '#9ad0b0', 16);
+  },
+});
