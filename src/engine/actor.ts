@@ -228,6 +228,31 @@ export type ActorShape =
  *  orc horns, briar spikes, demon wings. Readable at a glance, like the shapes. */
 export type ActorAdorn = 'ears' | 'horns' | 'spikes' | 'wings' | 'tentacles';
 
+/** One hitbox of a COMPOSITE MONSTER (MonsterDef.parts): its own monster def
+ *  (body, life, skills, look) anchored in the root's facing frame. Breaking
+ *  it wounds/weakens the root — plural hitboxes, one creature. Offsets are
+ *  in ROOT RADII (+x = ahead of the root), so one part list scales with any
+ *  body size. */
+export interface MonsterPartDef {
+  /** The part's own monster def id — parts are full actors (skills, brains,
+   *  statuses all work), so a claw can swing and a head can spit. */
+  monster: string;
+  /** Anchor offset in root radii, in the root's facing frame. */
+  dx: number;
+  dy: number;
+  /** Facing offset for INERT parts (a tail points backward); parts with
+   *  skills aim freely once aggroed. */
+  rot?: number;
+  /** Part life pool = frac × the ROOT's max life (omit: the part def's own). */
+  lifeFrac?: number;
+  /** Fraction of the root's max life dealt to it when this part breaks. */
+  breakDamage?: number;
+  /** Mods layered onto the root while this part is broken (armor torn…). */
+  breakMods?: Modifier[];
+  /** Root skill ids removed once this part is broken (disarm the sweep). */
+  breakDisables?: string[];
+}
+
 // The AI vocabulary (BrainDef, archetypes, phases, rules, scripts, actions)
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
@@ -294,6 +319,16 @@ export class Actor {
   brain?: BrainDef;
   /** Worm/snake bodies: trailing segments updated by the world. */
   worm?: WormBody;
+  /** MULTI-PART MONSTERS — this actor IS a part, rigidly anchored to its
+   *  root's facing frame. Its own life/skills/statuses work normally; its
+   *  death fires the part-break effects on the root instead of the loot
+   *  ladder (see World.updateParts / onPartBroken). */
+  partLink?: { root: Actor; def: MonsterPartDef };
+  /** The live part actors attached to this root (composite monsters). */
+  partActors?: Actor[];
+  /** Lazy-spawn latch: parts attach on the root's first update tick, so
+   *  every spawn path (packs, events, zone-memory restore) grows them. */
+  partsSpawned?: boolean;
   /** Bomber fuse: armed countdown to self-detonation (renderer flashes it). */
   fuse?: number;
   /** Airborne leap in flight. */

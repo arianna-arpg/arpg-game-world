@@ -1993,8 +1993,10 @@ export class Renderer {
     }
     ctx.restore();
 
-    // Health bar (enemies + minions; the player has the orb)
-    if (a !== world.player) {
+    // Health bar (enemies + minions; the player has the orb). A composite
+    // monster's PRISTINE parts stay bar-less — one boss mustn't wear five
+    // full bars; a part's bar appears the moment it's dented (poise rule).
+    if (a !== world.player && !(a.partLink && a.life >= a.maxLife() - 0.5)) {
       const bw = a.radius * 2.2;
       const frac = clamp(a.life / a.maxLife(), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';

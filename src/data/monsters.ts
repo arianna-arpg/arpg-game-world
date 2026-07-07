@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
-import type { ActorAdorn, ActorShape, BrainDef } from '../engine/actor';
+import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine/actor';
 
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
  *  IMPLODE = coalesce at the death spot → a delayed AoE pop. ORB = coalesce → an
@@ -189,6 +189,12 @@ export interface MonsterDef {
   /** Part-grammar portrait (data/looks.ts) — skeletons read as skeletons
    *  from overhead. Omitted = the legacy shape+adorn body. */
   look?: string;
+  /** COMPOSITE MONSTER: plural hitboxes anchored to this root's facing frame
+   *  (world bosses, dragons, leviathans). Each part is a full monster def —
+   *  it fights with its own skills and its death fires break effects on the
+   *  root. Parts lazy-attach on the root's first update tick, so every spawn
+   *  path (packs, events, zone-memory restores) grows them. */
+  parts?: MonsterPartDef[];
   /** Multiplier on detection range (1 = baseline). Low shambles past you
    *  (zombie 0.55); high senses you from afar (blood mite 1.6). */
   detection?: number;
@@ -3110,6 +3116,58 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['firebolt', 'meteor_storm'],
     xp: 26, faction: 'demon', adorn: 'wings',
     brain: { type: 'artillery' },
+  },
+
+  // --- THE MARSH LEVIATHAN — the composite-monster exemplar -----------------
+  // One creature, five hitboxes: the body is the root; head, claws and tail
+  // are full monster-actors anchored to its facing frame (MonsterDef.parts).
+  // Each part fights with its own skills and BREAKS individually — sundering
+  // a claw wounds the beast and tears its guard open; the head is the prize
+  // weakspot. The framework, proven: dragons/world bosses are data from here.
+  marsh_leviathan: {
+    id: 'marsh_leviathan', name: 'The Marsh Leviathan',
+    color: '#4a7a68', shape: 'oval', radius: 30, material: 'slime', look: 'leviathan_body',
+    boss: true, noNemesis: true,
+    base: { life: 700, moveSpeed: 52, armor: 40, weight: 6 },
+    skills: [],
+    xp: 420,
+    parts: [
+      { monster: 'leviathan_head', dx: 1.5, dy: 0, lifeFrac: 0.45, breakDamage: 0.18 },
+      {
+        monster: 'leviathan_claw', dx: 0.8, dy: 1.3, lifeFrac: 0.3, breakDamage: 0.1,
+        breakMods: [mod('damageTaken', 'increased', 0.12)],
+      },
+      {
+        monster: 'leviathan_claw', dx: 0.8, dy: -1.3, lifeFrac: 0.3, breakDamage: 0.1,
+        breakMods: [mod('damageTaken', 'increased', 0.12)],
+      },
+      { monster: 'leviathan_tail', dx: -1.75, dy: 0, rot: Math.PI, lifeFrac: 0.3, breakDamage: 0.1 },
+    ],
+  },
+  leviathan_head: {
+    id: 'leviathan_head', name: 'Leviathan Head',
+    color: '#5a8a74', shape: 'oval', radius: 19, material: 'slime', look: 'leviathan_head',
+    noNemesis: true,
+    base: { life: 200, moveSpeed: 0, mana: 120, manaRegen: 10, poise: 60 },
+    skills: ['venom_bolt'],
+    xp: 0,
+    brain: { type: 'artillery' },
+  },
+  leviathan_claw: {
+    id: 'leviathan_claw', name: 'Leviathan Claw',
+    color: '#43705f', shape: 'oval', radius: 14, material: 'chitin', look: 'leviathan_claw',
+    noNemesis: true,
+    base: { life: 140, moveSpeed: 0, mana: 60, manaRegen: 6, poise: 40 },
+    skills: ['claw'],
+    xp: 0,
+  },
+  leviathan_tail: {
+    id: 'leviathan_tail', name: 'Leviathan Tail',
+    color: '#3c6353', shape: 'oval', radius: 15, material: 'slime', look: 'leviathan_tail',
+    noNemesis: true,
+    base: { life: 140, moveSpeed: 0, mana: 80, manaRegen: 6, poise: 40 },
+    skills: ['whirling_reap'],
+    xp: 0,
   },
 };
 

@@ -698,4 +698,38 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'daggers', params: { len: 0.55 } },
     ],
   },
+
+  // ================================================== COMPOSITE-BOSS PARTS
+  /** The leviathan's bulk: plated shell over fins — the root hitbox. */
+  leviathan_body: {
+    parts: [
+      { kind: 'fins', scale: 0.9 },
+      { kind: 'shell' },
+      { kind: 'carapace', scale: 0.55, x: -0.3, alpha: 0.65, params: { segs: 3 } },
+    ],
+    shadowScale: 1.25,
+  },
+  /** The head part: all maw and lure — the weakspot that spits. */
+  leviathan_head: {
+    parts: [
+      { kind: 'serpentHead' },
+      { kind: 'maw', scale: 0.8, params: { arc: 0.7 } },
+      { kind: 'eyes', color: '#bfffe0', params: { n: 2, spread: 0.85, dist: 0.62, size: 0.11 } },
+    ],
+  },
+  /** A claw part: armored pad with reaching talons. */
+  leviathan_claw: {
+    parts: [
+      { kind: 'carapace', scale: 0.8, params: { segs: 2 } },
+      { kind: 'claws', scale: 1.1, params: { len: 0.6, talons: 3 } },
+    ],
+  },
+  /** The tail part: finned tip that sweeps. */
+  leviathan_tail: {
+    parts: [
+      { kind: 'carapace', scale: 0.75, params: { segs: 3 } },
+      { kind: 'tail', params: { len: 1.1 } },
+      { kind: 'fins', scale: 0.6, alpha: 0.8 },
+    ],
+  },
 };

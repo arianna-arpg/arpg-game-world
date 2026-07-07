@@ -16064,6 +16064,23 @@ export class World {
     // retires the actor itself (splice) + repaints the doorway — nothing else
     // in the death ladder (loot/XP/bursts) applies to a doorway.
     if (actor.doorId) { this.setDoorState(actor.doorId, 'broken'); return; }
+    // A COMPOSITE MONSTER'S PART: its death is a BREAK on the root (damage
+    // chunk, torn-guard mods, disarmed skills) — never the loot/XP ladder.
+    if (actor.partLink) { this.onPartBroken(actor, killer); return; }
+    // A dying ROOT takes its remaining parts with it — quietly (no bursts,
+    // no break effects; the beast is already down).
+    if (actor.partActors?.length) {
+      for (const part of actor.partActors) {
+        if (part.dead) continue;
+        part.dead = true;
+        part.partLink = undefined;
+        this.flashes.push({
+          pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.3,
+          color: part.color, life: 0.3, maxLife: 0.3,
+        });
+      }
+      actor.partActors.length = 0;
+    }
     // A garrisoned monster frees its tower slot as it falls (occupancy also
     // self-heals on evaluation — this is just the tidy fast path).
     if (actor.garrison) this.releaseGarrison(actor);
@@ -17640,6 +17657,7 @@ export class World {
 
     this.updateLeaps(dt);
     this.updateWorms();
+    this.updateParts();
     this.updateProjectiles(dt);
     this.updateZones(dt);
     this.updateEnemyTethers(dt);
@@ -18684,6 +18702,90 @@ export class World {
       // (Phoenix Dive scorches its crater), and Dive Bomb double-dips.
       this.moveBlast(a, L.inst, a.pos);
       this.dropLingerField(a, L.inst, a.pos);
+    }
+  }
+
+  /** COMPOSITE MONSTERS (MonsterDef.parts): lazy-attach part actors to any
+   *  live root that declares them, then hold every part rigid in the root's
+   *  facing frame each tick. Parts are full actors — they aim/cast on their
+   *  own once aggroed; inert or idle parts track the root's own bearing. */
+  private updateParts(): void {
+    for (const a of this.actors) {
+      if (a.dead || !a.defId) continue;
+      const def = MONSTERS[a.defId];
+      if (!def?.parts) continue;
+      if (!a.partsSpawned) {
+        a.partsSpawned = true;
+        a.partActors = [];
+        for (const pd of def.parts) {
+          if (!MONSTERS[pd.monster]) continue;
+          const part = this.createMonster(pd.monster, a.level, a.team);
+          part.faction = a.faction;
+          part.anchored = true;          // rigid: never shoved off the frame
+          part.xpValue = 0;              // the ROOT pays the bounty
+          part.fromZoneGen = false;      // never snapshotted apart from it
+          part.partLink = { root: a, def: pd };
+          if (pd.lifeFrac) {
+            // Aim the FINAL pool at frac × root max: set the base, measure
+            // what the level curve turns it into, and rescale — so a part is
+            // exactly its share of the beast at any spawn level.
+            const target = Math.max(1, Math.round(a.maxLife() * pd.lifeFrac));
+            part.sheet.setBase('life', target);
+            const got = part.maxLife();
+            if (got > 1 && Math.abs(got - target) > 1) {
+              part.sheet.setBase('life', Math.max(1, target * (target / got)));
+            }
+            part.fillResources();
+          }
+          a.partActors.push(part);
+          this.actors.push(part);
+        }
+      }
+      if (!a.partActors?.length) continue;
+      const c = Math.cos(a.facing), s = Math.sin(a.facing);
+      for (const part of a.partActors) {
+        if (part.dead || !part.partLink) continue;
+        const pd = part.partLink.def;
+        part.pos.x = a.pos.x + (pd.dx * c - pd.dy * s) * a.radius;
+        part.pos.y = a.pos.y + (pd.dx * s + pd.dy * c) * a.radius;
+        // Idle/inert parts wear the root's bearing (+ their mount angle);
+        // parts in a fight keep the facing their own AI chose.
+        if (part.skills.length === 0 || !part.aggroed) {
+          part.facing = a.facing + (pd.rot ?? 0);
+        }
+      }
+    }
+  }
+
+  /** A composite part broke: fire its break effects on the root — a chunk of
+   *  true damage, lingering mods (guard torn open), disarmed root skills —
+   *  and die QUIETLY (no loot/XP/corpse ladder; the root pays the bounty). */
+  private onPartBroken(part: Actor, killer?: Actor): void {
+    part.dead = true;
+    const link = part.partLink;
+    part.partLink = undefined;
+    if (!link || link.root.dead) return;
+    const root = link.root;
+    const pd = link.def;
+    root.partActors = root.partActors?.filter(p => p !== part);
+    this.flashes.push({
+      pos: vec(part.pos.x, part.pos.y), radius: part.radius * 1.7,
+      color: part.color, life: 0.35, maxLife: 0.35,
+    });
+    this.shake = Math.max(this.shake, 5);
+    if (pd.breakDamage) {
+      this.text(vec(root.pos.x, root.pos.y - root.radius), 'SUNDERED', '#ffd24a', 15);
+      root.life -= root.maxLife() * pd.breakDamage;
+      if (root.life <= 0 && !root.dead) {
+        this.kill(root, false, killer);
+        return;
+      }
+    }
+    if (pd.breakMods?.length) {
+      root.sheet.setSource(`partBreak_${part.id}`, pd.breakMods);
+    }
+    if (pd.breakDisables?.length) {
+      root.skills = root.skills.filter(s => !s || !pd.breakDisables!.includes(s.def.id));
     }
   }
 
