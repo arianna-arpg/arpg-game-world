@@ -8,6 +8,7 @@
 import { MONSTERS, WAVE_TABLE } from './monsters';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
+import { supportFits, type Delivery, type SkillDef, type SupportDef } from '../engine/skills';
 import { PROCS } from './procs';
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
@@ -253,6 +254,129 @@ export function validateContent(): void {
       }
     }
   }
+
+  // SUPPORT GEMS — the support×delivery NO-OP AUDIT. A support's only socket
+  // gate is its tag lists (supportFits), but several payloads are READ only
+  // inside specific delivery branches of the cast pipeline — SkillTag (the
+  // socket currency) and delivery.type (the execution branch) are independent
+  // axes. A gem that sockets cleanly yet grafts a payload whose read-site the
+  // host's delivery never reaches is a SILENT no-op: it costs a socket,
+  // changes nothing, and tells no one. Flagged PER-GRAFT, because partial
+  // no-ops are per-field (triangle_sigil's `more` damage still lands where
+  // its aoeShape dies). The map below is derived from the LIVE read-sites;
+  // every row names its site so drift is findable. Extend it whenever a new
+  // delivery-scoped graft or stat ships. Deliberately unaudited: pairs that
+  // only fit through ANOTHER gem's grantsTags (dive_bomb granting 'aoe' to a
+  // dash) — those are loadout-time compositions, not authorable data.
+  type DeliveryType = Delivery['type'];
+  type GraftReadRow = {
+    /** Delivery branches whose execution actually reads the payload. */
+    deliveries: DeliveryType[];
+    /** Read-sites BEYOND the delivery switch (fx zones, pylon auras, linger
+     *  fields) — the per-def false-positive escape hatch. */
+    defReads?: (def: SkillDef) => boolean;
+    /** Where the engine reads it — quoted in the warning as the fix-it trail. */
+    site: string;
+  } & (
+    | { kind: 'graft'; key: keyof SupportDef }  // a structured SupportDef field
+    | { kind: 'stat'; key: string }             // a stat carried in mods/perLevel
+  );
+  /** The def's OWN data carries a stat (innate, growth, or threshold mods) —
+   *  reads gated on stats rather than deliveries honor it (a cone with an
+   *  innate lingerField genuinely reads aoeShape for the field it drops). */
+  const defCarriesStat = (def: SkillDef, stat: string): boolean =>
+    (def.innateMods ?? []).some(m => m.stat === stat)
+    || (def.leveling?.perLevel ?? []).some(m => m.stat === stat)
+    || (def.thresholds ?? []).some(t => t.mods.some(m => m.stat === stat));
+  const GRAFT_READ_SITES: GraftReadRow[] = [
+    {
+      kind: 'stat', key: 'aoeShape',
+      deliveries: ['nova', 'ground', 'storm', 'aura', 'detonateProjectile'],
+      defReads: def => (def.delivery.type === 'construct' && !!def.delivery.aura)
+        || def.effects.some(e => e.type === 'spawnZone')
+        || defCarriesStat(def, 'lingerField'),
+      site: 'area-shape queries (novas, ground zones, storms, auras, linger fields)',
+    },
+    {
+      kind: 'stat', key: 'aoeScatter',
+      deliveries: ['nova', 'ground', 'storm', 'detonateProjectile'],
+      site: 'spawnAftershocks (nova bursts, exploding/pulsing zones, storm strikes)',
+    },
+    {
+      kind: 'stat', key: 'moveTrail',
+      deliveries: ['dash'],
+      site: 'the dash branch only (blinks and leaps travel without a wake)',
+    },
+    { kind: 'graft', key: 'cascade', deliveries: ['ground'], site: 'instanceCascade (ground placements only)' },
+    { kind: 'graft', key: 'pulse', deliveries: ['ground'], site: 'instancePulse (ground placements only)' },
+    { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
+    { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
+  ];
+  // The map audits itself: a stat row naming a dead stat is map drift.
+  for (const row of GRAFT_READ_SITES) {
+    if (row.kind === 'stat' && !STAT_DEFS[row.key]) {
+      warn(`no-op audit: read-site row names unknown stat '${row.key}' (map drift?)`);
+    }
+  }
+  const carriesRow = (sup: SupportDef, row: GraftReadRow): boolean => (row.kind === 'graft'
+    ? sup[row.key] !== undefined
+    : [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat === row.key));
+  const rowUnread = (row: GraftReadRow, def: SkillDef): boolean => {
+    if (row.deliveries.includes(def.delivery.type)) return false;
+    if (row.defReads?.(def)) return false;
+    // STAT payloads reach a construct's sub-casts (the turret's shots, the
+    // totem's novas): the deployed object wears the host's instanceMods as
+    // its 'parentSkill' sheet source, so every sheet query the sub-skill
+    // makes sees them. GRAFT payloads do NOT follow — sub-skill instances
+    // are minted fresh (null sockets) and instance-read grafts die there.
+    if (row.kind === 'stat' && def.delivery.type === 'construct' && def.delivery.castSkillId) {
+      const sub = SKILLS[def.delivery.castSkillId];
+      if (sub && !rowUnread(row, sub)) return false;
+    }
+    return true;
+  };
+
+  // The catalog sweep: every DROPPABLE skill a gem tag-fits but never reads.
+  const droppable = Object.values(SKILLS).filter(s => !s.noDrop);
+  for (const sup of Object.values(SUPPORTS)) {
+    for (const row of GRAFT_READ_SITES) {
+      if (!carriesRow(sup, row)) continue;
+      const inert = droppable.filter(def => supportFits(sup, def) && rowUnread(row, def));
+      if (!inert.length) continue;
+      const shown = inert.slice(0, 8).map(s => s.id).join(', ');
+      warn(`support ${sup.id}: '${row.key}' is read only at ${row.site} — silently INERT on `
+        + `${inert.length} tag-fitting skill(s): ${shown}${inert.length > 8 ? ` (+${inert.length - 8} more)` : ''}`);
+    }
+  }
+  // Monster-only kit pieces (noDrop) skip the sweep but their authored
+  // grant pairs (support × the exact target skill) get the same audit.
+  for (const m of Object.values(MONSTERS)) {
+    for (const g of m.grants ?? []) {
+      if (!g.support || !g.on) continue;
+      const sup = SUPPORTS[g.support];
+      const target = SKILLS[g.on];
+      if (!sup || !target) continue; // existence already warned above
+      for (const row of GRAFT_READ_SITES) {
+        if (carriesRow(sup, row) && rowUnread(row, target)) {
+          warn(`${m.id}: grant @${g.atLevel} sockets '${g.support}' on '${g.on}' — its `
+            + `'${row.key}' payload is never read by a '${target.delivery.type}' delivery`);
+        }
+      }
+    }
+  }
+
+  // SUMMON CONTRACTS: `decay` (the unlife death-clock) and `persistent` (the
+  // reserve-and-respawn contract) are documented mutually exclusive but read
+  // in independent branches — a def carrying both mints a minion with a death
+  // sentence AND a respawn appointment. Skills and summon-grafting supports
+  // both carry a SummonDelivery, so both are swept.
+  const checkSummonContract = (src: string, d: Delivery | undefined): void => {
+    if (d && d.type === 'summon' && d.decay && d.persistent) {
+      warn(`${src}: summon carries BOTH decay and persistent (mutually exclusive — drop one)`);
+    }
+  };
+  for (const s of Object.values(SKILLS)) checkSummonContract(`skill ${s.id}`, s.delivery);
+  for (const sup of Object.values(SUPPORTS)) checkSummonContract(`support ${sup.id} (summon graft)`, sup.summon);
 
   const checkTable = (where: string, ids: string[]): void => {
     for (const id of ids) if (!MONSTERS[id]) warn(`${where}: unknown monster '${id}'`);
