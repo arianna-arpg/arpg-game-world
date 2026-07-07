@@ -267,6 +267,9 @@ export class UI {
     bindTooltips(this.oracleMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.vendorMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
+    // Delegation works on SVG descendants too — tree nodes carry data-tip like
+    // any DOM row, so mouse AND the pad pointer's synthetic hover both hit it.
+    bindTooltips(this.passiveTree, (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null);
     this.updateHintBar(); // replace the static index.html placeholder with live binds
   }
 
@@ -1800,11 +1803,9 @@ export class UI {
       const voc = node.vocation !== undefined ? VOCATIONS[node.vocation] : undefined;
       const gateOpen = node.vocation === undefined || vocationGateOpen(m.allocated, node.vocation);
       // Vocation nodes spend the VOCATION pool behind the (toggleable) gate;
-      // everything else spends normal passive points. Same adjacency walk.
-      const available = !allocated
-        && (voc
-          ? m.vocationPoints > 0 && gateOpen && PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))
-          : m.passivePoints > 0 && PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n)));
+      // everything else spends normal passive points. Same adjacency walk —
+      // the ONE rule lives in nodeAllocatable (the node tooltip reads it too).
+      const available = this.nodeAllocatable(node, m);
       const fill = allocated ? (voc?.color ?? '#c8a84b')
         : node.kind === 'keystone' ? '#5a2a3a'
         : node.kind === 'notable' ? '#3a3a5a'
@@ -1816,20 +1817,12 @@ export class UI {
         : available ? '#d8d4c8'
         : voc && !gateOpen ? '#3a3648'
         : '#4a4a5e';
-      const attrText = node.attributes
-        ? '\n' + Object.entries(node.attributes).map(([a, v]) =>
-            `+${v} ${ATTRIBUTES[a as AttributeId].label}`).join(', ')
-        : '';
-      const gateName = node.vocation !== undefined
-        ? PASSIVE_NODES[vocationGateNodeId(node.vocation) ?? '']?.name : undefined;
-      const vocText = voc
-        ? `\n[${voc.name} vocation — spends vocation points${gateOpen ? '' : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`}]`
-        : '';
+      // Node info rides the SHARED tooltip (data-tip → passiveNodeTooltip):
+      // the old inline SVG <title> was slow, unstyled, and invisible to the
+      // pad pointer's synthetic hover.
       circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind]}"
         fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' ? 2.5 : 1.5}"
-        data-node="${node.id}" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}">
-        <title>${node.name} — ${node.description}${attrText}${vocText}</title>
-      </circle>`;
+        data-node="${node.id}" data-tip="pnode" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
     }
 
     // The DEV editor works in the raw 6000×6000 coordinate space;
@@ -1918,6 +1911,47 @@ export class UI {
       apply,
       ignore: '.tree-node',
     });
+  }
+
+  /** The ONE allocation-availability rule, shared by the tree render and the
+   *  node tooltip: unallocated, adjacent to an allocated node, and payable
+   *  from the right pool (vocation nodes also need their gate open). */
+  private nodeAllocatable(node: PassiveNode, m: World['meta']): boolean {
+    if (m.allocated.has(node.id)) return false;
+    if (!PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))) return false;
+    return node.vocation !== undefined
+      ? m.vocationPoints > 0 && vocationGateOpen(m.allocated, node.vocation)
+      : m.passivePoints > 0;
+  }
+
+  /** Tooltip for a passive-tree node — the same shared styled box every panel
+   *  uses, built from LIVE allocation state on each hover. (The old inline
+   *  SVG <title> was slow to appear, unstylable, and never showed for the
+   *  pad pointer, which the browser's native tooltip can't see.) */
+  private passiveNodeTooltip(nodeId: string): TooltipContent | null {
+    const node = PASSIVE_NODES[nodeId];
+    if (!node) return null;
+    const m = this.getWorld().meta;
+    const KIND_LABELS: Record<PassiveNode['kind'], string> = {
+      start: 'class start', small: 'passive', notable: 'notable',
+      keystone: 'keystone', attr: 'attribute', vocation: 'vocation',
+    };
+    const attrText = node.attributes
+      ? '<br>' + Object.entries(node.attributes).map(([a, v]) =>
+          `+${v} ${ATTRIBUTES[a as AttributeId].label}`).join(', ')
+      : '';
+    let meta = m.allocated.has(node.id) ? `${KIND_LABELS[node.kind]} — allocated`
+      : this.nodeAllocatable(node, m) ? `${KIND_LABELS[node.kind]} — click to allocate`
+      : KIND_LABELS[node.kind];
+    if (node.vocation !== undefined) {
+      const voc = VOCATIONS[node.vocation];
+      const gateName = PASSIVE_NODES[vocationGateNodeId(node.vocation) ?? '']?.name;
+      meta += `<br><span style="color:${voc?.color ?? 'var(--gold)'}">${voc?.name ?? node.vocation}</span>`
+        + ` vocation — spends vocation points`
+        + (vocationGateOpen(m.allocated, node.vocation) ? ''
+          : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`);
+    }
+    return { title: node.name, description: node.description + attrText, meta };
   }
 
   // -------------------------------------------------------------- world map
