@@ -56,20 +56,26 @@ interface WeatherDef {
    *  storm that gathers in minutes vs one that breaks all at once is this
    *  one number. Pairs with the renderer's per-kind display crossfade. */
   rampFrac?: number;
+  /** DIRECTIONAL WIND strength (0..1) this front drives at full intensity.
+   *  The wind's DIRECTION is the front's own drift vector — the storm blows
+   *  the way it travels. Consumed by World.windAt: headwinds slow movement,
+   *  tailwinds hasten it, anchored solids upwind shelter you (WIND_CFG). */
+  wind?: number;
 }
 
 export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
   clear: { label: 'Clear', countMul: 1.0, factionMul: {} },
-  rain: { label: 'Rain', countMul: 1.05, factionMul: { sylvan: 1.3, wild: 1.15 } },
+  rain: { label: 'Rain', countMul: 1.05, factionMul: { sylvan: 1.3, wild: 1.15 }, wind: 0.4 },
   storm: {
     label: 'Storm', countMul: 1.25, factionMul: { elemental: 1.8 },
     // The sky calls lightning down at random — more often the harder it rages.
     strike: { skillId: 'storm_call', radius: 80, telegraph: 0.7, ratePerSec: 1.3 },
     rampFrac: 0.15, // storms BREAK — a short gather, then full rage
+    wind: 0.9,      // — and they SHOVE: the strongest gale in the sky
   },
-  fog: { label: 'Fog', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 }, rampFrac: 0.5 },
-  ashfall: { label: 'Ashfall', countMul: 1.2, factionMul: { elemental: 1.4, goblin: 1.2 } },
-  bloodmoon: { label: 'Blood Moon', countMul: 1.6, factionMul: { undead: 2.0, wild: 1.3 } },
+  fog: { label: 'Fog', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 }, rampFrac: 0.5, wind: 0.12 },
+  ashfall: { label: 'Ashfall', countMul: 1.2, factionMul: { elemental: 1.4, goblin: 1.2 }, wind: 0.3 },
+  bloodmoon: { label: 'Blood Moon', countMul: 1.6, factionMul: { undead: 2.0, wild: 1.3 }, wind: 0.18 },
 };
 
 // Which kinds the sky favours at each hour (clear = simply fewer fronts).

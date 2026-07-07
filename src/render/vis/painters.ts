@@ -108,8 +108,24 @@ export interface LiquidParams {
   pads?: { color: ColorSpec; biomes: string[] };
   /** Slow ember pulse over the body (cinder). */
   emberPulse?: { color: ColorSpec };
-  /** Blade tufts scattered on the blob (grass). */
-  tufts?: { color: ColorSpec };
+  /** Blade tufts scattered on the blob (grass) — clumped, two-tone, swaying. */
+  tufts?: { color: ColorSpec; flower?: ColorSpec };
+  /** Drifting surface highlight arcs (deep water's living sheen). */
+  sheen?: { color: ColorSpec };
+  /** Sliding diagonal glass bands (ice). */
+  glassSheen?: { color: ColorSpec };
+  /** Slow-orbiting molten glow blobs under the crust (lava). */
+  crawl?: { color: ColorSpec };
+  /** Static crust cracks (lava, dried beds). */
+  crackle?: { color: ColorSpec };
+  /** A slow swelling bubble that POPS on its cycle (bog). */
+  bubbles?: { color: ColorSpec };
+  /** Wet darker blotches (mud). */
+  blotch?: { color: ColorSpec };
+  /** Pale floating scum patches (swamp). */
+  scum?: { color: ColorSpec };
+  /** Wet specular glints (gore). */
+  glisten?: { color: ColorSpec };
 }
 
 const liquid: GroupPainter = (env, group, def) => {
@@ -197,19 +213,207 @@ const liquid: GroupPainter = (env, group, def) => {
     blobPath(ctx, group, -8);
     ctx.fill();
   }
-  if (p.tufts) {
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = resolveColor(p.tufts.color, theme);
-    ctx.lineWidth = 1.5;
-    for (const g of group) {
-      for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2 + g.pos.x;
-        const gx = g.pos.x + Math.cos(a) * g.radius * 0.5;
-        const gy = g.pos.y + Math.sin(a) * g.radius * 0.5;
+  if (p.sheen) {
+    // Deep-water sheen: two bright arcs drifting across each pool.
+    const col = resolveColor(p.sheen.color, theme);
+    ctx.lineCap = 'round';
+    for (const d of group) {
+      if (d.shallow) continue;
+      for (let k = 0; k < 2; k++) {
+        const drift = time * 0.35 + d.pos.x * 0.013 + k * 2.4;
+        const a0 = (drift % (Math.PI * 2));
+        ctx.globalAlpha = 0.13 + 0.06 * Math.sin(time * 1.1 + k);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = Math.max(1.5, d.radius * 0.06);
         ctx.beginPath();
-        ctx.moveTo(gx, gy + 3); ctx.lineTo(gx - 2, gy - 4);
-        ctx.moveTo(gx, gy + 3); ctx.lineTo(gx + 2, gy - 5);
+        ctx.arc(d.pos.x, d.pos.y, d.radius * (0.45 + k * 0.24), a0, a0 + 1.1);
         ctx.stroke();
+      }
+    }
+  }
+  if (p.glassSheen) {
+    // Ice: diagonal glass bands sliding slowly — the frozen mirror.
+    const col = resolveColor(p.glassSheen.color, theme);
+    ctx.save();
+    blobPath(ctx, group);
+    ctx.clip();
+    for (const d of group) {
+      for (let k = 0; k < 2; k++) {
+        const off = ((time * 9 + k * d.radius * 0.9 + d.pos.y * 0.3) % (d.radius * 2.4)) - d.radius * 1.2;
+        const g = ctx.createLinearGradient(
+          d.pos.x + off - 14, d.pos.y - off + 14,
+          d.pos.x + off + 14, d.pos.y - off - 14);
+        g.addColorStop(0, withAlpha(col, 0));
+        g.addColorStop(0.5, withAlpha(col, 0.16));
+        g.addColorStop(1, withAlpha(col, 0));
+        ctx.fillStyle = g;
+        ctx.globalAlpha = 1;
+        ctx.fillRect(d.pos.x - d.radius, d.pos.y - d.radius, d.radius * 2, d.radius * 2);
+      }
+    }
+    ctx.restore();
+  }
+  if (p.crawl) {
+    // Molten crawl: glow blobs orbiting slowly beneath the crust.
+    const col = resolveColor(p.crawl.color, theme);
+    for (const d of group) {
+      for (let k = 0; k < 2; k++) {
+        const a = time * (0.22 + k * 0.13) * (k % 2 ? -1 : 1) + d.pos.x * 0.02 + k * 2.6;
+        const ox = d.pos.x + Math.cos(a) * d.radius * 0.42;
+        const oy = d.pos.y + Math.sin(a) * d.radius * 0.42;
+        const rr = d.radius * 0.4;
+        const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, rr);
+        g.addColorStop(0, withAlpha(col, 0.4));
+        g.addColorStop(1, withAlpha(col, 0));
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = g;
+        ctx.fillRect(ox - rr, oy - rr, rr * 2, rr * 2);
+      }
+    }
+  }
+  if (p.crackle) {
+    // Crust cracks: static jagged seams over the cooled skin.
+    const col = resolveColor(p.crackle.color, theme);
+    ctx.strokeStyle = withAlpha(col, 0.55);
+    ctx.lineWidth = 1.2;
+    ctx.lineCap = 'round';
+    for (const d of group) {
+      const seed = ((d.pos.x * 5 + d.pos.y * 11) | 0) >>> 0;
+      for (let i = 0; i < 3; i++) {
+        let x = d.pos.x + (hash01(i, seed) - 0.5) * d.radius;
+        let y = d.pos.y + (hash01(i, seed + 3) - 0.5) * d.radius;
+        const ang0 = hash01(i, seed + 7) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let s = 0; s < 3; s++) {
+          const ang = ang0 + (hash01(i * 5 + s, seed) - 0.5) * 1.6;
+          x += Math.cos(ang) * d.radius * 0.3;
+          y += Math.sin(ang) * d.radius * 0.3;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+  }
+  if (p.bubbles) {
+    // The bog breathes: one bubble per disc swells on its own clock, POPS
+    // (a fading ring), and starts again.
+    const col = resolveColor(p.bubbles.color, theme);
+    for (const d of group) {
+      const seed = ((d.pos.x * 3 + d.pos.y * 13) | 0) >>> 0;
+      const period = 2.6 + hash01(seed, 5) * 2.2;
+      const cyc = ((time + hash01(seed, 9) * period) % period) / period;
+      const bx = d.pos.x + (hash01(seed, 13) - 0.5) * d.radius * 0.9;
+      const by = d.pos.y + (hash01(seed, 17) - 0.5) * d.radius * 0.9;
+      if (cyc < 0.8) {
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        ctx.arc(bx, by, 1.5 + cyc * 4.5, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        const pop = (cyc - 0.8) / 0.2;
+        ctx.globalAlpha = 0.5 * (1 - pop);
+        ctx.strokeStyle = col;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(bx, by, 5 + pop * 7, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+  }
+  if (p.blotch) {
+    // Wet mud patches: darker irregular pools inside the bed.
+    const col = resolveColor(p.blotch.color, theme);
+    ctx.fillStyle = col;
+    for (const d of group) {
+      const seed = ((d.pos.x * 17 + d.pos.y * 7) | 0) >>> 0;
+      for (let i = 0; i < 3; i++) {
+        const a = hash01(i, seed) * Math.PI * 2;
+        const rr = Math.sqrt(hash01(i, seed + 3)) * d.radius * 0.6;
+        ctx.globalAlpha = 0.24;
+        ctx.beginPath();
+        ctx.ellipse(d.pos.x + Math.cos(a) * rr, d.pos.y + Math.sin(a) * rr,
+          d.radius * (0.16 + hash01(i, seed + 7) * 0.14), d.radius * 0.12,
+          hash01(i, seed + 9) * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      // One wet sheen glint.
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.ellipse(d.pos.x - d.radius * 0.24, d.pos.y - d.radius * 0.24, d.radius * 0.18, d.radius * 0.07, -0.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = col;
+    }
+  }
+  if (p.scum) {
+    // Swamp scum: pale mats adrift on the standing murk.
+    const col = resolveColor(p.scum.color, theme);
+    ctx.fillStyle = col;
+    for (const d of group) {
+      const seed = ((d.pos.x * 9 + d.pos.y * 5) | 0) >>> 0;
+      for (let i = 0; i < 2; i++) {
+        const a = hash01(i, seed) * Math.PI * 2 + time * 0.06 * (i % 2 ? 1 : -1);
+        const rr = d.radius * (0.3 + hash01(i, seed + 3) * 0.25);
+        ctx.globalAlpha = 0.2;
+        ctx.beginPath();
+        ctx.ellipse(d.pos.x + Math.cos(a) * d.radius * 0.4, d.pos.y + Math.sin(a) * d.radius * 0.4,
+          rr, rr * 0.6, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  if (p.glisten) {
+    // Gore glisten: wet specular pinpricks, faintly pulsing.
+    const col = resolveColor(p.glisten.color, theme);
+    ctx.fillStyle = col;
+    for (const d of group) {
+      const seed = ((d.pos.x * 11 + d.pos.y * 3) | 0) >>> 0;
+      for (let i = 0; i < 4; i++) {
+        const a = hash01(i, seed) * Math.PI * 2;
+        const rr = Math.sqrt(hash01(i, seed + 5)) * d.radius * 0.7;
+        ctx.globalAlpha = 0.25 + 0.2 * Math.sin(time * 2.2 + i * 1.8 + seed);
+        ctx.beginPath();
+        ctx.arc(d.pos.x + Math.cos(a) * rr, d.pos.y + Math.sin(a) * rr, 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  if (p.tufts) {
+    // RICH TUFTS: clumps of 5 curved blades, two-tone, gently SWAYING —
+    // grass that reads alive instead of scratched-on.
+    const base = resolveColor(p.tufts.color, theme);
+    const lit = shade(base, 0.22);
+    const flower = p.tufts.flower ? resolveColor(p.tufts.flower, theme) : null;
+    ctx.lineCap = 'round';
+    for (const g of group) {
+      const seed = ((g.pos.x * 13 + g.pos.y * 5) | 0) >>> 0;
+      const clumps = 5;
+      for (let i = 0; i < clumps; i++) {
+        const a = (i / clumps) * Math.PI * 2 + hash01(i, seed);
+        const cx = g.pos.x + Math.cos(a) * g.radius * (0.3 + hash01(i, seed + 3) * 0.35);
+        const cy = g.pos.y + Math.sin(a) * g.radius * (0.3 + hash01(i, seed + 5) * 0.35);
+        const sway = Math.sin(time * 1.7 + cx * 0.05) * 1.6;
+        for (let b = 0; b < 5; b++) {
+          const off = (b - 2) * 1.7;
+          const h = 5 + hash01(b, seed + i) * 4;
+          ctx.globalAlpha = 0.6;
+          ctx.strokeStyle = b % 2 ? base : lit;
+          ctx.lineWidth = 1.3;
+          ctx.beginPath();
+          ctx.moveTo(cx + off, cy + 3);
+          ctx.quadraticCurveTo(cx + off + sway * 0.4, cy - h * 0.5, cx + off + sway + (b - 2) * 0.8, cy - h);
+          ctx.stroke();
+        }
+        if (flower && hash01(i, seed + 11) > 0.72) {
+          ctx.globalAlpha = 0.85;
+          ctx.fillStyle = flower;
+          ctx.beginPath();
+          ctx.arc(cx + sway, cy - 7, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
     }
   }

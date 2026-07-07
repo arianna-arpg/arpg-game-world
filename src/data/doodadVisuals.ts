@@ -19,13 +19,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   landmass: { painter: 'landmass', order: 4 },
 
   // --- Liquid + ground overlays (merged blob silhouettes) -----------------
+  // WATER — one converged family: the same hue for ford and deep, depth told
+  // by tone; a living sheen drifts over the deep, ambient rings ripple, and
+  // moving bodies wake their own rings (renderer motion-FX).
   water: {
     painter: 'liquid', order: 10,
     params: {
       rim: { color: '#9ab8cc', alpha: 0.5, grow: 4 },
       core: { color: 'theme:water|#1d4264', alpha: 0.85 },
-      fords: { color: '#7ba8c4', alpha: 0.55, grow: -6 },
+      fords: { color: '#5c93b4', alpha: 0.6, grow: -6 },
       ripples: { color: '#bfe0f0' },
+      sheen: { color: '#d8f0fa' },
       pads: { color: '#6ba036', biomes: ['grove', 'meadow', 'isle'] },
     },
   },
@@ -35,15 +39,22 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       rim: { color: '#39432a', alpha: 0.6, grow: 3 },
       core: { color: '#5a6e34', alpha: 0.5, grow: -8 },
       squiggles: { color: '#7a8a4a' },
+      bubbles: { color: '#a8bc72' },
     },
   },
   swamp: {
     painter: 'liquid', order: 14,
-    params: { core: { color: '#2e3a2a', alpha: 0.55 } },
+    params: {
+      core: { color: '#2e3a2a', alpha: 0.55 },
+      scum: { color: '#5c7448' },
+    },
   },
   mud: {
     painter: 'liquid', order: 16,
-    params: { core: { color: 'theme:mud|#2b2518', alpha: 0.4 } },
+    params: {
+      core: { color: 'theme:mud|#2b2518', alpha: 0.4 },
+      blotch: { color: '#181209' },
+    },
   },
   sand: {
     painter: 'liquid', order: 18,
@@ -59,6 +70,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       rim: { color: '#ff5a1e', alpha: 0.6, grow: 4 },
       core: { color: 'theme:lava|#7a1a08', alpha: 1, grow: -6 },
       emberPulse: { color: '#ff7a2a' },
+      crawl: { color: '#ffb04a' },
+      crackle: { color: '#2a0c04' },
     },
     light: { radius: -1.8, color: '#ff6a26', intensity: 0.55 },
   },
@@ -75,6 +88,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       rim: { color: '#3a0a12', alpha: 0.6, grow: 3 },
       core: { color: '#5a1420', alpha: 0.82 },
+      glisten: { color: '#e8a8b0' },
     },
   },
   mycelial_mat: {
@@ -97,6 +111,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: {
       rim: { color: '#e8f4fc', alpha: 0.5, grow: 3 },
       core: { color: '#bcd8e8', alpha: 0.3 },
+      glassSheen: { color: '#ffffff' },
     },
   },
   heat_shimmer: {
@@ -162,7 +177,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'liquid', order: 47,
     params: {
       core: { color: 'theme:grass|#3e5c30', alpha: 0.22 },
-      tufts: { color: 'theme:grass|#3e5c30' },
+      tufts: { color: 'theme:grass|#3e5c30', flower: '#d8c86a' },
     },
   },
 

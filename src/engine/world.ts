@@ -321,6 +321,26 @@ export const HEAT_CFG = {
   dwindleEvery: 0.9,
 };
 
+/** DIRECTIONAL WIND tunables (World.windAt). A weather front's drift vector
+ *  IS the wind; its WeatherDef.wind scales strength. Movement pays or gains
+ *  by its dot with the gale; anything anchored and solid UPWIND shelters
+ *  you — the rock is your wall against the sky. */
+export const WIND_CFG = {
+  /** Speed penalty factor per unit of headwind dot (dot is -str..+str). */
+  headwind: 0.38,
+  /** Speed bonus factor per unit of tailwind dot. */
+  tailwind: 0.2,
+  /** Hard floor/ceiling on the wind's movement scale. */
+  minScale: 0.55,
+  maxScale: 1.25,
+  /** How far upwind the shelter probe reaches (world units). */
+  shelterReach: 36,
+  /** Extra pad on a sheltering solid's body radius. */
+  shelterPad: 8,
+  /** Gust pulse: extra strength at the crest of the slow gust wave. */
+  gustAmp: 0.55,
+};
+
 /** Tags whose bearers are AMBIENT living-world texture, streamed through zones
  *  by overlay packages — NEVER part of the zone objective, so a waves/clear
  *  zone can't soft-lock behind them. Materializers tag their spawns; a new
@@ -18979,6 +18999,49 @@ export class World {
     }
   }
 
+  /** THE ZONE'S WIND this frame — direction from the covering front's own
+   *  drift, strength from its WeatherDef.wind × intensity × the gust wave.
+   *  Cached per sim frame (every mover asks). Null in calm skies. */
+  private windCache: { at: number; w: { nx: number; ny: number; strength: number } | null } = { at: -1, w: null };
+  zoneWind(): { nx: number; ny: number; strength: number } | null {
+    if (this.windCache.at === this.time) return this.windCache.w;
+    let w: { nx: number; ny: number; strength: number } | null = null;
+    const f = this.sim.weather.sample(this.zone);
+    const windDef = f ? WEATHER_DEFS[f.kind].wind : undefined;
+    if (f && windDef) {
+      const len = Math.hypot(f.vel.x, f.vel.y);
+      if (len > 0.01) {
+        // The GUST WAVE: two slow sines beat against each other — strength
+        // swells in rolling pulses rather than holding a flat shove.
+        const gust = 1 + WIND_CFG.gustAmp
+          * Math.max(0, Math.sin(this.time * 0.7) * Math.sin(this.time * 0.23));
+        w = {
+          nx: f.vel.x / len, ny: f.vel.y / len,
+          strength: Math.min(1.6, windDef * f.intensity * gust),
+        };
+      }
+    }
+    this.windCache = { at: this.time, w };
+    return w;
+  }
+
+  /** The wind FELT at a point: the zone wind unless something anchored and
+   *  solid stands UPWIND within shelter reach — a rock, a wall, a trunk is
+   *  a windbreak you can deliberately hide behind. */
+  windAt(pos: Vec2): { x: number; y: number; strength: number } | null {
+    const w = this.zoneWind();
+    if (!w) return null;
+    const px = pos.x - w.nx * WIND_CFG.shelterReach;
+    const py = pos.y - w.ny * WIND_CFG.shelterReach;
+    for (const d of this.doodadsAt(px, py)) {
+      if (!blocksMovement(d)) continue;
+      const dx = px - d.pos.x, dy = py - d.pos.y;
+      const reach = bodyRadiusOf(d) + WIND_CFG.shelterPad;
+      if (dx * dx + dy * dy <= reach * reach) return null; // becalmed
+    }
+    return { x: w.nx * w.strength, y: w.ny * w.strength, strength: w.strength };
+  }
+
   /** Is this actor in SHADE — under a canopy crown, inside a roof, or in
    *  the night? (The desert's mercy; also any future heat hazard's.) */
   private isShaded(a: Actor): boolean {
@@ -22516,7 +22579,19 @@ export class World {
     // At sea the hero IS the boat — quicker than boots, and a better HULL is
     // quicker still (VOYAGE_CFG lever × the account's ship).
     const boatScale = this.sailing ? VOYAGE_CFG.boatSpeedMul * this.voyageShip().speedMul : 1;
-    const speed = a.sheet.get('moveSpeed') * channelFactor * regionScale * boatScale;
+    // DIRECTIONAL WIND (WEATHER_DEFS[kind].wind): pushing into the gale is
+    // work, running with it is a gift — and an anchored solid upwind
+    // (windAt's shelter probe) becalms you entirely. Applies to EVERYONE
+    // that walks, monsters included; sails feel it too, doubly.
+    let windScale = 1;
+    const gale = this.windAt(a.pos);
+    if (gale) {
+      const dot = (dx / len) * gale.x + (dy / len) * gale.y;
+      windScale = clamp(
+        1 + dot * (dot < 0 ? WIND_CFG.headwind : WIND_CFG.tailwind),
+        WIND_CFG.minScale, WIND_CFG.maxScale);
+    }
+    const speed = a.sheet.get('moveSpeed') * channelFactor * regionScale * boatScale * windScale;
     const traction = clamp(a.sheet.get('traction'), 0.05, 1);
     a.lastMoveAt = this.time;
     a.idleFor = 0; // a deliberate step breaks the 'stationary' stance

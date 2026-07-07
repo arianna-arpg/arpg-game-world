@@ -130,6 +130,8 @@ export class Renderer {
 
     this.drawFloor(world);
     this.drawDoodads(world);
+    this.updateMotionFx(world);
+    this.drawMotionFx();     // wake ripples + snow pocks, over grounds, under actors
     this.drawAirPockets(world);     // underwater: round air-pocket wash + rising bubbles
     this.drawAltars(world);
     this.drawShrines(world);
@@ -817,6 +819,36 @@ export class Renderer {
     for (const fx of world.zone.theme.ambientFx ?? []) {
       drawAmbientFx(ctx, fx, w, h, world.time);
     }
+    // WIND STREAMLINES: thin wisps riding the gale across the screen — the
+    // flow made faintly visible (direction + strength read at a glance).
+    const gale = world.zoneWind();
+    if (gale && gale.strength > 0.08) {
+      const t = world.time;
+      const ang = Math.atan2(gale.ny, gale.nx);
+      const diag = Math.hypot(w, h);
+      ctx.save();
+      ctx.strokeStyle = '#e8f0f8';
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = 'round';
+      const n = Math.round(6 + gale.strength * 10);
+      const speed = 140 + gale.strength * 280;
+      for (let i = 0; i < n; i++) {
+        const s = ((t * speed + i * 227) % (diag + 220)) - 110 - diag / 2;
+        const off = ((i * 349) % Math.round(diag)) - diag / 2;
+        const cx = w / 2 + Math.cos(ang) * s - Math.sin(ang) * off;
+        const cy = h / 2 + Math.sin(ang) * s + Math.cos(ang) * off;
+        const wob = Math.sin(t * 2 + i * 1.7) * 6;
+        const L = 24 + gale.strength * 34;
+        ctx.globalAlpha = (0.07 + 0.12 * gale.strength) * (0.5 + 0.5 * Math.sin(t * 1.3 + i * 2.1));
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(ang) * L, cy - Math.sin(ang) * L + wob);
+        ctx.quadraticCurveTo(cx + wob * 0.4, cy + wob,
+          cx + Math.cos(ang) * L, cy + Math.sin(ang) * L - wob * 0.5);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
     // ARENA WASH: a boss fight recolours the room per phase (intensity is capped at
     // the source so the climax stays readable — drama without blinding the player).
     if (world.arenaWash && world.arenaWash.intensity > 0) {
@@ -957,6 +989,91 @@ export class Renderer {
   private culledAll: Doodad[] = [];
   /** The baked-floor chunk cache (vis/ground.ts). */
   private ground = new GroundRenderer();
+  /** MOTION FX — transient liquid reactions to moving bodies: wake ripples
+   *  on water, pock marks pressed into snow. Renderer-owned (pure visuals),
+   *  cleared on zone change. */
+  private liquidFx: { x: number; y: number; age: number; max: number; r0: number; kind: 'ripple' | 'pock' }[] = [];
+  private lastFxSpawn = new Map<number, number>();
+  private fxZoneRef: unknown = null;
+
+  private updateMotionFx(world: World): void {
+    if (this.fxZoneRef !== world.zone) {
+      this.fxZoneRef = world.zone;
+      this.liquidFx.length = 0;
+      this.lastFxSpawn.clear();
+    }
+    const dt = this.frameDt;
+    for (let i = this.liquidFx.length - 1; i >= 0; i--) {
+      this.liquidFx[i].age += dt;
+      if (this.liquidFx[i].age >= this.liquidFx[i].max) this.liquidFx.splice(i, 1);
+    }
+    for (const a of world.actors) {
+      if (a.dead || a.construct) continue;
+      // "Moving" = stepped within the last beat (lastMoveAt is stamped by
+      // the movement artery) or carrying real velocity (ice slides count).
+      const moving = (world.time - (a.lastMoveAt ?? -9) < 0.12)
+        || Math.hypot(a.vel?.x ?? 0, a.vel?.y ?? 0) > 12;
+      if (!moving) continue;
+      const last = this.lastFxSpawn.get(a.id) ?? -9;
+      if (world.time - last < 0.16) continue;
+      if (a.groundKind === 'water') {
+        this.lastFxSpawn.set(a.id, world.time);
+        this.liquidFx.push({
+          x: a.pos.x, y: a.pos.y + a.radius * 0.3,
+          age: 0, max: 0.85, r0: a.radius * 0.55, kind: 'ripple',
+        });
+      } else {
+        // Snow isn't a sensed ground — probe the culled drifts directly.
+        const drifts = this.culled.get('snowdrift');
+        if (drifts) {
+          for (const d of drifts) {
+            if (dist(a.pos, d.pos) <= d.radius) {
+              this.lastFxSpawn.set(a.id, world.time);
+              this.liquidFx.push({
+                x: a.pos.x + (Math.random() * 4 - 2), y: a.pos.y + a.radius * 0.4,
+                age: 0, max: 9, r0: a.radius * 0.42, kind: 'pock',
+              });
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  private drawMotionFx(): void {
+    const { ctx } = this;
+    for (const f of this.liquidFx) {
+      const t = f.age / f.max;
+      if (f.kind === 'ripple') {
+        const r = f.r0 + t * 26;
+        ctx.globalAlpha = (1 - t) * 0.35;
+        ctx.strokeStyle = '#d8effa';
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = (1 - t) * 0.18;
+        ctx.beginPath();
+        ctx.arc(f.x, f.y, r * 0.6, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        // A pressed pock: a shaded dent with a bright compression rim.
+        ctx.globalAlpha = (1 - t) * 0.3;
+        ctx.fillStyle = '#8fa6bc';
+        ctx.beginPath();
+        ctx.ellipse(f.x, f.y, f.r0, f.r0 * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = (1 - t) * 0.2;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(f.x - f.r0 * 0.2, f.y - f.r0 * 0.2, f.r0 * 0.62, -2.6, -0.8);
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
   /** The dynamic darkness/emissive compositor (vis/lights.ts). */
   private lightLayer = new LightLayer();
   /** Crossfaded DISPLAYED weather (the raw sample can pop on zone hops and
@@ -1858,6 +1975,17 @@ export class Renderer {
     const lookDef = lookOf(a.look);
     // Part-grammar portraits are whole-body poses: they ALWAYS track facing.
     const rot = lookDef || shapeIsOriented(a.shape) ? a.facing : 0;
+    // ICE MIRROR: a faded, flipped ghost of the body beneath it — the frozen
+    // sheet reflects whoever crosses it.
+    if (a.groundKind === 'ice' && !flash) {
+      ctx.save();
+      ctx.translate(0, a.radius * 1.85);
+      ctx.scale(1, -0.8);
+      if (rot !== 0) ctx.rotate(-rot);
+      ctx.globalAlpha = 0.13 * baseAlpha;
+      ctx.drawImage(bodySprite(look), -half, -half);
+      ctx.restore();
+    }
     ctx.save();
     // Idle breathing — a live transform over the static bake. Scenery
     // (barrels, spawners) holds still; living things never quite do.

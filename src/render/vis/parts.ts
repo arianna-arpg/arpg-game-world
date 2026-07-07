@@ -1972,6 +1972,295 @@ const tailClub: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ==================================================== ANGELIC / DEMONIC
+
+/** A radiant SUNBURST behind the body — divine presence in spokes. */
+const sunburst: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 8));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.PI / n;
+      const inner = R * 0.75, outer = R * (i % 2 ? 1.15 : 1.4);
+      c.strokeStyle = withAlpha(col, i % 2 ? 0.35 : 0.55);
+      c.lineWidth = Math.max(1.4, R * (i % 2 ? 0.05 : 0.08));
+      c.beginPath();
+      c.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+      c.lineTo(Math.cos(a) * outer, Math.sin(a) * outer);
+      c.stroke();
+    }
+    const g = c.createRadialGradient(0, 0, R * 0.6, 0, 0, R * 1.4);
+    g.addColorStop(0, withAlpha(col, 0.14));
+    g.addColorStop(1, withAlpha(col, 0));
+    c.fillStyle = g;
+    c.fillRect(-R * 1.5, -R * 1.5, R * 3, R * 3);
+  });
+};
+
+/** A laurel wreath ringing the brow — leaf pairs along a circlet. */
+const laurel: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  place(ctx, r, spec, (c, R) => {
+    const cr = R * 0.5;
+    c.strokeStyle = withAlpha(ramp.shadow, 0.75);
+    c.lineWidth = Math.max(1, R * 0.05);
+    c.beginPath();
+    c.arc(0, 0, cr, 0.5, Math.PI * 2 - 0.5);
+    c.stroke();
+    c.fillStyle = ramp.base;
+    for (let i = 0; i < 8; i++) {
+      const a = 0.7 + (i / 7) * (Math.PI * 2 - 1.4);
+      for (const side of [-1, 1]) {
+        const la = a + side * 0.12;
+        c.beginPath();
+        c.ellipse(Math.cos(la) * cr, Math.sin(la) * cr, R * 0.1, R * 0.045, la + side * 0.7, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  });
+};
+
+/** A chained censer swinging at the hip, coal aglow (the holy orders). */
+const censer: PartPainter = (ctx, r, spec, pal) => {
+  const metal = pal.metal;
+  const col = spec.color ?? '#ffd898';
+  place(ctx, r, spec, (c, R) => {
+    const x = R * 0.42, y = R * 0.72;
+    c.strokeStyle = metal.shadow;
+    c.lineWidth = Math.max(1, R * 0.05);
+    c.beginPath();
+    c.moveTo(R * 0.1, R * 0.45);
+    c.quadraticCurveTo(x - R * 0.1, y - R * 0.2, x, y);
+    c.stroke();
+    const g = c.createRadialGradient(x, y, 0, x, y, R * 0.34);
+    g.addColorStop(0, withAlpha(col, 0.5));
+    g.addColorStop(1, withAlpha(col, 0));
+    c.fillStyle = g;
+    c.fillRect(x - R * 0.34, y - R * 0.34, R * 0.68, R * 0.68);
+    c.fillStyle = metal.base;
+    c.beginPath();
+    c.arc(x, y, R * 0.12, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = withAlpha(metal.outline, 0.8);
+    c.lineWidth = 1;
+    c.stroke();
+    c.fillStyle = col;
+    c.beginPath();
+    c.arc(x, y, R * 0.05, 0, Math.PI * 2);
+    c.fill();
+  });
+};
+
+/** The devil's tail: a whipping curve ending in a SPADE tip. */
+const tailSpade: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(1.8, R * 0.1);
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(-R * 0.7, 0);
+    c.quadraticCurveTo(-R * 1.25, R * 0.3, -R * 1.45, -R * 0.15);
+    c.stroke();
+    // The spade.
+    c.fillStyle = shade(ramp.base, -0.08);
+    c.beginPath();
+    c.moveTo(-R * 1.45, -R * 0.32);
+    c.quadraticCurveTo(-R * 1.28, -R * 0.18, -R * 1.32, -R * 0.02);
+    c.quadraticCurveTo(-R * 1.5, -R * 0.1, -R * 1.62, -R * 0.02);
+    c.quadraticCurveTo(-R * 1.62, -R * 0.2, -R * 1.45, -R * 0.32);
+    c.closePath();
+    c.fill();
+    outlined(c, ramp, 1);
+  });
+};
+
+/** A CROWN OF HORNS — a ring of curved points around the brow. */
+const crownOfHorns: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const n = Math.round(P(spec, 'n', 6));
+  place(ctx, r, spec, (c, R) => {
+    const cr = R * 0.48;
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.PI / n;
+      c.strokeStyle = i % 2 ? ramp.base : shade(ramp.base, -0.15);
+      c.lineWidth = Math.max(1.6, R * 0.09);
+      c.beginPath();
+      c.moveTo(Math.cos(a) * cr, Math.sin(a) * cr);
+      c.quadraticCurveTo(
+        Math.cos(a + 0.18) * cr * 1.5, Math.sin(a + 0.18) * cr * 1.5,
+        Math.cos(a + 0.42) * cr * 1.75, Math.sin(a + 0.42) * cr * 1.75);
+      c.stroke();
+    }
+  });
+};
+
+/** A BRAND seared into the body — a glowing sigil (mark of pact or seal). */
+const brand: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  place(ctx, r, spec, (c, R) => {
+    const g = c.createRadialGradient(0, 0, 0, 0, 0, R * 0.5);
+    g.addColorStop(0, withAlpha(col, 0.3));
+    g.addColorStop(1, withAlpha(col, 0));
+    c.fillStyle = g;
+    c.fillRect(-R * 0.5, -R * 0.5, R, R);
+    c.strokeStyle = withAlpha(col, 0.9);
+    c.lineWidth = Math.max(1.2, R * 0.06);
+    const s = R * 0.3;
+    // An angular rune: triangle + bisecting stroke + a crossbar.
+    c.beginPath();
+    c.moveTo(0, -s); c.lineTo(s * 0.85, s * 0.6); c.lineTo(-s * 0.85, s * 0.6);
+    c.closePath();
+    c.stroke();
+    c.beginPath();
+    c.moveTo(0, -s); c.lineTo(0, s * 0.95);
+    c.moveTo(-s * 0.45, s * 0.1); c.lineTo(s * 0.45, s * 0.1);
+    c.stroke();
+  });
+};
+
+// ============================================== ANIMAL KINGDOM, CONTINUED
+
+/** Pelt STRIPES raked across the back (tigers, zebra-kin). params: n. */
+const stripes: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'dark');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = withAlpha(ramp.base, 0.65);
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const x = R * 0.55 - (i / (n - 1)) * R * 1.2;
+      const half = R * (0.5 + 0.28 * Math.sin((i + 0.5) / n * Math.PI));
+      c.lineWidth = Math.max(1.6, R * (0.1 - 0.008 * i));
+      c.beginPath();
+      c.moveTo(x + R * 0.08, -half);
+      c.quadraticCurveTo(x - R * 0.1, 0, x + R * 0.08, half);
+      c.stroke();
+    }
+  });
+};
+
+/** Pelt SPOTS scattered over the back (leopards, fawns). params: n. */
+const spots: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'dark');
+  const n = Math.round(P(spec, 'n', 9));
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = withAlpha(ramp.base, 0.55);
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, 53) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, 59)) * R * 0.72;
+      const s = R * (0.06 + hash01(i, 61) * 0.06);
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      // Rosette: a broken ring of 3 dabs.
+      for (let k = 0; k < 3; k++) {
+        const ka = hash01(i * 7 + k, 67) * Math.PI * 2;
+        c.beginPath();
+        c.arc(x + Math.cos(ka) * s, y + Math.sin(ka) * s, s * 0.75, 0, Math.PI * 2);
+        c.fill();
+      }
+    }
+  });
+};
+
+/** A nose HORN rising off the snout (rhino-kin). */
+const rhinoHorn: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    c.fillStyle = ramp.base;
+    c.beginPath();
+    c.moveTo(R * 0.62, -R * 0.13);
+    c.quadraticCurveTo(R * 1.15, -R * 0.05, R * 1.22, 0);
+    c.quadraticCurveTo(R * 1.15, R * 0.05, R * 0.62, R * 0.13);
+    c.closePath();
+    c.fill();
+    outlined(c, ramp, 1.1);
+    c.fillStyle = shade(ramp.base, 0.2);
+    c.beginPath();
+    c.arc(R * 0.72, -R * 0.04, R * 0.05, 0, Math.PI * 2);
+    c.fill();
+  });
+};
+
+/** Tufted lynx ears — the adorn ears with feathered tips. */
+const tuftEars: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    for (const side of [-1, 1]) {
+      const ang = side * 1.75;
+      const bx = Math.cos(ang) * R * 0.8, by = Math.sin(ang) * R * 0.8;
+      const tx = Math.cos(ang) * R * 1.45, ty = Math.sin(ang) * R * 1.45;
+      const px = Math.cos(ang + Math.PI / 2) * R * 0.24, py = Math.sin(ang + Math.PI / 2) * R * 0.24;
+      c.fillStyle = ramp.base;
+      c.beginPath();
+      c.moveTo(bx - px, by - py); c.lineTo(tx, ty); c.lineTo(bx + px, by + py);
+      c.closePath(); c.fill();
+      outlined(c, ramp, 1);
+      // The tuft: two fine hairs off the tip.
+      c.strokeStyle = withAlpha(pal.dark, 0.8);
+      c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(tx, ty);
+      c.lineTo(tx + Math.cos(ang) * R * 0.22, ty + Math.sin(ang) * R * 0.22);
+      c.moveTo(tx, ty);
+      c.lineTo(tx + Math.cos(ang + 0.35) * R * 0.16, ty + Math.sin(ang + 0.35) * R * 0.16);
+      c.stroke();
+    }
+  });
+};
+
+/** Whiskers fanning off the muzzle. */
+const whiskers: PartPainter = (ctx, r, spec, pal) => {
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = withAlpha('#e8e4d8', 0.5);
+    c.lineWidth = 1;
+    for (const side of [-1, 1]) {
+      for (const lift of [-0.16, 0, 0.16]) {
+        c.beginPath();
+        c.moveTo(R * 0.62, side * R * 0.1);
+        c.quadraticCurveTo(R * 0.95, side * R * (0.32 + lift), R * 1.2, side * R * (0.5 + lift * 2));
+        c.stroke();
+      }
+    }
+  });
+};
+
+/** A spiral shell carried on the back (snails, shelled things). */
+const shellSpiral: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  place(ctx, r, spec, (c, R) => {
+    const cx = -R * 0.25;
+    const trace = (): void => { c.beginPath(); c.arc(cx, 0, R * 0.72, 0, Math.PI * 2); };
+    trace(); c.fillStyle = ramp.base; c.fill();
+    volume(c, R * 0.72, ramp, trace);
+    // The spiral: a shrinking arc walk.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.7);
+    c.lineWidth = Math.max(1.2, R * 0.06);
+    c.beginPath();
+    let ang = 0, rad = R * 0.68;
+    c.moveTo(cx + rad, 0);
+    while (rad > R * 0.08) {
+      ang += 0.5;
+      rad *= 0.92;
+      c.lineTo(cx + Math.cos(ang) * rad, Math.sin(ang) * rad);
+    }
+    c.stroke();
+    trace(); outlined(c, ramp, 1.4);
+  });
+};
+
+/** A back hump (camels, brutes bred for the wastes). */
+const hump: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  place(ctx, r, spec, (c, R) => {
+    const trace = (): void => { c.beginPath(); c.ellipse(-R * 0.2, 0, R * 0.42, R * 0.34, 0, 0, Math.PI * 2); };
+    trace(); c.fillStyle = shade(ramp.base, 0.06); c.fill();
+    volume(c, R * 0.4, ramp, trace);
+    trace(); outlined(c, ramp, 1.2);
+  });
+};
+
 /** Metal helm cap with a nose ridge (knights). */
 const helm: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'metal');
@@ -2002,6 +2291,8 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   antlers, ramHorns, beak, featherWings, crest, frill, gills,
   trunkNose, scutes, tailFin, eyestalks, mane, egg, cocoon, mask,
   quiver, cape, tailClub,
+  sunburst, laurel, censer, tailSpade, crownOfHorns, brand,
+  stripes, spots, rhinoHorn, tuftEars, whiskers, shellSpiral, hump,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */
