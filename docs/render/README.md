@@ -145,6 +145,23 @@ one `registerRegion` row.
 FORESIGHT: enemy ground-delivery wind-ups mark their landing with a dashed
 ring firming toward impact (`Settings.castTelegraphs`, in the options panel).
 
+## Liquids and wind
+
+Every liquid's identity is a painter param on its `DOODAD_VISUALS` entry:
+water `sheen` + renderer wake-ripples (motion FX also presses `pock` marks
+into snowdrifts), ice `glassSheen` + the actor MIRROR ghost (drawn in
+drawActor when `groundKind === 'ice'`), lava `crawl` + `crackle`, bog
+`bubbles`, mud `blotch`, swamp `scum`, gore `glisten`, grass clumped swaying
+`tufts` (+`flower`). New liquids compose from the same vocabulary.
+
+WIND: a covering front's drift vector is the zone wind (`WeatherDef.wind`
+scales strength; gusts roll on beating sines). `World.windAt(pos)` returns
+the felt vector — null when an anchored solid stands upwind within
+`WIND_CFG.shelterReach` (windbreaks are real cover). The movement artery
+scales speed by the move-direction dot (headwind slows, tailwind hastens,
+clamped); streamline wisps visualize direction/strength on screen. All
+knobs in `WIND_CFG`.
+
 ## The `compound` structure generator
 
 The room-grammar composer (`engine/structureGen.ts`): a footprint BSP-split
