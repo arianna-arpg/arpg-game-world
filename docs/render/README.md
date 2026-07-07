@@ -145,6 +145,41 @@ one `registerRegion` row.
 FORESIGHT: enemy ground-delivery wind-ups mark their landing with a dashed
 ring firming toward impact (`Settings.castTelegraphs`, in the options panel).
 
+## The stone, flora, fungal and flesh kits
+
+THE ROCK GRAMMAR (`boulder` painter): every stone rolls a deterministic FORM
+from its position — mono boulder, split pair, or an outcrop with shoulder
+stones — builds an angular silhouette, and shades it facet by facet against
+`VIS_CFG.lightAngle`. Accents are composable params, each chance-rolled per
+stone: strata, cracks, grain, moss + lichen (theme-gated — no key, no paint),
+quartz glints, barnacles, wet shine, pebble skirts, and a snow cap that
+follows `World.snowCover`. `cairn` (stacked waymark courses) and `scree`
+(walkable gravel) round out the family; `rock_spire` is the same painter in
+pinnacle mode; the `boulder_field` stamp composes an outcrop set-piece.
+
+FLORA CLARITY: bushes and tree crowns sit at opposite detail frequencies so
+clumps never merge. The bush painter carries a DISCRETE LEAF overlay
+(midribbed ovals angled outward), woody sprigs, and optional berry clusters
+(`berry_bush` is the same painter saying one more word); `leafCrown` carries
+broad soft dapple wells instead. `fern` is its own painter — arching
+leaflet fronds with a fiddlehead — a third silhouette for the understory.
+
+THE FUNGAL KIT: `hyphae` turns the mycelial mat into a living circuit —
+loam wash, branching filaments, bright nutrient pulses traveling the
+strands. `mushroomCrown` takes its whole palette from params (cap / glow /
+stalk / speck, gill fringes, wart specks) so any biome can grow its own
+mushroom. `shelfFungus` steps amber brackets off a woody heart;
+`toadstools` huddles speckled caps, and the fairy-ring stamp alternates
+them with glow-caps. The `spores` AmbientFx kind drifts breathing luminous
+motes with a periodic off-screen cap PUFF.
+
+THE FLESH KIT: the warren is ONE CREATURE — a shared `heartbeat()` (lub-dub,
+one clock) drives `membrane` sheets that tighten on the beat and `veins`
+whose pulse front visibly rides node-to-tip on every thump. `eyeStalk` is
+the signature tell: its iris tracks `world.player` live and blinks on its
+own clock. `ribArch` and `teethRow` jut the anatomy out of the floor. All
+palette on params — any organic horror biome can borrow the kit.
+
 ## Liquids and wind
 
 Every liquid's identity is a painter param on its `DOODAD_VISUALS` entry:
@@ -187,6 +222,13 @@ as templates; a dungeon or metropolis biome is a layout pass from here.
   to its `DOODAD_VISUALS` entry.
 - **Darken an interior tileset**: `ambientDark: 0.5` in its theme.
 - **Add weather particles**: one `WEATHER_FX` row keyed by the WeatherKind.
+- **Skin a biome's stone**: the `rock` entry already reads `theme:obstacle` —
+  for a bespoke look, point a new kind at the `boulder` painter and pick its
+  accents (strata/moss/quartz/…) in params.
+- **Grow a biome's own mushroom**: a `mushroomCrown` canopy with your own
+  cap/glow/stalk params — no new painter.
+- **Give a zone standing ambience**: `ambientFx` rows on the theme
+  (`spores`, `motes`, `aurora`, …).
 - **Rebalance the whole look**: `vis/visConfig.ts` — nothing else has magic
   numbers.
 
