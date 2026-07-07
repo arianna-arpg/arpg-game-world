@@ -22,6 +22,7 @@ import { DEFENSE_CFG } from './defense';
 import type { Actor } from './actor';
 import { instanceMods, skillContextTags, type SkillInstance } from './skills';
 import { STATUS_DEFS } from './status';
+import { SIM_TAP } from './tap';
 
 export interface DamagePacket {
   amounts: Partial<Record<DamageType, number>>;
@@ -309,6 +310,14 @@ export function mitigateTyped(
 
 /** Apply a rolled packet to a defender. Returns what actually landed. */
 export function applyHit(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
+  const result = applyHitCore(attacker, target, packet);
+  SIM_TAP.current?.onHit?.(attacker, target, result, packet);
+  return result;
+}
+
+/** The actual hit pipeline. applyHit is its thin observed wrapper, so the sim
+ *  tap sees EVERY exit — evade, immunity, block, and the landed wound alike. */
+function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): HitResult {
   if (target.invulnerable) return { evaded: false, immune: true, blocked: false, total: 0, crit: false };
   // HIT IMMUNITY (Cerement's shroud): every incoming HIT — attack, spell,
   // projectile — is dodged outright while the stat holds. DoTs still tick
@@ -552,6 +561,13 @@ function soakDamage(
  *
  *  Insight and poise sit this out: they read attacks, not afflictions. */
 export function applyDot(target: Actor, amount: number, type?: DamageType): number {
+  const landed = applyDotCore(target, amount, type);
+  SIM_TAP.current?.onDot?.(target, landed, type);
+  return landed;
+}
+
+/** The actual DoT pipeline (applyDot is its thin observed wrapper). */
+function applyDotCore(target: Actor, amount: number, type?: DamageType): number {
   if (target.invulnerable) return 0;
   const tags = type ? new Set<SkillTag>([type]) : undefined;
   let total = amount * target.sheet.get('damageTaken', tags);

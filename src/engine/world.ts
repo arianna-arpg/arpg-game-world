@@ -147,6 +147,7 @@ import {
 import { NEMESIS_RANKS } from '../data/nemesis';
 import { saveCharacter, rebuildSkill } from '../meta/character';
 import { saveAccount, saveAccountDurable } from '../meta/persistence';
+import { SIM_TAP } from './tap';
 import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
 
 export type { Doodad } from './levelgen';
@@ -10481,6 +10482,7 @@ export class World {
   ): boolean {
     const def = inst.def;
     const extra = instanceMods(inst);
+    SIM_TAP.current?.onCast?.(caster, inst, !!opts.noRepeat);
     // Tags granted by socketed supports count here too: a Dive-Bombed
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(def, grantedTags(inst));
@@ -16007,6 +16009,7 @@ export class World {
     }
 
     actor.dead = true;
+    SIM_TAP.current?.onDeath?.(actor, killer);
     // A dying bearer's auras vanish (and release their reservations).
     for (const id of [...actor.activeAuras.keys()]) this.deactivateAura(actor, id);
     // SQUAD & MORALE REACTIONS: a fallen LEADER scatters or enrages its band;
