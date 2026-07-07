@@ -240,6 +240,8 @@ registerRegion({ id: 'web', walkable: true, blocks: false, label: 'the webbing',
   enterText: { text: 'webbed!', color: '#d8d4c8' } });
 // REEDS: water-margin blades conceal like brush (the ambush margin).
 registerRegion({ id: 'reeds', walkable: true, blocks: false, label: 'the reeds', standStatus: 'concealed' });
+// BERRY BUSH: a fruiting shrub — conceals exactly like the brush it grows from.
+registerRegion({ id: 'berry_bush', walkable: true, blocks: false, label: 'the bushes', standStatus: 'concealed' });
 
 // --- PHASE-3 INSTANCE ROWS --------------------------------------------------
 // VOID: not walkable, does NOT block (you can be shoved/walk in) → its boundary

@@ -1561,11 +1561,25 @@ const trunk: GroupPainter = (env, group, def) => {
   }
 };
 
+export interface BrushParams {
+  color?: ColorSpec;
+  /** DISCRETE LEAF OVERLAY: pointed ovals with midribs scattered over the
+   *  lobes — the high-frequency texture tree crowns deliberately LACK, so a
+   *  bush clumped against a canopy still reads as a bush. Count multiplier
+   *  (default 1; 0 disables). */
+  leaves?: number;
+  /** Woody sprigs poking through the silhouette (default on). */
+  sprigs?: boolean;
+  /** Berry clusters: chance-rolled per bush (chance defaults to 0.55). */
+  berries?: { color: ColorSpec; chance?: number };
+}
+
 /** A TRUE BUSH — overlapping scallop-edged leaf lobes with vein strokes,
- *  sun-side highlights and a shadowed heart you can vanish into. Reads
- *  LEAFY at a glance: never a bog, never a slime. */
+ *  sun-side highlights and a shadowed heart you can vanish into, finished
+ *  with DISCRETE LEAVES, poking sprigs and (sometimes) berries. Reads LEAFY
+ *  and LOW at a glance: never a bog, never a slime — and never a canopy. */
 const brush: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const p = (def.params ?? {}) as unknown as BrushParams;
   const { ctx, theme } = env;
   for (const b of group) {
     const base = resolveColor(p.color, theme, '#2c4424');
@@ -1622,6 +1636,158 @@ const brush: GroupPainter = (env, group, def) => {
       drawLobe(Math.cos(a) * d, Math.sin(a) * d, b.radius * (0.42 + hash01(i, seed) * 0.12), i);
     }
     drawLobe(-b.radius * 0.08, -b.radius * 0.08, b.radius * 0.5, 1);
+    // WOODY SPRIGS: thin twigs breaking the silhouette — proof of a shrub's
+    // branching body under the leaves (crowns float; bushes GROW).
+    if (p.sprigs !== false) {
+      ctx.strokeStyle = withAlpha('#4a3a24', 0.75);
+      ctx.lineCap = 'round';
+      const sprigs = 3 + (seed % 3);
+      for (let i = 0; i < sprigs; i++) {
+        const a = (i / sprigs) * Math.PI * 2 + hash01(i, seed + 31) * 1.2;
+        const r0 = b.radius * 0.45, r1 = b.radius * (0.98 + hash01(i, seed + 37) * 0.18);
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+        const ex = Math.cos(a) * r1, ey = Math.sin(a) * r1;
+        ctx.quadraticCurveTo(Math.cos(a + 0.12) * r1 * 0.7, Math.sin(a + 0.12) * r1 * 0.7, ex, ey);
+        ctx.stroke();
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex + Math.cos(a + 0.9) * b.radius * 0.12, ey + Math.sin(a + 0.9) * b.radius * 0.12);
+        ctx.stroke();
+      }
+    }
+    // THE LEAF OVERLAY: discrete pointed ovals with midribs, angled outward —
+    // the detail frequency that separates a shrub from a distant crown.
+    const leafMul = p.leaves ?? 1;
+    if (leafMul > 0) {
+      const n = Math.round((7 + (seed % 5)) * leafMul * Math.min(1.6, b.radius / 22));
+      for (let i = 0; i < n; i++) {
+        const a = hash01(i, seed + 41) * Math.PI * 2;
+        const d = b.radius * (0.3 + Math.sqrt(hash01(i, seed + 43)) * 0.62);
+        const lx = Math.cos(a) * d, ly = Math.sin(a) * d;
+        const la = a + (hash01(i, seed + 47) - 0.5) * 0.9; // points outward-ish
+        const len = b.radius * (0.24 + hash01(i, seed + 53) * 0.14);
+        const wid = len * 0.42;
+        const tone = i % 3 === 0 ? lobeLight : i % 3 === 1 ? base : shade(base, -0.1);
+        ctx.save();
+        ctx.translate(lx, ly);
+        ctx.rotate(la);
+        ctx.globalAlpha = 0.92;
+        ctx.fillStyle = tone;
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.quadraticCurveTo(len * 0.5, -wid, len, 0);
+        ctx.quadraticCurveTo(len * 0.5, wid, 0, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = withAlpha(shade(tone, 0.3), 0.7);
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(len * 0.08, 0);
+        ctx.lineTo(len * 0.9, 0);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+    // BERRIES: bright clustered dots with a glint — the forager's tell.
+    if (p.berries && hash01(seed, 61) < (p.berries.chance ?? 0.55)) {
+      const bc = resolveColor(p.berries.color, theme, '#c8425a');
+      const clusters = 2 + (seed % 2);
+      for (let c = 0; c < clusters; c++) {
+        const a = hash01(c, seed + 67) * Math.PI * 2;
+        const d = b.radius * (0.34 + hash01(c, seed + 71) * 0.34);
+        const cx = Math.cos(a) * d, cy = Math.sin(a) * d;
+        const dots = 3 + ((seed + c) % 3);
+        for (let k = 0; k < dots; k++) {
+          const ka = hash01(k, seed + c * 7 + 73) * Math.PI * 2;
+          const kd = hash01(k, seed + c * 7 + 79) * b.radius * 0.12;
+          const bx = cx + Math.cos(ka) * kd, by = cy + Math.sin(ka) * kd;
+          const br = 1.3 + hash01(k, seed + c + 83) * 0.9;
+          ctx.globalAlpha = 0.95;
+          ctx.fillStyle = k % 3 ? bc : shade(bc, -0.18);
+          ctx.beginPath();
+          ctx.arc(bx, by, br, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 0.8;
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(bx - br * 0.3, by - br * 0.3, br * 0.28, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
+/** A FERN CLUMP — arching fronds of paired leaflets shrinking to the tip,
+ *  swaying on a slow breath. The understory's OWN silhouette: feathery where
+ *  bushes are lobed and grass is bladed — three floras, three reads. */
+const fern: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const base = resolveColor(p.color, theme, theme.tree ?? '#2c4424');
+  ctx.lineCap = 'round';
+  for (const o of group) {
+    const seed = ((o.pos.x * 19 + o.pos.y * 7) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    // A dark rooting heart so the clump sits in the ground.
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = shade(base, -0.45);
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    const fronds = 5 + (seed % 3);
+    for (let i = 0; i < fronds; i++) {
+      const a = (i / fronds) * Math.PI * 2 + hash01(i, seed) * 0.7;
+      const len = o.radius * (0.72 + hash01(i, seed + 5) * 0.36);
+      const sway = Math.sin(time * 1.3 + o.pos.x * 0.03 + i * 1.9) * 0.1;
+      const tone = i % 2 ? base : shade(base, 0.14);
+      // The rachis: a curved spine bowing outward.
+      const steps = 6;
+      let px = 0, py = 0;
+      const pts: { x: number; y: number; t: number }[] = [{ x: 0, y: 0, t: 0 }];
+      for (let s = 1; s <= steps; s++) {
+        const t = s / steps;
+        const ang = a + sway + t * 0.5 * (hash01(i, seed + 9) - 0.5);
+        px = Math.cos(ang) * len * t;
+        py = Math.sin(ang) * len * t;
+        pts.push({ x: px, y: py, t });
+      }
+      ctx.globalAlpha = 0.85;
+      ctx.strokeStyle = shade(tone, -0.2);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      pts.forEach((q, qi) => { if (qi === 0) ctx.moveTo(q.x, q.y); else ctx.lineTo(q.x, q.y); });
+      ctx.stroke();
+      // Paired leaflets, longest mid-frond, vanishing at the tip.
+      ctx.strokeStyle = tone;
+      for (let s = 1; s < steps; s++) {
+        const q = pts[s], q2 = pts[s + 1];
+        const da = Math.atan2(q2.y - q.y, q2.x - q.x);
+        const ll = len * 0.16 * Math.sin(Math.PI * Math.min(1, q.t + 0.15)) * (1 - q.t * 0.4);
+        ctx.lineWidth = 1.1;
+        for (const side of [-1, 1]) {
+          ctx.beginPath();
+          ctx.moveTo(q.x, q.y);
+          ctx.lineTo(q.x + Math.cos(da + side * 1.15) * ll, q.y + Math.sin(da + side * 1.15) * ll);
+          ctx.stroke();
+        }
+      }
+      // An unfurling fiddlehead on the youngest frond.
+      if (i === fronds - 1) {
+        ctx.strokeStyle = shade(tone, 0.24);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.arc(px, py, Math.max(1.6, len * 0.07), 0, Math.PI * 1.5);
+        ctx.stroke();
+      }
+    }
     ctx.globalAlpha = 1;
     ctx.restore();
   }
@@ -2698,7 +2864,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   liquid, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
-  campfire, groundShadow, trunk, brush, gravelPath, shimmer, fogFloor,
+  campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
@@ -2838,6 +3004,21 @@ const leafCrown: CanopyPainter = (env, o, alpha, params) => {
       i % 2 ? base : shade(base, -0.14));
   }
   lobe(-o.radius * 0.1, -o.radius * 0.1, o.radius * 0.5, shade(base, 0.05));
+  // CANOPY DAPPLE: soft dark wells where the crown opens toward the floor —
+  // the broad low-frequency depth a BUSH deliberately lacks (bushes carry
+  // discrete leaf detail instead; that contrast is the clump-clarity rule).
+  for (let i = 0; i < 3 + (seed % 3); i++) {
+    const a = hash01(i, seed + 91) * Math.PI * 2;
+    const d = Math.sqrt(hash01(i, seed + 97)) * o.radius * 0.6;
+    ctx.globalAlpha = alpha * 0.22;
+    ctx.fillStyle = shade(base, -0.55);
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d,
+      o.radius * (0.12 + hash01(i, seed + 101) * 0.1), o.radius * 0.09,
+      hash01(i, seed + 103) * 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = alpha;
   // Sun-side lit rim.
   ctx.globalAlpha = alpha * 0.5;
   ctx.strokeStyle = shade(base, 0.3);

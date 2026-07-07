@@ -208,7 +208,21 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
 
   // --- Flora + cover -------------------------------------------------------
   sapling: { painter: 'sapling', order: 45, params: { crown: 'theme:tree|#2c4424' } },
-  brush: { painter: 'brush', order: 49, params: { color: 'theme:tree|#2c4424' } },
+  // FLORA CLARITY: bushes wear DISCRETE LEAVES + sprigs (high-frequency
+  // detail), crowns carry broad dapple — clumped together they still read
+  // apart. Berry bushes are the same painter saying one more word.
+  brush: {
+    painter: 'brush', order: 49,
+    params: { color: 'theme:tree|#2c4424', leaves: 1, sprigs: true },
+  },
+  berry_bush: {
+    painter: 'brush', order: 49,
+    params: {
+      color: 'theme:tree|#2c4424', leaves: 1.2, sprigs: true,
+      berries: { color: '#c8425a', chance: 1 },
+    },
+  },
+  fern: { painter: 'fern', order: 48, params: { color: 'theme:tree|#2c4424' } },
   // WALK-UNDER TREES: the ground pass draws the real TRUNK (the physical
   // body — DoodadRule.bodyScale); the crown rides the canopy pass above,
   // fading when the hero steps beneath. Anyone ELSE under an unfaded crown

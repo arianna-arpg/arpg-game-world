@@ -121,7 +121,10 @@ export type KnownDoodadKind =
   // The rock grammar's kin (stone-variety round)
   | 'cairn'       // stacked waymark stones — solid, blocks feet not shots
   | 'scree'       // walkable gravel spill (pure decoration)
-  | 'rock_spire'; // a standing pinnacle — solid, blocks shots, casts long
+  | 'rock_spire'  // a standing pinnacle — solid, blocks shots, casts long
+  // Flora clarity (bush-vs-canopy round)
+  | 'berry_bush'  // a fruiting shrub — CONCEALS like brush, wears berries
+  | 'fern';       // feathery understory fronds (pure decoration)
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -497,6 +500,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   cairn:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80, forbidOn: ['water', 'lava', 'chasm'] },
   scree:      { overlap: 'ground', walkOnly: true },
   rock_spire: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm'] },
+  // Flora clarity: a berry bush is walkable cover exactly like brush; ferns
+  // are pure understory decoration.
+  berry_bush: { overlap: 'ground' },
+  fern:       { overlap: 'ground', walkOnly: true },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -1947,6 +1954,9 @@ registerStamp('cairn', stampSingle('cairn', [11, 16]));
 registerStamp('scree', (ctx, spec) => stampBlob(ctx, 'scree', spec.radius ?? [18, 46], [3, 6], false));
 registerStamp('rock_spire', (ctx, spec) => stampSolid(ctx, 'rock_spire', spec.radius ?? [14, 26]));
 registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
+// Flora clarity: fruiting bush clumps + feathery fern understory.
+registerStamp('berry_bush', (ctx, spec) => stampBlob(ctx, 'berry_bush', spec.radius ?? [16, 34], [2, 4], false));
+registerStamp('fern', (ctx, spec) => stampBlob(ctx, 'fern', spec.radius ?? [14, 30], [3, 6], false));
 registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
 registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
 registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));
@@ -2585,12 +2595,14 @@ function stampBlob(
 ): void {
   const R = ctx.rng.range(radius[0], radius[1]);
   // Blobs are terrain, not solids: they merge freely over rocks/trees (a pool
-  // laps the boulders) — checkSolids=false. Only brush spins per-piece, and its
-  // rot draw is conditional so non-brush blobs keep the exact same rng sequence.
+  // laps the boulders) — checkSolids=false. Only the shrub-family kinds spin
+  // per-piece, and the rot draw stays conditional so every other blob keeps
+  // the exact same rng sequence it always had.
   const center = findSpot(ctx, R * 1.8, hard, 20, false, kind);
   if (!center) return;
   const n = ctx.rng.int(pieces[0], pieces[1]);
-  const crot = (): number | undefined => kind === 'brush' ? ctx.rng.range(0, Math.PI * 2) : undefined;
+  const SPUN_BLOBS: readonly DoodadKind[] = ['brush', 'berry_bush', 'fern'];
+  const crot = (): number | undefined => SPUN_BLOBS.includes(kind) ? ctx.rng.range(0, Math.PI * 2) : undefined;
   ctx.doodads.push({ pos: center, radius: R, kind, rot: crot() });
   for (let i = 0; i < n; i++) {
     const ang = ctx.rng.range(0, Math.PI * 2);
