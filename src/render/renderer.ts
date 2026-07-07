@@ -26,7 +26,6 @@ import { QUEST_GIVER_IDS } from '../quests/defs';
  *  edges from popping at the screen border. */
 const RENDER_CULL_PAD = 150;
 import { roofStyle } from '../data/structures';
-import { WEATHER_COLORS } from '../world/palette';
 import { keyDisplay, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
@@ -40,7 +39,7 @@ import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
 import { drawAmbientFx } from './vis/ambientFx';
-import type { WeatherKind } from '../world/weather';
+import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
@@ -832,7 +831,7 @@ export class Renderer {
     // seeps in over seconds while a storm may still SLAM by design.
     const f = this.smoothWeather(world);
     if (f) {
-      const [r, g, b] = hexToRgb(WEATHER_COLORS[f.kind]);
+      const [r, g, b] = hexToRgb(WEATHER_DEFS[f.kind].color);
       ctx.fillStyle = `rgba(${r},${g},${b},${(0.05 + 0.12 * f.intensity).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
       // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts).

@@ -1,9 +1,8 @@
 // ---------------------------------------------------------------------------
 // Shared colors for the minimap overlays. Pure data, no logic — kept apart so
-// weather and faction rendering draw from one consistent palette.
+// the overlay painters draw from one consistent palette. (Weather tints live
+// on WeatherDef.color — the weather registry carries its own look.)
 // ---------------------------------------------------------------------------
-
-import type { WeatherKind } from './weather';
 
 /** The one neutral tint for a faction with no FACTION_COLORS entry — every
  *  overlay falls back to THIS, not its own literal. */
@@ -28,7 +27,7 @@ export const FACTION_COLORS: Record<string, string> = {
 
 /** The Contagion overlay's sickly palette — a necrotic green that brightens toward
  *  the source (the glow gradient) plus a rot-purple accent for the Patient Zero
- *  glyph. Kept here beside the faction/weather colours so the minimap reads one
+ *  glyph. Kept here beside the faction colours so the minimap reads one
  *  consistent set. (FACTION_COLORS['plague'] is grafted at boot by factionGen from
  *  the package's FactionSpec.color — that drives the spawn-contest wash; these drive
  *  the bespoke glow/pulse the overlay paints.) */
@@ -51,14 +50,4 @@ export const SPORE_COLORS = {
   weak: '#3f5a32',
   /** Luminous spore-light — the Heartbloom glyph + the densest haze. */
   accent: '#c8ffa0',
-};
-
-/** Cell color per weather kind ('clear' is the absence of a front). */
-export const WEATHER_COLORS: Record<WeatherKind, string> = {
-  clear: '#000000',
-  rain: '#4a6a9a',
-  storm: '#6a5ab0',
-  fog: '#9aa0a8',
-  ashfall: '#b06a3a',
-  bloodmoon: '#b03038',
 };

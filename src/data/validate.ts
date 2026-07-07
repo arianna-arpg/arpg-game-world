@@ -39,6 +39,7 @@ import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './struc
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
 import { BIOMES } from '../world/biomes';
+import { validateWeather } from '../world/weather';
 import { VOYAGE_ISLANDS } from './voyageIslands';
 import { Rng } from '../core/rng';
 
@@ -56,6 +57,11 @@ export function validateContent(): void {
     ]),
   ];
   for (const msg of validateStamps(layoutSources)) warn(msg);
+
+  // WEATHER: every registered kind's cross-refs resolve (a strike names a real
+  // skill, sky-spawnable kinds carry a skyWeight) — the open WeatherKind's
+  // safety net, exactly as validateStamps backstops the open StampKind.
+  for (const msg of validateWeather(id => !!SKILLS[id])) warn(msg);
 
   // STRUCTURES: plans resolve their legend, generators exist (and a fixed-seed
   // SAMPLE of each generator def emits only known chars), roof styles resolve,

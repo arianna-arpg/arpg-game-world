@@ -16,10 +16,16 @@ import { Rng } from '../core/rng';
 import type { ZoneDef } from '../data/zones';
 import { dayCycle, type DayPhase } from './daynight';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
-import { WEATHER_COLORS } from './palette';
 import { scaledCap } from '../packages/frequency';
 
-export type WeatherKind = 'clear' | 'rain' | 'storm' | 'fog' | 'ashfall' | 'bloodmoon';
+/** Weather kinds the engine registers out of the box ('clear' = no front). */
+export type KnownWeatherKind = 'clear' | 'rain' | 'storm' | 'fog' | 'ashfall' | 'bloodmoon';
+
+/** Open weather vocabulary (mirrors StampKind): the known kinds keep
+ *  autocomplete/typo resistance, and a kind added via registerWeather rides
+ *  the same field. Boot validation (validateWeather) replaces the safety net
+ *  the closed union provided. */
+export type WeatherKind = KnownWeatherKind | (string & {});
 
 export interface WeatherFront {
   kind: WeatherKind;
@@ -44,12 +50,20 @@ export interface WeatherStrike {
   ratePerSec: number;
 }
 
-interface WeatherDef {
+export interface WeatherDef {
   label: string;
+  /** Minimap cell + renderer wash tint. ('clear' keeps a token black — it is
+   *  the absence of a front and never paints.) */
+  color: string;
   /** Spawn-count multiplier at full intensity. */
   countMul: number;
   /** Per-faction weight multiplier at full intensity. */
   factionMul: Record<string, number>;
+  /** Which day phases the sky may birth this front under, and how strongly it
+   *  favours it there (maybeSpawn scans the registry; clear = simply fewer
+   *  fronts). Omitted ⇒ never sky-born — only 'clear', the no-front sentinel,
+   *  should omit it (validateWeather warns otherwise). */
+  skyWeight?: Partial<Record<DayPhase, number>>;
   /** Environmental strikes while you stand under this front (optional). */
   strike?: WeatherStrike;
   /** Fraction of the front's LIFE spent ramping in/out (default 0.4) — a
@@ -63,28 +77,60 @@ interface WeatherDef {
   wind?: number;
 }
 
+/** The registry of record — one row per weather kind. Every consumer is a
+ *  WEATHER_DEFS[kind].<field> lookup (no code branches on a specific kind),
+ *  so a net-new kind is pure data. */
 export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
-  clear: { label: 'Clear', countMul: 1.0, factionMul: {} },
-  rain: { label: 'Rain', countMul: 1.05, factionMul: { sylvan: 1.3, wild: 1.15 }, wind: 0.4 },
+  clear: { label: 'Clear', color: '#000000', countMul: 1.0, factionMul: {} },
+  rain: {
+    label: 'Rain', color: '#4a6a9a', countMul: 1.05, factionMul: { sylvan: 1.3, wild: 1.15 },
+    wind: 0.4, skyWeight: { day: 3, dusk: 2, night: 1, dawn: 2 },
+  },
   storm: {
-    label: 'Storm', countMul: 1.25, factionMul: { elemental: 1.8 },
+    label: 'Storm', color: '#6a5ab0', countMul: 1.25, factionMul: { elemental: 1.8 },
     // The sky calls lightning down at random — more often the harder it rages.
     strike: { skillId: 'storm_call', radius: 80, telegraph: 0.7, ratePerSec: 1.3 },
     rampFrac: 0.15, // storms BREAK — a short gather, then full rage
     wind: 0.9,      // — and they SHOVE: the strongest gale in the sky
+    skyWeight: { day: 1, dusk: 2, night: 3, dawn: 1 },
   },
-  fog: { label: 'Fog', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 }, rampFrac: 0.5, wind: 0.12 },
-  ashfall: { label: 'Ashfall', countMul: 1.2, factionMul: { elemental: 1.4, goblin: 1.2 }, wind: 0.3 },
-  bloodmoon: { label: 'Blood Moon', countMul: 1.6, factionMul: { undead: 2.0, wild: 1.3 }, wind: 0.18 },
+  fog: {
+    label: 'Fog', color: '#9aa0a8', countMul: 1.15, factionMul: { undead: 1.3, gnoll: 1.3 },
+    rampFrac: 0.5, wind: 0.12, skyWeight: { day: 2, dusk: 3, night: 2, dawn: 3 },
+  },
+  ashfall: {
+    label: 'Ashfall', color: '#b06a3a', countMul: 1.2, factionMul: { elemental: 1.4, goblin: 1.2 },
+    wind: 0.3, skyWeight: { day: 1, dusk: 1 },
+  },
+  bloodmoon: {
+    label: 'Blood Moon', color: '#b03038', countMul: 1.6, factionMul: { undead: 2.0, wild: 1.3 },
+    wind: 0.18, skyWeight: { night: 2 },
+  },
 };
 
-// Which kinds the sky favours at each hour (clear = simply fewer fronts).
-const KIND_WEIGHTS: Record<DayPhase, { kind: WeatherKind; weight: number }[]> = {
-  day: [{ kind: 'rain', weight: 3 }, { kind: 'fog', weight: 2 }, { kind: 'storm', weight: 1 }, { kind: 'ashfall', weight: 1 }],
-  dusk: [{ kind: 'fog', weight: 3 }, { kind: 'rain', weight: 2 }, { kind: 'storm', weight: 2 }, { kind: 'ashfall', weight: 1 }],
-  night: [{ kind: 'storm', weight: 3 }, { kind: 'fog', weight: 2 }, { kind: 'bloodmoon', weight: 2 }, { kind: 'rain', weight: 1 }],
-  dawn: [{ kind: 'fog', weight: 3 }, { kind: 'rain', weight: 2 }, { kind: 'storm', weight: 1 }],
-};
+/** Register a weather kind under an open-string id (see WeatherKind) — one
+ *  data row and the sky spawns it, the map tints it, spawn tables bend to it.
+ *  (A particle look is one optional WEATHER_FX row; no entry = tint wash only.) */
+export function registerWeather(id: string, def: WeatherDef): void {
+  if (WEATHER_DEFS[id]) console.warn(`[weather] re-registering kind '${id}' — overriding`);
+  WEATHER_DEFS[id] = def;
+}
+
+/** BOOT VALIDATION (wired into validateContent beside validateStamps) — the
+ *  cross-checks the closed union used to make unnecessary. The caller passes a
+ *  skill resolver so this module stays data-import-free. */
+export function validateWeather(hasSkill: (id: string) => boolean): string[] {
+  const bad: string[] = [];
+  for (const [kind, def] of Object.entries(WEATHER_DEFS)) {
+    if (def.strike && !hasSkill(def.strike.skillId)) {
+      bad.push(`weather '${kind}': strike names unknown skill '${def.strike.skillId}'`);
+    }
+    if (kind !== 'clear' && !def.skyWeight) {
+      bad.push(`weather '${kind}': no skyWeight — the sky can never birth it (only 'clear', the no-front sentinel, omits one)`);
+    }
+  }
+  return bad;
+}
 
 const STEP = 0.5;          // fixed lifecycle step (seconds)
 const MAX_FRONTS = 4;
@@ -161,7 +207,7 @@ export class WeatherField implements WorldOverlay {
   renderMap(): MapLayer {
     let under = '';
     for (const f of this.fronts) {
-      const col = WEATHER_COLORS[f.kind];
+      const col = WEATHER_DEFS[f.kind].color;
       const op = (0.08 + 0.20 * f.intensity).toFixed(3);
       under += `<circle cx="${f.pos.x.toFixed(1)}" cy="${f.pos.y.toFixed(1)}" `
         + `r="${f.radius.toFixed(1)}" fill="${col}" fill-opacity="${op}">`
@@ -177,7 +223,16 @@ export class WeatherField implements WorldOverlay {
     if (!this.rng.chance(SPAWN_CHANCE * this.spawnScale)) return;
     const anchor = this.rng.pick(view.nodes).map;
     const phase = dayCycle(view.time).phase;
-    const kind = this.rng.weighted(KIND_WEIGHTS[phase]).kind;
+    // Scan the registry for this phase's sky candidates — a registered package
+    // kind joins the rotation with no engine edit. Stable-sorted by descending
+    // weight, which reproduces the retired KIND_WEIGHTS arrays exactly, so the
+    // single weighted() draw below picks the same kind for existing seeds.
+    const sky = Object.entries(WEATHER_DEFS)
+      .map(([kind, d]) => ({ kind, weight: d.skyWeight?.[phase] ?? 0 }))
+      .filter(c => c.weight > 0)
+      .sort((a, b) => b.weight - a.weight);
+    if (!sky.length) return;
+    const kind = this.rng.weighted(sky).kind;
     const dir = this.rng.range(0, Math.PI * 2);
     const speed = this.rng.range(1.5, 4.5); // node-units/sec — a slow, legible crawl
     this.fronts.push({

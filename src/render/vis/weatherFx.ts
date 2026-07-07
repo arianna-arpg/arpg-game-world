@@ -8,8 +8,7 @@
 // Extending: a new WeatherKind gets its look by adding one WEATHER_FX row.
 // ---------------------------------------------------------------------------
 
-import type { WeatherKind } from '../../world/weather';
-import { WEATHER_COLORS } from '../../world/palette';
+import { WEATHER_DEFS, type WeatherKind } from '../../world/weather';
 import { withAlpha } from './color';
 import { VIS_CFG } from './visConfig';
 
@@ -26,7 +25,7 @@ export interface WeatherFxDef {
   size?: number;
   /** Alpha at full intensity. */
   alpha: number;
-  /** Color override; defaults to the WEATHER_COLORS tint. */
+  /** Color override; defaults to the kind's WeatherDef.color tint. */
   color?: string;
   /** Crossfade seconds for a full 0→1 swing of the DISPLAYED weather
    *  (renderer.smoothWeather). Small = the front slams in BY DESIGN;
@@ -49,7 +48,7 @@ export function drawWeatherFx(ctx: CanvasRenderingContext2D, kind: WeatherKind,
   const def = WEATHER_FX[kind];
   if (!def || intensity <= 0.02) return;
   const n = Math.min(VIS_CFG.weather.maxParticles, Math.round(def.count * (0.4 + 0.6 * intensity)));
-  const color = def.color ?? WEATHER_COLORS[kind];
+  const color = def.color ?? WEATHER_DEFS[kind].color;
   const a = def.alpha * (0.5 + 0.5 * intensity);
   const [vx, vy] = def.vel;
   const W = w + 80, H = h + 80; // wrap margin so particles enter off-screen
