@@ -22,7 +22,7 @@ import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  effectiveSkillLevel, grantedTags, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
+  crewBoardingOpen, effectiveSkillLevel, grantedTags, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -13325,6 +13325,14 @@ export class World {
    */
   private forwardSummonSockets(summonInst: SkillInstance | undefined, skills: (SkillInstance | null)[]): void {
     if (!summonInst) return;
+    // THE RESONANCE GATE (CREW_CFG.boarding 'gated'): summon-delivery
+    // crews demand a resonance key riding the host before anything boards
+    // — the whole system priced at one socket. Non-summon hosts (Forgebound
+    // proc-conscripts, Hiveborn broods on a melee skill) board FREE: the
+    // proc/graft that minted them was the price of admission, and their
+    // hosts could never socket the summon-gated key anyway.
+    const summonHost = summonInst.def.delivery.type === 'summon' || !!instanceSummon(summonInst);
+    if (summonHost && !crewBoardingOpen(summonInst)) return;
     // FIXPOINT passes: a forwarded gem's grantsTags can open the door for
     // another (Faultfinder's 'fissure' admits Tectonic Echoes) regardless
     // of how the player arranged the summon's sockets — arrangement

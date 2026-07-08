@@ -9,7 +9,7 @@ import { MONSTERS, WAVE_TABLE } from './monsters';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import {
-  summonCrewOf, supportFits, supportRidesMinions,
+  CREW_CFG, summonCrewOf, supportFits, supportRidesMinions,
   type Delivery, type SkillDef, type SupportDef,
 } from '../engine/skills';
 import { PROCS } from './procs';
@@ -365,6 +365,19 @@ export function validateContent(): void {
     }
     return true;
   };
+
+  // THE RESONANCE LEVER (CREW_CFG.boarding): a gated door needs a key in
+  // the catalog; a free door makes every key dead content. (The crew-hop
+  // audit below stays loadout-independent on purpose — under 'gated' a
+  // pair is still LIVE data, one socketed key away.)
+  const resonanceKeys = Object.values(SUPPORTS).filter(s => s.resonance);
+  if (CREW_CFG.boarding === 'gated' && !resonanceKeys.length) {
+    warn(`crew boarding is 'gated' but no support carries resonance — nothing can ever board a summon's crew`);
+  }
+  if (CREW_CFG.boarding === 'free' && resonanceKeys.length) {
+    warn(`crew boarding is 'free' but [${resonanceKeys.map(k => k.id).join(', ')}] carry resonance — `
+      + `dead keys (flip CREW_CFG.boarding or retire them)`);
+  }
 
   // THE CREW HOP: gems socketed into a SUMMON skill FORWARD onto the minted
   // minions' own skill instances (world.forwardSummonSockets) — so a row is

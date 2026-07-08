@@ -14,8 +14,8 @@ import {
 } from '../engine/stats';
 import { resistValue } from '../engine/damage';
 import {
-  crewSkillsServed, effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel, supportFitsInst,
-  supportFitsInstOrCrew, supportMaxLevel,
+  crewBoardingOpen, crewSkillsServed, effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel,
+  supportFitsInst, supportFitsInstOrCrew, supportMaxLevel,
   type SkillDef, type SkillInstance, type SupportInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
@@ -811,8 +811,10 @@ export class UI {
             const boards = served === 'unknowable' || served === null
               ? 'whatever you raise'
               : served.map(def => def.name).join(', ');
+            const doorNote = crewBoardingOpen(inst) ? ''
+              : ' Dormant until Resonance rides this skill.';
             return `<button data-socket="${idx}:${inst.def.id}"
-              title="Boards the crew: forwarded to the minions' own skills (${boards}).">${inst.def.name} ⤳</button>`;
+              title="Boards the crew: forwarded to the minions' own skills (${boards}).${doorNote}">${inst.def.name} ⤳</button>`;
           })
           .join('') || '<span style="color:#8a8678">no socketable skill</span>';
         return `
@@ -1744,13 +1746,22 @@ export class UI {
       // skills) so the lane is legible — independent of whether the gem
       // also serves the summon lane. crewSkillsServed composes granted
       // tags, so Tectonic Echoes riding Faultfinder is marked truthfully.
+      // With the crew door CLOSED (CREW_CFG 'gated', no Resonance riding)
+      // a would-board gem shows DORMANT: socketed, but no effect, no cost.
       const crew = world.summonCrewSkills(inst);
+      const doorOpen = crewBoardingOpen(inst);
       const boardsCrew = (s: SupportInstance | null): boolean =>
         !!s && crewSkillsServed(s.def, inst, crew) !== null;
+      const crewMark = (s: SupportInstance | null): string => !boardsCrew(s) ? ''
+        : doorOpen ? ' ⤳' : ' <span style="opacity:0.55">⤳✕</span>';
+      const crewTip = (s: SupportInstance | null): string => !boardsCrew(s) ? ''
+        : doorOpen
+          ? ' — boards the crew: forwarded to the minions’ own skills; its costs bill your cast.'
+          : ' — DORMANT: would board the crew, but the door is closed. Socket Resonance to open it (no effect, no cost until then).';
       const sockets = inst.sockets.map((s, i) => s ? `
         <span class="gem-chip" style="border-color:${s.def.color}"
-          title="${s.def.description}${boardsCrew(s) ? ' — boards the crew: forwarded to the minions’ own skills.' : ''}">
-          ${s.def.name}${boardsCrew(s) ? ' ⤳' : ''} <b>L${s.level}</b>
+          title="${s.def.description}${crewTip(s)}">
+          ${s.def.name}${crewMark(s)} <b>L${s.level}</b>
           <button data-gemlvl="${def.id}:${i}" ${m.skillPoints < 1 || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}>+</button>
           <button data-gemlvl-ess="${def.id}:${i}"
             ${!this.getWorld().canAffordEssence(this.getWorld().localSeat, skillLevelEssenceCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}

@@ -455,6 +455,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // (The Conjurer's wrapper family is RETIRED: supports forward to minions
   // DIRECTLY now — socket the real Splitting into the summon skill and the
   // archer's arrows split. See world.forwardSummonSockets.)
+  resonance: {
+    id: 'resonance', name: 'Resonance',
+    description: 'The summoner\'s art, taught to the summoned: while Resonance rides a summon skill, every riding support socketed beside it BOARDS THE CREW — forwarded into the minions\' own skills wherever it fits. Their power, your strain: boarded gems still bill their costs to your cast.',
+    color: '#9a7ee8', requiresTags: ['summon', 'minion'],
+    resonance: true,
+    mods: [],
+    perLevel: [mod('minionDamage', 'increased', 0.04)],
+    weight: 6,
+  },
   blood_toll: {
     id: 'blood_toll', name: 'Blood Toll',
     description: 'Each cast CONSUMES your nearest minion (within 260): 0.6% more damage per point of its remaining life. The altar always takes.',

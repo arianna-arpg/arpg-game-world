@@ -330,3 +330,32 @@ warnings; smoke baseline green.
 Aim-transform QA gotcha for the record: Alternating Strikes is a bearing SEQUENCE (steps [-70, +70],
 pause 0.2) — the swings are SCHEDULED, so synchronous eval reads see zero damage; step the world (and
 give the figure flanking targets — a dead-center dummy sits outside both ±70° arcs of a 130° cleave).
+
+### Addendum 2 — 2026-07-08 (RESONANCE: the boarding lever, and the crew tax)
+
+Two user-directed refinements to the lane router:
+
+**CREW_CFG.boarding ('gated' | 'free', shipping 'gated')** — engine/skills.ts. Boarding a summon's crew
+now demands a RESONANCE key (`SupportDef.resonance`; the `resonance` gem, summon/minion-gated, +minion
+damage per level) riding the same skill: the whole forwarding system priced at ONE SOCKET. Socketing
+stays permissive in both modes (plan your links before the key drops); a would-board gem without the key
+is DORMANT — ⤳✕ chip, explanatory tooltip, NO effect and NO cost (never a trap). The key is host-lane
+cargo (classified with the non-forwarding fields so it never ships a copy of itself aboard); it must be
+HOST-SERVING to count (a key that doesn't fit opens nothing). Because socket/unsocket already resync,
+the choreography is live: socket the key and the standing crew boards instantly, pull it and they
+strip. Non-summon crews (Forgebound proc-conscripts, Hiveborn broods) are NEVER gated — the proc/graft
+that minted them was the price, and their hosts couldn't socket the summon-gated key anyway. Validator
+warns on gated-without-a-key and free-with-dead-keys.
+
+**THE CREW TAX (HOST_COST_STATS: manaCost / addedManaCost / addedLifeCost)** — reverses the launch
+judgment call, per user: a gem ACTIVELY boarding the crew bills its cost-family mods to the host cast
+(instanceMods crew-tax block; live-checked: Resonance + Splitting takes Summon Skeleton Archer 25 → 33
+mana, and the tax vanishes with the key). The summoner strains to field the stronger crew — thematic,
+and one small registry instead of bespoke per-gem fields gives supports host-costs AND crew-payloads.
+The tax feeds everything manaCost feeds, including persistent-contract reservations. Dormant gems bill
+nothing.
+
+Probes re-run with the key socketed (suite 'minions'): byte-identical to the free-mode numbers
+(6.2/11.43, 13.31/31.15, zero warnings) — the lever's ON state is behavior-equivalent to launch, minus
+one socket. Baseline smoke green. Flip CREW_CFG.boarding to 'free' to retire the lever (validator will
+point at the dead keys).

@@ -79,26 +79,29 @@ for (const cls of CLASSES) {
 // build's dps_minions should sit visibly above the bare one (the archers'
 // arrows split; the summon skill itself never fires a shot). The historical
 // build id ('conjurer') is kept so baselines compare across the overhaul.
+// RESONANCE rides every forwarded build: CREW_CFG.boarding is 'gated' — the
+// key gem is the price of the whole boarding system (one socket), and the
+// probes exercise the lever's ON state end-to-end.
 const archerSummoner = (id: string, supports?: { id: string; level?: number }[]): BuildSpec => ({
-  id, label: `Skeleton-archer summoner @ L10 (${supports ? 'Splitting forwarded' : 'bare'})`,
+  id, label: `Skeleton-archer summoner @ L10 (${supports ? 'Resonance + Splitting forwarded' : 'bare'})`,
   classId: 'summoner', level: 10,
   skills: [{ id: 'summon_skeleton_archer', level: gemLevelAt(10), supports }],
   passives: greedyPassives('summoner', 10),
 });
 BUILDS['summoner_archers_l10'] = archerSummoner('summoner_archers_l10');
 BUILDS['summoner_conjurer_l10'] = archerSummoner('summoner_conjurer_l10',
-  [{ id: 'splitting', level: 1 }]);
+  [{ id: 'resonance', level: 1 }, { id: 'splitting', level: 1 }]);
 // The warrior-side probe: Faultfinder forwarded onto the skeleton warriors'
 // Cleave (a MELEE gem boarding a summon — refused outright before the
 // overhaul), plus Tectonic Echoes riding the granted 'fissure' tag beside
 // it. The warriors tear cracks as they fight and detonate them by chasing —
 // dps_minions should sit above the bare warrior build.
 const warriorSummoner = (id: string, supports?: { id: string; level?: number }[]): BuildSpec => ({
-  id, label: `Skeleton-warrior summoner @ L10 (${supports ? 'Faultfinder + Tectonic Echoes forwarded' : 'bare'})`,
+  id, label: `Skeleton-warrior summoner @ L10 (${supports ? 'Resonance + Faultfinder + Tectonic Echoes forwarded' : 'bare'})`,
   classId: 'summoner', level: 10,
   skills: [{ id: 'summon_skeleton', level: gemLevelAt(10), supports }],
   passives: greedyPassives('summoner', 10),
 });
 BUILDS['summoner_warriors_l10'] = warriorSummoner('summoner_warriors_l10');
 BUILDS['summoner_faultfinder_l10'] = warriorSummoner('summoner_faultfinder_l10',
-  [{ id: 'faultfinder', level: 1 }, { id: 'tectonic_echoes', level: 1 }]);
+  [{ id: 'resonance', level: 1 }, { id: 'faultfinder', level: 1 }, { id: 'tectonic_echoes', level: 1 }]);

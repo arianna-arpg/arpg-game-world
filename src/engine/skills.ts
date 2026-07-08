@@ -206,6 +206,36 @@ export function hostSockets(inst: SkillInstance): SupportInstance[] {
   return out;
 }
 
+/** CREW BOARDING CONFIG — the balance lever over support forwarding.
+ *  'gated': boarding demands a RESONANCE key (SupportDef.resonance) riding
+ *  the summon skill — the whole system costs one socket. 'free': every
+ *  riding gem socketed into a summon boards its crew (the overhaul's
+ *  launch behavior). Socketing stays PERMISSIVE in both modes (build your
+ *  links before you find the key); dormant gems are marked ⤳✕ in the book
+ *  and contribute NOTHING — not even costs. Non-summon crews (Forgebound
+ *  proc-conscripts, Hiveborn broods) are never gated. */
+export const CREW_CFG = {
+  boarding: 'gated' as 'gated' | 'free',
+};
+
+/** Is this instance's crew door OPEN — do riding gems actually board?
+ *  Free mode: always. Gated: a resonance key must be HOST-SERVING (a key
+ *  that doesn't fit the skill opens nothing — the ordinary lane rules
+ *  govern the key like any other gem). */
+export function crewBoardingOpen(inst: SkillInstance): boolean {
+  if (CREW_CFG.boarding === 'free') return true;
+  return hostSockets(inst).some(s => !!s.def.resonance);
+}
+
+/** Cost-family stats an ACTIVELY BOARDING crew gem still bills to the HOST
+ *  cast — the summoner strains to field the stronger crew (and persistent
+ *  contracts reserve accordingly: the manaCost stat feeds reservations).
+ *  One registry, deliberately small: a gem serves host costs AND crew
+ *  payloads with no bespoke per-gem fields. Extend with intent. */
+export const HOST_COST_STATS: ReadonlySet<string> = new Set([
+  'manaCost', 'addedManaCost', 'addedLifeCost',
+]);
+
 /** The aim transform a use obeys: a socketed support's graft wins over the
  *  skill's own (one transform per use — they don't stack). */
 export function instanceAim(inst: SkillInstance): AimSpec | undefined {
@@ -2773,6 +2803,16 @@ export interface SupportDef {
   /** An AURA baked onto the host's MINIONS at summon (Pyre Legion's
    *  burning ranks — the pylon spec, worn by flesh). */
   minionAura?: AuraSpec;
+  /** THE CREW GATE KEY (Resonance): while a gem carrying this rides a
+   *  summon skill, the skill's other riding supports BOARD THE CREW —
+   *  forwarded into the minions' own skill instances wherever they fit.
+   *  Only consulted when CREW_CFG.boarding is 'gated' (the balance lever:
+   *  the whole boarding system costs one socket); 'free' boards without
+   *  it. The key itself is host-lane cargo — it never forwards, and its
+   *  own mods/requiresTags work the summon skill by the ordinary rules.
+   *  Non-summon crews (Forgebound proc-conscripts, Hiveborn broods) are
+   *  never gated: the proc/graft that minted them was the price. */
+  resonance?: true;
   /** A STRIKE-TIMING discipline this support grafts (see StrikeTimingSpec
    *  — Perfect Draw's golden tail, Wandering Mark's roving marker): a
    *  press inside the zone on bar casts, the RELEASE inside the zone on
@@ -2973,6 +3013,10 @@ const MINION_SEAT_BOUND_FIELD_LIST = [
   'trigger', 'triggerPermit', 'overcharge', 'meta', 'strikeTiming',
   'curseOnHit', 'curseField', 'auraDuration', 'reserveLife',
   'gate', 'chargeCost',
+  // Not seat-bound in spirit — it's the crew gate's KEY itself (Resonance).
+  // Listed here so the key never forwards a copy of itself aboard: it
+  // serves the host lane, opening the door for the cargo beside it.
+  'resonance',
 ] as const satisfies readonly (keyof SupportDef)[];
 export const MINION_SEAT_BOUND_SUPPORT_FIELDS: ReadonlySet<string> =
   new Set(MINION_SEAT_BOUND_FIELD_LIST);
@@ -3163,14 +3207,33 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
   if (inst.def.thresholds) {
     for (const t of inst.def.thresholds) if (eff >= t.level) out.push(...t.mods);
   }
-  // Lane-routed: a crew-only gem (it boards the minions, not this cast)
-  // contributes nothing here — not even its cost mods. Socket scarcity is
-  // the price of a crew gem; the host cast stays untouched.
-  for (const socket of hostSockets(inst)) {
+  // Lane-routed: only host-serving gems shape this cast's numbers...
+  const serving = hostSockets(inst);
+  for (const socket of serving) {
     out.push(...socket.def.mods);
     const sl = socket.level - 1;
     if (sl > 0 && socket.def.perLevel) {
       for (const m of socket.def.perLevel) out.push({ ...m, value: m.value * sl });
+    }
+  }
+  // ...EXCEPT THE CREW TAX: a gem actively boarding the crew (riding, the
+  // door open, not already serving the host) bills its COST-family mods
+  // to the host cast — the summoner strains to field the stronger crew.
+  // Dormant gems (gated mode, no resonance key) bill nothing: no effect,
+  // no cost. Non-summon instances carry no crew gems, so no tax.
+  if (inst.def.delivery.type === 'summon' || instanceSummon(inst)) {
+    if (crewBoardingOpen(inst)) {
+      const servingSet = new Set(serving);
+      for (const socket of inst.sockets) {
+        if (!socket || servingSet.has(socket) || !supportRidesMinions(socket.def)) continue;
+        for (const m of socket.def.mods) if (HOST_COST_STATS.has(m.stat)) out.push(m);
+        const sl = socket.level - 1;
+        if (sl > 0 && socket.def.perLevel) {
+          for (const m of socket.def.perLevel) {
+            if (HOST_COST_STATS.has(m.stat)) out.push({ ...m, value: m.value * sl });
+          }
+        }
+      }
     }
   }
   return out;
