@@ -17,6 +17,7 @@ import type { Doodad } from '../../engine/levelgen';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import { withAlpha } from './color';
 import { resolveColor } from './painters';
+import { litPolygon, polygonPath } from './sight';
 import { drawGlow } from './sprites';
 import { VIS_CFG } from './visConfig';
 
@@ -24,6 +25,8 @@ interface LightSource {
   x: number; y: number; r: number;
   color: string;
   intensity: number;
+  /** Wall-occluded reach (vis/sight.ts); absent = plain disc. */
+  poly?: { x: number; y: number }[];
 }
 
 export class LightLayer {
@@ -81,6 +84,13 @@ export class LightLayer {
       push(world.player.pos.x, world.player.pos.y, VIS_CFG.lights.heroRadius,
         '#ffe8c0', Math.min(0.9, this.ambient + 0.15));
     }
+
+    // WALL OCCLUSION: each light's true reach against sight-blocking cells —
+    // glow pools at a wall instead of punching through it (null = open ground,
+    // keep the plain disc). Windows/parapets pass light: they don't block sight.
+    for (const L of this.lights) {
+      L.poly = litPolygon(world, L.x, L.y, L.r) ?? undefined;
+    }
   }
 
   /** Composite the darkness + bloom over the drawn world. Call with the
@@ -111,12 +121,17 @@ export class LightLayer {
     const k = zoom * scale;
     for (const L of this.lights) {
       const sx = (L.x - camX) * k, sy = (L.y - camY) * k, sr = L.r * k;
+      if (L.poly) {
+        b.save();
+        b.clip(polygonPath(L.poly, x => (x - camX) * k, y => (y - camY) * k));
+      }
       const g = b.createRadialGradient(sx, sy, 0, sx, sy, Math.max(1, sr));
       g.addColorStop(0, `rgba(0,0,0,${Math.min(1, L.intensity * 1.15).toFixed(3)})`);
       g.addColorStop(0.55, `rgba(0,0,0,${(L.intensity * 0.55).toFixed(3)})`);
       g.addColorStop(1, 'rgba(0,0,0,0)');
       b.fillStyle = g;
       b.fillRect(sx - sr, sy - sr, sr * 2, sr * 2);
+      if (L.poly) b.restore();
     }
     b.globalCompositeOperation = 'source-over';
     ctx.save();
@@ -133,7 +148,14 @@ export class LightLayer {
     for (const L of this.lights) {
       if (L.intensity < 0.25) continue;
       const sx = (L.x - camX) * zoom, sy = (L.y - camY) * zoom;
-      drawGlow(ctx, sx, sy, L.r * zoom * 0.6, L.color, strength * L.intensity * 0.5);
+      if (L.poly) {
+        ctx.save();
+        ctx.clip(polygonPath(L.poly, x => (x - camX) * zoom, y => (y - camY) * zoom));
+        drawGlow(ctx, sx, sy, L.r * zoom * 0.6, L.color, strength * L.intensity * 0.5);
+        ctx.restore();
+      } else {
+        drawGlow(ctx, sx, sy, L.r * zoom * 0.6, L.color, strength * L.intensity * 0.5);
+      }
     }
   }
 

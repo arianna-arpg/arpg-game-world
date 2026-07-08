@@ -17,6 +17,7 @@ import type { ZoneTheme } from '../../data/zones';
 import { BIOMES } from '../../world/biomes';
 import { hash01, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
+import { litPolygon, polygonPath } from './sight';
 import { drawShadow } from './sprites';
 import { VIS_CFG } from './visConfig';
 
@@ -1468,29 +1469,112 @@ const caveMouth: GroupPainter = (env, group, def) => {
   }
 };
 
-/** Campfires: layered flame over stones with a warm flicker. */
-const campfire: GroupPainter = (env, group) => {
-  const { ctx, time } = env;
+/** Campfires + braziers: a fire-ring of jittered stones (or an iron bowl,
+ *  params.bowl) round a char bed and crossed ember-cracked logs, petal flame
+ *  licks wheeling over a molten core, live ember motes spiraling off — and a
+ *  warm ground halo that CLIPS to the lit polygon (vis/sight.ts), so the glow
+ *  pools against a wall instead of melting into or through it. */
+const campfire: GroupPainter = (env, group, def) => {
+  const { ctx, world, time } = env;
+  const p = (def.params ?? {}) as { bowl?: boolean };
   for (const o of group) {
-    const flick = 0.85 + 0.15 * Math.sin(time * 11 + o.pos.x);
-    ctx.globalAlpha = 0.18 * flick;
-    ctx.fillStyle = '#ffae52';
+    const R = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const flick = 0.82 + 0.12 * Math.sin(time * 11 + o.pos.x * 0.7)
+      + 0.06 * Math.sin(time * 23.7 + o.pos.y);
+    // Warm ground halo, pooled at the walls.
+    const haloR = R * 2.3;
+    const poly = litPolygon(world, o.pos.x, o.pos.y, haloR);
+    ctx.save();
+    if (poly) ctx.clip(polygonPath(poly));
+    const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.3, o.pos.x, o.pos.y, haloR * flick);
+    g.addColorStop(0, withAlpha('#ffae52', 0.26 * flick));
+    g.addColorStop(0.6, withAlpha('#ff8838', 0.12 * flick));
+    g.addColorStop(1, withAlpha('#ff8838', 0));
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(o.pos.x, o.pos.y, o.radius * 2.6 * flick, 0, Math.PI * 2);
+    ctx.arc(o.pos.x, o.pos.y, haloR, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
+    if (p.bowl) {
+      // The brazier: an iron fire-bowl — dark basin, riveted rim.
+      ctx.fillStyle = '#1c1a18';
+      ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 1.02, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#4a4440';
+      ctx.lineWidth = Math.max(2, R * 0.22);
+      ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.92, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#5c5650';
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + 0.3;
+        ctx.beginPath();
+        ctx.arc(o.pos.x + Math.cos(a) * R * 0.92, o.pos.y + Math.sin(a) * R * 0.92,
+          R * 0.09, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      // The fire-ring: tone-jittered stones, each its own shape and set.
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + hash01(i, seed) * 0.5;
+        const sr = R * (0.17 + hash01(i, seed + 3) * 0.09);
+        const sx = o.pos.x + Math.cos(a) * R * 0.98, sy = o.pos.y + Math.sin(a) * R * 0.98;
+        ctx.fillStyle = shade('#6a6058', (hash01(i, seed + 5) - 0.5) * 0.3);
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, sr * 1.2, sr, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = withAlpha('#241f1a', 0.7);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+      // Char bed + crossed logs, ember cracks glowing along them.
+      ctx.fillStyle = '#241d16';
+      ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.72, 0, Math.PI * 2); ctx.fill();
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI + 0.35 + hash01(i, seed + 9) * 0.3;
+        ctx.strokeStyle = '#3a2c1e';
+        ctx.lineWidth = Math.max(2.5, R * 0.2);
+        ctx.beginPath();
+        ctx.moveTo(o.pos.x - Math.cos(a) * R * 0.58, o.pos.y - Math.sin(a) * R * 0.58);
+        ctx.lineTo(o.pos.x + Math.cos(a) * R * 0.58, o.pos.y + Math.sin(a) * R * 0.58);
+        ctx.stroke();
+        ctx.strokeStyle = withAlpha('#ff6a2a', 0.4 + 0.4 * flick);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(o.pos.x - Math.cos(a) * R * 0.3, o.pos.y - Math.sin(a) * R * 0.3);
+        ctx.lineTo(o.pos.x + Math.cos(a) * R * 0.34, o.pos.y + Math.sin(a) * R * 0.34);
+        ctx.stroke();
+      }
+    }
+    // The flame: petal licks wheeling round a molten core (top-down).
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + time * (0.8 + (i % 2) * 0.35);
+      const lick = 0.55 + 0.45 * Math.sin(time * 9 + i * 2.1);
+      const lr = R * (0.26 + 0.28 * lick) * flick;
+      const lx = o.pos.x + Math.cos(a) * R * 0.22, ly = o.pos.y + Math.sin(a) * R * 0.22;
+      ctx.globalAlpha = 0.5 + 0.3 * lick;
+      ctx.fillStyle = i % 2 ? '#ff8838' : '#ffb84a';
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, lr, lr * 0.62, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#3a3026';
-    ctx.beginPath();
-    ctx.arc(o.pos.x, o.pos.y, o.radius * 0.85, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#ff8838';
-    ctx.beginPath();
-    ctx.arc(o.pos.x, o.pos.y - 2, o.radius * 0.5 * flick, 0, Math.PI * 2);
-    ctx.fill();
     ctx.fillStyle = '#ffd24a';
-    ctx.beginPath();
-    ctx.arc(o.pos.x, o.pos.y - 3, o.radius * 0.25, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.3 * flick, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = withAlpha('#fff4c8', 0.9);
+    ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.15 * flick, 0, Math.PI * 2); ctx.fill();
+    // Live embers: motes spiral off the fire and die (deterministic phases).
+    for (let i = 0; i < 6; i++) {
+      const phase = (time * (0.35 + hash01(i, seed + 21) * 0.25) + i / 6) % 1;
+      const ea = hash01(i, seed + 17) * Math.PI * 2 + time * 0.4 + phase * 1.8;
+      const ed = R * (0.35 + phase * 1.5);
+      ctx.globalAlpha = (1 - phase) * (0.55 + 0.35 * flick);
+      ctx.fillStyle = phase < 0.4 ? '#ffc25e' : '#ff7a3a';
+      ctx.beginPath();
+      ctx.arc(o.pos.x + Math.cos(ea) * ed, o.pos.y + Math.sin(ea) * ed,
+        1.1 + (1 - phase) * 1.3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 };
 

@@ -167,6 +167,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   bone_pile: { painter: 'bones', order: 51, params: { color: '#d8cdb8' } },
   brazier: {
     painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,
+    params: { bowl: true }, // an iron fire-bowl, not a ring of stones
     light: { radius: -5.5, color: '#ffb45e', intensity: 0.55, flicker: 5 },
   },
   standing_stone: {
@@ -339,6 +340,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -11, color: '#ffd898', intensity: 0.5, flicker: 4 },
   },
   bench: { painter: 'bench', order: 53, shadow: 0.4 },
+  // A mercenary's camp roll: reads as a low log-shaped pad in muted wool
+  // tones (spotted as a warned disc-fallback during the settlement QA pass).
+  merc_bedroll: {
+    painter: 'log', order: 52, shadow: 0.4,
+    params: { color: '#6a5a44', moss: '#8a7658' },
+  },
   market_stall: { painter: 'marketStall', order: 55, shadow: 0.55, longShadow: 0.9 },
   broken_cart: { painter: 'brokenCart', order: 53, shadow: 0.5, longShadow: 0.9 },
   scarecrow: { painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.6 },
