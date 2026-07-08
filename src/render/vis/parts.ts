@@ -2815,6 +2815,76 @@ const drape: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ====================================================== DEPLOYED CONSTRUCTS
+
+/** A BARRIER ROW — stakes/slabs rammed side-by-side across the facing
+ *  (top-down: a footing bar under a line of studded heads). The wall-segment
+ *  limb: bone palisades, stone ramparts, ice walls — one painter, the
+ *  palette does the material. params: n (stakes), span (full width in
+ *  radii). */
+const stakeRow: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const n = Math.round(P(spec, 'n', 4));
+  const span = P(spec, 'span', 1.9);
+  place(ctx, r, spec, (c, R) => {
+    const w = R * span;
+    // The packed footing bar.
+    c.fillStyle = shade(ramp.base, -0.25);
+    c.fillRect(-R * 0.28, -w / 2, R * 0.56, w);
+    c.strokeStyle = ramp.outline;
+    c.lineWidth = 1.2;
+    c.strokeRect(-R * 0.28, -w / 2, R * 0.56, w);
+    // Stake heads, shoulder to shoulder.
+    for (let i = 0; i < n; i++) {
+      const y = -w / 2 + (i + 0.5) * (w / n);
+      const rr = (w / n) * 0.46;
+      c.fillStyle = shade(ramp.base, (hash01(i, 7) - 0.5) * 0.2);
+      c.beginPath(); c.arc(0, y, rr, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.8);
+      c.lineWidth = 1;
+      c.stroke();
+      // The lit point of each head.
+      c.fillStyle = withAlpha(ramp.highlight, 0.75);
+      c.beginPath(); c.arc(rr * 0.24, y - rr * 0.3, rr * 0.34, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** A CARVED TOTEM POST from above: stacked ring courses, radial carve
+ *  notches, a glowing sigil eye at heart. params: rings; glow (color). */
+const totemPost: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const rings = Math.round(P(spec, 'rings', 3));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = rings; i >= 1; i--) {
+      const rr = R * (0.35 + 0.65 * (i / rings));
+      c.fillStyle = shade(ramp.base, i % 2 ? -0.12 : 0.06);
+      c.beginPath(); c.arc(0, 0, rr, 0, Math.PI * 2); c.fill();
+      if (i === rings) {
+        c.strokeStyle = ramp.outline;
+        c.lineWidth = 1.3;
+        c.stroke();
+      }
+    }
+    // Radial carve notches.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.9);
+    c.lineWidth = Math.max(1.2, R * 0.07);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.3;
+      c.beginPath();
+      c.moveTo(Math.cos(a) * R * 0.4, Math.sin(a) * R * 0.4);
+      c.lineTo(Math.cos(a) * R * 0.92, Math.sin(a) * R * 0.92);
+      c.stroke();
+    }
+    // The sigil eye.
+    const glow = PS(spec, 'glow') ?? pal.glow;
+    c.fillStyle = withAlpha(glow, 0.9);
+    c.beginPath(); c.arc(0, 0, R * 0.22, 0, Math.PI * 2); c.fill();
+    c.fillStyle = withAlpha('#ffffff', 0.8);
+    c.beginPath(); c.arc(0, 0, R * 0.1, 0, Math.PI * 2); c.fill();
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -2835,6 +2905,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   fangs, plume, beard, tailFeathers, torch, net,
   mawRing, lure, sporeVents, mossPatch, veinweb, polyps, slimeTrail,
   sailfin, warhorn, drape,
+  stakeRow, totemPost,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

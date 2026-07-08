@@ -1264,6 +1264,11 @@ export function instanceSummon(inst: SkillInstance): SummonDelivery | undefined 
 export interface ConstructDelivery {
   type: 'construct';
   kind: ConstructKind;
+  /** Part-grammar portrait override (data/looks.ts). Omitted = the kind's
+   *  default from CONSTRUCT_LOOKS — a totem is carved, a barrier is stone —
+   *  so only skills with their OWN material (bone prison, frost wall) need
+   *  to name one. */
+  look?: string;
   /** Skill the construct casts (totem/sentry: at targets; trap: on trigger;
    *  mine: on detonation; pylon: periodic trigger). */
   castSkillId?: string;

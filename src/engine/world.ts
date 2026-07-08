@@ -56,6 +56,7 @@ import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, blocksSightOf, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
   type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
@@ -13696,6 +13697,11 @@ export class World {
     c.summonInst = sourceInst;
     c.shape = 'square';
     c.color = sourceInst.def.color;
+    // The visual-fabric portrait: the delivery's own look, else the kind's
+    // default (CONSTRUCT_LOOKS) — totems are carved posts, barriers are
+    // stake rows, embeds are lodged spears. The skill color drives the
+    // palette; the legacy square survives only for kinds neither names.
+    c.look = d.look ?? CONSTRUCT_LOOKS[d.kind];
     c.radius = d.kind === 'trap' || d.kind === 'mine' ? 8 : 13;
     c.level = caster.level;
     c.construct = {

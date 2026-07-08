@@ -1134,4 +1134,73 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'breathPuff', scale: 0.8, color: '#dff4ff' }],
   },
+
+  // ===================================================== DEPLOYED CONSTRUCTS
+  // Skill-objects (ConstructDelivery) — the square-and-skill-color era ends.
+  // spawnConstruct dresses by kind through CONSTRUCT_LOOKS below unless the
+  // delivery names its own look; the skill's color drives each palette, so
+  // a flame totem burns orange and a storm pylon hums yellow for free.
+  /** The carved post: ring courses, notches, a glowing sigil eye. */
+  construct_totem: {
+    parts: [{ kind: 'totemPost', params: { rings: 3 } }],
+  },
+  /** The ballista: a plank frame under a drawn bow, aimed down its lane. */
+  construct_sentry: {
+    parts: [
+      { kind: 'crateBox', scale: 0.72 },
+      { kind: 'bow', scale: 1.3 },
+    ],
+  },
+  /** The pylon: a crystal seated on a stone base, humming. */
+  construct_pylon: {
+    parts: [
+      { kind: 'disc', scale: 0.55 },
+      { kind: 'gem', scale: 1.15 },
+    ],
+  },
+  /** The trap: a half-buried jaw ring — faint by design (it is concealed). */
+  construct_trap: {
+    parts: [
+      { kind: 'disc', scale: 0.6, alpha: 0.45 },
+      { kind: 'mandibles', scale: 0.9, alpha: 0.85 },
+    ],
+  },
+  /** The mine: a squat orb bristling with contact barbs. */
+  construct_mine: {
+    parts: [
+      { kind: 'orb', scale: 0.8 },
+      { kind: 'barbs', scale: 0.85 },
+    ],
+  },
+  /** A LODGED SPEAR (embedments, hanging carom arrows): one slim stake and
+   *  its fletching, read from above. */
+  construct_spear: {
+    parts: [
+      { kind: 'stakeRow', params: { n: 1, span: 0.66 } },
+      { kind: 'quiver', x: -0.34, scale: 0.66, alpha: 0.9 },
+    ],
+  },
+  /** Barrier segments: one stakeRow, three materials. */
+  construct_barrier_bone: {
+    parts: [{ kind: 'stakeRow', role: 'bone', params: { n: 4, span: 1.9 } }],
+  },
+  construct_barrier_stone: {
+    parts: [{ kind: 'stakeRow', color: '#8a8276', params: { n: 3, span: 1.9 } }],
+  },
+  construct_barrier_ice: {
+    parts: [{ kind: 'stakeRow', color: '#bcdcec', alpha: 0.92, params: { n: 4, span: 1.9 } }],
+  },
+};
+
+/** Default portrait per deployed-construct kind (ConstructDelivery.look
+ *  overrides per skill). Kinds absent here keep the legacy square: a decoy
+ *  copies its owner elsewhere; pads/gates read as floor art. */
+export const CONSTRUCT_LOOKS: Record<string, string> = {
+  totem: 'construct_totem',
+  sentry: 'construct_sentry',
+  trap: 'construct_trap',
+  mine: 'construct_mine',
+  pylon: 'construct_pylon',
+  barrier: 'construct_barrier_stone',
+  embed: 'construct_spear',
 };

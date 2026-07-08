@@ -2233,7 +2233,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'physical', 'duration'], color: '#d8d0b8',
     manaCost: 22, cooldown: 8, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'barrier',
+      type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
       ring: { segments: 10, radius: 78 },
       range: 0, duration: 6, maxActive: 10, life: 30, placeRange: 340,
     },
@@ -2249,7 +2249,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 16, cooldown: 6, useTime: 0.6,
     targeting: { target: 'enemy', castRange: 320 },
     delivery: {
-      type: 'construct', kind: 'barrier',
+      type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
       ring: { segments: 8, radius: 50 },
       range: 0, duration: 4, maxActive: 8, life: 20, placeRange: 320,
     },
@@ -5911,7 +5911,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 16, cooldown: 7, useTime: 0.6,
     baseDamage: { cold: [8, 13] },
     delivery: {
-      type: 'construct', kind: 'barrier',
+      type: 'construct', kind: 'barrier', look: 'construct_barrier_ice',
       range: 0, duration: 9, maxActive: 12, life: 32,
       placeRange: 340,
       wallSegments: 6,
