@@ -119,6 +119,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [1, 2] },
       { kind: 'camp', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+      // Deep-forest rot: fungal pressure sacs and pale puffballs.
+      { kind: 'burst_sac', count: [0, 2] },
+      { kind: 'puffcap_cluster', count: [0, 2] },
     ],
     packs: {
       count: [5, 8], size: [3, 5],
@@ -193,6 +196,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'snowman', count: [0, 1] },
       { kind: 'ruin', count: [0, 1] },
       { kind: 'camp', count: [0, 1] },
+      // Brittle ice fangs — shatter when brushed.
+      { kind: 'icicle_cluster', count: [1, 3] },
     ],
     packs: {
       count: [6, 9], size: [3, 6],
@@ -241,6 +246,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'chasm', count: [0, 1] },
       { kind: 'ruin', count: [0, 1] },
       { kind: 'camp', count: [0, 1] },
+      { kind: 'icicle_cluster', count: [2, 4] },
     ],
     packs: {
       count: [6, 9], size: [3, 6],
@@ -431,6 +437,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'swamp', count: [1, 2] },
       { kind: 'river', count: [0, 1] },
       { kind: 'cave', count: [0, 1] },
+      // Jungle heat swells the marsh bladders here too.
+      { kind: 'gas_pod', count: [1, 2] },
       { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
     ],
     packs: {
@@ -493,6 +501,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [1, 2] },
       { kind: 'cave', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'pillaged_township' },
+      // Marsh gas pools in bladders; pale caps puff underfoot.
+      { kind: 'gas_pod', count: [2, 4] },
+      { kind: 'puffcap_cluster', count: [1, 3] },
     ],
     packs: {
       count: [5, 7], size: [3, 5],
@@ -587,9 +598,13 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bone_pile', count: [3, 6] }, { kind: 'brazier', count: [1, 3] }, { kind: 'web', count: [1, 3] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [2, 4] },
       { kind: 'tombstone', count: [14, 22] },
       { kind: 'ruin', count: [2, 3] },
-      // Burial goods pop underfoot; some tomb walls hide more than bones.
+      // Burial goods pop underfoot; some tomb walls hide more than bones —
+      // every crypt keeps at least one now. Sealed urns spill orbs and
+      // sometimes wake their tenants; grave mold puffs underfoot.
       { kind: 'clay_pots', count: [2, 4] },
-      { kind: 'secret_wall', count: [0, 1] },
+      { kind: 'secret_wall', count: [1, 2] },
+      { kind: 'burial_urn', count: [2, 4] },
+      { kind: 'puffcap_cluster', count: [0, 2] },
       { kind: 'rocks', count: [6, 10], radius: [16, 30] },
       { kind: 'swamp', count: [1, 2] },
       { kind: 'cliff', count: [1, 2] },
@@ -781,11 +796,15 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'chasm', count: [0, 2] },
       { kind: 'water', count: [0, 1] },
       { kind: 'lava', count: [0, 1] },
-      // The brittle kit: old storage pots, plugs poised to fall, and — rarely
-      // — a wall that isn't one.
+      // The brittle kit: old storage pots, plugs poised to fall, and a wall
+      // that isn't one — EVERY cave hides at least one now (rooms-rolled
+      // mazes hunt wall-adjacent cells; convex caves tuck it against a
+      // cliff flank). Wave 2: gem lattices and seeping gas bladders.
       { kind: 'clay_pots', count: [1, 2] },
       { kind: 'crumbling_wall', count: [1, 3] },
-      { kind: 'secret_wall', count: [0, 1] },
+      { kind: 'secret_wall', count: [1, 2] },
+      { kind: 'crystal_cluster', count: [1, 3] },
+      { kind: 'gas_pod', count: [0, 2] },
     ],
     packs: {
       count: [3, 5], size: [3, 5],
@@ -1064,6 +1083,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bog', count: [3, 5] }, { kind: 'water', count: [2, 4] },
       { kind: 'swamp', count: [2, 3] }, { kind: 'trees', count: [4, 7] },
       { kind: 'thicket', count: [1, 3] },
+      // Marsh gas swells in bladders between the islets.
+      { kind: 'gas_pod', count: [1, 3] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1136,6 +1157,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'crystal', count: [5, 9] }, { kind: 'rocks', count: [3, 6], radius: [18, 38] },
       { kind: 'scree', count: [1, 3] },
       { kind: 'cliff', count: [1, 3] },
+      // Knee-high lattices — the harvestable understory of the shard fields.
+      { kind: 'crystal_cluster', count: [2, 5] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1214,6 +1237,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'glow_cap', count: [4, 7] }, { kind: 'mycelial_mat', count: [3, 5] },
       { kind: 'shelf_fungus', count: [2, 4] }, { kind: 'toadstool', count: [3, 6] },
       { kind: 'mushroom_ring', count: [1, 2] }, { kind: 'fern', count: [1, 3] },
+      // Pressure sacs burst when neared (fume); puffballs pop underfoot.
+      { kind: 'burst_sac', count: [2, 4] }, { kind: 'puffcap_cluster', count: [1, 3] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],

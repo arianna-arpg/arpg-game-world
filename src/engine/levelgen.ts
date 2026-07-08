@@ -137,7 +137,15 @@ export type KnownDoodadKind =
   // The brittle kit (lifeless breakables — DoodadRule.brittle)
   | 'clay_pots'      // a huddle of pots: pops on a hit or a body brushing through
   | 'crumbling_wall' // a fissured plug that collapses (and carves open) when neared
-  | 'secret_wall';   // looks like stone; struck or leaned on, a passage grinds open
+  | 'secret_wall'    // looks like stone; struck or leaned on, a passage grinds open
+  // The brittle kit, wave 2 (hazard breakables — pop effects on BrittleSpec)
+  | 'rotten_bridge'  // a decayed span: footing that remembers every crossing, then drops you
+  | 'gas_pod'        // a bloated marsh bladder: ruptures into a lingering fume
+  | 'burst_sac'      // a fungal pressure sac: bursts into spore fume when neared
+  | 'puffcap_cluster' // pale puffballs underfoot: a soft fume when trodden
+  | 'burial_urn'     // grave clay: spills orbs — and sometimes wakes its tenants
+  | 'crystal_cluster' // a knee-high lattice: shatters to a strike, pays in gems
+  | 'icicle_cluster'; // brittle ice fangs: shatter when brushed or struck
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -460,7 +468,31 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   crumbling_wall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24,
     brittle: { on: ['near', 'hit'], reach: 46, carve: 40, orbChance: 0.15, text: 'the wall crumbles!', color: '#8a8276' } },
   secret_wall: { overlap: 'solid', blocksMove: true, blocksShot: true,
-    brittle: { on: ['hit', 'near'], reach: 36, dwell: 1.3, carve: 62, gemChance: 0.6, orbChance: 0.8, text: 'a hidden passage grinds open!', color: '#d8c890' } },
+    brittle: { on: ['hit', 'near'], reach: 36, dwell: 1.3, carve: 62, gemChance: 0.6, orbChance: 0.8, warn: 'the stone sounds hollow…', text: 'a hidden passage grinds open!', color: '#d8c890' } },
+  // WAVE 2 — hazard breakables, every consequence pure BrittleSpec data.
+  // The rotten span is FOOTING (ground + spans): it creaks at first tread,
+  // remembers every crossing, and drops whoever lingers into the fall
+  // recovery. Pods and sacs pop into lingering fume clouds; the urn spills
+  // orbs and sometimes wakes its tenants; lattices pay the one who strikes.
+  rotten_bridge: { overlap: 'ground', spans: true,
+    brittle: { on: ['touch'], dwell: 0.85, warn: 'the planks creak…', text: 'the span gives way!', color: '#8a6e48',
+      collapse: { damage: { pctMaxLife: 0.12 } } } },
+  gas_pod: { overlap: 'inert', spacing: 26,
+    brittle: { on: ['hit', 'touch'], text: 'the pod ruptures!', color: '#9fb95a',
+      fume: { radius: 78, linger: 3.2, dmgMult: 0.8, color: '#9fb95a' } } },
+  burst_sac: { overlap: 'inert', spacing: 24,
+    brittle: { on: ['hit', 'near'], reach: 30, text: 'the sac bursts!', color: '#b08ad8',
+      fume: { radius: 70, linger: 2.8, dmgMult: 0.7, color: '#b08ad8' } } },
+  puffcap_cluster: { overlap: 'inert', spacing: 18,
+    brittle: { on: ['touch', 'hit'], orbChance: 0.12, text: 'puff!', color: '#c8b06a',
+      fume: { radius: 54, linger: 2.0, dmgMult: 0.5, delay: 0.3, color: '#c8b06a' } } },
+  burial_urn: { overlap: 'inert', spacing: 22,
+    brittle: { on: ['hit', 'touch'], orbChance: 0.55, gemChance: 0.12, text: 'the urn shatters!', color: '#b8a890',
+      spawn: { monster: 'skeleton_warrior', count: [1, 2], chance: 0.22, text: 'the dead wake!' } } },
+  crystal_cluster: { overlap: 'solid', blocksMove: true, spacing: 34, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    brittle: { on: ['hit'], gemChance: 0.3, orbChance: 0.35, text: 'the lattice shatters!', color: '#7fc0f0' } },
+  icicle_cluster: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['water', 'lava'],
+    brittle: { on: ['hit', 'near'], reach: 30, orbChance: 0.25, text: 'shatter!', color: '#bfe0f0' } },
   // Canopy kinds (occlude): their crowns draw ABOVE actors and FADE when the
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
   // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
@@ -2346,6 +2378,13 @@ registerStamp('secret_wall', (ctx) => {
     radius: 16, kind: 'secret_wall',
   });
 });
+// The brittle kit, wave 2: hazard breakables (pop effects ride BrittleSpec).
+registerStamp('gas_pod', stampSingle('gas_pod', [14, 20]));
+registerStamp('burst_sac', stampSingle('burst_sac', [12, 18]));
+registerStamp('puffcap_cluster', stampSingle('puffcap_cluster', [12, 17]));
+registerStamp('burial_urn', stampSingle('burial_urn', [12, 16]));
+registerStamp('crystal_cluster', stampSingle('crystal_cluster', [14, 20]));
+registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));
@@ -3066,10 +3105,12 @@ function stampRavine(ctx: GenCtx): void {
   }
   if (path.length < 4) return;
 
-  // Bridges span the gap perpendicular to the cut.
+  // Bridges span the gap perpendicular to the cut. The GUARANTEED spans are
+  // sound timber (progression never rides a trap); a chance-rolled EXTRA
+  // crossing is rotten — a shortcut that creaks, remembers, and drops you.
   const spans = path.length > 10 ? 2 : 1;
   const fracs = spans === 2 ? [0.3, 0.72] : [rng.range(0.35, 0.65)];
-  for (const f of fracs) {
+  const laySpan = (f: number, kind: DoodadKind): void => {
     const i = Math.max(1, Math.min(path.length - 2, Math.round(f * path.length)));
     const at = path[i];
     const along = Math.atan2(path[i + 1].y - path[i - 1].y, path[i + 1].x - path[i - 1].x);
@@ -3078,9 +3119,13 @@ function stampRavine(ctx: GenCtx): void {
     for (let s = -reach; s <= reach; s += 18) {
       ctx.doodads.push({
         pos: vec(at.x + Math.cos(perp) * s, at.y + Math.sin(perp) * s),
-        radius: 24, kind: 'bridge', dir: perp,
+        radius: 24, kind, dir: perp,
       });
     }
+  };
+  for (const f of fracs) laySpan(f, 'bridge');
+  if (rng.chance(0.6)) {
+    laySpan(spans === 2 ? 0.5 : (fracs[0] > 0.5 ? fracs[0] - 0.24 : fracs[0] + 0.24), 'rotten_bridge');
   }
 }
 

@@ -394,6 +394,41 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
     params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', strata: {}, contrast: 0.95 },
   },
+  // --- Brittle wave 2: hazard breakables ------------------------------------
+  // A decayed crossing: the plank painter saying 'rot' — missing boards over
+  // the dark, a split seam, moss on the rails. Order matches sound bridges.
+  rotten_bridge: {
+    painter: 'plank', order: 44,
+    params: { fill: '#55412b', line: '#332419', rot: true },
+  },
+  gas_pod: {
+    painter: 'pod', order: 52, shadow: 0.45,
+    params: { body: '#5a6e34', glow: '#b8d06a', aspectY: 1.08, glowY: -0.15, glowR: 0.46, pulseRate: 1.1 },
+    light: { radius: -1.6, color: '#b8d06a', intensity: 0.1, flicker: 1.0 },
+  },
+  burst_sac: {
+    painter: 'pod', order: 52, shadow: 0.45,
+    params: { body: '#4a3a66', glow: '#b08ad8', aspectY: 0.9, glowY: -0.2, glowR: 0.5, pulseRate: 2.1 },
+    light: { radius: -1.8, color: '#b08ad8', intensity: 0.12, flicker: 1.6 },
+  },
+  puffcap_cluster: {
+    painter: 'toadstools', order: 47,
+    params: { cap: '#b7a15c', speck: '#e8dcc0' },
+  },
+  burial_urn: {
+    painter: 'potCluster', order: 52, shadow: 0.4,
+    params: { clay: '#8a8074', lid: '#6a6258' },
+  },
+  crystal_cluster: {
+    longShadow: 0.6, painter: 'shard', order: 50, shadow: 0.5,
+    params: { points: 7, color: '#4a7aa8', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
+    light: { radius: -2.2, color: '#7fc0f0', intensity: 0.22 },
+  },
+  icicle_cluster: {
+    painter: 'shard', order: 50, shadow: 0.45, longShadow: 0.9,
+    params: { points: 5, color: '#b6d4e6', material: 'ice', coreGlow: { color: '#eef8ff' } },
+    light: { radius: -1.6, color: '#cfe8f4', intensity: 0.1 },
+  },
   rubble: { painter: 'rubble', order: 36 },
   banner_post: { painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.5 },
   // The mercenary camp's standard (was a warned disc-fallback).

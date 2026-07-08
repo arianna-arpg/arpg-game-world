@@ -1591,21 +1591,52 @@ const sapling: GroupPainter = (env, group, def) => {
 
 /** Planks spanning a gap (bridges). */
 const plank: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { fill?: ColorSpec; line?: ColorSpec };
+  const p = (def.params ?? {}) as { fill?: ColorSpec; line?: ColorSpec; rot?: boolean };
   const { ctx, theme } = env;
   const fill = resolveColor(p.fill, theme, '#5e4730');
   const line = resolveColor(p.line, theme, '#3c2c1c');
   for (const b of group) {
+    const seed = ((b.pos.x * 13 + b.pos.y * 7) | 0) >>> 0;
     ctx.save();
     ctx.translate(b.pos.x, b.pos.y);
     ctx.rotate(b.dir ?? 0);
-    ctx.fillStyle = fill;
+    ctx.fillStyle = p.rot ? shade(fill, (hash01(seed, 3) - 0.6) * 0.16) : fill;
     ctx.fillRect(-b.radius, -b.radius * 0.82, b.radius * 2, b.radius * 1.64);
     // Worn mid-track.
     ctx.globalAlpha = 0.25;
     ctx.fillStyle = shade(fill, 0.2);
     ctx.fillRect(-b.radius, -b.radius * 0.3, b.radius * 2, b.radius * 0.6);
     ctx.globalAlpha = 1;
+    // ROT: boards missing over the dark, split seams, moss creeping the rail.
+    if (p.rot) {
+      const gaps = 1 + (seed % 2);
+      for (let i = 0; i < gaps; i++) {
+        const gx = -b.radius + (0.18 + hash01(i, seed + 7) * 0.6) * b.radius * 2;
+        const gw = b.radius * (0.1 + hash01(i, seed + 11) * 0.12);
+        ctx.fillStyle = withAlpha('#07070c', 0.88);
+        ctx.fillRect(gx, -b.radius * 0.82, gw, b.radius * 1.64);
+      }
+      ctx.strokeStyle = withAlpha(shade(fill, -0.5), 0.8);
+      ctx.lineWidth = 1;
+      const sx = -b.radius + hash01(seed, 17) * b.radius * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(sx, -b.radius * 0.7);
+      ctx.lineTo(sx + b.radius * 0.3, b.radius * (0.2 + hash01(seed, 19) * 0.5));
+      ctx.stroke();
+      const mossCol = resolveColorOpt('theme:tree', theme);
+      if (mossCol && hash01(seed, 23) < 0.55) {
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = mossCol;
+        for (let i = 0; i < 3; i++) {
+          const mx = -b.radius + hash01(i, seed + 29) * b.radius * 2;
+          ctx.beginPath();
+          ctx.ellipse(mx, b.radius * (0.6 + hash01(i, seed + 31) * 0.2) * (i % 2 ? 1 : -1),
+            2.2 + hash01(i, seed + 37) * 2, 1.4, 0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
     ctx.strokeStyle = line;
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -4038,7 +4069,7 @@ const hayBale: GroupPainter = (env, group) => {
 
 /** Clay POTS huddled together (markets, crypts, kitchens of the dead). */
 const potCluster: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { clay?: ColorSpec };
+  const p = (def.params ?? {}) as { clay?: ColorSpec; lid?: ColorSpec };
   const { ctx, theme } = env;
   const clay = resolveColor(p.clay, theme, '#9a6a44');
   for (const o of group) {
@@ -4057,9 +4088,22 @@ const potCluster: GroupPainter = (env, group, def) => {
       ctx.strokeStyle = withAlpha(shade(clay, -0.45), 0.85);
       ctx.lineWidth = 1.3;
       ctx.stroke();
-      // The mouth ring + a lip highlight.
-      ctx.strokeStyle = withAlpha(shade(clay, -0.3), 0.7);
-      ctx.beginPath(); ctx.arc(x, y, pr * 0.5, 0, Math.PI * 2); ctx.stroke();
+      if (p.lid) {
+        // SEALED: a lid disc with a knob — grave clay keeps its own counsel.
+        const lid = resolveColor(p.lid, theme);
+        ctx.fillStyle = shade(lid, hash01(i, seed + 9) * 0.14 - 0.04);
+        ctx.beginPath(); ctx.arc(x, y, pr * 0.66, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = withAlpha(shade(lid, -0.4), 0.8);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = shade(lid, 0.18);
+        ctx.beginPath(); ctx.arc(x, y, pr * 0.16, 0, Math.PI * 2); ctx.fill();
+      } else {
+        // The mouth ring.
+        ctx.strokeStyle = withAlpha(shade(clay, -0.3), 0.7);
+        ctx.beginPath(); ctx.arc(x, y, pr * 0.5, 0, Math.PI * 2); ctx.stroke();
+      }
+      // A lip highlight either way.
       ctx.strokeStyle = withAlpha(shade(clay, 0.3), 0.6);
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.arc(x - pr * 0.2, y - pr * 0.2, pr * 0.62, -2.4, -1.1); ctx.stroke();
