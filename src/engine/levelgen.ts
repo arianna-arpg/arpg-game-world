@@ -869,7 +869,7 @@ function carveWander(grid: GridWalkField, a: Vec2, b: Vec2, halfW: number, rng: 
  *  the whole box), so this is the first generator that genuinely needs the grid:
  *  clampPos confines actors to it, AI paths the corridors, spawns land only on it.
  *  Sets ctx.walk; the renderer paints the non-walkable cells as wall/void. */
-function roomsLayout(ctx: GenCtx, _def: ZoneDef): void {
+function roomsLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
   const grid = new GridWalkField(arena.w, arena.h, 30);
   const M = 70;
@@ -897,6 +897,12 @@ function roomsLayout(ctx: GenCtx, _def: ZoneDef): void {
   const extra = rng.int(2, 4);
   for (let i = 0; i < extra; i++) tunnel(grid, rng.pick(rooms), rng.pick(rooms), 38);
   ctx.walk = grid;
+  // The tileset's authored clutter scatters INSIDE the carved rooms + corridors —
+  // findSpot walk-gates solids/triggers onto walkable cells, same as flesh/mycelia/
+  // underwater. (Rooms previously ran NO def.layout stamps at all, so highland
+  // passes and rooms-rolled caves generated bare; unmade_vault stays the one
+  // generator that skips decoration deliberately.)
+  plainsLayout(ctx, def);
 }
 registerLayout('rooms', roomsLayout);
 
