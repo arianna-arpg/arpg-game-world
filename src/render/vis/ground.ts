@@ -14,6 +14,7 @@
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../../core/math';
+import { DOODAD_VISUALS } from '../../data/doodadVisuals';
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
@@ -108,11 +109,63 @@ export class GroundRenderer {
     const cell = CFG.cell;
     const ns = CFG.noiseScale / (gs.scale ?? 1);
     const nsx = ns / (gs.stretchX ?? 1);
+    // POSITIONAL PALETTE RULES (palette themes only): gather this chunk's
+    // nearby feature discs ONCE, then slide each cell's gradient sample by
+    // proximity — a wet fade hugging every waterline (`coast`), a sun-well
+    // where no crown covers (`clearing`). Bake-time cost only.
+    const coast = pal ? gs.coast : undefined;
+    const clearing = pal ? gs.clearing : undefined;
+    const coastReach = coast?.reach ?? 90;
+    const clearReach = clearing?.reach ?? 130;
+    const waterKinds = coast?.kinds ?? ['water', 'deep_water'];
+    type Disc = { x: number; y: number; r: number };
+    const near = (pad: number, want: (k: string) => boolean): Disc[] => {
+      const out: Disc[] = [];
+      for (const d of world.doodads) {
+        if (!want(d.kind)) continue;
+        if (d.pos.x + d.radius + pad < ox || d.pos.x - d.radius - pad > ox + C
+          || d.pos.y + d.radius + pad < oy || d.pos.y - d.radius - pad > oy + C) continue;
+        out.push({ x: d.pos.x, y: d.pos.y, r: d.radius });
+      }
+      return out;
+    };
+    const waterDiscs = coast ? near(coastReach, k => waterKinds.includes(k)) : [];
+    // Crowns influence out to the PRESENCE ring (a clearing is only a clearing
+    // when canopy stands near-but-not-over) — pad the gather to the full ring
+    // or the effect seams at chunk borders.
+    const presenceReach = clearReach * 2.2;
+    const crownDiscs = clearing
+      ? near(presenceReach, k => !!DOODAD_VISUALS[k]?.canopy) : [];
     for (let gy = 0; gy < C; gy += cell) {
       for (let gx = 0; gx < C; gx += cell) {
         const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, this.seed);
         let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
         if (biasExp !== 1) n = 1 - Math.pow(1 - n, biasExp);
+        if (coast && waterDiscs.length) {
+          // Proximity 1 at the water's edge → 0 at reach; slide the sample.
+          const wx = ox + gx + cell * 0.5, wy = oy + gy + cell * 0.5;
+          let prox = 0;
+          for (const d of waterDiscs) {
+            const de = Math.hypot(wx - d.x, wy - d.y) - d.r;
+            if (de < coastReach) prox = Math.max(prox, 1 - Math.max(0, de) / coastReach);
+          }
+          if (prox > 0) n = clamp(n + coast.shift * prox, 0, 1);
+        }
+        if (clearing && crownDiscs.length) {
+          // A CLEARING is a gap IN a forest: glow needs crowns NEAR (presence)
+          // but not OVER (cover). Open country far from any crown gets no lift
+          // — otherwise a sparse meadow washes wall-to-wall (it did).
+          const wx = ox + gx + cell * 0.5, wy = oy + gy + cell * 0.5;
+          let cover = 0, presence = 0;
+          for (const d of crownDiscs) {
+            const de = Math.hypot(wx - d.x, wy - d.y) - d.r;
+            if (de <= 0) { cover = 1; presence = 1; break; }
+            if (de < clearReach) cover = Math.max(cover, 1 - de / clearReach);
+            if (de < presenceReach) presence = Math.max(presence, 1 - de / presenceReach);
+          }
+          const glow = presence * (1 - cover);
+          if (glow > 0) n = clamp(n + clearing.lift * glow, 0, 1);
+        }
         if (pal) {
           const t = n * (pal.length - 1);
           const i = Math.min(pal.length - 2, Math.floor(t));

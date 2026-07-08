@@ -241,6 +241,17 @@ export interface ZoneTheme {
      *  the whole gradient lays down at uniform strength — a PURE two-color
      *  (or N-color) blend with no floor bleed-through in the middle. */
     evenness?: number;
+    /** POSITIONAL SAMPLING — COASTLINE FADE: within `reach` world units of a
+     *  water-family doodad's edge the palette sample slides by `shift`
+     *  (negative = toward the palette's FIRST stop, positive = the last) —
+     *  wet, dark margins around every pool and river bank. `kinds` overrides
+     *  which doodad kinds count as water. */
+    coast?: { reach?: number; shift: number; kinds?: string[] };
+    /** POSITIONAL SAMPLING — CLEARING GLOW: where NO canopy crown covers
+     *  within `reach`, the sample lifts by `lift` toward the palette's light
+     *  end — sun wells in the gaps of a forest. Tag on canopied biomes only
+     *  (an open plain would glow wall-to-wall). */
+    clearing?: { reach?: number; lift: number };
   };
 }
 

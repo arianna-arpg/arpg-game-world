@@ -89,8 +89,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Hollow', 'Reach', 'Warrens', 'Glade', 'Crossing', 'Depths', 'Thicket', 'Tangle', 'Shade', 'Boughs', 'Hush', 'Snarl', 'Covert', 'Verge', 'Stand', 'Underwood'],
     theme: {
       // The GROVE floor flourishes — greens over greens, barely any black
-      // (palette + light bias) — while its NIGHTS run forest-deep.
-      ground: { palette: ['#101f0d', '#173015', '#20421c', '#2b5424', '#38662e'], bias: 0.58, alpha: 0.55 },
+      // (palette + light bias) — while its NIGHTS run forest-deep. The floor
+      // SAMPLES BY POSITION too: banks darken wet toward every water/bog
+      // margin, and the gaps between crowns glow — real clearings.
+      ground: {
+        palette: ['#101f0d', '#173015', '#20421c', '#2b5424', '#38662e'], bias: 0.58, alpha: 0.55,
+        coast: { reach: 85, shift: -0.35, kinds: ['water', 'deep_water', 'bog', 'swamp'] },
+        clearing: { reach: 130, lift: 0.3 },
+      },
       nightDark: 0.78,
       floor: '#0d150c', grid: '#142112', border: '#2a452a',
       obstacle: '#223c1c', obstacleEdge: '#3a6030', accent: '#8ed45e',
@@ -661,7 +667,13 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Sunlit', 'Wildflower', 'Greenhollow', 'Honeybrook', 'Dappled', 'Springmoor', 'Cloverhill', 'Larksong', 'Daisychain', 'Goldengrass', 'Breezy', 'Sweetgrass', 'Buttercup', 'Gentlebrook', 'Verdant', 'Mossglen', 'Petalfall', 'Hazysun'],
     nameSecond: ['Meadow', 'Glade', 'Pasture', 'Vale', 'Downs', 'Greens', 'Lea', 'Field', 'Heath', 'Commons', 'Bloom', 'Reach', 'Dell', 'Sward', 'Clearing', 'Holt'],
     theme: {
-      ground: { palette: ['#131f0c', '#1e2f12', '#2a4218', '#3a5522', '#4a682c'], bias: 0.6, alpha: 0.5 },
+      // Pond margins darken wet; the sward between scattered crowns lifts
+      // sunlit (positional palette sampling — a meadow IS its clearings).
+      ground: {
+        palette: ['#131f0c', '#1e2f12', '#2a4218', '#3a5522', '#4a682c'], bias: 0.6, alpha: 0.5,
+        coast: { reach: 90, shift: -0.38 },
+        clearing: { reach: 120, lift: 0.18 },
+      },
       dayLight: 1.15, nightDark: 0.6,
       floor: '#0e130c', grid: '#172013', border: '#3a5a2c',
       obstacle: '#2c4a22', obstacleEdge: '#477534', accent: '#9ed060',
