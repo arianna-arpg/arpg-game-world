@@ -34,8 +34,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       pads: { color: '#6ba036', biomes: ['grove', 'meadow', 'isle'] },
     },
   },
+  // TERRAIN BLEND LEVER (DoodadVisualDef.blend): each ground family names how
+  // hard it meshes into the land — a bog seeps furthest, grass feathers less,
+  // a gravel road beds subtlest. One data field per kind; retune freely.
   bog: {
     painter: 'liquid', order: 12,
+    blend: { strength: 0.5, feather: 30, color: '#39432a' },
     params: {
       rim: { color: '#39432a', alpha: 0.6, grow: 3 },
       core: { color: '#5a6e34', alpha: 0.5, grow: -8 },
@@ -45,6 +49,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   swamp: {
     painter: 'liquid', order: 14,
+    blend: { strength: 0.48, feather: 28, color: '#2e3a2a' },
     params: {
       core: { color: '#2e3a2a', alpha: 0.55 },
       scum: { color: '#5c7448' },
@@ -52,6 +57,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   mud: {
     painter: 'liquid', order: 16,
+    blend: { strength: 0.42, feather: 24, color: 'theme:mud|#2b2518' },
     params: {
       core: { color: 'theme:mud|#2b2518', alpha: 0.4 },
       blotch: { color: '#181209' },
@@ -59,10 +65,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   sand: {
     painter: 'liquid', order: 18,
+    blend: { strength: 0.42, feather: 26, color: 'theme:sand|#c9a86a' },
     params: { core: { color: 'theme:sand|#c9a86a', alpha: 0.4 } },
   },
   road: {
     painter: 'gravelPath', order: 20,
+    blend: { mode: 'path', strength: 0.3, feather: 12, color: 'theme:road|#574f44' },
     params: { color: 'theme:road|#574f44' },
   },
   lava: {
@@ -136,6 +144,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   snowdrift: {
     painter: 'liquid', order: 21,
+    blend: { strength: 0.3, feather: 26, color: '#e6eef6' },
     params: {
       rim: { color: '#f0f6fc', alpha: 0.22, grow: 3 },
       core: { color: '#dce8f2', alpha: 0.22 },
@@ -176,6 +185,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   grass: {
     painter: 'liquid', order: 47,
+    blend: { strength: 0.38, feather: 22, color: 'theme:grass|#3e5c30' },
     params: {
       core: { color: 'theme:grass|#3e5c30', alpha: 0.22 },
       tufts: { color: 'theme:grass|#3e5c30', flower: '#d8c86a' },
@@ -305,7 +315,10 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'cairn', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge' },
   },
-  scree: { painter: 'scree', order: 37, params: { color: 'theme:obstacle' } },
+  scree: {
+    painter: 'scree', order: 37, params: { color: 'theme:obstacle' },
+    blend: { strength: 0.32, feather: 14, color: 'theme:obstacle' },
+  },
   rock_spire: {
     longShadow: 1.7,
     painter: 'boulder', order: 55, shadow: 0.65,

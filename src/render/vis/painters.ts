@@ -70,6 +70,17 @@ export interface DoodadVisualDef {
    *  standing objects 46–56, interactives/ritual 57–59. */
   order: number;
   params?: Record<string, unknown>;
+  /** TERRAIN BLEND — mesh this ground-family kind into the land around it.
+   *  The group's merged silhouette grows soft rings outward (feather world
+   *  units) fading from `strength` to nothing, so a gravel road beds into
+   *  the terrain instead of reading as a chain of stamped circles. Pure
+   *  data per kind: a bog melds harder than grass, grass harder than
+   *  gravel. Painted UNDER the kind's own painter.
+   *  `mode` picks the silhouette: 'blob' (default) merges the discs as an
+   *  organic patch — pools, grass, mud; 'path' strokes round-capped
+   *  segments through CONSECUTIVE discs — the smooth band a chained stamp
+   *  (a road) actually means, with breaks wherever the chain truly gaps. */
+  blend?: { strength: number; feather: number; color: ColorSpec; mode?: 'blob' | 'path' };
   /** Soft contact shadow under each doodad (alpha multiplier). */
   shadow?: number;
   /** DIRECTIONAL day-cycle shadow (sunCast): the body's cast reach as a
@@ -89,6 +100,59 @@ function blobPath(ctx: CanvasRenderingContext2D, group: readonly Doodad[], grow 
     ctx.moveTo(d.pos.x + d.radius + grow, d.pos.y);
     ctx.arc(d.pos.x, d.pos.y, Math.max(0.1, d.radius + grow), 0, Math.PI * 2);
   }
+}
+
+/** Stroke round-capped segments through CONSECUTIVE discs — the smooth band
+ *  a chained stamp (a road) means. Per-segment width follows the two discs'
+ *  radii (+grow); a jump wider than a body-and-a-half is a REAL gap (or a
+ *  cull gap, or the next chain of the same kind) and breaks the stroke. */
+export function pathBand(ctx: CanvasRenderingContext2D, group: readonly Doodad[], grow = 0): void {
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (let i = 0; i < group.length; i++) {
+    const a = group[i], b = group[i + 1];
+    if (!b || Math.hypot(b.pos.x - a.pos.x, b.pos.y - a.pos.y) > (a.radius + b.radius) * 1.35) {
+      // Chain end (or lone disc): a round dot keeps the band's terminus soft.
+      ctx.lineWidth = 0.1;
+      ctx.beginPath();
+      ctx.arc(a.pos.x, a.pos.y, Math.max(0.1, a.radius + grow), 0, Math.PI * 2);
+      ctx.fill();
+      continue;
+    }
+    ctx.lineWidth = Math.max(0.2, a.radius + b.radius + grow * 2);
+    ctx.beginPath();
+    ctx.moveTo(a.pos.x, a.pos.y);
+    ctx.lineTo(b.pos.x, b.pos.y);
+    ctx.stroke();
+  }
+}
+
+/** THE BLEND UNDERLAY (DoodadVisualDef.blend): paints a group's merged
+ *  silhouette as stacked outward rings — a discrete gradient from `strength`
+ *  at the body to nothing at `feather` — so ground kinds MESH into the
+ *  terrain. 'blob' mode reuses blobPath (organic patches); 'path' mode rides
+ *  pathBand (chained stamps read as one smooth band). Runs before the kind's
+ *  own painter; the painter details over the bed. */
+export function paintBlendUnderlay(env: PaintEnv, group: readonly Doodad[],
+  def: DoodadVisualDef): void {
+  const b = def.blend;
+  if (!b || b.strength <= 0) return;
+  const { ctx, theme } = env;
+  const RINGS = 4;
+  const color = resolveColor(b.color, theme);
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = b.strength / RINGS;
+  for (let k = RINGS; k >= 1; k--) {
+    const grow = b.feather * (k / RINGS);
+    if (b.mode === 'path') {
+      pathBand(ctx, group, grow);
+    } else {
+      blobPath(ctx, group, grow);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
 }
 
 function jaggedPoly(ctx: CanvasRenderingContext2D, n: number, r: number, irr: number, seed: number, squashY = 1): void {
@@ -2687,15 +2751,19 @@ const gravelPath: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
   const { ctx, theme } = env;
   const base = resolveColor(p.color, theme, '#574f44');
-  // Bed + worn center (the two-pass rim/core).
+  // Bed + worn center (the two-pass rim/core). A 'path'-blended kind draws
+  // both as ROUND-CAPPED BANDS through the chain (pathBand) — one continuous
+  // road, never a caterpillar of discs; other users keep the blob fill.
+  const band = def.blend?.mode === 'path';
   ctx.globalAlpha = 0.6;
   ctx.fillStyle = base;
-  blobPath(ctx, group);
-  ctx.fill();
+  ctx.strokeStyle = base;
+  if (band) pathBand(ctx, group); else { blobPath(ctx, group); ctx.fill(); }
   ctx.globalAlpha = 0.45;
-  ctx.fillStyle = shade(base, 0.16);
-  blobPath(ctx, group, -7);
-  ctx.fill();
+  const worn = shade(base, 0.16);
+  ctx.fillStyle = worn;
+  ctx.strokeStyle = worn;
+  if (band) pathBand(ctx, group, -7); else { blobPath(ctx, group, -7); ctx.fill(); }
   // Deterministic grit + edge stones per disc.
   for (const d of group) {
     const seed = ((d.pos.x * 31 + d.pos.y * 17) | 0) >>> 0;

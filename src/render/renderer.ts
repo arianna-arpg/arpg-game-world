@@ -34,7 +34,7 @@ import { hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawLongShadow, drawShadow, sunCast } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
-import { CANOPY_PAINTERS, PAINTERS, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
+import { CANOPY_PAINTERS, PAINTERS, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
@@ -1223,6 +1223,8 @@ export class Renderer {
             sun.dir, sun.len, sun.alpha);
         }
       }
+      // Ground kinds bed into the terrain before their own detail pass.
+      if (g.def.blend) paintBlendUnderlay(env, g.list, g.def);
       if (g.def.shadow) paintGroupShadows(env, g.list, g.def.shadow);
       (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, g.list, g.def);
     }
