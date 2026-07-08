@@ -1290,6 +1290,7 @@ export function generateLayout(
     }
   }
   ensureReachability(ctx);
+  ensureDoodadNavigability(ctx);
   return {
     doodads: ctx.doodads, pois: ctx.pois, camps: ctx.camps,
     breakables: ctx.breakables, npcs: ctx.npcs,
@@ -1384,6 +1385,162 @@ function ensureReachability(ctx: GenCtx): void {
 
   // Reseal the doors (closed state is the shipped topology).
   for (const c of doorRects) grid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'rampart');
+}
+
+/** SOLIDS NEVER SEAL — the doodad-aware belt over ensureReachability's grid
+ *  suspenders. The walk grid guarantees carved connectivity, but scattered
+ *  SOLID doodads (boulders, trunks, palisade posts) live OFF the grid — a
+ *  ring of them can still corral an exit, a POI, or a door apron. Rasterize:
+ *  grid walls HARD (doors counted open, per the open-doors topology), body
+ *  discs of movement-blocking scatter SOFT (authored keeps / reserved
+ *  footprints / doors HARD — never remove a castle to rescue a footpath),
+ *  then 0-1 BFS from the entry to every required point. A point only
+ *  reachable through soft cells gets its cheapest blocking doodads REMOVED.
+ *  Draw-free (no rng): zones that never seal are byte-identical. */
+function ensureDoodadNavigability(ctx: GenCtx): void {
+  const cs = 30;
+  const cols = Math.max(1, Math.ceil(ctx.arena.w / cs));
+  const rows = Math.max(1, Math.ceil(ctx.arena.h / cs));
+  const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  const inPocket = (p: Vec2): boolean =>
+    (ctx.pockets ?? []).some(k => dist(p, vec(k.x, k.y)) <= k.r);
+
+  // Door cells count OPEN for the check (their aprons are the guarantee).
+  const doorRects: { x: number; y: number; w: number; h: number }[] = [];
+  for (const st of ctx.structures ?? []) {
+    for (const pd of st.doors) if (pd.door.cells) doorRects.push(pd.door.cells);
+  }
+  const inDoor = (x: number, y: number): boolean =>
+    doorRects.some(r => x > r.x && x < r.x + r.w && y > r.y && y < r.y + r.h);
+
+  // 0 open · 1 soft (removable scatter) · 2 hard (walls, keeps, reserved).
+  const state = new Uint8Array(cols * rows);
+  if (grid) {
+    for (let gy = 0; gy < rows; gy++) {
+      for (let gx = 0; gx < cols; gx++) {
+        const x = (gx + 0.5) * cs, y = (gy + 0.5) * cs;
+        if (!grid.isWalkable(x, y) && !inDoor(x, y)) state[gy * cols + gx] = 2;
+      }
+    }
+  }
+  const softBy = new Map<number, number[]>(); // cell → doodad indices
+  for (let i = 0; i < ctx.doodads.length; i++) {
+    const d = ctx.doodads[i];
+    if (!doodadRule(d.kind).blocksMove || d.kind === 'door') continue;
+    const hard = d.keep || inReserved(ctx, d.pos, d.radius);
+    const rr = bodyRadiusOf(d) + 12;
+    const gx0 = Math.max(0, Math.floor((d.pos.x - rr) / cs));
+    const gx1 = Math.min(cols - 1, Math.floor((d.pos.x + rr) / cs));
+    const gy0 = Math.max(0, Math.floor((d.pos.y - rr) / cs));
+    const gy1 = Math.min(rows - 1, Math.floor((d.pos.y + rr) / cs));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        // Disc vs cell-rect intersection (conservative: small solids between
+        // cell centers still register).
+        const nx = clampNum(d.pos.x, gx * cs, (gx + 1) * cs);
+        const ny = clampNum(d.pos.y, gy * cs, (gy + 1) * cs);
+        if ((nx - d.pos.x) ** 2 + (ny - d.pos.y) ** 2 > rr * rr) continue;
+        const idx = gy * cols + gx;
+        if (state[idx] === 2) continue;
+        if (hard) { state[idx] = 2; softBy.delete(idx); continue; }
+        state[idx] = 1;
+        const list = softBy.get(idx);
+        if (list) list.push(i); else softBy.set(idx, [i]);
+      }
+    }
+  }
+
+  const cellOf = (p: Vec2): number => {
+    const gx = Math.min(cols - 1, Math.max(0, Math.floor(p.x / cs)));
+    const gy = Math.min(rows - 1, Math.max(0, Math.floor(p.y / cs)));
+    return gy * cols + gx;
+  };
+  // Snap the start to the nearest open cell (the entry itself is never built
+  // over, but its center may sit on a soft rim).
+  let start = cellOf(ctx.entry);
+  if (state[start] !== 0) {
+    outer: for (let ring = 1; ring <= 4; ring++) {
+      for (let dy = -ring; dy <= ring; dy++) {
+        for (let dx = -ring; dx <= ring; dx++) {
+          const gx = (start % cols) + dx, gy = Math.floor(start / cols) + dy;
+          if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) continue;
+          if (state[gy * cols + gx] === 0) { start = gy * cols + gx; break outer; }
+        }
+      }
+    }
+  }
+
+  // 0-1 BFS (deque): cost = soft cells crossed; parents rebuild the path.
+  const search = (target: number): number[] | null => {
+    if (state[target] === 2) return null;
+    const cost = new Int32Array(cols * rows).fill(-1);
+    const parent = new Int32Array(cols * rows).fill(-1);
+    const deque: number[] = [start];
+    cost[start] = 0;
+    while (deque.length) {
+      const cur = deque.shift()!;
+      if (cur === target) break;
+      const cx = cur % cols, cy = Math.floor(cur / cols);
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        const nx = cx + dx, ny = cy + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const ni = ny * cols + nx;
+        if (state[ni] === 2) continue;
+        const nc = cost[cur] + (state[ni] === 1 ? 1 : 0);
+        if (cost[ni] !== -1 && cost[ni] <= nc) continue;
+        cost[ni] = nc;
+        parent[ni] = cur;
+        if (state[ni] === 1) deque.push(ni); else deque.unshift(ni);
+      }
+    }
+    if (cost[target] === -1) return null;
+    if (cost[target] === 0) return []; // already reachable clean
+    const path: number[] = [];
+    for (let at = target; at !== -1 && at !== start; at = parent[at]) {
+      if (state[at] === 1) path.push(at);
+    }
+    return path;
+  };
+
+  const required: Vec2[] = [
+    ...ctx.exits, ...ctx.pois, ...ctx.camps,
+    ...ctx.garrisons.map(g => g.pos), ...(ctx.mustReach ?? []),
+  ];
+  for (const st of ctx.structures ?? []) {
+    for (const pd of st.doors) {
+      required.push(vec(
+        pd.pos.x + pd.normal.x * st.cellSize * APRON_CELLS,
+        pd.pos.y + pd.normal.y * st.cellSize * APRON_CELLS));
+    }
+  }
+
+  const doomed = new Set<number>();
+  for (const p of required) {
+    if (inPocket(p)) continue;
+    const softPath = search(cellOf(p));
+    if (!softPath) continue; // hard-sealed or clean-unreachable: the grid pass owns it
+    for (const cell of softPath) {
+      for (const di of softBy.get(cell) ?? []) doomed.add(di);
+    }
+  }
+  if (!doomed.size) return;
+  const removed = [...doomed].sort((a, b) => b - a);
+  for (const i of removed) {
+    const d = ctx.doodads[i];
+    // A removed SEED-PAIRED doodad takes its caveSeeds entry with it (the
+    // mouth↔seed zip must never shear) — same discipline as the site-clear.
+    if (doodadRule(d.kind).seedPaired) {
+      let ordinal = 0;
+      for (let k = 0; k < i; k++) if (ctx.doodads[k].kind === d.kind) ordinal++;
+      if (ordinal < ctx.caveSeeds.length) ctx.caveSeeds.splice(ordinal, 1);
+    }
+    ctx.doodads.splice(i, 1);
+  }
+  console.info(`[levelgen] navigability: cleared ${removed.length} sealing solid(s) so every required point stays walkable`);
+}
+
+function clampNum(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v;
 }
 
 /** Stamp a structure blueprint: wall strips, props, clutter, folk. */
