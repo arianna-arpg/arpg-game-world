@@ -1043,6 +1043,27 @@ const emberSparks: PartPainter = (ctx, r, spec, pal, t = 0) => {
   });
 };
 
+/** PUFF MOTES — live spore-dust drifting off the body: slower and floatier
+ *  than emberSparks, no hot core, swelling faintly before they fade (the
+ *  Bloom's breath). params: n, drift. */
+const puffMotes: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.accent.light;
+  const n = Math.round(P(spec, 'n', 4));
+  const drift = P(spec, 'drift', 0.7);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const cycle = 2.4 + hash01(i, 137) * 1.6;
+      const ph = ((t / cycle) + hash01(i, 139)) % 1;
+      const a = hash01(i, 149) * Math.PI * 2 + Math.sin(t * 0.7 + i) * 0.3;
+      const d = R * (0.4 + ph * drift);
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      const swell = Math.sin(ph * Math.PI); // grows, then thins away
+      c.fillStyle = withAlpha(col, 0.4 * swell);
+      c.beginPath(); c.arc(x, y, Math.max(0.8, R * 0.11 * swell), 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
 // ============================================================== NATURE KIT
 
 /** Plated dome shell. */
@@ -1087,6 +1108,177 @@ const caps: PartPainter = (ctx, r, spec, pal) => {
         c.fill();
       }
     }
+  });
+};
+
+/** THE MUSHROOM CAP — one broad dome worn as the body's crown: rim ring,
+ *  pale spots, a dented top. `caps` scatters button-clusters; this is the
+ *  single load-bearing silhouette of the cap-folk. params: spots, squash. */
+const capDome: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const spots = Math.round(P(spec, 'spots', 5));
+  const squash = P(spec, 'squash', 0.86);
+  place(ctx, r, spec, (c, R) => {
+    const trace = (): void => {
+      c.beginPath(); c.ellipse(0, 0, R, R * squash, 0, 0, Math.PI * 2);
+    };
+    trace(); c.fillStyle = ramp.base; c.fill();
+    volume(c, R, ramp, trace);
+    // Rim ring — the cap's underside peeking past the dome.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.8);
+    c.lineWidth = Math.max(1.4, R * 0.09);
+    trace(); c.stroke();
+    // Spots: pale flecks, denser toward the crown.
+    c.fillStyle = withAlpha(ramp.highlight, 0.75);
+    for (let i = 0; i < spots; i++) {
+      const a = hash01(i, 23) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, 29)) * R * 0.7;
+      const sr = R * (0.08 + hash01(i, 31) * 0.09);
+      c.beginPath();
+      c.ellipse(Math.cos(a) * d, Math.sin(a) * d * squash, sr, sr * 0.8, a, 0, Math.PI * 2);
+      c.fill();
+    }
+    // The dent — one soft crease so the dome reads domed, not flat.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.45);
+    c.lineWidth = Math.max(1, R * 0.05);
+    c.beginPath(); c.arc(R * 0.12, 0, R * 0.4, -0.9, 0.9); c.stroke();
+  });
+};
+
+/** GILL FRILL — radial gill-lines fanning out past a cap's rim (drawn UNDER
+ *  a capDome placed after it). params: n. */
+const gillFrill: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'bone');
+  const n = Math.round(P(spec, 'n', 14));
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = withAlpha(ramp.shadow, 0.75);
+    c.lineWidth = Math.max(1, R * 0.05);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      c.beginPath();
+      c.moveTo(Math.cos(a) * R * 0.55, Math.sin(a) * R * 0.55);
+      c.lineTo(Math.cos(a) * R * 1.0, Math.sin(a) * R * 1.0);
+      c.stroke();
+    }
+    c.strokeStyle = withAlpha(ramp.base, 0.5);
+    c.beginPath(); c.arc(0, 0, R * 0.98, 0, Math.PI * 2); c.stroke();
+  });
+};
+
+/** BARK PLATES — rough slabs with dark seams over a trunk-body; the treant
+ *  hide (crocodile scutes read wet, these read GRAIN). params: n. */
+const barkPlates: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const n = Math.round(P(spec, 'n', 6));
+  place(ctx, r, spec, (c, R) => {
+    c.save();
+    c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2); c.clip();
+    for (let i = 0; i < n; i++) {
+      const x = (hash01(i, 53) - 0.5) * R * 1.5;
+      const y = (hash01(i, 59) - 0.5) * R * 1.5;
+      const w = R * (0.3 + hash01(i, 61) * 0.3);
+      const h = R * (0.45 + hash01(i, 67) * 0.4);
+      const rot = (hash01(i, 71) - 0.5) * 0.5;
+      c.save();
+      c.translate(x, y); c.rotate(rot);
+      c.fillStyle = shade(ramp.base, (hash01(i, 73) - 0.5) * 0.16);
+      c.beginPath();
+      // A slab with clipped corners — bark, not brick.
+      c.moveTo(-w / 2 + w * 0.12, -h / 2);
+      c.lineTo(w / 2, -h / 2 + h * 0.1);
+      c.lineTo(w / 2 - w * 0.1, h / 2);
+      c.lineTo(-w / 2, h / 2 - h * 0.12);
+      c.closePath(); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.65);
+      c.lineWidth = Math.max(1, R * 0.05);
+      c.stroke();
+      // One grain line down the slab.
+      c.strokeStyle = withAlpha(ramp.shadow, 0.5);
+      c.beginPath(); c.moveTo(-w * 0.1, -h * 0.4); c.lineTo(w * 0.06, h * 0.42); c.stroke();
+      c.restore();
+    }
+    c.restore();
+  });
+};
+
+/** BRANCH ARMS — a forking bough swept forward, twigs off the elbow; mirror
+ *  for the pair. The treant's reach. params: forks, len. */
+const branchArms: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const forks = Math.round(P(spec, 'forks', 3));
+  const len = P(spec, 'len', 1.15);
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    const ex = R * len * 0.62, ey = R * 0.62; // the elbow
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(2, R * 0.14);
+    c.beginPath();
+    c.moveTo(R * 0.1, R * 0.35);
+    c.quadraticCurveTo(R * 0.45, R * 0.72, ex, ey);
+    c.stroke();
+    for (let i = 0; i < forks; i++) {
+      const a = -0.5 + (i / Math.max(1, forks - 1)) * 1.0 + (hash01(i, 79) - 0.5) * 0.3;
+      const tl = R * (0.3 + hash01(i, 83) * 0.22);
+      c.lineWidth = Math.max(1.2, R * 0.07);
+      c.strokeStyle = i % 2 ? ramp.base : ramp.shadow;
+      c.beginPath();
+      c.moveTo(ex, ey);
+      c.lineTo(ex + Math.cos(a) * tl, ey + Math.sin(a) * tl * 0.6);
+      c.stroke();
+    }
+  });
+};
+
+/** STALACTITE CROWN — a ring of rock fangs jutting from the rim; the "that
+ *  boulder just moved" silhouette. params: n. */
+const stalactites: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 6));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, 89) * 0.5;
+      const base = R * 0.6;
+      const tipLen = R * (0.4 + hash01(i, 97) * 0.35);
+      const w = R * (0.14 + hash01(i, 101) * 0.1);
+      const bx = Math.cos(a) * base, by = Math.sin(a) * base;
+      const tx = Math.cos(a) * (base + tipLen), ty = Math.sin(a) * (base + tipLen);
+      c.fillStyle = shade(ramp.base, (hash01(i, 103) - 0.5) * 0.2);
+      c.beginPath();
+      c.moveTo(bx + Math.cos(a + Math.PI / 2) * w, by + Math.sin(a + Math.PI / 2) * w);
+      c.lineTo(tx, ty);
+      c.lineTo(bx - Math.cos(a + Math.PI / 2) * w, by - Math.sin(a + Math.PI / 2) * w);
+      c.closePath(); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.6);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  });
+};
+
+/** NEST TWIGS — a woven ring of crosshatched sticks; every rookery's rim.
+ *  params: n. */
+const nestTwigs: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const n = Math.round(P(spec, 'n', 18));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, 107) * 0.4;
+      const lean = (hash01(i, 109) - 0.5) * 1.4;
+      const d0 = R * (0.62 + hash01(i, 113) * 0.14);
+      const len = R * (0.3 + hash01(i, 127) * 0.2);
+      c.strokeStyle = shade(ramp.base, (hash01(i, 131) - 0.5) * 0.24);
+      c.lineWidth = Math.max(1.1, R * 0.055);
+      c.beginPath();
+      c.moveTo(Math.cos(a) * d0 - Math.cos(a + lean) * len * 0.5,
+        Math.sin(a) * d0 - Math.sin(a + lean) * len * 0.5);
+      c.lineTo(Math.cos(a) * d0 + Math.cos(a + lean) * len * 0.5,
+        Math.sin(a) * d0 + Math.sin(a + lean) * len * 0.5);
+      c.stroke();
+    }
+    // The bowl shadow.
+    c.fillStyle = withAlpha(ramp.shadow, 0.35);
+    c.beginPath(); c.arc(0, 0, R * 0.5, 0, Math.PI * 2); c.fill();
   });
 };
 
@@ -1520,6 +1712,78 @@ const chains: PartPainter = (ctx, r, spec, pal) => {
         const y = side * (R * 0.55 + Math.sin(t * Math.PI) * sag * 0.35);
         c.beginPath(); c.arc(x, y, R * 0.055, 0, Math.PI * 2); c.fill();
       }
+    }
+  });
+};
+
+/** OOZE LOBES — live pseudopod bulges rolling around the rim: the body
+ *  never agrees on its own outline. params: n. */
+const oozeLobes: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + t * 0.25;
+      const throb = 0.5 + 0.5 * Math.sin(t * 1.7 + i * 2.1);
+      const d = R * (0.72 + 0.16 * throb);
+      const lr = R * (0.16 + 0.14 * throb);
+      c.fillStyle = withAlpha(ramp.base, 0.55 + 0.2 * throb);
+      c.beginPath();
+      c.ellipse(Math.cos(a) * d, Math.sin(a) * d, lr, lr * 0.75, a, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
+/** FLESH FOLDS — slack wrinkle-bands sagging across the body; meat that has
+ *  settled. params: n. */
+const fleshFolds: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 4));
+  place(ctx, r, spec, (c, R) => {
+    c.save();
+    c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2); c.clip();
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const y = -R * 0.6 + (i / Math.max(1, n - 1)) * R * 1.2;
+      const sag = R * (0.14 + hash01(i, 151) * 0.12);
+      const half = Math.sqrt(Math.max(0.1, 1 - (y / R) * (y / R))) * R * 0.9;
+      c.strokeStyle = withAlpha(ramp.shadow, 0.55);
+      c.lineWidth = Math.max(1.4, R * 0.08);
+      c.beginPath();
+      c.moveTo(-half, y);
+      c.quadraticCurveTo(0, y + sag, half, y);
+      c.stroke();
+      c.strokeStyle = withAlpha(ramp.highlight, 0.3);
+      c.lineWidth = Math.max(1, R * 0.04);
+      c.beginPath();
+      c.moveTo(-half * 0.9, y + R * 0.05);
+      c.quadraticCurveTo(0, y + sag + R * 0.05, half * 0.9, y + R * 0.05);
+      c.stroke();
+    }
+    c.restore();
+  });
+};
+
+/** EYE CLUSTER — a knot of small unblinking eyes in odd sizes (cavern
+ *  horrors, flesh that watches). params: n, spread, dist. */
+const eyeCluster: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 5));
+  const spread = P(spec, 'spread', 0.3);
+  const dist = P(spec, 'dist', 0.5);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = (hash01(i, 157) - 0.5) * spread * Math.PI * 2;
+      const d = R * dist * (0.8 + hash01(i, 163) * 0.5);
+      const er = R * (0.05 + hash01(i, 167) * 0.06);
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      c.fillStyle = withAlpha('#16121c', 0.9);
+      c.beginPath(); c.arc(x, y, er * 1.5, 0, Math.PI * 2); c.fill();
+      c.fillStyle = col;
+      c.beginPath(); c.arc(x, y, er, 0, Math.PI * 2); c.fill();
+      c.fillStyle = withAlpha('#ffffff', 0.55);
+      c.beginPath(); c.arc(x - er * 0.3, y - er * 0.3, er * 0.35, 0, Math.PI * 2); c.fill();
     }
   });
 };
@@ -3181,8 +3445,10 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   hood, tatters, pauldrons,
   eyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
   claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow,
-  halo, runes, wisps, flames, emberSparks, lavaCracks,
-  shell, caps, fronds, tail, stinger, fins,
+  halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes,
+  shell, caps, capDome, gillFrill, fronds, tail, stinger, fins,
+  barkPlates, branchArms, stalactites, nestTwigs,
+  oozeLobes, fleshFolds, eyeCluster,
   apron, pack, lantern, helm,
   tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,
   armorPlates, bloatSacs, chains, barbs, whip, keg, crateBox,

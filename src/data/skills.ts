@@ -3908,6 +3908,155 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  // ======================= The wildwood & carrion kit ======================
+  // The bestiary-expansion arsenal: roots, spores, talons, shrieks and bile.
+  // Monster-first (every entry has an ai hint), player-usable like any gem.
+
+  talon_rake: {
+    id: 'talon_rake', name: 'Talon Rake',
+    description: 'A fast raking strike that opens shallow, bleeding cuts — the hunting-bird\'s argument.',
+    tags: ['attack', 'melee', 'physical'], color: '#c88a4a',
+    manaCost: 2, cooldown: 0.8, useTime: 0.55,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'melee', range: 65, arcDeg: 100 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.5, magnitude: 0.4 },
+    ],
+    requirements: { dexterity: 14 },
+    ai: { range: 65, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('attackSpeed', 'increased', 0.01)] },
+  },
+
+  keening_shriek: {
+    id: 'keening_shriek', name: 'Keening Shriek',
+    description: 'A skull-splitting wail: those caught in it fumble what they were doing (35% interrupt) and swing weaker while their ears ring.',
+    tags: ['spell', 'aoe', 'duration', 'warcry'], color: '#c8b8e8',
+    manaCost: 10, cooldown: 6, useTime: 0.7,
+    baseDamage: { physical: [4, 7] },
+    delivery: { type: 'cone', range: 170, arcDeg: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'befuddlement', chance: 0.6 },
+      { type: 'status', status: 'weaken', chance: 0.35 },
+    ],
+    requirements: { willpower: 14 },
+    ai: { range: 150, weight: 3, keepDistance: 110 },
+  },
+
+  root_grasp: {
+    id: 'root_grasp', name: 'Root Grasp',
+    description: 'The ground knots itself under your victims, then HEAVES — damage and a true ROOT (movement skills forbidden) for those who linger in the telegraph.',
+    tags: ['spell', 'physical', 'aoe', 'duration'], color: '#8a9a4a',
+    manaCost: 11, cooldown: 5, useTime: 0.8,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'ground', radius: 75, castRange: 400, delay: 0.7 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'rooted', chance: 0.6 },
+    ],
+    requirements: { strength: 12, willpower: 12 },
+    ai: { range: 380, weight: 3, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
+  lash_roots: {
+    id: 'lash_roots', name: 'Lashing Roots',
+    description: 'A whipping fan of green-wood switches: shallow cuts that SNARE — the caught wade as if through briar.',
+    tags: ['attack', 'melee', 'physical', 'aoe'], color: '#7fae4a',
+    manaCost: 4, cooldown: 1.6, useTime: 0.75,
+    baseDamage: { physical: [8, 13] },
+    delivery: { type: 'melee', range: 75, arcDeg: 100 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'ensnared', chance: 0.8, durationOverride: 1.4 },
+      { type: 'status', status: 'bleed', chance: 0.25, magnitude: 0.3 },
+    ],
+    requirements: { strength: 14 },
+    ai: { range: 75, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  splinter_volley: {
+    id: 'splinter_volley', name: 'Splinter Volley',
+    description: 'Loose a fan of jagged splinters — heartwood shrapnel that sticks and bleeds.',
+    tags: ['attack', 'projectile', 'physical', 'aoe'], color: '#b09a6a',
+    manaCost: 8, cooldown: 2, useTime: 0.7,
+    baseDamage: { physical: [5, 8] },
+    delivery: { type: 'projectile', speed: 400, radius: 6, range: 340, count: 4, spreadDeg: 55 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.3 },
+    ],
+    requirements: { dexterity: 16 },
+    ai: { range: 300, weight: 3, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  sporefall: {
+    id: 'sporefall', name: 'Sporefall',
+    description: 'Call a drifting rain of spore-clusters over an area — each puff bursts soft and SICKENS.',
+    tags: ['spell', 'chaos', 'aoe', 'storm', 'duration'], color: '#9ac86a',
+    manaCost: 13, cooldown: 6, useTime: 0.9,
+    baseDamage: { chaos: [8, 13] },
+    delivery: { type: 'storm', count: [3, 5], interval: 0.3, areaRadius: 130, hitRadius: 55, castRange: 440 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.5, magnitude: 0.4 },
+    ],
+    requirements: { intelligence: 20 },
+    ai: { range: 400, weight: 3, keepDistance: 280 },
+  },
+
+  spore_burst: {
+    id: 'spore_burst', name: 'Spore Burst',
+    description: 'Vent a choking ring of spores from the body — poison in the blood, static in the mind (a chance to befuddle).',
+    tags: ['spell', 'chaos', 'aoe'], color: '#aed86a',
+    manaCost: 10, cooldown: 4, useTime: 0.7,
+    baseDamage: { chaos: [7, 11] },
+    delivery: { type: 'nova', radius: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.5, magnitude: 0.4 },
+      { type: 'status', status: 'befuddlement', chance: 0.3 },
+    ],
+    requirements: { willpower: 16 },
+    ai: { range: 120, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
+  bile_spray: {
+    id: 'bile_spray', name: 'Bile Spray',
+    description: 'A retched sheet of caustic bile — everything it coats begins to DECAY.',
+    tags: ['spell', 'chaos', 'aoe'], color: '#9ab83a',
+    manaCost: 9, cooldown: 2.5, useTime: 0.75,
+    baseDamage: { chaos: [9, 14] },
+    delivery: { type: 'cone', range: 180, arcDeg: 55 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'decay', chance: 0.5, magnitude: 0.35 },
+    ],
+    requirements: { willpower: 16 },
+    ai: { range: 160, weight: 3, keepDistance: 120 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  gut_hurl: {
+    id: 'gut_hurl', name: 'Gut Hurl',
+    description: 'Heave a wet knot of viscera. It hits like a sack of rot and leaves the victim VULNERABLE — opened a little wider for everything after.',
+    tags: ['spell', 'chaos', 'projectile'], color: '#b8604a',
+    manaCost: 9, cooldown: 3, useTime: 0.8,
+    baseDamage: { chaos: [12, 18], physical: [4, 7] },
+    delivery: { type: 'projectile', speed: 300, radius: 10, range: 480 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'vulnerable', chance: 0.4 },
+    ],
+    requirements: { strength: 12, willpower: 12 },
+    ai: { range: 440, weight: 3, keepDistance: 280 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
   // ======================= The verdant kit =================================
   // Plant-craft: gardens as violence. Seeds with schedules, fences that
   // scratch, tides of bramble — Entangle's lashes above are the family's
@@ -5346,6 +5495,63 @@ export const SKILLS: Record<string, SkillDef> = {
     },
     effects: [],
     requirements: { willpower: 30, intelligence: 24 },
+    ai: { range: 720, weight: 1 },
+  },
+
+  // Themed spawner mouths (the bestiary expansion): each biome family's
+  // 'spawners' objective gets its OWN destructible with its own churn.
+  spew_spores: {
+    id: 'spew_spores', name: 'Fruiting Body', noDrop: true,
+    description: 'The sac swells and calves another crop of the Bloom.',
+    tags: ['spell', 'summon', 'minion', 'chaos'], color: '#9ac86a',
+    manaCost: 0, cooldown: 3.2, useTime: 1.2,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'fungal_sporeling', weight: 3 },
+        { id: 'mushroomling', weight: 2 },
+        { id: 'fungal_puffball', weight: 1 },
+      ],
+      count: 1, maxActive: 5,
+    },
+    effects: [],
+    requirements: { willpower: 30 },
+    ai: { range: 720, weight: 1 },
+  },
+
+  spew_grubs: {
+    id: 'spew_grubs', name: 'Hatching Clutch', noDrop: true,
+    description: 'The eggs quiver, split, and spill the brood.',
+    tags: ['spell', 'summon', 'minion'], color: '#b0a880',
+    manaCost: 0, cooldown: 3.5, useTime: 1.3,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'rockgrub', weight: 3 },
+        { id: 'cave_bat', weight: 1 },
+      ],
+      count: 1, maxActive: 5,
+    },
+    effects: [],
+    requirements: { willpower: 30 },
+    ai: { range: 720, weight: 1 },
+  },
+
+  spew_flesh: {
+    id: 'spew_flesh', name: 'Sloughing Meat', noDrop: true,
+    description: 'The bloom sloughs living gobbets of itself.',
+    tags: ['spell', 'summon', 'minion', 'chaos'], color: '#c86a5a',
+    manaCost: 0, cooldown: 3, useTime: 1.2,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'lesser_ooze', weight: 3 },
+        { id: 'blood_mite', weight: 1 },
+      ],
+      count: 1, maxActive: 6,
+    },
+    effects: [],
+    requirements: { willpower: 30 },
     ai: { range: 720, weight: 1 },
   },
 

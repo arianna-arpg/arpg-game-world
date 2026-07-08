@@ -64,6 +64,12 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Deep — marine-only (contexts:['marine'], NOT baseline), so it never seeds
   // ordinary war/territory; it appears purely via the marine tilesets' pack tables.
   deep: { roaming: 0.3, aggression: 1.0, warlordHome: 'origin', homeBiome: 'deepsea', contexts: ['marine'] },
+  // The Horned Tribes — highland raiders: they march far and gladly (the
+  // gnolls' allies on the winter roads), throne wherever the strongest holds.
+  beastkin: { roaming: 0.95, aggression: 1.1, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
+  // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
+  // from its own dripping halls.
+  flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },
 };
 
 export function traitsOf(faction: string): FactionTraits {

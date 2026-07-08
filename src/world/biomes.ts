@@ -146,7 +146,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
     landmarks: [{ landmark: 'frozen_lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }] },
   // Highland: the mountain-pass maze, now with a bastion chance — a full castle
   // or concentric fortress commanding a pass — plus roadside watchtowers.
-  highland: { patronFaction: 'gnoll',  mapColor: '#8a8f6a', label: 'Highland', spacing: 88,
+  // The high crags belong to the Horned Tribes now (the gnolls keep the
+  // desert): beastkin war-camps stud the passes, their khan thrones on high.
+  highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Highland', spacing: 88,
     allowedLayouts: { rooms: 3, bastion: 1 },
     structures: [
       { structure: 'grand_castle', chance: 0 }, { structure: 'fortress', chance: 0 },
@@ -163,8 +165,14 @@ export const BIOMES: Record<string, BiomeInfo> = {
   //  flesh   — a writhing CIRCLE-chamber layout (organic, pulsing).
   //  crystal — plains scattered with crystal shards that fire random laser beams.
   //  volcanic— plains with lava vents that launch arcing lava orbs.
-  flesh:    { patronFaction: 'undead',   mapColor: '#7a2a38', label: 'Flesh', spacing: 64,
+  // The Flesh gains its true natives: the Glut patronizes its own ground
+  // (the undead keep the gravelands).
+  flesh:    { patronFaction: 'flesh',   mapColor: '#7a2a38', label: 'Flesh', spacing: 64,
     allowedLayouts: { flesh: 1 } },
+  // CAVERN — the biome tag for the underground tilesets (they previously
+  // carried none, so cave zones fell back to PLAINS wildlife: hares in the
+  // dark). No patron marches from here; the dark keeps its own.
+  cavern:   { patronFaction: 'wild', mapColor: '#5a5462', label: 'Cavern', spacing: 72 },
   crystal:  { patronFaction: 'elemental', mapColor: '#7fd0ff', label: 'Crystal', spacing: 84 },
   // VOLCANIC: one tileset, THREE generations (the recipe-tweak showcase) — a
   // spiral cauldron over a lava sea, a winding lava-tube gut, or open plains;

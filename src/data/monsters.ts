@@ -264,13 +264,18 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'lash_maiden', chance: 0.2, count: [2, 3] },
     { id: 'wayfarer_hunter', chance: 0.2, count: [1, 2] },
     { id: 'wayfarer_pilgrim', chance: 0.2, count: [2, 3] },
+    { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
   ],
-  forest: [
+  // Keyed by BIOME TAG (the vocabulary zones/tilesets actually speak — the
+  // old 'forest' key matched nothing and its rows never spawned). 'grove'
+  // covers deepwood, jungle, meadow and the Verdant Hollow in one stroke.
+  grove: [
     { id: 'meadow_hare', chance: 0.6, count: [2, 4] },
     { id: 'plains_wolf', chance: 0.5, count: [2, 4] },
     { id: 'thicket_stalker', chance: 0.35, count: [1, 2] },
     { id: 'broodmother', chance: 0.25, count: [1, 1] },
     { id: 'wayfarer_hunter', chance: 0.15, count: [1, 2] },
+    { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
   ],
   desert: [
     { id: 'meadow_hare', chance: 0.3, count: [1, 2] },
@@ -278,6 +283,59 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'dune_vulture', chance: 0.45, count: [1, 2] },
     { id: 'lash_maiden', chance: 0.3, count: [2, 3] },
     { id: 'broodmother', chance: 0.2, count: [1, 1] },
+  ],
+  // The northern belts: elk herds with wolves on their heels.
+  taiga: [
+    { id: 'taiga_elk', chance: 0.6, count: [2, 4] },
+    { id: 'plains_wolf', chance: 0.45, count: [2, 4] },
+    { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
+    { id: 'bloodwing_nest', chance: 0.15, count: [1, 1] },
+  ],
+  tundra: [
+    { id: 'taiga_elk', chance: 0.5, count: [2, 3] },
+    { id: 'meadow_hare', chance: 0.45, count: [2, 4] },
+    { id: 'plains_wolf', chance: 0.35, count: [2, 3] },
+  ],
+  // The wet country: toads in the reeds, herons fishing for them.
+  marsh: [
+    { id: 'marsh_toad', chance: 0.7, count: [3, 5] },
+    { id: 'bog_heron', chance: 0.5, count: [1, 2] },
+    { id: 'broodmother', chance: 0.2, count: [1, 1] },
+  ],
+  grave: [
+    { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
+    { id: 'bog_heron', chance: 0.25, count: [1, 1] },
+  ],
+  beach: [
+    { id: 'shore_crab', chance: 0.7, count: [3, 6] },
+    { id: 'bog_heron', chance: 0.4, count: [1, 2] },
+  ],
+  isle: [
+    { id: 'shore_crab', chance: 0.6, count: [2, 5] },
+    { id: 'bog_heron', chance: 0.35, count: [1, 2] },
+  ],
+  highland: [
+    { id: 'taiga_elk', chance: 0.45, count: [2, 3] },
+    { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
+    { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+  ],
+  field: [
+    { id: 'meadow_hare', chance: 0.7, count: [3, 5] },
+    { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
+    { id: 'taiga_elk', chance: 0.3, count: [2, 3] },
+    { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
+    { id: 'wayfarer_pilgrim', chance: 0.2, count: [2, 3] },
+  ],
+  // The dark keeps its own small lives. (No bare cave_bat row: the def is
+  // untagged so PACK bats count toward objectives — ambient bats arrive
+  // through the roost's summon rule, which stamps them 'predator'/exempt.)
+  cavern: [
+    { id: 'glow_moth', chance: 0.65, count: [3, 6] },
+    { id: 'bat_roost', chance: 0.45, count: [1, 2] },
+  ],
+  mycelia: [
+    { id: 'glow_moth', chance: 0.5, count: [2, 5] },
+    { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
   ],
 };
 
@@ -2800,7 +2858,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   bloodgorger: {
     id: 'bloodgorger', name: 'Bloodgorger',
     color: '#c03a4a', shape: 'octagon', radius: 19, look: 'bloodgorger',
-    base: { life: 150, moveSpeed: 105, accuracy: 105, armor: 20, mana: 0 },
+    base: { life: 150, moveSpeed: 105, accuracy: 105, armor: 20, mana: 30, manaRegen: 4 },
     mods: [mod('fireRes', 'flat', 0.3), mod('chaosRes', 'flat', 0.3)],
     skills: ['gore_rend'], xp: 30, faction: 'demon', adorn: 'spikes',
     scaling: { lifeRegen: { flatPerLevel: 0.5 }, armor: { flatPerLevel: 1.5 } },
@@ -2848,7 +2906,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   abyssal_flayer: {
     id: 'abyssal_flayer', name: 'Abyssal Flayer',
     color: '#8a3a5a', shape: 'kite', radius: 12, material: 'void', look: 'abyssal_flayer',
-    base: { life: 70, moveSpeed: 185, accuracy: 120, evasion: 80, mana: 0 },
+    base: { life: 70, moveSpeed: 185, accuracy: 120, evasion: 80, mana: 30, manaRegen: 4 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['gore_rend', 'claw'], xp: 34, faction: 'demon', adorn: 'spikes',
     detection: 1.5,
@@ -3360,6 +3418,444 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['whirling_reap'],
     xp: 0,
   },
+
+  // ==========================================================================
+  // THE BESTIARY EXPANSION — six families in one pass. Cap-folk (the Bloom's
+  // SOLID kin — warriors and priests under one great cap, no clouds), cavern
+  // dwellers, the treant line, the beastkin Horned Tribes, the Glut (flesh &
+  // the viscous), and the rookeries (D2 blood-hawk nests as living data:
+  // anchored spawners whose rules keep spitting until you break the bowl).
+  // ==========================================================================
+
+  // --- THE CAP-FOLK (faction 'fungal' — the Bloom's mushroom infantry) ------
+  // A walking button. The teaching tier of every mycelium floor.
+  mushroomling: {
+    id: 'mushroomling', name: 'Mushroomling',
+    color: '#c8a86a', shape: 'pentagon', radius: 9, material: 'verdant', look: 'mushroomling',
+    base: { life: 14, moveSpeed: 165, accuracy: 75, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'], xp: 5, faction: 'fungal',
+    scaleVariance: [0.8, 1.15],
+    detection: 1.0, brain: { type: 'swarm' },
+  },
+  // The line under the war-cap: myconids fight in ranks.
+  myconid_warrior: {
+    id: 'myconid_warrior', name: 'Myconid Warrior',
+    color: '#b89a5a', shape: 'hexagon', radius: 13, material: 'verdant', look: 'myconid_warrior',
+    base: { life: 55, moveSpeed: 125, accuracy: 100, armor: 20, mana: 20, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['cleave'], xp: 16, faction: 'fungal',
+    grants: [{ atLevel: 20, support: 'multistrike', on: 'cleave', chance: 0.5 }],
+    detection: 1.0, brain: { type: 'pack', squad: { idle: { style: 'drill' } } },
+  },
+  // The cap-caller: sporefall from the second rank; cargo worth guarding.
+  myconid_capcaller: {
+    id: 'myconid_capcaller', name: 'Myconid Capcaller',
+    color: '#d8b878', shape: 'octagon', radius: 12, material: 'verdant', look: 'myconid_capcaller',
+    base: { life: 45, moveSpeed: 115, mana: 150, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['sporefall', 'venom_bolt'], xp: 24, faction: 'fungal',
+    gemBias: ['chaos', 'spell'], wardPriority: 1,
+    detection: 1.1, brain: { type: 'artillery' },
+  },
+  // The bolete: a shelf-capped stump that knots the ground under you.
+  bolete_brute: {
+    id: 'bolete_brute', name: 'Bolete Brute',
+    color: '#a8804a', shape: 'octagon', radius: 18, material: 'verdant', look: 'bolete_brute',
+    base: { life: 170, moveSpeed: 100, accuracy: 105, armor: 30, poise: 40, mana: 40, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['ground_slam', 'root_grasp'], xp: 34, faction: 'fungal',
+    scaling: { armor: { flatPerLevel: 1.5 } },
+    detection: 1.0, brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+  // The sovereign under the parasol — the Bloom's warlord tier.
+  amanita_sovereign: {
+    id: 'amanita_sovereign', name: 'Amanita Sovereign',
+    color: '#d84a4a', shape: 'star', radius: 17, material: 'verdant', look: 'amanita_sovereign',
+    base: { life: 220, moveSpeed: 110, accuracy: 115, armor: 30, mana: 200, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('damage', 'increased', 0.15)],
+    skills: ['sporefall', 'spore_burst', 'root_grasp', 'war_cry'], xp: 80, faction: 'fungal',
+    gemBias: ['chaos', 'spell'], wardPriority: 2,
+    detection: 1.3, brain: { type: 'commander' },
+  },
+  // --- The Bloom's SPORE side, deepened (still clouds, still drifting) ------
+  spore_drifter: {
+    id: 'spore_drifter', name: 'Spore Drifter',
+    color: '#aec86a', shape: 'oval', radius: 12, material: 'verdant', look: 'spore_drifter',
+    base: { life: 30, moveSpeed: 70, evasion: 70, mana: 120, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['toxic_cloud', 'spore_burst'], xp: 18, faction: 'fungal',
+    levitates: true, // a floater — never lost to a chasm edge
+    deathBurst: { mode: 'implode', damageFrac: 0.8, coalesce: 0.7, damageType: 'chaos' },
+    detection: 1.1, brain: { type: 'strafer' },
+  },
+  // The fruiting nest: mycelia's own spawners-objective destructible AND a
+  // pack-table dweller — the sac spews the Bloom until broken.
+  spore_sac: {
+    id: 'spore_sac', name: 'Spore Sac',
+    color: '#9ab86a', shape: 'oval', radius: 15, material: 'verdant', look: 'spore_sac',
+    base: { life: 70, moveSpeed: 0, armor: 15, mana: 999, manaRegen: 50 },
+    skills: ['spew_spores'], xp: 8, faction: 'fungal',
+    spawner: true, noNemesis: true, drops: 0,
+  },
+
+  // --- THE CAVERN DWELLERS (unaffiliated — the dark keeps its own) ----------
+  // The bat: a wing-scrap that dives, rakes, and wheels away.
+  cave_bat: {
+    id: 'cave_bat', name: 'Cave Bat',
+    color: '#6a5a70', shape: 'triangle', radius: 8, material: 'fur', look: 'cave_bat',
+    base: { life: 16, moveSpeed: 210, accuracy: 90, evasion: 75, mana: 15, manaRegen: 3 },
+    skills: ['talon_rake', 'take_wing'], xp: 6,
+    detection: 1.4,
+    brain: {
+      type: 'skirmish', withdraw: 1.2,
+      rules: [
+        { when: { lifeAbove: 0.5, distUnder: 380 }, every: [5, 8], hold: [0.2, 0.4],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
+        { when: { lifeBelow: 0.5 }, every: [5, 8], hold: [2.5, 4],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
+          use: { move: { style: 'holdRange', hold: 380 } } },
+      ],
+    },
+  },
+  // The roost (ambient rookery): keeps loosing bats until the bowl breaks.
+  // Rule-summoned bats carry the 'predator' tag — ambient, never an objective.
+  bat_roost: {
+    id: 'bat_roost', name: 'Bat Roost',
+    color: '#584a5a', shape: 'oval', radius: 13, look: 'bat_roost',
+    base: { life: 60, moveSpeed: 0, armor: 10, mana: 0 },
+    skills: [], xp: 8, tag: 'predator',
+    noNemesis: true, drops: 0,
+    brain: {
+      type: 'basic',
+      rules: [{
+        when: {}, every: [6, 9], hold: [0.1, 0.2],
+        actions: [{ do: 'summon', monster: 'cave_bat', count: 2, ring: 50, lifespan: 30, tag: 'predator' }],
+      }],
+    },
+  },
+  // The grub: an armored larva — the young curl and flee, the old bite.
+  rockgrub: {
+    id: 'rockgrub', name: 'Rockgrub',
+    color: '#9a9078', shape: 'oval', radius: 13, material: 'chitin', look: 'rockgrub',
+    base: { life: 90, moveSpeed: 80, accuracy: 95, armor: 45, mana: 0 },
+    skills: ['claw'], xp: 14,
+    scaleVariance: [0.85, 1.2], juvenileBelow: 0.95,
+    juvenileBrain: { type: 'flee' },
+    scaling: { armor: { flatPerLevel: 1.2 } },
+    detection: 0.8, brain: { type: 'basic' },
+  },
+  // The clutch: the cavern's own spawners-objective destructible.
+  grub_clutch: {
+    id: 'grub_clutch', name: 'Grub Clutch',
+    color: '#b0a880', shape: 'oval', radius: 14, look: 'grub_clutch',
+    base: { life: 80, moveSpeed: 0, armor: 20, mana: 999, manaRegen: 50 },
+    skills: ['spew_grubs'], xp: 10,
+    spawner: true, noNemesis: true, drops: 0,
+  },
+  // The lurker: furniture until it isn't. Anchored, all-around senses, and
+  // the ground knots wherever it stares.
+  stalagmite_lurker: {
+    id: 'stalagmite_lurker', name: 'Stalagmite Lurker',
+    color: '#8a8276', shape: 'octagon', radius: 16, material: 'stone', look: 'stalagmite_lurker',
+    base: { life: 120, moveSpeed: 0, accuracy: 110, armor: 50, mana: 120, manaRegen: 8 },
+    skills: ['root_grasp', 'venom_bolt'], xp: 26,
+    vision: { arcDeg: 360, rearMul: 1 }, // a rock has no back
+    detection: 0.9, brain: { type: 'basic' },
+  },
+  // The fisher: sidles the dark ring of your torchlight, commits when your
+  // eyes leave it — the lurk kernel wearing a lure.
+  gloom_fisher: {
+    id: 'gloom_fisher', name: 'Gloom Fisher',
+    color: '#4a5a66', shape: 'kite', radius: 14, look: 'gloom_fisher',
+    base: { life: 75, moveSpeed: 160, accuracy: 115, evasion: 60, mana: 20, manaRegen: 3 },
+    skills: ['talon_rake', 'claw'], xp: 28,
+    detection: 1.5,
+    brain: { type: 'assassin', withdraw: 0.9, move: { style: 'lurk', ring: 260, commitRange: 250, unseenArc: 1.6 } },
+  },
+  // The shrieker: the cave's alarm — a wail that fumbles your casts and
+  // puts every dweller in earshot onto you.
+  cavern_shrieker: {
+    id: 'cavern_shrieker', name: 'Cavern Shrieker',
+    color: '#c8a888', shape: 'kite', radius: 11, look: 'cavern_shrieker',
+    base: { life: 40, moveSpeed: 175, accuracy: 90, evasion: 50, mana: 80, manaRegen: 7 },
+    skills: ['keening_shriek', 'claw'], xp: 20,
+    detection: 1.3,
+    brain: { type: 'skirmish', withdraw: 1.6, perception: { alertShout: 520 } },
+  },
+
+  // --- THE TREANT LINE (faction 'sylvan' — wood burns: fire is the answer) --
+  sylvan_sapling: {
+    id: 'sylvan_sapling', name: 'Sapling',
+    color: '#7fae4a', shape: 'pentagon', radius: 9, material: 'wood', look: 'sylvan_sapling',
+    base: { life: 20, moveSpeed: 150, accuracy: 80, mana: 0 },
+    mods: [mod('fireRes', 'flat', -0.2)],
+    skills: ['claw'], xp: 7, faction: 'sylvan',
+    scaleVariance: [0.75, 1.05],
+    detection: 1.0, brain: { type: 'swarm' },
+  },
+  twig_snarl: {
+    id: 'twig_snarl', name: 'Twig Snarl',
+    color: '#96804a', shape: 'cross', radius: 11, material: 'wood', look: 'twig_snarl',
+    base: { life: 35, moveSpeed: 185, accuracy: 100, evasion: 55, mana: 20, manaRegen: 3 },
+    mods: [mod('fireRes', 'flat', -0.25)],
+    skills: ['lash_roots'], xp: 15, faction: 'sylvan',
+    detection: 1.2, brain: { type: 'flanker' },
+  },
+  treant_warden: {
+    id: 'treant_warden', name: 'Treant Warden',
+    color: '#6a8a3a', shape: 'octagon', radius: 19, material: 'wood', look: 'treant_warden',
+    base: { life: 200, moveSpeed: 90, accuracy: 110, armor: 55, poise: 50, mana: 60, manaRegen: 5 },
+    mods: [mod('fireRes', 'flat', -0.25), mod('coldRes', 'flat', 0.3)],
+    skills: ['heavy_strike', 'root_grasp', 'splinter_volley'], xp: 40, faction: 'sylvan',
+    scaling: { armor: { flatPerLevel: 2 } },
+    detection: 1.0, brain: { type: 'protector' },
+  },
+  // The anchored knot: a grasping trap the grove grows across its floors.
+  root_snarl: {
+    id: 'root_snarl', name: 'Root Snarl',
+    color: '#7a6a3a', shape: 'oval', radius: 15, material: 'wood', look: 'root_snarl',
+    base: { life: 100, moveSpeed: 0, accuracy: 105, armor: 25, mana: 80, manaRegen: 7 },
+    mods: [mod('fireRes', 'flat', -0.25)],
+    skills: ['lash_roots', 'root_grasp'], xp: 22, faction: 'sylvan',
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 0.9, brain: { type: 'basic' },
+  },
+  // The elder: a walking grove with BREAKING BOUGHS (composite parts — sunder
+  // the arms and the trunk stands open).
+  elder_treant: {
+    id: 'elder_treant', name: 'Elder Treant',
+    color: '#5a7a34', shape: 'octagon', radius: 24, material: 'wood', look: 'elder_treant',
+    base: { life: 500, moveSpeed: 45, accuracy: 115, armor: 60, poise: 80, mana: 80, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', -0.3), mod('coldRes', 'flat', 0.3)],
+    skills: ['ground_slam', 'root_grasp'], xp: 150, faction: 'sylvan',
+    scaling: { life: { incPerLevel: 0.08 } },
+    detection: 1.0, brain: { type: 'juggernaut', enrage: 0.35 },
+    parts: [
+      {
+        monster: 'treant_bough', dx: 0.8, dy: 1.25, lifeFrac: 0.35, breakDamage: 0.12,
+        breakMods: [mod('damageTaken', 'increased', 0.1)],
+      },
+      {
+        monster: 'treant_bough', dx: 0.8, dy: -1.25, lifeFrac: 0.35, breakDamage: 0.12,
+        breakMods: [mod('damageTaken', 'increased', 0.1)],
+      },
+    ],
+  },
+  treant_bough: {
+    id: 'treant_bough', name: 'Elder Bough',
+    color: '#6a8a3a', shape: 'oval', radius: 13, material: 'wood', look: 'treant_bough',
+    noNemesis: true,
+    base: { life: 150, moveSpeed: 0, accuracy: 105, poise: 40, mana: 60, manaRegen: 5 },
+    skills: ['lash_roots', 'splinter_volley'],
+    xp: 0,
+  },
+
+  // --- THE BEASTKIN (faction 'beastkin' — the Horned Tribes of the crags) ---
+  beastkin_gorer: {
+    id: 'beastkin_gorer', name: 'Beastkin Gorer',
+    color: '#b07a4a', shape: 'hexagon', radius: 14, material: 'fur', look: 'beastkin_gorer',
+    base: { life: 85, moveSpeed: 170, accuracy: 105, armor: 20, mana: 25, manaRegen: 4 },
+    skills: ['heavy_strike'], xp: 24, faction: 'beastkin', adorn: 'horns',
+    detection: 1.2,
+    brain: { type: 'juggernaut', enrage: 0.5, move: { style: 'charge', commitRange: 320, chargeSpeed: 2.4 } },
+  },
+  beastkin_impaler: {
+    id: 'beastkin_impaler', name: 'Beastkin Impaler',
+    color: '#c89a5a', shape: 'triangle', radius: 12, material: 'fur', look: 'beastkin_impaler',
+    base: { life: 60, moveSpeed: 155, accuracy: 110, evasion: 55, mana: 0 },
+    skills: ['bone_arrow'], xp: 26, faction: 'beastkin', adorn: 'horns',
+    // Half the impalers hunt with hooked lines — their arrows ROOT (the
+    // barbed_snare support, worn the way the player wears it).
+    grants: [{ atLevel: 12, support: 'barbed_snare', on: 'bone_arrow', chance: 0.5 }],
+    detection: 1.2, brain: { type: 'skirmish', withdraw: 1.8 },
+  },
+  beastkin_ritualist: {
+    id: 'beastkin_ritualist', name: 'Beastkin Ritualist',
+    color: '#d8b06a', shape: 'octagon', radius: 12, material: 'cloth', look: 'beastkin_ritualist',
+    base: { life: 55, moveSpeed: 120, mana: 150, manaRegen: 10 },
+    mods: [mod('fireRes', 'flat', 0.3)],
+    skills: ['firebolt', 'despair', 'war_cry'], xp: 30, faction: 'beastkin', adorn: 'horns',
+    gemBias: ['spell', 'fire'], wardPriority: 1,
+    detection: 1.2, brain: { type: 'artillery' },
+  },
+  beastkin_flayer: {
+    id: 'beastkin_flayer', name: 'Beastkin Flayer',
+    color: '#a8683a', shape: 'kite', radius: 12, material: 'fur', look: 'beastkin_flayer',
+    base: { life: 70, moveSpeed: 185, accuracy: 115, evasion: 70, mana: 25, manaRegen: 4 },
+    skills: ['gore_rend', 'claw'], xp: 28, faction: 'beastkin', adorn: 'horns',
+    detection: 1.3, brain: { type: 'assassin', withdraw: 0.9 },
+  },
+  // The khan: the great rack — WARLORD_OF.beastkin.
+  beastlord_khan: {
+    id: 'beastlord_khan', name: 'the Beastlord Khan',
+    color: '#c8823a', shape: 'star', radius: 19, material: 'fur', look: 'beastlord_khan',
+    base: { life: 260, moveSpeed: 140, accuracy: 120, armor: 40, mana: 120, manaRegen: 8 },
+    mods: [mod('damage', 'increased', 0.2)],
+    skills: ['rallying_howl', 'gore_rend', 'war_cry'], xp: 90, faction: 'beastkin', adorn: 'horns',
+    grants: [{ atLevel: 40, skill: 'ground_slam' }],
+    detection: 1.4, brain: { type: 'commander', perception: { alertShout: 480 } },
+  },
+
+  // --- THE GLUT (faction 'flesh' — meat that wants more meat) ---------------
+  lesser_ooze: {
+    id: 'lesser_ooze', name: 'Lesser Ooze',
+    color: '#a85a4a', shape: 'oval', radius: 9, material: 'slime', look: 'lesser_ooze',
+    base: { life: 25, moveSpeed: 120, accuracy: 80, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 5, faction: 'flesh',
+    detection: 1.0, brain: { type: 'swarm' },
+  },
+  // The parent slick: kill it and it DIVIDES — the death rattle births two
+  // lesser oozes where it fell (the D2 mauler bargain: burst now, pay twice).
+  viscous_ooze: {
+    id: 'viscous_ooze', name: 'Viscous Ooze',
+    color: '#b8604a', shape: 'oval', radius: 16, material: 'slime', look: 'viscous_ooze',
+    base: { life: 110, moveSpeed: 95, accuracy: 95, mana: 60, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['bile_spray', 'claw'], xp: 30, faction: 'flesh',
+    detection: 1.0,
+    brain: {
+      type: 'juggernaut',
+      onDeath: [{ do: 'summon', monster: 'lesser_ooze', count: 2, ring: 28 }],
+    },
+  },
+  gutspray_hurler: {
+    id: 'gutspray_hurler', name: 'Gutspray Hurler',
+    color: '#c87a5a', shape: 'octagon', radius: 14, material: 'slime', look: 'gutspray_hurler',
+    base: { life: 65, moveSpeed: 115, mana: 120, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['gut_hurl', 'bile_spray'], xp: 32, faction: 'flesh',
+    gemBias: ['chaos', 'projectile'],
+    detection: 1.2, brain: { type: 'artillery' },
+  },
+  flesh_amalgam: {
+    id: 'flesh_amalgam', name: 'Flesh Amalgam',
+    color: '#b0524a', shape: 'octagon', radius: 21, look: 'flesh_amalgam',
+    base: { life: 300, moveSpeed: 90, accuracy: 110, armor: 25, poise: 60, mana: 40, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['gore_rend', 'ground_slam'], xp: 70, faction: 'flesh',
+    scaling: { life: { incPerLevel: 0.06 }, lifeRegen: { flatPerLevel: 0.6 } },
+    deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.8, damageType: 'chaos' },
+    detection: 1.1, brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+  // The anchored wall: a corridor of meat you must burst to pass.
+  membrane: {
+    id: 'membrane', name: 'Membrane',
+    color: '#c88a7a', shape: 'oval', radius: 18, material: 'slime', look: 'membrane',
+    base: { life: 220, moveSpeed: 0, accuracy: 95, armor: 10, mana: 80, manaRegen: 7 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['bile_spray'], xp: 18, faction: 'flesh',
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 0.8, brain: { type: 'basic' },
+  },
+  // The flower of meat: the flesh biome's own spawners-objective destructible.
+  corpse_bloom: {
+    id: 'corpse_bloom', name: 'Corpse Bloom',
+    color: '#d86a5a', shape: 'oval', radius: 15, material: 'slime', look: 'corpse_bloom',
+    base: { life: 90, moveSpeed: 0, armor: 10, mana: 999, manaRegen: 50 },
+    skills: ['spew_flesh'], xp: 12, faction: 'flesh',
+    spawner: true, noNemesis: true, drops: 0,
+  },
+
+  // --- THE ROOKERIES & NEW FAUNA (faction 'beast', the ambient layer) -------
+  // The bloodwing: the D2 blood hawk itself — wheels, dives, rakes, and is
+  // gone. Hunts the meadow's own critters when you're not worth the stoop.
+  bloodwing: {
+    id: 'bloodwing', name: 'Bloodwing',
+    color: '#b04a3a', shape: 'triangle', radius: 10, material: 'fur', look: 'bloodwing',
+    base: { life: 30, moveSpeed: 200, accuracy: 105, evasion: 70, mana: 15, manaRegen: 3 },
+    skills: ['talon_rake', 'take_wing'], xp: 12,
+    tag: 'predator', faction: 'beast',
+    detection: 1.5,
+    brain: {
+      type: 'skirmish', withdraw: 1.3,
+      target: { prey: ['critter'] },
+      rules: [
+        { when: { lifeAbove: 0.5, distUnder: 400 }, every: [6, 9], hold: [0.2, 0.4],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
+        { when: { lifeBelow: 0.5 }, every: [6, 9], hold: [3, 4.5],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'awayFromTarget', force: true }],
+          use: { move: { style: 'holdRange', hold: 400 } } },
+      ],
+    },
+  },
+  // The nest: while it stands, the sky keeps arriving one hawk at a time.
+  bloodwing_nest: {
+    id: 'bloodwing_nest', name: 'Bloodwing Nest',
+    color: '#8a6a4a', shape: 'oval', radius: 12, look: 'bloodwing_nest',
+    base: { life: 50, moveSpeed: 0, armor: 5, mana: 0 },
+    skills: [], xp: 8, tag: 'predator', faction: 'beast',
+    noNemesis: true, drops: 0,
+    brain: {
+      type: 'basic',
+      rules: [{
+        when: {}, every: [7, 11], hold: [0.1, 0.2],
+        actions: [{ do: 'summon', monster: 'bloodwing', count: 1, ring: 40, lifespan: 40, tag: 'predator' }],
+      }],
+    },
+  },
+  // A fat marsh toad: prey with a hop instead of a plan.
+  marsh_toad: {
+    id: 'marsh_toad', name: 'Marsh Toad',
+    color: '#7a8a4a', shape: 'oval', radius: 8, material: 'slime', look: 'marsh_toad',
+    base: { life: 12, moveSpeed: 130, evasion: 60, mana: 0 },
+    mods: [mod('detectability', 'more', -0.5)],
+    skills: [], xp: 2, tag: 'critter', faction: 'beast',
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.8, 1.2],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 130, duration: [1.2, 2.0] } },
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1, freezeChance: 0.3, freeze: [0.3, 0.6] },
+      tempo: { kite: 2.6, windedFor: [1.0, 1.6] },
+    },
+  },
+  // The bog heron: stilt-legged fisher of toads — the marsh's own drama.
+  bog_heron: {
+    id: 'bog_heron', name: 'Bog Heron',
+    color: '#9aa8b0', shape: 'kite', radius: 11, look: 'bog_heron',
+    base: { life: 26, moveSpeed: 160, accuracy: 110, evasion: 55, mana: 0 },
+    skills: ['claw'], xp: 8, tag: 'predator', faction: 'beast',
+    detection: 1.5,
+    brain: { type: 'skirmish', withdraw: 1.4, target: { prey: ['critter'] } },
+  },
+  // A glow moth: the cavern's drifting lantern — texture, not threat.
+  glow_moth: {
+    id: 'glow_moth', name: 'Glow Moth',
+    color: '#b8e8c8', shape: 'diamond', radius: 6, material: 'ethereal', look: 'glow_moth',
+    base: { life: 6, moveSpeed: 140, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 120, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.5], hookArc: 1.4, freezeChance: 0.1, freeze: [0.15, 0.3] },
+    },
+  },
+  // The taiga elk: a herd animal with the aurochs' bargain — calves bolt,
+  // a roused bull charges.
+  taiga_elk: {
+    id: 'taiga_elk', name: 'Taiga Elk',
+    color: '#8a7452', shape: 'hexagon', radius: 14, material: 'fur', look: 'taiga_elk',
+    base: { life: 60, moveSpeed: 190, accuracy: 95, mana: 25, manaRegen: 4 },
+    skills: ['heavy_strike'], xp: 10, tag: 'critter', faction: 'beast',
+    detection: 0.6, drops: 0,
+    scaleVariance: [0.78, 1.35], scaleStats: true, juvenileBelow: 0.92,
+    juvenileBrain: { type: 'flee' },
+    brain: { type: 'juggernaut', move: { style: 'charge', commitRange: 300, chargeSpeed: 2.2 } },
+  },
+  // The shore crab: a walking pebble — slow, shelled, unbothered.
+  shore_crab: {
+    id: 'shore_crab', name: 'Shore Crab',
+    color: '#c87a5a', shape: 'oval', radius: 9, material: 'chitin', look: 'shore_crab',
+    base: { life: 20, moveSpeed: 90, accuracy: 85, armor: 40, mana: 0 },
+    skills: ['claw'], xp: 4, tag: 'critter', faction: 'beast',
+    detection: 0.5, drops: 0,
+    scaleVariance: [0.8, 1.25],
+    brain: { type: 'basic' },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -3394,6 +3890,18 @@ const RELATIONS: Record<string, FactionStance> = {
   'demon|undead': 'hostile',
   'demon|wild': 'hostile',
   'demon|elemental': 'neutral',
+  // The Horned Tribes run with the packs, raid the warband's roads, and
+  // burn the groves for winter pasture.
+  'beastkin|gnoll': 'ally',
+  'beastkin|goblin': 'hostile',
+  'beastkin|sylvan': 'hostile',
+  'beastkin|demon': 'hostile',
+  // The Glut eats anything still warm — and the dead are no kin of meat
+  // that never stopped moving.
+  'flesh|undead': 'hostile',
+  'flesh|sylvan': 'hostile',
+  'flesh|beastkin': 'hostile',
+  'flesh|demon': 'hostile',
 };
 
 /** Diplomatic stance between two factions (order-insensitive). */
@@ -3479,11 +3987,19 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
   },
   sylvan: {
     name: 'the Sylvan Court',
+    // The Court now fields its TREANT LINE: saplings throng the young woods,
+    // snarls and wardens hold the middle age, and the elders only walk where
+    // the forest is old enough to remember (wood burns — bring fire).
     table: [
       { id: 'thorn_sprite', weight: 4, presence: { to: 20, fadeOut: 12 } },
+      { id: 'sylvan_sapling', weight: 3, presence: { to: 12, fadeOut: 5 } },
       { id: 'sylvan_warden', weight: 2 },
+      { id: 'twig_snarl', weight: 2, presence: { from: 5, fadeIn: 3, to: 24, fadeOut: 10 } },
       { id: 'grove_singer', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      { id: 'treant_warden', weight: 2, presence: { from: 12, fadeIn: 5 } },
+      { id: 'root_snarl', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      { id: 'elder_treant', weight: 1, presence: { from: 22, fadeIn: 8, mul: 1.5 } },
     ],
   },
   wild: {
@@ -3538,18 +4054,40 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
       { id: 'deep_leviathan', weight: 1, presence: { from: 16, fadeIn: 8 } },
     ],
   },
+  beastkin: {
+    name: 'the Horned Tribes',
+    table: [
+      { id: 'beastkin_gorer', weight: 3 },
+      { id: 'beastkin_impaler', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
+      { id: 'beastkin_ritualist', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      { id: 'beastlord_khan', weight: 1, presence: { from: 16, fadeIn: 6 } },
+    ],
+  },
+  flesh: {
+    name: 'the Glut',
+    table: [
+      // Oozes carry the early biome; the stitched things arrive with depth.
+      { id: 'lesser_ooze', weight: 3, presence: { to: 12, fadeOut: 6 } },
+      { id: 'viscous_ooze', weight: 3 },
+      { id: 'gutspray_hurler', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'membrane', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
+      { id: 'corpse_bloom', weight: 1 },
+    ],
+  },
 };
 
 /** Spawn weights per wave tier — which monsters appear as waves escalate. */
 export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
   { minWave: 1, ids: ['zombie', 'skeleton_warrior'] },
   { minWave: 2, ids: ['skeleton_archer', 'blood_mite'] },
-  { minWave: 3, ids: ['fire_cultist', 'storm_acolyte'] },
-  { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker', 'pyre_acolyte'] },
-  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade', 'quiet_sibyl'] },
-  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper', 'grave_shaman'] },
-  { minWave: 7, ids: ['warband_chieftain', 'bone_serpent'] },
-  { minWave: 8, ids: ['bone_colossus', 'javelin_skirmisher'] },
+  { minWave: 3, ids: ['fire_cultist', 'storm_acolyte', 'mushroomling'] },
+  { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker', 'pyre_acolyte', 'rockgrub'] },
+  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade', 'quiet_sibyl', 'myconid_warrior', 'viscous_ooze'] },
+  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper', 'grave_shaman', 'gutspray_hurler'] },
+  { minWave: 7, ids: ['warband_chieftain', 'bone_serpent', 'treant_warden'] },
+  { minWave: 8, ids: ['bone_colossus', 'javelin_skirmisher', 'flesh_amalgam', 'beastkin_gorer'] },
 ];
 
 /** Every 5th wave spawns this boss alongside the pack. */

@@ -154,6 +154,13 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'hex_weaver', weight: 1 },
         { id: 'warband_chieftain', weight: 1 },
         { id: 'brute', weight: 1 },
+        // The treant line walks the old woods (presence-banded: saplings in
+        // the young reaches, elders only where the forest runs deep).
+        { id: 'sylvan_sapling', weight: 2, presence: { to: 12, fadeOut: 5 } },
+        { id: 'twig_snarl', weight: 2, presence: { from: 4, fadeIn: 2, to: 22, fadeOut: 9 } },
+        { id: 'treant_warden', weight: 2, presence: { from: 11, fadeIn: 5 } },
+        { id: 'root_snarl', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'elder_treant', weight: 1, presence: { from: 20, fadeIn: 8 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -220,6 +227,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'tundra_behemoth', weight: 2 },
         { id: 'hex_weaver', weight: 1 },
         { id: 'lich_marshal', weight: 1 },
+        // Horned Tribe hunting parties range the winter woods.
+        { id: 'beastkin_gorer', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'beastkin_impaler', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'beastkin_ritualist', weight: 1, presence: { from: 12, fadeIn: 5 } },
       ],
     },
     spawnerId: 'rime_stone',
@@ -272,6 +283,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'storm_acolyte', weight: 1 },
         { id: 'frost_elemental', weight: 2 },
         { id: 'gale_elemental', weight: 2 },
+        // Horned Tribe raiders range even the white wastes.
+        { id: 'beastkin_gorer', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'stone_sentinel', weight: 1 },
         { id: 'fen_hound', weight: 2 },
         { id: 'alpha_stalker', weight: 1 },
@@ -462,6 +475,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'grove_singer', weight: 1 },
         { id: 'spitting_horror', weight: 2 },
         { id: 'fen_hound', weight: 1 },
+        // The jungle's own green wood, waking.
+        { id: 'sylvan_sapling', weight: 2, presence: { to: 12, fadeOut: 5 } },
+        { id: 'twig_snarl', weight: 2, presence: { from: 4, fadeIn: 2, to: 22, fadeOut: 9 } },
+        { id: 'treant_warden', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'root_snarl', weight: 1, presence: { from: 10, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -639,6 +657,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'crypt_warden', weight: 3 },
         { id: 'bone_serpent', weight: 2 },
         { id: 'lich_marshal', weight: 1 },
+        // Bats roost among the barrows (they thin as worthier dead wake).
+        { id: 'cave_bat', weight: 1, presence: { to: 14, fadeOut: 6 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -739,6 +759,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dune_stalker', weight: 2 },
         { id: 'blood_mite', weight: 2 },
         { id: 'fen_hound', weight: 1 },
+        { id: 'sylvan_sapling', weight: 1, presence: { to: 12, fadeOut: 5 } },
+        { id: 'twig_snarl', weight: 1, presence: { from: 5, fadeIn: 3, to: 20, fadeOut: 8 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -833,11 +855,23 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dune_stalker', weight: 2 },
         { id: 'spitting_horror', weight: 1 },
         { id: 'bone_serpent', weight: 1 },
+        // The cavern family: grubs carpet the shallows, the alarm-shriekers
+        // and anglers of the dark arrive with depth, and some of the rocks
+        // were never rocks.
+        { id: 'rockgrub', weight: 3, presence: { to: 16, fadeOut: 8 } },
+        { id: 'cave_bat', weight: 2 },
+        { id: 'cavern_shrieker', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'gloom_fisher', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'stalagmite_lurker', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'grub_clutch', weight: 1 },
       ],
     },
-    spawnerId: 'bone_altar',
+    // The dark's own destructible: clutches, not altars.
+    spawnerId: 'grub_clutch',
+    biome: 'cavern',
     objectives: [
       { kind: 'clear', weight: 1 },
+      { kind: 'spawners', weight: 1 },
     ],
     structures: [
       { structure: 'dungeon_block', chance: 0.22 },
@@ -866,6 +900,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'depthkin_lurker', weight: 3 },
         { id: 'depthkin_seer', weight: 2 },
         { id: 'depthkin_brute', weight: 1 },
+        // Even the Depthkin skirt the oldest lurkers.
+        { id: 'stalagmite_lurker', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'gloom_fisher', weight: 1, presence: { from: 14, fadeIn: 5 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1099,6 +1136,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'brute', weight: 3 }, { id: 'javelin_skirmisher', weight: 2 },
         { id: 'stone_sentinel', weight: 2 }, { id: 'troll_mauler', weight: 1 },
         { id: 'alpha_stalker', weight: 2 }, { id: 'gale_elemental', weight: 1 },
+        // The Horned Tribes' home crags — the full muster, khan at depth.
+        { id: 'beastkin_gorer', weight: 3 },
+        { id: 'beastkin_impaler', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'beastkin_ritualist', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'beastlord_khan', weight: 1, presence: { from: 16, fadeIn: 6 } },
       ],
     },
     spawnerId: 'rime_stone',
@@ -1135,6 +1178,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fen_hound', weight: 3 }, { id: 'husk_swarmer', weight: 2 },
         { id: 'bone_serpent', weight: 2 }, { id: 'zombie', weight: 2 },
         { id: 'spitting_horror', weight: 1 }, { id: 'hex_weaver', weight: 1 },
+        // The wet rot: oozes in the shallows, the Glut's throwers at depth.
+        { id: 'lesser_ooze', weight: 2, presence: { to: 10, fadeOut: 5 } },
+        { id: 'viscous_ooze', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'gutspray_hurler', weight: 1, presence: { from: 10, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1178,9 +1225,17 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         { id: 'blood_mite', weight: 3 }, { id: 'spitting_horror', weight: 3 },
         { id: 'husk_swarmer', weight: 2 }, { id: 'bone_serpent', weight: 2 }, { id: 'zombie', weight: 2 },
+        // The Glut at home: the biome's OWN faction now walks its halls.
+        { id: 'lesser_ooze', weight: 3, presence: { to: 12, fadeOut: 6 } },
+        { id: 'viscous_ooze', weight: 3 },
+        { id: 'gutspray_hurler', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'membrane', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
+        { id: 'corpse_bloom', weight: 1 },
       ],
     },
-    spawnerId: 'bone_altar',
+    // The Glut's own spawners-objective destructible: burst the blooms.
+    spawnerId: 'corpse_bloom',
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }],
   },
 
@@ -1288,9 +1343,20 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         { id: 'fungal_sporeling', weight: 3 }, { id: 'fungal_puffball', weight: 2 },
         { id: 'fungal_spitter', weight: 3 }, { id: 'fungal_brute', weight: 2 }, { id: 'fungal_tender', weight: 1 },
+        // The CAP-FOLK — the Bloom's solid kin (mushrooms, not clouds):
+        // caplings underfoot early, the myconid line by the mid-teens, the
+        // Sovereign only where the mycelium runs old and deep.
+        { id: 'mushroomling', weight: 3, presence: { to: 14, fadeOut: 5 } },
+        { id: 'myconid_warrior', weight: 3, presence: { from: 5, fadeIn: 3 } },
+        { id: 'myconid_capcaller', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'bolete_brute', weight: 2, presence: { from: 13, fadeIn: 5 } },
+        { id: 'amanita_sovereign', weight: 1, presence: { from: 22, fadeIn: 8, mul: 2 } },
+        { id: 'spore_drifter', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'spore_sac', weight: 1 },
       ],
     },
-    spawnerId: 'bone_altar',
+    // The Bloom fruits its own spawners-objective destructibles.
+    spawnerId: 'spore_sac',
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }],
   },
 

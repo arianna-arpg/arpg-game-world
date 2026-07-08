@@ -50,8 +50,11 @@ const MYCELIA_SURGE: MyceliaSurge = {
 };
 
 /** THE BLOOM — the fungal 'fungal' faction. contexts:['mycelia'] keeps it to fungal
- *  ground + the bloom's spread (never baseline war). The biome patron; no warlord (it
- *  spreads via the bloom, not invasions). */
+ *  ground + the bloom's spread (never baseline war). The biome patron. Its roster now
+ *  fields TWO kins: the drifting SPORE side (clouds, bursts, exhalations) and the
+ *  solid CAP-FOLK (myconid infantry under one great dome) — presence-banded so young
+ *  ground is sporelings and caplings, and the Sovereign walks only old mycelium
+ *  (WARLORD_OF.fungal — the Bloom finally crowns). */
 const FUNGAL_FACTION: FactionSpec = {
   id: 'fungal',
   name: 'the Bloom',
@@ -63,6 +66,12 @@ const FUNGAL_FACTION: FactionSpec = {
     { id: 'fungal_spitter', weight: 3 },
     { id: 'fungal_brute', weight: 2 },
     { id: 'fungal_tender', weight: 1 },
+    { id: 'spore_drifter', weight: 2, presence: { from: 4, fadeIn: 2 } },
+    { id: 'mushroomling', weight: 3, presence: { to: 14, fadeOut: 5 } },
+    { id: 'myconid_warrior', weight: 3, presence: { from: 5, fadeIn: 3 } },
+    { id: 'myconid_capcaller', weight: 2, presence: { from: 9, fadeIn: 4 } },
+    { id: 'bolete_brute', weight: 2, presence: { from: 13, fadeIn: 5 } },
+    { id: 'amanita_sovereign', weight: 1, presence: { from: 22, fadeIn: 8, mul: 2 } },
   ],
 };
 

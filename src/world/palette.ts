@@ -23,6 +23,8 @@ export const FACTION_COLORS: Record<string, string> = {
   wild: '#c85a4a',
   demon: '#e23a2a',
   deep: '#3a8ad8',
+  beastkin: '#c8823a',
+  flesh: '#c85a6a',
 };
 
 /** The Contagion overlay's sickly palette — a necrotic green that brightens toward

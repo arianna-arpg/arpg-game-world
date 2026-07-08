@@ -38,6 +38,9 @@ export const WARLORD_OF: Record<string, string> = {
   elemental: 'stone_sentinel',
   wild: 'alpha_stalker',
   demon: 'balor_warlord',
+  beastkin: 'beastlord_khan',
+  flesh: 'flesh_amalgam',
+  fungal: 'amanita_sovereign', // the Bloom finally crowns (mycelia package roster)
 };
 
 const RISE_ZONES = 2;   // owned zones a faction needs to crown a warlord

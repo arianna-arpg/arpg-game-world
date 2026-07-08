@@ -1307,6 +1307,391 @@ export const LOOKS: Record<string, LookDef> = {
   construct_barrier_ice: {
     parts: [{ kind: 'stakeRow', color: '#bcdcec', alpha: 0.92, params: { n: 4, span: 1.9 } }],
   },
+
+  // ==================================================== BESTIARY EXPANSION
+  // Six families in one pass: cap-folk, cavern dwellers, the treant line,
+  // beastkin, the Glut, and the rookeries. New limbs: capDome, gillFrill,
+  // barkPlates, branchArms, stalactites, nestTwigs, puffMotes, oozeLobes,
+  // fleshFolds, eyeCluster.
+
+  // --- The cap-folk (solid MUSHROOM kin of the Bloom — no clouds) ---------
+  /** A walking button: all cap, barely any body. */
+  mushroomling: {
+    parts: [
+      { kind: 'disc', scale: 0.55, role: 'bone' },
+      { kind: 'capDome', scale: 0.95, params: { spots: 4 } },
+      { kind: 'eyes', color: '#e8e0b8', params: { spread: 0.5, dist: 0.72, size: 0.1 } },
+    ],
+  },
+  /** The line infantry: gills under the war-cap, a crude blade. */
+  myconid_warrior: {
+    parts: [
+      { kind: 'disc', scale: 0.75, role: 'bone' },
+      { kind: 'gillFrill', scale: 0.8 },
+      { kind: 'sword', y: 0.05, params: { len: 0.8 } },
+      { kind: 'capDome', scale: 0.85, params: { spots: 5 } },
+      { kind: 'eyes', color: '#e8e0b8', params: { spread: 0.4, dist: 0.66, size: 0.08 } },
+    ],
+  },
+  /** The cap-caller: a tall crooked cap over robes, spore-dust rising. */
+  myconid_capcaller: {
+    parts: [
+      { kind: 'robe', scale: 0.9 },
+      { kind: 'gillFrill', scale: 0.7 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'capDome', scale: 0.78, x: 0.06, params: { spots: 6, squash: 0.72 } },
+    ],
+    live: [{ kind: 'puffMotes', params: { n: 3, drift: 0.8 } }],
+  },
+  /** The bolete brute: a stump of a body under a massive shelf-cap. */
+  bolete_brute: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.18, seed: 61 } },
+      { kind: 'mossPatch', params: { n: 3 } },
+      { kind: 'claws', params: { len: 0.45 } },
+      { kind: 'capDome', scale: 1.05, x: -0.05, params: { spots: 7, squash: 0.92 } },
+      { kind: 'eyes', color: '#e8d8a8', params: { spread: 0.36, dist: 0.7, size: 0.08 } },
+    ],
+  },
+  /** The sovereign: a crowned parasol over gill-lace, ringed in motes. */
+  amanita_sovereign: {
+    parts: [
+      { kind: 'gillFrill', scale: 1.0, params: { n: 18 } },
+      { kind: 'robe', scale: 0.85 },
+      { kind: 'capDome', scale: 0.95, params: { spots: 9, squash: 0.8 } },
+      { kind: 'crown', x: 0.3, scale: 0.55, role: 'accent' },
+      { kind: 'runes', params: { n: 4 } },
+    ],
+    live: [{ kind: 'puffMotes', params: { n: 5, drift: 1.0 } }],
+  },
+  /** The Bloom's drifter: a slack balloon of spores, trailing dust. */
+  spore_drifter: {
+    parts: [
+      { kind: 'blob', scale: 0.9, alpha: 0.9, params: { irr: 0.3, seed: 67 } },
+      { kind: 'sporeVents', params: { n: 2 } },
+      { kind: 'eyes', color: '#d8e8a8', params: { spread: 0.4, dist: 0.5, size: 0.09 } },
+    ],
+    live: [{ kind: 'puffMotes', params: { n: 6, drift: 1.2 } }],
+  },
+  /** The spore sac (nest): a swollen fruiting body rooted in its own web. */
+  spore_sac: {
+    parts: [
+      { kind: 'roots', scale: 0.9, params: { n: 5 } },
+      { kind: 'blob', params: { irr: 0.22, seed: 71 } },
+      { kind: 'bloatSacs', scale: 0.8, params: { n: 4 } },
+      { kind: 'capDome', scale: 0.6, x: 0.1, params: { spots: 3 } },
+    ],
+    live: [{ kind: 'puffMotes', params: { n: 4, drift: 0.9 } }],
+    shadowScale: 0.7,
+  },
+
+  // --- The cavern dwellers ------------------------------------------------
+  /** A ragged wing-scrap with ears and teeth. */
+  cave_bat: {
+    parts: [
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'featherWings', scale: 1.15, alpha: 0.95 },
+      { kind: 'ears', scale: 0.8 },
+      { kind: 'fangs', scale: 0.6 },
+      { kind: 'eyes', color: '#ffb0b0', params: { spread: 0.4, dist: 0.55, size: 0.1 } },
+    ],
+  },
+  /** The roost: a twig-and-guano bowl clinging to the rock, wings stirring. */
+  bat_roost: {
+    parts: [
+      { kind: 'blob', scale: 0.9, role: 'dark', params: { irr: 0.2, seed: 73 } },
+      { kind: 'nestTwigs', params: { n: 16 } },
+      { kind: 'eyeCluster', color: '#ffb0b0', params: { n: 6, spread: 0.9, dist: 0.4 } },
+    ],
+    shadowScale: 0.7,
+  },
+  /** An armored larva: plated back, pale grub flesh, mandibles. */
+  rockgrub: {
+    parts: [
+      { kind: 'blob', scale: 0.95, role: 'bone', params: { irr: 0.14, seed: 79 } },
+      { kind: 'scutes', scale: 0.9 },
+      { kind: 'mandibles', scale: 0.8 },
+      { kind: 'eyes', color: '#c8d8e8', params: { spread: 0.3, dist: 0.62, size: 0.06 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#6a6a58', params: { n: 3 } }],
+  },
+  /** The clutch: a nest-ring of quivering eggs. */
+  grub_clutch: {
+    parts: [
+      { kind: 'nestTwigs', scale: 0.95, params: { n: 14 } },
+      { kind: 'egg', x: 0.2, y: 0.15, scale: 0.5 },
+      { kind: 'egg', x: -0.22, y: 0.1, scale: 0.42 },
+      { kind: 'egg', x: 0, y: -0.25, scale: 0.46 },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The lurker: a stalagmite crown over a hidden maw — furniture until it
+   *  isn't. */
+  stalagmite_lurker: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.12, seed: 83 } },
+      { kind: 'stalactites', params: { n: 7 } },
+      { kind: 'maw', x: 0.3, scale: 0.5, params: { arc: 0.5 } },
+      { kind: 'eyeCluster', color: '#a8d8c8', params: { n: 4, spread: 0.5, dist: 0.55 } },
+    ],
+  },
+  /** The gloom fisher: a hunched angler of the dark, lure held forward. */
+  gloom_fisher: {
+    parts: [
+      { kind: 'blob', scale: 0.9, role: 'dark', params: { irr: 0.24, seed: 89 } },
+      { kind: 'lure', scale: 1.1 },
+      { kind: 'claws', params: { len: 0.5, talons: 3 } },
+      { kind: 'fangs', scale: 0.7 },
+      { kind: 'eyeCluster', color: '#b8e8d8', params: { n: 3, spread: 0.4, dist: 0.5 } },
+    ],
+  },
+  /** The shrieker: all ears and mouth on a scrawny frame. */
+  cavern_shrieker: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'ears', scale: 1.3 },
+      { kind: 'maw', x: 0.4, scale: 0.5, params: { arc: 0.6 } },
+      { kind: 'eyes', color: '#e8c8a8', params: { spread: 0.5, dist: 0.55, size: 0.11 } },
+    ],
+  },
+
+  // --- The treant line ------------------------------------------------------
+  /** A sapling: a whip of green over root-toes. */
+  sylvan_sapling: {
+    parts: [
+      { kind: 'roots', scale: 0.7, params: { n: 4 } },
+      { kind: 'disc', scale: 0.55, role: 'wood' },
+      { kind: 'fronds', scale: 0.75, params: { n: 3 } },
+      { kind: 'eyes', color: '#c8e8a0', params: { spread: 0.4, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** A snarl of animate deadfall — all elbows and switches. */
+  twig_snarl: {
+    parts: [
+      { kind: 'branchArms', scale: 0.8, mirror: true, params: { forks: 4, len: 1.0 } },
+      { kind: 'disc', scale: 0.5, role: 'wood' },
+      { kind: 'barbs', scale: 0.7, params: { n: 4 } },
+      { kind: 'eyes', color: '#d8c86a', params: { spread: 0.45, dist: 0.5, size: 0.08 } },
+    ],
+  },
+  /** The warden: a barrel trunk in bark plate, boughs for arms. */
+  treant_warden: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'wood' },
+      { kind: 'barkPlates', params: { n: 6 } },
+      { kind: 'branchArms', mirror: true, params: { forks: 3, len: 1.1 } },
+      { kind: 'fronds', scale: 0.9, params: { n: 4 } },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.3, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  /** The root snarl (anchored): a heaved knot of ground and grasping roots. */
+  root_snarl: {
+    parts: [
+      { kind: 'roots', scale: 1.05, params: { n: 7 } },
+      { kind: 'blob', scale: 0.8, role: 'wood', params: { irr: 0.28, seed: 97 } },
+      { kind: 'mossPatch', params: { n: 3 } },
+      { kind: 'eyeCluster', color: '#c8e86a', params: { n: 3, spread: 0.6, dist: 0.45 } },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The elder: a leaning tower of bark and bough (limbs are composite
+   *  PARTS — they break off it in play). */
+  elder_treant: {
+    parts: [
+      { kind: 'torso', scale: 1.1, role: 'wood' },
+      { kind: 'barkPlates', params: { n: 8 } },
+      { kind: 'mossPatch', scale: 0.9, params: { n: 4 } },
+      { kind: 'fronds', scale: 1.2, params: { n: 6 } },
+      { kind: 'crown', x: 0.3, scale: 0.5, role: 'wood' },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.26, dist: 0.62, size: 0.07 } },
+    ],
+  },
+  /** One breaking bough of the elder — a full monster part. */
+  treant_bough: {
+    parts: [
+      { kind: 'branchArms', scale: 1.1, params: { forks: 4, len: 1.25 } },
+      { kind: 'barkPlates', scale: 0.6, params: { n: 3 } },
+    ],
+  },
+
+  // --- The beastkin (the Horned Tribes) -------------------------------------
+  /** The gorer: down-slung head, ram horns, a hide of war-paint. */
+  beastkin_gorer: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'ramHorns', scale: 1.05 },
+      { kind: 'snout', scale: 0.9 },
+      { kind: 'warpaint', params: { n: 3 } },
+    ],
+  },
+  /** The impaler: a lighter frame behind a long spear and quiver. */
+  beastkin_impaler: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'ramHorns', scale: 0.8 },
+      { kind: 'snout', scale: 0.8 },
+      { kind: 'staff', y: 0.55, params: { len: 1.2 } },
+      { kind: 'quiver', x: -0.3, scale: 0.7 },
+    ],
+  },
+  /** The ritualist: horns through a cowl, a censer of burnt herbs. */
+  beastkin_ritualist: {
+    parts: [
+      { kind: 'robe', scale: 0.9 },
+      { kind: 'ramHorns', scale: 0.9 },
+      { kind: 'censer', y: 0.5, scale: 0.85 },
+      { kind: 'runes', scale: 0.9, params: { n: 3 } },
+      { kind: 'eyes', color: '#ffce7a', params: { spread: 0.35, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The flayer: twin knives, trophy-hung, quick. */
+  beastkin_flayer: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'ramHorns', scale: 0.75 },
+      { kind: 'snout', scale: 0.75 },
+      { kind: 'daggers', params: { len: 0.6 } },
+      { kind: 'bandolier' },
+    ],
+  },
+  /** The khan: the great rack, a mane, the warhorn at his hip. */
+  beastlord_khan: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'mane', scale: 1.0 },
+      { kind: 'ramHorns', scale: 1.25 },
+      { kind: 'snout', scale: 0.95 },
+      { kind: 'warhorn', x: -0.2, scale: 0.9 },
+      { kind: 'axe', params: { len: 0.9 } },
+    ],
+  },
+
+  // --- The Glut (flesh & the viscous) ---------------------------------------
+  /** A gob of living meat that rolls itself along. */
+  lesser_ooze: {
+    parts: [
+      { kind: 'blob', alpha: 0.92, params: { irr: 0.34, seed: 101 } },
+      { kind: 'eyes', color: '#ffd8c8', params: { n: 1, spread: 0, dist: 0.3, size: 0.12 } },
+    ],
+    live: [{ kind: 'oozeLobes', params: { n: 4 } }, { kind: 'slimeTrail', color: '#7a4038', params: { n: 4 } }],
+  },
+  /** The parent slick: lobes that never settle, too many eyes. */
+  viscous_ooze: {
+    parts: [
+      { kind: 'blob', alpha: 0.94, params: { irr: 0.3, seed: 103 } },
+      { kind: 'veinweb', params: { n: 4 } },
+      { kind: 'eyeCluster', color: '#ffd8c8', params: { n: 5, spread: 0.7, dist: 0.4 } },
+    ],
+    live: [{ kind: 'oozeLobes', params: { n: 6 } }, { kind: 'slimeTrail', color: '#7a4038', params: { n: 5 } }],
+  },
+  /** The hurler: a bloated torso that reaches into itself for ammunition. */
+  gutspray_hurler: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.24, seed: 107 } },
+      { kind: 'bloatSacs', scale: 0.9, params: { n: 5 } },
+      { kind: 'fleshFolds', params: { n: 3 } },
+      { kind: 'maw', x: 0.42, scale: 0.45, params: { arc: 0.5 } },
+      { kind: 'eyes', color: '#ffb0a0', params: { spread: 0.4, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  /** The amalgam: stitched of several bodies, none of them willing. */
+  flesh_amalgam: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.22, seed: 109 } },
+      { kind: 'fleshFolds', params: { n: 4 } },
+      { kind: 'stitchSeams', params: { n: 4 } },
+      { kind: 'claws', params: { len: 0.55 } },
+      { kind: 'eyeCluster', color: '#ffc8b0', params: { n: 6, spread: 0.8, dist: 0.5 } },
+    ],
+  },
+  /** The membrane (anchored): a stretched wall of skin and vessel. */
+  membrane: {
+    parts: [
+      { kind: 'blob', scale: 1.0, alpha: 0.9, params: { irr: 0.16, seed: 113 } },
+      { kind: 'veinweb', params: { n: 6 } },
+      { kind: 'fleshFolds', params: { n: 5 } },
+      { kind: 'eyeCluster', color: '#ffd8c8', params: { n: 3, spread: 1.0, dist: 0.55 } },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The corpse bloom (nest): a flower of meat, petals of rind. */
+  corpse_bloom: {
+    parts: [
+      { kind: 'tentacleRing', scale: 0.9, params: { n: 7 } },
+      { kind: 'blob', scale: 0.75, params: { irr: 0.2, seed: 127 } },
+      { kind: 'mawRing', scale: 0.7 },
+      { kind: 'orb', scale: 0.35, role: 'glow' },
+    ],
+    live: [{ kind: 'oozeLobes', scale: 0.8, params: { n: 5 } }],
+    shadowScale: 0.7,
+  },
+
+  // --- The rookeries & new fauna ---------------------------------------------
+  /** The bloodwing: a broad-winged raptor, all shoulder and beak. */
+  bloodwing: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'featherWings', scale: 1.3 },
+      { kind: 'tailFeathers', scale: 0.8 },
+      { kind: 'beak', scale: 0.9 },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.35, dist: 0.5, size: 0.08 } },
+    ],
+  },
+  /** The nest: a woven bowl, eggs in the cup. */
+  bloodwing_nest: {
+    parts: [
+      { kind: 'nestTwigs', params: { n: 18 } },
+      { kind: 'egg', x: 0.12, y: 0.1, scale: 0.4 },
+      { kind: 'egg', x: -0.14, y: -0.08, scale: 0.36 },
+    ],
+    shadowScale: 0.7,
+  },
+  /** A fat marsh toad — throat sac and dozing eyes. */
+  marsh_toad: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.16, seed: 131 } },
+      { kind: 'spots', params: { n: 4 } },
+      { kind: 'eyes', color: '#e8e0a8', params: { spread: 0.55, dist: 0.55, size: 0.11 } },
+    ],
+  },
+  /** The bog heron: stilt legs, a spear of a beak, folded wings. */
+  bog_heron: {
+    parts: [
+      { kind: 'legs', scale: 1.1, params: { n: 2 } },
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'featherWings', scale: 0.8, alpha: 0.9 },
+      { kind: 'beak', scale: 1.25 },
+      { kind: 'crest', scale: 0.7 },
+    ],
+  },
+  /** A glow moth — soft wings around a lantern body. */
+  glow_moth: {
+    parts: [
+      { kind: 'featherWings', scale: 1.0, alpha: 0.85 },
+      { kind: 'disc', scale: 0.45, role: 'glow' },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+    live: [{ kind: 'wisps', x: -0.2, scale: 0.6, params: { n: 2 } }],
+  },
+  /** The taiga elk: antler crown, humped shoulder, long face. */
+  taiga_elk: {
+    parts: [
+      { kind: 'torso', scale: 0.95, role: 'base' },
+      { kind: 'hump', scale: 0.8 },
+      { kind: 'antlers', scale: 1.15 },
+      { kind: 'snout', scale: 1.0 },
+      { kind: 'tail', params: { len: 0.4 } },
+    ],
+  },
+  /** A shore crab: shell dome, stalked eyes, one big fiddler claw. */
+  shore_crab: {
+    parts: [
+      { kind: 'carapace', scale: 0.9 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'pincers', scale: 1.0 },
+      { kind: 'eyestalks', scale: 0.8 },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

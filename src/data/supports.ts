@@ -118,6 +118,40 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The wildwood & carrion gifts (the bestiary expansion's gem lane) ------
+  putrefaction: {
+    id: 'putrefaction', name: 'Putrefaction',
+    description: 'Hits with this skill have a 20% chance to start the ROT (decay), and the skill deals 20% increased damage to the decaying — sickness begets appetite.',
+    color: '#9ab83a', requiresTags: ['chaos'],
+    mods: [mod('apply_decay', 'flat', 0.2), mod('damageVs_decay', 'increased', 0.2)],
+    perLevel: [mod('apply_decay', 'flat', 0.03), mod('damageVs_decay', 'increased', 0.03)],
+    weight: 5,
+  },
+  barbed_snare: {
+    id: 'barbed_snare', name: 'Barbed Snare',
+    description: 'This skill\'s projectiles trail hooked lines: 8% chance to ROOT the victim outright (movement skills forbidden while held).',
+    color: '#8a9a4a', requiresTags: ['projectile'],
+    mods: [mod('apply_rooted', 'flat', 0.08)],
+    perLevel: [mod('apply_rooted', 'flat', 0.012)],
+    weight: 5,
+  },
+  brood_tender: {
+    id: 'brood_tender', name: 'Brood Tender',
+    description: 'This skill\'s minions drip venom (20% chance to POISON on hit) and are reared a little hardier.',
+    color: '#7fce6a', requiresTags: ['minion'],
+    mods: [mod('minionApply_poison', 'flat', 0.2), mod('minionLife', 'increased', 0.1)],
+    perLevel: [mod('minionApply_poison', 'flat', 0.03)],
+    weight: 5,
+  },
+  wound_worrier: {
+    id: 'wound_worrier', name: 'Wound-Worrier',
+    description: 'Hits with this skill have a 15% chance to open a HEMORRHAGE — and the skill deals 20% increased damage to the hemorrhaging. Worry the wound; reopen it for the pop.',
+    color: '#e04858', requiresTags: ['attack', 'physical'],
+    mods: [mod('apply_hemorrhage', 'flat', 0.15), mod('damageVs_hemorrhage', 'increased', 0.2)],
+    perLevel: [mod('apply_hemorrhage', 'flat', 0.02), mod('damageVs_hemorrhage', 'increased', 0.03)],
+    weight: 5,
+  },
+
   // --- Blood, mending & the guard hall --------------------------------------------
   sanguine_feast: {
     id: 'sanguine_feast', name: 'Sanguine Feast',
