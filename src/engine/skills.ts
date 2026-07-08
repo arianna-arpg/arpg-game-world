@@ -159,10 +159,57 @@ export interface AimSpec {
   sequence?: { steps: number[]; pause: number };
 }
 
+/** One tag-gate check against an explicit tag pool — the primitive behind
+ *  every fit test (def-level, instance-level, lane pools, crew pools). */
+export function supportFitsTags(sup: SupportDef, tags: readonly SkillTag[]): boolean {
+  if (sup.excludeTags && sup.excludeTags.some(t => tags.includes(t))) return false;
+  if (!sup.requiresTags || !sup.requiresTags.length) return true;
+  return sup.requiresTags.some(t => tags.includes(t));
+}
+
+/**
+ * THE LANE ROUTER — the sockets that serve the HOST instance's own casts.
+ * A gem serves exactly the lanes it FITS: one admitted through the CREW
+ * gate (it boards the minions a summon mints) must not shape the summon
+ * cast itself — Alternating Strikes on Summon Skeleton Warrior alternates
+ * the warriors' cleaves, never the summoning, and Legion Call keeps sole
+ * custody of summon-cast shaping. Fit is computed to FIXPOINT over granted
+ * tags (arrangement-independent, matching the socket gate): a gem serves
+ * the host when its tag gate passes against the def's tags plus the grants
+ * of other host-serving gems. Hybrid defs opt into both lanes BY TAGGING —
+ * a melee+summon skill hands melee gems the host swing AND the crew; the
+ * router is pure data, no flags. On a minion's own instance the forwarded
+ * copies re-pass this check by construction (they were fit-forwarded, kit
+ * gems compose in the same pool), so every payload reader filters through
+ * here uniformly. Slot order is preserved in the result — meta chains and
+ * first-graft-wins rules stay player-curated.
+ */
+export function hostSockets(inst: SkillInstance): SupportInstance[] {
+  const sockets = inst.sockets;
+  const admitted: boolean[] = new Array(sockets.length).fill(false);
+  const pool = [...inst.def.tags];
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (let i = 0; i < sockets.length; i++) {
+      const s = sockets[i];
+      if (!s || admitted[i] || !supportFitsTags(s.def, pool)) continue;
+      admitted[i] = true;
+      if (s.def.grantsTags) { pool.push(...s.def.grantsTags); grew = true; }
+    }
+  }
+  const out: SupportInstance[] = [];
+  for (let i = 0; i < sockets.length; i++) {
+    const s = sockets[i];
+    if (s && admitted[i]) out.push(s);
+  }
+  return out;
+}
+
 /** The aim transform a use obeys: a socketed support's graft wins over the
  *  skill's own (one transform per use — they don't stack). */
 export function instanceAim(inst: SkillInstance): AimSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.aim) return s.def.aim;
+  for (const s of hostSockets(inst)) if (s.def.aim) return s.def.aim;
   return inst.def.aim;
 }
 
@@ -181,7 +228,7 @@ export function instanceMetas(inst: SkillInstance): { skillId: string; label: st
     if (m && !seen.has(m.skillId)) { seen.add(m.skillId); out.push(m); }
   };
   add(inst.def.meta);
-  for (const s of inst.sockets) add(s?.def.meta);
+  for (const s of hostSockets(inst)) add(s.def.meta);
   return out;
 }
 
@@ -193,14 +240,14 @@ export function instanceMeta(inst: SkillInstance): { skillId: string; label: str
 
 /** The curse→field conversion riding an instance, if any (Miasma). */
 export function instanceCurseField(inst: SkillInstance): NonNullable<SupportDef['curseField']> | undefined {
-  for (const s of inst.sockets) if (s?.def.curseField) return s.def.curseField;
+  for (const s of hostSockets(inst)) if (s.def.curseField) return s.def.curseField;
   return undefined;
 }
 
 /** The overcharge spec a use obeys: a socketed support's graft wins over
  *  the skill's own (one per use — stages don't stack across gems). */
 export function instanceOvercharge(inst: SkillInstance): OverchargeSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.overcharge) return s.def.overcharge;
+  for (const s of hostSockets(inst)) if (s.def.overcharge) return s.def.overcharge;
   return inst.def.overcharge;
 }
 
@@ -210,8 +257,8 @@ export function instanceOvercharge(inst: SkillInstance): OverchargeSpec | undefi
 export function socketSpec<K extends keyof SupportDef>(
   inst: SkillInstance, key: K,
 ): NonNullable<SupportDef[K]> | undefined {
-  for (const s of inst.sockets) {
-    const v = s?.def[key];
+  for (const s of hostSockets(inst)) {
+    const v = s.def[key];
     if (v !== undefined) return v as NonNullable<SupportDef[K]>;
   }
   return undefined;
@@ -220,13 +267,13 @@ export function socketSpec<K extends keyof SupportDef>(
 /** Every charge tap riding an instance: the skill's own + socket grafts. */
 export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
   const out = [...(inst.def.chargeGain ?? [])];
-  for (const s of inst.sockets) if (s?.def.chargeGain) out.push(...s.def.chargeGain);
+  for (const s of hostSockets(inst)) if (s.def.chargeGain) out.push(...s.def.chargeGain);
   return out;
 }
 
 /** The brood clause riding an instance (first socket graft wins). */
 export function instanceBrood(inst: SkillInstance): BroodSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.brood) return s.def.brood;
+  for (const s of hostSockets(inst)) if (s.def.brood) return s.def.brood;
   return undefined;
 }
 
@@ -245,13 +292,13 @@ export interface BroodSpec {
 /** The targeting a use resolves with: a socketed support's graft wins over
  *  the skill's innate spec (Closing Instinct on a plain dash). */
 export function instanceTargeting(inst: SkillInstance): TargetingSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.targeting) return s.def.targeting;
+  for (const s of hostSockets(inst)) if (s.def.targeting) return s.def.targeting;
   return inst.def.targeting;
 }
 
 /** The turret conversion riding an instance, if any (Risen Offering). */
 export function instanceTurret(inst: SkillInstance): { castSkillId: string; life?: number } | undefined {
-  for (const s of inst.sockets) if (s?.def.turret) return s.def.turret;
+  for (const s of hostSockets(inst)) if (s.def.turret) return s.def.turret;
   return undefined;
 }
 
@@ -260,7 +307,7 @@ export function instanceTurret(inst: SkillInstance): { castSkillId: string; life
  *  Snipe + Overcharge composes with no extra gem — the innate golden
  *  window becomes the release window). One discipline per use. */
 export function instanceStrikeTiming(inst: SkillInstance): StrikeTimingSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.strikeTiming) return s.def.strikeTiming;
+  for (const s of hostSockets(inst)) if (s.def.strikeTiming) return s.def.strikeTiming;
   if (inst.def.castMode === 'perfect') return { kind: 'perfect' };
   if (inst.def.castMode === 'timed') return { kind: 'timed', bonus: 1.2 };
   return undefined;
@@ -285,7 +332,7 @@ export interface ProjTrailSpec {
 /** The trail a projectile lays: a socketed support's graft wins over the
  *  skill's own (one trail per projectile — they don't stack). */
 export function instanceTrail(inst: SkillInstance): ProjTrailSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.trail) return s.def.trail;
+  for (const s of hostSockets(inst)) if (s.def.trail) return s.def.trail;
   return inst.def.delivery.type === 'projectile' ? inst.def.delivery.trail : undefined;
 }
 
@@ -316,7 +363,7 @@ export interface GroundCascadeSpec {
 /** The cascade a ground placement obeys: a socketed support's graft wins
  *  over the skill's own; the aoeCascade stat adds placements to either. */
 export function instanceCascade(inst: SkillInstance): GroundCascadeSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.cascade) return s.def.cascade;
+  for (const s of hostSockets(inst)) if (s.def.cascade) return s.def.cascade;
   return inst.def.delivery.type === 'ground' ? inst.def.delivery.cascade : undefined;
 }
 
@@ -352,7 +399,7 @@ export interface GroundPulseSpec {
 /** The pulse a ground placement obeys: a socketed support's graft wins
  *  over the skill's own; the pulseCount stat adds beats to either. */
 export function instancePulse(inst: SkillInstance): GroundPulseSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.pulse) return s.def.pulse;
+  for (const s of hostSockets(inst)) if (s.def.pulse) return s.def.pulse;
   return inst.def.delivery.type === 'ground' ? inst.def.delivery.pulse : undefined;
 }
 
@@ -380,7 +427,7 @@ export interface FollowUpSpec {
 export function instanceFollowUps(inst: SkillInstance): FollowUpSpec[] {
   const out: FollowUpSpec[] = [];
   if (inst.def.followUp) out.push(inst.def.followUp);
-  for (const s of inst.sockets) if (s?.def.followUp) out.push(s.def.followUp);
+  for (const s of hostSockets(inst)) if (s.def.followUp) out.push(s.def.followUp);
   return out;
 }
 
@@ -388,7 +435,7 @@ export function instanceFollowUps(inst: SkillInstance): FollowUpSpec[] {
 export function instanceTethers(inst: SkillInstance): TetherSpec[] {
   const out: TetherSpec[] = [];
   if (inst.def.tether) out.push(inst.def.tether);
-  for (const s of inst.sockets) if (s?.def.tether) out.push(s.def.tether);
+  for (const s of hostSockets(inst)) if (s.def.tether) out.push(s.def.tether);
   return out;
 }
 
@@ -732,14 +779,14 @@ export interface TriggerSpec {
 
 /** The trigger conversion riding an instance (first socketed wins). */
 export function instanceTrigger(inst: SkillInstance): TriggerSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.trigger) return s.def.trigger;
+  for (const s of hostSockets(inst)) if (s.def.trigger) return s.def.trigger;
   return undefined;
 }
 
 /** True when a permit gem rides the instance (lifts the cast-time gate —
  *  the heavy spell answers as a REAL rooted bar in succession). */
 export function instanceTriggerPermit(inst: SkillInstance): boolean {
-  return inst.sockets.some(s => !!s?.def.triggerPermit);
+  return hostSockets(inst).some(s => !!s.def.triggerPermit);
 }
 
 /** A PATH WARP for ground-laid fissures (SupportDef.fissurePath): the
@@ -782,7 +829,7 @@ export interface MeleeFissureSpec {
 /** The fissure trail a projectile tears: a socketed support's graft wins
  *  over the skill's own (one crack per flight — they don't stack). */
 export function instanceFissureTrail(inst: SkillInstance): FissureTrailSpec | undefined {
-  for (const s of inst.sockets) if (s?.def.fissureTrail) return s.def.fissureTrail;
+  for (const s of hostSockets(inst)) if (s.def.fissureTrail) return s.def.fissureTrail;
   return inst.def.delivery.type === 'projectile' ? inst.def.delivery.fissureTrail : undefined;
 }
 
@@ -1288,8 +1335,8 @@ export function instanceEchoes(inst: SkillInstance): { spec: EchoRiderSpec; key:
     out.push({ spec: d.echo, key: inst.def.id + ':self' });
   }
   const seen = new Set<string>();
-  for (const s of inst.sockets) {
-    if (!s?.def.echo || seen.has(s.def.id)) continue;
+  for (const s of hostSockets(inst)) {
+    if (!s.def.echo || seen.has(s.def.id)) continue;
     seen.add(s.def.id);
     out.push({ spec: s.def.echo, key: inst.def.id + ':' + s.def.id });
   }
@@ -1299,7 +1346,7 @@ export function instanceEchoes(inst: SkillInstance): { spec: EchoRiderSpec; key:
 /** A support's SUMMON graft: replaces a construct-delivery skill's spawn
  *  with a real minion (Vessel of Shadow's flesh-and-blood clone). */
 export function instanceSummon(inst: SkillInstance): SummonDelivery | undefined {
-  for (const s of inst.sockets) if (s?.def.summon) return s.def.summon;
+  for (const s of hostSockets(inst)) if (s.def.summon) return s.def.summon;
   return undefined;
 }
 
@@ -1820,7 +1867,7 @@ export interface GateSpec {
 export function instanceGates(inst: SkillInstance): GateSpec[] {
   const out: GateSpec[] = [];
   if (inst.def.gate) out.push(inst.def.gate);
-  for (const s of inst.sockets) if (s?.def.gate) out.push(s.def.gate);
+  for (const s of hostSockets(inst)) if (s.def.gate) out.push(s.def.gate);
   return out;
 }
 
@@ -1828,7 +1875,7 @@ export function instanceGates(inst: SkillInstance): GateSpec[] {
  *  optional feast, Embargo's hard levy) WINS over the skill's innate one —
  *  one spender economy per use. */
 export function instanceChargeCost(inst: SkillInstance): SkillDef['chargeCost'] {
-  for (const s of inst.sockets) if (s?.def.chargeCost) return s.def.chargeCost;
+  for (const s of hostSockets(inst)) if (s.def.chargeCost) return s.def.chargeCost;
   return inst.def.chargeCost;
 }
 
@@ -2905,9 +2952,7 @@ export function supportMaxLevel(def: SupportDef): number {
 }
 
 export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
-  if (sup.excludeTags && sup.excludeTags.some(t => skill.tags.includes(t))) return false;
-  if (!sup.requiresTags || !sup.requiresTags.length) return true;
-  return sup.requiresTags.some(t => skill.tags.includes(t));
+  return supportFitsTags(sup, skill.tags);
 }
 
 /** SupportDef keys that carry NO payload — identity, socket gating, and
@@ -2982,8 +3027,8 @@ export function supportRidesMinions(sup: SupportDef): boolean {
 /** Tags granted to a skill instance by its socketed supports. */
 export function grantedTags(inst: SkillInstance): SkillTag[] {
   const out: SkillTag[] = [];
-  for (const s of inst.sockets) {
-    if (s?.def.grantsTags) out.push(...s.def.grantsTags);
+  for (const s of hostSockets(inst)) {
+    if (s.def.grantsTags) out.push(...s.def.grantsTags);
   }
   return out;
 }
@@ -2994,10 +3039,7 @@ export function grantedTags(inst: SkillInstance): SkillTag[] {
  * 'aoe' — now fits in the next socket.
  */
 export function supportFitsInst(sup: SupportDef, inst: SkillInstance): boolean {
-  const tags = [...inst.def.tags, ...grantedTags(inst)];
-  if (sup.excludeTags && sup.excludeTags.some(t => tags.includes(t))) return false;
-  if (!sup.requiresTags || !sup.requiresTags.length) return true;
-  return sup.requiresTags.some(t => tags.includes(t));
+  return supportFitsTags(sup, [...inst.def.tags, ...grantedTags(inst)]);
 }
 
 /** What a summon skill's CREW is known to cast at socket time: the minted
@@ -3046,19 +3088,48 @@ export function summonCrewOf(
 }
 
 /**
+ * Which of a summon's CREW skills this support would board, composing the
+ * host's OTHER riding sockets to fixpoint per crew skill — the crew-side
+ * mirror of hostSockets, and the one truth behind the socket gate, the ⤳
+ * markers, and the sim injector's legality check. Faultfinder grants
+ * 'fissure' aboard the warrior's Cleave, so Tectonic Echoes serves that
+ * same Cleave even though the bare def never fit it. 'unknowable' for
+ * corpse crews (anything riding may board — fit resolves per-body at
+ * raise); null when it boards nothing.
+ */
+export function crewSkillsServed(sup: SupportDef, inst: SkillInstance, crew: SummonCrew): SkillDef[] | 'unknowable' | null {
+  if (!crew || !supportRidesMinions(sup)) return null;
+  if (crew === 'unknowable') return 'unknowable';
+  const riders = inst.sockets.filter((x): x is SupportInstance =>
+    !!x && x.def.id !== sup.id && supportRidesMinions(x.def));
+  const served = crew.filter(cd => {
+    const pool = [...cd.tags];
+    const admitted = new Set<SupportInstance>();
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const g of riders) {
+        if (admitted.has(g) || !supportFitsTags(g.def, pool)) continue;
+        admitted.add(g);
+        if (g.def.grantsTags) { pool.push(...g.def.grantsTags); grew = true; }
+      }
+    }
+    return supportFitsTags(sup, pool);
+  });
+  return served.length ? served : null;
+}
+
+/**
  * Crew-aware socket gate — THE fit check for socketing a gem into a skill.
  * A support fits when the instance itself takes it (the ordinary tag gate,
  * supports-compose-with-supports included) OR when the skill mints minions
- * the support could board: same gems, one gate, full parity between what
+ * the support would board: same gems, one gate, full parity between what
  * the player casts and what the crew casts. Splitting refuses a bare
  * Summon Skeleton Warrior (no projectile anywhere in the crew) but boards
  * the Archer through the bow his bones carry.
  */
 export function supportFitsInstOrCrew(sup: SupportDef, inst: SkillInstance, crew: SummonCrew): boolean {
-  if (supportFitsInst(sup, inst)) return true;
-  if (!crew || !supportRidesMinions(sup)) return false;
-  if (crew === 'unknowable') return true;
-  return crew.some(def => supportFits(sup, def));
+  return supportFitsInst(sup, inst) || crewSkillsServed(sup, inst, crew) !== null;
 }
 
 /**
@@ -3069,8 +3140,8 @@ export function supportFitsInstOrCrew(sup: SupportDef, inst: SkillInstance, crew
  */
 export function effectiveSkillLevel(inst: SkillInstance): number {
   let lv = inst.level + Math.floor(inst.bonusLevels ?? 0);
-  for (const s of inst.sockets) {
-    if (!s?.def.levelBonus) continue;
+  for (const s of hostSockets(inst)) {
+    if (!s.def.levelBonus) continue;
     lv += Math.floor(s.def.levelBonus + (s.def.levelBonusPer ?? 0) * (s.level - 1));
   }
   return lv;
@@ -3092,8 +3163,10 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
   if (inst.def.thresholds) {
     for (const t of inst.def.thresholds) if (eff >= t.level) out.push(...t.mods);
   }
-  for (const socket of inst.sockets) {
-    if (!socket) continue;
+  // Lane-routed: a crew-only gem (it boards the minions, not this cast)
+  // contributes nothing here — not even its cost mods. Socket scarcity is
+  // the price of a crew gem; the host cast stays untouched.
+  for (const socket of hostSockets(inst)) {
     out.push(...socket.def.mods);
     const sl = socket.level - 1;
     if (sl > 0 && socket.def.perLevel) {

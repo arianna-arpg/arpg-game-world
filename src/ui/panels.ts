@@ -14,9 +14,9 @@ import {
 } from '../engine/stats';
 import { resistValue } from '../engine/damage';
 import {
-  effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel, supportFits, supportFitsInst,
-  supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions,
-  type SkillDef, type SkillInstance, type SupportDef,
+  crewSkillsServed, effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel, supportFitsInst,
+  supportFitsInstOrCrew, supportMaxLevel,
+  type SkillDef, type SkillInstance, type SupportInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, socketCap, type ItemInstance } from '../engine/items';
@@ -807,10 +807,10 @@ export class UI {
             if (supportFitsInst(gem.def, inst)) {
               return `<button data-socket="${idx}:${inst.def.id}">${inst.def.name}</button>`;
             }
-            const crew = world.summonCrewSkills(inst);
-            const boards = crew === 'unknowable' || crew === null
+            const served = crewSkillsServed(gem.def, inst, world.summonCrewSkills(inst));
+            const boards = served === 'unknowable' || served === null
               ? 'whatever you raise'
-              : crew.filter(def => supportFits(gem.def, def)).map(def => def.name).join(', ');
+              : served.map(def => def.name).join(', ');
             return `<button data-socket="${idx}:${inst.def.id}"
               title="Boards the crew: forwarded to the minions' own skills (${boards}).">${inst.def.name} ⤳</button>`;
           })
@@ -1742,11 +1742,11 @@ export class UI {
       }).join('');
       // Mark gems that BOARD THE CREW (forwarded into the minions' own
       // skills) so the lane is legible — independent of whether the gem
-      // also serves the summon lane.
+      // also serves the summon lane. crewSkillsServed composes granted
+      // tags, so Tectonic Echoes riding Faultfinder is marked truthfully.
       const crew = world.summonCrewSkills(inst);
-      const boardsCrew = (s: { def: SupportDef } | null): boolean => !!s && !!crew
-        && supportRidesMinions(s.def)
-        && (crew === 'unknowable' || crew.some(d => supportFits(s.def, d)));
+      const boardsCrew = (s: SupportInstance | null): boolean =>
+        !!s && crewSkillsServed(s.def, inst, crew) !== null;
       const sockets = inst.sockets.map((s, i) => s ? `
         <span class="gem-chip" style="border-color:${s.def.color}"
           title="${s.def.description}${boardsCrew(s) ? ' — boards the crew: forwarded to the minions’ own skills.' : ''}">

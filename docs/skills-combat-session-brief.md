@@ -297,3 +297,36 @@ live gem-swap resync, real socketSupport gate accept/refuse, `⤳ boards the cre
 
 Still open (inherited): `SupportDef.requiresDelivery` socket-time enforcement, Side note A (`rampMove`),
 Side note C (`reapers_sweep`), and the no-op data pass — now with crew-inert rows in its feed.
+
+### Addendum — 2026-07-08 (THE LANE ROUTER: a gem serves exactly the lanes it fits)
+
+User-reported bleed from the overhaul: crew-admitted gems sat in the summon's sockets, and every
+host-side payload reader picked them up — Alternating Strikes on Summon Skeleton Warrior alternated the
+warriors' cleaves (intended, glorious) AND the summoning cast itself (accidental: the tag gate used to
+guarantee everything socketed fit the host; the crew gate broke that invariant). Legion Call's cast-
+shaping identity was suddenly competing with any melee gem.
+
+Fix — `hostSockets(inst)` in engine/skills.ts, the LANE ROUTER: every payload reader (all instanceX
+readers, socketSpec, grantedTags, effectiveSkillLevel, instanceMods, the world.ts inline scans, actor
+conditional-mod cues) filters to sockets whose tag gate passes against the def's tags plus the grants of
+other HOST-SERVING gems, computed to fixpoint (arrangement-independent, monotone — matches the gate).
+Crew-only gems are invisible to the host cast, including its cost (socket scarcity is the price of a
+crew gem). Hybrid defs opt into both lanes BY TAGGING — pure data, no flags. `crewSkillsServed` is the
+crew-side mirror (composes riding gems per crew skill: Tectonic Echoes rides Faultfinder's granted
+'fissure' aboard Cleave), now the one truth behind the socket gate, the ⤳ markers/tooltips, and the sim
+injector's legality check. forwardSummonSockets gained the same fixpoint (out-of-order socket
+arrangements forward fine). Validator: MonsterGrant pairs that don't tag-fit their target now warn
+(current data is clean); the sim injector notes that force-socketed misfits are genuinely inert.
+
+FORGEBOUND became the hybrid showcase: proc-conscripted minions (`effect.type: 'summon'`) now bind
+`summonInst` to the striking instance and receive forwarded gems — a melee skill carrying the proc acts
+as melee AND summon at once: Alternating Strikes swings the player's ±70° figure and the forged blade
+wraiths' own strikes alternate the same way (live-verified: 3 wraiths, whirling_reap + claw both
+carrying the forwarded gem). Live-verified end-to-end: summon cast steady while warriors alternate,
+Legion Call alone on the host lane (its +1 body per cast and mana price intact beside the crew gem).
+Probes: archer/conjurer pairs unchanged (6.2 / 11.43); faultfinder pair 31.15 (was 30.32) with zero
+warnings; smoke baseline green.
+
+Aim-transform QA gotcha for the record: Alternating Strikes is a bearing SEQUENCE (steps [-70, +70],
+pause 0.2) — the swings are SCHEDULED, so synchronous eval reads see zero damage; step the world (and
+give the figure flanking targets — a dead-center dummy sits outside both ±70° arcs of a 130° cleave).

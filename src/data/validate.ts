@@ -410,6 +410,12 @@ export function validateContent(): void {
       const sup = SUPPORTS[g.support];
       const target = SKILLS[g.on];
       if (!sup || !target) continue; // existence already warned above
+      // THE LANE ROUTER ignores sockets that don't tag-fit their host — an
+      // authored kit gem that misses its target's tags is dead weight.
+      if (!supportFits(sup, target)) {
+        warn(`${m.id}: grant @${g.atLevel} sockets '${g.support}' on '${g.on}' — it does not tag-fit `
+          + `[${target.tags.join(', ')}], so the lane router will ignore it`);
+      }
       for (const row of GRAFT_READ_SITES) {
         if (carriesRow(sup, row) && rowUnread(row, target)) {
           warn(`${m.id}: grant @${g.atLevel} sockets '${g.support}' on '${g.on}' — its `

@@ -12,7 +12,7 @@ import {
 } from './stats';
 import { DEFENSE_CFG } from './defense';
 import {
-  instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
+  hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
   type EchoRiderSpec, type LedgerSpec,
 } from './skills';
@@ -1243,8 +1243,8 @@ export class Actor {
     for (const inst of this.skills) {
       if (!inst) continue;
       if (inst.def.innateMods?.some(m => m.when === when)) return true;
-      for (const s of inst.sockets) {
-        if (s?.def.mods.some(m => m.when === when)) return true;
+      for (const s of hostSockets(inst)) {
+        if (s.def.mods.some(m => m.when === when)) return true;
       }
     }
     return false;

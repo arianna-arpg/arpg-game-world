@@ -16,8 +16,7 @@ import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode } from '../data/passives';
 import {
-  SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFits, supportFitsInst,
-  supportRidesMinions, skillMaxLevel,
+  SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFitsInstOrCrew, skillMaxLevel,
   type SkillInstance, type SkillRarity, type SupportInstance,
 } from '../engine/skills';
 import { SLOT_BY_ID } from '../engine/items';
@@ -60,17 +59,16 @@ function mintSkill(spec: BuildSkillSpec, warnings: string[]): SkillInstance | nu
       warnings.push(`unknown support '${s.id}' on '${spec.id}' — socket left empty`);
       return;
     }
-    // Legality mirrors the game's crew-aware gate exactly: instance fit
-    // (prior sockets' grantsTags compose — Faultfinder hands 'fissure' to
-    // the summon, so Tectonic Echoes boards legally beside it), OR a crew
-    // fit (the gem rides the minted minions' own skills —
-    // world.forwardSummonSockets). Neither is a probe irregularity.
+    // Legality mirrors the game's crew-aware gate exactly (one function):
+    // lane-pure instance fit OR a composed crew fit — Faultfinder boards
+    // the warriors' Cleave, and Tectonic Echoes rides its granted
+    // 'fissure' aboard that same Cleave. Neither is a probe irregularity.
+    // NOTE the lane router also means a force-socketed misfit is genuinely
+    // INERT now (host reads skip it), matching game-reachable states.
     const crew = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
       id => MONSTERS[id], id => SKILLS[id]);
-    const crewLegal = !!crew && supportRidesMinions(sdef)
-      && (crew === 'unknowable' || crew.some(cd => supportFits(sdef, cd)));
-    if (!supportFitsInst(sdef, inst) && !crewLegal) {
-      warnings.push(`support '${s.id}' does not fit '${spec.id}' (tag rules) — socketed anyway for the probe`);
+    if (!supportFitsInstOrCrew(sdef, inst, crew)) {
+      warnings.push(`support '${s.id}' does not fit '${spec.id}' (tag rules) — socketed anyway, but the lane router leaves it inert`);
     }
     const gem: SupportInstance = { def: sdef, level: s.level ?? 1 };
     inst.sockets[i] = gem;

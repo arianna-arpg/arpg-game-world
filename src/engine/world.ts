@@ -22,7 +22,7 @@ import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
+  effectiveSkillLevel, grantedTags, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -11619,7 +11619,7 @@ export class World {
           // A socketed Metronome grafts the back-and-forth onto any
           // lingering zone; the delivery's own spec is the innate base.
           pendulum: (() => {
-            const ps = inst.sockets.find(s => s?.def.pendulum)?.def.pendulum ?? d.pendulum;
+            const ps = hostSockets(inst).find(s => s.def.pendulum)?.def.pendulum ?? d.pendulum;
             return ps
               ? { arc: ps.arcDeg * Math.PI / 180, period: ps.period, base: caster.facing }
               : undefined;
@@ -13325,12 +13325,21 @@ export class World {
    */
   private forwardSummonSockets(summonInst: SkillInstance | undefined, skills: (SkillInstance | null)[]): void {
     if (!summonInst) return;
-    for (const socket of summonInst.sockets) {
-      if (!socket || !supportRidesMinions(socket.def)) continue;
-      for (const sk of skills) {
-        if (!sk || !supportFitsInst(socket.def, sk)) continue;
-        if (sk.sockets.some(x => x?.def.id === socket.def.id)) continue;
-        sk.sockets.push({ def: socket.def, level: socket.level, forwarded: true });
+    // FIXPOINT passes: a forwarded gem's grantsTags can open the door for
+    // another (Faultfinder's 'fissure' admits Tectonic Echoes) regardless
+    // of how the player arranged the summon's sockets — arrangement
+    // independence, matching the gate and the lane router.
+    let grew = true;
+    while (grew) {
+      grew = false;
+      for (const socket of summonInst.sockets) {
+        if (!socket || !supportRidesMinions(socket.def)) continue;
+        for (const sk of skills) {
+          if (!sk || sk.sockets.some(x => x?.def.id === socket.def.id)) continue;
+          if (!supportFitsInst(socket.def, sk)) continue;
+          sk.sockets.push({ def: socket.def, level: socket.level, forwarded: true });
+          grew = true;
+        }
       }
     }
   }
@@ -13544,7 +13553,7 @@ export class World {
     // DEVOURER (innate or the Ravenous Pact graft): the apex economy —
     // this minion eats its lessers on a beat (see updateMinionMeta).
     {
-      const devourSpec = d.devour ?? inst.sockets.find(s => s?.def.devour)?.def.devour;
+      const devourSpec = d.devour ?? hostSockets(inst).find(s => s.def.devour)?.def.devour;
       if (devourSpec) {
         minion.devour = { spec: devourSpec, next: this.time + devourSpec.interval };
       }
@@ -13575,8 +13584,8 @@ export class World {
     }
     // PYRE LEGION (SupportDef.minionAura): the ranks wear a baked aura —
     // the pylon spec, carried by flesh.
-    for (const s of inst.sockets) {
-      if (!s?.def.minionAura) continue;
+    for (const s of hostSockets(inst)) {
+      if (!s.def.minionAura) continue;
       minion.activeAuras.set(inst.def.id + ':legion', {
         inst, spec: s.def.minionAura,
         radius: s.def.minionAura.radius
@@ -13626,8 +13635,8 @@ export class World {
     let othersFlat = 0;
     if (!key.endsWith(':self')) {
       const gemId = key.slice(key.indexOf(':') + 1);
-      for (const s of sourceInst.sockets) {
-        if (!s?.def.echo || s.def.id === gemId) continue;
+      for (const s of hostSockets(sourceInst)) {
+        if (!s.def.echo || s.def.id === gemId) continue;
         for (const m of s.def.mods) {
           if (m.stat === 'mirageCount' && m.kind === 'flat') othersFlat += m.value;
         }
@@ -13882,8 +13891,8 @@ export class World {
     // (Pulsing Ramparts / Violent Genesis) — pulses merge, bursts merge.
     {
       let fx = d.fx;
-      for (const s of sourceInst.sockets) {
-        if (!s?.def.constructFx) continue;
+      for (const s of hostSockets(sourceInst)) {
+        if (!s.def.constructFx) continue;
         fx = {
           pulse: s.def.constructFx.pulse ?? fx?.pulse,
           burst: s.def.constructFx.burst ?? fx?.burst,
@@ -16319,6 +16328,17 @@ export class World {
           && m.sourceSkillId === key).length >= fx.max) break;
         const forged = this.createMonster(fx.monsterId, owner.level, owner.team, owner);
         forged.sourceSkillId = key;
+        // THE HYBRID SEAM: when the conscripting hit came from a real skill
+        // instance, the conscripts are that instance's CREW — its gems
+        // forward aboard (the lane router keeps each gem to the lanes it
+        // fits: Alternating Strikes alternates the swing AND the forged
+        // wraith's strikes), and socket changes resync them like any other
+        // minions. Forgebound turns a melee skill into a true melee+summon
+        // hybrid with zero new rules.
+        if (inst) {
+          forged.summonInst = inst;
+          this.forwardSummonSockets(inst, forged.skills);
+        }
         forged.lifespan = fx.duration * owner.sheet.get('effectDuration',
           inst ? skillContextTags(inst.def) : undefined,
           inst ? instanceMods(inst) : undefined);
