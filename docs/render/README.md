@@ -255,6 +255,15 @@ reveal shows a furnished, boarded room, which is the whole trick.
   dwell?, orbChance?, gemChance?, carve?, text? }` on its `DoodadRule`
   (engine/levelgen.ts) — pots pop to a hit or a touch, plugs crumble when
   neared, secret walls carve open under a lingering press.
+- **Give a region wall a readable rim**: `visual.edge: { color, width? }` on
+  its RegionKind row — baked on every side facing walkable ground (the flesh
+  wall's membrane line). Plain themed walls get legibility for free via the
+  baker's wall-vs-floor CONTRAST GUARD.
+- **Dress a skill-object**: constructs default to their kind's portrait
+  (`CONSTRUCT_LOOKS` in data/looks.ts); a skill with its own material names
+  `look:` on its ConstructDelivery (bone prison → bone, frost wall → ice).
+- **Walk-under anything**: `bodyScale` on the DoodadRule + a trunk-style
+  ground painter + a `canopy` crown — trees, palms, and now giant mushrooms.
 - **Add a new material**: one row in `MATERIALS`.
 - **Skin a new doodad kind**: one entry in `DOODAD_VISUALS` naming a painter;
   add a painter only for a genuinely new *vocabulary* of look.
