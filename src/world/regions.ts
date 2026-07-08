@@ -257,7 +257,10 @@ registerRegion({
   id: 'void', walkable: false, blocks: false, label: 'the void',
   boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'physical', canKill: true } },
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
-  visual: { fill: '#050507', alpha: 1 },
+  // The lip: a whisper of violet-grey on every walkable-facing side — the
+  // ground remembering the light before the drop (the cave-mouth rim's
+  // lesson), so the abyss reads as an EDGE falling away, not flat paint.
+  visual: { fill: '#050507', alpha: 1, edge: { color: '#221c36', width: 5 } },
 });
 // DEEP WATER: walkable but you SWIM (slowed) and your BREATH drains; out of air
 // you start drowning (the survival system). The underwater zones' open sea.

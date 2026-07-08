@@ -73,24 +73,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     blend: { mode: 'path', strength: 0.3, feather: 12, color: 'theme:road|#574f44' },
     params: { color: 'theme:road|#574f44' },
   },
+  // LAVA reads as FIRE UNDER PACK ICE now: hot hearts glow up through the
+  // merged flow, dark crust plates ride the surface with melt seams burning
+  // at their edges, crawl-glow wanders beneath. One body, like water.
   lava: {
     painter: 'liquid', order: 22,
     params: {
       rim: { color: '#ff5a1e', alpha: 0.6, grow: 4 },
-      core: { color: 'theme:lava|#7a1a08', alpha: 1, grow: -6 },
-      emberPulse: { color: '#ff7a2a' },
+      core: { color: 'theme:lava|#7a1a08', alpha: 1 },
+      melt: { hot: '#ff8a3a', crust: '#2a0f06' },
       crawl: { color: '#ffb04a' },
-      crackle: { color: '#2a0c04' },
     },
     light: { radius: -1.8, color: '#ff6a26', intensity: 0.55 },
   },
+  // CINDER = a cooling coal bed: the merged field carries dense ember
+  // glints, each pulsing on its own clock — coals, readable as coals.
   cinder: {
     painter: 'liquid', order: 24,
     params: {
       rim: { color: '#2a1a12', alpha: 0.55, grow: 3 },
-      emberPulse: { color: 'theme:lava|#7a1a08' },
-      core: { color: '#2a1a12', alpha: 0.25 },
+      core: { color: '#241610', alpha: 0.5 },
+      embers: { color: '#ff7a2a', density: 0.34 },
     },
+    light: { radius: -1.2, color: '#ff7a2a', intensity: 0.16, flicker: 1.8 },
   },
   gore: {
     painter: 'liquid', order: 26,
@@ -480,7 +485,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   beehive: {
     painter: 'pod', order: 53, shadow: 0.5,
-    params: { body: '#c8a24a', glow: '#e8cf7a', aspectY: 1.15, glowY: -0.2, glowR: 0.34, pulseRate: 1.4 },
+    params: { body: '#c8a24a', glow: '#e8cf7a', aspectY: 1.15, glowY: -0.2, glowR: 0.34, pulseRate: 1.4, bands: 3 },
   },
   obsidian: {
     longShadow: 0.7,
@@ -499,7 +504,10 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   flesh_pod: {
     painter: 'pod', order: 52, shadow: 0.5,
-    params: { body: 'theme:obstacle', glow: 'theme:accent|#e86a7a', aspectY: 0.82, glowY: -0.1, glowR: 0.42, pulseRate: 1.9 },
+    params: {
+      body: 'theme:obstacle', glow: 'theme:accent|#e86a7a', aspectY: 0.82,
+      glowY: -0.1, glowR: 0.42, pulseRate: 1.9, veins: 'theme:accent|#e86a7a',
+    },
     light: { radius: -2.2, color: '#e86a7a', intensity: 0.14, flicker: 1.3 },
   },
   // THE FLESH KIT: the warren is one creature — membranes and veins throb to
@@ -529,10 +537,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'pod', order: 52, shadow: 0.5,
     params: { body: '#4a5a2a', glow: '#adbf6a', aspectY: 1.1, glowY: -0.3, glowR: 0.5, pulseRate: 2.4 },
   },
+  // Real little mushrooms lit from within — the light layer carries the
+  // ambient pulse (flicker) at parity with every other emissive.
   glow_cap: {
     painter: 'dome', order: 52,
     params: { halo: '#c8ffa0', cap: '#8fd06f' },
-    light: { radius: -3.2, color: '#c8ffa0', intensity: 0.3 },
+    light: { radius: -3.2, color: '#c8ffa0', intensity: 0.3, flicker: 1.4 },
   },
   bone: { painter: 'bones', order: 52, params: { color: '#d8cdb8' } },
   tombstone: {

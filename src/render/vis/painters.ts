@@ -208,6 +208,13 @@ export interface LiquidParams {
   scum?: { color: ColorSpec };
   /** Wet specular glints (gore). */
   glisten?: { color: ColorSpec };
+  /** MOLTEN treatment (lava): per-well hot hearts glowing up through the
+   *  body, under seeded dark crust PLATES with melt seams burning at their
+   *  edges — pack ice over fire, spanning the merged flow. */
+  melt?: { hot: ColorSpec; crust: ColorSpec };
+  /** EMBER BED (cinder): dense coal glints across the merged body, each
+   *  pulsing on its own clock, brightest at the bed's heart. */
+  embers?: { color: ColorSpec; density?: number };
 }
 
 const liquid: GroupPainter = (env, group, def) => {
@@ -336,6 +343,73 @@ const liquid: GroupPainter = (env, group, def) => {
     ctx.fillStyle = resolveColor(p.emberPulse.color, theme);
     blobPath(ctx, group, -8);
     ctx.fill();
+  }
+  if (p.melt) {
+    // MOLTEN READ: per-well hot hearts glow up through the body, then dark
+    // crust plates ride the surface with melt seams burning at their edges.
+    // Everything clips to the merged silhouette, so the crust spans the
+    // whole flow like pack ice — one body of fire, never per-circle rings.
+    const hot = resolveColor(p.melt.hot, theme);
+    const crust = resolveColor(p.melt.crust, theme);
+    ctx.save();
+    blobPath(ctx, group);
+    ctx.clip();
+    ctx.globalAlpha = 1;
+    for (const d of group) {
+      const g = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, d.radius * 0.95);
+      g.addColorStop(0, withAlpha(hot, 0.5 + 0.15 * Math.sin(time * 1.3 + d.pos.x * 0.02)));
+      g.addColorStop(1, withAlpha(hot, 0));
+      ctx.fillStyle = g;
+      ctx.fillRect(d.pos.x - d.radius, d.pos.y - d.radius, d.radius * 2, d.radius * 2);
+    }
+    for (const d of group) {
+      const seed = ((d.pos.x * 7 + d.pos.y * 13) | 0) >>> 0;
+      for (let i = 0; i < 3 + (seed % 3); i++) {
+        const a = hash01(i, seed) * Math.PI * 2;
+        const dd = Math.sqrt(hash01(i, seed + 7)) * d.radius * 0.7;
+        const cx = d.pos.x + Math.cos(a) * dd, cy = d.pos.y + Math.sin(a) * dd;
+        const pr = d.radius * (0.2 + hash01(i, seed + 11) * 0.22);
+        ctx.fillStyle = withAlpha(crust, 0.85);
+        ctx.beginPath();
+        for (let k = 0; k <= 7; k++) {
+          const ka = (k / 7) * Math.PI * 2;
+          const kr = pr * (0.78 + 0.22 * Math.abs(Math.sin(ka * 2.5 + i + seed)));
+          const px = cx + Math.cos(ka) * kr, py = cy + Math.sin(ka) * kr;
+          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = withAlpha(hot, 0.35 + 0.25 * Math.sin(time * 1.7 + i + seed * 0.1));
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+  if (p.embers) {
+    // EMBER BED: a cooling coal field — dense little glints, each on its
+    // own clock, brightest toward each well's heart.
+    const col = resolveColor(p.embers.color, theme);
+    ctx.save();
+    blobPath(ctx, group);
+    ctx.clip();
+    for (const d of group) {
+      const seed = ((d.pos.x * 11 + d.pos.y * 3) | 0) >>> 0;
+      const n = Math.max(6, Math.round(d.radius * (p.embers.density ?? 0.3)));
+      for (let i = 0; i < n; i++) {
+        const a = hash01(i, seed) * Math.PI * 2;
+        const dd = Math.sqrt(hash01(i, seed + 7)) * d.radius * 0.9;
+        const beat = 0.5 + 0.5 * Math.sin(time * (0.8 + hash01(i, seed + 11) * 1.6) + i * 2.1);
+        ctx.globalAlpha = Math.max(0, 0.2 + 0.6 * beat * (1 - dd / (d.radius * 1.1)));
+        ctx.fillStyle = i % 4 ? col : shade(col, 0.3);
+        ctx.beginPath();
+        ctx.arc(d.pos.x + Math.cos(a) * dd, d.pos.y + Math.sin(a) * dd,
+          0.8 + hash01(i, seed + 13) * 1.4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
   if (p.sheen) {
     // Deep-water sheen: two bright arcs drifting across each pool.
@@ -1112,67 +1186,289 @@ export interface VentParams {
 }
 
 /** Molten vents: obsidian rim, pulsing throat, bright core. */
+/** VENTS — a CRATER, not circles-in-circles: a scorched apron fan, a
+ *  form-rolled crust rim of wedge slabs, a throat that falls away down a
+ *  real depth gradient to the melt breathing at the bottom, crawl-flecks
+ *  orbiting in it, spatter freckles cooling on the apron. Geysers wear the
+ *  same bones in spring-water colors; palettes stay pure params. */
 const vent: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as VentParams;
   const { ctx, theme, time } = env;
+  const rimCol = resolveColor(p.rim, theme);
+  const throatCol = resolveColor(p.throat, theme);
+  const hotCol = resolveColor(p.hot, theme);
+  const coreCol = resolveColor(p.core, theme);
   for (const v of group) {
-    const r = v.radius, glow = 0.5 + 0.5 * Math.sin(time * 3.3 + v.pos.x * 0.04);
-    ctx.fillStyle = resolveColor(p.rim, theme);
-    ctx.beginPath(); ctx.arc(v.pos.x, v.pos.y, r * 1.18, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = resolveColor(p.throat, theme);
-    ctx.beginPath(); ctx.arc(v.pos.x, v.pos.y, r, 0, Math.PI * 2); ctx.fill();
+    const seed = ((v.pos.x * 13 + v.pos.y * 7) | 0) >>> 0;
+    const r = v.radius;
+    const glow = 0.5 + 0.5 * Math.sin(time * 3.3 + seed * 0.1);
+    ctx.save();
+    ctx.translate(v.pos.x, v.pos.y);
+    // Scorched apron fanning out around the mouth.
+    const ag = ctx.createRadialGradient(0, 0, r * 0.8, 0, 0, r * 1.6);
+    ag.addColorStop(0, withAlpha(shade(rimCol, -0.2), 0.35));
+    ag.addColorStop(1, withAlpha(shade(rimCol, -0.2), 0));
+    ctx.fillStyle = ag;
+    ctx.beginPath(); ctx.arc(0, 0, r * 1.6, 0, Math.PI * 2); ctx.fill();
+    // Cooled spatter freckles on the apron.
+    for (let i = 0; i < 4 + (seed % 3); i++) {
+      const a = hash01(i, seed + 61) * Math.PI * 2;
+      const d = r * (1.15 + hash01(i, seed + 67) * 0.45);
+      ctx.fillStyle = withAlpha(shade(hotCol, -0.25), 0.5);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * d, Math.sin(a) * d, 1 + hash01(i, seed + 71) * 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The crust rim: a jagged ring of heaved slabs, seamed into wedges.
+    const verts = 11 + (seed % 3);
+    const rimPts: { x: number; y: number }[] = [];
+    for (let i = 0; i < verts; i++) {
+      const a = (i / verts) * Math.PI * 2;
+      const rr = r * (1.06 + hash01(i, seed) * 0.22);
+      rimPts.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr });
+    }
+    ctx.fillStyle = shade(rimCol, 0.08);
+    ctx.beginPath();
+    rimPts.forEach((pt, i) => { if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); });
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(rimCol, -0.5), 0.9);
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    // Wedge seams radiating across the rim ring.
+    ctx.strokeStyle = withAlpha(shade(rimCol, -0.45), 0.55);
+    ctx.lineWidth = 1.1;
+    for (let i = 0; i < 6 + (seed % 3); i++) {
+      const a = hash01(i, seed + 17) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.88, Math.sin(a) * r * 0.88);
+      ctx.lineTo(Math.cos(a) * r * 1.24, Math.sin(a) * r * 1.24);
+      ctx.stroke();
+    }
+    // The THROAT: rock lip falling away to the melt at the bottom.
+    const tg = ctx.createRadialGradient(0, 0, r * 0.06, 0, 0, r * 0.92);
+    tg.addColorStop(0, hotCol);
+    tg.addColorStop(0.34, shade(hotCol, -0.3));
+    tg.addColorStop(0.72, throatCol);
+    tg.addColorStop(1, shade(throatCol, 0.22));
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.92, 0, Math.PI * 2); ctx.fill();
+    // Crawl-flecks orbiting slowly in the melt.
+    for (let k = 0; k < 3; k++) {
+      const a = time * (0.3 + k * 0.14) * (k % 2 ? -1 : 1) + hash01(k, seed + 23) * Math.PI * 2;
+      const d = r * (0.14 + hash01(k, seed + 29) * 0.18);
+      ctx.globalAlpha = 0.4 + 0.4 * glow;
+      ctx.fillStyle = shade(hotCol, 0.25);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * d, Math.sin(a) * d, Math.max(1, r * 0.05), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The breathing core — and its white-hot pinprick.
+    ctx.globalAlpha = 0.45 + 0.5 * glow;
+    const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.3);
+    cg.addColorStop(0, coreCol);
+    cg.addColorStop(1, withAlpha(coreCol, 0));
+    ctx.fillStyle = cg;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.3, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 0.5 + 0.45 * glow;
-    ctx.fillStyle = resolveColor(p.hot, theme);
-    ctx.beginPath(); ctx.arc(v.pos.x, v.pos.y, r * 0.6, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 0.4 + 0.5 * glow;
-    ctx.fillStyle = resolveColor(p.core, theme);
-    ctx.beginPath(); ctx.arc(v.pos.x, v.pos.y, r * 0.28, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(0, 0, Math.max(1, r * 0.05), 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
+    ctx.restore();
   }
 };
 
 export interface PodParams {
   body: ColorSpec; glow: ColorSpec;
   aspectY: number; glowY: number; glowR: number; pulseRate: number;
+  /** Horizontal band seams (a woven hive says 3); disables mottle. */
+  bands?: number;
+  /** Vein tracery crawling the membrane (flesh pods). */
+  veins?: ColorSpec;
 }
 
-/** Bulbous organic sacs with a pulsing lit core (flesh/spore pods). */
+/** PODS — one membrane, five biomes: a bulb that BREATHES (the whole body
+ *  swells on its pulse), shaded to a sun-side pole, seated by a basal
+ *  collar with root ticks, mottled or banded or veined by params, its glow
+ *  an internal gradient shining THROUGH the skin instead of a pasted disc.
+ *  Serves spore pods, flesh pods, gas bladders, burst sacs, beehives. */
 const pod: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as unknown as PodParams;
   const { ctx, theme, time } = env;
   for (const o of group) {
-    const r = o.radius, pulse = 0.5 + 0.5 * Math.sin(time * p.pulseRate + o.pos.x * 0.05);
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const pulse = 0.5 + 0.5 * Math.sin(time * p.pulseRate + seed * 0.1);
     const body = resolveColor(p.body, theme);
+    const glowCol = resolveColor(p.glow, theme);
+    const r = o.radius * (0.97 + 0.05 * pulse); // the whole bulb breathes
+    const ry = r * p.aspectY;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
-    ctx.fillStyle = body;
-    ctx.beginPath(); ctx.ellipse(0, 0, r, r * p.aspectY, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = withAlpha(shade(body, -0.45), 0.7);
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.globalAlpha = 0.4 + 0.45 * pulse;
-    ctx.fillStyle = resolveColor(p.glow, theme);
-    ctx.beginPath(); ctx.arc(0, r * p.glowY, r * p.glowR, 0, Math.PI * 2); ctx.fill();
+    // Basal collar: the pod is rooted, not resting.
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = shade(body, -0.45);
+    ctx.beginPath();
+    ctx.ellipse(0, ry * 0.55, r * 0.78, ry * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.globalAlpha = 1;
+    ctx.strokeStyle = withAlpha(shade(body, -0.4), 0.8);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(1.2, r * 0.07);
+    for (let i = 0; i < 3; i++) {
+      const a = Math.PI * 0.5 + (i - 1) * 0.7 + (hash01(i, seed) - 0.5) * 0.3;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.6, Math.sin(a) * ry * 0.6);
+      ctx.lineTo(Math.cos(a) * r * (0.95 + hash01(i, seed + 7) * 0.2),
+        Math.sin(a) * ry * (0.95 + hash01(i, seed + 7) * 0.2));
+      ctx.stroke();
+    }
+    // The membrane: a sun-poled gradient over the whole bulb.
+    const L = VIS_CFG.lightAngle;
+    const px = Math.cos(L) * r * 0.3, py = Math.sin(L) * ry * 0.3;
+    const mg = ctx.createRadialGradient(px, py, 0, 0, 0, Math.max(r, ry));
+    mg.addColorStop(0, shade(body, 0.2));
+    mg.addColorStop(0.62, body);
+    mg.addColorStop(1, shade(body, -0.3));
+    ctx.fillStyle = mg;
+    ctx.beginPath(); ctx.ellipse(0, 0, r, ry, 0, 0, Math.PI * 2); ctx.fill();
+    // Mottle blotches — unless the skin is woven in bands.
+    if (!p.bands) {
+      ctx.globalAlpha = 0.28;
+      ctx.fillStyle = shade(body, -0.35);
+      for (let i = 0; i < 3 + (seed % 3); i++) {
+        const a = hash01(i, seed + 11) * Math.PI * 2;
+        const d = Math.sqrt(hash01(i, seed + 13)) * 0.7;
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * r * d, Math.sin(a) * ry * d,
+          r * (0.12 + hash01(i, seed + 17) * 0.12), r * 0.1,
+          hash01(i, seed + 19) * 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    } else {
+      // Woven courses following the bulb's curve.
+      ctx.strokeStyle = withAlpha(shade(body, -0.32), 0.8);
+      ctx.lineWidth = Math.max(1, r * 0.06);
+      for (let i = 1; i <= p.bands; i++) {
+        const f = -1 + (i / (p.bands + 1)) * 2;
+        const w = Math.sqrt(Math.max(0.08, 1 - f * f));
+        ctx.beginPath();
+        ctx.ellipse(0, ry * f, r * w, ry * 0.1 * w, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    // Vein tracery crawling up from the collar.
+    if (p.veins) {
+      const vc = resolveColorOpt(p.veins, theme);
+      if (vc) {
+        ctx.strokeStyle = withAlpha(vc, 0.5 + 0.2 * pulse);
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+          const a0 = Math.PI * 0.5 + (i - 1) * 0.8;
+          let x = Math.cos(a0) * r * 0.7, y = Math.sin(a0) * ry * 0.7;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          for (let s = 0; s < 3; s++) {
+            x += (hash01(i * 3 + s, seed + 23) - 0.5) * r * 0.4;
+            y -= ry * 0.34;
+            ctx.lineTo(x, y);
+          }
+          ctx.stroke();
+        }
+      }
+    }
+    // The glow INSIDE the membrane — light through skin, not a pasted disc.
+    const gx = 0, gy = ry * p.glowY;
+    const gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, r * p.glowR * 1.5);
+    gg.addColorStop(0, withAlpha(glowCol, 0.5 + 0.35 * pulse));
+    gg.addColorStop(0.6, withAlpha(glowCol, 0.22 * (0.5 + pulse)));
+    gg.addColorStop(1, withAlpha(glowCol, 0));
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.ellipse(0, 0, r, ry, 0, 0, Math.PI * 2); ctx.fill();
+    // Wet sheen on the sun side, and the rim holding it all in.
+    ctx.strokeStyle = withAlpha('#ffffff', 0.25);
+    ctx.lineWidth = Math.max(1, r * 0.06);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.8, ry * 0.8, 0, L - 0.7, L + 0.4);
+    ctx.stroke();
+    ctx.strokeStyle = withAlpha(shade(body, -0.5), 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.ellipse(0, 0, r, ry, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.restore();
   }
 };
 
-/** Bioluminescent half-dome caps with a breathing halo (glow caps). */
+/** GLOW CAPS — real little mushrooms lit from within, seen from above: a
+ *  domed cap over a ring of gill-light escaping under the rim, a bright
+ *  pole where the flesh runs thinnest, spore motes drifting up on the
+ *  breath. The big halo wash is GONE — the light LAYER carries the ambient
+ *  glow now (the entry's light spec), so the pulse reads at parity with
+ *  every other emissive in the fabric. */
 const dome: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { halo?: ColorSpec; cap?: ColorSpec };
   const { ctx, theme, time } = env;
+  const glowCol = resolveColor(p.halo, theme, '#c8ffa0');
+  const capCol = resolveColor(p.cap, theme, '#8fd06f');
   for (const o of group) {
-    const r = o.radius, glow = 0.5 + 0.5 * Math.sin(time * 3 + o.pos.x * 0.1);
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const r = o.radius;
+    const breath = 0.5 + 0.5 * Math.sin(time * 1.8 + seed * 0.1);
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
-    ctx.globalAlpha = 0.22 + 0.28 * glow;
-    ctx.fillStyle = resolveColor(p.halo, theme);
-    ctx.beginPath(); ctx.arc(0, 0, r * 2.2, 0, Math.PI * 2); ctx.fill();
+    // A cluster: one proud cap and 1-2 buttons huddling at its foot.
+    const buttons = 1 + (seed % 2);
+    const capAt = (cx: number, cy: number, cr: number, ci: number): void => {
+      // Gill-light escaping under the rim — the mushroom's own lamp.
+      const ug = ctx.createRadialGradient(cx, cy, cr * 0.55, cx, cy, cr * 1.35);
+      ug.addColorStop(0, withAlpha(glowCol, 0.34 + 0.2 * breath));
+      ug.addColorStop(1, withAlpha(glowCol, 0));
+      ctx.fillStyle = ug;
+      ctx.beginPath(); ctx.arc(cx, cy, cr * 1.35, 0, Math.PI * 2); ctx.fill();
+      // Gill spokes at the rim, back-lit.
+      ctx.strokeStyle = withAlpha(glowCol, 0.55 + 0.25 * breath);
+      ctx.lineWidth = Math.max(0.8, cr * 0.07);
+      const gills = Math.max(7, Math.round(cr / 2.4));
+      for (let g = 0; g < gills; g++) {
+        const a = (g / gills) * Math.PI * 2 + ci;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(a) * cr * 0.8, cy + Math.sin(a) * cr * 0.8);
+        ctx.lineTo(cx + Math.cos(a) * cr * 1.02, cy + Math.sin(a) * cr * 1.02);
+        ctx.stroke();
+      }
+      // The dome, translucent flesh over the light.
+      const L = VIS_CFG.lightAngle;
+      const px = cx + Math.cos(L) * cr * 0.2, py = cy + Math.sin(L) * cr * 0.2;
+      const dg = ctx.createRadialGradient(px, py, 0, cx, cy, cr);
+      dg.addColorStop(0, shade(capCol, 0.3));
+      dg.addColorStop(0.6, capCol);
+      dg.addColorStop(1, shade(capCol, -0.26));
+      ctx.fillStyle = dg;
+      ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(capCol, -0.5), 0.75);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // The thin crown where the inner light bleeds through, breathing.
+      ctx.globalAlpha = 0.35 + 0.35 * breath;
+      ctx.fillStyle = glowCol;
+      ctx.beginPath(); ctx.arc(px, py, cr * 0.3, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    };
+    capAt(0, 0, r * 0.78, 0);
+    for (let i = 0; i < buttons; i++) {
+      const a = hash01(i, seed + 31) * Math.PI * 2;
+      capAt(Math.cos(a) * r * 0.78, Math.sin(a) * r * 0.78, r * (0.3 + hash01(i, seed + 37) * 0.12), i + 1);
+    }
+    // Spore motes drifting up on the breath.
+    for (let i = 0; i < 2; i++) {
+      const cyc = (time * 0.4 + hash01(i, seed + 41)) % 1;
+      ctx.globalAlpha = (1 - cyc) * 0.6;
+      ctx.fillStyle = glowCol;
+      ctx.beginPath();
+      ctx.arc(Math.sin(time * 1.3 + i * 2.4) * r * 0.4, -cyc * r * 1.6, 1 + (1 - cyc), 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = resolveColor(p.cap, theme);
-    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.7, 0, Math.PI, Math.PI * 2); ctx.fill();
     ctx.restore();
   }
 };
@@ -2912,20 +3208,22 @@ const toadstools: GroupPainter = (env, group, def) => {
       const d = i === 0 ? 0 : o.radius * (0.4 + hash01(i, seed + 3) * 0.3);
       const cr = o.radius * (0.3 + hash01(i, seed + 7) * 0.16);
       const cx = Math.cos(a) * d, cy = Math.sin(a) * d;
-      // Cap with an off-center sun catch, rimmed dark.
-      ctx.fillStyle = shade(cap, (hash01(i, seed + 9) - 0.4) * 0.24);
+      // A true little DOME: bright pole falling to a shaded rim (the same
+      // read as the giant caps, several sizes down), rimmed dark.
+      const tone = shade(cap, (hash01(i, seed + 9) - 0.4) * 0.24);
+      const L = VIS_CFG.lightAngle;
+      const px = cx + Math.cos(L) * cr * 0.24, py = cy + Math.sin(L) * cr * 0.24;
+      const dg = ctx.createRadialGradient(px, py, 0, cx, cy, cr);
+      dg.addColorStop(0, shade(tone, 0.28));
+      dg.addColorStop(0.6, tone);
+      dg.addColorStop(1, shade(tone, -0.3));
+      ctx.fillStyle = dg;
       ctx.beginPath();
       ctx.arc(cx, cy, cr, 0, Math.PI * 2);
       ctx.fill();
       ctx.strokeStyle = withAlpha(shade(cap, -0.5), 0.75);
       ctx.lineWidth = 1;
       ctx.stroke();
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = shade(cap, 0.3);
-      ctx.beginPath();
-      ctx.ellipse(cx - cr * 0.28, cy - cr * 0.28, cr * 0.42, cr * 0.3, -0.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
       // The warts.
       ctx.fillStyle = speck;
       const specks = 3 + ((seed + i) % 3);
@@ -4666,54 +4964,82 @@ const mushroomCrown: CanopyPainter = (env, o, alpha, params) => {
     speck?: ColorSpec; specks?: boolean; gills?: boolean;
   };
   const { ctx, theme, time } = env;
-  const r = o.radius, caps = p.caps ?? 1;
+  const caps = p.caps ?? 1;
   const capCol = resolveColor(p.cap, theme, '#5a8a3a');
   const glowCol = resolveColor(p.glow, theme, '#8fd06f');
-  const stalkCol = resolveColor(p.stalk, theme, '#3a2a5a');
+  const gillCol = shade(resolveColor(p.stalk, theme, '#3a2a5a'), 0.3);
   const seed = ((o.pos.x * 13 + o.pos.y * 11) | 0) >>> 0;
-  const glow = 0.55 + 0.35 * Math.sin(time * 1.6 + o.pos.x * 0.04);
+  const breath = 0.55 + 0.35 * Math.sin(time * 1.6 + o.pos.x * 0.04);
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
-  ctx.globalAlpha = alpha;
-  ctx.fillStyle = stalkCol;
-  ctx.beginPath(); ctx.ellipse(0, r * 0.3, r * 0.34, r * (caps > 1 ? 1.1 : 0.7), 0, 0, Math.PI * 2); ctx.fill();
-  for (let i = 0; i < caps; i++) {
-    const cy = -r * (0.5 + i * 0.5), cr = r * (1 - i * 0.22);
-    // Gill fringe hanging under the rim.
+  // The CAP ITSELF is the canopy, seen from ABOVE: a shaded dome with its
+  // gill spokes peeking past the rim and the bioluminescence seeping out
+  // under the edge. The stalk lives on the GROUND (the trunk painter) —
+  // nothing floats on top of anything.
+  const drawCap = (cx: number, cy: number, cr: number, ci: number): void => {
+    // Under-rim bloom: the light escaping the gills.
+    ctx.globalAlpha = alpha * (0.16 + 0.12 * breath);
+    const ug = ctx.createRadialGradient(cx, cy, cr * 0.7, cx, cy, cr * 1.25);
+    ug.addColorStop(0, withAlpha(glowCol, 0.5));
+    ug.addColorStop(1, withAlpha(glowCol, 0));
+    ctx.fillStyle = ug;
+    ctx.beginPath(); ctx.arc(cx, cy, cr * 1.25, 0, Math.PI * 2); ctx.fill();
+    // Gill spokes peeking past the dome's rim.
     if (p.gills !== false) {
-      ctx.globalAlpha = alpha * 0.8;
-      ctx.strokeStyle = shade(stalkCol, 0.24);
-      ctx.lineWidth = 1;
-      const gills = Math.max(6, Math.round(cr / 5));
-      for (let g = 0; g <= gills; g++) {
-        const gx = -cr + (g / gills) * cr * 2;
-        const droop = Math.sqrt(Math.max(0, 1 - (gx / cr) * (gx / cr)));
+      ctx.globalAlpha = alpha * 0.85;
+      ctx.strokeStyle = gillCol;
+      ctx.lineWidth = Math.max(1, cr * 0.05);
+      const gills = Math.max(9, Math.round(cr / 3.2));
+      for (let g = 0; g < gills; g++) {
+        const a = (g / gills) * Math.PI * 2 + ci * 0.7;
         ctx.beginPath();
-        ctx.moveTo(gx * 0.96, cy);
-        ctx.lineTo(gx * 0.96, cy + cr * 0.12 * droop);
+        ctx.moveTo(cx + Math.cos(a) * cr * 0.84, cy + Math.sin(a) * cr * 0.84);
+        ctx.lineTo(cx + Math.cos(a) * cr, cy + Math.sin(a) * cr);
         ctx.stroke();
       }
     }
+    // The dome: bright pole offset sunward, falling to a shaded rim.
     ctx.globalAlpha = alpha;
-    ctx.fillStyle = capCol;
-    ctx.beginPath(); ctx.ellipse(0, cy, cr, cr * 0.6, 0, Math.PI, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = glow * alpha;
-    ctx.fillStyle = glowCol;
-    ctx.beginPath(); ctx.ellipse(0, cy, cr * 0.7, cr * 0.42, 0, Math.PI, Math.PI * 2); ctx.fill();
-    // Wart specks across the dome.
+    const L = VIS_CFG.lightAngle;
+    const px = cx + Math.cos(L) * cr * 0.22, py = cy + Math.sin(L) * cr * 0.22;
+    const dg = ctx.createRadialGradient(px, py, 0, cx, cy, cr);
+    dg.addColorStop(0, shade(capCol, 0.24));
+    dg.addColorStop(0.62, capCol);
+    dg.addColorStop(1, shade(capCol, -0.3));
+    ctx.fillStyle = dg;
+    ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(capCol, -0.5), 0.8);
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    // Wart specks riding the dome.
     if (p.specks) {
       const sc = resolveColor(p.speck, theme, '#e8f2da');
-      ctx.globalAlpha = alpha * 0.8;
-      ctx.fillStyle = sc;
-      const n = 3 + ((seed + i) % 3);
+      ctx.fillStyle = withAlpha(sc, 0.85);
+      const n = 4 + ((seed + ci * 7) % 4);
       for (let k = 0; k < n; k++) {
-        const ka = Math.PI + hash01(k, seed + i * 17) * Math.PI;
-        const kd = (0.3 + hash01(k, seed + i * 19) * 0.55);
+        const ka = hash01(k, seed + ci * 17) * Math.PI * 2;
+        const kd = Math.sqrt(hash01(k, seed + ci * 19)) * cr * 0.72;
         ctx.beginPath();
-        ctx.ellipse(Math.cos(ka) * cr * kd, cy + Math.sin(ka) * cr * 0.6 * kd,
-          cr * 0.06 + 0.6, cr * 0.045 + 0.5, 0, 0, Math.PI * 2);
+        ctx.ellipse(cx + Math.cos(ka) * kd, cy + Math.sin(ka) * kd,
+          cr * 0.07 + 0.6, cr * 0.05 + 0.5, ka, 0, Math.PI * 2);
         ctx.fill();
       }
+    }
+    // The glow bleeding through the dome's thin crown.
+    ctx.globalAlpha = alpha * (0.2 + 0.18 * breath);
+    ctx.fillStyle = glowCol;
+    ctx.beginPath(); ctx.arc(px, py, cr * 0.34, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = alpha;
+  };
+  if (caps <= 1) {
+    drawCap(0, 0, o.radius * 0.96, 0);
+  } else {
+    // A fruiting TOWER from above: the big crown, smaller caps stepping off.
+    drawCap(0, 0, o.radius * 0.8, 0);
+    for (let i = 1; i < caps; i++) {
+      const a = hash01(i, seed + 29) * Math.PI * 2;
+      const d = o.radius * (0.55 + 0.14 * i);
+      drawCap(Math.cos(a) * d, Math.sin(a) * d, o.radius * (0.46 - i * 0.08), i);
     }
   }
   ctx.globalAlpha = 1;
