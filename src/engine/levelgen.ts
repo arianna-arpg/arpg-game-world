@@ -1684,6 +1684,20 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     }
   }
 
+  // DEF-LEVEL dressing (props / breakables / npcs): the walls/props vocabulary
+  // rides plan structures too — offsets hang off the plan's true CENTER exactly
+  // as they hang off `at` on a legacy def. (The plan conversion dropped these
+  // silently — the smith vanished from her own forge.) Draw-free.
+  for (const prop of def.props ?? []) {
+    ctx.doodads.push({ pos: vec(center.x + prop.x, center.y + prop.y), radius: prop.radius ?? 12, kind: prop.kind });
+  }
+  for (const b of def.breakables ?? []) {
+    ctx.breakables.push({ id: b.id, pos: vec(center.x + b.x, center.y + b.y) });
+  }
+  for (const n of def.npcs ?? []) {
+    ctx.npcs.push({ id: n.id, pos: vec(center.x + n.x, center.y + n.y) });
+  }
+
   // Door doodads: one per group, sized to span the breach.
   for (let gi = 0; gi < doorGroups.length; gi++) {
     const g = doorGroups[gi];

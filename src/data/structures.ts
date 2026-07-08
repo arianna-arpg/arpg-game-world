@@ -279,18 +279,19 @@ export const STRUCTURES: Record<string, StructureDef> = {
     npcs: [{ id: 'townsfolk_caravanner', x: 0, y: -18 }],
   },
 
-  // The forge — an open-fronted PLAN: flagstone shop floor, a COBBLED work
-  // apron out the open east side, the brazier roaring, firewood stacked.
-  // The anvil stone keeps its old spot as a prop.
+  // The forge — an OPEN YARD, the way a working smithy stands: one L-shaped
+  // wall (north + west) cordons the lean-to, the flagstone shop floor runs
+  // out into a COBBLED work apron, and the whole east + south face opens
+  // onto the square. Brazier roaring, firewood stacked, the anvil stone at
+  // the heart, Brandt at her counter.
   blacksmith: {
-    id: 'blacksmith', halfW: 104, halfH: 78, cellSize: 26,
+    id: 'blacksmith', halfW: 104, halfH: 65, cellSize: 26,
     plan: [
-      '########',
-      '#z....._',
+      '#######_',
+      '#z.f..._',
       '#......_',
-      '#Bf...._',
-      '#......_',
-      '########',
+      '#B....._',
+      '#_______',
     ],
     roofs: 'auto', roofStyle: 'slate',
     floorStyle: 'flagstone', courtyardFloorStyle: 'cobble',
