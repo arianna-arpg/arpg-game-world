@@ -15,7 +15,7 @@ import type { Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
 import type { ZoneTheme } from '../../data/zones';
 import { BIOMES } from '../../world/biomes';
-import { hash01, shade, withAlpha } from './color';
+import { hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 import { litPolygon, polygonPath } from './sight';
 import { drawShadow } from './sprites';
@@ -1177,26 +1177,212 @@ const dome: GroupPainter = (env, group, def) => {
   }
 };
 
-/** Pale spine-and-rib struts (bone fields). */
+// --- The bone vocabulary ------------------------------------------------------
+// One long bone: a capsule shaft with a sun-lit edge and a settled shadow edge,
+// knobbed epiphyses at both ends, hairline weather cracks. Every bone painter
+// builds from this so the `bone` MATERIAL ramp (cool shadows, crack texture)
+// reads on the floor exactly as it does on skeleton bodies.
+
+function drawLongBone(ctx: CanvasRenderingContext2D, ramp: Ramp, seed: number,
+  x0: number, y0: number, x1: number, y1: number, w: number): void {
+  const ang = Math.atan2(y1 - y0, x1 - x0);
+  const px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
+  const L = VIS_CFG.lightAngle;
+  // Which long edge faces the sun decides where the light lands.
+  const lit = Math.cos(ang + Math.PI / 2 - L) >= 0 ? 1 : -1;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = ramp.base;
+  ctx.lineWidth = w;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+  ctx.strokeStyle = withAlpha(ramp.light, 0.8);
+  ctx.lineWidth = Math.max(1, w * 0.3);
+  ctx.beginPath();
+  ctx.moveTo(x0 + px * lit * w * 0.26, y0 + py * lit * w * 0.26);
+  ctx.lineTo(x1 + px * lit * w * 0.26, y1 + py * lit * w * 0.26);
+  ctx.stroke();
+  ctx.strokeStyle = withAlpha(ramp.shadow, 0.7);
+  ctx.lineWidth = Math.max(1, w * 0.26);
+  ctx.beginPath();
+  ctx.moveTo(x0 - px * lit * w * 0.28, y0 - py * lit * w * 0.28);
+  ctx.lineTo(x1 - px * lit * w * 0.28, y1 - py * lit * w * 0.28);
+  ctx.stroke();
+  // Knobbed epiphyses: paired lobes at each end, the sunward lobe brighter.
+  for (const [ex, ey, s] of [[x0, y0, 1], [x1, y1, -1]] as const) {
+    for (const k of [-1, 1]) {
+      ctx.fillStyle = shade(ramp.base, k === lit ? 0.14 : -0.04);
+      ctx.beginPath();
+      ctx.arc(ex + px * k * w * 0.34 - Math.cos(ang) * s * w * 0.1,
+        ey + py * k * w * 0.34 - Math.sin(ang) * s * w * 0.1,
+        w * 0.42, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  // Weather cracks ticking across the shaft (the material's word made visible).
+  if (hash01(seed, 5) < 0.6) {
+    ctx.strokeStyle = withAlpha(ramp.outline, 0.5);
+    ctx.lineWidth = 0.9;
+    const n = 1 + (seed % 2);
+    for (let i = 0; i < n; i++) {
+      const f = 0.28 + hash01(i, seed + 9) * 0.44;
+      const cx = x0 + (x1 - x0) * f, cy = y0 + (y1 - y0) * f;
+      ctx.beginPath();
+      ctx.moveTo(cx - px * w * 0.4, cy - py * w * 0.4);
+      ctx.lineTo(cx + px * w * (0.1 + hash01(i, seed + 11) * 0.3), cy + py * w * 0.42);
+      ctx.stroke();
+    }
+  }
+}
+
+/** A weathered skull lying where it rolled: dome with a sun-side lift, jaw
+ *  shelf, eye pits under the brow, a wandering suture crack. */
+function drawSkull(ctx: CanvasRenderingContext2D, ramp: Ramp, seed: number,
+  cx: number, cy: number, r: number, rot: number): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(rot);
+  ctx.fillStyle = ramp.base;
+  ctx.beginPath(); ctx.ellipse(0, -r * 0.12, r, r * 0.88, 0, 0, Math.PI * 2); ctx.fill();
+  const L = VIS_CFG.lightAngle;
+  ctx.fillStyle = withAlpha(ramp.light, 0.6);
+  ctx.beginPath();
+  ctx.ellipse(Math.cos(L) * r * 0.3, -r * 0.12 + Math.sin(L) * r * 0.26,
+    r * 0.5, r * 0.38, L, 0, Math.PI * 2);
+  ctx.fill();
+  // Jaw shelf tucked below the dome.
+  ctx.fillStyle = shade(ramp.base, -0.06);
+  ctx.beginPath(); ctx.ellipse(0, r * 0.6, r * 0.54, r * 0.32, 0, 0, Math.PI * 2); ctx.fill();
+  // The face: eye pits, nasal notch, suture.
+  ctx.fillStyle = withAlpha(ramp.outline, 0.9);
+  for (const k of [-1, 1]) {
+    ctx.beginPath();
+    ctx.ellipse(k * r * 0.34, r * 0.04, r * 0.19, r * 0.23, k * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath(); ctx.ellipse(0, r * 0.36, r * 0.09, r * 0.14, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = withAlpha(ramp.outline, 0.45);
+  ctx.lineWidth = 0.9;
+  ctx.beginPath();
+  ctx.moveTo(-r * 0.5, -r * 0.4);
+  ctx.quadraticCurveTo((hash01(seed, 3) - 0.5) * r * 0.5, -r * 0.72, r * 0.42, -r * 0.34);
+  ctx.stroke();
+  ctx.strokeStyle = withAlpha(ramp.outline, 0.7);
+  ctx.lineWidth = 1.1;
+  ctx.beginPath(); ctx.ellipse(0, -r * 0.12, r, r * 0.88, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+/** Loose bone chips scattered round a remains pile — ties it into the ground. */
+function drawBoneChips(ctx: CanvasRenderingContext2D, ramp: Ramp, seed: number,
+  r: number, n: number): void {
+  for (let i = 0; i < n; i++) {
+    const a = hash01(i, seed + 211) * Math.PI * 2;
+    const d = r * (0.55 + hash01(i, seed + 217) * 0.55);
+    ctx.fillStyle = shade(ramp.base, hash01(i, seed + 223) * 0.3 - 0.18);
+    ctx.beginPath();
+    ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d,
+      1.4 + hash01(i, seed + 227) * 1.6, 1 + hash01(i, seed + 229) * 0.8,
+      a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+/** BONE REMAINS — every pile FORM-ROLLS its own account of the dead: scattered
+ *  long-bones, a crossed pair beneath a skull, a half-buried rib sprawl, or the
+ *  classic spine-and-crossbars. All of it shades through the `bone` material
+ *  ramp, so the cracked, cool-shadowed identity skeletons wear extends to the
+ *  floor they fell on. */
 const bones: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const p = (def.params ?? {}) as { color?: ColorSpec; material?: string };
   const { ctx, theme } = env;
   const col = resolveColor(p.color, theme, '#d8cdb8');
+  const ramp = rampOf(col, materialOf(p.material ?? 'bone'));
   for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const r = o.radius;
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
-    ctx.strokeStyle = col;
-    ctx.lineWidth = Math.max(3, r * 0.4);
-    ctx.lineCap = 'round';
-    ctx.beginPath(); ctx.moveTo(0, -r); ctx.lineTo(0, r); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r * 0.7, -r * 0.4); ctx.lineTo(r * 0.7, -r * 0.4); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(-r * 0.7, r * 0.15); ctx.lineTo(r * 0.7, r * 0.15); ctx.stroke();
-    // Aged shading along the spine.
-    ctx.strokeStyle = withAlpha(shade(col, -0.4), 0.5);
-    ctx.lineWidth = Math.max(1, r * 0.12);
-    ctx.beginPath(); ctx.moveTo(0, -r * 0.9); ctx.lineTo(0, r * 0.9); ctx.stroke();
+    // Dust shadow first: the remains settled here a long time ago.
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = shade(col, -0.5);
+    ctx.beginPath(); ctx.ellipse(0, r * 0.08, r * 1.05, r * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    const roll = hash01(seed, 91);
+    if (roll < 0.3) {
+      // SCATTER: long bones flung at angles, chips between them.
+      const n = 2 + (seed % 2);
+      for (let i = 0; i < n; i++) {
+        const a = hash01(i, seed + 31) * Math.PI * 2;
+        const cx = (hash01(i, seed + 37) - 0.5) * r * 0.9;
+        const cy = (hash01(i, seed + 41) - 0.5) * r * 0.9;
+        const len = r * (0.55 + hash01(i, seed + 43) * 0.35);
+        drawLongBone(ctx, ramp, seed + i * 17,
+          cx - Math.cos(a) * len, cy - Math.sin(a) * len,
+          cx + Math.cos(a) * len, cy + Math.sin(a) * len,
+          Math.max(2.6, r * 0.22));
+      }
+      drawBoneChips(ctx, ramp, seed, r, 3 + (seed % 3));
+    } else if (roll < 0.56) {
+      // MEMENTO MORI: a crossed pair under a skull, staring at the sky.
+      const a = hash01(seed, 47) * Math.PI;
+      for (const k of [-1, 1]) {
+        const ba = a + k * 0.42;
+        drawLongBone(ctx, ramp, seed + k * 23,
+          -Math.cos(ba) * r * 0.82, -Math.sin(ba) * r * 0.82,
+          Math.cos(ba) * r * 0.82, Math.sin(ba) * r * 0.82,
+          Math.max(2.6, r * 0.2));
+      }
+      drawSkull(ctx, ramp, seed, 0, -r * 0.18, r * 0.52, (hash01(seed, 53) - 0.5) * 0.8);
+      drawBoneChips(ctx, ramp, seed, r, 2 + (seed % 2));
+    } else if (roll < 0.78) {
+      // RIB SPRAWL: a half-buried spine arc with rib hooks fading into the dirt.
+      const bend = (hash01(seed, 57) - 0.5) * 0.8;
+      ctx.strokeStyle = ramp.base;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(2.4, r * 0.16);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.85, bend * r * 0.5);
+      ctx.quadraticCurveTo(0, -bend * r, r * 0.85, bend * r * 0.5);
+      ctx.stroke();
+      ctx.strokeStyle = withAlpha(ramp.shadow, 0.6);
+      ctx.lineWidth = Math.max(1, r * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.8, bend * r * 0.5 + r * 0.05);
+      ctx.quadraticCurveTo(0, -bend * r + r * 0.05, r * 0.8, bend * r * 0.5 + r * 0.05);
+      ctx.stroke();
+      const ribs = 4 + (seed % 2);
+      for (let i = 0; i < ribs; i++) {
+        const f = -0.7 + (i / (ribs - 1)) * 1.4;
+        const sx = f * r * 0.8;
+        const sy = (1 - Math.abs(f) / 0.9) * -bend * r + Math.abs(f) * bend * r * 0.4;
+        const side = i % 2 ? 1 : -1;
+        const len = r * (0.5 - Math.abs(f) * 0.22) * (0.8 + hash01(i, seed + 61) * 0.4);
+        const tone = shade(ramp.base, (hash01(i, seed + 67) - 0.6) * 0.16);
+        ctx.strokeStyle = tone;
+        ctx.lineWidth = Math.max(1.8, r * 0.11);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.quadraticCurveTo(sx + side * len * 0.4, sy + len * 0.65, sx + side * len * 0.72, sy + len);
+        ctx.stroke();
+        // Lit crest on the sun side of each hoop.
+        ctx.strokeStyle = withAlpha(ramp.light, 0.5);
+        ctx.lineWidth = Math.max(0.8, r * 0.04);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - r * 0.03);
+        ctx.quadraticCurveTo(sx + side * len * 0.4, sy + len * 0.62 - r * 0.03,
+          sx + side * len * 0.7, sy + len * 0.96);
+        ctx.stroke();
+      }
+      drawBoneChips(ctx, ramp, seed, r, 2 + (seed % 3));
+    } else {
+      // THE CLASSIC: spine and crossbars — the original field marker, now
+      // built from real long bones instead of flat strokes.
+      const w = Math.max(2.8, r * 0.24);
+      drawLongBone(ctx, ramp, seed, 0, -r * 0.92, 0, r * 0.92, w);
+      drawLongBone(ctx, ramp, seed + 7, -r * 0.66, -r * 0.4, r * 0.66, -r * 0.4, w * 0.86);
+      drawLongBone(ctx, ramp, seed + 13, -r * 0.6, r * 0.16, r * 0.6, r * 0.16, w * 0.8);
+      drawBoneChips(ctx, ramp, seed, r, 2 + (seed % 2));
+    }
     ctx.restore();
   }
 };
@@ -1468,22 +1654,197 @@ const dock: GroupPainter = (env, group) => {
   }
 };
 
-/** Palisade wall posts. */
+/** Palisade wall posts — material-aware built segments: timber posts wear
+ *  vertical grain and a sun-lit cap; stone courses wear running-bond seams.
+ *  Per-post weathering off the position hash, so a wall run reads as many
+ *  hands' work instead of one tiling texture. */
 const palisade: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { fill?: ColorSpec; edge?: ColorSpec };
+  const p = (def.params ?? {}) as { fill?: ColorSpec; edge?: ColorSpec; material?: string };
   const { ctx, theme } = env;
   const fill = resolveColor(p.fill, theme, '#5e4c34');
+  const mat = p.material ?? 'wood';
+  const ramp = rampOf(fill, materialOf(mat));
+  const edgeCol = p.edge ? resolveColor(p.edge, theme) : withAlpha(ramp.outline, 0.95);
   for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const r = o.radius;
-    ctx.fillStyle = fill;
-    ctx.strokeStyle = resolveColor(p.edge, theme, '#2c2418');
+    const x0 = o.pos.x - r * 0.85, y0 = o.pos.y - r * 0.85, s = r * 1.7;
+    // Weathered base tone: no two segments quite match.
+    ctx.fillStyle = shade(ramp.base, (hash01(seed, 3) - 0.5) * 0.12);
+    ctx.fillRect(x0, y0, s, s);
+    // Sun-lit cap along the top, settled shadow along the foot.
+    ctx.fillStyle = withAlpha(ramp.light, 0.75);
+    ctx.fillRect(x0, y0, s, s * 0.24);
+    ctx.fillStyle = withAlpha(ramp.shadow, 0.55);
+    ctx.fillRect(x0, y0 + s * 0.8, s, s * 0.2);
+    if (mat === 'stone') {
+      // Running-bond seams: a mid course line, verticals staggered per segment.
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.5);
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0 + s * 0.52); ctx.lineTo(x0 + s, y0 + s * 0.52);
+      const stagger = (seed % 2) ? 0.33 : 0.62;
+      ctx.moveTo(x0 + s * stagger, y0 + s * 0.24); ctx.lineTo(x0 + s * stagger, y0 + s * 0.52);
+      ctx.moveTo(x0 + s * (1.02 - stagger), y0 + s * 0.52); ctx.lineTo(x0 + s * (1.02 - stagger), y0 + s);
+      ctx.stroke();
+    } else {
+      // Timber grain: vertical strokes wandering slightly off-plumb.
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.3);
+      ctx.lineWidth = 1;
+      const n = 2 + (seed % 2);
+      for (let i = 0; i < n; i++) {
+        const gx = x0 + s * ((i + 0.7) / (n + 0.6));
+        ctx.beginPath();
+        ctx.moveTo(gx, y0 + s * 0.26);
+        ctx.quadraticCurveTo(gx + (hash01(i, seed + 7) - 0.5) * s * 0.14, y0 + s * 0.6, gx, y0 + s * 0.96);
+        ctx.stroke();
+      }
+    }
+    // A weather crack on the odd post.
+    if (hash01(seed, 51) < 0.3) {
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.55);
+      ctx.lineWidth = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(x0 + s * hash01(seed, 57), y0 + s * 0.3);
+      ctx.lineTo(x0 + s * (hash01(seed, 57) + (hash01(seed, 61) - 0.5) * 0.3), y0 + s * (0.6 + hash01(seed, 67) * 0.3));
+      ctx.stroke();
+    }
+    ctx.strokeStyle = edgeCol;
     ctx.lineWidth = 2;
-    ctx.fillRect(o.pos.x - r * 0.85, o.pos.y - r * 0.85, r * 1.7, r * 1.7);
-    ctx.strokeRect(o.pos.x - r * 0.85, o.pos.y - r * 0.85, r * 1.7, r * 1.7);
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(o.pos.x - r * 0.85, o.pos.y - r * 0.85, r * 1.7, r * 0.4);
-    ctx.globalAlpha = 1;
+    ctx.strokeRect(x0, y0, s, s);
+  }
+};
+
+export interface ChasmParams {
+  /** Lip stone ringing the drop. */
+  rim?: { color?: ColorSpec; alpha?: number; grow?: number };
+  /** The dark itself. */
+  core: { color: ColorSpec };
+  /** A descending shelf terrace between lip and dark (0 to skip, default 1). */
+  bands?: number;
+  /** Ground-fracture cracks radiating out from the lip. */
+  cracks?: { color?: ColorSpec; chance?: number };
+  /** Broken slabs left overhanging the drop (~30% of mouths). */
+  ledges?: { color?: ColorSpec };
+  /** Slow pale breath drifting deep inside (big drops only). */
+  mist?: { color?: ColorSpec; alpha?: number };
+  /** Faint pulsing inner glow — the unnatural pits say so themselves. */
+  glow?: { color: ColorSpec; alpha?: number };
+}
+
+/** CHASMS — a real drop instead of a flat disc: lip stone, a descending shelf
+ *  terrace, per-well depth gradients pulling the eye down, fracture cracks
+ *  radiating into the ground, chance-rolled overhang slabs, and a slow mist
+ *  breathing far below. Merged-blob silhouettes throughout, so a chasm CHAIN
+ *  reads as one wound and never as stamped circles. */
+const chasmPit: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as ChasmParams;
+  const { ctx, theme, time } = env;
+  const coreCol = resolveColor(p.core.color, theme);
+  const rimCol = resolveColor(p.rim?.color, theme, shade(coreCol, 0.4));
+  const rimGrow = p.rim?.grow ?? 6;
+  // The lip: weathered stone ringing the whole merged silhouette.
+  if (p.rim) {
+    ctx.globalAlpha = p.rim.alpha ?? 0.5;
+    ctx.fillStyle = rimCol;
+    blobPath(ctx, group, rimGrow);
+    ctx.fill();
+  }
+  // One descending shelf between lip and dark — the ground stepping down.
+  const bands = p.bands ?? 1;
+  for (let k = 0; k < bands; k++) {
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = mix(rimCol, coreCol, (k + 1) / (bands + 1));
+    blobPath(ctx, group, rimGrow * (1 - (k + 1) / (bands + 1)));
+    ctx.fill();
+  }
+  // The dark, full blocking silhouette.
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = coreCol;
+  blobPath(ctx, group, 0);
+  ctx.fill();
+  // Per-well detail.
+  for (const d of group) {
+    const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
+    const r = d.radius;
+    // Depth well: the center falls further than the walls around it.
+    const dg = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, r * 0.85);
+    dg.addColorStop(0, withAlpha('#000000', 0.7));
+    dg.addColorStop(1, withAlpha('#000000', 0));
+    ctx.fillStyle = dg;
+    ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, r * 0.85, 0, Math.PI * 2); ctx.fill();
+    // Fracture cracks running out into the ground that failed.
+    if (p.cracks && hash01(seed, 21) < (p.cracks.chance ?? 0.5)) {
+      const cc = p.cracks.color ? resolveColor(p.cracks.color, theme) : withAlpha(shade(rimCol, -0.35), 0.5);
+      ctx.strokeStyle = cc;
+      ctx.lineWidth = 1.2;
+      ctx.lineCap = 'round';
+      const n = 2 + (seed % 2);
+      for (let i = 0; i < n; i++) {
+        const a0 = hash01(i, seed + 27) * Math.PI * 2;
+        let x = d.pos.x + Math.cos(a0) * (r + rimGrow * 0.6);
+        let y = d.pos.y + Math.sin(a0) * (r + rimGrow * 0.6);
+        let ang = a0;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let s = 0; s < 2; s++) {
+          ang += (hash01(i * 3 + s, seed + 31) - 0.5) * 1.0;
+          x += Math.cos(ang) * r * (0.2 + hash01(s, seed + 37) * 0.16);
+          y += Math.sin(ang) * r * (0.2 + hash01(s, seed + 37) * 0.16);
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+    // An overhang slab somebody will trust one day.
+    if (p.ledges && hash01(seed, 41) < 0.3 && r > 20) {
+      const lc = p.ledges.color ? resolveColor(p.ledges.color, theme) : shade(rimCol, 0.08);
+      const a = hash01(seed, 47) * Math.PI * 2;
+      const bx = d.pos.x + Math.cos(a) * r * 0.92, by = d.pos.y + Math.sin(a) * r * 0.92;
+      const inx = -Math.cos(a), iny = -Math.sin(a);
+      const w = r * (0.16 + hash01(seed, 53) * 0.1), len = r * (0.22 + hash01(seed, 57) * 0.14);
+      // Its shadow on the void below first, then the slab.
+      ctx.fillStyle = withAlpha('#000000', 0.5);
+      ctx.beginPath();
+      ctx.ellipse(bx + inx * len * 0.7 + w * 0.2, by + iny * len * 0.7 + w * 0.3, len * 0.7, w * 0.9, a, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = lc;
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(a + Math.PI / 2) * w, by + Math.sin(a + Math.PI / 2) * w);
+      ctx.lineTo(bx - Math.cos(a + Math.PI / 2) * w, by - Math.sin(a + Math.PI / 2) * w);
+      ctx.lineTo(bx + inx * len - Math.cos(a + Math.PI / 2) * w * 0.55, by + iny * len - Math.sin(a + Math.PI / 2) * w * 0.55);
+      ctx.lineTo(bx + inx * len + Math.cos(a + Math.PI / 2) * w * 0.55, by + iny * len + Math.sin(a + Math.PI / 2) * w * 0.55);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(lc, -0.45), 0.8);
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+    // The breath of the deep: pale mist crossing the well, slowly.
+    if (p.mist && r > 34) {
+      const mc = resolveColor(p.mist.color, theme, '#8a92a2');
+      const ma = p.mist.alpha ?? 0.06;
+      for (let i = 0; i < 2; i++) {
+        const cyc = (time * 0.05 + hash01(i, seed + 61)) % 1;
+        const mx = d.pos.x + Math.cos(cyc * Math.PI * 2) * r * 0.4;
+        const my = d.pos.y + Math.sin(cyc * Math.PI * 2 + i * 2.4) * r * 0.34;
+        const mg = ctx.createRadialGradient(mx, my, 0, mx, my, r * 0.42);
+        mg.addColorStop(0, withAlpha(mc, ma * (0.7 + 0.3 * Math.sin(time * 0.7 + i))));
+        mg.addColorStop(1, withAlpha(mc, 0));
+        ctx.fillStyle = mg;
+        ctx.beginPath(); ctx.arc(mx, my, r * 0.42, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // The unnatural pits glow, faintly, from below.
+    if (p.glow) {
+      const gc = resolveColor(p.glow.color, theme);
+      const pulse = 0.6 + 0.4 * Math.sin(time * 1.1 + seed * 0.1);
+      const gg = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, r * 0.6);
+      gg.addColorStop(0, withAlpha(gc, (p.glow.alpha ?? 0.12) * pulse));
+      gg.addColorStop(1, withAlpha(gc, 0));
+      ctx.fillStyle = gg;
+      ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, r * 0.6, 0, Math.PI * 2); ctx.fill();
+    }
   }
 };
 
@@ -1503,33 +1864,167 @@ const windowSlit: GroupPainter = (env, group) => {
   }
 };
 
-/** Cave mouths: a black throat under a stone lip, with a flickering glow. */
+export interface CaveMouthParams {
+  /** Brow/jamb stone color (default the biome's own obstacle rock). */
+  color?: ColorSpec;
+  edge?: ColorSpec;
+  material?: string;
+  /** Interior torch-glow licking the throat wall. */
+  glow?: ColorSpec;
+  /** Underground black at the center of the throat. */
+  throat?: ColorSpec;
+  /** Chance a mouth renders as a jumbled rockfall ring instead of a browed
+   *  arch (default 0.35). */
+  tumble?: number;
+  /** Stalactite fangs hanging into the opening (~55% of mouths). */
+  teeth?: { color?: ColorSpec };
+  /** Fallen threshold stones at the approach (~60%). */
+  rubble?: { color?: ColorSpec };
+  /** Hanging growth trailing over the lip — theme-gated, so verdant biomes
+   *  drape their caves and deserts stay bare (~45%). */
+  vines?: { color?: ColorSpec };
+  label?: string;
+}
+
+/** CAVE MOUTHS — geology, not an icon: every entrance FORM-ROLLS its portal
+ *  (a browed arch of real form-rolled stones, or a tumbled rockfall ring), the
+ *  throat falls away down a true depth gradient with torchlight licking up
+ *  from below, and chance-rolled accents (stalactite fangs, threshold rubble,
+ *  theme-gated hanging vines) dress each one differently. Same entry, every
+ *  biome, no two mouths alike. */
 const caveMouth: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { glow?: ColorSpec; label?: string };
+  const p = (def.params ?? {}) as unknown as CaveMouthParams;
   const { ctx, theme, time } = env;
+  const base = resolveColor(p.color, theme, theme.obstacle ?? '#6a625a');
+  const ramp = rampOf(base, materialOf(p.material ?? 'stone'));
+  const edgeCol = p.edge ? resolveColor(p.edge, theme) : withAlpha(ramp.outline, 0.9);
+  const glowCol = resolveColor(p.glow, theme, '#caa860');
+  const throatCol = resolveColor(p.throat, theme, '#0a0a0c');
   for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const r = o.radius;
     const flick = 0.85 + 0.15 * Math.sin(time * 5 + o.pos.x);
-    ctx.globalAlpha = 0.16 * flick;
-    ctx.fillStyle = resolveColor(p.glow, theme, '#caa860');
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Threshold apron: worn dust fanning from the mouth, seating it in the land.
+    ctx.globalAlpha = 0.16;
+    ctx.fillStyle = shade(base, -0.35);
     ctx.beginPath();
-    ctx.arc(o.pos.x, o.pos.y, o.radius * 1.4 * flick, 0, Math.PI * 2);
+    ctx.ellipse(0, r * 0.3, r * 1.5, r * 1.05, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#0a0a0c';
-    ctx.beginPath();
-    ctx.arc(o.pos.x, o.pos.y, o.radius, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = theme.obstacleEdge;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(o.pos.x, o.pos.y, o.radius, Math.PI, 0);
-    ctx.stroke();
+    // THE THROAT: underground black swallowing a rim-lifted edge — the hole
+    // reads round because its rim remembers the daylight.
+    const tg = ctx.createRadialGradient(0, r * 0.1, r * 0.12, 0, 0, r);
+    tg.addColorStop(0, throatCol);
+    tg.addColorStop(0.7, throatCol);
+    tg.addColorStop(1, shade(throatCol, 0.3));
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    // Torchlight from somewhere below, licking up the near throat wall.
+    ctx.globalAlpha = 0.22 + 0.12 * flick;
+    const gg = ctx.createRadialGradient(0, r * 0.3, 0, 0, r * 0.3, r * 0.85);
+    gg.addColorStop(0, glowCol);
+    gg.addColorStop(1, withAlpha(glowCol, 0));
+    ctx.fillStyle = gg;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // The overhang's bite: a deep shadow arc under the top rim.
+    ctx.strokeStyle = withAlpha('#000000', 0.5);
+    ctx.lineWidth = r * 0.3;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.82, Math.PI * 1.06, Math.PI * 1.94); ctx.stroke();
+    // Stalactite fangs hanging into the opening.
+    if (p.teeth && hash01(seed, 141) < 0.55) {
+      const tc = p.teeth.color ? resolveColor(p.teeth.color, theme) : shade(base, -0.22);
+      const n = 2 + (seed % 3);
+      for (let i = 0; i < n; i++) {
+        const a = Math.PI * (1.2 + ((i + 0.5) / n) * 0.6) + (hash01(i, seed + 147) - 0.5) * 0.14;
+        const bx = Math.cos(a) * r * 0.92, by = Math.sin(a) * r * 0.92;
+        const len = r * (0.26 + hash01(i, seed + 151) * 0.22);
+        const wid = r * (0.09 + hash01(i, seed + 157) * 0.05);
+        ctx.fillStyle = tc;
+        ctx.beginPath();
+        ctx.moveTo(bx - wid, by);
+        ctx.lineTo(bx + wid, by);
+        ctx.lineTo(bx + (hash01(i, seed + 163) - 0.5) * wid, by + len);
+        ctx.closePath();
+        ctx.fill();
+        // The fang's lit flank catches the interior glow.
+        ctx.strokeStyle = withAlpha(glowCol, 0.28 * flick);
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(bx + wid * 0.6, by + len * 0.16);
+        ctx.lineTo(bx + (hash01(i, seed + 163) - 0.5) * wid * 0.8, by + len * 0.88);
+        ctx.stroke();
+      }
+    }
+    // FORM ROLL: a browed arch of real stones, or a tumbled rockfall ring.
+    const squash = 0.86 + hash01(seed, 3) * 0.14;
+    const bodies: RockBody[] = [];
+    if (hash01(seed, 91) < (p.tumble ?? 0.35)) {
+      const n = 4 + (seed % 3);
+      for (let i = 0; i < n; i++) {
+        // Ring the top arc only — the approach side stays open.
+        const a = Math.PI + ((i + 0.5) / n) * Math.PI + (hash01(i, seed + 27) - 0.5) * 0.22;
+        const d = r * (0.94 + hash01(i, seed + 31) * 0.14);
+        bodies.push({
+          cx: Math.cos(a) * d, cy: Math.sin(a) * d * 0.92,
+          r: r * (0.3 + hash01(i, seed + 37) * 0.18), seed: seed + i * 7 + 3, squash,
+        });
+      }
+    } else {
+      // One heavy brow over the crown, a jamb stone at each shoulder.
+      bodies.push({ cx: 0, cy: -r * 0.82, r: r * 0.62, seed, squash: squash * 0.72 });
+      bodies.push({ cx: -r * 0.92, cy: -r * 0.18, r: r * 0.4, seed: seed + 13, squash });
+      bodies.push({ cx: r * 0.92, cy: -r * 0.18, r: r * 0.38, seed: seed + 29, squash });
+    }
+    for (const b of bodies) drawRockBody(ctx, b, ramp, edgeCol, 1, false);
+    // Threshold rubble: what the mountain shed onto the doorstep.
+    if (p.rubble && hash01(seed, 171) < 0.6) {
+      const rc = p.rubble.color ? resolveColor(p.rubble.color, theme) : base;
+      const n = 2 + (seed % 3);
+      for (let i = 0; i < n; i++) {
+        const a = Math.PI * 0.5 + (hash01(i, seed + 177) - 0.5) * 1.6;
+        const d = r * (1.0 + hash01(i, seed + 181) * 0.35);
+        ctx.fillStyle = shade(rc, hash01(i, seed + 187) * 0.3 - 0.2);
+        ctx.beginPath();
+        ctx.ellipse(Math.cos(a) * d, Math.sin(a) * d * 0.9,
+          1.8 + hash01(i, seed + 191) * 2.6, 1.4 + hash01(i, seed + 193) * 1.8,
+          a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Hanging growth over the lip — only where the biome grows any.
+    if (p.vines && hash01(seed, 201) < 0.45) {
+      const vc = resolveColorOpt(p.vines.color, theme);
+      if (vc) {
+        ctx.strokeStyle = withAlpha(vc, 0.75);
+        ctx.lineCap = 'round';
+        const n = 3 + (seed % 3);
+        for (let i = 0; i < n; i++) {
+          const a = Math.PI * (1.14 + ((i + 0.5) / n) * 0.72);
+          const bx = Math.cos(a) * r * 0.98, by = Math.sin(a) * r * 0.98;
+          const len = r * (0.3 + hash01(i, seed + 207) * 0.34);
+          const sway = Math.sin(time * 0.8 + i * 2.1 + seed) * r * 0.03;
+          ctx.lineWidth = 1.6;
+          ctx.beginPath();
+          ctx.moveTo(bx, by);
+          ctx.quadraticCurveTo(bx + sway, by + len * 0.6, bx + sway * 1.6, by + len);
+          ctx.stroke();
+          ctx.fillStyle = withAlpha(vc, 0.75);
+          ctx.beginPath();
+          ctx.arc(bx + sway * 1.6, by + len, 1.3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    }
     if (p.label) {
       ctx.fillStyle = '#d8d4c8';
       ctx.font = '11px Verdana';
       ctx.textAlign = 'center';
-      ctx.fillText(p.label, o.pos.x, o.pos.y + o.radius + 14);
+      ctx.fillText(p.label, 0, r + 14);
     }
+    ctx.restore();
   }
 };
 
@@ -2362,9 +2857,10 @@ const eyeStalk: GroupPainter = (env, group, def) => {
 /** RIB ARCHES — the last tenant's cage jutting from the meat: paired bone
  *  hoops with knuckled ends, aged down the middle. */
 const ribArch: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { bone?: ColorSpec };
+  const p = (def.params ?? {}) as { bone?: ColorSpec; material?: string };
   const { ctx, theme } = env;
   const bone = resolveColor(p.bone, theme, '#d8cdb8');
+  const ramp = rampOf(bone, materialOf(p.material ?? 'bone'));
   for (const o of group) {
     const seed = ((o.pos.x * 5 + o.pos.y * 17) | 0) >>> 0;
     const r = o.radius;
@@ -2376,17 +2872,24 @@ const ribArch: GroupPainter = (env, group, def) => {
     for (let i = 0; i < ribs; i++) {
       const off = (i - (ribs - 1) / 2) * r * 0.62;
       const rr = r * (0.72 - Math.abs(i - (ribs - 1) / 2) * 0.14);
-      const tone = shade(bone, (hash01(i, seed) - 0.6) * 0.16);
+      const tone = shade(ramp.base, (hash01(i, seed) - 0.6) * 0.16);
       ctx.strokeStyle = tone;
       ctx.lineWidth = Math.max(3, r * 0.16);
       ctx.beginPath();
       ctx.arc(off, 0, rr, Math.PI * 0.82, Math.PI * 2.18);
       ctx.stroke();
-      // Aged shadow along each hoop.
-      ctx.strokeStyle = withAlpha(shade(bone, -0.42), 0.5);
+      // Aged shadow along each hoop (the ramp's cool bone shadow).
+      ctx.strokeStyle = withAlpha(ramp.shadow, 0.55);
       ctx.lineWidth = Math.max(1, r * 0.05);
       ctx.beginPath();
       ctx.arc(off, r * 0.04, rr, Math.PI * 0.9, Math.PI * 2.1);
+      ctx.stroke();
+      // A lit crest where the hoop faces the sun.
+      const L = VIS_CFG.lightAngle;
+      ctx.strokeStyle = withAlpha(ramp.light, 0.55);
+      ctx.lineWidth = Math.max(1, r * 0.045);
+      ctx.beginPath();
+      ctx.arc(off, -r * 0.03, rr, L - 0.55, L + 0.55);
       ctx.stroke();
       // Knuckled ends where the bone sinks back into the floor.
       ctx.fillStyle = shade(tone, 0.12);
@@ -2394,6 +2897,16 @@ const ribArch: GroupPainter = (env, group, def) => {
         ctx.beginPath();
         ctx.arc(off + Math.cos(ea) * rr, Math.sin(ea) * rr, Math.max(2, r * 0.1), 0, Math.PI * 2);
         ctx.fill();
+      }
+      // Weather cracks ticking across the hoop.
+      if (hash01(i, seed + 73) < 0.45) {
+        const ca = Math.PI * (1.1 + hash01(i, seed + 79) * 0.8);
+        ctx.strokeStyle = withAlpha(ramp.outline, 0.5);
+        ctx.lineWidth = 0.9;
+        ctx.beginPath();
+        ctx.moveTo(off + Math.cos(ca) * (rr - r * 0.09), Math.sin(ca) * (rr - r * 0.09));
+        ctx.lineTo(off + Math.cos(ca) * (rr + r * 0.09), Math.sin(ca) * (rr + r * 0.09));
+        ctx.stroke();
       }
     }
     ctx.restore();
@@ -2403,10 +2916,11 @@ const ribArch: GroupPainter = (env, group, def) => {
 /** A TOOTH ROW — enamel cones erupting along an arc of raw gum: the floor
  *  remembering it has a mouth somewhere. One is always cracked. */
 const teethRow: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { gum?: ColorSpec; enamel?: ColorSpec };
+  const p = (def.params ?? {}) as { gum?: ColorSpec; enamel?: ColorSpec; material?: string };
   const { ctx, theme } = env;
   const gum = resolveColor(p.gum, theme, '#6a1a28');
-  const enamel = resolveColor(p.enamel, theme, '#e8e0d0');
+  const eRamp = rampOf(resolveColor(p.enamel, theme, '#e8e0d0'), materialOf(p.material ?? 'bone'));
+  const enamel = eRamp.base;
   for (const o of group) {
     const seed = ((o.pos.x * 21 + o.pos.y * 3) | 0) >>> 0;
     const r = o.radius;
@@ -2442,11 +2956,11 @@ const teethRow: GroupPainter = (env, group, def) => {
       ctx.lineTo(tx, ty);
       ctx.closePath();
       ctx.fill();
-      ctx.strokeStyle = withAlpha(shade(enamel, -0.5), 0.6);
+      ctx.strokeStyle = withAlpha(eRamp.outline, 0.6);
       ctx.lineWidth = 0.9;
       ctx.stroke();
       if (i !== cracked) {
-        ctx.strokeStyle = withAlpha('#ffffff', 0.7);
+        ctx.strokeStyle = withAlpha(eRamp.highlight, 0.75);
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(tx + Math.cos(a) * len * 0.2, ty + Math.sin(a) * len * 0.2);
@@ -2913,37 +3427,143 @@ const door: GroupPainter = (env, group) => {
   }
 };
 
-/** THE BREACH — a torn molten wound (dwell to cross into the Underworld). */
+export interface BreachParams {
+  /** The molten tear color. */
+  edge?: ColorSpec;
+  /** Charred crust-stone color heaved up round the wound (default a scorched
+   *  take on the biome's own rock). */
+  rock?: ColorSpec;
+  /** Crust-stone material (default 'ember' — cracked skin over inner glow). */
+  material?: string;
+  /** The underworld black at the center. */
+  throat?: ColorSpec;
+  /** Approximate radiating ground-crack count (default 5). */
+  cracks?: number;
+  /** Rising ember motes (default on; pass null-ish color off via 0 count). */
+  motes?: { color?: ColorSpec; count?: number };
+  label?: string;
+}
+
+/** THE BREACH — the torn way into the Underworld, drawn like a wound the
+ *  ground can't close: a form-rolled tear over a molten under-rim, heaved
+ *  ember-crusted slag stones, ground cracks radiating heat-light, and embers
+ *  forever drifting up out of the dark. Dwell at the lip to cross. */
 const breach: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { edge?: ColorSpec; label?: string };
-  const { ctx, time } = env;
-  const edge = resolveColor(p.edge, env.theme, '#d84a2a');
+  const p = (def.params ?? {}) as unknown as BreachParams;
+  const { ctx, theme, time } = env;
+  const edge = resolveColor(p.edge, theme, '#d84a2a');
+  const throatCol = resolveColor(p.throat, theme, '#0a0508');
+  const rockBase = p.rock ? resolveColor(p.rock, theme) : shade(resolveColor('theme:obstacle', theme, '#4a4442'), -0.35);
+  const rockRamp = rampOf(rockBase, materialOf(p.material ?? 'ember'));
   for (const o of group) {
-    const pulse = 0.5 + 0.5 * Math.sin(time * 2.8);
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const r = o.radius;
+    const pulse = 0.5 + 0.5 * Math.sin(time * 2.8 + seed * 0.1);
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
-    ctx.fillStyle = '#0a0508';
+    // Scorch halo: the ground round the wound burnt bare.
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = shade(throatCol, 0.12);
     ctx.beginPath();
-    for (let i = 0; i < 9; i++) {
-      const a = (i / 9) * Math.PI * 2;
-      const rr = o.radius * (0.7 + 0.3 * Math.sin(i * 2.7));
-      const x = Math.cos(a) * rr, y = Math.sin(a) * rr * 0.7;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    ctx.ellipse(0, 0, r * 1.45, r * 1.12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Radiating ground cracks, lit from below and breathing with the pulse.
+    const crackN = Math.max(0, Math.round((p.cracks ?? 5) * (0.7 + hash01(seed, 11) * 0.6)));
+    ctx.lineCap = 'round';
+    for (let i = 0; i < crackN; i++) {
+      const a0 = hash01(i, seed + 17) * Math.PI * 2;
+      let x = Math.cos(a0) * r * 0.72, y = Math.sin(a0) * r * 0.62;
+      let ang = a0;
+      ctx.strokeStyle = withAlpha(edge, 0.24 + 0.3 * pulse * hash01(i, seed + 19));
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      const segs = 2 + (i % 2);
+      for (let s = 0; s < segs; s++) {
+        ang += (hash01(i * 3 + s, seed + 23) - 0.5) * 1.1;
+        x += Math.cos(ang) * r * (0.3 + hash01(s, seed + 29) * 0.2);
+        y += Math.sin(ang) * r * (0.24 + hash01(s, seed + 31) * 0.16);
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
     }
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = edge;
-    ctx.lineWidth = 2 + pulse * 2;
-    ctx.globalAlpha = 0.5 + 0.4 * pulse;
+    // The TEAR: a form-rolled ragged polygon — no two breaches rip alike.
+    const verts = 8 + (seed % 4);
+    const rim: { x: number; y: number }[] = [];
+    for (let i = 0; i < verts; i++) {
+      const a = (i / verts) * Math.PI * 2;
+      const rr = r * (0.62 + hash01(i, seed + 37) * 0.36);
+      rim.push({ x: Math.cos(a) * rr, y: Math.sin(a) * rr * 0.72 });
+    }
+    const tracePath = () => {
+      ctx.beginPath();
+      rim.forEach((v, i) => { if (i === 0) ctx.moveTo(v.x, v.y); else ctx.lineTo(v.x, v.y); });
+      ctx.closePath();
+    };
+    // Molten under-rim first: the wound's heat bleeding past its lip.
+    tracePath();
+    ctx.strokeStyle = withAlpha(edge, 0.3 + 0.25 * pulse);
+    ctx.lineWidth = 6 + pulse * 3;
     ctx.stroke();
-    ctx.globalAlpha = 0.2 + 0.2 * pulse;
-    ctx.fillStyle = edge;
-    ctx.beginPath(); ctx.arc(0, 0, o.radius * 0.4, 0, Math.PI * 2); ctx.fill();
+    // The drop itself: a depth gradient falling to underworld black.
+    const dg = ctx.createRadialGradient(0, 0, r * 0.08, 0, 0, r * 0.9);
+    dg.addColorStop(0, throatCol);
+    dg.addColorStop(0.62, throatCol);
+    dg.addColorStop(1, shade(edge, -0.55));
+    tracePath();
+    ctx.fillStyle = dg;
+    ctx.fill();
+    // The living edge: bright tear-line, pulsing.
+    tracePath();
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = 1.6 + pulse * 1.8;
+    ctx.globalAlpha = 0.55 + 0.4 * pulse;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Heaved slag stones crusting the rim — ember-cracked, form-rolled.
+    const stoneN = 2 + (seed % 3);
+    for (let i = 0; i < stoneN; i++) {
+      const a = hash01(i, seed + 43) * Math.PI * 2;
+      const d = r * (0.86 + hash01(i, seed + 47) * 0.22);
+      drawRockBody(ctx, {
+        cx: Math.cos(a) * d, cy: Math.sin(a) * d * 0.74,
+        r: r * (0.16 + hash01(i, seed + 53) * 0.12),
+        seed: seed + i * 11 + 5, squash: 0.9,
+      }, rockRamp, withAlpha(rockRamp.outline, 0.9), 1.1, false);
+      // Each stone's wound-side face catches the glow.
+      ctx.fillStyle = withAlpha(edge, 0.16 + 0.14 * pulse);
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * d * 0.88, Math.sin(a) * d * 0.64, r * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The molten heart, breathing under everything that fell in.
+    ctx.globalAlpha = 0.18 + 0.2 * pulse;
+    const hg = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.42);
+    hg.addColorStop(0, shade(edge, 0.25));
+    hg.addColorStop(1, withAlpha(edge, 0));
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Embers drifting up out of the dark, forever.
+    const moteN = p.motes?.count ?? 5;
+    const moteCol = resolveColor(p.motes?.color, theme, shade(edge, 0.3));
+    for (let i = 0; i < moteN; i++) {
+      const cyc = (time * (0.16 + hash01(i, seed + 61) * 0.12) + hash01(i, seed + 67)) % 1;
+      const mx = (hash01(i, seed + 71) - 0.5) * r * 1.1 + Math.sin(time * 1.7 + i * 2.3) * r * 0.06;
+      const my = r * 0.5 - cyc * r * 1.6;
+      ctx.globalAlpha = (1 - cyc) * 0.7;
+      ctx.fillStyle = moteCol;
+      ctx.beginPath();
+      ctx.arc(mx, my, 1 + (1 - cyc) * 1.1, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.globalAlpha = 1;
     if (p.label) {
       ctx.textAlign = 'center';
       ctx.font = '9px Verdana';
       ctx.fillStyle = '#d88a6a';
-      ctx.fillText(p.label, 0, o.radius + 14);
+      ctx.fillText(p.label, 0, r + 14);
     }
     ctx.restore();
   }
@@ -3530,7 +4150,7 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
 }
 
 export const PAINTERS: Record<string, GroupPainter> = {
-  liquid, mound, boulder, cairn: cairnPainter, scree,
+  liquid, chasmPit, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
   campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,

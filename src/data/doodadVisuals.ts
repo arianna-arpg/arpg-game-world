@@ -193,18 +193,28 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
 
   // --- Pits (the void wins over every ground overlay), then spans ---------
+  // THE DROP READS AS A DROP: lip stone, a descending shelf, per-well depth
+  // gradients, fracture cracks in the ground that failed, overhang slabs,
+  // and mist breathing far below. Chains merge into one wound (blob paths).
   void_chasm: {
-    painter: 'liquid', order: 38,
+    painter: 'chasmPit', order: 38,
     params: {
-      rim: { color: '#3a2a52', alpha: 0.45, grow: 5 },
-      core: { color: '#020205', alpha: 1 },
+      rim: { color: '#3a2a52', alpha: 0.45, grow: 6 },
+      core: { color: '#020205' },
+      cracks: { chance: 0.55 },
+      ledges: {},
+      mist: { color: '#6a5a92', alpha: 0.07 },
+      glow: { color: '#7a5ab8', alpha: 0.1 },
     },
   },
   chasm: {
-    painter: 'liquid', order: 40,
+    painter: 'chasmPit', order: 40,
     params: {
-      rim: { color: 'theme:obstacleEdge', alpha: 0.5, grow: 5 },
-      core: { color: 'theme:chasm|#040409', alpha: 1 },
+      rim: { color: 'theme:obstacleEdge', alpha: 0.5, grow: 6 },
+      core: { color: 'theme:chasm|#040409' },
+      cracks: {},
+      ledges: {},
+      mist: {},
     },
   },
   bridge: { painter: 'plank', order: 44 },
@@ -469,7 +479,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
 
   // --- Built things ---------------------------------------------------------
-  wall: { painter: 'palisade', order: 52, longShadow: 0.6, params: { fill: 'theme:wall|#5e4c34', edge: '#2c2418' } },
+  // Timber by default; a structure wanting masonry says material:'stone' and
+  // the same painter lays running-bond seams instead of grain.
+  wall: { painter: 'palisade', order: 52, longShadow: 0.6, params: { fill: 'theme:wall|#5e4c34', edge: '#2c2418', material: 'wood' } },
   window: { painter: 'windowSlit', order: 58 },
   door: { painter: 'door', order: 58 },
   dock: {
@@ -480,9 +492,16 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'campfire', order: 53,
     light: { radius: -5, color: '#ffae52', intensity: 0.6, flicker: 6 },
   },
+  // Geology, not an icon: the mouth form-rolls its portal (browed arch or
+  // rockfall ring) from the biome's own stone, with chance-rolled stalactite
+  // fangs, threshold rubble, and theme-gated hanging vines.
   cave_entrance: {
     painter: 'caveMouth', order: 55,
-    params: { glow: '#caa860', label: 'Cave' },
+    params: {
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      glow: '#caa860', teeth: {}, rubble: {}, vines: { color: 'theme:tree' },
+      label: 'Cave',
+    },
     light: { radius: -2, color: '#caa860', intensity: 0.25, flicker: 2.5 },
   },
 
