@@ -98,7 +98,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'demon_pit', chance: 0.2 }, { landmark: 'void_pillars', chance: 0.1 }] },
   desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 104,
     structures: [{ structure: 'grand_castle', chance: 0.1 }, { structure: 'watchtower', chance: 0.3, count: [1, 2] }],
-    landmarks: [{ landmark: 'oasis', chance: 0.3 }, { landmark: 'canyon', chance: 0.25 }, { landmark: 'sinkhole', chance: 0.12 }] },
+    landmarks: [{ landmark: 'oasis', chance: 0.3 }, { landmark: 'canyon', chance: 0.25 }, { landmark: 'sinkhole', chance: 0.12 },
+      { landmark: 'maggot_burrow', chance: 0.14 }] },
   // MARINE family — these lean to the 'islands' layout (land lobes + bridges + sea).
   beach:  { patronFaction: 'wild', mapColor: '#d8c890', label: 'Coast', spacing: 84,
     marine: 'coast', allowedLayouts: { plains: 2, islands: 1 },
@@ -172,7 +173,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // CAVERN — the biome tag for the underground tilesets (they previously
   // carried none, so cave zones fell back to PLAINS wildlife: hares in the
   // dark). No patron marches from here; the dark keeps its own.
-  cavern:   { patronFaction: 'wild', mapColor: '#5a5462', label: 'Cavern', spacing: 72 },
+  cavern:   { patronFaction: 'wild', mapColor: '#5a5462', label: 'Cavern', spacing: 72,
+    landmarks: [{ landmark: 'maggot_burrow', chance: 0.18 }] },
   crystal:  { patronFaction: 'elemental', mapColor: '#7fd0ff', label: 'Crystal', spacing: 84 },
   // VOLCANIC: one tileset, THREE generations (the recipe-tweak showcase) — a
   // spiral cauldron over a lava sea, a winding lava-tube gut, or open plains;

@@ -695,6 +695,11 @@ export class Actor {
   /** Telegraphed coalesce-burst config (from MonsterDef.deathBurst) — an enemy's death
    *  gathers into a spore/orb before detonating, so the player can escape. */
   deathBurst?: DeathBurstDef;
+  /** BOLT-HOLE (MonsterDef.refuge): when routed, run FOR the nearest doodad of
+   *  this kind and slip away on arrival (the frog's dive). */
+  refuge?: { kind: string; seek?: number; text?: string };
+  /** The rout's cached bolt-hole (found once — ponds don't move). */
+  refugeGoal?: { x: number; y: number; r: number } | null;
 
   // Minion lifecycle
   /** Seconds until natural expiry (0 = permanent until killed). */

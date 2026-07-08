@@ -608,6 +608,10 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
     return from ?? actor.aiLastSeen ?? null;
   };
   const rout = (): boolean => {
+    // REFUGE (MonsterDef.refuge): a routed creature with a bolt-hole makes
+    // FOR it instead of merely running — and slips away on arrival (the
+    // frog's dive). Falls through to the ordinary rout when none is near.
+    if (actor.refuge && refugeStep(actor, world, dt)) return true;
     // Run from the nearest visible threat (memory of the last target serves
     // when nothing is in sight — panic doesn't reason). JUKE-movers flee in
     // hooks and freezes (the hare's flight); everyone else runs straight.
@@ -1064,6 +1068,34 @@ function fleeStep(actor: Actor, world: World, dt: number): void {
   if (dist(actor.pos, goal) < 70) world.onFleeArrive(actor);
 }
 
+/** REFUGE (MonsterDef.refuge): the routed creature runs FOR its bolt-hole —
+ *  the nearest matching doodad, found ONCE and cached (ponds don't move) —
+ *  and SLIPS AWAY on reaching its rim. Returns false when none is in seek
+ *  range, letting the ordinary rout run. */
+function refugeStep(actor: Actor, world: World, dt: number): boolean {
+  const r = actor.refuge;
+  if (!r) return false;
+  if (actor.refugeGoal === undefined) {
+    let best: { x: number; y: number; r: number } | null = null;
+    let bd = r.seek ?? 900;
+    for (const d of world.doodads) {
+      if (d.kind !== r.kind || d.gone) continue;
+      const dd = dist(actor.pos, d.pos);
+      if (dd < bd) { bd = dd; best = { x: d.pos.x, y: d.pos.y, r: d.radius }; }
+    }
+    actor.refugeGoal = best; // null = searched, nothing near — rout normally
+  }
+  const goal = actor.refugeGoal;
+  if (!goal) return false;
+  if (dist(actor.pos, vec(goal.x, goal.y)) <= Math.max(16, goal.r * 0.6)) {
+    world.slipAway(actor, `${actor.name} ${r.text ?? 'slips away!'}`);
+    return true;
+  }
+  actor.facing = angleTo(actor.pos, vec(goal.x, goal.y));
+  moveToward(actor, world, vec(goal.x, goal.y), dt);
+  return true;
+}
+
 /** The blocked-lane strafe: circle the blocker, biased toward the target so
  *  the arc eventually rounds the corner; flip direction if it isn't working.
  *  Returns true while the lane is blocked (the tick is consumed). */
@@ -1132,9 +1164,9 @@ function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number):
   if (!style || style === 'wander') return false;
   const spacing = sq.spacing ?? 46;
   if (actor.squadLeader) {
-    // The IDOL stands its ground; drill/loose leaders wander normally and
-    // the band dresses on them.
-    return style === 'circle';
+    // The IDOL stands its ground (circle) and the siege ANCHOR holds the
+    // yard; drill/loose leaders wander normally and the band dresses on them.
+    return style === 'circle' || style === 'siege';
   }
   const lead = world.actors.find(x =>
     !x.dead && x.squadId === actor.squadId && x.squadLeader);
@@ -1188,6 +1220,44 @@ function squadIdle(actor: Actor, world: World, tuning: BrainTuning, dt: number):
     case 'mixed':
       // A stable split: some stand vigil where they are, some drift.
       return stableRoll(actor.id, 9.13) < 0.5;
+    case 'siege': {
+      // THE GARRISON POSTURE: towers crewed before a shot is fired. The
+      // ranged rank claims free structure slots (the claim + its anchor/mods
+      // persist into combat — the fight starts with the walls already
+      // manned); everyone else takes a picket ring around the anchor, eyes
+      // OUT. Garrison state is sticky by design: a siege doesn't march.
+      if (actor.garrison) {
+        if (actor.garrison.pending) {
+          // March the pending claim to its perch (the combat kernel's walk,
+          // mirrored here so the crewing happens while the yard is quiet).
+          const slot = world.garrisonSlotById(actor.garrison.slotId);
+          if (!slot) { actor.garrison = undefined; return true; }
+          if (dist(actor.pos, slot.pos) > 22) {
+            actor.facing = angleTo(actor.pos, slot.pos);
+            moveToward(actor, world, slot.pos, dt);
+            return true;
+          }
+          world.finalizeGarrison(actor);
+        }
+        actor.facing = angleTo(lead.pos, actor.pos); // watch the approaches
+        return true;
+      }
+      const ranged = actor.skills.some(s => s && ((s.def.ai?.keepDistance ?? 0) >= 120
+        || s.def.delivery.type === 'projectile' || s.def.delivery.type === 'storm'));
+      if (ranged && world.claimGarrisonSlot(actor, sq.idle?.garrisonWithin ?? 620)) return true;
+      // The picket: a stable ring post around the anchor, facing outward.
+      if (actor.aiSign === 0) actor.aiSign = Math.random() < 0.5 ? 1 : -1;
+      const ring = sq.idle?.ring ?? spacing * 2.4;
+      const slot = stableRoll(actor.id, 6.29) * Math.PI * 2;
+      const post = vec(lead.pos.x + Math.cos(slot) * ring, lead.pos.y + Math.sin(slot) * ring);
+      if (dist(actor.pos, post) > 26) {
+        actor.facing = angleTo(actor.pos, post);
+        moveToward(actor, world, post, dt);
+      } else {
+        actor.facing = angleTo(lead.pos, actor.pos); // eyes out of the ring
+      }
+      return true;
+    }
   }
   return false;
 }

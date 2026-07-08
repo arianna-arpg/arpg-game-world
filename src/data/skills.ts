@@ -4057,6 +4057,100 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
   },
 
+  web_shot: {
+    id: 'web_shot', name: 'Web Shot',
+    description: 'Spit a hooked line of silk: a weak hit that ROOTS the caught for a breath — long enough for what spun it to arrive.',
+    tags: ['attack', 'projectile', 'physical', 'duration'], color: '#d8d8c8',
+    manaCost: 6, cooldown: 3, useTime: 0.65,
+    baseDamage: { physical: [3, 5] },
+    delivery: { type: 'projectile', speed: 340, radius: 8, range: 380 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'rooted', chance: 0.6, durationOverride: 1.2 },
+    ],
+    requirements: { dexterity: 14 },
+    ai: { range: 340, weight: 3, keepDistance: 220 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('apply_rooted', 'flat', 0.02)] },
+  },
+
+  hurl_debris: {
+    id: 'hurl_debris', name: 'Hurl Debris',
+    description: 'Unseen hands rip something loose and THROW it — a stone, a chair, a headstone. Heavy enough to stagger.',
+    tags: ['spell', 'physical', 'projectile'], color: '#b8b8d8',
+    manaCost: 7, cooldown: 1.8, useTime: 0.6,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'projectile', speed: 360, radius: 9, range: 420 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.15 },
+    ],
+    requirements: { willpower: 16 },
+    ai: { range: 380, weight: 3, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  summon_bats: {
+    id: 'summon_bats', name: 'Summon Bats',
+    description: 'Whistle a wing of crimson bats out of the dark to harry your prey.',
+    tags: ['spell', 'summon', 'minion'], color: '#a84a5a',
+    manaCost: 16, cooldown: 2, useTime: 0.7,
+    delivery: { type: 'summon', monsterId: 'crimson_bat', count: 1, maxActive: 3 },
+    meta: { skillId: 'command_assault', label: 'Attack!' },
+    effects: [],
+    requirements: { willpower: 14 },
+    ai: { range: 400, weight: 2, keepDistance: 300 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.12)] },
+  },
+
+  // --- THE EGG CLUTCH (the pod-construct incubation, worn by broodmothers):
+  //     the egg is DESTRUCTIBLE and hatches ONLY if it survives its timer —
+  //     break the clutch and the brood never comes (no onBreak: a broken
+  //     pod dies quietly). The user-facing spider fantasy, as pure data.
+  lay_brood_egg: {
+    id: 'lay_brood_egg', name: 'Lay Brood Egg',
+    description: 'Deposit a swollen egg sac. Seven seconds later it SPLITS and the brood boils out — unless someone stamps it first.',
+    tags: ['spell', 'summon', 'minion', 'duration'], color: '#c8c0a0',
+    manaCost: 14, cooldown: 9, useTime: 0.8,
+    delivery: {
+      type: 'construct', kind: 'pod', look: 'brood_egg',
+      range: 0, duration: 7, maxActive: 3, life: 40, placeRange: 80,
+      hatch: { skillId: 'egg_hatch_spiders' },
+    },
+    effects: [],
+    requirements: { willpower: 16 },
+    ai: { range: 240, weight: 2, keepDistance: 200 },
+  },
+  egg_hatch_spiders: {
+    id: 'egg_hatch_spiders', name: 'The Clutch Splits', noDrop: true,
+    description: 'The egg splits: spiderlings boil out.',
+    tags: ['spell', 'summon', 'minion'], color: '#c8c0a0',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'summon', monsterId: 'spiderling', count: 2, maxActive: 8 },
+    effects: [],
+  },
+  lay_grub_clutch: {
+    id: 'lay_grub_clutch', name: 'Lay Grub Clutch',
+    description: 'Bury a clutch of pale eggs. Left alone they HATCH a wave of maggots; broken, they are only a smear.',
+    tags: ['spell', 'summon', 'minion', 'duration'], color: '#d0c8a8',
+    manaCost: 14, cooldown: 10, useTime: 0.9,
+    delivery: {
+      type: 'construct', kind: 'pod', look: 'grub_egg',
+      range: 0, duration: 8, maxActive: 3, life: 45, placeRange: 90,
+      hatch: { skillId: 'egg_hatch_maggots' },
+    },
+    effects: [],
+    requirements: { willpower: 16 },
+    ai: { range: 240, weight: 2, keepDistance: 180 },
+  },
+  egg_hatch_maggots: {
+    id: 'egg_hatch_maggots', name: 'The Eggs Hatch', noDrop: true,
+    description: 'The clutch quivers, splits, and spills.',
+    tags: ['spell', 'summon', 'minion'], color: '#d0c8a8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'summon', monsterId: 'giant_maggot', count: 2, maxActive: 8 },
+    effects: [],
+  },
+
   // ======================= The verdant kit =================================
   // Plant-craft: gardens as violence. Seeds with schedules, fences that
   // scratch, tides of bramble — Entangle's lashes above are the family's

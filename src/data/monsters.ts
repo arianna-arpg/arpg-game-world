@@ -250,6 +250,12 @@ export interface MonsterDef {
    *  The D2 siege-beast pattern: a walking tower for its faction's fragile
    *  teeth. */
   mountSlot?: { kinds: string[]; offsetY?: number };
+  /** A BOLT-HOLE: when routed (morale break / skittish spook), this creature
+   *  makes FOR the nearest doodad of `kind` instead of merely running, and
+   *  SLIPS AWAY on reaching it — removed, no corpse, no credit (the frog
+   *  dives, the burrower goes to ground). `seek` caps the search (default
+   *  900); `text` is the vanish line ("dives!"). Ambient texture, any body. */
+  refuge?: { kind: string; seek?: number; text?: string };
 }
 
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls
@@ -257,7 +263,7 @@ export interface MonsterDef {
  *  squad. Prey ('critter') exists to wander and flee; predators hunt it by
  *  their brains' TargetSpec.prey — the meadow stages its own dramas whether
  *  or not you watch. A new biome's fauna is a new row, never new code. */
-export const WILDLIFE: Record<string, { id: string; chance: number; count: [number, number]; presence?: PresenceSpec }[]> = {
+export const WILDLIFE: Record<string, { id: string; chance: number; count: [number, number]; presence?: PresenceSpec; near?: string }[]> = {
   plains: [
     { id: 'meadow_hare', chance: 0.75, count: [3, 5] },
     { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
@@ -265,6 +271,8 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'wayfarer_hunter', chance: 0.2, count: [1, 2] },
     { id: 'wayfarer_pilgrim', chance: 0.2, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
+    { id: 'ant_trail', chance: 0.35, count: [1, 2] },
+    { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
   ],
   // Keyed by BIOME TAG (the vocabulary zones/tilesets actually speak — the
   // old 'forest' key matched nothing and its rows never spawned). 'grove'
@@ -276,6 +284,10 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'broodmother', chance: 0.25, count: [1, 1] },
     { id: 'wayfarer_hunter', chance: 0.15, count: [1, 2] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+    { id: 'squirrel', chance: 0.7, count: [2, 4] },
+    { id: 'ant_trail', chance: 0.3, count: [1, 2] },
+    { id: 'reed_frog', chance: 0.45, count: [2, 3], near: 'water' },
+    { id: 'dire_wolf', chance: 0.2, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
   ],
   desert: [
     { id: 'meadow_hare', chance: 0.3, count: [1, 2] },
@@ -283,6 +295,8 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'dune_vulture', chance: 0.45, count: [1, 2] },
     { id: 'lash_maiden', chance: 0.3, count: [2, 3] },
     { id: 'broodmother', chance: 0.2, count: [1, 1] },
+    { id: 'sand_scorpion', chance: 0.55, count: [2, 4] },
+    { id: 'ant_trail', chance: 0.4, count: [1, 2] },
   ],
   // The northern belts: elk herds with wolves on their heels.
   taiga: [
@@ -290,6 +304,9 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'plains_wolf', chance: 0.45, count: [2, 4] },
     { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.15, count: [1, 1] },
+    { id: 'squirrel', chance: 0.45, count: [2, 3] },
+    { id: 'dire_wolf', chance: 0.3, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
+    { id: 'moon_howler', chance: 0.2, count: [1, 1], presence: { from: 8, fadeIn: 4 } },
   ],
   tundra: [
     { id: 'taiga_elk', chance: 0.5, count: [2, 3] },
@@ -301,10 +318,13 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'marsh_toad', chance: 0.7, count: [3, 5] },
     { id: 'bog_heron', chance: 0.5, count: [1, 2] },
     { id: 'broodmother', chance: 0.2, count: [1, 1] },
+    { id: 'reed_frog', chance: 0.6, count: [2, 4], near: 'water' },
+    { id: 'will_o_wisp', chance: 0.35, count: [1, 3] },
   ],
   grave: [
     { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
     { id: 'bog_heron', chance: 0.25, count: [1, 1] },
+    { id: 'will_o_wisp', chance: 0.45, count: [1, 3] },
   ],
   beach: [
     { id: 'shore_crab', chance: 0.7, count: [3, 6] },
@@ -2180,6 +2200,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'artillery',
       move: { style: 'holdRange', hold: 460 },
       skillUse: { cadence: [0.25, 0.5] },
+      // The siege posture: a mage in a garrison squad crews a tower BEFORE
+      // the fight finds it (SquadSpec.idle 'siege').
+      squad: { idle: { style: 'siege' } },
     },
   },
 
@@ -2197,7 +2220,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     adorn: 'horns',
     detection: 1.0,
     mountSlot: { kinds: ['demonkin'] },
-    brain: { type: 'juggernaut', enrage: 0.35 },
+    brain: { type: 'juggernaut', enrage: 0.35, squad: { idle: { style: 'siege' } } },
   },
 
   // The fragile teeth (D2 Arreat demonkin): blinks about, and when the
@@ -2215,6 +2238,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.2,
     brain: {
       type: 'skirmish', withdraw: 1.0,
+      squad: { idle: { style: 'siege' } },
       rules: [
         { // the blink: never where you swung
           when: { distUnder: 160 }, every: [3, 5], hold: [0.1, 0.2],
@@ -3658,7 +3682,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 85, moveSpeed: 170, accuracy: 105, armor: 20, mana: 25, manaRegen: 4 },
     skills: ['heavy_strike'], xp: 24, faction: 'beastkin', adorn: 'horns',
     detection: 1.2,
-    brain: { type: 'juggernaut', enrage: 0.5, move: { style: 'charge', commitRange: 320, chargeSpeed: 2.4 } },
+    // War-camp posture: beastkin packs idle in SIEGE — pickets out, any
+    // watchtower crewed by their shooters before the fight finds them.
+    brain: {
+      type: 'juggernaut', enrage: 0.5,
+      move: { style: 'charge', commitRange: 320, chargeSpeed: 2.4 },
+      squad: { idle: { style: 'siege' } },
+    },
   },
   beastkin_impaler: {
     id: 'beastkin_impaler', name: 'Beastkin Impaler',
@@ -3668,7 +3698,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // Half the impalers hunt with hooked lines — their arrows ROOT (the
     // barbed_snare support, worn the way the player wears it).
     grants: [{ atLevel: 12, support: 'barbed_snare', on: 'bone_arrow', chance: 0.5 }],
-    detection: 1.2, brain: { type: 'skirmish', withdraw: 1.8 },
+    detection: 1.2,
+    brain: { type: 'skirmish', withdraw: 1.8, squad: { idle: { style: 'siege' } } },
   },
   beastkin_ritualist: {
     id: 'beastkin_ritualist', name: 'Beastkin Ritualist',
@@ -3677,14 +3708,16 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.3)],
     skills: ['firebolt', 'despair', 'war_cry'], xp: 30, faction: 'beastkin', adorn: 'horns',
     gemBias: ['spell', 'fire'], wardPriority: 1,
-    detection: 1.2, brain: { type: 'artillery' },
+    detection: 1.2,
+    brain: { type: 'artillery', squad: { idle: { style: 'siege' } } },
   },
   beastkin_flayer: {
     id: 'beastkin_flayer', name: 'Beastkin Flayer',
     color: '#a8683a', shape: 'kite', radius: 12, material: 'fur', look: 'beastkin_flayer',
     base: { life: 70, moveSpeed: 185, accuracy: 115, evasion: 70, mana: 25, manaRegen: 4 },
     skills: ['gore_rend', 'claw'], xp: 28, faction: 'beastkin', adorn: 'horns',
-    detection: 1.3, brain: { type: 'assassin', withdraw: 0.9 },
+    detection: 1.3,
+    brain: { type: 'assassin', withdraw: 0.9, squad: { idle: { style: 'siege' } } },
   },
   // The khan: the great rack — WARLORD_OF.beastkin.
   beastlord_khan: {
@@ -3694,7 +3727,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('damage', 'increased', 0.2)],
     skills: ['rallying_howl', 'gore_rend', 'war_cry'], xp: 90, faction: 'beastkin', adorn: 'horns',
     grants: [{ atLevel: 40, skill: 'ground_slam' }],
-    detection: 1.4, brain: { type: 'commander', perception: { alertShout: 480 } },
+    detection: 1.4,
+    brain: {
+      type: 'commander', perception: { alertShout: 480 },
+      squad: { idle: { style: 'siege' } }, // the khan anchors his war-camp
+    },
   },
 
   // --- THE GLUT (faction 'flesh' — meat that wants more meat) ---------------
@@ -3856,6 +3893,313 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaleVariance: [0.8, 1.25],
     brain: { type: 'basic' },
   },
+
+  // ==========================================================================
+  // THE MENAGERIE ROUND — apparitions (barely-bodies that fade and flicker),
+  // the Night Court (vampires, weres, and the wolves that answer them), the
+  // vermin (chitin, eggs that HATCH-IF-IGNORED via pod constructs), and the
+  // small lives (ambience with survival instincts — the refuge seam's home).
+  // ==========================================================================
+
+  // --- THE APPARITIONS (undead; ethereal, evasive, briefly elsewhere) -------
+  // A drifting lantern-mote: harmless grave-light that bolts when crowded.
+  will_o_wisp: {
+    id: 'will_o_wisp', name: "Will o' Wisp",
+    color: '#b8e8c8', shape: 'diamond', radius: 6, material: 'ethereal', look: 'will_o_wisp',
+    base: { life: 8, moveSpeed: 150, evasion: 90, mana: 0 },
+    skills: [], xp: 2, tag: 'critter', faction: 'beast',
+    detection: 0.1, drops: 0,
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 140, duration: [1.2, 2.0] } },
+      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.3, freezeChance: 0.15, freeze: [0.2, 0.4] },
+    },
+  },
+  // A scrap of dark with eyes — the gloam's lesser kin, swarming and fading.
+  gloomling: {
+    id: 'gloomling', name: 'Gloomling',
+    color: '#5a6a7a', shape: 'pentagon', radius: 9, material: 'ethereal', look: 'gloomling',
+    base: { life: 18, moveSpeed: 175, evasion: 70, mana: 40, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 8, faction: 'undead',
+    detection: 1.1,
+    brain: {
+      type: 'swarm',
+      rules: [{
+        when: {}, every: [4, 7], hold: [0.1, 0.2],
+        actions: [
+          { do: 'buff', buff: { type: 'buff', id: 'gloom_fade', duration: 0.9, mods: [mod('invisible', 'flat', 1)] } },
+          { do: 'teleport', to: 'nearTarget', range: 300 },
+        ],
+      }],
+    },
+  },
+  // The poltergeist: no body — a knot of orbiting debris that THROWS things
+  // and is never where the last stone came from.
+  poltergeist: {
+    id: 'poltergeist', name: 'Poltergeist',
+    color: '#8a9ac8', shape: 'star', radius: 11, material: 'ethereal', look: 'poltergeist',
+    base: { life: 45, moveSpeed: 140, evasion: 85, mana: 140, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('lightningRes', 'flat', 0.3)],
+    skills: ['hurl_debris'], xp: 26, faction: 'undead',
+    gemBias: ['physical', 'spell'],
+    detection: 1.2,
+    brain: {
+      type: 'strafer',
+      rules: [{
+        when: { distUnder: 220 }, every: [3, 5], hold: [0.1, 0.2],
+        actions: [
+          { do: 'buff', buff: { type: 'buff', id: 'gloom_fade', duration: 1.0, mods: [mod('invisible', 'flat', 1)] } },
+          { do: 'teleport', to: 'awayFromTarget', range: 360 },
+        ],
+      }],
+    },
+  },
+  // The banshee: the keening made flesh — casts fumble, arms weaken, and
+  // the wail carries her court's despair.
+  banshee: {
+    id: 'banshee', name: 'Banshee',
+    color: '#c8b8e8', shape: 'star', radius: 13, material: 'ethereal', look: 'banshee',
+    base: { life: 60, moveSpeed: 130, evasion: 60, mana: 160, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3)],
+    skills: ['keening_shriek', 'despair'], xp: 36, faction: 'undead',
+    gemBias: ['spell', 'curse'], wardPriority: 1,
+    detection: 1.3, brain: { type: 'artillery' },
+  },
+  // The barrow-wight: the corporeal apparition — old bone in grave-cloth
+  // that hits like the door of a tomb.
+  barrow_wight: {
+    id: 'barrow_wight', name: 'Barrow Wight',
+    color: '#9aa8b8', shape: 'hexagon', radius: 15, material: 'bone', look: 'barrow_wight',
+    base: { life: 130, moveSpeed: 110, accuracy: 110, armor: 40, mana: 40, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.3)],
+    skills: ['heavy_strike'], xp: 32, faction: 'undead',
+    grants: [{ atLevel: 18, support: 'multistrike', on: 'heavy_strike', chance: 0.5 }],
+    detection: 0.9, brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+
+  // --- THE NIGHT COURT (faction 'nightkin': the fed and their kept) ---------
+  vampire_thrall: {
+    id: 'vampire_thrall', name: 'Vampire Thrall',
+    color: '#c8a8a8', shape: 'pentagon', radius: 12, look: 'vampire_thrall',
+    base: { life: 60, moveSpeed: 170, accuracy: 110, evasion: 55, mana: 60, manaRegen: 6 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw', 'essence_drain'], xp: 22, faction: 'nightkin',
+    detection: 1.2, brain: { type: 'flanker' },
+  },
+  // The countess: drains from the second rank, whistles up her bats, and
+  // curses whatever her court cannot immediately eat. WARLORD_OF.nightkin.
+  vampire_countess: {
+    id: 'vampire_countess', name: 'Vampire Countess',
+    color: '#b83a5a', shape: 'star', radius: 15, material: 'cloth', look: 'vampire_countess',
+    base: { life: 170, moveSpeed: 135, accuracy: 120, evasion: 50, mana: 200, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('damage', 'increased', 0.15)],
+    skills: ['essence_drain', 'summon_bats', 'despair'], xp: 70, faction: 'nightkin',
+    gemBias: ['chaos', 'minion'], wardPriority: 2,
+    detection: 1.3, brain: { type: 'commander' },
+  },
+  // The werewolf: the wolf family's horror cousin — a locked charge, tearing
+  // wounds, and more of it the harder it bleeds.
+  werewolf: {
+    id: 'werewolf', name: 'Werewolf',
+    color: '#8a6a4a', shape: 'hexagon', radius: 15, material: 'fur', look: 'werewolf',
+    base: { life: 140, moveSpeed: 185, accuracy: 115, evasion: 45, armor: 30, mana: 30, manaRegen: 4 },
+    mods: [mod('lifeRegen', 'flat', 2)], // the curse knits — it heals as it hunts
+    skills: ['gore_rend', 'claw'], xp: 44, faction: 'nightkin',
+    grants: [{ atLevel: 22, support: 'multistrike', on: 'claw', chance: 0.6 }],
+    detection: 1.5,
+    brain: { type: 'juggernaut', enrage: 0.6, move: { style: 'charge', commitRange: 340, chargeSpeed: 2.5 } },
+  },
+  crimson_bat: {
+    id: 'crimson_bat', name: 'Crimson Bat',
+    color: '#b04a5a', shape: 'triangle', radius: 9, material: 'fur', look: 'crimson_bat',
+    base: { life: 22, moveSpeed: 215, accuracy: 95, evasion: 80, mana: 15, manaRegen: 3 },
+    skills: ['talon_rake', 'take_wing'], xp: 9, faction: 'nightkin',
+    detection: 1.4,
+    brain: {
+      type: 'skirmish', withdraw: 1.2,
+      rules: [
+        { when: { lifeAbove: 0.5, distUnder: 380 }, every: [5, 8], hold: [0.2, 0.4],
+          actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
+      ],
+    },
+  },
+
+  // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
+  dire_wolf: {
+    id: 'dire_wolf', name: 'Dire Wolf',
+    color: '#6a5a4a', shape: 'rhombus', radius: 15, material: 'fur', look: 'dire_wolf',
+    base: { life: 85, moveSpeed: 190, accuracy: 110, evasion: 45, mana: 25, manaRegen: 4 },
+    skills: ['gore_rend'], xp: 22, tag: 'predator', faction: 'beast',
+    detection: 1.6,
+    brain: {
+      type: 'pack',
+      target: { prey: ['critter'] },
+      squad: { tokens: 2, surround: true },
+    },
+  },
+  // The howler: the pack's voice — its cry rallies the wolves and wakes
+  // everything else with ears.
+  moon_howler: {
+    id: 'moon_howler', name: 'Moon Howler',
+    color: '#9a8a78', shape: 'rhombus', radius: 14, material: 'fur', look: 'moon_howler',
+    base: { life: 70, moveSpeed: 180, accuracy: 105, mana: 100, manaRegen: 8 },
+    skills: ['rallying_howl', 'claw'], xp: 26, tag: 'predator', faction: 'beast',
+    detection: 1.5,
+    brain: { type: 'commander', perception: { alertShout: 460 }, target: { prey: ['critter'] } },
+  },
+
+  // --- THE VERMIN (insectoids — unaffiliated; the ground's own plague) ------
+  giant_maggot: {
+    id: 'giant_maggot', name: 'Giant Maggot',
+    color: '#c8bc98', shape: 'oval', radius: 12, look: 'giant_maggot',
+    base: { life: 45, moveSpeed: 85, accuracy: 85, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 9,
+    scaleVariance: [0.8, 1.25],
+    detection: 0.7, brain: { type: 'swarm' },
+  },
+  // The queen: near-anchored bulk that LAYS — her clutches hatch waves
+  // unless stamped out first (the pod-construct egg, worn by a monster).
+  maggot_queen: {
+    id: 'maggot_queen', name: 'Maggot Queen',
+    color: '#d0c0a0', shape: 'oval', radius: 21, look: 'maggot_queen',
+    base: { life: 260, moveSpeed: 55, accuracy: 100, armor: 20, poise: 50, mana: 160, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['lay_grub_clutch', 'bile_spray'], xp: 60,
+    gemBias: ['summon', 'minion'], wardPriority: 1,
+    scaling: { life: { incPerLevel: 0.06 } },
+    detection: 0.9, brain: { type: 'juggernaut' },
+  },
+  formic_worker: {
+    id: 'formic_worker', name: 'Formic Worker',
+    color: '#a87848', shape: 'oval', radius: 10, material: 'chitin', look: 'formic_worker',
+    base: { life: 30, moveSpeed: 150, accuracy: 90, armor: 25, mana: 0 },
+    skills: ['claw'], xp: 8,
+    detection: 0.9,
+    brain: { type: 'swarm', squad: { idle: { style: 'drill' }, formation: 'column' } },
+  },
+  formic_soldier: {
+    id: 'formic_soldier', name: 'Formic Soldier',
+    color: '#8a5a38', shape: 'hexagon', radius: 13, material: 'chitin', look: 'formic_soldier',
+    base: { life: 75, moveSpeed: 140, accuracy: 105, armor: 45, mana: 20, manaRegen: 3 },
+    skills: ['cleave'], xp: 18,
+    scaling: { armor: { flatPerLevel: 1.2 } },
+    detection: 1.1,
+    brain: { type: 'pack', squad: { idle: { style: 'drill' }, formation: 'column', tokens: 3 } },
+  },
+  // The mantis: patience, then two scythes through the gap — it works the
+  // player's own finesse windows when it casts.
+  emerald_mantis: {
+    id: 'emerald_mantis', name: 'Emerald Mantis',
+    color: '#7ac858', shape: 'kite', radius: 13, material: 'chitin', look: 'emerald_mantis',
+    base: { life: 80, moveSpeed: 165, accuracy: 125, evasion: 70, mana: 30, manaRegen: 4 },
+    skills: ['eviscerate', 'claw'], xp: 34,
+    detection: 1.3,
+    brain: {
+      type: 'assassin', withdraw: 0.8,
+      move: { style: 'lurk', ring: 240, commitRange: 230, unseenArc: 1.6 },
+      skillUse: { finesse: { chance: 0.5 } },
+    },
+  },
+  bronze_scarab: {
+    id: 'bronze_scarab', name: 'Bronzeback Scarab',
+    color: '#b08a3a', shape: 'oval', radius: 15, material: 'metal', look: 'bronze_scarab',
+    base: { life: 120, moveSpeed: 105, accuracy: 100, armor: 70, poise: 40, mana: 20, manaRegen: 3 },
+    skills: ['heavy_strike'], xp: 28,
+    scaling: { armor: { flatPerLevel: 2 } },
+    detection: 0.9,
+    brain: { type: 'juggernaut', move: { style: 'charge', commitRange: 300, chargeSpeed: 2.2 } },
+  },
+  // The bombardier: a walking retort — bile at range, a caustic pop at death.
+  bombardier_beetle: {
+    id: 'bombardier_beetle', name: 'Bombardier Beetle',
+    color: '#c8a05a', shape: 'oval', radius: 13, material: 'chitin', look: 'bombardier_beetle',
+    base: { life: 60, moveSpeed: 125, accuracy: 105, armor: 35, mana: 90, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['bile_spray'], xp: 24,
+    deathBurst: { mode: 'implode', damageFrac: 0.9, coalesce: 0.7, damageType: 'chaos' },
+    detection: 1.0, brain: { type: 'skirmish', withdraw: 1.4 },
+  },
+  // The orb-weaver: silk first — a rooting line, then the long legs arrive.
+  orb_weaver: {
+    id: 'orb_weaver', name: 'Orb Weaver',
+    color: '#b0a878', shape: 'cross', radius: 13, material: 'chitin', look: 'orb_weaver',
+    base: { life: 55, moveSpeed: 155, accuracy: 110, evasion: 55, mana: 80, manaRegen: 7 },
+    skills: ['web_shot', 'claw'], xp: 26, tag: 'predator', faction: 'beast',
+    detection: 1.3,
+    brain: { type: 'skirmish', withdraw: 1.3, target: { prey: ['critter'] } },
+  },
+  // The widow matron: THE egg-layer — her clutches are destructible pods
+  // that hatch spiderlings if ignored (lay_brood_egg, the user's D2 fantasy).
+  widow_matron: {
+    id: 'widow_matron', name: 'Widow Matron',
+    color: '#4a3a48', shape: 'cross', radius: 16, material: 'chitin', look: 'widow_matron',
+    base: { life: 110, moveSpeed: 130, accuracy: 110, armor: 25, mana: 120, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['lay_brood_egg', 'web_shot', 'claw'], xp: 42, tag: 'predator', faction: 'beast',
+    gemBias: ['summon', 'projectile'],
+    detection: 1.2,
+    brain: { type: 'pack', move: { style: 'skitter', dart: [0.35, 0.6], pause: [0.2, 0.5] } },
+  },
+
+  // --- THE SMALL LIVES (ambient prey; the refuge seam's showcase) -----------
+  // A squirrel: all tail — and when spooked it makes FOR the nearest tree
+  // and is simply gone up it (refuge).
+  squirrel: {
+    id: 'squirrel', name: 'Squirrel',
+    color: '#a8704a', shape: 'oval', radius: 6, material: 'fur', look: 'squirrel',
+    base: { life: 6, moveSpeed: 220, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    detection: 0.1, drops: 0,
+    scaleVariance: [0.85, 1.1],
+    refuge: { kind: 'tree', text: 'darts up the tree!' },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 150, duration: [1.4, 2.4] } },
+      move: { style: 'juke', hookEvery: [0.25, 0.55], hookArc: 1.35, freezeChance: 0.25, freeze: [0.2, 0.5] },
+      tempo: { kite: 3.0, windedFor: [0.8, 1.3] },
+    },
+  },
+  // A sand scorpion: prey that answers back — one weak sting, then scuttle.
+  sand_scorpion: {
+    id: 'sand_scorpion', name: 'Sand Scorpion',
+    color: '#c8a86a', shape: 'oval', radius: 8, material: 'chitin', look: 'sand_scorpion',
+    base: { life: 14, moveSpeed: 135, evasion: 55, armor: 20, mana: 0 },
+    skills: ['claw'], xp: 3, tag: 'critter', faction: 'beast',
+    detection: 0.4, drops: 0,
+    scaleVariance: [0.8, 1.2],
+    brain: { type: 'basic', morale: { skittish: { radius: 90, duration: [0.8, 1.4] } } },
+  },
+  // THE ANT TRAIL: one marching line as one body — the WORM machinery worn
+  // as pure ambience (a drawn file of tiny workers crossing the ground).
+  ant_trail: {
+    id: 'ant_trail', name: 'Ant Trail',
+    color: '#7a5838', shape: 'oval', radius: 5, material: 'chitin', look: 'ant_trail',
+    base: { life: 10, moveSpeed: 95, evasion: 40, mana: 0 },
+    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    detection: 0.1, drops: 0,
+    worm: { length: 7, spacing: 9, taper: 0.97 },
+    brain: { type: 'basic' },
+  },
+  // The reed frog: spawns at the water's edge (WILDLIFE row `near`) and,
+  // when spooked, DIVES — reaching its pond, it simply despawns (refuge).
+  reed_frog: {
+    id: 'reed_frog', name: 'Reed Frog',
+    color: '#6aa848', shape: 'oval', radius: 7, material: 'slime', look: 'reed_frog',
+    base: { life: 8, moveSpeed: 175, evasion: 75, mana: 0 },
+    mods: [mod('detectability', 'more', -0.6)],
+    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    detection: 0.15, drops: 0,
+    scaleVariance: [0.8, 1.2],
+    refuge: { kind: 'water', text: 'dives!' },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 130, duration: [1.0, 1.8] } },
+      move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2, freezeChance: 0.3, freeze: [0.25, 0.5] },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -3902,6 +4246,12 @@ const RELATIONS: Record<string, FactionStance> = {
   'flesh|sylvan': 'hostile',
   'flesh|beastkin': 'hostile',
   'flesh|demon': 'hostile',
+  // The Night Court keeps the old courtesies: the dead serve, the groves
+  // burn, and the Horned Tribes are prey that fights back.
+  'nightkin|undead': 'ally',
+  'nightkin|sylvan': 'hostile',
+  'nightkin|beastkin': 'hostile',
+  'nightkin|demon': 'hostile',
 };
 
 /** Diplomatic stance between two factions (order-insensitive). */
@@ -3965,6 +4315,22 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
       { id: 'lich_marshal', weight: 1, presence: { from: 15, fadeIn: 6 } },
       { id: 'gloam', weight: 1, presence: { from: 10, fadeIn: 5 } },
       { id: 'oblivion_knight', weight: 1, presence: { from: 18, fadeIn: 7 } },
+      // The apparition wing: gloomlings throng the young graves and thin
+      // out; the wailers and barrow-lords wake with depth.
+      { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
+      { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'barrow_wight', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      { id: 'banshee', weight: 1, presence: { from: 14, fadeIn: 6 } },
+    ],
+  },
+  nightkin: {
+    name: 'the Night Court',
+    table: [
+      { id: 'vampire_thrall', weight: 3 },
+      { id: 'crimson_bat', weight: 2 },
+      { id: 'deadwake_ghoul', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'werewolf', weight: 2, presence: { from: 10, fadeIn: 5 } },
+      { id: 'vampire_countess', weight: 1, presence: { from: 14, fadeIn: 6 } },
     ],
   },
   gnoll: {
@@ -4082,12 +4448,12 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
 export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
   { minWave: 1, ids: ['zombie', 'skeleton_warrior'] },
   { minWave: 2, ids: ['skeleton_archer', 'blood_mite'] },
-  { minWave: 3, ids: ['fire_cultist', 'storm_acolyte', 'mushroomling'] },
-  { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker', 'pyre_acolyte', 'rockgrub'] },
-  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade', 'quiet_sibyl', 'myconid_warrior', 'viscous_ooze'] },
-  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper', 'grave_shaman', 'gutspray_hurler'] },
-  { minWave: 7, ids: ['warband_chieftain', 'bone_serpent', 'treant_warden'] },
-  { minWave: 8, ids: ['bone_colossus', 'javelin_skirmisher', 'flesh_amalgam', 'beastkin_gorer'] },
+  { minWave: 3, ids: ['fire_cultist', 'storm_acolyte', 'mushroomling', 'gloomling'] },
+  { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker', 'pyre_acolyte', 'rockgrub', 'giant_maggot'] },
+  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade', 'quiet_sibyl', 'myconid_warrior', 'viscous_ooze', 'orb_weaver'] },
+  { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper', 'grave_shaman', 'gutspray_hurler', 'vampire_thrall'] },
+  { minWave: 7, ids: ['warband_chieftain', 'bone_serpent', 'treant_warden', 'werewolf', 'banshee'] },
+  { minWave: 8, ids: ['bone_colossus', 'javelin_skirmisher', 'flesh_amalgam', 'beastkin_gorer', 'emerald_mantis'] },
 ];
 
 /** Every 5th wave spawns this boss alongside the pack. */

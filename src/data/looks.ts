@@ -1692,6 +1692,263 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyestalks', scale: 0.8 },
     ],
   },
+
+  // --- THE APPARITIONS (ephemeral: halos, tatters, wisps — barely bodies) --
+  /** A drifting lantern-mote: light pretending to be a creature. */
+  will_o_wisp: {
+    parts: [
+      { kind: 'disc', scale: 0.4, role: 'glow' },
+      { kind: 'halo', scale: 0.9, alpha: 0.7 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
+  },
+  /** A gloomling: a scrap of dark with eyes, trailing off to nothing. */
+  gloomling: {
+    parts: [
+      { kind: 'tatters', scale: 0.8, role: 'dark', params: { n: 4 } },
+      { kind: 'disc', scale: 0.55, role: 'dark' },
+      { kind: 'eyes', color: '#b8d8e8', params: { spread: 0.45, dist: 0.5, size: 0.11 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.7, params: { n: 2 } }],
+  },
+  /** The poltergeist: NO body at all — a knot of orbiting debris and two
+   *  furious pinpricks. The absence is the silhouette. */
+  poltergeist: {
+    parts: [
+      { kind: 'runes', scale: 0.9, params: { n: 3 } },
+      { kind: 'eyes', color: '#d8e8ff', params: { spread: 0.3, dist: 0.35, size: 0.09 } },
+    ],
+    live: [
+      { kind: 'crystalGrowths', role: 'dark', scale: 0.8, params: { n: 4 } },
+      { kind: 'wisps', params: { n: 2 } },
+    ],
+  },
+  /** The banshee: a hooded wail, cloak torn to streamers, keening halo. */
+  banshee: {
+    parts: [
+      { kind: 'tatters', params: { n: 6 } },
+      { kind: 'robe', scale: 0.85, alpha: 0.9 },
+      { kind: 'hood', x: 0.28, params: { eyes: true } },
+      { kind: 'halo', scale: 1.05, alpha: 0.5 },
+    ],
+    live: [{ kind: 'wisps', x: -0.4, params: { n: 4 } }],
+  },
+  /** The barrow-wight: the corporeal cousin — grave-cloth over old bone,
+   *  a cold crown, a barrow blade. */
+  barrow_wight: {
+    parts: [
+      { kind: 'tatters', params: { n: 4 } },
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'sword', y: 0.05, params: { len: 0.9 } },
+      { kind: 'skull', x: 0.42, params: { glow: 'glow' } },
+      { kind: 'crown', x: 0.26, scale: 0.6, role: 'dark' },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 2 } }],
+  },
+
+  // --- THE NIGHT COURT (vampires, weres — and their wolves) ----------------
+  /** A thrall: bled pale, collared cape, its master's fangs. */
+  vampire_thrall: {
+    parts: [
+      { kind: 'cape', scale: 0.9 },
+      { kind: 'disc', scale: 0.75, role: 'bone' },
+      { kind: 'daggers', params: { len: 0.5 } },
+      { kind: 'fangs', scale: 0.7 },
+      { kind: 'eyes', color: '#ff4a5a', params: { spread: 0.35, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** The countess: high collar, court regalia, a red-eyed calm. */
+  vampire_countess: {
+    parts: [
+      { kind: 'cape', scale: 1.0 },
+      { kind: 'robe', scale: 0.85, role: 'dark' },
+      { kind: 'crown', x: 0.3, scale: 0.6, role: 'accent' },
+      { kind: 'fangs', scale: 0.75 },
+      { kind: 'eyes', color: '#ff3a4a', params: { spread: 0.32, dist: 0.55, size: 0.09 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.8, params: { n: 3 } }],
+  },
+  /** The werewolf: a wolf stood wrong — mane, tearing claws, too many teeth. */
+  werewolf: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'mane', scale: 1.05 },
+      { kind: 'snout', scale: 1.05 },
+      { kind: 'fangs', scale: 0.9 },
+      { kind: 'claws', scale: 1.1, params: { len: 0.55, talons: 3 } },
+      { kind: 'tail', params: { len: 0.7, tuft: 1 } },
+    ],
+  },
+  /** A crimson bat: the cave bat's fed cousin. */
+  crimson_bat: {
+    parts: [
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'featherWings', scale: 1.2, alpha: 0.95 },
+      { kind: 'ears', scale: 0.75 },
+      { kind: 'fangs', scale: 0.65 },
+      { kind: 'eyes', color: '#ff5a5a', params: { spread: 0.4, dist: 0.55, size: 0.1 } },
+    ],
+  },
+  /** The dire wolf: the pack's anvil — heavy ruff, scarred hide. */
+  dire_wolf: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'furRuff', scale: 1.05 },
+      { kind: 'snout', scale: 1.0 },
+      { kind: 'fangs', scale: 0.8 },
+      { kind: 'tail', params: { len: 0.8, tuft: 1 } },
+    ],
+  },
+  /** The moon howler: the pack's voice — thrown-back head, pale blaze. */
+  moon_howler: {
+    parts: [
+      { kind: 'torso', scale: 0.9 },
+      { kind: 'furRuff', scale: 1.0, role: 'bone' },
+      { kind: 'snout', scale: 1.1, rot: -0.35 },
+      { kind: 'tail', params: { len: 0.85, tuft: 1 } },
+      { kind: 'eyes', color: '#c8e8ff', params: { spread: 0.3, dist: 0.5, size: 0.08 } },
+    ],
+  },
+
+  // --- THE VERMIN (insectoids: chitin, mandibles, repetition) --------------
+  /** A giant maggot: banded, blind, wet. */
+  giant_maggot: {
+    parts: [
+      { kind: 'blob', scale: 0.95, role: 'bone', params: { irr: 0.14, seed: 137 } },
+      { kind: 'segmentRings', params: { n: 5 } },
+      { kind: 'mandibles', scale: 0.6 },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#8a8468', params: { n: 3 } }],
+  },
+  /** The maggot queen: a mountain of banded meat behind a crown of feelers. */
+  maggot_queen: {
+    parts: [
+      { kind: 'blob', scale: 1.05, role: 'bone', params: { irr: 0.18, seed: 139 } },
+      { kind: 'segmentRings', params: { n: 7 } },
+      { kind: 'bloatSacs', x: -0.25, scale: 0.8, params: { n: 4 } },
+      { kind: 'mandibles', scale: 0.85 },
+      { kind: 'antennae', scale: 0.9 },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#8a8468', params: { n: 5 } }],
+  },
+  /** A formic worker: carapace, feelers, always carrying something. */
+  formic_worker: {
+    parts: [
+      { kind: 'carapace', scale: 0.85 },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'mandibles', scale: 0.6 },
+    ],
+  },
+  /** A formic soldier: the same body forged bigger — shear-jaws, plated. */
+  formic_soldier: {
+    parts: [
+      { kind: 'carapace', scale: 0.95 },
+      { kind: 'armorPlates', scale: 0.7 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.85 },
+      { kind: 'mandibles', scale: 1.0 },
+    ],
+  },
+  /** The emerald mantis: raptor arms held in prayer over a leaf-blade body. */
+  emerald_mantis: {
+    parts: [
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'raptorArms', params: { len: 1.0, fold: 0.6 } },
+      { kind: 'antennae', scale: 1.0 },
+      { kind: 'eyes', color: '#d8ffb0', params: { spread: 0.55, dist: 0.6, size: 0.1 } },
+    ],
+  },
+  /** The bronzeback scarab: a rolling shield with a horn. */
+  bronze_scarab: {
+    parts: [
+      { kind: 'shell', scale: 0.95, role: 'metal' },
+      { kind: 'legs', scale: 0.8, params: { n: 6 } },
+      { kind: 'rhinoHorn', scale: 0.9 },
+      { kind: 'mandibles', scale: 0.55 },
+    ],
+  },
+  /** The bombardier: a swollen chamber behind a small, busy front. */
+  bombardier_beetle: {
+    parts: [
+      { kind: 'carapace', scale: 0.9 },
+      { kind: 'bloatSacs', x: -0.3, scale: 0.7, params: { n: 3 } },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+  },
+  /** The orb-weaver: long-limbed, patient, silk at the ready. */
+  orb_weaver: {
+    parts: [
+      { kind: 'legs', scale: 1.2, params: { n: 8 } },
+      { kind: 'disc', scale: 0.65 },
+      { kind: 'spots', params: { n: 3 } },
+      { kind: 'eyeCluster', color: '#d8d8b0', params: { n: 4, spread: 0.4, dist: 0.5 } },
+    ],
+  },
+  /** The widow matron: the egg-layer — swollen abdomen, warning mark. */
+  widow_matron: {
+    parts: [
+      { kind: 'legs', scale: 1.15, params: { n: 8 } },
+      { kind: 'blob', scale: 0.85, role: 'dark', params: { irr: 0.12, seed: 149 } },
+      { kind: 'brand', scale: 0.5, color: '#e04848' },
+      { kind: 'eyeCluster', color: '#ffb0b0', params: { n: 6, spread: 0.45, dist: 0.5 } },
+    ],
+  },
+  /** The brood egg (a pod construct's portrait): a sac in a silk cradle. */
+  brood_egg: {
+    parts: [
+      { kind: 'nestTwigs', scale: 0.8, params: { n: 10 } },
+      { kind: 'egg', scale: 0.7 },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The grub clutch (pod portrait): pale eggs half-buried. */
+  grub_egg: {
+    parts: [
+      { kind: 'egg', x: 0.15, y: 0.12, scale: 0.55 },
+      { kind: 'egg', x: -0.18, y: -0.05, scale: 0.48 },
+      { kind: 'egg', x: 0.02, y: -0.2, scale: 0.4 },
+    ],
+    shadowScale: 0.6,
+  },
+
+  // --- THE SMALL LIVES (ambience: prey with personality) -------------------
+  /** A squirrel: all tail. */
+  squirrel: {
+    parts: [
+      { kind: 'disc', scale: 0.5 },
+      { kind: 'tail', rot: -0.6, scale: 1.2, params: { len: 1.0, tuft: 1 } },
+      { kind: 'tuftEars', scale: 0.7 },
+      { kind: 'eyes', color: '#2a2018', params: { spread: 0.4, dist: 0.5, size: 0.1 } },
+    ],
+  },
+  /** A sand scorpion: pincers forward, sting held high. */
+  sand_scorpion: {
+    parts: [
+      { kind: 'carapace', scale: 0.7 },
+      { kind: 'legs', scale: 0.75, params: { n: 6 } },
+      { kind: 'pincers', scale: 0.9 },
+      { kind: 'stinger', scale: 0.9 },
+    ],
+  },
+  /** One ant of the marching line (the trailing file is the worm body). */
+  ant_trail: {
+    parts: [
+      { kind: 'carapace', scale: 0.75 },
+      { kind: 'legs', scale: 0.7, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.8 },
+    ],
+  },
+  /** A reed frog: a dollop with eyes, one hop from the water. */
+  reed_frog: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.12, seed: 151 } },
+      { kind: 'spots', params: { n: 3 } },
+      { kind: 'legs', scale: 0.7, params: { n: 2 } },
+      { kind: 'eyes', color: '#f0e8a0', params: { spread: 0.6, dist: 0.5, size: 0.13 } },
+    ],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

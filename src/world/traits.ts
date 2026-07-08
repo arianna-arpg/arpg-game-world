@@ -70,6 +70,9 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },
+  // The Night Court — patient predators: they range at their own pace and
+  // throne wherever the feeding is richest.
+  nightkin: { roaming: 0.6, aggression: 1.2, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
 };
 
 export function traitsOf(faction: string): FactionTraits {

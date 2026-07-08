@@ -293,13 +293,19 @@ export interface SquadSpec {
    *            and jog to catch up (stragglerChance per member, stable roll)
    *  'circle'  the leader stands as an IDOL; the rest orbit it slowly
    *  'wander'  everyone drifts independently (the default zone life)
-   *  'mixed'   a stable per-member split: some stand vigil, some wander */
+   *  'mixed'   a stable per-member split: some stand vigil, some wander
+   *  'siege'   the GARRISON posture: the leader stands anchor, RANGED
+   *            members claim free structure slots (towers crewed before a
+   *            shot is fired — a claim persists into combat), and the
+   *            melee rank takes a picket ring around the anchor, eyes OUT */
   idle?: {
-    style: 'drill' | 'loose' | 'circle' | 'wander' | 'mixed';
-    /** circle: orbit distance (default spacing × 2.4). */
+    style: 'drill' | 'loose' | 'circle' | 'wander' | 'mixed' | 'siege';
+    /** circle/siege: orbit / picket-ring distance (default spacing × 2.4). */
     ring?: number;
     /** loose: fraction of members who straggle (default 0.35). */
     stragglerChance?: number;
+    /** siege: slot-claim reach for the ranged rank (default 620). */
+    garrisonWithin?: number;
   };
 }
 

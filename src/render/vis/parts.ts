@@ -1716,6 +1716,65 @@ const chains: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** RAPTOR ARMS — the mantis's folded scythe-forelimbs: two segments hinged
+ *  at a raised elbow, blade tucked inward, held COCKED. Draws both sides
+ *  (a mantis prays with the pair). params: len, fold (elbow lift). */
+const raptorArms: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const len = P(spec, 'len', 0.9);
+  const fold = P(spec, 'fold', 0.55);
+  place(ctx, r, spec, (c, R) => {
+    for (const m of [1, -1]) {
+      const sx = R * 0.35, sy = m * R * 0.4;                        // shoulder
+      const ex = R * (0.35 + len * 0.5), ey = m * R * (0.4 + fold); // raised elbow
+      const tx = R * (0.35 + len), ty = m * R * 0.18;               // tip, tucked in
+      c.lineCap = 'round';
+      c.strokeStyle = ramp.base;
+      c.lineWidth = Math.max(1.8, R * 0.12);
+      c.beginPath(); c.moveTo(sx, sy); c.lineTo(ex, ey); c.stroke();
+      // The scythe forearm: a tapered blade folding back toward the face.
+      c.fillStyle = ramp.light;
+      c.beginPath();
+      c.moveTo(ex, ey + m * R * 0.05);
+      c.quadraticCurveTo((ex + tx) / 2, (ey + ty) / 2 + m * R * 0.12, tx, ty);
+      c.lineTo(tx - R * 0.06, ty - m * R * 0.06);
+      c.quadraticCurveTo((ex + tx) / 2 - R * 0.05, (ey + ty) / 2, ex - R * 0.04, ey - m * R * 0.04);
+      c.closePath(); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  });
+};
+
+/** SEGMENT RINGS — larval body bands across a soft body (maggots, grubs,
+ *  worms): the anatomy IS the repetition. params: n. */
+const segmentRings: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    c.save();
+    c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2); c.clip();
+    for (let i = 0; i < n; i++) {
+      const x = -R * 0.8 + (i / Math.max(1, n - 1)) * R * 1.6;
+      const half = Math.sqrt(Math.max(0.08, 1 - (x / R) * (x / R))) * R;
+      c.strokeStyle = withAlpha(ramp.shadow, 0.5);
+      c.lineWidth = Math.max(1.2, R * 0.07);
+      c.beginPath();
+      c.moveTo(x, -half * 0.92);
+      c.quadraticCurveTo(x - R * 0.1, 0, x, half * 0.92);
+      c.stroke();
+      c.strokeStyle = withAlpha(ramp.highlight, 0.28);
+      c.lineWidth = Math.max(1, R * 0.04);
+      c.beginPath();
+      c.moveTo(x + R * 0.05, -half * 0.85);
+      c.quadraticCurveTo(x - R * 0.05, 0, x + R * 0.05, half * 0.85);
+      c.stroke();
+    }
+    c.restore();
+  });
+};
+
 /** OOZE LOBES — live pseudopod bulges rolling around the rim: the body
  *  never agrees on its own outline. params: n. */
 const oozeLobes: PartPainter = (ctx, r, spec, pal, t = 0) => {
@@ -3448,7 +3507,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes,
   shell, caps, capDome, gillFrill, fronds, tail, stinger, fins,
   barkPlates, branchArms, stalactites, nestTwigs,
-  oozeLobes, fleshFolds, eyeCluster,
+  oozeLobes, fleshFolds, eyeCluster, raptorArms, segmentRings,
   apron, pack, lantern, helm,
   tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,
   armorPlates, bloatSacs, chains, barbs, whip, keg, crateBox,

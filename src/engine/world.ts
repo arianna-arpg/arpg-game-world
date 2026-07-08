@@ -3874,7 +3874,17 @@ export class World {
         * presenceMul(MONSTERS[w.id]?.presence, lvl);
       if (Math.random() >= chance) continue;
       const n = randInt(w.count[0], w.count[1]);
-      const at = this.farPoint(700);
+      // PLACEMENT HINT (row.near): the band spawns on the RIM of a matching
+      // doodad — frogs at the water's edge, not the meadow's middle. A zone
+      // without one simply skips the row (no pond, no frogs).
+      let at = this.farPoint(700);
+      if (w.near) {
+        const spots = this.doodads.filter(d => d.kind === w.near && !d.gone);
+        if (!spots.length) continue;
+        const s = spots[randInt(0, spots.length - 1)];
+        const ang = rand(0, Math.PI * 2);
+        at = vec(s.pos.x + Math.cos(ang) * (s.radius + 26), s.pos.y + Math.sin(ang) * (s.radius + 26));
+      }
       const squadId = this.nextSquadId();
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(w.id, Math.max(1, def.level), 'enemy');
@@ -4252,10 +4262,17 @@ export class World {
   onFleeArrive(actor: Actor): void {
     actor.aiFleeing = false;
     if (this.onBeastEscape(actor)) return; // the Hunt handled it (migrated + despawned)
+    this.slipAway(actor, `${actor.name} slips away!`);
+  }
+
+  /** SILENT DEPARTURE — the actor leaves the world without dying: no corpse,
+   *  no credit, no rattles (a fled hare, the frog's dive into its refuge
+   *  pond). A soft flash + a line mark the exit; nothing else fires. */
+  slipAway(actor: Actor, text: string): void {
     const i = this.actors.indexOf(actor);
     if (i >= 0) this.actors.splice(i, 1);
     this.flashes.push({ pos: vec(actor.pos.x, actor.pos.y), radius: 60, color: '#c8a850', life: 0.5, maxLife: 0.5 });
-    this.text(vec(actor.pos.x, actor.pos.y - 30), `${actor.name} slips away!`, '#c8a850', 14);
+    this.text(vec(actor.pos.x, actor.pos.y - 30), text, '#c8a850', 14);
   }
 
   /** The Hunt beast begins a flee — a bulletin so the player knows to give chase
@@ -9952,6 +9969,7 @@ export class World {
     }
     if (def.explodeOnDeath) a.explodeOnDeath = def.explodeOnDeath;
     if (def.deathBurst) a.deathBurst = def.deathBurst;
+    if (def.refuge) a.refuge = def.refuge;
     // Monsters' skills level up with them — same leveling system as the player.
     const skillLevel = 1 + Math.floor(lv / 4);
     a.skills = def.skills.map(id => makeSkillInstance(SKILLS[id], skillLevel));

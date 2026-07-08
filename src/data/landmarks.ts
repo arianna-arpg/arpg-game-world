@@ -153,3 +153,18 @@ registerLandmark({
   spawns: { table: [{ id: 'imp', weight: 4 }, { id: 'cinder_fiend', weight: 1 }], count: [4, 8], where: 'interior' },
   poi: true, mustReach: true,
 });
+// THE MAGGOT LAIR (the D2 homage): a churned burrow-pit crawling with the
+// queen's brood — her clutches keep hatching if you let them incubate.
+registerLandmark({
+  id: 'maggot_burrow', builder: 'pit', size: [460, 720],
+  params: { floorKind: 'mud', gapArc: 0.55 },
+  spawns: {
+    table: [
+      { id: 'maggot_queen', weight: 1 },
+      { id: 'giant_maggot', weight: 5 },
+      { id: 'rockgrub', weight: 2, presence: { to: 14, fadeOut: 6 } },
+    ],
+    count: [5, 9], where: 'interior',
+  },
+  poi: true, mustReach: true,
+});
