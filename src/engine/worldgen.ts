@@ -363,6 +363,8 @@ export function placeZoneAt(
   const level = spec.level ?? spec.levelFor?.(target) ?? (src ? src.level + 1 : 1);
 
   // Sub-biome variant: rolled once, folded into BOTH the name and the layout.
+  // The tileset's COMMON rows then ride every roll — a variant re-authors the
+  // dressing that CHANGES; common carries what the biome always is.
   let layout = tileset.layout;
   let variantName: string | undefined;
   if (tileset.variants && tileset.variants.length) {
@@ -370,6 +372,7 @@ export function placeZoneAt(
     variantName = v.name;
     layout = v.layout;
   }
+  if (tileset.common && tileset.common.length) layout = [...tileset.common, ...layout];
 
   // A name nobody on the map is wearing yet (or an explicit override — the Caravan
   // pre-derives its destination name so the menu label matches the minted zone).

@@ -4868,6 +4868,90 @@ const discCrown: CanopyPainter = (env, o, alpha) => {
   ctx.globalAlpha = 1;
 };
 
+/** The KELP CROWN — a giant kelp's frond whorl riding the canopy pass: two
+ *  LAYERS of tapered ribbon fronds (broad dark unders, bright narrow overs)
+ *  radiating off-phase from the stipe, each swaying on its own current beat,
+ *  the whole crown drifting slowly. The gaps BETWEEN ribbons are the design:
+ *  the forest hides what stands in it in glimpses, never behind a solid
+ *  disc — and the walk-under fade opens it the moment you step beneath. */
+const kelpCrown: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { color?: ColorSpec; rib?: ColorSpec; bladder?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const base = resolveColor(p.color, theme, '#2f7a4a');
+  const rib = resolveColor(p.rib, theme, shade(base, 0.34));
+  const seed = ((o.pos.x * 7 + o.pos.y * 13) | 0) >>> 0;
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  ctx.rotate(Math.sin(time * 0.3 + seed * 0.1) * 0.06 + hash01(seed, 3) * Math.PI * 2);
+  // The frond MAT first: a translucent scalloped under-disc that gives the
+  // crown its mass — the ribbons above leave glimpse-gaps only at the rim.
+  ctx.globalAlpha = alpha * 0.38;
+  ctx.fillStyle = shade(base, -0.32);
+  ctx.beginPath();
+  for (let k = 0; k <= 10; k++) {
+    const a = (k / 10) * Math.PI * 2;
+    const rr = o.radius * 0.78 * (0.86 + 0.14 * Math.abs(Math.sin(a * 3 + seed)));
+    const px = Math.cos(a) * rr, py = Math.sin(a) * rr;
+    if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  const frond = (a: number, len: number, w0: number, tone: string, sway: number, la: number): void => {
+    const tipA = a + sway;
+    const tx = Math.cos(tipA) * len, ty = Math.sin(tipA) * len;
+    const cx = Math.cos(a + sway * 0.5) * len * 0.55, cy = Math.sin(a + sway * 0.5) * len * 0.55;
+    const px = Math.cos(a + Math.PI / 2) * w0, py = Math.sin(a + Math.PI / 2) * w0;
+    ctx.globalAlpha = la;
+    ctx.fillStyle = tone;
+    ctx.beginPath();
+    ctx.moveTo(px * 0.5, py * 0.5);
+    ctx.quadraticCurveTo(cx + px * 0.7, cy + py * 0.7, tx, ty);
+    ctx.quadraticCurveTo(cx - px * 0.7, cy - py * 0.7, -px * 0.5, -py * 0.5);
+    ctx.closePath();
+    ctx.fill();
+    // The midrib catching what light gets down here.
+    ctx.strokeStyle = withAlpha(rib, 0.55);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(cx, cy, tx, ty);
+    ctx.stroke();
+  };
+  // Under-layer: broad dark fronds.
+  const under = 7 + (seed % 2);
+  for (let i = 0; i < under; i++) {
+    const a = (i / under) * Math.PI * 2 + hash01(i, seed) * 0.4;
+    frond(a, o.radius * (0.82 + hash01(i, seed + 7) * 0.25),
+      o.radius * (0.24 + hash01(i, seed + 11) * 0.06),
+      shade(base, -0.3 + (hash01(i, seed + 13) - 0.5) * 0.1),
+      Math.sin(time * 0.9 + i * 1.9 + seed) * 0.14, alpha * 0.85);
+  }
+  // Over-layer: brighter ribbons, off-phase.
+  const over = 8 + (seed % 3);
+  for (let i = 0; i < over; i++) {
+    const a = (i / over) * Math.PI * 2 + 0.32 + hash01(i, seed + 17) * 0.4;
+    frond(a, o.radius * (0.6 + hash01(i, seed + 19) * 0.32),
+      o.radius * (0.16 + hash01(i, seed + 23) * 0.05),
+      shade(base, 0.06 + (hash01(i, seed + 29) - 0.5) * 0.14),
+      Math.sin(time * 1.15 + i * 2.3 + seed * 0.7) * 0.18, alpha);
+  }
+  // Gas bladders crowding the crown's heart.
+  const bl = resolveColor(p.bladder, theme, shade(base, 0.45));
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.fillStyle = bl;
+  for (let i = 0; i < 3 + (seed % 3); i++) {
+    const a = hash01(i, seed + 31) * Math.PI * 2;
+    const d = o.radius * (0.12 + hash01(i, seed + 37) * 0.2);
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * d, Math.sin(a) * d, 1.6 + hash01(i, seed + 41) * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+};
+
 export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
   bramble, palmCrown, mushroomCrown, discCrown, leafCrown, pineCrown, fogCloud,
+  kelpCrown,
 };

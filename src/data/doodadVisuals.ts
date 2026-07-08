@@ -193,6 +193,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       tufts: { color: 'theme:grass|#3e5c30', flower: '#d8c86a' },
     },
   },
+  // The Field's SOFT BOUNDARY: overlapping tuft mounds straddling the
+  // tallgrass rim, blended hard into the land — the raster's right angles
+  // disappear under a rolling hedge line.
+  hedgerow: {
+    painter: 'liquid', order: 46,
+    blend: { strength: 0.5, feather: 28, color: '#182c0e' },
+    params: {
+      core: { color: '#1d3410', alpha: 0.9 },
+      tufts: { color: '#5a9038', flower: '#c8d86a' },
+    },
+  },
 
   // --- Pits (the void wins over every ground overlay), then spans ---------
   // THE DROP READS AS A DROP: lip stone, a descending shelf, per-well depth
@@ -325,6 +336,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { cap: '#b8434e', speck: '#f0e6d8' },
   },
   kelp: { painter: 'kelp', order: 48 },
+  // The kelp TREE: a thin holdfast stipe at ground level (weave between the
+  // stalks), the layered frond crown riding the canopy pass above — fading
+  // when you step beneath, hiding everyone who doesn't.
+  giant_kelp: {
+    painter: 'trunk', order: 50, params: { scale: 0.16, roots: 3, color: '#2a5a40' },
+    canopy: { painter: 'kelpCrown', params: { color: '#2f7a4a', rib: '#57b06f', bladder: '#8fd0a0' } },
+  },
   // Coral form-rolls its colony (staghorn / brain boule / gorgonian fan) in
   // two hue families over a knobby reef base.
   coral: {

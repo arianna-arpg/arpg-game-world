@@ -43,8 +43,14 @@ export interface TilesetDef {
   ellipseChance?: number;
   /** Biome tag stamped on generated zones — faction-traits home matching. */
   biome?: string;
+  /** COMMON rows folded into EVERY rolled layout — base or variant. Variants
+   *  say what CHANGES about a zone; common says what the biome always IS
+   *  (the brittle-kit lesson: rows wired only into the base layout go dead
+   *  the day a tileset grows variants). */
+  common?: StampSpec[];
   /** Optional sub-biome variants; one is rolled per generated zone (its layout
-   *  replaces the base). Tilesets without variants behave exactly as before. */
+   *  replaces the base — common rows ride along regardless). Tilesets without
+   *  variants behave exactly as before. */
   variants?: TilesetVariant[];
   /** false = NEVER field-minted at a frontier (realm / cave / incursion-only
    *  tilesets: Fractures capstones, cave mouths, the Eldritch incursion). */
@@ -119,10 +125,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [1, 2] },
       { kind: 'camp', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
-      // Deep-forest rot: fungal pressure sacs and pale puffballs.
+    ],
+    // Sunlit or twilit, the deep forest always rots below and thorns always
+    // find purchase: the fungal + thorn kit rides every variant.
+    common: [
       { kind: 'burst_sac', count: [0, 2] },
       { kind: 'puffcap_cluster', count: [0, 2] },
-      // The thorn kin: gnarled briar trees you can walk beneath.
       { kind: 'briarwood', count: [1, 3] },
     ],
     packs: {
@@ -402,6 +410,10 @@ export const TILESETS: Record<string, TilesetDef> = {
   // JUNGLE — the Sylvan court's deep growth: palms, vines, impassable thickets.
   jungle: {
     id: 'jungle',
+    // The heat swells marsh bladders in clearing and dense floor alike.
+    common: [
+      { kind: 'gas_pod', count: [1, 2] },
+    ],
     variants: [
       { name: 'clearing', layout: [
         { kind: 'trees', count: [8, 12] }, { kind: 'grove', count: [3, 4] },
@@ -439,8 +451,6 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'swamp', count: [1, 2] },
       { kind: 'river', count: [0, 1] },
       { kind: 'cave', count: [0, 1] },
-      // Jungle heat swells the marsh bladders here too.
-      { kind: 'gas_pod', count: [1, 2] },
       { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
     ],
     packs: {
@@ -503,7 +513,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [1, 2] },
       { kind: 'cave', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'pillaged_township' },
-      // Marsh gas pools in bladders; pale caps puff underfoot.
+    ],
+    // Whichever water the mire shows, the gas still pools and the thorns
+    // still feed: the hazard kit rides every variant.
+    common: [
       { kind: 'gas_pod', count: [2, 4] },
       { kind: 'puffcap_cluster', count: [1, 3] },
       { kind: 'briarwood', count: [1, 2] },
@@ -574,6 +587,16 @@ export const TILESETS: Record<string, TilesetDef> = {
   // CRYPT — a forsaken graveland of headstones, broken tombs, and the risen.
   crypt: {
     id: 'crypt',
+    // What a graveland always keeps, whichever face it shows: burial goods
+    // underfoot, a wall that hides more than bones, sealed urns and their
+    // tenants, grave mold, the odd briar grown fat on the soil.
+    common: [
+      { kind: 'clay_pots', count: [2, 4] },
+      { kind: 'secret_wall', count: [1, 2] },
+      { kind: 'burial_urn', count: [2, 4] },
+      { kind: 'puffcap_cluster', count: [0, 2] },
+      { kind: 'briarwood', count: [0, 2] },
+    ],
     variants: [
       { name: 'barrows', layout: [
         { kind: 'tombstone', count: [18, 26] }, { kind: 'rocks', count: [8, 12], radius: [16, 30] },
@@ -601,14 +624,6 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bone_pile', count: [3, 6] }, { kind: 'brazier', count: [1, 3] }, { kind: 'web', count: [1, 3] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [2, 4] },
       { kind: 'tombstone', count: [14, 22] },
       { kind: 'ruin', count: [2, 3] },
-      // Burial goods pop underfoot; some tomb walls hide more than bones —
-      // every crypt keeps at least one now. Sealed urns spill orbs and
-      // sometimes wake their tenants; grave mold puffs underfoot.
-      { kind: 'clay_pots', count: [2, 4] },
-      { kind: 'secret_wall', count: [1, 2] },
-      { kind: 'burial_urn', count: [2, 4] },
-      { kind: 'puffcap_cluster', count: [0, 2] },
-      { kind: 'briarwood', count: [0, 2] },
       { kind: 'rocks', count: [6, 10], radius: [16, 30] },
       { kind: 'swamp', count: [1, 2] },
       { kind: 'cliff', count: [1, 2] },
@@ -1019,14 +1034,37 @@ export const TILESETS: Record<string, TilesetDef> = {
       water: '#0c2740', chasm: '#02060a',
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.2,
-    // Sea floor decoration (run by underwaterLayout via plainsLayout) — kelp beds,
-    // coral heads, rocky outcrops, the odd boulder. Vibrant, alive seabed.
-    layout: [
-      { kind: 'kelp', count: [4, 8] },
-      { kind: 'coral', count: [3, 6], radius: [16, 28] },
+    // The seabed everything grows from, whichever face the deep shows.
+    common: [
+      { kind: 'kelp', count: [3, 6] },
+      { kind: 'coral', count: [2, 4], radius: [16, 28] },
       { kind: 'sea_rock', count: [3, 6], radius: [22, 42] },
       { kind: 'rocks', count: [2, 4], radius: [16, 34] },
     ],
+    // SUB-BIOME FACES of the deep — the variance allowance the ocean grows
+    // on. A thresher kelp forest you can vanish into (layered crowns break
+    // sight both ways), a reef garden, an open drift. Future faces — vent
+    // fields, abyssal shelves — join as rows here, never as code.
+    variants: [
+      { name: 'kelp forest', layout: [
+        { kind: 'cluster', count: [2, 3], cluster: 'kelp_forest' },
+        { kind: 'giant_kelp', count: [3, 6] },
+        { kind: 'kelp', count: [4, 8] },
+      ] },
+      { name: 'reef', layout: [
+        { kind: 'coral', count: [7, 12], radius: [16, 30] },
+        { kind: 'sea_rock', count: [3, 5], radius: [22, 42] },
+        { kind: 'crystal_cluster', count: [0, 2] },
+      ] },
+      { name: 'open drift', layout: [
+        { kind: 'chasm', count: [0, 1] },
+        { kind: 'kelp', count: [2, 4] },
+        { kind: 'boulder_field', count: [0, 1] },
+      ] },
+    ],
+    // Superseded by common + variants for random mints; kept for authored
+    // spec paths that read the base directly.
+    layout: [],
     packs: {
       count: [5, 8], size: [3, 5],
       table: [

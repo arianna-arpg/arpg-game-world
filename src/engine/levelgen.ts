@@ -43,6 +43,7 @@ export type KnownDoodadKind =
   | 'tree'      // blocks movement and shots — a rock wearing a canopy
   | 'brush'     // walkable cover: standing in it CONCEALS you
   | 'grass'     // pure decoration — tufts and splotches
+  | 'hedgerow'  // pure decoration: the Field's soft boundary fringe (straddles the tallgrass rim)
   | 'campfire'  // pure decoration — a flickering warm light
   | 'road'      // ground overlay: a walkable gravel path — a mild move-speed boost (no status)
   // Biome-expansion terrain (batch 6)
@@ -105,6 +106,7 @@ export type KnownDoodadKind =
   | 'descent_platform' // trigger: the mineshaft platform — dwell to descend / climb out
   // Marine / deep-sea themed doodads
   | 'kelp'         // walkable cover: a swaying kelp frond field (decorative)
+  | 'giant_kelp'   // a kelp TREE: thin stipe underfoot, swaying frond crown above (walk-under, sight-breaking)
   | 'coral'        // blocks both — a vibrant branching coral head
   | 'sea_rock'     // blocks both — a barnacled rocky outcropping
   // Mycelia ("The Bloom") fungal biome doodads
@@ -569,6 +571,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   standing_stone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46 },
   road:      { overlap: 'ground', walkOnly: true }, // a walkable gravel path (stays on walkable ground in grid zones)
   grass:     { overlap: 'ground' },
+  /** The Field's boundary fringe: pure visual, deliberately NOT walk-gated —
+   *  it straddles the tallgrass rim to round the raster's right angles off. */
+  hedgerow:  { overlap: 'ground' },
   brush:     { overlap: 'ground' },
   campfire:  { overlap: 'ground' },
   ritual_pentagram: { overlap: 'ground' },
@@ -591,6 +596,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   descent_platform: { overlap: 'trigger', spacing: 40 },
   // Marine: kelp is walkable cover (decorative); coral + sea rocks are solids.
   kelp:     { overlap: 'ground', walkOnly: true },
+  /** The kelp TREE (the thresher-forest anchor): a thin stipe underfoot —
+   *  bodies weave between the stalks, shots sail through — while the frond
+   *  crown above BREAKS SIGHT and occlusion-fades near the hero: the forest
+   *  hides what stands in it, both ways, without ever walling you in. */
+  giant_kelp: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: true,
+    spacing: 26, occlude: { pad: 12, alpha: 0.28 }, bodyScale: 0.16 },
   coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
   sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40 },
   // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
@@ -1216,6 +1227,29 @@ function fieldLayout(ctx: GenCtx, def: ZoneDef): void {
     if (!grid.reachable(ctx.entry, pt)) grid.carveCorridor(ctx.entry.x, ctx.entry.y, pt.x, pt.y, 54);
   }
   if (!anchors.length) return; // degenerate (no blob sampled) — the carved clearings stand alone
+
+  // THE SOFT BOUNDARY: the 30px raster leaves the hedge line as right-angle
+  // staircase — so walk the FINAL boundary (after every portal clearing and
+  // connectivity carve) and lay overlapping hedgerow mounds straddling each
+  // ground↔tallgrass face, jittered off the grid beat. Blended tuft blobs
+  // round the corners off; the physical boundary stays the grid's.
+  for (let cy = 1; cy < rows - 1; cy++) {
+    for (let cx = 1; cx < cols - 1; cx++) {
+      const px = (cx + 0.5) * cell, py = (cy + 0.5) * cell;
+      if (grid.regionAt(px, py) !== 'ground') continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        if (grid.regionAt(px + dx * cell, py + dy * cell) !== 'tallgrass') continue;
+        if (rng.chance(0.22)) continue; // the odd gap keeps it a hedge, not a fence
+        const jx = (rng.range(0, 1) - 0.5) * cell * 0.8;
+        const jy = (rng.range(0, 1) - 0.5) * cell * 0.8;
+        ctx.doodads.push({
+          pos: vec(px + dx * cell * 0.55 + jx, py + dy * cell * 0.55 + jy),
+          radius: rng.range(22, 36), kind: 'hedgerow',
+        });
+        break; // one mound per boundary cell is plenty — neighbours overlap it
+      }
+    }
+  }
 
   // Flora — area-scaled by the blob's cell count, all kept on walkable ground.
   const area = anchors.length;
@@ -2482,6 +2516,8 @@ registerStamp('cinder', (ctx, spec) => stampBlob(ctx, 'cinder', spec.radius ?? [
 registerStamp('ember_vent', (ctx) => stampEmberVent(ctx));
 // Marine clutter: kelp fields (walkable beds), coral heads + rocky outcrops (solids).
 registerStamp('kelp', (ctx, spec) => stampBlob(ctx, 'kelp', spec.radius ?? [22, 40], [3, 6], false));
+// The kelp TREE — a lone stipe; forests come from the 'kelp_forest' cluster.
+registerStamp('giant_kelp', (ctx, spec) => stampSolid(ctx, 'giant_kelp', spec.radius ?? [26, 42]));
 registerStamp('coral', (ctx, spec) => stampSolid(ctx, 'coral', spec.radius ?? [16, 28]));
 registerStamp('sea_rock', (ctx, spec) => stampSolid(ctx, 'sea_rock', spec.radius ?? [22, 40]));
 // Mycelia fungal clutter: towering caps + spires (solids), puffing spore-pods

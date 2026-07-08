@@ -1154,10 +1154,11 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'apron', role: 'cloth', alpha: 0.85 },
     ],
   },
+  // An UNOPENED chest, gold-bound, its seam leaking the light of whatever
+  // waits inside — the event-box lineage (strongboxes to come) starts here.
   gem_cache: {
     parts: [
-      { kind: 'crateBox', scale: 0.95 },
-      { kind: 'gem', scale: 1.3 },
+      { kind: 'chest', scale: 1.05, params: { straps: 2, glow: 0.7 } },
     ],
   },
   cart: {

@@ -3080,6 +3080,73 @@ const stitchSeams: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** An UNOPENED CHEST — plank body with a rounded lid end, the lid seam (and
+ *  the light that leaks through it), iron straps with rivets, a hasp lock
+ *  waiting at the facing end. The strongboxes to come ride params: straps,
+ *  lock, glow / glowColor. */
+const chest: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  const iron = rampFor(spec, pal, 'metal');
+  const straps = Math.round(P(spec, 'straps', 2));
+  const glow = P(spec, 'glow', 0.5);
+  place(ctx, r, spec, (c, R) => {
+    const hw = R * 0.8, hh = R * 0.56;
+    c.fillStyle = wood.base;
+    c.beginPath();
+    c.moveTo(-hw, -hh);
+    c.lineTo(hw * 0.66, -hh);
+    c.quadraticCurveTo(hw, -hh, hw, 0);
+    c.quadraticCurveTo(hw, hh, hw * 0.66, hh);
+    c.lineTo(-hw, hh);
+    c.closePath();
+    c.fill();
+    outlined(c, wood, 1.2);
+    // Plank lines.
+    c.strokeStyle = withAlpha(wood.shadow, 0.55);
+    c.lineWidth = 1;
+    for (const fy of [-0.68, 0.68]) {
+      c.beginPath();
+      c.moveTo(-hw * 0.96, hh * fy);
+      c.lineTo(hw * 0.9, hh * fy);
+      c.stroke();
+    }
+    // The lid seam — and whatever's inside, leaking through it.
+    c.strokeStyle = withAlpha(wood.outline, 0.8);
+    c.lineWidth = 1.2;
+    c.beginPath(); c.moveTo(hw * 0.3, -hh); c.lineTo(hw * 0.3, hh); c.stroke();
+    if (glow > 0) {
+      c.strokeStyle = withAlpha(PS(spec, 'glowColor') ?? pal.glow, glow * 0.55);
+      c.lineWidth = 2.2;
+      c.beginPath(); c.moveTo(hw * 0.3, -hh * 0.78); c.lineTo(hw * 0.3, hh * 0.78); c.stroke();
+    }
+    // Iron straps, each riveted and catching an edge of light.
+    for (let i = 0; i < straps; i++) {
+      const sx = -hw + ((i + 0.6) / (straps + 0.4)) * hw * 1.2;
+      c.fillStyle = iron.base;
+      c.fillRect(sx - R * 0.055, -hh - 1, R * 0.11, hh * 2 + 2);
+      c.fillStyle = withAlpha(iron.highlight, 0.7);
+      c.fillRect(sx - R * 0.055, -hh - 1, R * 0.035, hh * 2 + 2);
+      c.fillStyle = iron.shadow;
+      for (const fy of [-0.72, 0.72]) {
+        c.beginPath(); c.arc(sx, hh * fy, R * 0.035, 0, Math.PI * 2); c.fill();
+      }
+    }
+    // The hasp and its lock, waiting at the lid end.
+    if (P(spec, 'lock', 1) > 0) {
+      c.beginPath();
+      c.rect(hw * 0.56, -R * 0.1, R * 0.3, R * 0.2);
+      c.fillStyle = iron.base;
+      c.fill();
+      outlined(c, iron, 1);
+      c.strokeStyle = iron.shadow;
+      c.lineWidth = 1.2;
+      c.beginPath(); c.arc(hw * 0.88, 0, R * 0.07, 0, Math.PI * 2); c.stroke();
+      c.fillStyle = iron.shadow;
+      c.beginPath(); c.arc(hw * 0.88, 0, R * 0.025, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
 /** A hanging BELL under its yoke — doom-heralds, plague criers, the tolling
  *  faithful. In live[] it sways; params: swing. */
 const bell: PartPainter = (ctx, r, spec, pal, t = 0) => {
@@ -3129,7 +3196,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   mawRing, lure, sporeVents, mossPatch, veinweb, polyps, slimeTrail,
   sailfin, warhorn, drape,
   stakeRow, totemPost,
-  crystalGrowths, roots, stitchSeams, bell,
+  crystalGrowths, roots, stitchSeams, bell, chest,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

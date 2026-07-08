@@ -30,7 +30,8 @@ import { keyDisplay, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { MONSTERS } from '../data/monsters';
-import { hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
+import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
+import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawLongShadow, drawShadow, sunCast } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
@@ -1410,73 +1411,171 @@ export class Renderer {
     }
   }
 
-  /** Shrines: a pillar with a glowing orb — dark once drunk. */
+  /** Shrines: a form-rolled stone plinth (menhir or stepped table) carved
+   *  with the buff's own runes, a gift-orb breathing over it and motes
+   *  rising to meet it — dark, cracked, and orbless once drunk. Dressed in
+   *  the same stone ramp the world's rock wears; never a grey rect again. */
   private drawShrines(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     for (const s of world.shrines) {
+      const seed = ((s.pos.x * 13 + s.pos.y * 7) | 0) >>> 0;
+      const ramp = rampOf('#5a5a66', materialOf('stone'));
       const color = s.used ? '#4a4a52' : s.def.color;
-      // Plinth
-      ctx.fillStyle = '#2a2a32';
-      ctx.strokeStyle = '#4a4a5a';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(s.pos.x - 10, s.pos.y - 6, 20, 16);
-      ctx.strokeRect(s.pos.x - 10, s.pos.y - 6, 20, 16);
-      // Orb
-      if (!s.used) {
-        ctx.globalAlpha = 0.25 + 0.1 * Math.sin(t * 3);
-        ctx.fillStyle = color;
+      const x = s.pos.x, y = s.pos.y;
+      drawShadow(ctx, x, y + 2, 15, 0.5);
+      const menhir = hash01(seed, 9) < 0.4;
+      const base = s.used ? shade(ramp.base, -0.25) : ramp.base;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate((hash01(seed, 3) - 0.5) * 0.3);
+      if (menhir) {
+        // A standing stone, tapered, lit along the sun edge.
+        ctx.fillStyle = base;
         ctx.beginPath();
-        ctx.arc(s.pos.x, s.pos.y - 14, 16, 0, Math.PI * 2);
+        ctx.moveTo(-9, 10); ctx.lineTo(-7, -12); ctx.lineTo(-1, -16); ctx.lineTo(7, -11); ctx.lineTo(9, 10);
+        ctx.closePath();
         ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.strokeStyle = withAlpha(ramp.light, s.used ? 0.2 : 0.5);
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(-6, -10); ctx.lineTo(-8, 8); ctx.stroke();
+      } else {
+        // A two-course table plinth with a chisel-lit top.
+        ctx.fillStyle = shade(base, -0.12);
+        ctx.fillRect(-13, -2, 26, 13);
+        ctx.fillStyle = base;
+        ctx.fillRect(-10, -9, 20, 12);
+        ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
+        ctx.lineWidth = 1.3;
+        ctx.strokeRect(-13, -2, 26, 13);
+        ctx.strokeRect(-10, -9, 20, 12);
+        ctx.fillStyle = withAlpha(ramp.light, s.used ? 0.15 : 0.4);
+        ctx.fillRect(-10, -9, 20, 3);
       }
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(s.pos.x, s.pos.y - 14, 7, 0, Math.PI * 2);
-      ctx.fill();
-      // A dark shrine keeps its silhouette but loses its name.
-      if (!s.used) {
+      // Carved runes wearing the buff's color — dim ash once drunk.
+      ctx.globalAlpha = s.used ? 0.25 : 0.6 + 0.25 * Math.sin(t * 2.1 + seed);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.2;
+      for (let i = 0; i < 3; i++) {
+        const rx = -6 + i * 6, ry = menhir ? -4 + (i % 2) * 4 : 0;
+        ctx.beginPath();
+        ctx.moveTo(rx - 1.6, ry + 2.4);
+        ctx.lineTo(rx + (hash01(i, seed + 7) - 0.5) * 2, ry - 2.4);
+        ctx.lineTo(rx + 1.8, ry + 1.2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.restore();
+      if (s.used) {
+        // A spent stone keeps the seam where the light left it.
+        ctx.strokeStyle = withAlpha('#1a1a20', 0.7);
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(x - 4, y - 12); ctx.lineTo(x + 1, y - 4); ctx.lineTo(x - 2, y + 6);
+        ctx.stroke();
+      } else {
+        // The gift: an orb breathing over the stone, motes rising to meet it.
+        const oy = y - 18 + Math.sin(t * 1.6 + seed) * 1.6;
+        const g = ctx.createRadialGradient(x, oy, 0, x, oy, 15);
+        g.addColorStop(0, withAlpha(color, 0.34 + 0.1 * Math.sin(t * 3 + seed)));
+        g.addColorStop(1, withAlpha(color, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(x, oy, 15, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(x, oy, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = withAlpha('#ffffff', 0.75);
+        ctx.beginPath(); ctx.arc(x - 1.8, oy - 2, 2, 0, Math.PI * 2); ctx.fill();
+        for (let i = 0; i < 3; i++) {
+          const cyc = (t * 0.5 + i / 3 + hash01(i, seed) * 0.2) % 1;
+          ctx.globalAlpha = (1 - cyc) * 0.7;
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(x + Math.sin(i * 2.1 + t) * 7, y + 4 - cyc * 26, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
         ctx.textAlign = 'center';
         ctx.font = '10px Verdana';
         ctx.fillStyle = color;
-        ctx.fillText(s.def.name, s.pos.x, s.pos.y + 24);
+        ctx.fillText(s.def.name, x, y + 26);
       }
     }
   }
 
-  /** Altars: a plinth and the standing field everyone inside answers to. */
+  /** Altars: a dressed stone slab under the god's cloth runner and a burning
+   *  sigil, warden stones marking the quarters of the standing field everyone
+   *  inside answers to. */
   private drawAltars(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     for (const al of world.altars) {
       const { color, radius, name } = al.def;
-      ctx.globalAlpha = 0.05 + 0.02 * Math.sin(t * 2);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.arc(al.pos.x, al.pos.y, radius, 0, Math.PI * 2);
-      ctx.fill();
+      const seed = ((al.pos.x * 13 + al.pos.y * 7) | 0) >>> 0;
+      const ramp = rampOf('#565662', materialOf('stone'));
+      const x = al.pos.x, y = al.pos.y;
+      // The field: a soft-edged wash, brightest at its rim.
+      const fg = ctx.createRadialGradient(x, y, radius * 0.4, x, y, radius);
+      fg.addColorStop(0, withAlpha(color, 0.02));
+      fg.addColorStop(0.85, withAlpha(color, 0.06 + 0.02 * Math.sin(t * 2)));
+      fg.addColorStop(1, withAlpha(color, 0));
+      ctx.fillStyle = fg;
+      ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
       ctx.globalAlpha = 0.4;
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.setLineDash([8, 10]);
       ctx.beginPath();
-      ctx.arc(al.pos.x, al.pos.y, radius, t * 0.15, t * 0.15 + Math.PI * 2);
+      ctx.arc(x, y, radius, t * 0.15, t * 0.15 + Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
-      // The altar block itself
-      ctx.fillStyle = '#26262e';
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 2;
-      ctx.fillRect(al.pos.x - 13, al.pos.y - 10, 26, 20);
-      ctx.strokeRect(al.pos.x - 13, al.pos.y - 10, 26, 20);
-      ctx.fillStyle = color;
-      ctx.fillRect(al.pos.x - 7, al.pos.y - 16, 14, 6);
+      // Warden stones at the field's quarters, each holding a spark.
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2 + 0.6 + (hash01(i, seed) - 0.5) * 0.3;
+        const sx = x + Math.cos(a) * radius * 0.94, sy = y + Math.sin(a) * radius * 0.94;
+        ctx.fillStyle = shade(ramp.base, -0.1);
+        ctx.beginPath();
+        ctx.ellipse(sx, sy, 4.5, 5.5, a, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = withAlpha(ramp.outline, 0.8);
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.fillStyle = withAlpha(color, 0.5 + 0.3 * Math.sin(t * 2.4 + i));
+        ctx.beginPath(); ctx.arc(sx, sy, 1.4, 0, Math.PI * 2); ctx.fill();
+      }
+      // The altar itself: foot course, slab, chisel light.
+      drawShadow(ctx, x, y + 3, 15, 0.5);
+      ctx.fillStyle = shade(ramp.base, -0.14);
+      ctx.fillRect(x - 14, y - 2, 28, 13);
+      ctx.fillStyle = ramp.base;
+      ctx.fillRect(x - 12, y - 11, 24, 14);
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
+      ctx.lineWidth = 1.3;
+      ctx.strokeRect(x - 14, y - 2, 28, 13);
+      ctx.strokeRect(x - 12, y - 11, 24, 14);
+      ctx.fillStyle = withAlpha(ramp.light, 0.4);
+      ctx.fillRect(x - 12, y - 11, 24, 3);
+      // The runner: the god's color laid across the stone.
+      ctx.fillStyle = withAlpha(shade(color, -0.25), 0.9);
+      ctx.fillRect(x - 4, y - 13, 8, 18);
+      ctx.fillStyle = withAlpha(shade(color, 0.15), 0.8);
+      ctx.fillRect(x - 4, y - 13, 8, 2);
+      // The sigil burning over the runner.
+      const pulse = 0.55 + 0.3 * Math.sin(t * 2.2 + seed);
+      ctx.strokeStyle = withAlpha(color, pulse);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(x, y - 4, 4.6, 0, Math.PI * 2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x, y - 8.2); ctx.lineTo(x + 3.8, y - 1.4); ctx.lineTo(x - 3.8, y - 1.4);
+      ctx.closePath();
+      ctx.stroke();
       ctx.textAlign = 'center';
       ctx.font = 'bold 10px Verdana';
       ctx.fillStyle = color;
-      ctx.fillText(name, al.pos.x, al.pos.y + 32);
+      ctx.fillText(name, x, y + 32);
     }
   }
 
@@ -2739,29 +2838,68 @@ export class Renderer {
     }
   }
 
-  /** Sacrificial Fonts: a dark basin under a violet flame. */
+  /** Sacrificial Fonts: a carved stone basin over a violet heart — petal
+   *  flame licks wheeling above the bowl, glyph notches round the rim, and
+   *  gem-motes spiraling DOWN into it (it eats skill gems, after all). */
   private drawFonts(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
+    const t = world.time;
     for (const f of world.fonts) {
-      ctx.fillStyle = '#1c1822';
-      ctx.strokeStyle = '#54406a';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(f.pos.x, f.pos.y, 16, 0, Math.PI * 2);
-      ctx.fill();
+      const seed = ((f.pos.x * 13 + f.pos.y * 7) | 0) >>> 0;
+      const ramp = rampOf('#4a4056', materialOf('stone'));
+      const x = f.pos.x, y = f.pos.y;
+      drawShadow(ctx, x, y + 2, 17, 0.5);
+      // The basin: stone rim over a bowl falling to violet dark.
+      ctx.fillStyle = ramp.base;
+      ctx.beginPath(); ctx.arc(x, y, 16, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
+      ctx.lineWidth = 1.6;
       ctx.stroke();
-      const lick = 4 + Math.sin(t * 5) * 2;
-      ctx.globalAlpha = 0.7;
-      ctx.fillStyle = '#b06bd4';
-      ctx.beginPath();
-      ctx.ellipse(f.pos.x, f.pos.y - 8, 5, lick + 6, 0, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.strokeStyle = withAlpha(ramp.light, 0.5);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.arc(x, y, 14.4, Math.PI * 1.05, Math.PI * 1.7); ctx.stroke();
+      const bg = ctx.createRadialGradient(x, y, 1, x, y, 11.5);
+      bg.addColorStop(0, '#2a1a3a');
+      bg.addColorStop(0.7, '#17101f');
+      bg.addColorStop(1, '#100a16');
+      ctx.fillStyle = bg;
+      ctx.beginPath(); ctx.arc(x, y, 11.5, 0, Math.PI * 2); ctx.fill();
+      // Glyph notches carved round the rim, breathing.
+      ctx.strokeStyle = withAlpha('#b06bd4', 0.5 + 0.2 * Math.sin(t * 1.8 + seed));
+      ctx.lineWidth = 1.1;
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + 0.3;
+        ctx.beginPath();
+        ctx.moveTo(x + Math.cos(a) * 12.6, y + Math.sin(a) * 12.6);
+        ctx.lineTo(x + Math.cos(a) * 15.2, y + Math.sin(a) * 15.2);
+        ctx.stroke();
+      }
+      // The violet heart: layered petal licks wheeling over the bowl.
+      for (let i = 0; i < 3; i++) {
+        const lick = Math.sin(t * 4.6 + i * 2.1) * 2;
+        ctx.globalAlpha = 0.45 - i * 0.1 + 0.15 * Math.sin(t * 5 + i);
+        ctx.fillStyle = i === 2 ? '#e8c8f8' : '#b06bd4';
+        ctx.beginPath();
+        ctx.ellipse(x + Math.sin(t * 2.2 + i * 2) * 1.6, y - 6 - i * 2.4,
+          4.2 - i * 1.1, 7 - i * 1.4 + lick, Math.sin(t * 1.3 + i) * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      // Gem-motes spiraling down into the bowl.
+      for (let i = 0; i < 3; i++) {
+        const cyc = (t * 0.4 + i / 3) % 1;
+        const a = cyc * Math.PI * 3 + i * 2.1 + seed;
+        ctx.globalAlpha = Math.min(1, cyc * 2) * 0.7;
+        ctx.fillStyle = i % 2 ? '#8fd0ff' : '#e8c8f8';
+        ctx.beginPath();
+        ctx.arc(x + Math.cos(a) * (16 - cyc * 12), y - 14 + cyc * 12, 1.3, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
       ctx.textAlign = 'center';
       ctx.font = '10px Verdana';
       ctx.fillStyle = '#b06bd4';
-      ctx.fillText('Sacrificial Font', f.pos.x, f.pos.y + 32);
+      ctx.fillText('Sacrificial Font', x, y + 32);
     }
   }
 

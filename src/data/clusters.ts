@@ -46,3 +46,16 @@ registerCluster({
   ],
   poi: true,
 });
+
+// A KELP FOREST: giant stipes packed into one swaying canopy mass over an
+// understory of frond beds — the thresher forest. Bodies weave between the
+// stalks; the layered crowns above break sight both ways. Walk in, vanish.
+registerCluster({
+  id: 'kelp_forest',
+  anchor: { radius: 36, kind: 'giant_kelp' },
+  pieces: [
+    { kind: 'giant_kelp', radius: [24, 38], count: [4, 7], ring: [30, 130], packed: true, rot: true },
+    { kind: 'kelp', radius: [18, 30], count: [3, 5], ring: [40, 160], rot: true },
+    { kind: 'sea_rock', radius: [14, 22], count: [0, 2], ring: [60, 170], rot: true },
+  ],
+});

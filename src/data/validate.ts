@@ -55,6 +55,7 @@ export function validateContent(): void {
     ...Object.values(ZONES).map(z => ({ source: `zone ${z.id}`, specs: z.layout })),
     ...Object.values(TILESETS).flatMap(t => [
       { source: `tileset ${t.id}`, specs: t.layout },
+      { source: `tileset ${t.id} common`, specs: t.common ?? [] },
       ...(t.variants ?? []).map((v, i) => ({ source: `tileset ${t.id} variant ${v.name ?? i}`, specs: v.layout })),
     ]),
   ];
