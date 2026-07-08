@@ -725,9 +725,10 @@ registerLayout('islands', islandsLayout);
 function descentLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, entry } = ctx;
   const clearOfEntry = (p: Vec2, gap: number): boolean => dist(p, entry) >= gap;
-  // Rock pillars — cover that boxes you in (the claustrophobia).
+  // Rock pillars — cover that boxes you in (the claustrophobia). Full size
+  // gamut: stubby knuckles to the rare cavern-filling column.
   for (let i = 0; i < 16; i++) {
-    const r = rng.range(26, 62);
+    const r = sizeRoll(rng, 26, 62);
     const p = findSpot(ctx, r, false, doodadRule('rock').spacing ?? 0, true, 'rock');
     if (p && clearOfEntry(p, 120)) ctx.doodads.push({ pos: p, radius: r, kind: 'rock', rot: rng.range(-0.4, 0.4) });
   }
@@ -1025,7 +1026,7 @@ function stampRockMudCluster(ctx: GenCtx, center: Vec2, onBlob: (p: Vec2, r: num
   const rocks = ctx.rng.int(3, 6);
   for (let i = 0; i < rocks; i++) {
     const ang = ctx.rng.range(0, Math.PI * 2), off = ctx.rng.range(8, 46);
-    const r = ctx.rng.range(16, 34);
+    const r = sizeRoll(ctx.rng, 16, 34);
     const p = vec(center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off);
     if (!onBlob(p, r) || overlapsSolidBefore(ctx, p, r, before)) continue;
     ctx.doodads.push({ pos: p, radius: r, kind: 'rock', rot: ctx.rng.range(-0.4, 0.4) });
@@ -2578,7 +2579,28 @@ function stampSolid(ctx: GenCtx, kind: DoodadKind, radius: [number, number]): vo
   if (p) ctx.doodads.push({ pos: p, radius: r, kind, rot: ctx.rng.range(0, Math.PI * 2) });
 }
 
-function stampRock(ctx: GenCtx, radius: [number, number]): void { stampSolid(ctx, 'rock', radius); }
+/** ONE-DRAW natural-size roll: most stones land small-to-mid (power-curve
+ *  skew), a rare tail lands truly HUGE — pebbles to monoliths out of the same
+ *  band. Exactly one rng draw, so every call site keeps its draw count; only
+ *  the VALUE distribution widens (a bigger stone can still shift a later
+ *  placement's acceptance — the golden-seed/baseline gates judge that). */
+function sizeRoll(rng: GenCtx['rng'], lo: number, hi: number,
+  opts?: { curve?: number; tail?: number; tailMul?: number }): number {
+  const curve = opts?.curve ?? 1.6;
+  const tail = opts?.tail ?? 0.06;
+  const tailMul = opts?.tailMul ?? 1.9;
+  const u = rng.range(0, 1);
+  if (u >= 1 - tail) return hi * (1 + (tailMul - 1) * ((u - (1 - tail)) / tail));
+  return lo + (hi - lo) * Math.pow(u / (1 - tail), curve);
+}
+
+/** Natural stone scatters at REAL spread — the lone 'rocks' stamp rolls the
+ *  full pebble→boulder→rare-monolith gamut instead of a flat band. */
+function stampRock(ctx: GenCtx, radius: [number, number]): void {
+  const r = sizeRoll(ctx.rng, radius[0], radius[1]);
+  const p = findSpot(ctx, r, true, doodadRule('rock').spacing ?? 0, true, 'rock');
+  if (p) ctx.doodads.push({ pos: p, radius: r, kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2) });
+}
 
 /** A BOULDER FIELD — an outcrop shrugging out of the ground: one anchor stone,
  *  shoulder rocks packed around it, scree spilling away downhill, and sometimes
@@ -2588,11 +2610,11 @@ function stampBoulderField(ctx: GenCtx): void {
   const center = findSpot(ctx, 90, true, doodadRule('rock').spacing ?? 0, true, 'rock');
   if (!center) return;
   const before = ctx.doodads.length;
-  ctx.doodads.push({ pos: center, radius: ctx.rng.range(34, 54), kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2) });
+  ctx.doodads.push({ pos: center, radius: sizeRoll(ctx.rng, 34, 54), kind: 'rock', rot: ctx.rng.range(0, Math.PI * 2) });
   const shoulders = ctx.rng.int(2, 4);
   for (let i = 0; i < shoulders; i++) {
     const ang = ctx.rng.range(0, Math.PI * 2), off = ctx.rng.range(50, 94);
-    const r = ctx.rng.range(14, 28);
+    const r = sizeRoll(ctx.rng, 14, 28);
     const p = vec(center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off);
     if (!clearOf(ctx, p, r, true) || inReserved(ctx, p, r)) continue;
     if (overlapsSolidBefore(ctx, p, r, before)) continue;
