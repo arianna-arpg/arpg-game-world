@@ -335,8 +335,12 @@ export function validateContent(): void {
     },
     { kind: 'graft', key: 'cascade', deliveries: ['ground'], site: 'instanceCascade (ground placements only)' },
     { kind: 'graft', key: 'pulse', deliveries: ['ground'], site: 'instancePulse (ground placements only)' },
+    { kind: 'graft', key: 'zoneFollow', deliveries: ['ground'], site: 'the ground placement follow mint (lingering placements only)' },
     { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
     { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
+    // exposure / zoneGrow stay unrowed on purpose: their gems gate on
+    // 'duration' the way madden/zoneEmit do — broad by design, and a row
+    // here would cry wolf at every boot for legitimately broad gates.
   ];
   // The map audits itself: a stat row naming a dead stat is map drift.
   for (const row of GRAFT_READ_SITES) {

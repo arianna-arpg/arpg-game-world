@@ -22,7 +22,7 @@ import { NEUTRAL_RESET } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
+  effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, supportFitsInst,
   supportMaxLevel, supportRidesMinions,
@@ -650,6 +650,9 @@ interface Zone {
    *  dwell, seconds — ticks bite only past `after`; leaving clears the
    *  lungs (the madden dwell pattern, frame-accurate). */
   exposure?: { after: number; dwell: Map<number, number> };
+  /** FUME DOMAIN (GroundDelivery.exposureDomain): the domain soaks in on
+   *  the exposure clock — occupants wear its mods only past the dwell. */
+  exposureDomain?: true;
   /** ARMED SPARK (StormDelivery.awaitRelease): waits for its channel to
    *  END, then detonates in sequence (armSeq = placement order). */
   armed?: boolean;
@@ -664,8 +667,9 @@ interface Zone {
   /** Linger at birth (retract/pendulum clocks measure from it). */
   linger0?: number;
   /** EMITTER: the lingering zone casts a payload skill on a beat (see
-   *  GroundDelivery.emit — fissure bursts, storm bolts, lashing tendrils). */
-  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out' };
+   *  GroundDelivery.emit — fissure bursts, storm bolts, lashing tendrils;
+   *  `reach` widens the 'enemy' pick past the zone's edge). */
+  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out'; reach?: number };
   emitTimer?: number;
   /** The payload instance, minted once per zone (rides the placer's level). */
   emitInst?: SkillInstance;
@@ -1297,6 +1301,8 @@ export class World {
   pendingSummons: PendingSummon[] = [];
   pendingRespawns: PendingRespawn[] = [];
   pendingDetonations: { mine: Actor; timer: number }[] = [];
+  /** Scheduled follow-through casts (FollowUpSpec) counting down to fire. */
+  pendingFollowUps: { caster: Actor; inst: SkillInstance; aim: Vec2; timer: number }[] = [];
   /** Telegraphed enemy death-bursts mid-coalesce / mid-flight (the implode + tracking orb). */
   deathBursts: DeathBurst[] = [];
   pendingBlinks: PendingBlink[] = [];
@@ -2513,6 +2519,7 @@ export class World {
     this.pendingSummons = [];
     this.pendingRespawns = [];
     this.pendingDetonations = [];
+    this.pendingFollowUps = [];
     this.deathBursts = [];
     this.pendingBlinks = [];
     this.pendingRepeats = [];
@@ -10600,6 +10607,8 @@ export class World {
       repeat?: number; noCooldown?: boolean; keepFacing?: boolean;
       /** Set on scheduled repeats so they don't schedule more repeats. */
       noRepeat?: boolean;
+      /** Set on follow-up fires so a payload never chains its own. */
+      noFollowUp?: boolean;
       /** Set on scheduled SEQUENCE steps: the absolute strike bearing, baked
        *  at cast time (skips the aim transform — the figure is locked). */
       strikeAngle?: number;
@@ -11480,10 +11489,16 @@ export class World {
         const ownLinger = (d.lingerDuration ?? 0) > 0;
         const groundTick = ownLinger || pulseN === 0 ? (d.tickInterval ?? 0.5) : Infinity;
         const groundTick0 = ownLinger || pulseN === 0 ? 0 : Infinity;
-        // LINGERING FUME (GroundDelivery.exposure): each placement carries
-        // its own per-occupant dwell ledger — breath is local to a surface.
+        // LINGERING FUME (GroundDelivery.exposure / SupportDef.exposure —
+        // a socketed graft wins over the delivery's own): each placement
+        // carries its own per-occupant dwell ledger — breath is local to a
+        // surface. The DOMAIN gate (exposureDomain) rides the primary
+        // placement only, where domains live.
+        const expGraft = socketSpec(inst, 'exposure');
+        const expAfter = expGraft?.after ?? d.exposure;
+        const expDomain = (expGraft ? expGraft.domain : d.exposureDomain) ? true as const : undefined;
         const mintExposure = (): Zone['exposure'] =>
-          d.exposure ? { after: d.exposure, dwell: new Map<number, number>() } : undefined;
+          expAfter ? { after: expAfter, dwell: new Map<number, number>() } : undefined;
         if (d.line) {
           // Flame Wall: segments across the facing — or, with a sigil
           // socketed, arranged around a square / triangle outline.
@@ -11563,17 +11578,23 @@ export class World {
           curseAllies,
           pulse: mintPulse(d.delay ?? 0),
           exposure: mintExposure(),
+          exposureDomain: expDomain,
           pull: d.pull,
           pullRadius: d.pullRadius ? d.pullRadius * aoeScale : undefined,
           drift: d.drift,
-          grow: d.grow,
+          // Growth: innate (Upheaval) or grafted (Overgrowth's zoneGrow —
+          // the delivery's own is the base and wins when present).
+          grow: d.grow ?? socketSpec(inst, 'zoneGrow'),
           // Revolution rides the aoeSpin stat (innate rotate = the base) —
           // Whirling Sigil spins any faced zone from nothing.
           rotate: (() => {
             const r = caster.sheet.get('aoeSpin', tags, extra, d.rotate ?? 0);
             return r !== 0 ? r : undefined;
           })(),
-          follow: d.follow,
+          // Worn fields: innate (Blizzard Coil's mantle) or grafted
+          // (Carried Edge's zoneFollow) — the placement RIDES its caster.
+          // A sweep's arc keeps its own trajectory; only the anchor walks.
+          follow: d.follow || (socketSpec(inst, 'zoneFollow') ? true : undefined),
           retract: d.retract,
           // Seeking grounds (Creeping Frost's slinking winter).
           seek: d.seek ? { speed: d.seek.speed, range: d.seek.range ?? 420 } : undefined,
@@ -11592,8 +11613,17 @@ export class World {
               ? { arc: ps.arcDeg * Math.PI / 180, period: ps.period, base: caster.facing }
               : undefined;
           })(),
+          // CONVERGE (Closing Shears): the primary becomes the LEFT hand —
+          // half the span, closing onto the cast bearing; its mirrored
+          // twin is pushed just after the placement (negative arc walks
+          // the same formula backwards — one integrator, two directions).
           sweep: d.sweep
-            ? { arc: d.sweep.arcDeg * Math.PI / 180, base: caster.facing }
+            ? (d.sweep.converge
+              ? {
+                arc: (d.sweep.arcDeg / 2) * Math.PI / 180,
+                base: caster.facing - (d.sweep.arcDeg / 4) * Math.PI / 180,
+              }
+              : { arc: d.sweep.arcDeg * Math.PI / 180, base: caster.facing })
             : undefined,
           linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
           leaveTerrain: d.leaveTerrain,
@@ -11619,6 +11649,32 @@ export class World {
           anchor: zoneAnchor,
           flatBonus,
         });
+        // THE CLAP (GroundDelivery.sweep.converge): the mirrored RIGHT
+        // hand closes from the other wing onto the same bearing — fresh
+        // hit ledger and fresh clocks, no emitter/domain (the cascade-
+        // ripple rule: one source per cast). Whatever stands on the
+        // meeting line takes BOTH hands; convergence is the crunch, by
+        // design. Two hands, one cost.
+        if (d.sweep?.converge) {
+          const prime = this.zones[this.zones.length - 1];
+          this.zones.push({
+            ...prime,
+            pos: vec(prime.pos.x, prime.pos.y),
+            sweep: {
+              arc: -((d.sweep.arcDeg / 2) * Math.PI / 180),
+              base: caster.facing + (d.sweep.arcDeg / 4) * Math.PI / 180,
+            },
+            struck: d.hitOnce ? new Set() : undefined,
+            emit: undefined, emitTimer: undefined, emitInst: undefined,
+            domain: undefined, domainKey: undefined, domainAffected: undefined,
+            exposureDomain: undefined,
+            marker: undefined, onImpact: undefined,
+            madden: prime.madden
+              ? { after: prime.madden.after, dwell: new Map<number, number>() } : undefined,
+            pulse: mintPulse(d.delay ?? 0),
+            exposure: mintExposure(),
+          });
+        }
         // GROUND CASCADE (innate, support-grafted, or purely stat-granted):
         // the placement REPEATS at displaced points — rippling out from the
         // impact like a skipped stone. Ripples echo weaker (dmgStep) and
@@ -11665,7 +11721,7 @@ export class World {
                 curseAllies,
                 pull: d.pull,
                 drift: d.drift,
-                grow: d.grow,
+                grow: d.grow ?? socketSpec(inst, 'zoneGrow'),
                 // Ripples quake too — each on its own displaced clock, its
                 // pulse damage riding the ripple's own dmgStep falloff.
                 pulse: mintPulse((d.delay ?? 0) + beat * k),
@@ -12588,6 +12644,23 @@ export class World {
           { keepFacing: true, noCooldown: true, noRepeat: true });
       }
     }
+    // FOLLOW-UP CASTS (SkillDef.followUp / SupportDef.followUp): the
+    // swing's follow-through — each spec riding the instance schedules its
+    // payload a beat after this completed REAL use, fired FREE (unpaid, no
+    // cooldown) at the same aim and minted at the host's effective level
+    // (the meta-instance rule). Repeats, echo replays and channel pulses
+    // never follow through (the standard real-use gate), and a follow-up
+    // never chains follow-ups of its own (noFollowUp rides the fire).
+    if (!opts.noRepeat && !opts.noCooldown && !opts.noFollowUp && !caster.construct) {
+      for (const fu of instanceFollowUps(inst)) {
+        if (!SKILLS[fu.skillId]) continue;
+        if (fu.chance !== undefined && !chance(fu.chance)) continue;
+        this.pendingFollowUps.push({
+          caster, inst: this.mintMetaInstance(caster, inst, fu.skillId),
+          aim: vec(aim.x, aim.y), timer: fu.delay ?? 0.35,
+        });
+      }
+    }
     // SHADOW MIMIC: living clones replay this use from where they stand.
     // Channel pulses ARE eligible — the per-clone throttle samples a beam
     // into a periodic shadow-lash; repeats and echo replays are not.
@@ -13032,10 +13105,14 @@ export class World {
         emit: linger > 0 ? d.emit : undefined,
         // LINGERING FUME: a venting crack — each segment keeps its own
         // dwell ledger (breath is local to the stretch you stand on).
-        // Cracks do NOT carry GroundDelivery.pulse: re-lighting is the
-        // fissure-texture gems' vocabulary (volatility, arming, waltz).
-        exposure: d.exposure && linger > 0
-          ? { after: d.exposure, dwell: new Map<number, number>() } : undefined,
+        // Grafted fumes (SupportDef.exposure) vent here too. Cracks do
+        // NOT carry GroundDelivery.pulse: re-lighting is the fissure-
+        // texture gems' vocabulary (volatility, arming, waltz).
+        exposure: (() => {
+          const after = socketSpec(inst, 'exposure')?.after ?? d.exposure;
+          return after && linger > 0
+            ? { after, dwell: new Map<number, number>() } : undefined;
+        })(),
         volatile: linger > 0 && volatile
           ? { ...volatile, next: this.time + delay + volatile.interval } : undefined,
         aftershock: linger > 0 && aftershock
@@ -17789,6 +17866,7 @@ export class World {
     this.updateAuras(dt);
     this.updateStrobes(dt);
     this.updateDetonations(dt);
+    this.updateFollowUps(dt);
     this.updateDeathBursts(dt);
     this.updatePendingSummons(dt);
     this.updatePendingRespawns(dt);
@@ -19317,6 +19395,21 @@ export class World {
       // mine the same frame and never land (the eaten-blast bug).
       this.executeSkill(mine, mine.construct.castInst, mine.pos, { keepFacing: true });
       this.kill(mine, true);
+    }
+  }
+
+  /** Follow-through casts (FollowUpSpec) firing a beat after their swing —
+   *  free executions at the stored aim; a dead swinger's follow-through
+   *  dies with them (the blade drops mid-arc). */
+  private updateFollowUps(dt: number): void {
+    for (let i = this.pendingFollowUps.length - 1; i >= 0; i--) {
+      const p = this.pendingFollowUps[i];
+      p.timer -= dt;
+      if (p.timer > 0) continue;
+      this.pendingFollowUps.splice(i, 1);
+      if (p.caster.dead) continue;
+      this.executeSkill(p.caster, p.inst, p.aim,
+        { noCooldown: true, noRepeat: true, noFollowUp: true });
     }
   }
 
@@ -21794,8 +21887,11 @@ export class World {
             for (let k = 0; k < n; k++) {
               let at: Vec2 | null = null;
               if ((z.emit.at ?? 'point') === 'enemy') {
+                // `reach` inflates the victim's radius for the containment
+                // test — a margin around the zone's edge (and along a
+                // fissure's whole capsule) where the lashes still find you.
                 const pool = this.zoneVictims(z).filter(v =>
-                  this.zoneHas(z, v.pos, v.radius));
+                  this.zoneHas(z, v.pos, v.radius + (z.emit!.reach ?? 0)));
                 if (pool.length) { const v = pick(pool); at = vec(v.pos.x, v.pos.y); }
               } else {
                 const ang = rand(0, Math.PI * 2);
@@ -21828,8 +21924,14 @@ export class World {
         // each occupant's CONTINUOUS dwell accrues per frame (the madden
         // ledger, frame-accurate: the grace is shorter than a tick), and
         // stepping out clears the lungs — re-entry restarts the clock.
+        // FUME DOMAINS breathe on EVERYONE the domain could dress: allies
+        // soak the incense on the same clock enemies drink the stupor
+        // (the pool mirrors updateZoneDomain's own filter).
         if (z.exposure && z.linger > 0) {
-          for (const v of this.zoneVictims(z)) {
+          const pool = z.exposureDomain && z.domain
+            ? this.actors.filter(a => !a.dead && !a.untargetable && !a.construct)
+            : this.zoneVictims(z);
+          for (const v of pool) {
             if (this.zoneHas(z, v.pos, v.radius)) {
               z.exposure.dwell.set(v.id, (z.exposure.dwell.get(v.id) ?? 0) + dt);
             } else {
@@ -21928,6 +22030,12 @@ export class World {
       }
       if (!mods?.length) continue;
       if (!inAoe(z.pos, z.radius, z.shape, z.facing, a.pos, a.radius, z.arcRad)) continue;
+      // FUME DOMAIN (GroundDelivery.exposureDomain): the dominion soaks in
+      // with the breath — occupants wear the mods only past the exposure
+      // dwell. Stripping stays instant at the rim: the accrual loop clears
+      // the lungs on exit and this set-difference does the rest.
+      if (z.exposure && z.exposureDomain
+        && (z.exposure.dwell.get(a.id) ?? 0) < z.exposure.after) continue;
       inside.add(a);
       if (!set.has(a)) {
         set.add(a);
@@ -22769,7 +22877,15 @@ export class World {
     if (a.casting?.mode === 'channel') {
       const ch = a.casting.inst.def.channel;
       const base = ch?.move === 'immobile' ? 0 : ch?.move === 'slowed' ? (ch.moveFactor ?? 0.5) : 1;
-      channelFactor = Math.min(1, base + this.channelMobility(a, a.casting.inst));
+      // rampMove: the held channel DRAGS (negative per — Undertow's
+      // maelstrom slowly anchors its own bearer) or FREES (positive — the
+      // gathering current), on the same curve family as the damage ramps.
+      // Floored at rooted; capped ×1.6, and only a rampMove channel may
+      // exceed a walking pace at all.
+      const rm = ch?.rampMove
+        ? rampValue(ch.rampMove, a.casting.channelTime ?? 0) : 0;
+      channelFactor = Math.max(0, Math.min(ch?.rampMove ? 1.6 : 1,
+        base + this.channelMobility(a, a.casting.inst) + rm));
       if (channelFactor <= 0) return;
     } else if (a.casting?.mode === 'guard') {
       // Shield up: heavy steps, but you keep your feet.

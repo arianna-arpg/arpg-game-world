@@ -356,6 +356,34 @@ export function instancePulse(inst: SkillInstance): GroundPulseSpec | undefined 
   return inst.def.delivery.type === 'ground' ? inst.def.delivery.pulse : undefined;
 }
 
+/**
+ * A FOLLOW-UP CAST: the swing's follow-through — `delay` seconds after a
+ * completed REAL use of the host (base presses only: repeats, echoes and
+ * emitter payloads never follow up), the payload skill fires FREE (unpaid,
+ * no cooldown) at the same aim, minted at the host's effective level (the
+ * meta-instance rule). `chance` rolls per use (default always). Follow-ups
+ * never chain follow-ups of their own — one follow-through per swing.
+ * Carried by a SKILL (Harvest Stroke's trailing sweep) or a SUPPORT
+ * (Reaper's Encore on any melee skill); the two MERGE — every spec riding
+ * the instance schedules its own payload (the tether rule, not graft-wins).
+ */
+export interface FollowUpSpec {
+  /** Catalog id of the payload skill. */
+  skillId: string;
+  /** Roll per completed use (default 1 — every use follows through). */
+  chance?: number;
+  /** Seconds after the host resolves (default 0.35 — a follow-through beat). */
+  delay?: number;
+}
+
+/** Every follow-up riding an instance: the skill's own plus socketed gems'. */
+export function instanceFollowUps(inst: SkillInstance): FollowUpSpec[] {
+  const out: FollowUpSpec[] = [];
+  if (inst.def.followUp) out.push(inst.def.followUp);
+  for (const s of inst.sockets) if (s?.def.followUp) out.push(s.def.followUp);
+  return out;
+}
+
 /** Every tether an instance carries: the skill's own plus socketed gems'. */
 export function instanceTethers(inst: SkillInstance): TetherSpec[] {
   const out: TetherSpec[] = [];
@@ -821,6 +849,13 @@ export interface GroundDelivery {
    *  between a lingering effect and an instant-damage area: fumes need
    *  breathing, explosions don't. */
   exposure?: number;
+  /** FUME DOMAIN: the zone's DOMAIN obeys the exposure clock too —
+   *  occupants (allies and enemies alike) wear the domain's mods only
+   *  once they have breathed `exposure` seconds inside; stepping out
+   *  strips them instantly and clears the clock. The soak-in dominion:
+   *  Soporific Veil's stupor, the Thurible's blessing — influence that
+   *  takes hold rather than switches on. Requires `exposure`. */
+  exposureDomain?: true;
   /** While lingering, drag victims toward the zone center at this speed
    *  (units/s) — Cold Vortex. */
   pull?: number;
@@ -894,8 +929,11 @@ export interface GroundDelivery {
    *  streaming from the far-away caster (Netherfissure's spirits rise
    *  from the crack itself). `bearing` sets the flight direction of such
    *  payloads: 'random' scatters each one, 'out' fires it outward through
-   *  the emit point (default: the caster's current facing). */
-  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out' };
+   *  the emit point (default: the caster's current facing). `reach` widens
+   *  the 'enemy' pick past the zone's own edge by that many units — the
+   *  Grasping Chasm's tendrils LASH at what strays near the crack, not
+   *  only what stands on it. */
+  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out'; reach?: number };
   /** The lingering zone is a DOMAIN: occupants wear these modifiers while
    *  they stand inside (ground-anchored auras — Rune of Power's circle,
    *  Toxic Domain's oppression). Applied per-actor as a sheet source,
@@ -954,8 +992,12 @@ export interface GroundDelivery {
   pendulum?: { arcDeg: number; period: number };
   /** ONE SWEEP (Reaver's Sweep): the facing crosses ±arcDeg/2 around the
    *  cast bearing EXACTLY ONCE over the zone's whole linger — a single
-   *  side-to-side harvest, no return stroke. Faced shapes feel it. */
-  sweep?: { arcDeg: number };
+   *  side-to-side harvest, no return stroke. Faced shapes feel it.
+   *  `converge` (Closing Shears): TWO mirrored half-sweeps instead — each
+   *  hand covers arcDeg/2 from its wing and they CLOSE onto the cast
+   *  bearing together; each hand is its own once-per-life hit surface, so
+   *  whatever stands on the meeting line takes both. The clap. */
+  sweep?: { arcDeg: number; converge?: true };
   /** STROBE STANCE (Restless Earth): the press TOGGLES a worn rhythm
    *  instead of placing — every `interval` seconds the placement re-casts
    *  ITSELF (through the live instance: sockets, path warps, textures and
@@ -1683,6 +1725,13 @@ export interface ChannelSpec {
    *  COMPRESSES the wedge while rampAoe stretches its reach: the focusing
    *  ray that squeezes into a line (floors at ×0.1). */
   rampArc?: RampSpec;
+  /** MOVE-FACTOR growth per held second (same curve family): positive per
+   *  FREES the stride the longer the hold (capped ×1.6 — the gathering
+   *  current); NEGATIVE per DRAGS it toward rooted (floored at 0 —
+   *  Undertow's maelstrom slowly anchors its own bearer). Applied on top
+   *  of move/moveFactor and the channelMobility stat; write `max: 0` with
+   *  a negative per (the outer floor does the clamping, the rampAoe rule). */
+  rampMove?: RampSpec;
   /** The skill's cooldown starts when the channel ENDS (early or not). */
   cooldownOnEnd?: boolean;
   /** Aim follows the controller while channeling (else locked at start). */
@@ -2387,6 +2436,11 @@ export interface SkillDef {
    *  primitive — meta-combos are payload skills all the way down. */
   meta?: { skillId: string; label: string };
 
+  /** FOLLOW-UP CAST: the swing's follow-through — a payload skill fires
+   *  free a beat after every completed real use (see FollowUpSpec;
+   *  supports graft the same via SupportDef.followUp, and the specs merge). */
+  followUp?: FollowUpSpec;
+
   /** COMBO CHAIN: consecutive presses of THIS key within `window` seconds
    *  WALK the chain — the second press casts skills[0], the third skills[1],
    *  … each an ordinary catalog entry at the host's effective level. After
@@ -2716,6 +2770,23 @@ export interface SupportDef {
    *  second detonation): any placement becomes dormant ground that blows
    *  AGAIN. A socketed graft wins over the skill's own. See GroundPulseSpec. */
   pulse?: GroundPulseSpec;
+  /** A FOLLOW-UP CAST this support grafts (Reaper's Encore): the payload
+   *  fires free a beat after every completed real use of the host. Specs
+   *  MERGE with the skill's own — the tether rule. See FollowUpSpec. */
+  followUp?: FollowUpSpec;
+  /** WORN GROUND (Carried Edge): the host's lingering placements RIDE the
+   *  caster (Zone.follow) instead of standing where cast — the sweep's arc
+   *  keeps its own trajectory, only the anchor walks with you. */
+  zoneFollow?: true;
+  /** A LINGERING-FUME graft (Creeping Fumes): the host's placements gate
+   *  their ticks on `after` seconds of continuous occupant breath — and,
+   *  with `domain`, the zone's domain soaks in on the same clock. A
+   *  socketed graft wins over the delivery's own exposure. */
+  exposure?: { after: number; domain?: true };
+  /** GROWTH this support grafts onto lingering ground (Overgrowth): the
+   *  zone SWELLS while it lives, radius units/s — the delivery's own grow
+   *  is the innate base and wins when present. */
+  zoneGrow?: number;
   /** A PENDULUM this support grafts onto lingering ground zones (the
    *  Metronome gem): the facing swings out-and-back — the exact back-and-
    *  forth stroke Reaver's Sweep retired when it learned the single pass. */
