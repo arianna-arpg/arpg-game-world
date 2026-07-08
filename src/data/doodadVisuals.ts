@@ -150,7 +150,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       core: { color: '#dce8f2', alpha: 0.22 },
     },
   },
-  reeds: { painter: 'kelp', order: 48, params: { color: '#5a7a3a' } },
+  // Reed beds ride the kelp painter's ribbon blades, standing straighter and
+  // thinner, tipped with cattail seed heads.
+  reeds: { painter: 'kelp', order: 48, params: { color: '#5a7a3a', reed: true } },
   web: { painter: 'web', order: 42, params: { color: '#d8d4c8' } },
   cactus: {
     painter: 'cactus', order: 53, shadow: 0.6, longShadow: 0.8,
@@ -218,11 +220,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
   },
   bridge: { painter: 'plank', order: 44 },
+  // THE CRAG: the chasm's inverse, drawn RAISED — thrown ground shadow, flank
+  // band, inset plateau bevel, sun-keyed rims, chance-rolled accents. A
+  // wandering cliff chain reads as ONE ridge (merged blobs).
   cliff: {
-    painter: 'liquid', order: 46,
+    painter: 'cliffMass', order: 46,
     params: {
-      rim: { color: 'theme:obstacleEdge', alpha: 1, grow: 3 },
-      core: { color: 'theme:obstacle', alpha: 1 },
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      strata: {}, cracks: 1, moss: { color: 'theme:tree' }, skirt: {}, snowCap: {},
     },
   },
 
@@ -258,7 +263,21 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     // — the last of the old gradient discs; the bramble crown rides above.
     painter: 'brush', order: 50,
     params: { color: '#14301a', leaves: 1.1 },
-    canopy: { painter: 'bramble', params: { fill: '#16401c', edge: '#0a2410', spine: '#2c5a26' } },
+    canopy: {
+      painter: 'bramble',
+      params: { fill: '#16401c', edge: '#0a2410', spine: '#2c5a26', berries: { chance: 0.3 } },
+    },
+  },
+  // The thicket grown into a TREE: gnarled thorn bole, walk-under bramble
+  // crown heavy with barbs and dark berries — reads apart from every leafy
+  // canopy at a glance.
+  briarwood: {
+    longShadow: 0.9,
+    painter: 'trunk', order: 50, params: { scale: 0.3, roots: 5, color: '#3a2c20' },
+    canopy: {
+      painter: 'bramble',
+      params: { fill: '#1e3c1a', edge: '#0c2410', spine: '#4a7034', thorns: true, berries: { chance: 0.5 } },
+    },
   },
   palm: {
     longShadow: 0.8,
@@ -306,7 +325,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { cap: '#b8434e', speck: '#f0e6d8' },
   },
   kelp: { painter: 'kelp', order: 48 },
-  coral: { painter: 'coral', order: 52, shadow: 0.5 },
+  // Coral form-rolls its colony (staghorn / brain boule / gorgonian fan) in
+  // two hue families over a knobby reef base.
+  coral: {
+    painter: 'coral', order: 52, shadow: 0.5,
+    params: { base: '#16323c', branch: '#e87aa0', branch2: '#e8b06a' },
+  },
 
   // --- Standing minerals + organics ---------------------------------------
   // THE ROCK GRAMMAR: every stone rolls its own form (mono/split/outcrop) and

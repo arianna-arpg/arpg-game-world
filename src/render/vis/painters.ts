@@ -1505,58 +1505,189 @@ const platformRing: GroupPainter = (env, group, def) => {
 };
 
 /** Swaying translucent kelp blades. */
+/** KELP STANDS (and reed beds, params.reed): tapered RIBBON blades — two
+ *  curved edges filled, a lit midrib, a slow current sway. Kelp floats gas
+ *  bladders where the blade narrows; reeds stand straighter, thinner, and
+ *  carry cattail seed heads at the tip. One painter, both waterlines. */
 const kelp: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { color?: ColorSpec };
+  const p = (def.params ?? {}) as { color?: ColorSpec; reed?: boolean; bladder?: ColorSpec };
   const { ctx, theme, time } = env;
   const col = resolveColor(p.color, theme, '#2f7a4a');
   for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const r = o.radius;
     ctx.save();
-    ctx.globalAlpha = 0.5;
-    ctx.strokeStyle = col;
-    ctx.lineCap = 'round';
-    const blades = 3 + ((o.pos.x | 0) % 3);
+    ctx.translate(o.pos.x, o.pos.y);
+    // Root shadow tying the stand into its bed.
+    ctx.globalAlpha = 0.14;
+    ctx.fillStyle = shade(col, -0.5);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.42, r * 0.8, r * 0.22, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 0.85;
+    const blades = 3 + (seed % 3);
     for (let i = 0; i < blades; i++) {
-      const bx = o.pos.x + ((i / blades) - 0.4) * r * 1.2;
-      const sway = Math.sin(time * 1.6 + o.pos.x * 0.04 + i) * (r * 0.18);
-      ctx.lineWidth = 3 + (i % 2);
+      const bx = ((i + 0.5) / blades - 0.5) * r * 1.3 + (hash01(i, seed) - 0.5) * r * 0.2;
+      const len = r * (p.reed ? 0.95 + hash01(i, seed + 7) * 0.45 : 0.85 + hash01(i, seed + 7) * 0.55);
+      const sway = Math.sin(time * (p.reed ? 1.1 : 1.6) + seed * 0.1 + i * 1.7) * r * (p.reed ? 0.07 : 0.19);
+      const w0 = r * (p.reed ? 0.045 : 0.085 + hash01(i, seed + 11) * 0.04);
+      const tone = shade(col, (hash01(i, seed + 13) - 0.4) * 0.3);
+      const baseY = r * 0.42;
+      const tipX = bx + sway, tipY = baseY - len;
+      const cX = bx + sway * 0.5, cY = baseY - len * 0.55;
+      ctx.fillStyle = tone;
       ctx.beginPath();
-      ctx.moveTo(bx, o.pos.y + r * 0.5);
-      ctx.quadraticCurveTo(bx + sway * 0.5, o.pos.y, bx + sway, o.pos.y - r * 0.7);
+      ctx.moveTo(bx - w0, baseY);
+      ctx.quadraticCurveTo(cX - w0 * 0.8, cY, tipX, tipY);
+      ctx.quadraticCurveTo(cX + w0 * 0.8, cY, bx + w0, baseY);
+      ctx.closePath();
+      ctx.fill();
+      // The lit midrib running up the blade.
+      ctx.strokeStyle = withAlpha(shade(col, 0.3), 0.6);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(bx, baseY - r * 0.03);
+      ctx.quadraticCurveTo(cX, cY, tipX, tipY);
       ctx.stroke();
+      if (p.reed) {
+        // Cattail seed head nodding at the tip.
+        ctx.fillStyle = shade('#8a6a42', hash01(i, seed + 17) * 0.2 - 0.1);
+        ctx.beginPath();
+        ctx.ellipse(tipX, tipY + r * 0.07, r * 0.05, r * 0.13, sway * 0.03, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (i % 2 === 0) {
+        // A gas bladder float where the blade narrows.
+        const bl = resolveColor(p.bladder, theme, shade(col, 0.42));
+        ctx.fillStyle = withAlpha(bl, 0.9);
+        ctx.beginPath();
+        ctx.arc(bx + sway * 0.55, baseY - len * 0.6, Math.max(1.4, r * 0.055), 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
     ctx.restore();
   }
 };
 
-/** Branching coral heads over a dark base. */
+/** CORAL HEADS — every head FORM-ROLLS its colony: a recursive STAGHORN
+ *  antler (knob tips, polyp specks), a BRAIN boule scored with meander
+ *  grooves, or a GORGONIAN FAN (spokes laced by concentric ribs). Two hue
+ *  families roll per head so a reef never reads monochrome. */
 const coral: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { base?: ColorSpec; branch?: ColorSpec };
+  const p = (def.params ?? {}) as { base?: ColorSpec; branch?: ColorSpec; branch2?: ColorSpec };
   const { ctx, theme } = env;
   for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const r = o.radius;
+    const baseCol = resolveColor(p.base, theme, '#16323c');
+    const br = hash01(seed, 5) < 0.6
+      ? resolveColor(p.branch, theme, '#e87aa0')
+      : resolveColor(p.branch2, theme, '#e8b06a');
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
-    ctx.fillStyle = resolveColor(p.base, theme, '#1a3a44');
-    ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.7, 0, Math.PI * 2); ctx.fill();
-    const br = resolveColor(p.branch, theme, '#e87aa0');
-    ctx.strokeStyle = br;
-    ctx.lineWidth = Math.max(3, r * 0.28);
-    ctx.lineCap = 'round';
-    for (let i = 0; i < 4; i++) {
-      const a = -Math.PI / 2 + (i - 1.5) * 0.5;
-      ctx.beginPath(); ctx.moveTo(0, r * 0.3);
-      ctx.lineTo(Math.cos(a) * r * 0.9, r * 0.3 + Math.sin(a) * r * 1.1); ctx.stroke();
+    // The reef base: a knobby dark mound the colony grew over.
+    ctx.fillStyle = baseCol;
+    ctx.beginPath();
+    for (let k = 0; k <= 9; k++) {
+      const a = (k / 9) * Math.PI * 2;
+      const rr = r * 0.68 * (0.86 + 0.14 * Math.abs(Math.sin(a * 3 + seed)));
+      const x = Math.cos(a) * rr, y = r * 0.12 + Math.sin(a) * rr * 0.82;
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
-    // Sun-side tips.
-    ctx.strokeStyle = shade(br, 0.3);
-    ctx.lineWidth = Math.max(1.5, r * 0.12);
-    for (let i = 0; i < 4; i++) {
-      const a = -Math.PI / 2 + (i - 1.5) * 0.5;
-      const tx = Math.cos(a) * r * 0.9, ty = r * 0.3 + Math.sin(a) * r * 1.1;
-      ctx.beginPath(); ctx.moveTo(tx - Math.cos(a) * r * 0.2, ty - Math.sin(a) * r * 0.2); ctx.lineTo(tx, ty); ctx.stroke();
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(baseCol, -0.45), 0.8);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    const form = hash01(seed, 9);
+    if (form < 0.45) {
+      // STAGHORN: recursive antlers off three main stems.
+      ctx.lineCap = 'round';
+      const drawBranch = (x: number, y: number, a: number, len: number, w: number, depth: number): void => {
+        const nx = x + Math.cos(a) * len, ny = y + Math.sin(a) * len;
+        ctx.strokeStyle = shade(br, -depth * 0.08);
+        ctx.lineWidth = Math.max(1.2, w);
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(nx, ny); ctx.stroke();
+        if (depth < 2) {
+          drawBranch(nx, ny, a - 0.5 - hash01(depth, seed + 21) * 0.3, len * 0.62, w * 0.66, depth + 1);
+          drawBranch(nx, ny, a + 0.45 + hash01(depth, seed + 23) * 0.3, len * 0.62, w * 0.66, depth + 1);
+        } else {
+          // Knob tip catching the light.
+          ctx.fillStyle = shade(br, 0.32);
+          ctx.beginPath(); ctx.arc(nx, ny, Math.max(1.2, w * 0.55), 0, Math.PI * 2); ctx.fill();
+        }
+      };
+      const stems = 3;
+      for (let i = 0; i < stems; i++) {
+        const a = -Math.PI / 2 + (i - 1) * 0.62 + (hash01(i, seed + 27) - 0.5) * 0.3;
+        drawBranch(Math.cos(a) * r * 0.2, r * 0.1 + Math.sin(a) * r * 0.2, a,
+          r * (0.4 + hash01(i, seed + 31) * 0.14), Math.max(2, r * 0.14), 0);
+      }
+      // Polyp specks feeding along the arms.
+      ctx.fillStyle = withAlpha(shade(br, 0.5), 0.8);
+      for (let i = 0; i < 6 + (seed % 4); i++) {
+        const a = -Math.PI / 2 + (hash01(i, seed + 37) - 0.5) * 2.2;
+        const d = r * (0.3 + hash01(i, seed + 41) * 0.6);
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * d, r * 0.1 + Math.sin(a) * d, 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else if (form < 0.75) {
+      // BRAIN: a boule scored by meander grooves.
+      const cy = -r * 0.08, cr = r * 0.58;
+      ctx.fillStyle = shade(br, -0.06);
+      ctx.beginPath(); ctx.arc(0, cy, cr, 0, Math.PI * 2); ctx.fill();
+      ctx.save();
+      ctx.beginPath(); ctx.arc(0, cy, cr, 0, Math.PI * 2); ctx.clip();
+      ctx.strokeStyle = withAlpha(shade(br, -0.48), 0.75);
+      ctx.lineWidth = Math.max(1, r * 0.05);
+      const rows = 4 + (seed % 3);
+      for (let i = 0; i < rows; i++) {
+        const gy = cy - cr + ((i + 0.5) / rows) * cr * 2;
+        ctx.beginPath();
+        for (let s = 0; s <= 10; s++) {
+          const gx = -cr + (s / 10) * cr * 2;
+          const wob = Math.sin(s * 1.9 + i * 2.3 + seed) * r * 0.05;
+          if (s === 0) ctx.moveTo(gx, gy + wob); else ctx.lineTo(gx, gy + wob);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+      // Sun-catch on the boule's crown.
+      const L = VIS_CFG.lightAngle;
+      ctx.strokeStyle = withAlpha(shade(br, 0.4), 0.55);
+      ctx.lineWidth = Math.max(1.2, r * 0.07);
+      ctx.beginPath();
+      ctx.arc(0, cy, cr * 0.82, L - 0.8, L + 0.8);
+      ctx.stroke();
+    } else {
+      // GORGONIAN FAN: spokes laced with concentric ribs.
+      const ox = 0, oy = r * 0.24;
+      const spokes = 5 + (seed % 3);
+      const span = 1.7;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < spokes; i++) {
+        const a = -Math.PI / 2 + (i / (spokes - 1) - 0.5) * span;
+        const len = r * (0.85 + hash01(i, seed + 47) * 0.25);
+        ctx.strokeStyle = shade(br, (hash01(i, seed + 51) - 0.5) * 0.16);
+        ctx.lineWidth = Math.max(1.2, r * 0.05);
+        ctx.beginPath();
+        ctx.moveTo(ox, oy);
+        ctx.lineTo(ox + Math.cos(a) * len, oy + Math.sin(a) * len);
+        ctx.stroke();
+        ctx.fillStyle = shade(br, 0.34);
+        ctx.beginPath();
+        ctx.arc(ox + Math.cos(a) * len, oy + Math.sin(a) * len, Math.max(1, r * 0.04), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.strokeStyle = withAlpha(shade(br, -0.2), 0.7);
+      ctx.lineWidth = 1;
+      for (const f of [0.45, 0.7, 0.92]) {
+        ctx.beginPath();
+        ctx.arc(ox, oy, r * f, -Math.PI / 2 - span / 2, -Math.PI / 2 + span / 2);
+        ctx.stroke();
+      }
     }
     ctx.restore();
   }
@@ -1875,6 +2006,168 @@ const chasmPit: GroupPainter = (env, group, def) => {
       gg.addColorStop(1, withAlpha(gc, 0));
       ctx.fillStyle = gg;
       ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, r * 0.6, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+};
+
+export interface CragParams {
+  color: ColorSpec;
+  edge?: ColorSpec;
+  material?: string;
+  /** Flank band width before the plateau top (world units, default 7). */
+  inset?: number;
+  contrast?: number;
+  /** Sedimentary banding along the leeward flank (~30% of crowns). */
+  strata?: { color?: ColorSpec; alpha?: number };
+  /** Approximate plateau fracture count per crown. */
+  cracks?: number;
+  /** Shade-side moss (theme-gated — skips biomes without the key). */
+  moss?: { color: ColorSpec };
+  /** Scree pebbles shed at the foot. */
+  skirt?: { color?: ColorSpec; alpha?: number };
+  /** Snow settling on the plateau as World.snowCover builds. */
+  snowCap?: { color?: ColorSpec };
+}
+
+/** CLIFF MASSES — the chasm's inverse, drawn RAISED: a sun-thrown ground
+ *  shadow, a shaded flank band under an inset plateau bevel, lit and sunk
+ *  rims keyed to the shared sun (interior crowns read as summit domes along
+ *  the ridge), leeward flank striations, and chance-rolled accents through
+ *  the material ramp. Merged-blob passes throughout, so a wandering cliff
+ *  chain reads as ONE crag and never as stamped circles. */
+const cliffMass: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as CragParams;
+  const { ctx, theme, world } = env;
+  const base = resolveColor(p.color, theme, theme.obstacle ?? '#5a5248');
+  const ramp = rampOf(base, materialOf(p.material ?? 'stone'));
+  const edgeCol = p.edge ? resolveColor(p.edge, theme) : withAlpha(ramp.outline, 0.95);
+  const contrast = p.contrast ?? 1;
+  const inset = p.inset ?? 7;
+  const L = VIS_CFG.lightAngle;
+  // Ground shadow thrown away from the sun: the mass STANDS on the land.
+  ctx.save();
+  ctx.translate(-Math.cos(L) * 7, -Math.sin(L) * 7);
+  ctx.globalAlpha = 0.22;
+  ctx.fillStyle = '#000000';
+  blobPath(ctx, group, 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  // The EDGE as a merged fill ring (a STROKE would outline every disc and
+  // give the stamped-circles read back — fills merge, strokes don't).
+  ctx.fillStyle = edgeCol;
+  blobPath(ctx, group, 0);
+  ctx.fill();
+  // The FLANK: the rock face you see past the top's edge.
+  ctx.fillStyle = shade(ramp.base, -0.2 * contrast);
+  blobPath(ctx, group, -1.6);
+  ctx.fill();
+  // The PLATEAU: the lit top, inset — the bevel that says RAISED.
+  ctx.fillStyle = ramp.base;
+  blobPath(ctx, group, -inset);
+  ctx.fill();
+  for (const d of group) {
+    const seed = ((d.pos.x * 13 + d.pos.y * 7) | 0) >>> 0;
+    const r = Math.max(2, d.radius - inset);
+    // Sun-keyed rims: a lit crescent sunward, a sunk crescent leeward.
+    ctx.strokeStyle = withAlpha(ramp.light, 0.4 * contrast);
+    ctx.lineWidth = Math.max(1.5, d.radius * 0.09);
+    ctx.beginPath();
+    ctx.arc(d.pos.x, d.pos.y, r * 0.94, L - 1.0, L + 1.0);
+    ctx.stroke();
+    ctx.strokeStyle = withAlpha(ramp.shadow, 0.35 * contrast);
+    ctx.beginPath();
+    ctx.arc(d.pos.x, d.pos.y, r * 0.94, L + Math.PI - 0.9, L + Math.PI + 0.9);
+    ctx.stroke();
+    // Leeward FLANK STRIATIONS: carved seams down the shaded face.
+    ctx.strokeStyle = withAlpha(ramp.outline, 0.4);
+    ctx.lineWidth = 1.1;
+    const seams = 2 + (seed % 3);
+    for (let i = 0; i < seams; i++) {
+      const a = L + Math.PI + (hash01(i, seed + 17) - 0.5) * 1.6;
+      ctx.beginPath();
+      ctx.moveTo(d.pos.x + Math.cos(a) * r, d.pos.y + Math.sin(a) * r);
+      ctx.lineTo(d.pos.x + Math.cos(a) * (d.radius - 1), d.pos.y + Math.sin(a) * (d.radius - 1));
+      ctx.stroke();
+    }
+    // Sedimentary banding riding the leeward flank.
+    if (p.strata && hash01(seed, 101) < 0.3) {
+      const sc = p.strata.color ? resolveColor(p.strata.color, theme) : shade(base, -0.34);
+      ctx.strokeStyle = withAlpha(sc, p.strata.alpha ?? 0.4);
+      ctx.lineWidth = Math.max(1, d.radius * 0.045);
+      for (const f of [0.985, 0.93]) {
+        ctx.beginPath();
+        ctx.arc(d.pos.x, d.pos.y, r + (d.radius - r) * f, L + Math.PI - 1.1, L + Math.PI + 1.1);
+        ctx.stroke();
+      }
+    }
+    // Plateau fractures wandering in from the rim.
+    const crackN = Math.round((p.cracks ?? 0) * (0.4 + hash01(seed, 71) * 1.3));
+    if (crackN > 0) {
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.5);
+      ctx.lineWidth = 1.1;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < crackN; i++) {
+        const a0 = hash01(i, seed + 77) * Math.PI * 2;
+        let x = d.pos.x + Math.cos(a0) * r * 0.9, y = d.pos.y + Math.sin(a0) * r * 0.9;
+        let ang = a0 + Math.PI;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        for (let s = 0; s < 3; s++) {
+          ang += (hash01(i * 5 + s, seed + 83) - 0.5) * 1.2;
+          x += Math.cos(ang) * r * 0.26;
+          y += Math.sin(ang) * r * 0.26;
+          ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+    // Moss hugging the shade side, where the biome grows any.
+    if (p.moss && hash01(seed, 121) < 0.5) {
+      const mc = resolveColorOpt(p.moss.color, theme);
+      if (mc) {
+        ctx.globalAlpha = 0.4;
+        ctx.fillStyle = mc;
+        for (let i = 0; i < 2 + (seed % 2); i++) {
+          const a = L + Math.PI + (hash01(i, seed + 127) - 0.5) * 1.6;
+          const dd = r * (0.55 + hash01(i, seed + 131) * 0.35);
+          ctx.beginPath();
+          ctx.ellipse(d.pos.x + Math.cos(a) * dd, d.pos.y + Math.sin(a) * dd,
+            r * (0.16 + hash01(i, seed + 137) * 0.12), r * 0.1,
+            hash01(i, seed + 139) * 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+    }
+    // Scree shed at the foot.
+    if (p.skirt && hash01(seed, 211) < 0.55) {
+      const n = 3 + (seed % 3);
+      for (let i = 0; i < n; i++) {
+        const a = hash01(i, seed + 217) * Math.PI * 2;
+        const dd = d.radius * (1.02 + hash01(i, seed + 223) * 0.14);
+        ctx.globalAlpha = p.skirt.alpha ?? 0.75;
+        ctx.fillStyle = shade(base, hash01(i, seed + 227) * 0.36 - 0.2);
+        ctx.beginPath();
+        ctx.ellipse(d.pos.x + Math.cos(a) * dd, d.pos.y + Math.sin(a) * dd,
+          1.5 + hash01(i, seed + 229) * 1.6, 1.1 + hash01(i, seed + 231), a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // Snow settles on the plateau as the cover builds.
+    if (p.snowCap) {
+      const cover = world.snowCover;
+      if (cover > 0.04) {
+        const sc = resolveColor(p.snowCap.color, theme, '#edf5fb');
+        const sx = d.pos.x + Math.cos(L) * r * 0.3, sy = d.pos.y + Math.sin(L) * r * 0.3;
+        const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
+        g.addColorStop(0, withAlpha(sc, 0.85 * cover));
+        g.addColorStop(0.6, withAlpha(sc, 0.5 * cover));
+        g.addColorStop(1, withAlpha(sc, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(d.pos.x, d.pos.y, r, 0, Math.PI * 2); ctx.fill();
+      }
     }
   }
 };
@@ -4194,7 +4487,7 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
 }
 
 export const PAINTERS: Record<string, GroupPainter> = {
-  liquid, chasmPit, mound, boulder, cairn: cairnPainter, scree,
+  liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
   campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,
@@ -4210,38 +4503,128 @@ export const PAINTERS: Record<string, GroupPainter> = {
 
 export type CanopyPainter = (env: PaintEnv, o: Doodad, alpha: number, params: Record<string, unknown>) => void;
 
-/** The BRAMBLE MASS: tangled disc + radiating spines. */
+/** The BRAMBLE MASS — a thicket's crown as a real tangle: scallop-lobed
+ *  silhouette (seeded, no two alike), crossing vine strokes bowing out past
+ *  the rim, thorn barbs studding the outer arcs, chance-rolled dark berry
+ *  clusters, a sun-side dapple. Briarwood crowns ride the same painter a
+ *  size up. Everything multiplies the walk-under fade alpha. */
 const bramble: CanopyPainter = (env, o, alpha, params) => {
-  const p = params as { fill?: ColorSpec; edge?: ColorSpec; spine?: ColorSpec };
+  const p = params as {
+    fill?: ColorSpec; edge?: ColorSpec; spine?: ColorSpec;
+    thorns?: boolean; berries?: { color?: ColorSpec; chance?: number };
+  };
   const { ctx, theme } = env;
+  const fill = resolveColor(p.fill, theme, '#2c4424');
+  const edge = resolveColor(p.edge, theme, 'rgba(0,0,0,0.4)');
+  const spine = resolveColor(p.spine, theme, shade(fill, 0.28));
+  const seed = ((o.pos.x * 11 + o.pos.y * 5) | 0) >>> 0;
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
   if (o.rot !== undefined) ctx.rotate(o.rot);
   ctx.globalAlpha = alpha;
-  const fill = resolveColor(p.fill, theme, '#2c4424');
-  ctx.fillStyle = fill;
-  ctx.strokeStyle = resolveColor(p.edge, theme, 'rgba(0,0,0,0.4)');
-  ctx.lineWidth = 2;
+  // Under-heart: the tangle's own dark depth.
+  ctx.fillStyle = shade(fill, -0.42);
   ctx.beginPath();
-  ctx.arc(0, 0, o.radius, 0, Math.PI * 2);
+  ctx.arc(0, 0, o.radius * 0.88, 0, Math.PI * 2);
   ctx.fill();
-  ctx.stroke();
-  // Crown volume: a lit arc toward the sun side.
-  ctx.globalAlpha = alpha * 0.3;
-  ctx.fillStyle = shade(fill, 0.3);
-  ctx.beginPath();
-  ctx.arc(-o.radius * 0.25, -o.radius * 0.25, o.radius * 0.62, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = alpha;
-  ctx.strokeStyle = resolveColor(p.spine, theme, 'rgba(255,255,255,0.22)');
-  ctx.lineWidth = 1.5;
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2;
+  // Scalloped tangle lobes ringing the mass.
+  const lobes = 6 + (seed % 3);
+  const lobe = (lx: number, ly: number, lr: number, tone: string): void => {
+    ctx.fillStyle = tone;
     ctx.beginPath();
-    ctx.moveTo(Math.cos(a) * o.radius * 0.4, Math.sin(a) * o.radius * 0.4);
-    ctx.lineTo(Math.cos(a) * o.radius * 1.05, Math.sin(a) * o.radius * 1.05);
+    for (let k = 0; k <= 8; k++) {
+      const a = (k / 8) * Math.PI * 2;
+      const rr = lr * (0.82 + 0.18 * Math.abs(Math.sin(a * 3 + lx + ly)));
+      const x = lx + Math.cos(a) * rr, y = ly + Math.sin(a) * rr;
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.quadraticCurveTo(lx + Math.cos(a - 0.4) * rr * 1.08, ly + Math.sin(a - 0.4) * rr * 1.08, x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(fill, -0.52), 0.4);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  };
+  for (let i = 0; i < lobes; i++) {
+    const a = (i / lobes) * Math.PI * 2 + hash01(i, seed) * 0.5;
+    const d = o.radius * (0.5 + hash01(i, seed + 7) * 0.14);
+    lobe(Math.cos(a) * d, Math.sin(a) * d,
+      o.radius * (0.36 + hash01(i, seed + 11) * 0.14),
+      i % 2 ? fill : shade(fill, -0.13));
+  }
+  lobe(-o.radius * 0.08, -o.radius * 0.08, o.radius * 0.46, shade(fill, 0.04));
+  // THE TANGLE: vine strokes crossing the mass and bowing out past the rim —
+  // the thicket escaping itself.
+  ctx.lineCap = 'round';
+  const vines = 8 + (seed % 4);
+  for (let i = 0; i < vines; i++) {
+    const a0 = hash01(i, seed + 31) * Math.PI * 2;
+    const a1 = a0 + 1.6 + hash01(i, seed + 37) * 2.2;
+    const r0 = o.radius * (0.2 + hash01(i, seed + 41) * 0.55);
+    const r1 = o.radius * (0.2 + hash01(i, seed + 43) * 0.6);
+    const mid = (a0 + a1) / 2;
+    const bow = o.radius * (0.88 + hash01(i, seed + 53) * 0.3);
+    ctx.strokeStyle = withAlpha(i % 3 ? shade(fill, -0.32) : spine, 0.75);
+    ctx.lineWidth = 1.2 + hash01(i, seed + 47) * 1.2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a0) * r0, Math.sin(a0) * r0);
+    ctx.quadraticCurveTo(Math.cos(mid) * bow, Math.sin(mid) * bow,
+      Math.cos(a1) * r1, Math.sin(a1) * r1);
     ctx.stroke();
   }
+  // THORNS: barbs studding the outer arcs.
+  if (p.thorns !== false) {
+    ctx.fillStyle = withAlpha(shade(fill, 0.45), 0.9);
+    const n = 7 + (seed % 4);
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, seed + 61) * Math.PI * 2;
+      const rr = o.radius * (0.84 + hash01(i, seed + 67) * 0.2);
+      const bx = Math.cos(a) * rr, by = Math.sin(a) * rr;
+      const ta = a + (hash01(i, seed + 71) - 0.5) * 1.0;
+      const len = o.radius * 0.1;
+      const px = Math.cos(ta + Math.PI / 2) * len * 0.32;
+      const py = Math.sin(ta + Math.PI / 2) * len * 0.32;
+      ctx.beginPath();
+      ctx.moveTo(bx - px, by - py);
+      ctx.lineTo(bx + px, by + py);
+      ctx.lineTo(bx + Math.cos(ta) * len, by + Math.sin(ta) * len);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  // BERRIES: dark clusters where the sun reaches (chance-rolled).
+  if (p.berries && hash01(seed, 81) < (p.berries.chance ?? 0.35)) {
+    const bc = resolveColor(p.berries.color, theme, '#3a1830');
+    const clusters = 2 + (seed % 2);
+    for (let c = 0; c < clusters; c++) {
+      const a = VIS_CFG.lightAngle + (hash01(c, seed + 87) - 0.5) * 1.8;
+      const d = o.radius * (0.42 + hash01(c, seed + 91) * 0.3);
+      const cx = Math.cos(a) * d, cy = Math.sin(a) * d;
+      for (let k = 0; k < 4 + (c % 2); k++) {
+        const ka = hash01(k, seed + c * 13 + 97) * Math.PI * 2;
+        const kd = hash01(k, seed + c * 13 + 101) * o.radius * 0.08;
+        const bx2 = cx + Math.cos(ka) * kd, by2 = cy + Math.sin(ka) * kd;
+        ctx.fillStyle = bc;
+        ctx.beginPath(); ctx.arc(bx2, by2, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = withAlpha('#ffffff', 0.4);
+        ctx.beginPath(); ctx.arc(bx2 - 0.5, by2 - 0.5, 0.5, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+  }
+  // Sun-side dapple + the mass's outer edge.
+  ctx.globalAlpha = alpha * 0.28;
+  ctx.fillStyle = shade(fill, 0.32);
+  ctx.beginPath();
+  ctx.ellipse(Math.cos(VIS_CFG.lightAngle) * o.radius * 0.34,
+    Math.sin(VIS_CFG.lightAngle) * o.radius * 0.34,
+    o.radius * 0.5, o.radius * 0.36, VIS_CFG.lightAngle, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = edge;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(0, 0, o.radius * 0.97, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.globalAlpha = 1;
   ctx.restore();
 };

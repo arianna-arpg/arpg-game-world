@@ -122,6 +122,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Deep-forest rot: fungal pressure sacs and pale puffballs.
       { kind: 'burst_sac', count: [0, 2] },
       { kind: 'puffcap_cluster', count: [0, 2] },
+      // The thorn kin: gnarled briar trees you can walk beneath.
+      { kind: 'briarwood', count: [1, 3] },
     ],
     packs: {
       count: [5, 8], size: [3, 5],
@@ -504,6 +506,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Marsh gas pools in bladders; pale caps puff underfoot.
       { kind: 'gas_pod', count: [2, 4] },
       { kind: 'puffcap_cluster', count: [1, 3] },
+      { kind: 'briarwood', count: [1, 2] },
     ],
     packs: {
       count: [5, 7], size: [3, 5],
@@ -605,6 +608,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'secret_wall', count: [1, 2] },
       { kind: 'burial_urn', count: [2, 4] },
       { kind: 'puffcap_cluster', count: [0, 2] },
+      { kind: 'briarwood', count: [0, 2] },
       { kind: 'rocks', count: [6, 10], radius: [16, 30] },
       { kind: 'swamp', count: [1, 2] },
       { kind: 'cliff', count: [1, 2] },
@@ -1085,6 +1089,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'thicket', count: [1, 3] },
       // Marsh gas swells in bladders between the islets.
       { kind: 'gas_pod', count: [1, 3] },
+      { kind: 'briarwood', count: [0, 2] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],

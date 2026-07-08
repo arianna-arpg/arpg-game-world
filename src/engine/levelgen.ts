@@ -125,6 +125,8 @@ export type KnownDoodadKind =
   // Flora clarity (bush-vs-canopy round)
   | 'berry_bush'  // a fruiting shrub — CONCEALS like brush, wears berries
   | 'fern'        // feathery understory fronds (pure decoration)
+  // The thorn kin (the thicket grown into a TREE)
+  | 'briarwood'    // a gnarled thorn bole under a walk-under bramble crown
   // The fungal kit (Mycelia identity round)
   | 'shelf_fungus' // blocks feet not shots — bracket shelves off a woody heart
   | 'toadstool'    // ground decoration: speckled little caps (fairy-ring folk)
@@ -505,6 +507,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   /** A forest ELDER: a huge crown over a thick bole — the dense-forest
    *  anchor (whole packs ambush beneath one). */
   ancient_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80, occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22 },
+  /** The thicket grown into a TREE: a gnarled thorn bole under a walk-under
+   *  bramble crown — the tangle you can stand beneath (and regret). */
+  briarwood: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3 },
   // Winter clutter (the taiga's furniture).
   ice_spike: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24 },
   snowman:   { overlap: 'solid', blocksMove: true, spacing: 60 },
@@ -2385,6 +2390,8 @@ registerStamp('puffcap_cluster', stampSingle('puffcap_cluster', [12, 17]));
 registerStamp('burial_urn', stampSingle('burial_urn', [12, 16]));
 registerStamp('crystal_cluster', stampSingle('crystal_cluster', [14, 20]));
 registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
+// The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
+registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));

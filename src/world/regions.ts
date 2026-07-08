@@ -300,7 +300,12 @@ registerRegion({ id: 'shimmer', walkable: true, blocks: false, visualOnly: true,
 // tall grass marking the expanse's edge), but a deep grassy visual so the zone EDGE
 // reads as overgrown meadow, NOT a cave wall or the black void. The walkable interior
 // is plain 'ground' (the grassland floor); this paints only the silhouette's outside.
-registerRegion({ id: 'tallgrass', walkable: false, blocks: true, label: 'the tall grass', visual: { fill: '#1c3312', alpha: 1 },
+registerRegion({ id: 'tallgrass', walkable: false, blocks: true, label: 'the tall grass',
+  // The hedge EDGE (the flesh biome's lesson): a sunlit fringe on every side
+  // facing the meadow, so the boundary reads as overgrown hedgerow at a
+  // glance instead of swallowing itself in the floor's own greens. Tuned
+  // live against the Field's day wash — subtler values vanish into it.
+  visual: { fill: '#182c0e', alpha: 1, edge: { color: '#79b84a', width: 6 } },
   // Explicit, deliberate: the Field's hedge is a SOFT boundary — never an arrow-stopper.
   blocksShot: false, blocksSight: false });
 
