@@ -50,6 +50,13 @@ src/data/
    onto floor beside walls. Chunks key on `GridWalkField.version` — door
    breaks and terraforms repaint themselves. **Animated** region visuals
    (`visual.animate`) stay live in `renderer.drawAnimatedRegions`.
+   Palette themes can also sample **by position**: `ground.coast` slides the
+   gradient toward the wet end near water-family doodads (dark damp banks),
+   `ground.clearing` lifts gaps where crowns stand near-but-not-over (sun
+   wells inside forests — presence-gated so open country never washes).
+   **Rampart** cells (raised structure walls) additionally bake running-bond
+   masonry — mortar courses, per-block quarry tone — so built walls never
+   read as cave rock.
 
 4. **Doodad painters** (`vis/painters.ts` + `data/doodadVisuals.ts`). Every
    doodad kind maps to a painter + params. Painters are parametric families
@@ -67,6 +74,12 @@ src/data/
    light in view: doodad `light` specs (negative radius = multiple of the
    doodad's radius; `flicker` for fire), projectiles, impact flashes, exits,
    and the hero's after-dark lantern. An additive bloom pass rides on top.
+   Every punch is **wall-occluded** (`vis/sight.ts`): rays against
+   `blocksSight` region cells clip the glow to its lit polygon, so a hearth
+   pools at the wall instead of bleeding through it — and windows/parapets
+   pass light for free, because they don't block sight. Open-ground lights
+   skip all of it (the polygon is null). The campfire painter clips its warm
+   ground halo through the same helper.
    The Descent keeps its own survival darkness — the layer defers to it.
    Weather kinds get particles from `WEATHER_FX` (streaks, flakes, fog
    banks, motes) — stateless, deterministic, intensity-scaled.
@@ -230,6 +243,10 @@ reveal shows a furnished, boarded room, which is the whole trick.
   def, one part def per hitbox.
 - **Shape a biome's floor**: `ground: { scale, stretchX, strength, speckles }`
   in its theme (desert dunes = scale 2.6, stretchX 2.1).
+- **Slide the floor palette by position**: `ground.coast: { reach, shift }`
+  (wet dark banks; `kinds` widens the water family) and
+  `ground.clearing: { reach, lift }` (sun-wells between crowns — tag
+  canopied biomes only).
 - **Add a new material**: one row in `MATERIALS`.
 - **Skin a new doodad kind**: one entry in `DOODAD_VISUALS` naming a painter;
   add a painter only for a genuinely new *vocabulary* of look.
