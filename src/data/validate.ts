@@ -32,9 +32,10 @@ import { GRUDGE_TIERS, NEMESIS_NAMES, NEMESIS_RANKS } from './nemesis';
 import { MONSTER_NAME_CFG, MONSTER_NAMES } from './monsterNames';
 import { RARITY_DEFS } from '../engine/rarity';
 import {
-  validateStamps, doodadRuleOf, hasDoodadRule,
+  validateStamps, doodadRuleOf, doodadRuleKinds, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs,
 } from '../engine/levelgen';
+import { DOODAD_VISUALS } from './doodadVisuals';
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
@@ -57,6 +58,22 @@ export function validateContent(): void {
     ]),
   ];
   for (const msg of validateStamps(layoutSources)) warn(msg);
+
+  // VISUAL COVERAGE SWEEP — the "don't miss things in multiple passes" net.
+  // Every kind the rules registry knows should own a DOODAD_VISUALS entry
+  // (else it ships as the warned generic disc), and no kind should regress to
+  // the crown-only groundShadow disc as its whole ground presence — the old
+  // pure-geometry look the visual fabric replaced.
+  const undressed = doodadRuleKinds().filter(k => !DOODAD_VISUALS[k]);
+  if (undressed.length) {
+    warn(`doodad kind(s) with a rule but no DOODAD_VISUALS entry (generic-disc fallback): ${undressed.join(', ')}`);
+  }
+  const crownOnly = Object.entries(DOODAD_VISUALS)
+    .filter(([, v]) => v.painter === 'groundShadow')
+    .map(([k]) => k);
+  if (crownOnly.length) {
+    warn(`doodad kind(s) whose ground body is still the legacy groundShadow disc: ${crownOnly.join(', ')}`);
+  }
 
   // WEATHER: every registered kind's cross-refs resolve (a strike names a real
   // skill, sky-spawnable kinds carry a skyWeight) — the open WeatherKind's

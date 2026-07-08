@@ -529,11 +529,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   kelp:     { overlap: 'ground', walkOnly: true },
   coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
   sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40 },
-  // Mycelia fungal doodads. giant_mushroom/fruiting_tower stand on STALKS now
-  // (bodyScale, the walk-under-tree mechanism): feet and arrows respect the
-  // stalk, eyes respect the cap — fight in the spore-shade beneath the crown.
-  // spore_pod is an active puffer (blocks move not shots, like lava_vent);
-  // glow_cap/mycelial_mat are walkable ground overlays.
+  // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
+  // is an active puffer (blocks move not shots, like lava_vent); glow_cap/mycelial_mat are
+  // walkable ground overlays (decoration + the spore carpet).
+  // Giant fungus stands on a STALK now (bodyScale, the walk-under-tree
+  // mechanism): feet and arrows respect the stalk, eyes respect the cap —
+  // fight in the spore-shade beneath the crown.
   giant_mushroom: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 42, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.3 },
   fruiting_tower: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 54, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.26 },
   spore_pod:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 38, forbidOn: ['water', 'lava', 'chasm', 'bog'] },
@@ -603,6 +604,13 @@ export function doodadRuleOf(kind: DoodadKind): DoodadRule { return doodadRule(k
  *  to the walkable 'ground' default and lose their blocking/hazard nature. */
 export function hasDoodadRule(kind: string): boolean {
   return kind in DOODAD_RULES || kind in RUNTIME_RULES;
+}
+
+/** Every kind the rules registry knows (built-in + runtime-registered) — the
+ *  content validator's coverage sweep walks this so no kind ever ships
+ *  undressed without a loud boot line. */
+export function doodadRuleKinds(): string[] {
+  return [...Object.keys(DOODAD_RULES), ...Object.keys(RUNTIME_RULES)];
 }
 
 export function blocksMovement(d: Doodad): boolean {
