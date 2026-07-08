@@ -364,6 +364,20 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   scarecrow: { painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.6 },
   hay_bale: { painter: 'hayBale', order: 53, shadow: 0.55, longShadow: 0.8 },
   pot_cluster: { painter: 'potCluster', order: 53, shadow: 0.5 },
+  // --- The brittle kit (DoodadRule.brittle): lifeless breakables ------------
+  clay_pots: { painter: 'potCluster', order: 52, shadow: 0.35 },
+  // A fissured plug: the boulder painter with cracks turned all the way up —
+  // it LOOKS ready to fall, and it is.
+  crumbling_wall: {
+    longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', cracks: 1, grain: true, contrast: 1.15 },
+  },
+  // The hidden face: SAME stone vocabulary as the biome's own rock — the
+  // camouflage IS the design; only the suspiciously clean strata whisper.
+  secret_wall: {
+    longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', strata: {}, contrast: 0.95 },
+  },
   rubble: { painter: 'rubble', order: 36 },
   banner_post: { painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.5 },
   beehive: {

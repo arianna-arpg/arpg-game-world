@@ -133,7 +133,11 @@ export type KnownDoodadKind =
   | 'vein_cluster'   // ground overlay: branching vessels, the pulse rides them
   | 'eye_stalk'      // blocks feet not shots — a fleshy nub whose iris TRACKS the hero
   | 'rib_arch'       // blocks feet not shots — the last tenant's cage
-  | 'tooth_row';     // blocks feet not shots — enamel cones on an arc of gum
+  | 'tooth_row'      // blocks feet not shots — enamel cones on an arc of gum
+  // The brittle kit (lifeless breakables — DoodadRule.brittle)
+  | 'clay_pots'      // a huddle of pots: pops on a hit or a body brushing through
+  | 'crumbling_wall' // a fissured plug that collapses (and carves open) when neared
+  | 'secret_wall';   // looks like stone; struck or leaned on, a passage grinds open
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -193,6 +197,9 @@ export interface Doodad {
   pos: Vec2;
   radius: number;
   kind: DoodadKind;
+  /** BRITTLE kinds: already popped this visit (guards stale spatial-index
+   *  hits between the break and the splice). Runtime-only, never authored. */
+  gone?: boolean;
   /** Bridges: orientation of the span (for plank rendering). */
   dir?: number;
   /** Water only: a ford — always wading-depth, never swimming. */
@@ -377,6 +384,34 @@ export interface DoodadRule {
    *  still occludes, shades, and blocks AI sight — so you walk (and fight)
    *  UNDER the leaves. Omitted = the whole disc is solid (today's kinds). */
   bodyScale?: number;
+  /** BRITTLE: a lifeless breakable — no life bar, no kill ladder; it POPS.
+   *  Pure data: any kind (or a package/legend kind via registerDoodadRule)
+   *  becomes a pot, a crumbling plug, or a secret door with one row. */
+  brittle?: BrittleSpec;
+}
+
+/** How a lifeless breakable gives way (World.popBrittle executes it). */
+export interface BrittleSpec {
+  /** What sets it off — any listed trigger fires:
+   *  'hit'   = a projectile/impact connects (the projectile step probes it);
+   *  'near'  = a player-team body inside `reach` (instant, or `dwell`-gated);
+   *  'touch' = body contact (walk through a pot and it goes). */
+  on: ('hit' | 'near' | 'touch')[];
+  /** 'near' reach in world units (default 40). */
+  reach?: number;
+  /** Sustained seconds inside reach before 'near' fires — a secret wall
+   *  gives to a lingering press, not a jog past. Default 0 = instant. */
+  dwell?: number;
+  /** Chance to spill a life/mana orb (the barrel tradition). */
+  orbChance?: number;
+  /** Chance to drop a gem (secret pockets pay for the finding). */
+  gemChance?: number;
+  /** Carve the walk grid open in this radius on break — a crumbling plug
+   *  unblocks itself; a secret wall carves INTO the wall face behind it. */
+  carve?: number;
+  /** Break flavor: floating text + flash tint. */
+  text?: string;
+  color?: string;
 }
 
 /** The PHYSICAL radius of a doodad — the trunk, not the crown. Movement,
@@ -392,6 +427,15 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
   cliff:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40 },
   wall:      { overlap: 'solid', blocksMove: true, blocksShot: true },
+  // THE BRITTLE KIT — lifeless breakables (DoodadRule.brittle; World.popBrittle).
+  // Pots pop underfoot or to a stray arrow; the fissured plug collapses when a
+  // body nears; the secret face gives to a strike — or a deliberate lean.
+  clay_pots: { overlap: 'inert', spacing: 8,
+    brittle: { on: ['hit', 'touch'], orbChance: 0.4, text: 'crash!', color: '#c8a06a' } },
+  crumbling_wall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24,
+    brittle: { on: ['near', 'hit'], reach: 46, carve: 40, orbChance: 0.15, text: 'the wall crumbles!', color: '#8a8276' } },
+  secret_wall: { overlap: 'solid', blocksMove: true, blocksShot: true,
+    brittle: { on: ['hit', 'near'], reach: 36, dwell: 1.3, carve: 62, gemChance: 0.6, orbChance: 0.8, text: 'a hidden passage grinds open!', color: '#d8c890' } },
   // Canopy kinds (occlude): their crowns draw ABOVE actors and FADE when the
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
   // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
@@ -2153,6 +2197,48 @@ registerStamp('fern', (ctx, spec) => stampBlob(ctx, 'fern', spec.radius ?? [14, 
 // The fungal kit: bracket shelves + toadstool huddles.
 registerStamp('shelf_fungus', (ctx, spec) => stampSolid(ctx, 'shelf_fungus', spec.radius ?? [12, 22]));
 registerStamp('toadstool', (ctx, spec) => stampBlob(ctx, 'toadstool', spec.radius ?? [10, 20], [2, 4], false));
+// The brittle kit: pot huddles, fissured plugs, and the hidden face.
+registerStamp('clay_pots', (ctx, spec) => stampBlob(ctx, 'clay_pots', spec.radius ?? [9, 14], [2, 4], false));
+registerStamp('crumbling_wall', (ctx, spec) => stampSolid(ctx, 'crumbling_wall', spec.radius ?? [18, 30]));
+// A SECRET WALL hides flush against something that reads as wall. GRID zones:
+// scan for wall-adjacent walkable cells (deterministic order), pick one far
+// from the entry with the zone rng — the pop carves a pocket INTO the face.
+// CONVEX zones: tuck it against the flank of a big standing solid (cliff,
+// boulder) — no carve to give, but the hidden cache still pays. Draw counts:
+// one pick when candidates exist, none otherwise.
+registerStamp('secret_wall', (ctx) => {
+  const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  if (grid) {
+    const cs = grid.cell;
+    const spots: Vec2[] = [];
+    for (let y = cs * 2; y < ctx.arena.h - cs * 2; y += cs) {
+      for (let x = cs * 2; x < ctx.arena.w - cs * 2; x += cs) {
+        if (!grid.isWalkable(x, y)) continue;
+        if (dist(vec(x, y), ctx.entry) < 320) continue;
+        if (inReserved(ctx, vec(x, y), 24)) continue;
+        if (!grid.isWalkable(x + cs, y) || !grid.isWalkable(x - cs, y)
+          || !grid.isWalkable(x, y + cs) || !grid.isWalkable(x, y - cs)) {
+          spots.push(vec(x, y));
+        }
+      }
+    }
+    if (!spots.length) return;
+    const p = spots[ctx.rng.int(0, spots.length - 1)];
+    ctx.doodads.push({ pos: p, radius: 16, kind: 'secret_wall' });
+    return;
+  }
+  const hosts = ctx.doodads.filter(d =>
+    (d.kind === 'cliff' || d.kind === 'rock') && d.radius >= 28
+    && dist(d.pos, ctx.entry) > 320 && !inReserved(ctx, d.pos, d.radius));
+  if (!hosts.length) return;
+  const host = hosts[ctx.rng.int(0, hosts.length - 1)];
+  const ang = ctx.rng.range(0, Math.PI * 2);
+  ctx.doodads.push({
+    pos: vec(host.pos.x + Math.cos(ang) * (host.radius + 12),
+      host.pos.y + Math.sin(ang) * (host.radius + 12)),
+    radius: 16, kind: 'secret_wall',
+  });
+});
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));

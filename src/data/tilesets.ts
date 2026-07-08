@@ -587,6 +587,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bone_pile', count: [3, 6] }, { kind: 'brazier', count: [1, 3] }, { kind: 'web', count: [1, 3] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [2, 4] },
       { kind: 'tombstone', count: [14, 22] },
       { kind: 'ruin', count: [2, 3] },
+      // Burial goods pop underfoot; some tomb walls hide more than bones.
+      { kind: 'clay_pots', count: [2, 4] },
+      { kind: 'secret_wall', count: [0, 1] },
       { kind: 'rocks', count: [6, 10], radius: [16, 30] },
       { kind: 'swamp', count: [1, 2] },
       { kind: 'cliff', count: [1, 2] },
@@ -778,6 +781,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'chasm', count: [0, 2] },
       { kind: 'water', count: [0, 1] },
       { kind: 'lava', count: [0, 1] },
+      // The brittle kit: old storage pots, plugs poised to fall, and — rarely
+      // — a wall that isn't one.
+      { kind: 'clay_pots', count: [1, 2] },
+      { kind: 'crumbling_wall', count: [1, 3] },
+      { kind: 'secret_wall', count: [0, 1] },
     ],
     packs: {
       count: [3, 5], size: [3, 5],

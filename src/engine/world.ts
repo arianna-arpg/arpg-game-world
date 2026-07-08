@@ -17778,6 +17778,7 @@ export class World {
     this.checkMinionDetonations();
     this.separateActors();
     this.updateWindPush(dt);
+    this.updateBrittle(dt);
     this.updateSnow(dt);
     this.updateDrops(dt);
     this.updateOrbs(dt);
@@ -20974,7 +20975,16 @@ export class World {
       // BOUNCE it (Galewisp): reflect off the obstacle's normal and fly on.
       if (!dead) {
         for (const o of this.doodadsAt(p.pos.x, p.pos.y)) {
+          // BRITTLE 'hit': the arrow finds it — pots shatter, hidden faces
+          // give. Flight continues unless the kind also blocks shots (a
+          // secret wall stops the arrow THAT opened it).
+          const br = doodadRuleOf(o.kind).brittle;
+          if (br && !o.gone && br.on.includes('hit')
+            && dist(p.pos, o.pos) <= p.radius + o.radius) {
+            this.popBrittle(o);
+          }
           if (!blocksProjectiles(o)) continue;
+          if (o.gone) continue; // popped this very step — nothing left to hit
           // Arrows fly UNDER the leaves and stop on the bole (bodyRadiusOf).
           if (dist(p.pos, o.pos) <= p.radius + bodyRadiusOf(o)) {
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
@@ -21971,6 +21981,73 @@ export class World {
         a.pos.x + gale.x * push,
         a.pos.y + gale.y * push,
       ), a.radius);
+    }
+  }
+
+  /** Dwell clocks for dwell-gated brittle nears (secret walls give to a
+   *  lingering press). WeakMap: popped/regenerated doodads just fall out. */
+  private brittleDwell = new WeakMap<Doodad, number>();
+
+  /** BRITTLE doodads (DoodadRule.brittle): lifeless breakables. 'touch' and
+   *  'near' triggers probe the player's team here each tick (bucket-local);
+   *  'hit' rides the projectile step. No life bars, no kill ladder — a pot
+   *  is not a monster. */
+  private updateBrittle(dt: number): void {
+    for (const a of this.actors) {
+      if (a.dead || a.passive || a.team !== this.player.team) continue;
+      for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
+        const br = doodadRuleOf(d.kind).brittle;
+        if (!br || d.gone) continue;
+        const gap = dist(a.pos, d.pos);
+        if (br.on.includes('touch') && gap <= a.radius + d.radius + 2) {
+          this.popBrittle(d);
+          continue;
+        }
+        if (br.on.includes('near') && gap <= (br.reach ?? 40) + a.radius) {
+          if (!br.dwell) { this.popBrittle(d); continue; }
+          const t = (this.brittleDwell.get(d) ?? 0) + dt;
+          if (t >= br.dwell) { this.brittleDwell.delete(d); this.popBrittle(d); }
+          else this.brittleDwell.set(d, t);
+        }
+      }
+    }
+  }
+
+  /** A lifeless breakable gives way: FX + spill + optional grid carve. The
+   *  crumbling plug unblocks its own footprint; a secret wall carves INTO the
+   *  wall face behind it — the passage the stone was hiding. */
+  private popBrittle(d: Doodad): void {
+    if (d.gone) return;
+    d.gone = true;
+    const i = this.doodads.indexOf(d);
+    if (i >= 0) this.doodads.splice(i, 1);
+    const br = doodadRuleOf(d.kind).brittle;
+    if (!br) return;
+    const color = br.color ?? '#c8b89a';
+    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 2.2, color, life: 0.3, maxLife: 0.3 });
+    if (br.text) this.text(vec(d.pos.x, d.pos.y - 14), br.text, color, 12);
+    if (br.orbChance && chance(br.orbChance)) {
+      const kind = chance(0.5) ? 'life' as const : 'mana' as const;
+      this.orbs.push({
+        pos: this.clampPos(vec(d.pos.x, d.pos.y), 8), kind,
+        amount: kind === 'life' ? 12 + this.zone.level * 2 : 9 + this.zone.level,
+        bob: rand(0, Math.PI * 2), life: 12,
+      });
+    }
+    if (br.gemChance && chance(br.gemChance)) this.dropGemAt(vec(d.pos.x, d.pos.y));
+    if (br.carve && this.walk instanceof GridWalkField) {
+      // A wall face beside it? Carve INTO it — that's where the passage goes.
+      const cs = this.walk.cell;
+      let cx = d.pos.x, cy = d.pos.y;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        if (!this.walk.isWalkable(d.pos.x + dx * cs, d.pos.y + dy * cs)) {
+          cx = d.pos.x + dx * br.carve * 0.7;
+          cy = d.pos.y + dy * br.carve * 0.7;
+          break;
+        }
+      }
+      this.walk.fillDisc(d.pos.x, d.pos.y, Math.max(24, d.radius + 8), 'ground');
+      this.walk.fillDisc(cx, cy, br.carve, 'ground');
     }
   }
 
