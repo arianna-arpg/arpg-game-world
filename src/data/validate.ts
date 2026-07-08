@@ -9,7 +9,7 @@ import { MONSTERS, WAVE_TABLE } from './monsters';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import {
-  minionUnsafeSupportFields, supportFits,
+  summonCrewOf, supportFits, supportRidesMinions,
   type Delivery, type SkillDef, type SupportDef,
 } from '../engine/skills';
 import { PROCS } from './procs';
@@ -366,16 +366,40 @@ export function validateContent(): void {
     return true;
   };
 
-  // The catalog sweep: every DROPPABLE skill a gem tag-fits but never reads.
+  // THE CREW HOP: gems socketed into a SUMMON skill FORWARD onto the minted
+  // minions' own skill instances (world.forwardSummonSockets) — so a row is
+  // genuinely read when any crew member's tag-fitting skill reads it (the
+  // trail gem boarding the archer's bow is live, not inert). 'unknowable'
+  // crews (corpse-raised) can't be audited — treat as read.
+  const crewOf = (def: SkillDef) => summonCrewOf(
+    def.delivery.type === 'summon' ? def.delivery : undefined,
+    id => MONSTERS[id], id => SKILLS[id]);
+  const crewReads = (sup: SupportDef, row: GraftReadRow, def: SkillDef): boolean => {
+    if (!supportRidesMinions(sup)) return false;
+    const crew = crewOf(def);
+    if (!crew) return false;
+    if (crew === 'unknowable') return true;
+    return crew.some(cd => supportFits(sup, cd) && !rowUnread(row, cd));
+  };
+  const crewFits = (sup: SupportDef, def: SkillDef): boolean => {
+    if (!supportRidesMinions(sup)) return false;
+    const crew = crewOf(def);
+    return crew === 'unknowable' || (!!crew && crew.some(cd => supportFits(sup, cd)));
+  };
+
+  // The catalog sweep: every DROPPABLE skill a gem fits — by tags, or by
+  // boarding a summon's crew — whose payload is then never read anywhere.
   const droppable = Object.values(SKILLS).filter(s => !s.noDrop);
   for (const sup of Object.values(SUPPORTS)) {
     for (const row of GRAFT_READ_SITES) {
       if (!carriesRow(sup, row)) continue;
-      const inert = droppable.filter(def => supportFits(sup, def) && rowUnread(row, def));
+      const inert = droppable.filter(def =>
+        (supportFits(sup, def) || crewFits(sup, def))
+        && rowUnread(row, def) && !crewReads(sup, row, def));
       if (!inert.length) continue;
       const shown = inert.slice(0, 8).map(s => s.id).join(', ');
       warn(`support ${sup.id}: '${row.key}' is read only at ${row.site} — silently INERT on `
-        + `${inert.length} tag-fitting skill(s): ${shown}${inert.length > 8 ? ` (+${inert.length - 8} more)` : ''}`);
+        + `${inert.length} fitting skill(s): ${shown}${inert.length > 8 ? ` (+${inert.length - 8} more)` : ''}`);
     }
   }
   // Monster-only kit pieces (noDrop) skip the sweep but their authored
@@ -392,27 +416,6 @@ export function validateContent(): void {
             + `'${row.key}' payload is never read by a '${target.delivery.type}' delivery`);
         }
       }
-    }
-  }
-
-  // MINION-BORNE SUPPORTS (SupportDef.minionSupports): every listed payload
-  // must exist and be minion-safe — the injection refuses unsafe payloads
-  // QUIETLY at spawn, so the loud line lives here. A carrier whose own tag
-  // gate can never reach a summon skill is dead content the same way.
-  for (const sup of Object.values(SUPPORTS)) {
-    if (!sup.minionSupports) continue;
-    for (const id of sup.minionSupports) {
-      const payload = SUPPORTS[id];
-      if (!payload) { warn(`support ${sup.id}: minionSupports names unknown support '${id}'`); continue; }
-      const unsafe = minionUnsafeSupportFields(payload);
-      if (unsafe.length) {
-        warn(`support ${sup.id}: minionSupports lists '${id}', whose [${unsafe.join(', ')}] payload(s) `
-          + `are not minion-safe — the spawn injection will refuse it (see MINION_SAFE_SUPPORT_FIELDS)`);
-      }
-    }
-    if (sup.requiresTags && !sup.requiresTags.includes('summon')) {
-      warn(`support ${sup.id}: carries minionSupports but requiresTags [${sup.requiresTags.join(', ')}] `
-        + `never reaches a summon skill — the payload can never board a minion`);
     }
   }
 

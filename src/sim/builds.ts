@@ -13,9 +13,11 @@
 import { PROGRESSION } from '../data/classes';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { MONSTERS } from '../data/monsters';
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode } from '../data/passives';
 import {
-  SKILL_RARITIES, makeSkillInstance, supportFits, skillMaxLevel,
+  SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFits, supportFitsInst,
+  supportRidesMinions, skillMaxLevel,
   type SkillInstance, type SkillRarity, type SupportInstance,
 } from '../engine/skills';
 import { SLOT_BY_ID } from '../engine/items';
@@ -58,7 +60,16 @@ function mintSkill(spec: BuildSkillSpec, warnings: string[]): SkillInstance | nu
       warnings.push(`unknown support '${s.id}' on '${spec.id}' — socket left empty`);
       return;
     }
-    if (!supportFits(sdef, def)) {
+    // Legality mirrors the game's crew-aware gate exactly: instance fit
+    // (prior sockets' grantsTags compose — Faultfinder hands 'fissure' to
+    // the summon, so Tectonic Echoes boards legally beside it), OR a crew
+    // fit (the gem rides the minted minions' own skills —
+    // world.forwardSummonSockets). Neither is a probe irregularity.
+    const crew = summonCrewOf(def.delivery.type === 'summon' ? def.delivery : undefined,
+      id => MONSTERS[id], id => SKILLS[id]);
+    const crewLegal = !!crew && supportRidesMinions(sdef)
+      && (crew === 'unknowable' || crew.some(cd => supportFits(sdef, cd)));
+    if (!supportFitsInst(sdef, inst) && !crewLegal) {
       warnings.push(`support '${s.id}' does not fit '${spec.id}' (tag rules) — socketed anyway for the probe`);
     }
     const gem: SupportInstance = { def: sdef, level: s.level ?? 1 };

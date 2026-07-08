@@ -24,8 +24,8 @@ import { runAIActions } from './aiActions';
 import {
   effectiveSkillLevel, grantedTags, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
-  skillContextTags, skillMaxLevel, SKILL_RARITIES, supportFitsInst,
-  supportMaxLevel, supportRidesMinions,
+  skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
+  supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ConstructDelivery, type GroundDelivery, type GuardSpec,
   type ProjectileDelivery, type ProjectileShape, type SkillDef,
   type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
@@ -9652,16 +9652,20 @@ export class World {
     return true;
   }
 
-  /** Socket an inventory gem into a known skill's first free socket. */
+  /** Socket an inventory gem into a known skill's first free socket. The
+   *  gate is CREW-AWARE: a gem may board a summon skill purely because the
+   *  minted minions cast something it fits — Splitting sockets into Summon
+   *  Skeleton Archer for the bow the bones carry. */
   socketSupport(invIndex: number, skillId: string, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const gem = m.inventory[invIndex];
     const inst = m.knownSkills.get(skillId);
-    if (!gem || !inst || !supportFitsInst(gem.def, inst)) return false;
+    if (!gem || !inst || !supportFitsInstOrCrew(gem.def, inst, this.summonCrewSkills(inst))) return false;
     const free = inst.sockets.indexOf(null);
     if (free === -1) return false;
     inst.sockets[free] = gem;
     m.inventory.splice(invIndex, 1);
+    this.resyncMinionSupports(inst);
     return true;
   }
 
@@ -9673,6 +9677,7 @@ export class World {
     if (!inst || !gem) return false;
     inst.sockets[socketIndex] = null;
     m.inventory.push(gem);
+    this.resyncMinionSupports(inst);
     return true;
   }
 
@@ -9769,8 +9774,14 @@ export class World {
         break;
       }
       case 'levelSupportSocket': {
-        const gem = seat.meta.knownSkills.get(action.skillId)?.sockets[action.socket];
-        if (gem) this.levelUpSupport(gem, seat, action.pay ?? 'points');
+        const inst = seat.meta.knownSkills.get(action.skillId);
+        const gem = inst?.sockets[action.socket];
+        if (gem) {
+          this.levelUpSupport(gem, seat, action.pay ?? 'points');
+          // Forwarded copies bake the carrier's level — re-mint so bodies
+          // already on the field feel the level-up too.
+          if (inst) this.resyncMinionSupports(inst);
+        }
         break;
       }
       case 'reacquireSkill': this.reacquireSkill(action.skillId, seat); break;
@@ -12244,9 +12255,9 @@ export class World {
           // fight the minion's own AI for the body.
           const order = makeSkillInstance(SKILLS[fx.skillId], effectiveSkillLevel(inst));
           // Conducted casts inherit the minion's OWN loadout: the summon
-          // skill that minted m may carry minion-borne supports (Conjurer's
-          // gems), and an ordered volley should split like a willed one.
-          this.injectMinionSupports(m.summonInst, [order]);
+          // skill that minted m forwards its gems, so an ordered volley
+          // splits like a willed one.
+          this.forwardSummonSockets(m.summonInst, [order]);
           m.useLock = 0; m.mana = Math.max(m.mana, m.maxMana());
           this.executeSkill(m, order, orderAt, { noRepeat: true });
           sent++;
@@ -13282,34 +13293,84 @@ export class World {
   }
 
   /**
-   * MINION-BORNE SUPPORTS: gems on a SUMMON skill may carry a
-   * `minionSupports` payload — support ids socketed into the minted
-   * minion's OWN skill instances (at the carrying gem's level), so the
-   * owner's investment reaches what the minions actually cast. Fit is the
-   * ordinary tag gate per minion skill (supportFitsInst): a projectile
-   * payload finds the archer's bow and skips the zombie's bite, with zero
-   * new math — minions already cast through useSkill → instanceMods.
-   * Reuses the MonsterGrant null-slot write: pre-filled kits skip
-   * gracefully when full, and a payload already riding (granted, or two
-   * carriers naming it) never stacks a second copy. Unsafe payloads
-   * (validator-flagged at boot) are refused quietly here. Pure given
-   * stable socket order — no RNG, co-op-replication friendly.
+   * SUPPORT FORWARDING — the whole minion-support story in one seam. Every
+   * gem socketed into a SUMMON skill boards the minted minions' OWN skill
+   * instances wherever it fits: Splitting on Summon Skeleton Archer splits
+   * the ARROWS; Faultfinder on Summon Skeleton Warrior teaches the Cleave
+   * to tear fissures the warrior himself detonates (z.caster is the
+   * minion). No wrapper gems, no payload lists — the socket IS the payload.
+   *
+   * Rules, in order:
+   * - Seat-bound gems (triggers, metas, overcharge, reservations, spender
+   *   economies — MINION_SEAT_BOUND_SUPPORT_FIELDS) never forward: their
+   *   machinery needs the player's hands. They still work the summon
+   *   skill itself by the ordinary rules.
+   * - Fit is the ordinary instance tag gate per minion skill, evaluated in
+   *   SLOT ORDER so grantsTags compose aboard exactly as they do for the
+   *   player (Faultfinder grants 'fissure'; Tectonic Echoes follows it
+   *   onto the same Cleave).
+   * - Copies are APPENDED past the kit's own socket array (MonsterGrant
+   *   gems keep their slots; nothing is dropped for want of a free null)
+   *   and stamped `forwarded` so resyncMinionSupports can strip and
+   *   re-mint them when the summon's sockets change.
+   * - A def already riding (kit gem, or two carriers of the same gem)
+   *   never stacks a second copy; the forwarded copy bakes the CARRIER's
+   *   gem level.
+   * - BOTH LANES ARE LIVE: the same gem keeps feeding the summon skill's
+   *   own instanceMods (minion damage/life/count investment, contracts,
+   *   devour) — the summon lane and the crew lane read disjoint stats in
+   *   practice, and where both genuinely read (a +fire-levels gem on a
+   *   fire summon) the gem honestly serves both.
+   * Pure given stable socket order — no RNG, co-op-replication friendly.
    */
-  private injectMinionSupports(summonInst: SkillInstance | undefined, skills: (SkillInstance | null)[]): void {
+  private forwardSummonSockets(summonInst: SkillInstance | undefined, skills: (SkillInstance | null)[]): void {
     if (!summonInst) return;
     for (const socket of summonInst.sockets) {
-      if (!socket?.def.minionSupports) continue;
-      for (const id of socket.def.minionSupports) {
-        const sup = SUPPORTS[id];
-        if (!sup || !supportRidesMinions(sup)) continue;
-        for (const sk of skills) {
-          if (!sk || !supportFitsInst(sup, sk)) continue;
-          if (sk.sockets.some(x => x?.def.id === id)) continue;
-          const slot = sk.sockets.findIndex(x => x === null);
-          if (slot >= 0) sk.sockets[slot] = { def: sup, level: socket.level };
-        }
+      if (!socket || !supportRidesMinions(socket.def)) continue;
+      for (const sk of skills) {
+        if (!sk || !supportFitsInst(socket.def, sk)) continue;
+        if (sk.sockets.some(x => x?.def.id === socket.def.id)) continue;
+        sk.sockets.push({ def: socket.def, level: socket.level, forwarded: true });
       }
     }
+  }
+
+  /**
+   * Re-derive the forwarded sockets of every LIVING minion minted by
+   * `inst` — called whenever the summon skill's sockets change (socket /
+   * unsocket / gem level-up), so a swap reaches bodies already on the
+   * field instead of waiting for a re-summon. Only `forwarded` entries are
+   * stripped; MonsterGrant kit gems keep their slots untouched. Matches by
+   * INSTANCE identity, not skill id — two seats running the same summon
+   * skill never cross-contaminate each other's crews.
+   */
+  resyncMinionSupports(inst: SkillInstance): void {
+    for (const a of this.actors) {
+      // Constructs carry summonInst as a back-reference too, but never
+      // receive spawn-time forwarding — resync mirrors the spawn path.
+      if (a.dead || a.construct || a.summonInst !== inst) continue;
+      for (const sk of a.skills) {
+        if (!sk) continue;
+        for (let i = sk.sockets.length - 1; i >= 0; i--) {
+          if (sk.sockets[i]?.forwarded) sk.sockets.splice(i, 1);
+        }
+      }
+      this.forwardSummonSockets(inst, a.skills);
+    }
+  }
+
+  /**
+   * What this instance's CREW is known to cast at socket time — feeds the
+   * crew-aware socket gate (supportFitsInstOrCrew). Resolves the summon
+   * delivery (innate, or a support's summon graft: Vessel of Shadow opens
+   * a construct skill's sockets to its clone's kit); the crew derivation
+   * itself is the pure summonCrewOf core, shared with the validator's
+   * crew-hop audit.
+   */
+  summonCrewSkills(inst: SkillInstance): SummonCrew {
+    const d: SummonDelivery | undefined =
+      inst.def.delivery.type === 'summon' ? inst.def.delivery : instanceSummon(inst);
+    return summonCrewOf(d, id => MONSTERS[id], id => SKILLS[id]);
   }
 
   /**
@@ -13370,10 +13431,11 @@ export class World {
     minion.sourceSkillId = inst.def.id;
     minion.sourcePoolGroup = d.poolGroup;
     minion.summonInst = inst;
-    // MINION-BORNE SUPPORTS (SupportDef.minionSupports): the owner's gems
-    // reach what the minion CASTS — injected before ownerMods so both lanes
-    // (socketed payload, sheet source) are live for the minion's whole life.
-    this.injectMinionSupports(inst, minion.skills);
+    // SUPPORT FORWARDING: the summon's own gems board what the minion
+    // CASTS — forwarded before ownerMods so both lanes (crew sockets,
+    // sheet source) are live for the minion's whole life. Corpse-raised
+    // bodies (Raise Spectre) resolve fit HERE, against the actual kit.
+    this.forwardSummonSockets(inst, minion.skills);
     const size = caster.sheet.get('minionSize', tags, extra);
     minion.radius = Math.max(5, minion.radius * size);
     const haste = caster.sheet.get('minionHaste', tags, extra);

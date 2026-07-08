@@ -14,8 +14,9 @@ import {
 } from '../engine/stats';
 import { resistValue } from '../engine/damage';
 import {
-  effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel, supportFitsInst, supportMaxLevel,
-  type SkillDef, type SkillInstance,
+  effectiveSkillLevel, SKILL_RARITIES, skillMaxLevel, supportFits, supportFitsInst,
+  supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions,
+  type SkillDef, type SkillInstance, type SupportDef,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, socketCap, type ItemInstance } from '../engine/items';
@@ -796,9 +797,23 @@ export class UI {
     const m = world.meta;
     if (kind === 'gems') {
       return m.inventory.map((gem, idx) => {
+        // Crew-aware targets: a gem may board a summon skill purely for what
+        // the minted minions cast — mark those so the player knows the
+        // payload rides the crew, and name the skills it boards.
         const targets = [...m.knownSkills.values()]
-          .filter(inst => supportFitsInst(gem.def, inst) && inst.sockets.includes(null))
-          .map(inst => `<button data-socket="${idx}:${inst.def.id}">${inst.def.name}</button>`)
+          .filter(inst => inst.sockets.includes(null)
+            && supportFitsInstOrCrew(gem.def, inst, world.summonCrewSkills(inst)))
+          .map(inst => {
+            if (supportFitsInst(gem.def, inst)) {
+              return `<button data-socket="${idx}:${inst.def.id}">${inst.def.name}</button>`;
+            }
+            const crew = world.summonCrewSkills(inst);
+            const boards = crew === 'unknowable' || crew === null
+              ? 'whatever you raise'
+              : crew.filter(def => supportFits(gem.def, def)).map(def => def.name).join(', ');
+            return `<button data-socket="${idx}:${inst.def.id}"
+              title="Boards the crew: forwarded to the minions' own skills (${boards}).">${inst.def.name} ⤳</button>`;
+          })
           .join('') || '<span style="color:#8a8678">no socketable skill</span>';
         return `
           <div class="skill-entry" style="border-left:3px solid ${gem.def.color}">
@@ -1725,9 +1740,17 @@ export class UI {
         return `<button data-bind="${def.id}" data-slot="${slot}"
           class="${bound ? 'bound' : ''}">${label}</button>`;
       }).join('');
+      // Mark gems that BOARD THE CREW (forwarded into the minions' own
+      // skills) so the lane is legible — independent of whether the gem
+      // also serves the summon lane.
+      const crew = world.summonCrewSkills(inst);
+      const boardsCrew = (s: { def: SupportDef } | null): boolean => !!s && !!crew
+        && supportRidesMinions(s.def)
+        && (crew === 'unknowable' || crew.some(d => supportFits(s.def, d)));
       const sockets = inst.sockets.map((s, i) => s ? `
-        <span class="gem-chip" style="border-color:${s.def.color}" title="${s.def.description}">
-          ${s.def.name} <b>L${s.level}</b>
+        <span class="gem-chip" style="border-color:${s.def.color}"
+          title="${s.def.description}${boardsCrew(s) ? ' — boards the crew: forwarded to the minions’ own skills.' : ''}">
+          ${s.def.name}${boardsCrew(s) ? ' ⤳' : ''} <b>L${s.level}</b>
           <button data-gemlvl="${def.id}:${i}" ${m.skillPoints < 1 || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}>+</button>
           <button data-gemlvl-ess="${def.id}:${i}"
             ${!this.getWorld().canAffordEssence(this.getWorld().localSeat, skillLevelEssenceCost(s.level + 1)) || s.level >= supportMaxLevel(s.def) ? 'disabled' : ''}

@@ -250,3 +250,50 @@ Shipped, in the suggested order, each gated on `tsc --noEmit` + `sim baseline ch
 
 Still open: the socket-time enforcement level (`SupportDef.requiresDelivery`), Side note A
 (`rampMove`), Side note C (`reapers_sweep` rework), and the no-op data pass the new warnings feed.
+
+---
+
+## Session outcome — 2026-07-08 (minion-support OVERHAUL: forwarding replaces the wrapper lane)
+
+Part 1's `minionSupports` design (option c) is **retired**. The wrapper-gem indirection (Conjurer's
+Splitting carrying a `['splitting']` payload list) demanded a parallel gem per forwardable support —
+clutter, player confusion, and an ALLOW-set that defaulted every new axis to minion-unsafe. The overhaul
+inverts all three:
+
+- **The socket IS the payload** (`world.forwardSummonSockets`): every gem socketed into a summon skill
+  is copied (at the carrier's level, `SupportInstance.forwarded`) into the minted minions' own skill
+  instances wherever it fits — appended past the MonsterGrant kit slots, deduped by id, evaluated in
+  SLOT ORDER so `grantsTags` compose aboard (Faultfinder hands Cleave the `fissure` tag; Tectonic
+  Echoes follows it on). Both call sites kept (spawnMinion + conducted `minionCast` orders). BOTH LANES
+  stay live: the same gem keeps feeding the summon's own instanceMods (minion damage/life/count,
+  contracts, devour), and the crew lane reads everything else — disjoint stats in practice.
+- **Rides-by-default** (`MINION_SEAT_BOUND_SUPPORT_FIELDS`): the ALLOW-set flipped to an exclusion set —
+  only payloads that genuinely demand the player's seat refuse to forward (trigger/triggerPermit,
+  overcharge, meta, strikeTiming, curseOnHit/curseField, auraDuration/reserveLife, gate/chargeCost).
+  Everything else — the whole fissure family, cascade/pulse, followUp, zoneFollow/exposure/zoneGrow/
+  pendulum, echo, tether, brood, zoneEmit, even nested `summon` grafts — boards minions. The partition
+  is COMPILE-CHECKED (`_SupportFieldPartitionCheck`): a new SupportDef field fails tsc until classified.
+- **Crew-aware socket gate** (`supportFitsInstOrCrew` + `World.summonCrewSkills` over the pure
+  `summonCrewOf`): a gem may socket into a summon skill when the minted crew casts something it fits —
+  monsterId/pool crews resolve statically (base skills + level-gated grants), corpse crews
+  (`fromCorpse`, Raise Spectre/Revive) are 'unknowable' (any riding gem boards; fit resolves per-body
+  at spawn against what was actually raised). Splitting therefore REFUSES a warrior/zombie crew and
+  boards the archer's bow — "only socketable where it can matter", with zero per-support data.
+- **Live resync** (`World.resyncMinionSupports`): socket/unsocket/gem-level-up strip and re-mint the
+  `forwarded` entries on living minions of that exact instance (constructs excluded — spawn parity;
+  kit gems untouched; instance identity, so co-op seats never cross-contaminate).
+- **Audit follows the pipes**: the no-op sweep gained the CREW HOP (a graft is read when a crew
+  member's tag-fitting skill reads it) and now also sweeps crew-fit pairs, so aoe-stat gems boarding a
+  melee crew get flagged crew-inert. Sim injector legality mirrors the real gate (instance fit incl.
+  composed grants, or crew fit).
+
+Verification: probes `minion_probe_summoner_{archers,conjurer}_l10` (id kept, now REAL splitting)
+6.2 → 11.43 dps_minions; NEW `minion_probe_summoner_{warriors,faultfinder}_l10` 13.31 → 30.32 (the
+warriors' Cleave tears fissures they detonate by chasing — zero player input). Live-checked: archer
+trio (splitting+volley+firing_line all board bone_arrow), Faultfinder→TE composition aboard Cleave,
+Raise Spectre per-body fit (archer corpse takes splitting on its bow, warrior corpse takes nothing),
+live gem-swap resync, real socketSupport gate accept/refuse, `⤳ boards the crew` chips in the book.
+`npm run check` + `sim baseline check --suite smoke` green; suite `minions` bundles the A/B pairs.
+
+Still open (inherited): `SupportDef.requiresDelivery` socket-time enforcement, Side note A (`rampMove`),
+Side note C (`reapers_sweep`), and the no-op data pass — now with crew-inert rows in its feed.

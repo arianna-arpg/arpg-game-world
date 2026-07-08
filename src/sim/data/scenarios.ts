@@ -107,13 +107,19 @@ for (const m of ['zombie', 'skeleton_warrior', 'blood_mite']) {
   add(monsterDuel('warrior', 5, m));
 }
 
-// MINION-SUPPORT PROBE PAIR: an archer-only summoner under a slow zombie
-// drip, bare vs a Conjurer's Splitting on the summon skill. dps_minions is
-// the headline — the hero carries NO attack skill, the gem's payload sockets
-// into the ARCHERS' bone_arrow, so the split arrows are the whole difference
-// between the two runs. (Not a dummy scenario: minion AI ignores passive
-// scenery, so minion probes need targets that fight back.)
-for (const build of ['summoner_archers_l10', 'summoner_conjurer_l10']) {
+// MINION-SUPPORT PROBE PAIRS (world.forwardSummonSockets): summoners under a
+// slow zombie drip, bare vs forwarded gems on the summon skill. dps_minions
+// is the headline — the hero carries NO attack skill, the gems board the
+// MINIONS' own skills, so the crew's behavior is the whole difference
+// between the runs. Archers: real Splitting straight into the summon (the
+// arrows split). Warriors: Faultfinder + Tectonic Echoes (the Cleave tears
+// fissures; the warriors detonate them by chasing). (Not dummy scenarios:
+// minion AI ignores passive scenery, so minion probes need targets that
+// fight back.)
+for (const build of [
+  'summoner_archers_l10', 'summoner_conjurer_l10',
+  'summoner_warriors_l10', 'summoner_faultfinder_l10',
+]) {
   add({
     id: `minion_probe_${build}`,
     label: `Minion-support probe — ${build}`,
@@ -123,7 +129,7 @@ for (const build of ['summoner_archers_l10', 'summoner_conjurer_l10']) {
     waves: [{ monsters: [{ id: 'zombie', count: 2 }], repeatEvery: 8 }],
     duration: 45,
     stop: 'duration',
-    notes: 'A/B probe for SupportDef.minionSupports: compare dps_minions across the pair.',
+    notes: 'A/B probe for support forwarding: compare dps_minions across each bare/forwarded pair.',
   });
 }
 
@@ -146,6 +152,8 @@ export const SUITES: Record<string, string[]> = {
   pressure: STARTER_CLASSES.map(c => `pressure_${c}_l5`),
   /** Per-monster duel probes. */
   duels: Object.keys(SCENARIOS).filter(id => id.startsWith('duel_')),
+  /** The minion-support forwarding A/B pairs (bare vs forwarded gems). */
+  minions: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_probe_')),
   /** Everything registered. */
   all: [], // filled below
 };

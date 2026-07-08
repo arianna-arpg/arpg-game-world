@@ -452,29 +452,9 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
-  // --- Minion-borne supports (SupportDef.minionSupports) ---------------------
-  // The Conjurer's family: the gem rides the SUMMON skill, but its payload
-  // sockets into the MINIONS' own skills at this gem's level — the ordinary
-  // tag gate scopes it, so a projectile payload finds the archer's bow and
-  // skips the warrior's sword. Summon-SCALING (count/life/damage) stays on
-  // the plain summon gems above; this lane is strictly "what the minions
-  // cast". Any minion-safe support can be carried — one data entry each.
-  conjurers_splitting: {
-    id: 'conjurers_splitting', name: "Conjurer's Splitting",
-    description: 'Your minions\' projectile skills gain Splitting at this gem\'s level — the skeleton archer\'s arrows split; the sword hand refuses the gift.',
-    color: '#7ec8a0', requiresTags: ['summon'],
-    minionSupports: ['splitting'],
-    mods: [],
-    weight: 5,
-  },
-  conjurers_arcing: {
-    id: 'conjurers_arcing', name: "Conjurer's Arcing",
-    description: 'Your minions\' projectile skills gain Arcing at this gem\'s level — every raised archer becomes a little bit Chain Lightning.',
-    color: '#f4e84a', requiresTags: ['summon'],
-    minionSupports: ['arcing'],
-    mods: [],
-    weight: 5,
-  },
+  // (The Conjurer's wrapper family is RETIRED: supports forward to minions
+  // DIRECTLY now — socket the real Splitting into the summon skill and the
+  // archer's arrows split. See world.forwardSummonSockets.)
   blood_toll: {
     id: 'blood_toll', name: 'Blood Toll',
     description: 'Each cast CONSUMES your nearest minion (within 260): 0.6% more damage per point of its remaining life. The altar always takes.',

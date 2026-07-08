@@ -2726,21 +2726,6 @@ export interface SupportDef {
   /** An AURA baked onto the host's MINIONS at summon (Pyre Legion's
    *  burning ranks — the pylon spec, worn by flesh). */
   minionAura?: AuraSpec;
-  /** MINION-BORNE SUPPORTS (the Conjurer's family): support ids injected
-   *  into the sockets of every minion the host skill SUMMONS — the payload
-   *  reaches the minions' OWN skills, not the summon. Conjurer's Splitting
-   *  on Summon Skeleton Archer splits the ARROWS: each listed support
-   *  sockets (at the carrying gem's level) into every minion skill it fits
-   *  by the ordinary tag gate, so a projectile payload finds the archer's
-   *  bow and skips the warrior's sword — supportFitsInst scopes it for
-   *  free. Summon-SCALING investment (minion damage/life/count) stays on
-   *  the summon skill's own mods lane; this lane is strictly "what the
-   *  minions cast". Only MINION-SAFE payloads may ride (the allow-set in
-   *  MINION_SAFE_SUPPORT_FIELDS — no triggers, metas, reservations): the
-   *  content validator flags violations at boot and the spawn injection
-   *  refuses them quietly. Conducted casts (minionCast orders) inherit
-   *  from each minion's own summon instance too. */
-  minionSupports?: string[];
   /** A STRIKE-TIMING discipline this support grafts (see StrikeTimingSpec
    *  — Perfect Draw's golden tail, Wandering Mark's roving marker): a
    *  press inside the zone on bar casts, the RELEASE inside the zone on
@@ -2822,6 +2807,11 @@ export const MAX_SUPPORT_LEVEL = 5;
 export interface SupportInstance {
   def: SupportDef;
   level: number;
+  /** FORWARDED from a summon skill's socket onto this minion-owned skill
+   *  instance (world.forwardSummonSockets) — stripped and re-minted whenever
+   *  the summon's sockets change. Never appears on a player-owned instance,
+   *  never saved (minions are transient). */
+  forwarded?: true;
 }
 
 /** Default socket count for instances not minted as drops (monster kits). */
@@ -2922,36 +2912,71 @@ export function supportFits(sup: SupportDef, skill: SkillDef): boolean {
 
 /** SupportDef keys that carry NO payload — identity, socket gating, and
  *  drop plumbing. Everything else on a def is a payload of some kind. */
-const SUPPORT_IDENTITY_FIELDS: ReadonlySet<string> = new Set([
+const SUPPORT_IDENTITY_FIELD_LIST = [
   'id', 'name', 'description', 'color', 'requiresTags', 'excludeTags',
   'maxLevel', 'weight', 'minDropLevel', 'dropTags',
-] satisfies (keyof SupportDef)[]);
+] as const satisfies readonly (keyof SupportDef)[];
 
-/** Payload fields a MINION-BORNE support may carry (SupportDef.minionSupports):
- *  plain skill-local modifiers, tag grants, and the delivery-scoped grafts a
- *  minion's own cast pipeline genuinely reads. Deliberately an ALLOW-set —
- *  everything else (triggers need a seat press, overcharge a held bar, metas
- *  the shift layer, curse/aura conversions a reservation, charge economies an
- *  owner) is refused, and NEW structured grafts default to unsafe until
- *  someone thinks about minions. `minionSupports` itself is excluded on
- *  purpose: payloads don't chain. */
-export const MINION_SAFE_SUPPORT_FIELDS: ReadonlySet<string> = new Set([
+/** Payload fields that DEMAND the player's seat — key latches (triggers,
+ *  curse draws), held bars (overcharge), press disciplines (strike timing),
+ *  the shift layer (metas), reservation economies the minion AI doesn't
+ *  manage (aura conversions), and threshold/spender economies that would
+ *  BRICK an autonomous caster (gates, charge costs). A support carrying ANY
+ *  of these never forwards to minions — whole-gem, no field surgery. It
+ *  still sockets and works the summon skill itself by the ordinary rules. */
+const MINION_SEAT_BOUND_FIELD_LIST = [
+  'trigger', 'triggerPermit', 'overcharge', 'meta', 'strikeTiming',
+  'curseOnHit', 'curseField', 'auraDuration', 'reserveLife',
+  'gate', 'chargeCost',
+] as const satisfies readonly (keyof SupportDef)[];
+export const MINION_SEAT_BOUND_SUPPORT_FIELDS: ReadonlySet<string> =
+  new Set(MINION_SEAT_BOUND_FIELD_LIST);
+
+/** Everything else RIDES MINIONS by default — supports forwarded from a
+ *  summon skill's sockets into the minted minions' own skill instances are
+ *  read by the same cast pipeline the player uses (minions cast through
+ *  useSkill; grafts read through socketSpec/instanceX; z.caster is the
+ *  minion, so aftershock dances, worn ground, tethers, even nested summon
+ *  grafts all genuinely work). Listed EXPLICITLY only so the partition
+ *  below is compile-checked: adding a SupportDef field without deciding
+ *  its seat-bound-or-rides fate is a tsc error naming the field. */
+const MINION_RIDABLE_FIELD_LIST = [
   'mods', 'perLevel', 'levelBonus', 'levelBonusPer', 'grantsTags',
-  'aim', 'targeting', 'trail', 'fissureTrail', 'cascade', 'pulse',
-] satisfies (keyof SupportDef)[]);
+  'tether', 'aim', 'constructFx', 'devour',
+  'fissureVolatile', 'fissureAftershock', 'fissureRoulette',
+  'fissureReclose', 'fissurePath', 'meleeFissure',
+  'spreadOnHit', 'breakableGraft', 'corpseSpawn', 'minionAuraPool',
+  'dominate', 'sacrifice', 'healField', 'spawnBuff', 'zoneEmit', 'madden',
+  'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
+  'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
+  'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'pendulum', 'echo',
+  'summon',
+] as const satisfies readonly (keyof SupportDef)[];
 
-/** Payload fields on `sup` that may NOT ride a minion — empty means safe. */
-export function minionUnsafeSupportFields(sup: SupportDef): string[] {
+/** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every
+ *  SupportDef key. A new field fails this assertion (tsc names it) until a
+ *  deliberate decision lands it in one of the lists above. */
+type ClassifiedSupportField =
+  | typeof SUPPORT_IDENTITY_FIELD_LIST[number]
+  | typeof MINION_SEAT_BOUND_FIELD_LIST[number]
+  | typeof MINION_RIDABLE_FIELD_LIST[number];
+type AssertAllSupportFieldsClassified<T extends never> = T;
+/** Exported ONLY so the assertion isn't flagged unused — never import it. */
+export type _SupportFieldPartitionCheck =
+  AssertAllSupportFieldsClassified<Exclude<keyof SupportDef, ClassifiedSupportField>>;
+
+/** Payload fields on `sup` that demand the player's seat — empty = rides. */
+export function minionSeatBoundFields(sup: SupportDef): string[] {
   return Object.entries(sup)
-    .filter(([k, v]) => v !== undefined
-      && !SUPPORT_IDENTITY_FIELDS.has(k) && !MINION_SAFE_SUPPORT_FIELDS.has(k))
+    .filter(([k, v]) => v !== undefined && MINION_SEAT_BOUND_SUPPORT_FIELDS.has(k))
     .map(([k]) => k);
 }
 
-/** May this support be listed in another's minionSupports and injected into
- *  a minion's skills? True when every payload it carries is minion-safe. */
+/** May this support board a summon skill's minions (forwarded into their
+ *  own skill instances by world.forwardSummonSockets)? Supports ride by
+ *  DEFAULT — the seat-bound exclusion set is the whole gate. */
 export function supportRidesMinions(sup: SupportDef): boolean {
-  return minionUnsafeSupportFields(sup).length === 0;
+  return minionSeatBoundFields(sup).length === 0;
 }
 
 /** Tags granted to a skill instance by its socketed supports. */
@@ -2973,6 +2998,67 @@ export function supportFitsInst(sup: SupportDef, inst: SkillInstance): boolean {
   if (sup.excludeTags && sup.excludeTags.some(t => tags.includes(t))) return false;
   if (!sup.requiresTags || !sup.requiresTags.length) return true;
   return sup.requiresTags.some(t => tags.includes(t));
+}
+
+/** What a summon skill's CREW is known to cast at socket time: the minted
+ *  monsters' skill defs. 'unknowable' = corpse-raised crews (Raise Spectre,
+ *  Revive) — we cannot say what the player will raise, so every gem that
+ *  rides minions may board and fit resolves per-body at spawn. null = the
+ *  instance mints no minions. Resolution lives with the registries
+ *  (World.summonCrewSkills); this type keeps the engine helpers pure. */
+export type SummonCrew = SkillDef[] | 'unknowable' | null;
+
+/**
+ * Resolve a summon delivery's knowable crew — the pure core behind
+ * World.summonCrewSkills (instance-aware) and the validator's crew-hop
+ * audit (def-level). Registries arrive as lookups so the engine stays
+ * data-free. The whole POSSIBLE kit counts: base skills plus level-gated
+ * grants, across the whole pool — generous by design, since a gem that
+ * fits ANY possible crew member may board and simply never forwards onto
+ * bodies that don't cast it. A corpse-sourced delivery with no fixed
+ * monsterId is 'unknowable' (Raise Spectre); with one (Shaman's Call,
+ * which eats a corpse but births a fixed body) the crew stays knowable.
+ */
+export function summonCrewOf(
+  d: SummonDelivery | undefined,
+  monster: (id: string) => { skills: string[]; grants?: { skill?: string }[] } | undefined,
+  skill: (id: string) => SkillDef | undefined,
+): SummonCrew {
+  if (!d) return null;
+  if (d.fromCorpse && !d.monsterId) return 'unknowable';
+  const ids = d.monsterId ? [d.monsterId] : (d.pool ?? []).map(p => p.id);
+  const out: SkillDef[] = [];
+  const seen = new Set<string>();
+  const add = (skillId: string | undefined): void => {
+    if (!skillId || seen.has(skillId)) return;
+    const def = skill(skillId);
+    if (!def) return;
+    seen.add(skillId);
+    out.push(def);
+  };
+  for (const mid of ids) {
+    const mdef = monster(mid);
+    if (!mdef) continue;
+    for (const sid of mdef.skills) add(sid);
+    for (const g of mdef.grants ?? []) add(g.skill);
+  }
+  return out.length ? out : null;
+}
+
+/**
+ * Crew-aware socket gate — THE fit check for socketing a gem into a skill.
+ * A support fits when the instance itself takes it (the ordinary tag gate,
+ * supports-compose-with-supports included) OR when the skill mints minions
+ * the support could board: same gems, one gate, full parity between what
+ * the player casts and what the crew casts. Splitting refuses a bare
+ * Summon Skeleton Warrior (no projectile anywhere in the crew) but boards
+ * the Archer through the bow his bones carry.
+ */
+export function supportFitsInstOrCrew(sup: SupportDef, inst: SkillInstance, crew: SummonCrew): boolean {
+  if (supportFitsInst(sup, inst)) return true;
+  if (!crew || !supportRidesMinions(sup)) return false;
+  if (crew === 'unknowable') return true;
+  return crew.some(def => supportFits(sup, def));
 }
 
 /**

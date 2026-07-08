@@ -72,17 +72,33 @@ for (const cls of CLASSES) {
   }
 }
 
-// MINION-SUPPORT PROBES (SupportDef.minionSupports): the same archer-only
-// summoner twice — bare, and carrying a Conjurer's Splitting on the summon
-// skill. Their A/B is the feature's regression probe: the CONJURER build's
-// dps_minions should sit visibly above the bare one (the archers' arrows
-// split; the summon skill itself never fires a shot).
+// MINION-SUPPORT PROBES (world.forwardSummonSockets): the same archer-only
+// summoner twice — bare, and with the REAL Splitting socketed straight into
+// the summon skill (the crew-aware gate takes it for the bow the bones
+// carry). Their A/B is the forwarding regression probe: the socketed
+// build's dps_minions should sit visibly above the bare one (the archers'
+// arrows split; the summon skill itself never fires a shot). The historical
+// build id ('conjurer') is kept so baselines compare across the overhaul.
 const archerSummoner = (id: string, supports?: { id: string; level?: number }[]): BuildSpec => ({
-  id, label: `Skeleton-archer summoner @ L10 (${supports ? 'Conjurer\'s Splitting' : 'bare'})`,
+  id, label: `Skeleton-archer summoner @ L10 (${supports ? 'Splitting forwarded' : 'bare'})`,
   classId: 'summoner', level: 10,
   skills: [{ id: 'summon_skeleton_archer', level: gemLevelAt(10), supports }],
   passives: greedyPassives('summoner', 10),
 });
 BUILDS['summoner_archers_l10'] = archerSummoner('summoner_archers_l10');
 BUILDS['summoner_conjurer_l10'] = archerSummoner('summoner_conjurer_l10',
-  [{ id: 'conjurers_splitting', level: 1 }]);
+  [{ id: 'splitting', level: 1 }]);
+// The warrior-side probe: Faultfinder forwarded onto the skeleton warriors'
+// Cleave (a MELEE gem boarding a summon — refused outright before the
+// overhaul), plus Tectonic Echoes riding the granted 'fissure' tag beside
+// it. The warriors tear cracks as they fight and detonate them by chasing —
+// dps_minions should sit above the bare warrior build.
+const warriorSummoner = (id: string, supports?: { id: string; level?: number }[]): BuildSpec => ({
+  id, label: `Skeleton-warrior summoner @ L10 (${supports ? 'Faultfinder + Tectonic Echoes forwarded' : 'bare'})`,
+  classId: 'summoner', level: 10,
+  skills: [{ id: 'summon_skeleton', level: gemLevelAt(10), supports }],
+  passives: greedyPassives('summoner', 10),
+});
+BUILDS['summoner_warriors_l10'] = warriorSummoner('summoner_warriors_l10');
+BUILDS['summoner_faultfinder_l10'] = warriorSummoner('summoner_faultfinder_l10',
+  [{ id: 'faultfinder', level: 1 }, { id: 'tectonic_echoes', level: 1 }]);
