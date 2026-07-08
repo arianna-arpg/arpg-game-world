@@ -511,6 +511,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('damage', 'increased', 0.05)],
     weight: 5,
   },
+  creeping_fumes: {
+    id: 'creeping_fumes', name: 'Creeping Fumes',
+    description: 'This skill\'s lingering ground turns FUME: its ticks bite only what has breathed inside for half a second — stepping out clears the lungs — and the vapors work 30% harder on whoever truly marinates. Patience, weaponized.',
+    color: '#9ab86a', requiresTags: ['duration'],
+    exposure: { after: 0.5 },
+    mods: [mod('damage', 'more', 0.3)],
+    perLevel: [mod('damage', 'increased', 0.05)],
+    weight: 5,
+  },
+  overgrowth: {
+    id: 'overgrowth', name: 'Overgrowth',
+    description: 'This skill\'s lingering ground GROWS while it lives — 30 radius a second, the patch becoming a field becoming a problem (cascade ripples swell too). 15% less damage; the trade is acreage.',
+    color: '#6aa84a', requiresTags: ['duration'],
+    zoneGrow: 30,
+    mods: [mod('damage', 'more', -0.15)],
+    perLevel: [mod('aoeRadius', 'increased', 0.04)],
+    weight: 5,
+  },
 
   // --- Reservation & resource economies ------------------------------------------
   fleeting_devotion: {
@@ -1270,6 +1288,26 @@ export const SUPPORTS: Record<string, SupportDef> = {
     mods: [mod('pulseCount', 'flat', 2), mod('damage', 'more', -0.2)],
     perLevel: [mod('pulseCount', 'flat', 0.5)],
     weight: 5,
+  },
+
+  carried_edge: {
+    id: 'carried_edge', name: 'Carried Edge',
+    description: 'The sweep comes OFF its post and onto your hip: the harvest RIDES you as you move — its arc keeps its own trajectory; only the anchor walks. Reap on the march.',
+    color: '#c8a0e0', requiresTags: ['sweep'],
+    zoneFollow: true,
+    mods: [mod('manaCost', 'more', 0.2)],
+    perLevel: [mod('damage', 'increased', 0.06)],
+    weight: 5,
+  },
+
+  reapers_encore: {
+    id: 'reapers_encore', name: "Reaper's Encore",
+    description: 'Every third-or-so swing of this skill earns an ENCORE: a heartbeat later, a full slow sweep crosses your front on its own — free, unpaid, uninvited. The scythe remembers what your wrists forgot.',
+    color: '#b088d0', requiresTags: ['melee'],
+    followUp: { skillId: 'follow_sweep', chance: 0.35, delay: 0.35 },
+    mods: [mod('manaCost', 'more', 0.15)],
+    perLevel: [mod('damage', 'increased', 0.05)],
+    weight: 6,
   },
 
   square_sigil: {

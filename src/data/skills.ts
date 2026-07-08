@@ -109,6 +109,37 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 65, weight: 2 },
   },
 
+  undertow: {
+    id: 'undertow', name: 'Undertow',
+    description: 'CHANNELED: the inverse of every spin-to-scatter — open a drowning current around yourself that DRAGS everything near it inward while the water works them over. The current only deepens: more violence every held second, and less of your own footing, until you are the anchor of your own drowning pool.',
+    tags: ['spell', 'cold', 'aoe', 'channel', 'duration'], color: '#4a90b8',
+    manaCost: 4, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    channel: {
+      interval: 0.45, move: 'slowed', moveFactor: 0.85, trackAim: false,
+      // The current DEEPENS: damage grows per held second while the
+      // bearer's own footing drains away (rampMove, negative per, max 0 —
+      // the outer floor does the clamping; fully anchored near ~3.5s).
+      ramp: { per: 0.16, max: 1.1 },
+      rampMove: { per: -0.24, max: 0 },
+    },
+    baseDamage: { cold: [4, 7], physical: [3, 5] },
+    delivery: {
+      // Each beat re-lays ONE worn suction field (exclusive + follow): the
+      // current is continuous while held and eddies out ~0.6s after.
+      type: 'ground', radius: 95, castRange: 0,
+      lingerDuration: 0.6, tickInterval: 0.3,
+      noImpact: true, exclusive: true, follow: true,
+      pull: 210, pullRadius: 300,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.2 },
+    ],
+    requirements: { intelligence: 16, willpower: 12 },
+    ai: { range: 90, weight: 2 },
+  },
+
   // ======================= Fire ============================================
 
   firebolt: {
@@ -3637,6 +3668,89 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  // ======================= The verdant kit =================================
+  // Plant-craft: gardens as violence. Seeds with schedules, fences that
+  // scratch, tides of bramble — Entangle's lashes above are the family's
+  // eldest; Grasping Chasm (the fissure section) its patient cousin.
+
+  strangler_seed: {
+    id: 'strangler_seed', name: 'Strangler Seed',
+    description: 'Plant a fat, pulsing SEED among them — a thing with a schedule. A moment\'s incubation and it BLOOMS: a ring of grasping vines that rends and snares everything in reach. Break it early and it blooms ANYWAY, insulted. Gardening, as a threat.',
+    tags: ['spell', 'chaos', 'physical', 'totem', 'aoe', 'duration'], color: '#7fae4a',
+    manaCost: 14, cooldown: 5, useTime: 0.6,
+    baseDamage: { physical: [6, 10], chaos: [4, 7] },
+    delivery: {
+      // A pod on a 1.4s incubation — killed pods HATCH (onBreak: the
+      // powder rule): the garden does not accept editorial feedback.
+      type: 'construct', kind: 'pod',
+      range: 0, duration: 1.4, maxActive: 3, life: 30,
+      placeRange: 340,
+      hatch: { skillId: 'vine_bloom', onBreak: 'hatch' },
+    },
+    effects: [],
+    requirements: { willpower: 16 },
+    ai: { range: 300, weight: 2, keepDistance: 220 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
+  vine_bloom: {
+    id: 'vine_bloom', name: 'Vine Bloom', noDrop: true,
+    description: 'The seed\'s answer: a ring of grasping vines.',
+    tags: ['spell', 'chaos', 'physical', 'aoe'], color: '#6f9e3a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [10, 16], chaos: [6, 9] },
+    delivery: { type: 'ground', radius: 120, castRange: 9999, delay: 0.1 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'ensnared', chance: 1, durationOverride: 1.4 },
+      { type: 'status', status: 'bleed', chance: 0.35, magnitude: 0.3 },
+    ],
+  },
+
+  bramble_hedge: {
+    id: 'bramble_hedge', name: 'Bramble Hedge',
+    description: 'Grow a fence of thorned bramble across the way: it stands, it scratches, it does not apologize. The hedge answers to FIRE poorly on purpose — your own flame clears it double-quick when the garden needs re-planning — and every torn-out section leaves a parting spray of thorns.',
+    tags: ['spell', 'physical', 'totem', 'duration', 'aoe'], color: '#5a8a3a',
+    manaCost: 15, cooldown: 7, useTime: 0.6,
+    baseDamage: { physical: [7, 11] },
+    delivery: {
+      type: 'construct', kind: 'barrier',
+      range: 0, duration: 12, maxActive: 12, life: 38,
+      placeRange: 320,
+      wallSegments: 6,
+      breakable: { ownerMult: 2, affinityTags: ['fire'], affinityMult: 2.5 },
+      deathBurst: { radius: 70, damageScale: 0.7 },
+      clearway: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.5, magnitude: 0.35 },
+    ],
+    requirements: { willpower: 14, dexterity: 12 },
+    ai: { range: 260, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
+  creeping_thicket: {
+    id: 'creeping_thicket', name: 'Creeping Thicket',
+    description: 'Loose a low tide of bramble that CRAWLS forward and PUTS ON MASS as it goes — a hedgerow with ambitions, dragging its thorns across everything it overtakes. Slow, inevitable, wider every yard: the garden is coming.',
+    tags: ['spell', 'physical', 'chaos', 'aoe', 'duration'], color: '#6a9a4a',
+    manaCost: 15, cooldown: 6, useTime: 0.7,
+    baseDamage: { physical: [6, 9], chaos: [2, 4] },
+    delivery: {
+      type: 'ground', radius: 60, castRange: 80, delay: 0.1,
+      lingerDuration: 3.2, tickInterval: 0.45,
+      drift: 110, grow: 30,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'ensnared', chance: 0.25, durationOverride: 0.8 },
+      { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.3 },
+    ],
+    requirements: { willpower: 16, dexterity: 10 },
+    ai: { range: 140, weight: 2 },
+  },
+
   rune_of_power: {
     id: 'rune_of_power', name: 'Rune of Power',
     description: 'Inscribe a circle of standing power at your feet: allies INSIDE it cast 25% harder and 15% faster. The rune does not follow — the discipline is standing your ground on it.',
@@ -3680,6 +3794,66 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     requirements: { willpower: 20, intelligence: 14 },
     ai: { range: 370, weight: 2, keepDistance: 260 },
+  },
+
+  // ======================= The fume doctrine ===============================
+  // Exposure-gated dominions: influence that SOAKS IN with the breath
+  // (exposure + exposureDomain) instead of switching on at the rim —
+  // Toxic Cloud is the family's teeth; these two are its politics.
+
+  soporific_veil: {
+    id: 'soporific_veil', name: 'Soporific Veil',
+    description: 'Loose a pale, sweet fog with NO teeth at all — nothing about it hurts. Anything that BREATHES it for a heartbeat and a half goes heavy: slowed to a trudge, swings drooping, guard sagging open. The fume is the trap; the follow-up is your business.',
+    tags: ['spell', 'chaos', 'aoe', 'duration', 'curse'], color: '#b8a8d8',
+    manaCost: 16, cooldown: 8, useTime: 0.7,
+    delivery: {
+      // A pure fume DOMAIN: no impact, no ticks (the interval outlives the
+      // linger — the rune_of_power trick); the stupor is the whole skill,
+      // and it takes 1.2s of breathing to set in (exposureDomain).
+      type: 'ground', radius: 130, castRange: 380,
+      lingerDuration: 5, tickInterval: 9,
+      noImpact: true, exposure: 1.2, exposureDomain: true,
+      domain: {
+        enemyMods: [
+          mod('moveSpeed', 'more', -0.35),
+          mod('attackSpeed', 'more', -0.2),
+          mod('castSpeed', 'more', -0.2),
+          mod('damageTaken', 'more', 0.1),
+        ],
+      },
+    },
+    effects: [],
+    requirements: { willpower: 18, intelligence: 12 },
+    ai: { range: 350, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.05), mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  thurible: {
+    id: 'thurible', name: 'Thurible',
+    description: 'Light the swinging censer: a wreath of consecrated smoke RIDES you, and any ally who walks in it long enough to truly breathe — a slow second — carries the blessing while they stay: harder blows, quicker hands, a steady mending. Faith as an atmosphere; devotion, measured in dwell time.',
+    tags: ['spell', 'aoe', 'duration', 'buff'], color: '#e8d8a8',
+    manaCost: 20, cooldown: 12, useTime: 0.6,
+    delivery: {
+      // The worn incense: a follow field whose DOMAIN soaks in on the
+      // exposure clock — allies bathe a full second before the blessing
+      // takes, and it strips the instant they step off the smoke.
+      type: 'ground', radius: 120, castRange: 0,
+      lingerDuration: 9, tickInterval: 10,
+      noImpact: true, follow: true,
+      exposure: 1.0, exposureDomain: true,
+      domain: {
+        allyMods: [
+          mod('damage', 'increased', 0.15),
+          mod('attackSpeed', 'increased', 0.08),
+          mod('castSpeed', 'increased', 0.08),
+          mod('lifeRegen', 'flat', 4),
+        ],
+      },
+    },
+    effects: [],
+    requirements: { willpower: 20 },
+    ai: { range: 120, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.04)] },
   },
 
   barrage: {
@@ -5567,7 +5741,7 @@ export const SKILLS: Record<string, SkillDef> = {
 
   reavers_sweep: {
     id: 'reavers_sweep', name: "Reaver's Sweep",
-    description: 'The TRUE side-to-side harvest: face north and the blade crosses east→west in ONE committed pass — a crescent at arm\'s length (the near deadzone is the discipline: keep them at blade\'s reach). Socket Return Stroke to teach it the way back.',
+    description: 'The TRUE side-to-side harvest: face north and the blade crosses east→west in ONE committed pass — a crescent at arm\'s length (the near deadzone is the discipline: keep them at blade\'s reach). The blade hurts only where it PASSES. Socket Return Stroke to teach it the way back.',
     tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#b06ad8',
     manaCost: 10, cooldown: 2, useTime: 0.6,
     baseDamage: { physical: [10, 15] },
@@ -5577,6 +5751,10 @@ export const SKILLS: Record<string, SkillDef> = {
       shape: 'crescent', arcDeg: 85,
       sweep: { arcDeg: 200 },
       hitOnce: true,
+      // The pass does the cutting — no opening smack on the whole crescent
+      // (the Scythe Arc discipline; Harvest Stroke below keeps the
+      // smack-then-sweep as its own two-part lesson).
+      noImpact: true,
     },
     effects: [
       { type: 'damage' },
@@ -5608,6 +5786,67 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     requirements: { strength: 16 },
     ai: { range: 100, weight: 2 },
+  },
+
+  harvest_stroke: {
+    id: 'harvest_stroke', name: 'Harvest Stroke',
+    description: 'The two-part reaping taught as ONE lesson: a hard straight cut to drop the nearest — then, a beat later, the blade comes all the way around on its own: a full slow sweep across your front, free. Strike; the harvest follows.',
+    tags: ['attack', 'melee', 'physical', 'aoe'], color: '#c88ae0',
+    manaCost: 11, cooldown: 2.2, useTime: 0.55,
+    baseDamage: { physical: [14, 21] },
+    delivery: { type: 'melee', range: 95, arcDeg: 70 },
+    // The follow-through (FollowUpSpec): the sweep fires itself 0.4s after
+    // every completed swing — unpaid, uncooled, at the same bearing.
+    followUp: { skillId: 'follow_sweep', delay: 0.4 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.3 },
+    ],
+    requirements: { strength: 18, dexterity: 10 },
+    ai: { range: 90, weight: 2 },
+  },
+
+  follow_sweep: {
+    id: 'follow_sweep', name: 'Follow-Through', noDrop: true,
+    description: 'The blade comes around on its own — the swing\'s second thought.',
+    tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#b880d8',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [8, 12] },
+    delivery: {
+      type: 'ground', radius: 125, castRange: 0, delay: 0,
+      lingerDuration: 0.8, tickInterval: 0.18,
+      shape: 'sector', arcDeg: 75,
+      sweep: { arcDeg: 200 },
+      hitOnce: true, noImpact: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.2, magnitude: 0.25 },
+    ],
+  },
+
+  closing_shears: {
+    id: 'closing_shears', name: 'Closing Shears',
+    description: 'Two blades, one breath: a sweep rises from EACH wing and they close on your bearing together — the clap of a god\'s hands. Each wing cuts once; whatever stands where they MEET is cut by both. Herd them to the middle, then applaud.',
+    tags: ['attack', 'melee', 'physical', 'aoe', 'duration', 'sweep'], color: '#d090e8',
+    manaCost: 14, cooldown: 3.5, useTime: 0.65,
+    baseDamage: { physical: [9, 14] },
+    delivery: {
+      // converge: the 240° span is split into two mirrored 120° hands
+      // closing onto the cast bearing over the linger (sweep.converge).
+      type: 'ground', radius: 135, castRange: 0, delay: 0,
+      lingerDuration: 1.0, tickInterval: 0.2,
+      shape: 'sector', arcDeg: 75,
+      sweep: { arcDeg: 240, converge: true },
+      hitOnce: true, noImpact: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.25, magnitude: 0.25 },
+      { type: 'status', status: 'stun', chance: 0.12 },
+    ],
+    requirements: { strength: 20 },
+    ai: { range: 120, weight: 2 },
   },
 
   sparkfield: {
@@ -5783,6 +6022,45 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  grasping_chasm: {
+    id: 'grasping_chasm', name: 'Grasping Chasm',
+    description: 'Split the ground AT YOUR OWN FEET and let something patient live in it: a crack that holds its place while tendrils lash from its whole length — SEIZING whatever strays near, wringing the speed out of them, and envenoming what little they keep. Casting again relocates the tenant. Stand by your wound; it works for you.',
+    tags: ['spell', 'chaos', 'physical', 'aoe', 'duration', 'fissure'], color: '#7a9a5a',
+    manaCost: 16, cooldown: 5, useTime: 0.75,
+    baseDamage: { physical: [4, 6], chaos: [4, 6] },
+    delivery: {
+      // Entangle × Netherfissure: the crack is laid FROM the caster
+      // (castRange 0 projects it along the facing), stays open as the one
+      // wound in the world (exclusive), and its whole length lashes
+      // tendrils at enemies within 90 units of the crack (emit.reach).
+      type: 'ground', radius: 40, castRange: 0, delay: 0.1,
+      lingerDuration: 7, tickInterval: 0.6,
+      exclusive: true,
+      emit: { skillId: 'chasm_tendril', interval: 0.8, count: 2, at: 'enemy', reach: 90 },
+      fissure: { length: 300, speed: 520 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.3, magnitude: 0.3 },
+    ],
+    requirements: { willpower: 18, intelligence: 12 },
+    ai: { range: 120, weight: 2 },
+  },
+
+  chasm_tendril: {
+    id: 'chasm_tendril', name: 'Grasping Tendril', noDrop: true,
+    description: 'A tendril whips out of the chasm and takes HOLD — the grip slows, the venom stays.',
+    tags: ['spell', 'chaos', 'physical', 'aoe'], color: '#6a8a4a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { physical: [3, 5], chaos: [3, 5] },
+    delivery: { type: 'ground', radius: 36, castRange: 9999, delay: 0.12 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'ensnared', chance: 1, durationOverride: 1.5 },
+      { type: 'status', status: 'poison', chance: 0.6, magnitude: 0.35 },
+    ],
+  },
+
   faultbreak: {
     id: 'faultbreak', name: 'Faultbreak',
     description: 'SLAM the ground at your feet and PROJECT the break: a fissure tears out from within arm\'s reach, splitting whatever stands along the line. The crack is the weapon — warp it, arm it, fan it.',
@@ -5927,6 +6205,55 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { intelligence: 18, willpower: 10 },
     ai: { range: 300, weight: 2, keepDistance: 200 },
     leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
+  // ======================= The meatwright kit ==============================
+  // Flesh-craft: anatomy as materiel. Walls of anonymous muscle, ground
+  // that remembers being alive — pair with the SHIPPED Blood Price gem
+  // (costs paid in life) for the full butcher's ledger.
+
+  wall_of_meat: {
+    id: 'wall_of_meat', name: 'Wall of Meat',
+    description: 'Raise a rampart of LIVING MEAT across the way — slabs of anonymous muscle that soak what comes and do not complain. Your own blows carve it three times as fast, and every slab DETONATES as it dies: bone shrapnel, hooked gristle, and a lesson about standing near meat. Butchery is a siege discipline.',
+    tags: ['spell', 'physical', 'chaos', 'totem', 'duration', 'aoe'], color: '#c05a4a',
+    manaCost: 17, cooldown: 8, useTime: 0.7,
+    baseDamage: { physical: [9, 14] },
+    delivery: {
+      type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
+      range: 0, duration: 11, maxActive: 10, life: 55,
+      placeRange: 300,
+      wallSegments: 5,
+      breakable: { ownerMult: 3 },
+      deathBurst: { radius: 85, damageScale: 0.9 },
+      clearway: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.45, magnitude: 0.4 },
+    ],
+    requirements: { strength: 14, willpower: 16 },
+    ai: { range: 240, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
+  fleshspur: {
+    id: 'fleshspur', name: 'Fleshspur',
+    description: 'The ground remembers it was ALIVE once: hooked spurs of raw flesh erupt at the mark and rend everything standing there — and the meat TWITCHES: one more convulsion a breath later, harder. Anatomy, weaponized twice.',
+    tags: ['spell', 'physical', 'chaos', 'aoe', 'pulse'], color: '#d06858',
+    manaCost: 13, cooldown: 4, useTime: 0.6,
+    baseDamage: { physical: [11, 17], chaos: [3, 5] },
+    delivery: {
+      type: 'ground', radius: 90, castRange: 340, delay: 0.2,
+      // The twitch: the meat convulses again 0.8s after the eruption
+      // (GroundPulseSpec — Unsettled Earth keeps it seizing).
+      pulse: { delay: 0.8, dmgMult: 1.5, radiusMult: 1.1 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.4, magnitude: 0.4 },
+    ],
+    requirements: { willpower: 16, strength: 12 },
+    ai: { range: 320, weight: 2, keepDistance: 200 },
   },
 
   shardrift: {
