@@ -337,6 +337,7 @@ export function validateContent(): void {
     { kind: 'graft', key: 'cascade', deliveries: ['ground'], site: 'instanceCascade (ground placements only)' },
     { kind: 'graft', key: 'pulse', deliveries: ['ground'], site: 'instancePulse (ground placements only)' },
     { kind: 'graft', key: 'zoneFollow', deliveries: ['ground'], site: 'the ground placement follow mint (lingering placements only)' },
+    { kind: 'graft', key: 'cadence', deliveries: ['ground'], site: 'the ground placement beat mints (pulse gaps, cascade skips, emitter salvos)' },
     { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
     { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
     // exposure / zoneGrow stay unrowed on purpose: their gems gate on

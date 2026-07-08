@@ -645,8 +645,14 @@ interface Zone {
   /** ARMED PULSE (GroundDelivery.pulse / SupportDef.pulse): the dormant
    *  placement DETONATES AGAIN — `left` beats remain, the next at `next`
    *  (world time). Carries its resolved spec so the renderer can draw the
-   *  charge at the TRUE reach (radiusMult). */
-  pulse?: { delay: number; interval: number; dmgMult: number; radiusMult: number; left: number; next: number };
+   *  charge at the TRUE reach (radiusMult). interval/dmgMult/radiusMult
+   *  are LIVE — each fired beat multiplies them by their steps (the
+   *  bouncing ball: quickening, softening, shrinking — or the reverse). */
+  pulse?: {
+    delay: number; interval: number; intervalStep: number;
+    dmgMult: number; dmgStep: number; radiusMult: number; radiusStep: number;
+    left: number; next: number;
+  };
   /** LINGERING FUME (GroundDelivery.exposure): per-occupant CONTINUOUS
    *  dwell, seconds — ticks bite only past `after`; leaving clears the
    *  lungs (the madden dwell pattern, frame-accurate). */
@@ -672,6 +678,12 @@ interface Zone {
    *  `reach` widens the 'enemy' pick past the zone's edge). */
   emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out'; reach?: number };
   emitTimer?: number;
+  /** The emitter's LIVE beat (starts at emit.interval; never mutate the
+   *  def's shared spec) — an emitStep cadence evolves it per beat. */
+  emitInterval?: number;
+  /** Per-beat multiplier on emitInterval (Volcano settles at 1.16; a
+   *  cadence graft overrides the spec's own intervalStep). */
+  emitStep?: number;
   /** The payload instance, minted once per zone (rides the placer's level). */
   emitInst?: SkillInstance;
   /** DOMAIN: occupants wear these mods while standing inside (see
@@ -11496,21 +11508,37 @@ export class World {
         // (Thundermark's ripple) keep an honest clock; noImpact zones are
         // born live and keep this one. Every zone this case places —
         // primary, wall segment, cascade ripple — quakes on its own clock.
+        // A socketed CADENCE (Accelerando/Ritardando) retunes every beat
+        // the placement keeps — pulse gaps, cascade skips, emitter salvos
+        // — overriding each spec's own intervalStep. One knob, every clock.
+        const cadence = socketSpec(inst, 'cadence')?.intervalStep;
         const pSpec = instancePulse(inst);
         const pulseN = Math.max(0, (pSpec ? (pSpec.count ?? 1) : 0)
           + Math.round(caster.sheet.get('pulseCount', tags, extra)));
         const pDelay = pSpec?.delay ?? 1;
         const pInterval = pSpec?.interval ?? pDelay;
+        const pStep = cadence ?? pSpec?.intervalStep ?? 1;
         const mintPulse = (telegraph: number): Zone['pulse'] => pulseN > 0
           ? {
-            delay: pDelay, interval: pInterval,
-            dmgMult: pSpec?.dmgMult ?? 1, radiusMult: pSpec?.radiusMult ?? 1,
+            delay: pDelay, interval: pInterval, intervalStep: pStep,
+            dmgMult: pSpec?.dmgMult ?? 1, dmgStep: pSpec?.dmgStep ?? 1,
+            radiusMult: pSpec?.radiusMult ?? 1, radiusStep: pSpec?.radiusStep ?? 1,
             left: pulseN, next: this.time + Math.max(0, telegraph) + pDelay,
           } : undefined;
         // The pulse clock is FIXED (an armed charge, not a duration) — the
         // imposed linger is exactly the beats + a settling breath, and an
         // effectDuration-shortened innate linger is still floored to it.
-        const pulseSpan = pulseN > 0 ? pDelay + (pulseN - 1) * pInterval + 0.1 : 0;
+        // The beats walk the bouncing-ball curve (geometric), so the span
+        // is the geometric sum — a settling ball's whole life is finite.
+        let pulseSpan = 0;
+        if (pulseN > 0) {
+          pulseSpan = pDelay + 0.1;
+          let gap = pInterval;
+          for (let k = 1; k < pulseN; k++) {
+            pulseSpan += gap;
+            gap = Math.max(0.05, gap * pStep);
+          }
+        }
         const pulseLinger = (secs: number): number => Math.max(secs, pulseSpan);
         const ownLinger = (d.lingerDuration ?? 0) > 0;
         const groundTick = ownLinger || pulseN === 0 ? (d.tickInterval ?? 0.5) : Infinity;
@@ -11663,6 +11691,9 @@ export class World {
             const ze = socketSpec(inst, 'zoneEmit');
             return ze ? { skillId: ze.skillId, interval: ze.interval, at: ze.at } : undefined;
           })(),
+          // The emitter's cadence: a socketed graft retunes the spec's own
+          // (Volcano's settling eruption; Accelerando's gathering storm).
+          emitStep: cadence ?? d.emit?.intervalStep,
           domain: d.domain,
           domainKey: d.domain ? `domain:${this.domainSeq++}` : undefined,
           // Sweep vocabulary: crescent width (melee-style arc scaling) and
@@ -11692,6 +11723,7 @@ export class World {
             },
             struck: d.hitOnce ? new Set() : undefined,
             emit: undefined, emitTimer: undefined, emitInst: undefined,
+            emitInterval: undefined, emitStep: undefined,
             domain: undefined, domainKey: undefined, domainAffected: undefined,
             exposureDomain: undefined,
             marker: undefined, onImpact: undefined,
@@ -11718,10 +11750,20 @@ export class World {
             const scaleStep = spec?.scaleStep ?? 1;
             const dmgStep = spec?.dmgStep ?? 0.75;
             const beat = spec?.interval ?? 0;
+            // The BOUNCING BALL (intervalStep / a socketed cadence): each
+            // later skip's gap × step — <1 patters the shocks together as
+            // the stone settles, >1 stretches the tolls apart. beatAt
+            // accumulates the geometric walk (floored so a deep taper
+            // never divides by the frame).
+            const beatStep = cadence ?? spec?.intervalStep ?? 1;
+            let beatAt = 0;
+            let beatGap = beat;
             // castRange-0 skills (Reap) place AT the caster — angleTo of a
             // zero vector is due EAST; the FACING is the honest axis there.
             const axisAng = dist(caster.pos, at) < 1 ? caster.facing : angleTo(caster.pos, at);
             for (let k = 1; k <= count; k++) {
+              beatAt += beatGap;
+              beatGap = Math.max(0.02, beatGap * beatStep);
               let px2: number, py2: number;
               if (dir === 'random') {
                 const ra = rand(0, Math.PI * 2);
@@ -11738,7 +11780,7 @@ export class World {
                 pos: vec(px2, py2),
                 radius: d.radius * aoeScale * Math.pow(scaleStep, k),
                 caster, inst, color: def.color,
-                delay: (d.delay ?? 0) + beat * k, exploded: false,
+                delay: (d.delay ?? 0) + beatAt, exploded: false,
                 linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
                 tickInterval: groundTick, tickTimer: groundTick0,
                 shape: groundShape,
@@ -11750,7 +11792,7 @@ export class World {
                 grow: d.grow ?? socketSpec(inst, 'zoneGrow'),
                 // Ripples quake too — each on its own displaced clock, its
                 // pulse damage riding the ripple's own dmgStep falloff.
-                pulse: mintPulse((d.delay ?? 0) + beat * k),
+                pulse: mintPulse((d.delay ?? 0) + beatAt),
                 exposure: mintExposure(),
                 // Ripples inherit the sweep vocabulary — each with a FRESH
                 // struck set (per-zone crossing semantics).
@@ -13127,8 +13169,12 @@ export class World {
         shape: 0, facing: segAng,
         dmgMult: mult, depth: 1,
         // The PRIMARY chain carries the emitter (spirits rise from the
-        // whole crack); the closing passes and branches stay plain.
+        // whole crack); the closing passes and branches stay plain. Its
+        // cadence rides along (spec's own intervalStep or a cadence graft).
         emit: linger > 0 ? d.emit : undefined,
+        emitStep: linger > 0
+          ? (socketSpec(inst, 'cadence')?.intervalStep ?? d.emit?.intervalStep)
+          : undefined,
         // LINGERING FUME: a venting crack — each segment keeps its own
         // dwell ledger (breath is local to the stretch you stand on).
         // Grafted fumes (SupportDef.exposure) vent here too. Cracks do
@@ -21925,6 +21971,11 @@ export class World {
         if (z.pulse && z.pulse.left > 0 && z.linger > 0 && this.time >= z.pulse.next) {
           z.pulse.left--;
           z.pulse.next = this.time + z.pulse.interval;
+          // The bouncing ball walks: this beat fires at the LIVE values,
+          // then interval/damage/reach step for the next (quickening and
+          // softening as the ground settles — or the reverse; the floor
+          // keeps a deep taper from dividing into the frame).
+          z.pulse.interval = Math.max(0.05, z.pulse.interval * z.pulse.intervalStep);
           const pr = z.seg ? z.radius : z.radius * z.pulse.radiusMult;
           for (const v of this.zoneVictims(z)) {
             const caught = z.seg
@@ -21940,6 +21991,8 @@ export class World {
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
           });
           this.spawnAftershocks(z.caster, z.inst, z.pos, pr, z.shape, z.depth);
+          z.pulse.dmgMult *= z.pulse.dmgStep;
+          z.pulse.radiusMult *= z.pulse.radiusStep;
         }
         // Revolving zones sweep their facing around (Cinderwhirl's flame
         // hand) — faced shapes only feel it; discs spin invisibly.
@@ -21984,9 +22037,16 @@ export class World {
         // inside ('point' — fissure bursts) or at random enemies standing
         // in the zone ('enemy' — storm bolts; the beat skips when empty).
         if (z.emit && SKILLS[z.emit.skillId]) {
-          z.emitTimer = (z.emitTimer ?? z.emit.interval) - dt;
+          // The emitter's LIVE beat: seeded from the spec, evolved by any
+          // cadence (emitStep) per salvo — an eruption that settles, a
+          // storm that quickens. Never mutate the def's shared spec.
+          z.emitInterval ??= z.emit.interval;
+          z.emitTimer = (z.emitTimer ?? z.emitInterval) - dt;
           if (z.emitTimer <= 0) {
-            z.emitTimer += z.emit.interval;
+            z.emitTimer += z.emitInterval;
+            if (z.emitStep && z.emitStep !== 1) {
+              z.emitInterval = Math.max(0.05, z.emitInterval * z.emitStep);
+            }
             z.emitInst ??= makeSkillInstance(SKILLS[z.emit.skillId], z.inst.level);
             const n = z.emit.count ?? 1;
             for (let k = 0; k < n; k++) {

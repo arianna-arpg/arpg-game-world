@@ -1325,6 +1325,26 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // --- The cadence gems (one knob, every clock) --------------------------------
+  accelerando: {
+    id: 'accelerando', name: 'Accelerando',
+    description: 'Everything this skill does ON A BEAT — pulses, cascade skips, emitter salvos — arrives SOONER each time: every gap shrinks to 70% of the last. The settling ball, the gathering peal. 10% less damage; haste has a price.',
+    color: '#e8d088', requiresTags: ['aoe'],
+    cadence: { intervalStep: 0.7 },
+    mods: [mod('damage', 'more', -0.1)],
+    perLevel: [mod('damage', 'increased', 0.05)],
+    weight: 5,
+  },
+  ritardando: {
+    id: 'ritardando', name: 'Ritardando',
+    description: 'Everything this skill does ON A BEAT spaces OUT — every gap stretches to 140% of the last — and the patience is paid for: 25% more damage on all of it. Fewer notes; heavier hands.',
+    color: '#c8b078', requiresTags: ['aoe'],
+    cadence: { intervalStep: 1.4 },
+    mods: [mod('damage', 'more', 0.25)],
+    perLevel: [mod('damage', 'increased', 0.05)],
+    weight: 5,
+  },
+
   square_sigil: {
     id: 'square_sigil', name: 'Square Sigil',
     description: 'Converts the area of effect into a square, covering the corners.',

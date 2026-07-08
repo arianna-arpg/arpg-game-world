@@ -388,6 +388,11 @@ export interface GroundCascadeSpec {
   dmgStep?: number;
   /** Seconds between placements' detonations (0 = simultaneous). */
   interval?: number;
+  /** Each later gap × this — THE BOUNCING-BALL KNOB (geometric, like the
+   *  ball's coefficient of restitution): <1 patters the skips together as
+   *  the stone settles (gap k = interval × step^(k-1)), >1 stretches them
+   *  apart. Default 1 (even beats). A socketed cadence graft overrides. */
+  intervalStep?: number;
 }
 
 /** The cascade a ground placement obeys: a socketed support's graft wins
@@ -419,11 +424,21 @@ export interface GroundPulseSpec {
   count?: number;
   /** Seconds between later pulses (default `delay`). */
   interval?: number;
+  /** Each later gap × this — the bouncing ball, for pulses (geometric):
+   *  <1 = the beats quicken as the ground settles (Crumble's collapse),
+   *  >1 = the tolls space OUT (Rising Knell's verdicts). Default 1.
+   *  A socketed cadence graft (Accelerando/Ritardando) overrides. */
+  intervalStep?: number;
   /** Damage multiplier per pulse, × the placement's roll (default 1). */
   dmgMult?: number;
+  /** dmgMult × this per beat — the softening bounce (<1) or the swelling
+   *  peal (>1). Default 1. */
+  dmgStep?: number;
   /** Pulse blast reach, × the zone's live radius (default 1) — the armed
    *  warning ring renders at the TRUE reach, honest-telegraph rule. */
   radiusMult?: number;
+  /** radiusMult × this per beat — the shrinking bounce. Default 1. */
+  radiusStep?: number;
 }
 
 /** The pulse a ground placement obeys: a socketed support's graft wins
@@ -1009,8 +1024,10 @@ export interface GroundDelivery {
    *  the emit point (default: the caster's current facing). `reach` widens
    *  the 'enemy' pick past the zone's own edge by that many units — the
    *  Grasping Chasm's tendrils LASH at what strays near the crack, not
-   *  only what stands on it. */
-  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out'; reach?: number };
+   *  only what stands on it. `intervalStep` puts the cadence on the
+   *  bouncing-ball curve: each later beat × step (Volcano erupts furious
+   *  and SETTLES at 1.16; <1 quickens — the storm finding its rhythm). */
+  emit?: { skillId: string; interval: number; count?: number; at?: 'point' | 'enemy'; bearing?: 'random' | 'out'; reach?: number; intervalStep?: number };
   /** The lingering zone is a DOMAIN: occupants wear these modifiers while
    *  they stand inside (ground-anchored auras — Rune of Power's circle,
    *  Toxic Domain's oppression). Applied per-actor as a sheet source,
@@ -2859,6 +2876,12 @@ export interface SupportDef {
    *  zone SWELLS while it lives, radius units/s — the delivery's own grow
    *  is the innate base and wins when present. */
   zoneGrow?: number;
+  /** A CADENCE warp this support grafts (Accelerando / Ritardando): every
+   *  BEAT the host's placements keep — pulse gaps, cascade skips, emitter
+   *  salvos — multiplies its interval by this per beat. OVERRIDES the
+   *  specs' own intervalStep. <1 quickens like the settling ball; >1
+   *  spreads the tolls out. One knob, every clock. */
+  cadence?: { intervalStep: number };
   /** A PENDULUM this support grafts onto lingering ground zones (the
    *  Metronome gem): the facing swings out-and-back — the exact back-and-
    *  forth stroke Reaver's Sweep retired when it learned the single pass. */
@@ -3038,8 +3061,8 @@ const MINION_RIDABLE_FIELD_LIST = [
   'dominate', 'sacrifice', 'healField', 'spawnBuff', 'zoneEmit', 'madden',
   'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
-  'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'pendulum', 'echo',
-  'summon',
+  'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'cadence', 'pendulum',
+  'echo', 'summon',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every

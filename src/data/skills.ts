@@ -2908,6 +2908,145 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 380, weight: 2, keepDistance: 220 },
   },
 
+  skipping_stone: {
+    id: 'skipping_stone', name: 'Skipping Stone',
+    description: 'Sunder as a THROWN STONE: the first skip is long and proud, and every skip after arrives sooner, smaller, softer — the shockwave pattering out across the field until the earth simply rests. Read the rhythm: the last few land almost together.',
+    tags: ['attack', 'melee', 'aoe', 'physical'], color: '#c2a26a',
+    manaCost: 13, cooldown: 3.5, useTime: 0.7,
+    baseDamage: { physical: [17, 27] },
+    delivery: {
+      type: 'ground', radius: 88, castRange: 60, delay: 0.1,
+      // The bouncing ball as data: each gap × 0.6 (0.55s, 0.33, 0.20,
+      // 0.12, 0.07) while the skips shed size and force — kinetic honesty.
+      cascade: { count: 6, dir: 'forward', step: 95, scaleStep: 0.88, dmgStep: 0.82, interval: 0.55, intervalStep: 0.6 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 26 },
+      { type: 'status', status: 'stun', chance: 0.12 },
+    ],
+    requirements: { strength: 19 },
+    ai: { range: 120, weight: 2 },
+  },
+
+  crumble: {
+    id: 'crumble', name: 'Crumble',
+    description: 'Condemn a patch of ground and let STRUCTURAL FAILURE do the arguing: a long, groaning stillness — then a collapse, then sooner a smaller one, then sooner again, the falls quickening and shrinking until the ruin settles into gravel. Leave before the mathematics finish.',
+    tags: ['spell', 'physical', 'aoe', 'duration', 'pulse'], color: '#a89478',
+    manaCost: 17, cooldown: 7, useTime: 0.7,
+    baseDamage: { physical: [9, 14] },
+    delivery: {
+      type: 'ground', radius: 115, castRange: 400, delay: 0.15,
+      // The inverse ball, dropped from height: the first fall waits 1.5s,
+      // then every gap × 0.55 while each collapse softens (dmgStep) and
+      // tightens (radiusStep) — big slow dread into fast small gravel.
+      pulse: { delay: 1.5, count: 5, interval: 1.1, intervalStep: 0.55, dmgMult: 1.7, dmgStep: 0.8, radiusMult: 1.1, radiusStep: 0.88 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.1 },
+    ],
+    requirements: { strength: 12, intelligence: 16 },
+    ai: { range: 380, weight: 2, keepDistance: 240 },
+  },
+
+  // ======================= The carillon ====================================
+  // Resonance as violence: bells whose CADENCE is the identity — the
+  // intervalStep knob worn openly. Accelerando gathers into a crescendo,
+  // ritardando spaces into verdicts; the Cadence gems (Accelerando /
+  // Ritardando) retune anything else with a beat.
+
+  carillon: {
+    id: 'carillon', name: 'Carillon',
+    description: 'Hang a struck BELL over the ground and let it gather: each toll arrives sooner and rings a little harder, the peals climbing over one another — and when the bronze can take no more, the FINALE: one crashing burst across the whole ring. Music theory, weaponized.',
+    tags: ['spell', 'physical', 'aoe', 'duration', 'pulse'], color: '#e0c878',
+    manaCost: 18, cooldown: 8, useTime: 0.7,
+    baseDamage: { physical: [7, 11] },
+    delivery: {
+      type: 'ground', radius: 105, castRange: 380, delay: 0.2,
+      // Accelerando: gaps × 0.72 per toll, each ringing ×1.08 harder — and
+      // the linger's dying breath IS the crescendo (endBurst fires as the
+      // pulse-imposed surface expires, right after the last toll).
+      pulse: { delay: 1.2, count: 6, interval: 1.0, intervalStep: 0.72, dmgMult: 0.9, dmgStep: 1.08 },
+      endBurst: { damageScale: 2.2, radiusScale: 1.3 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.1 },
+    ],
+    requirements: { intelligence: 18, willpower: 12 },
+    ai: { range: 350, weight: 2, keepDistance: 240 },
+  },
+
+  rising_knell: {
+    id: 'rising_knell', name: 'Rising Knell',
+    description: 'The bell swung the OTHER way: a quick nervous chatter of strikes that slows — and GROWS — each toll heavier than the last, spacing out into final blows that land like verdicts. The ritardando: fewer notes, and every one of them means it.',
+    tags: ['spell', 'physical', 'aoe', 'duration', 'pulse'], color: '#d8b868',
+    manaCost: 16, cooldown: 7, useTime: 0.65,
+    baseDamage: { physical: [8, 12] },
+    delivery: {
+      type: 'ground', radius: 95, castRange: 380, delay: 0.15,
+      pulse: { delay: 0.35, count: 6, interval: 0.35, intervalStep: 1.5, dmgMult: 0.8, dmgStep: 1.28, radiusStep: 1.05 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.12 },
+    ],
+    requirements: { intelligence: 16, willpower: 12 },
+    ai: { range: 350, weight: 2, keepDistance: 220 },
+  },
+
+  // ======================= The vents =======================================
+  // Ground that PROJECTS: lingering placements firing true projectiles —
+  // the Netherfissure spirit-recipe (cursor-origin payloads + bearing)
+  // promoted to a family seat. The emitter cadence rides intervalStep.
+  // (Volcano proper — the charge-raised magma totem — lives with the fire
+  // kit; the Fumarole is its patient little sibling.)
+
+  fumarole: {
+    id: 'fumarole', name: 'Fumarole',
+    description: 'Open a hissing VENT in the earth: molten globs LOB OUTWARD from the cone — real projectiles, arcing away, shedding speed, BURSTING where they die — furious at first, settling as the chamber spends itself. The vent itself cooks whatever stands on it. Artillery you plant like a garden.',
+    tags: ['spell', 'fire', 'aoe', 'duration'], color: '#ff6a3a',
+    manaCost: 19, cooldown: 9, useTime: 0.8,
+    baseDamage: { fire: [6, 10] },
+    delivery: {
+      type: 'ground', radius: 70, castRange: 360, delay: 0.3,
+      lingerDuration: 7, tickInterval: 0.7,
+      // The eruption: globs rise at random points in the cone and fire
+      // OUTWARD (bearing 'out' + the payload's cursor origin), on a
+      // SETTLING cadence — 0.3s beats stretching ×1.16 per glob as the
+      // chamber empties (emit.intervalStep; Accelerando re-agitates it).
+      emit: { skillId: 'lava_glob', interval: 0.3, intervalStep: 1.16, at: 'point', bearing: 'out' },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.35, magnitude: 0.35 },
+    ],
+    requirements: { intelligence: 20, willpower: 12 },
+    ai: { range: 330, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
+  },
+
+  lava_glob: {
+    id: 'lava_glob', name: 'Lava Glob', noDrop: true,
+    description: 'A gout of molten stone, thrown by the mountain.',
+    tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff8a4a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { fire: [9, 15] },
+    delivery: {
+      // Rises AT the vent (cursor origin), lobs outward bleeding speed
+      // (accel < 0), and BURSTS where it dies — impact or apogee alike.
+      type: 'projectile', speed: 340, radius: 9, range: 230,
+      origin: 'cursor', originRange: 9999,
+      trajectory: { accel: -0.55 },
+      explode: { radius: 68, damageScale: 1 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.4, magnitude: 0.35 },
+    ],
+  },
+
   upheaval: {
     id: 'upheaval', name: 'Upheaval',
     description: 'Strike the ground and send it CHURNING: a slow wave of broken earth that rolls forward and GROWS as it goes — small where it starts, a landslide where it arrives.',
