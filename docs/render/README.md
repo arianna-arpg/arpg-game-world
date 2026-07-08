@@ -247,6 +247,14 @@ reveal shows a furnished, boarded room, which is the whole trick.
   (wet dark banks; `kinds` widens the water family) and
   `ground.clearing: { reach, lift }` (sun-wells between crowns — tag
   canopied biomes only).
+- **Mesh a ground kind into the terrain**: `blend: { strength, feather,
+  color }` on its `DOODAD_VISUALS` entry — soft rings bed the group's merged
+  silhouette into the land (bog 0.5 > grass 0.38 > road 0.3). Chained stamps
+  add `mode: 'path'` so the discs stroke as one continuous band (roads).
+- **Make a kind breakable without a life bar**: `brittle: { on, reach?,
+  dwell?, orbChance?, gemChance?, carve?, text? }` on its `DoodadRule`
+  (engine/levelgen.ts) — pots pop to a hit or a touch, plugs crumble when
+  neared, secret walls carve open under a lingering press.
 - **Add a new material**: one row in `MATERIALS`.
 - **Skin a new doodad kind**: one entry in `DOODAD_VISUALS` naming a painter;
   add a painter only for a genuinely new *vocabulary* of look.
