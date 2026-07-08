@@ -47,6 +47,20 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#c8d89a', params: { spread: 0.4, dist: 0.62, size: 0.08 } },
     ],
   },
+  /** The CRAWLING dead: lost below the waist — a front-heavy torso hauled
+   *  along on two overreached talon arms, the spine bared where the legs
+   *  used to be, ragged hide trailing off the stump, a glistening smear
+   *  dragging behind (live). Hiveborn's corpse-brood wears this. */
+  zombie_crawler: {
+    parts: [
+      { kind: 'blob', x: 0.12, scale: 0.82, params: { irr: 0.32, seed: 11 } },
+      { kind: 'tatters', x: -0.42, scale: 0.66, alpha: 0.8, params: { n: 4 } },
+      { kind: 'ribs', x: -0.5, rot: Math.PI, scale: 0.52, alpha: 0.95, params: { pairs: 3, span: 0.85 } },
+      { kind: 'claws', x: 0.2, scale: 1.22, params: { len: 0.62, talons: 3 } },
+      { kind: 'eyes', color: '#c8d89a', params: { spread: 0.34, dist: 0.72, size: 0.09 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#5a3028', params: { n: 5 } }],
+  },
   /** The ghost: a cowled nothing trailing away to wisps. */
   ghost: {
     parts: [

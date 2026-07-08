@@ -405,9 +405,9 @@ export const SUPPORTS: Record<string, SupportDef> = {
   // --- The offering ecology -----------------------------------------------------
   hiveborn: {
     id: 'hiveborn', name: 'Hiveborn',
-    description: 'Each corpse this skill consumes crawls back out as a shambling servant for 12 seconds (up to 6).',
+    description: 'Each corpse this skill consumes crawls back out — a legless thing dragging itself on its arms — serving you for 12 seconds (up to 6).',
     color: '#a8c860', requiresTags: ['corpse'],
-    corpseSpawn: { monsterId: 'zombie', perCorpse: true, duration: 12, max: 6 },
+    corpseSpawn: { monsterId: 'zombie_crawler', perCorpse: true, duration: 12, max: 6 },
     mods: [],
     perLevel: [mod('minionLife', 'increased', 0.08)],
     weight: 5,

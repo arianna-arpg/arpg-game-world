@@ -289,6 +289,26 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // The CRAWLING dead: what rises when the legs stayed in the grave. It hauls
+  // itself along on its arms — slower than any shamble, easier to put down —
+  // but it arrives in broods: the Hiveborn offering births one per corpse fed,
+  // so the summoned-from-corpses dead read distinct from raised zombies at a
+  // glance (legless silhouette, dragging smear).
+  zombie_crawler: {
+    id: 'zombie_crawler', name: 'Crawling Zombie',
+    color: '#71824e', shape: 'circle', radius: 12, look: 'zombie_crawler',
+    base: { life: 26, moveSpeed: 68, accuracy: 60, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'],
+    xp: 6,
+    faction: 'undead',
+    detection: 0.5, // it drags itself by smell more than sight
+    brain: {
+      type: 'basic',
+      perception: { arcDeg: 100, rearMul: 0.2, attentionSpan: [3, 6], alertMul: 0.15 },
+    },
+  },
+
   skeleton_warrior: {
     id: 'skeleton_warrior', name: 'Skeleton Warrior',
     color: '#cfc8b8', shape: 'ribcage', radius: 13, material: 'bone', look: 'skeleton_warrior',
