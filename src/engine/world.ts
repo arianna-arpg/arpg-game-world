@@ -22545,22 +22545,33 @@ export class World {
     const dx = end.x - start.x, dy = end.y - start.y;
     const len = Math.hypot(dx, dy);
     if (len < 0.0001) return vec(start.x, start.y);
+    const passable = (px: number, py: number): boolean => {
+      if (wf.isWalkable(px, py)) return true;
+      if (!crossFall) return false;
+      const rk = regionKind(wf.regionAt?.(px, py));
+      return !!rk && !rk.walkable && !rk.blocks; // void: pass over
+    };
     const gran = (wf.cellSize ?? 24) * 0.34;
     const steps = Math.max(1, Math.ceil(len / gran));
-    let last = vec(start.x, start.y);
+    let lastT = 0;
+    let blockedT = -1;
     for (let i = 1; i <= steps; i++) {
       const t = i / steps;
-      const px = start.x + dx * t, py = start.y + dy * t;
-      if (!wf.isWalkable(px, py)) {
-        if (crossFall) {
-          const rk = regionKind(wf.regionAt?.(px, py));
-          if (rk && !rk.walkable && !rk.blocks) { last = vec(px, py); continue; } // void: pass over
-        }
-        break; // a wall (or void when not crossing) stops the sweep
-      }
-      last = vec(px, py);
+      if (!passable(start.x + dx * t, start.y + dy * t)) { blockedT = t; break; }
+      lastT = t;
     }
-    return last;
+    if (blockedT < 0) return vec(start.x + dx * lastT, start.y + dy * lastT);
+    // CONTACT REFINE: bisect between the last clear sample and the blocked one
+    // so the stop point sits AT the wall face instead of on a sample-grid
+    // multiple. Without this the stop quantizes differently every frame (the
+    // sample spacing shifts with per-frame move length) and a body pressed
+    // against a wall visibly VIBRATES on and off it.
+    let lo = lastT, hi = blockedT;
+    for (let k = 0; k < 4; k++) {
+      const mid = (lo + hi) / 2;
+      if (passable(start.x + dx * mid, start.y + dy * mid)) lo = mid; else hi = mid;
+    }
+    return vec(start.x + dx * lo, start.y + dy * lo);
   }
 
   /**
