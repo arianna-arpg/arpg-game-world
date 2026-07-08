@@ -388,6 +388,11 @@ export interface DoodadRule {
    *  Pure data: any kind (or a package/legend kind via registerDoodadRule)
    *  becomes a pot, a crumbling plug, or a secret door with one row. */
   brittle?: BrittleSpec;
+  /** SPANS hazards: this kind negates chasm blocking where it lies — the
+   *  bridge contract. World.bridges collects spanning doodads by THIS flag,
+   *  never by kind literal, so a package's rope crossing or a brittle rotten
+   *  plank joins the same physics with one row. */
+  spans?: boolean;
 }
 
 /** How a lifeless breakable gives way (World.popBrittle executes it). */
@@ -412,6 +417,26 @@ export interface BrittleSpec {
   /** Break flavor: floating text + flash tint. */
   text?: string;
   color?: string;
+  /** One-shot flavor the first time a dwell clock STARTS ticking — the creak
+   *  before the drop, the hollow knock behind the stone. */
+  warn?: string;
+  /** Break exhales a FUME: a lingering hazard cloud minted from the named
+   *  ground skill (default the reference fume, toxic_cloud) at the wreck.
+   *  Radius/linger/damage ride this data; the cloud runs the normal ground-
+   *  zone pipeline (ticks, exposure grace, Foresight telegraphs), so a gas
+   *  pod is a pot that says one more word. */
+  fume?: { skillId?: string; radius?: number; linger?: number; tickInterval?: number;
+    dmgMult?: number; delay?: number; color?: string };
+  /** Break WAKES something: monsters spawned at the wreck — urn ambushes,
+   *  hive husks. `chance` gates the whole clutch; `count` rolls per break. */
+  spawn?: { monster: string; count?: [number, number]; chance?: number; text?: string };
+  /** COLLAPSE: the doodad WAS the footing (a rotten span over a drop).
+   *  Bodies riding it when it goes take the fall recovery — confined to the
+   *  hazard's edge ('edge', default) or returned to safe ground
+   *  ('lastNode') — with the fall's damage. Bodies a surviving span still
+   *  holds are spared by the physics itself, not by a special case. */
+  collapse?: { to?: 'edge' | 'lastNode';
+    damage?: { amount?: number; pctMaxLife?: number; type?: string; canKill?: boolean } };
 }
 
 /** The PHYSICAL radius of a doodad — the trunk, not the crown. Movement,
@@ -479,7 +504,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true },
   lava:      { overlap: 'inert',  blocksMove: true,  blocksShot: false },
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
-  bridge:    { overlap: 'ground' },
+  bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground' },
   swamp:     { overlap: 'ground' },
   bog:       { overlap: 'ground' },

@@ -59,7 +59,7 @@ import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDe
 import { CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, blocksSightOf, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
-  type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
+  type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, setRouteGuard, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
@@ -2578,7 +2578,7 @@ export class World {
     const rng = new Rng(layoutSeed);
     const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos));
     this.doodads = layout.doodads;
-    this.bridges = layout.doodads.filter(d => d.kind === 'bridge');
+    this.bridges = layout.doodads.filter(d => doodadRuleOf(d.kind).spans);
     this.grounds = layout.doodads.filter(d => GROUND_KINDS.includes(d.kind));
     this.walk = layout.walk ?? null; // a non-convex layout's walkability (else convex)
     this.airPockets = layout.airPockets ?? []; // underwater: circular bubbles for the renderer
@@ -6063,12 +6063,14 @@ export class World {
     }
   }
 
-  /** A spore-pod PUFFS a lingering spore cloud — gentle area-denial (a poison DoT cloud,
-   *  not a damage volley). Mirrors effectLavaOrb's hazard-caster + zone push, but one
-   *  lingering ticking cloud centred on the pod instead of a ring of meteors. */
-  private effectSporePuff(d: Doodad, eff: DoodadEffect): void {
-    if (!chance(eff.chance)) return;
-    const skill = SKILLS['toxic_cloud'] ?? SKILLS['venom_bolt'];
+  /** Mint a lingering hazard cloud at a point from the hidden hazard caster —
+   *  the ONE seam behind spore-pod puffs and brittle fume pops. The payload is
+   *  a real ground skill (default the reference fume, toxic_cloud), so the
+   *  cloud rides the normal zone pipeline: ticks, the payload's own exposure
+   *  breathe-grace, Foresight telegraphs, co-op snapshots. */
+  private mintHazardCloud(at: Vec2, opts: { skillId?: string; radius?: number; linger?: number;
+    tickInterval?: number; dmgMult?: number; delay?: number; color?: string }): void {
+    const skill = SKILLS[opts.skillId ?? 'toxic_cloud'] ?? SKILLS['venom_bolt'];
     if (!skill) return;
     if (!this.hazardCaster) {
       const c = new Actor('Spore', 'player', vec(0, 0));
@@ -6077,13 +6079,24 @@ export class World {
     }
     const caster = this.hazardCaster;
     caster.level = Math.max(1, this.zone.level);
-    caster.pos = vec(d.pos.x, d.pos.y);
+    caster.pos = vec(at.x, at.y);
     const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3));
+    const exp = (skill.delivery as { exposure?: number } | undefined)?.exposure;
     this.zones.push({
-      pos: vec(d.pos.x, d.pos.y), radius: eff.radius ?? 90, caster, inst, color: '#8fd06f',
-      delay: 0.6, exploded: false, linger: 2.6, tickInterval: 0.5, tickTimer: 0,
-      shape: 0, facing: 0, dmgMult: 0.7, depth: 1, hitAll: true, meteor: false,
+      pos: vec(at.x, at.y), radius: opts.radius ?? 90, caster, inst,
+      color: opts.color ?? '#8fd06f',
+      delay: opts.delay ?? 0.6, exploded: false, linger: opts.linger ?? 2.6,
+      tickInterval: opts.tickInterval ?? 0.5, tickTimer: 0,
+      shape: 0, facing: 0, dmgMult: opts.dmgMult ?? 0.7, depth: 1, hitAll: true, meteor: false,
+      exposure: exp ? { after: exp, dwell: new Map() } : undefined,
     });
+  }
+
+  /** A spore-pod PUFFS a lingering spore cloud — gentle area-denial (a poison DoT cloud,
+   *  not a damage volley). One word into the shared hazard-cloud seam. */
+  private effectSporePuff(d: Doodad, eff: DoodadEffect): void {
+    if (!chance(eff.chance)) return;
+    this.mintHazardCloud(vec(d.pos.x, d.pos.y), { radius: eff.radius ?? 90 });
   }
 
   // --- INCURSION PAYOFF (Pass 2d): the Observer boss --------------------------
@@ -22006,17 +22019,30 @@ export class World {
         if (!br || d.gone) continue;
         const gap = dist(a.pos, d.pos);
         if (br.on.includes('touch') && gap <= a.radius + d.radius + 2) {
-          this.popBrittle(d);
+          if (!br.dwell) { this.popBrittle(d); continue; }
+          this.brittleAccrue(d, br, dt);
           continue;
         }
         if (br.on.includes('near') && gap <= (br.reach ?? 40) + a.radius) {
           if (!br.dwell) { this.popBrittle(d); continue; }
-          const t = (this.brittleDwell.get(d) ?? 0) + dt;
-          if (t >= br.dwell) { this.brittleDwell.delete(d); this.popBrittle(d); }
-          else this.brittleDwell.set(d, t);
+          this.brittleAccrue(d, br, dt);
         }
       }
     }
+  }
+
+  /** One tick of dwell against a brittle doodad's clock — shared by 'near'
+   *  and 'touch' triggers. The clock never decays (a bridge REMEMBERS every
+   *  crossing), and the first accrual speaks the spec's `warn` — the creak
+   *  before the drop, the hollow knock behind the stone. */
+  private brittleAccrue(d: Doodad, br: BrittleSpec, dt: number): void {
+    const prev = this.brittleDwell.get(d);
+    if (prev === undefined && br.warn) {
+      this.text(vec(d.pos.x, d.pos.y - 12), br.warn, br.color ?? '#c8b89a', 11);
+    }
+    const t = (prev ?? 0) + dt;
+    if (t >= (br.dwell ?? 0)) { this.brittleDwell.delete(d); this.popBrittle(d); }
+    else this.brittleDwell.set(d, t);
   }
 
   /** A lifeless breakable gives way: FX + spill + optional grid carve. The
@@ -22054,6 +22080,42 @@ export class World {
       }
       this.walk.fillDisc(d.pos.x, d.pos.y, Math.max(24, d.radius + 8), 'ground');
       this.walk.fillDisc(cx, cy, br.carve, 'ground');
+    }
+    // A popped SPAN stops negating its chasm (the bridges index is the physics).
+    const bi = this.bridges.indexOf(d);
+    if (bi >= 0) this.bridges.splice(bi, 1);
+    // COLLAPSE: whoever the span was holding takes the fall — unless something
+    // else still holds them (another plank, real ground): clampPos with no
+    // origin resolves to true footing, and an unmoved body was never falling.
+    if (br.collapse) {
+      const dmg = br.collapse.damage ?? {};
+      for (const a of this.actors) {
+        if (a.dead || a.passive) continue;
+        if (dist(a.pos, d.pos) > d.radius + a.radius * 0.6) continue;
+        const edge = this.clampPos(vec(a.pos.x, a.pos.y), a.radius);
+        if (dist(edge, a.pos) < 0.5) continue;
+        a.pos = edge;
+        this.applyRecovery(a, {
+          kind: 'fall', to: br.collapse.to ?? 'edge',
+          damage: {
+            amount: dmg.amount ?? 0, pctMaxLife: dmg.pctMaxLife ?? 0.12,
+            type: (dmg.type ?? 'physical') as DamageSpec['type'], canKill: dmg.canKill ?? true,
+          },
+        }, edge);
+      }
+    }
+    // FUME: the wreck exhales a lingering hazard cloud (gas pods, spore sacs).
+    if (br.fume) this.mintHazardCloud(vec(d.pos.x, d.pos.y), br.fume);
+    // WAKE: something was living in there (urn ambushes, hive husks).
+    if (br.spawn && chance(br.spawn.chance ?? 1)) {
+      const [lo, hi] = br.spawn.count ?? [1, 1];
+      const n = lo + Math.floor(rand(0, hi - lo + 1));
+      for (let i = 0; i < n; i++) {
+        const m = this.createMonster(br.spawn.monster, Math.max(1, this.zone.level), 'enemy');
+        m.pos = this.clampPos(vec(d.pos.x + rand(-22, 22), d.pos.y + rand(-22, 22)), m.radius);
+        this.actors.push(m);
+      }
+      if (n > 0 && br.spawn.text) this.text(vec(d.pos.x, d.pos.y - 28), br.spawn.text, color, 12);
     }
   }
 
@@ -22630,7 +22692,7 @@ export class World {
    *  client's PREDICTED movement (clampPos) blocks a bridged chasm the host walks
    *  across (rubber-band). Host/SP populate these in loadZone and never call this. */
   rebuildClientTerrain(): void {
-    this.bridges = this.doodads.filter(d => d.kind === 'bridge');
+    this.bridges = this.doodads.filter(d => doodadRuleOf(d.kind).spans);
     this.grounds = this.doodads.filter(d => GROUND_KINDS.includes(d.kind));
   }
 
