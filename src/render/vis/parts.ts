@@ -2885,6 +2885,130 @@ const totemPost: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// --- Hazard-kit kin: library fill for the entity creator ---------------------
+
+/** CRYSTAL GROWTHS — faceted shards erupting from the hide (gem-crusted
+ *  beasts, lattice golems). Each shard is two faces meeting at a spine; in a
+ *  look's live[] the glint walks the spine, baked it freezes mid-gleam.
+ *  params: n. */
+const crystalGrowths: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const n = Math.round(P(spec, 'n', 4));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, 61) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, 67)) * R * 0.5;
+      const bx = Math.cos(a) * d, by = Math.sin(a) * d;
+      const len = R * (0.3 + hash01(i, 71) * 0.3);
+      const ta = a + (hash01(i, 73) - 0.5) * 0.8;
+      const tx = bx + Math.cos(ta) * len, ty = by + Math.sin(ta) * len;
+      const pw = R * (0.08 + hash01(i, 79) * 0.05);
+      const px = Math.cos(ta + Math.PI / 2) * pw, py = Math.sin(ta + Math.PI / 2) * pw;
+      c.fillStyle = shade(ramp.base, -0.18);
+      c.beginPath(); c.moveTo(bx - px, by - py); c.lineTo(tx, ty); c.lineTo(bx, by); c.closePath(); c.fill();
+      c.fillStyle = shade(ramp.base, 0.22);
+      c.beginPath(); c.moveTo(bx + px, by + py); c.lineTo(tx, ty); c.lineTo(bx, by); c.closePath(); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.7);
+      c.lineWidth = 1;
+      c.beginPath(); c.moveTo(bx - px, by - py); c.lineTo(tx, ty); c.lineTo(bx + px, by + py); c.stroke();
+      const gl = (t * 0.4 + hash01(i, 83)) % 1;
+      c.fillStyle = withAlpha('#ffffff', 0.7 * Math.max(0, Math.sin(gl * Math.PI)));
+      c.beginPath();
+      c.arc(bx + (tx - bx) * gl, by + (ty - by) * gl, R * 0.045, 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
+/** ROOTS — kinked, tapering root tendrils trailing off the rear arc (treants,
+ *  shamblers, anything recently uprooted). params: n. */
+const roots: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const n = Math.round(P(spec, 'n', 5));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = Math.PI + (i / Math.max(1, n - 1) - 0.5) * 2.2;
+      let x = Math.cos(a) * R * 0.7, y = Math.sin(a) * R * 0.7;
+      let ang = a;
+      let w = Math.max(1.6, R * 0.11);
+      c.strokeStyle = shade(ramp.base, (hash01(i, 31) - 0.5) * 0.2);
+      for (let s = 0; s < 3; s++) {
+        const nx = x + Math.cos(ang) * R * (0.2 + hash01(i * 3 + s, 37) * 0.16);
+        const ny = y + Math.sin(ang) * R * (0.2 + hash01(i * 3 + s, 37) * 0.16);
+        c.lineWidth = w;
+        c.beginPath(); c.moveTo(x, y); c.lineTo(nx, ny); c.stroke();
+        x = nx; y = ny;
+        ang += (hash01(i * 5 + s, 41) - 0.5) * 1.1;
+        w *= 0.66;
+      }
+    }
+  });
+};
+
+/** STITCH SEAMS — puckered surgical seams crossed by their stitches: sewn
+ *  abominations, flesh-golems, anything assembled in a hurry. params: n. */
+const stitchSeams: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'dark');
+  const n = Math.round(P(spec, 'n', 3));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a0 = hash01(i, 91) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, 93)) * R * 0.45;
+      const cx = Math.cos(a0) * d, cy = Math.sin(a0) * d;
+      const ang = hash01(i, 97) * Math.PI;
+      const len = R * (0.3 + hash01(i, 101) * 0.24);
+      const dx = Math.cos(ang), dy = Math.sin(ang);
+      c.strokeStyle = withAlpha(ramp.shadow, 0.9);
+      c.lineWidth = Math.max(1.2, R * 0.05);
+      c.beginPath();
+      c.moveTo(cx - dx * len, cy - dy * len);
+      c.lineTo(cx + dx * len, cy + dy * len);
+      c.stroke();
+      const ticks = 3 + (i % 2);
+      c.lineWidth = Math.max(1, R * 0.035);
+      c.strokeStyle = withAlpha(ramp.base, 0.9);
+      for (let k = 0; k < ticks; k++) {
+        const f = -0.7 + (k / (ticks - 1)) * 1.4;
+        const px = cx + dx * len * f, py = cy + dy * len * f;
+        c.beginPath();
+        c.moveTo(px - dy * R * 0.08, py + dx * R * 0.08);
+        c.lineTo(px + dy * R * 0.08, py - dx * R * 0.08);
+        c.stroke();
+      }
+    }
+  });
+};
+
+/** A hanging BELL under its yoke — doom-heralds, plague criers, the tolling
+ *  faithful. In live[] it sways; params: swing. */
+const bell: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'metal');
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = shade(ramp.base, -0.25);
+    c.lineWidth = Math.max(1.4, R * 0.07);
+    c.beginPath(); c.moveTo(-R * 0.3, 0); c.lineTo(R * 0.3, 0); c.stroke();
+    c.save();
+    c.rotate(Math.sin(t * 2.1) * P(spec, 'swing', 0.14));
+    c.fillStyle = ramp.base;
+    c.beginPath();
+    c.moveTo(-R * 0.16, R * 0.08);
+    c.quadraticCurveTo(-R * 0.2, R * 0.42, -R * 0.3, R * 0.52);
+    c.lineTo(R * 0.3, R * 0.52);
+    c.quadraticCurveTo(R * 0.2, R * 0.42, R * 0.16, R * 0.08);
+    c.closePath();
+    c.fill();
+    outlined(c, ramp, 1.1);
+    c.strokeStyle = withAlpha(ramp.highlight, 0.6);
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(-R * 0.24, R * 0.4); c.lineTo(R * 0.24, R * 0.4); c.stroke();
+    c.fillStyle = shade(ramp.base, -0.4);
+    c.beginPath(); c.arc(0, R * 0.6, R * 0.07, 0, Math.PI * 2); c.fill();
+    c.restore();
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -2906,6 +3030,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   mawRing, lure, sporeVents, mossPatch, veinweb, polyps, slimeTrail,
   sailfin, warhorn, drape,
   stakeRow, totemPost,
+  crystalGrowths, roots, stitchSeams, bell,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

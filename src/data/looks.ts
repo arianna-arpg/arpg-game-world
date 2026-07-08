@@ -428,6 +428,8 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'runes', params: { n: 5 } },
       { kind: 'halo', scale: 1.05, alpha: 0.6 },
     ],
+    // The court regalia: lattice shards riding the mantle, glints walking.
+    live: [{ kind: 'crystalGrowths', role: 'accent', params: { n: 5 } }],
   },
 
   // ================================================================ BEASTS
@@ -570,6 +572,8 @@ export const LOOKS: Record<string, LookDef> = {
   mycelial_brute: {
     parts: [
       { kind: 'blob', scale: 1.02, params: { irr: 0.12, seed: 21 } },
+      // Hyphal root tendrils dragging where it tore free of the mat.
+      { kind: 'roots', role: 'accent', params: { n: 4 } },
       { kind: 'mossPatch', params: { n: 4 } },
       { kind: 'caps', x: -0.3, params: { n: 3 } },
       { kind: 'claws', params: { len: 0.5 } },
@@ -783,6 +787,8 @@ export const LOOKS: Record<string, LookDef> = {
   bloat: {
     parts: [
       { kind: 'blob', scale: 1.05, params: { irr: 0.1, seed: 33 } },
+      // Somebody sewed this shut once. It didn't take.
+      { kind: 'stitchSeams', params: { n: 3 } },
       { kind: 'bloatSacs', scale: 1.1, params: { n: 8 } },
     ],
   },
