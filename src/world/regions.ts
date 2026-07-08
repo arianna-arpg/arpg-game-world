@@ -78,6 +78,12 @@ export interface RegionVisualSpec {
   alpha?: number;
   /** A gentle animated shimmer/pulse (renderer interprets). */
   animate?: 'shimmer' | 'pulse' | 'drift';
+  /** BOUNDARY EDGE: painted on every side facing walkable ground so the
+   *  region's rim READS at a glance — a flesh wall's pale membrane, the
+   *  mycelium's luminous weave. Bakes with the ground chunks; `width` in
+   *  world units (default 4). Without it a visual-region wall can sit in
+   *  the same tones as its biome's floor and swallow the boundary. */
+  edge?: { color: string; width?: number };
 }
 
 /** A once-on-enter status (bog poison, tentacle stun). amount scales with zone
@@ -270,12 +276,18 @@ registerRegion({ id: 'flesh', walkable: true, blocks: false, label: 'the flesh',
 // reads as carved-from-meat ("Belly of the Beast") — NOT the black void/fall region.
 // A solid wash (no pulse) keeps the walls reading as solid; the floor does the throb.
 registerRegion({ id: 'flesh_wall', walkable: false, blocks: true, label: 'the flesh',
-  blocksShot: true, blocksSight: true, visual: { fill: '#3a0e16', alpha: 1 } });
+  blocksShot: true, blocksSight: true,
+  // The pale strained-membrane rim: the floor throbs in the same reds, so the
+  // WALL announces itself at its boundary or you run face-first into meat.
+  visual: { fill: '#3a0e16', alpha: 1, edge: { color: '#8a3a46', width: 5 } } });
 // FUNGAL WALL: the dense living MYCELIUM between a mycelia grotto's chambers (the negative
 // space the myceliaLayout carves into). Non-walkable + blocks like a wall, but a deep
 // purple-fungal visual so the warren reads as carved-from-mushroom, NOT the black void.
 registerRegion({ id: 'fungal_wall', walkable: false, blocks: true, label: 'the mycelium',
-  blocksShot: true, blocksSight: true, visual: { fill: '#241634', alpha: 1 } });
+  blocksShot: true, blocksSight: true,
+  // Luminous hyphal weave along the rim — the grotto's own glow marks where
+  // the soft dark becomes solid mycelium.
+  visual: { fill: '#241634', alpha: 1, edge: { color: '#6a4a92', width: 5 } } });
 // AIR POCKET: a safe walkable bubble in an underwater zone — breath refills here
 // (no drain), the player's lifeline. Pure walkable + a visual tell.
 registerRegion({ id: 'air_pocket', walkable: true, blocks: false, label: 'air', visual: { fill: '#2a6a8a', alpha: 0.35, animate: 'pulse' } });

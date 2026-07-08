@@ -254,7 +254,19 @@ export class GroundRenderer {
     wf: GridWalkField, ox: number, oy: number, C: number): void {
     const CFG = VIS_CFG.ground;
     const theme = world.zone.theme;
-    const wallFill = theme.wall ?? theme.obstacle ?? '#07070b';
+    // CONTRAST GUARD: a biome whose wall tone sits within a whisker of its
+    // floor (field greens on field greens) swallows the boundary — walls
+    // must READ. If the luminance gap is too small, push the wall darker
+    // (or lighter for near-black floors) until it clears the floor.
+    let wallFill = theme.wall ?? theme.obstacle ?? '#07070b';
+    const lum = (hex: string): number => {
+      const n = parseInt(hex.slice(1), 16);
+      return (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
+    };
+    const gap = lum(wallFill) - lum(theme.floor);
+    if (Math.abs(gap) < 0.09) {
+      wallFill = lum(theme.floor) > 0.24 ? shade(wallFill, -0.35) : shade(wallFill, 0.3);
+    }
     const wallLit = shade(wallFill, 0.18);
     const wallDark = shade(wallFill, -0.3);
     const cell = wf.cell;
@@ -282,6 +294,22 @@ export class GroundRenderer {
             ctx.globalAlpha = vis.alpha ?? 1;
             ctx.fillStyle = vis.fill;
             ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
+            ctx.globalAlpha = 1;
+          }
+          // BOUNDARY EDGE (RegionVisualSpec.edge): a bright rim on every side
+          // facing walkable ground, so a wall in its floor's own tones still
+          // reads as a wall (the flesh biome taught us). Bakes even for
+          // animated fills — the rim itself is static.
+          if (vis.edge && !def?.walkable) {
+            const ew = vis.edge.width ?? 4;
+            const open = (nx: number, ny: number): boolean =>
+              !!regionKind(idAt(nx, ny))?.walkable;
+            ctx.fillStyle = vis.edge.color;
+            ctx.globalAlpha = 0.9;
+            if (open(gx, gy - 1)) ctx.fillRect(x, y, cell + 0.6, ew);
+            if (open(gx, gy + 1)) ctx.fillRect(x, y + cell - ew, cell + 0.6, ew);
+            if (open(gx - 1, gy)) ctx.fillRect(x, y, ew, cell + 0.6);
+            if (open(gx + 1, gy)) ctx.fillRect(x + cell - ew, y, ew, cell + 0.6);
             ctx.globalAlpha = 1;
           }
           continue;
