@@ -19064,8 +19064,13 @@ export class World {
   windAt(pos: Vec2): { x: number; y: number; strength: number } | null {
     const w = this.zoneWind();
     if (!w) return null;
+    // INDOORS: a roof owns its sky — no gale under it (courtyards stay open).
+    if (this.underRoofAt(pos)) return null;
     const px = pos.x - w.nx * WIND_CFG.shelterReach;
     const py = pos.y - w.ny * WIND_CFG.shelterReach;
+    // The upwind probe reads BODY radii (bodyRadiusOf): a canopy tree shelters
+    // only in its trunk's narrow lee — wind blows through the leaves, and the
+    // shade of a crown is deliberately NOT cover from the gale.
     for (const d of this.doodadsAt(px, py)) {
       if (!blocksMovement(d)) continue;
       const dx = px - d.pos.x, dy = py - d.pos.y;
@@ -19075,6 +19080,17 @@ export class World {
     return { x: w.nx * w.strength, y: w.ny * w.strength, strength: w.strength };
   }
 
+  /** INDOORS: under any placed structure's roof rect. Heat-shade ends here,
+   *  and so does the gale (windAt) — courtyards stay open sky. */
+  underRoofAt(pos: Vec2): boolean {
+    for (const st of this.structures) {
+      for (const r of st.roofs) {
+        if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return true;
+      }
+    }
+    return false;
+  }
+
   /** Is this actor in SHADE — under a canopy crown, inside a roof, or in
    *  the night? (The desert's mercy; also any future heat hazard's.) */
   private isShaded(a: Actor): boolean {
@@ -19082,12 +19098,7 @@ export class World {
     for (const d of this.doodadsAt(a.pos.x, a.pos.y)) {
       if (doodadRuleOf(d.kind).occlude && dist(a.pos, d.pos) <= d.radius) return true;
     }
-    for (const st of this.structures) {
-      for (const r of st.roofs) {
-        if (a.pos.x > r.x && a.pos.x < r.x + r.w && a.pos.y > r.y && a.pos.y < r.y + r.h) return true;
-      }
-    }
-    return false;
+    return this.underRoofAt(a.pos);
   }
 
   private updateTerrainEffects(dt: number): void {
