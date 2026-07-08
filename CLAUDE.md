@@ -42,7 +42,10 @@ balance harness's smoke suite are how we verify changes.
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
   (layered modifier engine), `damage.ts`, `status.ts`, `skills.ts` (skill
   schema), `actor.ts` (one entity model for player/monsters/minions),
-  `ai.ts` + `brain.ts` (composable enemy AI), `levelgen.ts`, `worldgen.ts`;
+  `ai.ts` + `brain.ts` (composable enemy AI), `presence.ts` (leveled-list
+  spawn envelopes: weight-vs-level curves on any monster-table entry or
+  MonsterDef, folded at `World.weightedPick(table, atLevel)`),
+  `levelgen.ts`, `worldgen.ts`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),
   `loot.ts` (nestable loot tables + DROP_CFG kill-path levers).

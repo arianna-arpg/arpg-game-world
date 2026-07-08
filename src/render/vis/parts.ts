@@ -809,6 +809,46 @@ const daggers: PartPainter = (ctx, r, spec, pal) => {
   sword(ctx, r, { ...spec, mirror: true, params: { len: 0.5, w: 0.08, ...(spec.params ?? {}) } }, pal);
 };
 
+/** THREE-TINED TRIDENT — pit regalia: a long haft into a crossbar crowned
+ *  with a raked fork (legates, tormentors, sea-devils). params: len, w. */
+const trident: PartPainter = (ctx, r, spec, pal) => {
+  const metal = pal.metal;
+  const len = P(spec, 'len', 1.1);
+  const w = P(spec, 'w', 0.07);
+  place(ctx, r, spec, (c, R) => {
+    const y = R * 0.62;
+    const bx = R * (len - 0.34);
+    // Haft.
+    c.strokeStyle = pal.wood.base;
+    c.lineWidth = Math.max(1.5, R * w);
+    c.beginPath(); c.moveTo(-R * 0.3, y); c.lineTo(bx, y); c.stroke();
+    // Crossbar.
+    c.strokeStyle = withAlpha(metal.shadow, 0.9);
+    c.lineWidth = Math.max(1.3, R * 0.06);
+    c.beginPath(); c.moveTo(bx, y - R * 0.2); c.lineTo(bx, y + R * 0.2); c.stroke();
+    // The fork: a long center tine, the outer pair raked slightly outward.
+    const tine = (dy: number, tl: number, rake: number): void => {
+      c.save();
+      c.translate(bx, y + dy);
+      c.rotate(rake);
+      c.fillStyle = metal.light;
+      c.beginPath();
+      c.moveTo(0, -R * 0.045);
+      c.lineTo(R * tl, 0);
+      c.lineTo(0, R * 0.045);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = withAlpha(metal.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+      c.restore();
+    };
+    tine(-R * 0.19, 0.34, -0.16);
+    tine(0, 0.46, 0);
+    tine(R * 0.19, 0.34, 0.16);
+  });
+};
+
 /** Flanged mace at the side. */
 const mace: PartPainter = (ctx, r, spec, pal) => {
   const metal = pal.metal;
@@ -976,6 +1016,29 @@ const flames: PartPainter = (ctx, r, spec, pal, t = 0) => {
       c.beginPath();
       c.ellipse(x, y, R * 0.06, lick * 0.55, a + Math.PI / 2, 0, Math.PI * 2);
       c.fill();
+    }
+  });
+};
+
+/** EMBER SPARKS — live motes that break off the body and gutter out as they
+ *  drift (the Legion's cinder-breath; `flames` licks, this SHEDS).
+ *  params: n, drift (body-radii traveled over a mote's life). */
+const emberSparks: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const col = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 5));
+  const drift = P(spec, 'drift', 0.9);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const cycle = 1.1 + hash01(i, 41) * 0.9;
+      const ph = ((t / cycle) + hash01(i, 43)) % 1;
+      const a = hash01(i, 47) * Math.PI * 2 + ph * 0.8;
+      const d = R * (0.35 + ph * drift);
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      const fade = 1 - ph;
+      c.fillStyle = withAlpha(col, 0.65 * fade);
+      c.beginPath(); c.arc(x, y, Math.max(0.8, R * 0.09 * fade), 0, Math.PI * 2); c.fill();
+      c.fillStyle = withAlpha('#ffe9b8', 0.5 * fade * fade);
+      c.beginPath(); c.arc(x, y, Math.max(0.5, R * 0.045 * fade), 0, Math.PI * 2); c.fill();
     }
   });
 };
@@ -2652,6 +2715,42 @@ const mossPatch: PartPainter = (ctx, r, spec, pal) => {
 
 /** LIVE: VEINWEB — surface vessels webbing the body, throbbing brighter on
  *  the beat. params: n. */
+/** MAGMA SEAMS — a cooled-crust fissure web with a molten core, clipped to
+ *  the body disc (pyre titans, hellforged hulks, magma golems). Baked: the
+ *  crust doesn't crawl — heat reads from the glow ramp alone. params: n. */
+const lavaCracks: PartPainter = (ctx, r, spec, pal) => {
+  const glow = spec.color ?? pal.glow;
+  const n = Math.round(P(spec, 'n', 4));
+  place(ctx, r, spec, (c, R) => {
+    c.save();
+    c.beginPath(); c.arc(0, 0, R, 0, Math.PI * 2); c.clip();
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a0 = (i / n) * Math.PI * 2 + hash01(i, 31) * 1.2;
+      const x0 = Math.cos(a0) * R * 0.92, y0 = Math.sin(a0) * R * 0.92;
+      // One wandering polyline from the rim inward, drawn three times:
+      // wide dark crust split, molten seam, white-hot core.
+      const pass = (wMul: number, col: string, alpha: number): void => {
+        c.strokeStyle = withAlpha(col, alpha);
+        c.lineWidth = Math.max(0.8, R * wMul);
+        let px = x0, py = y0, ang = a0 + Math.PI;
+        c.beginPath(); c.moveTo(px, py);
+        for (let s = 0; s < 3; s++) {
+          ang += (hash01(i * 7 + s, 37) - 0.5) * 0.9;
+          px += Math.cos(ang) * R * 0.34;
+          py += Math.sin(ang) * R * 0.34;
+          c.lineTo(px, py);
+        }
+        c.stroke();
+      };
+      pass(0.1, pal.dark, 0.85);
+      pass(0.045, glow, 0.9);
+      pass(0.02, '#ffe9b8', 0.75);
+    }
+    c.restore();
+  });
+};
+
 const veinweb: PartPainter = (ctx, r, spec, pal, t = 0) => {
   const col = spec.color ?? pal.accent.light;
   const n = Math.round(P(spec, 'n', 5));
@@ -3014,8 +3113,8 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   skull, ribs, spineTrail, crown,
   hood, tatters, pauldrons,
   eyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
-  claws, scythe, staff, sword, daggers, mace, axe, shield, bow,
-  halo, runes, wisps, flames,
+  claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow,
+  halo, runes, wisps, flames, emberSparks, lavaCracks,
   shell, caps, fronds, tail, stinger, fins,
   apron, pack, lantern, helm,
   tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,

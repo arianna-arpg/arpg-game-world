@@ -307,6 +307,116 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'flames', params: { n: 3 } }],
   },
+  /** A scrap of living cinder: stub horns, hot little eyes, shedding sparks. */
+  ash_whelp: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.22, seed: 33 } },
+      { kind: 'horns', scale: 0.5 },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.5, dist: 0.55, size: 0.12 } },
+    ],
+    live: [{ kind: 'emberSparks', params: { n: 3, drift: 0.7 } }],
+  },
+  /** The meat wall: a lopsided mass, gorged sacs, crude field-stitching, a
+   *  maw that takes up most of the front. */
+  bloodgorger: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.26, seed: 45 } },
+      { kind: 'bloatSacs', x: -0.2, scale: 0.85, params: { n: 3 } },
+      { kind: 'stitchSeams', rot: 0.6, params: { n: 2 } },
+      { kind: 'maw', x: 0.42, scale: 0.5, params: { arc: 0.55 } },
+      { kind: 'eyes', color: '#ffb0a0', params: { spread: 0.55, dist: 0.6, size: 0.07 } },
+    ],
+  },
+  /** The choir-priest: robed, horn-crowned, a censer swinging ash. */
+  brimstone_cantor: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'crownOfHorns', x: 0.26, scale: 0.7 },
+      { kind: 'censer', y: 0.55, scale: 0.9 },
+      { kind: 'runes', scale: 0.85, params: { n: 3 } },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+    ],
+    live: [{ kind: 'emberSparks', x: -0.2, scale: 0.8, params: { n: 3, drift: 0.6 } }],
+  },
+  /** The tormentor: bare torso hung with chains, a long whip arm, spiked. */
+  chained_tormentor: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'chains', rot: 0.4, params: { n: 2 } },
+      { kind: 'whip' },
+      { kind: 'horns', scale: 0.75 },
+      { kind: 'eyes', params: { spread: 0.4, dist: 0.58, size: 0.09 } },
+    ],
+  },
+  /** The Legion's voice: robes, a war-banner, the brand held high. */
+  doomherald: {
+    parts: [
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'banner', x: -0.15 },
+      { kind: 'brand', x: 0.3, scale: 0.8 },
+      { kind: 'wings', scale: 0.6, alpha: 0.85 },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+    ],
+  },
+  /** The skinner: a lean dart of a body, paired flensing knives, barbed. */
+  abyssal_flayer: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'tail', params: { len: 0.9 } },
+      { kind: 'daggers', params: { len: 0.6 } },
+      { kind: 'barbs', scale: 0.85, params: { n: 4 } },
+      { kind: 'eyes', color: '#ff5a8a', params: { spread: 0.42, dist: 0.6, size: 0.09 } },
+    ],
+  },
+  /** The gatekeeper: robes over a tentacle-fringe, an orb-staff, horned. */
+  hellgate_caller: {
+    parts: [
+      { kind: 'tentacleRing', scale: 0.85, params: { n: 6 } },
+      { kind: 'robe', scale: 0.92 },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'horns', scale: 0.7 },
+      { kind: 'runes', params: { n: 4 } },
+      { kind: 'eyes', params: { spread: 0.35, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The planted gate: a ring of teeth around a molten throat — ground
+   *  anatomy, not a walker (rot 0 keeps the maw facing the sky). */
+  rift_maw: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.18, seed: 51 } },
+      { kind: 'lavaCracks', params: { n: 3 } },
+      { kind: 'mawRing', scale: 0.9 },
+      { kind: 'orb', scale: 0.4, role: 'glow' },
+    ],
+    live: [{ kind: 'emberSparks', params: { n: 4, drift: 1.1 } }],
+    shadowScale: 0.6,
+  },
+  /** The walking tower: plated shoulders over a magma-seamed hide, ram
+   *  horns, claws — and sparks guttering off the crust. */
+  pyre_titan: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'lavaCracks', params: { n: 4 } },
+      { kind: 'armorPlates', x: -0.1, scale: 0.9 },
+      { kind: 'ramHorns', scale: 0.95 },
+      { kind: 'claws', params: { len: 0.5 } },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.32, dist: 0.62, size: 0.08 } },
+    ],
+    live: [{ kind: 'emberSparks', params: { n: 5, drift: 0.9 } }],
+  },
+  /** The field officer: winged, horn-crowned, caped — and the trident,
+   *  the pit's rank insignia. */
+  archfiend_legate: {
+    parts: [
+      { kind: 'cape', scale: 0.95 },
+      { kind: 'torso' },
+      { kind: 'wings', scale: 0.9 },
+      { kind: 'crownOfHorns', x: 0.28, scale: 0.75 },
+      { kind: 'trident', params: { len: 1.15 } },
+      { kind: 'eyes', params: { spread: 0.35, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'flames', x: -0.25, scale: 0.6, params: { n: 2 } }],
+  },
 
   // ======================================================== HUMAN THREATS
   cultist: {

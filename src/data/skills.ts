@@ -189,6 +189,107 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 3, keepDistance: 280 },
   },
 
+  // --- The Legion's arsenal: demon-kit skills (dropped as gems like any) ----
+
+  hellfire_lash: {
+    id: 'hellfire_lash', name: 'Hellfire Lash',
+    description: 'Crack a burning whip in a long, shallow stripe. The weal CAUTERIZES: victims take half healing while it sears.',
+    tags: ['attack', 'melee', 'fire', 'aoe'], color: '#ff5a3a',
+    manaCost: 5, cooldown: 1.2, useTime: 0.75,
+    baseDamage: { fire: [9, 15] },
+    // Twice a sword's reach, half its arc — the whip hits a RIBBON, not a fan.
+    delivery: { type: 'melee', range: 105, arcDeg: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sear', chance: 0.5 },
+      { type: 'status', status: 'burn', chance: 0.25, magnitude: 0.3 },
+    ],
+    requirements: { strength: 14, intelligence: 10 },
+    ai: { range: 100, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('addedFire', 'flat', 1.2)] },
+  },
+
+  brimstone_volley: {
+    id: 'brimstone_volley', name: 'Brimstone Volley',
+    description: 'Lob a salvo of brimstone mortars across an area — each arc bursts on impact and may set the ground\'s victims alight.',
+    tags: ['spell', 'fire', 'aoe', 'storm', 'duration'], color: '#ff7a3a',
+    manaCost: 13, cooldown: 5, useTime: 0.85,
+    baseDamage: { fire: [11, 17], physical: [4, 7] },
+    delivery: { type: 'storm', count: [3, 4], interval: 0.22, areaRadius: 120, hitRadius: 60, castRange: 460 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.35, magnitude: 0.3 },
+    ],
+    requirements: { intelligence: 20 },
+    ai: { range: 430, weight: 3, keepDistance: 280 },
+  },
+
+  rain_of_ash: {
+    id: 'rain_of_ash', name: 'Rain of Ash',
+    description: 'Smother an area under a slow ashfall — a FUME the victims must breathe: a beat of standing inside before the searing starts, and every breath cauterizes (healing halved).',
+    tags: ['spell', 'fire', 'aoe', 'duration'], color: '#c88a5a',
+    manaCost: 12, cooldown: 6, useTime: 0.85,
+    baseDamage: { fire: [3, 5] },
+    // The exposure fume pattern (toxic_cloud): no impact blast, occupants
+    // only, and the ash needs 0.35s in the lungs before it bites.
+    delivery: { type: 'ground', radius: 95, castRange: 430, lingerDuration: 4.5, tickInterval: 0.5, noImpact: true, exposure: 0.35 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sear', chance: 0.4 },
+      { type: 'status', status: 'burn', chance: 0.2, magnitude: 0.25 },
+    ],
+    requirements: { intelligence: 18, willpower: 12 },
+    ai: { range: 400, weight: 3, keepDistance: 260 },
+  },
+
+  doom_chant: {
+    id: 'doom_chant', name: 'Doom Chant',
+    description: 'CURSE: chant the victims\' names into the pit. DOOM pumps a six-second keg that bursts EARLY if it ever covers what life remains — while torment drags at their feet.',
+    tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#7a48c8',
+    manaCost: 12, cooldown: 6, useTime: 0.7,
+    baseDamage: { chaos: [10, 16] },
+    delivery: { type: 'ground', radius: 100, castRange: 440 },
+    effects: [
+      { type: 'status', status: 'doom', chance: 1 },
+      { type: 'status', status: 'torment', chance: 0.6 },
+    ],
+    requirements: { willpower: 18, intelligence: 14 },
+    ai: { range: 400, weight: 3, keepDistance: 300 },
+  },
+
+  gore_rend: {
+    id: 'gore_rend', name: 'Gore Rend',
+    description: 'Tear one deep, ragged wound — a HEMORRHAGE that bleeds long and slow, and POPS a share of whatever it was still owed when reopened.',
+    tags: ['attack', 'melee', 'physical'], color: '#c03a4a',
+    manaCost: 3, cooldown: 2, useTime: 0.8,
+    baseDamage: { physical: [12, 19] },
+    delivery: { type: 'melee', range: 60, arcDeg: 90 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'hemorrhage', chance: 0.6, magnitude: 0.5 },
+    ],
+    requirements: { strength: 18 },
+    ai: { range: 60, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  call_the_rift: {
+    id: 'call_the_rift', name: 'Call the Rift',
+    description: 'Tear a whelp-gate in the air: each cast drags a lesser demon through — ash-whelps mostly, now and then a true imp.',
+    tags: ['spell', 'summon', 'minion', 'fire'], color: '#ff4a5a',
+    manaCost: 18, cooldown: 1.4, useTime: 0.85,
+    delivery: {
+      type: 'summon',
+      pool: [{ id: 'ash_whelp', weight: 65 }, { id: 'imp', weight: 35 }],
+      count: 1, maxActive: 5,
+    },
+    meta: { skillId: 'command_assault', label: 'Attack!' },
+    effects: [],
+    requirements: { willpower: 16 },
+    ai: { range: 420, weight: 2, keepDistance: 320 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
+  },
+
   // ======================= Cold ============================================
 
   frostbolt: {

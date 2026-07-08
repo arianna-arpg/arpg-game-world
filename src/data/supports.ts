@@ -92,6 +92,32 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // --- The Legion's gifts (demon-kill gem drops lean this way via gemBias) ---
+  brimstone_tithe: {
+    id: 'brimstone_tithe', name: 'Brimstone Tithe',
+    description: 'The pit\'s bargain: this skill deals 30% MORE fire damage — and its mana cost swells 40%. The tithe is always collected.',
+    color: '#ff6a2a', requiresTags: ['fire'],
+    mods: [mod('damage', 'more', 0.3, ['fire']), mod('manaCost', 'more', 0.4)],
+    perLevel: [mod('damage', 'more', 0.02, ['fire'])],
+    weight: 5,
+  },
+  tormentors_glee: {
+    id: 'tormentors_glee', name: "Tormentor's Glee",
+    description: 'Hits with this skill have a 25% chance to TORMENT (a necrotic gnaw that drags at the feet) — and the skill deals 25% increased damage to the tormented.',
+    color: '#8a5ac8', requiresTags: ['chaos', 'curse'],
+    mods: [mod('apply_torment', 'flat', 0.25), mod('damageVs_torment', 'increased', 0.25)],
+    perLevel: [mod('apply_torment', 'flat', 0.03), mod('damageVs_torment', 'increased', 0.03)],
+    weight: 5,
+  },
+  hellhunger: {
+    id: 'hellhunger', name: 'Hellhunger',
+    description: 'This skill\'s minions fight with burning teeth: 20% chance to set what they strike ALIGHT.',
+    color: '#e0503a', requiresTags: ['minion'],
+    mods: [mod('minionApply_burn', 'flat', 0.2), mod('minionDamage', 'increased', 0.1)],
+    perLevel: [mod('minionApply_burn', 'flat', 0.03)],
+    weight: 5,
+  },
+
   // --- Blood, mending & the guard hall --------------------------------------------
   sanguine_feast: {
     id: 'sanguine_feast', name: 'Sanguine Feast',

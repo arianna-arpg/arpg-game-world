@@ -9,8 +9,13 @@
 
 import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
 import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine/actor';
-import type { PresenceSpec } from '../engine/presence';
+import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import type { PackTableEntry } from './zones';
+
+// The Legion's own tier band, shared by its elite defs and roster rows —
+// retune ONE envelope and the whole muster shifts (the named-band pattern;
+// generic tiers live in engine/presence.ts PRESENCE_BANDS).
+registerPresenceBand('legion_muster', { from: 26, fadeIn: 8 });
 
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
  *  IMPLODE = coalesce at the death spot → a delayed AoE pop. ORB = coalesce → an
@@ -2765,7 +2770,157 @@ export const MONSTERS: Record<string, MonsterDef> = {
       mod('damage', 'increased', 0.35)],
     skills: ['infernal_rift', 'ground_slam', 'meteor_storm', 'war_cry'],
     xp: 160, boss: true, faction: 'demon', adorn: 'wings',
+    // DEF-level presence: the champion never marches in shallow war zones,
+    // WHEREVER his id is tabled. Invasion set-pieces spawn him explicitly
+    // (epicenter/realm), so the story beats are untouched.
+    presence: { from: 15, fadeIn: 5 },
     detection: 1.4, brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+
+  // --- THE LEGION MUSTERS: the deep-world horde (presence-banded — the
+  //     roster below ~L12 is imps and hounds; by 20 the pit sends its
+  //     army; past 30 the elite tier walks). Each entry works a different
+  //     lever: death-bursts, tethers, fumes, curses, summon-nests, mounts,
+  //     grants, scaling — the Legion is a tour of the bestiary's machinery.
+
+  // The teaching tier: a scrap of living cinder that pops when it dies.
+  // ONLY early (roster envelope) — past ~14 the whelps are all used up.
+  ash_whelp: {
+    id: 'ash_whelp', name: 'Ash Whelp',
+    color: '#e8643a', shape: 'pentagon', radius: 8, material: 'ember', look: 'ash_whelp',
+    base: { life: 12, moveSpeed: 190, accuracy: 70, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 4, faction: 'demon', adorn: 'horns',
+    scaleVariance: [0.85, 1.1],
+    deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.6 },
+    detection: 1.2, brain: { type: 'swarm' },
+  },
+  // The meat of the mid-game host: one deep wound at a time, and a body
+  // that SCALES — regen and armor climb with level so it stays a wall.
+  bloodgorger: {
+    id: 'bloodgorger', name: 'Bloodgorger',
+    color: '#c03a4a', shape: 'octagon', radius: 19, look: 'bloodgorger',
+    base: { life: 150, moveSpeed: 105, accuracy: 105, armor: 20, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.3), mod('chaosRes', 'flat', 0.3)],
+    skills: ['gore_rend'], xp: 30, faction: 'demon', adorn: 'spikes',
+    scaling: { lifeRegen: { flatPerLevel: 0.5 }, armor: { flatPerLevel: 1.5 } },
+    grants: [{ atLevel: 26, support: 'multistrike', on: 'gore_rend' }],
+    detection: 1.1, brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+  // The choir-priest: an ashfall FUME the host fights inside (heals halved
+  // for anyone breathing it) — protect-me cargo the brutes escort.
+  brimstone_cantor: {
+    id: 'brimstone_cantor', name: 'Brimstone Cantor',
+    color: '#e8945a', shape: 'octagon', radius: 13, material: 'cloth', look: 'brimstone_cantor',
+    base: { life: 55, moveSpeed: 125, mana: 140, manaRegen: 10 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['rain_of_ash', 'firebolt'], xp: 26, faction: 'demon',
+    gemBias: ['fire', 'spell'], wardPriority: 2,
+    detection: 1.2, brain: { type: 'artillery' },
+  },
+  // The PACK TETHER exemplar: tormentors arc a searing chain to their
+  // nearest unlinked kin — the "don't stand between them" modifier as a
+  // whole monster. Long whips, flanking feet.
+  chained_tormentor: {
+    id: 'chained_tormentor', name: 'Chained Tormentor',
+    color: '#d84a3a', shape: 'kite', radius: 14, look: 'chained_tormentor',
+    base: { life: 85, moveSpeed: 150, accuracy: 110, evasion: 40, mana: 30, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['hellfire_lash'], xp: 32, faction: 'demon', adorn: 'spikes',
+    tether: { dps: 9, damageType: 'fire', radius: 300, period: 6, duty: 3, color: '#ff7a3a' },
+    grants: [{ atLevel: 30, support: 'multistrike', on: 'hellfire_lash', chance: 0.5 }],
+    detection: 1.3, brain: { type: 'flanker' },
+  },
+  // The Legion's voice: DOOM kegs from artillery range, brimstone on the
+  // fallback. Its own curse doubles up at depth (creeping_doom grant).
+  doomherald: {
+    id: 'doomherald', name: 'Doomherald',
+    color: '#9a4ac8', shape: 'star', radius: 14, material: 'cloth', look: 'doomherald',
+    base: { life: 60, moveSpeed: 120, mana: 160, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('fireRes', 'flat', 0.3)],
+    skills: ['doom_chant', 'brimstone_volley'], xp: 36, faction: 'demon', adorn: 'wings',
+    gemBias: ['chaos', 'spell'], wardPriority: 1,
+    grants: [{ atLevel: 35, support: 'creeping_doom', on: 'doom_chant' }],
+    detection: 1.3, brain: { type: 'artillery' },
+  },
+  // The skinner in the smoke: one personality stalks alone, the other runs
+  // with the knives — rolled the moment it walks in (brainVariants).
+  abyssal_flayer: {
+    id: 'abyssal_flayer', name: 'Abyssal Flayer',
+    color: '#8a3a5a', shape: 'kite', radius: 12, material: 'void', look: 'abyssal_flayer',
+    base: { life: 70, moveSpeed: 185, accuracy: 120, evasion: 80, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['gore_rend', 'claw'], xp: 34, faction: 'demon', adorn: 'spikes',
+    detection: 1.5,
+    brainVariants: [
+      { weight: 3, brain: { type: 'assassin', withdraw: 0.8 } },
+      { weight: 2, brain: { type: 'flanker' } },
+    ],
+  },
+  // The gatekeeper: whelps through the skill-gate, and every so often it
+  // PLANTS a rift-maw nest that keeps spitting long after the caller falls.
+  hellgate_caller: {
+    id: 'hellgate_caller', name: 'Hellgate Caller',
+    color: '#c84a6a', shape: 'octagon', radius: 14, material: 'cloth', look: 'hellgate_caller',
+    base: { life: 75, moveSpeed: 115, mana: 200, manaRegen: 12 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('chaosRes', 'flat', 0.3)],
+    skills: ['call_the_rift', 'firebolt'], xp: 40, faction: 'demon', adorn: 'horns',
+    gemBias: ['summon', 'minion'], wardPriority: 1,
+    detection: 1.2,
+    brain: {
+      type: 'caster',
+      rules: [{
+        when: {}, every: [14, 20], hold: [0.3, 0.5],
+        actions: [{ do: 'summon', monster: 'rift_maw', count: 1, ring: 110, lifespan: 45, announce: 'A rift tears open!' }],
+      }],
+    },
+  },
+  // The planted gate (spawned ONLY by the caller's rule — never rostered):
+  // an anchored maw that drips whelps on a beat until broken.
+  rift_maw: {
+    id: 'rift_maw', name: 'Rift Maw',
+    color: '#ff3a3a', shape: 'oval', radius: 15, material: 'ember', look: 'rift_maw',
+    base: { life: 90, moveSpeed: 0, armor: 25, mana: 0 },
+    skills: [], xp: 10, faction: 'demon',
+    noNemesis: true, drops: 0,
+    brain: {
+      type: 'basic',
+      rules: [{
+        when: {}, every: [7, 10], hold: [0.1, 0.2],
+        actions: [{ do: 'summon', monster: 'ash_whelp', count: 2, ring: 40, lifespan: 30 }],
+      }],
+    },
+  },
+  // The walking tower (elite tier): darters and imps RIDE it (mountSlot),
+  // its crust hardens with level (scaling), and its death launches an orb
+  // that hunts you down. Slow, inevitable, worth focusing first.
+  pyre_titan: {
+    id: 'pyre_titan', name: 'Pyre Titan',
+    color: '#ff5a2a', shape: 'octagon', radius: 22, material: 'ember', look: 'pyre_titan',
+    base: { life: 320, moveSpeed: 95, accuracy: 115, armor: 60, mana: 40, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.6), mod('damage', 'increased', 0.2)],
+    skills: ['ground_slam', 'flame_wave'], xp: 70, faction: 'demon', adorn: 'horns',
+    presence: 'legion_muster',
+    mountSlot: { kinds: ['demonkin', 'imp', 'finger_mage'], offsetY: -6 },
+    scaling: { armor: { flatPerLevel: 2.5 }, life: { incPerLevel: 0.05 } },
+    deathBurst: { mode: 'orb', damageFrac: 1.2 },
+    detection: 1.1, brain: { type: 'juggernaut', enrage: 0.3 },
+  },
+  // The field officer (elite tier): a commander who whips the line forward,
+  // and whose OWN kit keeps growing — extra lash hits at 40, meteors at 48.
+  archfiend_legate: {
+    id: 'archfiend_legate', name: 'Archfiend Legate',
+    color: '#d8303a', shape: 'star', radius: 18, material: 'ember', look: 'archfiend_legate',
+    base: { life: 210, moveSpeed: 130, accuracy: 125, armor: 45, mana: 120, manaRegen: 8 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.3), mod('damage', 'increased', 0.15)],
+    skills: ['hellfire_lash', 'brimstone_volley', 'war_cry'], xp: 85, faction: 'demon', adorn: 'wings',
+    presence: 'legion_muster',
+    gemBias: ['fire', 'attack'], wardPriority: 2,
+    grants: [
+      { atLevel: 40, support: 'multistrike', on: 'hellfire_lash' },
+      { atLevel: 48, skill: 'meteor_storm' },
+    ],
+    detection: 1.4, brain: { type: 'commander' },
   },
 
   // --- BREACH: rift-spawn that pour from tears in reality. A NET-NEW faction
@@ -3273,37 +3428,44 @@ export function addRelation(a: string, b: string, stance: FactionStance, seedWar
  *  roster EVOLVE — fodder that disperses past the teens, elites that only
  *  muster deep in the world — while the table stays one flat, open list. */
 export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }> = {
+  // Each roster now BREATHES with level (presence envelopes): fodder rows
+  // fade as the world deepens, veterans arrive on ramps, and the champion
+  // tier musters only where the ground is dangerous enough to deserve it.
   goblin: {
     name: 'the Goblin Warband',
     table: [
-      { id: 'goblin_skirmisher', weight: 3 },
+      // The warband's teaching tier: skirmishers throng the early roads,
+      // then disperse — by the late teens the warband fields real muscle.
+      { id: 'goblin_skirmisher', weight: 3, presence: { to: 14, fadeOut: 6 } },
       { id: 'goblin_brute', weight: 2 },
-      { id: 'goblin_shaman', weight: 2 },
-      { id: 'orc_ravager', weight: 2 },
-      { id: 'troll_mauler', weight: 1 },
-      { id: 'goblin_chief', weight: 1 },
+      { id: 'goblin_shaman', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'orc_ravager', weight: 2, presence: { from: 6, fadeIn: 4 } },
+      { id: 'troll_mauler', weight: 1, presence: { from: 9, fadeIn: 5 } },
+      { id: 'goblin_chief', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   undead: {
     name: 'the Risen Host',
     table: [
-      { id: 'zombie', weight: 3 },
+      // The shamble never quite leaves the Host — it just thins as the
+      // graves send worthier dead (a long fadeOut, not a gate).
+      { id: 'zombie', weight: 3, presence: { to: 22, fadeOut: 14 } },
       { id: 'skeleton_warrior', weight: 3 },
       { id: 'skeleton_archer', weight: 2 },
-      { id: 'crypt_warden', weight: 1 },
-      { id: 'bone_serpent', weight: 1 },
-      { id: 'lich_marshal', weight: 1 },
-      { id: 'gloam', weight: 1 },
-      { id: 'oblivion_knight', weight: 1 },
+      { id: 'crypt_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'bone_serpent', weight: 1, presence: { from: 12, fadeIn: 5 } },
+      { id: 'lich_marshal', weight: 1, presence: { from: 15, fadeIn: 6 } },
+      { id: 'gloam', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      { id: 'oblivion_knight', weight: 1, presence: { from: 18, fadeIn: 7 } },
     ],
   },
   gnoll: {
     name: 'the Gnoll Packs',
     table: [
       { id: 'gnoll_prowler', weight: 4 },
-      { id: 'gnoll_butcher', weight: 2 },
-      { id: 'gnoll_longshot', weight: 2 },
-      { id: 'gnoll_howler', weight: 1 },
+      { id: 'gnoll_butcher', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'gnoll_longshot', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'gnoll_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   elemental: {
@@ -3311,52 +3473,69 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
     table: [
       { id: 'ember_elemental', weight: 3 },
       { id: 'gale_elemental', weight: 3 },
-      { id: 'frost_elemental', weight: 2 },
-      { id: 'stone_sentinel', weight: 1 },
+      { id: 'frost_elemental', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
     ],
   },
   sylvan: {
     name: 'the Sylvan Court',
     table: [
-      { id: 'thorn_sprite', weight: 4 },
+      { id: 'thorn_sprite', weight: 4, presence: { to: 20, fadeOut: 12 } },
       { id: 'sylvan_warden', weight: 2 },
-      { id: 'grove_singer', weight: 1 },
-      { id: 'briar_beast', weight: 1 },
+      { id: 'grove_singer', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
     ],
   },
   wild: {
     name: 'the Wilds',
     table: [
-      { id: 'fen_hound', weight: 4 },
-      { id: 'blood_mite', weight: 3 },
-      { id: 'dune_stalker', weight: 2 },
-      { id: 'spitting_horror', weight: 2 },
-      { id: 'alpha_stalker', weight: 1 },
+      { id: 'fen_hound', weight: 4, presence: { to: 18, fadeOut: 10 } },
+      { id: 'blood_mite', weight: 3, presence: { to: 16, fadeOut: 8 } },
+      { id: 'dune_stalker', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'spitting_horror', weight: 2, presence: { from: 7, fadeIn: 4 } },
+      { id: 'alpha_stalker', weight: 1, presence: { from: 11, fadeIn: 5 } },
     ],
   },
   demon: {
     name: 'the Infernal Legion',
+    // The Legion's muster GROWS with the world (the user-facing showcase of
+    // presence): shallow rifts leak whelps, imps and hounds; by the 20s the
+    // pit sends its army — gorgers, tormentors, heralds, callers — and past
+    // 30 the elite tier walks. The imp swarm itself is a GRADIENT (stops):
+    // it never leaves, it just thins as worthier things crowd the gate.
     table: [
-      { id: 'imp', weight: 3 },
+      { id: 'ash_whelp', weight: 3, presence: 'early_only' },
+      { id: 'imp', weight: 3, presence: { stops: [[1, 1.4], [12, 1], [24, 0.6], [40, 0.35]] } },
       { id: 'hellhound', weight: 3 },
-      { id: 'cinder_fiend', weight: 2 },
-      { id: 'searing_spawn', weight: 2 },
-      { id: 'dread_fiend', weight: 1 },
-      { id: 'balor_warlord', weight: 1 },
+      { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
+      { id: 'dread_fiend', weight: 1, presence: { from: 12, fadeIn: 5, mul: 2 } },
+      { id: 'balor_warlord', weight: 1 }, // def presence gates him below 15
       // The siege line: fragile darters that blink, then take cover on a
       // hulk's back or in a tower crown — a garrison worth breaking up.
-      { id: 'finger_mage', weight: 2 },
-      { id: 'demonkin_darter', weight: 2 },
-      { id: 'siege_hulk', weight: 1 },
+      { id: 'finger_mage', weight: 2, presence: { from: 10, fadeIn: 4 } },
+      { id: 'demonkin_darter', weight: 2, presence: { from: 12, fadeIn: 4 } },
+      { id: 'siege_hulk', weight: 1, presence: { from: 16, fadeIn: 6 } },
+      // The deep-war muster: the horde variety that ARRIVES above ~20.
+      { id: 'bloodgorger', weight: 2, presence: { from: 18, fadeIn: 5 } },
+      { id: 'brimstone_cantor', weight: 2, presence: { from: 20, fadeIn: 5 } },
+      { id: 'chained_tormentor', weight: 2, presence: { from: 20, fadeIn: 6 } },
+      { id: 'abyssal_flayer', weight: 2, presence: { from: 22, fadeIn: 6 } },
+      { id: 'doomherald', weight: 1, presence: { from: 24, fadeIn: 6, mul: 2 } },
+      { id: 'hellgate_caller', weight: 1, presence: { from: 26, fadeIn: 6, mul: 2 } },
+      // The elite tier rides the shared legion_muster band (def presence
+      // floors them too — they never leak into a shallow list anywhere).
+      { id: 'pyre_titan', weight: 1, presence: { mul: 1.5 } },
+      { id: 'archfiend_legate', weight: 1, presence: { mul: 1.5 } },
     ],
   },
   deep: {
     name: 'the Deep',
     table: [
       { id: 'deep_thresher', weight: 4 },
-      { id: 'deep_angler', weight: 3 },
-      { id: 'deep_tidecaller', weight: 2 },
-      { id: 'deep_leviathan', weight: 1 },
+      { id: 'deep_angler', weight: 3, presence: { from: 6, fadeIn: 3 } },
+      { id: 'deep_tidecaller', weight: 2, presence: { from: 10, fadeIn: 4 } },
+      { id: 'deep_leviathan', weight: 1, presence: { from: 16, fadeIn: 8 } },
     ],
   },
 };

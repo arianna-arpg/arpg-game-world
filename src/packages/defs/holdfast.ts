@@ -34,10 +34,13 @@ const BANDIT_FACTION: FactionSpec = {
   color: '#c8a04a',
   traits: { roaming: 1.0, aggression: 0.9, warlordHome: 'capital', contexts: ['baseline', 'holdfast'] },
   warlord: 'bandit_bruiser',
+  // Presence: the road-gangs are an EARLY-WORLD scourge — full variety through
+  // the ~5-12 band, trailing off past 15 until only hardened bruisers still
+  // dare hold a toll; deep-world holdfasts read as veteran crews, not mobs.
   roster: [
-    { id: 'bandit_cutthroat', weight: 5 },
+    { id: 'bandit_cutthroat', weight: 5, presence: { to: 15, fadeOut: 7 } },
     { id: 'bandit_bruiser', weight: 2 },
-    { id: 'bandit_keeper', weight: 1 },
+    { id: 'bandit_keeper', weight: 1, presence: { from: 5, fadeIn: 3, to: 18, fadeOut: 8 } },
   ],
 };
 
