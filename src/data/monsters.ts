@@ -9,6 +9,8 @@
 
 import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
 import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine/actor';
+import type { PresenceSpec } from '../engine/presence';
+import type { PackTableEntry } from './zones';
 
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
  *  IMPLODE = coalesce at the death spot → a delayed AoE pop. ORB = coalesce → an
@@ -198,6 +200,13 @@ export interface MonsterDef {
   /** Multiplier on detection range (1 = baseline). Low shambles past you
    *  (zombie 0.55); high senses you from afar (blood mite 1.6). */
   detection?: number;
+  /** LEVELED-LIST envelope (engine/presence.ts): this def's GLOBAL weight-vs-
+   *  level curve, multiplied into every table/pool that selects it by id —
+   *  the "never below 18, anywhere" or "disperses past 14, everywhere" lever.
+   *  Per-table shaping belongs on the table entry's own `presence`; the two
+   *  multiply. Selection only — explicit spawns (bosses, summon verbs,
+   *  composite parts) ignore it. */
+  presence?: PresenceSpec;
   /** OPT-IN per-stat level scaling, layered on the baseline (see StatScale). */
   scaling?: Record<string, StatScale>;
   /** Level-gated skill/support grants — the kit evolves as it levels (MonsterGrant). */
@@ -243,7 +252,7 @@ export interface MonsterDef {
  *  squad. Prey ('critter') exists to wander and flee; predators hunt it by
  *  their brains' TargetSpec.prey — the meadow stages its own dramas whether
  *  or not you watch. A new biome's fauna is a new row, never new code. */
-export const WILDLIFE: Record<string, { id: string; chance: number; count: [number, number] }[]> = {
+export const WILDLIFE: Record<string, { id: string; chance: number; count: [number, number]; presence?: PresenceSpec }[]> = {
   plains: [
     { id: 'meadow_hare', chance: 0.75, count: [3, 5] },
     { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
@@ -3258,8 +3267,12 @@ export function addRelation(a: string, b: string, stance: FactionStance, seedWar
   }
 }
 
-/** Faction rosters — what each side fields when a war zone spawns them. */
-export const FACTIONS: Record<string, { name: string; table: { id: string; weight: number }[] }> = {
+/** Faction rosters — what each side fields when a war zone spawns them (and
+ *  what encounters, invasions, fractures, garrisons and contests draw from).
+ *  Entries carry PRESENCE envelopes: the leveled-list lever that lets a
+ *  roster EVOLVE — fodder that disperses past the teens, elites that only
+ *  muster deep in the world — while the table stays one flat, open list. */
+export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }> = {
   goblin: {
     name: 'the Goblin Warband',
     table: [

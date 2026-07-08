@@ -45,6 +45,7 @@ import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
 import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
 import { coopScale } from '../data/coop';
@@ -2709,7 +2710,7 @@ export class World {
         const dir = side === 0 ? -1 : 1;
         // the front line
         for (let pk = 0; pk < 2; pk++) {
-          const type = this.weightedPick(roster.table);
+          const type = this.weightedPick(roster.table, Math.max(1, def.level));
           const n = randInt(3, 5);
           for (let k = 0; k < n; k++) {
             const mw = this.createMonster(type, Math.max(1, def.level), 'enemy');
@@ -2721,7 +2722,7 @@ export class World {
         }
         // reinforcements in the field
         const at = this.farPoint(650);
-        const type2 = this.weightedPick(roster.table);
+        const type2 = this.weightedPick(roster.table, Math.max(1, def.level));
         for (let k = 0; k < randInt(3, 5); k++) {
           const mw = this.createMonster(type2, Math.max(1, def.level), 'enemy');
           mw.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), mw.radius);
@@ -2774,7 +2775,7 @@ export class World {
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
       for (const c of layout.camps) {
-        const type = this.weightedPick(def.packs.table);
+        const type = this.weightedPick(def.packs.table, def.level);
         const n = randInt(3, 5);
         const squadId = this.nextSquadId();
         for (let k = 0; k < n; k++) {
@@ -2792,7 +2793,7 @@ export class World {
     for (const grn of layout.garrisons) {
       const roster = FACTIONS[grn.faction];
       if (!roster) continue;
-      const type = this.weightedPick(roster.table);
+      const type = this.weightedPick(roster.table, def.level);
       const n = randInt(grn.size[0], grn.size[1]);
       const squadId = this.nextSquadId();
       for (let k = 0; k < n; k++) {
@@ -3214,7 +3215,7 @@ export class World {
     const pack: Actor[] = [];
     let leader: Actor | null = null;
     for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(roster.table), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
       if (k === 0) { const r = rollRarity(crowned); if (r !== 'normal') this.promoteRarity(m, r, { distinctName: true }); leader = m; }
       m.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), m.radius);
       this.actors.push(m);
@@ -3381,7 +3382,7 @@ export class World {
       const facId = this.encRng.pick(e.def.factions);
       const roster = FACTIONS[facId];
       if (!roster?.table.length) continue;
-      const type = this.weightedPick(roster.table);
+      const type = this.weightedPick(roster.table, this.zone.level);
       const m = this.createMonster(type, this.zone.level, 'enemy');
       m.faction = facId;
       const ang = this.encRng.range(0, Math.PI * 2);
@@ -3822,7 +3823,7 @@ export class World {
       // The keenest sensors (blood mites, whose swarm AI ×1.4's an already-high
       // detection) still notice you on arrival — by design, that's their thing.
       const at = this.farPoint(840);
-      const type = this.weightedPick(picks);
+      const type = this.weightedPick(picks, def.level);
       // SIZE: a weighted ARCHETYPE spread (swarm / standard / grazing) when the zone
       // defines one — so a Field varies dense clusters and grazing pairs — else the band.
       const n = spec.archetypes?.length ? rollPackSize(spec.archetypes) : randInt(spec.size[0], spec.size[1]);
@@ -3854,7 +3855,12 @@ export class World {
     const table = WILDLIFE[def.biome ?? 'plains'];
     if (!table?.length) return;
     for (const w of table) {
-      if (Math.random() >= w.chance) continue;
+      // Presence gates fauna too: row envelope × def envelope scale the CHANCE
+      // (rows aren't a weighted pick against each other, so chance is the dial).
+      const lvl = Math.max(1, def.level);
+      const chance = w.chance * presenceMul(w.presence, lvl)
+        * presenceMul(MONSTERS[w.id]?.presence, lvl);
+      if (Math.random() >= chance) continue;
       const n = randInt(w.count[0], w.count[1]);
       const at = this.farPoint(700);
       const squadId = this.nextSquadId();
@@ -4149,7 +4155,7 @@ export class World {
 
   /** Spawn a tagged event actor from a weighted table; returns it. */
   spawnEventActor(table: PackTableEntry[], level: number, team: Team, faction: string, tag: string): Actor {
-    const a = this.createMonster(this.weightedPick(table), level, team);
+    const a = this.createMonster(this.weightedPick(table, level), level, team);
     a.faction = faction;
     a.tag = tag;
     this.actors.push(a);
@@ -4623,7 +4629,7 @@ export class World {
     const pool = (FACTIONS[fr.faction]?.table ?? []).filter(e => e.id !== fr.cap.boss);
     const n = randInt(5, 9);
     for (let k = 0; k < n && pool.length; k++) {
-      const m = this.createMonster(this.weightedPick(pool), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(pool, lvl), lvl, 'enemy');
       m.faction = fr.faction;
       m.pos = this.clampPos(vec(at.x + rand(-120, 120), at.y + rand(-120, 120)), m.radius);
       this.actors.push(m);
@@ -4675,7 +4681,7 @@ export class World {
     const roster = FACTIONS[run.faction];
     if (!roster?.table.length) return;
     for (let i = 0; i < n; i++) {
-      const type = this.weightedPick(roster.table);
+      const type = this.weightedPick(roster.table, this.zone.level);
       const m = this.createMonster(type, this.zone.level, 'enemy');
       m.faction = run.faction;
       m.tag = 'fracture_foe';
@@ -5803,7 +5809,8 @@ export class World {
     if (room <= 0) return;
     const n = Math.min(room, eventCount(cfg, intensity));
     for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(roster.table), Math.max(1, this.zone.level), 'enemy');
+      const lvl = Math.max(1, this.zone.level);
+      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
       m.faction = fac;
       m.tag = 'eldritch_spawn';
       m.pos = this.clampPos(this.farPoint(cfg.farFrom), m.radius);
@@ -6257,7 +6264,7 @@ export class World {
       const packs = multi ? (rank === 0 ? 2 : 1) : 2;
       for (let pk = 0; pk < packs; pk++) {
         const at = this.farPoint(650);
-        const type = this.weightedPick(roster.table);
+        const type = this.weightedPick(roster.table, Math.max(1, def.level));
         for (let k = 0; k < randInt(3, 5); k++) {
           const m = this.createMonster(type, Math.max(1, def.level), 'enemy');
           m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
@@ -6373,8 +6380,9 @@ export class World {
     if (!roster?.table?.length) return;
     const champId = this.sim.demonField?.surge()?.portal?.champion?.monsterId;
     const pool = roster.table.filter(e => e.id !== champId); // craters spit lessers, not the Balor
-    const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table),
-      Math.max(1, this.zone.level + info.strengthBonus), 'enemy');
+    const meteorLvl = Math.max(1, this.zone.level + info.strengthBonus);
+    const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table, meteorLvl),
+      meteorLvl, 'enemy');
     m.faction = facId;
     m.pos = this.clampPos(vec(at.x, at.y), m.radius);
     if (this.demonHeadcount(facId) >= ENCOUNTER_CAP && m.defId) {
@@ -6421,7 +6429,7 @@ export class World {
     const pool = roster.table.filter(e => e.id !== champId);
     const n = randInt(5, 8);
     for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table, lvl), lvl, 'enemy');
       m.faction = facId;
       m.pos = this.clampPos(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
       this.actors.push(m);
@@ -6502,7 +6510,7 @@ export class World {
     const n = randInt(6, 10);
     const squadId = this.nextSquadId(); // the demesne guard fights as one warband
     for (let k = 0; k < n && pool.length; k++) {
-      const m = this.createMonster(this.weightedPick(pool), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(pool, lvl), lvl, 'enemy');
       m.faction = 'demon';
       m.squadId = squadId;
       m.squadLeader = k === 0;
@@ -6551,7 +6559,7 @@ export class World {
     // sanctum gate, not by clearing the streets.
     const n = randInt(info.garrison[0], info.garrison[1]);
     for (let k = 0; k < n; k++) {
-      const m = this.createMonster(this.weightedPick(roster.table), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
       m.faction = info.faction;
       m.pos = this.clampPos(vec(center.x + rand(-100, 100), center.y + rand(-100, 100)), m.radius);
       if (k === 0 && info.leaderRarity !== 'none') {
@@ -6599,7 +6607,7 @@ export class World {
         cfg.packCount[0] + (cfg.packCount[1] - cfg.packCount[0]) * clamp(info.intensity, 0, 1)));
       for (let pk = 0; pk < packs; pk++) {
         const at = this.farPoint(460);
-        const type = this.weightedPick(roster.table);
+        const type = this.weightedPick(roster.table, lvl);
         const n = randInt(cfg.packSize[0], cfg.packSize[1]);
         for (let k = 0; k < n; k++) {
           const m = this.createMonster(type, lvl, 'enemy');
@@ -6670,7 +6678,7 @@ export class World {
       const packs = Math.max(1, Math.round(1 + 3 * clamp(info.density, 0, 1))); // 1..4 by density
       for (let pk = 0; pk < packs; pk++) {
         const at = this.clampPos(vec(from.x + rand(-110, 110), from.y + rand(-110, 110)), 24);
-        const type = this.weightedPick(roster.table);
+        const type = this.weightedPick(roster.table, lvl);
         const n = randInt(2, 4);
         for (let k = 0; k < n; k++) {
           const m = this.createMonster(type, lvl, 'enemy');
@@ -6843,9 +6851,9 @@ export class World {
    *  Tagged so each casualty SWELLS the tide and the headcount caps the pour. */
   private spawnDeadwakeStreamer(info: DeadwakeInfo, cfg: DeadwakeSurge): void {
     if (!cfg.floodRoster.length) return;
-    const id = this.weightedPick(cfg.floodRoster);
-    if (!MONSTERS[id]) return;
     const lvl = Math.max(1, this.zone.level + info.levelBonus);
+    const id = this.weightedPick(cfg.floodRoster, lvl);
+    if (!MONSTERS[id]) return;
     const m = this.createMonster(id, lvl, 'enemy');
     m.faction = info.faction;
     m.tag = 'deadwake_spawn';
@@ -6860,9 +6868,9 @@ export class World {
   private spawnDeadwakeLeader(info: DeadwakeInfo): void {
     const cfg = this.sim.deadwakeField?.surge();
     if (!cfg?.leaderPool.length) return;
-    const leaderId = this.weightedPick(cfg.leaderPool);
-    if (!MONSTERS[leaderId]) return;
     const lvl = Math.max(1, this.zone.level + info.leaderLevelBonus);
+    const leaderId = this.weightedPick(cfg.leaderPool, lvl);
+    if (!MONSTERS[leaderId]) return;
     const leader = this.createMonster(leaderId, lvl, 'enemy');
     leader.faction = info.faction;
     this.promoteRarity(leader, 'crowned');
@@ -6970,9 +6978,9 @@ export class World {
    *  goal (aiFleeGoal) serves BOTH the engine's neutral wheel AND a roused calf's flee. */
   private spawnMigrant(info: MigrationInfo, cfg: MigrationSurge): void {
     if (!cfg.roster.length) return;
-    const id = this.weightedPick(cfg.roster);
-    if (!MONSTERS[id]) return;
     const lvl = Math.max(1, this.zone.level + cfg.levelBonus);
+    const id = this.weightedPick(cfg.roster, lvl);
+    if (!MONSTERS[id]) return;
     const m = this.createMonster(id, lvl, 'enemy');
     m.faction = info.faction;
     m.tag = 'migrant';
@@ -7068,7 +7076,7 @@ export class World {
     // fight with pack discipline (muster/tokens/formations per their brains).
     const squadId = this.nextSquadId();
     for (let k = 0; k < info.packSize; k++) {
-      const m = this.createMonster(this.weightedPick(roster), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(roster, lvl), lvl, 'enemy');
       m.faction = info.faction;
       m.tag = 'brigand';
       m.squadId = squadId;
@@ -7205,10 +7213,10 @@ export class World {
   /** Populate the Necropolis arena: the Bonelord (uber, Crowned) + a garrison of the
    *  flood roster, scaled by the realm's level bonus. */
   private spawnNecropolisBoss(cfg: NecropolisCfg): void {
-    const bossId = this.weightedPick(cfg.bossPool);
+    const lvl = Math.max(1, this.zone.level + cfg.levelBonus);
+    const bossId = this.weightedPick(cfg.bossPool, lvl + 2);
     if (!MONSTERS[bossId]) return;
     const faction = this.sim.deadwakeField?.surge().faction ?? 'undead';
-    const lvl = Math.max(1, this.zone.level + cfg.levelBonus);
     const at = this.clampPos(this.farPoint(440), 32);
     const boss = this.createMonster(bossId, lvl + 2, 'enemy');
     boss.faction = faction;
@@ -7220,7 +7228,7 @@ export class World {
     const roster = this.sim.deadwakeField?.surge().floodRoster ?? [];
     const n = randInt(cfg.garrison[0], cfg.garrison[1]);
     for (let k = 0; k < n && roster.length; k++) {
-      const m = this.createMonster(this.weightedPick(roster), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(roster, lvl), lvl, 'enemy');
       m.faction = faction;
       m.pos = this.clampPos(vec(at.x + rand(-140, 140), at.y + rand(-140, 140)), m.radius);
       this.actors.push(m);
@@ -7287,7 +7295,7 @@ export class World {
     const pool = FACTIONS[faction]?.table?.filter(e => e.id !== leaderId) ?? [];
     const n = randInt(6, 10);
     for (let k = 0; k < n && pool.length; k++) {
-      const m = this.createMonster(this.weightedPick(pool), lvl, 'enemy');
+      const m = this.createMonster(this.weightedPick(pool, lvl), lvl, 'enemy');
       m.faction = faction;
       m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
       this.actors.push(m);
@@ -7296,15 +7304,22 @@ export class World {
       `${MONSTERS[leaderId]?.name ?? 'the Crusade Leader'} commands the sanctum!`, '#ffd700', 18);
   }
 
-  private weightedPick(table: PackTableEntry[]): string {
+  /** THE selection chokepoint: every "which monster?" roll lands here. Pass
+   *  `atLevel` (the level the spawn will use) and the table is first shaped
+   *  by the PRESENCE envelopes (engine/presence.ts) — entry × def — so
+   *  leveled lists apply uniformly to packs, rosters, events and overlays.
+   *  Omit it only for tables that genuinely have no level context. */
+  private weightedPick(table: PackTableEntry[], atLevel?: number): string {
+    const picks = atLevel === undefined ? table
+      : presenceTable(table, atLevel, id => MONSTERS[id]?.presence);
     let total = 0;
-    for (const e of table) total += e.weight;
+    for (const e of picks) total += e.weight;
     let roll = rand(0, total);
-    for (const e of table) {
+    for (const e of picks) {
       roll -= e.weight;
       if (roll <= 0) return e.id;
     }
-    return table[table.length - 1].id;
+    return picks[picks.length - 1].id;
   }
 
   /** A random point at least `minFromPlayer` away (best effort). When
@@ -22467,7 +22482,7 @@ export class World {
           if (this.countedEnemies().length < 24 && this.zone.packs) {
             const at = this.farPoint(740);
             const { table } = this.effectiveSpawn(this.zone, this.baseTable(this.zone));
-            const type = this.weightedPick(table);
+            const type = this.weightedPick(table, this.zone.level);
             const n = randInt(2, 4);
             for (let i = 0; i < n; i++) {
               const m = this.createMonster(type, this.zone.level, 'enemy');
@@ -22504,29 +22519,35 @@ export class World {
     // Leveled zones draw a WEIGHTED table so day/night, weather, and a faction
     // contest actually reshape who attacks; The Pit (level 0, no packs) runs
     // the classic flat escalating table, level = wave.
+    const level = this.zone.level > 0
+      ? this.zone.level + Math.floor((this.wave - 1) / 2)
+      : this.wave;
     let pickType: () => string;
     if (this.zone.packs) {
       const e = this.effectiveSpawn(this.zone, this.baseTable(this.zone));
       const table: PackTableEntry[] = e.table
-        .filter(en => MONSTERS[en.id]).map(en => ({ id: en.id, weight: en.weight }));
+        .filter(en => MONSTERS[en.id])
+        .map(en => ({ id: en.id, weight: en.weight, presence: en.presence }));
       // Contested ground bleeds into the assault — the rival rosters join in.
       for (const fid of e.inject) {
         for (const en of FACTIONS[fid]?.table ?? []) {
           if (!MONSTERS[en.id]) continue;
           const ex = table.find(t => t.id === en.id);
-          if (ex) ex.weight += en.weight; else table.push({ id: en.id, weight: en.weight });
+          if (ex) ex.weight += en.weight;
+          else table.push({ id: en.id, weight: en.weight, presence: en.presence });
         }
       }
-      pickType = (): string => this.weightedPick(table);
+      pickType = (): string => this.weightedPick(table, level);
     } else {
-      const pool: string[] = [];
-      for (const tier of WAVE_TABLE) if (this.wave >= tier.minWave) pool.push(...tier.ids);
-      pickType = (): string => pick(pool);
+      // Wave tiers gate entry; def-level presence still shapes the pool (a
+      // monster whose envelope excludes this wave-level sits the round out).
+      const pool: PackTableEntry[] = [];
+      for (const tier of WAVE_TABLE) {
+        if (this.wave >= tier.minWave) pool.push(...tier.ids.map(id => ({ id, weight: 1 })));
+      }
+      pickType = (): string => this.weightedPick(pool, level);
     }
     const count = Math.min(4 + this.wave * 2, 20);
-    const level = this.zone.level > 0
-      ? this.zone.level + Math.floor((this.wave - 1) / 2)
-      : this.wave;
 
     for (let i = 0; i < count; i++) {
       const m = this.createMonster(pickType(), level, 'enemy');

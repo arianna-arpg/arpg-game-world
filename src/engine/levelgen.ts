@@ -20,8 +20,10 @@
 
 import { dist, vec, type Vec2 } from '../core/math';
 import type { Rng } from '../core/rng';
-import type { StampIgnoreRule, StampRuleOverride, StampSpec, ZoneDef } from '../data/zones';
+import type { PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
+import { MONSTERS } from '../data/monsters';
+import { presenceTable } from './presence';
 import { runStructureGen } from './structureGen';
 import type { Modifier } from './stats';
 import type { WalkField } from '../world/walk';
@@ -728,6 +730,9 @@ export type Reservation =
 export interface GenCtx {
   rng: Rng;
   arena: { w: number; h: number };
+  /** The zone's monster level — landmark spawn tables shape by PRESENCE
+   *  envelopes against it (deterministic: pure math on a pure table). */
+  level?: number;
   entry: Vec2;
   exits: Vec2[];
   doodads: Doodad[];
@@ -1310,7 +1315,7 @@ export function generateLayout(
   rng: Rng, entry: Vec2, exits: Vec2[],
 ): GeneratedLayout {
   const ctx: GenCtx = {
-    rng, arena, entry, exits,
+    rng, arena, entry, exits, level: def.level,
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
   };
@@ -2517,7 +2522,8 @@ registerStamp('landmark', (ctx, spec) => {
 // invariant (mustReach anchors) or declare deliberate jump-only POCKETS, and
 // may seed entity SPAWNS over their interior (an open pit crawling with them).
 export interface LandmarkSpawns {
-  table: { id: string; weight: number }[];
+  /** Rows may carry PRESENCE envelopes — shaped by the zone's level at gen. */
+  table: PackTableEntry[];
   count: [number, number];
   where: 'interior' | 'rim';
 }
@@ -2699,12 +2705,15 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
       if (!ctx.walk || ctx.walk.isWalkable(c.x, c.y)) cells.push(c);
     });
     if (cells.length) {
-      const total = def.spawns.table.reduce((a, e) => a + e.weight, 0);
+      // Presence envelopes shape the table at the ZONE's level before the
+      // seeded walk — still deterministic (pure math on a pure table).
+      const table = presenceTable(def.spawns.table, ctx.level ?? 1, id => MONSTERS[id]?.presence);
+      const total = table.reduce((a, e) => a + e.weight, 0);
       const n = ctx.rng.int(def.spawns.count[0], def.spawns.count[1]);
       for (let i = 0; i < n; i++) {
         let roll = ctx.rng.range(0, total);
-        let pick = def.spawns.table[def.spawns.table.length - 1];
-        for (const e of def.spawns.table) { roll -= e.weight; if (roll <= 0) { pick = e; break; } }
+        let pick = table[table.length - 1];
+        for (const e of table) { roll -= e.weight; if (roll <= 0) { pick = e; break; } }
         const cell = cells[ctx.rng.int(0, cells.length - 1)];
         (ctx.landmarkSpawns ??= []).push({ id: pick.id, pos: vec(cell.x, cell.y) });
       }

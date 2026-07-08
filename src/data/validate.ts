@@ -5,7 +5,8 @@
 // skill and just stands there) get a loud console line instead.
 // ---------------------------------------------------------------------------
 
-import { MONSTERS, WAVE_TABLE } from './monsters';
+import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE } from './monsters';
+import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import {
@@ -468,6 +469,71 @@ export function validateContent(): void {
     if (!MONSTERS[t.spawnerId]) warn(`tileset ${t.id}: unknown spawner '${t.spawnerId}'`);
   }
   for (const tier of WAVE_TABLE) checkTable(`wave table (wave ${tier.minWave}+)`, tier.ids);
+  for (const [fid, f] of Object.entries(FACTIONS)) {
+    checkTable(`faction ${fid}`, f.table.map(e => e.id));
+  }
+  for (const [biome, rows] of Object.entries(WILDLIFE)) {
+    checkTable(`wildlife ${biome}`, rows.map(r => r.id));
+  }
+
+  // PRESENCE envelopes (engine/presence.ts): every spec well-formed, every
+  // named band registered, and no weighted table left ENTIRELY empty by its
+  // envelopes at some level — the runtime falls back to unshaped weights
+  // there (never starves), but that silently un-does the authored gating.
+  const specIssues = (spec: PresenceSpec): string[] => {
+    if (typeof spec === 'string') {
+      return PRESENCE_BANDS[spec] ? [] : [`unknown presence band '${spec}'`];
+    }
+    const out: string[] = [];
+    if (spec.from !== undefined && spec.to !== undefined && spec.from > spec.to) {
+      out.push(`presence from ${spec.from} > to ${spec.to}`);
+    }
+    if ((spec.fadeIn ?? 0) < 0 || (spec.fadeOut ?? 0) < 0) out.push('presence fade must be >= 0');
+    if ((spec.mul ?? 1) < 0) out.push('presence mul must be >= 0');
+    if (spec.stops) {
+      for (let i = 0; i < spec.stops.length; i++) {
+        if (spec.stops[i][1] < 0) out.push(`presence stop ${i} multiplier < 0`);
+        if (i > 0 && spec.stops[i][0] <= spec.stops[i - 1][0]) {
+          out.push('presence stops must be sorted by ascending level');
+          break;
+        }
+      }
+    }
+    return out;
+  };
+  for (const m of Object.values(MONSTERS)) {
+    if (m.presence !== undefined) for (const msg of specIssues(m.presence)) warn(`monster ${m.id}: ${msg}`);
+  }
+  const checkPresenceTable = (where: string, table: { id: string; weight: number; presence?: PresenceSpec }[]): void => {
+    let any = false;
+    for (const e of table) {
+      if (e.presence !== undefined) { any = true; for (const msg of specIssues(e.presence)) warn(`${where} (${e.id}): ${msg}`); }
+      if (MONSTERS[e.id]?.presence !== undefined) any = true;
+    }
+    if (!any) return;
+    const gaps: number[] = [];
+    for (let lvl = 1; lvl <= 100; lvl++) {
+      let total = 0;
+      for (const e of table) {
+        total += e.weight * presenceMul(e.presence, lvl) * presenceMul(MONSTERS[e.id]?.presence, lvl);
+      }
+      if (total <= 0) gaps.push(lvl);
+    }
+    if (gaps.length) {
+      warn(`${where}: presence leaves the table empty at level ${gaps[0]}`
+        + (gaps.length > 1 ? `..${gaps[gaps.length - 1]} (${gaps.length} levels)` : '')
+        + ' — spawns there fall back to unshaped weights');
+    }
+  };
+  for (const z of Object.values(ZONES)) if (z.packs) checkPresenceTable(`zone ${z.id}`, z.packs.table);
+  for (const t of Object.values(TILESETS)) checkPresenceTable(`tileset ${t.id}`, t.packs.table);
+  for (const [fid, f] of Object.entries(FACTIONS)) checkPresenceTable(`faction ${fid}`, f.table);
+  for (const lm of landmarkDefs()) if (lm.spawns) checkPresenceTable(`landmark ${lm.id}`, lm.spawns.table);
+  for (const [biome, rows] of Object.entries(WILDLIFE)) {
+    for (const r of rows) {
+      if (r.presence !== undefined) for (const msg of specIssues(r.presence)) warn(`wildlife ${biome} (${r.id}): ${msg}`);
+    }
+  }
 
   // UNLOCK CATALOG: ids unique, every gem/class id resolves against the live
   // registries, requiresUnlock ladders point at real entries, and every

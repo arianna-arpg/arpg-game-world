@@ -125,9 +125,11 @@ export function biasTable(base: PackTableEntry[], bias: SpawnBias): PackTableEnt
     const fac = MONSTERS[e.id]?.faction;
     const mul = fac ? (bias.factionMul[fac] ?? 1) : 1;
     const w = Math.max(0, e.weight * mul);
-    if (w > 0) out.push({ id: e.id, weight: w });
+    // Spread, don't rebuild: the entry's presence envelope (and any future
+    // per-row fields) must survive the reweigh — weightedPick folds it later.
+    if (w > 0) out.push({ ...e, weight: w });
   }
   // Degenerate guard: if every row zeroed out, fall back to the base weights.
-  if (out.length === 0) for (const e of base) out.push({ id: e.id, weight: e.weight });
+  if (out.length === 0) for (const e of base) out.push({ ...e });
   return out;
 }

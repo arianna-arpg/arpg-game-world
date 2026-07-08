@@ -15,8 +15,14 @@
 // ---------------------------------------------------------------------------
 
 import type { MonsterRarity } from '../engine/rarity';
+import type { PresenceSpec } from '../engine/presence';
 
-export interface PackTableEntry { id: string; weight: number; }
+/** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
+ *  a weight-vs-level envelope — or a named band — deciding how present this
+ *  entry is at the spawn's level. Absent = present at every level. The same
+ *  monster can carry different envelopes in different tables; MonsterDef
+ *  .presence multiplies on top as its global floor/ceiling. */
+export interface PackTableEntry { id: string; weight: number; presence?: PresenceSpec }
 
 /** A pack SIZE archetype rolled per pack (a weighted spread): lets a zone mix dense
  *  swarms, standard packs, and tiny grazing groups instead of one uniform size band.
