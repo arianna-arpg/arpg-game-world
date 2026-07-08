@@ -1781,14 +1781,56 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     }
     doorGroups.push({ cells: group, mode: dc.spec.door! });
   }
+  // Plan-cell probes for the interior-door normal: which cells the PLAN
+  // itself says are floor (interior/courtyard/ground-painting furniture) vs
+  // wall-region. Doors count as floor — a passage continues through them.
+  const planSpecAt = (cx: number, cy: number): CellSpec | undefined => {
+    const ch = rows[cy]?.[cx];
+    return ch ? legendCell(ch, def.legend) : undefined;
+  };
+  const planFloorAt = (cx: number, cy: number): boolean => {
+    const s = planSpecAt(cx, cy);
+    if (!s) return false;
+    if (s.region && !s.door) return false;
+    return !!(s.interior || s.courtyard || s.slot || s.breakable || s.npc || s.doodad || s.door);
+  };
   const groupNormal = (g: PlanCell[]): Vec2 => {
-    const gx = g.reduce((a, c) => a + c.cx, 0) / g.length;
-    const gy = g.reduce((a, c) => a + c.cy, 0) / g.length;
     if (g.some(c => c.cy === 0)) return vec(0, -1);
     if (g.some(c => c.cy === planH - 1)) return vec(0, 1);
     if (g.some(c => c.cx === 0)) return vec(-1, 0);
     if (g.some(c => c.cx === planW - 1)) return vec(1, 0);
-    // Interior door (a keep): normal points from the plan center toward it.
+    // INTERIOR door (a BSP partition, a keep gate): the passage runs
+    // PERPENDICULAR to the wall it pierces — never "away from the plan
+    // center", which for a partition door can point straight down its own
+    // wall line into masonry (the walled_manor's d2/d5/d7/d8 taught us:
+    // no walkable apron ever lay that way). The group's run gives the wall
+    // axis; a single-cell door reads its wall-region neighbors instead. The
+    // SIGN takes whichever side the plan says is floor (both sides of a
+    // partition are rooms — the first found wins, deterministically).
+    const minX = Math.min(...g.map(c => c.cx)), maxX = Math.max(...g.map(c => c.cx));
+    const minY = Math.min(...g.map(c => c.cy)), maxY = Math.max(...g.map(c => c.cy));
+    const midX = Math.round((minX + maxX) / 2), midY = Math.round((minY + maxY) / 2);
+    let axes: Vec2[];
+    if (maxX - minX > maxY - minY) {
+      axes = [vec(0, -1), vec(0, 1)];       // door run along X → passage along Y
+    } else if (maxY - minY > maxX - minX) {
+      axes = [vec(-1, 0), vec(1, 0)];       // door run along Y → passage along X
+    } else {
+      const wallAt = (cx: number, cy: number): boolean => {
+        const s = planSpecAt(cx, cy);
+        return !!s?.region && !s.door;
+      };
+      axes = wallAt(minX - 1, midY) || wallAt(maxX + 1, midY)
+        ? [vec(0, -1), vec(0, 1)]           // walled left/right → passage along Y
+        : [vec(-1, 0), vec(1, 0)];
+    }
+    for (const a of axes) {
+      if (planFloorAt(midX + a.x, midY + a.y)) return a;
+    }
+    // Neither side reads as floor in the plan (odd authoring): the old
+    // center-away heuristic stays as the last resort.
+    const gx = g.reduce((a, c) => a + c.cx, 0) / g.length;
+    const gy = g.reduce((a, c) => a + c.cy, 0) / g.length;
     const ddx = gx - planW / 2, ddy = gy - planH / 2;
     return Math.abs(ddx) >= Math.abs(ddy) ? vec(Math.sign(ddx) || 1, 0) : vec(0, Math.sign(ddy) || 1);
   };
@@ -2011,10 +2053,24 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   // carves are allowed only OUTSIDE the footprint, so a wall is never breached.
   for (let gi = 0; gi < doorGroups.length; gi++) {
     const pd = placed.doors[gi];
-    let apron: Vec2 | null = null;
-    for (let step = 1.2; step <= 3.4; step += 0.5) {
-      const p = vec(pd.pos.x + pd.normal.x * cell * step, pd.pos.y + pd.normal.y * cell * step);
-      if (grid.isWalkable(p.x, p.y)) { apron = p; break; }
+    const searchAlong = (nx: number, ny: number): Vec2 | null => {
+      for (let step = 1.2; step <= 3.4; step += 0.5) {
+        const p = vec(pd.pos.x + nx * cell * step, pd.pos.y + ny * cell * step);
+        if (grid.isWalkable(p.x, p.y)) return p;
+      }
+      return null;
+    };
+    let apron: Vec2 | null = searchAlong(pd.normal.x, pd.normal.y);
+    if (!apron) {
+      // The REVERSE side: an interior door opens into a room either way — if
+      // the derived normal faced masonry, the working side becomes the normal
+      // (guards, apron requirements and open-doors topology all read it).
+      const back = searchAlong(-pd.normal.x, -pd.normal.y);
+      if (back) {
+        pd.normal.x *= -1;
+        pd.normal.y *= -1;
+        apron = back;
+      }
     }
     if (!apron) {
       const p = vec(pd.pos.x + pd.normal.x * cell * APRON_CELLS, pd.pos.y + pd.normal.y * cell * APRON_CELLS);
@@ -2026,7 +2082,13 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
         grid.carveCorridor(p.x, p.y, far.x, far.y, cell * 0.8);
         apron = p;
       } else {
-        console.warn(`[structures] ${sid}: door ${pd.door.id} has no walkable apron along its normal (authoring/generator gap)`);
+        // Once per def+door — a generator gap repeats identically on every
+        // mint of that blueprint; the first line says everything.
+        const key = `${def.id}/d${gi}`;
+        if (!apronWarned.has(key)) {
+          apronWarned.add(key);
+          console.warn(`[structures] ${sid}: door ${pd.door.id} has no walkable apron along either normal (authoring/generator gap)`);
+        }
         continue;
       }
     }
@@ -2103,6 +2165,10 @@ export function registerStamp(id: string, h: StampHandler): void {
 export function hasStamp(id: string): boolean { return id in STAMP_HANDLERS; }
 
 const unknownStampWarned = new Set<string>();
+
+/** Apron-gap warns fire ONCE per def+door (`<defId>/d<n>`): a generator gap
+ *  repeats identically on every mint of that blueprint — one line suffices. */
+const apronWarned = new Set<string>();
 
 function stamp(ctx: GenCtx, spec: StampSpec): void {
   const h = STAMP_HANDLERS[spec.kind];
