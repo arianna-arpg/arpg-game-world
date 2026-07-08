@@ -244,7 +244,10 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   thicket: {
     longShadow: 0.7,
-    painter: 'groundShadow', order: 50, params: { scale: 0.5, color: '#101c10' },
+    // A REAL tangle at ground level (the true-bush painter in bramble darks)
+    // — the last of the old gradient discs; the bramble crown rides above.
+    painter: 'brush', order: 50,
+    params: { color: '#14301a', leaves: 1.1 },
     canopy: { painter: 'bramble', params: { fill: '#16401c', edge: '#0a2410', spine: '#2c5a26' } },
   },
   palm: {
@@ -262,9 +265,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'trunk', order: 50, params: { scale: 0.22, roots: 6 },
     canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
   },
+  // Giant fungus wears the WALK-UNDER TREE mechanism now: a real pale-ringed
+  // STALK at ground level (the trunk painter, fungal-toned, sized to the
+  // bodyScale trunk), the parametric cap riding the canopy pass above.
   giant_mushroom: {
     longShadow: 0.8,
-    painter: 'groundShadow', order: 50, params: { scale: 0.34, color: '#241c2e' },
+    painter: 'trunk', order: 50, params: { scale: 0.3, roots: 3, color: '#5a4a7a' },
     canopy: {
       painter: 'mushroomCrown',
       params: { caps: 1, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
@@ -273,7 +279,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   fruiting_tower: {
     longShadow: 0.9,
-    painter: 'groundShadow', order: 50, params: { scale: 0.34, color: '#241c2e' },
+    painter: 'trunk', order: 50, params: { scale: 0.26, roots: 4, color: '#4a3a66' },
     canopy: {
       painter: 'mushroomCrown',
       params: { caps: 3, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
@@ -380,6 +386,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   rubble: { painter: 'rubble', order: 36 },
   banner_post: { painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.5 },
+  // The mercenary camp's standard (was a warned disc-fallback).
+  merc_banner: {
+    painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.4,
+    params: { cloth: '#8a6a3e' },
+  },
   beehive: {
     painter: 'pod', order: 53, shadow: 0.5,
     params: { body: '#c8a24a', glow: '#e8cf7a', aspectY: 1.15, glowY: -0.2, glowR: 0.34, pulseRate: 1.4 },

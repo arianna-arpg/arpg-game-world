@@ -529,11 +529,13 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   kelp:     { overlap: 'ground', walkOnly: true },
   coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
   sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40 },
-  // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
-  // is an active puffer (blocks move not shots, like lava_vent); glow_cap/mycelial_mat are
-  // walkable ground overlays (decoration + the spore carpet).
-  giant_mushroom: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 42, occlude: { pad: 12, alpha: 0.3 } },
-  fruiting_tower: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 54, occlude: { pad: 12, alpha: 0.3 } },
+  // Mycelia fungal doodads. giant_mushroom/fruiting_tower stand on STALKS now
+  // (bodyScale, the walk-under-tree mechanism): feet and arrows respect the
+  // stalk, eyes respect the cap — fight in the spore-shade beneath the crown.
+  // spore_pod is an active puffer (blocks move not shots, like lava_vent);
+  // glow_cap/mycelial_mat are walkable ground overlays.
+  giant_mushroom: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 42, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.3 },
+  fruiting_tower: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 54, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.26 },
   spore_pod:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 38, forbidOn: ['water', 'lava', 'chasm', 'bog'] },
   glow_cap:       { overlap: 'ground' },
   mycelial_mat:   { overlap: 'ground', walkOnly: true },
