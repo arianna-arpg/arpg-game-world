@@ -238,6 +238,14 @@ export class GroundRenderer {
         const wn = valueNoise((ox + x) * CFG.noiseScale * 1.6, (oy + y) * CFG.noiseScale * 1.6, this.seed + 31);
         ctx.fillStyle = wn > 0.5 ? wallFill : mix(wallFill, wallDark, 0.5);
         ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
+        // STRUCTURE MASONRY (rampart cells): dressed-stone courses in running
+        // bond — mortar seams, per-block tone, a chisel highlight along each
+        // course — so a RAISED wall reads BUILT, never the same rock as a cave
+        // face. World-coord aligned: the bond runs unbroken across cells and
+        // chunk borders.
+        if (id === 'rampart') {
+          this.bakeMasonry(ctx, x, y, cell, ox, oy, wallFill, wallDark, wallLit);
+        }
       }
     }
     // Bevel + AO in a second pass so fills never overpaint them.
@@ -271,5 +279,46 @@ export class GroundRenderer {
         if (openW) ao(x - aoDepth, y, aoDepth, cell, x, 0, x - aoDepth, 0);
       }
     }
+  }
+
+  /** One rampart cell's dressed-stone coursework, clipped to the cell. Blocks
+   *  key on WORLD course/column indices so the running bond survives every
+   *  cell and chunk seam; tone jitters per block off the bake seed. */
+  private bakeMasonry(ctx: CanvasRenderingContext2D, x: number, y: number,
+    cell: number, ox: number, oy: number,
+    fill: string, seam: string, lit: string): void {
+    const courseH = cell / 2;
+    const blockW = cell * (2 / 3);
+    const wx = ox + x, wy = oy + y;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, cell + 0.6, cell + 0.6);
+    ctx.clip();
+    const row0 = Math.floor(wy / courseH), row1 = Math.floor((wy + cell) / courseH);
+    for (let row = row0; row <= row1; row++) {
+      const ly = row * courseH - oy;
+      const off = (row % 2 + 2) % 2 ? blockW * 0.5 : 0;
+      const col0 = Math.floor((wx - off) / blockW), col1 = Math.floor((wx + cell - off) / blockW);
+      for (let col = col0; col <= col1; col++) {
+        const lx = col * blockW + off - ox;
+        // Per-block tone: quarried stone, no two alike.
+        ctx.fillStyle = shade(fill, (hash01(col, row, this.seed + 53) - 0.5) * 0.16);
+        ctx.globalAlpha = 0.55;
+        ctx.fillRect(lx, ly, blockW, courseH);
+      }
+      ctx.globalAlpha = 1;
+      // Mortar bed under the course, chisel light along its top.
+      ctx.fillStyle = withAlpha(seam, 0.85);
+      ctx.fillRect(x, ly + courseH - 1.2, cell + 0.6, 1.2);
+      ctx.fillStyle = withAlpha(lit, 0.22);
+      ctx.fillRect(x, ly, cell + 0.6, 1);
+      // Head joints (vertical mortar) per block.
+      ctx.fillStyle = withAlpha(seam, 0.7);
+      for (let col = col0; col <= col1; col++) {
+        const lx = col * blockW + off - ox;
+        ctx.fillRect(lx - 0.6, ly, 1.2, courseH);
+      }
+    }
+    ctx.restore();
   }
 }
