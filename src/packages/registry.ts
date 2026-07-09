@@ -18,6 +18,7 @@ import { DESCENT } from './defs/descent';
 import { DEMON_INVASION } from './defs/demonInvasion';
 import { FACTION_POLITICS } from './defs/factionPolitics';
 import { FRACTURES } from './defs/fractures';
+import { HAUNTING } from './defs/haunting';
 import { HOLDFAST } from './defs/holdfast';
 import { HUNT } from './defs/hunt';
 import { MIGRATION } from './defs/migration';
@@ -45,6 +46,7 @@ export const PACKAGES: ContentPackage[] = [
   HOLDFAST,
   BRIGANDS,
   MYCELIA,
+  HAUNTING,
   FACTION_POLITICS,
 ];
 

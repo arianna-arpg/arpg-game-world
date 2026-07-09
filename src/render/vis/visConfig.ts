@@ -32,6 +32,11 @@ export const VIS_CFG = {
     /** The hero's soft class-colored ground halo. */
     heroHaloAlpha: 0.16,
     heroHaloScale: 2.3,
+    /** SPAWN-IN: seconds a mid-play arrival (summon, construct, hatch,
+     *  streamer) takes to GROW to full size. Zone-load population skips it. */
+    spawnInSeconds: 0.35,
+    /** The seed scale a spawn-in starts from. */
+    spawnInFrom: 0.25,
   },
 
   /** Soft drop shadows (actors + standing doodads). */

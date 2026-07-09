@@ -1971,7 +1971,12 @@ export class Renderer {
 
   private drawFlash(f: { pos: Vec2; radius: number; color: string; life: number; maxLife: number; arc?: { facing: number; arcRad: number }; shape?: number; facing?: number; edgeFrac?: number; bolt?: boolean; meteor?: boolean; beam?: boolean }): void {
     const { ctx } = this;
-    const t = f.life / f.maxLife;
+    // A big synchronous sim step (headless probes, background-tab catch-up)
+    // can overshoot a flash's life below zero before the prune sweeps it —
+    // clamp, or every arc/gradient call downstream throws on a negative
+    // radius and takes the whole rAF loop down with it.
+    const t = Math.max(0, Math.min(1, f.life / f.maxLife));
+    if (t <= 0 || f.radius <= 0) return;
     // Crystal laser: a straight beam from pos along `facing` for `radius` length.
     if (f.beam) {
       const dir = f.facing ?? 0, ex = Math.cos(dir) * f.radius, ey = Math.sin(dir) * f.radius;
@@ -2117,6 +2122,17 @@ export class Renderer {
       const t = 1 - a.leap.timer / a.leap.total;
       const s = 1 + 0.55 * Math.sin(Math.PI * Math.min(1, Math.max(0, t)));
       ctx.scale(s, s);
+    }
+    // SPAWN-IN: a mid-play arrival (summon, construct, offering effigy,
+    // hatch, streamer) GROWS into the world over a breath. Zone-load
+    // population is exempt — its stamp rides the zone's own entry beat.
+    if (a.spawnedAt >= 0 && a.spawnedAt > world.zoneEnteredAt + 1) {
+      const bt = (world.time - a.spawnedAt) / VIS_CFG.body.spawnInSeconds;
+      if (bt >= 0 && bt < 1) {
+        const from = VIS_CFG.body.spawnInFrom;
+        const s = from + (1 - from) * (1 - (1 - bt) * (1 - bt)); // easeOutQuad
+        ctx.scale(s, s);
+      }
     }
     if (a.untargetable) ctx.globalAlpha = 0.55;
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;

@@ -3031,7 +3031,7 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'risen_offering', name: 'Risen Offering',
     description: 'The offering RISES: the field plants as an EFFIGY at your feet instead of at the mark — the ring rides the idol, dies with it, and the idol SPITS grave-wisps at enemies inside the incense. Recasting raises a new effigy; the old one crumbles, smoke and all.',
     color: '#b06888', requiresTags: ['corpse'], excludeTags: ['buff'],
-    turret: { castSkillId: 'offering_wisp', life: 50 },
+    turret: { castSkillId: 'offering_wisp', life: 50, look: 'offering_effigy' },
     mods: [mod('manaCost', 'more', 0.25)],
     perLevel: [mod('effectDuration', 'increased', 0.08)],
     weight: 5,

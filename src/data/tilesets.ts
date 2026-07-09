@@ -168,6 +168,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'moon_howler', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'orb_weaver', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        // Some of the trees are wearing something.
+        { id: 'root_wraith', weight: 2, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -500,6 +502,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'emerald_mantis', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'orb_weaver', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'root_wraith', weight: 2, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -572,6 +575,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'banshee', weight: 1, presence: { from: 14, fadeIn: 6 } },
         { id: 'giant_maggot', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'lake_horror', weight: 1, presence: { from: 12, fadeIn: 5 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1227,6 +1232,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'lesser_ooze', weight: 2, presence: { to: 10, fadeOut: 5 } },
         { id: 'viscous_ooze', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'gutspray_hurler', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        // The ground itself: pools with appetites, water with arms.
+        { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'lake_horror', weight: 1, presence: { from: 10, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1280,6 +1288,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'membrane', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
         { id: 'corpse_bloom', weight: 1 },
+        { id: 'spire_of_eyes', weight: 1, presence: { from: 12, fadeIn: 5 } },
       ],
     },
     // The Glut's own spawners-objective destructible: burst the blooms.
@@ -1314,6 +1323,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'frost_elemental', weight: 2 },
         { id: 'stone_sentinel', weight: 2, presence: { from: 10, fadeIn: 5 } },
         { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The leyline's own batteries.
+        { id: 'shard_spire', weight: 2, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'rime_stone',

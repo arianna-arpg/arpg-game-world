@@ -25,6 +25,7 @@ import type { CrusadeField } from '../packages/overlays/crusade';
 import type { DeadwakeField } from '../packages/overlays/deadwake';
 import type { MigrationField } from '../packages/overlays/migration';
 import type { BrigandField } from '../packages/overlays/brigands';
+import type { HauntField } from '../packages/overlays/haunting';
 import type { DemonInvasionField } from '../packages/overlays/demonInvasion';
 import type { FractureField } from '../packages/overlays/fractures';
 import type { HuntField } from '../packages/overlays/hunt';
@@ -115,6 +116,11 @@ export class WorldSim {
    *  Zero in an infected zone, and calls onPatientZeroSlain() to start the cure. It
    *  owns the cross-zone spread / reveal / recession. */
   readonly contagionField: ContagionField | null;
+  /** The haunting overlay if its package is in the manifest, else null — the engine
+   *  reads hauntOn() to field the grief-anchor + the apparition stream in a held zone;
+   *  the kill-handler rows call onAnchorBroken()/resolveHaunt() back. It owns the
+   *  settle/lapse lifecycle. */
+  readonly hauntField: HauntField | null;
   /** The holdfast overlay if its package is in the manifest, else null — the engine
    *  reads infoFor()/isLocked() to raise the locked bonus exit + its guardian and to
    *  resolve the toll. It owns the durable per-zone lock state. */
@@ -210,6 +216,13 @@ export class WorldSim {
     if (this.brigandField) {
       const badBr = this.brigandField.surge().roster.map(e => e.id).filter(id => !MONSTERS[id]);
       if (badBr.length) console.warn('[brigands] roster references unknown monster id(s):', badBr);
+    }
+    this.hauntField = (extra.find(o => o.id === 'haunting') as HauntField | undefined) ?? null;
+    if (this.hauntField) {
+      const s = this.hauntField.surge();
+      const badHa = [...s.roster, { id: s.anchorId, weight: 1 }, { id: s.bossId, weight: 1 }]
+        .map(e => e.id).filter(id => !MONSTERS[id]);
+      if (badHa.length) console.warn('[haunting] roster/anchor/boss references unknown monster id(s):', badHa);
     }
     this.contagionField = (extra.find(o => o.id === 'contagion') as ContagionField | undefined) ?? null;
     if (this.contagionField) {

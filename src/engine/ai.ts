@@ -113,6 +113,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (actor.dead || world.seatOf(actor)) return;
   // Constructs (decoys included) act through the world, not the brain.
   if (actor.construct) return;
+  // An ARMED ambusher IS scenery — no scheming until the world springs it.
+  if (actor.ambushArmed) return;
   // Scenery doesn't scheme: barrels, caches and townsfolk hold still.
   if (actor.passive) return;
   // DRIVEN actors (the caravan cart) are wheeled by an event tick, not a brain.

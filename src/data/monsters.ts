@@ -256,6 +256,19 @@ export interface MonsterDef {
    *  dives, the burrower goes to ground). `seek` caps the search (default
    *  900); `text` is the vanish line ("dives!"). Ambient texture, any body. */
   refuge?: { kind: string; seek?: number; text?: string };
+  /** TERRAIN-BOUND: this creature exists ONLY on matching ground. Spawn
+   *  placement relocates it onto a doodad of `kind` with radius >= minRadius
+   *  (no such doodad in the zone = the body simply isn't spawned), and it is
+   *  HARD-CONFINED to that doodad's disc + `grace` px forever after — the
+   *  lake horror slashes from its water and cannot be kited onto the grass.
+   *  Composes with `ambush` (hidden until you stray near its ground). */
+  habitat?: { kind: string; minRadius?: number; grace?: number };
+  /** AMBUSH SPAWN: the body is HIDDEN and untargetable — indistinguishable
+   *  from scenery — until an enemy strays within `radius`, then it ERUPTS
+   *  (reveal flash + announce) and fights normally. The root that was only
+   *  a root, the rock that was never a rock. Selection/objectives count it
+   *  normally; only the reveal is deferred. */
+  ambush?: { radius: number; announce?: string };
 }
 
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls
@@ -4200,6 +4213,113 @@ export const MONSTERS: Record<string, MonsterDef> = {
       move: { style: 'juke', hookEvery: [0.35, 0.7], hookArc: 1.2, freezeChance: 0.3, freeze: [0.25, 0.5] },
     },
   },
+
+  // ==========================================================================
+  // THE GROUND ITSELF — terrain-bound predators (MonsterDef.habitat: they
+  // exist ONLY on their ground and can never leave it) and the standing
+  // turret tier. Most also ARM (MonsterDef.ambush): scenery until sprung.
+  // ==========================================================================
+
+  // THE LAKE HORROR — the showpiece: bound to a large-enough body of water,
+  // hidden beneath the surface until you stray near, and ENTICING: its
+  // Undertow drags the shore's would-be spectators into its pool while the
+  // current works them over. It cannot be kited onto the grass — fight it
+  // in its water or shoot it from beyond the drag.
+  lake_horror: {
+    id: 'lake_horror', name: 'Lake Horror',
+    color: '#3a7a8a', shape: 'octagon', radius: 19, material: 'slime', look: 'lake_horror',
+    base: { life: 240, moveSpeed: 95, accuracy: 115, armor: 25, poise: 50, mana: 160, manaRegen: 10 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.3)],
+    skills: ['undertow', 'claw', 'frostbolt'], xp: 55,
+    habitat: { kind: 'water', minRadius: 55, grace: 30 },
+    ambush: { radius: 170, announce: 'the water erupts!' },
+    scaleVariance: [0.9, 1.3], scaleStats: true,
+    scaling: { life: { incPerLevel: 0.06 } },
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.2, brain: { type: 'basic' },
+  },
+  // THE ROOT WRAITH — sylvan corruption sleeping against a trunk: just
+  // roots, right up until it is NOT. Bound to its tree; burns like one.
+  root_wraith: {
+    id: 'root_wraith', name: 'Root Wraith',
+    color: '#6a7a38', shape: 'oval', radius: 14, material: 'wood', look: 'root_wraith',
+    base: { life: 90, moveSpeed: 0, accuracy: 108, armor: 30, mana: 90, manaRegen: 8 },
+    mods: [mod('fireRes', 'flat', -0.25)],
+    skills: ['lash_roots', 'root_grasp'], xp: 24, faction: 'sylvan',
+    habitat: { kind: 'tree', grace: 32 },
+    ambush: { radius: 130, announce: 'the roots wake!' },
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.0, brain: { type: 'basic' },
+  },
+  // THE MIRE MAW — a bog pool with an appetite: mud until it opens.
+  mire_maw: {
+    id: 'mire_maw', name: 'Mire Maw',
+    color: '#5a5238', shape: 'oval', radius: 16, material: 'slime', look: 'mire_maw',
+    base: { life: 110, moveSpeed: 0, accuracy: 105, armor: 20, mana: 110, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['bile_spray', 'gut_hurl'], xp: 28,
+    habitat: { kind: 'mud', minRadius: 40, grace: 26 },
+    ambush: { radius: 120, announce: 'the mire opens!' },
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.0, brain: { type: 'basic' },
+  },
+  // THE SHARD SPIRE — a standing battery of charged crystal: the leyline's
+  // own turret tier (visible from the start; its menace is the arc).
+  shard_spire: {
+    id: 'shard_spire', name: 'Shard Spire',
+    color: '#7fd0ff', shape: 'octagon', radius: 14, material: 'crystal', look: 'shard_spire',
+    base: { life: 100, moveSpeed: 0, accuracy: 115, armor: 40, mana: 200, manaRegen: 14 },
+    mods: [mod('lightningRes', 'flat', 0.6), mod('coldRes', 'flat', 0.3)],
+    skills: ['spark', 'frostbolt'], xp: 26, faction: 'elemental',
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.1, brain: { type: 'basic' },
+  },
+  // --- THE HAUNTING's bodies (spawned by the package, never rostered) -------
+  // THE GRIEF-ANCHOR: a standing knot of sorrow the haunting winds around.
+  // Breaking it doesn't end the grief — it gives the grief a THROAT (the
+  // kill handler manifests the Wailing One over the shards).
+  grief_anchor: {
+    id: 'grief_anchor', name: 'Grief-Anchor',
+    color: '#b8c8e8', shape: 'octagon', radius: 14, material: 'ethereal', look: 'grief_anchor',
+    base: { life: 200, moveSpeed: 0, armor: 20, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.4)],
+    skills: [], xp: 30, faction: 'undead',
+    noNemesis: true, drops: 1,
+    vision: { arcDeg: 360, rearMul: 1 },
+  },
+  // THE WAILING ONE: the grief, given a body — keening, cursing, hurling
+  // whatever isn't nailed down, and calling its gloomlings at the half.
+  wailing_one: {
+    id: 'wailing_one', name: 'the Wailing One',
+    color: '#d8e0f0', shape: 'star', radius: 18, material: 'ethereal', look: 'wailing_one',
+    base: { life: 380, moveSpeed: 130, accuracy: 125, evasion: 55, mana: 240, manaRegen: 13 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.4), mod('damage', 'increased', 0.25)],
+    skills: ['keening_shriek', 'despair', 'hurl_debris'], xp: 150, boss: true, faction: 'undead',
+    detection: 1.4,
+    brain: {
+      type: 'commander',
+      phases: [
+        { atLifeFrac: 0.5, rewardGems: 1, announce: 'The wail SPLITS — its griefs take shape!',
+          mods: [mod('damage', 'more', 0.25), mod('castSpeed', 'more', 0.2)] },
+      ],
+      rules: [{
+        when: { lifeBelow: 0.5 }, every: [11, 15], hold: [0.3, 0.5],
+        actions: [{ do: 'summon', monster: 'gloomling', count: 2, ring: 90, lifespan: 30, tag: 'grief_add' }],
+      }],
+    },
+  },
+  // THE SPIRE OF EYES — the Glut's watchtower: a stalk of meat that is
+  // mostly retina, hurling gutshot at everything it refuses to blink at.
+  spire_of_eyes: {
+    id: 'spire_of_eyes', name: 'Spire of Eyes',
+    color: '#c87868', shape: 'oval', radius: 15, look: 'spire_of_eyes',
+    base: { life: 120, moveSpeed: 0, accuracy: 120, armor: 15, mana: 160, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['gut_hurl', 'bile_spray'], xp: 30, faction: 'flesh',
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.4, // it is ALL eyes
+    brain: { type: 'basic' },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -4349,6 +4469,7 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
       { id: 'gale_elemental', weight: 3 },
       { id: 'frost_elemental', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      { id: 'shard_spire', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   sylvan: {
@@ -4366,6 +4487,7 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
       { id: 'treant_warden', weight: 2, presence: { from: 12, fadeIn: 5 } },
       { id: 'root_snarl', weight: 1, presence: { from: 10, fadeIn: 4 } },
       { id: 'elder_treant', weight: 1, presence: { from: 22, fadeIn: 8, mul: 1.5 } },
+      { id: 'root_wraith', weight: 1, presence: { from: 10, fadeIn: 4 } },
     ],
   },
   wild: {
@@ -4440,6 +4562,7 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
       { id: 'membrane', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
       { id: 'corpse_bloom', weight: 1 },
+      { id: 'spire_of_eyes', weight: 1, presence: { from: 12, fadeIn: 5 } },
     ],
   },
 };

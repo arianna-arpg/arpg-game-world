@@ -700,6 +700,21 @@ export class Actor {
   refuge?: { kind: string; seek?: number; text?: string };
   /** The rout's cached bolt-hole (found once — ponds don't move). */
   refugeGoal?: { x: number; y: number; r: number } | null;
+  /** TERRAIN-BOUND spec (MonsterDef.habitat) — carried so any spawn path
+   *  (packs, zone-memory restores, summons) can lazily derive `confine`
+   *  from the nearest matching doodad. */
+  habitat?: { kind: string; minRadius?: number; grace?: number };
+  /** TERRAIN CONFINEMENT (derived from habitat): a disc this body can never
+   *  leave — clamped every frame, whatever moved it (walk, dash, knockback).
+   *  The lake horror's pond; the root wraith's trunk. */
+  confine?: { x: number; y: number; r: number };
+  /** ARMED AMBUSH (MonsterDef.ambush): hidden + untargetable until an enemy
+   *  strays inside the wake radius — then the reveal. */
+  ambushArmed = false;
+  /** World-clock stamp of this body's creation — the renderer's spawn-in
+   *  scale-up reads it (mid-play arrivals only; zone-load population is
+   *  exempted against the zone's own entry stamp). */
+  spawnedAt = -1;
 
   // Minion lifecycle
   /** Seconds until natural expiry (0 = permanent until killed). */

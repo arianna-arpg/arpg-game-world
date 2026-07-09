@@ -1486,6 +1486,9 @@ export class World {
    *  (one leader per wake per visit; cleared per loadZone). The relentless STREAM is
    *  driven separately by updateDeadwakeStream on its own timer. */
   private materializedDeadwakes = new Set<string>();
+  /** Haunts whose grief-anchor already stood up this visit (per haunt id). */
+  private materializedHaunts = new Set<string>();
+  private hauntStreamTimer = 0;
   /** Countdown to the next Deadwake stream-pour while a tide floods this zone. */
   private deadwakeStreamTimer = 0;
   /** Migration ids already announced in THIS zone (one bulletin + ledger bump per
@@ -1871,6 +1874,9 @@ export class World {
   lowLifeHitFlash = 0;
   /** World clock in seconds (drives Unleash seal accrual). */
   time = 0;
+  /** World-clock stamp of the last zone load — the renderer's spawn-in
+   *  exemption (load-time population never "grows in", arrivals do). */
+  zoneEnteredAt = 0;
   /** Scheduled re-executions (Multistrike, Spell Echo, Cascade, Unleash). */
   pendingRepeats: {
     caster: Actor; inst: SkillInstance; aim: Vec2;
@@ -2481,6 +2487,9 @@ export class World {
     const firstVisit = !isCave && !this.visited.has(zoneId);
     const def = this.zoneMap[zoneId] ?? this.caveMap[zoneId];
     this.zone = def;
+    // The zone's own entry beat: the renderer exempts LOAD-time population
+    // from the spawn-in grow (only true mid-play arrivals swell in).
+    this.zoneEnteredAt = this.time;
     this.arena = makeArena(def);
     if (!isCave) {
       this.visited.add(zoneId);   // caves never chart onto the map
@@ -3846,16 +3855,40 @@ export class World {
       const squadId = this.nextSquadId();
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(type, def.level, 'enemy');
+        // TERRAIN-BOUND (MonsterDef.habitat): the body exists only on its
+        // ground — relocate onto a matching doodad, or don't spawn it at all
+        // (a zone with no big-enough pond simply has no lake horror).
+        if (m.habitat && !this.placeInHabitat(m)) continue;
         if (k === 0 && leaderRarity !== 'normal') this.promoteRarity(m, leaderRarity, { distinctName: true });
         m.squadId = squadId;
         m.squadLeader = k === 0;
-        // findFreeSpot: the jittered point can land deep inside a rock/thicket
-        // blob that clampPos's passes can't escape — a monster BORN embedded
-        // pingpongs against the collision resolve forever (cost + nonsense).
-        m.pos = this.findFreeSpot(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
+        if (!m.habitat) {
+          // findFreeSpot: the jittered point can land deep inside a rock/thicket
+          // blob that clampPos's passes can't escape — a monster BORN embedded
+          // pingpongs against the collision resolve forever (cost + nonsense).
+          m.pos = this.findFreeSpot(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
+        }
         this.actors.push(m);
       }
     }
+  }
+
+  /** Place a TERRAIN-BOUND body (MonsterDef.habitat) onto a matching doodad:
+   *  a random point inside the disc, hard-confined to it forever after.
+   *  Returns false when the zone offers no qualifying ground — the body
+   *  simply isn't spawned (a zone without a big pond has no lake horror). */
+  private placeInHabitat(m: Actor): boolean {
+    const h = m.habitat;
+    if (!h) return true;
+    const spots = this.doodads.filter(d =>
+      d.kind === h.kind && !d.gone && d.radius >= (h.minRadius ?? 0));
+    if (!spots.length) return false;
+    const s = spots[randInt(0, spots.length - 1)];
+    const ang = rand(0, Math.PI * 2);
+    const dd = Math.sqrt(Math.random()) * Math.max(0, s.radius - m.radius * 0.5);
+    m.pos = vec(s.pos.x + Math.cos(ang) * dd, s.pos.y + Math.sin(ang) * dd);
+    m.confine = { x: s.pos.x, y: s.pos.y, r: s.radius + (h.grace ?? 24) };
+    return true;
   }
 
   /** Populate the zone's ambient FAUNA from the biome's WILDLIFE table: each
@@ -3888,9 +3921,12 @@ export class World {
       const squadId = this.nextSquadId();
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(w.id, Math.max(1, def.level), 'enemy');
+        if (m.habitat && !this.placeInHabitat(m)) continue;
         m.squadId = squadId;
         m.squadLeader = k === 0;
-        m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+        if (!m.habitat) {
+          m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+        }
         this.actors.push(m);
       }
     }
@@ -6824,6 +6860,53 @@ export class World {
     this.deadwakeStreamTimer = cfg.streamInterval;
     const batch = randInt(cfg.streamBatch[0], cfg.streamBatch[1]);
     for (let i = 0; i < batch && this.deadwakeHeadcount() < info.streamCap; i++) this.spawnDeadwakeStreamer(info, cfg);
+  }
+
+  /** Per-frame: THE HAUNTING's presence in a held zone. The GRIEF-ANCHOR
+   *  stands up once per haunt-visit (the discovery beat — bumps the unlock
+   *  ledger), then a slow apparition trickle maintains the dread while the
+   *  grief holds. The anchor-break → Wailing One → resolve chain lives in
+   *  the kill-handler rows (packages/defs/haunting.ts). */
+  private updateHauntStream(dt: number): void {
+    const hf = this.sim.hauntField;
+    if (!hf || this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
+      this.hauntStreamTimer = 0; return;
+    }
+    const info = hf.hauntOn(this.zone.id);
+    if (!info) { this.hauntStreamTimer = 0; return; }
+    const lvl = Math.max(1, this.zone.level + info.levelBonus);
+    if (!this.materializedHaunts.has(info.id)) {
+      this.materializedHaunts.add(info.id);
+      bumpLedger(this.ledger, 'haunt_seen'); // surfaces the Vault tuning
+      // The anchor stands where you'll FIND it, not on your toes.
+      const at = this.clampPos(this.farPoint(520), 24);
+      const anchor = this.createMonster(info.anchorId, lvl, 'enemy');
+      anchor.tag = 'haunt_anchor';
+      anchor.pos = this.findFreeSpot(at, anchor.radius);
+      this.actors.push(anchor);
+      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        `A grief holds ${this.zone.name} — find its anchor.`, info.color, 18);
+    }
+    // The slow pour: one apparition at a time toward the dread ceiling. While
+    // the Wailing One walks (anchor broken), the pour keeps the pressure on.
+    if (this.hauntHeadcount() >= info.maxAlive) { this.hauntStreamTimer = rand(info.streamInterval[0], info.streamInterval[1]); return; }
+    this.hauntStreamTimer -= dt;
+    if (this.hauntStreamTimer > 0) return;
+    this.hauntStreamTimer = rand(info.streamInterval[0], info.streamInterval[1]);
+    const id = this.weightedPick(info.roster, lvl);
+    if (!MONSTERS[id]) return;
+    const m = this.createMonster(id, lvl, 'enemy');
+    m.tag = 'haunt_spawn';
+    m.pos = this.findFreeSpot(this.farPoint(600), m.radius);
+    this.actors.push(m);
+  }
+
+  /** Live count of the streamed apparitions (the dread ceiling). */
+  private hauntHeadcount(): number {
+    let n = 0;
+    for (const a of this.actors) if (!a.dead && a.team === 'enemy' && a.tag === 'haunt_spawn') n++;
+    return n;
   }
 
   /** Live count of the streamed Deadwake host (tagged stream undead) — the cap. */
@@ -9970,6 +10053,15 @@ export class World {
     if (def.explodeOnDeath) a.explodeOnDeath = def.explodeOnDeath;
     if (def.deathBurst) a.deathBurst = def.deathBurst;
     if (def.refuge) a.refuge = def.refuge;
+    if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
+    // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
+    // update sweep springs it when an enemy strays inside the wake radius.
+    if (def.ambush) {
+      a.ambushArmed = true;
+      a.untargetable = true;
+      a.sheet.setSource('ambush', [mod('invisible', 'flat', 1)]);
+    }
+    a.spawnedAt = this.time;
     // Monsters' skills level up with them — same leveling system as the player.
     const skillLevel = 1 + Math.floor(lv / 4);
     a.skills = def.skills.map(id => makeSkillInstance(SKILLS[id], skillLevel));
@@ -11489,6 +11581,7 @@ export class World {
             range: d.radius * aoeScale,
             duration: d.lingerDuration ?? 6, maxActive: 1,
             life: turret.life ?? 45, placeRange: 0,
+            look: turret.look, // the support's own effigy body
           }, caster.pos, turretCast, vec(caster.pos.x, caster.pos.y));
           if (built) { zoneAnchor = built; at.x = built.pos.x; at.y = built.pos.y; }
         }
@@ -17494,6 +17587,7 @@ export class World {
     this.updateStorm(dt);
     this.updateDemonStorm(dt);
     this.updateDeadwakeStream(dt);
+    this.updateHauntStream(dt);
     this.updateNecropolis();
     this.updateMigrationStream(dt);
     this.updateBrigandRaid(dt);
@@ -17812,6 +17906,46 @@ export class World {
         s.leechAcc = 0;
         const applier = this.actors.find(x => x.id === s.casterId && !x.dead);
         if (applier) applier.healBy(sip);
+      }
+      // TERRAIN-BOUND upkeep: derive a missing confinement from the nearest
+      // matching ground (zone-memory restores, summons — every path self-
+      // heals), then CLAMP the body into its disc, whatever moved it.
+      if (a.habitat && !a.dead) {
+        if (!a.confine) {
+          const h = a.habitat;
+          let bx = 0, by = 0, br = -1, bd = Infinity;
+          for (const d of this.doodads) {
+            if (d.kind !== h.kind || d.gone || d.radius < (h.minRadius ?? 0)) continue;
+            const dd = dist(a.pos, d.pos);
+            if (dd < bd) { bd = dd; bx = d.pos.x; by = d.pos.y; br = d.radius; }
+          }
+          a.confine = br >= 0
+            ? { x: bx, y: by, r: br + (h.grace ?? 24) }
+            : { x: a.pos.x, y: a.pos.y, r: 120 }; // no ground left: hold this spot
+        }
+        const cdx = a.pos.x - a.confine.x, cdy = a.pos.y - a.confine.y;
+        const cd = Math.hypot(cdx, cdy);
+        if (cd > a.confine.r) {
+          const s = a.confine.r / cd;
+          a.pos.x = a.confine.x + cdx * s;
+          a.pos.y = a.confine.y + cdy * s;
+        }
+      }
+      // ARMED AMBUSH: scenery until an enemy strays inside the wake radius —
+      // then the reveal (flash + tell) and an ordinary fight.
+      if (a.ambushArmed && !a.dead) {
+        const spec = a.defId ? MONSTERS[a.defId]?.ambush : undefined;
+        const wake = spec?.radius ?? 130;
+        for (const e of this.enemiesOf(a)) {
+          if (e.dead || e.sheet.get('invisible') > 0) continue;
+          if (dist(a.pos, e.pos) > wake) continue;
+          a.ambushArmed = false;
+          a.untargetable = false;
+          a.sheet.setSource('ambush', []);
+          this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius * 2.6, color: a.color, life: 0.4, maxLife: 0.4 });
+          this.text(vec(a.pos.x, a.pos.y - 24), spec?.announce ?? 'ambush!', '#e8c86a', 13);
+          break;
+        }
       }
       // THE LEDGER's beat: escalating upkeep + the low-mana vent.
       this.updateActorLedgers(a, dt);

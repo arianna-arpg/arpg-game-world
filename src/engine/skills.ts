@@ -327,7 +327,7 @@ export function instanceTargeting(inst: SkillInstance): TargetingSpec | undefine
 }
 
 /** The turret conversion riding an instance, if any (Risen Offering). */
-export function instanceTurret(inst: SkillInstance): { castSkillId: string; life?: number } | undefined {
+export function instanceTurret(inst: SkillInstance): { castSkillId: string; life?: number; look?: string } | undefined {
   for (const s of hostSockets(inst)) if (s.def.turret) return s.def.turret;
   return undefined;
 }
@@ -2850,8 +2850,10 @@ export interface SupportDef {
   /** A TURRET conversion (Risen Offering): a lingering GROUND skill is
    *  planted as a construct at the CASTER's feet instead of at the mark —
    *  the zone (domain and all) rides the turret and dies with it, and the
-   *  turret CASTS `castSkillId` at enemies inside the zone's radius. */
-  turret?: { castSkillId: string; life?: number };
+   *  turret CASTS `castSkillId` at enemies inside the zone's radius.
+   *  `look` names the effigy's part-grammar portrait (data/looks.ts) so a
+   *  turret support carries its own body, never the generic totem post. */
+  turret?: { castSkillId: string; life?: number; look?: string };
   /** A ground CASCADE this support grafts onto the skill (Spell Cascade's
    *  displaced repeats, Seismic March's rippling wave). See GroundCascadeSpec. */
   cascade?: GroundCascadeSpec;

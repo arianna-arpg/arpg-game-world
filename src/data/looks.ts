@@ -1949,6 +1949,99 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#f0e8a0', params: { spread: 0.6, dist: 0.5, size: 0.13 } },
     ],
   },
+
+  // --- THE GROUND ITSELF (terrain-bound predators + the turret tier) -------
+  /** The lake horror: a crown of reaching arms around a drowned maw. */
+  lake_horror: {
+    parts: [
+      { kind: 'tentacleRing', scale: 1.05, params: { n: 7 } },
+      { kind: 'blob', scale: 0.85, alpha: 0.94, params: { irr: 0.2, seed: 157 } },
+      { kind: 'fins', scale: 0.9 },
+      { kind: 'mawRing', scale: 0.65 },
+      { kind: 'eyeCluster', color: '#b0e8d8', params: { n: 5, spread: 0.6, dist: 0.5 } },
+    ],
+    live: [{ kind: 'oozeLobes', scale: 0.9, params: { n: 5 } }],
+  },
+  /** The root wraith: only roots — then eyes among the bark. */
+  root_wraith: {
+    parts: [
+      { kind: 'roots', scale: 1.1, params: { n: 7 } },
+      { kind: 'blob', scale: 0.7, role: 'wood', params: { irr: 0.3, seed: 163 } },
+      { kind: 'barkPlates', scale: 0.75, params: { n: 4 } },
+      { kind: 'branchArms', scale: 0.7, mirror: true, params: { forks: 3, len: 0.9 } },
+      { kind: 'eyeCluster', color: '#c8e86a', params: { n: 3, spread: 0.5, dist: 0.45 } },
+    ],
+  },
+  /** The mire maw: a sag of bog with a ring of teeth at the middle. */
+  mire_maw: {
+    parts: [
+      { kind: 'blob', scale: 1.0, role: 'dark', params: { irr: 0.26, seed: 167 } },
+      { kind: 'fleshFolds', params: { n: 3 } },
+      { kind: 'mawRing', scale: 0.8 },
+      { kind: 'eyeCluster', color: '#c8b868', params: { n: 4, spread: 0.8, dist: 0.55 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#4a4230', params: { n: 3 } }],
+    shadowScale: 0.7,
+  },
+  /** The shard spire: a standing crown of charged crystal over a core. */
+  shard_spire: {
+    parts: [
+      { kind: 'stalactites', scale: 1.05, params: { n: 6 } },
+      { kind: 'disc', scale: 0.55 },
+      { kind: 'orb', scale: 0.45, role: 'glow' },
+      { kind: 'runes', scale: 0.9, params: { n: 4 } },
+    ],
+    live: [{ kind: 'crystalGrowths', role: 'accent', scale: 0.85, params: { n: 4 } }],
+    shadowScale: 0.7,
+  },
+  /** The spire of eyes: a stalk of meat that is mostly retina. */
+  spire_of_eyes: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.2, seed: 173 } },
+      { kind: 'veinweb', params: { n: 5 } },
+      { kind: 'fleshFolds', params: { n: 3 } },
+      { kind: 'eyeCluster', color: '#ffd8c8', params: { n: 9, spread: 1.0, dist: 0.55 } },
+      { kind: 'eyes', color: '#ff6a5a', params: { n: 1, spread: 0, dist: 0.15, size: 0.16 } },
+    ],
+    shadowScale: 0.7,
+  },
+  /** THE GRIEF-ANCHOR (the Haunting's standing knot of sorrow). */
+  grief_anchor: {
+    parts: [
+      { kind: 'tatters', scale: 0.9, params: { n: 5 } },
+      { kind: 'disc', scale: 0.6, role: 'dark' },
+      { kind: 'orb', scale: 0.5, role: 'glow' },
+      { kind: 'halo', scale: 1.1, alpha: 0.6 },
+      { kind: 'runes', params: { n: 5 } },
+    ],
+    live: [{ kind: 'wisps', params: { n: 4 } }],
+    shadowScale: 0.7,
+  },
+  /** THE WAILING ONE (grief, given a body): a crowned hooded wail trailing
+   *  to streamers, ringed in restless light. */
+  wailing_one: {
+    parts: [
+      { kind: 'tatters', scale: 1.05, params: { n: 7 } },
+      { kind: 'robe', scale: 0.9, alpha: 0.9 },
+      { kind: 'hood', x: 0.28, scale: 1.05, params: { eyes: true } },
+      { kind: 'crown', x: 0.2, scale: 0.6, role: 'dark' },
+      { kind: 'halo', scale: 1.15, alpha: 0.55 },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, params: { n: 5 } }],
+  },
+  /** THE OFFERING EFFIGY (Risen Offering's turret body): powdered bone
+   *  packed into an idol, wreathed in grave-incense. */
+  offering_effigy: {
+    parts: [
+      { kind: 'ribs', scale: 0.8, params: { under: true, pairs: 4 } },
+      { kind: 'censer', y: 0.4, scale: 0.8 },
+      { kind: 'skull', x: 0.2, scale: 0.9, params: { glow: 'glow' } },
+      { kind: 'halo', scale: 1.0, alpha: 0.55 },
+      { kind: 'runes', scale: 0.85, params: { n: 3 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.2, scale: 0.9, params: { n: 3 } }],
+    shadowScale: 0.7,
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
