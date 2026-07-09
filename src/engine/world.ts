@@ -18144,9 +18144,22 @@ export class World {
           this.text(vec(a.pos.x, a.pos.y - 20), 'shell regrows', '#c8d8a0', 12);
         }
       }
+      // CAST LOCK: a running cast bar PINS the body on its STAMPED aim —
+      // the wind-up points where the blow will actually land (the resolve
+      // fires at cs.aim, so a body that keeps tracking its target is lying).
+      // Channels and guards steer their own facing inside updateCasting
+      // (trackAim / autoSpin / turnRate) — their tracking is the design.
+      {
+        const cl = a.casting;
+        if (cl && cl.mode !== 'channel' && cl.mode !== 'guard' && !a.dead
+          && dist(a.pos, cl.aim) > 2) {
+          a.facing = angleTo(a.pos, cl.aim);
+        }
+      }
       // TURN CLAMP (Actor.turnSpeed): facing may only swing so far per
       // frame — big bodies LUMBER, their shell arcs and their aim lag the
-      // fight, and circling them becomes real play.
+      // fight, and circling them becomes real play. Runs AFTER the cast
+      // lock, so a lumbering body still SWINGS onto its stamp believably.
       if (a.turnSpeed > 0 && a.facingPrev !== undefined && !a.dead) {
         const want = angleDiff(a.facingPrev, a.facing);
         const cap = a.turnSpeed * dt;
