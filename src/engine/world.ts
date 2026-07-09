@@ -384,6 +384,15 @@ export const AMBIENT_TAGS = new Set([
   'wayfarer',      // neutral human travelers — minding their own way
 ]);
 
+/** Every tag the HAUNTING stamps on what it stands up — the one set the engine
+ *  sweeps at a dawn dissipation and paints with the wane pulse. A new haunt
+ *  spawn kind adds its tag here (and wherever it is stamped), nowhere else. */
+const HAUNT_TAGS = new Set([
+  'haunt_spawn',   // the streamed apparitions
+  'haunt_anchor',  // the standing grief-anchor
+  'wailing_one',   // the manifested boss
+]);
+
 interface Projectile {
   /** PULSATION (projPulse): breathe the hit radius ±this fraction of
    *  radius0 on a fixed rhythm. */
@@ -3028,6 +3037,11 @@ export class World {
     this.deadwakeStreamTimer = 0;
     this.materializedMigrations.clear();
     this.migrationStreamTimer = 0;
+    // Haunts re-stand on re-entry (anchor / walking Wailing One at their
+    // overlay-remembered wounds) — mid-play spawns are never zone-memory
+    // captured, so without this a revisited haunt stood empty and unbreakable.
+    this.materializedHaunts.clear();
+    this.hauntStreamTimer = 0;
     this.materializedBrigands.clear();
     this.brigandLingerLeft = 0;
     this.brigandsDrifting = false;
@@ -6940,29 +6954,70 @@ export class World {
 
   /** Per-frame: THE HAUNTING's presence in a held zone. The GRIEF-ANCHOR
    *  stands up once per haunt-visit (the discovery beat — bumps the unlock
-   *  ledger), then a slow apparition trickle maintains the dread while the
-   *  grief holds. The anchor-break → Wailing One → resolve chain lives in
-   *  the kill-handler rows (packages/defs/haunting.ts). */
+   *  ledger) — or, when the grief arrives already broken (a prior visit, or a
+   *  dawn-carried wound), the WAILING ONE walks at once wearing every blow it
+   *  has taken. Then a slow apparition trickle maintains the dread while the
+   *  grief holds. Standing wounds sync to the overlay each frame (the Hunt's
+   *  preserved-health pattern) and the wane pulse is painted onto every haunt
+   *  spawn; dawn dissipations sweep them via drainDissipated(). The
+   *  anchor-break → Wailing One → resolve chain lives in the kill-handler
+   *  rows (packages/defs/haunting.ts). */
   private updateHauntStream(dt: number): void {
     const hf = this.sim.hauntField;
-    if (!hf || this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
+    if (!hf) { this.hauntStreamTimer = 0; return; }
+    // DAWN BANISHMENTS first (drained even from ground the stream skips, so the
+    // queue never backs up): a dissolved grief's standing spawns fade out of
+    // the zone it held — its spawns only ever live in that zone's actor list.
+    for (const gone of hf.drainDissipated()) {
+      if (gone.zoneId === this.zone.id) this.dissipateHauntSpawns(gone.color);
+    }
+    if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.hauntStreamTimer = 0; return;
     }
     const info = hf.hauntOn(this.zone.id);
+    // THE WANE + THE WOUND LEDGER, every frame. Wane is re-stamped even when
+    // the haunt is gone (0 — a resolved haunt's leftovers snap back solid),
+    // and standing anchor/boss wounds sync to the overlay so a dawn
+    // banishment — or a zone exit — carries the effort forward.
+    const wane = info?.waneFrac ?? 0;
+    for (const a of this.actors) {
+      if (a.dead || !a.tag || !HAUNT_TAGS.has(a.tag)) continue;
+      a.wane = wane;
+      if (!info) continue;
+      if (a.tag === 'haunt_anchor') hf.setAnchorLife(info.id, a.life / a.maxLife());
+      else if (a.tag === 'wailing_one') hf.setBossLife(info.id, a.life / a.maxLife());
+    }
     if (!info) { this.hauntStreamTimer = 0; return; }
     const lvl = Math.max(1, this.zone.level + info.levelBonus);
     if (!this.materializedHaunts.has(info.id)) {
       this.materializedHaunts.add(info.id);
       bumpLedger(this.ledger, 'haunt_seen'); // surfaces the Vault tuning
-      // The anchor stands where you'll FIND it, not on your toes.
-      const at = this.clampPos(this.farPoint(520), 24);
-      const anchor = this.createMonster(info.anchorId, lvl, 'enemy');
-      anchor.tag = 'haunt_anchor';
-      anchor.pos = this.findFreeSpot(at, anchor.radius);
-      this.actors.push(anchor);
       this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
-        `A grief holds ${this.zone.name} — find its anchor.`, info.color, 18);
+      if (info.anchorBroken) {
+        // The grief already has its throat — no anchor stands; the Wailing One
+        // walks at once, still wearing whatever was done to it.
+        const boss = this.createMonster(info.bossId, Math.max(1, this.zone.level + info.bossLevelBonus), 'enemy');
+        boss.tag = 'wailing_one';
+        boss.life = Math.max(1, boss.maxLife() * clamp(info.bossLifeFrac, 0.02, 1)); // PRESERVED wounds
+        boss.pos = this.findFreeSpot(this.clampPos(this.farPoint(520), 24), boss.radius);
+        this.actors.push(boss);
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          `An unfinished grief holds ${this.zone.name} — the WAILING ONE walks${info.bossLifeFrac < 1 ? ', still wounded' : ''}.`,
+          info.color, 18);
+      } else {
+        // The anchor stands where you'll FIND it, not on your toes.
+        const at = this.clampPos(this.farPoint(520), 24);
+        const anchor = this.createMonster(info.anchorId, lvl, 'enemy');
+        anchor.tag = 'haunt_anchor';
+        if (info.anchorLifeFrac < 1) {
+          anchor.life = Math.max(1, anchor.maxLife() * clamp(info.anchorLifeFrac, 0.02, 1)); // PRESERVED cracks
+        }
+        anchor.pos = this.findFreeSpot(at, anchor.radius);
+        this.actors.push(anchor);
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          `A grief holds ${this.zone.name} — find its anchor${info.anchorLifeFrac < 1 ? ' (already cracked)' : ''}.`,
+          info.color, 18);
+      }
     }
     // The slow pour: one apparition at a time toward the dread ceiling. While
     // the Wailing One walks (anchor broken), the pour keeps the pressure on.
@@ -6976,6 +7031,26 @@ export class World {
     m.tag = 'haunt_spawn';
     m.pos = this.findFreeSpot(this.farPoint(600), m.radius);
     this.actors.push(m);
+  }
+
+  /** The light dissolves a haunt where the player stands: every standing spawn
+   *  it stamped (HAUNT_TAGS) fades out where it is — no kill(), no bounty, no
+   *  corpse (mirrors slipAway). The effort is not lost: the overlay banked the
+   *  grief's wounds before queueing this sweep (carryWound). */
+  private dissipateHauntSpawns(color: string): void {
+    let swept = 0;
+    for (let i = this.actors.length - 1; i >= 0; i--) {
+      const a = this.actors[i];
+      if (a.dead || !a.tag || !HAUNT_TAGS.has(a.tag)) continue;
+      this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: 46, color, life: 0.5, maxLife: 0.5 });
+      this.actors.splice(i, 1);
+      swept++;
+    }
+    if (swept) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        'The light comes — the grief and its shades fade from this ground…', color, 17);
+    }
+    this.hauntStreamTimer = 0;
   }
 
   /** Live count of the streamed apparitions (the dread ceiling). */

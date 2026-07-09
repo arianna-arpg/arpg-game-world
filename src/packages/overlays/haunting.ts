@@ -4,20 +4,34 @@
 // No march, no territory: every so often a haunting simply TAKES a place. While
 // it holds, the zone runs cold — apparitions stream in around a standing
 // GRIEF-ANCHOR (the engine spawns both off hauntOn()). The knot unties two
-// ways: wait it out (the ttl lapses, the grief drifts on, no reward), or BREAK
-// THE ANCHOR — which does not end it. Breaking the anchor MANIFESTS the
-// Wailing One, and only its fall lifts the haunt (the reward path). A broken-
-// anchor haunt never expires: grief faced must be finished.
+// ways: wait it out (the grief drifts on, no reward), or BREAK THE ANCHOR —
+// which does not end it. Breaking the anchor MANIFESTS the Wailing One, and
+// only its fall lifts the haunt (the reward path).
 //
-// PURE of the engine: owns the settle/lapse lifecycle; the engine reads
-// hauntOn() to field the anchor + the stream, and calls onAnchorBroken()/
-// resolveHaunt() back through the kill-handler rows in defs/haunting.ts.
+// THE NIGHT CANON (all data on HauntSurge, each knob optional): griefs may
+// SETTLE only in their hours (beginPhases) and cannot HOLD their shape outside
+// them (holdPhases) — when the wheel turns past, the haunt DISSIPATES: its
+// standing spawns fade where they stand (the engine sweeps them off
+// drainDissipated(), no bounty), after visibly WANING for the last waneSeconds
+// (the pulse the engine paints through HauntInfo.waneFrac → Actor.wane). What
+// the light takes it does not erase: a dissipating grief BANKS its progress
+// (anchor wounds, a broken anchor, the Wailing One's hurts — synced in by the
+// engine via setAnchorLife/setBossLife, the Hunt's preserved-health pattern)
+// and the NEXT grief to settle anywhere RESUMES it, so effort spent is never
+// wasted. A broken-anchor haunt still never lapses by ttl: grief faced must
+// be finished — or carried.
+//
+// PURE of the engine: owns the settle/wane/dissipate/lapse lifecycle; the
+// engine reads hauntOn() to field the anchor + the stream, and calls
+// onAnchorBroken()/resolveHaunt() back through the kill-handler rows in
+// defs/haunting.ts.
 // ---------------------------------------------------------------------------
 
 import { Rng } from '../../core/rng';
 import type { PackTableEntry, ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
+import { inPhases, phaseAhead, type DayPhase } from '../../world/daynight';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -49,6 +63,22 @@ export interface HauntSurge {
   /** Extra level bonus on the manifested Wailing One. */
   bossLevelBonus: number;
   color?: string;
+  /** Day-phases a fresh grief may SETTLE in (undefined = any hour). */
+  beginPhases?: DayPhase[];
+  /** Day-phases the grief can HOLD its shape through. When the wheel turns to
+   *  a phase outside this set the haunt DISSIPATES: the engine sweeps its
+   *  standing spawns (fade-out, no bounty) and — see carryWound — the effort
+   *  spent on it is banked, not lost. Undefined = holds any hour (the old
+   *  ttl-only lifecycle). */
+  holdPhases?: DayPhase[];
+  /** Seconds before a dissipating phase-turn the haunt's spawns visibly WANE —
+   *  the renderer pulses them toward transparent as the light nears (surfaced
+   *  as HauntInfo.waneFrac, 0 → 1 across this window). 0/undefined = no warning. */
+  waneSeconds?: number;
+  /** A dissipated grief BANKS its progress (anchor wounds / broken anchor /
+   *  the Wailing One's wounds) and the NEXT grief to settle — any zone —
+   *  RESUMES it, so player effort is never wasted. Default true. */
+  carryWound?: boolean;
 }
 
 /** What the engine reads to field a haunted zone. */
@@ -63,6 +93,14 @@ export interface HauntInfo {
   bossId: string;
   bossLevelBonus: number;
   color: string;
+  /** How far into the pre-dissipation fade this grief stands (0 = full power,
+   *  1 = the light is here). The engine stamps it onto its spawns' Actor.wane. */
+  waneFrac: number;
+  /** Remembered wounds (fraction of max life left; 1 = unhurt). The engine
+   *  spawns the anchor / the Wailing One at these, and syncs them back every
+   *  frame — the grief remembers every blow across dawns and zone exits. */
+  anchorLifeFrac: number;
+  bossLifeFrac: number;
 }
 
 interface ActiveHaunt {
@@ -71,6 +109,20 @@ interface ActiveHaunt {
   coord: MapCoord;
   ttlLeft: number;
   anchorBroken: boolean;
+  /** Live wound ledger (see HauntInfo) — engine-synced, dawn-banked. */
+  anchorLifeFrac: number;
+  bossLifeFrac: number;
+  waneFrac: number;
+  /** DEV: a pinned grief ignores the wheel (never dissipates, never lapses) —
+   *  it still WANES visually near a boundary so the pulse can be previewed. */
+  pinned?: boolean;
+}
+
+/** A grief the light banished mid-effort — its wounds ride to the next settle. */
+interface RestlessGrief {
+  anchorBroken: boolean;
+  anchorLifeFrac: number;
+  bossLifeFrac: number;
 }
 
 export class HauntField implements WorldOverlay {
@@ -80,6 +132,12 @@ export class HauntField implements WorldOverlay {
   private readonly gate: () => PackageGate;
   private readonly cfg: HauntSurge;
   private haunts: ActiveHaunt[] = [];
+  /** Wounds banked off dissipated griefs, oldest first — the next settle
+   *  (anywhere) consumes one and resumes it. */
+  private carried: RestlessGrief[] = [];
+  /** Griefs the light dissolved since the engine last drained — the engine
+   *  sweeps their standing spawns from the named zone (fade-out, no bounty). */
+  private dissipated: { id: string; zoneId: string; color: string }[] = [];
   private acc = 0;
   private seq = 0;
 
@@ -91,24 +149,49 @@ export class HauntField implements WorldOverlay {
 
   update(dt: number, view: OverlayView): void {
     const g = this.gate();
-    // LIFECYCLE — an unbroken haunt lapses when its ttl runs out (the grief
-    // drifts on, unrewarded). A BROKEN one holds until the Wailing One falls.
+    // LIFECYCLE — the wheel first: outside its held hours a grief cannot keep
+    // its shape (DISSIPATES, banking its wounds); inside them it WANES as a
+    // dissolving boundary nears. Then the old clock: an unbroken haunt lapses
+    // when its ttl runs out (drifts on, unrewarded); a BROKEN one holds until
+    // the Wailing One falls — or the light carries it to another night.
+    const ahead = phaseAhead(view.time);
+    const holds = (p: DayPhase) => !this.cfg.holdPhases || this.cfg.holdPhases.includes(p);
     for (let i = this.haunts.length - 1; i >= 0; i--) {
       const h = this.haunts[i];
-      if (h.anchorBroken) continue;
+      if (!holds(ahead.phase) && !h.pinned) { this.dissipate(i); continue; }
+      h.waneFrac = this.cfg.waneSeconds && !holds(ahead.next)
+        ? Math.min(1, Math.max(0, 1 - ahead.endsIn / this.cfg.waneSeconds)) : 0;
+      if (h.anchorBroken || h.pinned) continue;
       h.ttlLeft -= dt;
       if (h.ttlLeft <= 0) this.haunts.splice(i, 1);
     }
-    // IGNITION — a fresh grief settles on some charted, hauntable ground.
+    // IGNITION — a fresh grief settles on some charted, hauntable ground,
+    // and only in its hours (beginPhases — the night gate).
     this.acc += dt;
     while (this.acc >= STEP) {
       this.acc -= STEP;
       if (g.active
+        && inPhases(view.time, this.cfg.beginPhases)
         && this.haunts.length < scaledCap(this.cfg.maxConcurrent, g.concurrencyMul)
         && this.rng.chance(this.cfg.igniteChance * g.ignitionMul)) {
         this.tryIgnite(view);
       }
     }
+  }
+
+  /** The light takes haunt #i: bank its progress (carryWound) and queue the
+   *  engine sweep of its standing spawns. */
+  private dissipate(i: number): void {
+    const h = this.haunts[i];
+    if ((this.cfg.carryWound ?? true) && (h.anchorBroken || h.anchorLifeFrac < 1)) {
+      this.carried.push({
+        anchorBroken: h.anchorBroken,
+        anchorLifeFrac: h.anchorLifeFrac,
+        bossLifeFrac: h.bossLifeFrac,
+      });
+    }
+    this.dissipated.push({ id: h.id, zoneId: h.zoneId, color: this.cfg.color ?? HAUNT_PALE });
+    this.haunts.splice(i, 1);
   }
 
   onNodeCharted(): void { /* griefs settle on already-charted ground only */ }
@@ -119,9 +202,11 @@ export class HauntField implements WorldOverlay {
     for (const h of this.haunts) {
       const col = this.cfg.color ?? HAUNT_PALE;
       const x = h.coord.x.toFixed(1), y = h.coord.y.toFixed(1);
-      // A slow, pale breath around the held zone — grief, not war.
-      over += `<circle cx="${x}" cy="${y}" r="11" fill="none" stroke="${col}" stroke-width="1.6" stroke-opacity="${h.anchorBroken ? 0.95 : 0.7}">`
-        + `<animate attributeName="stroke-opacity" values="0.25;${h.anchorBroken ? 0.95 : 0.7};0.25" dur="2.6s" repeatCount="indefinite"/></circle>`;
+      // A slow, pale breath around the held zone — grief, not war. A waning
+      // grief breathes thinner (the map echoes the in-world fade).
+      const peak = (h.anchorBroken ? 0.95 : 0.7) * (1 - 0.6 * h.waneFrac);
+      over += `<circle cx="${x}" cy="${y}" r="11" fill="none" stroke="${col}" stroke-width="1.6" stroke-opacity="${peak.toFixed(2)}">`
+        + `<animate attributeName="stroke-opacity" values="0.15;${peak.toFixed(2)};0.15" dur="2.6s" repeatCount="indefinite"/></circle>`;
     }
     return { under: '', over };
   }
@@ -141,6 +226,8 @@ export class HauntField implements WorldOverlay {
       anchorId: this.cfg.anchorId, bossId: this.cfg.bossId,
       bossLevelBonus: this.cfg.bossLevelBonus,
       color: this.cfg.color ?? HAUNT_PALE,
+      waneFrac: h.waneFrac,
+      anchorLifeFrac: h.anchorLifeFrac, bossLifeFrac: h.bossLifeFrac,
     };
   }
 
@@ -155,23 +242,49 @@ export class HauntField implements WorldOverlay {
     this.haunts = this.haunts.filter(h => h.id !== id);
   }
 
+  /** Engine sync (per frame, the Hunt's preserved-health pattern): the standing
+   *  anchor's wound, remembered so a dawn — or a zone exit — keeps it. */
+  setAnchorLife(id: string, frac: number): void {
+    const h = this.haunts.find(x => x.id === id);
+    if (h) h.anchorLifeFrac = Math.min(1, Math.max(0, frac));
+  }
+
+  /** Engine sync (per frame): the walking Wailing One's wound. */
+  setBossLife(id: string, frac: number): void {
+    const h = this.haunts.find(x => x.id === id);
+    if (h) h.bossLifeFrac = Math.min(1, Math.max(0, frac));
+  }
+
+  /** Griefs the light dissolved since the last drain. The engine sweeps each
+   *  one's standing spawns out of its named zone (fade-out, no bounty). */
+  drainDissipated(): ReadonlyArray<{ id: string; zoneId: string; color: string }> {
+    if (!this.dissipated.length) return this.dissipated;
+    const out = this.dissipated;
+    this.dissipated = [];
+    return out;
+  }
+
   activeCount(): number { return this.haunts.length; }
 
+  /** Wounds waiting to ride the next settle (QA / tests). */
+  carriedCount(): number { return this.carried.length; }
+
   /** Read-only snapshot for the map markers. */
-  peek(): ReadonlyArray<{ id: string; x: number; y: number; broken: boolean }> {
-    return this.haunts.map(h => ({ id: h.id, x: h.coord.x, y: h.coord.y, broken: h.anchorBroken }));
+  peek(): ReadonlyArray<{ id: string; x: number; y: number; broken: boolean; waneFrac: number }> {
+    return this.haunts.map(h => ({
+      id: h.id, x: h.coord.x, y: h.coord.y, broken: h.anchorBroken, waneFrac: h.waneFrac,
+    }));
   }
 
   // --- dev seam --------------------------------------------------------------
 
-  /** DEV: settle a grief on the given zone immediately. */
+  /** DEV: settle a grief on the given zone immediately — PINNED (it ignores
+   *  the wheel, so a day-time force holds; it still previews the wane pulse
+   *  near a dissolving boundary). Consumes a banked wound like any settle. */
   devIgnite(view: OverlayView, zoneId: string): boolean {
     const z = view.byId[zoneId];
     if (!z || !this.hauntable(z) || this.haunts.some(h => h.zoneId === zoneId)) return false;
-    this.haunts.push({
-      id: `haunt_${this.seq++}`, zoneId, coord: { x: z.map.x, y: z.map.y },
-      ttlLeft: 9999, anchorBroken: false,
-    });
+    this.haunts.push(this.mintHaunt(z, 9999, /* pinned */ true));
     return true;
   }
 
@@ -189,12 +302,23 @@ export class HauntField implements WorldOverlay {
       view.visited.has(n.id) && this.hauntable(n) && !taken.has(n.id));
     if (!nodes.length) return;
     const z = nodes[this.rng.int(0, nodes.length - 1)];
-    this.haunts.push({
+    this.haunts.push(this.mintHaunt(z, this.rng.range(this.cfg.ttlSeconds[0], this.cfg.ttlSeconds[1])));
+  }
+
+  /** Mint a settle on `z` — and if a banished grief's wounds are banked, the
+   *  oldest RESUMES here (broken anchor stays broken, hurts stay taken). */
+  private mintHaunt(z: ZoneDef, ttl: number, pinned?: boolean): ActiveHaunt {
+    const c = this.carried.shift();
+    return {
       id: `haunt_${this.seq++}`,
       zoneId: z.id, coord: { x: z.map.x, y: z.map.y },
-      ttlLeft: this.rng.range(this.cfg.ttlSeconds[0], this.cfg.ttlSeconds[1]),
-      anchorBroken: false,
-    });
+      ttlLeft: ttl,
+      anchorBroken: c?.anchorBroken ?? false,
+      anchorLifeFrac: c?.anchorLifeFrac ?? 1,
+      bossLifeFrac: c?.bossLifeFrac ?? 1,
+      waneFrac: 0,
+      pinned,
+    };
   }
 }
 
@@ -205,7 +329,9 @@ registerMarkerSource((world: World): MapMarker[] => {
   return hf.peek().map(h => ({
     id: `haunting-${h.id}`, coord: { x: h.x, y: h.y },
     glyph: '☽', fill: '#12141c', stroke: HAUNT_PALE, text: '#d8e0f0', r: 7,
-    title: h.broken ? 'A grief UNBOUND — the Wailing One walks here' : 'A haunting holds this ground',
+    title: h.waneFrac > 0 ? 'A haunting thins in the coming light — it will not hold'
+      : h.broken ? 'A grief UNBOUND — the Wailing One walks here'
+        : 'A haunting holds this ground',
     fog: 'always', z: 16,
   }));
 });
@@ -213,11 +339,13 @@ registerMarkerSource((world: World): MapMarker[] => {
 registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const info = world.sim.hauntField?.hauntOn(zoneId);
   if (!info) return [];
+  let detail = info.anchorBroken
+    ? 'the anchor is broken — the Wailing One walks until it is faced'
+    : 'a grief holds this ground: apparitions gather around its anchor';
+  if (info.waneFrac > 0) detail += ' — the light comes; it cannot hold much longer';
   return [{
     kind: 'event', icon: '☽', color: info.color, label: 'Haunted',
-    detail: info.anchorBroken
-      ? 'the anchor is broken — the Wailing One walks until it is faced'
-      : 'a grief holds this ground: apparitions gather around its anchor',
+    detail,
     z: 15,
   }];
 });

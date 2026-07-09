@@ -1,13 +1,20 @@
 // ---------------------------------------------------------------------------
-// THE HAUNTING — a restless grief that settles on charted ground.
+// THE HAUNTING — a restless grief that settles on charted ground, BY NIGHT.
 //
 // While it holds a zone, apparitions stream in around a standing GRIEF-ANCHOR.
-// Two ways out: wait (the grief drifts on unrewarded), or BREAK THE ANCHOR —
-// which manifests the WAILING ONE, and only its fall lifts the haunt (the
-// reward path). Reuses the apparition wing (gloomlings, wisps, poltergeists,
-// banshees — presence-banded), the undead faction, and the kill-handler
-// registry; the overlay owns the settle/lapse lifecycle. Discovered in play;
-// the Vault unlock gates TUNING, exactly like Brigands/Migration.
+// Break the anchor and the WAILING ONE manifests; only its fall lifts the
+// haunt (the reward path). THE NIGHT CANON (all data on the surge): griefs
+// settle only in the dark (beginPhases) and cannot hold their shape past it
+// (holdPhases) — at dawn the haunt DISSIPATES: its spawns visibly WANE for the
+// last waneSeconds (a transparent pulse), then fade where they stand, paying
+// nothing. But the light erases nothing (carryWound): a banished grief banks
+// the anchor's cracks, a broken anchor, the Wailing One's hurts — and the next
+// grief to settle, wherever it lands, RESUMES them. Effort is never wasted;
+// it is carried to another night. Reuses the apparition wing (gloomlings,
+// wisps, poltergeists, banshees — presence-banded), the undead faction, and
+// the kill-handler registry; the overlay owns the settle/wane/dissipate
+// lifecycle. Discovered in play; the Vault unlock gates TUNING, exactly like
+// Brigands/Migration.
 // ---------------------------------------------------------------------------
 
 import { registerKillHandler } from '../../engine/killHandlers';
@@ -18,10 +25,20 @@ import type { ContentPackage } from '../types';
 export const HAUNT_SURGE: HauntSurge = {
   igniteChance: 0.010,        // per 0.5s step, × pressure — a slow, patient grief
   maxConcurrent: 2,
-  ttlSeconds: [240, 420],     // an ignored haunt drifts on after 4-7 minutes
+  // The phase-agnostic BACKSTOP lapse. Under night-only holdPhases the DAWN is
+  // what actually ends an unbroken haunt (a whole night is ~96s, shorter than
+  // this floor), so the ttl only bites if holdPhases is widened or removed.
+  ttlSeconds: [240, 420],
   streamInterval: [4.5, 7.5], // one apparition at a time — dread, not a flood
   maxAlive: 7,
   levelBonus: 1,
+  // THE NIGHT CANON: settles only in the dark, dissolves in the light — the
+  // spirits pulse thin through the last stretch of night, and what the dawn
+  // takes rides forward (carryWound) instead of paying out partial rewards.
+  beginPhases: ['night'],
+  holdPhases: ['night'],
+  waneSeconds: 25,
+  carryWound: true,
   // The apparition wing, banded: young ground grieves in gloomlings and
   // grave-lights; old ground sends its wights and wailers.
   roster: [
@@ -79,11 +96,11 @@ registerKillHandler({
 export const HAUNTING: ContentPackage = {
   id: 'haunting',
   label: 'The Haunting',
-  blurb: 'Grief does not bury well. Now and then it settles on some stretch of charted ground and holds it — the air runs cold, grave-lights drift the field, and the restless stream in around a standing anchor of sorrow. Leave it be and it drifts on in its own time, giving nothing. Or break the anchor — and understand that breaking it does not end the grief. It gives the grief a THROAT. The Wailing One walks until someone faces it; its fall is the only lifting that pays.',
+  blurb: 'Grief does not bury well. By night it settles on some stretch of charted ground and holds it — the air runs cold, grave-lights drift the field, and the restless stream in around a standing anchor of sorrow. Leave it be and the dawn unbinds it, giving nothing. Or break the anchor — and understand that breaking it does not end the grief. It gives the grief a THROAT. The Wailing One walks until someone faces it — and if the light takes it first, watch the spirits thin and gutter as day nears, then remember this: the light erases nothing. What you cracked stays cracked, what you wounded stays wounded, and the grief returns to some other ground the next nightfall, carrying every blow.',
   cost: 120,
   unlock: {
     id: 'haunting_unlock',
-    label: 'Stand haunted ground (griefs settle on charted zones from low levels)',
+    label: 'Stand haunted ground (griefs settle on charted zones by night)',
     test: (ctx) => (ctx.ledger.haunt_seen ?? 0) >= 1,
   },
   tiers: [

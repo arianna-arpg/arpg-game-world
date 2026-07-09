@@ -715,6 +715,11 @@ export class Actor {
   owner?: Actor;          // set for minions
   aiCooldown = 0;         // small delay between AI decisions
   hitFlash = 0;           // render feedback timer
+  /** WANING PRESENCE (0..1): a generic render-only fade channel — the body
+   *  pulses toward transparent as it rises (VIS_CFG.body.waneDepth/waneRate).
+   *  The OWNING system re-stamps it every frame (the Haunting's dawn-wane);
+   *  it never gates gameplay. */
+  wane = 0;
 
   // Minion explosion payloads, baked from the owner's stats at summon time.
   // Values are the fraction of the minion's max life dealt as fire damage.

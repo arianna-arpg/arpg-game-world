@@ -37,6 +37,11 @@ export const VIS_CFG = {
     spawnInSeconds: 0.35,
     /** The seed scale a spawn-in starts from. */
     spawnInFrom: 0.25,
+    /** WANING PRESENCE (Actor.wane): the deepest transparency dip at full
+     *  wane (0..1 of the body's alpha) — the pulse bottoms out at 1-this. */
+    waneDepth: 0.8,
+    /** Pulse speed of the waning shimmer (rad/s) — slow, a breath in the light. */
+    waneRate: 2.4,
   },
 
   /** Soft drop shadows (actors + standing doodads). */

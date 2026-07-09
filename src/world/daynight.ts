@@ -29,6 +29,16 @@ const PHASE_LABEL: Record<DayPhase, string> = {
   dawn: 'Dawn', day: 'Day', dusk: 'Dusk', night: 'Night',
 };
 
+/** The turning of the day as ONE data table: each phase and the cycle-fraction
+ *  (0..1) it ends at, in wheel order. dayCycle() and phaseAhead() both read
+ *  this — rebalancing the day is one edit here, never a scattered literal. */
+export const PHASE_WHEEL: ReadonlyArray<{ phase: DayPhase; until: number }> = [
+  { phase: 'day', until: 0.40 },
+  { phase: 'dusk', until: 0.50 },
+  { phase: 'night', until: 0.90 },
+  { phase: 'dawn', until: 1.00 },
+];
+
 // Reweights are by FACTION and only touch monsters already native to a zone.
 const PHASE_BIAS: Record<DayPhase, SpawnBias> = {
   day: { countMul: 0.9, factionMul: { undead: 0.85 }, injectFactions: [] },
@@ -41,12 +51,34 @@ const PHASE_BIAS: Record<DayPhase, SpawnBias> = {
 export function dayCycle(time: number): DayCycle {
   const cyc = ((time % DAY_LENGTH) + DAY_LENGTH) % DAY_LENGTH;
   const t = cyc / DAY_LENGTH;
-  let phase: DayPhase;
-  if (t < 0.40) phase = 'day';
-  else if (t < 0.50) phase = 'dusk';
-  else if (t < 0.90) phase = 'night';
-  else phase = 'dawn';
+  let phase: DayPhase = PHASE_WHEEL[PHASE_WHEEL.length - 1].phase;
+  for (const spoke of PHASE_WHEEL) { if (t < spoke.until) { phase = spoke.phase; break; } }
   // Smooth light: peaks at t=0.20 (midday), troughs at t=0.70 (midnight).
   const light = 0.5 + 0.5 * Math.cos(2 * Math.PI * (t - 0.20));
   return { phase, t, light, label: PHASE_LABEL[phase], bias: PHASE_BIAS[phase] };
+}
+
+/** Look AHEAD on the wheel: the current phase, seconds until it turns, and the
+ *  phase that follows — lets a system anticipate a boundary (a grief waning
+ *  before the dawn takes it) without re-deriving the clock's arithmetic. */
+export function phaseAhead(time: number): { phase: DayPhase; endsIn: number; next: DayPhase } {
+  const cyc = ((time % DAY_LENGTH) + DAY_LENGTH) % DAY_LENGTH;
+  const t = cyc / DAY_LENGTH;
+  for (let i = 0; i < PHASE_WHEEL.length; i++) {
+    if (t < PHASE_WHEEL[i].until) {
+      return {
+        phase: PHASE_WHEEL[i].phase,
+        endsIn: (PHASE_WHEEL[i].until - t) * DAY_LENGTH,
+        next: PHASE_WHEEL[(i + 1) % PHASE_WHEEL.length].phase,
+      };
+    }
+  }
+  // Unreachable (t < 1 by construction; the wheel's last spoke ends at 1).
+  return { phase: PHASE_WHEEL[0].phase, endsIn: 0, next: PHASE_WHEEL[1].phase };
+}
+
+/** True when the clock stands in one of `phases` (undefined = any hour) —
+ *  the shared gate for "this may only happen at night"-style data fields. */
+export function inPhases(time: number, phases?: readonly DayPhase[]): boolean {
+  return !phases || phases.includes(dayCycle(time).phase);
 }

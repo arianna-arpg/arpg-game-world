@@ -2264,6 +2264,13 @@ export class Renderer {
     // Echo riders: a ghost-faded copy of their owner — the dashed seam ring
     // after the body keeps the lie legible (construct.kind ships on the wire).
     if (a.construct?.kind === 'echo') ctx.globalAlpha = 0.45;
+    // WANING PRESENCE (Actor.wane 0..1, system-stamped): the body pulses
+    // toward transparent, dipping deeper as the wane rises — a thing fading
+    // in the coming light. Multiplies, so it composes with the flags above.
+    if (a.wane > 0) {
+      const dip = a.wane * VIS_CFG.body.waneDepth;
+      ctx.globalAlpha *= 1 - dip * (0.5 + 0.5 * Math.sin(world.time * VIS_CFG.body.waneRate + a.id * 1.7));
+    }
     // Every overlay from here rides the same fade as the body itself.
     const baseAlpha = ctx.globalAlpha;
 
