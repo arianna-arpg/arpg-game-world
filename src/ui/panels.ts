@@ -19,9 +19,9 @@ import {
   type SkillDef, type SkillInstance, type SupportInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, socketCap, type ItemInstance } from '../engine/items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, slotsForCategory, socketCap, type ItemInstance } from '../engine/items';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
-import { describeItem, itemGridSize } from '../engine/itemgen';
+import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
 import { ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, type EssenceCost } from '../data/essences';
 import {
@@ -267,13 +267,17 @@ export class UI {
       el.dataset.tip === 'class' ? this.classTooltip()
         : el.dataset.tip === 'stat' ? this.statTooltip(el.dataset.statId!)
         : el.dataset.tip === 'attr' ? this.attrTooltip(el.dataset.attrId as AttributeId) : null);
-    bindTooltips(this.inventory, (el) =>
-      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid))
+    // Item tips everywhere grow the ON-SWAP comparison on a dwell (extend);
+    // the extended flag only ever reaches itemTooltip — other cards have no
+    // deeper form and simply re-serve themselves.
+    bindTooltips(this.inventory, (el, ext) =>
+      el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext)
         : el.dataset.tip === 'skill' ? this.skillTooltip(el.dataset.skillId!)
-        : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null);
-    bindTooltips(this.salvageMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
-    bindTooltips(this.oracleMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
-    bindTooltips(this.vendorMenu, (el) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid)) : null);
+        : el.dataset.tip === 'vestige' ? this.vestigeTooltip(el.dataset.vestigeId!) : null,
+    { extend: true });
+    bindTooltips(this.salvageMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
+    bindTooltips(this.oracleMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
+    bindTooltips(this.vendorMenu, (el, ext) => el.dataset.tip === 'item' ? this.itemTooltip(Number(el.dataset.itemUid), ext) : null, { extend: true });
     bindTooltips(this.classSelect, (el) => el.dataset.tip === 'cskill' ? this.classSkillTooltip(el.dataset.skillId!) : null);
     // Delegation works on SVG descendants too — tree nodes carry data-tip like
     // any DOM row, so mouse AND the pad pointer's synthetic hover both hit it.
@@ -910,9 +914,54 @@ export class UI {
       ?? Object.values(m.equipped).find(i => i?.uid === uid) ?? undefined;
   }
 
+  /** The candidate slots an UNWORN item could swap into that hold something
+   *  today — the comparison targets. Worn items (and empty targets) compare
+   *  against nothing: the plain card already reads as the whole story. */
+  private compareTargets(item: ItemInstance): { label: string; worn: ItemInstance }[] {
+    const m = this.getWorld().meta;
+    if (Object.values(m.equipped).some(i => i?.uid === item.uid)) return [];
+    const base = ITEM_BASES[item.baseId];
+    if (!base) return [];
+    return slotsForCategory(base.category)
+      .filter(s => m.equipped[s.id])
+      .map(s => ({ label: s.label, worn: m.equipped[s.id]! }));
+  }
+
+  /** EXTENDED-HOVER comparison block: the hovered piece vs whatever fills
+   *  each slot it could take (both rings, when both are worn). Rows derive
+   *  from compareItemMods — the stat sheet's own folding — never from
+   *  re-parsing tooltip text. */
+  private compareHtml(item: ItemInstance): string | null {
+    const targets = this.compareTargets(item);
+    if (!targets.length) return null;
+    const row = (r: ModCompareRow): string => {
+      switch (r.kind) {
+        case 'gain': return `<div style="color:#7ec8a0;font-size:10px">+ ${r.text}</div>`;
+        case 'loss': return `<div style="color:#d05050;font-size:10px">− ${r.text}</div>`;
+        case 'same': return `<div style="color:#7a7688;font-size:10px">= ${r.text}</div>`;
+        case 'delta': {
+          const up = (r.delta ?? 0) > 0;
+          return `<div style="color:${up ? '#a8d8b8' : '#d8a8a8'};font-size:10px">${r.text}
+            <span style="color:${up ? '#7ec8a0' : '#d05050'};font-size:9px;font-weight:bold">${r.deltaText}</span></div>`;
+        }
+      }
+    };
+    const sections = targets.map(t => {
+      const rows = compareItemMods(item, t.worn);
+      return `<div style="color:#9a94a8;font-size:10px;margin-top:4px">vs ${t.label} —
+          <span style="color:${ITEM_RARITIES[t.worn.rarity].color}">${t.worn.name}</span></div>
+        ${rows.map(row).join('') || '<div style="color:#7a7688;font-size:10px">grants exactly the same lines</div>'}`;
+    }).join('');
+    return `<div style="border-top:1px dashed #4a4458;margin-top:6px;padding-top:3px">
+      <div style="color:#c8a84b;font-size:9px;letter-spacing:1.2px">ON SWAP
+        <span style="color:#6a6478;letter-spacing:0"> · green gained · red lost · = unchanged</span></div>
+      ${sections}</div>`;
+  }
+
   /** Rich item card — every line derives live from the instance's rolls, so
-   *  a data retune re-prices the tooltip the same instant it re-prices play. */
-  private itemTooltip(uid: number): TooltipContent | null {
+   *  a data retune re-prices the tooltip the same instant it re-prices play.
+   *  DWELLING (extended hover) grows the card with the ON-SWAP comparison. */
+  private itemTooltip(uid: number, extended?: boolean): TooltipContent | null {
     const item = this.findItem(uid);
     if (!item) return null;
     const d = describeItem(item);
@@ -936,10 +985,19 @@ export class UI {
       if (d.epitaph.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic">${d.epitaph.flavor}</div>`);
     }
     if (d.flavor) lines.push(`<div style="color:#8a7a5a;font-style:italic;margin-top:4px">${d.flavor}</div>`);
+    // Extended dwell: grow with the ON-SWAP comparison; the compact card
+    // advertises the dwell whenever a comparison exists to grow into.
+    let compareHint = '';
+    if (extended) {
+      const cmp = this.compareHtml(item);
+      if (cmp) lines.push(cmp);
+    } else if (this.compareTargets(item).length) {
+      compareHint = ' · <span style="color:#c8a84b">hold to compare</span>';
+    }
     return {
       title: `<span style="color:${d.color}">${d.epitaph ? `${d.epitaph.name} — ` : ''}${d.title}</span>`,
       description: lines.join(''),
-      meta: `${d.reqLine} · ${ITEM_RARITIES[item.rarity].label}`,
+      meta: `${d.reqLine} · ${ITEM_RARITIES[item.rarity].label}${compareHint}`,
     };
   }
 
@@ -969,22 +1027,34 @@ export class UI {
     if (this.heldItemUid !== null && !held) this.heldItemUid = null; // vanished (equipped/dropped) — self-heal
 
     // --- the doll: every ENABLED slot from the registry, in registry order ---
+    // While an item is LIFTED, every slot that ACCEPTS it lights up — worn or
+    // empty alike (a swap target matters as much as a hole). The slot a plain
+    // equip would take (first empty, else first — World.equipItem's own rule)
+    // outlines SOLID; sibling candidates (the other ring) outline dashed.
     const heldBase = held ? ITEM_BASES[held.baseId] : undefined;
+    const candidates = heldBase ? slotsForCategory(heldBase.category) : [];
+    const autoSlotId = candidates.length
+      ? (candidates.find(s => !m.equipped[s.id]) ?? candidates[0]).id : null;
     const doll = EQUIP_SLOTS.filter(s => s.enabled).map(slot => {
       const worn = m.equipped[slot.id];
       const takes = heldBase && slot.accepts.includes(heldBase.category);
       const border = worn ? ITEM_RARITIES[worn.rarity].color : takes ? '#7ec8a0' : '#3a3644';
+      const glow = takes
+        ? `outline:2px ${slot.id === autoSlotId ? 'solid' : 'dashed'} #7ec8a0;outline-offset:1px;box-shadow:0 0 9px rgba(126,200,160,0.45);`
+        : '';
       const wornPips = worn?.sockets?.length ? ` <span style="font-size:12px">${worn.sockets.map((vid, si) => {
         const v = vid ? VESTIGES[vid] : null;
         return `<span data-sock="${worn.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
           style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
       }).join('')}</span>` : '';
+      const swapMark = takes && worn
+        ? ' <span style="color:#7ec8a0;font-size:11px" title="Click to swap the lifted item in here">⇄</span>' : '';
       const label = worn
-        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>${wornPips}`
+        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>${swapMark}${wornPips}`
         : `<span style="color:#5a5668">${slot.label}</span>`;
       return `<button data-doll="${slot.id}" ${worn ? `data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:170px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
-        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:pointer">${label}</button>`;
+        background:#1a1722;border:1px solid ${border};${glow}border-radius:4px;cursor:pointer">${label}</button>`;
     }).join('');
 
     // --- the bag: cells (click targets) under absolutely-positioned tiles ---

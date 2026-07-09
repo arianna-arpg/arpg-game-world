@@ -22,6 +22,16 @@ export interface TooltipContent {
   meta?: string;
 }
 
+/** Shared tooltip tunables — one home, no magic numbers at call sites. */
+export const TIP_CFG = {
+  /** Cursor→box gap when placing (px). */
+  pad: 14,
+  /** EXTENDED HOVER: dwell this long on one anchor and the box re-asks its
+   *  content with extended=true — the deeper card (gear comparison). Binds
+   *  opt in via TooltipOpts.extend. */
+  extendMs: 550,
+};
+
 export interface TooltipProximity {
   /** Which descendants compete for the nearest-anchor pick. */
   selector: string;
@@ -37,18 +47,28 @@ export interface TooltipProximity {
 
 export interface TooltipOpts {
   proximity?: TooltipProximity;
+  /** EXTENDED HOVER (opt-in per bind): dwell TIP_CFG.extendMs on one anchor
+   *  and getContent re-runs with extended=true, growing the box in place —
+   *  leave and return to reset to the compact card. Content that has no
+   *  deeper form simply returns the same card. */
+  extend?: boolean;
 }
 
 export function bindTooltips(
   container: HTMLElement,
-  getContent: (el: HTMLElement) => TooltipContent | null,
+  getContent: (el: HTMLElement, extended?: boolean) => TooltipContent | null,
   opts?: TooltipOpts,
 ): void {
   const tip = document.getElementById('tooltip')!;
   let cur: HTMLElement | null = null;
+  let extendTimer: number | null = null;
+  /** Last cursor point — the extend re-render must re-clamp the grown box
+   *  without waiting for the next mouse event. */
+  let lastPt = { clientX: 0, clientY: 0 };
 
   const place = (e: { clientX: number; clientY: number }): void => {
-    const pad = 14, vw = window.innerWidth, vh = window.innerHeight;
+    lastPt = { clientX: e.clientX, clientY: e.clientY };
+    const pad = TIP_CFG.pad, vw = window.innerWidth, vh = window.innerHeight;
     const r = tip.getBoundingClientRect();
     let x = e.clientX + pad, y = e.clientY + pad;
     if (x + r.width > vw) x = e.clientX - r.width - pad;
@@ -57,7 +77,35 @@ export function bindTooltips(
     tip.style.top = `${Math.max(4, y)}px`;
   };
 
+  const render = (el: HTMLElement, extended: boolean): boolean => {
+    const c = getContent(el, extended);
+    if (!c) return false;
+    tip.innerHTML =
+      `${c.title ? `<div class="tt-title">${c.title}</div>` : ''}` +
+      `<div class="tt-desc">${c.description}</div>` +
+      `${c.meta ? `<div class="tt-meta">${c.meta}</div>` : ''}`;
+    tip.classList.remove('hidden');
+    return true;
+  };
+
+  const disarmExtend = (): void => {
+    if (extendTimer !== null) { window.clearTimeout(extendTimer); extendTimer = null; }
+  };
+
+  const armExtend = (el: HTMLElement): void => {
+    disarmExtend();
+    if (!opts?.extend) return;
+    extendTimer = window.setTimeout(() => {
+      extendTimer = null;
+      // Still dwelling on the same, still-attached anchor? Grow in place.
+      if (cur !== el || !el.isConnected) return;
+      render(el, true);
+      place(lastPt); // the grown box must re-clamp into the viewport
+    }, TIP_CFG.extendMs);
+  };
+
   const hide = (): void => {
+    disarmExtend();
     if (!cur) return;
     cur = null;
     tip.classList.add('hidden');
@@ -65,14 +113,9 @@ export function bindTooltips(
 
   const show = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
     if (el !== cur) {
-      const c = getContent(el);
-      if (!c) { hide(); return; }
+      if (!render(el, false)) { hide(); return; }
       cur = el;
-      tip.innerHTML =
-        `${c.title ? `<div class="tt-title">${c.title}</div>` : ''}` +
-        `<div class="tt-desc">${c.description}</div>` +
-        `${c.meta ? `<div class="tt-meta">${c.meta}</div>` : ''}`;
-      tip.classList.remove('hidden');
+      armExtend(el);
     }
     place(e);
   };

@@ -13,7 +13,7 @@ import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
 import { chargeColor } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { RUNE_INFO } from '../data/invocations';
-import { BOSS_BAR_XP_MIN, SNOW_CFG } from '../engine/world';
+import { BOSS_BAR_XP_MIN, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
@@ -26,7 +26,7 @@ import { QUEST_GIVER_IDS } from '../quests/defs';
  *  edges from popping at the screen border. */
 const RENDER_CULL_PAD = 150;
 import { roofStyle } from '../data/structures';
-import { keyDisplay, type Settings } from '../meta/settings';
+import { DEFAULT_KEYBINDS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { MONSTERS } from '../data/monsters';
@@ -71,6 +71,13 @@ export class Renderer {
     this.ctx = canvas.getContext('2d')!;
     this.resize();
     window.addEventListener('resize', () => this.resize());
+  }
+
+  /** Live keybind label for one action — every HUD hint that names a key
+   *  goes through this, so hints can never drift from a rebind (the retired
+   *  Skill Book key taught that lesson). */
+  private actionKey(id: ActionId): string {
+    return keyDisplay(this.getSettings?.().keybinds[id] ?? DEFAULT_KEYBINDS[id]);
   }
 
   /** Bar-slot key labels, derived from the live keybinds (slots 0/1 fixed to
@@ -163,10 +170,11 @@ export class Renderer {
     for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
     for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
     for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
-    this.drawEliteNameHover(world);
     this.drawProjectiles(world);
     this.drawCanopies(world);      // fake-2D depth: crowns above actors, faded near the hero
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
+    this.drawLabels(world);        // actor text (names/prompts) — above the fades, visibility-gated
+    this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
     this.drawTexts(world);
     this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
 
@@ -192,12 +200,15 @@ export class Renderer {
   /** D2-style hover nameplate: the DISTINCTLY-NAMED foe nearest the cursor
    *  (one at a time — no label storms) shows its minted name over a tier/genus
    *  subtitle ("Goresnap the Bilious" / "Rare Goblin"). Nemeses are skipped —
-   *  they wear their own permanent mark. */
+   *  they wear their own permanent mark. Drawn on the post-fade layer so a
+   *  crown never covers the plate of a foe you can see — and CONCEALED foes
+   *  never bid at all: the cursor must not become a canopy probe. */
   private drawEliteNameHover(world: World): void {
     // "The cursor" is wherever aim truly lives: the pad's reticle when the
     // pad owns it, else the mouse — nameplates follow the same point skills do.
     const cur = this.padAim ?? this.toWorld(this.hudMouse);
     let best: Actor | null = null;
+    let bestReveal = 0;
     let bd = 80;
     for (const a of world.actors) {
       if (a.dead || a.team !== 'enemy' || a.nemesis || !a.defId) continue;
@@ -206,7 +217,10 @@ export class Renderer {
       const label = a.rarity ? RARITY_DEFS[a.rarity].label : '';
       if (label && a.name === `${label} ${def.name}`) continue; // tier-prefixed, not minted
       const d = Math.hypot(a.pos.x - cur.x, a.pos.y - cur.y) - a.radius;
-      if (d < bd) { bd = d; best = a; }
+      if (d >= bd) continue;
+      const reveal = this.labelRevealAt(world, a.pos); // hidden foes don't bid
+      if (reveal <= 0.02) continue;
+      bd = d; best = a; bestReveal = reveal;
     }
     if (!best) return;
     const { ctx } = this;
@@ -216,10 +230,11 @@ export class Renderer {
       ? `${RARITY_DEFS[best.rarity].label} ${def.name}` : def.name;
     ctx.save();
     ctx.textAlign = 'center';
+    ctx.globalAlpha = bestReveal;
     ctx.fillStyle = tint;
     ctx.font = 'bold 12px Verdana';
     ctx.fillText(best.name, best.pos.x, best.pos.y - best.radius - 20);
-    ctx.globalAlpha = 0.75;
+    ctx.globalAlpha = 0.75 * bestReveal;
     ctx.font = '10px Verdana';
     ctx.fillText(sub, best.pos.x, best.pos.y - best.radius - 8);
     ctx.restore();
@@ -242,7 +257,9 @@ export class Renderer {
 
   /** A MANIFESTED NEMESIS (meta/nemesis.ts) wears its memory openly: a dashed
    *  ring in its rank tint and its minted name + title overhead — a remembered
-   *  foe must read as one at a glance. */
+   *  foe must read as one at a glance. The ring rides the body (and hides
+   *  with it under a crown); the NAME goes through the label pass, so it
+   *  stays readable over foliage yet leaks nothing while the foe is hidden. */
   private drawNemesisMark(a: Actor): void {
     const { ctx } = this;
     const tint = a.nemesis!.tint;
@@ -255,12 +272,8 @@ export class Renderer {
     ctx.arc(a.pos.x, a.pos.y, a.radius + 7, 0, Math.PI * 2);
     ctx.stroke();
     ctx.setLineDash([]);
-    ctx.globalAlpha = 0.95;
-    ctx.fillStyle = tint;
-    ctx.font = 'bold 12px Verdana';
-    ctx.textAlign = 'center';
-    ctx.fillText(`☠ ${a.name}`, a.pos.x, a.pos.y - a.radius - 16);
     ctx.restore();
+    this.queueLabel(a, `☠ ${a.name}`, tint, 16, { font: 'bold 12px Verdana', stroke: false });
   }
 
   /** CHARACTER-MODE fade (a survived death, meta/modes.ts): the whole screen —
@@ -1257,6 +1270,75 @@ export class Renderer {
     }
   }
 
+  // --- ACTOR-ANCHORED TEXT LABELS ---------------------------------------------
+  // NPC names, overhead prompts, and nameplates queue here during the actor
+  // pass and draw AFTER the canopy/roof fades — text near the player never
+  // drowns under a crown. The trade is honesty: each label is gated on the
+  // SAME smoothed fades the player's eyes get, so an actor the fades still
+  // hide leaks not one glyph (the text half of the canopy's ambush rule).
+  private labels: { a: Actor; text: string; color: string; dy: number; font: string; stroke: boolean }[] = [];
+
+  /** Queue one line above an actor's head for the post-fade text pass.
+   *  dy stacks lines: 8 hugs the scalp (names), 22 rides above the bars. */
+  private queueLabel(a: Actor, text: string, color: string, dy: number,
+    opts?: { font?: string; stroke?: boolean }): void {
+    this.labels.push({ a, text, color, dy, font: opts?.font ?? 'bold 11px Verdana', stroke: opts?.stroke ?? true });
+  }
+
+  /** How readable a label anchored at this POINT may be (0..1), keyed on the
+   *  live canopy/roof fades over it. 1 = nothing covers the anchor (or its
+   *  cover has faded open — the near-fade that reveals the body reveals the
+   *  words); 0 = an opaque crown/roof conceals body and text alike. The
+   *  canopy disc rule (center within radius) matches World.isShaded and the
+   *  AI's shade checks — one under-a-crown contract everywhere; a crown's
+   *  painted overhang past its radius covers only anchors that already read
+   *  as substantially outside it. Point-based so any future world-anchored
+   *  text (doodad prompts, ground marks) can ride the same gate. */
+  private labelRevealAt(world: World, pos: Vec2): number {
+    const L = VIS_CFG.labels;
+    let reveal = 1;
+    for (const c of this.frameOccluders) {
+      if (dist(pos, c.o.pos) > c.o.radius) continue;
+      reveal = Math.min(reveal, clamp((L.hideAt - c.fade) / (L.hideAt - L.showAt), 0, 1));
+      if (reveal <= 0) return 0;
+    }
+    for (const st of world.structures) {
+      const under = st.roofs.some(r =>
+        pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h);
+      if (!under) continue;
+      const fade = this.roofFade.get(st.id) ?? roofStyle(st.roofStyle).alpha;
+      reveal = Math.min(reveal, clamp((L.hideAt - fade) / (L.hideAt - L.showAt), 0, 1));
+      if (reveal <= 0) return 0;
+    }
+    return reveal;
+  }
+
+  private drawLabels(world: World): void {
+    if (!this.labels.length) return;
+    const { ctx } = this;
+    // One reveal per anchor per frame — an actor usually wears 1-2 lines.
+    const reveals = new Map<Actor, number>();
+    ctx.save();
+    ctx.textAlign = 'center';
+    for (const L of this.labels) {
+      let r = reveals.get(L.a);
+      if (r === undefined) { r = this.labelRevealAt(world, L.a.pos); reveals.set(L.a, r); }
+      if (r <= 0.02) continue;
+      ctx.globalAlpha = r;
+      ctx.font = L.font;
+      const x = L.a.pos.x, y = L.a.pos.y - L.a.radius - L.dy;
+      if (L.stroke) {
+        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(L.text, x, y);
+      }
+      ctx.fillStyle = L.color;
+      ctx.fillText(L.text, x, y);
+    }
+    ctx.restore();
+    this.labels.length = 0;
+  }
+
   // --- FAKE-2D DEPTH: canopies above actors, proximity-faded -----------------
   // Tall doodads whose DOODAD_RULES row carries `occlude` draw AFTER the actor
   // pass: walk under a tree and its crown covers you — until you're close, when
@@ -1264,11 +1346,15 @@ export class Renderer {
   // without a real z-axis). Fade is smoothed per doodad; enemies lurking under
   // an unfaded canopy stay hidden, which is the ambush half of the feature.
   private canopyFade = new WeakMap<object, number>();
+  /** This frame's occluders with their smoothed fades — collected by
+   *  drawCanopies for the label pass (one loop, two customers). */
+  private frameOccluders: { o: Doodad; fade: number }[] = [];
 
   private drawCanopies(world: World): void {
     const hero = world.player;
     const dt = this.frameDt;
     const env: PaintEnv = { ctx: this.ctx, theme: world.zone.theme, time: world.time, world };
+    this.frameOccluders.length = 0;
     for (const o of this.culledAll) {
       const occ = doodadRuleOf(o.kind).occlude;
       if (!occ) continue;
@@ -1277,6 +1363,7 @@ export class Renderer {
       const cur = this.canopyFade.get(o) ?? 1;
       const fade = cur + (target - cur) * Math.min(1, dt * 10);
       this.canopyFade.set(o, fade);
+      this.frameOccluders.push({ o, fade });
       // Crown looks come from the SAME registry entry as the ground pass —
       // a kind with no canopy def gets the translucent disc.
       const cdef = DOODAD_VISUALS[o.kind]?.canopy;
@@ -2423,26 +2510,20 @@ export class Renderer {
       }
     }
 
+    // Overhead TEXT — names and prompts — queues for the post-fade label
+    // pass (drawLabels): doodads never drown the words, and the reveal gate
+    // keeps a concealed actor's text as hidden as its body.
+
     // NPCs that fill a town role (MonsterDef.npcRole) wear their names.
     if (a.team === 'player' && a.defId && MONSTERS[a.defId]?.npcRole) {
-      ctx.textAlign = 'center';
-      ctx.font = '10px Verdana';
-      ctx.fillStyle = '#e8c87a';
-      ctx.fillText(a.name, x, y - a.radius - 8);
+      this.queueLabel(a, a.name, '#e8c87a', 8, { font: '10px Verdana', stroke: false });
     }
 
     // The innkeep "talks" when her healing isn't unlocked — no free innstay yet.
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'innkeep'
       && world.nearMireille()
       && !world.mireilleUnlocked()) {
-      const msg = 'No free innstay — unlock my care in the Vault.';
-      ctx.textAlign = 'center';
-      ctx.font = 'bold 11px Verdana';
-      ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-      ctx.lineWidth = 3;
-      ctx.strokeText(msg, x, y - a.radius - 22);
-      ctx.fillStyle = '#d8b87a';
-      ctx.fillText(msg, x, y - a.radius - 22);
+      this.queueLabel(a, 'No free innstay — unlock my care in the Vault.', '#d8b87a', 22);
     }
 
     // Any quest-giving NPC posts its offer above its head while you're near —
@@ -2450,56 +2531,24 @@ export class Renderer {
     // vocation's shrine spirit, future field boards), never a hand list.
     if (a.defId && QUEST_GIVER_IDS.has(a.defId)) {
       const msg = world.questGiverPrompt();
-      if (msg) {
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 11px Verdana';
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-        ctx.lineWidth = 3;
-        ctx.strokeText(msg, x, y - a.radius - 22);
-        ctx.fillStyle = '#c8a8e8';
-        ctx.fillText(msg, x, y - a.radius - 22);
-      }
+      if (msg) this.queueLabel(a, msg, '#c8a8e8', 22);
     }
 
     if (a.defId && MONSTERS[a.defId]?.npcRole === 'caravanner') {
       const msg = world.caravanPrompt();
-      if (msg) {
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 11px Verdana';
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-        ctx.lineWidth = 3;
-        ctx.strokeText(msg, x, y - a.radius - 22);
-        ctx.fillStyle = '#d8b87a';
-        ctx.fillText(msg, x, y - a.radius - 22);
-      }
+      if (msg) this.queueLabel(a, msg, '#d8b87a', 22);
     }
 
     // The Bonewright posts its current demand above its head.
     if (a.defId === 'amalgam_necromancer') {
       const msg = world.amalgamPrompt();
-      if (msg) {
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 11px Verdana';
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-        ctx.lineWidth = 3;
-        ctx.strokeText(msg, x, y - a.radius - 22);
-        ctx.fillStyle = '#9ad0b0';
-        ctx.fillText(msg, x, y - a.radius - 22);
-      }
+      if (msg) this.queueLabel(a, msg, '#9ad0b0', 22);
     }
 
     // The Delver posts its trade/descend prompt above its head.
     if (a.defId === 'descent_delver') {
       const msg = world.delverPrompt();
-      if (msg) {
-        ctx.textAlign = 'center';
-        ctx.font = 'bold 11px Verdana';
-        ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-        ctx.lineWidth = 3;
-        ctx.strokeText(msg, x, y - a.radius - 22);
-        ctx.fillStyle = '#7fe0d8';
-        ctx.fillText(msg, x, y - a.radius - 22);
-      }
+      if (msg) this.queueLabel(a, msg, '#7fe0d8', 22);
     }
 
     // Status pips
@@ -3615,21 +3664,18 @@ export class Renderer {
     ctx.fillText(world.objectiveText(), 16, 82);
     // The kill counter is RUN-END information (credits math, the death
     // screen) — mid-run it's clutter, so the HUD no longer carries it.
+    // Unspent-point nudges only — carried-gem COUNTS retired (the refreshed
+    // inventory owns that bookkeeping; a tally here was clutter, and its hint
+    // key had already drifted from the binds). Keys read live from settings.
     let hintY = 100;
     if (m.passivePoints > 0) {
       ctx.fillStyle = '#ffd700';
-      ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press P`, 16, hintY);
+      ctx.fillText(`${m.passivePoints} passive point${m.passivePoints > 1 ? 's' : ''} — press ${this.actionKey('panelTree')}`, 16, hintY);
       hintY += 18;
     }
     if (m.skillPoints > 0) {
       ctx.fillStyle = '#7ec8a0';
-      ctx.fillText(`${m.skillPoints} skill point${m.skillPoints > 1 ? 's' : ''} — press B`, 16, hintY);
-      hintY += 18;
-    }
-    const carried = m.inventory.length + m.skillInv.length;
-    if (carried > 0) {
-      ctx.fillStyle = '#b06bd4';
-      ctx.fillText(`${carried} gem${carried > 1 ? 's' : ''} carried — press B`, 16, hintY);
+      ctx.fillText(`${m.skillPoints} skill point${m.skillPoints > 1 ? 's' : ''} — press ${this.actionKey('panelInv')}`, 16, hintY);
       hintY += 18;
     }
     if (world.mireilleXpBuff > 0) {
@@ -3646,7 +3692,7 @@ export class Renderer {
     }
     if (world.nearFont()) {
       ctx.fillStyle = '#b06bd4';
-      ctx.fillText(`Sacrificial Font — offer skill gems in the book (B) · ${m.offerings}/3`, 16, hintY);
+      ctx.fillText(`Sacrificial Font — offer skill gems in the Build drawer (${this.actionKey('panelInv')}) · ${m.offerings}/${OFFERINGS_PER_POINT}`, 16, hintY);
     }
     if (world.zone.objective.kind === 'waves' && !world.objectiveDone
       && !world.waveActive && !world.gameOver) {

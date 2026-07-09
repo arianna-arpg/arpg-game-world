@@ -25,11 +25,12 @@ import { UNIQUES, UNIQUE_LIST } from '../data/uniques';
 import { epitaphFor, VESTIGES, type VestigeLine } from '../data/vestiges';
 import {
   DEFENSE_KINDS, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS,
-  baseBonusFor, defenseBudget, formatModLine, lerpRange, levelReqForTier,
-  roundStatValue, slotsForCategory, socketCap, tierForIlvl, tieredBaseName,
+  baseBonusFor, defenseBudget, formatModLine, formatStatValue, lerpRange,
+  levelReqForTier, roundStatValue, slotsForCategory, socketCap, tierForIlvl,
+  tieredBaseName,
   type AffixDef, type AffixRollState, type AffixTierDef, type ItemBaseDef,
-  type ItemCategory, type ItemInstance, type ItemRarity, type RangedLineDef,
-  type UniqueDef,
+  type ItemCategory, type ItemInstance, type ItemRarity, type ModLineDef,
+  type RangedLineDef, type UniqueDef,
 } from './items';
 import { STAT_DEFS, isAttributeId, type Modifier } from './stats';
 
@@ -530,6 +531,80 @@ export function describeItem(item: ItemInstance): ItemDescription {
     }
   }
   return d;
+}
+
+// ------------------------------------------------------------- comparing ---
+
+/** One row of an A-vs-B grant comparison (compareItemMods). */
+export interface ModCompareRow {
+  /** Full human line at the CANDIDATE's folded value ('loss' rows: the worn
+   *  value — the line the swap gives up). */
+  text: string;
+  /** 'delta' = shared line whose value moves · 'same' = shared and equal ·
+   *  'gain' = only the candidate grants it · 'loss' = only the worn piece does. */
+  kind: 'delta' | 'same' | 'gain' | 'loss';
+  /** 'delta' rows: signed change (candidate − worn) and its display label. */
+  delta?: number;
+  deltaText?: string;
+}
+
+/** Line-identity bucket: stat+kind+source+gauge+condition+tags — a
+ *  conditional line must never fold into (or diff against) its unconditional
+ *  cousin, and "+10 fire damage with melee skills" is not "+10 fire damage". */
+const modSig = (m: Modifier): string =>
+  [m.stat, m.kind, m.fromStat ?? '', m.gauge ?? '', m.when ?? '',
+    [...(m.tags ?? [])].sort().join('+')].join('§');
+
+/** Fold one item's grants into per-identity totals, the way the stat sheet
+ *  folds them: flat/increased/link ADD, 'more' COMPOUNDS, override last-wins. */
+function foldMods(mods: Modifier[]): Map<string, { line: ModLineDef; value: number }> {
+  const out = new Map<string, { line: ModLineDef; value: number }>();
+  for (const m of mods) {
+    const k = modSig(m);
+    const b = out.get(k);
+    if (!b) {
+      out.set(k, {
+        line: { stat: m.stat, kind: m.kind, tags: m.tags, when: m.when, fromStat: m.fromStat, gauge: m.gauge },
+        value: m.value,
+      });
+      continue;
+    }
+    b.value = m.kind === 'more' ? (1 + b.value) * (1 + m.value) - 1
+      : m.kind === 'override' ? m.value
+        : b.value + m.value;
+  }
+  return out;
+}
+
+/** Compare everything two items GRANT — derived from compileItemMods, the
+ *  same derivation the worn stat sheet plays by, so the card can never
+ *  disagree with the engine. Rows come back deltas first, then unchanged,
+ *  then gains, then losses; values inside each group keep grant order.
+ *  Presentation (colors, glyphs) stays the caller's business. */
+export function compareItemMods(candidate: ItemInstance, worn: ItemInstance): ModCompareRow[] {
+  const cand = foldMods(compileItemMods(candidate));
+  const cur = foldMods(compileItemMods(worn));
+  const rows: ModCompareRow[] = [];
+  const EPS = 1e-9;
+  for (const [k, a] of cand) {
+    const b = cur.get(k);
+    if (!b) {
+      rows.push({ text: formatModLine(a.line, a.value), kind: 'gain' });
+    } else if (Math.abs(a.value - b.value) <= EPS) {
+      rows.push({ text: formatModLine(a.line, a.value), kind: 'same' });
+    } else {
+      const d = a.value - b.value;
+      rows.push({
+        text: formatModLine(a.line, a.value), kind: 'delta', delta: d,
+        deltaText: `${d > 0 ? '+' : '−'}${formatStatValue(a.line.stat, a.line.kind, Math.abs(d))}`,
+      });
+    }
+  }
+  for (const [k, b] of cur) {
+    if (!cand.has(k)) rows.push({ text: formatModLine(b.line, b.value), kind: 'loss' });
+  }
+  const rank: Record<ModCompareRow['kind'], number> = { delta: 0, same: 1, gain: 2, loss: 3 };
+  return rows.sort((x, y) => rank[x.kind] - rank[y.kind]);
 }
 
 /** Bag footprint (1×1 fallback keeps unknown bases carryable, not stuck). */

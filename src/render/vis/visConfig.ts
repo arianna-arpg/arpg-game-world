@@ -55,6 +55,16 @@ export const VIS_CFG = {
     longAlpha: 0.2,
   },
 
+  /** Actor-anchored text labels (NPC names, overhead prompts, nameplates) —
+   *  drawn ABOVE the canopy/roof fades for clarity, but gated on the SAME
+   *  smoothed fade the player's eyes get so a concealed actor leaks no text.
+   *  A label fades out as the crown/roof over its anchor climbs from showAt
+   *  toward hideAt opacity (fully hidden at hideAt and beyond). */
+  labels: {
+    hideAt: 0.55,
+    showAt: 0.35,
+  },
+
   /** Ground texture chunks. */
   ground: {
     /** Chunk edge in world units (one baked canvas per chunk). */
