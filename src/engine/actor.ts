@@ -737,6 +737,11 @@ export class Actor {
   /** PACK BOND transition tracker (MonsterDef.bond) — the sheet source only
    *  moves on held/dropped edges, never per frame. */
   bondHeld = false;
+  /** NO BOUNTY: this body was CONJURED mid-fight (an enemy's summon verb,
+   *  summon delivery, brood hatch, split, spew) — killing it pays no xp, no
+   *  drops, no orbs. The summoner is the prize; its spawn is just weather.
+   *  Closes the leave-the-summoner-alive farming exploit. */
+  noBounty = false;
   /** LIVE BURROW (the {do:'burrow'} verb): submerge → travel underground as
    *  a dust line → telegraphed EMERGENCE hit. Untargetable throughout. */
   burrow?: {

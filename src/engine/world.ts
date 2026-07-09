@@ -13699,6 +13699,10 @@ export class World {
 
     const typeId = overrides?.monsterId ?? this.rollSummonType(d);
     const minion = this.createMonster(typeId, caster.level, caster.team, caster);
+    // Skill-conjured bodies pay no bounty on death — an enemy summoner's
+    // spawn stream can't be farmed for xp/drops (kill the caster instead),
+    // and a re-raised corpse can't pay twice. No-op for player minions.
+    minion.noBounty = true;
     // Shades and doppelgangers wear their summoner's silhouette (a data
     // flag, not an id check — any monster can be a mimic).
     if (MONSTERS[typeId]?.mimicOwnerForm) {
@@ -17176,23 +17180,28 @@ export class World {
         this.noteNemesisKill(actor);
         // Kill-fed encounters: a foe slain inside an open breach extends it.
         if (this.encounters.length) this.feedEncounters(actor);
-        this.grantXp(actor.xpValue);
-        this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11);
-        this.rollDrops(actor);
-        // Elites spill extra gems on top of the base roll (bias rides along).
-        if (actor.rarity) {
-          const bias = actor.defId ? MONSTERS[actor.defId]?.gemBias : undefined;
-          for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias);
-        }
-        // Breakables can spill something drinkable.
-        const mdef = actor.defId ? MONSTERS[actor.defId] : undefined;
-        if (mdef?.orbDrops && chance(mdef.orbDrops)) {
-          const kind = chance(0.5) ? 'life' as const : 'mana' as const;
-          this.orbs.push({
-            pos: this.clampPos(vec(actor.pos.x, actor.pos.y), 8),
-            kind, amount: kind === 'life' ? 12 + this.zone.level * 2 : 9 + this.zone.level,
-            bob: rand(0, Math.PI * 2), life: 12,
-          });
+        // CONJURED bodies (Actor.noBounty) pay nothing — no xp, no loot, no
+        // elite spill, no orbs. The summoner is the prize; endlessly farming
+        // its spawn is a closed door.
+        if (!actor.noBounty) {
+          this.grantXp(actor.xpValue);
+          this.text(actor.pos, `+${actor.xpValue} xp`, '#b8a0e0', 11);
+          this.rollDrops(actor);
+          // Elites spill extra gems on top of the base roll (bias rides along).
+          if (actor.rarity) {
+            const bias = actor.defId ? MONSTERS[actor.defId]?.gemBias : undefined;
+            for (let i = 0; i < RARITY_DEFS[actor.rarity].drops; i++) this.dropGemAt(actor.pos, bias);
+          }
+          // Breakables can spill something drinkable.
+          const mdef = actor.defId ? MONSTERS[actor.defId] : undefined;
+          if (mdef?.orbDrops && chance(mdef.orbDrops)) {
+            const kind = chance(0.5) ? 'life' as const : 'mana' as const;
+            this.orbs.push({
+              pos: this.clampPos(vec(actor.pos.x, actor.pos.y), 8),
+              kind, amount: kind === 'life' ? 12 + this.zone.level * 2 : 9 + this.zone.level,
+              bob: rand(0, Math.PI * 2), life: 12,
+            });
+          }
         }
       }
       // PER-KIND KILL BOUNTIES — the open registry (engine/killHandlers.ts).

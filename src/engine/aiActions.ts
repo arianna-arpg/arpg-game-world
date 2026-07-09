@@ -108,6 +108,9 @@ const HANDLERS: Record<AIAction['do'], Handler> = {
       ? (actor.aiAnchor ?? actor.pos) : actor.pos;
     for (let i = 0; i < count; i++) {
       const m = world.createMonster(act.monster, actor.level, actor.team);
+      // Conjured mid-fight by a living caster — recastable forever, so it
+      // pays no bounty (xp/drops). Kill the summoner for the prize.
+      m.noBounty = true;
       const ang = base + (i / count) * Math.PI * 2;
       m.pos = groundPoint(world,
         vec(around.x + Math.cos(ang) * ring, around.y + Math.sin(ang) * ring),
