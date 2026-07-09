@@ -5,7 +5,7 @@
 
 import { clamp, dist, type Vec2 } from '../core/math';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { instanceMeta, instanceStrikeTiming, instanceTrigger, SKILL_RARITIES } from '../engine/skills';
+import { instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, skillContextTags, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { STATUS_DEFS } from '../engine/status';
@@ -2512,15 +2512,22 @@ export class Renderer {
       px += 8;
     }
 
-    // FORESIGHT — an enemy wind-up with a GROUND footprint marks its landing
-    // spot: a faint ring in the skill's color firming toward impact, plus a
-    // center pip. Read it, step out. Toggleable (Settings.castTelegraphs).
+    // FORESIGHT — an enemy wind-up marks where the blow will land, in the
+    // skill's color, firming toward impact. GROUND footprints ring their
+    // landing spot (plus a center pip); MELEE swings and breath CONES wedge
+    // out from the body along the stamped aim (the cast lock pins the pose
+    // there and the resolve fires there — the drawing is the truth, stat
+    // scaling and all); hostile NOVAS ring the caster. Read it, step out.
+    // Toggleable (Settings.castTelegraphs).
     if (a.team === 'enemy' && a.casting && (this.getSettings?.().castTelegraphs ?? true)) {
       const fc = a.casting;
       const del = fc.inst.def.delivery;
+      // Channels breathe with the pulse clock; bar casts firm once.
+      const prog = fc.mode === 'channel'
+        ? (fc.total > 0 ? clamp(1 - Math.max(0, fc.pulseTimer ?? 0) / fc.total, 0, 1) : 1)
+        : (fc.total > 0 ? clamp(fc.elapsed / fc.total, 0, 1) : 1);
       if (del.type === 'ground') {
         const aim = fc.lockedAim ?? fc.aim;
-        const prog = fc.total > 0 ? clamp(fc.elapsed / fc.total, 0, 1) : 1;
         const rr = del.radius;
         ctx.save();
         ctx.translate(aim.x, aim.y); // world space — the body transform ended above
@@ -2541,6 +2548,62 @@ export class Renderer {
         ctx.globalAlpha = 0.5 + 0.4 * prog;
         ctx.beginPath();
         ctx.arc(0, 0, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        ctx.globalAlpha = baseAlpha;
+      } else if ((del.type === 'melee' || del.type === 'cone'
+        || (del.type === 'nova' && del.affects !== 'allies')) && fc.mode !== 'guard') {
+        // Mirror the resolve's TRUE geometry (world.ts melee/cone/nova
+        // cases): same stat multipliers, same reach formulae — the wedge
+        // never lies. Channels track the live facing (their pulses do);
+        // everything else aims down the stamp the resolve will fire at.
+        const tags = skillContextTags(fc.inst.def);
+        const extra = instanceMods(fc.inst);
+        const aim = fc.lockedAim ?? fc.aim;
+        const aoeScale = a.sheet.get('aoeRadius', tags, extra);
+        const ang = del.type === 'nova' ? 0
+          : fc.mode === 'channel' || dist(a.pos, aim) < 2
+            ? a.facing
+            : Math.atan2(aim.y - a.pos.y, aim.x - a.pos.x);
+        const reach = del.type === 'melee'
+          ? (a.radius + del.range) * a.sheet.get('meleeReach', tags, extra)
+          : del.type === 'cone'
+            ? del.range * aoeScale * a.sheet.get('meleeReach', tags, extra)
+            : del.radius * aoeScale;
+        const arcRad = del.type === 'nova' ? Math.PI * 2
+          : Math.min(Math.PI * 2, (del.arcDeg * Math.PI / 180)
+            * (del.type === 'melee' ? Math.sqrt(aoeScale) : 1)
+            * a.sheet.get('swingArc', tags, extra));
+        // Edge-band shapes (Surgical Strike, Shock Nova): only the rim cuts.
+        const inner = del.type !== 'melee' && del.edgeOnly ? reach * del.edgeOnly : 0;
+        const full = arcRad >= Math.PI * 2 - 0.01;
+        const wedge = (r0: number, r1: number): void => {
+          ctx.beginPath();
+          if (full) {
+            ctx.arc(x, y, r1, 0, Math.PI * 2);
+            if (r0 > 0) ctx.arc(x, y, r0, Math.PI * 2, 0, true);
+          } else if (r0 > 0) {
+            ctx.arc(x, y, r1, ang - arcRad / 2, ang + arcRad / 2);
+            ctx.arc(x, y, r0, ang + arcRad / 2, ang - arcRad / 2, true);
+            ctx.closePath();
+          } else {
+            ctx.moveTo(x, y);
+            ctx.arc(x, y, r1, ang - arcRad / 2, ang + arcRad / 2);
+            ctx.closePath();
+          }
+        };
+        ctx.save();
+        ctx.strokeStyle = fc.inst.def.color;
+        ctx.globalAlpha = 0.18 + 0.3 * prog;
+        ctx.lineWidth = 1.5 + prog * 1.5;
+        ctx.setLineDash([6, 6]);
+        wedge(inner, reach);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        // The fill sweeps out from the body as the swing commits.
+        ctx.globalAlpha = 0.05 + 0.09 * prog;
+        ctx.fillStyle = fc.inst.def.color;
+        wedge(inner, Math.max(inner + 2, reach * (0.35 + 0.65 * prog)));
         ctx.fill();
         ctx.restore();
         ctx.globalAlpha = baseAlpha;
