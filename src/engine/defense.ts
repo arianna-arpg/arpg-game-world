@@ -52,19 +52,26 @@ export const DEFENSE_CFG = {
     windowReset: 4,
   },
 
-  /** POISE — the break-bar (Fortitude's pool). While it stands, the bearer
-   *  shrugs stagger: `poiseDR` less hit damage and `poiseCcAvoid` chance to
-   *  ignore hard CC (both stats). Every hit drains it:
-   *  drain = hit × drainRatio + drainFlat, × the ATTACKER's poiseDamage stat
-   *  (so poise-breaker builds are a tag-filtered investment, not code).
-   *  At zero it BREAKS: the bearer loses the benefits, wears `breakStatus`,
-   *  and stays broken until the pool regenerates back past `rearmFrac` of
-   *  max. Recovery rate/delay are stats (poiseRegenPct / poiseRegenDelay). */
+  /** POISE — the break-bar (Fortitude's pool), a STAMINA-BREAK state machine.
+   *  ARMED: the bearer shrugs stagger — `poiseDR` less hit damage and
+   *  `poiseCcAvoid` chance to ignore hard CC (both stats). Every hit drains
+   *  it: drain = hit × drainRatio + drainFlat, × the ATTACKER's poiseDamage
+   *  stat (so poise-breaker builds are a tag-filtered investment, not code).
+   *  At zero it BREAKS: benefits lapse, `breakStatus` lands, and after
+   *  poiseRegenDelay (stamped ONCE, at the break) the bar climbs back at
+   *  poiseRegenPct — UNINTERRUPTIBLY: while broken the bar is inert, so
+   *  further hits neither drain it nor reset its recovery. It re-arms (and
+   *  the benefits return) only at poiseRearmAt of max (base = FULL).
+   *  An armed-but-dented bar does NOT trickle mid-fight: it refills only
+   *  after poiseCalmDelay seconds without a drain (the out-of-combat gate).
+   *  All four recovery numbers are stats — gear, passives, and curses can
+   *  move every one of them. Explicit gains (poiseOnHit, restores, procs)
+   *  flow through Actor.gainPoise, which may OVERCHARGE past max into
+   *  poiseOvercharge headroom; the overage sheds at overDecay. */
   poise: {
     drainRatio: 0.5,
     drainFlat: 1,
     breakStatus: 'sundered',
-    rearmFrac: 0.35,
     /** The SMOOTH WEAR dial: poiseDR scales with the remaining bar, from
      *  full reduction at a full bar down to drFloor × DR at a sliver — so
      *  protection erodes readably as the bar chips instead of vanishing in
@@ -72,6 +79,15 @@ export const DEFENSE_CFG = {
      *  fully linear fade. The break itself still matters: Sundered lands,
      *  the CC shrug lapses, and the poise-weight anchor lets go. */
     drFloor: 0.35,
+    /** BRACKET rungs (fractions of max, descending): a drain that carries
+     *  the bar through a rung raises a 'poiseBracket' proc event tagged
+     *  with it — the per-threshold hook (ProcDef.bracket filters to one).
+     *  The ladder is a rule; what fires at each rung is data (procs.ts). */
+    brackets: [0.75, 0.5, 0.25],
+    /** OVERCHARGED poise (above max, via gainPoise + the poiseOvercharge
+     *  stat) is a temporary crest, not a second pool: the OVERAGE sheds at
+     *  this fraction of itself per second, easing back toward max. */
+    overDecay: 0.4,
     /** Bosses hold their ground by default: a poise pool seeded at spawn
      *  when their def declares none (base + perLevel × level). */
     bossBase: 120,

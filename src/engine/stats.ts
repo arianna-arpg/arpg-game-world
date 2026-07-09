@@ -72,7 +72,13 @@ export type ConditionId =
   | 'stationary' | 'moving'
   // The poise break-bar stands unbroken (Actor.poise > 0 and not broken) —
   // "while poised" mods are the fortress-stance investment hook.
-  | 'poised';
+  | 'poised'
+  // The bar is BROKEN and recovering — the berserker's inverse hook
+  // ("while your poise is broken, 30% more damage" is one conditional mod).
+  | 'poiseBroken'
+  // The energy shield's recharge is actively FLOWING (delay elapsed, pool
+  // climbing) — "while recharging" mods make the stream itself a stance.
+  | 'esRecharging';
 
 export interface Modifier {
   stat: string;
@@ -192,14 +198,28 @@ export const STAT_DEFS: Record<string, StatDef> = {
   chaosResMax:     { label: 'Maximum Chaos Resistance', base: 0.75, min: 0, max: DEFENSE_CFG.resistance.hardCap, percent: true },
 
   // POISE — the break-bar (Fortitude's lane; see DEFENSE_CFG.poise for the
-  // break rules). While the pool stands the bearer takes poiseDR less HIT
-  // damage and shrugs hard CC at poiseCcAvoid; every hit drains it, a break
-  // strips the benefits until it recovers past the re-arm line.
+  // state-machine rules). ARMED, the bearer takes poiseDR less HIT damage
+  // and shrugs hard CC at poiseCcAvoid; every hit drains the bar. At zero
+  // it BREAKS: benefits lapse, and after poiseRegenDelay the bar recovers
+  // UNINTERRUPTIBLY (an inert, broken bar can't be drained or delayed) to
+  // the poiseRearmAt line, where it re-arms. Armed-but-dented bars refill
+  // only after poiseCalmDelay seconds without a drain.
   poise:          { label: 'Maximum Poise', base: 25, min: 0 },
-  /** Fraction of max poise recovered per second (after the delay). */
+  /** Fraction of max poise recovered per second — the rate of both the
+   *  broken-bar recovery climb and the out-of-combat calm refill. */
   poiseRegenPct:  { label: 'Poise Recovery %', base: 0.25, min: 0, percent: true },
-  /** Seconds after a poise-draining hit before recovery begins. */
-  poiseRegenDelay:{ label: 'Poise Recovery Delay', base: 1.5, min: 0.2 },
+  /** Seconds after the BREAK before the recovery climb begins (stamped
+   *  once, at the break — never reset by further hits). 0 is legal:
+   *  "recovery begins the instant your poise breaks" is an investment. */
+  poiseRegenDelay:{ label: 'Poise Recovery Delay', base: 1.5, min: 0 },
+  /** The RE-ARM line: fraction of max poise a broken bar must climb back
+   *  to before it re-arms and the benefits return. Base 1 = the full bar;
+   *  passives can pull it down ("re-arm at 60%") for faster cycling. */
+  poiseRearmAt:   { label: 'Poise Re-arm Threshold', base: 1, min: 0.05, max: 1, percent: true },
+  /** Seconds without a poise drain before an armed-but-dented bar begins
+   *  refilling — the out-of-combat gate. Mid-fight, an unbroken bar is a
+   *  wearing resource, not a regenerating one. */
+  poiseCalmDelay: { label: 'Poise Calm Refill Delay', base: 4, min: 0 },
   /** Hit-damage reduction while the bar is unbroken. */
   poiseDR:        { label: 'Poise Damage Reduction', base: 0.15, min: 0, max: 0.75, percent: true },
   /** Chance to ignore hard crowd control while the bar is unbroken. */
@@ -207,6 +227,15 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** ATTACKER-side multiplier on the poise damage your hits inflict —
    *  tag-queried, so "40% more poise damage with maces" is a filter. */
   poiseDamage:    { label: 'Poise Damage Dealt', base: 1, min: 0 },
+  /** Flat poise restored to YOU per hit you land (tag-queried like
+   *  lifeOnHit) — the fight-to-stay-armed sustain lane. Flows through
+   *  gainPoise, so it feeds a broken bar's climb and can OVERCHARGE. */
+  poiseOnHit:     { label: 'Poise Gained on Hit', base: 0, min: 0 },
+  /** OVERCHARGE headroom: explicit gains (poiseOnHit, restores, procs) may
+   *  crest the bar this fraction PAST max — a temporary larger buffer for
+   *  eating a telegraphed haymaker; the overage decays back toward max
+   *  (DEFENSE_CFG.poise.overDecay). Natural recovery never overcharges. */
+  poiseOvercharge:{ label: 'Maximum Poise Overcharge', base: 0, min: 0, percent: true },
 
   // INSIGHT — the momentum-fed avoidance pool (Charisma's lane): reading the
   // opponent's body language and slipping the brunt. Reduction scales with
@@ -449,12 +478,21 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Fraction of incoming damage paid from mana before life (capped 90%). */
   manaShield:     { label: 'Mana Shield', base: 0, min: 0, max: 0.9, percent: true },
   /** Maximum energy shield: a pool soaked before mana shield and life.
-   *  Recharges fast — but only after esRechargeDelay seconds untouched. */
+   *  Recharges fast — but only after esRechargeDelay seconds untouched,
+   *  and the recharge is a RUNNING STATE, not a promise: damage taken
+   *  while it flows interrupts it and the wait starts over (unless
+   *  esRechargeSteadfast holds). Every lever below is a stat on purpose:
+   *  rate, delay, and interruption are all investable, both ways. */
   energyShield:   { label: 'Maximum Energy Shield', base: 0, min: 0 },
   /** Fraction of max energy shield recharged per second (once recharging). */
   esRechargeRate: { label: 'Energy Shield Recharge Rate', base: 0.33, min: 0.01, percent: true },
-  /** Seconds without taking damage before energy shield begins recharging. */
-  esRechargeDelay:{ label: 'Energy Shield Recharge Delay', base: 2.5, min: 0.2 },
+  /** Seconds without taking damage before energy shield begins recharging.
+   *  0 is legal — "recharge is always running" is a reachable keystone. */
+  esRechargeDelay:{ label: 'Energy Shield Recharge Delay', base: 2.5, min: 0 },
+  /** Chance a wound does NOT interrupt an ACTIVE recharge — at 1 the flow,
+   *  once started, runs to full through anything. Guards only the running
+   *  stream: damage during the waiting period still restarts the wait. */
+  esRechargeSteadfast: { label: 'Recharge Interruption Avoidance', base: 0, min: 0, max: 1, percent: true },
   /** Fraction of life regeneration converted to flat ES regeneration —
    *  which trickles even during the recharge delay, and stacks with the
    *  recharge once it starts. */
@@ -1125,8 +1163,11 @@ const STAT_BLURBS: Record<string, string> = {
   accuracy: 'Contests enemy evasion — the higher it is, the less you whiff.',
   evasion: 'Entropy-based avoidance: dodges bank on a deterministic meter, never pure dice, and a hit is always eventually due.',
   armor: 'Physical mitigation on a self-limiting curve — big hits punch through more; investment is uncapped and never reaches immunity.',
-  poise: 'A break-bar hits wear down. While it holds you shrug stagger and keep some damage reduction; broken, it must re-arm.',
+  poise: 'A break-bar hits wear down. While it holds you shrug stagger and keep some damage reduction; broken, it lies inert until it recovers — uninterruptibly — and re-arms.',
   poiseDR: 'The damage reduction granted while your poise holds.',
+  poiseRearmAt: 'How full a broken poise bar must climb back before it re-arms.',
+  poiseCalmDelay: 'How long the drains must stop before an unbroken, dented bar refills.',
+  poiseOvercharge: 'Headroom past maximum poise that explicit gains can crest into — a temporary larger buffer.',
   insight: 'A momentum pool that refills only while you are MOVING — it spends itself to blunt incoming hits.',
   insightDR: 'The damage reduction granted while insight remains.',
   endurance: 'A break-less stamina pool: it shaves damage flat off every hit, spending what it prevents.',
@@ -1135,7 +1176,8 @@ const STAT_BLURBS: Record<string, string> = {
   blockChance: 'The odds an incoming hit is blocked.',
   blockPower: 'The fraction of a blocked hit that is stopped.',
   guardStrength: 'How much punishment a raised guard absorbs before it breaks.',
-  energyShield: 'A second life pool that soaks damage first and recharges after a quiet moment.',
+  energyShield: 'A second life pool that soaks damage first and recharges after a quiet moment — but a wound mid-recharge interrupts the flow and the wait starts over.',
+  esRechargeSteadfast: 'The chance a wound fails to interrupt a running energy shield recharge.',
   esDotResist: 'How much of a damage-over-time seep the shield stops before it reaches life.',
   manaShield: 'A fraction of incoming damage paid from mana instead of life.',
   critChance: 'The odds a hit strikes critically.',

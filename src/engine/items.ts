@@ -474,6 +474,8 @@ const CONDITION_LABELS: Record<ConditionId, string> = {
   hasEs: 'while energy shield holds', fullEs: 'on full energy shield',
   lowEs: 'on low energy shield', guarding: 'while guarding',
   stationary: 'while stationary', moving: 'while moving', poised: 'while poised',
+  poiseBroken: 'while your poise is broken',
+  esRecharging: 'while energy shield is recharging',
 };
 
 function statLabel(stat: string): string {

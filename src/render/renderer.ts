@@ -3397,8 +3397,18 @@ export class Renderer {
       ctx.fillText('⚿ sealed', lifeX, sy - 3 < orbY - orbR + 8 ? sy + 10 : sy - 3);
     }
     // Energy shield: a cyan arc wrapping the life orb; absorb: white outer arc.
-    if (p.maxEs() > 0 && p.es > 0) {
-      ctx.strokeStyle = '#5ad8d8';
+    // While the RECHARGE FLOWS, a faint full-circle track appears under the
+    // arc (visible even at a drained pool) — the honest "stream is running"
+    // signal; interruption reads as the track winking out.
+    if (p.maxEs() > 0 && (p.es > 0 || p.esRecharging)) {
+      if (p.esRecharging) {
+        ctx.strokeStyle = 'rgba(90,216,216,0.22)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = p.esRecharging ? '#8af0f0' : '#5ad8d8';
       ctx.lineWidth = 4;
       ctx.beginPath();
       ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(p.es / p.maxEs(), 0, 1));
@@ -3426,15 +3436,28 @@ export class Renderer {
       ctx.stroke();
     }
     // POISE: a bronze arc outside the tank layers — dims while broken so
-    // the lapse of its protection is readable at a glance. Same poolBars
-    // methodology as insight (the break flip counts as a change).
+    // the lapse of its protection is readable at a glance (the recovering
+    // climb fills VISIBLY dim, then snaps bright at the re-arm). An
+    // OVERCHARGED crest burns brighter and lays its overage as a second
+    // thin lap. Same poolBars methodology as insight (the break flip
+    // counts as a change).
     if (p.maxPoise() > 0 && this.poolArcShown('poise', p, world)) {
-      ctx.strokeStyle = p.poiseBroken ? 'rgba(216,176,106,0.35)' : '#d8b06a';
+      const maxP = p.maxPoise();
+      const over = p.poise > maxP + 0.25;
+      ctx.strokeStyle = p.poiseBroken ? 'rgba(216,176,106,0.35)'
+        : over ? '#f4d494' : '#d8b06a';
       ctx.lineWidth = 3;
       ctx.beginPath();
       ctx.arc(lifeX, orbY, orbR + ORB_ARCS.poise, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / p.maxPoise(), 0, 1));
+        -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / maxP, 0, 1));
       ctx.stroke();
+      if (over) {
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(lifeX, orbY, orbR + ORB_ARCS.poise + 3, -Math.PI / 2,
+          -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / maxP - 1, 0, 1));
+        ctx.stroke();
+      }
     }
     // ENDURANCE (opt-in pool): the fortify-green outermost ring — binary
     // protection, so the ring simply IS or ISN'T there (opting in IS the

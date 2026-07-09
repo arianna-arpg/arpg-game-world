@@ -14904,14 +14904,19 @@ export class World {
     });
   }
 
-  /** Restore a resource (Power Surge, resource orbs). */
-  private applyRestore(target: Actor, fx: { resource: 'life' | 'mana' | 'es'; amount: number; resetEsDelay?: boolean }): void {
+  /** Restore a resource (Power Surge, resource orbs). ES rides gainEs
+   *  (the esFilled seam sees it); poise rides gainPoise (broken bars are
+   *  fed, invested bars may overcharge). resetEsDelay starts the ES
+   *  recharge flowing immediately — the autonomous-recharge lever. */
+  private applyRestore(target: Actor, fx: { resource: 'life' | 'mana' | 'es' | 'poise'; amount: number; resetEsDelay?: boolean }): void {
     if (fx.resource === 'life') {
       target.healBy(fx.amount);
     } else if (fx.resource === 'mana') {
       target.mana = Math.min(target.availableMaxMana(), target.mana + fx.amount);
+    } else if (fx.resource === 'poise') {
+      target.gainPoise(fx.amount);
     } else {
-      target.es = Math.min(target.maxEs(), target.es + fx.amount);
+      target.gainEs(fx.amount);
       if (fx.resetEsDelay) target.esDelay = 0;
     }
   }
@@ -15543,24 +15548,23 @@ export class World {
       if (result.culled) {
         this.text(vec(target.pos.x, target.pos.y - 20), 'CULLED!', '#c8a0e8', 14);
       }
-      // The poise bar SHATTERED under this blow — announce the window, and
-      // fire both sides' break procs: the breaker's payoff loop
-      // (poiseBreakDealt, with the breaking skill's context) and the
-      // victim's own steel-yourself reactions (poiseBroken).
+      // The poise bar SHATTERED under this blow — the breaker's payoff
+      // loop (poiseBreakDealt, with the breaking skill's context). The
+      // victim's own reactions (poiseBroken / poiseBracket, the fanfare)
+      // ride the defense-event sweep below, so caster-less breaks share
+      // the exact same path.
       if (result.poiseBroke) {
-        this.text(vec(target.pos.x, target.pos.y - 24), 'BROKEN!', '#d8b06a', 15);
-        this.flashes.push({
-          pos: vec(target.pos.x, target.pos.y), radius: target.radius + 12,
-          color: '#d8b06a', life: 0.3, maxLife: 0.3,
-        });
         this.rollOwnProcs(caster, 'poiseBreakDealt', { tags: packet.tags, extra, inst, target, depth });
-        this.rollOwnProcs(target, 'poiseBroken', { depth });
       }
       // The hit emptied the shield — the victim's esBreak reactions fire.
       if (target.esBroke) {
         target.esBroke = false;
         this.rollOwnProcs(target, 'esBreak', { depth });
       }
+      // Victim-side defense events this blow raised (break, rungs crossed)
+      // fire NOW with the hit's chain depth — the once-per-frame sweep
+      // would fire them a frame late and depthless.
+      this.sweepDefenseEvents(target, depth);
       // THE TRIGGER GEMS (SupportDef.trigger): the landed hit raises its
       // events. A CRIT rolls the attacker's crit-triggers at the victim —
       // chain depth rides the SOURCE instance's trigDepth stamp, so a
@@ -16485,23 +16489,65 @@ export class World {
   }
 
   /** Roll an actor's OWN procs for a self-owned trigger (block / evade /
-   *  esBreak / poiseBroken / poiseBreakDealt). Defensive triggers query the
+   *  esBreak / esRechargeStart / esFilled / poiseBroken / poiseBracket /
+   *  poiseRearmed / poiseBreakDealt). Defensive triggers query the
    *  GLOBAL sheet (passives, buffs, worn equipMods) — golden rule 3; the
-   *  attacker-owned poiseBreakDealt may pass its skill context in. */
+   *  attacker-owned poiseBreakDealt may pass its skill context in.
+   *  `bracket` carries the poise rung a poiseBracket event crossed, so a
+   *  def pinned to one rung (ProcDef.bracket) only fires on its own. */
   rollOwnProcs(
     owner: Actor, trigger: ProcDef['trigger'],
-    opts?: { tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor; depth?: number },
+    opts?: { tags?: Set<SkillTag>; extra?: Modifier[]; inst?: SkillInstance; target?: Actor; depth?: number; bracket?: number },
   ): void {
     if (owner.dead) return;
     const depth = opts?.depth ?? 0;
     if (depth >= this.procDepthAllowed(owner)) return;
     for (const proc of PROC_LIST) {
       if (proc.trigger !== trigger) continue;
+      if (proc.bracket !== undefined && (opts?.bracket === undefined
+        || !(Array.isArray(proc.bracket) ? proc.bracket : [proc.bracket]).includes(opts.bracket))) continue;
       if (!this.procGates(owner, proc, opts?.inst ?? null)) continue;
       const c = this.procChance(owner, proc, depth, opts?.tags, opts?.extra);
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(owner, proc)) continue;
       this.executeProc(proc, owner, opts?.inst ?? null, opts?.target ?? null, depth);
+    }
+  }
+
+  /** Harvest an actor's DEFENSE-EVENT transients (the esBroke pattern, one
+   *  sweep): the poise break / bracket rungs / re-arm, and the ES recharge
+   *  start / top-off. Called after damage resolutions (with their chain
+   *  depth) AND once per frame in the actor update — so timer-driven flips
+   *  (a re-arm, a delay expiring into flow) fire their hooks even when no
+   *  wound is in flight. The break fanfare lives HERE, so caster-less
+   *  sources (death-bursts, proc bursts, environment) announce it too. */
+  sweepDefenseEvents(a: Actor, depth = 0): void {
+    if (a.poiseJustBroke) {
+      a.poiseJustBroke = false;
+      this.text(vec(a.pos.x, a.pos.y - 24), 'BROKEN!', '#d8b06a', 15);
+      this.flashes.push({
+        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 12,
+        color: '#d8b06a', life: 0.3, maxLife: 0.3,
+      });
+      this.rollOwnProcs(a, 'poiseBroken', { depth });
+    }
+    if (a.poiseBracketHits.length) {
+      const rungs = a.poiseBracketHits;
+      a.poiseBracketHits = [];
+      for (const frac of rungs) this.rollOwnProcs(a, 'poiseBracket', { depth, bracket: frac });
+    }
+    if (a.poiseJustRearmed) {
+      a.poiseJustRearmed = false;
+      this.text(vec(a.pos.x, a.pos.y - 24), 'POISED', '#d8b06a', 12);
+      this.rollOwnProcs(a, 'poiseRearmed', { depth });
+    }
+    if (a.esRechargeJustStarted) {
+      a.esRechargeJustStarted = false;
+      this.rollOwnProcs(a, 'esRechargeStart', { depth });
+    }
+    if (a.esJustFilled) {
+      a.esJustFilled = false;
+      this.rollOwnProcs(a, 'esFilled', { depth });
     }
   }
 
@@ -16565,11 +16611,19 @@ export class World {
         break;
       case 'restore': {
         const amount = (fx.flat ?? 0) + (fx.pctMax ?? 0)
-          * (fx.resource === 'mana' ? caster.maxMana() : caster.maxEs());
+          * (fx.resource === 'mana' ? caster.maxMana()
+            : fx.resource === 'poise' ? caster.maxPoise() : caster.maxEs());
         if (fx.resource === 'mana') {
           caster.mana = Math.min(caster.availableMaxMana(), caster.mana + amount);
+        } else if (fx.resource === 'poise') {
+          // Through gainPoise: feeds a broken bar's climb, and may CREST
+          // past max into the owner's poiseOvercharge headroom.
+          caster.gainPoise(amount);
         } else {
-          caster.es = Math.min(caster.maxEs(), caster.es + amount);
+          caster.gainEs(amount);
+          // The autonomous-recharge seam: the payload may also start the
+          // recharge flowing NOW instead of waiting out the delay.
+          if (fx.resetEsDelay) caster.esDelay = 0;
         }
         break;
       }
@@ -16588,11 +16642,13 @@ export class World {
           enemy.hitFlash = 0.15;
           this.text(enemy.pos, Math.round(landed).toString(), proc.color, 12);
           // The burst emptied a shield: the victim's esBreak reactions
-          // fire one link deeper (this damage IS proc output).
+          // fire one link deeper (this damage IS proc output). Poise
+          // breaks/rungs it caused ride the same sweep at the same depth.
           if (enemy.esBroke) {
             enemy.esBroke = false;
             this.rollOwnProcs(enemy, 'esBreak', { depth: depth + 1 });
           }
+          this.sweepDefenseEvents(enemy, depth + 1);
           if (enemy.life <= 0 && !enemy.dead) this.kill(enemy);
         }
         break;
@@ -16726,6 +16782,7 @@ export class World {
             a.esBroke = false;
             this.rollOwnProcs(a, 'esBreak', { depth: b.depth });
           }
+          this.sweepDefenseEvents(a, b.depth);
           if (a.life <= 0 && !a.dead) this.kill(a);
         }
       }
@@ -18027,6 +18084,11 @@ export class World {
           a.recentHurt = 0;
         }
       }
+      // The per-frame defense-event sweep: harvests TIMER-driven flips the
+      // damage paths never see — a broken bar re-arming, a recharge delay
+      // expiring into flow, a calm refill topping off (depth 0: these are
+      // real state changes, not proc output).
+      this.sweepDefenseEvents(a);
       // GAIN EVENTS: charges/buffs gained since last frame feed the
       // chargeGain/buffGain triggers. Payload grants land as NEW events
       // (one link deeper) swept NEXT frame — chains propagate a link per

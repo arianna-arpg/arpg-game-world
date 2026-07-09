@@ -448,16 +448,32 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
     // shield on-hit/leech and mana leech, each capped by its own max.
     const esGain = attacker.sheet.get('esOnHit', packet.tags, packet.extra)
       + attacker.sheet.get('esLeech', packet.tags, packet.extra) * total;
-    if (esGain > 0) attacker.es = Math.min(attacker.maxEs(), attacker.es + esGain);
+    if (esGain > 0) attacker.gainEs(esGain);
     const mLeech = attacker.sheet.get('manaLeech', packet.tags, packet.extra) * total;
     if (mLeech > 0) {
       attacker.mana = Math.min(attacker.availableMaxMana(), attacker.mana + mLeech);
     }
+    // POISE on hit (the fight-to-stay-armed lane): tag-queried like the
+    // rest, flowing through gainPoise — it feeds a broken bar's climb and
+    // may CREST past max when the striker carries poiseOvercharge.
+    const pGain = attacker.sheet.get('poiseOnHit', packet.tags, packet.extra);
+    if (pGain > 0) attacker.gainPoise(pGain);
   }
   return {
     evaded: false, immune: false, blocked: false, total, crit: packet.crit,
     poiseBroke: out.poiseBroke, culled,
   };
+}
+
+/** A wound contests the energy shield's recharge — THE one interruption
+ *  gate. A recharge that is actively FLOWING may hold through it: the
+ *  victim's esRechargeSteadfast stat is the chance the stream keeps
+ *  running (the "recharge is not interrupted by damage" investment).
+ *  Steadfastness guards only the stream — a wound during the WAITING
+ *  period always restarts the wait; there is nothing to hold yet. */
+function interruptEsRecharge(target: Actor): void {
+  if (target.esRecharging && chance(target.sheet.get('esRechargeSteadfast'))) return;
+  target.esDelay = target.sheet.get('esRechargeDelay');
 }
 
 /**
@@ -467,7 +483,8 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
  * shield split (a fraction paid from mana), and only then life — where the
  * staggerFrac stat may spread part of the wound over time instead. Any
  * damage taken — even fully absorbed — resets the energy shield's recharge
- * delay. Returns the life damage that lands NOW.
+ * delay (unless a running recharge holds steadfast). Returns the life
+ * damage that lands NOW.
  *
  * `esBypass` (DoT ticks): the fraction of what reaches the ES gate that
  * SEEPS PAST the shield to the layers beneath — 0 (baseline) treats ES as
@@ -483,7 +500,7 @@ function soakDamage(
 ): number {
   if (total <= 0) return total;
   if (!opts?.delayOnDrainOnly && target.sheet.get('energyShield') > 0) {
-    target.esDelay = target.sheet.get('esRechargeDelay');
+    interruptEsRecharge(target);
   }
   // 0) WARD — the decaying shield, spent before everything else.
   if (target.ward > 0) {
@@ -516,7 +533,7 @@ function soakDamage(
       target.es -= e;
       total -= e;
       if (opts?.delayOnDrainOnly) {
-        target.esDelay = target.sheet.get('esRechargeDelay');
+        interruptEsRecharge(target);
       }
       // The shield EMPTIED under this wound — the esBreak proc seam.
       if (hadShield && target.es <= 0.001) target.esBroke = true;

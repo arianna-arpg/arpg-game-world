@@ -431,6 +431,40 @@ const SUFFIXES: AffixDef[] = [
     names: ['of Osmosis', 'of Sipping'],
     stat: 'manaOnKill', top: 8, floor: 0.2, count: 3, weight: 55,
   }),
+  // POISE cycle levers — the break-bar's recovery machine, investable on
+  // gear: faster recovery climbs, fight-to-stay-armed on-hit refill, and
+  // overcharge headroom for the crest-then-eat-the-haymaker play.
+  fam({
+    id: 'poise_recovery', kind: 'suffix', themes: [DEFENSE, SUSTAIN],
+    names: ['of Re-arming', 'of Recomposure'],
+    stat: 'poiseRegenPct', modKind: 'increased', top: 0.4, floor: 0.25,
+    baseTags: ['belt', 'chest', 'helmet'], weight: 55,
+  }),
+  fam({
+    id: 'poise_on_hit', kind: 'suffix', themes: [DEFENSE, MARTIAL],
+    names: ['of Bracing Blows', 'of Footing'],
+    stat: 'poiseOnHit', top: 3, floor: 0.25, count: 3,
+    baseTags: ['weapon', 'gloves'], weight: 50,
+  }),
+  fam({
+    id: 'poise_overcharge', kind: 'suffix', themes: [DEFENSE],
+    names: ['of the Bulwark Crest', 'of Bracing'],
+    stat: 'poiseOvercharge', top: 0.25, floor: 0.3,
+    baseTags: ['belt', 'amulet'], weight: 45,
+  }),
+  // ES recharge levers: the flow's speed, and its refusal to be interrupted.
+  fam({
+    id: 'es_recharge_rate', kind: 'suffix', themes: [CASTER, DEFENSE],
+    names: ['of Resurgence', 'of the Rising Tide'],
+    stat: 'esRechargeRate', modKind: 'increased', top: 0.45, floor: 0.25,
+    baseTags: ['armour', 'amulet', 'ring'], weight: 55,
+  }),
+  fam({
+    id: 'es_steadfast', kind: 'suffix', themes: [CASTER, DEFENSE],
+    names: ['of Still Waters', 'of the Unbroken Stream'],
+    stat: 'esRechargeSteadfast', top: 0.35, floor: 0.3,
+    baseTags: ['armour', 'amulet'], weight: 45,
+  }),
   fam({
     id: 'cooldown', kind: 'suffix',
     names: ['of Readiness', 'of Promptness'],

@@ -2158,12 +2158,15 @@ export interface TerrainEffect {
   duration: number;
 }
 
-/** Restores a resource immediately (Power Surge, resource orbs). */
+/** Restores a resource immediately (Power Surge, resource orbs). Poise
+ *  restores flow through gainPoise — they feed a broken bar's recovery
+ *  climb and may crest past max into poiseOvercharge headroom. */
 export interface RestoreEffect {
   type: 'restore';
-  resource: 'life' | 'mana' | 'es';
+  resource: 'life' | 'mana' | 'es' | 'poise';
   amount: number;
-  /** ES restores can also kick the recharge off immediately. */
+  /** ES restores can also kick the recharge off immediately —
+   *  the autonomous-recharge seam (a skill that STARTS the flow). */
   resetEsDelay?: boolean;
 }
 

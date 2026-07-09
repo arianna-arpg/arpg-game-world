@@ -77,8 +77,8 @@ const SCRAP_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
 const SHEET_STATS = [
   'life', 'lifeRegen', 'lifeRegenPct', 'mana', 'manaRegen', 'manaRegenPct', 'moveSpeed',
   'attackSpeed', 'castSpeed', 'accuracy', 'evasion', 'armor',
-  'poise', 'poiseDR', 'insight', 'insightDR', 'endurance', 'enduranceDR', 'weight',
-  'blockChance', 'blockPower', 'guardStrength', 'energyShield', 'esDotResist', 'manaShield',
+  'poise', 'poiseDR', 'poiseRegenPct', 'insight', 'insightDR', 'endurance', 'enduranceDR', 'weight',
+  'blockChance', 'blockPower', 'guardStrength', 'energyShield', 'esRechargeRate', 'esDotResist', 'manaShield',
   'critChance', 'critMulti',
   'fireRes', 'coldRes', 'lightningRes', 'chaosRes',
   'aoeRadius', 'effectDuration', 'cooldownRecovery',

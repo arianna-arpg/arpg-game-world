@@ -82,8 +82,11 @@ export type ProcEffect =
   /** HEALS the proc's OWNER — flat and/or a fraction of max life (through
    *  healBy, so healTaken gates it like every heal). */
   | { type: 'heal'; flat?: number; pctMax?: number }
-  /** Restores mana or energy shield on the proc's OWNER. */
-  | { type: 'restore'; resource: 'mana' | 'es'; flat?: number; pctMax?: number }
+  /** Restores mana, energy shield, or poise on the proc's OWNER (ES flows
+   *  through gainEs, poise through gainPoise — so poise restores can crest
+   *  into overcharge headroom). `resetEsDelay` also kicks the ES recharge
+   *  off IMMEDIATELY — the autonomous-recharge seam in proc form. */
+  | { type: 'restore'; resource: 'mana' | 'es' | 'poise'; flat?: number; pctMax?: number; resetEsDelay?: boolean }
   /** A typed BURST around the proc's OWNER: baseline-scaled damage
    *  (flat + perLevel × owner level), mitigated per victim like any typed
    *  source — never derived from a skill roll (golden rule 4). */
@@ -117,12 +120,18 @@ export interface ProcDef {
    *   'block'           you block a hit (passive block)
    *   'evade'           you evade an attack
    *   'esBreak'         your energy shield is emptied
+   *   'esRechargeStart' your energy shield's recharge begins to flow
+   *   'esFilled'        your energy shield fills back to full
    *   'poiseBreakDealt' your hit breaks an enemy's poise bar
    *   'poiseBroken'     your own poise bar breaks
+   *   'poiseBracket'    your poise is drained through a bracket rung
+   *                     (DEFENSE_CFG.poise.brackets; see `bracket` filter)
+   *   'poiseRearmed'    your broken poise bar recovers and re-arms
    *   'chargeGain'      you actually gain a charge (see `charge` filter)
    *   'buffGain'        a buff is applied to you (see `buff` filter) */
   trigger: 'hit' | 'kill' | 'collision' | 'statusApply'
-    | 'block' | 'evade' | 'esBreak' | 'poiseBreakDealt' | 'poiseBroken'
+    | 'block' | 'evade' | 'esBreak' | 'esRechargeStart' | 'esFilled'
+    | 'poiseBreakDealt' | 'poiseBroken' | 'poiseBracket' | 'poiseRearmed'
     | 'chargeGain' | 'buffGain';
   /** statusApply only: fires when one of THESE statuses lands (omit = any). */
   status?: string | string[];
@@ -130,6 +139,9 @@ export interface ProcDef {
   charge?: string | string[];
   /** buffGain only: fires for THESE buff ids (omit = any buff). */
   buff?: string | string[];
+  /** poiseBracket only: fires for THESE rungs — fractions of max poise,
+   *  matching DEFENSE_CFG.poise.brackets entries (omit = every rung). */
+  bracket?: number | number[];
   /** SKILL GATE: the proc only rolls for these skill ids — "Sanctified
    *  Strike has a chance to..." lives on the proc, so ANY grantor (passive,
    *  gem, affix) is automatically skill-scoped. Omit = every skill. */
@@ -326,6 +338,70 @@ export const PROCS: Record<string, ProcDef> = {
         mods: [mod('damageTaken', 'more', -0.15), mod('healTaken', 'increased', 0.2)],
       },
     },
+  },
+
+  // SHATTERPLATE: the break IS the weapon — the bar's shards fly off as
+  // physical shrapnel around you (baseline-scaled, golden rule 4). The
+  // poise cycle becomes a detonation rhythm: wear it, break it, wear it.
+  shatterplate: {
+    id: 'shatterplate', name: 'Shatterplate',
+    color: '#d8b06a', trigger: 'poiseBroken', icd: 4,
+    effect: { type: 'burst', damage: 'physical', base: 16, perLevel: 4, radius: 120 },
+  },
+
+  // UNBROKEN WRATH: the berserker reading of the broken window — while the
+  // bar lies inert and re-forging, you hit HARDER. Duration sized to the
+  // base recovery cycle, so investment in faster recovery trades fury for
+  // safety on its own.
+  unbroken_wrath: {
+    id: 'unbroken_wrath', name: 'Unbroken Wrath',
+    color: '#ff8a4a', trigger: 'poiseBroken', icd: 6,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'unbroken_wrath', duration: 5,
+        mods: [mod('damage', 'more', 0.2), mod('attackSpeed', 'increased', 0.1)],
+      },
+    },
+  },
+
+  // TEMPERED RE-ARM: steel quenched twice comes back harder — the freshly
+  // re-armed bar opens with a window of deeper reduction and surer footing.
+  tempered_rearm: {
+    id: 'tempered_rearm', name: 'Tempered Re-arm',
+    color: '#e8d44a', trigger: 'poiseRearmed', icd: 6,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'tempered_rearm', duration: 4,
+        mods: [mod('poiseDR', 'flat', 0.1), mod('poiseCcAvoid', 'flat', 0.25)],
+      },
+    },
+  },
+
+  // SHEDDING PLATES: each bracket rung the bar is drained through shears
+  // off as ENDURANCE — the wearing bar banks a break-less wall beneath
+  // itself (omit `bracket` = every rung; a def could pin one instead).
+  shedding_plates: {
+    id: 'shedding_plates', name: 'Shedding Plates',
+    color: '#a8c86a', trigger: 'poiseBracket',
+    effect: { type: 'fortify', pctMaxLife: 0.04, flat: 4 },
+  },
+
+  // CREST DISCHARGE: a shield that fills back to the brim throws the spare
+  // charge OUT — topping off becomes an offensive beat, which makes
+  // recharge-rate investment read on the damage side too.
+  crest_discharge: {
+    id: 'crest_discharge', name: 'Crest Discharge',
+    color: '#5ad8d8', trigger: 'esFilled', icd: 5,
+    effect: { type: 'burst', damage: 'lightning', base: 12, perLevel: 3, radius: 130 },
+  },
+
+  // MIND LIKE WATER: a clean slip settles the mind — a sliver of shield
+  // returns AND the recharge starts flowing at once (the autonomous-
+  // recharge seam: resetEsDelay skips the wait entirely).
+  mind_like_water: {
+    id: 'mind_like_water', name: 'Mind Like Water',
+    color: '#9ad8e8', trigger: 'evade', icd: 4,
+    effect: { type: 'restore', resource: 'es', flat: 6, pctMax: 0.03, resetEsDelay: true },
   },
 
   // --- Skill-gated, cast-scoped, and delayed shapes ---------------------------

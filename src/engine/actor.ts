@@ -589,19 +589,30 @@ export class Actor {
   mana: number;
 
   /** Energy shield: soaked before mana shield and life. Recharges fast,
-   *  but only after going untouched for esRechargeDelay seconds. */
+   *  but only after going untouched for esRechargeDelay seconds — and the
+   *  recharge is a running STATE that damage interrupts (soakDamage
+   *  restamps the delay unless esRechargeSteadfast holds). */
   es = 0;
   /** Seconds until the energy shield may begin recharging. */
   esDelay = 0;
-  /** POISE — the break-bar (Fortitude's pool): while it stands, hits are
-   *  reduced by poiseDR and hard CC is shrugged at poiseCcAvoid; every hit
-   *  drains it. At zero it BREAKS (benefits lost, `sundered` worn) until it
-   *  recovers past the re-arm line. See DEFENSE_CFG.poise for the rules. */
+  /** The recharge is actively FLOWING this frame (delay elapsed, pool
+   *  below max) — read by soakDamage's steadfast gate, the 'esRecharging'
+   *  condition, and the HUD. Maintained by updateTimers. */
+  esRecharging = false;
+  /** POISE — the break-bar (Fortitude's pool): ARMED, hits are reduced by
+   *  poiseDR and hard CC is shrugged at poiseCcAvoid, and every hit drains
+   *  the bar. At zero it BREAKS (benefits lost, `sundered` worn) and lies
+   *  INERT — hits can neither drain it nor delay it — while it recovers,
+   *  re-arming at the poiseRearmAt line. See DEFENSE_CFG.poise. */
   poise = 0;
-  /** Seconds until poise may begin recovering (reset by every drain). */
+  /** Seconds until a BROKEN bar begins its recovery climb — stamped once,
+   *  at the break (never reset by further hits: recovery is a promise). */
   poiseDelay = 0;
-  /** Broken until the pool climbs back past the re-arm fraction. */
+  /** Broken (inert, recovering) until the pool climbs to the re-arm line. */
   poiseBroken = false;
+  /** Seconds since the last poise drain — the calm gate: an ARMED, dented
+   *  bar refills only once this passes the poiseCalmDelay stat. */
+  poiseCalm = 0;
   /** INSIGHT — the momentum-fed avoidance pool (Charisma's lane): spent by
    *  incoming hits to slip the brunt, refilled only while MOVING. The live
    *  reduction is insightDR × insightMomentum() (the velocity taper). */
@@ -621,6 +632,23 @@ export class Actor {
    *  set by the soak chain, consumed by the world's esBreak proc roll
    *  (the expiredStatuses pattern). */
   esBroke = false;
+  // DEFENSE-EVENT TRANSIENTS (the same expiredStatuses pattern, consumed
+  // together by World.sweepDefenseEvents): set wherever the state machine
+  // flips, harvested after damage resolutions AND once per frame — so
+  // timer-driven flips (a re-arm, a recharge starting) fire their hooks
+  // even when no wound is in flight.
+  /** The poise bar BROKE (victim-side 'poiseBroken' procs + the fanfare). */
+  poiseJustBroke = false;
+  /** A broken bar climbed past the re-arm line ('poiseRearmed' procs). */
+  poiseJustRearmed = false;
+  /** Bracket rungs (fractions of max) the bar was drained THROUGH since
+   *  the last sweep — each raises a 'poiseBracket' proc event. */
+  poiseBracketHits: number[] = [];
+  /** The ES recharge began flowing ('esRechargeStart' procs). */
+  esRechargeJustStarted = false;
+  /** The ES recharge (or a gain through gainEs) topped the pool off
+   *  ('esFilled' procs — the crest-of-the-wave hook). */
+  esJustFilled = false;
   /** Absorption shield: temporary pool eaten before EVERYTHING else. */
   absorb = 0;
   absorbTimer = 0;
@@ -870,20 +898,32 @@ export class Actor {
   }
 
   /** Drain the poise bar (damage.ts mitigation + any future data source).
-   *  Resets the recovery delay; at the bottom the bar BREAKS — the break
-   *  status (DEFENSE_CFG.poise.breakStatus) lands and the benefits lapse
-   *  until the pool recovers past the re-arm fraction (updateTimers).
+   *  A BROKEN bar is INERT: the drain is a no-op (recovery can be neither
+   *  damaged nor delayed) — it only re-marks combat for the calm gate.
+   *  Rungs of DEFENSE_CFG.poise.brackets the drain carries the bar through
+   *  raise 'poiseBracket' events; at the bottom the bar BREAKS — the break
+   *  status (DEFENSE_CFG.poise.breakStatus) lands, the benefits lapse, and
+   *  poiseRegenDelay is stamped ONCE (the recovery countdown; updateTimers
+   *  owns the climb and the re-arm).
    *  The BREAKER's sunderDuration stat stretches the Sundered they inflict
    *  (the poise-breaker specialization dial); their effectDuration does
    *  not — sunder is its own investment, not a free rider.
    *  Returns true only on the breaking drain (for the world's fanfare). */
   damagePoise(amount: number, breaker?: Actor, tags?: Set<SkillTag>, extra?: readonly Modifier[]): boolean {
-    if (amount <= 0 || this.maxPoise() <= 0) return false;
-    this.poiseDelay = this.sheet.get('poiseRegenDelay');
+    const max = this.maxPoise();
+    if (amount <= 0 || max <= 0) return false;
+    this.poiseCalm = 0;
+    if (this.poiseBroken) return false;
     const before = this.poise;
     this.poise = Math.max(0, this.poise - amount);
-    if (this.poise <= 0 && before > 0 && !this.poiseBroken) {
+    for (const frac of DEFENSE_CFG.poise.brackets) {
+      const rung = max * frac;
+      if (before > rung && this.poise <= rung) this.poiseBracketHits.push(frac);
+    }
+    if (this.poise <= 0 && before > 0) {
       this.poiseBroken = true;
+      this.poiseJustBroke = true;
+      this.poiseDelay = this.sheet.get('poiseRegenDelay');
       const bs = DEFENSE_CFG.poise.breakStatus;
       if (bs && STATUS_DEFS[bs]) {
         const durScale = breaker ? breaker.sheet.get('sunderDuration', tags, extra) : 1;
@@ -892,6 +932,37 @@ export class Actor {
       return true;
     }
     return false;
+  }
+
+  /** THE one gate for explicit poise gains (poiseOnHit, restores, proc
+   *  payloads): capped at max × (1 + poiseOvercharge) — an un-invested
+   *  bearer simply caps at max. Gains flow even while BROKEN (they speed
+   *  the recovery climb; updateTimers still owns the re-arm check, so a
+   *  fed bar re-arms sooner rather than instantly). Natural recovery never
+   *  routes through here — only deliberate, sourced gains may overcharge. */
+  gainPoise(amount: number): number {
+    if (amount <= 0 || this.dead) return 0;
+    const max = this.maxPoise();
+    if (max <= 0) return 0;
+    const cap = max * (1 + this.sheet.get('poiseOvercharge'));
+    const before = this.poise;
+    this.poise = Math.min(cap, this.poise + amount);
+    return this.poise - before;
+  }
+
+  /** THE one gate for energy shield GAINS (on-hit/leech, restores, proc
+   *  payloads, the lifeRegenToEs trickle — everything except the recharge
+   *  itself, which updateTimers owns): caps at max and flags the esFilled
+   *  seam when a gain tops the pool off. Spends (esToMana) don't come
+   *  through here — they are withdrawals, not gains. */
+  gainEs(amount: number): number {
+    if (amount <= 0 || this.dead) return 0;
+    const max = this.maxEs();
+    if (max <= 0) return 0;
+    const before = this.es;
+    this.es = Math.min(max, this.es + amount);
+    if (before < max - 0.001 && this.es >= max - 0.001) this.esJustFilled = true;
+    return this.es - before;
   }
 
   /** The one WEIGHT read (pushes, crowd separation): the weight stat,
@@ -950,6 +1021,10 @@ export class Actor {
     this.insight = this.maxInsight();
     this.endurance = this.maxEndurance();
     this.poiseBroken = false;
+    this.poiseDelay = 0;
+    this.poiseCalm = 0;
+    this.esDelay = 0;
+    this.esRecharging = false;
   }
 
   isMinion(): boolean { return !!this.owner; }
@@ -1329,6 +1404,11 @@ export class Actor {
     if (this.casting?.mode === 'guard') active.push('guarding');
     // The break-bar stands: "while poised" mods hold (lapse on the break).
     if (this.poise > 0.5 && !this.poiseBroken) active.push('poised');
+    // ...and its inverse: the broken-and-recovering window is a stance of
+    // its own (the berserker's "while your poise is broken" hook).
+    if (this.poiseBroken) active.push('poiseBroken');
+    // The ES recharge is FLOWING — "while recharging" mods ride the stream.
+    if (this.esRecharging) active.push('esRecharging');
     // Planted vs on the move (Colossus Stance): idleFor accrues in
     // updateTimers and is zeroed by every deliberate step. Between the two
     // windows sits a NEUTRAL transition band — neither bonus nor malus.
@@ -1481,7 +1561,7 @@ export class Actor {
       else if (st.resource === 'mana') {
         this.mana = Math.min(this.availableMaxMana(), this.mana + step);
       } else {
-        this.es = Math.min(this.maxEs(), this.es + step);
+        this.gainEs(step);
       }
       if (st.remaining <= 0) this.restoreStreams.splice(i, 1);
     }
@@ -1596,31 +1676,65 @@ export class Actor {
 
       const maxEs = this.maxEs();
       if (maxEs > 0) {
-        if (toEs > 0) this.es = Math.min(maxEs, this.es + regen * toEs * dt);
-        // The delay-gated recharge: fast, but any damage resets the gate.
+        if (toEs > 0) this.gainEs(regen * toEs * dt);
+        // The delay-gated RECHARGE — a running STATE, not a one-shot
+        // promise: a wound restamps the delay (soakDamage, unless
+        // esRechargeSteadfast holds), stalling the flow until the wait
+        // passes again. The rising edge and the top-off feed the
+        // esRechargeStart / esFilled proc seams.
         if (this.esDelay > 0) this.esDelay -= dt;
-        else if (this.es < maxEs) {
+        if (this.esDelay <= 0 && this.es < maxEs - 0.001) {
+          if (!this.esRecharging) {
+            this.esRecharging = true;
+            this.esRechargeJustStarted = true;
+          }
           this.es = Math.min(maxEs, this.es + maxEs * this.sheet.get('esRechargeRate') * dt);
+          if (this.es >= maxEs - 0.001) {
+            this.es = maxEs;
+            this.esRecharging = false;
+            this.esJustFilled = true;
+          }
+        } else {
+          this.esRecharging = false;
         }
-      } else if (this.es > 0) {
+      } else if (this.es > 0 || this.esRecharging) {
         this.es = 0; // the granting buff expired
+        this.esRecharging = false;
       }
       if (this.es > maxEs) this.es = maxEs;
 
-      // POISE recovery: delay-gated like the energy shield — a fraction of
-      // max per second once the drains stop. A broken bar RE-ARMS when the
-      // pool climbs back past the re-arm line (DEFENSE_CFG.poise.rearmFrac).
+      // POISE, the break-bar state machine. BROKEN: the stamped countdown,
+      // then the UNINTERRUPTIBLE climb (drains are no-ops while broken —
+      // damagePoise gates them out), re-arming at the poiseRearmAt line.
+      // ARMED but dented: mid-fight the bar is a wearing resource — it
+      // refills only once the drains have stopped past the calm gate.
       const maxPoise = this.maxPoise();
       if (maxPoise > 0) {
-        if (this.poiseDelay > 0) this.poiseDelay -= dt;
-        else if (this.poise < maxPoise) {
-          this.poise = Math.min(maxPoise,
-            this.poise + maxPoise * this.sheet.get('poiseRegenPct') * dt);
+        this.poiseCalm += dt;
+        const rate = maxPoise * this.sheet.get('poiseRegenPct') * dt;
+        if (this.poiseBroken) {
+          if (this.poiseDelay > 0) this.poiseDelay -= dt;
+          else if (this.poise < maxPoise) {
+            this.poise = Math.min(maxPoise, this.poise + rate);
+          }
+          // Gains (gainPoise) may beat the climb to the line — the re-arm
+          // check reads the POOL, not the clock, so feeding the bar counts.
+          if (this.poise >= maxPoise * this.sheet.get('poiseRearmAt') - 0.001) {
+            this.poiseBroken = false;
+            this.poiseJustRearmed = true;
+            this.poiseDelay = 0;
+          }
+        } else if (this.poise < maxPoise
+          && this.poiseCalm >= this.sheet.get('poiseCalmDelay')) {
+          this.poise = Math.min(maxPoise, this.poise + rate);
         }
-        if (this.poiseBroken && this.poise >= maxPoise * DEFENSE_CFG.poise.rearmFrac) {
-          this.poiseBroken = false;
+        // OVERCHARGE is a crest, not a plateau: the overage sheds toward
+        // max (and the ceiling re-clamps if the granting investment lapsed).
+        if (this.poise > maxPoise) {
+          const ceil = maxPoise * (1 + this.sheet.get('poiseOvercharge'));
+          this.poise = Math.min(ceil, Math.max(maxPoise,
+            this.poise - (this.poise - maxPoise) * DEFENSE_CFG.poise.overDecay * dt));
         }
-        if (this.poise > maxPoise) this.poise = maxPoise;
       } else if (this.poise > 0 || this.poiseBroken) {
         this.poise = 0;
         this.poiseBroken = false;
