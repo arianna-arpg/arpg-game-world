@@ -42,10 +42,20 @@ jobs:
       - run: npm run build
       - run: node scripts/make-build-info.mjs
 
+      # Uploads land on a DRAFT release (electron-builder.yml releaseType),
+      # where same-name assets are replaced — so one retry after a transient
+      # CDN/API hiccup (the 504 that sank v0.2.0's first run) is safe.
       - name: Package (and publish on tag builds)
-        run: npx electron-builder ${{ matrix.args }} --publish ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PUBLISH: ${{ startsWith(github.ref, 'refs/tags/') && 'always' || 'never' }}
+        run: |
+          npx electron-builder ${{ matrix.args }} --publish "$PUBLISH" || {
+            echo "electron-builder failed — retrying once in 20s (transient network errors)…"
+            sleep 20
+            npx electron-builder ${{ matrix.args }} --publish "$PUBLISH"
+          }
 
       - name: Stash artifacts (manual dry runs)
         if: ${{ !startsWith(github.ref, 'refs/tags/') }}
@@ -57,24 +67,32 @@ jobs:
             release/*.AppImage
           if-no-files-found: error
 
-  # electron-builder creates the release bare (no title, no body — v0.1.0
-  # shipped as a blank page). Once both legs have uploaded, stamp a human
-  # title and notes onto it: docs/releases/<tag>.md when the repo carries
-  # curated notes for this tag, else GitHub's auto-generated commit list.
-  annotate:
+  # Both legs upload into a DRAFT (electron-builder.yml releaseType) — this
+  # job is what actually ships it: stamp a human title + notes (curated
+  # docs/releases/<tag>.md when the repo carries them, else GitHub's
+  # auto-generated commit list), then flip the draft public and mark it
+  # latest. It runs only when every leg succeeded, so /releases/latest —
+  # the launcher's update probe — never serves a partial release.
+  finalize:
     if: ${{ startsWith(github.ref, 'refs/tags/') }}
     needs: package
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Title + notes on the published release
+      - name: Publish the draft with title + notes
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
+          # GET /releases/tags/:tag hides drafts — find ours in the list.
+          id="$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=30" \
+                --jq ".[] | select(.tag_name == \"$TAG\") | .id" | head -n1)"
+          if [ -z "$id" ]; then echo "no release found for tag $TAG"; exit 1; fi
           if [ -f "docs/releases/${TAG}.md" ]; then
-            gh release edit "$TAG" --title "Hollow Wake $TAG" --notes-file "docs/releases/${TAG}.md"
+            notes="$(cat "docs/releases/${TAG}.md")"
           else
             notes="$(gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" -f tag_name="$TAG" --jq .body)"
-            gh release edit "$TAG" --title "Hollow Wake $TAG" --notes "$notes"
           fi
+          gh api -X PATCH "repos/${GITHUB_REPOSITORY}/releases/$id" \
+            -f name="Hollow Wake $TAG" -f body="$notes" \
+            -F draft=false -f make_latest=true
