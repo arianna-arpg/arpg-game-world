@@ -70,7 +70,16 @@ export interface Settings {
    *  during the wind-up (a faint ring firming toward impact). ON by default;
    *  OFF is the hard-mode read-the-animation purist option. */
   castTelegraphs: boolean;
+  /** When the HUD draws the POISE/INSIGHT pool arcs. 'smart' (default):
+   *  around a recent change, or while dented on a build where the pool is
+   *  real weight (its damage-worth vs the life stack — VIS_CFG.poolArcs).
+   *  'recent': strictly around a recent change. 'always': pinned on — the
+   *  min-maxer's steady readout. */
+  poolBars: PoolBarsMode;
 }
+
+export type PoolBarsMode = 'smart' | 'recent' | 'always';
+
 export interface SettingsSave {
   schemaVersion: number;
   keybinds: Record<string, string>;
@@ -80,6 +89,7 @@ export interface SettingsSave {
   lowLifePulse?: boolean;
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
+  poolBars?: PoolBarsMode;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -159,6 +169,7 @@ export const makeSettings = (): Settings => ({
   lowLifePulse: true,
   gearPickup: 'vacuum',
   castTelegraphs: true,
+  poolBars: 'smart',
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -170,6 +181,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   lowLifePulse: s.lowLifePulse,
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
+  poolBars: s.poolBars,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -206,5 +218,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     lowLifePulse: s.lowLifePulse ?? true,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
+    // Unknown values (a renamed mode) fall back to the default methodology.
+    poolBars: s.poolBars === 'always' || s.poolBars === 'recent' ? s.poolBars : 'smart',
   };
 }

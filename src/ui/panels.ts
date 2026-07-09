@@ -3057,6 +3057,15 @@ export class UI {
         <span>Foresight (enemy cast markers)</span>
         <button id="opt-foresight">${this.getSettings().castTelegraphs ? 'ON' : 'OFF'}</button>
       </div>
+      <div class="rebind-row">
+        <span>Poise/Insight Arcs</span>
+        <button id="opt-poolbars" title="When the poise/insight pool arcs show on the life orb:
+SMART — around a recent change, or while dented on builds where the pool carries real weight (default)
+ON CHANGE — strictly around a recent change to the pool
+ALWAYS — pinned on (the min-maxer's steady readout)">${{
+          smart: 'SMART', recent: 'ON CHANGE', always: 'ALWAYS',
+        }[this.getSettings().poolBars]}</button>
+      </div>
       <h1>Cursor</h1>
       <div class="acct-head">One identity for the mouse cursor and the pad's aim reticle —
         a shape and a tint that stand out against any battlefield.</div>
@@ -3095,6 +3104,14 @@ export class UI {
     root.querySelector<HTMLElement>('#opt-foresight')!.addEventListener('click', () => {
       const st = this.getSettings();
       st.castTelegraphs = !st.castTelegraphs;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
+    // POISE/INSIGHT arcs: cycle the three view methodologies — smart hide
+    // (change + build weight), strictly on-change, or always-on.
+    root.querySelector<HTMLElement>('#opt-poolbars')!.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.poolBars = st.poolBars === 'smart' ? 'recent' : st.poolBars === 'recent' ? 'always' : 'smart';
       this.saveSettings();
       this.renderKeybinds(root, onBack);
     });

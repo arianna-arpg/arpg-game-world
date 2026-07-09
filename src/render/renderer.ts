@@ -19,6 +19,7 @@ import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { doodadRuleOf, type Doodad } from '../engine/levelgen';
+import { DEFENSE_CFG } from '../engine/defense';
 import { QUEST_GIVER_IDS } from '../quests/defs';
 
 /** View-cull margin beyond a doodad's own radius: canopy crowns, vent rims,
@@ -44,6 +45,17 @@ import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
+
+/** The LIFE ORB's arc ladder — px beyond the orb radius per ring, inside→
+ *  out: the tank layers that eat damage before blood (ES, absorb, insight),
+ *  then the poise break-bar, then the endurance wall. One table so a new
+ *  ring slots in without nudging its neighbors by hand; the orb caption and
+ *  the survival meters clear the outermost rung through it. */
+const ORB_ARCS = {
+  es: 6, absorb: 11, insight: 16, poise: 21, endurance: 26,
+  /** Caption clearance above the outermost ring. */
+  captionPad: 5,
+};
 
 const warnedUnrenderedKinds = new Set<string>();
 
@@ -2468,27 +2480,32 @@ export class Renderer {
     }
     ctx.restore();
 
-    // Health bar (enemies + minions; the player has the orb). A composite
-    // monster's PRISTINE parts stay bar-less — one boss mustn't wear five
-    // full bars; a part's bar appears the moment it's dented (poise rule).
-    if (a !== world.player && !(a.partLink && a.life >= a.maxLife() - 0.5)) {
+    // Health bar (enemies + minions; the player has the orb) — drawn only
+    // once the pool is DENTED. What was the composite-part rule (a pristine
+    // part stays bar-less) is now the whole stack's: an untouched body wears
+    // no overlay at all, so "no bar" itself reads as "at full life" — the
+    // signal any full-life-keyed mechanic (yours or theirs) hangs off.
+    if (a !== world.player && a.life < a.maxLife() - 0.5) {
       const bw = a.radius * 2.2;
       const frac = clamp(a.life / a.maxLife(), 0, 1);
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw, 4);
       ctx.fillStyle = a.team === 'enemy' ? '#c03030' : '#40b050';
       ctx.fillRect(x - bw / 2, y - a.radius - 9, bw * frac, 4);
-      // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
-      // finite hire show how much of it remains — swarms stay clean.
-      if (a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
-        ctx.fillStyle = '#b8a0e0';
-        ctx.fillRect(x - bw / 2, y - a.radius - 5.5,
-          bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
-      }
+    }
+    // LIFESPAN sliver (the Amalgam's clock): SIZABLE owned minions with a
+    // finite hire show how much of it remains — swarms stay clean. A clock,
+    // not a health readout: it ticks whether or not the life bar shows.
+    if (a !== world.player && a.owner && a.lifespan > 0 && a.radius >= 14 && a.lifespanTotal > 0) {
+      const bw = a.radius * 2.2;
+      ctx.fillStyle = '#b8a0e0';
+      ctx.fillRect(x - bw / 2, y - a.radius - 5.5,
+        bw * clamp(a.lifespan / a.lifespanTotal, 0, 1), 2.5);
     }
 
-    // Layered-defense bars: energy shield (cyan) and absorb (white).
-    if (a.es > 0 && a.maxEs() > 0) {
+    // Layered-defense bars: energy shield (cyan) and absorb (white) — the
+    // shield bar follows the same dent rule (full ES on a full body = clean).
+    if (a.es > 0 && a.maxEs() > 0 && a.es < a.maxEs() - 0.5) {
       const bw = a.radius * 2.2;
       ctx.fillStyle = '#5ad8d8';
       ctx.fillRect(x - bw / 2, y - a.radius - 13, bw * clamp(a.es / a.maxEs(), 0, 1), 3);
@@ -3273,6 +3290,46 @@ export class Renderer {
 
   // -------------------------------------------------------------------- HUD
 
+  /** POOL-ARC visibility (the poise/insight rings), per Settings.poolBars:
+   *  'always' pins the arc on; 'recent' shows it for poolArcs.recentSecs
+   *  around any change (value, max, or break-state — regen ticks count, so
+   *  a recovering pool stays lit until it settles full); 'smart' (default)
+   *  adds a STANDING spot while the pool is dented AND carries real build
+   *  weight — its damage-worth (poise: max/drainRatio soaked before the
+   *  break; insight: max × efficiency slipped) at least relevantFrac of
+   *  maxLife+maxES. A full, untouched pool always tucks away; an
+   *  un-invested one only surfaces the moment it actually acts. */
+  private poolWatch = {
+    poise: { last: -1, max: -1, state: 0, at: -Infinity },
+    insight: { last: -1, max: -1, state: 0, at: -Infinity },
+  };
+
+  private poolArcShown(kind: 'poise' | 'insight', p: Actor, world: World): boolean {
+    const cur = kind === 'poise' ? p.poise : p.insight;
+    const max = kind === 'poise' ? p.maxPoise() : p.maxInsight();
+    const state = kind === 'poise' && p.poiseBroken ? 1 : 0;
+    const w = this.poolWatch[kind];
+    if (w.at > world.time) w.at = -Infinity; // a new run rewound the clock
+    // `last` only moves when the trip fires, so a slow regen re-trips as its
+    // drift accumulates — continuous recovery reads as continuous change.
+    if (Math.abs(cur - w.last) > 0.25 || Math.abs(max - w.max) > 0.25 || state !== w.state) {
+      w.at = world.time;
+      w.last = cur; w.max = max; w.state = state;
+    }
+    const mode = this.getSettings?.().poolBars ?? 'smart';
+    if (mode === 'always') return true;
+    if (world.time - w.at < VIS_CFG.poolArcs.recentSecs) return true;
+    if (mode === 'recent') return false;
+    if (cur >= max - 0.25) return false; // full + settled — tuck away
+    // Damage-worth runs through the pool's OWN mechanic dial: poise meters
+    // poiseDR across ~max/drainRatio damage before the break; insight slips
+    // up to insightDR of each hit until max × efficiency damage is spent.
+    const worth = kind === 'poise'
+      ? (max / Math.max(0.05, DEFENSE_CFG.poise.drainRatio)) * p.sheet.get('poiseDR')
+      : max * p.sheet.get('insightEfficiency') * p.sheet.get('insightDR');
+    return worth / Math.max(1, p.maxLife() + p.maxEs()) >= VIS_CFG.poolArcs.relevantFrac;
+  }
+
   private drawHud(world: World): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
@@ -3344,51 +3401,55 @@ export class Renderer {
       ctx.strokeStyle = '#5ad8d8';
       ctx.lineWidth = 4;
       ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(p.es / p.maxEs(), 0, 1));
+      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.es, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp(p.es / p.maxEs(), 0, 1));
       ctx.stroke();
     }
     if (p.absorb > 0) {
       ctx.strokeStyle = '#e8f0f8';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + 11, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.absorb / 60));
+      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.absorb, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * Math.min(1, p.absorb / 60));
+      ctx.stroke();
+    }
+    // INSIGHT rides the LIFE orb with the other tank layers — it slips
+    // damage before blood, so it reads as part of the life stack, not the
+    // mana economy. Teal, BRIGHTNESS breathing with momentum — full glow at
+    // a sprint, fading over the taper once you plant. Settings.poolBars
+    // decides when it earns the spot (poolArcShown).
+    if (p.maxInsight() > 0 && this.poolArcShown('insight', p, world)) {
+      const momentum = p.insightMomentum();
+      ctx.strokeStyle = `rgba(106,216,184,${(0.3 + 0.7 * momentum).toFixed(2)})`;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.insight, -Math.PI / 2,
+        -Math.PI / 2 + Math.PI * 2 * clamp(p.insight / p.maxInsight(), 0, 1));
       ctx.stroke();
     }
     // POISE: a bronze arc outside the tank layers — dims while broken so
-    // the lapse of its protection is readable at a glance.
-    if (p.maxPoise() > 0) {
+    // the lapse of its protection is readable at a glance. Same poolBars
+    // methodology as insight (the break flip counts as a change).
+    if (p.maxPoise() > 0 && this.poolArcShown('poise', p, world)) {
       ctx.strokeStyle = p.poiseBroken ? 'rgba(216,176,106,0.35)' : '#d8b06a';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + 16, -Math.PI / 2,
+      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.poise, -Math.PI / 2,
         -Math.PI / 2 + Math.PI * 2 * clamp(p.poise / p.maxPoise(), 0, 1));
       ctx.stroke();
     }
     // ENDURANCE (opt-in pool): the fortify-green outermost ring — binary
-    // protection, so the ring simply IS or ISN'T there.
+    // protection, so the ring simply IS or ISN'T there (opting in IS the
+    // investment; no smart-hide second-guesses it).
     if (p.maxEndurance() > 0) {
       ctx.strokeStyle = '#a8c86a';
       ctx.lineWidth = 3;
       ctx.beginPath();
-      ctx.arc(lifeX, orbY, orbR + 21, -Math.PI / 2,
+      ctx.arc(lifeX, orbY, orbR + ORB_ARCS.endurance, -Math.PI / 2,
         -Math.PI / 2 + Math.PI * 2 * clamp(p.endurance / p.maxEndurance(), 0, 1));
       ctx.stroke();
     }
     this.drawOrb(manaX, orbY, orbR, p.maxMana() > 0 ? p.mana / p.maxMana() : 0,
       '#2858b8', '#101848', `${Math.ceil(p.mana)}`, 'Mana',
       p.maxMana() > 0 ? p.reservedMana / p.maxMana() : 0);
-    // INSIGHT wraps the MANA orb (the agility resource keeps the agile
-    // company): a teal arc whose BRIGHTNESS breathes with momentum — full
-    // glow at a sprint, fading over the taper once you plant.
-    if (p.maxInsight() > 0) {
-      const momentum = p.insightMomentum();
-      ctx.strokeStyle = `rgba(106,216,184,${(0.3 + 0.7 * momentum).toFixed(2)})`;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(manaX, orbY, orbR + 6, -Math.PI / 2,
-        -Math.PI / 2 + Math.PI * 2 * clamp(p.insight / p.maxInsight(), 0, 1));
-      ctx.stroke();
-    }
 
     // Environmental-survival meters (breath underwater; future heat/cold) — tucked
     // under the mana orb, shown only while a resource is below max (i.e. active).
@@ -3752,13 +3813,14 @@ export class Renderer {
     const { ctx } = this;
     // Stack the bars ABOVE the orb (the orbs hug the bottom edge, so a below-orb
     // bar renders off-screen — same reason drawOrb's caption sits above). Clear the
-    // orb's own caption (at orbY - orbR - 26) and grow upward.
+    // orb's own caption (arc ladder + captionPad) and grow upward.
     let dy = 0;
+    const base = ORB_ARCS.endurance + ORB_ARCS.captionPad + 20;
     for (const def of Object.values(SURVIVAL_RESOURCES)) {
       const cur = p.survival.get(def.id);
       if (cur === undefined || cur >= def.max) continue; // full / inactive → hidden
       const frac = clamp(cur / def.max, 0, 1);
-      const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - 46 - dy;
+      const bw = orbR * 1.4, bh = 8, x = cx - bw / 2, y = orbY - orbR - base - dy;
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(x, y, bw, bh);
       ctx.fillStyle = frac < 0.34 ? '#e85050' : def.color; ctx.fillRect(x, y, bw * frac, bh);
       ctx.strokeStyle = '#3a3a52'; ctx.lineWidth = 1; ctx.strokeRect(x, y, bw, bh);
@@ -3796,12 +3858,12 @@ export class Renderer {
     ctx.fillStyle = '#fff';
     ctx.fillText(text, x, y + 5);
     // Caption sits ABOVE the orb: the orbs now flank the bar near the bottom
-    // edge, so a below-orb label (y + r + 14) would render off-screen. Cleared
-    // above ALL the tank arcs — the outermost (endurance) rides at orbR + 21,
-    // which struck through the caption at the old -18 offset.
+    // edge, so a below-orb label (y + r + 14) would render off-screen. It
+    // clears the arc ladder's outermost rung by captionPad — derived, so a
+    // new ring re-seats the caption for free.
     ctx.font = '10px Verdana';
     ctx.fillStyle = '#8a8678';
-    ctx.fillText(label, x, y - r - 26);
+    ctx.fillText(label, x, y - r - (ORB_ARCS.endurance + ORB_ARCS.captionPad));
   }
 }
 

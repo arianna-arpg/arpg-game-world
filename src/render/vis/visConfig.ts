@@ -65,6 +65,21 @@ export const VIS_CFG = {
     showAt: 0.35,
   },
 
+  /** The player's POISE/INSIGHT pool arcs (Settings.poolBars gates how). */
+  poolArcs: {
+    /** Seconds an arc stays shown after ANY change to its pool (value moved,
+     *  max moved, break-state flipped) — the 'recent' window. */
+    recentSecs: 4,
+    /** 'smart' standing-spot test: the pool's damage-worth, run through its
+     *  own mechanic dial (poise: max/drainRatio × poiseDR — damage mitigated
+     *  across the bar's life; insight: max × efficiency × insightDR — damage
+     *  it can slip), as a fraction of maxLife+maxES. Below this, the arc
+     *  only surfaces around changes. Calibration: a fresh Warrior sits at
+     *  ~0.09 poise / ~0.13 insight (quiet buffers, hidden); real investment
+     *  in pool size or its DR clears 0.2 and earns the standing spot. */
+    relevantFrac: 0.2,
+  },
+
   /** Ground texture chunks. */
   ground: {
     /** Chunk edge in world units (one baked canvas per chunk). */
