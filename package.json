@@ -1,7 +1,7 @@
 {
   "name": "arpg-test-game",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Hollow Wake — a data-driven top-down action RPG (TypeScript + Canvas 2D + Electron).",
   "author": "Arianna",
   "repository": "github:arianna-arpg/arpg-game-world",

@@ -12,7 +12,18 @@ the exact same skill pipeline (`World.useSkill`).
 
 ## Quick start
 
-**Desktop app (the normal way to play):** double-click **Launch Game.bat**
+**Just want to play? Download it — no tools needed:** grab the latest
+installer from the [Releases page](https://github.com/arianna-arpg/arpg-game-world/releases/latest).
+On **Windows** run `HollowWake-Setup-<version>.exe` — a normal game installer
+(per-user by default, no admin rights; desktop + Start Menu shortcuts; an
+uninstaller entry in *Apps & features*). SmartScreen may warn that the
+publisher is unknown because the build is unsigned — **More info → Run
+anyway**. On **Linux / Steam Deck** take the `.AppImage` (`chmod +x`, run).
+Installed copies keep saves in the per-user data folder (Windows:
+`%APPDATA%/Hollow Wake`) and check GitHub for newer releases on launch — the
+Update button hands you the new installer.
+
+**Desktop app (from a checkout):** double-click **Launch Game.bat**
 (Windows; installs dependencies on first run), or run `npm run game`. A
 launcher window shows the installed version, checks GitHub for updates —
 one click pulls, rebuilds, and plays — then opens the game in its own
