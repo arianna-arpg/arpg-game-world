@@ -7159,8 +7159,14 @@ export class World {
     if (!mf || this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
       this.migrationStreamTimer = 0; return;
     }
+    // STRAGGLERS FINISH THE CROSSING: wheel standing migrants toward their exit
+    // whether or not the band still covers this zone. A crossing that ends (the
+    // tail recedes past us, or the whole herd arrives) must not freeze its
+    // stragglers mid-stride — they amble on and out. Only the REPLENISHING
+    // stream below is gated on live coverage.
+    this.updateMigrants(dt);
     const info = mf.migrationOn(this.zone.id);
-    if (!info) { this.migrationStreamTimer = 0; return; } // the herd crossed on — it ebbs
+    if (!info) { this.migrationStreamTimer = 0; return; } // the herd crossed on — the flow ebbs, the last walkers leave
     // First time this crossing catches the player here: a bulletin + the discovery ledger.
     if (!this.materializedMigrations.has(info.id)) {
       this.materializedMigrations.add(info.id);
