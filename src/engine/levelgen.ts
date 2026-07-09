@@ -2716,7 +2716,9 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   // it. Builder-placed pieces (rim rocks ON the wall ring, gulf islands) are
   // deliberate and stay: only indices < preBuild are candidates. seedPaired
   // kinds keep their parallel seed list zipped. Draw-free.
-  for (let i = preBuild - 1; i >= 0; i--) {
+  // (A builder that POURS engulfing terrain can splice pre-build doodads and
+  // shrink the array below preBuild — clamp, or the sweep reads past the end.)
+  for (let i = Math.min(preBuild, ctx.doodads.length) - 1; i >= 0; i--) {
     const d = ctx.doodads[i];
     if (d.keep) continue;
     if (Math.abs(d.pos.x - center.x) > r + d.radius || Math.abs(d.pos.y - center.y) > r + d.radius) continue;
