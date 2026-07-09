@@ -102,6 +102,21 @@ export const VIS_CFG = {
     /** LRU cap on live chunks (boundless zones stream forever) — ~0.8 MB
      *  each at 448², so the cap bounds the floor cache near 50 MB. */
     maxChunks: 60,
+    /** Terrain-blend beds (DoodadVisualDef.blend) bake into the floor chunks
+     *  instead of re-rasterizing the merged group silhouette 4× per frame
+     *  (a kind opts back into the live pass via blend.live). */
+    bakeBlend: true,
+    /** Liquid BODIES (the liquid painter's rim/core/inner union fills) bake
+     *  into the floor chunks too — the animated features (sheen, melt,
+     *  crawl, bubbles…) stay live. A pool's merged path was rasterizing
+     *  most of the screen twice per frame. Per-kind opt-out:
+     *  params.liveBody on the DOODAD_VISUALS entry. */
+    bakeLiquidBody: true,
+    /** Max STALE-chunk rebakes per frame after a walk-grid repaint (door
+     *  break, terraform, crawling fissure). Stale chunks keep drawing their
+     *  old bake until their turn — a repaint must never rebake a whole
+     *  screen of chunks in one frame (that was a visible hitch). */
+    rebakesPerFrame: 3,
   },
 
   /** Dynamic light layer. */

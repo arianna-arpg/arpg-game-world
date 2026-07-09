@@ -82,5 +82,10 @@ export default defineConfig({
   // saves/ writes are DATA, not source — without this ignore, every zone-hop's
   // autosave tripped the watcher into a FULL RELOAD (killing the live world
   // mid-play and mid-QA; the long-standing "reload ate my test" gotcha).
-  server: { watch: { ignored: ['**/saves/**', '**/*.bak'] } },
+  server: {
+    watch: { ignored: ['**/saves/**', '**/*.bak'] },
+    // Enables the JS Self-Profiling API (`new Profiler(...)`) in dev — the
+    // sampling profiler perf passes lean on; inert for normal play.
+    headers: { 'Document-Policy': 'js-profiling' },
+  },
 });

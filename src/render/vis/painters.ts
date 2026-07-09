@@ -18,7 +18,7 @@ import { BIOMES } from '../../world/biomes';
 import { hash01, mix, shade, withAlpha } from './color';
 import { materialOf, rampOf, type Ramp } from './materials';
 import { litPolygon, polygonPath } from './sight';
-import { drawShadow } from './sprites';
+import { baked, drawShadow } from './sprites';
 import { VIS_CFG } from './visConfig';
 
 export interface PaintEnv {
@@ -79,8 +79,11 @@ export interface DoodadVisualDef {
    *  `mode` picks the silhouette: 'blob' (default) merges the discs as an
    *  organic patch — pools, grass, mud; 'path' strokes round-capped
    *  segments through CONSECUTIVE discs — the smooth band a chained stamp
-   *  (a road) actually means, with breaks wherever the chain truly gaps. */
-  blend?: { strength: number; feather: number; color: ColorSpec; mode?: 'blob' | 'path' };
+   *  (a road) actually means, with breaks wherever the chain truly gaps.
+   *  Beds are static, so they BAKE into the floor chunks by default
+   *  (VIS_CFG.ground.bakeBlend); `live` opts a kind back into the per-frame
+   *  pass — for a future kind whose bed must move or breathe. */
+  blend?: { strength: number; feather: number; color: ColorSpec; mode?: 'blob' | 'path'; live?: boolean };
   /** Soft contact shadow under each doodad (alpha multiplier). */
   shadow?: number;
   /** DIRECTIONAL day-cycle shadow (sunCast): the body's cast reach as a
@@ -166,6 +169,145 @@ function jaggedPoly(ctx: CanvasRenderingContext2D, n: number, r: number, irr: nu
   ctx.closePath();
 }
 
+// --- Per-disc SPRITE BAKES ----------------------------------------------------
+// The liquid painter used to allocate canvas gradients PER DISC PER FRAME
+// (melt hearts, crawl glows, ford melds) and rasterize crust polygons inside a
+// merged clip of the whole group — measured at ~170ms/frame on a caldera whose
+// spiral pours ~2,600 lava discs. Every periodic look here is a fixed alpha
+// PROFILE scaled by a scalar, so it bakes once (vis/sprites.ts LRU) and the
+// runtime becomes drawImage-per-disc with globalAlpha carrying the animation.
+
+/** A radial alpha-falloff disc of `color`: stops are [t, alphaFrac] pairs.
+ *  Unit sprite (64px), blit scaled; animate via ctx.globalAlpha. */
+function alphaDiscSprite(color: string, stops: readonly (readonly [number, number])[], key: string): HTMLCanvasElement {
+  return baked(`ad|${key}|${color}`, 64, 64, (ctx) => {
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 32);
+    for (const [t, a] of stops) g.addColorStop(t, withAlpha(color, a));
+    ctx.fillStyle = g;
+    ctx.fillRect(-32, -32, 64, 64);
+  });
+}
+
+/** How many seeded looks each per-disc bake family rolls: enough that no two
+ *  neighbouring discs visibly repeat, few enough that the LRU stays warm. */
+const DISC_VARIANTS = 12;
+
+/** One lava disc's crust plates — fill and burning-seam stroke share the
+ *  geometry; the caller decides which to emit. Original per-disc seeding, so
+ *  a poured flow never tiles. Drawn only at BAKE time (inside the union
+ *  clip), where its polygon raster is paid once per chunk, not per frame. */
+function meltCrustPlates(ctx: CanvasRenderingContext2D, d: Doodad,
+  mode: 'fill' | 'stroke'): void {
+  const seed = ((d.pos.x * 7 + d.pos.y * 13) | 0) >>> 0;
+  for (let i = 0; i < 3 + (seed % 3); i++) {
+    const a = hash01(i, seed) * Math.PI * 2;
+    const dd = Math.sqrt(hash01(i, seed + 7)) * d.radius * 0.7;
+    const cx = d.pos.x + Math.cos(a) * dd, cy = d.pos.y + Math.sin(a) * dd;
+    const pr = d.radius * (0.2 + hash01(i, seed + 11) * 0.22);
+    ctx.beginPath();
+    for (let k = 0; k <= 7; k++) {
+      const ka = (k / 7) * Math.PI * 2;
+      const kr = pr * (0.78 + 0.22 * Math.abs(Math.sin(ka * 2.5 + i + seed)));
+      const px = cx + Math.cos(ka) * kr, py = cy + Math.sin(ka) * kr;
+      if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    if (mode === 'fill') ctx.fill(); else ctx.stroke();
+  }
+}
+
+/** One whole grass/hedgerow tuft (5 clumps × 5 blades + chance flowers),
+ *  variant-seeded and radius-bucketed. Sway rides a whole-sprite shear at
+ *  draw time — one drawImage per tuft instead of 25 stroked curves. */
+function tuftSprite(base: string, lit: string, flower: string | null,
+  variant: number, r: number): HTMLCanvasElement {
+  return baked(`tuft|${variant}|${r}|${base}|${flower ?? ''}`, r * 2 + 26, r * 2 + 26, (ctx) => {
+    const seed = 104729 * (variant + 1);
+    ctx.lineCap = 'round';
+    const clumps = 5;
+    for (let i = 0; i < clumps; i++) {
+      const a = (i / clumps) * Math.PI * 2 + hash01(i, seed);
+      const cx = Math.cos(a) * r * (0.3 + hash01(i, seed + 3) * 0.35);
+      const cy = Math.sin(a) * r * (0.3 + hash01(i, seed + 5) * 0.35);
+      for (let b = 0; b < 5; b++) {
+        const off = (b - 2) * 1.7;
+        const h = 5 + hash01(b, seed + i) * 4;
+        ctx.globalAlpha = 0.6;
+        ctx.strokeStyle = b % 2 ? base : lit;
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(cx + off, cy + 3);
+        ctx.quadraticCurveTo(cx + off, cy - h * 0.5, cx + off + (b - 2) * 0.8, cy - h);
+        ctx.stroke();
+      }
+      if (flower && hash01(i, seed + 11) > 0.72) {
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = flower;
+        ctx.beginPath();
+        ctx.arc(cx, cy - 7, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  });
+}
+
+/** LILY PADS are static geometry (seeded off the pool's own discs), but they
+ *  were re-derived per frame with an O(group²) coastline test — ~900k hypots
+ *  a frame on an isle. Computed once per pool disc against the FULL kind
+ *  group (culling can hide a neighbour and fake a coastline) and cached. */
+interface PadSpot { x: number; y: number; r: number; dark: boolean; notch: number }
+const padCache = new WeakMap<Doodad, PadSpot[]>();
+const fullGroupCache = new WeakMap<readonly Doodad[], Map<string, Doodad[]>>();
+
+function fullKindGroup(world: World, kind: string): Doodad[] {
+  let m = fullGroupCache.get(world.doodads);
+  if (!m) { m = new Map(); fullGroupCache.set(world.doodads, m); }
+  let list = m.get(kind);
+  if (!list) {
+    list = world.doodads.filter(d => d.kind === kind);
+    m.set(kind, list);
+  }
+  return list;
+}
+
+function padsOf(world: World, w: Doodad): PadSpot[] {
+  const hit = padCache.get(w);
+  if (hit) return hit;
+  const group = fullKindGroup(world, w.kind);
+  const out: PadSpot[] = [];
+  const seed = ((w.pos.x * 13 + w.pos.y * 29) | 0) >>> 0;
+  const candidates = 10;
+  for (let i = 0; i < candidates; i++) {
+    if (hash01(i, seed) > 0.4) continue; // sparse and irregular
+    const a = (i / candidates) * Math.PI * 2 + hash01(i, seed + 7) * 0.6;
+    const ox = w.pos.x + Math.cos(a) * (w.radius + 9);
+    const oy = w.pos.y + Math.sin(a) * (w.radius + 9);
+    let interior = false;
+    for (const o of group) {
+      if (o === w) continue;
+      const dd = Math.hypot(ox - o.pos.x, oy - o.pos.y);
+      if (dd < o.radius) { interior = true; break; }
+    }
+    if (interior) continue; // mid-lake seam, not a shore
+    const px = w.pos.x + Math.cos(a) * (w.radius - 7);
+    const py = w.pos.y + Math.sin(a) * (w.radius - 7);
+    const clump = 1 + Math.floor(hash01(i, seed + 13) * 3);
+    for (let j = 0; j < clump; j++) {
+      const off = (j - (clump - 1) / 2) * 7.5;
+      out.push({
+        x: px + Math.cos(a + Math.PI / 2) * off,
+        y: py + Math.sin(a + Math.PI / 2) * off,
+        r: 2.8 + hash01(i * 5 + j, seed) * 1.9,
+        dark: j % 2 === 0,
+        notch: a + Math.PI + (hash01(j, seed + i) - 0.5),
+      });
+    }
+  }
+  padCache.set(w, out);
+  return out;
+}
+
 // --- LIQUID / GROUND BLOBS ---------------------------------------------------
 
 export interface LiquidParams {
@@ -217,18 +359,24 @@ export interface LiquidParams {
   embers?: { color: ColorSpec; density?: number };
 }
 
-const liquid: GroupPainter = (env, group, def) => {
+/** The STATIC body of a liquid group — rim silhouette, core fill, inset pass.
+ *  Time-free, so it bakes into the ground chunks by default (the merged
+ *  union path of a big pool rasterized most of the screen TWICE a frame;
+ *  an isle's water ring alone measured ~17ms). Exported for the chunk
+ *  baker; the live painter calls it only when baking is off (or a kind
+ *  opts out via params.liveBody). */
+export function paintLiquidBody(env: PaintEnv, group: readonly Doodad[],
+  def: DoodadVisualDef): void {
   const p = (def.params ?? {}) as unknown as LiquidParams;
-  const { ctx, theme, time } = env;
+  const { ctx, theme } = env;
   if (p.rim) {
     ctx.globalAlpha = p.rim.alpha;
     ctx.fillStyle = resolveColor(p.rim.color, theme);
     blobPath(ctx, group, p.rim.grow);
     ctx.fill();
   }
-  const coreCol = resolveColor(p.core.color, theme);
   ctx.globalAlpha = p.core.alpha;
-  ctx.fillStyle = coreCol;
+  ctx.fillStyle = resolveColor(p.core.color, theme);
   blobPath(ctx, group, p.core.grow ?? 0);
   ctx.fill();
   if (p.inner) {
@@ -237,27 +385,73 @@ const liquid: GroupPainter = (env, group, def) => {
     blobPath(ctx, group, p.inner.grow);
     ctx.fill();
   }
+  ctx.globalAlpha = 1;
+}
+
+/** Should this liquid kind's body render live (not baked)? One shared gate
+ *  for the painter and the chunk baker so they can never both (or neither)
+ *  paint it. */
+export function liquidBodyIsLive(def: DoodadVisualDef): boolean {
+  return !VIS_CFG.ground.bakeLiquidBody || !!(def.params as { liveBody?: boolean } | undefined)?.liveBody;
+}
+
+/** EVERYTHING about a liquid group that never moves: the body fills, the
+ *  ford melds, and the molten crust (plates + seams + heart BASE glow, all
+ *  inside the merged-silhouette clip — pack ice over fire, one body). The
+ *  chunk baker calls this once per repaint; only the pulse/crawl/sparkle
+ *  layers stay per-frame. */
+export function paintLiquidStatics(env: PaintEnv, group: readonly Doodad[],
+  def: DoodadVisualDef): void {
+  const p = (def.params ?? {}) as unknown as LiquidParams;
+  const { ctx, theme } = env;
+  paintLiquidBody(env, group, def);
   if (p.fords) {
-    // One water, two depths: the ford tone derives from the DEEP color
-    // (lighten) and lays down as soft radial gradients per disc — shallows
-    // breathe into the deep instead of ending on a cut line.
+    const coreCol = resolveColor(p.core.color, theme);
     const fordCol = p.fords.lighten !== undefined
       ? shade(coreCol, p.fords.lighten)
       : resolveColor(p.fords.color, theme, coreCol);
+    const spr = alphaDiscSprite(fordCol, [[0, 1], [0.62, 0.75], [1, 0]], 'ford');
+    ctx.globalAlpha = p.fords.alpha;
     for (const d of group) {
       if (!d.shallow) continue;
       const r = Math.max(4, d.radius + (p.fords.grow ?? 0));
-      const g = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, r);
-      g.addColorStop(0, withAlpha(fordCol, p.fords.alpha));
-      g.addColorStop(0.62, withAlpha(fordCol, p.fords.alpha * 0.75));
-      g.addColorStop(1, withAlpha(fordCol, 0));
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(d.pos.x, d.pos.y, r, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.drawImage(spr, d.pos.x - r, d.pos.y - r, r * 2, r * 2);
     }
+    ctx.globalAlpha = 1;
   }
+  if (p.melt) {
+    const hot = resolveColor(p.melt.hot, theme);
+    const crust = resolveColor(p.melt.crust, theme);
+    ctx.save();
+    blobPath(ctx, group);
+    ctx.clip();
+    // Heart BASE glow (the live pass breathes 0..0.3 on top → 0.35..0.65,
+    // the original pulse band).
+    const heart = alphaDiscSprite(hot, [[0, 1], [1, 0]], 'meltH');
+    ctx.globalAlpha = 0.35;
+    for (const d of group) {
+      const r = d.radius * 0.95;
+      ctx.drawImage(heart, d.pos.x - r, d.pos.y - r, r * 2, r * 2);
+    }
+    // Crust plates spanning the flow, their edges burning at rest strength.
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = withAlpha(crust, 0.85);
+    for (const d of group) meltCrustPlates(ctx, d, 'fill');
+    ctx.strokeStyle = withAlpha(hot, 0.35);
+    ctx.lineWidth = 1.4;
+    for (const d of group) meltCrustPlates(ctx, d, 'stroke');
+    ctx.restore();
+  }
+}
+
+const liquid: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as LiquidParams;
+  const { ctx, theme, time } = env;
+  // Body + fords + molten crust normally bake with the floor chunks; a kind
+  // that opted out (params.liveBody) — or a bakeLiquidBody=false fallback —
+  // paints them here, exactly as the chunk baker would.
+  if (liquidBodyIsLive(def)) paintLiquidStatics(env, group, def);
+  const coreCol = resolveColor(p.core.color, theme);
   if (p.ripples) {
     ctx.globalAlpha = 0.12;
     ctx.strokeStyle = resolveColor(p.ripples.color, theme);
@@ -293,48 +487,27 @@ const liquid: GroupPainter = (env, group, def) => {
   if (p.pads && p.pads.biomes.includes(env.world.zone.biome ?? '')) {
     // Lily pads live on the COASTLINE: candidate rim spots that face open
     // ground (the point just outside is covered by NO other disc of this
-    // body) may grow a pad clump — randomized, floating just inside the
-    // shore, with the classic notch cut toward open water.
+    // body) grow a pad clump. The coastline derivation is static per pool,
+    // so it computes ONCE per disc (against the FULL kind group — see
+    // padsOf) and per-frame work is just the cached spots' fills.
     const padCol = resolveColor(p.pads.color, theme);
+    const padLit = shade(padCol, 0.14);
     for (const w of group) {
       if (w.shallow) continue;
-      const seed = ((w.pos.x * 13 + w.pos.y * 29) | 0) >>> 0;
-      const candidates = 10;
-      for (let i = 0; i < candidates; i++) {
-        if (hash01(i, seed) > 0.4) continue; // sparse and irregular
-        const a = (i / candidates) * Math.PI * 2 + hash01(i, seed + 7) * 0.6;
-        const ox = w.pos.x + Math.cos(a) * (w.radius + 9);
-        const oy = w.pos.y + Math.sin(a) * (w.radius + 9);
-        let interior = false;
-        for (const o of group) {
-          if (o === w) continue;
-          const dd = Math.hypot(ox - o.pos.x, oy - o.pos.y);
-          if (dd < o.radius) { interior = true; break; }
-        }
-        if (interior) continue; // mid-lake seam, not a shore
-        const px = w.pos.x + Math.cos(a) * (w.radius - 7);
-        const py = w.pos.y + Math.sin(a) * (w.radius - 7);
-        const clump = 1 + Math.floor(hash01(i, seed + 13) * 3);
-        for (let j = 0; j < clump; j++) {
-          const off = (j - (clump - 1) / 2) * 7.5;
-          const cx = px + Math.cos(a + Math.PI / 2) * off;
-          const cy = py + Math.sin(a + Math.PI / 2) * off;
-          const pr = 2.8 + hash01(i * 5 + j, seed) * 1.9;
-          ctx.globalAlpha = 0.8;
-          ctx.fillStyle = j % 2 ? padCol : shade(padCol, 0.14);
-          ctx.beginPath();
-          ctx.arc(cx, cy, pr, 0, Math.PI * 2);
-          ctx.fill();
-          // The notch: a thin wedge of open water cut toward the deep.
-          const na = a + Math.PI + (hash01(j, seed + i) - 0.5);
-          ctx.fillStyle = coreCol;
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(cx + Math.cos(na - 0.3) * pr * 1.1, cy + Math.sin(na - 0.3) * pr * 1.1);
-          ctx.lineTo(cx + Math.cos(na + 0.3) * pr * 1.1, cy + Math.sin(na + 0.3) * pr * 1.1);
-          ctx.closePath();
-          ctx.fill();
-        }
+      for (const s of padsOf(env.world, w)) {
+        ctx.globalAlpha = 0.8;
+        ctx.fillStyle = s.dark ? padLit : padCol;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+        // The notch: a thin wedge of open water cut toward the deep.
+        ctx.fillStyle = coreCol;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y);
+        ctx.lineTo(s.x + Math.cos(s.notch - 0.3) * s.r * 1.1, s.y + Math.sin(s.notch - 0.3) * s.r * 1.1);
+        ctx.lineTo(s.x + Math.cos(s.notch + 0.3) * s.r * 1.1, s.y + Math.sin(s.notch + 0.3) * s.r * 1.1);
+        ctx.closePath();
+        ctx.fill();
       }
     }
   }
@@ -345,54 +518,26 @@ const liquid: GroupPainter = (env, group, def) => {
     ctx.fill();
   }
   if (p.melt) {
-    // MOLTEN READ: per-well hot hearts glow up through the body, then dark
-    // crust plates ride the surface with melt seams burning at their edges.
-    // Everything clips to the merged silhouette, so the crust spans the
-    // whole flow like pack ice — one body of fire, never per-circle rings.
+    // MOLTEN PULSE: the hearts' baked base glow (chunk statics) breathes up
+    // and down here — a soft-edged radial blit per disc whose alpha rides
+    // the old pulse band (0.35 base + 0..0.3 live = 0.35..0.65). The crust
+    // plates and seams are baked; only the fire moves.
     const hot = resolveColor(p.melt.hot, theme);
-    const crust = resolveColor(p.melt.crust, theme);
-    ctx.save();
-    blobPath(ctx, group);
-    ctx.clip();
+    const heart = alphaDiscSprite(hot, [[0, 1], [1, 0]], 'meltH');
+    for (const d of group) {
+      const a = 0.15 + 0.15 * Math.sin(time * 1.3 + d.pos.x * 0.02);
+      if (a <= 0.01) continue;
+      ctx.globalAlpha = a;
+      const r = d.radius * 0.95;
+      ctx.drawImage(heart, d.pos.x - r, d.pos.y - r, r * 2, r * 2);
+    }
     ctx.globalAlpha = 1;
-    for (const d of group) {
-      const g = ctx.createRadialGradient(d.pos.x, d.pos.y, 0, d.pos.x, d.pos.y, d.radius * 0.95);
-      g.addColorStop(0, withAlpha(hot, 0.5 + 0.15 * Math.sin(time * 1.3 + d.pos.x * 0.02)));
-      g.addColorStop(1, withAlpha(hot, 0));
-      ctx.fillStyle = g;
-      ctx.fillRect(d.pos.x - d.radius, d.pos.y - d.radius, d.radius * 2, d.radius * 2);
-    }
-    for (const d of group) {
-      const seed = ((d.pos.x * 7 + d.pos.y * 13) | 0) >>> 0;
-      for (let i = 0; i < 3 + (seed % 3); i++) {
-        const a = hash01(i, seed) * Math.PI * 2;
-        const dd = Math.sqrt(hash01(i, seed + 7)) * d.radius * 0.7;
-        const cx = d.pos.x + Math.cos(a) * dd, cy = d.pos.y + Math.sin(a) * dd;
-        const pr = d.radius * (0.2 + hash01(i, seed + 11) * 0.22);
-        ctx.fillStyle = withAlpha(crust, 0.85);
-        ctx.beginPath();
-        for (let k = 0; k <= 7; k++) {
-          const ka = (k / 7) * Math.PI * 2;
-          const kr = pr * (0.78 + 0.22 * Math.abs(Math.sin(ka * 2.5 + i + seed)));
-          const px = cx + Math.cos(ka) * kr, py = cy + Math.sin(ka) * kr;
-          if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = withAlpha(hot, 0.35 + 0.25 * Math.sin(time * 1.7 + i + seed * 0.1));
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
   }
   if (p.embers) {
     // EMBER BED: a cooling coal field — dense little glints, each on its
-    // own clock, brightest toward each well's heart.
+    // own clock, brightest toward each well's heart. Glints sit within
+    // their own disc by construction, so no merged-group clip is needed.
     const col = resolveColor(p.embers.color, theme);
-    ctx.save();
-    blobPath(ctx, group);
-    ctx.clip();
     for (const d of group) {
       const seed = ((d.pos.x * 11 + d.pos.y * 3) | 0) >>> 0;
       const n = Math.max(6, Math.round(d.radius * (p.embers.density ?? 0.3)));
@@ -409,7 +554,6 @@ const liquid: GroupPainter = (env, group, def) => {
       }
     }
     ctx.globalAlpha = 1;
-    ctx.restore();
   }
   if (p.sheen) {
     // Deep-water sheen: two bright arcs drifting across each pool.
@@ -452,20 +596,18 @@ const liquid: GroupPainter = (env, group, def) => {
     ctx.restore();
   }
   if (p.crawl) {
-    // Molten crawl: glow blobs orbiting slowly beneath the crust.
+    // Molten crawl: glow blobs orbiting slowly beneath the crust — a baked
+    // radial falloff blitted twice per disc (orbit ≤ 0.82r keeps it inside).
     const col = resolveColor(p.crawl.color, theme);
+    const spr = alphaDiscSprite(col, [[0, 0.4], [1, 0]], 'crawl');
+    ctx.globalAlpha = 1;
     for (const d of group) {
       for (let k = 0; k < 2; k++) {
         const a = time * (0.22 + k * 0.13) * (k % 2 ? -1 : 1) + d.pos.x * 0.02 + k * 2.6;
         const ox = d.pos.x + Math.cos(a) * d.radius * 0.42;
         const oy = d.pos.y + Math.sin(a) * d.radius * 0.42;
         const rr = d.radius * 0.4;
-        const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, rr);
-        g.addColorStop(0, withAlpha(col, 0.4));
-        g.addColorStop(1, withAlpha(col, 0));
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = g;
-        ctx.fillRect(ox - rr, oy - rr, rr * 2, rr * 2);
+        ctx.drawImage(spr, ox - rr, oy - rr, rr * 2, rr * 2);
       }
     }
   }
@@ -580,39 +722,27 @@ const liquid: GroupPainter = (env, group, def) => {
     }
   }
   if (p.tufts) {
-    // RICH TUFTS: clumps of 5 curved blades, two-tone, gently SWAYING —
-    // grass that reads alive instead of scratched-on.
+    // RICH TUFTS: clumps of curved blades, two-tone, gently SWAYING. Each
+    // tuft is a baked variant sprite (see tuftSprite) and the sway rides a
+    // whole-sprite shear — one blit per tuft instead of 25 stroked curves
+    // per tuft per frame, which is what dragged the Fields' hedgerows down.
     const base = resolveColor(p.tufts.color, theme);
     const lit = shade(base, 0.22);
     const flower = p.tufts.flower ? resolveColor(p.tufts.flower, theme) : null;
-    ctx.lineCap = 'round';
+    ctx.globalAlpha = 1;
     for (const g of group) {
       const seed = ((g.pos.x * 13 + g.pos.y * 5) | 0) >>> 0;
-      const clumps = 5;
-      for (let i = 0; i < clumps; i++) {
-        const a = (i / clumps) * Math.PI * 2 + hash01(i, seed);
-        const cx = g.pos.x + Math.cos(a) * g.radius * (0.3 + hash01(i, seed + 3) * 0.35);
-        const cy = g.pos.y + Math.sin(a) * g.radius * (0.3 + hash01(i, seed + 5) * 0.35);
-        const sway = Math.sin(time * 1.7 + cx * 0.05) * 1.6;
-        for (let b = 0; b < 5; b++) {
-          const off = (b - 2) * 1.7;
-          const h = 5 + hash01(b, seed + i) * 4;
-          ctx.globalAlpha = 0.6;
-          ctx.strokeStyle = b % 2 ? base : lit;
-          ctx.lineWidth = 1.3;
-          ctx.beginPath();
-          ctx.moveTo(cx + off, cy + 3);
-          ctx.quadraticCurveTo(cx + off + sway * 0.4, cy - h * 0.5, cx + off + sway + (b - 2) * 0.8, cy - h);
-          ctx.stroke();
-        }
-        if (flower && hash01(i, seed + 11) > 0.72) {
-          ctx.globalAlpha = 0.85;
-          ctx.fillStyle = flower;
-          ctx.beginPath();
-          ctx.arc(cx + sway, cy - 7, 1.6, 0, Math.PI * 2);
-          ctx.fill();
-        }
-      }
+      const rq = Math.max(6, Math.round(g.radius / 4) * 4); // radius bucket
+      const spr = tuftSprite(base, lit, flower, seed % DISC_VARIANTS, rq);
+      const sway = Math.sin(time * 1.7 + g.pos.x * 0.05) * 1.6;
+      const half = spr.width / 2;
+      // Mirroring (not rotating — blades must stay upright) breaks repeats.
+      const flip = hash01(seed, 3) > 0.5 ? -1 : 1;
+      ctx.save();
+      ctx.translate(g.pos.x, g.pos.y);
+      ctx.transform(flip, 0, -sway / 12, 1, 0, 0);      // the lean (blade-tip px → shear)
+      ctx.drawImage(spr, -half, -half);
+      ctx.restore();
     }
   }
   ctx.globalAlpha = 1;
@@ -3601,15 +3731,12 @@ const shimmer: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
   const { ctx, time } = env;
   const col = resolveColor(p.color, env.theme, '#ffe8c0');
+  // The hot lens: a soft warm wash that marks the field's true extent —
+  // constant falloff, so it bakes once and blits per disc.
+  const lens = alphaDiscSprite(col, [[0, 0.11], [0.2, 0.11], [1, 0]], 'lens');
   for (const d of group) {
-    // The hot lens: a soft warm wash that marks the field's true extent.
-    const g = ctx.createRadialGradient(d.pos.x, d.pos.y, d.radius * 0.2, d.pos.x, d.pos.y, d.radius);
-    g.addColorStop(0, withAlpha(col, 0.11));
-    g.addColorStop(1, withAlpha(col, 0));
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(d.pos.x, d.pos.y, d.radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.drawImage(lens, d.pos.x - d.radius, d.pos.y - d.radius, d.radius * 2, d.radius * 2);
     // Rising heat-lines: short serpentine strokes drifting upward, wrapping.
     const seed = ((d.pos.x * 7 + d.pos.y * 13) | 0) >>> 0;
     const n = Math.max(3, Math.round(d.radius / 22));

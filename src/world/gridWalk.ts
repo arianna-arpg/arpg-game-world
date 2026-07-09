@@ -37,13 +37,35 @@ export class GridWalkField implements WalkField {
   /** Bumped on every region repaint (door breaks, terraforms) — cache-keying
    *  seam for anything that bakes the grid (the renderer's ground chunks). */
   version = 0;
+  /** The WORLD-SPACE rects of recent repaints, each stamped with the version
+   *  it produced — so a baker invalidates ONLY the chunks a repaint actually
+   *  touched instead of rebaking every visible chunk the same frame (a
+   *  growing fissure used to trigger exactly that stutter). A bounded ring:
+   *  when it overflows, `dirtyFloodV` rises and anything baked at or before
+   *  that version counts as stale (correct, just less precise). */
+  readonly dirty: { x0: number; y0: number; x1: number; y1: number; v: number }[] = [];
+  dirtyFloodV = 0;
+  private static readonly DIRTY_MAX = 64;
+
+  private pushDirty(x0: number, y0: number, x1: number, y1: number): void {
+    this.version++;
+    this.dirty.push({ x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), v: this.version });
+    if (this.dirty.length > GridWalkField.DIRTY_MAX) {
+      const dropped = this.dirty.shift()!;
+      this.dirtyFloodV = Math.max(this.dirtyFloodV, dropped.v);
+    }
+  }
   /** Connected-component label per cell (-1 = blocked / unlabeled). Lazy. */
   private region: Int32Array | null = null;
   /** LRU of BFS distance-fields keyed by target cell — so the common mix of the
    *  player cell + a few brain targets (caster strafe / assassin / commander) all
-   *  stay warm in a frame instead of evicting each other (single-slot thrash). */
+   *  stay warm in a frame instead of evicting each other (single-slot thrash).
+   *  Sized for a FIELD's worth of wanderers: a big herd pathing to distinct
+   *  targets under an 8-slot cache recomputed a full-grid BFS nearly every
+   *  pathStep (~1.4ms × dozens of actors × every frame — the "Fields
+   *  sometimes stutter" report). ~130KB per field on the largest grids. */
   private distCache = new Map<number, Int32Array>();
-  private static readonly DIST_CACHE_MAX = 8;
+  private static readonly DIST_CACHE_MAX = 32;
 
   constructor(w: number, h: number, cell = DEFAULT_CELL) {
     this.cell = cell;
@@ -83,7 +105,8 @@ export class GridWalkField implements WalkField {
       const i = cy * this.cols + cx;
       this.kind[i] = byte; this.mask[i] = walkable;
     }
-    this.region = null; this.distCache.clear(); this.version++;
+    this.region = null; this.distCache.clear();
+    this.pushDirty(x0, y0, x1, y1);
   }
 
   /** Paint walkable ('ground') or blocked ('wall') — the Phase-2 wrapper over
@@ -105,7 +128,8 @@ export class GridWalkField implements WalkField {
       const i = gy * this.cols + gx;
       this.kind[i] = byte; this.mask[i] = walkable;
     }
-    this.region = null; this.distCache.clear(); this.version++;
+    this.region = null; this.distCache.clear();
+    this.pushDirty(cx - r, cy - r, cx + r, cy + r);
   }
 
   /** Paint a WORLD-space thick line (corridor) walkable, `halfW` to each side. */

@@ -15,10 +15,12 @@
 
 import { clamp } from '../../core/math';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
+import type { Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
+import { liquidBodyIsLive, paintBlendUnderlay, paintLiquidStatics, type DoodadVisualDef } from './painters';
 import { paintStructureFloors } from './floors';
 import { VIS_CFG } from './visConfig';
 
@@ -28,19 +30,35 @@ function strSeed(s: string): number {
   return (h >>> 0) % 100000;
 }
 
+/** One kind's full group + reach, gathered once per zone, for everything
+ *  that is STATIC per zone and so bakes with the floor: terrain-meld blend
+ *  beds and liquid bodies (rim/core/inner union fills). */
+interface StaticGroup {
+  def: DoodadVisualDef; list: Doodad[]; pad: number;
+  blend: boolean; body: boolean;
+}
+
 export class GroundRenderer {
-  private chunks = new Map<string, HTMLCanvasElement>();
+  private chunks = new Map<string, { img: HTMLCanvasElement; v: number }>();
   private zoneRef: unknown = null;
   private seed = 0;
+  private staticGroups: StaticGroup[] = [];
+  private staticCount = -1;
 
-  /** Blit the visible floor. The caller owns any arena clip (rect/ellipse). */
+  /** Blit the visible floor. The caller owns any arena clip (rect/ellipse).
+   *  Chunks carry the walk-grid version they baked at; a repaint re-bakes
+   *  ONLY the chunks its dirty rect touched, spread over frames by a budget
+   *  (a stale chunk keeps drawing its old self until its turn) — so a door
+   *  break or a crawling fissure never rebakes a whole screen in one frame. */
   draw(ctx: CanvasRenderingContext2D, world: World,
     camX: number, camY: number, vw: number, vh: number): void {
     if (this.zoneRef !== world.zone) {
       this.chunks.clear();
       this.zoneRef = world.zone;
       this.seed = strSeed(`${world.zone.id}|${world.zone.name}`);
+      this.staticCount = -1; // re-gather the static groups for the new zone
     }
+    if (VIS_CFG.ground.bakeBlend || VIS_CFG.ground.bakeLiquidBody) this.syncStaticGroups(world);
     const C = VIS_CFG.ground.chunk;
     const wf = world.walk instanceof GridWalkField ? world.walk : null;
     const ver = wf ? wf.version : 0;
@@ -51,26 +69,109 @@ export class GroundRenderer {
       x1 = Math.min(Math.floor(Math.max(0, world.arena.w - 1) / C), x1);
       y1 = Math.min(Math.floor(Math.max(0, world.arena.h - 1) / C), y1);
     }
+    let rebakes = 0;
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
-        const key = `${cx},${cy},${ver}`;
-        let img = this.chunks.get(key);
-        if (img) {
+        const key = `${cx},${cy}`;
+        let entry = this.chunks.get(key);
+        if (entry) {
           // LRU touch.
           this.chunks.delete(key);
-          this.chunks.set(key, img);
+          this.chunks.set(key, entry);
+          if (entry.v < ver && wf) {
+            if (!this.chunkStale(wf, entry.v, cx * C, cy * C, C)) {
+              entry.v = ver; // untouched by any repaint — just adopt the version
+            } else if (rebakes < VIS_CFG.ground.rebakesPerFrame) {
+              entry.img = this.bake(world, wf, cx, cy);
+              entry.v = ver;
+              rebakes++;
+            } // else: budget spent — keep drawing the old bake, retry next frame
+          }
         } else {
-          img = this.bake(world, wf, cx, cy);
-          this.chunks.set(key, img);
+          entry = { img: this.bake(world, wf, cx, cy), v: ver };
+          this.chunks.set(key, entry);
           while (this.chunks.size > VIS_CFG.ground.maxChunks) {
             const oldest = this.chunks.keys().next().value;
             if (oldest === undefined) break;
             this.chunks.delete(oldest);
           }
         }
-        ctx.drawImage(img, cx * C, cy * C);
+        ctx.drawImage(entry.img, cx * C, cy * C);
       }
     }
+    // PREFETCH: bake at most one not-yet-baked chunk in the ring just
+    // outside the viewport, so walking streams floor in ahead of arrival
+    // instead of hitching the frame a new column first appears on.
+    if (rebakes === 0) {
+      let bx0 = x0 - 1, bx1 = x1 + 1, by0 = y0 - 1, by1 = y1 + 1;
+      if (!world.arena.boundless) {
+        bx0 = Math.max(0, bx0); by0 = Math.max(0, by0);
+        bx1 = Math.min(Math.floor(Math.max(0, world.arena.w - 1) / C), bx1);
+        by1 = Math.min(Math.floor(Math.max(0, world.arena.h - 1) / C), by1);
+      }
+      outer: for (let cy = by0; cy <= by1; cy++) {
+        for (let cx = bx0; cx <= bx1; cx++) {
+          if (cy >= y0 && cy <= y1 && cx >= x0 && cx <= x1) continue; // visible: handled above
+          const key = `${cx},${cy}`;
+          if (this.chunks.get(key)) continue;
+          this.chunks.set(key, { img: this.bake(world, wf, cx, cy), v: ver });
+          while (this.chunks.size > VIS_CFG.ground.maxChunks) {
+            const oldest = this.chunks.keys().next().value;
+            if (oldest === undefined) break;
+            this.chunks.delete(oldest);
+          }
+          break outer;
+        }
+      }
+    }
+  }
+
+  /** Did any repaint since `bakedV` touch this chunk's rect? Falls back to
+   *  stale when the dirty ring has already dropped rects that new. */
+  private chunkStale(wf: GridWalkField, bakedV: number, ox: number, oy: number, C: number): boolean {
+    if (bakedV <= wf.dirtyFloodV) return true;
+    for (const r of wf.dirty) {
+      if (r.v <= bakedV) continue;
+      if (r.x1 < ox || r.x0 > ox + C || r.y1 < oy || r.y0 > oy + C) continue;
+      return true;
+    }
+    return false;
+  }
+
+  /** Gather (or re-gather when the doodad list changed) every kind whose
+   *  blend bed and/or liquid body bakes with the floor. Bake-time consumers
+   *  only — never per frame. */
+  private syncStaticGroups(world: World): void {
+    if (this.staticCount === world.doodads.length) return;
+    this.staticCount = world.doodads.length;
+    this.chunks.clear(); // doodad set changed → any baked beds/bodies are stale
+    const byKind = new Map<string, Doodad[]>();
+    for (const d of world.doodads) {
+      const def = DOODAD_VISUALS[d.kind];
+      if (!def) continue;
+      const blend = VIS_CFG.ground.bakeBlend && def.blend && !def.blend.live;
+      const body = def.painter === 'liquid' && !liquidBodyIsLive(def);
+      if (!blend && !body) continue;
+      const arr = byKind.get(d.kind);
+      if (arr) arr.push(d); else byKind.set(d.kind, [d]);
+    }
+    this.staticGroups = [];
+    for (const [kind, list] of byKind) {
+      const def = DOODAD_VISUALS[kind]!;
+      let maxR = 0;
+      for (const d of list) maxR = Math.max(maxR, d.radius);
+      const blend = !!(VIS_CFG.ground.bakeBlend && def.blend && !def.blend.live);
+      // pathBand strokes whole segments: a neighbour up to (rA+rB)·1.35 away
+      // can reach into this chunk, so pad by the worst span, not just feather.
+      // Blob pad 1.4·maxR covers melt crust plates spilling into the union.
+      const pad = (blend ? def.blend!.feather : 0)
+        + maxR * (def.blend?.mode === 'path' ? 3.7 : 1.4) + 8; // +8: rim/core grow
+      this.staticGroups.push({
+        def, list, pad, blend,
+        body: def.painter === 'liquid' && !liquidBodyIsLive(def),
+      });
+    }
+    this.staticGroups.sort((a, b) => (a.def.order ?? 50) - (b.def.order ?? 50));
   }
 
   private bake(world: World, wf: GridWalkField | null, cx: number, cy: number): HTMLCanvasElement {
@@ -219,6 +320,38 @@ export class GroundRenderer {
       }
     }
     ctx.globalAlpha = 1;
+
+    // --- STATIC DOODAD LAYERS: blend beds + liquid bodies ------------------
+    // The soft rings that mesh ground kinds into the land (DoodadVisualDef
+    // .blend) and the rim/core/inner union fills of liquid pools are both
+    // static per zone — they bake with the floor instead of re-rasterizing
+    // merged group silhouettes several times per frame (kinds opt back into
+    // the live passes via blend.live / params.liveBody). Painted in
+    // ascending kind order, exactly as the live pass layered them.
+    if (this.staticGroups.length) {
+      ctx.save();
+      ctx.translate(-ox, -oy);
+      const env = { ctx, theme, time: 0, world };
+      for (const g of this.staticGroups) {
+        // ONLY the discs whose reach touches this chunk: pixels inside the
+        // chunk are identical either way, and a spiral's 3,000-disc lava
+        // pour must never be path-built (or clipped against) per chunk —
+        // that read as a multi-second bake spike on zone load. 'path' blend
+        // groups are the exception: pathBand needs the CHAIN intact (a
+        // filtered gap fakes a chain break), and roads stay small.
+        const wholeChain = g.blend && g.def.blend!.mode === 'path';
+        const sub: Doodad[] = [];
+        for (const d of g.list) {
+          if (d.pos.x + d.radius + g.pad < ox || d.pos.x - d.radius - g.pad > ox + C
+            || d.pos.y + d.radius + g.pad < oy || d.pos.y - d.radius - g.pad > oy + C) continue;
+          sub.push(d);
+        }
+        if (!sub.length) continue;
+        if (g.blend) paintBlendUnderlay(env, wholeChain ? g.list : sub, g.def);
+        if (g.body) paintLiquidStatics(env, sub, g.def);
+      }
+      ctx.restore();
+    }
 
     // --- STRUCTURE FLOORS: boards/cobble/flagstone under buildings --------
     // (vis/floors.ts) — townsfolk don't live in the mud. Painted over the

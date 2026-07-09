@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
-import { DiscIndex } from './spatial';
+import { DiscIndex, SPATIAL_CFG } from './spatial';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, type BrainPhase, type CastingState, type Team } from './actor';
@@ -19607,21 +19607,32 @@ export class World {
   lineOfSight(from: Vec2, to: Vec2): boolean {
     const dx = to.x - from.x, dy = to.y - from.y;
     const lenSq = dx * dx + dy * dy;
-    for (const o of this.doodads) {
-      if (!blocksSightOf(o)) continue;
-      // Closest point on the segment to the circle center.
-      let t = lenSq > 0 ? ((o.pos.x - from.x) * dx + (o.pos.y - from.y) * dy) / lenSq : 0;
-      t = clamp(t, 0, 1);
-      const cx = from.x + dx * t - o.pos.x;
-      const cy = from.y + dy * t - o.pos.y;
-      if (cx * cx + cy * cy < o.radius * o.radius) return false;
+    const len = Math.sqrt(lenSq);
+    // Doodad occluders via the spatial index: sample the segment at pad-wide
+    // steps — coverage insertion guarantees every disc that could touch the
+    // segment appears in at least one sampled bucket, so this answers EXACTLY
+    // what the old full-list scan answered (re-testing a disc twice is
+    // harmless for a boolean ANY). The full scan was O(actors × doodads) per
+    // frame through the AI's vision checks — real money in a liquid-poured
+    // zone whose lava carpet is thousands of (sight-transparent) discs.
+    const steps = Math.ceil(len / SPATIAL_CFG.queryPad);
+    for (let i = 0; i <= steps; i++) {
+      const ts = steps > 0 ? i / steps : 0;
+      for (const o of this.doodadsAt(from.x + dx * ts, from.y + dy * ts)) {
+        if (!blocksSightOf(o)) continue;
+        // Closest point on the segment to the circle center.
+        let t = lenSq > 0 ? ((o.pos.x - from.x) * dx + (o.pos.y - from.y) * dy) / lenSq : 0;
+        t = clamp(t, 0, 1);
+        const cx = from.x + dx * t - o.pos.x;
+        const cy = from.y + dy * t - o.pos.y;
+        if (cx * cx + cy * cy < o.radius * o.radius) return false;
+      }
     }
     // Grid regions: ray-march at half-cell steps over the blocksSight rows.
     // (The default is FALSE — a region is a chasm-like unless its RegionKind
     // opts in: rampart masonry plus the TRUE WALLS — wall/flesh_wall/
     // fungal_wall — block sight; ledges/water/tallgrass stay transparent.)
     if (this.walk instanceof GridWalkField) {
-      const len = Math.sqrt(lenSq);
       if (len > 0) {
         const step = (this.walk.cellSize ?? 30) / 2;
         for (let s = step; s < len; s += step) {
@@ -19783,6 +19794,9 @@ export class World {
     return this.underRoofAt(a.pos);
   }
 
+  /** Scratch for updateTerrainEffects' per-actor drained-resource set. */
+  private terrainDrainScratch = new Set<string>();
+
   private updateTerrainEffects(dt: number): void {
     this.terrainTick++;
     // UNSTUCK SENTINEL (amortized: each actor probed ~every 16 frames). An
@@ -19802,9 +19816,10 @@ export class World {
     }
     const hasGrid = !!this.walk;
     if (this.grounds.length === 0 && !hasGrid) return;
+    const drained = this.terrainDrainScratch; // reused: was a fresh Set per actor per frame
     for (const a of this.actors) {
       if (a.dead || a.construct || a.leap) { a.groundKind = undefined; a.gridRegion = undefined; continue; }
-      const drained = new Set<string>();
+      drained.clear();
       // DOODAD-sourced region (the migrated grounds: mud/water/bog/…).
       const ground = this.groundAt(a.pos);
       const prevG = a.groundKind;

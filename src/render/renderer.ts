@@ -968,9 +968,12 @@ export class Renderer {
     }
     const ell = world.arena.shape === 'ellipse';
     ctx.save();
+    // Clip RECT only: a persistent curved clip forces every chunk blit and
+    // cell fill under it onto a slow raster path (isles are always ellipses
+    // and paid for it every frame). Elliptical zones draw unclipped and mask
+    // the outside ONCE at the end of the pass instead.
     ctx.beginPath();
-    if (ell) ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
-    else ctx.rect(0, 0, w, h);
+    ctx.rect(0, 0, w, h);
     ctx.clip();
     // The floor itself: baked noise-mottled chunks (vis/ground.ts) — texture,
     // speckle, wall bevels and contact AO all land in one drawImage per chunk.
@@ -1005,6 +1008,15 @@ export class Renderer {
         ctx.fillStyle = g;
         ctx.fillRect(rx, ry, rw, rh);
       }
+    }
+    // ELLIPSE zones: mask everything outside the oval back to the void
+    // color — one even-odd fill instead of a whole-pass curved clip.
+    if (ell) {
+      ctx.fillStyle = '#0a0a0e';
+      ctx.beginPath();
+      ctx.rect(-8, -8, w + 16, h + 16);
+      ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
+      ctx.fill('evenodd');
     }
     ctx.restore();
     ctx.strokeStyle = theme.border;
@@ -1249,8 +1261,12 @@ export class Renderer {
             sun.dir, sun.len, sun.alpha);
         }
       }
-      // Ground kinds bed into the terrain before their own detail pass.
-      if (g.def.blend) paintBlendUnderlay(env, g.list, g.def);
+      // Ground kinds bed into the terrain before their own detail pass —
+      // normally baked into the floor chunks (static); `blend.live` kinds
+      // (or a bakeBlend=false fallback) still paint here every frame.
+      if (g.def.blend && (g.def.blend.live || !VIS_CFG.ground.bakeBlend)) {
+        paintBlendUnderlay(env, g.list, g.def);
+      }
       if (g.def.shadow) paintGroupShadows(env, g.list, g.def.shadow);
       (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, g.list, g.def);
     }

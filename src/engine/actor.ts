@@ -1388,46 +1388,99 @@ export class Actor {
     return false;
   }
 
+  /** Change detectors for refreshConditions' no-change fast path: the last
+   *  condition BITMASK and gauge CHECKSUM pushed into the sheet (plus which
+   *  sheet they were pushed into — a rebuilt sheet must be re-primed).
+   *  This runs per actor per frame; the old form allocated two arrays and a
+   *  string per gauge every frame just to let the sheet discover that
+   *  nothing changed. */
+  private condMask = -1;
+  private gaugeHashA = -1;
+  private gaugeHashB = -1;
+  private condSheet: StatSheet | null = null;
+
   /** Recompute the actor-state conditions conditional modifiers test. */
   private refreshConditions(): void {
     const maxLife = this.maxLife();
     const maxMana = this.maxMana();
     const maxEs = this.maxEs();
-    const active: ConditionId[] = [];
-    if (this.life < maxLife * 0.35) active.push('lowLife');
-    if (this.life >= maxLife * 0.95) active.push('fullLife');
-    if (maxMana > 0 && this.mana < maxMana * 0.25) active.push('lowMana');
-    if (maxMana > 0 && this.mana >= maxMana * 0.95) active.push('fullMana');
-    if (this.es > 0.5) active.push('hasEs');
-    if (maxEs > 0 && this.es >= maxEs * 0.99) active.push('fullEs');
-    if (maxEs > 0 && this.es < maxEs * 0.35) active.push('lowEs');
-    if (this.casting?.mode === 'guard') active.push('guarding');
+    let mask = 0;
+    if (this.life < maxLife * 0.35) mask |= 1;                         // lowLife
+    if (this.life >= maxLife * 0.95) mask |= 2;                        // fullLife
+    if (maxMana > 0 && this.mana < maxMana * 0.25) mask |= 4;          // lowMana
+    if (maxMana > 0 && this.mana >= maxMana * 0.95) mask |= 8;         // fullMana
+    if (this.es > 0.5) mask |= 16;                                     // hasEs
+    if (maxEs > 0 && this.es >= maxEs * 0.99) mask |= 32;              // fullEs
+    if (maxEs > 0 && this.es < maxEs * 0.35) mask |= 64;               // lowEs
+    if (this.casting?.mode === 'guard') mask |= 128;                   // guarding
     // The break-bar stands: "while poised" mods hold (lapse on the break).
-    if (this.poise > 0.5 && !this.poiseBroken) active.push('poised');
+    if (this.poise > 0.5 && !this.poiseBroken) mask |= 256;            // poised
     // ...and its inverse: the broken-and-recovering window is a stance of
     // its own (the berserker's "while your poise is broken" hook).
-    if (this.poiseBroken) active.push('poiseBroken');
+    if (this.poiseBroken) mask |= 512;                                 // poiseBroken
     // The ES recharge is FLOWING — "while recharging" mods ride the stream.
-    if (this.esRecharging) active.push('esRecharging');
+    if (this.esRecharging) mask |= 1024;                               // esRecharging
     // Planted vs on the move (Colossus Stance): idleFor accrues in
     // updateTimers and is zeroed by every deliberate step. Between the two
     // windows sits a NEUTRAL transition band — neither bonus nor malus.
-    if (this.idleFor > STANCE_PLANT_TIME) active.push('stationary');
-    else if (this.idleFor < STANCE_MOVE_WINDOW) active.push('moving');
-    this.sheet.setConditions(active);
+    if (this.idleFor > STANCE_PLANT_TIME) mask |= 2048;                // stationary
+    else if (this.idleFor < STANCE_MOVE_WINDOW) mask |= 4096;          // moving
+    const sheetChanged = this.condSheet !== this.sheet;
+    if (mask !== this.condMask || sheetChanged) {
+      this.condMask = mask;
+      const active: ConditionId[] = [];
+      if (mask & 1) active.push('lowLife');
+      if (mask & 2) active.push('fullLife');
+      if (mask & 4) active.push('lowMana');
+      if (mask & 8) active.push('fullMana');
+      if (mask & 16) active.push('hasEs');
+      if (mask & 32) active.push('fullEs');
+      if (mask & 64) active.push('lowEs');
+      if (mask & 128) active.push('guarding');
+      if (mask & 256) active.push('poised');
+      if (mask & 512) active.push('poiseBroken');
+      if (mask & 1024) active.push('esRecharging');
+      if (mask & 2048) active.push('stationary');
+      if (mask & 4096) active.push('moving');
+      this.sheet.setConditions(active);
+    }
 
     // LIVE GAUGES for gauge-scaled modifiers ("2% increased damage per
     // poison stack on you"): own status stacks + banked charges. Integer,
     // event-driven quantities ONLY — per-frame floats would churn the stat
-    // cache every tick (the gauge golden rule).
-    const gauges: [string, number][] = [];
+    // cache every tick (the gauge golden rule). Two mixed 32-bit checksum
+    // lanes detect change without building the entries (collision odds are
+    // lottery-grade; a collision would only defer a conditional-mod refresh
+    // to the next gauge change).
+    let ha = 0x9e3779b9 | 0, hb = 0x85ebca6b | 0;
+    const mixStr = (s: string): void => {
+      for (let i = 0; i < s.length; i++) {
+        ha = Math.imul(ha ^ s.charCodeAt(i), 0x01000193);
+        hb = (Math.imul(hb, 31) + s.charCodeAt(i)) | 0;
+      }
+    };
     for (const s of this.statuses) {
-      if (s.stacks > 0) gauges.push(['status:' + s.id, s.stacks]);
+      if (s.stacks <= 0) continue;
+      mixStr(s.id);
+      ha = Math.imul(ha ^ s.stacks, 0x01000193); hb = (Math.imul(hb, 31) + s.stacks) | 0;
     }
     for (const [id, n] of this.charges) {
-      if (n > 0) gauges.push(['charge:' + id, n]);
+      if (n <= 0) continue;
+      mixStr(id);
+      ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
     }
-    this.sheet.setGauges(gauges);
+    if (ha !== this.gaugeHashA || hb !== this.gaugeHashB || sheetChanged) {
+      this.gaugeHashA = ha; this.gaugeHashB = hb;
+      const gauges: [string, number][] = [];
+      for (const s of this.statuses) {
+        if (s.stacks > 0) gauges.push(['status:' + s.id, s.stacks]);
+      }
+      for (const [id, n] of this.charges) {
+        if (n > 0) gauges.push(['charge:' + id, n]);
+      }
+      this.sheet.setGauges(gauges);
+    }
+    if (sheetChanged) this.condSheet = this.sheet;
   }
 
   /** Tick durations; returns the frame's DoT damage to inflict, BY DAMAGE
