@@ -60,6 +60,7 @@ export type MoveStyleId =
   | 'hoverAllies' // hang behind the warband's centroid (commander)
   | 'prowl'       // wide waiting circle around the prey (pack)
   | 'hold'        // stand ground (turrets, ritualists that CAN move but won't)
+  | 'turtle'      // stand ground and face AWAY — present the shell (rear guards)
   | 'retreat'     // run directly away from the target (morale breaks)
   | 'skitter'     // darting bursts with dead-stop pauses (sand-leaper scuttle)
   | 'charge'      // stalk in, then a LOCKED headlong sprint (goring beasts)
@@ -361,6 +362,11 @@ export type AIAction =
    *  marks them (ward gates + goto tagCleared read it); `lifespan` for
    *  waves that expire. */
   | { do: 'summon'; monster: string; count?: number; ring?: number; at?: 'self' | 'anchor'; tag?: string; lifespan?: number; rarity?: MonsterRarity; announce?: string }
+  /** BURROW: if standing on a doodad of `kinds`, submerge and travel
+   *  underground to the qualifying patch nearest the target, then ERUPT
+   *  (telegraphed emergence AoE = maxLife × damageFrac). The counterplay
+   *  is the GROUND: stay off its kinds and the worm can't reach you. */
+  | { do: 'burrow'; kinds: string[]; range?: number; damageFrac?: number; emergeRadius?: number; announce?: string }
   | { do: 'teleport'; to: 'awayFromTarget' | 'behindTarget' | 'anchor' | 'nearTarget'; range?: number }
   /** Become UNTARGETABLE until no live actor carries `tag` — the add-gate
    *  (P4 Unmade, every "kill the adds" ward). Announce fires on shatter. */

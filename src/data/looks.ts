@@ -2029,6 +2029,64 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', x: -0.35, params: { n: 5 } }],
   },
+  // --- THE COMPOSABLE ROUND (shells, wyrms, snares) -------------------------
+  /** The molting behemoth: a mountain of plated chitin, always mid-molt. */
+  molting_behemoth: {
+    parts: [
+      { kind: 'shell', scale: 1.05, role: 'bone' },
+      { kind: 'armorPlates', scale: 0.9 },
+      { kind: 'scutes', scale: 0.85 },
+      { kind: 'mandibles', scale: 0.9 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+    ],
+  },
+  /** The bulwark scuttler: a shield grown down the BACK — read the shell. */
+  bulwark_scuttler: {
+    parts: [
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'shell', x: -0.28, scale: 0.85, role: 'metal' },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'mandibles', scale: 0.65 },
+      { kind: 'eyes', color: '#d8e8a0', params: { spread: 0.4, dist: 0.6, size: 0.08 } },
+    ],
+  },
+  /** The sand wyrm: a ringed head of plates and jaws (the file follows). */
+  sand_wyrm: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.14, seed: 179 } },
+      { kind: 'segmentRings', params: { n: 4 } },
+      { kind: 'mawRing', scale: 0.7 },
+      { kind: 'mandibles', scale: 0.9 },
+    ],
+  },
+  /** The mire burrower: the wet cousin — slicker, softer, fewer teeth. */
+  mire_burrower: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.2, seed: 181 } },
+      { kind: 'segmentRings', params: { n: 4 } },
+      { kind: 'maw', x: 0.4, scale: 0.45, params: { arc: 0.5 } },
+      { kind: 'eyes', color: '#c8c890', params: { spread: 0.4, dist: 0.6, size: 0.07 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#5a4e38', params: { n: 3 } }],
+  },
+  /** The gnoll trapper: the pack's quiet one — bow, satchel, iron jaws. */
+  gnoll_trapper: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'ears', scale: 0.9 },
+      { kind: 'bow' },
+      { kind: 'pack', x: -0.3, scale: 0.8 },
+      { kind: 'bandolier' },
+    ],
+  },
+  /** The jaw snare: nothing but teeth on a plate, waiting. */
+  jaw_snare: {
+    parts: [
+      { kind: 'disc', scale: 0.65, role: 'metal' },
+      { kind: 'mandibles', scale: 1.25, role: 'metal' },
+    ],
+    shadowScale: 0.5,
+  },
   /** THE OFFERING EFFIGY (Risen Offering's turret body): powdered bone
    *  packed into an idol, wreathed in grave-incense. */
   offering_effigy: {

@@ -1740,6 +1740,7 @@ export const SKILLS: Record<string, SkillDef> = {
     targeting: { target: 'enemy', requiresStatus: 'bleed', consumesStatus: true, castRange: 150 },
     delivery: { type: 'target' },
     effects: [{ type: 'damage' }],
+    ai: { range: 60, weight: 3 },
     requirements: { strength: 14 },
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
@@ -4055,6 +4056,39 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { strength: 12, willpower: 12 },
     ai: { range: 440, weight: 3, keepDistance: 280 },
     leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  rearguard_aegis: {
+    id: 'rearguard_aegis', name: 'Rearguard Aegis',
+    description: 'TOGGLE: wear a guard on your BACK — a directional shell across the half-circle behind you that EATS hits arriving through it (their ailments and knockback with them) until it breaks, then knits itself whole after a quiet breath. Strength scales with Guard Strength. Turn your back only on what you trust it to hold.',
+    tags: ['spell', 'guard', 'buff', 'duration'], color: '#c8b87a',
+    manaCost: 0, cooldown: 1, useTime: 0.4,
+    delivery: {
+      type: 'aura', mode: 'toggle',
+      upkeep: { reserveMana: 18 },
+      aura: { radius: 0 },
+      // The directional energy shield: 180° behind the bearer, pool ×
+      // guardStrength, self-knitting after 3 quiet seconds.
+      shellGuard: { side: 'rear', max: 90, arcDeg: 180, regenDelay: 3, regenRate: 24 },
+    },
+    effects: [],
+    requirements: { fortitude: 14, willpower: 10 },
+    ai: { range: 9999, weight: 1 },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.06)] },
+  },
+
+  snap_shut: {
+    id: 'snap_shut', name: 'Snap Shut', noDrop: true,
+    description: 'The snare closes: iron jaws and a held ankle.',
+    tags: ['attack', 'physical', 'aoe'], color: '#b0a890',
+    manaCost: 0, cooldown: 2.5, useTime: 0.1,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'nova', radius: 48 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'rooted', chance: 0.8, durationOverride: 1.6 },
+    ],
+    ai: { range: 46, weight: 5 },
   },
 
   web_shot: {

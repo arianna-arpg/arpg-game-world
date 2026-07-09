@@ -424,6 +424,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         // The sand's armored vermin.
         { id: 'bronze_scarab', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'sand_wyrm', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'gnoll_trapper', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'bombardier_beetle', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'giant_maggot', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'maggot_queen', weight: 1, presence: { from: 12, fadeIn: 5 } },
@@ -577,6 +579,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'giant_maggot', weight: 2, presence: { to: 18, fadeOut: 8 } },
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'lake_horror', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -745,6 +748,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The Deep washes ashore in the shallows (a lighter presence than the abyss).
         { id: 'deep_thresher', weight: 2 },
         { id: 'deep_angler', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'sand_wyrm', weight: 1, presence: { from: 9, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -906,6 +910,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'giant_maggot', weight: 2, presence: { to: 18, fadeOut: 8 } },
         { id: 'maggot_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'bulwark_scuttler', weight: 1, presence: { from: 9, fadeIn: 4 } },
       ],
     },
     // The dark's own destructible: clutches, not altars.
@@ -1189,6 +1194,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'beastkin_flayer', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'beastkin_ritualist', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'beastlord_khan', weight: 1, presence: { from: 16, fadeIn: 6 } },
+        { id: 'molting_behemoth', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        { id: 'bulwark_scuttler', weight: 1, presence: { from: 9, fadeIn: 4 } },
       ],
     },
     spawnerId: 'rime_stone',
@@ -1235,6 +1242,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The ground itself: pools with appetites, water with arms.
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'lake_horror', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',

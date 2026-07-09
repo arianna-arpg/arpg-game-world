@@ -17,6 +17,11 @@ import type { PackTableEntry } from './zones';
 // generic tiers live in engine/presence.ts PRESENCE_BANDS).
 registerPresenceBand('legion_muster', { from: 26, fadeIn: 8 });
 
+/** The bestiary's default TURN SPEED (rad/s) — fast enough to read as
+ *  natural, no longer instant (smooths the one-frame snap-flips). Defs
+ *  override with `turnSpeed`; low values (2-4) make big bodies LUMBER. */
+export const MONSTER_TURN_DEFAULT = 10;
+
 /** How a monster's death-burst resolves (overhauls the old instant explodeOnDeath).
  *  IMPLODE = coalesce at the death spot → a delayed AoE pop. ORB = coalesce → an
  *  undamageable sphere that loosely HOMES the nearest player for a duration, then arms +
@@ -269,6 +274,44 @@ export interface MonsterDef {
    *  a root, the rock that was never a rock. Selection/objectives count it
    *  normally; only the reveal is deferred. */
   ambush?: { radius: number; announce?: string };
+  /** SHELL GUARD — a directional ABSORB worn as anatomy (the entity's own
+   *  guard, not a skill): hits arriving through the covered arc soak into a
+   *  breakable pool that REGROWS after `regenDelay` quiet seconds. side
+   *  'rear' = back-armor (fight its face), 'front' = a shield wall (flank
+   *  it), 'all' = a full EXOSKELETON (burst it through the break window
+   *  before it knits). Composes with `turnSpeed` (a slow shell is a
+   *  positional puzzle) and the 'turtle' move style (it ROTATES AWAY to
+   *  present the shell). DoTs, ground effects and bursts bypass — shells
+   *  block BLOWS. */
+  shellGuard?: {
+    side: 'rear' | 'front' | 'all';
+    /** Pool the shell soaks before breaking. */
+    max: number;
+    /** Coverage arc in degrees (default 180; ignored for side 'all'). */
+    arcDeg?: number;
+    /** Quiet seconds (no shell hits) before regrowth begins (default 4). */
+    regenDelay?: number;
+    /** Pool regrown per second once knitting (default max/6). */
+    regenRate?: number;
+    color?: string;
+  };
+  /** TURN SPEED (radians/sec) — how fast this body can swing its facing.
+   *  Omitted = the bestiary default (fast enough to read as natural but no
+   *  longer instant). Low values (2-4) make big and shelled bodies LUMBER:
+   *  their facing — and so their shell arc and their aim — lags the fight,
+   *  and circling them becomes real play. Player seats always turn free. */
+  turnSpeed?: number;
+  /** FLIER: true flight — moves on the noclip policy (over rocks, walls,
+   *  chasms, water; zone bounds still hold) and the renderer lifts + bobs
+   *  the body off its grounded shadow so flight reads at a glance. Pair
+   *  with `levitates` so a flier never falls to the void it crosses. */
+  flier?: boolean;
+  /** PACK BOND — the synchronic seam: these mods are worn ONLY while a
+   *  living bond-holder stands within `radius` (default 520). `kin` names
+   *  who holds the bond (a defId, tag or faction); omitted = any living
+   *  SQUADMATE. The counterplay is priority: burst the bond-holder first
+   *  and the pack softens. */
+  bond?: { mods: Modifier[]; kin?: string; radius?: number };
 }
 
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls
@@ -2996,6 +3039,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', 0.6), mod('damage', 'increased', 0.2)],
     skills: ['ground_slam', 'flame_wave'], xp: 70, faction: 'demon', adorn: 'horns',
     presence: 'legion_muster',
+    turnSpeed: 2.8,
     mountSlot: { kinds: ['demonkin', 'imp', 'finger_mage'], offsetY: -6 },
     scaling: { armor: { flatPerLevel: 2.5 }, life: { incPerLevel: 0.05 } },
     deathBurst: { mode: 'orb', damageFrac: 1.2 },
@@ -3502,6 +3546,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 170, moveSpeed: 100, accuracy: 105, armor: 30, poise: 40, mana: 40, manaRegen: 4 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['ground_slam', 'root_grasp'], xp: 34, faction: 'fungal',
+    turnSpeed: 3.4,
     scaling: { armor: { flatPerLevel: 1.5 } },
     detection: 1.0, brain: { type: 'juggernaut', enrage: 0.4 },
   },
@@ -3543,6 +3588,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#6a5a70', shape: 'triangle', radius: 8, material: 'fur', look: 'cave_bat',
     base: { life: 16, moveSpeed: 210, accuracy: 90, evasion: 75, mana: 15, manaRegen: 3 },
     skills: ['talon_rake', 'take_wing'], xp: 6,
+    flier: true, levitates: true,
     detection: 1.4,
     brain: {
       type: 'skirmish', withdraw: 1.2,
@@ -3579,6 +3625,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'], xp: 14,
     scaleVariance: [0.85, 1.2], juvenileBelow: 0.95,
     juvenileBrain: { type: 'flee' },
+    shellGuard: { side: 'all', max: 55, regenDelay: 5, regenRate: 10, color: '#c8c0a0' },
     scaling: { armor: { flatPerLevel: 1.2 } },
     detection: 0.8, brain: { type: 'basic' },
   },
@@ -3666,6 +3713,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 500, moveSpeed: 45, accuracy: 115, armor: 60, poise: 80, mana: 80, manaRegen: 6 },
     mods: [mod('fireRes', 'flat', -0.3), mod('coldRes', 'flat', 0.3)],
     skills: ['ground_slam', 'root_grasp'], xp: 150, faction: 'sylvan',
+    turnSpeed: 2.2,
     scaling: { life: { incPerLevel: 0.08 } },
     detection: 1.0, brain: { type: 'juggernaut', enrage: 0.35 },
     parts: [
@@ -3785,6 +3833,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 300, moveSpeed: 90, accuracy: 110, armor: 25, poise: 60, mana: 40, manaRegen: 5 },
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['gore_rend', 'ground_slam'], xp: 70, faction: 'flesh',
+    turnSpeed: 3.0,
     scaling: { life: { incPerLevel: 0.06 }, lifeRegen: { flatPerLevel: 0.6 } },
     deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.8, damageType: 'chaos' },
     detection: 1.1, brain: { type: 'juggernaut', enrage: 0.4 },
@@ -3817,6 +3866,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 30, moveSpeed: 200, accuracy: 105, evasion: 70, mana: 15, manaRegen: 3 },
     skills: ['talon_rake', 'take_wing'], xp: 12,
     tag: 'predator', faction: 'beast',
+    flier: true, levitates: true,
     detection: 1.5,
     brain: {
       type: 'skirmish', withdraw: 1.3,
@@ -3877,6 +3927,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 6, moveSpeed: 140, evasion: 85, mana: 0 },
     mods: [mod('detectability', 'more', -0.6)],
     skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    flier: true, levitates: true,
     detection: 0.1, drops: 0,
     brain: {
       type: 'basic',
@@ -3986,7 +4037,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#9aa8b8', shape: 'hexagon', radius: 15, material: 'bone', look: 'barrow_wight',
     base: { life: 130, moveSpeed: 110, accuracy: 110, armor: 40, mana: 40, manaRegen: 4 },
     mods: [mod('coldRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.3)],
-    skills: ['heavy_strike'], xp: 32, faction: 'undead',
+    skills: ['heavy_strike', 'rearguard_aegis'], xp: 32, faction: 'undead',
     grants: [{ atLevel: 18, support: 'multistrike', on: 'heavy_strike', chance: 0.5 }],
     detection: 0.9, brain: { type: 'juggernaut', enrage: 0.4 },
   },
@@ -4028,6 +4079,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#b04a5a', shape: 'triangle', radius: 9, material: 'fur', look: 'crimson_bat',
     base: { life: 22, moveSpeed: 215, accuracy: 95, evasion: 80, mana: 15, manaRegen: 3 },
     skills: ['talon_rake', 'take_wing'], xp: 9, faction: 'nightkin',
+    flier: true, levitates: true,
     detection: 1.4,
     brain: {
       type: 'skirmish', withdraw: 1.2,
@@ -4080,6 +4132,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 260, moveSpeed: 55, accuracy: 100, armor: 20, poise: 50, mana: 160, manaRegen: 10 },
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['lay_grub_clutch', 'bile_spray'], xp: 60,
+    turnSpeed: 2.4,
     gemBias: ['summon', 'minion'], wardPriority: 1,
     scaling: { life: { incPerLevel: 0.06 } },
     detection: 0.9, brain: { type: 'juggernaut' },
@@ -4097,6 +4150,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#8a5a38', shape: 'hexagon', radius: 13, material: 'chitin', look: 'formic_soldier',
     base: { life: 75, moveSpeed: 140, accuracy: 105, armor: 45, mana: 20, manaRegen: 3 },
     skills: ['cleave'], xp: 18,
+    // The colony's SYNCHRONY: soldiers fight harder while a worker lives
+    // near — burst the workers first and the line softens (the bond seam).
+    bond: { kin: 'formic_worker', mods: [mod('damageTaken', 'more', -0.25)] },
+    shellGuard: { side: 'front', max: 70, regenDelay: 4, regenRate: 16, color: '#b09060' },
     scaling: { armor: { flatPerLevel: 1.2 } },
     detection: 1.1,
     brain: { type: 'pack', squad: { idle: { style: 'drill' }, formation: 'column', tokens: 3 } },
@@ -4120,6 +4177,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#b08a3a', shape: 'oval', radius: 15, material: 'metal', look: 'bronze_scarab',
     base: { life: 120, moveSpeed: 105, accuracy: 100, armor: 70, poise: 40, mana: 20, manaRegen: 3 },
     skills: ['heavy_strike'], xp: 28,
+    // The exoskeleton retrofit: a knitting full shell over the old armor.
+    shellGuard: { side: 'all', max: 90, regenDelay: 5, regenRate: 18, color: '#d8b86a' },
+    turnSpeed: 3.2,
     scaling: { armor: { flatPerLevel: 2 } },
     detection: 0.9,
     brain: { type: 'juggernaut', move: { style: 'charge', commitRange: 300, chargeSpeed: 2.2 } },
@@ -4233,6 +4293,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['undertow', 'claw', 'frostbolt'], xp: 55,
     habitat: { kind: 'water', minRadius: 55, grace: 30 },
     ambush: { radius: 170, announce: 'the water erupts!' },
+    turnSpeed: 3.4,
     scaleVariance: [0.9, 1.3], scaleStats: true,
     scaling: { life: { incPerLevel: 0.06 } },
     vision: { arcDeg: 360, rearMul: 1 },
@@ -4319,6 +4380,110 @@ export const MONSTERS: Record<string, MonsterDef> = {
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.4, // it is ALL eyes
     brain: { type: 'basic' },
+  },
+
+  // ==========================================================================
+  // THE COMPOSABLE ROUND — shells that break and regrow, backs that guard,
+  // ground that swallows, bonds that must be burst first, and a trap that is
+  // nothing but three existing seams holding hands (ambush + summon + nova).
+  // ==========================================================================
+
+  // THE MOLTING BEHEMOTH — the exoskeleton showcase: a full-shell absorb
+  // that knits back after quiet seconds. Burst it through the break window
+  // or fight the whole pool twice. Slow of foot AND of face (turnSpeed).
+  molting_behemoth: {
+    id: 'molting_behemoth', name: 'Molting Behemoth',
+    color: '#a8925a', shape: 'octagon', radius: 23, material: 'chitin', look: 'molting_behemoth',
+    base: { life: 380, moveSpeed: 85, accuracy: 115, armor: 40, poise: 70, mana: 40, manaRegen: 4 },
+    skills: ['heavy_strike', 'ground_slam'], xp: 85,
+    shellGuard: { side: 'all', max: 260, regenDelay: 5, regenRate: 45, color: '#d8c88a' },
+    turnSpeed: 2.6,
+    scaling: { life: { incPerLevel: 0.06 } },
+    detection: 1.0, brain: { type: 'juggernaut', enrage: 0.35 },
+  },
+  // THE BULWARK SCUTTLER — the rear-shell tactician: back-armor as anatomy,
+  // and when bloodied it TURTLES — rotating its shell into your blows (the
+  // 'turtle' windows) while the slow pivot keeps circling honest.
+  bulwark_scuttler: {
+    id: 'bulwark_scuttler', name: 'Bulwark Scuttler',
+    color: '#8a9a78', shape: 'hexagon', radius: 15, material: 'chitin', look: 'bulwark_scuttler',
+    base: { life: 130, moveSpeed: 125, accuracy: 105, armor: 35, mana: 25, manaRegen: 3 },
+    skills: ['claw', 'heavy_strike'], xp: 34,
+    shellGuard: { side: 'rear', max: 140, regenDelay: 4, regenRate: 30, color: '#a8c890' },
+    turnSpeed: 3.0,
+    detection: 1.1,
+    brain: {
+      type: 'juggernaut',
+      rules: [{
+        when: { lifeBelow: 0.6 }, every: [8, 12], hold: [2.5, 3.5],
+        use: { move: { style: 'turtle' } },
+      }],
+    },
+  },
+  // THE SAND WYRM — the burrow showpiece: it dives where sand or mud holds,
+  // travels UNDER the field as a dust line, and ERUPTS beneath its prey.
+  // Stand on grass and stone and the ground cannot betray you.
+  sand_wyrm: {
+    id: 'sand_wyrm', name: 'Sand Wyrm',
+    color: '#c8ac6a', shape: 'oval', radius: 15, material: 'chitin', look: 'sand_wyrm',
+    base: { life: 160, moveSpeed: 120, accuracy: 110, armor: 30, mana: 60, manaRegen: 6 },
+    skills: ['claw'], xp: 40,
+    worm: { length: 7, spacing: 16, taper: 0.88 },
+    scaleVariance: [0.85, 1.2],
+    detection: 1.2,
+    brain: {
+      type: 'juggernaut',
+      rules: [{
+        when: { distUnder: 700 }, every: [9, 14], hold: [0.3, 0.5],
+        actions: [{ do: 'burrow', kinds: ['sand', 'mud'], damageFrac: 0.24, emergeRadius: 75, announce: 'the sand shifts...' }],
+      }],
+    },
+  },
+  // THE MIRE BURROWER — the wet cousin: it swims the mud between pools.
+  mire_burrower: {
+    id: 'mire_burrower', name: 'Mire Burrower',
+    color: '#7a6a48', shape: 'oval', radius: 12, material: 'slime', look: 'mire_burrower',
+    base: { life: 110, moveSpeed: 110, accuracy: 100, armor: 15, mana: 50, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw', 'bile_spray'], xp: 30,
+    worm: { length: 5, spacing: 14, taper: 0.9 },
+    detection: 1.1,
+    brain: {
+      type: 'skirmish', withdraw: 1.2,
+      rules: [{
+        when: { distUnder: 600 }, every: [10, 15], hold: [0.3, 0.5],
+        actions: [{ do: 'burrow', kinds: ['mud'], damageFrac: 0.2, emergeRadius: 65, announce: 'the mire churns...' }],
+      }],
+    },
+  },
+  // THE GNOLL TRAPPER — the trap-layer: seeds jaw-snares around the fight
+  // and shoots from behind them. The snare is pure composition: an ambush-
+  // armed summoned body whose whole kit is one snap.
+  gnoll_trapper: {
+    id: 'gnoll_trapper', name: 'Gnoll Trapper',
+    color: '#c8a060', shape: 'triangle', radius: 12, material: 'fur', look: 'gnoll_trapper',
+    base: { life: 55, moveSpeed: 150, accuracy: 110, evasion: 55, mana: 60, manaRegen: 6 },
+    skills: ['bone_arrow'], xp: 26, faction: 'gnoll', adorn: 'ears',
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.6,
+      rules: [{
+        when: {}, every: [10, 15], hold: [0.4, 0.6],
+        actions: [{ do: 'summon', monster: 'jaw_snare', count: 1, ring: 70, lifespan: 45 }],
+      }],
+    },
+  },
+  // THE JAW SNARE — a trap with a heartbeat: hidden until stepped near,
+  // then one iron snap and a held ankle. Three seams holding hands.
+  jaw_snare: {
+    id: 'jaw_snare', name: 'Jaw Snare',
+    color: '#b0a890', shape: 'oval', radius: 7, material: 'metal', look: 'jaw_snare',
+    base: { life: 18, moveSpeed: 0, armor: 30, mana: 0 },
+    skills: ['snap_shut'], xp: 3,
+    ambush: { radius: 42, announce: 'SNAP!' },
+    noNemesis: true, drops: 0,
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 2.0, brain: { type: 'basic' },
   },
 };
 
@@ -4460,6 +4625,7 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
       { id: 'gnoll_butcher', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'gnoll_longshot', weight: 2, presence: { from: 4, fadeIn: 3 } },
       { id: 'gnoll_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'gnoll_trapper', weight: 1, presence: { from: 6, fadeIn: 3 } },
     ],
   },
   elemental: {

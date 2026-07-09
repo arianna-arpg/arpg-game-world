@@ -134,6 +134,15 @@ const HANDLERS: Record<AIAction['do'], Handler> = {
     world.claimGarrisonSlot(actor, act.within, act.kinds);
   },
 
+  // BURROW: submerge into qualifying ground and travel underground to the
+  // matching patch nearest the target, erupting there (World.startBurrow +
+  // stepBurrow own the ride). Standing off its kinds = a graceful no-op —
+  // the rule simply tries again next window.
+  burrow: (world, actor, act, target) => {
+    if (act.do !== 'burrow' || actor.burrow || !target) return;
+    world.startBurrow(actor, act, target);
+  },
+
   // MOUNT the nearest free same-team beast whose mountSlot accepts this
   // actor: teleport to the saddle; World.updateMounts carries the rider
   // from here (position pinned, dash/push stilled) until either dies.

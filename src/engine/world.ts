@@ -44,7 +44,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
@@ -3889,6 +3889,82 @@ export class World {
     m.pos = vec(s.pos.x + Math.cos(ang) * dd, s.pos.y + Math.sin(ang) * dd);
     m.confine = { x: s.pos.x, y: s.pos.y, r: s.radius + (h.grace ?? 24) };
     return true;
+  }
+
+  /** BURROW ({do:'burrow'}): if the actor stands ON qualifying ground, it
+   *  submerges and travels underground to the qualifying patch nearest its
+   *  target, erupting there (stepBurrow drives the ride). Off its kinds =
+   *  no ride — the counterplay IS the ground you choose to stand on. */
+  startBurrow(a: Actor, act: { kinds: string[]; range?: number; damageFrac?: number; emergeRadius?: number; announce?: string }, target: Actor): void {
+    const on = this.doodads.some(d =>
+      act.kinds.includes(d.kind) && !d.gone && dist(a.pos, d.pos) <= d.radius + a.radius * 0.5);
+    if (!on) return;
+    // Destination: the qualifying patch nearest the TARGET; emerge at the
+    // target's own position when it stands inside the patch.
+    let best: Doodad | null = null;
+    let bd = Infinity;
+    const reach = act.range ?? 800;
+    for (const d of this.doodads) {
+      if (!act.kinds.includes(d.kind) || d.gone) continue;
+      if (dist(a.pos, d.pos) > reach) continue;
+      const dd = dist(target.pos, d.pos);
+      if (dd < bd) { bd = dd; best = d; }
+    }
+    if (!best) return;
+    const dx = target.pos.x - best.pos.x, dy = target.pos.y - best.pos.y;
+    const dl = Math.hypot(dx, dy) || 1;
+    const inner = Math.max(0, best.radius - a.radius * 0.4);
+    const to = dl <= inner
+      ? { x: target.pos.x, y: target.pos.y }
+      : { x: best.pos.x + (dx / dl) * inner, y: best.pos.y + (dy / dl) * inner };
+    a.burrow = {
+      phase: 'submerge', t: 0.35, to,
+      speed: Math.max(150, a.sheet.get('moveSpeed') * 2.2),
+      damageFrac: act.damageFrac ?? 0.22,
+      emergeRadius: act.emergeRadius ?? 70,
+      dustAcc: 0, color: '#c8b070',
+    };
+    a.untargetable = true;
+    if (act.announce) this.text(vec(a.pos.x, a.pos.y - 20), act.announce, '#c8b070', 12);
+  }
+
+  /** Advance a live burrow: dust the dive, run the underground line, swell
+   *  the EMERGENCE telegraph (the escape window), then erupt through the
+   *  real team-aware blast path. */
+  private stepBurrow(a: Actor, dt: number): void {
+    const b = a.burrow!;
+    b.dustAcc += dt;
+    if (b.dustAcc >= 0.1 && b.phase !== 'emerge') {
+      b.dustAcc = 0;
+      this.flashes.push({ pos: vec(a.pos.x + rand(-6, 6), a.pos.y + rand(-6, 6)), radius: 12 + rand(0, 6), color: b.color, life: 0.3, maxLife: 0.3 });
+    }
+    if (b.phase === 'submerge') {
+      b.t -= dt;
+      if (b.t <= 0) b.phase = 'travel';
+      return;
+    }
+    if (b.phase === 'travel') {
+      const dx = b.to.x - a.pos.x, dy = b.to.y - a.pos.y;
+      const d = Math.hypot(dx, dy);
+      const step = b.speed * dt;
+      if (d <= step) {
+        a.pos.x = b.to.x; a.pos.y = b.to.y;
+        b.phase = 'emerge'; b.t = 0.55;
+      } else {
+        a.pos.x += (dx / d) * step;
+        a.pos.y += (dy / d) * step;
+      }
+      return;
+    }
+    // EMERGE: the ring swells over the window, then the eruption lands.
+    b.t -= dt;
+    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: Math.max(4, b.emergeRadius * (1 - Math.max(0, b.t) / 0.55)), color: b.color, life: 0.08, maxLife: 0.08 });
+    if (b.t > 0) return;
+    a.burrow = undefined;
+    a.untargetable = false;
+    this.burstDamage(vec(a.pos.x, a.pos.y), b.emergeRadius, a.maxLife() * b.damageFrac, 'physical', b.color, a.team);
+    this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: b.emergeRadius + 14, color: b.color, life: 0.4, maxLife: 0.4 });
+    this.text(vec(a.pos.x, a.pos.y - 24), 'ERUPTION!', '#e8c86a', 14);
   }
 
   /** Populate the zone's ambient FAUNA from the biome's WILDLIFE table: each
@@ -10061,6 +10137,22 @@ export class World {
       a.untargetable = true;
       a.sheet.setSource('ambush', [mod('invisible', 'flat', 1)]);
     }
+    // SHELL GUARD worn as anatomy: the directional absorb, pool full at birth.
+    if (def.shellGuard) {
+      const sg = def.shellGuard;
+      a.shellGuard = {
+        side: sg.side, arcDeg: sg.arcDeg ?? 180,
+        max: sg.max, pool: sg.max,
+        regenDelay: sg.regenDelay ?? 4,
+        regenRate: sg.regenRate ?? sg.max / 6,
+        lastHitAt: -999, broken: false,
+        color: sg.color ?? '#c8b87a',
+      };
+    }
+    // TURN SPEED: the bestiary default smooths every pivot; big and shelled
+    // bodies author their own lumber. Player seats never pass through here.
+    a.turnSpeed = def.turnSpeed ?? MONSTER_TURN_DEFAULT;
+    if (def.flier) a.flying = true;
     a.spawnedAt = this.time;
     // Monsters' skills level up with them — same leveling system as the player.
     const skillLevel = 1 + Math.floor(lv / 4);
@@ -14301,6 +14393,24 @@ export class World {
     if (d.aura.selfMods) {
       caster.sheet.setSource('auraself:' + inst.def.id, d.aura.selfMods);
     }
+    // REAR-GUARD SHELL (AuraDelivery.shellGuard): the toggle installs a
+    // DIRECTIONAL absorb on the bearer — the "energy shield you wear on
+    // your back". Pool scales with the guardStrength stat (the guard-hall
+    // economy prices this shield too); the toggle-off removes only its own.
+    if (d.shellGuard) {
+      const s = d.shellGuard;
+      const strength = caster.sheet.get('guardStrength', tags, extra);
+      const max = s.max * strength;
+      caster.shellGuard = {
+        side: s.side ?? 'rear', arcDeg: s.arcDeg ?? 180,
+        max, pool: max,
+        regenDelay: s.regenDelay ?? 3,
+        regenRate: s.regenRate ?? max / 5,
+        lastHitAt: -999, broken: false,
+        color: s.color ?? inst.def.color,
+        fromAura: inst.def.id,
+      };
+    }
   }
 
   /** THE LEDGER's beat, per bearer: the escalating upkeep (starvation
@@ -14364,6 +14474,9 @@ export class World {
   deactivateAura(bearer: Actor, skillId: string): void {
     const aura = bearer.activeAuras.get(skillId);
     if (!aura) return;
+    // A toggle-installed rear-guard shell drops with its toggle (a shell
+    // worn as ANATOMY — MonsterDef.shellGuard — has no fromAura and stays).
+    if (bearer.shellGuard?.fromAura === skillId) bearer.shellGuard = undefined;
     // Strip this aura's modifiers from everyone it touched.
     const sourceName = 'aura:' + skillId + ':' + bearer.id;
     for (const a of this.actors) {
@@ -14515,6 +14628,42 @@ export class World {
    * the shield eats the RAW damage, thorns prick the attacker, and a
    * drained shield breaks the stance into its cooldown.
    */
+  /** SHELL GUARD (Actor.shellGuard): the directional absorb worn as anatomy
+   *  (or installed by the rear-guard toggle). A hit arriving through the
+   *  covered arc soaks into the pool — fully EATEN while it holds (statuses
+   *  and knockback with it, like a guard); the blow that breaks the shell
+   *  leaks only its overflow through as a reduced packet. Returns true when
+   *  the hit was fully absorbed. */
+  private tryShellBlock(victim: Actor, threatPos: Vec2, packet: DamagePacket): boolean {
+    const sg = victim.shellGuard;
+    if (!sg || sg.broken || sg.pool <= 0) return false;
+    if (sg.side !== 'all') {
+      const center = victim.facing + (sg.side === 'rear' ? Math.PI : 0);
+      const arc = sg.arcDeg * Math.PI / 180;
+      if (Math.abs(angleDiff(center, angleTo(victim.pos, threatPos))) > arc / 2) return false;
+    }
+    const raw = Object.values(packet.amounts).reduce((s, v) => s + (v ?? 0), 0);
+    if (raw <= 0) return false;
+    sg.lastHitAt = this.time;
+    const absorb = Math.min(sg.pool, raw);
+    sg.pool -= absorb;
+    if (sg.pool <= 0) {
+      sg.broken = true;
+      this.text(vec(victim.pos.x, victim.pos.y - 20), 'SHELL BREAKS!', '#ffd27a', 15);
+      this.flashes.push({ pos: vec(victim.pos.x, victim.pos.y), radius: victim.radius * 2, color: sg.color, life: 0.35, maxLife: 0.35 });
+    }
+    if (absorb >= raw) {
+      this.text(victim.pos, 'shell', '#c8b87a', 11);
+      return true; // fully eaten — statuses and knockback with it
+    }
+    // The breaking blow: only the overflow lands.
+    const k = (raw - absorb) / raw;
+    for (const t of Object.keys(packet.amounts) as (keyof typeof packet.amounts)[]) {
+      packet.amounts[t]! *= k;
+    }
+    return false;
+  }
+
   private tryGuardBlock(victim: Actor, attacker: Actor, threatPos: Vec2, rawDamage: number): boolean {
     const guardian = this.guardianFor(victim);
     if (!guardian) return false;
@@ -15227,6 +15376,9 @@ export class World {
     // whole hit — damage, statuses, knockback, everything.
     const raw = Object.values(packet.amounts).reduce((s, v) => s + (v ?? 0), 0);
     if (raw > 0 && this.tryGuardBlock(target, caster, caster.pos, raw)) return;
+    // SHELL GUARD (worn anatomy / the rear-guard toggle): the directional
+    // absorb eats what its arc covers; a breaking blow leaks its overflow.
+    if (raw > 0 && this.tryShellBlock(target, caster.pos, packet)) return;
 
     const hasDamage = forceDamage || def.effects.some(e => e.type === 'damage');
     let dealt = 0;
@@ -17947,6 +18099,51 @@ export class World {
           break;
         }
       }
+      // LIVE BURROW: submerge → dust-line travel → telegraphed emergence.
+      if (a.burrow && !a.dead) this.stepBurrow(a, dt);
+      // PACK BOND (MonsterDef.bond): worn only while a living bond-holder
+      // stands near — the source moves on EDGES, never per frame. Burst the
+      // holder first and the pack softens (the priority counterplay).
+      if (a.defId && !a.dead) {
+        const bond = MONSTERS[a.defId]?.bond;
+        if (bond) {
+          const r = bond.radius ?? 520;
+          let held = false;
+          for (const o of this.actors) {
+            if (o === a || o.dead || o.team !== a.team) continue;
+            if (bond.kin
+              ? (o.defId !== bond.kin && o.tag !== bond.kin && o.faction !== bond.kin)
+              : (a.squadId === undefined || o.squadId !== a.squadId)) continue;
+            if (dist(a.pos, o.pos) > r) continue;
+            held = true;
+            break;
+          }
+          if (held !== a.bondHeld) {
+            a.bondHeld = held;
+            a.sheet.setSource('bond', held ? bond.mods : []);
+            if (!held) this.text(vec(a.pos.x, a.pos.y - 18), 'bond broken!', '#d88a8a', 11);
+          }
+        }
+      }
+      // SHELL REGROWTH: quiet seconds knit the pool back; a broken shell
+      // re-forms once a real fraction has regrown (the burst window closes).
+      const sg = a.shellGuard;
+      if (sg && !a.dead && sg.pool < sg.max && this.time - sg.lastHitAt >= sg.regenDelay) {
+        sg.pool = Math.min(sg.max, sg.pool + sg.regenRate * dt);
+        if (sg.broken && sg.pool >= sg.max * 0.4) {
+          sg.broken = false;
+          this.text(vec(a.pos.x, a.pos.y - 20), 'shell regrows', '#c8d8a0', 12);
+        }
+      }
+      // TURN CLAMP (Actor.turnSpeed): facing may only swing so far per
+      // frame — big bodies LUMBER, their shell arcs and their aim lag the
+      // fight, and circling them becomes real play.
+      if (a.turnSpeed > 0 && a.facingPrev !== undefined && !a.dead) {
+        const want = angleDiff(a.facingPrev, a.facing);
+        const cap = a.turnSpeed * dt;
+        if (Math.abs(want) > cap) a.facing = a.facingPrev + Math.sign(want) * cap;
+      }
+      a.facingPrev = a.facing;
       // THE LEDGER's beat: escalating upkeep + the low-mana vent.
       this.updateActorLedgers(a, dt);
       // One sweep for EVERYTHING updateTimers can bleed — DoTs, staggered
@@ -23261,8 +23458,10 @@ export class World {
     // consumed by Actor.updateCharges on its own meters.
     a.moveAcc += speed * dt;
     this.markSeatActed(a); // movement interrupts THAT seat's dwell
-    // DEV noclip: the local hero phases through walls/rocks/void (bounds still hold).
-    const disp = this.devNoclip && a === this.player ? NOCLIP_DISP : undefined;
+    // DEV noclip: the local hero phases through walls/rocks/void (bounds still
+    // hold). TRUE FLIERS ride the same displacement policy — the wing cares
+    // nothing for rocks, walls or the gap beneath (levitates covers the void).
+    const disp = (this.devNoclip && a === this.player) || a.flying ? NOCLIP_DISP : undefined;
     if (traction >= 0.999) {
       // Solid ground: instant control, exactly as ever.
       a.vel.x = (dx / len) * speed;

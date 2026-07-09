@@ -2098,6 +2098,10 @@ export class Renderer {
     const { ctx } = this;
     const { x, y } = a.pos;
 
+    // A BURROWED body is underground: the dust line and the swelling
+    // emergence telegraph (world-pushed flashes) carry the whole visual.
+    if (a.burrow) return;
+
     // AT SEA the hero IS the boat: hull + sail + a trailing wake, rotated to
     // the facing. Zone-keyed (world.sailing), so co-op clients skin it too.
     if (world.sailing && world.seats.some(s => s.actor === a)) {
@@ -2116,6 +2120,11 @@ export class Renderer {
     if (a === world.player) {
       drawGlow(ctx, 0, a.radius * 0.3, a.radius * VIS_CFG.body.heroHaloScale,
         a.color, VIS_CFG.body.heroHaloAlpha, false);
+    }
+    // TRUE FLIGHT reads at a glance: the body rides LIFTED and bobbing
+    // above its grounded shadow (drawn at the true position before this).
+    if (a.flying) {
+      ctx.translate(0, -(7 + Math.sin(world.time * 3.1 + a.id * 1.7) * 2.2));
     }
     // Airborne leapers swell along the arc.
     if (a.leap) {

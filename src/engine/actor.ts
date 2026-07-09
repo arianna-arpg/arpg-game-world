@@ -711,6 +711,44 @@ export class Actor {
   /** ARMED AMBUSH (MonsterDef.ambush): hidden + untargetable until an enemy
    *  strays inside the wake radius — then the reveal. */
   ambushArmed = false;
+  /** SHELL GUARD (MonsterDef.shellGuard or a toggled rear-guard aura): the
+   *  directional absorb pool + its break/regrow state. `fromAura` names the
+   *  installing skill so the toggle-off removes ONLY its own shell. */
+  shellGuard?: {
+    side: 'rear' | 'front' | 'all';
+    arcDeg: number;
+    max: number;
+    pool: number;
+    regenDelay: number;
+    regenRate: number;
+    lastHitAt: number;
+    broken: boolean;
+    color: string;
+    fromAura?: string;
+  };
+  /** TURN SPEED (rad/s): the per-frame facing clamp. 0 = instant (players). */
+  turnSpeed = 0;
+  /** Last frame's clamped facing (the turn clamp's reference). */
+  facingPrev?: number;
+  /** FLIER (MonsterDef.flier): moves on the noclip displacement policy —
+   *  over rocks, walls, chasms and water — and the renderer lifts + bobs the
+   *  body off its shadow so flight READS at a glance. */
+  flying = false;
+  /** PACK BOND transition tracker (MonsterDef.bond) — the sheet source only
+   *  moves on held/dropped edges, never per frame. */
+  bondHeld = false;
+  /** LIVE BURROW (the {do:'burrow'} verb): submerge → travel underground as
+   *  a dust line → telegraphed EMERGENCE hit. Untargetable throughout. */
+  burrow?: {
+    phase: 'submerge' | 'travel' | 'emerge';
+    t: number;
+    to: { x: number; y: number };
+    speed: number;
+    damageFrac: number;
+    emergeRadius: number;
+    dustAcc: number;
+    color: string;
+  };
   /** World-clock stamp of this body's creation — the renderer's spawn-in
    *  scale-up reads it (mid-play arrivals only; zone-load population is
    *  exempted against the zone's own entry stamp). */

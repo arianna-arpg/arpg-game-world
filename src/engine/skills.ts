@@ -1549,6 +1549,18 @@ export interface AuraDelivery {
      *  Seal-and-Form price curve (Stormbind's mounting hunger). */
     rampPerSec?: number;
   };
+  /** REAR-GUARD SHELL: while this aura burns, the bearer wears a
+   *  DIRECTIONAL absorb (Actor.shellGuard) — hits through the covered arc
+   *  soak into a breakable, self-knitting pool. `max` scales with the
+   *  guardStrength stat. The bestiary's back-armor, as a toggle. */
+  shellGuard?: {
+    side?: 'rear' | 'front' | 'all';
+    max: number;
+    arcDeg?: number;
+    regenDelay?: number;
+    regenRate?: number;
+    color?: string;
+  };
   /** SEALS & FORMS — movement factor while the toggle burns (0 = rooted:
    *  Stormbind plants you; omit = unimpeded). */
   moveFactor?: number;

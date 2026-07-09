@@ -115,6 +115,8 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (actor.construct) return;
   // An ARMED ambusher IS scenery — no scheming until the world springs it.
   if (actor.ambushArmed) return;
+  // A BURROWED body is underground — stepBurrow owns it until the eruption.
+  if (actor.burrow) return;
   // Scenery doesn't scheme: barrels, caches and townsfolk hold still.
   if (actor.passive) return;
   // DRIVEN actors (the caravan cart) are wheeled by an event tick, not a brain.
@@ -1768,6 +1770,18 @@ function garrisonKernel(ctx: KernelCtx): void {
   if (chosen) ctx.cast(chosen);
 }
 
+/** turtle — PRESENT THE SHELL: hold ground and face AWAY from the threat so
+ *  a rear shellGuard eats the exchange. Slow-turning bodies telegraph the
+ *  pivot (the turn clamp), so circling a turtled shell is real play. Casts
+ *  still fire — a mortar needs no eyes — but most turtled kits just endure
+ *  their rules window. */
+function turtleKernel(ctx: KernelCtx): void {
+  const { a, target } = ctx;
+  a.facing = angleTo(target.pos, a.pos); // away from the threat
+  const chosen = ctx.pick();
+  if (chosen) ctx.cast(chosen);
+}
+
 export const MOVE_KERNELS: Record<string, MoveKernel> = {
   approach: approachKernel,
   direct: directKernel,
@@ -1784,6 +1798,7 @@ export const MOVE_KERNELS: Record<string, MoveKernel> = {
   retreat: retreatKernel,
   skitter: skitterKernel,
   charge: chargeKernel,
+  turtle: turtleKernel,
   garrison: garrisonKernel,
   juke: jukeKernel,
   lurk: lurkKernel,
