@@ -26,9 +26,13 @@
   "launcher": {
     "width": 700,
     "height": 680,
-    "returnToLauncher": true
+    "returnToLauncher": true,
+    "autoPlayOnGamescope": true
   },
   "paths": {
     "saves": "auto"
+  },
+  "debug": {
+    "bootLog": true
   }
 }

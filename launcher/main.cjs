@@ -87,8 +87,9 @@ const CONFIG_DEFAULTS = {
   updates: { checkOnLaunch: true, mode: 'auto' },
   window: { width: 1600, height: 900, maximized: true, fullscreen: 'auto', devtools: true, zoom: 1 },
   server: { host: '127.0.0.1', port: 0 },
-  launcher: { width: 700, height: 680, returnToLauncher: true },
+  launcher: { width: 700, height: 680, returnToLauncher: true, autoPlayOnGamescope: true },
   paths: { saves: 'auto' },
+  debug: { bootLog: true },
 };
 // Merge order (later wins): hard defaults ← committed defaults (ship with the
 // install) ← machine-local overrides. A checkout keeps the single repo-root
@@ -149,15 +150,49 @@ const flagValue = (flag) => {
 const SMOKE = flagValue('--smoke-test') !== null ? (flagValue('--smoke-test') || 'game') : null;
 const PLAY_DIRECT = flagValue('--play') !== null;
 
+/** A Steam Deck / gamescope session (Game Mode, or any gamescope nest) —
+ *  drives fullscreen 'auto' AND the straight-into-the-game launch policy. */
+function gamescopeSession() {
+  return !!(process.env.SteamDeck || process.env.SteamOS
+    || process.env.XDG_CURRENT_DESKTOP === 'gamescope' || process.env.GAMESCOPE_WAYLAND_DISPLAY);
+}
+
 /** window.fullscreen: true/false, or 'auto' → fullscreen exactly when running
  *  inside a Steam Deck / gamescope session. `--fullscreen` forces it on. */
 function resolveFullscreen() {
   if (flagValue('--fullscreen') !== null) return true;
   const v = cfg.window.fullscreen;
   if (typeof v === 'boolean') return v;
-  return !!(process.env.SteamDeck || process.env.SteamOS
-    || process.env.XDG_CURRENT_DESKTOP === 'gamescope' || process.env.GAMESCOPE_WAYLAND_DISPLAY);
+  return gamescopeSession();
 }
+
+// ----------------------------------------------------------------- boot log
+// A packaged install that dies before its first window is INVISIBLE — Steam
+// just shows a spinner forever. So every launch overwrites a tiny breadcrumb
+// file in userData (launcher.log) recording the walk to the first window and
+// any fatal exit: "it hangs" becomes "it stopped after line N". Costs one
+// appendFileSync per milestone; debug.bootLog=false turns it off.
+const BOOT_LOG = (cfg.debug && cfg.debug.bootLog) === false
+  ? null : path.join(app.getPath('userData'), 'launcher.log');
+if (BOOT_LOG) {
+  try { fs.mkdirSync(path.dirname(BOOT_LOG), { recursive: true }); fs.writeFileSync(BOOT_LOG, ''); }
+  catch { /* diagnostics must never be the thing that breaks the boot */ }
+}
+/** @param {string} line */
+function boot(line) {
+  if (BOOT_LOG) { try { fs.appendFileSync(BOOT_LOG, `[${new Date().toISOString()}] ${line}\n`); } catch { } }
+  if (SMOKE) console.log(`[boot] ${line}`);
+}
+boot(`start v=${app.getVersion()} packaged=${PACKAGED} platform=${process.platform}`
+  + ` gamescope=${gamescopeSession()} argv=[${argv.join(' ')}]`
+  + ` LD_PRELOAD=${process.env.LD_PRELOAD || '(none)'}`);
+process.on('uncaughtException', (e) => boot(`FATAL uncaught: ${(e && e.stack) || e}`));
+process.on('unhandledRejection', (e) => boot(`FATAL unhandled rejection: ${e}`));
+// Chromium child health — a dead GPU process or zygote is exactly the kind
+// of silent boot-killer (Steam's overlay preload, missing GL) this file exists
+// to make visible.
+app.on('child-process-gone', (_e, d) => boot(`child-process-gone type=${d.type} reason=${d.reason} exitCode=${d.exitCode ?? '?'}`));
+app.on('render-process-gone', (_e, _wc, d) => boot(`render-process-gone reason=${d.reason} exitCode=${d.exitCode ?? '?'}`));
 
 // -------------------------------------------------------- child process runs
 
@@ -459,6 +494,7 @@ async function ensureServer() {
   gameServer = started.server;
   gameUrl = started.url;
   log(`Game server on ${started.url}`);
+  boot(`game server on ${started.url} (dist=${DIST})`);
   return started.url;
 }
 
@@ -500,11 +536,13 @@ function createGameWindow(opts) {
 
 async function play() {
   const built = await ensureBuilt();
-  if (!built.ok) return built;
+  if (!built.ok) { boot(`play: build check failed — ${built.error || 'unknown'}`); return built; }
   const url = await ensureServer();
   if (gameWin && !gameWin.isDestroyed()) { gameWin.focus(); return { ok: true }; }
   gameWin = createGameWindow();
+  boot('game window created');
   await gameWin.loadURL(url);
+  boot('game page loaded');
   if (launcherWin && !launcherWin.isDestroyed()) launcherWin.hide();
   return { ok: true };
 }
@@ -526,7 +564,9 @@ function createLauncherWindow(opts) {
       nodeIntegration: false,
     },
   });
+  boot('launcher window created');
   w.loadFile(path.join(__dirname, 'launcher.html'));
+  w.webContents.once('did-finish-load', () => boot('launcher page loaded'));
   w.on('closed', () => {
     launcherWin = null;
     // Closing the launcher only quits when no game is running.
@@ -668,11 +708,21 @@ app.on('web-contents-created', (_e, wc) => {
 });
 
 app.whenReady().then(async () => {
+  boot('electron ready');
   if (SMOKE) { wireIpc(); await smoke(); return; }
   wireIpc();
-  if (PLAY_DIRECT) {
+  // STRAIGHT INTO THE GAME: --play asks for it, and a gamescope / Steam Deck
+  // session implies it — a console-style boot wants the game, not a utility
+  // window (the launcher stays a Desktop-Mode tool, and any failure still
+  // falls back to it so the error has somewhere visible to land).
+  // launcher.autoPlayOnGamescope=false restores launcher-first everywhere.
+  const direct = PLAY_DIRECT
+    || (cfg.launcher.autoPlayOnGamescope !== false && gamescopeSession());
+  if (direct) {
+    boot(`direct play (flag=${PLAY_DIRECT} gamescope=${gamescopeSession()})`);
     const res = await exclusive('play', () => play());
     if (!res.ok) { // fall back to the launcher so the error is visible
+      boot(`direct play failed: ${res.error || 'unknown'} — showing the launcher`);
       launcherWin = createLauncherWindow();
     }
     return;

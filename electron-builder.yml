@@ -38,6 +38,11 @@ extraResources:
 asar: true
 # Nothing native to rebuild (zero deps) — skip the postinstall dance entirely.
 npmRebuild: false
+# Linux: wrap the binary in an exec shim that strips Steam's overlay preload
+# (gameoverlayrenderer.so) — without it, launching the AppImage FROM STEAM
+# (Deck Game Mode included) wedges Chromium's child processes and the window
+# never appears. See the script header for the full story.
+afterPack: scripts/afterPack.cjs
 
 win:
   icon: build/icon.png

@@ -33,11 +33,12 @@ folder above (userData wins). `paths.saves` accepts `${data}`, `${exe}`,
 1. Bump `version` in `package.json`, commit. The tag must match this version
    — electron-builder attaches artifacts to the release named `v<version>`.
 2. Tag it and push: `git tag v0.2.0 && git push origin v0.2.0`.
-3. The `release` GitHub Action builds Windows + Linux and attaches both to
-   that release (published immediately — `releaseType: release` in
-   electron-builder.yml; the draft default would hide it from
-   `/releases/latest`, where the launcher and the Deck installer look).
-   Manual dry run: Actions → release → Run workflow.
+3. The `release` GitHub Action builds Windows + Linux into a hidden DRAFT,
+   and its `finalize` job flips it public — with notes from
+   `docs/releases/<tag>.md` when present — only after BOTH legs succeed, so
+   `/releases/latest` (where the launcher's update probe and the Deck
+   installer look) never serves a half-built release. Manual dry run:
+   Actions → release → Run workflow.
 
 **Private repo?** Everything above still works, but *consuming* the release
 needs auth: create a fine-grained PAT (repo → Contents: read-only) and use
@@ -127,3 +128,27 @@ else.
 **Testing without hardware:** the pad layer reads `window.__fakePad` before
 real devices — `__game.fakePad({ axes: [0,0,1,0], buttons: [] })` in the
 console drives aim from a script; `__game.pad()` inspects live state.
+
+## Troubleshooting — Steam Deck / Linux
+
+**Infinite loading screen from Game Mode (window never appears), but the
+AppImage runs fine from Konsole:** that was Steam's overlay injection.
+Steam preloads `gameoverlayrenderer.so` into everything it launches, and
+Chromium's child processes wedge on it. Fixed in v0.2.1+ — the packaged
+binary is wrapped in a shim that strips the overlay preload before Electron
+boots (side effect: the Steam overlay doesn't render over the game). On an
+older AppImage, the manual equivalent is a Steam launch option:
+`LD_PRELOAD="" %command%`.
+
+**Where to look when a launch misbehaves:** every start overwrites
+`~/.config/Hollow Wake/launcher.log` (Windows:
+`%AppData%\Hollow Wake\launcher.log`) with boot breadcrumbs — environment,
+server start, window creation, page load, and any fatal error or dead
+Chromium child. The last line names the stall. `debug.bootLog: false` in
+`launcher.config.json` disables it.
+
+**Game Mode boots straight into the game** (no launcher window) — that's
+`launcher.autoPlayOnGamescope: true`, because a console-style launch wants
+the game, not a utility window. The launcher (updates, factory reset) is
+still there when you run the AppImage from Desktop Mode. Set the flag to
+false to get launcher-first everywhere.
