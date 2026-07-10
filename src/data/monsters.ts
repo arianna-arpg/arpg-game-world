@@ -354,6 +354,19 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'sand_scorpion', chance: 0.55, count: [2, 4] },
     { id: 'ant_trail', chance: 0.4, count: [1, 2] },
   ],
+  // The deep wood: small lives in the roof, hooves and hunters below.
+  forest: [
+    { id: 'squirrel', chance: 0.8, count: [3, 5] },
+    { id: 'meadow_hare', chance: 0.5, count: [2, 3] },
+    { id: 'taiga_elk', chance: 0.35, count: [2, 3] },
+    { id: 'plains_wolf', chance: 0.5, count: [2, 4] },
+    { id: 'thicket_stalker', chance: 0.4, count: [1, 2] },
+    { id: 'glow_moth', chance: 0.4, count: [2, 4] },
+    { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
+    { id: 'ant_trail', chance: 0.3, count: [1, 2] },
+    { id: 'reed_frog', chance: 0.4, count: [2, 3], near: 'water' },
+    { id: 'dire_wolf', chance: 0.25, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
+  ],
   // The northern belts: elk herds with wolves on their heels.
   taiga: [
     { id: 'taiga_elk', chance: 0.6, count: [2, 4] },

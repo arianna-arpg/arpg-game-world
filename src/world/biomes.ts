@@ -89,6 +89,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
   grove:  { patronFaction: 'sylvan', mapColor: '#3f8a3a', label: 'Grove', spacing: 56,
     climate: { temperature: 'mild', moisture: { from: 0.3, fadeIn: 0.2 } },
     landmarks: [{ landmark: 'lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }, { landmark: 'great_lake', chance: 0.08 }] },
+  // The FOREST proper — where the grove is open woodland, the forest is a
+  // ROOF: the 'forest' recipe plants veiled canopy masses whose coverage
+  // scales with biomeDepth (the region's heart runs near-sealed). Claims the
+  // wet half of the mild belt; the grove keeps the drier woods. Tight node
+  // web (old roads under old boughs).
+  forest: { patronFaction: 'sylvan', mapColor: '#2e7d32', label: 'Forest', spacing: 58,
+    climate: { temperature: 'mild', moisture: 'damp' },
+    allowedLayouts: { forest: 1 },
+    landmarks: [{ landmark: 'lake', chance: 0.25 }, { landmark: 'secluded_valley', chance: 0.15 }] },
   // Gravelands raise mausoleum labyrinths (a rare whole-zone hedge-maze bastion)
   // and the odd lone watchtower among the tombs.
   // GRAVELANDS: plains, mausoleum-labyrinth bastions, and RUINED NECROPOLIS
@@ -294,6 +303,7 @@ export interface BiomeSeedDef {
  *  modest weights. Grave is the unconditioned filler that can appear anywhere. */
 export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'grove', weight: 1.2 },
+  { biome: 'forest', weight: 1.3 },
   { biome: 'field', weight: 1.1 },
   { biome: 'grave', weight: 1.0 },
   { biome: 'desert', weight: 2.0 },

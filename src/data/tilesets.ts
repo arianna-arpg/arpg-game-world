@@ -184,6 +184,124 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE FOREST — the deep wood proper. Where the deepwood/grove is open
+  // woodland you see across, the forest is a CANOPY: the 'forest' layout
+  // recipe (biome allowedLayouts) plants veiled walk-under masses whose
+  // coverage scales with geo.biomeDepth — a fringe zone breathes, the
+  // region's heart is a near-sealed roof you must move UNDER to see into.
+  // Trails read as beaten earth (theme.road drives the road kind's color),
+  // clearings are the sun-wells where the decoration pools. The tileset's
+  // own layout rows are only the FURNITURE — the recipe grows the trees.
+  forest: {
+    id: 'forest',
+    nameFirst: ['Heartwood', 'Oldgrowth', 'Deepbough', 'Greenholt', 'Oakenshade', 'Wildewood', 'Timberdark', 'Highcanopy', 'Fernbrake', 'Mossmantle', 'Broadleaf', 'Elderbough', 'Longshade', 'Hartswood', 'Boughlock', 'Greenvault'],
+    nameSecond: ['Forest', 'Canopy', 'Wilds', 'Fastness', 'Timberland', 'Understory', 'Greenwood', 'Woodland', 'Heart', 'Vaults', 'Eaves', 'Roof'],
+    theme: {
+      // Brighter, warmer greens than the deepwood's twilight — this wood is
+      // ALIVE overhead; the dark comes from the roof, not the floor. Clearing
+      // lift runs strong (real sun-wells); banks still darken toward water.
+      ground: {
+        palette: ['#122408', '#1b3a12', '#26501b', '#357024', '#478c30'], bias: 0.6, alpha: 0.55,
+        coast: { reach: 85, shift: -0.35, kinds: ['water', 'deep_water', 'bog', 'swamp'] },
+        clearing: { reach: 150, lift: 0.34 },
+      },
+      nightDark: 0.76,
+      floor: '#0f1a0c', grid: '#152413', border: '#2c4a28',
+      obstacle: '#254220', obstacleEdge: '#3e6a34', accent: '#9ade66',
+      mud: '#1d2b15', chasm: '#040804', water: '#1a3e4e', wall: '#4a3a22',
+      // Game trails: the road kind reads THIS — beaten forest earth, not gravel.
+      road: '#4a3d28',
+      // Common crowns ride the theme green; forest_oak keeps its own deeper
+      // literal so the sealed roof reads as a distinct mass among the trees.
+      tree: '#2b5220',
+    },
+    sizeW: [2800, 4000], sizeH: [2000, 2800], ellipseChance: 0.2, biome: 'forest',
+    // FURNITURE ONLY — the forest recipe plants the canopy/trails/understory;
+    // these rows findSpot into whatever the roof leaves open, so rocks, ruins
+    // and camps pool in the clearings by themselves.
+    layout: [
+      { kind: 'log', count: [2, 5] }, { kind: 'stump', count: [2, 4] },
+      { kind: 'flowers', count: [1, 3] }, { kind: 'grass', count: [3, 6] },
+      { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [0, 2] },
+      { kind: 'rocks', count: [3, 6], radius: [18, 32] },
+      { kind: 'river', count: [0, 1] },
+      { kind: 'bog', count: [0, 1] },
+      { kind: 'ruin', count: [0, 2] },
+      { kind: 'camp', count: [0, 1] },
+      { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+    ],
+    // Whatever variant rolls, the deep wood always rots below, thorns always
+    // find purchase, and something always webs the dark.
+    common: [
+      { kind: 'burst_sac', count: [0, 2] },
+      { kind: 'puffcap_cluster', count: [0, 1] },
+      { kind: 'briarwood', count: [1, 2] },
+    ],
+    variants: [
+      // Sun-dappled fringe: more clearing furniture, lighter rot.
+      { name: 'sun-dappled', layout: [
+        { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] },
+        { kind: 'flowers', count: [2, 4] }, { kind: 'grass', count: [5, 8] },
+        { kind: 'rocks', count: [3, 6], radius: [18, 32] },
+        { kind: 'river', count: [0, 1] },
+        { kind: 'camp', count: [0, 1] },
+        { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
+      ] },
+      // Briar-snarled: the understory fights back.
+      { name: 'briar-snarled', layout: [
+        { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [2, 4] },
+        { kind: 'thicket', count: [2, 4] }, { kind: 'vines', count: [1, 3] },
+        { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [1, 2] },
+        { kind: 'rocks', count: [3, 5], radius: [18, 30] },
+        { kind: 'bog', count: [0, 1] },
+        { kind: 'ruin', count: [0, 1] },
+      ] },
+    ],
+    packs: {
+      count: [5, 8], size: [3, 5],
+      // The sylvan court's own wood, banded end to end: saplings and sprites
+      // in the young fringe; wardens, wolves and the Horned Tribes in the
+      // middle depths; elders and the werewolf dark where the roof seals.
+      table: [
+        { id: 'sylvan_sapling', weight: 3, presence: { to: 12, fadeOut: 5 } },
+        { id: 'twig_snarl', weight: 3, presence: { from: 3, fadeIn: 2, to: 24, fadeOut: 9 } },
+        { id: 'thorn_sprite', weight: 2, presence: { to: 20, fadeOut: 10 } },
+        { id: 'thicket_stalker', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'will_o_wisp', weight: 1, presence: { to: 14, fadeOut: 6 } },
+        { id: 'gloomling', weight: 1, presence: { from: 4, fadeIn: 2, to: 20, fadeOut: 8 } },
+        { id: 'sylvan_warden', weight: 2 },
+        { id: 'grove_singer', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'gloom_stalker', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'dire_wolf', weight: 3, presence: { from: 6, fadeIn: 3 } },
+        { id: 'moon_howler', weight: 1, presence: { from: 9, fadeIn: 5 } },
+        { id: 'orb_weaver', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'treant_warden', weight: 2, presence: { from: 10, fadeIn: 5 } },
+        { id: 'root_snarl', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'briar_beast', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'beastkin_gorer', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'beastkin_impaler', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'beastkin_ritualist', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'werewolf', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        { id: 'elder_treant', weight: 1, presence: { from: 18, fadeIn: 8 } },
+        // The trees are watching. Some of them are walking.
+        { id: 'root_wraith', weight: 3, presence: { from: 7, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'waves', weight: 1 },
+    ],
+    structures: [
+      { structure: 'walled_manor', chance: 0.12 },
+      { structure: 'watchtower', chance: 0.15 },
+    ],
+  },
+
   // THE TAIGA — the winter FOREST: where the tundra is open and howling,
   // the taiga is close and hushed — dense conifer stands you disappear
   // beneath, standing drifts, frozen pools, firewood caches of travelers

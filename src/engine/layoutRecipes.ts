@@ -254,6 +254,181 @@ function lakelandsLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('lakelands', lakelandsLayout);
 
+// --- FOREST (the deep wood: CANOPY as terrain) -------------------------------------
+// A CONVEX recipe — no walk grid; the floor stays open between trunks. The
+// forest's body is its canopy: VEILED walk-under trees planted through a
+// smooth noise density mask whose coverage scales with geo.biomeDepth — a
+// zone deep inside its forest region is a near-sealed roof of leaves, a
+// fringe zone breathes. Crowns overlap ON PURPOSE: the veil system
+// (engine/veil.ts) merges them into contiguous patches that hide everything
+// beneath until you walk in under the same mass — growing density obscures
+// vision; mobility and positioning keep a target in sight. Clearings punch
+// sun-wells through the roof, GAME TRAILS wander entry→exits as worn 'road'
+// ground (the tileset's road color reads as beaten earth; the moveScale seam
+// rides along), the understory thickens beneath the crowns, and the tileset's
+// decoration scatter runs last — its solids self-sort into the gaps the
+// canopy left, because findSpot already refuses solid-on-solid.
+// Every knob reads from layoutParams (spec ▷ tileset ▷ biome), so any biome
+// can pour its own woods (a package could roll a 'forest' of fungal towers).
+
+/** Smooth 2-octave value noise in 0..1 — the planner's density mask. Local
+ *  hash (the Rng family) so ONE seed draw covers the whole lattice sweep. */
+function forestHash(a: number, b: number, seed: number): number {
+  let h = (seed ^ 0x9e3779b9) >>> 0;
+  h = Math.imul(h ^ (a | 0), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (b | 0), 0xc2b2ae35) >>> 0;
+  h ^= h >>> 13; h = Math.imul(h, 0x27d4eb2f) >>> 0; h ^= h >>> 15;
+  return (h >>> 0) / 0x100000000;
+}
+function forestValueNoise(x: number, y: number, cell: number, seed: number): number {
+  const gx = Math.floor(x / cell), gy = Math.floor(y / cell);
+  const fx = x / cell - gx, fy = y / cell - gy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const a = forestHash(gx, gy, seed), b = forestHash(gx + 1, gy, seed);
+  const c = forestHash(gx, gy + 1, seed), d = forestHash(gx + 1, gy + 1, seed);
+  return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+}
+function forestNoise(x: number, y: number, seed: number): number {
+  return 0.65 * forestValueNoise(x, y, 340, seed)
+    + 0.35 * forestValueNoise(x, y, 130, (seed ^ 0x51ed) >>> 0);
+}
+
+/** Circle-vs-reservation test covering both Reservation shapes. */
+function hitsReservation(ctx: GenCtx, x: number, y: number, r: number): boolean {
+  for (const res of ctx.reserved) {
+    if ('pos' in res) {
+      const dx = x - res.pos.x, dy = y - res.pos.y;
+      const reach = res.radius + r;
+      if (dx * dx + dy * dy < reach * reach) return true;
+    } else {
+      const m = (res.margin ?? 0) + r;
+      if (x > res.rect.x - m && x < res.rect.x + res.rect.w + m
+        && y > res.rect.y - m && y < res.rect.y + res.rect.h + m) return true;
+    }
+  }
+  return false;
+}
+
+interface ForestTreeMix { kind: string; weight: number; radius: [number, number] }
+
+function forestLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const depth = def.geo?.biomeDepth ?? 0.5;
+  const coverEdge = layoutParam(def, 'forestCoverEdge', 0.44);
+  const coverDeep = layoutParam(def, 'forestCoverDeep', 0.86);
+  const sd = depth * depth * (3 - 2 * depth); // smoothstep: the heart seals fast
+  const cover = coverEdge + (coverDeep - coverEdge) * sd;
+  const spacing = layoutParam(def, 'forestSpacing', 46);
+  // ONE rng draw seeds the whole density mask; per-tree rolls draw only for
+  // trees that actually place, so retuning coverage can't shift what an
+  // unrelated later stamp rolls out from under a fixed zone seed.
+  const noiseSeed = rng.int(0, 0x7fffffff);
+
+  // CLEARINGS — sun-wells the canopy never claims. POIs so patrols/quests
+  // find them; the decoration scatter's solids sort into them naturally.
+  const clearingN = layoutParam(def, 'forestClearings', [2, 4]) as [number, number];
+  const clearings: { x: number; y: number; r: number }[] = [];
+  for (let i = 0, n = rng.int(clearingN[0], clearingN[1]); i < n; i++) {
+    const c = {
+      x: rng.range(arena.w * 0.15, arena.w * 0.85),
+      y: rng.range(arena.h * 0.15, arena.h * 0.85),
+      r: rng.range(130, 230),
+    };
+    clearings.push(c);
+    ctx.pois.push(vec(c.x, c.y));
+  }
+
+  // GAME TRAILS — worn ground wandering entry → exit, reserved like every
+  // artery so the planting sweep leaves the passage open. Chained road discs
+  // ride the existing 'road' kind: path-mode blend, moveScale, one impl.
+  const trailN = Math.min(ctx.exits.length,
+    rng.int(...(layoutParam(def, 'forestTrails', [1, 2]) as [number, number])));
+  for (let i = 0; i < trailN; i++) {
+    const pts = wanderPath(rng, ctx.entry, ctx.exits[i], { step: 120, wobble: 55, bowFrac: 0.3 });
+    reserveArtery(ctx, pts, 30);
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 30));
+      for (let t = 0; t <= steps; t++) {
+        ctx.doodads.push({
+          pos: vec(a.x + (b.x - a.x) * (t / steps), a.y + (b.y - a.y) * (t / steps)),
+          radius: rng.range(16, 22), kind: 'road',
+        });
+      }
+    }
+  }
+
+  // THE CANOPY — a jittered lattice sweep through the density mask. Crowns
+  // are sized to knit (spacing < neighbouring crown radii sums), so the veil
+  // index reads whole stands as single patches.
+  const mix = layoutParam(def, 'forestTrees', [
+    { kind: 'forest_oak', weight: 5, radius: [38, 58] },
+    { kind: 'tree', weight: 3, radius: [20, 32] },
+    { kind: 'conifer', weight: 2, radius: [20, 30] },
+    { kind: 'briarwood', weight: 1, radius: [18, 26] },
+  ] as ForestTreeMix[]);
+  const totalW = mix.reduce((a, m) => a + m.weight, 0);
+  const portals = [ctx.entry, ...ctx.exits];
+  const portalClear = layoutParam(def, 'forestPortalClear', 140);
+  const margin = 40;
+  for (let y = margin; y < arena.h - margin; y += spacing) {
+    for (let x = margin; x < arena.w - margin; x += spacing) {
+      if (forestNoise(x, y, noiseSeed) > cover) continue;
+      const px = x + (forestHash(x, y, (noiseSeed ^ 0x77) >>> 0) - 0.5) * spacing * 0.9;
+      const py = y + (forestHash(x, y, (noiseSeed ^ 0xa1) >>> 0) - 0.5) * spacing * 0.9;
+      if (clearings.some(c => (px - c.x) ** 2 + (py - c.y) ** 2 < c.r * c.r)) continue;
+      if (portals.some(p => (px - p.x) ** 2 + (py - p.y) ** 2 < portalClear * portalClear)) continue;
+      if (hitsReservation(ctx, px, py, 14)) continue;
+      let roll = rng.range(0, totalW);
+      let m = mix[mix.length - 1];
+      for (const cand of mix) { roll -= cand.weight; if (roll <= 0) { m = cand; break; } }
+      ctx.doodads.push({
+        pos: vec(px, py), radius: rng.range(m.radius[0], m.radius[1]),
+        kind: m.kind, rot: rng.range(0, Math.PI * 2),
+      });
+    }
+  }
+
+  // ELDERS — the deep wood's anchors (huge veiled crowns; whole packs wait
+  // beneath one). Fringe zones may see a single elder; the heart grows more.
+  const elderN = depth > 0.45 ? rng.int(1, 3) : rng.int(0, 1);
+  for (let i = 0; i < elderN; i++) {
+    for (let tries = 0; tries < 12; tries++) {
+      const px = rng.range(arena.w * 0.2, arena.w * 0.8);
+      const py = rng.range(arena.h * 0.2, arena.h * 0.8);
+      if (forestNoise(px, py, noiseSeed) > cover) continue;
+      if (clearings.some(c => (px - c.x) ** 2 + (py - c.y) ** 2 < c.r * c.r)) continue;
+      if (portals.some(p => (px - p.x) ** 2 + (py - p.y) ** 2 < 180 * 180)) continue;
+      if (hitsReservation(ctx, px, py, 30)) continue;
+      ctx.doodads.push({
+        pos: vec(px, py), radius: rng.range(56, 80),
+        kind: 'ancient_tree', rot: rng.range(0, Math.PI * 2),
+      });
+      break;
+    }
+  }
+
+  // UNDERSTORY — brush and fern thicken beneath the crowns (concealment
+  // fields the stealth statuses already speak); berries where light leaks.
+  const area = arena.w * arena.h;
+  const underN = Math.round((area / 260000) * (6 + cover * 10));
+  for (let i = 0; i < underN; i++) {
+    const px = rng.range(margin, arena.w - margin);
+    const py = rng.range(margin, arena.h - margin);
+    if (forestNoise(px, py, noiseSeed) > cover) continue;
+    if (portals.some(p => (px - p.x) ** 2 + (py - p.y) ** 2 < 120 * 120)) continue;
+    if (hitsReservation(ctx, px, py, 10)) continue;
+    const roll = rng.range(0, 1);
+    const kind = roll < 0.5 ? 'brush' : roll < 0.85 ? 'fern' : 'berry_bush';
+    ctx.doodads.push({ pos: vec(px, py), radius: rng.range(12, 22), kind, rot: rng.range(0, Math.PI * 2) });
+  }
+
+  // The tileset's own decoration last: rocks/rivers/ruins/camps findSpot into
+  // whatever the canopy left open — furniture pools in clearings for free.
+  scatterDecoration(ctx, def);
+}
+registerLayout('forest', forestLayout);
+
 // --- OPEN SEA (the VOYAGE's boundless pseudo-zone) ---------------------------------
 // Deliberately EMPTY: the sea's terrain is the continent field, STREAMED in
 // around the boat at runtime (world.streamCoast) — nothing is generated ahead.

@@ -310,6 +310,15 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'trunk', order: 50, params: { scale: 0.22, roots: 6 },
     canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
   },
+  // The FOREST's canopy body: a broad-crowned oak, one shade deeper than the
+  // common tree so a sealed forest roof reads as ITS OWN mass, not a smear of
+  // grove greens. Planted by the forest recipe closer than crowns span — the
+  // veil index knits whole stands into single patches.
+  forest_oak: {
+    longShadow: 0.95,
+    painter: 'trunk', order: 50, params: { scale: 0.22, roots: 5, color: '#41321f' },
+    canopy: { painter: 'leafCrown', params: { fill: '#274f1d' } },
+  },
   // Giant fungus wears the WALK-UNDER TREE mechanism now: a real pale-ringed
   // STALK at ground level (the trunk painter, fungal-toned, sized to the
   // bodyScale trunk), the parametric cap riding the canopy pass above.

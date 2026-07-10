@@ -72,6 +72,7 @@ export type KnownDoodadKind =
   | 'palm'      // blocks both — a tree variant (beach/jungle canopy)
   | 'conifer'   // evergreen spire (pine crown; tundra/deepwood)
   | 'ancient_tree' // a forest ELDER: huge crown, thick bole, packs hide beneath
+  | 'forest_oak' // the FOREST's canopy body: a broad veiled crown built to knit into sealed masses
   | 'ice_spike' // a rimed crystal fang jutting from frozen ground (taiga/tundra)
   | 'snowman'   // someone built it and left; it watches (winter clutter)
   | 'signpost'  // a fingerboard post naming ways travelers stopped taking
@@ -515,10 +516,19 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
   // eyes respect the canopy — walk under the leaves, fight in the shade,
   // and never see who waits beneath an unfaded crown until you join them.
-  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3 },
-  palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26 },
+  // The whole walk-under tree family VEILS (veil: {}): crowns knit into
+  // contiguous patches that seal over whatever stands beneath — a lone tree
+  // is a one-crown patch (aim assist already can't hold what waits under it),
+  // a grove cluster opens as one, a forest is a roof. Cover/reveal/status all
+  // ride VEIL_DEFAULTS unless a kind says otherwise.
+  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {} },
+  palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {} },
   /** Evergreen spire — tundra/deepwood conifer (pineCrown canopy). */
-  conifer:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26 },
+  conifer:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {} },
+  /** The FOREST's canopy body: a broad oak whose crown is built to KNIT —
+   *  the forest recipe plants them closer than their crowns span, so the
+   *  veil index reads whole stands as single sealed masses. */
+  forest_oak: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 12, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.22, veil: {} },
   /** A forest ELDER: a huge crown over a thick bole — the dense-forest
    *  anchor (whole packs ambush beneath one). Veiled: even a lone elder's
    *  crown is a PATCH (aim assist can't hold what waits beneath), and where
@@ -526,7 +536,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   ancient_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80, occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22, veil: {} },
   /** The thicket grown into a TREE: a gnarled thorn bole under a walk-under
    *  bramble crown — the tangle you can stand beneath (and regret). */
-  briarwood: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3 },
+  briarwood: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {} },
   // Winter clutter (the taiga's furniture).
   ice_spike: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24 },
   snowman:   { overlap: 'solid', blocksMove: true, spacing: 60 },
@@ -614,7 +624,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
    *  crown above BREAKS SIGHT and occlusion-fades near the hero: the forest
    *  hides what stands in it, both ways, without ever walling you in. */
   giant_kelp: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: true,
-    spacing: 26, occlude: { pad: 12, alpha: 0.28 }, bodyScale: 0.16 },
+    spacing: 26, occlude: { pad: 12, alpha: 0.28 }, bodyScale: 0.16, veil: {} },
   coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
   sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40 },
   // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
@@ -623,8 +633,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // Giant fungus stands on a STALK now (bodyScale, the walk-under-tree
   // mechanism): feet and arrows respect the stalk, eyes respect the cap —
   // fight in the spore-shade beneath the crown.
-  giant_mushroom: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 42, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.3 },
-  fruiting_tower: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 54, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.26 },
+  giant_mushroom: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 42, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.3, veil: {} },
+  fruiting_tower: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 54, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.26, veil: {} },
   spore_pod:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 38, forbidOn: ['water', 'lava', 'chasm', 'bog'] },
   glow_cap:       { overlap: 'ground' },
   mycelial_mat:   { overlap: 'ground', walkOnly: true },
