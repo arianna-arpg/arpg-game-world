@@ -864,6 +864,10 @@ export interface FissureTrailSpec {
 
 export type TriggerKind =
   | 'crit' | 'damageTaken' | 'channelBeat' | 'overchargeStage'
+  /** A channel of the owner's reaches TRUE COMPLETION — the hold hits its
+   *  maxHold cap or its brim fills (once per unbroken channel). The
+   *  Culmination moment: interrupts deny it. */
+  | 'channelFinish'
   /** A status the owner APPLIES banks power (see TriggerSpec.status/.power)
    *  — "every third burn you set casts this" (the ailment-power gems). */
   | 'statusApply'
@@ -883,6 +887,7 @@ export const TRIGGER_CFG = {
   /** Per-kind fallback internal cooldowns, seconds (a spec's icd wins). */
   icd: {
     crit: 0.15, damageTaken: 0.25, channelBeat: 0.35, overchargeStage: 0,
+    channelFinish: 0,
     statusApply: 0.2, block: 0.5, kill: 0.4,
   } as Record<TriggerKind, number>,
   /** damageTaken: fraction of MAX LIFE that must accumulate per firing
@@ -918,6 +923,38 @@ export interface TriggerSpec {
 export function instanceTrigger(inst: SkillInstance): TriggerSpec | undefined {
   for (const s of hostSockets(inst)) if (s.def.trigger) return s.def.trigger;
   return undefined;
+}
+
+/**
+ * A FUSE — the delayed-effect lever (Doom, the powder keg): the cast
+ * happens NOW (projectiles fly, zones stand, costs are paid), but the
+ * RESOLUTION arrives `delay` seconds late. Per landed hit, the wound
+ * banks instead of biting — damage, statuses, on-hit procs, everything —
+ * and detonates on schedule at the caster's LIVE stats (a fizzle if
+ * either party is gone). The caster-side worn payload (buffs) defers on
+ * the same clock — the blessing that arrives when the fuse burns down.
+ * Deliveries with their own clocks (zones' telegraphs and lingers,
+ * summon lifespans) keep them: the fuse defers RESOLUTIONS, not stagework.
+ *
+ * The delay is FIXED — unscaled by effectDuration (the pulse-clock rule:
+ * a fuse is a promise the whole room can read) — but rides the fuseDelay
+ * stat (Slow Match stretches it) and the banked resolution rides
+ * fusePower. Carried by a SKILL (Doomsayer's Word) or grafted by a
+ * SUPPORT (Time Fuse turns any skill into arrears); a socketed graft
+ * WINS over the skill's own (the trail rule).
+ */
+export interface FuseSpec {
+  /** Seconds between the landing and the resolution. */
+  delay: number;
+  /** Floating tell stamped on the bank (default '…'). */
+  tell?: string;
+}
+
+/** The fuse riding an instance: a socketed graft wins over the skill's
+ *  own (one clock per use — they don't stack). */
+export function instanceFuse(inst: SkillInstance): FuseSpec | undefined {
+  for (const s of hostSockets(inst)) if (s.def.fuse) return s.def.fuse;
+  return inst.def.fuse;
 }
 
 /** True when a permit gem rides the instance (lifts the cast-time gate —
@@ -2013,13 +2050,43 @@ export interface ChannelSpec {
    *  vocabulary as pulses. `pulses: false` makes the channel a pure
    *  GATHER — each beat only pays and ramps; NOTHING fires until the
    *  release delivers everything banked (Flame Blast). Releases before
-   *  `minHold` held seconds fizzle (no payload — the tap tax). */
+   *  `minHold` held seconds fizzle (no payload — the tap tax).
+   *  `requireFull` gates the payload on TRUE COMPLETION: it fires only
+   *  when the hold reached maxHold (or the brim filled) — a stun that
+   *  breaks the bar early DENIES everything (the interrupt idiom clears
+   *  casting without ever reaching this branch); the counterplay is the
+   *  point. With a `brim` riding the channel, the payload's POWER comes
+   *  from the BAR (fill × the brim's scale walk), not from this press's
+   *  held time — see BrimSpec. */
   release?: {
     dmgRamp?: RampSpec;
     aoeRamp?: RampSpec;
     pulses?: boolean;
     minHold?: number;
+    requireFull?: boolean;
   };
+  /** THE BRIM — a PERSISTENT gauge the channel fills (the powering-up
+   *  scream): held seconds pour in (÷ fillTime, × cast/attack speed and
+   *  the brimFill stat — haste reaches full sooner), the bar SURVIVES
+   *  between presses, and the release payload fires at a power walked
+   *  from the FILL: lerp(minScale → maxScale) on a named CURVES shape,
+   *  × the brimPower stat. Knobs, each its own playstyle:
+   *   - decay: fill/sec drained while NOT channeling (× brimDecay stat;
+   *     omit = the bar HOLDS — bank it, walk around, spend it later).
+   *   - bankAt: fill at/above this fraction stops decaying — the met
+   *     threshold is KEPT (the plateau); below it, interruption bleeds.
+   *   - minRelease: releases under this fill FIZZLE (nothing fires,
+   *     nothing spent) — the tap tax, gauge-flavored.
+   *   - spend: the payload drains the bar (default true); false reads
+   *     it without spending (a standing dividend).
+   *   - autoRelease: the bar filling FORCES the release that instant —
+   *     the completion-cast; no second decision.
+   *  Filling the bar (and hitting maxHold) raises the 'channelFinish'
+   *  trigger event — Culmination-family gems answer it. The bar renders
+   *  on the skill slot; the live hold shows above the cast bar. Fill is
+   *  also published as an INTEGER sheet gauge ('brim:<skillId>', 0–5
+   *  pips) for gauge-scaled modifiers. */
+  brim?: BrimSpec;
   /** MINE-CHANNEL (Arcswarm): ending the channel DETONATES every still-
    *  flying projectile this skill launched, each at `damageScale` of its
    *  explode payload — the banked orbs go up together. */
@@ -2036,6 +2103,28 @@ export interface ChannelSpec {
    *  under minHold leave nothing behind. Channel long, then move — it
    *  keeps raining. */
   persist?: { perHeldSec: number; maxDuration?: number; minHold?: number; fade?: number };
+}
+
+/** The persistent channel gauge (ChannelSpec.brim) — see the field doc. */
+export interface BrimSpec {
+  /** Held seconds to a full bar (÷ cast/attack speed, × brimFill stat). */
+  fillTime: number;
+  /** Fill fraction drained per second while not channeling (× brimDecay
+   *  stat). Omit = the bar holds between presses. */
+  decay?: number;
+  /** Fill at/above this fraction stops decaying — the banked plateau. */
+  bankAt?: number;
+  /** Releases under this fill fizzle: nothing fires, nothing spent. */
+  minRelease?: number;
+  /** The release drains the bar (default true). */
+  spend?: boolean;
+  /** A full bar forces the release the instant it fills. */
+  autoRelease?: boolean;
+  /** Payload power at empty / full (default 0.25 / 1). */
+  minScale?: number;
+  maxScale?: number;
+  /** CURVES shape walking fill → power (default 'linear'). */
+  curve?: CurveKind;
 }
 
 export interface ChargeSpec {
@@ -2189,6 +2278,11 @@ export interface BuffEffect {
    *  MINIONS too (affects: 'minions' / targeted deliveries), "bless the
    *  Amalgam so its next blow poisons hugely" is one buff. */
   nextHit?: NextHitRider;
+  /** POWER-SCALED: every mod value multiplies by the use's power mult —
+   *  a brim release at 40% fill grants 40%-strength blessing (Surgewind's
+   *  gathered stride). Opt-in so ordinary buffs never wobble with damage
+   *  multipliers. */
+  powerScaled?: true;
   /** LIFE BOND (the Chloromancer shape): applying this buff to an ALLY
    *  bonds the CASTER to them — a share of the caster's damage dealt
    *  (their bondShare stat × the striking skill's bondFeed) flows to the
@@ -2638,6 +2732,9 @@ export interface SkillDef {
   channel?: ChannelSpec;
   /** Charge-and-release behavior (castMode 'charge'). */
   chargeUp?: ChargeSpec;
+  /** A FUSE: this skill's resolutions arrive LATE (see FuseSpec — Doom,
+   *  the powder keg; supports graft the same via SupportDef.fuse). */
+  fuse?: FuseSpec;
   /** Frontal-block behavior (castMode 'guard'). */
   guard?: GuardSpec;
   /** Stage-banked hold behavior (castMode 'overcharge' — or grafted onto
@@ -3071,6 +3168,10 @@ export interface SupportDef {
   /** A PROJECTILE TRAIL this support grafts onto the skill (Detonating
    *  Passage's path blasts, Scorched Wake's burning ground). See ProjTrailSpec. */
   trail?: ProjTrailSpec;
+  /** A FUSE this support grafts onto the skill (Time Fuse): every
+   *  resolution arrives late — the arrears conversion. A socketed graft
+   *  WINS over the skill's own. See FuseSpec. */
+  fuse?: FuseSpec;
   /** A FISSURE TRAIL this support grafts onto the skill's projectiles —
    *  every shot becomes the tear-head of a travelling crack (Sundering
    *  Flight). See FissureTrailSpec. */
@@ -3307,7 +3408,7 @@ const MINION_RIDABLE_FIELD_LIST = [
   'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
   'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'zoneSizeOver',
-  'cadence', 'pendulum', 'echo', 'summon',
+  'cadence', 'pendulum', 'echo', 'summon', 'fuse',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every

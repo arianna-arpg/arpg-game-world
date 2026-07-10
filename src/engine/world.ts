@@ -22,7 +22,7 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
+  crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
   CONCENTRATION_CFG, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -1979,6 +1979,17 @@ export class World {
     remaining: number; total: number;
     powerMult: number; fade: number;
   }[] = [];
+  /** BANKED FUSES (FuseSpec — Doom, the powder keg): resolutions waiting
+   *  out their delay. 'hit' re-runs the full per-target resolution at the
+   *  caster's LIVE stats (fizzles if either party died); 'buff' delivers
+   *  the deferred blessing. Cleared per zone load (the persist rule). */
+  pendingFuses: ({
+    due: number; caster: Actor; inst: SkillInstance;
+  } & (
+    | { kind: 'hit'; targetId: number; mult: number; depth: number;
+        flat?: Partial<Record<DamageType, number>>; force: boolean }
+    | { kind: 'buff'; fx: BuffEffect; durScale: number; mult: number }
+  ))[] = [];
 
   /** The meta-progression account (drop/vendor gating, restock, features).
    *  A REFERENCE owned by main.ts — it outlives this World; never re-loaded. */
@@ -2605,6 +2616,7 @@ export class World {
     this.pendingAmbushes = [];
     this.pendingMetas = [];
     this.pendingPersists = [];
+    this.pendingFuses = [];
     this.event = null;
     this.encounters = [];
     this.transientDoodads = []; // terraform growths are zone-local (the doodad list itself was just rebuilt)
@@ -11518,6 +11530,8 @@ export class World {
       noRepeat?: boolean;
       /** Set on follow-up fires so a payload never chains its own. */
       noFollowUp?: boolean;
+      /** Set on fuse-sweep resumes so a banked resolution never re-banks. */
+      fromFuse?: boolean;
       /** Set on scheduled SEQUENCE steps: the absolute strike bearing, baked
        *  at cast time (skips the aim transform — the figure is locked). */
       strikeAngle?: number;
@@ -13154,25 +13168,22 @@ export class World {
     const durScale = caster.sheet.get('effectDuration', tags, extra);
     for (const fx of def.effects) {
       if (fx.type === 'buff') {
-        // The minion-war-cry seam: affects 'minions' routes the buff onto
-        // every living minion instead (Convocation's mend).
-        if (fx.affects === 'minions') {
-          for (const m of this.actors) {
-            if (m.owner === caster && !m.dead && m.isMinion() && !m.construct) {
-              m.addBuff(fx, durScale);
-            }
-          }
-          // OFFERING SHARE (Communal Rites): a fraction of the minions'
-          // blessing also dresses the officiant — same buff, scaled values.
-          const share = caster.sheet.get('offeringShare', tags, extra);
-          if (share > 0) {
-            caster.addBuff({
-              ...fx, id: fx.id + '_shared', affects: 'caster',
-              mods: fx.mods.map(m => ({ ...m, value: m.value * share })),
-            }, durScale);
-          }
+        // THE FUSE defers the worn payload too — the blessing that lands
+        // when the powder burns down (delayed buffs). The routing itself
+        // (minion war-cry lane, offering share, powerScaled) lives in
+        // applyBuffEffect, shared with the fuse sweep's late deliveries.
+        const buffFuse = instanceFuse(inst);
+        if (buffFuse && !opts.fromFuse) {
+          this.pendingFuses.push({
+            kind: 'buff',
+            due: this.time + buffFuse.delay
+              * caster.sheet.get('fuseDelay', tags, extra),
+            caster, inst, fx, durScale, mult: useMult,
+          });
+          this.text(vec(caster.pos.x, caster.pos.y - caster.radius - 10),
+            buffFuse.tell ?? '…', def.color, 11);
         } else {
-          caster.addBuff(fx, durScale);
+          this.applyBuffEffect(caster, inst, fx, durScale, useMult);
         }
       }
       // ABSOLUTION (payLedger): bleed the HOST toggle's account down early
@@ -16072,13 +16083,73 @@ export class World {
     if (woke) this.text(vec(target.pos.x, target.pos.y - 24), rule.toast, rule.color, rule.size);
   }
 
+  /** Apply a skill's BUFF effect through the ONE routing (the minion
+   *  war-cry lane, offering share, powerScaled magnitude) — shared by the
+   *  live caster lane and the fuse sweep's late deliveries. */
+  private applyBuffEffect(
+    caster: Actor, inst: SkillInstance, fx: BuffEffect,
+    durScale: number, useMult = 1,
+  ): void {
+    // POWER-SCALED (BuffEffect.powerScaled): the blessing's magnitude
+    // rides the use's power — a brim release at 40% fill grants a
+    // 40%-strength stride. Opt-in; ordinary buffs never wobble.
+    const scaled = fx.powerScaled && useMult !== 1
+      ? { ...fx, mods: fx.mods.map(m => ({ ...m, value: m.value * useMult })) }
+      : fx;
+    if (fx.affects === 'minions') {
+      for (const m of this.actors) {
+        if (m.owner === caster && !m.dead && m.isMinion() && !m.construct) {
+          m.addBuff(scaled, durScale);
+        }
+      }
+      // OFFERING SHARE (Communal Rites): a fraction of the minions'
+      // blessing also dresses the officiant — same buff, scaled values.
+      const tags = skillContextTags(inst.def, grantedTags(inst));
+      const share = caster.sheet.get('offeringShare', tags, instanceMods(inst));
+      if (share > 0) {
+        caster.addBuff({
+          ...scaled, id: scaled.id + '_shared', affects: 'caster',
+          mods: scaled.mods.map(m => ({ ...m, value: m.value * share })),
+        }, durScale);
+      }
+    } else {
+      caster.addBuff(scaled, durScale);
+    }
+  }
+
   private resolveHit(
     caster: Actor, inst: SkillInstance, target: Actor,
     dmgMult = 1, depth = 0,
     flatBonus?: Partial<Record<DamageType, number>>,
     forceDamage = false,
+    fromFuse = false,
   ): void {
     const def = inst.def;
+    // THE FUSE (FuseSpec — innate or a socketed Time Fuse): the wound
+    // BANKS instead of biting. The whole resolution — damage, statuses,
+    // on-hit procs — arrives late (delay × the fuseDelay stat) at the
+    // caster's LIVE stats, × fusePower. The landing still tells: the
+    // room can read the promise burning down.
+    if (!fromFuse) {
+      const fuse = instanceFuse(inst);
+      if (fuse) {
+        const fTags = skillContextTags(def, grantedTags(inst));
+        this.pendingFuses.push({
+          kind: 'hit',
+          due: this.time + fuse.delay
+            * caster.sheet.get('fuseDelay', fTags, instanceMods(inst)),
+          caster, inst, targetId: target.id,
+          mult: dmgMult, depth, flat: flatBonus, force: forceDamage,
+        });
+        this.text(vec(target.pos.x, target.pos.y - target.radius - 8),
+          fuse.tell ?? '…', def.color, 11);
+        this.flashes.push({
+          pos: vec(target.pos.x, target.pos.y), radius: target.radius + 8,
+          color: def.color, life: 0.25, maxLife: 0.25,
+        });
+        return;
+      }
+    }
     // The CALM clock: any blow involving the player's side is "recent combat"
     // for calm-gated dwells (the mercenary outpost's parley).
     if (caster.team === 'player' || target.team === 'player') {
@@ -16650,9 +16721,10 @@ export class World {
     for (const fx of def.effects) {
       if (fx.type === 'heal') {
         // Ally-resolving deliveries (blessing novas, curseAllies edges)
-        // carry their mend here; hostile targets are never healed.
+        // carry their mend here; hostile targets are never healed. The
+        // mend honors the use's POWER (brim releases, scaled secondaries).
         if (target.team === caster.team && !(fx.excludeCaster && target === caster)) {
-          this.applyHealChained(caster, inst, target, fx);
+          this.applyHealChained(caster, inst, target, fx, dmgMult);
         }
       } else if (fx.type === 'cleanse') {
         if (target.team === caster.team) this.cleanseActor(target, fx.count ?? 2);
@@ -19352,6 +19424,24 @@ export class World {
           }
         }
       }
+      // BRIM DECAY (ChannelSpec.brim.decay): un-held bars bleed — unless
+      // banked at/above bankAt (the kept plateau) or the spec simply
+      // holds. The ledger carries the live instance so socketed support
+      // mods reach the drain query (Stillwater's stopped clock).
+      if (a.brims?.size) {
+        for (const [sid, bs] of a.brims) {
+          if (a.casting?.mode === 'channel' && a.casting.held
+            && a.casting.inst.def.id === sid) continue;
+          if (bs.fill <= 0) { a.brims.delete(sid); continue; }
+          const spec = bs.inst.def.channel?.brim;
+          if (!spec?.decay) continue;
+          if (spec.bankAt !== undefined && bs.fill >= spec.bankAt) continue;
+          bs.fill -= spec.decay
+            * a.sheet.get('brimDecay', skillContextTags(bs.inst.def), instanceMods(bs.inst))
+            * dt;
+          if (bs.fill <= 0) a.brims.delete(sid);
+        }
+      }
       // Knockback shoves in flight: smooth, and collision stops them. A collision
       // (wall or void) reports back, so it can FALL into a void and roll the
       // caster's 'collision' procs ONCE (the knockback-collision-damage support).
@@ -21068,7 +21158,13 @@ export class World {
     // Monsters hold channels/charges/guards for a little while, then let go.
     if (a !== this.player && (cs.mode === 'channel' || cs.mode === 'charge'
       || cs.mode === 'guard' || cs.mode === 'overcharge')) {
-      cs.aiHold ??= rand(1.2, 2.6);
+      // A completion-gated gather (release.requireFull) is all-or-nothing:
+      // the monster holds TO the cap — the readable doom-cast is the
+      // design, and breaking it is the player's counterplay.
+      const chSpec = cs.mode === 'channel' ? def.channel : undefined;
+      cs.aiHold ??= chSpec?.release?.requireFull
+        ? (chSpec.maxHold ?? 4) + 0.5
+        : rand(1.2, 2.6);
       // Charge bars release at FULL CHARGE at the latest: elapsed CAPS at
       // total, so an aiHold rolled above it would otherwise hold the cast
       // open forever (wedged monsters, totems, and echo riders mid-charge).
@@ -21195,10 +21291,47 @@ export class World {
         const ch = def.channel!;
         cs.channelTime = (cs.channelTime ?? 0) + dt;
         // CAPPED CHANNEL: the gather has a ceiling — the hold force-
-        // releases at maxHold (× effectDuration), payload and all.
+        // releases at maxHold (× effectDuration), payload and all. The
+        // cap is TRUE COMPLETION: requireFull payloads read the stamp,
+        // and the 'channelFinish' trigger event fires once per unbroken
+        // channel (a stun clears casting without ever reaching here —
+        // interrupts DENY the finish; that counterplay is the point).
         if (ch.maxHold !== undefined && cs.channelTime >= ch.maxHold
           * a.sheet.get('effectDuration', skillContextTags(def), instanceMods(cs.inst))) {
           cs.held = false;
+          cs.hitCap = true;
+          if (!cs.finishRolled) {
+            cs.finishRolled = true;
+            this.rollTriggers(a, 'channelFinish',
+              { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
+          }
+        }
+        // THE BRIM (ChannelSpec.brim): held seconds pour into the skill's
+        // PERSISTENT gauge — ÷ fillTime, × cast/attack speed and the
+        // brimFill stat, so haste genuinely reaches full sooner. Filling
+        // it is a completion too: the finish trigger rolls, and
+        // autoRelease lets the brimming bar force its own payoff.
+        if (ch.brim) {
+          const bm = a.brims ?? (a.brims = new Map());
+          let bs = bm.get(def.id);
+          if (!bs) { bs = { fill: 0, inst: cs.inst }; bm.set(def.id, bs); }
+          bs.inst = cs.inst; // the LIVE loadout (sockets may have changed)
+          const rate = a.speedFactor(cs.inst)
+            * a.sheet.get('brimFill', skillContextTags(def), instanceMods(cs.inst))
+            / Math.max(0.2, ch.brim.fillTime);
+          const before = bs.fill;
+          bs.fill = Math.min(1, bs.fill + dt * rate);
+          if (before < 1 && bs.fill >= 1) {
+            this.text(vec(a.pos.x, a.pos.y - a.radius - 26), 'BRIMMING', def.color, 12);
+            if (!cs.finishRolled) {
+              cs.finishRolled = true;
+              this.rollTriggers(a, 'channelFinish',
+                { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
+            }
+            if (ch.brim.autoRelease) { cs.held = false; cs.hitCap = true; }
+          }
+          // A full bar counts as the cap even on a manual release mid-hold.
+          if (bs.fill >= 1) cs.hitCap = true;
         }
         // CAST-WHILE-CHANNELING metronome: the held channel raises a
         // channelBeat trigger event every TRIGGER_CFG.channelInterval —
@@ -21289,19 +21422,43 @@ export class World {
             this.text(big.pos, 'THE AMALGAM RISES', def.color, 15);
           }
           // RELEASE payload (Flame Blast): the gather resolves ONE final
-          // time, scaled by held time through the pulse ramp vocabulary.
-          // Taps under minHold fizzle — the gather has a floor.
+          // time — scaled by held time through the pulse ramp vocabulary,
+          // or, with a BRIM riding, by the PERSISTENT bar's fill (the
+          // brim's scale walk on its named curve, × the brimPower stat).
+          // Taps under minHold fizzle; brim releases under minRelease
+          // fizzle WITHOUT spending; requireFull payloads fire only when
+          // the hold truly completed (maxHold's ceiling / a filled brim)
+          // — an early let-go gets nothing, and a stun never even reaches
+          // this branch (the interrupt idiom clears casting outright).
           if (rel && !a.dead && heldT >= (rel.minHold ?? 0)) {
-            this.executeSkill(a, cs.inst,
-              track ? cs.aim : (cs.lockedAim ?? cs.aim), {
-                dmgMult: Math.max(0.1,
-                  1 + (rel.dmgRamp ? rampValue(rel.dmgRamp, heldT) : 0)) * cs.baseMult,
-                aoeMult: Math.max(0.15,
-                  1 + (rel.aoeRamp ? rampValue(rel.aoeRamp, heldT) : 0)),
-                keepFacing: true,
-                targetInfo,
-                noCooldown: !!ch.cooldownOnEnd,
-              });
+            const brim = ch.brim;
+            const bs = brim ? a.brims?.get(def.id) : undefined;
+            const bFill = bs?.fill ?? 0;
+            const thin = brim !== undefined && bFill < (brim.minRelease ?? 0);
+            const unfinished = !!rel.requireFull && !cs.hitCap;
+            if (thin || unfinished) {
+              this.failNote(a, def.id + ':gather',
+                unfinished ? 'the gather broke early' : 'the gather is too thin');
+            } else {
+              const power = brim
+                ? Math.max(0.05,
+                    ((brim.minScale ?? 0.25)
+                      + ((brim.maxScale ?? 1) - (brim.minScale ?? 0.25))
+                        * evalCurve(brim.curve, bFill))
+                    * a.sheet.get('brimPower', skillContextTags(def), instanceMods(cs.inst)))
+                : Math.max(0.1, 1 + (rel.dmgRamp ? rampValue(rel.dmgRamp, heldT) : 0));
+              this.executeSkill(a, cs.inst,
+                track ? cs.aim : (cs.lockedAim ?? cs.aim), {
+                  dmgMult: power * cs.baseMult,
+                  aoeMult: Math.max(0.15,
+                    1 + (rel.aoeRamp ? rampValue(rel.aoeRamp, heldT) : 0)),
+                  keepFacing: true,
+                  targetInfo,
+                  noCooldown: !!ch.cooldownOnEnd,
+                });
+              // The payoff drains the bar (BrimSpec.spend, default true).
+              if (brim && bs && (brim.spend ?? true)) bs.fill = 0;
+            }
           }
           // BUILD → PERSIST-AND-DECAY (Hailcrown): the released work keeps
           // pulsing on its own — duration bought by the hold, power frozen
@@ -21722,6 +21879,33 @@ export class World {
    *  pulsing on its own — each beat re-centered on the caster's LIVE
    *  position, power fading toward `fade` as the clock runs out. */
   private updatePendingPersists(dt: number): void {
+    // BANKED FUSES: due resolutions detonate at the caster's LIVE stats,
+    // × the fusePower stat. A dead party on either side fizzles the
+    // promise — the fuse is a bet on both bodies still standing.
+    for (let i = this.pendingFuses.length - 1; i >= 0; i--) {
+      const pf = this.pendingFuses[i];
+      if (this.time < pf.due) continue;
+      this.pendingFuses.splice(i, 1);
+      if (pf.caster.dead) continue;
+      const fTags = skillContextTags(pf.inst.def, grantedTags(pf.inst));
+      const fPow = pf.caster.sheet.get('fusePower', fTags, instanceMods(pf.inst));
+      if (pf.kind === 'hit') {
+        const target = this.actorById(pf.targetId);
+        if (!target || target.dead) continue;
+        this.flashes.push({
+          pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14,
+          color: pf.inst.def.color, life: 0.3, maxLife: 0.3,
+        });
+        this.resolveHit(pf.caster, pf.inst, target,
+          pf.mult * fPow, pf.depth, pf.flat, pf.force, true);
+      } else {
+        this.flashes.push({
+          pos: vec(pf.caster.pos.x, pf.caster.pos.y), radius: pf.caster.radius + 12,
+          color: pf.inst.def.color, life: 0.3, maxLife: 0.3,
+        });
+        this.applyBuffEffect(pf.caster, pf.inst, pf.fx, pf.durScale, pf.mult * fPow);
+      }
+    }
     for (let i = this.pendingPersists.length - 1; i >= 0; i--) {
       const pp = this.pendingPersists[i];
       pp.remaining -= dt;

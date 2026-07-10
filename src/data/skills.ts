@@ -8331,6 +8331,94 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  // --- The GATHER family: capped holds, brimming bars, fuses -----------------
+  // The completion-cast vocabulary in four shapes: ChannelSpec.brim banks
+  // held time in a PERSISTENT gauge whose fill scales the payoff (its decay,
+  // bank threshold, spend policy and fill→power curve all data); maxHold
+  // gives a channel a readable CEILING; release.requireFull fires ONLY at
+  // true completion (a stun denies everything — the counterplay); and
+  // FuseSpec makes any skill's resolutions arrive LATE (Doom, made a lever).
+  surgewind: {
+    id: 'surgewind', name: 'Surgewind',
+    description: 'Scream the storm into your blood: the held channel FILLS a gauge that survives between holds (it bleeds away while you rest), and the release spends it as five seconds of stride and swiftness whose STRENGTH is exactly how full the bar ran. Haste fills it faster; a bare sliver fizzles. Let go early for a taste — hold to the brim for the whole gale.',
+    tags: ['spell', 'buff', 'duration', 'channel'], color: '#7fd0c8',
+    manaCost: 4, cooldown: 0, useTime: 0.4,
+    castMode: 'channel',
+    channel: {
+      interval: 0.5, move: 'slowed', moveFactor: 0.55, windup: 0.2,
+      release: { pulses: false },
+      brim: { fillTime: 5, decay: 0.16, minRelease: 0.12 },
+    },
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'surgewind', duration: 5, powerScaled: true,
+      mods: [
+        mod('moveSpeed', 'increased', 0.55),
+        mod('attackSpeed', 'increased', 0.16),
+        mod('castSpeed', 'increased', 0.16),
+      ],
+    }],
+    requirements: { willpower: 14 },
+    leveling: { perLevel: [mod('brimPower', 'increased', 0.03)] },
+  },
+
+  marrow_communion: {
+    id: 'marrow_communion', name: 'Marrow Communion',
+    description: 'Kneel into the wound-song and pour time into the bar — and the bar KEEPS whatever you bank, however long ago you knelt. Release it and the stored communion mends you and every ally around, scaled to the fill; a thin bar refuses to spend at all. Brim it in the quiet, carry a second life into the loud. The risk is the kneeling.',
+    tags: ['spell', 'heal', 'aoe', 'duration', 'channel'], color: '#8fd08a',
+    manaCost: 7, cooldown: 0, useTime: 0.5,
+    castMode: 'channel',
+    channel: {
+      interval: 0.6, move: 'immobile',
+      release: { pulses: false },
+      brim: { fillTime: 3.5, minRelease: 0.2, minScale: 0.15 },
+    },
+    delivery: { type: 'nova', radius: 230, affects: 'allies' },
+    effects: [
+      { type: 'heal', amount: 26, pctMax: 0.1 },
+    ],
+    requirements: { wisdom: 16 },
+    leveling: { perLevel: [mod('healPower', 'increased', 0.08)] },
+  },
+
+  kindled_ruin: {
+    id: 'kindled_ruin', name: 'Kindled Ruin',
+    description: 'Four held seconds of gathering fire under a bar the whole room can read — and NOTHING until it finishes: break the channel (or the caster) and the ruin never comes. Survive the kindling and it arrives all at once, a furnace nova at full gather. The deliberate cast, weaponized.',
+    tags: ['spell', 'fire', 'aoe', 'channel'], color: '#ff8a3a',
+    manaCost: 6, cooldown: 8, useTime: 0.45,
+    baseDamage: { fire: [34, 52] },
+    castMode: 'channel',
+    channel: {
+      interval: 0.55, move: 'immobile', maxHold: 4, cooldownOnEnd: true,
+      release: { pulses: false, requireFull: true, dmgRamp: { per: 0.4, max: 1.6 } },
+    },
+    delivery: { type: 'nova', radius: 220 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.5, magnitude: 0.5 },
+    ],
+    requirements: { intelligence: 20 },
+    ai: { range: 190, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
+  doomsayers_word: {
+    id: 'doomsayers_word', name: 'Doomsayer\'s Word',
+    description: 'Speak the sentence and let it ride: the bolt lands soft as a whisper — and three seconds later the Word RESOLVES all at once, rolled at whatever your power has become by then. The mark can read the clock; so can everything you socket (a Slow Match stretches the wait and sharpens the verdict).',
+    tags: ['spell', 'chaos', 'projectile'], color: '#b06bd4',
+    manaCost: 9, cooldown: 1.2, useTime: 0.55,
+    baseDamage: { chaos: [18, 28] },
+    fuse: { delay: 3, tell: 'the Word settles…' },
+    delivery: { type: 'projectile', speed: 380, radius: 8, range: 520 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'decay', chance: 0.5, magnitude: 0.5 },
+    ],
+    requirements: { intelligence: 16, willpower: 12 },
+    ai: { range: 460, weight: 2, keepDistance: 280 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   skyfall_volley: {
     id: 'skyfall_volley', name: 'Skyfall Volley',
     description: 'Hurl a fistful of javelins SKYWARD and let them fall as weather: a rain of iron over your mark, each landing its own wound. The Impaler\'s artillery arc.',

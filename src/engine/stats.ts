@@ -743,6 +743,13 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  starts rooted at 0) — walking casters by investment (Fleetfoot). */
   castMobility:   { label: 'Cast Mobility', base: 0, min: 0 },
   effectDuration: { label: 'Skill Effect Duration', base: 1, min: 0.1 },
+  // The GATHER family (ChannelSpec.brim + FuseSpec) — multiplicative axes
+  // so supports, passives and affixes all reach them by ordinary mods.
+  brimFill:       { label: 'Gauge Fill Rate', base: 1, min: 0.1 },
+  brimDecay:      { label: 'Gauge Drain Rate', base: 1, min: 0 },
+  brimPower:      { label: 'Gauge Payoff', base: 1, min: 0.1 },
+  fuseDelay:      { label: 'Fuse Length', base: 1, min: 0.15 },
+  fusePower:      { label: 'Fused Resolution Power', base: 1, min: 0.1 },
   statusChance:   { label: 'Ailment Chance', base: 0, percent: true },
   manaCost:       { label: 'Mana Cost Multiplier', base: 1, min: 0 },
   /** Flat cost adders — a support's teeth on cheap skills (Mana Feeder). */

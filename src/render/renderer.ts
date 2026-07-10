@@ -2758,6 +2758,28 @@ export class Renderer {
       ctx.fillStyle = color;
       ctx.fillRect(bx2, by2, bw * frac, bh);
       // Mode decorations
+      if (cs.mode === 'channel') {
+        // CAPPED / BRIM channels wear their COMPLETION above the pulse
+        // bar (the overcharge stacked-bar idiom): the gather's walk to
+        // its ceiling, gold the instant it truly finishes. Enemies wear
+        // it too — the whole room reads the doom-cast burning in.
+        const chSpec = cs.inst.def.channel;
+        let holdFrac: number | null = null;
+        if (chSpec?.brim) {
+          holdFrac = a.brims?.get(cs.inst.def.id)?.fill ?? 0;
+        } else if (chSpec?.maxHold !== undefined) {
+          const cap = chSpec.maxHold * a.sheet.get('effectDuration',
+            skillContextTags(cs.inst.def), instanceMods(cs.inst));
+          holdFrac = cap > 0 ? Math.min(1, (cs.channelTime ?? 0) / cap) : null;
+        }
+        if (holdFrac !== null) {
+          const hy = by2 - 4;
+          ctx.fillStyle = 'rgba(0,0,0,0.7)';
+          ctx.fillRect(bx2 - 1, hy - 1, bw + 2, 4);
+          ctx.fillStyle = holdFrac >= 1 ? '#ffd700' : color;
+          ctx.fillRect(bx2, hy, bw * holdFrac, 3);
+        }
+      }
       if (cs.mode === 'perfect') {
         ctx.fillStyle = 'rgba(255,215,0,0.55)';
         ctx.fillRect(bx2 + bw * 0.72, by2, bw * 0.28, bh);
@@ -3613,6 +3635,18 @@ export class Renderer {
           for (let c = 0; c < Math.min(cap, 8); c++) {
             ctx.fillStyle = c < bank.count ? '#ffe86a' : 'rgba(90,90,110,0.8)';
             ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
+          }
+        }
+        // BRIM strip (ChannelSpec.brim): the persistent gauge lives on
+        // the slot's bottom edge — the banked scream visible between
+        // presses, gold at the brim.
+        if (def.channel?.brim) {
+          const bFill = p.brims?.get(def.id)?.fill ?? 0;
+          if (bFill > 0) {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.fillRect(x + 3, by + slot - 7, slot - 6, 4);
+            ctx.fillStyle = bFill >= 1 ? '#ffd700' : def.color;
+            ctx.fillRect(x + 3, by + slot - 7, (slot - 6) * bFill, 4);
           }
         }
         // Skill level badge

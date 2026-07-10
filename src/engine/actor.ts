@@ -90,6 +90,12 @@ export interface CastingState {
   focusBroken?: boolean;
   /** THE AMALGAM: minions consumed so far by this held channel. */
   amalgamFed?: number;
+  /** CAPPED CHANNEL / BRIM: the hold reached TRUE COMPLETION this cast —
+   *  maxHold's ceiling or a filled brim (release.requireFull reads it). */
+  hitCap?: boolean;
+  /** The 'channelFinish' trigger already rolled this cast (once per
+   *  unbroken channel, however the completion arrived). */
+  finishRolled?: boolean;
 }
 
 /** One OVERDRIVE lane's ledger: the toggle instance that opened it, the
@@ -787,6 +793,11 @@ export class Actor {
   /** BODY WAKE spec (MonsterDef.wake): the body itself sheds its ground
    *  payload as it travels. */
   wake?: { skillId: string; everyDist: number; dmgMult?: number };
+  /** THE BRIM LEDGER (ChannelSpec.brim): per-skill persistent gauge fill.
+   *  The live instance rides along so decay/payoff stat queries see
+   *  socketed support mods; fed by held channels, drained by the decay
+   *  sweep, spent by releases. Lazy — most bodies never brim. */
+  brims?: Map<string, { fill: number; inst: SkillInstance }>;
   /** The wake's runtime ledger: travel accrued toward the next shed, last
    *  frame's position (the displacement source), and the payload instance
    *  minted lazily at first shed. */
@@ -1595,6 +1606,17 @@ export class Actor {
       mixStr(id);
       ha = Math.imul(ha ^ n, 0x01000193); hb = (Math.imul(hb, 31) + n) | 0;
     }
+    // Brim fills publish as INTEGER pips (0–5) — the quantized bar honors
+    // the gauge golden rule (a raw float would churn the cache per frame),
+    // and "damage per brim pip" affix lines become authorable for free.
+    if (this.brims) {
+      for (const [id, b] of this.brims) {
+        const pips = Math.round(b.fill * 5);
+        if (pips <= 0) continue;
+        mixStr(id);
+        ha = Math.imul(ha ^ pips, 0x01000193); hb = (Math.imul(hb, 31) + pips) | 0;
+      }
+    }
     if (ha !== this.gaugeHashA || hb !== this.gaugeHashB || sheetChanged) {
       this.gaugeHashA = ha; this.gaugeHashB = hb;
       const gauges: [string, number][] = [];
@@ -1603,6 +1625,12 @@ export class Actor {
       }
       for (const [id, n] of this.charges) {
         if (n > 0) gauges.push(['charge:' + id, n]);
+      }
+      if (this.brims) {
+        for (const [id, b] of this.brims) {
+          const pips = Math.round(b.fill * 5);
+          if (pips > 0) gauges.push(['brim:' + id, pips]);
+        }
       }
       this.sheet.setGauges(gauges);
     }

@@ -373,6 +373,10 @@ export function validateContent(): void {
     // exposure / zoneGrow / zoneSizeOver stay unrowed on purpose: their gems
     // gate on 'duration' the way madden/zoneEmit do — broad by design, and a
     // row here would cry wolf at every boot for legitimately broad gates.
+    // The brim*/fuse* stats stay unrowed too: Stillwater/Overbrim gate on
+    // 'channel' (brim-less channels are a legitimate socket), and Slow
+    // Match's whole point is riding a Time Fuse graft — the loadout-time
+    // composition this audit deliberately leaves alone.
   ];
   // The map audits itself: a stat row naming a dead stat is map drift.
   for (const row of GRAFT_READ_SITES) {
@@ -490,6 +494,15 @@ export function validateContent(): void {
   for (const s of Object.values(SKILLS)) {
     if (s.meta && !SKILLS[s.meta.skillId]) {
       warn(`skill ${s.id}: meta payload '${s.meta.skillId}' is not a catalog skill`);
+    }
+    // THE GATHER FAMILY sanity: a completion-gated release needs a
+    // completion to reach (maxHold's ceiling or a fillable brim), and an
+    // auto-releasing brim that never spends would re-fire every press.
+    if (s.channel?.release?.requireFull && s.channel.maxHold === undefined && !s.channel.brim) {
+      warn(`skill ${s.id}: release.requireFull with neither maxHold nor brim — the payload can never fire`);
+    }
+    if (s.channel?.brim?.autoRelease && s.channel.brim.spend === false) {
+      warn(`skill ${s.id}: brim autoRelease without spend — a full bar re-fires instantly every press`);
     }
     // CONCENTRATION needs a quarry: an actor-resolving targeting spec, and
     // no rival held-cast discipline (the bar can only serve one master).

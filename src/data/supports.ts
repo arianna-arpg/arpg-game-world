@@ -324,6 +324,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('triggerChance', 'flat', 0.05)],
     weight: 4, minDropLevel: 10,
   },
+  culmination: {
+    id: 'culmination', name: 'Culmination',
+    description: 'This skill casts itself at the moment of COMPLETION: whenever a channel of yours truly finishes — a capped hold reaching its ceiling, a gauge filling to the brim — this fires free at your aim. Interrupted gathers pay nothing: the finish is the whole covenant. Its key only arms and disarms it.',
+    color: '#e8d88a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'channelFinish', chance: 1 },
+    mods: [],
+    perLevel: [mod('triggerChance', 'flat', 0.05)],
+    weight: 4, minDropLevel: 12,
+  },
   sequenced_invocation: {
     id: 'sequenced_invocation', name: 'Sequenced Invocation',
     description: 'Rides BESIDE a trigger gem and lifts its cast-time gate: the heavy spell answers the moment as a REAL cast in succession — feet planted for the bar (castMove and mobility investments still walk it). No trigger gem beside it, no effect.',
@@ -608,6 +617,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     mods: [],
     perLevel: [mod('effectDuration', 'increased', 0.05)],
     weight: 4,
+  },
+
+  // --- Brim gems: the persistent gauge, retuned (ChannelSpec.brim) ----------
+  stillwater_discipline: {
+    id: 'stillwater_discipline', name: 'Stillwater Discipline',
+    description: 'This channel\'s gauge STOPS BLEEDING — whatever you bank, it keeps, however long you carry it. The stored water runs 10% shallower: patience buys permanence, permanence pays a tithe.',
+    color: '#7ab0c8', requiresTags: ['channel'],
+    mods: [mod('brimDecay', 'increased', -1), mod('brimPower', 'increased', -0.1)],
+    perLevel: [mod('brimPower', 'increased', 0.02)],
+    weight: 5,
+  },
+  overbrim: {
+    id: 'overbrim', name: 'Overbrim',
+    description: 'This channel\'s gauge pays out 30% HARDER — and fills 20% slower. The deeper draw: every second of the scream is worth more, and every second is longer.',
+    color: '#c8a85a', requiresTags: ['channel'],
+    mods: [mod('brimPower', 'increased', 0.3), mod('brimFill', 'increased', -0.2)],
+    perLevel: [mod('brimPower', 'increased', 0.03)],
+    weight: 5,
   },
 
   // --- Reservation & resource economies ------------------------------------------
@@ -2183,6 +2210,25 @@ export const SUPPORTS: Record<string, SupportDef> = {
       },
     },
     weight: 5,
+  },
+
+  // --- Fuse gems: resolutions in arrears (FuseSpec) --------------------------
+  time_fuse: {
+    id: 'time_fuse', name: 'Time Fuse',
+    description: 'This skill\'s wounds land as PROMISES: every resolution — damage, ailments, on-hit ruin — banks for two seconds and then arrives all at once, rolled at your LIVE power and 25% MORE of it. The room can read the fuse; you can stack the debt.',
+    color: '#d8a06a', excludeTags: ['channel', 'guard', 'aura'],
+    fuse: { delay: 2, tell: 'the fuse hisses…' },
+    mods: [mod('damage', 'more', 0.25)],
+    perLevel: [mod('fusePower', 'increased', 0.03)],
+    weight: 5, minDropLevel: 8,
+  },
+  slow_match: {
+    id: 'slow_match', name: 'Slow Match',
+    description: 'Fused resolutions of this skill wait HALF AGAIN as long — and strike 40% harder when they finally speak. The long bet, for builds that can keep the mark in play. Inert without a fuse (innate or a socketed Time Fuse).',
+    color: '#b08a5a',
+    mods: [mod('fuseDelay', 'increased', 0.5), mod('fusePower', 'increased', 0.4)],
+    perLevel: [mod('fusePower', 'increased', 0.04)],
+    weight: 4, minDropLevel: 8,
   },
 
   // --- Ailment-stack + form gems ---------------------------------------------------
