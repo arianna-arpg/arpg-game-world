@@ -74,7 +74,16 @@ function groundPoint(world: World, p: Vec2, radius: number): Vec2 {
 
 type Handler = (world: World, actor: Actor, act: AIAction, target: Actor | null) => void;
 
-const HANDLERS: Record<AIAction['do'], Handler> = {
+/** PACKAGE-EXTENDED verbs (`x_`-prefixed `do` ids): the open half of the
+ *  registry — same contract as registerMoveStyle / registerCommandKind /
+ *  registerAICondition. Unknown ids no-op with a one-time console warn. */
+const CUSTOM_HANDLERS: Record<string, Handler> = {};
+export function registerAIAction(id: `x_${string}`, handler: Handler): void {
+  CUSTOM_HANDLERS[id] = handler;
+}
+const warnedUnknown = new Set<string>();
+
+const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
 
   announce: (world, actor, act) => {
     if (act.do !== 'announce') return;
@@ -397,6 +406,14 @@ export function runAIActions(
 ): void {
   for (const act of actions) {
     if (actor.dead && !opts?.allowDead) return;
-    HANDLERS[act.do]?.(world, actor, act, target);
+    const h = (HANDLERS as Record<string, Handler>)[act.do] ?? CUSTOM_HANDLERS[act.do];
+    if (!h) {
+      if (!warnedUnknown.has(act.do)) {
+        warnedUnknown.add(act.do);
+        console.warn(`[ai] unknown action verb '${act.do}' — is its package loaded?`);
+      }
+      continue;
+    }
+    h(world, actor, act, target);
   }
 }

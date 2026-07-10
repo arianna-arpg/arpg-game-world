@@ -421,6 +421,12 @@ export class Actor {
   aiDodgeAt = 0;
   aiDodgeExit?: Vec2;
   aiDodgeUntil = 0;
+  /** THE FEINT (BehaviorSpec.feint): world time the bluffed bar drops
+   *  (0 = no feint in flight). */
+  aiFeintAt = 0;
+  /** POST-CAST PLANT (BehaviorSpec.plantChance): feet frozen until this
+   *  world time — the hands stay free (runKernel zeroes movement dt). */
+  aiPlantUntil = 0;
   /** WARD (the add-gate): untargetable until no live actor carries this tag;
    *  the note is announced when the ward shatters. */
   aiWardTag?: string;

@@ -4212,16 +4212,24 @@ export class World {
   claimRingSlot(actor: Actor, target: Actor, front: number): number {
     let claims = this.ringClaims.get(target.id);
     if (!claims) { claims = []; this.ringClaims.set(target.id, claims); }
+    const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+    const approach = Math.atan2(actor.pos.y - target.pos.y, actor.pos.x - target.pos.x);
+    const sep = BEHAVIOR_CFG.ringSep;
     const mine = claims.find(c => c.actorId === actor.id);
     if (mine) {
       mine.at = this.time;
+      // A LIVE ring: when the claimant's CURRENT bearing sits clear of every
+      // other claim, the slot re-seats there — a fight that MOVES drags its
+      // ring along. A stale world-absolute slot behind a fleeing target is
+      // a tail-chase that never bites; separation still holds, so the
+      // discipline survives the pursuit.
+      if (!claims.some(c => c !== mine && Math.abs(wrap(c.ang - approach)) < sep)) {
+        mine.ang = approach;
+      }
       actor.aiRingTarget = target.id;
       actor.aiRingAt = this.time;
       return mine.ang;
     }
-    const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
-    const approach = Math.atan2(actor.pos.y - target.pos.y, actor.pos.x - target.pos.x);
-    const sep = BEHAVIOR_CFG.ringSep;
     let ang: number;
     if (claims.length < Math.max(1, front)) {
       // Vanguard: bite from where you came — nudged sideways until clear of
@@ -4260,8 +4268,8 @@ export class World {
    *  reader rolls its read ONCE per telegraph, the PADDED disc to clear,
    *  and the seconds left before it lands. Null = nothing worth diving from. */
   imminentThreatTo(actor: Actor, pad: number):
-    { ref: object; pos: Vec2; radius: number; eta: number } | null {
-    let best: { ref: object; pos: Vec2; radius: number; eta: number } | null = null;
+    { ref: object; pos: Vec2; radius: number; eta: number; casterPos?: Vec2 } | null {
+    let best: { ref: object; pos: Vec2; radius: number; eta: number; casterPos?: Vec2 } | null = null;
     for (const z of this.zones) {
       if (z.exploded || z.delay <= 0) continue;
       if (z.delay > BEHAVIOR_CFG.dodgeHorizon) continue;
@@ -4269,7 +4277,10 @@ export class World {
       if (!z.hitAll && !this.hostileTo(z.caster, actor)) continue;
       const r = z.radius + pad;
       if (dist(actor.pos, z.pos) > r) continue;
-      if (!best || z.delay < best.eta) best = { ref: z, pos: z.pos, radius: r, eta: z.delay };
+      if (!best || z.delay < best.eta) {
+        best = { ref: z, pos: z.pos, radius: r, eta: z.delay,
+          casterPos: vec(z.caster.pos.x, z.caster.pos.y) };
+      }
     }
     for (const e of this.enemiesOf(actor)) {
       const cs = e.casting;
@@ -4282,7 +4293,10 @@ export class World {
       const at = del.type === 'nova' ? e.pos : cs.aim;
       const r = del.radius + pad;
       if (dist(actor.pos, at) > r) continue;
-      if (!best || eta < best.eta) best = { ref: cs, pos: vec(at.x, at.y), radius: r, eta };
+      if (!best || eta < best.eta) {
+        best = { ref: cs, pos: vec(at.x, at.y), radius: r, eta,
+          casterPos: vec(e.pos.x, e.pos.y) };
+      }
     }
     return best;
   }

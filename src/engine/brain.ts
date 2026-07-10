@@ -221,7 +221,34 @@ export interface BehaviorSpec {
     reaction?: [number, number];
     /** Clearance beyond the blast edge (default BEHAVIOR_CFG.dodgePad). */
     pad?: number;
+    /** Exit geometry: 'nearest' rim point (default), 'away' — out the far
+     *  side from the CASTER (ranged minds open distance as they clear),
+     *  'lateral' — perpendicular to the caster's line (the player-strafe
+     *  dodge: clear the disc, keep your own range). */
+    exit?: 'nearest' | 'away' | 'lateral';
   };
+  /** POST-CAST RHYTHM: chance, rolled per cast, that the body PLANTS —
+   *  feet frozen (hands stay free) until the next cast decision (or
+   *  `plantFor`, rolled). The monotony spectrum: 0/absent = always moves
+   *  off the shot (the classic weave), 1 = a metronome that stands its
+   *  ground and fires — PREDICTABILITY ITSELF as an authored trait — and
+   *  everything between breaks the rhythm a player would otherwise learn
+   *  in three exchanges. */
+  plantChance?: number;
+  plantFor?: [number, number];
+  /** THE FEINT: chance, rolled per would-be cast (bar casts only), that
+   *  the bar is a LIE — begun, held `hold` seconds (rolled), then dropped
+   *  with no payload, and the real decision follows fast. Bait for
+   *  everything that reads casts: player dodges, dodge minds (their
+   *  once-per-telegraph read is SPENT on the fake), punish rules. The
+   *  cost is still paid — bluffing isn't free. */
+  feint?: { chance: number; hold?: [number, number] };
+  /** LIVE AIM — the Puppet-Strings hand: while a target is held, this
+   *  actor's aimPos refreshes EVERY TICK onto it (plus `lead` × the
+   *  intercept horizon), so guided flights (guidePower — innate or a
+   *  granted support like puppet_strings) curve after the prey mid-flight:
+   *  a monster dragging its cursor exactly the way the player does. */
+  steerAim?: { lead?: number };
 }
 
 /** The behavior fabric's modular thresholds (avoid-hardcoding: tune here). */
@@ -248,6 +275,10 @@ export const BEHAVIOR_CFG = {
    *  slot, and the transit radius as a fraction of the bite ring. */
   detourStep: 0.85,
   detourRadiusMul: 1.35,
+  /** Ring transit: detours apply only within this × the bite ring — from
+   *  farther out the chaser heads STRAIGHT for its slot (spiraling around
+   *  a moving target is a tail-chase that never closes). */
+  detourWithinMul: 2.6,
   /** Spacing: repulsion gain at zero distance (falls off linearly). */
   spacingGain: 0.9,
   /** Dodge: default clearance beyond a blast's edge (px). */
@@ -260,6 +291,23 @@ export const BEHAVIOR_CFG = {
   /** Dodge: the dive itself may not outlive this (secs) — a body that
    *  hasn't cleared the disc by then resumes its own mind. */
   dodgeWindowMax: 1.1,
+  /** PET MELEE catches movers: the default intercept fraction PLAYER-SIDE
+   *  melee (minions, companions, mercenaries) solves with when its brain
+   *  declares no aimLead — the swing stamped where the prey WILL be at
+   *  bar's end. Without it, an idly-strafing enemy is immune to a slow pet
+   *  as a free baseline (the tamed wolf that never lands a claw). ONE-SIDED
+   *  by design: enemy melee prediction stays an authored per-def lever, so
+   *  the fairness fix never doubles as a global difficulty bump. Bewilder's
+   *  aiAimLead kill zeroes this too: cursed pets flail at ghosts. */
+  meleeLead: 0.85,
+  /** Feint: default bar-hold before the drop (secs, rolled). */
+  feintHold: [0.25, 0.45] as [number, number],
+  /** Feint: only bars at least this long can bluff (instants just fire). */
+  feintMinBar: 0.15,
+  /** Plant: slack past the next cast decision when plantFor is unset. */
+  plantPad: 0.15,
+  /** steerAim: the intercept horizon (secs) its lead fraction scales. */
+  steerHorizon: 0.45,
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at cast time
@@ -469,6 +517,24 @@ export interface AICondition {
   sinceEngaged?: number;
   /** Gate each FIRING by this chance (rolled when everything else passes). */
   chance?: number;
+  /** PACKAGE-EXTENDED conditions: each key names a predicate registered via
+   *  registerAICondition (its value rides along as the arg). The last
+   *  closed seam of the DSL, opened: new trigger vocabulary is a registry
+   *  entry, never an engine edit. Unknown keys are FALSE — a missing
+   *  package fails closed, not open. */
+  ext?: Record<string, unknown>;
+}
+
+/** A package-registered condition predicate (AICondition.ext). */
+export type AIConditionFn =
+  (actor: Actor, target: Actor | null, ctx: AICtx, arg: unknown) => boolean;
+
+const EXT_CONDITIONS = new Map<string, AIConditionFn>();
+
+/** Open the condition DSL: packages add trigger vocabulary here — the same
+ *  contract as registerMoveStyle / registerCommandKind / registerAIAction. */
+export function registerAICondition(id: string, fn: AIConditionFn): void {
+  EXT_CONDITIONS.set(id, fn);
 }
 
 // --- ACTIONS: the choreography verbs ---------------------------------------------
@@ -545,7 +611,11 @@ export type AIAction =
    *  carried, casting freely — until dismounted or either party dies. The
    *  D2 siege-beast pattern; graceful no-op with nothing to ride. */
   | { do: 'mount'; within?: number }
-  | { do: 'dismount' };
+  | { do: 'dismount' }
+  /** PACKAGE-EXTENDED verbs: `x_`-prefixed ids dispatch through the open
+   *  registry (aiActions.ts registerAIAction) — new choreography is a
+   *  registry entry, never an engine edit. Unknown ids no-op with a warn. */
+  | { do: `x_${string}`; [key: string]: unknown };
 
 // --- RULES ------------------------------------------------------------------------
 
@@ -987,6 +1057,12 @@ export function evalCondition(
   if (c.hasCharge && (actor.charges.get(c.hasCharge.charge) ?? 0) < c.hasCharge.min) return false;
   if (c.sinceEngaged !== undefined) {
     if (actor.aiEngagedAt < 0 || ctx.time - actor.aiEngagedAt < c.sinceEngaged) return false;
+  }
+  if (c.ext) {
+    for (const key of Object.keys(c.ext)) {
+      const fn = EXT_CONDITIONS.get(key);
+      if (!fn || !fn(actor, target, ctx, c.ext[key])) return false;
+    }
   }
   return true;
 }

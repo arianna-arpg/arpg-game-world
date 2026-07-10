@@ -1901,9 +1901,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('lightningRes', 'flat', 0.4)],
     skills: ['spark', 'rallying_howl'],
     xp: 16,
-    // Dim like its kin: slow to open, and its sparks spray wide of the mark —
-    // stand still at your peril, but a walking target is half safe.
-    brain: { type: 'caster', behavior: { reaction: [0.5, 1.0], aimJitter: 0.22 } },
+    // Dim like its kin: slow to open, sparks spraying wide — and its rhythm
+    // is a mess (plantChance): sometimes it roots and fires again from the
+    // same spot, sometimes it scurries mid-volley. Learn nothing from it.
+    brain: { type: 'caster', behavior: { reaction: [0.5, 1.0], aimJitter: 0.22, plantChance: 0.35 } },
     wardPriority: 2, // the warband shields its shaman like a commander
     faction: 'goblin',
     adorn: 'ears',
@@ -2050,7 +2051,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // AND A PRACTICED EYE, sometimes (BehaviorSpec.aimLead): under half its
       // shots lead your run — enough that straight-line strafing stops being
       // free, not so many that juking it is pointless. Rolled PER SHOT.
-      behavior: { aimLead: 0.55, aimLeadChance: 0.45 },
+      // AND A LIAR'S SHOULDER (feint): one draw in five is a fake — the bar
+      // you dodged was bait, and the real arrow follows your recovery.
+      behavior: { aimLead: 0.55, aimLeadChance: 0.45, feint: { chance: 0.22, hold: [0.3, 0.5] } },
       rules: [{
         when: { distUnder: 720 },
         actions: [{ do: 'garrison', within: 680 }],
@@ -2254,8 +2257,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'skirmish', withdraw: 1.2,
       target: { prey: ['critter'] },
       // Sky-honed reflexes (dodge): a vulture reads the wind-up and is
-      // simply elsewhere when the blast arrives.
-      behavior: { dodge: { chance: 0.8, reaction: [0.1, 0.3] } },
+      // simply elsewhere when the blast arrives — AWAY elsewhere, opening
+      // distance from whoever threw it (exit 'away').
+      behavior: { dodge: { chance: 0.8, reaction: [0.1, 0.3], exit: 'away' } },
       rules: [
         { // bloodied: flee on the wing — and CIRCLE out of reach while the
           // fright holds, before hunger drags it back in
@@ -2327,8 +2331,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'flanker',
       skillUse: { mode: 'priority', order: ['despair', 'heavy_strike', 'cleave'] },
       // Elite intellect (the sylvan tier of the undead): it reads wind-ups
-      // and steps off the disc, and its curse arcs LEAD a running mark.
-      behavior: { aimLead: 0.65, aimLeadChance: 0.8, dodge: { chance: 0.5, reaction: [0.2, 0.4] } },
+      // and strafes off the disc laterally — a blade keeps its blade range —
+      // and its curse arcs LEAD a running mark.
+      behavior: { aimLead: 0.65, aimLeadChance: 0.8, dodge: { chance: 0.5, reaction: [0.2, 0.4], exit: 'lateral' } },
       rules: [{ when: { targetLifeBelow: 0.35 }, use: { skillUse: { cadence: [0.08, 0.18] } } }],
     },
   },
@@ -2349,9 +2354,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'artillery',
       move: { style: 'holdRange', hold: 460 },
       skillUse: { cadence: [0.25, 0.5] },
-      // Half its volleys LEAD your run (the motes' weak guide corrects the
-      // rest) — the loose-track feel gains a planning mind behind it.
-      behavior: { aimLead: 0.45, aimLeadChance: 0.5 },
+      // Half its volleys LEAD your run — and its hand never leaves them:
+      // steerAim refreshes its aim every tick, so the motes' innate guide
+      // (spectral_finger's trajectory) tracks you LIVE, the D2 finger-mage
+      // feel perfected. The planning mind, then the following hand.
+      behavior: { aimLead: 0.45, aimLeadChance: 0.5, steerAim: { lead: 0.25 } },
       // The siege posture: a mage in a garrison squad crews a tower BEFORE
       // the fight finds it (SquadSpec.idle 'siege').
       squad: { idle: { style: 'siege' } },
@@ -2431,6 +2438,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'artillery',
       move: { style: 'holdRange', hold: 300, band: [0.5, 1.2] },
       skillUse: { mode: 'priority', order: ['creeping_ice', 'frostbolt'] },
+      // Glacial DELIBERATION (the monotony lever, high end): it mostly
+      // plants after each working and lets the ice do the walking.
+      behavior: { plantChance: 0.75, plantFor: [0.8, 1.4] },
     },
   },
 
@@ -2503,6 +2513,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'skirmish', withdraw: 1.3,
       target: { prey: ['critter'] },
       impulses: [{ type: 'swarm', every: [6, 9], duration: [1.2, 1.8] }],
+      // A huntress FEINTS the spear-draw — bait the sidestep, then the
+      // true cast into your recovery. Fights her like she fights you.
+      behavior: { feint: { chance: 0.3 } },
       // The huntress PUNISHES a planted foot: begin a bar with a maiden in
       // spear range and the line rushes THAT instant, not on its own clock.
       rules: [{
@@ -2530,9 +2543,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // A living marksman's hand: 55% Perfect! snipes when provoked.
       skillUse: { finesse: { chance: 0.55 } },
       // And a living marksman's EYE and FEET: he leads a running mark like
-      // the player leads one, and steps out of a wind-up he can see coming —
-      // the closest thing to fighting your own kind on the road.
-      behavior: { aimLead: 0.7, aimLeadChance: 0.7, dodge: { chance: 0.7, reaction: [0.18, 0.4] } },
+      // the player leads one, and STRAFES out of a wind-up he can see
+      // coming — lateral, keeping his own range, the way you would.
+      behavior: { aimLead: 0.7, aimLeadChance: 0.7, dodge: { chance: 0.7, reaction: [0.18, 0.4], exit: 'lateral' } },
       morale: { breakOutnumbered: { deficit: 3, radius: 300 }, rallyAfter: 4 },
     },
   },
@@ -2633,10 +2646,18 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // FEY CUNNING (the goblin shaman's foil — same job, nothing alike): the
     // sprite reads your run and looses venom where you're GOING, near every
     // time — and reads YOUR wind-ups right back, skipping out of the disc.
+    // Veterans take the MARIONETTE HAND: puppet_strings grafts onto the
+    // venom (the player's own support, granted) while steerAim drags its
+    // "cursor" after you every tick — the bolt bends onto your dodge path.
     // Break your line or wear the bolt; the grove punishes habits.
+    grants: [{ atLevel: 10, support: 'puppet_strings', on: 'venom_bolt' }],
     brain: {
       type: 'strafer',
-      behavior: { aimLead: 0.8, aimLeadChance: 0.75, dodge: { chance: 0.7, reaction: [0.15, 0.35] } },
+      behavior: {
+        aimLead: 0.8, aimLeadChance: 0.75,
+        dodge: { chance: 0.7, reaction: [0.15, 0.35] },
+        steerAim: { lead: 0.4 }, plantChance: 0.2,
+      },
     },
     faction: 'sylvan',
   },
@@ -4311,7 +4332,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // pincer, never a shoving file. Insect drill, insect geometry.
     brain: {
       type: 'pack',
-      behavior: { encircle: { front: 3 }, spacing: 30 },
+      // The colony is a METRONOME by design (plantChance 0.9): every strike
+      // from a planted stance, utterly predictable — monotony AS identity,
+      // the deliberate far pole of the rhythm lever.
+      behavior: { encircle: { front: 3 }, spacing: 30, plantChance: 0.9 },
       squad: { idle: { style: 'drill' }, formation: 'column', tokens: 3 },
     },
   },

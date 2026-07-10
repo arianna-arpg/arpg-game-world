@@ -274,6 +274,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     actor.aiWardNote = undefined;
   }
 
+  // A FEINT mid-flight drops its bar at the appointed beat — no payload,
+  // just the bait (the stun-interrupt idiom: clearing casting is enough).
+  // Every mind that read the bar spent its read on a lie.
+  if (actor.aiFeintAt > 0 && world.time >= actor.aiFeintAt) {
+    actor.aiFeintAt = 0;
+    if (actor.casting && actor.casting.mode !== 'channel') actor.casting = null;
+  }
+
   // Resolve the EFFECTIVE tuning this tick and run the machines (ladder,
   // script, rules, impulses) — phase transitions, cadences and rule actions
   // all fire in here.
@@ -479,6 +487,16 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // ELBOW ROOM (BehaviorSpec.spacing): closing movement repels off the
   // nearest packmate this tick — moveToward reads the stamp.
   actor.aiSpacing = tuning.behavior?.spacing;
+
+  // LIVE AIM (BehaviorSpec.steerAim): the monster's "cursor" rides the prey
+  // every tick — guided flights (guidePower, innate or a granted support
+  // like puppet_strings) curve after it mid-flight, the player's own
+  // marionette hand extended into the bestiary.
+  const steer = tuning.behavior?.steerAim;
+  if (steer && target) {
+    const h = BEHAVIOR_CFG.steerHorizon * (steer.lead ?? 0);
+    actor.aimPos = vec(target.pos.x + target.velEst.x * h, target.pos.y + target.velEst.y * h);
+  }
 
   // A stalker that swapped to an unshrouded style de-cloaks.
   if (!tuning.move?.shroud && actor.aiShrouded) setShroud(actor, false);
@@ -873,10 +891,22 @@ function updateDodge(actor: Actor, world: World, tuning: BrainTuning, dt: number
   // (the world carries it), or anchored on a garrison perch. The mind has
   // read the threat; the feet answer the moment they're free.
   if (actor.casting || actor.dash || actor.garrison) return false;
-  // Dive radially — the shortest line out of the disc from where it stands.
-  const out = dist(threat.pos, actor.pos) < 1
-    ? rand(0, Math.PI * 2)
-    : angleTo(threat.pos, actor.pos);
+  // EXIT GEOMETRY (dodge.exit): 'nearest' takes the shortest line out;
+  // 'away' clears through the far side from the CASTER (ranged minds open
+  // distance as they dive); 'lateral' crosses perpendicular to the
+  // caster's line — the player-strafe dodge that keeps its own range.
+  let out: number;
+  if (dist(threat.pos, actor.pos) < 1) {
+    out = rand(0, Math.PI * 2);
+  } else if (spec.exit === 'away' && threat.casterPos) {
+    out = angleTo(threat.casterPos, actor.pos);
+  } else if (spec.exit === 'lateral' && threat.casterPos) {
+    const line = angleTo(threat.casterPos, actor.pos);
+    const side = angleDiff(line, angleTo(threat.pos, actor.pos)) >= 0 ? 1 : -1;
+    out = line + side * (Math.PI / 2);
+  } else {
+    out = angleTo(threat.pos, actor.pos);
+  }
   const clear = threat.radius + actor.radius + 8;
   actor.aiDodgeExit = vec(
     threat.pos.x + Math.cos(out) * clear,
@@ -1119,7 +1149,19 @@ function aimPointFor(
   // base 0), so a Bewilder curse scatters even a mind that was never
   // authored to have one. Two stat reads per cast — event-rate, not tick-rate.
   let ax = target.pos.x, ay = target.pos.y;
-  const lead = actor.sheet.get(BEHAVIOR_STATS.aimLead, undefined, undefined, beh?.aimLead ?? 0);
+  // PET MELEE catches movers by default: with no authored aimLead, a
+  // PLAYER-SIDE melee bar (minions, companions, mercenaries) solves the
+  // intercept at BEHAVIOR_CFG.meleeLead — the swing stamped where the prey
+  // WILL be at bar's end. Without it, any idly-strafing enemy is immune to
+  // a slow pet as a free baseline (the tamed wolf that never lands). The
+  // default is deliberately ONE-SIDED: enemy melee prediction stays an
+  // AUTHORED lever (dim things keep whiffing at strafing players), so the
+  // fix never smuggles in a global difficulty bump.
+  const petSide = !!actor.owner || actor.kind === 'minion'
+    || actor.kind === 'companion' || actor.kind === 'mercenary';
+  const innate = beh?.aimLead
+    ?? (petSide && inst.def.delivery.type === 'melee' ? BEHAVIOR_CFG.meleeLead : 0);
+  const lead = actor.sheet.get(BEHAVIOR_STATS.aimLead, undefined, undefined, innate);
   if (lead !== 0 && target !== actor && Math.random() < (beh?.aimLeadChance ?? 1)) {
     const del = inst.def.delivery;
     const flight = del.type === 'projectile'
@@ -1638,7 +1680,11 @@ function makeCtx(
     const slotAng = world.claimRingSlot(actor, target, beh.encircle.front ?? 2);
     const myAng = angleTo(target.pos, actor.pos);
     const err = angleDiff(myAng, slotAng);
-    if (Math.abs(err) > BEHAVIOR_CFG.detourArc) {
+    // Detour ONLY inside the close ring, where cutting the chord would shove
+    // the victim's body: from farther out, head STRAIGHT for the slot point
+    // — a spiral waypoint around a MOVING target re-rotates as fast as the
+    // chaser walks it, and the pursuit stalls into a tail-chase orbit.
+    if (Math.abs(err) > BEHAVIOR_CFG.detourArc && d < ring * BEHAVIOR_CFG.detourWithinMul) {
       const step = myAng + Math.sign(err) * BEHAVIOR_CFG.detourStep;
       const rr = Math.max(ring * BEHAVIOR_CFG.detourRadiusMul, d * 0.8);
       goal = vec(target.pos.x + Math.cos(step) * rr, target.pos.y + Math.sin(step) * rr);
@@ -1665,7 +1711,29 @@ function makeCtx(
         angleTo(actor.pos, target.pos))) > beh.castArc) return null;
       return pickSkill(actor, world, d, tuning);
     },
-    cast: inst => useOn(actor, world, inst, target, tuning),
+    cast: inst => {
+      // THE FEINT (kernel casts only — reserves/menders never bluff): the
+      // bar begins for real, drops at the beat, and the next real decision
+      // follows fast. Instants can't bluff — there's no bar to fake.
+      const f = beh?.feint;
+      if (f && actor.skillUseTime(inst) > BEHAVIOR_CFG.feintMinBar
+        && Math.random() < f.chance) {
+        if (world.useSkill(actor, inst, aimPointFor(actor, inst, target, beh))) {
+          const hw = f.hold ?? BEHAVIOR_CFG.feintHold;
+          actor.aiFeintAt = world.time + rand(hw[0], hw[1]);
+          actor.aiCooldown = rand(0.08, 0.2); // the real blow follows fast
+        }
+        return;
+      }
+      useOn(actor, world, inst, target, tuning);
+      // POST-CAST RHYTHM (plantChance): sometimes the feet stay planted
+      // into the next skill — the monotony spectrum, rolled per cast.
+      if (beh?.plantChance && Math.random() < beh.plantChance) {
+        actor.aiPlantUntil = world.time + (beh.plantFor
+          ? rand(beh.plantFor[0], beh.plantFor[1])
+          : actor.aiCooldown + BEHAVIOR_CFG.plantPad);
+      }
+    },
   };
 }
 
@@ -1677,8 +1745,9 @@ function runKernel(style: string, ctx: KernelCtx): void {
     ctx = { ...ctx, dt: ctx.dt * Math.max(0, pace) };
   }
   // A tempo PAUSE stills the feet, not the hands: movement dt collapses to
-  // zero, the pick/cast path keeps its real clock.
-  if (ctx.paused) ctx = { ...ctx, dt: 0 };
+  // zero, the pick/cast path keeps its real clock. A post-cast PLANT
+  // (BehaviorSpec.plantChance) is the same stillness on a per-cast roll.
+  if (ctx.paused || ctx.a.aiPlantUntil > ctx.world.time) ctx = { ...ctx, dt: 0 };
   (MOVE_KERNELS[style] ?? MOVE_KERNELS.approach)(ctx);
 }
 
