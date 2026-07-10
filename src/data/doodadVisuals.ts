@@ -485,6 +485,30 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 5, color: '#b6d4e6', material: 'ice', coreGlow: { color: '#eef8ff' } },
     light: { radius: -1.6, color: '#cfe8f4', intensity: 0.1 },
   },
+  // --- The bog set: mire dressing + the contracting-fume hazard -------------
+  // A waterlogged trunk gone half to moss — the log painter saying 'drowned'.
+  sunken_log: {
+    painter: 'log', order: 51, shadow: 0.4,
+    params: { color: '#413828', moss: '#2f5230' },
+  },
+  // The will-o-the-mire: barely a body at all — the light IS the doodad.
+  marsh_wisp: {
+    painter: 'pod', order: 49,
+    params: { body: '#1f2e22', glow: '#b8f0a0', aspectY: 0.82, glowY: -0.3, glowR: 0.62, pulseRate: 0.7 },
+    light: { radius: -3.4, color: '#a8e890', intensity: 0.34, flicker: 3.4 },
+  },
+  // Cut peat stacked into a hummock: soft dark cover, tar on the nose.
+  peat_mound: {
+    painter: 'mound', order: 50, shadow: 0.5,
+    params: { color: '#3a3226', edge: '#57492f' },
+  },
+  // The mire-flower swollen with venom — its pop mints venom_seep, so the
+  // fume CONTRACTS away on the skill's own envelope.
+  venom_bloom: {
+    painter: 'pod', order: 52, shadow: 0.45,
+    params: { body: '#4a5e2c', glow: '#c8e86a', aspectY: 1.05, glowY: -0.12, glowR: 0.5, pulseRate: 1.6 },
+    light: { radius: -1.7, color: '#c8e86a', intensity: 0.12, flicker: 1.2 },
+  },
   rubble: { painter: 'rubble', order: 36 },
   banner_post: { painter: 'bannerPost', order: 55, shadow: 0.35, longShadow: 1.5 },
   // The mercenary camp's standard (was a warned disc-fallback).

@@ -579,6 +579,37 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- Size-envelope gems: ground that BREATHES (SupportDef.zoneSizeOver) ---
+  // Duration-normalized, curve-shaped radius walks — the graft wins over any
+  // innate envelope, and duration mods reshape the PACE, never the journey.
+  ebbing_ground: {
+    id: 'ebbing_ground', name: 'Ebbing Ground',
+    description: 'This skill\'s lingering ground opens 30% WIDE and then CLOSES like a throat — holding its promise, collapsing late, gone exactly as the duration dies. What it still covers it works 25% harder: the noose concentrates. Duration mods set the pace of the closing.',
+    color: '#7a9a52', requiresTags: ['duration'],
+    zoneSizeOver: { from: 1.3, to: 0, curve: 'quadIn' },
+    mods: [mod('damage', 'more', 0.25)],
+    perLevel: [mod('effectDuration', 'increased', 0.04)],
+    weight: 5,
+  },
+  blooming_ground: {
+    id: 'blooming_ground', name: 'Blooming Ground',
+    description: 'This skill\'s lingering ground begins as a SEED — a quarter of its reach — and blooms fast past full to 140% by the end. 15% less damage; patience buys the acreage, and whatever bursts as it expires bursts at FULL spread.',
+    color: '#8ab86a', requiresTags: ['duration'],
+    zoneSizeOver: { from: 0.25, to: 1.4, curve: 'quadOut' },
+    mods: [mod('damage', 'more', -0.15)],
+    perLevel: [mod('aoeRadius', 'increased', 0.04)],
+    weight: 5,
+  },
+  tidal_ground: {
+    id: 'tidal_ground', name: 'Tidal Ground',
+    description: 'This skill\'s lingering ground breathes ONE FULL TIDE per life: out from half its reach to half again past it at mid-duration, and home again by the end. Stand where the water was and wait — it comes back.',
+    color: '#6a9a8a', requiresTags: ['duration'],
+    zoneSizeOver: { from: 0.5, to: 1.5, curve: 'breath' },
+    mods: [],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 4,
+  },
+
   // --- Reservation & resource economies ------------------------------------------
   fleeting_devotion: {
     id: 'fleeting_devotion', name: 'Fleeting Devotion',
@@ -2135,6 +2166,22 @@ export const SUPPORTS: Record<string, SupportDef> = {
     color: '#e88a4a', requiresTags: ['projectile'],
     mods: [],
     trail: { every: 90, zone: { radius: 40, duration: 2.5, tickInterval: 0.4, damageScale: 0.3 } },
+    weight: 5,
+  },
+
+  sloughing_wake: {
+    id: 'sloughing_wake', name: 'Sloughing Wake',
+    description: 'The projectile SLOUGHS as it flies: ground shed every stretch of travel that CONTRACTS into nothing over its life — and each shedding reads the flight\'s pace at the moment it falls. The slower the passage, the longer it lingers: lob something ponderous and write a moat; a decelerating shot ages its trail young-to-old.',
+    color: '#9ab84a', requiresTags: ['projectile'],
+    mods: [],
+    trail: {
+      every: 74,
+      zone: {
+        radius: 44, duration: 2.8, tickInterval: 0.45, damageScale: 0.28,
+        sizeOver: { from: 1, to: 0, curve: 'quadIn' },
+        durationBySpeed: { ref: 240, exp: -0.6, min: 0.5, max: 2.2 },
+      },
+    },
     weight: 5,
   },
 

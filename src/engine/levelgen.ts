@@ -155,7 +155,12 @@ export type KnownDoodadKind =
   | 'puffcap_cluster' // pale puffballs underfoot: a soft fume when trodden
   | 'burial_urn'     // grave clay: spills orbs — and sometimes wakes its tenants
   | 'crystal_cluster' // a knee-high lattice: shatters to a strike, pays in gems
-  | 'icicle_cluster'; // brittle ice fangs: shatter when brushed or struck
+  | 'icicle_cluster'  // brittle ice fangs: shatter when brushed or struck
+  // The bog set (mire/marsh dressing + hazard)
+  | 'sunken_log'      // a waterlogged trunk half-swallowed by the mire
+  | 'marsh_wisp'      // a hovering bog-light: glow and omen, no body to bar the way
+  | 'peat_mound'      // a low cut-peat hummock: dark cover that smells of tar
+  | 'venom_bloom';    // a swollen mire-flower: pops into a CONTRACTING venom fume
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -515,6 +520,15 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['hit'], gemChance: 0.3, orbChance: 0.35, text: 'the lattice shatters!', color: '#7fc0f0' } },
   icicle_cluster: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['water', 'lava'],
     brittle: { on: ['hit', 'near'], reach: 30, orbChance: 0.25, text: 'shatter!', color: '#bfe0f0' } },
+  // The bog set: mire dressing + the contracting-fume hazard flower. The
+  // bloom's pop is pure BrittleSpec data — its fume names venom_seep, so the
+  // cloud inherits the skill's own closing SIZE ENVELOPE (it shrinks away).
+  sunken_log: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['lava', 'chasm'] },
+  marsh_wisp: { overlap: 'inert', spacing: 34 },
+  peat_mound: { overlap: 'solid', blocksMove: true, spacing: 28, forbidOn: ['water', 'lava', 'chasm'] },
+  venom_bloom: { overlap: 'inert', spacing: 24,
+    brittle: { on: ['hit', 'near'], reach: 32, text: 'the bloom bursts!', color: '#a8d05a',
+      fume: { skillId: 'venom_seep', radius: 62, linger: 3.4, dmgMult: 0.8, color: '#a8d05a' } } },
   // Canopy kinds (occlude): their crowns draw ABOVE actors and FADE when the
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
   // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
@@ -2456,6 +2470,11 @@ registerStamp('puffcap_cluster', stampSingle('puffcap_cluster', [12, 17]));
 registerStamp('burial_urn', stampSingle('burial_urn', [12, 16]));
 registerStamp('crystal_cluster', stampSingle('crystal_cluster', [14, 20]));
 registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
+// The bog set: mire dressing + the contracting-fume bloom.
+registerStamp('sunken_log', stampSingle('sunken_log', [16, 24]));
+registerStamp('marsh_wisp', stampSingle('marsh_wisp', [7, 10]));
+registerStamp('peat_mound', stampSingle('peat_mound', [18, 26]));
+registerStamp('venom_bloom', stampSingle('venom_bloom', [12, 16]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the

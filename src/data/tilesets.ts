@@ -681,6 +681,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'gas_pod', count: [2, 4] },
       { kind: 'puffcap_cluster', count: [1, 3] },
       { kind: 'briarwood', count: [1, 2] },
+      // The bog set rides every variant too: drowned timber, wisp-light,
+      // and the venom blooms whose pops CONTRACT away.
+      { kind: 'sunken_log', count: [1, 2] },
+      { kind: 'marsh_wisp', count: [1, 3] },
+      { kind: 'venom_bloom', count: [1, 2] },
     ],
     packs: {
       count: [5, 7], size: [3, 5],
@@ -698,6 +703,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'lake_horror', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1347,6 +1353,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Marsh gas swells in bladders between the islets.
       { kind: 'gas_pod', count: [1, 3] },
       { kind: 'briarwood', count: [0, 2] },
+      // The bog set: drowned timber, wisp-light, peat cover, venom blooms.
+      { kind: 'sunken_log', count: [1, 3] },
+      { kind: 'marsh_wisp', count: [2, 4] },
+      { kind: 'peat_mound', count: [1, 2] },
+      { kind: 'venom_bloom', count: [1, 3] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1365,6 +1376,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'lake_horror', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',

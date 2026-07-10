@@ -8240,6 +8240,97 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 380, weight: 2, keepDistance: 240 },
   },
 
+  // --- The mire suite: slow flights, breathing ground ------------------------
+  // The size-envelope showcase: every pool these lay CONTRACTS over its own
+  // duration (SizeEnvelopeSpec — quadIn holds the promise then closes), and
+  // the wakes read the flight's LIVE pace (durationBySpeed, exp < 0): slow
+  // the glob further and its sheddings linger LONGER. Duration is the one
+  // composable everything else hangs from.
+  mirespume: {
+    id: 'mirespume', name: 'Mirespume',
+    description: 'Cough up a fat glob of living bog that DAWDLES after prey on a sluggish appetite of its own, shedding venom pools in its wake — and a deeper pool where it dies. Every pool CLOSES like drying mud, gone exactly as its duration ends; the slower the glob crawls, the longer its sheddings linger. Slow on purpose: everything here is duration, and duration is yours to shape.',
+    tags: ['spell', 'chaos', 'projectile', 'duration'], color: '#7aa042',
+    manaCost: 11, cooldown: 0, useTime: 0.75,
+    baseDamage: { chaos: [11, 17] },
+    delivery: {
+      type: 'projectile', speed: 90, radius: 11, range: 430,
+      duration: 4.6,
+      trajectory: { homing: 0.8 },
+      trail: {
+        every: 58,
+        zone: {
+          radius: 40, duration: 3.0, tickInterval: 0.5, damageScale: 0.3,
+          sizeOver: { from: 1, to: 0, curve: 'quadIn' },
+          durationBySpeed: { ref: 90, exp: -0.55, min: 0.6, max: 1.8 },
+        },
+      },
+      endZone: {
+        radius: 68, duration: 4.0, tickInterval: 0.5, damageScale: 0.55,
+        sizeOver: { from: 1.1, to: 0, curve: 'quadIn' },
+      },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.55, magnitude: 0.5 },
+    ],
+    requirements: { willpower: 16 },
+    ai: { range: 420, weight: 3, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
+  marshlight: {
+    id: 'marshlight', name: 'Marshlight',
+    description: 'Loose a corpse-lantern on a leash of will: it bends after your cursor, never dies on what it burns, and sheds closing venom pools along whatever path you write. Drag it out to hound the fleeing — or wheel it around yourself and stand inside the moat it leaves. The wake reads its pace: a slow, deliberate hand lays longer-lived ground.',
+    tags: ['spell', 'chaos', 'projectile', 'duration'], color: '#9ad4a0',
+    manaCost: 12, cooldown: 0, useTime: 0.7,
+    baseDamage: { chaos: [9, 14] },
+    delivery: {
+      type: 'projectile', speed: 150, radius: 9, range: 600,
+      duration: 4.2,
+      rehit: 0.6,
+      trajectory: { guide: 3.0 },
+      trail: {
+        every: 50,
+        zone: {
+          radius: 36, duration: 2.6, tickInterval: 0.5, damageScale: 0.26,
+          sizeOver: { from: 1, to: 0, curve: 'linear' },
+          durationBySpeed: { ref: 150, exp: -0.5, min: 0.6, max: 2.0 },
+        },
+      },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.45, magnitude: 0.45 },
+    ],
+    requirements: { willpower: 18 },
+    ai: { range: 360, weight: 2, keepDistance: 220 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('effectDuration', 'increased', 0.02)] },
+  },
+
+  // The bog dweller's seep — and the venom bloom's burst: a small pure pool
+  // that begins LIVE (no impact pop of its own) and contracts into nothing.
+  // noDrop: a kit piece, not a gem. Serves BOTH the body-wake kit-part
+  // (MonsterDef.wake free-casts it underfoot) and BrittleSpec.fume
+  // (mintHazardCloud pops it, envelope and all) — one payload, two seams.
+  venom_seep: {
+    id: 'venom_seep', name: 'Venom Seep',
+    description: 'A slick of bog-venom that closes like a drying wound.',
+    tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#8ab84a',
+    noDrop: true,
+    manaCost: 0, cooldown: 0, useTime: 0.1,
+    baseDamage: { chaos: [4, 7] },
+    delivery: {
+      type: 'ground', radius: 34, castRange: 90,
+      lingerDuration: 2.4, tickInterval: 0.5,
+      noImpact: true,
+      sizeOver: { from: 1, to: 0, curve: 'quadIn' },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.35, magnitude: 0.4 },
+    ],
+  },
+
   skyfall_volley: {
     id: 'skyfall_volley', name: 'Skyfall Volley',
     description: 'Hurl a fistful of javelins SKYWARD and let them fall as weather: a rain of iron over your mark, each landing its own wound. The Impaler\'s artillery arc.',

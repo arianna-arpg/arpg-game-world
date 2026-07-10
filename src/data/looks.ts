@@ -1664,6 +1664,17 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'crest', scale: 0.7 },
     ],
   },
+  /** The bog dweller: a hunched sod-back — a moss lump with lantern eyes,
+   *  marsh-light guttering off the hump as it slogs. */
+  bog_dweller: {
+    parts: [
+      { kind: 'blob', scale: 1.0, params: { irr: 0.22, seed: 197 } },
+      { kind: 'hump', scale: 0.7 },
+      { kind: 'spots', params: { n: 5 } },
+      { kind: 'eyes', color: '#c8e88a', params: { spread: 0.52, dist: 0.52, size: 0.12 } },
+    ],
+    live: [{ kind: 'wisps', x: 0.12, y: -0.15, scale: 0.55, params: { n: 2 } }],
+  },
   /** A glow moth — soft wings around a lantern body. */
   glow_moth: {
     parts: [

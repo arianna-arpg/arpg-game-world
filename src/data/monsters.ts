@@ -286,6 +286,18 @@ export interface MonsterDef {
    *  lake horror slashes from its water and cannot be kited onto the grass.
    *  Composes with `ambush` (hidden until you stray near its ground). */
   habitat?: { kind: string; minRadius?: number; grace?: number };
+  /** BODY WAKE: the body itself SHEDS ground as it travels — every
+   *  `everyDist` units of actual displacement (walks, dashes, shoves
+   *  alike) the named catalog skill free-casts at its feet through the
+   *  ordinary ground pipeline (size envelopes, exposure grace, telegraphs
+   *  and Foresight all ride; no cost, no cooldown). A stationary body
+   *  never leaks — the trail IS the travel — and hidden ambushers /
+   *  burrowers shed nothing while untargetable. The payload should be a
+   *  small noDrop GROUND skill (the bog dweller's venom_seep); dmgMult
+   *  scales its rolls (default 1). Composes with habitat (a bog-bound
+   *  oozer laces its own pool), minions (a summoned wake-body sheds for
+   *  its owner), and everything the payload skill itself composes with. */
+  wake?: { skillId: string; everyDist: number; dmgMult?: number };
   /** AMBUSH SPAWN: the body is HIDDEN and untargetable — indistinguishable
    *  from scenery — until an enemy strays within `radius`, then it ERUPTS
    *  (reveal flash + announce) and fights normally. The root that was only
@@ -4606,6 +4618,27 @@ export const MONSTERS: Record<string, MonsterDef> = {
     ambush: { radius: 120, announce: 'the mire opens!' },
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.0, brain: { type: 'basic' },
+  },
+  // THE BOG DWELLER — the mire maw's MOBILE cousin: a hunched sod-back that
+  // slogs its bog and never leaves it, lobbing slow, hungry globs of mire
+  // (mirespume: lightly seeking, shedding contracting venom pools in
+  // flight) while its own body seeps a closing slick wherever it walks
+  // (the body-wake kit-part). Fight it on its ground and the ground fills
+  // in behind you; shoot it from the grass and eat the lob anyway.
+  bog_dweller: {
+    id: 'bog_dweller', name: 'Bog Dweller',
+    color: '#5a7a42', shape: 'oval', radius: 15, material: 'slime', look: 'bog_dweller',
+    base: { life: 150, moveSpeed: 62, accuracy: 108, armor: 15, poise: 45, mana: 140, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.6), mod('fireRes', 'flat', -0.2)],
+    skills: ['mirespume'], xp: 34,
+    habitat: { kind: 'bog', minRadius: 38, grace: 30 },
+    wake: { skillId: 'venom_seep', everyDist: 64 },
+    ambush: { radius: 150, announce: 'the bog heaves upright!' },
+    turnSpeed: 3.0,
+    scaleVariance: [0.9, 1.25], scaleStats: true,
+    scaling: { life: { incPerLevel: 0.05 } },
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.1, brain: { type: 'basic' },
   },
   // THE SHARD SPIRE — a standing battery of charged crystal: the leyline's
   // own turret tier (visible from the start; its menace is the arc).

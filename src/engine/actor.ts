@@ -784,6 +784,15 @@ export class Actor {
    *  (packs, zone-memory restores, summons) can lazily derive `confine`
    *  from the nearest matching doodad. */
   habitat?: { kind: string; minRadius?: number; grace?: number };
+  /** BODY WAKE spec (MonsterDef.wake): the body itself sheds its ground
+   *  payload as it travels. */
+  wake?: { skillId: string; everyDist: number; dmgMult?: number };
+  /** The wake's runtime ledger: travel accrued toward the next shed, last
+   *  frame's position (the displacement source), and the payload instance
+   *  minted lazily at first shed. */
+  wakeOdo?: number;
+  wakePrev?: Vec2;
+  wakeInst?: SkillInstance;
   /** TERRAIN CONFINEMENT (derived from habitat): a disc this body can never
    *  leave — clamped every frame, whatever moved it (walk, dash, knockback).
    *  The lake horror's pond; the root wraith's trunk. */

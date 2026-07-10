@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
+import type { CurveKind } from './curves';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
 
@@ -353,6 +354,77 @@ export function instanceStrikeTiming(inst: SkillInstance): StrikeTimingSpec | un
 }
 
 /**
+ * SIZE ENVELOPE: a lingering zone's radius WALKS from `from` × its birth
+ * radius to `to` × it over the zone's WHOLE linger, shaped by a named unit
+ * curve (src/engine/curves.ts) — duration-normalized breathing. `to: 0`
+ * contracts into obscurity exactly as the linger dies (the closing pool);
+ * `from` < `to` blooms from a seed. Because the walk rides the linger
+ * clock, DURATION stays the leverable composable: effectDuration
+ * investment, speed-fed lingers (durationBySpeed) and pulse-imposed
+ * surfaces all reshape the pace without touching the spec.
+ *
+ * While present it is THE radius authority — innate grow/retract stand
+ * down (one authority per disc) — and everything reading the LIVE radius
+ * (ticks, pulses, endBursts, default pull reach, rendering) breathes with
+ * it. An explicit pullRadius stays as authored. Rides the primary
+ * placement, line/wall segments, cascade ripples, projectile-trail drops
+ * and endZone blooms alike.
+ */
+export interface SizeEnvelopeSpec {
+  /** Radius multiplier at birth (default 1). */
+  from?: number;
+  /** Radius multiplier as the linger expires (default 0 — contract away). */
+  to?: number;
+  /** Unit curve shaping the walk (CURVES registry; default 'linear').
+   *  For a contraction: quadIn holds then collapses, quadOut slumps fast
+   *  then lingers small, 'breath' swells out and returns home. */
+  curve?: CurveKind;
+}
+
+/** Resolve a SizeEnvelopeSpec's defaults into the runtime form zones carry
+ *  (undefined in, undefined out) — the ONE defaults path every zone-push
+ *  site shares. */
+export function resolveSizeOver(spec?: SizeEnvelopeSpec):
+  { from: number; to: number; curve: CurveKind } | undefined {
+  return spec
+    ? { from: spec.from ?? 1, to: spec.to ?? 0, curve: spec.curve ?? 'linear' }
+    : undefined;
+}
+
+/** SPEED-FED LINGER: a projectile-dropped zone's duration scales with the
+ *  flight's LIVE speed at the drop — linger × clamp((speed/ref)^exp, min,
+ *  max). exp defaults 1 (fast flight = long life); NEGATIVE exp inverts
+ *  (the dawdle lingers — slow lobs sow long-lived pools). min defaults
+ *  0.25, max 4. With a size envelope riding the drop, contraction PACE
+ *  follows automatically — duration is the composable being fed. */
+export interface DurationBySpeedSpec {
+  /** Reference speed (units/s) at which the linger is exactly ×1. */
+  ref: number;
+  /** Exponent on speed/ref (default 1; negative inverts). */
+  exp?: number;
+  /** Clamp floor on the multiplier (default 0.25). */
+  min?: number;
+  /** Clamp ceiling on the multiplier (default 4). */
+  max?: number;
+}
+
+/** The zone a projectile path/terminus drops (ProjTrailSpec.zone, endZone):
+ *  radius/duration plus the optional breathing envelope and speed-fed
+ *  linger — one shape shared by every drop site. */
+export interface DropZoneSpec {
+  radius: number;
+  duration: number;
+  tickInterval?: number;
+  damageScale?: number;
+  /** The drop BREATHES (see SizeEnvelopeSpec) — contracting venom pools,
+   *  blooming embers. */
+  sizeOver?: SizeEnvelopeSpec;
+  /** The drop's linger rides the flight's live speed (see
+   *  DurationBySpeedSpec). */
+  durationBySpeed?: DurationBySpeedSpec;
+}
+
+/**
  * A PROJECTILE TRAIL: every `every` units of travel the projectile drops
  * destruction at its position — an immediate BLAST (a fraction of the
  * skill's damage in a radius) and/or a lingering ground ZONE ticking the
@@ -364,8 +436,9 @@ export interface ProjTrailSpec {
   every: number;
   /** Immediate blast at each drop point. */
   blast?: { radius: number; damageScale?: number };
-  /** Lingering ground zone at each drop point. */
-  zone?: { radius: number; duration: number; tickInterval?: number; damageScale?: number };
+  /** Lingering ground zone at each drop point (envelope + speed-fed
+   *  linger ride along — see DropZoneSpec). */
+  zone?: DropZoneSpec;
 }
 
 /** The trail a projectile lays: a socketed support's graft wins over the
@@ -373,6 +446,14 @@ export interface ProjTrailSpec {
 export function instanceTrail(inst: SkillInstance): ProjTrailSpec | undefined {
   for (const s of hostSockets(inst)) if (s.def.trail) return s.def.trail;
   return inst.def.delivery.type === 'projectile' ? inst.def.delivery.trail : undefined;
+}
+
+/** The size envelope a ground placement breathes: a socketed support's
+ *  graft wins over the delivery's own (the trail rule — you socketed it
+ *  to change the behavior). */
+export function instanceSizeOver(inst: SkillInstance): SizeEnvelopeSpec | undefined {
+  for (const s of hostSockets(inst)) if (s.def.zoneSizeOver) return s.def.zoneSizeOver;
+  return inst.def.delivery.type === 'ground' ? inst.def.delivery.sizeOver : undefined;
 }
 
 /**
@@ -690,8 +771,10 @@ export interface ProjectileDelivery {
    *  DIES — impact or spent range alike (the always-bursting lob; explode
    *  is its hit-damage sibling). damageScale defaults 0.5. `seek` makes
    *  the bloom HUNT (Creeping Frost's slinking winter — see
-   *  GroundDelivery.seek for the semantics). */
-  endZone?: { radius: number; duration: number; tickInterval?: number; damageScale?: number; seek?: { speed: number; range?: number } };
+   *  GroundDelivery.seek for the semantics). Carries the drop-zone
+   *  composables: sizeOver breathes the bloom, durationBySpeed feeds its
+   *  linger from the flight's dying speed (see DropZoneSpec). */
+  endZone?: DropZoneSpec & { seek?: { speed: number; range?: number } };
   /** The RETURN is CATCHABLE (Gyreblade): a homeward projectile arriving
    *  at its caster banks charges instead of just dying — fuel for a
    *  follow-up that hurls the caught blades back out. */
@@ -988,6 +1071,14 @@ export interface GroundDelivery {
   /** The lingering zone GROWS as it lives (radius units/s) — pair with
    *  drift for a traveling, swelling upchurn (Upheaval). */
   grow?: number;
+  /** The lingering zone BREATHES on its linger clock: radius walks
+   *  from×birth → to×birth over the WHOLE linger on a named curve —
+   *  contraction into obscurity (`to: 0`), bloom from a seed, or the
+   *  out-and-back 'breath'. Duration-normalized, so duration mods reshape
+   *  the pace, never the journey. THE radius authority when present
+   *  (grow/retract stand down). See SizeEnvelopeSpec; supports graft the
+   *  same via SupportDef.zoneSizeOver (a socketed graft wins). */
+  sizeOver?: SizeEnvelopeSpec;
   /** Skip the placement IMPACT entirely — the zone begins already LIVE,
    *  and only its linger (ticks, sweep crossings) ever deals damage:
    *  Scythe Arc hurts where the blade PASSES, never where it appears.
@@ -3020,6 +3111,11 @@ export interface SupportDef {
    *  zone SWELLS while it lives, radius units/s — the delivery's own grow
    *  is the innate base and wins when present. */
   zoneGrow?: number;
+  /** A SIZE ENVELOPE this support grafts onto lingering ground (Ebbing
+   *  Ground's closing throat, Blooming Ground's seed-to-field): the zone
+   *  BREATHES over its whole linger on a named curve. A socketed graft
+   *  WINS over the delivery's own sizeOver — see SizeEnvelopeSpec. */
+  zoneSizeOver?: SizeEnvelopeSpec;
   /** A CADENCE warp this support grafts (Accelerando / Ritardando): every
    *  BEAT the host's placements keep — pulse gaps, cascade skips, emitter
    *  salvos — multiplies its interval by this per beat. OVERRIDES the
@@ -3210,8 +3306,8 @@ const MINION_RIDABLE_FIELD_LIST = [
   'dominate', 'sacrifice', 'healField', 'spawnBuff', 'zoneEmit', 'madden',
   'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
-  'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'cadence', 'pendulum',
-  'echo', 'summon',
+  'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'zoneSizeOver',
+  'cadence', 'pendulum', 'echo', 'summon',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every

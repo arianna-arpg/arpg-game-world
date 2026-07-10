@@ -22,7 +22,7 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
+  crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
   CONCENTRATION_CFG, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -31,6 +31,7 @@ import {
   type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec,
 } from './skills';
+import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
 import { compileItemMods, itemLevelReq, rebuildItem } from './itemgen';
 import {
@@ -560,6 +561,18 @@ const TETHER_TICK = 0.4;
 /** Chunk cadence of a projectile-borne field's DoT (Soulflay's wake). */
 const PROJ_AURA_TICK = 0.3;
 
+/** DropZoneSpec.durationBySpeed: the linger multiplier a flight's LIVE
+ *  speed feeds its drop — clamp((speed/ref)^exp, min, max); exp < 0
+ *  inverts (the dawdle lingers). One path for trail drops and endZones. */
+function speedLingerMul(
+  spec: { ref: number; exp?: number; min?: number; max?: number } | undefined,
+  speed: number,
+): number {
+  if (!spec) return 1;
+  const raw = Math.pow(Math.max(1, speed) / Math.max(1, spec.ref), spec.exp ?? 1);
+  return Math.min(spec.max ?? 4, Math.max(spec.min ?? 0.25, raw));
+}
+
 /** Push-impulse damping (per second). A lone push of `strength` travels
  *  ~strength units total; the constant sets how QUICKLY it eases out —
  *  higher = snappier shoves, lower = floatier batting. */
@@ -597,6 +610,15 @@ interface Zone {
   /** The lingering zone GROWS as it lives, radius units/s (Upheaval — pair
    *  with drift for a traveling, swelling upchurn). */
   grow?: number;
+  /** SIZE ENVELOPE (GroundDelivery.sizeOver / SupportDef.zoneSizeOver /
+   *  DropZoneSpec.sizeOver — resolved defaults): the radius walks
+   *  radius0×from → radius0×to over the WHOLE linger on the named unit
+   *  curve. THE radius authority while present: grow/retract stand down;
+   *  ticks, pulses, endBursts, default pull reach and rendering all read
+   *  the live disc, so they breathe with it. */
+  sizeOver?: { from: number; to: number; curve: CurveKind };
+  /** Birth radius — the envelope's anchor (stamped only when one rides). */
+  radius0?: number;
   /** The zone's facing REVOLVES at this rate, rad/s — faced shapes
    *  (crescents) become sweeping hands (Cinderwhirl; the aoeSpin stat). */
   rotate?: number;
@@ -6487,13 +6509,22 @@ export class World {
     caster.pos = vec(at.x, at.y);
     const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3));
     const exp = (skill.delivery as { exposure?: number } | undefined)?.exposure;
+    // The payload's own SIZE ENVELOPE rides the pop (venom_bloom's
+    // contracting burst) — the cloud breathes exactly as the skill would.
+    const so = resolveSizeOver(
+      skill.delivery.type === 'ground' ? skill.delivery.sizeOver : undefined);
+    const cloudR = opts.radius ?? 90;
+    const cloudLinger = opts.linger ?? 2.6;
     this.zones.push({
-      pos: vec(at.x, at.y), radius: opts.radius ?? 90, caster, inst,
+      pos: vec(at.x, at.y), radius: cloudR * (so?.from ?? 1), caster, inst,
       color: opts.color ?? '#8fd06f',
-      delay: opts.delay ?? 0.6, exploded: false, linger: opts.linger ?? 2.6,
+      delay: opts.delay ?? 0.6, exploded: false, linger: cloudLinger,
+      linger0: cloudLinger,
       tickInterval: opts.tickInterval ?? 0.5, tickTimer: 0,
       shape: 0, facing: 0, dmgMult: opts.dmgMult ?? 0.7, depth: 1, hitAll: true, meteor: false,
       exposure: exp ? { after: exp, dwell: new Map() } : undefined,
+      sizeOver: so,
+      radius0: so ? cloudR : undefined,
     });
   }
 
@@ -10485,6 +10516,7 @@ export class World {
     if (def.deathBurst) a.deathBurst = def.deathBurst;
     if (def.refuge) a.refuge = def.refuge;
     if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
+    if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
     // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
     // update sweep springs it when an enemy strays inside the wake radius.
     if (def.ambush) {
@@ -12401,6 +12433,13 @@ export class World {
         const expDomain = (expGraft ? expGraft.domain : d.exposureDomain) ? true as const : undefined;
         const mintExposure = (): Zone['exposure'] =>
           expAfter ? { after: expAfter, dwell: new Map<number, number>() } : undefined;
+        // SIZE ENVELOPE (GroundDelivery.sizeOver / SupportDef.zoneSizeOver —
+        // a socketed graft wins, the trail rule): resolved ONCE; every
+        // placement this cast lays (wall segments, the primary, cascade
+        // ripples) breathes the same walk from its OWN birth radius. Birth
+        // radius is stamped from-scaled so telegraphs and the opening hit
+        // stay honest — what you see at detonation is what hits.
+        const sizeOver = resolveSizeOver(instanceSizeOver(inst));
         if (d.line) {
           // Flame Wall: segments across the facing — or, with a sigil
           // socketed, arranged around a square / triangle outline.
@@ -12430,10 +12469,11 @@ export class World {
           }
           for (const pt of pts) {
             this.zones.push({
-              pos: this.clampPos(pt, 10), radius: d.radius * aoeScale,
+              pos: this.clampPos(pt, 10), radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
               caster, inst, color: def.color,
               delay: d.delay ?? 0, exploded: (d.delay ?? 0) <= 0,
               linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
+              linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
               tickInterval: groundTick, tickTimer: groundTick0,
               shape: 0, facing: caster.facing,
               dmgMult: useMult, depth: 0,
@@ -12442,9 +12482,13 @@ export class World {
               // each segment is its own hit surface, re-armed on exit.
               struck: d.hitOnce ? new Set() : undefined,
               rearm: d.rearmOnExit || undefined,
-              // Each wall segment quakes and breathes on its own ledger.
+              // Each wall segment quakes and breathes on its own ledger —
+              // and each rides the envelope from its own birth radius (a
+              // contracting wall THINS; a blooming one closes its gaps).
               pulse: mintPulse(d.delay ?? 0),
               exposure: mintExposure(),
+              sizeOver,
+              radius0: sizeOver ? d.radius * aoeScale : undefined,
               flatBonus,
             });
           }
@@ -12466,7 +12510,7 @@ export class World {
         }
         const fillTime = d.fillTime ?? (d.lingerDuration ?? 1);
         this.zones.push({
-          pos: at, radius: d.radius * aoeScale,
+          pos: at, radius: d.radius * aoeScale * (sizeOver?.from ?? 1),
           caster, inst, color: def.color,
           marker: d.marker ? true : undefined,
           // noImpact (Scythe Arc): the zone begins LIVE — no opening hit,
@@ -12487,6 +12531,10 @@ export class World {
           // Growth: innate (Upheaval) or grafted (Overgrowth's zoneGrow —
           // the delivery's own is the base and wins when present).
           grow: d.grow ?? socketSpec(inst, 'zoneGrow'),
+          // The breathing envelope (resolved above): radius0 anchors the
+          // walk; while it rides, grow/retract stand down.
+          sizeOver,
+          radius0: sizeOver ? d.radius * aoeScale : undefined,
           // Revolution rides the aoeSpin stat (innate rotate = the base) —
           // Whirling Sigil spins any faced zone from nothing.
           rotate: (() => {
@@ -12626,10 +12674,11 @@ export class World {
               }
               this.zones.push({
                 pos: vec(px2, py2),
-                radius: d.radius * aoeScale * Math.pow(scaleStep, k),
+                radius: d.radius * aoeScale * Math.pow(scaleStep, k) * (sizeOver?.from ?? 1),
                 caster, inst, color: def.color,
                 delay: (d.delay ?? 0) + beatAt, exploded: false,
                 linger: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
+                linger0: pulseLinger((d.lingerDuration ?? 0) * caster.sheet.get('effectDuration', tags, extra)),
                 tickInterval: groundTick, tickTimer: groundTick0,
                 shape: groundShape,
                 facing: axisAng,
@@ -12638,6 +12687,10 @@ export class World {
                 pull: d.pull,
                 drift: d.drift,
                 grow: d.grow ?? socketSpec(inst, 'zoneGrow'),
+                // Ripples breathe too — each on the same walk from its own
+                // (scaleStep-shrunk) birth radius.
+                sizeOver,
+                radius0: sizeOver ? d.radius * aoeScale * Math.pow(scaleStep, k) : undefined,
                 // Ripples quake too — each on its own displaced clock, its
                 // pulse damage riding the ripple's own dmgStep falloff.
                 pulse: mintPulse((d.delay ?? 0) + beatAt),
@@ -19272,6 +19325,33 @@ export class World {
           }
         }
       }
+      // BODY WAKE (MonsterDef.wake): the body itself SHEDS its ground
+      // payload as it travels — every everyDist units of ACTUAL
+      // displacement (walks, dashes, shoves alike) the named catalog skill
+      // free-casts at its feet through the ordinary ground pipeline, so
+      // envelopes, exposure grace, telegraphs and Foresight all ride. A
+      // hidden ambusher or burrower (untargetable) sheds nothing, and a
+      // stationary body never leaks: the trail IS the travel.
+      if (a.wake && !a.dead && !a.untargetable) {
+        const prev = a.wakePrev;
+        a.wakePrev = vec(a.pos.x, a.pos.y);
+        if (prev) {
+          // One shed per beat, however far a single frame jumped — a
+          // teleport writes one drop, not a rope of them.
+          a.wakeOdo = (a.wakeOdo ?? 0) + dist(prev, a.pos);
+          if (a.wakeOdo >= a.wake.everyDist) {
+            a.wakeOdo = 0;
+            const wdef = SKILLS[a.wake.skillId];
+            if (wdef) {
+              a.wakeInst ??= makeSkillInstance(wdef, Math.max(1, Math.round(a.level)));
+              this.executeSkill(a, a.wakeInst, vec(a.pos.x, a.pos.y), {
+                dmgMult: a.wake.dmgMult ?? 1,
+                noCooldown: true, noRepeat: true, keepFacing: true,
+              });
+            }
+          }
+        }
+      }
       // Knockback shoves in flight: smooth, and collision stops them. A collision
       // (wall or void) reports back, so it can FALL into a void and roll the
       // caster's 'collision' procs ONCE (the knockback-collision-damage support).
@@ -22849,16 +22929,26 @@ export class World {
           this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
         }
         if (ts.zone) {
+          // The drop-zone composables (DropZoneSpec): a size envelope
+          // breathes each drop from its own birth radius, and the linger
+          // can ride the flight's LIVE pace at this very drop — a
+          // decelerating lob's early drops and late drops age apart.
+          const tso = resolveSizeOver(ts.zone.sizeOver);
+          const tLinger = ts.zone.duration
+            * speedLingerMul(ts.zone.durationBySpeed, p.speed)
+            * p.caster.sheet.get('effectDuration', tTags, tExtra);
           this.zones.push({
             pos: vec(p.pos.x, p.pos.y),
-            radius: ts.zone.radius * aoeMul,
+            radius: ts.zone.radius * aoeMul * (tso?.from ?? 1),
             caster: p.caster, inst: p.inst, color: p.color,
             delay: 0, exploded: true,
-            linger: ts.zone.duration * p.caster.sheet.get('effectDuration', tTags, tExtra),
+            linger: tLinger, linger0: tLinger,
             tickInterval: ts.zone.tickInterval ?? 0.5, tickTimer: ts.zone.tickInterval ?? 0.5,
             shape: 0, facing: p.dir,
             dmgMult: (ts.zone.damageScale ?? 0.3) * p.mult, depth: 1,
             forceDamage: true,
+            sizeOver: tso,
+            radius0: tso ? ts.zone.radius * aoeMul : undefined,
             flatBonus: p.flat,
           });
         }
@@ -23212,17 +23302,27 @@ export class World {
           if (ez && !p.dissolved && !p.caster.dead) {
             const zTags = skillContextTags(p.inst.def, grantedTags(p.inst));
             const zExtra = instanceMods(p.inst);
+            // Drop-zone composables (DropZoneSpec): the bloom can breathe
+            // (sizeOver) and its linger can ride the DYING speed — a spent,
+            // stalled lob seeds a different pool than a hard impact.
+            const ezo = resolveSizeOver(ez.sizeOver);
+            const ezRadius = ez.radius * p.caster.sheet.get('aoeRadius', zTags, zExtra);
+            const ezLinger = ez.duration
+              * speedLingerMul(ez.durationBySpeed, p.speed)
+              * p.caster.sheet.get('effectDuration', zTags, zExtra);
             this.zones.push({
               pos: vec(p.pos.x, p.pos.y),
-              radius: ez.radius * p.caster.sheet.get('aoeRadius', zTags, zExtra),
+              radius: ezRadius * (ezo?.from ?? 1),
               caster: p.caster, inst: p.inst, color: p.color,
               delay: 0, exploded: true,
-              linger: ez.duration * p.caster.sheet.get('effectDuration', zTags, zExtra),
+              linger: ezLinger, linger0: ezLinger,
               tickInterval: ez.tickInterval ?? 0.5, tickTimer: 0,
               shape: 0, facing: p.dir,
               dmgMult: (ez.damageScale ?? 0.5) * p.mult, depth: 1,
               // Creeping Frost: the bloom HUNTS (see GroundDelivery.seek).
               seek: ez.seek ? { speed: ez.seek.speed, range: ez.seek.range ?? 420 } : undefined,
+              sizeOver: ezo,
+              radius0: ezo ? ezRadius : undefined,
               flatBonus: p.flat,
             });
           }
@@ -23417,18 +23517,33 @@ export class World {
             }
           }
         }
-        // The Squall's breath: growth until the mark, then the ring pulls
-        // back in — retraction SUPERSEDES growth (one direction at a time).
-        // `fizzle` instead ENDS the zone at the apex: the endBurst fires at
-        // full spread and the ring is gone (the expansion-only Squall).
-        const retracting = z.retract !== undefined
-          && (z.linger0 ?? 0) - z.linger >= z.retract.at;
-        if (retracting && z.retract!.fizzle) {
-          z.linger = Math.min(z.linger, 0);
+        // SIZE ENVELOPE (Zone.sizeOver): the radius WALKS radius0×from →
+        // radius0×to across the whole linger on its named curve — the
+        // duration-normalized breath. `to: 0` contracts into obscurity
+        // exactly as the linger dies; from < to blooms from a seed. THE
+        // radius authority while present: grow/retract stand down (one
+        // authority per disc); pulses, endBursts, pulls and rendering read
+        // the live radius, so they breathe with it. A frozen clock
+        // (toggled fields) holds the breath where it stands.
+        if (z.sizeOver && z.radius0 !== undefined && (z.linger0 ?? 0) > 0) {
+          const t = ((z.linger0 ?? 1) - Math.max(0, z.linger)) / (z.linger0 ?? 1);
+          const s = evalCurve(z.sizeOver.curve, t);
+          z.radius = Math.max(0, z.radius0
+            * (z.sizeOver.from + (z.sizeOver.to - z.sizeOver.from) * s));
         } else {
-          // Growing zones swell as they live — the upchurn gathers ground.
-          if (z.grow && !retracting) z.radius += z.grow * dt;
-          if (retracting) z.radius = Math.max(10, z.radius - (z.retract!.speed ?? 100) * dt);
+          // The Squall's breath: growth until the mark, then the ring pulls
+          // back in — retraction SUPERSEDES growth (one direction at a time).
+          // `fizzle` instead ENDS the zone at the apex: the endBurst fires at
+          // full spread and the ring is gone (the expansion-only Squall).
+          const retracting = z.retract !== undefined
+            && (z.linger0 ?? 0) - z.linger >= z.retract.at;
+          if (retracting && z.retract!.fizzle) {
+            z.linger = Math.min(z.linger, 0);
+          } else {
+            // Growing zones swell as they live — the upchurn gathers ground.
+            if (z.grow && !retracting) z.radius += z.grow * dt;
+            if (retracting) z.radius = Math.max(10, z.radius - (z.retract!.speed ?? 100) * dt);
+          }
         }
         // VOLATILE fissure segments re-light on their own clock — the
         // volcanic crag: unpredictable, re-armed, still honest (the flash

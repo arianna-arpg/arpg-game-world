@@ -291,6 +291,15 @@ export function validateContent(): void {
     for (const stat of Object.keys(m.scaling ?? {})) {
       if (!STAT_DEFS[stat]) warn(`${m.id}: scaling references unknown stat '${stat}'`);
     }
+    // A body wake must shed a real GROUND skill — anything else free-casts
+    // into the delivery switch's wrong branch every stride.
+    if (m.wake) {
+      const w = SKILLS[m.wake.skillId];
+      if (!w) warn(`${m.id}: wake payload '${m.wake.skillId}' is not a catalog skill`);
+      else if (w.delivery.type !== 'ground') {
+        warn(`${m.id}: wake payload '${m.wake.skillId}' is '${w.delivery.type}' — the shed-underfoot fantasy wants a ground delivery`);
+      }
+    }
     // Level-gated grants must name real skills/supports, and a support's target
     // skill must be one the monster actually fields (authored or earlier-granted).
     for (const g of m.grants ?? []) {
@@ -361,9 +370,9 @@ export function validateContent(): void {
     { kind: 'graft', key: 'cadence', deliveries: ['ground'], site: 'the ground placement beat mints (pulse gaps, cascade skips, emitter salvos)' },
     { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
     { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
-    // exposure / zoneGrow stay unrowed on purpose: their gems gate on
-    // 'duration' the way madden/zoneEmit do — broad by design, and a row
-    // here would cry wolf at every boot for legitimately broad gates.
+    // exposure / zoneGrow / zoneSizeOver stay unrowed on purpose: their gems
+    // gate on 'duration' the way madden/zoneEmit do — broad by design, and a
+    // row here would cry wolf at every boot for legitimately broad gates.
   ];
   // The map audits itself: a stat row naming a dead stat is map drift.
   for (const row of GRAFT_READ_SITES) {
