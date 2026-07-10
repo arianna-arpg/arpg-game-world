@@ -78,7 +78,7 @@ export const CLASSES: ClassDef[] = [
       intelligence: 0, wisdom: 0, willpower: 0,
       vitality: 12,
     },
-    bar: ['frenzy', 'stealth', 'shadow_step', 'cloak', null, null, null, null],
+    bar: ['frenzy', 'cloak', 'shadow_step', null, null, null, null, null],
     startNode: 'fin_start', // the unseen blade → the Finesse point
   },
   {
@@ -162,7 +162,7 @@ export const CLASSES: ClassDef[] = [
       intelligence: 2, wisdom: 0, willpower: 2,
       vitality: 8,
     },
-    bar: ['surgical_strike', 'dash_strike', 'buckler_strike', 'wild_strike', 'fan_of_blades', null, null, null],
+    bar: ['buckler_strike', 'wild_strike', 'dash_strike', null, null, null, null, null],
     startNode: 'fin_start',
   },
   {
@@ -204,7 +204,7 @@ export const CLASSES: ClassDef[] = [
       intelligence: 2, wisdom: 0, willpower: 0,
       vitality: 10,
     },
-    bar: ['rend', 'eviscerate', 'stealth', 'invisibility', null, null, null, null],
+    bar: ['rend', 'eviscerate', 'invisibility', null, null, null, null, null],
     startNode: 'fin_start', // ailments from the dark → the Finesse point
   },
   {
@@ -232,7 +232,7 @@ export const CLASSES: ClassDef[] = [
       intelligence: 8, wisdom: 14, willpower: 16,
       vitality: 10,
     },
-    bar: ['sanctified_strike', 'mend', 'consecration', 'benediction', null, null, null, null],
+    bar: ['sanctified_strike', 'mend', 'consecration', null, null, null, null, null],
     startNode: 'wil_start', // the devout ward → the Willpower point
   }
 ];
