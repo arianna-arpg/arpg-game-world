@@ -111,6 +111,10 @@ const HANDLERS: Record<AIAction['do'], Handler> = {
       // Conjured mid-fight by a living caster — recastable forever, so it
       // pays no bounty (xp/drops). Kill the summoner for the prize.
       m.noBounty = true;
+      // BORROWED UNLIFE: a player-side conjurer's rule-summons (a raised
+      // broodmother's nests) are lifelined to it — they unmake when it
+      // falls. Wild casters' summons stand on their own (no stamp).
+      m.lifelineId = world.conjurationLifeline(actor);
       const ang = base + (i / count) * Math.PI * 2;
       m.pos = groundPoint(world,
         vec(around.x + Math.cos(ang) * ring, around.y + Math.sin(ang) * ring),

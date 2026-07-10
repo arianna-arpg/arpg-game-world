@@ -10519,6 +10519,20 @@ export class World {
     return prey.some(p => b.tag === p || b.faction === p || b.defId === p);
   }
 
+  /** THE LIFELINE RULE (borrowed unlife): a body conjured by a PLAYER-SIDE
+   *  conjurer that is not itself a seat — a spectre'd grave shaman raising
+   *  from corpses, a raised broodmother laying nests, a turret that summons
+   *  — stands only while its conjurer does (Actor.lifelineId; the lifeline
+   *  sweep unmakes dependents quietly). Seats conjure freely: your own
+   *  court answers to the bar, not to a lifeline. Enemy/wild conjurers
+   *  return undefined — their risen were brought BACK: they live, whoever
+   *  falls. The asymmetry rides ownership, never a skill or def id. */
+  conjurationLifeline(conjurer: Actor): number | undefined {
+    if (this.seatOf(conjurer)) return undefined;
+    return this.seats.some(s => s.actor.team === conjurer.team)
+      ? conjurer.id : undefined;
+  }
+
   enemiesOf(actor: Actor): Actor[] {
     return this.actors.filter(a =>
       (this.hostileTo(actor, a)
@@ -12741,7 +12755,10 @@ export class World {
           let sent = 0, balked = 0;
           for (const m of this.actors) {
             if (m === caster || m.dead || m.construct) continue;
-            const owned = m.owner === caster;
+            // The whole ownership CHAIN answers the horn: a spectre'd
+            // shaman's risen march with the shaman (grand-minions obey
+            // the mastermind, not just the first rank).
+            const owned = m.ownedBy(caster);
             const squadmate = !m.owner && !m.passive
               && ((caster.squadId !== undefined && m.squadId === caster.squadId)
                 || (caster.faction !== undefined && m.faction === caster.faction
@@ -13933,6 +13950,12 @@ export class World {
     // spawn stream can't be farmed for xp/drops (kill the caster instead),
     // and a re-raised corpse can't pay twice. No-op for player minions.
     minion.noBounty = true;
+    // BORROWED UNLIFE: a body minted by a player-side conjurer that isn't
+    // itself a seat (a spectre'd grave shaman answering with its own call)
+    // is LIFELINED to that conjurer — it unmakes when its raiser goes, so
+    // second-hand armies can't outlive the mind that holds them. Wild and
+    // enemy chains never stamp it: their risen owe nothing to the caller.
+    minion.lifelineId = this.conjurationLifeline(caster);
     // Shades and doppelgangers wear their summoner's silhouette (a data
     // flag, not an id check — any monster can be a mimic).
     if (MONSTERS[typeId]?.mimicOwnerForm) {
@@ -21026,6 +21049,19 @@ export class World {
       if (m.owner.skills.some(s => s?.def.id === anchor)) continue;
       this.releaseContract(m, false); // free any reservation, no respawn
       this.kill(m, true);
+    }
+    // THE LIFELINE SWEEP: borrowed unlife ends with its lender. Anything
+    // whose lifeline keeper no longer stands UNMAKES — silently (no bounty,
+    // drops, bursts, or rattles): what the raiser held together lets go.
+    // Chains cascade naturally: a raised raiser's own risen fall on the
+    // next pass, generation by generation.
+    for (const m of [...this.actors]) {
+      if (m.dead || m.lifelineId === undefined) continue;
+      const keeper = this.actorById(m.lifelineId);
+      if (!keeper || keeper.dead) {
+        this.releaseContract(m, false);
+        this.kill(m, true);
+      }
     }
     // Collect, per owner, the live apex presences (one entry per skill).
     const presence = new Map<Actor, { key: string; skillId: string; mods: Modifier[] }[]>();

@@ -835,6 +835,15 @@ export class Actor {
    *  fulfilled or expired. Set via ai.ts issueCommand — never by hand, so
    *  receipt reliably drops the current agenda and the order OVERRIDES. */
   aiCommand?: CommandState;
+  /** THE LIFELINE (borrowed unlife): while set, this actor stands only as
+   *  long as the named actor does — World's lifeline sweep UNMAKES it
+   *  (quietly: no bounty, drops, bursts, or rattles) the moment its keeper
+   *  is dead or gone. Stamped by World.conjurationLifeline at every mint a
+   *  player-side NON-SEAT conjurer performs (a spectre'd grave shaman's
+   *  risen, a raised broodmother's nests): what it held together lets go
+   *  when it falls. Enemy/wild conjurers never stamp it — their risen
+   *  outlive the caller. */
+  lifelineId?: number;
   /** Last AI tick's RESOLVED obedience tuning (machines can shift it live) —
    *  the command roll reads this so an enraged phase can go deaf to orders. */
   aiObedience?: number;
@@ -1038,6 +1047,18 @@ export class Actor {
   }
 
   isMinion(): boolean { return !!this.owner; }
+
+  /** True when this actor sits anywhere under `lord`'s ownership chain — a
+   *  raised zombie answers the summoner who raised its raiser (commands,
+   *  court-wide sweeps). Loop-guarded; direct minions are hop one. */
+  ownedBy(lord: Actor): boolean {
+    let r: Actor | undefined = this.owner;
+    for (let hops = 0; r && hops < 8; hops++) {
+      if (r === lord) return true;
+      r = r.owner;
+    }
+    return false;
+  }
 
   /** Book threat against an enemy (the chart decays in the AI tick). */
   addThreat(id: number, amount: number): void {
