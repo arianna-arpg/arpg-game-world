@@ -252,6 +252,14 @@ export interface MonsterDef {
    *  full — no death, no credit, no loot (the Training Dummy; any future
    *  practice target opts in with this flag, never a def-id gate). */
   immortal?: boolean;
+  /** BESTIARY (data/bestiary.ts): kills to MASTER this kind's entry, overriding
+   *  the config default (BESTIARY_CFG.kills; bosses use bossKills). Pure data —
+   *  a legendary rarity could ask for 1, a swarm chaff for 1000. */
+  bestiaryKills?: number;
+  /** Opt OUT of the bestiary entirely (fixtures, set-piece one-offs, bodies
+   *  whose page would read as nonsense). Scenery/NPC/driven kinds are already
+   *  excluded structurally — this is for the rest. */
+  noBestiary?: boolean;
   /** A RIDER SLOT on this creature's back: same-team actors whose tag /
    *  defId / faction matches `kinds` may MOUNT it (the {do:'mount'} verb) —
    *  the rider is carried (position pinned, dash/push stilled) and casts
@@ -2713,6 +2721,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
   townsfolk_questgiver: {
     id: 'townsfolk_questgiver', name: 'Aldric the Quartermaster',
     color: '#9a86c8', shape: 'circle', radius: 13, look: 'npc_scholar', npcRole: 'questgiver',
+    base: { life: 100, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 0,
+    passive: true,
+    invulnerable: true,
+  },
+
+  // The Tracker — the Bestiary's keeper (FEATURE.TRACKER; data/bestiary.ts).
+  // Camps at the town's west edge; dwell by his fire to open the book. Same
+  // passive+invulnerable scenery shape as the rest of the townsfolk.
+  townsfolk_tracker: {
+    id: 'townsfolk_tracker', name: 'Weslan the Tracker',
+    color: '#a8c87a', shape: 'circle', radius: 13, look: 'npc_trader', npcRole: 'tracker',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
     xp: 0,

@@ -57,6 +57,10 @@ export const FEATURE = {
   MIREILLE_HEAL_LIFE: 'mireille_heal_life',
   MIREILLE_HEAL_MANA: 'mireille_heal_mana',
   MIREILLE_XP_BUFF: 'mireille_xp_buff',
+  /** THE TRACKER: a huntsman camps at Lastlight's west edge — dwell by his
+   *  fire to open the BESTIARY (data/bestiary.ts): every kind your line has
+   *  slain, studied into knowledge across the whole account. */
+  TRACKER: 'tracker',
   /** The Quest Package: expands Lastlight with a quest-giver who posts hunts. */
   QUEST_GIVER: 'quest_giver',
   /** A Training Dummy in town — an immortal target to test skills / effects /

@@ -217,6 +217,10 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'feat_mireille_life',  kind: 'feature', cost: 40,  reqLevel: 0, label: 'Mireille: Field Care',     description: 'Mireille restores your LIFE when you linger near her.',  payload: { flag: FEATURE.MIREILLE_HEAL_LIFE } },
   { id: 'feat_mireille_mana',  kind: 'feature', cost: 60,  reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_LIFE, label: 'Mireille: Restorative Brew', description: 'She also replenishes your MANA.',                       payload: { flag: FEATURE.MIREILLE_HEAL_MANA } },
   { id: 'feat_mireille_xp',    kind: 'feature', cost: 120, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Mireille: Traveller\'s Rest', description: 'Linger for a 5-minute +5% experience blessing — a worthwhile pitstop.', payload: { flag: FEATURE.MIREILLE_XP_BUFF } },
+  // The TRACKER — the inn's word-of-mouth made flesh: once Mireille keeps you
+  // fed and watered, her huntsman friend pitches camp. Unlocks the BESTIARY
+  // (data/bestiary.ts): account-wide kill knowledge, studied into power.
+  { id: 'feat_tracker', kind: 'feature', cost: 90, reqLevel: 0, requiresFeature: FEATURE.MIREILLE_HEAL_MANA, label: 'Weslan the Tracker', description: 'A huntsman camps at the town\'s west edge. Dwell by his fire to open the BESTIARY — every kind your line has slain, studied into knowledge that outlives every death.', payload: { flag: FEATURE.TRACKER } },
 
   // --- Town-building: the Quest Package (surfaces once any character reaches L5)
   { id: 'feat_quest_giver', kind: 'feature', cost: 100, reqLevel: 0, reqLedger: 'reached_level_5',

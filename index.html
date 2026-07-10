@@ -175,7 +175,7 @@
     .class-card .cskills { font-size: 10px; color: var(--gold); margin-top: 4px; }
 
     /* Account / unlock screen */
-    #caravan-menu, #toll-menu, #sail-menu, #vocation-menu, #salvage-menu, #oracle-menu, #vendor-menu, #merc-menu {
+    #caravan-menu, #toll-menu, #sail-menu, #vocation-menu, #salvage-menu, #oracle-menu, #vendor-menu, #merc-menu, #bestiary-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 420px; max-width: 92vw; max-height: 80vh;
       overflow-y: auto; font-size: 12px;
@@ -186,6 +186,16 @@
     #salvage-menu { width: 540px; max-height: 84vh; }
     #oracle-menu { width: 520px; max-height: 84vh; }
     #vendor-menu { width: 540px; max-height: 84vh; }
+    /* The Tracker's book spreads two facing columns. */
+    #bestiary-menu { width: 640px; max-height: 86vh; }
+    #bestiary-menu .b-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 8px 0; }
+    #bestiary-menu .b-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border: 1px solid #2a2a3a; border-radius: 3px; cursor: pointer; background: rgba(16,16,24,0.6); }
+    #bestiary-menu .b-row:hover { border-color: #8a86b8; }
+    #bestiary-menu .b-row.sel { border-color: #c8a84b; }
+    #bestiary-menu .b-row.dark { color: #55536a; cursor: default; }
+    #bestiary-menu .b-bar { height: 3px; background: #26263a; border-radius: 2px; overflow: hidden; margin-top: 2px; }
+    #bestiary-menu .b-bar i { display: block; height: 100%; background: #8ab06a; }
+    #bestiary-menu .b-bar i.done { background: #e8c860; }
     #account-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
       width: 820px; max-width: 95vw; max-height: 90vh;
@@ -386,6 +396,7 @@
   <div id="toll-menu" class="panel hidden"></div>
   <div id="salvage-menu" class="panel hidden"></div>
   <div id="oracle-menu" class="panel hidden"></div>
+  <div id="bestiary-menu" class="panel hidden"></div>
   <div id="vendor-menu" class="panel hidden"></div>
   <div id="death-screen" class="panel hidden"></div>
   <div id="account-screen" class="panel hidden"></div>

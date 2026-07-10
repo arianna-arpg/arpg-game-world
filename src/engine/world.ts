@@ -67,7 +67,10 @@ import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord,
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
-import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE } from '../data/townBuild';
+import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE } from '../data/townBuild';
+// Side-effect import: registers the bestiary's recording kill-rule at boot
+// (the book itself is UI; the knowledge accrues whether or not it's ever read).
+import '../data/bestiary';
 import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
@@ -1692,6 +1695,9 @@ export class World {
   /** ONE-SHOT: the Oracle-stone dwell (same idiom). */
   oracleDwellRequested = false;
   private oracleGate = new Dwell();
+  /** ONE-SHOT: the Tracker's-fire dwell — opens the BESTIARY (same idiom). */
+  trackerDwellRequested = false;
+  private trackerGate = new Dwell();
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
   vendorDwellRequested = false;
@@ -2949,6 +2955,14 @@ export class World {
       const dummy = this.createMonster('target_dummy', Math.max(1, this.player.level), 'enemy');
       dummy.pos = this.clampPos(vec(TRAINING_YARD.x, TRAINING_YARD.y), dummy.radius);
       this.actors.push(dummy);
+    }
+    // THE TRACKER: the Bestiary's keeper camps at the west edge once his
+    // Vault feature is bought (townBuild raised his fire; the body and the
+    // fixture line up at TRACKER_SITE).
+    if (def.id === START_ZONE && featureEnabled(this.account, FEATURE.TRACKER)) {
+      const t = this.createMonster('townsfolk_tracker', 1, 'player');
+      t.pos = this.clampPos(vec(TRACKER_SITE.x + 26, TRACKER_SITE.y - 20), t.radius);
+      this.actors.push(t);
     }
     this.text(vec(p.pos.x, p.pos.y - 46), def.name, def.theme.accent, 24);
     // If a warband is storming this ground as you arrive, you'll know it.
@@ -8142,6 +8156,28 @@ export class World {
   salvageHint(): { pos: Vec2; text: string } | null {
     if (!this.nearSalvage()) return null;
     return { pos: vec(SALVAGE_SITE.x, SALVAGE_SITE.y), text: 'Linger to work the salvage bench.' };
+  }
+
+  // -------------------------------------------------------- tracker's camp ---
+
+  /** By the Tracker's fire? (Feature owned + in town + near TRACKER_SITE.) */
+  nearTracker(seat: Seat = this.localSeat): boolean {
+    return featureEnabled(this.account, FEATURE.TRACKER)
+      && this.zone.id === START_ZONE
+      && dist(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y)) <= SALVAGE_CFG.stationRadius;
+  }
+
+  /** Linger by the fire → open the BESTIARY (flag → main loop). */
+  private updateTracker(dt: number): void {
+    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearTracker();
+    if (!this.trackerGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    this.trackerDwellRequested = true;
+  }
+
+  /** The camp's prompt while the player is near (renderer), or null. */
+  trackerHint(): { pos: Vec2; text: string } | null {
+    if (!this.nearTracker()) return null;
+    return { pos: vec(TRACKER_SITE.x, TRACKER_SITE.y), text: 'Linger to open the bestiary.' };
   }
 
   // --------------------------------------------------------- oracle stone ----
@@ -17098,6 +17134,13 @@ export class World {
       dropGemAt: at => this.dropGemAt(at),
       text: (at, msg, color, size) => this.text(at, msg, color, size),
       bumpLedger: (key, by) => bumpLedger(this.ledger, key, by),
+      bumpAccountLedger: (key, by = 1, flush = false) => {
+        const cur = this.account.ledger[key] ?? 0;
+        if (!this.metaProgressionActive()) return cur;
+        this.account.ledger[key] = cur + by;
+        if (flush) this.accountDirty = true;
+        return cur + by;
+      },
       flash: (at, radius, color, life = 0.3) =>
         this.flashes.push({ pos: vec(at.x, at.y), radius, color, life, maxLife: life }),
       spawnHostileAt: (defId, level, at) => {
@@ -18043,6 +18086,8 @@ export class World {
     this.updateSalvage(dt);
     // The Oracle stone opens the communion menu on a dwell.
     this.updateOracle(dt);
+    // The Tracker's fire opens the Bestiary on a dwell.
+    this.updateTracker(dt);
     // Any stocked, registered vendor counter opens the Vendor screen on a dwell.
     this.updateVendors(dt);
     // The Caravanner opens the band-travel menu on a dwell (a UI callback).

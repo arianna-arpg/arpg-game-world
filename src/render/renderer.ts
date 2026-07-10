@@ -1740,6 +1740,7 @@ export class Renderer {
       { h: world.campfireHint(), ring: '#ff9a3a', ink: '#ffc878' },
       { h: world.salvageHint(), ring: '#7a9ae8', ink: '#aac0f0' },
       { h: world.oracleHint(), ring: '#b06bd4', ink: '#d0a8e8' },
+      { h: world.trackerHint(), ring: '#a8c87a', ink: '#c8e0a8' },
     ];
     const { ctx } = this;
     const t = world.time;

@@ -505,6 +505,7 @@ function handleLocalPanels(): void {
     if (ui.vendorOpen) { ui.closeVendor(); return; }
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
     if (ui.oracleOpen) { ui.closeOracle(); return; }
+    if (ui.bestiaryOpen) { ui.closeBestiary(); return; }
     if (ui.sailOpen) { ui.closeSail(); return; }
     if (ui.mercOpen) { ui.closeMercMenu(); return; }
     // The vocation choice menu closes through its OWN close (not hideAll):
@@ -625,6 +626,11 @@ function tick(now: number): void {
       if (world.oracleDwellRequested && !ui.escapeMenuOpen) {
         world.oracleDwellRequested = false;
         if (!ui.oracleOpen) ui.showOracle();
+      }
+      // The Tracker's-fire dwell asks to open the Bestiary.
+      if (world.trackerDwellRequested && !ui.escapeMenuOpen) {
+        world.trackerDwellRequested = false;
+        if (!ui.bestiaryOpen) ui.showBestiary();
       }
       // A stocked vendor counter's dwell asks to open the Vendor screen.
       if (world.vendorDwellRequested && !ui.escapeMenuOpen) {

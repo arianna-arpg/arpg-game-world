@@ -37,6 +37,11 @@ export const CARAVAN_SITE = { x: 1300, y: 220 };
  *  break your loot, then spend it at his counter three steps away. */
 export const SALVAGE_SITE = { x: 620, y: 250 };
 
+/** Where the Tracker pitches camp — the town's west edge, half in the wilds
+ *  (a huntsman sleeps closest to what he studies). Shared by the fixture,
+ *  the NPC spawn, and the World's nearTracker dwell check. */
+export const TRACKER_SITE = { x: 230, y: 600 };
+
 /** Where the Oracle's standing stones rise — shared by the fixture and the
  *  World's nearOracle dwell check. The expanded south, past the campfire:
  *  magic happens at the town's quiet edge. */
@@ -77,6 +82,13 @@ export const TOWN_ADDITIONS: TownAddition[] = [
   {
     feature: FEATURE.SALVAGE_STATION,
     fixtures: [{ structure: 'salvage_bench', x: SALVAGE_SITE.x, y: SALVAGE_SITE.y }],
+  },
+  // The Tracker's camp — the west edge. Dwell by the fire for the BESTIARY
+  // (the World reads proximity to TRACKER_SITE; the NPC spawns there too).
+  {
+    feature: FEATURE.TRACKER,
+    fixtures: [{ structure: 'wayside_camp', x: TRACKER_SITE.x, y: TRACKER_SITE.y }],
+    grow: { w: 1700, h: 1200 },
   },
   // The Oracle Stone — the expanded south edge. Dwell among the stones for
   // the communion (reroll) menu (the World reads proximity to ORACLE_SITE).

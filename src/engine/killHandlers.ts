@@ -48,6 +48,13 @@ export interface KillCtx {
    *  them verbatim (hunt tiers, Warbands' crowned_killed, the Conclave's
    *  eldritch_repelled...); never rename one. */
   bumpLedger(key: string, by?: number): void;
+  /** LIFETIME-ledger bump: writes the ACCOUNT ledger directly (knowledge that
+   *  outlives the run — the craft-lore stance), gated on the mode stage's
+   *  metaProgression policy (returns the current count unchanged when meta is
+   *  off). `flush` also marks the account save dirty — reserve it for the
+   *  moments worth a durable write (first sighting, tier crossings, mastery);
+   *  routine counts ride the next scheduled account save. */
+  bumpAccountLedger(key: string, by?: number, flush?: boolean): number;
   flash(at: Vec2, radius: number, color: string, life?: number): void;
   /** Spawn a hostile at a clamped position (the cultist's blood-demon verb). */
   spawnHostileAt(defId: string, level: number, at: Vec2): Actor;

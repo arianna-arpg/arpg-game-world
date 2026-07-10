@@ -29,6 +29,11 @@ import {
   salvageItemYield, salvageSkillYield, salvageSupportYield,
 } from '../engine/crafting';
 import { SKILLS } from '../data/skills';
+import {
+  BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals,
+  bestiaryThreshold, bestiaryTotals, spectreAttunable,
+} from '../data/bestiary';
+import type { MonsterDef } from '../data/monsters';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -109,6 +114,7 @@ export class UI {
   private tollMenu = document.getElementById('toll-menu')!;
   private salvageMenu = document.getElementById('salvage-menu')!;
   private oracleMenu = document.getElementById('oracle-menu')!;
+  private bestiaryMenu = document.getElementById('bestiary-menu')!;
   private vendorMenu = document.getElementById('vendor-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
@@ -197,6 +203,10 @@ export class UI {
   private craftTargetUid: number | null = null;
   oracleOpen = false;
   private oracleTargetUid: number | null = null;
+  /** The Tracker's book: which leaf is open, and which page is under the thumb. */
+  bestiaryOpen = false;
+  private bestiaryPage = 0;
+  private bestiarySel: string | null = null;
   vendorOpen = false;
   /** The scrap wheel: while ON, the vendor screen's sell-half is live and
    *  clicks BREAK your things for essence. Reset on close — never sticky. */
@@ -396,6 +406,7 @@ export class UI {
     return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
       || this.caravanOpen || this.mercOpen || this.tollOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.vocationOpen
+      || this.bestiaryOpen
       || !this.startMenu.classList.contains('hidden');
   }
 
@@ -1586,6 +1597,143 @@ export class UI {
       });
     }));
     this.salvageMenu.querySelector<HTMLButtonElement>('[data-salv-close]')?.addEventListener('click', () => this.closeSalvage());
+  }
+
+  // -------------------------------------------------------- the bestiary book
+  // The Tracker's ledger: one page per eligible kind in the LIVE registry
+  // (data/bestiary.ts derives the list — new monsters bind themselves in).
+  // A page darkens to '???' until first blood, then reveals in STUDY TIERS
+  // as account-lifetime kills accrue; the full threshold MASTERS it.
+
+  showBestiary(): void {
+    this.bestiaryOpen = true;
+    this.bestiaryMenu.classList.remove('hidden');
+    this.refreshBestiary();
+  }
+
+  closeBestiary(): void {
+    this.bestiaryOpen = false;
+    this.bestiaryMenu.classList.add('hidden');
+    hideTooltip();
+  }
+
+  /** A kind's little portrait: its silhouette LANGUAGE (shape + color), as
+   *  inline SVG — no renderer round-trip, readable at 22px, and any new
+   *  ActorShape falls back to the circle rather than breaking the book. */
+  private monsterGlyph(def: MonsterDef, dark: boolean): string {
+    const c = dark ? '#3a384c' : def.color;
+    const pts: Record<string, string> = {
+      diamond: '11,1 21,11 11,21 1,11',
+      triangle: '11,2 21,20 1,20',
+      square: '3,3 19,3 19,19 3,19',
+      kite: '11,1 19,13 11,21 3,13',
+      trapezoid: '5,4 17,4 21,19 1,19',
+      pentagon: '11,1 21,9 17,20 5,20 1,9',
+      hexagon: '6,2 16,2 21,11 16,20 6,20 1,11',
+      star: '11,1 13,8 21,8 15,13 17,21 11,16 5,21 7,13 1,8 9,8',
+    };
+    const body = def.shape === 'oval'
+      ? `<ellipse cx="11" cy="11" rx="10" ry="7" fill="${c}"/>`
+      : pts[def.shape]
+        ? `<polygon points="${pts[def.shape]}" fill="${c}"/>`
+        : `<circle cx="11" cy="11" r="9" fill="${c}"/>`;
+    return `<svg width="22" height="22" viewBox="0 0 22 22" style="flex:0 0 22px">${body}</svg>`;
+  }
+
+  refreshBestiary(): void {
+    if (!this.bestiaryOpen) return;
+    const acc = this.getAccount();
+    const list = bestiaryList();
+    const per = BESTIARY_CFG.pageSize;
+    const pages = Math.max(1, Math.ceil(list.length / per));
+    this.bestiaryPage = Math.min(Math.max(0, this.bestiaryPage), pages - 1);
+    const totals = bestiaryTotals(acc);
+    const leaf = list.slice(this.bestiaryPage * per, (this.bestiaryPage + 1) * per);
+
+    const rows = leaf.map(def => {
+      const kills = bestiaryKills(acc, def.id);
+      const need = bestiaryThreshold(def);
+      const dark = kills <= 0;
+      const done = kills >= need;
+      const sel = this.bestiarySel === def.id ? ' sel' : '';
+      const pct = Math.min(100, (kills / need) * 100);
+      return `<div class="b-row${dark ? ' dark' : sel}" data-bst="${dark ? '' : def.id}">
+        ${this.monsterGlyph(def, dark)}
+        <div style="flex:1;min-width:0">
+          <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+            ${dark ? '???' : def.name}${def.boss ? ' <span style="color:#e64db4;font-size:9px">BOSS</span>' : ''}
+            ${done ? ' <span style="color:#e8c860;font-size:9px">★</span>' : ''}
+          </div>
+          <div class="b-bar"><i class="${done ? 'done' : ''}" style="width:${pct}%"></i></div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // The open leaf's DETAIL: what the study tier has revealed so far.
+    let detail = '<div style="color:#8a8678;font-size:11px;margin-top:6px">Open an entry — knowledge fills in as your line hunts.</div>';
+    const def = list.find(d => d.id === this.bestiarySel);
+    if (def) {
+      const kills = bestiaryKills(acc, def.id);
+      const need = bestiaryThreshold(def);
+      const reveals = (g: string): boolean => bestiaryReveals(acc, def, g);
+      const done = kills >= need;
+      const line = (label: string, val: string): string =>
+        `<div style="display:flex;justify-content:space-between;gap:12px"><span style="color:#8a8678">${label}</span><span>${val}</span></div>`;
+      const hidden = (label: string): string =>
+        `<div style="display:flex;justify-content:space-between;gap:12px;color:#55536a"><span>${label}</span><span>· · ·</span></div>`;
+      const b = def.base;
+      let body = line('Studied', `${kills} / ${need} kills${done ? ' — <span style="color:#e8c860">MASTERED</span>' : ''}`);
+      body += line('Allegiance', def.faction ?? 'none') + line('Worth', `${def.xp} xp`);
+      body += reveals('vitals')
+        ? line('Life', String(b.life ?? '—')) + line('Pace', String(b.moveSpeed ?? '—'))
+        : hidden('Vitals');
+      if (reveals('arts')) {
+        const arts = def.skills.map(s => SKILLS[s]?.name ?? s).join(', ') || 'tooth and claw';
+        body += line('Accuracy', String(b.accuracy ?? '—')) + line('Arts', arts);
+      } else body += hidden('Arts');
+      if (reveals('hide')) {
+        body += line('Armor', String(b.armor ?? 0)) + line('Evasion', String(b.evasion ?? 0));
+        const quirks = (def.mods ?? [])
+          .map(m => STAT_DEFS[m.stat]?.label ?? m.stat).join(', ');
+        if (quirks) body += line('Quirks', quirks);
+      } else body += hidden('Hide & quirks');
+      if (done) {
+        body += `<div style="margin-top:6px;color:${spectreAttunable(acc, def) ? '#a8d8a0' : '#8a8678'};font-size:10px">
+          ${spectreAttunable(acc, def)
+            ? '★ Mastered — this form may be ATTUNED to a Spectre skill (Build pane).'
+            : '★ Mastered — too mighty a form for spectral binding.'}</div>`;
+      }
+      detail = `<div style="border:1px solid #3a3a52;border-radius:4px;padding:8px;margin-top:8px;background:rgba(20,20,30,0.5)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">${this.monsterGlyph(def, false)}
+          <b>${def.name}</b>${def.boss ? ' <span style="color:#e64db4;font-size:10px">BOSS</span>' : ''}</div>
+        ${body}</div>`;
+    }
+
+    this.bestiaryMenu.innerHTML = `
+      <h2 style="margin-bottom:2px">The Tracker's Bestiary</h2>
+      <div style="color:#8a8678;font-size:10px;margin-bottom:6px">
+        ${totals.sighted} of ${totals.pages} kinds sighted · ${totals.mastered} mastered — knowledge is the account's, and outlives you.
+      </div>
+      <div class="b-grid">${rows}</div>
+      <div class="bind-btns" style="display:flex;justify-content:space-between;align-items:center">
+        <button data-bpage="-1" ${this.bestiaryPage <= 0 ? 'disabled' : ''}>◀ Prev</button>
+        <span style="color:#8a8678;font-size:10px">leaf ${this.bestiaryPage + 1} / ${pages}</span>
+        <button data-bpage="1" ${this.bestiaryPage >= pages - 1 ? 'disabled' : ''}>Next ▶</button>
+      </div>
+      ${detail}
+      <div class="bind-btns" style="margin-top:8px"><button data-bst-close>Close the book</button></div>`;
+
+    const q = <T extends HTMLElement>(sel: string): T[] => [...this.bestiaryMenu.querySelectorAll<T>(sel)];
+    q<HTMLElement>('[data-bst]').forEach(el => el.addEventListener('click', () => {
+      if (!el.dataset.bst) return; // a dark page holds its secrets
+      this.bestiarySel = el.dataset.bst;
+      this.refreshBestiary();
+    }));
+    q<HTMLButtonElement>('button[data-bpage]').forEach(btn => btn.addEventListener('click', () => {
+      this.bestiaryPage += Number(btn.dataset.bpage);
+      this.refreshBestiary();
+    }));
+    this.bestiaryMenu.querySelector<HTMLButtonElement>('[data-bst-close]')?.addEventListener('click', () => this.closeBestiary());
   }
 
   // ------------------------------------------------------------ oracle stone
