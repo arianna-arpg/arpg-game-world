@@ -21,6 +21,7 @@
 
 import type { World } from './world';
 import type { Actor } from './actor';
+import { LOS_CFG } from './los';
 
 export interface AimAssistTuning {
   /** A target's EDGE within this of the raw aim point can be acquired. */
@@ -67,7 +68,12 @@ export function assistAim(
   const pool = world.enemiesOf(self).filter(a => {
     if (a.construct?.breakable !== undefined && a.owner === self) return false;
     const p = world.veilPatchAt(a.pos);
-    return p === null || p === selfPatch;
+    if (p !== null && p !== selfPatch) return false;
+    // The veil rule, extended to STONE (LOS_CFG.aimAssist): the reticle
+    // can't hold what a wall hides — a held lock breaks when its target
+    // steps behind masonry, exactly as under unbroken leaves.
+    if (LOS_CFG.aimAssist && !world.lineOfSight(self.pos, a.pos)) return false;
+    return true;
   });
   let target: Actor | undefined;
   // STICK: the held target survives while raw aim stays inside breakRadius.

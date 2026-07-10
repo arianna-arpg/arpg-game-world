@@ -621,6 +621,9 @@ export interface DischargeSpec {
    *  charge HELD (floored at 0.15s) — Tempest Gathering's mounting storm.
    *  A fuller battery doesn't just last longer; it fires faster. */
   intervalPerCharge?: number;
+  /** Terrain occlusion: 'blocked' (default — the bolt leaps only to prey
+   *  with a clear firing line) or 'free'. `phasing` stat frees from data. */
+  occlusion?: 'blocked' | 'free';
 }
 
 /**
@@ -687,6 +690,12 @@ export interface ProjectileDelivery {
   speed: number;          // units / second
   radius: number;         // collision radius
   range: number;          // max travel distance
+  /** Terrain occlusion attitude: 'blocked' (the default via LOS_CFG.delivery
+   *  — rocks, walls and masonry stop the flight) or 'free' (the shot PHASES
+   *  through terrain like mist). The `phasing` stat frees any use from data
+   *  — a support gem (Wraith Passage) conjures passage the way Ricochet
+   *  conjures bounces. */
+  occlusion?: 'blocked' | 'free';
   pierce?: number;        // number of extra targets it can pass through
   count?: CountSpec;      // base projectile count (player adds projectileCount stat)
   spreadDeg?: number;     // total fan angle when firing multiple
@@ -1035,6 +1044,10 @@ export interface NovaDelivery {
    *  LINE from the origin — the burst reads as simultaneous razor lances,
    *  not a wash. Pure presentation; the hits are the nova's. */
   lanceFx?: true;
+  /** Terrain occlusion: 'blocked' (default — the burst washes around
+   *  corners but never THROUGH walls: victims without a firing line from
+   *  the origin are spared) or 'free'. `phasing` stat frees from data. */
+  occlusion?: 'blocked' | 'free';
 }
 
 /** A direct strike on the skill's resolved target (see SkillDef.targeting). */
@@ -1042,6 +1055,10 @@ export interface TargetDelivery {
   type: 'target';
   /** Optional splash radius around the target, hitting other enemies. */
   splash?: number;
+  /** Terrain occlusion: 'blocked' (default — HOSTILE targeting refuses
+   *  victims without a firing line; ally mends stay free) or 'free'.
+   *  `phasing` stat frees from data. */
+  occlusion?: 'blocked' | 'free';
 }
 
 export interface ConeDelivery {
@@ -1055,12 +1072,22 @@ export interface ConeDelivery {
    *  mechanically; this makes them read that way (Umbral Lance,
    *  Sunpiercer). Pure visuals; the hit test is unchanged. */
   beamFx?: true;
+  /** Terrain occlusion: 'blocked' (default — a wall EATS the ray/breath:
+   *  victims without a firing line are spared and the beamFx line clips at
+   *  the stone) or 'free' (burns through). `phasing` stat frees from data. */
+  occlusion?: 'blocked' | 'free';
 }
 
 export interface GroundDelivery {
   type: 'ground';         // targeted at cursor (AI: at target)
   radius: number;
   castRange: number;      // max placement distance
+  /** Terrain occlusion: 'blocked' (default — the placement point CLIPS to
+   *  the near side of the first wall along the cast line, and the zone's
+   *  ticks spare victims walled off from it) or 'free' (called from the
+   *  sky: place and burn anywhere — celestial rains opt in here).
+   *  `phasing` stat frees from data. */
+  occlusion?: 'blocked' | 'free';
   delay?: number;         // telegraph time before impact
   lingerDuration?: number;// if set, leaves a zone dealing damage each tick
   tickInterval?: number;  // seconds between linger ticks (default 0.5)
@@ -1341,6 +1368,11 @@ export interface StormDelivery {
   areaRadius: number;     // scatter radius around the cast point
   hitRadius: number;      // radius of each strike
   castRange: number;      // max placement distance
+  /** Terrain occlusion: 'blocked' (default — the CAST POINT clips to the
+   *  first wall along the cast line; the strikes themselves still fall
+   *  from the SKY inside the disc) or 'free' (call the storm anywhere).
+   *  `phasing` stat frees from data. */
+  occlusion?: 'blocked' | 'free';
   /** SPARKFIELD: strikes plant UNDER enemies inside the scatter disc
    *  (nearest first; leftovers scatter at random ground as usual). */
   atEnemies?: true;

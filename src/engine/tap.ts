@@ -27,6 +27,8 @@
 //                                     mechanical re-casts stay separable)
 //   - world.ts   shedOrb   → onOrbShed (a resource orb enters the world)
 //   - world.ts   pourOrb   → onOrbPickup (an orb scooped — after it poured)
+//   - world.ts   updateProjectiles / clampGroundTarget → onOccluded (terrain
+//                                     ate a shot / clipped a placement)
 // ---------------------------------------------------------------------------
 
 import type { Actor } from './actor';
@@ -50,6 +52,9 @@ export interface SimTap {
   onOrbShed?(kind: string): void;
   /** An orb was scooped and poured into an actor. */
   onOrbPickup?(kind: string, into: Actor): void;
+  /** Terrain occlusion bit something: 'proj' = a flight died on a wall,
+   *  'place' = a ground/storm cast point was clipped to the near side. */
+  onOccluded?(kind: 'proj' | 'place'): void;
 }
 
 /** The installed tap. Read via `SIM_TAP.current?.…` at each chokepoint. */

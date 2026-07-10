@@ -9,7 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
-import { DiscIndex, SPATIAL_CFG } from './spatial';
+import { DiscIndex } from './spatial';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type BrainPhase, type CastingState, type Team } from './actor';
@@ -60,7 +60,7 @@ import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId }
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { CONSTRUCT_LOOKS } from '../data/looks';
 import {
-  blocksMovement, blocksProjectiles, blocksSightOf, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
+  blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
@@ -97,6 +97,7 @@ import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../wo
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
+import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt, dimensionsEnteredBy } from '../world/dimensions';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
@@ -377,6 +378,16 @@ export const SNOW_CFG = {
   washAlpha: 0.42,
 };
 
+/** CONVEX-ZONE NAV tunables (World.pathField): the lazy flow-field grid raked
+ *  over a plains zone's blocking doodads, so AI routes around cliff pockets
+ *  and chasm lips exactly as it routes through warren walls. */
+export const NAV_CFG = {
+  /** Blocker inflation (px): paths keep a shoulder's clearance off trunks
+   *  and chasm lips. A gap the pad closes simply falls back to straight
+   *  steering (pathStep null) — clampPos stays the collision authority. */
+  pad: 10,
+};
+
 /** Tags whose bearers are AMBIENT living-world texture, streamed through zones
  *  by overlay packages — NEVER part of the zone objective, so a waves/clear
  *  zone can't soft-lock behind them. Materializers tag their spawns; a new
@@ -505,6 +516,9 @@ interface Projectile {
   zig?: { timer: number; sign: number };
   /** Terrain ricochets remaining. */
   bounces?: number;
+  /** PHASING flight (occlusion 'free' / the phasing stat): terrain never
+   *  stops it — through rock, walls and masonry like mist. */
+  phase?: boolean;
   /** Live recurve chance (× decay per whip-around). */
   recurveChance?: number;
   /** Selective pierce: the prey's actor id (retargets on its death). */
@@ -642,6 +656,10 @@ interface Zone {
   /** THUNDERMARK: a linked marker — when one fires, its living kin fire
    *  in a quick ripple (same skill + caster). */
   marker?: boolean;
+  /** Occlusion attitude, resolved ONCE on first hit test (zoneSees):
+   *  true = this zone's hits ignore walls (sky strikes, sweeps, phasing
+   *  skills); false = victims walled off from the zone are spared. */
+  phase?: boolean;
   /** The zone FOLLOWS its caster (worn fields — Blizzard Coil's mantle). */
   follow?: boolean;
   /** The zone RIDES an arbitrary actor and DIES with it (Risen Offering's
@@ -10672,6 +10690,13 @@ export class World {
         ? this.actors.filter(a => a.owner === caster && !a.dead && !a.construct)
         : this.actors.filter(a => a.team === caster.team && !a.dead && a !== caster);
     const reqs = statusReqs(t.requiresStatus);
+    // FIRING LINE gate (occlusion): HOSTILE targeting refuses victims the
+    // caster has no line of fire to — you cannot Ignite through masonry.
+    // Ally mends stay free (a wall never blocks succor), and phasing skills
+    // target through anything. The AI's cast-validity check shares this
+    // resolve, so a monster never winds up a targeted cast into a wall.
+    const needLoF = t.target === 'enemy'
+      && this.skillOcclusion(caster, inst) === 'blocked';
     const qualifies = (a: Actor): boolean => {
       if (reqs && !a.statuses.some(s => reqs.includes(s.id))) return false;
       // TAXONOMY gate (requiresMonsterTags): the target's KIND must match —
@@ -10680,6 +10705,7 @@ export class World {
         const mtags = a.defId ? MONSTERS[a.defId]?.tags : undefined;
         if (!mtags || !t.requiresMonsterTags.some(tag => mtags.includes(tag))) return false;
       }
+      if (needLoF && !this.lineOfFire(caster.pos, a.pos)) return false;
       return true;
     };
     let best: Actor | null = null, bd = search;
@@ -12223,16 +12249,22 @@ export class World {
       case 'nova': {
         const radius = d.radius * aoeScale;
         const shape = caster.sheet.get('aoeShape', tags, extra);
+        // WALLS SHAPE BURSTS (occlusion): the wash reaches only what the
+        // origin has a firing line to — cover is cover even inside the ring.
+        const phase = this.skillOcclusion(caster, inst) === 'free';
+        const sees = (v: Actor): boolean =>
+          phase || v === caster || this.lineOfFire(origin, v.pos);
         let pool = d.affects === 'all'
           ? this.actors.filter(a => !a.dead && !a.untargetable)
           : d.affects === 'allies'
             ? this.actors.filter(a => !a.dead && a.team === caster.team)
             : this.enemiesOf(caster);
         // Capped-target novas (Galvanic Reserve): the burst picks the
-        // NEAREST N instead of washing the whole room.
+        // NEAREST N instead of washing the whole room — walled-off bodies
+        // never consume a slot.
         if (d.maxTargets !== undefined) {
           pool = pool
-            .filter(v => inAoe(origin, radius, shape, caster.facing, v.pos, v.radius))
+            .filter(v => inAoe(origin, radius, shape, caster.facing, v.pos, v.radius) && sees(v))
             .sort((a, b) => dist(origin, a.pos) - dist(origin, b.pos))
             .slice(0, Math.max(1, d.maxTargets));
         }
@@ -12244,6 +12276,7 @@ export class World {
           // Status-gated novas (Soul Glut): only the afflicted are devoured.
           if (d.requiresStatus
             && !victim.statuses.some(s => d.requiresStatus!.includes(s.id))) continue;
+          if (!sees(victim)) continue;
           this.resolveHit(caster, inst, victim, useMult, 0, flatBonus);
           // LANCE VISUALS (Lancing Flurry): every victim is struck down a
           // drawn line from the origin — simultaneous razor lances.
@@ -12347,19 +12380,28 @@ export class World {
           * caster.sheet.get('meleeReach', tags, extra);
         const arcRad = Math.min(Math.PI * 2,
           (d.arcDeg * Math.PI / 180) * arcScale);
+        // WALLS EAT RAYS (occlusion): victims without a firing line from the
+        // origin are spared — the wedge licks around corners it can SEE past,
+        // never through stone. A phasing use burns through everything.
+        const phase = this.skillOcclusion(caster, inst) === 'free';
         for (const enemy of this.enemiesOf(caster)) {
           const dd = dist(caster.pos, enemy.pos);
           if (dd - enemy.radius > range) continue;
           // Edge-band cones (Surgical Strike): only the far rim cuts.
           if (d.edgeOnly && dd + enemy.radius < range * d.edgeOnly) continue;
           if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, enemy.pos))) > arcRad / 2) continue;
+          if (!phase && !this.lineOfFire(caster.pos, enemy.pos)) continue;
           this.resolveHit(caster, inst, enemy, useMult, 0, flatBonus);
         }
         // LASER presentation (beamFx): razor cones ARE hitscan — draw the
-        // crystal-beam line instead of an invisible sliver of wedge.
+        // crystal-beam line instead of an invisible sliver of wedge. The
+        // drawn ray CLIPS at the first wall (honest laser: the stone eats it).
         if (d.beamFx) {
+          const beamLen = phase ? range : dist(caster.pos, this.clipShot(caster.pos,
+            vec(caster.pos.x + Math.cos(caster.facing) * range,
+                caster.pos.y + Math.sin(caster.facing) * range)));
           this.flashes.push({
-            pos: vec(caster.pos.x, caster.pos.y), radius: range, color: def.color,
+            pos: vec(caster.pos.x, caster.pos.y), radius: beamLen, color: def.color,
             life: 0.22, maxLife: 0.22, beam: true, facing: caster.facing,
           });
         } else {
@@ -12383,7 +12425,7 @@ export class World {
       }
 
       case 'ground': {
-        const at = this.clampGroundTarget(caster.pos, aim, d);
+        const at = this.clampGroundTarget(caster, aim, d, inst);
         const isCurse = def.tags.includes('curse');
         const curseAllies = isCurse && caster.sheet.get('hedonism', tags, extra) > 0;
         // EXCLUSIVE placements (Netherfissure): the new wound extinguishes
@@ -12920,10 +12962,14 @@ export class World {
       }
 
       case 'storm': {
-        const at = this.clampPos(
-          dist(caster.pos, aim) <= d.castRange ? vec(aim.x, aim.y)
-            : vec(caster.pos.x + Math.cos(caster.facing) * d.castRange,
-                  caster.pos.y + Math.sin(caster.facing) * d.castRange), 10);
+        // The CAST POINT respects walls (occlusion): clipped to the first
+        // shot-blocker along the line — the strikes themselves still fall
+        // from the SKY inside the disc (zoneSees never gates storm zones).
+        const wantAt = dist(caster.pos, aim) <= d.castRange ? vec(aim.x, aim.y)
+          : vec(caster.pos.x + Math.cos(caster.facing) * d.castRange,
+                caster.pos.y + Math.sin(caster.facing) * d.castRange);
+        const at = this.clampPos(this.skillOcclusion(caster, inst) === 'blocked'
+          ? this.clipShot(caster.pos, wantAt) : wantAt, 10);
         const strikes = rollCount(d.count, Math.round(caster.sheet.get('stormCount', tags, extra)));
         // stormImmediate is a FRACTION: that share of the strikes crashes
         // down up-front (nearest enemies first via the sparkfield sort),
@@ -13922,6 +13968,9 @@ export class World {
       // Bounce and recurve are STAT AXES like the flight patterns: innate
       // spec values seed the queries, so gems create them from nothing.
       bounces: Math.round(caster.sheet.get('projBounce', tags, extra, t?.bounce ?? 0)) || undefined,
+      // PHASING (occlusion 'free' / the phasing stat, support-graftable):
+      // terrain never stops this flight.
+      phase: this.skillOcclusion(caster, inst) === 'free' || undefined,
       caromLock: t?.caromOnHit,
       recurveChance: (() => {
         const rc = caster.sheet.get('projRecurve', tags, extra, t?.recurve?.chance ?? 0);
@@ -14101,11 +14150,27 @@ export class World {
     }
   }
 
-  private clampGroundTarget(from: Vec2, aim: Vec2, d: GroundDelivery): Vec2 {
+  private clampGroundTarget(caster: Actor, aim: Vec2, d: GroundDelivery, inst: SkillInstance): Vec2 {
+    const from = caster.pos;
     const dd = dist(from, aim);
-    if (dd <= d.castRange) return vec(aim.x, aim.y);
-    const ang = angleTo(from, aim);
-    return vec(from.x + Math.cos(ang) * d.castRange, from.y + Math.sin(ang) * d.castRange);
+    let at: Vec2;
+    if (dd <= d.castRange) at = vec(aim.x, aim.y);
+    else {
+      const ang = angleTo(from, aim);
+      at = vec(from.x + Math.cos(ang) * d.castRange, from.y + Math.sin(ang) * d.castRange);
+    }
+    // WALLS EAT PLACEMENTS (occlusion): the drop point clips to the near
+    // side of the first shot-blocker along the cast line — no seeding fire
+    // through masonry. Sky-called skills (occlusion 'free') and phasing
+    // uses place anywhere in range.
+    if (this.skillOcclusion(caster, inst) === 'blocked') {
+      const clipped = this.clipShot(from, at);
+      if (clipped.x !== at.x || clipped.y !== at.y) {
+        SIM_TAP.current?.onOccluded?.('place');
+        at = clipped;
+      }
+    }
+    return at;
   }
 
   /** Lay one FISSURE (GroundDelivery.fissure): a chain of zones tearing
@@ -15427,6 +15492,7 @@ export class World {
     this.flashes.push({ pos: vec(at.x, at.y), radius, color: z.color, life: 0.3, maxLife: 0.3 });
     for (const v of this.zoneVictims(z)) {
       if (dist(at, v.pos) - v.radius > radius) continue;
+      if (!this.zoneSees(z, v)) continue;
       this.resolveHit(z.caster, z.inst, v, z.dmgMult * damageScale, z.depth, z.flatBonus, true);
     }
     this.spawnAftershocks(z.caster, z.inst, at, radius, z.shape, 0);
@@ -20754,43 +20820,67 @@ export class World {
    * see through). This is what line-of-sight casters reposition to regain.
    */
   lineOfSight(from: Vec2, to: Vec2): boolean {
-    const dx = to.x - from.x, dy = to.y - from.y;
-    const lenSq = dx * dx + dy * dy;
-    const len = Math.sqrt(lenSq);
-    // Doodad occluders via the spatial index: sample the segment at pad-wide
-    // steps — coverage insertion guarantees every disc that could touch the
-    // segment appears in at least one sampled bucket, so this answers EXACTLY
-    // what the old full-list scan answered (re-testing a disc twice is
-    // harmless for a boolean ANY). The full scan was O(actors × doodads) per
-    // frame through the AI's vision checks — real money in a liquid-poured
-    // zone whose lava carpet is thousands of (sight-transparent) discs.
-    const steps = Math.ceil(len / SPATIAL_CFG.queryPad);
-    for (let i = 0; i <= steps; i++) {
-      const ts = steps > 0 ? i / steps : 0;
-      for (const o of this.doodadsAt(from.x + dx * ts, from.y + dy * ts)) {
-        if (!blocksSightOf(o)) continue;
-        // Closest point on the segment to the circle center.
-        let t = lenSq > 0 ? ((o.pos.x - from.x) * dx + (o.pos.y - from.y) * dy) / lenSq : 0;
-        t = clamp(t, 0, 1);
-        const cx = from.x + dx * t - o.pos.x;
-        const cy = from.y + dy * t - o.pos.y;
-        if (cx * cx + cy * cy < o.radius * o.radius) return false;
-      }
-    }
-    // Grid regions: ray-march at half-cell steps over the blocksSight rows.
-    // (The default is FALSE — a region is a chasm-like unless its RegionKind
-    // opts in: rampart masonry plus the TRUE WALLS — wall/flesh_wall/
-    // fungal_wall — block sight; ledges/water/tallgrass stay transparent.)
-    if (this.walk instanceof GridWalkField) {
-      if (len > 0) {
-        const step = (this.walk.cellSize ?? 30) / 2;
-        for (let s = step; s < len; s += step) {
-          const k = regionKind(this.walk.regionAt(from.x + dx * (s / len), from.y + dy * (s / len)));
-          if (k?.blocksSight) return false;
-        }
-      }
-    }
-    return true;
+    return castRay(this, from, to, 'sight') === null;
+  }
+
+  /**
+   * Can an EFFECT travel a straight line between two points? The 'shot'
+   * channel of the one raycast (engine/los.ts): blocked by shot-blocking
+   * doodads at TRUNK radius (arrows fly under leaves, stop on the bole) and
+   * grid blocksShot cells (rampart masonry, true walls) — chasms, water,
+   * windows and parapets all pass. Beams, novas, placements, chain hops and
+   * AI hold-fire all ask THIS, so terrain data drives every one of them.
+   */
+  lineOfFire(from: Vec2, to: Vec2): boolean {
+    return castRay(this, from, to, 'shot') === null;
+  }
+
+  /** Clip a cast line at the first shot-blocker: the point just SHORT of the
+   *  wall (LOS_CFG.clipBackoff), or `to` itself when the line is clear —
+   *  ground/storm placements land on the castable side of the stone. */
+  clipShot(from: Vec2, to: Vec2): Vec2 {
+    const hit = castRay(this, from, to, 'shot');
+    if (!hit) return to;
+    const back = Math.max(0, hit.d - LOS_CFG.clipBackoff);
+    const len = dist(from, to) || 1;
+    return vec(from.x + (to.x - from.x) * (back / len),
+               from.y + (to.y - from.y) * (back / len));
+  }
+
+  /** Perception rays, memoized (TTL LOS_CFG.memoTtl): acquireTarget probes
+   *  every candidate every tick — the memo keeps the raycasts at event rate.
+   *  Keyed per ordered pair; the map self-flushes when it bloats. */
+  private losMemo = new Map<number, { ok: boolean; until: number }>();
+  losCached(a: Actor, b: Actor): boolean {
+    const key = a.id * 1_000_000 + b.id;
+    const hit = this.losMemo.get(key);
+    if (hit && hit.until > this.time) return hit.ok;
+    const ok = this.lineOfSight(a.pos, b.pos);
+    if (this.losMemo.size > 4096) this.losMemo.clear();
+    this.losMemo.set(key, { ok, until: this.time + LOS_CFG.memoTtl });
+    return ok;
+  }
+
+  /** The delivery's occlusion ATTITUDE for one use: the spec's own word wins,
+   *  else the type default (LOS_CFG.delivery — unlisted types are free: melee
+   *  reach and self-effects have no remote firing line to cut). A positive
+   *  `phasing` stat frees the whole use — the support-graftable passage
+   *  (Wraith Passage conjures it from nothing, exactly like projBounce). */
+  skillOcclusion(caster: Actor, inst: SkillInstance): 'blocked' | 'free' {
+    const d = inst.def.delivery as { type: string; occlusion?: 'blocked' | 'free' };
+    const base = d.occlusion ?? LOS_CFG.delivery[d.type] ?? 'free';
+    if (base === 'free') return 'free';
+    return caster.sheet.get('phasing', skillContextTags(inst.def, grantedTags(inst)),
+      instanceMods(inst)) > 0 ? 'free' : 'blocked';
+  }
+
+  /** Should an AI HOLD FIRE on this skill without a clear firing line?
+   *  Remote deliveries do (LOS_CFG.aiHoldFire); free/phasing skills never —
+   *  the meteor caster keeps bombarding from behind its wall (emergent
+   *  artillery) while the ray caster repositions for the line. */
+  aiNeedsFireLine(caster: Actor, inst: SkillInstance): boolean {
+    return !!LOS_CFG.aiHoldFire[inst.def.delivery.type]
+      && this.skillOcclusion(caster, inst) === 'blocked';
   }
 
   /**
@@ -22599,13 +22689,18 @@ export class World {
         const tags = skillContextTags(inst!.def);
         const extra = instanceMods(inst!);
         // Nearest HOSTILE in reach — faction-stance targeting like melee
-        // and cone hits, so the storm never zaps neutral townsfolk.
+        // and cone hits, so the storm never zaps neutral townsfolk. The
+        // bolt needs a firing line (occlusion): walls hold the charge in.
+        const zapPhase = (ds.occlusion ?? 'blocked') === 'free'
+          || a.sheet.get('phasing', tags, extra) > 0;
         let best: Actor | null = null;
         let bd = ds.range * a.sheet.get('aoeRadius', tags, extra);
         for (const e of this.enemiesOf(a)) {
           if (e.invulnerable) continue;
           const dd = dist(a.pos, e.pos) - e.radius;
-          if (dd < bd) { bd = dd; best = e; }
+          if (dd >= bd) continue;
+          if (!zapPhase && !this.lineOfFire(a.pos, e.pos)) continue;
+          bd = dd; best = e;
         }
         if (!best) continue;
         // A fuller bank beats FASTER (intervalPerCharge — Tempest
@@ -23099,7 +23194,9 @@ export class World {
       // Terrain blocks flight: rocks and cliffs stop projectiles cold
       // (chasms don't — you can shoot across a gap you can't walk) — or
       // BOUNCE it (Galewisp): reflect off the obstacle's normal and fly on.
-      if (!dead) {
+      // PHASING flights (occlusion 'free' / Wraith Passage) skip terrain
+      // entirely — through rock and masonry like mist.
+      if (!dead && !p.phase) {
         for (const o of this.doodadsAt(p.pos.x, p.pos.y)) {
           // BRITTLE 'hit': the arrow finds it — pots shatter, hidden faces
           // give. Flight continues unless the kind also blocks shots (a
@@ -23127,6 +23224,7 @@ export class World {
               p.anchor.x = p.pos.x; p.anchor.y = p.pos.y;
             } else {
               dead = true;
+              SIM_TAP.current?.onOccluded?.('proj');
             }
             break;
           }
@@ -23139,7 +23237,7 @@ export class World {
       // its RegionKind opts in: rampart masonry AND the TRUE WALLS (wall/
       // flesh_wall/fungal_wall — why would an arrow fly through a mountain
       // pass's wall?). Windows/parapets pass — the arrow-slit works.
-      if (!dead && this.walk instanceof GridWalkField) {
+      if (!dead && !p.phase && this.walk instanceof GridWalkField) {
         const sdx = p.pos.x - prev.x, sdy = p.pos.y - prev.y;
         const slen = Math.hypot(sdx, sdy);
         const step = (this.walk.cellSize ?? 30) / 2;
@@ -23163,6 +23261,7 @@ export class World {
               p.anchor.x = px; p.anchor.y = py;
             } else {
               dead = true;
+              SIM_TAP.current?.onOccluded?.('proj');
             }
             break;
           }
@@ -23459,13 +23558,17 @@ export class World {
               p.pierce--; // pierce takes precedence over chaining
               if (p.hitDetonate) this.explodeProjectile(p, enemy.id);
             } else if (p.chains > 0) {
-              // Chain: veer toward the nearest enemy not yet struck.
+              // Chain: veer toward the nearest enemy not yet struck — one
+              // the hop has a firing line to (no chaining through masonry;
+              // phasing flights hop through anything).
               let next: Actor | null = null;
               let bestD = 280;
               for (const cand of this.enemiesOf(p.caster)) {
                 if (p.hits.has(cand.id)) continue;
                 const dd = dist(p.pos, cand.pos);
-                if (dd < bestD) { bestD = dd; next = cand; }
+                if (dd >= bestD) continue;
+                if (!p.phase && !this.lineOfFire(p.pos, cand.pos)) continue;
+                bestD = dd; next = cand;
               }
               if (next) {
                 p.chains--;
@@ -23708,6 +23811,9 @@ export class World {
             if (!inAoe(z.pos, z.radius, z.shape, z.facing, victim.pos, victim.radius, z.arcRad)) continue;
             // Fill-in zones: the hollow center is (briefly) safe.
             if (z.edge && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edge) continue;
+            // Walls shield (occlusion): a victim walled off from the
+            // placement is spared its blast.
+            if (!this.zoneSees(z, victim)) continue;
             // Sweep surfaces: one hit per crossing, never per tick.
             if (z.struck) {
               if (z.struck.has(victim.id)) continue;
@@ -23828,6 +23934,7 @@ export class World {
             });
             for (const v of this.zoneVictims(z)) {
               if (!this.zoneHas(z, v.pos, v.radius)) continue;
+              if (!this.zoneSees(z, v)) continue;
               this.resolveHit(z.caster, z.inst, v,
                 z.dmgMult * z.volatile.damageScale, z.depth, z.flatBonus, true);
             }
@@ -23881,6 +23988,7 @@ export class World {
               : inAoe(z.pos, pr, z.shape, z.facing, v.pos, v.radius, z.arcRad);
             if (!caught) continue;
             if (z.edge && dist(z.pos, v.pos) + v.radius < z.radius * z.edge) continue;
+            if (!this.zoneSees(z, v)) continue;
             this.resolveHit(z.caster, z.inst, v,
               z.dmgMult * z.pulse.dmgMult, z.depth, z.flatBonus, z.forceDamage);
           }
@@ -24027,6 +24135,8 @@ export class World {
             // sweep ledger so an unbitten crossing never burns its
             // once-per-life entry on a hit that didn't land.
             if (z.exposure && (z.exposure.dwell.get(victim.id) ?? 0) < z.exposure.after) continue;
+            // Walls shield (occlusion): walled off from the field = spared.
+            if (!this.zoneSees(z, victim)) continue;
             // Sweep surfaces: one hit per crossing, never per tick.
             if (z.struck) {
               if (z.struck.has(victim.id)) continue;
@@ -24152,6 +24262,29 @@ export class World {
       }
     }
     return out;
+  }
+
+  /** Does this zone's damage REACH the victim past terrain? Ground
+   *  placements occlude (a wall shields you from the burning field's far
+   *  side — LOS_CFG.zoneTickTypes); sky strikes (storm) and traveling melee
+   *  sweeps never consult walls, and a phasing skill frees its zones
+   *  outright. The attitude is resolved ONCE per zone (z.phase); fissure
+   *  segments ray from the nearest point on the crack, discs from center. */
+  private zoneSees(z: Zone, v: Actor): boolean {
+    z.phase ??= !(LOS_CFG.zoneTickTypes[z.inst.def.delivery.type]
+      && this.skillOcclusion(z.caster, z.inst) === 'blocked');
+    if (z.phase) return true;
+    let ox = z.pos.x, oy = z.pos.y;
+    if (z.seg) {
+      // Closest point on the capsule spine to the victim — the crack burns
+      // along its whole length, so the ray leaves from the nearest reach.
+      const sx = z.seg.bx - z.seg.ax, sy = z.seg.by - z.seg.ay;
+      const ll = sx * sx + sy * sy;
+      const t = ll > 0
+        ? clamp(((v.pos.x - z.seg.ax) * sx + (v.pos.y - z.seg.ay) * sy) / ll, 0, 1) : 0;
+      ox = z.seg.ax + sx * t; oy = z.seg.ay + sy * t;
+    }
+    return this.lineOfFire(vec(ox, oy), v.pos);
   }
 
   /** THE WIND IS A FORCE: every unsheltered body drifts with the gale,
