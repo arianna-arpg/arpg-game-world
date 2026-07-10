@@ -146,6 +146,27 @@ keep the full canopy radius. Crowns come from the canopy registry —
 the `conifer` + `ancient_tree` kinds anchor dense forests. Anyone beneath an
 unfaded crown is unseen until the hero steps under too.
 
+VEILS (`DoodadRule.veil`, `engine/veil.ts`): the crown escalated to the
+PATCH. Veil-bearing kinds' crowns MERGE into contiguous canopy masses
+(union-find over overlapping discs, per `group`), and the patch behaves as a
+unit: sealed near-opaque `cover` alpha over everything beneath — monsters,
+loot, ground — until the LOCAL hero stands under the same mass, when the
+whole patch fades to `reveal` together (per-crown smoothing toward the
+shared target; the per-tree `occlude` near-fade composes via min so the
+crown overhead always opens a little further). Concealment is GAMEPLAY, not
+just pixels: `World.veilPatchAt`/`isConcealedFrom` gate aim assist (a held
+lock BREAKS when its target slips under unbroken leaves), labels ride the
+same `frameOccluders` fade, and standing under cover wears the veil's
+`standStatus` (default `canopied`, detectability −35% — fogveiled's
+pattern). The whole walk-under family veils (tree/conifer/palm/briarwood/
+ancient_tree/forest_oak/giant_mushroom/fruiting_tower/giant_kelp); one rule
+row opts any future kind in. The index rebuilds lazily off the same doodad
+list/rev keys as `doodadsAt` (brittle pops self-heal; co-op clients derive
+identical patches from the shipped list). Fade speed: `VIS_CFG.canopy`.
+The FOREST biome is built on this — its layout recipe plants crowns closer
+than they span so whole stands read as single sealed roofs, coverage scaling
+with `geo.biomeDepth` (see `docs/worldgen/climate.md`).
+
 SUN SHADOWS: `sunCast(time)` gives a direction that spins through daylight
 and a reach that stretches at low sun; kinds opt in via
 `DoodadVisualDef.longShadow` (a radius multiplier).
