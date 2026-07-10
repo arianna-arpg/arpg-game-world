@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { vec, type Vec2 } from '../core/math';
+import { WORLD_DRIVES } from '../world/drives';
 import { FACTIONS, factionStance } from '../data/monsters';
 import type { ZoneDef } from '../data/zones';
 import type { OverlayView } from '../world/overlay';
@@ -101,6 +102,34 @@ export function killRuleMatches(rule: KillRule, ctx: KillCtx): boolean {
 }
 
 // --- Core rows (engine-owned kinds) -----------------------------------------
+
+// FACTION DRIVES (world/drives.ts): a member's death feeds its faction's
+// registered meters — dread climbs with the bodies, and any monster rule
+// can read it (AICondition.drive, scope 'faction'). Meter-driven nerve,
+// no script fires.
+registerKillHandler({
+  id: 'faction_drive_feed',
+  when: ctx => !!ctx.actor.faction,
+  run: ctx => {
+    for (const spec of Object.values(WORLD_DRIVES)) {
+      if (spec.scope === 'faction' && spec.onMemberDeath) {
+        ctx.sim.drives.bump(spec.id, spec.onMemberDeath, ctx.actor.faction!);
+      }
+    }
+  },
+});
+
+// THE GILDED SCAMP's hoard: its death pays a gem burst on top of whatever
+// its sack spills (the sack itself returns in World.kill — nothing the
+// scamp snatched is ever lost; this is the chase's own prize).
+registerKillHandler({
+  id: 'scamp_hoard',
+  when: ctx => ctx.actor.defId === 'gilded_scamp' && ctx.credit,
+  run: ctx => {
+    for (let i = 0; i < 3; i++) ctx.dropGemAt(ctx.actor.pos);
+    ctx.text(ctx.actor.pos, 'the hoard spills!', '#e8c84a', 16);
+  },
+});
 
 // A slain warlord pays the player a bounty and a rival's gratitude.
 // (Its faction's power breaks in the next row — credit or not, the body counts.)

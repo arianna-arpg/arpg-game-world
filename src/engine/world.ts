@@ -4357,6 +4357,12 @@ export class World {
   private onSquadDeath(actor: Actor): void {
     for (const a of this.actors) {
       if (a.dead || a === actor || a.team !== actor.team || !a.brain) continue;
+      // THE FEAR THAT SPREADS (DriveSpec.onAllyDeath): a squadmate falling
+      // in earshot jumps the witnesses' meters — dread down a goblin line.
+      if (actor.squadId !== undefined && a.squadId === actor.squadId
+        && dist(a.pos, actor.pos) <= COMMAND_CFG.earshot) {
+        this.bumpDrives(a, 'onAllyDeath');
+      }
       const spec = normalizeBrain(a.brain).base;
       if (actor.squadLeader && actor.squadId !== undefined && a.squadId === actor.squadId) {
         const react = spec.squad?.onLeaderDeath;
@@ -10696,11 +10702,67 @@ export class World {
     return prey.some(p => b.tag === p || b.faction === p || b.defId === p);
   }
 
+  /** The idle hunter's NOSE (BehaviorSpec.seek 'prey'): the nearest actor
+   *  this one's resolved prey list marks as food, within range — sight not
+   *  required; hunger walks farther than eyes see. */
+  seekPrey(actor: Actor, range: number): Actor | null {
+    let best: Actor | null = null;
+    let bd = range;
+    for (const b of this.actors) {
+      if (b.dead || b.passive || b.untargetable || !this.isPrey(actor, b)) continue;
+      const d = dist(actor.pos, b.pos);
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best;
+  }
+
+  /** The scavenger's nose (BehaviorSpec.seek 'loot'): the nearest UNCLAIMED
+   *  ground drop this actor's looter spec covets. Player-placed drops
+   *  (droppedBy/grace) are NEVER wanted — grief-proof by construction. */
+  seekLoot(actor: Actor, range: number): Vec2 | null {
+    const spec = actor.defId ? MONSTERS[actor.defId]?.looter : undefined;
+    const kinds = spec?.kinds ?? ['skill', 'support'];
+    let best: Vec2 | null = null;
+    let bd = range;
+    for (const d of this.drops) {
+      if (d.droppedBy || d.grace) continue;
+      if (!kinds.includes(d.item.kind)) continue;
+      const dd = dist(actor.pos, d.pos);
+      if (dd < bd) { bd = dd; best = d.pos; }
+    }
+    return best;
+  }
+
+  /** LOOTERS (MonsterDef.looter): snatch coveted ground drops within reach
+   *  into the sack. The sack is a PROMISE, not a theft: a solid blow shakes
+   *  a piece loose (resolveHit), death spills everything (kill) — nothing a
+   *  looter grabs is ever lost, it just RUNS. */
+  private updateLooters(): void {
+    if (!this.drops.length) return;
+    for (const a of this.actors) {
+      if (a.dead || !a.defId) continue;
+      const spec = MONSTERS[a.defId]?.looter;
+      if (!spec) continue;
+      const kinds = spec.kinds ?? ['skill', 'support'];
+      const reach = (spec.reach ?? 30) + a.radius;
+      for (let i = this.drops.length - 1; i >= 0; i--) {
+        const d = this.drops[i];
+        if (d.droppedBy || d.grace) continue;
+        if (!kinds.includes(d.item.kind)) continue;
+        if (dist(a.pos, d.pos) > reach) continue;
+        (a.lootSack ??= []).push(d.item);
+        this.drops.splice(i, 1);
+        this.text(vec(a.pos.x, a.pos.y - 16), 'snatched!', '#e8c84a', 12);
+      }
+    }
+  }
+
   /** THE WANTS pump (BrainDef.drives): jump an actor's meters on an event —
-   *  a kill it landed, a wound it took, a wound it dealt. `share` echoes the
-   *  jump to squad kin within earshot (the pack that eats together sates
-   *  together). Early-outs keep this free for the driveless majority. */
-  bumpDrives(actor: Actor | null, kind: 'onKill' | 'onHurt' | 'onDealt'): void {
+   *  a kill it landed, a wound it took, a wound it dealt, a squadmate
+   *  fallen in earshot. `share` echoes the jump to squad kin within earshot
+   *  (the pack that eats together sates together). Early-outs keep this
+   *  free for the driveless majority. */
+  bumpDrives(actor: Actor | null, kind: 'onKill' | 'onHurt' | 'onDealt' | 'onAllyDeath'): void {
     if (!actor || actor.dead || !actor.brain) return;
     const drives = normalizeBrain(actor.brain).drives;
     if (!drives) return;
@@ -16157,6 +16219,17 @@ export class World {
       // life bar would (free early-outs for the driveless majority).
       this.bumpDrives(target, 'onHurt');
       this.bumpDrives(caster, 'onDealt');
+      // THE SHAKEDOWN (MonsterDef.looter): a solid blow shakes one snatched
+      // shiny out of the sack — the D4 goblin-chase beat, per landed hit.
+      if (target.lootSack?.length && this.time - target.lastSpillAt > 0.4) {
+        target.lastSpillAt = this.time;
+        const item = target.lootSack.pop()!;
+        this.drops.push({
+          pos: vec(target.pos.x + rand(-20, 20), target.pos.y + rand(-20, 20)),
+          item, bob: rand(0, Math.PI * 2),
+        });
+        this.text(vec(target.pos.x, target.pos.y - 20), 'drops loot!', '#e8c84a', 13);
+      }
       // The RECENT-WOUND clock (GateSpec.recentDamage): a landed hit
       // licenses the victim's counter-blows.
       if (dealt > 0) target.recentHurt = 0;
@@ -17984,6 +18057,17 @@ export class World {
       // THE MEAL (BrainDef.drives): a landed kill jumps the killer's wants —
       // the hunt sates the hunger that drove it.
       this.bumpDrives(killer ?? null, 'onKill');
+      // A dead looter's sack SPILLS in full — nothing it snatched is ever
+      // lost; the chase always pays out (grief-proof by construction).
+      if (actor.lootSack?.length) {
+        for (const item of actor.lootSack) {
+          this.drops.push({
+            pos: vec(actor.pos.x + rand(-26, 26), actor.pos.y + rand(-26, 26)),
+            item, bob: rand(0, Math.PI * 2),
+          });
+        }
+        actor.lootSack = undefined;
+      }
       // The ephemeral remnant of their passing — briefly usable (corpses
       // drop regardless of who did the killing; necromancy isn't picky).
       if (actor.defId) {
@@ -18529,6 +18613,7 @@ export class World {
     this.updateNeutralCooldown(); // roused neutrals lose interest + re-dormant on disengage
     this.pruneEngageTokens();     // stale/dead attack-token holders rotate out
     this.updateMounts();          // riders pin to their beasts; dead links free
+    this.updateLooters();         // scavengers snatch coveted ground drops
     this.maybeOpenDemonPortal();
     this.maybeOpenCrusadePortal();
     // War bulletins: a zone changed hands somewhere on the map.

@@ -477,6 +477,23 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         }
         return;
       }
+      // DRIVE-DRIVEN IDLE LIFE (BehaviorSpec.seek): wants pull the idle
+      // body — hunger walks toward prey it can't yet see (scent outranges
+      // the sight cone), greed toward unclaimed shinies. A drive rule
+      // layers this on, so the pack MIGRATES when the meter runs high and
+      // merely mills about when it doesn't.
+      const seek = tuning.behavior?.seek;
+      if (seek && !actor.isMinion()) {
+        const range = seek.range ?? BEHAVIOR_CFG.seekRange;
+        const goal = seek.what === 'prey'
+          ? world.seekPrey(actor, range)?.pos
+          : world.seekLoot(actor, range);
+        if (goal && dist(actor.pos, goal) > 40) {
+          actor.facing = angleTo(actor.pos, goal);
+          moveToward(actor, world, goal, dt * (seek.pace ?? 0.55));
+          return;
+        }
+      }
       // Squad IDLE DEMEANOR: how the group carries itself with no foe in
       // sight — the militant drill, the lackadaisical amble with stragglers,
       // the idol-circling vigil, the stable stand/wander mix. Consumes the
@@ -611,6 +628,7 @@ function aiCtxOf(world: World): AICtx {
     time: world.time,
     actors: world.actors,
     lineOfSight: (a, b) => world.lineOfSight(vec(a.x, a.y), vec(b.x, b.y)),
+    factionDrive: (id, faction) => world.sim.drives.get(id, faction),
   };
 }
 

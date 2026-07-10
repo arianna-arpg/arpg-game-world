@@ -319,6 +319,12 @@ export interface MonsterDef {
    *  their facing — and so their shell arc and their aim — lags the fight,
    *  and circling them becomes real play. Player seats always turn free. */
   turnSpeed?: number;
+  /** LOOTER (the gilded scamp): snatches coveted GROUND drops within reach
+   *  into a sack. GRIEF-PROOF BY CONSTRUCTION: player-placed drops are
+   *  never touched, a solid blow shakes one piece loose (0.4s icd), and
+   *  death spills everything — loot is never lost, only CHASED. Pair with
+   *  BehaviorSpec.seek {what:'loot'} so it noses toward shinies while idle. */
+  looter?: { kinds?: ('skill' | 'support' | 'gear' | 'vestige')[]; reach?: number };
   /** FLIER: true flight — moves on the noclip policy (over rocks, walls,
    *  chasms, water; zone bounds still hold) and the renderer lifts + bobs
    *  the body off its grounded shadow so flight reads at a glance. Pair
@@ -347,6 +353,8 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
     { id: 'ant_trail', chance: 0.35, count: [1, 2] },
     { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
+    // The rare golden flicker at the meadow's edge — chase it.
+    { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
   ],
   // Keyed by BIOME TAG (the vocabulary zones/tilesets actually speak — the
   // old 'forest' key matched nothing and its rows never spawned). 'grove'
@@ -362,6 +370,7 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'ant_trail', chance: 0.3, count: [1, 2] },
     { id: 'reed_frog', chance: 0.45, count: [2, 3], near: 'water' },
     { id: 'dire_wolf', chance: 0.2, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
+    { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
   ],
   desert: [
     { id: 'meadow_hare', chance: 0.3, count: [1, 2] },
@@ -1881,6 +1890,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'skirmish', withdraw: 1.2,
       morale: { breakAtLife: 0.35, rallyAfter: 2.5, boldNearLeader: 280 },
+      // FEAR is a METER, not a switch (drives): every wound stings it up,
+      // every squadmate falling in earshot jumps it hard, quiet cools it.
+      // Past the threshold the goblin fights WARY — longer withdrawals,
+      // breaks sooner — the graded band between brave and broken that the
+      // binary morale system can't say. Courage near a leader still holds
+      // the ROUT; fear just makes the skirmishing honest about its nerves.
+      drives: { fear: { rise: -0.05, onHurt: 0.12, onAllyDeath: 0.28 } },
+      rules: [{
+        when: { drive: { id: 'fear', above: 0.6 } },
+        use: {
+          move: { style: 'hitAndRun', withdraw: [2.2, 2.8] },
+          morale: { breakAtLife: 0.5, rallyAfter: 2.5, boldNearLeader: 280 },
+        },
+      }],
       // Goblin marching order is a RABBLE: a loose amble around whoever
       // leads, with stragglers who lag and jog to catch up — the exact
       // opposite of the gnoll drill two ridges over.
@@ -2018,6 +2041,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // the approach so packmates never bunch into a shoving file.
       behavior: { spacing: 36 },
       morale: { panicOnAllyDeath: { radius: 200, duration: 2.2, chance: 0.35 }, rallyAfter: 2.2 },
+      // FACTION DREAD (world drives, scope 'faction'): every gnoll death
+      // anywhere feeds the people's meter; while it runs high the
+      // survivors' nerve thins — cull a warband and the stragglers break
+      // easy. Quiet minutes cool it. Meter-driven conduct, no script.
+      rules: [{
+        when: { drive: { id: 'dread', above: 0.5, scope: 'faction' } },
+        use: { morale: { breakAtLife: 0.55, rallyAfter: 3 } },
+      }],
       // UNRULY: the howler's Snarled Orders land on a prowler barely half
       // the time (the obedience dial — the drill line is for show).
       obedience: 0.55,
@@ -2167,10 +2198,15 @@ export const MONSTERS: Record<string, MonsterDef> = {
       tempo: { moveFor: [1.2, 2.2], pauseFor: [0.25, 0.6] },
       rules: [
         // HUNGER opens the hunt: predation (prey + keener noses) exists
-        // only while the meter runs high — conduct chasing the want.
+        // only while the meter runs high — and the IDLE pack MIGRATES
+        // toward prey-rich ground (seek: scent outranges sight) instead
+        // of milling in place. Conduct chasing the want, awake or idle.
         {
           when: { drive: { id: 'hunger', above: 0.6 } },
-          use: { target: { prey: ['critter'], detectMul: 1.25 } },
+          use: {
+            target: { prey: ['critter'], detectMul: 1.25 },
+            behavior: { seek: { what: 'prey', pace: 0.5 } },
+          },
         },
         // AND A WOLF POUNCES (targetCasting): the moment your hands commit
         // to a bar, the nearest wolf breaks its stalk and dives the opening.
@@ -2260,7 +2296,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
       rules: [
         {
           when: { drive: { id: 'hunger', above: 0.6 } },
-          use: { target: { prey: ['critter'] } },
+          use: {
+            target: { prey: ['critter'] },
+            behavior: { seek: { what: 'prey', pace: 0.45 } },
+          },
         },
         // The cat PUNISHES commitment: eyes leaving it is one opening — hands
         // busy with a cast bar is the other (targetCasting joins unseenArc).
@@ -2597,6 +2636,34 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'basic',
       // A roused pilgrim doesn't fight — it scatters (and forgives later).
       morale: { skittish: { radius: 220, duration: [2, 3.5] } },
+    },
+  },
+
+  // THE GILDED SCAMP — the loot-goblin chase, grief-proofed by construction:
+  // it noses toward unclaimed WORLD loot (never a player's placed drop),
+  // stuffs its sack, and RUNS — jukes, freezes, tires (the kite budget: it
+  // IS catchable). A solid blow shakes a shiny loose; death spills the whole
+  // sack plus its own hoard (the scamp_hoard kill row). It never leaves the
+  // zone and never despawns holding your loot: catch it or let it caper.
+  gilded_scamp: {
+    id: 'gilded_scamp', name: 'Gilded Scamp',
+    color: '#e8c84a', shape: 'pentagon', radius: 10, material: 'metal', look: 'goblin',
+    base: { life: 95, moveSpeed: 225, accuracy: 60, evasion: 90, mana: 0 },
+    skills: [],
+    xp: 45,
+    looter: { reach: 32 },
+    detection: 1.3,
+    adorn: 'ears',
+    scaling: { life: { incPerLevel: 0.08 } },
+    brain: {
+      type: 'basic',
+      move: { style: 'juke', hookEvery: [0.3, 0.7], freezeChance: 0.12 },
+      // The nose for shinies: idle, it walks at the nearest unclaimed drop.
+      behavior: { seek: { what: 'loot', pace: 0.7, range: 1600 } },
+      // Anything comes close — it bolts (and its flight is the whole fight).
+      morale: { skittish: { radius: 280, duration: [1.5, 2.6] } },
+      // But its legs GIVE OUT on a rhythm you can learn: chase, wind it, catch.
+      tempo: { kite: 3.2, windedFor: [0.9, 1.4] },
     },
   },
 

@@ -48,6 +48,7 @@ import { BiomeField } from './biomeField';
 import { IncursionField } from '../packages/overlays/incursion';
 import { dayCycle } from './daynight';
 import { FactionField } from './faction';
+import { WorldDrives } from './drives';
 import { InvasionField } from './invasion';
 import { biasTable, composeBias, type OverlayView, type WorldOverlay } from './overlay';
 import { Reputation } from './reputation';
@@ -134,6 +135,11 @@ export class WorldSim {
   readonly myceliaField: MyceliaField | null;
   /** Per-faction favor earned from events and warlord kills. Persists per run. */
   readonly reputation = new Reputation();
+  /** FACTION/WORLD WANTS (world/drives.ts): named slow meters — dread,
+   *  warlust — fed by events (the faction_drive_feed kill row), drifted
+   *  here, read by any monster rule (AICondition.drive scope 'faction')
+   *  and by event packages: meter-driven expansion instead of timers. */
+  readonly drives = new WorldDrives();
   /** The run-LOCKED content-package configuration this world runs under. */
   readonly manifest: ExpeditionManifest;
   private overlays: WorldOverlay[];
@@ -364,6 +370,8 @@ export class WorldSim {
     const conc = this.effectiveFrequency().concurrency;
     this.weather.concurrencyScale = conc;
     this.invasion.concurrencyScale = conc;
+    // Faction/world wants drift on their clocks (dread cools between culls).
+    this.drives.update(dt);
     for (const o of this.overlays) o.update(dt, this.scopedView(view, o.dimension));
   }
 

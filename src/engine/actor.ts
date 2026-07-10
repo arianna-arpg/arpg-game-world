@@ -427,6 +427,11 @@ export class Actor {
   /** THE WANTS (BrainDef.drives): named slow meters, 0..1 — seeded on the
    *  first AI tick, drifted per tick, jumped by World.bumpDrives events. */
   drives = new Map<string, number>();
+  /** THE SACK (MonsterDef.looter): actual snatched drop payloads. A solid
+   *  blow shakes one loose; death spills all — never lost, only chased. */
+  lootSack?: import('./world').DropItem[];
+  /** Last shakedown spill (its 0.4s icd). */
+  lastSpillAt = -999;
   /** This tick's RESOLVED prey list (rules can gate predation — the hungry
    *  wolf hunts, the sated one ambles past). World.isPrey reads the stamp,
    *  falling back to the brain's base when no AI tick has stamped one. */

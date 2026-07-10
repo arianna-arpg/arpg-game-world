@@ -249,6 +249,13 @@ export interface BehaviorSpec {
    *  granted support like puppet_strings) curve after the prey mid-flight:
    *  a monster dragging its cursor exactly the way the player does. */
   steerAim?: { lead?: number };
+  /** DRIVE-DRIVEN IDLE LIFE: with no foe in sight, the body drifts toward
+   *  the nearest thing it WANTS — 'prey' walks at its resolved prey list
+   *  far beyond sight reach (scent), 'loot' at unclaimed ground shinies
+   *  (the scavenger's nose). Layer it from a drive rule and hunger
+   *  MIGRATES a pack toward prey-rich ground instead of milling in place;
+   *  the fantasy reads even when nobody is fighting. */
+  seek?: { what: 'prey' | 'loot'; pace?: number; range?: number };
 }
 
 /** The behavior fabric's modular thresholds (avoid-hardcoding: tune here). */
@@ -308,6 +315,8 @@ export const BEHAVIOR_CFG = {
   plantPad: 0.15,
   /** steerAim: the intercept horizon (secs) its lead fraction scales. */
   steerHorizon: 0.45,
+  /** seek: default nose reach (px) — far past any sight cone. */
+  seekRange: 1500,
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at cast time
@@ -500,10 +509,12 @@ export interface DriveSpec {
   /** Spawn value, rolled (default [0, 0]). */
   start?: [number, number];
   /** Event jumps, signed: a kill I land (the meal), a wound I take (the
-   *  sting), a wound I deal (the taste). */
+   *  sting), a wound I deal (the taste), a squadmate's death within
+   *  earshot (the fear that spreads down a line). */
   onKill?: number;
   onHurt?: number;
   onDealt?: number;
+  onAllyDeath?: number;
   /** PACK APPETITE: fraction of my event jumps echoed to squad kin within
    *  earshot — one kill feeds the pack, one wound angers the line. */
   share?: number;
@@ -540,9 +551,12 @@ export interface AICondition {
    *  seconds of bar left. The punish vocabulary — "when he commits, rush"
    *  (rules), "when he commits, shield" (reserves). False = not casting. */
   targetCasting?: boolean | number;
-  /** THE WANTS trigger (BrainDef.drives): this actor's named meter sits in
-   *  the band — "hunger above 0.6, hunt", "wrath below 0.3, compose". */
-  drive?: { id: string; above?: number; below?: number };
+  /** THE WANTS trigger: a named meter sits in the band. Default scope reads
+   *  this ACTOR's own drives (BrainDef.drives) — "hunger above 0.6, hunt".
+   *  Scope 'faction' reads the actor's FACTION meter and 'global' the world
+   *  meter (world/drives.ts via sim.drives) — "while my people's dread runs
+   *  high, my nerve thins": one kill feed changes a whole warband's conduct. */
+  drive?: { id: string; above?: number; below?: number; scope?: 'faction' | 'global' };
   /** At least this many seconds since the CURRENT engagement began. */
   sinceEngaged?: number;
   /** Gate each FIRING by this chance (rolled when everything else passes). */
@@ -1037,6 +1051,9 @@ export interface AICtx {
   time: number;
   actors: readonly Actor[];
   lineOfSight: (a: { x: number; y: number }, b: { x: number; y: number }) => boolean;
+  /** FACTION/WORLD WANTS read (world/drives.ts via sim.drives): faction
+   *  undefined reads the global meter. */
+  factionDrive: (id: string, faction: string | undefined) => number;
 }
 
 /** Evaluate one condition bundle (AND semantics). `chance` is NOT rolled here
@@ -1099,7 +1116,9 @@ export function evalCondition(
     if (actor.aiEngagedAt < 0 || ctx.time - actor.aiEngagedAt < c.sinceEngaged) return false;
   }
   if (c.drive) {
-    const v = actor.drives.get(c.drive.id) ?? 0;
+    const v = c.drive.scope === 'faction' ? ctx.factionDrive(c.drive.id, actor.faction)
+      : c.drive.scope === 'global' ? ctx.factionDrive(c.drive.id, undefined)
+      : (actor.drives.get(c.drive.id) ?? 0);
     if (c.drive.above !== undefined && !(v >= c.drive.above)) return false;
     if (c.drive.below !== undefined && !(v <= c.drive.below)) return false;
   }
