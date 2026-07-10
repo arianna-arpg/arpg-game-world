@@ -1711,6 +1711,18 @@ export class UI {
         ${body}</div>`;
     }
 
+    // The RELEASE counter: bonded companions present themselves at the fire
+    // (the only place a bond may be undone — the whistle never unbinds).
+    const world = this.getWorld();
+    const companions = world.actors.filter(a => a.companion && !a.dead && a.owner === world.player);
+    const release = companions.length ? `
+      <div style="border-top:1px solid #2a2a3a;margin-top:8px;padding-top:6px">
+        <div style="color:#a8c87a;font-size:11px;margin-bottom:4px">Bonded companions</div>
+        ${companions.map(c => `<div class="bind-btns" style="margin:2px 0">
+          <span style="font-size:11px">${c.name}${c.downed ? ' <span style="color:#e8a860">(down)</span>' : ''} — Lv ${c.level}</span>
+          <button data-untame="${c.id}">Release to the wild</button></div>`).join('')}
+      </div>` : '';
+
     this.bestiaryMenu.innerHTML = `
       <h2 style="margin-bottom:2px">The Tracker's Bestiary</h2>
       <div style="color:#8a8678;font-size:10px;margin-bottom:6px">
@@ -1723,6 +1735,7 @@ export class UI {
         <button data-bpage="1" ${this.bestiaryPage >= pages - 1 ? 'disabled' : ''}>Next ▶</button>
       </div>
       ${detail}
+      ${release}
       <div class="bind-btns" style="margin-top:8px"><button data-bst-close>Close the book</button></div>`;
 
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.bestiaryMenu.querySelectorAll<T>(sel)];
@@ -1733,6 +1746,10 @@ export class UI {
     }));
     q<HTMLButtonElement>('button[data-bpage]').forEach(btn => btn.addEventListener('click', () => {
       this.bestiaryPage += Number(btn.dataset.bpage);
+      this.refreshBestiary();
+    }));
+    q<HTMLButtonElement>('button[data-untame]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'untameCompanion', actorId: Number(btn.dataset.untame) });
       this.refreshBestiary();
     }));
     this.bestiaryMenu.querySelector<HTMLButtonElement>('[data-bst-close]')?.addEventListener('click', () => this.closeBestiary());

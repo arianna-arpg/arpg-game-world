@@ -75,6 +75,10 @@ export interface CharacterSave {
   /** Vestige wallet (socket material, per vestige id). Optional. */
   vestiges?: Record<string, number>;
   offerings: number;
+  /** TAMED COMPANIONS (the Hunter's bond): re-fielded beside the keeper on
+   *  resume, downed state included. Optional → older saves load unchanged;
+   *  a removed def simply releases that bond. */
+  companions?: { defId: string; level: number; skillId: string; downed?: boolean }[];
   bar: (string | null)[];   // bar bindings as skill ids (any length; padded to BAR_SLOTS on load)
   level: number;            // Actor level (display + xp continuity)
   // Content-package run state (optional → old saves still load). The expedition
@@ -131,6 +135,13 @@ export function serializeCharacter(world: World): CharacterSave {
     essences: { ...m.essences },
     vestiges: { ...m.vestiges },
     offerings: m.offerings,
+    companions: world.actors
+      .filter(a => a.companion && !a.dead && a.owner === world.player && a.defId)
+      .map(a => ({
+        defId: a.defId!, level: a.level,
+        skillId: (a.sourceSkillId ?? '').replace('__companion:', ''),
+        ...(a.downed ? { downed: true } : {}),
+      })),
     bar: world.player.skills.map(s => s ? s.def.id : null),
     level: world.player.level,
     expedition: world.manifest,
@@ -230,6 +241,8 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
   world.adoptSavedMeta(meta, save.bar, save.level);
   // Re-field a saved mercenary contract (already paid + pool-marked).
   if (save.mercenary?.snapshot) world.restoreHiredMerc(save.mercenary);
+  // Re-field tamed companions beside the keeper (downed state included).
+  if (save.companions?.length) world.restoreCompanions(save.companions);
   return true;
 }
 

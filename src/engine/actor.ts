@@ -218,7 +218,7 @@ export type Team = 'player' | 'enemy';
  *  conflating it with WHICH SIDE it fights for. `undefined` ⇒ treat as 'monster'.
  *  The authoritative MINION test stays `isMinion()`/`owner`; `kind` is for
  *  UI / attribution / roster lifecycle only. */
-export type UnitKind = 'player' | 'minion' | 'mercenary' | 'monster';
+export type UnitKind = 'player' | 'minion' | 'mercenary' | 'monster' | 'companion';
 
 /** Body silhouettes — the shape IS the enemy-type language. */
 export type ActorShape =
@@ -839,6 +839,14 @@ export class Actor {
    *  fulfilled or expired. Set via ai.ts issueCommand — never by hand, so
    *  receipt reliably drops the current agenda and the order OVERRIDES. */
   aiCommand?: CommandState;
+  /** A TAMED COMPANION (the Hunter's bond — World.tameCompanion): fights at
+   *  its keeper's side like a minion, but DOWNS instead of dying — revived
+   *  by a lingering ally seat or its keeper's whistle. Sweep-exempt via its
+   *  '__companion:' sourceSkillId marker; released only at the Tracker. */
+  companion = false;
+  /** Revive dwell accrued beside this downed companion (any standing, idle
+   *  ally seat feeds it — the seat-revive idiom, one accumulator). */
+  companionReviveDwell = 0;
   /** THE LIFELINE (borrowed unlife): while set, this actor stands only as
    *  long as the named actor does — World's lifeline sweep UNMAKES it
    *  (quietly: no bounty, drops, bursts, or rattles) the moment its keeper

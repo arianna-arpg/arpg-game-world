@@ -27,7 +27,7 @@ import {
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ConstructDelivery, type GroundDelivery, type GuardSpec,
-  type ProjectileDelivery, type ProjectileShape, type SkillDef,
+  type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
   type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec,
 } from './skills';
@@ -895,6 +895,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
     case 'unlearn': case 'reacquireSkill': return isStr(a.skillId);
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
+    case 'untameCompanion': return isIdx(a.actorId);
     case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
     case 'allocate': return isStr(a.nodeId);
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
@@ -10198,6 +10199,7 @@ export class World {
       case 'learn': this.learnSkill(action.index, seat); break;
       case 'unlearn': this.unlearnSkill(action.skillId, seat); break;
       case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
+      case 'untameCompanion': this.releaseCompanion(action.actorId, seat); break;
       case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
       case 'buyDelver': this.buyDelverGem(action.index, seat); break;
@@ -10503,8 +10505,16 @@ export class World {
         ? this.actors.filter(a => a.owner === caster && !a.dead && !a.construct)
         : this.actors.filter(a => a.team === caster.team && !a.dead && a !== caster);
     const reqs = statusReqs(t.requiresStatus);
-    const qualifies = (a: Actor): boolean =>
-      !reqs || a.statuses.some(s => reqs.includes(s.id));
+    const qualifies = (a: Actor): boolean => {
+      if (reqs && !a.statuses.some(s => reqs.includes(s.id))) return false;
+      // TAXONOMY gate (requiresMonsterTags): the target's KIND must match —
+      // Tame finds only beasts; aiming at anything else finds nothing.
+      if (t.requiresMonsterTags) {
+        const mtags = a.defId ? MONSTERS[a.defId]?.tags : undefined;
+        if (!mtags || !t.requiresMonsterTags.some(tag => mtags.includes(tag))) return false;
+      }
+      return true;
+    };
     let best: Actor | null = null, bd = search;
     for (const a of pool) {
       if (dist(caster.pos, a.pos) > t.castRange) continue;
@@ -10566,6 +10576,133 @@ export class World {
     if (b.defId === a.defId) return false;
     if (a.squadId !== undefined && b.squadId === a.squadId) return false;
     return prey.some(p => b.tag === p || b.faction === p || b.defId === p);
+  }
+
+  // ------------------------------------------------------- tamed companions --
+  // The Hunter's bond (TameEffect): a claimed beast fights at its keeper's
+  // side but DOWNS instead of dying — revived by a lingering ally seat (the
+  // co-op revive idiom) or the keeper's whistle (the tame skill's meta).
+  // '__companion:<skillId>' sourceSkillId = sweep-exempt marker + the
+  // whistle's scope; ONE bond per skill instance; released at the Tracker.
+
+  /** The living/downed companion bonded to one tame skill (by its marker). */
+  companionOf(keeper: Actor, skillId: string): Actor | undefined {
+    return this.actors.find(a => a.companion && !a.dead
+      && a.owner === keeper && a.sourceSkillId === '__companion:' + skillId);
+  }
+
+  /** Refund a just-stamped cooldown (a whistle with no bond must never burn
+   *  its long clock). */
+  private refundCooldown(caster: Actor, skillId: string): void {
+    caster.cooldowns.delete(skillId);
+    caster.cooldownTotals.delete(skillId);
+  }
+
+  /** Attempt the TAMING: taxonomy already gated targeting (requiresMonsterTags);
+   *  here the bond checks its own terms — wildness (rarity/boss), the weakened
+   *  threshold, the one-bond rule — and either claims or is shrugged off. */
+  private tryTame(caster: Actor, inst: SkillInstance, target: Actor,
+    fx: Extract<SkillEffect, { type: 'tame' }>): void {
+    const def = inst.def;
+    const mdef = target.defId ? MONSTERS[target.defId] : undefined;
+    if (this.companionOf(caster, def.id)) {
+      this.failNote(caster, def.id + ':bonded', 'the bond holds one already');
+      return;
+    }
+    if (!mdef || target.owner || target.companion || target.team === caster.team
+      || mdef.boss || (target.rarity && target.rarity !== 'normal' && !fx.allowRares)
+      // Belt to targeting's taxonomy gate — future callers may not route
+      // through resolveTargeting.
+      || !(mdef.tags ?? []).some(tg => fx.tags.includes(tg))) {
+      this.failNote(caster, def.id + ':willful', 'it will not be tamed');
+      return;
+    }
+    if (fx.maxLifeFrac !== undefined && target.life > fx.maxLifeFrac * target.maxLife()) {
+      this.failNote(caster, def.id + ':unbroken', 'weaken it first');
+      return;
+    }
+    this.tameCompanion(caster, target, def.id);
+  }
+
+  /** THE CLAIMING: the beast leaves its old life behind — pack, grudges,
+   *  role tags, standing orders — and joins the keeper's side whole. */
+  tameCompanion(keeper: Actor, beast: Actor, skillId: string): void {
+    beast.team = keeper.team;
+    beast.owner = keeper;
+    beast.kind = 'companion';
+    beast.companion = true;
+    beast.sourceSkillId = '__companion:' + skillId;
+    beast.noBounty = true;
+    beast.lifelineId = undefined;      // a bond is not borrowed unlife
+    beast.squadId = undefined; beast.squadLeader = undefined;
+    beast.tag = undefined;
+    beast.aiCommand = undefined;
+    beast.aiTargetId = undefined;
+    beast.threat.clear();
+    beast.aggroed = false;
+    beast.aiFleeing = false;
+    beast.life = beast.maxLife();
+    this.text(vec(beast.pos.x, beast.pos.y - 26), `TAMED: ${beast.name}`, '#a8d8a0', 16);
+    this.flashes.push({
+      pos: vec(beast.pos.x, beast.pos.y), radius: beast.radius + 20,
+      color: '#a8d8a0', life: 0.4, maxLife: 0.4,
+    });
+  }
+
+  /** Bring a downed companion back on its feet (the dwell path and the
+   *  whistle both land here). */
+  reviveCompanion(a: Actor, frac = 0.5): void {
+    if (!a.companion || !a.downed) return;
+    a.downed = false;
+    a.life = Math.max(1, a.maxLife() * frac);
+    a.companionReviveDwell = 0;
+    this.text(vec(a.pos.x, a.pos.y - 22), `${a.name} rises!`, '#a8d8a0', 14);
+    this.flashes.push({
+      pos: vec(a.pos.x, a.pos.y), radius: a.radius + 16,
+      color: '#a8d8a0', life: 0.35, maxLife: 0.35,
+    });
+  }
+
+  /** Downed COMPANIONS revive like downed seats: any standing, IDLE ally
+   *  seat lingering within the same radius accrues the same dwell (one
+   *  accumulator — whoever tends the body, the bond mends). */
+  private updateDownedCompanions(dt: number): void {
+    for (const a of this.actors) {
+      if (!a.companion || a.dead || !a.downed) continue;
+      const tended = this.seats.some(s => !s.actor.dead && !s.actor.downed
+        && dist(s.actor.pos, a.pos) <= REVIVE_RADIUS && this.seatIdle(s));
+      a.companionReviveDwell = tended ? a.companionReviveDwell + dt : 0;
+      if (a.companionReviveDwell >= REVIVE_DWELL) this.reviveCompanion(a);
+    }
+  }
+
+  /** Re-field SAVED companions beside the resuming keeper (character.ts):
+   *  the bond survives the save file exactly as it survives a zone edge. */
+  restoreCompanions(list: { defId: string; level: number; skillId: string; downed?: boolean }[]): void {
+    for (const c of list) {
+      if (!MONSTERS[c.defId]) continue; // a removed def releases the bond
+      const beast = this.createMonster(c.defId, Math.max(1, c.level), this.player.team, this.player);
+      this.tameCompanion(this.player, beast, c.skillId);
+      beast.pos = this.clampPos(vec(
+        this.player.pos.x + rand(-60, 60), this.player.pos.y + rand(40, 80)), beast.radius);
+      if (c.downed) { beast.downed = true; beast.life = 0; }
+      this.actors.push(beast);
+    }
+  }
+
+  /** RELEASE the bond (the Tracker's un-tame counter): the companion walks
+   *  back into the wild — a quiet unmake, never a corpse or a turncoat. */
+  releaseCompanion(actorId: number, seat: Seat = this.localSeat): void {
+    const a = this.actorById(actorId);
+    if (!a || !a.companion || a.dead || a.owner !== seat.actor) return;
+    this.text(vec(a.pos.x, a.pos.y - 22), `${a.name} returns to the wild`, '#c8b048', 13);
+    // The bond ends FIRST — else kill()'s companion intercept would merely
+    // down it (and a downed body's kill() no-ops outright).
+    a.companion = false;
+    a.downed = false;
+    this.releaseContract(a, false);
+    this.kill(a, true);
+    this.charDirty = true;
   }
 
   /** THE GRIMOIRE: attune a MASTERED bestiary form to ONE grimoire-summon
@@ -11845,6 +11982,14 @@ export class World {
           break;
         }
         if (targetInfo?.actor) {
+          // THE TAMING: a tame-bearing cast never harms — it CLAIMS. The
+          // whole hit pipeline is bypassed; the bond succeeds or the beast
+          // shrugs it off with a note.
+          const tameFx = def.effects.find((f): f is Extract<SkillEffect, { type: 'tame' }> => f.type === 'tame');
+          if (tameFx) {
+            this.tryTame(caster, inst, targetInfo.actor, tameFx);
+            break;
+          }
           this.resolveHit(caster, inst, targetInfo.actor, useMult, 0, flatBonus);
           // Forked Focus: targeted skills land on extra nearby victims —
           // Ignite three things at once.
@@ -12873,6 +13018,26 @@ export class World {
           } else {
             this.failNote(caster, def.id + ':nominions', 'no minions to command');
           }
+        }
+      }
+      // THE WHISTLE (the tame skill's meta payload): the bonded companion
+      // is pulled to the keeper's side, revived if downed, healed to full.
+      // hostSkillId scopes the call to the whistling skill's own bond; a
+      // bar-cast whistle (no host) reaches any bond the keeper holds.
+      if (fx.type === 'whistleCompanion') {
+        const comp = inst.hostSkillId
+          ? this.companionOf(caster, inst.hostSkillId)
+          : this.actors.find(a => a.companion && !a.dead && a.owner === caster);
+        if (!comp) {
+          this.failNote(caster, def.id + ':nobond', 'no companion bonded');
+          this.refundCooldown(caster, def.id);
+        } else {
+          if (comp.downed) this.reviveCompanion(comp, 1);
+          comp.life = comp.maxLife();
+          this.teleportActor(comp, vec(
+            caster.pos.x + Math.cos(caster.facing + Math.PI * 0.75) * 40,
+            caster.pos.y + Math.sin(caster.facing + Math.PI * 0.75) * 40), '#a8d8a0');
+          this.text(vec(caster.pos.x, caster.pos.y - 24), 'the bond answers', '#a8d8a0', 12);
         }
       }
       if (fx.type === 'recallMinions') {
@@ -17353,6 +17518,19 @@ export class World {
     // retires the actor itself (splice) + repaints the doorway — nothing else
     // in the death ladder (loot/XP/bursts) applies to a doorway.
     if (actor.doorId) { this.setDoorState(actor.doorId, 'broken'); return; }
+    // A TAMED COMPANION falls DOWNED, never dead (the Hunter's bond): the
+    // body waits for a lingering ally or its keeper's whistle. Nothing in
+    // the death ladder applies — no bounty, no rules, no corpse (it is not
+    // a corpse). A deliberate release clears the flag first and dies plain.
+    if (actor.companion && !silent) {
+      actor.downed = true;
+      actor.life = 0;
+      actor.casting = null;
+      actor.aiCommand = undefined;
+      actor.companionReviveDwell = 0;
+      this.text(vec(actor.pos.x, actor.pos.y - 22), `${actor.name} is DOWN`, '#e8a860', 14);
+      return;
+    }
     // A COMPOSITE MONSTER'S PART: its death is a BREAK on the root (damage
     // chunk, torn-guard mods, disarmed skills) — never the loot/XP ladder.
     if (actor.partLink) { this.onPartBroken(actor, killer); return; }
@@ -18148,6 +18326,8 @@ export class World {
     this.updatePlayerCorpses(dt);
     // Co-op: an ally lingering by a downed seat revives them.
     this.updateDownedSeats(dt);
+    // The same tending mends a downed COMPANION (the Hunter's bond).
+    this.updateDownedCompanions(dt);
     // ALL-DOWN terminator: once no seat is left standing, the wipe concludes
     // (per mode: resurface / respawn / run over). Guarded on !gameOver so
     // single-player — where onPlayerDown already concluded this same frame —

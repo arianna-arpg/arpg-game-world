@@ -242,6 +242,12 @@ export interface MonsterDef {
    *  'predator' — AMBIENT_TAGS keeps them off objectives). Event spawners
    *  may overwrite for their own roles (patrol, siege, brigand...). */
   tag?: string;
+  /** TAXONOMY tags (plural — orthogonal to `tag`, the mutable spawn-time
+   *  role label): what this creature IS ('beast', 'undead', 'demon',
+   *  'construct'…). An open vocabulary read by data that restricts by
+   *  nature — Tame takes only 'beast'-tagged kinds, a future bane charm
+   *  only 'undead' — never by def id. Tag freely; unread tags cost nothing. */
+  tags?: string[];
   /** Open TOWN-NPC role this body fills ('vendor', 'innkeep', 'caravanner',
    *  'questgiver', a package's own...). Behavior sites scan for the role —
    *  never a literal def id — so any def can staff any counter, and any role
@@ -1581,7 +1587,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#9c7a4e', shape: 'hexagon', radius: 16, material: 'fur', look: 'behemoth',
     base: { life: 78, moveSpeed: 104, accuracy: 96, armor: 24, mana: 30, manaRegen: 4 },
     skills: ['heavy_strike'],
-    xp: 18, faction: 'beast', adorn: 'horns',
+    xp: 18, faction: 'beast', tags: ['beast'], adorn: 'horns',
     // High detection so a ROUSED adult locks straight onto whoever drew blood. (Neutral
     // migrants early-return from the AI before detection is ever read, so this never
     // changes their placid grazing — it only bites once the herd is provoked.)
@@ -1598,7 +1604,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#c8a85e', shape: 'trapezoid', radius: 13, material: 'fur', look: 'stalker',
     base: { life: 46, moveSpeed: 176, accuracy: 100, mana: 0 },
     skills: ['claw'],
-    xp: 14, faction: 'beast',
+    xp: 14, faction: 'beast', tags: ['beast'],
     detection: 1.15, // see the rouse note on the aurochs — only bites once provoked
     scaleVariance: [0.82, 1.34], scaleStats: true, juvenileBelow: 0.95,
     juvenileBrain: { type: 'flee' },
@@ -1610,7 +1616,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#8a6a44', shape: 'octagon', radius: 20, material: 'fur', look: 'tusker',
     base: { life: 142, moveSpeed: 96, accuracy: 104, armor: 40, mana: 50, manaRegen: 6 },
     skills: ['ground_slam', 'heavy_strike'],
-    xp: 30, faction: 'beast', adorn: 'horns',
+    xp: 30, faction: 'beast', tags: ['beast'], adorn: 'horns',
     detection: 1.05, // see the rouse note on the aurochs — only bites once provoked
     brain: { type: 'juggernaut' },
     scaleVariance: [0.88, 1.62], scaleStats: true, juvenileBelow: 0.98,
@@ -2067,7 +2073,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [],
     xp: 1,
     tag: 'critter',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     detection: 0.1,
     drops: 0,
     scaleVariance: [0.8, 1.15],
@@ -2095,7 +2101,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'],
     xp: 12,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     detection: 1.6,
     adorn: 'ears',
     scaleVariance: [0.9, 1.25],
@@ -2122,7 +2128,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'],
     xp: 13,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     detection: 1.2,
     adorn: 'spikes',
     brainVariants: [
@@ -2173,7 +2179,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'],
     xp: 16,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     detection: 1.5,
     adorn: 'ears',
     brain: {
@@ -2195,7 +2201,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw', 'take_wing'],
     xp: 14,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     detection: 1.4,
     adorn: 'wings',
     brain: {
@@ -2374,7 +2380,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'],
     xp: 2,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     drops: 0,
     brain: { type: 'swarm', move: { style: 'skitter', dart: [0.25, 0.45], pause: [0.08, 0.2] } },
   },
@@ -2385,7 +2391,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [],
     xp: 8,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     drops: 0,
     brain: {
       type: 'basic',
@@ -2403,7 +2409,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'],
     xp: 30,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     adorn: 'spikes',
     detection: 1.2,
     brain: {
@@ -2425,7 +2431,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['voltspear', 'claw'],
     xp: 20,
     tag: 'predator',
-    faction: 'beast',
+    faction: 'beast', tags: ['beast'],
     adorn: 'ears',
     detection: 1.3,
     scaleVariance: [0.9, 1.15],
@@ -3914,7 +3920,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#b04a3a', shape: 'triangle', radius: 10, material: 'fur', look: 'bloodwing',
     base: { life: 30, moveSpeed: 200, accuracy: 105, evasion: 70, mana: 15, manaRegen: 3 },
     skills: ['talon_rake', 'take_wing'], xp: 12,
-    tag: 'predator', faction: 'beast',
+    tag: 'predator', faction: 'beast', tags: ['beast'],
     flier: true, levitates: true,
     detection: 1.5,
     brain: {
@@ -3934,7 +3940,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'bloodwing_nest', name: 'Bloodwing Nest',
     color: '#8a6a4a', shape: 'oval', radius: 12, look: 'bloodwing_nest',
     base: { life: 50, moveSpeed: 0, armor: 5, mana: 0 },
-    skills: [], xp: 8, tag: 'predator', faction: 'beast',
+    skills: [], xp: 8, tag: 'predator', faction: 'beast', tags: ['beast'],
     noNemesis: true, drops: 0,
     brain: {
       type: 'basic',
@@ -3950,7 +3956,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#7a8a4a', shape: 'oval', radius: 8, material: 'slime', look: 'marsh_toad',
     base: { life: 12, moveSpeed: 130, evasion: 60, mana: 0 },
     mods: [mod('detectability', 'more', -0.5)],
-    skills: [], xp: 2, tag: 'critter', faction: 'beast',
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.15, drops: 0,
     scaleVariance: [0.8, 1.2],
     brain: {
@@ -3965,7 +3971,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'bog_heron', name: 'Bog Heron',
     color: '#9aa8b0', shape: 'kite', radius: 11, look: 'bog_heron',
     base: { life: 26, moveSpeed: 160, accuracy: 110, evasion: 55, mana: 0 },
-    skills: ['claw'], xp: 8, tag: 'predator', faction: 'beast',
+    skills: ['claw'], xp: 8, tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.5,
     brain: { type: 'skirmish', withdraw: 1.4, target: { prey: ['critter'] } },
   },
@@ -3975,7 +3981,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#b8e8c8', shape: 'diamond', radius: 6, material: 'ethereal', look: 'glow_moth',
     base: { life: 6, moveSpeed: 140, evasion: 85, mana: 0 },
     mods: [mod('detectability', 'more', -0.6)],
-    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     flier: true, levitates: true,
     detection: 0.1, drops: 0,
     brain: {
@@ -3990,7 +3996,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'taiga_elk', name: 'Taiga Elk',
     color: '#8a7452', shape: 'hexagon', radius: 14, material: 'fur', look: 'taiga_elk',
     base: { life: 60, moveSpeed: 190, accuracy: 95, mana: 25, manaRegen: 4 },
-    skills: ['heavy_strike'], xp: 10, tag: 'critter', faction: 'beast',
+    skills: ['heavy_strike'], xp: 10, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.6, drops: 0,
     scaleVariance: [0.78, 1.35], scaleStats: true, juvenileBelow: 0.92,
     juvenileBrain: { type: 'flee' },
@@ -4001,7 +4007,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'shore_crab', name: 'Shore Crab',
     color: '#c87a5a', shape: 'oval', radius: 9, material: 'chitin', look: 'shore_crab',
     base: { life: 20, moveSpeed: 90, accuracy: 85, armor: 40, mana: 0 },
-    skills: ['claw'], xp: 4, tag: 'critter', faction: 'beast',
+    skills: ['claw'], xp: 4, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.5, drops: 0,
     scaleVariance: [0.8, 1.25],
     brain: { type: 'basic' },
@@ -4020,7 +4026,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'will_o_wisp', name: "Will o' Wisp",
     color: '#b8e8c8', shape: 'diamond', radius: 6, material: 'ethereal', look: 'will_o_wisp',
     base: { life: 8, moveSpeed: 150, evasion: 90, mana: 0 },
-    skills: [], xp: 2, tag: 'critter', faction: 'beast',
+    skills: [], xp: 2, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.1, drops: 0,
     brain: {
       type: 'basic',
@@ -4144,7 +4150,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'dire_wolf', name: 'Dire Wolf',
     color: '#6a5a4a', shape: 'rhombus', radius: 15, material: 'fur', look: 'dire_wolf',
     base: { life: 85, moveSpeed: 190, accuracy: 110, evasion: 45, mana: 25, manaRegen: 4 },
-    skills: ['gore_rend'], xp: 22, tag: 'predator', faction: 'beast',
+    skills: ['gore_rend'], xp: 22, tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.6,
     brain: {
       type: 'pack',
@@ -4158,7 +4164,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'moon_howler', name: 'Moon Howler',
     color: '#9a8a78', shape: 'rhombus', radius: 14, material: 'fur', look: 'moon_howler',
     base: { life: 70, moveSpeed: 180, accuracy: 105, mana: 100, manaRegen: 8 },
-    skills: ['rallying_howl', 'claw'], xp: 26, tag: 'predator', faction: 'beast',
+    skills: ['rallying_howl', 'claw'], xp: 26, tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.5,
     brain: { type: 'commander', perception: { alertShout: 460 }, target: { prey: ['critter'] } },
   },
@@ -4248,7 +4254,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'orb_weaver', name: 'Orb Weaver',
     color: '#b0a878', shape: 'cross', radius: 13, material: 'chitin', look: 'orb_weaver',
     base: { life: 55, moveSpeed: 155, accuracy: 110, evasion: 55, mana: 80, manaRegen: 7 },
-    skills: ['web_shot', 'claw'], xp: 26, tag: 'predator', faction: 'beast',
+    skills: ['web_shot', 'claw'], xp: 26, tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.3,
     brain: { type: 'skirmish', withdraw: 1.3, target: { prey: ['critter'] } },
   },
@@ -4259,7 +4265,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#4a3a48', shape: 'cross', radius: 16, material: 'chitin', look: 'widow_matron',
     base: { life: 110, moveSpeed: 130, accuracy: 110, armor: 25, mana: 120, manaRegen: 9 },
     mods: [mod('chaosRes', 'flat', 0.4)],
-    skills: ['lay_brood_egg', 'web_shot', 'claw'], xp: 42, tag: 'predator', faction: 'beast',
+    skills: ['lay_brood_egg', 'web_shot', 'claw'], xp: 42, tag: 'predator', faction: 'beast', tags: ['beast'],
     gemBias: ['summon', 'projectile'],
     detection: 1.2,
     brain: { type: 'pack', move: { style: 'skitter', dart: [0.35, 0.6], pause: [0.2, 0.5] } },
@@ -4273,7 +4279,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#a8704a', shape: 'oval', radius: 6, material: 'fur', look: 'squirrel',
     base: { life: 6, moveSpeed: 220, evasion: 85, mana: 0 },
     mods: [mod('detectability', 'more', -0.7)],
-    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.1, drops: 0,
     scaleVariance: [0.85, 1.1],
     refuge: { kind: 'tree', text: 'darts up the tree!' },
@@ -4289,7 +4295,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'sand_scorpion', name: 'Sand Scorpion',
     color: '#c8a86a', shape: 'oval', radius: 8, material: 'chitin', look: 'sand_scorpion',
     base: { life: 14, moveSpeed: 135, evasion: 55, armor: 20, mana: 0 },
-    skills: ['claw'], xp: 3, tag: 'critter', faction: 'beast',
+    skills: ['claw'], xp: 3, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.4, drops: 0,
     scaleVariance: [0.8, 1.2],
     brain: { type: 'basic', morale: { skittish: { radius: 90, duration: [0.8, 1.4] } } },
@@ -4300,7 +4306,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'ant_trail', name: 'Ant Trail',
     color: '#7a5838', shape: 'oval', radius: 5, material: 'chitin', look: 'ant_trail',
     base: { life: 10, moveSpeed: 95, evasion: 40, mana: 0 },
-    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.1, drops: 0,
     worm: { length: 7, spacing: 9, taper: 0.97 },
     brain: { type: 'basic' },
@@ -4312,7 +4318,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#6aa848', shape: 'oval', radius: 7, material: 'slime', look: 'reed_frog',
     base: { life: 8, moveSpeed: 175, evasion: 75, mana: 0 },
     mods: [mod('detectability', 'more', -0.6)],
-    skills: [], xp: 1, tag: 'critter', faction: 'beast',
+    skills: [], xp: 1, tag: 'critter', faction: 'beast', tags: ['beast'],
     detection: 0.15, drops: 0,
     scaleVariance: [0.8, 1.2],
     refuge: { kind: 'water', text: 'dives!' },

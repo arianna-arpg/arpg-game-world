@@ -167,8 +167,8 @@ export interface TargetSpec {
   /** Detection-range multiplier while this tuning holds (swarm's 1.4). */
   detectMul?: number;
   /** Score multipliers by unit kind — a minion-hating brute biases 'minion',
-   *  an assassin biases 'player' (default 1 each). */
-  kindBias?: Partial<Record<'player' | 'minion' | 'mercenary' | 'monster', number>>;
+   *  an assassin biases 'player' (default 1 each; 'companion' = tamed pets). */
+  kindBias?: Partial<Record<'player' | 'minion' | 'mercenary' | 'monster' | 'companion', number>>;
   /** PREDATION: extra hunt-candidates beyond team enemies, matched against a
    *  candidate's tag, faction, or defId (kin — same defId or squad — never
    *  count). ONE-DIRECTIONAL: World.hostileTo makes the predator hostile to

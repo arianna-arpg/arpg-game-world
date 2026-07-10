@@ -1775,6 +1775,35 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
   },
 
+  // THE HUNTER'S BOND: claim a living beast instead of raising a dead one.
+  // Taxonomy-gated (MonsterDef.tags 'beast' — targeting simply finds nothing
+  // else), one bond per GEM, and the companion DOWNS instead of dying:
+  // linger beside it like a downed ally, or shift-press the WHISTLE (the
+  // meta layer) to recall it revived and whole on a long clock.
+  tame_beast: {
+    id: 'tame_beast', name: 'Tame Beast',
+    description: 'A long, steady claim on a living beast: weaken it below half, hold the cast, and it is YOURS — a companion that falls DOWNED, never dead. Linger to mend it, or WHISTLE (shift) to call it back revived. One bond per gem; release it at the Tracker.',
+    tags: ['spell', 'minion', 'duration'], color: '#a8c87a',
+    manaCost: 30, cooldown: 6, useTime: 2.2,
+    targeting: { target: 'enemy', castRange: 320, requiresMonsterTags: ['beast'] },
+    delivery: { type: 'target' },
+    effects: [{ type: 'tame', tags: ['beast'], maxLifeFrac: 0.5 }],
+    requirements: { wisdom: 14, charisma: 8 },
+    meta: { skillId: 'companion_whistle', label: 'Whistle' },
+    leveling: { perLevel: [mod('minionLife', 'increased', 0.12), mod('minionDamage', 'increased', 0.08)] },
+  },
+
+  // The whistle — Tame Beast's meta payload (its own long clock; refunds
+  // itself when no bond answers).
+  companion_whistle: {
+    id: 'companion_whistle', name: 'Whistle', noDrop: true,
+    description: 'The bond answers: your companion is pulled to your side, revived if downed, healed whole.',
+    tags: ['spell', 'instant'], color: '#a8c87a',
+    manaCost: 0, cooldown: 45, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{ type: 'whistleCompanion' }],
+  },
+
   revive: {
     id: 'revive', name: 'Revive',
     description: 'Wrench a corpse briefly back to its feet as a short-lived ally. Cheap, plentiful, and temporary.',

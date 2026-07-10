@@ -1967,6 +1967,11 @@ export interface TargetingSpec {
   /** The target must carry one of these statuses (Expunge: poison;
    *  Flash Freeze: chill OR frozen). String or any-of list. */
   requiresStatus?: string | string[];
+  /** The target's DEF must carry one of these taxonomy tags
+   *  (MonsterDef.tags — Tame reads only 'beast'-kinded bodies). The
+   *  greying gate follows for free: aiming at anything else, the skill
+   *  simply finds no target. */
+  requiresMonsterTags?: string[];
   /** Consume the required status on use, converting its remaining damage
    *  into an immediate flat hit (Eviscerate). */
   consumesStatus?: boolean;
@@ -2104,6 +2109,31 @@ export interface CommandMinionsEffect {
   discipline?: number;
   /** Engagement radius around the MARK (default COMMAND_CFG.markRadius). */
   markRadius?: number;
+}
+
+/** THE TAMING (the Hunter archetype's bond): a target-delivery cast that
+ *  CLAIMS instead of harming. Success converts the struck creature into
+ *  the caster's COMPANION (World.tameCompanion: player-side, downs instead
+ *  of dying, revived by lingering allies or the whistle). Restricted by
+ *  TAXONOMY (MonsterDef.tags — 'beast' for the classic bond), never by def
+ *  id; rares/bosses refuse unless the effect opens them. ONE companion per
+ *  skill INSTANCE — the bond, not the character, holds the leash. */
+export interface TameEffect {
+  type: 'tame';
+  /** Taxonomy tags that may be claimed (any match qualifies). */
+  tags: string[];
+  /** Also allow RARE-rarity bodies (default false; bosses never). */
+  allowRares?: boolean;
+  /** Target must be at or below this life fraction (default 1 = any). */
+  maxLifeFrac?: number;
+}
+
+/** THE WHISTLE (the tame skill's meta payload): the keeper's recall — the
+ *  bonded companion is pulled to the caster's side, revived if downed, and
+ *  healed to full. Scoped by hostSkillId to the whistling skill's own bond.
+ *  A whistle with no companion refunds its cooldown (never a wasted bark). */
+export interface WhistleCompanionEffect {
+  type: 'whistleCompanion';
 }
 
 /** CHRONO (#19): shaves every OTHER learned skill's running cooldown —
@@ -2404,7 +2434,7 @@ export type SkillEffect =
   | DetonateMinionsEffect | SpawnCorpseEffect | ShatterConstructsEffect
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
-  | RecallImpalesEffect;
+  | RecallImpalesEffect | TameEffect | WhistleCompanionEffect;
 
 // --- The skill definition ---------------------------------------------------
 

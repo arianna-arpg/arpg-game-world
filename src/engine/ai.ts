@@ -223,7 +223,8 @@ const DEFAULT_BRAIN: BrainDef = {};
 export function updateAI(actor: Actor, world: World, dt: number): void {
   // Skip ANY player seat (the local hero AND co-op allies) — they're driven by
   // World.applyInputs (OS / scripted / remote intent), never the monster brain.
-  if (actor.dead || world.seatOf(actor)) return;
+  // A DOWNED body (a felled companion awaiting revival) doesn't scheme either.
+  if (actor.dead || actor.downed || world.seatOf(actor)) return;
   // Constructs (decoys included) act through the world, not the brain.
   if (actor.construct) return;
   // An ARMED ambusher IS scenery — no scheming until the world springs it.
