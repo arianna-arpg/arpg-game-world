@@ -291,6 +291,10 @@ export function validateContent(): void {
     for (const stat of Object.keys(m.scaling ?? {})) {
       if (!STAT_DEFS[stat]) warn(`${m.id}: scaling references unknown stat '${stat}'`);
     }
+    // A breathing shell needs an ARC to breathe — side 'all' has none.
+    if (m.shellGuard?.breathe && m.shellGuard.side === 'all') {
+      warn(`${m.id}: shellGuard.breathe on side 'all' — no arc to breathe; the spec is inert`);
+    }
     // A body wake must shed a real GROUND skill — anything else free-casts
     // into the delivery switch's wrong branch every stride.
     if (m.wake) {
@@ -376,7 +380,9 @@ export function validateContent(): void {
     // The brim*/fuse* stats stay unrowed too: Stillwater/Overbrim gate on
     // 'channel' (brim-less channels are a legitimate socket), and Slow
     // Match's whole point is riding a Time Fuse graft — the loadout-time
-    // composition this audit deliberately leaves alone.
+    // composition this audit deliberately leaves alone. Likewise 'gather'
+    // (read for every bar-cast at useSkill) and 'shellGraft' (gated by
+    // its own requiresTags ['guard'] — the tag fit IS the audit).
   ];
   // The map audits itself: a stat row naming a dead stat is map drift.
   for (const row of GRAFT_READ_SITES) {

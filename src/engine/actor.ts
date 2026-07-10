@@ -14,8 +14,9 @@ import { DEFENSE_CFG } from './defense';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
-  type EchoRiderSpec, type LedgerSpec,
+  type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec,
 } from './skills';
+import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import type { MonsterRarity } from './rarity';
 import type { DeathBurstDef } from '../data/monsters';
@@ -96,6 +97,11 @@ export interface CastingState {
   /** The 'channelFinish' trigger already rolled this cast (once per
    *  unbroken channel, however the completion arrived). */
   finishRolled?: boolean;
+  /** GATHERED CASTING (SupportDef.gather): the SYNTHESIZED channel spec a
+   *  converted bar-cast runs on — brim, release and beats alike. When set
+   *  it is THE spec (updateCasting and the renderer read it over
+   *  def.channel, which a converted cast doesn't have). */
+  gather?: ChannelSpec;
 }
 
 /** One OVERDRIVE lane's ledger: the toggle instance that opened it, the
@@ -105,6 +111,23 @@ export interface OverdriveState {
   inst: SkillInstance;
   debt: number;
   idle: number;
+}
+
+/** The BREATHING shell's live arc factor (shellGuard.breathe): coverage
+ *  swells and wanes on its period — minFrac at the trough (the opening
+ *  you TIME your blows into), full at the crest. Directional shells only
+ *  ('all' shells ignore it — no arc to breathe). ONE helper shared by the
+ *  block test and the renderer's glyph, so what you read is what blocks. */
+export function shellArcFactor(
+  sg: { breathe?: { period: number; minFrac?: number; curve?: CurveKind } },
+  time: number,
+): number {
+  const b = sg.breathe;
+  if (!b) return 1;
+  const period = Math.max(0.5, b.period);
+  const t = (time % period) / period;
+  const min = b.minFrac ?? 0.35;
+  return min + (1 - min) * evalCurve(b.curve ?? 'breath', t);
 }
 
 /** Stance windows for the `stationary`/`moving` conditions: planted after
@@ -795,9 +818,11 @@ export class Actor {
   wake?: { skillId: string; everyDist: number; dmgMult?: number };
   /** THE BRIM LEDGER (ChannelSpec.brim): per-skill persistent gauge fill.
    *  The live instance rides along so decay/payoff stat queries see
-   *  socketed support mods; fed by held channels, drained by the decay
-   *  sweep, spent by releases. Lazy — most bodies never brim. */
-  brims?: Map<string, { fill: number; inst: SkillInstance }>;
+   *  socketed support mods, and the SPEC rides so converted gathers
+   *  (SupportDef.gather — no def.channel to look up) decay correctly.
+   *  Fed by held channels, drained by the decay sweep, spent by
+   *  releases. Lazy — most bodies never brim. */
+  brims?: Map<string, { fill: number; inst: SkillInstance; spec: BrimSpec }>;
   /** The wake's runtime ledger: travel accrued toward the next shed, last
    *  frame's position (the displacement source), and the payload instance
    *  minted lazily at first shed. */
@@ -811,9 +836,11 @@ export class Actor {
   /** ARMED AMBUSH (MonsterDef.ambush): hidden + untargetable until an enemy
    *  strays inside the wake radius — then the reveal. */
   ambushArmed = false;
-  /** SHELL GUARD (MonsterDef.shellGuard or a toggled rear-guard aura): the
-   *  directional absorb pool + its break/regrow state. `fromAura` names the
-   *  installing skill so the toggle-off removes ONLY its own shell. */
+  /** SHELL GUARD (MonsterDef.shellGuard, a toggled rear-guard aura, or a
+   *  guard-skill graft): the directional absorb pool + its break/regrow
+   *  state. `fromAura` names the installing skill so the toggle-off (or
+   *  the stance dropping) removes ONLY its own shell. `breathe` makes the
+   *  covered ARC swell and wane on a period — the opening you time. */
   shellGuard?: {
     side: 'rear' | 'front' | 'all';
     arcDeg: number;
@@ -825,6 +852,7 @@ export class Actor {
     broken: boolean;
     color: string;
     fromAura?: string;
+    breathe?: { period: number; minFrac?: number; curve?: CurveKind };
   };
   /** TURN SPEED (rad/s): the per-frame facing clamp. 0 = instant (players). */
   turnSpeed = 0;

@@ -39,6 +39,20 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'fireRes', kind: 'flat', range: [0.1, 0.15] },
     ],
   },
+  // THE FUSE BUILD's anchor: shorter fuses, far harder verdicts — worn by
+  // anyone running Time Fuse / Doomsayer's arrears (the gather family).
+  {
+    id: 'slowmatch_coil', name: 'The Slowmatch Coil', baseId: 'ring_ruby', weight: 70,
+    minIlvl: 8,
+    flavor: 'Light it, then live long enough to hear the answer.',
+    lines: [
+      { stat: 'fusePower', kind: 'increased', range: [0.35, 0.55] },
+      { stat: 'fuseDelay', kind: 'increased', range: [-0.3, -0.18] },
+      { stat: 'damage', kind: 'increased', range: [0.08, 0.14] },
+      // The coil takes its time — a real downside line.
+      { stat: 'castSpeed', kind: 'increased', range: [-0.08, -0.05] },
+    ],
+  },
   {
     id: 'gravebloom', name: 'Gravebloom', baseId: 'helmet_es', weight: 100,
     flavor: 'What you plant in sorrow you may harvest in service.',

@@ -9,6 +9,7 @@
 
 import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
 import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine/actor';
+import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import type { PackTableEntry } from './zones';
 
@@ -324,6 +325,13 @@ export interface MonsterDef {
     /** Pool regrown per second once knitting (default max/6). */
     regenRate?: number;
     color?: string;
+    /** The shell BREATHES: its covered arc swells and wanes on `period`
+     *  seconds — full coverage at the crest, arc × minFrac (default 0.35)
+     *  at the trough. The opening is the fight: time your blows into the
+     *  ebb. Directional shells only ('all' has no arc to breathe); the
+     *  side glyph renders the LIVE arc, so what you read is what blocks.
+     *  `curve` names a CURVES shape (default 'breath'). */
+    breathe?: { period: number; minFrac?: number; curve?: CurveKind };
   };
   /** TURN SPEED (radians/sec) — how fast this body can swing its facing.
    *  Omitted = the bestiary default (fast enough to read as natural but no
@@ -3901,7 +3909,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
   rockgrub: {
     id: 'rockgrub', name: 'Rockgrub',
     color: '#9a9078', shape: 'oval', radius: 13, material: 'chitin', look: 'rockgrub',
-    base: { life: 90, moveSpeed: 80, accuracy: 95, armor: 45, mana: 0 },
+    // THE SHELL/POISE DOCTRINE: a FULL exoskeleton serves the structural
+    // role poise would — so the grub carries ZERO poise. Crack the shell
+    // and everything staggers it; burst play opens it, sustain finishes.
+    // (Full 'all' shells stay RARE by design — they read as walls.)
+    base: { life: 90, moveSpeed: 80, accuracy: 95, armor: 45, poise: 0, mana: 0 },
     skills: ['claw'], xp: 14,
     scaleVariance: [0.85, 1.2], juvenileBelow: 0.95,
     juvenileBrain: { type: 'flee' },
@@ -4433,12 +4445,16 @@ export const MONSTERS: Record<string, MonsterDef> = {
   formic_soldier: {
     id: 'formic_soldier', name: 'Formic Soldier',
     color: '#8a5a38', shape: 'hexagon', radius: 13, material: 'chitin', look: 'formic_soldier',
-    base: { life: 75, moveSpeed: 140, accuracy: 105, armor: 45, mana: 20, manaRegen: 3 },
+    base: { life: 75, moveSpeed: 140, accuracy: 105, armor: 45, poise: 35, mana: 20, manaRegen: 3 },
     skills: ['cleave'], xp: 18,
     // The colony's SYNCHRONY: soldiers fight harder while a worker lives
     // near — burst the workers first and the line softens (the bond seam).
     bond: { kin: 'formic_worker', mods: [mod('damageTaken', 'more', -0.25)] },
-    shellGuard: { side: 'front', max: 70, regenDelay: 4, regenRate: 16, color: '#b09060' },
+    // LOW SHELL + REAL POISE (the texture doctrine's other pole): a thin
+    // frontal plate over a braced body — crack the line fast, then commit
+    // through the poise to the soft flesh. Sustain-then-burst, where the
+    // whelk and the grub reward the opposite rhythm.
+    shellGuard: { side: 'front', max: 55, regenDelay: 4, regenRate: 14, color: '#b09060' },
     scaling: { armor: { flatPerLevel: 1.2 } },
     detection: 1.1,
     // The colony COORDINATES like nothing else alive: the preset's ring
@@ -4470,7 +4486,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
   bronze_scarab: {
     id: 'bronze_scarab', name: 'Bronzeback Scarab',
     color: '#b08a3a', shape: 'oval', radius: 15, material: 'metal', look: 'bronze_scarab',
-    base: { life: 120, moveSpeed: 105, accuracy: 100, armor: 70, poise: 40, mana: 20, manaRegen: 3 },
+    // SHELL-INSTEAD-OF-POISE (the texture doctrine): the full bronze
+    // exoskeleton IS its structure — zero poise, and the old armor pile
+    // trimmed so shell+armor+poise never stack into a wall of no-answers.
+    // Burst cracks it open; anything staggers what's underneath.
+    base: { life: 120, moveSpeed: 105, accuracy: 100, armor: 55, poise: 0, mana: 20, manaRegen: 3 },
     skills: ['heavy_strike'], xp: 28,
     // The exoskeleton retrofit: a knitting full shell over the old armor.
     shellGuard: { side: 'all', max: 90, regenDelay: 5, regenRate: 18, color: '#d8b86a' },
@@ -4619,6 +4639,77 @@ export const MONSTERS: Record<string, MonsterDef> = {
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.0, brain: { type: 'basic' },
   },
+  // THE RUIN CHANTER — the interrupt-or-eat-it elite: it closes, PLANTS,
+  // and gathers Kindled Ruin under a bar the whole room can read — four
+  // seconds to break the channel or clear the blast, and an early break
+  // pays NOTHING (release.requireFull). Modest poise ON PURPOSE: focused
+  // blows crack it, the sunder strips its CC-shrug, and the stun that
+  // follows denies the finish outright — the counterplay ladder IS the
+  // fight (poise → sunder → stun → silence).
+  ruin_chanter: {
+    id: 'ruin_chanter', name: 'Ruin Chanter',
+    color: '#ff8a3a', shape: 'triangle', radius: 13, look: 'ruin_chanter',
+    base: { life: 95, moveSpeed: 95, accuracy: 112, poise: 50, mana: 160, manaRegen: 10 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['kindled_ruin', 'firebolt'], xp: 44,
+    detection: 1.1, brain: { type: 'basic' },
+  },
+  // THE TIDE WHELK — the breathing shell made flesh: its frontal carapace
+  // COVERAGE swells and wanes on a five-second tide (the shell glyph draws
+  // the LIVE arc — read the ebb, strike the meat). ZERO poise on purpose:
+  // the shell IS the structure; once you're through, stagger it freely.
+  // The texture doctrine's reference: shell-instead-of-poise.
+  tide_whelk: {
+    id: 'tide_whelk', name: 'Tide Whelk',
+    color: '#7ab0a0', shape: 'oval', radius: 15, material: 'chitin', look: 'tide_whelk',
+    base: { life: 150, moveSpeed: 55, accuracy: 102, armor: 20, poise: 0, mana: 90, manaRegen: 7 },
+    mods: [mod('coldRes', 'flat', 0.4)],
+    skills: ['bile_spray'], xp: 32,
+    shellGuard: {
+      side: 'front', arcDeg: 230, max: 110, regenDelay: 4, regenRate: 20,
+      color: '#9ad0c0', breathe: { period: 5, minFrac: 0.3 },
+    },
+    turnSpeed: 2.4,
+    detection: 1.0, brain: { type: 'basic' },
+  },
+  // THE MAGMA SWIMMER — the lava-lane burrower: it dives only where the
+  // ground BURNS and erupts under whatever lingers by the flows. Stand off
+  // the basalt lanes and the pool cannot betray you (one def, one verb
+  // line — the burrow vocabulary doing all the work).
+  magma_swimmer: {
+    id: 'magma_swimmer', name: 'Magma Swimmer',
+    color: '#ff7a2a', shape: 'oval', radius: 13, material: 'stone', look: 'magma_swimmer',
+    base: { life: 120, moveSpeed: 100, accuracy: 108, armor: 30, mana: 70, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    skills: ['claw', 'firebolt'], xp: 36,
+    worm: { length: 6, spacing: 15, taper: 0.88 },
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      rules: [{
+        when: { distUnder: 650 }, every: [9, 14], hold: [0.3, 0.5],
+        actions: [{ do: 'burrow', kinds: ['lava'], damageFrac: 0.24, emergeRadius: 70, announce: 'the lava churns…' }],
+      }],
+    },
+  },
+  // THE SNOW SWIMMER — the tundra's white wake: it slips under drifts and
+  // ice sheets and surfaces in a spray of powder. Fight it off the snow.
+  snow_swimmer: {
+    id: 'snow_swimmer', name: 'Snow Swimmer',
+    color: '#cfe4f0', shape: 'oval', radius: 12, material: 'ice', look: 'snow_swimmer',
+    base: { life: 100, moveSpeed: 115, accuracy: 106, evasion: 40, mana: 70, manaRegen: 6 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.3)],
+    skills: ['claw', 'frostbolt'], xp: 32,
+    worm: { length: 5, spacing: 14, taper: 0.9 },
+    detection: 1.2,
+    brain: {
+      type: 'skirmish', withdraw: 1.2,
+      rules: [{
+        when: { distUnder: 650 }, every: [9, 14], hold: [0.3, 0.5],
+        actions: [{ do: 'burrow', kinds: ['snowdrift', 'ice'], damageFrac: 0.2, emergeRadius: 65, announce: 'the snow shifts…' }],
+      }],
+    },
+  },
   // THE BOG DWELLER — the mire maw's MOBILE cousin: a hunched sod-back that
   // slogs its bog and never leaves it, lobbing slow, hungry globs of mire
   // (mirespume: lightly seeking, shedding contracting venom pools in
@@ -4710,6 +4801,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
   molting_behemoth: {
     id: 'molting_behemoth', name: 'Molting Behemoth',
     color: '#a8925a', shape: 'octagon', radius: 23, material: 'chitin', look: 'molting_behemoth',
+    // THE DELIBERATE APEX EXCEPTION: full shell AND real poise on one body
+    // — the rare wall the doctrine otherwise forbids (full-shells carry no
+    // poise; poise-bodies carry thin shells). One per biome tier at most,
+    // presence-gated deep: when it appears, it should feel like weather.
     base: { life: 380, moveSpeed: 85, accuracy: 115, armor: 40, poise: 70, mana: 40, manaRegen: 4 },
     skills: ['heavy_strike', 'ground_slam'], xp: 85,
     shellGuard: { side: 'all', max: 260, regenDelay: 5, regenRate: 45, color: '#d8c88a' },

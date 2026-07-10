@@ -9,7 +9,7 @@ import { instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, skil
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { STATUS_DEFS } from '../engine/status';
-import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
+import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
 import { chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
@@ -2431,6 +2431,38 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
+    // SHELL GLYPH (Actor.shellGuard): the covered side reads BEFORE the
+    // first tink — a faint arc riding the body on the shell's side, its
+    // alpha following the pool. Breathing shells draw their LIVE arc (the
+    // same factor the block test uses — what you read is what blocks),
+    // and a BROKEN shell turns to cracked dashes while it knits.
+    if (a.shellGuard) {
+      const sg = a.shellGuard;
+      const r = a.radius + 6;
+      const live = sg.side === 'all'
+        ? Math.PI * 2
+        : (sg.arcDeg * Math.PI / 180) * shellArcFactor(sg, world.time);
+      const center = sg.side === 'rear' ? a.facing + Math.PI : a.facing;
+      const poolFrac = sg.max > 0 ? Math.max(0, sg.pool) / sg.max : 0;
+      ctx.strokeStyle = sg.color;
+      if (sg.broken || sg.pool <= 0) {
+        // Cracked: short dashes, dim — the shell is OPEN; hit the meat.
+        ctx.setLineDash([3, 6]);
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.35;
+      } else {
+        ctx.setLineDash([]);
+        ctx.lineWidth = 3.5;
+        ctx.globalAlpha = 0.18 + 0.4 * poolFrac;
+      }
+      ctx.beginPath();
+      if (sg.side === 'all') ctx.arc(0, 0, r, 0, Math.PI * 2);
+      else ctx.arc(0, 0, r, center - live / 2, center + live / 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+
     // Stance feedback: conditional 'stationary' mods (Colossus Stance) are
     // invisible ±28% swings without a cue — SHOW the plant. The ring fades
     // in as the feet set and locks solid (with root-spikes) once planted.
@@ -2763,7 +2795,7 @@ export class Renderer {
         // bar (the overcharge stacked-bar idiom): the gather's walk to
         // its ceiling, gold the instant it truly finishes. Enemies wear
         // it too — the whole room reads the doom-cast burning in.
-        const chSpec = cs.inst.def.channel;
+        const chSpec = cs.gather ?? cs.inst.def.channel;
         let holdFrac: number | null = null;
         if (chSpec?.brim) {
           holdFrac = a.brims?.get(cs.inst.def.id)?.fill ?? 0;
@@ -3637,10 +3669,11 @@ export class Renderer {
             ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
           }
         }
-        // BRIM strip (ChannelSpec.brim): the persistent gauge lives on
-        // the slot's bottom edge — the banked scream visible between
-        // presses, gold at the brim.
-        if (def.channel?.brim) {
+        // BRIM strip (ChannelSpec.brim / a Gathered Casting conversion):
+        // the persistent gauge lives on the slot's bottom edge — the
+        // banked scream visible between presses, gold at the brim. Gated
+        // on the LEDGER, not the def: converted casts have no def.channel.
+        {
           const bFill = p.brims?.get(def.id)?.fill ?? 0;
           if (bFill > 0) {
             ctx.fillStyle = 'rgba(0,0,0,0.7)';

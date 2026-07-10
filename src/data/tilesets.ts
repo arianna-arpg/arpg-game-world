@@ -414,6 +414,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'storm_acolyte', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'frost_elemental', weight: 2 },
         { id: 'gale_elemental', weight: 2 },
+        // The white wake under the drifts.
+        { id: 'snow_swimmer', weight: 2, presence: { from: 4, fadeIn: 2 } },
         // Horned Tribe raiders range even the white wastes.
         { id: 'beastkin_gorer', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
@@ -704,6 +706,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'lake_horror', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
         { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'tide_whelk', weight: 1, presence: { from: 5, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -750,6 +753,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The deep-war Legion walks its own wastes.
         { id: 'bloodgorger', weight: 1, presence: { from: 18, fadeIn: 5 } },
         { id: 'chained_tormentor', weight: 1, presence: { from: 20, fadeIn: 6 } },
+        // The gather elite and the lava-lane burrower.
+        { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'magma_swimmer', weight: 1, presence: { from: 6, fadeIn: 3 } },
       ],
     },
     spawnerId: 'ember_rift',
@@ -1377,6 +1383,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'lake_horror', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
         { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'tide_whelk', weight: 2, presence: { from: 5, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1505,6 +1512,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fire_golem', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'brute', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'spitting_horror', weight: 1, presence: { to: 14, fadeOut: 7 } },
+        // The lava-lane burrower and the gather elite hold the deep flows.
+        { id: 'magma_swimmer', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'ruin_chanter', weight: 2, presence: { from: 7, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',

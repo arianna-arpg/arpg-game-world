@@ -333,6 +333,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('triggerChance', 'flat', 0.05)],
     weight: 4, minDropLevel: 12,
   },
+  culminant_frenzy: {
+    id: 'culminant_frenzy', name: 'Culminant Frenzy',
+    description: 'Every channel you truly COMPLETE while this rides one banks 2 Frenzy charges — the finish, converted to fury. Interrupted gathers bank nothing: fury is earned at the brim.',
+    color: '#e8a84a', requiresTags: ['channel'],
+    chargeGain: [{ charge: 'frenzy', amount: 2, max: 6, on: 'channelFinish' }],
+    mods: [],
+    perLevel: [mod('chargeCap', 'flat', 0.5)],
+    weight: 4,
+  },
+  gathered_casting: {
+    id: 'gathered_casting', name: 'Gathered Casting',
+    description: 'The long cast stops being a promise made standing still: this skill becomes a GATHER — hold to bank its cast time into a bar that KEEPS between holds, then release the whole spell on your own schedule at a power matching the fill. The bank runs half again the honest bar and pays its mana as you pour; haste fills it faster. Channels, instants and quick flicks refuse the conversion.',
+    color: '#c8b8e8', excludeTags: ['channel', 'guard', 'instant', 'movement', 'aura', 'overcharge'],
+    gather: { premium: 1.5, minRelease: 0.15 },
+    mods: [],
+    perLevel: [mod('brimFill', 'increased', 0.04)],
+    weight: 4, minDropLevel: 12,
+  },
   sequenced_invocation: {
     id: 'sequenced_invocation', name: 'Sequenced Invocation',
     description: 'Rides BESIDE a trigger gem and lifts its cast-time gate: the heavy spell answers the moment as a REAL cast in succession — feet planted for the bar (castMove and mobility investments still walk it). No trigger gem beside it, no effect.',
@@ -2229,6 +2247,16 @@ export const SUPPORTS: Record<string, SupportDef> = {
     mods: [mod('fuseDelay', 'increased', 0.5), mod('fusePower', 'increased', 0.4)],
     perLevel: [mod('fusePower', 'increased', 0.04)],
     weight: 4, minDropLevel: 8,
+  },
+
+  grafted_carapace: {
+    id: 'grafted_carapace', name: 'Grafted Carapace',
+    description: 'While this guard stance holds, you ALSO wear a SHELL across its blind side — a rear carapace that eats blows whole until it breaks (the shell glyph shows the covered arc). Priced by guard strength like the shield itself; drops with the stance, breaks like anatomy.',
+    color: '#a8c890', requiresTags: ['guard'],
+    shellGraft: { side: 'rear', arcDeg: 200, max: 55, regenDelay: 4 },
+    mods: [],
+    perLevel: [mod('guardStrength', 'increased', 0.04)],
+    weight: 4,
   },
 
   // --- Ailment-stack + form gems ---------------------------------------------------

@@ -12,7 +12,7 @@ import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, rand
 import { DiscIndex, SPATIAL_CFG } from './spatial';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
-import { Actor, type BrainPhase, type CastingState, type Team } from './actor';
+import { Actor, shellArcFactor, type BrainPhase, type CastingState, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
@@ -26,9 +26,9 @@ import {
   CONCENTRATION_CFG, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
-  type AuraDelivery, type BuffEffect, type ConstructDelivery, type GroundDelivery, type GuardSpec,
+  type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardSpec,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
-  type ProjTrailSpec, type FissureTrailSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
+  type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec,
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
@@ -10546,6 +10546,7 @@ export class World {
         regenRate: sg.regenRate ?? sg.max / 6,
         lastHitAt: -999, broken: false,
         color: sg.color ?? '#c8b87a',
+        breathe: sg.breathe, // the tidal shell's opening rides along
       };
     }
     // TURN SPEED: the bestiary default smooths every pivot; big and shelled
@@ -11333,12 +11334,39 @@ export class World {
       return true;
     }
 
+    // GATHERED CASTING (SupportDef.gather): the socketed gem CONVERTS a
+    // bar-cast into a brim GATHER — the long cast becomes a held channel
+    // banking its own cast time in a persistent bar (the skill as its own
+    // powerbank), fired on the caster's schedule at fill-scaled power.
+    // Cast speed still fills the bank; the gem's premium stretches the
+    // full-bank time past the honest bar. Instants, channels and sub-0.3s
+    // flicks refuse the conversion (nothing worth banking).
+    let gather: ChannelSpec | undefined;
+    if (mode === 'cast' && !def.concentration && def.useTime >= 0.3) {
+      const g = socketSpec(inst, 'gather');
+      if (g) {
+        gather = {
+          interval: 0.4, move: 'slowed', moveFactor: 0.5, windup: 0.2,
+          release: { pulses: false },
+          brim: {
+            fillTime: Math.max(0.5, def.useTime * (g.premium ?? 1.5)),
+            decay: g.decay,
+            minRelease: g.minRelease ?? 0.15,
+            minScale: g.minScale ?? 0.25,
+            maxScale: g.maxScale ?? 1,
+            curve: g.curve,
+          },
+        };
+      }
+    }
+
     // Channels pay per pulse (inside updateCasting), everything else now.
-    if (mode === 'channel' && def.channel) {
-      const total = Math.max(0.1, def.channel.interval / caster.speedFactor(inst));
+    if (gather || (mode === 'channel' && def.channel)) {
+      const chSpec = gather ?? def.channel!;
+      const total = Math.max(0.1, chSpec.interval / caster.speedFactor(inst));
       const cc = this.consumeChargeCost(caster, inst);
       caster.casting = {
-        inst, mode, aim: vec(aim.x, aim.y),
+        inst, mode: 'channel', aim: vec(aim.x, aim.y),
         elapsed: 0,
         total,
         held: true,
@@ -11353,9 +11381,10 @@ export class World {
         // interval), never on the press frame — tapping a channel yields
         // NOTHING; you have to actually hold the thing.
         channelTime: 0,
-        pulseTimer: def.channel.windup !== undefined
-          ? Math.max(0, def.channel.windup / caster.speedFactor(inst))
+        pulseTimer: chSpec.windup !== undefined
+          ? Math.max(0, chSpec.windup / caster.speedFactor(inst))
           : total,
+        gather,
       };
       return true;
     }
@@ -11400,6 +11429,24 @@ export class World {
         shield: maxShield, maxShield,
         channelTime: 0,
       };
+      // GRAFTED CARAPACE (SupportDef.shellGraft): the raised stance ALSO
+      // wears a directional shell — the shield's blind side, armored.
+      // Priced by guardStrength like the shield itself; stripped when the
+      // stance drops (release or interrupt — the fromAura removal rule).
+      const graft = socketSpec(inst, 'shellGraft');
+      if (graft) {
+        const gs = caster.sheet.get('guardStrength', skillContextTags(def), instanceMods(inst));
+        const gmax = graft.max * gs;
+        caster.shellGuard = {
+          side: graft.side ?? 'rear', arcDeg: graft.arcDeg ?? 200,
+          max: gmax, pool: gmax,
+          regenDelay: graft.regenDelay ?? 4,
+          regenRate: graft.regenRate ?? gmax / 5,
+          lastHitAt: -999, broken: false,
+          color: graft.color ?? def.color,
+          fromAura: def.id,
+        };
+      }
       return true;
     }
 
@@ -14141,11 +14188,15 @@ export class World {
     // Each placement is a true LINE SEGMENT (a capsule the width of the
     // crack) — the fracture IS the hitbox, laid tangent-wise at its path
     // point. Branches and the closing passes carry their own bearings.
+    // SIZE ENVELOPE: the capsule's HALF-WIDTH breathes on the same walk
+    // discs do — a contracting crack knits itself shut, a blooming one
+    // splits wider as it lives (each segment from its own birth width).
+    const fizSizeOver = resolveSizeOver(instanceSizeOver(inst));
     const lay = (px: number, py: number, segAng: number, delay: number, mult: number, linger: number): void => {
       const half = step / 2;
       this.zones.push({
         pos: this.clampPos(vec(px, py), 10),
-        radius: d.radius * aoeScale,
+        radius: d.radius * aoeScale * (fizSizeOver?.from ?? 1),
         seg: {
           ax: px - Math.cos(segAng) * half, ay: py - Math.sin(segAng) * half,
           bx: px + Math.cos(segAng) * half, by: py + Math.sin(segAng) * half,
@@ -14153,6 +14204,9 @@ export class World {
         caster, inst, color: inst.def.color,
         delay, exploded: false,
         linger, tickInterval: d.tickInterval ?? 0.5, tickTimer: 0,
+        linger0: linger,
+        sizeOver: fizSizeOver,
+        radius0: fizSizeOver ? d.radius * aoeScale : undefined,
         shape: 0, facing: segAng,
         dmgMult: mult, depth: 1,
         // The PRIMARY chain carries the emitter (spirits rise from the
@@ -15433,7 +15487,10 @@ export class World {
     if (!sg || sg.broken || sg.pool <= 0) return false;
     if (sg.side !== 'all') {
       const center = victim.facing + (sg.side === 'rear' ? Math.PI : 0);
-      const arc = sg.arcDeg * Math.PI / 180;
+      // BREATHING shells (shellGuard.breathe): the covered arc swells and
+      // wanes on its period — the trough is the opening you time. The
+      // renderer's glyph draws the SAME live factor: read it, then strike.
+      const arc = (sg.arcDeg * Math.PI / 180) * shellArcFactor(sg, this.time);
       if (Math.abs(angleDiff(center, angleTo(victim.pos, threatPos))) > arc / 2) return false;
     }
     const raw = Object.values(packet.amounts).reduce((s, v) => s + (v ?? 0), 0);
@@ -19369,21 +19426,30 @@ export class World {
             }
           }
         }
-        // Trailblaze / Fire Walker: the dash sows burning ground.
-        const trail = (a as Actor & { dashTrailSpec?: { radius: number; duration: number; tickInterval?: number; damageScale?: number } }).dashTrailSpec;
+        // Trailblaze / Fire Walker: the dash sows burning ground. The
+        // drop-zone composables ride (DropZoneSpec): envelopes breathe
+        // each drop, and durationBySpeed reads the DASH's own pace — a
+        // laden charge-dash (speedAtFull) sows different ground than a
+        // full-tilt one.
+        const trail = (a as Actor & { dashTrailSpec?: DropZoneSpec }).dashTrailSpec;
         if (inst && trail) {
           const carrier = a as Actor & { trailDist?: number };
           carrier.trailDist = (carrier.trailDist ?? 99) + step;
           if (carrier.trailDist >= 42) {
             carrier.trailDist = 0;
+            const dso = resolveSizeOver(trail.sizeOver);
+            const dLinger = trail.duration
+              * speedLingerMul(trail.durationBySpeed, a.dash.speed);
             this.zones.push({
-              pos: vec(a.pos.x, a.pos.y), radius: trail.radius,
+              pos: vec(a.pos.x, a.pos.y), radius: trail.radius * (dso?.from ?? 1),
               caster: a, inst, color: inst.def.color,
               delay: 0, exploded: true,
-              linger: trail.duration,
+              linger: dLinger, linger0: dLinger,
               tickInterval: trail.tickInterval ?? 0.4, tickTimer: 0.2,
               shape: 0, facing: a.dash.dir,
               dmgMult: trail.damageScale ?? 0.5, depth: 1,
+              sizeOver: dso,
+              radius0: dso ? trail.radius : undefined,
             });
           }
         }
@@ -19433,8 +19499,8 @@ export class World {
           if (a.casting?.mode === 'channel' && a.casting.held
             && a.casting.inst.def.id === sid) continue;
           if (bs.fill <= 0) { a.brims.delete(sid); continue; }
-          const spec = bs.inst.def.channel?.brim;
-          if (!spec?.decay) continue;
+          const spec = bs.spec;
+          if (!spec.decay) continue;
           if (spec.bankAt !== undefined && bs.fill >= spec.bankAt) continue;
           bs.fill -= spec.decay
             * a.sheet.get('brimDecay', skillContextTags(bs.inst.def), instanceMods(bs.inst))
@@ -21148,6 +21214,9 @@ export class World {
     const cs = a.casting;
     if (!cs) return;
     if (a.isStunned()) {
+      // A stance-grafted shell (Grafted Carapace) drops with the stance —
+      // the interrupt strips both, or the carapace would outlive its guard.
+      if (a.shellGuard?.fromAura === cs.inst.def.id) a.shellGuard = undefined;
       a.casting = null;
       this.text(a.pos, 'interrupted', '#d05050', 11);
       return;
@@ -21160,11 +21229,15 @@ export class World {
       || cs.mode === 'guard' || cs.mode === 'overcharge')) {
       // A completion-gated gather (release.requireFull) is all-or-nothing:
       // the monster holds TO the cap — the readable doom-cast is the
-      // design, and breaking it is the player's counterplay.
-      const chSpec = cs.mode === 'channel' ? def.channel : undefined;
+      // design, and breaking it is the player's counterplay. Brim
+      // channels (innate or a Gathered Casting conversion) hold to the
+      // BRIM: a monster releases at full power or not at all.
+      const chSpec = cs.mode === 'channel' ? (cs.gather ?? def.channel) : undefined;
       cs.aiHold ??= chSpec?.release?.requireFull
         ? (chSpec.maxHold ?? 4) + 0.5
-        : rand(1.2, 2.6);
+        : chSpec?.brim
+          ? chSpec.brim.fillTime + 0.4
+          : rand(1.2, 2.6);
       // Charge bars release at FULL CHARGE at the latest: elapsed CAPS at
       // total, so an aiHold rolled above it would otherwise hold the cast
       // open forever (wedged monsters, totems, and echo riders mid-charge).
@@ -21280,6 +21353,8 @@ export class World {
           const shieldLeft = cs.shield ?? 0;
           a.casting = null;
           a.useLock = 0.2;
+          // The grafted carapace drops with the stance (fromAura rule).
+          if (a.shellGuard?.fromAura === def.id) a.shellGuard = undefined;
           if (def.cooldown > 0) a.cooldowns.set(def.id, def.cooldown);
           if (bash && !a.dead && shieldLeft >= (cs.maxShield ?? 1) * 0.25) {
             this.guardBash(a, cs.inst, spec, shieldLeft);
@@ -21288,7 +21363,9 @@ export class World {
         return;
       }
       case 'channel': {
-        const ch = def.channel!;
+        // A Gathered Casting conversion runs on its SYNTHESIZED spec —
+        // the def itself has no channel to read.
+        const ch = cs.gather ?? def.channel!;
         cs.channelTime = (cs.channelTime ?? 0) + dt;
         // CAPPED CHANNEL: the gather has a ceiling — the hold force-
         // releases at maxHold (× effectDuration), payload and all. The
@@ -21304,6 +21381,7 @@ export class World {
             cs.finishRolled = true;
             this.rollTriggers(a, 'channelFinish',
               { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
+            this.tapCharges(a, 'channelFinish');
           }
         }
         // THE BRIM (ChannelSpec.brim): held seconds pour into the skill's
@@ -21314,8 +21392,9 @@ export class World {
         if (ch.brim) {
           const bm = a.brims ?? (a.brims = new Map());
           let bs = bm.get(def.id);
-          if (!bs) { bs = { fill: 0, inst: cs.inst }; bm.set(def.id, bs); }
+          if (!bs) { bs = { fill: 0, inst: cs.inst, spec: ch.brim }; bm.set(def.id, bs); }
           bs.inst = cs.inst; // the LIVE loadout (sockets may have changed)
+          bs.spec = ch.brim; // …and the LIVE spec (a conversion has no def.channel)
           const rate = a.speedFactor(cs.inst)
             * a.sheet.get('brimFill', skillContextTags(def), instanceMods(cs.inst))
             / Math.max(0.2, ch.brim.fillTime);
@@ -21327,6 +21406,7 @@ export class World {
               cs.finishRolled = true;
               this.rollTriggers(a, 'channelFinish',
                 { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
+              this.tapCharges(a, 'channelFinish');
             }
             if (ch.brim.autoRelease) { cs.held = false; cs.hitCap = true; }
           }
@@ -21510,6 +21590,13 @@ export class World {
           // the channel declares one (the Black Hole's escalating price);
           // running dry ends the channel.
           const cost = a.skillCost(cs.inst);
+          // GATHERED CASTING pays in micro-beats: interval/fillTime of the
+          // full price per pulse — a complete bank totals ≈ one honest cast.
+          if (cs.gather?.brim) {
+            const f = cs.gather.interval / Math.max(0.2, cs.gather.brim.fillTime);
+            cost.mana *= f;
+            cost.life *= f;
+          }
           if (ch.costRamp) {
             const costMult = 1 + rampT(ch.costRamp);
             cost.mana *= costMult;

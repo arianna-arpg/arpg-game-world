@@ -1675,6 +1675,43 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', x: 0.12, y: -0.15, scale: 0.55, params: { n: 2 } }],
   },
+  /** The ruin chanter: a bowed cowl over ember eyes, a crown of cinders
+   *  guttering above the gather. */
+  ruin_chanter: {
+    parts: [
+      { kind: 'torso', scale: 0.9, role: 'base' },
+      { kind: 'hump', scale: 0.55 },
+      { kind: 'eyes', color: '#ffb45e', params: { spread: 0.4, dist: 0.42, size: 0.1 } },
+      { kind: 'crest', scale: 0.8 },
+    ],
+    live: [{ kind: 'wisps', y: -0.3, scale: 0.6, params: { n: 2 } }],
+  },
+  /** The tide whelk: a soft foot under a tide-worn dome, horns out. */
+  tide_whelk: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.12, seed: 331 } },
+      { kind: 'carapace', scale: 0.95 },
+      { kind: 'antennae', scale: 0.7 },
+      { kind: 'eyes', color: '#c8e8e0', params: { spread: 0.4, dist: 0.6, size: 0.09 } },
+    ],
+  },
+  /** The magma swimmer: a basalt-skinned eel-head, ember-lit from inside. */
+  magma_swimmer: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.18, seed: 411 } },
+      { kind: 'spots', params: { n: 4 } },
+      { kind: 'eyes', color: '#ffd27a', params: { spread: 0.5, dist: 0.5, size: 0.11 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.5, params: { n: 2 } }],
+  },
+  /** The snow swimmer: a pale sleek head barely apart from the drift. */
+  snow_swimmer: {
+    parts: [
+      { kind: 'blob', scale: 0.88, params: { irr: 0.14, seed: 421 } },
+      { kind: 'spots', params: { n: 3 } },
+      { kind: 'eyes', color: '#9ad4ff', params: { spread: 0.48, dist: 0.52, size: 0.1 } },
+    ],
+  },
   /** A glow moth — soft wings around a lantern body. */
   glow_moth: {
     parts: [

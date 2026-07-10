@@ -649,10 +649,13 @@ export interface ChargeGainSpec {
    *                `orbKind` — the flask FOUNT tap)
    *   'channelSecond' once per `everySeconds` WHILE the owner holds any
    *                channel or guard ("gain Frenzy every 3s of channeling")
+   *   'channelFinish' a channel of the owner's reaches TRUE COMPLETION —
+   *                the capped hold hits its ceiling or the brim fills
+   *                (once per unbroken channel; interrupts deny it)
    *   'use'        every completed REAL use of THIS skill (echo/repeat
    *                executions never tap — the meta-banking discipline) */
   on: 'hit' | 'kill' | 'takeHit' | 'block' | 'enemyDeath' | 'allyDeath' | 'second'
-    | 'move' | 'orbPickup' | 'channelSecond' | 'use';
+    | 'move' | 'orbPickup' | 'channelSecond' | 'channelFinish' | 'use';
   /** enemyDeath: harvest radius around the owner (default 360). */
   radius?: number;
   /** move: units walked per bank (default 60). */
@@ -1366,7 +1369,10 @@ export interface DashDelivery {
   /** Leave a mirage of the caster at the start point that taunts enemies. */
   decoyDuration?: number;
   /** Trailblaze: drop a lingering damage zone every ~40 units of travel. */
-  trailZone?: { radius: number; duration: number; tickInterval?: number; damageScale?: number };
+  /** The dash sows lingering ground along the corridor (Fire Walker) —
+   *  a full DropZoneSpec: envelopes breathe each drop, durationBySpeed
+   *  reads the DASH's pace. */
+  trailZone?: DropZoneSpec;
 }
 
 /** Teleportation: instant, delayed (Warp), or behind a targeted enemy. */
@@ -2103,6 +2109,34 @@ export interface ChannelSpec {
    *  under minHold leave nothing behind. Channel long, then move — it
    *  keeps raining. */
   persist?: { perHeldSec: number; maxDuration?: number; minHold?: number; fade?: number };
+}
+
+/**
+ * GATHERED CASTING (SupportDef.gather): the socketed gem CONVERTS a
+ * bar-cast into a brim GATHER — the long cast stops being a promise made
+ * standing still and becomes a held channel banking its own cast time in
+ * a PERSISTENT bar (the skill as its own powerbank), released on the
+ * caster's schedule at fill-scaled power. Cast speed still matters — it
+ * fills the bank — and the gem's `premium` stretches the full-bank time
+ * past the honest bar (the price of firing on demand). Costs are paid in
+ * micro-beats while holding (interval/fillTime of the full price per
+ * pulse — a complete bank totals ≈ one honest cast). Channels, guards,
+ * instants and sub-0.3s flicks refuse the conversion. Monsters convert
+ * through kit grants like anything else: the AI holds a gather to its
+ * brim before letting go.
+ */
+export interface GatherConvertSpec {
+  /** Full-bank time = the skill's useTime × this (default 1.5). */
+  premium?: number;
+  /** Bar bleed per second while resting (omit = it HOLDS — the bank). */
+  decay?: number;
+  /** Releases under this fill fizzle without spending (default 0.15). */
+  minRelease?: number;
+  /** Payload power at empty / full (default 0.25 / 1). */
+  minScale?: number;
+  maxScale?: number;
+  /** CURVES shape walking fill → power (default 'linear'). */
+  curve?: CurveKind;
 }
 
 /** The persistent channel gauge (ChannelSpec.brim) — see the field doc. */
@@ -3172,6 +3206,23 @@ export interface SupportDef {
    *  resolution arrives late — the arrears conversion. A socketed graft
    *  WINS over the skill's own. See FuseSpec. */
   fuse?: FuseSpec;
+  /** GATHERED CASTING (Gathered Casting): converts the hosting bar-cast
+   *  into a brim gather — the skill banks its own cast time and fires on
+   *  demand at fill-scaled power. See GatherConvertSpec. */
+  gather?: GatherConvertSpec;
+  /** A SHELL grafted onto a GUARD skill (Grafted Carapace): while the
+   *  stance holds, the guardian ALSO wears a directional shell — the
+   *  raised shield's blind side, armored. Pool scales with guardStrength
+   *  (the guard-hall economy); installed at the raise, stripped when the
+   *  stance drops (release, parry-end, or a stun). */
+  shellGraft?: {
+    side?: 'rear' | 'front' | 'all';
+    arcDeg?: number;
+    max: number;
+    regenDelay?: number;
+    regenRate?: number;
+    color?: string;
+  };
   /** A FISSURE TRAIL this support grafts onto the skill's projectiles —
    *  every shot becomes the tear-head of a travelling crack (Sundering
    *  Flight). See FissureTrailSpec. */
@@ -3408,7 +3459,7 @@ const MINION_RIDABLE_FIELD_LIST = [
   'releaseOrder', 'healOverTime', 'chargeGain', 'brood', 'minionAura',
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
   'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'zoneSizeOver',
-  'cadence', 'pendulum', 'echo', 'summon', 'fuse',
+  'cadence', 'pendulum', 'echo', 'summon', 'fuse', 'gather', 'shellGraft',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every
