@@ -377,6 +377,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Befuddled', color: '#c878b8', duration: 7,
     interruptChance: 0.35,
   },
+  // The behavior fabric turned into a HEX: aiAimLead/aiAimJitter are stats
+  // (the AI's cast aim reads the sheet), so a curse can unmake a mind — the
+  // sylvan sniper's intercept solving zeroes out and every cast's bearing
+  // wobbles wide. Purely anti-monster: player aim is a hand, not a stat.
+  bewilder: {
+    label: 'Bewildered', color: '#c8a8e8', duration: 7,
+    mods: [
+      mod('aiAimJitter', 'flat', 0.38),
+      mod('aiAimLead', 'more', -1),
+    ],
+  },
 
   // --- Blessings (positive statuses, applied to allies) ----------------------
   hedonism: {

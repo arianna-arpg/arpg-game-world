@@ -1179,6 +1179,18 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 400, weight: 2, keepDistance: 280 },
   },
 
+  bewilder: {
+    id: 'bewilder', name: 'Bewilder',
+    description: 'CURSE: enemies in the area lose their aim for 7 seconds — casts scatter wide of the mark, and minds that lead your run forget where you were going.',
+    tags: ['spell', 'curse', 'aoe', 'chaos', 'duration'], color: '#c8a8e8',
+    manaCost: 10, cooldown: 4, useTime: 0.6,
+    baseDamage: { chaos: [9, 14] },
+    delivery: { type: 'ground', radius: 115, castRange: 440 },
+    effects: [{ type: 'status', status: 'bewilder', chance: 1 }],
+    requirements: { willpower: 16, intelligence: 12 },
+    ai: { range: 400, weight: 2, keepDistance: 280 },
+  },
+
   // --- Blessings: the inverse — buff fields for your side ------------------
 
   belligerence: {
@@ -6341,7 +6353,7 @@ export const SKILLS: Record<string, SkillDef> = {
     targeting: { target: 'enemy', castRange: 420 },
     baseDamage: { chaos: [16, 24] },
     shatterStatus: {
-      statuses: ['despair', 'agony', 'indecision', 'befuddlement', 'torment', 'doombrand', 'doom'],
+      statuses: ['despair', 'agony', 'indecision', 'befuddlement', 'bewilder', 'torment', 'doombrand', 'doom'],
       mult: 1.8,
     },
     delivery: { type: 'target', splash: 130 },

@@ -488,6 +488,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'basic',
       perception: { arcDeg: 100, rearMul: 0.2, attentionSpan: [3, 6], alertMul: 0.15 },
+      // Slower to remember violence than even the walking dead.
+      behavior: { reaction: [0.9, 1.6] },
     },
   },
 
@@ -1921,6 +1923,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       { atLevel: 50, skill: 'war_cry' },
     ],
     xp: 24,
+    // Dim AND heavy: a gawping beat before the first swing, and the cleave
+    // waits for the shoulders — goblin muscle, goblin wits.
+    brain: { type: 'basic', behavior: { reaction: [0.4, 0.8], castArc: 0.6 } },
     faction: 'goblin',
     adorn: 'ears',
   },
@@ -1965,7 +1970,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
     skills: ['ground_slam', 'heavy_strike'],
     xp: 52,
-    brain: { type: 'juggernaut', enrage: 0.4 },
+    // A troll turns like a felled log rights itself: the slam waits for the
+    // bulk to bear, and the first blow of any fight comes a thought late.
+    brain: { type: 'juggernaut', enrage: 0.4, behavior: { castArc: 0.65, reaction: [0.4, 0.9] } },
     faction: 'goblin',
     adorn: 'spikes',
   },
@@ -2067,8 +2074,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['rallying_howl', 'war_cry', 'snarled_orders', 'claw'],
     xp: 34,
     // The HOWL is literal: sighting prey puts every gnoll within earshot on
-    // alert toward it (PerceptionSpec.alertShout — the sentry callout).
-    brain: { type: 'commander', perception: { alertShout: 480 } },
+    // alert toward it (PerceptionSpec.alertShout — the sentry callout). The
+    // voice of the pack keeps itself alive: it reads wind-ups and steps out.
+    brain: {
+      type: 'commander', perception: { alertShout: 480 },
+      behavior: { dodge: { chance: 0.6, reaction: [0.2, 0.45] } },
+    },
     faction: 'gnoll',
     adorn: 'ears',
   },
@@ -2126,11 +2137,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'pack',
       target: { prey: ['critter'] },
-      squad: { muster: { count: 2, radius: 340 }, tokens: 2, surround: true, onLeaderDeath: 'scatter' },
+      // The wait RESOLVES (muster.patience): five seconds of circling a prey
+      // that won't be caught up to, and hunger wins — a lone or scattered
+      // wolf no longer strafes a slow player to the horizon forever.
+      squad: { muster: { count: 2, radius: 340, patience: 5 }, tokens: 2, surround: true, onLeaderDeath: 'scatter' },
       perception: { memory: 3 },
       // A wolf STALKS: lopes in bursts with held, watching pauses — the
       // hesitation of a real animal, and your window to line up a shot.
       tempo: { moveFor: [1.2, 2.2], pauseFor: [0.25, 0.6] },
+      // AND A WOLF POUNCES (targetCasting): the moment your hands commit to
+      // a bar, the nearest wolf breaks its stalk and dives the opening.
+      rules: [{
+        when: { targetCasting: 0.35, distUnder: 380, chance: 0.55 },
+        hold: [0.7, 1.1], cooldown: 3,
+        use: { move: { style: 'direct', pace: 1.3 } },
+      }],
     },
   },
 
@@ -2206,6 +2227,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
       target: { prey: ['critter'] },
       perception: { memory: 3.5 },
       tempo: { moveFor: [1.4, 2.4], pauseFor: [0.3, 0.7] }, // a cat's patience
+      // The cat PUNISHES commitment: eyes leaving it is one opening — hands
+      // busy with a cast bar is the other (targetCasting joins unseenArc).
+      rules: [{
+        when: { targetCasting: 0.3, distUnder: 420, chance: 0.8 },
+        hold: [0.7, 1.1], cooldown: 2,
+        use: { move: { style: 'direct', pace: 1.35 } },
+      }],
     },
   },
 
@@ -2225,6 +2253,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'skirmish', withdraw: 1.2,
       target: { prey: ['critter'] },
+      // Sky-honed reflexes (dodge): a vulture reads the wind-up and is
+      // simply elsewhere when the blast arrives.
+      behavior: { dodge: { chance: 0.8, reaction: [0.1, 0.3] } },
       rules: [
         { // bloodied: flee on the wing — and CIRCLE out of reach while the
           // fright holds, before hunger drags it back in
@@ -2295,6 +2326,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'flanker',
       skillUse: { mode: 'priority', order: ['despair', 'heavy_strike', 'cleave'] },
+      // Elite intellect (the sylvan tier of the undead): it reads wind-ups
+      // and steps off the disc, and its curse arcs LEAD a running mark.
+      behavior: { aimLead: 0.65, aimLeadChance: 0.8, dodge: { chance: 0.5, reaction: [0.2, 0.4] } },
       rules: [{ when: { targetLifeBelow: 0.35 }, use: { skillUse: { cadence: [0.08, 0.18] } } }],
     },
   },
@@ -2315,6 +2349,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'artillery',
       move: { style: 'holdRange', hold: 460 },
       skillUse: { cadence: [0.25, 0.5] },
+      // Half its volleys LEAD your run (the motes' weak guide corrects the
+      // rest) — the loose-track feel gains a planning mind behind it.
+      behavior: { aimLead: 0.45, aimLeadChance: 0.5 },
       // The siege posture: a mage in a garrison squad crews a tower BEFORE
       // the fight finds it (SquadSpec.idle 'siege').
       squad: { idle: { style: 'siege' } },
@@ -2335,7 +2372,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
     adorn: 'horns',
     detection: 1.0,
     mountSlot: { kinds: ['demonkin'] },
-    brain: { type: 'juggernaut', enrage: 0.35, squad: { idle: { style: 'siege' } } },
+    // A tower swings where it points (castArc): romp past its shoulder while
+    // the riders on its back keep casting — two problems, one body.
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      behavior: { castArc: 0.6 },
+      squad: { idle: { style: 'siege' } },
+    },
   },
 
   // The fragile teeth (D2 Arreat demonkin): blinks about, and when the
@@ -2353,6 +2396,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.2,
     brain: {
       type: 'skirmish', withdraw: 1.0,
+      // Darter reflexes (dodge): it reads the wind-up and skips the disc —
+      // between this and the blink, catching one is the whole fight.
+      behavior: { dodge: { chance: 0.75, reaction: [0.12, 0.3] } },
       squad: { idle: { style: 'siege' } },
       rules: [
         { // the blink: never where you swung
@@ -2457,6 +2503,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'skirmish', withdraw: 1.3,
       target: { prey: ['critter'] },
       impulses: [{ type: 'swarm', every: [6, 9], duration: [1.2, 1.8] }],
+      // The huntress PUNISHES a planted foot: begin a bar with a maiden in
+      // spear range and the line rushes THAT instant, not on its own clock.
+      rules: [{
+        when: { targetCasting: 0.3, distUnder: 340, chance: 0.6 },
+        hold: [0.8, 1.2], cooldown: 2.5,
+        use: { move: { style: 'direct', pace: 1.3 } },
+      }],
     },
   },
 
@@ -2476,6 +2529,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'artillery',
       // A living marksman's hand: 55% Perfect! snipes when provoked.
       skillUse: { finesse: { chance: 0.55 } },
+      // And a living marksman's EYE and FEET: he leads a running mark like
+      // the player leads one, and steps out of a wind-up he can see coming —
+      // the closest thing to fighting your own kind on the road.
+      behavior: { aimLead: 0.7, aimLeadChance: 0.7, dodge: { chance: 0.7, reaction: [0.18, 0.4] } },
       morale: { breakOutnumbered: { deficit: 3, radius: 300 }, rallyAfter: 4 },
     },
   },
@@ -2575,8 +2632,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 16,
     // FEY CUNNING (the goblin shaman's foil — same job, nothing alike): the
     // sprite reads your run and looses venom where you're GOING, near every
-    // time. Break your line or wear the bolt; the grove punishes habits.
-    brain: { type: 'strafer', behavior: { aimLead: 0.8, aimLeadChance: 0.75 } },
+    // time — and reads YOUR wind-ups right back, skipping out of the disc.
+    // Break your line or wear the bolt; the grove punishes habits.
+    brain: {
+      type: 'strafer',
+      behavior: { aimLead: 0.8, aimLeadChance: 0.75, dodge: { chance: 0.7, reaction: [0.15, 0.35] } },
+    },
     faction: 'sylvan',
   },
 
@@ -2586,7 +2647,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 70, moveSpeed: 120, mana: 160, manaRegen: 11 },
     skills: ['rallying_howl', 'creeping_ice', 'despair'],
     xp: 30,
-    brain: { type: 'commander' },
+    // The grove's mind: its ice leads your line of retreat, and it drifts
+    // out of wind-ups mid-verse — sylvan cunning at commander tier.
+    brain: {
+      type: 'commander',
+      behavior: { aimLead: 0.7, aimLeadChance: 0.7, dodge: { chance: 0.55, reaction: [0.2, 0.4] } },
+    },
     faction: 'sylvan',
   },
 
@@ -2600,7 +2666,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.5)],
     skills: ['acid_spray', 'ground_slam'],
     xp: 56,
-    brain: { type: 'juggernaut', enrage: 0.35 },
+    // Rooted bulk swings where it faces (castArc) — circle the thorns.
+    brain: { type: 'juggernaut', enrage: 0.35, behavior: { castArc: 0.6 } },
     faction: 'sylvan',
     adorn: 'spikes',
   },
@@ -3771,7 +3838,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('fireRes', 'flat', -0.25), mod('coldRes', 'flat', 0.3)],
     skills: ['heavy_strike', 'root_grasp', 'splinter_volley'], xp: 40, faction: 'sylvan',
     scaling: { armor: { flatPerLevel: 2 } },
-    detection: 1.0, brain: { type: 'protector' },
+    detection: 1.0,
+    // Wood turns like wood: the warden's strikes wait for the trunk to bear.
+    brain: { type: 'protector', behavior: { castArc: 0.55 } },
   },
   // The anchored knot: a grasping trap the grove grows across its floors.
   root_snarl: {
@@ -4237,7 +4306,14 @@ export const MONSTERS: Record<string, MonsterDef> = {
     shellGuard: { side: 'front', max: 70, regenDelay: 4, regenRate: 16, color: '#b09060' },
     scaling: { armor: { flatPerLevel: 1.2 } },
     detection: 1.1,
-    brain: { type: 'pack', squad: { idle: { style: 'drill' }, formation: 'column', tokens: 3 } },
+    // The colony COORDINATES like nothing else alive: the preset's ring
+    // discipline plus tight elbow room — soldiers arrive as a closing
+    // pincer, never a shoving file. Insect drill, insect geometry.
+    brain: {
+      type: 'pack',
+      behavior: { encircle: { front: 3 }, spacing: 30 },
+      squad: { idle: { style: 'drill' }, formation: 'column', tokens: 3 },
+    },
   },
   // The mantis: patience, then two scythes through the gap — it works the
   // player's own finesse windows when it casts.

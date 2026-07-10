@@ -4252,6 +4252,41 @@ export class World {
     return ang;
   }
 
+  /** READING THE CAST (BehaviorSpec.dodge): the most imminent hostile
+   *  telegraph whose blast will cover `actor` — an un-exploded zone's disc
+   *  (telegraph countdown running), or an enemy's LIVE CAST BAR whose
+   *  ground-stamped aim (or nova reach) covers this body. Returns the
+   *  threat's stable identity (`ref` — the zone / casting object) so the
+   *  reader rolls its read ONCE per telegraph, the PADDED disc to clear,
+   *  and the seconds left before it lands. Null = nothing worth diving from. */
+  imminentThreatTo(actor: Actor, pad: number):
+    { ref: object; pos: Vec2; radius: number; eta: number } | null {
+    let best: { ref: object; pos: Vec2; radius: number; eta: number } | null = null;
+    for (const z of this.zones) {
+      if (z.exploded || z.delay <= 0) continue;
+      if (z.delay > BEHAVIOR_CFG.dodgeHorizon) continue;
+      if (z.caster === actor) continue;
+      if (!z.hitAll && !this.hostileTo(z.caster, actor)) continue;
+      const r = z.radius + pad;
+      if (dist(actor.pos, z.pos) > r) continue;
+      if (!best || z.delay < best.eta) best = { ref: z, pos: z.pos, radius: r, eta: z.delay };
+    }
+    for (const e of this.enemiesOf(actor)) {
+      const cs = e.casting;
+      if (!cs || cs.mode === 'channel' || cs.mode === 'guard') continue;
+      const eta = cs.total - cs.elapsed;
+      if (eta <= 0.08 || eta > BEHAVIOR_CFG.dodgeHorizon) continue;
+      const del = cs.inst.def.delivery as { type: string; radius?: number };
+      if (del.type !== 'ground' && del.type !== 'nova') continue;
+      if (!del.radius) continue;
+      const at = del.type === 'nova' ? e.pos : cs.aim;
+      const r = del.radius + pad;
+      if (dist(actor.pos, at) > r) continue;
+      if (!best || eta < best.eta) best = { ref: cs, pos: vec(at.x, at.y), radius: r, eta };
+    }
+    return best;
+  }
+
   /** MOUNTS: carry riders on their beasts — the rider's position pins to the
    *  saddle (dash/push stilled) and both links self-heal: either party dying
    *  (or vanishing in a zone swap) frees the other. Runs late in update so

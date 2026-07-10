@@ -412,6 +412,15 @@ export class Actor {
   /** ELBOW ROOM (BehaviorSpec.spacing): this tick's kin-repulsion radius,
    *  stamped by updateAI while closing on a target (undefined = none). */
   aiSpacing?: number;
+  /** READING THE CAST (BehaviorSpec.dodge): the telegraph currently being
+   *  tracked (zone / casting-state identity — the read rolls ONCE per
+   *  telegraph), whether the read succeeded, when the feet may move, and
+   *  the dive in progress (exit point + expiry). */
+  aiDodgeRef?: object;
+  aiDodgeRead = false;
+  aiDodgeAt = 0;
+  aiDodgeExit?: Vec2;
+  aiDodgeUntil = 0;
   /** WARD (the add-gate): untargetable until no live actor carries this tag;
    *  the note is announced when the ward shatters. */
   aiWardTag?: string;

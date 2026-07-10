@@ -205,6 +205,23 @@ export interface BehaviorSpec {
   /** Kin elbow-room (px) while closing on a target: a soft repulsion from
    *  the nearest packmate, so approaches fan instead of conga-lining. */
   spacing?: number;
+  /** READING THE CAST: a player-brained sidestep out of incoming telegraphs
+   *  — un-exploded hostile blast zones covering this body, and enemy CAST
+   *  BARS whose stamped ground-aim (or nova reach) covers it. Rolled ONCE
+   *  per telegraph (`chance`), the feet move after `reaction` (rolled) —
+   *  a dim brute reads the flash too late; a fey reads the wind-up. The
+   *  dive is a commitment: a dodging body neither casts nor schemes, and a
+   *  body mid-cast of its own CANNOT dive (its commitment is the player's
+   *  punish window — castArc lumberers eat what they started). */
+  dodge?: {
+    /** Chance to read a given telegraph at all (rolled once; default 1). */
+    chance?: number;
+    /** Seconds between the telegraph appearing and the feet moving
+     *  (rolled; default [0.15, 0.35]). */
+    reaction?: [number, number];
+    /** Clearance beyond the blast edge (default BEHAVIOR_CFG.dodgePad). */
+    pad?: number;
+  };
 }
 
 /** The behavior fabric's modular thresholds (avoid-hardcoding: tune here). */
@@ -233,6 +250,16 @@ export const BEHAVIOR_CFG = {
   detourRadiusMul: 1.35,
   /** Spacing: repulsion gain at zero distance (falls off linearly). */
   spacingGain: 0.9,
+  /** Dodge: default clearance beyond a blast's edge (px). */
+  dodgePad: 26,
+  /** Dodge: default read-to-feet delay window (seconds, rolled). */
+  dodgeReaction: [0.15, 0.35] as [number, number],
+  /** Dodge: ignore telegraphs further out than this from landing (secs) —
+   *  nothing worth diving from announces itself that far ahead. */
+  dodgeHorizon: 2.2,
+  /** Dodge: the dive itself may not outlive this (secs) — a body that
+   *  hasn't cleared the disc by then resumes its own mind. */
+  dodgeWindowMax: 1.1,
 };
 
 /** The behavior knobs that read THROUGH the actor's stat sheet at cast time
@@ -365,8 +392,12 @@ export interface SkillPolicy {
  *  kin assign squadId/squadLeader); everything here reads it. */
 export interface SquadSpec {
   /** Hold at the prowl ring until `count` members (self included) are within
-   *  `radius` of the prey — blood up (life < bloodiedAt) commits early. */
-  muster?: { count: number; radius: number; bloodiedAt?: number };
+   *  `radius` of the prey — blood up (life < bloodiedAt) commits early.
+   *  A muster is a TACTIC, not a lock: the requirement caps at the kin
+   *  actually alive to answer (a lone survivor hunts alone), and `patience`
+   *  seconds after first sighting the hunger wins and it commits anyway —
+   *  no more wolves strafing a slow player to the horizon forever. */
+  muster?: { count: number; radius: number; bloodiedAt?: number; patience?: number };
   /** At most this many squadmates ENGAGE one target at once; the rest orbit
    *  the ring waiting for a slot — the classic attack-token dance. */
   tokens?: number;
@@ -429,6 +460,11 @@ export interface AICondition {
   hasCharge?: { charge: string; min: number };
   /** Line of sight to the current target. */
   los?: boolean;
+  /** READING THE CAST, as a trigger: true = the target is mid-cast (a bar
+   *  running or a channel held); a number = ...with at least that many
+   *  seconds of bar left. The punish vocabulary — "when he commits, rush"
+   *  (rules), "when he commits, shield" (reserves). False = not casting. */
+  targetCasting?: boolean | number;
   /** At least this many seconds since the CURRENT engagement began. */
   sinceEngaged?: number;
   /** Gate each FIRING by this chance (rolled when everything else passes). */
@@ -760,7 +796,9 @@ export const ARCHETYPES: Record<BrainType, BrainTuning> = {
     // prowl until the band has numbers — v1's packBrain → swarmBrain handoff.
     move: { style: 'direct', closeFrac: 0.8 },
     skillUse: { cadence: [0.08, 0.2] },
-    squad: { muster: { count: 3, radius: 380, bloodiedAt: 0.9 } },
+    // The wait RESOLVES: capped by living kin, and six seconds of circling
+    // is all the patience a predator has — then hunger wins.
+    squad: { muster: { count: 3, radius: 380, bloodiedAt: 0.9, patience: 6 } },
     // RING DISCIPLINE: two press the face; the rest wrap the flanks and the
     // back instead of shoving their own front rank out of cast range.
     behavior: { encircle: { front: 2 } },
@@ -902,7 +940,8 @@ export function evalCondition(
   if (c.lifeAbove !== undefined && !(lifeFrac >= c.lifeAbove)) return false;
   if (c.targetLifeBelow !== undefined || c.targetLifeAbove !== undefined
     || c.distOver !== undefined || c.distUnder !== undefined
-    || c.targetHasStatus !== undefined || c.los !== undefined) {
+    || c.targetHasStatus !== undefined || c.los !== undefined
+    || c.targetCasting !== undefined) {
     if (!target) return false;
     const tFrac = target.life / Math.max(1, target.maxLife());
     if (c.targetLifeBelow !== undefined && !(tFrac <= c.targetLifeBelow)) return false;
@@ -914,6 +953,16 @@ export function evalCondition(
       && !target.statuses.some(s => s.id === c.targetHasStatus)) return false;
     if (c.los !== undefined
       && ctx.lineOfSight(actor.pos, target.pos) !== c.los) return false;
+    if (c.targetCasting !== undefined) {
+      // A held channel is an open-ended commitment; a bar has a countdown.
+      const cs = target.casting;
+      const rem = !cs ? 0
+        : cs.mode === 'channel' ? (cs.held ? 999 : 0)
+        : Math.max(0, cs.total - cs.elapsed);
+      if (c.targetCasting === false && rem > 0) return false;
+      if (c.targetCasting === true && rem <= 0) return false;
+      if (typeof c.targetCasting === 'number' && rem < c.targetCasting) return false;
+    }
   }
   if (c.alliesWithin) {
     let n = 0;

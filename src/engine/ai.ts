@@ -326,6 +326,12 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // MORALE: a broken actor routs — no casts, no schemes, just distance.
   if (updateMorale(actor, world, tuning, dt)) return;
 
+  // READING THE CAST (BehaviorSpec.dodge): a player-brained sidestep out of
+  // incoming telegraphs — a reflex that outranks every scheme below, but
+  // never interrupts this body's OWN committed cast (that commitment is the
+  // player's punish window, and fair is fair).
+  if (updateDodge(actor, world, tuning, dt)) return;
+
   // MENDER PRE-PASS + RESERVES: an ally-targeted kit piece (clerics, spirit
   // menders) outranks the fight, and policy-reserved skills fire the moment
   // their condition holds. Actors without either fall through instantly.
@@ -510,20 +516,29 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     }
     // MUSTER: hold the prowl ring until the band has numbers (blood up
     // commits early). Squadless muster counts nearby KIN, like the old
-    // pack brain, so summoned hunters still coordinate.
+    // pack brain, so summoned hunters still coordinate. A muster is a
+    // TACTIC, not a lock: the requirement caps at the kin actually ALIVE
+    // to answer (the last wolf hunts alone), and past `patience` seconds
+    // of unfulfilled waiting the hunger wins — no more prowling a slow
+    // player to the horizon forever.
     if (squad.muster) {
       const m = squad.muster;
       let engaged = 0;
+      let kin = 0;
       for (const a of world.actors) {
         if (a.dead || a.team !== actor.team) continue;
         if (actor.squadId !== undefined
           ? a.squadId !== actor.squadId
           : (a.faction !== actor.faction || a === actor)) continue;
+        kin++;
         if (dist(a.pos, target.pos) < m.radius) engaged++;
       }
-      if (actor.squadId === undefined) engaged++; // self, kin-counted implicitly above otherwise
+      if (actor.squadId === undefined) { kin++; engaged++; } // self, kin-counted implicitly above otherwise
       const bloodied = actor.life < actor.maxLife() * (m.bloodiedAt ?? 0.9);
-      if (engaged < m.count && !bloodied) {
+      const need = Math.min(m.count, Math.max(1, kin));
+      const patienceSpent = m.patience !== undefined && actor.aiEngagedAt >= 0
+        && world.time - actor.aiEngagedAt >= m.patience;
+      if (engaged < need && !bloodied && !patienceSpent) {
         // not yet: prowl a wide circle around the prey — and no casting;
         // a waiting wolf doesn't spend its teeth.
         runKernel('prowl', makeCtx(actor, world, target, best, dt, tuning, norm, true, tempoPaused));
@@ -817,6 +832,61 @@ function updateMorale(actor: Actor, world: World, tuning: BrainTuning, dt: numbe
   return rout();
 }
 
+// === READING THE CAST ===========================================================
+
+/** The telegraph-evade reflex (BehaviorSpec.dodge). Watches the world's
+ *  imminent threats to this body (un-exploded blast discs; enemy cast bars
+ *  stamped onto the ground it stands on), rolls the READ once per telegraph,
+ *  waits out the reaction, then DIVES radially clear. The dive owns the tick
+ *  (no casting, no scheming — dodging is a commitment); a body mid-cast of
+ *  its own never dives. Returns true while it consumed the tick. */
+function updateDodge(actor: Actor, world: World, tuning: BrainTuning, dt: number): boolean {
+  // A dive in progress runs to its exit (or its window's end).
+  if (actor.aiDodgeExit) {
+    if (world.time >= actor.aiDodgeUntil || dist(actor.pos, actor.aiDodgeExit) < 14) {
+      actor.aiDodgeExit = undefined;
+    } else {
+      actor.facing = angleTo(actor.pos, actor.aiDodgeExit);
+      moveToward(actor, world, actor.aiDodgeExit, dt);
+      return true;
+    }
+  }
+  const spec = tuning.behavior?.dodge;
+  if (!spec) return false;
+  const threat = world.imminentThreatTo(actor, spec.pad ?? BEHAVIOR_CFG.dodgePad);
+  if (!threat) {
+    actor.aiDodgeRef = undefined;
+    return false;
+  }
+  if (threat.ref !== actor.aiDodgeRef) {
+    // A FRESH telegraph: one roll decides whether this mind reads it at
+    // all, and the reaction window decides how late the feet answer. The
+    // READ happens even mid-swing — busy hands don't blind the eyes.
+    actor.aiDodgeRef = threat.ref;
+    actor.aiDodgeRead = Math.random() < (spec.chance ?? 1);
+    const rw = spec.reaction ?? BEHAVIOR_CFG.dodgeReaction;
+    actor.aiDodgeAt = world.time + rand(rw[0], rw[1]);
+  }
+  if (!actor.aiDodgeRead || world.time < actor.aiDodgeAt) return false;
+  // The BODY may still be locked: mid-cast of its own (a commitment the
+  // player can punish — it finishes the swing or eats the blast), mid-dash
+  // (the world carries it), or anchored on a garrison perch. The mind has
+  // read the threat; the feet answer the moment they're free.
+  if (actor.casting || actor.dash || actor.garrison) return false;
+  // Dive radially — the shortest line out of the disc from where it stands.
+  const out = dist(threat.pos, actor.pos) < 1
+    ? rand(0, Math.PI * 2)
+    : angleTo(threat.pos, actor.pos);
+  const clear = threat.radius + actor.radius + 8;
+  actor.aiDodgeExit = vec(
+    threat.pos.x + Math.cos(out) * clear,
+    threat.pos.y + Math.sin(out) * clear);
+  actor.aiDodgeUntil = world.time + Math.min(BEHAVIOR_CFG.dodgeWindowMax, threat.eta + 0.25);
+  actor.facing = angleTo(actor.pos, actor.aiDodgeExit);
+  moveToward(actor, world, actor.aiDodgeExit, dt);
+  return true;
+}
+
 // === PERCEPTION & THE THREAT CHART =============================================
 
 /** Score a candidate — bigger is better; all scores are positive so kind
@@ -1045,10 +1115,12 @@ function useOn(
 function aimPointFor(
   actor: Actor, inst: SkillInstance, target: Actor, beh?: BehaviorSpec,
 ): Vec2 {
-  if (!beh) return target.pos;
+  // No early-out on a missing spec: the sheet is ALWAYS consulted (innate
+  // base 0), so a Bewilder curse scatters even a mind that was never
+  // authored to have one. Two stat reads per cast — event-rate, not tick-rate.
   let ax = target.pos.x, ay = target.pos.y;
-  const lead = actor.sheet.get(BEHAVIOR_STATS.aimLead, undefined, undefined, beh.aimLead ?? 0);
-  if (lead !== 0 && target !== actor && Math.random() < (beh.aimLeadChance ?? 1)) {
+  const lead = actor.sheet.get(BEHAVIOR_STATS.aimLead, undefined, undefined, beh?.aimLead ?? 0);
+  if (lead !== 0 && target !== actor && Math.random() < (beh?.aimLeadChance ?? 1)) {
     const del = inst.def.delivery;
     const flight = del.type === 'projectile'
       ? dist(actor.pos, target.pos) / Math.max(60, del.speed) : 0;
@@ -1062,8 +1134,8 @@ function aimPointFor(
     }
     ax += lx; ay += ly;
   }
-  const jitter = actor.sheet.get(BEHAVIOR_STATS.aimJitter, undefined, undefined, beh.aimJitter ?? 0);
-  const bodyAimed = beh.castArc !== undefined;
+  const jitter = actor.sheet.get(BEHAVIOR_STATS.aimJitter, undefined, undefined, beh?.aimJitter ?? 0);
+  const bodyAimed = beh?.castArc !== undefined;
   if (jitter > 0 || bodyAimed) {
     // Bearing errors rotate about the CASTER: the reach is kept, the line moves.
     const dx = ax - actor.pos.x, dy = ay - actor.pos.y;
