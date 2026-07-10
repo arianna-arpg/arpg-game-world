@@ -19,7 +19,7 @@ import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } 
 import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
 import { DEFENSE_CFG } from './defense';
 import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
-import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
+import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
   crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
@@ -4199,6 +4199,59 @@ export class World {
     return true;
   }
 
+  /** ENGAGEMENT RING (BehaviorSpec.encircle): world-absolute angular claims
+   *  around one victim, per victim across ALL its attackers — so a mixed mob
+   *  coordinates. Same self-freeing contract as engage tokens (stale/dead/
+   *  retargeted holders pruned every frame). */
+  private ringClaims = new Map<number, { actorId: number; ang: number; at: number }[]>();
+
+  /** Claim (or re-assert) this actor's bite bearing around `target`. The
+   *  first `front` claim their own approach bearing (nudged apart); later
+   *  arrivals take the midpoint of the LARGEST free arc — flanks first,
+   *  then the back. Returns the claim's world-absolute angle. */
+  claimRingSlot(actor: Actor, target: Actor, front: number): number {
+    let claims = this.ringClaims.get(target.id);
+    if (!claims) { claims = []; this.ringClaims.set(target.id, claims); }
+    const mine = claims.find(c => c.actorId === actor.id);
+    if (mine) {
+      mine.at = this.time;
+      actor.aiRingTarget = target.id;
+      actor.aiRingAt = this.time;
+      return mine.ang;
+    }
+    const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+    const approach = Math.atan2(actor.pos.y - target.pos.y, actor.pos.x - target.pos.x);
+    const sep = BEHAVIOR_CFG.ringSep;
+    let ang: number;
+    if (claims.length < Math.max(1, front)) {
+      // Vanguard: bite from where you came — nudged sideways until clear of
+      // earlier claims, so three abreast becomes a short arc, not a stack.
+      ang = approach;
+      for (let guard = 0; guard <= claims.length; guard++) {
+        const near = claims.find(c => Math.abs(wrap(c.ang - ang)) < sep);
+        if (!near) break;
+        const side = wrap(ang - near.ang) >= 0 ? 1 : -1;
+        ang = wrap(near.ang + side * sep);
+      }
+    } else {
+      // The front is manned: wrap to the midpoint of the LARGEST free arc —
+      // the flanks first, then squarely behind.
+      const sorted = claims.map(c => c.ang).sort((a, b) => a - b);
+      let bestGap = -1;
+      ang = wrap(sorted[0] + Math.PI);
+      for (let i = 0; i < sorted.length; i++) {
+        const a0 = sorted[i];
+        const a1 = i + 1 < sorted.length ? sorted[i + 1] : sorted[0] + Math.PI * 2;
+        const gap = a1 - a0;
+        if (gap > bestGap) { bestGap = gap; ang = wrap(a0 + gap / 2); }
+      }
+    }
+    claims.push({ actorId: actor.id, ang, at: this.time });
+    actor.aiRingTarget = target.id;
+    actor.aiRingAt = this.time;
+    return ang;
+  }
+
   /** MOUNTS: carry riders on their beasts — the rider's position pins to the
    *  saddle (dash/push stilled) and both links self-heal: either party dying
    *  (or vanishing in a zone swap) frees the other. Runs late in update so
@@ -4235,6 +4288,17 @@ export class World {
       if (live.length === held.length) continue;
       if (live.length) this.engageTokens.set(key, live);
       else this.engageTokens.delete(key);
+    }
+    // Ring claims share the contract: dead, stale, or retargeted claimants
+    // release their bearing, and the arc heals for the next arrival.
+    for (const [tid, claims] of this.ringClaims) {
+      const live = claims.filter(c => {
+        const a = this.actorById(c.actorId);
+        return a && !a.dead && a.aiRingTarget === tid && this.time - a.aiRingAt < 0.5;
+      });
+      if (live.length === claims.length) continue;
+      if (live.length) this.ringClaims.set(tid, live);
+      else this.ringClaims.delete(tid);
     }
   }
 
@@ -18859,6 +18923,24 @@ export class World {
         if (Math.abs(want) > cap) a.facing = a.facingPrev + Math.sign(want) * cap;
       }
       a.facingPrev = a.facing;
+      // VELOCITY ESTIMATE (the behavior fabric): an EMA of the actual frame
+      // displacement — whatever moved the body (walk, dash, knockback), this
+      // is the motion a shot-leading mind (BehaviorSpec.aimLead) reads.
+      if (dt > 0) {
+        if (a.posPrev) {
+          // Teleports read as a blink, not a ballistic launch: samples clamp
+          // to a fast sprint, so one warped frame can't poison the read.
+          const cap = BEHAVIOR_CFG.velSampleMax;
+          const ix = clamp((a.pos.x - a.posPrev.x) / dt, -cap, cap);
+          const iy = clamp((a.pos.y - a.posPrev.y) / dt, -cap, cap);
+          const k = Math.min(1, dt * BEHAVIOR_CFG.velEmaRate);
+          a.velEst.x += (ix - a.velEst.x) * k;
+          a.velEst.y += (iy - a.velEst.y) * k;
+          a.posPrev.x = a.pos.x; a.posPrev.y = a.pos.y;
+        } else {
+          a.posPrev = { x: a.pos.x, y: a.pos.y };
+        }
+      }
       // THE LEDGER's beat: escalating upkeep + the low-mana vent.
       this.updateActorLedgers(a, dt);
       // One sweep for EVERYTHING updateTimers can bleed — DoTs, staggered

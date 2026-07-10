@@ -9,6 +9,10 @@
 //   skillUse    WHEN it casts (weighted / priority / rotation, combos, reserves)
 //   morale      WHETHER it dares (breaks, panics, rallies, courage near leaders)
 //   squad       HOW the group fights (muster, engage tokens, surround, formation)
+//   tempo       HOW its clock breathes (movement duty cycles, the kite budget)
+//   behavior    HOW its MIND works (aim leading/scatter, reaction lag, the
+//               body-aim pivot gate, encircle ring discipline, elbow room) —
+//               spectrum LEVERS, composable like the projectile flight axes
 //
 // A BrainDef is a bundle of axes plus three MACHINES layered on top:
 //
@@ -147,6 +151,94 @@ export interface TempoSpec {
   /** Seconds spent winded when the budget empties (default [1.0, 1.6]). */
   windedFor?: [number, number];
 }
+
+// --- BEHAVIOR: the cognition levers -------------------------------------------
+
+/** HOW the mind behind the body works — orthogonal SPECTRUM levers, composable
+ *  the way projectile flight axes are: each knob independent, absent = the
+ *  classic conduct, and every one shiftable live by the machines (an enraged
+ *  phase can gain foresight; a 'bewilder' curse can scatter a sniper's aim,
+ *  since the aim knobs read through the stat sheet — see BEHAVIOR_STATS).
+ *
+ *  The difficulty curve BAKED INTO THE ENTITY, not its numbers: a goblin and
+ *  a sylvan can share a kit and feel nothing alike.
+ *
+ *    aimLead     the marksman's mind: -1 trails where you WERE, 0 aims where
+ *                you ARE (the classic), 1 solves where you WILL be (cast time
+ *                + flight time against your live velocity)
+ *    aimLeadChance  "leads on occasion" — the roll happens PER CAST
+ *    aimJitter   sloppy hands: each cast's bearing wobbles by up to ±this
+ *    reaction    dim wits: seconds between first sighting and the first cast
+ *    castArc     the BODY aims, not the mind: casts hold until the (turn-
+ *                clamped) facing bears within this half-arc, and the aim
+ *                projects along the body's facing — pair with a low
+ *                MonsterDef.turnSpeed and circling the lumberer is the play
+ *    encircle    ring discipline: the first `front` claim their approach
+ *                bearing; the rest wrap the LARGEST GAP — flanks, then the
+ *                back. The anti-conga: a pack that surrounds instead of
+ *                shoving its own front rank out of cast range
+ *    spacing     elbow room: kin-repulsion while closing, so the charge
+ *                arrives as a crescent instead of a bead chain */
+export interface BehaviorSpec {
+  /** Intercept fraction applied when aiming a cast (default 0 = none;
+   *  negative = trailing shots; >1 = overleads). Reads through the sheet as
+   *  'aiAimLead', so statuses/auras can bend a mind. */
+  aimLead?: number;
+  /** Chance PER CAST that the lead is applied at all (default 1). */
+  aimLeadChance?: number;
+  /** Aim scatter in radians: each cast's bearing wobbles ±this (rolled per
+   *  cast; sheet stat 'aiAimJitter'). */
+  aimJitter?: number;
+  /** BODY-AIMED CASTS: the half-arc (radians) the facing must bear within
+   *  before a cast fires — and the aim then projects along the body's actual
+   *  facing (bearing error ≤ the arc). Absent = the mind aims, instantly. */
+  castArc?: number;
+  /** Seconds (rolled per FRESH engagement) between sighting and the first
+   *  cast — movement is unaffected; the blade hesitates, not the feet. */
+  reaction?: [number, number];
+  /** ENGAGEMENT RING: melee slot discipline around one victim.
+   *  `front` = how many claim their own approach bearing before later
+   *  arrivals wrap to the emptiest arc (default 2); `ring` = bite distance
+   *  (default: touching). Claims are per-victim across ALL its attackers,
+   *  so mixed mobs coordinate; slots free themselves on death/retarget. */
+  encircle?: { front?: number; ring?: number };
+  /** Kin elbow-room (px) while closing on a target: a soft repulsion from
+   *  the nearest packmate, so approaches fan instead of conga-lining. */
+  spacing?: number;
+}
+
+/** The behavior fabric's modular thresholds (avoid-hardcoding: tune here). */
+export const BEHAVIOR_CFG = {
+  /** Longest future (secs) a leading mind solves for — beyond this even a
+   *  perfect shot is a guess not worth making. */
+  leadHorizonMax: 1.25,
+  /** Hard cap (px) on the lead displacement — no aiming a screen away. */
+  leadCap: 300,
+  /** Velocity-estimate smoothing rate (per second, EMA) — how fast the
+   *  marksman's read of your motion converges. */
+  velEmaRate: 6,
+  /** Per-frame velocity sample clamp (px/s): teleports read as a blink,
+   *  not a ballistic launch. */
+  velSampleMax: 900,
+  /** Ring slots: minimum angular separation between claims (radians). */
+  ringSep: 0.55,
+  /** Ring slots: default bite-ring padding beyond touching radii (px). */
+  ringPad: 6,
+  /** Ring transit: bearing error (radians) beyond which the approach routes
+   *  AROUND the ring instead of cutting through the victim. */
+  detourArc: 0.7,
+  /** Ring transit: how far (radians) each detour waypoint steps toward the
+   *  slot, and the transit radius as a fraction of the bite ring. */
+  detourStep: 0.85,
+  detourRadiusMul: 1.35,
+  /** Spacing: repulsion gain at zero distance (falls off linearly). */
+  spacingGain: 0.9,
+};
+
+/** The behavior knobs that read THROUGH the actor's stat sheet at cast time
+ *  (spec value = the innate base), so mods — curses, auras, ground — can bend
+ *  an enemy's mind the way they bend its body. Registered in stats.ts. */
+export const BEHAVIOR_STATS = { aimLead: 'aiAimLead', aimJitter: 'aiAimJitter' } as const;
 
 // --- TARGETING & THE THREAT CHART ---------------------------------------------
 
@@ -541,6 +633,9 @@ export interface BrainTuning {
   squad?: SquadSpec;
   /** The RHYTHM layer: movement duty cycles + the kite budget (TempoSpec). */
   tempo?: TempoSpec;
+  /** The COGNITION layer: aim leading/scatter, reaction lag, the body-aim
+   *  pivot gate, encircle ring discipline, elbow room (BehaviorSpec). */
+  behavior?: BehaviorSpec;
   /** OBEDIENCE (0..1): the chance this actor ACCEPTS an order from the
    *  command fabric (CommandMinionsEffect → ai.ts issueCommand). Unset = 1:
    *  a player's summoned court obeys utterly. An unruly wild pack dials it
@@ -666,6 +761,9 @@ export const ARCHETYPES: Record<BrainType, BrainTuning> = {
     move: { style: 'direct', closeFrac: 0.8 },
     skillUse: { cadence: [0.08, 0.2] },
     squad: { muster: { count: 3, radius: 380, bloodiedAt: 0.9 } },
+    // RING DISCIPLINE: two press the face; the rest wrap the flanks and the
+    // back instead of shoving their own front rank out of cast range.
+    behavior: { encircle: { front: 2 } },
   },
   artillery: {
     move: { style: 'holdRange' },
@@ -712,6 +810,9 @@ export function mergeTuning(...layers: (BrainTuning | undefined)[]): BrainTuning
     if (layer.morale) out.morale = { ...out.morale, ...layer.morale };
     if (layer.squad) out.squad = { ...out.squad, ...layer.squad };
     if (layer.tempo) out.tempo = { ...out.tempo, ...layer.tempo };
+    if (layer.behavior) out.behavior = { ...out.behavior, ...layer.behavior,
+      encircle: layer.behavior.encircle
+        ? { ...out.behavior?.encircle, ...layer.behavior.encircle } : out.behavior?.encircle };
     if (layer.obedience !== undefined) out.obedience = layer.obedience;
   }
   return out;

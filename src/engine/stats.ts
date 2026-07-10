@@ -887,6 +887,13 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Range at which THIS actor notices enemies (per-monster `detection`
    *  multiplier varies it: zombies shamble, blood mites sense you afar). */
   detectionRange: { label: 'Detection Range', base: 520, min: 50 },
+  // AI COGNITION (BehaviorSpec, brain.ts): the aim knobs read through the
+  // sheet with the brain's spec value as the innate base, so curses, auras
+  // and ground can bend an enemy's MIND the way they bend its body.
+  /** Intercept fraction a casting mind leads its shots by (negative trails). */
+  aiAimLead:      { label: 'Aim Leading', base: 0, min: -2, max: 2 },
+  /** Aim scatter (radians) rolled onto every cast's bearing. */
+  aiAimJitter:    { label: 'Aim Scatter', base: 0, min: 0 },
 
   // DoT & curse mechanics
   /** CHANCE that a DoT applied by the skill spreads on the victim's death

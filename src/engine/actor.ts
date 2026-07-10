@@ -402,6 +402,16 @@ export class Actor {
    *  (world prunes stale holders, so tokens free themselves). */
   aiTokenKey?: string;
   aiTokenAt = 0;
+  /** ENGAGEMENT RING (BehaviorSpec.encircle): the victim whose ring slot
+   *  this actor holds + the last re-assert (same prune contract as tokens). */
+  aiRingTarget?: number;
+  aiRingAt = 0;
+  /** REACTION (BehaviorSpec.reaction): casts hold until this world time —
+   *  rolled once per FRESH engagement; the feet never wait, only the blade. */
+  aiReactAt = 0;
+  /** ELBOW ROOM (BehaviorSpec.spacing): this tick's kin-repulsion radius,
+   *  stamped by updateAI while closing on a target (undefined = none). */
+  aiSpacing?: number;
   /** WARD (the add-gate): untargetable until no live actor carries this tag;
    *  the note is announced when the ward shatters. */
   aiWardTag?: string;
@@ -773,6 +783,12 @@ export class Actor {
   turnSpeed = 0;
   /** Last frame's clamped facing (the turn clamp's reference). */
   facingPrev?: number;
+  /** VELOCITY ESTIMATE (px/s): an EMA of actual per-frame displacement,
+   *  world-maintained beside the turn clamp — what shot-leading minds
+   *  (BehaviorSpec.aimLead) read to solve their intercepts. */
+  velEst = { x: 0, y: 0 };
+  /** Last frame's position (the velocity estimate's reference). */
+  posPrev?: { x: number; y: number };
   /** FLIER (MonsterDef.flier): moves on the noclip displacement policy —
    *  over rocks, walls, chasms and water — and the renderer lifts + bobs the
    *  body off its shadow so flight READS at a glance. */

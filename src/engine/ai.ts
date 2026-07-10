@@ -1,9 +1,10 @@
 // ---------------------------------------------------------------------------
 // AI RUNTIME — drives monsters AND player minions through the same skill
 // pipeline the player uses. Conduct is DATA (see brain.ts): a BrainDef bundles
-// orthogonal axes (move / target / perception / skillUse / morale / squad) and
-// three machines (HP-ladder phases, the script FSM, condition rules). The 13
-// classic archetypes are presets expressed in that vocabulary.
+// orthogonal axes (move / target / perception / skillUse / morale / squad /
+// tempo / behavior) and the machines (HP-ladder phases, the script FSM,
+// condition rules, the cycle). The 13 classic archetypes are presets
+// expressed in that vocabulary.
 //
 // Each tick, an actor resolves its EFFECTIVE tuning (base ← ladder phase ←
 // script phase ← active rules ← impulse), then runs the pipeline:
@@ -22,9 +23,10 @@ import { MONSTERS } from '../data/monsters';
 import { mod } from './stats';
 import type { Actor } from './actor';
 import {
-  alertScale, ARCHETYPES, evalCondition, mergeTuning, normalizeBrain, tuningOf,
-  type AICtx, type BrainDef, type BrainTuning, type CommandState, type MoveSpec,
-  type NormalizedBrain, type PhaseCadence, type SkillPolicy,
+  alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, evalCondition, mergeTuning,
+  normalizeBrain, tuningOf,
+  type AICtx, type BehaviorSpec, type BrainDef, type BrainTuning, type CommandState,
+  type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { runAIActions } from './aiActions';
 import type { SkillInstance } from './skills';
@@ -295,6 +297,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // Stamp the RESOLVED obedience so the command roll (world.ts, an event —
   // not a tick) reads live machine layers: an enraged phase can go deaf.
   actor.aiObedience = tuning.obedience;
+  // Elbow room re-stamps below once a target locks; idle/ordered movement
+  // never pays for it.
+  actor.aiSpacing = undefined;
   if (actor.aiKiteAcc > 0 && world.time - actor.aiLastRetreatAt > 0.15) {
     actor.aiKiteAcc = Math.max(0, actor.aiKiteAcc - dt * 0.6);
   }
@@ -465,6 +470,10 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   }
   actor.wanderDir = undefined; // combat focuses the mind
 
+  // ELBOW ROOM (BehaviorSpec.spacing): closing movement repels off the
+  // nearest packmate this tick — moveToward reads the stamp.
+  actor.aiSpacing = tuning.behavior?.spacing;
+
   // A stalker that swapped to an unshrouded style de-cloaks.
   if (!tuning.move?.shroud && actor.aiShrouded) setShroud(actor, false);
 
@@ -534,8 +543,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
 
   // ---- THE KERNEL: cast/move interleave, per style ---------------------------
   // A MOUNTED rider doesn't steer — the beast carries it (updateMounts pins
-  // the saddle); it holds and casts, a walking tower's teeth.
-  const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused);
+  // the saddle); it holds and casts, a walking tower's teeth. This is the
+  // ENGAGED path — the only one that claims encircle ring slots.
+  const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused, true);
   runKernel(actor.mountId !== undefined ? 'hold' : ctx.spec.style, ctx);
 }
 
@@ -910,6 +920,10 @@ function acquireTarget(
       if (actor.aiEngagedAt < 0
         || world.time - Math.max(actor.lastCombatAt, actor.aiEngagedAt) > 8) {
         actor.aiEngagedAt = world.time;
+        // REACTION (BehaviorSpec.reaction): dim wits take a beat between
+        // sighting and the first cast — the feet close, the blade waits.
+        const react = tuning.behavior?.reaction;
+        if (react) actor.aiReactAt = world.time + rand(react[0], react[1]);
       }
       // Dim brains roll how long this lock can HOLD their attention.
       if (per?.attentionSpan) {
@@ -1015,10 +1029,55 @@ function pickSkill(
 function useOn(
   actor: Actor, world: World, inst: SkillInstance, target: Actor, tuning?: BrainTuning,
 ): void {
-  world.useSkill(actor, inst, target.pos);
+  world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior));
   const cad = tuning?.skillUse?.cadence ?? [0.15, 0.4];
   actor.aiCooldown = rand(cad[0], cad[1]);
   actor.aiLastSkill = { id: inst.def.id, at: world.time };
+}
+
+/** Where the cast actually POINTS (BehaviorSpec, the aim knobs): the classic
+ *  conduct aims at the victim's live position; a LEADING mind solves the
+ *  intercept over cast time + projectile flight against the victim's read
+ *  velocity (per-cast chance); SLOPPY hands scatter the bearing; a BODY-AIMED
+ *  caster (castArc) fires along its turn-clamped facing, so an incomplete
+ *  pivot is a real whiff. The lead/jitter knobs read through the stat sheet
+ *  (spec = innate base) so curses and auras can bend an enemy's mind. */
+function aimPointFor(
+  actor: Actor, inst: SkillInstance, target: Actor, beh?: BehaviorSpec,
+): Vec2 {
+  if (!beh) return target.pos;
+  let ax = target.pos.x, ay = target.pos.y;
+  const lead = actor.sheet.get(BEHAVIOR_STATS.aimLead, undefined, undefined, beh.aimLead ?? 0);
+  if (lead !== 0 && target !== actor && Math.random() < (beh.aimLeadChance ?? 1)) {
+    const del = inst.def.delivery;
+    const flight = del.type === 'projectile'
+      ? dist(actor.pos, target.pos) / Math.max(60, del.speed) : 0;
+    const horizon = Math.min(BEHAVIOR_CFG.leadHorizonMax, actor.skillUseTime(inst) + flight);
+    let lx = target.velEst.x * horizon * lead;
+    let ly = target.velEst.y * horizon * lead;
+    const mag = Math.hypot(lx, ly);
+    if (mag > BEHAVIOR_CFG.leadCap) {
+      lx *= BEHAVIOR_CFG.leadCap / mag;
+      ly *= BEHAVIOR_CFG.leadCap / mag;
+    }
+    ax += lx; ay += ly;
+  }
+  const jitter = actor.sheet.get(BEHAVIOR_STATS.aimJitter, undefined, undefined, beh.aimJitter ?? 0);
+  const bodyAimed = beh.castArc !== undefined;
+  if (jitter > 0 || bodyAimed) {
+    // Bearing errors rotate about the CASTER: the reach is kept, the line moves.
+    const dx = ax - actor.pos.x, dy = ay - actor.pos.y;
+    const reach = Math.hypot(dx, dy);
+    if (reach > 1) {
+      // Body-aimed casts fire along the CLAMPED facing (facingPrev — see the
+      // castArc gate): mid-pivot, the blow lands where the mass points.
+      let bearing = bodyAimed ? (actor.facingPrev ?? actor.facing) : Math.atan2(dy, dx);
+      if (jitter > 0) bearing += rand(-jitter, jitter);
+      ax = actor.pos.x + Math.cos(bearing) * reach;
+      ay = actor.pos.y + Math.sin(bearing) * reach;
+    }
+  }
+  return vec(ax, ay);
 }
 
 /** The healer's instinct + policy RESERVES. Ally-targeted kit pieces mend the
@@ -1101,6 +1160,26 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
     if (step) goal = step;
   }
   let dx = goal.x - actor.pos.x, dy = goal.y - actor.pos.y;
+  // ELBOW ROOM (BehaviorSpec.spacing, stamped per combat tick): a soft
+  // repulsion off the nearest packmate folds into the goal bearing, so a
+  // closing band arrives as a crescent instead of a conga line shoving its
+  // own front rank out of cast range. Idle/ordered movement never pays.
+  const room = actor.aiSpacing;
+  if (room && room > 0) {
+    let nx = 0, ny = 0, nd = room;
+    for (const b of world.actors) {
+      if (b === actor || b.dead || b.team !== actor.team || b.passive || b.construct) continue;
+      const bd = dist(actor.pos, b.pos);
+      if (bd < nd) { nd = bd; nx = actor.pos.x - b.pos.x; ny = actor.pos.y - b.pos.y; }
+    }
+    if (nd < room) {
+      const gm = Math.hypot(dx, dy) || 1;
+      const nm = Math.hypot(nx, ny) || 1;
+      const w = (1 - nd / room) * BEHAVIOR_CFG.spacingGain;
+      dx = dx / gm + (nx / nm) * w;
+      dy = dy / gm + (ny / nm) * w;
+    }
+  }
   // Worms slither: the approach weaves side to side.
   if (actor.worm) {
     const wob = Math.sin(world.time * 4 + actor.id * 1.3) * 0.55;
@@ -1472,15 +1551,48 @@ export type MoveKernel = (ctx: KernelCtx) => void;
 function makeCtx(
   actor: Actor, world: World, target: Actor, d: number, dt: number,
   tuning: BrainTuning, norm: NormalizedBrain, noCast: boolean, paused = false,
+  engaged = false,
 ): KernelCtx {
   const spec = tuning.move ?? { style: 'approach' };
-  const goal = tuning.squad?.surround && actor.squadId !== undefined
-    ? surroundGoal(actor, world, target,
-      Math.max(40, target.radius + actor.radius + 4))
-    : target.pos;
+  const beh = tuning.behavior;
+  let goal: Vec2;
+  if (engaged && beh?.encircle && !target.passive) {
+    // THE ENGAGEMENT RING (BehaviorSpec.encircle): claim a bite bearing —
+    // the first `front` take their approach, later arrivals wrap the widest
+    // arc. A claimant whose bearing is still far from its slot routes
+    // AROUND the ring (a closing spiral), never through the victim.
+    const ring = beh.encircle.ring
+      ?? (target.radius + actor.radius + BEHAVIOR_CFG.ringPad);
+    const slotAng = world.claimRingSlot(actor, target, beh.encircle.front ?? 2);
+    const myAng = angleTo(target.pos, actor.pos);
+    const err = angleDiff(myAng, slotAng);
+    if (Math.abs(err) > BEHAVIOR_CFG.detourArc) {
+      const step = myAng + Math.sign(err) * BEHAVIOR_CFG.detourStep;
+      const rr = Math.max(ring * BEHAVIOR_CFG.detourRadiusMul, d * 0.8);
+      goal = vec(target.pos.x + Math.cos(step) * rr, target.pos.y + Math.sin(step) * rr);
+    } else {
+      goal = vec(target.pos.x + Math.cos(slotAng) * ring, target.pos.y + Math.sin(slotAng) * ring);
+    }
+  } else if (tuning.squad?.surround && actor.squadId !== undefined) {
+    goal = surroundGoal(actor, world, target,
+      Math.max(40, target.radius + actor.radius + 4));
+  } else {
+    goal = target.pos;
+  }
   return {
     a: actor, world, target, d, dt, spec, tuning, norm, noCast, paused, goal,
-    pick: () => noCast ? null : pickSkill(actor, world, d, tuning),
+    pick: () => {
+      if (noCast) return null;
+      // REACTION: the first cast of a fresh engagement waits out the wits.
+      if (world.time < actor.aiReactAt) return null;
+      // BODY-AIMED (castArc): hold fire until the BODY bears. The pipeline
+      // writes `facing` as this tick's DESIRE (the world clamp runs after
+      // the AI tick) — `facingPrev` is the last clamped truth, the body.
+      if (beh?.castArc !== undefined && Math.abs(angleDiff(
+        actor.facingPrev ?? actor.facing,
+        angleTo(actor.pos, target.pos))) > beh.castArc) return null;
+      return pickSkill(actor, world, d, tuning);
+    },
     cast: inst => useOn(actor, world, inst, target, tuning),
   };
 }

@@ -465,6 +465,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'basic',
       perception: { arcDeg: 110, rearMul: 0.2, attentionSpan: [4, 7], alertMul: 0.15 },
+      // And slow to REACT (BehaviorSpec.reaction): a long dead-eyed beat
+      // between noticing you and remembering what teeth are for.
+      behavior: { reaction: [0.6, 1.3] },
     },
   },
 
@@ -1880,6 +1883,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // leads, with stragglers who lag and jog to catch up — the exact
       // opposite of the gnoll drill two ridges over.
       squad: { idle: { style: 'loose', stragglerChance: 0.45 } },
+      // DIM (BehaviorSpec): a beat of gawping before the first swing, and
+      // sloppy hands ever after — goblin menace is numbers, not craft.
+      behavior: { reaction: [0.35, 0.8], aimJitter: 0.16 },
     },
     faction: 'goblin',
     adorn: 'ears',
@@ -1893,7 +1899,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('lightningRes', 'flat', 0.4)],
     skills: ['spark', 'rallying_howl'],
     xp: 16,
-    brain: { type: 'caster' },
+    // Dim like its kin: slow to open, and its sparks spray wide of the mark —
+    // stand still at your peril, but a walking target is half safe.
+    brain: { type: 'caster', behavior: { reaction: [0.5, 1.0], aimJitter: 0.22 } },
     wardPriority: 2, // the warband shields its shaman like a commander
     faction: 'goblin',
     adorn: 'ears',
@@ -1963,10 +1971,13 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // --- The Gnoll packs: hyena-folk who run with the goblins and despise
-  // the sylvan groves. They circle. They wait. Then all of them come at once.
-  // THE SQUAD-TACTICS SHOWCASE: prowlers muster (pack preset), rotate two
-  // ENGAGE TOKENS so the bites come in shifts, fan their approaches around
-  // the prey, share the leader's mark — and scatter when the leader falls.
+  // the sylvan groves. They circle. They wait. Then all of them come at once —
+  // FROM ALL SIDES. THE SQUAD-TACTICS SHOWCASE: prowlers muster (pack preset),
+  // then work the ENGAGEMENT RING (BehaviorSpec.encircle, preset-carried): two
+  // press your face while the rest wrap the flanks and the back, elbow room
+  // keeping the charge a crescent — no more conga line shoving its own front
+  // rank out of cast range. They share the leader's mark — and scatter when
+  // the leader falls.
 
   gnoll_prowler: {
     id: 'gnoll_prowler', name: 'Gnoll Prowler',
@@ -1980,9 +1991,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // its leader (SquadSpec.idle 'drill') — you see the discipline before
       // you feel it.
       squad: {
-        tokens: 2, surround: true, focusLeader: true, onLeaderDeath: 'scatter',
+        focusLeader: true, onLeaderDeath: 'scatter',
         formation: 'column', spacing: 42, idle: { style: 'drill' },
       },
+      // The preset's encircle (front 2) does the surrounding; spacing fans
+      // the approach so packmates never bunch into a shoving file.
+      behavior: { spacing: 36 },
       morale: { panicOnAllyDeath: { radius: 200, duration: 2.2, chance: 0.35 }, rallyAfter: 2.2 },
       // UNRULY: the howler's Snarled Orders land on a prowler barely half
       // the time (the obedience dial — the drill line is for show).
@@ -2026,6 +2040,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // the same second-press the player clicks — landing Perfect! a tunable
       // 45% of the time and fumbling the rest.
       skillUse: { finesse: { chance: 0.45 } },
+      // AND A PRACTICED EYE, sometimes (BehaviorSpec.aimLead): under half its
+      // shots lead your run — enough that straight-line strafing stops being
+      // free, not so many that juking it is pointless. Rolled PER SHOT.
+      behavior: { aimLead: 0.55, aimLeadChance: 0.45 },
       rules: [{
         when: { distUnder: 720 },
         actions: [{ do: 'garrison', within: 680 }],
@@ -2555,7 +2573,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['venom_bolt'],
     xp: 16,
-    brain: { type: 'strafer' },
+    // FEY CUNNING (the goblin shaman's foil — same job, nothing alike): the
+    // sprite reads your run and looses venom where you're GOING, near every
+    // time. Break your line or wear the bolt; the grove punishes habits.
+    brain: { type: 'strafer', behavior: { aimLead: 0.8, aimLeadChance: 0.75 } },
     faction: 'sylvan',
   },
 
@@ -3098,7 +3119,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mountSlot: { kinds: ['demonkin', 'imp', 'finger_mage'], offsetY: -6 },
     scaling: { armor: { flatPerLevel: 2.5 }, life: { incPerLevel: 0.05 } },
     deathBurst: { mode: 'orb', damageFrac: 1.2 },
-    detection: 1.1, brain: { type: 'juggernaut', enrage: 0.3 },
+    detection: 1.1,
+    // The titan swings where its mass points (castArc) — get off its face.
+    brain: { type: 'juggernaut', enrage: 0.3, behavior: { castArc: 0.6 } },
   },
   // The field officer (elite tier): a commander who whips the line forward,
   // and whose OWN kit keeps growing — extra lash hits at 40, meteors at 48.
@@ -3770,7 +3793,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['ground_slam', 'root_grasp'], xp: 150, faction: 'sylvan',
     turnSpeed: 2.2,
     scaling: { life: { incPerLevel: 0.08 } },
-    detection: 1.0, brain: { type: 'juggernaut', enrage: 0.35 },
+    detection: 1.0,
+    // A tree turns like a tree: casts hold until the trunk bears (castArc),
+    // so circling its pivot starves it of swings — mind the boughs.
+    brain: { type: 'juggernaut', enrage: 0.35, behavior: { castArc: 0.5 } },
     parts: [
       {
         monster: 'treant_bough', dx: 0.8, dy: 1.25, lifeFrac: 0.35, breakDamage: 0.12,
@@ -4454,7 +4480,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     shellGuard: { side: 'all', max: 260, regenDelay: 5, regenRate: 45, color: '#d8c88a' },
     turnSpeed: 2.6,
     scaling: { life: { incPerLevel: 0.06 } },
-    detection: 1.0, brain: { type: 'juggernaut', enrage: 0.35 },
+    detection: 1.0,
+    // BODY-AIMED (castArc × the slow turnSpeed): the slam waits for the
+    // shoulders to come round and lands where the BODY points — keep moving
+    // through its pivot and the blow breaks on empty ground behind you.
+    brain: { type: 'juggernaut', enrage: 0.35, behavior: { castArc: 0.55 } },
   },
   // THE BULWARK SCUTTLER — the rear-shell tactician: back-armor as anatomy,
   // and when bloodied it TURTLES — rotating its shell into your blows (the
