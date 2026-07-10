@@ -29,6 +29,7 @@ import {
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { runAIActions } from './aiActions';
+import { LOS_CFG } from './los';
 import type { SkillInstance } from './skills';
 import type { World } from './world';
 
@@ -311,6 +312,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // Elbow room re-stamps below once a target locks; idle/ordered movement
   // never pays for it.
   actor.aiSpacing = undefined;
+  // PATHING (MoveSpec.pathing): stamped every tick so the machines can
+  // shift it live (a panicked phase can go 'none'); moveToward reads it.
+  actor.aiPathing = tuning.move?.pathing;
 
   // THE WANTS (BrainDef.drives): meters drift on their clocks — events jump
   // them elsewhere (World.bumpDrives: kills feed, wounds sting). Seeded on
@@ -1011,6 +1015,13 @@ function acquireTarget(
   const alerted = world.time < actor.alertUntil;
   const prefer = tuning.target?.prefer ?? 'nearest';
   const bias = tuning.target?.kindBias;
+  // WALLS BLIND (LOS_CFG.perception): a FRESH lock needs an actual sight
+  // line — stone between you and it, and you are not there. A HELD lock
+  // survives blindness for the chase-memory window (the hunter rounds the
+  // corner after you — pathing does the walking) before the thread snaps;
+  // relentless bonds never let go, and xray minds (tremor-sense) read
+  // through anything. Rays ride the world's memo so this stays event-rate.
+  const losGated = LOS_CFG.perception && per?.xray !== true;
 
   let target: Actor | null = null;
   let bestScore = -Infinity;
@@ -1031,6 +1042,15 @@ function acquireTarget(
     if (alerted) reach *= 1.5;
     else if (Math.abs(angleDiff(actor.facing, angleTo(actor.pos, e.pos))) > arcHalf) reach *= rearMul;
     if (d > reach) continue;
+    if (losGated) {
+      if (e.id !== actor.aiTargetId) {
+        if (!world.losCached(actor, e)) continue; // unseen strangers don't exist
+      } else if (!world.losCached(actor, e)
+        && !(tuning.target?.relentless && actor.aggroed)) {
+        const holdFor = Math.max(per?.memory ?? 0, LOS_CFG.chaseMemory);
+        if (world.time - actor.aiLosSeenAt > holdFor) continue; // the thread snaps
+      }
+    }
     if (e.taunt && d < tauntBest) { tauntBest = d; tauntTarget = e; }
     let score = scoreTarget(prefer, actor, e, d);
     if (bias) score *= bias[e.kind ?? 'monster'] ?? 1;
@@ -1077,7 +1097,12 @@ function acquireTarget(
       }
     }
     actor.aiTargetId = target.id;
-    actor.aiLastSeen = vec(target.pos.x, target.pos.y);
+    // The last-SEEN ledger stays honest: position and clock refresh only
+    // while the eye actually reaches (a blind chase stalks a stale spot).
+    if (!losGated || world.losCached(actor, target)) {
+      actor.aiLosSeenAt = world.time;
+      actor.aiLastSeen = vec(target.pos.x, target.pos.y);
+    }
   } else if (actor.aiTargetId !== undefined) {
     // LOST the lock: with perception memory, stalk the last-seen position
     // (rides the alert-investigate walk); without, shrug back to the watch.
@@ -1098,6 +1123,7 @@ function acquireTarget(
  *  commander's support range. */
 function pickSkill(
   actor: Actor, world: World, best: number, tuning: BrainTuning,
+  target?: Actor,
 ): SkillInstance | null {
   if (actor.aiCooldown > 0) return null;
   // GUARD COMBOS: a raised shield is not "busy" for the skills drilled to
@@ -1116,11 +1142,20 @@ function pickSkill(
     }
     return s.def.ai!.range;
   };
+  // HOLD FIRE without a firing line (occlusion): skills whose delivery a
+  // wall would eat are unusable while the line is blocked — the caster
+  // keeps closing/pathing instead of pumping rays into stone. PER SKILL,
+  // so a meteor caster ('free' occlusion) still bombards from behind its
+  // wall while its rays wait. One lazy ray per pick.
+  let fire: boolean | undefined;
+  const fireLine = (): boolean =>
+    fire ??= !target || world.lineOfFire(actor.pos, target.pos);
   const usable = actor.skills.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
     && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard)
     && actor.canUse(s) && best <= rangeOf(s)
-    && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id)));
+    && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
+    && (!world.aiNeedsFireLine(actor, s) || fireLine()));
   if (!usable.length) return null;
   // OPENER: the first cast of a fresh engagement, when it reaches.
   if (policy.opener && (!actor.aiLastSkill || actor.aiLastSkill.at < actor.aiEngagedAt)) {
@@ -1301,14 +1336,19 @@ function mostWoundedAlly(
 // === SHARED MOVEMENT HELPERS =====================================================
 
 function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt: number): void {
-  // NON-CONVEX zones (Phase 2): steer toward the next cell along the walkable
-  // flow-field instead of straight at the target — so melee routes through tunnels
-  // and around gaps instead of jamming a wall. NULL walk (plains + every existing
-  // zone) keeps the original straight-line steer (zero behaviour change).
+  // Steer toward the next cell along the zone's walkable flow-field instead
+  // of straight at the target — around warren walls AND plains cliff pockets
+  // alike (World.pathField lazily rakes a nav grid over a convex zone's
+  // blocking doodads). FLIERS cross everything and steer straight; 'none'
+  // minds (MoveSpec.pathing) beeline and pile at walls — authored
+  // mindlessness. An unreachable goal falls back to the straight steer.
   let goal = to;
-  if (world.walk?.pathStep) {
-    const step = world.walk.pathStep(actor.pos, to);
-    if (step) goal = step;
+  if (!actor.flying && actor.aiPathing !== 'none') {
+    const pf = world.pathField();
+    if (pf?.pathStep) {
+      const step = pf.pathStep(actor.pos, to);
+      if (step) goal = step;
+    }
   }
   let dx = goal.x - actor.pos.x, dy = goal.y - actor.pos.y;
   // ELBOW ROOM (BehaviorSpec.spacing, stamped per combat tick): a soft
@@ -1746,7 +1786,7 @@ function makeCtx(
       if (beh?.castArc !== undefined && Math.abs(angleDiff(
         actor.facingPrev ?? actor.facing,
         angleTo(actor.pos, target.pos))) > beh.castArc) return null;
-      return pickSkill(actor, world, d, tuning);
+      return pickSkill(actor, world, d, tuning, target);
     },
     cast: inst => {
       // THE FEINT (kernel casts only — reserves/menders never bluff): the

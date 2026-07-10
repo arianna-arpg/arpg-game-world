@@ -61,6 +61,10 @@ export interface CastingState {
   presses?: number;
   /** AI: how long a monster holds a channel/charge before letting go. */
   aiHold?: number;
+  /** AI: seconds this channel's firing line has been WALLED (occlusion) —
+   *  past LOS_CFG.channelGrace the grip releases and the caster repositions
+   *  instead of gnawing stone. */
+  losLost?: number;
   /** AI FINESSE (perfect/timed bars): the bar fraction where the monster
    *  "clicks" (castPress), pre-rolled once per cast from its brain's
    *  skillUse.finesse — inside the window on a made roll, a fumble outside
@@ -398,6 +402,14 @@ export class Actor {
   aiTargetId?: number;
   /** Where the locked target was last seen (perception-memory investigation). */
   aiLastSeen?: Vec2;
+  /** World time the locked target was last actually SEEN (line of sight) —
+   *  a held lock survives blindness for the chase-memory window (the hunter
+   *  rounds the corner after you), then the thread snaps. */
+  aiLosSeenAt = 0;
+  /** MoveSpec.pathing, stamped per AI tick — moveToward reads it. 'none' =
+   *  straight-line steer (mindless things pile at walls, an authored trait);
+   *  absent/'route' = follow the zone's walkable flow-field. */
+  aiPathing?: 'none' | 'route';
   /** World time the current engagement began (-1 = never engaged). */
   aiEngagedAt = -1;
   /** ATTENTION SPAN (dim brains): the lock lapses at this world time — the

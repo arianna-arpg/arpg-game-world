@@ -21333,6 +21333,19 @@ export class World {
       // open forever (wedged monsters, totems, and echo riders mid-charge).
       const hold = cs.mode === 'charge' ? Math.min(cs.aiHold, cs.total) : cs.aiHold;
       cs.held = (cs.mode === 'charge' ? cs.elapsed : cs.channelTime ?? 0) < hold;
+      // A WALLED firing line loses the grip (occlusion): grace, then release
+      // — the ray doesn't gnaw stone while the prey walks away. The wall is
+      // the player's counterplay; repositioning is the monster's answer.
+      if (cs.held && cs.mode === 'channel') {
+        const prey = a.aiTargetId !== undefined ? this.actorById(a.aiTargetId) : undefined;
+        if (prey && !prey.dead && this.aiNeedsFireLine(a, cs.inst)
+          && !this.lineOfFire(a.pos, prey.pos)) {
+          cs.losLost = (cs.losLost ?? 0) + dt;
+          if (cs.losLost >= LOS_CFG.channelGrace) cs.held = false;
+        } else if (cs.losLost) {
+          cs.losLost = 0;
+        }
+      }
     }
     // AI FINESSE: monsters with a practiced hand (skillUse.finesse) work the
     // PLAYER's timing mechanics — they "click" the perfect/timed bar through
@@ -24724,6 +24737,63 @@ export class World {
    *  real to eyes), or null in the open. */
   veilPatchAt(p: { x: number; y: number }): VeilPatch | null {
     return this.veilIndex().patchAt(p.x, p.y);
+  }
+
+  // --- PATHING AUTHORITY: the flow-field every steered foot follows --------
+  private convexNav: GridWalkField | null = null;
+  private convexNavKey = '';
+
+  /** The zone's PATHING authority: the walk grid where one exists (warrens,
+   *  structures), else a lazy NAV GRID raked over the convex zone's blocking
+   *  doodads — so flow-field pathing works on plains exactly as it does in
+   *  mazes. Purely advisory (clampPos stays the collision truth): a monster
+   *  the grid can't route falls back to straight steering. Rebuilt when the
+   *  doodad list changes (brittle pops, terraforms — the doodadsRev seam).
+   *  Boundless zones (the open sea) steer straight — nothing to round. */
+  pathField(): WalkField | null {
+    if (this.walk) return this.walk.pathStep ? this.walk : null;
+    if (this.arena.boundless) return null;
+    const key = this.zone.id + ':' + this.doodads.length + ':' + this.doodadsRev;
+    if (!this.convexNav || this.convexNavKey !== key) {
+      this.convexNav = this.buildConvexNav();
+      this.convexNavKey = key;
+    }
+    return this.convexNav;
+  }
+
+  /** Rake the nav grid: interior walkable (rect or ellipse bounds), then
+   *  move-blocking doodads stamp 'wall' at TRUNK radius + NAV_CFG.pad —
+   *  chasm discs first so bridge spans can re-open their crossings, solids
+   *  last so a boulder on a bridge still blocks (clampPos parity). */
+  private buildConvexNav(): GridWalkField {
+    const g = new GridWalkField(this.arena.w, this.arena.h);
+    if (this.arena.shape === 'ellipse') {
+      // Row-fill the inscribed ellipse; the corners stay 'wall' so paths
+      // never hug ground clampToBounds would drag feet back from.
+      const rx = this.arena.w / 2, ry = this.arena.h / 2;
+      for (let y = g.cell / 2; y < this.arena.h; y += g.cell) {
+        const ny = (y - ry) / ry;
+        const k = 1 - ny * ny;
+        if (k <= 0) continue;
+        const half = Math.sqrt(k) * rx;
+        g.fillRect(rx - half, y - g.cell / 2, rx + half, y + g.cell / 2 - 1, true);
+      }
+    } else {
+      g.fillRect(0, 0, this.arena.w, this.arena.h, true);
+    }
+    const solids: Doodad[] = [], spans: Doodad[] = [];
+    for (const d of this.doodads) {
+      if (doodadRuleOf(d.kind).spans) { spans.push(d); continue; }
+      if (!blocksMovement(d)) continue;
+      if (d.kind === 'chasm') {
+        g.fillDisc(d.pos.x, d.pos.y, bodyRadiusOf(d) + NAV_CFG.pad, 'wall');
+      } else {
+        solids.push(d);
+      }
+    }
+    for (const s of spans) g.fillDisc(s.pos.x, s.pos.y, s.radius, 'ground');
+    for (const o of solids) g.fillDisc(o.pos.x, o.pos.y, bodyRadiusOf(o) + NAV_CFG.pad, 'wall');
+    return g;
   }
 
   /** Is `target` swallowed by a veil patch the viewer isn't inside? THE one

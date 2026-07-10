@@ -100,6 +100,13 @@ export interface MoveSpec {
   flipChance?: number;
   /** Strafe to reopen a blocked firing lane before anything else (casters). */
   losSeek?: boolean;
+  /** HOW the feet find the way (the pathfinding lever, machine-shiftable
+   *  like every move knob): 'route' (default) follows the zone's walkable
+   *  flow-field — around warren walls AND plains cliff pockets alike
+   *  (World.pathField); 'none' steers straight and piles up at whatever
+   *  stands in the way — MINDLESSNESS as an authored trait (shamblers
+   *  smearing along a wall while the clever thing walks around it). */
+  pathing?: 'route' | 'none';
   /** Stealth-shroud while stalking; strikes reveal, withdrawal re-cloaks. */
   shroud?: boolean;
   /** skitter: seconds per DART burst (default [0.28, 0.5]) and per dead-stop
@@ -390,6 +397,11 @@ export interface PerceptionSpec {
    *  alarm, kin callouts, shouts). 0 = OBLIVIOUS — struck from the shadows,
    *  it forgets the wound the moment you vanish. Default 1. */
   alertMul?: number;
+  /** SEES THROUGH WALLS (tremor-sense, the burrower's ear to the ground):
+   *  perception skips the line-of-sight gate entirely — this mind acquires
+   *  and holds prey through any stone. Casting still respects firing lines
+   *  (knowing where you are doesn't let a ray through masonry). */
+  xray?: boolean;
 }
 
 // --- MORALE ---------------------------------------------------------------------
