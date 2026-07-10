@@ -128,17 +128,20 @@ export interface ProcDef {
    *                     (DEFENSE_CFG.poise.brackets; see `bracket` filter)
    *   'poiseRearmed'    your broken poise bar recovers and re-arms
    *   'chargeGain'      you actually gain a charge (see `charge` filter)
-   *   'buffGain'        a buff is applied to you (see `buff` filter) */
+   *   'buffGain'        a buff is applied to you (see `buff` filter)
+   *   'orbPickup'       you scoop a resource orb (see `orb` filter) */
   trigger: 'hit' | 'kill' | 'collision' | 'statusApply'
     | 'block' | 'evade' | 'esBreak' | 'esRechargeStart' | 'esFilled'
     | 'poiseBreakDealt' | 'poiseBroken' | 'poiseBracket' | 'poiseRearmed'
-    | 'chargeGain' | 'buffGain';
+    | 'chargeGain' | 'buffGain' | 'orbPickup';
   /** statusApply only: fires when one of THESE statuses lands (omit = any). */
   status?: string | string[];
   /** chargeGain only: fires for THESE charge ids (omit = any charge). */
   charge?: string | string[];
   /** buffGain only: fires for THESE buff ids (omit = any buff). */
   buff?: string | string[];
+  /** orbPickup only: fires for THESE orb kinds (omit = any orb). */
+  orb?: string | string[];
   /** poiseBracket only: fires for THESE rungs — fractions of max poise,
    *  matching DEFENSE_CFG.poise.brackets entries (omit = every rung). */
   bracket?: number | number[];

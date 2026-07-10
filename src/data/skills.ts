@@ -5807,7 +5807,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 0, cooldown: 2, useTime: 0,
     chargeGain: [{ charge: 'flask_life', amount: 1, max: 5, on: 'orbPickup', orbKind: 'life' }],
     chargeCost: { charge: 'flask_life', amount: 'all', minimum: 1 },
-    equipMods: [mod('orbDropLife', 'flat', 0.05)],
+    equipMods: [mod('orbOnHit_life', 'flat', 0.05)],
     delivery: { type: 'self' },
     effects: [{ type: 'restoreOverTime', resource: 'life', amount: 16, duration: 3, perCharge: true }],
     thresholds: [
@@ -5823,7 +5823,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 0, cooldown: 2, useTime: 0,
     chargeGain: [{ charge: 'flask_mana', amount: 1, max: 5, on: 'orbPickup', orbKind: 'mana' }],
     chargeCost: { charge: 'flask_mana', amount: 'all', minimum: 1 },
-    equipMods: [mod('orbDropMana', 'flat', 0.05)],
+    equipMods: [mod('orbOnHit_mana', 'flat', 0.05)],
     delivery: { type: 'self' },
     effects: [{ type: 'restoreOverTime', resource: 'mana', amount: 13, duration: 3, perCharge: true }],
     thresholds: [
@@ -5839,7 +5839,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 0, cooldown: 5, useTime: 0,
     chargeGain: [{ charge: 'flask_catalyst', amount: 1, max: 6, on: 'orbPickup' }],
     chargeCost: { charge: 'flask_catalyst', amount: 'all', minimum: 2 },
-    equipMods: [mod('orbDropLife', 'flat', 0.025), mod('orbDropMana', 'flat', 0.025)],
+    equipMods: [mod('orbOnHit_life', 'flat', 0.025), mod('orbOnHit_mana', 'flat', 0.025)],
     delivery: { type: 'self' },
     effects: [
       { type: 'restoreOverTime', resource: 'life', amount: 7, duration: 3.5, perCharge: true },

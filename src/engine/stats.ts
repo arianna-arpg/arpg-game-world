@@ -514,10 +514,11 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Life lane: repayment = total life regen × this × attack speed. */
   overdriveLifeFactor:   { label: 'Blood Debt Metabolism', base: 0, min: 0 },
 
-  // Resource orbs (on-hit procs from Harvest supports)
-  orbDropLife:    { label: 'Life Orb Drop Chance', base: 0, percent: true },
-  orbDropMana:    { label: 'Mana Orb Drop Chance', base: 0, percent: true },
-  orbDropEs:      { label: 'Energy Orb Drop Chance', base: 0, percent: true },
+  // Resource orbs: per-kind shed chances are a GENERATED family registered
+  // by the ORB_DEFS registry (data/orbs.ts — orbOnHit_<id> / orbOnKill_<id>
+  // / orbOnHurt_<id>, plus orbRefund_<id> pickup refunds). This is the one
+  // shared scalar: a rate multiplier over every shed roll.
+  orbShedRate:    { label: 'Orb Shed Rate', base: 1, min: 0 },
   /** Hits may shed an elemental remnant; picking it up empowers the next
    *  cast of that element (Elemental Remnants support). */
   remnantChance:  { label: 'Remnant Drop Chance', base: 0, percent: true },

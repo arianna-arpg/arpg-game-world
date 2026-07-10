@@ -126,6 +126,10 @@ import { dayCycle } from '../world/daynight';
 import { clampToBounds, exitInside, samplePoint, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned } from '../world/traits';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
+import {
+  ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnKillStat, orbOnHurtStat,
+  orbRefundStat,
+} from '../data/orbs';
 import { chooseEvent, type EventContext, type EventReward } from './events';
 import { ActiveZoneEvent } from './zoneEvent';
 import {
@@ -783,10 +787,13 @@ export interface GemDrop {
   dropperCleared?: boolean;
 }
 
-/** A resource orb knocked loose by a Harvest support — run it over. */
+/** A resource orb on the ground — run it over and it POURS (ORB_DEFS is
+ *  the kind registry: restores, banked charges, refund taps). */
 export interface ResourceOrb {
   pos: Vec2;
-  kind: 'life' | 'mana' | 'es';
+  /** ORB_DEFS id. */
+  kind: string;
+  /** Restore amount for pouring kinds (charge payloads live on the def). */
   amount: number;
   bob: number;
   life: number;
@@ -15763,6 +15770,17 @@ export class World {
       if (depth === 0) {
         this.tapCharges(caster, 'hit');
         this.tapCharges(target, 'takeHit');
+        // BRUISED-LOOSE orbs (orbOnHurt_<id>): a landed blow TAKEN can shake
+        // a registry orb out of the victim's own gear — the defensive shed
+        // valve (no skill context; the wound is the roll).
+        if (this.orbs.length < ORB_CAP && !target.construct) {
+          for (const id of Object.keys(ORB_DEFS)) {
+            const c = target.sheet.get(orbOnHurtStat(id)) * target.sheet.get('orbShedRate');
+            if (c > 0 && chance(Math.min(0.5, c))) {
+              this.shedOrb(id, target.pos, { scatter: 24 });
+            }
+          }
+        }
         // Blood-spooling (channelHitSpool): landed hits during an unbroken
         // channel bank toward bonus projectiles on the coming pulses.
         if (caster.casting?.mode === 'channel') {
@@ -16237,12 +16255,10 @@ export class World {
         // SIPHON ORB (Siphon Strike / Rip Blood): the landed top-level hit
         // knocks a resource orb loose that HOMES back to the caster —
         // sustain with travel time. Sub-hits (splash, procs) never bleed.
-        if (dealt > 0 && depth === 0 && this.orbs.length < 40 && !caster.construct) {
-          this.orbs.push({
-            pos: vec(target.pos.x + rand(-8, 8), target.pos.y + rand(-8, 8)),
-            kind: fx.resource, amount: fx.amount,
-            bob: rand(0, Math.PI * 2), life: 8,
-            homeTo: caster.owner ?? caster,
+        if (dealt > 0 && depth === 0 && !caster.construct) {
+          this.shedOrb(fx.resource, target.pos, {
+            scatter: 8, amount: fx.amount, life: 8,
+            homeTo: caster.owner ?? caster, clamp: false,
           });
         }
       } else if (fx.type === 'spreadStatus') {
@@ -16394,22 +16410,15 @@ export class World {
       }
     }
 
-    // Resource orbs (Harvest supports): damaging hits can knock loose a
-    // pickup of life, mana, or energy shield.
-    if (dealt > 0 && depth === 0 && this.orbs.length < 40) {
-      const ORB_KINDS = [
-        { kind: 'life' as const, stat: 'orbDropLife', amount: 10 + this.zone.level * 2 },
-        { kind: 'mana' as const, stat: 'orbDropMana', amount: 8 + this.zone.level },
-        { kind: 'es' as const, stat: 'orbDropEs', amount: 10 + this.zone.level * 2 },
-      ];
-      for (const o of ORB_KINDS) {
-        const c = caster.sheet.get(o.stat, tags, extra);
+    // Resource orbs (ORB_DEFS): damaging hits can knock loose any registry
+    // kind — the orbOnHit_<id> family, rolled with the striking skill's
+    // context so tag-filtered grants work ("melee hits shed wakeflames").
+    if (dealt > 0 && depth === 0 && this.orbs.length < ORB_CAP) {
+      const rate = caster.sheet.get('orbShedRate', tags, extra);
+      for (const id of Object.keys(ORB_DEFS)) {
+        const c = caster.sheet.get(orbOnHitStat(id), tags, extra) * rate;
         if (c > 0 && chance(Math.min(0.5, c))) {
-          this.orbs.push({
-            pos: this.clampPos(vec(target.pos.x + rand(-18, 18), target.pos.y + rand(-18, 18)), 8),
-            kind: o.kind, amount: o.amount,
-            bob: rand(0, Math.PI * 2), life: 12,
-          });
+          this.shedOrb(id, target.pos, { scatter: 18 });
         }
       }
     }
@@ -16535,6 +16544,7 @@ export class World {
       // visible from a skill-context query — this is that site.
       this.tapCharges(caster, 'kill');
       this.rollKillRemnants(caster, inst, target.pos);
+      this.rollKillOrbs(caster, inst, target);
       // CAST-ON-KILL trigger gems ride the killing hit (chain depth from
       // the slaying instance's stamp, aimed at where the victim fell).
       this.rollTriggers(caster, 'kill', {
@@ -16549,7 +16559,7 @@ export class World {
    *  (see ChargeGainSpec — the passive-baked-into-a-skill seam). `at` is
    *  the triggering event's position for radius-gated taps (enemyDeath). */
   private tapCharges(a: Actor, on: NonNullable<SkillDef['chargeGain']>[number]['on'],
-    at?: Vec2, orbKind?: 'life' | 'mana' | 'es'): void {
+    at?: Vec2, orbKind?: string): void {
     for (const inst of a.skills) {
       if (!inst) continue;
       // instanceChargeGain, not def.chargeGain: SOCKETED taps (Answering
@@ -16564,6 +16574,23 @@ export class World {
         if (on === 'orbPickup' && spec.orbKind && spec.orbKind !== orbKind) continue;
         if (spec.chance !== undefined && !chance(spec.chance)) continue;
         a.gainCharge(spec.charge, spec.amount, spec.max, inst);
+      }
+    }
+  }
+
+  /** Shed registry ORBS at a credited kill (orbOnKill_<id> stat family,
+   *  rolled with the slaying skill's context). noBounty prey sheds nothing —
+   *  a conjurer's endless brood must not become an orb fountain (remnants
+   *  stay ungated: short-lived buff fuel, not a banked economy). */
+  private rollKillOrbs(caster: Actor, inst: SkillInstance, victim: Actor): void {
+    if (caster.construct || victim.noBounty || this.orbs.length >= ORB_CAP) return;
+    const tags = skillContextTags(inst.def, grantedTags(inst));
+    const extra = instanceMods(inst);
+    const rate = caster.sheet.get('orbShedRate', tags, extra);
+    for (const id of Object.keys(ORB_DEFS)) {
+      const c = caster.sheet.get(orbOnKillStat(id), tags, extra) * rate;
+      if (c > 0 && chance(Math.min(0.75, c))) {
+        this.shedOrb(id, victim.pos, { scatter: 26 });
       }
     }
   }
@@ -16723,12 +16750,14 @@ export class World {
    *  and Bloodlust→Fury can never close the loop past the lid. Payload
    *  grants land as NEW events swept next frame (one link per frame —
    *  chains propagate visibly, never recurse). */
-  private rollGainProcs(owner: Actor, ev: { kind: 'charge' | 'buff'; id: string; depth: number }): void {
+  private rollGainProcs(owner: Actor, ev: { kind: 'charge' | 'buff' | 'orb'; id: string; depth: number }): void {
     if (owner.dead || ev.depth >= this.procDepthAllowed(owner)) return;
-    const want = ev.kind === 'charge' ? 'chargeGain' : 'buffGain';
+    const want = ev.kind === 'charge' ? 'chargeGain'
+      : ev.kind === 'buff' ? 'buffGain' : 'orbPickup';
     for (const proc of PROC_LIST) {
       if (proc.trigger !== want) continue;
-      const filter = ev.kind === 'charge' ? proc.charge : proc.buff;
+      const filter = ev.kind === 'charge' ? proc.charge
+        : ev.kind === 'buff' ? proc.buff : proc.orb;
       if (filter !== undefined) {
         const list = Array.isArray(filter) ? filter : [filter];
         if (!list.includes(ev.id)) continue;
@@ -17509,12 +17538,7 @@ export class World {
           // Breakables can spill something drinkable.
           const mdef = actor.defId ? MONSTERS[actor.defId] : undefined;
           if (mdef?.orbDrops && chance(mdef.orbDrops)) {
-            const kind = chance(0.5) ? 'life' as const : 'mana' as const;
-            this.orbs.push({
-              pos: this.clampPos(vec(actor.pos.x, actor.pos.y), 8),
-              kind, amount: kind === 'life' ? 12 + this.zone.level * 2 : 9 + this.zone.level,
-              bob: rand(0, Math.PI * 2), life: 12,
-            });
+            this.shedOrb(chance(0.5) ? 'life' : 'mana', actor.pos);
           }
         }
       }
@@ -19690,6 +19714,24 @@ export class World {
             if (bearer.life - drained <= 1) { this.deactivateAura(bearer, skillId); continue; }
             bearer.life -= drained;
           }
+          // CHARGE-FED upkeep: fractional owing, paid in whole charges as
+          // they come due. An unpayable due charge snuffs the toggle —
+          // but a scoop BETWEEN payments refuels it seamlessly.
+          if (d.upkeep.charges) {
+            const uc = d.upkeep.charges;
+            aura.chargeAcc = (aura.chargeAcc ?? 0) + uc.perSec * rampMul * dt;
+            if (aura.chargeAcc >= 1) {
+              const owed = Math.floor(aura.chargeAcc);
+              aura.chargeAcc -= owed;
+              const bank = bearer.charges.get(uc.charge) ?? 0;
+              if (bank < owed) {
+                if (bank > 0) bearer.spendCharge(uc.charge, bank);
+                this.deactivateAura(bearer, skillId);
+                continue;
+              }
+              bearer.spendCharge(uc.charge, owed);
+            }
+          }
         }
         // LIFE SEAL bookkeeping: damage reduction scales with the MISSING
         // fraction (deeper wound, harder shell) and the seal staggers a
@@ -20246,12 +20288,7 @@ export class World {
     this.dropGemAt(c.pos);
     this.dropGemAt(c.pos);
     for (let i = 0; i < 2; i++) {
-      const kind = chance(0.5) ? 'life' as const : 'mana' as const;
-      this.orbs.push({
-        pos: this.clampPos(vec(c.pos.x + rand(-22, 22), c.pos.y + rand(-22, 22)), 8),
-        kind, amount: kind === 'life' ? 12 + this.zone.level * 2 : 9 + this.zone.level,
-        bob: rand(0, Math.PI * 2), life: 14,
-      });
+      this.shedOrb(chance(0.5) ? 'life' : 'mana', c.pos, { scatter: 22, life: 14 });
     }
     this.flashes.push({ pos: vec(c.pos.x, c.pos.y), radius: 50, color: '#e8c87a', life: 0.4, maxLife: 0.4 });
     this.text(vec(c.pos.x, c.pos.y - 22), 'the chest opens!', '#e8c87a', 14);
@@ -21319,10 +21356,83 @@ export class World {
     return best;
   }
 
+  /** THE one orb spawn path: registry lookup, world cap, clamp, scatter.
+   *  Every shed site — harvest hits, kill sheds, hurt sheds, siphons,
+   *  chests, breakables, monster spills — funnels through here. */
+  shedOrb(kind: string, at: Vec2, opts?: {
+    scatter?: number; amount?: number; life?: number; homeTo?: Actor;
+    /** false: keep the raw scatter point (siphon orbs fly home anyway). */
+    clamp?: boolean;
+  }): void {
+    const def = ORB_DEFS[kind];
+    if (!def || this.orbs.length >= ORB_CAP) return;
+    const s = opts?.scatter ?? 0;
+    const p = vec(at.x + (s ? rand(-s, s) : 0), at.y + (s ? rand(-s, s) : 0));
+    this.orbs.push({
+      pos: opts?.clamp === false ? p : this.clampPos(p, 8),
+      kind, amount: opts?.amount ?? orbAmount(def, this.zone.level),
+      bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
+      homeTo: opts?.homeTo,
+    });
+  }
+
+  /** Pour a scooped orb into an actor: the def says what it carries —
+   *  a resource restore, banked charges (CHARGE_DEFS personalities apply),
+   *  or both — then every 'orbPickup' seam fires: flask FOUNT taps,
+   *  per-skill cooldown REFUNDS (orbRefund_<kind>), and orbPickup procs
+   *  (queued as a gain event, swept next frame like charge/buff chains). */
+  private pourOrb(a: Actor, orb: ResourceOrb): void {
+    const def = ORB_DEFS[orb.kind];
+    if (!def) return;
+    const gained: string[] = [];
+    if (def.restore && orb.amount > 0) {
+      this.applyRestore(a, {
+        resource: def.restore, amount: orb.amount,
+        resetEsDelay: def.restore === 'es',
+      });
+      gained.push(`+${orb.amount} ${def.label}`);
+    }
+    if (def.charge) {
+      const before = a.charges.get(def.charge.charge) ?? 0;
+      a.gainCharge(def.charge.charge, def.charge.amount, def.charge.max);
+      // Honest text: a scoop at a full bank banks nothing, says nothing.
+      if ((a.charges.get(def.charge.charge) ?? 0) > before) {
+        gained.push(`+${def.charge.amount} ${def.label}`);
+      }
+    }
+    this.tapCharges(a, 'orbPickup', undefined, orb.kind);
+    this.refundOnOrb(a, orb.kind);
+    if (a.gainEvents.length < 64) {
+      a.gainEvents.push({ kind: 'orb', id: orb.kind, depth: 0 });
+    }
+    if (gained.length) this.text(a.pos, gained.join('  '), def.color, 12);
+  }
+
+  /** Per-skill cooldown REFUND on an orb scoop: each cooling skill asks the
+   *  orbRefund_<kind> stat with its own tags + instance mods, so a skill can
+   *  subscribe itself (innateMods), a support can subscribe its host, and a
+   *  passive can subscribe a whole tag ("melee skills refund on wakeflame").
+   *  Meta-shared clocks come free — they key the same cooldowns entry. */
+  private refundOnOrb(a: Actor, kind: string): void {
+    if (a.cooldowns.size === 0) return;
+    for (const inst of a.skills) {
+      if (!inst) continue;
+      const left = a.cooldowns.get(inst.def.id);
+      if (left === undefined) continue;
+      const s = a.sheet.get(orbRefundStat(kind),
+        skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst));
+      if (s <= 0) continue;
+      const next = left - s;
+      if (next <= 0) a.cooldowns.delete(inst.def.id);
+      else a.cooldowns.set(inst.def.id, next);
+    }
+  }
+
   private updateOrbs(dt: number): void {
-    const colors = { life: '#d04848', mana: '#4a78d8', es: '#5ad8d8' };
     for (let i = this.orbs.length - 1; i >= 0; i--) {
       const orb = this.orbs[i];
+      const def = ORB_DEFS[orb.kind];
+      if (!def) { this.orbs.splice(i, 1); continue; }
       orb.bob += dt * 3;
       orb.life -= dt;
       if (orb.life <= 0) { this.orbs.splice(i, 1); continue; }
@@ -21333,12 +21443,7 @@ export class World {
         const home = orb.homeTo;
         const gap = dist(orb.pos, home.pos);
         if (gap <= home.radius + 10) {
-          this.applyRestore(home, {
-            resource: orb.kind, amount: orb.amount,
-            resetEsDelay: orb.kind === 'es',
-          });
-          this.tapCharges(home, 'orbPickup', undefined, orb.kind);
-          this.text(home.pos, `+${orb.amount} ${orb.kind === 'es' ? 'shield' : orb.kind}`, colors[orb.kind], 12);
+          this.pourOrb(home, orb);
           this.orbs.splice(i, 1);
         } else {
           const ang = angleTo(orb.pos, home.pos);
@@ -21348,16 +21453,18 @@ export class World {
         }
         continue;
       }
-      const seat = this.pickupSeat(orb.pos, 18);
+      // MAGNET kinds drift to the nearest living seat before the scoop —
+      // wakeflames are drawn to the living (def.magnet is the leash).
+      const seat = this.pickupSeat(orb.pos, Math.max(18, def.magnet ?? 0));
       if (!seat) continue;
       const p = seat.actor;
-      this.applyRestore(p, {
-        resource: orb.kind, amount: orb.amount,
-        resetEsDelay: orb.kind === 'es',
-      });
-      // FOUNT taps (flask skills): the scooped orb also banks a sip.
-      this.tapCharges(p, 'orbPickup', undefined, orb.kind);
-      this.text(p.pos, `+${orb.amount} ${orb.kind === 'es' ? 'shield' : orb.kind}`, colors[orb.kind], 12);
+      if (dist(orb.pos, p.pos) > p.radius + 18) {
+        const ang = angleTo(orb.pos, p.pos);
+        orb.pos.x += Math.cos(ang) * 240 * dt;
+        orb.pos.y += Math.sin(ang) * 240 * dt;
+        continue;
+      }
+      this.pourOrb(p, orb);
       this.orbs.splice(i, 1);
     }
   }
@@ -23139,12 +23246,7 @@ export class World {
     this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 2.2, color, life: 0.3, maxLife: 0.3 });
     if (br.text) this.text(vec(d.pos.x, d.pos.y - 14), br.text, color, 12);
     if (br.orbChance && chance(br.orbChance)) {
-      const kind = chance(0.5) ? 'life' as const : 'mana' as const;
-      this.orbs.push({
-        pos: this.clampPos(vec(d.pos.x, d.pos.y), 8), kind,
-        amount: kind === 'life' ? 12 + this.zone.level * 2 : 9 + this.zone.level,
-        bob: rand(0, Math.PI * 2), life: 12,
-      });
+      this.shedOrb(chance(0.5) ? 'life' : 'mana', d.pos);
     }
     if (br.gemChance && chance(br.gemChance)) this.dropGemAt(vec(d.pos.x, d.pos.y));
     if (br.carve && this.walk instanceof GridWalkField) {

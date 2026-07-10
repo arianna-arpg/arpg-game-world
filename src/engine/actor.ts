@@ -202,6 +202,9 @@ export interface ActiveAura {
   since?: number;
   /** Last seal-DR value synced into the sheet (skip no-op setSource). */
   sealVal?: number;
+  /** Fractional charge-upkeep owed (AuraDelivery.upkeep.charges) — paid
+   *  in whole charges when it crosses 1. */
+  chargeAcc?: number;
   /** THE LEDGER's running balance (AuraDelivery.ledger — Arrears' deferred
    *  wound, Reclamation's suppressed regen). Settles on the lapse. */
   ledger?: { balance: number };
@@ -455,13 +458,14 @@ export class Actor {
    *  per-attempt chance scales with the gap, so fast and slow skills
    *  converge on the same procs-per-minute (ProcDef.ppm). */
   procAttemptAt = new Map<string, number>();
-  /** GAIN EVENTS (the chargeGain/buffGain proc triggers): every charge or
-   *  buff actually gained this frame, with its CHAIN DEPTH — 0 for gains
-   *  from real play, +1 per proc-payload link, so Frenzy→Rage→Bloodlust
-   *  chains are governed by the same procDepth/falloff rules as hit chains
-   *  and a loop back into Frenzy dies at the lid. Swept by the world each
-   *  frame (the expiredStatuses pattern); capped so nothing can flood it. */
-  gainEvents: { kind: 'charge' | 'buff'; id: string; depth: number }[] = [];
+  /** GAIN EVENTS (the chargeGain/buffGain/orbPickup proc triggers): every
+   *  charge, buff, or orb actually gained this frame, with its CHAIN DEPTH
+   *  — 0 for gains from real play, +1 per proc-payload link, so
+   *  Frenzy→Rage→Bloodlust chains are governed by the same procDepth/
+   *  falloff rules as hit chains and a loop back into Frenzy dies at the
+   *  lid. Swept by the world each frame (the expiredStatuses pattern);
+   *  capped so nothing can flood it. */
+  gainEvents: { kind: 'charge' | 'buff' | 'orb'; id: string; depth: number }[] = [];
   /** LIFE BOND (BuffEffect.bond): the ally this actor's damage feeds as
    *  healing (bondShare × the skill's bondFeed) — held while the named
    *  buff still rides the target; one bond per caster, newest wins. */
@@ -1157,9 +1161,13 @@ export class Actor {
   gainCharge(charge: string, amount: number, max: number, inst?: SkillInstance, chainDepth = 0): void {
     const st = this.chargeState.get(charge);
     if (st?.drain !== undefined) return;
+    // Cap = the gain path's own max + the skill-scoped chargeCap stat
+    // + the charge-scoped chargeCap_<id> family (which reaches every
+    // path, including skill-less orb pours and passive accrual).
     const cap = Math.max(0, Math.round(max + this.sheet.get('chargeCap',
       inst ? skillContextTags(inst.def) : undefined,
-      inst ? instanceMods(inst) : undefined)));
+      inst ? instanceMods(inst) : undefined)
+      + this.sheet.get('chargeCap_' + charge)));
     const cur = this.charges.get(charge) ?? 0;
     const next = Math.min(cap, cur + amount);
     this.charges.set(charge, next);
@@ -1237,6 +1245,27 @@ export class Actor {
         st.acc = 0;
       }
       this.syncChargeMods(id);
+    }
+    // PASSIVE ACCRUAL (chargeRegen_<id>, charges per 10s — passive nodes,
+    // affixes, buffs). Sampled on a 1s cadence so idle actors don't pay a
+    // registry of stat queries every frame. Accrual without a bank banks
+    // nothing: the cap is the def's baseCap plus invested chargeCap stats.
+    const rst = this.chargeState.get('__regen') ?? { idle: 0, acc: 0, tick: 0 };
+    this.chargeState.set('__regen', rst);
+    rst.tick += dt;
+    if (rst.tick >= 1) {
+      rst.tick -= 1;
+      for (const [id, def] of Object.entries(CHARGE_DEFS)) {
+        const q = this.sheet.get('chargeRegen_' + id);
+        if (q <= 0) continue;
+        const st = this.chargeState.get(id + ':regen') ?? { idle: 0, acc: 0, tick: 0 };
+        this.chargeState.set(id + ':regen', st);
+        st.acc += q / 10;
+        while (st.acc >= 1) {
+          st.acc -= 1;
+          this.gainCharge(id, 1, def.baseCap ?? 0);
+        }
+      }
     }
     // Per-second / per-distance / per-channel-second taps on equipped
     // skills (chargeGain, skill-innate AND support-grafted — the merged

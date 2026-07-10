@@ -83,7 +83,8 @@ export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; 
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige'; color: string; rarity?: string; name?: string; vid?: string; }
-export interface OrbW { p: Vec2W; bob: number; life: number; kind: 'life' | 'mana' | 'es'; }
+/** kind is an ORB_DEFS registry id — the client renders from the registry. */
+export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string; }
 export interface FlashW { p: Vec2W; radius: number; color: string; life: number; maxLife: number; }
 /** A death-burst telegraph (coalesce gather → tracking orb). RENDER-ONLY: the client

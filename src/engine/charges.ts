@@ -15,7 +15,7 @@
 // New charges are added here and referenced by name from any skill/proc.
 // ---------------------------------------------------------------------------
 
-import { mod, type Modifier } from './stats';
+import { mod, STAT_DEFS, type Modifier } from './stats';
 
 export interface ChargeDef {
   label: string;
@@ -29,6 +29,10 @@ export interface ChargeDef {
   /** Unattended decay: after `delay` seconds without a gain, lose
    *  `perSec` charges per second (fractional, accumulated). */
   decay?: { perSec: number; delay?: number };
+  /** Cap for gains WITHOUT a skill context — orb pours, passive accrual
+   *  (chargeRegen_<id>). Skill taps carry their own max; this is the
+   *  bank's floor when nothing on the bar vouches for it. */
+  baseCap?: number;
 }
 
 export const CHARGE_DEFS: Record<string, ChargeDef> = {
@@ -169,3 +173,29 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
 export function chargeColor(id: string): string {
   return CHARGE_DEFS[id]?.color ?? '#e05545';
 }
+
+/** Display label for a charge (registry name, or the raw id). */
+export function chargeLabel(id: string): string {
+  return CHARGE_DEFS[id]?.label ?? id;
+}
+
+// Generated per-charge stat families, mirroring remnantDrop_<id>: any
+// modifier source — passive node, support, affix, buff — reaches a
+// SPECIFIC charge through the ordinary stat engine:
+//   chargeCap_<id>    extra max on top of every gain path's cap (the
+//                     untagged sibling of the skill-scoped chargeCap stat
+//                     — it also raises orb-pour and accrual banks).
+//   chargeRegen_<id>  passive accrual, charges per 10 seconds (needs a
+//                     bank: the def's baseCap or invested cap).
+for (const [id, def] of Object.entries(CHARGE_DEFS)) {
+  STAT_DEFS['chargeCap_' + id] = {
+    label: `Maximum ${def.label}`, base: 0,
+  };
+  STAT_DEFS['chargeRegen_' + id] = {
+    label: `${def.label} per 10s`, base: 0, min: 0,
+  };
+}
+
+/** Stat ids for a charge's extra cap and passive accrual. */
+export function chargeCapStat(id: string): string { return 'chargeCap_' + id; }
+export function chargeRegenStat(id: string): string { return 'chargeRegen_' + id; }

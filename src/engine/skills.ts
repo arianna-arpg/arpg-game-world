@@ -569,8 +569,8 @@ export interface ChargeGainSpec {
   perDistance?: number;
   /** second / channelSecond: seconds per bank (default 1). */
   everySeconds?: number;
-  /** orbPickup: only orbs of this kind feed the tap (omit = any). */
-  orbKind?: 'life' | 'mana' | 'es';
+  /** orbPickup: only orbs of this ORB_DEFS kind feed the tap (omit = any). */
+  orbKind?: string;
   /** Chance per trigger (default 1). */
   chance?: number;
   /** Only taps while THIS skill is toggled active (its aura is on / its
@@ -1548,6 +1548,12 @@ export interface AuraDelivery {
     /** The drain RAMPS: upkeep × (1 + rampPerSec × seconds held) — the
      *  Seal-and-Form price curve (Stormbind's mounting hunger). */
     rampPerSec?: number;
+    /** CHARGE-FED upkeep (the Deathwatch vigil): the toggle burns banked
+     *  charges — perSec fractional, paid in whole charges as they come
+     *  due. When a due charge can't be paid, the toggle drops (a scoop
+     *  between payments refuels it seamlessly — the grace window is the
+     *  active-play reward). Gate ignition with chargeCost minimum. */
+    charges?: { charge: string; perSec: number };
   };
   /** REAR-GUARD SHELL: while this aura burns, the bearer wears a
    *  DIRECTIONAL absorb (Actor.shellGuard) — hits through the covered arc

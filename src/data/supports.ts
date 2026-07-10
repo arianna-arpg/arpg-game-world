@@ -1098,8 +1098,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'crimson_harvest', name: 'Crimson Harvest',
     description: 'Hits have an 8% chance to knock loose a life orb — run it over to drink it.',
     color: '#d04848', requiresTags: ['attack', 'spell'],
-    mods: [mod('orbDropLife', 'flat', 0.08)],
-    perLevel: [mod('orbDropLife', 'flat', 0.03)],
+    mods: [mod('orbOnHit_life', 'flat', 0.08)],
+    perLevel: [mod('orbOnHit_life', 'flat', 0.03)],
     weight: 7,
   },
 
@@ -1107,8 +1107,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'azure_harvest', name: 'Azure Harvest',
     description: 'Hits have an 8% chance to knock loose a mana orb.',
     color: '#4a78d8', requiresTags: ['attack', 'spell'],
-    mods: [mod('orbDropMana', 'flat', 0.08)],
-    perLevel: [mod('orbDropMana', 'flat', 0.03)],
+    mods: [mod('orbOnHit_mana', 'flat', 0.08)],
+    perLevel: [mod('orbOnHit_mana', 'flat', 0.03)],
     weight: 7,
   },
 
@@ -1116,8 +1116,8 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'lambent_harvest', name: 'Lambent Harvest',
     description: 'Hits have an 8% chance to knock loose an energy shield orb — picking one up also kicks off your recharge.',
     color: '#5ad8d8', requiresTags: ['attack', 'spell'],
-    mods: [mod('orbDropEs', 'flat', 0.08)],
-    perLevel: [mod('orbDropEs', 'flat', 0.03)],
+    mods: [mod('orbOnHit_es', 'flat', 0.08)],
+    perLevel: [mod('orbOnHit_es', 'flat', 0.03)],
     weight: 6,
   },
 

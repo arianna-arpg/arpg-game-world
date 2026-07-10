@@ -10,8 +10,9 @@ import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { STATUS_DEFS } from '../engine/status';
 import { STANCE_PLANT_TIME, type Actor } from '../engine/actor';
-import { chargeColor } from '../engine/charges';
+import { chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
+import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
 import { BOSS_BAR_XP_MIN, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
@@ -3137,22 +3138,26 @@ export class Renderer {
   /** Resource orbs: little glowing droplets of life / mana / shield. */
   private drawResourceOrbs(world: World): void {
     const { ctx } = this;
-    const COLORS = { life: '#d04848', mana: '#4a78d8', es: '#5ad8d8' };
     for (const o of world.orbs) {
+      const def = ORB_DEFS[o.kind];
+      if (!def) continue;
       const y = o.pos.y + Math.sin(o.bob) * 2.5;
       const fade = Math.min(1, o.life / 2);
+      const r = def.size ?? 5.5;
+      // Charge-bearing kinds breathe — a candle guttering, not a bead.
+      const pulse = def.charge ? 1 + Math.sin(o.bob * 2) * 0.12 : 1;
       ctx.globalAlpha = 0.85 * fade;
-      ctx.shadowColor = COLORS[o.kind];
-      ctx.shadowBlur = 9;
-      ctx.fillStyle = COLORS[o.kind];
+      ctx.shadowColor = def.color;
+      ctx.shadowBlur = def.glow ?? 9;
+      ctx.fillStyle = def.color;
       ctx.beginPath();
-      ctx.arc(o.pos.x, y, 5.5, 0, Math.PI * 2);
+      ctx.arc(o.pos.x, y, r * pulse, 0, Math.PI * 2);
       ctx.fill();
       ctx.shadowBlur = 0;
       ctx.globalAlpha = 0.9 * fade;
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(o.pos.x - 1.5, y - 1.5, 1.8, 0, Math.PI * 2);
+      ctx.arc(o.pos.x - r * 0.27, y - r * 0.27, r * 0.33, 0, Math.PI * 2);
       ctx.fill();
       ctx.globalAlpha = 1;
     }
@@ -3716,7 +3721,7 @@ export class Renderer {
       ctx.fillText(`${count}`, bpx + 5, buffY - 2);
       const mx = this.hudMouse.x, myv = this.hudMouse.y;
       if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
-        hoverLabel = { x: bpx + 5, text: name };
+        hoverLabel = { x: bpx + 5, text: chargeLabel(name) };
       }
       bpx += 18;
     }
