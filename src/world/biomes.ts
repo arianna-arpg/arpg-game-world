@@ -116,8 +116,11 @@ export const BIOMES: Record<string, BiomeInfo> = {
     structures: [{ structure: 'siege_castle', chance: 0 }, { structure: 'watchtower', chance: 0.15 }],
     landmarks: [{ landmark: 'lava_coast', chance: 0.18 }, { landmark: 'caldera', chance: 0.12 },
       { landmark: 'demon_pit', chance: 0.2 }, { landmark: 'void_pillars', chance: 0.1 }] },
+  // Warm∧dry (not strictly hot∧arid — the conjunction starved deserts to
+  // <1% of land in sweep tests; the true hot/arid hearts still run
+  // desert-dominant because every competitor thins there too).
   desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 104,
-    climate: { temperature: 'hot', moisture: 'arid' },
+    climate: { temperature: 'warm', moisture: 'dry' },
     structures: [{ structure: 'grand_castle', chance: 0.1 }, { structure: 'watchtower', chance: 0.3, count: [1, 2] }],
     landmarks: [{ landmark: 'oasis', chance: 0.3 }, { landmark: 'canyon', chance: 0.25 }, { landmark: 'sinkhole', chance: 0.12 },
       { landmark: 'maggot_burrow', chance: 0.14 }] },
@@ -159,8 +162,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // tunnels mountain-pass maze, marsh = boggy islets (islands). Pure data.
   // TUNDRA: open plains, wide EXPANSES, and RIVERLAND whose course freezes
   // mid-run (the D2 Act-5 frozen river — freezeAt flips water→ice).
+  // The cold belt splits ecologically: TUNDRA claims the cold-and-dry steppe,
+  // the taiga the cold-and-wet forest (frigid-only starved it in sweeps).
   tundra:   { patronFaction: 'wild',   mapColor: '#bcd0d8', label: 'Tundra', spacing: 96,
-    climate: { temperature: 'frigid' },
+    climate: { temperature: 'cold', moisture: { to: 0.55, fadeOut: 0.2 } },
     allowedLayouts: { plains: 3, expanse: 1, riverland: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.45 },
     landmarks: [{ landmark: 'frozen_lake', chance: 0.35 }, { landmark: 'frozen_strand', chance: 0.22 }, { landmark: 'cirque', chance: 0.15 }] },
