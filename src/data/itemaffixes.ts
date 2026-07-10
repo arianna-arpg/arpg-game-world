@@ -542,6 +542,15 @@ const SUFFIXES: AffixDef[] = [
     top: 0.12, floor: 0.35, count: 2,
     baseTags: ['amulet', 'helmet'], weight: 30,
   }),
+  // The orb economy's one universal roll: richer sheds of EVERY kind —
+  // harvest founts, flask loops and wakeflame votives all drink from it.
+  fam({
+    id: 'orb_shed_rate', kind: 'suffix',
+    names: ['of Abundance', 'of the Overflowing'],
+    stat: 'orbShedRate', modKind: 'increased',
+    top: 0.3, floor: 0.25, count: 3,
+    baseTags: ['amulet', 'ring', 'boots'], weight: 45,
+  }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
   ...APPLY_AFFIXES,

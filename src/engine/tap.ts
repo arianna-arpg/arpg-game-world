@@ -25,6 +25,8 @@
 //   - world.ts   executeSkill → onCast (real executions; scheduledRepeat=true
 //                                     for echo/repeat re-fires, so presses and
 //                                     mechanical re-casts stay separable)
+//   - world.ts   shedOrb   → onOrbShed (a resource orb enters the world)
+//   - world.ts   pourOrb   → onOrbPickup (an orb scooped — after it poured)
 // ---------------------------------------------------------------------------
 
 import type { Actor } from './actor';
@@ -44,6 +46,10 @@ export interface SimTap {
   /** A skill EXECUTION (not a bar press — triggers, echoes and totem casts land
    *  here too). scheduledRepeat marks mechanical re-fires of one press. */
   onCast?(caster: Actor, inst: SkillInstance, scheduledRepeat: boolean): void;
+  /** A resource orb entered the world (ORB_DEFS kind). */
+  onOrbShed?(kind: string): void;
+  /** An orb was scooped and poured into an actor. */
+  onOrbPickup?(kind: string, into: Actor): void;
 }
 
 /** The installed tap. Read via `SIM_TAP.current?.…` at each chokepoint. */

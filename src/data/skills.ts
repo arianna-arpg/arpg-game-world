@@ -8,7 +8,7 @@
 // No engine changes required.
 // ---------------------------------------------------------------------------
 
-import { mod } from '../engine/stats';
+import { mod, linkMod } from '../engine/stats';
 import type { SkillDef } from '../engine/skills';
 
 export const SKILLS: Record<string, SkillDef> = {
@@ -5853,6 +5853,88 @@ export const SKILLS: Record<string, SkillDef> = {
       { level: 12, label: 'Volatile mixture', mods: [mod('chargeCap', 'flat', 3)] },
     ],
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  // ======================= The Wakeflame votive economy ====================
+  // The divine-core loop, Hollow Wake style: these skills SHED Wakeflame
+  // orbs while carried (equipMods → the orbOnHit/orbOnKill families),
+  // scooping banks the flame (ORB_DEFS.wakeflame → CHARGE_DEFS.wakeflame)
+  // and REFUNDS the cooldowns that subscribe (innateMods →
+  // orbRefund_wakeflame). Passives turn the held bank into a
+  // build-your-own-buff (gaugeMod on 'charge:wakeflame'); Deathwatch burns
+  // it as aura upkeep; Requiem spends it whole. Every hook is an ordinary
+  // stat or registry seam — no bespoke code anywhere in the loop.
+
+  cindershell: {
+    id: 'cindershell', name: 'Cindershell',
+    description: 'Your armor detonates in a ring of burning shrapnel — the blast gains 3 added fire and 3 added physical damage per 50 armor you wear. Carried on the bar, your hits and kills shake Wakeflame orbs loose, and each flame you scoop rekindles Cindershell by 1s.',
+    tags: ['spell', 'fire', 'physical', 'aoe'], color: '#ffb35a',
+    manaCost: 14, cooldown: 9, useTime: 0.45,
+    baseDamage: { fire: [10, 16], physical: [8, 14] },
+    delivery: { type: 'nova', radius: 130 },
+    innateMods: [
+      linkMod('addedFire', 'armor', 0.06),
+      linkMod('addedPhysical', 'armor', 0.06),
+      mod('orbRefund_wakeflame', 'flat', 1),
+    ],
+    equipMods: [
+      mod('orbOnHit_wakeflame', 'flat', 0.08),
+      mod('orbOnKill_wakeflame', 'flat', 0.3),
+    ],
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.25 },
+    ],
+    requirements: { strength: 16 },
+    ai: { range: 100, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
+  deathwatch: {
+    id: 'deathwatch', name: 'Deathwatch',
+    description: 'TOGGLE: light the vigil. Igniting it costs 1 Wakeflame and FLARES — you surge for a few seconds — then the watch holds: steady power for everyone in the ring while the vigil FEEDS on your banked Wakeflames, one every 2 seconds, guttering out when the bank runs dry. Carried on the bar, your kills shake Wakeflame orbs loose.',
+    tags: ['spell', 'aura', 'fire', 'buff', 'aoe'], color: '#ffd98a',
+    manaCost: 0, cooldown: 1, useTime: 0.4,
+    chargeCost: { charge: 'wakeflame', amount: 1, minimum: 1 },
+    delivery: {
+      type: 'aura', mode: 'toggle',
+      upkeep: { charges: { charge: 'wakeflame', perSec: 0.5 } },
+      aura: {
+        radius: 140,
+        allyMods: [mod('damage', 'increased', 0.12), mod('moveSpeed', 'increased', 0.06)],
+      },
+    },
+    equipMods: [mod('orbOnKill_wakeflame', 'flat', 0.35)],
+    effects: [{
+      type: 'buff', id: 'vigil_flare', duration: 4,
+      mods: [
+        mod('attackSpeed', 'increased', 0.15),
+        mod('castSpeed', 'increased', 0.15),
+        mod('damage', 'increased', 0.15),
+      ],
+    }],
+    requirements: { strength: 12, willpower: 12 },
+    ai: { range: 150, weight: 1 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  requiem: {
+    id: 'requiem', name: 'Requiem',
+    description: 'Speak the last words: consume EVERY banked Wakeflame for a mourning nova — 40% more damage per flame consumed. Each Wakeflame orb you scoop refunds 1.5s of the rite\'s long cooldown, and carried on the bar your hits occasionally shake one loose.',
+    tags: ['spell', 'fire', 'aoe'], color: '#f0c060',
+    manaCost: 20, cooldown: 14, useTime: 0.7,
+    baseDamage: { fire: [16, 26] },
+    delivery: { type: 'nova', radius: 150 },
+    chargeCost: { charge: 'wakeflame', amount: 'all', minimum: 1, damagePerCharge: 0.4 },
+    innateMods: [mod('orbRefund_wakeflame', 'flat', 1.5)],
+    equipMods: [mod('orbOnHit_wakeflame', 'flat', 0.07)],
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.35 },
+    ],
+    requirements: { strength: 10, willpower: 16 },
+    ai: { range: 110, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
 
   // ======================= Movement, dashes & transform channels ===========

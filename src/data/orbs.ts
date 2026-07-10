@@ -40,6 +40,9 @@ export interface OrbDef {
   /** Orbs DRIFT to the nearest living seat within this range before the
    *  walk-over scoop (0/unset = walk-over only, the classic trio). */
   magnet?: number;
+  /** Cast into the DYNAMIC LIGHT LAYER at this radius (unset = self-glow
+   *  only). Reserve it for kinds worth a candle — the light cap is shared. */
+  light?: number;
 }
 
 export const ORB_DEFS: Record<string, OrbDef> = {
@@ -67,6 +70,7 @@ export const ORB_DEFS: Record<string, OrbDef> = {
     id: 'wakeflame', label: 'Wakeflame', color: '#ffd98a',
     charge: { charge: 'wakeflame', amount: 1, max: 5 },
     amount: { base: 0 }, life: 10, size: 4.5, glow: 14, magnet: 90,
+    light: 46,
   },
 };
 

@@ -1121,6 +1121,40 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // The votive-economy grafts: ANY skill can keep the wake. kindled_wake
+  // makes the host a Wakeflame generator (the orbOnHit/orbOnKill families,
+  // read with the host's context); abundant_harvest scales every shed roll
+  // the host makes, whatever the kind; victors_tempo is the charge-battery
+  // shape — the host's kills feed a bank it doesn't natively touch,
+  // trading a support slot for a second skill's worth of generation.
+  kindled_wake: {
+    id: 'kindled_wake', name: 'Kindled Wake',
+    description: 'Supported skill keeps the wake: its hits have a 6% chance — kills a 25% chance — to shake a Wakeflame orb loose.',
+    color: '#ffd98a', requiresTags: ['attack', 'spell'],
+    mods: [mod('orbOnHit_wakeflame', 'flat', 0.06), mod('orbOnKill_wakeflame', 'flat', 0.25)],
+    perLevel: [mod('orbOnKill_wakeflame', 'flat', 0.04)],
+    weight: 6,
+  },
+
+  victors_tempo: {
+    id: 'victors_tempo', name: "Victor's Tempo",
+    description: 'Kills with the supported skill kindle your tempo: 60% chance to gain a Frenzy charge (up to 3) — a Reckoning that feeds your speed, a nova that quickens your feet.',
+    color: '#8ae06a', requiresTags: ['attack', 'spell'],
+    mods: [],
+    perLevel: [mod('chargeCap', 'flat', 0.34)],
+    chargeGain: [{ charge: 'frenzy', amount: 1, max: 3, on: 'kill', chance: 0.6 }],
+    weight: 5,
+  },
+
+  abundant_harvest: {
+    id: 'abundant_harvest', name: 'Abundant Harvest',
+    description: 'Supported skill sheds RICHER: 30% increased orb shed chance of every kind — life, mana, shield and Wakeflame alike.',
+    color: '#c8e87a', requiresTags: ['attack', 'spell'],
+    mods: [mod('orbShedRate', 'increased', 0.3)],
+    perLevel: [mod('orbShedRate', 'increased', 0.05)],
+    weight: 6,
+  },
+
   guardians_aegis: {
     id: 'guardians_aegis', name: "Guardian's Aegis",
     description: 'While you guard, your minions near you are guarded too — hits against them from your blocking arc drain YOUR shield instead.',

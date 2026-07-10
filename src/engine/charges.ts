@@ -163,6 +163,18 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
     label: 'Catalyst', color: '#c8a848',
   },
 
+  // WAKEFLAME (the votive economy): funeral-vigil flames, shed as ORBS
+  // (ORB_DEFS.wakeflame) by the skills that keep the wake, banked here on
+  // the scoop. MUTE BY DESIGN — the payoffs are all composable elsewhere:
+  // orbRefund_wakeflame cooldown subscriptions, Deathwatch's charge-fed
+  // upkeep, Requiem's damagePerCharge, and passive gaugeMods on
+  // 'charge:wakeflame' (the build-your-own-buff lane). No decay: a lit
+  // candle keeps until it is spent or burned.
+  wakeflame: {
+    label: 'Wakeflame', color: '#ffd98a',
+    baseCap: 5,
+  },
+
   // STATIC (Galvanic Reserve): built by walking and by being struck —
   // movement-as-accumulation. Mute; the discharge nova is the payoff.
   // (Also fed by Static Strike's blows — shared fuel is a feature: the

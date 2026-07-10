@@ -558,6 +558,15 @@ export const PROCS: Record<string, ProcDef> = {
       healAllies: { base: 6, perLevel: 1.2 },
     },
   },
+
+  // VOTIVE SPARK — the orbPickup trigger's demo row: scooping a Wakeflame
+  // also splashes a sip of mana. Kind-filtered (`orb`), ICD-paced; the
+  // chance stat is granted by the Long Wake's Candle Beads node.
+  votive_spark: {
+    id: 'votive_spark', name: 'Votive Spark',
+    color: '#ffd98a', trigger: 'orbPickup', orb: 'wakeflame', icd: 0.5,
+    effect: { type: 'restore', resource: 'mana', flat: 6 },
+  },
 };
 
 export const PROC_LIST: ProcDef[] = Object.values(PROCS);

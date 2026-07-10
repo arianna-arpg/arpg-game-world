@@ -21374,6 +21374,7 @@ export class World {
       bob: rand(0, Math.PI * 2), life: opts?.life ?? def.life ?? 12,
       homeTo: opts?.homeTo,
     });
+    SIM_TAP.current?.onOrbShed?.(kind);
   }
 
   /** Pour a scooped orb into an actor: the def says what it carries —
@@ -21406,6 +21407,7 @@ export class World {
       a.gainEvents.push({ kind: 'orb', id: orb.kind, depth: 0 });
     }
     if (gained.length) this.text(a.pos, gained.join('  '), def.color, 12);
+    SIM_TAP.current?.onOrbPickup?.(orb.kind, a);
   }
 
   /** Per-skill cooldown REFUND on an orb scoop: each cooling skill asks the

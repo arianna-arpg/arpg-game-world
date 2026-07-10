@@ -321,6 +321,18 @@ const nodes: PassiveNode[] = [
   { id: "executioners_rhythm_n", name: "Executioner's Rhythm", description: "+8 life gained on kill; kills tick your cooldowns down 1.5s", kind: "notable", x: 5010, y: 4200, mods: [mod("lifeOnKill", "flat", 8), mod("proc_executioners_rhythm", "flat", 1)], links: ["cl_phys_p0"] },
   // Culling keystone:
   { id: "reapers_due", name: "Reaper's Due", description: "KEYSTONE: your hits EXECUTE enemies at or below 10% of their maximum life", kind: "keystone", x: 3888, y: 4356, mods: [mod("cullThreshold", "flat", 0.1)], links: ["cl_melee_c"] },
+  // --- THE LONG WAKE: the wakeflame votive economy as a passive wing.
+  // Held wakeflames are a BUILD-YOUR-OWN-BUFF (gaugeMods on
+  // 'charge:wakeflame'): each notable converts the bank into a different
+  // payoff, so holding vs spending (Requiem, Deathwatch) is a real
+  // decision the tree itself sharpens. Entry rides the on-kill wing.
+  { id: "cl_wake_p0", name: "Votive Path", description: "+1 maximum Wakeflame; 10% increased orb shed chance", kind: "small", x: 5100, y: 4470, mods: [mod("chargeCap_wakeflame", "flat", 1), mod("orbShedRate", "increased", 0.1)], links: ["executioners_rhythm_n"] },
+  { id: "cl_wake_p1", name: "Candle Beads", description: "Kills have 6% chance to shed a Wakeflame orb; scooping a Wakeflame sparks 6 mana back (Votive Spark)", kind: "small", x: 5240, y: 4680, mods: [mod("orbOnKill_wakeflame", "flat", 0.06), mod("proc_votive_spark", "flat", 1)], links: ["cl_wake_p0"] },
+  { id: "cl_wake_p2", name: "Keeper's Patience", description: "Gain 1 Wakeflame every 10 seconds", kind: "small", x: 5090, y: 4880, mods: [mod("chargeRegen_wakeflame", "flat", 1)], links: ["cl_wake_p1"] },
+  { id: "cl_wake_cortege", name: "Cortege", description: "For each Wakeflame you hold: minions deal 2% increased damage", kind: "notable", x: 5410, y: 4560, mods: [gaugeMod("minionDamage", "increased", 0.02, "charge:wakeflame")], links: ["cl_wake_p1"] },
+  { id: "cl_wake_tallow", name: "Tallow Ward", description: "For each Wakeflame you hold: 3% increased armor and 1% less damage taken", kind: "notable", x: 5400, y: 4840, mods: [gaugeMod("armor", "increased", 0.03, "charge:wakeflame"), gaugeMod("damageTaken", "more", -0.01, "charge:wakeflame")], links: ["cl_wake_p1"] },
+  { id: "cl_wake_bright", name: "Bright Procession", description: "For each Wakeflame you hold: 2% increased damage; Wakeflame orbs refund 0.1s of every cooling skill", kind: "notable", x: 5245, y: 5045, mods: [gaugeMod("damage", "increased", 0.02, "charge:wakeflame"), mod("orbRefund_wakeflame", "flat", 0.1)], links: ["cl_wake_p2"] },
+  { id: "cl_wake_hours", name: "The Candle Hours", description: "KEYSTONE: you can hold 2 fewer Wakeflames, but each burns brighter — per Wakeflame: 3% increased damage, minions 3% increased damage, 1.5% less damage taken", kind: "keystone", x: 5570, y: 4990, mods: [mod("chargeCap_wakeflame", "flat", -2), gaugeMod("damage", "increased", 0.03, "charge:wakeflame"), gaugeMod("minionDamage", "increased", 0.03, "charge:wakeflame"), gaugeMod("damageTaken", "more", -0.015, "charge:wakeflame")], links: ["cl_wake_tallow", "cl_wake_bright"] },
   // The proc-combat archetype's gate: one extra proc LAYER (deeper layers
   // roll at half rate — DEFENSE_CFG.procs.depthFalloff keeps it convergent).
   { id: "chain_reaction", name: "Chain Reaction", description: "KEYSTONE: your triggered effects can themselves trigger effects (one extra layer; deeper layers fire at half rate)", kind: "keystone", x: 570, y: 1230, mods: [mod("procDepth", "flat", 1)], links: ["stored_lightning"] },

@@ -16,6 +16,7 @@ import { dayCycle } from '../../world/daynight';
 import type { Doodad } from '../../engine/levelgen';
 import { GridWalkField } from '../../world/gridWalk';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
+import { ORB_DEFS } from '../../data/orbs';
 import { withAlpha } from './color';
 import { resolveColor } from './painters';
 import { litPolygon, polygonPath } from './sight';
@@ -110,6 +111,14 @@ export class LightLayer {
     }
     for (const p of world.projectiles) {
       push(p.pos.x, p.pos.y, p.radius * 8, p.color, 0.3);
+    }
+    // Orb kinds that declare a light carry a real candle (wakeflames in the
+    // dark) — movers like projectiles, fading out with their last seconds.
+    for (const o of world.orbs) {
+      const r = ORB_DEFS[o.kind]?.light;
+      if (!r) continue;
+      push(o.pos.x, o.pos.y, r, ORB_DEFS[o.kind].color,
+        0.4 * Math.min(1, o.life / 2));
     }
 
     // Zone exits breathe their accent so the way out reads in the dark.
