@@ -186,6 +186,14 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Fog-Veiled', color: '#b8c4cc', duration: 1.2,
     mods: [mod('detectability', 'more', -0.35)],
   },
+  /** CANOPIED (the veil system, engine/veil.ts): the leaves swallow your
+   *  outline — detectability drops while you stand under an unbroken crown.
+   *  Refreshed per tick under cover; the short duration is the linger when
+   *  stepping into the open. The default standStatus for veil kinds. */
+  canopied: {
+    label: 'Canopied', color: '#4e7a3c', duration: 1.2,
+    mods: [mod('detectability', 'more', -0.35)],
+  },
   /** DESERT HEAT (World.updateHeat): standing in a heat-shimmer field bakes
    *  stacks on; shade (a canopy, a roof, the night) dwindles them. Each stack
    *  erodes fire resistance — the desert softens you up for its burns. The

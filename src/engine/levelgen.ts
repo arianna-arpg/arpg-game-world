@@ -25,6 +25,9 @@ import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../dat
 import { MONSTERS } from '../data/monsters';
 import { presenceTable } from './presence';
 import { runStructureGen } from './structureGen';
+// Type-only: veil.ts value-imports this module (rules/Doodad); the type flows
+// back erased, so there is no runtime cycle.
+import type { VeilSpec } from './veil';
 import type { Modifier } from './stats';
 import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
@@ -384,6 +387,14 @@ export interface DoodadRule {
    *  `radius + pad` of this doodad, its draw fades toward `alpha` so the
    *  character reads through the canopy. Data-driven per kind. */
   occlude?: { pad?: number; alpha?: number };
+  /** VEIL (engine/veil.ts): this kind's crowns MERGE into contiguous canopy
+   *  PATCHES that hide everything beneath them — near-opaque until the local
+   *  hero walks under the patch, when the whole mass opens. Concealment is
+   *  gameplay, not just pixels: aim assist can't hold a foe under a patch the
+   *  viewer isn't inside, and `standStatus` (the fogveiled pattern) wears on
+   *  anyone beneath the leaves. Composes with `occlude` (the per-crown
+   *  self-fade still opens the tree directly overhead). One row per kind. */
+  veil?: VeilSpec;
   /** This kind is INDEX-PAIRED with a parallel gen-list (cave_entrance ↔
    *  caveSeeds): only its dedicated stamp may emit it — clusters/legends/fx
    *  layers are validator-forbidden from placing it (the zip would shear). */
@@ -509,8 +520,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   /** Evergreen spire — tundra/deepwood conifer (pineCrown canopy). */
   conifer:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26 },
   /** A forest ELDER: a huge crown over a thick bole — the dense-forest
-   *  anchor (whole packs ambush beneath one). */
-  ancient_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80, occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22 },
+   *  anchor (whole packs ambush beneath one). Veiled: even a lone elder's
+   *  crown is a PATCH (aim assist can't hold what waits beneath), and where
+   *  elders knit into a forest canopy the whole mass seals as one. */
+  ancient_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80, occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22, veil: {} },
   /** The thicket grown into a TREE: a gnarled thorn bole under a walk-under
    *  bramble crown — the tangle you can stand beneath (and regret). */
   briarwood: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3 },

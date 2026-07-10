@@ -92,6 +92,7 @@ import { GridWalkField } from '../world/gridWalk';
 import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../world/regions';
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
+import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt } from '../world/dimensions';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
@@ -19902,11 +19903,21 @@ export class World {
       a.pos.x = free.x; a.pos.y = free.y;
     }
     const hasGrid = !!this.walk;
-    if (this.grounds.length === 0 && !hasGrid) return;
+    const veils = this.veilIndex();
+    const hasVeil = veils.patches.length > 0;
+    if (this.grounds.length === 0 && !hasGrid && !hasVeil) return;
     const drained = this.terrainDrainScratch; // reused: was a fresh Set per actor per frame
     for (const a of this.actors) {
       if (a.dead || a.construct || a.leap) { a.groundKind = undefined; a.gridRegion = undefined; continue; }
       drained.clear();
+      // VEIL cover (canopy patches): standing under a member crown wears the
+      // veil's standStatus — the fogveiled pattern, detectability as data.
+      // ONE bucket query per actor; statuses/AI read the rest from the sheet.
+      if (hasVeil) {
+        const cover = veils.coverAt(a.pos.x, a.pos.y);
+        const vs = cover ? (cover.spec.standStatus ?? VEIL_DEFAULTS.standStatus) : undefined;
+        if (vs) a.applyStatus(vs, 0, 1, 'canopy');
+      }
       // DOODAD-sourced region (the migrated grounds: mud/water/bog/…).
       const ground = this.groundAt(a.pos);
       const prevG = a.groundKind;
@@ -23200,6 +23211,43 @@ export class World {
    *  radius edits) must call this so the index re-syncs. Pushes and splices
    *  are covered by the length check and need nothing. */
   markDoodadsChanged(): void { this.doodadsRev++; }
+
+  // --- VEILS: contiguous canopy cover (engine/veil.ts) ----------------------
+  private veilIdx: VeilIndex | null = null;
+  private veilIdxArr: Doodad[] | null = null;
+  private veilIdxLen = -1;
+  private veilIdxRev = -1;
+
+  /** The veil-patch index over the live doodad list — rebuilt lazily on the
+   *  SAME list/length/rev keys as doodadsAt, so runtime pushes and brittle
+   *  pops self-heal, and co-op clients derive identical patches from the
+   *  shipped doodad list with zero replication. */
+  veilIndex(): VeilIndex {
+    if (!this.veilIdx || this.veilIdxArr !== this.doodads
+      || this.veilIdxLen !== this.doodads.length || this.veilIdxRev !== this.doodadsRev) {
+      this.veilIdx = new VeilIndex(this.doodads);
+      this.veilIdxArr = this.doodads;
+      this.veilIdxLen = this.doodads.length;
+      this.veilIdxRev = this.doodadsRev;
+    }
+    return this.veilIdx;
+  }
+
+  /** The canopy patch covering a point (full crown radius — the canopy is
+   *  real to eyes), or null in the open. */
+  veilPatchAt(p: { x: number; y: number }): VeilPatch | null {
+    return this.veilIndex().patchAt(p.x, p.y);
+  }
+
+  /** Is `target` swallowed by a veil patch the viewer isn't inside? THE one
+   *  concealment predicate — aim assist, hover naming, and future vision
+   *  consumers share it. Patch semantics: step under the same leaves (or
+   *  flush the target out) to see it. */
+  isConcealedFrom(viewer: Actor, target: Actor): boolean {
+    const tp = this.veilPatchAt(target.pos);
+    if (!tp) return false;
+    return this.veilPatchAt(viewer.pos) !== tp;
+  }
 
   /** The blocking doodad whose disc (± margin) covers this point, if any —
    *  bridged chasm spans excepted, exactly like clampPos. Powers spawn

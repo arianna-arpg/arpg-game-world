@@ -70,6 +70,13 @@ export const VIS_CFG = {
     showAt: 0.35,
   },
 
+  /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's
+   *  alpha chases its target per second (patch reveals and the per-tree
+   *  near-fade share it — one speed, coherent motion). */
+  canopy: {
+    fadeRate: 10,
+  },
+
   /** The player's POISE/INSIGHT pool arcs (Settings.poolBars gates how). */
   poolArcs: {
     /** Seconds an arc stays shown after ANY change to its pool (value moved,

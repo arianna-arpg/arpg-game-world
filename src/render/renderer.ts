@@ -19,6 +19,7 @@ import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { doodadRuleOf, type Doodad } from '../engine/levelgen';
+import { VEIL_DEFAULTS } from '../engine/veil';
 import { DEFENSE_CFG } from '../engine/defense';
 import { QUEST_GIVER_IDS } from '../quests/defs';
 
@@ -1373,6 +1374,15 @@ export class Renderer {
   // it fades so your character reads through the foliage (the depth illusion
   // without a real z-axis). Fade is smoothed per doodad; enemies lurking under
   // an unfaded canopy stay hidden, which is the ambush half of the feature.
+  //
+  // VEIL kinds (DoodadRule.veil, engine/veil.ts) escalate this to the PATCH:
+  // their crowns merge into contiguous canopy masses, and the PATCH drives the
+  // crown's target alpha — sealed near-opaque cover until the LOCAL hero
+  // stands under the same mass, when the whole patch opens together. The
+  // per-crown near-fade still composes in (min), so the tree directly overhead
+  // always opens a little further and an eave can be peeked under from just
+  // outside. Every crown smooths individually toward the shared target, so a
+  // patch fades as one body with no extra state.
   private canopyFade = new WeakMap<object, number>();
   /** This frame's occluders with their smoothed fades — collected by
    *  drawCanopies for the label pass (one loop, two customers). */
@@ -1383,13 +1393,26 @@ export class Renderer {
     const dt = this.frameDt;
     const env: PaintEnv = { ctx: this.ctx, theme: world.zone.theme, time: world.time, world };
     this.frameOccluders.length = 0;
+    const veils = world.veilIndex();
+    const heroPatch = veils.patches.length ? veils.patchAt(hero.pos.x, hero.pos.y) : null;
     for (const o of this.culledAll) {
-      const occ = doodadRuleOf(o.kind).occlude;
-      if (!occ) continue;
-      const near = dist(hero.pos, o.pos) < o.radius + hero.radius + (occ.pad ?? 10);
-      const target = near ? (occ.alpha ?? 0.32) : 1;
+      const rule = doodadRuleOf(o.kind);
+      const occ = rule.occlude;
+      const veil = rule.veil;
+      if (!occ && !veil) continue;
+      const near = dist(hero.pos, o.pos) < o.radius + hero.radius + (occ?.pad ?? 10);
+      let target = near ? (occ?.alpha ?? 0.32) : 1;
+      if (veil) {
+        const patch = veils.patchOf(o);
+        if (patch) {
+          const patchTarget = patch === heroPatch
+            ? (veil.reveal ?? VEIL_DEFAULTS.reveal)
+            : (veil.cover ?? VEIL_DEFAULTS.cover);
+          target = Math.min(target, patchTarget);
+        }
+      }
       const cur = this.canopyFade.get(o) ?? 1;
-      const fade = cur + (target - cur) * Math.min(1, dt * 10);
+      const fade = cur + (target - cur) * Math.min(1, dt * VIS_CFG.canopy.fadeRate);
       this.canopyFade.set(o, fade);
       this.frameOccluders.push({ o, fade });
       // Crown looks come from the SAME registry entry as the ground pass —

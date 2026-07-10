@@ -58,9 +58,17 @@ export function assistAim(
   // One hostility sweep per call — enemiesOf already filters dead/untargetable
   // /downed and applies diplomacy. The player's own breakable conjurations
   // join that pool (so their skills can demolish them), but magnetizing the
-  // reticle onto your own furniture would be a betrayal — skip them.
-  const pool = world.enemiesOf(self).filter(a =>
-    !(a.construct?.breakable !== undefined && a.owner === self));
+  // reticle onto your own furniture would be a betrayal — skip them. Foes
+  // swallowed by a canopy VEIL patch the aimer isn't inside are skipped too —
+  // the reticle can't hold what the eye can't see, and a held lock BREAKS the
+  // moment its target slips under unbroken leaves (positioning keeps targets
+  // in sight; step under the same canopy to re-acquire).
+  const selfPatch = world.veilPatchAt(self.pos);
+  const pool = world.enemiesOf(self).filter(a => {
+    if (a.construct?.breakable !== undefined && a.owner === self) return false;
+    const p = world.veilPatchAt(a.pos);
+    return p === null || p === selfPatch;
+  });
   let target: Actor | undefined;
   // STICK: the held target survives while raw aim stays inside breakRadius.
   if (heldId !== null) {
