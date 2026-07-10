@@ -58,6 +58,7 @@ export interface FactionOwner {
 
 export class FactionField implements WorldOverlay {
   readonly id = 'faction' as const;
+  readonly mapLabel = 'Territory';
   private field = new Map<string, NodeInfluence>();
   private acc = 0;
   /** Zones taken from their original holders: zoneId -> current ruler. A

@@ -56,6 +56,7 @@ const WARBAND_FULL = 8;         // a warband at full strength; the pump scales w
 
 export class InvasionField implements WorldOverlay {
   readonly id = 'invasion' as const;
+  readonly mapLabel = 'Invasions';
   readonly hosts: InvasionHost[] = [];
   /** Hosts that REACHED their target this tick — the engine drains this each
    *  update to materialize an arriving warband where the player stands. */

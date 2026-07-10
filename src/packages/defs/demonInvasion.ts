@@ -120,6 +120,11 @@ export const DEMON_INVASION: ContentPackage = {
   world: {
     invasionFactions: ['demon'],
     overlay: (ctx) => new DemonInvasionField(ctx, BALOR_SURGE),
+    // The invasion rages in BOTH world-states: one instance above, one below —
+    // independent epicenters, storms, portals. The Underworld's TEMPO (×2.5
+    // ignition) lives on ITS dimension row (world/dimensions.ts events), so
+    // "hell erupts more often" is the dimension's dial, not this package's.
+    dimensions: ['surface', 'underworld'],
   },
 };
 

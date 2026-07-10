@@ -76,6 +76,11 @@ export interface MintRequest {
 
 export class DemonInvasionField implements WorldOverlay {
   readonly id = 'demon_invasion';
+  readonly mapLabel = 'Demon Rifts';
+  /** Which DIMENSION this instance governs (stamped by the sim at construction
+   *  for non-surface instances — the per-dimension world-state seam). The
+   *  overlay's own logic never reads it; the engine's drains/lookups do. */
+  readonly dimension?: string;
   /** Mint seam the engine drains (host-only): the epicenter zone at its target
    *  coordinate. The portal-to-realm is read directly off invasionOn().portalReady. */
   readonly mintRequests: MintRequest[] = [];

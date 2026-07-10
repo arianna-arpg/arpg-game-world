@@ -50,6 +50,7 @@ const BLEED = 28;       // influence drained from every zone when it dies
 
 export class WarlordField implements WorldOverlay {
   readonly id = 'warlord' as const;
+  readonly mapLabel = 'Warlords';
   readonly lords = new Map<string, WarlordState>();
   private faction: FactionField;
 

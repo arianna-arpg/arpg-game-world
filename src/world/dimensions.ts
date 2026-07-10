@@ -13,6 +13,29 @@ import type { MapCoord } from './coords';
 import { BIOME_FIELD_CFG, fieldBiomePick } from './biomes';
 import { registerDimensionClimate, type DimensionAxisOverride } from './climate';
 
+/** How a dimension is ENTERED — data, not a bespoke function. 'cave_breach' =
+ *  delving minDepth caves deep tears a breach whose realm gate mints the
+ *  dimension's GATE ZONE (the Underworld's ladder). New entry KINDS are engine
+ *  seams (a shrine rite, a stormfront, a death); WHICH dimension uses which —
+ *  and its gate's name/biome/seed — is declared here, so a heaven or limbo
+ *  layer is a registry row away. */
+export interface DimensionEntry {
+  kind: 'cave_breach' | (string & {});
+  /** cave_breach: nesting depth at which the breach may tear (parent caves
+   *  in a dimensioned world never re-breach — hell's caves are just caves). */
+  minDepth?: number;
+  /** The minted GATE ZONE — the one legal cross-dimension road. */
+  gate: {
+    /** Stable zone id (mint-once; the waypoint home). */
+    id: string;
+    name: string;
+    /** The gate zone's tileset resolves from this biome's frontier pool. */
+    biome: string;
+    /** Gate seed = manifest.seed ^ seedSalt (deterministic across clients). */
+    seedSalt: number;
+  };
+}
+
 export interface DimensionDef {
   id: string;
   label: string;
@@ -30,6 +53,28 @@ export interface DimensionDef {
    *  gravelands keep the cooler marches). Registered into the climate leaf at
    *  registerDimension time; everything else rides the shared field pick. */
   climate?: Record<string, DimensionAxisOverride>;
+  /** PER-DIMENSION EVENT TEMPO — this world-state's own frequency levers.
+   *  densityMul scales every package overlay's ignition here (default 1);
+   *  packages[id] overrides per package (demonic incursions ×2.5 below the
+   *  world, ×0.75 above it). Composed into the GATE each per-dimension
+   *  overlay instance is constructed with (sim.ts), so no overlay code ever
+   *  reads this directly — the biomeEventDensity lesson, one tier up. */
+  events?: { densityMul?: number; packages?: Record<string, number> };
+  /** How this dimension is entered (see DimensionEntry). Omitted = no entry
+   *  of its own (the surface — you start there). */
+  entry?: DimensionEntry;
+}
+
+/** The event-tempo multiplier a package's overlay runs at inside a dimension. */
+export function dimensionPackageTempo(dimId: string, pkgId: string): number {
+  const ev = dimensionDef(dimId).events;
+  return ev?.packages?.[pkgId] ?? ev?.densityMul ?? 1;
+}
+
+/** Every registered dimension whose entry is the given kind — the engine seam
+ *  (mintCave's breach roll) scans this instead of naming any dimension. */
+export function dimensionsEnteredBy(kind: string): DimensionDef[] {
+  return Object.values(DIMENSIONS).filter(d => d.entry?.kind === kind);
 }
 
 const DIMENSIONS: Record<string, DimensionDef> = {};
@@ -67,6 +112,15 @@ registerDimension({
     temperature: { base: 0.72, layers: [{ kind: 'noise', cell: 900, amp: 0.22, salt: 0x0661 }] },
     moisture: { base: 0.16, layers: [{ kind: 'noise', cell: 1100, amp: 0.14, salt: 0x0662 }] },
     maritime: { base: 0, layers: [] },
+  },
+  // Hell's TEMPO: demonic incursions erupt two-and-a-half times as often below
+  // the world as above it — the same package, a different world-state's pulse.
+  events: { packages: { demon_invasion: 2.5 } },
+  // Entered by delving: a surface cave ladder three deep tears a breach whose
+  // realm gate mints The Hellgate (the one marked cross-dimension road).
+  entry: {
+    kind: 'cave_breach', minDepth: 3,
+    gate: { id: 'uw_gate', name: 'The Hellgate', biome: 'rift', seedSalt: 0x4e11 },
   },
 });
 

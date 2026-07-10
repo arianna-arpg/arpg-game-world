@@ -107,14 +107,21 @@ export interface PackageGate {
 // --- world hooks: how a package's pressure feeds the shared simulation -------
 
 export interface OverlayBuildCtx {
-  /** Deterministic per-package seed (manifest.seed ^ PACKAGE_MAGIC[id]). */
+  /** Deterministic per-package seed (manifest.seed ^ PACKAGE_MAGIC[id]) —
+   *  salted per DIMENSION for non-surface instances, so parallel world-states
+   *  roll independent event streams. */
   seed: number;
-  /** Live gate accessor, read each tick by the overlay. */
+  /** Live gate accessor, read each tick by the overlay. For a non-surface
+   *  instance, ignitionMul arrives PRE-SCALED by the dimension's tempo
+   *  (DimensionDef.events) — overlays never read dimension data directly. */
   gate(): PackageGate;
   /** The world's BIOME-FIELD seed (= manifest.seed) — overlays that locate biome
    *  regions sample biomeAt / fieldRegionAt with it (Migration finds Field blobs to
    *  herd between). Most overlays ignore it. */
   biomeSeed: number;
+  /** Which DIMENSION this instance runs in ('surface' default). The sim scopes
+   *  views/routing off the instance's dimension; most overlays never read this. */
+  dimension?: string;
 }
 
 export interface WorldHooks {
@@ -127,6 +134,14 @@ export interface WorldHooks {
    *  (Breach). Migrated features need none of this — they route pressure into
    *  the shared invasion/weather fields above. */
   overlay?(ctx: OverlayBuildCtx): WorldOverlay;
+  /** The DIMENSIONS this package's overlay runs in (default ['surface']).
+   *  The sim constructs ONE INSTANCE PER LISTED DIMENSION — each with a
+   *  dimension-salted seed, a dimension-scoped view, and a gate whose
+   *  ignitionMul is pre-scaled by that dimension's tempo (DimensionDef.events)
+   *  — so 'demonic incursions rage below while the surface breathes' is two
+   *  data lines: this list + the dimension's events row. Parallel world-states
+   *  run the SAME overlay code with zero per-overlay edits. */
+  dimensions?: string[];
 }
 
 // --- rewards / quests / events (declarative; wired incrementally) ------------

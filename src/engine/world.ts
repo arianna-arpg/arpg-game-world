@@ -94,7 +94,7 @@ import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { coordDist } from '../world/coords';
-import { dimensionDef, dimensionBiomeAt } from '../world/dimensions';
+import { dimensionDef, dimensionBiomeAt, dimensionsEnteredBy } from '../world/dimensions';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 
 /** Options for clampPos: a per-move DISPLACEMENT POLICY (lets a flicker/teleport
@@ -3087,7 +3087,8 @@ export class World {
       const host = this.sim.invasion.hosts.find(h => h.arrived && h.targetZoneId === def.id);
       if (host) this.spawnWarband(host);
       // You walked into a Demon Invasion's epicenter — the Balor holds court here.
-      const inv = this.sim.demonField?.invasionOn(def.id);
+      // (Resolved against the instance governing THIS zone's dimension.)
+      const inv = this.sim.demonFieldFor(def.dimension)?.invasionOn(def.id);
       if (inv?.isEpicenter) this.spawnEpicenter(inv);
       // A Crusade holds this ground — raise its works (camp / fortress / city)
       // and post its garrison, scaled to how long it's been held.
@@ -3196,7 +3197,7 @@ export class World {
    *  warning entrance (the `live` flag). */
   private materializeLiveZoneEvents(): void {
     if (this.inCave || this.zone.special) return; // a special arena hosts no overlay events
-    const inv = this.sim.demonField?.invasionOn(this.zone.id);
+    const inv = this.sim.demonFieldFor(this.zone.dimension)?.invasionOn(this.zone.id);
     if (inv?.isEpicenter && !this.materializedEpicenters.has(inv.id)) this.spawnEpicenter(inv, true);
     const cru = this.sim.crusadeField?.crusadeOn(this.zone.id);
     if (cru && !this.materializedCrusades.has(this.zone.id)) this.materializeCrusade(cru);
@@ -3350,6 +3351,11 @@ export class World {
   private placeEncounters(def: ZoneDef): void {
     const o = def.objective;
     if (o.kind === 'safe' || o.kind === 'waves' || this.inCave) return;
+    // Encounters are SURFACE content until a def declares otherwise — without
+    // this gate, a surface package's Breach diamonds seeded in hell (the
+    // confirmed event bleed-over). Per-dimension encounters ride the same
+    // seam the overlays use when an EncounterDef grows a `dimensions` field.
+    if (def.dimension) return;
     if (!def.packs?.table?.length) return;
     const gates = this.sim.gatesFor(this.player.level);
     // Roll each ACTIVE encounter package independently off its OWN package seed.
@@ -3499,9 +3505,14 @@ export class World {
     // eager-web LINK paths) so the earned road is genuinely new, applying any chosen-gem
     // dest theme (drop-to-choose). Fires once — travelThrough then sets exitDef.to.
     if (exitDef.lock) {
-      const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, this.biomeFor, this.levelFor, this.biomeDepthFor, this.climateFor);
+      // A hell holdfast's earned road samples HELL's palette (the surface field
+      // would dress a hell bonus zone in meadow greens) and carries hell's level
+      // pressure — full parity with the main mint path below.
+      const lockBiomeFor = source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor;
+      const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, lockBiomeFor, this.levelFor, this.biomeDepthFor, this.climateFor);
       // The earned road must lead to LAND (this branch bypasses the ocean gate).
       if (!gen.dimension && this.continentFor(gen.map).kind === 'ocean') gen.map = this.pullToLand(gen.map);
+      if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
       const hf = this.sim.holdfastField;
       const gdef = hf ? hf.def(hf.infoFor(source.id)?.defId ?? '') : undefined;
       if (gdef?.reward.destLevelDelta) gen.level = Math.max(1, gen.level + gdef.reward.destLevelDelta); // the base reward bias
@@ -3569,10 +3580,10 @@ export class World {
     this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     this.zoneMap[gen.id] = gen;
-    // The world-sim (factions, territory, overlays, events) governs the SURFACE
-    // — dimensioned nodes stay off its ledgers until dimensions grow their own
-    // simulations (a surface herd must not migrate through hell).
-    if (!gen.dimension) this.sim.onNodeCharted(gen, this.simView());
+    // Chart into the sim — it ROUTES to the overlays of the node's dimension
+    // (sim.onNodeCharted): surface mints feed the surface systems, hell mints
+    // feed hell's own overlay instances. Parallel world-states, one graph.
+    this.sim.onNodeCharted(gen, this.simView());
     return gen;
   }
 
@@ -3582,12 +3593,20 @@ export class World {
     return (c) => dimensionBiomeAt(dimId, c, seed);
   }
 
-  /** BREACH the Underworld (the bottom of the cave ladder): mint-once the
-   *  hellgate — the Underworld dimension's anchor zone — and cross. The map
-   *  gains the dimension TAB the moment this fires. */
-  enterUnderworld(): void {
-    this.discoveredDimensions.add('underworld');
-    const gateId = 'uw_gate';
+  /** BREACH into a DIMENSION (the bottom of a cave ladder today; any future
+   *  rite that names a registered dimension): mint-once its GATE ZONE — the
+   *  dimension's anchor — and cross. Fully data-driven off DimensionDef.entry:
+   *  a heaven, a limbo, or any new layer is a registry row, not a new function.
+   *  The map gains the dimension TAB the moment this fires. */
+  enterDimension(dimId: string): void {
+    const dim = dimensionDef(dimId);
+    const gateSpec = dim.entry?.gate;
+    if (!gateSpec) {
+      console.warn(`[world] enterDimension('${dimId}') — no DimensionDef.entry.gate declared`);
+      return;
+    }
+    this.discoveredDimensions.add(dim.id);
+    const gateId = gateSpec.id;
     if (!this.zoneMap[gateId]) {
       // Anchor the gate's node where the SURFACE chain began. The ladder's
       // FIRST record holds the surface zone (later records hold cave ids,
@@ -3597,26 +3616,31 @@ export class World {
       const surfaceAnchor = this.zoneMap[originId] ?? this.zoneMap[START_ZONE];
       const gen = placeZoneAt(surfaceAnchor.map, surfaceAnchor, this.zoneMap, this.nextGenId++, {
         id: gateId,
-        tileset: pickTilesetForBiome('rift', new Rng((this.manifest.seed ^ 0x4e11) >>> 0)) ?? 'wasteland',
-        biomeFor: this.dimensionBiomeFor('underworld'),
+        tileset: pickTilesetForBiome(gateSpec.biome, new Rng((this.manifest.seed ^ gateSpec.seedSalt) >>> 0)) ?? 'wasteland',
+        biomeFor: this.dimensionBiomeFor(dim.id),
         levelFor: this.levelFor,
-        level: Math.max(this.zone.level + (dimensionDef('underworld').levelBonus ?? 0), this.player.level),
-        seed: (this.manifest.seed ^ 0x4e11) >>> 0,
-        name: 'The Hellgate',
-        forceWaypoint: true, // the anchor: once attuned, hell is a map-travel away
-        dimension: 'underworld',
+        level: Math.max(this.zone.level + (dim.levelBonus ?? 0), this.player.level),
+        seed: (this.manifest.seed ^ gateSpec.seedSalt) >>> 0,
+        name: gateSpec.name,
+        forceWaypoint: true, // the anchor: once attuned, the dimension is a map-travel away
+        dimension: dim.id,
         objective: { kind: 'clear' }, // arrivals carry no entryFrom — never gated
+        // The way home is placeZoneAt's back-edge to the (other-dimension)
+        // anchor — THE one sanctioned crossing, marked crossDim on the exit
+        // so every seal/validator knows it from a defect.
+        gateCross: true,
       });
-      // The way home is placeZoneAt's own back-edge to the anchor (the surface
-      // zone the ladder began in) — the ONE deliberate cross-dimension road.
-      // No onNodeCharted: the surface sim doesn't govern hell (see chartFrontier).
+      // No onNodeCharted: gate zones sit outside every overlay's ledgers.
       this.zoneMap[gateId] = gen;
     }
     this.caveReturn = null; // the breach consumes the ladder — you cross, not climb
     this.caveStack.length = 0;
-    this.text(vec(this.player.pos.x, this.player.pos.y - 30), 'the world tears open…', '#d84a2a', 15);
+    this.text(vec(this.player.pos.x, this.player.pos.y - 30), 'the world tears open…', dim.color, 15);
     this.loadZone(gateId);
   }
+
+  /** Legacy alias — the underworld's cave-breach gate (kept for dev tooling). */
+  enterUnderworld(): void { this.enterDimension('underworld'); }
 
   /** Apply a Holdfast dest theme to a freshly-minted bonus zone (drop-to-choose: the
    *  surrendered gem dictates what spawns). A faction override floods the zone with that
@@ -3724,10 +3748,26 @@ export class World {
     def.exits.push(...reals, ...frontiers);
   }
 
+  /** A SURFACE anchor for directed event mints whose nearestNode search came up
+   *  empty: the zone the player stands in when it's surface, else the town.
+   *  (An event zone anchored on a hell zone would trip the dimension seal —
+   *  the old `?? this.zone` fallback was that exact dormant footgun.) */
+  private surfaceAnchor(): ZoneDef {
+    return !this.zone.dimension ? this.zone : (this.zoneMap[START_ZONE] ?? this.zone);
+  }
+  /** Event-warp reconcile cadence (sweepEventWarps in the drain block). */
+  private warpSweepAcc = 0;
+
   /** Forge a reciprocal road from `target` back to `source` if one is missing, so a
    *  mint-once Field link stays two-way (you can leave the expanse the way you came). */
   private linkBackTo(target: ZoneDef, source: ZoneDef): void {
     if (target.id === source.id || target.exits.some(e => e.to === source.id)) return;
+    // Dimensions are sealed — a LINKER may never forge a cross-dimension road
+    // (the gate's marked back-edge is MINTED by enterDimension, never linked).
+    if ((target.dimension ?? 'surface') !== (source.dimension ?? 'surface')) {
+      console.warn(`[world] refused cross-dimension link ${target.id} → ${source.id}`);
+      return;
+    }
     const dx = source.map.x - target.map.x, dy = source.map.y - target.map.y;
     const side: ZoneExitDef['side'] = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'e' : 'w') : (dy > 0 ? 's' : 'n');
     // Pick a SPACED `at` so the reciprocal portal doesn't stack on an existing exit on the
@@ -3787,10 +3827,36 @@ export class World {
       };
     }
     const dest = this.zoneMap[e.to] ?? this.caveMap[e.to];
+    // An UNMARKED cross-dimension edge never opens (isExitLocked seals it); the
+    // portal reads as a dead rift and the console names the culprit edge once.
+    if (this.isIllegalCrossDim(e as ZoneExitDef)) {
+      this.warnCrossDim(this.zone.exits[defIndex] ?? (e as ZoneExitDef), dest);
+      return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label: 'a sealed rift' };
+    }
     const sub = dest.objective.kind === 'waves' && dest.objective.waves === 0
       ? 'endless' : `Lv ${dest.level}`;
     const label = this.inCave ? `Surface · ${dest.name}` : `${dest.name} · ${sub}`;
     return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label };
+  }
+
+  /** An exit whose destination lives in ANOTHER dimension without the declared
+   *  gate marker (ZoneExitDef.crossDim) — never legal. Dimensions are sealed
+   *  world-states; the marked gate back-edge is the one lawful road between. */
+  private isIllegalCrossDim(ed: { to: string; crossDim?: true } | undefined): boolean {
+    if (!ed || ed.to === '?' || ed.crossDim) return false;
+    const dest = this.zoneMap[ed.to];
+    if (!dest) return false;
+    return (dest.dimension ?? 'surface') !== (this.zone.dimension ?? 'surface');
+  }
+
+  private crossDimWarned = new Set<string>();
+  private warnCrossDim(ed: { to: string }, dest: ZoneDef | undefined): void {
+    const key = `${this.zone.id}→${ed.to}`;
+    if (this.crossDimWarned.has(key)) return;
+    this.crossDimWarned.add(key);
+    console.warn(`[world] ILLEGAL cross-dimension exit ${key} `
+      + `(${this.zone.dimension ?? 'surface'} → ${dest?.dimension ?? 'surface'}) — sealed. `
+      + 'Trace whatever appended it: every legal crossing carries crossDim.');
   }
 
   /** Reconcile the LIVE placed portals with the current zone's exit defs. Exits
@@ -3820,11 +3886,14 @@ export class World {
    *  simulated crusade node's accessibility wire-in: it stays floating out in the
    *  wilds until the front (or the player's exploration) brings it within reach of
    *  real, visible ground. */
-  private nearestChartedDist(c: Vec2): number {
+  private nearestChartedDist(c: Vec2, dimension?: string): number {
     let best = Infinity;
     for (const id of this.visited) {
       const z = this.zoneMap[id];
       if (!z) continue;
+      // Dimensions share one coordinate plane — a hell node "near" a surface
+      // coord is a coincidence of numbers, not reachable ground.
+      if ((z.dimension ?? 'surface') !== (dimension ?? 'surface')) continue;
       const d = Math.hypot(z.map.x - c.x, z.map.y - c.y);
       if (d < best) best = d;
     }
@@ -6493,7 +6562,7 @@ export class World {
   // leave a raisable corpse. Mirrors updateStorm; reads the overlay, not weather.
 
   private updateDemonStorm(dt: number): void {
-    const df = this.sim.demonField;
+    const df = this.sim.demonFieldFor(this.zone.dimension);
     if (!df || this.zone.objective.kind === 'safe') { this.meteorTimer = 0; return; }
     const info = df.invasionOn(this.zone.id);
     if (!info || info.meteorRatePerSec <= 0.02) { this.meteorTimer = 0; return; }
@@ -6507,7 +6576,7 @@ export class World {
   /** Telegraph one meteor at a random arena point; the zone pipeline lands it a
    *  beat later (hit-everyone), and its onImpact spits a demon at the crater. */
   private fireMeteor(info: InvasionInfo): void {
-    const surge = this.sim.demonField?.surge();
+    const surge = this.sim.demonFieldFor(this.zone.dimension)?.surge();
     if (!surge) return;
     const skill = SKILLS[surge.meteorSkillId];
     if (!skill) return;
@@ -6539,7 +6608,7 @@ export class World {
     const facId = info.type.factions?.[0] ?? 'demon';
     const roster = FACTIONS[facId];
     if (!roster?.table?.length) return;
-    const champId = this.sim.demonField?.surge()?.portal?.champion?.monsterId;
+    const champId = this.sim.demonFieldFor(this.zone.dimension)?.surge()?.portal?.champion?.monsterId;
     const pool = roster.table.filter(e => e.id !== champId); // craters spit lessers, not the Balor
     const meteorLvl = Math.max(1, this.zone.level + info.strengthBonus);
     const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table, meteorLvl),
@@ -6618,7 +6687,7 @@ export class World {
    *  reward" fork. Placed once; stepping into it (below) loads the realm. */
   private maybeOpenDemonPortal(): void {
     if (this.inCave || this.demonPortals.length || this.realmContext) return;
-    const info = this.sim.demonField?.invasionOn(this.zone.id);
+    const info = this.sim.demonFieldFor(this.zone.dimension)?.invasionOn(this.zone.id);
     if (!info || !info.isEpicenter || !info.portalReady) return;
     const at = this.clampPos(this.farPoint(420), 30);
     this.demonPortals.push({ pos: vec(at.x, at.y), invId: info.id });
@@ -6631,9 +6700,10 @@ export class World {
    *  back out. Spawns the realm Balor; felling it repels the whole invasion for
    *  the fattest, stage-scaled spoils. Opening the portal counts (the ledger). */
   private enterDemonRealm(invId: string, portalPos: Vec2): void {
-    const surge = this.sim.demonField?.surge();
+    const dfz = this.sim.demonFieldFor(this.zone.dimension);
+    const surge = dfz?.surge();
     if (!surge) return;
-    const info = this.sim.demonField?.invasionOn(this.zone.id);
+    const info = dfz?.invasionOn(this.zone.id);
     if (!info || info.id !== invId) return; // invasion burned out / moved on — no stale realm
     const stageIdx = info.stageIdx;
     const id = `cave_realm_${invId}`; // 'cave_' prefix ⇒ off-graph + cave-return travel
@@ -9669,7 +9739,7 @@ export class World {
     const target = (q.zone.bandPlacement && typeof q.zone.level === 'number')
       ? this.findBandCoord(q.zone.level, questSeed)
       : projectCoord(from.map, q.zone.direction, q.zone.distance ?? 1);
-    const anchor = nearestNode(this.zoneMap, target) ?? this.zone;
+    const anchor = nearestNode(this.zoneMap, target) ?? this.surfaceAnchor();
     // 'character' quests now obey the radial field at the quest's coord (the standard
     // ruleset) instead of flat-locking to the player's level; an authored number wins.
     const lvl = q.zone.level === 'character' ? this.eventLevel(target) : q.zone.level;
@@ -17004,7 +17074,9 @@ export class World {
       run: ctx => {
         const rctx = this.realmContext;
         this.realmContext = null;
-        if (rctx) ctx.sim.demonField?.resolveInvasionById(rctx.invId);
+        // The realm could have been entered from any dimension's invasion —
+        // resolve on the owner (non-owners no-op on an unknown id).
+        if (rctx) for (const f of ctx.sim.demonFieldsAll()) f.resolveInvasionById(rctx.invId);
         const mul = rctx?.rewardMul ?? 1;
         ctx.bumpLedger('demon_invasions_repelled');
         ctx.bumpLedger('balor_slain');
@@ -17977,7 +18049,7 @@ export class World {
     if (dwf && dwf.consumedZones.length) {
       const con = dwf.surge().consume;
       for (const zid of dwf.consumedZones) {
-        if (con.demonInvasion) this.sim.demonField?.resolveInvasion(zid);
+        if (con.demonInvasion) this.sim.demonFieldFor(this.zoneMap[zid]?.dimension)?.resolveInvasion(zid);
         if (con.crusade) this.sim.crusadeField?.resolveCrusadeZone(zid);
       }
       dwf.consumedZones.length = 0;
@@ -17996,30 +18068,56 @@ export class World {
     // — no forced road trail; a path forms as the player explores toward it (the
     // floating-zone drain below). The pure overlay can't reach worldgen, so it
     // queues requests we drain here (host/SP only — clients get it via sendZone).
+    //
+    // EVERY instance drains — each DIMENSION's rifts tear in its own graph:
+    // hell's epicenters carry hell's dimension/palette/level pressure and never
+    // touch the surface biome field (only surface events scorch the surface wash).
     const df = this.sim.demonField;
-    if (df && df.mintRequests.length) {
-      for (const req of df.mintRequests) {
-        if (this.zoneMap[req.zoneKey]) { df.bindTarget(req.invId, req.zoneKey); continue; }
+    for (const dfi of this.sim.demonFieldsAll()) {
+      if (!dfi.mintRequests.length) continue;
+      const dfDim = dfi.dimension; // undefined = the surface instance
+      for (const req of dfi.mintRequests) {
+        if (this.zoneMap[req.zoneKey]) { dfi.bindTarget(req.invId, req.zoneKey); continue; }
         // BIOME: steer the rift toward demon land (rift/volcanic); warp the ground if
         // none is near. LEVEL: the radial field at the (relocated) coord, not the player.
-        const rl = this.relocateToFactionBiome(req.coord, 'demon');
-        if (rl.warpBiome) this.sim.biomeField.warp({ center: rl.coord, radius: 240, biome: rl.warpBiome, strength: 1 });
-        const anchor = this.zoneMap[req.anchorZoneId] ?? nearestNode(this.zoneMap, rl.coord) ?? this.zone;
+        // (Hell needs no steering — its whole field is demon country already.)
+        const rl = dfDim ? { coord: req.coord, warpBiome: null as string | null }
+          : this.relocateToFactionBiome(req.coord, 'demon');
+        // KEYED warp + attribution: the scorch RECEDES when this invasion ends
+        // (sweepEventWarps) — a repelled invasion no longer scars the wash forever.
+        if (rl.warpBiome) {
+          this.sim.biomeField.setWarp(`demon_${req.invId}`, {
+            center: rl.coord, radius: 240, biome: rl.warpBiome, strength: 1,
+            label: 'Demonic invasion — the ground is scorched',
+          });
+        }
+        const anchor = this.zoneMap[req.anchorZoneId]
+          ?? nearestNode(this.zoneMap, rl.coord, undefined, dfDim)
+          ?? (dfDim ? this.zoneMap[dimensionDef(dfDim).entry?.gate.id ?? ''] : undefined)
+          ?? this.surfaceAnchor();
         const def = placeZoneAt(rl.coord, anchor, this.zoneMap, this.nextGenId++, {
-          id: req.zoneKey, tileset: req.tileset, level: this.eventLevel(rl.coord),
+          id: req.zoneKey, tileset: req.tileset,
+          level: this.eventLevel(rl.coord) + (dfDim ? dimensionDef(dfDim).levelBonus ?? 0 : 0),
           objective: { kind: 'clear' }, forceWaypoint: true, forceFrontiers: 1, floating: true, fieldBiome: true,
           seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
-          biomeFor: this.biomeFor, biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
+          biomeFor: dfDim ? this.dimensionBiomeFor(dfDim) : this.biomeFor,
+          ...(dfDim ? {} : { biomeDepthFor: this.biomeDepthFor }),
+          climateFor: this.climateFor,
+          ...(dfDim ? { dimension: dfDim } : {}),
         });
         def.eventOwned = true; // the demon epicenter — no other overlay squats here
         this.zoneMap[req.zoneKey] = def;
         // NB: NO sim.onNodeCharted here — a floating zone isn't on the graph yet
         // (it seeds its territory when connectFloatingZone wires it in, below).
-        df.bindTarget(req.invId, req.zoneKey);
-        this.text(vec(this.player.pos.x, this.player.pos.y - 90),
-          'A demon-blighted rift tears open in the distance!', '#e8503c', 15);
+        dfi.bindTarget(req.invId, req.zoneKey);
+        // Announce only invasions of the plane the player stands in — a hell
+        // rift tearing while you walk the surface stays hell's own business.
+        if ((dfDim ?? 'surface') === (this.zone.dimension ?? 'surface')) {
+          this.text(vec(this.player.pos.x, this.player.pos.y - 90),
+            'A demon-blighted rift tears open in the distance!', '#e8503c', 15);
+        }
       }
-      df.mintRequests.length = 0;
+      dfi.mintRequests.length = 0;
     }
 
     // CRUSADE: mint the stronghold + its SIMULATED frontier nodes at their
@@ -18042,8 +18140,14 @@ export class World {
         // structures are stamped on top by materializeCrusade. LEVEL: the radial field.
         const cFaction = cf.factionOf(req.crusadeId);
         const rl = cFaction ? this.relocateToFactionBiome(req.coord, cFaction) : { coord: req.coord, warpBiome: null as string | null };
-        if (rl.warpBiome) this.sim.biomeField.warp({ center: rl.coord, radius: 240, biome: rl.warpBiome, strength: 1 });
-        const anchor = this.zoneMap[req.anchorZoneId] ?? nearestNode(this.zoneMap, rl.coord) ?? this.zone;
+        // KEYED warp + attribution: the claim RELEASES when the crusade breaks.
+        if (rl.warpBiome) {
+          this.sim.biomeField.setWarp(`crusade_${req.crusadeId}`, {
+            center: rl.coord, radius: 240, biome: rl.warpBiome, strength: 1,
+            label: 'Crusade — a faction claims this ground',
+          });
+        }
+        const anchor = this.zoneMap[req.anchorZoneId] ?? nearestNode(this.zoneMap, rl.coord) ?? this.surfaceAnchor();
         const def = placeZoneAt(rl.coord, anchor, this.zoneMap, this.nextGenId++, {
           id: req.zoneKey, tileset: req.tileset, level: this.eventLevel(rl.coord),
           objective: { kind: 'clear' }, forceWaypoint: req.kind === 'stronghold', forceFrontiers: 1, floating: true, fieldBiome: true,
@@ -18077,7 +18181,7 @@ export class World {
         if (this.zoneMap[req.zoneKey]) { inc.bindEpicenter(req.id, req.zoneKey); continue; }
         // Even an alien intrusion needs GROUND to blight — pulled ashore.
         req.coord = this.pullToLand(req.coord);
-        const anchor = nearestNode(this.zoneMap, req.coord) ?? this.zone;
+        const anchor = nearestNode(this.zoneMap, req.coord) ?? this.surfaceAnchor();
         // An Incursion WARPS its ground to the blight (eldritch) — an alien intrusion,
         // not a relocation — so its biome is intentionally fixed. LEVEL still obeys the
         // radial field at its coord (not the player's level at ignition).
@@ -18091,9 +18195,34 @@ export class World {
         // Re-anchor the overlay's epicenter (tentacles + intensity capsules) on
         // where the zone ACTUALLY landed — ashore, post anti-crowd.
         inc.bindEpicenter(req.id, req.zoneKey, def.map);
-        this.sim.biomeField.warp({ center: def.map, radius: req.biomeRadius, biome: req.biome, strength: req.biomeStrength });
+        // PERMANENT by design — an incursion LOCKS its landing's ground; the
+        // label keeps even that deliberate scar attributable on the map.
+        this.sim.biomeField.warp({
+          center: def.map, radius: req.biomeRadius, biome: req.biome, strength: req.biomeStrength,
+          label: 'Eldritch incursion — the ground is blighted',
+        });
       }
       inc.mintRequests.length = 0;
+    }
+
+    // EVENT WARPS RECEDE WITH THEIR EVENTS: a repelled (or burned-out) invasion
+    // and a broken crusade release their hold on the land — the wash heals; the
+    // zones they minted stand as the scar. Incursion blight is permanent BY
+    // DESIGN (unkeyed). Reconciled against the overlays' own liveness (peek),
+    // so every ending — kill, burnout, collapse — heals within a beat.
+    this.warpSweepAcc += dt;
+    if (this.warpSweepAcc >= 1) {
+      this.warpSweepAcc = 0;
+      const bf = this.sim.biomeField;
+      for (const wid of bf.warpIds()) {
+        if (wid.startsWith('demon_')) {
+          const invId = wid.slice('demon_'.length);
+          if (!df || !df.peek().some(i => i.id === invId)) bf.unwarp(wid);
+        } else if (wid.startsWith('crusade_')) {
+          const cid = wid.slice('crusade_'.length);
+          if (!cf || !cf.peek().some(c => c.id === cid)) bf.unwarp(wid);
+        }
+      }
     }
 
     // FLOATING ZONES wire into the charted graph — a road forms (connectFloatingZone),
@@ -18108,8 +18237,13 @@ export class World {
     const crusadeAccess = this.sim.crusadeField?.surge().accessRadius ?? 130;
     for (const z of Object.values(this.zoneMap)) {
       if (!z.floating) continue;
-      const nearPlayer = Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
-      const crusadeReachable = z.id.startsWith('crusade_') && this.nearestChartedDist(z.map) <= crusadeAccess;
+      // Proximity only counts WITHIN a dimension — the planes share one
+      // coordinate space, and a hell rift must not wire in because the player
+      // walks surface ground that happens to overlap its numbers.
+      const sameDim = (z.dimension ?? 'surface') === (this.zone.dimension ?? 'surface');
+      const nearPlayer = sameDim
+        && Math.hypot(z.map.x - this.zone.map.x, z.map.y - this.zone.map.y) <= APPROACH_RADIUS;
+      const crusadeReachable = z.id.startsWith('crusade_') && this.nearestChartedDist(z.map, z.dimension) <= crusadeAccess;
       if (!nearPlayer && !crusadeReachable) continue;
       connectFloatingZone(z, this.zoneMap, new Rng((this.manifest.seed ^ hashStr(z.id)) >>> 0));
       this.sim.onNodeCharted(z, this.simView()); // now on the graph — seed its territory
@@ -18694,7 +18828,13 @@ export class World {
         // gates with their enter actions and dwell on the NEAREST one you stand on.
         const gates: { pos: Vec2; key: string; enter: () => void }[] = [];
         // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
-        if (this.breachPos) gates.push({ pos: this.breachPos, key: 'breach:uw', enter: () => this.enterUnderworld() });
+        if (this.breachPos) {
+          // Which dimension does a cave breach tear into? Whatever REGISTERED a
+          // cave_breach entry (data) — first registrant today; a weighted roll
+          // when a second breach-entered layer ever ships.
+          const bd = dimensionsEnteredBy('cave_breach')[0];
+          if (bd) gates.push({ pos: this.breachPos, key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+        }
         for (const dp of this.demonPortals) gates.push({ pos: dp.pos, key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
         for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
         for (const np of this.necropolisPortals) gates.push({ pos: np.pos, key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
@@ -18935,6 +19075,11 @@ export class World {
     // zone never opens the gate). Resolved against the durable HoldfastField lock state.
     const ed = this.zone.exits[e.defIndex];
     if (ed?.lock && this.sim.holdfastField?.isLocked(this.zone.id, ed.lock)) return true;
+    // DIMENSION SEAL: an exit that crosses dimensions WITHOUT the declared gate
+    // marker is a defect (a pre-fix save, a bad mint) — it stays sealed forever,
+    // so a damaged world self-heals into "a rift that never opens" instead of a
+    // door to the wrong plane. Diagnosis lands in the console via placeExit.
+    if (this.isIllegalCrossDim(ed)) return true;
     if (this.objectiveDone) return false;
     const o = this.zone.objective;
     const gates = o.kind === 'boss' || o.kind === 'spawners'

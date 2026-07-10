@@ -215,6 +215,10 @@ export class UI {
   /** Which DIMENSION the map tab shows (surface / underworld / …) — tabs
    *  appear once a run breaches a second dimension (the PoE Acts pattern). */
   private mapDimension = 'surface';
+  /** Sim layers the user has toggled OFF on the map (by overlay id) — so a
+   *  drifting weather front or territory tint can be silenced and never
+   *  misread as the biome heat map "changing at random". Session-scoped. */
+  private mapLayersOff = new Set<string>();
   /** The fitted map box (set each refreshMap) so the wheel/drag handlers can
    *  recompute the viewBox without a full re-render. */
   private mapBox = { minX: 0, minY: 0, w: 1, h: 1 };
@@ -2163,6 +2167,9 @@ export class UI {
     // The hover/pin selection is per-viewing — start each open on the current zone.
     this.hoveredZone = null;
     this.pinnedZone = null;
+    // Open on the dimension you STAND IN (standing in hell, see hell) — tabs
+    // still flip freely once open; only the opening snaps.
+    if (this.mapOpen) this.mapDimension = this.getWorld().zone.dimension ?? 'surface';
     if (this.mapOpen) this.refreshMap();
   }
 
@@ -2538,8 +2545,9 @@ export class UI {
     // SURFACE ONLY: the world-sim doesn't govern other dimensions (hell zones
     // never seed it — see chartFrontier), so its fronts/territory/biome wash
     // must not drift over the underworld tab.
-    const known = zones.filter(z => visited.has(z.id));
-    const layers = dim === 'surface' ? world.sim.mapLayers(known) : [];
+    const known = zones.filter(z => visited.has(z.id) && (z.dimension ?? 'surface') === dim);
+    const allLayers = world.sim.mapLayers(known, dim);
+    const layers = allLayers.filter(l => !this.mapLayersOff.has(l.id));
     const simUnder = layers.map(l => l.under).join('');
     const simOver = layers.map(l => l.over).join('');
 
@@ -2556,9 +2564,13 @@ export class UI {
         const pad = 320;
         const spanW = Math.max(...xs0) - Math.min(...xs0) + pad * 2;
         const spanH = Math.max(...ys0) - Math.min(...ys0) + pad * 2;
-        // The step SCALES with the box (≤ ~4000 cells) so a run that charts far
-        // and wide coarsens the wash instead of growing the sweep unbounded.
-        const step = Math.max(130, Math.ceil(Math.sqrt((spanW * spanH) / 4000) / 10) * 10);
+        // The step climbs a LADDER (130 × 2^k, ≤ ~4096 cells) so a run that
+        // charts far and wide coarsens the wash instead of growing the sweep
+        // unbounded — and, unlike a continuous formula, the lattice holds
+        // PERFECTLY STILL between doublings (origins snap below): charting new
+        // ground only adds rows/columns, it never re-tiles the whole wash.
+        let step = 130;
+        while (spanW / step > 64 || spanH / step > 64) step *= 2;
         // Snap the origin to the step lattice: growth only ADDS rows/columns,
         // so existing rects (and the cache key) hold still between charts.
         const ox0 = Math.floor((Math.min(...xs0) - pad) / step) * step;
@@ -2595,6 +2607,11 @@ export class UI {
     let deaths = '';
     for (const m of collectMarkers(world)) {
       const node = m.zoneId ? world.zoneMap[m.zoneId] : undefined;
+      // Markers stay on THEIR dimension's tab — a zone-anchored marker derives
+      // its plane from the zone, a raw-coord marker declares it. Without this,
+      // a hell corpse skull or quest pin haunts the surface map (and vice versa).
+      const mDim = node ? (node.dimension ?? 'surface') : (m.dimension ?? 'surface');
+      if (mDim !== dim) continue;
       if (m.fog === 'charted' && (!node || !visited.has(node.id))) continue;
       const cx = node ? node.map.x : (m.coord?.x ?? 0);
       const cy = node ? node.map.y : (m.coord?.y ?? 0);
@@ -2631,6 +2648,7 @@ export class UI {
       ${this.mapTabsHtml()}
       <div style="font-size:11px;color:#9ab0c8;margin:-4px 0 6px 0">${world.sim.hudLine(world.zone, world.time)}
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
+      ${this.mapLayerChipsHtml(allLayers)}
       <div class="map-body">
         <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:grab;touch-action:none">${ocean}${simUnder}${edges}${stubs}${nodes}${deaths}${simOver}</svg>
         <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
@@ -2673,6 +2691,31 @@ export class UI {
     this.worldMap.querySelectorAll<HTMLButtonElement>('.book-tab[data-mdim]').forEach(btn => {
       btn.addEventListener('click', () => { this.mapDimension = btn.dataset.mdim!; this.refreshMap(); });
     });
+    this.worldMap.querySelectorAll<HTMLButtonElement>('button[data-mlayer]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const id = btn.dataset.mlayer!;
+        if (this.mapLayersOff.has(id)) this.mapLayersOff.delete(id); else this.mapLayersOff.add(id);
+        this.refreshMap();
+      });
+    });
+  }
+
+  /** LAYER TOGGLE CHIPS — one per sim overlay currently painting the map (plus
+   *  any the user toggled off, so they can be re-lit). Auto-derived from the
+   *  tagged mapLayers: a new overlay's layer gets its chip with zero edits
+   *  here. The point is ATTRIBUTION — with weather/territory silenceable, a
+   *  drifting front can never read as "the biome heat map changed". */
+  private mapLayerChipsHtml(allLayers: { id: string; label: string; under: string; over: string }[]): string {
+    const shown = allLayers.filter(l => l.under || l.over || this.mapLayersOff.has(l.id));
+    if (!shown.length) return '';
+    const chips = shown.map(l => {
+      const off = this.mapLayersOff.has(l.id);
+      return `<button data-mlayer="${esc(l.id)}" title="toggle this map layer"
+        style="font-size:9px;padding:1px 7px;margin:0 3px 0 0;border-radius:8px;cursor:pointer;
+        border:1px solid ${off ? '#33333e' : '#4a4a5e'};background:${off ? '#141418' : '#22222e'};
+        color:${off ? '#55555e' : '#b8b4a8'};${off ? 'text-decoration:line-through;' : ''}">${esc(l.label)}</button>`;
+    }).join('');
+    return `<div style="font-size:9px;color:#6a6a78;margin:-2px 0 6px 0">layers: ${chips}</div>`;
   }
 
   /** The QUESTS view of the map panel: the journal of active + completed quests. */

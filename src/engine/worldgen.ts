@@ -16,6 +16,7 @@ import type { ObjectiveSpec, ZoneDef, ZoneExitDef } from '../data/zones';
 import { OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, biomeSpacing } from '../world/biomes';
+import { dimensionsEnteredBy } from '../world/dimensions';
 
 // The node-space coordinate vocabulary (Dir, MapCoord, MAP_DIR, projectCoord) now
 // lives in world/coords — a pure leaf shared with the world overlays. Re-exported
@@ -115,6 +116,11 @@ export interface ZoneSpec {
   /** The DIMENSION this zone belongs to (inherited from its source at mint).
    *  Baked BEFORE the weave so the road graph never crosses dimensions. */
   dimension?: string;
+  /** THIS MINT IS A DIMENSION GATE: its back-edge to the (other-dimension)
+   *  anchor is the ONE sanctioned crossing, marked crossDim on the exit. Set
+   *  only by World.enterDimension — any other cross-dimension back-edge is
+   *  refused with a warning (the anchor footgun, closed). */
+  gateCross?: boolean;
 }
 
 // CONNECTION QA — when a freshly-charted node lands near already-charted nodes,
@@ -450,8 +456,24 @@ export function placeZoneAt(
   // bypassing the degree cap), then 1-2 fresh frontiers so it can grow its own edges.
   // A FLOATING zone skips the back-edge (it mints disconnected, wired in later by
   // connectFloatingZone on approach — the fog-of-war find-it).
+  //
+  // DIMENSIONS ARE SEALED: an anchor in another dimension mints NO back-edge
+  // unless this is a declared gate (spec.gateCross → the exit carries crossDim,
+  // the one legal crossing). Callers used to be trusted here — the exact
+  // footgun that let a mismatched (anchor, dimension) pair silently forge a
+  // hell↔surface road indistinguishable from the Hellgate's.
   const backSide: Dir = src ? sideToward(map, srcMap) : 's';
-  const exits: ZoneExitDef[] = (src && !spec.floating) ? [{ to: src.id, side: backSide }] : [];
+  const srcDim = src?.dimension ?? 'surface';
+  const myDim = spec.dimension ?? 'surface';
+  let backEdge: ZoneExitDef[] = [];
+  if (src && !spec.floating) {
+    if (srcDim === myDim) backEdge = [{ to: src.id, side: backSide }];
+    else if (spec.gateCross) backEdge = [{ to: src.id, side: backSide, crossDim: true }];
+    else {
+      console.warn(`[worldgen] refused cross-dimension back-edge ${spec.id ?? `gen_${genIndex}`} (${myDim}) → ${src.id} (${srcDim}) — only a declared gate may cross`);
+    }
+  }
+  const exits: ZoneExitDef[] = backEdge;
   const openSides = (['n', 's', 'e', 'w'] as const).filter(s => s !== backSide);
   const frontiers = spec.forceFrontiers ?? rng.int(1, 2);
   for (let i = 0; i < frontiers && openSides.length; i++) {
@@ -546,10 +568,16 @@ export function placeZoneAt(
   // A FLOATING zone forges NONE of this at mint — connectFloatingZone does it on
   // approach (so it sits disconnected on the map until you explore to it).
   if (!spec.floating) {
-    if (spec.linkBack && src) {
+    // The reciprocal obeys the SAME dimension seal as the back-edge: a
+    // mismatched anchor gains no road into this zone (a directed mint whose
+    // anchor fell back to a cross-dimension zone would otherwise stamp the
+    // exact "hell exit to the surface" defect on the ANCHOR'S side).
+    if (spec.linkBack && src && srcDim === myDim) {
       const recSide = OPP_DIR[backSide];
       const at = findNonCollidingAt(recSide, src.exits, rng, src.size) ?? bestSpacedAt(recSide, src.exits, src.size);
       src.exits.push({ to: def.id, side: recSide, at });
+    } else if (spec.linkBack && src && srcDim !== myDim) {
+      console.warn(`[worldgen] refused cross-dimension linkBack ${src.id} (${srcDim}) → ${def.id} (${myDim})`);
     }
     // Weave opportunistic roads into already-charted neighbours (density).
     weaveConnections(def, zoneMap, rng);
@@ -609,15 +637,24 @@ export function generateZone(
  * the same cave def.
  */
 /** The CAVE LADDER's levers — all data, not destiny. A deeper mouth is a
- *  seeded ROLL per cave (the ladder is a rare discovery, not a guarantee);
- *  only a surface ladder that actually reaches `breachDepth` breaches. */
+ *  seeded ROLL per cave (the ladder is a rare discovery, not a guarantee).
+ *  The BREACH DEPTH is no longer a lever here: it comes from whichever
+ *  registered dimension declares a 'cave_breach' entry (DimensionDef.entry
+ *  .minDepth) — the ladder bottoms out wherever a dimension says it does. */
 export const CAVE_LADDER = {
   /** Chance a cave at depth 1, 2, … conceals a deeper mouth (last entry
    *  repeats for greater depths). */
   deeperChance: [0.3, 0.3],
-  /** The depth where a SURFACE ladder bottoms out in an Underworld breach. */
-  breachDepth: 3,
 };
+
+/** The shallowest cave depth at which ANY registered dimension breaches —
+ *  Infinity when none does (the ladder just ends in caves). */
+function caveBreachDepth(): number {
+  const entries = dimensionsEnteredBy('cave_breach');
+  return entries.length
+    ? Math.min(...entries.map(d => d.entry?.minDepth ?? Infinity))
+    : Infinity;
+}
 
 export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId = 'cavern'): ZoneDef {
   const ts = TILESETS[tilesetId] ?? TILESETS['cavern'];
@@ -641,7 +678,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // Only SURFACE ladders bottom out in a breach — hell's caves are just caves
   // (a breach FROM the Underworld INTO the Underworld would be a teleport to
   // the hellgate dressed as revelation).
-  const breach = depth >= CAVE_LADDER.breachDepth && !parent.dimension;
+  const breach = depth >= caveBreachDepth() && !parent.dimension;
   const chances = CAVE_LADDER.deeperChance;
   const deeper = !breach && rng.chance(chances[Math.min(depth - 1, chances.length - 1)] ?? 0);
   const layout = deeper ? [...ts.layout, { kind: 'cave' as const, count: [1, 1] as [number, number] }] : ts.layout;

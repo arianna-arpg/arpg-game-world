@@ -78,6 +78,8 @@ export interface MapLayer {
  *  net-new content package can append its own overlay (e.g. 'breach'). */
 export interface WorldOverlay {
   readonly id: string;
+  /** Human label for the map's layer-toggle chips (default: the id). */
+  readonly mapLabel?: string;
   /** The DIMENSION this field lives in (default 'surface'). The sim hands the
    *  overlay a view scoped to that dimension's graph and skips its spawn bias
    *  and map layers everywhere else — one declaration ties an event to hell,

@@ -147,6 +147,7 @@ const SPAWN_CHANCE = 0.06; // per step, while under the cap — fronts are rarer
 
 export class WeatherField implements WorldOverlay {
   readonly id = 'weather' as const;
+  readonly mapLabel = 'Weather';
   readonly fronts: WeatherFront[] = [];
   private rng: Rng;
   private acc = 0;

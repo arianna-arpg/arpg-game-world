@@ -591,6 +591,10 @@ export interface DoodadW {
 export interface ExitW { p: Vec2W; r: number; to: string; label: string; }
 export interface ZoneMsg {
   zoneId: string; name: string; level: number;
+  /** The zone's DIMENSION ('surface' omitted) — the client's map tab, dimension
+   *  seals, and any dimension-scoped rendering read the same plane the host is
+   *  in (a client in hell must not paint surface weather over it). */
+  dimension?: string;
   arena: { w: number; h: number; shape: ZoneShape };
   theme: ZoneTheme;
   doodads: DoodadW[];
@@ -608,6 +612,7 @@ export interface ZoneMsg {
 export function serializeZone(world: World): ZoneMsg {
   return {
     zoneId: world.zone.id, name: world.zone.name, level: world.zone.level,
+    dimension: world.zone.dimension,
     arena: { w: world.arena.w, h: world.arena.h, shape: world.arena.shape },
     theme: world.zone.theme,
     doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door })),
@@ -625,6 +630,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.theme = msg.theme;
   world.zone.name = msg.name;
   world.zone.level = msg.level;
+  world.zone.dimension = msg.dimension;
   world.doodads = msg.doodads.map(d => ({
     pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door,
   })) as Doodad[];

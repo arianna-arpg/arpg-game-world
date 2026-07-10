@@ -34,6 +34,10 @@ export interface MapMarker {
   fog: 'always' | 'charted';
   /** Draw order among markers (higher = on top). */
   z?: number;
+  /** The DIMENSION whose map tab this marker belongs on. Zone-anchored markers
+   *  DERIVE it from their zone (leave unset); a raw-coord marker declares it
+   *  (default 'surface') — a hell corpse must not haunt the surface map. */
+  dimension?: string;
 }
 
 export type MarkerSource = (world: World) => MapMarker[];

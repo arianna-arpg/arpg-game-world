@@ -171,6 +171,12 @@ export interface ZoneExitDef {
    *  from `side` so a non-cardinal locale still draws a sane map road from `side`.
    *  Absent (the norm) = the cardinal side+at placement. (Data seam; phase-2 use.) */
   posFrac?: { fx: number; fy: number };
+  /** A DECLARED cross-dimension road (a dimension gate's way home). Dimensions are
+   *  sealed world-states: every mint/link guard refuses an exit whose destination
+   *  lives in another dimension UNLESS it carries this marker — set only by the
+   *  gate mint (ZoneSpec.gateCross). An unmarked cross-edge is a bug: placeExit
+   *  refuses to open it and warns, so a bad save self-heals visibly. */
+  crossDim?: true;
 }
 
 export interface ZoneTheme {

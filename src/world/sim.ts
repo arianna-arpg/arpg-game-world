@@ -36,6 +36,7 @@ import type { PackageGate } from '../packages/types';
 import { gateOf, resolveGates } from '../packages/weighting';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD } from './biomes';
 import { setClimateOrigin } from './climate';
+import { dimensionPackageTempo } from './dimensions';
 import { LevelField, validateLevelField } from './levelField';
 import { START_ZONE, ZONES } from '../data/zones';
 import { biomesWithoutTileset } from '../data/tilesets';
@@ -48,7 +49,7 @@ import { IncursionField } from '../packages/overlays/incursion';
 import { dayCycle } from './daynight';
 import { FactionField } from './faction';
 import { InvasionField } from './invasion';
-import { biasTable, composeBias, type MapLayer, type OverlayView, type WorldOverlay } from './overlay';
+import { biasTable, composeBias, type OverlayView, type WorldOverlay } from './overlay';
 import { Reputation } from './reputation';
 import { WarlordField } from './warlord';
 import { WeatherField, WEATHER_DEFS } from './weather';
@@ -150,6 +151,13 @@ export class WorldSim {
   constructor(manifest: ExpeditionManifest) {
     this.manifest = manifest;
     const seed = manifest.seed >>> 0;
+    // Deterministic per-dimension seed salt (FNV over the id) — a non-surface
+    // overlay instance rolls an independent event stream from its surface twin.
+    const dimSalt = (id: string): number => {
+      let h = 0x811c9dc5;
+      for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
+      return h >>> 0;
+    };
     this.weather = new WeatherField(new Rng((seed ^ 0x5eed) >>> 0));
     this.invasion = new InvasionField(this.faction, new Rng((seed ^ 0x1a5e) >>> 0));
     this.warlord = new WarlordField(this.faction);
@@ -172,11 +180,31 @@ export class WorldSim {
       if (pkg.world.weather) this.weatherPkgIds.push(pkg.id);
       for (const f of pkg.world.invasionFactions ?? []) this.factionToPkg[f] = pkg.id;
       if (pkg.world.overlay) {
-        extra.push(pkg.world.overlay({
-          seed: packageSeed(seed, pkg.id),
-          gate: () => gateOf(this.gates, pkg.id),
-          biomeSeed: seed,
-        }));
+        // ONE INSTANCE PER DECLARED DIMENSION (default surface-only) — parallel
+        // world-states run the same overlay code. The surface instance keeps
+        // the exact legacy seed + gate (byte-identical runs); a non-surface
+        // instance salts its seed by dimension and reads a gate whose
+        // ignitionMul arrives PRE-SCALED by the dimension's tempo
+        // (DimensionDef.events) — every overlay's ignition roll already reads
+        // gate().ignitionMul, so the per-dimension lever needs zero overlay
+        // edits. Views/routing/spawn-bias scope off the instance's dimension.
+        for (const dim of pkg.world.dimensions ?? ['surface']) {
+          const inst = pkg.world.overlay({
+            seed: dim === 'surface' ? packageSeed(seed, pkg.id) : (packageSeed(seed, pkg.id) ^ dimSalt(dim)) >>> 0,
+            gate: () => {
+              const g = gateOf(this.gates, pkg.id);
+              const tempo = dimensionPackageTempo(dim, pkg.id);
+              return tempo === 1 ? g : { ...g, ignitionMul: g.ignitionMul * tempo };
+            },
+            biomeSeed: seed,
+            dimension: dim,
+          });
+          // WorldOverlay.dimension is a readonly class declaration; the sim
+          // stamps the runtime instance's dimension HERE (the one sanctioned
+          // write) so every overlay class stays dimension-blind.
+          if (dim !== 'surface') (inst as { dimension?: string }).dimension = dim;
+          extra.push(inst);
+        }
       }
     }
     // Order matters: faction settles ownership, the warlord reads it, then the
@@ -200,7 +228,9 @@ export class WorldSim {
     this.overlays = [this.biomeField, this.weather, this.faction, this.warlord, this.invasion, this.incursionField, ...extra];
     // Cache the demon-invasion overlay (if the package is in this run's manifest)
     // so the engine can reach it without scanning the overlay list every tick.
-    this.demonField = (extra.find(o => o.id === 'demon_invasion') as DemonInvasionField | undefined) ?? null;
+    // Cached fields hold the SURFACE instance (legacy consumers); per-dimension
+    // instances resolve through overlayFor(id, dimension).
+    this.demonField = (extra.find(o => o.id === 'demon_invasion' && (o.dimension ?? 'surface') === 'surface') as DemonInvasionField | undefined) ?? null;
     this.crusadeField = (extra.find(o => o.id === 'crusade') as CrusadeField | undefined) ?? null;
     this.huntField = (extra.find(o => o.id === 'hunt') as HuntField | undefined) ?? null;
     this.fractureField = (extra.find(o => o.id === 'fractures') as FractureField | undefined) ?? null;
@@ -339,11 +369,32 @@ export class WorldSim {
 
   onNodeCharted(zone: ZoneDef, view: OverlayView): void {
     // A node only seeds the overlays of ITS dimension (surface mints reach the
-    // surface systems; a future hell overlay would seed from hell mints).
+    // surface systems; a hell mint seeds hell's own overlay instances).
     for (const o of this.overlays) {
       if ((o.dimension ?? 'surface') !== (zone.dimension ?? 'surface')) continue;
       o.onNodeCharted(zone, this.scopedView(view, o.dimension));
     }
+  }
+
+  /** A package overlay's instance for a DIMENSION (null when the package is
+   *  off this run or doesn't run there). Zone-side engine consumers resolve
+   *  by the zone's dimension — parallel world-states, one lookup. */
+  overlayFor<T extends WorldOverlay>(id: string, dimension?: string): T | null {
+    const dim = dimension ?? 'surface';
+    return (this.overlays.find(o => o.id === id && (o.dimension ?? 'surface') === dim) as T | undefined) ?? null;
+  }
+
+  /** The demon-invasion instance governing a dimension (surface = the cached
+   *  legacy field). See overlayFor. */
+  demonFieldFor(dimension?: string): DemonInvasionField | null {
+    if ((dimension ?? 'surface') === 'surface') return this.demonField;
+    return this.overlayFor<DemonInvasionField>('demon_invasion', dimension);
+  }
+
+  /** Every live demon-invasion instance (all dimensions) — the engine's mint
+   *  drain walks them all so each world-state's rifts tear in its own graph. */
+  demonFieldsAll(): DemonInvasionField[] {
+    return this.overlays.filter(o => o.id === 'demon_invasion') as DemonInvasionField[];
   }
 
   /** A zone's EVENT ACTIVITY from the living world: the sum of every overlay's
@@ -374,9 +425,19 @@ export class WorldSim {
     return order.length >= 2 ? order : factions;
   }
 
-  /** [weather, faction] minimap layers in draw order. */
-  mapLayers(nodes: ZoneDef[]): MapLayer[] {
-    return this.overlays.map(o => o.renderMap(nodes));
+  /** Minimap layers in draw order, TAGGED with their overlay's id + label so
+   *  the map can offer layer toggles (weather off, territory off…) and a
+   *  drifting front can never masquerade as "the biome map changed". Only the
+   *  overlays of the VIEWED dimension paint — the surface tab shows surface
+   *  weather/territory/biomes; a hell tab shows hell's own instances (its
+   *  demon rings), never the surface fronts drifting over the underworld. */
+  mapLayers(nodes: ZoneDef[], dimension = 'surface'): { id: string; label: string; under: string; over: string }[] {
+    return this.overlays
+      .filter(o => (o.dimension ?? 'surface') === dimension)
+      .map(o => {
+        const l = o.renderMap(nodes);
+        return { id: o.id, label: o.mapLabel ?? o.id, under: l.under, over: l.over };
+      });
   }
 
   /** One-line HUD status: "Night · Storm · Goblin Warband invading" — the same

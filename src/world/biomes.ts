@@ -349,6 +349,10 @@ export interface BiomeFieldModifier {
   /** Optional stable id so a TRANSIENT warp (a Mycelia bloom that crawls + recedes) can
    *  be replaced/removed by key (setWarp/unwarp). Omitted = a permanent push (Incursion). */
   id?: string;
+  /** ATTRIBUTION: what is warping this land ("Mycelia bloom", "Demonic invasion") —
+   *  the map's zone-info box and the warped-cell pulse surface it, so the heat map
+   *  never appears to change "for no reason". */
+  label?: string;
 }
 
 /** Integer hash (Rng's family) → deterministic across host / client / reload. */
@@ -365,6 +369,12 @@ function hashCell(a: number, b: number, seed: number): number {
 // wholesale at the cap (a re-fill is cheap; correctness never depends on it).
 const pickMemo = new Map<string, string>();
 const PICK_MEMO_CAP = 16384;
+
+/** Drop every memoized cell pick. Called when a NEW world constructs (a fresh
+ *  BiomeField) — the seed in the key already isolates worlds, but a hard reset
+ *  also kills any stale entries a dev-session module swap (HMR duality) or a
+ *  climate-origin change could otherwise carry across runs. */
+export function resetFieldPickMemo(): void { pickMemo.clear(); }
 
 /** Weighted biome for a Voronoi cell: seed weight × CLIMATE AFFINITY sampled
  *  at the cell's SITE (one climate reading per blob — regions stay coherent).
