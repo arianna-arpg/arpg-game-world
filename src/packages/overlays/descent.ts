@@ -38,8 +38,16 @@ export interface DescentSurge {
   payoutKeptOnDeath: number;
   /** Depthkin level = the descent cave level + this + floor(depth). */
   enemyLevelBonus: number;
+  /** The abyss's brood FACTION — the engine spawns from ITS registered roster
+   *  (weighted + presence-shaped) and scopes culling/credit by it. Swapping
+   *  the brood (or reweighting a type) is a data edit, never an engine one. */
+  faction: string;
   /** Seconds between continuous Depthkin spawns (scaled down by depth). */
   spawnInterval: number;
+  /** The spawn interval never drops below this, however deep you delve. */
+  spawnIntervalFloor: number;
+  /** Seconds shaved off the interval per depth unit (the pressure ramp). */
+  spawnRampPerDepth: number;
   /** Most live Depthkin around the player at once (the streamed pressure cap). */
   spawnCap: number;
   /** Depthkin spawn this far from the player (just past the light, into the dark). */

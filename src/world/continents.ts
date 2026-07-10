@@ -59,9 +59,13 @@ function hashCell(a: number, b: number, seed: number): number {
 }
 
 function cellIsLand(gx: number, gy: number, seed: number): boolean {
-  // The HOME cell (0,0 neighborhood of the origin) is always land — the town
-  // must never spawn mid-ocean.
-  if (gx === 0 && gy === 0) return true;
+  // The HOME NEIGHBORHOOD is always land — the town must never sit mid-ocean.
+  // The town's canonical coord lives near the corner of macro-cells
+  // (-1..0, -1..0) (cellSpan 1150, jitter 0.42), so ANY of those four can win
+  // the Voronoi at its coordinate depending on the seed; pinning only (0,0)
+  // left seeds where the town's actual winning cell rolled OCEAN (the map
+  // washed the town blue, frontiers gated into ports at the doorstep).
+  if (gx >= -1 && gx <= 0 && gy >= -1 && gy <= 0) return true;
   return (hashCell(gx, gy, (seed ^ 0x51ed270b) >>> 0) / 0x100000000) >= CONTINENT_CFG.oceanFrac;
 }
 

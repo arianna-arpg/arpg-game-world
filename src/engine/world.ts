@@ -44,7 +44,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { FACTIONS, MONSTERS, WAVE_TABLE, BOSS_ID, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
@@ -82,7 +82,7 @@ import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from 
 import { Rng, rollSeed } from '../core/rng';
 import { ALTARS, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
-import { patronFaction, biomesForFaction, biomeEventDensity } from '../world/biomes';
+import { patronFaction, biomesForFaction, biomeEventDensity, OCEAN_BIOME } from '../world/biomes';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
@@ -124,7 +124,7 @@ import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherStrike } from '../world/weather';
 import { dayCycle } from '../world/daynight';
 import { clampToBounds, exitInside, samplePoint, type Bounds } from '../world/shape';
-import { distFromHome, traitsOf } from '../world/traits';
+import { distFromHome, traitsOf, isDeathAligned } from '../world/traits';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
 import { chooseEvent, type EventContext, type EventReward } from './events';
 import { ActiveZoneEvent } from './zoneEvent';
@@ -3509,7 +3509,8 @@ export class World {
       // would dress a hell bonus zone in meadow greens) and carries hell's level
       // pressure — full parity with the main mint path below.
       const lockBiomeFor = source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor;
-      const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, lockBiomeFor, this.levelFor, this.biomeDepthFor, this.climateFor);
+      const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, lockBiomeFor, this.levelFor,
+        source.dimension ? undefined : this.biomeDepthFor, this.climateFor);
       // The earned road must lead to LAND (this branch bypasses the ocean gate).
       if (!gen.dimension && this.continentFor(gen.map).kind === 'ocean') gen.map = this.pullToLand(gen.map);
       if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
@@ -3573,10 +3574,14 @@ export class World {
     // takes an explicit target); a normal source uses generateZone's node-step projection.
     // A non-surface source samples ITS OWN dimension's biome palette (hell grows hell).
     const biomeFor = source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor;
+    // Biome DEPTH is a SURFACE Voronoi read — meaningless inside a dimension's
+    // own palette, so hell mints carry no geo.biomeDepth (data hygiene; the
+    // demon drain already omits it the same way).
+    const depthFor = source.dimension ? undefined : this.biomeDepthFor;
     const gen = source.field
       ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
-        { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
-      : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, this.biomeDepthFor, this.climateFor);
+        { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
+      : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, depthFor, this.climateFor);
     this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     this.zoneMap[gen.id] = gen;
@@ -4061,7 +4066,11 @@ export class World {
    *  packs hunt with discipline) away from the entrance. Safe zones and
    *  biomes without a table stay fauna-free. */
   private spawnWildlife(def: ZoneDef): void {
-    if (def.objective.kind === 'safe') return;
+    // SPECIAL zones host no ambient life (the open sea, boss arenas) — the same
+    // gate spawnPacks/spawnContest already honor. Without it, the sea's
+    // undefined biome fell through to the plains fallback below and hares,
+    // wolves and lash-maidens spawned ON OPEN WATER during a voyage.
+    if (def.objective.kind === 'safe' || def.special) return;
     const table = WILDLIFE[def.biome ?? 'plains'];
     if (!table?.length) return;
     for (const w of table) {
@@ -5837,33 +5846,38 @@ export class World {
     }
     // DEPTH: how far you've delved from the shaft — scales danger + payout.
     run.depth = Math.floor(dist(p, run.origin) / Math.max(1, cfg.depthUnit));
-    // Continuous Depthkin pressure (faster the deeper you are).
+    // Continuous Depthkin pressure (faster the deeper you are) — floor + ramp
+    // are the surge's own data, not engine literals.
     this.descentSpawnTimer -= dt;
     if (this.descentSpawnTimer <= 0) {
-      this.descentSpawnTimer = Math.max(0.6, cfg.spawnInterval - run.depth * 0.2);
+      this.descentSpawnTimer = Math.max(cfg.spawnIntervalFloor, cfg.spawnInterval - run.depth * cfg.spawnRampPerDepth);
       this.spawnDepthkin(cfg);
     }
     // Stream terrain around the player + cull what falls far behind into the dark.
     this.streamDescentTerrain(cfg);
     for (let i = this.actors.length - 1; i >= 0; i--) {
       const a = this.actors[i];
-      if (a.team === 'enemy' && a.faction === 'depthkin' && !a.dead && dist(a.pos, p) > cfg.cullRadius) {
+      if (a.team === 'enemy' && a.faction === cfg.faction && !a.dead && dist(a.pos, p) > cfg.cullRadius) {
         this.actors.splice(i, 1);
       }
     }
   }
 
-  /** Spawn one Depthkin just past the light, scaled to depth, under the live cap. */
+  /** Spawn one of the abyss's brood just past the light, scaled to depth, under
+   *  the live cap — picked from the surge faction's REGISTERED roster (weighted
+   *  + presence-shaped), so the brood's mix is data. An inline threshold ladder
+   *  here once drifted out of sync with the declared roster weights. */
   private spawnDepthkin(cfg: import('../packages/overlays/descent').DescentSurge): void {
     const run = this.descentRun;
     if (!run) return;
-    const live = this.actors.filter(a => a.team === 'enemy' && !a.dead && a.faction === 'depthkin').length;
+    const live = this.actors.filter(a => a.team === 'enemy' && !a.dead && a.faction === cfg.faction).length;
     if (live >= cfg.spawnCap) return;
-    const r = Math.random();
-    const id = r < 0.5 ? 'depthkin_crawler' : r < 0.78 ? 'depthkin_lurker' : r < 0.92 ? 'depthkin_seer' : 'depthkin_brute';
+    const roster = FACTIONS[cfg.faction]?.table;
+    if (!roster?.length) return;
     const lvl = Math.max(1, this.zone.level + cfg.enemyLevelBonus + Math.floor(run.depth));
+    const id = this.weightedPick(roster, lvl);
     const m = this.createMonster(id, lvl, 'enemy');
-    m.faction = 'depthkin';
+    m.faction = cfg.faction;
     const ang = rand(0, Math.PI * 2);
     const dr = rand(cfg.spawnDist[0], cfg.spawnDist[1]);
     m.pos = vec(this.player.pos.x + Math.cos(ang) * dr, this.player.pos.y + Math.sin(ang) * dr);
@@ -6278,7 +6292,9 @@ export class World {
    *  A single-orb ember vent (count 1) is the same handler with smaller data. */
   private effectLavaOrb(d: Doodad, eff: DoodadEffect): void {
     if (!chance(eff.chance)) return;
-    const skill = SKILLS['magma_glob'];
+    // The hurled skill is the EFFECT'S data (mintHazardCloud's pattern) — a
+    // vent can lob anything registered; magma_glob is only the default.
+    const skill = SKILLS[eff.skillId ?? 'magma_glob'];
     if (!skill) return;
     if (!this.hazardCaster) {
       const c = new Actor('Volcano', 'player', vec(0, 0));
@@ -8397,10 +8413,22 @@ export class World {
     return {
       id: VOYAGE_ZONE_ID, name: 'The Open Sea', level: this.zone.level,
       size: { w: 2400, h: 1800 }, shape: 'rect', boundless: true,
+      // The sea IS the ocean biome (WILDLIFE has no ocean row — deliberate:
+      // explicit absence beats the plains fallback; belt to spawnWildlife's
+      // special-gate suspenders).
+      biome: OCEAN_BIOME,
       theme: {
         floor: '#0b2033', grid: '#10293f', border: '#10293f',
         obstacle: '#c9b98a', obstacleEdge: '#8a7a52', accent: '#7fd0ff',
-        chasm: '#061523', mud: '#16344c', water: '#0b2033', lava: '#5a1606',
+        chasm: '#061523', mud: '#16344c', water: '#0b2033',
+        // OCEAN GROUND: the mottle bake reads this style — a deep-to-crest
+        // blue gradient stretched into horizontal SWELL BANDS, with the
+        // speckle pass OFF (its pebble chips sampled the tan obstacle color
+        // and read as rocky outcrops strewn across open water).
+        ground: {
+          palette: ['#071a2c', '#0b2438', '#103048', '#173d58', '#20506e'],
+          bias: 0.55, alpha: 0.6, stretchX: 2.6, scale: 1.5, speckles: 0,
+        },
       },
       layout: [], layoutType: 'open_sea',
       objective: { kind: 'clear' },              // nothing gates the water
@@ -10354,7 +10382,7 @@ export class World {
     if (i !== -1) this.corpses.splice(i, 1);
     // THE DEADWAKE: a CONSUMED corpse (raise-spectre / revive) feeds the tide — a
     // heavier tick when an undead corpse is the one devoured. No-op until armed.
-    this.sim.deadwakeField?.accrue('corpse', MONSTERS[c.defId]?.faction === 'undead');
+    this.sim.deadwakeField?.accrue('corpse', isDeathAligned(MONSTERS[c.defId]?.faction));
   }
 
   /** Displace an actor with departure/arrival flashes. */
@@ -14076,7 +14104,7 @@ export class World {
     }
     // THE DEADWAKE: raising a minion stirs the corpse tide (a heavier tick when the
     // thing raised is itself undead — a skeleton, a spectre). No-op until armed.
-    this.sim.deadwakeField?.accrue('summon', minion.faction === 'undead');
+    this.sim.deadwakeField?.accrue('summon', isDeathAligned(minion.faction));
     this.flashes.push({ pos: vec(minion.pos.x, minion.pos.y), radius: 20 + minion.radius, color: inst.def.color, life: 0.35, maxLife: 0.35 });
     return minion;
   }
@@ -17037,10 +17065,12 @@ export class World {
    *  rouseRules pattern). A package whose state lives on its overlay registers
    *  through registerKillHandler from its def file, never here. */
   private readonly worldKillRules: KillRule[] = [
-    // DESCENT: a slain Depthkin pays Echoes (× depth) into the dive's haul.
+    // DESCENT: a slain brood-member pays Echoes (× depth) into the dive's haul
+    // — scoped by the surge's own faction, never a literal.
     {
       id: 'descent_depthkin',
-      when: ctx => !!this.descentRun && ctx.credit && ctx.actor.faction === 'depthkin',
+      when: ctx => !!this.descentRun && ctx.credit
+        && ctx.actor.faction === ctx.sim.descentField?.surge().faction,
       run: ctx => {
         const dr = this.descentRun;
         if (!dr) return;
@@ -17182,10 +17212,10 @@ export class World {
     // A DOWNED co-op seat is already out of the fight — stray AoE/DoT must not
     // re-enter the death path (which would fire onPlayerDown twice).
     if (actor.downed) return;
-    // The Training Dummy is IMMORTAL: it shows the hit, then snaps back to full
-    // instead of dying — no credit, no loot, no death FX. (defId-gated so it's
-    // inert to every damage source.)
-    if (actor.defId === 'target_dummy') { actor.life = actor.maxLife(); return; }
+    // IMMORTAL fixtures (MonsterDef.immortal — the Training Dummy): show the
+    // hit, then snap back to full instead of dying — no credit, no loot, no
+    // death FX. A flag, not a def-id gate: any practice target opts in.
+    if (actor.defId && MONSTERS[actor.defId]?.immortal) { actor.life = actor.maxLife(); return; }
     // A BREAKABLE door's guard-body: dying SPLINTERS its door. setDoorState
     // retires the actor itself (splice) + repaints the doorway — nothing else
     // in the death ladder (loot/XP/bursts) applies to a doorway.
@@ -17396,7 +17426,7 @@ export class World {
     if (!silent) {
       const df = this.sim.deadwakeField;
       if (df) {
-        const undead = actor.faction === 'undead';
+        const undead = isDeathAligned(actor.faction);
         df.accrue('death', undead);
         // The seed is SLAYING an undead FOE (not a raised ally's expiry) — so the
         // arm roll needs an enemy the player's side felled.
@@ -19107,10 +19137,12 @@ export class World {
       return false;
     }
     // Passive scenery (a Training Dummy, a barrel) isn't "hunting" you — only a
-    // real threat nearby blocks waypointing. A NEUTRAL, un-roused migrant herd ambling
-    // past doesn't count (it never attacks); a ROUSED one does (it's genuinely hunting).
+    // real threat nearby blocks waypointing. NEUTRAL, un-roused AMBIENT bodies
+    // (a passing herd, grazing wildlife, toll wardens — the whole AMBIENT_TAGS
+    // registry, not a hand-picked subset that rots as packages grow) never
+    // count; a ROUSED one does (it's genuinely hunting).
     if (this.enemiesOf(this.player).some(e => !e.passive
-      && !((e.tag === 'migrant' || e.tag === 'brigand') && !e.aiAwakened) && dist(e.pos, this.player.pos) < 350)) {
+      && !(AMBIENT_TAGS.has(e.tag ?? '') && !e.aiAwakened) && dist(e.pos, this.player.pos) < 350)) {
       this.text(this.player.pos, 'cannot waypoint while hunted', '#d05050', 13);
       return false;
     }
@@ -23061,6 +23093,10 @@ export class World {
     d.gone = true;
     const i = this.doodads.indexOf(d);
     if (i >= 0) this.doodads.splice(i, 1);
+    // Bump the rev EXPLICITLY: a pop followed by a same-frame push can net the
+    // SAME list length, and the spatial/veil indices key on (identity, length,
+    // rev) — length alone would leave them stale for that window.
+    this.markDoodadsChanged();
     const br = doodadRuleOf(d.kind).brittle;
     if (!br) return;
     const color = br.color ?? '#c8b89a';
@@ -23349,8 +23385,11 @@ export class World {
       m.pos = this.spawnPoint(m.radius);
       this.actors.push(m);
     }
-    if (this.zone.id === 'the_pit' && this.wave % 5 === 0) {
-      const boss = this.createMonster(BOSS_ID, level + 1, 'enemy');
+    // Boss cadence is the OBJECTIVE'S data (bossEveryWaves/bossId) — any
+    // survival arena declares its own lord; nothing is keyed to a zone id.
+    const o = this.zone.objective;
+    if (o.kind === 'waves' && o.bossEveryWaves && o.bossId && this.wave % o.bossEveryWaves === 0) {
+      const boss = this.createMonster(o.bossId, level + 1, 'enemy');
       boss.pos = this.spawnPoint(boss.radius);
       this.actors.push(boss);
       this.text(vec(this.player.pos.x, this.player.pos.y - 60), `${boss.name} emerges!`, '#ff5050', 20);

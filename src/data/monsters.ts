@@ -248,6 +248,10 @@ export interface MonsterDef {
    *  floats the actor's nameplate. Distinct from `tag`, the spawn-time actor
    *  label event spawners overwrite at will. */
   npcRole?: string;
+  /** IMMORTAL fixture: the kill path shows the hit then snaps life back to
+   *  full — no death, no credit, no loot (the Training Dummy; any future
+   *  practice target opts in with this flag, never a def-id gate). */
+  immortal?: boolean;
   /** A RIDER SLOT on this creature's back: same-team actors whose tag /
    *  defId / faction matches `kinds` may MOUNT it (the {do:'mount'} verb) —
    *  the rider is carried (position pinned, dash/push stilled) and casts
@@ -844,7 +848,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // engine tags it 'amalgam_necromancer'. faction 'amalgam' (contexts-gated) keeps
   // it — and its undead — out of ordinary generation (appears only at its site).
   amalgam_necromancer: {
-    id: 'amalgam_necromancer', name: 'the Bonewright',
+    id: 'amalgam_necromancer', name: 'the Bonewright', npcRole: 'bonewright',
     color: '#9ad0b0', shape: 'pentagon', radius: 15, material: 'cloth', look: 'necromancer',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
@@ -921,7 +925,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
   // ignored by AI), invulnerable + untargetable, rooted (moveSpeed 0). Dwell it for
   // wares; dwell its platform to descend. Tagged 'descent_delver' by the engine.
   descent_delver: {
-    id: 'descent_delver', name: 'the Delver',
+    id: 'descent_delver', name: 'the Delver', npcRole: 'delver',
     color: '#7fe0d8', shape: 'pentagon', radius: 14, look: 'npc_delver',
     base: { life: 100, moveSpeed: 0, mana: 0 },
     skills: [],
@@ -2680,6 +2684,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [],
     xp: 0,
     passive: true,
+    immortal: true,
   },
 
   // Friendly scenery folk: they stand at their posts and cannot be harmed.

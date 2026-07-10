@@ -46,8 +46,10 @@ export type ObjectiveSpec =
   /** A sanctuary: nothing spawns, nothing seals, nothing is asked. */
   | { kind: 'safe' }
   | { kind: 'clear' }
-  /** Survive N waves (0 = endless — the original arena mode). */
-  | { kind: 'waves'; waves: number }
+  /** Survive N waves (0 = endless — the original arena mode). A boss cadence
+   *  is DATA: every `bossEveryWaves` waves, `bossId` emerges (The Pit's lord
+   *  every 5th — any future survival arena declares its own, no engine edit). */
+  | { kind: 'waves'; waves: number; bossEveryWaves?: number; bossId?: string }
   /** Enemies trickle in forever; the objective is reaching an exit. */
   | { kind: 'escape'; interval: [number, number] }
   /** Destructible spawner objects seed the zone; destroy them all. */
@@ -937,7 +939,7 @@ export const ZONES: Record<string, ZoneDef> = {
     layout: [
       { kind: 'rocks', count: [6, 9], radius: [24, 44] },
     ],
-    objective: { kind: 'waves', waves: 0 },
+    objective: { kind: 'waves', waves: 0, bossEveryWaves: 5, bossId: 'pit_lord' },
     exits: [
       { to: 'crossroads', side: 'n' },
       { to: '?', side: 'e', tileset: 'meadow' },

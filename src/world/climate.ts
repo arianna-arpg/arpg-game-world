@@ -117,6 +117,7 @@ export const CLIMATE_CFG = { origin: { x: 0, y: 0 } as MapCoord };
  *  static data, so host and clients agree without any replication. */
 export function setClimateOrigin(c: MapCoord): void {
   CLIMATE_CFG.origin = { x: c.x, y: c.y };
+  homeCellMemo = null; // the home landmass derives from the origin — re-resolve
 }
 
 // --- bands ------------------------------------------------------------------
@@ -217,10 +218,23 @@ function axisSalt(id: string): number {
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);
 
-/** Continent info shared across an axis stack's layers (probed lazily, once). */
+// The origin's WINNING continent cell per seed (memoized — one world, one home).
+let homeCellMemo: { seed: number; gx: number; gy: number } | null = null;
+function homeCellFor(contSeed: number): { gx: number; gy: number } {
+  if (!homeCellMemo || homeCellMemo.seed !== contSeed) {
+    const c = continentCellAt(CLIMATE_CFG.origin, contSeed);
+    homeCellMemo = { seed: contSeed, gx: c.gx, gy: c.gy };
+  }
+  return homeCellMemo;
+}
+
+/** Continent info shared across an axis stack's layers (probed lazily). The
+ *  coastal cache keys by PROBE REACH — two axes declaring different reaches
+ *  (moisture 700, maritime 620) each get their own sample; a single slot once
+ *  silently served the first-computed reach to every later axis. */
 interface ContinentProbe {
   cell: { gx: number; gy: number; kind: 'land' | 'ocean' | 'bridge' } | null;
-  coastal: number | null;
+  coastal: Map<number, number> | null;
 }
 
 function layerValue(
@@ -235,9 +249,11 @@ function layerValue(
       return clamp01((d - layer.innerRadius) / layer.span) * layer.amp;
     }
     case 'coastal': {
-      if (probe.coastal === null) {
+      const cache = (probe.coastal ??= new Map<number, number>());
+      let v = cache.get(layer.probe);
+      if (v === undefined) {
         const center = (probe.cell ??= continentCellAt(coord, seed));
-        if (center.kind !== 'land') probe.coastal = 1;
+        if (center.kind !== 'land') v = 1;
         else {
           let sea = 0;
           for (let i = 0; i < 4; i++) {
@@ -247,15 +263,20 @@ function layerValue(
             );
             if (c.kind !== 'land') sea++;
           }
-          probe.coastal = clamp01((sea / 4) * 1.6);
+          v = clamp01((sea / 4) * 1.6);
         }
+        cache.set(layer.probe, v);
       }
-      return probe.coastal * layer.amp;
+      return v * layer.amp;
     }
     case 'landmass': {
       const cell = (probe.cell ??= continentCellAt(coord, seed));
-      // The home landmass (the origin's cell) is the unbiased baseline.
-      if (cell.gx === 0 && cell.gy === 0) return 0;
+      // The HOME landmass — whichever macro cell actually WINS at the climate
+      // origin under this seed's jitter (never assumed to be cell (0,0): the
+      // town sits near a macro-cell corner, so any of the four neighbours can
+      // win) — is the unbiased baseline.
+      const home = homeCellFor(seed);
+      if (cell.gx === home.gx && cell.gy === home.gy) return 0;
       return (hash01(cell.gx, cell.gy, (seed ^ salt ^ 0x1a4d) >>> 0) - 0.5) * 2 * layer.spread;
     }
     case 'const':

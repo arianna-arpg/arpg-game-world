@@ -44,6 +44,10 @@ export interface FactionTraits {
    *  that lists 'crusade' but NOT 'baseline' (the dedicated zealots) is summoned
    *  ONLY by a Crusade and never leaks into normal generation. */
   contexts?: string[];
+  /** DEATH-ALIGNED: this faction's corpses/summons/deaths feed the corpse-tide
+   *  systems (the Deadwake's accrual reads this, never a faction literal — a
+   *  future lich cult or wraith host joins the loop with one flag). */
+  deathAligned?: boolean;
 }
 
 export const DEFAULT_TRAITS: FactionTraits = { roaming: 1, aggression: 1, warlordHome: 'capital' };
@@ -59,7 +63,7 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   wild: { roaming: 0.7, aggression: 0.8, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
   elemental: { roaming: 0.55, aggression: 0.8, warlordHome: 'capital', contexts: ['baseline', 'crusade', 'fractures'] },
   sylvan: { roaming: 0.35, aggression: 0.6, warlordHome: 'origin', homeBiome: 'grove', eventRange: 160, contexts: ['baseline', 'crusade'] },
-  undead: { roaming: 0.18, aggression: 0.5, warlordHome: 'origin', originZone: 'forsaken_graveyard', homeBiome: 'grave', eventRange: 150, contexts: ['baseline', 'crusade'] },
+  undead: { roaming: 0.18, aggression: 0.5, warlordHome: 'origin', originZone: 'forsaken_graveyard', homeBiome: 'grave', eventRange: 150, contexts: ['baseline', 'crusade'], deathAligned: true },
   demon: { roaming: 0.85, aggression: 1.6, warlordHome: 'origin', originZone: 'infernal_rift', homeBiome: 'rift', eventRange: 240, contexts: ['baseline', 'fractures'] },
   // The Deep — marine-only (contexts:['marine'], NOT baseline), so it never seeds
   // ordinary war/territory; it appears purely via the marine tilesets' pack tables.
@@ -74,6 +78,12 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // throne wherever the feeding is richest.
   nightkin: { roaming: 0.6, aggression: 1.2, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
 };
+
+/** Does this faction feed the corpse-tide loops (Deadwake accrual)? Reads the
+ *  trait row — never compare a faction id literal for death-alignment. */
+export function isDeathAligned(faction: string | undefined): boolean {
+  return !!(faction && FACTION_TRAITS[faction]?.deathAligned);
+}
 
 export function traitsOf(faction: string): FactionTraits {
   return FACTION_TRAITS[faction] ?? DEFAULT_TRAITS;

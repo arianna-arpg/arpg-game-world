@@ -91,6 +91,13 @@ export class DemonInvasionField implements WorldOverlay {
   private invasions: ActiveInvasion[] = [];
   private acc = 0;
   private seq = 0;
+  /** NAMESPACES ids/zone-keys per instance: a hell instance mints
+   *  `inv_underworld_0` / `demon_inv_underworld_0` while the surface keeps the
+   *  legacy `inv_0`. Without it, both instances' counters walked 0,1,2… — a
+   *  hell epicenter's zoneKey collided with an old surface demon zone (the
+   *  drain BOUND hell's invasion to the surface zone: no Balor, no portal),
+   *  and a realm kill's resolve-by-id hit BOTH dimensions' `inv_3`. */
+  private readonly idTag: string;
   /** Last view's node map, for distance lookups outside update(). */
   private nodesById: Record<string, ZoneDef> = {};
 
@@ -98,6 +105,7 @@ export class DemonInvasionField implements WorldOverlay {
     this.rng = new Rng(ctx.seed);
     this.gate = ctx.gate;
     this.cfg = surge;
+    this.idTag = ctx.dimension && ctx.dimension !== 'surface' ? `${ctx.dimension}_` : '';
   }
 
   update(dt: number, view: OverlayView): void {
@@ -260,7 +268,7 @@ export class DemonInvasionField implements WorldOverlay {
     // town, a cave, or a floating node as an epicenter.
     if (!here || here.caveDepth != null || here.floating || here.eventOwned || here.objective.kind === 'safe') return false;
     this.invasions.push({
-      id: `inv_${this.seq++}`, type: this.rng.weighted(this.cfg.types),
+      id: `inv_${this.idTag}${this.seq++}`, type: this.rng.weighted(this.cfg.types),
       coord: { x: here.map.x, y: here.map.y }, anchorZoneId: zoneId, zoneId,
       age: 0, radius: this.cfg.startRadius, minted: true,
     });
@@ -315,7 +323,7 @@ export class DemonInvasionField implements WorldOverlay {
     const zoneId = near && coordDist(near.map, coord) <= BIND_FLOOR ? near.id : null;
     const anchorZoneId = near?.id ?? view.currentZoneId;
     const type = this.rng.weighted(this.cfg.types);
-    const id = `inv_${this.seq++}`;
+    const id = `inv_${this.idTag}${this.seq++}`;
     this.invasions.push({
       id, type, coord, anchorZoneId,
       zoneId, age: 0, radius: this.cfg.startRadius, minted: zoneId !== null,
@@ -352,7 +360,9 @@ export class DemonInvasionField implements WorldOverlay {
 // a structured row off the SAME public accessor the engine reads (invasionOn) —
 // the epicenter, or the in-radius stage, with its severity in the detail.
 registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
-  const inv = world.sim.demonField?.invasionOn(zoneId);
+  // Resolve the instance governing the ZONE'S dimension (a hell zone reads
+  // hell's invasion, never the surface field's empty ledger).
+  const inv = world.sim.demonFieldFor(world.zoneMap[zoneId]?.dimension)?.invasionOn(zoneId);
   if (!inv) return [];
   return [{
     kind: 'event',

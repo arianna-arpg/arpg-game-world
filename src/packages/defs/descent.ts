@@ -32,7 +32,10 @@ const DESCENT_SURGE: DescentSurge = {
   payoutDepthBonus: 0.35,
   payoutKeptOnDeath: 1,     // keep all on resurface (lower for bank-or-bust risk)
   enemyLevelBonus: 1,
+  faction: 'depthkin',
   spawnInterval: 2.6,
+  spawnIntervalFloor: 0.6,
+  spawnRampPerDepth: 0.2,
   spawnCap: 14,
   spawnDist: [560, 920],
   cullRadius: 1700,

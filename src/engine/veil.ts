@@ -83,19 +83,24 @@ export class VeilIndex {
   constructor(doodads: readonly Doodad[]) {
     // Gather the veil-bearing crowns (a popped brittle stays out).
     const members: { d: Doodad; spec: VeilSpec }[] = [];
-    let maxReach = 0;
+    let maxRadius = 0;
+    let maxScale: number = VEIL_DEFAULTS.mergeScale;
     for (const d of doodads) {
       if (d.gone) continue;
       const spec = veilSpecOf(d.kind);
       if (!spec) continue;
       members.push({ d, spec });
-      maxReach = Math.max(maxReach, d.radius * 2 * (spec.mergeScale ?? VEIL_DEFAULTS.mergeScale));
+      maxRadius = Math.max(maxRadius, d.radius);
+      maxScale = Math.max(maxScale, spec.mergeScale ?? VEIL_DEFAULTS.mergeScale);
     }
     if (!members.length) return;
 
     // UNION-FIND over crown overlaps, bucketed so a dense forest stays cheap.
-    // Cell ≥ the largest possible pair reach ⇒ every mergeable pair sits in
-    // adjacent cells (3×3 sweep is complete).
+    // Cell ≥ the largest possible PAIR reach — (rA+rB)·max(sA,sB) ≤
+    // 2·maxRadius·maxScale — so every mergeable pair sits in adjacent cells
+    // (the 3×3 sweep is complete even when a big low-scale crown meets a
+    // small high-scale one; a per-member max once under-sized this).
+    const maxReach = 2 * maxRadius * maxScale;
     const parent = members.map((_, i) => i);
     const find = (i: number): number => {
       while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; }

@@ -1048,7 +1048,11 @@ export const TILESETS: Record<string, TilesetDef> = {
   // sizeW/H is just the STARTER patch the engine streams outward from. Packs the
   // Depthkin. An alien, near-lightless palette — the claustrophobia is the dark.
   descent: {
-    id: 'descent', boundless: true, forceLayout: 'descent',
+    // biome 'cavern': the abyss shares the underground's ambient life (bats,
+    // grubs in the dark) — without a biome tag the wildlife table fell back
+    // to PLAINS and hares grazed the bottomless dark (the sea had the same
+    // leak; see spawnWildlife's special-gate).
+    id: 'descent', frontier: false, boundless: true, forceLayout: 'descent', biome: 'cavern',
     nameFirst: ['Sightless', 'Devouring', 'Whispering', 'Yawning', 'Starless', 'Hollowing', 'Bottomless', 'Gnawing', 'Soundless', 'Endless', 'Forsaken', 'Drowning', 'Unlit', 'Cavernous', 'Swallowing', 'Hungering', 'Voidsunk', 'Plummeting'],
     nameSecond: ['Abyss', 'Descent', 'Deep', 'Maw', 'Gulf', 'Pit', 'Plunge', 'Fall', 'Drop', 'Throat', 'Hollow', 'Chasm', 'Sink', 'Void', 'Shaft', 'Reaches'],
     theme: {

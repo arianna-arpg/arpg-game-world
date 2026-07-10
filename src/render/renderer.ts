@@ -1118,7 +1118,19 @@ export class Renderer {
       if (!moving) continue;
       const last = this.lastFxSpawn.get(a.id) ?? -9;
       if (world.time - last < 0.16) continue;
-      if (a.groundKind === 'water') {
+      // A seated hull ON THE VOYAGE is a body in water the ground never
+      // senses (the open sea is streamed coastline, not water doodads) —
+      // its WAKE is the same ripple system, seeded at the stern so the
+      // rings trail the hull instead of centering under it.
+      const boat = world.sailing && world.seats.some(s => s.actor === a);
+      if (boat) {
+        this.lastFxSpawn.set(a.id, world.time);
+        this.liquidFx.push({
+          x: a.pos.x - Math.cos(a.facing) * a.radius * 0.9,
+          y: a.pos.y - Math.sin(a.facing) * a.radius * 0.9,
+          age: 0, max: 1.1, r0: a.radius * 0.6, kind: 'ripple',
+        });
+      } else if (a.groundKind === 'water') {
         this.lastFxSpawn.set(a.id, world.time);
         this.liquidFx.push({
           x: a.pos.x, y: a.pos.y + a.radius * 0.3,
@@ -2602,14 +2614,16 @@ export class Renderer {
       if (msg) this.queueLabel(a, msg, '#d8b87a', 22);
     }
 
-    // The Bonewright posts its current demand above its head.
-    if (a.defId === 'amalgam_necromancer') {
+    // The Bonewright posts its current demand above its head — bound to the
+    // ROLE (npcRole 'bonewright'), like every other counter: any body a
+    // package dresses in the role gets the prompt, no renderer edit.
+    if (a.defId && MONSTERS[a.defId]?.npcRole === 'bonewright') {
       const msg = world.amalgamPrompt();
       if (msg) this.queueLabel(a, msg, '#9ad0b0', 22);
     }
 
-    // The Delver posts its trade/descend prompt above its head.
-    if (a.defId === 'descent_delver') {
+    // The Delver posts its trade/descend prompt above its head (role-bound).
+    if (a.defId && MONSTERS[a.defId]?.npcRole === 'delver') {
       const msg = world.delverPrompt();
       if (msg) this.queueLabel(a, msg, '#7fe0d8', 22);
     }
@@ -2827,17 +2841,9 @@ export class Renderer {
     ctx.translate(0, bob);
     ctx.rotate(a.facing + Math.PI / 2);
     const L = a.radius * 2.4 * ship.hullScale, W = a.radius * 1.35 * ship.hullScale;
-    // Wake: two rippling trails off the stern.
-    ctx.globalAlpha = 0.3;
-    ctx.strokeStyle = '#bfe4f4';
-    ctx.lineWidth = 2;
-    for (const s of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(s * W * 0.4, L * 0.5);
-      ctx.quadraticCurveTo(s * W * 0.9, L * 0.95, s * W * (1.15 + 0.2 * Math.sin(world.time * 3 + s)), L * 1.5);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
+    // (The wake is no longer painted here — the moving hull seeds the SAME
+    // water-ripple motion FX walking bodies make, trailing real expanding
+    // rings from the stern. See updateMotionFx's boat branch.)
     // Hull: a pointed bow, a squared stern — timbers tinted by the ship tier.
     ctx.fillStyle = a.hitFlash > 0 ? '#ffffff' : ship.color;
     ctx.strokeStyle = '#2c2013';

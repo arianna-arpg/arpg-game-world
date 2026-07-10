@@ -173,6 +173,10 @@ export type DoodadKind = KnownDoodadKind | (string & {});
 export interface DoodadEffect {
   /** Registry id selecting the behavior (world.ts doodadEffects). */
   id: string;
+  /** The SKILL a projectile/AoE-flavored effect fires (lava orbs default
+   *  'magma_glob'; hazard clouds 'toxic_cloud') — data, so a vent can hurl
+   *  anything registered without an engine edit. */
+  skillId?: string;
   /** The side this effect serves. */
   faction?: string;
   /** Who the effect reaches for, resolved by the shared target scan: 'opponent'
