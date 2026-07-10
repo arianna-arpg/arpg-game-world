@@ -67,6 +67,7 @@ export type MetaAction =
   | { t: 'levelSupportInv'; index: number; pay?: 'points' | 'essence' } // loose support gem
   | { t: 'levelSupportSocket'; skillId: string; socket: number; pay?: 'points' | 'essence' } // socketed support
   | { t: 'reacquireSkill'; skillId: string }                   // re-kindle a lost class starter (GRANTED copy)
+  | { t: 'attuneSpectre'; skillId: string; formId: string }    // grimoire: bind a mastered bestiary form ('' releases)
   | { t: 'socket'; index: number; skillId: string }            // inv gem → skill socket
   | { t: 'unsocket'; skillId: string; socket: number }
   | { t: 'allocate'; nodeId: string }

@@ -22,7 +22,7 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  crewBoardingOpen, effectiveSkillLevel, grantedTags, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
+  crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
   ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -68,9 +68,9 @@ import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, ty
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
 import { expandedTown, TRAINING_YARD, CAMPFIRE_SITE, SALVAGE_SITE, ORACLE_SITE, TRACKER_SITE } from '../data/townBuild';
-// Side-effect import: registers the bestiary's recording kill-rule at boot
-// (the book itself is UI; the knowledge accrues whether or not it's ever read).
-import '../data/bestiary';
+// Also a side-effect import: pulling these registers the bestiary's recording
+// kill-rule at boot (the knowledge accrues whether or not the book is read).
+import { bestiaryEligible, spectreAttunable } from '../data/bestiary';
 import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
@@ -894,6 +894,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'socket': return isIdx(a.index) && isStr(a.skillId);
     case 'levelSupportSocket': case 'unsocket': return isStr(a.skillId) && isIdx(a.socket);
     case 'unlearn': case 'reacquireSkill': return isStr(a.skillId);
+    case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
     case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
     case 'allocate': return isStr(a.nodeId);
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
@@ -10196,6 +10197,7 @@ export class World {
     switch (action.t) {
       case 'learn': this.learnSkill(action.index, seat); break;
       case 'unlearn': this.unlearnSkill(action.skillId, seat); break;
+      case 'attuneSpectre': this.attuneSpectre(action.skillId, action.formId, seat); break;
       case 'sacrifice': this.sacrificeSkill(action.index, seat); break;
       case 'buyVendor': this.buyVendorGem(action.index, seat); break;
       case 'buyDelver': this.buyDelverGem(action.index, seat); break;
@@ -10448,6 +10450,10 @@ export class World {
     const search = t.searchRadius ?? 70;
 
     if (t.target === 'corpse') {
+      // THE GRIMOIRE: an attuned form frees the skill from the ground — no
+      // corpse sought, no corpse needed; the cast targets the aim point
+      // like any plain summon (the summon branch reads the form).
+      if (grimoireForm(inst)) return { pos: vec(aim.x, aim.y) };
       let best: Corpse | null = null, bd = search;
       for (const c of this.corpses) {
         if (dist(caster.pos, c.pos) > t.castRange) continue;
@@ -10560,6 +10566,30 @@ export class World {
     if (b.defId === a.defId) return false;
     if (a.squadId !== undefined && b.squadId === a.squadId) return false;
     return prey.some(p => b.tag === p || b.faction === p || b.defId === p);
+  }
+
+  /** THE GRIMOIRE: attune a MASTERED bestiary form to ONE grimoire-summon
+   *  instance (per instance — two Spectre gems may hold two forms; formId ''
+   *  releases the attunement back to corpse-reading). Mastery + the
+   *  bestiary's attunable policy gate it (data/bestiary.ts); the skill then
+   *  summons the studied kind outright. Rides the requestMeta intent lane,
+   *  so a co-op client's Build pane works untrusted like every mutation. */
+  attuneSpectre(skillId: string, formId: string, seat: Seat = this.localSeat): void {
+    const inst = seat.meta.knownSkills.get(skillId);
+    const d = inst?.def.delivery;
+    if (!inst || d?.type !== 'summon' || !d.grimoire) return;
+    if (formId === '') {
+      inst.attunedForm = undefined;
+      this.charDirty = true;
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 20), 'attunement released', '#8a8678', 11);
+      return;
+    }
+    const def = MONSTERS[formId];
+    if (!bestiaryEligible(def) || !spectreAttunable(this.account, def)) return;
+    inst.attunedForm = formId;
+    this.charDirty = true;
+    this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 20),
+      `attuned: ${def.name}`, '#a8d8a0', 12);
   }
 
   /** THE LIFELINE RULE (borrowed unlife): a body conjured by a PLAYER-SIDE
@@ -12300,6 +12330,14 @@ export class World {
       case 'summon': {
         // Corpse summons (Raise Spectre / Revive): the minion IS the corpse.
         if (d.fromCorpse) {
+          // THE GRIMOIRE: mastery replaces scavenging — an attuned bestiary
+          // form summons outright, no corpse read or consumed (targeting
+          // already resolved to the plain aim point).
+          const form = grimoireForm(inst);
+          if (form && MONSTERS[form]) {
+            this.spawnMinion(caster, inst, { monsterId: form });
+            break;
+          }
           if (!targetInfo?.corpse) break;
           const corpse = targetInfo.corpse;
           this.removeCorpse(corpse);

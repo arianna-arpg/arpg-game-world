@@ -33,7 +33,7 @@ import {
   BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals,
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
 } from '../data/bestiary';
-import type { MonsterDef } from '../data/monsters';
+import { MONSTERS, type MonsterDef } from '../data/monsters';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
@@ -207,6 +207,8 @@ export class UI {
   bestiaryOpen = false;
   private bestiaryPage = 0;
   private bestiarySel: string | null = null;
+  /** The grimoire picker: which skill's attunement list is unfolded in Build. */
+  private attunePicking: string | null = null;
   vendorOpen = false;
   /** The scrap wheel: while ON, the vendor screen's sell-half is live and
    *  clicks BREAK your things for essence. Reset on close — never sticky. */
@@ -1993,6 +1995,31 @@ export class UI {
       const eff = effectiveSkillLevel(inst);
       const nextThresh = def.thresholds?.find(t => eff < t.level);
       const reached = def.thresholds?.filter(t => eff >= t.level) ?? [];
+      // THE GRIMOIRE (delivery.grimoire): the attuned-form chip + picker.
+      // Mastered, attunable bestiary forms bind PER INSTANCE — carry two
+      // Spectre gems, hold two different forms.
+      let grimoire = '';
+      if (def.delivery.type === 'summon' && def.delivery.grimoire) {
+        const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
+        const acc = this.getAccount();
+        const chip = form
+          ? `<span class="gem-chip" style="border-color:#a8d8a0" title="This copy summons ${form.name} outright — no corpse read.">
+              ${this.monsterGlyph(form, false)} ${form.name}
+              <button data-unattune="${def.id}" title="Release the attunement (back to corpse-reading)">✕</button></span>`
+          : `<span style="color:#8a8678">unattuned — reads corpses</span>`;
+        let picker = '';
+        if (this.attunePicking === def.id) {
+          const forms = bestiaryList().filter(d => spectreAttunable(acc, d));
+          picker = `<div style="margin-top:3px">${forms.map(d =>
+            `<button data-attune-pick="${def.id}:${d.id}" title="${bestiaryKills(acc, d.id)} studied kills">
+              ${this.monsterGlyph(d, false)} ${d.name}</button>`).join(' ')
+            || '<span style="color:#8a8678;font-size:10px">No forms mastered yet — the Tracker\'s bestiary fills as your line hunts.</span>'}</div>`;
+        }
+        grimoire = `<div style="margin-top:3px;font-size:10px">
+          <span style="color:#a8d8a0">Grimoire:</span> ${chip}
+          <button data-attune="${def.id}">${this.attunePicking === def.id ? 'Close' : 'Attune…'}</button>
+          ${picker}</div>`;
+      }
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" style="border-left:3px solid ${def.color}">
           <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
@@ -2011,6 +2038,7 @@ export class UI {
             <button data-unlearn="${def.id}">Unlearn</button>
           </div>
           <div class="sockets">${sockets}</div>
+          ${grimoire}
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters — learn them from the Inventory (I) → Skill Gems tab.</div>';
   }
@@ -2025,6 +2053,21 @@ export class UI {
     // back). The UI reconciles on the next snapshot either way.
     q<HTMLButtonElement>('button[data-bind]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'bindSkill', slot: Number(btn.dataset.slot), skillId: btn.dataset.bind! });
+      refresh();
+    }));
+    // THE GRIMOIRE: unfold the picker / bind a mastered form / release it.
+    q<HTMLButtonElement>('button[data-attune]').forEach(btn => btn.addEventListener('click', () => {
+      this.attunePicking = this.attunePicking === btn.dataset.attune ? null : btn.dataset.attune!;
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-attune-pick]').forEach(btn => btn.addEventListener('click', () => {
+      const [skillId, formId] = btn.dataset.attunePick!.split(':');
+      world.requestMeta({ t: 'attuneSpectre', skillId, formId });
+      this.attunePicking = null;
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-unattune]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'attuneSpectre', skillId: btn.dataset.unattune!, formId: '' });
       refresh();
     }));
     q<HTMLButtonElement>('button[data-unlearn]').forEach(btn => btn.addEventListener('click', () => {

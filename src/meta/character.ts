@@ -12,6 +12,7 @@
 import { CLASSES } from '../data/classes';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { MONSTERS } from '../data/monsters';
 import {
   makeSkillInstance,
   type SkillInstance, type SupportInstance, type SkillRarity,
@@ -40,6 +41,9 @@ interface SavedSkill {
    *  older saves load unchanged. */
   granted?: boolean;
   essenceLevels?: number;
+  /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
+   *  def id; rebuilt tolerantly — a removed def drops the attunement). */
+  attunedForm?: string;
 }
 export interface CharacterSave {
   schemaVersion: number;
@@ -102,6 +106,7 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
   sockets: i.sockets.map(s => s ? { supportId: s.def.id, level: s.level } : null),
   ...(i.granted ? { granted: true } : {}),
   ...(i.essenceLevels ? { essenceLevels: i.essenceLevels } : {}),
+  ...(i.attunedForm ? { attunedForm: i.attunedForm } : {}),
 });
 
 export function serializeCharacter(world: World): CharacterSave {
@@ -159,6 +164,7 @@ export function rebuildSkill(s: SavedSkill): SkillInstance | null {
   inst.rarity = s.rarity;
   if (s.granted) inst.granted = true;
   if (s.essenceLevels) inst.essenceLevels = s.essenceLevels;
+  if (s.attunedForm && MONSTERS[s.attunedForm]) inst.attunedForm = s.attunedForm;
   inst.sockets = s.sockets.map(sock => {
     if (!sock) return null;
     const sd = SUPPORTS[sock.supportId];

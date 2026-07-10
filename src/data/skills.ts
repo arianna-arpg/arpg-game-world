@@ -1765,11 +1765,11 @@ export const SKILLS: Record<string, SkillDef> = {
 
   raise_spectre: {
     id: 'raise_spectre', name: 'Raise Spectre',
-    description: 'Bind the spirit of a corpse into a PERMANENT allied copy of the slain creature. Only a precious few can be held.',
+    description: 'Bind the spirit of a corpse into a PERMANENT allied copy of the slain creature. Only a precious few can be held. MASTER a kind in the Tracker\'s bestiary and ATTUNE it to this gem (Build pane): the grimoire then summons that form outright — no corpse hunted, ever again.',
     tags: ['spell', 'summon', 'minion', 'corpse'], color: '#a8b8d8',
     manaCost: 30, cooldown: 2, useTime: 1,
     targeting: { target: 'corpse', castRange: 420 },
-    delivery: { type: 'summon', fromCorpse: true, count: 1, maxActive: 2 },
+    delivery: { type: 'summon', fromCorpse: true, grimoire: true, count: 1, maxActive: 2 },
     effects: [],
     requirements: { willpower: 22 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },

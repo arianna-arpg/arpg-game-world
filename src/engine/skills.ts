@@ -268,6 +268,15 @@ export function instanceMeta(inst: SkillInstance): { skillId: string; label: str
   return instanceMetas(inst)[0];
 }
 
+/** THE GRIMOIRE form this instance summons instead of reading corpses —
+ *  set only when the delivery opts in (grimoire) AND a form is attuned.
+ *  One predicate every consumer shares: targeting bypass, the summon
+ *  branch, the greying gate, the Build-pane chip. */
+export function grimoireForm(inst: SkillInstance): string | undefined {
+  const d = inst.def.delivery;
+  return d.type === 'summon' && d.grimoire && inst.attunedForm ? inst.attunedForm : undefined;
+}
+
 /** The curse→field conversion riding an instance, if any (Miasma). */
 export function instanceCurseField(inst: SkillInstance): NonNullable<SupportDef['curseField']> | undefined {
   for (const s of hostSockets(inst)) if (s.def.curseField) return s.def.curseField;
@@ -1116,6 +1125,13 @@ export interface SummonDelivery {
   /** The minion type comes from the consumed corpse (Raise Spectre, Revive).
    *  Requires `targeting: { target: 'corpse' }` on the skill. */
   fromCorpse?: boolean;
+  /** THE GRIMOIRE (data/bestiary.ts): this corpse skill accepts an ATTUNED
+   *  bestiary form (SkillInstance.attunedForm — per instance, so two copies
+   *  may hold two forms). With a form attuned the skill stops reading the
+   *  ground entirely: no corpse targeting, the studied kind summoned
+   *  outright — mastery replacing scavenging. Meaningless without
+   *  fromCorpse. */
+  grimoire?: boolean;
   count: number;
   maxActive: number;      // oldest minion is replaced beyond this
   /** Skills sharing a poolGroup share one cap (Fire/Ice/Blood Golems). */
@@ -3011,6 +3027,11 @@ export interface SkillInstance {
   /** The HOST skill this instance was minted to serve (meta payloads,
    *  combo steps) — minionCast orders scope to the host's minions. */
   hostSkillId?: string;
+  /** THE GRIMOIRE: the bestiary form this instance is attuned to (a monster
+   *  def id; only read on `delivery.grimoire` summons). Set through
+   *  World.attuneSpectre — mastery-gated — and serialized with the
+   *  character; per INSTANCE, never per character. */
+  attunedForm?: string;
   /** GRANTED: a reacquired class-starter spark. Worth NOTHING everywhere
    *  value is minted — zero salvage essence, zero font offerings — so the
    *  softlock rescue hatch can never become a currency loop. */
