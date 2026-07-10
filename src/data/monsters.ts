@@ -1973,7 +1973,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 52,
     // A troll turns like a felled log rights itself: the slam waits for the
     // bulk to bear, and the first blow of any fight comes a thought late.
-    brain: { type: 'juggernaut', enrage: 0.4, behavior: { castArc: 0.65, reaction: [0.4, 0.9] } },
+    // And a troll KEEPS SCORE (drives): every wound stokes a wrath that
+    // cools between fights — chip it long enough and it goes berserk at
+    // ANY life total, where enrage waits for the bar. Two angers, two clocks.
+    brain: {
+      type: 'juggernaut', enrage: 0.4,
+      behavior: { castArc: 0.65, reaction: [0.4, 0.9] },
+      drives: { wrath: { rise: -0.05, onHurt: 0.09 } },
+      rules: [{
+        when: { drive: { id: 'wrath', above: 0.6 } },
+        announce: 'the troll seethes!',
+        use: { skillUse: { cadence: [0.1, 0.25] }, move: { style: 'direct', pace: 1.25 }, behavior: { reaction: [0, 0] } },
+      }],
+    },
     faction: 'goblin',
     adorn: 'spikes',
   },
@@ -2051,9 +2063,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // AND A PRACTICED EYE, sometimes (BehaviorSpec.aimLead): under half its
       // shots lead your run — enough that straight-line strafing stops being
       // free, not so many that juking it is pointless. Rolled PER SHOT.
-      // AND A LIAR'S SHOULDER (feint): one draw in five is a fake — the bar
-      // you dodged was bait, and the real arrow follows your recovery.
-      behavior: { aimLead: 0.55, aimLeadChance: 0.45, feint: { chance: 0.22, hold: [0.3, 0.5] } },
+      // (No feint — an honest draw. Bluffed bars are a trickster's SIGNATURE,
+      // not marksman texture; the lash maiden owns that game.)
+      behavior: { aimLead: 0.55, aimLeadChance: 0.45 },
       rules: [{
         when: { distUnder: 720 },
         actions: [{ do: 'garrison', within: 680 }],
@@ -2139,7 +2151,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaleVariance: [0.9, 1.25],
     brain: {
       type: 'pack',
-      target: { prey: ['critter'] },
+      // THE WANTS (BrainDef.drives): a wolf hunts because it HUNGERS. The
+      // meter climbs through the day; past the threshold (the rule below)
+      // the meadow's critters become food — and a kill feeds the WHOLE
+      // pack in earshot (share), so one hare buys the field an hour of
+      // peace. Sated wolves amble past the prey they'd have run down.
+      drives: { hunger: { rise: 0.01, start: [0.3, 0.8], onKill: -0.7, share: 0.4 } },
       // The wait RESOLVES (muster.patience): five seconds of circling a prey
       // that won't be caught up to, and hunger wins — a lone or scattered
       // wolf no longer strafes a slow player to the horizon forever.
@@ -2148,13 +2165,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // A wolf STALKS: lopes in bursts with held, watching pauses — the
       // hesitation of a real animal, and your window to line up a shot.
       tempo: { moveFor: [1.2, 2.2], pauseFor: [0.25, 0.6] },
-      // AND A WOLF POUNCES (targetCasting): the moment your hands commit to
-      // a bar, the nearest wolf breaks its stalk and dives the opening.
-      rules: [{
-        when: { targetCasting: 0.35, distUnder: 380, chance: 0.55 },
-        hold: [0.7, 1.1], cooldown: 3,
-        use: { move: { style: 'direct', pace: 1.3 } },
-      }],
+      rules: [
+        // HUNGER opens the hunt: predation (prey + keener noses) exists
+        // only while the meter runs high — conduct chasing the want.
+        {
+          when: { drive: { id: 'hunger', above: 0.6 } },
+          use: { target: { prey: ['critter'], detectMul: 1.25 } },
+        },
+        // AND A WOLF POUNCES (targetCasting): the moment your hands commit
+        // to a bar, the nearest wolf breaks its stalk and dives the opening.
+        {
+          when: { targetCasting: 0.35, distUnder: 380, chance: 0.55 },
+          hold: [0.7, 1.1], cooldown: 3,
+          use: { move: { style: 'direct', pace: 1.3 } },
+        },
+      ],
     },
   },
 
@@ -2227,16 +2252,24 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'basic',
       move: { style: 'lurk', ring: 260, commitRange: 250, unseenArc: 1.6 },
-      target: { prey: ['critter'] },
+      // The cat hunts on its STOMACH's clock (drives): a fed stalker just
+      // watches; a hungry one puts the meadow's small lives on the menu.
+      drives: { hunger: { rise: 0.008, start: [0.2, 0.7], onKill: -0.6 } },
       perception: { memory: 3.5 },
       tempo: { moveFor: [1.4, 2.4], pauseFor: [0.3, 0.7] }, // a cat's patience
-      // The cat PUNISHES commitment: eyes leaving it is one opening — hands
-      // busy with a cast bar is the other (targetCasting joins unseenArc).
-      rules: [{
-        when: { targetCasting: 0.3, distUnder: 420, chance: 0.8 },
-        hold: [0.7, 1.1], cooldown: 2,
-        use: { move: { style: 'direct', pace: 1.35 } },
-      }],
+      rules: [
+        {
+          when: { drive: { id: 'hunger', above: 0.6 } },
+          use: { target: { prey: ['critter'] } },
+        },
+        // The cat PUNISHES commitment: eyes leaving it is one opening — hands
+        // busy with a cast bar is the other (targetCasting joins unseenArc).
+        {
+          when: { targetCasting: 0.3, distUnder: 420, chance: 0.8 },
+          hold: [0.7, 1.1], cooldown: 2,
+          use: { move: { style: 'direct', pace: 1.35 } },
+        },
+      ],
     },
   },
 
@@ -2513,9 +2546,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'skirmish', withdraw: 1.3,
       target: { prey: ['critter'] },
       impulses: [{ type: 'swarm', every: [6, 9], duration: [1.2, 1.8] }],
-      // A huntress FEINTS the spear-draw — bait the sidestep, then the
-      // true cast into your recovery. Fights her like she fights you.
-      behavior: { feint: { chance: 0.3 } },
+      // THE FEINT IS HER SIGNATURE — and hers nearly alone (the player
+      // can't cancel a bar; an enemy that constantly does reads as broken,
+      // so bluffs stay RARE and this one's identity): roughly one draw in
+      // six is bait for your sidestep, the true cast into your recovery.
+      behavior: { feint: { chance: 0.18 } },
       // The huntress PUNISHES a planted foot: begin a bar with a maiden in
       // spear range and the line rushes THAT instant, not on its own clock.
       rules: [{

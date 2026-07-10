@@ -182,6 +182,14 @@ const HANDLERS: Record<Exclude<AIAction['do'], `x_${string}`>, Handler> = {
     world.teleportActor(actor, vec(best.pos.x, best.pos.y - best.radius), '#d8b0ff');
   },
 
+  // Shove a WANT (BrainDef.drives): choreography starves, enrages, calms —
+  // "the ritual feeds the hunger", "the roar spends the wrath".
+  drive: (world, actor, act) => {
+    if (act.do !== 'drive') return;
+    const v = (actor.drives.get(act.id) ?? 0) + act.add;
+    actor.drives.set(act.id, Math.max(0, Math.min(1, v)));
+  },
+
   dismount: (world, actor, act) => {
     if (act.do !== 'dismount') return;
     if (actor.mountId === undefined) return;

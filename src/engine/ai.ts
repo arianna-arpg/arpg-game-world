@@ -305,9 +305,28 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // Stamp the RESOLVED obedience so the command roll (world.ts, an event —
   // not a tick) reads live machine layers: an enraged phase can go deaf.
   actor.aiObedience = tuning.obedience;
+  // Stamp the RESOLVED prey so the hostility gate (World.isPrey) sees what
+  // the machines see — a hunger rule can switch predation on and off live.
+  actor.aiPrey = tuning.target?.prey;
   // Elbow room re-stamps below once a target locks; idle/ordered movement
   // never pays for it.
   actor.aiSpacing = undefined;
+
+  // THE WANTS (BrainDef.drives): meters drift on their clocks — events jump
+  // them elsewhere (World.bumpDrives: kills feed, wounds sting). Seeded on
+  // first sight of each spec, so every spawn path rolls its own appetites.
+  if (norm.drives) {
+    for (const id in norm.drives) {
+      const spec = norm.drives[id];
+      let v = actor.drives.get(id);
+      if (v === undefined) {
+        const s = spec.start ?? [0, 0];
+        v = rand(s[0], s[1]);
+      }
+      if (spec.rise) v += spec.rise * dt;
+      actor.drives.set(id, Math.max(0, Math.min(1, v)));
+    }
+  }
   if (actor.aiKiteAcc > 0 && world.time - actor.aiLastRetreatAt > 0.15) {
     actor.aiKiteAcc = Math.max(0, actor.aiKiteAcc - dt * 0.6);
   }

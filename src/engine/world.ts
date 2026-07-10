@@ -10684,14 +10684,41 @@ export class World {
   }
 
   /** Does `a`'s brain list `b` as prey (by tag, faction, or defId)? Kin —
-   *  same species or same squad — are never food. */
+   *  same species or same squad — are never food. Reads the AI tick's
+   *  RESOLVED stamp (aiPrey) when one exists, so a hunger rule can switch
+   *  predation on and off live; the brain's base serves un-ticked actors. */
   private isPrey(a: Actor, b: Actor): boolean {
     if (!a.brain || a === b || b.dead) return false;
-    const prey = normalizeBrain(a.brain).base.target?.prey;
+    const prey = a.aiPrey ?? normalizeBrain(a.brain).base.target?.prey;
     if (!prey || !prey.length) return false;
     if (b.defId === a.defId) return false;
     if (a.squadId !== undefined && b.squadId === a.squadId) return false;
     return prey.some(p => b.tag === p || b.faction === p || b.defId === p);
+  }
+
+  /** THE WANTS pump (BrainDef.drives): jump an actor's meters on an event —
+   *  a kill it landed, a wound it took, a wound it dealt. `share` echoes the
+   *  jump to squad kin within earshot (the pack that eats together sates
+   *  together). Early-outs keep this free for the driveless majority. */
+  bumpDrives(actor: Actor | null, kind: 'onKill' | 'onHurt' | 'onDealt'): void {
+    if (!actor || actor.dead || !actor.brain) return;
+    const drives = normalizeBrain(actor.brain).drives;
+    if (!drives) return;
+    for (const id in drives) {
+      const jump = drives[id][kind];
+      if (!jump) continue;
+      const v = (actor.drives.get(id) ?? 0) + jump;
+      actor.drives.set(id, Math.max(0, Math.min(1, v)));
+      const share = drives[id].share;
+      if (share && actor.squadId !== undefined) {
+        for (const kin of this.actors) {
+          if (kin === actor || kin.dead || kin.squadId !== actor.squadId) continue;
+          if (dist(kin.pos, actor.pos) > COMMAND_CFG.earshot) continue;
+          const kv = (kin.drives.get(id) ?? 0) + jump * share;
+          kin.drives.set(id, Math.max(0, Math.min(1, kv)));
+        }
+      }
+    }
   }
 
   // ------------------------------------------------------- tamed companions --
@@ -16125,6 +16152,11 @@ export class World {
       // early-returns, so a fully-absorbed swing doesn't count — only a landed hit is "live".
       caster.lastCombatAt = this.time;
       target.lastCombatAt = this.time;
+      // THE STING and THE TASTE (BrainDef.drives): a landed hit jumps both
+      // sides' wants — chip damage stokes a troll's wrath long before its
+      // life bar would (free early-outs for the driveless majority).
+      this.bumpDrives(target, 'onHurt');
+      this.bumpDrives(caster, 'onDealt');
       // The RECENT-WOUND clock (GateSpec.recentDamage): a landed hit
       // licenses the victim's counter-blows.
       if (dealt > 0) target.recentHurt = 0;
@@ -17949,6 +17981,9 @@ export class World {
       const kctx = this.killCtx(actor, killer ?? null, credit);
       for (const r of killRules()) if (killRuleMatches(r, kctx)) r.run(kctx);
       for (const r of this.worldKillRules) if (killRuleMatches(r, kctx)) r.run(kctx);
+      // THE MEAL (BrainDef.drives): a landed kill jumps the killer's wants —
+      // the hunt sates the hunger that drove it.
+      this.bumpDrives(killer ?? null, 'onKill');
       // The ephemeral remnant of their passing — briefly usable (corpses
       // drop regardless of who did the killing; necromancy isn't picky).
       if (actor.defId) {

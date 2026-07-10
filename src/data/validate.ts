@@ -161,6 +161,21 @@ export function validateContent(): void {
     }
   }
 
+  // FEINT DISCIPLINE: a bluffed cast bar is a SIGNATURE move. The player
+  // cannot cancel a bar, so an enemy that constantly does reads as broken
+  // rather than clever — keep chances rare and deliberate (tricksters only).
+  const feintCheck = (id: string, chance: number | undefined, src: string): void => {
+    if (chance !== undefined && chance > 0.35) {
+      warn(`monster ${id}: ${src} feint.chance ${chance} > 0.35 — feints are signature moves, keep them RARE`);
+    }
+  };
+  for (const def of Object.values(MONSTERS)) {
+    feintCheck(def.id, def.brain?.behavior?.feint?.chance, 'brain');
+    for (const [i, v] of (def.brainVariants ?? []).entries()) {
+      feintCheck(def.id, v.brain?.behavior?.feint?.chance, `brainVariants[${i}]`);
+    }
+  }
+
   // VOYAGE ISLANDS: tilesets exist, objective bosses/spawners + pack tables
   // name real monsters, extra rolls resolve against the live registries.
   for (const isle of Object.values(VOYAGE_ISLANDS)) {

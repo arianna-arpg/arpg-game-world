@@ -424,6 +424,13 @@ export class Actor {
   /** THE FEINT (BehaviorSpec.feint): world time the bluffed bar drops
    *  (0 = no feint in flight). */
   aiFeintAt = 0;
+  /** THE WANTS (BrainDef.drives): named slow meters, 0..1 — seeded on the
+   *  first AI tick, drifted per tick, jumped by World.bumpDrives events. */
+  drives = new Map<string, number>();
+  /** This tick's RESOLVED prey list (rules can gate predation — the hungry
+   *  wolf hunts, the sated one ambles past). World.isPrey reads the stamp,
+   *  falling back to the brain's base when no AI tick has stamped one. */
+  aiPrey?: string[];
   /** POST-CAST PLANT (BehaviorSpec.plantChance): feet frozen until this
    *  world time — the hands stay free (runKernel zeroes movement dt). */
   aiPlantUntil = 0;

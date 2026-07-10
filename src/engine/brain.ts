@@ -482,6 +482,33 @@ export interface SquadSpec {
   };
 }
 
+// --- DRIVES: the wants layer ---------------------------------------------------
+
+/** A DRIVE is a slow internal METER (0..1) — hunger, wrath, dread, greed —
+ *  that drifts on its own clock (`rise` per second, SIGNED: hunger grows,
+ *  wrath cools) and JUMPS on events (a kill feeds; a wound stings). A drive
+ *  does nothing by itself: RULES read it (AICondition.drive) and shift
+ *  conduct at thresholds, machines and the {do:'drive'} verb shove it, and
+ *  every layer composes with every other axis. The reward-function seam,
+ *  as data: conduct chases what the meter wants — the sated wolf ambles
+ *  past the hare it would have run down an hour hungrier. Individual by
+ *  default; `share` propagates event jumps to squad kin, so a pack that
+ *  eats together sates together (the group-goal lever). */
+export interface DriveSpec {
+  /** Per-second drift, signed (hunger +0.01 grows; wrath -0.05 cools). */
+  rise?: number;
+  /** Spawn value, rolled (default [0, 0]). */
+  start?: [number, number];
+  /** Event jumps, signed: a kill I land (the meal), a wound I take (the
+   *  sting), a wound I deal (the taste). */
+  onKill?: number;
+  onHurt?: number;
+  onDealt?: number;
+  /** PACK APPETITE: fraction of my event jumps echoed to squad kin within
+   *  earshot — one kill feeds the pack, one wound angers the line. */
+  share?: number;
+}
+
 // --- THE CONDITION DSL --------------------------------------------------------------
 
 /** One condition bundle — every present field must hold (AND). Rules, phase
@@ -513,6 +540,9 @@ export interface AICondition {
    *  seconds of bar left. The punish vocabulary — "when he commits, rush"
    *  (rules), "when he commits, shield" (reserves). False = not casting. */
   targetCasting?: boolean | number;
+  /** THE WANTS trigger (BrainDef.drives): this actor's named meter sits in
+   *  the band — "hunger above 0.6, hunt", "wrath below 0.3, compose". */
+  drive?: { id: string; above?: number; below?: number };
   /** At least this many seconds since the CURRENT engagement began. */
   sinceEngaged?: number;
   /** Gate each FIRING by this chance (rolled when everything else passes). */
@@ -612,6 +642,9 @@ export type AIAction =
    *  D2 siege-beast pattern; graceful no-op with nothing to ride. */
   | { do: 'mount'; within?: number }
   | { do: 'dismount' }
+  /** Shove a WANT (BrainDef.drives): choreography starves, enrages, or
+   *  calms — "the ritual feeds the hunger", "the roar spends the wrath". */
+  | { do: 'drive'; id: string; add: number }
   /** PACKAGE-EXTENDED verbs: `x_`-prefixed ids dispatch through the open
    *  registry (aiActions.ts registerAIAction) — new choreography is a
    *  registry entry, never an engine edit. Unknown ids no-op with a warn. */
@@ -804,6 +837,11 @@ export interface BrainDef extends BrainTuning {
    *  reward bursts, arena restoration. Runs through the same verb registry
    *  as everything else (kill() invokes it with the corpse as author). */
   onDeath?: AIAction[];
+  /** THE WANTS (DriveSpec): named slow meters — hunger, wrath — that drift
+   *  on their clocks and jump on events; rules read them (AICondition
+   *  .drive) and the {do:'drive'} verb shoves them. Conduct chases what
+   *  the meters want. */
+  drives?: Record<string, DriveSpec>;
   /** THE CYCLE: a strict LOOPING duty cycle of tuning steps — "hold off,
    *  then rush, then hold off again", each for its rolled window. Lighter
    *  than a script (no gotos, no beats), stricter than rules (exact
@@ -899,6 +937,7 @@ export interface NormalizedBrain {
   impulses?: BrainImpulse[];
   onDeath?: AIAction[];
   cycle?: { use: BrainTuning; for: [number, number] }[];
+  drives?: Record<string, DriveSpec>;
   fuseRange?: number;
   fuseTime?: number;
 }
@@ -982,6 +1021,7 @@ export function normalizeBrain(def: BrainDef): NormalizedBrain {
     impulses: def.impulses,
     onDeath: def.onDeath,
     cycle: def.cycle,
+    drives: def.drives,
     fuseRange: def.fuseRange,
     fuseTime: def.fuseTime,
   };
@@ -1057,6 +1097,11 @@ export function evalCondition(
   if (c.hasCharge && (actor.charges.get(c.hasCharge.charge) ?? 0) < c.hasCharge.min) return false;
   if (c.sinceEngaged !== undefined) {
     if (actor.aiEngagedAt < 0 || ctx.time - actor.aiEngagedAt < c.sinceEngaged) return false;
+  }
+  if (c.drive) {
+    const v = actor.drives.get(c.drive.id) ?? 0;
+    if (c.drive.above !== undefined && !(v >= c.drive.above)) return false;
+    if (c.drive.below !== undefined && !(v <= c.drive.below)) return false;
   }
   if (c.ext) {
     for (const key of Object.keys(c.ext)) {
