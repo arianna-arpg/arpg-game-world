@@ -36,6 +36,7 @@ import {
   validateStamps, doodadRuleOf, doodadRuleKinds, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs,
 } from '../engine/levelgen';
+import { hasCommandKind } from '../engine/ai';
 import { DOODAD_VISUALS } from './doodadVisuals';
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
@@ -457,6 +458,32 @@ export function validateContent(): void {
   };
   for (const s of Object.values(SKILLS)) checkSummonContract(`skill ${s.id}`, s.delivery);
   for (const sup of Object.values(SUPPORTS)) checkSummonContract(`support ${sup.id} (summon graft)`, sup.summon);
+
+  // The META/ORDER id net: all of these are typo'd-id DEAD BUTTONS at
+  // runtime — useMetaSkill silently filters a missing payload, an unknown
+  // command kind never drives a step, a minionCast order no-ops, a combo
+  // step is skipped. Catch them at boot instead.
+  for (const s of Object.values(SKILLS)) {
+    if (s.meta && !SKILLS[s.meta.skillId]) {
+      warn(`skill ${s.id}: meta payload '${s.meta.skillId}' is not a catalog skill`);
+    }
+    for (const cid of s.comboChain?.skills ?? []) {
+      if (!SKILLS[cid]) warn(`skill ${s.id}: combo step '${cid}' is not a catalog skill`);
+    }
+    for (const fx of s.effects) {
+      if (fx.type === 'commandMinions' && fx.command && !hasCommandKind(fx.command)) {
+        warn(`skill ${s.id}: command kind '${fx.command}' is not in COMMAND_KINDS`);
+      }
+      if (fx.type === 'minionCast' && !SKILLS[fx.skillId]) {
+        warn(`skill ${s.id}: minionCast order '${fx.skillId}' is not a catalog skill`);
+      }
+    }
+  }
+  for (const sup of Object.values(SUPPORTS)) {
+    if (sup.meta && !SKILLS[sup.meta.skillId]) {
+      warn(`support ${sup.id}: meta payload '${sup.meta.skillId}' is not a catalog skill`);
+    }
+  }
 
   const checkTable = (where: string, ids: string[]): void => {
     for (const id of ids) if (!MONSTERS[id]) warn(`${where}: unknown monster '${id}'`);

@@ -1966,6 +1966,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
         formation: 'column', spacing: 42, idle: { style: 'drill' },
       },
       morale: { panicOnAllyDeath: { radius: 200, duration: 2.2, chance: 0.35 }, rallyAfter: 2.2 },
+      // UNRULY: the howler's Snarled Orders land on a prowler barely half
+      // the time (the obedience dial — the drill line is for show).
+      obedience: 0.55,
     },
     faction: 'gnoll',
     adorn: 'ears',
@@ -1978,10 +1981,12 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['cleave', 'claw'],
     xp: 22,
     // Butchers AVENGE a fallen leader instead of mourning it — and march
-    // the drill line with the prowlers.
+    // the drill line with the prowlers. Veterans: they heed the howler's
+    // orders more often than the rank-and-file.
     brain: {
       type: 'flanker',
       squad: { focusLeader: true, onLeaderDeath: 'frenzy', formation: 'column', spacing: 42, idle: { style: 'drill' } },
+      obedience: 0.7,
     },
     faction: 'gnoll',
     adorn: 'ears',
@@ -2009,6 +2014,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
         use: { move: { style: 'garrison' } },
         cooldown: 4,
       }],
+      // A sniper follows target calls — the most obedient gnoll afield.
+      obedience: 0.8,
     },
     faction: 'gnoll',
     adorn: 'ears',
@@ -2018,7 +2025,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'gnoll_howler', name: 'Gnoll Howler',
     color: '#d8b068', shape: 'trapezoid', radius: 14, look: 'gnoll_howler',
     base: { life: 90, moveSpeed: 130, accuracy: 95, mana: 100, manaRegen: 8 },
-    skills: ['rallying_howl', 'war_cry', 'claw'],
+    // SNARLED ORDERS = the enemy command lever's proof: the howler barks the
+    // pack (same-faction kin in earshot) onto its mark, and each gnoll rolls
+    // its own brain's `obedience` — an unruly lot, so only some converge.
+    skills: ['rallying_howl', 'war_cry', 'snarled_orders', 'claw'],
     xp: 34,
     // The HOWL is literal: sighting prey puts every gnoll within earshot on
     // alert toward it (PerceptionSpec.alertShout — the sentry callout).
@@ -4484,6 +4494,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
         when: {}, every: [10, 15], hold: [0.4, 0.6],
         actions: [{ do: 'summon', monster: 'jaw_snare', count: 1, ring: 70, lifespan: 45 }],
       }],
+      // A LONER: the trapper works its own ground and all but ignores the
+      // howler's bark.
+      obedience: 0.35,
     },
   },
   // THE JAW SNARE — a trap with a heartbeat: hidden until stepped near,

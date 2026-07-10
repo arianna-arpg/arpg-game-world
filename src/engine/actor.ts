@@ -257,7 +257,7 @@ export interface MonsterPartDef {
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
 export type { BrainDef, BrainType, BrainPhase, BrainImpulse } from './brain';
-import type { BrainDef, BrainType } from './brain';
+import type { BrainDef, BrainType, CommandState } from './brain';
 
 /** A worm/snake body: trailing segments that follow the head. */
 export interface WormBody {
@@ -830,9 +830,14 @@ export class Actor {
    *  (the Amalgam's deterioration sliver). Self-maintained in updateTimers
    *  so no lifespan assignment site needs to remember it. */
   lifespanTotal = 0;
-  /** COMMANDED (minions): march on this mark until arrival or expiry. */
-  aiCommandPos?: Vec2;
-  aiCommandUntil = 0;
+  /** COMMANDED (the order fabric): the standing order this actor is under.
+   *  COMMAND_KINDS[kind] (ai.ts, open registry) drives it each AI tick until
+   *  fulfilled or expired. Set via ai.ts issueCommand — never by hand, so
+   *  receipt reliably drops the current agenda and the order OVERRIDES. */
+  aiCommand?: CommandState;
+  /** Last AI tick's RESOLVED obedience tuning (machines can shift it live) —
+   *  the command roll reads this so an enraged phase can go deaf to orders. */
+  aiObedience?: number;
   /** DEVOURER (the apex economy): the spec stamped at spawn (innate or a
    *  Ravenous Pact graft) and the world clock of the next meal. */
   devour?: { spec: import('./skills').DevourSpec; next: number };

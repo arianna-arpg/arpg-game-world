@@ -26,6 +26,7 @@
 // choreography verbs. New movement styles / actions are REGISTRY entries.
 // ---------------------------------------------------------------------------
 
+import type { Vec2 } from '../core/math';
 import { mod, type Modifier } from './stats';
 import type { BuffEffect } from './skills';
 import type { MonsterRarity } from './rarity';
@@ -540,6 +541,36 @@ export interface BrainTuning {
   squad?: SquadSpec;
   /** The RHYTHM layer: movement duty cycles + the kite budget (TempoSpec). */
   tempo?: TempoSpec;
+  /** OBEDIENCE (0..1): the chance this actor ACCEPTS an order from the
+   *  command fabric (CommandMinionsEffect → ai.ts issueCommand). Unset = 1:
+   *  a player's summoned court obeys utterly. An unruly wild pack dials it
+   *  low — the warcaller barks and only SOME of the pack heeds. A tuning
+   *  knob like any other, so machines shift it live (an enraged phase can
+   *  go deaf to orders), and the ISSUER presses against it with the
+   *  effect's `discipline` plus its commandDiscipline stat. */
+  obedience?: number;
+}
+
+/** A STANDING ORDER an actor is under (the command fabric): `kind` names a
+ *  handler in the open COMMAND_KINDS registry (ai.ts) that drives the actor
+ *  each tick until the order is fulfilled or `until` expires. Issue through
+ *  ai.ts issueCommand — it drops the current agenda so the order actually
+ *  overrides; a cast already in flight resolves first (moveActor gates the
+ *  feet, canUse gates fresh casts). */
+export interface CommandState {
+  kind: string;
+  /** THE MARK: where the order points. */
+  pos: Vec2;
+  /** World-clock expiry — no order outlives its moment. */
+  until: number;
+  /** Engagement radius around the mark, kind-interpreted (default
+   *  COMMAND_CFG.markRadius): how wide "whatever holds it" reads. */
+  radius?: number;
+  /** A PINNED QUARRY: the specific foe the order names (point AT a monster
+   *  and the whole court converges on THAT one, not the ground it stood on). */
+  targetId?: number;
+  /** Who gave the order (feedback, future rescind/countermand mechanics). */
+  issuerId?: number;
 }
 
 /**
@@ -681,6 +712,7 @@ export function mergeTuning(...layers: (BrainTuning | undefined)[]): BrainTuning
     if (layer.morale) out.morale = { ...out.morale, ...layer.morale };
     if (layer.squad) out.squad = { ...out.squad, ...layer.squad };
     if (layer.tempo) out.tempo = { ...out.tempo, ...layer.tempo };
+    if (layer.obedience !== undefined) out.obedience = layer.obedience;
   }
   return out;
 }

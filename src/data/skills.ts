@@ -3440,7 +3440,7 @@ export const SKILLS: Record<string, SkillDef> = {
   // point — the inverse Bombardment (#39). Equippable on its own, too.
   command_assault: {
     id: 'command_assault', name: 'Command: Assault',
-    description: 'Point, and the horde OBEYS: every mobile minion marches on your mark and fights whatever holds it. The rift opens at your feet; the teeth arrive where you aim.',
+    description: 'Point, and the horde OBEYS: every minion drops its own fight, marches on your mark, and kills whatever holds it. Point AT a foe to pin the whole court on that one. The rift opens at your feet; the teeth arrive where you aim.',
     tags: ['spell', 'minion', 'instant'], color: '#d0a858',
     manaCost: 6, cooldown: 5, useTime: 0,
     delivery: { type: 'self' },
@@ -3448,6 +3448,24 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { willpower: 12 },
     ai: { range: 500, weight: 1 },
     leveling: { perLevel: [mod('cooldownRecovery', 'increased', 0.08)] },
+  },
+
+  // The ENEMY side of the same lever (the obedience fabric's proof): the
+  // pack-leader's bark. `affects: 'squad'` routes the order to squadmates
+  // and same-faction kin in earshot instead of summons, and every packmate
+  // rolls its brain's `obedience` dial — gnolls are an unruly lot, so only
+  // SOME heed the howl while the rest keep their own counsel.
+  snarled_orders: {
+    id: 'snarled_orders', name: 'Snarled Orders', noDrop: true,
+    description: 'The pack-leader barks the pack onto its quarry. Every packmate in earshot that HEEDS — obedience is a dial in the brain, and gnolls barely listen — drops its own hunt and converges on the mark.',
+    tags: ['spell'], color: '#d8b068',
+    manaCost: 10, cooldown: 9, useTime: 0.45,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'commandMinions', command: 'assault', affects: 'squad',
+      duration: 4.5, radius: 760, markRadius: 220,
+    }],
+    ai: { range: 620, weight: 2.5 },
   },
 
   // ======================= The healer archetype ============================

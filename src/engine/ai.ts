@@ -23,7 +23,7 @@ import { mod } from './stats';
 import type { Actor } from './actor';
 import {
   alertScale, ARCHETYPES, evalCondition, mergeTuning, normalizeBrain, tuningOf,
-  type AICtx, type BrainDef, type BrainTuning, type MoveSpec,
+  type AICtx, type BrainDef, type BrainTuning, type CommandState, type MoveSpec,
   type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
 import { runAIActions } from './aiActions';
@@ -95,6 +95,119 @@ export const NEUTRAL_RESET: Record<string, NeutralResetRule> = {
   wayfarer: { coolDownSecs: 6, disengageDist: 300 },    // travelers FORGIVE — back off and they return to the road
   // ritual_cultist intentionally omitted — a roused cultist stays hostile.
 };
+
+// === THE COMMAND FABRIC ========================================================
+// Orders are open, data-driven VERBS an actor can be put UNDER: `kind` names a
+// handler in this registry, and while the order stands the handler owns the
+// actor's agenda each tick — marching it, posting it, or AIMING the normal
+// pipeline at the order's quarry. New order verbs are new entries here (or
+// registerCommandKind calls from packages), never engine edits. Who issues,
+// to whom, and whether each recipient LISTENS is the caller's business
+// (CommandMinionsEffect rolls obedienceOf + discipline before issuing).
+
+/** Command-fabric tunables — the modular thresholds. Effect fields override
+ *  per skill (CommandMinionsEffect.duration/markRadius/radius). */
+export const COMMAND_CFG = {
+  /** Seconds a default order stands. */
+  duration: 6,
+  /** Engagement radius around the MARK — how wide "whatever holds it" reads. */
+  markRadius: 180,
+  /** Close enough to the mark to count as arrived. */
+  arriveDist: 55,
+  /** Squad orders carry this far without an explicit radius (a howl is
+   *  literal earshot). */
+  earshot: 640,
+  /** An aim point within this of a live foe PINS that foe (focus fire). */
+  pinRadius: 52,
+};
+
+export interface CommandKindDef {
+  id: string;
+  /** Drive one tick under the order. Returns:
+   *  - 'consumed': the handler moved/acted — skip the pipeline this tick;
+   *  - 'done':     fulfilled — clear the order, the actor's own mind resumes;
+   *  - an Actor:   fight THIS through the normal pipeline (the kernels own
+   *                the cast/move interleave — the order only aims them);
+   *  - undefined:  nothing to impose this tick — fall through unaimed. */
+  step(actor: Actor, world: World, cmd: CommandState, dt: number):
+    'consumed' | 'done' | Actor | undefined;
+}
+
+/** The open order registry — a new command verb is a new entry, not engine. */
+export const COMMAND_KINDS: Record<string, CommandKindDef> = {};
+export function registerCommandKind(def: CommandKindDef): void {
+  COMMAND_KINDS[def.id] = def;
+}
+export function hasCommandKind(id: string): boolean { return !!COMMAND_KINDS[id]; }
+
+/** Put an actor UNDER an order, now: the current agenda drops (target lock +
+ *  grudge ledger cleared) so the order actually overrides — a cast already in
+ *  flight resolves on its own and the actor obeys from its next free tick.
+ *  Obedience is the CALLER's to roll (obedienceOf + issuer discipline). */
+export function issueCommand(actor: Actor, cmd: CommandState): void {
+  actor.aiCommand = cmd;
+  actor.aiTargetId = undefined;
+  actor.threat.clear();
+  actor.wanderDir = undefined;
+}
+
+/** The chance this actor ACCEPTS an order: last tick's RESOLVED tuning when
+ *  it has one (machines shift it live — an enraged phase can go deaf), else
+ *  the brain's own base. Unset = 1: a player's court obeys utterly; unruly
+ *  packs dial it down in their MonsterDef brains. */
+export function obedienceOf(actor: Actor): number {
+  return actor.aiObedience
+    ?? normalizeBrain(actor.brain ?? DEFAULT_BRAIN).base.obedience
+    ?? 1;
+}
+
+/** Nearest live foe within `r` of `at` — what "whatever holds the mark" means. */
+function foeNear(actor: Actor, world: World, at: Vec2, r: number): Actor | undefined {
+  let best: Actor | undefined, bd = r;
+  for (const e of world.enemiesOf(actor)) {
+    if (e.passive || e.sheet.get('invisible') > 0) continue;
+    const d = dist(e.pos, at);
+    if (d < bd) { bd = d; best = e; }
+  }
+  return best;
+}
+
+// ASSAULT — the flagship order (Command: Assault / a warcaller's bark): march
+// on the mark and kill whatever holds it. The pinned quarry outranks
+// geography; an empty mark, reached, means the order is fulfilled.
+registerCommandKind({
+  id: 'assault',
+  step(actor, world, cmd, dt) {
+    const pinned = cmd.targetId !== undefined ? world.actorById(cmd.targetId) : undefined;
+    if (pinned && !pinned.dead && !pinned.downed && !pinned.untargetable
+      && pinned.team !== actor.team && pinned.sheet.get('invisible') <= 0) {
+      return pinned;
+    }
+    const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
+    if (foe) return foe;
+    if (dist(actor.pos, cmd.pos) > COMMAND_CFG.arriveDist) {
+      actor.facing = angleTo(actor.pos, cmd.pos);
+      moveToward(actor, world, cmd.pos, dt);
+      return 'consumed';
+    }
+    return 'done';
+  },
+});
+
+// HOLD — stand the mark and repel what comes: assault's geometry, but an
+// empty mark is a POST, not a finish line — held until the order expires.
+registerCommandKind({
+  id: 'hold',
+  step(actor, world, cmd, dt) {
+    const foe = foeNear(actor, world, cmd.pos, cmd.radius ?? COMMAND_CFG.markRadius);
+    if (foe) return foe;
+    if (dist(actor.pos, cmd.pos) > COMMAND_CFG.arriveDist) {
+      actor.facing = angleTo(actor.pos, cmd.pos);
+      moveToward(actor, world, cmd.pos, dt);
+    }
+    return 'consumed';
+  },
+});
 
 /** Default frontal sight-cone width (degrees) and rear-hearing fraction of
  *  detection range — PerceptionSpec / MonsterDef.vision override per monster. */
@@ -178,6 +291,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   actor.aiKiteSpec = tuning.tempo?.kite !== undefined
     ? { kite: tuning.tempo.kite, windedFor: tuning.tempo.windedFor }
     : undefined;
+  // Stamp the RESOLVED obedience so the command roll (world.ts, an event —
+  // not a tick) reads live machine layers: an enraged phase can go deaf.
+  actor.aiObedience = tuning.obedience;
   if (actor.aiKiteAcc > 0 && world.time - actor.aiLastRetreatAt > 0.15) {
     actor.aiKiteAcc = Math.max(0, actor.aiKiteAcc - dt * 0.6);
   }
@@ -209,29 +325,39 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // their condition holds. Actors without either fall through instantly.
   if (tryReserves(actor, world, tuning)) return;
 
-  // COMMANDED minions (Attack!): march on the mark, fight what holds it.
-  // The order clears on arrival or expiry; an enemy at blade's length
-  // overrides the march (they fight their way there, not through walls
-  // of teeth). Player-owned only — wild monsters take no orders.
-  if (actor.owner && actor.aiCommandPos && actor.aiCommandUntil > world.time) {
-    const goal = actor.aiCommandPos;
-    if (dist(actor.pos, goal) < 70) {
-      actor.aiCommandPos = undefined;
+  // COMMANDED (the order fabric): a standing order OWNS the agenda. The
+  // kind's handler (COMMAND_KINDS — open registry) marches the actor, posts
+  // it, or AIMS the pipeline at the order's quarry; its own hunt resumes
+  // only when the order is fulfilled or expires. A cast already in flight
+  // resolves untouched (moveActor gates rooted feet, canUse gates fresh
+  // casts): the troops finish the swing, THEN obey. Any commanded actor
+  // qualifies — your court, or a warcaller's pack (obedience was rolled at
+  // issue; a deaf packmate never got the order at all).
+  let ordered: Actor | undefined;
+  if (actor.aiCommand) {
+    const cmd = actor.aiCommand;
+    const kindDef = COMMAND_KINDS[cmd.kind];
+    if (!kindDef || cmd.until <= world.time) {
+      actor.aiCommand = undefined;
     } else {
-      const engaged = world.enemiesOf(actor)
-        .some(e => !e.passive && dist(e.pos, actor.pos) < 120);
-      if (!engaged) {
-        actor.facing = angleTo(actor.pos, goal);
-        moveToward(actor, world, goal, dt);
-        return;
-      }
+      const r = kindDef.step(actor, world, cmd, dt);
+      if (r === 'done') actor.aiCommand = undefined;
+      else if (r === 'consumed') return;
+      else if (r) ordered = r;
     }
-  } else if (actor.aiCommandPos && actor.aiCommandUntil <= world.time) {
-    actor.aiCommandPos = undefined;
   }
 
   // ---- PERCEPTION → the threat chart → a target --------------------------
   let { target, d: best } = acquireTarget(actor, world, tuning);
+
+  // The order's quarry OVERRIDES the actor's own pick — the commander aims
+  // the pack; perception still ran its bookkeeping, but the blade goes
+  // where it is pointed (an order is shared information: no sight required).
+  if (ordered) {
+    target = ordered;
+    best = dist(actor.pos, ordered.pos);
+    actor.aiTargetId = ordered.id;
+  }
 
   // LEASH (TargetSpec.leash): guardians give up the marathon. Beyond the
   // tether they drop the lock and walk home (with hysteresis, so the edge
@@ -262,8 +388,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
 
   // Minions with nothing to fight heel back to their owner. Guard-stance
   // minions (Meat Shield) keep a SHORT leash — they disengage anything that
-  // would drag them off their master's flank.
-  if (!target || (actor.isMinion() && best > (actor.guardMode ? 260 : 700))) {
+  // would drag them off their master's flank. An ORDERED quarry is exempt
+  // from both leashes: the commander explicitly sent them.
+  if (!target || (actor.isMinion() && !ordered && best > (actor.guardMode ? 260 : 700))) {
     if (actor.owner && dist(actor.pos, actor.owner.pos) > 90) {
       // LEASH RECALL: a minion that can't make progress home (snagged on
       // terrain) or fell impossibly far behind TELEPORTS to its owner —

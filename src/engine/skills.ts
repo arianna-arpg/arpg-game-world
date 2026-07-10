@@ -2054,13 +2054,34 @@ export interface RecallMinionsEffect {
   radius?: number;
 }
 
-/** COMMAND every mobile minion to the AIM POINT: they march on the mark
- *  and fight whatever holds it (the inverse-Bombardment order — the rift
- *  opens at your feet, the horde goes where you point). The order expires
- *  on arrival or after `duration` seconds. */
+/** COMMAND recipients onto the AIM POINT (the order fabric): each is put
+ *  UNDER a standing order (ai.ts COMMAND_KINDS drives it) — they drop their
+ *  current agenda (a cast in flight resolves first), march on the mark, and
+ *  do what the kind says until it's fulfilled or expires. Point AT a foe
+ *  and the order PINS that foe (focus fire). WHO answers, HOW LONG, and how
+ *  hard the bark lands are all data — and every recipient rolls its brain's
+ *  `obedience` (default 1: a summoned court obeys utterly; an unruly pack
+ *  only in part — the enemy-warcaller lever). */
 export interface CommandMinionsEffect {
   type: 'commandMinions';
+  /** Command KIND from the open registry (default 'assault': march and kill
+   *  whatever holds the mark; 'hold': stand the mark until expiry). */
+  command?: string;
+  /** Seconds the order stands (default COMMAND_CFG.duration). */
   duration?: number;
+  /** WHO takes the order: the caster's summoned court ('minions', default),
+   *  its SQUAD — stamped squadmates plus same-faction kin in earshot, the
+   *  enemy-commander lever ('squad') — or 'both'. */
+  affects?: 'minions' | 'squad' | 'both';
+  /** Only recipients within this range of the caster hear it (default:
+   *  minions always hear; squads default to COMMAND_CFG.earshot). */
+  radius?: number;
+  /** DISCIPLINE pressure added to every recipient's obedience roll — a
+   *  drill-sergeant's bark lands where a whimper wouldn't. Stacks with the
+   *  caster's commandDiscipline stat. */
+  discipline?: number;
+  /** Engagement radius around the MARK (default COMMAND_CFG.markRadius). */
+  markRadius?: number;
 }
 
 /** CHRONO (#19): shaves every OTHER learned skill's running cooldown —

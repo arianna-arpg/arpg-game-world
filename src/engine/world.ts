@@ -18,7 +18,7 @@ import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
 import { DEFENSE_CFG } from './defense';
-import { NEUTRAL_RESET } from './ai';
+import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
 import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
@@ -12612,27 +12612,71 @@ export class World {
         }
         if (sent === 0) this.failNote(caster, def.id + ':nominions', 'no minions to command');
       }
-      // COMMAND (Attack! / the inverse Bombardment): every mobile minion
-      // marches on the MARK and fights whatever holds it. Fired as a META
-      // (hostSkillId set), the order scopes to THAT skill's retinue alone —
-      // your bruisers charge without dragging the fragile casters along;
-      // the bar-skill form (War Horn) commands the whole court.
+      // COMMAND (Attack! / the enemy warcaller's bark): recipients are put
+      // UNDER a standing order (the command fabric — ai.ts COMMAND_KINDS):
+      // they drop their current agenda, finish any swing in flight, and
+      // obey until the order is fulfilled or expires. WHO answers is data
+      // (`affects`): the caster's summoned court, or its SQUAD — stamped
+      // squadmates plus same-faction kin in earshot (the enemy-command
+      // lever). Fired as a META (hostSkillId set), a court order scopes to
+      // THAT skill's retinue alone — your bruisers charge without dragging
+      // the fragile casters along; the bar-skill form commands the whole
+      // court. Every recipient rolls OBEDIENCE (brain tuning, default 1 =
+      // utterly loyal) against the issuer's discipline — an unruly pack
+      // heeds only in part, and the defiant say so.
       if (fx.type === 'commandMinions') {
-        let sent = 0;
-        for (const m of this.actors) {
-          if (m.owner !== caster || m.dead || m.construct) continue;
-          if (inst.hostSkillId && m.sourceSkillId !== inst.hostSkillId) continue;
-          m.aiCommandPos = vec(aim.x, aim.y);
-          m.aiCommandUntil = this.time + (fx.duration ?? 5);
-          sent++;
-        }
-        if (sent > 0) {
-          this.flashes.push({
-            pos: vec(aim.x, aim.y), radius: 40, color: def.color,
-            life: 0.3, maxLife: 0.3,
-          });
+        const kind = fx.command ?? 'assault';
+        if (!hasCommandKind(kind)) {
+          console.warn(`[commandMinions] unknown command kind '${kind}' on ${def.id}`);
         } else {
-          this.failNote(caster, def.id + ':nominions', 'no minions to command');
+          const affects = fx.affects ?? 'minions';
+          const until = this.time + (fx.duration ?? COMMAND_CFG.duration);
+          const mark = vec(aim.x, aim.y);
+          // Point AT a foe and the order PINS it — focus fire, not geography.
+          let quarry: Actor | undefined; let qd = COMMAND_CFG.pinRadius;
+          for (const e of this.enemiesOf(caster)) {
+            if (e.passive || e.sheet.get('invisible') > 0) continue;
+            const dq = dist(e.pos, mark);
+            if (dq < qd) { qd = dq; quarry = e; }
+          }
+          const discipline = (fx.discipline ?? 0) + caster.sheet.get('commandDiscipline');
+          let sent = 0, balked = 0;
+          for (const m of this.actors) {
+            if (m === caster || m.dead || m.construct) continue;
+            const owned = m.owner === caster;
+            const squadmate = !m.owner && !m.passive
+              && ((caster.squadId !== undefined && m.squadId === caster.squadId)
+                || (caster.faction !== undefined && m.faction === caster.faction
+                  && dist(m.pos, caster.pos) <= (fx.radius ?? COMMAND_CFG.earshot)));
+            const takes = affects === 'minions' ? owned
+              : affects === 'squad' ? squadmate : (owned || squadmate);
+            if (!takes) continue;
+            if (inst.hostSkillId && m.sourceSkillId !== inst.hostSkillId) continue;
+            if (fx.radius !== undefined && dist(m.pos, caster.pos) > fx.radius) continue;
+            // THE OBEDIENCE ROLL: loyalty is the recipient's brain dial,
+            // discipline the issuer's pressure — both plain data.
+            if (!chance(Math.min(1, obedienceOf(m) + discipline))) {
+              balked++;
+              this.text(vec(m.pos.x, m.pos.y - 14), 'defies!', '#c08a68', 10);
+              continue;
+            }
+            issueCommand(m, {
+              kind, pos: vec(mark.x, mark.y), until,
+              radius: fx.markRadius, targetId: quarry?.id, issuerId: caster.id,
+            });
+            sent++;
+          }
+          if (sent > 0) {
+            this.flashes.push({
+              pos: vec(mark.x, mark.y), radius: 40, color: def.color,
+              life: 0.3, maxLife: 0.3,
+            });
+          } else if (balked > 0) {
+            // The whole pack shrugged — the bark alone marks the moment.
+            this.text(vec(caster.pos.x, caster.pos.y - 18), 'unheeded!', '#c08a68', 11);
+          } else {
+            this.failNote(caster, def.id + ':nominions', 'no minions to command');
+          }
         }
       }
       if (fx.type === 'recallMinions') {

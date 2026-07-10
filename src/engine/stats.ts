@@ -791,6 +791,11 @@ export const STAT_DEFS: Record<string, StatDef> = {
   mirageDamage:   { label: 'Echo Damage', base: 1, min: 0.1 },
 
   // Minions (queried on the OWNER; minions inherit these as multipliers)
+  /** ISSUER-side pressure added to every command recipient's obedience roll
+   *  (the command fabric — CommandMinionsEffect). Only matters against
+   *  unruly recipients: obedience defaults to 1, so a loyal court never
+   *  needs it and a warcaller build invests in it. */
+  commandDiscipline: { label: 'Command Discipline', base: 0 },
   minionDamage:   { label: 'Minion Damage', base: 1, min: 0 },
   minionLife:     { label: 'Minion Life', base: 1, min: 0.1 },
   minionMaxCount: { label: 'Additional Maximum Minions', base: 0 },
