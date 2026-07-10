@@ -10,6 +10,8 @@
 // ---------------------------------------------------------------------------
 
 import type { MapCoord } from './coords';
+import { BIOME_FIELD_CFG, fieldBiomePick } from './biomes';
+import { registerDimensionClimate, type DimensionAxisOverride } from './climate';
 
 export interface DimensionDef {
   id: string;
@@ -21,6 +23,13 @@ export interface DimensionDef {
   biomes?: { biome: string; weight: number }[];
   /** Flat level pressure on top of the radial field (hell runs hot). */
   levelBonus?: number;
+  /** CLIMATE AXIS OVERRIDES for this dimension (world/climate.ts): replace an
+   *  axis' resting value and/or layer stack, so the SAME biome-affinity
+   *  machinery paints a structurally different world below (the Underworld
+   *  runs hot and arid — volcanic country pools in its hottest reaches while
+   *  gravelands keep the cooler marches). Registered into the climate leaf at
+   *  registerDimension time; everything else rides the shared field pick. */
+  climate?: Record<string, DimensionAxisOverride>;
 }
 
 const DIMENSIONS: Record<string, DimensionDef> = {};
@@ -28,6 +37,7 @@ const DIMENSIONS: Record<string, DimensionDef> = {};
 export function registerDimension(def: DimensionDef): void {
   if (DIMENSIONS[def.id]) console.warn(`[dimensions] re-registering '${def.id}' — overriding`);
   DIMENSIONS[def.id] = def;
+  if (def.climate) registerDimensionClimate(def.id, def.climate);
 }
 
 export function dimensionDef(id: string | undefined): DimensionDef {
@@ -49,6 +59,15 @@ registerDimension({
     { biome: 'grave', weight: 1 },
   ],
   levelBonus: 3,
+  // Hell's own climate: hot and arid, with its own slow heat swells — so the
+  // shared affinity machinery pools volcanic country in the hottest reaches
+  // (temperature crests past 'scorching') while gravelands keep the cooler
+  // marches. No seas below: the maritime axis reads 0 everywhere.
+  climate: {
+    temperature: { base: 0.72, layers: [{ kind: 'noise', cell: 900, amp: 0.22, salt: 0x0661 }] },
+    moisture: { base: 0.16, layers: [{ kind: 'noise', cell: 1100, amp: 0.14, salt: 0x0662 }] },
+    maritime: { base: 0, layers: [] },
+  },
 });
 
 function hashCell(a: number, b: number, seed: number): number {
@@ -60,14 +79,16 @@ function hashCell(a: number, b: number, seed: number): number {
 }
 
 /** A dimension's biome at a coordinate — the same jittered-Voronoi idiom as
- *  the surface heat map, drawn over the DIMENSION'S palette. Pure/deterministic. */
+ *  the surface heat map, drawn over the DIMENSION'S palette and picked through
+ *  the SHARED weight × climate-affinity machinery (fieldBiomePick), under the
+ *  dimension's own axis overrides. Pure/deterministic. */
 export function dimensionBiomeAt(dimId: string, coord: MapCoord, seed: number): string {
   const def = dimensionDef(dimId);
   const table = def.biomes;
   if (!table?.length) return 'grove';
-  const span = 260, jit = 0.45;
+  const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let bestGx = cx, bestGy = cy, bd = Infinity;
+  let bestGx = cx, bestGy = cy, bestPx = coord.x, bestPy = coord.y, bd = Infinity;
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       const gx = cx + dx, gy = cy + dy;
@@ -75,11 +96,8 @@ export function dimensionBiomeAt(dimId: string, coord: MapCoord, seed: number): 
       const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
       const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
       const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
-      if (d < bd) { bd = d; bestGx = gx; bestGy = gy; }
+      if (d < bd) { bd = d; bestGx = gx; bestGy = gy; bestPx = px; bestPy = py; }
     }
   }
-  const total = table.reduce((a, e) => a + e.weight, 0);
-  let r = (hashCell(bestGx, bestGy, (seed ^ 0x5bd1e995) >>> 0) / 0x100000000) * total;
-  for (const e of table) { r -= e.weight; if (r <= 0) return e.biome; }
-  return table[0].biome;
+  return fieldBiomePick(table, bestGx, bestGy, { x: bestPx, y: bestPy }, seed, dimId);
 }

@@ -97,6 +97,11 @@ export interface ZoneSpec {
    *  coord sits (1=center). With fieldBiome, a MARINE region mints shallow isles at
    *  its edge and the true DEEP-SEA zone at its heart. Paired with biomeFor. */
   biomeDepthFor?: (c: MapCoord) => number;
+  /** CLIMATE sampler (world/climate.ts through the sim's field seed, dimension-
+   *  aware): bakes the minted coordinate's axis values into ZoneDef.geo.climate
+   *  so generators/UI read the zone's weather without re-deriving the field.
+   *  Mirrors biomeFor's closure pattern. */
+  climateFor?: (c: MapCoord, dimension?: string) => Record<string, number>;
   /** RANDOM-FRONTIER mint: the heat-map field is AUTHORITATIVE — it re-selects the
    *  whole tileset (theme/packs/layout/biome) for the region explored into. Set only
    *  by generateZone; authored/quest/event mints leave it false (spec.tileset wins). */
@@ -484,10 +489,17 @@ export function placeZoneAt(
   ];
   // GEO context — how deep inside its biome blob the zone sits (0 = edge, 1 =
   // interior), from the EXISTING biome-depth sampler (sim.biomeField.sampleDepth,
-  // already threaded for the marine shallow-isles/deep-sea split). Pure field
-  // read, NO rng — directed mints without a sampler simply carry no geo.
-  const geo = spec.biomeDepthFor
-    ? { biomeDepth: Math.max(0, Math.min(1, spec.biomeDepthFor(target))) }
+  // already threaded for the marine shallow-isles/deep-sea split), plus the
+  // CLIMATE axes at the coordinate (rounded for tidy serialization). Pure field
+  // reads, NO rng — directed mints without samplers simply carry no geo.
+  const climate = spec.climateFor?.(target, spec.dimension);
+  const geo = (spec.biomeDepthFor || climate)
+    ? {
+      ...(spec.biomeDepthFor ? { biomeDepth: Math.max(0, Math.min(1, spec.biomeDepthFor(target))) } : {}),
+      ...(climate ? {
+        climate: Object.fromEntries(Object.entries(climate).map(([k, v]) => [k, Math.round(v * 100) / 100])),
+      } : {}),
+    }
     : undefined;
   // Layout knobs, spec ▷ tileset ▷ biome (most-specific wins) — baked so
   // revisits/co-op replay the same recipe tweaks.
@@ -575,6 +587,7 @@ export function generateZone(
   biomeFor?: (c: MapCoord) => string,
   levelFor?: (c: MapCoord) => number,
   biomeDepthFor?: (c: MapCoord) => number,
+  climateFor?: (c: MapCoord, dimension?: string) => Record<string, number>,
 ): ZoneDef {
   const target = projectCoord(source.map, exitDef.side);
   // fieldBiome: this is a RANDOM frontier — let the heat maps decide. biomeFor picks
@@ -582,7 +595,7 @@ export function generateZone(
   // sets the level from the difficulty field at `target` (the same coord placeExit previews).
   // The child inherits its source's DIMENSION (hell grows hell) — baked pre-weave.
   return placeZoneAt(target, source, zoneMap, genIndex,
-    { tileset: exitDef.tileset, biomeFor, levelFor, biomeDepthFor, fieldBiome: true, dimension: source.dimension });
+    { tileset: exitDef.tileset, biomeFor, levelFor, biomeDepthFor, climateFor, fieldBiome: true, dimension: source.dimension });
 }
 
 /**

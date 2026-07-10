@@ -65,10 +65,20 @@ function cellIsLand(gx: number, gy: number, seed: number): boolean {
   return (hashCell(gx, gy, (seed ^ 0x51ed270b) >>> 0) / 0x100000000) >= CONTINENT_CFG.oceanFrac;
 }
 
-/** The landmass field at a node-space coordinate. Same 3×3 jittered-Voronoi
- *  search as biomeAt; the winning seed's land/ocean roll decides. An ocean
- *  winner wedged directly between two land seeds may firm into a BRIDGE. */
-export function continentAt(coord: MapCoord, seed: number): ContinentInfo {
+/** The WINNING macro cell at a coordinate — the landmass field's raw unit,
+ *  exposed so sibling fields (climate's coastal/landmass-flavor layers) can
+ *  key stable per-continent values without parsing label strings. */
+export interface ContinentCell {
+  gx: number;
+  gy: number;
+  kind: 'land' | 'ocean' | 'bridge';
+}
+
+/** The landmass field's winning cell at a node-space coordinate. Same 3×3
+ *  jittered-Voronoi search as biomeAt; the winning seed's land/ocean roll
+ *  decides. An ocean winner wedged directly between two land seeds may firm
+ *  into a BRIDGE. */
+export function continentCellAt(coord: MapCoord, seed: number): ContinentCell {
   const span = CONTINENT_CFG.cellSpan, jit = CONTINENT_CFG.jitter;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
   let bestD = Infinity, bestGx = 0, bestGy = 0;
@@ -82,18 +92,26 @@ export function continentAt(coord: MapCoord, seed: number): ContinentInfo {
       if (d < bestD) { bestD = d; bestGx = gx; bestGy = gy; }
     }
   }
-  if (cellIsLand(bestGx, bestGy, seed)) {
-    return { kind: 'land', landmass: `cont_${bestGx}_${bestGy}` };
-  }
+  if (cellIsLand(bestGx, bestGy, seed)) return { gx: bestGx, gy: bestGy, kind: 'land' };
   // Bridge test: an ocean cell with land on OPPOSITE sides (either axis) may
   // firm into an isthmus — hashed per cell so the bridge is stable world-wide.
   const flanked =
     (cellIsLand(bestGx - 1, bestGy, seed) && cellIsLand(bestGx + 1, bestGy, seed))
     || (cellIsLand(bestGx, bestGy - 1, seed) && cellIsLand(bestGx, bestGy + 1, seed));
   if (flanked && (hashCell(bestGx, bestGy, (seed ^ 0x2545f491) >>> 0) / 0x100000000) < CONTINENT_CFG.bridgeChance) {
-    return { kind: 'bridge', landmass: `bridge_${bestGx}_${bestGy}` };
+    return { gx: bestGx, gy: bestGy, kind: 'bridge' };
   }
-  return { kind: 'ocean', landmass: null };
+  return { gx: bestGx, gy: bestGy, kind: 'ocean' };
+}
+
+/** The landmass field at a node-space coordinate (label form of the cell). */
+export function continentAt(coord: MapCoord, seed: number): ContinentInfo {
+  const cell = continentCellAt(coord, seed);
+  switch (cell.kind) {
+    case 'land': return { kind: 'land', landmass: `cont_${cell.gx}_${cell.gy}` };
+    case 'bridge': return { kind: 'bridge', landmass: `bridge_${cell.gx}_${cell.gy}` };
+    case 'ocean': return { kind: 'ocean', landmass: null };
+  }
 }
 
 /** March from a port coordinate across the ocean along a bearing until LAND —

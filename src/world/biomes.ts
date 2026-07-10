@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { continentAt, continentSeedFrom } from './continents';
+import { climateAt, climateAffinity, validateClimateSpecs, type ClimateSpec } from './climate';
 import type { MapCoord } from './coords';
 
 export interface BiomeInfo {
@@ -72,12 +73,21 @@ export interface BiomeInfo {
    *  faint land heat-map). The sea paints heavier so it reads as water, not as
    *  a tint over land. */
   washOpacity?: number;
+  /** CLIMATE AFFINITY — weight-multiplier envelopes over the climate axes
+   *  (world/climate.ts). The biome field multiplies seed weight × affinity per
+   *  Voronoi cell, so this is HOW a biome claims its geography: 'desert is hot
+   *  + arid' as one data line. Keys are axis ids; values are that axis' band
+   *  names or inline envelopes over its 0..1 value. Omitted = at home on any
+   *  ground (grave stays unconditioned on purpose — the universal filler that
+   *  guarantees every cell keeps a candidate). */
+  climate?: Record<string, ClimateSpec>;
 }
 
 export const BIOMES: Record<string, BiomeInfo> = {
   // spacing: a per-biome map-density lever (forest/grave/marsh = tight interwoven web;
   // desert/tundra/highland/volcanic/coast = spacious, legible branching).
   grove:  { patronFaction: 'sylvan', mapColor: '#3f8a3a', label: 'Grove', spacing: 56,
+    climate: { temperature: 'mild', moisture: { from: 0.3, fadeIn: 0.2 } },
     landmarks: [{ landmark: 'lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }, { landmark: 'great_lake', chance: 0.08 }] },
   // Gravelands raise mausoleum labyrinths (a rare whole-zone hedge-maze bastion)
   // and the odd lone watchtower among the tombs.
@@ -91,17 +101,20 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // RIFT: siege castles + the RIVER OF FLAME (riverland pouring lava, stone
   // causeways spanning it — the D2 Act 4 artery).
   rift:   { patronFaction: 'demon',  mapColor: '#a83a2a', label: 'Rift', spacing: 64,
+    climate: { wildness: { from: 0.3, fadeIn: 0.2 } },
     allowedLayouts: { plains: 6, bastion: 1, riverland: 1 },
     layoutParams: { riverLiquid: 'lava', causeways: [2, 3] },
     structures: [{ structure: 'siege_castle', chance: 0 }, { structure: 'watchtower', chance: 0.15 }],
     landmarks: [{ landmark: 'lava_coast', chance: 0.18 }, { landmark: 'caldera', chance: 0.12 },
       { landmark: 'demon_pit', chance: 0.2 }, { landmark: 'void_pillars', chance: 0.1 }] },
   desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 104,
+    climate: { temperature: 'hot', moisture: 'arid' },
     structures: [{ structure: 'grand_castle', chance: 0.1 }, { structure: 'watchtower', chance: 0.3, count: [1, 2] }],
     landmarks: [{ landmark: 'oasis', chance: 0.3 }, { landmark: 'canyon', chance: 0.25 }, { landmark: 'sinkhole', chance: 0.12 },
       { landmark: 'maggot_burrow', chance: 0.14 }] },
   // MARINE family — these lean to the 'islands' layout (land lobes + bridges + sea).
   beach:  { patronFaction: 'wild', mapColor: '#d8c890', label: 'Coast', spacing: 84,
+    climate: { maritime: 'shorebound' },
     marine: 'coast', allowedLayouts: { plains: 2, islands: 1 },
     landmarks: [
       { landmark: 'cove', chance: 0.3 }, { landmark: 'fjord_coast', chance: 0.15 },
@@ -109,12 +122,14 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'tombolo', chance: 0.1 },
     ] },
   isle:   { patronFaction: 'wild', mapColor: '#7ec8e8', label: 'Isle', spacing: 90,
+    climate: { maritime: 'shorebound' },
     marine: 'coast', allowedLayouts: { islands: 3, plains: 1 },
     landmarks: [
       { landmark: 'peninsula', chance: 0.2 }, { landmark: 'isthmus', chance: 0.15 },
       { landmark: 'cliff_coast', chance: 0.15 }, { landmark: 'coastal_island', chance: 0.2 },
     ] },
   deepsea: { patronFaction: 'wild', mapColor: '#2f6aa8', label: 'Deep Sea',
+    climate: { maritime: { from: 0.3, fadeIn: 0.2 } },
     marine: 'deep', allowedLayouts: { underwater: 1 },
     // No land warband braves the open ocean (the user's example). Eldritch is
     // event-driven (contexts gate) so it can still erupt here. Demo of the gate.
@@ -124,6 +139,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // its corners). Spacious on the map (open country spreads out); event-dense (a wide
   // hub of opportunity). See levelgen fieldLayout + world fieldifyZone.
   field:    { patronFaction: 'wild',   mapColor: '#6fae3f', label: 'Fields', spacing: 132,
+    climate: { temperature: 'mild', moisture: { to: 0.62, fadeOut: 0.2 } },
     allowedLayouts: { field: 1 }, eventDensityMul: 1.4,
     // Open country: a lone watchtower on the expanse (structures roll layout-
     // agnostically, so the Field's blob rasterizer gets them too).
@@ -135,6 +151,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // TUNDRA: open plains, wide EXPANSES, and RIVERLAND whose course freezes
   // mid-run (the D2 Act-5 frozen river — freezeAt flips water→ice).
   tundra:   { patronFaction: 'wild',   mapColor: '#bcd0d8', label: 'Tundra', spacing: 96,
+    climate: { temperature: 'frigid' },
     allowedLayouts: { plains: 3, expanse: 1, riverland: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.45 },
     landmarks: [{ landmark: 'frozen_lake', chance: 0.35 }, { landmark: 'frozen_strand', chance: 0.22 }, { landmark: 'cirque', chance: 0.15 }] },
@@ -142,6 +159,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // conifer stands to slip beneath, standing drifts, frozen pools, the
   // aurora overhead. Wolves and worse den here.
   taiga:    { patronFaction: 'wild',   mapColor: '#9ec4b4', label: 'Taiga', spacing: 62,
+    climate: { temperature: 'cold', moisture: { from: 0.32, fadeIn: 0.18 } },
     allowedLayouts: { plains: 3, riverland: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.6 },
     landmarks: [{ landmark: 'frozen_lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }] },
@@ -150,6 +168,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // The high crags belong to the Horned Tribes now (the gnolls keep the
   // desert): beastkin war-camps stud the passes, their khan thrones on high.
   highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Highland', spacing: 88,
+    climate: { temperature: { to: 0.55, fadeOut: 0.2 }, moisture: 'dry' },
     allowedLayouts: { rooms: 3, bastion: 1 },
     structures: [
       { structure: 'grand_castle', chance: 0 }, { structure: 'fortress', chance: 0 },
@@ -160,6 +179,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'lone_mountain', chance: 0.18 }, { landmark: 'cirque', chance: 0.12 },
     ] },
   marsh:    { patronFaction: 'undead', mapColor: '#4a6a52', label: 'Marsh', spacing: 58,
+    climate: { moisture: 'wet' },
     allowedLayouts: { islands: 2, plains: 1 },
     landmarks: [{ landmark: 'bog_shore', chance: 0.3 }, { landmark: 'swamp_hill', chance: 0.22 }, { landmark: 'tar_pool', chance: 0.25 }] },
   // Exotic hazard biomes (each is a distinct framework instance):
@@ -169,17 +189,20 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // The Flesh gains its true natives: the Glut patronizes its own ground
   // (the undead keep the gravelands).
   flesh:    { patronFaction: 'flesh',   mapColor: '#7a2a38', label: 'Flesh', spacing: 64,
+    climate: { wildness: 'deepwild' },
     allowedLayouts: { flesh: 1 } },
   // CAVERN — the biome tag for the underground tilesets (they previously
   // carried none, so cave zones fell back to PLAINS wildlife: hares in the
   // dark). No patron marches from here; the dark keeps its own.
   cavern:   { patronFaction: 'wild', mapColor: '#5a5462', label: 'Cavern', spacing: 72,
     landmarks: [{ landmark: 'maggot_burrow', chance: 0.18 }] },
-  crystal:  { patronFaction: 'elemental', mapColor: '#7fd0ff', label: 'Crystal', spacing: 84 },
+  crystal:  { patronFaction: 'elemental', mapColor: '#7fd0ff', label: 'Crystal', spacing: 84,
+    climate: { wildness: 'deepwild' } },
   // VOLCANIC: one tileset, THREE generations (the recipe-tweak showcase) — a
   // spiral cauldron over a lava sea, a winding lava-tube gut, or open plains;
   // the layoutParams pour lava into whichever recipe rolls.
   volcanic: { patronFaction: 'demon',    mapColor: '#d84a1e', label: 'Volcanic', spacing: 92,
+    climate: { temperature: 'scorching', wildness: { from: 0.25, fadeIn: 0.2 } },
     allowedLayouts: { plains: 2, spiral: 1, winding: 1 },
     layoutParams: { negativeLiquid: 'lava', riverLiquid: 'lava' },
     landmarks: [{ landmark: 'caldera', chance: 0.25 }, { landmark: 'lava_coast', chance: 0.18 }, { landmark: 'crater', chance: 0.2 }] },
@@ -188,6 +211,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the tileset packs). eventDensityMul 0.7 = the quiet home (the bloom suppresses events as
   // it spreads — the tug-of-war; the overlay folds a live per-zone suppression on top).
   mycelia:  { patronFaction: 'fungal',   mapColor: '#8fd06f', label: 'Mycelia', spacing: 64,
+    climate: { moisture: 'damp', wildness: { from: 0.35, fadeIn: 0.2 } },
     allowedLayouts: { mycelia: 1 }, eventDensityMul: 0.7 },
   // ELDRITCH — never seeded into BIOME_FIELD (no random eldritch regions in normal
   // gen); only an Incursion's biome-warp paints this ground, locking the landing.
@@ -259,23 +283,32 @@ export interface BiomeSeedDef {
   weight?: number;
 }
 
-/** The palette of biome regions seeded across the world map. */
+/** The palette of biome regions seeded across the world map.
+ *
+ *  WEIGHTS ARE CONDITIONED-EQUILIBRIUM TUNED: each cell's effective weight is
+ *  weight × climate affinity (fieldBiomePick), so a biome whose climate gate
+ *  holds only over part of the world (desert: hot+arid) carries a HIGHER seed
+ *  weight to keep its global share — where its climate holds it DOMINATES
+ *  (that's what makes regions read as coherent deserts/tundras instead of
+ *  confetti), and it simply doesn't exist elsewhere. Broad-gate biomes keep
+ *  modest weights. Grave is the unconditioned filler that can appear anywhere. */
 export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'grove', weight: 1.2 },
   { biome: 'field', weight: 1.1 },
   { biome: 'grave', weight: 1.0 },
-  { biome: 'desert', weight: 0.9 },
-  { biome: 'beach', weight: 0.7 },
-  { biome: 'rift', weight: 0.6 },
-  { biome: 'isle', weight: 0.5 },
-  { biome: 'deepsea', weight: 0.4 },
-  { biome: 'tundra', weight: 0.6 },
-  { biome: 'highland', weight: 0.7 },
-  { biome: 'marsh', weight: 0.6 },
-  { biome: 'flesh', weight: 0.35 },
-  { biome: 'crystal', weight: 0.4 },
-  { biome: 'volcanic', weight: 0.5 },
-  { biome: 'mycelia', weight: 0.4 }, // rare fungal regions — the dormant homes the bloom collapses to
+  { biome: 'desert', weight: 2.0 },
+  { biome: 'beach', weight: 1.6 },
+  { biome: 'rift', weight: 1.2 },
+  { biome: 'isle', weight: 1.2 },
+  { biome: 'deepsea', weight: 0.9 },
+  { biome: 'tundra', weight: 1.8 },
+  { biome: 'taiga', weight: 1.6 },
+  { biome: 'highland', weight: 1.5 },
+  { biome: 'marsh', weight: 1.5 },
+  { biome: 'flesh', weight: 1.1 },
+  { biome: 'crystal', weight: 1.2 },
+  { biome: 'volcanic', weight: 1.3 },
+  { biome: 'mycelia', weight: 1.2 }, // rare fungal regions — the dormant homes the bloom collapses to
 ];
 
 /** Tunable thresholds (modular, not scattered literals): the Voronoi cell size,
@@ -312,17 +345,54 @@ function hashCell(a: number, b: number, seed: number): number {
   return h >>> 0;
 }
 
-/** Weighted biome for a cell, driven by its hash (deterministic). */
-function cellBiome(h: number): string {
+// Cell-pick memo: the pick is pure per (dimension, seed, cell), and floods /
+// map washes hammer the same cells thousands of times. Bounded — cleared
+// wholesale at the cap (a re-fill is cheap; correctness never depends on it).
+const pickMemo = new Map<string, string>();
+const PICK_MEMO_CAP = 16384;
+
+/** Weighted biome for a Voronoi cell: seed weight × CLIMATE AFFINITY sampled
+ *  at the cell's SITE (one climate reading per blob — regions stay coherent).
+ *  THE shared pick for the surface field and every dimension palette. A cell
+ *  whose climate zeroes every candidate falls back to the raw weights so the
+ *  world never starves (validateBiomeClimate flags authoring instead). */
+export function fieldBiomePick(
+  table: readonly BiomeSeedDef[], gx: number, gy: number, site: MapCoord,
+  fieldSeed: number, dimension = 'surface',
+): string {
+  const memoKey = `${dimension}|${fieldSeed}|${gx}|${gy}`;
+  const hit = pickMemo.get(memoKey);
+  if (hit !== undefined) return hit;
+  const climate = climateAt(site, fieldSeed, dimension);
+  const weights: number[] = new Array(table.length);
   let total = 0;
-  for (const s of BIOME_FIELD) total += s.weight ?? 1;
-  let r = (h / 0x100000000) * total;
-  for (const s of BIOME_FIELD) { r -= s.weight ?? 1; if (r <= 0) return s.biome; }
-  return BIOME_FIELD[0].biome;
+  for (let i = 0; i < table.length; i++) {
+    const s = table[i];
+    const w = (s.weight ?? 1) * climateAffinity(BIOMES[s.biome]?.climate, climate);
+    weights[i] = w; total += w;
+  }
+  const h = hashCell(gx, gy, (fieldSeed ^ 0x5bd1e995) >>> 0);
+  let picked = table[table.length - 1].biome;
+  if (total <= 0) {
+    let raw = 0;
+    for (const s of table) raw += s.weight ?? 1;
+    let r = (h / 0x100000000) * raw;
+    for (const s of table) { r -= s.weight ?? 1; if (r <= 0) { picked = s.biome; break; } }
+  } else {
+    let r = (h / 0x100000000) * total;
+    for (let i = 0; i < table.length; i++) {
+      r -= weights[i];
+      if (r <= 0) { picked = table[i].biome; break; }
+    }
+  }
+  if (pickMemo.size >= PICK_MEMO_CAP) pickMemo.clear();
+  pickMemo.set(memoKey, picked);
+  return picked;
 }
 
 /** The biome at a node-space coordinate — a jittered Voronoi over the seeded
- *  regions (3×3 lattice neighbourhood, nearest seed point wins). Pure + identical
+ *  regions (3×3 lattice neighbourhood, nearest seed point wins), each cell's
+ *  biome rolled from weight × climate affinity at its site. Pure + identical
  *  for a fixed (coord, fieldSeed). */
 export function biomeAt(coord: MapCoord, fieldSeed: number): string {
   // THE LANDMASS LAYER SITS ABOVE THE LAND LATTICE: open sea is its own
@@ -332,7 +402,7 @@ export function biomeAt(coord: MapCoord, fieldSeed: number): string {
   if (continentAt(coord, continentSeedFrom(fieldSeed)).kind === 'ocean') return OCEAN_BIOME;
   const span = BIOME_FIELD_CFG.cellSpan, jit = BIOME_FIELD_CFG.jitter;
   const cx = Math.floor(coord.x / span), cy = Math.floor(coord.y / span);
-  let best = BIOME_FIELD[0].biome, bd = Infinity;
+  let bd = Infinity, bestGx = cx, bestGy = cy, bestPx = coord.x, bestPy = coord.y;
   for (let dx = -1; dx <= 1; dx++) {
     for (let dy = -1; dy <= 1; dy++) {
       const gx = cx + dx, gy = cy + dy;
@@ -340,10 +410,10 @@ export function biomeAt(coord: MapCoord, fieldSeed: number): string {
       const px = (gx + 0.5 + (((h & 0xffff) / 0xffff) - 0.5) * jit) * span;
       const py = (gy + 0.5 + ((((h >>> 16) & 0xffff) / 0xffff) - 0.5) * jit) * span;
       const d = (px - coord.x) ** 2 + (py - coord.y) ** 2;
-      if (d < bd) { bd = d; best = cellBiome(hashCell(gx, gy, (fieldSeed ^ 0x5bd1e995) >>> 0)); }
+      if (d < bd) { bd = d; bestGx = gx; bestGy = gy; bestPx = px; bestPy = py; }
     }
   }
-  return best;
+  return fieldBiomePick(BIOME_FIELD, bestGx, bestGy, { x: bestPx, y: bestPy }, fieldSeed);
 }
 
 /** How DEEP into its biome region a coordinate sits: 1 at the region's (jittered)
@@ -378,6 +448,15 @@ export function fieldNoise(x: number, y: number, seed: number): number {
  *  has a colour + a future generated zone has a backing biome). Returns the bad ids. */
 export function validateBiomeField(): string[] {
   return BIOME_FIELD.filter(s => !BIOMES[s.biome]).map(s => s.biome);
+}
+
+/** Boot validator: every biome's climate spec must reference registered axes
+ *  and (for named specs) registered bands — a typo'd axis would silently read
+ *  as always-on. Returns the offending "owner: problem" strings. */
+export function validateBiomeClimate(): string[] {
+  return validateClimateSpecs(
+    Object.entries(BIOMES).map(([id, b]) => [`biome '${id}'`, b.climate]),
+  );
 }
 
 /** Boot validator: every biome's allowedLayouts must name a REGISTERED layout

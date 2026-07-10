@@ -34,7 +34,8 @@ import { DEFAULT_FREQUENCY, type FrequencyProfile } from '../packages/frequency'
 import { PACKAGE_BY_ID, packageSeed } from '../packages/registry';
 import type { PackageGate } from '../packages/types';
 import { gateOf, resolveGates } from '../packages/weighting';
-import { biomeOf, validateBiomeField, validateBiomeLayouts, BIOME_FIELD } from './biomes';
+import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD } from './biomes';
+import { setClimateOrigin } from './climate';
 import { LevelField, validateLevelField } from './levelField';
 import { START_ZONE, ZONES } from '../data/zones';
 import { biomesWithoutTileset } from '../data/tilesets';
@@ -157,6 +158,9 @@ export class WorldSim {
     // regions; centered on the town's CANONICAL map coord (static, never the moved
     // runtime copy) so difficulty is anchored to home no matter how town expands.
     this.levelField = new LevelField((seed ^ 0x1e7e1) >>> 0, ZONES[START_ZONE].map);
+    // Climate radial layers (wildness) anchor on the same static home coord —
+    // static data, so host and clients agree without replication.
+    setClimateOrigin(ZONES[START_ZONE].map);
     this.incursionField = new IncursionField(new Rng((seed ^ 0x1ec0) >>> 0));
     // Build the package→world routing from the manifest, and instantiate any
     // NET-NEW package overlays (migrated features route pressure into the shared
@@ -183,6 +187,8 @@ export class WorldSim {
     if (bad.length) console.warn('[biomes] BIOME_FIELD references unknown biome(s):', bad);
     const badL = validateBiomeLayouts(hasLayout);
     if (badL.length) console.warn('[biomes] allowedLayouts reference unregistered layout(s):', badL);
+    const badC = validateBiomeClimate();
+    if (badC.length) console.warn('[climate] biome climate specs reference unknown axes/bands:', badC);
     // Heat-map authority needs every field biome to resolve to a frontier tileset
     // (else a mint in that region falls back to the inherited line — the old bug).
     const badT = biomesWithoutTileset(BIOME_FIELD.map(s => s.biome));

@@ -91,6 +91,7 @@ import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../world/regions';
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
+import { climateAt } from '../world/climate';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt } from '../world/dimensions';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
@@ -1429,6 +1430,10 @@ export class World {
   /** Biome-DEPTH sampler bound for the mint path (1=region center) — marine zones
    *  mint shallow isles at a region's edge, the deep-sea zone at its heart. */
   private readonly biomeDepthFor = (c: { x: number; y: number }): number => this.sim.biomeField.sampleDepth(c);
+  /** CLIMATE sampler bound for the mint path (dimension-aware): bakes the axes'
+   *  values at the minted coord into geo.climate. Mirrors biomeFor's pattern. */
+  private readonly climateFor = (c: { x: number; y: number }, dimension?: string): Record<string, number> =>
+    climateAt(c, this.sim.biomeField.fieldSeed, dimension ?? 'surface');
   /** LANDMASS sampler (continents/ocean/bridges) — the world's macro field
    *  above the biome field. Salted off the biome seed so continents and
    *  biomes are independent layouts of the same world. */
@@ -3493,7 +3498,7 @@ export class World {
     // eager-web LINK paths) so the earned road is genuinely new, applying any chosen-gem
     // dest theme (drop-to-choose). Fires once — travelThrough then sets exitDef.to.
     if (exitDef.lock) {
-      const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, this.biomeFor, this.levelFor, this.biomeDepthFor);
+      const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, this.biomeFor, this.levelFor, this.biomeDepthFor, this.climateFor);
       // The earned road must lead to LAND (this branch bypasses the ocean gate).
       if (!gen.dimension && this.continentFor(gen.map).kind === 'ocean') gen.map = this.pullToLand(gen.map);
       const hf = this.sim.holdfastField;
@@ -3532,7 +3537,7 @@ export class World {
       if (near) { this.linkBackTo(near, source); return near; }
       const gen = placeZoneAt(harbor, source, this.zoneMap, this.nextGenId++, {
         tileset: exitDef.tileset, biomeFor: this.biomeFor, levelFor: this.levelFor,
-        biomeDepthFor: this.biomeDepthFor, fieldBiome: true, port: true,
+        biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true, port: true,
         objective: { kind: 'clear' }, // never a gated harbor: sail-in arrivals carry no entryFrom
       });
       this.zoneMap[gen.id] = gen;
@@ -3558,8 +3563,8 @@ export class World {
     const biomeFor = source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor;
     const gen = source.field
       ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
-        { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor, fieldBiome: true, dimension: source.dimension })
-      : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, this.biomeDepthFor);
+        { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
+      : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, this.biomeDepthFor, this.climateFor);
     this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     this.zoneMap[gen.id] = gen;
@@ -4243,7 +4248,7 @@ export class World {
     let dest = Object.values(this.zoneMap).find(z => z.field?.regionId === ext.regionId);
     if (!dest) {
       dest = placeZoneAt(fc, this.zone, this.zoneMap, this.nextGenId++,
-        { biomeFor: this.biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor, fieldBiome: true });
+        { biomeFor: this.biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true });
       this.fieldifyZone(dest, ext);
       this.zoneMap[dest.id] = dest;
       this.sim.onNodeCharted(dest, this.simView());
@@ -8249,7 +8254,7 @@ export class World {
       if (near) { this.sailTo(near.id); return near.id; }
       const gen = placeZoneAt(landfall, this.zone, this.zoneMap, this.nextGenId++, {
         biomeFor: this.biomeFor, levelFor: this.levelFor,
-        biomeDepthFor: this.biomeDepthFor, fieldBiome: true, port: true,
+        biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor, fieldBiome: true, port: true,
         objective: { kind: 'clear' },
       });
       this.zoneMap[gen.id] = gen;
@@ -8425,8 +8430,9 @@ export class World {
     // VOYAGE ISLANDS in spyglass reach: a shore blob + a beacon, and the
     // island's ZONE mints (unvisited — a "???" node) so the world map shows
     // it and the sailor can navigate between sighted islands from the chart.
-    const seed = continentSeedFrom(this.sim.biomeField.fieldSeed);
-    for (const spot of islandsNear(this.nodeFromSea(p), R / VOYAGE_CFG.pxPerNode + VOYAGE_CFG.islandSightPad, seed)) {
+    // (The island field takes the BIOME-field seed — it derives the continent
+    // seed itself and samples the climate for its def picks.)
+    for (const spot of islandsNear(this.nodeFromSea(p), R / VOYAGE_CFG.pxPerNode + VOYAGE_CFG.islandSightPad, this.sim.biomeField.fieldSeed)) {
       const zone = this.mintIslandZone(spot);
       const center = this.seaFromNode(spot.coord);
       // The blob: a center disc + a ring, sized within ISLAND_FIELD.shoreRadius
@@ -8527,7 +8533,7 @@ export class World {
       dest = this.zoneMap[isleId] ?? null;
       if (!dest) {
         const [, gx, gy] = isleId.split('_');
-        const spot = islandAtCell(Number(gx), Number(gy), continentSeedFrom(this.sim.biomeField.fieldSeed));
+        const spot = islandAtCell(Number(gx), Number(gy), this.sim.biomeField.fieldSeed);
         if (spot) dest = this.mintIslandZone(spot);
       }
     }
@@ -8544,6 +8550,7 @@ export class World {
         const anchor = this.zoneMap[run.fromPortId] ?? null;
         dest = placeZoneAt(landC, anchor, this.zoneMap, this.nextGenId++, {
           biomeFor: this.biomeFor, levelFor: this.levelFor, biomeDepthFor: this.biomeDepthFor,
+          climateFor: this.climateFor,
           fieldBiome: true, port: true, objective: { kind: 'clear' },
           seed: (this.manifest.seed ^ hashStr(`landfall_${Math.round(landC.x)}_${Math.round(landC.y)}`)) >>> 0,
           // FLOATING = no back-edge: an island's link to the world is its SEA
@@ -8595,8 +8602,7 @@ export class World {
   private islandDefIdOf(z: ZoneDef): string | null {
     if (!z.id.startsWith('isle_')) return null;
     const [, gx, gy] = z.id.split('_');
-    const seed = continentSeedFrom(this.sim.biomeField.fieldSeed);
-    return islandAtCell(Number(gx), Number(gy), seed)?.def.id ?? null;
+    return islandAtCell(Number(gx), Number(gy), this.sim.biomeField.fieldSeed)?.def.id ?? null;
   }
 
   /** The landing-dwell readout for the renderer (ring + prompt), null unless
@@ -17958,7 +17964,7 @@ export class World {
           id: req.zoneKey, tileset: req.tileset, level: this.eventLevel(rl.coord),
           objective: { kind: 'clear' }, forceWaypoint: true, forceFrontiers: 1, floating: true, fieldBiome: true,
           seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
-          biomeFor: this.biomeFor, biomeDepthFor: this.biomeDepthFor,
+          biomeFor: this.biomeFor, biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
         });
         def.eventOwned = true; // the demon epicenter — no other overlay squats here
         this.zoneMap[req.zoneKey] = def;
@@ -17997,7 +18003,7 @@ export class World {
           id: req.zoneKey, tileset: req.tileset, level: this.eventLevel(rl.coord),
           objective: { kind: 'clear' }, forceWaypoint: req.kind === 'stronghold', forceFrontiers: 1, floating: true, fieldBiome: true,
           seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
-          biomeFor: this.biomeFor, biomeDepthFor: this.biomeDepthFor,
+          biomeFor: this.biomeFor, biomeDepthFor: this.biomeDepthFor, climateFor: this.climateFor,
         });
         def.eventOwned = true; // crusade stronghold/frontier — no other overlay squats here
         this.zoneMap[req.zoneKey] = def;

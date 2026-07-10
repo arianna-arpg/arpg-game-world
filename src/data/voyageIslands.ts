@@ -12,11 +12,18 @@
 // ---------------------------------------------------------------------------
 
 import type { ObjectiveSpec, PackSpec } from './zones';
+import type { ClimateSpec } from '../world/climate';
 
 export interface VoyageIslandDef {
   id: string;
   /** Relative frequency among island rolls (default 1). */
   weight?: number;
+  /** CLIMATE AFFINITY over the axes at the island's own waters (world/
+   *  climate.ts) — folded into the def pick as weight × affinity, the biome
+   *  field's law: ember atolls rise in scorching seas, sirens keen in the
+   *  frigid ones, and a voyage across climates meets different island kinds.
+   *  Omitted = sails any sea. */
+  climate?: Record<string, ClimateSpec>;
   /** Name pools — "<First> <Second>" seeded per island site. */
   nameFirst: string[];
   nameSecond: string[];
@@ -50,6 +57,7 @@ export function registerVoyageIsland(def: VoyageIslandDef): void {
 
 registerVoyageIsland({
   id: 'beastfang_isle', weight: 3,
+  climate: { temperature: 'mild', moisture: 'damp' },
   nameFirst: ['Beastfang', 'Wildmaw', 'Feral', 'Thornback', 'Snarling'],
   nameSecond: ['Isle', 'Refuge', 'Wilds', 'Holt'],
   tileset: 'jungle',
@@ -90,7 +98,8 @@ registerVoyageIsland({
 });
 
 registerVoyageIsland({
-  id: 'ember_atoll', weight: 2,
+  id: 'ember_atoll', weight: 3,
+  climate: { temperature: 'warm' },
   nameFirst: ['Ember', 'Cinder', 'Smoldering', 'Ashen'],
   nameSecond: ['Atoll', 'Caldera', 'Reef', 'Crown'],
   tileset: 'volcanic',
@@ -104,7 +113,8 @@ registerVoyageIsland({
 });
 
 registerVoyageIsland({
-  id: 'sirens_expanse', weight: 2,
+  id: 'sirens_expanse', weight: 3,
+  climate: { temperature: 'cold' },
   nameFirst: ['Siren', 'Wailing', 'Keening', 'Stormcalled'],
   nameSecond: ['Expanse', 'Shoal', 'Strand', 'Shallows'],
   tileset: 'tundra',
@@ -126,6 +136,7 @@ registerVoyageIsland({
 
 registerVoyageIsland({
   id: 'leviathans_grave', weight: 1,
+  climate: { wildness: { from: 0.35, fadeIn: 0.2 } },
   nameFirst: ['Leviathan', 'Abyssal', 'Depthless', 'Krakenfall'],
   nameSecond: ['Grave', 'Trench', 'Maw', 'Deep'],
   tileset: 'deepsea',

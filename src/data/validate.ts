@@ -41,6 +41,7 @@ import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './struc
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
 import { BIOMES } from '../world/biomes';
+import { validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
 import { VOYAGE_ISLANDS } from './voyageIslands';
 import { Rng } from '../core/rng';
@@ -177,6 +178,9 @@ export function validateContent(): void {
     }
     if (!isle.nameFirst.length || !isle.nameSecond.length) warn(`voyage island ${isle.id}: empty name pool`);
   }
+  for (const msg of validateClimateSpecs(
+    Object.values(VOYAGE_ISLANDS).map(i => [`voyage island ${i.id}`, i.climate]),
+  )) warn(msg);
 
   // ATTUNEMENTS / TERRAFORMS: statuses exist, doodad kinds are ruled, and the
   // attunement reach honors the spatial index's one-bucket guarantee.

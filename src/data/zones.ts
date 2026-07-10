@@ -313,8 +313,11 @@ export interface ZoneDef {
   /** GEOGRAPHIC context baked at mint — how the zone sits in the WORLD's
    *  fields. biomeDepth: 0 = at its biome blob's edge, 1 = deep interior
    *  (a deep-sea zone far inside the deepsea region rolls more void trenches
-   *  than a coastal one — generation that reads the world map). */
-  geo?: { biomeDepth: number };
+   *  than a coastal one — generation that reads the world map). climate: the
+   *  climate axes sampled at the minted coordinate (world/climate.ts —
+   *  temperature/moisture/wildness/…), so generators, UI, and future systems
+   *  can read the zone's weather without re-deriving the field. */
+  geo?: { biomeDepth?: number; climate?: Record<string, number> };
   /** A PORT: the land ends here — a harbor zone on a continent's shore. Its
    *  dock opens the Sail menu (naval travel to other discovered ports /
    *  chart-a-course landfalls). Frontiers never mint past a port into open

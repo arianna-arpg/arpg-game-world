@@ -22,7 +22,8 @@
 // exit trio in the engine, and a renderer skin.
 // ---------------------------------------------------------------------------
 
-import { continentAt } from './continents';
+import { continentAt, continentSeedFrom } from './continents';
+import { climateAt, climateAffinity } from './climate';
 import { VOYAGE_ISLANDS, type VoyageIslandDef } from '../data/voyageIslands';
 
 export const VOYAGE_CFG = {
@@ -96,9 +97,13 @@ function hashCell(a: number, b: number, seed: number): number {
   return h >>> 0;
 }
 
-/** The island (if any) of one island-field cell. Pure. `seed` is the CONTINENT
- *  seed (continentSeedFrom) so islands and landmasses are the same world. */
-export function islandAtCell(gx: number, gy: number, seed: number): IslandSpot | null {
+/** The island (if any) of one island-field cell. Pure. `fieldSeed` is the
+ *  BIOME-field seed — the continent seed derives internally (islands and
+ *  landmasses stay the same world), and the def pick samples the CLIMATE at
+ *  the island's coord so fire atolls rise in scorching seas and frozen
+ *  strands in the frigid ones (weight × affinity, the biome field's law). */
+export function islandAtCell(gx: number, gy: number, fieldSeed: number): IslandSpot | null {
+  const seed = continentSeedFrom(fieldSeed);
   const span = ISLAND_FIELD.cellSpan;
   const h = hashCell(gx, gy, (seed ^ 0x15a4d) >>> 0);
   if ((h / 0x100000000) >= ISLAND_FIELD.chance) return null;
@@ -112,18 +117,28 @@ export function islandAtCell(gx: number, gy: number, seed: number): IslandSpot |
   if (continentAt(coord, seed).kind !== 'ocean') return null;
   const defs = Object.values(VOYAGE_ISLANDS);
   if (!defs.length) return null;
-  // Weighted pick off a second hash (decoupled from the existence roll).
+  // Weighted pick off a second hash (decoupled from the existence roll),
+  // shaped by each def's climate affinity at this island's own waters. A
+  // fully-zeroed table falls back to the raw weights (the field never starves).
+  const climate = climateAt(coord, fieldSeed);
+  const weights = defs.map(d => (d.weight ?? 1) * climateAffinity(d.climate, climate));
+  let total = weights.reduce((a, w) => a + w, 0);
+  let effective = weights;
+  if (total <= 0) {
+    effective = defs.map(d => d.weight ?? 1);
+    total = effective.reduce((a, w) => a + w, 0);
+  }
   const h2 = hashCell(gx, gy, (seed ^ 0x7e11e5) >>> 0);
-  const total = defs.reduce((a, d) => a + (d.weight ?? 1), 0);
   let r = (h2 / 0x100000000) * total;
   let def = defs[defs.length - 1];
-  for (const d of defs) { r -= d.weight ?? 1; if (r <= 0) { def = d; break; } }
+  for (let i = 0; i < defs.length; i++) { r -= effective[i]; if (r <= 0) { def = defs[i]; break; } }
   return { id: `isle_${gx}_${gy}`, coord, def, h: h2 };
 }
 
-/** Every island within `radius` node-units of a coord (box-scan the cells). */
+/** Every island within `radius` node-units of a coord (box-scan the cells).
+ *  `fieldSeed` = the biome-field seed (see islandAtCell). */
 export function islandsNear(
-  coord: { x: number; y: number }, radius: number, seed: number,
+  coord: { x: number; y: number }, radius: number, fieldSeed: number,
 ): IslandSpot[] {
   const span = ISLAND_FIELD.cellSpan;
   const gx0 = Math.floor((coord.x - radius) / span), gx1 = Math.floor((coord.x + radius) / span);
@@ -131,7 +146,7 @@ export function islandsNear(
   const out: IslandSpot[] = [];
   for (let gy = gy0; gy <= gy1; gy++) {
     for (let gx = gx0; gx <= gx1; gx++) {
-      const s = islandAtCell(gx, gy, seed);
+      const s = islandAtCell(gx, gy, fieldSeed);
       if (!s) continue;
       const dx = s.coord.x - coord.x, dy = s.coord.y - coord.y;
       if (dx * dx + dy * dy <= radius * radius) out.push(s);
