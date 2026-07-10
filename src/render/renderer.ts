@@ -2777,6 +2777,17 @@ export class Renderer {
         ctx.strokeStyle = '#ffd700';
         ctx.lineWidth = 2;
         ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
+      } else if (cs.mode === 'concentration') {
+        // FOCUS cue: a steady green frame while the gaze holds the quarry;
+        // red + 'refocus!' the instant it breaks (drain bleeds meanwhile).
+        ctx.strokeStyle = cs.focusBroken ? '#e05050' : '#a8d8a0';
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(bx2 - 2, by2 - 2, bw + 4, bh + 4);
+        if (cs.focusBroken) {
+          ctx.fillStyle = '#e05050';
+          ctx.font = 'bold 9px Verdana';
+          ctx.fillText('refocus!', x, by2 - 5);
+        }
       } else if (cs.mode === 'overcharge') {
         // STACKED bars: every banked stage is a thin filled bar laid on
         // top of the refilling one — the old JRPG hold, made literal.

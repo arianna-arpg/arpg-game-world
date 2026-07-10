@@ -1718,7 +1718,56 @@ export type CastMode =
   | 'timed'      // press when the bar reaches a randomly placed indicator
   | 'multitude'  // press repeatedly during the bar: one hit per press
   | 'guard'      // held: a directional shield with its own health (see GuardSpec)
-  | 'overcharge';// held: the bar REFILLS, banking stages (see OverchargeSpec)
+  | 'overcharge' // held: the bar REFILLS, banking stages (see OverchargeSpec)
+  | 'concentration'; // held: fills ONLY while the cursor rides the quarry (ConcentrationSpec)
+
+/**
+ * CONCENTRATION (castMode 'concentration' — SkillDef.concentration): the
+ * PRECISION cast. The button is held like a channel, but the bar fills ONLY
+ * while the caster's live cursor rides the acquired QUARRY (the actor the
+ * targeting spec resolved at press). Look away and focus BREAKS; what
+ * happens next is the spec's `onBreak` policy — the whole high-risk
+ * playstyle in one knob:
+ *
+ *   'cancel'  — the cast dies on the spot (strictest; cost already paid);
+ *   'release' — the skill FIRES INSTANTLY at partial strength (dmgMult ×
+ *               the bar fraction; below minRelease it just fizzles) — let
+ *               go early, hit softer;
+ *   'drain'   — progress BLEEDS at drainRate× fill speed until the cursor
+ *               finds the quarry again; a bar that drains to zero FIZZLES.
+ *               Releasing the BUTTON abandons the cast outright. (default)
+ *
+ * Completion fires the skill at the QUARRY's live position (targetInfo
+ * threads the actor — a fleeing quarry is still the one struck). Cast speed
+ * shortens the bar like any cast; castMobility opens the feet; the cooldown
+ * stamps however the cast ENDS (fizzles included — refocus lives INSIDE the
+ * bar via 'drain', not in retry spam). AI casters have no cursor: their
+ * focus IS their quarry (auto-track), so to a brain this reads as a slow,
+ * body-blockable wind-up. Tame Beast is the first bearer; any skill may
+ * carry the spec — the "focused casting" discipline is pure data. */
+export interface ConcentrationSpec {
+  /** Seconds of HELD focus to complete (before cast speed). */
+  time: number;
+  /** Focus-break policy (see above; default 'drain'). */
+  onBreak?: 'cancel' | 'release' | 'drain';
+  /** Drain speed as a multiple of fill speed while broken ('drain' only;
+   *  default 1 — symmetric. 0.5 forgiving, 2 punishing). */
+  drainRate?: number;
+  /** Minimum bar fraction for a 'release' partial fire (default
+   *  CONCENTRATION_CFG.minRelease; below it the break just cancels). */
+  minRelease?: number;
+  /** Cursor slack past the quarry's edge before focus counts as broken
+   *  (px; default CONCENTRATION_CFG.slack — a forgiving halo). */
+  slack?: number;
+}
+
+/** Concentration's modular thresholds (specs override per skill). */
+export const CONCENTRATION_CFG = {
+  /** Default cursor halo past the quarry's radius (px). */
+  slack: 30,
+  /** Default minimum fraction for a 'release' partial fire. */
+  minRelease: 0.25,
+};
 
 /**
  * OVERCHARGE (castMode 'overcharge', or grafted by a support onto any
@@ -2609,6 +2658,11 @@ export interface SkillDef {
    *  offensive skills (base damage, damage/knockback/pull effects) break
    *  stealth, movement and utility keep it. */
   breaksStealth?: boolean;
+
+  /** CONCENTRATION: the precision cast — the held bar fills only while the
+   *  cursor rides the acquired quarry (see ConcentrationSpec). Requires an
+   *  actor-resolving `targeting` spec; replaces the plain cast bar. */
+  concentration?: ConcentrationSpec;
 
   /** META-ACTION: a SECOND ability riding this skill's hotbar slot — a
    *  mini-button above the slot, fired with SHIFT+key (never a bar slot of

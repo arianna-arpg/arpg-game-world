@@ -23,7 +23,7 @@ import { alertScale, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
   crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, rollCount, rollSkillRarity, socketSpec,
-  ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
+  CONCENTRATION_CFG, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ConstructDelivery, type GroundDelivery, type GuardSpec,
@@ -2176,7 +2176,10 @@ export class World {
         a.casting.held = ci >= 0 ? !!inp.held[ci] : false;
         if (ci >= 0 && inp.edge[ci]) this.castPress(a);
         if (a.casting.mode === 'channel' || a.casting.mode === 'charge'
-          || a.casting.mode === 'guard' || a.casting.mode === 'overcharge') {
+          || a.casting.mode === 'guard' || a.casting.mode === 'overcharge'
+          // Concentration IS cursor-tracking: the live aim decides whether
+          // focus holds — stale aim would make the mechanic unplayable.
+          || a.casting.mode === 'concentration') {
           a.casting.aim = aim;
         }
       }
@@ -11118,6 +11121,28 @@ export class World {
     const paid = caster.construct ? undefined : cost;
     const cc = this.consumeChargeCost(caster, inst);
     const baseMult = cc.mult;
+
+    // CONCENTRATION (the precision cast): the held bar fills only while the
+    // cursor rides the QUARRY resolved at press — no quarry, no cast (the
+    // targeting spec already refused upstream when nothing qualified).
+    // updateCasting owns the focus/break/drain machinery.
+    if (def.concentration) {
+      if (!targetInfo?.actor) {
+        this.failNote(caster, def.id + ':noquarry', 'no quarry held');
+        return false;
+      }
+      caster.casting = {
+        inst, mode: 'concentration', aim: vec(aim.x, aim.y),
+        elapsed: 0,
+        total: Math.max(0.2, def.concentration.time / caster.speedFactor(inst)),
+        held: true, baseMult,
+        chargesSpent: cc.consumed,
+        targetInfo: targetInfo ?? undefined,
+        paidCost: paid,
+        quarryId: targetInfo.actor.id,
+      };
+      return true;
+    }
 
     // Guard: raise the shield and hold it — its health IS the cast state.
     if (mode === 'guard' && def.guard) {
@@ -20747,6 +20772,67 @@ export class World {
     }
 
     switch (cs.mode) {
+      case 'concentration': {
+        // THE PRECISION CAST (ConcentrationSpec): the bar fills only while
+        // the live cursor rides the quarry. Focus breaks → the spec's
+        // policy (cancel / partial release / drain-to-fizzle). The cooldown
+        // stamps however the cast ENDS — refocusing lives INSIDE the bar
+        // ('drain'), never in retry spam.
+        const spec = def.concentration!;
+        const quarry = cs.quarryId !== undefined ? this.actorById(cs.quarryId) : undefined;
+        const quarryLive = !!quarry && !quarry.dead && !quarry.downed
+          && !quarry.untargetable && quarry.sheet.get('invisible') <= 0;
+        // A brain has no cursor: its focus IS its quarry (auto-track) — to
+        // a monster this reads as a slow, interruptible wind-up.
+        if (!this.seatOf(a) && quarryLive) cs.aim = vec(quarry.pos.x, quarry.pos.y);
+        const slack = spec.slack ?? CONCENTRATION_CFG.slack;
+        const focused = cs.held && quarryLive
+          && dist(cs.aim, quarry.pos) <= quarry.radius + slack;
+        cs.focusBroken = !focused;
+        const end = (fire: boolean, mult = 1): void => {
+          a.casting = null;
+          a.useLock = 0.15;
+          if (fire) {
+            this.executeSkill(a, cs.inst, vec(cs.aim.x, cs.aim.y), {
+              targetInfo: quarryLive
+                ? { pos: vec(quarry.pos.x, quarry.pos.y), actor: quarry }
+                : { pos: vec(cs.aim.x, cs.aim.y) },
+              dmgMult: cs.baseMult * mult,
+              paidCost: cs.paidCost, chargesSpent: cs.chargesSpent,
+            });
+          } else {
+            // A fizzle still stamps the clock (executeSkill would have) —
+            // the retry economy is the skill's cooldown, not free spam.
+            this.text(vec(a.pos.x, a.pos.y - 18), 'fizzled', '#8a8678', 11);
+            if (def.cooldown > 0) {
+              const tags = skillContextTags(def);
+              const extra = instanceMods(cs.inst);
+              const cd = def.cooldown / Math.max(0.1,
+                a.sheet.get('cooldownRecovery', tags, extra) / a.sheet.get('cooldownRecovery'));
+              a.cooldowns.set(def.id, cd);
+              a.cooldownTotals.set(def.id, cd);
+            }
+          }
+        };
+        if (focused) {
+          cs.elapsed += dt;
+          if (cs.elapsed >= cs.total) end(true, 1);
+        } else if ((spec.onBreak ?? 'drain') === 'cancel') {
+          end(false);
+        } else if ((spec.onBreak ?? 'drain') === 'release') {
+          const frac = cs.elapsed / cs.total;
+          if (frac >= (spec.minRelease ?? CONCENTRATION_CFG.minRelease)) end(true, frac);
+          else end(false);
+        } else {
+          // 'drain': concentration bleeds until the cursor finds the quarry
+          // again. A released BUTTON abandons the cast outright — both
+          // hands of focus must hold.
+          if (!cs.held) { end(false); return; }
+          cs.elapsed -= dt * (spec.drainRate ?? 1);
+          if (cs.elapsed <= 0) end(false);
+        }
+        return;
+      }
       case 'guard': {
         const spec = def.guard!;
         cs.channelTime = (cs.channelTime ?? 0) + dt;

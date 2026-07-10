@@ -467,6 +467,16 @@ export function validateContent(): void {
     if (s.meta && !SKILLS[s.meta.skillId]) {
       warn(`skill ${s.id}: meta payload '${s.meta.skillId}' is not a catalog skill`);
     }
+    // CONCENTRATION needs a quarry: an actor-resolving targeting spec, and
+    // no rival held-cast discipline (the bar can only serve one master).
+    if (s.concentration) {
+      if (!s.targeting || s.targeting.target === 'corpse') {
+        warn(`skill ${s.id}: concentration requires an actor-resolving targeting spec`);
+      }
+      if (s.channel || s.chargeUp || s.guard) {
+        warn(`skill ${s.id}: concentration cannot share the bar with channel/chargeUp/guard`);
+      }
+    }
     for (const cid of s.comboChain?.skills ?? []) {
       if (!SKILLS[cid]) warn(`skill ${s.id}: combo step '${cid}' is not a catalog skill`);
     }

@@ -1780,12 +1780,16 @@ export const SKILLS: Record<string, SkillDef> = {
   // else), one bond per GEM, and the companion DOWNS instead of dying:
   // linger beside it like a downed ally, or shift-press the WHISTLE (the
   // meta layer) to recall it revived and whole on a long clock.
+  // The first CONCENTRATION bearer (engine/skills.ts ConcentrationSpec): the
+  // bar fills only while your cursor RIDES the beast — look away and the
+  // claim bleeds back out ('drain'); hold the gaze to the end and it's yours.
   tame_beast: {
     id: 'tame_beast', name: 'Tame Beast',
-    description: 'A long, steady claim on a living beast: weaken it below half, hold the cast, and it is YOURS — a companion that falls DOWNED, never dead. Linger to mend it, or WHISTLE (shift) to call it back revived. One bond per gem; release it at the Tracker.',
+    description: 'FOCUS on a weakened beast (below half) and HOLD — the claim fills only while your cursor stays on it. Look away and the bond bleeds; hold the gaze to the end and it is YOURS: a companion that falls DOWNED, never dead. Linger to mend it, or WHISTLE (shift) to call it back revived. One bond per gem; release it at the Tracker.',
     tags: ['spell', 'minion', 'duration'], color: '#a8c87a',
-    manaCost: 30, cooldown: 6, useTime: 2.2,
+    manaCost: 30, cooldown: 6, useTime: 0,
     targeting: { target: 'enemy', castRange: 320, requiresMonsterTags: ['beast'] },
+    concentration: { time: 2.4, onBreak: 'drain', drainRate: 1.25 },
     delivery: { type: 'target' },
     effects: [{ type: 'tame', tags: ['beast'], maxLifeFrac: 0.5 }],
     requirements: { wisdom: 14, charisma: 8 },

@@ -82,6 +82,12 @@ export interface CastingState {
   /** RITUAL GROUND: this cast bar PLANTS a channeler construct at the aim
    *  instead of resolving the skill (the channel-to-cast conversion). */
   plantChannel?: boolean;
+  // concentration state (the precision cast — ConcentrationSpec)
+  /** The QUARRY the bar is focused on: the actor resolved at press. */
+  quarryId?: number;
+  /** True on frames where focus is broken (cursor off the quarry) — the
+   *  renderer's "refocus!" cue; 'drain' policy bleeds while it holds. */
+  focusBroken?: boolean;
   /** THE AMALGAM: minions consumed so far by this held channel. */
   amalgamFed?: number;
 }

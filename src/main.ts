@@ -467,7 +467,7 @@ function readLocalInput(): PlayerInput | null {
     // the HELD skill's meta. Scoped to exactly that slot: three channel
     // skills on the bar never fire three metas — only the one in hand.
     if (metaEdgePressed && p.casting
-      && ['guard', 'channel', 'charge', 'overcharge'].includes(p.casting.mode)) {
+      && ['guard', 'channel', 'charge', 'overcharge', 'concentration'].includes(p.casting.mode)) {
       const ci = p.skills.findIndex(s => s === p.casting!.inst);
       if (ci >= 0) metaEdge[ci] = true;
     }
