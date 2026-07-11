@@ -317,11 +317,6 @@ export class UI {
       }
     });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
-  }
-
-  /** Tooltip for the class label in the character sheet. */
-  private classTooltip(): TooltipContent {
-    const c = this.getWorld().meta.classDef;
 
     // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
     // consumer): a MASTERED, attunable bestiary page lifts from its book row
@@ -365,6 +360,11 @@ export class UI {
       if (d.type === 'summon' && d.grimoire) out.push(inst);
     }
     return out;
+  }
+
+  /** Tooltip for the class label in the character sheet. */
+  private classTooltip(): TooltipContent {
+    const c = this.getWorld().meta.classDef;
     return {
       title: c.name, description: c.description,
       meta: `${c.innateText ? `Innate: ${c.innateText} — ` : ''}A class is only a starting point; you can allocate any attributes and bind any skill you qualify for.`,
@@ -1659,12 +1659,12 @@ export class UI {
   closeBestiary(): void {
     this.bestiaryOpen = false;
     this.bestiaryMenu.classList.add('hidden');
+    dndCancel(); // never strand a lifted page on a closed book
     hideTooltip();
   }
 
   /** A kind's little portrait: its silhouette LANGUAGE (shape + color), as
    *  inline SVG — no renderer round-trip, readable at 22px, and any new
-    dndCancel(); // never strand a lifted page on a closed book
    *  ActorShape falls back to the circle rather than breaking the book. */
   private monsterGlyph(def: MonsterDef, dark: boolean): string {
     const c = dark ? '#3a384c' : def.color;
@@ -1696,15 +1696,15 @@ export class UI {
     const totals = bestiaryTotals(acc);
     const leaf = list.slice(this.bestiaryPage * per, (this.bestiaryPage + 1) * per);
 
+    // Pages LIFT when they can LAND: a mastered, attunable page is a drag
+    // source (press-drag or click-lift — the fabric's twin gestures) only
+    // while a grimoire skill offers a slot to receive it.
+    const liftable = this.grimoireSkills().length > 0;
     const rows = leaf.map(def => {
       const kills = bestiaryKills(acc, def.id);
       const need = bestiaryThreshold(def);
       const dark = kills <= 0;
       const done = kills >= need;
-    // Pages LIFT when they can LAND: a mastered, attunable page is a drag
-    // source (press-drag or click-lift — the fabric's twin gestures) only
-    // while a grimoire skill offers a slot to receive it.
-    const liftable = this.grimoireSkills().length > 0;
       const sel = this.bestiarySel === def.id ? ' sel' : '';
       const pct = Math.min(100, (kills / need) * 100);
       const canLift = liftable && done && spectreAttunable(acc, def);
@@ -1775,11 +1775,6 @@ export class UI {
           <button data-untame="${c.id}">Release to the wild</button></div>`).join('')}
       </div>` : '';
 
-    this.bestiaryMenu.innerHTML = `
-      <h2 style="margin-bottom:2px">The Tracker's Bestiary</h2>
-      <div style="color:#8a8678;font-size:10px;margin-bottom:6px">
-        ${totals.sighted} of ${totals.pages} kinds sighted · ${totals.mastered} mastered — knowledge is the account's, and outlives you.
-      </div>
     // THE GRIMOIRE STRIP — the binding site itself. One slot per learned
     // grimoire-summon INSTANCE (two Spectre gems, two slots, two forms);
     // a mastered page dropped here attunes THAT copy, the ✕ releases it.
@@ -1804,6 +1799,12 @@ export class UI {
         }).join('')}
       </div>` : '';
 
+    this.bestiaryMenu.innerHTML = `
+      <h2 style="margin-bottom:2px">The Tracker's Bestiary</h2>
+      <div style="color:#8a8678;font-size:10px;margin-bottom:6px">
+        ${totals.sighted} of ${totals.pages} kinds sighted · ${totals.mastered} mastered — knowledge is the account's, and outlives you.
+      </div>
+      ${grim}
       <div class="b-grid">${rows}</div>
       <div class="bind-btns" style="display:flex;justify-content:space-between;align-items:center">
         <button data-bpage="-1" ${this.bestiaryPage <= 0 ? 'disabled' : ''}>◀ Prev</button>
@@ -1828,12 +1829,6 @@ export class UI {
       world.requestMeta({ t: 'untameCompanion', actorId: Number(btn.dataset.untame) });
       this.refreshBestiary();
     }));
-    this.bestiaryMenu.querySelector<HTMLButtonElement>('[data-bst-close]')?.addEventListener('click', () => this.closeBestiary());
-  }
-
-  // ------------------------------------------------------------ oracle stone
-
-  showOracle(): void {
     // Release an attuned form (the slot's ✕) — same intent lane as the drop,
     // formId '' releases; the engine's binding-site gate rules here too.
     q<HTMLButtonElement>('button[data-slot-release]').forEach(btn => btn.addEventListener('click', () => {
@@ -1841,6 +1836,12 @@ export class UI {
       this.refreshBestiary();
       if (this.inventoryOpen) this.refreshInventory();
     }));
+    this.bestiaryMenu.querySelector<HTMLButtonElement>('[data-bst-close]')?.addEventListener('click', () => this.closeBestiary());
+  }
+
+  // ------------------------------------------------------------ oracle stone
+
+  showOracle(): void {
     this.oracleOpen = true;
     this.oracleMenu.classList.remove('hidden');
     this.refreshOracle();
@@ -2104,7 +2105,6 @@ export class UI {
       let grimoire = '';
       if (def.delivery.type === 'summon' && def.delivery.grimoire) {
         const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
-        const acc = this.getAccount();
         const chip = form
           ? `<span class="gem-chip" style="border-color:#a8d8a0" title="This copy summons ${form.name} outright — no corpse read. Rebind or release at the Tracker's book.">
               ${this.monsterGlyph(form, false)} ${form.name}</span>`

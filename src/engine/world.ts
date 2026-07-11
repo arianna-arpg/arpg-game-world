@@ -11227,6 +11227,16 @@ export class World {
     const inst = seat.meta.knownSkills.get(skillId);
     const d = inst?.def.delivery;
     if (!inst || d?.type !== 'summon' || !d.grimoire) return;
+    // THE BINDING SITE (BESTIARY_CFG.attuneAtBook): grimoire work — binding
+    // AND releasing — happens at the Tracker's open book. In the field you
+    // fight with the form you carried out; the walk back to town is the
+    // price of a swap. Enforced HERE, not in the UI, so an untrusted co-op
+    // client's intent meets the same wall as a console poke.
+    if (BESTIARY_CFG.attuneAtBook && !this.nearTracker(seat)) {
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 20),
+        "the grimoire binds only at the Tracker's book", '#8a8678', 11);
+      return;
+    }
     if (formId === '') {
       inst.attunedForm = undefined;
       this.charDirty = true;
@@ -11278,16 +11288,6 @@ export class World {
    *  minted at the HOST's effective level and cached per host slot — its
    *  own cost, cooldown, and delivery (Detonate, Enrage, Attack!). */
   /** Mint (or re-mint on level change) a meta payload against its host —
-    // THE BINDING SITE (BESTIARY_CFG.attuneAtBook): grimoire work — binding
-    // AND releasing — happens at the Tracker's open book. In the field you
-    // fight with the form you carried out; the walk back to town is the
-    // price of a swap. Enforced HERE, not in the UI, so an untrusted co-op
-    // client's intent meets the same wall as a console poke.
-    if (BESTIARY_CFG.attuneAtBook && !this.nearTracker(seat)) {
-      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 20),
-        "the grimoire binds only at the Tracker's book", '#8a8678', 11);
-      return;
-    }
    *  stamped with hostSkillId so pack orders (minionCast) know whose
    *  minions they command. */
   private mintMetaInstance(caster: Actor, host: SkillInstance, skillId: string): SkillInstance {
