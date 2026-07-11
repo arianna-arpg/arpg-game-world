@@ -1010,6 +1010,11 @@ export class Actor {
 
   dead = false;
 
+  /** This actor's index in world.actors at the last actor-grid build — the
+   *  order-stability handle for spatial queries (see engine/actorGrid.ts).
+   *  Transient bookkeeping, never serialized. */
+  gridSeq = 0;
+
   constructor(name: string, team: Team, pos: Vec2) {
     this.name = name;
     this.team = team;

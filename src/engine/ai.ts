@@ -33,6 +33,10 @@ import { LOS_CFG } from './los';
 import type { SkillInstance } from './skills';
 import type { World } from './world';
 
+/** Scratch for moveToward's spacing neighbor query (single-threaded AI
+ *  loop; never held across calls). */
+const spacingScratch: Actor[] = [];
+
 /** Tags whose actor stays NEUTRAL — no targeting, movement, or casting — until a
  *  wounding strike ROUSES it (World.resolveHit sets the per-actor aiAwakened latch).
  *  ONE registry so a new neutral (Conclave cultists, Migration herds, the Holdfast
@@ -1361,7 +1365,9 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
   const room = actor.aiSpacing;
   if (room && room > 0) {
     let nx = 0, ny = 0, nd = room;
-    for (const b of world.actors) {
+    // Only packmates within `room` can matter — a spatial-grid query, not a
+    // world sweep (every moving band member paid O(actors) here per frame).
+    for (const b of world.actorsNear(actor.pos.x, actor.pos.y, room, spacingScratch)) {
       if (b === actor || b.dead || b.team !== actor.team || b.passive || b.construct) continue;
       const bd = dist(actor.pos, b.pos);
       if (bd < nd) { nd = bd; nx = actor.pos.x - b.pos.x; ny = actor.pos.y - b.pos.y; }

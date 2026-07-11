@@ -265,32 +265,35 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // FLORA CLARITY: bushes wear DISCRETE LEAVES + sprigs (high-frequency
   // detail), crowns carry broad dapple — clumped together they still read
   // apart. Berry bushes are the same painter saying one more word.
+  // Understory clumps bake to whole-doodad sprites (bakeWhole): the brush
+  // painter is time-free, the fern's only time input is frond sway (a
+  // whole-sprite shear at blit) — a deep forest scatters hundreds of these.
   brush: {
-    painter: 'brush', order: 49,
+    painter: 'brush', order: 49, bakeWhole: 'static',
     params: { color: 'theme:tree|#2c4424', leaves: 1, sprigs: true },
   },
   berry_bush: {
-    painter: 'brush', order: 49,
+    painter: 'brush', order: 49, bakeWhole: 'static',
     params: {
       color: 'theme:tree|#2c4424', leaves: 1.2, sprigs: true,
       berries: { color: '#c8425a', chance: 1 },
     },
   },
-  fern: { painter: 'fern', order: 48, params: { color: 'theme:tree|#2c4424' } },
+  fern: { painter: 'fern', order: 48, bakeWhole: 'sway', params: { color: 'theme:tree|#2c4424' } },
   // WALK-UNDER TREES: the ground pass draws the real TRUNK (the physical
   // body — DoodadRule.bodyScale); the crown rides the canopy pass above,
   // fading when the hero steps beneath. Anyone ELSE under an unfaded crown
   // is simply unseen — the forest ambush, for both sides.
   tree: {
     longShadow: 0.85,
-    painter: 'trunk', order: 50, params: { scale: 0.3, roots: 4 },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.3, roots: 4 },
     canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
   },
   thicket: {
     longShadow: 0.7,
     // A REAL tangle at ground level (the true-bush painter in bramble darks)
     // — the last of the old gradient discs; the bramble crown rides above.
-    painter: 'brush', order: 50,
+    painter: 'brush', order: 50, bakeWhole: 'static',
     params: { color: '#14301a', leaves: 1.1 },
     canopy: {
       painter: 'bramble',
@@ -302,7 +305,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // canopy at a glance.
   briarwood: {
     longShadow: 0.9,
-    painter: 'trunk', order: 50, params: { scale: 0.3, roots: 5, color: '#3a2c20' },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.3, roots: 5, color: '#3a2c20' },
     canopy: {
       painter: 'bramble',
       params: { fill: '#1e3c1a', edge: '#0c2410', spine: '#4a7034', thorns: true, berries: { chance: 0.5 } },
@@ -310,17 +313,17 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   palm: {
     longShadow: 0.8,
-    painter: 'trunk', order: 50, params: { scale: 0.26, roots: 3 },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.26, roots: 3 },
     canopy: { painter: 'palmCrown' },
   },
   conifer: {
     longShadow: 0.9,
-    painter: 'trunk', order: 50, params: { scale: 0.26, roots: 3, color: '#4a3826' },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.26, roots: 3, color: '#4a3826' },
     canopy: { painter: 'pineCrown', params: { fill: 'theme:tree|#1e3a28' } },
   },
   ancient_tree: {
     longShadow: 0.9,
-    painter: 'trunk', order: 50, params: { scale: 0.22, roots: 6 },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.22, roots: 6 },
     canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2c4424' } },
   },
   // The FOREST's canopy body: a broad-crowned oak, one shade deeper than the
@@ -329,7 +332,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // veil index knits whole stands into single patches.
   forest_oak: {
     longShadow: 0.95,
-    painter: 'trunk', order: 50, params: { scale: 0.22, roots: 5, color: '#41321f' },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.22, roots: 5, color: '#41321f' },
     canopy: { painter: 'leafCrown', params: { fill: '#274f1d' } },
   },
   // Giant fungus wears the WALK-UNDER TREE mechanism now: a real pale-ringed
@@ -337,7 +340,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // bodyScale trunk), the parametric cap riding the canopy pass above.
   giant_mushroom: {
     longShadow: 0.8,
-    painter: 'trunk', order: 50, params: { scale: 0.3, roots: 3, color: '#5a4a7a' },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.3, roots: 3, color: '#5a4a7a' },
     canopy: {
       painter: 'mushroomCrown',
       params: { caps: 1, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
@@ -346,7 +349,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   fruiting_tower: {
     longShadow: 0.9,
-    painter: 'trunk', order: 50, params: { scale: 0.26, roots: 4, color: '#4a3a66' },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.26, roots: 4, color: '#4a3a66' },
     canopy: {
       painter: 'mushroomCrown',
       params: { caps: 3, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
@@ -367,7 +370,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // stalks), the layered frond crown riding the canopy pass above — fading
   // when you step beneath, hiding everyone who doesn't.
   giant_kelp: {
-    painter: 'trunk', order: 50, params: { scale: 0.16, roots: 3, color: '#2a5a40' },
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.16, roots: 3, color: '#2a5a40' },
     canopy: { painter: 'kelpCrown', params: { color: '#2f7a4a', rib: '#57b06f', bladder: '#8fd0a0' } },
   },
   // Coral form-rolls its colony (staghorn / brain boule / gorgonian fan) in

@@ -38,7 +38,7 @@ import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawLongShadow, drawShadow, sunCast } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
-import { CANOPY_PAINTERS, PAINTERS, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
+import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, crownSprite, crownVariantOf, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
@@ -62,6 +62,10 @@ const ORB_ARCS = {
 };
 
 const warnedUnrenderedKinds = new Set<string>();
+
+/** Shared empty params for canopy defs that declare none — identity-stable
+ *  so sprite-bake keys are too (see the drawCanopies bake path). */
+const EMPTY_PARAMS: Record<string, unknown> = {};
 
 export class Renderer {
   ctx: CanvasRenderingContext2D;
@@ -1318,7 +1322,10 @@ export class Renderer {
         paintBlendUnderlay(env, g.list, g.def);
       }
       if (g.def.shadow) paintGroupShadows(env, g.list, g.def.shadow);
-      (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, g.list, g.def);
+      // bakeWhole kinds (brush clumps, ferns) blit variant sprites through
+      // their own painter's bake — the understory half of the forest fix.
+      if (g.def.bakeWhole && VIS_CFG.ground.bakeDoodads) paintBakedWhole(env, g.list, g.def);
+      else (PAINTERS[g.def.painter] ?? PAINTERS.fallback)(env, g.list, g.def);
     }
 
     // Eldritch-mutated doodads: writhing tentacles grafted onto the silhouette
@@ -1465,10 +1472,33 @@ export class Renderer {
       this.canopyFade.set(o, fade);
       this.frameOccluders.push({ o, fade });
       // Crown looks come from the SAME registry entry as the ground pass —
-      // a kind with no canopy def gets the translucent disc.
+      // a kind with no canopy def gets the translucent disc. STATIC crown
+      // painters (CANOPY_STATIC) blit a variant-baked sprite at the fade
+      // alpha — a sealed deep-forest viewport holds hundreds of crowns and
+      // repainting their lobed silhouettes live was the forest frame drop.
       const cdef = DOODAD_VISUALS[o.kind]?.canopy;
-      const painter = (cdef && CANOPY_PAINTERS[cdef.painter]) ?? CANOPY_PAINTERS.discCrown;
-      painter(env, o, fade, cdef?.params ?? {});
+      const name = cdef?.painter ?? 'discCrown';
+      const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
+      if (VIS_CFG.canopy.bakeCrowns && CANOPY_STATIC[name]) {
+        // params must be the REGISTRY object (or the shared empty) — a fresh
+        // `{}` per frame would mint a fresh bake key per frame and re-bake
+        // every crown every frame (it did: 250ms forests).
+        const spr = crownSprite(name, painter, world.zone.theme, cdef?.params ?? EMPTY_PARAMS,
+          o.radius, crownVariantOf(o));
+        const rq = Math.max(8, Math.round(o.radius / 5) * 5);
+        const scale = o.radius / rq;
+        const half = (spr.width / 2) * scale;
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.translate(o.pos.x, o.pos.y);
+        if (o.rot !== undefined) ctx.rotate(o.rot);
+        ctx.globalAlpha = fade;
+        ctx.drawImage(spr, -half, -half, spr.width * scale, spr.height * scale);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      } else {
+        painter(env, o, fade, cdef?.params ?? {});
+      }
     }
   }
 

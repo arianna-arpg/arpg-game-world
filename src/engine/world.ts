@@ -10,6 +10,7 @@
 
 import { angleDiff, angleTo, chance, clamp, dist, pick, pointSegDist, rand, randInt, vec, type Vec2 } from '../core/math';
 import { DiscIndex } from './spatial';
+import { ActorGrid } from './actorGrid';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
 import { Actor, shellArcFactor, type BrainPhase, type CastingState, type Team } from './actor';
@@ -6576,13 +6577,20 @@ export class World {
     this.mintHazardCloud(vec(d.pos.x, d.pos.y), { radius: eff.radius ?? 90 });
   }
 
+  /** Scratch for effectHeatWash's per-firing candidate query. */
+  private heatWashScratch: Actor[] = [];
+
   /** LAVA HEAT (heat_wash): the melt radiates PAST its rim — actors in the
    *  band around the pool (never inside it: standing IN the melt is
    *  standDamage's province) roll a small fire lick per beat, through
    *  RESISTANCE only. The insured ignore it: fliers, habitat-matched
    *  bodies, immuneGround bearers. eff.radius is the band's width. */
   private effectHeatWash(d: Doodad, eff: DoodadEffect): void {
-    for (const a of this.actors) {
+    // Spatial-grid candidates (a caldera attaches this effect to THOUSANDS
+    // of discs — sweeping every actor per firing was the zone's biggest CPU
+    // regression). The grid returns build-order candidates, so the per-actor
+    // chance() rolls draw in exactly the order the full sweep drew them.
+    for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.heatWashScratch)) {
       if (a.dead || a.flying || a.construct || a.invulnerable) continue;
       if (a.habitat?.kind === d.kind || a.immuneGround?.includes(d.kind)) continue;
       const dd = dist(a.pos, d.pos);
@@ -18833,6 +18841,9 @@ export class World {
   update(dt: number): void {
     if (this.gameOver) return;
     this.time += dt;
+    // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
+    // moveActor directly), so spatial queries from here read current bodies.
+    this.actorGridRev++;
     // A survived death's fade/wake sequence (character modes). The world keeps
     // simulating beneath the dark — the death itself was already banked.
     if (this.pendingRespawn) this.updateModeRespawn(dt);
@@ -19655,6 +19666,11 @@ export class World {
         }
       }
     }
+
+    // Second actor-grid epoch: the actor loop above integrated casting steps,
+    // knockback, dashes and slippery momentum — the post-actor systems
+    // (zones, auras, projectiles, separation, heat bands) query fresh bodies.
+    this.actorGridRev++;
 
     this.updateTempGrounds(dt);
     this.updatePendingBursts();
@@ -20892,14 +20908,23 @@ export class World {
 
   /** Perception rays, memoized (TTL LOS_CFG.memoTtl): acquireTarget probes
    *  every candidate every tick — the memo keeps the raycasts at event rate.
-   *  Keyed per ordered pair; the map self-flushes when it bloats. */
+   *  Keyed per ordered pair. Overflow evicts the OLDEST ENTRIES only (Map
+   *  preserves insertion order) — the old clear-on-overflow dumped every
+   *  cached ray at once, so crowded fights re-marched them all next frame
+   *  (a per-frame thrash cliff at exactly the moment frames were dearest). */
   private losMemo = new Map<number, { ok: boolean; until: number }>();
   losCached(a: Actor, b: Actor): boolean {
     const key = a.id * 1_000_000 + b.id;
     const hit = this.losMemo.get(key);
     if (hit && hit.until > this.time) return hit.ok;
     const ok = this.lineOfSight(a.pos, b.pos);
-    if (this.losMemo.size > 4096) this.losMemo.clear();
+    if (this.losMemo.size > 4096) {
+      let drop = this.losMemo.size - 3072;
+      for (const k of this.losMemo.keys()) {
+        this.losMemo.delete(k);
+        if (--drop <= 0) break;
+      }
+    }
     this.losMemo.set(key, { ok, until: this.time + LOS_CFG.memoTtl });
     return ok;
   }
@@ -24500,6 +24525,9 @@ export class World {
   }
 
   /** Soft circle-collision separation so actors don't stack. */
+  /** Scratch for separateActors' per-actor neighbor query. */
+  private separateScratch: Actor[] = [];
+
   private separateActors(): void {
     // Flat constructs are floor markings — you walk OVER them, not into them.
     const flat = (a: Actor): boolean => !!a.construct
@@ -24512,10 +24540,17 @@ export class World {
         || (a.construct.kind === 'echo' && a.construct.echo?.mode !== 'mimic'));
     // Airborne leapers don't shoulder anyone; downed co-op bodies are frozen
     // (excluded so a shove can't drift them out of an ally's revive range).
+    // PAIRS COME FROM THE ACTOR GRID, not an O(n²/2) sweep — but in the SAME
+    // (i, j) array order the sweep produced (gridSeq ascending), so the float
+    // nudges accumulate byte-identically (the balance baseline gates on it).
     const alive = this.actors.filter(a => !a.dead && !a.downed && !flat(a) && !a.leap);
+    const cand = this.separateScratch;
     for (let i = 0; i < alive.length; i++) {
-      for (let j = i + 1; j < alive.length; j++) {
-        const a = alive[i], b = alive[j];
+      const a = alive[i];
+      this.actorsNear(a.pos.x, a.pos.y, a.radius, cand);
+      for (const b of cand) {
+        if (b.gridSeq <= a.gridSeq) continue; // each pair once, sweep order
+        if (b.dead || b.downed || flat(b) || b.leap) continue;
         const d = dist(a.pos, b.pos);
         const minD = a.radius + b.radius;
         if (d < minD && d > 0.01) {
@@ -24759,6 +24794,28 @@ export class World {
   }
 
   // ---------------------------------------------------------------- misc ----
+
+  /** The actor spatial grid (engine/actorGrid.ts) + its rebuild epoch.
+   *  `actorGridRev` bumps at the world seams where bodies just moved (update
+   *  start after the AI phase; after the actor integration loop) — queries
+   *  lazily rebuild on the first read of each epoch. */
+  private actorGrid = new ActorGrid();
+  private actorGridBuiltRev = -1;
+  private actorGridBuiltFor: unknown = null;
+  actorGridRev = 0;
+
+  /** Live-actor candidates whose bodies could reach within `r` of (x, y):
+   *  a slop-padded SUPERSET in build-order (see ActorGrid's determinism
+   *  contract) — the caller applies its exact predicate, exactly as the
+   *  full `this.actors` sweeps it replaces did. `out` is caller scratch. */
+  actorsNear(x: number, y: number, r: number, out: Actor[]): Actor[] {
+    if (this.actorGridBuiltRev !== this.actorGridRev || this.actorGridBuiltFor !== this.actors) {
+      this.actorGrid.build(this.actors);
+      this.actorGridBuiltRev = this.actorGridRev;
+      this.actorGridBuiltFor = this.actors;
+    }
+    return this.actorGrid.near(x, y, r, out);
+  }
 
   /** The spatial-index candidate set at a point (every doodad whose disc,
    *  grown by the index pad, covers x/y). Rebuilds the index lazily when the

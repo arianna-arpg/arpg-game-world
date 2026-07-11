@@ -10,9 +10,12 @@ export const VIS_CFG = {
    *  bands and long doodad shadows all agree on this one sun. */
   lightAngle: -2.35, // up-left
 
-  /** Baked-sprite cache (bodies, glows, shadows). */
+  /** Baked-sprite cache (bodies, glows, shadows, crowns, whole-doodads). */
   sprite: {
-    maxEntries: 720,
+    /** Crowns/whole-doodad bakes share this LRU with actor bodies — a deep
+     *  forest's working set (≈300 crown variants × buckets + understory)
+     *  must fit alongside the bestiary or the cache thrashes into rebakes. */
+    maxEntries: 1600,
     /** Canvas pad beyond the body radius (adorn reach: wings hit ~2.2r). */
     padFactor: 2.55,
   },
@@ -75,6 +78,10 @@ export const VIS_CFG = {
    *  near-fade share it — one speed, coherent motion). */
   canopy: {
     fadeRate: 10,
+    /** Static crown painters (CANOPY_STATIC) blit variant-baked sprites at
+     *  the fade alpha instead of repainting lobed silhouettes live — the
+     *  sealed deep-forest fix. Off = every crown paints procedurally. */
+    bakeCrowns: true,
   },
 
   /** The player's POISE/INSIGHT pool arcs (Settings.poolBars gates how). */
@@ -129,6 +136,10 @@ export const VIS_CFG = {
      *  old bake until their turn — a repaint must never rebake a whole
      *  screen of chunks in one frame (that was a visible hitch). */
     rebakesPerFrame: 3,
+    /** Ground kinds tagged DoodadVisualDef.bakeWhole render as variant-baked
+     *  whole-doodad sprites (brush clumps, ferns) instead of live stroke
+     *  storms — the understory half of the deep-forest fix. */
+    bakeDoodads: true,
   },
 
   /** Dynamic light layer. */
@@ -136,6 +147,11 @@ export const VIS_CFG = {
     /** Lightmap resolution as a fraction of the screen. */
     scale: 0.28,
     maxLights: 72,
+    /** Static doodad emissives collapse into per-zone cluster aggregates
+     *  (bin size below, world units) — dense lava fields stop fighting the
+     *  cap and the lit set stops reshuffling as the camera pans. */
+    cluster: true,
+    clusterBin: 176,
     /** How dark deep night gets (0 = untouched, 1 = pitch black). */
     nightDark: 0.66,
     /** Ambient darkness floor applied even at noon in lightless interiors. */

@@ -69,24 +69,26 @@ export function assistAim(
     if (a.construct?.breakable !== undefined && a.owner === self) return false;
     const p = world.veilPatchAt(a.pos);
     if (p !== null && p !== selfPatch) return false;
-    // The veil rule, extended to STONE (LOS_CFG.aimAssist): the reticle
-    // can't hold what a wall hides — a held lock breaks when its target
-    // steps behind masonry, exactly as under unbroken leaves.
-    if (LOS_CFG.aimAssist && !world.lineOfSight(self.pos, a.pos)) return false;
     return true;
   });
+  // The veil rule, extended to STONE (LOS_CFG.aimAssist): the reticle can't
+  // hold what a wall hides. Tested LAZILY — only the held lock and acquire
+  // candidates that would WIN get a ray, through the shared perception memo
+  // (an uncached ray per pooled enemy per frame marched a forest's crown
+  // buckets ~55 times a frame for a pad player).
+  const seen = (a: Actor): boolean => !LOS_CFG.aimAssist || world.losCached(self, a);
   let target: Actor | undefined;
   // STICK: the held target survives while raw aim stays inside breakRadius.
   if (heldId !== null) {
     const held = pool.find(a => a.id === heldId);
-    if (held && edgeDist(held, raw.x, raw.y) <= tuning.breakRadius) target = held;
+    if (held && edgeDist(held, raw.x, raw.y) <= tuning.breakRadius && seen(held)) target = held;
   }
   // ACQUIRE: nearest eligible edge within acquireRadius of the raw point.
   if (!target) {
     let bd = tuning.acquireRadius;
     for (const a of pool) {
       const d = edgeDist(a, raw.x, raw.y);
-      if (d < bd) { bd = d; target = a; }
+      if (d < bd && seen(a)) { bd = d; target = a; }
     }
   }
   if (!target) return { x: raw.x, y: raw.y, targetId: null };

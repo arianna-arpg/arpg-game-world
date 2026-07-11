@@ -93,6 +93,12 @@ export interface DoodadVisualDef {
   light?: LightSpec;
   /** Canopy crown painter (occluding kinds draw this ABOVE actors). */
   canopy?: { painter: string; params?: Record<string, unknown> };
+  /** Whole-doodad sprite baking for GROUND kinds whose painter is time-free
+   *  ('static': brush clumps) or whose only time input is sway ('sway':
+   *  ferns — baked at rest, swayed by a whole-sprite shear at blit). The
+   *  painter still authors every pixel (wholeKindSprite runs it at bake);
+   *  this flag only moves WHEN it runs. */
+  bakeWhole?: 'static' | 'sway';
 }
 
 // --- Shared path helpers -----------------------------------------------------
@@ -5291,24 +5297,23 @@ const fogCloud: CanopyPainter = (env, o, alpha, params) => {
   const breathe = 1 + 0.07 * Math.sin(time * 0.5 + seed);
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
+  // Billow falloffs are constant profiles scaled by alpha — baked sprites
+  // (see alphaDiscSprite), so the swirl costs six blits, not six gradient
+  // allocations per bank per frame.
+  const billow = alphaDiscSprite(col, [[0, 0.34], [0.7, 0.16], [1, 0]], 'fogB');
+  ctx.globalAlpha = alpha;
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2 + time * (0.1 + hash01(i, seed) * 0.08) * (i % 2 ? 1 : -1);
     const d = o.radius * 0.42 * breathe;
     const x = Math.cos(a) * d, y = Math.sin(a) * d;
     const r = o.radius * (0.5 + hash01(i, seed + 3) * 0.22) * breathe;
-    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-    g.addColorStop(0, withAlpha(col, 0.34 * alpha));
-    g.addColorStop(0.7, withAlpha(col, 0.16 * alpha));
-    g.addColorStop(1, withAlpha(col, 0));
-    ctx.fillStyle = g;
-    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    ctx.drawImage(billow, x - r, y - r, r * 2, r * 2);
   }
   // A brighter core wisp so the bank reads as weather, not a paint smear.
-  const cg = ctx.createRadialGradient(0, 0, 0, 0, 0, o.radius * 0.5 * breathe);
-  cg.addColorStop(0, withAlpha(shade(col, 0.25), 0.2 * alpha));
-  cg.addColorStop(1, withAlpha(col, 0));
-  ctx.fillStyle = cg;
-  ctx.fillRect(-o.radius, -o.radius, o.radius * 2, o.radius * 2);
+  const core = alphaDiscSprite(shade(col, 0.25), [[0, 0.2], [1, 0]], 'fogC');
+  const cr = o.radius * 0.5 * breathe;
+  ctx.drawImage(core, -cr, -cr, cr * 2, cr * 2);
+  ctx.globalAlpha = 1;
   ctx.restore();
 };
 
@@ -5408,3 +5413,117 @@ export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
   bramble, palmCrown, mushroomCrown, discCrown, leafCrown, pineCrown, fogCloud,
   kelpCrown,
 };
+
+/** Canopy painters whose pixels are a pure function of (radius, position
+ *  seed, params, theme) — no `time` reads — and so bake to variant sprites
+ *  (see crownSprite). fogCloud swirls and kelpCrown sways stay live; a new
+ *  static painter earns baking by joining this list. A deep forest holds
+ *  300-600 crowns in a fullscreen viewport and repainting their lobed
+ *  silhouettes live every frame WAS the forest FPS drop — the only per-frame
+ *  variable, the veil/proximity fade, is exactly what globalAlpha on a
+ *  cached blit expresses. */
+export const CANOPY_STATIC: Record<string, boolean> = {
+  bramble: true, discCrown: true, leafCrown: true, pineCrown: true,
+};
+
+/** Stable small integer for a params object (registry defs are singletons) —
+ *  folds param identity into bake keys without stringifying per frame. */
+const paramsIds = new WeakMap<object, number>();
+let nextParamsId = 1;
+function paramsIdOf(p: object): number {
+  let id = paramsIds.get(p);
+  if (!id) { id = nextParamsId++; paramsIds.set(p, id); }
+  return id;
+}
+
+/** Theme identity token for bake keys: the palette inputs crown/foliage
+ *  painters actually resolve against. */
+function themeTokenOf(theme: ZoneTheme): string {
+  return `${theme.tree ?? ''}~${theme.grass ?? ''}~${theme.floor}`;
+}
+
+const CROWN_VARIANTS = 8;
+
+/** Per-crown variant pick — hash01 (not raw modulo) so lattice-planted
+ *  forests can't alias into repeats (the lava-crust tiling lesson). */
+export function crownVariantOf(o: Doodad): number {
+  return (hash01(o.pos.x * 0.7311, o.pos.y * 0.3917) * CROWN_VARIANTS) | 0;
+}
+
+/** Fetch-or-bake one crown sprite by running the REAL canopy painter once
+ *  with a fake origin doodad whose position encodes the variant — the
+ *  painter's own seed math mints the look, so baked crowns are pixel-true
+ *  to the live ones with zero painter changes. */
+export function crownSprite(name: string, painter: CanopyPainter, theme: ZoneTheme,
+  params: Record<string, unknown>, radius: number, variant: number): HTMLCanvasElement {
+  const rq = Math.max(8, Math.round(radius / 5) * 5); // 5px radius buckets
+  const size = rq * 2 * 1.5;                          // vines/thorns overreach the disc
+  const key = `crown|${name}|${paramsIdOf(params)}|${variant}|${rq}|${themeTokenOf(theme)}`;
+  return baked(key, size, size, (ctx) => {
+    const fake = {
+      kind: '__bake', radius: rq,
+      pos: { x: variant * 1327.31 + 11.7, y: variant * 883.57 + 5.3 },
+    } as unknown as Doodad;
+    // The painter translates to o.pos itself — cancel it so the crown lands
+    // at the (already centered) bake origin. time:0 / world:null are safe:
+    // static painters read neither (that is what CANOPY_STATIC asserts).
+    ctx.translate(-fake.pos.x, -fake.pos.y);
+    painter({ ctx, theme, time: 0, world: null as unknown as World }, fake, 1, params);
+  });
+}
+
+/** Fetch-or-bake a whole GROUND doodad sprite (brush clumps, fern whorls)
+ *  through its real group painter — same fake-doodad trick as crownSprite.
+ *  Used by the renderer for kinds tagged DoodadVisualDef.bakeWhole. */
+export function wholeKindSprite(def: DoodadVisualDef, theme: ZoneTheme,
+  radius: number, variant: number): HTMLCanvasElement {
+  const painter = PAINTERS[def.painter] ?? PAINTERS.fallback;
+  const rq = Math.max(6, Math.round(radius / 4) * 4);
+  const size = rq * 2 * 1.7; // fern fronds arc past the disc
+  const key = `wk|${def.painter}|${paramsIdOf(def)}|${variant}|${rq}|${themeTokenOf(theme)}`;
+  return baked(key, size, size, (ctx) => {
+    const fake = {
+      kind: '__bake', radius: rq,
+      pos: { x: variant * 1531.77 + 7.9, y: variant * 691.13 + 3.1 },
+    } as unknown as Doodad;
+    ctx.translate(-fake.pos.x, -fake.pos.y);
+    painter({ ctx, theme, time: 0, world: null as unknown as World }, [fake], def);
+  });
+}
+
+/** Painters that draw sun-anchored (ignore o.rot): their baked blits must
+ *  not rotate either, or the lit edge would spin off the global light. */
+const PAINTER_IGNORES_ROT: Record<string, boolean> = { trunk: true };
+
+/** Blit a bakeWhole kind group: one image per doodad, sway (if declared) as
+ *  a whole-sprite shear — the tuft recipe, generalized to any ground kind
+ *  whose painter is time-free (or whose only time input is sway). */
+export function paintBakedWhole(env: PaintEnv, group: readonly Doodad[],
+  def: DoodadVisualDef): void {
+  const { ctx, theme, time } = env;
+  const sway = def.bakeWhole === 'sway';
+  const spins = !PAINTER_IGNORES_ROT[def.painter];
+  ctx.globalAlpha = 1;
+  for (const o of group) {
+    const variant = (hash01(o.pos.x * 0.531, o.pos.y * 0.877) * CROWN_VARIANTS) | 0;
+    const spr = wholeKindSprite(def, theme, o.radius, variant);
+    const rq = Math.max(6, Math.round(o.radius / 4) * 4);
+    const scale = o.radius / rq;
+    const half = (spr.width / 2) * scale;
+    const rot = spins && o.rot !== undefined ? o.rot : 0;
+    if (rot === 0 && !sway) {
+      // Fast path: most doodads need no transform at all — one blit.
+      ctx.drawImage(spr, o.pos.x - half, o.pos.y - half, spr.width * scale, spr.height * scale);
+      continue;
+    }
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (sway) {
+      const s = Math.sin(time * 1.6 + o.pos.x * 0.05) * 1.4;
+      ctx.transform(1, 0, -s / 12, 1, 0, 0);
+    }
+    if (rot !== 0) ctx.rotate(rot);
+    ctx.drawImage(spr, -half, -half, spr.width * scale, spr.height * scale);
+    ctx.restore();
+  }
+}

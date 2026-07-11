@@ -37,13 +37,69 @@ interface LightSource {
  *  which at the 72-light cap was ~3,500 ray marches a frame in a walled zone. */
 interface PolyCacheEntry { v: number; poly: { x: number; y: number }[] | null }
 
+/** One clustered STATIC emissive source: same-kind emissive doodads binned
+ *  once per zone into aggregates (a lava sea's ~3,000 disc lights collapse
+ *  to a few dozen pool glows). Two problems die at once: the per-frame light
+ *  count stops fighting the cap, and the capped SELECTION stops reshuffling
+ *  as the camera pans — the winking, "strange" light field over dense lava
+ *  was cap eviction in cull order, not flicker. */
+interface LightCluster {
+  x: number; y: number; r: number;
+  color: string; intensity: number; flicker?: number;
+}
+
 export class LightLayer {
   private buf = document.createElement('canvas');
   private bctx = this.buf.getContext('2d')!;
   private lights: LightSource[] = [];
   private polyCache = new WeakMap<object, PolyCacheEntry>();
+  /** Static-emissive clusters, rebuilt when the zone's doodad list changes. */
+  private clusters: LightCluster[] = [];
+  private clustersFor: unknown = null;
+  private clustersLen = -1;
   /** This frame's resolved ambient darkness (rendered + reusable by callers). */
   ambient = 0;
+
+  /** Bin every light-carrying doodad kind into cluster aggregates (bin size
+   *  VIS_CFG.lights.clusterBin): centroid position, a radius that covers
+   *  every member's own glow, the kind's color/intensity/flicker. Isolated
+   *  sources (a lone campfire) become 1:1 clusters — one uniform path. */
+  private zoneClusters(world: World): LightCluster[] {
+    if (this.clustersFor === world.doodads && this.clustersLen === world.doodads.length) {
+      return this.clusters;
+    }
+    this.clustersFor = world.doodads;
+    this.clustersLen = world.doodads.length;
+    const bin = VIS_CFG.lights.clusterBin;
+    type Acc = { sx: number; sy: number; n: number; members: { x: number; y: number; lr: number }[];
+      color: string; intensity: number; flicker?: number };
+    const bins = new Map<string, Acc>();
+    for (const d of world.doodads) {
+      const spec = DOODAD_VISUALS[d.kind]?.light;
+      if (!spec) continue;
+      const lr = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
+      const key = `${d.kind}|${Math.floor(d.pos.x / bin)},${Math.floor(d.pos.y / bin)}`;
+      let acc = bins.get(key);
+      if (!acc) {
+        acc = { sx: 0, sy: 0, n: 0, members: [],
+          color: resolveColor(spec.color, world.zone.theme),
+          intensity: spec.intensity, flicker: spec.flicker };
+        bins.set(key, acc);
+      }
+      acc.sx += d.pos.x; acc.sy += d.pos.y; acc.n++;
+      acc.members.push({ x: d.pos.x, y: d.pos.y, lr });
+    }
+    this.clusters = [];
+    for (const acc of bins.values()) {
+      const cx = acc.sx / acc.n, cy = acc.sy / acc.n;
+      let r = 0;
+      for (const m of acc.members) {
+        r = Math.max(r, Math.hypot(m.x - cx, m.y - cy) + m.lr);
+      }
+      this.clusters.push({ x: cx, y: cy, r, color: acc.color, intensity: acc.intensity, flicker: acc.flicker });
+    }
+    return this.clusters;
+  }
 
   /** The darkness punch profile is one fixed falloff scaled by intensity —
    *  baked once; per-light rendering is a destination-out blit. */
@@ -126,19 +182,30 @@ export class LightLayer {
       push(e.pos.x, e.pos.y, 85, world.zone.theme.accent, 0.3, e);
     }
 
-    // Doodad emissives — declared per kind in DOODAD_VISUALS.light.
+    // Doodad emissives — declared per kind in DOODAD_VISUALS.light, served
+    // as per-zone CLUSTERS (see zoneClusters) so a poured lava sea reads as
+    // a few dozen stable pool glows instead of thousands of cap-fighting
+    // point lights. The legacy per-disc path stays behind the config lever.
     const t = world.time;
-    for (const [kind, list] of culled) {
-      const spec = DOODAD_VISUALS[kind]?.light;
-      if (!spec) continue;
-      const color = resolveColor(spec.color, world.zone.theme);
-      for (const d of list) {
-        const r = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
-        const flick = spec.flicker
-          ? 0.82 + 0.18 * Math.sin(t * spec.flicker + d.pos.x * 0.13) : 1;
+    if (VIS_CFG.lights.cluster) {
+      for (const c of this.zoneClusters(world)) {
+        const flick = c.flicker
+          ? 0.82 + 0.18 * Math.sin(t * c.flicker + c.x * 0.13) : 1;
         // The occlusion poly caches at the UN-flickered reach (its widest);
         // the flicker animates brightness + blit size, not the ray march.
-        push(d.pos.x, d.pos.y, r * flick, color, spec.intensity * flick, d, r);
+        push(c.x, c.y, c.r * flick, c.color, c.intensity * flick, c, c.r);
+      }
+    } else {
+      for (const [kind, list] of culled) {
+        const spec = DOODAD_VISUALS[kind]?.light;
+        if (!spec) continue;
+        const color = resolveColor(spec.color, world.zone.theme);
+        for (const d of list) {
+          const r = spec.radius < 0 ? -spec.radius * d.radius : spec.radius;
+          const flick = spec.flicker
+            ? 0.82 + 0.18 * Math.sin(t * spec.flicker + d.pos.x * 0.13) : 1;
+          push(d.pos.x, d.pos.y, r * flick, color, spec.intensity * flick, d, r);
+        }
       }
     }
   }

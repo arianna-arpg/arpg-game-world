@@ -30,6 +30,76 @@ function strSeed(s: string): number {
   return (h >>> 0) % 100000;
 }
 
+/** Per-mottle-cell distance to the nearest disc EDGE, as a chamfer distance
+ *  transform over a padded cell grid: stamp every cell whose center lies
+ *  inside a disc to 0, then two 3-4 chamfer sweeps. The positional-palette
+ *  rules (coast wet-fade, clearing sun-wells) are functions of MIN edge
+ *  distance, so one field answers every cell in O(cells) — the old per-cell ×
+ *  per-disc loop hit ~500k hypots per chunk under a sealed forest canopy
+ *  (hundreds of crowns in presence reach) and baked at ~40ms: a visible
+ *  hitch at every chunk boundary while walking. Half-cell quantization on a
+ *  ≥85px soft gradient is invisible. */
+interface EdgeField { d: Float32Array; cols: number; pad: number; cell: number }
+
+function edgeDistanceField(discs: readonly { x: number; y: number; r: number }[],
+  ox: number, oy: number, C: number, cell: number, maxReach: number): EdgeField {
+  const pad = Math.ceil(maxReach / cell) + 1;
+  const cols = Math.ceil(C / cell) + pad * 2;
+  const n = cols * cols;
+  const d = new Float32Array(n).fill(1e9);
+  const gx0 = ox - pad * cell, gy0 = oy - pad * cell; // world origin of the padded grid
+  for (const disc of discs) {
+    const r2 = disc.r * disc.r;
+    const cx0 = Math.max(0, Math.floor((disc.x - disc.r - gx0) / cell));
+    const cx1 = Math.min(cols - 1, Math.floor((disc.x + disc.r - gx0) / cell));
+    const cy0 = Math.max(0, Math.floor((disc.y - disc.r - gy0) / cell));
+    const cy1 = Math.min(cols - 1, Math.floor((disc.y + disc.r - gy0) / cell));
+    for (let cy = cy0; cy <= cy1; cy++) {
+      const wy = gy0 + (cy + 0.5) * cell - disc.y;
+      for (let cx = cx0; cx <= cx1; cx++) {
+        const wx = gx0 + (cx + 0.5) * cell - disc.x;
+        if (wx * wx + wy * wy <= r2) d[cy * cols + cx] = 0;
+      }
+    }
+  }
+  const orth = cell, diag = cell * 1.4;
+  // Forward sweep (top-left → bottom-right), then backward.
+  for (let cy = 0; cy < cols; cy++) {
+    for (let cx = 0; cx < cols; cx++) {
+      const i = cy * cols + cx;
+      let v = d[i];
+      if (cx > 0) v = Math.min(v, d[i - 1] + orth);
+      if (cy > 0) {
+        v = Math.min(v, d[i - cols] + orth);
+        if (cx > 0) v = Math.min(v, d[i - cols - 1] + diag);
+        if (cx < cols - 1) v = Math.min(v, d[i - cols + 1] + diag);
+      }
+      d[i] = v;
+    }
+  }
+  for (let cy = cols - 1; cy >= 0; cy--) {
+    for (let cx = cols - 1; cx >= 0; cx--) {
+      const i = cy * cols + cx;
+      let v = d[i];
+      if (cx < cols - 1) v = Math.min(v, d[i + 1] + orth);
+      if (cy < cols - 1) {
+        v = Math.min(v, d[i + cols] + orth);
+        if (cx < cols - 1) v = Math.min(v, d[i + cols + 1] + diag);
+        if (cx > 0) v = Math.min(v, d[i + cols - 1] + diag);
+      }
+      d[i] = v;
+    }
+  }
+  return { d, cols, pad, cell };
+}
+
+/** Sample an edge field at a chunk-local mottle cell origin (gx, gy). */
+function edgeDistAt(f: EdgeField, gx: number, gy: number): number {
+  const cx = Math.floor(gx / f.cell) + f.pad;
+  const cy = Math.floor(gy / f.cell) + f.pad;
+  return f.d[cy * f.cols + cx];
+}
+
 /** One kind's full group + reach, gathered once per zone, for everything
  *  that is STATIC per zone and so bakes with the floor: terrain-meld blend
  *  beds and liquid bodies (rim/core/inner union fills). */
@@ -237,33 +307,33 @@ export class GroundRenderer {
     const presenceReach = clearReach * 2.2;
     const crownDiscs = clearing
       ? near(presenceReach, k => !!DOODAD_VISUALS[k]?.canopy) : [];
+    // Both positional rules read MIN distance-to-nearest-edge — one chamfer
+    // field each answers every cell (see edgeDistanceField; the per-cell ×
+    // per-disc form was the forest's 40ms chunk-bake hitch).
+    const coastField = waterDiscs.length
+      ? edgeDistanceField(waterDiscs, ox, oy, C, cell, coastReach) : null;
+    const crownField = crownDiscs.length
+      ? edgeDistanceField(crownDiscs, ox, oy, C, cell, presenceReach) : null;
     for (let gy = 0; gy < C; gy += cell) {
       for (let gx = 0; gx < C; gx += cell) {
         const nn = valueNoise((ox + gx) * nsx, (oy + gy) * ns, this.seed);
         let n = clamp(0.5 + (nn - 0.5) * 2.6, 0, 1);
         if (biasExp !== 1) n = 1 - Math.pow(1 - n, biasExp);
-        if (coast && waterDiscs.length) {
+        if (coast && coastField) {
           // Proximity 1 at the water's edge → 0 at reach; slide the sample.
-          const wx = ox + gx + cell * 0.5, wy = oy + gy + cell * 0.5;
-          let prox = 0;
-          for (const d of waterDiscs) {
-            const de = Math.hypot(wx - d.x, wy - d.y) - d.r;
-            if (de < coastReach) prox = Math.max(prox, 1 - Math.max(0, de) / coastReach);
+          const de = edgeDistAt(coastField, gx, gy);
+          if (de < coastReach) {
+            const prox = 1 - Math.max(0, de) / coastReach;
+            n = clamp(n + coast.shift * prox, 0, 1);
           }
-          if (prox > 0) n = clamp(n + coast.shift * prox, 0, 1);
         }
-        if (clearing && crownDiscs.length) {
+        if (clearing && crownField) {
           // A CLEARING is a gap IN a forest: glow needs crowns NEAR (presence)
           // but not OVER (cover). Open country far from any crown gets no lift
           // — otherwise a sparse meadow washes wall-to-wall (it did).
-          const wx = ox + gx + cell * 0.5, wy = oy + gy + cell * 0.5;
-          let cover = 0, presence = 0;
-          for (const d of crownDiscs) {
-            const de = Math.hypot(wx - d.x, wy - d.y) - d.r;
-            if (de <= 0) { cover = 1; presence = 1; break; }
-            if (de < clearReach) cover = Math.max(cover, 1 - de / clearReach);
-            if (de < presenceReach) presence = Math.max(presence, 1 - de / presenceReach);
-          }
+          const de = edgeDistAt(crownField, gx, gy);
+          const cover = de <= 0 ? 1 : de < clearReach ? 1 - de / clearReach : 0;
+          const presence = de < presenceReach ? 1 - de / presenceReach : 0;
           const glow = presence * (1 - cover);
           if (glow > 0) n = clamp(n + clearing.lift * glow, 0, 1);
         }
