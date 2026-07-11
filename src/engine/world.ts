@@ -70,6 +70,8 @@ import {
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
 import { transitDwell, transitRadius } from '../data/transit';
+import type { ArenaSpec, ArenaWardSpec } from '../data/arenas';
+import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
@@ -121,7 +123,7 @@ import type { Ledger } from '../packages/types';
 import { bumpLedger, mergeLedger } from '../packages/ledger';
 import type { InvasionInfo } from '../packages/overlays/demonInvasion';
 import type { CrusadeInfo } from '../packages/overlays/crusade';
-import type { DeadwakeInfo, DeadwakeSurge, NecropolisCfg } from '../packages/overlays/deadwake';
+import type { DeadwakeInfo, DeadwakeSurge } from '../packages/overlays/deadwake';
 import type { MigrationInfo, MigrationSurge } from '../packages/overlays/migration';
 import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
@@ -1191,6 +1193,34 @@ const REVIVE_RADIUS = CORPSE_RADIUS;
 const REVIVE_DWELL = 1.0;
 const REVIVE_LIFE_FRAC = 0.35;
 
+/** How a realm ARENA's boss is fielded — the one spec behind the demon realm
+ *  Balor, the Necropolis Bonelord, the crusade Leader and the fracture
+ *  capstone champion (spawnArenaBoss). Every difference between them is a
+ *  field here, not a copy of the spawn loop. */
+interface ArenaBossSpec {
+  /** A fixed champion id… */
+  monsterId?: string;
+  /** …or a weighted pool the boss is picked from (at its own level). */
+  pool?: PackTableEntry[];
+  faction: string;
+  /** Garrison levels over the arena zone's level. */
+  levelBonus?: number;
+  /** Extra levels on the boss itself, over the garrison. */
+  bossBump?: number;
+  /** Kill-handler hook (worldKillRules / registerKillHandler). */
+  tag: string;
+  xpFloor?: number;
+  /** How deep in the arena the court assembles (farPoint distance). */
+  far?: number;
+  garrison?: { count: [number, number]; spread?: number; squad?: boolean };
+  /** Roster the garrison draws from (default: the faction's table); the boss
+   *  id is always filtered out — the curated champion stays singular. */
+  garrisonTable?: PackTableEntry[];
+  /** Manifest bulletin; '{name}' = the champion's def name. */
+  announce?: string;
+  announceColor?: string;
+}
+
 /** A prior run's death spot, spawned in-zone by coordinate match. SEPARATE from
  *  the necromancy `corpses[]` (ephemeral raisable enemy remnants). */
 interface PlayerCorpse {
@@ -1756,6 +1786,12 @@ export class World {
   private realmDwellKind = '';
   private realmDwellPos: Vec2 = vec(0, 0);
   private realmDwellStart = 0;
+  /** The live arena WARD RITUAL (data/arenas.ts): standing seals + the boss
+   *  they gate. Null when the current zone runs no ritual. */
+  private arenaWard: { spec: ArenaWardSpec; boss: ArenaBossSpec; seals: Doodad[]; total: number } | null = null;
+  /** Dwell-to-shatter progress on a ward seal (mirrors the realm-gate dwell). */
+  private wardDwellSeal: Doodad | null = null;
+  private wardDwellStart = 0;
   /** Dwell-to-OPEN a structure door (the door doodad's id) + when it began —
    *  push on a closed gate for a beat and it swings (mirrors the portal dwell). */
   private doorDwellId = '';
@@ -2664,6 +2700,8 @@ export class World {
     this.caveDwellIdx = -1; // dwell-to-enter-a-cave resets too (entrances rebuild)
     this.realmDwellKey = ''; // dwell-to-enter-a-realm-gate resets too
     this.doorDwellId = '';  // dwell-to-open-a-door resets too (doors rebuild)
+    this.arenaWard = null;  // a ward ritual is zone-local (re-raised on realm entry)
+    this.wardDwellSeal = null;
     this.escapeTimer = 2.5;
     this.lockHint = 0;
     this.mireilleDwell = 0; // dwell resets on zone change (cooldown intentionally persists)
@@ -3664,6 +3702,27 @@ export class World {
 
   /** Open NECROPOLIS gates in the current zone, for the renderer. */
   necropolisPortalsView(): readonly { pos: Vec2 }[] { return this.necropolisPortals; }
+
+  /** Every open realm gate in the current zone, KIND-tagged for the data-driven
+   *  gate painter (data/gateVisuals.ts). `color` carries the event's own hue
+   *  where one exists — the invasion TYPE's, the crusade's, the fracture
+   *  variant's — for look slots authored as '@event'. The Underworld breach is
+   *  a DOODAD (its painter already rides the visual fabric), so not repeated
+   *  here. A new enterable realm joins with one push + one registered look. */
+  realmGatesView(): { pos: Vec2; kind: string; color?: string }[] {
+    const out: { pos: Vec2; kind: string; color?: string }[] = [];
+    if (this.demonPortals.length) {
+      const c = this.sim.demonFieldFor(this.zone.dimension)?.invasionOn(this.zone.id)?.color;
+      for (const dp of this.demonPortals) out.push({ pos: dp.pos, kind: 'demon', ...(c ? { color: c } : {}) });
+    }
+    if (this.crusadePortals.length) {
+      const c = this.sim.crusadeField?.crusadeOn(this.zone.id)?.color;
+      for (const cp of this.crusadePortals) out.push({ pos: cp.pos, kind: 'crusade', ...(c ? { color: c } : {}) });
+    }
+    for (const np of this.necropolisPortals) out.push({ pos: np.pos, kind: 'necropolis' });
+    for (const fr of this.fractureRifts) out.push({ pos: fr.pos, kind: 'fracture', color: fr.color });
+    return out;
+  }
 
   /** Resolve a '?' frontier of `source` into a real zone — the shared mint path:
    *  (1) FIELD MINT-ONCE — if the frontier opens onto a contiguous Field region that is
@@ -5221,45 +5280,24 @@ export class World {
    *  themed by the variant's tileset + packed with its faction's honour-guard,
    *  set the realm context (read on the boss kill), and spawn the capstone boss. */
   private enterFractureRift(fr: { id: string; pos: Vec2; faction: string; color: string; variant: string; level: number; cap: FractureCapstone }): void {
-    const id = `cave_fracture_${fr.id}`; // unique per rift → a fresh chamber each time
-    if (!this.caveMap[id]) {
-      const realm = mintCave(this.zone, (this.manifest.seed ^ hashStr(id)) >>> 0, id, fr.cap.tileset);
-      realm.level = Math.max(1, fr.level + fr.cap.levelBonus); // the chamber out-levels the zone
-      const roster = FACTIONS[fr.faction]?.table ?? [];
-      // Controlled ambient horde (minus the boss id, so the only champion is the
-      // curated one) — a fight, not a zerg.
-      realm.packs = { count: [2, 4], size: [2, 3], table: roster.filter(e => e.id !== fr.cap.boss) };
-      this.caveMap[id] = realm;
-    }
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(fr.pos.x, fr.pos.y), entryFrom: this.entryFrom };
     this.fractureRealmContext = { variant: fr.variant, faction: fr.faction, color: fr.color, rewardMul: fr.cap.rewardMul };
     bumpLedger(this.ledger, 'fracture_rifts_entered');
-    this.loadZone(id, this.zone.id); // off-graph: NO onNodeCharted
-    this.spawnFractureBoss(fr);
-  }
-
-  /** Populate the rift chamber: the Crowned capstone boss + an honour-guard of
-   *  its faction (the boss filtered out), scaled to the chamber's level. */
-  private spawnFractureBoss(fr: { faction: string; color: string; cap: FractureCapstone }): void {
-    if (!MONSTERS[fr.cap.boss]) return;
-    const lvl = Math.max(1, this.zone.level); // the realm.level set on mint
-    const at = this.clampPos(this.farPoint(440), 30);
-    const boss = this.createMonster(fr.cap.boss, lvl, 'enemy');
-    boss.faction = fr.faction;
-    this.promoteRarity(boss, 'crowned');
-    boss.tag = 'fracture_boss';
-    boss.pos = this.clampPos(vec(at.x, at.y), boss.radius);
-    this.actors.push(boss);
-    const pool = (FACTIONS[fr.faction]?.table ?? []).filter(e => e.id !== fr.cap.boss);
-    const n = randInt(5, 9);
-    for (let k = 0; k < n && pool.length; k++) {
-      const m = this.createMonster(this.weightedPick(pool, lvl), lvl, 'enemy');
-      m.faction = fr.faction;
-      m.pos = this.clampPos(vec(at.x + rand(-120, 120), at.y + rand(-120, 120)), m.radius);
-      this.actors.push(m);
-    }
-    this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-      `${boss.name} awaits in the rift!`, fr.color, 18);
+    this.enterRealmArena({
+      caveId: `cave_fracture_${fr.id}`, // unique per rift → a fresh chamber each time
+      tileset: fr.cap.tileset,
+      arena: fr.cap.arena,
+      // Controlled ambient horde (minus the boss id, so the only champion is
+      // the curated one) — a fight, not a zerg.
+      packs: { count: [2, 4], size: [2, 3] },
+      rosterTable: (FACTIONS[fr.faction]?.table ?? []).filter(e => e.id !== fr.cap.boss),
+      levelOverride: fr.level + fr.cap.levelBonus, // the chamber out-levels the zone
+      returnPos: fr.pos,
+      boss: {
+        monsterId: fr.cap.boss, faction: fr.faction, tag: 'fracture_boss',
+        far: 440, garrison: { count: [5, 9], spread: 120 },
+        announce: '{name} awaits in the rift!', announceColor: fr.color,
+      },
+    });
   }
 
   /** Open fracture-capstone rifts in this zone (for the renderer). */
@@ -7141,18 +7179,28 @@ export class World {
    *  reward" fork. Placed once; stepping into it (below) loads the realm. */
   private maybeOpenDemonPortal(): void {
     if (this.inCave || this.demonPortals.length || this.realmContext) return;
-    const info = this.sim.demonFieldFor(this.zone.dimension)?.invasionOn(this.zone.id);
-    if (!info || !info.isEpicenter || !info.portalReady) return;
+    const dfz = this.sim.demonFieldFor(this.zone.dimension);
+    const info = dfz?.invasionOn(this.zone.id);
+    if (!info || !info.isEpicenter) return;
+    // WHEN the rift stands is surge data: 'epicenter' = every epicenter always
+    // offers its realm (the premium still scales with the stage you dive at);
+    // 'stage'/unset = the classic fester-gate (age/opensPortal).
+    if (!(info.portalReady || dfz?.surge()?.portal.openAt === 'epicenter')) return;
     const at = this.clearTransitSpot(this.clampPos(this.farPoint(420), 30));
     this.demonPortals.push({ pos: vec(at.x, at.y), invId: info.id });
-    this.flashes.push({ pos: vec(at.x, at.y), radius: 120, color: '#c81e3a', life: 0.9, maxLife: 0.9 });
-    this.text(vec(at.x, at.y - 44), 'A rift to the demon realm tears open!', '#c81e3a', 18);
+    const realmName = info.type.realm?.name;
+    this.flashes.push({ pos: vec(at.x, at.y), radius: 120, color: info.color ?? '#c81e3a', life: 0.9, maxLife: 0.9 });
+    this.text(vec(at.x, at.y - 44),
+      realmName ? `A rift to ${realmName} tears open!` : 'A rift to the demon realm tears open!',
+      info.color ?? '#c81e3a', 18);
   }
 
-  /** Step through the rift into the demons' off-graph home turf — minted like a
-   *  cave (keyed, never charted), so the existing cave-return travel carries you
-   *  back out. Spawns the realm Balor; felling it repels the whole invasion for
-   *  the fattest, stage-scaled spoils. Opening the portal counts (the ledger). */
+  /** Step through the rift into THIS invasion type's own underworld — minted
+   *  like a cave (keyed, never charted), so the existing cave-return travel
+   *  carries you back out. The arena is the TYPE's authored realm
+   *  (InvasionType.realm: tileset, recipe, packs, ward seals) falling back to
+   *  the surge's shared portal turf; a warded realm holds its Balor back until
+   *  every seal is broken. Opening the portal counts (the ledger). */
   private enterDemonRealm(invId: string, portalPos: Vec2): void {
     const dfz = this.sim.demonFieldFor(this.zone.dimension);
     const surge = dfz?.surge();
@@ -7160,50 +7208,174 @@ export class World {
     const info = dfz?.invasionOn(this.zone.id);
     if (!info || info.id !== invId) return; // invasion burned out / moved on — no stale realm
     const stageIdx = info.stageIdx;
-    const id = `cave_realm_${invId}`; // 'cave_' prefix ⇒ off-graph + cave-return travel
-    if (!this.caveMap[id]) {
-      const realm = mintCave(this.zone, (this.manifest.seed ^ hashStr(id)) >>> 0, id, surge.portal.tileset);
-      // The realm is the demons' OWN turf — replace the tileset's native packs
-      // with a controlled DEMON-only ambient horde (minus the warlord, so the only
-      // Balor is the curated champion), keeping the arena a fight, not a zerg.
-      const champId = surge.portal.champion.monsterId;
-      realm.packs = { count: [2, 4], size: [2, 3], table: (FACTIONS['demon']?.table ?? []).filter(e => e.id !== champId) };
-      this.caveMap[id] = realm;
-    }
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(portalPos.x, portalPos.y), entryFrom: this.entryFrom };
+    const champId = surge.portal.champion.monsterId;
     // The realm pays the OVERWORLD stage reward PLUS a per-stage portal premium —
     // strictly more than felling the overworld Balor, the payoff for the deep risk.
     this.realmContext = { invId, rewardMul: info.rewardMul * (1 + surge.portal.rewardMulPerStage * stageIdx) };
     bumpLedger(this.ledger, 'demon_portals_opened'); // surfaces the Infernal Dominion tier
-    this.loadZone(id, this.zone.id); // deliberately NO onNodeCharted — the realm is off-graph
-    this.spawnRealmBalor(surge.portal.champion, stageIdx);
+    this.enterRealmArena({
+      caveId: `cave_realm_${invId}`, // 'cave_' prefix ⇒ off-graph + cave-return travel
+      tileset: surge.portal.tileset,
+      arena: info.type.realm,
+      // The realm is the demons' OWN turf — a controlled ambient horde (minus
+      // the warlord, so the only Balor is the curated champion), not natives.
+      packs: { count: [2, 4], size: [2, 3] },
+      rosterTable: (FACTIONS['demon']?.table ?? []).filter(e => e.id !== champId),
+      returnPos: portalPos,
+      boss: {
+        monsterId: champId, faction: 'demon',
+        levelBonus: surge.portal.champion.levelBonus + stageIdx,
+        tag: 'balor_realm',
+        garrison: { count: [6, 10], squad: true }, // the demesne guard fights as one warband
+        announce: 'The Balor awaits in its infernal demesne!',
+        announceColor: '#c81e3a',
+      },
+    });
   }
 
-  /** Populate the demon realm: the Balor (Crowned, tougher than the overworld
-   *  one) and an infernal host, scaled by the stage the invasion reached. */
-  private spawnRealmBalor(champ: { monsterId: string; levelBonus: number; ledgerKill: string }, stageIdx: number): void {
-    const lvl = Math.max(1, this.zone.level + champ.levelBonus + stageIdx);
-    const at = this.clampPos(this.farPoint(420), 28);
-    const balor = this.createMonster(champ.monsterId, lvl, 'enemy');
-    balor.faction = 'demon';
-    this.promoteRarity(balor, 'crowned');
-    balor.tag = 'balor_realm';
-    balor.pos = this.clampPos(vec(at.x, at.y), balor.radius);
-    this.actors.push(balor);
-    const roster = FACTIONS['demon'];
-    const pool = roster?.table?.filter(e => e.id !== champ.monsterId) ?? [];
-    const n = randInt(6, 10);
-    const squadId = this.nextSquadId(); // the demesne guard fights as one warband
+  /** THE SHARED REALM-ARENA PIPELINE — every event's off-graph realm (demon
+   *  portal, crusade sanctum, necropolis, fracture chamber) enters through
+   *  here: mint the pocket from the ArenaSpec (tileset / recipe / name /
+   *  packs, data/arenas.ts), set the cave-return, load, then either raise the
+   *  WARD RITUAL (seals gate the boss — the Chaos-Sanctuary move) or field
+   *  the boss at once. Callers set their own realm context + ledger first. */
+  private enterRealmArena(o: {
+    caveId: string;
+    /** Fallback tileset when the arena spec doesn't pin one. */
+    tileset: string;
+    arena?: ArenaSpec;
+    /** Ambient pack band (the arena spec's `packs` outranks it); null = none —
+     *  the population is hand-placed (the necropolis way). */
+    packs: { count: [number, number]; size: [number, number] } | null;
+    /** Ambient roster (already boss-filtered by the caller). */
+    rosterTable: PackTableEntry[];
+    /** Pin the realm's level (the fracture chamber out-levels its zone). */
+    levelOverride?: number;
+    returnPos: Vec2;
+    boss: ArenaBossSpec;
+  }): void {
+    const a = o.arena;
+    if (!this.caveMap[o.caveId]) {
+      const opts = a && (a.layoutType !== undefined || a.layoutParams !== undefined || a.name !== undefined)
+        ? { layoutType: a.layoutType, layoutParams: a.layoutParams, name: a.name } : undefined;
+      const realm = mintCave(this.zone, (this.manifest.seed ^ hashStr(o.caveId)) >>> 0, o.caveId,
+        a?.tileset ?? o.tileset, opts);
+      if (o.levelOverride !== undefined) realm.level = Math.max(1, o.levelOverride);
+      const band = a?.packs ?? o.packs;
+      realm.packs = band
+        ? { count: band.count, size: band.size, table: o.rosterTable }
+        : { count: [0, 0], size: [0, 0], table: o.rosterTable };
+      this.caveMap[o.caveId] = realm;
+    }
+    this.caveReturn = { zoneId: this.zone.id, pos: vec(o.returnPos.x, o.returnPos.y), entryFrom: this.entryFrom };
+    this.loadZone(o.caveId, this.zone.id); // deliberately NO onNodeCharted — realms are off-graph
+    if (a?.wards) this.raiseArenaWards(a.wards, o.boss);
+    else this.spawnArenaBoss(o.boss);
+  }
+
+  /** Field an arena's boss + court from its ArenaBossSpec — the ONE spawn loop
+   *  behind the realm Balor, the Bonelord, the crusade Leader and the fracture
+   *  champion. Differences are spec fields, never copies of this code. */
+  private spawnArenaBoss(spec: ArenaBossSpec): void {
+    const lvl = Math.max(1, this.zone.level + (spec.levelBonus ?? 0));
+    const bossLvl = lvl + (spec.bossBump ?? 0);
+    const bossId = spec.monsterId
+      ?? (spec.pool?.length ? this.weightedPick(spec.pool, bossLvl) : undefined);
+    if (!bossId || !MONSTERS[bossId]) return;
+    const at = this.clampPos(this.farPoint(spec.far ?? 420), 30);
+    const boss = this.createMonster(bossId, bossLvl, 'enemy');
+    boss.faction = spec.faction;
+    this.promoteRarity(boss, 'crowned');
+    boss.tag = spec.tag;
+    if (spec.xpFloor) boss.xpValue = Math.max(boss.xpValue, spec.xpFloor);
+    boss.pos = this.clampPos(vec(at.x, at.y), boss.radius);
+    this.actors.push(boss);
+    const g = spec.garrison ?? { count: [6, 10] as [number, number] };
+    const pool = (spec.garrisonTable ?? FACTIONS[spec.faction]?.table ?? []).filter(e => e.id !== bossId);
+    const n = randInt(g.count[0], g.count[1]);
+    const spread = g.spread ?? 110;
+    const squadId = g.squad ? this.nextSquadId() : undefined;
     for (let k = 0; k < n && pool.length; k++) {
       const m = this.createMonster(this.weightedPick(pool, lvl), lvl, 'enemy');
-      m.faction = 'demon';
-      m.squadId = squadId;
-      m.squadLeader = k === 0;
-      m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+      m.faction = spec.faction;
+      if (squadId !== undefined) { m.squadId = squadId; m.squadLeader = k === 0; }
+      m.pos = this.clampPos(vec(at.x + rand(-spread, spread), at.y + rand(-spread, spread)), m.radius);
       this.actors.push(m);
     }
+    if (spec.announce) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+        spec.announce.replace('{name}', MONSTERS[bossId]?.name ?? boss.name),
+        spec.announceColor ?? '#e86a4a', 18);
+    }
+  }
+
+  /** Raise the WARD RITUAL: scatter the seals across the arena (walkable,
+   *  spread apart, clear of the way home) and hold the boss back until every
+   *  one is dwell-broken. The seal look is its doodad kind's visual row; the
+   *  linger feel is the 'ward_seal' transit row. */
+  private raiseArenaWards(spec: ArenaWardSpec, boss: ArenaBossSpec): void {
+    const kind = spec.doodadKind ?? 'ward_seal';
+    const total = randInt(spec.count[0], spec.count[1]);
+    const seals: Doodad[] = [];
+    const placedPts: Vec2[] = [];
+    for (let i = 0; i < total; i++) {
+      let at: Vec2 | null = null;
+      for (let t = 0; t < 16 && !at; t++) {
+        const cand = this.clampPos(vec(rand(90, this.arena.w - 90), rand(90, this.arena.h - 90)), 40);
+        const p = this.walk && !this.walk.isWalkable(cand.x, cand.y) ? this.walk.snapToWalkable(cand) : cand;
+        if (dist(p, this.player.pos) < 260) continue;              // never at the door
+        if (placedPts.some(q => dist(p, q) < 200)) continue;       // seals spread out
+        at = this.clearTransitSpot(p, 90);                          // …and off the way home
+      }
+      const p = at ?? this.clearTransitSpot(this.clampPos(this.farPoint(300 + i * 60), 40), 90);
+      const seal: Doodad = { pos: vec(p.x, p.y), radius: 26, kind };
+      this.doodads.push(seal);
+      seals.push(seal);
+      placedPts.push(p);
+    }
+    this.arenaWard = { spec, boss, seals, total };
     this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-      'The Balor awaits in its infernal demesne!', '#c81e3a', 18);
+      `${total} seals bind this place — break them all`, '#ff9a50', 16);
+  }
+
+  /** A seal shattered: swap its face, unleash its guard, and — on the last —
+   *  manifest the warded boss. */
+  private breakArenaSeal(seal: Doodad): void {
+    const ward = this.arenaWard;
+    if (!ward) return;
+    const idx = ward.seals.indexOf(seal);
+    if (idx < 0) return;
+    ward.seals.splice(idx, 1);
+    seal.kind = `${ward.spec.doodadKind ?? 'ward_seal'}_broken`;
+    this.flashes.push({ pos: vec(seal.pos.x, seal.pos.y), radius: 90, color: '#ff9a50', life: 0.6, maxLife: 0.6 });
+    // The seal's guard answers the break.
+    const guards = ward.spec.guards;
+    if (guards) {
+      const lvl = Math.max(1, this.zone.level + (ward.boss.levelBonus ?? 0));
+      const pool = (ward.boss.garrisonTable ?? FACTIONS[ward.boss.faction]?.table ?? [])
+        .filter(e => e.id !== ward.boss.monsterId);
+      const n = randInt(guards.count[0], guards.count[1]);
+      const spread = guards.spread ?? 120;
+      for (let k = 0; k < n && pool.length; k++) {
+        const m = this.createMonster(this.weightedPick(pool, lvl), lvl, 'enemy');
+        m.faction = ward.boss.faction;
+        m.pos = this.clampPos(vec(seal.pos.x + rand(-spread, spread), seal.pos.y + rand(-spread, spread)), m.radius);
+        this.actors.push(m);
+      }
+    }
+    if (ward.seals.length > 0) {
+      const line = (ward.spec.announceBreak ?? 'A seal shatters — {n} of {total} remain!')
+        .replace('{n}', String(ward.seals.length)).replace('{total}', String(ward.total));
+      this.text(vec(seal.pos.x, seal.pos.y - 40), line, '#ff9a50', 15);
+      return;
+    }
+    // The last seal: the ward falls, the boss manifests.
+    const boss = ward.boss;
+    this.arenaWard = null;
+    this.text(vec(this.player.pos.x, this.player.pos.y - 80),
+      ward.spec.announceAll ?? 'The last seal breaks — the warded one manifests!', '#ffd700', 18);
+    this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 170, color: '#ff6a3a', life: 0.9, maxLife: 0.9 });
+    this.spawnArenaBoss(boss);
   }
 
   // ------------------------------------------------------- crusade materialize
@@ -7996,44 +8168,24 @@ export class World {
     if (!df || !n) return;
     const cfg = df.surge().necropolis;
     const id = `cave_necropolis_${n.id}`; // 'cave_' ⇒ off-graph + cave-return travel
-    if (!this.caveMap[id]) {
-      const realm = mintCave(this.zone, (this.manifest.seed ^ hashStr(id)) >>> 0, id, cfg.tileset);
-      realm.packs = { count: [0, 0], size: [0, 0], table: df.surge().floodRoster }; // boss + garrison placed by hand
-      this.caveMap[id] = realm;
-    }
     df.bindNecropolisZone(id);
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(portalPos.x, portalPos.y), entryFrom: this.entryFrom };
     this.necropolisRealmContext = { reward: cfg.reward };
     this.necropolisPortals.length = 0;
-    this.loadZone(id, this.zone.id); // off-graph — no onNodeCharted
-    this.spawnNecropolisBoss(cfg);
-  }
-
-  /** Populate the Necropolis arena: the Bonelord (uber, Crowned) + a garrison of the
-   *  flood roster, scaled by the realm's level bonus. */
-  private spawnNecropolisBoss(cfg: NecropolisCfg): void {
-    const lvl = Math.max(1, this.zone.level + cfg.levelBonus);
-    const bossId = this.weightedPick(cfg.bossPool, lvl + 2);
-    if (!MONSTERS[bossId]) return;
-    const faction = this.sim.deadwakeField?.surge().faction ?? 'undead';
-    const at = this.clampPos(this.farPoint(440), 32);
-    const boss = this.createMonster(bossId, lvl + 2, 'enemy');
-    boss.faction = faction;
-    this.promoteRarity(boss, 'crowned');
-    boss.tag = 'necropolis_boss';
-    boss.xpValue = Math.max(boss.xpValue, 400);
-    boss.pos = this.clampPos(vec(at.x, at.y), boss.radius);
-    this.actors.push(boss);
-    const roster = this.sim.deadwakeField?.surge().floodRoster ?? [];
-    const n = randInt(cfg.garrison[0], cfg.garrison[1]);
-    for (let k = 0; k < n && roster.length; k++) {
-      const m = this.createMonster(this.weightedPick(roster, lvl), lvl, 'enemy');
-      m.faction = faction;
-      m.pos = this.clampPos(vec(at.x + rand(-140, 140), at.y + rand(-140, 140)), m.radius);
-      this.actors.push(m);
-    }
-    this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-      `${MONSTERS[bossId]?.name ?? 'the Bonelord'} holds the Necropolis!`, '#e8dcb0', 18);
+    const faction = df.surge().faction ?? 'undead';
+    this.enterRealmArena({
+      caveId: id, tileset: cfg.tileset,
+      arena: cfg.arena,
+      packs: null, // boss + garrison placed by hand — no ambient packs
+      rosterTable: df.surge().floodRoster,
+      returnPos: portalPos,
+      boss: {
+        pool: cfg.bossPool, faction, levelBonus: cfg.levelBonus, bossBump: 2,
+        tag: 'necropolis_boss', xpFloor: 400, far: 440,
+        garrison: { count: cfg.garrison, spread: 140 },
+        garrisonTable: df.surge().floodRoster,
+        announce: '{name} holds the Necropolis!', announceColor: '#e8dcb0',
+      },
+    });
   }
 
   /** A converted capital's SANCTUM gate tears open once it has stood long enough.
@@ -8060,47 +8212,25 @@ export class World {
     if (!info || info.crusadeId !== crusadeId) return; // crusade collapsed / moved — no stale realm
     const surge = cf.surge();
     const faction = cf.factionOf(crusadeId) ?? info.faction;
-    const id = `cave_crusade_${crusadeId}`; // 'cave_' ⇒ off-graph + cave-return travel
-    if (!this.caveMap[id]) {
-      const realm = mintCave(this.zone, (this.manifest.seed ^ hashStr(id)) >>> 0, id, surge.sanctum.tileset);
-      // The sanctum is the crusade's own keep — a controlled garrison of its faction
-      // (minus the Leader, the curated boss) rather than the tileset's natives.
-      const leaderId = this.sim.warlord.bossId(faction);
-      realm.packs = { count: [2, 4], size: [2, 3], table: (FACTIONS[faction]?.table ?? []).filter(e => e.id !== leaderId) };
-      this.caveMap[id] = realm;
-    }
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(portalPos.x, portalPos.y), entryFrom: this.entryFrom };
-    this.crusadeRealmContext = { crusadeId, faction, rewardMul: surge.sanctum.rewardMul };
-    cf.markSanctumMinted(crusadeId);
-    this.loadZone(id, this.zone.id); // deliberately NO onNodeCharted — the realm is off-graph
-    this.spawnSanctumLeader(faction, surge.sanctum.levelBonus);
-  }
-
-  /** Populate the sanctum: the Crusade Leader (the faction's warlord, Crowned)
-   *  and an honour-guard, scaled by the realm's level bonus. */
-  private spawnSanctumLeader(faction: string, levelBonus: number): void {
     const leaderId = this.sim.warlord.bossId(faction)
       ?? FACTIONS[faction]?.table?.[FACTIONS[faction].table.length - 1]?.id;
-    if (!leaderId || !MONSTERS[leaderId]) return;
-    const lvl = Math.max(1, this.zone.level + levelBonus);
-    const at = this.clampPos(this.farPoint(420), 28);
-    const leader = this.createMonster(leaderId, lvl + 2, 'enemy');
-    leader.faction = faction;
-    this.promoteRarity(leader, 'crowned');
-    leader.tag = 'crusade_leader';
-    leader.xpValue = Math.max(leader.xpValue, 140);
-    leader.pos = this.clampPos(vec(at.x, at.y), leader.radius);
-    this.actors.push(leader);
-    const pool = FACTIONS[faction]?.table?.filter(e => e.id !== leaderId) ?? [];
-    const n = randInt(6, 10);
-    for (let k = 0; k < n && pool.length; k++) {
-      const m = this.createMonster(this.weightedPick(pool, lvl), lvl, 'enemy');
-      m.faction = faction;
-      m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
-      this.actors.push(m);
-    }
-    this.text(vec(this.player.pos.x, this.player.pos.y - 60),
-      `${MONSTERS[leaderId]?.name ?? 'the Crusade Leader'} commands the sanctum!`, '#ffd700', 18);
+    this.crusadeRealmContext = { crusadeId, faction, rewardMul: surge.sanctum.rewardMul };
+    cf.markSanctumMinted(crusadeId);
+    this.enterRealmArena({
+      caveId: `cave_crusade_${crusadeId}`, tileset: surge.sanctum.tileset,
+      arena: surge.sanctum.arena,
+      // The sanctum is the crusade's own keep — a controlled garrison of its
+      // faction (minus the Leader, the curated boss), not the tileset's natives.
+      packs: { count: [2, 4], size: [2, 3] },
+      rosterTable: (FACTIONS[faction]?.table ?? []).filter(e => e.id !== leaderId),
+      returnPos: portalPos,
+      boss: {
+        monsterId: leaderId, faction, levelBonus: surge.sanctum.levelBonus, bossBump: 2,
+        tag: 'crusade_leader', xpFloor: 140,
+        garrison: { count: [6, 10] },
+        announce: '{name} commands the sanctum!', announceColor: '#ffd700',
+      },
+    });
   }
 
   /** THE selection chokepoint: every "which monster?" roll lands here. Pass
@@ -20851,6 +20981,25 @@ export class World {
         } else {
           this.realmDwellKey = ''; // stepped off / acting / knocked → the dwell resets
         }
+        // ARENA WARD SEALS (data/arenas.ts): dwell one to SHATTER it — the same
+        // deliberate linger as every transit; the 'ward_seal' transit row sets
+        // the feel. Breaking the last seal manifests the warded boss.
+        if (this.arenaWard) {
+          let onSeal: Doodad | null = null, sealD = Infinity;
+          for (const s of this.arenaWard.seals) {
+            const d = dist(this.player.pos, s.pos);
+            if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + this.player.radius && d < sealD) { sealD = d; onSeal = s; }
+          }
+          if (onSeal && this.playerIdle() && !this.player.push) {
+            if (this.wardDwellSeal !== onSeal) { this.wardDwellSeal = onSeal; this.wardDwellStart = this.time; }
+            if (this.time - this.wardDwellStart >= transitDwell(`ward_seal:${onSeal.kind}`)) {
+              this.wardDwellSeal = null;
+              this.breakArenaSeal(onSeal);
+            }
+          } else {
+            this.wardDwellSeal = null;
+          }
+        }
         // HOLDFAST: dwell beside the toll keeper to pay (a gem taken at random) or open
         // the bargain menu (drop-to-choose). Only while the gate is sealed + the wardens
         // un-roused — drawing steel cancels the parley. A CONSUMED latch ('done') keeps
@@ -20972,6 +21121,17 @@ export class World {
     return { pos: vec(p.x, p.y), frac: clamp(this.descentShaftDwell / transitDwell('descent_shaft'), 0, 1), kind: 'descent_shaft' };
   }
 
+  /** Dwell-to-shatter progress on the arena ward seal the player lingers on
+   *  (renderer ring), or null when not dwelling on one. */
+  wardDwellView(): { pos: Vec2; frac: number; kind: string } | null {
+    if (!this.wardDwellSeal) return null;
+    const kind = `ward_seal:${this.wardDwellSeal.kind}`;
+    return {
+      pos: vec(this.wardDwellSeal.pos.x, this.wardDwellSeal.pos.y),
+      frac: clamp((this.time - this.wardDwellStart) / transitDwell(kind), 0, 1), kind,
+    };
+  }
+
   /** Every dwell progress ring live this frame — ONE feed for the renderer's
    *  single ring pass. Each entry names its transit KIND, so the ring's style
    *  (radius/width/color) is a data row in data/transit.ts, never a renderer
@@ -20987,6 +21147,7 @@ export class World {
     add(this.doorDwellView());
     add(this.holdfastDwellView());
     add(this.descentDwellView());
+    add(this.wardDwellView());
     return out;
   }
 

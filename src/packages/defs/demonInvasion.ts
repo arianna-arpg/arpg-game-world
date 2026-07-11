@@ -22,14 +22,49 @@ import type { DemonSurge, InvasionStage, InvasionType } from '../encounters';
 import { DemonInvasionField } from '../overlays/demonInvasion';
 import type { ContentPackage } from '../types';
 
-/** The three flavors a Demon Invasion ignites as (extensible: add an entry). */
+/** The three flavors a Demon Invasion ignites as (extensible: add an entry).
+ *  Each carries its OWN realm arena (data/arenas.ts) — the underworld behind
+ *  its rift — so the flavor you let fester is the hell you descend into. */
 const INVASION_TYPES: InvasionType[] = [
   // Cheap swarm — frequent, weaker, rains the most meteors; a slow creep.
-  { id: 'imp_incursion', label: 'Imp Incursion', weight: 5, ageScale: 0.85, strengthMul: 0.85, meteorMul: 1.3, color: '#ff7a4a' },
+  // Its realm: the OUTER STEPPES as a screaming parade ground — open scorched
+  // plains cut by ruined hellworks, drowned in imps (dense, many-bodied packs).
+  {
+    id: 'imp_incursion', label: 'Imp Incursion', weight: 5, ageScale: 0.85, strengthMul: 0.85, meteorMul: 1.3, color: '#ff7a4a',
+    realm: {
+      tileset: 'hell_steppes', name: 'The Screaming Steppes',
+      layoutType: 'steppes', layoutParams: { ridges: [2, 4], ridgeGapChance: 0.6 },
+      packs: { count: [4, 6], size: [4, 6] },
+    },
+  },
   // Heavy demons — the balanced siege, hard-hitting packs, measured cadence.
-  { id: 'hell_host', label: 'Hell-Host', weight: 3, ageScale: 1.0, strengthMul: 1.2, meteorMul: 0.9, color: '#e8503c' },
+  // Its realm: a VOLCANIC war-foundry — the spiral cauldron recipe winding down
+  // over poured lava, heavy packs holding the terraces.
+  {
+    id: 'hell_host', label: 'Hell-Host', weight: 3, ageScale: 1.0, strengthMul: 1.2, meteorMul: 0.9, color: '#e8503c',
+    realm: {
+      tileset: 'volcanic', name: 'The War-Foundry',
+      layoutType: 'spiral', layoutParams: { negativeLiquid: 'lava' },
+      packs: { count: [3, 5], size: [3, 4] },
+    },
+  },
   // Elite rite — rare, brutal, and ramps to the portal FASTEST (ageScale 1.5).
-  { id: 'balor_rite', label: "Balor's Rite", weight: 1, ageScale: 1.5, strengthMul: 1.4, meteorMul: 1.0, color: '#c81e3a' },
+  // Its realm is the CHAOS-SANCTUARY move: a hellion-rift sanctum warded by
+  // seals — break every seal (each unleashes its guard) and ONLY THEN does the
+  // Balor manifest. The event's whole theme in one arena.
+  {
+    id: 'balor_rite', label: "Balor's Rite", weight: 1, ageScale: 1.5, strengthMul: 1.4, meteorMul: 1.0, color: '#c81e3a',
+    realm: {
+      tileset: 'hellion_rift', name: 'The Sanctum of the Rite',
+      packs: { count: [2, 4], size: [2, 3] },
+      wards: {
+        count: [4, 5],
+        guards: { count: [3, 5] },
+        announceBreak: 'A seal shatters — {n} of {total} still bind the Rite!',
+        announceAll: 'The last seal breaks — the Balor manifests!',
+      },
+    },
+  },
 ];
 
 /** The escalation ladder — a step function over elapsed age. Each row is a
@@ -64,8 +99,12 @@ const BALOR_SURGE: DemonSurge = {
   types: INVASION_TYPES,
   stages: INVASION_STAGES,
   portal: {
-    atSeconds: 210, // opens at the "Hellstorm" stage — the risk/reward fork
-    tileset: 'wasteland', // the demons' molten home turf (a desolate infernal waste)
+    atSeconds: 210, // the "Hellstorm" threshold (drives stage-gated types + the premium ladder)
+    // Every epicenter OFFERS its realm from the moment you find it — the fork
+    // is no longer "wait or don't get a door", it's "dive now for a lean
+    // premium or let it fester for a fat one" (rewardMulPerStage × stage).
+    openAt: 'epicenter',
+    tileset: 'wasteland', // the FALLBACK realm turf — each InvasionType.realm overrides
     champion: { monsterId: 'balor_warlord', levelBonus: 4, ledgerKill: 'balor_slain' },
     rewardMulPerStage: 0.5, // realm reward = stage reward × (1 + 0.5 × stageIdx)
   },

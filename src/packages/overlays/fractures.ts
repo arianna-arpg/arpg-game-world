@@ -26,6 +26,7 @@
 
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
+import type { ArenaSpec } from '../../data/arenas';
 import { FACTIONS } from '../../data/monsters';
 import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
@@ -50,6 +51,9 @@ export interface FractureCapstone {
   levelBonus: number;
   /** Reward multiplier on the boss kill (realm-scale spoils). */
   rewardMul: number;
+  /** Optional arena build sheet (data/arenas.ts) — forced recipe, fixed name,
+   *  pack density, ward seals — the same distinctness lever every realm has. */
+  arena?: ArenaSpec;
 }
 
 /** One flavour a Fracture can roll (faction whose roster the chasm spews). */

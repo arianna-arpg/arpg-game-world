@@ -26,6 +26,7 @@
 
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
+import type { ArenaSpec } from '../../data/arenas';
 import { FACTIONS } from '../../data/monsters';
 import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
@@ -112,8 +113,11 @@ export interface CrusadeSurge {
   factionWeights?: Record<string, number>;
   /** Fallback wash colour if the faction has none. */
   color?: string;
-  /** The inner-sanctum realm config (the converted capital's deep dive). */
-  sanctum: { atSecondsHeld: number; tileset: string; rewardMul: number; levelBonus: number };
+  /** The inner-sanctum realm config (the converted capital's deep dive).
+   *  `arena` (data/arenas.ts) makes the sanctum DISTINCT with one row — a
+   *  forced layout recipe, a fixed name, pack density, even boss-warding
+   *  seals — riding the same pipeline as every event realm. */
+  sanctum: { atSecondsHeld: number; tileset: string; rewardMul: number; levelBonus: number; arena?: ArenaSpec };
   /** CLASH (Crusade vs Crusade): when two different-faction crusades' fronts meet,
    *  the stronger side wrests the contested border zone — a tug-of-war warfront that
    *  shifts on its own, which the player can tip by thinning a side. */

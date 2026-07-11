@@ -807,6 +807,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },
   ritual_pentagram: { painter: 'pentagram', order: 57 },
+  // Arena ward seals (data/arenas.ts): the boss-gating ritual anchors. The
+  // live seal burns; its broken face is the same painter, stilled + cracked.
+  ward_seal: {
+    painter: 'wardSeal', order: 57,
+    params: { ring: '#c8763a', sigil: '#ffb066', ember: '#ff9a50' },
+    light: { radius: -2.6, color: '#ff9a50', intensity: 0.32, flicker: 2.2 },
+  },
+  ward_seal_broken: { painter: 'wardSeal', order: 57, params: { broken: true } },
   breach: {
     painter: 'breach', order: 58,
     params: { edge: '#d84a2a', label: 'the Breach' },

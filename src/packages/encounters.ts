@@ -14,6 +14,8 @@
 // live on World, driven by these numbers.
 // ---------------------------------------------------------------------------
 
+import type { ArenaSpec } from '../data/arenas';
+
 /** One size band an encounter can roll into — the small-vs-large variance. */
 export interface EncounterScale {
   id: string;
@@ -77,6 +79,11 @@ export interface InvasionType {
   meteorMul: number;
   /** Tint for the minimap epicenter wash (defaults to the demon red). */
   color?: string;
+  /** THIS TYPE'S OWN REALM ARENA (data/arenas.ts) — the underworld its portal
+   *  opens onto: tileset, layout recipe, name, pack density, and (the Chaos-
+   *  Sanctuary move) ward seals the player must break before the Balor
+   *  manifests. Absent = the surge's shared portal.tileset, classic behavior. */
+  realm?: ArenaSpec;
 }
 
 /** One duration THRESHOLD row of the escalation ladder — the modular, no-
@@ -142,6 +149,11 @@ export interface DemonSurge {
   portal: {
     /** Elapsed seconds after which the epicenter tears a portal open. */
     atSeconds: number;
+    /** WHEN the rift stands: 'epicenter' = as soon as the epicenter zone
+     *  materializes (every epicenter always offers its realm — the reward
+     *  premium still scales with the stage you dive at); 'stage' (default) =
+     *  only once age/opensPortal say so, the classic fester-gate. */
+    openAt?: 'epicenter' | 'stage';
     tileset: string;
     champion: { monsterId: string; levelBonus: number; ledgerKill: string };
     /** Reward multiplier per stage reached when the realm is cleared. */

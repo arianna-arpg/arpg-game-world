@@ -22,6 +22,7 @@ import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { doodadRuleOf, type Doodad } from '../engine/levelgen';
 import { transitRing } from '../data/transit';
+import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
 import { VEIL_DEFAULTS } from '../engine/veil';
 import { DEFENSE_CFG } from '../engine/defense';
 import { QUEST_GIVER_IDS } from '../quests/defs';
@@ -533,74 +534,81 @@ export class Renderer {
         ctx.restore();
       }
     }
-    // Demon-realm rifts: a swirling molten tear you step into for the realm.
-    for (const dp of world.demonPortalsView()) {
-      const pulse = 1 + 0.18 * Math.sin(world.time * 5);
-      ctx.save();
-      ctx.translate(dp.pos.x, dp.pos.y);
-      ctx.beginPath(); ctx.arc(0, 0, 34 * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = '#3a0010'; ctx.globalAlpha = 0.6; ctx.fill();
-      ctx.globalAlpha = 0.9; ctx.lineWidth = 3; ctx.strokeStyle = '#c81e3a'; ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, 20 * pulse, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ff6a3a'; ctx.lineWidth = 2; ctx.globalAlpha = 0.85; ctx.stroke();
-      ctx.globalAlpha = 1; ctx.fillStyle = '#ffd0b0'; ctx.font = '18px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('✶', 0, 0);
-      ctx.restore();
+    // REALM GATES — the demon rift, crusade sanctum, necropolis way and
+    // fracture tear all draw through ONE pass; each gate's whole look (halo,
+    // rims, churn, rays, motes, glyph, prompt) is its kind's data row in
+    // data/gateVisuals.ts, '@event' slots tinting with the event's own color.
+    for (const g of world.realmGatesView()) this.drawRealmGate(g, world.time);
+  }
+
+  /** THE gate painter — every realm gate draws from its GateLook row. */
+  private drawRealmGate(g: { pos: Vec2; kind: string; color?: string }, time: number): void {
+    const look = gateLookOf(g.kind);
+    const col = (c: string): string => c === EVENT_COLOR ? (g.color ?? '#c8c8e8') : c;
+    const { ctx } = this;
+    const pulse = 1 + look.pulseAmp * Math.sin(time * look.pulseHz);
+    const r = look.radius * pulse;
+    ctx.save();
+    ctx.translate(g.pos.x, g.pos.y);
+    // The halo: a soft breathing glow pooled under the mouth.
+    if (look.halo) {
+      const grad = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, look.halo.radius);
+      grad.addColorStop(0, col(look.rim));
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.globalAlpha = look.halo.alpha * (0.8 + 0.2 * pulse);
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(0, 0, look.halo.radius, 0, Math.PI * 2); ctx.fill();
     }
-    // Crusade sanctum gates: a gilded portal you step into for the Leader's realm.
-    for (const cp of world.crusadePortalsView()) {
-      const pulse = 1 + 0.16 * Math.sin(world.time * 4);
-      ctx.save();
-      ctx.translate(cp.pos.x, cp.pos.y);
-      ctx.beginPath(); ctx.arc(0, 0, 34 * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = '#241c08'; ctx.globalAlpha = 0.6; ctx.fill();
-      ctx.globalAlpha = 0.9; ctx.lineWidth = 3; ctx.strokeStyle = '#d8b040'; ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, 20 * pulse, 0, Math.PI * 2);
-      ctx.strokeStyle = '#ffe070'; ctx.lineWidth = 2; ctx.globalAlpha = 0.85; ctx.stroke();
-      ctx.globalAlpha = 1; ctx.fillStyle = '#fff0c0'; ctx.font = '18px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('☗', 0, 0);
-      ctx.restore();
-    }
-    // Necropolis gates: a great pale-bone portal — step in for the seat of the dead
-    // (the uber). Larger + slower-pulsing than the sibling gates so it reads as a
-    // deliberate, weighty way in, not an ambush.
-    for (const np of world.necropolisPortalsView()) {
-      const pulse = 1 + 0.14 * Math.sin(world.time * 3);
-      ctx.save();
-      ctx.translate(np.pos.x, np.pos.y);
-      ctx.beginPath(); ctx.arc(0, 0, 42 * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = '#1a1812'; ctx.globalAlpha = 0.62; ctx.fill();
-      ctx.globalAlpha = 0.95; ctx.lineWidth = 3.5; ctx.strokeStyle = '#d8cdb0'; ctx.stroke();
-      ctx.beginPath(); ctx.arc(0, 0, 26 * pulse, 0, Math.PI * 2);
-      ctx.strokeStyle = '#f0e8cc'; ctx.lineWidth = 2; ctx.globalAlpha = 0.85; ctx.stroke();
-      ctx.globalAlpha = 1; ctx.fillStyle = '#f0e8cc'; ctx.font = '22px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('☗', 0, 0);
-      ctx.restore();
-    }
-    // Fracture capstone rifts: a churning variant-colored tear — step in for the
-    // boss chamber (the climax of a full max-span fracture chain).
-    for (const fr of world.fractureRiftsView()) {
-      const pulse = 1 + 0.2 * Math.sin(world.time * 5);
-      ctx.save();
-      ctx.translate(fr.pos.x, fr.pos.y);
-      ctx.rotate(world.time * 0.6);
-      ctx.beginPath(); ctx.arc(0, 0, 36 * pulse, 0, Math.PI * 2);
-      ctx.fillStyle = '#0a0410'; ctx.globalAlpha = 0.7; ctx.fill();
-      ctx.globalAlpha = 0.95; ctx.lineWidth = 3.5; ctx.strokeStyle = fr.color; ctx.stroke();
-      // jagged inner rays (a tear, not a ring)
-      ctx.globalAlpha = 0.85; ctx.lineWidth = 2; ctx.strokeStyle = fr.color;
+    if (look.spin) ctx.rotate(time * look.spin);
+    // The mouth: dark core + twin rims (the inner counter-pulses — a breathing throat).
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.fillStyle = look.core; ctx.globalAlpha = 0.66; ctx.fill();
+    ctx.globalAlpha = 0.92; ctx.lineWidth = 3; ctx.strokeStyle = col(look.rim); ctx.stroke();
+    ctx.globalAlpha = 0.5; ctx.lineWidth = 1.5;
+    ctx.setLineDash([7, 9]); ctx.lineDashOffset = -time * 26; // the slow churn orbit
+    ctx.beginPath(); ctx.arc(0, 0, r + 7, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    ctx.beginPath(); ctx.arc(0, 0, look.radius * 0.58 * (2 - pulse), 0, Math.PI * 2);
+    ctx.strokeStyle = col(look.inner); ctx.lineWidth = 2; ctx.globalAlpha = 0.85; ctx.stroke();
+    // Tear rays: jagged spokes — a wound in the world, not a doorway.
+    if (look.rays) {
+      ctx.globalAlpha = 0.85; ctx.lineWidth = 2; ctx.strokeStyle = col(look.inner);
       ctx.beginPath();
-      for (let k = 0; k < 8; k++) {
-        const a = (k / 8) * Math.PI * 2;
-        const r2 = (12 + (k % 2) * 8) * pulse;
-        ctx.moveTo(Math.cos(a) * 5, Math.sin(a) * 5);
-        ctx.lineTo(Math.cos(a) * r2, Math.sin(a) * r2);
+      for (let k = 0; k < look.rays.count; k++) {
+        const a = (k / look.rays.count) * Math.PI * 2;
+        const rr = (look.rays.r1 + (k % 2) * look.rays.alt) * pulse;
+        ctx.moveTo(Math.cos(a) * look.rays.r0, Math.sin(a) * look.rays.r0);
+        ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
       }
       ctx.stroke();
-      ctx.restore();
-      ctx.globalAlpha = 0.9; ctx.fillStyle = fr.color; ctx.font = 'bold 11px Verdana';
-      ctx.textAlign = 'center';
-      ctx.fillText('a rift yawns — step in', fr.pos.x, fr.pos.y - 48);
+    }
+    ctx.restore();
+    // Motes orbit UPRIGHT (outside the spin), embers circling the threshold.
+    if (look.motes) {
+      ctx.fillStyle = col(look.inner);
+      for (let k = 0; k < look.motes.count; k++) {
+        const a = time * look.motes.hz + (k / look.motes.count) * Math.PI * 2;
+        ctx.globalAlpha = 0.35 + 0.35 * Math.sin(time * 2.2 + k * 1.9);
+        ctx.beginPath();
+        ctx.arc(g.pos.x + Math.cos(a) * look.motes.orbit, g.pos.y + Math.sin(a) * look.motes.orbit * 0.8,
+          look.motes.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    // Glyph + prompt stay upright and legible whatever the gate does.
+    if (look.glyph) {
+      ctx.globalAlpha = 1; ctx.fillStyle = look.glyphColor ?? col(look.inner);
+      ctx.font = `${look.glyphSize ?? 18}px sans-serif`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(look.glyph, g.pos.x, g.pos.y);
+      ctx.textBaseline = 'alphabetic';
+    }
+    if (look.prompt) {
+      ctx.globalAlpha = 0.9; ctx.font = 'bold 11px Verdana'; ctx.textAlign = 'center';
+      ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.lineWidth = 3;
+      ctx.strokeText(look.prompt, g.pos.x, g.pos.y - look.radius - 13);
+      ctx.fillStyle = col(look.promptColor ?? look.inner);
+      ctx.fillText(look.prompt, g.pos.x, g.pos.y - look.radius - 13);
       ctx.globalAlpha = 1;
     }
   }

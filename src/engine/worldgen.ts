@@ -756,7 +756,21 @@ function rollCaveLayout(ts: TilesetDef, rng: Rng): string | undefined {
   return undefined;
 }
 
-export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId = 'cavern'): ZoneDef {
+/** Build-sheet overrides for a minted pocket (realm ARENAS author these —
+ *  data/arenas.ts). Each slot swaps one rolled decision for an authored one;
+ *  omitted slots keep the classic cave behavior. Callers without opts are
+ *  BYTE-IDENTICAL to before (the seeded draw-order contract below). */
+export interface CaveMintOpts {
+  /** Force a layout recipe — branches exactly where forceLayout does, BEFORE
+   *  the layout roll (so the rng stream shifts only for the opts caller). */
+  layoutType?: string;
+  /** Recipe knobs, as a biome would pass them (ZoneDef.layoutParams). */
+  layoutParams?: Record<string, unknown>;
+  /** A fixed name instead of the tileset's rolled one. */
+  name?: string;
+}
+
+export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId = 'cavern', opts?: CaveMintOpts): ZoneDef {
   const ts = TILESETS[tilesetId] ?? TILESETS['cavern'];
   const rng = new Rng(entranceSeed);
   const w = Math.round(rng.range(ts.sizeW[0], ts.sizeW[1]));
@@ -770,7 +784,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // the legacy default (rooms 35% / plains 65%). Either path draws EXACTLY ONE
   // rng value, and forceLayout branches BEFORE the roll, exactly as the old id
   // check did — the seeded draw order is a compatibility contract.
-  const layoutType = ts.forceLayout ?? rollCaveLayout(ts, rng);
+  const layoutType = opts?.layoutType ?? ts.forceLayout ?? rollCaveLayout(ts, rng);
   // THE CAVE LADDER: depth counts caves-within-caves. A cave shy of the bottom
   // MAY conceal a deeper mouth — a seeded ROLL (CAVE_LADDER.deeperChance), so
   // nesting stays a discovery, not a guarantee; a rolled mouth's placement IS
@@ -786,9 +800,9 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   const layout = deeper ? [...ts.layout, { kind: 'cave' as const, count: [1, 1] as [number, number] }] : ts.layout;
   return {
     id,
-    name: depth >= 2 && !breach ? `Deep ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
+    name: opts?.name ?? (depth >= 2 && !breach ? `Deep ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
       : breach ? `${rng.pick(ts.nameFirst)} Breach`
-        : `${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`,
+        : `${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`),
     level: parent.level + (depth >= 2 ? 1 : 0),
     size: { w, h },
     shape: 'rect',                          // caves stay rect — no ellipse rim math
@@ -796,6 +810,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     theme: ts.theme,
     layout,
     ...(layoutType ? { layoutType } : {}),
+    ...(opts?.layoutParams ? { layoutParams: opts.layoutParams } : {}),
     objective: { kind: 'clear' },           // never gates the way back out
     packs: ts.packs,
     exits: [{ to: parent.id, side: 's' }],  // the sole exit — back to the surface

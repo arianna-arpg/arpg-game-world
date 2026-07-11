@@ -32,6 +32,7 @@
 
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
+import type { ArenaSpec } from '../../data/arenas';
 import type { PackTableEntry, ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { coordDist, type MapCoord } from '../../world/coords';
@@ -101,6 +102,9 @@ export interface NecropolisCfg {
   garrison: [number, number];
   /** The purge bounty (the combined-event payoff). */
   reward: { xpBase: number; xpPerLevel: number; gems: number };
+  /** Optional arena build sheet (data/arenas.ts) — forced recipe, fixed name,
+   *  pack density, ward seals — the same distinctness lever every realm has. */
+  arena?: ArenaSpec;
 }
 
 /** The whole Deadwake mechanic as data (mirrors DemonSurge / CrusadeSurge). */

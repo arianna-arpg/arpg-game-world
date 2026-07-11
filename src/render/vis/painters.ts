@@ -4144,6 +4144,85 @@ const pentagram: GroupPainter = (env, group) => {
   ctx.globalAlpha = 1;
 };
 
+/** ARENA WARD SEALS (data/arenas.ts) — the ritual anchors gating a realm's
+ *  boss. A ground sigil: scorched pan, twin rune rings (the outer binding
+ *  slowly orbits), a bound star rolled five- or six-pointed per seal, and a
+ *  breathing ember heart. `broken: true` params draw the shattered face —
+ *  greyed, still, cracked through, heart dark. */
+const wardSeal: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { ring?: string; sigil?: string; ember?: string; broken?: boolean };
+  const { ctx, theme, time } = env;
+  const broken = !!p.broken;
+  const ring = resolveColor(p.ring, theme, broken ? '#584f46' : '#c8763a');
+  const sigil = resolveColor(p.sigil, theme, broken ? '#463f38' : '#ffb066');
+  const ember = resolveColor(p.ember, theme, '#ff9a50');
+  for (const o of group) {
+    const seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
+    const R = o.radius;
+    const pulse = broken ? 0 : 0.5 + 0.5 * Math.sin(time * 2.6 + seed * 0.13);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Scorched pan under the sigil.
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = shade(ring, -0.7);
+    ctx.beginPath(); ctx.ellipse(0, 0, R * 1.2, R * 0.98, 0, 0, Math.PI * 2); ctx.fill();
+    // Twin rune rings — the dashed binding orbits while the seal lives.
+    ctx.globalAlpha = broken ? 0.5 : 0.7 + 0.25 * pulse;
+    ctx.strokeStyle = ring; ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.stroke();
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([5, 6]); ctx.lineDashOffset = broken ? 0 : -time * 9;
+    ctx.beginPath(); ctx.arc(0, 0, R * 0.76, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    // The bound star — five or six points, no two rites alike.
+    const n = 5 + (seed % 2);
+    const rot = hash01(seed, 7) * Math.PI * 2;
+    const pts: { x: number; y: number }[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = rot + (i / n) * Math.PI * 2;
+      pts.push({ x: Math.cos(a) * R * 0.72, y: Math.sin(a) * R * 0.72 });
+    }
+    ctx.strokeStyle = sigil; ctx.lineWidth = 1.8;
+    ctx.globalAlpha = broken ? 0.4 : 0.55 + 0.35 * pulse;
+    ctx.beginPath();
+    if (n === 5) {
+      for (let k = 0; k <= 5; k++) { const pt = pts[[0, 2, 4, 1, 3][k % 5]]; if (k === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y); }
+    } else {
+      for (const tri of [[0, 2, 4], [1, 3, 5]]) {
+        ctx.moveTo(pts[tri[0]].x, pts[tri[0]].y);
+        ctx.lineTo(pts[tri[1]].x, pts[tri[1]].y);
+        ctx.lineTo(pts[tri[2]].x, pts[tri[2]].y);
+        ctx.closePath();
+      }
+    }
+    ctx.stroke();
+    if (broken) {
+      // Cracked through: two dead fracture strokes across the face.
+      ctx.strokeStyle = shade(ring, -0.3); ctx.lineWidth = 2.2; ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.moveTo(-R * 0.9, -R * 0.28); ctx.lineTo(-R * 0.2, 0); ctx.lineTo(R * 0.85, R * 0.4);
+      ctx.moveTo(-R * 0.35, R * 0.8); ctx.lineTo(0, R * 0.1); ctx.lineTo(R * 0.3, -R * 0.85);
+      ctx.stroke();
+      // The heart, gone dark.
+      ctx.globalAlpha = 0.8; ctx.fillStyle = shade(ring, -0.75);
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.2, 0, Math.PI * 2); ctx.fill();
+    } else {
+      // The ember heart, breathing.
+      const hg = ctx.createRadialGradient(0, 0, R * 0.04, 0, 0, R * 0.4);
+      hg.addColorStop(0, withAlpha(ember, 0.85));
+      hg.addColorStop(1, withAlpha(ember, 0));
+      ctx.globalAlpha = 0.55 + 0.4 * pulse;
+      ctx.fillStyle = hg;
+      ctx.beginPath(); ctx.arc(0, 0, R * 0.4, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = ember;
+      ctx.beginPath(); ctx.arc(0, 0, R * (0.09 + 0.03 * pulse), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+};
+
 /** Structure doors — closed bar / swung open / splintered stubs. */
 const door: GroupPainter = (env, group) => {
   const { ctx } = env;
@@ -5482,7 +5561,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
-  tentacleField, pentagram, door, breach, landmass, beacon, fallback,
+  tentacleField, pentagram, wardSeal, door, breach, landmass, beacon, fallback,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------
