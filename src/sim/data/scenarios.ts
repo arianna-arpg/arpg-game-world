@@ -10,6 +10,7 @@
 import { CLASSES } from '../../data/classes';
 import { SKILLS } from '../../data/skills';
 import { STARTER_CLASSES } from '../../meta/account';
+import type { MonsterRarity } from '../../engine/rarity';
 import type { PilotSpec, ScenarioDef } from '../types';
 
 /** How a human plays the class, derived from its OWN bar: a spell-led kit
@@ -161,6 +162,64 @@ add({
   notes: 'Exercises ChannelSpec.intervalJitter + VarianceSpec.aoe deterministically (crash/regression net).',
 });
 
+// --------------------------------------------------------------- matchups --
+
+/** Matchup knobs — the instrument's defaults, adjustable per call. */
+export const MATCHUP_CFG = {
+  /** Sim-seconds per matchup episode. Long enough for several kill cycles
+   *  against a tanky texture at parity investment. */
+  duration: 45,
+  /** Seconds between a cycle's last death and the next fresh body. */
+  respawnDelay: 1.0,
+};
+
+/** THE MATCHUP DUEL: one build against an endless supply of ONE monster,
+ *  each kill cycle a fresh body (poise bars, shells, ES re-armed). Headline
+ *  metrics: edps_cycle_mean (output into that texture), ttk_wave_mean,
+ *  dps_in / life_floor_pct (what it costs to stand there). This is the
+ *  skill-×-enemy-texture axis: run it over a target panel and the spread
+ *  across textures IS the interaction finding. */
+export function matchupDuel(
+  buildId: string,
+  monsterId: string,
+  opts: {
+    level?: number; count?: number; rarity?: MonsterRarity;
+    duration?: number; pilot?: PilotSpec; idTag?: string;
+  } = {},
+): ScenarioDef {
+  const count = opts.count ?? 1;
+  const bits = [
+    'matchup', opts.idTag ?? buildId, 'vs', monsterId,
+    ...(count > 1 ? [`x${count}`] : []),
+    ...(opts.rarity && opts.rarity !== 'normal' ? [opts.rarity] : []),
+    ...(opts.level !== undefined ? [`l${opts.level}`] : []),
+  ];
+  return {
+    id: bits.join('_'),
+    label: `Matchup — ${buildId} vs ${monsterId}${opts.rarity ? ` (${opts.rarity})` : ''}`,
+    build: buildId,
+    pilot: opts.pilot,
+    ...(opts.level !== undefined ? { parityLevel: opts.level } : {}),
+    waves: [{
+      monsters: [{ id: monsterId, ...(opts.level !== undefined ? { level: opts.level } : {}), count, ...(opts.rarity ? { rarity: opts.rarity } : {}) }],
+      respawnOnClear: MATCHUP_CFG.respawnDelay,
+    }],
+    duration: opts.duration ?? MATCHUP_CFG.duration,
+    stop: 'duration',
+    notes: 'edps_cycle_mean = effective DPS into this texture; dps_in/life_floor_pct = the price of the fight.',
+  };
+}
+
+// Curated early matchups: both starter archetypes across confirmed texture
+// seats (the parity trio + the two shell lessons). Panel-driven sweeps cover
+// the rest — these exist so `run --suite matchups` answers the everyday
+// "did a data change move a texture interaction" question cheaply.
+for (const classId of ['warrior', 'magician']) {
+  for (const m of ['zombie', 'skeleton_warrior', 'blood_mite', 'tide_whelk', 'bulwark_scuttler']) {
+    add(matchupDuel(`starter_${classId}_l5`, m, { level: 5, pilot: pilotFor(classId) }));
+  }
+}
+
 // ------------------------------------------------------------------ suites --
 
 /** Named bundles: the unit a balance pass (or a CI gate) runs. */
@@ -182,6 +241,8 @@ export const SUITES: Record<string, string[]> = {
   duels: Object.keys(SCENARIOS).filter(id => id.startsWith('duel_')),
   /** The minion-support forwarding A/B pairs (bare vs forwarded gems). */
   minions: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_probe_')),
+  /** Curated texture matchups (starter archetypes × confirmed texture seats). */
+  matchups: Object.keys(SCENARIOS).filter(id => id.startsWith('matchup_')),
   /** The fortune-fabric probes (rollTop gates, riders, spread, variance). */
   fortune: Object.keys(SCENARIOS).filter(id => id.startsWith('fortune_probe_')),
   /** Everything registered. */

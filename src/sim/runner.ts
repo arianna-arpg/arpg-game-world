@@ -19,14 +19,14 @@ import type { World } from '../engine/world';
 import { MONSTERS } from '../data/monsters';
 import type { PlayerInput } from '../net/intent';
 import { SIM_CFG, makeSimWorld } from './arena';
-import { applyBuild } from './builds';
+import { applyAnyBuild, entryClassId, entryLevel } from './builds';
 import { Collector, aggregate, collectMetrics, round2, summarize } from './metrics';
 import { makePilot } from './pilots';
 import { deriveSeed, seedGlobalRandom } from './rng';
 import { BUILDS } from './data/builds';
-import type { BuildSpec, EpisodeResult, ScenarioDef, ScenarioReport, WaveSpec } from './types';
+import type { BuildEntry, EpisodeResult, ScenarioDef, ScenarioReport, WaveSpec } from './types';
 
-export function resolveBuild(ref: string | BuildSpec): BuildSpec {
+export function resolveBuild(ref: string | BuildEntry): BuildEntry {
   if (typeof ref !== 'string') return ref;
   const spec = BUILDS[ref];
   if (!spec) throw new Error(`sim: unknown build '${ref}' (have: ${Object.keys(BUILDS).join(', ')})`);
@@ -40,6 +40,9 @@ interface LiveWave {
   members: Actor[];        // the LATEST spawn's members (repeat waves overwrite)
   spawnedAt: number;
   clearedAt: number | null;
+  /** Effective kill pool (life + ES, post-promotion) of the latest spawn —
+   *  the numerator of edps_cycle_mean. */
+  cyclePool: number;
 }
 
 function spawnWave(world: World, wave: WaveSpec, parityLevel: number, warnings: string[]): Actor[] {
@@ -69,8 +72,8 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
   let world: World | null = null;
   try {
     const build = resolveBuild(scenario.build);
-    world = makeSimWorld(build.classId, seed);
-    warnings.push(...applyBuild(world, build, deriveSeed(seed, 0x9ea7)));
+    world = makeSimWorld(entryClassId(build), seed);
+    warnings.push(...applyAnyBuild(world, build, deriveSeed(seed, 0x9ea7)));
     // Freeze XP by default: mid-episode level-ups would move the thing being
     // measured. xpNeeded is per-seat data, so a data-sized freeze suffices.
     if (scenario.freezeXp !== false) world.meta.xpNeeded = Number.MAX_SAFE_INTEGER;
@@ -84,11 +87,16 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
     setSimTap(collector);
 
     const dt = SIM_CFG.dt;
-    const parity = scenario.parityLevel ?? build.level;
+    const parity = scenario.parityLevel ?? entryLevel(build);
     const waves: LiveWave[] = scenario.waves.map(w => ({
-      spec: w, nextAt: w.at ?? 0, spawned: 0, members: [], spawnedAt: 0, clearedAt: null,
+      spec: w, nextAt: w.at ?? 0, spawned: 0, members: [], spawnedAt: 0, clearedAt: null, cyclePool: 0,
     }));
-    const repeating = waves.some(w => w.spec.repeatEvery !== undefined);
+    for (const w of waves) {
+      if (w.spec.repeatEvery !== undefined && w.spec.respawnOnClear !== undefined) {
+        warnings.push(`wave sets both repeatEvery and respawnOnClear — repeatEvery wins`);
+      }
+    }
+    const repeating = waves.some(w => w.spec.repeatEvery !== undefined || w.spec.respawnOnClear !== undefined);
     let stop = scenario.stop ?? (repeating ? 'duration' : 'waves_dead');
     if (stop === 'waves_dead' && repeating) {
       warnings.push(`stop 'waves_dead' with repeating waves — falling back to 'duration'`);
@@ -98,6 +106,9 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
     const sampleEvery = Math.max(1, Math.round(1 / ((scenario.sampleHz ?? SIM_CFG.sampleHz) * dt)));
     const maxTicks = Math.min(Math.ceil(scenario.duration / dt), SIM_CFG.maxTicksHardCap);
     const clearTimes: number[] = [];
+    // One entry per CLEARED spawn cycle: how big the body was and how long it
+    // took — pool/ttk is the effective-DPS-into-this-texture reading.
+    const cycles: { ttk: number; pool: number }[] = [];
     let ended = 'duration';
     let t = 0;
 
@@ -105,10 +116,14 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       t = tick * dt;
       collector.tick(t);
 
-      // Wave spawns due this tick.
+      // Wave spawns due this tick. respawnOnClear waves re-arm nextAt in the
+      // clear hook below, so "nextAt is finite and due" is the whole gate.
       for (const w of waves) {
-        if (w.nextAt <= t && (w.spawned === 0 || w.spec.repeatEvery !== undefined)) {
+        if (w.nextAt <= t && (w.spawned === 0 || w.spec.repeatEvery !== undefined
+          || (w.spec.respawnOnClear !== undefined && w.clearedAt !== null))) {
           w.members = spawnWave(world, w.spec, parity, warnings);
+          // Post-promotion sheet read: the pool a kill actually chews through.
+          w.cyclePool = w.members.reduce((s, a) => s + a.maxLife() + a.maxEs(), 0);
           w.spawnedAt = t;
           w.clearedAt = null;
           w.spawned++;
@@ -131,7 +146,14 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       for (const w of waves) {
         if (w.spawned > 0 && w.clearedAt === null && w.members.length && w.members.every(a => a.dead)) {
           w.clearedAt = t;
-          clearTimes.push(round2(t - w.spawnedAt));
+          const ttk = round2(t - w.spawnedAt);
+          clearTimes.push(ttk);
+          cycles.push({ ttk, pool: w.cyclePool });
+          // Matchup duels: schedule the next fresh body (repeatEvery wins the
+          // conflict — its clock is already armed).
+          if (w.spec.respawnOnClear !== undefined && w.spec.repeatEvery === undefined) {
+            w.nextAt = t + w.spec.respawnOnClear;
+          }
         }
       }
 
@@ -153,9 +175,17 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       metrics.ttk_wave_mean = s.mean;
       metrics.ttk_wave_max = s.max;
     }
+    if (cycles.length) {
+      // Effective DPS through kill cycles: pool ÷ time-to-kill, per cycle.
+      // THE matchup headline — comparable across defense textures because a
+      // bigger pool and a longer kill cancel where raw ttk would mislead.
+      metrics.cycles_cleared = cycles.length;
+      metrics.cycle_pool_mean = summarize(cycles.map(c => c.pool)).mean;
+      metrics.edps_cycle_mean = summarize(cycles.map(c => c.pool / Math.max(c.ttk, dt))).mean;
+    }
     const heroDeath = collector.deaths.find(d => d.who === 'player');
     if (heroDeath) metrics.died_at = heroDeath.t;
-    metrics.hero_level = resolveBuild(scenario.build).level;
+    metrics.hero_level = entryLevel(resolveBuild(scenario.build));
     metrics.hero_max_life = round2(heroMaxLife);
     metrics.hero_max_mana = round2(heroMaxMana);
     metrics.warning_count = warnings.length + collector.warnings.length;

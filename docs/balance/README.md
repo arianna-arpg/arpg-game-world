@@ -16,8 +16,12 @@ hilarious **on purpose**, with the outliers known, chosen, and revisitable.
 ```
 npm run sim -- run --suite smoke          # the confidence check (run after ANY data change)
 npm run sim -- run --suite starters --seeds 10
+npm run sim -- run --suite starters --as save:1        # the same questions, YOUR character
 npm run sim -- sweep skills --level 5     # every attack/spell skill, solo, ranked
+npm run sim -- sweep skills --level 5 --vs panel:textures_l8   # skill × enemy-texture matrix
+npm run sim -- sweep matchups --build player_my_char --panel textures_l8  # one build across the poles
 npm run sim -- audit monsters             # stat curves per level band
+npm run sim -- audit textures --check-panels  # the defense-texture ledger + panel drift gate
 npm run sim -- manifest                   # machine-readable catalog of everything runnable
 npm run sim -- baseline check --suite smoke   # regression gate (exit 2 on breach)
 ```
@@ -64,14 +68,27 @@ human table). Baselines live in `balance/baselines/` and are **committed**.
   itself doesn't know who lit the fire); DoT absorbed by energy shield isn't
   split out; wave `rarity` promotions use the real `promoteMonster` path but
   no elite-affix scenarios exist yet.
+- **Texture classification is derived, and shells fade.** `audit textures`
+  reads live specimens (deterministically seeded) and judges poles against
+  cohort medians (`TEXTURE_CFG`). Monster shell plates are flat def constants
+  while life scales with level, so a shell's LIVE fraction shrinks as levels
+  rise — the classifier uses the AUTHORED ratio (plate ÷ level-1 body) for
+  identity and reports both (`shell.fracAuthored` / `fracLive`). Whether
+  shells *should* fade with level is an open design question the audit now
+  makes visible.
+- **Matchup pools count life+ES only.** `cycle_pool_mean` excludes shell
+  plates (directional coverage — a rear plate costs a brawler nothing), so
+  `edps_cycle_mean` into a shelled monster honestly reads lower when the
+  build actually had to chew the plate.
 
 ## The measurement tiers
 
 | Tier | Command | Question it answers | Cost |
 |---|---|---|---|
-| L0 static | `manifest`, `audit monsters` | What exists? What are the stat curves? | ms |
+| L0 static | `manifest`, `audit monsters`, `audit textures` | What exists? Stat curves? Which defensive poles are populated? | ms |
 | L1 dummy | `run --scenario dummy_dps_*`, `sweep skills` | Sustained output at equal investment | ~0.1s/episode |
-| L2 arena | `ttk_parity_*`, `pressure_*`, `duel_*` suites | Clear feel, survival, per-monster threat | ~0.2s/episode |
+| L2 arena | `ttk_parity_*`, `pressure_*`, `duel_*`, `matchup_*` suites | Clear feel, survival, per-monster threat | ~0.2s/episode |
+| L2 matrix | `sweep matchups`, `sweep skills --vs panel:…` | Build/skill × enemy-texture interaction grid | rows × cols × seeds episodes |
 | L3 (future) | zone/economy sims | Loot rates, XP tempo, event pressure | seconds |
 
 Speed is the design constraint that matters: a full smoke suite is ~3s, a
@@ -99,6 +116,12 @@ Per-episode scalars (aggregated across seeds in `report.json`):
   presses from mechanical repeats per skill.
 - `hero_level`, `hero_max_life`, `hero_max_mana` — the injected sheet, so a
   report explains its own survivability numbers.
+- `cycles_cleared` / `cycle_pool_mean` / `edps_cycle_mean` — kill-cycle
+  metrics from `respawnOnClear` waves (matchup duels): how many fresh bodies
+  died, how big each was (life+ES, post-promotion), and pool÷TTK per cycle —
+  **effective DPS into that defense texture**, comparable across textures
+  where raw TTK misleads. A matchup row with `cycles_cleared` absent is a
+  WALL: the build never finished one kill in the window (that's the finding).
 - `warning_count` — anything irregular (over-budget tree, misfit support,
   unknown ids, non-finite vitals). **A warned row is not a balance datum.**
 
@@ -138,6 +161,32 @@ wrong; baselines express "don't move things by accident" and are exact.
   need a trigger. Each needs a richer scenario before its number means
   anything. Broken kits also land here — that's the point of the list.
 
+**The matchup matrix** (`sweep matchups`, `sweep skills --vs`):
+- Targets come from **panels** (`src/sim/data/panels.ts`): rosters mixing
+  literal monster ids with texture QUERIES resolved through the live
+  classifier (`src/sim/textures.ts`) — so `panel:textures_l8` always means
+  "one representative per populated defensive pole, as of this content".
+- Matchup duels use `respawnOnClear` waves: every kill cycle fights a FRESH
+  body, so poise bars, shells, and ES re-arm and `edps_cycle_mean` reads the
+  full texture, not a broken remnant.
+- The reading is the SPREAD: a skill at 1.2× across textures is
+  texture-blind; 4× is an identity; `∞ WALL` (zero cycles beside living
+  columns) is either a designed hard-counter or a broken interaction — decide
+  which on purpose.
+- Cost math is printed before running: `skills × targets × seeds` episodes.
+  A full sweep against a 6-seat panel is ~6× the dummy sweep — filter first,
+  matrix second.
+
+**Actual player builds** — two refs, one seam (`applySavedCharacter`, the
+game's own resume path — exact rolled gear, gem levels, companions):
+- `--as save:<slot|path>` reads a LIVE save right now ("how does my character
+  do on the standard questions" — scenario ids get an `as_…__` prefix and
+  target bands deliberately don't grade them).
+- `balance/players/*.json` are COMMITTED fixtures auto-registered as
+  `player_<file>` build ids — the standing real-build library every sweep and
+  suite can name (see `balance/players/README.md`). Content drift on load
+  (a removed skill/affix) lands in warnings, never silently.
+
 **Seeds guidance:** 3 for a quick look, 10 for a decision, 30 when two results
 are within one standard deviation of each other. If `|Δ| < sd`, you don't have
 a result — you have a coin flip; add seeds instead of arguing.
@@ -148,6 +197,9 @@ a result — you have a coin flip; add seeds instead of arguing.
 |---|---|
 | a scenario / suite | `src/sim/data/scenarios.ts` (factory or literal) |
 | a reference build | `src/sim/data/builds.ts` |
+| a REAL build fixture | drop a `CharacterSave` in `balance/players/` |
+| a target panel | `src/sim/data/panels.ts` (literal ids + texture queries) |
+| a defense texture / threshold | `src/sim/textures.ts` (`TEXTURE_CFG` + one classify clause) |
 | a design band | `src/sim/data/targets.ts` |
 | a pilot policy | `src/sim/pilots.ts` (`PilotSpec` union + one class) |
 | a metric | `src/sim/metrics.ts` (collector field + `collectMetrics` key + glossary entry here) |

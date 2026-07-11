@@ -23,10 +23,11 @@ import {
 import { SLOT_BY_ID } from '../engine/items';
 import { rollItem } from '../engine/itemgen';
 import { emptyEssences, type PlayerMeta, type World } from '../engine/world';
+import { applySavedCharacter } from '../meta/character';
 import { DEFAULT_MODE_ID } from '../meta/modes';
 import { classById } from './arena';
 import { mulberry32 } from './rng';
-import type { BuildSkillSpec, BuildSpec } from './types';
+import type { BuildEntry, BuildSkillSpec, BuildSpec, SavedBuild } from './types';
 
 /** Smallest gem rarity whose socket count fits the requested supports. */
 function pickRarity(requested: SkillRarity | undefined, supportCount: number): SkillRarity {
@@ -207,4 +208,56 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
   };
   world.adoptSavedMeta(meta, bar, spec.level);
   return warnings;
+}
+// ------------------------------------------------------------ saved builds --
+
+export function isSavedBuild(entry: BuildEntry): entry is SavedBuild {
+  return 'fromSave' in entry;
+}
+
+/** The class the arena boots before injection. */
+export function entryClassId(entry: BuildEntry): string {
+  return isSavedBuild(entry) ? entry.fromSave.classId : entry.classId;
+}
+
+/** The character level a report attributes its numbers to. */
+export function entryLevel(entry: BuildEntry): number {
+  return isSavedBuild(entry) ? entry.fromSave.level : entry.level;
+}
+
+export function entryLabel(entry: BuildEntry): string {
+  return entry.label ?? entry.id;
+}
+
+/** Inject an ACTUAL saved character through the game's own resume path
+ *  (applySavedCharacter → adoptSavedMeta): exact rolled gear, exact gem
+ *  levels/sockets, allocated tree, companions, hired merc — the whole
+ *  entourage, because that IS the player's real power. The rebuild is
+ *  tolerant of removed content (that's the live loader's contract), so the
+ *  sim re-counts what survived and WARNS about anything dropped — a report
+ *  must never quietly grade a save that lost half its kit in a data change. */
+function applySavedBuild(world: World, sb: SavedBuild): string[] {
+  const warnings: string[] = [];
+  const save = sb.fromSave;
+  if (!applySavedCharacter(world, save)) {
+    return [`saved build '${sb.id}': class '${save.classId}' no longer exists — hero left at boot defaults`];
+  }
+  const meta = world.meta;
+  const lostSkills = (save.knownSkills?.length ?? 0) - meta.knownSkills.size;
+  if (lostSkills > 0) warnings.push(`saved build '${sb.id}': ${lostSkills} known skill(s) no longer rebuild (removed ids)`);
+  const savedEquip = Object.keys(save.equipped ?? {}).length;
+  const liveEquip = Object.values(meta.equipped).filter(Boolean).length;
+  if (liveEquip < savedEquip) warnings.push(`saved build '${sb.id}': ${savedEquip - liveEquip} equipped item(s) dropped in rebuild`);
+  const unknownNodes = [...meta.allocated].filter(id => !PASSIVE_NODES[id]);
+  if (unknownNodes.length) warnings.push(`saved build '${sb.id}': ${unknownNodes.length} allocated passive(s) unknown to the live tree: ${unknownNodes.join(', ')}`);
+  return warnings;
+}
+
+/** THE injection dispatch: every runner path goes through here, so an
+ *  authored BuildSpec and a real CharacterSave are interchangeable anywhere
+ *  a scenario names a build. */
+export function applyAnyBuild(world: World, entry: BuildEntry, fallbackGearSeed: number): string[] {
+  return isSavedBuild(entry)
+    ? applySavedBuild(world, entry)
+    : applyBuild(world, entry, fallbackGearSeed);
 }

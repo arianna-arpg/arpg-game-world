@@ -13,9 +13,13 @@ the contract.
 - `src/data/**` — skills, supports, monsters, affixes, uniques, loot tables,
   passives, zones, classes (numbers, tags, curves, tables).
 - Named `*_CFG` objects (`ITEM_CFG`, `DROP_CFG`, `DEFENSE_CFG`, `CRAFT_CFG`,
-  `GEM_DROP_CFG`, `MERC_CFG`, …) — they exist exactly for this.
-- `src/sim/data/**` — scenarios, suites, reference builds, target bands
-  (bands only as *hypotheses*: add/adjust with `provisional: true`).
+  `GEM_DROP_CFG`, `MERC_CFG`, `TEXTURE_CFG`, `MATCHUP_CFG`, …) — they exist
+  exactly for this.
+- `src/sim/data/**` — scenarios, suites, reference builds, target PANELS,
+  target bands (bands only as *hypotheses*: add/adjust with
+  `provisional: true`).
+- `balance/players/**` — committed real-build fixtures (CharacterSave JSONs);
+  curate like reference builds, a few honest snapshots per band.
 
 **You must not change without flagging for human sign-off:**
 - Engine mechanics (`src/engine/**` beyond the tap seams), the damage ladder's
@@ -34,14 +38,27 @@ the contract.
 - If `|Δ| < sd`, you have a coin flip, not a finding. Add seeds (10 → 30)
   before claiming anything.
 - Never compare across different pilots and call it a skill delta.
+- A matchup `∞ WALL` (zero kill cycles beside living columns) is a claim
+  about an INTERACTION — check the target's level/panel seat and the episode
+  window before calling it a counter, and never divide by it.
+- An UNPOPULATED texture pole from `audit textures` is a content gap to
+  report, not a reason to stretch a panel query until something matches.
+- `--as` runs are ungraded by design (bands assume reference builds). Compare
+  a real character to the reference build's numbers, not to the bands.
+- Substituting saves mid-pass: `save:` refs read the LIVE slot — a player
+  session running in parallel can rewrite it between runs. Pin fixtures into
+  `balance/players/` for anything you'll cite.
 
 ## The loop
 
 ```
 1. ORIENT      npm run sim -- manifest                 # what exists (JSON)
+               npm run sim -- audit textures           # which defensive poles are populated
 2. HEALTH      npm run sim -- baseline check --suite smoke   # exit 2 = repo already moved; stop and report
 3. MEASURE     npm run sim -- run --suite <nearest> --seeds 10
                npm run sim -- sweep skills --level <band> --seeds 5 [--filter x]
+               npm run sim -- sweep skills --level <band> --vs panel:textures_l8 [--filter x]
+               npm run sim -- sweep matchups --build <ref> --panel <id> --seeds 5
                npm run sim -- audit monsters
 4. HYPOTHESIZE one sentence: "<knob> causes <metric> to be <off-band> because <mechanism>"
 5. CHANGE      the smallest data diff that tests it (one knob family per pass)
@@ -70,9 +87,26 @@ Everything prints deterministic JSON to files; parse those, not the console.
   → same shapes + console ranking. The sweep rig pins all ten attributes to
   40 so requirement gates never confound the skill measurement — solo skill,
   no supports, no gear, same pilot.
+- `sweep skills --vs panel:<id> | --vs id[:lvl],…` → the same rigs against
+  killable respawn-duels instead of the dummy; emits `matrix.json`
+  (rows=skills, cols=targets, cells: edps/ttk/kills/dps_in/floor/deaths) and
+  a console matrix with a per-skill texture SPREAD. Cost = skills × targets ×
+  seeds episodes, printed before running — `--filter` first.
+- `sweep matchups --build <id|save:ref> (--panel <id> | --targets id[:lvl],…)
+  [--level N] [--duration N]` → one build across a target roster; console
+  table gives both directions (edps/ttk out, dps_in/floor/deaths back) plus
+  the edps spread; same `matrix.json`.
+- `run … --as <id|save:slot|save:path>` → the suite's scenarios with the
+  build swapped for a registry build or a REAL character (pilot re-derived
+  from its class; ids prefixed `as_…__` so bands don't grade them).
 - `audit monsters [--levels csv]` → `monsters.json` / `monsters.csv` rows:
   `{id, level, life, armor, evasion, moveSpeed, xp, boss, passive}` through
   the real `createMonster` (scaling included).
+- `audit textures [--level N] [--check-panels]` → `textures.json` /
+  `textures.csv`: per-monster defensive profile + assigned texture poles
+  (armor/evasion/es/poise/shell/apex/plain) with a census that names
+  unpopulated poles. `--check-panels` re-derives every curated panel claim
+  and exits 2 on drift — run it whenever monsters or `TEXTURE_CFG` move.
 - `compare A B [--tolerance 0.15] [--abs-eps 0.5]` → exit 2 + listing when a
   gated metric's mean moved beyond both thresholds. Gated set:
   `dps_out, dps_dummy, dps_in, ttk_wave_mean, kills, kill_rate,
@@ -85,13 +119,18 @@ Exit codes: `0` ok · `1` usage/internal error · `2` regression gate breached.
 ## Scaling a pass (breadth strategy)
 
 For "audit everything"-shaped asks, layer coverage:
-1. `manifest` + `audit monsters` — free, full breadth.
+1. `manifest` + `audit monsters` + `audit textures` — free, full breadth.
 2. `sweep skills` at 2–3 level bands — every attack/spell skill, ranked.
 3. `run --suite starters --seeds 10` — archetype health at the bands.
-4. Targeted deep-dives only where 1–3 flagged something (a `--filter` sweep
-   with supports via a custom build, a `duel_` matrix vs the outlier monster).
-5. For unknown-unknowns: propose new scenarios (that's a `src/sim/data/`
-   change — in your remit) rather than stretching conclusions past coverage.
+4. The interaction layer: `sweep skills --vs panel:textures_l8` on the
+   flagged band (filtered if wide), and `sweep matchups` for each reference
+   AND `player_*` build that band owns — spreads and WALLs are the findings.
+5. Targeted deep-dives only where 1–4 flagged something (a `--filter` sweep
+   with supports via a custom build, a `duel_` matrix vs the outlier monster,
+   a rarity-promoted panel seat for elite pressure).
+6. For unknown-unknowns: propose new scenarios/panels (that's a
+   `src/sim/data/` change — in your remit) rather than stretching conclusions
+   past coverage.
 
 State plainly what you did NOT cover. An honest coverage map beats implied
 omniscience.

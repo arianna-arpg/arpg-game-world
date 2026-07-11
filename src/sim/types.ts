@@ -18,6 +18,7 @@
 import type { SkillRarity } from '../engine/skills';
 import type { ItemRarity } from '../engine/items';
 import type { MonsterRarity } from '../engine/rarity';
+import type { CharacterSave } from '../meta/character';
 
 // ------------------------------------------------------------------ builds --
 
@@ -75,6 +76,20 @@ export interface BuildSpec {
   gearSeed?: number;
 }
 
+/** An ACTUAL player character, verbatim: the CharacterSave a real save slot
+ *  holds, injected through the SAME rebuild path a resumed game uses
+ *  (applySavedCharacter → adoptSavedMeta) — exact rolled gear, exact gem
+ *  levels, companions and all. This is how "sim my real character" works:
+ *  no transcription into a BuildSpec, no fidelity loss. */
+export interface SavedBuild {
+  id: string;
+  label?: string;
+  fromSave: CharacterSave;
+}
+
+/** Anything the BUILDS registry can hold / a scenario can name. */
+export type BuildEntry = BuildSpec | SavedBuild;
+
 // ------------------------------------------------------------------ pilots --
 
 /** How the hero's seat is driven. All pilots aim at the nearest living foe
@@ -109,6 +124,12 @@ export interface WaveSpec {
   /** Re-spawn this wave every N seconds (throughput pressure). Unbounded —
    *  pair with a duration stop. */
   repeatEvery?: number;
+  /** Re-spawn this many seconds after the wave DIES (matchup duels): every
+   *  kill cycle fights a fresh body, so poise bars, shells, and energy
+   *  shields re-arm and ttk_wave_mean samples each cycle cleanly. Feeds the
+   *  edps_cycle_mean metric. Unbounded — pair with a duration stop.
+   *  Mutually exclusive with repeatEvery (repeatEvery wins, with a warning). */
+  respawnOnClear?: number;
 }
 
 export type StopRule =
@@ -120,8 +141,8 @@ export type StopRule =
 export interface ScenarioDef {
   id: string;
   label?: string;
-  /** A BUILDS registry id, or an inline spec. */
-  build: string | BuildSpec;
+  /** A BUILDS registry id, or an inline spec (authored or save-backed). */
+  build: string | BuildEntry;
   pilot?: PilotSpec;
   /** Default monster level for waves that don't pin one (default: build level). */
   parityLevel?: number;

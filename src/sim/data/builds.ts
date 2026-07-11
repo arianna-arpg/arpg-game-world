@@ -10,7 +10,7 @@
 
 import { CLASSES } from '../../data/classes';
 import { PASSIVE_ADJACENCY, classStartNode } from '../../data/passives';
-import type { BuildSpec } from '../types';
+import type { BuildEntry, BuildSpec } from '../types';
 
 /** Roughly how a gem keeps pace with character level, absent fancy play.
  *  A deliberate, documented assumption — change it HERE, not per-build. */
@@ -61,8 +61,11 @@ export function starterBuild(classId: string, level: number): BuildSpec {
 }
 
 /** The registry. Starter kits at the canonical measurement bands, minted from
- *  the LIVE class bars (re-bar a class and these follow, zero edits here). */
-export const BUILDS: Record<string, BuildSpec> = {};
+ *  the LIVE class bars (re-bar a class and these follow, zero edits here).
+ *  Holds authored BuildSpecs AND save-backed builds (SavedBuild): the CLI
+ *  auto-registers balance/players/*.json as player_<name> and `save:` refs
+ *  on demand, so a real character is addressable wherever a build id is. */
+export const BUILDS: Record<string, BuildEntry> = {};
 
 const BAND_LEVELS = [1, 5, 10, 20] as const;
 for (const cls of CLASSES) {
