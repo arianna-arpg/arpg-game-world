@@ -68,8 +68,9 @@ import {
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
+import { transitDwell, transitRadius } from '../data/transit';
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
-import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
+import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
@@ -1109,12 +1110,11 @@ const EVENT_SPACING = 240;       // min gap between co-occurring world-event cen
 const ENCOUNTER_CAP = 26;        // max living enemies inside an open encounter field
 const FRACTURE_FOE_CAP = 24;     // max living fracture-spewed foes (perf + clearability)
 const ZONE_MEMORY_TTL = 600;     // seconds of GAME TIME a left zone is remembered (10 min)
-const ZONE_EXIT_DWELL = 0.5;     // seconds standing idle on a portal before it carries you
-// (Sidezone mouth dwell now lives with the registry: data/sidezones.ts dwellOf.)
-const REALM_GATE_DWELL = 0.5;    // seconds dwelling on a realm gate (demon/crusade/necropolis/fracture) before you enter
-const HOLDFAST_DWELL = 0.7;      // seconds parleying by a toll keeper before you pay (a touch longer — a deliberate choice)
-const HOLDFAST_TALK_RADIUS = 78; // how close you stand to a toll keeper to parley
-const DOOR_DWELL = 0.45;         // seconds pushing on a structure door before it swings (per-door data may override)
+// (Dwell seconds + stand-on radii + progress-ring styles for every transit
+// family — zone exits, sidezone mouths, realm gates, doors, toll keepers,
+// descent platforms, ward seals — live in the TRANSIT registry now:
+// data/transit.ts. The engine reads transitDwell()/transitRadius() at the use
+// site, so a package can retune a kind with one registered row.)
 const DOOR_REACH = 26;           // how far beyond the door's own span the dwell reaches
 
 /** FNV-1a hash of a string → a stable per-zone seed offset (encounter placement). */
@@ -1164,8 +1164,7 @@ const AMALGAM_GRAVE_RING = 104;  // graves ring the Bonewright at this radius
 const DELVER_RADIUS = 160;       // dwell/trade range at the Delver (mirrors the smith)
 const CARAVAN_RADIUS = 160;      // dwell range at the Caravanner (opens the band menu)
 const CARAVAN_DWELL = 0.9;       // seconds lingering before the Caravan menu opens
-const DESCENT_SHAFT_RADIUS = 72; // dwell range on the mineshaft platform
-const DESCENT_SHAFT_DWELL = 1.0; // seconds dwelling on the platform to descend / climb out
+// (Descent-shaft dwell/radius: the TRANSIT registry's 'descent_shaft' row.)
 const DELVER_WARE_COST = 30;     // Depth Echoes per Delver ware
 const APPROACH_RADIUS = 150;     // node-units: a floating quest zone wires in when a
                                  // charted zone lands this near (> WEAVE_RADIUS 96, so
@@ -1744,6 +1743,7 @@ export class World {
    *  gate's stable id, its pos (for the renderer ring) + when it began, so running
    *  over a gate never yanks you into a realm without meaning to. */
   private realmDwellKey = '';
+  private realmDwellKind = '';
   private realmDwellPos: Vec2 = vec(0, 0);
   private realmDwellStart = 0;
   /** Dwell-to-OPEN a structure door (the door doodad's id) + when it began —
@@ -2716,6 +2716,11 @@ export class World {
     if (!isCave) this.eagerChartNeighbors(def);
 
     this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+    // BELT-AND-SUSPENDERS: whatever def data or edge-snapping produced, no two
+    // live portals may overlap (an overlapped pair leaves one of them un-dwellable
+    // — the "can't choose which zone I enter" hard-lock). Runs BEFORE the layout
+    // carve below, so the clears open around the RESOLVED positions.
+    this.separateOverlappingExits();
 
     // Every player SEAT (the local hero + co-op allies, downed bodies included)
     // and their mobile minions step through together; constructs are anchored
@@ -2770,7 +2775,9 @@ export class World {
     // THE BREACH (bottom of the cave ladder): the torn way into the Underworld.
     this.breachPos = null;
     if (def.breach) {
-      const p = this.clampPos(this.farPoint(360), 30);
+      // clearTransitSpot: the tear must never open ON the climb-out portal or a
+      // deeper mouth — stacked transitions leave one of them un-dwellable.
+      const p = this.clearTransitSpot(this.clampPos(this.farPoint(360), 30));
       this.breachPos = vec(p.x, p.y);
       this.doodads.push({ pos: vec(p.x, p.y), radius: 30, kind: 'breach' });
     }
@@ -3906,12 +3913,16 @@ export class World {
     // mint, before the zone is loaded, so rebuilding def.exits in place is safe.
     const tileset = def.exits.find(x => x.tileset)?.tileset;
     const reals = def.exits.filter(x => x.to !== '?');
-    const frontiers: ZoneExitDef[] = [];
+    // Each spread frontier claims a SPACED slot against everything already in
+    // the rebuilt list (the kept weave roads included) — a real road at n@0.35
+    // used to sit 0.05·w from the spread's n@0.3, overlapping portals.
+    const rebuilt: ZoneExitDef[] = [...reals];
+    const probe = { exits: rebuilt, size: def.size };
     for (const side of ['n', 's', 'e', 'w'] as const) {
-      for (const at of [0.3, 0.7]) frontiers.push({ to: '?', side, at, tileset });
+      for (const at of [0.3, 0.7]) rebuilt.push({ to: '?', side, at: spacedExitAt(probe, side, at), tileset });
     }
     def.exits.length = 0;
-    def.exits.push(...reals, ...frontiers);
+    def.exits.push(...rebuilt);
   }
 
   /** A SURFACE anchor for directed event mints whose nearestNode search came up
@@ -3936,12 +3947,9 @@ export class World {
     }
     const dx = source.map.x - target.map.x, dy = source.map.y - target.map.y;
     const side: ZoneExitDef['side'] = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'e' : 'w') : (dy > 0 ? 's' : 'n');
-    // Pick a SPACED `at` so the reciprocal portal doesn't stack on an existing exit on the
-    // same side (placeExit defaults a bare `at` to 0.5 — two at 0.5 would overlap exactly;
-    // mirrors worldgen's findNonCollidingAt without reaching into its internals).
-    const used = target.exits.filter(e => e.side === side).map(e => e.at ?? 0.5);
-    const at = [0.5, 0.3, 0.7, 0.2, 0.8, 0.4, 0.6].find(c => used.every(u => Math.abs(u - c) > 0.12)) ?? 0.5;
-    target.exits.push({ to: source.id, side, at });
+    // Claim a SPACED `at` via the shared worldgen guard (corner-aware, pixel-true) —
+    // the old per-side fractional scan couldn't see an n@~0 vs w@~0 corner stack.
+    target.exits.push({ to: source.id, side, at: spacedExitAt(target, side) });
   }
 
   /** A FIELD zone's exit portal: march inward from the rect edge along the side's axis
@@ -4005,6 +4013,79 @@ export class World {
     return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label };
   }
 
+  /** THE LIVE OVERLAP RESOLVE — the last line of defense behind the def-level
+   *  spacing guards (worldgen spacedExitAt et al.): scan the placed portals in
+   *  defIndex order and slide any LATER portal that sits within MIN_PORTAL_SEP
+   *  of an earlier one along its side's axis until every pair clears. Pure
+   *  function of the exits array (no rng) — a re-load, a save restore, and the
+   *  co-op host all resolve identically. Warns when it fires: the def-level
+   *  guard was supposed to make this a no-op, and silence would hide the bug.
+   *  `fromIdx` lets syncZoneExits resolve ONLY freshly-appended portals so a
+   *  mid-session append never teleports a portal the player already saw. */
+  private separateOverlappingExits(fromIdx = 1): void {
+    const { w, h } = this.arena;
+    const inset = 60; // stay comfortably inside the arena while sliding
+    for (let i = Math.max(1, fromIdx); i < this.exits.length; i++) {
+      const e = this.exits[i];
+      const side = this.zone.exits[e.defIndex]?.side;
+      const horiz = side === undefined || side === 'n' || side === 's'; // slide along the edge
+      for (let guard = 0; guard < 24; guard++) {
+        let clash: ZoneExit | null = null;
+        for (let j = 0; j < i; j++) {
+          if (dist(this.exits[j].pos, e.pos) < MIN_PORTAL_SEP) { clash = this.exits[j]; break; }
+        }
+        if (!clash) break;
+        if (guard === 0) {
+          console.warn(`[world] overlapping portals in '${this.zone.id}' `
+            + `(defIndex ${clash.defIndex} vs ${e.defIndex}) — sliding the later one apart. `
+            + 'The def-level spacing guard should have prevented this; trace the appender.');
+        }
+        const step = MIN_PORTAL_SEP - dist(clash.pos, e.pos) + 8;
+        const along = horiz ? e.pos.x - clash.pos.x : e.pos.y - clash.pos.y;
+        const dir = along !== 0 ? Math.sign(along) : (i % 2 === 0 ? 1 : -1);
+        if (horiz) e.pos.x = clamp(e.pos.x + dir * step, inset, w - inset);
+        else e.pos.y = clamp(e.pos.y + dir * step, inset, h - inset);
+        // Clamped back INTO the clash (a corner)? Push along the other axis too.
+        if (dist(clash.pos, e.pos) < MIN_PORTAL_SEP) {
+          if (horiz) e.pos.y = clamp(e.pos.y + (e.pos.y >= h / 2 ? -1 : 1) * step, inset, h - inset);
+          else e.pos.x = clamp(e.pos.x + (e.pos.x >= w / 2 ? -1 : 1) * step, inset, w - inset);
+        }
+      }
+    }
+  }
+
+  /** Keep a proposed TRANSIT SPOT (realm gate / breach / descent platform) off
+   *  every other "linger here" trigger — portals, mouths, the dock, sibling
+   *  gates — so two transitions never contest one footprint of ground (the
+   *  dwell walks each pick their nearest; a stacked pair makes one of them
+   *  unusable and the outcome ambiguous). Deterministic staggered spiral from
+   *  the proposal; returns the proposal itself when already clear, and falls
+   *  back to it when the ground is crowded beyond hope (never fail the event). */
+  private clearTransitSpot(at: Vec2, clear = MIN_PORTAL_SEP + 14): Vec2 {
+    const spots: Vec2[] = [
+      ...this.exits.map(e => e.pos),
+      ...this.caveEntrances.map(c => c.pos),
+      ...this.demonPortals.map(g => g.pos),
+      ...this.crusadePortals.map(g => g.pos),
+      ...this.necropolisPortals.map(g => g.pos),
+      ...this.fractureRifts.map(g => g.pos),
+    ];
+    if (this.breachPos) spots.push(this.breachPos);
+    if (this.descentSite) spots.push(this.descentSite.platform);
+    if (this.waypointPos) spots.push(this.waypointPos);
+    for (const d of this.doodads) if (d.kind === 'dock') spots.push(d.pos);
+    const clearOf = (p: Vec2): boolean => spots.every(s => dist(p, s) >= clear);
+    if (clearOf(at)) return at;
+    for (let ring = 1; ring <= 5; ring++) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k / 8) * Math.PI * 2 + ring * 0.39; // stagger rings so probes never line up
+        const p = this.clampPos(vec(at.x + Math.cos(a) * clear * ring, at.y + Math.sin(a) * clear * ring), 30);
+        if (clearOf(p)) return p;
+      }
+    }
+    return at;
+  }
+
   /** An exit whose destination lives in ANOTHER dimension without the declared
    *  gate marker (ZoneExitDef.crossDim) — never legal. Dimensions are sealed
    *  world-states; the marked gate back-edge is the one lawful road between. */
@@ -4039,6 +4120,9 @@ export class World {
     for (let i = this.exits.length; i < defs.length; i++) {
       const ze = this.placeExit(defs[i], i);
       this.exits.push(ze);
+      // A mid-session append resolves ONLY itself against the standing portals —
+      // never sliding one the player already saw.
+      this.separateOverlappingExits(this.exits.length - 1);
       const dest = ze.to === '?' ? null : (this.zoneMap[ze.to] ?? this.caveMap[ze.to]);
       this.flashes.push({ pos: vec(ze.pos.x, ze.pos.y), radius: 64, color: '#7ec8d8', life: 0.8, maxLife: 0.8 });
       this.text(vec(ze.pos.x, ze.pos.y - 38),
@@ -5085,7 +5169,7 @@ export class World {
   private openFractureRift(run: FractureRun, cap: FractureCapstone): void {
     const ff = this.sim.fractureField;
     if (!ff || ff.peekRift()) return; // one pending rift at a time
-    const p = this.clampPos(this.farPoint(460), 30);
+    const p = this.clearTransitSpot(this.clampPos(this.farPoint(460), 30));
     // PERSIST the rift on the overlay so it SURVIVES leaving the zone (the engine
     // re-materializes its portal on every re-entry until the boss is slain — the
     // capstone is too rare to lose to an accidental exit). Then place it here, now.
@@ -5498,7 +5582,11 @@ export class World {
     // spore-laced zone raises fewer gates without otherwise re-tuning shipped behaviour).
     const info = hf.ensureRolled(def, (def.encounterDensity ?? 1) * (this.sim.myceliaField?.suppressionAt(def.id) ?? 1));
     if (!info || info.exitAppended) return;
-    def.exits.push({ to: '?', side: info.side, at: info.at, lock: info.lockId });
+    // The overlay's rolled `at` is a PREFERENCE — the spacing guard keeps it
+    // unless its portal pixel would stack on an existing exit (same side OR a
+    // corner), else it slides to the clearest slot on that side. Without this
+    // a holdfast at 0.32 beside a frontier at 0.35 overlapped outright.
+    def.exits.push({ to: '?', side: info.side, at: spacedExitAt(def, info.side, info.at), lock: info.lockId });
     info.exitDefIndex = def.exits.length - 1;
     info.exitAppended = true;
   }
@@ -5638,7 +5726,7 @@ export class World {
     // or left one roused, the toll is off and only the slaughter remains (see holdfastKeeper).
     const keeper = this.holdfastKeeper();
     if (!keeper) return false;
-    if (dist(seat.actor.pos, keeper.pos) > HOLDFAST_TALK_RADIUS + 50) return false;
+    if (dist(seat.actor.pos, keeper.pos) > transitRadius('holdfast', 78) + 50) return false;
     const gdef = hf.def(site.defId);
     if (!gdef || gdef.unlock.kind !== 'pay-gem') return false; // only the gem toll pays here
     const inv = seat.meta.inventory;
@@ -5680,15 +5768,15 @@ export class World {
 
   /** Dwell-to-pay progress on the toll keeper (renderer ring), or null. Only the ACTIVE
    *  dwell shows a ring ('done' = already parleyed this stand, awaiting step-away). */
-  holdfastDwellView(): { pos: Vec2; frac: number } | null {
+  holdfastDwellView(): { pos: Vec2; frac: number; kind: string } | null {
     if (this.holdfastDwellKey !== 'holdfast') return null;
-    return { pos: vec(this.holdfastDwellPos.x, this.holdfastDwellPos.y), frac: clamp((this.time - this.holdfastDwellStart) / HOLDFAST_DWELL, 0, 1) };
+    return { pos: vec(this.holdfastDwellPos.x, this.holdfastDwellPos.y), frac: clamp((this.time - this.holdfastDwellStart) / transitDwell('holdfast'), 0, 1), kind: 'holdfast' };
   }
 
   /** The toll prompt to draw over the keeper when the player is near (renderer), or null. */
   holdfastTollPrompt(): { pos: Vec2; text: string } | null {
     const k = this.holdfastKeeper();
-    if (!k || dist(this.player.pos, k.pos) > HOLDFAST_TALK_RADIUS + 30) return null;
+    if (!k || dist(this.player.pos, k.pos) > transitRadius('holdfast', 78) + 30) return null;
     const gdef = this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
     const choose = gdef?.unlock.payment === 'drop-to-choose';
     return { pos: vec(k.pos.x, k.pos.y - 34), text: choose ? 'dwell to offer a gem' : 'dwell to pay the toll (a gem)' };
@@ -6023,7 +6111,8 @@ export class World {
     delver.pos = this.clampPos(vec(center.x, center.y), delver.radius);
     this.actors.push(delver);
     const ang = roll.range(0, Math.PI * 2);
-    const platform = this.clampPos(vec(center.x + Math.cos(ang) * 92, center.y + Math.sin(ang) * 92), 24);
+    const platform = this.clearTransitSpot(
+      this.clampPos(vec(center.x + Math.cos(ang) * 92, center.y + Math.sin(ang) * 92), 24));
     this.doodads.push({ pos: vec(platform.x, platform.y), radius: 30, kind: 'descent_platform' });
     this.descentSite = { delverId: delver.id, platform: vec(platform.x, platform.y) };
     this.descentStock = this.buildVendorStock(); // wares to spend Echoes on
@@ -6101,9 +6190,9 @@ export class World {
   private updateDelver(dt: number): void {
     if (!this.descentSite || this.descentRun || this.descentSpent.has(this.zone.id)) return;
     if (this.player.dead || this.player.downed) { this.descentShaftDwell = 0; return; }
-    if (dist(this.player.pos, this.descentSite.platform) <= DESCENT_SHAFT_RADIUS && this.playerIdle()) {
+    if (dist(this.player.pos, this.descentSite.platform) <= transitRadius('descent_shaft', 72) && this.playerIdle()) {
       this.descentShaftDwell += dt;
-      if (this.descentShaftDwell >= DESCENT_SHAFT_DWELL) { this.descentShaftDwell = 0; this.descend(); }
+      if (this.descentShaftDwell >= transitDwell('descent_shaft')) { this.descentShaftDwell = 0; this.descend(); }
     } else this.descentShaftDwell = 0;
   }
 
@@ -7032,7 +7121,7 @@ export class World {
     if (this.inCave || this.demonPortals.length || this.realmContext) return;
     const info = this.sim.demonFieldFor(this.zone.dimension)?.invasionOn(this.zone.id);
     if (!info || !info.isEpicenter || !info.portalReady) return;
-    const at = this.clampPos(this.farPoint(420), 30);
+    const at = this.clearTransitSpot(this.clampPos(this.farPoint(420), 30));
     this.demonPortals.push({ pos: vec(at.x, at.y), invId: info.id });
     this.flashes.push({ pos: vec(at.x, at.y), radius: 120, color: '#c81e3a', life: 0.9, maxLife: 0.9 });
     this.text(vec(at.x, at.y - 44), 'A rift to the demon realm tears open!', '#c81e3a', 18);
@@ -7866,7 +7955,7 @@ export class World {
     const near = Math.hypot(this.zone.map.x - n.coord.x, this.zone.map.y - n.coord.y)
       <= df.surge().necropolis.accessRadius;
     if (near && !this.necropolisPortals.length) {
-      const at = this.clampPos(this.farPoint(440), 30);
+      const at = this.clearTransitSpot(this.clampPos(this.farPoint(440), 30));
       this.necropolisPortals.push({ pos: vec(at.x, at.y) });
       this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: '#d8cdb0', life: 1, maxLife: 1 });
       this.text(vec(at.x, at.y - 44), 'A gate to the Necropolis yawns open!', '#e8dcb0', 18);
@@ -7932,7 +8021,7 @@ export class World {
     if (this.inCave || this.crusadePortals.length || this.crusadeRealmContext) return;
     const info = this.sim.crusadeField?.crusadeOn(this.zone.id);
     if (!info || !info.isStronghold || !info.sanctumReady) return;
-    const at = this.clampPos(this.farPoint(440), 30);
+    const at = this.clearTransitSpot(this.clampPos(this.farPoint(440), 30));
     this.crusadePortals.push({ pos: vec(at.x, at.y), crusadeId: info.crusadeId });
     this.flashes.push({ pos: vec(at.x, at.y), radius: 120, color: info.color, life: 0.9, maxLife: 0.9 });
     this.text(vec(at.x, at.y - 44), 'The crusade sanctum gate grinds open!', info.color, 18);
@@ -20414,7 +20503,7 @@ export class World {
       const playerRoof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null)
         ? this.roofedStructureAt(this.player.pos) : null;
       const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null }): boolean =>
-        dist(this.player.pos, cm.pos) <= 28 + this.player.radius
+        dist(this.player.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius
         && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof));
       if (this.caveExitGrace) {
         if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
@@ -20457,7 +20546,7 @@ export class World {
             this.doorDwellStart = this.time;
             this.doorDwellPos = vec(onDoor.pos.x, onDoor.pos.y);
           }
-          if (this.time - this.doorDwellStart >= (onDoor.door.dwell ?? DOOR_DWELL)) {
+          if (this.time - this.doorDwellStart >= (onDoor.door.dwell ?? transitDwell('door'))) {
             this.doorDwellId = '';
             this.setDoorState(onDoor.door.id, 'open');
           }
@@ -20469,27 +20558,33 @@ export class World {
         // never yanks you into a realm without meaning to (mirrors the portal + cave
         // dwell; a knockback onto a gate can't carry you in either). Gather the open
         // gates with their enter actions and dwell on the NEAREST one you stand on.
-        const gates: { pos: Vec2; key: string; enter: () => void }[] = [];
+        const gates: { pos: Vec2; kind: string; key: string; enter: () => void }[] = [];
         // The Underworld BREACH (bottom of the cave ladder) is a realm gate too.
         if (this.breachPos) {
           // Which dimension does a cave breach tear into? Whatever REGISTERED a
           // cave_breach entry (data) — first registrant today; a weighted roll
           // when a second breach-entered layer ever ships.
           const bd = dimensionsEnteredBy('cave_breach')[0];
-          if (bd) gates.push({ pos: this.breachPos, key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+          if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
         }
-        for (const dp of this.demonPortals) gates.push({ pos: dp.pos, key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
-        for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
-        for (const np of this.necropolisPortals) gates.push({ pos: np.pos, key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
-        for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
-        let onGate: { pos: Vec2; key: string; enter: () => void } | null = null, bestGD = Infinity;
+        for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
+        for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
+        for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
+        for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
+        // Radius + dwell are per-KIND transit rows ('realm_gate:demon' chains to
+        // the 'realm_gate' family) — a heavier gate can ask a longer, wider linger
+        // with one data row.
+        let onGate: { pos: Vec2; kind: string; key: string; enter: () => void } | null = null, bestGD = Infinity;
         for (const g of gates) {
           const d = dist(this.player.pos, g.pos);
-          if (d <= 32 + this.player.radius && d < bestGD) { bestGD = d; onGate = g; }
+          if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD) { bestGD = d; onGate = g; }
         }
         if (onGate && this.playerIdle() && !this.player.push) {
-          if (this.realmDwellKey !== onGate.key) { this.realmDwellKey = onGate.key; this.realmDwellPos = onGate.pos; this.realmDwellStart = this.time; }
-          if (this.time - this.realmDwellStart >= REALM_GATE_DWELL) {
+          if (this.realmDwellKey !== onGate.key) {
+            this.realmDwellKey = onGate.key; this.realmDwellKind = onGate.kind;
+            this.realmDwellPos = onGate.pos; this.realmDwellStart = this.time;
+          }
+          if (this.time - this.realmDwellStart >= transitDwell(`realm_gate:${onGate.kind}`)) {
             this.realmDwellKey = '';
             onGate.enter();
             return; // entering a realm — the rest of this frame belongs to the old zone
@@ -20502,11 +20597,11 @@ export class World {
         // un-roused — drawing steel cancels the parley. A CONSUMED latch ('done') keeps
         // it from re-firing while you stand; it re-arms when you step away / act.
         const keeper = this.holdfastKeeper();
-        const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= HOLDFAST_TALK_RADIUS;
+        const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78);
         if (nearKeeper && this.playerIdle() && !this.player.push) {
           if (this.holdfastDwellKey !== 'done') {
             if (this.holdfastDwellKey !== 'holdfast') { this.holdfastDwellKey = 'holdfast'; this.holdfastDwellPos = vec(keeper!.pos.x, keeper!.pos.y); this.holdfastDwellStart = this.time; }
-            if (this.time - this.holdfastDwellStart >= HOLDFAST_DWELL) {
+            if (this.time - this.holdfastDwellStart >= transitDwell('holdfast')) {
               this.holdfastDwellKey = 'done'; // consumed — won't re-fire until you move away
               this.onHoldfastDwell();
             }
@@ -20564,7 +20659,7 @@ export class World {
       // onto a portal must never carry you off (it's not your intent).
       if (onExit && this.playerIdle() && !this.player.push) {
         if (this.exitDwellIdx !== onExit.defIndex) { this.exitDwellIdx = onExit.defIndex; this.exitDwellStart = this.time; }
-        if (this.time - this.exitDwellStart >= ZONE_EXIT_DWELL) {
+        if (this.time - this.exitDwellStart >= transitDwell('zone_exit')) {
           this.travelThrough(onExit);
           return; // everything else this frame belongs to the old zone
         }
@@ -20576,36 +20671,64 @@ export class World {
 
   /** Dwell-to-travel progress on the exit the player lingers on (renderer ring),
    *  or null when not dwelling on any exit. */
-  exitDwellView(): { pos: Vec2; frac: number } | null {
+  exitDwellView(): { pos: Vec2; frac: number; kind: string } | null {
     if (this.exitDwellIdx < 0) return null;
     const e = this.exits.find(x => x.defIndex === this.exitDwellIdx);
     if (!e) return null;
-    return { pos: vec(e.pos.x, e.pos.y), frac: clamp((this.time - this.exitDwellStart) / ZONE_EXIT_DWELL, 0, 1) };
+    return { pos: vec(e.pos.x, e.pos.y), frac: clamp((this.time - this.exitDwellStart) / transitDwell('zone_exit'), 0, 1), kind: 'zone_exit' };
   }
 
   /** Dwell-to-enter progress on the sidezone mouth the player lingers on
    *  (renderer ring), or null when not dwelling on any mouth. */
-  caveDwellView(): { pos: Vec2; frac: number } | null {
+  caveDwellView(): { pos: Vec2; frac: number; kind: string } | null {
     if (this.caveDwellIdx < 0 || this.caveDwellIdx >= this.caveEntrances.length) return null;
     const cm = this.caveEntrances[this.caveDwellIdx];
-    return { pos: vec(cm.pos.x, cm.pos.y), frac: clamp((this.time - this.caveDwellStart) / dwellOf(cm.kind), 0, 1) };
+    return { pos: vec(cm.pos.x, cm.pos.y), frac: clamp((this.time - this.caveDwellStart) / dwellOf(cm.kind), 0, 1), kind: `sidezone:${cm.kind}` };
   }
 
   /** Dwell-to-enter progress on the realm gate the player lingers on (renderer ring),
    *  or null when not dwelling on any gate. */
-  realmDwellView(): { pos: Vec2; frac: number } | null {
+  realmDwellView(): { pos: Vec2; frac: number; kind: string } | null {
     if (!this.realmDwellKey) return null;
-    return { pos: vec(this.realmDwellPos.x, this.realmDwellPos.y), frac: clamp((this.time - this.realmDwellStart) / REALM_GATE_DWELL, 0, 1) };
+    const kind = `realm_gate:${this.realmDwellKind}`;
+    return { pos: vec(this.realmDwellPos.x, this.realmDwellPos.y), frac: clamp((this.time - this.realmDwellStart) / transitDwell(kind), 0, 1), kind };
   }
 
   /** Dwell-to-open progress on the structure door the player pushes on (renderer
    *  ring), or null when not dwelling on any door. */
-  doorDwellView(): { pos: Vec2; frac: number } | null {
+  doorDwellView(): { pos: Vec2; frac: number; kind: string } | null {
     if (!this.doorDwellId) return null;
     const d = this.doodads.find(x => x.door?.id === this.doorDwellId);
     if (!d?.door) return null;
-    const need = d.door.dwell ?? DOOR_DWELL;
-    return { pos: vec(this.doorDwellPos.x, this.doorDwellPos.y), frac: clamp((this.time - this.doorDwellStart) / need, 0, 1) };
+    const need = d.door.dwell ?? transitDwell('door');
+    return { pos: vec(this.doorDwellPos.x, this.doorDwellPos.y), frac: clamp((this.time - this.doorDwellStart) / need, 0, 1), kind: 'door' };
+  }
+
+  /** Dwell-to-descend progress on the Delver's mineshaft platform (renderer ring),
+   *  or null when not dwelling on it. The one transit that historically drew NO
+   *  progress — now it fills like every other. */
+  descentDwellView(): { pos: Vec2; frac: number; kind: string } | null {
+    if (!this.descentSite || this.descentShaftDwell <= 0) return null;
+    const p = this.descentSite.platform;
+    return { pos: vec(p.x, p.y), frac: clamp(this.descentShaftDwell / transitDwell('descent_shaft'), 0, 1), kind: 'descent_shaft' };
+  }
+
+  /** Every dwell progress ring live this frame — ONE feed for the renderer's
+   *  single ring pass. Each entry names its transit KIND, so the ring's style
+   *  (radius/width/color) is a data row in data/transit.ts, never a renderer
+   *  constant. New dwell families join by pushing here. */
+  dwellRingsView(): { pos: Vec2; frac: number; kind: string }[] {
+    const out: { pos: Vec2; frac: number; kind: string }[] = [];
+    const add = (v: { pos: Vec2; frac: number; kind: string } | null): void => {
+      if (v && v.frac > 0.02) out.push(v);
+    };
+    add(this.exitDwellView());
+    add(this.caveDwellView());
+    add(this.realmDwellView());
+    add(this.doorDwellView());
+    add(this.holdfastDwellView());
+    add(this.descentDwellView());
+    return out;
   }
 
   /** Claim the nearest FREE garrison slot (a tower core) within reach: the

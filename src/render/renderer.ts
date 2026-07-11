@@ -20,6 +20,7 @@ import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { doodadRuleOf, type Doodad } from '../engine/levelgen';
+import { transitRing } from '../data/transit';
 import { VEIL_DEFAULTS } from '../engine/veil';
 import { DEFENSE_CFG } from '../engine/defense';
 import { QUEST_GIVER_IDS } from '../quests/defs';
@@ -414,14 +415,7 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(p.pos.x, p.pos.y, 22, 0, Math.PI * 2);
       ctx.stroke();
-      if (p.frac > 0) {
-        ctx.globalAlpha = 0.9;
-        ctx.strokeStyle = '#e8ffe0';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(p.pos.x, p.pos.y, 22, -Math.PI / 2, -Math.PI / 2 + p.frac * Math.PI * 2);
-        ctx.stroke();
-      }
+      this.drawProgressRing(p.pos.x, p.pos.y, p.frac, 'choice_pick');
       // Glyph disc.
       ctx.globalAlpha = 0.85;
       ctx.fillStyle = '#13241c';
@@ -608,6 +602,22 @@ export class Renderer {
       ctx.fillText('a rift yawns — step in', fr.pos.x, fr.pos.y - 48);
       ctx.globalAlpha = 1;
     }
+  }
+
+  /** THE dwell progress ring — every linger-to-act draw goes through here. The
+   *  style (radius/width/color/alpha) is the transit KIND's data row
+   *  (data/transit.ts); a missing color tints with the zone `accent`. */
+  private drawProgressRing(x: number, y: number, frac: number, kind: string, accent = '#e8e8e8'): void {
+    if (frac <= 0.02) return;
+    const s = transitRing(kind);
+    const { ctx } = this;
+    ctx.globalAlpha = s.alpha ?? 0.95;
+    ctx.strokeStyle = s.color ?? accent;
+    ctx.lineWidth = s.width ?? 4;
+    ctx.beginPath();
+    ctx.arc(x, y, s.radius, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
   }
 
   /** The breach timer bar (the kill-fed countdown), screen-space near the top. */
@@ -1605,15 +1615,8 @@ export class Renderer {
           ctx.fillStyle = '#9a9aa2';
           ctx.fillText('sealed by the objective', x, y + 24);
         } else if (c.kind === 'timed') {
-          // lockpick progress ring
-          const frac = 1 - c.lockTime / c.maxLock;
-          if (frac > 0.01) {
-            ctx.strokeStyle = '#e8c87a';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(x, y, 22, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
-            ctx.stroke();
-          }
+          // lockpick progress ring (the shared transit ring, 'lockpick' style)
+          this.drawProgressRing(x, y, 1 - c.lockTime / c.maxLock, 'lockpick');
           ctx.textAlign = 'center';
           ctx.font = '9px Verdana';
           ctx.fillStyle = '#c8a85a';
@@ -1880,42 +1883,18 @@ export class Renderer {
         ctx.stroke();
       }
     }
-    // Dwell-to-travel: the portal you stand idle on fills a progress ring before
-    // it carries you through (so a quick run-over no longer transitions).
-    const dw = world.exitDwellView();
-    if (dw && dw.frac > 0.02) {
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = world.zone.theme.accent;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(dw.pos.x, dw.pos.y, 36, -Math.PI / 2, -Math.PI / 2 + dw.frac * Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
+    // Dwell progress rings — every "linger to act" family (exit portals, cave
+    // mouths, realm gates, doors, toll keepers, descent platforms, …) feeds ONE
+    // pass; each ring's radius/width/color is its transit KIND's data row
+    // (data/transit.ts), color falling back to the zone theme's accent.
+    for (const ring of world.dwellRingsView()) {
+      this.drawProgressRing(ring.pos.x, ring.pos.y, ring.frac, ring.kind, world.zone.theme.accent);
     }
-    // Dwell-to-enter a cave mouth — the same progress ring as a portal.
-    const cdw = world.caveDwellView();
-    if (cdw && cdw.frac > 0.02) {
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = world.zone.theme.accent;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(cdw.pos.x, cdw.pos.y, 30, -Math.PI / 2, -Math.PI / 2 + cdw.frac * Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    // MAKE LANDFALL — the landing dwell at sea: a ring around the boat plus a
-    // shore prompt (the Voyage's exit rule). A Voyage Island names itself.
+    // MAKE LANDFALL — the landing dwell at sea: the shared ring around the boat
+    // plus a shore prompt (the Voyage's exit rule). A Voyage Island names itself.
     const ndw = world.voyageLandingView();
     if (ndw) {
-      if (ndw.frac > 0.02) {
-        ctx.globalAlpha = 0.95;
-        ctx.strokeStyle = '#7fd0ff';
-        ctx.lineWidth = 4;
-        ctx.beginPath();
-        ctx.arc(ndw.pos.x, ndw.pos.y, 34, -Math.PI / 2, -Math.PI / 2 + ndw.frac * Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      }
+      this.drawProgressRing(ndw.pos.x, ndw.pos.y, ndw.frac, 'voyage_landing', world.zone.theme.accent);
       ctx.textAlign = 'center';
       ctx.font = 'bold 11px Verdana';
       const msg = !ndw.ready ? 'coming about…'
@@ -1925,40 +1904,6 @@ export class Renderer {
       ctx.strokeText(msg, ndw.pos.x, ndw.pos.y - 46);
       ctx.fillStyle = '#9ad0e8';
       ctx.fillText(msg, ndw.pos.x, ndw.pos.y - 46);
-    }
-
-    // Dwell-to-enter a REALM GATE — the same progress ring, sized to the larger gate.
-    const rdw = world.realmDwellView();
-    if (rdw && rdw.frac > 0.02) {
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = world.zone.theme.accent;
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(rdw.pos.x, rdw.pos.y, 44, -Math.PI / 2, -Math.PI / 2 + rdw.frac * Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    // Dwell-to-pay ring on a Holdfast toll keeper.
-    const hdw = world.holdfastDwellView();
-    if (hdw && hdw.frac > 0.02) {
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = '#d0a850';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(hdw.pos.x, hdw.pos.y, 40, -Math.PI / 2, -Math.PI / 2 + hdw.frac * Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-    // Dwell-to-open ring on a structure door you push against.
-    const ddw = world.doorDwellView();
-    if (ddw && ddw.frac > 0.02) {
-      ctx.globalAlpha = 0.95;
-      ctx.strokeStyle = '#c8b47a';
-      ctx.lineWidth = 4;
-      ctx.beginPath();
-      ctx.arc(ddw.pos.x, ddw.pos.y, 32, -Math.PI / 2, -Math.PI / 2 + ddw.frac * Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
     }
     // The toll keeper posts its offer above its head while you're near (and un-roused).
     const tp = world.holdfastTollPrompt();

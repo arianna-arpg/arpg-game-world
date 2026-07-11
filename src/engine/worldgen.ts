@@ -204,7 +204,10 @@ const AT_CANDIDATES = [0.2, 0.35, 0.5, 0.65, 0.8] as const; // portal slots alon
 // makes the dwell-to-transition pick only the top-most → the other exit unusable).
 export const PORTAL_RADIUS = 30;      // ZoneExit.radius (placeExit)
 export const PORTAL_EDGE_INSET = 90;  // edge inset of a portal from the zone border (placeExit)
-const MIN_PORTAL_SEP = PORTAL_RADIUS * 2.2; // ≥ 2× radius ⇒ two portals' circles never overlap
+/** Min pixel gap between two portals (≥ 2× radius ⇒ their circles never overlap;
+ *  the slack absorbs the ellipse-rim / field-blob nudges placeExit applies later).
+ *  Exported for the live belt-and-suspenders pass + the genqa spacing sweep. */
+export const MIN_PORTAL_SEP = PORTAL_RADIUS * 2.2;
 
 /** The WORLD-space position a portal (side, at) resolves to — a pure mirror of
  *  world.ts placeExit's rect edge math, so spacing is tested against TRUE pixels
@@ -231,6 +234,22 @@ function slotClearance(side: 'n' | 's' | 'e' | 'w', at: number, existing: ZoneEx
     if (d < min) min = d;
   }
   return min;
+}
+
+/** THE public spacing guard for any system that APPENDS an exit OUTSIDE the
+ *  weave path (holdfast bonus exits, the Field frontier spread, reciprocal
+ *  linkers, future scripted roads): keep `preferredAt` when its portal pixel
+ *  clears EVERY existing exit (any side — corner collisions count) by
+ *  MIN_PORTAL_SEP, else fall to the most-separated slot on that side.
+ *  Deterministic (no rng), so both a re-load and a co-op client re-derive the
+ *  same def. Appending WITHOUT this guard is how two portals end up stacked —
+ *  the dwell can then only ever pick one of them. */
+export function spacedExitAt(
+  def: { exits: ZoneExitDef[]; size: { w: number; h: number } },
+  side: 'n' | 's' | 'e' | 'w', preferredAt = 0.5,
+): number {
+  if (slotClearance(side, preferredAt, def.exits, def.size) >= MIN_PORTAL_SEP) return preferredAt;
+  return bestSpacedAt(side, def.exits, def.size);
 }
 
 /** Cardinal side of `to` as seen from `from` (dominant axis of the delta). */

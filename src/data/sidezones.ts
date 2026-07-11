@@ -18,6 +18,7 @@
 
 import { registerDoodadRule } from '../engine/levelgen';
 import { mintCave } from '../engine/worldgen';
+import { transitDwell } from './transit';
 import type { ZoneDef } from './zones';
 
 /** Everything a mint may read from the live world, passed by the engine. */
@@ -66,13 +67,12 @@ export function sidezoneOf(kind: string): SidezoneDef | undefined {
   return SIDEZONES[kind];
 }
 
-/** The classic cave's dwell — the default for any kind that doesn't tune it. */
-export const DEFAULT_SIDEZONE_DWELL = 0.55;
-
 /** Idle-dwell seconds to enter a mouth of this kind (ONE lookup for the
- *  engine's dwell loop and the renderer's progress ring alike). */
+ *  engine's dwell loop and the renderer's progress ring alike). A SidezoneDef's
+ *  own `dwell` wins; otherwise the TRANSIT registry answers ('sidezone:<kind>'
+ *  chains to the 'sidezone' family row — the classic cave's 0.55). */
 export function dwellOf(kind: string): number {
-  return SIDEZONES[kind]?.dwell ?? DEFAULT_SIDEZONE_DWELL;
+  return SIDEZONES[kind]?.dwell ?? transitDwell(`sidezone:${kind}`, 0.55);
 }
 
 // --- THE CLASSIC CAVE --------------------------------------------------------

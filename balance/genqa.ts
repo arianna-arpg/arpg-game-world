@@ -42,6 +42,7 @@ import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
+import { generateZone, randomizeStarterWeb, spacedExitAt, MIN_PORTAL_SEP } from '../src/engine/worldgen';
 import {
   generateLayout, validateStamps, validateCompositions, compositionDefs,
   doodadRuleOf, layoutIds, blocksMovement,
@@ -333,6 +334,93 @@ for (const c of compositionDefs()) {
     objective: { kind: 'clear' },
     exits: [], map: { x: 0, y: 0 },
   });
+}
+
+// --- 5. EXIT SPACING — the worldgen graph layer's promise ---------------------
+// Drives the REAL graph builder (randomizeStarterWeb → generateZone charts,
+// with their back-edges, frontier deals, weaves and reciprocals) plus the
+// guarded append paths (spacedExitAt — holdfast bonus exits, the Field
+// frontier spread), and asserts the promise the live dwell relies on: every
+// pair of a def's exits resolves to portal PIXELS ≥ MIN_PORTAL_SEP apart,
+// corner collisions included. Two stacked portals leave one un-dwellable —
+// the "can't choose which zone I enter" hard-lock this net exists to catch.
+// placeExit's edge math is mirrored below (the harness asserts the OBSERVABLE
+// promise); MIN_PORTAL_SEP itself is imported — it's the engine's public
+// contract now, shared with world.ts's live resolve.
+const P_INSET = 90; // mirror of worldgen PORTAL_EDGE_INSET (placeExit's edge math)
+function portalPixel(side: 'n' | 's' | 'e' | 'w', at: number, size: { w: number; h: number }): { x: number; y: number } {
+  const cx = Math.min(Math.max(size.w * at, P_INSET), size.w - P_INSET);
+  const cy = Math.min(Math.max(size.h * at, P_INSET), size.h - P_INSET);
+  return side === 'n' ? { x: cx, y: P_INSET } : side === 's' ? { x: cx, y: size.h - P_INSET }
+    : side === 'w' ? { x: P_INSET, y: cy } : { x: size.w - P_INSET, y: cy };
+}
+function checkExitSpacing(label: string, def: Pick<ZoneDef, 'exits' | 'size'>, fails: string[]): void {
+  for (let i = 0; i < def.exits.length; i++) {
+    for (let j = i + 1; j < def.exits.length; j++) {
+      const a = def.exits[i], b = def.exits[j];
+      const pa = portalPixel(a.side, a.at ?? 0.5, def.size), pb = portalPixel(b.side, b.at ?? 0.5, def.size);
+      const d = Math.hypot(pa.x - pb.x, pa.y - pb.y);
+      if (d < MIN_PORTAL_SEP - 0.5) {
+        fails.push(`${label}: exits ${i} (${a.side}@${(a.at ?? 0.5).toFixed(2)}→${a.to}) and `
+          + `${j} (${b.side}@${(b.at ?? 0.5).toFixed(2)}→${b.to}) only ${d.toFixed(0)}px apart `
+          + `(< ${MIN_PORTAL_SEP}) on a ${def.size.w}×${def.size.h} zone`);
+      }
+    }
+  }
+}
+if (!FILTER || 'exit-spacing'.includes(FILTER)) {
+  const fails: string[] = [];
+  const t0 = performance.now();
+  const webs = SEEDS * 2;
+  let charted = 0;
+  for (let w = 0; w < webs; w++) {
+    // Fresh deep clones — ZONES defs are module singletons; a probe web must
+    // never share their exits arrays (the cloneZones by-reference trap).
+    const zoneMap: Record<string, ZoneDef> = {};
+    for (const [id, z] of Object.entries(ZONES)) {
+      zoneMap[id] = { ...z, exits: z.exits.map(e => ({ ...e })), size: { ...z.size }, map: { ...z.map } };
+    }
+    randomizeStarterWeb(zoneMap, (0x5eed + w * 7919) >>> 0);
+    const rng = new Rng((0xac3 + w) >>> 0);
+    let genIdx = 1000 + w * 100;
+    // Chart '?' frontiers the way travel does, ~12 mints per web (the weave
+    // machinery runs inside generateZone — reciprocals and all).
+    for (let step = 0; step < 12; step++) {
+      const openDefs = Object.values(zoneMap).filter(z => z.exits.some(e => e.to === '?' && !e.lock));
+      if (!openDefs.length) break;
+      const src = openDefs[rng.int(0, openDefs.length - 1)];
+      const e = src.exits.find(x => x.to === '?' && !x.lock)!;
+      const gen = generateZone(src, e, zoneMap, genIdx++);
+      zoneMap[gen.id] = gen;
+      e.to = gen.id;
+      charted++;
+    }
+    // The graph layer's own deals + weaves…
+    for (const z of Object.values(zoneMap)) checkExitSpacing(`web ${w} zone ${z.id}`, z, fails);
+    // …then the GUARDED append paths, stressed. Holdfast-style: the overlay's
+    // real raw at-candidates, pushed through the spacing guard, twice per zone.
+    for (const z of Object.values(zoneMap)) {
+      for (let k = 0; k < 2; k++) {
+        const side = rng.pick(['n', 's', 'e', 'w'] as const);
+        const at = rng.pick([0.2, 0.32, 0.68, 0.8]);
+        z.exits.push({ to: '?', side, at: spacedExitAt(z, side, at) });
+      }
+      checkExitSpacing(`web ${w} zone ${z.id} +holdfast-appends`, z, fails);
+    }
+    // Field-style spread: keep the real roads, re-deal 2-per-side frontiers
+    // through the guard (mirrors world.fieldifyZone's rebuild).
+    for (const z of Object.values(zoneMap)) {
+      const reals = z.exits.filter(x => x.to !== '?').map(e => ({ ...e }));
+      if (!reals.length) continue;
+      const rebuilt = { exits: reals, size: z.size };
+      for (const side of ['n', 's', 'e', 'w'] as const) {
+        for (const at of [0.3, 0.7]) rebuilt.exits.push({ to: '?', side, at: spacedExitAt(rebuilt, side, at) });
+      }
+      checkExitSpacing(`web ${w} zone ${z.id} field-spread`, rebuilt, fails);
+    }
+  }
+  results.push({ name: 'exit-spacing:webs', seeds: webs, doodads: charted,
+    ms: (performance.now() - t0) / Math.max(1, webs), fails, warns: [] });
 }
 
 // --- Report ------------------------------------------------------------------
