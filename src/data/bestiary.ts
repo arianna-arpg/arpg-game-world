@@ -26,6 +26,14 @@ export const BESTIARY_CFG = {
   /** May mastered BOSS forms be attuned as Spectres? (The grimoire gate —
    *  flip to true and the uber-spectre fantasy is data.) */
   spectreBosses: false,
+  /** THE BINDING SITE: attuning — and releasing — a Spectre form happens at
+   *  the Tracker's OPEN BOOK (drag a mastered page onto the skill's slot).
+   *  The field commits you to the form you carried out; swapping means
+   *  walking back to town — the opportunity cost IS the design. This gates
+   *  the ENGINE lane (World.attuneSpectre), so untrusted co-op intents and
+   *  console pokes meet the same wall; flip false and the intent binds from
+   *  anywhere again (the book stays the shipped UI either way). */
+  attuneAtBook: true,
   /** STUDY TIERS: fractions of the threshold at which the book reveals more
    *  of a page. Names are the reveal GROUPS the book renders by — reorder or
    *  retune freely; the page reads whatever tier the count has reached. */

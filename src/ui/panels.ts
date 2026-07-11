@@ -33,6 +33,7 @@ import {
   BESTIARY_CFG, bestiaryKills, bestiaryList, bestiaryReveals,
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
 } from '../data/bestiary';
+import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
@@ -208,8 +209,6 @@ export class UI {
   bestiaryOpen = false;
   private bestiaryPage = 0;
   private bestiarySel: string | null = null;
-  /** The grimoire picker: which skill's attunement list is unfolded in Build. */
-  private attunePicking: string | null = null;
   vendorOpen = false;
   /** The scrap wheel: while ON, the vendor screen's sell-half is live and
    *  clicks BREAK your things for essence. Reset on close — never sticky. */
@@ -323,6 +322,49 @@ export class UI {
   /** Tooltip for the class label in the character sheet. */
   private classTooltip(): TooltipContent {
     const c = this.getWorld().meta.classDef;
+
+    // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
+    // consumer): a MASTERED, attunable bestiary page lifts from its book row
+    // (press-drag or click-lift alike) and lands on a Spectre skill's slot in
+    // the grimoire strip. The drop routes through requestMeta like every
+    // mutation — and the ENGINE gate (World.attuneSpectre, attuneAtBook)
+    // decides legality, so the UI never pretends an authority it lacks.
+    registerDragSource({
+      kind: 'bestiaryForm',
+      clickLift: true,
+      payload: (defId) => {
+        const def = MONSTERS[defId];
+        if (!def || !spectreAttunable(this.getAccount(), def)) return null;
+        // With no grimoire skill learned there is nowhere to land — refuse
+        // the lift so a row click stays a plain page-open.
+        if (this.grimoireSkills().length === 0) return null;
+        return {
+          kind: 'bestiaryForm', arg: defId, label: def.name,
+          ghostHtml: `${this.monsterGlyph(def, false)} ${def.name}`,
+        };
+      },
+    });
+    registerDropTarget({
+      kind: 'spectreSlot',
+      accepts: (p, skillId) => p.kind === 'bestiaryForm'
+        && this.grimoireSkills().some(inst => inst.def.id === skillId),
+      drop: (p, skillId) => {
+        this.getWorld().requestMeta({ t: 'attuneSpectre', skillId, formId: p.arg });
+        this.refreshBestiary();
+        if (this.inventoryOpen) this.refreshInventory();
+      },
+    });
+  }
+
+  /** The local seat's GRIMOIRE-capable skill instances (delivery.grimoire),
+   *  in learned order — the book's binding slots, one per instance. */
+  private grimoireSkills(): SkillInstance[] {
+    const out: SkillInstance[] = [];
+    for (const inst of this.getWorld().meta.knownSkills.values()) {
+      const d = inst.def.delivery;
+      if (d.type === 'summon' && d.grimoire) out.push(inst);
+    }
+    return out;
     return {
       title: c.name, description: c.description,
       meta: `${c.innateText ? `Innate: ${c.innateText} — ` : ''}A class is only a starting point; you can allocate any attributes and bind any skill you qualify for.`,
@@ -1622,6 +1664,7 @@ export class UI {
 
   /** A kind's little portrait: its silhouette LANGUAGE (shape + color), as
    *  inline SVG — no renderer round-trip, readable at 22px, and any new
+    dndCancel(); // never strand a lifted page on a closed book
    *  ActorShape falls back to the circle rather than breaking the book. */
   private monsterGlyph(def: MonsterDef, dark: boolean): string {
     const c = dark ? '#3a384c' : def.color;
@@ -1658,9 +1701,15 @@ export class UI {
       const need = bestiaryThreshold(def);
       const dark = kills <= 0;
       const done = kills >= need;
+    // Pages LIFT when they can LAND: a mastered, attunable page is a drag
+    // source (press-drag or click-lift — the fabric's twin gestures) only
+    // while a grimoire skill offers a slot to receive it.
+    const liftable = this.grimoireSkills().length > 0;
       const sel = this.bestiarySel === def.id ? ' sel' : '';
       const pct = Math.min(100, (kills / need) * 100);
-      return `<div class="b-row${dark ? ' dark' : sel}" data-bst="${dark ? '' : def.id}">
+      const canLift = liftable && done && spectreAttunable(acc, def);
+      return `<div class="b-row${dark ? ' dark' : sel}${canLift ? ' attunable' : ''}" data-bst="${dark ? '' : def.id}"${
+        canLift ? ` data-drag="bestiaryForm:${def.id}"` : ''}>
         ${this.monsterGlyph(def, dark)}
         <div style="flex:1;min-width:0">
           <div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
@@ -1703,7 +1752,9 @@ export class UI {
       if (done) {
         body += `<div style="margin-top:6px;color:${spectreAttunable(acc, def) ? '#a8d8a0' : '#8a8678'};font-size:10px">
           ${spectreAttunable(acc, def)
-            ? '★ Mastered — this form may be ATTUNED to a Spectre skill (Build pane).'
+            ? (this.grimoireSkills().length
+              ? '★ Mastered — drag this page (or click to lift it) onto a Spectre slot above to attune.'
+              : '★ Mastered — a Spectre skill, once learned, binds this form here at the book.')
             : '★ Mastered — too mighty a form for spectral binding.'}</div>`;
       }
       detail = `<div style="border:1px solid #3a3a52;border-radius:4px;padding:8px;margin-top:8px;background:rgba(20,20,30,0.5)">
@@ -1729,6 +1780,30 @@ export class UI {
       <div style="color:#8a8678;font-size:10px;margin-bottom:6px">
         ${totals.sighted} of ${totals.pages} kinds sighted · ${totals.mastered} mastered — knowledge is the account's, and outlives you.
       </div>
+    // THE GRIMOIRE STRIP — the binding site itself. One slot per learned
+    // grimoire-summon INSTANCE (two Spectre gems, two slots, two forms);
+    // a mastered page dropped here attunes THAT copy, the ✕ releases it.
+    // Only rendered when a slot exists — the book stays a pure ledger for
+    // everyone else. The engine gate (attuneAtBook) lives in World, not
+    // here; the strip is merely where the targets are.
+    const grimSkills = this.grimoireSkills();
+    const grim = grimSkills.length ? `
+      <div style="border:1px solid #4a3a5a;border-radius:4px;padding:6px 8px;margin-bottom:6px;background:rgba(30,24,40,0.45)">
+        <div style="color:#c8a8ff;font-size:10px;margin-bottom:3px">
+          SPECTRE GRIMOIRE — forms bind here, at the open book. In the field you fight with what you carried out.
+        </div>
+        ${grimSkills.map(inst => {
+          const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
+          return `<span class="spec-slot" data-drop="spectreSlot:${inst.def.id}">
+            <span style="color:${inst.def.color};font-size:10px">${inst.def.name} Lv ${inst.level}</span>
+            ${form
+              ? `${this.monsterGlyph(form, false)} <span style="color:#a8d8a0">${form.name}</span>
+                 <button data-slot-release="${inst.def.id}" title="Release the attunement (back to corpse-reading)">✕</button>`
+              : '<span class="empty">drag a mastered ★ form here</span>'}
+          </span>`;
+        }).join('')}
+      </div>` : '';
+
       <div class="b-grid">${rows}</div>
       <div class="bind-btns" style="display:flex;justify-content:space-between;align-items:center">
         <button data-bpage="-1" ${this.bestiaryPage <= 0 ? 'disabled' : ''}>◀ Prev</button>
@@ -1759,6 +1834,13 @@ export class UI {
   // ------------------------------------------------------------ oracle stone
 
   showOracle(): void {
+    // Release an attuned form (the slot's ✕) — same intent lane as the drop,
+    // formId '' releases; the engine's binding-site gate rules here too.
+    q<HTMLButtonElement>('button[data-slot-release]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'attuneSpectre', skillId: btn.dataset.slotRelease!, formId: '' });
+      this.refreshBestiary();
+      if (this.inventoryOpen) this.refreshInventory();
+    }));
     this.oracleOpen = true;
     this.oracleMenu.classList.remove('hidden');
     this.refreshOracle();
@@ -2013,30 +2095,23 @@ export class UI {
       const eff = effectiveSkillLevel(inst);
       const nextThresh = def.thresholds?.find(t => eff < t.level);
       const reached = def.thresholds?.filter(t => eff >= t.level) ?? [];
-      // THE GRIMOIRE (delivery.grimoire): the attuned-form chip + picker.
-      // Mastered, attunable bestiary forms bind PER INSTANCE — carry two
-      // Spectre gems, hold two different forms.
+      // THE GRIMOIRE (delivery.grimoire): the attuned-form chip — READ-ONLY
+      // here. Binding lives at the Tracker's OPEN BOOK now (drag a mastered
+      // page onto this skill's slot in the grimoire strip): the field
+      // commits you to the form you carried out, and the walk back to town
+      // is the price of a swap. The chip keeps the build pane honest about
+      // what this copy summons; the engine gate is World.attuneSpectre's.
       let grimoire = '';
       if (def.delivery.type === 'summon' && def.delivery.grimoire) {
         const form = inst.attunedForm ? MONSTERS[inst.attunedForm] : undefined;
         const acc = this.getAccount();
         const chip = form
-          ? `<span class="gem-chip" style="border-color:#a8d8a0" title="This copy summons ${form.name} outright — no corpse read.">
-              ${this.monsterGlyph(form, false)} ${form.name}
-              <button data-unattune="${def.id}" title="Release the attunement (back to corpse-reading)">✕</button></span>`
+          ? `<span class="gem-chip" style="border-color:#a8d8a0" title="This copy summons ${form.name} outright — no corpse read. Rebind or release at the Tracker's book.">
+              ${this.monsterGlyph(form, false)} ${form.name}</span>`
           : `<span style="color:#8a8678">unattuned — reads corpses</span>`;
-        let picker = '';
-        if (this.attunePicking === def.id) {
-          const forms = bestiaryList().filter(d => spectreAttunable(acc, d));
-          picker = `<div style="margin-top:3px">${forms.map(d =>
-            `<button data-attune-pick="${def.id}:${d.id}" title="${bestiaryKills(acc, d.id)} studied kills">
-              ${this.monsterGlyph(d, false)} ${d.name}</button>`).join(' ')
-            || '<span style="color:#8a8678;font-size:10px">No forms mastered yet — the Tracker\'s bestiary fills as your line hunts.</span>'}</div>`;
-        }
         grimoire = `<div style="margin-top:3px;font-size:10px">
           <span style="color:#a8d8a0">Grimoire:</span> ${chip}
-          <button data-attune="${def.id}">${this.attunePicking === def.id ? 'Close' : 'Attune…'}</button>
-          ${picker}</div>`;
+          <span style="color:#6a6478">— binds at the Tracker's book</span></div>`;
       }
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" style="border-left:3px solid ${def.color}">
@@ -2073,21 +2148,8 @@ export class UI {
       world.requestMeta({ t: 'bindSkill', slot: Number(btn.dataset.slot), skillId: btn.dataset.bind! });
       refresh();
     }));
-    // THE GRIMOIRE: unfold the picker / bind a mastered form / release it.
-    q<HTMLButtonElement>('button[data-attune]').forEach(btn => btn.addEventListener('click', () => {
-      this.attunePicking = this.attunePicking === btn.dataset.attune ? null : btn.dataset.attune!;
-      refresh();
-    }));
-    q<HTMLButtonElement>('button[data-attune-pick]').forEach(btn => btn.addEventListener('click', () => {
-      const [skillId, formId] = btn.dataset.attunePick!.split(':');
-      world.requestMeta({ t: 'attuneSpectre', skillId, formId });
-      this.attunePicking = null;
-      refresh();
-    }));
-    q<HTMLButtonElement>('button[data-unattune]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'attuneSpectre', skillId: btn.dataset.unattune!, formId: '' });
-      refresh();
-    }));
+    // (Grimoire attunement wires nowhere here anymore — binding is the
+    // Tracker's book's drag gesture; the chip above is display-only.)
     q<HTMLButtonElement>('button[data-unlearn]').forEach(btn => btn.addEventListener('click', () => {
       world.requestMeta({ t: 'unlearn', skillId: btn.dataset.unlearn! }); refresh();
     }));
