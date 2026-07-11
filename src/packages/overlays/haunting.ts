@@ -19,7 +19,11 @@
 // engine via setAnchorLife/setBossLife, the Hunt's preserved-health pattern)
 // and the NEXT grief to settle anywhere RESUMES it, so effort spent is never
 // wasted. A broken-anchor haunt still never lapses by ttl: grief faced must
-// be finished — or carried.
+// be finished — or carried. While a grief holds the player's zone the air
+// itself runs cold (the `wash` knob → the world/zoneWash.ts seam, thinning
+// with the wane), and a grief FACED buys a REPRIEVE: resolveCooldownSeconds
+// blocks fresh settles for a stretch, so committing to a haunt clears the
+// nights that follow instead of inviting the next one.
 //
 // PURE of the engine: owns the settle/wane/dissipate/lapse lifecycle; the
 // engine reads hauntOn() to field the anchor + the stream, and calls
@@ -34,6 +38,7 @@ import type { MapCoord } from '../../world/coords';
 import { inPhases, phaseAhead, type DayPhase } from '../../world/daynight';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
+import { registerZoneWashSource } from '../../world/zoneWash';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventAllowed } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
@@ -79,6 +84,16 @@ export interface HauntSurge {
    *  the Wailing One's wounds) and the NEXT grief to settle — any zone —
    *  RESUMES it, so player effort is never wasted. Default true. */
   carryWound?: boolean;
+  /** Full-screen wash while a grief holds the player's zone — dread made
+   *  visible (the world/zoneWash.ts seam). Alpha THINS with the wane: the
+   *  air warms as the light nears. Colour defaults to the surge colour. */
+  wash?: { color?: string; alpha: number };
+  /** Seconds (rolled in range) after a grief is FACED — the Wailing One
+   *  felled, resolveHaunt() — before a fresh grief may settle anywhere: the
+   *  player's reprieve, so committing to a haunt buys quiet nights instead
+   *  of wall-to-wall grief. Dissipation never cools (it carries instead);
+   *  a ttl lapse never cools (nothing was faced). Undefined = no reprieve. */
+  resolveCooldownSeconds?: [number, number];
 }
 
 /** What the engine reads to field a haunted zone. */
@@ -138,6 +153,9 @@ export class HauntField implements WorldOverlay {
   /** Griefs the light dissolved since the engine last drained — the engine
    *  sweeps their standing spawns from the named zone (fade-out, no bounty). */
   private dissipated: { id: string; zoneId: string; color: string }[] = [];
+  /** The reprieve: seconds until a fresh grief may settle again after one was
+   *  FACED (resolveCooldownSeconds). 0 = no cooldown running. */
+  private cooldownLeft = 0;
   private acc = 0;
   private seq = 0;
 
@@ -166,11 +184,14 @@ export class HauntField implements WorldOverlay {
       if (h.ttlLeft <= 0) this.haunts.splice(i, 1);
     }
     // IGNITION — a fresh grief settles on some charted, hauntable ground,
-    // and only in its hours (beginPhases — the night gate).
+    // only in its hours (beginPhases — the night gate), and never during the
+    // reprieve a FACED grief bought (resolveCooldownSeconds).
+    if (this.cooldownLeft > 0) this.cooldownLeft = Math.max(0, this.cooldownLeft - dt);
     this.acc += dt;
     while (this.acc >= STEP) {
       this.acc -= STEP;
       if (g.active
+        && this.cooldownLeft <= 0
         && inPhases(view.time, this.cfg.beginPhases)
         && this.haunts.length < scaledCap(this.cfg.maxConcurrent, g.concurrencyMul)
         && this.rng.chance(this.cfg.igniteChance * g.ignitionMul)) {
@@ -237,10 +258,21 @@ export class HauntField implements WorldOverlay {
     if (h) h.anchorBroken = true;
   }
 
-  /** The Wailing One fell (or a dev lift): the grief releases the ground. */
+  /** The Wailing One fell (or a dev lift): the grief releases the ground —
+   *  and RESTS. A faced grief starts the resolve cooldown, the player's
+   *  reprieve: the nights right after a commitment aren't wall-to-wall grief.
+   *  (Only a real resolution cools — a stale id is a no-op.) */
   resolveHaunt(id: string): void {
+    const before = this.haunts.length;
     this.haunts = this.haunts.filter(h => h.id !== id);
+    if (this.haunts.length < before && this.cfg.resolveCooldownSeconds) {
+      this.cooldownLeft = this.rng.range(
+        this.cfg.resolveCooldownSeconds[0], this.cfg.resolveCooldownSeconds[1]);
+    }
   }
+
+  /** Seconds of reprieve left before griefs may settle again (QA / tests). */
+  cooldownRemaining(): number { return this.cooldownLeft; }
 
   /** Engine sync (per frame, the Hunt's preserved-health pattern): the standing
    *  anchor's wound, remembered so a dawn — or a zone exit — keeps it. */
@@ -280,7 +312,8 @@ export class HauntField implements WorldOverlay {
 
   /** DEV: settle a grief on the given zone immediately — PINNED (it ignores
    *  the wheel, so a day-time force holds; it still previews the wane pulse
-   *  near a dissolving boundary). Consumes a banked wound like any settle. */
+   *  near a dissolving boundary). Consumes a banked wound like any settle,
+   *  and bypasses the resolve cooldown (dev forces answer to no reprieve). */
   devIgnite(view: OverlayView, zoneId: string): boolean {
     const z = view.byId[zoneId];
     if (!z || !this.hauntable(z) || this.haunts.some(h => h.zoneId === zoneId)) return false;
@@ -348,4 +381,17 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
     detail,
     z: 15,
   }];
+});
+
+// --- zone wash (registered on import): held ground runs COLD ------------------
+// The dread made visible — a pale wash over the whole zone while the grief
+// holds, thinning with the wane (the air warms as the light nears). Pure data:
+// the surge's `wash` knob; no knob, no wash.
+registerZoneWashSource((world: World) => {
+  const hf = world.sim.hauntField;
+  const wash = hf?.surge().wash;
+  if (!hf || !wash) return null;
+  const info = hf.hauntOn(world.zone.id);
+  if (!info) return null;
+  return { color: wash.color ?? info.color, alpha: wash.alpha * (1 - info.waneFrac) };
 });

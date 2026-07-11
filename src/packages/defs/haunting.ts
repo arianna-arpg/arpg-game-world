@@ -10,7 +10,10 @@
 // nothing. But the light erases nothing (carryWound): a banished grief banks
 // the anchor's cracks, a broken anchor, the Wailing One's hurts — and the next
 // grief to settle, wherever it lands, RESUMES them. Effort is never wasted;
-// it is carried to another night. Reuses the apparition wing (gloomlings,
+// it is carried to another night. Held ground runs visibly COLD (the wash
+// knob → zoneWash seam), and a grief FACED buys a reprieve (the resolve
+// cooldown) — commitment clears the nights that follow. Reuses the
+// apparition wing (gloomlings,
 // wisps, poltergeists, banshees — presence-banded), the undead faction, and
 // the kill-handler registry; the overlay owns the settle/wane/dissipate
 // lifecycle. Discovered in play; the Vault unlock gates TUNING, exactly like
@@ -39,6 +42,15 @@ export const HAUNT_SURGE: HauntSurge = {
   holdPhases: ['night'],
   waneSeconds: 25,
   carryWound: true,
+  // DREAD MADE VISIBLE: the held zone's whole air runs cold-pale while the
+  // grief holds (zoneWash seam; colour falls back to the surge colour), and
+  // the wash thins with the wane — the world warming is the dawn's herald.
+  wash: { alpha: 0.16 },
+  // THE REPRIEVE: felling the Wailing One buys quiet — no fresh settle for
+  // 1.25–2 day-turns (a night is ~96s of the 240s wheel, so at least the NEXT
+  // night is grief-free). Only a FACED grief cools: dissipation carries its
+  // wound instead, and an ignored lapse never earned a rest.
+  resolveCooldownSeconds: [300, 480],
   // The apparition wing, banded: young ground grieves in gloomlings and
   // grave-lights; old ground sends its wights and wailers.
   roster: [
