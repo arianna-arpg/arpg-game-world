@@ -4305,7 +4305,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 15, cooldown: 7, useTime: 0.6,
     baseDamage: { physical: [7, 11] },
     delivery: {
-      type: 'construct', kind: 'barrier',
+      type: 'construct', kind: 'barrier', look: 'construct_barrier_bramble',
       range: 0, duration: 12, maxActive: 12, life: 38,
       placeRange: 320,
       wallSegments: 6,
@@ -4516,7 +4516,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'projectile', 'duration', 'totem'], color: '#ff6a3a',
     manaCost: 26, cooldown: 9, useTime: 0.8,
     delivery: {
-      type: 'construct', kind: 'eruptor', castSkillId: 'hellfire_missile',
+      type: 'construct', kind: 'eruptor', look: 'construct_rift', castSkillId: 'hellfire_missile',
       range: 500, duration: 6, maxActive: 2, invulnerable: true,
       placeRange: 380, interval: 0.35,
     },
@@ -5228,7 +5228,8 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'aoe', 'duration', 'aura', 'totem'], color: '#ffd24a',
     manaCost: 26, cooldown: 10, useTime: 0.7,
     delivery: {
-      type: 'construct', kind: 'pylon',
+      // aims:false — it hangs and radiates; a sun points at nothing.
+      type: 'construct', kind: 'pylon', look: 'construct_sun', aims: false,
       range: 150, duration: 7, maxActive: 1, placeRange: 320, invulnerable: true,
       aura: { radius: 150, enemyDps: { amount: 9, type: 'fire' } },
     },
@@ -6994,7 +6995,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 12, cooldown: 5, useTime: 0.55,
     baseDamage: { cold: [3, 5] },
     delivery: {
-      type: 'construct', kind: 'sentry', castSkillId: 'rift_shard',
+      type: 'construct', kind: 'sentry', look: 'construct_rift', castSkillId: 'rift_shard',
       range: 440, duration: 4, maxActive: 2, invulnerable: true,
       placeRange: 300, interval: 0.5,
     },
@@ -7159,7 +7160,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 13, cooldown: 7, useTime: 0.6,
     baseDamage: { cold: [6, 10] },
     delivery: {
-      type: 'construct', kind: 'barrier',
+      type: 'construct', kind: 'barrier', look: 'construct_barrier_ice',
       range: 0, duration: 7, maxActive: 5, life: 55, placeRange: 240,
       wallSegments: 5,
       fx: { pulse: { interval: 0.9, radius: 46, damageScale: 0.45 } },
@@ -8575,7 +8576,7 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'aoe', 'duration'], color: '#e07838',
     manaCost: 10, cooldown: 3, useTime: 0.45,
     delivery: {
-      type: 'construct', kind: 'pod',
+      type: 'construct', kind: 'pod', look: 'construct_cask',
       range: 0, duration: 2.4, maxActive: 3, life: 45, placeRange: 280,
       hatch: { skillId: 'cask_blast', onBreak: 'hatch' },
     },
@@ -8791,7 +8792,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 15, cooldown: 9, useTime: 0.6,
     baseDamage: { physical: [7, 11] },
     delivery: {
-      type: 'construct', kind: 'barrier', castSkillId: 'bell_toll',
+      type: 'construct', kind: 'barrier', look: 'construct_bell', castSkillId: 'bell_toll',
       range: 0, duration: 10, maxActive: 1, life: 150, placeRange: 280,
       interval: 0.6,
       castOnStruck: true,

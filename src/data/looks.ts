@@ -1307,6 +1307,117 @@ export const LOOKS: Record<string, LookDef> = {
   construct_barrier_ice: {
     parts: [{ kind: 'stakeRow', color: '#bcdcec', alpha: 0.92, params: { n: 4, span: 1.9 } }],
   },
+  /** The hedge segment: a thorn-woven fence rank (Bramble Hedge). */
+  construct_barrier_bramble: {
+    parts: [
+      { kind: 'stakeRow', color: '#5a7a34', params: { n: 4, span: 1.9 } },
+      { kind: 'nestTwigs', scale: 0.95, alpha: 0.9, params: { n: 10 } },
+    ],
+  },
+  /** The DOME projector — a warded beacon: pedestal, humming core, rune
+   *  ring, glow. The bubble itself is live FX (renderer domeRadius). */
+  construct_dome: {
+    parts: [
+      { kind: 'disc', scale: 0.6, role: 'metal' },
+      { kind: 'runes', scale: 0.85, params: { n: 3 } },
+      { kind: 'gem', scale: 1.05 },
+      { kind: 'halo', scale: 1.15 },
+    ],
+  },
+  /** The launch PAD: a flat rune plate — all glow, no mass (its facing is
+   *  the hurl direction; the aim tick points the throw). */
+  construct_pad: {
+    parts: [
+      { kind: 'disc', scale: 0.85, alpha: 0.55 },
+      { kind: 'runes', scale: 0.72, params: { n: 5 } },
+      { kind: 'halo', scale: 0.72 },
+    ],
+    shadowScale: 0.3,
+  },
+  /** The GATE anchor: a rune-bound portal ring around a burning core. */
+  construct_gate: {
+    parts: [
+      { kind: 'halo', scale: 1.2 },
+      { kind: 'runes', scale: 1.0, params: { n: 6 } },
+      { kind: 'orb', scale: 0.66 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.4,
+  },
+  /** The ERUPTOR vent: a cracked mound seeping its skill's heat (Volcano,
+   *  Stormbrand Beacon). Rifts that hang in the AIR want construct_rift. */
+  construct_eruptor: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.24, seed: 9 } },
+      { kind: 'lavaCracks', scale: 0.95, params: { n: 5 } },
+      { kind: 'orb', scale: 0.5 },
+    ],
+  },
+  /** A torn RIFT: jagged shards around a burning heart (Shardrift, Hell
+   *  Rift) — the skill color decides whether it's ice or hellfire. */
+  construct_rift: {
+    parts: [
+      { kind: 'crystalGrowths', scale: 1.0, params: { n: 5 } },
+      { kind: 'orb', scale: 0.55 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The TREE of the grove: a full crown over root-heave (two root fans =
+   *  all-around heave; the crown is the whole silhouette from above). */
+  construct_tree: {
+    parts: [
+      { kind: 'roots', scale: 1.15, params: { n: 7 } },
+      { kind: 'roots', rot: Math.PI, scale: 1.15, params: { n: 5 } },
+      { kind: 'capDome', scale: 0.95, params: { spots: 0 } },
+      { kind: 'halo', scale: 1.05 },
+    ],
+  },
+  /** The standing RELIC: a reliquary gem in its sunburst standard. */
+  construct_relic: {
+    parts: [
+      { kind: 'sunburst', scale: 0.9, params: { n: 8 } },
+      { kind: 'halo', scale: 0.8 },
+      { kind: 'gem', scale: 1.1 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The POD default: a gravid egg bedded in a woven ring (Strangler Seed,
+   *  Broodpod; brood_egg / grub_egg stay the bespoke clutches). */
+  construct_pod: {
+    parts: [
+      { kind: 'nestTwigs', scale: 0.72, params: { n: 8 } },
+      { kind: 'egg', scale: 0.85 },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The powder CASK: a banded keg, fuse-spark glowing at the bung. */
+  construct_cask: {
+    parts: [
+      { kind: 'keg', scale: 0.95 },
+      { kind: 'orb', x: 0.4, y: -0.4, scale: 0.34 },
+    ],
+  },
+  /** The hung SUN (Solar Orb): a burning core in its spoked corona. */
+  construct_sun: {
+    parts: [
+      { kind: 'sunburst', scale: 1.0, params: { n: 10 } },
+      { kind: 'orb', scale: 0.9 },
+    ],
+    shadowScale: 0.45,
+  },
+  /** The GREAT BELL on its stand — it sways, wanting to be struck. */
+  construct_bell: {
+    parts: [{ kind: 'disc', scale: 0.55, role: 'wood' }],
+    live: [{ kind: 'bell', scale: 1.5, params: { swing: 0.1 } }],
+  },
+  /** The whirlaxe CATCH SPOT: the marked circle, steel lying in it. */
+  construct_axe_catch: {
+    parts: [
+      { kind: 'halo', scale: 1.1 },
+      { kind: 'axe', scale: 1.1, rot: -0.5 },
+    ],
+    shadowScale: 0.4,
+  },
 
   // ==================================================== BESTIARY EXPANSION
   // Six families in one pass: cap-folk, cavern dwellers, the treant line,
@@ -2182,4 +2293,24 @@ export const CONSTRUCT_LOOKS: Record<string, string> = {
   pylon: 'construct_pylon',
   barrier: 'construct_barrier_stone',
   embed: 'construct_spear',
+  dome: 'construct_dome',
+  pad: 'construct_pad',
+  gate: 'construct_gate',
+  eruptor: 'construct_eruptor',
+  tree: 'construct_tree',
+  relic: 'construct_relic',
+  pod: 'construct_pod',
+  // echo / decoy dress themselves in their OWNER's silhouette (buildEchoRider
+  // / the dash-decoy mint copy look+shape+color) — deliberately absent here;
+  // the validator's SELF_DRESSING set mirrors this pair.
 };
+
+/** Construct kinds that wear their OWNER's silhouette instead of a registry
+ *  portrait (spawn paths copy look/shape/color) — the visual-coverage sweep
+ *  skips them, and CONSTRUCT_LOOKS deliberately carries no entry. */
+export const SELF_DRESSING_KINDS = new Set(['echo', 'decoy']);
+
+/** The planted catch-spot's default portrait (Whirlaxe's marked circle) —
+ *  one name shared by the world's mint and the validator, so removing the
+ *  look entry can never silently regress the catch to a legacy square. */
+export const CATCH_SPOT_LOOK = 'construct_axe_catch';

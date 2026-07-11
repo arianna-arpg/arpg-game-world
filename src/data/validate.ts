@@ -39,6 +39,7 @@ import {
 import { hasCommandKind } from '../engine/ai';
 import { hasConvertRule } from '../engine/skills';
 import { DOODAD_VISUALS } from './doodadVisuals';
+import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS, LOOKS, SELF_DRESSING_KINDS } from './looks';
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
@@ -117,6 +118,43 @@ export function validateContent(): void {
     .map(([k]) => k);
   if (crownOnly.length) {
     warn(`doodad kind(s) whose ground body is still the legacy groundShadow disc: ${crownOnly.join(', ')}`);
+  }
+
+  // ACTOR half of the sweep — deployed constructs. Every construct delivery
+  // must RESOLVE a portrait (its own look, else its kind's CONSTRUCT_LOOKS
+  // default) that exists in LOOKS; anything short of that spawns as the
+  // legacy square-in-skill-color the visual fabric retired. echo/decoy wear
+  // their owner's silhouette instead (SELF_DRESSING_KINDS) and are exempt.
+  for (const s of Object.values(SKILLS)) {
+    const d = s.delivery;
+    if (d.type !== 'construct' || SELF_DRESSING_KINDS.has(d.kind)) continue;
+    const look = d.look ?? CONSTRUCT_LOOKS[d.kind];
+    if (!look) {
+      warn(`construct skill ${s.id} (kind '${d.kind}'): no delivery look and no CONSTRUCT_LOOKS default — spawns as the legacy square`);
+    } else if (!LOOKS[look]) {
+      warn(`construct skill ${s.id}: look '${look}' is not a LOOKS entry`);
+    }
+  }
+  // The catch-spot mint plants CATCH_SPOT_LOOK when the spec names none —
+  // the default itself must stay registered while any catchSpot skill lives.
+  if (!LOOKS[CATCH_SPOT_LOOK] && Object.values(SKILLS).some(s =>
+    s.delivery.type === 'projectile' && s.delivery.catchSpot && !s.delivery.catchSpot.look)) {
+    warn(`catchSpot skills rely on default look '${CATCH_SPOT_LOOK}' but it is not a LOOKS entry`);
+  }
+  // DANGLING PORTRAITS: every named look id, wherever it's named — a typo
+  // silently regresses the body to the legacy shape; make it loud. (Monster
+  // defs, class skins, the construct kind registry, catch-spot overrides.)
+  const lookRefs: [string, string | undefined][] = [
+    ...Object.values(MONSTERS).map((m): [string, string | undefined] => [`monster ${m.id}`, m.look]),
+    ...CLASSES.map((c): [string, string | undefined] => [`class ${c.id}`, c.look]),
+    ...Object.entries(CONSTRUCT_LOOKS).map(([k, v]): [string, string | undefined] => [`CONSTRUCT_LOOKS.${k}`, v]),
+    ...Object.values(SKILLS).map((s): [string, string | undefined] => [
+      `skill ${s.id} catchSpot`,
+      s.delivery.type === 'projectile' ? s.delivery.catchSpot?.look : undefined,
+    ]),
+  ];
+  for (const [src, id] of lookRefs) {
+    if (id && !LOOKS[id]) warn(`${src}: look '${id}' is not a LOOKS entry`);
   }
 
   // WEATHER: every registered kind's cross-refs resolve (a strike names a real

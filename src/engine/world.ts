@@ -59,7 +59,7 @@ import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
-import { CONSTRUCT_LOOKS } from '../data/looks';
+import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
@@ -13283,10 +13283,14 @@ export class World {
           const mirage = new Actor(`${caster.name}?`, caster.team, vec(caster.pos.x, caster.pos.y));
           mirage.owner = caster;
           mirage.sourceSkillId = def.id;
+          // A convincing double wears the full silhouette, not just the tint.
           mirage.shape = caster.shape;
           mirage.color = caster.color;
           mirage.radius = caster.radius;
           mirage.facing = caster.facing;
+          mirage.look = caster.look;
+          mirage.adorn = caster.adorn;
+          mirage.material = caster.material;
           mirage.taunt = true;
           mirage.construct = { kind: 'decoy', range: 0, timer: 0 };
           mirage.sheet.setBase('life', 25 + caster.maxLife() * 0.2);
@@ -15199,9 +15203,14 @@ export class World {
     };
     const c = this.spawnConstruct(owner, sourceInst, d, owner.pos, castInst);
     if (!c) return null;
+    // The ghost wears its owner's WHOLE silhouette — part-grammar portrait,
+    // adorn and surface included (shape+color alone undressed a class look).
     c.shape = owner.shape;
     c.color = owner.color;
     c.radius = owner.radius;
+    c.look = owner.look;
+    c.adorn = owner.adorn;
+    c.material = owner.material;
     const st = c.construct!;
     st.echo = spec;
     st.echoKey = key;
@@ -23511,6 +23520,9 @@ export class World {
         if (cspec && !p.caster.dead) {
           this.spawnConstruct(p.caster, p.inst, {
             type: 'construct', kind: 'embed',
+            // Not a lodged spear: the marked circle with the steel lying
+            // in it (catchSpot.look overrides per skill).
+            look: cspec.look ?? CATCH_SPOT_LOOK,
             range: 0, duration: cspec.duration ?? 5, maxActive: 4,
             invulnerable: true, placeRange: 9999,
             embed: {

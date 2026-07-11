@@ -841,6 +841,9 @@ export interface ProjectileDelivery {
     duration?: number;
     /** How far from the caster the circle lands (default 70–115). */
     nearRadius?: number;
+    /** Portrait of the planted catch (default 'construct_axe_catch' —
+     *  the marked circle with steel lying in it). */
+    look?: string;
   };
   /** SPREAD BY AIM (Splayshot): the fan's cone interpolates with cursor
    *  DISTANCE — `near` degrees point-blank, `far` degrees at `range` —
@@ -1515,7 +1518,8 @@ export const CONSTRUCT_KIND_AIMS: Record<ConstructKind, boolean> = {
   eruptor: false, // random spray is activity, not an aim
   trap: false,    // aims only at the instant it springs
   mine: false,
-  pad: false, gate: false, barrier: false, dome: false,
+  pad: true,      // its facing IS the hurl direction — the tick points the throw
+  gate: false, barrier: false, dome: false,
   tree: false, embed: false, relic: false, pod: false,
 };
 
