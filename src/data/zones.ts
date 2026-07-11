@@ -48,8 +48,10 @@ export type ObjectiveSpec =
   | { kind: 'clear' }
   /** Survive N waves (0 = endless — the original arena mode). A boss cadence
    *  is DATA: every `bossEveryWaves` waves, `bossId` emerges (The Pit's lord
-   *  every 5th — any future survival arena declares its own, no engine edit). */
-  | { kind: 'waves'; waves: number; bossEveryWaves?: number; bossId?: string }
+   *  every 5th — any future survival arena declares its own, no engine edit).
+   *  `frenzy: false` opts this arena out of the wave-frenzy overlay
+   *  (data/waves.ts) — default is the full already-hunting crash. */
+  | { kind: 'waves'; waves: number; bossEveryWaves?: number; bossId?: string; frenzy?: boolean }
   /** Enemies trickle in forever; the objective is reaching an exit. */
   | { kind: 'escape'; interval: [number, number] }
   /** Destructible spawner objects seed the zone; destroy them all. */

@@ -66,6 +66,7 @@ import {
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
 import { sidezoneOf } from '../data/sidezones';
+import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
@@ -1905,7 +1906,7 @@ export class World {
   private lockHint = 0;
 
   wave = 0;
-  waveTimer = 2;       // countdown to next wave while no enemies remain
+  waveTimer = WAVE_CFG.firstDelay; // countdown to next wave while no enemies remain
   waveActive = false;
   gameOver = false;
   /** Why the run ended — 'death' (records a corpse) or 'forfeit' (does not).
@@ -2671,7 +2672,7 @@ export class World {
     }
     this.vocationSites = [];    // secret-vocation shrines re-place per load (deterministic)
     this.wave = 0;
-    this.waveTimer = 3;
+    this.waveTimer = WAVE_CFG.firstDelay;
     this.waveActive = false;
 
     // HOLDFAST: on first arrival in an uncharted zone, maybe raise a fortified, LOCKED
@@ -24899,7 +24900,7 @@ export class World {
         const enemies = this.countedEnemies();
         if (this.waveActive && enemies.length === 0) {
           this.waveActive = false;
-          this.waveTimer = 3;
+          this.waveTimer = WAVE_CFG.intermission;
           if (o.waves > 0 && this.wave >= o.waves) {
             this.completeObjective('The assault is broken!');
           }
@@ -24947,22 +24948,81 @@ export class World {
       }
       pickType = (): string => this.weightedPick(pool, level);
     }
-    const count = Math.min(4 + this.wave * 2, 20);
-
+    // COUNT scales with the wave AND the character (data/waves.ts): an arena
+    // that grows with whoever dares it, not a fixed drip.
+    const cfg = WAVE_CFG;
+    const count = Math.min(
+      Math.round(cfg.count.base + this.wave * cfg.count.perWave + this.player.level * cfg.count.perLevel),
+      cfg.count.max);
+    // SURGE GROUPS: the wave breaks from a few points, not an even sprinkle —
+    // every anchor is a fully-legal spawn point (reachability-checked); the
+    // members ring their anchor and clamp legal, falling back onto it where
+    // the ring leaves the mesh.
+    const anchors: Vec2[] = [];
+    for (let k = 0, n = Math.max(1, Math.ceil(count / cfg.cluster.size)); k < n; k++) {
+      anchors.push(this.spawnPoint(24));
+    }
+    const o = this.zone.objective;
+    const frenzy = o.kind === 'waves' && o.frenzy !== false ? cfg.frenzy : null;
     for (let i = 0; i < count; i++) {
       const m = this.createMonster(pickType(), level, 'enemy');
-      m.pos = this.spawnPoint(m.radius);
+      const a = anchors[i % anchors.length];
+      const ang = rand(0, Math.PI * 2), rr = rand(12, cfg.cluster.spread);
+      let p = vec(a.x + Math.cos(ang) * rr, a.y + Math.sin(ang) * rr);
+      if (this.walk && !this.walk.isWalkable(p.x, p.y)) p = vec(a.x, a.y);
+      m.pos = this.clampPos(p, m.radius);
+      if (frenzy) this.applyWaveFrenzy(m, frenzy);
       this.actors.push(m);
     }
     // Boss cadence is the OBJECTIVE'S data (bossEveryWaves/bossId) — any
     // survival arena declares its own lord; nothing is keyed to a zone id.
-    const o = this.zone.objective;
     if (o.kind === 'waves' && o.bossEveryWaves && o.bossId && this.wave % o.bossEveryWaves === 0) {
       const boss = this.createMonster(o.bossId, level + 1, 'enemy');
       boss.pos = this.spawnPoint(boss.radius);
+      if (frenzy) this.applyWaveFrenzy(boss, frenzy);
       this.actors.push(boss);
       this.text(vec(this.player.pos.x, this.player.pos.y - 60), `${boss.name} emerges!`, '#ff5050', 20);
     }
+  }
+
+  /** FRENZY (data/waves.ts): a wave spawn arrives ALREADY HUNTING — aggro
+   *  latched from frame one (the nemesis precedent), x-ray 360° senses, an
+   *  infinite relentless lock, kin-alert shout, the direct charge kernel
+   *  routing around walls, and no leash/morale/tempo hesitation. Built as a
+   *  FRESH merged brain per instance — the def's SHARED brain object is never
+   *  mutated (normalizeBrain caches per object identity; touching def.brain
+   *  would frenzy every monster of that def everywhere, forever). */
+  private applyWaveFrenzy(m: Actor, fz: WaveFrenzySpec): void {
+    m.aggroed = true;        // came here for you —
+    m.alertUntil = Infinity; // — with relentless below, detection is ∞ from frame one
+    const b: NonNullable<Actor['brain']> = m.brain ?? {};
+    m.brain = {
+      ...b,
+      perception: {
+        ...b.perception,
+        xray: true,
+        arcDeg: 360,
+        alertShout: Math.max(fz.shoutRadius, b.perception?.alertShout ?? 0),
+        memory: Math.max(fz.memory, b.perception?.memory ?? 0),
+        attentionSpan: undefined, // a wave never forgets you
+      },
+      target: {
+        ...b.target,
+        relentless: true,
+        detectMul: Math.max(fz.detectMul, b.target?.detectMul ?? 0),
+        leash: undefined,         // no giving up and walking home
+        kindBias: { ...fz.kindBias },
+      },
+      move: {
+        ...b.move,
+        style: 'direct',
+        closeFrac: Math.min(fz.closeFrac, b.move?.closeFrac ?? fz.closeFrac),
+        pathing: 'route',         // charge AROUND walls, never pile into them
+      },
+      morale: undefined,          // never rout
+      tempo: undefined,           // no duty-cycle pauses — a wave does not hesitate
+    };
+    if (fz.moveSpeedMore) m.sheet.setSource('waveFrenzy', [mod('moveSpeed', 'more', fz.moveSpeedMore)]);
   }
 
   private spawnPoint(radius: number): Vec2 {
