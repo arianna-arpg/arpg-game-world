@@ -492,6 +492,10 @@ export interface DoodadRule {
    *  this kind (world.ts eldritchMutateDoodads). A derived predicate, never
    *  a literal id set in engine paths. */
   mutable?: boolean;
+  /** SHRUB-FAMILY SPIN: blob pieces of this kind roll a per-piece rotation
+   *  at stamp time (stampBlob). The rot draw stays CONDITIONAL on this flag
+   *  so every unflagged kind keeps its exact historical rng sequence. */
+  spin?: boolean;
 }
 
 /** How a lifeless breakable gives way (World.popBrittle executes it). */
@@ -717,7 +721,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   /** The Field's boundary fringe: pure visual, deliberately NOT walk-gated —
    *  it straddles the tallgrass rim to round the raster's right angles off. */
   hedgerow:  { overlap: 'ground' },
-  brush:     { overlap: 'ground' },
+  brush:     { overlap: 'ground', spin: true },
   campfire:  { overlap: 'ground' },
   ritual_pentagram: { overlap: 'ground' },
   tentacle_field:   { overlap: 'ground' },
@@ -776,8 +780,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   rock_spire: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm'] },
   // Flora clarity: a berry bush is walkable cover exactly like brush; ferns
   // are pure understory decoration.
-  berry_bush: { overlap: 'ground' },
-  fern:       { overlap: 'ground', walkOnly: true },
+  berry_bush: { overlap: 'ground', spin: true },
+  fern:       { overlap: 'ground', walkOnly: true, spin: true },
   // The fungal kit: shelves are low solids (step behind, shoot over);
   // toadstools are walkable fairy-ring decoration.
   shelf_fungus: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 36, forbidOn: ['water', 'lava', 'chasm'] },
@@ -4328,8 +4332,7 @@ function stampBlob(
   const center = findSpot(ctx, R * 1.8, hard, 20, false, kind);
   if (!center) return;
   const n = ctx.rng.int(pieces[0], pieces[1]);
-  const SPUN_BLOBS: readonly DoodadKind[] = ['brush', 'berry_bush', 'fern'];
-  const crot = (): number | undefined => SPUN_BLOBS.includes(kind) ? ctx.rng.range(0, Math.PI * 2) : undefined;
+  const crot = (): number | undefined => doodadRule(kind).spin ? ctx.rng.range(0, Math.PI * 2) : undefined;
   ctx.doodads.push({ pos: center, radius: R, kind, rot: crot() });
   for (let i = 0; i < n; i++) {
     const ang = ctx.rng.range(0, Math.PI * 2);

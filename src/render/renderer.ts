@@ -35,7 +35,7 @@ import { roofStyle } from '../data/structures';
 import { DEFAULT_KEYBINDS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
-import { MONSTERS } from '../data/monsters';
+import { FACTIONS, MONSTERS } from '../data/monsters';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
@@ -2395,7 +2395,7 @@ export class Renderer {
       shape: a.shape, radius: a.radius, color: a.color,
       material: a.material, adorn: a.adorn, look: a.look,
       outline: a.isMinion() ? '#b06bd4' : undefined,
-      demonHorns: a.faction === 'demon',
+      demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
     };
     const half = spriteHalf(a.radius);
     const flash = a.hitFlash > 0;
@@ -2613,8 +2613,11 @@ export class Renderer {
       }
     }
 
-    // Iron banding on breakables: containers read as containers.
-    if (a.defId === 'barrel') {
+    // Iron banding on breakables (LookDef.banding): containers read as
+    // containers. The LOOK carries it — never a defId compare — so any new
+    // container def joins by wearing (or declaring) a banded look.
+    const banding = lookDef?.banding;
+    if (banding === 'hoops') {
       ctx.strokeStyle = '#c8a87a';
       ctx.lineWidth = 2;
       ctx.beginPath();
@@ -2623,7 +2626,7 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(0, 0, a.radius * 0.38, 0, Math.PI * 2);
       ctx.stroke();
-    } else if (a.defId === 'crate') {
+    } else if (banding === 'cross') {
       ctx.strokeStyle = '#c8a87a';
       ctx.lineWidth = 2;
       const r = a.radius * 0.85;

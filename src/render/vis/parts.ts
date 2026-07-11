@@ -40,6 +40,11 @@ export interface LookDef {
   live?: PartSpec[];
   /** Contact-shadow width multiplier (long bodies want more). */
   shadowScale?: number;
+  /** Container BANDING drawn over the body (breakables read as containers):
+   *  iron hoops (kegs) or cross-slats (crates). On the LOOK, not the monster
+   *  id — any def wearing the look gets the banding, and a new container
+   *  kind opts in with one word. */
+  banding?: 'hoops' | 'cross';
 }
 
 export type PaletteRole =

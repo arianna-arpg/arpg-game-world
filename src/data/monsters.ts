@@ -5319,7 +5319,14 @@ export function addRelation(a: string, b: string, stance: FactionStance, seedWar
  *  Entries carry PRESENCE envelopes: the leveled-list lever that lets a
  *  roster EVOLVE — fodder that disperses past the teens, elites that only
  *  muster deep in the world — while the table stays one flat, open list. */
-export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }> = {
+export const FACTIONS: Record<string, {
+  name: string;
+  table: PackTableEntry[];
+  /** This faction's horned bodies wear demon-style NUB horns instead of the
+   *  swept default (render adorn styling) — a faction-level look word, never
+   *  a faction-id compare in draw code. */
+  nubHorns?: boolean;
+}> = {
   // Each roster now BREATHES with level (presence envelopes): fodder rows
   // fade as the world deepens, veterans arrive on ramps, and the champion
   // tier musters only where the ground is dangerous enough to deserve it.
@@ -5417,6 +5424,7 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
   },
   demon: {
     name: 'the Infernal Legion',
+    nubHorns: true,
     // The Legion's muster GROWS with the world (the user-facing showcase of
     // presence): shallow rifts leak whelps, imps and hounds; by the 20s the
     // pit sends its army — gorgers, tormentors, heralds, callers — and past

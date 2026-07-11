@@ -1146,8 +1146,8 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.5, size: 0.06 } },
     ],
   },
-  keg: { parts: [{ kind: 'keg' }] },
-  crate: { parts: [{ kind: 'crateBox' }] },
+  keg: { parts: [{ kind: 'keg' }], banding: 'hoops' },
+  crate: { parts: [{ kind: 'crateBox' }], banding: 'cross' },
   training_dummy: {
     parts: [
       { kind: 'torso', role: 'wood' },
