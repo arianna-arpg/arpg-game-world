@@ -285,6 +285,19 @@ export const STRUCTURES: Record<string, StructureDef> = {
     floorStyle: 'flagstone', courtyardFloorStyle: 'flagstone',
   },
 
+  // The Pit's maw — a broken ring of floor around the drop. Never rolled by
+  // any zone: the pit package FURNISHES it into the cellar (furnish spec).
+  pit_maw: {
+    id: 'pit_maw', halfW: 45, halfH: 45, cellSize: 30,
+    plan: [
+      '___',
+      '_O_',
+      '___',
+    ],
+    legend: { O: { doodad: { kind: 'pit_entrance', radius: 26 }, courtyard: true } },
+    courtyardFloorStyle: 'flagstone',
+  },
+
   // The quartermaster's house: the cottage with the quest-giver inside.
   // Added to Lastlight only once the Quest Package is bought.
   quest_house: {

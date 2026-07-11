@@ -58,13 +58,17 @@ export function bound(pkg: ContentPackage, kind: ModifierKind, account: Account)
   return base;
 }
 
-/** The effective entry for a package, from the player's saved prefs or defaults. */
+/** The effective entry for a package, from the player's saved prefs or defaults.
+ *  A package only reaches this at all via manifestPackages (defaultEnabled OR
+ *  purchased) — so a PURCHASED opt-in package defaults ON: buying it is the
+ *  opt-in (The Pit must exist the run after it's bought, not hide behind a
+ *  second toggle). The Expedition screen can still park it per run. */
 function entryFor(pkg: ContentPackage, account: Account): ManifestEntry {
   const pref = account.packageDefaults[pkg.id];
   const wB = bound(pkg, 'weight', account), sB = bound(pkg, 'startLevel', account);
   return {
     id: pkg.id,
-    enabled: pref ? pref.enabled : pkg.defaultEnabled,
+    enabled: pref ? pref.enabled : (pkg.defaultEnabled || isConfigured(account, pkg.id)),
     weight: clampInt(pref?.weight ?? pkg.defaultWeight, wB.min, wB.max),
     startLevel: clampInt(pref?.startLevel ?? pkg.defaultStartLevel, sB.min, sB.max),
   };

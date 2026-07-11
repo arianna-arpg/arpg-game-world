@@ -23,6 +23,7 @@ import { HOLDFAST } from './defs/holdfast';
 import { HUNT } from './defs/hunt';
 import { MIGRATION } from './defs/migration';
 import { MYCELIA } from './defs/mycelia';
+import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
 import { WARBANDS } from './defs/warbands';
 import type { EncounterDef } from './encounters';
@@ -47,6 +48,7 @@ export const PACKAGES: ContentPackage[] = [
   BRIGANDS,
   MYCELIA,
   HAUNTING,
+  PIT,
   FACTION_POLITICS,
 ];
 
@@ -73,6 +75,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   holdfast: 0x401d,
   brigands: 0xb21a,
   mycelia: 0x14ce,
+  pit: 0x9147,
 };
 
 function hashId(id: string): number {

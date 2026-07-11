@@ -38,6 +38,15 @@ export function resolveGates(manifest: ExpeditionManifest, charLevel: number): M
     const pkg = PACKAGE_BY_ID[e.id];
     if (!pkg) continue;
     if (pkg.alwaysOn) { gates.set(e.id, { active: true, share: 0, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 }); continue; }
+    // A PLACE, not an EVENT (pressureless — The Pit): it never joins the
+    // weight budget. No share seat, no count seat — the other packages'
+    // shares AND pressures are byte-identical whether it's owned or not.
+    if (pkg.pressureless) {
+      gates.set(e.id, isStartGateOpen(e, charLevel)
+        ? { active: true, share: 0, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 }
+        : { ...INACTIVE_GATE });
+      continue;
+    }
     if (isStartGateOpen(e, charLevel)) raw.set(e.id, Math.max(0, e.weight));
   }
 

@@ -362,7 +362,11 @@ function packageUnlockables(): Unlockable[] {
     if (p.alwaysOn) continue;
     out.push({
       id: `pkg_${p.id}`, kind: 'package',
-      label: `${p.label} — Configurable`, description: p.blurb, cost: p.cost,
+      // A pressureless package is a PLACE the purchase itself opens — nothing
+      // ran before buying it, so "Configurable" (tuning an already-live
+      // feature) would mislabel it.
+      label: p.pressureless ? p.label : `${p.label} — Configurable`,
+      description: p.blurb, cost: p.cost,
       payload: { packageId: p.id },
     });
     for (const t of p.tiers ?? []) {

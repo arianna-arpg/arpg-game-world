@@ -242,6 +242,11 @@ export interface ContentPackage {
   defaultEnabled: boolean;
   /** Always active, never weighted or gated — the faction-politics substrate. */
   alwaysOn?: boolean;
+  /** A PLACE, not an EVENT: excluded from the relative-weight pressure budget
+   *  entirely (its gate is pure enabled + start-level; other packages' shares
+   *  and the mix bar never see it). The Pit's mode — owning a room under the
+   *  town must not dilute how often storms or warbands fire. */
+  pressureless?: boolean;
   world?: WorldHooks;
   /** Spatial, timed, IN-ZONE encounters this package places (Breach diamonds).
    *  Generalized — a new event type is one more EncounterDef. See encounters.ts. */

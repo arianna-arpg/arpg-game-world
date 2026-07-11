@@ -3642,7 +3642,8 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     };
 
     const mixHtml = (): string => {
-      const active = pkgs.filter(p => !p.alwaysOn && cfg[p.id].enabled && cfg[p.id].startLevel <= 100);
+      // pressureless packages (The Pit) hold no share of the world mix.
+      const active = pkgs.filter(p => !p.alwaysOn && !p.pressureless && cfg[p.id].enabled && cfg[p.id].startLevel <= 100);
       if (!active.length) return `<div class="mix-empty">No packages enabled — a calm world.</div>`;
       const total = active.reduce((s, p) => s + Math.max(0, cfg[p.id].weight), 0) || 1;
       return active.map(p => {
@@ -3661,6 +3662,17 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       }
       const editable = isConfigured(acc, p.id);
       const dis = editable ? '' : 'disabled';
+      // A PLACE, not an event (pressureless — The Pit): just the on/off, no
+      // frequency or start-level to tune, no seat in the mix bar.
+      if (p.pressureless) {
+        return `
+        <div class="exped-card ${c.enabled ? '' : 'exped-off'}" data-card="${p.id}">
+          <label class="exped-head"><input type="checkbox" data-en="${p.id}" ${c.enabled ? 'checked' : ''} ${dis}>
+            <span class="exped-name" style="color:${p.color ?? 'var(--gold)'}">${p.label}</span></label>
+          <div class="exped-blurb">${p.blurb}</div>
+          <div class="exped-always">● A place, not an event — no frequency to tune</div>
+        </div>`;
+      }
       // Slider ranges WIDEN with owned investment tiers (Investigation/Exploration).
       const wB = bound(p, 'weight', acc), sB = bound(p, 'startLevel', acc);
       const sStep = p.modifiers.find(m => m.kind === 'startLevel')?.step ?? 1;
