@@ -228,3 +228,17 @@ registerFormation({
     { kind: 'giant_kelp', radius: [24, 36], every: 4, jitter: 10 },
   ],
 });
+
+// A FULGURITE SCAR: the memory of a strike — glassed ground wandering under
+// branched fulgurite, charged shards still lit, blooms sparking at the rim.
+// All inert look-alikes (the no-fake-inert-hazards rule): the storm is over.
+registerFormation({
+  id: 'fulgurite_scar', arrange: 'meander', span: [300, 560], step: 46,
+  params: { wobble: 30 },
+  pieces: [
+    { kind: 'storm_glass', radius: [16, 26], every: 2, jitter: 10, rot: true },
+    { kind: 'fulgurite', radius: [11, 17], jitter: 9, rot: true },
+    { kind: 'charged_crystal', radius: [9, 14], every: 2, jitter: 16, rot: true },
+    { kind: 'static_bloom', radius: [10, 15], every: 2, jitter: 24 },
+  ],
+});

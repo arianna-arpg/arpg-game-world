@@ -176,7 +176,11 @@ export type KnownDoodadKind =
   | 'tallow_stump'     // a stump drowned in decades of candle wax, still lit
   | 'barrow_mound'     // a turfed burial dome — the dead beneath the grass
   | 'hollow_log'       // a rotted trunk big enough to bar the way
-  | 'bone_cairn';      // stacked bones as a marker — someone counted these dead
+  | 'bone_cairn'       // stacked bones as a marker — someone counted these dead
+  | 'fulgurite'        // lightning-fused sand, flash-frozen mid-branch
+  | 'charged_crystal'  // a crystal still holding somebody's storm
+  | 'static_bloom'     // flowers that spark when the wind combs them
+  | 'storm_glass';     // a sheet of vitrified ground — the strike's floor
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -658,6 +662,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   barrow_mound:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 220, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   hollow_log:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 140, bodyScale: 0.6, forbidOn: ['water', 'lava', 'chasm'] },
   bone_cairn:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The storm-scar kit: where lightning kept an appointment. All INERT —
+  // the formations doctrine's look-alikes; the live hazards live elsewhere.
+  fulgurite:       { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 150, bodyScale: 0.6, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  charged_crystal: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 130, bodyScale: 0.75, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  static_bloom:    { overlap: 'ground' },
+  storm_glass:     { overlap: 'ground', forbidOn: ['water', 'lava', 'chasm'] },
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
   bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground', pour: {} },
@@ -2779,6 +2789,11 @@ registerStamp('tallow_stump', stampSingle('tallow_stump', [10, 15]));
 registerStamp('barrow_mound', stampSingle('barrow_mound', [26, 40]));
 registerStamp('hollow_log', stampSingle('hollow_log', [16, 26]));
 registerStamp('bone_cairn', stampSingle('bone_cairn', [11, 16]));
+// The storm-scar kit: glassed ground, branched glass, charged shards, blooms.
+registerStamp('fulgurite', stampSingle('fulgurite', [11, 17]));
+registerStamp('charged_crystal', stampSingle('charged_crystal', [9, 14]));
+registerStamp('static_bloom', stampSingle('static_bloom', [10, 16]));
+registerStamp('storm_glass', stampSingle('storm_glass', [16, 28]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the

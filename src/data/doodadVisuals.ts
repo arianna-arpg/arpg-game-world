@@ -519,6 +519,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 7, color: '#4a7aa8', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
     light: { radius: -2.2, color: '#7fc0f0', intensity: 0.22 },
   },
+  // The storm-scar kit: lightning's leavings, all inert.
+  fulgurite: {
+    longShadow: 0.6, painter: 'shard', order: 51, shadow: 0.45,
+    params: { points: 3, color: '#c8b088', material: 'crystal', coreGlow: { color: '#f0e4c0' } },
+  },
+  charged_crystal: {
+    longShadow: 0.55, painter: 'shard', order: 50, shadow: 0.5,
+    params: { points: 6, color: '#5a7ab0', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
+    light: { radius: -3, color: '#8fd0ff', intensity: 0.35, flicker: 6 },
+  },
+  static_bloom: {
+    painter: 'sparkle', order: 47,
+    light: { radius: -2.6, color: '#cfe4ff', intensity: 0.25, flicker: 9 },
+  },
+  storm_glass: {
+    painter: 'liquid', order: 27,
+    blend: { strength: 0.35, feather: 16, color: '#3a4a52' },
+    params: {
+      rim: { color: '#7a94a0', alpha: 0.5, grow: 2 },
+      core: { color: '#4a6a78', alpha: 0.45 },
+      sheen: { color: '#c8e8f0' },
+    },
+  },
   icicle_cluster: {
     painter: 'shard', order: 50, shadow: 0.45, longShadow: 0.9,
     params: { points: 5, color: '#b6d4e6', material: 'ice', coreGlow: { color: '#eef8ff' } },

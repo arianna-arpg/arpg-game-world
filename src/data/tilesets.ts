@@ -585,6 +585,9 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'formation', count: [1, 2], formation: 'dune_ridges' },
       { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      // Where lightning kept an appointment with the sand.
+      { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
+      { kind: 'fulgurite', count: [0, 2] },
       // Shimmer thickens where the WORLD bakes hottest (climate strata).
       { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
@@ -816,6 +819,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [6, 8], size: [3, 5],
       table: [
         { id: 'imp', weight: 3, presence: { to: 22, fadeOut: 12 } },
+        { id: 'fulgur_imp', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'hellhound', weight: 3 },
         { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
@@ -1431,6 +1435,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Rockslides strung downslope + a processional the old folk cut.
       { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
       { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
+      // Storm-swept moors remember their strikes.
+      { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
+      { kind: 'charged_crystal', count: [0, 2] },
       // Crags crown the HIGH ground (elevation strata: coherent height noise
       // domed toward the zone's heart).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
@@ -1509,6 +1516,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The wet rot: oozes in the shallows, the Glut's throwers at depth.
         { id: 'lesser_ooze', weight: 2, presence: { to: 10, fadeOut: 5 } },
         { id: 'viscous_ooze', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'galvanic_ooze', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'gutspray_hurler', weight: 1, presence: { from: 10, fadeIn: 4 } },
         // The ground itself: pools with appetites, water with arms.
         { id: 'mire_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
