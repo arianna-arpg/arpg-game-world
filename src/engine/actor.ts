@@ -849,6 +849,13 @@ export class Actor {
   wakeOdo?: number;
   wakePrev?: Vec2;
   wakeInst?: SkillInstance;
+  /** VOLATILE spec (MonsterDef.volatile): the struck body ANSWERS with a
+   *  free-cast payload, ICD-throttled — the poked wasp nest. */
+  volatile?: { skillId: string; chance: number; icd?: number; dmgMult?: number };
+  /** The volatile answer's next-ready clock (world seconds). */
+  volatileReadyAt = 0;
+  /** The volatile payload instance, minted lazily at the first answer. */
+  volatileInst?: SkillInstance;
   /** TERRAIN CONFINEMENT (derived from habitat): a disc this body can never
    *  leave — clamped every frame, whatever moved it (walk, dash, knockback).
    *  The lake horror's pond; the root wraith's trunk. */

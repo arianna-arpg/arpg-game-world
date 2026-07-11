@@ -27,6 +27,13 @@ import { SIM_TAP } from './tap';
 export interface DamagePacket {
   amounts: Partial<Record<DamageType, number>>;
   crit: boolean;
+  /** Where the damage dice landed, 0..1 from range floor to ceiling —
+   *  averaged across the hit's live ranges, each weighted by its expected
+   *  contribution (so a spark's wide die dominates a trinket's sliver).
+   *  Undefined when nothing actually rolled (flat-only or degenerate
+   *  ranges): no dice, no gambling. Read by the rollTop gates (procs /
+   *  cast-on-high-roll triggers); visible to the sim tap via the packet. */
+  rollT?: number;
   tags: Set<SkillTag>;
   sourceName: string;
   /** The rolling instance's SKILL-LOCAL mods, carried so attacker-side
@@ -86,11 +93,20 @@ export function rollSkillDamage(
   // Both at once cancel out. Rolled once per use, applied to every range.
   const lucky = chance(caster.sheet.get('luckyChance', baseTags, extra));
   const unlucky = chance(caster.sheet.get('unluckyChance', baseTags, extra));
+  // ROLL FRACTION: track where each live range's roll landed. Weighted by
+  // the range's MIDPOINT (its expected contribution), never by the roll
+  // itself — weighting by the outcome would bias the fraction upward.
+  let rollAcc = 0, rollWeight = 0;
   const rollRange = (lo: number, hi: number): number => {
     let r = rand(lo, hi);
     if (lucky !== unlucky) {
       const second = rand(lo, hi);
       r = lucky ? Math.max(r, second) : Math.min(r, second);
+    }
+    if (hi > lo) {
+      const mid = (lo + hi) / 2;
+      rollAcc += ((r - lo) / (hi - lo)) * mid;
+      rollWeight += mid;
     }
     return r;
   };
@@ -106,8 +122,18 @@ export function rollSkillDamage(
     const minAdd = caster.sheet.get(`addedMin_${type}`, tags, extra) * effectiveness;
     const maxAdd = caster.sheet.get(`addedMax_${type}`, tags, extra) * effectiveness;
     if (range || minAdd > 0 || maxAdd > 0) {
-      const lo = (range?.[0] ?? 0) + minAdd;
-      const hi = Math.max(lo, (range?.[1] ?? 0) + maxAdd);
+      let lo = (range?.[0] ?? 0) + minAdd;
+      let hi = Math.max(lo, (range?.[1] ?? 0) + maxAdd);
+      // DICE WIDTH (damageSpread): stretch (or, negative, squeeze) the
+      // range around its midpoint — same mean, fatter tails. The
+      // high-roller's fuel; the floor never dips below zero.
+      const spread = caster.sheet.get('damageSpread', tags, extra);
+      if (spread !== 0 && hi > lo) {
+        const mid = (lo + hi) / 2;
+        const half = ((hi - lo) / 2) * Math.max(0, 1 + spread);
+        lo = Math.max(0, mid - half);
+        hi = mid + half;
+      }
       base += rollRange(lo, hi);
     }
     const added = caster.sheet.get(addedDamageStat(type), tags, extra) * effectiveness;
@@ -149,7 +175,10 @@ export function rollSkillDamage(
       for (const t of Object.keys(amounts) as DamageType[]) amounts[t]! *= multi;
     }
   }
-  return { amounts, crit, tags: baseTags, sourceName: def.name, extra };
+  return {
+    amounts, crit, tags: baseTags, sourceName: def.name, extra,
+    rollT: rollWeight > 0 ? rollAcc / rollWeight : undefined,
+  };
 }
 
 export interface HitResult {

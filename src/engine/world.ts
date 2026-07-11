@@ -23,7 +23,7 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceVariance, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -55,7 +55,7 @@ import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
-import { PROC_LIST, PROCS, procStat, type ProcDef } from '../data/procs';
+import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
@@ -10709,6 +10709,7 @@ export class World {
     if (def.refuge) a.refuge = def.refuge;
     if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
     if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
+    if (def.volatile) a.volatile = def.volatile; // the poked nest arms
     if (def.immuneGround) a.immuneGround = def.immuneGround; // the insured (lava natives)
     // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
     // update sweep springs it when an enemy strays inside the wake radius.
@@ -12150,7 +12151,15 @@ export class World {
     }
 
     const d = def.delivery;
-    const aoeScale = caster.sheet.get('aoeRadius', tags, extra) * (opts.aoeMult ?? 1);
+    let aoeScale = caster.sheet.get('aoeRadius', tags, extra) * (opts.aoeMult ?? 1);
+    // PER-CAST VARIANCE (VarianceSpec.aoe): the whole footprint rolls
+    // ONCE per cast — impact, linger, envelope anchors and cascades all
+    // breathe together — and channel beats pass through here per pulse,
+    // so each detonation wears its own size.
+    {
+      const vAoe = instanceVariance(inst)?.aoe;
+      if (vAoe) aoeScale *= rand(vAoe[0], vAoe[1]);
+    }
     /** One WIDTH lever for every arc geometry: the swingArc stat (Wild
      *  Abandon widens, Measured Blade tightens) × any channel rampArc
      *  convergence — melee swings, cone wedges, and crescent zones agree. */
@@ -16842,7 +16851,37 @@ export class World {
           aim: vec(target.pos.x, target.pos.y), sourceInst: inst,
         });
       }
+      // A HIGH ROLL (the dice landing at the top of their range) raises
+      // the jackpot event — each armed gem judges the packet against its
+      // OWN rollTop window inside rollTriggers, so one hit can clear a
+      // tight gem and miss a tighter one.
+      if (packet.rollT !== undefined) {
+        this.rollTriggers(caster, 'highRoll', {
+          depth: inst.state?.trigDepth ?? 0,
+          aim: vec(target.pos.x, target.pos.y), sourceInst: inst,
+          rollT: packet.rollT,
+        });
+      }
       if (dealt > 0) this.bankDamageTakenTriggers(target, dealt, caster);
+      // VOLATILE (MonsterDef.volatile): the struck body ANSWERS — its
+      // payload free-casts from the body, aimed back along the blow,
+      // throttled by its ICD. A killing blow is answered by nothing (the
+      // corpse is quiet — death answers belong to the onDeath rattle),
+      // and hidden ambushers stay quiet too.
+      if (dealt > 0 && target.volatile && target.life > 0 && !target.dead
+        && !target.untargetable && this.time >= target.volatileReadyAt
+        && chance(target.volatile.chance)) {
+        const vdef = SKILLS[target.volatile.skillId];
+        if (vdef) {
+          target.volatileReadyAt = this.time + (target.volatile.icd ?? 1.5);
+          target.volatileInst ??= makeSkillInstance(vdef, Math.max(1, Math.round(target.level)));
+          this.text(vec(target.pos.x, target.pos.y - 18), 'volatile!', vdef.color, 11);
+          this.executeSkill(target, target.volatileInst, vec(caster.pos.x, caster.pos.y), {
+            dmgMult: target.volatile.dmgMult ?? 1,
+            noCooldown: true, noRepeat: true, keepFacing: true,
+          });
+        }
+      }
       // CARRIER STRAIN (SupportDef.spreadOnHit): the hit itself is a
       // VECTOR — a chance to hand ONE random affliction from the victim
       // to its nearest untouched neighbor. Top-level hits only.
@@ -17471,6 +17510,8 @@ export class World {
         // arrested knockbacks; statusApply procs at status application).
         if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
         if (proc.crit && !wasCrit) continue;
+        if (proc.rollTop !== undefined
+          && !this.rollTopMet(caster, proc.rollTop, packet.rollT, tags, extra)) continue;
         if (!this.procGates(caster, proc, inst)) continue;
         let procChance = this.procChance(caster, proc, depth, tags, extra);
         if (proc.trigger === 'kill' && !lethal) {
@@ -17500,6 +17541,8 @@ export class World {
           if (!proc.minionCarry) continue;
           if (proc.trigger !== 'hit' && proc.trigger !== 'kill') continue;
           if (proc.crit && !wasCrit) continue;
+          if (proc.rollTop !== undefined
+            && !this.rollTopMet(owner, proc.rollTop, packet.rollT, cTags, cExtra)) continue;
           if (!this.procGates(owner, proc, carryInst)) continue;
           let cc = this.procChance(owner, proc, depth, cTags, cExtra);
           if (proc.trigger === 'kill' && !lethal) {
@@ -17709,6 +17752,22 @@ export class World {
   private procDepthAllowed(owner: Actor): number {
     return 1 + Math.min(DEFENSE_CFG.procs.maxExtraDepth,
       Math.floor(owner.sheet.get('procDepth')));
+  }
+
+  /** ROLL-TOP GATE (ProcDef.rollTop / TriggerSpec.rollTop): did the hit's
+   *  damage dice land within the top `frac` of their range? The owner's
+   *  highRollWindow stat widens the window additively (tag-filtered, so
+   *  "wider jackpots with lightning skills" is an ordinary filter). A hit
+   *  that rolled no live range (rollT undefined) never passes — no dice,
+   *  no jackpot. */
+  private rollTopMet(
+    owner: Actor, frac: number, rollT: number | undefined,
+    tags?: Set<SkillTag>, extra?: readonly Modifier[],
+  ): boolean {
+    if (rollT === undefined) return false;
+    const window = frac
+      + owner.sheet.get('highRollWindow', tags, extra as Modifier[] | undefined);
+    return rollT >= 1 - window;
   }
 
   /** The effective roll chance for one attempt, honouring the def's RATE
@@ -17976,6 +18035,40 @@ export class World {
         }
         break;
       }
+      case 'arc': {
+        if (!inst || !target) break;
+        // The jolt LEAPS outward: struck target → nearest fresh enemy →
+        // onward, up to `hops` links, each landing a re-rolled hit at the
+        // scale one depth deeper. Struck bodies never repeat, so the arc
+        // always travels away from where it started.
+        const struck = new Set<Actor>([target]);
+        let from = target;
+        for (let hop = 0; hop < fx.hops; hop++) {
+          let best: Actor | null = null;
+          let bd = fx.range;
+          for (const enemy of this.enemiesOf(caster)) {
+            if (enemy.dead || enemy.untargetable || struck.has(enemy)) continue;
+            const dd = dist(from.pos, enemy.pos);
+            if (dd <= bd) { bd = dd; best = enemy; }
+          }
+          if (!best) break;
+          // The leap itself: a bead of flashes strung along the segment
+          // (no dedicated arc renderer yet — the visual fabric can dress
+          // this seam later without touching the mechanic).
+          for (let s = 1; s <= 3; s++) {
+            const f = s / 3;
+            this.flashes.push({
+              pos: vec(from.pos.x + (best.pos.x - from.pos.x) * f,
+                from.pos.y + (best.pos.y - from.pos.y) * f),
+              radius: 14, color: proc.color, life: 0.18, maxLife: 0.18,
+            });
+          }
+          struck.add(best);
+          this.resolveHit(caster, inst, best, fx.damageScale, depth + 1);
+          from = best;
+        }
+        break;
+      }
       case 'displace': {
         if (!target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: 60, color: proc.color, life: 0.25, maxLife: 0.25 });
@@ -18016,6 +18109,67 @@ export class World {
           target.pos.x + rand(-30, 30), target.pos.y + rand(-30, 30)), forged.radius);
         this.actors.push(forged);
         break;
+      }
+    }
+    // PROC RIDERS: stat-granted consequences bolted onto THIS proc from
+    // outside (passives, gems, affixes — see ProcRiderDef). Each rider
+    // rolls its own chance (procRider_<id>, luck-scaled like every proc
+    // rate) and casts its payload from the proc's site, one depth deeper
+    // than the host — the golden rules keep governing.
+    this.fireProcRiders(proc, caster, inst, target, depth);
+  }
+
+  /** Fire every registered rider hosted on this proc that the caster has
+   *  invested in. PROJECTILE payloads SPRAY from the site (the shatter
+   *  pattern — hit-locked against the struck body so they always fly
+   *  OUTWARD); any other delivery executes AT the site, count times. */
+  private fireProcRiders(
+    proc: ProcDef, caster: Actor, inst: SkillInstance | null,
+    target: Actor | null, depth: number,
+  ): void {
+    if (!PROC_RIDER_LIST.length || caster.dead) return;
+    const tags = inst ? skillContextTags(inst.def) : undefined;
+    const extra = inst ? instanceMods(inst) : undefined;
+    for (const rider of PROC_RIDER_LIST) {
+      const hosts = Array.isArray(rider.proc) ? rider.proc : [rider.proc];
+      if (!hosts.includes(proc.id)) continue;
+      let c = caster.sheet.get(procRiderStat(rider.id), tags, extra);
+      if (c <= 0) continue;
+      // Luck multiplies rider rates exactly as it does proc rates.
+      c *= 1 + caster.sheet.get('luck', tags, extra);
+      if (!chance(Math.min(0.95, c))) continue;
+      const skill = SKILLS[rider.cast.skillId];
+      if (!skill) continue;
+      const site = rider.cast.at === 'self' || !target ? caster : target;
+      const origin = vec(site.pos.x, site.pos.y);
+      const n = randInt(rider.cast.count[0], rider.cast.count[1]);
+      if (n <= 0) continue;
+      this.text(vec(origin.x, origin.y - 26), rider.name + '!', rider.color, 11);
+      const level = inst ? effectiveSkillLevel(inst)
+        : Math.max(1, Math.round(caster.level / 2));
+      const mult = rider.cast.mult ?? 1;
+      if (skill.delivery.type === 'projectile') {
+        const bearing = target && target !== caster
+          ? angleTo(caster.pos, target.pos) : caster.facing;
+        const phase = rand(0, Math.PI * 2);
+        const fan = typeof rider.cast.spread === 'number' ? rider.cast.spread : undefined;
+        for (let i = 0; i < n; i++) {
+          const dir = fan === undefined
+            ? phase + (i / n) * Math.PI * 2
+            : bearing + (n === 1 ? 0 : (i / (n - 1) - 0.5) * fan * Math.PI / 180);
+          this.spawnProjectile(caster, makeSkillInstance(skill, level), origin, dir,
+            { depth: depth + 1, mult });
+          if (target) {
+            this.projectiles[this.projectiles.length - 1].hits.set(target.id, Infinity);
+          }
+        }
+      } else {
+        for (let i = 0; i < n; i++) {
+          this.executeSkill(caster, makeSkillInstance(skill, level), origin, {
+            dmgMult: mult, noCooldown: true, noRepeat: true,
+            noFollowUp: true, keepFacing: true,
+          });
+        }
       }
     }
   }
@@ -22076,7 +22230,11 @@ export class World {
             return;
           }
           a.payCost(cost);
-          cs.pulseTimer += cs.total;
+          // ERRATIC CADENCE (ChannelSpec.intervalJitter): each fired beat
+          // reschedules the next on its own fresh die — stutters and
+          // lulls around the same average drumbeat.
+          cs.pulseTimer += cs.total * (ch.intervalJitter
+            ? rand(ch.intervalJitter[0], ch.intervalJitter[1]) : 1);
           const rampStat = a.sheet.get('channelRamp', tags, extra);
           // Negative ramps CONVERGE — floored so a long hold squeezes the
           // wedge toward a line without inverting or vanishing entirely.
@@ -23126,6 +23284,8 @@ export class World {
    *  (skipped while the owner is already casting or channeling). */
   rollTriggers(owner: Actor, kind: TriggerKind, ctx: {
     depth?: number; aim?: Vec2; sourceInst?: SkillInstance;
+    /** highRoll events: where the raising hit's dice landed (0..1). */
+    rollT?: number;
   } = {}): void {
     const skills = owner.skills;
     if (!skills?.length || owner.dead) return;
@@ -23158,6 +23318,10 @@ export class World {
         const need = Math.max(1, owner.sheet.get('triggerPower', tags, extra, spec.power ?? 1));
         if ((st.trigAccum ?? 0) < need) continue;
       }
+      // highRoll: the raising hit's dice must clear THIS gem's window
+      // (spec rollTop, else the config default; highRollWindow widens).
+      if (kind === 'highRoll'
+        && !this.rollTopMet(owner, spec.rollTop ?? TRIGGER_CFG.rollTop, ctx.rollT, tags, extra)) continue;
       if (!this.triggerEligible(owner, inst)) continue;
       // SELECTED: the cursor advances here whatever the dice say.
       owner.triggerRR.set(kind, idx);

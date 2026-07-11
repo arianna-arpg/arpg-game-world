@@ -370,6 +370,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  inflicted: the jinxed roll twice and keep the LOWER). */
   luckyChance:    { label: 'Lucky Hit Chance', base: 0, min: 0, max: 1, percent: true },
   unluckyChance:  { label: 'Unlucky Hit Chance', base: 0, min: 0, max: 1, percent: true },
+  /** DICE WIDTH: widens (negative: narrows) every damage roll's range
+   *  around its midpoint — +50% turns [60..100] into [50..110]. Same mean,
+   *  fatter tails: the high-roller's fuel, tag-filterable per element. */
+  damageSpread:   { label: 'Damage Roll Spread', base: 0, min: -1, percent: true },
+  /** HIGH-ROLL WINDOW: additively widens every rollTop gate (procs,
+   *  cast-on-high-roll triggers) — a def's rollTop 0.15 plus 0.05 here
+   *  fires on the top 20% of the dice. Capped: jackpots stay jackpots. */
+  highRollWindow: { label: 'High Roll Window', base: 0, min: 0, max: 0.5, percent: true },
   /** GUARD MEND: allies near you heal this much per second WHILE you hold
    *  a guard stance — the aegis that shelters, not just blocks. */
   guardMend:      { label: 'Guard Mending', base: 0, min: 0 },

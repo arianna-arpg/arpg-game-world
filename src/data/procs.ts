@@ -61,6 +61,11 @@ export type ProcEffect =
   /** The hit echoes as an explosion around the target, re-rolling the
    *  skill's damage at a scale against everything in the radius. */
   | { type: 'explosion'; damageScale: number; radius: number }
+  /** The hit ARCS: leaps from the struck target to the nearest fresh
+   *  enemy within `range`, then onward, up to `hops` times — each leap
+   *  re-rolling the skill's damage at the scale, one depth deeper. Struck
+   *  bodies never repeat, so the jolt always travels OUTWARD. */
+  | { type: 'arc'; damageScale: number; range: number; hops: number }
   /** Shoves the struck target. Signed force: + pushes it away from the
    *  caster, − pulls it toward the caster (a magnetic yank). */
   | { type: 'displace'; force: number }
@@ -154,6 +159,14 @@ export interface ProcDef {
    *  Distinct proc ids roll independently, so a gem's crit-rage and a
    *  passive's crit-fury stack as separate dice by construction. */
   crit?: true;
+  /** ROLL-TOP GATE (hit/kill triggers): only hits whose damage dice landed
+   *  in the top `rollTop` fraction of their range roll this proc (0.15 =
+   *  the top 15% — the jackpot line). The owner's highRollWindow stat
+   *  widens the window; damageSpread widens the dice themselves so the
+   *  jackpots that do land hit HARDER. Hits that rolled no live range
+   *  never pass (no dice, no jackpot); stacks with `crit` — both gates
+   *  must open — and the chance stat still rolls after it. */
+  rollTop?: number;
   /** ONCE PER CAST: at most one firing per world tick per owner — a
    *  multi-target swing's simultaneous contacts count as ONE trigger
    *  (hits that resolve on later frames, like a piercing arrow's second
@@ -190,6 +203,31 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'corpsefire', name: 'Corpsefire',
     color: '#ff5a2a', trigger: 'kill',
     effect: { type: 'explosion', damageScale: 0.8, radius: 90 },
+  },
+
+  // --- THE JACKPOT LINE (rollTop procs): the dice themselves pull the ---------
+  // trigger. These roll ONLY when the hit's damage landed in the top of its
+  // range (ProcDef.rollTop) — damageSpread widens the dice so the jackpots
+  // that land hit harder, highRollWindow widens the window so they come up
+  // more often, and luckyChance re-rolls toward them. The high-roller's kit:
+  // grant chance 1 and let the dice do the pacing.
+
+  // SHORT CIRCUIT: a peak roll can't be contained — it DETONATES around the
+  // struck target. Top 15% of the dice ≈ a 15% rate, every one a huge hit
+  // by construction (the gate and the payoff are the same event).
+  short_circuit: {
+    id: 'short_circuit', name: 'Short Circuit',
+    color: '#9ae8ff', trigger: 'hit', rollTop: 0.15,
+    effect: { type: 'explosion', damageScale: 0.6, radius: 90 },
+  },
+
+  // OVERLOAD ARC: the peak roll LEAPS — struck target to nearest fresh
+  // enemy to onward, up to three links. Separate die on a separate gate
+  // from Short Circuit: a truly towering roll does BOTH at once.
+  overload_arc: {
+    id: 'overload_arc', name: 'Overload Arc',
+    color: '#7af0ff', trigger: 'hit', rollTop: 0.12,
+    effect: { type: 'arc', damageScale: 0.5, range: 240, hops: 3 },
   },
 
   displacement_field: {
@@ -574,6 +612,71 @@ export const PROC_LIST: ProcDef[] = Object.values(PROCS);
 /** The stat id whose value is this proc's trigger chance. */
 export function procStat(id: string): string {
   return 'proc_' + id;
+}
+
+// ---------------------------------------------------------------------------
+// PROC RIDERS — payloads bolted onto EXISTING procs from outside.
+//
+// A rider fires WHEN its host proc fires, enabled by the `procRider_<id>`
+// stat exactly as procs are enabled by `proc_<id>`: the stat's value is
+// the rider's chance, so any passive node, support gem, buff, or affix can
+// hang new consequences off a proc some OTHER source granted
+// ("Thunderstruck also sheds sparks") without touching the proc's own def
+// — the locked-behind-the-notable passive shape, and the seam that makes
+// procs COMPOSE instead of merely stack. Riders execute one depth deeper
+// than their host proc, so the golden rules above keep governing: depth
+// gates, the 95% cap, luck's multiplier — all of it.
+//
+// To add a rider: register it here, then grant `procRider_<id>` chance
+// from any modifier source. No engine changes needed.
+// ---------------------------------------------------------------------------
+
+export interface ProcRiderDef {
+  id: string;
+  name: string;
+  /** Floating-text color when the rider fires. */
+  color: string;
+  /** The host proc(s) whose firings this rider follows. */
+  proc: string | string[];
+  /** The payload: CAST a catalog skill from the proc's site.
+   *  - count: casts per firing, rolled uniformly ([1,4] = one to four —
+   *    the random-assortment die).
+   *  - PROJECTILE payloads SPRAY from the site: 'ring' (default) spaces
+   *    the count evenly around the circle at a random phase; a number
+   *    fans them across that many degrees around the strike bearing.
+   *  - at: 'target' (default) anchors at the struck body, 'self' at the
+   *    rider's owner.
+   *  - mult: damage multiplier on the payload (default 1). */
+  cast: {
+    skillId: string;
+    count: [number, number];
+    spread?: 'ring' | number;
+    at?: 'target' | 'self';
+    mult?: number;
+  };
+}
+
+export const PROC_RIDERS: Record<string, ProcRiderDef> = {
+
+  // STATIC SHRAPNEL: Thunderstruck's burst sheds LIVE SPARKS — one to four
+  // darts flung outward from the strike point, each a real spark_bolt cast
+  // (they shock, they carry the caster's lightning investment, they can
+  // even jackpot their own wide dice). Granted by the Static Shrapnel
+  // notable locked behind the Thunderstruck notable — the proof shape for
+  // "a passive that extends a proc another passive granted".
+  static_shrapnel: {
+    id: 'static_shrapnel', name: 'Static Shrapnel',
+    color: '#ffe97a', proc: 'thunderstruck',
+    cast: { skillId: 'spark_bolt', count: [1, 4], spread: 'ring' },
+  },
+
+};
+
+export const PROC_RIDER_LIST: ProcRiderDef[] = Object.values(PROC_RIDERS);
+
+/** The stat id whose value is this rider's chance to follow its host. */
+export function procRiderStat(id: string): string {
+  return 'procRider_' + id;
 }
 
 // Register every proc's chance stat with a DISPLAY identity (label +

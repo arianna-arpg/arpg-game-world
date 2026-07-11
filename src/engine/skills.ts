@@ -496,6 +496,24 @@ export function instanceSizeOver(inst: SkillInstance): SizeEnvelopeSpec | undefi
   return inst.def.delivery.type === 'ground' ? inst.def.delivery.sizeOver : undefined;
 }
 
+/** PER-CAST VARIANCE — the organic-instability axis: parts of the skill's
+ *  own footprint re-roll on every cast. Every field is a uniform
+ *  MULTIPLIER range; the same skill blooms small and huge from press to
+ *  press (channel pulses re-roll per beat — each detonation its own die). */
+export interface VarianceSpec {
+  /** Area multiplier range per cast, folded into the cast's aoeScale —
+   *  impact, linger, envelope anchors and cascades all breathe together
+   *  ([0.6, 1.5] wanders between a pop and a bloom, same average). */
+  aoe?: [number, number];
+}
+
+/** The variance a cast re-rolls under: a socketed support's graft wins
+ *  over the skill's own (the trail rule). */
+export function instanceVariance(inst: SkillInstance): VarianceSpec | undefined {
+  for (const s of hostSockets(inst)) if (s.def.variance) return s.def.variance;
+  return inst.def.variance;
+}
+
 /**
  * A ground CASCADE: the placement repeats at DISPLACED points — rippling
  * out from the impact like a skipped stone. Directions: 'axis' alternates
@@ -929,7 +947,11 @@ export type TriggerKind =
   /** The owner BLOCKS a hit — guard stance, passive block, or parry. */
   | 'block'
   /** A kill credited to the owner's landed hits. */
-  | 'kill';
+  | 'kill'
+  /** A hit of the owner's whose damage dice landed in the top of their
+   *  range (see TriggerSpec.rollTop) — the cast-on-jackpot event. Hits
+   *  that rolled no live range never raise it: no dice, no jackpot. */
+  | 'highRoll';
 
 export const TRIGGER_CFG = {
   /** Max BASE use time (def.useTime) a skill may have and still be
@@ -943,8 +965,12 @@ export const TRIGGER_CFG = {
   icd: {
     crit: 0.15, damageTaken: 0.25, channelBeat: 0.35, overchargeStage: 0,
     channelFinish: 0,
-    statusApply: 0.2, block: 0.5, kill: 0.4,
+    statusApply: 0.2, block: 0.5, kill: 0.4, highRoll: 0.25,
   } as Record<TriggerKind, number>,
+  /** highRoll: default top-of-the-dice fraction a hit must land in to
+   *  raise the event (a spec's rollTop wins; the owner's highRollWindow
+   *  stat widens either) — the jackpot line. */
+  rollTop: 0.12,
   /** damageTaken: fraction of MAX LIFE that must accumulate per firing
    *  (a spec's lifeFrac wins; the triggerThreshold stat scales either). */
   lifeFrac: 0.3,
@@ -972,6 +998,10 @@ export interface TriggerSpec {
    *  mechanism (BASE of the triggerPower stat query; default 1). The bank
    *  fills as the owner lays the status and RESETS when the gem fires. */
   power?: number;
+  /** highRoll only: the hit's damage dice must land within this top
+   *  fraction of their range (default TRIGGER_CFG.rollTop; the owner's
+   *  highRollWindow stat widens it additively). */
+  rollTop?: number;
 }
 
 /** The trigger conversion riding an instance (first socketed wins). */
@@ -2120,6 +2150,11 @@ export interface ChannelSpec {
   /** Seconds of SPOOL-UP before the first pulse (divided by cast/attack
    *  speed). Default: one full interval — tapping a channel yields nothing. */
   windup?: number;
+  /** ERRATIC CADENCE: each fired beat reschedules the next at interval ×
+   *  a fresh uniform roll in [min,max] — stutters and lulls around the
+   *  same average drumbeat ([0.5, 1.5] keeps the mean; skew it to slow or
+   *  quicken the song). Held-target re-acquire waits stay unjittered. */
+  intervalJitter?: [number, number];
   /** Movement while channeling. The channelMobility stat ADDS to the move
    *  factor (immobile starts at 0), so enough investment walks any channel. */
   move: 'normal' | 'slowed' | 'immobile';
@@ -2983,6 +3018,11 @@ export interface SkillDef {
    *  (see AimSpec — supports graft the same via SupportDef.aim). */
   aim?: AimSpec;
 
+  /** An INNATE per-cast variance: the skill re-rolls parts of its own
+   *  footprint every cast (see VarianceSpec — supports graft the same via
+   *  SupportDef.variance; a socketed graft wins). */
+  variance?: VarianceSpec;
+
   /** Movement factor while this skill's CAST BAR runs (0 = rooted, the
    *  default). The castMobility stat ADDS to it — mobile attacks by data,
    *  walking casters by investment (Fleetfoot). Channels use ChannelSpec. */
@@ -3393,6 +3433,10 @@ export interface SupportDef {
    *  specs' own intervalStep. <1 quickens like the settling ball; >1
    *  spreads the tolls out. One knob, every clock. */
   cadence?: { intervalStep: number };
+  /** A PER-CAST VARIANCE this support grafts (Unstable Compression's
+   *  wandering footprint on any area skill) — the host re-rolls its own
+   *  size every cast. WINS over the skill's innate variance. */
+  variance?: VarianceSpec;
   /** A PENDULUM this support grafts onto lingering ground zones (the
    *  Metronome gem): the facing swings out-and-back — the exact back-and-
    *  forth stroke Reaver's Sweep retired when it learned the single pass. */
@@ -3579,6 +3623,7 @@ const MINION_RIDABLE_FIELD_LIST = [
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
   'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'zoneSizeOver',
   'cadence', 'pendulum', 'echo', 'summon', 'fuse', 'gather', 'shellGraft',
+  'variance',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every
