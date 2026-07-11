@@ -63,8 +63,12 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   wild: { roaming: 0.7, aggression: 0.8, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
   elemental: { roaming: 0.55, aggression: 0.8, warlordHome: 'capital', contexts: ['baseline', 'crusade', 'fractures'] },
   sylvan: { roaming: 0.35, aggression: 0.6, warlordHome: 'origin', homeBiome: 'grove', eventRange: 160, contexts: ['baseline', 'crusade'] },
-  undead: { roaming: 0.18, aggression: 0.5, warlordHome: 'origin', originZone: 'forsaken_graveyard', homeBiome: 'grave', eventRange: 150, contexts: ['baseline', 'crusade'], deathAligned: true },
-  demon: { roaming: 0.85, aggression: 1.6, warlordHome: 'origin', originZone: 'infernal_rift', homeBiome: 'rift', eventRange: 240, contexts: ['baseline', 'fractures'] },
+  // Rooted factions home on their BIOME (the sylvan pattern): with the static
+  // web cut to town + hub there is no authored graveyard/rift to originZone —
+  // the undead throne on whatever grave-biome ground the run mints, the Legion
+  // on its rifts. (originZone stays a valid lever for future authored ground.)
+  undead: { roaming: 0.18, aggression: 0.5, warlordHome: 'origin', homeBiome: 'grave', eventRange: 150, contexts: ['baseline', 'crusade'], deathAligned: true },
+  demon: { roaming: 0.85, aggression: 1.6, warlordHome: 'origin', homeBiome: 'rift', eventRange: 240, contexts: ['baseline', 'fractures'] },
   // The Deep — marine-only (contexts:['marine'], NOT baseline), so it never seeds
   // ordinary war/territory; it appears purely via the marine tilesets' pack tables.
   deep: { roaming: 0.3, aggression: 1.0, warlordHome: 'origin', homeBiome: 'deepsea', contexts: ['marine'] },

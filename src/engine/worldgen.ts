@@ -12,8 +12,9 @@ import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
+import { START_ZONE, HUB_ZONE } from '../data/zones';
 import type { ObjectiveSpec, ZoneDef, ZoneExitDef } from '../data/zones';
-import { OPP_DIR, projectCoord, coordDist } from '../world/coords';
+import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, biomeSpacing } from '../world/biomes';
 import { dimensionsEnteredBy } from '../world/dimensions';
@@ -24,6 +25,40 @@ import { dimensionsEnteredBy } from '../world/dimensions';
 // from worldgen unchanged.
 export { projectCoord };
 export type { Dir, MapCoord };
+
+/** THE STARTER WEB — the only hand-placed geography left is the town and its
+ *  hub, and even their arrangement is rolled per run: the Crossroads lands one
+ *  cardinal step from Lastlight in a seeded-random direction (east this run,
+ *  north the next), the town's single road re-aims at it, and the hub re-deals
+ *  its back-edge plus three '?' frontiers across the remaining sides. From
+ *  there the NORMAL mint pipeline (heat-map biomes, the radial level field,
+ *  the eager web) grows the whole world — each run a genuinely new map.
+ *
+ *  Mutates only the RUN's zoneMap clones, and only with FRESH exit arrays and
+ *  a fresh hub map coord — cloneZones() shallow-copies defs, so pushing into
+ *  (or mutating members of) a shared array would leak into the static ZONES
+ *  across runs (the known cloneZones by-reference trap). Deterministic per
+ *  run seed: resume re-rolls the identical arrangement. */
+export function randomizeStarterWeb(zoneMap: Record<string, ZoneDef>, seed: number): void {
+  const town = zoneMap[START_ZONE];
+  const hub = zoneMap[HUB_ZONE];
+  if (!town || !hub) return;
+  const rng = new Rng((seed ^ 0x57a2) >>> 0);
+  const dir = rng.pick(DIRS);
+  // Keep the authored frontier tileset FLAVORS (fallbacks — the live mint's
+  // heat-map biome outranks them), re-dealt onto the rolled sides.
+  const flavors = hub.exits.filter(e => e.to === '?' && e.tileset).map(e => e.tileset!);
+  hub.map = projectCoord(town.map, dir);
+  town.exits = [{ to: HUB_ZONE, side: dir }];
+  const rest = DIRS.filter(d => d !== OPP_DIR[dir]);
+  hub.exits = [
+    { to: START_ZONE, side: OPP_DIR[dir] },
+    ...rest.map((d, i): ZoneExitDef => ({
+      to: '?', side: d,
+      ...(flavors.length ? { tileset: flavors[i % flavors.length] } : {}),
+    })),
+  ];
+}
 
 /** The charted node nearest a coordinate (skips off-graph caves). Used to anchor
  *  a directed placement onto real explored ground — incl. the already-explored

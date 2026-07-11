@@ -65,7 +65,7 @@ import {
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
-import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, setRouteGuard, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
+import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
 import { shipOf, type ShipDef } from '../data/ships';
@@ -2031,6 +2031,11 @@ export class World {
     // additions). Keyed off account.features (stable for the run) — a mid-run
     // purchase only takes effect next run, like every town feature.
     this.zoneMap[START_ZONE] = expandedTown(account, this.zoneMap[START_ZONE]);
+    // THE WANDERING HUB: roll where the Crossroads sits this run (a random
+    // cardinal step from town) and re-deal its frontiers — the whole world
+    // past the town's one road is minted, so each run is a genuinely new map.
+    // Seeded from the run manifest: a resumed save re-rolls identically.
+    randomizeStarterWeb(this.zoneMap, manifest.seed);
     // Co-op: when the roster changes, re-balance living enemies to the new count.
     this.events.on('party/join', () => this.rescaleEnemies());
     this.events.on('party/leave', () => this.rescaleEnemies());
