@@ -15,7 +15,8 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode } from '../data/passives';
-import { choiceLockReason } from '../data/passiveChoices';
+import { choiceLockReason, graftSourcesOf } from '../data/passiveChoices';
+import { MAIN_REALM, realmOf } from '../data/passiveRealms';
 import {
   SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFitsInstOrCrew, skillMaxLevel,
   type SkillInstance, type SkillRarity, type SupportInstance,
@@ -86,9 +87,18 @@ function auditPassives(classId: string, picks: string[], level: number, warnings
     if (!PASSIVE_NODES[id]) { warnings.push(`unknown passive node '${id}' — dropped`); continue; }
     allocated.add(id);
   }
-  // Connectivity: BFS from the start through the allocated set only.
-  const reachable = new Set<string>([start]);
-  const queue = [start];
+  // Connectivity: BFS from the start through the allocated set only. REALM
+  // nodes seed themselves where their def says they stand alone: every
+  // allocated realm ROOT (crests are free) and every node of a
+  // FREE-adjacency realm (Pantheon shrines never path).
+  const seeds = [start, ...[...allocated].filter(id => {
+    const n = PASSIVE_NODES[id];
+    const r = n ? realmOf(n) : undefined;
+    return !!r && r.id !== MAIN_REALM
+      && (r.adjacency === 'free' || (r.roots ?? []).includes(id));
+  })];
+  const reachable = new Set<string>(seeds);
+  const queue = [...seeds];
   while (queue.length) {
     const at = queue.pop()!;
     for (const next of PASSIVE_ADJACENCY[at] ?? []) {
@@ -100,14 +110,21 @@ function auditPassives(classId: string, picks: string[], level: number, warnings
     warnings.push(`passives not connected to '${start}': ${stranded.join(', ')} (simulated anyway)`);
   }
   const budget = level * PROGRESSION.passivePointsPerLevel + 1; // +1: the creation freebie
-  const spent = allocated.size; // start node included, mirroring live allocation
+  // Only nodes billing the MAIN pool count against the passive budget —
+  // realm-currency nodes spend their own wallet, and realm roots are free.
+  const spent = [...allocated].filter(id => {
+    const n = PASSIVE_NODES[id];
+    const r = n ? realmOf(n) : undefined;
+    if (!r || r.id === MAIN_REALM) return true;
+    if ((r.roots ?? []).includes(id)) return false;
+    return (r.currency ?? 'passive') === 'passive';
+  }).length;
   if (spent > budget) {
     warnings.push(`passive budget exceeded: ${spent} allocated vs ${budget} available at level ${level}`);
   }
   return allocated;
 }
 
-/** Inject a BuildSpec into the world's local seat. Returns audit warnings. */
 /** Choice-node picks: replay the LIVE legality rule (choiceLockReason) pick by
  *  pick so the sim can never hold a build a real character couldn't — bad
  *  picks warn and drop, matching auditPassives' hypothesis-friendly stance.
@@ -135,6 +152,27 @@ function auditChoices(
   return { choices, extraPicks };
 }
 
+/** Graft bindings: the source must be earned by the spec'd tree, the carrier
+ *  must be a minted skill — same drop-and-warn stance as the other audits. */
+function auditGrafts(
+  spec: Record<string, string | null> | undefined,
+  allocated: ReadonlySet<string>,
+  choices: Record<string, string[]>,
+  knownSkills: ReadonlyMap<string, unknown>,
+  warnings: string[],
+): Record<string, string | null> {
+  const grafts: Record<string, string | null> = {};
+  if (!spec) return grafts;
+  const live = new Set(graftSourcesOf(allocated, choices, PASSIVE_NODES).map(s => s.key));
+  for (const [key, skillId] of Object.entries(spec)) {
+    if (!live.has(key)) { warnings.push(`graft '${key}' is not granted by this build's tree — dropped`); continue; }
+    if (skillId !== null && !knownSkills.has(skillId)) { warnings.push(`graft '${key}' binds unknown skill '${skillId}' — dropped`); continue; }
+    grafts[key] = skillId;
+  }
+  return grafts;
+}
+
+/** Inject a BuildSpec into the world's local seat. Returns audit warnings. */
 export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: number): string[] {
   const warnings: string[] = [];
   const classDef = classById(spec.classId);
@@ -178,8 +216,9 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
 
   // --- the tree --------------------------------------------------------------
   const allocated = auditPassives(spec.classId, spec.passives ?? [], spec.level, warnings);
-
   const { choices, extraPicks } = auditChoices(spec.choices, allocated, warnings);
+  const grafts = auditGrafts(spec.grafts, allocated, choices, knownSkills, warnings);
+
   // --- assemble PlayerMeta exactly the way a save rebuild does ----------------
   const meta: PlayerMeta = {
     classDef,
@@ -191,8 +230,10 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     skillPoints: 0,
     passivePoints: Math.max(0, spec.level * PROGRESSION.passivePointsPerLevel + 1 - allocated.size - extraPicks),
     allocated,
-    vocations: [],
     choices,
+    realmPoints: {},
+    grafts,
+    vocations: [],
     vocationPoints: 0,
     knownSkills,
     inventory: [],
@@ -209,6 +250,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
   world.adoptSavedMeta(meta, bar, spec.level);
   return warnings;
 }
+
 // ------------------------------------------------------------ saved builds --
 
 export function isSavedBuild(entry: BuildEntry): entry is SavedBuild {

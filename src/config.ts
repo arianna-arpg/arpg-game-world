@@ -22,6 +22,11 @@ export const DEV = {
    *  to write the layout back to src/data/passives.ts (backs up to .bak).
    *  Requires the Vite dev server (the /__dev/passives endpoint). 0 = off. */
   passiveTreeEditor: 0,
+  /** 1 = reveal every PASSIVE REALM tab (data/passiveRealms.ts) regardless of
+   *  its unlockLedger — the scaffolding realms (Devotion, the Pantheon) become
+   *  visitable before any content writes their discovery counters. 0 = only
+   *  realms the character has actually unlocked. */
+  showAllRealms: 0,
 };
 
 /** FEATURE TOGGLE: the eager pre-minted world WEB. When ON, visiting a zone immediately

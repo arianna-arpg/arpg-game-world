@@ -120,6 +120,21 @@ export interface MonsterGrant {
   chance?: number;
 }
 
+/** A BOON: this monster rolls options from a passive CHOICE GROUP at spawn —
+ *  the SAME data/passiveChoices.ts pools the player's tree deals, so player
+ *  powers and bestiary variance share one vocabulary. Option MODS fold onto
+ *  the body as an ordinary sheet source; an option GRAFT rides the first
+ *  skill's graft lane (hostSockets — the player's mutator seam, verbatim).
+ *  Option ATTRIBUTES are player-pipeline payloads and are skipped here. */
+export interface MonsterBoon {
+  /** CHOICE_GROUPS id. */
+  group: string;
+  /** Distinct options rolled (default 1; clamped to the pool). */
+  pick?: number;
+  /** Per-spawn chance the boon rolls at all (absent = always). */
+  chance?: number;
+}
+
 export interface MonsterDef {
   id: string;
   name: string;
@@ -231,6 +246,8 @@ export interface MonsterDef {
   scaling?: Record<string, StatScale>;
   /** Level-gated skill/support grants — the kit evolves as it levels (MonsterGrant). */
   grants?: MonsterGrant[];
+  /** Spawn-rolled options from the player-shared choice pools (MonsterBoon). */
+  boons?: MonsterBoon[];
   /** SCALE VARIANCE — a per-spawn body-scale multiplier rolled in [min,max], so a
    *  herd reads as a mix of big adults and small young (createMonster sizes the body
    *  to it, and — with scaleStats — its life/damage). The lever the Migration herds
@@ -2806,6 +2823,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     // A third of the wardens drill the lance: shield up, then the poke
     // AROUND the guard (phalanx_thrust's guard-combo — rolled per spawn).
     grants: [{ atLevel: 1, chance: 0.35, skill: 'phalanx_thrust' }],
+    // Half carry a WARD-SWORN BOON: one bulwark doctrine rolled from the
+    // PLAYER'S OWN choice pool (MonsterBoon — shared vocabulary, per-spawn
+    // texture: this warden took Stone, that one Salve).
+    boons: [{ group: 'bulwark_doctrines', chance: 0.5 }],
     skills: ['shield_up', 'cleave'],
     xp: 32,
     brain: { type: 'protector' },

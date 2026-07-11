@@ -27,7 +27,7 @@ import type { World, Seat, VendorEntry } from '../engine/world';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { PASSIVE_NODES } from '../data/passives';
-import { sanitizeChoices } from '../data/passiveChoices';
+import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { makeSkillInstance, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
@@ -129,6 +129,9 @@ export interface SeatMetaW {
   allocated: string[];              // passive node ids
   /** Choice-node picks by node id (optional → tolerant of an older host). */
   choices?: Record<string, string[]>;
+  /** Realm-currency wallet + graft bindings (optional, same tolerance). */
+  realmPoints?: Record<string, number>;
+  grafts?: Record<string, string | null>;
   known: Record<string, SkillInstW>;
   inv: SupportInstW[];              // loose support gems
   skillInv: SkillInstW[];          // carried skill gems
@@ -164,6 +167,8 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     baseAttrs: { ...m.baseAttrs },
     allocated: [...m.allocated],
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
+    realmPoints: { ...m.realmPoints },
+    grafts: { ...m.grafts },
     known: Object.fromEntries([...m.knownSkills].map(([id, inst]) => [id, skillInstW(inst)])),
     inv: m.inventory.map(supW),
     skillInv: m.skillInv.map(skillInstW),
@@ -228,9 +233,12 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.allocated = new Set(w.allocated);
   // Untrusted wire → the same registry-tolerant rebuild the disk save gets.
   m.choices = sanitizeChoices(w.choices, PASSIVE_NODES);
+  m.realmPoints = { ...(w.realmPoints ?? {}) };
   const known = new Map<string, SkillInstance>();
   for (const [id, sw] of Object.entries(w.known)) { const inst = rehydrateSkill(sw); if (inst) known.set(id, inst); }
   m.knownSkills = known;
+  // Graft bindings resolve against the freshly rehydrated book + allocation.
+  m.grafts = sanitizeGrafts(w.grafts, m.allocated, m.choices, PASSIVE_NODES, id => known.has(id));
   m.inventory = w.inv.map(rehydrateSupport).filter((x): x is SupportInstance => !!x);
   m.skillInv = w.skillInv.map(rehydrateSkill).filter((x): x is SkillInstance => !!x);
   // GEAR: re-validate every instance against the client's live registries.

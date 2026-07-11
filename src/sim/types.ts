@@ -65,12 +65,16 @@ export interface BuildSpec {
    *  WARNS on over-budget or disconnected picks but still simulates them
    *  (hypotheticals are allowed; the warning keeps reports honest). */
   passives?: string[];
-  /** Worn gear recipes. */
   /** Choice-node picks, keyed by node id (the node must also be in `passives`).
    *  Audited against data/passiveChoices.ts with the LIVE legality rule —
    *  unknown groups/options and over-limit picks warn and drop; extra picks
    *  on multi-pick nodes cost budget exactly like live allocation. */
   choices?: Record<string, string[]>;
+  /** GRAFT bindings: earned graft key (`nodeId` / `nodeId:optionId` — the
+   *  source must be granted by `passives`/`choices`) → carrier skill id.
+   *  Audited: unresolved sources/carriers warn and drop. */
+  grafts?: Record<string, string | null>;
+  /** Worn gear recipes. */
   gear?: GearSpec[];
   /** Seed for the gear rolls (default: derived from the episode seed). */
   gearSeed?: number;

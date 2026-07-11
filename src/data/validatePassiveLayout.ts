@@ -31,6 +31,7 @@ const MARGIN = 12;    // keep nodes this far inside the edge
  *  and deliberately not flagged. */
 function isNew(id: string): boolean {
   return id.startsWith('cl_') || id.startsWith('voc_') || id.startsWith('cho_')
+    || id.startsWith('dev_') || id.startsWith('pan_')
     || /_(pc|kb|df|pd)\d+$/.test(id);
 }
 
@@ -46,6 +47,9 @@ export function validatePassiveLayout(warn: (msg: string) => void): void {
       // most one renders per character, so cross-vocation overlap is by design.
       // Same-vocation and vocation-vs-main-tree overlaps ARE still policed.
       if (a.vocation && b.vocation && a.vocation !== b.vocation) continue;
+      // DIFFERENT realms render on different TABS — coordinate spaces are
+      // per-realm by design; only same-realm overlaps are geometry bugs.
+      if ((a.realm ?? 'tree') !== (b.realm ?? 'tree')) continue;
       const d = Math.hypot(a.x - b.x, a.y - b.y);
       const min = RADII[a.kind] + RADII[b.kind] + PAD;
       if (d < min) warn(`passive overlap: ${a.id}/${b.id} ${d.toFixed(1)} < ${min.toFixed(1)}`);

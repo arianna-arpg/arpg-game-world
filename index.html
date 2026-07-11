@@ -120,6 +120,29 @@
     .tree-node.available { cursor: pointer; }
     .tree-node.available:hover { stroke: #ffd700; stroke-width: 3; }
 
+    /* Passive REALM tabs (data/passiveRealms.ts — the tree's constellations) */
+    .realm-tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+    .realm-tabs .realm-tab {
+      background: #1c1926; border: 1px solid #3c3556; border-bottom-width: 2px;
+      border-radius: 5px 5px 0 0; padding: 4px 12px; color: #8a8678;
+      font: inherit; font-size: 12px; cursor: pointer;
+    }
+    .realm-tabs .realm-tab:hover { color: #d8d4c8; }
+    .realm-tabs .realm-tab.active {
+      color: var(--realm-color, #c8a84b); border-bottom-color: var(--realm-color, #c8a84b);
+      background: #242030;
+    }
+
+    /* Graft chips (bindable passive powers riding skills — panels graft bank) */
+    .gem-chip.graft-chip { border-style: dashed; cursor: pointer; }
+    .gem-chip.graft-chip.lifted { box-shadow: 0 0 6px #b8a2e8; color: #e6d8ff; }
+    .graft-bank { margin: 2px 0 8px; }
+    .graft-land {
+      background: #2d2444; border: 1px dashed #8a68c8; border-radius: 4px;
+      color: #cbb8f0; font: inherit; font-size: 10px; padding: 2px 8px; cursor: pointer;
+    }
+    .graft-land:hover { background: #3a2f56; }
+
     /* Choice-node popup (data/passiveChoices.ts deals, panels.openChoicePopup) */
     .choice-popup {
       position: fixed; z-index: 60; width: 300px; max-height: 62vh; overflow-y: auto;

@@ -328,6 +328,9 @@ export function mountPassiveEditor(ui: UI): void {
     // Choice deals are a group REFERENCE (options live in passiveChoices.ts,
     // safely outside this file's overwrite) — pure JSON, trivially emitted.
     if (n.choice) p.push(`choice: { group: ${J(n.choice.group)}${n.choice.pick !== undefined ? `, pick: ${n.choice.pick}` : ''} }`);
+    // Realm + graft ride the same pure-JSON round-trip.
+    if (n.realm) p.push(`realm: ${J(n.realm)}`);
+    if (n.graft) p.push(`graft: { support: ${J(n.graft.support)}${n.graft.level !== undefined ? `, level: ${n.graft.level}` : ''} }`);
     p.push(`links: [${canonicalLinks(n.id).map(J).join(', ')}]`);
     return `  { ${p.join(', ')} },`;
   };
@@ -354,7 +357,7 @@ export function mountPassiveEditor(ui: UI): void {
 ${importLine}
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
-import type { PassiveChoiceRef } from './passiveChoices';
+import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 
@@ -377,6 +380,16 @@ export interface PassiveNode {
    *  permanent; the popup, allocation legality, recalc folding, saves and the
    *  wire all resolve through that one registry. */
   choice?: PassiveChoiceRef;
+  /** PASSIVE REALM (data/passiveRealms.ts): which constellation TAB this node
+   *  lives on. Absent = the main star. A realm's def decides its unlock,
+   *  adjacency style ('free' realms skip pathing), and point currency —
+   *  everything else (grants, choices, recalc, saves) is identical. Realms
+   *  render one at a time, so coordinate spaces are per-realm. */
+  realm?: string;
+  /** GRAFT: a bindable support-gem payload this node grants while allocated
+   *  (choice OPTIONS may carry their own) — socketed onto ONE learned skill
+   *  through the skill book, riding hostSockets beside its real gems. */
+  graft?: GraftSpec;
   /** Set on VOCATION mini-tree nodes (the owning VocationDef id). These render
    *  and allocate ONLY for a character who has EARNED that vocation, and they
    *  spend vocation points — see world.allocateNode / panels.refreshTree. */

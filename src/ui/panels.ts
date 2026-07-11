@@ -37,7 +37,9 @@ import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
-import { PASSIVE_CHOICE_CFG, choiceGroupOf, choiceLockReason, choiceOptionOf, choicePickLimit, chosenOf, nodeChoiceOpen } from '../data/passiveChoices';
+import { PASSIVE_CHOICE_CFG, choiceGroupOf, choiceLockReason, choiceOptionOf, choicePickLimit, chosenOf, graftSourcesOf, nodeChoiceOpen } from '../data/passiveChoices';
+import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen } from '../data/passiveRealms';
+import { SUPPORTS } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
 import { BIOMES, biomeOf } from '../world/biomes';
 import { dimensionDef } from '../world/dimensions';
@@ -199,6 +201,10 @@ export class UI {
    *  the SVG and survive nothing: every refresh/pan/close dismisses it). */
   private choicePopup: HTMLDivElement | null = null;
   private choicePopupDismiss: ((ev: PointerEvent) => void) | null = null;
+  /** The passive-tree panel's active REALM TAB (data/passiveRealms.ts). */
+  private treeRealm: string = MAIN_REALM;
+  /** GRAFT bind flow: the lifted graft key awaiting its carrier skill click. */
+  private liftedGraftKey: string | null = null;
   treeOpen = false;
   mapOpen = false;
   caravanOpen = false;
@@ -2064,7 +2070,30 @@ export class UI {
     const world = this.getWorld();
     const p = world.player;
     const m = world.meta;
-    return [...m.knownSkills.values()].map(inst => {
+    // THE GRAFT BANK (data/passiveChoices.ts GraftSpec): every bindable
+    // power the tree has granted — bound chips name their carrier, unbound
+    // ones lift on click and land on the next skill row clicked. Same
+    // requestMeta routing as every other build mutation.
+    const graftSources = graftSourcesOf(m.allocated, m.choices, PASSIVE_NODES);
+    const bankChips = graftSources.map(s => {
+      const sup = SUPPORTS[s.graft.support];
+      if (!sup) return '';
+      const boundTo = m.grafts[s.key];
+      const carrier = boundTo ? m.knownSkills.get(boundTo)?.def : undefined;
+      const lifted = this.liftedGraftKey === s.key;
+      return `<span class="gem-chip graft-chip ${lifted ? 'lifted' : ''}" data-graft-lift="${s.key}"
+        style="border-color:${sup.color ?? '#b8a2e8'}" title="${s.name}: ${sup.name} — ${sup.description}
+${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Click, then click a skill to graft it on — no socket spent.'}">
+        ✦ ${sup.name}${carrier ? ` → ${carrier.name}` : ' — unbound'}
+        ${boundTo ? `<button data-graft-unbind="${s.key}">✕</button>` : ''}
+      </span>`;
+    }).join('');
+    const graftBank = graftSources.length ? `
+      <div class="graft-bank">
+        <span style="color:#b8a2e8;font-size:10px">Grafts${this.liftedGraftKey ? ' — click a skill to bind' : ''}:</span>
+        ${bankChips}
+      </div>` : '';
+    return graftBank + [...m.knownSkills.values()].map(inst => {
       const def = inst.def;
       const maxLv = skillMaxLevel(def);
       const binds = this.slotLabels().map((label, slot) => {
@@ -2118,6 +2147,18 @@ export class UI {
           <span style="color:#a8d8a0">Grimoire:</span> ${chip}
           <span style="color:#6a6478">— binds at the Tracker's book</span></div>`;
       }
+      // Grafts riding THIS skill (chips mirror sockets; ✕ unbinds) + the
+      // landing button while a lifted graft is looking for its carrier.
+      const graftRow = (inst.grafts?.length || this.liftedGraftKey) ? `
+        <div class="grafts" style="margin-top:2px">
+          ${(inst.grafts ?? []).map(g => {
+            const src = graftSources.find(s => m.grafts[s.key] === def.id && SUPPORTS[s.graft.support] === g.def);
+            return `<span class="gem-chip graft-chip" style="border-color:${g.def.color ?? '#b8a2e8'}"
+              title="${g.def.description} — grafted by ${src?.name ?? 'a passive power'}; no socket spent.">
+              ✦ ${g.def.name} <b>L${g.level}</b>${src ? `<button data-graft-unbind="${src.key}">✕</button>` : ''}</span>`;
+          }).join('')}
+          ${this.liftedGraftKey ? `<button class="graft-land" data-graft-bind="${def.id}">⊕ graft here</button>` : ''}
+        </div>` : '';
       return `
         <div class="skill-entry" data-tip="skill" data-skill-id="${def.id}" style="border-left:3px solid ${def.color}">
           <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}${eff > inst.level ? ` <span style="color:#8ad0ff">(+${eff - inst.level} → ${eff})</span>` : inst.level >= maxLv ? ' (max)' : ''}</span>
@@ -2136,6 +2177,7 @@ export class UI {
             <button data-unlearn="${def.id}">Unlearn</button>
           </div>
           <div class="sockets">${sockets}</div>
+          ${graftRow}
           ${grimoire}
         </div>`;
     }).join('') || '<div style="color:#8a8678;font-size:11px">Nothing learned. Skills drop from monsters — learn them from the Inventory (I) → Skill Gems tab.</div>';
@@ -2180,6 +2222,26 @@ export class UI {
       world.requestMeta({ t: 'unsocket', skillId, socket: Number(sock) });
       refresh();
     }));
+    // GRAFTS: lift a bank chip → land it on a skill (click-lift twins, the
+    // drag fabric's gesture family). Unbind is one ✕ through the same intent.
+    q<HTMLElement>('[data-graft-lift]').forEach(chip => chip.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('[data-graft-unbind]')) return; // the ✕ wins
+      const key = chip.dataset.graftLift!;
+      this.liftedGraftKey = this.liftedGraftKey === key ? null : key;
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-graft-bind]').forEach(btn => btn.addEventListener('click', () => {
+      if (!this.liftedGraftKey) return;
+      world.requestMeta({ t: 'bindGraft', key: this.liftedGraftKey, skillId: btn.dataset.graftBind! });
+      this.liftedGraftKey = null;
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-graft-unbind]').forEach(btn => btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      world.requestMeta({ t: 'bindGraft', key: btn.dataset.graftUnbind!, skillId: null });
+      this.liftedGraftKey = null;
+      refresh();
+    }));
   }
 
   // (The Skill Book panel is GONE — the Build drawer on the Inventory now
@@ -2198,9 +2260,11 @@ export class UI {
     }
   }
 
-  /** Fit box over every node (+padding) — the zoom/pan reference frame. */
+  /** Fit box over the ACTIVE REALM's nodes (+padding) — the zoom/pan
+   *  reference frame. Each realm tab auto-fits its own constellation. */
   private computeTreeBox(): void {
-    const allNodes = Object.values(PASSIVE_NODES);
+    const allNodes = Object.values(PASSIVE_NODES).filter(n => realmIdOf(n) === this.treeRealm);
+    if (!allNodes.length) { this.treeBox = { minX: 0, minY: 0, w: 1000, h: 1000 }; return; }
     const PAD = 45;
     const bMinX = Math.min(...allNodes.map(n => n.x)) - PAD;
     const bMaxX = Math.max(...allNodes.map(n => n.x)) + PAD;
@@ -2215,6 +2279,9 @@ export class UI {
    *  reset to survey everything; pan clamps keep the window on the tree. */
   private centerTreeOnStart(): void {
     this.computeTreeBox();
+    // Realm tabs open FIT-TO-CONSTELLATION (small stars read whole); only
+    // the main star centres on the class start at a readable zoom.
+    if (this.treeRealm !== MAIN_REALM) { this.treeZoom = 1; this.treePan = { x: 0, y: 0 }; return; }
     const start = PASSIVE_NODES[classStartNode(this.getWorld().meta.classDef.id)];
     if (!start) return;
     const b = this.treeBox;
@@ -2233,6 +2300,13 @@ export class UI {
     const world = this.getWorld();
     const m = world.meta;
 
+    // REALM TABS (data/passiveRealms.ts): resolve the open set, snap the
+    // active tab back to the star if its realm closed, seed root crests.
+    const realms = openRealms(world.ledger);
+    if (!realms.some(r => r.id === this.treeRealm)) this.treeRealm = MAIN_REALM;
+    const activeRealm = PASSIVE_REALMS[this.treeRealm];
+    world.ensureOpenRealmRoots();
+
     // Fit the view to the NODE BOUNDS (not a fixed viewBox) so the tree stays
     // extensible — adding nodes anywhere just grows the fitted box; zoom/pan navigate.
     this.computeTreeBox();
@@ -2240,10 +2314,12 @@ export class UI {
     const RADII: Record<PassiveNode['kind'], number> = {
       start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15,
     };
-    // VOCATION nodes exist for every defined vocation, but only the ones this
-    // character has EARNED render (they share the star's central space).
+    // One realm renders at a time. Within the star, VOCATION nodes exist for
+    // every defined vocation, but only the ones this character has EARNED
+    // render (they share the star's central space).
     const visibleNode = (n: PassiveNode): boolean =>
-      n.vocation === undefined || m.vocations.includes(n.vocation);
+      realmIdOf(n) === this.treeRealm
+      && (n.vocation === undefined || m.vocations.includes(n.vocation));
     const drawnEdges = new Set<string>();
     let edges = '';
     let circles = '';
@@ -2319,7 +2395,7 @@ export class UI {
     const zPct = Math.round(this.treeZoom * 100);
     // Vocation header chip: the separate point pool, plus a "path to the gate"
     // nudge while the spending gate is still closed.
-    const vocChips = m.vocations.map(vid => {
+    const vocChips = this.treeRealm !== MAIN_REALM ? '' : m.vocations.map(vid => {
       const voc = VOCATIONS[vid];
       if (!voc) return '';
       const open = vocationGateOpen(m.allocated, vid);
@@ -2327,8 +2403,19 @@ export class UI {
       return ` · <span style="color:${voc.color}">${m.vocationPoints} vocation (${voc.name})</span>`
         + (open ? '' : ` <span style="color:#8a8678;font-size:11px">— locked: allocate ${gateName ?? 'its class start'}</span>`);
     }).join('');
+    // The active realm's POOL: the star spends passive points; other realms
+    // read their currency wallet (earned at future shrines/communions).
+    const currency = activeRealm?.currency ?? 'passive';
+    const poolChip = currency === 'passive'
+      ? `<span style="color:#ffd700">${m.passivePoints} points</span>`
+      : `<span style="color:${activeRealm?.color ?? '#ffd700'}">${m.realmPoints[currency] ?? 0} ${currency}</span>`;
+    // REALM TABS — only when more than one constellation is open.
+    const realmTabs = realms.length > 1 ? `<div class="realm-tabs">${realms.map(r => `
+      <button class="realm-tab ${r.id === this.treeRealm ? 'active' : ''}" data-realm="${r.id}"
+        style="--realm-color:${r.color ?? '#c8a84b'}" title="${r.blurb ?? ''}">${r.label}</button>`).join('')}</div>` : '';
     this.passiveTree.innerHTML = `
-      <h2>Passive Tree — <span style="color:#ffd700">${m.passivePoints} points</span>${vocChips}
+      ${realmTabs}
+      <h2>${activeRealm && this.treeRealm !== MAIN_REALM ? activeRealm.label : 'Passive Tree'} — ${poolChip}${vocChips}
         <span style="float:right;color:#8a8678;font-size:11px;font-weight:normal">
           ${DEV.passiveTreeEditor ? '' : `<span class="tree-zoom-grp">
             <button class="tree-zoom" data-tz="out" title="zoom out">−</button>
@@ -2339,6 +2426,15 @@ export class UI {
 
     // In EDITOR mode, clicks SELECT nodes (the editor wires that up) — skip the
     // play-mode allocate handler so the two don't fight over the same click.
+    // Realm tab clicks re-aim the whole panel at that constellation.
+    this.passiveTree.querySelectorAll<HTMLButtonElement>('.realm-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.dataset.realm === this.treeRealm) return;
+        this.treeRealm = btn.dataset.realm ?? MAIN_REALM;
+        this.centerTreeOnStart();
+        this.refreshTree();
+      });
+    });
     if (!DEV.passiveTreeEditor) {
       this.passiveTree.querySelectorAll<SVGCircleElement>('.tree-node.available').forEach(el => {
         el.addEventListener('click', () => {
@@ -2412,13 +2508,20 @@ export class UI {
    *  CHOICE NODES stay "available" while picks remain open — clicking deals
    *  the popup again; world.allocateNode holds the same line. */
   private nodeAllocatable(node: PassiveNode, m: World['meta']): boolean {
+    // Realm gates mirror world.allocateNode: the constellation must be open,
+    // 'free' realms skip pathing, and the realm's own currency pays.
+    const realm = realmOf(node);
+    if (!realmOpen(realm, this.getWorld().ledger)) return false;
     const already = m.allocated.has(node.id);
     if (already && !(node.choice && nodeChoiceOpen(node, m.choices))) return false;
-    if (!already && !PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))) return false;
+    if (!already && realm?.adjacency !== 'free'
+      && !PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))) return false;
     const cost = node.choice ? PASSIVE_CHOICE_CFG.pickCost : 1;
-    return node.vocation !== undefined
-      ? m.vocationPoints >= cost && vocationGateOpen(m.allocated, node.vocation)
-      : m.passivePoints >= cost;
+    if (node.vocation !== undefined) {
+      return m.vocationPoints >= cost && vocationGateOpen(m.allocated, node.vocation);
+    }
+    const currency = realm?.currency ?? 'passive';
+    return currency === 'passive' ? m.passivePoints >= cost : (m.realmPoints[currency] ?? 0) >= cost;
   }
 
   /** Dismiss the choice popup (idempotent). Every path that could slide the

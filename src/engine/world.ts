@@ -53,7 +53,8 @@ import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/cla
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
-import { PASSIVE_CHOICE_CFG, choiceLockReason, choiceOptionOf, chosenOf, sanitizeChoices } from '../data/passiveChoices';
+import { CHOICE_GROUPS, PASSIVE_CHOICE_CFG, choiceLockReason, choiceOptionOf, chosenOf, graftSourcesOf, sanitizeChoices } from '../data/passiveChoices';
+import { openRealms, realmOf, realmOpen, type PassiveRealmDef } from '../data/passiveRealms';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
@@ -942,6 +943,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'untameCompanion': return isIdx(a.actorId);
     case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
     case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
+    case 'bindGraft': return isStr(a.key) && (a.skillId === null || isStr(a.skillId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
@@ -988,6 +990,17 @@ export interface PlayerMeta {
    *  through allocateNode; every load/wire path rebuilds it registry-tolerantly
    *  via sanitizeChoices, so a renamed group or option simply drops its pick. */
   choices: Record<string, string[]>;
+  /** REALM CURRENCIES (data/passiveRealms.ts): unspent points per realm
+   *  currency id ('devotion', 'communion', …) — earned through
+   *  world.grantRealmPoints (the seam shrines/quests/communions will call),
+   *  spent by allocateNode on nodes of realms that name that currency. */
+  realmPoints: Record<string, number>;
+  /** GRAFT BINDINGS (data/passiveChoices.ts GraftSpec): earned graft key
+   *  (`nodeId` / `nodeId:optionId`) → the learned skill carrying it (null =
+   *  earned, unbound). Written through world.bindGraft; recalcSeat rebuilds
+   *  every SkillInstance.grafts lane from this map, and sanitizeGrafts
+   *  re-validates it on every load/wire path. */
+  grafts: Record<string, string | null>;
   /** Vocations GRANTED to this character (quest-chain completions). Capped at
    *  VOCATION_CFG.maxPerCharacter; an array so the cap is pure config. */
   vocations: string[];
@@ -2106,6 +2119,8 @@ export class World {
       passivePoints: 1,
       allocated: new Set([classStartNode(classDef.id)]),
       choices: {},
+      realmPoints: {},
+      grafts: {},
       vocations: [],
       vocationPoints: 0,
       knownSkills: new Map(),
@@ -8116,6 +8131,18 @@ export class World {
       }
       inst.bonusLevels = bonus;
     }
+    // GRAFTS: rebuild every instance's mutator lane from the bound sources —
+    // derived state exactly like bonusLevels above. A binding whose source
+    // was never earned (or whose skill left the book) simply injects nothing.
+    for (const inst of m.knownSkills.values()) inst.grafts = undefined;
+    for (const s of graftSourcesOf(m.allocated, m.choices, PASSIVE_NODES)) {
+      const skillId = m.grafts[s.key];
+      if (!skillId) continue;
+      const inst = m.knownSkills.get(skillId);
+      const def = SUPPORTS[s.graft.support];
+      if (!inst || !def) continue;
+      (inst.grafts ??= []).push({ def, level: s.graft.level ?? 1 });
+    }
     p.sheet.setSource('level', [
       mod('life', 'flat', (p.level - 1) * PROGRESSION.lifePerLevel),
       mod('mana', 'flat', (p.level - 1) * PROGRESSION.manaPerLevel),
@@ -9410,6 +9437,10 @@ export class World {
       // budget trim (a pick on a trimmed node would be a phantom grant).
       choices: Object.fromEntries(Object.entries(sanitizeChoices(snapshot.choices, PASSIVE_NODES))
         .filter(([id]) => allocated.has(id))),
+      // Veterans field WITHOUT realm currencies or graft bindings (v1) — the
+      // trim walks from the class start, so realm constellations fall away.
+      realmPoints: {},
+      grafts: {},
       vocations: [...(snapshot.vocations ?? [])],
       vocationPoints: 0,
       knownSkills,
@@ -10524,6 +10555,13 @@ export class World {
     if (!Object.prototype.hasOwnProperty.call(PASSIVE_NODES, nodeId)) return false;
     const node = PASSIVE_NODES[nodeId];
     if (!node) return false;
+    // REALM GATE (data/passiveRealms.ts): the node's constellation must be
+    // OPEN for this run (the star always is; scaffolding realms open when
+    // content bumps their unlockLedger). Opening seeds the realm's free
+    // root crests, so pathing has somewhere to start.
+    const realm = realmOf(node);
+    if (!realmOpen(realm, this.ledger)) return false;
+    if (realm) this.ensureRealmRoots(seat, realm);
     const already = m.allocated.has(nodeId);
     let cost = 1;
     if (node.choice) {
@@ -10533,23 +10571,86 @@ export class World {
     } else if (already || optionId !== undefined) {
       return false; // plain nodes: one allocation, no options
     }
-    // Pathing: the FIRST touch of any node needs an allocated neighbour;
+    // Pathing: the FIRST touch of any node needs an allocated neighbour —
+    // except in a 'free'-adjacency realm (Pantheon shrines stand alone);
     // an already-open choice node's later picks re-pay only the pool.
-    if (!already && !PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n))) return false;
+    if (!already && realm?.adjacency !== 'free'
+      && !PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n))) return false;
     if (node.vocation !== undefined) {
       if (!m.vocations.includes(node.vocation)) return false;   // not earned (or another's tree)
       if (!vocationGateOpen(m.allocated, node.vocation)) return false; // the toggle-able gate
       if (m.vocationPoints < cost) return false;                // the separate currency
       m.vocationPoints -= cost;
     } else {
-      if (m.passivePoints < cost) return false;
-      m.passivePoints -= cost;
+      // The realm names its pool: 'passive' (default) is the main pool,
+      // anything else a REALM CURRENCY ledgered in meta.realmPoints.
+      const currency = realm?.currency ?? 'passive';
+      if (currency === 'passive') {
+        if (m.passivePoints < cost) return false;
+        m.passivePoints -= cost;
+      } else {
+        const have = m.realmPoints[currency] ?? 0;
+        if (have < cost) return false;
+        m.realmPoints[currency] = have - cost;
+      }
     }
     if (node.choice && optionId !== undefined) {
       (m.choices[nodeId] ??= []).push(optionId);
     }
     m.allocated.add(nodeId);
     this.recalcSeat(seat);
+    return true;
+  }
+
+  /** Seed a realm's free ROOT crests into a seat's allocation (idempotent —
+   *  the vocation-crest pattern). Runs on every allocation in the realm and
+   *  when the tree panel shows an open realm, so the walk always has a start. */
+  ensureRealmRoots(seat: Seat, realm: PassiveRealmDef): void {
+    let added = false;
+    for (const id of realm.roots ?? []) {
+      if (!PASSIVE_NODES[id] || seat.meta.allocated.has(id)) continue;
+      seat.meta.allocated.add(id);
+      added = true;
+    }
+    if (added) this.recalcSeat(seat);
+  }
+
+  /** Seed roots for EVERY currently-open realm (the tree panel calls this on
+   *  render so a freshly unlocked realm greets the player with its crest lit). */
+  ensureOpenRealmRoots(seat: Seat = this.localSeat): void {
+    for (const r of openRealms(this.ledger)) this.ensureRealmRoots(seat, r);
+  }
+
+  /** Award REALM CURRENCY (devotion, communion, …) — the one seam future
+   *  shrines / quest rewards / communions call. Negative-safe, replicated. */
+  grantRealmPoints(currency: string, amount: number, seat: Seat = this.localSeat): void {
+    if (!currency || currency === 'passive' || !Number.isFinite(amount)) return;
+    const m = seat.meta;
+    m.realmPoints[currency] = Math.max(0, (m.realmPoints[currency] ?? 0) + Math.round(amount));
+    this.markMetaDirty(seat);
+  }
+
+  /** Bind (or unbind with null) an earned GRAFT onto a learned skill — the
+   *  devotion-binding gesture. `key` must resolve to a LIVE graft source
+   *  (allocated node / chosen option; graftSourcesOf is the one enumeration);
+   *  a graft serves at most one skill, and rebinding is free — the
+   *  commitment was earning the power, carrying it is the build's play. */
+  bindGraft(key: string, skillId: string | null, seat: Seat = this.localSeat): boolean {
+    const m = seat.meta;
+    const source = graftSourcesOf(m.allocated, m.choices, PASSIVE_NODES).find(s => s.key === key);
+    if (!source) return false;
+    if (skillId !== null && !m.knownSkills.has(skillId)) return false;
+    const prev = m.grafts[key] ?? null;
+    if (prev === skillId) return true;
+    m.grafts[key] = skillId;
+    this.recalcSeat(seat); // rebuilds every instance's graft lane
+    // Forwarded copies on live minions re-mint for BOTH hosts involved —
+    // mirrors socketSupport's resync exactly.
+    for (const id of [prev, skillId]) {
+      if (!id) continue;
+      const inst = m.knownSkills.get(id);
+      if (inst) this.resyncMinionSupports(inst);
+    }
     return true;
   }
 
@@ -10630,6 +10731,7 @@ export class World {
       case 'socket': this.socketSupport(action.index, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
       case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
+      case 'bindGraft': this.bindGraft(action.key, action.skillId, seat); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
       case 'dropSkill': this.dropFromInventory(seat, 'skill', action.index); break;
       case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;
@@ -10819,6 +10921,27 @@ export class World {
           }
         }
       }
+    }
+    // BOONS (MonsterBoon): spawn-rolled options from the SAME choice pools
+    // the player's tree deals (data/passiveChoices.ts) — mods fold as a
+    // sheet source, an option's graft rides the first skill's graft lane
+    // (the player's mutator seam, verbatim). Attributes are player-pipeline
+    // payloads and deliberately skip the bestiary.
+    for (const b of def.boons ?? []) {
+      const group = CHOICE_GROUPS[b.group];
+      if (!group) continue;
+      if (b.chance !== undefined && Math.random() >= b.chance) continue;
+      const pool = [...group.options];
+      const picks = Math.min(Math.max(1, b.pick ?? 1), pool.length);
+      const mods: Modifier[] = [];
+      for (let i = 0; i < picks; i++) {
+        const opt = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+        if (opt.mods) mods.push(...opt.mods);
+        if (opt.graft && SUPPORTS[opt.graft.support] && a.skills[0]) {
+          (a.skills[0].grafts ??= []).push({ def: SUPPORTS[opt.graft.support], level: opt.graft.level ?? 1 });
+        }
+      }
+      if (mods.length) a.sheet.setSource(`boon:${group.id}`, mods);
     }
     a.xpValue = Math.round(def.xp * XP_SCALE * (1 + 0.15 * lv));
     a.fillResources();
@@ -14843,10 +14966,15 @@ export class World {
     // another (Faultfinder's 'fissure' admits Tectonic Echoes) regardless
     // of how the player arranged the summon's sockets — arrangement
     // independence, matching the gate and the lane router.
+    // GRAFTS forward exactly like socketed gems — a devotion bound onto a
+    // summon skill reaches the crew (the fantasy: your Hunt rides your
+    // skeletons). Same fixpoint, same fit gates, same forwarded stamping.
+    const carried = summonInst.grafts?.length
+      ? [...summonInst.sockets, ...summonInst.grafts] : summonInst.sockets;
     let grew = true;
     while (grew) {
       grew = false;
-      for (const socket of summonInst.sockets) {
+      for (const socket of carried) {
         if (!socket || !supportRidesMinions(socket.def)) continue;
         for (const sk of skills) {
           if (!sk || sk.sockets.some(x => x?.def.id === socket.def.id)) continue;

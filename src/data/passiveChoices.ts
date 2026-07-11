@@ -26,8 +26,23 @@
 
 import { gaugeMod, mod, type Attributes, type Modifier } from '../engine/stats';
 
+/** A GRAFT: a support-gem payload a passive power can carry, BINDABLE onto
+ *  one learned skill (the Grim Dawn devotion-binding shape). The support is
+ *  an ordinary SUPPORTS id — grafts ride the skill's hostSockets lane beside
+ *  its real gems (same tag-fit admission, no socket consumed), so the whole
+ *  support vocabulary (mods, riders, cast-on-X, minion forwarding) is
+ *  immediately graftable power. Binding lives in meta.grafts, keyed by the
+ *  granting node (`nodeId`) or option (`nodeId:optionId`). */
+export interface GraftSpec {
+  /** SUPPORTS id — validated at boot. */
+  support: string;
+  /** Gem level of the injected payload (default 1). */
+  level?: number;
+}
+
 /** One pickable option inside a choice group. The payload mirrors a passive
- *  node's grant surface — attributes (flat), attributesPct (percent), mods. */
+ *  node's grant surface — attributes (flat), attributesPct (percent), mods —
+ *  plus an optional bindable GRAFT. */
 export interface PassiveChoiceOption {
   /** Unique WITHIN its group. Persisted in saves — renaming one orphans picks
    *  (they drop with a console note on load, like a removed node id). */
@@ -40,6 +55,8 @@ export interface PassiveChoiceOption {
    *  whole pool — the multiplicative knob beside the flat one. */
   attributesPct?: Partial<Attributes>;
   mods?: Modifier[];
+  /** Bindable skill-graft this option grants while chosen. */
+  graft?: GraftSpec;
 }
 
 export interface PassiveChoiceGroup {
@@ -154,8 +171,25 @@ export function choiceLockReason(
  *  content validator — bad data degrades, never throws. */
 export function validatePassiveChoices(
   warn: (msg: string) => void,
-  nodes: Record<string, (NodeLike & { kind?: string }) | undefined>,
+  nodes: Record<string, (NodeLike & { kind?: string; graft?: GraftSpec }) | undefined>,
+  supportExists?: (id: string) => boolean,
 ): void {
+  // GRAFTS: every bindable payload must name a live support gem — a typo here
+  // is a chip the skill book offers that injects nothing.
+  if (supportExists) {
+    for (const g of Object.values(CHOICE_GROUPS)) {
+      for (const o of g.options) {
+        if (o.graft && !supportExists(o.graft.support)) {
+          warn(`choice group ${g.id}: option '${o.id}' grafts unknown support '${o.graft.support}'`);
+        }
+      }
+    }
+    for (const n of Object.values(nodes)) {
+      if (n?.graft && !supportExists(n.graft.support)) {
+        warn(`passive ${n.id}: grafts unknown support '${n.graft.support}'`);
+      }
+    }
+  }
   for (const g of Object.values(CHOICE_GROUPS)) {
     if (g.options.length < 2) warn(`choice group ${g.id}: a deal needs at least 2 options (has ${g.options.length})`);
     const seen = new Set<string>();
@@ -187,6 +221,71 @@ export function validatePassiveChoices(
       warn(`choice group ${gid}: character-unique but nodes deal ${total} picks over ${g.options.length} options (surplus nodes go dead)`);
     }
   }
+}
+
+// --- grafts ---------------------------------------------------------------------
+
+/** A graft AVAILABLE to a character: resolved from an allocated node's own
+ *  GraftSpec or a chosen option's. `key` is what meta.grafts and the bind
+ *  intent speak; `name` labels the chip in the skill book. */
+export interface GraftSource {
+  key: string;                 // nodeId | nodeId:optionId
+  name: string;
+  description: string;
+  graft: GraftSpec;
+}
+
+type GraftNodeLike = NodeLike & {
+  name?: string; description?: string;
+  graft?: GraftSpec;
+};
+
+/** Every graft this allocation + choice state grants, in node order. The one
+ *  enumeration the recalc rebuild, the bind mutator, the skill-book strip,
+ *  and the sim auditor all share. */
+export function graftSourcesOf(
+  allocated: ReadonlySet<string>,
+  choices: ChoiceState,
+  nodes: Record<string, GraftNodeLike | undefined>,
+): GraftSource[] {
+  const out: GraftSource[] = [];
+  for (const id of allocated) {
+    const node = nodes[id];
+    if (!node) continue;
+    if (node.graft) {
+      out.push({ key: id, name: node.name ?? id, description: node.description ?? '', graft: node.graft });
+    }
+    if (node.choice) {
+      for (const oid of chosenOf(choices, id)) {
+        const opt = choiceOptionOf(node, oid);
+        if (opt?.graft) {
+          out.push({ key: `${id}:${oid}`, name: opt.name, description: opt.description, graft: opt.graft });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** Registry-tolerant rebuild of saved/wired graft bindings: keys must resolve
+ *  to a live graft source (node allocated / option chosen), values to a known
+ *  skill — anything else drops. Fresh object, never aliases the input. */
+export function sanitizeGrafts(
+  raw: Record<string, string | null> | undefined,
+  allocated: ReadonlySet<string>,
+  choices: ChoiceState,
+  nodes: Record<string, GraftNodeLike | undefined>,
+  knownSkill: (id: string) => boolean,
+): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  if (!raw) return out;
+  const live = new Set(graftSourcesOf(allocated, choices, nodes).map(s => s.key));
+  for (const [key, skillId] of Object.entries(raw)) {
+    if (!live.has(key)) continue;
+    if (skillId === null) { out[key] = null; continue; }
+    if (typeof skillId === 'string' && knownSkill(skillId)) out[key] = skillId;
+  }
+  return out;
 }
 
 /** Registry-tolerant rebuild of a saved/wired choices record: unknown nodes,
@@ -313,6 +412,47 @@ registerChoiceGroup({
     { id: 'well', name: 'Well Doctrine', description: '+30 maximum mana, +1 mana regeneration per second', mods: [mod('mana', 'flat', 30), mod('manaRegen', 'flat', 1)] },
     { id: 'veil', name: 'Veil Doctrine', description: '+35 maximum energy shield', mods: [mod('energyShield', 'flat', 35)] },
     { id: 'omen', name: 'Omen Doctrine', description: '+5% spell critical strike chance', mods: [mod('critChance', 'flat', 0.05, ['spell'])] },
+  ],
+});
+
+// DEVOTION: THE HUNT — the scaffolding constellation's one deal (see
+// data/passiveRealms.ts; the realm ships locked until content attunes it).
+registerChoiceGroup({
+  id: 'devotion_hunt',
+  name: 'The Hunt — one aspect',
+  options: [
+    // Each aspect grants its stats AND a bindable GRAFT (the Grim Dawn
+    // shape): the passive is the constellation's gift, the graft is where
+    // YOU choose to carry it — socketed onto one learned skill, free.
+    { id: 'stride', name: 'Aspect of the Stride', description: '6% increased movement speed. GRAFT: Swiftness.', mods: [mod('moveSpeed', 'increased', 0.06)], graft: { support: 'swiftness' } },
+    { id: 'aim', name: 'Aspect of the Eye', description: '+50 accuracy rating. GRAFT: Precision.', mods: [mod('accuracy', 'flat', 50)], graft: { support: 'precision' } },
+    { id: 'fang', name: 'Aspect of the Fang', description: 'Adds 4 physical damage to attacks. GRAFT: Brutality.', mods: [mod('addedPhysical', 'flat', 4, ['attack'])], graft: { support: 'brutality' } },
+  ],
+});
+
+// THE PANTHEON — the god board's two deals: ONE Major voice, three minor
+// blessings. Free-standing shrines in a 'free'-adjacency realm.
+registerChoiceGroup({
+  id: 'pantheon_major',
+  name: 'Commune — one Major voice',
+  options: [
+    { id: 'dawnfather', name: 'Voice of the Dawnfather', description: '+15% fire resistance, +0.5 life regeneration per second', mods: [mod('fireRes', 'flat', 0.15), mod('lifeRegen', 'flat', 0.5)] },
+    { id: 'tidemother', name: 'Voice of the Tidemother', description: '+15% cold resistance, +20 maximum mana', mods: [mod('coldRes', 'flat', 0.15), mod('mana', 'flat', 20)] },
+    { id: 'skycaller', name: 'Voice of the Skycaller', description: '+15% lightning resistance, 3% increased movement speed', mods: [mod('lightningRes', 'flat', 0.15), mod('moveSpeed', 'increased', 0.03)] },
+    { id: 'gravekeeper', name: 'Voice of the Gravekeeper', description: '+12% chaos resistance, 10% increased minion life', mods: [mod('chaosRes', 'flat', 0.12), mod('minionLife', 'increased', 0.1)] },
+  ],
+});
+registerChoiceGroup({
+  id: 'pantheon_minor',
+  name: 'Minor blessings — choose three',
+  pick: 3,
+  options: [
+    { id: 'hearth', name: 'Blessing of Hearth', description: '+15 maximum life', mods: [mod('life', 'flat', 15)] },
+    { id: 'well', name: 'Blessing of the Well', description: '+12 maximum mana', mods: [mod('mana', 'flat', 12)] },
+    { id: 'mist', name: 'Blessing of Mist', description: '+15 evasion rating', mods: [mod('evasion', 'flat', 15)] },
+    { id: 'stone', name: 'Blessing of Stone', description: '+12 armor', mods: [mod('armor', 'flat', 12)] },
+    { id: 'spring', name: 'Blessing of the Spring', description: '+0.4 life regeneration per second', mods: [mod('lifeRegen', 'flat', 0.4)] },
+    { id: 'omen', name: 'Blessing of Omens', description: '+5 maximum insight', mods: [mod('insight', 'flat', 5)] },
   ],
 });
 

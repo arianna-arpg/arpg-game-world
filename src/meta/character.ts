@@ -11,7 +11,7 @@
 
 import { CLASSES } from '../data/classes';
 import { PASSIVE_NODES } from '../data/passives';
-import { sanitizeChoices } from '../data/passiveChoices';
+import { sanitizeChoices, sanitizeGrafts } from '../data/passiveChoices';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
@@ -61,6 +61,11 @@ export interface CharacterSave {
    *  pre-choice saves load unchanged; rebuilt registry-tolerantly (a renamed
    *  group/option drops its pick, exactly like a removed node id). */
   choices?: Record<string, string[]>;
+  /** Realm-currency wallet (data/passiveRealms.ts), per currency id. Optional. */
+  realmPoints?: Record<string, number>;
+  /** Graft bindings: earned graft key → carrier skill id (null = unbound).
+   *  Optional; re-validated against the live registries on load. */
+  grafts?: Record<string, string | null>;
   /** Vocations GRANTED to this character + unspent vocation points. Optional →
    *  pre-vocation saves still load (`?? []` / `?? 0`). Allocated vocation-tree
    *  nodes ride the ordinary `allocated` list; a removed VocationDef's ids are
@@ -130,6 +135,8 @@ export function serializeCharacter(world: World): CharacterSave {
     skillPoints: m.skillPoints, passivePoints: m.passivePoints,
     allocated: [...m.allocated],
     choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
+    realmPoints: { ...m.realmPoints },
+    grafts: { ...m.grafts },
     vocations: [...m.vocations],
     vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
@@ -226,6 +233,11 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     if (item) equipped[slot] = item;
   }
 
+  // Tree state rebuilds registry-tolerantly, in dependency order: the
+  // allocation seeds choice sanitizing, both seed graft-binding sanitizing
+  // (a binding whose source or carrier vanished simply drops).
+  const allocated = new Set(save.allocated);
+  const choices = sanitizeChoices(save.choices, PASSIVE_NODES);
   const meta: PlayerMeta = {
     classDef,
     name: save.name?.trim() || classDef.name,
@@ -233,8 +245,10 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     attrs: { ...save.baseAttrs }, // recomputed by recalcPlayer() inside adoptSavedMeta
     xp: save.xp, xpNeeded: save.xpNeeded,
     skillPoints: save.skillPoints, passivePoints: save.passivePoints,
-    allocated: new Set(save.allocated),
-    choices: sanitizeChoices(save.choices, PASSIVE_NODES),
+    allocated,
+    choices,
+    realmPoints: { ...(save.realmPoints ?? {}) },
+    grafts: sanitizeGrafts(save.grafts, allocated, choices, PASSIVE_NODES, id => knownSkills.has(id)),
     vocations: [...(save.vocations ?? [])],
     vocationPoints: save.vocationPoints ?? 0,
     knownSkills, inventory, skillInv, offerings: save.offerings,

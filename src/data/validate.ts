@@ -18,7 +18,8 @@ import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunements';
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
-import { validatePassiveChoices } from './passiveChoices';
+import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
+import { validatePassiveRealms } from './passiveRealms';
 import { STAT_DEFS } from '../engine/stats';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
@@ -923,6 +924,19 @@ export function validateContent(): void {
   if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
 
   // CHOICE NODES: deals resolve, pools are unambiguous, character-unique
-  // groups aren't oversubscribed (the sweep lives beside the registry).
-  validatePassiveChoices(warn, PASSIVE_NODES);
+  // groups aren't oversubscribed, grafts name live supports (the sweeps
+  // live beside their registries).
+  validatePassiveChoices(warn, PASSIVE_NODES, id => !!SUPPORTS[id]);
+  validatePassiveRealms(warn, PASSIVE_NODES);
+
+  // MONSTER BOONS: the bestiary's rolls from the player-shared choice pools
+  // must resolve — a typo'd group is a silent nothing at spawn.
+  for (const mdef of Object.values(MONSTERS)) {
+    for (const b of mdef.boons ?? []) {
+      const g = CHOICE_GROUPS[b.group];
+      if (!g) { warn(`monster ${mdef.id}: boon names unknown choice group '${b.group}'`); continue; }
+      if ((b.pick ?? 1) > g.options.length) warn(`monster ${mdef.id}: boon pick ${b.pick} exceeds group '${b.group}' pool (${g.options.length})`);
+      if (b.chance !== undefined && !(b.chance >= 0 && b.chance <= 1)) warn(`monster ${mdef.id}: boon chance ${b.chance} outside [0,1]`);
+    }
+  }
 }

@@ -8,7 +8,7 @@
 import { gaugeMod, linkMod, mod, type Attributes, type Modifier } from '../engine/stats';
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
-import type { PassiveChoiceRef } from './passiveChoices';
+import type { GraftSpec, PassiveChoiceRef } from './passiveChoices';
 
 export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 
@@ -31,6 +31,16 @@ export interface PassiveNode {
    *  permanent; the popup, allocation legality, recalc folding, saves and the
    *  wire all resolve through that one registry. */
   choice?: PassiveChoiceRef;
+  /** PASSIVE REALM (data/passiveRealms.ts): which constellation TAB this node
+   *  lives on. Absent = the main star. A realm's def decides its unlock,
+   *  adjacency style ('free' realms skip pathing), and point currency —
+   *  everything else (grants, choices, recalc, saves) is identical. Realms
+   *  render one at a time, so coordinate spaces are per-realm. */
+  realm?: string;
+  /** GRAFT: a bindable support-gem payload this node grants while allocated
+   *  (choice OPTIONS may carry their own) — socketed onto ONE learned skill
+   *  through the skill book, riding hostSockets beside its real gems. */
+  graft?: GraftSpec;
   /** Set on VOCATION mini-tree nodes (the owning VocationDef id). These render
    *  and allocate ONLY for a character who has EARNED that vocation, and they
    *  spend vocation points — see world.allocateNode / panels.refreshTree. */
@@ -400,6 +410,21 @@ const nodes: PassiveNode[] = [
   { id: "cho_arcane2", name: "Arcane Doctrine", description: "Commit to one doctrine of the arcane. Each doctrine may be sworn only once per character, at any node that deals it.", kind: "choice", x: 1998, y: 4356, choice: { group: "arcane_doctrines" }, links: ["cl_es_c"] },
   { id: "cho_wake_litany", name: "The Candle Litany", description: "Recite three of the litany's eight verses — each verse costs a point; five stay unsaid forever.", kind: "choice", x: 4890, y: 5090, choice: { group: "wake_litany" }, links: ["cl_wake_p2"] },
   { id: "cho_wake_paean", name: "The Paean", description: "Sing one of four refrains over the wake. The others fall silent.", kind: "choice", x: 5730, y: 5170, choice: { group: "wake_paean" }, links: ["cl_wake_hours"] },
+  // --- PASSIVE REALMS (data/passiveRealms.ts) — scaffolding constellations.
+  // DEVOTION: "The Hunt", a tiny star proving tree-adjacency realms — free
+  // root crest, a short walk, and a choice-node deal. Spends devotion points.
+  { id: "dev_hunt_root", name: "The Hunt", description: "The Hunt constellation's crest — attuned free when Devotion opens. Its stars spend devotion points.", kind: "start", x: 3000, y: 3000, realm: "devotion", links: [] },
+  { id: "dev_hunt_s1", name: "Loping Chase", description: "8% increased projectile damage", kind: "small", x: 2830, y: 2880, realm: "devotion", mods: [mod("damage", "increased", 0.08, ["projectile"])], links: ["dev_hunt_root"] },
+  { id: "dev_hunt_s2", name: "Keen Scent", description: "+30 accuracy rating", kind: "small", x: 3170, y: 2880, realm: "devotion", mods: [mod("accuracy", "flat", 30)], links: ["dev_hunt_root"] },
+  { id: "dev_hunt_s3", name: "Soft Paws", description: "4% increased movement speed", kind: "small", x: 2900, y: 3190, realm: "devotion", mods: [mod("moveSpeed", "increased", 0.04)], links: ["dev_hunt_root"] },
+  { id: "dev_hunt_n1", name: "The Hound", description: "15% increased projectile damage; +2 life gained on kill. GRAFT: Skewering Blows — bind it onto one learned skill.", kind: "notable", x: 3080, y: 3210, realm: "devotion", mods: [mod("damage", "increased", 0.15, ["projectile"]), mod("lifeOnKill", "flat", 2)], graft: { support: "skewering_blows" }, links: ["dev_hunt_s3"] },
+  { id: "dev_hunt_cho", name: "Aspect of the Hunt", description: "Take one aspect of the Hunt. The constellation remembers your shape.", kind: "choice", x: 3000, y: 2700, realm: "devotion", choice: { group: "devotion_hunt" }, links: ["dev_hunt_s1", "dev_hunt_s2"] },
+  // THE PANTHEON: free-standing shrines (adjacency 'free' — no pathing, no
+  // links): ONE Major voice of four, three minor blessings of six, and a
+  // plain offering stone proving ordinary free nodes. Spends communion.
+  { id: "pan_major", name: "Shrine of the Voice", description: "Kneel and take ONE Major voice. The other gods remember being passed over.", kind: "choice", x: 2820, y: 3000, realm: "pantheon", choice: { group: "pantheon_major" }, links: [] },
+  { id: "pan_minor", name: "Shrine of Blessings", description: "Three minor blessings of six — each communion costs a point.", kind: "choice", x: 3180, y: 3000, realm: "pantheon", choice: { group: "pantheon_minor" }, links: [] },
+  { id: "pan_offering", name: "Offering Stone", description: "+10 maximum life", kind: "small", x: 3000, y: 3260, realm: "pantheon", mods: [mod("life", "flat", 10)], links: [] },
 ];
 
 // --- VOCATION MINI-TREES -------------------------------------------------------

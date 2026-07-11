@@ -186,7 +186,12 @@ export function supportFitsTags(sup: SupportDef, tags: readonly SkillTag[]): boo
  * first-graft-wins rules stay player-curated.
  */
 export function hostSockets(inst: SkillInstance): SupportInstance[] {
-  const sockets = inst.sockets;
+  // GRAFTS ride the same lane as socketed gems: bound passive powers
+  // (devotions, future mutator sources) append after the real sockets and
+  // pass the identical fixpoint tag-admission — a misfit graft is inert
+  // exactly like a misfit socket, and every payload reader downstream sees
+  // grafts with no further edits. Slot order: sockets first, grafts after.
+  const sockets = inst.grafts?.length ? [...inst.sockets, ...inst.grafts] : inst.sockets;
   const admitted: boolean[] = new Array(sockets.length).fill(false);
   const pool = [...inst.def.tags];
   let grew = true;
@@ -3622,6 +3627,13 @@ export interface SkillInstance {
    *  Invocation's last-rune conversion, future item affixes) — merged into
    *  instanceMods for this instance's whole life, zones and all. */
   extraMods?: Modifier[];
+  /** GRAFTS — the skill-mutator lane: support-gem payloads attached WITHOUT
+   *  occupying a socket. hostSockets appends them after the real sockets
+   *  (same fixpoint tag admission), so mods/riders/cast-on-X/forwarding all
+   *  see them uniformly. DERIVED state, never saved: recalcSeat rebuilds it
+   *  from meta.grafts (bound passive powers — see data/passiveChoices.ts
+   *  GraftSpec); future mutator sources (uniques, boons) push here too. */
+  grafts?: SupportInstance[];
   /** The HOST skill this instance was minted to serve (meta payloads,
    *  combo steps) — minionCast orders scope to the host's minions. */
   hostSkillId?: string;
