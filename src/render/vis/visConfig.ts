@@ -154,6 +154,11 @@ export const VIS_CFG = {
     streakAlpha: 0.4,
     coreAlpha: 0.85,
     flashRimAlpha: 0.7,
+    /** EVENT ZONE WASH (world/zoneWash.ts): seconds for a full 0→1 swing of
+     *  the displayed wash — settles / lifts / zone hops seep, never pop. */
+    zoneWashFadeSec: 2.5,
+    /** Safety ceiling on any zone wash's alpha — no event whites out the field. */
+    zoneWashMaxAlpha: 0.3,
   },
 
   /** Screen-space weather + ambient particles. */

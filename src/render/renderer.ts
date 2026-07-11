@@ -44,6 +44,7 @@ import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
+import { foldZoneWash } from '../world/zoneWash';
 import { VIS_CFG } from './vis/visConfig';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
@@ -879,6 +880,15 @@ export class Renderer {
       // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts).
       drawWeatherFx(ctx, f.kind, f.intensity, w, h, world.time);
     }
+    // EVENT ZONE WASH (world/zoneWash.ts): ground HELD by something — a
+    // haunting's pale cold — colours the whole air of the zone. Smoothed
+    // like the weather, so a settle / lift / zone hop seeps rather than pops.
+    const zw = this.smoothZoneWash(world);
+    if (zw) {
+      const [zr, zg, zb] = hexToRgb(zw.color);
+      ctx.fillStyle = `rgba(${zr},${zg},${zb},${zw.alpha.toFixed(3)})`;
+      ctx.fillRect(0, 0, w, h);
+    }
     // The zone's STANDING ambience — underwater caustics + bubble splays,
     // desert heat haze — declared on the theme (vis/ambientFx.ts).
     for (const fx of world.zone.theme.ambientFx ?? []) {
@@ -1198,6 +1208,10 @@ export class Renderer {
   /** Crossfaded DISPLAYED weather (the raw sample can pop on zone hops and
    *  kind flips; each kind ramps at its own WEATHER_FX.fadeIn). */
   private wx: { kind: WeatherKind | null; intensity: number } = { kind: null, intensity: 0 };
+  /** The DISPLAYED zone wash (world/zoneWash.ts), eased toward the folded
+   *  target each frame — a grief settling / lifting / a zone hop seeps
+   *  instead of popping. */
+  private zw: { color: string; alpha: number } = { color: '#b8c8e8', alpha: 0 };
 
   private smoothWeather(world: World): { kind: WeatherKind; intensity: number } | null {
     const target = world.sim.weather.sample(world.zone);
@@ -1226,6 +1240,27 @@ export class Renderer {
     return this.wx.kind && this.wx.intensity > 0.02
       ? { kind: this.wx.kind, intensity: clamp(this.wx.intensity, 0, 1) }
       : null;
+  }
+
+  /** Ease the DISPLAYED zone wash (world/zoneWash.ts) toward the folded
+   *  target. Mirrors smoothWeather: a different-coloured mood clears the old
+   *  wash before the new one gathers, and alpha walks at one configured ramp
+   *  (VIS_CFG.fx.zoneWashFadeSec), clamped so no event whites out the field. */
+  private smoothZoneWash(world: World): { color: string; alpha: number } | null {
+    const target = foldZoneWash(world);
+    const step = this.frameDt / Math.max(0.05, VIS_CFG.fx.zoneWashFadeSec);
+    if (target && target.color !== this.zw.color && this.zw.alpha > 0.02) {
+      // A different mood incoming: the old colour clears at the same ramp.
+      this.zw.alpha = Math.max(0.02, this.zw.alpha - step);
+    } else if (target) {
+      this.zw.color = target.color;
+      const want = clamp(target.alpha, 0, VIS_CFG.fx.zoneWashMaxAlpha);
+      const d = want - this.zw.alpha;
+      this.zw.alpha += Math.sign(d) * Math.min(Math.abs(d), step);
+    } else {
+      this.zw.alpha = Math.max(0, this.zw.alpha - step);
+    }
+    return this.zw.alpha > 0.004 ? this.zw : null;
   }
   private cullDoodads(world: World, vw: number, vh: number): void {
     const pad = RENDER_CULL_PAD;
