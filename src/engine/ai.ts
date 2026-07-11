@@ -234,6 +234,9 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   if (actor.dead || actor.downed || world.seatOf(actor)) return;
   // Constructs (decoys included) act through the world, not the brain.
   if (actor.construct) return;
+  // A stalk-creep stamp lives one combat tick only — cleared here so idle
+  // wander, orders and heel moves never pay a stale watched-freeze.
+  actor.aiStalkCreep = undefined;
   // An ARMED ambusher IS scenery — no scheming until the world springs it.
   if (actor.ambushArmed) return;
   // A BURROWED body is underground — stepBurrow owns it until the eruption.
@@ -506,6 +509,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
       // sight — the militant drill, the lackadaisical amble with stragglers,
       // the idol-circling vigil, the stable stand/wander mix. Consumes the
       // tick when the demeanor moved (or deliberately stilled) this member.
+      // CARRION FEEDING (MonsterDef.carrion): hurt and unbothered, the
+      // scavenger noses to the nearest raisable corpse and eats it back to
+      // health — and the corpse is GONE, denied to every spectre-reader and
+      // corpse-raiser sharing the larder. OUTRANKS the squad's idle
+      // demeanor: a wounded scavenger eats before it drills, or a pack
+      // brain's amble would own every idle tick and the part would never
+      // fire on exactly the kinds that pack.
+      if (updateCarrion(actor, world, dt)) return;
       if (squadIdle(actor, world, tuning, dt)) return;
       // Idle WANDER: the zone lives whether or not you're watching.
       if (!actor.isMinion()) {
@@ -531,6 +542,19 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // ELBOW ROOM (BehaviorSpec.spacing): closing movement repels off the
   // nearest packmate this tick — moveToward reads the stamp.
   actor.aiSpacing = tuning.behavior?.spacing;
+
+  // THE UNWATCHED ADVANCE (BehaviorSpec.stalk): "watched" = the quarry's
+  // facing bears on this body within the arc AND the sight line is open.
+  // Stamped per combat tick; moveToward folds the creep into every closing
+  // step. Movement only — a watched stalker in reach still bites.
+  const stalk = tuning.behavior?.stalk;
+  if (stalk) {
+    const off = Math.abs(angleDiff(target.facing, angleTo(target.pos, actor.pos)));
+    const halfArc = ((stalk.arcDeg ?? BEHAVIOR_CFG.stalkArc) * Math.PI / 180) / 2;
+    if (off <= halfArc && world.lineOfSight(target.pos, actor.pos)) {
+      actor.aiStalkCreep = stalk.creep ?? BEHAVIOR_CFG.stalkCreep;
+    }
+  }
 
   // LIVE AIM (BehaviorSpec.steerAim): the monster's "cursor" rides the prey
   // every tick — guided flights (guidePower, innate or a granted support
@@ -1339,6 +1363,80 @@ function mostWoundedAlly(
   return sick;
 }
 
+// === CARRION FEEDING (MonsterDef.carrion) ========================================
+
+/** The feeding loop's modular thresholds (avoid-hardcoding: tune here). */
+export const CARRION_CFG = {
+  /** Default corpse-scent reach (px) when the spec names none. */
+  radius: 340,
+  /** Approach pace as a fraction of full stride (a saunter, not a charge). */
+  pace: 0.55,
+  /** Muzzle reach beyond the body's own radius (px) to start eating. */
+  biteReach: 16,
+  /** Default heal per second, as a fraction of max life. */
+  rate: 0.06,
+  /** Default seconds of eating that CONSUME the corpse outright. */
+  time: 2.2,
+  /** Seconds of zero approach progress before the meal is SNUBBED (the
+   *  unreachable-corpse wedge guard) and how long the snub holds. */
+  stallAfter: 1.5,
+  snubFor: 6,
+};
+
+/** Hurt + idle + a corpse in scent range → walk to it and eat: life back per
+ *  second while feeding, and after the spec's `time` the corpse is REMOVED —
+ *  the same `World.corpses` larder spectre corpse-reads and raise skills
+ *  draw from, so the scavenger literally eats the necromancer's material.
+ *  Returns true while the meal (or the walk to it) owns this idle tick. */
+function updateCarrion(actor: Actor, world: World, dt: number): boolean {
+  const spec = actor.defId ? MONSTERS[actor.defId]?.carrion : undefined;
+  if (!spec || actor.life >= actor.maxLife() - 0.5) { actor.carrionEatT = 0; return false; }
+  // A snubbed larder (an unreachable meal, below) stays off the menu long
+  // enough for ordinary idle life to move the body somewhere new.
+  if (world.time < actor.carrionSnubUntil) return false;
+  const reach = spec.radius ?? CARRION_CFG.radius;
+  let best: { pos: Vec2 } | null = null;
+  let bd = reach;
+  for (const c of world.corpses) {
+    const d = dist(actor.pos, c.pos);
+    if (d < bd) { bd = d; best = c; }
+  }
+  if (!best) { actor.carrionEatT = 0; return false; }
+  actor.facing = angleTo(actor.pos, best.pos);
+  if (bd > actor.radius + CARRION_CFG.biteReach) {
+    actor.carrionEatT = 0;
+    // STALL GUARD: a meal it cannot actually close on (across water, behind
+    // a cliff lip) must not wedge the feeder into walking-in-place — no
+    // progress for stallAfter seconds snubs the larder and frees the tick.
+    if (bd >= actor.carrionStallD - 1) {
+      actor.carrionStallT += dt;
+      if (actor.carrionStallT >= CARRION_CFG.stallAfter) {
+        actor.carrionSnubUntil = world.time + CARRION_CFG.snubFor;
+        actor.carrionStallT = 0;
+        actor.carrionStallD = Infinity;
+        return false;
+      }
+    } else {
+      actor.carrionStallT = 0;
+      actor.carrionStallD = bd;
+    }
+    moveToward(actor, world, best.pos, dt * CARRION_CFG.pace);
+    return true;
+  }
+  actor.carrionStallT = 0;
+  actor.carrionStallD = Infinity;
+  actor.carrionEatT += dt;
+  actor.life = Math.min(actor.maxLife(),
+    actor.life + (spec.rate ?? CARRION_CFG.rate) * actor.maxLife() * dt);
+  if (actor.carrionEatT >= (spec.time ?? CARRION_CFG.time)) {
+    const i = world.corpses.indexOf(best as (typeof world.corpses)[number]);
+    if (i !== -1) world.corpses.splice(i, 1);
+    actor.carrionEatT = 0;
+    world.text(vec(actor.pos.x, actor.pos.y - 16), 'feeds', '#a8c87a', 11);
+  }
+  return true;
+}
+
 // === SHARED MOVEMENT HELPERS =====================================================
 
 function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt: number): void {
@@ -1388,7 +1486,10 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
     const cos = Math.cos(wob), sin = Math.sin(wob);
     [dx, dy] = [dx * cos - dy * sin, dx * sin + dy * cos];
   }
-  world.moveActor(actor, dx, dy, dt);
+  // THE UNWATCHED ADVANCE: a stamped stalk-creep scales the step (0 = a
+  // statue while watched). Everything above still ran, so the body resumes
+  // mid-stride the instant the gaze breaks.
+  world.moveActor(actor, dx, dy, dt * (actor.aiStalkCreep ?? 1));
 }
 
 /** THE RETREAT GATE: every backpedal flows through here. A WINDED actor

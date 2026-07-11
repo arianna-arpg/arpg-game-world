@@ -266,6 +266,15 @@ export interface BehaviorSpec {
    *  MIGRATES a pack toward prey-rich ground instead of milling in place;
    *  the fantasy reads even when nobody is fighting. */
   seek?: { what: 'prey' | 'loot'; pace?: number; range?: number };
+  /** THE UNWATCHED ADVANCE: while its quarry's FACING bears on this body
+   *  (within `arcDeg` of dead-on, default BEHAVIOR_CFG.stalkArc) and the
+   *  line of sight is open, every closing step multiplies by `creep`
+   *  (default BEHAVIOR_CFG.stalkCreep — 0, a statue). Look away, and it
+   *  comes. Facing is the aim-desire every actor already wears, so no new
+   *  perception is invented; MOVEMENT only — a watched stalker in reach
+   *  still bites, and a broken gaze resumes the advance mid-stride. Pair
+   *  with low `turnSpeed` and a lurk style for the full dread. */
+  stalk?: { arcDeg?: number; creep?: number };
 }
 
 /** The behavior fabric's modular thresholds (avoid-hardcoding: tune here). */
@@ -298,6 +307,10 @@ export const BEHAVIOR_CFG = {
   detourWithinMul: 2.6,
   /** Spacing: repulsion gain at zero distance (falls off linearly). */
   spacingGain: 0.9,
+  /** Stalk: default watched-cone width (degrees, full width) and the
+   *  closing-step multiplier while watched (0 = the statue). */
+  stalkArc: 70,
+  stalkCreep: 0,
   /** Dodge: default clearance beyond a blast's edge (px). */
   dodgePad: 26,
   /** Dodge: default read-to-feet delay window (seconds, rolled). */

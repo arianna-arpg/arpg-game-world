@@ -501,6 +501,22 @@ export class Actor {
   aiWindedUntil = 0;
   aiLastRetreatAt = -1;
   aiKiteSpec?: { kite: number; windedFor?: [number, number] };
+  /** THE UNWATCHED ADVANCE (BehaviorSpec.stalk, stamped per combat tick):
+   *  closing-step multiplier while the quarry's gaze holds this body
+   *  (0 = a statue); undefined = unwatched or no stalk in the mind. */
+  aiStalkCreep?: number;
+  /** CARRION FEEDING (MonsterDef.carrion): seconds spent eating the current
+   *  corpse — the meal completes (and the corpse vanishes) at the spec's
+   *  time. Reset whenever the feeder moves off or is interrupted. */
+  carrionEatT = 0;
+  /** Carrion STALL GUARD: last measured distance-to-meal + seconds spent
+   *  making no progress toward it (a corpse across water would otherwise
+   *  wedge the feeder into walking-in-place forever), and the snub clock —
+   *  while world.time < snubUntil the larder is ignored and ordinary idle
+   *  life resumes. */
+  carrionStallD = Infinity;
+  carrionStallT = 0;
+  carrionSnubUntil = 0;
   /** CYCLE machine: current step + when it rolls over. */
   aiCycleIdx = 0;
   aiCycleAt = 0;

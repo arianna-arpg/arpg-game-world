@@ -428,6 +428,30 @@ export function validateContent(): void {
         warn(`${m.id}: wake payload '${m.wake.skillId}' is '${w.delivery.type}' — the shed-underfoot fantasy wants a ground delivery`);
       }
     }
+    // DEATH DIVISION (split): the child must exist, must not be the parent
+    // itself (division must converge — chains are authored via DIFFERENT
+    // defs), and must be a fightable body: scenery spawning from a corpse
+    // is a draw error with hitpoints.
+    if (m.split) {
+      const child = MONSTERS[m.split.into];
+      if (!child) warn(`${m.id}: split.into '${m.split.into}' is not a monster`);
+      else {
+        if (child.id === m.id) warn(`${m.id}: split.into itself — endless division`);
+        if (child.passive || child.spawner || child.driven) {
+          warn(`${m.id}: split child '${child.id}' is scenery/driven — not a fightable spawn`);
+        }
+      }
+      const [lo, hi] = m.split.count;
+      if (lo < 0 || hi < lo) warn(`${m.id}: split.count [${lo}, ${hi}] is malformed`);
+      if (hi > 8) warn(`${m.id}: split.count max ${hi} — a corpse becomes a crowd; keep divisions readable`);
+    }
+    // CARRION FEEDING: the dials must stay physical — a nonpositive rate
+    // never heals, a nonpositive time eats the larder instantly.
+    if (m.carrion) {
+      if (m.carrion.rate !== undefined && m.carrion.rate <= 0) warn(`${m.id}: carrion.rate must be positive`);
+      if (m.carrion.time !== undefined && m.carrion.time <= 0) warn(`${m.id}: carrion.time must be positive`);
+      if (m.carrion.radius !== undefined && m.carrion.radius <= 0) warn(`${m.id}: carrion.radius must be positive`);
+    }
     // VOLATILE (the poked nest): the answer must be a real catalog skill
     // and the chance a probability — a typo here is a nest that never
     // answers (or answers every frame).

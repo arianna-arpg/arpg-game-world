@@ -11,12 +11,44 @@ import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/st
 import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine/actor';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
+import { registerKillHandler } from '../engine/killHandlers';
+import { vec } from '../core/math';
 import type { PackTableEntry } from './zones';
 
 // The Legion's own tier band, shared by its elite defs and roster rows —
 // retune ONE envelope and the whole muster shifts (the named-band pattern;
 // generic tiers live in engine/presence.ts PRESENCE_BANDS).
 registerPresenceBand('legion_muster', { from: 26, fadeIn: 8 });
+
+// --- DEATH DIVISION (MonsterDef.split) ---------------------------------------
+// ONE generic kill rule serves every splitter, registered here beside the
+// data it reads (the registerPresenceBand precedent — module-scope rows,
+// no engine edits). The body comes apart at the corpse through the same
+// hostile-spawn lane as every conjured enemy; counts and ring angles are
+// ID-SEEDED, never Math.random — the balance sim's seeded replays must not
+// fork on a kill. Enemy bodies only: a player-side splitter minion dies
+// whole (its nature is bound by the binding), and silent sweeps never ran
+// kill rules to begin with.
+registerKillHandler({
+  id: 'monster_split',
+  when: ctx => ctx.actor.team === 'enemy' && !!ctx.actor.defId && !!MONSTERS[ctx.actor.defId]?.split,
+  run: ctx => {
+    const s = MONSTERS[ctx.actor.defId!].split!;
+    const child = MONSTERS[s.into];
+    if (!child) return;
+    const lo = Math.round(s.count[0]), hi = Math.round(s.count[1]);
+    const n = lo + (hi > lo ? ctx.actor.id % (hi - lo + 1) : 0);
+    const ring = ctx.actor.radius + child.radius + 4;
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2 + (ctx.actor.id % 7) * 0.31;
+      ctx.spawnHostileAt(s.into, ctx.actor.level,
+        vec(ctx.actor.pos.x + Math.cos(a) * ring, ctx.actor.pos.y + Math.sin(a) * ring));
+    }
+    if (n > 0 && s.text) {
+      ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 24), s.text, '#c8e0a8', 13);
+    }
+  },
+});
 
 /** The bestiary's default TURN SPEED (rad/s) — fast enough to read as
  *  natural, no longer instant (smooths the one-frame snap-flips). Defs
@@ -385,6 +417,20 @@ export interface MonsterDef {
    *  SQUADMATE. The counterplay is priority: burst the bond-holder first
    *  and the pack softens. */
   bond?: { mods: Modifier[]; kin?: string; radius?: number };
+  /** DEATH DIVISION: the slain body comes apart into `count` (rolled,
+   *  id-seeded) hostile spawns of `into` at the corpse — the classic gel.
+   *  Chains when the child def splits again: author the depth in data (the
+   *  validator refuses direct self-reference). Enemy deaths only; children
+   *  spawn at the parent's level through the ordinary hostile-spawn lane.
+   *  `text` is the coming-apart line. */
+  split?: { into: string; count: [number, number]; text?: string };
+  /** CARRION FEEDER: hurt and out of combat, it noses to the nearest
+   *  necromancy corpse within `radius` (default CARRION_CFG.radius) and
+   *  EATS — `rate` × max life healed per second; after `time` seconds the
+   *  corpse is GONE, denied to every spectre corpse-read and raise skill
+   *  sharing the larder. The scavenger and the necromancer fight over the
+   *  same bodies — kill the eaters first or lose your material. */
+  carrion?: { radius?: number; rate?: number; time?: number };
 }
 
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls
@@ -465,11 +511,17 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'broodmother', chance: 0.2, count: [1, 1] },
     { id: 'reed_frog', chance: 0.6, count: [2, 4], near: 'water' },
     { id: 'will_o_wisp', chance: 0.35, count: [1, 3] },
+    { id: 'quag_gel', chance: 0.45, count: [1, 3], near: 'bog' },
+    { id: 'marsh_stalker', chance: 0.3, count: [1, 2] },
+    { id: 'bloat_mother', chance: 0.2, count: [1, 1], presence: { from: 7, fadeIn: 4 } },
   ],
   grave: [
     { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
     { id: 'bog_heron', chance: 0.25, count: [1, 1] },
     { id: 'will_o_wisp', chance: 0.45, count: [1, 3] },
+    { id: 'gravemaw_hound', chance: 0.5, count: [2, 3] },
+    { id: 'carrion_shrike', chance: 0.4, count: [1, 2] },
+    { id: 'pale_watcher', chance: 0.3, count: [1, 1], presence: { from: 9, fadeIn: 4 } },
   ],
   beach: [
     { id: 'shore_crab', chance: 0.7, count: [3, 6] },
@@ -4853,6 +4905,107 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaling: { life: { incPerLevel: 0.05 } },
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.1, brain: { type: 'basic' },
+  },
+  // --- THE SCAVENGER WEB — the death-fed kit-parts, worn as ordinary data ---
+  // (split / carrion / stalk composables: any future def copies a line, the
+  // entity creator gets three more dials. Nothing below is bespoke.)
+  quag_gel: {
+    id: 'quag_gel', name: 'Quag Gel',
+    color: '#7fa04e', shape: 'oval', radius: 16, material: 'slime',
+    base: { life: 64, moveSpeed: 92, accuracy: 88, poise: 20, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.45), mod('fireRes', 'flat', -0.25)],
+    skills: ['claw'], xp: 15,
+    faction: 'wild', tags: ['ooze'],
+    split: { into: 'quag_gelling', count: [2, 3], text: 'it comes apart!' },
+    scaleVariance: [0.9, 1.3], scaleStats: true,
+    turnSpeed: 4,
+    brain: { type: 'basic' },
+  },
+  quag_gelling: {
+    id: 'quag_gelling', name: 'Quag Gelling',
+    color: '#95b862', shape: 'circle', radius: 8, material: 'slime',
+    base: { life: 16, moveSpeed: 150, accuracy: 80, mana: 0 },
+    skills: ['claw'], xp: 4,
+    faction: 'wild', tags: ['ooze'],
+    brain: { type: 'swarm' },
+  },
+  // The brood carried to term: killing her IS the fight's second half.
+  bloat_mother: {
+    id: 'bloat_mother', name: 'Bloat Mother',
+    color: '#a8506a', shape: 'oval', radius: 19,
+    base: { life: 130, moveSpeed: 70, accuracy: 90, poise: 35, mana: 0 },
+    skills: ['claw'], xp: 30,
+    faction: 'wild', tags: ['beast'],
+    split: { into: 'blood_mite', count: [4, 6], text: 'the brood spills out!' },
+    presence: { from: 7, fadeIn: 4 },
+    turnSpeed: 3.5,
+    brain: { type: 'basic' },
+  },
+  // The gaze-frozen cat: hold your aim on it and it holds its ground.
+  marsh_stalker: {
+    id: 'marsh_stalker', name: 'Marsh Stalker',
+    color: '#5e7a62', shape: 'kite', radius: 13, look: 'barbed_stalker',
+    base: { life: 52, moveSpeed: 196, accuracy: 102, evasion: 65, mana: 0 },
+    skills: ['claw'], xp: 19,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    detection: 1.4, vision: { arcDeg: 220, rearMul: 0.4 },
+    adorn: 'ears',
+    brain: {
+      type: 'basic',
+      move: { style: 'lurk', ring: 240, commitRange: 230, unseenArc: 1.5 },
+      behavior: { stalk: { arcDeg: 80 }, spacing: 26 },
+      drives: { hunger: { rise: 0.008, start: [0.2, 0.6], onKill: -0.6 } },
+      perception: { memory: 4 },
+    },
+  },
+  // The statue that was never a statue: it advances ONLY between glances —
+  // stalk creep 0 + slow turn + all-around senses = the weeping-angel dread.
+  pale_watcher: {
+    id: 'pale_watcher', name: 'Pale Watcher',
+    color: '#cdd0dc', shape: 'pentagon', radius: 14, material: 'stone',
+    base: { life: 110, moveSpeed: 165, accuracy: 105, armor: 35, poise: 50, mana: 0 },
+    mods: [mod('coldRes', 'flat', 0.4), mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'], xp: 32,
+    faction: 'undead', tags: ['construct'],
+    turnSpeed: 2.6,
+    detection: 1.2, vision: { arcDeg: 360, rearMul: 1 },
+    presence: { from: 9, fadeIn: 4 },
+    brain: {
+      type: 'basic',
+      behavior: { stalk: { arcDeg: 120, creep: 0 } },
+      perception: { memory: 6 },
+    },
+  },
+  // The larder-thief: it heals off the same corpses your grimoire wants.
+  carrion_shrike: {
+    id: 'carrion_shrike', name: 'Carrion Shrike',
+    color: '#8a7f9c', shape: 'kite', radius: 12, look: 'vulture',
+    base: { life: 40, moveSpeed: 185, accuracy: 96, evasion: 60, mana: 0 },
+    skills: ['claw', 'take_wing'], xp: 16,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    detection: 1.5, adorn: 'wings',
+    carrion: { radius: 420, rate: 0.09, time: 1.8 },
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      target: { prey: ['critter'] },
+      behavior: { dodge: { chance: 0.7, reaction: [0.12, 0.3], exit: 'away' } },
+    },
+  },
+  gravemaw_hound: {
+    id: 'gravemaw_hound', name: 'Gravemaw Hound',
+    color: '#6d6a58', shape: 'kite', radius: 13, look: 'hound',
+    base: { life: 58, moveSpeed: 182, accuracy: 98, evasion: 35, mana: 0 },
+    skills: ['claw'], xp: 22,
+    tag: 'predator', faction: 'beast', tags: ['beast'],
+    detection: 1.4, adorn: 'ears',
+    carrion: { radius: 360, rate: 0.07, time: 2.4 },
+    bond: {
+      mods: [mod('damage', 'increased', 0.2), mod('moveSpeed', 'increased', 0.1)],
+      kin: 'gravemaw_hound', radius: 420,
+    },
+    scaleVariance: [0.9, 1.2],
+    presence: { from: 5, fadeIn: 3 },
+    brain: { type: 'pack', squad: { muster: { count: 2, radius: 320, patience: 5 }, tokens: 2, surround: true } },
   },
   // THE SHARD SPIRE — a standing battery of charged crystal: the leyline's
   // own turret tier (visible from the start; its menace is the arc).
