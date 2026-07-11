@@ -1447,13 +1447,13 @@ export class World {
    *  doodad kind registered in data/sidezones.ts), rebuilt each loadZone. */
   private caveEntrances: { pos: Vec2; seed: number; kind: string }[] = [];
   /** Set while underground: where to drop the player when they climb back out. */
-  private caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null } | null = null;
+  private caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
    *  pushes the current return here; climbing out pops it back — so a mid-
    *  ladder retreat stands in the outer cave WITH its way home intact (the
    *  single-slot field alone would null out and misread the outer cave as
    *  surface: sealed exits, no zone memory, wrong spawn point). */
-  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null }[] = [];
+  private caveStack: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string }[] = [];
   /** True just after climbing out of a cave: the player lands AT the mouth, so
    *  suppress re-entry until they step clear of it once (no bouncing back in). */
   private caveExitGrace = false;
@@ -4194,7 +4194,9 @@ export class World {
     // gate spawnPacks/spawnContest already honor. Without it, the sea's
     // undefined biome fell through to the plains fallback below and hares,
     // wolves and lash-maidens spawned ON OPEN WATER during a voyage.
-    if (def.objective.kind === 'safe' || def.special) return;
+    // WAVES arenas are sealed stages too: nothing wanders into The Pit —
+    // no grazing hares, no passing hunters, only what the wave brings.
+    if (def.objective.kind === 'safe' || def.objective.kind === 'waves' || def.special) return;
     const table = WILDLIFE[def.biome ?? 'plains'];
     if (!table?.length) return;
     for (const w of table) {
@@ -20299,7 +20301,7 @@ export class World {
     // Descending DEEPER (pocket-within-pocket): bank the current level's way
     // home on the ladder stack; climbing out pops it back.
     if (this.caveReturn) this.caveStack.push(this.caveReturn);
-    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom };
+    this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind };
     this.loadZone(id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
   }
 
@@ -20339,12 +20341,18 @@ export class World {
       // Restore the ORIGINAL entry direction so a gated parent zone's exits don't
       // all re-seal (entryFrom=null would lock every exit on a boss/spawner zone).
       this.loadZone(ret.zoneId, ret.entryFrom ?? undefined);
-      this.player.pos = this.clampPos(vec(ret.pos.x, ret.pos.y + 40), this.player.radius);
+      // INDOOR mouths (the cellar hatch) surface you ON the hatch — a step
+      // south would clip through the house wall and clampPos would strand you
+      // OUTSIDE. Open-air mouths keep the classic step off the hole; the
+      // exit grace guards re-descent either way.
+      const indoors = !!(ret.kind && sidezoneOf(ret.kind)?.indoorsOnly);
+      const stepY = indoors ? 0 : 40;
+      this.player.pos = this.clampPos(vec(ret.pos.x, ret.pos.y + stepY), this.player.radius);
       // Co-op ally seats climb out beside the local hero (SP no-op: one seat).
       const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
       for (const a of this.actors) {
         if (a === this.player || !seatActors.has(a)) continue;
-        a.pos = this.clampPos(vec(ret.pos.x + rand(-50, 50), ret.pos.y + rand(40, 90)), a.radius);
+        a.pos = this.clampPos(vec(ret.pos.x + rand(-50, 50) * (indoors ? 0.5 : 1), ret.pos.y + stepY + rand(0, 50) * (indoors ? 0.5 : 1)), a.radius);
       }
       this.caveExitGrace = true; // standing on the mouth — don't re-descend until clear
       return;
