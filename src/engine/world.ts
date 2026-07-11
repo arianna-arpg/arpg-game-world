@@ -65,7 +65,7 @@ import {
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
-import { sidezoneOf } from '../data/sidezones';
+import { dwellOf, sidezoneOf } from '../data/sidezones';
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
@@ -1091,7 +1091,7 @@ const ENCOUNTER_CAP = 26;        // max living enemies inside an open encounter 
 const FRACTURE_FOE_CAP = 24;     // max living fracture-spewed foes (perf + clearability)
 const ZONE_MEMORY_TTL = 600;     // seconds of GAME TIME a left zone is remembered (10 min)
 const ZONE_EXIT_DWELL = 0.5;     // seconds standing idle on a portal before it carries you
-const CAVE_ENTRY_DWELL = 0.55;   // seconds dwelling on a cave mouth before you descend (no run-over)
+// (Sidezone mouth dwell now lives with the registry: data/sidezones.ts dwellOf.)
 const REALM_GATE_DWELL = 0.5;    // seconds dwelling on a realm gate (demon/crusade/necropolis/fracture) before you enter
 const HOLDFAST_DWELL = 0.7;      // seconds parleying by a toll keeper before you pay (a touch longer — a deliberate choice)
 const HOLDFAST_TALK_RADIUS = 78; // how close you stand to a toll keeper to parley
@@ -1444,8 +1444,10 @@ export class World {
   // cavern, and climb back out at the same spot.
   caveMap: Record<string, ZoneDef> = {};
   /** This zone's sidezone mouths (pos + stable seed + entrance KIND — any
-   *  doodad kind registered in data/sidezones.ts), rebuilt each loadZone. */
-  private caveEntrances: { pos: Vec2; seed: number; kind: string }[] = [];
+   *  doodad kind registered in data/sidezones.ts), rebuilt each loadZone.
+   *  `roof` is the indoorsOnly gate's precomputed home structure (a mouth
+   *  never moves, so its roof is resolved once, not rescanned per frame). */
+  private caveEntrances: { pos: Vec2; seed: number; kind: string; roof?: PlacedStructure | null }[] = [];
   /** Set while underground: where to drop the player when they climb back out. */
   private caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
@@ -2770,13 +2772,17 @@ export class World {
     // with a SidezoneDef is a dwell-mouth too — the cellar hatch, a package's
     // arena maw. Their pocket seed derives from the mouth's POSITION (stable:
     // the layout regenerates from a fixed def.seed), where classic caves ride
-    // the stampCaveMouth caveSeeds zip.
+    // the stampCaveMouth caveSeeds zip. An indoorsOnly mouth resolves its home
+    // roof HERE, once — mouths never move.
     for (const d of layout.doodads) {
-      if (d.kind === 'cave_entrance' || !sidezoneOf(d.kind)) continue;
+      const sz = sidezoneOf(d.kind);
+      if (d.kind === 'cave_entrance' || !sz) continue;
+      const pos = this.clampPos(vec(d.pos.x, d.pos.y), 28);
       this.caveEntrances.push({
-        pos: this.clampPos(vec(d.pos.x, d.pos.y), 28),
+        pos,
         seed: hashStr(`${zoneId}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
         kind: d.kind,
+        roof: sz.indoorsOnly ? this.roofedStructureAt(pos) : null,
       });
     }
     this.caveExitGrace = false; // re-armed by the cave-return path after this returns
@@ -5973,6 +5979,10 @@ export class World {
   private placeDescentDelver(def: ZoneDef): void {
     const df = this.sim.descentField;
     if (!df || !this.inCave || def.id.startsWith('cave_descent_')) return;
+    // Delvers haunt COMBAT caves. A safe pocket (the town cellar) and a waves
+    // arena (The Pit) are sealed rooms — no shaft-keeper mints a mineshaft
+    // through their floors (the same objective gate every ambient system uses).
+    if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
     if (!df.delverAllowed(this.player.level)) return;
     const roll = new Rng(((def.seed ?? 0) ^ 0xde17e2) >>> 0); // stable per mouth
     if (!roll.chance(df.surge().delverChance)) return;
@@ -19895,9 +19905,13 @@ export class World {
     // indoorsOnly kinds (the cellar hatch) also demand the player stand under
     // the SAME ROOF as the mouth — nobody dwells a hatch through a house wall.
     if (!this.player.dead && !this.player.downed) {
-      const onMouth = (cm: { pos: Vec2; kind: string }): boolean =>
+      // Player-side roof resolved ONCE per frame; each mouth carries its own
+      // precomputed home roof (loadZone) — the indoors gate is two compares.
+      const playerRoof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null)
+        ? this.roofedStructureAt(this.player.pos) : null;
+      const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null }): boolean =>
         dist(this.player.pos, cm.pos) <= 28 + this.player.radius
-        && (!sidezoneOf(cm.kind)?.indoorsOnly || this.sameRoof(this.player.pos, cm.pos));
+        && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof));
       if (this.caveExitGrace) {
         if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
         this.caveDwellIdx = -1;
@@ -19909,7 +19923,7 @@ export class World {
         if (mouthIdx >= 0 && this.playerIdle() && !this.player.push) {
           if (this.caveDwellIdx !== mouthIdx) { this.caveDwellIdx = mouthIdx; this.caveDwellStart = this.time; }
           const cm = this.caveEntrances[mouthIdx];
-          if (this.time - this.caveDwellStart >= (sidezoneOf(cm.kind)?.dwell ?? CAVE_ENTRY_DWELL)) {
+          if (this.time - this.caveDwellStart >= dwellOf(cm.kind)) {
             this.caveDwellIdx = -1;
             this.enterSidezone(cm);
             return; // everything else this frame belongs to the old zone
@@ -20070,8 +20084,7 @@ export class World {
   caveDwellView(): { pos: Vec2; frac: number } | null {
     if (this.caveDwellIdx < 0 || this.caveDwellIdx >= this.caveEntrances.length) return null;
     const cm = this.caveEntrances[this.caveDwellIdx];
-    const need = sidezoneOf(cm.kind)?.dwell ?? CAVE_ENTRY_DWELL;
-    return { pos: vec(cm.pos.x, cm.pos.y), frac: clamp((this.time - this.caveDwellStart) / need, 0, 1) };
+    return { pos: vec(cm.pos.x, cm.pos.y), frac: clamp((this.time - this.caveDwellStart) / dwellOf(cm.kind), 0, 1) };
   }
 
   /** Dwell-to-enter progress on the realm gate the player lingers on (renderer ring),
@@ -20283,15 +20296,18 @@ export class World {
       ? `cave_${this.zone.id}_${cm.seed}`
       : `cave_${cm.kind}_${this.zone.id}_${cm.seed}`;
     if (!this.caveMap[id]) {
-      const minted = sz.mint({
+      this.caveMap[id] = sz.mint({
         parent: this.zone, seed: cm.seed, id,
         playerLevel: this.player.level,
-        pkgActive: (pid) => gateOf(this.sim.gatesFor(this.player.level), pid).active,
+        pkgActive: (pid) => this.sim.packageActive(pid, this.player.level),
       });
-      this.applySidezoneFurnish(minted, sz);
-      this.caveMap[id] = minted;
     }
     const dest = this.caveMap[id];
+    // FURNISH on EVERY entry (idempotent): a package whose gate opens mid-run
+    // (a startLevel reached after the room first minted) still gets to build —
+    // the pocket regenerates from its def each load, so a fixture added now
+    // stands from this visit on.
+    this.applySidezoneFurnish(dest, sz);
     // A 'character' pocket re-levels to the entering hero EVERY visit — the
     // arena scales with you (its spawns read zone.level), not with geography.
     if (sz.levelWith === 'character') dest.level = Math.max(1, this.player.level);
@@ -20306,15 +20322,16 @@ export class World {
   }
 
   /** PACKAGE FURNISH: manifest-active packages may plant fixtures inside a
-   *  freshly minted sidezone (ContentPackage.furnish) — The Pit's maw in the
-   *  town cellar. Resolved ONCE at mint (the pocket is cached in caveMap), so
-   *  a package must be live when the room is first entered to build in it. */
+   *  registered sidezone (ContentPackage.furnish) — The Pit's maw in the town
+   *  cellar. Re-checked on EVERY entry and idempotent (a fixture is appended
+   *  once), so a gate that opens mid-run furnishes on the next visit. */
   private applySidezoneFurnish(def: ZoneDef, sz: { kind: string }): void {
-    const gates = this.sim.gatesFor(this.player.level);
     for (const f of allFurnishSpecs()) {
       if (f.sidezone !== sz.kind) continue;
-      if (!gateOf(gates, f.packageId).active) continue;
-      def.fixtures = [...(def.fixtures ?? []), { ...f.fixture }];
+      if (!this.sim.packageActive(f.packageId, this.player.level)) continue;
+      const placed = def.fixtures?.some(fx =>
+        fx.structure === f.fixture.structure && fx.x === f.fixture.x && fx.y === f.fixture.y);
+      if (!placed) def.fixtures = [...(def.fixtures ?? []), { ...f.fixture }];
     }
   }
 
@@ -21287,12 +21304,6 @@ export class World {
     return null;
   }
 
-  /** Are both points under the SAME structure's roof? The indoorsOnly sidezone
-   *  gate — a hatch inside a house can't be dwelled from beyond its wall. */
-  private sameRoof(a: Vec2, b: Vec2): boolean {
-    const s = this.roofedStructureAt(a);
-    return s !== null && s === this.roofedStructureAt(b);
-  }
 
   /** Is this actor in SHADE — under a canopy crown, inside a roof, or in
    *  the night? (The desert's mercy; also any future heat hazard's.) */
@@ -24926,8 +24937,10 @@ export class World {
     this.wave++;
     this.waveActive = true;
     // Leveled zones draw a WEIGHTED table so day/night, weather, and a faction
-    // contest actually reshape who attacks; The Pit (level 0, no packs) runs
-    // the classic flat escalating table, level = wave.
+    // contest actually reshape who attacks; a PACKLESS arena (The Pit) runs
+    // the flat WAVE_TABLE escalation at zone level — which the Pit re-stamps
+    // from the CHARACTER on every entry (levelWith), creeping +1 per 2 waves.
+    // (A hypothetical level-0 arena keeps the classic level = wave ladder.)
     const level = this.zone.level > 0
       ? this.zone.level + Math.floor((this.wave - 1) / 2)
       : this.wave;
@@ -24948,13 +24961,16 @@ export class World {
       }
       pickType = (): string => this.weightedPick(table, level);
     } else {
-      // Wave tiers gate entry; def-level presence still shapes the pool (a
-      // monster whose envelope excludes this wave-level sits the round out).
+      // Wave tiers gate entry; def-level presence still shapes the pool — but
+      // folded at the WAVE number, the axis the table is designed on. Folding
+      // at the (now character-stamped) zone level would let a high-level hero's
+      // wave 1 exclude every early-band monster and thin the pool toward empty;
+      // composition follows the wave ladder, STATS follow the hero (`level`).
       const pool: PackTableEntry[] = [];
       for (const tier of WAVE_TABLE) {
         if (this.wave >= tier.minWave) pool.push(...tier.ids.map(id => ({ id, weight: 1 })));
       }
-      pickType = (): string => this.weightedPick(pool, level);
+      pickType = (): string => this.weightedPick(pool, this.wave);
     }
     // COUNT scales with the wave AND the character (data/waves.ts): an arena
     // that grows with whoever dares it, not a fixed drip.
@@ -24977,7 +24993,16 @@ export class World {
       const a = anchors[i % anchors.length];
       const ang = rand(0, Math.PI * 2), rr = rand(12, cfg.cluster.spread);
       let p = vec(a.x + Math.cos(ang) * rr, a.y + Math.sin(ang) * rr);
-      if (this.walk && !this.walk.isWalkable(p.x, p.y)) p = vec(a.x, a.y);
+      // A ring position keeps ALL of spawnPoint's guarantees or falls back to
+      // its anchor (which holds them by construction): on-mesh, not embedded
+      // in a solid (a member born inside a boulder can strand un-killable and
+      // stall the endless objective), and not across a wall into a sealed
+      // interior in structure zones.
+      const bad = (this.walk && !this.walk.isWalkable(p.x, p.y))
+        || this.pointInSolid(p.x, p.y, m.radius * 0.5)
+        || (this.structures.length > 0 && !!this.walk?.reachable
+          && !this.walk.reachable(this.zoneEntry, p));
+      if (bad) p = vec(a.x, a.y);
       m.pos = this.clampPos(p, m.radius);
       if (frenzy) this.applyWaveFrenzy(m, frenzy);
       this.actors.push(m);
@@ -25001,8 +25026,11 @@ export class World {
    *  mutated (normalizeBrain caches per object identity; touching def.brain
    *  would frenzy every monster of that def everywhere, forever). */
   private applyWaveFrenzy(m: Actor, fz: WaveFrenzySpec): void {
-    m.aggroed = true;        // came here for you —
-    m.alertUntil = Infinity; // — with relentless below, detection is ∞ from frame one
+    m.aggroed = true; // came here for you — with relentless below, detection is ∞ from frame one
+    // A huge FINITE horizon, not Infinity: every other alert writer uses
+    // time + duration, and a JSON round-trip (snapshots, future saves) turns
+    // Infinity into null — which would read as never-alerted.
+    m.alertUntil = this.time + 1e9;
     const b: NonNullable<Actor['brain']> = m.brain ?? {};
     m.brain = {
       ...b,
@@ -25026,9 +25054,14 @@ export class World {
         style: 'direct',
         closeFrac: Math.min(fz.closeFrac, b.move?.closeFrac ?? fz.closeFrac),
         pathing: 'route',         // charge AROUND walls, never pile into them
+        withdraw: undefined,      // no post-strike backpedal (skirmish presets)
       },
-      morale: undefined,          // never rout
-      tempo: undefined,           // no duty-cycle pauses — a wave does not hesitate
+      // NULL clears the AXIS through the archetype preset too (mergeTuning):
+      // an artillery/caster body in a wave keeps its guns but loses the kite
+      // budget and duty-cycle pauses its preset ships — a wave does not
+      // hesitate, and it never routs.
+      morale: null,
+      tempo: null,
     };
     if (fz.moveSpeedMore) m.sheet.setSource('waveFrenzy', [mod('moveSpeed', 'more', fz.moveSpeedMore)]);
   }

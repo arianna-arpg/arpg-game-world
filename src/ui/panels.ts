@@ -54,7 +54,7 @@ import {
   availableModes, DEFAULT_MODE_ID, modeById, rosterCapacity, rosterOf, stageOf,
   type RosterEntry,
 } from '../meta/modes';
-import { bound } from '../packages/manifest';
+import { bound, defaultEnabledFor } from '../packages/manifest';
 import { isConfigured, PACKAGES } from '../packages/registry';
 import type { ContentPackage } from '../packages/types';
 import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
@@ -3618,7 +3618,10 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       const pref = acc.packageDefaults[p.id];
       const wB = bound(p, 'weight', acc), sB = bound(p, 'startLevel', acc);
       cfg[p.id] = {
-        enabled: pref ? pref.enabled : p.defaultEnabled,
+        // ONE rule with buildManifest (defaultEnabledFor): a purchased opt-in
+        // package (The Pit) seeds ON — otherwise saving this screen untouched
+        // would persist enabled:false and silently undo the purchase.
+        enabled: pref ? pref.enabled : defaultEnabledFor(p, acc),
         weight: clampN(pref?.weight ?? p.defaultWeight, wB.min, wB.max),
         startLevel: clampN(pref?.startLevel ?? p.defaultStartLevel, sB.min, sB.max),
       };

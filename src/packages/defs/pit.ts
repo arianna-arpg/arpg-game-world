@@ -19,6 +19,7 @@
 import { registerSidezone } from '../../data/sidezones';
 import { START_ZONE, ZONES } from '../../data/zones';
 import type { ZoneDef } from '../../data/zones';
+import { registerDoodadRule } from '../../engine/levelgen';
 import type { ContentPackage } from '../types';
 
 /** Everything tunable about the arena, in one place. */
@@ -58,6 +59,10 @@ function mintPit(parent: ZoneDef, seed: number, id: string, level: number): Zone
 // The maw is a sidezone entrance like any other (data/sidezones.ts): the
 // registration is unconditional at boot, but the DOODAD only exists where the
 // package furnished one — so an unpurchased run simply never has a maw.
+// The doodad rule keeps the entrance a real TRIGGER (walk-through, spaced) —
+// without it the validator flags a rule-less legend kind and future placement
+// systems would stack clutter on the arena's only way in.
+registerDoodadRule('pit_entrance', { overlap: 'trigger', spacing: 40 });
 registerSidezone({
   kind: 'pit_entrance',
   dwell: PIT_ARENA.entryDwell,

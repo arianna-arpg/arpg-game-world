@@ -20,6 +20,9 @@ import type { ExpeditionManifest, ManifestEntry } from './manifest';
 import type { PackageGate } from './types';
 
 export const INACTIVE_GATE: PackageGate = { active: false, share: 0, pressure: 0, ignitionMul: 0, severityMul: 0, concurrencyMul: 1 };
+/** Active but holding NO seat in the weight budget — the alwaysOn substrate
+ *  and pressureless places both resolve to this exact gate. */
+const UNWEIGHTED_GATE: PackageGate = { active: true, share: 0, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 };
 
 export function isStartGateOpen(e: ManifestEntry, charLevel: number): boolean {
   return e.enabled && e.startLevel <= 100 && charLevel >= e.startLevel;
@@ -37,14 +40,12 @@ export function resolveGates(manifest: ExpeditionManifest, charLevel: number): M
   for (const e of manifest.packages) {
     const pkg = PACKAGE_BY_ID[e.id];
     if (!pkg) continue;
-    if (pkg.alwaysOn) { gates.set(e.id, { active: true, share: 0, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 }); continue; }
+    if (pkg.alwaysOn) { gates.set(e.id, { ...UNWEIGHTED_GATE }); continue; }
     // A PLACE, not an EVENT (pressureless — The Pit): it never joins the
     // weight budget. No share seat, no count seat — the other packages'
     // shares AND pressures are byte-identical whether it's owned or not.
     if (pkg.pressureless) {
-      gates.set(e.id, isStartGateOpen(e, charLevel)
-        ? { active: true, share: 0, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 }
-        : { ...INACTIVE_GATE });
+      gates.set(e.id, isStartGateOpen(e, charLevel) ? { ...UNWEIGHTED_GATE } : { ...INACTIVE_GATE });
       continue;
     }
     if (isStartGateOpen(e, charLevel)) raw.set(e.id, Math.max(0, e.weight));

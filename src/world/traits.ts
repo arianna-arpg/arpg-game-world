@@ -119,11 +119,25 @@ export function isWarOrigin(faction: string, zone: ZoneDef, conqueredBy: string 
 }
 
 /** Node-distance from a faction's home anchor to `zone`. 0 (always-near) for
- *  roamers, or when the home zone isn't charted yet (don't strand them). */
+ *  roamers, or when no home ground is charted yet (don't strand them).
+ *  An authored originZone anchors exactly; a biome-homed faction (undead on
+ *  grave ground, the Legion on rifts, sylvans in groves) anchors to its
+ *  NEAREST charted home-biome zone — so eventRange keeps meaning something
+ *  now that the static web is just town + hub and homes are minted. */
 export function distFromHome(faction: string, zone: ZoneDef, byId: Record<string, ZoneDef>): number {
   const t = traitsOf(faction);
-  if (!t.originZone) return 0;
-  const home = byId[t.originZone];
-  if (!home) return 0;
-  return Math.hypot(zone.map.x - home.map.x, zone.map.y - home.map.y);
+  if (t.originZone) {
+    const home = byId[t.originZone];
+    return home ? Math.hypot(zone.map.x - home.map.x, zone.map.y - home.map.y) : 0;
+  }
+  if (t.homeBiome) {
+    let best = Infinity;
+    for (const z of Object.values(byId)) {
+      if (z.caveDepth != null || z.biome !== t.homeBiome) continue;
+      const d = Math.hypot(zone.map.x - z.map.x, zone.map.y - z.map.y);
+      if (d < best) best = d;
+    }
+    return best === Infinity ? 0 : best;
+  }
+  return 0;
 }

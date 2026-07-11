@@ -58,17 +58,23 @@ export function bound(pkg: ContentPackage, kind: ModifierKind, account: Account)
   return base;
 }
 
-/** The effective entry for a package, from the player's saved prefs or defaults.
- *  A package only reaches this at all via manifestPackages (defaultEnabled OR
- *  purchased) — so a PURCHASED opt-in package defaults ON: buying it is the
- *  opt-in (The Pit must exist the run after it's bought, not hide behind a
- *  second toggle). The Expedition screen can still park it per run. */
+/** The DEFAULT enabled state when the player has expressed no preference: every
+ *  base-game feature, plus any package the account has PURCHASED — buying an
+ *  opt-in package IS the opt-in (The Pit must exist the run after it's bought,
+ *  not hide behind a second toggle). THE single rule — the Expedition screen
+ *  seeds its cards from this too, so what the UI shows is what the manifest
+ *  would run. */
+export function defaultEnabledFor(pkg: ContentPackage, account: Account): boolean {
+  return pkg.defaultEnabled || isConfigured(account, pkg.id);
+}
+
+/** The effective entry for a package, from the player's saved prefs or defaults. */
 function entryFor(pkg: ContentPackage, account: Account): ManifestEntry {
   const pref = account.packageDefaults[pkg.id];
   const wB = bound(pkg, 'weight', account), sB = bound(pkg, 'startLevel', account);
   return {
     id: pkg.id,
-    enabled: pref ? pref.enabled : (pkg.defaultEnabled || isConfigured(account, pkg.id)),
+    enabled: pref ? pref.enabled : defaultEnabledFor(pkg, account),
     weight: clampInt(pref?.weight ?? pkg.defaultWeight, wB.min, wB.max),
     startLevel: clampInt(pref?.startLevel ?? pkg.defaultStartLevel, sB.min, sB.max),
   };

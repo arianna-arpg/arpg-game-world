@@ -66,6 +66,15 @@ export function sidezoneOf(kind: string): SidezoneDef | undefined {
   return SIDEZONES[kind];
 }
 
+/** The classic cave's dwell — the default for any kind that doesn't tune it. */
+export const DEFAULT_SIDEZONE_DWELL = 0.55;
+
+/** Idle-dwell seconds to enter a mouth of this kind (ONE lookup for the
+ *  engine's dwell loop and the renderer's progress ring alike). */
+export function dwellOf(kind: string): number {
+  return SIDEZONES[kind]?.dwell ?? DEFAULT_SIDEZONE_DWELL;
+}
+
 // --- THE CLASSIC CAVE --------------------------------------------------------
 // The reference sidezone: mintCave keeps its historical behavior wholesale
 // (cavern tileset, the deeper-mouth ladder, breach depth) — the registry just

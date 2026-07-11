@@ -49,8 +49,14 @@ export function randomizeStarterWeb(zoneMap: Record<string, ZoneDef>, seed: numb
   // Keep the authored frontier tileset FLAVORS (fallbacks — the live mint's
   // heat-map biome outranks them), re-dealt onto the rolled sides.
   const flavors = hub.exits.filter(e => e.to === '?' && e.tileset).map(e => e.tileset!);
+  // PRESERVE exits this function doesn't own: only the town↔hub road and the
+  // hub's '?' frontiers are re-dealt. A future authored neighbour or a
+  // town-feature exit (the townBuild pattern grows the town) rides through
+  // untouched instead of being silently dropped into a dangling back-edge.
+  const townKeep = town.exits.filter(e => e.to !== HUB_ZONE && e.to !== '?');
+  const hubKeep = hub.exits.filter(e => e.to !== START_ZONE && e.to !== '?');
   hub.map = projectCoord(town.map, dir);
-  town.exits = [{ to: HUB_ZONE, side: dir }];
+  town.exits = [{ to: HUB_ZONE, side: dir }, ...townKeep];
   const rest = DIRS.filter(d => d !== OPP_DIR[dir]);
   hub.exits = [
     { to: START_ZONE, side: OPP_DIR[dir] },
@@ -58,6 +64,7 @@ export function randomizeStarterWeb(zoneMap: Record<string, ZoneDef>, seed: numb
       to: '?', side: d,
       ...(flavors.length ? { tileset: flavors[i % flavors.length] } : {}),
     })),
+    ...hubKeep,
   ];
 }
 

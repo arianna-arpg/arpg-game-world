@@ -1205,7 +1205,9 @@ function pickSkill(
 function useOn(
   actor: Actor, world: World, inst: SkillInstance, target: Actor, tuning?: BrainTuning,
 ): void {
-  world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior));
+  // Resolved tuning never carries a null axis (mergeTuning clears it), but a
+  // RAW layer can — coalesce for the aim path's plain-optional signature.
+  world.useSkill(actor, inst, aimPointFor(actor, inst, target, tuning?.behavior ?? undefined));
   const cad = tuning?.skillUse?.cadence ?? [0.15, 0.4];
   actor.aiCooldown = rand(cad[0], cad[1]);
   actor.aiLastSkill = { id: inst.def.id, at: world.time };

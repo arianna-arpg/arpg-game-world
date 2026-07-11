@@ -793,17 +793,22 @@ export interface PhaseDef {
 export interface BrainTuning {
   /** Archetype preset to START from (each axis individually overridable). */
   type?: BrainType;
-  move?: MoveSpec;
-  target?: TargetSpec;
-  perception?: PerceptionSpec;
-  skillUse?: SkillPolicy;
-  morale?: MoraleSpec;
-  squad?: SquadSpec;
+  // Every object axis accepts NULL as "CLEAR this axis wholesale" — a later
+  // layer stripping even what the preset supplied (mergeTuning). undefined
+  // merely abstains (the preset/earlier layer shows through); null erases.
+  // The wave frenzy is the first consumer: tempo/morale null = a wave that
+  // never pauses and never routs, whatever archetype its bodies came from.
+  move?: MoveSpec | null;
+  target?: TargetSpec | null;
+  perception?: PerceptionSpec | null;
+  skillUse?: SkillPolicy | null;
+  morale?: MoraleSpec | null;
+  squad?: SquadSpec | null;
   /** The RHYTHM layer: movement duty cycles + the kite budget (TempoSpec). */
-  tempo?: TempoSpec;
+  tempo?: TempoSpec | null;
   /** The COGNITION layer: aim leading/scatter, reaction lag, the body-aim
    *  pivot gate, encircle ring discipline, elbow room (BehaviorSpec). */
-  behavior?: BehaviorSpec;
+  behavior?: BehaviorSpec | null;
   /** OBEDIENCE (0..1): the chance this actor ACCEPTS an order from the
    *  command fabric (CommandMinionsEffect → ai.ts issueCommand). Unset = 1:
    *  a player's summoned court obeys utterly. An unruly wild pack dials it
@@ -972,21 +977,32 @@ export interface NormalizedBrain {
 }
 
 /** Shallow-merge tuning layers per AXIS KNOB (later layers win knob-by-knob,
- *  so a phase tweaking only `skillUse.cadence` keeps the preset's mode). */
+ *  so a phase tweaking only `skillUse.cadence` keeps the preset's mode).
+ *  NULL on an axis CLEARS it wholesale — later layers can strip even what an
+ *  archetype preset supplied (undefined merely abstains). The resolved
+ *  tuning never carries null: a cleared axis reads as plain absent. */
 export function mergeTuning(...layers: (BrainTuning | undefined)[]): BrainTuning {
   const out: BrainTuning = {};
   for (const layer of layers) {
     if (!layer) continue;
     if (layer.type) out.type = layer.type;
-    if (layer.move) out.move = { ...out.move, ...layer.move };
-    if (layer.target) out.target = { ...out.target, ...layer.target,
+    if (layer.move === null) out.move = undefined;
+    else if (layer.move) out.move = { ...out.move, ...layer.move };
+    if (layer.target === null) out.target = undefined;
+    else if (layer.target) out.target = { ...out.target, ...layer.target,
       threat: layer.target.threat ? { ...out.target?.threat, ...layer.target.threat } : out.target?.threat };
-    if (layer.perception) out.perception = { ...out.perception, ...layer.perception };
-    if (layer.skillUse) out.skillUse = { ...out.skillUse, ...layer.skillUse };
-    if (layer.morale) out.morale = { ...out.morale, ...layer.morale };
-    if (layer.squad) out.squad = { ...out.squad, ...layer.squad };
-    if (layer.tempo) out.tempo = { ...out.tempo, ...layer.tempo };
-    if (layer.behavior) out.behavior = { ...out.behavior, ...layer.behavior,
+    if (layer.perception === null) out.perception = undefined;
+    else if (layer.perception) out.perception = { ...out.perception, ...layer.perception };
+    if (layer.skillUse === null) out.skillUse = undefined;
+    else if (layer.skillUse) out.skillUse = { ...out.skillUse, ...layer.skillUse };
+    if (layer.morale === null) out.morale = undefined;
+    else if (layer.morale) out.morale = { ...out.morale, ...layer.morale };
+    if (layer.squad === null) out.squad = undefined;
+    else if (layer.squad) out.squad = { ...out.squad, ...layer.squad };
+    if (layer.tempo === null) out.tempo = undefined;
+    else if (layer.tempo) out.tempo = { ...out.tempo, ...layer.tempo };
+    if (layer.behavior === null) out.behavior = undefined;
+    else if (layer.behavior) out.behavior = { ...out.behavior, ...layer.behavior,
       encircle: layer.behavior.encircle
         ? { ...out.behavior?.encircle, ...layer.behavior.encircle } : out.behavior?.encircle };
     if (layer.obedience !== undefined) out.obedience = layer.obedience;
