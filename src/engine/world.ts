@@ -23,7 +23,7 @@ import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './br
 import { runAIActions } from './aiActions';
 import {
   crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
-  CONCENTRATION_CFG, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
+  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardSpec,
@@ -1680,6 +1680,7 @@ export class World {
     tentacle_swing: (d, eff) => this.effectTentacleSwing(d, eff),
     crystal_beam: (d, eff) => this.effectCrystalBeam(d, eff),
     lava_orb: (d, eff) => this.effectLavaOrb(d, eff),
+    heat_wash: (d, eff) => this.effectHeatWash(d, eff),
     descent_trap: (d, eff) => this.effectDescentTrap(d, eff),
     spore_puff: (d, eff) => this.effectSporePuff(d, eff),
     growth_lash: (d, eff) => this.effectGrowthLash(d, eff),
@@ -2638,6 +2639,16 @@ export class World {
     this.event = null;
     this.encounters = [];
     this.transientDoodads = []; // terraform growths are zone-local (the doodad list itself was just rebuilt)
+    // THE HEAT STANDS OFF THE MELT: every lava pool and magma_core wall
+    // radiates a heat_wash — a band around the rim (never inside; standing
+    // IN the melt is standDamage's province) that licks the uninsured with
+    // small fire on a chance beat. Attached here, the ONE seam every gen
+    // path pours through (tileset stamps, landmark pours, cave mints).
+    for (const d of this.doodads) {
+      if ((d.kind === 'lava' || d.kind === 'magma_core') && !d.effect) {
+        d.effect = { id: 'heat_wash', interval: 1.1, cd: rand(0, 1.1), radius: 64, chance: 0.55, power: 3 };
+      }
+    }
     this.vocationSites = [];    // secret-vocation shrines re-place per load (deterministic)
     this.wave = 0;
     this.waveTimer = 3;
@@ -6563,6 +6574,31 @@ export class World {
   private effectSporePuff(d: Doodad, eff: DoodadEffect): void {
     if (!chance(eff.chance)) return;
     this.mintHazardCloud(vec(d.pos.x, d.pos.y), { radius: eff.radius ?? 90 });
+  }
+
+  /** LAVA HEAT (heat_wash): the melt radiates PAST its rim — actors in the
+   *  band around the pool (never inside it: standing IN the melt is
+   *  standDamage's province) roll a small fire lick per beat, through
+   *  RESISTANCE only. The insured ignore it: fliers, habitat-matched
+   *  bodies, immuneGround bearers. eff.radius is the band's width. */
+  private effectHeatWash(d: Doodad, eff: DoodadEffect): void {
+    for (const a of this.actors) {
+      if (a.dead || a.flying || a.construct || a.invulnerable) continue;
+      if (a.habitat?.kind === d.kind || a.immuneGround?.includes(d.kind)) continue;
+      const dd = dist(a.pos, d.pos);
+      if (dd <= d.radius || dd > d.radius + eff.radius) continue;
+      if (!chance(eff.chance)) continue;
+      const heat = eff.power * (1 + this.zone.level * 0.08)
+        * (1 - resistValue(a, 'fire'));
+      if (heat <= 0) continue;
+      a.life -= heat;
+      a.hitFlash = 0.1;
+      this.flashes.push({
+        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
+        color: '#ff8a3a', life: 0.18, maxLife: 0.18,
+      });
+      if (a.life <= 0 && !a.dead) this.kill(a);
+    }
   }
 
   // --- INCURSION PAYOFF (Pass 2d): the Observer boss --------------------------
@@ -10499,6 +10535,8 @@ export class World {
     // overwrite it for event roles (patrols, sieges).
     if (def.tag) a.tag = def.tag;
     a.passive = !!def.passive;
+    // aims:false — facing-is-noise bodies (data lever): no aim tick.
+    if (def.aims === false) a.aims = false;
     // SCALE VARIANCE: a herd reads as a mix of big adults and small young. Roll a
     // per-spawn body-scale (sizing the body + — with scaleStats — its life/damage),
     // and below the juvenile cut SWAP to the juvenile brain (the young flee, never
@@ -10547,6 +10585,7 @@ export class World {
     if (def.refuge) a.refuge = def.refuge;
     if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
     if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
+    if (def.immuneGround) a.immuneGround = def.immuneGround; // the insured (lava natives)
     // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
     // update sweep springs it when an enemy strays inside the wake radius.
     if (def.ambush) {
@@ -15056,6 +15095,10 @@ export class World {
       range: d.range,
       timer: d.kind === 'trap' ? 0.5 : (d.interval ?? 0),
     };
+    // AIM IDENTITY: live-aiming kinds wear the renderer's aim tick; frozen
+    // furniture (bone walls, embeds) doesn't — kind registry default, and
+    // any skill may declare the exception on its delivery.
+    c.aims = d.aims ?? CONSTRUCT_KIND_AIMS[d.kind];
     // TREE OF LIFE: the reservoir starts as a sapling and swells as its
     // side's violence feeds it (resolveHit banks into `stored`).
     if (d.healBurst) {
@@ -21100,6 +21143,13 @@ export class World {
   private applyRegionEffects(a: Actor, kindId: string, deep: boolean, entered: boolean, dt: number, drained: Set<string>): void {
     const def = regionKind(kindId);
     if (!def) return;
+    // GROUND IMMUNITY: a body whose habitat IS this ground, or whose def
+    // lists it in immuneGround, ignores the region OUTRIGHT — statuses,
+    // enter effects, drains and damage alike (the magma lurker is not
+    // mired in its own melt). FLIERS skip ground regions wholesale: an
+    // airborne body is not IN the bog, the water, or the lava it crosses.
+    if (a.flying) return;
+    if (a.habitat?.kind === kindId || a.immuneGround?.includes(kindId)) return;
     // Per-tick standing status (depth-aware variant for water).
     const src = def.label ?? kindId;
     const stand = deep && def.standStatusDeep ? def.standStatusDeep : def.standStatus;
@@ -21111,6 +21161,20 @@ export class World {
       if (es) a.applyStatus(es.id, (es.amount ?? 0) + (es.amountPerLevel ?? 0) * this.zone.level, es.duration, src);
       if (def.enterText) this.text(a.pos, def.enterText.text, def.enterText.color, 11);
       def.onEnter?.(a, this);
+    }
+    // TERRAIN DAMAGE (RegionKind.standDamage — lava): typed dps through
+    // RESISTANCE only (terrain doesn't swing; capping the res is the build
+    // answer). The insured never reach here — the head of this function
+    // already excused fliers, habitat-matched bodies and immuneGround.
+    if (def.standDamage && !a.invulnerable) {
+      const sd = def.standDamage;
+      const res = resistValue(a, sd.type);
+      const dmg = (sd.dps + (sd.dpsPerLevel ?? 0) * this.zone.level) * (1 - res) * dt;
+      if (dmg > 0) {
+        a.life -= dmg;
+        if (chance(dt * 2.5)) a.hitFlash = 0.12;
+        if (a.life <= 0 && !a.dead) this.kill(a);
+      }
     }
     // Environmental-survival drain (deep_water → breath); empty → drown. Only the
     // player seats breathe — the creatures that dwell in the depths are adapted to it.
@@ -24489,11 +24553,15 @@ export class World {
   // ---------------------------------------------------------------- waves ---
 
   /** Living enemies that count toward objectives (caches and such don't).
-   *  AMBIENT_TAGS bearers are excluded wholesale — see the registry above. */
+   *  AMBIENT_TAGS bearers are excluded wholesale — see the registry above.
+   *  noObjective defs are the SOFT-LOCK GUARD: bodies whose habitat a
+   *  build may be unable to reach (a void angler over its chasm) never
+   *  gate a clear — they fight and drop, but the zone finishes without
+   *  them. */
   private countedEnemies(): Actor[] {
     return this.actors.filter(a => a.team === 'enemy' && !a.dead
       && !(a.tag && AMBIENT_TAGS.has(a.tag))
-      && !(a.defId && MONSTERS[a.defId]?.passive));
+      && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective)));
   }
 
   /** Living spawner objects in the zone. */

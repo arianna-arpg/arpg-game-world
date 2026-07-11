@@ -1459,6 +1459,26 @@ export type ConstructKind =
   | 'relic'   // casts its skill at ITSELF whenever its OWNER attacks (Warden Relic)
   | 'pod';    // INCUBATES: hatches a payload skill when its duration matures (Broodpod)
 
+/** Which construct kinds ACT in a direction — their facing is live truth
+ *  (they pivot to cast), so they wear the renderer's AIM TICK — versus
+ *  FURNITURE whose facing froze at placement (a bone-prison bar is not
+ *  plotting anything). Drives the Actor.aims default in spawnConstruct;
+ *  ConstructDelivery.aims is the per-skill override in either direction.
+ *  Decoys spawn outside spawnConstruct and keep Actor's default (they
+ *  wander in disguise, and a fake hero must dress like one — tick and all). */
+export const CONSTRUCT_KIND_AIMS: Record<ConstructKind, boolean> = {
+  totem: true,    // pivots onto its target every cast
+  sentry: true,
+  pylon: true,
+  echo: true,     // the ghost glides and swings at prey
+  decoy: true,    // roams — a live pose, worn as camouflage
+  eruptor: false, // random spray is activity, not an aim
+  trap: false,    // aims only at the instant it springs
+  mine: false,
+  pad: false, gate: false, barrier: false, dome: false,
+  tree: false, embed: false, relic: false, pod: false,
+};
+
 /**
  * An EMBEDMENT — a lodged object the rest of the kit interacts with
  * (Impale Lance's spears, Arclight Rain's arrows). Carried by a construct
@@ -1590,6 +1610,11 @@ export interface ConstructDelivery {
   /** Skill the construct casts (totem/sentry: at targets; trap: on trigger;
    *  mine: on detonation; pylon: periodic trigger). */
   castSkillId?: string;
+  /** Whether this construct wears the AIM TICK (the facing pointer).
+   *  Omitted = the kind's default (CONSTRUCT_KIND_AIMS): live-aiming
+   *  casters tick, frozen furniture doesn't. The per-skill exception
+   *  lever, valid in either direction. */
+  aims?: boolean;
   /** Targeting range (totem/sentry/pylon) or trigger radius (trap). */
   range: number;
   duration: number;       // lifespan, scaled by effectDuration

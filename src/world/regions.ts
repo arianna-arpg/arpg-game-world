@@ -116,6 +116,13 @@ export interface RegionKind {
   enterText?: { text: string; color: string };
   /** Drains a survival resource while standing in (deep_water → breath). */
   survival?: { resource: string; drain: number };
+  /** TERRAIN DAMAGE: typed dps while standing in (lava). Applied through
+   *  the victim's RESISTANCE only — never armor/evasion (terrain doesn't
+   *  swing) — so capping the matching res IS the build answer. The
+   *  insured walk free: fliers, bodies whose habitat IS this ground, and
+   *  MonsterDef.immuneGround bearers (the magma bestiary swims its own
+   *  melt). dps + dpsPerLevel × zone level. */
+  standDamage?: { dps: number; dpsPerLevel?: number; type: DamageType };
   /** Direct move-speed multiplier while standing in (for kinds that don't use a
    *  status). Existing grounds keep using statuses; this is for new kinds. */
   moveScale?: number;
@@ -231,6 +238,17 @@ registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', sta
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged',
   enterStatus: { id: 'poison', amount: 1.5, amountPerLevel: 0.7, duration: 1 }, enterText: { text: 'bogged!', color: '#6a8a3a' } });
+// LAVA — a real LIQUID: crossable, and it COOKS whoever isn't insured
+// (fliers, habitat-matched bodies, immuneGround bearers wade free). Heavy
+// typed fire per second through RESISTANCE only — capping fire res is the
+// build answer, wading anyway is the desperate one. The mired slog keeps
+// the crossing a decision, not a stroll; the impassable molten WALL (the
+// caldera's spiral) is the separate magma_core doodad kind.
+registerRegion({ id: 'lava', walkable: true, blocks: false, label: 'the lava',
+  standStatus: 'mired',
+  standDamage: { dps: 14, dpsPerLevel: 2.2, type: 'fire' },
+  enterStatus: { id: 'burn', amount: 1.2, amountPerLevel: 0.5, duration: 2 },
+  enterText: { text: 'scalded!', color: '#ff8a3a' } });
 registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'the tentacles', standStatus: 'ensnared',
   enterStatus: { id: 'stun', duration: 0.6 }, enterText: { text: 'ensnared!', color: '#7fce6a' } });
 // ROAD: a packed gravel path — a VERY mild move-speed boost (moveScale, NOT a status, so

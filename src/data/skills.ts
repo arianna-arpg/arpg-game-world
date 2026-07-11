@@ -8408,6 +8408,46 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.02)] },
   },
 
+  // --- The melt & the deep: lurker/angler armaments ---------------------------
+  magma_lob: {
+    id: 'magma_lob', name: 'Magma Lob',
+    description: 'Heave a gout of living melt in a lazy arc — it bursts where it lands and leaves a pool of fire that CLOSES like cooling slag, gone exactly as its duration dies.',
+    tags: ['spell', 'fire', 'projectile', 'aoe', 'duration'], color: '#ff7a2a',
+    manaCost: 10, cooldown: 0.8, useTime: 0.7,
+    baseDamage: { fire: [14, 22] },
+    delivery: {
+      type: 'projectile', speed: 190, radius: 10, range: 460,
+      explode: { radius: 60, damageScale: 0.7 },
+      endZone: {
+        radius: 62, duration: 3.2, tickInterval: 0.5, damageScale: 0.4,
+        sizeOver: { from: 1, to: 0, curve: 'quadOut' },
+      },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.45, magnitude: 0.5 },
+    ],
+    requirements: { intelligence: 14 },
+    ai: { range: 430, weight: 3, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
+  void_hook: {
+    id: 'void_hook', name: 'Void Hook',
+    description: 'A barbed line of nothing, cast and REELED: the catch is dragged bodily to the caster\'s feet and left reeling. In an angler\'s grip that means dragged toward the edge it fishes from — mind your footing, or turn the gift around: the reel-in is also how you get close enough to gut the angler.',
+    tags: ['spell', 'chaos', 'projectile'], color: '#8a6ad4',
+    manaCost: 8, cooldown: 3, useTime: 0.6,
+    baseDamage: { chaos: [10, 16] },
+    delivery: { type: 'projectile', speed: 520, radius: 8, range: 420, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.3 },
+    ],
+    requirements: { willpower: 14 },
+    ai: { range: 400, weight: 3, keepDistance: 300 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   doomsayers_word: {
     id: 'doomsayers_word', name: 'Doomsayer\'s Word',
     description: 'Speak the sentence and let it ride: the bolt lands soft as a whisper — and three seconds later the Word RESOLVES all at once, rolled at whatever your power has become by then. The mark can read the clock; so can everything you socket (a Slow Match stretches the wait and sharpens the verdict).',

@@ -414,8 +414,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'storm_acolyte', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'frost_elemental', weight: 2 },
         { id: 'gale_elemental', weight: 2 },
-        // The white wake under the drifts.
+        // The white wake under the drifts — and the angler in the cracks.
         { id: 'snow_swimmer', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'void_angler', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // Horned Tribe raiders range even the white wastes.
         { id: 'beastkin_gorer', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
@@ -732,6 +733,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     layout: [
       { kind: 'dead_tree', count: [3, 6] }, { kind: 'bone_pile', count: [1, 3] },
       { kind: 'lava', count: [2, 3] },
+      { kind: 'chasm', count: [0, 1] },
       { kind: 'ravine', count: [1, 1] },
       { kind: 'rocks', count: [10, 16], radius: [24, 52] },
       { kind: 'rock_spire', count: [1, 2] }, { kind: 'scree', count: [1, 3] },
@@ -756,6 +758,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The gather elite and the lava-lane burrower.
         { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'magma_swimmer', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'magma_lurker', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'void_angler', weight: 1, presence: { from: 10, fadeIn: 4 } },
       ],
     },
     spawnerId: 'ember_rift',
@@ -1503,6 +1507,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'lava_vent', count: [2, 3] }, { kind: 'ember_vent', count: [2, 4] },
       { kind: 'obsidian', count: [4, 7] }, { kind: 'cinder', count: [2, 4] },
       { kind: 'rock_spire', count: [1, 2] }, { kind: 'scree', count: [1, 2] },
+      // Slag levees (impassable — the wall the liquid lava no longer is)
+      // and the odd cooled crack for the anglers.
+      { kind: 'magma_core', count: [1, 2] },
+      { kind: 'chasm', count: [0, 1] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1515,6 +1523,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The lava-lane burrower and the gather elite hold the deep flows.
         { id: 'magma_swimmer', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'ruin_chanter', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        // The pools themselves have appetites now (lava is a LIQUID — wade
+        // in after it), and the deeper cracks hold anglers.
+        { id: 'magma_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'void_angler', weight: 1, presence: { from: 9, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',

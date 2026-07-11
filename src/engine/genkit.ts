@@ -364,7 +364,8 @@ export function liquidIds(): string[] { return Object.keys(LIQUIDS); }
 registerLiquid('water', { doodad: 'water' });
 registerLiquid('shallows', { doodad: 'water', shallow: true });
 registerLiquid('deep_water', { region: 'deep_water' });          // swim + breath drain
-registerLiquid('lava', { doodad: 'lava' });                       // blocks bodies, not shots
+registerLiquid('lava', { doodad: 'lava' });                       // crossable melt: cooks the uninsured
+registerLiquid('magma_core', { doodad: 'magma_core' });           // the WALL: impassable slag (caldera spirals)
 registerLiquid('bog', { doodad: 'bog' });                         // poison on entry
 registerLiquid('swamp', { doodad: 'swamp' });
 registerLiquid('ice', { doodad: 'ice' });                         // slippery

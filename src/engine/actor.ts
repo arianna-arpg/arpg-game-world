@@ -670,6 +670,10 @@ export class Actor {
   /** Rooted in place: never walks, never pushed (spawners, townsfolk).
    *  Passive things WITHOUT this (barrels) can still be shoved around. */
   anchored = false;
+  /** ACTS in a direction — the renderer's aim tick rides this. Furniture
+   *  constructs (bone walls, embeds, armed mines: CONSTRUCT_KIND_AIMS) and
+   *  aims:false monsters clear it — a frozen facing means nothing. */
+  aims = true;
   /** Monster faction — cross-faction hostility ignites in war zones. */
   faction?: string;
 
@@ -828,6 +832,10 @@ export class Actor {
   /** BODY WAKE spec (MonsterDef.wake): the body itself sheds its ground
    *  payload as it travels. */
   wake?: { skillId: string; everyDist: number; dmgMult?: number };
+  /** GROUND IMMUNITY (MonsterDef.immuneGround): region kinds whose
+   *  standDamage and heat wash this body ignores — the magma bestiary
+   *  swims its own melt (habitat-matched bodies are exempt implicitly). */
+  immuneGround?: string[];
   /** THE BRIM LEDGER (ChannelSpec.brim): per-skill persistent gauge fill.
    *  The live instance rides along so decay/payoff stat queries see
    *  socketed support mods, and the SPEC rides so converted gathers

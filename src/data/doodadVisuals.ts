@@ -86,6 +86,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -1.8, color: '#ff6a26', intensity: 0.55 },
   },
+  // MAGMA CORE — the WALL the lava-liquid no longer is: dense slag plates
+  // over a furnace heart, rim burning hard so the barrier reads "do not
+  // cross" at a glance (the caldera's spiral is built from this).
+  magma_core: {
+    painter: 'liquid', order: 23,
+    params: {
+      rim: { color: '#ff7a2a', alpha: 0.85, grow: 5 },
+      core: { color: '#3a1206', alpha: 1 },
+      melt: { hot: '#ffb04a', crust: '#160a05' },
+      crawl: { color: '#ff8a3a' },
+    },
+    light: { radius: -2.2, color: '#ff7a2a', intensity: 0.65 },
+  },
   // CINDER = a cooling coal bed: the merged field carries dense ember
   // glints, each pulsing on its own clock — coals, readable as coals.
   cinder: {

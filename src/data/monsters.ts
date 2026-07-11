@@ -170,6 +170,10 @@ export interface MonsterDef {
   spawner?: boolean;
   /** Scenery with a health bar: never counts toward zone objectives. */
   passive?: boolean;
+  /** aims:false — the facing means nothing (the renderer hides the aim
+   *  tick): bodies whose pose never tracks a target. Constructs default
+   *  by kind (CONSTRUCT_KIND_AIMS); this is the bestiary-side lever. */
+  aims?: boolean;
   /** Movement/behavior is DRIVEN externally (an event tick wheels it); the
    *  AI brain skips it entirely (the caravan cart). */
   driven?: true;
@@ -287,6 +291,18 @@ export interface MonsterDef {
    *  lake horror slashes from its water and cannot be kited onto the grass.
    *  Composes with `ambush` (hidden until you stray near its ground). */
   habitat?: { kind: string; minRadius?: number; grace?: number };
+  /** GROUND IMMUNITY: region kinds whose standDamage and heat wash this
+   *  body ignores (lava natives). Habitat-matched bodies are implicitly
+   *  exempt from their OWN ground; this covers kin who merely visit —
+   *  the magma swimmer crossing a pool it isn't burrowed in. */
+  immuneGround?: string[];
+  /** NEVER COUNTS toward zone objectives (clear counts and kin): bodies
+   *  whose habitat the player may be unable to reach (a void angler over
+   *  its chasm) must never gate progress — the soft-lock guard. The
+   *  validator REQUIRES this on any def whose habitat kind blocks
+   *  movement. Purely an objective exemption: it still fights, still
+   *  drops, still pays xp. */
+  noObjective?: boolean;
   /** BODY WAKE: the body itself SHEDS ground as it travels — every
    *  `everyDist` units of actual displacement (walks, dashes, shoves
    *  alike) the named catalog skill free-casts at its feet through the
@@ -4645,6 +4661,45 @@ export const MONSTERS: Record<string, MonsterDef> = {
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.0, brain: { type: 'basic' },
   },
+  // THE MAGMA LURKER — the pool with an appetite: bound to its lava (a
+  // LIQUID now — wade in after it if you dare; the melt cooks the
+  // uninsured and the heat wash licks the shore), mostly submerged until
+  // prey strays near, then lobbing gouts of melt whose pools CLOSE like
+  // cooling slag. Reachable BY DESIGN: crossable lava means no build is
+  // locked out — the wade is the price, not a wall.
+  magma_lurker: {
+    id: 'magma_lurker', name: 'Magma Lurker',
+    color: '#ff6a26', shape: 'oval', radius: 17, material: 'stone', look: 'magma_lurker',
+    base: { life: 190, moveSpeed: 40, accuracy: 110, armor: 35, poise: 45, mana: 130, manaRegen: 9 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.4)],
+    immuneGround: ['lava', 'magma_core'],
+    skills: ['magma_lob'], xp: 42,
+    habitat: { kind: 'lava', minRadius: 44, grace: 26 },
+    ambush: { radius: 165, announce: 'the melt boils!' },
+    turnSpeed: 2.6,
+    scaleVariance: [0.9, 1.25], scaleStats: true,
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.1, brain: { type: 'basic' },
+  },
+  // THE VOID ANGLER — it fishes the living from the rim of its chasm: a
+  // barbed hook of nothing REELS you toward the dark (and toward IT — the
+  // drag is also melee's ticket to adjacency). Bound to ground no build
+  // can stand on, so it carries noObjective BY LAW (the soft-lock guard):
+  // it never gates a clear — an optional, loot-bearing menace, never a
+  // wall between a build and the exit.
+  void_angler: {
+    id: 'void_angler', name: 'Void Angler',
+    color: '#8a6ad4', shape: 'oval', radius: 16, look: 'void_angler',
+    base: { life: 170, moveSpeed: 30, accuracy: 112, armor: 20, poise: 35, mana: 120, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.6), mod('fireRes', 'flat', 0.2)],
+    skills: ['void_hook'], xp: 46,
+    habitat: { kind: 'chasm', minRadius: 38, grace: 34 },
+    noObjective: true,
+    ambush: { radius: 175, announce: 'something stirs in the dark below…' },
+    turnSpeed: 2.8,
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.2, brain: { type: 'basic' },
+  },
   // THE RUIN CHANTER — the interrupt-or-eat-it elite: it closes, PLANTS,
   // and gathers Kindled Ruin under a bar the whole room can read — four
   // seconds to break the channel or clear the blast, and an early break
@@ -4687,6 +4742,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#ff7a2a', shape: 'oval', radius: 13, material: 'stone', look: 'magma_swimmer',
     base: { life: 120, moveSpeed: 100, accuracy: 108, armor: 30, mana: 70, manaRegen: 6 },
     mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    immuneGround: ['lava', 'magma_core'],
     skills: ['claw', 'firebolt'], xp: 36,
     worm: { length: 6, spacing: 15, taper: 0.88 },
     detection: 1.2,

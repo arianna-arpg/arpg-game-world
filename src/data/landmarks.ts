@@ -73,8 +73,11 @@ registerLandmark({
   params: { fill: 'ground', gapArc: 0.5 }, poi: true, mustReach: true,
 });
 registerLandmark({
-  id: 'caldera', builder: 'crater', size: [620, 940], liquid: 'lava',
-  params: { fill: 'lava', spiralRamp: true, turns: 1.4, gapArc: 0.45 }, poi: true, mustReach: true,
+  // The caldera's spiral is WALLS on purpose (magma_core — impassable
+  // slag): traversal means walking the ramp, not wading the melt. Plain
+  // 'lava' elsewhere is the crossable liquid that merely cooks you.
+  id: 'caldera', builder: 'crater', size: [620, 940], liquid: 'magma_core',
+  params: { fill: 'magma_core', spiralRamp: true, turns: 1.4, gapArc: 0.45 }, poi: true, mustReach: true,
 });
 registerLandmark({
   id: 'sinkhole', builder: 'crater', size: [420, 640],

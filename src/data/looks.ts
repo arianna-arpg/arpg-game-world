@@ -1712,6 +1712,27 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#9ad4ff', params: { spread: 0.48, dist: 0.52, size: 0.1 } },
     ],
   },
+  /** The magma lurker: a crusted dome barely proud of the melt — furnace
+   *  eyes and heat-shimmer wisps rising off the slag back. */
+  magma_lurker: {
+    parts: [
+      { kind: 'blob', scale: 1.0, params: { irr: 0.2, seed: 433 } },
+      { kind: 'hump', scale: 0.65 },
+      { kind: 'spots', params: { n: 4 } },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.5, dist: 0.5, size: 0.12 } },
+    ],
+    live: [{ kind: 'wisps', y: -0.2, scale: 0.6, params: { n: 2 } }],
+  },
+  /** The void angler: a darkness with a LURE — the dangling light is the
+   *  only honest part of it, and it is bait. */
+  void_angler: {
+    parts: [
+      { kind: 'blob', scale: 0.95, params: { irr: 0.24, seed: 443 } },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'eyes', color: '#cfc0f0', params: { spread: 0.42, dist: 0.5, size: 0.09 } },
+    ],
+    live: [{ kind: 'wisps', x: 0.3, y: -0.3, scale: 0.7, params: { n: 2 } }],
+  },
   /** A glow moth — soft wings around a lantern body. */
   glow_moth: {
     parts: [

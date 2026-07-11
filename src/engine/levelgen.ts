@@ -160,7 +160,9 @@ export type KnownDoodadKind =
   | 'sunken_log'      // a waterlogged trunk half-swallowed by the mire
   | 'marsh_wisp'      // a hovering bog-light: glow and omen, no body to bar the way
   | 'peat_mound'      // a low cut-peat hummock: dark cover that smells of tar
-  | 'venom_bloom';    // a swollen mire-flower: pops into a CONTRACTING venom fume
+  | 'venom_bloom'     // a swollen mire-flower: pops into a CONTRACTING venom fume
+  // The melt (lava is a crossable LIQUID; this is the wall)
+  | 'magma_core';     // impassable molten mass — the caldera's spiral walls
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -584,7 +586,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // A chasm ENGULFS what it cuts through (a boulder can't hover over the
   // void); lava/water keep the lapping look (boulders shoulder out of pools).
   chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true },
-  lava:      { overlap: 'inert',  blocksMove: true,  blocksShot: false },
+  // LAVA is a LIQUID now: crossable ground that COOKS the uninsured (the
+  // 'lava' RegionKind carries the standDamage; fliers, habitat-matched
+  // bodies and immuneGround bearers wade free). The impassable molten
+  // WALL — the caldera's spiral — is the separate magma_core kind below.
+  lava:      { overlap: 'ground' },
+  magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false },
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
   bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground' },
@@ -2508,6 +2515,7 @@ registerStamp('mushroom_ring', (ctx, spec) => {
 });
 registerStamp('vines', (ctx) => stampBlob(ctx, 'vines', [20, 56], [4, 8], true));
 registerStamp('lava', (ctx) => stampBlob(ctx, 'lava', [26, 68], [5, 9], true));
+registerStamp('magma_core', (ctx) => stampBlob(ctx, 'magma_core', [24, 60], [4, 8], true));
 registerStamp('shallows', (ctx) => stampShallows(ctx));
 registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'));
 registerStamp('conifers', (ctx, spec) => stampTree(ctx, spec.radius ?? [13, 26], 'conifer'));

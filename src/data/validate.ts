@@ -295,6 +295,17 @@ export function validateContent(): void {
     if (m.shellGuard?.breathe && m.shellGuard.side === 'all') {
       warn(`${m.id}: shellGuard.breathe on side 'all' — no arc to breathe; the spec is inert`);
     }
+    // THE SOFT-LOCK LINT: a body confined to ground the player may never
+    // be able to STAND ON (its habitat kind blocks movement — a chasm, a
+    // magma_core wall) must never count toward zone objectives, or a
+    // melee-only build stares at "1 remain" forever. noObjective is the
+    // guard; this makes forgetting it a boot-time warning, not a stuck
+    // player. (Walkable habitats — water, bog, the now-liquid lava — are
+    // reachable at a price and stay counted.)
+    if (m.habitat && hasDoodadRule(m.habitat.kind)
+      && doodadRuleOf(m.habitat.kind).blocksMove && !m.noObjective) {
+      warn(`${m.id}: habitat '${m.habitat.kind}' blocks movement but the def lacks noObjective — a build that cannot reach it soft-locks the clear`);
+    }
     // A body wake must shed a real GROUND skill — anything else free-casts
     // into the delivery switch's wrong branch every stride.
     if (m.wake) {
