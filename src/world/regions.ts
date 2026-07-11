@@ -84,6 +84,10 @@ export interface RegionVisualSpec {
    *  world units (default 4). Without it a visual-region wall can sit in
    *  the same tones as its biome's floor and swallow the boundary. */
   edge?: { color: string; width?: number };
+  /** DRESSED-STONE coursework (running-bond masonry) over the wall fill —
+   *  the built-structure read. A flag, not an id compare: any future
+   *  fortification region opts in with one word. */
+  masonry?: boolean;
 }
 
 /** A once-on-enter status (bog poison, tentacle stun). amount scales with zone
@@ -147,6 +151,14 @@ export interface RegionKind {
    *  window stay see-through — the arrow-slit: a wall you can shoot and see
    *  through but never walk through. */
   blocksSight?: boolean;
+  /** SURFACE MOTION FX: bodies moving through this ground spawn the named
+   *  transient (renderer motion-FX system) — water's wake rings today; a
+   *  future tar could ripple with one word. Data, never an id compare in
+   *  draw code. */
+  surfaceWake?: 'ripple';
+  /** SURFACE REFLECTION: bodies standing on this ground draw a faded flipped
+   *  ghost beneath them (the frozen mirror). */
+  surfaceMirror?: boolean;
 }
 
 /** A generic ENVIRONMENTAL-SURVIVAL meter (breath today; heat/cold/corruption
@@ -233,8 +245,8 @@ registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, bl
 registerRegion({ id: 'mud', walkable: true, blocks: false, label: 'the mud', standStatus: 'mired' });
 registerRegion({ id: 'sand', walkable: true, blocks: false, label: 'the sand', standStatus: 'mired' });
 registerRegion({ id: 'swamp', walkable: true, blocks: false, label: 'the swamp', standStatus: 'sodden' });
-registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming' });
-registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery' });
+registerRegion({ id: 'water', walkable: true, blocks: false, label: 'the water', standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple' });
+registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', standStatus: 'slippery', surfaceMirror: true });
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged',
   enterStatus: { id: 'poison', amount: 1.5, amountPerLevel: 0.7, duration: 1 }, enterText: { text: 'bogged!', color: '#6a8a3a' } });
@@ -348,7 +360,7 @@ registerRegion({ id: 'tallgrass', walkable: false, blocks: true, label: 'the tal
 // keep means finding the gate or a window line, not trading arrows through
 // masonry.
 registerRegion({ id: 'rampart', walkable: false, blocks: true, label: 'the rampart',
-  blocksShot: true, blocksSight: true, visual: { fill: '#3b3f4c', alpha: 1 } });
+  blocksShot: true, blocksSight: true, visual: { fill: '#3b3f4c', alpha: 1, masonry: true } });
 // PARAPET: a waist-high battlement rim (tower crowns, wall walks). Blocks MOVEMENT
 // only — shots and sight sail over, which is what lets a garrisoned archer rain
 // fire from a tower while staying unreachable (the Arreat-plateau imp fantasy).

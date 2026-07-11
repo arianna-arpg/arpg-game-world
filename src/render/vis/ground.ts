@@ -109,11 +109,17 @@ interface StaticGroup {
 }
 
 export class GroundRenderer {
-  private chunks = new Map<string, { img: HTMLCanvasElement; v: number }>();
+  private chunks = new Map<string, { img: HTMLCanvasElement; v: number; b: number }>();
   private zoneRef: unknown = null;
   private seed = 0;
   private staticGroups: StaticGroup[] = [];
   private staticCount = -1;
+  /** Bumped whenever the static bed/body groups re-gather (doodad set
+   *  changed) — chunks baked under an older rev are STALE, not discarded:
+   *  they keep drawing while the budgeted loop re-bakes them a few per
+   *  frame. The old clear() rebaked the whole viewport in ONE frame — a
+   *  guaranteed hitch every time a barrel popped mid-fight. */
+  private bedsRev = 0;
 
   /** Blit the visible floor. The caller owns any arena clip (rect/ellipse).
    *  Chunks carry the walk-grid version they baked at; a repaint re-bakes
@@ -140,6 +146,10 @@ export class GroundRenderer {
       y1 = Math.min(Math.floor(Math.max(0, world.arena.h - 1) / C), y1);
     }
     let rebakes = 0;
+    let bakedNew = false;
+    const bakeT0 = performance.now();
+    const budgetLeft = (): boolean =>
+      performance.now() - bakeT0 < VIS_CFG.ground.bakeBudgetMs;
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const key = `${cx},${cy}`;
@@ -148,22 +158,39 @@ export class GroundRenderer {
           // LRU touch.
           this.chunks.delete(key);
           this.chunks.set(key, entry);
-          if (entry.v < ver && wf) {
-            if (!this.chunkStale(wf, entry.v, cx * C, cy * C, C)) {
+          const bedsStale = entry.b !== this.bedsRev;
+          if (bedsStale || (entry.v < ver && wf)) {
+            const touched = bedsStale
+              || (wf ? this.chunkStale(wf, entry.v, cx * C, cy * C, C) : false);
+            if (!touched) {
               entry.v = ver; // untouched by any repaint — just adopt the version
-            } else if (rebakes < VIS_CFG.ground.rebakesPerFrame) {
+            } else if (rebakes < VIS_CFG.ground.rebakesPerFrame && budgetLeft()) {
               entry.img = this.bake(world, wf, cx, cy);
               entry.v = ver;
+              entry.b = this.bedsRev;
               rebakes++;
             } // else: budget spent — keep drawing the old bake, retry next frame
           }
         } else {
-          entry = { img: this.bake(world, wf, cx, cy), v: ver };
-          this.chunks.set(key, entry);
-          while (this.chunks.size > VIS_CFG.ground.maxChunks) {
-            const oldest = this.chunks.keys().next().value;
-            if (oldest === undefined) break;
-            this.chunks.delete(oldest);
+          // A never-baked visible chunk: guarantee ONE bake per frame so
+          // streaming always progresses, then hold the rest to the TIME
+          // budget — the old unbounded path baked a whole screenful in one
+          // frame after a teleport or a cache flush (the zone-entry stall).
+          if (!bakedNew || budgetLeft()) {
+            entry = { img: this.bake(world, wf, cx, cy), v: ver, b: this.bedsRev };
+            bakedNew = true;
+            this.chunks.set(key, entry);
+            while (this.chunks.size > VIS_CFG.ground.maxChunks) {
+              const oldest = this.chunks.keys().next().value;
+              if (oldest === undefined) break;
+              this.chunks.delete(oldest);
+            }
+          } else {
+            // Over budget: a flat floor stand-in this frame; the real bake
+            // lands within the next frame or two.
+            ctx.fillStyle = world.zone.theme.floor;
+            ctx.fillRect(cx * C, cy * C, C, C);
+            continue;
           }
         }
         ctx.drawImage(entry.img, cx * C, cy * C);
@@ -172,7 +199,7 @@ export class GroundRenderer {
     // PREFETCH: bake at most one not-yet-baked chunk in the ring just
     // outside the viewport, so walking streams floor in ahead of arrival
     // instead of hitching the frame a new column first appears on.
-    if (rebakes === 0) {
+    if (rebakes === 0 && budgetLeft()) {
       let bx0 = x0 - 1, bx1 = x1 + 1, by0 = y0 - 1, by1 = y1 + 1;
       if (!world.arena.boundless) {
         bx0 = Math.max(0, bx0); by0 = Math.max(0, by0);
@@ -184,7 +211,7 @@ export class GroundRenderer {
           if (cy >= y0 && cy <= y1 && cx >= x0 && cx <= x1) continue; // visible: handled above
           const key = `${cx},${cy}`;
           if (this.chunks.get(key)) continue;
-          this.chunks.set(key, { img: this.bake(world, wf, cx, cy), v: ver });
+          this.chunks.set(key, { img: this.bake(world, wf, cx, cy), v: ver, b: this.bedsRev });
           while (this.chunks.size > VIS_CFG.ground.maxChunks) {
             const oldest = this.chunks.keys().next().value;
             if (oldest === undefined) break;
@@ -214,7 +241,12 @@ export class GroundRenderer {
   private syncStaticGroups(world: World): void {
     if (this.staticCount === world.doodads.length) return;
     this.staticCount = world.doodads.length;
-    this.chunks.clear(); // doodad set changed → any baked beds/bodies are stale
+    // Doodad set changed (a brittle popped, a growth landed) → baked beds/
+    // bodies are stale. MARK, never clear: live chunks keep drawing their
+    // old bake and re-bake through the per-frame budget, so a mid-fight
+    // barrel pop costs a few staggered rebakes instead of one whole-screen
+    // hitch frame.
+    this.bedsRev++;
     const byKind = new Map<string, Doodad[]>();
     for (const d of world.doodads) {
       const def = DOODAD_VISUALS[d.kind];
@@ -522,12 +554,12 @@ export class GroundRenderer {
         const wn = valueNoise((ox + x) * CFG.noiseScale * 1.6, (oy + y) * CFG.noiseScale * 1.6, this.seed + 31);
         ctx.fillStyle = wn > 0.5 ? wallFill : mix(wallFill, wallDark, 0.5);
         ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
-        // STRUCTURE MASONRY (rampart cells): dressed-stone courses in running
-        // bond — mortar seams, per-block tone, a chisel highlight along each
-        // course — so a RAISED wall reads BUILT, never the same rock as a cave
-        // face. World-coord aligned: the bond runs unbroken across cells and
-        // chunk borders.
-        if (id === 'rampart') {
+        // STRUCTURE MASONRY (RegionVisualSpec.masonry): dressed-stone courses
+        // in running bond — mortar seams, per-block tone, a chisel highlight
+        // along each course — so a RAISED wall reads BUILT, never the same
+        // rock as a cave face. World-coord aligned: the bond runs unbroken
+        // across cells and chunk borders. A data flag, not an id compare.
+        if (regionKind(id)?.visual?.masonry) {
           this.bakeMasonry(ctx, x, y, cell, ox, oy, wallFill, wallDark, wallLit);
         }
       }

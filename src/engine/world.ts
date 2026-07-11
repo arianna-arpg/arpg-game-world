@@ -386,6 +386,8 @@ export const SNOW_CFG = {
   frozenBaseline: 0.55,
   /** Ground white-wash alpha at full cover (renderer). */
   washAlpha: 0.42,
+  /** Wash noise-cell size in world units (renderer bake). */
+  washCell: 22,
 };
 
 /** CONVEX-ZONE NAV tunables (World.pathField): the lazy flow-field grid raked
@@ -908,9 +910,9 @@ const DROP_PICKUP_GRACE = 0.8;
 const GROUND_KINDS = {
   includes: (kind: string): boolean => doodadGroundIds().includes(kind),
 };
-/** Solid/notable doodad kinds an Incursion's doodad_mutation can graft tentacles
- *  onto (ground overlays / bridges / the pentagram are skipped). */
-const MUTABLE_DOODADS = new Set<string>(['rock', 'tree', 'cliff', 'tombstone', 'palm', 'wall', 'thicket']);
+// (Doodad mutability — which kinds an Incursion's doodad_mutation may graft
+// onto — is a DoodadRule.mutable flag now, read at the use site: the derived-
+// predicate pattern GROUND_KINDS set, one shelf up.)
 
 /** How many skills can be LEARNED at once — the build-defining budget. */
 export const MAX_LEARNED_SKILLS = 8;
@@ -4752,6 +4754,25 @@ export class World {
     return true;
   }
 
+  /** DEV/QA: mint a fresh zone from a NAMED tileset near the current node and
+   *  travel there — the generative lever the perf harness sweeps (every
+   *  tileset probed through the REAL mint path: placeZoneAt → loadZone, no
+   *  frontier walking). A fixed spec.level keeps zones comparable across a
+   *  sweep; `spread` staggers mint coordinates so repeated mints never stack
+   *  on one node. Returns the minted zone id, or null for an unknown tileset. */
+  devMintTileset(tilesetId: string, spread = 0, level = 8): string | null {
+    if (!TILESETS[tilesetId]) return null;
+    const anchor = this.zoneMap[this.zone.id] ?? this.zone;
+    const def = placeZoneAt(
+      { x: anchor.map.x + 3 + (spread % 7), y: anchor.map.y + (spread % 5) - 2 },
+      anchor, this.zoneMap, this.nextGenId++,
+      { tileset: tilesetId, level });
+    this.zoneMap[def.id] = def;
+    this.loadZone(def.id);
+    this.player.pos = this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), this.player.radius);
+    return def.id;
+  }
+
   /** DEV: find the nearest contiguous FIELD heat-map region, mint its mega-zone (or
    *  link to an existing one — mint-once), wire two-way roads, and travel there. For
    *  playtesting the Field expanse without hunting the map for one. */
@@ -6453,7 +6474,7 @@ export class World {
   private eldritchMutateDoodads(intensity: number, a: IncursionArchetype): void {
     const cfg = a.eventConfig.doodadMutation;
     if (cfg.perFire <= 0) return;
-    const all = this.doodads.filter(d => MUTABLE_DOODADS.has(d.kind));
+    const all = this.doodads.filter(d => doodadRuleOf(d.kind).mutable);
     const fresh = all.filter(d => d.adorn !== 'tentacles');
     if (!fresh.length) return;
     const budget = Math.floor(all.length * cfg.maxFraction) - (all.length - fresh.length);

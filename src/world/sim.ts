@@ -237,50 +237,55 @@ export class WorldSim {
     // Cached fields hold the SURFACE instance (legacy consumers); per-dimension
     // instances resolve through overlayFor(id, dimension).
     this.demonField = (extra.find(o => o.id === 'demon_invasion' && (o.dimension ?? 'surface') === 'surface') as DemonInvasionField | undefined) ?? null;
-    this.crusadeField = (extra.find(o => o.id === 'crusade') as CrusadeField | undefined) ?? null;
-    this.huntField = (extra.find(o => o.id === 'hunt') as HuntField | undefined) ?? null;
-    this.fractureField = (extra.find(o => o.id === 'fractures') as FractureField | undefined) ?? null;
-    this.conclaveField = (extra.find(o => o.id === 'conclave') as ConclaveField | undefined) ?? null;
-    this.amalgamationField = (extra.find(o => o.id === 'amalgamation') as AmalgamationField | undefined) ?? null;
-    this.descentField = (extra.find(o => o.id === 'descent') as DescentField | undefined) ?? null;
-    this.deadwakeField = (extra.find(o => o.id === 'deadwake') as DeadwakeField | undefined) ?? null;
+    // Every cached legacy field takes the same surface guard the demon field
+    // pioneered: the moment any package runs a non-surface instance, first-
+    // in-array would otherwise bind a "surface" cache to another dimension.
+    const surface = <T extends { id: string; dimension?: string }>(id: string): T | undefined =>
+      extra.find(o => o.id === id && (o.dimension ?? 'surface') === 'surface') as T | undefined;
+    this.crusadeField = surface<CrusadeField>('crusade') ?? null;
+    this.huntField = surface<HuntField>('hunt') ?? null;
+    this.fractureField = surface<FractureField>('fractures') ?? null;
+    this.conclaveField = surface<ConclaveField>('conclave') ?? null;
+    this.amalgamationField = surface<AmalgamationField>('amalgamation') ?? null;
+    this.descentField = surface<DescentField>('descent') ?? null;
+    this.deadwakeField = surface<DeadwakeField>('deadwake') ?? null;
     if (this.deadwakeField) {
       const s = this.deadwakeField.surge();
       const badDw = [...s.floodRoster, ...s.leaderPool, ...s.necropolis.bossPool].map(e => e.id).filter(id => !MONSTERS[id]);
       if (badDw.length) console.warn('[deadwake] roster references unknown monster id(s):', badDw);
     }
-    this.migrationField = (extra.find(o => o.id === 'migration') as MigrationField | undefined) ?? null;
+    this.migrationField = surface<MigrationField>('migration') ?? null;
     if (this.migrationField) {
       const badMg = this.migrationField.surge().roster.map(e => e.id).filter(id => !MONSTERS[id]);
       if (badMg.length) console.warn('[migration] roster references unknown monster id(s):', badMg);
     }
-    this.brigandField = (extra.find(o => o.id === 'brigands') as BrigandField | undefined) ?? null;
+    this.brigandField = surface<BrigandField>('brigands') ?? null;
     if (this.brigandField) {
       const badBr = this.brigandField.surge().roster.map(e => e.id).filter(id => !MONSTERS[id]);
       if (badBr.length) console.warn('[brigands] roster references unknown monster id(s):', badBr);
     }
-    this.hauntField = (extra.find(o => o.id === 'haunting') as HauntField | undefined) ?? null;
+    this.hauntField = surface<HauntField>('haunting') ?? null;
     if (this.hauntField) {
       const s = this.hauntField.surge();
       const badHa = [...s.roster, { id: s.anchorId, weight: 1 }, { id: s.bossId, weight: 1 }]
         .map(e => e.id).filter(id => !MONSTERS[id]);
       if (badHa.length) console.warn('[haunting] roster/anchor/boss references unknown monster id(s):', badHa);
     }
-    this.contagionField = (extra.find(o => o.id === 'contagion') as ContagionField | undefined) ?? null;
+    this.contagionField = surface<ContagionField>('contagion') ?? null;
     if (this.contagionField) {
       const s = this.contagionField.surge();
       const badCg = [...(FACTIONS[s.faction]?.table ?? []), { id: s.bossDefId, weight: 1 }]
         .map(e => e.id).filter(id => !MONSTERS[id]);
       if (badCg.length) console.warn('[contagion] roster/boss references unknown monster id(s):', badCg);
     }
-    this.holdfastField = (extra.find(o => o.id === 'holdfast') as HoldfastField | undefined) ?? null;
+    this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
     if (this.holdfastField) {
       const badHf = this.holdfastField.surge().defs
         .flatMap(d => [d.guardian.keeperId, ...(d.guardian.rosterIds ?? [])])
         .filter(id => !MONSTERS[id]);
       if (badHf.length) console.warn('[holdfast] guardian references unknown monster id(s):', badHf);
     }
-    this.myceliaField = (extra.find(o => o.id === 'mycelia') as MyceliaField | undefined) ?? null;
+    this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     if (this.myceliaField) {
       const s = this.myceliaField.surge();
       const badMy = [...(FACTIONS[s.faction]?.table ?? []), { id: s.heartbloom.defId, weight: 1 }]

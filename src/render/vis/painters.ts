@@ -146,6 +146,31 @@ export function pathBand(ctx: CanvasRenderingContext2D, group: readonly Doodad[]
   }
 }
 
+// --- Cached gradient pool ------------------------------------------------------
+// createRadialGradient per frame is an allocation + parse the hot painters
+// (pods breathing every frame in bog country) cannot afford. Gradients are
+// plain paint objects, reusable across frames ON THE SAME CONTEXT and they
+// live in the CURRENT TRANSFORM at fill time — so local-space gradients pool
+// perfectly. Keyed by full geometry+stops signature; callers quantize any
+// breathing radii so a pulsing bulb cycles 2-3 entries instead of minting
+// forever. Stops build lazily (only on a miss).
+const gradPools = new WeakMap<CanvasRenderingContext2D, Map<string, CanvasGradient>>();
+
+export function cachedRadial(ctx: CanvasRenderingContext2D, key: string,
+  x0: number, y0: number, r0: number, x1: number, y1: number, r1: number,
+  stops: () => [number, string][]): CanvasGradient {
+  let pool = gradPools.get(ctx);
+  if (!pool) { pool = new Map(); gradPools.set(ctx, pool); }
+  let g = pool.get(key);
+  if (!g) {
+    g = ctx.createRadialGradient(x0, y0, r0, x1, y1, r1);
+    for (const [at, col] of stops()) g.addColorStop(at, col);
+    if (pool.size > 512) pool.clear(); // palette shift / zone churn resets
+    pool.set(key, g);
+  }
+  return g;
+}
+
 /** THE BLEND UNDERLAY (DoodadVisualDef.blend): paints a group's merged
  *  silhouette as stacked outward rings — a discrete gradient from `strength`
  *  at the body to nothing at `feather` — so ground kinds MESH into the
@@ -590,25 +615,42 @@ const liquid: GroupPainter = (env, group, def) => {
     }
   }
   if (p.glassSheen) {
-    // Ice: diagonal glass bands sliding slowly — the frozen mirror.
+    // Ice: diagonal glass bands sliding slowly — the frozen mirror. Drawn
+    // per GROUP, not per disc: a few long diagonal bands sweep the whole
+    // clipped sheet at CONSTANT cost. The old per-disc version (2 gradient
+    // allocations + fills per disc per frame) turned a frozen RIVER — one
+    // group, hundreds of lattice discs — into a per-frame stroke storm; the
+    // harness caught it as a tundra hitch cluster.
     const col = resolveColor(p.glassSheen.color, theme);
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const d of group) {
+      x0 = Math.min(x0, d.pos.x - d.radius); y0 = Math.min(y0, d.pos.y - d.radius);
+      x1 = Math.max(x1, d.pos.x + d.radius); y1 = Math.max(y1, d.pos.y + d.radius);
+    }
+    const span = Math.max(x1 - x0, y1 - y0);
+    const bands = Math.min(4, 2 + (span > 600 ? 1 : 0) + (span > 1400 ? 1 : 0));
     ctx.save();
     blobPath(ctx, group);
     ctx.clip();
-    for (const d of group) {
-      for (let k = 0; k < 2; k++) {
-        const off = ((time * 9 + k * d.radius * 0.9 + d.pos.y * 0.3) % (d.radius * 2.4)) - d.radius * 1.2;
-        const g = ctx.createLinearGradient(
-          d.pos.x + off - 14, d.pos.y - off + 14,
-          d.pos.x + off + 14, d.pos.y - off - 14);
-        g.addColorStop(0, withAlpha(col, 0));
-        g.addColorStop(0.5, withAlpha(col, 0.16));
-        g.addColorStop(1, withAlpha(col, 0));
-        ctx.fillStyle = g;
-        ctx.globalAlpha = 1;
-        ctx.fillRect(d.pos.x - d.radius, d.pos.y - d.radius, d.radius * 2, d.radius * 2);
-      }
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = col;
+    // Bands run along the (1,1) diagonal and drift across the sheet's
+    // anti-diagonal extent; each keeps its own phase.
+    const reach = (x1 - x0) + (y1 - y0);
+    for (let k = 0; k < bands; k++) {
+      const drift = ((time * 26 + k * reach / bands + x0 * 0.3) % reach);
+      const bx = x0 + drift, by = y1 - drift;
+      ctx.beginPath();
+      ctx.moveTo(bx - span, by - span);
+      ctx.lineTo(bx + span, by + span);
+      ctx.globalAlpha = 0.06;
+      ctx.lineWidth = 30;
+      ctx.stroke();
+      ctx.globalAlpha = 0.08;
+      ctx.lineWidth = 12;
+      ctx.stroke();
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
   if (p.crawl) {
@@ -1469,13 +1511,15 @@ const pod: GroupPainter = (env, group, def) => {
         Math.sin(a) * ry * (0.95 + hash01(i, seed + 7) * 0.2));
       ctx.stroke();
     }
-    // The membrane: a sun-poled gradient over the whole bulb.
+    // The membrane: a sun-poled gradient over the whole bulb. POOLED (the
+    // breathing radius quantizes to whole px, so a pulsing pod cycles a few
+    // cached gradients instead of allocating two per frame).
     const L = VIS_CFG.lightAngle;
-    const px = Math.cos(L) * r * 0.3, py = Math.sin(L) * ry * 0.3;
-    const mg = ctx.createRadialGradient(px, py, 0, 0, 0, Math.max(r, ry));
-    mg.addColorStop(0, shade(body, 0.2));
-    mg.addColorStop(0.62, body);
-    mg.addColorStop(1, shade(body, -0.3));
+    const rq = Math.round(r), ryq = Math.round(ry);
+    const px = Math.round(Math.cos(L) * rq * 0.3), py = Math.round(Math.sin(L) * ryq * 0.3);
+    const mg = cachedRadial(ctx, `pod|${body}|${rq}|${ryq}`,
+      px, py, 0, 0, 0, Math.max(rq, ryq),
+      () => [[0, shade(body, 0.2)], [0.62, body], [1, shade(body, -0.3)]]);
     ctx.fillStyle = mg;
     ctx.beginPath(); ctx.ellipse(0, 0, r, ry, 0, 0, Math.PI * 2); ctx.fill();
     // Mottle blotches — unless the skin is woven in bands.
@@ -1525,13 +1569,18 @@ const pod: GroupPainter = (env, group, def) => {
       }
     }
     // The glow INSIDE the membrane — light through skin, not a pasted disc.
-    const gx = 0, gy = ry * p.glowY;
-    const gg = ctx.createRadialGradient(gx, gy, 0, gx, gy, r * p.glowR * 1.5);
-    gg.addColorStop(0, withAlpha(glowCol, 0.5 + 0.35 * pulse));
-    gg.addColorStop(0.6, withAlpha(glowCol, 0.22 * (0.5 + pulse)));
-    gg.addColorStop(1, withAlpha(glowCol, 0));
+    // POOLED with the pulse factored into globalAlpha (profile baked at the
+    // pulse-1 peak; 0.588+0.412·pulse reproduces the old stop-0 curve
+    // exactly, the mid stop lands within a few percent — invisible in play).
+    const gyq = Math.round(ry * p.glowY);
+    const grq = Math.max(1, Math.round(r * p.glowR * 1.5));
+    const gg = cachedRadial(ctx, `podglow|${glowCol}|${grq}|${gyq}`,
+      0, gyq, 0, 0, gyq, grq,
+      () => [[0, withAlpha(glowCol, 0.85)], [0.6, withAlpha(glowCol, 0.33)], [1, withAlpha(glowCol, 0)]]);
     ctx.fillStyle = gg;
+    ctx.globalAlpha = 0.588 + 0.412 * pulse;
     ctx.beginPath(); ctx.ellipse(0, 0, r, ry, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
     // Wet sheen on the sun side, and the rim holding it all in.
     ctx.strokeStyle = withAlpha('#ffffff', 0.25);
     ctx.lineWidth = Math.max(1, r * 0.06);
@@ -6125,9 +6174,11 @@ export function wholeKindSprite(def: DoodadVisualDef, theme: ZoneTheme,
   });
 }
 
-/** Painters that draw sun-anchored (ignore o.rot): their baked blits must
- *  not rotate either, or the lit edge would spin off the global light. */
-const PAINTER_IGNORES_ROT: Record<string, boolean> = { trunk: true };
+/** Painters that draw sun-anchored or upright (ignore o.rot): their baked
+ *  blits must not rotate either — a trunk's lit edge would spin off the
+ *  global light, a reed stand's blades would tip sideways off the fake-2D
+ *  upright convention. */
+const PAINTER_IGNORES_ROT: Record<string, boolean> = { trunk: true, kelp: true };
 
 /** Blit a bakeWhole kind group: one image per doodad, sway (if declared) as
  *  a whole-sprite shear — the tuft recipe, generalized to any ground kind

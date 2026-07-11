@@ -1063,27 +1063,82 @@ export class Renderer {
 
   /** SNOW COVER wash (World.snowCover): drifted white laid over the floor,
    *  deeper in the noise-hollows so a half-melted fall reads patchy, near
-   *  solid at a full blanket. Viewport cells only; a boundless-arena zone
-   *  wears it the same way. */
+   *  solid at a full blanket. BAKED per floor-chunk tile at a QUANTIZED
+   *  cover level: the old path ran ~3k valueNoise + fillRect over the whole
+   *  viewport EVERY frame — a permanent tax in frozen biomes, where
+   *  frozenBaseline pins cover on forever. Cover moves slowly, so a bucket
+   *  flip re-bakes a visible tile every few seconds at worst; steady state
+   *  is a handful of drawImages. */
+  private snowChunks = new Map<string, { img: HTMLCanvasElement; cover: number }>();
+  private snowZoneRef: unknown = null;
+
   private drawSnowCover(world: World, vw: number, vh: number): void {
     const cover = world.snowCover;
     if (cover <= 0.02) return;
+    if (this.snowZoneRef !== world.zone) {
+      this.snowZoneRef = world.zone;
+      this.snowChunks.clear();
+    }
     const { ctx } = this;
-    const cell = 22;
-    const x0 = Math.floor(this.cam.x / cell) * cell, y0 = Math.floor(this.cam.y / cell) * cell;
-    ctx.fillStyle = '#eaf2f7';
-    for (let y = y0; y < this.cam.y + vh + cell; y += cell) {
-      for (let x = x0; x < this.cam.x + vw + cell; x += cell) {
+    const C = VIS_CFG.ground.chunk; // ride the floor-chunk grid
+    const x0 = Math.floor(this.cam.x / C), x1 = Math.floor((this.cam.x + vw) / C);
+    const y0 = Math.floor(this.cam.y / C), y1 = Math.floor((this.cam.y + vh) / C);
+    // HYSTERESIS + BUDGET: a tile re-bakes only once the live cover has moved
+    // a real step past what it baked (0.06 — wider than any accumulate/melt
+    // equilibrium dither), and only a few tiles per frame; the rest keep
+    // drawing their slightly-stale snow. Without both, a snow front whose
+    // accumulation fights the melt at a threshold FLAPPED every visible tile
+    // every frame — a constant whole-viewport canvas-realloc storm the perf
+    // harness caught as tundra's 54ms floor (and the GPU error log).
+    let rebakes = 0;
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const key = `${cx},${cy}`;
+        let e = this.snowChunks.get(key);
+        if (!e || (Math.abs(e.cover - cover) > 0.06 && rebakes < 4)) {
+          if (e) rebakes++;
+          e = { img: this.bakeSnowChunk(cx * C, cy * C, C, cover), cover };
+          this.snowChunks.set(key, e);
+          // Cap rides the floor-chunk cap: it must exceed the largest visible
+          // chunk count or walking evicts live tiles every frame — the
+          // realloc churn read as a hitch storm (and GPU pressure) at 1440p.
+          while (this.snowChunks.size > VIS_CFG.ground.maxChunks) {
+            const oldest = this.snowChunks.keys().next().value;
+            if (oldest === undefined) break;
+            this.snowChunks.delete(oldest);
+          }
+        } else {
+          this.snowChunks.delete(key); // LRU touch
+          this.snowChunks.set(key, e);
+        }
+        ctx.drawImage(e.img, cx * C, cy * C);
+      }
+    }
+  }
+
+  /** One snow-wash tile: the per-cell noise loop the old per-frame path ran,
+   *  run ONCE per (tile, cover bucket). Cells snap to the GLOBAL wash grid
+   *  (not the tile origin) so a cell straddling a tile seam paints the same
+   *  noise on both sides — no seam lines. */
+  private bakeSnowChunk(ox: number, oy: number, C: number, cover: number): HTMLCanvasElement {
+    const c = document.createElement('canvas');
+    c.width = C; c.height = C;
+    const g = c.getContext('2d')!;
+    const cell = SNOW_CFG.washCell;
+    g.fillStyle = '#eaf2f7';
+    const gx0 = Math.floor(ox / cell) * cell, gy0 = Math.floor(oy / cell) * cell;
+    for (let wy = gy0; wy < oy + C; wy += cell) {
+      for (let wx = gx0; wx < ox + C; wx += cell) {
         // Broad features (~200u) — DRIFTS, not a checkerboard of cells.
-        const n = valueNoise(x * 0.005, y * 0.005, 77);
+        const n = valueNoise(wx * 0.005, wy * 0.005, 77);
         // Snow settles into the low noise first; a full cover whites out all.
         const depth = clamp(cover * 1.25 - n * 0.55, 0, 1);
         if (depth <= 0.03) continue;
-        ctx.globalAlpha = depth * SNOW_CFG.washAlpha;
-        ctx.fillRect(x, y, cell + 0.5, cell + 0.5);
+        g.globalAlpha = depth * SNOW_CFG.washAlpha;
+        g.fillRect(wx - ox, wy - oy, cell + 0.5, cell + 0.5);
       }
     }
-    ctx.globalAlpha = 1;
+    return c;
   }
 
   /** ANIMATED region visuals (flesh throb, water drift) — the only per-frame
@@ -1165,7 +1220,7 @@ export class Renderer {
           y: a.pos.y - Math.sin(a.facing) * a.radius * 0.9,
           age: 0, max: 1.1, r0: a.radius * 0.6, kind: 'ripple',
         });
-      } else if (a.groundKind === 'water') {
+      } else if (regionKind(a.groundKind)?.surfaceWake === 'ripple') {
         this.lastFxSpawn.set(a.id, world.time);
         this.liquidFx.push({
           x: a.pos.x, y: a.pos.y + a.radius * 0.3,
@@ -2347,9 +2402,9 @@ export class Renderer {
     const lookDef = lookOf(a.look);
     // Part-grammar portraits are whole-body poses: they ALWAYS track facing.
     const rot = lookDef || shapeIsOriented(a.shape) ? a.facing : 0;
-    // ICE MIRROR: a faded, flipped ghost of the body beneath it — the frozen
-    // sheet reflects whoever crosses it.
-    if (a.groundKind === 'ice' && !flash) {
+    // SURFACE MIRROR (RegionKind.surfaceMirror — ice today): a faded, flipped
+    // ghost of the body beneath it — the frozen sheet reflects its crossers.
+    if (regionKind(a.groundKind)?.surfaceMirror && !flash) {
       ctx.save();
       ctx.translate(0, a.radius * 1.85);
       ctx.scale(1, -0.8);

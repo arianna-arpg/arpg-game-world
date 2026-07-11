@@ -484,6 +484,14 @@ export interface DoodadRule {
    *  zone-level fuse pass (fuseGroundBodies) then closes sliver gaps between
    *  near-touching bodies of the same kind + flags. Ground kinds only. */
   pour?: PourSpec;
+  /** HAZARD GROUND: structure/landmark/camp siting refuses to stand on this
+   *  kind (the derived hazardGrounds() list — was a literal array). A
+   *  package's new pit or pool joins the siting rules with one word. */
+  hazardGround?: boolean;
+  /** MUTABLE by world events: an Incursion's doodad_mutation may graft onto
+   *  this kind (world.ts eldritchMutateDoodads). A derived predicate, never
+   *  a literal id set in engine paths. */
+  mutable?: boolean;
 }
 
 /** How a lifeless breakable gives way (World.popBrittle executes it). */
@@ -544,9 +552,9 @@ export function bodyRadiusOf(d: Doodad): number {
 const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // Solids (must not pile on each other; walk-gated in grid zones). Spacings are
   // migrated verbatim from the old per-stamp literals so existing zones don't shift.
-  rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
-  cliff:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40 },
-  wall:      { overlap: 'solid', blocksMove: true, blocksShot: true },
+  rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, mutable: true },
+  cliff:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, mutable: true },
+  wall:      { overlap: 'solid', blocksMove: true, blocksShot: true, mutable: true },
   // THE BRITTLE KIT — lifeless breakables (DoodadRule.brittle; World.popBrittle).
   // Pots pop underfoot or to a stray arrow; the fissured plug collapses when a
   // body nears; the secret face gives to a strike — or a deliberate lean.
@@ -599,8 +607,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // is a one-crown patch (aim assist already can't hold what waits under it),
   // a grove cluster opens as one, a forest is a roof. Cover/reveal/status all
   // ride VEIL_DEFAULTS unless a kind says otherwise.
-  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {} },
-  palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {} },
+  tree:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {}, mutable: true },
+  palm:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {}, mutable: true },
   /** Evergreen spire — tundra/deepwood conifer (pineCrown canopy). */
   conifer:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.26, veil: {} },
   /** The FOREST's canopy body: a broad oak whose crown is built to KNIT —
@@ -633,8 +641,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   rubble:    { overlap: 'ground', walkOnly: true },
   banner_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
-  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 } },
-  tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22 },
+  thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true },
+  tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true },
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
   // read as distinct shards/vents (crystal bumped 30→60 so two never near-touch).
   crystal:   { overlap: 'solid', blocksMove: true, blocksShot: true,  spacing: 60, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -650,12 +658,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // blockers could choke a corridor. Water keeps a depth heart so its ponds
   // still swim past the wading shelf. Vines deliberately stay a scatter:
   // a tangle IS an interlocking weave.
-  chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true, pour: { fuseGap: 0 } },
+  chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true, pour: { fuseGap: 0 }, hazardGround: true },
   // LAVA is a LIQUID now: crossable ground that COOKS the uninsured (the
   // 'lava' RegionKind carries the standDamage; fliers, habitat-matched
   // bodies and immuneGround bearers wade free). The impassable molten
   // WALL — the caldera's spiral — is the separate magma_core kind below.
-  lava:      { overlap: 'ground', pour: {} },
+  lava:      { overlap: 'ground', pour: {}, hazardGround: true },
   magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false, pour: { fuseGap: 0 } },
   // The wayfarer kit: story furniture for roads, coasts and working woods.
   weathered_statue: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -682,9 +690,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
   bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground', pour: {} },
-  swamp:     { overlap: 'ground', pour: {} },
-  bog:       { overlap: 'ground', pour: {} },
-  water:     { overlap: 'ground', pour: { depthCore: true } },
+  swamp:     { overlap: 'ground', pour: {}, hazardGround: true },
+  bog:       { overlap: 'ground', pour: {}, hazardGround: true },
+  water:     { overlap: 'ground', pour: { depthCore: true }, hazardGround: true },
   ice:       { overlap: 'ground', pour: {} },
   sand:      { overlap: 'ground', pour: {} },
   heat_shimmer: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'chasm'] },
@@ -726,7 +734,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // by the engine); void_chasm is an inert fall pit (reports 'void' → recovery);
   // ruin_obelisk is a solid that carries a lashing trap DoodadEffect.
   light_spot:       { overlap: 'trigger', spacing: 60 },
-  void_chasm:       { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true },
+  void_chasm:       { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true, hazardGround: true },
   ruin_obelisk:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46 },
   descent_platform: { overlap: 'trigger', spacing: 40 },
   // Marine: kelp is walkable cover (decorative); coral + sea rocks are solids.
@@ -792,7 +800,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   impaler_stake: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   hell_chain:    { overlap: 'ground', walkOnly: true },
   ember_fissure: { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 70, forbidOn: ['water', 'lava', 'chasm'] },
-  abyssal_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true },
+  abyssal_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true, hazardGround: true },
   gate_stair:    { overlap: 'ground', walkOnly: true },
 };
 
@@ -810,6 +818,7 @@ export function registerDoodadRule(kind: string, rule: DoodadRule): void {
     console.warn(`[doodads] re-registering rule for '${kind}' — overriding`);
   }
   RUNTIME_RULES[kind] = rule;
+  hazardGroundsCache = null; // a late hazard row must join the siting rules
 }
 
 /** The placement rule for a kind (a safe non-blocking ground default if unlisted). */
@@ -2112,7 +2121,22 @@ export function ensureGrid(ctx: GenCtx): GridWalkField {
 }
 
 const APRON_CELLS = 1.6;      // how far outside a door its guaranteed-clear apron sits
-const HAZARD_GROUNDS: DoodadKind[] = ['chasm', 'water', 'lava', 'bog', 'swamp', 'void_chasm'];
+
+/** Hazard grounds structure/landmark/camp siting must refuse — DERIVED from
+ *  DoodadRule.hazardGround (never a literal list: a package's tar pit joins
+ *  the siting rules with one row flag). Memoized; registerDoodadRule
+ *  invalidates so late package registrations count. Consumers are boolean
+ *  ANY-tests, so derivation order can never shift a placement. */
+let hazardGroundsCache: DoodadKind[] | null = null;
+function hazardGrounds(): DoodadKind[] {
+  if (!hazardGroundsCache) {
+    hazardGroundsCache = [
+      ...(Object.keys(DOODAD_RULES) as DoodadKind[]),
+      ...Object.keys(RUNTIME_RULES),
+    ].filter(k => doodadRule(k).hazardGround);
+  }
+  return hazardGroundsCache;
+}
 
 /** Is a point inside any doodad of the given kinds? (Point probe — the cheap
  *  siting test big footprints use instead of a whole-disc areaFreeOf, which a
@@ -2144,7 +2168,7 @@ function findStructureSpot(
     const hazardProbes = [c,
       vec(rect.x, rect.y), vec(rect.x + w, rect.y), vec(rect.x, rect.y + h), vec(rect.x + w, rect.y + h),
       vec(c.x, rect.y), vec(c.x, rect.y + h), vec(rect.x, c.y), vec(rect.x + w, c.y)];
-    if (hazardProbes.some(p => pointOnKinds(ctx, p, HAZARD_GROUNDS))) continue;
+    if (hazardProbes.some(p => pointOnKinds(ctx, p, hazardGrounds()))) continue;
     // Pre-existing grid zones (field/rooms/flesh): the footprint's anchor points
     // must sit on walkable ground pre-paint, or the castle lands inside rock.
     if (ctx.walk && !ctx.gridEnsured) {
@@ -2937,7 +2961,7 @@ registerStamp('structure', (ctx, spec) => {
   // pattern of every existing structure stamp is untouched).
   if (s.plan || s.generator) { placeStructurePlan(ctx, s); return; }
   const at = findSpot(ctx, Math.max(s.halfW, s.halfH) * 1.3, true, 30);
-  if (at && areaFreeOf(ctx, at, Math.max(s.halfW, s.halfH) * 1.2, HAZARD_GROUNDS)) {
+  if (at && areaFreeOf(ctx, at, Math.max(s.halfW, s.halfH) * 1.2, hazardGrounds())) {
     placeStructure(ctx, s, at);
   }
 });
@@ -3067,7 +3091,7 @@ function findLandmarkSpot(ctx: GenCtx, r: number): Vec2 | null {
     // Hazard-ground probes (the structure sitter's discipline): a pit straddling
     // an earlier recipe's lava river would bury its own approach.
     const hz = [p, vec(p.x - r * 0.6, p.y), vec(p.x + r * 0.6, p.y), vec(p.x, p.y - r * 0.6), vec(p.x, p.y + r * 0.6)];
-    if (hz.some(q => pointOnKinds(ctx, q, HAZARD_GROUNDS))) continue;
+    if (hz.some(q => pointOnKinds(ctx, q, hazardGrounds()))) continue;
     return p;
   }
   return null;
@@ -4449,7 +4473,7 @@ function stampCamp(ctx: GenCtx): void {
   let center: Vec2 | null = null;
   for (let tries = 0; tries < 14 && !center; tries++) {
     const p = findSpot(ctx, Math.max(halfW, halfH) * 0.55, true, 0);
-    if (p && areaFreeOf(ctx, p, footprint, HAZARD_GROUNDS)) center = p;
+    if (p && areaFreeOf(ctx, p, footprint, hazardGrounds())) center = p;
   }
   if (!center) return;
   ctx.reserved.push({ pos: center, radius: footprint + 20 });
@@ -4494,7 +4518,7 @@ function stampRuin(ctx: GenCtx): void {
   let center: Vec2 | null = null;
   for (let tries = 0; tries < 10 && !center; tries++) {
     const p = findSpot(ctx, R + 40, true, 30);
-    if (p && areaFreeOf(ctx, p, R + 30, HAZARD_GROUNDS)) center = p;
+    if (p && areaFreeOf(ctx, p, R + 30, hazardGrounds())) center = p;
   }
   if (!center) return;
   ctx.reserved.push({ pos: center, radius: R + 40 });

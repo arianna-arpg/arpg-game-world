@@ -36,6 +36,7 @@ import { CLASSES, type ClassDef } from './data/classes';
 import { DEV, GAME_TITLE } from './config';
 import { mountDevGemSpawner } from './dev/gemSpawner';
 import { mountPassiveEditor } from './dev/passiveEditor';
+import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
 import { applyCredits, creditsForDeath, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, type Account } from './meta/account';
 import {
   loadAccount, loadAccountAsync, loadSettings, loadSettingsAsync,
@@ -330,6 +331,9 @@ declare global {
       padPointer: () => PadPointer;
       fakePad: (p: FakePad | null) => void;
       step: (frames?: number, dtMs?: number) => void;
+      devStartRun: (classId?: string) => string;
+      perfFrames: (reset?: boolean) => { gap: number[]; sim: number[]; ren: number[] };
+      perfSweep: (opts?: PerfSweepOpts) => Promise<PerfSweepReport>;
     };
   }
 }
@@ -361,6 +365,29 @@ window.__game = {
   // Drive N frames synchronously — the antidote to rAF freezing in hidden
   // tabs; the ONLY way input polling (incl. the pad) runs under a harness.
   step: (frames = 1, dtMs = 16.7) => { for (let i = 0; i < frames; i++) tick(last + dtMs); },
+  // DEV/QA: start a run headlessly (the perf harness's ignition) — the real
+  // startGame path under the first (or named) class, menus dismissed.
+  devStartRun: (classId?: string) => {
+    const cls = CLASSES.find(c => c.id === classId) ?? CLASSES[0];
+    document.getElementById('start-menu')?.classList.add('hidden');
+    document.getElementById('class-select')?.classList.add('hidden');
+    startGame(cls);
+    return cls.id;
+  },
+  // FRAME TELEMETRY readout: the ring buffers as plain arrays, oldest-first
+  // (rAF gap = true pacing, sim ms, render ms). reset=true also clears —
+  // how the perf sweep separates a zone's entry burst from its steady state.
+  perfFrames: (reset = false) => {
+    const n = perfCount, start = (perfIdx - n + PERF_RING) % PERF_RING;
+    const out = { gap: new Array<number>(n), sim: new Array<number>(n), ren: new Array<number>(n) };
+    for (let i = 0; i < n; i++) {
+      const k = (start + i) % PERF_RING;
+      out.gap[i] = perfGap[k]; out.sim[i] = perfSim[k]; out.ren[i] = perfRen[k];
+    }
+    if (reset) { perfIdx = 0; perfCount = 0; }
+    return out;
+  },
+  perfSweep: (opts?: PerfSweepOpts) => perfSweep(opts),
 };
 
 // Cross-check the data files; authoring mistakes warn instead of failing silently.
@@ -550,6 +577,25 @@ function spawnCoopAlly(): void {
   world.addSeat(id, cls, COOP_HUMAN ? new LocalCoopInput(input.keys) : new ScriptedInput());
 }
 
+// --- FRAME TELEMETRY (always on; read via __game.perfFrames) -----------------
+// Three fixed ring buffers of per-frame wall-clock samples: the rAF GAP (true
+// frame pacing — the jitter a player feels, compositor included), the SIM
+// milliseconds (input + AI + world.update), and the RENDER milliseconds. Cost
+// is two performance.now() calls and three float writes per frame — nothing.
+// The perf harness (npm run perf → src/dev/perf.ts) reduces these to
+// percentiles/hitch counts per zone; a future in-game FPS readout reads the
+// same rings.
+const PERF_RING = 2048;
+const perfGap = new Float32Array(PERF_RING);
+const perfSim = new Float32Array(PERF_RING);
+const perfRen = new Float32Array(PERF_RING);
+let perfIdx = 0, perfCount = 0;
+function perfPush(gap: number, sim: number, ren: number): void {
+  perfGap[perfIdx] = gap; perfSim[perfIdx] = sim; perfRen[perfIdx] = ren;
+  perfIdx = (perfIdx + 1) % PERF_RING;
+  if (perfCount < PERF_RING) perfCount++;
+}
+
 let last = performance.now();
 /** The rAF pump: one tick, then re-arm. All work lives in tick() so tests can
  *  drive frames SYNCHRONOUSLY via __game.step() — a hidden tab freezes rAF
@@ -560,6 +606,7 @@ function frame(now: number): void {
   requestAnimationFrame(frame);
 }
 function tick(now: number): void {
+  const frameGapMs = now - last; // true frame pacing, BEFORE the dt clamp
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
 
@@ -587,6 +634,7 @@ function tick(now: number): void {
   if (running) {
     if (net.isHost) {
       // ---- HOST (and single-player / local co-op): run the one real sim. ----
+      const perfSimT0 = performance.now();
       // 1. Local UI (pause menu, panels) — never gameplay intent.
       handleLocalPanels();
       // 2. Gather this frame's per-seat intent into the transport. The local seat
@@ -672,7 +720,9 @@ function tick(now: number): void {
       // Close a lingering toll menu if the wardens were slain / roused mid-bargain.
       if (ui.tollOpen && !world.holdfastParleyOpen()) ui.closeToll();
       feedRendererAim();
+      const perfRenT0 = performance.now();
       renderer.render(world);
+      perfPush(frameGapMs, perfRenT0 - perfSimT0, performance.now() - perfRenT0);
 
       // Broadcast to connected clients. Gated on a REAL wire (never LocalTransport),
       // so single-player AND local co-op (a stand-in ally is a LocalTransport peer)

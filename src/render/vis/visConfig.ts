@@ -136,6 +136,14 @@ export const VIS_CFG = {
      *  old bake until their turn — a repaint must never rebake a whole
      *  screen of chunks in one frame (that was a visible hitch). */
     rebakesPerFrame: 3,
+    /** TIME budget (ms) for ALL chunk baking in one frame — stale rebakes,
+     *  never-baked visible chunks, and the prefetch ring all spend from it.
+     *  One never-baked visible chunk is always allowed through (streaming
+     *  must progress); the rest draw a flat floor stand-in for a frame or
+     *  two. The count caps bound churn; THIS bounds the hitch — a teleport
+     *  or a doodad-set change used to bake a whole screenful in one frame
+     *  (the 100-200ms zone-entry stall the perf harness reports as `entry`). */
+    bakeBudgetMs: 6,
     /** Ground kinds tagged DoodadVisualDef.bakeWhole render as variant-baked
      *  whole-doodad sprites (brush clumps, ferns) instead of live stroke
      *  storms — the understory half of the deep-forest fix. */

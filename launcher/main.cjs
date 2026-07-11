@@ -148,6 +148,7 @@ const flagValue = (flag) => {
   return hit.includes('=') ? hit.split('=')[1] : '';
 };
 const SMOKE = flagValue('--smoke-test') !== null ? (flagValue('--smoke-test') || 'game') : null;
+const PERF = flagValue('--perf-test') !== null;
 const PLAY_DIRECT = flagValue('--play') !== null;
 
 /** A Steam Deck / gamescope session (Game Mode, or any gamescope nest) —
@@ -681,11 +682,123 @@ async function smoke() {
   app.exit(errors.length ? 1 : 0);
 }
 
+// -------------------------------------------------------------- perf harness
+
+/** `npm run perf` — boot the real desktop game VISIBLE (true compositor
+ *  pacing; a hidden window throttles rAF and lies), run the in-page perf
+ *  sweep (src/dev/perf.ts) over the tileset matrix, gate the numbers against
+ *  balance/perf.config.json, write a report, exit 0 / 2 (budget breached) /
+ *  1 (harness error) — the genqa contract for frame cost. Budgets are DATA:
+ *  each zone is judged RELATIVE to the same run's town control (so the
+ *  verdict travels across machines) plus generous absolute backstops. */
+async function perfMode() {
+  /** @param {number} ms */
+  const wait = (ms) => new Promise(r => setTimeout(r, ms));
+  const cfgPath = path.join(BASE, 'balance', 'perf.config.json');
+  /** @type {any} */
+  let budgets;
+  try { budgets = JSON.parse(fs.readFileSync(cfgPath, 'utf8')); }
+  catch (e) { console.log('PERF FAILED: cannot read ' + cfgPath + ': ' + String(e)); app.exit(1); return; }
+  /** @type {string[]} */
+  const errors = [];
+  try {
+    const built = await ensureBuilt(); // a stale dist would measure old code
+    if (!built.ok) throw new Error('build failed');
+    const url = await ensureServer();
+    gameWin = createGameWindow({ show: true });
+    gameWin.webContents.setBackgroundThrottling(false);
+    gameWin.webContents.on('render-process-gone', (_e, d) => errors.push('renderer gone: ' + d.reason));
+    await gameWin.loadURL(url);
+    await wait(2500); // async boot: account load, world init, start menu
+    const ready = await gameWin.webContents.executeJavaScript(`typeof window.__game`);
+    if (ready !== 'object') throw new Error('window.__game is ' + ready + ' — game did not boot');
+    const opts = {
+      seconds: Number(flagValue('--seconds') || budgets.sampleSeconds || 6),
+      settleSeconds: Number(budgets.settleSeconds || 1.5),
+      filter: flagValue('--filter') || '',
+    };
+    console.log(`PERF: sweeping tilesets (${opts.seconds}s steady + ${opts.settleSeconds}s entry per zone` +
+      (opts.filter ? `, filter '${opts.filter}'` : '') + `)…`);
+    /** @type {any} */
+    const report = await gameWin.webContents.executeJavaScript(
+      `window.__game.perfSweep(${JSON.stringify(opts)})`, true);
+
+    // ---- the gate: relative-to-town caps + absolute backstops, all data ----
+    const rel = budgets.relative ?? {};
+    const abs = budgets.absolute ?? {};
+    const ctl = report.control;
+    const secs = report.sampleSeconds || 6;
+    /** @type {string[]} */
+    const breaches = [];
+    /** @type {string[]} */
+    const lines = [];
+    /** @param {any} z @param {string} name */
+    const row = (z, name) =>
+      `${name.padEnd(16)} ${String(z.gapP50).padStart(6)} ${String(z.gapP95).padStart(6)} ${String(z.gapP99).padStart(6)}` +
+      ` ${String(z.gapMax).padStart(7)} ${String(z.hitch40).padStart(3)} ${String(z.entryWorstGap).padStart(7)}` +
+      ` ${String(z.simP99).padStart(6)} ${String(z.renP99).padStart(6)}  ${z.zone}`; // zone names already carry their variant
+    lines.push('tileset           gap50  gap95  gap99  gapMax h40   entry  sim99  ren99  zone');
+    lines.push(row(ctl, '(town ctl)'));
+    for (const z of report.zones) {
+      lines.push(row(z, z.tileset));
+      // Per-tileset overrides (budgets.overrides[id]) merge over the shared
+      // caps — the explicit, committed registry of known-heavy zones (each
+      // entry should carry a _todo note; the gate stays data end to end).
+      const ov = (budgets.overrides ?? {})[z.tileset] ?? {};
+      const relZ = { ...rel, ...(ov.relative ?? {}) };
+      const absZ = { ...abs, ...(ov.absolute ?? {}) };
+      const capP50 = ctl.gapP50 * (relZ.gapP50Mul ?? 99) + (relZ.slackMs ?? 0);
+      const capP99 = ctl.gapP99 * (relZ.gapP99Mul ?? 99) + (relZ.slackMs ?? 0);
+      if (z.gapP50 > capP50) breaches.push(`${z.tileset}: gapP50 ${z.gapP50}ms > cap ${capP50.toFixed(1)} (town ${ctl.gapP50} x${relZ.gapP50Mul} +${relZ.slackMs})`);
+      if (z.gapP99 > capP99) breaches.push(`${z.tileset}: gapP99 ${z.gapP99}ms > cap ${capP99.toFixed(1)} (town ${ctl.gapP99} x${relZ.gapP99Mul} +${relZ.slackMs})`);
+      if (absZ.gapMaxMs != null && z.gapMax > absZ.gapMaxMs) breaches.push(`${z.tileset}: gapMax ${z.gapMax}ms > ${absZ.gapMaxMs}`);
+      if (absZ.maxHitch40PerMin != null && z.hitch40 * 60 / secs > absZ.maxHitch40PerMin) {
+        breaches.push(`${z.tileset}: ${z.hitch40} frames >40ms in ${secs}s (${(z.hitch40 * 60 / secs).toFixed(1)}/min > ${absZ.maxHitch40PerMin}/min)`);
+      }
+      if (absZ.maxHitch70PerMin != null && z.hitch70 * 60 / secs > absZ.maxHitch70PerMin) {
+        breaches.push(`${z.tileset}: ${z.hitch70} frames >70ms in ${secs}s (${(z.hitch70 * 60 / secs).toFixed(1)}/min > ${absZ.maxHitch70PerMin}/min)`);
+      }
+      if (absZ.entryWorstGapMs != null && z.entryWorstGap > absZ.entryWorstGapMs) {
+        breaches.push(`${z.tileset}: entry burst ${z.entryWorstGap}ms > ${absZ.entryWorstGapMs}`);
+      }
+    }
+    console.log(lines.join('\n'));
+    if (report.skipped?.length) console.log('skipped (unknown/unmintable): ' + report.skipped.join(', '));
+    console.log(`canvas ${report.canvas.w}x${report.canvas.h} @dpr ${report.dpr}`);
+
+    // ---- report files (balance/reports is gitignored, like every gate) ----
+    const stampStr = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+    const dir = path.join(BASE, 'balance', 'reports', 'perf_' + stampStr);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ budgets, report, breaches }, null, 2));
+    fs.writeFileSync(path.join(dir, 'report.md'), [
+      '# perf ' + stampStr, '',
+      '```', ...lines, '```', '',
+      breaches.length ? '## BREACHES\n' + breaches.map(b => '- ' + b).join('\n') : 'No budget breached.',
+    ].join('\n'));
+    console.log('report -> ' + dir);
+
+    if (errors.length) throw new Error(errors.join('; '));
+    if (breaches.length) {
+      console.log('PERF BREACHED:');
+      for (const b of breaches) console.log('  - ' + b);
+    } else {
+      console.log('PERF OK — no budget breached.');
+    }
+    gameServer?.close();
+    app.exit(breaches.length ? 2 : 0);
+  } catch (e) {
+    console.log('PERF FAILED: ' + String(e));
+    gameServer?.close();
+    app.exit(1);
+  }
+}
+
 // --------------------------------------------------------------------- boot
 
 Menu.setApplicationMenu(null);
 
-if (!SMOKE) {
+if (!SMOKE && !PERF) {
   const locked = app.requestSingleInstanceLock();
   if (!locked) {
     app.quit();
@@ -710,6 +823,7 @@ app.on('web-contents-created', (_e, wc) => {
 app.whenReady().then(async () => {
   boot('electron ready');
   if (SMOKE) { wireIpc(); await smoke(); return; }
+  if (PERF) { wireIpc(); await perfMode(); return; }
   wireIpc();
   // STRAIGHT INTO THE GAME: --play asks for it, and a gamescope / Steam Deck
   // session implies it — a console-style boot wants the game, not a utility

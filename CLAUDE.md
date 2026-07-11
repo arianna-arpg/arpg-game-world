@@ -25,6 +25,16 @@ and the player, monsters, and minions all act through a single skill pipeline
   boot the real game window (or launcher), assert `__game` / start menu /
   `/__save` endpoint (or the IPC status round-trip), print `SMOKE … OK`, exit
   0/1. Run these after touching `launcher/` or anything boot-related.
+- `npm run perf` — the PERFORMANCE HARNESS: boots the real desktop game
+  (visible window — true compositor pacing), starts a run, mints one zone per
+  frontier tileset through the real mint path, walks each under real rAF
+  while sampling frame telemetry (rAF-gap p50/p95/p99, hitch counts, sim-vs-
+  render split, entry burst), and gates against `balance/perf.config.json` —
+  each zone judged RELATIVE to the same run's town control plus absolute
+  hitch backstops. Exit 2 on breach; per-run reports in `balance/reports/`.
+  Flags: `-- --filter=mire --seconds=8`. Run after render/engine perf work or
+  when a biome feels stuttery — the sweep derives its matrix from the tileset
+  registry, so new biomes join automatically.
 - `npm run sim -- …` — the BALANCE HARNESS: the real engine headless and
   deterministic (seeded), running scenario suites over reference builds.
   `run --suite smoke` after any `src/data/` change; `sweep skills` ranks every

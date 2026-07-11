@@ -224,7 +224,10 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   // Reed beds ride the kelp painter's ribbon blades, standing straighter and
   // thinner, tipped with cattail seed heads.
-  reeds: { painter: 'kelp', order: 48, params: { color: '#5a7a3a', reed: true } },
+  // Reeds ride the kelp painter as a WHOLE-SPRITE sway bake (the fern
+  // recipe): the blades bake once per variant, the shear supplies the sway —
+  // a reed shoreline was 3-5 live-stroked blades per doodad per frame.
+  reeds: { painter: 'kelp', order: 48, bakeWhole: 'sway', params: { color: '#5a7a3a', reed: true } },
   web: { painter: 'web', order: 42, params: { color: '#d8d4c8' } },
   cactus: {
     painter: 'cactus', order: 53, shadow: 0.6, longShadow: 0.8,
@@ -442,7 +445,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'toadstools', order: 47,
     params: { cap: '#b8434e', speck: '#f0e6d8' },
   },
-  kelp: { painter: 'kelp', order: 48 },
+  kelp: { painter: 'kelp', order: 48, bakeWhole: 'sway' },
   // The kelp TREE: a thin holdfast stipe at ground level (weave between the
   // stalks), the layered frond crown riding the canopy pass above — fading
   // when you step beneath, hiding everyone who doesn't.
