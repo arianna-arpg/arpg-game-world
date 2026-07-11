@@ -68,6 +68,7 @@ import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
+import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
@@ -3309,6 +3310,17 @@ export class UI {
         <button id="opt-foresight">${this.getSettings().castTelegraphs ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Aim Ticks (facing pointers)</span>
+        <span>${Object.values(AIM_TICK_STYLES).map(st =>
+          `<button data-aimtick-style="${st.id}" style="margin-left:5px;${st.id === s.aimTick.style
+            ? 'border-color:var(--gold);color:var(--gold)' : ''}">${st.label}</button>`).join('')}</span>
+      </div>
+      <div class="rebind-row">
+        <span>Aim Tick Opacity</span>
+        <span class="pad-opt"><input type="range" id="opt-aimtick" min="0" max="100" step="5"
+          value="${Math.round(s.aimTick.alpha * 100)}"> <b id="val-aimtick">${s.aimTick.alpha <= 0 ? 'HIDDEN' : `${Math.round(s.aimTick.alpha * 100)}%`}</b></span>
+      </div>
+      <div class="rebind-row">
         <span>Poise/Insight Arcs</span>
         <button id="opt-poolbars" title="When the poise/insight pool arcs show on the life orb:
 SMART — around a recent change, or while dented on builds where the pool carries real weight (default)
@@ -3383,6 +3395,19 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     slider('aimreach', v => { this.getSettings().pad.aimRadius = v; }, v => String(v));
     slider('padspeed', v => { this.getSettings().pad.pointerSpeed = v; }, v => String(v));
     slider('aimassist', v => { this.getSettings().pad.aimAssist = v / 100; }, v => v <= 0 ? 'OFF' : `${v}%`);
+    // AIM TICK opacity: fades every facing pointer; 0 hides them outright
+    // (the see-the-fight option). The renderer reads Settings live — the
+    // drag shows on the battlefield behind the menu, next frame.
+    slider('aimtick', v => { this.getSettings().aimTick.alpha = v / 100; },
+      v => v <= 0 ? 'HIDDEN' : `${v}%`);
+    // AIM TICK style: one button per registry entry (line / dot / mods').
+    root.querySelectorAll<HTMLElement>('[data-aimtick-style]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.getSettings().aimTick.style = btn.dataset.aimtickStyle!;
+        this.saveSettings();
+        this.renderKeybinds(root, onBack);
+      });
+    });
     // Cursor identity: style + tint apply INSTANTLY (applyCursor re-paints the
     // CSS cursor; the pad reticle reads the color live) and persist on click.
     root.querySelectorAll<HTMLElement>('[data-cursor-style]').forEach(btn => {

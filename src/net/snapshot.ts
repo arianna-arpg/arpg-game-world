@@ -45,6 +45,7 @@ export interface ActorW {
   mn: boolean;                 // isMinion() (purple outline)
   passive: boolean;
   ut: boolean;                 // untargetable (ghostly alpha)
+  aims?: false;                // Actor.aims=false (no aim tick) — omit when it aims
   wn?: number;                 // waning presence pulse, 0..1 (omit when 0)
   inv?: number;                // sheet invisible (omit when 0)
   det?: number;                // sheet detectability (omit when 1)
@@ -284,6 +285,7 @@ function actorToW(a: Actor): ActorW {
   };
   if (inv > 0) w.inv = inv;
   if (det !== 1) w.det = det;
+  if (!a.aims) w.aims = false;
   if (a.wane > 0) w.wn = Math.round(a.wane * 100) / 100;
   if (a.kind === 'player') { const s = SEAT_OF(a); if (s) w.seat = s; }
   if (a.adorn) w.adorn = a.adorn;
@@ -453,6 +455,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.life = aw.life; a.es = aw.es; a.absorb = aw.ab ?? 0;
     a.hitFlash = aw.hf; a.downed = aw.downed; a.dead = aw.dead;
     a.passive = aw.passive; a.untargetable = aw.ut;
+    a.aims = aw.aims !== false; // absent = aims (older hosts, ordinary bodies)
     a.wane = aw.wn ?? 0;
     a.owner = aw.mn ? MINION_OWNER : undefined;
     a.kind = aw.seat ? 'player' : undefined;

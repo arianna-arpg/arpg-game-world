@@ -46,6 +46,7 @@ import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
 import { VIS_CFG } from './vis/visConfig';
+import { AIM_TICK_STYLES, DEFAULT_AIM_TICK } from './vis/aimtick';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
 
@@ -2556,14 +2557,21 @@ export class Renderer {
       ctx.globalAlpha = 1;
     }
 
-    // Facing tick — things that don't ACT don't aim (barrels aren't plotting).
-    if (!a.passive) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(Math.cos(a.facing) * a.radius * 0.4, Math.sin(a.facing) * a.radius * 0.4);
-      ctx.lineTo(Math.cos(a.facing) * a.radius, Math.sin(a.facing) * a.radius);
-      ctx.stroke();
+    // AIM TICK — the facing pointer on everything that ACTS in a direction
+    // (a cast pins facing to the cast lock, so this is also the honest
+    // "where it will land" line). Things that don't act don't aim (barrels
+    // aren't plotting), and neither does furniture whose pose froze at
+    // placement (Actor.aims — bone walls, embeds). Style and opacity are
+    // the player's call (Settings.aimTick): any registry style, 0 hides.
+    if (!a.passive && a.aims) {
+      const tick = this.getSettings?.().aimTick ?? DEFAULT_AIM_TICK;
+      const alpha = baseAlpha * clamp(tick.alpha, 0, 1);
+      if (alpha > 0.01) {
+        const style = AIM_TICK_STYLES[tick.style] ?? AIM_TICK_STYLES[DEFAULT_AIM_TICK.style];
+        ctx.globalAlpha = alpha;
+        style.draw(ctx, a.facing, a.radius);
+        ctx.globalAlpha = baseAlpha;
+      }
     }
 
     // Iron banding on breakables: containers read as containers.

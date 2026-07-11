@@ -17,6 +17,7 @@
 
 import { PAD_CFG } from '../core/gamepad';
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
+import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -70,6 +71,10 @@ export interface Settings {
    *  during the wind-up (a faint ring firming toward impact). ON by default;
    *  OFF is the hard-mode read-the-animation purist option. */
   castTelegraphs: boolean;
+  /** The AIM TICK (the facing/cast-direction pointer on acting bodies):
+   *  a style from the registry (render/vis/aimtick.ts — line, dot, …) and
+   *  an opacity. 0 hides ticks entirely — see the monster, not the marker. */
+  aimTick: AimTickOptions;
   /** When the HUD draws the POISE/INSIGHT pool arcs. 'smart' (default):
    *  around a recent change, or while dented on a build where the pool is
    *  real weight (its damage-worth vs the life stack — VIS_CFG.poolArcs).
@@ -89,6 +94,7 @@ export interface SettingsSave {
   lowLifePulse?: boolean;
   gearPickup?: 'vacuum' | 'key';
   castTelegraphs?: boolean;
+  aimTick?: Partial<AimTickOptions>;
   poolBars?: PoolBarsMode;
 }
 
@@ -169,6 +175,7 @@ export const makeSettings = (): Settings => ({
   lowLifePulse: true,
   gearPickup: 'vacuum',
   castTelegraphs: true,
+  aimTick: { ...DEFAULT_AIM_TICK },
   poolBars: 'smart',
 });
 
@@ -181,6 +188,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   lowLifePulse: s.lowLifePulse,
   gearPickup: s.gearPickup,
   castTelegraphs: s.castTelegraphs,
+  aimTick: { ...s.aimTick },
   poolBars: s.poolBars,
 });
 
@@ -218,6 +226,12 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     lowLifePulse: s.lowLifePulse ?? true,
     gearPickup: s.gearPickup === 'key' ? 'key' : 'vacuum',
     castTelegraphs: s.castTelegraphs ?? true,
+    // Tick identity: unknown styles (a removed entry) fall back; the alpha
+    // re-clamps so a hand-edited save can't smuggle a 500% tick.
+    aimTick: {
+      style: AIM_TICK_STYLES[s.aimTick?.style ?? ''] ? s.aimTick!.style! : DEFAULT_AIM_TICK.style,
+      alpha: clamp(s.aimTick?.alpha ?? DEFAULT_AIM_TICK.alpha, 0, 1),
+    },
     // Unknown values (a renamed mode) fall back to the default methodology.
     poolBars: s.poolBars === 'always' || s.poolBars === 'recent' ? s.poolBars : 'smart',
   };
