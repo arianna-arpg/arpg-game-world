@@ -9,6 +9,7 @@
 // ---------------------------------------------------------------------------
 
 import { FEATURE, LEDGER_ACCOUNT_DEATHS, type Account } from './account';
+import { LEDGER_ESSENCE_TOUCHED } from '../data/essences';
 import { IMMORTAL_CFG } from './modes';
 import { CLASSES } from '../data/classes';
 import { SKILLS } from '../data/skills';
@@ -243,10 +244,14 @@ export const UNLOCK_CATALOG: Unlockable[] = [
     description: 'A campfire is laid in Lastlight. Zones already remember their layout and surviving foes as you cross between them; dwell by the fire to REFRESH the wilds on command — every zone repopulates fresh (your cleared objectives stay claimed).',
     payload: { flag: FEATURE.CAMPFIRE } },
 
-  // --- The Salvage Station (the essence economy's front door) ----------------
-  { id: 'feat_salvage_station', kind: 'feature', cost: 60, reqLevel: 0, reqLedger: 'reached_level_5',
+  // --- The Salvage Station (the essence economy's front door). Surfaces the
+  //     moment a line first TOUCHES essence (a Gilded Scamp's spill, most
+  //     likely) — the discovery IS the pitch. One purchase, two doors: the
+  //     bench (break: rarity essence + craft lore) and Brandt's scrap counter
+  //     (sell: coarse volume by quality). -------------------------------------
+  { id: 'feat_salvage_station', kind: 'feature', cost: 60, reqLevel: 0, reqLedger: LEDGER_ESSENCE_TOUCHED,
     label: 'Salvage Station — Town',
-    description: 'A breaker\'s bench is raised in Lastlight. Dwell there to break gear and carried gems into Essence — spend it levelling skills, at Brandt\'s counter, and (as salvaging teaches you each affix) crafting studied affixes directly onto your gear.',
+    description: 'That strange residue has a name: ESSENCE. A breaker\'s bench is raised in Lastlight — dwell there to BREAK gear and carried gems into their rarity\'s essence (coarse, glimmering, brilliant, pristine), studying every affix broken. The same wisdom teaches Brandt to BUY SCRAP at his counter, paying Coarse Essence by an item\'s overall quality — sell for volume, break for the deep tints and the lore. Spend essence levelling skills, at counters, and crafting studied affixes onto your gear.',
     payload: { flag: FEATURE.SALVAGE_STATION } },
   { id: 'feat_craft_second', kind: 'feature', cost: 400, reqLevel: 0, reqLedger: 'reached_level_15', requiresFeature: FEATURE.SALVAGE_STATION,
     label: 'Salvage Station — Twin Anvils',

@@ -8,6 +8,7 @@ import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
 import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, skillContextTags, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
+import { ESSENCES } from '../data/essences';
 import { STATUS_DEFS } from '../engine/status';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
 import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
@@ -3080,6 +3081,25 @@ export class Renderer {
         ctx.shadowBlur = 14;
         ctx.fillStyle = v?.color ?? '#b06bd4';
         ctx.fillText(v?.glyph ?? '؟', d.pos.x, y + 5);
+        ctx.restore();
+        continue;
+      }
+      if (item.kind === 'essence') {
+        // Currency underfoot: the essence's own glyph in its tint, with a
+        // count tag when the packet is fat — reads as a trail mid-chase.
+        const e = ESSENCES[item.essence];
+        ctx.save();
+        ctx.font = 'bold 13px Verdana';
+        ctx.textAlign = 'center';
+        ctx.shadowColor = e.color;
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = e.color;
+        ctx.fillText(e.glyph, d.pos.x, y + 4);
+        if (item.count > 1) {
+          ctx.shadowBlur = 0;
+          ctx.font = 'bold 9px Verdana';
+          ctx.fillText(`×${item.count}`, d.pos.x + 11, y + 8);
+        }
         ctx.restore();
         continue;
       }

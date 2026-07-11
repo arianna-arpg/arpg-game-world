@@ -21,7 +21,8 @@
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { ITEM_BASES } from '../data/itembases';
 import {
-  ESSENCE_OF_GEM, ESSENCE_OF_RARITY, SALVAGE_CFG, type EssenceCost, type EssenceId,
+  ESSENCE_OF_GEM, ESSENCE_OF_RARITY, SALVAGE_CFG, SELL_CFG, VENDOR_ITEM_CFG,
+  type EssenceCost, type EssenceId,
 } from '../data/essences';
 import { UNIQUES } from '../data/uniques';
 import type { SkillInstance, SupportInstance } from './skills';
@@ -104,8 +105,12 @@ function tierQuality(def: AffixDef, tierIdx: number): number {
   return 1 - tierIdx / (def.tiers.length - 1);
 }
 
-/** Essence yield for salvaging a piece of GEAR — the quality formula. */
-export function salvageItemYield(item: ItemInstance): EssenceCost {
+/** The cross-rarity QUALITY scalar — "what the item IS" as one number: its
+ *  tier, every affix (tier quality + roll heat), a white's base-roll game,
+ *  exquisite and unique lines (SALVAGE_CFG weights). THE shared input to
+ *  BOTH salvage lanes: the bench pays it in the RARITY's essence, Brandt's
+ *  counter pays it in coarse through SELL_CFG's exchange rates. */
+export function itemQuality(item: ItemInstance): number {
   const c = SALVAGE_CFG;
   let q = c.base + c.perTier * (item.tier - 1);
   for (const a of item.affixes) {
@@ -120,19 +125,75 @@ export function salvageItemYield(item: ItemInstance): EssenceCost {
     q += c.baseRollQuality * item.baseRoll + (item.superior !== undefined ? c.superiorBonus : 0);
   }
   if (item.uniqueId) q += c.uniqueBonus;
-  return { essence: ESSENCE_OF_RARITY[item.rarity], count: Math.max(1, Math.round(q)) };
+  return q;
+}
+
+/** A carried gem's quality (its level curve — SALVAGE_CFG's gem knobs). */
+function gemQuality(level: number): number {
+  return SALVAGE_CFG.gemBase + SALVAGE_CFG.gemPerLevel * (level - 1);
+}
+
+// THE BENCH LANE (break): pays the RARITY's essence — the only mint for the
+// deep tints — and (in World.salvageItem) studies each broken line into lore.
+
+/** Essence yield for BREAKING a piece of GEAR at the bench. */
+export function salvageItemYield(item: ItemInstance): EssenceCost {
+  return { essence: ESSENCE_OF_RARITY[item.rarity], count: Math.max(1, Math.round(itemQuality(item))) };
 }
 
 /** Essence yield for a carried skill gem — GRANTED sparks yield NOTHING. */
 export function salvageSkillYield(inst: SkillInstance): EssenceCost | null {
   if (inst.granted) return null;
-  const count = Math.max(1, Math.round(SALVAGE_CFG.gemBase + SALVAGE_CFG.gemPerLevel * (inst.level - 1)));
-  return { essence: ESSENCE_OF_GEM[inst.rarity ?? 'common'], count };
+  return { essence: ESSENCE_OF_GEM[inst.rarity ?? 'common'], count: Math.max(1, Math.round(gemQuality(inst.level))) };
 }
 
 export function salvageSupportYield(gem: SupportInstance): EssenceCost {
-  const count = Math.max(1, Math.round(SALVAGE_CFG.gemBase + SALVAGE_CFG.gemPerLevel * (gem.level - 1)));
-  return { essence: 'glimmering' satisfies EssenceId, count };
+  return { essence: 'glimmering' satisfies EssenceId, count: Math.max(1, Math.round(gemQuality(gem.level))) };
+}
+
+// THE COUNTER LANE (sell): Brandt converts ANYTHING to COARSE — quality ×
+// SELL_CFG's cross-rarity exchange rate. Volume, never tints, never lore.
+
+/** Coarse yield for SELLING a piece of gear to a scrap counter. */
+export function sellItemYield(item: ItemInstance): EssenceCost {
+  return {
+    essence: 'coarse',
+    count: Math.max(1, Math.round(itemQuality(item) * SELL_CFG.rarityMul[item.rarity] * SELL_CFG.mul)),
+  };
+}
+
+/** Coarse yield for selling a carried skill gem — GRANTED sparks sell as
+ *  nothing (the rescue hatch can never become a mint, on either lane). */
+export function sellSkillYield(inst: SkillInstance): EssenceCost | null {
+  if (inst.granted) return null;
+  return {
+    essence: 'coarse',
+    count: Math.max(1, Math.round(gemQuality(inst.level) * SELL_CFG.gemRarityMul[inst.rarity ?? 'common'] * SELL_CFG.mul)),
+  };
+}
+
+export function sellSupportYield(gem: SupportInstance): EssenceCost {
+  return {
+    essence: 'coarse',
+    count: Math.max(1, Math.round(gemQuality(gem.level) * SELL_CFG.supportMul * SELL_CFG.mul)),
+  };
+}
+
+/** Brandt's PRICE for a rolled shelf item (VENDOR_ITEM_CFG): coarse at the
+ *  sell value × markup, plus — magic and up — a component of the rarity's
+ *  own essence. The mixture is the point: selling alone can't buy the good
+ *  shelf; the bench's tints complete the price. */
+export function vendorItemPrice(item: ItemInstance): EssenceCost[] {
+  const out: EssenceCost[] = [{
+    essence: 'coarse',
+    count: Math.max(1, Math.round(sellItemYield(item).count * VENDOR_ITEM_CFG.markup)),
+  }];
+  const mul = VENDOR_ITEM_CFG.tierComponent[item.rarity];
+  const tint = ESSENCE_OF_RARITY[item.rarity];
+  if (mul > 0 && tint !== 'coarse') {
+    out.push({ essence: tint, count: Math.max(1, Math.ceil(itemQuality(item) * mul)) });
+  }
+  return out;
 }
 
 // -------------------------------------------------------------- expertise ---

@@ -27,6 +27,7 @@ import { ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, type EssenceCost } from '
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseProgress, expertiseRank,
   salvageItemYield, salvageSkillYield, salvageSupportYield,
+  sellItemYield, sellSkillYield, sellSupportYield,
 } from '../engine/crafting';
 import { SKILLS } from '../data/skills';
 import {
@@ -980,9 +981,13 @@ export class UI {
 
   /** An item anywhere on this seat — bag or doll (tooltips serve both). */
   private findItem(uid: number): ItemInstance | undefined {
-    const m = this.getWorld().meta;
+    const w = this.getWorld();
+    const m = w.meta;
     return m.items.find(i => i.uid === uid)
-      ?? Object.values(m.equipped).find(i => i?.uid === uid) ?? undefined;
+      ?? Object.values(m.equipped).find(i => i?.uid === uid)
+      // Brandt's shelf: counter gear carries the same rich tooltip (and the
+      // on-swap comparison against what you wear) BEFORE you buy it.
+      ?? w.vendorStock.flatMap(e => (e.kind === 'item' ? [e.item] : [])).find(i => i.uid === uid);
   }
 
   /** The candidate slots an UNWORN item could swap into that hold something
@@ -1619,15 +1624,15 @@ export class UI {
       this.refreshSalvage();
     }));
     q<HTMLButtonElement>('button[data-salv-item]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.salvItem) });
+      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.salvItem), lane: 'break' });
       this.refreshSalvage();
     }));
     q<HTMLButtonElement>('button[data-salv-skill]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.salvSkill) });
+      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.salvSkill), lane: 'break' });
       this.refreshSalvage();
     }));
     q<HTMLButtonElement>('button[data-salv-sup]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.salvSup) });
+      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.salvSup), lane: 'break' });
       this.refreshSalvage();
     }));
     q<HTMLButtonElement>('button[data-ctar]').forEach(btn => btn.addEventListener('click', () => {
@@ -1945,9 +1950,9 @@ export class UI {
     hideTooltip();
   }
 
-  /** The player's things as scrap-wheel targets — the SELL half. Clicking
-   *  one salvages it exactly as the station would (same META intents; the
-   *  world's gates accept salvage-capable vendor counters). */
+  /** The player's things as scrap-wheel targets — the SELL lane. Prices are
+   *  the sell yields (everything converts to COARSE by quality × rarity
+   *  rate); the bench's break yields live on the station screen instead. */
   private scrapListHtml(): string {
     const m = this.getWorld().meta;
     const chip = (attr: string, color: string, label: string, yieldHtml: string): string =>
@@ -1955,17 +1960,17 @@ export class UI {
         ${label} <span style="color:#8a8678">→ ${yieldHtml}</span></button>`;
     const gear = m.items.map(i =>
       chip(`data-scrap-item="${i.uid}" data-tip="item" data-item-uid="${i.uid}"`,
-        ITEM_RARITIES[i.rarity].color, i.name, this.essCostText(salvageItemYield(i)))).join('');
+        ITEM_RARITIES[i.rarity].color, i.name, this.essCostText(sellItemYield(i)))).join('');
     const skills = m.skillInv.map((inst, idx) => {
-      const y = salvageSkillYield(inst);
+      const y = sellSkillYield(inst);
       return chip(`data-scrap-skill="${idx}"`, SKILL_RARITIES[inst.rarity ?? 'common'].color,
         `${inst.def.name} Lv${inst.level}`, y ? this.essCostText(y) : 'nothing (granted)');
     }).join('');
     const sups = m.inventory.map((gem, idx) =>
       chip(`data-scrap-sup="${idx}"`, gem.def.color, `${gem.def.name} Lv${gem.level}`,
-        this.essCostText(salvageSupportYield(gem)))).join('');
+        this.essCostText(sellSupportYield(gem)))).join('');
     const all = gear + skills + sups;
-    return all || '<div style="color:#8a8678;font-size:11px">Nothing carried worth breaking.</div>';
+    return all || '<div style="color:#8a8678;font-size:11px">Nothing carried worth selling.</div>';
   }
 
   refreshVendor(): void {
@@ -1975,19 +1980,31 @@ export class UI {
 
     const sections = near.map(v => {
       const rows = v.stock(world).map((e, idx) => {
-        const name = e.kind === 'skill' ? e.inst.def.name : e.gem.def.name;
-        const lv = e.kind === 'skill' ? e.inst.level : e.gem.level;
-        const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color : e.gem.def.color;
-        const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ') : 'support gem';
+        // The three counter shapes: gems read as gems; rolled GEAR reads as
+        // an item row (rarity color + the ilvl badge) and carries the full
+        // item tooltip — inspect before you spend, exactly like a bag piece.
+        const name = e.kind === 'skill' ? e.inst.def.name : e.kind === 'support' ? e.gem.def.name : e.item.name;
+        const col = e.kind === 'skill' ? SKILL_RARITIES[e.inst.rarity ?? 'common'].color
+          : e.kind === 'support' ? e.gem.def.color
+          : ITEM_RARITIES[e.item.rarity].color;
+        const lvHtml = e.kind === 'item'
+          ? `<span style="color:#9a94a8;font-size:10px">ilvl ${e.item.ilvl}</span>`
+          : `<span style="color:#ffd700">Lv ${e.kind === 'skill' ? e.inst.level : e.gem.level}</span>`;
+        const tags = e.kind === 'skill' ? e.inst.def.tags.join(' · ')
+          : e.kind === 'support' ? 'support gem'
+          : ITEM_BASES[e.item.baseId]?.name ?? 'gear';
         const tag = e.kind === 'skill' ? this.rarityTagHtml(e.inst) : '';
+        const tipAttrs = e.kind === 'item' ? ` data-tip="item" data-item-uid="${e.item.uid}"` : '';
         const price = v.priceOf(world, e);
-        const afford = price.essence
-          ? world.canAffordEssence(world.localSeat, price.essence)
+        const afford = price.essences
+          ? price.essences.every(c => world.canAffordEssence(world.localSeat, c))
           : world.descentEchoes >= (price.echoes ?? 0);
-        const priceHtml = price.essence ? this.essCostText(price.essence) : `${price.echoes} ◈`;
+        const priceHtml = price.essences
+          ? price.essences.map(c => this.essCostText(c)).join(' + ')
+          : `${price.echoes} ◈`;
         return `
-          <div class="skill-entry" style="border-left:3px solid ${col}">
-            <div class="name">${name} <span style="color:#ffd700">Lv ${lv}</span> ${tag}</div>
+          <div class="skill-entry" style="border-left:3px solid ${col}"${tipAttrs}>
+            <div class="name" style="${e.kind === 'item' ? `color:${col}` : ''}">${name} ${lvHtml} ${tag}</div>
             <div class="tags">${tags}</div>
             <div class="bind-btns">
               <button data-vbuy="${v.id}:${idx}" ${afford ? '' : 'disabled'}>
@@ -1996,13 +2013,17 @@ export class UI {
           </div>`;
       }).join('') || '<div style="color:#8a8678;font-size:11px">Sold out — come back after the restock.</div>';
 
-      // The SELL half: only counters that buy scrap offer the wheel.
-      const scrap = v.salvage ? `
+      // The SELL lane: counters whose scrap gate is OPEN offer the wheel
+      // (everything → Coarse, by quality). A gated-shut counter explains
+      // itself (salvageLocked) — the Vault sells the key.
+      const scrap = v.salvage?.(world) ? `
         <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px">
           <button data-scrapmode class="${this.scrapMode ? 'bound' : ''}">
-            ⚙ ${this.scrapMode ? 'Scrap wheel ON — click your things to break them' : 'Flip the scrap wheel (sell for Essence)'}</button>
+            ⚙ ${this.scrapMode ? 'Scrap wheel ON — click your things to SELL them for Coarse Essence' : 'Flip the scrap wheel (sell for Coarse Essence)'}</button>
           ${this.scrapMode ? `<div style="margin-top:6px">${this.scrapListHtml()}</div>` : ''}
-        </div>` : '';
+        </div>` : (v.salvage && v.salvageLocked ? `
+        <div style="margin-top:8px;border-top:1px dashed ${v.accent}55;padding-top:6px;color:#8a8678;font-size:11px">
+          🔒 ${v.salvageLocked}</div>` : '');
 
       return `
         <div style="border:1px solid ${v.accent}44;border-radius:4px;padding:8px;margin-bottom:10px;background:${v.bg}">
@@ -2036,13 +2057,13 @@ export class UI {
       this.refreshVendor();
     }));
     q<HTMLButtonElement>('button[data-scrap-item]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.scrapItem) }); refresh();
+      world.requestMeta({ t: 'salvageItem', uid: Number(btn.dataset.scrapItem), lane: 'sell' }); refresh();
     }));
     q<HTMLButtonElement>('button[data-scrap-skill]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.scrapSkill) }); refresh();
+      world.requestMeta({ t: 'salvageSkill', index: Number(btn.dataset.scrapSkill), lane: 'sell' }); refresh();
     }));
     q<HTMLButtonElement>('button[data-scrap-sup]').forEach(btn => btn.addEventListener('click', () => {
-      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.scrapSup) }); refresh();
+      world.requestMeta({ t: 'salvageSupport', index: Number(btn.dataset.scrapSup), lane: 'sell' }); refresh();
     }));
     this.vendorMenu.querySelector<HTMLButtonElement>('[data-vendor-close]')?.addEventListener('click', () => this.closeVendor());
   }

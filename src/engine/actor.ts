@@ -473,6 +473,12 @@ export class Actor {
   lootSack?: import('./world').DropItem[];
   /** Last shakedown spill (its 0.4s icd). */
   lastSpillAt = -999;
+  /** THE PURSE (MonsterDef.essenceSpill): landed damage banked toward the
+   *  next shed packet, packets shed so far (against the body's fixed
+   *  budget), and the last shed's throttle stamp. */
+  spillBank = 0;
+  essenceSpilled = 0;
+  lastEssenceSpillAt = -999;
   /** This tick's RESOLVED prey list (rules can gate predation — the hungry
    *  wolf hunts, the sated one ambles past). World.isPrey reads the stamp,
    *  falling back to the brain's base when no AI tick has stamped one. */

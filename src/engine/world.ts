@@ -34,10 +34,11 @@ import {
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
-import { compileItemMods, itemLevelReq, rebuildItem } from './itemgen';
+import { compileItemMods, itemLevelReq, rebuildItem, rollItem } from './itemgen';
 import {
-  ESSENCES, ESSENCE_IDS, skillLevelEssenceCost, VENDOR_ESSENCE_PRICE, VENDOR_SUPPORT_PRICE,
-  type EssenceCost, type EssenceId,
+  ESSENCES, ESSENCE_IDS, ESSENCE_SPILL_CFG, LEDGER_ESSENCE_TOUCHED, rollSpillPacket,
+  skillLevelEssenceCost, spillBudget, VENDOR_ESSENCE_PRICE, VENDOR_ITEM_CFG, VENDOR_SUPPORT_PRICE,
+  type EssenceCost, type EssenceId, type EssenceSpillSpec,
 } from '../data/essences';
 import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance } from './items';
 import { DROP_CFG, GEM_DROP_CFG, resolveLootTable, rollVestigeId } from './loot';
@@ -81,7 +82,8 @@ import { BESTIARY_CFG, bestiaryEligible, spectreAttunable } from '../data/bestia
 import { oracleRerollCost, SALVAGE_CFG } from '../data/essences';
 import {
   CRAFT_CFG, craftableAffixesFor, craftedCount, expertiseRank, rollCraftedAffix,
-  rollRerolledAffix, salvageItemYield, salvageSkillYield, salvageSupportYield, studySalvage,
+  rollRerolledAffix, salvageItemYield, salvageSkillYield, salvageSupportYield,
+  sellItemYield, sellSkillYield, sellSupportYield, studySalvage, vendorItemPrice,
 } from './crafting';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { caravanBand, CARAVAN_BANDS, caravanBandLabel } from '../data/caravan';
@@ -819,7 +821,8 @@ export type DropItem =
   | { kind: 'support'; gem: SupportInstance }
   | { kind: 'skill'; inst: SkillInstance }
   | { kind: 'gear'; item: ItemInstance }
-  | { kind: 'vestige'; id: string; count: number };
+  | { kind: 'vestige'; id: string; count: number }
+  | { kind: 'essence'; essence: EssenceId; count: number };
 
 export interface GemDrop {
   pos: Vec2;
@@ -926,6 +929,9 @@ function padBar(skills: (SkillInstance | null)[]): (SkillInstance | null)[] {
 // UNTRUSTED client meta intents before they touch seat state.
 const isIdx = (n: unknown): n is number => typeof n === 'number' && Number.isInteger(n) && n >= 0;
 const isStr = (s: unknown): s is string => typeof s === 'string';
+// A salvage-lane discriminator (optional on the wire — absent = legacy pick).
+const isLane = (l: unknown): l is 'break' | 'sell' | undefined =>
+  l === undefined || l === 'break' || l === 'sell';
 
 /** Validate an untrusted client META intent BEFORE it reaches a mutator. A joined
  *  client controls this payload entirely, so a hostile/buggy one (string or
@@ -953,9 +959,10 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
     case 'unequipItem': return isStr(a.slot);
     case 'moveItem': return isIdx(a.uid) && isIdx(a.x) && isIdx(a.y);
-    case 'dropItem': case 'salvageItem': return isIdx(a.uid);
+    case 'dropItem': return isIdx(a.uid);
+    case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
     case 'pickupItem': return true;
-    case 'salvageSkill': case 'salvageSupport': return isIdx(a.index);
+    case 'salvageSkill': case 'salvageSupport': return isIdx(a.index) && isLane(a.lane);
     case 'craftAffix':
       return isIdx(a.uid) && isStr(a.affixId)
         && (a.score === undefined || (typeof a.score === 'number' && Number.isFinite(a.score)));
@@ -1069,10 +1076,13 @@ export interface Seat {
   reviveDwellBy: Map<string, number>;
 }
 
-/** One item on Brandt's counter — a skill gem, or (once unlocked) a support gem. */
+/** One entry on Brandt's counter — a skill gem, a support gem (once
+ *  unlocked), or a rolled piece of GEAR (the true-vendor shelf: random
+ *  rolls at the buyer's level, quality-priced in mixed essence). */
 export type VendorEntry =
   | { kind: 'skill'; inst: SkillInstance }
-  | { kind: 'support'; gem: SupportInstance };
+  | { kind: 'support'; gem: SupportInstance }
+  | { kind: 'item'; item: ItemInstance };
 
 // --- the world ---------------------------------------------------------------
 
@@ -4340,6 +4350,7 @@ export class World {
         at = vec(s.pos.x + Math.cos(ang) * (s.radius + 26), s.pos.y + Math.sin(ang) * (s.radius + 26));
       }
       const squadId = this.nextSquadId();
+      let landed = 0;
       for (let k = 0; k < n; k++) {
         const m = this.createMonster(w.id, Math.max(1, def.level), 'enemy');
         if (m.habitat && !this.placeInHabitat(m)) continue;
@@ -4349,6 +4360,14 @@ export class World {
           m.pos = this.findFreeSpot(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
         }
         this.actors.push(m);
+        landed++;
+      }
+      // THE ARRIVAL LINE (WildlifeRow.announce): an EVENT row tells the
+      // heroes it landed — the "something stirs in this zone" beat, pure data.
+      if (w.announce && landed > 0) {
+        for (const s of this.seats) {
+          this.text(vec(s.actor.pos.x, s.actor.pos.y - 36), w.announce, '#e8c84a', 13);
+        }
       }
     }
   }
@@ -6286,11 +6305,14 @@ export class World {
     return this.actors.some(a => a.id === site.delverId && !a.dead && dist(a.pos, seat.actor.pos) <= DELVER_RADIUS);
   }
 
-  /** Buy one of the Delver's wares for Depth Echoes (mirrors buyVendorGem). */
+  /** Buy one of the Delver's wares for Depth Echoes (mirrors buyVendorGem).
+   *  The Delver deals only in GEMS — a rolled-gear entry (Brandt's shelf
+   *  shape) can't appear in descentStock, so it simply no-ops here. */
   buyDelverGem(index: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const entry = this.descentStock[index];
-    if (!entry || !this.nearDelver(seat) || this.descentEchoes < DELVER_WARE_COST) return false;
+    if (!entry || entry.kind === 'item') return false;
+    if (!this.nearDelver(seat) || this.descentEchoes < DELVER_WARE_COST) return false;
     this.descentEchoes -= DELVER_WARE_COST;
     this.descentStock.splice(index, 1);
     if (entry.kind === 'skill') { m.skillInv.push(entry.inst); this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#7fe0d8', 13); }
@@ -8441,8 +8463,44 @@ export class World {
 
   grantEssence(seat: Seat, gain: EssenceCost): void {
     seat.meta.essences[gain.essence] = (seat.meta.essences[gain.essence] ?? 0) + gain.count;
+    // DISCOVERY — the first essence a line ever touches surfaces the Salvage
+    // Station in the Vault (unlocks.ts reads the banked key, the same *_seen
+    // idiom every package uses). The nudge floats once per run while the
+    // station is still unowned, so the drop explains itself.
+    if ((this.ledger[LEDGER_ESSENCE_TOUCHED] ?? 0) === 0
+      && !featureEnabled(this.account, FEATURE.SALVAGE_STATION)) {
+      this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
+        'strange residue — the Vault could put this to use…', '#e8c87a', 12);
+    }
+    bumpLedger(this.ledger, LEDGER_ESSENCE_TOUCHED, gain.count);
     const def = ESSENCES[gain.essence];
     this.text(seat.actor.pos, `+${gain.count} ${def.label}`, def.color, 12);
+    this.markMetaDirty(seat); // the wallet rides seatMeta — replicate every gain
+  }
+
+  /** Shed an essence packet on the ground (the spill fabric) — vacuumed on
+   *  touch like a vestige; scatter keeps a trail readable at a glance. */
+  dropEssenceAt(at: Vec2, gain: EssenceCost): void {
+    if (gain.count <= 0) return;
+    const s = ESSENCE_SPILL_CFG.scatter;
+    const pos = this.clampPos(vec(at.x + rand(-s, s), at.y + rand(-s, s)), 10);
+    this.drops.push({ pos, item: { kind: 'essence', essence: gain.essence, count: gain.count }, bob: rand(0, Math.PI * 2) });
+  }
+
+  /** Bank landed damage toward a spill bearer's next shed (MonsterDef
+   *  .essenceSpill). One shed per cooldown window keeps the trail readable;
+   *  banked overflow simply WAITS — the death true-up in kill() always pays
+   *  out the rest of the budget, so throttling never shorts the purse. */
+  private bankEssenceSpill(target: Actor, spill: EssenceSpillSpec, dealt: number): void {
+    target.spillBank += dealt;
+    if (target.essenceSpilled >= spillBudget(spill)) return;
+    if (this.time - target.lastEssenceSpillAt < (spill.cooldown ?? ESSENCE_SPILL_CFG.cooldown)) return;
+    const threshold = Math.max(1, target.maxLife() * (spill.per ?? ESSENCE_SPILL_CFG.perLifeLost));
+    if (target.spillBank < threshold) return;
+    target.spillBank -= threshold;
+    target.essenceSpilled++;
+    target.lastEssenceSpillAt = this.time;
+    this.dropEssenceAt(target.pos, rollSpillPacket(target.level, spill));
   }
 
   /** Is the seat's hero standing close enough to a Sacrificial Font to use it? */
@@ -8464,29 +8522,48 @@ export class World {
       && dist(a.pos, seat.actor.pos) <= 160);
   }
 
-  /** The essence price on one of Brandt's wares (data/essences.ts tables). */
-  vendorPrice(entry: VendorEntry): EssenceCost {
+  /** The essence price on one of Brandt's wares: gems off the static tables,
+   *  rolled GEAR through the quality-priced mixture (crafting.ts
+   *  vendorItemPrice — coarse × markup + the rarity's own tint). Always a
+   *  LIST of costs; single-tint prices are just lists of one. */
+  vendorPrice(entry: VendorEntry): EssenceCost[] {
+    if (entry.kind === 'item') return vendorItemPrice(entry.item);
     return entry.kind === 'skill'
-      ? VENDOR_ESSENCE_PRICE[entry.inst.rarity ?? 'common']
-      : VENDOR_SUPPORT_PRICE;
+      ? [VENDOR_ESSENCE_PRICE[entry.inst.rarity ?? 'common']]
+      : [VENDOR_SUPPORT_PRICE];
   }
 
-  /** Buy one of Brandt's wares — priced in ESSENCE by the gem's rarity (the
-   *  salvage loop closes at the counter). Skill gems go to the skill
-   *  inventory; support gems to the support inventory. */
+  /** Buy one of Brandt's wares — gems land in their inventories; rolled GEAR
+   *  must FIT the bag (checked before a single essence moves — a full bag
+   *  refuses the sale, never eats the price). */
   buyVendorGem(index: number, seat: Seat = this.localSeat): boolean {
     const m = seat.meta;
     const entry = this.vendorStock[index];
     if (!entry || !this.nearSmith(seat)) return false;
-    if (!this.spendEssence(seat, this.vendorPrice(entry), 'vendor:' + index)) return false;
+    const price = this.vendorPrice(entry);
+    // Affordability first (names the missing tint), then bag space for gear,
+    // THEN the spend — order matters: no partial deductions, no eaten fees.
+    const short = price.find(c => !this.canAffordEssence(seat, c));
+    if (short) {
+      this.failNote(seat.actor, 'vendor:' + index, `needs ${short.count}× ${ESSENCES[short.essence].label}`);
+      return false;
+    }
+    if (entry.kind === 'item' && !autoPlace(m.items, entry.item)) {
+      this.failNote(seat.actor, 'bagfull', 'inventory full');
+      return false;
+    }
+    for (const c of price) m.essences[c.essence] -= c.count;
     this.vendorStock.splice(index, 1);
     if (entry.kind === 'skill') {
       m.skillInv.push(entry.inst);
       this.text(seat.actor.pos, `bought ${entry.inst.def.name}`, '#e8c87a', 13);
-    } else {
+    } else if (entry.kind === 'support') {
       m.inventory.push(entry.gem);
       this.text(seat.actor.pos, `bought ${entry.gem.def.name}`, '#e8c87a', 13);
+    } else {
+      this.text(seat.actor.pos, `bought ${entry.item.name}`, ITEM_RARITIES[entry.item.rarity].color, 13);
     }
+    this.markMetaDirty(seat);
     // Persist only the genuine LOCAL hero (the host / single-player) to disk. A
     // render-shell CLIENT (clientActionHook set) must NEVER saveCharacter — its
     // optimistic-predicted shell meta would clobber the client's OWN save slot.
@@ -8642,9 +8719,16 @@ export class World {
 
   // ------------------------------------------------------ salvage station ----
 
+  /** Does this account own the salvage economy at all? ONE Vault purchase
+   *  (the Salvage Station) opens BOTH doors: the bench in town AND every
+   *  vendor row whose scrap gate reads this (Brandt's sell lane). */
+  salvageUnlocked(): boolean {
+    return featureEnabled(this.account, FEATURE.SALVAGE_STATION);
+  }
+
   /** At the breaker's bench? (Feature owned + in town + near SALVAGE_SITE.) */
   nearSalvage(seat: Seat = this.localSeat): boolean {
-    return featureEnabled(this.account, FEATURE.SALVAGE_STATION)
+    return this.salvageUnlocked()
       && this.zone.id === START_ZONE
       && dist(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y)) <= SALVAGE_CFG.stationRadius;
   }
@@ -8715,10 +8799,10 @@ export class World {
     return VENDORS.some(v => v.near(this, seat));
   }
 
-  /** A SALVAGE-capable vendor at hand — widens the station-only salvage
-   *  gates: the smith buys scrap too (the sell half of the essence economy). */
+  /** A scrap-BUYING counter at hand (its gate open) — the SELL lane's door:
+   *  anything → coarse essence, priced by quality (crafting.ts sell yields). */
   nearScrapVendor(seat: Seat = this.localSeat): boolean {
-    return VENDORS.some(v => v.salvage && v.near(this, seat));
+    return VENDORS.some(v => v.salvage?.(this) && v.near(this, seat));
   }
 
   /** Linger at a stocked counter → open the Vendor screen (flag → main). */
@@ -10832,9 +10916,9 @@ export class World {
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
       case 'pickupItem': this.pickupNearestGear(seat); break;
-      case 'salvageItem': this.salvageItem(seat, action.uid); break;
-      case 'salvageSkill': this.salvageSkillGem(seat, action.index); break;
-      case 'salvageSupport': this.salvageSupportGem(seat, action.index); break;
+      case 'salvageItem': this.salvageItem(seat, action.uid, action.lane); break;
+      case 'salvageSkill': this.salvageSkillGem(seat, action.index, action.lane); break;
+      case 'salvageSupport': this.salvageSupportGem(seat, action.index, action.lane); break;
       case 'craftAffix': this.craftAffix(seat, action.uid, action.affixId, action.score ?? 0); break;
       case 'rerollAffix': this.rerollAffix(seat, action.uid, action.affix, action.score); break;
       case 'socketVestige': this.socketVestige(seat, action.uid, action.socket, action.vestigeId); break;
@@ -17176,6 +17260,12 @@ export class World {
         });
         this.text(vec(target.pos.x, target.pos.y - 20), 'drops loot!', '#e8c84a', 13);
       }
+      // THE WOUNDED PURSE (MonsterDef.essenceSpill): landed damage banks
+      // toward shed essence packets — the currency trail of the chase.
+      if (dealt > 0 && target.defId) {
+        const spill = MONSTERS[target.defId]?.essenceSpill;
+        if (spill) this.bankEssenceSpill(target, spill, dealt);
+      }
       // The RECENT-WOUND clock (GateSpec.recentDamage): a landed hit
       // licenses the victim's counter-blows.
       if (dealt > 0) target.recentHurt = 0;
@@ -19228,6 +19318,18 @@ export class World {
       // THE MEAL (BrainDef.drives): a landed kill jumps the killer's wants —
       // the hunt sates the hunger that drove it.
       this.bumpDrives(killer ?? null, 'onKill');
+      // THE PURSE PAYS IN FULL (essenceSpill.deathBurst): whatever the chase
+      // didn't shake loose lands in one pile — trail + pile always sum the
+      // fixed budget, regardless of who landed the kill or how.
+      const spillDef = actor.defId ? MONSTERS[actor.defId]?.essenceSpill : undefined;
+      if (spillDef && spillDef.deathBurst !== false) {
+        const owed = spillBudget(spillDef) - actor.essenceSpilled;
+        for (let k = 0; k < owed; k++) this.dropEssenceAt(actor.pos, rollSpillPacket(actor.level, spillDef));
+        if (owed > 0) {
+          actor.essenceSpilled += owed;
+          this.text(vec(actor.pos.x, actor.pos.y - 20), 'the purse bursts!', '#e8c84a', 14);
+        }
+      }
       // A dead looter's sack SPILLS in full — nothing it snatched is ever
       // lost; the chase always pays out (grief-proof by construction).
       if (actor.lootSack?.length) {
@@ -19564,20 +19666,33 @@ export class World {
   // spends essence to stamp a studied affix onto gear within expertise's
   // ceiling. Account writes persist fire-and-forget (the reclaim pattern).
 
-  /** Break a BAG item into essence + lore. Works at the station OR any
-   *  salvage-capable vendor counter (the scrap wheel). Worn gear must be
+  /** Resolve which salvage LANE a request rides: 'break' (the bench — the
+   *  rarity's essence + lore) or 'sell' (a scrap counter — coarse volume,
+   *  no study). Panels name their lane; an unnamed request takes the bench
+   *  when near, else the counter (the pre-lane behavior, kept for old
+   *  clients). Null when the wanted lane isn't actually at hand. */
+  private salvageLane(seat: Seat, lane?: 'break' | 'sell'): 'break' | 'sell' | null {
+    const want = lane ?? (this.nearSalvage(seat) ? 'break' : 'sell');
+    if (want === 'break') return this.nearSalvage(seat) ? 'break' : null;
+    return this.nearScrapVendor(seat) ? 'sell' : null;
+  }
+
+  /** Break (bench) or sell (counter) a BAG item — the lane decides the tint:
+   *  the bench pays the rarity's essence AND studies each line into lore;
+   *  selling pays coarse volume and teaches nothing. Worn gear must be
    *  unequipped first — a deliberate two-step, no accidental doll salvage. */
-  salvageItem(seat: Seat, uid: number): void {
-    if (!this.nearSalvage(seat) && !this.nearScrapVendor(seat)) return;
+  salvageItem(seat: Seat, uid: number, lane?: 'break' | 'sell'): void {
+    const mode = this.salvageLane(seat, lane);
+    if (!mode) return;
     const item = this.bagItem(seat, uid);
     if (!item) return;
     removeFromBag(seat.meta.items, uid);
-    this.grantEssence(seat, salvageItemYield(item));
-    // TIER-TRUE study: only lines at/above each family's NEXT ceiling teach.
+    this.grantEssence(seat, mode === 'break' ? salvageItemYield(item) : sellItemYield(item));
+    // TIER-TRUE study — BENCH ONLY: the counter pays cash, never knowledge.
     // Craft lore is ACCOUNT knowledge (meta-progression): a sealed character
     // still salvages for essence and crafts from what the account already
     // knows — it just teaches the account nothing new.
-    if (this.metaProgressionActive()) {
+    if (mode === 'break' && this.metaProgressionActive()) {
       const taught = studySalvage(this.account.craftLore, item);
       for (const t of taught.filter(x => x.rankedUp)) {
         this.text(vec(seat.actor.pos.x, seat.actor.pos.y - 26),
@@ -19588,29 +19703,32 @@ export class World {
     this.markMetaDirty(seat);
   }
 
-  /** Break a CARRIED skill gem (skillInv). Granted sparks yield nothing —
-   *  deleted outright, exactly as promised. Sockets are pried out first. */
-  salvageSkillGem(seat: Seat, index: number): void {
-    if (!this.nearSalvage(seat) && !this.nearScrapVendor(seat)) return;
+  /** Break/sell a CARRIED skill gem (skillInv). Granted sparks yield nothing
+   *  on EITHER lane — deleted outright, exactly as promised. Sockets are
+   *  pried out first. */
+  salvageSkillGem(seat: Seat, index: number, lane?: 'break' | 'sell'): void {
+    const mode = this.salvageLane(seat, lane);
+    if (!mode) return;
     const m = seat.meta;
     const inst = m.skillInv[index];
     if (!inst) return;
     m.skillInv.splice(index, 1);
     for (const s of inst.sockets) if (s) m.inventory.push(s);
-    const yieldd = salvageSkillYield(inst);
+    const yieldd = mode === 'break' ? salvageSkillYield(inst) : sellSkillYield(inst);
     if (yieldd) this.grantEssence(seat, yieldd);
     else this.text(seat.actor.pos, 'the granted spark breaks into nothing', '#8a8678', 12);
     this.markMetaDirty(seat);
   }
 
-  /** Break a loose support gem (inventory). */
-  salvageSupportGem(seat: Seat, index: number): void {
-    if (!this.nearSalvage(seat) && !this.nearScrapVendor(seat)) return;
+  /** Break/sell a loose support gem (inventory). */
+  salvageSupportGem(seat: Seat, index: number, lane?: 'break' | 'sell'): void {
+    const mode = this.salvageLane(seat, lane);
+    if (!mode) return;
     const m = seat.meta;
     const gem = m.inventory[index];
     if (!gem) return;
     m.inventory.splice(index, 1);
-    this.grantEssence(seat, salvageSupportYield(gem));
+    this.grantEssence(seat, mode === 'break' ? salvageSupportYield(gem) : sellSupportYield(gem));
     this.markMetaDirty(seat);
   }
 
@@ -19657,7 +19775,9 @@ export class World {
     return featureEnabled(this.account, FEATURE.BRANDT_FAST_RESTOCK) ? 15 : 30;
   }
 
-  /** Roll a fresh counter: skill gems, plus support gems once that's unlocked. */
+  /** Roll a fresh counter: skill gems, support gems once that's unlocked —
+   *  and the TRUE-VENDOR SHELF: rolled gear at the buyer's level, rarity
+   *  weighted per VENDOR_ITEM_CFG, priced by quality in mixed essence. */
   buildVendorStock(): VendorEntry[] {
     const out: VendorEntry[] = [];
     const sellSupports = featureEnabled(this.account, FEATURE.BRANDT_SELL_SUPPORTS);
@@ -19667,6 +19787,15 @@ export class World {
         if (sd) { out.push({ kind: 'support', gem: { def: sd, level: 1 } }); continue; }
       }
       out.push({ kind: 'skill', inst: this.rollSkillGem() });
+    }
+    // The gear shelf shares Brandt's expanded-wares feature: bigger counter,
+    // bigger shelf. Rolls anchor to the LOCAL hero's level (the shopper).
+    const shelf = VENDOR_ITEM_CFG.slots
+      + (featureEnabled(this.account, FEATURE.BRANDT_EXTRA_GEMS) ? VENDOR_ITEM_CFG.extraSlots : 0);
+    for (let i = 0; i < shelf; i++) {
+      const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
+      const item = rollItem({ ilvl, rarityWeights: VENDOR_ITEM_CFG.rarityWeights });
+      if (item) out.push({ kind: 'item', item });
     }
     return out;
   }
@@ -23613,6 +23742,15 @@ export class World {
         const seat = this.pickupSeat(drop.pos, 22, exclude);
         if (!seat) continue;
         this.grantVestige(seat, drop.item.id, drop.item.count);
+        this.drops.splice(i, 1);
+        continue;
+      }
+      // ESSENCE always vacuums — currency underfoot, straight to the wallet
+      // (grantEssence floats the gain, banks discovery, replicates the seat).
+      if (drop.item.kind === 'essence') {
+        const seat = this.pickupSeat(drop.pos, 22, exclude);
+        if (!seat) continue;
+        this.grantEssence(seat, { essence: drop.item.essence, count: drop.item.count });
         this.drops.splice(i, 1);
         continue;
       }

@@ -85,10 +85,12 @@ export type MetaAction =
   | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
   | { t: 'dropItem'; uid: number }                             // bag item → ground
   | { t: 'pickupItem' }                                        // nearest ground gear within reach → bag
-  // SALVAGE STATION (dwell-gated): break things into essence; craft studied affixes.
-  | { t: 'salvageItem'; uid: number }                          // bag gear → essence + craft lore
-  | { t: 'salvageSkill'; index: number }                       // skillInv gem → essence (granted: nothing)
-  | { t: 'salvageSupport'; index: number }                     // loose support → essence
+  // SALVAGE (dwell-gated, TWO LANES): 'break' at the bench pays the rarity's
+  // essence + craft lore; 'sell' at a scrap counter pays coarse volume only.
+  // Absent lane = legacy pick (bench when near, else counter).
+  | { t: 'salvageItem'; uid: number; lane?: 'break' | 'sell' } // bag gear → essence (+ lore on 'break')
+  | { t: 'salvageSkill'; index: number; lane?: 'break' | 'sell' }  // skillInv gem (granted: nothing)
+  | { t: 'salvageSupport'; index: number; lane?: 'break' | 'sell' } // loose support
   | { t: 'craftAffix'; uid: number; affixId: string; score?: number } // essence + SMITHING score → a studied affix
   | { t: 'rerollAffix'; uid: number; affix: number; score: number }   // Oracle COMMUNION: reroll + seal one line
   // SOCKETS & VESTIGES (deterministic craft):

@@ -32,6 +32,7 @@ import { makeSkillInstance, type SkillInstance, type SupportInstance, type Skill
 import { rebuildItem } from '../engine/itemgen';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
+import { ESSENCES } from '../data/essences';
 import type { Attributes } from '../engine/stats';
 
 export type Vec2W = [number, number];
@@ -85,7 +86,7 @@ export interface CastW {
 export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
-export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige'; color: string; rarity?: string; name?: string; vid?: string; }
+export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence'; color: string; rarity?: string; name?: string; vid?: string; eid?: string; cnt?: number; }
 /** kind is an ORB_DEFS registry id — the client renders from the registry. */
 export interface OrbW { p: Vec2W; bob: number; life: number; kind: string; }
 export interface TextW { p: Vec2W; life: number; maxLife: number; size: number; color: string; text: string; }
@@ -207,13 +208,19 @@ const rehydrateSkill = (w: SkillInstW): SkillInstance | null => {
 // indices line up. Reuses the skill/support instance wire shapes (defId only).
 export type VendorEntryW =
   | { kind: 'skill'; s: SkillInstW }
-  | { kind: 'support'; g: SupportInstW };
+  | { kind: 'support'; g: SupportInstW }
+  // Rolled GEAR rides as the full instance (already pure JSON — the same
+  // stance as seat gear); rebuildItem re-validates on the client.
+  | { kind: 'item'; i: ItemInstance };
 
 const vendorEntryW = (e: VendorEntry): VendorEntryW =>
-  e.kind === 'skill' ? { kind: 'skill', s: skillInstW(e.inst) } : { kind: 'support', g: supW(e.gem) };
+  e.kind === 'skill' ? { kind: 'skill', s: skillInstW(e.inst) }
+    : e.kind === 'support' ? { kind: 'support', g: supW(e.gem) }
+    : { kind: 'item', i: { ...e.item } };
 
 const rehydrateVendor = (w: VendorEntryW): VendorEntry | null => {
   if (w.kind === 'skill') { const inst = rehydrateSkill(w.s); return inst ? { kind: 'skill', inst } : null; }
+  if (w.kind === 'item') { const item = rebuildItem(w.i); return item ? { kind: 'item', item } : null; }
   const gem = rehydrateSupport(w.g); return gem ? { kind: 'support', gem } : null;
 };
 
@@ -369,11 +376,14 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       color: d.item.kind === 'support' ? d.item.gem.def.color
         : d.item.kind === 'gear' ? ITEM_RARITIES[d.item.item.rarity].color
         : d.item.kind === 'vestige' ? (VESTIGES[d.item.id]?.color ?? '#b06bd4')
+        : d.item.kind === 'essence' ? ESSENCES[d.item.essence].color
         : d.item.inst.def.color,
       rarity: d.item.kind === 'skill' ? (d.item.inst.rarity ?? 'common')
         : d.item.kind === 'gear' ? d.item.item.rarity : undefined,
       name: d.item.kind === 'gear' ? d.item.item.name : undefined,
       vid: d.item.kind === 'vestige' ? d.item.id : undefined,
+      eid: d.item.kind === 'essence' ? d.item.essence : undefined,
+      cnt: d.item.kind === 'essence' ? d.item.count : undefined,
     })),
     orbs: world.orbs.map(o => ({ p: v2(o.pos), bob: o.bob, life: o.life, kind: o.kind })),
     texts: world.texts.map(t => ({ p: v2(t.pos), life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text })),
@@ -541,7 +551,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
         ? { kind: 'gear', item: { name: d.name ?? '?', rarity: (d.rarity ?? 'common') } }
         : d.kind === 'vestige'
           ? { kind: 'vestige', id: d.vid ?? '', count: 1 }
-          : { kind: 'skill', inst: { def: { color: d.color }, rarity: d.rarity ?? 'common' } },
+          : d.kind === 'essence'
+            ? { kind: 'essence', essence: d.eid ?? 'coarse', count: d.cnt ?? 1 }
+            : { kind: 'skill', inst: { def: { color: d.color }, rarity: d.rarity ?? 'common' } },
   })) as unknown as World['drops'];
   world.orbs = snap.orbs.map(o => ({ pos: { x: o.p[0], y: o.p[1] }, bob: o.bob, life: o.life, kind: o.kind, amount: 0 })) as unknown as World['orbs'];
   world.texts = snap.texts.map(t => ({ pos: { x: t.p[0], y: t.p[1] }, life: t.life, maxLife: t.maxLife, size: t.size, color: t.color, text: t.text })) as unknown as World['texts'];

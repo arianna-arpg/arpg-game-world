@@ -12,6 +12,7 @@ import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import type { PackTableEntry } from './zones';
+import type { EssenceSpillSpec } from './essences';
 
 // The Legion's own tier band, shared by its elite defs and roster rows —
 // retune ONE envelope and the whole muster shifts (the named-band pattern;
@@ -395,7 +396,12 @@ export interface MonsterDef {
    *  never touched, a solid blow shakes one piece loose (0.4s icd), and
    *  death spills everything — loot is never lost, only CHASED. Pair with
    *  BehaviorSpec.seek {what:'loot'} so it noses toward shinies while idle. */
-  looter?: { kinds?: ('skill' | 'support' | 'gear' | 'vestige')[]; reach?: number };
+  looter?: { kinds?: ('skill' | 'support' | 'gear' | 'vestige' | 'essence')[]; reach?: number };
+  /** ESSENCE SPILL (data/essences.ts): striking this body shakes essence
+   *  packets onto the ground — the loot-goblin gold-trail beat on OUR
+   *  currency. A fixed budget (trail + death pile always sum the same),
+   *  level-scaled quantity, ladder-climbed tint. Any def may carry it. */
+  essenceSpill?: EssenceSpillSpec;
   /** FLIER: true flight — moves on the noclip policy (over rocks, walls,
    *  chasms, water; zone bounds still hold) and the renderer lifts + bobs
    *  the body off its grounded shadow so flight reads at a glance. Pair
@@ -416,12 +422,26 @@ export interface MonsterDef {
   carrion?: { radius?: number; rate?: number; time?: number };
 }
 
+/** One ambient-fauna row: an independent per-zone roll (chance), a band size,
+ *  an optional presence envelope / doodad-rim placement hint — and an optional
+ *  ARRIVAL LINE (`announce`): floated to the players when the band lands, for
+ *  the rows that are an EVENT (the gilded kin), not texture. */
+export interface WildlifeRow {
+  id: string;
+  chance: number;
+  count: [number, number];
+  presence?: PresenceSpec;
+  near?: string;
+  /** Floated at the heroes when this row spawns — the "something stirs" beat. */
+  announce?: string;
+}
+
 /** AMBIENT FAUNA by biome — the living-texture layer. Each row rolls
  *  independently per zone (chance), then spawns count[min,max] bodies as one
  *  squad. Prey ('critter') exists to wander and flee; predators hunt it by
  *  their brains' TargetSpec.prey — the meadow stages its own dramas whether
  *  or not you watch. A new biome's fauna is a new row, never new code. */
-export const WILDLIFE: Record<string, { id: string; chance: number; count: [number, number]; presence?: PresenceSpec; near?: string }[]> = {
+export const WILDLIFE: Record<string, WildlifeRow[]> = {
   plains: [
     { id: 'meadow_hare', chance: 0.75, count: [3, 5] },
     { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
@@ -433,6 +453,10 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'reed_frog', chance: 0.5, count: [2, 4], near: 'water' },
     // The rare golden flicker at the meadow's edge — chase it.
     { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
+    // The EVENT cousin: rarer, fatter, and it ANNOUNCES itself — a walking
+    // essence purse whose whole budget spills, hit by hit or all at the end.
+    { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
+      announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
   ],
   // Keyed by BIOME TAG (the vocabulary zones/tilesets actually speak — the
   // old 'forest' key matched nothing and its rows never spawned). 'grove'
@@ -449,6 +473,8 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'reed_frog', chance: 0.45, count: [2, 3], near: 'water' },
     { id: 'dire_wolf', chance: 0.2, count: [2, 3], presence: { from: 6, fadeIn: 3 } },
     { id: 'gilded_scamp', chance: 0.05, count: [1, 1] },
+    { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
+      announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
   ],
   desert: [
     { id: 'meadow_hare', chance: 0.3, count: [1, 2] },
@@ -458,6 +484,9 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'broodmother', chance: 0.2, count: [1, 1] },
     { id: 'sand_scorpion', chance: 0.55, count: [2, 4] },
     { id: 'ant_trail', chance: 0.4, count: [1, 2] },
+    // Dunes hide riches too — the hoarder ranges further than its flighty kin.
+    { id: 'gilded_hoarder', chance: 0.02, count: [1, 1], presence: { from: 4, fadeIn: 3 },
+      announce: 'a heavy jingling rings out — something gilded lumbers nearby…' },
   ],
   // The deep wood: small lives in the roof, hooves and hunters below.
   forest: [
@@ -2743,6 +2772,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [],
     xp: 45,
     looter: { reach: 32 },
+    // The purse under the sack: every solid blow also shakes ESSENCE loose —
+    // the hunt trail that likely FIRST introduces the currency to a player.
+    essenceSpill: {},
     detection: 1.3,
     adorn: 'ears',
     scaling: { life: { incPerLevel: 0.08 } },
@@ -2755,6 +2787,34 @@ export const MONSTERS: Record<string, MonsterDef> = {
       morale: { skittish: { radius: 280, duration: [1.5, 2.6] } },
       // But its legs GIVE OUT on a rhythm you can learn: chase, wind it, catch.
       tempo: { kite: 3.2, windedFor: [0.9, 1.4] },
+    },
+  },
+
+  // THE GILDED HOARDER — the scamp that got away once and got FAT: the
+  // announced EVENT cousin (WILDLIFE rows carry its arrival line). It doesn't
+  // snatch your drops — it IS the treasure: a walking essence purse on a much
+  // deeper budget (essenceSpill), too heavy to juke, tiring fast. Every blow
+  // rings coins onto the ground; the kill pays whatever the chase didn't.
+  gilded_hoarder: {
+    id: 'gilded_hoarder', name: 'Gilded Hoarder',
+    color: '#f0d060', shape: 'pentagon', radius: 16, material: 'metal', look: 'goblin',
+    base: { life: 340, moveSpeed: 175, accuracy: 60, evasion: 40, mana: 0 },
+    skills: [],
+    xp: 120,
+    // A deep purse: twice the packets, each fatter — and the ladder still
+    // climbs with level, so a deep-zone hoarder rains the rare tints.
+    essenceSpill: { per: 0.08, mul: 2 },
+    drops: 1,
+    detection: 1.2,
+    adorn: 'ears',
+    scaling: { life: { incPerLevel: 0.09 } },
+    brain: {
+      type: 'basic',
+      // Heavier gait: it hooks less and never dares the freeze-fake.
+      move: { style: 'juke', hookEvery: [0.6, 1.1], freezeChance: 0 },
+      // It bolts like its kin — but the WEIGHT tells: shorter wind, longer rest.
+      morale: { skittish: { radius: 300, duration: [1.8, 3] } },
+      tempo: { kite: 2.2, windedFor: [1.4, 2] },
     },
   },
 
