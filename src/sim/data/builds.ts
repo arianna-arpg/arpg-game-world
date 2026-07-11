@@ -105,3 +105,32 @@ const warriorSummoner = (id: string, supports?: { id: string; level?: number }[]
 BUILDS['summoner_warriors_l10'] = warriorSummoner('summoner_warriors_l10');
 BUILDS['summoner_faultfinder_l10'] = warriorSummoner('summoner_faultfinder_l10',
   [{ id: 'resonance', level: 1 }, { id: 'faultfinder', level: 1 }, { id: 'tectonic_echoes', level: 1 }]);
+
+// FORTUNE-FABRIC PROBES (rollTop gates / proc riders / damageSpread): the
+// same wide-dice caster twice — the bare bolt, and the full gambler (Loaded
+// Dice widening the dice; the tree's Thunderstruck + Static Shrapnel rider +
+// Short Circuit + All In behind it). Their A/B is the fabric's regression
+// probe: the loaded build's jackpot detonations, arcs and shrapnel sparks
+// are the WHOLE difference between the runs.
+const fulminator = (id: string, loaded: boolean): BuildSpec => ({
+  id,
+  label: `Fulminate probe @ L12 (${loaded ? 'loaded dice + gambler tree' : 'bare'})`,
+  classId: 'magician', level: 12,
+  skills: [{
+    id: 'fulminate', level: gemLevelAt(12),
+    supports: loaded ? [{ id: 'loaded_dice', level: 1 }] : undefined,
+  }],
+  passives: loaded
+    ? ['sor_x1', 'cl_gam_s1', 'cl_gam_shrapnel', 'cl_gam_short', 'cl_gam_key']
+    : [],
+});
+BUILDS['fulminate_bare_l12'] = fulminator('fulminate_bare_l12', false);
+BUILDS['fulminate_loaded_l12'] = fulminator('fulminate_loaded_l12', true);
+// The variance-channel probe: intervalJitter + VarianceSpec.aoe under the
+// deterministic clock — the erratic drumbeat, reproducible per seed.
+BUILDS['barrage_probe_l12'] = {
+  id: 'barrage_probe_l12', label: 'Unstable Barrage probe @ L12',
+  classId: 'magician', level: 12,
+  skills: [{ id: 'unstable_barrage', level: gemLevelAt(12) }],
+  passives: [],
+};

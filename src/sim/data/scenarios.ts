@@ -133,6 +133,34 @@ for (const build of [
   });
 }
 
+// FORTUNE-FABRIC PROBE PAIR (rollTop procs, the Static Shrapnel rider,
+// damageSpread) plus the variance channel: bare vs loaded Fulminate against
+// the dummy — the loaded build's jackpot payloads are the entire A/B
+// difference — and Unstable Barrage's jittered, size-rolled channel run
+// end-to-end under the deterministic clock.
+for (const build of ['fulminate_bare_l12', 'fulminate_loaded_l12']) {
+  add({
+    id: `fortune_probe_${build}`,
+    label: `Fortune-fabric probe — ${build}`,
+    build,
+    pilot: { kind: 'caster' },
+    waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
+    duration: 30,
+    stop: 'duration',
+    notes: 'A/B probe for the fortune fabric: compare dps_dummy bare vs loaded — the gap is the fabric firing.',
+  });
+}
+add({
+  id: 'fortune_probe_barrage',
+  label: 'Fortune-fabric probe — unstable barrage channel',
+  build: 'barrage_probe_l12',
+  pilot: { kind: 'caster' },
+  waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
+  duration: 20,
+  stop: 'duration',
+  notes: 'Exercises ChannelSpec.intervalJitter + VarianceSpec.aoe deterministically (crash/regression net).',
+});
+
 // ------------------------------------------------------------------ suites --
 
 /** Named bundles: the unit a balance pass (or a CI gate) runs. */
@@ -154,6 +182,8 @@ export const SUITES: Record<string, string[]> = {
   duels: Object.keys(SCENARIOS).filter(id => id.startsWith('duel_')),
   /** The minion-support forwarding A/B pairs (bare vs forwarded gems). */
   minions: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_probe_')),
+  /** The fortune-fabric probes (rollTop gates, riders, spread, variance). */
+  fortune: Object.keys(SCENARIOS).filter(id => id.startsWith('fortune_probe_')),
   /** Everything registered. */
   all: [], // filled below
 };
