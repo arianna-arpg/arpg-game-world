@@ -203,6 +203,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'slab', order: 54, shadow: 0.65, longShadow: 1.2,
     params: { shape: 'monolith', fill: 'theme:obstacle', edge: 'theme:obstacleEdge' },
   },
+  // The wayfarer kit — roadside & village-story furniture.
+  weathered_statue: {
+    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.5,
+    params: { stone: 'theme:obstacle|#8a8578', moss: '#5a6e42' },
+  },
+  wayshrine: {
+    painter: 'wayshrine', order: 55, shadow: 0.45, longShadow: 0.9,
+    params: { stone: '#7e7668', roof: '#4e4438', flame: '#ffd890' },
+    light: { radius: -4.2, color: '#ffd890', intensity: 0.4, flicker: 3.2 },
+  },
+  gallows: {
+    painter: 'gallows', order: 55, shadow: 0.5, longShadow: 1.8,
+    params: { wood: '#5c4a34', rope: '#a89468' },
+  },
+  fishing_rack: {
+    painter: 'fishingRack', order: 53, shadow: 0.35, longShadow: 0.8,
+    params: { wood: '#6a5a40', fish: '#b0a284' },
+  },
+  charcoal_mound: {
+    painter: 'kilnMound', order: 50, shadow: 0.4, longShadow: 0.4,
+    params: { earth: '#3c342a', ember: '#ff9a48' },
+    light: { radius: -2.4, color: '#ff9a48', intensity: 0.3, flicker: 2.2 },
+  },
   grass: {
     painter: 'liquid', order: 47,
     blend: { strength: 0.38, feather: 22, color: 'theme:grass|#3e5c30' },

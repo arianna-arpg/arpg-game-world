@@ -72,6 +72,30 @@ export const AMALGAM_PARTS: AmalgamPartSpec[] = [
     grantSupport: 'precision',
     drop: { support: 'precision', gems: 1 },
   },
+  {
+    id: 'spine', label: 'Crooked Spine', epithet: 'the Coiled', glyph: '§',
+    mods: [mod('poise', 'flat', 150), mod('poiseDamage', 'increased', 0.4)],
+    grantSkill: 'sunder', grantSupport: 'crushing_impact',
+    drop: { support: 'crushing_impact', gems: 1 },
+  },
+  {
+    id: 'gut', label: 'Bilious Gut', epithet: 'the Seething', glyph: '✱',
+    mods: [mod('life', 'more', 0.25), mod('statusChance', 'flat', 0.25)],
+    grantSkill: 'poison_nova',
+    drop: { support: 'putrefaction', gems: 1 },
+  },
+  {
+    id: 'hide', label: 'Bristled Hide', epithet: 'the Bristling', glyph: '❖',
+    mods: [mod('thorns', 'flat', 30), mod('armor', 'flat', 40)],
+    grantSupport: 'bulwark_of_thorns',
+    drop: { support: 'bulwark_of_thorns', gems: 1 },
+  },
+  {
+    id: 'lung', label: 'Rimebound Lung', epithet: 'the Stillbreath', glyph: '❄',
+    mods: [mod('coldRes', 'flat', 0.5), mod('castSpeed', 'increased', 0.2)],
+    grantSkill: 'frost_nova',
+    drop: { skill: 'frost_nova', gems: 1 },
+  },
 ];
 
 /** The whole Amalgamation mechanic as data — every number is a knob. */

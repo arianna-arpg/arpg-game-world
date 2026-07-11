@@ -119,6 +119,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'grove',
     layout: [
       { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] }, { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [0, 2] },
+      { kind: 'charcoal_mound', count: [0, 1] },
       { kind: 'conifers', count: [6, 10] }, { kind: 'ancient_tree', count: [1, 3] },
       { kind: 'trees', count: [14, 20], radius: [14, 28] },
       { kind: 'grove', count: [2, 4] },
@@ -232,6 +233,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'log', count: [2, 5] }, { kind: 'stump', count: [2, 4] },
       { kind: 'flowers', count: [1, 3] }, { kind: 'grass', count: [3, 6] },
       { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [0, 2] },
+      { kind: 'charcoal_mound', count: [0, 1] }, { kind: 'wayshrine', count: [0, 1] },
       { kind: 'rocks', count: [3, 6], radius: [18, 32] },
       { kind: 'river', count: [0, 1] },
       { kind: 'bog', count: [0, 1] },
@@ -793,6 +795,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.3, biome: 'rift',
     layout: [
       { kind: 'dead_tree', count: [3, 6] }, { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'gallows', count: [0, 1] },
       { kind: 'lava', count: [2, 3] },
       { kind: 'chasm', count: [0, 1] },
       { kind: 'ravine', count: [1, 1] },
@@ -878,6 +881,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2000, 2900], sizeH: [1500, 2200], ellipseChance: 0.15, biome: 'grave',
     layout: [
       { kind: 'bone_pile', count: [3, 6] }, { kind: 'brazier', count: [1, 3] }, { kind: 'web', count: [1, 3] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [2, 4] },
+      { kind: 'weathered_statue', count: [0, 2] }, { kind: 'gallows', count: [0, 1] },
       { kind: 'tombstone', count: [14, 22] },
       { kind: 'ruin', count: [2, 3] },
       { kind: 'rocks', count: [6, 10], radius: [16, 30] },
@@ -932,6 +936,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2400, 3200], sizeH: [1600, 2200], ellipseChance: 0.3, biome: 'beach',
     layout: [
       { kind: 'log', count: [1, 3] }, { kind: 'reeds', count: [1, 3] },
+      { kind: 'fishing_rack', count: [1, 2] },
       { kind: 'sand', count: [5, 8] },
       { kind: 'shallows', count: [2, 4] },
       { kind: 'palm', count: [6, 10] },
@@ -995,6 +1000,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     layout: [
       // A kept lawn at the heart of the lea — negative space first.
       { kind: 'clearing', count: [1, 2], radius: [100, 170] },
+      { kind: 'wayshrine', count: [0, 1] }, { kind: 'weathered_statue', count: [0, 1] },
       // Wildflowers drift in NOISE patches, the way seed actually falls.
       { kind: 'flowers', count: [4, 8], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 11 } } },
       { kind: 'log', count: [0, 2] },
@@ -1411,6 +1417,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [4, 8], radius: [20, 42] },
       { kind: 'boulder_field', count: [1, 2] }, { kind: 'cairn', count: [1, 2] },
       { kind: 'scree', count: [1, 3] },
+      { kind: 'gallows', count: [0, 1] }, { kind: 'wayshrine', count: [0, 1] },
       // Rockslides strung downslope + a processional the old folk cut.
       { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
       { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
@@ -1459,7 +1466,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.25,
     layout: [
       { kind: 'reeds', count: [3, 6] }, { kind: 'geyser', count: [1, 3] }, { kind: 'fog_bank', count: [1, 3] }, { kind: 'dead_tree', count: [2, 4] },
-      { kind: 'fern', count: [1, 3] },
+      { kind: 'fern', count: [1, 3] }, { kind: 'fishing_rack', count: [0, 1] },
       { kind: 'bog', count: [3, 5] }, { kind: 'water', count: [2, 4] },
       { kind: 'swamp', count: [2, 3] }, { kind: 'trees', count: [4, 7] },
       { kind: 'thicket', count: [1, 3] },

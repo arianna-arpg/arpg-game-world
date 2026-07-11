@@ -4976,6 +4976,197 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
   for (const d of group) drawShadow(env.ctx, d.pos.x, d.pos.y, d.radius, alphaMul);
 }
 
+/** A WEATHERED STATUE: square plinth, the figure's shoulder-and-head mass
+ *  off-centre the way old monuments lean, moss creeping up the north face. */
+const statue: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stone?: ColorSpec; moss?: ColorSpec };
+  const { ctx, theme } = env;
+  const stone = resolveColor(p.stone, theme, '#8a8578');
+  const moss = resolveColor(p.moss, theme, '#5a6e42');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The plinth: two stacked squares, the lower a shade darker.
+    ctx.fillStyle = shade(stone, -0.3);
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+    ctx.fillStyle = shade(stone, -0.1);
+    ctx.fillRect(-r * 0.74, -r * 0.74, r * 1.48, r * 1.48);
+    ctx.strokeStyle = withAlpha(shade(stone, -0.5), 0.8);
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-r * 0.74, -r * 0.74, r * 1.48, r * 1.48);
+    // The figure's mass: shoulders + head, leaning as the ground let it.
+    const lean = (hash01(1, seed) - 0.5) * r * 0.3;
+    ctx.fillStyle = shade(stone, 0.12);
+    ctx.beginPath();
+    ctx.ellipse(lean * 0.4, 0, r * 0.46, r * 0.34, hash01(2, seed) * 0.6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = shade(stone, 0.24);
+    ctx.beginPath();
+    ctx.arc(lean, -r * 0.08, r * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    // Moss holds the sunless corner.
+    ctx.fillStyle = withAlpha(moss, 0.55);
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath();
+      ctx.arc(-r * 0.5 + hash01(i + 3, seed) * r * 0.5, -r * 0.55 + hash01(i + 9, seed) * r * 0.5,
+        r * (0.1 + hash01(i + 5, seed) * 0.1), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/** A WAYSHRINE: a stone niche with a pitched cap and the votive candle the
+ *  road still keeps lit (the glow itself rides the def's LightSpec). */
+const wayshrine: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stone?: ColorSpec; roof?: ColorSpec; flame?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const stone = resolveColor(p.stone, theme, '#7e7668');
+  const roof = resolveColor(p.roof, theme, '#4e4438');
+  const flame = resolveColor(p.flame, theme, '#ffd890');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // Stone body + the niche's shadowed mouth.
+    ctx.fillStyle = shade(stone, -0.12);
+    ctx.fillRect(-r * 0.62, -r * 0.7, r * 1.24, r * 1.4);
+    ctx.fillStyle = withAlpha('#141210', 0.75);
+    ctx.fillRect(-r * 0.3, -r * 0.16, r * 0.6, r * 0.62);
+    // The pitched cap: two shaded slopes meeting on a ridge.
+    ctx.fillStyle = shade(roof, 0.1);
+    ctx.fillRect(-r * 0.78, -r * 0.86, r * 0.78, r * 0.38);
+    ctx.fillStyle = shade(roof, -0.16);
+    ctx.fillRect(0, -r * 0.86, r * 0.78, r * 0.38);
+    ctx.strokeStyle = withAlpha(shade(roof, -0.45), 0.9);
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-r * 0.78, -r * 0.86, r * 1.56, r * 0.38);
+    // The candle: a breathing pinpoint in the niche.
+    const breathe = 0.75 + Math.sin(time * 5.1 + o.pos.x) * 0.25;
+    ctx.fillStyle = withAlpha(flame, 0.9 * breathe);
+    ctx.beginPath();
+    ctx.arc(0, r * 0.12, r * 0.1 * (0.8 + breathe * 0.3), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** THE GALLOWS: platform boards, the post's shadowed bulk, and a crossbeam
+ *  reaching out with its rope stilled mid-sway. Grim road punctuation. */
+const gallows: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; rope?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const wood = resolveColor(p.wood, theme, '#5c4a34');
+  const rope = resolveColor(p.rope, theme, '#a89468');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 11) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The platform: weathered boards, gaps where feet learned the drop.
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = shade(wood, -0.05 + (hash01(i, seed) - 0.5) * 0.18);
+      ctx.fillRect(-r + i * (r * 2 / n) + 1, -r * 0.8, r * 2 / n - 2, r * 1.6);
+    }
+    ctx.strokeStyle = withAlpha(shade(wood, -0.5), 0.7);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-r, -r * 0.8, r * 2, r * 1.6);
+    // Post + crossbeam, top-down: the beam reaches over the trap.
+    ctx.fillStyle = shade(wood, -0.35);
+    ctx.beginPath();
+    ctx.arc(-r * 0.55, 0, r * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = shade(wood, -0.22);
+    ctx.fillRect(-r * 0.55, -r * 0.09, r * 1.15, r * 0.18);
+    // The rope: a loop drifting a hand's width in whatever wind there is.
+    const sway = Math.sin(time * 1.3 + seed) * r * 0.06;
+    ctx.strokeStyle = withAlpha(rope, 0.9);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(r * 0.42 + sway, r * 0.05, r * 0.13, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** A FISHING RACK: two posts, rails between, split fish drying tail-up —
+ *  the coast's pantry, hung out where the wind does the work. */
+const fishingRack: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; fish?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#6a5a40');
+  const fish = resolveColor(p.fish, theme, '#b0a284');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 19 + o.pos.y * 7) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // End posts + the two rails they carry.
+    ctx.fillStyle = shade(wood, -0.3);
+    ctx.beginPath(); ctx.arc(-r, 0, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r, 0, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = shade(wood, 0.05);
+    ctx.lineWidth = 2.2;
+    for (const y of [-r * 0.16, r * 0.16]) {
+      ctx.beginPath(); ctx.moveTo(-r, y); ctx.lineTo(r, y); ctx.stroke();
+    }
+    // The catch: tapered splits hung along the rails, no two the same size.
+    const count = 4 + (seed % 3);
+    for (let i = 0; i < count; i++) {
+      const x = -r * 0.8 + (i / (count - 1)) * r * 1.6;
+      const y = (i % 2 === 0 ? -1 : 1) * r * 0.16;
+      const len = r * (0.26 + hash01(i, seed) * 0.14);
+      ctx.fillStyle = shade(fish, (hash01(i + 4, seed) - 0.5) * 0.2);
+      ctx.beginPath();
+      ctx.ellipse(x, y + len * 0.5, r * 0.09, len * 0.5, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/** A CHARCOAL MOUND: the burner's turf-clad kiln — a dark dome seamed with
+ *  ember cracks that breathe while the burn holds (glow rides the LightSpec). */
+const kilnMound: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { earth?: ColorSpec; ember?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const earth = resolveColor(p.earth, theme, '#3c342a');
+  const ember = resolveColor(p.ember, theme, '#ff9a48');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 23 + o.pos.y * 3) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The turf dome, darkest at the crown where the smoke hole vents.
+    ctx.fillStyle = shade(earth, -0.05);
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = shade(earth, -0.3);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.55, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = withAlpha('#100c08', 0.85);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.16, 0, Math.PI * 2); ctx.fill();
+    // Ember seams: radial cracks that brighten and dim with the burn.
+    const pulse = 0.55 + Math.sin(time * 2.3 + seed) * 0.3;
+    ctx.lineWidth = 1.6;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + hash01(i, seed) * 0.7;
+      ctx.strokeStyle = withAlpha(ember, (0.35 + hash01(i + 5, seed) * 0.4) * pulse);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.2);
+      ctx.lineTo(Math.cos(a + 0.25) * r * (0.6 + hash01(i + 2, seed) * 0.3),
+        Math.sin(a + 0.25) * r * (0.6 + hash01(i + 2, seed) * 0.3));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
@@ -4986,6 +5177,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
+  statue, wayshrine, gallows, fishingRack, kilnMound,
   tentacleField, pentagram, door, breach, landmass, beacon, fallback,
 };
 

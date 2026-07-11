@@ -191,6 +191,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     passivePoints: Math.max(0, spec.level * PROGRESSION.passivePointsPerLevel + 1 - allocated.size - extraPicks),
     allocated,
     vocations: [],
+    choices,
     vocationPoints: 0,
     knownSkills,
     inventory: [],
