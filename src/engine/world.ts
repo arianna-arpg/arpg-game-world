@@ -3674,6 +3674,11 @@ export class World {
         const c = { x: source.map.x + (target.x - source.map.x) * t, y: source.map.y + (target.y - source.map.y) * t };
         if (this.continentFor(c).kind !== 'ocean') { harbor = c; break; }
       }
+      // The 4-sample scan comes up ALL-ocean when the coastline hugs the
+      // source (every t lands past the shore) — the one mint path that could
+      // still raise a node at sea. The same spiral net every other mint path
+      // rides is the backstop (placeZoneAt's land-clamp needs verified land).
+      if (this.continentFor(harbor).kind === 'ocean') harbor = this.pullToLand(harbor);
       // ONE harbor per stretch of coast: adjacent coastal zones' seaward
       // frontiers LINK to an existing near port instead of minting a twin.
       const near = Object.values(this.zoneMap).find(z => z.port && coordDist(z.map, harbor) < 60);
