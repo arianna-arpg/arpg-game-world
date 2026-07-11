@@ -61,4 +61,24 @@ export class DiscIndex<T extends SpatialDisc> {
     const cell = SPATIAL_CFG.cell;
     return this.buckets.get(keyOf(Math.floor(x / cell), Math.floor(y / cell))) ?? this.empty;
   }
+
+  /** Every disc whose circle could intersect a query circle of radius
+   *  `reach` at (x, y) — the AREA sibling of at(): the bucket sweep over
+   *  the query's bounding box, deduped (a disc spans many cells). This is
+   *  the CANDIDATE set; the precise overlap test is the caller's business.
+   *  Single-bucket queries return the bucket itself, allocation-free. */
+  near(x: number, y: number, reach: number): readonly T[] {
+    const cell = SPATIAL_CFG.cell;
+    const x0 = Math.floor((x - reach) / cell), x1 = Math.floor((x + reach) / cell);
+    const y0 = Math.floor((y - reach) / cell), y1 = Math.floor((y + reach) / cell);
+    if (x0 === x1 && y0 === y1) return this.buckets.get(keyOf(x0, y0)) ?? this.empty;
+    const seen = new Set<T>();
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const b = this.buckets.get(keyOf(cx, cy));
+        if (b) for (const it of b) seen.add(it);
+      }
+    }
+    return [...seen];
+  }
 }

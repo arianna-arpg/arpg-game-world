@@ -1846,7 +1846,15 @@ export interface ConstructDelivery {
   follows?: true;
   /** THE BELL (Tolling Bell): every landed hit the construct SUFFERS makes
    *  it cast castSkillId at itself (throttled by `interval`) — pair with
-   *  `taunt` and the enemies ring it for you. */
+   *  `taunt` and the enemies ring it for you. Two mallets, one gate
+   *  (World.ringBell): enemy blows ring through resolveHit's landed-hit
+   *  hook, and the OWNER'S side rings through the strike-surface seam
+   *  (World.strikeSurfaces) — every damaging delivery shape (arcs, sweeps,
+   *  novas, cones, grounds, storms, leaps, dashes, flights, beams, blasts)
+   *  offers its own victim geometry to the bell, no damage dealt. DoTs,
+   *  fume exposure and vents stay silent (wounds that seep are not blows
+   *  that land), and constructs never wield the mallet (a bell must not
+   *  ring bells). */
   castOnStruck?: true;
   /** Enemies prefer striking this construct (the decoy's pull, on
    *  anything) — the bell wants to be hit. */

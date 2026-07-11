@@ -12771,20 +12771,14 @@ export class World {
           dist(caster.pos, a.pos) - a.radius <= reach
           && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2,
           useMult);
-        // RING YOUR OWN BELL: the caster's swings FORCE a castOnStruck
-        // construct in the arc to answer — walk up and play it on purpose
-        // instead of waiting for the enemy to oblige (the PoE2 bell combo).
-        for (const c of this.actors) {
-          if (c.dead || c.owner !== caster || !c.construct?.castOnStruck) continue;
-          if (dist(caster.pos, c.pos) - c.radius > reach) continue;
-          if (Math.abs(angleDiff(caster.facing, angleTo(caster.pos, c.pos))) > arcRad / 2) continue;
-          if (this.ringBell(c)) {
-            this.flashes.push({
-              pos: vec(c.pos.x, c.pos.y), radius: c.radius + 10,
-              color: c.color, life: 0.2, maxLife: 0.2,
-            });
-          }
-        }
+        // THE MALLET: the swing's own arc rings castOnStruck constructs
+        // and pops brittle 'hit' scenery through the shared strike-surface
+        // seam — walk up and play the bell on purpose (the PoE2 combo),
+        // smash the pots on the follow-through. Team-wide by design:
+        // minions and co-op allies swing mallets too.
+        this.strikeSurfaces(caster, caster.pos, reach, (p, r) =>
+          dist(caster.pos, p) - r <= reach
+          && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2);
         break;
       }
 
@@ -12845,6 +12839,14 @@ export class World {
             inAoe(origin, radius, shape, caster.facing, a.pos, a.radius)
             && !(d.edgeOnly && dist(origin, a.pos) + a.radius < radius * d.edgeOnly),
             useMult);
+          // THE MALLET: the burst's own footprint (shape, edge band, walls)
+          // rings bells and pops brittle scenery. Mend-washes ('allies')
+          // strike nothing — a blessing is not a blow — and 'all' bursts
+          // already reach the bell as a victim (resolveHit rings it).
+          this.strikeSurfaces(caster, origin, radius, (p, r) =>
+            inAoe(origin, radius, shape, caster.facing, p, r)
+            && !(d.edgeOnly && dist(origin, p) + r < radius * d.edgeOnly)
+            && (phase || this.lineOfFire(origin, p)));
         }
         break;
       }
@@ -12907,6 +12909,8 @@ export class World {
                 this.resolveHit(caster, inst, enemy, useMult * 0.5, 0);
               }
             }
+            // THE MALLET: the named strike's splash is a blast too.
+            this.strikeSurfaces(caster, targetInfo.pos, splash);
           }
         }
         this.flashes.push({
@@ -12963,6 +12967,16 @@ export class World {
             && !(d.edgeOnly && dd + a.radius < range * d.edgeOnly)
             && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, a.pos))) <= arcRad / 2;
         }, useMult);
+        // THE MALLET: the wedge rings bells and pops brittle scenery it can
+        // see — same range/arc/edge/occlusion gates as its victims (razor
+        // beamFx cones included: the laser is a mallet too).
+        this.strikeSurfaces(caster, caster.pos, range, (p, r) => {
+          const dd = dist(caster.pos, p);
+          return dd - r <= range
+            && !(d.edgeOnly && dd + r < range * d.edgeOnly)
+            && Math.abs(angleDiff(caster.facing, angleTo(caster.pos, p))) <= arcRad / 2
+            && (phase || this.lineOfFire(caster.pos, p));
+        });
         break;
       }
 
@@ -13656,6 +13670,8 @@ export class World {
               this.resolveHit(caster, inst, e, useMult);
             }
           }
+          // THE MALLET: the repeated slam is a blast where it stands.
+          this.strikeSurfaces(caster, caster.pos, radius);
           this.flashes.push({
             pos: vec(caster.pos.x, caster.pos.y), radius,
             color: def.color, life: 0.3, maxLife: 0.3,
@@ -13781,6 +13797,9 @@ export class World {
           if (!inAoe(at, radius, shape, caster.facing, victim.pos, victim.radius)) continue;
           this.resolveHit(caster, inst, victim, mult, 0, flatBonus);
         }
+        // THE MALLET: the pop's own shape strikes the surfaces.
+        this.strikeSurfaces(caster, at, radius, (p, r) =>
+          inAoe(at, radius, shape, caster.facing, p, r));
         this.flashes.push({
           pos: at, radius, color: def.color,
           life: 0.35, maxLife: 0.35, shape, facing: caster.facing,
@@ -16026,7 +16045,8 @@ export class World {
 
   /** RING a castOnStruck construct (Tolling Bell): it casts its skill at
    *  itself on its own throttle. One gate for every mallet — enemy blows
-   *  (resolveHit) and the owner's deliberate swings (the melee case). */
+   *  (resolveHit's landed-hit hook) and the striker's own side (the
+   *  strike-surface seam below: every delivery shape is a mallet). */
   private ringBell(bell: Actor): boolean {
     const st = bell.construct;
     if (!st?.castOnStruck || !st.castInst || bell.dead) return false;
@@ -16039,6 +16059,84 @@ export class World {
     this.executeSkill(bell, st.castInst,
       vec(bell.pos.x, bell.pos.y), { keepFacing: true, noRepeat: true });
     return true;
+  }
+
+  /** Scratch buffer for strike-surface actor queries (actorsNear contract). */
+  private surfaceScratch: Actor[] = [];
+
+  /** THE MALLET — the shared strike-surface seam. Every damaging delivery
+   *  offers the SAME area it gathers victims with to the interactive
+   *  surfaces standing in it (the healAlliesInArea pattern: one helper,
+   *  each mechanism passes its own geometry). Two congregations answer:
+   *   - castOnStruck constructs on the striker's OWN side (Tolling Bell)
+   *     RING through the one ringBell gate — any skill shape plays the
+   *     instrument (arcs, sweeps, novas, cones, grounds, storms, leaps,
+   *     dashes, flights, beams, blasts), not just the anchored melee arc.
+   *     Enemy blows already ring through resolveHit (they damage it);
+   *     minions and co-op allies count — the bell tolls for whoever swings.
+   *   - brittle doodads with an on:'hit' trigger (DoodadRule.brittle: pots,
+   *     urns, lattices, hidden faces) POP via popBrittle — any strike is a
+   *     hit, not only a projectile in flight.
+   *  A null striker is an OWNERLESS blast (death bursts, martyrdoms baked
+   *  past their actor): it rings EVERY side's bells — a blast is a blast.
+   *  Automatons never wield the mallet (striker.construct — the bell's own
+   *  toll, a relic's pulse or a turret's spray must not ring bells: free
+   *  self-perpetuating tolls). DoTs, fume exposure, vents and tether
+   *  seepage stay silent by design — wounds that seep are not blows that
+   *  land. `test` is the delivery's exact victim geometry (shape, edge
+   *  bands, occlusion); omit it for a plain disc of `reach` at `at`.
+   *  `struck` is a sweep ledger (one ring per crossing), shared with the
+   *  zone's victim set — brittle pops need none (a popped pot is gone). */
+  private strikeSurfaces(
+    striker: Actor | null, at: Vec2, reach: number,
+    test?: (pos: Vec2, radius: number) => boolean,
+    struck?: Set<number>,
+  ): void {
+    const within = (pos: Vec2, radius: number): boolean =>
+      test ? test(pos, radius) : dist(at, pos) - radius <= reach;
+    if (!striker?.construct) {
+      for (const c of this.actorsNear(at.x, at.y, reach + 64, this.surfaceScratch)) {
+        if (c.dead || c === striker || !c.construct?.castOnStruck) continue;
+        if (striker && c.team !== striker.team) continue; // cross-team rings ride resolveHit
+        if (struck?.has(c.id)) continue;
+        if (!within(c.pos, c.radius)) continue;
+        struck?.add(c.id);
+        if (this.ringBell(c)) {
+          this.flashes.push({
+            pos: vec(c.pos.x, c.pos.y), radius: c.radius + 10,
+            color: c.color, life: 0.2, maxLife: 0.2,
+          });
+        }
+      }
+    }
+    for (const o of this.doodadsNear(at.x, at.y, reach)) {
+      const br = doodadRuleOf(o.kind).brittle;
+      if (!br || o.gone || !br.on.includes('hit')) continue;
+      if (!within(o.pos, o.radius)) continue;
+      this.popBrittle(o);
+    }
+  }
+
+  /** The zone-side mallet: offer a zone's strike moment to the surfaces
+   *  with the SAME gates its victims saw — containment (zoneHas for the
+   *  zone's own footprint, or an override blast shape at `at`/`radius` for
+   *  pulses and fissure detonations), the edge band, and walls (zoneSees).
+   *  Fume exposure zones and healing grounds never strike surfaces — gas
+   *  is not a blow, and a mend is not a mallet. `useStruck` rides the
+   *  zone's own sweep ledger (crescents ring once per crossing; pulses and
+   *  volatile re-lights are fresh blasts and pass false, exactly as their
+   *  victim loops skip it). */
+  private strikeZoneSurfaces(z: Zone, useStruck = true, at?: Vec2, radius?: number): void {
+    if (z.exposure || z.healTick) return;
+    const cAt = at ?? z.pos;
+    const r = radius ?? z.radius;
+    this.strikeSurfaces(z.caster, cAt, r, (p, pr) =>
+      (at !== undefined || radius !== undefined
+        ? inAoe(cAt, r, z.shape, z.facing, p, pr, z.arcRad)
+        : this.zoneHas(z, p, pr))
+      && !(z.edge && dist(z.pos, p) + pr < z.radius * z.edge)
+      && this.zoneSees(z, p),
+      useStruck ? z.struck : undefined);
   }
 
   /** Scatter an exploding area skill into smaller secondary explosions. */
@@ -16060,6 +16158,9 @@ export class World {
       if (!this.zoneSees(z, v)) continue;
       this.resolveHit(z.caster, z.inst, v, z.dmgMult * damageScale, z.depth, z.flatBonus, true);
     }
+    // THE MALLET: the segment's detonation is a fresh blast at the piece
+    // (no sweep ledger, the same wall gates its victims saw).
+    this.strikeZoneSurfaces(z, false, at, radius);
     this.spawnAftershocks(z.caster, z.inst, at, radius, z.shape, 0);
     return true;
   }
@@ -16370,6 +16471,8 @@ export class World {
       this.resolveHit(caster, inst, e, scale, 1, undefined, true);
     }
     this.flashes.push({ pos: vec(at.x, at.y), radius, color: inst.def.color, life: 0.3, maxLife: 0.3 });
+    // THE MALLET: the movement eruption is a blast — dive-bomb your bell.
+    this.strikeSurfaces(caster, at, radius);
   }
 
   /** Grant an absorption shield (take the larger pool, refresh the clock). */
@@ -16547,17 +16650,28 @@ export class World {
    *  already swept the enemies). */
   private healAlliesInArea(
     caster: Actor, inst: SkillInstance, accepts: (a: Actor) => boolean,
-    mult = 1, quiet = false,
+    mult = 1, quiet = false, once?: Set<number>,
   ): void {
-    for (const fx of inst.def.effects) {
-      if (fx.type !== 'heal' && fx.type !== 'cleanse') continue;
-      for (const a of this.actors) {
-        if (a.dead || a.untargetable || a.construct || a.team !== caster.team) continue;
+    // `once` is a per-CROSSING ledger (the sweep zones' own struck set):
+    // a drifting crescent mends each ally exactly once per pass — a
+    // blade-pass, not a per-frame fountain. Lingering fields pass nothing
+    // and keep their per-tick wash. Ids are shared with the zone's damage
+    // victims and rung bells; the sets are disjoint by team, so nothing
+    // collides.
+    const fxs = inst.def.effects.filter(fx => fx.type === 'heal' || fx.type === 'cleanse');
+    if (!fxs.length) return;
+    for (const a of this.actors) {
+      if (a.dead || a.untargetable || a.construct || a.team !== caster.team) continue;
+      if (once?.has(a.id)) continue;
+      if (!accepts(a)) continue;
+      let touched = false;
+      for (const fx of fxs) {
         if (fx.type === 'heal' && fx.excludeCaster && a === caster) continue;
-        if (!accepts(a)) continue;
+        touched = true;
         if (fx.type === 'heal') this.applyHealChained(caster, inst, a, fx, mult, quiet);
         else this.cleanseActor(a, fx.count ?? 2);
       }
+      if (touched) once?.add(a.id);
     }
   }
 
@@ -16609,6 +16723,10 @@ export class World {
       if (e.life <= 0 && !e.dead) this.kill(e);
     }
     this.flashes.push({ pos: vec(pos.x, pos.y), radius, color, life: 0.35, maxLife: 0.35 });
+    // THE MALLET, ownerless: a baked blast rings EVERY side's bells and
+    // pops brittle scenery — the exploding corpse beside the bell already
+    // damaged it without a toll; now the blast answers too.
+    this.strikeSurfaces(null, pos, radius);
   }
 
   // --- DEATH BURST: the telegraphed coalesce → implode / tracking-orb on enemy death ---
@@ -17786,6 +17904,9 @@ export class World {
           this.resolveHit(caster, inst, e, dmgMult * 0.5, depth + 1);
         }
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: splash, color: def.color, life: 0.15, maxLife: 0.15 });
+        // THE MALLET: the splash detonation strikes the surfaces around
+        // the struck body too.
+        this.strikeSurfaces(caster, target.pos, splash);
       }
     }
 
@@ -18314,6 +18435,9 @@ export class World {
       case 'burst': {
         const dmg = fx.base + fx.perLevel * Math.max(0, caster.level - 1);
         this.flashes.push({ pos: vec(caster.pos.x, caster.pos.y), radius: fx.radius, color: proc.color, life: 0.3, maxLife: 0.3 });
+        // THE MALLET: the proc's blast is a strike surface (rings bells,
+        // pops pots — triggered violence counts).
+        this.strikeSurfaces(caster, caster.pos, fx.radius);
         for (const enemy of this.enemiesOf(caster)) {
           if (enemy.dead || enemy.untargetable) continue;
           if (dist(caster.pos, enemy.pos) - enemy.radius > fx.radius) continue;
@@ -18372,6 +18496,8 @@ export class World {
       case 'explosion': {
         if (!inst || !target) break;
         this.flashes.push({ pos: vec(target.pos.x, target.pos.y), radius: fx.radius, color: proc.color, life: 0.3, maxLife: 0.3 });
+        // THE MALLET: the proc's explosion strikes the surfaces too.
+        this.strikeSurfaces(caster, target.pos, fx.radius);
         for (const enemy of this.enemiesOf(caster)) {
           if (dist(target.pos, enemy.pos) - enemy.radius <= fx.radius) {
             this.resolveHit(caster, inst, enemy, fx.damageScale, depth + 1);
@@ -20291,6 +20417,10 @@ export class World {
               this.resolveHit(a, inst, enemy, inst.def.delivery.corridorScale ?? 1);
             }
           }
+          // THE MALLET: the corridor rings bells / pops pots it passes
+          // over, once per dash (the same hits ledger the bodies ride).
+          this.strikeSurfaces(a, a.pos,
+            inst.def.delivery.width / 2 + a.radius, undefined, hits);
         }
         // Trailblaze / Fire Walker: the dash sows burning ground. The
         // drop-zone composables ride (DropZoneSpec): envelopes breathe
@@ -21588,6 +21718,9 @@ export class World {
           this.resolveHit(a, L.inst, e, L.dmgMult);
         }
       }
+      // THE MALLET: the slam's crater rings bells and pops brittle scenery
+      // (leap onto your own bell — the classic).
+      this.strikeSurfaces(a, a.pos, L.radius);
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: L.radius,
         color: L.inst.def.color, life: 0.3, maxLife: 0.3,
@@ -24262,6 +24395,8 @@ export class World {
             this.resolveHit(p.caster, p.inst, e, (ts.blast.damageScale ?? 0.35) * p.mult, 1, p.flat);
           }
           this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius, color: p.color, life: 0.22, maxLife: 0.22 });
+          // THE MALLET: each path-blast is a fresh strike surface.
+          this.strikeSurfaces(p.caster, p.pos, radius);
         }
         if (ts.zone) {
           // The drop-zone composables (DropZoneSpec): a size envelope
@@ -24398,6 +24533,23 @@ export class World {
         }
       }
 
+      // THE MALLET IN FLIGHT: your own shot rings your own bell as it
+      // passes — the flight-side sibling of the brittle 'hit' pop in the
+      // terrain sweep above. Rehit windows ride the same p.hits ledger the
+      // bodies use; the flight continues (your construct never eats the
+      // shot), and automaton-fired shots (turrets) ring nothing.
+      if (!dead && !p.caster.construct) {
+        for (const c of this.actors) {
+          if (c.dead || !c.construct?.castOnStruck || c.team !== p.caster.team) continue;
+          const until = p.hits.get(c.id);
+          if (until !== undefined && p.age < until) continue;
+          if (dist(p.pos, c.pos) > p.radius + c.radius) continue;
+          p.hits.set(c.id, p.rehit ? p.age + p.rehit : Infinity);
+          if (this.ringBell(c)) {
+            this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
+          }
+        }
+      }
       if (!dead) {
         for (const enemy of this.enemiesOf(p.caster)) {
           const until = p.hits.get(enemy.id);
@@ -24812,6 +24964,9 @@ export class World {
             }
             this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage);
           }
+          // THE MALLET: the placement's impact strikes the surfaces with
+          // its victims' own gates (sweeps share the crossing ledger).
+          this.strikeZoneSurfaces(z);
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: z.radius, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
@@ -24929,6 +25084,8 @@ export class World {
               this.resolveHit(z.caster, z.inst, v,
                 z.dmgMult * z.volatile.damageScale, z.depth, z.flatBonus, true);
             }
+            // THE MALLET: each re-light is a fresh blast (no sweep ledger).
+            this.strikeZoneSurfaces(z, false);
           }
         }
         // AFTERSHOCK segments (the whack-a-mole): the CASTER running over
@@ -24983,6 +25140,11 @@ export class World {
             this.resolveHit(z.caster, z.inst, v,
               z.dmgMult * z.pulse.dmgMult, z.depth, z.flatBonus, z.forceDamage);
           }
+          // THE MALLET: each quake beat is a fresh blast (no sweep ledger)
+          // at the pulse's true reach — discs quake at pr, segments stay
+          // their own capsule, matching the victims' containment exactly.
+          this.strikeZoneSurfaces(z, false,
+            z.seg ? undefined : z.pos, z.seg ? undefined : pr);
           this.flashes.push({
             pos: vec(z.pos.x, z.pos.y), radius: pr, color: z.color,
             life: 0.35, maxLife: 0.35, shape: z.shape, facing: z.facing,
@@ -25135,6 +25297,12 @@ export class World {
             }
             this.resolveHit(z.caster, z.inst, victim, z.dmgMult, z.depth, z.flatBonus, z.forceDamage);
           }
+          // THE MALLET: the tick strikes the surfaces with its victims'
+          // own gates — a drifting crescent rings the bell once per
+          // crossing (the shared sweep ledger); a lingering field re-rings
+          // on the bell's own throttle, exactly as enemy fields do through
+          // resolveHit.
+          this.strikeZoneSurfaces(z);
           }
           // MADDENING GROUND: dwell long enough inside and the fog takes
           // you — the maddened lash at whatever is nearest, either side.
@@ -25153,9 +25321,12 @@ export class World {
           // CONSECRATIONS: the field's mend side washes allies inside, per
           // tick and quietly (Healing Rain, Consecration — heal-and-harm
           // fields damage the trespassers and mend the congregation).
+          // Sweep surfaces (struck ledger) mend ONCE PER CROSSING instead:
+          // a drifting crescent with a mend side is a blade-pass, not a
+          // per-frame fountain (its tickInterval is 0).
           this.healAlliesInArea(z.caster, z.inst, a =>
             this.zoneHas(z, a.pos, a.radius),
-            z.dmgMult, true);
+            z.dmgMult, true, z.struck);
         }
         if (z.linger <= 0) {
           // The dying breath (Squall Rune): one final burst as it goes.
@@ -25166,6 +25337,9 @@ export class World {
               this.resolveHit(z.caster, z.inst, victim,
                 z.dmgMult * z.endBurst.damageScale, z.depth, z.flatBonus, true);
             }
+            // THE MALLET: the dying breath is a plain-disc blast, exactly
+            // as its victims see it.
+            this.strikeSurfaces(z.caster, z.pos, radius);
             this.flashes.push({
               pos: vec(z.pos.x, z.pos.y), radius, color: z.color,
               life: 0.35, maxLife: 0.35,
@@ -25261,7 +25435,10 @@ export class World {
    *  sweeps never consult walls, and a phasing skill frees its zones
    *  outright. The attitude is resolved ONCE per zone (z.phase); fissure
    *  segments ray from the nearest point on the crack, discs from center. */
-  private zoneSees(z: Zone, v: Actor): boolean {
+  private zoneSees(z: Zone, v: Actor | Vec2): boolean {
+    // Victims and strike SURFACES (bells, brittle scenery) share one wall
+    // test — pass an actor or a bare position.
+    const p = 'pos' in v ? v.pos : v;
     z.phase ??= !(LOS_CFG.zoneTickTypes[z.inst.def.delivery.type]
       && this.skillOcclusion(z.caster, z.inst) === 'blocked');
     if (z.phase) return true;
@@ -25272,10 +25449,10 @@ export class World {
       const sx = z.seg.bx - z.seg.ax, sy = z.seg.by - z.seg.ay;
       const ll = sx * sx + sy * sy;
       const t = ll > 0
-        ? clamp(((v.pos.x - z.seg.ax) * sx + (v.pos.y - z.seg.ay) * sy) / ll, 0, 1) : 0;
+        ? clamp(((p.x - z.seg.ax) * sx + (p.y - z.seg.ay) * sy) / ll, 0, 1) : 0;
       ox = z.seg.ax + sx * t; oy = z.seg.ay + sy * t;
     }
-    return this.lineOfFire(vec(ox, oy), v.pos);
+    return this.lineOfFire(vec(ox, oy), p);
   }
 
   /** THE WIND IS A FORCE: every unsheltered body drifts with the gale,
@@ -25792,6 +25969,22 @@ export class World {
    *  doodad list changed — see the field doc. THE way per-frame code touches
    *  doodads; the full-list scans it replaced were the caldera frame drops. */
   doodadsAt(x: number, y: number): readonly Doodad[] {
+    this.ensureDoodadIdx();
+    return this.doodadIdx.at(x, y);
+  }
+
+  /** The AREA candidate set: every doodad whose disc could intersect a
+   *  circle of `reach` at (x, y) — doodadsAt's area sibling on the same
+   *  lazy rebuild, for skill-shaped queries (the strike-surface seam).
+   *  A candidate SUPERSET: the caller applies its exact geometry. */
+  doodadsNear(x: number, y: number, reach: number): readonly Doodad[] {
+    this.ensureDoodadIdx();
+    return this.doodadIdx.near(x, y, reach);
+  }
+
+  /** Rebuild the doodad index lazily when the list changed — the shared
+   *  gate behind doodadsAt/doodadsNear (see the field doc). */
+  private ensureDoodadIdx(): void {
     if (this.doodadIdxArr !== this.doodads || this.doodadIdxLen !== this.doodads.length
       || this.doodadIdxRev !== this.doodadsRev) {
       this.doodadIdx.build(this.doodads);
@@ -25799,7 +25992,6 @@ export class World {
       this.doodadIdxLen = this.doodads.length;
       this.doodadIdxRev = this.doodadsRev;
     }
-    return this.doodadIdx.at(x, y);
   }
 
   /** In-place doodad mutations that DON'T change the list length (kind swaps,

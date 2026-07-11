@@ -489,7 +489,11 @@ export interface DoodadRule {
 /** How a lifeless breakable gives way (World.popBrittle executes it). */
 export interface BrittleSpec {
   /** What sets it off — any listed trigger fires:
-   *  'hit'   = a projectile/impact connects (the projectile step probes it);
+   *  'hit'   = any STRIKE connects: a projectile in flight (the flight step
+   *            probes it) or any damaging skill area washing over it — arcs,
+   *            sweeps, novas, cones, grounds, leaps, blasts — through the
+   *            shared strike-surface seam (World.strikeSurfaces), each with
+   *            its own victim geometry. DoT seepage never pops anything;
    *  'near'  = a player-team body inside `reach` (instant, or `dwell`-gated);
    *  'touch' = body contact (walk through a pot and it goes). */
   on: ('hit' | 'near' | 'touch')[];
