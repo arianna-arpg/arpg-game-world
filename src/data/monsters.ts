@@ -511,7 +511,8 @@ export const WILDLIFE: Record<string, { id: string; chance: number; count: [numb
     { id: 'broodmother', chance: 0.2, count: [1, 1] },
     { id: 'reed_frog', chance: 0.6, count: [2, 4], near: 'water' },
     { id: 'will_o_wisp', chance: 0.35, count: [1, 3] },
-    { id: 'quag_gel', chance: 0.45, count: [1, 3], near: 'bog' },
+    { id: 'quag_gel', chance: 0.45, count: [1, 3] }, // habitat relocates onto gel_pool
+
     { id: 'marsh_stalker', chance: 0.3, count: [1, 2] },
     { id: 'bloat_mother', chance: 0.2, count: [1, 1], presence: { from: 7, fadeIn: 4 } },
   ],
@@ -4917,6 +4918,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'], xp: 15,
     faction: 'wild', tags: ['ooze'],
     split: { into: 'quag_gelling', count: [2, 3], text: 'it comes apart!' },
+    // Terrain-bound to its own poured ground (the gel_pool dressing): the
+    // gel fights from its shallows and cannot be kited onto dry land.
+    habitat: { kind: 'gel_pool', minRadius: 36, grace: 28 },
     scaleVariance: [0.9, 1.3], scaleStats: true,
     turnSpeed: 4,
     brain: { type: 'basic' },

@@ -736,6 +736,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [3, 6], radius: [16, 34] },
       { kind: 'fern', count: [1, 3] },
       { kind: 'ruin', count: [1, 2] },
+      // The graveland set: old burials and the mire's counted dead.
+      { kind: 'barrow_mound', count: [1, 2] },
+      { kind: 'bone_cairn', count: [1, 2] },
+      { kind: 'hollow_log', count: [0, 2] },
+      { kind: 'gel_pool', count: [1, 2], radius: [38, 58] },
       { kind: 'cave', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'pillaged_township' },
     ],
@@ -884,6 +889,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'weathered_statue', count: [0, 2] }, { kind: 'gallows', count: [0, 1] },
       { kind: 'tombstone', count: [14, 22] },
       { kind: 'ruin', count: [2, 3] },
+      // The graveland set: barrows, obelisks, wax-drowned stumps, counted dead.
+      { kind: 'barrow_mound', count: [1, 3] },
+      { kind: 'black_obelisk', count: [0, 2] },
+      { kind: 'tallow_stump', count: [1, 3] },
+      { kind: 'bone_cairn', count: [2, 4] },
       { kind: 'rocks', count: [6, 10], radius: [16, 30] },
       { kind: 'swamp', count: [1, 2] },
       { kind: 'cliff', count: [1, 2] },
@@ -1478,6 +1488,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'marsh_wisp', count: [2, 4] },
       { kind: 'peat_mound', count: [1, 2] },
       { kind: 'venom_bloom', count: [1, 3] },
+      // The scavenger-web dressing: gel shallows (the quag gels' habitat
+      // ground — radius clears their minRadius), drowned steles, barred logs.
+      { kind: 'gel_pool', count: [2, 4], radius: [38, 64] },
+      { kind: 'sunken_stone', count: [1, 3] },
+      { kind: 'hollow_log', count: [0, 2] },
       // Rushes trace the waterlines the rows above pooled (shore strata).
       { kind: 'formation', count: [1, 3], formation: 'reed_shoreline',
         where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'bog', 'swamp'], reach: 140 } } },

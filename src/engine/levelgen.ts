@@ -168,7 +168,15 @@ export type KnownDoodadKind =
   | 'wayshrine'        // a roadside votive shrine — the candle the road still tends
   | 'gallows'          // a crossbeam the crows remember (brigand roads, moors)
   | 'fishing_rack'     // split fish drying on rails (coasts, bog margins)
-  | 'charcoal_mound';  // a charcoal-burner's smoldering earth kiln (working woods)
+  | 'charcoal_mound'   // a charcoal-burner's smoldering earth kiln (working woods)
+  // The scavenger-web dressing (graveland + mire texture)
+  | 'gel_pool'         // quivering ooze shallows — the quag gels' own ground
+  | 'sunken_stone'     // a drowned stele barely proud of the water
+  | 'black_obelisk'    // a basalt needle over old graves, cold light in its heart
+  | 'tallow_stump'     // a stump drowned in decades of candle wax, still lit
+  | 'barrow_mound'     // a turfed burial dome — the dead beneath the grass
+  | 'hollow_log'       // a rotted trunk big enough to bar the way
+  | 'bone_cairn';      // stacked bones as a marker — someone counted these dead
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -640,6 +648,16 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   gallows:        { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 200, bodyScale: 0.45, forbidOn: ['water', 'lava', 'chasm'] },
   fishing_rack:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70, bodyScale: 0.5, forbidOn: ['lava', 'chasm'] },
   charcoal_mound: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 150, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The scavenger-web dressing: graveland + mire texture. gel_pool is a
+  // POURED ground liquid (contiguous organic bodies, fuse-welded) — the
+  // quag gels' habitat ground; the rest are solids on the wayfarer pattern.
+  gel_pool:      { overlap: 'ground', pour: {} },
+  sunken_stone:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80, forbidOn: ['lava', 'chasm'] },
+  black_obelisk: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 200, bodyScale: 0.55, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  tallow_stump:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  barrow_mound:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 220, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  hollow_log:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 140, bodyScale: 0.6, forbidOn: ['water', 'lava', 'chasm'] },
+  bone_cairn:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
   bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground', pour: {} },
@@ -2752,6 +2770,15 @@ registerStamp('sunken_log', stampSingle('sunken_log', [16, 24]));
 registerStamp('marsh_wisp', stampSingle('marsh_wisp', [7, 10]));
 registerStamp('peat_mound', stampSingle('peat_mound', [18, 26]));
 registerStamp('venom_bloom', stampSingle('venom_bloom', [12, 16]));
+// The scavenger-web dressing: graveland + mire singles, and the gels'
+// poured shallows (a blob body like every liquid — the pour rule welds it).
+registerStamp('gel_pool', (ctx, spec) => stampBlob(ctx, 'gel_pool', spec.radius ?? [30, 56], [3, 6], false));
+registerStamp('sunken_stone', stampSingle('sunken_stone', [11, 17]));
+registerStamp('black_obelisk', stampSingle('black_obelisk', [13, 19]));
+registerStamp('tallow_stump', stampSingle('tallow_stump', [10, 15]));
+registerStamp('barrow_mound', stampSingle('barrow_mound', [26, 40]));
+registerStamp('hollow_log', stampSingle('hollow_log', [16, 26]));
+registerStamp('bone_cairn', stampSingle('bone_cairn', [11, 16]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the

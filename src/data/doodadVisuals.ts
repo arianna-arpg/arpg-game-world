@@ -541,6 +541,52 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'mound', order: 50, shadow: 0.5,
     params: { color: '#3a3226', edge: '#57492f' },
   },
+  // --- The scavenger-web dressing: graveland + mire texture -----------------
+  // The quag gels' own ground: a quivering ooze shallows, poured contiguous
+  // like every liquid, sheened and slow-bubbling. Their habitat points here.
+  gel_pool: {
+    painter: 'liquid', order: 28,
+    blend: { strength: 0.4, feather: 20, color: '#4a5e2e' },
+    params: {
+      rim: { color: '#6e8a3c', alpha: 0.55, grow: 3 },
+      core: { color: '#55702f', alpha: 0.6 },
+      sheen: { color: '#b7d478' },
+      bubbles: { color: '#cfe89a' },
+    },
+  },
+  // A drowned stele barely proud of the water — old work, older silence.
+  sunken_stone: {
+    painter: 'slab', order: 50, shadow: 0.4,
+    params: { shape: 'monolith', fill: '#2e3a34', edge: '#54685a' },
+  },
+  // A basalt needle over old graves; the cold violet at its heart is the
+  // light layer's, at parity with every other emissive.
+  black_obelisk: {
+    painter: 'shard', order: 54, shadow: 0.6, longShadow: 1.6,
+    params: { points: 4, color: '#20242e', material: 'stone', coreGlow: { color: '#6a5a9a' } },
+    light: { radius: -2.2, color: '#8a74c8', intensity: 0.16 },
+  },
+  // A stump drowned in decades of candle wax — someone still lights them.
+  tallow_stump: {
+    painter: 'stump', order: 52, shadow: 0.5,
+    params: { color: '#c9bfa4' },
+    light: { radius: -3.4, color: '#ffd890', intensity: 0.32, flicker: 3.4 },
+  },
+  // A turfed burial dome — the dead beneath the grass, the grass unbothered.
+  barrow_mound: {
+    painter: 'mound', order: 50, shadow: 0.55, longShadow: 0.8,
+    params: { color: '#3c4432', edge: '#5a6644' },
+  },
+  // A rotted trunk big enough to bar the way — cover that used to be a tree.
+  hollow_log: {
+    painter: 'log', order: 52, shadow: 0.5,
+    params: { color: '#4a3c2c', moss: '#41603a' },
+  },
+  // Stacked bones as a marker: someone counted these dead, and stopped.
+  bone_cairn: {
+    painter: 'cairn', order: 53, shadow: 0.5, longShadow: 0.9,
+    params: { color: '#cfc4ac', edge: '#8a8070' },
+  },
   // The mire-flower swollen with venom — its pop mints venom_seep, so the
   // fume CONTRACTS away on the skill's own envelope.
   venom_bloom: {
