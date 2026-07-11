@@ -393,6 +393,20 @@ export function validateContent(): void {
         warn(`${m.id}: wake payload '${m.wake.skillId}' is '${w.delivery.type}' — the shed-underfoot fantasy wants a ground delivery`);
       }
     }
+    // VOLATILE (the poked nest): the answer must be a real catalog skill
+    // and the chance a probability — a typo here is a nest that never
+    // answers (or answers every frame).
+    if (m.volatile) {
+      if (!SKILLS[m.volatile.skillId]) {
+        warn(`${m.id}: volatile payload '${m.volatile.skillId}' is not a catalog skill`);
+      }
+      if (m.volatile.chance <= 0 || m.volatile.chance > 1) {
+        warn(`${m.id}: volatile chance ${m.volatile.chance} is not a probability`);
+      }
+      if (m.volatile.icd !== undefined && m.volatile.icd <= 0) {
+        warn(`${m.id}: volatile icd must be positive — it is the throttle`);
+      }
+    }
     // Level-gated grants must name real skills/supports, and a support's target
     // skill must be one the monster actually fields (authored or earlier-granted).
     for (const g of m.grants ?? []) {

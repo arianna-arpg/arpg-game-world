@@ -315,6 +315,19 @@ export interface MonsterDef {
    *  oozer laces its own pool), minions (a summoned wake-body sheds for
    *  its owner), and everything the payload skill itself composes with. */
   wake?: { skillId: string; everyDist: number; dmgMult?: number };
+  /** VOLATILE — the poked wasp nest: TAKING a landed hit has `chance` to
+   *  FREE-CAST the named catalog skill from the body, aimed back along the
+   *  blow, throttled by `icd` seconds (default 1.5). The hit-driven
+   *  sibling of `wake` (which sheds on travel) and the bestiary cousin of
+   *  the construct bell (castOnStruck): ANY delivery works — novas spray
+   *  around the body, projectiles answer the attacker, ground pools at its
+   *  feet. dmgMult scales the payload's rolls (default 1). Dead, hidden
+   *  and untargetable bodies never answer, and a killing blow is answered
+   *  by nothing — the corpse is quiet (death answers belong to the brain's
+   *  onDeath rattle). Composes with ambush (poke the root, learn why),
+   *  shells (the answer fires even while the shell soaks), and everything
+   *  the payload skill itself composes with. */
+  volatile?: { skillId: string; chance: number; icd?: number; dmgMult?: number };
   /** AMBUSH SPAWN: the body is HIDDEN and untargetable — indistinguishable
    *  from scenery — until an enemy strays within `radius`, then it ERUPTS
    *  (reveal flash + announce) and fights normally. The root that was only
@@ -3162,6 +3175,19 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['claw'], xp: 7, faction: 'demon', adorn: 'horns',
     detection: 1.1, brain: { type: 'swarm' }, // swarm AI adds ×1.4 on top
   },
+  // FULGUR IMP — the high-roller in the bestiary: chasm-wide dice and both
+  // jackpot procs riding its bolt (Fulminate's innate grants) — the fabric
+  // gambles FOR the monster exactly as it does for the player. Close the
+  // distance before the dice come up.
+  fulgur_imp: {
+    id: 'fulgur_imp', name: 'Fulgur Imp',
+    color: '#ffe14a', shape: 'pentagon', radius: 10, look: 'imp', adorn: 'horns',
+    base: { life: 26, moveSpeed: 170, accuracy: 85, mana: 60, manaRegen: 7 },
+    mods: [mod('lightningRes', 'flat', 0.6)],
+    skills: ['fulminate'], xp: 12, faction: 'demon',
+    gemBias: ['lightning'],
+    detection: 1.2, brain: { type: 'skirmish' },
+  },
   hellhound: {
     id: 'hellhound', name: 'Hellhound',
     color: '#e0402a', shape: 'rhombus', radius: 14, material: 'fur', look: 'hellhound',
@@ -4136,6 +4162,36 @@ export const MONSTERS: Record<string, MonsterDef> = {
       type: 'juggernaut',
       onDeath: [{ do: 'summon', monster: 'lesser_ooze', count: 2, ring: 28 }],
     },
+  },
+  // GALVANIC OOZE — the VOLATILE showcase: a storm-fattened slick that
+  // ANSWERS blows with a spark bolt (hit-driven, ICD-throttled — the poked
+  // wasp nest) and DIVIDES when it falls (the viscous bargain, via the
+  // death rattle). Wide dice ride its mods: even the answers can jackpot.
+  galvanic_ooze: {
+    id: 'galvanic_ooze', name: 'Galvanic Ooze',
+    color: '#b8e05a', shape: 'oval', radius: 16, material: 'slime', look: 'viscous_ooze',
+    base: { life: 150, moveSpeed: 90, accuracy: 100, mana: 70, manaRegen: 6 },
+    mods: [mod('lightningRes', 'flat', 0.75), mod('chaosRes', 'flat', 0.3), mod('damageSpread', 'flat', 0.5)],
+    skills: ['spark_bolt'], xp: 34, faction: 'flesh',
+    volatile: { skillId: 'spark_bolt', chance: 0.4, icd: 1.2 },
+    scaleVariance: [0.9, 1.2], scaleStats: true,
+    gemBias: ['lightning'],
+    detection: 1.0,
+    brain: {
+      type: 'juggernaut',
+      onDeath: [{ do: 'summon', monster: 'galvanic_globule', count: 2, ring: 30 }],
+    },
+  },
+  // The division: small, fast, still crackling — a weaker answer on a
+  // slower clock, and the wide dice ride along.
+  galvanic_globule: {
+    id: 'galvanic_globule', name: 'Galvanic Globule',
+    color: '#c8e86a', shape: 'oval', radius: 9, material: 'slime', look: 'lesser_ooze',
+    base: { life: 30, moveSpeed: 125, accuracy: 85, mana: 30, manaRegen: 4 },
+    mods: [mod('lightningRes', 'flat', 0.75), mod('damageSpread', 'flat', 0.5)],
+    skills: ['claw'], xp: 6, faction: 'flesh',
+    volatile: { skillId: 'spark_bolt', chance: 0.25, icd: 1.6, dmgMult: 0.7 },
+    detection: 1.0, brain: { type: 'swarm' },
   },
   gutspray_hurler: {
     id: 'gutspray_hurler', name: 'Gutspray Hurler',
@@ -5226,9 +5282,9 @@ export const FACTIONS: Record<string, { name: string; table: PackTableEntry[] }>
 export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
   { minWave: 1, ids: ['zombie', 'skeleton_warrior'] },
   { minWave: 2, ids: ['skeleton_archer', 'blood_mite'] },
-  { minWave: 3, ids: ['fire_cultist', 'storm_acolyte', 'mushroomling', 'gloomling'] },
+  { minWave: 3, ids: ['fire_cultist', 'storm_acolyte', 'mushroomling', 'gloomling', 'fulgur_imp'] },
   { minWave: 4, ids: ['frost_witch', 'spitting_horror', 'dune_stalker', 'pyre_acolyte', 'rockgrub', 'giant_maggot'] },
-  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade', 'quiet_sibyl', 'myconid_warrior', 'viscous_ooze', 'orb_weaver'] },
+  { minWave: 5, ids: ['brute', 'hex_weaver', 'voltaic_shade', 'quiet_sibyl', 'myconid_warrior', 'viscous_ooze', 'galvanic_ooze', 'orb_weaver'] },
   { minWave: 6, ids: ['volatile_zealot', 'gloom_stalker', 'crypt_warden', 'wraith_piper', 'grave_shaman', 'gutspray_hurler', 'vampire_thrall'] },
   { minWave: 7, ids: ['warband_chieftain', 'bone_serpent', 'treant_warden', 'werewolf', 'banshee'] },
   { minWave: 8, ids: ['bone_colossus', 'javelin_skirmisher', 'flesh_amalgam', 'beastkin_gorer', 'emerald_mantis'] },
