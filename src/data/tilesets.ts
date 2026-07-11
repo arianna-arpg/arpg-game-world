@@ -9,7 +9,7 @@
 // cinderlands past the Ember Wastes — each line leveling up as it goes.
 // ---------------------------------------------------------------------------
 
-import type { LandmarkRoll, PackSpec, StampSpec, StructureRoll, ZoneTheme } from './zones';
+import type { CompositionRoll, LandmarkRoll, PackSpec, StampSpec, StructureRoll, ZoneTheme } from './zones';
 import type { Rng } from '../core/rng';
 
 export interface ObjectiveWeight {
@@ -69,12 +69,20 @@ export interface TilesetDef {
   layoutParams?: Record<string, unknown>;
   /** Geographic-landmark CHANCES (merged with the biome's at mint). */
   landmarks?: LandmarkRoll[];
+  /** Whole-zone COMPOSITION picks (merged with the biome's at mint) —
+   *  coordinated clearing/formation/strata bundles (see CompositionRoll). */
+  compositions?: CompositionRoll[];
+  /** CAVE layout weights: what a cave minted UNDER this tileset rolls for its
+   *  generator ('plains' = the classic convex crawl). Absent = the legacy
+   *  default (rooms 35% / plains 65%). forceLayout outranks this. */
+  caveLayouts?: Record<string, number>;
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
 
   deepwood: {
     id: 'deepwood',
+    compositions: [{ composition: 'fairy_court', chance: 0.22 }],
     variants: [
       { name: 'sunlit glade', layout: [
         { kind: 'trees', count: [8, 12] }, { kind: 'grove', count: [3, 4] },
@@ -194,6 +202,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // own layout rows are only the FURNITURE — the recipe grows the trees.
   forest: {
     id: 'forest',
+    compositions: [{ composition: 'orchard_rows', chance: 0.22 }],
     nameFirst: ['Heartwood', 'Oldgrowth', 'Deepbough', 'Greenholt', 'Oakenshade', 'Wildewood', 'Timberdark', 'Highcanopy', 'Fernbrake', 'Mossmantle', 'Broadleaf', 'Elderbough', 'Longshade', 'Hartswood', 'Boughlock', 'Greenvault'],
     nameSecond: ['Forest', 'Canopy', 'Wilds', 'Fastness', 'Timberland', 'Understory', 'Greenwood', 'Woodland', 'Heart', 'Vaults', 'Eaves', 'Roof'],
     theme: {
@@ -315,6 +324,10 @@ export const TILESETS: Record<string, TilesetDef> = {
   // who never came back, and the aurora breathing over the dark.
   taiga: {
     id: 'taiga',
+    // The frost hollow reads the BAKED climate: it grows where the world map
+    // actually runs cold and skips the taiga's warm frontier — the same
+    // tileset, different dress by geography.
+    compositions: [{ composition: 'frost_hollow', chance: 0.4 }, { composition: 'stone_sanctum', chance: 0.16 }],
     nameFirst: ['Silent', 'Whitewood', 'Frostpine', 'Snowveil', 'Winterdeep', 'Rimewood', 'Palegrove', 'Hoarwood', 'Stillfall', 'Coldbough', 'Evergloam', 'Firshadow', 'Icebough', 'Drifthollow'],
     nameSecond: ['Taiga', 'Firwood', 'Pines', 'Timberland', 'Woods', 'Stands', 'Thickets', 'Wilds', 'Forest', 'Boughs', 'Snowwood', 'Hollow'],
     theme: {
@@ -340,6 +353,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       // The windbreak line + a frost-heave arc — composed set-pieces.
       { kind: 'formation', count: [1, 2], formation: 'windrow_pines' },
       { kind: 'formation', count: [0, 1], formation: 'ice_teeth' },
+      // Extra drift where the WORLD runs cold (the baked climate axis): the
+      // taiga's frigid heart banks deeper snow than its mild frontier.
+      { kind: 'snowdrift', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
       { kind: 'fog_bank', count: [1, 3] },
       { kind: 'dead_tree', count: [1, 3] },
       { kind: 'rocks', count: [6, 10], radius: [20, 40] },
@@ -387,6 +403,7 @@ export const TILESETS: Record<string, TilesetDef> = {
 
   tundra: {
     id: 'tundra',
+    compositions: [{ composition: 'frost_hollow', chance: 0.4 }],
     nameFirst: ['Frostbitten', 'Howling', 'Pale', 'Glacial', 'Whitemourn', 'Rimebound', 'Frostfell', 'Hoarfrost', 'Bitterwind', 'Snowbound', 'Wintermourn', 'Bleakhold', 'Sleetborn', 'Coldcairn', 'Stormriven', 'Frostshard', 'Iceveil', 'Numbing'],
     nameSecond: ['Expanse', 'Steppes', 'Wastes', 'Drifts', 'Pass', 'Fields', 'Tundra', 'Floes', 'Hollow', 'Verge', 'Barrens', 'Plateau', 'Hinterland', 'Snowfields', 'Reach', 'Tarn'],
     theme: {
@@ -566,6 +583,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     common: [
       { kind: 'formation', count: [1, 2], formation: 'dune_ridges' },
       { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      // Shimmer thickens where the WORLD bakes hottest (climate strata).
+      { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
     packs: {
       count: [6, 8], size: [3, 5],
@@ -600,6 +619,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     // The heat swells marsh bladders in clearing and dense floor alike.
     common: [
       { kind: 'gas_pod', count: [1, 2] },
+      // The canopy drips harder where the WORLD runs wet (climate strata).
+      { kind: 'vines', count: [0, 2], where: { field: 'climate', params: { axis: 'moisture' }, min: 0.55 } },
     ],
     variants: [
       { name: 'clearing', layout: [
@@ -673,6 +694,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // MIRE — a drowned graveland: standing swamp, poison bog, rotted timber.
   mire: {
     id: 'mire',
+    compositions: [{ composition: 'drowned_procession', chance: 0.3 }],
     variants: [
       { name: 'sunken grove', layout: [
         { kind: 'trees', count: [8, 12] }, { kind: 'swamp', count: [3, 5] },
@@ -813,6 +835,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // CRYPT — a forsaken graveland of headstones, broken tombs, and the risen.
   crypt: {
     id: 'crypt',
+    compositions: [{ composition: 'boneyard_court', chance: 0.4 }],
     // What a graveland always keeps, whichever face it shows: burial goods
     // underfoot, a wall that hides more than bones, sealed urns and their
     // tenants, grave mold, the odd briar grown fat on the soil.
@@ -952,6 +975,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // MEADOW — a gentle grove breather: grass, scattered trees, low-threat wilds.
   meadow: {
     id: 'meadow',
+    compositions: [{ composition: 'orchard_rows', chance: 0.4 }],
     nameFirst: ['Sunlit', 'Wildflower', 'Greenhollow', 'Honeybrook', 'Dappled', 'Springmoor', 'Cloverhill', 'Larksong', 'Daisychain', 'Goldengrass', 'Breezy', 'Sweetgrass', 'Buttercup', 'Gentlebrook', 'Verdant', 'Mossglen', 'Petalfall', 'Hazysun'],
     nameSecond: ['Meadow', 'Glade', 'Pasture', 'Vale', 'Downs', 'Greens', 'Lea', 'Field', 'Heath', 'Commons', 'Bloom', 'Reach', 'Dell', 'Sward', 'Clearing', 'Holt'],
     theme: {
@@ -1057,6 +1081,10 @@ export const TILESETS: Record<string, TilesetDef> = {
   // biome tag (caves don't tint the map — they aren't on it). Tight and rocky.
   cavern: {
     id: 'cavern', frontier: false,
+    // What a cave BECOMES underground: the classic convex crawl, the maggot-
+    // lair warren, a catacomb dungeon, or a full maze — one seeded roll at
+    // mint (mintCave), pure data.
+    caveLayouts: { plains: 5.5, rooms: 2, dungeon: 1.5, labyrinth: 1 },
     nameFirst: ['Dripstone', 'Gloom', 'Hollow', 'Sunless', 'Blackrock', 'Echoing', 'Lightless', 'Dampstone', 'Crawlway', 'Stalactite', 'Deepdark', 'Mossgrot', 'Whispering', 'Coldstone', 'Slickrock', 'Veiled', 'Mirefoot', 'Lampless'],
     nameSecond: ['Cave', 'Grotto', 'Burrow', 'Den', 'Tunnels', 'Deep', 'Cavern', 'Warren', 'Crawl', 'Pocket', 'Undercroft', 'Gallery', 'Shaft', 'Vault', 'Maw', 'Reaches'],
     theme: {
@@ -1306,6 +1334,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // trenches; reach the next air pocket before you drown.
   deepsea: {
     id: 'deepsea', biome: 'deepsea',
+    compositions: [{ composition: 'kelp_gyre', chance: 0.3 }],
     nameFirst: ['Sunken', 'Abyssal', 'Drowned', 'Fathomless', 'Tide-Lost', 'Lightless', 'Pressuredark', 'Brineblack', 'Leviathan', 'Pelagic', 'Sunless', 'Cold-Crushed', 'Hadal', 'Stillwater', 'Deepswell', 'Saltgloom', 'Trenchborn', 'Drownward'],
     nameSecond: ['Deep', 'Trench', 'Shelf', 'Reach', 'Sound', 'Gulf', 'Abyss', 'Fathoms', 'Current', 'Depths', 'Hollow', 'Sink', 'Drift', 'Brine', 'Maw', 'Shoals'],
     theme: {
@@ -1335,6 +1364,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'kelp', count: [4, 8] },
         // Drifting frond WALLS between the stands — corridors of blindness.
         { kind: 'formation', count: [1, 2], formation: 'kelp_curtain' },
+        // Current-plaited ropes threading the stands (the braid arranger).
+        { kind: 'formation', count: [0, 1], formation: 'kelp_braid' },
       ] },
       { name: 'reef', layout: [
         { kind: 'coral', count: [7, 12], radius: [16, 30] },
@@ -1367,6 +1398,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // maze of corridors and chambers carved into the rock).
   highland: {
     id: 'highland', biome: 'highland',
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
     nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Highlands', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {
@@ -1382,6 +1414,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Rockslides strung downslope + a processional the old folk cut.
       { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
       { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
+      // Crags crown the HIGH ground (elevation strata: coherent height noise
+      // domed toward the zone's heart).
+      { kind: 'rocks', count: [2, 4], radius: [20, 44],
+        where: { field: 'elevation', min: 0.62, params: { scale: 640, dome: 0.35 } } },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1410,6 +1446,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // sluggish water and mire).
   marsh: {
     id: 'marsh', biome: 'marsh',
+    compositions: [{ composition: 'drowned_procession', chance: 0.4 }],
     nameFirst: ['Fetid', 'Sunken', 'Miremost', 'Rotbound', 'Stagnant', 'Murkwater', 'Reekwallow', 'Foulreek', 'Dankreed', 'Slumpwater', 'Gnatswarm', 'Greenscum', 'Cloywater', 'Sodden', 'Bogrot', 'Stillreek', 'Mudchurn', 'Drearmoor'],
     nameSecond: ['Marsh', 'Fen', 'Mire', 'Bog', 'Sump', 'Wetland', 'Slough', 'Quag', 'Reeds', 'Morass', 'Lowwater', 'Shallows', 'Mudflat', 'Sink', 'Hollow', 'Mere'],
     theme: {
@@ -1612,6 +1649,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // Bloom dwells here. The bloom's spore-density influence spreads OUT from these regions.
   mycelia: {
     id: 'mycelia', biome: 'mycelia',
+    compositions: [{ composition: 'fairy_court', chance: 0.4 }],
     nameFirst: ['Sporebound', 'Mycelial', 'Fruiting', 'Rotcap', 'Luminous', 'Creeping', 'Hyphal', 'Glowcap', 'Mouldgrown', 'Spore-Choked', 'Fungal', 'Damprot', 'Capshadow', 'Bloomrot', 'Pulsefungus', 'Veilspore', 'Mushroomed', 'Softrot'],
     nameSecond: ['Bloom', 'Hollow', 'Warren', 'Thicket', 'Grotto', 'Spread', 'Flush', 'Tangle', 'Sprawl', 'Mat', 'Patch', 'Colony', 'Reach', 'Mire', 'Beds', 'Veil'],
     theme: {
@@ -1675,6 +1713,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // bbox. A wide-open, exploration-leaning hub (objectives favour clear/escape).
   grassland: {
     id: 'grassland', biome: 'field',
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }],
     nameFirst: ['Sunlit', 'Windswept', 'Verdant', 'Rolling', 'Emerald', 'Goldengrass', 'Wildflower', 'Open', 'Boundless', 'Whispergrass', 'Far-Reaching', 'Sunwashed', 'Breezy', 'Tallgrass', 'Endless', 'Sweeping', 'Lark-Sung', 'Greenswept'],
     nameSecond: ['Fields', 'Meadows', 'Expanse', 'Greens', 'Pastures', 'Lowlands', 'Reach', 'Plains', 'Prairie', 'Steppe', 'Sprawl', 'Veldt', 'Downs', 'Grasslands', 'Range', 'Heath'],
     theme: {
@@ -1692,6 +1731,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'brush', count: [2, 4] },
       // A processional the plains folk raised, striding to nowhere now.
       { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
+      // Blooms pool in the LOW folds (elevation strata — the hollows keep
+      // their water; the rises keep their grass).
+      { kind: 'flowers', count: [1, 3], where: { field: 'elevation', max: 0.4, params: { scale: 700 } } },
     ],
     packs: {
       count: [6, 9], size: [3, 5],

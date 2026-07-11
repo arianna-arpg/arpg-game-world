@@ -20,7 +20,7 @@
 
 import { dist, vec, type Vec2 } from '../core/math';
 import type { Rng } from '../core/rng';
-import type { PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, ZoneDef } from '../data/zones';
+import type { PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
 import { MONSTERS } from '../data/monsters';
 import { presenceTable } from './presence';
@@ -162,7 +162,13 @@ export type KnownDoodadKind =
   | 'peat_mound'      // a low cut-peat hummock: dark cover that smells of tar
   | 'venom_bloom'     // a swollen mire-flower: pops into a CONTRACTING venom fume
   // The melt (lava is a crossable LIQUID; this is the wall)
-  | 'magma_core';     // impassable molten mass — the caldera's spiral walls
+  | 'magma_core'      // impassable molten mass — the caldera's spiral walls
+  // The wayfarer kit (roadside & village-story furniture)
+  | 'weathered_statue' // a mossed monument nobody remembers — solid, blocks shots
+  | 'wayshrine'        // a roadside votive shrine — the candle the road still tends
+  | 'gallows'          // a crossbeam the crows remember (brigand roads, moors)
+  | 'fishing_rack'     // split fish drying on rails (coasts, bog margins)
+  | 'charcoal_mound';  // a charcoal-burner's smoldering earth kiln (working woods)
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -628,6 +634,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // WALL — the caldera's spiral — is the separate magma_core kind below.
   lava:      { overlap: 'ground', pour: {} },
   magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false, pour: { fuseGap: 0 } },
+  // The wayfarer kit: story furniture for roads, coasts and working woods.
+  weathered_statue: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  wayshrine:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 160, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  gallows:        { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 200, bodyScale: 0.45, forbidOn: ['water', 'lava', 'chasm'] },
+  fishing_rack:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70, bodyScale: 0.5, forbidOn: ['lava', 'chasm'] },
+  charcoal_mound: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 150, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
   bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground', pour: {} },
@@ -851,6 +863,21 @@ export interface GenCtx {
   /** The zone's layout seed (def.seed), for seed-stable gen FIELDS (noise
    *  bands must not drift between the try-loop's samples or across co-op). */
   seed?: number;
+  /** The zone's baked geography (def.geo: biomeDepth + climate axes, sampled
+   *  at mint) — read by geo-aware gen fields ('climate') and composition
+   *  when-gates. Absent on authored/headless defs: consumers fall back to
+   *  their neutral defaults, never draw rng from it. */
+  geo?: ZoneDef['geo'];
+  /** TRANSIENT: restrict findSpot's sample rect to a sub-area (a dungeon room
+   *  being furnished, a composition site's surround). Draw COUNT is unchanged
+   *  (2 range draws per try, same as the full arena) — unset = byte-identical
+   *  sampling for every existing caller. */
+  sampleRect?: { x: number; y: number; w: number; h: number };
+  /** TRANSIENT: a pre-resolved anchor for the running stamp (composition
+   *  SITES) — site-aware stamps (clearing/formation/cluster) use it as their
+   *  center/origin instead of drawing a findSpot site, so several entries of
+   *  one composition coordinate around a shared point. */
+  siteAt?: Vec2;
   /** Plan structures raised so far (placeStructurePlan appends). */
   structures?: PlacedStructure[];
   /** The walk grid was LAZILY created by a plan structure in an otherwise-convex
@@ -970,6 +997,53 @@ registerGenField('shore', (ctx, params) => {
     }
     return Math.max(0, best) / reach;
   };
+});
+/** Coherent TERRAIN HEIGHT in 0..1 — octave-summed patch noise, optionally
+ *  biased toward a central dome (+) or basin (−) so "high ground" can mean the
+ *  zone's heart instead of a random ridge. Draw-free (samples never feed rng).
+ *  params: scale (default 760), octaves (1-4, default 2), seed, dome (-1..1,
+ *  default 0 — fraction of the range pushed toward/away from the center). */
+registerGenField('elevation', (ctx, params) => {
+  const scale = typeof params.scale === 'number' ? Math.max(60, params.scale) : 760;
+  const octaves = Math.max(1, Math.min(4, typeof params.octaves === 'number' ? Math.round(params.octaves) : 2));
+  const dome = typeof params.dome === 'number' ? Math.max(-1, Math.min(1, params.dome)) : 0;
+  const seed = ((ctx.seed ?? 0) ^ (typeof params.seed === 'number' ? params.seed : 0) ^ 0xe1e7) >>> 0;
+  const cx = ctx.arena.w / 2, cy = ctx.arena.h / 2;
+  return (x, y) => {
+    let v = 0, amp = 1, total = 0, sc = scale;
+    for (let o = 0; o < octaves; o++) {
+      v += valueNoise2(x, y, sc, (seed + o * 101) >>> 0) * amp;
+      total += amp; amp *= 0.55; sc *= 0.5;
+    }
+    v /= total;
+    if (dome) {
+      const rim = Math.max(Math.abs(x - cx) / Math.max(1, cx), Math.abs(y - cy) / Math.max(1, cy));
+      v += dome * (0.5 - rim);
+    }
+    return Math.max(0, Math.min(1, v));
+  };
+});
+/** The world's CLIMATE at this spot — base value = the axis baked into the
+ *  zone at mint (def.geo.climate, sampled from the world climate field), plus
+ *  gentle local variation so a band feathers instead of snapping on/off. The
+ *  SAME tileset row dresses differently across the map: reeds thicken where
+ *  the world runs wet, ice teeth bare where it runs cold — emergent, zero
+ *  bespoke wiring. Zones with no baked climate (authored/headless/directed
+ *  mints without samplers) read `base` (default 0.5): bands written around
+ *  the midpoint degrade to neutral, never to dead entries.
+ *  params: axis (default 'temperature'), vary (local ± amplitude, default
+ *  0.12), scale (default 900), seed, base (fallback when nothing is baked). */
+registerGenField('climate', (ctx, params) => {
+  const axis = typeof params.axis === 'string' ? params.axis : 'temperature';
+  const fallback = typeof params.base === 'number' ? params.base : 0.5;
+  const base = ctx.geo?.climate?.[axis] ?? fallback;
+  const vary = typeof params.vary === 'number' ? Math.max(0, params.vary) : 0.12;
+  const scale = typeof params.scale === 'number' ? Math.max(60, params.scale) : 900;
+  let axisMix = 0;
+  for (let i = 0; i < axis.length; i++) axisMix = (axisMix * 31 + axis.charCodeAt(i)) >>> 0;
+  const seed = ((ctx.seed ?? 0) ^ (typeof params.seed === 'number' ? params.seed : 0) ^ axisMix) >>> 0;
+  if (!vary) return () => Math.max(0, Math.min(1, base));
+  return (x, y) => Math.max(0, Math.min(1, base + (valueNoise2(x, y, scale, seed) - 0.5) * 2 * vary));
 });
 
 /** PLAINS — the classic layout: walk the def.layout StampSpec[] and scatter each
@@ -1510,7 +1584,7 @@ export function generateLayout(
   rng: Rng, entry: Vec2, exits: Vec2[],
 ): GeneratedLayout {
   const ctx: GenCtx = {
-    rng, arena, entry, exits, level: def.level, seed: def.seed,
+    rng, arena, entry, exits, level: def.level, seed: def.seed, geo: def.geo,
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
   };
@@ -1522,6 +1596,11 @@ export function generateLayout(
     const s = STRUCTURES[f.structure];
     if (s && !s.plan && !s.generator) placeStructure(ctx, s, vec(f.x, f.y));
   }
+  // COMPOSITION PLANS (whole-zone planning): the zone's picked bundles resolve
+  // their shared sites and stamp their PRE entries before the base layout, so
+  // the negative space they promise suppresses the scatter that follows. Zones
+  // without composition rolls draw nothing here (byte-identical).
+  const compositions = planCompositions(ctx, def);
   // Dispatch to the zone's layout generator (default 'plains' = byte-identical).
   const gen = LAYOUT_GENERATORS[def.layoutType ?? 'plains'] ?? plainsLayout;
   gen(ctx, def);
@@ -1550,6 +1629,11 @@ export function generateLayout(
     const n = roll.count ? ctx.rng.int(roll.count[0], roll.count[1]) : 1;
     for (let i = 0; i < n; i++) stamp(ctx, { kind: 'structure', structure: roll.structure, count: [1, 1] });
   }
+  // COMPOSITION POST entries: after the base layout + landmark/structure rolls
+  // so their shore bands measure EVERY liquid (authored and landmark-poured)
+  // and their pieces route around every reservation. Before the fuse/splice/
+  // reachability tail — the finalizers act on the complete geometry.
+  runCompositionPost(ctx, compositions);
   // THE FUSE: near-touching poured ground bodies (same kind + flags) merge
   // into one contiguous body — the parity pass over every placement system
   // (stamps, landmarks, clusters, fx layers). Draw-free; runs before the
@@ -1651,10 +1735,24 @@ function ensureReachability(ctx: GenCtx): void {
   if (!(grid instanceof GridWalkField)) return;
   const inPocket = (p: Vec2): boolean =>
     (ctx.pockets ?? []).some(k => dist(p, vec(k.x, k.y)) <= k.r);
-  // Open-doors topology: door cells pass for the check, resealed after.
+  // Open-doors topology: door cells pass for the check, then RESTORED to
+  // whatever they held before (not blanket-resealed to rampart: plan
+  // structures seal their door cells, but the interior generators leave
+  // theirs GROUND — the doodad does the blocking so spawns/pathing see the
+  // open topology — and a forced reseal would wall the dungeon at every
+  // rolled door).
   const doorRects: { x: number; y: number; w: number; h: number }[] = [];
   for (const st of ctx.structures ?? []) {
     for (const pd of st.doors) if (pd.door.cells) doorRects.push(pd.door.cells);
+  }
+  const cs = grid.cellSize ?? 30;
+  const priorCells: { x: number; y: number; kind: string }[] = [];
+  for (const c of doorRects) {
+    for (let y = c.y + cs / 2; y < c.y + c.h; y += cs) {
+      for (let x = c.x + cs / 2; x < c.x + c.w; x += cs) {
+        priorCells.push({ x, y, kind: grid.regionAt(x, y) });
+      }
+    }
   }
   for (const c of doorRects) grid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'ground');
 
@@ -1718,8 +1816,9 @@ function ensureReachability(ctx: GenCtx): void {
     }
   }
 
-  // Reseal the doors (closed state is the shipped topology).
-  for (const c of doorRects) grid.fillRegion(c.x, c.y, c.x + c.w - 0.01, c.y + c.h - 0.01, 'rampart');
+  // Restore the door cells to their pre-check kinds (a plan structure's seal
+  // comes back rampart; an interior door's floor stays floor).
+  for (const pc of priorCells) grid.fillRegion(pc.x - 1, pc.y - 1, pc.x + 1, pc.y + 1, pc.kind);
 }
 
 /** SOLIDS NEVER SEAL — the doodad-aware belt over ensureReachability's grid
@@ -2458,6 +2557,27 @@ const unknownStampWarned = new Set<string>();
 const apronWarned = new Set<string>();
 const unknownFieldWarned = new Set<string>();
 
+/** Compile a WHERE band into a fieldGate (the strata gate findSpot reads).
+ *  Shared by stamp() and composition-site resolution so both speak the same
+ *  vocabulary. Unknown fields warn once and gate nothing — a band that failed
+ *  to load degrades to ungated placement, never to a dead entry. */
+function compileFieldGate(ctx: GenCtx, where: WhereSpec | undefined): GenCtx['fieldGate'] {
+  if (!where) return undefined;
+  const factory = GEN_FIELDS[where.field];
+  if (!factory) {
+    if (!unknownFieldWarned.has(where.field)) {
+      unknownFieldWarned.add(where.field);
+      console.warn(`[genfields] layout entry references unregistered field '${where.field}' — band ignored`);
+    }
+    return undefined;
+  }
+  return {
+    sample: factory(ctx, where.params ?? {}),
+    min: where.min ?? 0,
+    max: where.max ?? Infinity,
+  };
+}
+
 function stamp(ctx: GenCtx, spec: StampSpec): void {
   const h = STAMP_HANDLERS[spec.kind];
   if (!h) {
@@ -2479,25 +2599,10 @@ function stamp(ctx: GenCtx, spec: StampSpec): void {
   try {
     ctx.ruleOver = spec.rules;
     // WHERE band: compile the spec's strata gate once for the handler's whole
-    // run (findSpot reads it after every legacy check). Unknown fields warn
-    // once and gate nothing — a package field that failed to load degrades to
-    // the ungated scatter, never a dead zone entry. Unset bounds are
+    // run (findSpot reads it after every legacy check). Unset bounds are
     // UNBOUNDED (min ?? 0, max ?? Infinity): `{field:'radial', min:0.6}`
     // means "the rim, however far it runs", not "up to 1".
-    ctx.fieldGate = undefined;
-    if (spec.where) {
-      const factory = GEN_FIELDS[spec.where.field];
-      if (factory) {
-        ctx.fieldGate = {
-          sample: factory(ctx, spec.where.params ?? {}),
-          min: spec.where.min ?? 0,
-          max: spec.where.max ?? Infinity,
-        };
-      } else if (!unknownFieldWarned.has(spec.where.field)) {
-        unknownFieldWarned.add(spec.where.field);
-        console.warn(`[genfields] layout entry references unregistered field '${spec.where.field}' — band ignored`);
-      }
-    }
+    ctx.fieldGate = compileFieldGate(ctx, spec.where);
     h(ctx, spec);
   } finally {
     ctx.ruleOver = prevRule;
@@ -2578,6 +2683,12 @@ registerStamp('bone_pile', stampSingle('bone_pile', [12, 22]));
 // The rock grammar's kin: waymark cairns, gravel spills, standing pinnacles,
 // and the composed BOULDER FIELD outcrop.
 registerStamp('cairn', stampSingle('cairn', [11, 16]));
+// The wayfarer kit: roadside & village-story singles.
+registerStamp('weathered_statue', stampSingle('weathered_statue', [16, 24]));
+registerStamp('wayshrine', stampSingle('wayshrine', [13, 18]));
+registerStamp('gallows', stampSingle('gallows', [22, 30]));
+registerStamp('fishing_rack', stampSingle('fishing_rack', [16, 24]));
+registerStamp('charcoal_mound', stampSingle('charcoal_mound', [18, 28]));
 registerStamp('scree', (ctx, spec) => stampBlob(ctx, 'scree', spec.radius ?? [18, 46], [3, 6], false));
 registerStamp('rock_spire', (ctx, spec) => stampSolid(ctx, 'rock_spire', spec.radius ?? [14, 26]));
 registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
@@ -3046,7 +3157,7 @@ export function clusterDefs(): ClusterDef[] { return Object.values(CLUSTERS); }
 function stampCluster(ctx: GenCtx, def: ClusterDef): void {
   const a = def.anchor;
   const spacing = a.spacing ?? (a.kind ? doodadRule(a.kind).spacing ?? 0 : 0);
-  const center = findSpot(ctx, a.radius, a.hard ?? true, spacing, true, a.kind);
+  const center = ctx.siteAt ?? findSpot(ctx, a.radius, a.hard ?? true, spacing, true, a.kind);
   if (!center) return;
   const clusterStart = ctx.doodads.length;
   for (const piece of def.pieces) {
@@ -3124,12 +3235,24 @@ export interface FormationDef {
  *  anchors in chain order. */
 export type FormationArranger = (ctx: GenCtx, def: FormationDef, start: Vec2, rng: Rng) => Vec2[];
 
+/** How an arranger USES its start point — drives the default siting clearance
+ *  (stampFormation): `around` arrangers (arc/ring/orbit/grid) treat start as a
+ *  CENTER and want their whole extent clear-ish; chain arrangers (line/
+ *  meander/braid) treat it as an origin and only need their head sited.
+ *  `siteFrac` overrides the span[1] fraction used for the clearance probe. */
+export interface FormationArrangerMeta {
+  around?: boolean;
+  siteFrac?: number;
+}
+
 const FORMATION_ARRANGERS: Record<string, FormationArranger> = {};
+const FORMATION_ARRANGER_META: Record<string, FormationArrangerMeta> = {};
 const FORMATIONS: Record<string, FormationDef> = {};
 
-export function registerFormationArranger(id: string, a: FormationArranger): void {
+export function registerFormationArranger(id: string, a: FormationArranger, meta?: FormationArrangerMeta): void {
   if (FORMATION_ARRANGERS[id]) console.warn(`[formations] re-registering arranger '${id}' — overriding`);
   FORMATION_ARRANGERS[id] = a;
+  if (meta) FORMATION_ARRANGER_META[id] = meta;
 }
 
 export function registerFormation(def: FormationDef): void {
@@ -3187,6 +3310,93 @@ registerFormationArranger('ring', (ctx, def, start, rng) => {
   return pts;
 });
 
+/** A rotated LATTICE around `start` — orchard rows, tomb plots, pillar halls.
+ *  span = the lattice's LONG side; step = column gap along each row. params:
+ *  rows ([lo,hi] roll, default derives near-square from `aspect`), rowGap
+ *  (default step), aspect (short/long ratio when rows derive, default 0.62).
+ *  Anchors run SERPENTINE (row 0 left→right, row 1 right→left…) so `every`
+ *  cadences stay spatially coherent. Draws: span, angle, then rows only when
+ *  the def asks for a roll — def-conditional, stable per def. */
+registerFormationArranger('grid', (ctx, def, start, rng) => {
+  const span = rng.range(def.span[0], def.span[1]);
+  const angle = rng.range(0, Math.PI * 2);
+  const step = def.step ?? 46;
+  const rowGap = typeof def.params?.rowGap === 'number' ? def.params.rowGap : step;
+  const aspect = typeof def.params?.aspect === 'number' ? def.params.aspect : 0.62;
+  const rowBand = Array.isArray(def.params?.rows) ? def.params.rows as [number, number] : undefined;
+  const rows = Math.max(2, rowBand
+    ? rng.int(rowBand[0], rowBand[1])
+    : Math.round((span * aspect) / Math.max(1, rowGap)) + 1);
+  const cols = Math.max(2, Math.floor(span / step) + 1);
+  const ux = Math.cos(angle), uy = Math.sin(angle);        // along a row
+  const vx = -uy, vy = ux;                                 // across rows
+  const w = (cols - 1) * step, h = (rows - 1) * rowGap;
+  const pts: Vec2[] = [];
+  for (let rI = 0; rI < rows; rI++) {
+    for (let cI = 0; cI < cols; cI++) {
+      const c = rI % 2 ? cols - 1 - cI : cI;               // serpentine
+      const ox = c * step - w / 2, oy = rI * rowGap - h / 2;
+      pts.push(vec(start.x + ux * ox + vx * oy, start.y + uy * ox + vy * oy));
+    }
+  }
+  return pts;
+}, { around: true, siteFrac: 0.55 });
+
+/** CONCENTRIC RINGS around `start` — druidic stone circles, fairy courts,
+ *  camp rings. span = the OUTER radius; each ring's anchor count derives from
+ *  its circumference / step. params: rings ([lo,hi] roll, default [2,3]),
+ *  innerFrac (innermost ring's fraction of the outer radius, default
+ *  1/rings). Rings run inner→outer, each phase-offset by the golden angle so
+ *  spokes never align into artificial rays. Draws: radius, a0, rings roll. */
+registerFormationArranger('orbit', (ctx, def, start, rng) => {
+  const outer = rng.range(def.span[0], def.span[1]);
+  const a0 = rng.range(0, Math.PI * 2);
+  const ringBand = Array.isArray(def.params?.rings) ? def.params.rings as [number, number] : [2, 3];
+  const rings = Math.max(1, rng.int(ringBand[0], ringBand[1]));
+  const step = def.step ?? 46;
+  const innerFrac = typeof def.params?.innerFrac === 'number' ? def.params.innerFrac : 1 / rings;
+  const inner = outer * Math.max(0.1, Math.min(1, innerFrac));
+  const GOLDEN = 2.399963229728653;
+  const pts: Vec2[] = [];
+  for (let rI = 0; rI < rings; rI++) {
+    const radius = rings === 1 ? outer : inner + ((outer - inner) * rI) / (rings - 1);
+    const n = Math.max(3, Math.round((Math.PI * 2 * radius) / step));
+    const phase = a0 + rI * GOLDEN;
+    for (let i = 0; i < n; i++) {
+      const a = phase + (i / n) * Math.PI * 2;
+      pts.push(vec(start.x + Math.cos(a) * radius, start.y + Math.sin(a) * radius));
+    }
+  }
+  return pts;
+}, { around: true, siteFrac: 0.9 });
+
+/** INTERLEAVED STRANDS woven along one bearing — braided reeds, kelp ropes,
+ *  root plaits. span = the braid's LENGTH; strands cross where their sine
+ *  offsets meet zero. Anchors interleave strand-by-strand at each step
+ *  (s0,s1,… then advance), so `every: strands` picks out ONE strand and
+ *  `every: 1` plants the full weave. params: strands (default 2), weave
+ *  (perpendicular amplitude, default 30), wavelength (default step*6).
+ *  Draws: span, dir, phase — geometry after that is pure. */
+registerFormationArranger('braid', (ctx, def, start, rng) => {
+  const span = rng.range(def.span[0], def.span[1]);
+  const dir = rng.range(0, Math.PI * 2);
+  const phase = rng.range(0, Math.PI * 2);
+  const step = def.step ?? 46;
+  const strands = Math.max(2, Math.min(4, typeof def.params?.strands === 'number' ? Math.round(def.params.strands) : 2));
+  const weave = typeof def.params?.weave === 'number' ? def.params.weave : 30;
+  const wavelength = typeof def.params?.wavelength === 'number' ? Math.max(step, def.params.wavelength) : step * 6;
+  const ux = Math.cos(dir), uy = Math.sin(dir);
+  const px = -uy, py = ux;
+  const pts: Vec2[] = [];
+  for (let s = 0; s <= span; s += step) {
+    for (let k = 0; k < strands; k++) {
+      const off = Math.sin((s / wavelength) * Math.PI * 2 + phase + (k * Math.PI * 2) / strands) * weave;
+      pts.push(vec(start.x + ux * s + px * off, start.y + uy * s + py * off));
+    }
+  }
+  return pts;
+}, { siteFrac: 0.3 });
+
 function stampFormation(ctx: GenCtx, def: FormationDef): void {
   const arranger = FORMATION_ARRANGERS[def.arrange];
   if (!arranger) {
@@ -3196,11 +3406,17 @@ function stampFormation(ctx: GenCtx, def: FormationDef): void {
     }
     return;
   }
-  // Siting clearance: arcs/rings need their whole radius clear-ish; chains
-  // just need their head sited (the per-piece gates walk the rest).
-  const around = def.arrange === 'arc' || def.arrange === 'ring';
-  const site = def.siteRadius ?? Math.round(around ? def.span[1] * 0.9 : def.span[1] * 0.3);
-  const start = findSpot(ctx, site, def.hard ?? false, 24, false);
+  // Siting clearance: around-arrangers (arc/ring/orbit/grid) need their whole
+  // extent clear-ish; chains just need their head sited (the per-piece gates
+  // walk the rest). New arrangers declare their policy via registration META;
+  // the arc/ring fallback keeps the pre-meta built-ins byte-identical.
+  const meta = FORMATION_ARRANGER_META[def.arrange];
+  const around = meta?.around ?? (def.arrange === 'arc' || def.arrange === 'ring');
+  const siteFrac = meta?.siteFrac ?? (around ? 0.9 : 0.3);
+  const site = def.siteRadius ?? Math.round(def.span[1] * siteFrac);
+  // A composition SITE pre-resolves the origin (shared with the bundle's other
+  // entries); otherwise the chain sites itself exactly as before.
+  const start = ctx.siteAt ?? findSpot(ctx, site, def.hard ?? false, 24, false);
   if (!start) return;
   const anchors = arranger(ctx, def, start, ctx.rng);
   if (anchors.length < 2) return;
@@ -3248,21 +3464,204 @@ registerStamp('formation', (ctx, spec) => {
 registerStamp('clearing', (ctx, spec) => {
   const band = spec.radius ?? [90, 170];
   const r = ctx.rng.range(band[0], band[1]);
-  const p = findSpot(ctx, r * 0.7, false, 0, false);
+  const p = ctx.siteAt ?? findSpot(ctx, r * 0.7, false, 0, false);
   if (!p) return;
   ctx.reserved.push({ pos: p, radius: r });
 });
+
+// COMPOSITIONS — whole-zone PLANNING above single layout entries: one picked
+// bundle COORDINATES clearings, formations, and banded scatter around shared
+// named SITES, so "a glade ringed by standing stones" is one authored idea, not
+// three independent rolls that happen to miss each other. Everything data: a
+// CompositionDef names its sites + pre/post entries (the same StampSpec
+// vocabulary tilesets speak, plus `at` referencing a site); zones pick from
+// weighted CompositionRoll pools merged at mint (tileset + biome, like
+// structure rolls). PRE entries stamp before the base layout (their clearings
+// suppress the whole scatter); POST entries stamp after landmark/structure
+// rolls (their shore bands measure every liquid, their pieces route around
+// every reservation). `when` gates a bundle on the zone's BAKED geography
+// (def.geo climate/biomeDepth) — a frost hollow only where the world runs
+// cold — checked after the pick roll so filters never shift draws.
+
+export interface CompositionSite {
+  id: string;
+  /** Probe clearance band (rolled, then sited via findSpot). */
+  radius: [number, number];
+  /** Optional strata band the site must satisfy (the WhereSpec vocabulary —
+   *  a heart on the rim, a hollow where the climate field runs cold). */
+  where?: WhereSpec;
+  /** Portal-margin policy for the site probe (default false = soft). */
+  hard?: boolean;
+}
+
+export interface CompositionDef {
+  id: string;
+  /** Named shared anchors resolved ONCE per pick — entries reference them via
+   *  StampSpec.at, so a clearing and the orbit ringing it share one center. */
+  sites?: CompositionSite[];
+  /** Stamped BEFORE the zone's base layout (reservations land first). */
+  pre?: StampSpec[];
+  /** Stamped AFTER the base layout + landmark/structure rolls. */
+  post?: StampSpec[];
+  /** Geo gates on def.geo: keys are 'biomeDepth' or a climate axis id; a zone
+   *  missing the datum PASSES (neutral — authored zones without baked climate
+   *  still roll the bundle). */
+  when?: Record<string, { min?: number; max?: number }>;
+}
+
+const COMPOSITIONS: Record<string, CompositionDef> = {};
+
+export function registerComposition(def: CompositionDef): void {
+  if (COMPOSITIONS[def.id]) console.warn(`[compositions] re-registering '${def.id}' — overriding`);
+  COMPOSITIONS[def.id] = def;
+}
+
+export function hasComposition(id: string): boolean { return id in COMPOSITIONS; }
+
+/** All registered composition defs (boot validation + the generation QA sweep). */
+export function compositionDefs(): CompositionDef[] { return Object.values(COMPOSITIONS); }
+
+/** The stamps that consume a composition site (ctx.siteAt) as their anchor —
+ *  validation warns when `at` rides any other kind (it would be silently
+ *  ignored: those handlers site themselves). */
+export const SITE_AWARE_STAMPS: ReadonlySet<string> = new Set(['clearing', 'formation', 'cluster']);
+
+interface CompositionPlan { def: CompositionDef; sites: Record<string, Vec2> }
+
+function compositionEligible(def: ZoneDef, c: CompositionDef): boolean {
+  if (!c.when) return true;
+  for (const [key, band] of Object.entries(c.when)) {
+    const v = key === 'biomeDepth' ? def.geo?.biomeDepth : def.geo?.climate?.[key];
+    if (v === undefined) continue; // datum not baked → neutral pass
+    if (v < (band.min ?? -Infinity) || v > (band.max ?? Infinity)) return false;
+  }
+  return true;
+}
+
+/** Stamp one phase's entries, threading each entry's site (if any) through the
+ *  ctx.siteAt transient. The count roll mirrors plainsLayout exactly; an entry
+ *  whose site failed to resolve stands down AFTER its count draw (the
+ *  rolls-before-filters discipline, at bundle scale). */
+function stampCompositionEntries(ctx: GenCtx, entries: StampSpec[] | undefined, sites: Record<string, Vec2>): void {
+  for (const spec of entries ?? []) {
+    const n = ctx.rng.int(spec.count[0], spec.count[1]);
+    for (let i = 0; i < n; i++) {
+      if (spec.at && !sites[spec.at]) continue;
+      const prev = ctx.siteAt;
+      try {
+        ctx.siteAt = spec.at ? sites[spec.at] : undefined;
+        stamp(ctx, spec);
+      } finally {
+        ctx.siteAt = prev;
+      }
+    }
+  }
+}
+
+/** Roll the zone's composition picks, resolve their shared sites, and stamp
+ *  their PRE entries. Returns the plans so the POST phase reuses the exact
+ *  same sites. Draws rng only when def.compositions exists — zones without
+ *  rolls are byte-identical. */
+function planCompositions(ctx: GenCtx, def: ZoneDef): CompositionPlan[] {
+  const plans: CompositionPlan[] = [];
+  for (const roll of def.compositions ?? []) {
+    const hit = ctx.rng.chance(roll.chance); // roll BEFORE the filters
+    if (!hit) continue;
+    const c = COMPOSITIONS[roll.composition];
+    if (!c) {
+      if (!unknownStampWarned.has(`composition:${roll.composition}`)) {
+        unknownStampWarned.add(`composition:${roll.composition}`);
+        console.warn(`[compositions] zone rolls unregistered composition '${roll.composition}' — skipped`);
+      }
+      continue;
+    }
+    if (!compositionEligible(def, c)) continue;
+    const sites: Record<string, Vec2> = {};
+    for (const s of c.sites ?? []) {
+      const r = ctx.rng.range(s.radius[0], s.radius[1]);
+      const prevGate = ctx.fieldGate;
+      try {
+        ctx.fieldGate = compileFieldGate(ctx, s.where);
+        const p = findSpot(ctx, r, s.hard ?? false, 0, false);
+        if (p) sites[s.id] = p;
+      } finally {
+        ctx.fieldGate = prevGate;
+      }
+    }
+    stampCompositionEntries(ctx, c.pre, sites);
+    plans.push({ def: c, sites });
+  }
+  return plans;
+}
+
+function runCompositionPost(ctx: GenCtx, plans: CompositionPlan[]): void {
+  for (const plan of plans) stampCompositionEntries(ctx, plan.def.post, plan.sites);
+}
+
+/** Run a list of layout entries through the stamp dispatcher (count rolls
+ *  mirror plainsLayout exactly) — the furnishing primitive: interior room
+ *  roles, package dressings, and future composed generators reuse the whole
+ *  stamp vocabulary (where bands, rule overrides, clusters) without touching
+ *  the dispatcher. Combine with ctx.sampleRect for scoped scatter. */
+export function stampEntries(ctx: GenCtx, entries: StampSpec[] | undefined): void {
+  stampCompositionEntries(ctx, entries, {});
+}
+
+/** BOOT VALIDATION for composition defs (mirrors validateStamps' contract:
+ *  callers feed entry specs into validateStamps separately; this checks the
+ *  composition-LOCAL invariants — `at` refs resolve to declared sites, `at`
+ *  rides only site-aware stamps, `when` keys name a known geo datum). The
+ *  climate-axis check is a callback so this module stays data-import-free. */
+export function validateCompositions(isClimateAxis?: (id: string) => boolean): string[] {
+  const errs: string[] = [];
+  for (const c of compositionDefs()) {
+    const siteIds = new Set((c.sites ?? []).map(s => s.id));
+    for (const s of c.sites ?? []) {
+      if (s.radius[0] > s.radius[1]) errs.push(`composition '${c.id}': site '${s.id}' radius band inverted`);
+      if (s.where && !hasGenField(s.where.field)) {
+        errs.push(`composition '${c.id}': site '${s.id}' names unregistered field '${s.where.field}'`);
+      }
+    }
+    // PRE runs BEFORE the layout generator — no walk grid exists yet, so a
+    // piece-planting stamp there would embed doodads in cells a grid layout
+    // later paints as wall. Reservation stamps are the pre vocabulary.
+    for (const e of c.pre ?? []) {
+      if (e.kind !== 'clearing') {
+        errs.push(`composition '${c.id}': pre entry '${e.kind}' — pre precedes the layout generator (no walk grid yet); only reservation stamps (clearing) belong there, pieces go in post`);
+      }
+    }
+    for (const [phase, entries] of [['pre', c.pre], ['post', c.post]] as const) {
+      for (const e of entries ?? []) {
+        if (!e.at) continue;
+        if (!siteIds.has(e.at)) errs.push(`composition '${c.id}': ${phase} entry '${e.kind}' references undeclared site '${e.at}'`);
+        if (!SITE_AWARE_STAMPS.has(e.kind)) errs.push(`composition '${c.id}': ${phase} entry '${e.kind}' carries at:'${e.at}' but that stamp sites itself — the site would be ignored`);
+        // A pinned entry never calls findSpot, so a where band on it is dead
+        // data — the SITE carries the band instead (CompositionSite.where).
+        if (e.where) errs.push(`composition '${c.id}': ${phase} entry '${e.kind}' carries BOTH at:'${e.at}' and a where band — the band is ignored (put it on the site)`);
+      }
+    }
+    for (const key of Object.keys(c.when ?? {})) {
+      if (key !== 'biomeDepth' && isClimateAxis && !isClimateAxis(key)) {
+        errs.push(`composition '${c.id}': when-gate names unknown geo datum '${key}'`);
+      }
+    }
+  }
+  return errs;
+}
 
 /** BOOT VALIDATION (wired in sim.ts like the biome validators): every layout
  *  entry across the authored data must name a registered stamp, every cluster/
  *  structure ref must resolve, and no cluster piece may emit a seed-paired kind
  *  (cave_entrance's caveSeeds zip would shear). The caller supplies the layout
  *  sources so this module stays data-import-free (no engine→data cycle). */
-export function validateStamps(sources: { source: string; specs: StampSpec[] }[]): string[] {
+export function validateStamps(sources: { source: string; specs: StampSpec[]; allowAt?: boolean }[]): string[] {
   const bad: string[] = [];
-  for (const { source, specs } of sources) {
+  for (const { source, specs, allowAt } of sources) {
     for (const s of specs ?? []) {
       if (!hasStamp(s.kind)) bad.push(`${source}: unregistered stamp '${s.kind}'`);
+      // `at` is composition-site vocabulary — on a tileset/zone row it names a
+      // site that can never exist, and the stamp would silently self-site.
+      if (s.at && !allowAt) bad.push(`${source}: entry '${s.kind}' carries at:'${s.at}' outside a composition — sites only exist there`);
       if (s.kind === 'cluster' && (!s.cluster || !hasCluster(s.cluster))) {
         bad.push(`${source}: cluster stamp names unknown cluster '${s.cluster ?? '(none)'}'`);
       }
@@ -3458,10 +3857,18 @@ function findSpot(
   const spacingIgnored = ruleIgnored(ctx, 'spacing');
   const effSpacing = spacingIgnored ? 0 : (over?.spacing ?? spacing);
   const inset = ruleIgnored(ctx, 'border') ? r : BORDER + r;
+  // SCOPED SAMPLING (ctx.sampleRect, transient): a furnisher confines the try
+  // rect to its room/site. Same 2 range draws per try — unset keeps the full
+  // arena and the exact draw values of today. The inset floors at 0 so a
+  // degenerate rect (sub-2px) samples inside itself instead of a REVERSED
+  // range interval spraying tries outside the room.
+  const sx = ctx.sampleRect?.x ?? 0, sy = ctx.sampleRect?.y ?? 0;
+  const sw = ctx.sampleRect?.w ?? ctx.arena.w, sh = ctx.sampleRect?.h ?? ctx.arena.h;
+  const rInset = ctx.sampleRect ? Math.max(0, Math.min(r, sw / 2 - 1, sh / 2 - 1)) : inset;
   for (let tries = 0; tries < 26; tries++) {
     const p = vec(
-      ctx.rng.range(inset, ctx.arena.w - inset),
-      ctx.rng.range(inset, ctx.arena.h - inset));
+      ctx.rng.range(sx + rInset, sx + sw - rInset),
+      ctx.rng.range(sy + rInset, sy + sh - rInset));
     if (!clearOf(ctx, p, r, hard)) continue;
     if (inReserved(ctx, p, r)) continue;
     if ((effSpacing > 0 || spacingIgnored) && checkSolids && !ruleIgnored(ctx, 'solids')
@@ -3853,6 +4260,10 @@ function stampRavine(ctx: GenCtx): void {
   const r = rng.range(36, 46);
   const step = r * 1.1;
 
+  // The inverse-forbidOn contract (see forbiddersOf): a path stamp adds chasm
+  // AFTER solids landed, so it must route around anything that forbids it —
+  // the same skip that already bends the cut around reservations.
+  const dry = ruleIgnored(ctx, 'forbid') ? [] : forbiddersOf(ctx, 'chasm');
   const path: Vec2[] = [];
   let wob = 0;
   for (let s = -half; s <= half; s += step) {
@@ -3863,6 +4274,7 @@ function stampRavine(ctx: GenCtx): void {
     if (dist(p, ctx.entry) < r + ENTRY_CLEAR * 0.8) continue;
     if (ctx.exits.some(e => dist(p, e) < r + EXIT_CLEAR)) continue;
     if (inReserved(ctx, p, r)) continue; // ravines route around structures
+    if (dry.some(f => dist(p, f.pos) < r + f.radius)) continue;
     ctx.doodads.push({ pos: p, radius: r, kind: 'chasm' });
     path.push(p);
   }
@@ -3910,6 +4322,10 @@ function stampRiver(ctx: GenCtx): void {
   const r = rng.range(32, 60);
   const step = r * 0.95;
 
+  // The inverse-forbidOn contract (see forbiddersOf): the channel is laid
+  // AFTER solids landed, so it flows around anything that forbids water —
+  // the same skip that already bends it around camps and ruins.
+  const dry = ruleIgnored(ctx, 'forbid') ? [] : forbiddersOf(ctx, 'water');
   const placed: Doodad[] = [];
   let wob = 0;
   for (let s = -half; s <= half; s += step) {
@@ -3920,6 +4336,7 @@ function stampRiver(ctx: GenCtx): void {
     if (dist(p, ctx.entry) < r + ENTRY_CLEAR * 0.7) continue;
     if (ctx.exits.some(e => dist(p, e) < r + EXIT_CLEAR * 0.7)) continue;
     if (inReserved(ctx, p, r)) continue; // rivers bend around camps and ruins
+    if (dry.some(f => dist(p, f.pos) < r + f.radius)) continue;
     const doo: Doodad = { pos: p, radius: r * rng.range(0.9, 1.1), kind: 'water' };
     ctx.doodads.push(doo);
     placed.push(doo);

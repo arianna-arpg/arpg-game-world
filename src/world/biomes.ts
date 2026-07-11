@@ -65,6 +65,9 @@ export interface BiomeInfo {
   /** Geographic-landmark CHANCES this biome's zones roll (merged with the
    *  tileset's at mint). Structural (matches data/zones.ts LandmarkRoll). */
   landmarks?: { landmark: string; chance: number; count?: [number, number] }[];
+  /** Whole-zone COMPOSITION picks this biome's zones roll (merged with the
+   *  tileset's at mint). Structural (matches data/zones.ts CompositionRoll). */
+  compositions?: { composition: string; chance: number }[];
   /** A VIRTUAL biome is imposed by a macro layer (the continent field's open
    *  sea), never rolled by the land lattice, never mints zones, and is excluded
    *  from faction-patron biome lists (no event may relocate/warp INTO it). */
@@ -103,7 +106,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // GRAVELANDS: plains, mausoleum-labyrinth bastions, and RUINED NECROPOLIS
   // metropolises — the sacked city of the dead (ruined 0.85).
   grave:  { patronFaction: 'undead', mapColor: '#6a5a8a', label: 'Graveland', spacing: 60,
-    allowedLayouts: { plains: 6, bastion: 1, metropolis: 1 },
+    // Interior families join the pool: CATACOMB dungeons and mausoleum
+    // labyrinths under the open graves, the odd manor EDIFICE still standing.
+    allowedLayouts: { plains: 6, bastion: 1, metropolis: 1, dungeon: 1, labyrinth: 0.5, edifice: 0.5 },
     layoutParams: { ruined: 0.85 },
     structures: [{ structure: 'hedge_labyrinth', chance: 0 }, { structure: 'watchtower', chance: 0.2 }],
     landmarks: [{ landmark: 'sinkhole', chance: 0.15 }, { landmark: 'tar_pool', chance: 0.2 }] },
@@ -183,7 +188,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // desert): beastkin war-camps stud the passes, their khan thrones on high.
   highland: { patronFaction: 'beastkin',  mapColor: '#8a8f6a', label: 'Highland', spacing: 88,
     climate: { temperature: { to: 0.55, fadeOut: 0.2 }, moisture: 'dry' },
-    allowedLayouts: { rooms: 3, bastion: 1 },
+    // rooms = the mountain-pass maze; labyrinth = the stone warren the old
+    // folk cut (a full-zone maze, braided so it fights instead of frustrates).
+    allowedLayouts: { rooms: 3, bastion: 1, labyrinth: 0.5 },
     structures: [
       { structure: 'grand_castle', chance: 0 }, { structure: 'fortress', chance: 0 },
       { structure: 'watchtower', chance: 0.35, count: [1, 2] },

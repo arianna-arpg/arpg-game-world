@@ -11,7 +11,9 @@
 //
 // Invariants checked per generated layout:
 //   registry   validateStamps over every authored layout source (unknown
-//              stamps/clusters/landmarks/formations/fields fail the sweep)
+//              stamps/clusters/landmarks/formations/fields fail the sweep),
+//              plus composition defs (at→site refs, when-gate keys) and every
+//              tileset/biome composition ROLL naming a registered bundle
 //   sanity     no NaN positions/radii, doodad count within ceilings
 //   determinism the same seed generates byte-identical doodads twice
 //   forbidOn   no solid intersects ground its rule forbids (inverse audit)
@@ -19,7 +21,11 @@
 //              (structure footprints exempt — their walls are the point)
 //   caveSeeds  the cave_entrance ↔ caveSeeds index zip holds
 //   reachable  on walk-grid layouts, every exit shares the entry's component
+//   doors      placed doors keep walkable floor on BOTH sides (warn)
 //   fuse       poured same-kind bodies never sit a sliver apart (warn)
+//
+// Case groups: every tileset (base + variants, with its rolls), every
+// registered layout generator, and every composition FORCED at chance 1.
 //
 // Usage: npm run genqa [-- --seeds 3 --filter mire --verbose]
 // ---------------------------------------------------------------------------
@@ -31,17 +37,22 @@ import '../src/data/formations';
 import '../src/engine/landmarkBuilders';
 import '../src/data/landmarks';
 import '../src/engine/layoutRecipes';
+import '../src/engine/interiorGen';
+import '../src/data/compositions';
 
 import { Rng } from '../src/core/rng';
 import { vec } from '../src/core/math';
 import {
-  generateLayout, validateStamps, doodadRuleOf, layoutIds, blocksMovement,
+  generateLayout, validateStamps, validateCompositions, compositionDefs,
+  doodadRuleOf, layoutIds, blocksMovement,
   type Doodad, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { GridWalkField } from '../src/world/gridWalk';
 import { TILESETS } from '../src/data/tilesets';
 import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { BIOMES } from '../src/world/biomes';
+import { CLIMATE_AXES } from '../src/world/climate';
+import { interiorRoleDefs } from '../src/engine/interiorGen';
 
 const args = process.argv.slice(2);
 const flag = (name: string): string | undefined => {
@@ -129,6 +140,28 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
         fails.push(`${name}: exit (${Math.round(e.x)},${Math.round(e.y)}) unreachable from entry`);
       }
     }
+    // Door sanity (warn): a placed door should open BETWEEN two walkable
+    // sides along its normal — a door with a wall behind it is dead décor.
+    // Mirrors the engine's apron contract: a SEARCH along the normal
+    // (1.2–3.4 cells, either sign), not a fixed-offset probe — fixed
+    // offsets land on second wall lines exactly like the apron warns the
+    // manor pass fixed.
+    for (const st of layout.structures ?? []) {
+      for (const pd of st.doors) {
+        const grid = layout.walk;
+        const open = (sign: number): boolean => {
+          for (let k = 1.2; k <= 3.4; k += 0.4) {
+            const x = pd.pos.x + pd.normal.x * st.cellSize * k * sign;
+            const y = pd.pos.y + pd.normal.y * st.cellSize * k * sign;
+            if (grid.isWalkable(x, y)) return true;
+          }
+          return false;
+        };
+        if (!open(1) || !open(-1)) {
+          warns.push(`${name}: door ${pd.door.id} lacks floor on ${!open(1) ? 'its apron' : 'its room'} side`);
+        }
+      }
+    }
   }
   // Fuse promise (warn): poured same-kind bodies never a sliver apart.
   const pouredKinds = [...new Set(doodads.filter(d => doodadRuleOf(d.kind).pour
@@ -195,8 +228,26 @@ const layoutSources = [
     { source: `tileset ${t.id} common`, specs: (t.common ?? []) as StampSpec[] },
     ...(t.variants ?? []).map((v, i) => ({ source: `tileset ${t.id} variant ${v.name ?? i}`, specs: v.layout })),
   ]),
+  // Composition entries speak the same StampSpec vocabulary (plus `at`).
+  ...compositionDefs().flatMap(c => [
+    { source: `composition ${c.id} pre`, specs: (c.pre ?? []) as StampSpec[], allowAt: true },
+    { source: `composition ${c.id} post`, specs: (c.post ?? []) as StampSpec[], allowAt: true },
+  ]),
+  // Interior room-role furnishings are stamped inside dungeon rooms.
+  ...interiorRoleDefs().map(r => ({ source: `interiorRole ${r.id}`, specs: (r.furnish ?? []) as StampSpec[] })),
 ];
-const registryErrors = validateStamps(layoutSources);
+const registryErrors = [
+  ...validateStamps(layoutSources),
+  // Composition-local invariants: at→site refs, when-gate keys, site bands.
+  ...validateCompositions(id => id in CLIMATE_AXES),
+  // Every composition ROLL on a tileset must name a registered bundle.
+  ...Object.values(TILESETS).flatMap(t => (t.compositions ?? [])
+    .filter(r => !compositionDefs().some(c => c.id === r.composition))
+    .map(r => `tileset ${t.id}: unregistered composition '${r.composition}'`)),
+  ...Object.entries(BIOMES).flatMap(([id, b]) => (b.compositions ?? [])
+    .filter(r => !compositionDefs().some(c => c.id === r.composition))
+    .map(r => `biome ${id}: unregistered composition '${r.composition}'`)),
+];
 
 // --- 2. Every tileset, base + variants --------------------------------------
 for (const ts of Object.values(TILESETS)) {
@@ -211,6 +262,7 @@ for (const ts of Object.values(TILESETS)) {
     exits: [], map: { x: 0, y: 0 },
     ...(ts.structures ? { structures: ts.structures } : {}),
     ...(ts.landmarks ? { landmarks: ts.landmarks } : {}),
+    ...(ts.compositions ? { compositions: ts.compositions } : {}),
   };
   runCase(`tileset:${ts.id}`, base);
   for (const [i, v] of (ts.variants ?? []).entries()) {
@@ -240,6 +292,44 @@ for (const id of layoutIds()) {
     ],
     layoutType: id,
     ...(biome?.layoutParams ? { layoutParams: biome.layoutParams } : {}),
+    objective: { kind: 'clear' },
+    exits: [], map: { x: 0, y: 0 },
+  });
+}
+
+// --- 3b. Interior layouts at CAVE scale ---------------------------------------
+// mintCave rolls dungeon/labyrinth from caveLayouts at cavern arena sizes
+// (~1200×900) — far smaller than group 3's representative def. Rooms, portal
+// chambers, and door mouths must all still fit and connect down there.
+for (const id of ['dungeon', 'labyrinth', 'edifice']) {
+  runCase(`layout:${id}@cave`, {
+    id: `qa_cave_${id}`, name: `QA cave ${id}`, level: 8,
+    size: { w: 1150, h: 880 },
+    theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
+    layout: [
+      { kind: 'rocks', count: [2, 4] }, { kind: 'grass', count: [2, 4] },
+    ],
+    layoutType: id,
+    objective: { kind: 'clear' },
+    exits: [], map: { x: 0, y: 0 },
+  });
+}
+
+// --- 4. Every composition, FORCED (chance 1) ---------------------------------
+// The tileset sweep exercises compositions probabilistically; this group pins
+// every bundle at least once per seed over a representative liquid-y def (the
+// water rows let shore-banded entries site). when-gates pass neutrally here
+// (headless defs bake no geo) — exactly the authored contract.
+for (const c of compositionDefs()) {
+  runCase(`composition:${c.id}`, {
+    id: `qa_comp_${c.id}`, name: `QA ${c.id}`, level: 8,
+    size: { w: 2400, h: 1800 },
+    theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
+    layout: [
+      { kind: 'rocks', count: [4, 7] }, { kind: 'trees', count: [5, 8] },
+      { kind: 'water', count: [1, 2] }, { kind: 'grass', count: [3, 5] },
+    ],
+    compositions: [{ composition: c.id, chance: 1 }],
     objective: { kind: 'clear' },
     exits: [], map: { x: 0, y: 0 },
   });

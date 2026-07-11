@@ -160,3 +160,71 @@ registerFormation({
     { kind: 'web', radius: [18, 30], every: 3, jitter: 22 },
   ],
 });
+
+// --- GRID / ORBIT / BRAID (the second arranger wave) --------------------------
+
+// AN ORCHARD: planted rows — someone tends these trees, or someone did.
+// Serpentine grid anchors; the berry bushes fill every third plot.
+registerFormation({
+  id: 'orchard_grid', arrange: 'grid', span: [260, 420], step: 64,
+  params: { rowGap: 68, aspect: 0.7 },
+  pieces: [
+    { kind: 'tree', radius: [13, 19], jitter: 8, rot: true },
+    { kind: 'berry_bush', radius: [16, 24], every: 3, jitter: 20, rot: true },
+  ],
+});
+
+// A TOMB LATTICE: the ordered quarter of a graveyard — plots in ranks, the
+// bone piles where the ranks were disturbed.
+registerFormation({
+  id: 'tomb_lattice', arrange: 'grid', span: [200, 340], step: 54,
+  params: { rowGap: 56, rows: [2, 4] },
+  pieces: [
+    { kind: 'tombstone', radius: [11, 15], jitter: 5 },
+    { kind: 'bone_pile', radius: [12, 18], every: 5, jitter: 16, rot: true },
+  ],
+});
+
+// A MENHIR ORBIT: concentric standing-stone rings — a worked sanctum, not a
+// scatter. Sized to ring a composition clearing (inner ring stays OUTSIDE a
+// reserved glade of ≤85 + piece slop; see data/compositions.ts stone_sanctum).
+registerFormation({
+  id: 'menhir_orbit', arrange: 'orbit', span: [125, 185], step: 62,
+  params: { rings: [1, 2], innerFrac: 0.92 },
+  pieces: [
+    { kind: 'standing_stone', radius: [12, 20], jitter: 6, rot: true },
+    { kind: 'grass', radius: [18, 28], every: 2, jitter: 22, rot: true },
+  ],
+});
+
+// A TOADSTOOL COURT: fairy rings within rings, glow-caps holding the lanterns.
+registerFormation({
+  id: 'toadstool_court', arrange: 'orbit', span: [110, 155], step: 44,
+  params: { rings: [1, 2], innerFrac: 0.95 },
+  pieces: [
+    { kind: 'toadstool', radius: [10, 16], jitter: 8, rot: true },
+    { kind: 'glow_cap', radius: [8, 12], every: 2, jitter: 12 },
+  ],
+});
+
+// A REED BRAID: two reed strands plaited down a waterline, drowned logs at
+// the crossings. Pair with a `where: {field:'shore', …}` band.
+registerFormation({
+  id: 'reed_braid', arrange: 'braid', span: [300, 540], step: 40,
+  params: { weave: 34, wavelength: 240 },
+  pieces: [
+    { kind: 'reeds', radius: [13, 22], jitter: 10, rot: true },
+    { kind: 'sunken_log', radius: [15, 22], every: 5, jitter: 14, rot: true },
+  ],
+});
+
+// A KELP BRAID: current-combed ropes of kelp, giant stalks where the strands
+// cross.
+registerFormation({
+  id: 'kelp_braid', arrange: 'braid', span: [320, 560], step: 44,
+  params: { weave: 40, wavelength: 260, strands: 3 },
+  pieces: [
+    { kind: 'kelp', radius: [15, 26], jitter: 10, rot: true },
+    { kind: 'giant_kelp', radius: [24, 36], every: 4, jitter: 10 },
+  ],
+});

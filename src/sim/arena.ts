@@ -20,6 +20,8 @@ import '../data/formations';
 import '../engine/landmarkBuilders';
 import '../data/landmarks';
 import '../engine/layoutRecipes';
+import '../engine/interiorGen';
+import '../data/compositions';
 import { validateContent } from '../data/validate';
 import { registerAllPackageFactions } from '../packages/factionGen';
 import { buildManifest } from '../packages/manifest';

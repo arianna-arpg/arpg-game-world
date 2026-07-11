@@ -34,9 +34,11 @@ import { GRUDGE_TIERS, NEMESIS_NAMES, NEMESIS_RANKS } from './nemesis';
 import { MONSTER_NAME_CFG, MONSTER_NAMES } from './monsterNames';
 import { RARITY_DEFS } from '../engine/rarity';
 import {
-  validateStamps, doodadRuleOf, doodadRuleKinds, hasDoodadRule,
+  validateStamps, validateCompositions, compositionDefs, hasComposition,
+  doodadRuleOf, doodadRuleKinds, hasDoodadRule,
   hasLandmark, hasLandmarkBuilder, landmarkDefs, hasLayout,
 } from '../engine/levelgen';
+import { interiorRoleDefs } from '../engine/interiorGen';
 import { hasCommandKind } from '../engine/ai';
 import { hasConvertRule } from '../engine/skills';
 import { DOODAD_VISUALS } from './doodadVisuals';
@@ -45,7 +47,7 @@ import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './struc
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
 import { BIOMES } from '../world/biomes';
-import { validateClimateSpecs } from '../world/climate';
+import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
 import { VOYAGE_ISLANDS } from './voyageIslands';
 import { Rng } from '../core/rng';
@@ -56,15 +58,47 @@ export function validateContent(): void {
 
   // Every authored layout entry must resolve against the live stamp/cluster/
   // structure registries — the open StampKind's safety net (variants included).
-  const layoutSources: { source: string; specs: StampSpec[] }[] = [
+  // Composition entries and interior room-role furnishings speak the same
+  // vocabulary, so they ride the same net (compositions may carry `at`).
+  const layoutSources: { source: string; specs: StampSpec[]; allowAt?: boolean }[] = [
     ...Object.values(ZONES).map(z => ({ source: `zone ${z.id}`, specs: z.layout })),
     ...Object.values(TILESETS).flatMap(t => [
       { source: `tileset ${t.id}`, specs: t.layout },
       { source: `tileset ${t.id} common`, specs: t.common ?? [] },
       ...(t.variants ?? []).map((v, i) => ({ source: `tileset ${t.id} variant ${v.name ?? i}`, specs: v.layout })),
     ]),
+    ...compositionDefs().flatMap(c => [
+      { source: `composition ${c.id} pre`, specs: c.pre ?? [], allowAt: true },
+      { source: `composition ${c.id} post`, specs: c.post ?? [], allowAt: true },
+    ]),
+    ...interiorRoleDefs().map(r => ({ source: `interiorRole ${r.id}`, specs: r.furnish ?? [] })),
   ];
   for (const msg of validateStamps(layoutSources)) warn(msg);
+
+  // COMPOSITIONS: local invariants (at→site refs, when-gate keys against the
+  // climate axes) + every roll on a zone/tileset/biome naming a registered
+  // bundle with a sane chance.
+  for (const msg of validateCompositions(id => id in CLIMATE_AXES)) warn(msg);
+  const compRollSources: { source: string; rolls?: { composition: string; chance: number }[] }[] = [
+    ...Object.values(ZONES).map(z => ({ source: `zone ${z.id}`, rolls: z.compositions })),
+    ...Object.values(TILESETS).map(t => ({ source: `tileset ${t.id}`, rolls: t.compositions })),
+    ...Object.entries(BIOMES).map(([id, b]) => ({ source: `biome ${id}`, rolls: b.compositions })),
+  ];
+  for (const { source, rolls } of compRollSources) {
+    for (const r of rolls ?? []) {
+      if (!hasComposition(r.composition)) warn(`${source}: unregistered composition '${r.composition}'`);
+      if (!(r.chance >= 0 && r.chance <= 1)) warn(`${source}: composition '${r.composition}' chance ${r.chance} outside [0,1]`);
+    }
+  }
+
+  // CAVE LAYOUT TABLES: every weight key must be a registered layout id
+  // ('plains' = the explicit classic crawl) — an unknown id would silently
+  // eat its share of the roll.
+  for (const t of Object.values(TILESETS)) {
+    for (const id of Object.keys(t.caveLayouts ?? {})) {
+      if (!hasLayout(id)) warn(`tileset ${t.id}: caveLayouts names unregistered layout '${id}'`);
+    }
+  }
 
   // FIXTURES: a mistyped structure id silently drops the building at
   // generation (generateLayout's `if (s && …)` skips unknowns without a

@@ -35,10 +35,12 @@ and the player, monsters, and minions all act through a single skill pipeline
   `tsconfig.sim.json` inside `npm run check`.
 - `npm run genqa` — the GENERATION QA HARNESS: generateLayout headless over
   the whole authored matrix (every tileset + variant with its rolls, every
-  registered layout generator) × several seeds, asserting the generation
-  invariants (registry refs, determinism, inverse forbidOn, portal clears,
-  caveSeeds zip, grid reachability, fuse contiguity). Exit 2 on breach — run
-  after any levelgen/tileset/formation/landmark change.
+  registered layout generator — interiors also at cave scale — and every
+  composition forced at chance 1) × several seeds, asserting the generation
+  invariants (registry refs incl. composition sites/rolls, determinism,
+  inverse forbidOn, portal clears, caveSeeds zip, grid reachability,
+  door-sides sanity, fuse contiguity). Exit 2 on breach — run after any
+  levelgen/tileset/formation/composition/landmark change.
   Flags: `-- --seeds 5 --filter mire --verbose`.
 - `npm run preview` — serve the built `dist/`.
 

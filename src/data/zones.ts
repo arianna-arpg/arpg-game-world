@@ -166,6 +166,11 @@ export interface StampSpec {
   formation?: string;
   /** STRATA: site this entry only inside a gen-field band (see WhereSpec). */
   where?: WhereSpec;
+  /** COMPOSITION entries only: anchor this entry on the named shared SITE
+   *  declared by the owning CompositionDef (site-aware stamps: clearing/
+   *  formation/cluster). Meaningless on tileset/zone layout rows — boot
+   *  validation flags it there. */
+  at?: string;
 }
 
 /** A structure CHANCE a zone rolls at generation (merged from tileset + biome
@@ -182,6 +187,15 @@ export interface LandmarkRoll {
   landmark: string;
   chance: number;
   count?: [number, number];
+}
+
+/** A whole-zone COMPOSITION pick (same merge + roll discipline as structures/
+ *  landmarks): the zone rolls each entry's chance at generation; hits stamp
+ *  their coordinated bundle (engine/levelgen registerComposition) around
+ *  shared sites. A bundle's own `when` geo-gate may still stand it down. */
+export interface CompositionRoll {
+  composition: string;
+  chance: number;
 }
 
 export interface ZoneExitDef {
@@ -345,6 +359,10 @@ export interface ZoneDef {
   /** Geographic-landmark CHANCES rolled at generation (merged from tileset +
    *  biome at mint) — the fjord/caldera/oasis vocabulary. */
   landmarks?: LandmarkRoll[];
+  /** Whole-zone COMPOSITION picks rolled at generation (merged from tileset +
+   *  biome at mint) — coordinated clearing/formation/strata bundles around
+   *  shared sites (engine/levelgen registerComposition). */
+  compositions?: CompositionRoll[];
   /** GEOGRAPHIC context baked at mint — how the zone sits in the WORLD's
    *  fields. biomeDepth: 0 = at its biome blob's edge, 1 = deep interior
    *  (a deep-sea zone far inside the deepsea region rolls more void trenches

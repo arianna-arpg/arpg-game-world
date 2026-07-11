@@ -11,7 +11,7 @@
 import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
-import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
+import { TILESETS, pickTilesetForBiome, type TilesetDef } from '../data/tilesets';
 import { hasLayout } from './levelgen';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
 import type { ObjectiveSpec, ZoneDef, ZoneExitDef } from '../data/zones';
@@ -566,6 +566,12 @@ export function placeZoneAt(
     // A port ALWAYS gets its shoreline (the harbor's reason to exist).
     ...(spec.port ? [{ landmark: 'coast', chance: 1 }] : []),
   ];
+  // COMPOSITION ROLLS: the whole-zone coordinated bundles, same merge + bake
+  // discipline as structures/landmarks (special arenas skip them too).
+  const compositionRolls = spec.special ? [] : [
+    ...(tileset.compositions ?? []),
+    ...(biome ? BIOMES[biome]?.compositions ?? [] : []),
+  ];
   // GEO context — how deep inside its biome blob the zone sits (0 = edge, 1 =
   // interior), from the EXISTING biome-depth sampler (sim.biomeField.sampleDepth,
   // already threaded for the marine shallow-isles/deep-sea split), plus the
@@ -615,6 +621,7 @@ export function placeZoneAt(
     ...(spec.concealed ? { concealed: true } : {}),
     ...(structureRolls.length ? { structures: structureRolls } : {}),
     ...(landmarkRolls.length ? { landmarks: landmarkRolls } : {}),
+    ...(compositionRolls.length ? { compositions: compositionRolls } : {}),
     ...(geo ? { geo } : {}),
     ...(Object.keys(layoutParams).length ? { layoutParams } : {}),
     ...(spec.port ? { port: true } : {}),
@@ -713,19 +720,38 @@ function caveBreachDepth(): number {
     : Infinity;
 }
 
+/** One seeded draw resolves a cave's layout generator from the tileset's
+ *  caveLayouts weight table ('plains' = the classic convex crawl); tilesets
+ *  without the table keep the legacy roll (rooms 35%). Exactly ONE rng value
+ *  is consumed either way — the mintCave draw-order contract. */
+function rollCaveLayout(ts: TilesetDef, rng: Rng): string | undefined {
+  const table = ts.caveLayouts;
+  if (!table) return rng.chance(0.35) ? 'rooms' : undefined;
+  const entries = Object.entries(table).filter(([, w]) => w > 0);
+  const total = entries.reduce((a, [, w]) => a + w, 0);
+  let roll = rng.range(0, total); // the one contractual draw (even a degenerate table burns it)
+  for (const [layoutId, w] of entries) {
+    roll -= w;
+    if (roll <= 0) return layoutId === 'plains' ? undefined : layoutId;
+  }
+  return undefined;
+}
+
 export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId = 'cavern'): ZoneDef {
   const ts = TILESETS[tilesetId] ?? TILESETS['cavern'];
   const rng = new Rng(entranceSeed);
   const w = Math.round(rng.range(ts.sizeW[0], ts.sizeW[1]));
   const h = Math.round(rng.range(ts.sizeH[0], ts.sizeH[1]));
-  // A cave is the natural home for the rooms+tunnels ("maggot lair") layout —
-  // deterministic per entrance seed, so revisits + co-op clients regenerate it
-  // identically. (Caves never persist to the save; this is pure-gen flavour.) The
-  // DESCENT abyss is the exception: it forces its own convex generator + BOUNDLESS
-  // arena (the engine streams terrain around the player; no walls, ever).
-  // (forceLayout branches BEFORE the rng roll, exactly as the old id check did —
-  // the seeded draw order is a compatibility contract.)
-  const layoutType = ts.forceLayout ?? (rng.chance(0.35) ? 'rooms' : undefined);
+  // A cave is the natural home for the non-convex layouts — deterministic per
+  // entrance seed, so revisits + co-op clients regenerate identically. (Caves
+  // never persist to the save; this is pure-gen flavour.) The DESCENT abyss is
+  // the exception: it forces its own convex generator + BOUNDLESS arena.
+  // WHICH layout a cave rolls is DATA: TilesetDef.caveLayouts weights (a crypt
+  // ladder descends into catacomb dungeons, a cavern into warrens) — absent,
+  // the legacy default (rooms 35% / plains 65%). Either path draws EXACTLY ONE
+  // rng value, and forceLayout branches BEFORE the roll, exactly as the old id
+  // check did — the seeded draw order is a compatibility contract.
+  const layoutType = ts.forceLayout ?? rollCaveLayout(ts, rng);
   // THE CAVE LADDER: depth counts caves-within-caves. A cave shy of the bottom
   // MAY conceal a deeper mouth — a seeded ROLL (CAVE_LADDER.deeperChance), so
   // nesting stays a discovery, not a guarantee; a rolled mouth's placement IS
