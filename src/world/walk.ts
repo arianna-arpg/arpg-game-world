@@ -40,4 +40,9 @@ export interface WalkField {
    *  hook (a grid flow-field or a navmesh path both satisfy this). Null = no path.
    *  Optional: Phase-1 has no impl, so steering stays straight-line. */
   pathStep?(from: Vec2, to: Vec2): Vec2 | null;
+  /** Is the STRAIGHT line from→to entirely walkable? The any-angle shortcut:
+   *  steering beelines whenever this is true and consults pathStep only when
+   *  something actually stands in the way — open ground keeps its beelines
+   *  (no 4-connected staircase), warrens path exactly as before. */
+  lineWalkable?(from: Vec2, to: Vec2): boolean;
 }

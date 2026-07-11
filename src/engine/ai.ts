@@ -1345,7 +1345,10 @@ function moveToward(actor: Actor, world: World, to: { x: number; y: number }, dt
   let goal = to;
   if (!actor.flying && actor.aiPathing !== 'none') {
     const pf = world.pathField();
-    if (pf?.pathStep) {
+    // ANY-ANGLE shortcut: beeline while the straight line is walkable (open
+    // ground keeps its beelines — no 4-connected staircase); pay for a
+    // flow-field step only when something actually stands in the way.
+    if (pf?.pathStep && !(pf.lineWalkable?.(actor.pos, to) ?? false)) {
       const step = pf.pathStep(actor.pos, to);
       if (step) goal = step;
     }

@@ -191,6 +191,20 @@ export class GridWalkField implements WalkField {
     return a >= 0 && a === b;
   }
 
+  /** Straight-line walkability (the any-angle shortcut): half-cell march over
+   *  the mask, start cell excused (you stand where you stand). Steering
+   *  beelines while this holds and pays for a flow-field step only when the
+   *  line actually crosses blocked cells. */
+  lineWalkable(from: Vec2, to: Vec2): boolean {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    const len = Math.hypot(dx, dy);
+    const step = this.cell / 2;
+    for (let s = step; s <= len; s += step) {
+      if (!this.isWalkable(from.x + dx * (s / len), from.y + dy * (s / len))) return false;
+    }
+    return len <= 0 || this.isWalkable(to.x, to.y);
+  }
+
   /** One step from `from` toward `to` that respects walls — flow-field following.
    *  Returns the centre of the next cell along the shortest walkable path, `to`
    *  itself on the final approach, or null if unreachable (caller falls back to
