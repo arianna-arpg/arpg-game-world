@@ -619,7 +619,7 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // the saddle); it holds and casts, a walking tower's teeth. This is the
   // ENGAGED path — the only one that claims encircle ring slots.
   const ctx = makeCtx(actor, world, target, best, dt, tuning, norm, false, tempoPaused, true);
-  runKernel(actor.mountId !== undefined ? 'hold' : ctx.spec.style, ctx);
+  runKernel(actor.mountId !== undefined ? 'hold' : ctx.spec.style ?? 'approach', ctx);
 }
 
 // === MACHINES ==================================================================

@@ -374,7 +374,10 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'aoe'], color: '#ff6024',
     manaCost: 0, cooldown: 0, useTime: 0.6,
     baseDamage: { fire: [20, 38] },
-    delivery: { type: 'ground', radius: 96, castRange: 600, delay: 0.9 },
+    // CELESTIAL (occlusion 'free'): it falls from the SKY — walls neither
+    // stop the placement nor shield the crater. The artillery niche: its
+    // casters bombard from behind cover while ray casters must reposition.
+    delivery: { type: 'ground', radius: 96, castRange: 600, delay: 0.9, occlusion: 'free' },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'burn', chance: 0.5 },
@@ -917,7 +920,8 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'fire', 'aoe', 'storm', 'duration'], color: '#ff6a2a',
     manaCost: 17, cooldown: 7, useTime: 0.9,
     baseDamage: { fire: [13, 20] },
-    delivery: { type: 'storm', count: [4, 6], interval: 0.25, areaRadius: 150, hitRadius: 55, castRange: 480 },
+    // CELESTIAL (occlusion 'free'): meteors answer to the sky, not the wall.
+    delivery: { type: 'storm', count: [4, 6], interval: 0.25, areaRadius: 150, hitRadius: 55, castRange: 480, occlusion: 'free' },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'burn', chance: 0.4, magnitude: 0.3 },
@@ -1433,7 +1437,8 @@ export const SKILLS: Record<string, SkillDef> = {
     castMode: 'channel',
     channel: { interval: 0.8, move: 'immobile', trackAim: true, cooldownOnEnd: true },
     baseDamage: { fire: [12, 18] },
-    delivery: { type: 'storm', count: [2, 3], interval: 0.12, areaRadius: 130, hitRadius: 50, castRange: 480 },
+    // CELESTIAL (occlusion 'free'): the bombardment falls from above.
+    delivery: { type: 'storm', count: [2, 3], interval: 0.12, areaRadius: 130, hitRadius: 50, castRange: 480, occlusion: 'free' },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'burn', chance: 0.35, magnitude: 0.3 },
@@ -5440,7 +5445,8 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 16, cooldown: 5, useTime: 0.8,
     baseDamage: { cold: [20, 30] },
     delivery: {
-      type: 'ground', radius: 95, castRange: 460, delay: 0.9,
+      // CELESTIAL (occlusion 'free'): called down from the sky.
+      type: 'ground', radius: 95, castRange: 460, delay: 0.9, occlusion: 'free',
       leaveTerrain: { kind: 'ice', radius: 95, duration: 6 },
     },
     effects: [
@@ -8476,8 +8482,9 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 13, cooldown: 4, useTime: 0.65,
     baseDamage: { lightning: [9, 15] },
     delivery: {
+      // CELESTIAL (occlusion 'free'): the sky empties where the mark is set.
       type: 'storm', count: [9, 13], interval: 0.04,
-      areaRadius: 180, hitRadius: 42, castRange: 460,
+      areaRadius: 180, hitRadius: 42, castRange: 460, occlusion: 'free',
       telegraph: 0.9,
     },
     effects: [

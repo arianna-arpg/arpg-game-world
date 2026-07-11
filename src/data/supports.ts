@@ -2988,6 +2988,20 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // The occlusion lever, graftable: `phasing` frees a skill from LOS_CFG's
+  // 'blocked' default exactly the way projBounce conjures ricochets — one
+  // stat, read at the one skillOcclusion chokepoint. Universal on purpose
+  // (no requiresTags): a phasing ray burns through the pillar, a phasing
+  // bolt threads the keep, a phasing brand seeds fire past the rampart.
+  wraith_passage: {
+    id: 'wraith_passage', name: 'Wraith Passage',
+    description: 'The socketed skill PHASES: shots, rays and placements pass through rock, walls and masonry as through mist — but 25% less damage. What stone cannot stop, it also cannot sharpen.',
+    color: '#9a8ab8',
+    mods: [mod('phasing', 'flat', 1), mod('damage', 'more', -0.25)],
+    perLevel: [mod('damage', 'increased', 0.05)],
+    weight: 4,
+  },
+
   // --- Construct FX & rotation (the §5 batch) ---------------------------------
 
   pulsing_ramparts: {

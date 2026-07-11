@@ -42,7 +42,11 @@ balance harness's smoke suite are how we verify changes.
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`
   (layered modifier engine), `damage.ts`, `status.ts`, `skills.ts` (skill
   schema), `actor.ts` (one entity model for player/monsters/minions),
-  `ai.ts` + `brain.ts` (composable enemy AI), `presence.ts` (leveled-list
+  `ai.ts` + `brain.ts` (composable enemy AI), `los.ts` (THE occlusion
+  raycast: one shot/sight ray over doodads + grid regions, `LOS_CFG`
+  delivery defaults, the `phasing` stat lever; AI pathing rides
+  `World.pathField()` — docs in `docs/engine/los-pathing.md`),
+  `presence.ts` (leveled-list
   spawn envelopes: weight-vs-level curves on any monster-table entry or
   MonsterDef, folded at `World.weightedPick(table, atLevel)`),
   `levelgen.ts`, `worldgen.ts`;

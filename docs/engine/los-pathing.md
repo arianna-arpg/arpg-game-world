@@ -1,0 +1,82 @@
+# Line of Sight, Line of Fire & Pathing
+
+The occlusion fabric: one raycast, two channels, every consumer. Nothing in
+it names a terrain kind — blocking is **data the terrain already declares**.
+
+## The one ray (`src/engine/los.ts`)
+
+`castRay(env, from, to, channel)` walks a segment over BOTH terrain models:
+
+| channel | doodads (spatial index)                     | grid cells            |
+|---------|---------------------------------------------|-----------------------|
+| `sight` | `blocksSightOf` at full **crown** radius    | `RegionKind.blocksSight` |
+| `shot`  | `blocksProjectiles` at **trunk** radius (`bodyRadiusOf`) | `RegionKind.blocksShot`  |
+
+World wraps it: `lineOfSight` (eyes), `lineOfFire` (effects), `clipShot`
+(first-blocker clip, pulled back `LOS_CFG.clipBackoff`), `losCached`
+(TTL-memoized perception rays). All thresholds live in `LOS_CFG`.
+
+The terrain promise, everywhere the ray is asked:
+
+- **True walls** (`wall`/`rampart`/`flesh_wall`/`fungal_wall` regions; rock,
+  cliff, masonry doodads) stop both channels.
+- **Chasm-likes** (`void` region; `chasm`/`void_chasm`/`lava` discs; water,
+  ledges) stop **neither** — bodies can't cross, shots and eyes sail over.
+- **Partials** keep their character: `window`/`parapet` = see + shoot
+  through, never walk; `giant_kelp` = walk-through fronds that break sight
+  only; `tallgrass` = a soft hedge (move-only).
+
+## The skill lever
+
+Relevant deliveries (`projectile`/`cone`/`nova`/`target`/`ground`/`storm`,
+plus `DischargeSpec`) accept `occlusion: 'blocked' | 'free'`. Defaults per
+type sit in `LOS_CFG.delivery` ('blocked'); unlisted types (melee, self,
+movement) are free. The **`phasing` stat** frees any use from data —
+`World.skillOcclusion` is the one read; the Wraith Passage support grafts it
+exactly the way Ricochet grafts `projBounce`.
+
+What 'blocked' means per delivery:
+
+- **cone/beam** — victims without a firing line are spared; `beamFx` rays
+  visibly clip at the stone.
+- **nova** — the burst washes around corners it can see past, never through
+  walls; walled-off bodies don't consume `maxTargets` slots.
+- **target** — hostile targeting refuses walled-off victims (ally mends are
+  always free).
+- **ground/storm** — the cast point clips to the near side of the first
+  blocker (`clipShot`); ground-zone ticks/pulses/volatiles/fissure
+  aftershocks spare the walled-off (`World.zoneSees`); **storm strikes fall
+  from the sky** inside the disc (`LOS_CFG.zoneTickTypes` gates only
+  `ground`).
+- **projectile** — already collided with terrain; `'free'` makes it phase.
+- **chains/discharges** — hops need the line.
+
+Celestial skills (`meteor`, `meteor_storm`, `meteoric_bombardment`,
+`icy_comet`, `levinfall`) declare `occlusion: 'free'` — the artillery niche.
+
+## The AI
+
+- **Perception** (`acquireTarget`): fresh locks need sight; a held lock
+  survives blindness for `max(PerceptionSpec.memory, LOS_CFG.chaseMemory)`
+  then snaps; `relentless` never lets go; `PerceptionSpec.xray` (burrowers'
+  tremor-sense) skips the gate. `aiLastSeen` refreshes only while seen.
+- **Hold fire** (`pickSkill`): skills whose delivery a wall would eat are
+  unusable while the line is blocked (`World.aiNeedsFireLine`) — meteor
+  casters bombard from cover, ray casters close for the line.
+- **Channels**: a walled firing line releases after `LOS_CFG.channelGrace`
+  (`CastingState.losLost`).
+- **Aim assist**: wall-hidden targets break the reticle lock like veiled ones.
+
+## Pathing (`World.pathField`)
+
+The zone's pathing authority: the walk grid where one exists (warrens,
+structures), else a lazy **nav grid** raked over the convex zone's blocking
+doodads (trunk radii + `NAV_CFG.pad`; chasm discs stamp first so bridge
+spans re-open crossings; rect/ellipse bounds honored; rebuilt on
+`doodadsRev`). Purely advisory — `clampPos` stays the collision truth.
+
+`moveToward` follows it for everyone except **fliers** (straight over
+everything) and **`MoveSpec.pathing: 'none'`** minds — mindlessness as an
+authored, machine-shiftable trait (zombies pile at walls; the clever thing
+walks around and reopens its firing line, which is what makes the hold-fire
+gate read as intelligence).

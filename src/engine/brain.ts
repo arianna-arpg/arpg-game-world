@@ -76,7 +76,10 @@ export type MoveStyleId =
 /** Locomotion spec: a kernel + knobs. Each kernel reads only what it needs;
  *  unspecified knobs use the kernel's defaults, so specs stay terse. */
 export interface MoveSpec {
-  style: MoveStyleId;
+  /** The locomotion kernel (default 'approach') — optional so a layer can
+   *  shift ONE knob (a rule flips pace, a def sets pathing) without
+   *  restating the preset's style; mergeTuning folds partial layers. */
+  style?: MoveStyleId;
   /** Movement input multiplier (1 = full march; wanders stroll at 0.35). */
   pace?: number;
   /** orbit/prowl ring distance (default: kit standoff / 270 for prowl). */

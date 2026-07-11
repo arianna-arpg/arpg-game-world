@@ -497,6 +497,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
       // And slow to REACT (BehaviorSpec.reaction): a long dead-eyed beat
       // between noticing you and remembering what teeth are for.
       behavior: { reaction: [0.6, 1.3] },
+      // MINDLESS FEET (pathing 'none'): it walks AT you, wall or no wall —
+      // shamblers smear along masonry while the living route around it.
+      move: { pathing: 'none' },
     },
   },
 
@@ -519,6 +522,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
       perception: { arcDeg: 100, rearMul: 0.2, attentionSpan: [3, 6], alertMul: 0.15 },
       // Slower to remember violence than even the walking dead.
       behavior: { reaction: [0.9, 1.6] },
+      // Mindless feet: it drags itself straight at you (pathing 'none').
+      move: { pathing: 'none' },
     },
   },
 
@@ -1311,7 +1316,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     mods: [mod('chaosRes', 'flat', 0.4)],
     skills: ['claw'],
     xp: 7,
-    brain: { type: 'swarm' },
+    // The tide doesn't THINK — it pours straight and piles at the stone.
+    brain: { type: 'swarm', move: { pathing: 'none' } },
     faction: 'undead',
     detection: 0.75,
   },
@@ -4686,6 +4692,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.2,
     brain: {
       type: 'skirmish', withdraw: 1.1,
+      // TREMOR-SENSE (xray): it reads prey through stone — a swimmer of
+      // rock hears feet, not faces. Its bolts still need the firing line.
+      perception: { xray: true },
       rules: [{
         when: { distUnder: 650 }, every: [9, 14], hold: [0.3, 0.5],
         actions: [{ do: 'burrow', kinds: ['lava'], damageFrac: 0.24, emergeRadius: 70, announce: 'the lava churns…' }],
@@ -4704,6 +4713,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.2,
     brain: {
       type: 'skirmish', withdraw: 1.2,
+      // Tremor-sense (xray): it feels footfalls through the pack.
+      perception: { xray: true },
       rules: [{
         when: { distUnder: 650 }, every: [9, 14], hold: [0.3, 0.5],
         actions: [{ do: 'burrow', kinds: ['snowdrift', 'ice'], damageFrac: 0.2, emergeRadius: 65, announce: 'the snow shifts…' }],
@@ -4848,6 +4859,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.2,
     brain: {
       type: 'juggernaut',
+      // Tremor-sense (xray): the dune reads weight, not light.
+      perception: { xray: true },
       rules: [{
         when: { distUnder: 700 }, every: [9, 14], hold: [0.3, 0.5],
         actions: [{ do: 'burrow', kinds: ['sand', 'mud'], damageFrac: 0.24, emergeRadius: 75, announce: 'the sand shifts...' }],
@@ -4865,6 +4878,8 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.1,
     brain: {
       type: 'skirmish', withdraw: 1.2,
+      // Tremor-sense (xray): the mud carries every step to it.
+      perception: { xray: true },
       rules: [{
         when: { distUnder: 600 }, every: [10, 15], hold: [0.3, 0.5],
         actions: [{ do: 'burrow', kinds: ['mud'], damageFrac: 0.2, emergeRadius: 65, announce: 'the mire churns...' }],
