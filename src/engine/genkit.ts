@@ -410,6 +410,7 @@ registerLiquid('bog', { doodad: 'bog' });                         // poison on e
 registerLiquid('swamp', { doodad: 'swamp' });
 registerLiquid('ice', { doodad: 'ice' });                         // slippery
 registerLiquid('void', { region: 'void' });                       // the fall
+registerLiquid('abyss', { region: 'abyss' });                     // hell's fall: ember-rimmed dark
 registerLiquid('chasm', { doodad: 'chasm' });                     // blocking gap, shoot across
 // Dry "washes" — ground overlays a pit/floor recipe pours like a liquid.
 registerLiquid('cinder', { doodad: 'cinder' });                   // ember-strewn ash

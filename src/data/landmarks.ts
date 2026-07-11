@@ -171,3 +171,19 @@ registerLandmark({
   },
   poi: true, mustReach: true,
 });
+// --- THE ABYSS (the Underworld's pits) -------------------------------------------
+// An abyssal maw: a tear in the steppes floor — the 'abyss' region does the
+// fall (ember-rimmed dark; shots and sight cross, bodies drop), dead stone
+// crowds the lip. No POI, no mustReach: the hole is the point.
+registerLandmark({
+  id: 'abyssal_maw', builder: 'lake', size: [460, 780], liquid: 'abyss',
+  params: { rim: { kind: 'rock', count: [4, 8], radius: [13, 24] } },
+});
+// An abyssal gulf: pocket crags marooned over the drop — jump/blink-only
+// ground (void_pillars' hell twin), a far battery raining fire across the gap.
+registerLandmark({
+  id: 'abyssal_gulf', builder: 'pillars', size: [680, 1020],
+  params: { pillars: [3, 5], gulf: 'abyss' },
+  pocket: true,
+  spawns: { table: [{ id: 'imp', weight: 3 }, { id: 'cinder_fiend', weight: 2 }], count: [3, 6], where: 'interior' },
+});

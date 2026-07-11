@@ -180,7 +180,14 @@ export type KnownDoodadKind =
   | 'fulgurite'        // lightning-fused sand, flash-frozen mid-branch
   | 'charged_crystal'  // a crystal still holding somebody's storm
   | 'static_bloom'     // flowers that spark when the wind combs them
-  | 'storm_glass';     // a sheet of vitrified ground — the strike's floor
+  | 'storm_glass'      // a sheet of vitrified ground — the strike's floor
+  // The hell-steppes kit (the Underworld's scorched marches — the outer steppes)
+  | 'hell_fin'         // a curved basalt horn-blade heaved out of the scorch — the steppes' skyline
+  | 'impaler_stake'    // a leaning stake and what the legions left on it — the warning roads
+  | 'hell_chain'       // a titan chain bolted into the crust, running toward something below
+  | 'ember_fissure'    // a glowing rent in the ground — the fire underneath showing through
+  | 'abyssal_rent'     // blocks movement not shots, stamped fall:true — a bottomless tear (fall recovery)
+  | 'gate_stair';      // a switchback stair flight — the descent off a gate terrace (recipe-placed)
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -771,6 +778,18 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   eye_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'] },
   rib_arch:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 50, forbidOn: ['water', 'lava', 'chasm'] },
   tooth_row: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, forbidOn: ['water', 'lava', 'chasm'] },
+  // The hell-steppes kit: fins are standing wall-pieces (full blocks — the
+  // steppes' navigate-around skyline at doodad scale); stakes are thin (step
+  // behind one, shoot past it); chains are floor dressing; fissures are small
+  // blocking rents; the abyssal rent is the steppes' FALL pit — void_chasm's
+  // hell twin (its stamp marks fall:true; the fall physics ride the recovery
+  // machinery, not the kind).
+  hell_fin:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 64, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  impaler_stake: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  hell_chain:    { overlap: 'ground', walkOnly: true },
+  ember_fissure: { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 70, forbidOn: ['water', 'lava', 'chasm'] },
+  abyssal_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true },
+  gate_stair:    { overlap: 'ground', walkOnly: true },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -2794,6 +2813,19 @@ registerStamp('fulgurite', stampSingle('fulgurite', [11, 17]));
 registerStamp('charged_crystal', stampSingle('charged_crystal', [9, 14]));
 registerStamp('static_bloom', stampSingle('static_bloom', [10, 16]));
 registerStamp('storm_glass', stampSingle('storm_glass', [16, 28]));
+// The hell-steppes kit: horn-blade fins, the legions' stakes, titan chains,
+// glowing crust-rents — and the abyssal rent, a FALL pit (the descent's
+// void_chasm idiom: the stamp marks fall:true, the recovery does the physics).
+registerStamp('hell_fin', (ctx, spec) => stampSolid(ctx, 'hell_fin', spec.radius ?? [18, 34]));
+registerStamp('impaler_stake', stampSingle('impaler_stake', [12, 16]));
+registerStamp('hell_chain', stampSingle('hell_chain', [26, 40]));
+registerStamp('ember_fissure', stampSingle('ember_fissure', [16, 26]));
+registerStamp('abyssal_rent', (ctx, spec) => {
+  const band = spec.radius ?? [34, 66];
+  const r = ctx.rng.range(band[0], band[1]);
+  const p = findSpot(ctx, r, false, 44, true, 'abyssal_rent');
+  if (p) ctx.doodads.push({ pos: p, radius: r, kind: 'abyssal_rent', fall: true });
+});
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the

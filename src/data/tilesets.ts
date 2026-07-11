@@ -844,6 +844,107 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE OUTER STEPPES — the Underworld's scorched marches (biome:'steppes').
+  // Open umber plains cut by the angular wall-runs of abandoned hellworks (the
+  // 'steppes' recipe: true walls with breaches — navigate AROUND them), abyssal
+  // maws and rents burning through the crust, horn-blade fins and the legions'
+  // impaled warnings between them — and, where the gate terrace rolls, a
+  // flagstone ledge whose switchback stair is the only way down onto the
+  // steppe: the descent out of the fortress.
+  hell_steppes: {
+    id: 'hell_steppes', biome: 'steppes',
+    nameFirst: ['Outer', 'Sundered', 'Screaming', 'Forsaken', 'Chainscarred', 'Ashen', 'Howling', 'Nailed', 'Godless', 'Smoldering', 'Harrowed', 'Iron-Staked', 'Cindered', 'Abyssal', 'Unhallowed', 'Flayed', 'Embertorn', 'Wailing'],
+    nameSecond: ['Steppes', 'Marches', 'Plains', 'Reaches', 'Waste', 'Approach', 'Threshold', 'Expanse', 'Scarlands', 'Fields', 'Verge', 'Descent', 'Flats', 'Outlands', 'Span', 'Steps'],
+    theme: {
+      heat: 0.9, dayLight: 0.92, nightDark: 0.8, ambientDark: 0.18,
+      // Standing embers on the wind + a breath of heat-shimmer: hell's air.
+      ambientFx: [
+        { kind: 'motes', intensity: 0.4, color: '#ff9a4a' },
+        { kind: 'heatHaze', intensity: 0.25, color: '#ffc9a0' },
+      ],
+      ground: {
+        palette: ['#1e1109', '#2a180c', '#35200e', '#402a12', '#4c3416'],
+        bias: 0.46, alpha: 0.52, stretchX: 1.5, speckles: 0.9, strength: 1.15,
+      },
+      floor: '#1a0f08', grid: '#271609', border: '#5c3018',
+      obstacle: '#33191b', obstacleEdge: '#6e3a24', accent: '#ff8a4a',
+      // Wall = the ruined hellwork runs: wine-dark obsidian masonry. Kept a
+      // full luminance step above the floor (gap > 0.09) so the ground
+      // baker's contrast guard never washes it to neutral grey.
+      wall: '#452330', chasm: '#120507', mud: '#2e1c10', sand: '#66513a',
+    },
+    sizeW: [2600, 3600], sizeH: [1700, 2400], ellipseChance: 0.15,
+    // The tileset leans harder on its recipe than the biome default does:
+    // more wall-runs, a near-certain gate terrace (spec ▷ tileset ▷ biome).
+    layoutParams: { ridges: [3, 6], gateTerrace: { chance: 0.8 } },
+    layout: [
+      // Ground scars first, so the solids placed after honour their forbidOn.
+      { kind: 'cinder', count: [1, 3] },
+      { kind: 'abyssal_rent', count: [1, 3] },
+      { kind: 'ember_fissure', count: [2, 4] },
+      // The steppes' skyline: horn-blades, the legions' warnings, titan chains.
+      { kind: 'hell_fin', count: [4, 8] },
+      { kind: 'impaler_stake', count: [2, 5] },
+      { kind: 'hell_chain', count: [2, 4] },
+      { kind: 'rib_arch', count: [0, 2] },
+      { kind: 'black_obelisk', count: [0, 1] },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'rocks', count: [7, 12], radius: [22, 46] },
+      { kind: 'rock_spire', count: [1, 2] },
+      { kind: 'scree', count: [1, 3] },
+      { kind: 'formation', count: [1, 2], formation: 'fin_procession' },
+      { kind: 'formation', count: [0, 1], formation: 'stake_line' },
+      { kind: 'ruin', count: [0, 1] },
+    ],
+    variants: [
+      // PLAINS OF DESPAIR: the stake-fields past the walls — sparser skyline,
+      // thicker warnings, the ground more torn. (A variant REPLACES the base
+      // layout; rows both faces need would belong in `common`.)
+      {
+        name: 'Despair',
+        layout: [
+          { kind: 'cinder', count: [2, 4] },
+          { kind: 'abyssal_rent', count: [2, 4] },
+          { kind: 'ember_fissure', count: [3, 5] },
+          { kind: 'impaler_stake', count: [5, 9] },
+          { kind: 'hell_chain', count: [3, 5] },
+          { kind: 'hell_fin', count: [2, 4] },
+          { kind: 'bone_pile', count: [3, 6] },
+          { kind: 'gallows', count: [0, 1] },
+          { kind: 'rocks', count: [6, 10], radius: [22, 44] },
+          { kind: 'formation', count: [1, 2], formation: 'stake_line' },
+          { kind: 'formation', count: [0, 1], formation: 'fin_procession' },
+        ],
+      },
+    ],
+    compositions: [{ composition: 'impaler_court', chance: 0.4 }],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'imp', weight: 3, presence: { to: 22, fadeOut: 12 } },
+        { id: 'hellhound', weight: 3 },
+        { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        // The steppes are dread country: the heavy Legion walks earlier here.
+        { id: 'dread_fiend', weight: 2, presence: { from: 12, fadeIn: 5 } },
+        { id: 'chained_tormentor', weight: 2, presence: { from: 16, fadeIn: 5 } },
+        { id: 'bloodgorger', weight: 1, presence: { from: 18, fadeIn: 5 } },
+        // The pit country's angler — the maws are its hunting ground.
+        { id: 'void_angler', weight: 2, presence: { from: 8, fadeIn: 3 } },
+        { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'brute', weight: 2, presence: { to: 15, fadeOut: 8 } },
+      ],
+    },
+    spawnerId: 'ember_rift',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
   // CRYPT — a forsaken graveland of headstones, broken tombs, and the risen.
   crypt: {
     id: 'crypt',

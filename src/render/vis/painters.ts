@@ -5167,6 +5167,309 @@ const kilnMound: GroupPainter = (env, group, def) => {
   }
 };
 
+// --- The hell-steppes kit ------------------------------------------------------
+
+export interface FinBladeParams {
+  color?: ColorSpec;
+  material?: string;
+  /** An ember seam bleeding up the concave face — the heat below showing through. */
+  emberEdge?: { color: ColorSpec; alpha?: number };
+}
+
+/** HELL FINS — curved basalt horn-blades heaved out of the scorch (the outer
+ *  steppes' skyline): a swept claw silhouette hooked left or right by seed,
+ *  facet-shaded against the shared sun, growth ridges following the curl, a
+ *  heaved rubble footing — and, where the params say so, an ember seam on the
+ *  concave face. The doodad's rot only LEANS the blade (these stand). */
+const finBlade: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as FinBladeParams;
+  const { ctx, theme } = env;
+  const base = resolveColor(p.color, theme, '#241318');
+  const ramp = rampOf(base, materialOf(p.material ?? 'stone'));
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const r = o.radius;
+    const h = r * (2.0 + hash01(seed, 13) * 0.9);
+    const curl = r * (0.8 + hash01(seed, 17) * 0.55);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(Math.sin(o.rot ?? 0) * 0.16);
+    if (hash01(seed, 19) < 0.5) ctx.scale(-1, 1); // hooks break both ways
+    // Root footing: heaved rubble the blade erupted through.
+    ctx.fillStyle = ramp.shadow;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.92, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const horn = (): void => {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.66, r * 0.08);
+      ctx.quadraticCurveTo(-r * 0.78, -h * 0.62, -r * 0.16 + curl * 0.35, -h * 0.98);
+      ctx.quadraticCurveTo(curl * 0.95, -h * 1.04, curl, -h * 0.82);
+      ctx.quadraticCurveTo(r * 0.34, -h * 0.48, r * 0.6, r * 0.06);
+      ctx.closePath();
+    };
+    ctx.fillStyle = ramp.base;
+    horn();
+    ctx.fill();
+    // Facets vs the shared sun: windward face lit, lee face sunk.
+    ctx.save();
+    horn();
+    ctx.clip();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = ramp.light;
+    ctx.fillRect(-r * 1.3, -h * 1.15, r * 0.95, h * 1.3);
+    ctx.globalAlpha = 0.42;
+    ctx.fillStyle = ramp.shadow;
+    ctx.fillRect(r * 0.1, -h * 1.15, r * 1.4, h * 1.3 + r);
+    ctx.restore();
+    // Growth ridges sweeping with the curl.
+    ctx.strokeStyle = withAlpha(ramp.outline, 0.45);
+    ctx.lineWidth = 1;
+    for (let i = 1; i <= 3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.62 + i * r * 0.28, r * 0.02);
+      ctx.quadraticCurveTo(-r * 0.3 + i * r * 0.14, -h * (0.52 + i * 0.03),
+        curl * (0.42 + i * 0.16), -h * (0.86 - i * 0.06));
+      ctx.stroke();
+    }
+    horn();
+    ctx.strokeStyle = withAlpha(ramp.outline, 0.9);
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    if (p.emberEdge) {
+      ctx.strokeStyle = withAlpha(resolveColor(p.emberEdge.color, theme), p.emberEdge.alpha ?? 0.5);
+      ctx.lineWidth = 1.6;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.54, r * 0.02);
+      ctx.quadraticCurveTo(r * 0.32, -h * 0.48, curl * 0.9, -h * 0.8);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+export interface ImpalerParams {
+  wood?: ColorSpec;
+  husk?: ColorSpec;
+  wrap?: ColorSpec;
+}
+
+/** IMPALER STAKES — a leaning sharpened shaft and the dried husk the legions
+ *  left on it: slumped remains at two-thirds height, arms surrendered to
+ *  gravity, wrappings trailing below. Grim silhouette dressing — bone-dry,
+ *  long past gore. The rot only leans the stake. */
+const impaler: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as ImpalerParams;
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#382018');
+  const husk = resolveColor(p.husk, theme, '#191013');
+  const wrap = resolveColor(p.wrap, theme, '#3a3026');
+  for (const o of group) {
+    const seed = ((o.pos.x * 11 + o.pos.y * 5) | 0) >>> 0;
+    const r = o.radius;
+    const h = r * (3.1 + hash01(seed, 3) * 0.9);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(Math.sin(o.rot ?? 0) * 0.24);
+    // Packed spoil at the foot.
+    ctx.fillStyle = shade(wood, -0.45);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.7, r * 0.32, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The shaft, tapering to the point; sun catches its left face and the tip.
+    const wBase = r * 0.3, wTip = r * 0.08;
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    ctx.moveTo(-wBase / 2, 0);
+    ctx.lineTo(-wTip / 2, -h);
+    ctx.lineTo(wTip / 2, -h);
+    ctx.lineTo(wBase / 2, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(wood, -0.5), 0.8);
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = withAlpha(shade(wood, 0.3), 0.6);
+    ctx.beginPath();
+    ctx.moveTo(-wBase / 2, 0);
+    ctx.lineTo(-wTip / 2, -h);
+    ctx.lineTo(0, -h);
+    ctx.lineTo(-wBase / 6, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = shade(wood, 0.45);
+    ctx.beginPath();
+    ctx.moveTo(-wTip, -h);
+    ctx.lineTo(0, -h - r * 0.34);
+    ctx.lineTo(wTip, -h);
+    ctx.closePath();
+    ctx.fill();
+    // THE HUSK: torso mass, a dropped head, hanging arms.
+    const hy = -h * (0.58 + hash01(seed, 7) * 0.12);
+    ctx.fillStyle = husk;
+    ctx.beginPath();
+    ctx.ellipse(0, hy, r * 0.5, r * 0.72, 0.12, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(r * 0.18, hy - r * 0.66, r * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = husk;
+    ctx.lineWidth = r * 0.16;
+    ctx.lineCap = 'round';
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(s * r * 0.34, hy - r * 0.2);
+      ctx.quadraticCurveTo(s * r * (0.5 + hash01(seed + s + 1, 11) * 0.14), hy + r * 0.5,
+        s * r * 0.3, hy + r * 0.95);
+      ctx.stroke();
+    }
+    // Wrappings trailing in the wind that isn't there.
+    ctx.strokeStyle = withAlpha(wrap, 0.8);
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.1 + i * r * 0.2, hy + r * 0.4);
+      ctx.quadraticCurveTo(r * (0.4 + i * 0.2), hy + r * (0.9 + i * 0.3),
+        r * (0.2 + i * 0.3), hy + r * (1.4 + i * 0.2));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+export interface GroundChainParams {
+  iron?: ColorSpec;
+  rust?: ColorSpec;
+  plate?: ColorSpec;
+}
+
+/** TITAN CHAINS — a bolted anchor plate and a run of massive links marching
+ *  off toward whatever they hold below: drawn flat on the floor (the doodad's
+ *  rot IS the run's bearing), links alternating aspect like a chain laid
+ *  down, rust blooming at the welds, the last link half-swallowed by the
+ *  crust. */
+const groundChain: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as GroundChainParams;
+  const { ctx, theme } = env;
+  const iron = resolveColor(p.iron, theme, '#3c3a40');
+  const rust = resolveColor(p.rust, theme, '#7a3a1e');
+  const plate = resolveColor(p.plate, theme, '#2c2a30');
+  for (const o of group) {
+    const seed = ((o.pos.x * 17 + o.pos.y * 3) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The anchor plate: bolted iron biting the crust.
+    ctx.fillStyle = withAlpha('#000000', 0.28);
+    ctx.beginPath();
+    ctx.ellipse(2, 3, r * 0.5, r * 0.4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const pw = r * 0.72, ph = r * 0.6;
+    ctx.fillStyle = plate;
+    ctx.fillRect(-pw / 2, -ph / 2, pw, ph);
+    ctx.strokeStyle = withAlpha(shade(plate, -0.5), 0.9);
+    ctx.lineWidth = 1.2;
+    ctx.strokeRect(-pw / 2, -ph / 2, pw, ph);
+    ctx.fillStyle = shade(plate, 0.3);
+    for (const [bx, by] of [[-1, -1], [1, -1], [-1, 1], [1, 1]] as const) {
+      ctx.beginPath();
+      ctx.arc(bx * pw * 0.32, by * ph * 0.3, r * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The run: links tapering off along the bearing, sagging with the ground.
+    const links = 5 + (seed % 3);
+    let x = pw / 2 + r * 0.18;
+    for (let i = 0; i < links; i++) {
+      const t = i / Math.max(1, links - 1);
+      const lr = r * (0.34 - t * 0.08);
+      const y = Math.sin(i * 1.7 + hash01(i, seed) * 2) * r * 0.14;
+      const upright = i % 2 === 0;
+      ctx.globalAlpha = i === links - 1 ? 0.55 : 1; // the last link sinks in
+      ctx.strokeStyle = hash01(i, seed + 23) < 0.4 ? mix(iron, rust, 0.55) : iron;
+      ctx.lineWidth = lr * 0.5;
+      ctx.beginPath();
+      ctx.ellipse(x + lr, y, lr, lr * (upright ? 0.62 : 0.36), 0, 0, Math.PI * 2);
+      ctx.stroke();
+      // A lit crescent on each link's sunward rim.
+      ctx.strokeStyle = withAlpha(shade(iron, 0.4), 0.5);
+      ctx.lineWidth = lr * 0.18;
+      ctx.beginPath();
+      ctx.ellipse(x + lr, y, lr, lr * (upright ? 0.62 : 0.36), 0, Math.PI * 1.1, Math.PI * 1.7);
+      ctx.stroke();
+      x += lr * (upright ? 1.5 : 1.72);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
+export interface StairFlightParams {
+  stone?: ColorSpec;
+  edge?: ColorSpec;
+  /** Treads in the flight (default 7). */
+  treads?: number;
+  /** Ember light seeping from the riser seams. */
+  glow?: { color: ColorSpec; alpha?: number };
+}
+
+/** GATE STAIRS — a broad flight descending along the doodad's rot: treads
+ *  step darker as they drop, risers cut hard seam shadows, low stringer curbs
+ *  flank the run, and the last tread feathers into the ground it arrives on.
+ *  Pseudo-elevation for the top-down camera — the descent reads at a glance,
+ *  coming or going. */
+const stairFlight: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as StairFlightParams;
+  const { ctx, theme } = env;
+  const stone = resolveColor(p.stone, theme, '#4a4550');
+  const edgeCol = resolveColor(p.edge, theme, '#16131d');
+  for (const o of group) {
+    const r = o.radius;
+    const L = r * 2.0;  // the run, along the descent
+    const W = r * 1.42; // width across
+    const n = Math.max(3, p.treads ?? 7);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0); // +x = down the stairs
+    // The cut: a hard shadow under the whole run so it sits INTO the ground.
+    ctx.fillStyle = withAlpha('#000000', 0.32);
+    ctx.fillRect(-L / 2 - 2, -W / 2 - 3, L + 6, W + 6);
+    // Treads, stepping darker as they descend.
+    const tw = L / n;
+    for (let i = 0; i < n; i++) {
+      const x0 = -L / 2 + i * tw;
+      const t = i / (n - 1);
+      ctx.fillStyle = mix(shade(stone, 0.22), shade(stone, -0.5), t);
+      ctx.fillRect(x0, -W / 2, tw + 0.5, W);
+      // The lip catches light; the riser under it cuts shadow.
+      ctx.fillStyle = withAlpha(shade(stone, 0.5), 0.5 * (1 - t * 0.6));
+      ctx.fillRect(x0, -W / 2, 1.6, W);
+      ctx.fillStyle = withAlpha(edgeCol, 0.85);
+      ctx.fillRect(x0 + tw - 1.4, -W / 2, 1.4, W);
+      if (p.glow) {
+        ctx.fillStyle = withAlpha(resolveColor(p.glow.color, theme),
+          (p.glow.alpha ?? 0.2) * (0.4 + t * 0.6));
+        ctx.fillRect(x0 + tw - 2.2, -W / 2 + 2, 0.9, W - 4);
+      }
+    }
+    // Stringer curbs: low stone rails flanking the run.
+    for (const s of [-1, 1]) {
+      const sy = s > 0 ? W / 2 : -W / 2 - 4.5;
+      ctx.fillStyle = shade(stone, -0.18);
+      ctx.fillRect(-L / 2 - 2, sy, L + 4, 4.5);
+      ctx.fillStyle = withAlpha(shade(stone, 0.34), 0.6);
+      ctx.fillRect(-L / 2 - 2, sy, L + 4, 1.3);
+    }
+    // The arrival: the last tread feathers into the field.
+    const fg = ctx.createLinearGradient(L / 2, 0, L / 2 + r * 0.5, 0);
+    fg.addColorStop(0, withAlpha(shade(stone, -0.5), 0.5));
+    fg.addColorStop(1, withAlpha(shade(stone, -0.5), 0));
+    ctx.fillStyle = fg;
+    ctx.fillRect(L / 2, -W / 2, r * 0.5, W);
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
@@ -5174,6 +5477,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
+  finBlade, impaler, groundChain, stairFlight,
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,

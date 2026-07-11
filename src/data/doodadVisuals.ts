@@ -110,6 +110,60 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -1.2, color: '#ff7a2a', intensity: 0.16, flicker: 1.8 },
   },
+  // --- The hell-steppes kit (the Underworld's scorched marches) ------------
+  // TITAN CHAINS lie flat on the crust (ground order, under standing objects).
+  hell_chain: {
+    painter: 'groundChain', order: 36,
+    params: { iron: '#3c3a40', rust: '#7a3a1e', plate: '#2c2a30' },
+  },
+  // ABYSSAL RENTS: the steppes' bottomless tears — the chasmPit drop in hell's
+  // palette: warm-black wells, ember mist, a fire-glow breathing from below.
+  abyssal_rent: {
+    painter: 'chasmPit', order: 38,
+    params: {
+      rim: { color: '#4a2012', alpha: 0.5, grow: 6 },
+      core: { color: '#070204' },
+      bands: 2,
+      cracks: { chance: 0.6 },
+      ledges: {},
+      mist: { color: '#c96a3a', alpha: 0.07 },
+      glow: { color: '#ff5a1a', alpha: 0.16 },
+    },
+    light: { radius: -1.4, color: '#ff5a1a', intensity: 0.2, flicker: 1.4 },
+  },
+  // EMBER FISSURES: small crust-rents all crack and glow — the fire underneath
+  // showing through (no shelf terrace at this scale: bands 0).
+  ember_fissure: {
+    painter: 'chasmPit', order: 39,
+    params: {
+      rim: { color: '#3a1a10', alpha: 0.5, grow: 4 },
+      core: { color: '#120507' },
+      bands: 0,
+      cracks: { chance: 0.9, color: '#c94a16' },
+      glow: { color: '#ff6a1e', alpha: 0.3 },
+    },
+    light: { radius: -2.2, color: '#ff5a16', intensity: 0.3, flicker: 2.6 },
+  },
+  // GATE STAIRS: the descent off a gate terrace — fortress stone matching the
+  // rampart masonry it leaves, ember light seeping from the riser seams.
+  gate_stair: {
+    painter: 'stairFlight', order: 42,
+    params: {
+      stone: '#4a4752', edge: '#16131d',
+      glow: { color: '#ff8a3a', alpha: 0.22 },
+    },
+  },
+  hell_fin: {
+    painter: 'finBlade', order: 52, shadow: 0.6, longShadow: 1.5,
+    params: {
+      color: 'theme:obstacle|#2c1a16', material: 'stone',
+      emberEdge: { color: 'theme:accent|#ff7a2a', alpha: 0.45 },
+    },
+  },
+  impaler_stake: {
+    painter: 'impaler', order: 53, shadow: 0.5, longShadow: 1.6,
+    params: { wood: '#382018', husk: '#191013', wrap: '#3a3026' },
+  },
   gore: {
     painter: 'liquid', order: 26,
     params: {

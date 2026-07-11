@@ -493,3 +493,219 @@ function metropolisLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('metropolis', metropolisLayout);
+
+// --- STEPPES (the Underworld's outer marches) --------------------------------------
+// Open scorched country partitioned by RUINED WALL RUNS: long angular rampart
+// remnants (true walls — block movement, shots, and sight) with breaches and
+// open ends, so the plain is wide but never straight: you navigate AROUND the
+// fortifications hell abandoned. Optionally a GATE TERRACE at the entry — a
+// raised floored ledge flanked by masonry whose only way down is a switchback
+// stair: the descent out of a fortress gate and onto the steppe. Every knob
+// reads from layoutParams (spec ▷ tileset ▷ biome), and the terrace is an
+// EXPORTED composable (carveGateTerrace) — a surface battlefield or a glacier
+// shelf can pour its own ruin-field or descent without touching this recipe.
+
+/** Fill a world-space rect (plus margin) into a mask — the rect counterpart of
+ *  disc/band for portal clears and footprint exclusions. */
+function rectInto(m: Mask, r: { x: number; y: number; w: number; h: number }, margin = 0): void {
+  const x0 = m.cx(r.x - margin), x1 = m.cx(r.x + r.w + margin);
+  const y0 = m.cy(r.y - margin), y1 = m.cy(r.y + r.h + margin);
+  for (let cy = y0; cy <= y1; cy++) {
+    for (let cx = x0; cx <= x1; cx++) m.set(cx, cy, true);
+  }
+}
+
+export interface GateTerraceParams {
+  /** Roll chance when the object is present (default 1 — always). */
+  chance?: number;
+  /** Platform half-width across the portal (world units; lattice-snapped). */
+  halfWidth?: number;
+  /** Platform reach into the zone (world units; lattice-snapped). */
+  depth?: number;
+  /** Width of the stair mouth in the front lip (≥ 3 cells). */
+  stairWidth?: number;
+  /** Flank/lip wall region (default 'rampart' — dressed fortress masonry). */
+  wallRegion?: string;
+  /** Baked floor under the platform (default 'flagstone'). */
+  floorStyle?: string;
+  /** The lights flanking the stair mouth ('' skips them). */
+  brazierKind?: string;
+  /** The stair doodad kind (default 'gate_stair'). */
+  stairKind?: string;
+}
+
+export interface GateTerrace {
+  rect: { x: number; y: number; w: number; h: number };
+  /** Center of the stair mouth, on the lip's inner plane. */
+  mouth: Vec2;
+  /** Unit cardinal pointing DOWN the stairs, into the zone. */
+  inward: Vec2;
+}
+
+/** Raise a GATE TERRACE at a portal: a raised, floored ledge grown inward from
+ *  the portal's own wall, flanked by wall bands, closed by a front lip whose
+ *  one opening is a switchback stair down to the field — the "descending out
+ *  of the fortress" moment as a reusable feature. The footprint is reserved
+ *  (scatter/landmarks/structures all route around it), the floor bakes via a
+ *  synthetic structure record (no roofs, no doors — the blacksmith-yard
+ *  precedent), and the ground past the stair joins the reachability contract. */
+export function carveGateTerrace(ctx: GenCtx, at: Vec2,
+  p: GateTerraceParams = {}): GateTerrace | null {
+  const grid = ensureGrid(ctx);
+  const { arena } = ctx;
+  const CELL = 30;
+  const q = (v: number): number => Math.round(v / CELL) * CELL;
+  // Which wall does the portal hug? The terrace grows INWARD from that edge.
+  const dl = at.x, dr = arena.w - at.x, dt = at.y, db = arena.h - at.y;
+  const m = Math.min(dl, dr, dt, db);
+  const ix = m === dl ? 1 : m === dr ? -1 : 0;
+  const iy = ix !== 0 ? 0 : (m === dt ? 1 : -1);
+  const halfW = Math.max(CELL * 4, q(p.halfWidth ?? 200));
+  const depth = Math.max(CELL * 5, q(p.depth ?? 250));
+  const stairW = Math.max(CELL * 3, q(p.stairWidth ?? 120));
+  const wallRegion = p.wallRegion ?? 'rampart';
+  const back = CELL; // the platform tucks slightly behind the portal line
+  let x0: number, y0: number, w: number, h: number;
+  if (ix !== 0) {
+    w = depth + back; h = halfW * 2;
+    x0 = ix > 0 ? q(at.x - back) : q(at.x + back) - w;
+    y0 = q(at.y - halfW);
+  } else {
+    h = depth + back; w = halfW * 2;
+    y0 = iy > 0 ? q(at.y - back) : q(at.y + back) - h;
+    x0 = q(at.x - halfW);
+  }
+  x0 = Math.max(0, Math.min(arena.w - w, x0));
+  y0 = Math.max(0, Math.min(arena.h - h, y0));
+  const rect = { x: x0, y: y0, w, h };
+  const wall = (wx: number, wy: number, ww: number, wh: number): void => {
+    if (ww > 0.5 && wh > 0.5) grid.fillRegion(wx, wy, wx + ww - 0.01, wy + wh - 0.01, wallRegion);
+  };
+  // Floor first (the whole platform is walkable ground under the baked floor),
+  // then the flanks along the long sides, then the LIP closing the inner end —
+  // except for the stair mouth, centered on the portal's own axis.
+  grid.fillRegion(x0, y0, x0 + w - 0.01, y0 + h - 0.01, 'ground');
+  let mouth: Vec2;
+  if (ix !== 0) {
+    wall(x0, y0, w, CELL);
+    wall(x0, y0 + h - CELL, w, CELL);
+    const lipX = ix > 0 ? x0 + w - CELL : x0;
+    const g0 = Math.max(y0 + CELL, Math.min(q(at.y - stairW / 2), y0 + h - CELL - stairW));
+    const g1 = g0 + stairW;
+    wall(lipX, y0, CELL, g0 - y0);
+    wall(lipX, g1, CELL, y0 + h - g1);
+    mouth = vec(ix > 0 ? x0 + w : x0, g0 + stairW / 2);
+  } else {
+    wall(x0, y0, CELL, h);
+    wall(x0 + w - CELL, y0, CELL, h);
+    const lipY = iy > 0 ? y0 + h - CELL : y0;
+    const g0 = Math.max(x0 + CELL, Math.min(q(at.x - stairW / 2), x0 + w - CELL - stairW));
+    const g1 = g0 + stairW;
+    wall(x0, lipY, g0 - x0, CELL);
+    wall(g1, lipY, x0 + w - g1, CELL);
+    mouth = vec(g0 + stairW / 2, iy > 0 ? y0 + h : y0);
+  }
+  const inward = vec(ix, iy);
+  // THE DESCENT: the stair flight spanning the mouth, braziers on the lip ends
+  // flanking it. Direct pushes (no findSpot): the geometry IS the placement,
+  // and the reserved footprint spares them from the portal-clear splice.
+  ctx.doodads.push({
+    pos: vec(mouth.x + inward.x * 14, mouth.y + inward.y * 14),
+    radius: stairW * 0.55, kind: (p.stairKind ?? 'gate_stair'),
+    rot: Math.atan2(inward.y, inward.x),
+  });
+  const brazierKind = p.brazierKind ?? 'brazier';
+  if (brazierKind) {
+    const tx = -inward.y, ty = inward.x;
+    for (const s of [-1, 1]) {
+      ctx.doodads.push({
+        pos: vec(mouth.x - inward.x * (CELL / 2) + tx * s * (stairW / 2 + 22),
+          mouth.y - inward.y * (CELL / 2) + ty * s * (stairW / 2 + 22)),
+        radius: 9, kind: brazierKind,
+      });
+    }
+  }
+  // Bookkeeping: reserve the footprint (scatter, landmark and structure rolls
+  // all honor it), bake the floor via a synthetic structure record, keep the
+  // landing lane open, and hand the invariant the ground past the stair.
+  ctx.reserved.push({ rect, margin: 10 });
+  reserveArtery(ctx, [vec(mouth.x, mouth.y),
+    vec(mouth.x + inward.x * 280, mouth.y + inward.y * 280)], 60);
+  ctx.structures = ctx.structures ?? [];
+  ctx.structures.push({
+    id: `gate_terrace#${ctx.structures.length}`, defId: 'gate_terrace',
+    rect, cellSize: CELL, roofs: [], roofStyle: 'stone',
+    floors: [{ ...rect }], floorStyle: p.floorStyle ?? 'flagstone',
+    courtyards: [], doors: [], slots: [],
+  });
+  ctx.mustReach = ctx.mustReach ?? [];
+  ctx.mustReach.push(vec(mouth.x + inward.x * 150, mouth.y + inward.y * 150));
+  return { rect, mouth, inward };
+}
+
+function steppesLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  // 1) The gate terrace (chance-gated; draws only when configured).
+  const gt = layoutParam<GateTerraceParams | undefined>(def, 'gateTerrace', undefined);
+  let terrace: GateTerrace | null = null;
+  if (gt && rng.chance(gt.chance ?? 1)) terrace = carveGateTerrace(ctx, ctx.entry, gt);
+
+  // 2) RUINED WALL RUNS: angular polylines (cardinal headings, right-angle
+  // turns, a breath of wobble) painted as true-wall bands — hell's abandoned
+  // fortification lines. 'wander' style trades the corners for winding ridges.
+  const runsBand = layoutParam(def, 'ridges', [3, 5]) as [number, number];
+  const widthBand = layoutParam(def, 'ridgeWidth', [16, 26]) as [number, number];
+  const gapChance = layoutParam(def, 'ridgeGapChance', 0.55);
+  const angular = layoutParam(def, 'ridgeStyle', 'angular') === 'angular';
+  const region = layoutParam(def, 'ridgeRegion', 'wall');
+  const walls = Mask.forRect(0, 0, arena.w, arena.h);
+  const openings = walls.like();
+  const portals = [ctx.entry, ...ctx.exits];
+  for (let i = 0, n = rng.int(runsBand[0], runsBand[1]); i < n; i++) {
+    let start: Vec2 | null = null;
+    for (let t = 0; t < 14 && !start; t++) {
+      const c = vec(rng.range(arena.w * 0.15, arena.w * 0.85), rng.range(arena.h * 0.15, arena.h * 0.85));
+      if (portals.some(p => Math.hypot(p.x - c.x, p.y - c.y) < 320)) continue;
+      if (terrace && c.x > terrace.rect.x - 140 && c.x < terrace.rect.x + terrace.rect.w + 140
+        && c.y > terrace.rect.y - 140 && c.y < terrace.rect.y + terrace.rect.h + 140) continue;
+      start = c;
+    }
+    if (!start) continue;
+    const pts: Vec2[] = [start];
+    let heading = rng.int(0, 3) * (Math.PI / 2);
+    for (let s = 0, segs = rng.int(2, 4); s < segs; s++) {
+      if (s > 0 && rng.chance(0.8)) heading += (rng.chance(0.5) ? 1 : -1) * (Math.PI / 2);
+      const a = heading + (angular ? rng.range(-0.09, 0.09) : rng.range(-0.55, 0.55));
+      const len = rng.range(240, 520);
+      const prev = pts[pts.length - 1];
+      pts.push(vec(
+        Math.max(120, Math.min(arena.w - 120, prev.x + Math.cos(a) * len)),
+        Math.max(120, Math.min(arena.h - 120, prev.y + Math.sin(a) * len))));
+    }
+    band(walls, pts, rng.range(widthBand[0], widthBand[1]));
+    // A breach somewhere along the run — these are ruins, not fortifications.
+    if (rng.chance(gapChance)) {
+      const k = rng.int(0, pts.length - 2);
+      const t = rng.range(0.3, 0.7);
+      disc(openings, pts[k].x + (pts[k + 1].x - pts[k].x) * t,
+        pts[k].y + (pts[k + 1].y - pts[k].y) * t, rng.range(42, 64));
+    }
+  }
+  // Mouths breathe; the terrace and its landing lane keep their own geometry.
+  for (const p of portals) disc(openings, p.x, p.y, 160);
+  if (terrace) {
+    rectInto(openings, terrace.rect, 70);
+    for (let s = 0; s <= 320; s += 40) {
+      disc(openings, terrace.mouth.x + terrace.inward.x * s,
+        terrace.mouth.y + terrace.inward.y * s, 84);
+    }
+  }
+  walls.subtract(openings);
+  paintRegion(grid, walls, region);
+
+  // 3) The tileset's dressing — solids walk-gate into the open ground, and the
+  // zone's landmark rolls (abyssal maws, demon pits) follow in generateLayout.
+  scatterDecoration(ctx, def);
+}
+registerLayout('steppes', steppesLayout);

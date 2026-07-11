@@ -121,6 +121,23 @@ export const BIOMES: Record<string, BiomeInfo> = {
     structures: [{ structure: 'siege_castle', chance: 0 }, { structure: 'watchtower', chance: 0.15 }],
     landmarks: [{ landmark: 'lava_coast', chance: 0.18 }, { landmark: 'caldera', chance: 0.12 },
       { landmark: 'demon_pit', chance: 0.2 }, { landmark: 'void_pillars', chance: 0.1 }] },
+  // THE OUTER STEPPES: the Underworld's scorched marches — open plains cut by
+  // the angular wall-runs of abandoned hellworks (the 'steppes' recipe),
+  // abyssal maws burning through the crust, the legions' stakes on the old
+  // roads. Claims hell's COOLER ring (volcanic keeps the scorching cores);
+  // underworld-palette-only until a surface field entry ever lists it.
+  steppes: { patronFaction: 'demon', mapColor: '#8a4526', label: 'Steppes', spacing: 82,
+    climate: { temperature: { to: 0.8, fadeOut: 0.14 } },
+    allowedLayouts: { steppes: 4, expanse: 1 },
+    layoutParams: {
+      ridges: [3, 5], ridgeGapChance: 0.55, gateTerrace: { chance: 0.75 },
+      bonusLandmarks: [1, 2],
+    },
+    structures: [{ structure: 'watchtower', chance: 0.12 }],
+    landmarks: [
+      { landmark: 'abyssal_maw', chance: 0.5 }, { landmark: 'abyssal_gulf', chance: 0.16 },
+      { landmark: 'demon_pit', chance: 0.18 }, { landmark: 'sinkhole', chance: 0.1 },
+    ] },
   // Warm∧dry (not strictly hot∧arid — the conjunction starved deserts to
   // <1% of land in sweep tests; the true hot/arid hearts still run
   // desert-dominant because every competitor thins there too).

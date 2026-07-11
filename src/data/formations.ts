@@ -108,6 +108,40 @@ registerFormation({
   ],
 });
 
+// A FIN PROCESSION: the steppes' horn-blades marching down an old scar, bone
+// heaped at their roots (all inert — the formations doctrine: look-alike
+// hazards never ride a formation).
+registerFormation({
+  id: 'fin_procession', arrange: 'meander', span: [340, 620], step: 64,
+  params: { wobble: 30 },
+  pieces: [
+    { kind: 'hell_fin', radius: [16, 30], jitter: 14, rot: true },
+    { kind: 'bone_pile', radius: [12, 20], every: 3, jitter: 24 },
+  ],
+});
+
+// THE IMPALED ROAD: stakes pacing a dead-straight legion road, cinders
+// drifting along it — the warning the steppes post for free.
+registerFormation({
+  id: 'stake_line', arrange: 'line', span: [360, 640], step: 92,
+  pieces: [
+    { kind: 'impaler_stake', radius: [10, 14], jitter: 8, rot: true },
+    { kind: 'cinder', radius: [20, 30], every: 2, jitter: 28 },
+  ],
+});
+
+// AN IMPALER RING: the court's warning circle. Sized to ring a composition
+// clearing (inner ring 128×0.94−6 = 114 stays outside a reserved court of
+// ≤78 + piece 13 = 91 — tune BOTH sides together; see impaler_court).
+registerFormation({
+  id: 'impaler_ring', arrange: 'orbit', span: [128, 175], step: 58,
+  params: { rings: [1, 1], innerFrac: 0.94 },
+  pieces: [
+    { kind: 'impaler_stake', radius: [10, 13], jitter: 6, rot: true },
+    { kind: 'bone_pile', radius: [12, 18], every: 3, jitter: 18 },
+  ],
+});
+
 // DUNE RIDGES: a crescent of wind-combed sand (the discs fuse into a ridge).
 registerFormation({
   id: 'dune_ridges', arrange: 'arc', span: [130, 240], step: 38,

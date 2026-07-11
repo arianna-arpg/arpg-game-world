@@ -119,3 +119,16 @@ registerComposition({
   id: 'kelp_gyre',
   post: [{ kind: 'formation', formation: 'kelp_braid', count: [1, 2] }],
 });
+
+// AN IMPALER COURT: a bare ritual ground the legions keep swept — ringed by
+// their warnings, titan chains crawling toward it out of the scorch. The
+// clearing IS the arena; the stakes keep the sightlines honest.
+registerComposition({
+  id: 'impaler_court',
+  sites: [{ id: 'court', radius: [150, 190] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [58, 78] }],
+  post: [
+    { kind: 'formation', formation: 'impaler_ring', at: 'court', count: [1, 1] },
+    { kind: 'hell_chain', count: [2, 4], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 13 } } },
+  ],
+});

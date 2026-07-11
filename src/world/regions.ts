@@ -280,6 +280,18 @@ registerRegion({
   // lesson), so the abyss reads as an EDGE falling away, not flat paint.
   visual: { fill: '#050507', alpha: 1, edge: { color: '#221c36', width: 5 } },
 });
+// ABYSS: the Underworld's own drop — the void's physics (enter → fall recovery,
+// shots and sight sail across) under hell's palette: a warm-black depth whose
+// walkable-facing rim BURNS — the ember under-glow of the outer steppes' pits.
+// A separate row (not a void retint) so surface voids keep their cold violet
+// and future dimensions can tune their own falls without touching either. The
+// fall burns (typed fire, resistable) instead of the void's blunt physical.
+registerRegion({
+  id: 'abyss', walkable: false, blocks: false, label: 'the abyss',
+  boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'fire', canKill: true } },
+  crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  visual: { fill: '#0c0407', alpha: 1, edge: { color: '#a83a16', width: 5 } },
+});
 // DEEP WATER: walkable but you SWIM (slowed) and your BREATH drains; out of air
 // you start drowning (the survival system). The underwater zones' open sea.
 registerRegion({

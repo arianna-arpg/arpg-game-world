@@ -95,10 +95,13 @@ registerDimension({ id: 'surface', label: 'The Surface', color: '#8fb86a' });
 registerDimension({
   id: 'underworld', label: 'The Underworld', color: '#d84a2a',
   // Hell's palette: rift country (river-of-flame riverlands + siege castles),
-  // volcanic cauldrons (spiral over lava), flesh warrens — all existing biome
-  // rows; the dimension only re-weights WHERE the world grows from them.
+  // the OUTER STEPPES (open marches cut by ruined hellwork walls + abyssal
+  // maws — the gate-terrace descent), volcanic cauldrons (spiral over lava),
+  // flesh warrens — all biome rows; the dimension only re-weights WHERE the
+  // world grows from them.
   biomes: [
     { biome: 'rift', weight: 4 },
+    { biome: 'steppes', weight: 4 },
     { biome: 'volcanic', weight: 3 },
     { biome: 'flesh', weight: 2 },
     { biome: 'grave', weight: 1 },
