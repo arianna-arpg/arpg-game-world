@@ -71,6 +71,31 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('addedMin_lightning', 'flat', 2)],
     weight: 6,
   },
+  loaded_dice: {
+    id: 'loaded_dice', name: 'Loaded Dice',
+    description: 'This skill\'s damage dice WIDEN by 40% around the same average — jackpots jack higher, fizzles fizzle lower. Feeds anything that reads the top of the roll.',
+    color: '#e8c04a',
+    mods: [mod('damageSpread', 'flat', 0.4)],
+    perLevel: [mod('damageSpread', 'flat', 0.06)],
+    weight: 6,
+  },
+  overload: {
+    id: 'overload', name: 'Overload',
+    description: 'Hits with this skill that roll in the top 12% of their dice ARC — leaping to up to three nearby enemies at 50% damage. Wider dice and wider windows both feed it.',
+    color: '#7af0ff', requiresTags: ['lightning'],
+    mods: [mod('proc_overload_arc', 'flat', 1)],
+    perLevel: [mod('damage', 'increased', 0.05, ['lightning'])],
+    weight: 5,
+  },
+  unstable_compression: {
+    id: 'unstable_compression', name: 'Unstable Compression',
+    description: 'This skill\'s AREA re-rolls on every cast — from a pop at 60% to a bloom at 155% of itself. 15% more area damage: instability pays.',
+    color: '#e89a4a', requiresTags: ['aoe'],
+    variance: { aoe: [0.6, 1.55] },
+    mods: [mod('damage', 'more', 0.15, ['aoe'])],
+    perLevel: [mod('damage', 'increased', 0.05, ['aoe'])],
+    weight: 5,
+  },
   // The Spell Power / Spell Damage split, as a pair of gems: umbral_power
   // adds chaos to EVERYTHING this skill is (untagged mod — the universal
   // lane); umbral_focus adds MORE, but only when the skill is chaos-tagged
@@ -320,6 +345,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
     description: 'Every overcharge STAGE you bank casts this skill for you — the held greed pays out as you climb, not just when you let go. Its key only arms and disarms it. Quick skills only, unless Sequenced Invocation rides beside it.',
     color: '#ffd24a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
     trigger: { on: 'overchargeStage', chance: 1 },
+    mods: [],
+    perLevel: [mod('triggerChance', 'flat', 0.05)],
+    weight: 4, minDropLevel: 10,
+  },
+  cast_on_high_roll: {
+    id: 'cast_on_high_roll', name: 'Cast on High Roll',
+    description: 'When a hit of yours rolls in the top 12% of its damage dice, THIS skill casts itself at the jackpot — the dice pull the trigger. Honest costs; quick skills only, unless Sequenced Invocation rides beside it. Its key only arms and disarms it.',
+    color: '#ffe97a', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'highRoll', chance: 1, icd: 0.25 },
     mods: [],
     perLevel: [mod('triggerChance', 'flat', 0.05)],
     weight: 4, minDropLevel: 10,

@@ -348,6 +348,54 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 360, weight: 2, keepDistance: 220 },
   },
 
+  // SPARK BOLT — the COMPONENT dart (Static Shrapnel's shrapnel, and
+  // anything else that wants one honest spark as a payload): a single
+  // erratic dart with wide dice, so even shrapnel can jackpot. Never
+  // drops — it exists to be composed.
+  spark_bolt: {
+    id: 'spark_bolt', name: 'Spark Bolt',
+    description: 'A single erratic spark. A component payload: riders, emitters and constructs fling these.',
+    tags: ['spell', 'projectile', 'lightning'], color: '#ffe97a',
+    manaCost: 3, cooldown: 0, useTime: 0.4,
+    baseDamage: { lightning: [1, 14] },
+    delivery: { type: 'projectile', speed: 380, radius: 6, range: 260, trajectory: { erratic: 5 } },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.15 },
+    ],
+    noDrop: true,
+    ai: { range: 240, weight: 2, keepDistance: 160 },
+  },
+
+  // FULMINATE — the high-roller's signature bolt: dice a chasm wide, and
+  // BOTH jackpot procs innate at chance 1 — the top 15% of rolls DETONATE
+  // (Short Circuit), the top 12% ARC (Overload Arc), the very peak does
+  // both at once. damageSpread, luckyChance and highRollWindow investment
+  // turn the slot machine into a rigged one.
+  fulminate: {
+    id: 'fulminate', name: 'Fulminate',
+    description: 'Hurl an unstable bolt whose damage rolls across a chasm-wide range. Rolls near the top of the dice SHORT-CIRCUIT — detonating, arcing to nearby enemies, or both at once.',
+    tags: ['spell', 'lightning', 'projectile'], color: '#9ae8ff',
+    manaCost: 9, cooldown: 0, useTime: 0.6,
+    baseDamage: { lightning: [1, 58] },
+    innateMods: [
+      mod('proc_short_circuit', 'flat', 1, ['lightning']),
+      mod('proc_overload_arc', 'flat', 1, ['lightning']),
+    ],
+    delivery: { type: 'projectile', speed: 500, radius: 8, range: 450 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.25 },
+    ],
+    // Over-cap THRESHOLD: the windows themselves widen — jackpots arrive.
+    thresholds: [
+      { level: 11, label: 'Loaded dice', mods: [mod('highRollWindow', 'flat', 0.05)] },
+    ],
+    leveling: { perLevel: [mod('damage', 'increased', 0.11, ['lightning'])] },
+    requirements: { intelligence: 20 },
+    ai: { range: 420, weight: 3, keepDistance: 260 },
+  },
+
   storm_call: {
     id: 'storm_call', name: 'Storm Call',
     description: 'Call a bolt of lightning down on a target point.',
@@ -1427,6 +1475,36 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'damage' }],
     requirements: { intelligence: 24 },
     ai: { range: 500, weight: 2, keepDistance: 360 },
+  },
+
+  // UNSTABLE BARRAGE — the erratic-drumbeat channel: explosions of
+  // wandering size on a wandering clock. intervalJitter rolls every beat's
+  // gap, variance.aoe rolls every detonation's footprint, and the storm's
+  // scatter wanders its placement — nothing about it is steady except the
+  // average. The showcase for the per-cast variance axis.
+  unstable_barrage: {
+    id: 'unstable_barrage', name: 'Unstable Barrage',
+    description: 'CHANNELED: erratic detonations hammer the area around your cursor — each blast its own size, on its own beat. Nothing about the barrage is steady; the average is.',
+    tags: ['spell', 'fire', 'aoe', 'storm', 'channel', 'duration'], color: '#ff9a3a',
+    manaCost: 8, cooldown: 4, useTime: 0,
+    castMode: 'channel',
+    channel: {
+      interval: 0.7, intervalJitter: [0.45, 1.7],
+      move: 'slowed', moveFactor: 0.5, trackAim: true, cooldownOnEnd: true,
+    },
+    variance: { aoe: [0.6, 1.55] },
+    baseDamage: { fire: [9, 21] },
+    // CELESTIAL (occlusion 'free'): the barrage falls from above.
+    delivery: {
+      type: 'storm', count: [1, 2], interval: 0.1, areaRadius: 120,
+      hitRadius: 46, scatter: 42, castRange: 460, occlusion: 'free',
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.3, magnitude: 0.3 },
+    ],
+    requirements: { intelligence: 24 },
+    ai: { range: 420, weight: 3, keepDistance: 280 },
   },
 
   meteoric_bombardment: {
