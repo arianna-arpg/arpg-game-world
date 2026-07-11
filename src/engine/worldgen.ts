@@ -12,6 +12,7 @@ import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
 import { TILESETS, pickTilesetForBiome } from '../data/tilesets';
+import { hasLayout } from './levelgen';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
 import type { ObjectiveSpec, ZoneDef, ZoneExitDef } from '../data/zones';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
@@ -400,7 +401,14 @@ export function placeZoneAt(
     picked = picked ?? pickTilesetForBiome(fb, rng);
     if (picked) tilesetId = picked;
   }
-  const tileset = TILESETS[tilesetId];
+  // Same guard mintCave carries: a directed mint naming an unregistered
+  // tileset must degrade loudly to a real one, never crash the mint chain.
+  let tileset = TILESETS[tilesetId];
+  if (!tileset) {
+    console.warn(`[worldgen] mint '${spec.id ?? `gen_${genIndex}`}' names unregistered tileset '${tilesetId}' — falling back to 'deepwood'`);
+    tilesetId = 'deepwood';
+    tileset = TILESETS[tilesetId];
+  }
   const id = spec.id ?? `gen_${genIndex}`;
   // LEVEL priority: explicit spec.level (authored/quest/event mints) → the DIFFICULTY
   // FIELD at this coordinate (random frontiers: radial danger geography) → the legacy
@@ -530,6 +538,13 @@ export function placeZoneAt(
   const biome = zoneBiome;
   // An authored set-piece arena forces its layout; otherwise the biome picks it.
   const layoutType = spec.layoutType ?? pickLayout(biome, target, rng, spec.biomeFor);
+  // generateLayout degrades an unregistered layout id to 'plains' silently —
+  // say so at mint, where the authoring slip (a quest def's layoutType typo)
+  // is one hop away. Biome allowedLayouts are boot-validated; this covers the
+  // directed spec path those validators can't see.
+  if (layoutType !== 'plains' && !hasLayout(layoutType)) {
+    console.warn(`[worldgen] mint '${id}' names unregistered layout '${layoutType}' — generateLayout will fall back to 'plains'`);
+  }
   // STRUCTURE ROLLS: merge the tileset's chances with the biome's (both pure
   // data). Baked onto the def so revisits/co-op replay the same rolls, and so
   // the bastion layout resolves its candidate pool from the zone itself. Special

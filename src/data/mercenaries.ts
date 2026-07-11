@@ -14,6 +14,8 @@
 // Vault sells, never a leak of it.
 // ---------------------------------------------------------------------------
 
+import { registerDoodadRule } from '../engine/levelgen';
+
 export interface MercTemplateDef {
   id: string;
   /** Name pool — each offer rolls one (until the Naming system writes here). */
@@ -55,3 +57,10 @@ export const MERC_TEMPLATES: MercTemplateDef[] = [
 
 export const MERC_TEMPLATE_BY_ID: Record<string, MercTemplateDef> =
   Object.fromEntries(MERC_TEMPLATES.map(t => [t.id, t]));
+
+// The outpost's camp dressing (world.placeMercOutpost pushes these at runtime).
+// The rows make the implicit default EXPLICIT — same walkable-ground behavior
+// they always had, but the kinds now stand in the rules registry like every
+// other placed kind (the registered-everywhere parity the validators sweep).
+registerDoodadRule('merc_bedroll', { overlap: 'ground' });
+registerDoodadRule('merc_banner', { overlap: 'ground' });

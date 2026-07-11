@@ -298,14 +298,22 @@ registerLandmarkBuilder('pillars', (b) => {
   const n = b.param('pillars', [3, 5]) as [number, number];
   for (let i = 0, k = rng.int(n[0], n[1]); i < k; i++) {
     const a = rng.range(0, Math.PI * 2), d = rng.range(0, r * 0.6);
-    disc(isles, b.center.x + Math.cos(a) * d, b.center.y + Math.sin(a) * d,
-      rng.range(...(b.param('pillarRadius', [60, 110]) as [number, number])));
+    // Clamp each island INSIDE the gulf (draws unchanged, value capped): an
+    // island rim reaching past the void's 0.88r would touch the outer ground
+    // and foot-bridge the jump-only pocket on small footprints.
+    const ir = Math.min(
+      rng.range(...(b.param('pillarRadius', [60, 110]) as [number, number])),
+      r * 0.88 - d);
+    if (ir <= 12) continue; // degenerate sliver — the gulf keeps the spot
+    disc(isles, b.center.x + Math.cos(a) * d, b.center.y + Math.sin(a) * d, ir);
   }
   voidMask.subtract(isles);
   paintLiquid(b.ctx, b.grid, voidMask, liquidOf(b.param('gulf', 'void')));
   // The islands stay whatever the ground was; they ARE the interior (spawn
   // sampling lands the dwellers on the pillars, never in the gulf).
   b.interior = isles;
+  // The jump-only geometry ends where the gulf does, not at the footprint.
+  b.pocketR = r * 0.9;
 });
 
 // --- PIT ------------------------------------------------------------------------

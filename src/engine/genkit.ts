@@ -103,6 +103,27 @@ export class Mask {
     return this;
   }
 
+  /** Shrink (erode) by n cells (4-neighborhood) — grow's inverse. A cell
+   *  survives only while all 4 neighbors are set, so `grow(n).erode(n)` is a
+   *  morphological CLOSE: gaps up to ~2n cells between bodies fuse shut while
+   *  everything already solid comes back untouched. Out-of-frame counts as
+   *  unset (a body flush against the mask frame erodes at that edge — pours
+   *  never reach the frame, which is padded past the zone border). */
+  erode(n = 1): this {
+    for (let k = 0; k < n; k++) {
+      const src = this.clone();
+      for (let cy = 0; cy < this.rows; cy++) {
+        for (let cx = 0; cx < this.cols; cx++) {
+          if (!src.get(cx, cy)) continue;
+          if (!src.get(cx - 1, cy) || !src.get(cx + 1, cy) || !src.get(cx, cy - 1) || !src.get(cx, cy + 1)) {
+            this.set(cx, cy, false);
+          }
+        }
+      }
+    }
+    return this;
+  }
+
   /** Largest 4-connected component (drop stray specks a noisy shape leaves). */
   largestComponent(): Mask {
     const label = new Int32Array(this.data.length).fill(-1);
@@ -148,8 +169,12 @@ export class Mask {
 
 export function disc(m: Mask, x: number, y: number, r: number): Mask {
   const r2 = r * r;
-  for (let cy = 0; cy < m.rows; cy++) {
-    for (let cx = 0; cx < m.cols; cx++) {
+  // Bounded to the circle's bbox — same cells set, but a fuse pass rasterizing
+  // hundreds of discs over an arena-sized mask stays O(area of the discs).
+  const cx0 = Math.max(0, m.cx(x - r)), cx1 = Math.min(m.cols - 1, m.cx(x + r));
+  const cy0 = Math.max(0, m.cy(y - r)), cy1 = Math.min(m.rows - 1, m.cy(y + r));
+  for (let cy = cy0; cy <= cy1; cy++) {
+    for (let cx = cx0; cx <= cx1; cx++) {
       const c = m.center(cx, cy);
       const dx = c.x - x, dy = c.y - y;
       if (dx * dx + dy * dy <= r2) m.set(cx, cy, true);

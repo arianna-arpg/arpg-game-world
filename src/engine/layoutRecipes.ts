@@ -179,7 +179,10 @@ function riverlandLayout(ctx: GenCtx, def: ZoneDef): void {
   // path fraction into two masks, pour each liquid.
   const freezeAt = layoutParam<number | undefined>(def, 'freezeAt', undefined);
   if (freezeAt !== undefined) {
-    const cut = Math.max(1, Math.min(pts.length - 1, Math.round(pts.length * freezeAt)));
+    // Clamp to length-2: band() needs ≥2 points, so a cut at length-1 would
+    // slice a single-point tail and silently paint NO frozen section at all
+    // (a freezeAt ≳ 0.95 river lost its whole D2-Act-5 frozen run).
+    const cut = Math.max(1, Math.min(pts.length - 2, Math.round(pts.length * freezeAt)));
     const flowing = Mask.forRect(0, 0, arena.w, arena.h);
     band(flowing, pts.slice(0, cut + 1), halfW);
     const frozen = Mask.forRect(0, 0, arena.w, arena.h);

@@ -91,7 +91,11 @@ registerStructureGen('castle', (rng, p) => {
   const sides: ('n' | 's' | 'e' | 'w')[] = ['n', 's', 'e', 'w'];
   const gates = roll(rng, p.gates, [1, 2]);
   const firstSide = sides[rng.int(0, 3)];
-  const gateSides = gates >= 2 ? [firstSide, sides[(sides.indexOf(firstSide) + 2) % 4]] : [firstSide];
+  // A second gate breaches the OPPOSITE wall (storm one face, sally the
+  // other). The old `+2 % 4` walked ['n','s','e','w'] — a PAIRED order, not a
+  // ring — and always landed on a perpendicular wall instead.
+  const OPPOSITE = { n: 's', s: 'n', e: 'w', w: 'e' } as const;
+  const gateSides = gates >= 2 ? [firstSide, OPPOSITE[firstSide]] : [firstSide];
   for (const side of gateSides) {
     if (side === 'n' || side === 's') {
       const gx = Math.floor(w / 2) + rng.int(-2, 2);
@@ -225,9 +229,17 @@ registerStructureGen('compound', (rng, p) => {
   g.rect(1, 1, w - 2, h - 2, '.');
   g.ring(0, 0, w - 1, h - 1, '#');
 
-  // BSP split: cut regions with interior walls, door-punch every cut.
+  // BSP split: cut regions with interior walls, door-punch every cut. Door
+  // punches are DEFERRED until the whole recursion lands: a child partition
+  // wall spans its region's full width, which reaches the cell flanking a
+  // parent's already-punched door — sealing the sole connector and orphaning
+  // an entire sub-tree of rooms (unreachable garrison, unenterable rooms).
+  // The rng draws stay exactly in place (only the g.set moves), and the
+  // post-pass reopens any flank a child wall closed, so every cut's door
+  // provably connects its two sides.
   interface Region { x0: number; y0: number; x1: number; y1: number }
   const leaves: Region[] = [];
+  const doorOps: { x: number; y: number; vertical: boolean }[] = [];
   const split = (rgn: Region, depth: number): void => {
     const rw = rgn.x1 - rgn.x0 + 1, rh = rgn.y1 - rgn.y0 + 1;
     const canV = rw >= minRoom * 2 + 1;
@@ -239,18 +251,29 @@ registerStructureGen('compound', (rng, p) => {
     if (vertical) {
       const cx = rgn.x0 + minRoom + rng.int(0, rw - minRoom * 2 - 1);
       for (let y = rgn.y0; y <= rgn.y1; y++) g.set(cx, y, '#');
-      g.set(cx, rgn.y0 + rng.int(0, rh - 1), doorChar);
+      doorOps.push({ x: cx, y: rgn.y0 + rng.int(0, rh - 1), vertical: true });
       split({ x0: rgn.x0, y0: rgn.y0, x1: cx - 1, y1: rgn.y1 }, depth + 1);
       split({ x0: cx + 1, y0: rgn.y0, x1: rgn.x1, y1: rgn.y1 }, depth + 1);
     } else {
       const cy = rgn.y0 + minRoom + rng.int(0, rh - minRoom * 2 - 1);
       for (let x = rgn.x0; x <= rgn.x1; x++) g.set(x, cy, '#');
-      g.set(rgn.x0 + rng.int(0, rw - 1), cy, doorChar);
+      doorOps.push({ x: rgn.x0 + rng.int(0, rw - 1), y: cy, vertical: false });
       split({ x0: rgn.x0, y0: rgn.y0, x1: rgn.x1, y1: cy - 1 }, depth + 1);
       split({ x0: rgn.x0, y0: cy + 1, x1: rgn.x1, y1: rgn.y1 }, depth + 1);
     }
   };
   split({ x0: 1, y0: 1, x1: w - 2, y1: h - 2 }, 0);
+  // Punch the doors now that every child wall is down; a flank a child wall
+  // sealed reopens to floor (a 1-cell doorway notch in that wall — exactly
+  // the connectivity the door promised). Runs before courtyards so reopened
+  // flanks join a courtyard conversion like any other floor cell. Draw-free.
+  for (const op of doorOps) {
+    g.set(op.x, op.y, doorChar);
+    const flanks = op.vertical
+      ? [[op.x - 1, op.y], [op.x + 1, op.y]] as const
+      : [[op.x, op.y - 1], [op.x, op.y + 1]] as const;
+    for (const [fx, fy] of flanks) if (g.get(fx, fy) === '#') g.set(fx, fy, '.');
+  }
 
   // Courtyards: open some leaf rooms to the sky (unroofed floor).
   for (const rgn of leaves) {

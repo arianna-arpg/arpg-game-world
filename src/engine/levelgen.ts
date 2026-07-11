@@ -34,7 +34,7 @@ import { GridWalkField } from '../world/gridWalk';
 import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
 // erased at runtime — no actual module cycle exists.
-import { Mask, GEN_CELL } from './genkit';
+import { Mask, GEN_CELL, disc, radial, bearingNoise, paintLiquid } from './genkit';
 
 export type KnownDoodadKind =
   | 'rock' | 'cliff' | 'chasm' | 'bridge' | 'wall'
@@ -384,6 +384,27 @@ export interface GeneratedLayout {
 //   walkOnly — in a GRID zone, reject non-walkable cells (defaults true for
 //              solids/triggers; ground/inert opt in).
 type OverlapClass = 'solid' | 'ground' | 'inert' | 'trigger';
+/** How a ground kind POURS (DoodadRule.pour) — every knob data, per kind:
+ *  a package kind opts into contiguous bodies with one row, no engine edits. */
+export interface PourSpec {
+  /** Rim wobble amplitude as a fraction of the body radius (default 0.3). */
+  wobble?: number;
+  /** Body radius multiplier over the stamp's rolled R, so a poured footprint
+   *  matches the reach the old satellite scatter had (default 1.5). */
+  scale?: number;
+  /** Keep one full-size disc under the lattice at the pour's heart, so
+   *  body-aware depth (groundAt penetration past LIQUID_CFG.deepInset)
+   *  survives the pour — the pond keeps its deep middle (default false;
+   *  meaningful for water, whose region distinguishes wade/swim). */
+  depthCore?: boolean;
+  /** Fuse reach in grid cells: same-kind bodies within ~2×this many cells
+   *  of each other merge at the zone-level close pass (fuseGroundBodies);
+   *  0 opts the kind out — blocking kinds default to 0, because
+   *  auto-bridging two blockers could choke a corridor the navigability
+   *  net would then have to chew back open (default 1 for poured kinds). */
+  fuseGap?: number;
+}
+
 export interface DoodadRule {
   overlap: OverlapClass;
   blocksMove?: boolean;
@@ -430,6 +451,14 @@ export interface DoodadRule {
    *  never by kind literal, so a package's rope crossing or a brittle rotten
    *  plank joins the same physics with one row. */
   spans?: boolean;
+  /** POURED BODY: blob stamps of this GROUND kind stop scattering big
+   *  overlapping circles and instead rasterize ONE organic mask (wobbled
+   *  radial core + lobes) emitted through the shared paintLiquid lattice —
+   *  the exact geometry landmark recipes pour, so stamps, clusters, fx
+   *  layers and landmarks converge on cohesive contiguous bodies. The
+   *  zone-level fuse pass (fuseGroundBodies) then closes sliver gaps between
+   *  near-touching bodies of the same kind + flags. Ground kinds only. */
+  pour?: PourSpec;
 }
 
 /** How a lifeless breakable gives way (World.popBrittle executes it). */
@@ -585,21 +614,28 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // 'inert'/'ground' in the overlap check (today's behaviour).
   // A chasm ENGULFS what it cuts through (a boulder can't hover over the
   // void); lava/water keep the lapping look (boulders shoulder out of pools).
-  chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true },
+  // The LIQUID family POURS (DoodadRule.pour): blob stamps rasterize one
+  // organic body on the landmark lattice instead of scattering big circles,
+  // and near-touching bodies of a kind FUSE contiguous. Blocking members
+  // (chasm, magma_core) pour but never auto-fuse (fuseGap 0) — merging two
+  // blockers could choke a corridor. Water keeps a depth heart so its ponds
+  // still swim past the wading shelf. Vines deliberately stay a scatter:
+  // a tangle IS an interlocking weave.
+  chasm:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, swallowsSolids: true, pour: { fuseGap: 0 } },
   // LAVA is a LIQUID now: crossable ground that COOKS the uninsured (the
   // 'lava' RegionKind carries the standDamage; fliers, habitat-matched
   // bodies and immuneGround bearers wade free). The impassable molten
   // WALL — the caldera's spiral — is the separate magma_core kind below.
-  lava:      { overlap: 'ground' },
-  magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false },
+  lava:      { overlap: 'ground', pour: {} },
+  magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false, pour: { fuseGap: 0 } },
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
   bridge:    { overlap: 'ground', spans: true },
-  mud:       { overlap: 'ground' },
-  swamp:     { overlap: 'ground' },
-  bog:       { overlap: 'ground' },
-  water:     { overlap: 'ground' },
-  ice:       { overlap: 'ground' },
-  sand:      { overlap: 'ground' },
+  mud:       { overlap: 'ground', pour: {} },
+  swamp:     { overlap: 'ground', pour: {} },
+  bog:       { overlap: 'ground', pour: {} },
+  water:     { overlap: 'ground', pour: { depthCore: true } },
+  ice:       { overlap: 'ground', pour: {} },
+  sand:      { overlap: 'ground', pour: {} },
   heat_shimmer: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'chasm'] },
   // Fog CLOUDS ride the canopy pass (occlude) so the murk covers whoever
   // stands inside — and parts around the hero like every other crown.
@@ -613,7 +649,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   cactus:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30, forbidOn: ['water', 'chasm'] },
   web:       { overlap: 'ground', walkOnly: true },
   geyser:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 48, forbidOn: ['water', 'chasm'] },
-  snowdrift: { overlap: 'ground' },
+  snowdrift: { overlap: 'ground', pour: {} },
   bone_pile: { overlap: 'ground', walkOnly: true },
   brazier:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
   standing_stone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46 },
@@ -630,10 +666,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // Flesh themed doodads (walk-gated so they land inside the carved chambers).
   flesh_pod: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 36 },
   bone:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 26 },
-  gore:      { overlap: 'ground', walkOnly: true },
+  gore:      { overlap: 'ground', walkOnly: true, pour: {} },
   // Volcanic themed doodads.
   obsidian:   { overlap: 'solid', blocksMove: true, blocksShot: true,  spacing: 34, forbidOn: ['water', 'lava', 'chasm'] },
-  cinder:     { overlap: 'ground', walkOnly: true },
+  cinder:     { overlap: 'ground', walkOnly: true, pour: {} },
   ember_vent: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 32, forbidOn: ['water', 'chasm'] },
   // Descent doodads. light_spot/descent_platform are non-blocking triggers (touched
   // by the engine); void_chasm is an inert fall pit (reports 'void' → recovery);
@@ -1437,6 +1473,11 @@ export function generateLayout(
     const n = roll.count ? ctx.rng.int(roll.count[0], roll.count[1]) : 1;
     for (let i = 0; i < n; i++) stamp(ctx, { kind: 'structure', structure: roll.structure, count: [1, 1] });
   }
+  // THE FUSE: near-touching poured ground bodies (same kind + flags) merge
+  // into one contiguous body — the parity pass over every placement system
+  // (stamps, landmarks, clusters, fx layers). Draw-free; runs before the
+  // portal splice + reachability guards so they act on the final geometry.
+  fuseGroundBodies(ctx);
   // REACHABILITY GUARD: a CONVEX layout (no walk grid) scatters its solids without
   // exit awareness, so a rock / cliff / wall can land ON a portal and wall it off —
   // the player then can't reach the exit (seen on crusade-minted + wall-heavy zones).
@@ -1454,6 +1495,14 @@ export function generateLayout(
       // around, exactly like every other solid-placement path here).
       if (blocksMovement(d) && !d.keep && !inReserved(ctx, d.pos, d.radius)
         && pts.some(p => dist(p, d.pos) < EXIT_CLEAR_CARVE + d.radius)) {
+        // seedPaired kinds ride an index-zip with a parallel gen list (the
+        // cave_entrance ↔ caveSeeds contract every other splice site keeps).
+        // No seedPaired kind blocks movement today, so this is the same
+        // defensive guard the sibling splices carry — not a live path.
+        if (doodadRule(d.kind).seedPaired) {
+          const ordinal = ctx.doodads.slice(0, i).filter(x => doodadRule(x.kind).seedPaired).length;
+          ctx.caveSeeds.splice(ordinal, 1);
+        }
         ctx.doodads.splice(i, 1);
       }
     }
@@ -2217,17 +2266,12 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     };
     let apron: Vec2 | null = searchAlong(pd.normal.x, pd.normal.y);
     if (!apron) {
-      // The REVERSE side: an interior door opens into a room either way — if
-      // the derived normal faced masonry, the working side becomes the normal
-      // (guards, apron requirements and open-doors topology all read it).
-      const back = searchAlong(-pd.normal.x, -pd.normal.y);
-      if (back) {
-        pd.normal.x *= -1;
-        pd.normal.y *= -1;
-        apron = back;
-      }
-    }
-    if (!apron) {
+      // Which side does the recorded normal face? A PERIMETER door's apron
+      // lives OUTSIDE the footprint — when its outward span is pre-existing
+      // rock (a grid layout), carve egress rather than trying the reverse:
+      // the reverse search always finds the structure's own interior floor,
+      // which would leave the gate sealed in rock with its normal flipped
+      // INTO the keep (and the carve branch could never run).
       const p = vec(pd.pos.x + pd.normal.x * cell * APRON_CELLS, pd.pos.y + pd.normal.y * cell * APRON_CELLS);
       const outside = p.x < rect.x || p.x > rect.x + rect.w || p.y < rect.y || p.y > rect.y + rect.h;
       if (outside) {
@@ -2237,15 +2281,26 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
         grid.carveCorridor(p.x, p.y, far.x, far.y, cell * 0.8);
         apron = p;
       } else {
-        // Once per def+door — a generator gap repeats identically on every
-        // mint of that blueprint; the first line says everything.
-        const key = `${def.id}/d${gi}`;
-        if (!apronWarned.has(key)) {
-          apronWarned.add(key);
-          console.warn(`[structures] ${sid}: door ${pd.door.id} has no walkable apron along either normal (authoring/generator gap)`);
+        // The REVERSE side: an interior door opens into a room either way —
+        // if the derived normal faced masonry, the working side becomes the
+        // normal (guards, apron requirements, open-doors topology read it).
+        const back = searchAlong(-pd.normal.x, -pd.normal.y);
+        if (back) {
+          pd.normal.x *= -1;
+          pd.normal.y *= -1;
+          apron = back;
         }
-        continue;
       }
+    }
+    if (!apron) {
+      // Once per def+door — a generator gap repeats identically on every
+      // mint of that blueprint; the first line says everything.
+      const key = `${def.id}/d${gi}`;
+      if (!apronWarned.has(key)) {
+        apronWarned.add(key);
+        console.warn(`[structures] ${sid}: door ${pd.door.id} has no walkable apron along either normal (authoring/generator gap)`);
+      }
+      continue;
     }
     if (grid.reachable && !grid.reachable(ctx.entry, apron)) {
       console.warn(`[structures] ${sid}: door ${pd.door.id} apron not reachable from entry (open-doors topology)`);
@@ -2589,7 +2644,7 @@ registerStamp('structure', (ctx, spec) => {
   // pattern of every existing structure stamp is untouched).
   if (s.plan || s.generator) { placeStructurePlan(ctx, s); return; }
   const at = findSpot(ctx, Math.max(s.halfW, s.halfH) * 1.3, true, 30);
-  if (at && areaFreeOf(ctx, at, Math.max(s.halfW, s.halfH) * 1.2, ['chasm', 'water'])) {
+  if (at && areaFreeOf(ctx, at, Math.max(s.halfW, s.halfH) * 1.2, HAZARD_GROUNDS)) {
     placeStructure(ctx, s, at);
   }
 });
@@ -2655,6 +2710,11 @@ export interface LandmarkBuildCtx {
   def: LandmarkDef;
   param<T>(key: string, dflt: T): T;
   interior: Mask;
+  /** A builder whose jump-only geometry stops short of the footprint sets the
+   *  TRUE pocket radius here (the pillars' gulf ends at 0.9r); placeLandmark
+   *  registers the pocket at this instead of the whole footprint, so ordinary
+   *  ground on the outer ring stays under the reachability net. */
+  pocketR?: number;
 }
 
 export type LandmarkBuilder = (b: LandmarkBuildCtx) => void;
@@ -2784,9 +2844,31 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
     }
     ctx.doodads.splice(i, 1);
   }
-  if (def.poi) ctx.pois.push(vec(center.x, center.y));
-  if (def.mustReach) (ctx.mustReach ??= []).push(vec(center.x, center.y));
-  if (def.pocket) (ctx.pockets ??= []).push({ x: center.x, y: center.y, r });
+  // POI/mustReach anchors sit on the landmark's INTERIOR — the builder's own
+  // usable-ground mask (a lake's interior is its SHORE ring, a crater's its
+  // bowl floor) — snapped to the nearest interior cell that's grid-walkable.
+  // The recipes' contract ("spawns/POIs live on the shore") now holds for the
+  // anchor too: an oasis quest spawner sits among the palms, not mid-pool,
+  // and an anchor can never strand inside a poured liquid the walk grid
+  // doesn't see. Draw-free: pure geometry, row-major tie-break.
+  if (def.poi || def.mustReach) {
+    let anchor = vec(center.x, center.y);
+    if (!b.interior.has(center.x, center.y) || !grid.isWalkable(center.x, center.y)) {
+      let bd = Infinity;
+      b.interior.forEach((icx, icy) => {
+        const c = b.interior.center(icx, icy);
+        if (!grid.isWalkable(c.x, c.y)) return;
+        const dd = (c.x - center.x) ** 2 + (c.y - center.y) ** 2;
+        if (dd < bd) { bd = dd; anchor = c; }
+      });
+    }
+    if (def.poi) ctx.pois.push(vec(anchor.x, anchor.y));
+    if (def.mustReach) (ctx.mustReach ??= []).push(vec(anchor.x, anchor.y));
+  }
+  // The pocket covers the builder's ACTUAL jump-only geometry (b.pocketR —
+  // the pillars' void stops at 0.9r), not the whole footprint: ground on the
+  // rim ring outside the gulf must stay under the reachability net.
+  if (def.pocket) (ctx.pockets ??= []).push({ x: center.x, y: center.y, r: b.pocketR ?? r });
   // Entity SPAWNS over the landmark: weighted picks over interior/rim cells,
   // resolved AT GEN (deterministic per seed) — loadZone materializes them.
   if (def.spawns) {
@@ -2913,6 +2995,14 @@ export function validateStamps(sources: { source: string; specs: StampSpec[] }[]
       if (doodadRule(p.kind).seedPaired) {
         bad.push(`cluster '${c.id}': piece kind '${p.kind}' is seed-paired (only its dedicated stamp may emit it)`);
       }
+      // A mistyped piece kind silently becomes default walkable ground with
+      // the generic-disc render — flag it like legend/fx kinds are flagged.
+      if (!hasDoodadRule(p.kind)) {
+        bad.push(`cluster '${c.id}': piece kind '${p.kind}' has NO registered rule (falls to walkable ground — typo?)`);
+      }
+    }
+    if (c.anchor.kind && !hasDoodadRule(c.anchor.kind)) {
+      bad.push(`cluster '${c.id}': anchor kind '${c.anchor.kind}' has NO registered rule (typo?)`);
     }
   }
   return bad;
@@ -2958,6 +3048,13 @@ function stampGraves(ctx: GenCtx): void {
 /** A shallow swathe: a wading-depth water patch (beaches and isle shores). It
  *  reuses the water kind with `shallow:true`, so groundAt wades it, never swims. */
 function stampShallows(ctx: GenCtx): void {
+  // Shallow water pours like every water body now — one wadeable organic
+  // sheet (no depth heart: shallows are shallow by contract), fused with
+  // whatever channel or pool it laps against by the zone-level pass.
+  if (doodadRule('water').pour) {
+    pourBody(ctx, 'water', [26, 78], [5, 9], false, { shallow: true });
+    return;
+  }
   const R = ctx.rng.range(26, 78);
   const center = findSpot(ctx, R * 1.6, false, 16, false); // ground: merges over solids
   if (!center) return;
@@ -3120,9 +3217,14 @@ function stampBoulderField(ctx: GenCtx): void {
   const spills = ctx.rng.int(1, 3);
   for (let i = 0; i < spills; i++) {
     const ang = ctx.rng.range(0, Math.PI * 2), off = ctx.rng.range(64, 124);
+    // Draw the size BEFORE the reservation filter (the draws-before-filter
+    // discipline every sibling loop here keeps): a spill skipped by a
+    // reservation must not shift every later placement's rng, and the
+    // reservation probe tests the disc's real radius.
+    const r = ctx.rng.range(20, 34);
     const p = vec(center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off);
-    if (inReserved(ctx, p, 30)) continue;
-    ctx.doodads.push({ pos: p, radius: ctx.rng.range(20, 34), kind: 'scree' });
+    if (inReserved(ctx, p, r)) continue;
+    ctx.doodads.push({ pos: p, radius: r, kind: 'scree' });
   }
   if (ctx.rng.range(0, 1) < 0.25) {
     const ang = ctx.rng.range(0, Math.PI * 2);
@@ -3156,11 +3258,212 @@ function stampCliff(ctx: GenCtx): void {
   }
 }
 
+/** Should a poured/fused cell at `c` be CUT? The SAME gates the piece scatter
+ *  honored — zone border, entry/exit clears, reservations, and (for walk-gated
+ *  kinds) the walk grid — each honoring the running stamp's rule-breaker
+ *  relaxations, so a poured body flows around exactly what a scattered one
+ *  skipped. `cr` is the reach the lattice actually paints (cell × 1.05). */
+function cellGuarded(ctx: GenCtx, c: Vec2, cr: number, kind: DoodadKind, hard: boolean): boolean {
+  const exitMargin = hard ? EXIT_CLEAR : EXIT_CLEAR * 0.6;
+  // Border honored = the scatter's BORDER inset; ignored = still inside the
+  // arena (the rule-breaker widened findSpot's rect, it never left the zone).
+  const edge = ruleIgnored(ctx, 'border') ? cr : BORDER + cr;
+  if (c.x < edge || c.x > ctx.arena.w - edge || c.y < edge || c.y > ctx.arena.h - edge) return true;
+  if (!ruleIgnored(ctx, 'portalClear')) {
+    if (dist(c, ctx.entry) < cr + ENTRY_CLEAR) return true;
+    if (ctx.exits.some(e => dist(c, e) < cr + exitMargin)) return true;
+  }
+  if (inReserved(ctx, c, cr)) return true;
+  if (!ruleIgnored(ctx, 'walk') && ctx.walk && walkGated(kind) && !ctx.walk.isWalkable(c.x, c.y)) return true;
+  return false;
+}
+
+/** Trim a poured mask by cellGuarded, cell by cell. */
+function maskGuards(ctx: GenCtx, m: Mask, kind: DoodadKind, hard: boolean): void {
+  const cr = m.cell * 1.05;
+  for (let cy = 0; cy < m.rows; cy++) {
+    for (let cx = 0; cx < m.cols; cx++) {
+      if (m.get(cx, cy) && cellGuarded(ctx, m.center(cx, cy), cr, kind, hard)) m.set(cx, cy, false);
+    }
+  }
+}
+
+/** THE POUR — a blob stamp routed through the landmark geometry: one organic
+ *  mask (a wobbled radial core + a lobe where the scatter rolled each piece)
+ *  rasterized to the gen lattice and emitted via the shared paintLiquid
+ *  idiom, so a bog reads as one cohesive body instead of a weave of stamped
+ *  circles. Siting is unchanged (findSpot center, reserved/portal respect) —
+ *  the guards act on CELLS now instead of piece centers, which is strictly
+ *  finer-grained. Opt-in per kind via DoodadRule.pour; every knob data. */
+function pourBody(
+  ctx: GenCtx, kind: DoodadKind,
+  radius: [number, number], pieces: [number, number], hard: boolean,
+  opts?: { shallow?: boolean },
+): void {
+  const pour = doodadRule(kind).pour ?? {};
+  const R = ctx.rng.range(radius[0], radius[1]);
+  const center = findSpot(ctx, R * 1.8, hard, 20, false, kind);
+  if (!center) return;
+  const body = R * (pour.scale ?? 1.5);
+  const wob = pour.wobble ?? 0.3;
+  const seed = ctx.rng.int(0, 0x7fffffff);
+  // Frame the mask over the body's worst reach, SNAPPED to the gen lattice
+  // (an unsnapped mask bleeds against the walk grid — the placeLandmark rule).
+  const reach = body * 2.2;
+  const ox = Math.floor((center.x - reach) / GEN_CELL) * GEN_CELL;
+  const oy = Math.floor((center.y - reach) / GEN_CELL) * GEN_CELL;
+  const m = Mask.forRect(ox, oy, reach * 2 + GEN_CELL, reach * 2 + GEN_CELL);
+  radial(m, center.x, center.y, a => body * (1 + bearingNoise(a, wob, seed)));
+  // LOBES: the piece rolls, reshaped — each a smaller wobbled radial ORed on,
+  // so a multi-lobed marsh keeps its sprawl without the circle seams. Lobe
+  // radii keep the union INSIDE `reach` (0.95 + 0.55×(1+wob) < 2.2 for any
+  // wobble ≤ 1), so the frame never clips a lobe.
+  const n = ctx.rng.int(pieces[0], pieces[1]);
+  for (let i = 0; i < n; i++) {
+    const ang = ctx.rng.range(0, Math.PI * 2);
+    const off = ctx.rng.range(body * 0.45, body * 0.95);
+    const lr = body * ctx.rng.range(0.3, 0.55);
+    radial(m, center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off,
+      a => lr * (1 + bearingNoise(a, wob, (seed + i + 1) >>> 0)));
+  }
+  maskGuards(ctx, m, kind, hard);
+  // Depth heart FIRST (under the lattice): the scatter's old center disc,
+  // kept so a poured pond still swims past LIQUID_CFG.deepInset at its
+  // middle. The core's radius R never pokes past the wobbled rim (mask
+  // radius ≥ body×(1−wob) = 1.05R at the default scale/wobble).
+  if (pour.depthCore && !opts?.shallow) {
+    ctx.doodads.push({ pos: center, radius: Math.min(R, body * 0.85), kind });
+  }
+  paintLiquid(ctx, null, m, { doodad: kind, ...(opts?.shallow ? { shallow: true } : {}) });
+}
+
+/** THE FUSE — the zone-level closure over poured ground kinds: bodies of the
+ *  same kind that landed NEXT TO (or interlocked with) each other merge into
+ *  ONE contiguous body instead of reading as circles jammed together. Two
+ *  complementary halves, both additive and draw-free (no rng), so a zone
+ *  without near-touching bodies is untouched and every already-placed disc
+ *  keeps its exact geometry:
+ *
+ *  1. CLOSE (per kind + flag signature): the union rasterizes to the gen
+ *     lattice and morphologically closes (grow+erode by fuseGap) — this fills
+ *     the interlock artifacts, the pinholes and concave slivers where several
+ *     circles almost meet. Signature-pure, so a fill never changes a ford
+ *     into deep water.
+ *  2. WELD (per kind, across signatures): a close cannot keep a tangent-thin
+ *     bridge (erosion eats one-cell isthmuses), so near-touching BODIES are
+ *     found by union-find over the discs and welded with a straight lattice
+ *     seam wherever their rim gap is within reach (fuseGap × 2 cells). A weld
+ *     touching a ford stays `shallow` — a junction may get easier to cross,
+ *     never surprise-deep.
+ *
+ *  Runs before the portal splice + reachability passes, so every guard sees
+ *  the fused geometry. This is the parity seam: stamps, landmarks, clusters,
+ *  fx layers — however two bodies of a kind arrive near each other, they
+ *  read as one. Seam cells emit at full density (no checker thinning): they
+ *  are one-or-two-cell isthmuses, and a thinned isthmus would leak a gap. */
+function fuseGroundBodies(ctx: GenCtx): void {
+  const byKind = new Map<DoodadKind, { gap: number; discs: Doodad[] }>();
+  for (const d of ctx.doodads) {
+    if (d.keep || d.fall || d.gone) continue; // bespoke flags stay bespoke
+    const pour = doodadRule(d.kind).pour;
+    if (!pour) continue;
+    const gap = pour.fuseGap ?? 1;
+    if (gap <= 0) continue;
+    let g = byKind.get(d.kind);
+    if (!g) byKind.set(d.kind, g = { gap, discs: [] });
+    g.discs.push(d);
+  }
+  const cell = GEN_CELL, cr = cell * 1.05;
+  for (const [kind, g] of byKind) {
+    if (g.discs.length < 2) continue;
+    // INVERSE forbidOn: the fuse is the one pass that adds ground AFTER the
+    // solids landed, so it must honor their forbidOn retroactively — a weld
+    // between two lava bodies must never flood the obsidian that legally sat
+    // in the gap between them (placement-time forbidOn saw only the bodies).
+    const forbidders = ctx.doodads.filter(d => doodadRule(d.kind).forbidOn?.includes(kind));
+    const floods = (c: Vec2): boolean =>
+      forbidders.some(f => dist(c, f.pos) < cr + f.radius);
+
+    // --- 1. CLOSE, per flag signature -----------------------------------
+    const bySig = new Map<string, Doodad[]>();
+    for (const d of g.discs) {
+      const key = d.shallow ? 's' : '';
+      const list = bySig.get(key);
+      if (list) list.push(d); else bySig.set(key, [d]);
+    }
+    for (const [sig, list] of bySig) {
+      if (list.length < 2) continue;
+      const m = Mask.forRect(0, 0, ctx.arena.w, ctx.arena.h);
+      for (const d of list) disc(m, d.pos.x, d.pos.y, d.radius);
+      const closed = m.clone().grow(g.gap).erode(g.gap).subtract(m);
+      maskGuards(ctx, closed, kind, false);
+      closed.forEach((cx, cy) => {
+        const pos = closed.center(cx, cy);
+        if (floods(pos)) return;
+        const d: Doodad = {
+          pos, radius: cr, kind,
+          ...(sig === 's' ? { shallow: true } : {}),
+        };
+        ctx.doodads.push(d);
+        g.discs.push(d); // welds below see the filled geometry
+      });
+    }
+
+    // --- 2. WELD near-tangent bodies -------------------------------------
+    const discs = g.discs;
+    const parent = discs.map((_, i) => i);
+    const find = (i: number): number => parent[i] === i ? i : (parent[i] = find(parent[i]));
+    for (let i = 0; i < discs.length; i++) {
+      for (let j = i + 1; j < discs.length; j++) {
+        if (dist(discs[i].pos, discs[j].pos) < discs[i].radius + discs[j].radius - 6) {
+          const ri = find(i), rj = find(j);
+          if (ri !== rj) parent[ri] = rj;
+        }
+      }
+    }
+    const reach = g.gap * 2 * cell;
+    // Deterministic pair scan (index order); union as welds land so a chain
+    // A–B–C lays two seams, never a redundant third.
+    for (let i = 0; i < discs.length; i++) {
+      for (let j = i + 1; j < discs.length; j++) {
+        const ri = find(i), rj = find(j);
+        if (ri === rj) continue;
+        const a = discs[i], b = discs[j];
+        const gapPx = dist(a.pos, b.pos) - a.radius - b.radius;
+        if (gapPx > reach) continue;
+        // Seam: lattice cells along a→b spanning the gap, one cell INTO each
+        // body so the weld's discs genuinely overlap both rims.
+        const span = dist(a.pos, b.pos);
+        const dir = vec((b.pos.x - a.pos.x) / (span || 1), (b.pos.y - a.pos.y) / (span || 1));
+        let welded = false;
+        for (let s = a.radius - cell; s <= span - b.radius + cell; s += cell * 0.9) {
+          const px = a.pos.x + dir.x * s, py = a.pos.y + dir.y * s;
+          const c = vec(
+            (Math.floor(px / cell) + 0.5) * cell,
+            (Math.floor(py / cell) + 0.5) * cell);
+          if (cellGuarded(ctx, c, cr, kind, false)) continue;
+          if (floods(c)) continue;
+          if (ctx.doodads.some(d => d.kind === kind && d.pos.x === c.x && d.pos.y === c.y)) { welded = true; continue; }
+          ctx.doodads.push({
+            pos: c, radius: cr, kind,
+            ...(a.shallow || b.shallow ? { shallow: true } : {}),
+          });
+          welded = true;
+        }
+        if (welded) parent[ri] = rj;
+      }
+    }
+  }
+}
+
 /** A blob of overlapping circles — mud patches and chasm lakes. */
 function stampBlob(
   ctx: GenCtx, kind: DoodadKind,
   radius: [number, number], pieces: [number, number], hard: boolean,
 ): void {
+  // POURED kinds trade the satellite scatter for one organic mask — the
+  // landmark-parity path (DoodadRule.pour, pure data per kind).
+  if (doodadRule(kind).pour) { pourBody(ctx, kind, radius, pieces, hard); return; }
   const R = ctx.rng.range(radius[0], radius[1]);
   // Blobs are terrain, not solids: they merge freely over rocks/trees (a pool
   // laps the boulders) — checkSolids=false. Only the shrub-family kinds spin
@@ -3299,7 +3602,7 @@ function stampCamp(ctx: GenCtx): void {
   let center: Vec2 | null = null;
   for (let tries = 0; tries < 14 && !center; tries++) {
     const p = findSpot(ctx, Math.max(halfW, halfH) * 0.55, true, 0);
-    if (p && areaFreeOf(ctx, p, footprint, ['chasm', 'water', 'bog', 'swamp'])) center = p;
+    if (p && areaFreeOf(ctx, p, footprint, HAZARD_GROUNDS)) center = p;
   }
   if (!center) return;
   ctx.reserved.push({ pos: center, radius: footprint + 20 });
@@ -3344,7 +3647,7 @@ function stampRuin(ctx: GenCtx): void {
   let center: Vec2 | null = null;
   for (let tries = 0; tries < 10 && !center; tries++) {
     const p = findSpot(ctx, R + 40, true, 30);
-    if (p && areaFreeOf(ctx, p, R + 30, ['chasm', 'water'])) center = p;
+    if (p && areaFreeOf(ctx, p, R + 30, HAZARD_GROUNDS)) center = p;
   }
   if (!center) return;
   ctx.reserved.push({ pos: center, radius: R + 40 });
