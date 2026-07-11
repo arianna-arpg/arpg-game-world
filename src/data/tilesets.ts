@@ -231,11 +231,18 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'structure', count: [0, 1], structure: 'wayside_camp' },
     ],
     // Whatever variant rolls, the deep wood always rots below, thorns always
-    // find purchase, and something always webs the dark.
+    // find purchase, and something always webs the dark. COMMON is the one
+    // list every mint runs (a rolled variant REPLACES the base layout), and
+    // it runs FIRST — so the glades reserve before any variant's scatter.
     common: [
+      // True GLADES: reserved sun-wells the furniture pools around (the
+      // clearing-lift palette already brightens them — now they stay open).
+      { kind: 'clearing', count: [1, 2], radius: [110, 180] },
       { kind: 'burst_sac', count: [0, 2] },
       { kind: 'puffcap_cluster', count: [0, 1] },
       { kind: 'briarwood', count: [1, 2] },
+      // An old field line the forest swallowed.
+      { kind: 'formation', count: [0, 1], formation: 'oak_hedgerow' },
     ],
     variants: [
       // Sun-dappled fringe: more clearing furniture, lighter rot.
@@ -322,11 +329,17 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.2, biome: 'taiga',
     layout: [
+      // NEGATIVE SPACE first: a snow-glade the whole scatter flows around.
+      { kind: 'clearing', count: [1, 2], radius: [100, 170] },
       { kind: 'conifers', count: [20, 30] },
       { kind: 'ancient_tree', count: [0, 2] },
-      { kind: 'snowdrift', count: [7, 12] },
+      // Drifts bank in wind-combed PATCHES (noise strata), not confetti.
+      { kind: 'snowdrift', count: [7, 12], where: { field: 'noise', max: 0.47, params: { scale: 520 } } },
       { kind: 'ice', count: [3, 5] },
       { kind: 'ice_spike', count: [3, 6] },
+      // The windbreak line + a frost-heave arc — composed set-pieces.
+      { kind: 'formation', count: [1, 2], formation: 'windrow_pines' },
+      { kind: 'formation', count: [0, 1], formation: 'ice_teeth' },
       { kind: 'fog_bank', count: [1, 3] },
       { kind: 'dead_tree', count: [1, 3] },
       { kind: 'rocks', count: [6, 10], radius: [20, 40] },
@@ -386,7 +399,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2600, 3600], sizeH: [1700, 2500], ellipseChance: 0.3, biome: 'tundra',
     layout: [
-      { kind: 'snowdrift', count: [5, 9] }, { kind: 'geyser', count: [0, 2] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'snowdrift', count: [5, 9], where: { field: 'noise', max: 0.47, params: { scale: 640, seed: 3 } } },
+      { kind: 'geyser', count: [0, 2] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [1, 3] },
       { kind: 'conifers', count: [8, 14] },
       { kind: 'rocks', count: [8, 14], radius: [22, 46] },
       { kind: 'cairn', count: [1, 2] }, { kind: 'scree', count: [1, 3] },
@@ -395,7 +409,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'mud', count: [3, 4] },
       { kind: 'cliff', count: [2, 4] },
       { kind: 'river', count: [0, 1] },
+      // Frozen MARGINS: extra ice hugging whatever channel the river cut
+      // (order matters — the shore field reads the water above; a riverless
+      // roll leaves the band empty and the base ice entry still delivers).
+      { kind: 'ice', count: [1, 2], where: { field: 'shore', max: 0.5, params: { kinds: ['water'] } } },
       { kind: 'chasm', count: [0, 1] },
+      // An old rockslide strung downslope + frost-heave teeth.
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      { kind: 'formation', count: [1, 2], formation: 'ice_teeth' },
       { kind: 'ruin', count: [0, 1] },
       { kind: 'camp', count: [0, 1] },
       { kind: 'icicle_cluster', count: [2, 4] },
@@ -496,6 +517,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     variants: [
       { name: 'dunes', layout: [
         { kind: 'sand', count: [8, 12] }, { kind: 'rocks', count: [3, 5], radius: [22, 52] },
+        // Wind-combed ridge crescents (the arcs fuse into dune lines).
+        { kind: 'formation', count: [2, 4], formation: 'dune_ridges' },
         { kind: 'cliff', count: [0, 1] }, { kind: 'ruin', count: [0, 1] },
         { kind: 'heat_shimmer', count: [3, 6] },
         { kind: 'cave', count: [0, 1] },
@@ -508,6 +531,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'heat_shimmer', count: [1, 3] },
         { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
+        // Shade arcs ringing the pool: the strand centers near the water the
+        // rows above poured, its arc sweeping the shoreline.
+        { kind: 'formation', count: [1, 2], formation: 'palm_strand',
+          where: { field: 'shore', max: 0.4, params: { kinds: ['water'], reach: 220 } } },
       ] },
     ],
     nameFirst: ['Sunscoured', 'Bone-Dry', 'Wind-Carved', 'Mirage', 'Scorchsand', 'Glasswaste', 'Sunbaked', 'Duneshift', 'Saltcrack', 'Heat-Hazed', 'Witherglass', 'Sandlorn', 'Blistering', 'Dustchoke', 'Goldwaste', 'Suncracked', 'Parched', 'Burnglass'],
@@ -533,6 +560,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'camp', count: [0, 1] },
       { kind: 'cave', count: [0, 2] },
       { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
+    ],
+    // Every desert face is combed by wind and slides — COMMON runs for both
+    // variants (a rolled variant REPLACES the base layout above).
+    common: [
+      { kind: 'formation', count: [1, 2], formation: 'dune_ridges' },
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
     ],
     packs: {
       count: [6, 8], size: [3, 5],
@@ -647,6 +680,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'vines', count: [2, 3] }, { kind: 'grove', count: [1, 2] },
         { kind: 'rocks', count: [2, 4], radius: [16, 34] }, { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'pillaged_township' },
+        { kind: 'formation', count: [1, 2], formation: 'reed_shoreline',
+          where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'swamp', 'bog'], reach: 140 } } },
       ] },
       { name: 'blackwater', layout: [
         { kind: 'water', count: [3, 5] }, { kind: 'bog', count: [4, 6] },
@@ -654,6 +689,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'vines', count: [2, 4] }, { kind: 'trees', count: [3, 5] },
         { kind: 'rocks', count: [2, 3], radius: [16, 30] }, { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'pillaged_township' },
+        { kind: 'formation', count: [1, 3], formation: 'reed_shoreline',
+          where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'swamp', 'bog'], reach: 140 } } },
       ] },
     ],
     nameFirst: ['Sunken', 'Rotreek', 'Fenmire', 'Blackwater', 'Drownreed', 'Quagmire', 'Stillwater', 'Murkwallow', 'Reekbrack', 'Sludgewater', 'Greenrot', 'Cessmire', 'Gloomwrack', 'Dankmoor', 'Wetrot', 'Slimewater', 'Foulmere', 'Bogshade'],
@@ -679,7 +716,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'structure', count: [0, 1], structure: 'pillaged_township' },
     ],
     // Whichever water the mire shows, the gas still pools and the thorns
-    // still feed: the hazard kit rides every variant.
+    // still feed: the hazard kit rides every variant. (Shore-banded reeds
+    // live in each VARIANT list — a shore band must FOLLOW its liquids, and
+    // common rows run before them.)
     common: [
       { kind: 'gas_pod', count: [2, 4] },
       { kind: 'puffcap_cluster', count: [1, 3] },
@@ -783,10 +822,17 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'burial_urn', count: [2, 4] },
       { kind: 'puffcap_cluster', count: [0, 2] },
       { kind: 'briarwood', count: [0, 2] },
+      // Rows someone once kept + the drag-path of whatever keeps the bones —
+      // COMMON so every graveland face composes (a variant REPLACES the base
+      // layout; barrows stacks its own extra rows on top).
+      { kind: 'formation', count: [2, 3], formation: 'gravestone_rows' },
+      { kind: 'formation', count: [0, 1], formation: 'bone_trail' },
     ],
     variants: [
       { name: 'barrows', layout: [
         { kind: 'tombstone', count: [18, 26] }, { kind: 'rocks', count: [8, 12], radius: [16, 30] },
+        // The tended half of the boneyard: headstones in ROWS.
+        { kind: 'formation', count: [2, 4], formation: 'gravestone_rows' },
         { kind: 'ruin', count: [1, 2] }, { kind: 'cliff', count: [2, 3] },
         { kind: 'mud', count: [1, 2] }, { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'pillaged_township' },
@@ -871,6 +917,15 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'coral', count: [2, 4], radius: [14, 24] },
       { kind: 'rocks', count: [3, 6], radius: [18, 40] },
       { kind: 'cave', count: [0, 1] },
+      // STRATA set-pieces: shade arcs near the waterline the rows above
+      // poured, ridge crescents banked toward the zone rim, a kelp wall in
+      // the surf itself.
+      { kind: 'formation', count: [1, 2], formation: 'palm_strand',
+        where: { field: 'shore', max: 0.5, params: { kinds: ['water'], reach: 180 } } },
+      { kind: 'formation', count: [1, 2], formation: 'dune_ridges',
+        where: { field: 'radial', min: 0.55 } },
+      { kind: 'formation', count: [0, 1], formation: 'kelp_curtain',
+        where: { field: 'shore', max: 0.35, params: { kinds: ['water'], reach: 160 } } },
     ],
     packs: {
       count: [5, 7], size: [3, 5],
@@ -914,7 +969,11 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.2, biome: 'grove',
     layout: [
-      { kind: 'flowers', count: [4, 8] }, { kind: 'log', count: [0, 2] },
+      // A kept lawn at the heart of the lea — negative space first.
+      { kind: 'clearing', count: [1, 2], radius: [100, 170] },
+      // Wildflowers drift in NOISE patches, the way seed actually falls.
+      { kind: 'flowers', count: [4, 8], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 11 } } },
+      { kind: 'log', count: [0, 2] },
       { kind: 'ancient_tree', count: [0, 1] },
       { kind: 'grass', count: [6, 10] },
       { kind: 'trees', count: [8, 14] },
@@ -925,6 +984,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cairn', count: [0, 1] }, { kind: 'berry_bush', count: [1, 2] },
       { kind: 'cave', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
+      // Old field lines: hedgerows the pasture grew back around.
+      { kind: 'formation', count: [1, 2], formation: 'oak_hedgerow' },
     ],
     packs: {
       count: [5, 7], size: [2, 4],
@@ -1272,6 +1333,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'cluster', count: [2, 3], cluster: 'kelp_forest' },
         { kind: 'giant_kelp', count: [3, 6] },
         { kind: 'kelp', count: [4, 8] },
+        // Drifting frond WALLS between the stands — corridors of blindness.
+        { kind: 'formation', count: [1, 2], formation: 'kelp_curtain' },
       ] },
       { name: 'reef', layout: [
         { kind: 'coral', count: [7, 12], radius: [16, 30] },
@@ -1316,6 +1379,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [4, 8], radius: [20, 42] },
       { kind: 'boulder_field', count: [1, 2] }, { kind: 'cairn', count: [1, 2] },
       { kind: 'scree', count: [1, 3] },
+      // Rockslides strung downslope + a processional the old folk cut.
+      { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
+      { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1368,6 +1434,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'marsh_wisp', count: [2, 4] },
       { kind: 'peat_mound', count: [1, 2] },
       { kind: 'venom_bloom', count: [1, 3] },
+      // Rushes trace the waterlines the rows above pooled (shore strata).
+      { kind: 'formation', count: [1, 3], formation: 'reed_shoreline',
+        where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'bog', 'swamp'], reach: 140 } } },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1467,6 +1536,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'cliff', count: [1, 3] },
       // Knee-high lattices — the harvestable understory of the shard fields.
       { kind: 'crystal_cluster', count: [2, 5] },
+      // A lode line breaking the surface in a run.
+      { kind: 'formation', count: [1, 2], formation: 'crystal_run' },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1511,6 +1582,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       // and the odd cooled crack for the anglers.
       { kind: 'magma_core', count: [1, 2] },
       { kind: 'chasm', count: [0, 1] },
+      // An ash-choked flow line, vents smoking along it (placed after the
+      // pools so its vents honour their forbidOn against the ground).
+      { kind: 'formation', count: [1, 2], formation: 'cinder_vein' },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1566,6 +1640,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'mushroom_ring', count: [1, 2] }, { kind: 'fern', count: [1, 3] },
       // Pressure sacs burst when neared (fume); puffballs pop underfoot.
       { kind: 'burst_sac', count: [2, 4] }, { kind: 'puffcap_cluster', count: [1, 3] },
+      // Glow-caps filing through the dark — the mycelium's own roads.
+      { kind: 'formation', count: [1, 2], formation: 'fungal_procession' },
     ],
     packs: {
       count: [6, 9], size: [3, 5],
@@ -1614,6 +1690,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'boulder_field', count: [0, 2] }, { kind: 'cairn', count: [0, 1] },
       { kind: 'mud', count: [2, 4] },
       { kind: 'brush', count: [2, 4] },
+      // A processional the plains folk raised, striding to nowhere now.
+      { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },
     ],
     packs: {
       count: [6, 9], size: [3, 5],

@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "check": "tsc --noEmit && tsc -p tsconfig.launcher.json && tsc -p tsconfig.sim.json",
     "sim": "tsx balance/cli.ts",
+    "genqa": "tsx balance/genqa.ts",
     "game": "electron .",
     "game:play": "electron . --play",
     "smoke": "electron . --smoke-test=game",

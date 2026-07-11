@@ -11,6 +11,7 @@ import { PadPointer } from './ui/padpointer';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
 import './data/clusters'; // side-effect: registers the data-driven cluster stamps
+import './data/formations'; // side-effect: registers the patterned formation stamps
 import './engine/landmarkBuilders'; // side-effect: registers the landmark shape builders
 import './data/landmarks'; // side-effect: registers the geographic landmark recipes
 import './engine/layoutRecipes'; // side-effect: registers the composed layout recipes

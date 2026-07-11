@@ -211,6 +211,21 @@ export function edgeNoise(t: number, amp: number, wavelength: number, seed: numb
   return (hashNoise(i, seed) * (1 - s) + hashNoise(i + 1, seed) * s) * amp;
 }
 
+/** Smooth 2D value noise in [0, 1] (lerped lattice hash) — the patchiness
+ *  primitive gen FIELDS sample (drift bands, moss patches). Deterministic
+ *  per (scale, seed); cheap enough to call per placement try. */
+export function valueNoise2(x: number, y: number, scale: number, seed: number): number {
+  const u = x / Math.max(1, scale), v = y / Math.max(1, scale);
+  const ix = Math.floor(u), iy = Math.floor(v);
+  const fx = u - ix, fy = v - iy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const h = (i: number, j: number): number =>
+    (hashNoise((i * 73856093) ^ (j * 19349663), seed) + 1) / 2;
+  const top = h(ix, iy) * (1 - sx) + h(ix + 1, iy) * sx;
+  const bot = h(ix, iy + 1) * (1 - sx) + h(ix + 1, iy + 1) * sx;
+  return top * (1 - sy) + bot * sy;
+}
+
 /** PERIODIC bearing noise for radial rims — continuous across the ±π wrap
  *  (edgeNoise fed a raw atan2 leaves a visible seam on the west bearing).
  *  A few seeded sine harmonics: cheap, seamless, organic. */

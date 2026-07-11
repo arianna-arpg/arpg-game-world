@@ -100,7 +100,11 @@ export type KnownStampKind =
   // Data-driven composite clusters (engine/levelgen registerCluster).
   | 'cluster'
   // Geographic landmark recipes (engine/levelgen registerLandmark).
-  | 'landmark';
+  | 'landmark'
+  // Patterned arrangements along anchor chains (engine/levelgen registerFormation).
+  | 'formation'
+  // NEGATIVE SPACE: a reserved glade every later placement flows around.
+  | 'clearing';
 
 /** Open stamp vocabulary: the known kinds keep autocomplete/typo resistance, and a
  *  registered package stamp (registerStamp) rides the same field. Every layout entry
@@ -128,6 +132,23 @@ export interface StampRuleOverride {
   forbidOn?: string[];
 }
 
+/** STRATA gate on a layout entry: the stamp only SITES inside a band of a
+ *  registered generation field (levelgen registerGenField) — terrain layering
+ *  as data. `radial` bands ring the arena (rim beaches, ash cores), `axisX`/
+ *  `axisY` grade across it, `noise` patches it, `shore` hugs liquid bodies
+ *  laid by EARLIER entries (order matters — the ground-before convention).
+ *  The gate applies to the entry's own siting draws; a poured body may still
+ *  organically spill past the band edge. Open registry: a package field
+ *  (elevation, climate…) joins with one registerGenField call. */
+export interface WhereSpec {
+  field: string;
+  /** Inclusive normalized band (defaults 0..1). */
+  min?: number;
+  max?: number;
+  /** Factory knobs forwarded to the field (noise scale/seed, shore kinds/reach…). */
+  params?: Record<string, unknown>;
+}
+
 export interface StampSpec {
   kind: StampKind;
   count: [number, number];
@@ -141,6 +162,10 @@ export interface StampSpec {
   landmark?: string;
   /** Per-stamp placement-rule relaxations (see StampRuleOverride). */
   rules?: StampRuleOverride;
+  /** formation stamps: which registered FormationDef to lay (engine/levelgen). */
+  formation?: string;
+  /** STRATA: site this entry only inside a gen-field band (see WhereSpec). */
+  where?: WhereSpec;
 }
 
 /** A structure CHANCE a zone rolls at generation (merged from tileset + biome

@@ -33,10 +33,18 @@ and the player, monsters, and minions all act through a single skill pipeline
   (framework + metrics glossary) and `docs/balance/AGENT_PLAYBOOK.md` (the
   contract for agent-driven mass balance passes). Type-checked by
   `tsconfig.sim.json` inside `npm run check`.
+- `npm run genqa` — the GENERATION QA HARNESS: generateLayout headless over
+  the whole authored matrix (every tileset + variant with its rolls, every
+  registered layout generator) × several seeds, asserting the generation
+  invariants (registry refs, determinism, inverse forbidOn, portal clears,
+  caveSeeds zip, grid reachability, fuse contiguity). Exit 2 on breach — run
+  after any levelgen/tileset/formation/landmark change.
+  Flags: `-- --seeds 5 --filter mire --verbose`.
 - `npm run preview` — serve the built `dist/`.
 
-No unit-test runner is configured; `tsc --noEmit`, the smoke checks, and the
-balance harness's smoke suite are how we verify changes.
+No unit-test runner is configured; `tsc --noEmit`, the smoke checks, the
+balance harness's smoke suite, and the generation QA sweep are how we verify
+changes.
 
 ## Layout
 - `src/engine/` — systems: `world.ts` (core loop, `useSkill`), `stats.ts`

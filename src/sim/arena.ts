@@ -16,6 +16,7 @@ import { installHeadlessShims } from './shims';
 // The same side-effect registrations main.ts performs — a World without them
 // is missing stamps/landmarks/layouts and zone generation would be wrong.
 import '../data/clusters';
+import '../data/formations';
 import '../engine/landmarkBuilders';
 import '../data/landmarks';
 import '../engine/layoutRecipes';

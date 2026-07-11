@@ -34,7 +34,7 @@ import { GridWalkField } from '../world/gridWalk';
 import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
 // erased at runtime — no actual module cycle exists.
-import { Mask, GEN_CELL, disc, radial, bearingNoise, paintLiquid } from './genkit';
+import { Mask, GEN_CELL, disc, radial, bearingNoise, paintLiquid, valueNoise2, wanderPath } from './genkit';
 
 export type KnownDoodadKind =
   | 'rock' | 'cliff' | 'chasm' | 'bridge' | 'wall'
@@ -843,6 +843,14 @@ export interface GenCtx {
    *  handler call, read by clearOf/inReserved/findSpot) — how ONE spec opts out
    *  of individual placement gates without threading params through every stamp. */
   ruleOver?: StampRuleOverride;
+  /** TRANSIENT: the running stamp's WHERE band (StampSpec.where compiled to a
+   *  sampler + range by stamp(), read by findSpot after every legacy gate) —
+   *  the strata lever, riding the exact ruleOver pattern: zero signature
+   *  churn, zero rng impact on entries without a band. */
+  fieldGate?: { sample: GenFieldSampler; min: number; max: number };
+  /** The zone's layout seed (def.seed), for seed-stable gen FIELDS (noise
+   *  bands must not drift between the try-loop's samples or across co-op). */
+  seed?: number;
   /** Plan structures raised so far (placeStructurePlan appends). */
   structures?: PlacedStructure[];
   /** The walk grid was LAZILY created by a plan structure in an otherwise-convex
@@ -887,6 +895,11 @@ export function hasLayout(id: string): boolean {
   return id in LAYOUT_GENERATORS;
 }
 
+/** Every registered layout id (the generation-QA harness sweeps them all). */
+export function layoutIds(): string[] {
+  return Object.keys(LAYOUT_GENERATORS);
+}
+
 /** A layout-generator KNOB, resolved from the zone's merged layoutParams
  *  (spec ▷ tileset ▷ biome, baked at mint) — how ONE recipe serves a spiral
  *  cauldron, a winding road, and an open expanse without forking. */
@@ -894,6 +907,70 @@ export function layoutParam<T>(def: ZoneDef, key: string, dflt: T): T {
   const v = def.layoutParams?.[key];
   return v === undefined ? dflt : (v as T);
 }
+
+// --- GENERATION FIELDS -------------------------------------------------------
+// Normalized scalar fields over the arena that WHERE bands sample (StampSpec.
+// where) — the STRATA vocabulary: a layout entry belongs to the rim, the core,
+// a noise patch, or the shore of whatever liquid an earlier entry poured.
+// Open registry: a package's elevation/climate field joins with one call.
+
+export type GenFieldSampler = (x: number, y: number) => number;
+export type GenFieldFactory = (ctx: GenCtx, params: Record<string, unknown>) => GenFieldSampler;
+
+const GEN_FIELDS: Record<string, GenFieldFactory> = {};
+
+export function registerGenField(id: string, f: GenFieldFactory): void {
+  if (GEN_FIELDS[id]) console.warn(`[genfields] re-registering field '${id}' — overriding`);
+  GEN_FIELDS[id] = f;
+}
+
+export function hasGenField(id: string): boolean { return id in GEN_FIELDS; }
+
+/** 0 at the arena center → EXACTLY 1 on the border, whatever the aspect
+ *  ratio (rect-normalized max metric — the naive circular norm over-rejected
+ *  the long axis of a wide arena and the corners of a square one, balding
+ *  exactly the rims the band was written for): `{min: 0.6}` is a rim band,
+ *  `{max: 0.45}` a core. */
+registerGenField('radial', (ctx) => {
+  const cx = ctx.arena.w / 2, cy = ctx.arena.h / 2;
+  return (x, y) => Math.max(Math.abs(x - cx) / Math.max(1, cx), Math.abs(y - cy) / Math.max(1, cy));
+});
+/** 0 at the west edge → 1 at the east edge (an axis gradient). */
+registerGenField('axisX', (ctx) => (x) => x / Math.max(1, ctx.arena.w));
+/** 0 at the north edge → 1 at the south edge. */
+registerGenField('axisY', (ctx) => (_x, y) => y / Math.max(1, ctx.arena.h));
+/** Smooth seeded patch noise in 0..1 — drift stripes, moss patches. params:
+ *  scale (world units per lattice cell, default 460), seed (mixed with the
+ *  zone seed so two entries can carve DIFFERENT patchworks of one zone).
+ *  Seedless zones (terrain reshuffles per visit) read ctx.seed 0 — their
+ *  patch MACRO-placement repeats across visits while the scatter inside it
+ *  reshuffles; accepted (never feeds rng, so no draw-order or co-op skew). */
+registerGenField('noise', (ctx, params) => {
+  const scale = typeof params.scale === 'number' ? params.scale : 460;
+  const seed = ((ctx.seed ?? 0) ^ (typeof params.seed === 'number' ? params.seed : 0)) >>> 0;
+  return (x, y) => valueNoise2(x, y, scale, seed);
+});
+/** 0 touching a liquid body of the listed kinds → 1 at `reach` or beyond —
+ *  the shoreline field. Reads doodads placed by EARLIER entries (order
+ *  matters: pour the lake, then band the reeds). params: kinds (default
+ *  ['water']), reach (default 150). */
+registerGenField('shore', (ctx, params) => {
+  const kinds = Array.isArray(params.kinds) && params.kinds.length
+    ? params.kinds as DoodadKind[] : ['water' as DoodadKind];
+  const reach = typeof params.reach === 'number' ? Math.max(1, params.reach) : 150;
+  // Snapshot the liquid set ONCE (the factory runs once per stamp): the
+  // liquids this band measures were poured by EARLIER entries by contract,
+  // and re-filtering all doodads per findSpot try was O(tries × zone).
+  const liquids = ctx.doodads.filter(d => kinds.includes(d.kind));
+  return (x, y) => {
+    let best = reach;
+    for (const d of liquids) {
+      const dd = Math.hypot(x - d.pos.x, y - d.pos.y) - d.radius;
+      if (dd < best) { best = dd; if (best <= 0) return 0; }
+    }
+    return Math.max(0, best) / reach;
+  };
+});
 
 /** PLAINS — the classic layout: walk the def.layout StampSpec[] and scatter each
  *  set-piece over the convex floor. This is the byte-identical default; extracting
@@ -1433,7 +1510,7 @@ export function generateLayout(
   rng: Rng, entry: Vec2, exits: Vec2[],
 ): GeneratedLayout {
   const ctx: GenCtx = {
-    rng, arena, entry, exits, level: def.level,
+    rng, arena, entry, exits, level: def.level, seed: def.seed,
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
   };
@@ -2379,6 +2456,7 @@ const unknownStampWarned = new Set<string>();
 /** Apron-gap warns fire ONCE per def+door (`<defId>/d<n>`): a generator gap
  *  repeats identically on every mint of that blueprint — one line suffices. */
 const apronWarned = new Set<string>();
+const unknownFieldWarned = new Set<string>();
 
 function stamp(ctx: GenCtx, spec: StampSpec): void {
   const h = STAMP_HANDLERS[spec.kind];
@@ -2393,11 +2471,37 @@ function stamp(ctx: GenCtx, spec: StampSpec): void {
   // (read by clearOf/inReserved/findSpot); doodads born under a 'portalClear'
   // waiver are tagged keep so the convex portal-clear splice spares them.
   const n0 = ctx.doodads.length;
-  ctx.ruleOver = spec.rules;
+  // SAVE/RESTORE the transients (not clear-to-undefined): a future composite
+  // handler that re-enters stamp() must hand the outer stamp its band and
+  // relaxations back, and a throwing field factory must not leak ruleOver.
+  const prevRule = ctx.ruleOver;
+  const prevGate = ctx.fieldGate;
   try {
+    ctx.ruleOver = spec.rules;
+    // WHERE band: compile the spec's strata gate once for the handler's whole
+    // run (findSpot reads it after every legacy check). Unknown fields warn
+    // once and gate nothing — a package field that failed to load degrades to
+    // the ungated scatter, never a dead zone entry. Unset bounds are
+    // UNBOUNDED (min ?? 0, max ?? Infinity): `{field:'radial', min:0.6}`
+    // means "the rim, however far it runs", not "up to 1".
+    ctx.fieldGate = undefined;
+    if (spec.where) {
+      const factory = GEN_FIELDS[spec.where.field];
+      if (factory) {
+        ctx.fieldGate = {
+          sample: factory(ctx, spec.where.params ?? {}),
+          min: spec.where.min ?? 0,
+          max: spec.where.max ?? Infinity,
+        };
+      } else if (!unknownFieldWarned.has(spec.where.field)) {
+        unknownFieldWarned.add(spec.where.field);
+        console.warn(`[genfields] layout entry references unregistered field '${spec.where.field}' — band ignored`);
+      }
+    }
     h(ctx, spec);
   } finally {
-    ctx.ruleOver = undefined;
+    ctx.ruleOver = prevRule;
+    ctx.fieldGate = prevGate;
   }
   if (spec.rules?.ignore?.includes('portalClear')) {
     for (let i = n0; i < ctx.doodads.length; i++) ctx.doodads[i].keep = true;
@@ -2961,6 +3065,10 @@ function stampCluster(ctx: GenCtx, def: ClusterDef): void {
       if (!clearOf(ctx, p, r, hard)) continue;
       if (inReserved(ctx, p, r)) continue;
       if (ctx.walk && walkGated(piece.kind) && !ruleIgnored(ctx, 'walk') && !ctx.walk.isWalkable(p.x, p.y)) continue;
+      // The kind's forbidOn holds for cluster pieces exactly as it does for
+      // findSpot placements and formation pieces (a cluster's cairn must not
+      // balance on lava any more than a scattered one).
+      if (rule.forbidOn && !ruleIgnored(ctx, 'forbid') && !areaFreeOf(ctx, p, r, rule.forbidOn)) continue;
       if (isSolid(piece.kind)
           && overlapsSolidBefore(ctx, p, r, piece.packed ? clusterStart : ctx.doodads.length)) continue;
       ctx.doodads.push({ pos: p, radius: r, kind: piece.kind, rot });
@@ -2968,6 +3076,182 @@ function stampCluster(ctx: GenCtx, def: ClusterDef): void {
   }
   if (def.poi) ctx.pois.push(center);
 }
+
+// FORMATION STAMPS — patterned arrangements along ANCHOR CHAINS: the grammar
+// layer above clusters. A cluster is a radial huddle around one point; a
+// formation is a line of windbreak pines, a meandering boulder train, an arc
+// of dune ridges, a ring of gravestones — pieces planted along a chain a
+// registered ARRANGER lays out. Everything data: a FormationDef names its
+// arranger + pieces; new arrangement shapes register alongside line/meander/
+// arc/ring with one call; tilesets ride `{kind:'formation', formation: id}`
+// exactly like clusters. Pieces honor every placement gate the scatter does
+// (portal clears, reservations, walk-gating, forbidOn) and pack freely among
+// THEMSELVES — a windrow's crowns are supposed to knit.
+
+export interface FormationPiece {
+  kind: DoodadKind;
+  radius: [number, number];
+  /** Plant at every Nth chain anchor (default 1 = each anchor). */
+  every?: number;
+  /** Radial scatter around the anchor (default 0 = dead on the chain). */
+  jitter?: number;
+  /** Pieces per selected anchor (default [1, 1]). */
+  count?: [number, number];
+  /** Random spin per piece (trees/stones read better rotated). */
+  rot?: boolean;
+}
+
+export interface FormationDef {
+  id: string;
+  /** The anchor-chain ARRANGER (open registry): 'line' | 'meander' | 'arc' |
+   *  'ring' | a package's own. */
+  arrange: string;
+  /** Chain extent band, world units — line/meander LENGTH, arc/ring RADIUS. */
+  span: [number, number];
+  /** Anchor spacing along the chain (default 46). */
+  step?: number;
+  /** Arranger knobs (meander wobble, arc sweep fraction…). */
+  params?: Record<string, unknown>;
+  pieces: FormationPiece[];
+  /** Chain siting clearance override (default derives from span + arrange). */
+  siteRadius?: number;
+  /** Portal-margin policy for the chain + pieces (default false = soft). */
+  hard?: boolean;
+}
+
+/** Lays the anchor chain: `start` is the sited chain origin (line/meander) or
+ *  center (arc/ring). Draw ONLY from rng (seed-deterministic), return the
+ *  anchors in chain order. */
+export type FormationArranger = (ctx: GenCtx, def: FormationDef, start: Vec2, rng: Rng) => Vec2[];
+
+const FORMATION_ARRANGERS: Record<string, FormationArranger> = {};
+const FORMATIONS: Record<string, FormationDef> = {};
+
+export function registerFormationArranger(id: string, a: FormationArranger): void {
+  if (FORMATION_ARRANGERS[id]) console.warn(`[formations] re-registering arranger '${id}' — overriding`);
+  FORMATION_ARRANGERS[id] = a;
+}
+
+export function registerFormation(def: FormationDef): void {
+  if (FORMATIONS[def.id]) console.warn(`[formations] re-registering '${def.id}' — overriding`);
+  FORMATIONS[def.id] = def;
+}
+
+export function hasFormation(id: string): boolean { return id in FORMATIONS; }
+export function hasFormationArranger(id: string): boolean { return id in FORMATION_ARRANGERS; }
+
+/** All registered formation defs (boot validation walks their pieces). */
+export function formationDefs(): FormationDef[] { return Object.values(FORMATIONS); }
+
+registerFormationArranger('line', (ctx, def, start, rng) => {
+  const span = rng.range(def.span[0], def.span[1]);
+  const dir = rng.range(0, Math.PI * 2);
+  const step = def.step ?? 46;
+  const pts: Vec2[] = [];
+  for (let s = 0; s <= span; s += step) {
+    pts.push(vec(start.x + Math.cos(dir) * s, start.y + Math.sin(dir) * s));
+  }
+  return pts;
+});
+
+registerFormationArranger('meander', (ctx, def, start, rng) => {
+  const span = rng.range(def.span[0], def.span[1]);
+  const dir = rng.range(0, Math.PI * 2);
+  const wobble = typeof def.params?.wobble === 'number' ? def.params.wobble : 26;
+  const to = vec(start.x + Math.cos(dir) * span, start.y + Math.sin(dir) * span);
+  return wanderPath(rng, start, to, { step: def.step ?? 46, wobble });
+});
+
+registerFormationArranger('arc', (ctx, def, start, rng) => {
+  const radius = rng.range(def.span[0], def.span[1]);
+  const sweep = (typeof def.params?.sweep === 'number' ? def.params.sweep : rng.range(0.3, 0.6)) * Math.PI * 2;
+  const a0 = rng.range(0, Math.PI * 2);
+  const step = def.step ?? 46;
+  const pts: Vec2[] = [];
+  for (let a = 0; a <= sweep; a += step / Math.max(step, radius)) {
+    pts.push(vec(start.x + Math.cos(a0 + a) * radius, start.y + Math.sin(a0 + a) * radius));
+  }
+  return pts;
+});
+
+registerFormationArranger('ring', (ctx, def, start, rng) => {
+  const radius = rng.range(def.span[0], def.span[1]);
+  const a0 = rng.range(0, Math.PI * 2);
+  const step = def.step ?? 46;
+  const n = Math.max(3, Math.round((Math.PI * 2 * radius) / step));
+  const pts: Vec2[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = a0 + (i / n) * Math.PI * 2;
+    pts.push(vec(start.x + Math.cos(a) * radius, start.y + Math.sin(a) * radius));
+  }
+  return pts;
+});
+
+function stampFormation(ctx: GenCtx, def: FormationDef): void {
+  const arranger = FORMATION_ARRANGERS[def.arrange];
+  if (!arranger) {
+    if (!unknownStampWarned.has(`formation:${def.arrange}`)) {
+      unknownStampWarned.add(`formation:${def.arrange}`);
+      console.warn(`[formations] '${def.id}': unknown arranger '${def.arrange}' — skipped`);
+    }
+    return;
+  }
+  // Siting clearance: arcs/rings need their whole radius clear-ish; chains
+  // just need their head sited (the per-piece gates walk the rest).
+  const around = def.arrange === 'arc' || def.arrange === 'ring';
+  const site = def.siteRadius ?? Math.round(around ? def.span[1] * 0.9 : def.span[1] * 0.3);
+  const start = findSpot(ctx, site, def.hard ?? false, 24, false);
+  if (!start) return;
+  const anchors = arranger(ctx, def, start, ctx.rng);
+  if (anchors.length < 2) return;
+  const formationStart = ctx.doodads.length;
+  for (const piece of def.pieces) {
+    const rule = doodadRule(piece.kind);
+    const hard = !!rule.blocksMove;
+    const every = Math.max(1, piece.every ?? 1);
+    for (let i = 0; i < anchors.length; i++) {
+      if (i % every) continue;
+      const n = piece.count ? ctx.rng.int(piece.count[0], piece.count[1]) : 1;
+      for (let k = 0; k < n; k++) {
+        // Draws BEFORE filters (findSpot discipline): a rejected anchor must
+        // not shift the sequence for the rest of the chain.
+        const r = ctx.rng.range(piece.radius[0], piece.radius[1]);
+        const rot = piece.rot ? ctx.rng.range(0, Math.PI * 2) : undefined;
+        let p = anchors[i];
+        if (piece.jitter) {
+          const ang = ctx.rng.range(0, Math.PI * 2);
+          const off = ctx.rng.range(0, piece.jitter);
+          p = vec(p.x + Math.cos(ang) * off, p.y + Math.sin(ang) * off);
+        }
+        if (!clearOf(ctx, p, r, hard)) continue;
+        if (inReserved(ctx, p, r)) continue;
+        if (ctx.walk && walkGated(piece.kind) && !ruleIgnored(ctx, 'walk') && !ctx.walk.isWalkable(p.x, p.y)) continue;
+        if (rule.forbidOn && !ruleIgnored(ctx, 'forbid') && !areaFreeOf(ctx, p, r, rule.forbidOn)) continue;
+        if (isSolid(piece.kind) && overlapsSolidBefore(ctx, p, r, formationStart)) continue;
+        ctx.doodads.push({ pos: p, radius: r, kind: piece.kind, rot });
+      }
+    }
+  }
+}
+
+registerStamp('formation', (ctx, spec) => {
+  const def = spec.formation ? FORMATIONS[spec.formation] : undefined;
+  if (def) stampFormation(ctx, def);
+});
+
+// NEGATIVE SPACE — a clearing: a reserved glade EVERY placement path already
+// flows around (findSpot, blobs, pours, cliffs, ravines, rivers, landmarks,
+// structures all consult reservations). Order in the layout list decides what
+// it suppresses: clearings authored FIRST keep the whole scatter out — open
+// sightlines, breathing room, a fight arena the composition promises. Pure
+// data, no new physics: the reservation IS the feature.
+registerStamp('clearing', (ctx, spec) => {
+  const band = spec.radius ?? [90, 170];
+  const r = ctx.rng.range(band[0], band[1]);
+  const p = findSpot(ctx, r * 0.7, false, 0, false);
+  if (!p) return;
+  ctx.reserved.push({ pos: p, radius: r });
+});
 
 /** BOOT VALIDATION (wired in sim.ts like the biome validators): every layout
  *  entry across the authored data must name a registered stamp, every cluster/
@@ -2987,6 +3271,40 @@ export function validateStamps(sources: { source: string; specs: StampSpec[] }[]
       }
       if (s.kind === 'structure' && s.structure && !STRUCTURES[s.structure]) {
         bad.push(`${source}: structure stamp names unknown structure '${s.structure}'`);
+      }
+      if (s.kind === 'formation' && (!s.formation || !hasFormation(s.formation))) {
+        bad.push(`${source}: formation stamp names unknown formation '${s.formation ?? '(none)'}'`);
+      }
+      if (s.where) {
+        if (!hasGenField(s.where.field)) {
+          bad.push(`${source}: where band names unregistered gen field '${s.where.field}'`);
+        }
+        // Effective bounds (unset = unbounded), so a defaulted bound crossing
+        // an explicit one is caught too.
+        if ((s.where.min ?? 0) >= (s.where.max ?? Infinity)) {
+          bad.push(`${source}: where band is empty (min ${s.where.min} ≥ max ${s.where.max ?? '∞'})`);
+        }
+      }
+    }
+  }
+  for (const f of formationDefs()) {
+    if (!hasFormationArranger(f.arrange)) {
+      bad.push(`formation '${f.id}': unknown arranger '${f.arrange}'`);
+    }
+    if (!(f.span[0] > 0) || !(f.span[1] >= f.span[0])) {
+      bad.push(`formation '${f.id}': degenerate span [${f.span[0]}, ${f.span[1]}]`);
+    }
+    // A zero/negative step never advances an arranger's chain loop — the one
+    // authoring typo that HANGS generation instead of degrading.
+    if (f.step !== undefined && !(f.step > 0)) {
+      bad.push(`formation '${f.id}': step must be > 0 (got ${f.step})`);
+    }
+    for (const p of f.pieces) {
+      if (doodadRule(p.kind).seedPaired) {
+        bad.push(`formation '${f.id}': piece kind '${p.kind}' is seed-paired (only its dedicated stamp may emit it)`);
+      }
+      if (!hasDoodadRule(p.kind)) {
+        bad.push(`formation '${f.id}': piece kind '${p.kind}' has NO registered rule (falls to walkable ground — typo?)`);
       }
     }
   }
@@ -3156,6 +3474,13 @@ function findSpot(
       const forbid = over?.forbidOn ?? rule.forbidOn;
       if (!ruleIgnored(ctx, 'forbid') && forbid && !areaFreeOf(ctx, p, r, forbid)) continue;
     }
+    // STRATA: the running entry's WHERE band (compiled by stamp()) — placed
+    // LAST like the rule gates, so entries without a band keep their exact
+    // rng acceptance sequence.
+    if (ctx.fieldGate) {
+      const v = ctx.fieldGate.sample(p.x, p.y);
+      if (v < ctx.fieldGate.min || v > ctx.fieldGate.max) continue;
+    }
     return p;
   }
   return null;
@@ -3278,12 +3603,28 @@ function cellGuarded(ctx: GenCtx, c: Vec2, cr: number, kind: DoodadKind, hard: b
   return false;
 }
 
-/** Trim a poured mask by cellGuarded, cell by cell. */
+/** The solids whose rule FORBIDS standing in `kind` ground — every path that
+ *  adds `kind` AFTER solids landed (pour, fuse) must flow around them, so the
+ *  forbidOn contract holds regardless of stamp order: a geyser stays dry even
+ *  when the marsh pours its pools afterwards. */
+function forbiddersOf(ctx: GenCtx, kind: DoodadKind): Doodad[] {
+  return ctx.doodads.filter(d => doodadRule(d.kind).forbidOn?.includes(kind));
+}
+
+/** Trim a poured mask by cellGuarded, cell by cell — plus the inverse
+ *  forbidOn cut (the pour laps AROUND a forbid-carrying solid, leaving it a
+ *  dry notch, exactly as the fuse does). */
 function maskGuards(ctx: GenCtx, m: Mask, kind: DoodadKind, hard: boolean): void {
   const cr = m.cell * 1.05;
+  const forbidders = ruleIgnored(ctx, 'forbid') ? [] : forbiddersOf(ctx, kind);
   for (let cy = 0; cy < m.rows; cy++) {
     for (let cx = 0; cx < m.cols; cx++) {
-      if (m.get(cx, cy) && cellGuarded(ctx, m.center(cx, cy), cr, kind, hard)) m.set(cx, cy, false);
+      if (!m.get(cx, cy)) continue;
+      const c = m.center(cx, cy);
+      if (cellGuarded(ctx, c, cr, kind, hard)
+        || forbidders.some(f => dist(c, f.pos) < cr + f.radius)) {
+        m.set(cx, cy, false);
+      }
     }
   }
 }
@@ -3330,9 +3671,15 @@ function pourBody(
   // Depth heart FIRST (under the lattice): the scatter's old center disc,
   // kept so a poured pond still swims past LIQUID_CFG.deepInset at its
   // middle. The core's radius R never pokes past the wobbled rim (mask
-  // radius ≥ body×(1−wob) = 1.05R at the default scale/wobble).
+  // radius ≥ body×(1−wob) = 1.05R at the default scale/wobble). Skipped when
+  // it would flood a forbid-carrying solid (the inverse-forbidOn contract —
+  // the lattice around it is already trimmed by maskGuards).
   if (pour.depthCore && !opts?.shallow) {
-    ctx.doodads.push({ pos: center, radius: Math.min(R, body * 0.85), kind });
+    const coreR = Math.min(R, body * 0.85);
+    const dry = ruleIgnored(ctx, 'forbid') ? [] : forbiddersOf(ctx, kind);
+    if (!dry.some(f => dist(center, f.pos) < coreR + f.radius)) {
+      ctx.doodads.push({ pos: center, radius: coreR, kind });
+    }
   }
   paintLiquid(ctx, null, m, { doodad: kind, ...(opts?.shallow ? { shallow: true } : {}) });
 }
@@ -3376,11 +3723,11 @@ function fuseGroundBodies(ctx: GenCtx): void {
   const cell = GEN_CELL, cr = cell * 1.05;
   for (const [kind, g] of byKind) {
     if (g.discs.length < 2) continue;
-    // INVERSE forbidOn: the fuse is the one pass that adds ground AFTER the
-    // solids landed, so it must honor their forbidOn retroactively — a weld
-    // between two lava bodies must never flood the obsidian that legally sat
-    // in the gap between them (placement-time forbidOn saw only the bodies).
-    const forbidders = ctx.doodads.filter(d => doodadRule(d.kind).forbidOn?.includes(kind));
+    // INVERSE forbidOn: the fuse adds ground AFTER the solids landed, so it
+    // honors their forbidOn retroactively — a weld between two lava bodies
+    // must never flood the obsidian that legally sat in the gap between them
+    // (the same contract maskGuards holds for pours).
+    const forbidders = forbiddersOf(ctx, kind);
     const floods = (c: Vec2): boolean =>
       forbidders.some(f => dist(c, f.pos) < cr + f.radius);
 
@@ -3482,6 +3829,11 @@ function stampBlob(
     const p = vec(center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off);
     if (!clearOf(ctx, p, r, hard)) continue;
     if (inReserved(ctx, p, r)) continue;
+    // The kind's own forbidOn holds for satellites like everywhere else (the
+    // center already passed it via findSpot): a heat shimmer's fringe must
+    // not drift onto the oasis pool. Draw-free — acceptance only.
+    if (doodadRule(kind).forbidOn && !ruleIgnored(ctx, 'forbid')
+      && !areaFreeOf(ctx, p, r, doodadRule(kind).forbidOn!)) continue;
     ctx.doodads.push({ pos: p, radius: r, kind, rot: crot() });
   }
 }
