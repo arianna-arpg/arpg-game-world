@@ -33,6 +33,13 @@ export interface ChargeDef {
    *  (chargeRegen_<id>). Skill taps carry their own max; this is the
    *  bank's floor when nothing on the bar vouches for it. */
   baseCap?: number;
+  /** Where the HUD shows the bank. 'slot' pins the pips ONTO the hotbar
+   *  slot of whichever slotted skill SPENDS this charge (founts ride
+   *  their flask's icon — ammunition reads at the button that fires it),
+   *  and the buff-row pip lane skips it. A 'slot' charge with no slotted
+   *  spender falls back to the buff row: the count is never hidden.
+   *  Unset = the classic buff-row pip. */
+  hud?: 'slot';
 }
 
 export const CHARGE_DEFS: Record<string, ChargeDef> = {
@@ -149,18 +156,21 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   },
 
   // FLASK FOUNTS: scooped orbs bank a sip alongside their instant pour
-  // (ChargeGainSpec on 'orbPickup'); the flask skill drinks the bank as a
-  // restore-over-time. Mute counters — the payoff lives on the drink.
+  // (ChargeGainSpec on 'orbPickup'); the flask skill spends the bank as
+  // AMMUNITION — one drink, one sip, a fixed pour (the catalyst gulps
+  // instead: chargeCost 'all' + perCharge, the scale-with-bank lane).
+  // Mute counters — the payoff lives on the drink. hud 'slot' pins the
+  // sips over the flask's own hotbar icon.
   flask_life: {
-    label: 'Life Fount', color: '#d04848',
+    label: 'Life Fount', color: '#d04848', hud: 'slot',
   },
   flask_mana: {
-    label: 'Mana Fount', color: '#4a78d8',
+    label: 'Mana Fount', color: '#4a78d8', hud: 'slot',
   },
   // The alchemist's catalyst: EVERY orb kind feeds it; drinking it buys a
   // short, stacking transmutation high (the flask-as-buff lane).
   flask_catalyst: {
-    label: 'Catalyst', color: '#c8a848',
+    label: 'Catalyst', color: '#c8a848', hud: 'slot',
   },
 
   // WAKEFLAME (the votive economy): funeral-vigil flames, shed as ORBS

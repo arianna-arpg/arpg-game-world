@@ -1339,6 +1339,25 @@ export class Actor {
     this.syncChargeMods(charge);
   }
 
+  /** The folded CAP for a charge as seen from a skill: the largest of the
+   *  skill's own gain-tap maxes for it (or the registry baseCap when the
+   *  skill carries no tap), raised by the skill-scoped chargeCap stat and
+   *  the chargeCap_<id> family — the same math gainCharge caps by, so the
+   *  HUD's pips and Mireille's refills never lie about the ceiling. */
+  chargeCapFor(charge: string, inst?: SkillInstance): number {
+    let base = 0;
+    if (inst) {
+      for (const cg of instanceChargeGain(inst)) {
+        if (cg.charge === charge) base = Math.max(base, cg.max);
+      }
+    }
+    if (base <= 0) base = CHARGE_DEFS[charge]?.baseCap ?? 0;
+    return Math.max(0, Math.round(base + this.sheet.get('chargeCap',
+      inst ? skillContextTags(inst.def) : undefined,
+      inst ? instanceMods(inst) : undefined)
+      + this.sheet.get('chargeCap_' + charge)));
+  }
+
   /** Spend charges (floored at zero) and re-sync per-charge mods. */
   spendCharge(charge: string, amount: number): void {
     const cur = this.charges.get(charge) ?? 0;

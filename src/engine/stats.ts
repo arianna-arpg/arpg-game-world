@@ -39,6 +39,10 @@ export type SkillTag =
   // so they never socket into ground that only ever blows once. Granted
   // by the pulse-grafting gem the way Faultfinder grants 'fissure'.
   | 'pulse'
+  // 'flask' marks the fount family (orb-fed drinks) so tag-filtered
+  // investment reaches ONLY the drinks — "20% increased Restoration with
+  // flasks" is an ordinary modifier, never a bespoke hook.
+  | 'flask'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -407,6 +411,15 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Fraction of OVERHEAL (healing past full) hardened into an absorption
    *  shield on the target — the support player's answer to topped bars. */
   overheal:       { label: 'Overheal to Ward', base: 0, min: 0 },
+  /** Multiplier on restore-over-time STREAM totals (the fount pours) —
+   *  the drink's own potency stat, tag-filtered like damage so "flask"
+   *  investment stays a modifier. Deliberately separate from healPower:
+   *  the healer's output stat must not double-dip their own sustain. */
+  restorePower:   { label: 'Restoration', base: 1, min: 0 },
+  /** Fraction of the RESTORED POOL'S MAXIMUM added to every restore
+   *  stream's total (0.03 = +3% of max per drink) — the percent lever
+   *  passives/affixes grant so flat founts keep pace with big pools. */
+  restorePctMax:  { label: 'Restored % of Maximum', base: 0, min: 0, percent: true },
   /** Victim-side chance to SHRUG an incoming ailment outright — queried
    *  with the status's element tag, so Purity of Fire resists ignites
    *  specifically while Purity of Elements resists the lot. */
@@ -1215,6 +1228,8 @@ const STAT_BLURBS: Record<string, string> = {
   lightningRes: 'Lightning damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
   chaosRes: 'Chaos damage mitigated. Soft-capped — overcap is a buffer against resistance shred.',
   aoeRadius: 'Widens every area effect you create.',
+  restorePower: 'Scales every fount pour and restore-over-time stream you drink.',
+  restorePctMax: 'Your fount drinks add this fraction of the pool\'s maximum to their pour.',
   effectDuration: 'Lengthens your timed effects — buffs, ailments you inflict, lingering zones.',
   cooldownRecovery: 'Speeds the return of every cooldown.',
   minionDamage: 'Scales the damage everything you summon deals.',

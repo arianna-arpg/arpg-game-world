@@ -346,6 +346,12 @@ const nodes: PassiveNode[] = [
   { id: "cl_wake_p0", name: "Votive Path", description: "+1 maximum Wakeflame; 10% increased orb shed chance", kind: "small", x: 5100, y: 4470, mods: [mod("chargeCap_wakeflame", "flat", 1), mod("orbShedRate", "increased", 0.1)], links: ["executioners_rhythm_n"] },
   { id: "cl_wake_p1", name: "Candle Beads", description: "Kills have 6% chance to shed a Wakeflame orb; scooping a Wakeflame sparks 6 mana back (Votive Spark)", kind: "small", x: 5240, y: 4680, mods: [mod("orbOnKill_wakeflame", "flat", 0.06), mod("proc_votive_spark", "flat", 1)], links: ["cl_wake_p0"] },
   { id: "cl_wake_hurt", name: "Bruised Votives", description: "Blows that land on you have an 8% chance to shake a Wakeflame orb loose — every wound feeds the wake", kind: "small", x: 4960, y: 4650, mods: [mod("orbOnHurt_wakeflame", "flat", 0.08)], links: ["cl_wake_p0"] },
+  // The alchemist's spur: fount investment off the orb wing. Capacity is
+  // the chargeCap_<id> family; the notable is the PERCENT lever — flat
+  // founts keep pace with big pools through restorePctMax/restorePower,
+  // never through count-scaled pours (the sip economy stays detached).
+  { id: "cl_fount_p0", name: "Deep Founts", description: "+1 maximum Life Fount and Mana Fount", kind: "small", x: 4820, y: 4780, mods: [mod("chargeCap_flask_life", "flat", 1), mod("chargeCap_flask_mana", "flat", 1)], links: ["cl_wake_hurt"] },
+  { id: "cl_fount_n", name: "Bottomless Draught", description: "Fount drinks restore an extra 3% of the pool's maximum; 20% increased Restoration", kind: "notable", x: 4700, y: 4920, mods: [mod("restorePctMax", "flat", 0.03), mod("restorePower", "increased", 0.2)], links: ["cl_fount_p0"] },
   { id: "cl_wake_p2", name: "Keeper's Patience", description: "Gain 1 Wakeflame every 10 seconds", kind: "small", x: 5090, y: 4880, mods: [mod("chargeRegen_wakeflame", "flat", 1)], links: ["cl_wake_p1"] },
   { id: "cl_wake_cortege", name: "Cortege", description: "For each Wakeflame you hold: minions deal 2% increased damage", kind: "notable", x: 5410, y: 4560, mods: [gaugeMod("minionDamage", "increased", 0.02, "charge:wakeflame")], links: ["cl_wake_p1"] },
   { id: "cl_wake_tallow", name: "Tallow Ward", description: "For each Wakeflame you hold: 3% increased armor and 1% less damage taken", kind: "notable", x: 5400, y: 4840, mods: [gaugeMod("armor", "increased", 0.03, "charge:wakeflame"), gaugeMod("damageTaken", "more", -0.01, "charge:wakeflame")], links: ["cl_wake_p1"] },

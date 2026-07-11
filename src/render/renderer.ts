@@ -5,12 +5,12 @@
 
 import { clamp, dist, type Vec2 } from '../core/math';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, skillContextTags, SKILL_RARITIES } from '../engine/skills';
+import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, skillContextTags, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { STATUS_DEFS } from '../engine/status';
 import { STANCE_PLANT_TIME, shellArcFactor, type Actor } from '../engine/actor';
-import { chargeColor, chargeLabel } from '../engine/charges';
+import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
@@ -3750,6 +3750,33 @@ export class Renderer {
             ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
           }
         }
+        // FOUNT PIPS (ChargeDef.hud 'slot'): a spender's bank rides its
+        // own slot — one registry-tinted disc per banked sip, hollow up
+        // to the folded cap, so "how many drinks are left" reads at the
+        // button that spends them. The buff-row pip lane skips these.
+        // An empty bank already greys the whole slot via skillUsable.
+        {
+          const cc = instanceChargeCost(inst);
+          if (cc && CHARGE_DEFS[cc.charge]?.hud === 'slot') {
+            const held = p.charges.get(cc.charge) ?? 0;
+            const cap = Math.max(held, p.chargeCapFor(cc.charge, inst));
+            const py = def.useCharges ? by + 12 : by + 7;
+            for (let c = 0; c < Math.min(cap, 8); c++) {
+              ctx.beginPath();
+              ctx.arc(x + 9 + c * 8, py, 3, 0, Math.PI * 2);
+              if (c < held) {
+                ctx.fillStyle = chargeColor(cc.charge);
+                ctx.fill();
+              } else {
+                ctx.fillStyle = 'rgba(10,10,16,0.75)';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(200,200,220,0.55)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+              }
+            }
+          }
+        }
         // BRIM strip (ChannelSpec.brim / a Gathered Casting conversion):
         // the persistent gauge lives on the slot's bottom edge — the
         // banked scream visible between presses, gold at the brim. Gated
@@ -3869,9 +3896,14 @@ export class Renderer {
       }
       bpx += 14;
     }
-    // Charge pips (combo resources) next to the buffs, registry-tinted
+    // Charge pips (combo resources) next to the buffs, registry-tinted.
+    // 'slot'-homed charges (flask founts) draw on their SPENDER's hotbar
+    // slot instead — skipped here only while such a spender is slotted,
+    // so an unslotted fount's bank still reads somewhere.
     for (const [name, count] of p.charges) {
       if (count <= 0) continue;
+      if (CHARGE_DEFS[name]?.hud === 'slot'
+        && p.skills.some(s => s && instanceChargeCost(s)?.charge === name)) continue;
       ctx.fillStyle = chargeColor(name);
       ctx.beginPath();
       ctx.arc(bpx + 5, buffY + 5, 5, 0, Math.PI * 2);

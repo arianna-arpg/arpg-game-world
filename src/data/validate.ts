@@ -20,6 +20,7 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunement
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { validatePassiveChoices } from './passiveChoices';
 import { STAT_DEFS } from '../engine/stats';
+import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, type StampSpec, type StructureRoll } from './zones';
 import { TILESETS } from './tilesets';
@@ -638,6 +639,21 @@ export function validateContent(): void {
   for (const s of Object.values(SKILLS)) checkSummonContract(`skill ${s.id}`, s.delivery);
   for (const sup of Object.values(SUPPORTS)) checkSummonContract(`support ${sup.id} (summon graft)`, sup.summon);
 
+  // A 'slot'-homed charge (ChargeDef.hud) needs at least one catalog
+  // SPENDER — a skill or support chargeCost — to pin its pips on;
+  // otherwise it only ever falls back to the buff row, which is almost
+  // certainly an authoring slip (the lever asked for a slot that can't exist).
+  {
+    const spent = new Set<string>();
+    for (const s of Object.values(SKILLS)) if (s.chargeCost) spent.add(s.chargeCost.charge);
+    for (const sup of Object.values(SUPPORTS)) if (sup.chargeCost) spent.add(sup.chargeCost.charge);
+    for (const [cid, cdef] of Object.entries(CHARGE_DEFS)) {
+      if (cdef.hud === 'slot' && !spent.has(cid)) {
+        warn(`charge ${cid}: hud 'slot' but nothing in the catalog spends it — the pips have no slot to ride`);
+      }
+    }
+  }
+
   // The META/ORDER id net: all of these are typo'd-id DEAD BUTTONS at
   // runtime — useMetaSkill silently filters a missing payload, an unknown
   // command kind never drives a step, a minionCast order no-ops, a combo
@@ -680,6 +696,17 @@ export function validateContent(): void {
     }
     for (const cid of s.comboChain?.skills ?? []) {
       if (!SKILLS[cid]) warn(`skill ${s.id}: combo step '${cid}' is not a catalog skill`);
+    }
+    // FOUNT ECONOMY honesty: perCharge multiplies by charges CONSUMED, so
+    // an innate numeric spend of at most 1 makes it a silent ×1 — the sip
+    // lane and the gulp lane got mixed. (A socketed 'all' spender would
+    // override the innate cost — if that's the design, drop the innate.)
+    if (s.chargeCost && s.chargeCost.amount !== 'all' && s.chargeCost.amount <= 1) {
+      for (const fx of s.effects) {
+        if ((fx.type === 'restoreOverTime' || fx.type === 'ward') && fx.perCharge) {
+          warn(`skill ${s.id}: ${fx.type}.perCharge with a spend of ${s.chargeCost.amount} — a silent ×1 (use 'all' to scale with the bank, or drop perCharge for the flat sip)`);
+        }
+      }
     }
     for (const fx of s.effects) {
       if (fx.type === 'commandMinions' && fx.command && !hasCommandKind(fx.command)) {

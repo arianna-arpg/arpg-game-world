@@ -5933,45 +5933,50 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // --- The flask family (founts) --------------------------------------------
   // Orbs you scoop both pour instantly AND bank a sip in the flask's fount;
-  // the drink spends the bank as a restore-over-time. Learned flasks also
-  // carry a passive drop chance (equipMods) — the alchemist's loop.
+  // the founts are AMMUNITION: every drink spends exactly ONE sip and pours
+  // the same fixed draught (chargeCost amount 1 — the PoE flask economy),
+  // deepening as the gem levels (amountPerLevel) and open to percent-of-max
+  // investment (amountPctMax / restorePctMax / restorePower). The catalyst
+  // keeps the OTHER philosophy on purpose — chargeCost 'all' + perCharge,
+  // the scale-with-bank lane any skill can still choose. Learned flasks
+  // also carry a passive drop chance (equipMods) — the alchemist's loop.
 
   life_flask: {
     id: 'life_flask', name: 'Life Flask',
-    description: 'A fount that BANKS every life orb you scoop (up to 5 sips). Drink to pour the whole bank back as healing over a few seconds. Carried on the bar, it shakes life orbs loose from your hits.',
-    tags: ['instant', 'buff', 'duration'], color: '#d04848',
+    description: 'A fount of THREE sips — every life orb you scoop banks one. Drinking spends a single sip and pours a fixed draught of healing over a few seconds, deeper as the skill levels. Carried on the bar, it shakes life orbs loose from your hits.',
+    tags: ['instant', 'buff', 'duration', 'flask'], color: '#d04848',
     manaCost: 0, cooldown: 2, useTime: 0,
-    chargeGain: [{ charge: 'flask_life', amount: 1, max: 5, on: 'orbPickup', orbKind: 'life' }],
-    chargeCost: { charge: 'flask_life', amount: 'all', minimum: 1 },
+    chargeGain: [{ charge: 'flask_life', amount: 1, max: 3, on: 'orbPickup', orbKind: 'life' }],
+    chargeCost: { charge: 'flask_life', amount: 1 },
     equipMods: [mod('orbOnHit_life', 'flat', 0.05)],
     delivery: { type: 'self' },
-    effects: [{ type: 'restoreOverTime', resource: 'life', amount: 16, duration: 3, perCharge: true }],
+    effects: [{ type: 'restoreOverTime', resource: 'life', amount: 16, amountPerLevel: 4, duration: 3 }],
     thresholds: [
-      { level: 12, label: 'Deeper draught', mods: [mod('chargeCap', 'flat', 2)] },
+      { level: 12, label: 'Deeper draught', mods: [mod('chargeCap', 'flat', 1)] },
     ],
     leveling: { perLevel: [mod('effectDuration', 'increased', -0.04)] },
   },
 
   mana_flask: {
     id: 'mana_flask', name: 'Mana Flask',
-    description: 'A fount that BANKS every mana orb you scoop (up to 5 sips). Drink to pour the bank back as mana over a few seconds. Carried on the bar, it shakes mana orbs loose from your hits.',
-    tags: ['instant', 'buff', 'duration'], color: '#4a78d8',
+    description: 'A fount of THREE sips — every mana orb you scoop banks one. Drinking spends a single sip and pours a fixed draught of mana over a few seconds, deeper as the skill levels. Carried on the bar, it shakes mana orbs loose from your hits.',
+    tags: ['instant', 'buff', 'duration', 'flask'], color: '#4a78d8',
     manaCost: 0, cooldown: 2, useTime: 0,
-    chargeGain: [{ charge: 'flask_mana', amount: 1, max: 5, on: 'orbPickup', orbKind: 'mana' }],
-    chargeCost: { charge: 'flask_mana', amount: 'all', minimum: 1 },
+    chargeGain: [{ charge: 'flask_mana', amount: 1, max: 3, on: 'orbPickup', orbKind: 'mana' }],
+    chargeCost: { charge: 'flask_mana', amount: 1 },
     equipMods: [mod('orbOnHit_mana', 'flat', 0.05)],
     delivery: { type: 'self' },
-    effects: [{ type: 'restoreOverTime', resource: 'mana', amount: 13, duration: 3, perCharge: true }],
+    effects: [{ type: 'restoreOverTime', resource: 'mana', amount: 13, amountPerLevel: 3, duration: 3 }],
     thresholds: [
-      { level: 12, label: 'Deeper draught', mods: [mod('chargeCap', 'flat', 2)] },
+      { level: 12, label: 'Deeper draught', mods: [mod('chargeCap', 'flat', 1)] },
     ],
     leveling: { perLevel: [mod('effectDuration', 'increased', -0.04)] },
   },
 
   catalyst_flask: {
     id: 'catalyst_flask', name: 'Catalyst Flask',
-    description: 'The alchemist\'s vice: EVERY orb kind feeds the catalyst. Drink to transmute the bank — life and mana trickle together and the reaction leaves you burning brighter for a spell.',
-    tags: ['instant', 'buff', 'duration'], color: '#c8a848',
+    description: 'The alchemist\'s vice: EVERY orb kind feeds the catalyst, and drinking it GULPS the whole bank — a fuller catalyst trickles life and mana longer, and the reaction leaves you burning brighter for a spell.',
+    tags: ['instant', 'buff', 'duration', 'flask'], color: '#c8a848',
     manaCost: 0, cooldown: 5, useTime: 0,
     chargeGain: [{ charge: 'flask_catalyst', amount: 1, max: 6, on: 'orbPickup' }],
     chargeCost: { charge: 'flask_catalyst', amount: 'all', minimum: 2 },

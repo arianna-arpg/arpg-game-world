@@ -8428,7 +8428,19 @@ export class World {
       this.meta.knownSkills.set(sid, inst);
       gifted = true;
     }
-    if (gifted) { did = true; parts.push('the flasks'); }
+    if (gifted) {
+      did = true; parts.push('the flasks');
+      // The gift lands READY: each flask takes the first EMPTY bar slot
+      // (never displacing a chosen skill) so the founts read on the bar —
+      // and their equipMods start shaking orbs loose — the moment she
+      // hands them over. The equip-mod sync fingerprints the bar itself.
+      for (const sid of MIREILLE_GIFT_SKILLS) {
+        const inst = this.meta.knownSkills.get(sid);
+        if (!inst || p.skills.includes(inst)) continue;
+        const free = p.skills.findIndex(s => s === null);
+        if (free >= 0) p.skills[free] = inst;
+      }
+    }
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && p.life < p.maxLife()) {
       p.life = p.maxLife(); did = true; parts.push('life');
     }
@@ -16170,18 +16182,34 @@ export class World {
     }
   }
 
-  /** Open a RESTORE STREAM (restoreOverTime — the flask pour): total ×
-   *  charges when perCharge, spread across the duration (× the drinker's
-   *  effectDuration: same total, longer sip). Streams stack. */
+  /** Open a RESTORE STREAM (restoreOverTime — the flask pour): the base
+   *  pour deepens with the gem (amountPerLevel × effective level) and cuts
+   *  from the pool's ceiling (amountPctMax + the caster's restorePctMax
+   *  stat, × the TARGET's max — the drinker's pool pays the percent), all
+   *  scaled by restorePower; × charges when perCharge (the gulp lane),
+   *  spread across the duration (× the drinker's effectDuration: same
+   *  total, longer sip). Streams stack. */
   private startRestoreStream(
     target: Actor, caster: Actor, inst: SkillInstance,
-    fx: { resource: 'life' | 'mana' | 'es'; amount: number; duration: number; perCharge?: boolean },
+    fx: {
+      resource: 'life' | 'mana' | 'es'; amount: number; duration: number;
+      amountPerLevel?: number; amountPctMax?: number; perCharge?: boolean;
+    },
     chargesSpent: number,
   ): void {
-    const total = fx.amount * (fx.perCharge ? Math.max(1, chargesSpent) : 1);
+    const tags = skillContextTags(inst.def);
+    const extra = instanceMods(inst);
+    const maxPool = fx.resource === 'life' ? target.maxLife()
+      : fx.resource === 'mana' ? target.availableMaxMana() : target.maxEs();
+    const pct = (fx.amountPctMax ?? 0) + caster.sheet.get('restorePctMax', tags, extra);
+    const base = fx.amount
+      + (fx.amountPerLevel ?? 0) * Math.max(0, effectiveSkillLevel(inst) - 1)
+      + pct * maxPool;
+    const total = base * (fx.perCharge ? Math.max(1, chargesSpent) : 1)
+      * caster.sheet.get('restorePower', tags, extra);
     if (total <= 0) return;
     const dur = Math.max(0.2, fx.duration
-      * caster.sheet.get('effectDuration', skillContextTags(inst.def), instanceMods(inst)));
+      * caster.sheet.get('effectDuration', tags, extra));
     target.restoreStreams.push({
       resource: fx.resource, perSec: total / dur, remaining: total,
     });
@@ -23502,10 +23530,13 @@ export class World {
       && (a.pools.get(def.pool.id) ?? 0) < (def.pool.min ?? 1)) return false;
     // Unmet PREREQUISITE gates grey the slot ("not ready").
     if (!a.gatesMet(inst)) return false;
-    // A hard SPENDER graft (Embargo) greys until the bank is there.
+    // Any hard charge economy greys until the bank can pay — an innate
+    // cost (an empty flask fount, a chargeless Galvanic Reserve) exactly
+    // as a socketed SPENDER graft (Embargo). Mirrors canUse: the press
+    // would refuse, so the bar must say so first.
     {
       const cc = instanceChargeCost(inst);
-      if (cc && !cc.optional && !inst.def.chargeCost) {
+      if (cc && !cc.optional) {
         const have = a.charges.get(cc.charge) ?? 0;
         const need = cc.amount === 'all' ? (cc.minimum ?? 1) : Math.max(cc.amount, cc.minimum ?? 0);
         if (have < need) return false;

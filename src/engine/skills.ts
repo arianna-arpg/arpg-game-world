@@ -2714,18 +2714,31 @@ export interface GuardSurgeEffect {
   ratio: number;
 }
 
-/** Restores a resource OVER TIME — the flask drink. `perCharge` scales the
- *  total with the charges the use consumed (chargeCost 'all': a fuller
- *  fount pours longer), so one entry serves sips and gulps alike. Streams
- *  stack; life flows through healBy (seared wounds slow the flask too). */
+/** Restores a resource OVER TIME — the flask drink. Two spend PHILOSOPHIES
+ *  share this one entry, chosen by the host's chargeCost:
+ *   - amount: 1 (the fount sip): every drink pours the SAME fixed draught
+ *     and the bank is ammunition — detached from count, PoE-style;
+ *   - amount: 'all' + perCharge (the gulp): a fuller fount pours longer —
+ *     the scale-with-bank lever for skills that WANT count to matter.
+ *  Scaling levers, all composable: amountPerLevel grows the pour with the
+ *  gem, amountPctMax cuts it from the pool's ceiling, and the drinker's
+ *  restorePower / restorePctMax stats reach every stream (tag-filtered —
+ *  'flask' investment is an ordinary modifier). Streams stack; life flows
+ *  through healBy (seared wounds slow the flask too). */
 export interface RestoreOverTimeEffect {
   type: 'restoreOverTime';
   resource: 'life' | 'mana' | 'es';
   /** Total restored across the stream (× perCharge count when set). */
   amount: number;
+  /** Flat growth per EFFECTIVE skill level past 1 (over-cap levels count —
+   *  investment gems deepen the draught like any other skill). */
+  amountPerLevel?: number;
+  /** Fraction of the drinker's MAXIMUM pool added to the total (0.05 =
+   *  +5% of max per drink) — the percent lever, per skill. */
+  amountPctMax?: number;
   /** Seconds the stream runs (× effectDuration). */
   duration: number;
-  /** Multiply `amount` by the charges this use consumed. */
+  /** Multiply the total by the charges this use consumed. */
   perCharge?: boolean;
 }
 
