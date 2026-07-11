@@ -1087,11 +1087,11 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 3, cooldown: 0, useTime: 0,
     castMode: 'channel',
     channel: { interval: 0.2, move: 'slowed', moveFactor: 0.7, trackAim: true },
-    // The random SECTOR is a lever set: forward-biased 180° here (reined in
+    // The random SECTOR is a lever set: forward-biased 90° here (reined in
     // from 240 — the flurry stays a fighter, not a sprinkler). Data or
     // supports move it: Wild Abandon rounds it toward a full circle,
     // Measured Blade focuses it, offsetDeg can lock it aside or behind.
-    aim: { random: { offsetDeg: 0, spreadDeg: 180 } },
+    aim: { random: { offsetDeg: 0, spreadDeg: 90 } },
     baseDamage: { physical: [6, 10] },
     delivery: { type: 'cone', range: 150, arcDeg: 12 },
     effects: [
