@@ -137,3 +137,12 @@ BUILDS['barrage_probe_l12'] = {
   skills: [{ id: 'unstable_barrage', level: gemLevelAt(12) }],
   passives: [],
 };
+// The sequel/contagion probe: Pyroclast Bolt's completion-cast (SequelSpec)
+// blooming Pyre Nova, whose contagion chains through a pack — the whole
+// two-skills-in-sequence composition end-to-end.
+BUILDS['pyroclast_probe_l12'] = {
+  id: 'pyroclast_probe_l12', label: 'Pyroclast sequel/contagion probe @ L12',
+  classId: 'magician', level: 12,
+  skills: [{ id: 'pyroclast_bolt', level: gemLevelAt(12) }],
+  passives: [],
+};

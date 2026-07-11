@@ -161,6 +161,17 @@ add({
   stop: 'duration',
   notes: 'Exercises ChannelSpec.intervalJitter + VarianceSpec.aoe deterministically (crash/regression net).',
 });
+add({
+  id: 'fortune_probe_pyroclast',
+  label: 'Sequel/contagion probe — pyroclast chain vs a pack',
+  build: 'pyroclast_probe_l12',
+  pilot: { kind: 'caster' },
+  parityLevel: 12,
+  waves: [{ monsters: [{ id: 'zombie', count: 4 }], repeatEvery: 10 }],
+  duration: 30,
+  stop: 'duration',
+  notes: 'SequelSpec completion-cast (bolt→nova at the death point) + ContagionSpec chain through the pack; kill_rate is the signal.',
+});
 
 // --------------------------------------------------------------- matchups --
 
@@ -241,10 +252,10 @@ export const SUITES: Record<string, string[]> = {
   duels: Object.keys(SCENARIOS).filter(id => id.startsWith('duel_')),
   /** The minion-support forwarding A/B pairs (bare vs forwarded gems). */
   minions: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_probe_')),
-  /** Curated texture matchups (starter archetypes × confirmed texture seats). */
-  matchups: Object.keys(SCENARIOS).filter(id => id.startsWith('matchup_')),
   /** The fortune-fabric probes (rollTop gates, riders, spread, variance). */
   fortune: Object.keys(SCENARIOS).filter(id => id.startsWith('fortune_probe_')),
+  /** Curated texture matchups (starter archetypes × confirmed texture seats). */
+  matchups: Object.keys(SCENARIOS).filter(id => id.startsWith('matchup_')),
   /** Everything registered. */
   all: [], // filled below
 };

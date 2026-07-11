@@ -413,6 +413,52 @@ export const SKILLS: Record<string, SkillDef> = {
 
   // ======================= Fire (environmental) ============================
 
+  // PYRE NOVA — the CONTAGION showcase: a fire burst whose victims may
+  // ERUPT IN KIND after a beat, each hop at half the odds of the last,
+  // three generations at most (ContagionSpec — the lineage's seen-set
+  // keeps the wave traveling outward). Castable alone; Pyroclast Bolt
+  // carries it as a sequel — the two-skills-in-sequence composition.
+  pyre_nova: {
+    id: 'pyre_nova', name: 'Pyre Nova',
+    description: 'A burst of flame around you. Enemies caught may ERUPT in kind after a beat — and eruptions beget eruptions, each less likely than the last.',
+    tags: ['spell', 'fire', 'aoe'], color: '#ff7a3a',
+    manaCost: 11, cooldown: 3, useTime: 0.7,
+    baseDamage: { fire: [9, 15] },
+    contagion: { chance: 0.35, decay: 0.5, maxGenerations: 3, damageScale: 0.75 },
+    delivery: { type: 'nova', radius: 110 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.3, magnitude: 0.3 },
+    ],
+    leveling: { perLevel: [mod('damage', 'increased', 0.11, ['fire'])] },
+    requirements: { intelligence: 18 },
+    ai: { range: 130, weight: 3 },
+  },
+
+  // PYROCLAST BOLT — the SEQUEL showcase: a heavy ember whose flight's
+  // END is itself a cast — Pyre Nova blooms at the death point, impact or
+  // spent range alike (SequelSpec.on picks which; supports socketed into
+  // EITHER def keep reading their own skill). Two skills in one, in
+  // sequence, each still fully itself.
+  pyroclast_bolt: {
+    id: 'pyroclast_bolt', name: 'Pyroclast Bolt',
+    description: 'Loose a heavy ember. Where its flight ENDS — a body struck or its reach spent — a Pyre Nova blooms; and what the nova starts, its contagion may finish.',
+    tags: ['spell', 'fire', 'projectile', 'aoe'], color: '#ff8a4a',
+    manaCost: 13, cooldown: 0, useTime: 0.75,
+    baseDamage: { fire: [11, 19] },
+    delivery: {
+      type: 'projectile', speed: 300, radius: 9, range: 420,
+      sequel: { skillId: 'pyre_nova', on: 'any', damageScale: 0.9 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.25, magnitude: 0.3 },
+    ],
+    leveling: { perLevel: [mod('damage', 'increased', 0.11, ['fire'])] },
+    requirements: { intelligence: 22 },
+    ai: { range: 400, weight: 3, keepDistance: 240 },
+  },
+
   // The Demon Storm's falling rock — an environmental hazard the Demon-Invasion
   // overlay rains on in-radius zones (cast by a synthetic caster, like the storm
   // bolt). Not a player gem; it lives here so the world can field it by id.

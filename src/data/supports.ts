@@ -96,6 +96,25 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('damage', 'increased', 0.05, ['aoe'])],
     weight: 5,
   },
+  parting_gift: {
+    id: 'parting_gift', name: 'Parting Gift',
+    description: 'Where this skill\'s projectiles END their flight — struck home or spent — a FROST NOVA blooms at the death point. The going-away present.',
+    color: '#a8e4ff', requiresTags: ['projectile'],
+    sequel: { skillId: 'frost_nova', damageScale: 0.7 },
+    mods: [mod('manaCost', 'more', 0.2)],
+    perLevel: [mod('damage', 'increased', 0.05, ['cold'])],
+    weight: 5, minDropLevel: 8,
+  },
+  epidemic: {
+    id: 'epidemic', name: 'Epidemic',
+    description: 'Enemies struck by this skill may RE-RELEASE it from themselves after a beat — each hop at half the odds of the last, three hops at most. The crowd becomes the caster.',
+    color: '#b8e06a', requiresTags: ['aoe'],
+    excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    contagion: { chance: 0.25, decay: 0.5, damageScale: 0.6 },
+    mods: [mod('manaCost', 'more', 0.3)],
+    perLevel: [mod('damage', 'increased', 0.04, ['aoe'])],
+    weight: 4, minDropLevel: 12,
+  },
   // The Spell Power / Spell Damage split, as a pair of gems: umbral_power
   // adds chaos to EVERYTHING this skill is (untagged mod — the universal
   // lane); umbral_focus adds MORE, but only when the skill is chaos-tagged
