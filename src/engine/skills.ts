@@ -514,6 +514,80 @@ export function instanceVariance(inst: SkillInstance): VarianceSpec | undefined 
   return inst.def.variance;
 }
 
+/** How deep completion-casts may nest: an authored A→B→A sequel cycle
+ *  bottoms out here, whatever the defs say. */
+export const SEQUEL_CFG = { maxDepth: 3 } as const;
+
+/** A SEQUEL — the completion-cast: when the host flight COMPLETES, the
+ *  named catalog skill casts AT THE COMPLETION POINT (not the caster),
+ *  aimed onward along the flight, at the host's effective level — two
+ *  skills in one, in sequence, each still fully itself (the payload's own
+ *  def keeps its supports, procs, contagion, everything). */
+export interface SequelSpec {
+  /** The catalog skill cast at the death point. Centered deliveries (nova,
+   *  instant) bloom exactly there; payloads with a castRange (grounds)
+   *  still clamp against the CASTER — give payload defs generous reach. */
+  skillId: string;
+  /** Which ending counts: 'hit' = the flight died ON A BODY (a guarded
+   *  stop counts — it struck someone); 'expire' = spent range, walls,
+   *  arrivals — every bodiless end. Default 'any': both. The lever the
+   *  variants hang from. */
+  on?: 'hit' | 'expire' | 'any';
+  /** Roll per completion (default 1). */
+  chance?: number;
+  /** Damage multiplier on the payload (default 1; the host flight's own
+   *  mult stacks in). */
+  damageScale?: number;
+}
+
+/** The sequel riding an instance: a socketed support's graft wins over
+ *  the delivery's own (the trail rule). */
+export function instanceSequel(inst: SkillInstance): SequelSpec | undefined {
+  for (const s of hostSockets(inst)) if (s.def.sequel) return s.def.sequel;
+  return inst.def.delivery.type === 'projectile' ? inst.def.delivery.sequel : undefined;
+}
+
+/** CONTAGION pacing defaults — the modular thresholds every spec omits to. */
+export const CONTAGION_CFG = {
+  /** Hard generation lid, whatever a def asks for. */
+  maxGenerations: 3,
+  /** Chance multiplier per generation — the exponentially-reducing rate. */
+  decay: 0.5,
+  /** Seconds between infection and release — the honest, readable ripple. */
+  delay: 0.3,
+  /** Per-ACTOR release throttle (seconds), whatever the lineage count. */
+  actorIcd: 0.6,
+} as const;
+
+/** CONTAGION — struck victims may become the next CAST SITE: after a
+ *  telegraphed beat the skill (or a named payload) RELEASES from the
+ *  victim, attributed to the original caster, and those hits may infect
+ *  onward — chance × decay^generation, a hard generation lid, a per-actor
+ *  throttle, and a lineage seen-set so the wave always travels OUTWARD.
+ *  The exponential decay is the safety AND the fantasy. */
+export interface ContagionSpec {
+  /** What the victim releases (default: THE HOST SKILL ITSELF — the nova
+   *  that begets novas). */
+  skillId?: string;
+  /** Infection chance per struck victim at generation 0. */
+  chance: number;
+  /** Chance multiplier per generation (default CONTAGION_CFG.decay). */
+  decay?: number;
+  /** Generation lid (default — and capped by — CONTAGION_CFG.maxGenerations). */
+  maxGenerations?: number;
+  /** Seconds from infection to release (default CONTAGION_CFG.delay). */
+  delay?: number;
+  /** Damage multiplier on releases (default 1). */
+  damageScale?: number;
+}
+
+/** The contagion riding an instance: a socketed support's graft wins over
+ *  the skill's own (the trail rule). */
+export function instanceContagion(inst: SkillInstance): ContagionSpec | undefined {
+  for (const s of hostSockets(inst)) if (s.def.contagion) return s.def.contagion;
+  return inst.def.contagion;
+}
+
 /**
  * A ground CASCADE: the placement repeats at DISPLACED points — rippling
  * out from the impact like a skipped stone. Directions: 'axis' alternates
@@ -845,6 +919,11 @@ export interface ProjectileDelivery {
    *  composables: sizeOver breathes the bloom, durationBySpeed feeds its
    *  linger from the flight's dying speed (see DropZoneSpec). */
   endZone?: DropZoneSpec & { seek?: { speed: number; range?: number } };
+  /** The flight's COMPLETION is itself a CAST (see SequelSpec): the named
+   *  skill fires at the death point — impact, spent range, or both, per
+   *  the spec's `on` lever. Supports graft the same via SupportDef.sequel
+   *  (a socketed graft wins). */
+  sequel?: SequelSpec;
   /** The RETURN is CATCHABLE (Gyreblade): a homeward projectile arriving
    *  at its caster banks charges instead of just dying — fuel for a
    *  follow-up that hurls the caught blades back out. */
@@ -3036,6 +3115,11 @@ export interface SkillDef {
    *  SupportDef.variance; a socketed graft wins). */
   variance?: VarianceSpec;
 
+  /** An INNATE contagion: this skill's struck victims may RE-RELEASE it
+   *  (or a named payload) from themselves — see ContagionSpec. Supports
+   *  graft the same via SupportDef.contagion; a socketed graft wins. */
+  contagion?: ContagionSpec;
+
   /** Movement factor while this skill's CAST BAR runs (0 = rooted, the
    *  default). The castMobility stat ADDS to it — mobile attacks by data,
    *  walking casters by investment (Fleetfoot). Channels use ChannelSpec. */
@@ -3450,6 +3534,12 @@ export interface SupportDef {
    *  wandering footprint on any area skill) — the host re-rolls its own
    *  size every cast. WINS over the skill's innate variance. */
   variance?: VarianceSpec;
+  /** A SEQUEL this support grafts (Parting Gift): the host's flights cast
+   *  the named skill where they END. WINS over the delivery's own. */
+  sequel?: SequelSpec;
+  /** A CONTAGION this support grafts (Epidemic): the host's victims may
+   *  re-release it from themselves. WINS over the skill's own. */
+  contagion?: ContagionSpec;
   /** A PENDULUM this support grafts onto lingering ground zones (the
    *  Metronome gem): the facing swings out-and-back — the exact back-and-
    *  forth stroke Reaver's Sweep retired when it learned the single pass. */
@@ -3572,6 +3662,13 @@ export interface SkillInstance {
     trigReadyAt?: number;
     trigAccum?: number;
     trigDepth?: number;
+    /** SEQUEL chain depth (SequelSpec): how many completion-casts deep
+     *  this instance was minted — the authored-cycle lid. */
+    seqDepth?: number;
+    /** CONTAGION lineage (ContagionSpec): this release-cast's generation
+     *  and the actors the chain has already infected (the shared set rides
+     *  the whole lineage — the wave only travels outward). */
+    contagion?: { gen: number; seen: Set<number> };
   };
 }
 
@@ -3636,7 +3733,7 @@ const MINION_RIDABLE_FIELD_LIST = [
   'trail', 'fissureTrail', 'targeting', 'turret', 'cascade', 'pulse',
   'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'zoneSizeOver',
   'cadence', 'pendulum', 'echo', 'summon', 'fuse', 'gather', 'shellGraft',
-  'variance',
+  'variance', 'sequel', 'contagion',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every

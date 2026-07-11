@@ -23,8 +23,8 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceVariance, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
-  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
+  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardSpec,
@@ -16971,6 +16971,44 @@ export class World {
           });
         }
       }
+      // CONTAGION (SkillDef/SupportDef.contagion): the struck victim may
+      // become the next CAST SITE — after a telegraphed beat the skill (or
+      // a named payload) RELEASES from the victim, attributed to the
+      // original caster, at chance × decay^generation under a hard
+      // generation lid, a per-actor throttle, and the lineage's seen-set.
+      // A killing blow still infects: plagues ride corpses. The
+      // exponential decay is the safety AND the fantasy.
+      {
+        const cg = instanceContagion(inst);
+        if (cg && dealt > 0 && !caster.dead) {
+          const chain = inst.state?.contagion;
+          const gen = chain?.gen ?? 0;
+          const lid = Math.min(CONTAGION_CFG.maxGenerations,
+            cg.maxGenerations ?? CONTAGION_CFG.maxGenerations);
+          const sid = cg.skillId ?? inst.def.id;
+          if (gen < lid && SKILLS[sid]
+            && this.time >= target.contagionReadyAt
+            && !chain?.seen.has(target.id)
+            && chance(cg.chance * Math.pow(cg.decay ?? CONTAGION_CFG.decay, gen))) {
+            target.contagionReadyAt = this.time + CONTAGION_CFG.actorIcd;
+            const seen = chain?.seen ?? new Set<number>();
+            seen.add(target.id);
+            const delay = cg.delay ?? CONTAGION_CFG.delay;
+            this.pendingContagions.push({
+              when: this.time + delay, caster, skillId: sid,
+              level: effectiveSkillLevel(inst), host: target,
+              at: vec(target.pos.x, target.pos.y), gen: gen + 1, seen,
+              damageScale: cg.damageScale ?? 1,
+            });
+            // The honest telegraph: an edge ring for the whole delay.
+            this.flashes.push({
+              pos: vec(target.pos.x, target.pos.y), radius: target.radius + 14,
+              color: SKILLS[sid].color, life: delay, maxLife: delay, edgeFrac: 0.9,
+            });
+            this.text(vec(target.pos.x, target.pos.y - 24), 'contagion!', SKILLS[sid].color, 11);
+          }
+        }
+      }
       // CARRIER STRAIN (SupportDef.spreadOnHit): the hit itself is a
       // VECTOR — a chance to hand ONE random affliction from the victim
       // to its nearest untouched neighbor. Top-level hits only.
@@ -18254,7 +18292,10 @@ export class World {
         }
       } else {
         for (let i = 0; i < n; i++) {
+          // targetInfo anchors CENTERED deliveries (novas, instants) at
+          // the proc's site — without it they would bloom on the caster.
           this.executeSkill(caster, makeSkillInstance(skill, level), origin, {
+            targetInfo: { pos: vec(origin.x, origin.y) },
             dmgMult: mult, noCooldown: true, noRepeat: true,
             noFollowUp: true, keepFacing: true,
           });
@@ -18307,6 +18348,36 @@ export class World {
           if (a.life <= 0 && !a.dead) this.kill(a);
         }
       }
+    }
+  }
+
+  /** Scheduled contagion releases (ContagionSpec) awaiting their
+   *  telegraphed beat — resolved by updatePendingContagions. */
+  private pendingContagions: {
+    when: number; caster: Actor; skillId: string; level: number;
+    host: Actor; at: Vec2; gen: number; seen: Set<number>; damageScale: number;
+  }[] = [];
+
+  /** Resolve due contagion releases: the payload casts FROM the infected
+   *  body (its live position — or where it fell), attributed to the
+   *  original caster, carrying the lineage's generation + seen-set so its
+   *  own hits may infect onward under the decaying odds. */
+  private updatePendingContagions(): void {
+    for (let i = this.pendingContagions.length - 1; i >= 0; i--) {
+      const c = this.pendingContagions[i];
+      if (this.time < c.when) continue;
+      this.pendingContagions.splice(i, 1);
+      if (c.caster.dead) continue;
+      const sdef = SKILLS[c.skillId];
+      if (!sdef) continue;
+      const at = !c.host.dead ? vec(c.host.pos.x, c.host.pos.y) : c.at;
+      const minted = makeSkillInstance(sdef, c.level);
+      (minted.state ??= {}).contagion = { gen: c.gen, seen: c.seen };
+      this.executeSkill(c.caster, minted, vec(at.x, at.y), {
+        targetInfo: { pos: vec(at.x, at.y), actor: !c.host.dead ? c.host : undefined },
+        dmgMult: c.damageScale,
+        noCooldown: true, noRepeat: true, noFollowUp: true, keepFacing: true,
+      });
     }
   }
 
@@ -20132,6 +20203,7 @@ export class World {
 
     this.updateTempGrounds(dt);
     this.updatePendingBursts();
+    this.updatePendingContagions();
     this.updateTerrainEffects(dt);
     this.updateHeat(dt);
     this.updateShrines();
@@ -23800,6 +23872,10 @@ export class World {
         || (p.maxAge !== undefined && p.age >= p.maxAge)
         || (!tethered && !this.arena.boundless
             && (p.pos.x < 0 || p.pos.x > this.arena.w || p.pos.y < 0 || p.pos.y > this.arena.h));
+      // Did a fatal end land ON A BODY (pierce spent, guarded stop) rather
+      // than spend itself (range, walls, arrivals)? The SequelSpec
+      // 'hit'|'expire' lever reads this at the death payout below.
+      let diedOnBody = false;
       // Spent projectiles that return get a second life instead of dying.
       if (dead && this.enterReturn(p)) dead = false;
       // Homeward arrival — CATCHABLE returns (Gyreblade) bank their charge
@@ -24085,6 +24161,7 @@ export class World {
               .reduce((s, v) => s + (v ?? 0), 0);
             if (guardRaw > 0 && this.tryGuardBlock(enemy, p.caster, p.pos, guardRaw)) {
               dead = true;
+              diedOnBody = true; // a guarded stop still struck someone
               break;
             }
             p.hits.set(enemy.id, p.rehit ? p.age + p.rehit : Infinity);
@@ -24231,6 +24308,7 @@ export class World {
             } else {
               dead = true;
             }
+            if (dead) diedOnBody = true; // the flight ENDED on this body
             break;
           }
         }
@@ -24336,6 +24414,30 @@ export class World {
               sizeOver: ezo,
               radius0: ezo ? ezRadius : undefined,
               flatBonus: p.flat,
+            });
+          }
+        }
+        // SEQUEL (SequelSpec): the completion is itself a CAST — the
+        // payload skill fires from the death point, aimed onward along
+        // the flight, at the host's effective level. The 'on' lever picks
+        // which ending counts; seqDepth lids authored cycles; dissolved
+        // flights (dome-eaten) leave nothing, as everywhere.
+        {
+          const sq = instanceSequel(p.inst);
+          const seqDepth = p.inst.state?.seqDepth ?? 0;
+          if (sq && !p.dissolved && !p.caster.dead && SKILLS[sq.skillId]
+            && seqDepth < SEQUEL_CFG.maxDepth
+            && (sq.on ?? 'any') !== (diedOnBody ? 'expire' : 'hit')
+            && chance(sq.chance ?? 1)) {
+            const sdef = SKILLS[sq.skillId];
+            const minted = makeSkillInstance(sdef, effectiveSkillLevel(p.inst));
+            (minted.state ??= {}).seqDepth = seqDepth + 1;
+            this.text(vec(p.pos.x, p.pos.y - 12), sdef.name + '!', sdef.color, 11);
+            this.executeSkill(p.caster, minted, vec(
+              p.pos.x + Math.cos(p.dir) * 60, p.pos.y + Math.sin(p.dir) * 60), {
+              targetInfo: { pos: vec(p.pos.x, p.pos.y) },
+              dmgMult: (sq.damageScale ?? 1) * p.mult,
+              noCooldown: true, noRepeat: true, noFollowUp: true, keepFacing: true,
             });
           }
         }

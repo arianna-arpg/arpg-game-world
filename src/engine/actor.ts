@@ -870,6 +870,9 @@ export class Actor {
   volatile?: { skillId: string; chance: number; icd?: number; dmgMult?: number };
   /** The volatile answer's next-ready clock (world seconds). */
   volatileReadyAt = 0;
+  /** CONTAGION release throttle (ContagionSpec): this body may host at
+   *  most one release per CONTAGION_CFG.actorIcd, whatever the lineages. */
+  contagionReadyAt = 0;
   /** The volatile payload instance, minted lazily at the first answer. */
   volatileInst?: SkillInstance;
   /** TERRAIN CONFINEMENT (derived from habitat): a disc this body can never
