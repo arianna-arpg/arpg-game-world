@@ -887,8 +887,8 @@ export function validateContent(): void {
     }
   }
   if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
-}
 
   // CHOICE NODES: deals resolve, pools are unambiguous, character-unique
   // groups aren't oversubscribed (the sweep lives beside the registry).
   validatePassiveChoices(warn, PASSIVE_NODES);
+}
