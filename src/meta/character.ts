@@ -10,6 +10,8 @@
 // ---------------------------------------------------------------------------
 
 import { CLASSES } from '../data/classes';
+import { PASSIVE_NODES } from '../data/passives';
+import { sanitizeChoices } from '../data/passiveChoices';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
@@ -55,6 +57,10 @@ export interface CharacterSave {
   xp: number; xpNeeded: number;
   skillPoints: number; passivePoints: number;
   allocated: string[];
+  /** Choice-node picks (data/passiveChoices.ts), keyed by node id. Optional →
+   *  pre-choice saves load unchanged; rebuilt registry-tolerantly (a renamed
+   *  group/option drops its pick, exactly like a removed node id). */
+  choices?: Record<string, string[]>;
   /** Vocations GRANTED to this character + unspent vocation points. Optional →
    *  pre-vocation saves still load (`?? []` / `?? 0`). Allocated vocation-tree
    *  nodes ride the ordinary `allocated` list; a removed VocationDef's ids are
@@ -123,6 +129,7 @@ export function serializeCharacter(world: World): CharacterSave {
     xp: m.xp, xpNeeded: m.xpNeeded,
     skillPoints: m.skillPoints, passivePoints: m.passivePoints,
     allocated: [...m.allocated],
+    choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     vocations: [...m.vocations],
     vocationPoints: m.vocationPoints,
     knownSkills: [...m.knownSkills.values()].map(saveSkill),
@@ -227,6 +234,7 @@ export function applySavedCharacter(world: World, save: CharacterSave): boolean 
     xp: save.xp, xpNeeded: save.xpNeeded,
     skillPoints: save.skillPoints, passivePoints: save.passivePoints,
     allocated: new Set(save.allocated),
+    choices: sanitizeChoices(save.choices, PASSIVE_NODES),
     vocations: [...(save.vocations ?? [])],
     vocationPoints: save.vocationPoints ?? 0,
     knownSkills, inventory, skillInv, offerings: save.offerings,

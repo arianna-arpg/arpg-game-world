@@ -53,6 +53,9 @@ export interface MercSnapshot {
   level: number;
   baseAttrs: Attributes;
   allocated: string[];
+  /** Choice-node picks (data/passiveChoices.ts), keyed by node id. Optional →
+   *  pre-choice rosters load unchanged; sanitized + budget-trimmed on field. */
+  choices?: Record<string, string[]>;
   vocations?: string[];
   knownSkills: MercSavedSkill[];
   bar: (string | null)[];
@@ -201,6 +204,7 @@ export function snapshotBuild(
   classId: string,
   baseAttrs: Attributes,
   allocated: Iterable<string>,
+  choices: Record<string, string[]>,
   vocations: string[],
   knownSkills: Iterable<SkillInstance>,
   bar: (string | null)[],
@@ -219,6 +223,7 @@ export function snapshotBuild(
     level,
     baseAttrs: { ...baseAttrs },
     allocated: [...allocated],
+    choices: Object.fromEntries(Object.entries(choices).map(([k, v]) => [k, [...v]])),
     vocations: [...vocations],
     knownSkills: skills,
     bar: [...bar],

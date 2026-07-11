@@ -120,6 +120,31 @@
     .tree-node.available { cursor: pointer; }
     .tree-node.available:hover { stroke: #ffd700; stroke-width: 3; }
 
+    /* Choice-node popup (data/passiveChoices.ts deals, panels.openChoicePopup) */
+    .choice-popup {
+      position: fixed; z-index: 60; width: 300px; max-height: 62vh; overflow-y: auto;
+      background: #17151f; border: 1px solid #6a54a0; border-radius: 6px;
+      padding: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+      font-size: 12px; color: #d8d4c8;
+    }
+    .choice-popup .choice-head {
+      color: #cbb8f0; font-weight: bold; margin: 0 2px 7px;
+      border-bottom: 1px solid #35304a; padding-bottom: 5px;
+    }
+    .choice-popup .choice-count { float: right; color: #8a8678; font-weight: normal; font-size: 11px; }
+    .choice-popup .choice-opt {
+      display: block; width: 100%; text-align: left; margin: 3px 0;
+      background: #221e30; border: 1px solid #3c3556; border-radius: 4px;
+      padding: 6px 8px; color: inherit; cursor: pointer; font: inherit;
+    }
+    .choice-popup .choice-opt:hover:not(:disabled) { border-color: #cbb8f0; background: #2b2540; }
+    .choice-popup .choice-opt .opt-name { color: #e6d8ff; font-weight: bold; display: block; }
+    .choice-popup .choice-opt .opt-desc { display: block; color: #b8b4a8; margin-top: 1px; }
+    .choice-popup .choice-opt .opt-note { display: block; color: #8a8678; font-size: 11px; margin-top: 3px; }
+    .choice-popup .choice-opt.chosen { border-color: #8a68c8; background: #2d2444; }
+    .choice-popup .choice-opt.chosen .opt-note { color: #b8a2e8; }
+    .choice-popup .choice-opt.locked { opacity: 0.55; cursor: default; }
+
     /* World map */
     #world-map {
       top: 50%; left: 50%; transform: translate(-50%, -50%);

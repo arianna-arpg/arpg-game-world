@@ -17,7 +17,7 @@
 import { PASSIVE_NODES, type PassiveNode } from './passives';
 
 const RADII: Record<PassiveNode['kind'], number> =
-  { start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15 };
+  { start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15 };
 
 const PAD = 10;       // breathing room required between any two node edges
 // The tree lives in a 6000×6000 space (the 6× expansion — room to grow for
@@ -30,7 +30,8 @@ const MARGIN = 12;    // keep nodes this far inside the edge
  *  vocation mini-tree. Overlaps among purely-legacy nodes are pre-existing
  *  and deliberately not flagged. */
 function isNew(id: string): boolean {
-  return id.startsWith('cl_') || id.startsWith('voc_') || /_(pc|kb|df|pd)\d+$/.test(id);
+  return id.startsWith('cl_') || id.startsWith('voc_') || id.startsWith('cho_')
+    || /_(pc|kb|df|pd)\d+$/.test(id);
 }
 
 /** Warn on any overlapping or out-of-bounds NEW passive node. Cheap O(n^2);

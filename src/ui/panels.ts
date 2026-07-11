@@ -37,6 +37,7 @@ import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
+import { PASSIVE_CHOICE_CFG, choiceGroupOf, choiceLockReason, choiceOptionOf, choicePickLimit, chosenOf, nodeChoiceOpen } from '../data/passiveChoices';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
 import { BIOMES, biomeOf } from '../world/biomes';
 import { dimensionDef } from '../world/dimensions';
@@ -194,6 +195,10 @@ export class UI {
    *  slot / another item to swap with). Uid-addressed so it survives the
    *  panel's innerHTML re-renders; self-heals if the item vanishes. */
   private heldItemUid: number | null = null;
+  /** The floating CHOICE-NODE popup (appended to body — it must ride above
+   *  the SVG and survive nothing: every refresh/pan/close dismisses it). */
+  private choicePopup: HTMLDivElement | null = null;
+  private choicePopupDismiss: ((ev: PointerEvent) => void) | null = null;
   treeOpen = false;
   mapOpen = false;
   caravanOpen = false;
@@ -2185,6 +2190,7 @@ export class UI {
 
   toggleTree(): void {
     this.treeOpen = !this.treeOpen;
+    this.closeChoicePopup(); // a popup never outlives its panel
     this.passiveTree.classList.toggle('hidden', !this.treeOpen);
     if (this.treeOpen) {
       this.centerTreeOnStart();
@@ -2221,6 +2227,8 @@ export class UI {
   }
 
   refreshTree(): void {
+    // A refresh rebuilds the SVG under the popup's feet — never orphan it.
+    this.closeChoicePopup();
     if (!this.treeOpen) return;
     const world = this.getWorld();
     const m = world.meta;
@@ -2230,7 +2238,7 @@ export class UI {
     this.computeTreeBox();
 
     const RADII: Record<PassiveNode['kind'], number> = {
-      start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15,
+      start: 13, small: 9, notable: 14, keystone: 17, attr: 11, vocation: 15, choice: 15,
     };
     // VOCATION nodes exist for every defined vocation, but only the ones this
     // character has EARNED render (they share the star's central space).
@@ -2282,22 +2290,26 @@ export class UI {
       // everything else spends normal passive points. Same adjacency walk —
       // the ONE rule lives in nodeAllocatable (the node tooltip reads it too).
       const available = this.nodeAllocatable(node, m);
-      const fill = allocated ? (voc?.color ?? '#c8a84b')
+      const fill = allocated ? (voc?.color ?? (node.kind === 'choice' ? '#8a68c8' : '#c8a84b'))
         : node.kind === 'keystone' ? '#5a2a3a'
         : node.kind === 'notable' ? '#3a3a5a'
         : node.kind === 'attr' ? '#2a4a3a'
         : node.kind === 'vocation' ? '#241f33'
+        : node.kind === 'choice' ? '#33244a'
         : '#26262e';
       const stroke = node.kind === 'vocation' ? (voc?.color ?? '#ffe9a0')
-        : allocated ? '#ffe9a0'
-        : available ? '#d8d4c8'
+        // An allocated choice node with picks still open keeps its "come
+        // back" shimmer: the available-stroke over the allocated fill.
+        : allocated ? (available ? '#e6d8ff' : '#ffe9a0')
+        : available ? (node.kind === 'choice' ? '#cbb8f0' : '#d8d4c8')
         : voc && !gateOpen ? '#3a3648'
         : '#4a4a5e';
       // Node info rides the SHARED tooltip (data-tip → passiveNodeTooltip):
       // the old inline SVG <title> was slow, unstyled, and invisible to the
       // pad pointer's synthetic hover.
       circles += `<circle cx="${node.x}" cy="${node.y}" r="${RADII[node.kind]}"
-        fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' ? 2.5 : 1.5}"
+        fill="${fill}" stroke="${stroke}" stroke-width="${node.kind === 'keystone' || node.kind === 'notable' || node.kind === 'vocation' || node.kind === 'choice' ? 2.5 : 1.5}"
+        ${node.kind === 'choice' ? 'stroke-dasharray="4 3"' : ''}
         data-node="${node.id}" data-tip="pnode" class="tree-node ${available ? 'available' : ''} ${allocated ? 'allocated' : ''}"/>`;
     }
 
@@ -2330,6 +2342,10 @@ export class UI {
     if (!DEV.passiveTreeEditor) {
       this.passiveTree.querySelectorAll<SVGCircleElement>('.tree-node.available').forEach(el => {
         el.addEventListener('click', () => {
+          const node = PASSIVE_NODES[el.dataset.node!];
+          // CHOICE NODES deal their options in a popup instead of allocating
+          // blind — the pick itself is dispatched from the popup's buttons.
+          if (node?.choice) { this.openChoicePopup(node, el); return; }
           world.requestMeta({ t: 'allocate', nodeId: el.dataset.node! });
           this.refreshTree();
           this.refreshCharSheet();
@@ -2365,6 +2381,7 @@ export class UI {
     const svg = this.passiveTree.querySelector<SVGSVGElement>('#tree-svg');
     if (!svg) return;
     const apply = (): void => {
+      this.closeChoicePopup(); // pan/zoom slides the node out from under it
       svg.setAttribute('viewBox', this.treeViewBox());
       const lbl = this.passiveTree.querySelector<HTMLElement>('[data-tz="reset"]');
       if (lbl) lbl.textContent = `${Math.round(this.treeZoom * 100)}%`;
@@ -2391,13 +2408,97 @@ export class UI {
 
   /** The ONE allocation-availability rule, shared by the tree render and the
    *  node tooltip: unallocated, adjacent to an allocated node, and payable
-   *  from the right pool (vocation nodes also need their gate open). */
+   *  from the right pool (vocation nodes also need their gate open).
+   *  CHOICE NODES stay "available" while picks remain open — clicking deals
+   *  the popup again; world.allocateNode holds the same line. */
   private nodeAllocatable(node: PassiveNode, m: World['meta']): boolean {
-    if (m.allocated.has(node.id)) return false;
-    if (!PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))) return false;
+    const already = m.allocated.has(node.id);
+    if (already && !(node.choice && nodeChoiceOpen(node, m.choices))) return false;
+    if (!already && !PASSIVE_ADJACENCY[node.id].some(n => m.allocated.has(n))) return false;
+    const cost = node.choice ? PASSIVE_CHOICE_CFG.pickCost : 1;
     return node.vocation !== undefined
-      ? m.vocationPoints > 0 && vocationGateOpen(m.allocated, node.vocation)
-      : m.passivePoints > 0;
+      ? m.vocationPoints >= cost && vocationGateOpen(m.allocated, node.vocation)
+      : m.passivePoints >= cost;
+  }
+
+  /** Dismiss the choice popup (idempotent). Every path that could slide the
+   *  node out from under it — refresh, pan/zoom, panel close — calls this. */
+  private closeChoicePopup(): void {
+    if (this.choicePopupDismiss) {
+      window.removeEventListener('pointerdown', this.choicePopupDismiss, true);
+      this.choicePopupDismiss = null;
+    }
+    this.choicePopup?.remove();
+    this.choicePopup = null;
+  }
+
+  /** Deal a CHOICE NODE's options in a small popup above the node. Each
+   *  option button dispatches the ordinary allocate intent with its optionId;
+   *  legality labels come from the SAME rule the engine enforces
+   *  (choiceLockReason), so the popup can never promise what the host would
+   *  refuse. Multi-pick nodes re-open until their deal is spent. */
+  private openChoicePopup(node: PassiveNode, el: SVGCircleElement): void {
+    this.closeChoicePopup();
+    const world = this.getWorld();
+    const m = world.meta;
+    const group = choiceGroupOf(node);
+    if (!group) return;
+    const chosen = chosenOf(m.choices, node.id);
+    const limit = choicePickLimit(node);
+    const pool = node.vocation !== undefined ? m.vocationPoints : m.passivePoints;
+    const canPay = pool >= PASSIVE_CHOICE_CFG.pickCost;
+
+    const pop = document.createElement('div');
+    pop.className = 'choice-popup';
+    pop.innerHTML = `
+      <div class="choice-head">${group.name}
+        <span class="choice-count">${chosen.length}/${limit} chosen${group.unique === 'character' ? ' · once per character' : ''}</span></div>
+      ${group.options.map(o => {
+        const taken = chosen.includes(o.id);
+        const why = taken ? null : choiceLockReason(node, o.id, m.choices, PASSIVE_NODES);
+        const locked = taken || why !== null || !canPay;
+        const note = taken ? '✓ chosen' : why !== null ? `✕ ${why}` : !canPay ? 'no points' : '';
+        return `<button class="choice-opt${taken ? ' chosen' : ''}${locked ? ' locked' : ''}"
+          data-opt="${o.id}" ${locked ? 'disabled' : ''}>
+          <span class="opt-name">${o.name}</span>
+          <span class="opt-desc">${o.description}</span>
+          ${note ? `<span class="opt-note">${note}</span>` : ''}
+        </button>`;
+      }).join('')}`;
+    document.body.appendChild(pop);
+    // Fixed-position above the node's screen rect, clamped to the viewport.
+    const r = el.getBoundingClientRect();
+    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pw - 8, r.left + r.width / 2 - pw / 2))}px`;
+    pop.style.top = `${Math.max(8, r.top - ph - 10)}px`;
+
+    pop.querySelectorAll<HTMLButtonElement>('.choice-opt:not(.locked)').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        world.requestMeta({ t: 'allocate', nodeId: node.id, optionId: btn.dataset.opt! });
+        const willRemain = chosenOf(m.choices, node.id).length < limit;
+        this.refreshTree();       // closes this popup + repaints allocation
+        this.refreshCharSheet();
+        // Multi-pick deals re-open on the freshly rendered circle so a
+        // litany's three verses are three clicks, not three hunts.
+        if (willRemain && nodeChoiceOpen(node, m.choices) && this.nodeAllocatable(node, m)) {
+          const el2 = this.passiveTree.querySelector<SVGCircleElement>(`.tree-node[data-node="${node.id}"]`);
+          if (el2) this.openChoicePopup(node, el2);
+        }
+      });
+    });
+    // Outside pointerdown dismisses (capture phase; armed next tick so the
+    // opening click itself doesn't). Persistent until closed — a first click
+    // INSIDE the popup must not disarm it.
+    const dismiss = (ev: PointerEvent): void => {
+      if (this.choicePopup === pop && !pop.contains(ev.target as Node)) this.closeChoicePopup();
+    };
+    setTimeout(() => {
+      if (this.choicePopup !== pop) return; // already superseded/closed
+      window.addEventListener('pointerdown', dismiss, true);
+      this.choicePopupDismiss = dismiss;
+    }, 0);
+    this.choicePopup = pop;
   }
 
   /** Tooltip for a passive-tree node — the same shared styled box every panel
@@ -2411,13 +2512,37 @@ export class UI {
     const KIND_LABELS: Record<PassiveNode['kind'], string> = {
       start: 'class start', small: 'passive', notable: 'notable',
       keystone: 'keystone', attr: 'attribute', vocation: 'vocation',
+      choice: 'choice node',
     };
-    const attrText = node.attributes
+    let attrText = node.attributes
       ? '<br>' + Object.entries(node.attributes).map(([a, v]) =>
           `+${v} ${ATTRIBUTES[a as AttributeId].label}`).join(', ')
       : '';
-    let meta = m.allocated.has(node.id) ? `${KIND_LABELS[node.kind]} — allocated`
-      : this.nodeAllocatable(node, m) ? `${KIND_LABELS[node.kind]} — click to allocate`
+    if (node.attributesPct) {
+      attrText += '<br>' + Object.entries(node.attributesPct).map(([a, v]) =>
+        `${Math.round(v * 100)}% increased ${ATTRIBUTES[a as AttributeId].label}`).join(', ');
+    }
+    // CHOICE NODES: the deal (group, pick count, uniqueness) + what this
+    // character has already picked here, each with its granted line.
+    let choiceText = '';
+    const group = choiceGroupOf(node);
+    if (node.choice && group) {
+      const limit = choicePickLimit(node);
+      const chosen = chosenOf(m.choices, node.id);
+      choiceText = `<br><span style="color:#b8a2e8">${group.name}</span>`
+        + ` — pick ${limit} of ${group.options.length}`
+        + (group.unique === 'character' ? ' (each option once per character)' : '');
+      for (const oid of chosen) {
+        const opt = choiceOptionOf(node, oid);
+        if (opt) choiceText += `<br><span style="color:#e6d8ff">✓ ${opt.name}</span> — ${opt.description}`;
+      }
+    }
+    const openPicks = node.choice && group
+      ? ` — ${chosenOf(m.choices, node.id).length}/${choicePickLimit(node)} picked`
+      : '';
+    let meta = m.allocated.has(node.id)
+      ? `${KIND_LABELS[node.kind]} — allocated${openPicks}${this.nodeAllocatable(node, m) ? ' — click to choose' : ''}`
+      : this.nodeAllocatable(node, m) ? `${KIND_LABELS[node.kind]} — click to ${node.choice ? 'choose' : 'allocate'}`
       : KIND_LABELS[node.kind];
     if (node.vocation !== undefined) {
       const voc = VOCATIONS[node.vocation];
@@ -2427,7 +2552,7 @@ export class UI {
         + (vocationGateOpen(m.allocated, node.vocation) ? ''
           : ` — LOCKED until ${gateName ?? 'its class start node'} is allocated`);
     }
-    return { title: node.name, description: node.description + attrText, meta };
+    return { title: node.name, description: node.description + attrText + choiceText, meta };
   }
 
   // -------------------------------------------------------------- world map
@@ -3846,6 +3971,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     this.vendorMenu.style.cursor = '';
     this.vendorMenu.classList.add('hidden');
     this.treeOpen = false;
+    this.closeChoicePopup();
     this.mapOpen = false;
     this.caravanOpen = false;
     this.mercOpen = false;

@@ -8,8 +8,9 @@
 import { gaugeMod, linkMod, mod, type Attributes, type Modifier } from '../engine/stats';
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
+import type { PassiveChoiceRef } from './passiveChoices';
 
-export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation';
+export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 
 export interface PassiveNode {
   id: string;
@@ -19,8 +20,17 @@ export interface PassiveNode {
   x: number;
   y: number;
   attributes?: Partial<Attributes>;
+  /** PERCENT attribute grants (+0.05 = "5% increased Fortitude") — the
+   *  multiplicative lever beside the flat one. Folded in recalcSeat AFTER
+   *  every flat source (base + tree + gear), so it scales the whole pool. */
+  attributesPct?: Partial<Attributes>;
   mods?: Modifier[];
   links: string[];
+  /** CHOICE NODE: this node deals options from a data/passiveChoices.ts group
+   *  instead of (or on top of) its own grants. Each pick spends a point and is
+   *  permanent; the popup, allocation legality, recalc folding, saves and the
+   *  wire all resolve through that one registry. */
+  choice?: PassiveChoiceRef;
   /** Set on VOCATION mini-tree nodes (the owning VocationDef id). These render
    *  and allocate ONLY for a character who has EARNED that vocation, and they
    *  spend vocation points — see world.allocateNode / panels.refreshTree. */
@@ -368,6 +378,22 @@ const nodes: PassiveNode[] = [
   // ignite; these notables are the tree's way to buy the chances back.
   { id: "exsanguinate", name: "Exsanguinate", description: "Attacks have 20% chance to Bleed; 20% increased physical ailment magnitude", kind: "notable", x: 3480, y: 1560, mods: [mod("apply_bleed", "flat", 0.2, ["attack"]), mod("statusMagnitude", "increased", 0.2, ["physical"])], links: ["swb_s3"] },
   { id: "kindling_doctrine", name: "Kindling Doctrine", description: "Spells have 15% chance to Ignite; 20% increased fire ailment magnitude", kind: "notable", x: 1230, y: 3300, mods: [mod("apply_burn", "flat", 0.15, ["spell"]), mod("statusMagnitude", "increased", 0.2, ["fire"])], links: ["sor_s3"] },
+  // --- CHOICE NODES (data/passiveChoices.ts): each deals its group's options
+  // in a popup; a pick spends a point and locks permanently. The three shapes
+  // demonstrated here: single-pick attribute callings (flat AND the percent
+  // temper), character-unique DOCTRINES shared across several nodes (the
+  // mastery rule — taking Stone at the armor cluster spends it at the block
+  // cluster too), and the god-tree pair (pick 3 of 8 verses; 1 of 4 refrains).
+  { id: "cho_calling", name: "The Calling", description: "Choose one calling — Might, Bulwark, or Cunning. The choice is permanent; the paths not taken lock.", kind: "choice", x: 4032, y: 2916, choice: { group: "attr_calling" }, links: ["attr_all"] },
+  { id: "cho_temper", name: "The Tempering", description: "Temper one attribute — a permanent percent increase that scales everything the build grants it.", kind: "choice", x: 5610, y: 3648, choice: { group: "attr_temper" }, links: ["cl_attr_c"] },
+  { id: "cho_bulwark1", name: "Bulwark Doctrine", description: "Commit to one doctrine of the bulwark. Each doctrine may be sworn only once per character, at any node that deals it.", kind: "choice", x: 3162, y: 4362, choice: { group: "bulwark_doctrines" }, links: ["cl_armor_c"] },
+  { id: "cho_bulwark2", name: "Bulwark Doctrine", description: "Commit to one doctrine of the bulwark. Each doctrine may be sworn only once per character, at any node that deals it.", kind: "choice", x: 2196, y: 4788, choice: { group: "bulwark_doctrines" }, links: ["cl_block_c"] },
+  { id: "cho_war1", name: "War Doctrine", description: "Commit to one doctrine of war. Each doctrine may be sworn only once per character, at any node that deals it.", kind: "choice", x: 4062, y: 4644, choice: { group: "war_doctrines" }, links: ["cl_melee_c"] },
+  { id: "cho_war2", name: "War Doctrine", description: "Commit to one doctrine of war. Each doctrine may be sworn only once per character, at any node that deals it.", kind: "choice", x: 4590, y: 4536, choice: { group: "war_doctrines" }, links: ["cl_phys_c"] },
+  { id: "cho_arcane1", name: "Arcane Doctrine", description: "Commit to one doctrine of the arcane. Each doctrine may be sworn only once per character, at any node that deals it.", kind: "choice", x: 1206, y: 4602, choice: { group: "arcane_doctrines" }, links: ["cl_spell_c"] },
+  { id: "cho_arcane2", name: "Arcane Doctrine", description: "Commit to one doctrine of the arcane. Each doctrine may be sworn only once per character, at any node that deals it.", kind: "choice", x: 1998, y: 4356, choice: { group: "arcane_doctrines" }, links: ["cl_es_c"] },
+  { id: "cho_wake_litany", name: "The Candle Litany", description: "Recite three of the litany's eight verses — each verse costs a point; five stay unsaid forever.", kind: "choice", x: 4890, y: 5090, choice: { group: "wake_litany" }, links: ["cl_wake_p2"] },
+  { id: "cho_wake_paean", name: "The Paean", description: "Sing one of four refrains over the wake. The others fall silent.", kind: "choice", x: 5730, y: 5170, choice: { group: "wake_paean" }, links: ["cl_wake_hours"] },
 ];
 
 // --- VOCATION MINI-TREES -------------------------------------------------------

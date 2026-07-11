@@ -665,8 +665,11 @@ function ensureValidated(): void {
     for (const line of a.lines) {
       if (isAttributeId(line.stat)) {
         // Attribute grants route through Actor.setAttributes (recalcSeat
-        // splits them out of the sheet) — only FLAT has meaning there.
-        if (line.kind !== 'flat') warn(`affix '${a.id}': attribute '${line.stat}' supports only flat lines (got '${line.kind}')`);
+        // splits them out of the sheet) — FLAT adds points, INCREASED feeds
+        // the percent phase. Other kinds have no meaning there.
+        if (line.kind !== 'flat' && line.kind !== 'increased') {
+          warn(`affix '${a.id}': attribute '${line.stat}' supports flat/increased lines only (got '${line.kind}')`);
+        }
       } else if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
         warn(`affix '${a.id}' references unknown stat '${line.stat}'`);
       }
@@ -681,7 +684,9 @@ function ensureValidated(): void {
     if (!ITEM_BASES[u.baseId]) warn(`unique '${u.id}' pinned to unknown base '${u.baseId}'`);
     for (const line of u.lines) {
       if (isAttributeId(line.stat)) {
-        if (line.kind !== 'flat') warn(`unique '${u.id}': attribute '${line.stat}' supports only flat lines (got '${line.kind}')`);
+        if (line.kind !== 'flat' && line.kind !== 'increased') {
+          warn(`unique '${u.id}': attribute '${line.stat}' supports flat/increased lines only (got '${line.kind}')`);
+        }
       } else if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
         warn(`unique '${u.id}' references unknown stat '${line.stat}'`);
       }

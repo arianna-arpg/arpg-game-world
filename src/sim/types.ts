@@ -65,6 +65,11 @@ export interface BuildSpec {
    *  (hypotheticals are allowed; the warning keeps reports honest). */
   passives?: string[];
   /** Worn gear recipes. */
+  /** Choice-node picks, keyed by node id (the node must also be in `passives`).
+   *  Audited against data/passiveChoices.ts with the LIVE legality rule —
+   *  unknown groups/options and over-limit picks warn and drop; extra picks
+   *  on multi-pick nodes cost budget exactly like live allocation. */
+  choices?: Record<string, string[]>;
   gear?: GearSpec[];
   /** Seed for the gear rolls (default: derived from the episode seed). */
   gearSeed?: number;

@@ -26,6 +26,8 @@ import { BOSS_BAR_XP_MIN, emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
+import { PASSIVE_NODES } from '../data/passives';
+import { sanitizeChoices } from '../data/passiveChoices';
 import { makeSkillInstance, type SkillInstance, type SupportInstance, type SkillRarity } from '../engine/skills';
 import { rebuildItem } from '../engine/itemgen';
 import { ITEM_RARITIES, type ItemInstance } from '../engine/items';
@@ -125,6 +127,8 @@ export interface SeatMetaW {
   vocations: string[];              // granted vocations (center-tree render + gates)
   baseAttrs: Attributes;            // recalcSeat derives `attrs` from this + allocated
   allocated: string[];              // passive node ids
+  /** Choice-node picks by node id (optional → tolerant of an older host). */
+  choices?: Record<string, string[]>;
   known: Record<string, SkillInstW>;
   inv: SupportInstW[];              // loose support gems
   skillInv: SkillInstW[];          // carried skill gems
@@ -159,6 +163,7 @@ export function serializeSeatMeta(seat: Seat): SeatMetaW {
     vocations: [...m.vocations],
     baseAttrs: { ...m.baseAttrs },
     allocated: [...m.allocated],
+    choices: Object.fromEntries(Object.entries(m.choices).map(([k, v]) => [k, [...v]])),
     known: Object.fromEntries([...m.knownSkills].map(([id, inst]) => [id, skillInstW(inst)])),
     inv: m.inventory.map(supW),
     skillInv: m.skillInv.map(skillInstW),
@@ -221,6 +226,8 @@ export function applySeatMeta(world: World, seat: Seat, w: SeatMetaW): void {
   m.vocations = [...(w.vocations ?? [])];
   m.baseAttrs = { ...w.baseAttrs };
   m.allocated = new Set(w.allocated);
+  // Untrusted wire → the same registry-tolerant rebuild the disk save gets.
+  m.choices = sanitizeChoices(w.choices, PASSIVE_NODES);
   const known = new Map<string, SkillInstance>();
   for (const [id, sw] of Object.entries(w.known)) { const inst = rehydrateSkill(sw); if (inst) known.set(id, inst); }
   m.knownSkills = known;

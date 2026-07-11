@@ -71,7 +71,7 @@ export type MetaAction =
   | { t: 'untameCompanion'; actorId: number }                  // the Tracker's release counter
   | { t: 'socket'; index: number; skillId: string }            // inv gem → skill socket
   | { t: 'unsocket'; skillId: string; socket: number }
-  | { t: 'allocate'; nodeId: string }
+  | { t: 'allocate'; nodeId: string; optionId?: string } // optionId: choice-node pick (data/passiveChoices.ts)
   | { t: 'bindSkill'; slot: number; skillId: string | null }   // action-bar slot
   | { t: 'dropSkill'; index: number }                          // skillInv idx → world
   | { t: 'dropSupport'; index: number }                        // inventory idx → world

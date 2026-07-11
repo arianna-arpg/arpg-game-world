@@ -18,6 +18,7 @@ import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunements';
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
+import { validatePassiveChoices } from './passiveChoices';
 import { STAT_DEFS } from '../engine/stats';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, type StampSpec, type StructureRoll } from './zones';
@@ -853,3 +854,7 @@ export function validateContent(): void {
   }
   if (!MODE_BY_ID[DEFAULT_MODE_ID]) warn(`modes: default '${DEFAULT_MODE_ID}' missing from the registry`);
 }
+
+  // CHOICE NODES: deals resolve, pools are unambiguous, character-unique
+  // groups aren't oversubscribed (the sweep lives beside the registry).
+  validatePassiveChoices(warn, PASSIVE_NODES);

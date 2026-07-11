@@ -53,6 +53,7 @@ import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/cla
 import { coopScale } from '../data/coop';
 import { SUPPORT_LIST, SUPPORTS } from '../data/supports';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateOpen } from '../data/passives';
+import { PASSIVE_CHOICE_CFG, choiceLockReason, choiceOptionOf, chosenOf, sanitizeChoices } from '../data/passiveChoices';
 import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocationRootId, vocationStepKey, type VocationSiteFilter } from '../data/vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
@@ -940,7 +941,7 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'attuneSpectre': return isStr(a.skillId) && isStr(a.formId);
     case 'untameCompanion': return isIdx(a.actorId);
     case 'levelSkill': return isStr(a.skillId) && (a.pay === undefined || a.pay === 'points' || a.pay === 'essence');
-    case 'allocate': return isStr(a.nodeId);
+    case 'allocate': return isStr(a.nodeId) && (a.optionId === undefined || isStr(a.optionId));
     case 'vocationQuest': return isStr(a.questId); // menu-accept a vocation chain step
     case 'bindSkill': return isIdx(a.slot) && (a.skillId === null || isStr(a.skillId));
     case 'caravanTo': return isIdx(a.band); // band 0 = home; N = a band index
@@ -982,6 +983,11 @@ export interface PlayerMeta {
   skillPoints: number;
   passivePoints: number;
   allocated: Set<string>;
+  /** CHOICE NODES: the option ids picked per allocated choice node (see
+   *  data/passiveChoices.ts — groups, pick limits, uniqueness). Written only
+   *  through allocateNode; every load/wire path rebuilds it registry-tolerantly
+   *  via sanitizeChoices, so a renamed group or option simply drops its pick. */
+  choices: Record<string, string[]>;
   /** Vocations GRANTED to this character (quest-chain completions). Capped at
    *  VOCATION_CFG.maxPerCharacter; an array so the cap is pure config. */
   vocations: string[];
@@ -2099,6 +2105,7 @@ export class World {
       skillPoints: 0,
       passivePoints: 1,
       allocated: new Set([classStartNode(classDef.id)]),
+      choices: {},
       vocations: [],
       vocationPoints: 0,
       knownSkills: new Map(),
@@ -8031,15 +8038,29 @@ export class World {
     // Seeded over EVERY registered attribute id (missing keys read 0), so a
     // save written before an attribute existed never poisons the math.
     const attrs = {} as Attributes;
-    for (const a of ATTRIBUTE_IDS) attrs[a] = m.baseAttrs[a] ?? 0;
-    const passiveMods = [];
+    const attrsPct = {} as Attributes;
+    for (const a of ATTRIBUTE_IDS) { attrs[a] = m.baseAttrs[a] ?? 0; attrsPct[a] = 0; }
+    const passiveMods: Modifier[] = [];
+    // ONE folding rule for everything the tree grants — nodes and their chosen
+    // options share the payload surface (attributes / attributesPct / mods).
+    const fold = (g: { attributes?: Partial<Attributes>; attributesPct?: Partial<Attributes>; mods?: Modifier[] }): void => {
+      if (g.attributes) for (const a of ATTRIBUTE_IDS) attrs[a] += g.attributes[a] ?? 0;
+      if (g.attributesPct) for (const a of ATTRIBUTE_IDS) attrsPct[a] += g.attributesPct[a] ?? 0;
+      if (g.mods) passiveMods.push(...g.mods);
+    };
     for (const id of m.allocated) {
       const node = PASSIVE_NODES[id];
       if (!node) continue;
-      if (node.attributes) {
-        for (const a of ATTRIBUTE_IDS) attrs[a] += node.attributes[a] ?? 0;
+      fold(node);
+      // CHOICE NODES: the options picked at this node fold exactly like node
+      // grants. An unknown option id (a renamed group entry) drops silently —
+      // the same registry-tolerant stance as a removed node id above.
+      if (node.choice) {
+        for (const oid of chosenOf(m.choices, id)) {
+          const opt = choiceOptionOf(node, oid);
+          if (opt) fold(opt);
+        }
       }
-      if (node.mods) passiveMods.push(...node.mods);
     }
     // GEAR: attribute-granting lines (+12 Strength — stat names registered in
     // ATTRIBUTES, not STAT_DEFS) are ATTRIBUTE grants, not sheet stats. They
@@ -8055,12 +8076,22 @@ export class World {
       const sheetMods: Modifier[] = [];
       for (const gm of compileItemMods(worn)) {
         if (isAttributeId(gm.stat)) {
+          // Attribute lines join the ONE attrs artery: 'flat' adds points,
+          // 'increased' feeds the same percent phase as attributesPct tree
+          // grants. Other kinds have no meaning on an attribute (validated).
           if (gm.kind === 'flat') attrs[gm.stat] += gm.value;
+          else if (gm.kind === 'increased') attrsPct[gm.stat] += gm.value;
         } else {
           sheetMods.push(gm);
         }
       }
       gearSheetMods.set(slot.id, sheetMods);
+    }
+    // THE PERCENT PHASE: attributesPct scales the fully-summed flat pool
+    // (class base + tree + choices + gear), floored at 0 and rounded so every
+    // consumer (skill gates, per-point mods, the char sheet) sees whole points.
+    for (const a of ATTRIBUTE_IDS) {
+      attrs[a] = Math.max(0, Math.round(attrs[a] * (1 + attrsPct[a])));
     }
     m.attrs = attrs;
 
@@ -9354,6 +9385,7 @@ export class World {
       equipped[slot] = item;
     }
 
+    const allocated = this.trimAllocated(snapshot, scale.passiveBudget(targetLevel));
     return {
       classDef,
       name: classDef.name, // the seat's DISPLAY name is stamped by the spawner
@@ -9361,7 +9393,11 @@ export class World {
       attrs: { ...snapshot.baseAttrs },
       xp: 0, xpNeeded: PROGRESSION.xpForLevel(targetLevel),
       skillPoints: 0, passivePoints: 0,
-      allocated: this.trimAllocated(snapshot, scale.passiveBudget(targetLevel)),
+      allocated,
+      // Choices survive normalization only where their node survived the
+      // budget trim (a pick on a trimmed node would be a phantom grant).
+      choices: Object.fromEntries(Object.entries(sanitizeChoices(snapshot.choices, PASSIVE_NODES))
+        .filter(([id]) => allocated.has(id))),
       vocations: [...(snapshot.vocations ?? [])],
       vocationPoints: 0,
       knownSkills,
@@ -9545,7 +9581,7 @@ export class World {
       retiredLevel: this.player.level,
       retiredAt: Date.now(),
       snapshot: snapshotBuild(
-        m.classDef.id, m.baseAttrs, m.allocated, m.vocations,
+        m.classDef.id, m.baseAttrs, m.allocated, m.choices, m.vocations,
         m.knownSkills.values(), this.player.skills.map(s => s ? s.def.id : null),
         m.equipped, this.player.level),
     };
@@ -10461,30 +10497,45 @@ export class World {
   /** Allocate a passive node adjacent to the existing allocation. VOCATION
    *  nodes are the same graph walk but spend VOCATION points, belong only to a
    *  character who EARNED that vocation, and (behind the playtest toggle) wait
-   *  for the vocation's gate start node — see data/vocations.ts. */
-  allocateNode(nodeId: string, seat: Seat = this.localSeat): boolean {
+   *  for the vocation's gate start node — see data/vocations.ts.
+   *  CHOICE NODES (node.choice) additionally require `optionId`: the FIRST
+   *  pick IS the allocation; later picks (multi-pick deals) re-pay the pool
+   *  with no fresh adjacency walk. Pick legality — taken options, pick
+   *  limits, character-unique groups — is the ONE rule in
+   *  data/passiveChoices.ts (choiceLockReason); the popup renders exactly the
+   *  verdicts enforced here. */
+  allocateNode(nodeId: string, seat: Seat = this.localSeat, optionId?: string): boolean {
     const m = seat.meta;
     // hasOwnProperty guard: a prototype-chain key ('__proto__', 'constructor', …)
     // would otherwise resolve PASSIVE_NODES[nodeId] to Object.prototype (truthy)
     // and then crash on PASSIVE_ADJACENCY[nodeId].some — an untrusted-id vector.
     if (!Object.prototype.hasOwnProperty.call(PASSIVE_NODES, nodeId)) return false;
     const node = PASSIVE_NODES[nodeId];
-    if (!node || m.allocated.has(nodeId)) return false;
+    if (!node) return false;
+    const already = m.allocated.has(nodeId);
+    let cost = 1;
+    if (node.choice) {
+      if (optionId === undefined) return false; // a choice node never allocates blind
+      if (choiceLockReason(node, optionId, m.choices, PASSIVE_NODES) !== null) return false;
+      cost = PASSIVE_CHOICE_CFG.pickCost;
+    } else if (already || optionId !== undefined) {
+      return false; // plain nodes: one allocation, no options
+    }
+    // Pathing: the FIRST touch of any node needs an allocated neighbour;
+    // an already-open choice node's later picks re-pay only the pool.
+    if (!already && !PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n))) return false;
     if (node.vocation !== undefined) {
       if (!m.vocations.includes(node.vocation)) return false;   // not earned (or another's tree)
-      if (m.vocationPoints < 1) return false;                   // the separate currency
       if (!vocationGateOpen(m.allocated, node.vocation)) return false; // the toggle-able gate
-      const adjacent = PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n));
-      if (!adjacent) return false;                              // pathing from the free root
-      m.vocationPoints--;
-      m.allocated.add(nodeId);
-      this.recalcSeat(seat);
-      return true;
+      if (m.vocationPoints < cost) return false;                // the separate currency
+      m.vocationPoints -= cost;
+    } else {
+      if (m.passivePoints < cost) return false;
+      m.passivePoints -= cost;
     }
-    if (m.passivePoints < 1) return false;
-    const adjacent = PASSIVE_ADJACENCY[nodeId]?.some(n => m.allocated.has(n));
-    if (!adjacent) return false;
-    m.passivePoints--;
+    if (node.choice && optionId !== undefined) {
+      (m.choices[nodeId] ??= []).push(optionId);
+    }
     m.allocated.add(nodeId);
     this.recalcSeat(seat);
     return true;
@@ -10566,7 +10617,7 @@ export class World {
       case 'reacquireSkill': this.reacquireSkill(action.skillId, seat); break;
       case 'socket': this.socketSupport(action.index, action.skillId, seat); break;
       case 'unsocket': this.unsocketSupport(action.skillId, action.socket, seat); break;
-      case 'allocate': this.allocateNode(action.nodeId, seat); break;
+      case 'allocate': this.allocateNode(action.nodeId, seat, action.optionId); break;
       case 'bindSkill': this.bindSkill(action.slot, action.skillId, seat); break;
       case 'dropSkill': this.dropFromInventory(seat, 'skill', action.index); break;
       case 'dropSupport': this.dropFromInventory(seat, 'support', action.index); break;

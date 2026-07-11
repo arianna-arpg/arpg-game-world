@@ -98,7 +98,7 @@ export function mountPassiveEditor(ui: UI): void {
   const select = (id: string): void => { selectedId = id; renderPanel(); highlight(); };
 
   /** Circle radii by kind (mirrors panels.refreshTree) — for coordinate hit-tests. */
-  const RADII: Record<string, number> = { start: 13, small: 9, notable: 14, keystone: 17, attr: 11 };
+  const RADII: Record<string, number> = { start: 13, small: 9, notable: 14, keystone: 17, attr: 11, choice: 15 };
   /** Which node (if any) sits under a tree COORDINATE — a capture-safe hit-test
    *  (e.target is corrupted to the SVG once a node grabs the pointer). */
   const nodeAt = (x: number, y: number): string | null => {
@@ -297,18 +297,37 @@ export function mountPassiveEditor(ui: UI): void {
   const canonicalLinks = (id: string): string[] =>
     [...new Set(PASSIVE_ADJACENCY[id] ?? [])].filter(m => id < m && PASSIVE_NODES[m]).sort();
 
-  const serMod = (m: Modifier): string => {
-    const args = [J(m.stat), J(m.kind), String(m.value)];
+  // Tail args shared by all three constructors: [tags?][, when?].
+  const serModTail = (m: Modifier, args: string[]): string[] => {
     if (m.tags && m.tags.length) args.push(`[${m.tags.map(J).join(', ')}]`);
     else if (m.when) args.push('undefined');
     if (m.when) args.push(J(m.when));
-    return `mod(${args.join(', ')})`;
+    return args;
   };
+  const serMod = (m: Modifier): string => {
+    // LINK and GAUGE modifiers round-trip through their own constructors —
+    // flattening them to mod() would silently drop fromStat/gauge on the
+    // next editor save (the interaction-fabric nodes would go inert).
+    if (m.kind === 'link' && m.fromStat !== undefined) {
+      return `linkMod(${serModTail(m, [J(m.stat), J(m.fromStat), String(m.value)]).join(', ')})`;
+    }
+    if (m.gauge !== undefined) {
+      return `gaugeMod(${serModTail(m, [J(m.stat), J(m.kind), String(m.value), J(m.gauge)]).join(', ')})`;
+    }
+    return `mod(${serModTail(m, [J(m.stat), J(m.kind), String(m.value)]).join(', ')})`;
+  };
+
+  const serAttrs = (a: Record<string, number>): string =>
+    `{ ${Object.entries(a).map(([k, v]) => `${k}: ${v}`).join(', ')} }`;
 
   const serNode = (n: PassiveNode): string => {
     const p = [`id: ${J(n.id)}`, `name: ${J(n.name)}`, `description: ${J(n.description)}`, `kind: ${J(n.kind)}`, `x: ${Math.round(n.x)}`, `y: ${Math.round(n.y)}`];
-    if (n.attributes && Object.keys(n.attributes).length) p.push(`attributes: { ${Object.entries(n.attributes).map(([k, v]) => `${k}: ${v}`).join(', ')} }`);
+    if (n.attributes && Object.keys(n.attributes).length) p.push(`attributes: ${serAttrs(n.attributes)}`);
+    if (n.attributesPct && Object.keys(n.attributesPct).length) p.push(`attributesPct: ${serAttrs(n.attributesPct)}`);
     if (n.mods && n.mods.length) p.push(`mods: [${n.mods.map(serMod).join(', ')}]`);
+    // Choice deals are a group REFERENCE (options live in passiveChoices.ts,
+    // safely outside this file's overwrite) — pure JSON, trivially emitted.
+    if (n.choice) p.push(`choice: { group: ${J(n.choice.group)}${n.choice.pick !== undefined ? `, pick: ${n.choice.pick}` : ''} }`);
     p.push(`links: [${canonicalLinks(n.id).map(J).join(', ')}]`);
     return `  { ${p.join(', ')} },`;
   };
@@ -318,10 +337,13 @@ export function mountPassiveEditor(ui: UI): void {
     // serialized (a save that inlined them would duplicate every tree on the
     // next boot). Edit vocation trees in their VocationDef, not here.
     const list = Object.values(PASSIVE_NODES).filter(n => n.vocation === undefined);
-    const usesMod = list.some(n => n.mods && n.mods.length);
-    const importLine = usesMod
-      ? `import { mod, type Attributes, type Modifier } from '../engine/stats';`
-      : `import { type Attributes, type Modifier } from '../engine/stats';`;
+    // Emit exactly the constructors the tree uses (unused imports fail tsc).
+    const usesLink = list.some(n => n.mods?.some(m => m.kind === 'link' && m.fromStat !== undefined));
+    const usesGauge = list.some(n => n.mods?.some(m => m.gauge !== undefined));
+    const usesMod = list.some(n => n.mods?.some(m => m.gauge === undefined && !(m.kind === 'link' && m.fromStat !== undefined)));
+    const fns = [usesGauge ? 'gaugeMod' : '', usesLink ? 'linkMod' : '', usesMod ? 'mod' : ''].filter(Boolean);
+    const importLine =
+      `import { ${[...fns, 'type Attributes', 'type Modifier'].join(', ')} } from '../engine/stats';`;
     return `// ---------------------------------------------------------------------------
 // THE PASSIVE TREE — written by the in-game passive-tree editor (DEV tool).
 // Each node is explicit data: position (x, y), attribute grants, stat modifiers,
@@ -332,8 +354,9 @@ export function mountPassiveEditor(ui: UI): void {
 ${importLine}
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG, vocationNodeId, vocationRootId } from './vocations';
+import type { PassiveChoiceRef } from './passiveChoices';
 
-export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation';
+export type NodeKind = 'start' | 'small' | 'notable' | 'keystone' | 'attr' | 'vocation' | 'choice';
 
 export interface PassiveNode {
   id: string;
@@ -343,8 +366,17 @@ export interface PassiveNode {
   x: number;
   y: number;
   attributes?: Partial<Attributes>;
+  /** PERCENT attribute grants (+0.05 = "5% increased Fortitude") — the
+   *  multiplicative lever beside the flat one. Folded in recalcSeat AFTER
+   *  every flat source (base + tree + gear), so it scales the whole pool. */
+  attributesPct?: Partial<Attributes>;
   mods?: Modifier[];
   links: string[];
+  /** CHOICE NODE: this node deals options from a data/passiveChoices.ts group
+   *  instead of (or on top of) its own grants. Each pick spends a point and is
+   *  permanent; the popup, allocation legality, recalc folding, saves and the
+   *  wire all resolve through that one registry. */
+  choice?: PassiveChoiceRef;
   /** Set on VOCATION mini-tree nodes (the owning VocationDef id). These render
    *  and allocate ONLY for a character who has EARNED that vocation, and they
    *  spend vocation points — see world.allocateNode / panels.refreshTree. */

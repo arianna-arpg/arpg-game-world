@@ -15,6 +15,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import { MONSTERS } from '../data/monsters';
 import { PASSIVE_ADJACENCY, PASSIVE_NODES, classStartNode } from '../data/passives';
+import { choiceLockReason } from '../data/passiveChoices';
 import {
   SKILL_RARITIES, makeSkillInstance, summonCrewOf, supportFitsInstOrCrew, skillMaxLevel,
   type SkillInstance, type SkillRarity, type SupportInstance,
@@ -106,6 +107,33 @@ function auditPassives(classId: string, picks: string[], level: number, warnings
 }
 
 /** Inject a BuildSpec into the world's local seat. Returns audit warnings. */
+/** Choice-node picks: replay the LIVE legality rule (choiceLockReason) pick by
+ *  pick so the sim can never hold a build a real character couldn't — bad
+ *  picks warn and drop, matching auditPassives' hypothesis-friendly stance.
+ *  Returns the picks plus the EXTRA points they cost (every pick past a
+ *  node's first, which rode the allocation itself). */
+function auditChoices(
+  spec: Record<string, string[]> | undefined,
+  allocated: ReadonlySet<string>,
+  warnings: string[],
+): { choices: Record<string, string[]>; extraPicks: number } {
+  const choices: Record<string, string[]> = {};
+  let extraPicks = 0;
+  for (const [nodeId, picks] of Object.entries(spec ?? {})) {
+    const node = PASSIVE_NODES[nodeId];
+    if (!node?.choice) { warnings.push(`choices name '${nodeId}', which is not a choice node — dropped`); continue; }
+    if (!allocated.has(nodeId)) { warnings.push(`choices name unallocated node '${nodeId}' — dropped`); continue; }
+    for (const oid of picks) {
+      const why = choiceLockReason(node, oid, choices, PASSIVE_NODES);
+      if (why !== null) { warnings.push(`choice '${nodeId}:${oid}' illegal (${why}) — dropped`); continue; }
+      (choices[nodeId] ??= []).push(oid);
+      extraPicks++;
+    }
+    if (choices[nodeId]?.length) extraPicks--; // the first pick rode the allocation
+  }
+  return { choices, extraPicks };
+}
+
 export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: number): string[] {
   const warnings: string[] = [];
   const classDef = classById(spec.classId);
@@ -150,6 +178,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
   // --- the tree --------------------------------------------------------------
   const allocated = auditPassives(spec.classId, spec.passives ?? [], spec.level, warnings);
 
+  const { choices, extraPicks } = auditChoices(spec.choices, allocated, warnings);
   // --- assemble PlayerMeta exactly the way a save rebuild does ----------------
   const meta: PlayerMeta = {
     classDef,
@@ -159,7 +188,7 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     xp: 0,
     xpNeeded: PROGRESSION.xpForLevel(spec.level),
     skillPoints: 0,
-    passivePoints: Math.max(0, spec.level * PROGRESSION.passivePointsPerLevel + 1 - allocated.size),
+    passivePoints: Math.max(0, spec.level * PROGRESSION.passivePointsPerLevel + 1 - allocated.size - extraPicks),
     allocated,
     vocations: [],
     vocationPoints: 0,
