@@ -32,6 +32,16 @@ export interface PaintEnv {
 /** '#hex' literal or 'theme:key' / 'theme:key|#fallback'. */
 export type ColorSpec = string;
 
+/** Is a labeled doodad's TEXT revealed? Text under an UNSEEN layer stays
+ *  unseen: a roofed label draws only while the local hero shares its roof —
+ *  the same interior-reveal rule the roof pass follows, so a hatch's name
+ *  never advertises through a wall. Open-air labels always draw. */
+export function labelRevealed(env: PaintEnv, pos: { x: number; y: number }): boolean {
+  const w = env.world;
+  const roof = w.roofedStructureAt(pos);
+  return roof === null || roof === w.roofedStructureAt(w.player.pos);
+}
+
 export function resolveColor(spec: ColorSpec | undefined, theme: ZoneTheme, fallback = '#9a9aa0'): string {
   if (!spec) return fallback;
   if (!spec.startsWith('theme:')) return spec;
@@ -2774,7 +2784,7 @@ const caveMouth: GroupPainter = (env, group, def) => {
         }
       }
     }
-    if (p.label) {
+    if (p.label && labelRevealed(env, o.pos)) {
       ctx.fillStyle = '#d8d4c8';
       ctx.font = '11px Verdana';
       ctx.textAlign = 'center';
@@ -4951,7 +4961,7 @@ const hatch: GroupPainter = (env, group, def) => {
     ctx.strokeStyle = ring;
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.24, 0, Math.PI * 2); ctx.stroke();
-    if (p.label) {
+    if (p.label && labelRevealed(env, o.pos)) {
       ctx.fillStyle = '#d8d4c8';
       ctx.font = '11px Verdana';
       ctx.textAlign = 'center';

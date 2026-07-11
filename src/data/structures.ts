@@ -248,14 +248,16 @@ export const STRUCTURES: Record<string, StructureDef> = {
 
   // The cellar-house: the same one-room cottage, but its floorboards hide a
   // HATCH — dwell on it (from inside; the wall gives nobody the cellar) to
-  // descend into the town's cellar (data/sidezones.ts 'cellar_hatch').
+  // descend into the town's cellar (data/sidezones.ts 'cellar_hatch'). The
+  // hatch sits at the BACK of the room, three rows from the doorway — the
+  // door dwell and the hatch dwell can never build from the same spot.
   cellar_house: {
     id: 'cellar_house', halfW: 91, halfH: 65, cellSize: 26,
     plan: [
       '#######',
-      '#p...C#',
+      '#p.V.C#',
       '#.....#',
-      '#b..V.#',
+      '#b....#',
       '###D###',
     ],
     legend: { V: { doodad: { kind: 'cellar_hatch', radius: 13 }, interior: true } },

@@ -91,10 +91,13 @@ export class WarlordField implements WorldOverlay {
     for (const f of factions) {
       const e = realm.get(f);
       const lord = this.lords.get(f);
-      // Rooted factions seat at home (falling back to the drifting capital only
-      // if they hold no home ground, so they're never stranded throne-less).
+      // Rooted factions seat ONLY on native home ground — no capital fallback.
+      // With the static web cut to town + hub, a rooted faction may hold no
+      // home-biome zone yet; it stays UNCROWNED until one mints rather than
+      // throne on its strongest hold (early on that is the level-1 hub — a
+      // Lich Marshal squatting the Wayfarer's Crossroads greeted new heroes).
       const seat = traitsOf(f).warlordHome === 'origin'
-        ? (e?.originSeat ?? e?.capital ?? null)
+        ? (e?.originSeat ?? null)
         : (e?.capital ?? null);
       if (e && e.count >= RISE_ZONES && seat) {
         if (!lord) {

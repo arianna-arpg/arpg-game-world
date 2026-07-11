@@ -501,10 +501,12 @@ export const ZONES: Record<string, ZoneDef> = {
     objective: { kind: 'clear' },
     packs: {
       count: [3, 4], size: [2, 4],
+      // The hub is the GENTLE first fight: shamblers and rusted bones only —
+      // no swarms, no casters, no summoners. The Risen Host's worthier dead
+      // (and its lich warlord) wait on real grave ground past the frontiers.
       table: [
         { id: 'zombie', weight: 3 },
         { id: 'skeleton_warrior', weight: 2 },
-        { id: 'blood_mite', weight: 2 },
       ],
     },
     exits: [

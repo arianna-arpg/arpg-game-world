@@ -2701,11 +2701,15 @@ export class Renderer {
       this.queueLabel(a, a.name, '#e8c87a', 8, { font: '10px Verdana', stroke: false });
     }
 
-    // The innkeep "talks" when her healing isn't unlocked — no free innstay yet.
-    if (a.defId && MONSTERS[a.defId]?.npcRole === 'innkeep'
-      && world.nearMireille()
-      && !world.mireilleUnlocked()) {
-      this.queueLabel(a, 'No free innstay — unlock my care in the Vault.', '#d8b87a', 22);
+    // The innkeep "talks": an invitation while her WELCOME GIFT (the flasks)
+    // is still owed — linger and she hands them over — else the locked-care
+    // note when none of her Vault services are unlocked yet.
+    if (a.defId && MONSTERS[a.defId]?.npcRole === 'innkeep' && world.nearMireille()) {
+      if (world.mireilleGiftPending()) {
+        this.queueLabel(a, 'Come here, dear — I keep flasks for new faces.', '#d8b87a', 22);
+      } else if (!world.mireilleUnlocked()) {
+        this.queueLabel(a, 'No free innstay — unlock my care in the Vault.', '#d8b87a', 22);
+      }
     }
 
     // Any quest-giving NPC posts its offer above its head while you're near —

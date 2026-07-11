@@ -1121,6 +1121,10 @@ registerConvertRule('companionsFull', (caster, inst, world) =>
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
 const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
+/** Her WELCOME GIFT: skills handed over on the first dwell, once per
+ *  character — free of any unlock (the innkeeper's kindness, not a Vault
+ *  service). Both flask founts, so every hero owns the alchemist's loop. */
+const MIREILLE_GIFT_SKILLS = ['life_flask', 'mana_flask'];
 const MIREILLE_XP_BUFF_SEC = 300;   // a 5-minute blessing
 const MIREILLE_XP_BUFF_MULT = 0.05; // +5% experience while it lasts
 const MIREILLE_XP_REFRESH = 240;    // only (re)grant when below this (no spam)
@@ -8367,18 +8371,59 @@ export class World {
       || featureEnabled(this.account, FEATURE.MIREILLE_XP_BUFF);
   }
 
+  /** Is Mireille's welcome gift still owed? (Any gift skill unknown.) Public:
+   *  the renderer swaps her locked-talk line for an invitation while it is. */
+  mireilleGiftPending(): boolean {
+    return MIREILLE_GIFT_SKILLS.some(id => !!SKILLS[id] && !this.meta.knownSkills.has(id));
+  }
+
   /** Mireille's service, by which of her unlocks the account owns: restore LIFE,
-   *  restore MANA, and/or grant a 5-minute +5% experience blessing. Returns true
+   *  restore MANA, and/or grant a 5-minute +5% experience blessing — plus her
+   *  WELCOME GIFT (both flask founts, first dwell, no unlock needed) and, with
+   *  a resource's care unlocked, a full REPLENISH of every known orb-fed fount
+   *  of that resource (an any-orb catalyst fount counts for both). Returns true
    *  if anything was actually given (so the dwell consumes its cooldown). */
   private mireilleService(): boolean {
     const p = this.player;
     let did = false;
     const parts: string[] = [];
+    // THE WELCOME GIFT — once per character (a resumed save that already
+    // knows the flasks skips; drops/vendor copies count as known too).
+    let gifted = false;
+    for (const sid of MIREILLE_GIFT_SKILLS) {
+      if (!SKILLS[sid] || this.meta.knownSkills.has(sid)) continue;
+      const inst = makeSkillInstance(SKILLS[sid], 1, SKILL_RARITIES.magic.sockets);
+      inst.rarity = 'magic';
+      this.meta.knownSkills.set(sid, inst);
+      gifted = true;
+    }
+    if (gifted) { did = true; parts.push('the flasks'); }
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && p.life < p.maxLife()) {
       p.life = p.maxLife(); did = true; parts.push('life');
     }
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_MANA) && p.mana < p.maxMana()) {
       p.mana = p.maxMana(); did = true; parts.push('mana');
+    }
+    // FLASK REPLENISH: her brews top the founts themselves. Every KNOWN
+    // skill's orb-fed bank of the unlocked resource fills to its true cap
+    // (gainCharge folds chargeCap mods, so deeper draughts fill deeper).
+    const fillFounts = (kind: 'life' | 'mana'): boolean => {
+      let any = false;
+      for (const inst of this.meta.knownSkills.values()) {
+        for (const cg of inst.def.chargeGain ?? []) {
+          if (cg.on !== 'orbPickup' || (cg.orbKind && cg.orbKind !== kind)) continue;
+          const cur = p.charges.get(cg.charge) ?? 0;
+          p.gainCharge(cg.charge, 999, cg.max, inst);
+          if ((p.charges.get(cg.charge) ?? 0) > cur) any = true;
+        }
+      }
+      return any;
+    };
+    if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && fillFounts('life')) {
+      did = true; parts.push('life founts');
+    }
+    if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_MANA) && fillFounts('mana')) {
+      did = true; parts.push('mana founts');
     }
     if (featureEnabled(this.account, FEATURE.MIREILLE_XP_BUFF) && this.mireilleXpBuff < MIREILLE_XP_REFRESH) {
       this.mireilleXpBuff = MIREILLE_XP_BUFF_SEC; did = true; parts.push('+5% xp');
@@ -8392,8 +8437,10 @@ export class World {
   private updateMireille(dt: number): void {
     if (this.mireilleCd > 0) this.mireilleCd -= dt;
     // Dwell only builds toward an AVAILABLE service: not while dead, away from
-    // her, before any of her care is unlocked, or while the player is acting.
-    if (this.player.dead || this.player.downed || this.getMireille() === null || !this.mireilleUnlocked() || !this.playerIdle()) {
+    // her, or while the player is acting. Her WELCOME GIFT (the flasks) needs
+    // no unlock — the dwell builds for it even on a fresh account.
+    if (this.player.dead || this.player.downed || this.getMireille() === null
+      || (!this.mireilleUnlocked() && !this.mireilleGiftPending()) || !this.playerIdle()) {
       this.mireilleDwell = 0;
       return;
     }
@@ -21299,8 +21346,10 @@ export class World {
   }
 
   /** The placed structure whose roof covers this point (null in the open —
-   *  courtyards and doorways count as open: roof rects exclude them). */
-  private roofedStructureAt(pos: Vec2): PlacedStructure | null {
+   *  courtyards and doorways count as open: roof rects exclude them). Public:
+   *  the render layer reads it for the interior-reveal rule (roof-gated
+   *  labels hide with the room they mark). */
+  roofedStructureAt(pos: Vec2): PlacedStructure | null {
     for (const st of this.structures) {
       for (const r of st.roofs) {
         if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return st;
