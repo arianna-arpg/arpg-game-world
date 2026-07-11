@@ -246,6 +246,45 @@ export const STRUCTURES: Record<string, StructureDef> = {
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
   },
 
+  // The cellar-house: the same one-room cottage, but its floorboards hide a
+  // HATCH — dwell on it (from inside; the wall gives nobody the cellar) to
+  // descend into the town's cellar (data/sidezones.ts 'cellar_hatch').
+  cellar_house: {
+    id: 'cellar_house', halfW: 91, halfH: 65, cellSize: 26,
+    plan: [
+      '#######',
+      '#p...C#',
+      '#.....#',
+      '#b..V.#',
+      '###D###',
+    ],
+    legend: { V: { doodad: { kind: 'cellar_hatch', radius: 13 }, interior: true } },
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+  },
+
+  // The cellar itself: one broad flagstone slab (the blacksmith's stone,
+  // underground) with somebody's stores in the corners. No walls — the room's
+  // own bounds enclose it; no roof — you're already under the house. Barren
+  // until a package digs deeper (The Pit plants its maw here via furnish).
+  cellar_room: {
+    id: 'cellar_room', halfW: 270, halfH: 180, cellSize: 30,
+    plan: [
+      '__________________',
+      '__________________',
+      '_p________________',
+      '__________________',
+      '_______________C__',
+      '__________________',
+      '_f________________',
+      '__________________',
+      '__________________',
+      '__________________',
+      '__________________',
+      '__________________',
+    ],
+    floorStyle: 'flagstone', courtyardFloorStyle: 'flagstone',
+  },
+
   // The quartermaster's house: the cottage with the quest-giver inside.
   // Added to Lastlight only once the Quest Package is bought.
   quest_house: {

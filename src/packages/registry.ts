@@ -27,7 +27,7 @@ import { STORM_FRONTS } from './defs/stormFronts';
 import { WARBANDS } from './defs/warbands';
 import type { EncounterDef } from './encounters';
 import type { HoldfastDef } from './holdfast';
-import type { ContentPackage, UnlockRequirement } from './types';
+import type { ContentPackage, FurnishSpec, UnlockRequirement } from './types';
 
 export const PACKAGES: ContentPackage[] = [
   WARBANDS,
@@ -97,6 +97,13 @@ export function allEncounterSpecs(): EncounterDef[] {
  *  declared `holdfasts` join the roll — one def entry, no overlay code. */
 export function allHoldfastDefs(): HoldfastDef[] {
   return PACKAGES.flatMap(p => p.holdfasts ?? []);
+}
+
+/** Every sidezone furnishing across all packages, tagged with its owner (the
+ *  World applies these when a registered sidezone first mints, gated on the
+ *  owning package's live gate — see FurnishSpec / applySidezoneFurnish). */
+export function allFurnishSpecs(): (FurnishSpec & { packageId: string })[] {
+  return PACKAGES.flatMap(p => (p.furnish ?? []).map(f => ({ packageId: p.id, ...f })));
 }
 
 /** Does this package's unlock requirement pass for the account? */

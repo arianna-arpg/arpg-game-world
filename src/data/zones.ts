@@ -452,7 +452,9 @@ export const ZONES: Record<string, ZoneDef> = {
       { structure: 'blacksmith', x: 450, y: 320 },
       { structure: 'inn', x: 960, y: 300 },
       { structure: 'house_small', x: 420, y: 700 },
-      { structure: 'house_small', x: 640, y: 760 },
+      // The spare house keeps a cellar under its boards (data/sidezones.ts):
+      // dwell the hatch INSIDE to descend. Packages may dig deeper from there.
+      { structure: 'cellar_house', x: 640, y: 760 },
       { structure: 'wayside_camp', x: 960, y: 660 },
     ],
     objective: { kind: 'safe' },

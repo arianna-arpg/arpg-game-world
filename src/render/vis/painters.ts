@@ -4912,6 +4912,55 @@ const fallback: GroupPainter = (env, group) => {
   }
 };
 
+interface HatchParams {
+  wood?: ColorSpec; seam?: ColorSpec; frame?: ColorSpec; ring?: ColorSpec;
+  label?: string;
+}
+
+/** A CELLAR HATCH: a plank trapdoor set flush in the floor — wooden leaves in
+ *  a shadowed frame, a cross-batten, an iron pull-ring. The quiet door down. */
+const hatch: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as HatchParams;
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#5c4630');
+  const seam = resolveColor(p.seam, theme, '#3a2c1c');
+  const frame = resolveColor(p.frame, theme, '#2e2418');
+  const ring = resolveColor(p.ring, theme, '#8a8578');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The frame: the dark rebate the leaves sit into.
+    ctx.fillStyle = frame;
+    ctx.fillRect(-r, -r * 0.82, r * 2, r * 1.64);
+    // Plank leaves, each its own weathered tone.
+    const n = 4;
+    const pw = (r * 2 - 4) / n;
+    for (let i = 0; i < n; i++) {
+      ctx.fillStyle = shade(wood, (hash01(i, seed) - 0.5) * 0.16);
+      ctx.fillRect(-r + 2 + i * pw, -r * 0.82 + 2, pw - 1, r * 1.64 - 4);
+    }
+    // Seams: the frame line + the cross-batten holding the leaves.
+    ctx.strokeStyle = seam;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(-r + 2, -r * 0.82 + 2, r * 2 - 4, r * 1.64 - 4);
+    ctx.fillStyle = withAlpha(seam, 0.9);
+    ctx.fillRect(-r + 2, -1.4, r * 2 - 4, 2.6);
+    // The iron pull-ring, resting toward the near edge.
+    ctx.strokeStyle = ring;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, r * 0.3, r * 0.24, 0, Math.PI * 2); ctx.stroke();
+    if (p.label) {
+      ctx.fillStyle = '#d8d4c8';
+      ctx.font = '11px Verdana';
+      ctx.textAlign = 'center';
+      ctx.fillText(p.label, 0, r + 14);
+    }
+    ctx.restore();
+  }
+};
+
 /** Standing-object contact shadows, driven by DoodadVisualDef.shadow. */
 export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alphaMul: number): void {
   for (const d of group) drawShadow(env.ctx, d.pos.x, d.pos.y, d.radius, alphaMul);
@@ -4920,7 +4969,7 @@ export function paintGroupShadows(env: PaintEnv, group: readonly Doodad[], alpha
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
-  kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth,
+  kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth, hatch,
   campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,

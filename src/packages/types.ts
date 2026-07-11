@@ -205,6 +205,19 @@ export interface FactionSpec {
   relations?: Relationship[];
 }
 
+/** A fixture a package plants inside a REGISTERED SIDEZONE (data/sidezones.ts)
+ *  at its mint — the seam that lets a package build inside rooms it doesn't
+ *  own (The Pit's maw in the town cellar). Applied by the engine only while
+ *  the package's gate is active on the run, and only when the pocket first
+ *  mints (sidezone defs are cached per entrance). */
+export interface FurnishSpec {
+  /** The SidezoneDef.kind this furnishing lands in. */
+  sidezone: string;
+  /** The structure fixture appended to the minted def (structure id + center
+   *  coords in the pocket's own space). */
+  fixture: { structure: string; x: number; y: number };
+}
+
 // --- the package -------------------------------------------------------------
 
 export interface ContentPackage {
@@ -242,4 +255,7 @@ export interface ContentPackage {
   quests?: QuestSpec[];
   factions?: FactionSpec[];
   relationships?: Relationship[];
+  /** Fixtures planted inside registered sidezones at their mint — a package
+   *  building in rooms it doesn't own (see FurnishSpec). */
+  furnish?: FurnishSpec[];
 }

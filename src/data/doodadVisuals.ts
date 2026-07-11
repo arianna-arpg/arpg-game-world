@@ -640,6 +640,23 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2, color: '#caa860', intensity: 0.25, flicker: 2.5 },
   },
+  // A plank trapdoor set flush in a house floor — the quiet way down to the
+  // cellar (data/sidezones.ts 'cellar_hatch').
+  cellar_hatch: {
+    painter: 'hatch', order: 54,
+    params: { wood: '#5c4630', seam: '#3a2c1c', frame: '#2e2418', ring: '#8a8578', label: 'Cellar' },
+  },
+  // The Pit's maw (the pit package's furnish): bottomless dark ringed in
+  // tumbled home-stone, torchlight licking up from somewhere far below.
+  pit_entrance: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      glow: '#c8a84b', throat: '#050507', tumble: 1, teeth: {}, rubble: {},
+      label: 'The Pit',
+    },
+    light: { radius: -2, color: '#c8a84b', intensity: 0.4, flicker: 4 },
+  },
 
   // --- Ritual + event set-pieces -------------------------------------------
   tentacle_field: { painter: 'tentacleField', order: 56 },

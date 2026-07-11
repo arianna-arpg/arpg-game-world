@@ -65,6 +65,7 @@ import {
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { STRUCTURES } from '../data/structures';
+import { sidezoneOf } from '../data/sidezones';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
 import { VOYAGE_ISLANDS } from '../data/voyageIslands';
@@ -120,7 +121,7 @@ import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
 import type { IncursionArchetype } from '../packages/overlays/incursion';
 import type { HoldfastDest, GuardianSpec } from '../packages/holdfast';
-import { allEncounterSpecs, packageSeed } from '../packages/registry';
+import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
 import { gateOf } from '../packages/weighting';
 import type { ActiveEncounter } from './encounter';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
@@ -1434,8 +1435,9 @@ export class World {
   // pocket of exploration inside its parent: you descend a mouth, fight a small
   // cavern, and climb back out at the same spot.
   caveMap: Record<string, ZoneDef> = {};
-  /** This zone's cave mouths (pos + stable seed), rebuilt each loadZone. */
-  private caveEntrances: { pos: Vec2; seed: number }[] = [];
+  /** This zone's sidezone mouths (pos + stable seed + entrance KIND — any
+   *  doodad kind registered in data/sidezones.ts), rebuilt each loadZone. */
+  private caveEntrances: { pos: Vec2; seed: number; kind: string }[] = [];
   /** Set while underground: where to drop the player when they climb back out. */
   private caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
@@ -2749,7 +2751,21 @@ export class World {
     this.caveEntrances = mouths.map((d, i) => ({
       pos: this.clampPos(vec(d.pos.x, d.pos.y), 28),
       seed: layout.caveSeeds[i] ?? 0,
+      kind: 'cave_entrance',
     }));
+    // REGISTERED SIDEZONE entrances (data/sidezones.ts): any OTHER doodad kind
+    // with a SidezoneDef is a dwell-mouth too — the cellar hatch, a package's
+    // arena maw. Their pocket seed derives from the mouth's POSITION (stable:
+    // the layout regenerates from a fixed def.seed), where classic caves ride
+    // the stampCaveMouth caveSeeds zip.
+    for (const d of layout.doodads) {
+      if (d.kind === 'cave_entrance' || !sidezoneOf(d.kind)) continue;
+      this.caveEntrances.push({
+        pos: this.clampPos(vec(d.pos.x, d.pos.y), 28),
+        seed: hashStr(`${zoneId}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
+        kind: d.kind,
+      });
+    }
     this.caveExitGrace = false; // re-armed by the cave-return path after this returns
 
     this.zoneEntry = vec(entry.x, entry.y);
@@ -19747,15 +19763,18 @@ export class World {
       });
     }
 
-    // Cave mouths: DWELL on one (stand idle ~0.55s) to descend into a cave — running
-    // OVER a mouth no longer yanks you underground (mirrors the portal dwell). Just
-    // after climbing out you stand AT the mouth, so a grace flag holds until you
-    // step clear once — otherwise you'd dwell straight back underground.
-    // Runs INSIDE caves too — that's the ladder (a deeper mouth in a cave is
-    // dwelled exactly like a surface one; enterCave stacks the way home).
+    // Sidezone mouths (data/sidezones.ts): DWELL on one (stand idle) to descend
+    // — running OVER a mouth never yanks you under (mirrors the portal dwell).
+    // Just after climbing out you stand AT the mouth, so a grace flag holds
+    // until you step clear once — otherwise you'd dwell straight back down.
+    // Runs INSIDE sidezones too — that's the ladder (a deeper mouth in a cave
+    // is dwelled exactly like a surface one; enterSidezone stacks the way home).
+    // indoorsOnly kinds (the cellar hatch) also demand the player stand under
+    // the SAME ROOF as the mouth — nobody dwells a hatch through a house wall.
     if (!this.player.dead && !this.player.downed) {
-      const onMouth = (cm: { pos: Vec2 }): boolean =>
-        dist(this.player.pos, cm.pos) <= 28 + this.player.radius;
+      const onMouth = (cm: { pos: Vec2; kind: string }): boolean =>
+        dist(this.player.pos, cm.pos) <= 28 + this.player.radius
+        && (!sidezoneOf(cm.kind)?.indoorsOnly || this.sameRoof(this.player.pos, cm.pos));
       if (this.caveExitGrace) {
         if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
         this.caveDwellIdx = -1;
@@ -19766,9 +19785,10 @@ export class World {
         // onto a mouth must never carry you under).
         if (mouthIdx >= 0 && this.playerIdle() && !this.player.push) {
           if (this.caveDwellIdx !== mouthIdx) { this.caveDwellIdx = mouthIdx; this.caveDwellStart = this.time; }
-          if (this.time - this.caveDwellStart >= CAVE_ENTRY_DWELL) {
+          const cm = this.caveEntrances[mouthIdx];
+          if (this.time - this.caveDwellStart >= (sidezoneOf(cm.kind)?.dwell ?? CAVE_ENTRY_DWELL)) {
             this.caveDwellIdx = -1;
-            this.enterCave(this.caveEntrances[mouthIdx]);
+            this.enterSidezone(cm);
             return; // everything else this frame belongs to the old zone
           }
         } else {
@@ -19922,12 +19942,13 @@ export class World {
     return { pos: vec(e.pos.x, e.pos.y), frac: clamp((this.time - this.exitDwellStart) / ZONE_EXIT_DWELL, 0, 1) };
   }
 
-  /** Dwell-to-enter progress on the cave mouth the player lingers on (renderer ring),
-   *  or null when not dwelling on any mouth. */
+  /** Dwell-to-enter progress on the sidezone mouth the player lingers on
+   *  (renderer ring), or null when not dwelling on any mouth. */
   caveDwellView(): { pos: Vec2; frac: number } | null {
     if (this.caveDwellIdx < 0 || this.caveDwellIdx >= this.caveEntrances.length) return null;
     const cm = this.caveEntrances[this.caveDwellIdx];
-    return { pos: vec(cm.pos.x, cm.pos.y), frac: clamp((this.time - this.caveDwellStart) / CAVE_ENTRY_DWELL, 0, 1) };
+    const need = sidezoneOf(cm.kind)?.dwell ?? CAVE_ENTRY_DWELL;
+    return { pos: vec(cm.pos.x, cm.pos.y), frac: clamp((this.time - this.caveDwellStart) / need, 0, 1) };
   }
 
   /** Dwell-to-enter progress on the realm gate the player lingers on (renderer ring),
@@ -20126,17 +20147,52 @@ export class World {
     return true;
   }
 
-  /** Descend a cave mouth into a small cavern minted off the world graph. The
-   *  cave is keyed by parent + entrance seed, so revisiting the same mouth
-   *  re-enters the same cave; it never charts, never seeds the sim. */
-  private enterCave(cm: { pos: Vec2; seed: number }): void {
-    const id = `cave_${this.zone.id}_${cm.seed}`;
-    if (!this.caveMap[id]) this.caveMap[id] = mintCave(this.zone, cm.seed, id);
-    // Descending DEEPER (cave-within-cave): bank the current level's way home
-    // on the ladder stack; climbing out pops it back.
+  /** Descend a registered sidezone mouth (data/sidezones.ts) into a pocket zone
+   *  minted off the world graph. Keyed by parent + entrance seed, so revisiting
+   *  the same mouth re-enters the same pocket; it never charts, never seeds the
+   *  sim. Classic caves keep their historical id shape (`cave_<zone>_<seed>`);
+   *  other kinds prefix theirs (`cave_<kind>_<zone>_<seed>`) — everything keeps
+   *  the cave_ prefix so save-side filters treat all pockets alike. */
+  private enterSidezone(cm: { pos: Vec2; seed: number; kind: string }): void {
+    const sz = sidezoneOf(cm.kind);
+    if (!sz) return;
+    const id = cm.kind === 'cave_entrance'
+      ? `cave_${this.zone.id}_${cm.seed}`
+      : `cave_${cm.kind}_${this.zone.id}_${cm.seed}`;
+    if (!this.caveMap[id]) {
+      const minted = sz.mint({
+        parent: this.zone, seed: cm.seed, id,
+        playerLevel: this.player.level,
+        pkgActive: (pid) => gateOf(this.sim.gatesFor(this.player.level), pid).active,
+      });
+      this.applySidezoneFurnish(minted, sz);
+      this.caveMap[id] = minted;
+    }
+    const dest = this.caveMap[id];
+    // A 'character' pocket re-levels to the entering hero EVERY visit — the
+    // arena scales with you (its spawns read zone.level), not with geography.
+    if (sz.levelWith === 'character') dest.level = Math.max(1, this.player.level);
+    // DISCOVERY: the run ledger learns you found this (merged to the account on
+    // death — surfaces Vault unlocks, the delvers_seen pattern).
+    if (sz.ledgerOnEnter) bumpLedger(this.ledger, sz.ledgerOnEnter);
+    // Descending DEEPER (pocket-within-pocket): bank the current level's way
+    // home on the ladder stack; climbing out pops it back.
     if (this.caveReturn) this.caveStack.push(this.caveReturn);
     this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom };
-    this.loadZone(id, this.zone.id); // deliberately NO sim.onNodeCharted — caves are off-graph
+    this.loadZone(id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
+  }
+
+  /** PACKAGE FURNISH: manifest-active packages may plant fixtures inside a
+   *  freshly minted sidezone (ContentPackage.furnish) — The Pit's maw in the
+   *  town cellar. Resolved ONCE at mint (the pocket is cached in caveMap), so
+   *  a package must be live when the room is first entered to build in it. */
+  private applySidezoneFurnish(def: ZoneDef, sz: { kind: string }): void {
+    const gates = this.sim.gatesFor(this.player.level);
+    for (const f of allFurnishSpecs()) {
+      if (f.sidezone !== sz.kind) continue;
+      if (!gateOf(gates, f.packageId).active) continue;
+      def.fixtures = [...(def.fixtures ?? []), { ...f.fixture }];
+    }
   }
 
   /** Step through a portal — generating the zone behind a frontier first. */
@@ -21088,12 +21144,25 @@ export class World {
   /** INDOORS: under any placed structure's roof rect. Heat-shade ends here,
    *  and so does the gale (windAt) — courtyards stay open sky. */
   underRoofAt(pos: Vec2): boolean {
+    return this.roofedStructureAt(pos) !== null;
+  }
+
+  /** The placed structure whose roof covers this point (null in the open —
+   *  courtyards and doorways count as open: roof rects exclude them). */
+  private roofedStructureAt(pos: Vec2): PlacedStructure | null {
     for (const st of this.structures) {
       for (const r of st.roofs) {
-        if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return true;
+        if (pos.x > r.x && pos.x < r.x + r.w && pos.y > r.y && pos.y < r.y + r.h) return st;
       }
     }
-    return false;
+    return null;
+  }
+
+  /** Are both points under the SAME structure's roof? The indoorsOnly sidezone
+   *  gate — a hatch inside a house can't be dwelled from beyond its wall. */
+  private sameRoof(a: Vec2, b: Vec2): boolean {
+    const s = this.roofedStructureAt(a);
+    return s !== null && s === this.roofedStructureAt(b);
   }
 
   /** Is this actor in SHADE — under a canopy crown, inside a roof, or in
