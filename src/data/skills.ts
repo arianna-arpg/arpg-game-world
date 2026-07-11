@@ -1802,15 +1802,21 @@ export const SKILLS: Record<string, SkillDef> = {
   // claim bleeds back out ('drain'); hold the gaze to the end and it's yours.
   tame_beast: {
     id: 'tame_beast', name: 'Tame Beast',
-    description: 'FOCUS on a weakened beast (below half) and HOLD — the claim fills only while your cursor stays on it. Look away and the bond bleeds; hold the gaze to the end and it is YOURS: a companion that falls DOWNED, never dead. Linger to mend it, or WHISTLE (shift) to call it back revived. One bond per gem; release it at the Tracker.',
+    description: 'FOCUS on a living beast and HOLD — the claim fills only while your cursor stays on it. A weakened beast (below half) is a CERTAIN claim; a hale one may resist. Hold the gaze to the end and it is YOURS: a companion that falls DOWNED, never dead. With the bond held, this button IS the Whistle (call it back, revived); shift commands it to ATTACK. Unlearning kills the bond — relearn and it returns downed, owed a revival. Release it at the Tracker.',
     tags: ['spell', 'minion', 'duration'], color: '#a8c87a',
     manaCost: 30, cooldown: 6, useTime: 0,
     targeting: { target: 'enemy', castRange: 320, requiresMonsterTags: ['beast'] },
     concentration: { time: 2.4, onBreak: 'drain', drainRate: 1.25 },
     delivery: { type: 'target' },
-    effects: [{ type: 'tame', tags: ['beast'], maxLifeFrac: 0.5 }],
+    // The claim contests above half life: 35% against a hale beast, sliding
+    // to certainty at the threshold — the sneak-tame opener (Cloak in, gaze,
+    // claim) is real but never free.
+    effects: [{ type: 'tame', tags: ['beast'], sureBelow: 0.5, wildChance: 0.35 }],
     requirements: { wisdom: 14, charisma: 8 },
-    meta: { skillId: 'companion_whistle', label: 'Whistle' },
+    // The exhausted-skill two-for-one: bond held → the base press IS the
+    // Whistle (SkillDef.convert); the meta slot commands the companion.
+    convert: { when: 'companionsFull', skillId: 'companion_whistle' },
+    meta: { skillId: 'command_assault', label: 'Attack!' },
     leveling: { perLevel: [mod('minionLife', 'increased', 0.12), mod('minionDamage', 'increased', 0.08)] },
   },
 

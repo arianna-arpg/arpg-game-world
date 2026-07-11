@@ -23,7 +23,7 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -1110,6 +1110,13 @@ function hashStr(s: string): number {
 function eventCount(cfg: { perFire: number; intensityFloor: number; intensityGain: number }, intensity: number): number {
   return Math.max(1, Math.round(cfg.perFire * (cfg.intensityFloor + cfg.intensityGain * intensity)));
 }
+// THE 'companionsFull' CONVERSION RULE (SkillDef.convert): a companion
+// skill whose every bond slot is HELD presses as its converted face (a
+// full Tame becomes the Whistle). Registered here because the read needs
+// world state; the registry itself is the open seam (engine/skills.ts).
+registerConvertRule('companionsFull', (caster, inst, world) =>
+  world.companionBondsOfSkill(caster, inst.def.id) >= world.companionCapOf(inst));
+
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
 const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
@@ -1744,6 +1751,11 @@ export class World {
   /** ONE-SHOT: the Tracker's-fire dwell — opens the BESTIARY (same idiom). */
   trackerDwellRequested = false;
   private trackerGate = new Dwell();
+  /** STASHED BONDS: companions whose skill was UNLEARNED (the pet dies with
+   *  the bond — no slot-juggling exploit) — remembered here so RELEARNING
+   *  the same skill returns them DOWNED, owed a revival. Serialized with
+   *  the character (character.ts merges them into `companions`). */
+  stashedCompanions: { defId: string; level: number; skillId: string }[] = [];
   /** ONE-SHOT: lingering at any REGISTERED vendor counter with stock (the
    *  data/vendors.ts registry) asks the main loop to open the Vendor screen. */
   vendorDwellRequested = false;
@@ -8152,6 +8164,14 @@ export class World {
     if (!this.meetsRequirements(inst.def.id, seat)) return false;
     m.skillInv.splice(invIndex, 1);
     m.knownSkills.set(inst.def.id, inst);
+    // A REMEMBERED BOND answers the relearning: companions stashed when
+    // this skill was unlearned return DOWNED at the keeper's side — the
+    // revival is owed, the exploit stays closed, the pet stays yours.
+    const stashed = this.stashedCompanions.filter(s => s.skillId === inst.def.id);
+    if (stashed.length) {
+      this.stashedCompanions = this.stashedCompanions.filter(s => s.skillId !== inst.def.id);
+      this.restoreCompanions(stashed.map(s => ({ ...s, downed: true })), seat.actor);
+    }
     return true;
   }
 
@@ -8182,6 +8202,16 @@ export class World {
     // A toggled summon contract dies with the skill that priced it — an
     // unlearned skill must never keep an army running with no off-switch.
     if (p.summonToggles.has(skillId)) this.dismissSummonToggle(p, skillId);
+    // THE BOND DOES NOT LAUNDER: unlearning a companion skill kills its
+    // tamed outright — no banking a living pet while the slot serves
+    // another gem. The bond is REMEMBERED (stash): relearn the same skill
+    // and the companion returns DOWNED, owed its revival.
+    for (const c of this.companionsOfSkill(p, skillId)) {
+      if (c.defId) this.stashedCompanions.push({ defId: c.defId, level: c.level, skillId });
+      this.text(vec(c.pos.x, c.pos.y - 22), 'the bond breaks', '#c08a68', 12);
+      c.companion = false; // past the down-intercept: this death is real
+      this.kill(c, true);
+    }
     m.skillInv.push(inst);
     return true;
   }
@@ -10935,6 +10965,48 @@ export class World {
       && a.owner === keeper && a.sourceSkillId === '__companion:' + skillId);
   }
 
+  /** EVERY body bonded to one companion skill (downed included — a downed
+   *  bond still HOLDS its slot; only true death or the Tracker frees it). */
+  companionsOfSkill(keeper: Actor, skillId: string): Actor[] {
+    return this.actors.filter(a => a.companion && !a.dead
+      && a.owner === keeper && a.sourceSkillId === '__companion:' + skillId);
+  }
+
+  /** Held BOND UNITS: distinct bondGroups (a future pack of hounds counts
+   *  once). The tame refusal and the 'companionsFull' conversion rule both
+   *  read this — one truth for "is the kennel full". */
+  companionBondsOfSkill(keeper: Actor, skillId: string): number {
+    const groups = new Set<string>();
+    for (const a of this.companionsOfSkill(keeper, skillId)) {
+      groups.add(a.bondGroup ?? String(a.id));
+    }
+    return groups.size;
+  }
+
+  /** Bond slots one companion skill may hold (TameEffect.slots, default 1). */
+  companionCapOf(inst: SkillInstance): number {
+    const fx = inst.def.effects.find((f): f is Extract<SkillEffect, { type: 'tame' }> => f.type === 'tame');
+    return Math.max(1, fx?.slots ?? 1);
+  }
+
+  /** Does a minion SERVE the named skill? True for its direct summons AND
+   *  its bonded companions — retinue-scoped orders (meta commands,
+   *  conducted casts) reach both without knowing the marker scheme. */
+  minionServes(m: Actor, skillId: string): boolean {
+    return m.sourceSkillId === skillId || m.sourceSkillId === '__companion:' + skillId;
+  }
+
+  /** The face a bar slot PRESENTS: while a skill's conversion rule holds,
+   *  the slot IS the converted skill — color, initials, cooldown sweep (a
+   *  full Tame presents the Whistle) — else the skill itself. The renderer
+   *  reads this so the button never lies about what a press will do. */
+  slotFaceOf(caster: Actor, inst: SkillInstance): SkillDef {
+    const conv = inst.def.convert;
+    return conv && SKILLS[conv.skillId] && convertRuleHolds(conv.when, caster, inst, this)
+      ? SKILLS[conv.skillId]
+      : inst.def;
+  }
+
   /** Refund a just-stamped cooldown (a whistle with no bond must never burn
    *  its long clock). */
   private refundCooldown(caster: Actor, skillId: string): void {
@@ -10949,8 +11021,9 @@ export class World {
     fx: Extract<SkillEffect, { type: 'tame' }>): void {
     const def = inst.def;
     const mdef = target.defId ? MONSTERS[target.defId] : undefined;
-    if (this.companionOf(caster, def.id)) {
-      this.failNote(caster, def.id + ':bonded', 'the bond holds one already');
+    if (this.companionBondsOfSkill(caster, def.id) >= this.companionCapOf(inst)) {
+      this.failNote(caster, def.id + ':bonded',
+        this.companionCapOf(inst) > 1 ? 'every bond is held' : 'the bond holds one already');
       return;
     }
     if (!mdef || target.owner || target.companion || target.team === caster.team
@@ -10961,9 +11034,26 @@ export class World {
       this.failNote(caster, def.id + ':willful', 'it will not be tamed');
       return;
     }
-    if (fx.maxLifeFrac !== undefined && target.life > fx.maxLifeFrac * target.maxLife()) {
-      this.failNote(caster, def.id + ':unbroken', 'weaken it first');
-      return;
+    // THE CLAIM ROLL: weakened to `sureBelow` the bond is CERTAIN; above it
+    // the beast's own will contests — the chance climbs linearly from
+    // wildChance (full life; the sneak-tame lever) to certainty at the
+    // threshold. A shrug costs the whole focused cast and the cooldown —
+    // that clock IS the retry economy. wildChance 0/absent restores the
+    // old hard weaken-it-first gate.
+    const frac = target.life / Math.max(1, target.maxLife());
+    const sure = fx.sureBelow ?? fx.maxLifeFrac;
+    if (sure !== undefined && frac > sure) {
+      const wild = fx.wildChance ?? 0;
+      if (wild <= 0) {
+        this.failNote(caster, def.id + ':unbroken', 'weaken it first');
+        return;
+      }
+      const p = wild + (1 - wild)
+        * Math.max(0, Math.min(1, (1 - frac) / Math.max(0.001, 1 - sure)));
+      if (!chance(p)) {
+        this.text(vec(target.pos.x, target.pos.y - 20), 'resisted!', '#c08a68', 13);
+        return;
+      }
     }
     this.tameCompanion(caster, target, def.id);
   }
@@ -10976,6 +11066,9 @@ export class World {
     beast.kind = 'companion';
     beast.companion = true;
     beast.sourceSkillId = '__companion:' + skillId;
+    // Solo claims are their own bond unit; pack-style claims overwrite
+    // with a shared key (companionBondsOfSkill counts DISTINCT groups).
+    beast.bondGroup = String(beast.id);
     beast.noBounty = true;
     beast.lifelineId = undefined;      // a bond is not borrowed unlife
     beast.squadId = undefined; beast.squadLeader = undefined;
@@ -11021,14 +11114,23 @@ export class World {
   }
 
   /** Re-field SAVED companions beside the resuming keeper (character.ts):
-   *  the bond survives the save file exactly as it survives a zone edge. */
-  restoreCompanions(list: { defId: string; level: number; skillId: string; downed?: boolean }[]): void {
+   *  the bond survives the save file exactly as it survives a zone edge.
+   *  A bond whose skill is NOT currently known (unlearned before the save)
+   *  goes to the STASH instead — it returns downed when the skill does. */
+  restoreCompanions(
+    list: { defId: string; level: number; skillId: string; downed?: boolean }[],
+    keeper: Actor = this.player,
+  ): void {
     for (const c of list) {
       if (!MONSTERS[c.defId]) continue; // a removed def releases the bond
-      const beast = this.createMonster(c.defId, Math.max(1, c.level), this.player.team, this.player);
-      this.tameCompanion(this.player, beast, c.skillId);
+      if (keeper === this.player && !this.meta.knownSkills.has(c.skillId)) {
+        this.stashedCompanions.push({ defId: c.defId, level: c.level, skillId: c.skillId });
+        continue;
+      }
+      const beast = this.createMonster(c.defId, Math.max(1, c.level), keeper.team, keeper);
+      this.tameCompanion(keeper, beast, c.skillId);
       beast.pos = this.clampPos(vec(
-        this.player.pos.x + rand(-60, 60), this.player.pos.y + rand(40, 80)), beast.radius);
+        keeper.pos.x + rand(-60, 60), keeper.pos.y + rand(40, 80)), beast.radius);
       if (c.downed) { beast.downed = true; beast.life = 0; }
       this.actors.push(beast);
     }
@@ -11203,6 +11305,19 @@ export class World {
       // A stale chain-depth stamp on a NO-LONGER-triggered skill must not
       // dampen its events — direct casts always count as real actions.
       if (inst.state?.trigDepth) inst.state.trigDepth = 0;
+    }
+    // SKILL CONVERSION (SkillDef.convert): while the rule holds, this press
+    // IS the converted skill — minted per host at the host's effective
+    // level with hostSkillId stamped (the meta/combo idiom), so a full
+    // Tame's press whistles ITS OWN companion. The HUD already presented
+    // this face (slotFaceOf); the button does what it showed.
+    {
+      const conv = inst.def.convert;
+      if (conv && SKILLS[conv.skillId]
+        && convertRuleHolds(conv.when, caster, inst, this)) {
+        return this.useSkill(caster,
+          this.mintMetaInstance(caster, inst, conv.skillId), aim, seatPress);
+      }
     }
     // PREREQUISITE GATES: an unmet gate is the ONE canUse refusal worth a
     // note — the player should learn "not ready", not wonder about mana.
@@ -13374,7 +13489,7 @@ export class World {
         const hostId = inst.hostSkillId;
         const troops = this.actors.filter(m =>
           m.owner === lord && !m.dead && !m.construct
-          && (!hostId || m.sourceSkillId === hostId));
+          && (!hostId || this.minionServes(m, hostId)));
         let sent = 0;
         for (const m of troops) {
           let orderAt: Vec2 | null = null;
@@ -13444,7 +13559,7 @@ export class World {
             const takes = affects === 'minions' ? owned
               : affects === 'squad' ? squadmate : (owned || squadmate);
             if (!takes) continue;
-            if (inst.hostSkillId && m.sourceSkillId !== inst.hostSkillId) continue;
+            if (inst.hostSkillId && !this.minionServes(m, inst.hostSkillId)) continue;
             if (fx.radius !== undefined && dist(m.pos, caster.pos) > fx.radius) continue;
             // THE OBEDIENCE ROLL: loyalty is the recipient's brain dial,
             // discipline the issuer's pressure — both plain data.
@@ -13477,18 +13592,23 @@ export class World {
       // hostSkillId scopes the call to the whistling skill's own bond; a
       // bar-cast whistle (no host) reaches any bond the keeper holds.
       if (fx.type === 'whistleCompanion') {
-        const comp = inst.hostSkillId
-          ? this.companionOf(caster, inst.hostSkillId)
-          : this.actors.find(a => a.companion && !a.dead && a.owner === caster);
-        if (!comp) {
+        // EVERY bonded body answers (one bond today; a full kennel or a
+        // hound-pack later — the whistle never picks favorites).
+        const bonded = inst.hostSkillId
+          ? this.companionsOfSkill(caster, inst.hostSkillId)
+          : this.actors.filter(a => a.companion && !a.dead && a.owner === caster);
+        if (!bonded.length) {
           this.failNote(caster, def.id + ':nobond', 'no companion bonded');
           this.refundCooldown(caster, def.id);
         } else {
-          if (comp.downed) this.reviveCompanion(comp, 1);
-          comp.life = comp.maxLife();
-          this.teleportActor(comp, vec(
-            caster.pos.x + Math.cos(caster.facing + Math.PI * 0.75) * 40,
-            caster.pos.y + Math.sin(caster.facing + Math.PI * 0.75) * 40), '#a8d8a0');
+          bonded.forEach((comp, i) => {
+            if (comp.downed) this.reviveCompanion(comp, 1);
+            comp.life = comp.maxLife();
+            const ang = caster.facing + Math.PI * 0.75 + i * 0.7;
+            this.teleportActor(comp, vec(
+              caster.pos.x + Math.cos(ang) * 40,
+              caster.pos.y + Math.sin(ang) * 40), '#a8d8a0');
+          });
           this.text(vec(caster.pos.x, caster.pos.y - 24), 'the bond answers', '#a8d8a0', 12);
         }
       }

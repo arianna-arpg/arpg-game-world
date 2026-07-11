@@ -34,9 +34,10 @@ import { MONSTER_NAME_CFG, MONSTER_NAMES } from './monsterNames';
 import { RARITY_DEFS } from '../engine/rarity';
 import {
   validateStamps, doodadRuleOf, doodadRuleKinds, hasDoodadRule,
-  hasLandmark, hasLandmarkBuilder, landmarkDefs,
+  hasLandmark, hasLandmarkBuilder, landmarkDefs, hasLayout,
 } from '../engine/levelgen';
 import { hasCommandKind } from '../engine/ai';
+import { hasConvertRule } from '../engine/skills';
 import { DOODAD_VISUALS } from './doodadVisuals';
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
@@ -62,6 +63,45 @@ export function validateContent(): void {
     ]),
   ];
   for (const msg of validateStamps(layoutSources)) warn(msg);
+
+  // FIXTURES: a mistyped structure id silently drops the building at
+  // generation (generateLayout's `if (s && …)` skips unknowns without a
+  // word) — the town's smithy would just not exist. Every authored fixture
+  // must resolve against STRUCTURES.
+  for (const z of Object.values(ZONES)) {
+    for (const f of z.fixtures ?? []) {
+      if (!STRUCTURES[f.structure]) warn(`zone ${z.id}: fixture names unknown structure '${f.structure}'`);
+    }
+  }
+
+  // LAYOUT PARAMS, liquid half: recipe knobs whose VALUE names a liquid
+  // (riverLiquid/negativeLiquid/frozenLiquid/… — the convention is any key
+  // containing 'liquid') silently degrade to water when unregistered; the
+  // landmark params get this check via validateLandmarks, the layout recipes
+  // read these from tileset/biome/zone data that nothing else covers.
+  const liquids = new Set(liquidIds());
+  const paramSources: { source: string; params?: Record<string, unknown> }[] = [
+    ...Object.values(TILESETS).map(t => ({ source: `tileset ${t.id}`, params: t.layoutParams })),
+    ...Object.entries(BIOMES).map(([id, b]) => ({ source: `biome ${id}`, params: b.layoutParams })),
+    ...Object.values(ZONES).map(z => ({ source: `zone ${z.id}`, params: z.layoutParams })),
+  ];
+  for (const { source, params } of paramSources) {
+    for (const [key, v] of Object.entries(params ?? {})) {
+      if (!/liquid/i.test(key) && key !== 'gulf') continue;
+      if (typeof v === 'string' && !liquids.has(v)) {
+        warn(`${source}: layoutParams.${key} names unregistered liquid '${v}' (degrades to water)`);
+      }
+    }
+  }
+
+  // FORCED LAYOUTS: biome allowedLayouts are validated at boot, but a
+  // tileset's forceLayout rode past that net — an unregistered id degrades
+  // to a silent plains scatter.
+  for (const t of Object.values(TILESETS)) {
+    if (t.forceLayout && !hasLayout(t.forceLayout)) {
+      warn(`tileset ${t.id}: forceLayout '${t.forceLayout}' is not a registered layout`);
+    }
+  }
 
   // VISUAL COVERAGE SWEEP — the "don't miss things in multiple passes" net.
   // Every kind the rules registry knows should own a DOODAD_VISUALS entry
@@ -529,6 +569,19 @@ export function validateContent(): void {
       }
       if (s.channel || s.chargeUp || s.guard) {
         warn(`skill ${s.id}: concentration cannot share the bar with channel/chargeUp/guard`);
+      }
+    }
+    // SKILL CONVERSION: both halves are typo'd-id dead buttons — an unknown
+    // payload never casts, an unregistered rule never converts. And a
+    // convert chain (payload converting onward) would recurse — refuse it.
+    if (s.convert) {
+      if (!SKILLS[s.convert.skillId]) {
+        warn(`skill ${s.id}: convert payload '${s.convert.skillId}' is not a catalog skill`);
+      } else if (SKILLS[s.convert.skillId].convert) {
+        warn(`skill ${s.id}: convert payload '${s.convert.skillId}' converts onward (chains recurse — flatten them)`);
+      }
+      if (!hasConvertRule(s.convert.when)) {
+        warn(`skill ${s.id}: convert rule '${s.convert.when}' is not in CONVERT_RULES`);
       }
     }
     for (const cid of s.comboChain?.skills ?? []) {

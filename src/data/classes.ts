@@ -234,6 +234,22 @@ export const CLASSES: ClassDef[] = [
     },
     bar: ['sanctified_strike', 'mend', 'consecration', null, null, null, null, null],
     startNode: 'wil_start', // the devout ward → the Willpower point
+  },
+  {
+    id: 'tamer', name: 'Tamer',
+    look: 'class_ranger',
+    description: 'A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus, and fights beside the bond — the pet at the front, the whistle in reserve.',
+    color: '#a8c87a',
+    attributes: {
+      strength: 2, prowess: 2, fortitude: 4,
+      dexterity: 14, finesse: 4, charisma: 8,
+      intelligence: 0, wisdom: 14, willpower: 2,
+      vitality: 10,
+    },
+    // The sneak-and-claim opener BY DESIGN: cloak in, hold the gaze, and the
+    // wild answers — combat is what happens when the claim slips.
+    bar: ['wild_strike', 'tame_beast', 'cloak', null, null, null, null, null],
+    startNode: 'wis_start', // the beast-bond is Wisdom's craft
   }
 ];
 

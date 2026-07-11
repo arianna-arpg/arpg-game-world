@@ -3702,11 +3702,15 @@ export class Renderer {
       ctx.strokeRect(x, by, slot, slot);
       if (inst) {
         const def = inst.def;
+        // THE SLOT'S FACE: a converted skill (SkillDef.convert — a full
+        // Tame presses as the Whistle) presents the CONVERTED look: color,
+        // initials, and the cooldown clock a press would actually answer to.
+        const face = world.slotFaceOf(p, inst);
         const cost = p.skillCost(inst);
         // GATED skills grey out hard: no fuel in the pool, no afflicted
         // target in range — the bar tells you before the button does.
-        const gated = !world.skillUsable(p, inst);
-        ctx.fillStyle = def.color;
+        const gated = face === def && !world.skillUsable(p, inst);
+        ctx.fillStyle = face.color;
         // A toggled-ON contract is always bright: the off-press is free —
         // "unaffordable" dimming would lie about the one press that helps.
         ctx.globalAlpha = gated ? 0.15
@@ -3716,12 +3720,12 @@ export class Renderer {
         ctx.fillStyle = '#0a0a0e';
         ctx.font = 'bold 13px Verdana';
         // Stateful skills can change face: Mark shows REC while armed.
-        const label = inst.state?.markPos ? 'REC' : initials(def.name);
+        const label = inst.state?.markPos ? 'REC' : initials(face.name);
         ctx.fillText(label, x + slot / 2, by + slot / 2 + 5);
         // Cooldown sweep — measured against the clock actually SET (an
         // Apotheosis-imposed cooldown sweeps too, not just innate ones).
-        const cd = p.cooldowns.get(def.id);
-        const cdTotal = p.cooldownTotals.get(def.id) ?? def.cooldown;
+        const cd = p.cooldowns.get(face.id);
+        const cdTotal = p.cooldownTotals.get(face.id) ?? face.cooldown;
         if (cd !== undefined && cdTotal > 0) {
           ctx.fillStyle = 'rgba(0,0,0,0.65)';
           const frac = clamp(cd / cdTotal, 0, 1);

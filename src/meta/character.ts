@@ -135,13 +135,19 @@ export function serializeCharacter(world: World): CharacterSave {
     essences: { ...m.essences },
     vestiges: { ...m.vestiges },
     offerings: m.offerings,
-    companions: world.actors
-      .filter(a => a.companion && !a.dead && a.owner === world.player && a.defId)
-      .map(a => ({
-        defId: a.defId!, level: a.level,
-        skillId: (a.sourceSkillId ?? '').replace('__companion:', ''),
-        ...(a.downed ? { downed: true } : {}),
-      })),
+    companions: [
+      ...world.actors
+        .filter(a => a.companion && !a.dead && a.owner === world.player && a.defId)
+        .map(a => ({
+          defId: a.defId!, level: a.level,
+          skillId: (a.sourceSkillId ?? '').replace('__companion:', ''),
+          ...(a.downed ? { downed: true } : {}),
+        })),
+      // STASHED bonds (skill unlearned, pet slain-and-remembered) ride the
+      // same list marked downed; restoreCompanions routes them back to the
+      // stash on load since their skill isn't known.
+      ...world.stashedCompanions.map(s => ({ ...s, downed: true as const })),
+    ],
     bar: world.player.skills.map(s => s ? s.def.id : null),
     level: world.player.level,
     expedition: world.manifest,

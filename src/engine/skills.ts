@@ -269,6 +269,46 @@ export function instanceMeta(inst: SkillInstance): { skillId: string; label: str
   return instanceMetas(inst)[0];
 }
 
+// === SKILL CONVERSION ==========================================================
+// The EXHAUSTED-SKILL two-for-one (SkillDef.convert): while a rule holds,
+// PRESSING this skill casts another catalog skill instead — a Tame whose
+// bond is full presses as the Whistle; a future kennel converts only at
+// four held bonds. The rule is an OPEN REGISTRY entry ('companionsFull'
+// ships; packages register their own), the payload is minted per host at
+// the host's effective level with hostSkillId stamped (the meta/combo
+// idiom — a converted Whistle scopes to THIS gem's companions), and the
+// HUD presents the converted FACE (World.slotFaceOf) so the button never
+// lies. The slot's META stays the HOST's own (Attack! rides Tame however
+// the base press resolves).
+
+export interface ConvertSpec {
+  /** Conversion rule id from CONVERT_RULES (open registry). */
+  when: string;
+  /** The catalog skill a converted press casts. */
+  skillId: string;
+}
+
+export type ConvertRule = (
+  caster: import('./actor').Actor,
+  inst: SkillInstance,
+  world: import('./world').World,
+) => boolean;
+
+/** The open conversion-rule registry — a new condition is a new entry
+ *  (registerConvertRule), never an engine edit. Rules are STATELESS reads;
+ *  run-state belongs on the world they're handed. */
+export const CONVERT_RULES: Record<string, ConvertRule> = {};
+export function registerConvertRule(id: string, rule: ConvertRule): void {
+  CONVERT_RULES[id] = rule;
+}
+export function hasConvertRule(id: string): boolean { return !!CONVERT_RULES[id]; }
+export function convertRuleHolds(
+  when: string, caster: import('./actor').Actor, inst: SkillInstance,
+  world: import('./world').World,
+): boolean {
+  return CONVERT_RULES[when]?.(caster, inst, world) ?? false;
+}
+
 /** THE GRIMOIRE form this instance summons instead of reading corpses —
  *  set only when the delivery opts in (grimoire) AND a form is attuned.
  *  One predicate every consumer shares: targeting bypass, the summon
@@ -2449,8 +2489,20 @@ export interface TameEffect {
   tags: string[];
   /** Also allow RARE-rarity bodies (default false; bosses never). */
   allowRares?: boolean;
-  /** Target must be at or below this life fraction (default 1 = any). */
+  /** At or below this life fraction the claim is CERTAIN (`maxLifeFrac` is
+   *  the legacy alias). Above it the beast's own will contests: the chance
+   *  climbs linearly from `wildChance` at full life to certainty at the
+   *  threshold. Omit both = any state claims outright. */
+  sureBelow?: number;
   maxLifeFrac?: number;
+  /** Claim chance against a FULL-life target (the sneak-tame lever — the
+   *  Tamer opens without drawing blood). 0/omitted = hard refusal above
+   *  the threshold (the old weaken-it-first gate). */
+  wildChance?: number;
+  /** Bond UNITS this skill may hold (default 1). Both tryTame's refusal
+   *  and the 'companionsFull' conversion rule read it — a 4-slot kennel
+   *  converts to the Whistle only when all four bonds are held. */
+  slots?: number;
 }
 
 /** THE WHISTLE (the tame skill's meta payload): the keeper's recall — the
@@ -2942,6 +2994,12 @@ export interface SkillDef {
    *  cursor rides the acquired quarry (see ConcentrationSpec). Requires an
    *  actor-resolving `targeting` spec; replaces the plain cast bar. */
   concentration?: ConcentrationSpec;
+
+  /** SKILL CONVERSION: while `when` holds, pressing this skill casts
+   *  `skillId` instead (see ConvertSpec — the exhausted-skill two-for-one:
+   *  a full Tame presses as the Whistle). The HUD presents the converted
+   *  face; the slot's meta stays this skill's own. */
+  convert?: ConvertSpec;
 
   /** META-ACTION: a SECOND ability riding this skill's hotbar slot — a
    *  mini-button above the slot, fired with SHIFT+key (never a bar slot of

@@ -961,6 +961,10 @@ export class Actor {
    *  by a lingering ally seat or its keeper's whistle. Sweep-exempt via its
    *  '__companion:' sourceSkillId marker; released only at the Tracker. */
   companion = false;
+  /** BOND UNIT: companions sharing a bondGroup count as ONE held bond (a
+   *  future pack of hounds fills one kennel slot together). Solo tames
+   *  group under their own actor id; pack-style claims stamp a shared key. */
+  bondGroup?: string;
   /** Revive dwell accrued beside this downed companion (any standing, idle
    *  ally seat feeds it — the seat-revive idiom, one accumulator). */
   companionReviveDwell = 0;
