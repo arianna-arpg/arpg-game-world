@@ -31,12 +31,19 @@ export const PARITY_PACK = [
   { id: 'blood_mite', count: 1 },
 ];
 
+/** Optional build swap for the standard questions: `tier` names a BUILDS
+ *  prefix ('starter' | 'geared' | any future wardrobe tier) — scenario ids
+ *  carry the non-default tier so bands and baselines stay distinct. */
+export interface TierOpt { tier?: 'starter' | 'geared' }
+const tierOf = (o?: TierOpt): string => o?.tier ?? 'starter';
+const tierTag = (o?: TierOpt): string => (tierOf(o) === 'starter' ? '' : `${tierOf(o)}_`);
+
 /** Sustained single-target output vs the immortal training dummy. */
-export function dummyDps(classId: string, level: number): ScenarioDef {
+export function dummyDps(classId: string, level: number, opts?: TierOpt): ScenarioDef {
   return {
-    id: `dummy_dps_${classId}_l${level}`,
-    label: `Dummy DPS — ${classId} starter @ L${level}`,
-    build: `starter_${classId}_l${level}`,
+    id: `dummy_dps_${tierTag(opts)}${classId}_l${level}`,
+    label: `Dummy DPS — ${classId} ${tierOf(opts)} @ L${level}`,
+    build: `${tierOf(opts)}_${classId}_l${level}`,
     pilot: pilotFor(classId),
     waves: [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: 70 }],
     duration: 30,
@@ -46,11 +53,11 @@ export function dummyDps(classId: string, level: number): ScenarioDef {
 }
 
 /** Time-to-kill a parity pack — the bread-and-butter clear feel. */
-export function parityPack(classId: string, level: number): ScenarioDef {
+export function parityPack(classId: string, level: number, opts?: TierOpt): ScenarioDef {
   return {
-    id: `ttk_parity_${classId}_l${level}`,
-    label: `Parity pack TTK — ${classId} starter @ L${level}`,
-    build: `starter_${classId}_l${level}`,
+    id: `ttk_parity_${tierTag(opts)}${classId}_l${level}`,
+    label: `Parity pack TTK — ${classId} ${tierOf(opts)} @ L${level}`,
+    build: `${tierOf(opts)}_${classId}_l${level}`,
     pilot: pilotFor(classId),
     parityLevel: level,
     waves: [{ monsters: PARITY_PACK }],
@@ -103,6 +110,15 @@ for (const classId of STARTER_CLASSES) {
   add(parityPack(classId, 5));
   add(parityPack(classId, 10));
   add(pressure(classId, 5));
+  // THE GEARED TWINS: same questions, dressed (see GEARED_CFG). The
+  // bare↔geared delta at each band IS the measured value of found gear —
+  // and the tier where gear-affecting fixes stop being invisible to suites.
+  for (const level of [5, 10, 20]) {
+    add(dummyDps(classId, level, { tier: 'geared' }));
+    add(parityPack(classId, level, { tier: 'geared' }));
+  }
+  add(dummyDps(classId, 20));
+  add(parityPack(classId, 20));
 }
 for (const m of ['zombie', 'skeleton_warrior', 'blood_mite']) {
   add(monsterDuel('warrior', 5, m));
@@ -252,6 +268,13 @@ export const SUITES: Record<string, string[]> = {
   duels: Object.keys(SCENARIOS).filter(id => id.startsWith('duel_')),
   /** The minion-support forwarding A/B pairs (bare vs forwarded gems). */
   minions: Object.keys(SCENARIOS).filter(id => id.startsWith('minion_probe_')),
+  /** THE GEAR VALUE CURVE: bare vs geared twins at the measurement bands —
+   *  read as pairs (dps ratio, ttk ratio); the spread across bands is the
+   *  found-gear power curve. */
+  gearvalue: STARTER_CLASSES.flatMap(c => [5, 10, 20].flatMap(l => [
+    `dummy_dps_${c}_l${l}`, `dummy_dps_geared_${c}_l${l}`,
+    `ttk_parity_${c}_l${l}`, `ttk_parity_geared_${c}_l${l}`,
+  ])).filter(id => !!SCENARIOS[id]),
   /** The fortune-fabric probes (rollTop gates, riders, spread, variance). */
   fortune: Object.keys(SCENARIOS).filter(id => id.startsWith('fortune_probe_')),
   /** Curated texture matchups (starter archetypes × confirmed texture seats). */

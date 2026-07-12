@@ -28,7 +28,11 @@ import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { entryClassId, entryLabel, entryLevel } from '../src/sim/builds';
 import { BUILDS } from '../src/sim/data/builds';
 import { PANELS, expandPanel, type ResolvedTarget } from '../src/sim/data/panels';
-import { MATCHUP_CFG, SCENARIOS, SUITES, matchupDuel, pilotFor } from '../src/sim/data/scenarios';
+import { COMPAT_CFG, compatCensus, runCompatMatrix, type MatrixResult, type PairProbeResult } from '../src/sim/compat';
+import { ECONOMY_CFG, auditAffixes, auditLoot, killDropExpectations, unreachableAffixes } from '../src/sim/economy';
+import { gearedBuild, starterBuild } from '../src/sim/data/builds';
+import { STARTER_CLASSES } from '../src/meta/account';
+import { MATCHUP_CFG, SCENARIOS, SUITES, dummyDps, matchupDuel, parityPack, pilotFor } from '../src/sim/data/scenarios';
 import { TARGETS, gradeReport } from '../src/sim/data/targets';
 import { defenseProfiles, TEXTURE_CFG, type TextureId } from '../src/sim/textures';
 import { runScenario } from '../src/sim/runner';
@@ -59,6 +63,9 @@ const num = (v: string | boolean | undefined, dflt: number): number => {
   const n = typeof v === 'string' ? Number(v) : NaN;
   return Number.isFinite(n) ? n : dflt;
 };
+/** csv of numbers; empty/blank pieces dropped (Number('') is 0 — the trap). */
+const csvNums = (s: string): number[] =>
+  s.split(',').map(x => x.trim()).filter(Boolean).map(Number).filter(Number.isFinite);
 
 // ---------------------------------------------------------------- reports --
 
@@ -262,7 +269,58 @@ function cmdSweep(args: Args): void {
   const what = args._[1] ?? 'skills';
   if (what === 'skills') sweepSkills(args);
   else if (what === 'matchups') sweepMatchups(args);
-  else throw new Error(`sweep supports 'skills' or 'matchups' (got '${what}')`);
+  else if (what === 'supports') sweepSupports(args);
+  else if (what === 'progression') sweepProgression(args);
+  else throw new Error(`sweep supports 'skills', 'matchups', 'supports' or 'progression' (got '${what}')`);
+}
+
+/** THE POWER CURVE: the standard questions (dummy DPS + parity TTK) asked at
+ *  every level band, bare and geared — per class. The table reads as player
+ *  power progression; the geared÷bare column is the gear value curve. */
+function sweepProgression(args: Args): void {
+  const classes = str(args.flags.classes, '').split(',').map(s => s.trim()).filter(Boolean);
+  const classIds = classes.length ? classes : [...STARTER_CLASSES];
+  const levels = str(args.flags.levels, '1,5,10,20').split(',').map(Number).filter(Number.isFinite);
+  const geared = !!args.flags.geared;
+  const seeds = num(args.flags.seeds, 5);
+  const baseSeed = num(args.flags['base-seed'], 0xa11ce);
+
+  const defs: ScenarioDef[] = [];
+  for (const classId of classIds) {
+    for (const level of levels) {
+      // Builds mint on demand — any level is a legal band, not just the
+      // registry's canonical ones.
+      const bare = starterBuild(classId, level);
+      BUILDS[bare.id] ??= bare;
+      defs.push(dummyDps(classId, level), parityPack(classId, level));
+      if (geared && level > 1) {
+        const g = gearedBuild(classId, level);
+        BUILDS[g.id] ??= g;
+        defs.push(dummyDps(classId, level, { tier: 'geared' }), parityPack(classId, level, { tier: 'geared' }));
+      }
+    }
+  }
+  console.log(`Progression: ${classIds.join(', ')} × L[${levels.join(', ')}]${geared ? ' × bare+geared' : ''} × ${seeds} seed(s) — ${defs.length * seeds} episode(s)…`);
+  const runName = `progression_${classIds.join('_')}`;
+  const { suite, episodes } = runDefs(runName, defs, seeds, baseSeed);
+  const dir = writeReport(runName, suite, episodes, str(args.flags.out, '') || undefined);
+
+  const cell = (id: string, metric: string): number | undefined =>
+    suite.scenarios.find(r => r.scenarioId === id)?.metrics[metric]?.mean;
+  for (const classId of classIds) {
+    console.log(`\n${classId} — power curve:`);
+    console.log(`  level   dps_dummy${geared ? '   geared      Δgear' : ''}   ttk_parity${geared ? '  geared' : ''}   life_floor%`);
+    for (const level of levels) {
+      const dps = cell(`dummy_dps_${classId}_l${level}`, 'dps_dummy');
+      const gdps = geared ? cell(`dummy_dps_geared_${classId}_l${level}`, 'dps_dummy') : undefined;
+      const ttk = cell(`ttk_parity_${classId}_l${level}`, 'ttk_wave_mean');
+      const gttk = geared ? cell(`ttk_parity_geared_${classId}_l${level}`, 'ttk_wave_mean') : undefined;
+      const floor = cell(`ttk_parity_${classId}_l${level}`, 'life_floor_pct');
+      const gearMul = dps && gdps ? `${(gdps / Math.max(dps, 1e-9)).toFixed(2)}×` : '';
+      console.log(`  ${String(level).padStart(5)}${String(dps ?? '—').padStart(12)}${geared ? String(gdps ?? '—').padStart(9) + gearMul.padStart(11) : ''}${String(ttk ?? '—').padStart(13)}${geared ? String(gttk ?? '—').padStart(8) : ''}${String(floor ?? '—').padStart(14)}`);
+    }
+  }
+  console.log(`\nReport: ${dir}`);
 }
 
 /** Parse a target spec: `panel:<id>` (resolved through the live classifier)
@@ -423,6 +481,148 @@ function sweepSkills(args: Args): void {
   console.log(`\nReport: ${dir}`);
 }
 
+/** THE SKILL × SUPPORT MATRIX (src/sim/compat.ts): census every pair through
+ *  the real socket gate, then A/B-probe fitting pairs — bare vs socketed at
+ *  the same seed — and classify: effective / cost_only / negligible / INERT
+ *  (byte-identical fingerprint). The triage report is the deliverable. */
+function sweepSupports(args: Args): void {
+  const opts = {
+    skillFilter: str(args.flags.filter, ''),
+    supportFilter: str(args.flags.support, ''),
+    level: num(args.flags.level, COMPAT_CFG.level),
+    gemLevel: typeof args.flags['gem-level'] === 'string' ? num(args.flags['gem-level'], 1) : undefined,
+    supportLevel: num(args.flags['support-level'], COMPAT_CFG.supportLevel),
+    duration: typeof args.flags.duration === 'string' ? num(args.flags.duration, COMPAT_CFG.dummyDuration) : undefined,
+    seeds: num(args.flags.seeds, 1),
+    baseSeed: num(args.flags['base-seed'], 0xc0ffee),
+    budget: num(args.flags.budget, COMPAT_CFG.budgetEpisodes),
+    staticOnly: !!args.flags['static-only'],
+  };
+
+  // The census is free — print its shape and the probe bill before running.
+  const census = compatCensus(opts.skillFilter, opts.supportFilter);
+  const eligible = census.rows.filter(r => r.fit !== 'refused').length;
+  console.log(`Census: ${census.skills.length} droppable skill(s) × ${census.supports.length} support(s) = ${census.rows.length} pair(s)`);
+  console.log(`  fits host lane: ${census.counts.host} · via crew only: ${census.counts.crew} · refused: ${census.counts.refused}`);
+  console.log(`  refused-but-mechanically-affine (tag-hygiene suspects): ${census.counts.suspects}`);
+  console.log(`  fitting pairs carrying an unread delivery-scoped payload: ${census.counts.unreadPairs}`);
+  if (!opts.staticOnly) {
+    const worst = eligible * opts.seeds + census.skills.length * opts.seeds;
+    console.log(`Probing up to ${eligible} pair(s) × ${opts.seeds} seed(s) (+${census.skills.length} bare baselines) — worst case ${worst} episode(s), budget ${opts.budget}.`);
+    if (worst > opts.budget) {
+      console.log(`  budget covers ~${Math.round((opts.budget / worst) * 100)}% — probes round-robin across supports; narrow with --filter/--support or raise --budget for full coverage.`);
+    }
+  }
+
+  const t0 = Date.now();
+  const result = runCompatMatrix(opts, msg => console.log(msg));
+  const secs = ((Date.now() - t0) / 1000).toFixed(1);
+  console.log(`Matrix done in ${secs}s: ${result.probed.length}/${result.eligible} pair(s) probed, ${result.episodesRun} episode(s), ${result.skipped} skipped (budget).`);
+
+  // ---- write artifacts ------------------------------------------------------
+  const dir = str(args.flags.out, '') ? path.resolve(str(args.flags.out, '')) : path.join(REPORTS_DIR, `compat_supports_${stamp()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'compat.json'), JSON.stringify({
+    cfg: result.cfg, opts, counts: result.census.counts,
+    eligible: result.eligible, episodesRun: result.episodesRun, skipped: result.skipped,
+    probed: result.probed,
+    suspects: result.census.rows.filter(r => r.suspect),
+  }, null, 2));
+  const csv = ['skill,support,fit,verdict,probe,identical_seeds,d_output_rel,top_moved,unread',
+    ...result.census.rows.map(r => {
+      const p = result.probed.find(x => x.skillId === r.skillId && x.supportId === r.supportId);
+      return [r.skillId, r.supportId, r.fit,
+        p?.verdict ?? (r.fit === 'refused' ? (r.suspect ? 'refused_suspect' : 'refused') : 'unprobed'),
+        p?.probe ?? '', p ? `${p.identicalSeeds}/${p.seeds}` : '',
+        p?.dOutputRel ?? '', p?.moved[0]?.key ?? '',
+        (r.unread ?? []).map(u => u.key).join('+')].join(',');
+    })].join('\n');
+  fs.writeFileSync(path.join(dir, 'census.csv'), csv);
+  fs.writeFileSync(path.join(dir, 'report.md'), compatMarkdown(result));
+
+  // ---- console triage -------------------------------------------------------
+  const inert = result.probed.filter(p => p.verdict === 'inert');
+  const costOnly = result.probed.filter(p => p.verdict === 'cost_only');
+  const negligible = result.probed.filter(p => p.verdict === 'negligible');
+  console.log(`\nVerdicts: effective ${result.probed.filter(p => p.verdict === 'effective').length} · inert ${inert.length} · cost_only ${costOnly.length} · negligible ${negligible.length}`);
+  if (inert.length) {
+    console.log(`\nINERT pairs (socket accepted, byte-identical episodes — the bug list):`);
+    for (const p of inert.slice(0, 25)) {
+      const why = p.unread?.length ? ` — static: '${p.unread.map(u => u.key).join("','")}' unread on this delivery` : '';
+      console.log(`  ${p.skillId} + ${p.supportId}${why}`);
+    }
+    if (inert.length > 25) console.log(`  … ${inert.length - 25} more in report.md`);
+  }
+  if (costOnly.length) {
+    console.log(`\nCOST-ONLY pairs (tax moved, no observed function — partial no-ops):`);
+    for (const p of costOnly.slice(0, 15)) console.log(`  ${p.skillId} + ${p.supportId} (${p.moved[0]?.key ?? '?'} moved)`);
+    if (costOnly.length > 15) console.log(`  … ${costOnly.length - 15} more in report.md`);
+  }
+  const suspects = result.census.rows.filter(r => r.suspect);
+  if (suspects.length) {
+    console.log(`\nREFUSED-SUSPECT pairs (mechanically affine, tag list refuses — triage for tag hygiene):`);
+    const bySupport = new Map<string, string[]>();
+    for (const s of suspects) {
+      const list = bySupport.get(s.supportId) ?? [];
+      list.push(s.skillId);
+      bySupport.set(s.supportId, list);
+    }
+    for (const [sup, skills] of [...bySupport.entries()].slice(0, 12)) {
+      console.log(`  ${sup}: ${skills.slice(0, 6).join(', ')}${skills.length > 6 ? ` (+${skills.length - 6})` : ''}`);
+    }
+  }
+  console.log(`\nReport: ${dir}`);
+}
+
+function compatMarkdown(result: MatrixResult): string {
+  const L: string[] = [];
+  const probedBy = (v: string) => result.probed.filter(p => p.verdict === v);
+  L.push(`# Skill × support interaction matrix`);
+  L.push('');
+  L.push(`- pairs: ${result.census.rows.length} (${result.census.skills.length} skills × ${result.census.supports.length} supports)`);
+  L.push(`- fits: host ${result.census.counts.host} · crew ${result.census.counts.crew} · refused ${result.census.counts.refused} (suspects ${result.census.counts.suspects})`);
+  L.push(`- probed: ${result.probed.length}/${result.eligible} eligible (${result.episodesRun} episodes; ${result.skipped} skipped by budget)`);
+  L.push(`- verdicts: effective ${probedBy('effective').length} · inert ${probedBy('inert').length} · cost_only ${probedBy('cost_only').length} · negligible ${probedBy('negligible').length}`);
+  L.push('');
+  const section = (title: string, rows: PairProbeResult[], fmt: (p: PairProbeResult) => string): void => {
+    if (!rows.length) return;
+    L.push(`## ${title} (${rows.length})`);
+    L.push('');
+    for (const p of rows) L.push(fmt(p));
+    L.push('');
+  };
+  section('INERT — socket accepted, byte-identical episodes (bug list)',
+    probedBy('inert') as PairProbeResult[],
+    p => `- \`${p.skillId}\` + \`${p.supportId}\` (${p.probe} probe${p.unread?.length ? `; static: ${p.unread.map(u => `'${u.key}' read only at ${u.site}`).join('; ')}` : ''})`);
+  section('COST-ONLY — tax moved, no observed function (partial no-ops)',
+    probedBy('cost_only') as PairProbeResult[],
+    p => `- \`${p.skillId}\` + \`${p.supportId}\` — moved: ${p.moved.map(m => m.key).join(', ')}`);
+  section('NEGLIGIBLE — diverged under noise (escalate seeds/duration before claiming)',
+    probedBy('negligible') as PairProbeResult[],
+    p => `- \`${p.skillId}\` + \`${p.supportId}\``);
+  const suspects = result.census.rows.filter(r => r.suspect);
+  if (suspects.length) {
+    L.push(`## REFUSED-SUSPECT — mechanically affine, tags refuse (${suspects.length})`);
+    L.push('');
+    for (const s of suspects) {
+      L.push(`- \`${s.skillId}\` × \`${s.supportId}\` — ${s.suspect!.map(x => `wants '${x.tag}', skill ${x.evidence}`).join('; ')}`);
+    }
+    L.push('');
+  }
+  const eff = probedBy('effective').sort((a, b) => b.dOutputRel - a.dOutputRel);
+  if (eff.length) {
+    L.push(`## EFFECTIVE — output delta extremes (support power table)`);
+    L.push('');
+    L.push('| skill | support | Δoutput | top channel |');
+    L.push('|---|---|---|---|');
+    for (const p of [...eff.slice(0, 20), ...eff.slice(-20)]) {
+      L.push(`| ${p.skillId} | ${p.supportId} | ${(p.dOutputRel * 100).toFixed(1)}% | ${p.moved[0]?.key ?? ''} |`);
+    }
+    L.push('');
+  }
+  return L.join('\n');
+}
+
 function sweepMatchups(args: Args): void {
   const buildRef = str(args.flags.build, '');
   if (!buildRef) throw new Error('sweep matchups needs --build <id|save:slot|save:path>');
@@ -473,7 +673,85 @@ function cmdAudit(args: Args): void {
   const what = args._[1] ?? 'monsters';
   if (what === 'monsters') auditMonsters(args);
   else if (what === 'textures') auditTextures(args);
-  else throw new Error(`audit supports 'monsters' or 'textures' (got '${what}')`);
+  else if (what === 'affixes') cmdAuditAffixes(args);
+  else if (what === 'drops') cmdAuditDrops(args);
+  else throw new Error(`audit supports 'monsters', 'textures', 'affixes' or 'drops' (got '${what}')`);
+}
+
+/** ITEM GENERATION under the microscope: N mints per ilvl band through the
+ *  real rollItem — rarity/base/affix distributions, dead-affix and dead-stat
+ *  detectors. The economy's first instrument (src/sim/economy.ts). */
+function cmdAuditAffixes(args: Args): void {
+  bootSimEngine();
+  const ilvls = csvNums(str(args.flags.ilvls, ''));
+  const audit = auditAffixes({
+    ilvls: ilvls.length ? ilvls : undefined,
+    n: typeof args.flags.n === 'string' ? num(args.flags.n, ECONOMY_CFG.affixSamples) : undefined,
+    category: (str(args.flags.category, '') || undefined) as never,
+    baseId: str(args.flags.base, '') || undefined,
+  });
+  const unreachable = unreachableAffixes();
+  const dir = path.join(REPORTS_DIR, `audit_affixes_${stamp()}`);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'affixes.json'), JSON.stringify({ ...audit, unreachable }, null, 2));
+
+  for (const b of audit.bands) {
+    const total = Object.values(b.rarities).reduce((s, x) => s + x, 0);
+    console.log(`\nilvl ${b.ilvl} — ${total} item(s): ${Object.entries(b.rarities).map(([r, c]) => `${r} ${(c / total * 100).toFixed(1)}%`).join(' · ')}`);
+    console.log(`  uniques seen: ${Object.keys(b.uniques).length} kind(s), ${Object.values(b.uniques).reduce((s, x) => s + x, 0)} drop(s)`);
+    if (b.neverRolled.length) {
+      console.log(`  eligible-but-NEVER-rolled affixes (${b.neverRolled.length}) — dead-affix triage:`);
+      for (const a of b.neverRolled.slice(0, 8)) console.log(`    ${a.id} (${a.kind}, weight ${a.weight}, ${a.eligibleBases} base pool(s))`);
+      if (b.neverRolled.length > 8) console.log(`    … +${b.neverRolled.length - 8} more in affixes.json`);
+    }
+    if (b.shareFlags.length) {
+      console.log(`  share flags (observed÷expected beyond ${ECONOMY_CFG.shareFlagLow}–${ECONOMY_CFG.shareFlagHigh}×):`);
+      for (const f of b.shareFlags.slice(0, 6)) console.log(`    ${f.id}: ${f.ratio}× (obs ${f.observed} vs exp ${f.expected})`);
+    }
+  }
+  if (audit.unknownStats.length) {
+    console.log(`\nDEAD STAT LINES (compiled mods naming stats the engine doesn't define):`);
+    for (const u of audit.unknownStats) console.log(`  '${u.stat}' via ${u.via}`);
+  } else {
+    console.log(`\nDead-stat sweep: clean (every compiled line resolves).`);
+  }
+  if (unreachable.length) {
+    console.log(`\nUNREACHABLE affixes (in NO base's pool at any ilvl): ${unreachable.map(u => u.id).join(', ')}`);
+  }
+  console.log(`\nReport: ${dir}`);
+}
+
+/** LOOT TABLES resolved N times per ilvl band + the DROP_CFG analytic
+ *  per-kill expectations — "what does a kill actually pay", measured. */
+function cmdAuditDrops(args: Args): void {
+  bootSimEngine();
+  const ilvls = csvNums(str(args.flags.ilvls, ''));
+  const audit = auditLoot({
+    tableId: str(args.flags.table, '') || undefined,
+    ilvls: ilvls.length ? ilvls : undefined,
+    n: typeof args.flags.n === 'string' ? num(args.flags.n, ECONOMY_CFG.lootSamples) : undefined,
+  });
+  const dir = path.join(REPORTS_DIR, `audit_drops_${idSafe(audit.tableId)}_${stamp()}`);
+  fs.mkdirSync(dir, { recursive: true });
+
+  console.log(`Loot table '${audit.tableId}':`);
+  for (const b of audit.bands) {
+    console.log(`  ilvl ${b.ilvl}: per resolve — items ${b.perResolve.items}, gems ${b.perResolve.gems}, vestiges ${b.perResolve.vestiges}`);
+    const items = Object.values(b.itemRarities).reduce((s, x) => s + x, 0);
+    if (items) {
+      console.log(`    rarities: ${Object.entries(b.itemRarities).map(([r, c]) => `${r} ${(c / items * 100).toFixed(1)}%`).join(' · ')}`);
+      console.log(`    uniques: ${Object.keys(b.uniques).length} kind(s) / ${Object.values(b.uniques).reduce((s, x) => s + x, 0)} drop(s)`);
+    }
+  }
+  const meanItems = audit.bands.reduce((s, b) => s + b.perResolve.items, 0) / Math.max(1, audit.bands.length);
+  const expectations = killDropExpectations(meanItems);
+  console.log(`\nPer-KILL expectations (DROP_CFG × mean table yield ${meanItems.toFixed(3)}):`);
+  console.log(`  tier       gear rolls   items/kill   gem%    vestige%`);
+  for (const e of expectations) {
+    console.log(`  ${e.tier.padEnd(10)} ${String(e.gearRolls).padStart(10)} ${String(e.itemsPerKill).padStart(12)} ${(e.gemChance * 100).toFixed(0).padStart(6)} ${(e.vestigeChance * 100).toFixed(0).padStart(9)}`);
+  }
+  fs.writeFileSync(path.join(dir, 'drops.json'), JSON.stringify({ ...audit, expectations }, null, 2));
+  console.log(`\nReport: ${dir}`);
 }
 
 /** The defense-texture ledger: every monster's sheet at the probe level plus
@@ -676,8 +954,16 @@ const HELP = `Hollow Wake balance harness
             [--vs panel:<id> | --vs id[:lvl],…]       (skill × enemy-texture matrix)
   sweep     matchups --build <id|save:ref> (--panel <id> | --targets id[:lvl],…)
             [--level N] [--seeds N] [--duration N]    (one build across a target panel)
+  sweep     supports [--filter skill] [--support substr] [--seeds N] [--budget N]
+            [--static-only] [--level N]               (skill × support no-op matrix)
+  sweep     progression [--classes a,b] [--levels 1,5,10,20] [--geared] [--seeds N]
+            (power curve per class; --geared adds the gear-value column)
   audit     monsters [--levels 1,5,10,20,40] [--filter substr]
   audit     textures [--level N] [--filter substr] [--check-panels]
+  audit     affixes  [--ilvls 1,5,10,20,40] [--n 4000] [--category id] [--base id]
+            (item-gen distributions, dead-affix + dead-stat detectors)
+  audit     drops    [--table world_gear] [--ilvls csv] [--n 2000]
+            (loot-table yields + DROP_CFG per-kill expectations)
   manifest  (JSON catalogs of everything runnable — for tooling/agents)
   compare   <a/report.json> <b/report.json> [--tolerance 0.15] [--abs-eps 0.5]
   baseline  write|check --suite <name> [--seeds N] [--tolerance 0.15]

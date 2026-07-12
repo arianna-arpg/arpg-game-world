@@ -20,8 +20,13 @@ npm run sim -- run --suite starters --as save:1        # the same questions, YOU
 npm run sim -- sweep skills --level 5     # every attack/spell skill, solo, ranked
 npm run sim -- sweep skills --level 5 --vs panel:textures_l8   # skill × enemy-texture matrix
 npm run sim -- sweep matchups --build player_my_char --panel textures_l8  # one build across the poles
+npm run sim -- sweep supports --support splitting      # skill × support no-op matrix (see below)
+npm run sim -- sweep progression --geared # the power curve + gear-value column per class
+npm run sim -- run --suite gearvalue --seeds 10        # bare↔geared twins at the bands
 npm run sim -- audit monsters             # stat curves per level band
 npm run sim -- audit textures --check-panels  # the defense-texture ledger + panel drift gate
+npm run sim -- audit affixes              # item-gen distributions + dead-affix/dead-stat detectors
+npm run sim -- audit drops                # loot-table yields + DROP_CFG per-kill expectations
 npm run sim -- manifest                   # machine-readable catalog of everything runnable
 npm run sim -- baseline check --suite smoke   # regression gate (exit 2 on breach)
 ```
@@ -85,11 +90,14 @@ human table). Baselines live in `balance/baselines/` and are **committed**.
 
 | Tier | Command | Question it answers | Cost |
 |---|---|---|---|
-| L0 static | `manifest`, `audit monsters`, `audit textures` | What exists? Stat curves? Which defensive poles are populated? | ms |
+| L0 static | `manifest`, `audit monsters`, `audit textures`, `sweep supports --static-only` | What exists? Stat curves? Which defensive poles are populated? Which skill × support pairs socket at all? | ms |
 | L1 dummy | `run --scenario dummy_dps_*`, `sweep skills` | Sustained output at equal investment | ~0.1s/episode |
-| L2 arena | `ttk_parity_*`, `pressure_*`, `duel_*`, `matchup_*` suites | Clear feel, survival, per-monster threat | ~0.2s/episode |
+| L2 arena | `ttk_parity_*`, `pressure_*`, `duel_*`, `matchup_*`, `gearvalue` suites | Clear feel, survival, per-monster threat, gear value | ~0.2s/episode |
 | L2 matrix | `sweep matchups`, `sweep skills --vs panel:…` | Build/skill × enemy-texture interaction grid | rows × cols × seeds episodes |
-| L3 (future) | zone/economy sims | Loot rates, XP tempo, event pressure | seconds |
+| L2 matrix | `sweep supports` | Skill × support FUNCTION matrix (works / inert / cost-only) | ~0.1–0.3s/pair |
+| L2 curve | `sweep progression [--geared]` | Player power per level band; the gear-value multiplier | classes × levels × 4 × seeds |
+| L3 economy | `audit affixes`, `audit drops` | Item-gen distributions, dead affixes/stats, loot yields per kill | ~ms/item |
+| L3 (future) | zone/XP sims | XP tempo, event pressure, travel economy | seconds |
 
 Speed is the design constraint that matters: a full smoke suite is ~3s, a
 9-skill sweep ~1.5s. Mass passes (hundreds of scenarios × tens of seeds) are
@@ -177,6 +185,39 @@ wrong; baselines express "don't move things by accident" and are exact.
   A full sweep against a 6-seat panel is ~6× the dummy sweep — filter first,
   matrix second.
 
+**The support matrix** (`sweep supports`) — the skill × support no-op hunt:
+- THE CENSUS is free and total: every droppable skill × every support through
+  the REAL socket gate (`supportFitsInst` / crew boarding). It also flags
+  REFUSED-SUSPECT pairs — the skill's delivery provably has a mechanic the
+  support demands (`MECHANIC_EVIDENCE` in `src/sim/compat.ts`), but the tag
+  list refuses the socket. Those are tag-hygiene candidates.
+- THE PROBES are A/B episodes at the SAME seed: bare vs socketed. The engine
+  is deterministic, so a byte-identical behavioral fingerprint is a
+  DEFINITIVE **inert** verdict (the gem changed nothing — not damage, not
+  statuses, not minions, not even a mana float). No statistics needed at one
+  seed; that's what makes 50k-pair coverage affordable.
+- Divergent pairs classify by which channel lanes moved (`CHANNEL_LANES`):
+  output/defense beyond noise = **effective** (the Δoutput column doubles as
+  a support-power table); cost alone = **cost_only** (a tax with no observed
+  function — the partial-no-op bucket); nothing beyond noise =
+  **negligible** (indeterminate — escalate seeds/duration, never cite as-is).
+- Crew-fit pairs probe KEYED: the resonance gem rides both runs, so the
+  verdict is about the boarded behavior, not the (by-design) dormant
+  keyless socket.
+- Probe shapes are data: dummy vs live targets (`LIVE_PROBE_*` rules — kills,
+  corpses, incoming damage), solo vs escort rigs (`ESCORT_HOST_RULES` — a
+  curse shows its worth through the escort's hits; trigger gems fire off its
+  events). A pair's report row names the shape that measured it.
+- Reading INERT rows: the row often carries a static annotation
+  (`data/graftReadSites.ts` — "'trail' is read only at spawnProjectile"),
+  which is the fix-it trail. An inert pair resolves ONE of two ways, both
+  legitimate: make it WORK (engine read-site or data payload) or make it
+  REFUSE honestly (tags/excludeTags) — a socket that takes the gem and does
+  nothing is the only wrong answer.
+- Cost: full coverage is ~55k episodes (hours). Slice with `--support`
+  (one gem catalog-wide) or `--filter` (one skill family), and use
+  `--budget N` for breadth-first coverage that states what it skipped.
+
 **Actual player builds** — two refs, one seam (`applySavedCharacter`, the
 game's own resume path — exact rolled gear, gem levels, companions):
 - `--as save:<slot|path>` reads a LIVE save right now ("how does my character
@@ -186,6 +227,29 @@ game's own resume path — exact rolled gear, gem levels, companions):
   `player_<file>` build ids — the standing real-build library every sweep and
   suite can name (see `balance/players/README.md`). Content drift on load
   (a removed skill/affix) lands in warnings, never silently.
+
+**The economy audits** (`audit affixes`, `audit drops`) — L3's first tier:
+- `audit affixes` mints N items per ilvl band through the real `rollItem`:
+  rarity/base/affix distributions, tier usage, plus two dead-content
+  detectors — ELIGIBLE-BUT-NEVER-ROLLED affixes (in a pool, never came out)
+  and DEAD STAT LINES (compiled mods naming stats the engine doesn't
+  define — the `attr_*` bug's class, permanently instrumented). Share flags
+  are base-mix-weighted APPROXIMATIONS (family exclusion skews them) —
+  triage, not proof; raise `--n` before believing a ratio.
+- `unreachableAffixes` runs sample-free: an affix whose tags match no base's
+  pool is dead data at any ilvl and any luck.
+- `audit drops` resolves a loot table N times per band and prints the
+  DROP_CFG-derived per-kill expectations beside it — drop-rate questions
+  ("what does a rare kill actually pay?") become one command.
+
+**The power curve** (`sweep progression [--geared]`, `run --suite gearvalue`):
+- Progression asks the standard questions (dummy DPS, parity TTK) at every
+  level band per class; `--geared` adds the wardrobe twins (`GEARED_CFG` in
+  `src/sim/data/builds.ts`) and prints the geared÷bare multiplier — the
+  measured value of found gear, and the tier where gear-affecting fixes
+  stop being invisible to suites.
+- The `gearvalue` suite is the standing regression form of the same
+  question at the canonical bands (baseline-able like any suite).
 
 **Seeds guidance:** 3 for a quick look, 10 for a decision, 30 when two results
 are within one standard deviation of each other. If `|Δ| < sd`, you don't have
@@ -203,6 +267,11 @@ a result — you have a coin flip; add seeds instead of arguing.
 | a design band | `src/sim/data/targets.ts` |
 | a pilot policy | `src/sim/pilots.ts` (`PilotSpec` union + one class) |
 | a metric | `src/sim/metrics.ts` (collector field + `collectMetrics` key + glossary entry here) |
+| a fingerprint channel | `src/sim/metrics.ts` (`fingerprint()` key) + its lane in `src/sim/compat.ts` `CHANNEL_LANES` |
+| a support-payload read-site | `src/data/graftReadSites.ts` (one row — the validator and the matrix both read it) |
+| a probe shape rule | `src/sim/compat.ts` (`LIVE_PROBE_*`, `ESCORT_HOST_RULES`, `MECHANIC_EVIDENCE`) |
+| a geared-tier wardrobe | `src/sim/data/builds.ts` (`GEARED_CFG`, or a build with explicit `GearSpec`s) |
+| an economy audit knob | `src/sim/economy.ts` (`ECONOMY_CFG`) |
 | an observation point | `src/engine/tap.ts` (type) + one `SIM_TAP.current?.…` line at the chokepoint — keep the header list honest |
 | a CLI verb | `balance/cli.ts` |
 

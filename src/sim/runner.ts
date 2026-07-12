@@ -196,6 +196,7 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       simSeconds: round2(simSeconds),
       ended,
       metrics,
+      fingerprint: collector.fingerprint(),
       casts: Object.fromEntries(collector.casts),
       deaths: collector.deaths.slice(0, 200),
       warnings: [...warnings, ...collector.warnings],

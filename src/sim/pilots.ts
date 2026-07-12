@@ -21,7 +21,7 @@
 import { dist } from '../core/math';
 import type { Actor } from '../engine/actor';
 import type { World } from '../engine/world';
-import { instanceTrigger } from '../engine/skills';
+import { instanceCurseField, instanceTrigger, socketSpec, type SkillInstance } from '../engine/skills';
 import type { PlayerInput, PlayerInputSource } from '../net/intent';
 import type { PilotSpec } from './types';
 
@@ -33,6 +33,9 @@ export const PILOT_CFG = {
   casterRange: 180,
   bandLow: 0.8,
   bandHigh: 1.15,
+  /** pair: seconds between host taps (buff/curse upkeep without starving
+   *  the escort's filler). */
+  pairHostPeriod: 3,
 };
 
 /** Nearest living foe; real (non-passive) threats win over scenery/dummies. */
@@ -57,7 +60,7 @@ class Pilot implements PlayerInputSource {
   private heldLast: boolean[] = [];
   private rotationCursor = 0;
 
-  constructor(private spec: Exclude<PilotSpec, { kind: 'idle' }>) {}
+  constructor(private spec: Extract<PilotSpec, { kind: 'turret' | 'brawler' | 'caster' }>) {}
 
   poll(actor: Actor, world: World, _dt: number): PlayerInput | null {
     const n = actor.skills.length;
@@ -150,8 +153,71 @@ class IdlePilot implements PlayerInputSource {
   poll(): PlayerInput | null { return null; }
 }
 
+/** Latch-shaped hosts are pressed ONCE and left standing: trigger-armed
+ *  (the key is an arm/disarm latch), drawn curses (curseOnHit / follow-mode
+ *  curse fields reserve while drawn), toggled auras, and summon contracts
+ *  (re-pressing re-mints the same crew). */
+function hostIsLatch(inst: SkillInstance): boolean {
+  if (instanceTrigger(inst) !== undefined) return true;
+  if (socketSpec(inst, 'curseOnHit') !== undefined) return true;
+  if (instanceCurseField(inst)?.mode === 'follow') return true;
+  const dv = inst.def.delivery as { type?: string; mode?: string };
+  return (dv.type === 'aura' && dv.mode === 'toggle') || dv.type === 'summon';
+}
+
+/** THE ESCORT RIG — see PilotSpec 'pair'. Movement is the brawler's close;
+ *  buttons are a metronome: host tapped on its period (or latched once),
+ *  the reference filler held every other tick. */
+class PairPilot implements PlayerInputSource {
+  private t = 0;
+  private nextHostAt = 0;
+  private latched = false;
+  private heldLast: boolean[] = [];
+
+  constructor(private spec: Extract<PilotSpec, { kind: 'pair' }>) {}
+
+  poll(actor: Actor, world: World, dt: number): PlayerInput | null {
+    this.t += dt;
+    const n = actor.skills.length;
+    const held: boolean[] = new Array(n).fill(false);
+    const edge: boolean[] = new Array(n).fill(false);
+    if (this.heldLast.length !== n) this.heldLast = new Array(n).fill(false);
+
+    const foe = nearestFoe(world, actor);
+    const aim = foe ? { x: foe.pos.x, y: foe.pos.y } : { x: actor.pos.x + Math.cos(actor.facing) * 60, y: actor.pos.y + Math.sin(actor.facing) * 60 };
+    let dx = 0, dy = 0;
+    if (foe) {
+      const want = actor.radius + foe.radius + (this.spec.engage ?? PILOT_CFG.meleeGap);
+      if (dist(actor.pos, foe.pos) > want) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
+    }
+
+    const host = actor.skills[this.spec.hostSlot];
+    const ref = actor.skills[this.spec.refSlot];
+    let pressedHost = false;
+    if (foe && host) {
+      const latch = hostIsLatch(host);
+      if (latch ? !this.latched : this.t >= this.nextHostAt) {
+        if (actor.canUse(host) || instanceTrigger(host)) {
+          edge[this.spec.hostSlot] = true;
+          held[this.spec.hostSlot] = true;
+          pressedHost = true;
+          this.latched = true;
+          this.nextHostAt = this.t + (this.spec.hostPeriod ?? PILOT_CFG.pairHostPeriod);
+        }
+      }
+    }
+    if (foe && ref && !pressedHost) {
+      held[this.spec.refSlot] = true;
+      if (!this.heldLast[this.spec.refSlot]) edge[this.spec.refSlot] = true;
+    }
+    this.heldLast = held;
+    return { dx, dy, aim, held, edge };
+  }
+}
+
 export function makePilot(spec: PilotSpec | undefined): PlayerInputSource {
   const s = spec ?? { kind: 'brawler' };
   if (s.kind === 'idle') return new IdlePilot();
+  if (s.kind === 'pair') return new PairPilot(s);
   return new Pilot(s);
 }

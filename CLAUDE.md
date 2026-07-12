@@ -38,11 +38,18 @@ and the player, monsters, and minions all act through a single skill pipeline
 - `npm run sim -- …` — the BALANCE HARNESS: the real engine headless and
   deterministic (seeded), running scenario suites over reference builds.
   `run --suite smoke` after any `src/data/` change; `sweep skills` ranks every
-  attack/spell skill at equal investment; `baseline check --suite smoke` is
-  the regression gate (exit 2 on breach). Docs: `docs/balance/README.md`
-  (framework + metrics glossary) and `docs/balance/AGENT_PLAYBOOK.md` (the
-  contract for agent-driven mass balance passes). Type-checked by
-  `tsconfig.sim.json` inside `npm run check`.
+  attack/spell skill at equal investment; `sweep supports` is the SKILL ×
+  SUPPORT NO-OP MATRIX (census through the real socket gate + same-seed A/B
+  probes — byte-identical fingerprint = definitive INERT; run a
+  `--support <gem>` slice after any supports.ts change); `sweep progression
+  --geared` prints the per-class power curve with the gear-value column;
+  `audit affixes` / `audit drops` are the ECONOMY AUDITS (dead-affix +
+  dead-stat detectors, loot yields vs DROP_CFG); `baseline check --suite
+  smoke` is the regression gate (exit 2 on breach). Docs:
+  `docs/balance/README.md` (framework + metrics glossary) and
+  `docs/balance/AGENT_PLAYBOOK.md` (the contract for agent-driven mass
+  balance passes, incl. run/follow-up recipes for the matrix + economy
+  passes). Type-checked by `tsconfig.sim.json` inside `npm run check`.
 - `npm run genqa` — the GENERATION QA HARNESS: generateLayout headless over
   the whole authored matrix (every tileset + variant with its rolls, every
   registered layout generator — interiors also at cave scale — and every

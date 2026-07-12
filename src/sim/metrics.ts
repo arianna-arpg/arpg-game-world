@@ -41,6 +41,18 @@ export class Collector implements SimTap {
   manaFloor = 1;
   lifeEnd = 1;
   samples = 0;
+  // -- sampled world state (per-sample integrals — ×dt-free, deterministic;
+  //    the support matrix's behavioral channels: a gem whose whole payload is
+  //    a status, a minion, a trail zone, or a flight count moves one of these
+  //    even when no damage number does) --
+  enemyStatusSamples = 0;   // Σ per sample: active statuses across enemy actors
+  heroStatusSamples = 0;    // Σ per sample: active statuses on the hero
+  minionSamples = 0;        // Σ per sample: living player-team non-hero actors
+  projectileSamples = 0;    // Σ per sample: projectiles in flight
+  zoneSamples = 0;          // Σ per sample: live zones
+  corpseSamples = 0;        // Σ per sample: corpses on the floor
+  minionPeak = 0;           // max living player-team non-hero actors seen
+  statusIdsSeen = new Set<string>(); // every status id observed on anyone
   // -- bookkeeping --
   warnings: string[] = [];
   private now = 0;
@@ -115,8 +127,60 @@ export class Collector implements SimTap {
     this.lifeFloor = Math.min(this.lifeFloor, lifeFrac);
     this.manaFloor = Math.min(this.manaFloor, manaFrac);
     this.lifeEnd = lifeFrac;
+    // World-state channels — observe-only reads off the live world; every
+    // count rides the same deterministic sampling clock as the vitals.
+    let minions = 0;
+    for (const a of this.world.actors) {
+      if (a.dead) continue;
+      for (const st of a.statuses) this.statusIdsSeen.add(st.id);
+      if (a.team === 'enemy') this.enemyStatusSamples += a.statuses.length;
+      else if (a === p) this.heroStatusSamples += a.statuses.length;
+      else if (a.team === p.team) minions++;
+    }
+    this.minionSamples += minions;
+    this.minionPeak = Math.max(this.minionPeak, minions);
+    this.projectileSamples += this.world.projectiles.length;
+    this.zoneSamples += this.world.zones.length;
+    this.corpseSamples += this.world.corpses.length;
     this.samples++;
     return true;
+  }
+
+  /** THE FINGERPRINT: every behavioral channel at FULL precision, fixed key
+   *  order. Two episodes of the same seed hash identically iff nothing the
+   *  collector can see differed — the support matrix's inertness oracle.
+   *  Keys are grouped by lane so classifiers can reason about output vs cost
+   *  vs defense without a second registry (see compat.ts CHANNEL_LANES). */
+  fingerprint(): Record<string, number | string> {
+    return {
+      dmg_hero_out: this.dmgHeroOut,
+      dmg_minion_out: this.dmgMinionOut,
+      dot_out: this.dotOut,
+      dmg_dummy: this.dmgDummy,
+      hits_out: this.hitsOut,
+      hit_attempts_out: this.hitAttemptsOut,
+      crits_out: this.critsOut,
+      kills: this.kills,
+      enemy_status_samples: this.enemyStatusSamples,
+      hero_status_samples: this.heroStatusSamples,
+      minion_samples: this.minionSamples,
+      minion_peak: this.minionPeak,
+      projectile_samples: this.projectileSamples,
+      zone_samples: this.zoneSamples,
+      corpse_samples: this.corpseSamples,
+      dmg_in: this.dmgIn,
+      dot_in: this.dotIn,
+      hit_attempts_in: this.hitAttemptsIn,
+      evades_in: this.evadesIn,
+      blocks_in: this.blocksIn,
+      life_floor: this.lifeFloor,
+      mana_floor: this.manaFloor,
+      life_end: this.lifeEnd,
+      presses: [...this.casts.values()].reduce((n, x) => n + x.presses, 0),
+      repeats: [...this.casts.values()].reduce((n, x) => n + x.repeats, 0),
+      status_ids: [...this.statusIdsSeen].sort().join('|'),
+      cast_ids: [...this.casts.keys()].sort().join('|'),
+    };
   }
 }
 

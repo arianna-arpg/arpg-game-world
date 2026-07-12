@@ -13,6 +13,7 @@ import {
   CREW_CFG, DEFAULT_RELOAD_SKILL, summonCrewOf, supportFits, supportRidesMinions,
   type Delivery, type SkillDef, type SupportDef,
 } from '../engine/skills';
+import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
 import { CLASSES } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
@@ -476,86 +477,18 @@ export function validateContent(): void {
   // delivery-scoped graft or stat ships. Deliberately unaudited: pairs that
   // only fit through ANOTHER gem's grantsTags (dive_bomb granting 'aoe' to a
   // dash) — those are loadout-time compositions, not authorable data.
-  type DeliveryType = Delivery['type'];
-  type GraftReadRow = {
-    /** Delivery branches whose execution actually reads the payload. */
-    deliveries: DeliveryType[];
-    /** Read-sites BEYOND the delivery switch (fx zones, pylon auras, linger
-     *  fields) — the per-def false-positive escape hatch. */
-    defReads?: (def: SkillDef) => boolean;
-    /** Where the engine reads it — quoted in the warning as the fix-it trail. */
-    site: string;
-  } & (
-    | { kind: 'graft'; key: keyof SupportDef }  // a structured SupportDef field
-    | { kind: 'stat'; key: string }             // a stat carried in mods/perLevel
-  );
-  /** The def's OWN data carries a stat (innate, growth, or threshold mods) —
-   *  reads gated on stats rather than deliveries honor it (a cone with an
-   *  innate lingerField genuinely reads aoeShape for the field it drops). */
-  const defCarriesStat = (def: SkillDef, stat: string): boolean =>
-    (def.innateMods ?? []).some(m => m.stat === stat)
-    || (def.leveling?.perLevel ?? []).some(m => m.stat === stat)
-    || (def.thresholds ?? []).some(t => t.mods.some(m => m.stat === stat));
-  const GRAFT_READ_SITES: GraftReadRow[] = [
-    {
-      kind: 'stat', key: 'aoeShape',
-      deliveries: ['nova', 'ground', 'storm', 'aura', 'detonateProjectile'],
-      defReads: def => (def.delivery.type === 'construct' && !!def.delivery.aura)
-        || def.effects.some(e => e.type === 'spawnZone')
-        || defCarriesStat(def, 'lingerField'),
-      site: 'area-shape queries (novas, ground zones, storms, auras, linger fields)',
-    },
-    {
-      kind: 'stat', key: 'aoeScatter',
-      deliveries: ['nova', 'ground', 'storm', 'detonateProjectile'],
-      site: 'spawnAftershocks (nova bursts, exploding/pulsing zones, storm strikes)',
-    },
-    {
-      kind: 'stat', key: 'moveTrail',
-      deliveries: ['dash'],
-      site: 'the dash branch only (blinks and leaps travel without a wake)',
-    },
-    { kind: 'graft', key: 'cascade', deliveries: ['ground'], site: 'instanceCascade (ground placements only)' },
-    { kind: 'graft', key: 'pulse', deliveries: ['ground'], site: 'instancePulse (ground placements only)' },
-    { kind: 'graft', key: 'zoneFollow', deliveries: ['ground'], site: 'the ground placement follow mint (lingering placements only)' },
-    { kind: 'graft', key: 'cadence', deliveries: ['ground'], site: 'the ground placement beat mints (pulse gaps, cascade skips, emitter salvos)' },
-    { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
-    { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
-    // exposure / zoneGrow / zoneSizeOver stay unrowed on purpose: their gems
-    // gate on 'duration' the way madden/zoneEmit do — broad by design, and a
-    // row here would cry wolf at every boot for legitimately broad gates.
-    // The brim*/fuse* stats stay unrowed too: Stillwater/Overbrim gate on
-    // 'channel' (brim-less channels are a legitimate socket), and Slow
-    // Match's whole point is riding a Time Fuse graft — the loadout-time
-    // composition this audit deliberately leaves alone. Likewise 'gather'
-    // (read for every bar-cast at useSkill) and 'shellGraft' (gated by
-    // its own requiresTags ['guard'] — the tag fit IS the audit). And
-    // 'guardCast' (read at every press — canUse's hold-combo lift and
-    // skillUseTime's instant force are delivery-agnostic by design).
-  ];
+  // The map itself lives in data/graftReadSites.ts — one registry shared with
+  // the sim's interaction matrix (src/sim/compat.ts), so the boot warning and
+  // the measured report can never drift apart.
+  const carriesRow = supportCarriesRow;
+  const rowUnread = (row: GraftReadRow, def: SkillDef): boolean =>
+    rowUnreadBy(row, def, id => SKILLS[id]);
   // The map audits itself: a stat row naming a dead stat is map drift.
   for (const row of GRAFT_READ_SITES) {
     if (row.kind === 'stat' && !STAT_DEFS[row.key]) {
       warn(`no-op audit: read-site row names unknown stat '${row.key}' (map drift?)`);
     }
   }
-  const carriesRow = (sup: SupportDef, row: GraftReadRow): boolean => (row.kind === 'graft'
-    ? sup[row.key] !== undefined
-    : [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat === row.key));
-  const rowUnread = (row: GraftReadRow, def: SkillDef): boolean => {
-    if (row.deliveries.includes(def.delivery.type)) return false;
-    if (row.defReads?.(def)) return false;
-    // STAT payloads reach a construct's sub-casts (the turret's shots, the
-    // totem's novas): the deployed object wears the host's instanceMods as
-    // its 'parentSkill' sheet source, so every sheet query the sub-skill
-    // makes sees them. GRAFT payloads do NOT follow — sub-skill instances
-    // are minted fresh (null sockets) and instance-read grafts die there.
-    if (row.kind === 'stat' && def.delivery.type === 'construct' && def.delivery.castSkillId) {
-      const sub = SKILLS[def.delivery.castSkillId];
-      if (sub && !rowUnread(row, sub)) return false;
-    }
-    return true;
-  };
 
   // THE RESONANCE LEVER (CREW_CFG.boarding): a gated door needs a key in
   // the catalog; a free door makes every key dead content. (The crew-hop

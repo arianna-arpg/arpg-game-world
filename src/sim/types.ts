@@ -107,7 +107,14 @@ export type PilotSpec =
   /** Close to melee gap, then work the rotation. */
   | { kind: 'brawler'; engage?: number; rotation?: number[]; openers?: number[] }
   /** Hold a range band (kite in/out), work the rotation. */
-  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[] };
+  | { kind: 'caster'; range?: number; rotation?: number[]; openers?: number[] }
+  /** THE ESCORT RIG (support-matrix probes): hold `refSlot` as the steady
+   *  filler (constant hits — trigger events, curse exploitation, buff
+   *  beneficiary) and TAP `hostSlot` once per `hostPeriod` seconds when
+   *  usable. Latch-shaped hosts (trigger-armed, drawn curses, toggled
+   *  auras) are edged ONCE and left standing. Deliberately metronomic:
+   *  a probe wants a reproducible cadence, not optimal play. */
+  | { kind: 'pair'; hostSlot: number; refSlot: number; engage?: number; hostPeriod?: number };
 
 // --------------------------------------------------------------- scenarios --
 
@@ -177,6 +184,12 @@ export interface EpisodeResult {
   /** Why the episode ended: 'duration' | 'waves_dead' | 'player_dead' | 'error'. */
   ended: string;
   metrics: MetricRecord;
+  /** FULL-PRECISION behavioral channels (fixed key order, unrounded floats,
+   *  status-id census included). Same seed + same code path ⇒ byte-identical
+   *  fingerprint — the A/B inertness oracle the support matrix hashes.
+   *  Everything in it is DERIVED from tap events and world-state samples the
+   *  collector already observes; nothing engine-side was added to feed it. */
+  fingerprint: Record<string, number | string>;
   /** Cast counts per skill id (presses and mechanical repeats separated). */
   casts: Record<string, { presses: number; repeats: number }>;
   /** Deaths in order: t = sim time, who = defId or 'player', team. */

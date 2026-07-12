@@ -60,8 +60,41 @@ export function starterBuild(classId: string, level: number): BuildSpec {
   };
 }
 
+/** GEARED tier knobs: what "reasonably equipped at level L" means, as data.
+ *  The rarity ladder is deliberately modest — found gear, not a bench-crafted
+ *  ceiling; raise it here (or add a build with explicit GearSpecs) to probe
+ *  richer wardrobes. */
+export const GEARED_CFG = {
+  /** Every slot worn from this list (EQUIP_SLOTS ids). */
+  slots: ['helmet', 'amulet', 'chest', 'gloves', 'belt', 'ring1', 'ring2', 'legs', 'boots'],
+  /** Worn rarity by band: the smallest band ≥ level wins. */
+  rarityByLevel: [
+    { upTo: 4, rarity: 'common' as const },
+    { upTo: 9, rarity: 'magic' as const },
+    { upTo: Infinity, rarity: 'rare' as const },
+  ],
+  /** Fixed roll seed → the same wardrobe every run (a build is a measuring
+   *  stick; re-seed deliberately to study gear VARIANCE instead). */
+  gearSeed: 0x9ea7ed,
+};
+
+/** The starter kit WEARING level-appropriate found gear — the geared tier.
+ *  Same skills, same tree; the delta bare→geared IS the value of gear. */
+export function gearedBuild(classId: string, level: number): BuildSpec {
+  const base = starterBuild(classId, level);
+  const rarity = GEARED_CFG.rarityByLevel.find(r => level <= r.upTo)!.rarity;
+  return {
+    ...base,
+    id: `geared_${classId}_l${level}`,
+    label: `${base.label ?? classId} + ${rarity} wardrobe`,
+    gear: GEARED_CFG.slots.map(slot => ({ slot, rarity })),
+    gearSeed: GEARED_CFG.gearSeed,
+  };
+}
+
 /** The registry. Starter kits at the canonical measurement bands, minted from
- *  the LIVE class bars (re-bar a class and these follow, zero edits here).
+ *  the LIVE class bars (re-bar a class and these follow, zero edits here),
+ *  plus the geared twins (gear value = the bare↔geared delta at each band).
  *  Holds authored BuildSpecs AND save-backed builds (SavedBuild): the CLI
  *  auto-registers balance/players/*.json as player_<name> and `save:` refs
  *  on demand, so a real character is addressable wherever a build id is. */
@@ -72,6 +105,8 @@ for (const cls of CLASSES) {
   for (const level of BAND_LEVELS) {
     const b = starterBuild(cls.id, level);
     BUILDS[b.id] = b;
+    const g = gearedBuild(cls.id, level);
+    BUILDS[g.id] = g;
   }
 }
 
