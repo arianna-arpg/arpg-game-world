@@ -424,6 +424,19 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     when: (def, sup) => sup.sacrifice !== undefined
       && def.delivery.type !== 'summon' && !def.tags.includes('minion'),
   },
+  {
+    // THE CONDUIT FAMILY (SupportDef.conduit): resource pumps that run
+    // only while the host stance is genuinely HELD or its toggle burns,
+    // and that move DEFENSE pools (poise/guard/es/ward/insight) — the
+    // standard probes neither hold stances nor fingerprint those pools,
+    // so every pairing reads byte-identical. The fabric itself is
+    // deterministically verified elsewhere (balance/_probe_conduit.ts,
+    // 16/16); when a stance-holding pilot with a defense-pool fingerprint
+    // ships, delete this row and the family re-enters measurement
+    // automatically.
+    note: 'resource pump (conduit): needs a HELD stance / burning toggle and a defense-pool fingerprint the standard probes lack',
+    when: (_def, sup) => sup.conduit !== undefined,
+  },
 ];
 
 export interface ChannelDelta { key: string; bare: number | string; pair: number | string; rel: number }
