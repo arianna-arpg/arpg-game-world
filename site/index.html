@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-page="home">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -249,38 +249,13 @@
 <div class="content">
 
 <!-- NAV -->
-<header class="nav" id="nav">
-  <div class="wrap nav-inner">
-    <a href="#top" class="brand" aria-label="Hollow Wake home">
-      <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
-        <circle cx="16" cy="16" r="13" stroke="url(#g1)" stroke-width="1.5"/>
-        <circle cx="16" cy="16" r="4.4" fill="url(#g1)"/>
-        <circle cx="16" cy="3" r="1.7" fill="#4fd6c4"/><circle cx="27.3" cy="22" r="1.7" fill="#a98bff"/><circle cx="4.7" cy="22" r="1.7" fill="#ff8a4c"/>
-        <path d="M16 16 L16 3 M16 16 L27.3 22 M16 16 L4.7 22" stroke="url(#g1)" stroke-width="1.1" opacity=".55"/>
-        <defs><linearGradient id="g1" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs>
-      </svg>
-      HOLLOW WAKE
-    </a>
-    <nav class="nav-links" aria-label="Primary">
-      <a href="#systems">Systems</a>
-      <a href="#classes">Classes</a>
-      <a href="database/">Database</a>
-      <a href="tree/">Passive&nbsp;Tree</a>
-      <a href="play/">Play</a>
-      <a href="https://github.com/arianna-arpg/arpg-game-world" class="gh" target="_blank" rel="noopener">
-        <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        GitHub
-      </a>
-      <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="nav-cta" target="_blank" rel="noopener">Download</a>
-    </nav>
-    <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="nav-cta nav-toggle" target="_blank" rel="noopener" style="display:none">Download</a>
-  </div>
-</header>
+<!-- top nav is rendered by the shared widget (assets/nav.js) for cross-page parity -->
+<header data-hwnav></header>
 
 <span id="top"></span>
 
 <!-- HERO -->
-<section class="hero">
+<section class="hero" data-nav="Top">
   <div class="wrap">
     <span class="eyebrow"><span class="dot"></span> Top-down action RPG · In development</span>
     <h1 class="display">Hollow Wake</h1>
@@ -323,7 +298,7 @@
 </div>
 
 <!-- PILLARS -->
-<section class="band">
+<section class="band" data-nav="Overview">
   <div class="wrap">
     <div class="sec-head center reveal">
       <div class="kicker">Why it's different</div>
@@ -358,7 +333,7 @@
 <div class="wrap"><div class="divider-line"></div></div>
 
 <!-- DEEP DIVE INTRO -->
-<section class="band" id="systems">
+<section class="band" id="systems" data-nav="Systems">
   <div class="wrap">
     <div class="deepdive-intro">
       <div class="di-copy reveal">
@@ -438,7 +413,7 @@
 </section>
 
 <!-- ARCHITECTURE -->
-<section class="band" style="padding-top:0">
+<section class="band" style="padding-top:0" data-nav="Architecture">
   <div class="wrap">
     <div class="sec-head reveal">
       <div class="kicker">Repository map</div>
@@ -492,7 +467,7 @@
 </section>
 
 <!-- CLASSES -->
-<section class="band" id="classes">
+<section class="band" id="classes" data-nav="Classes">
   <div class="wrap">
     <div class="sec-head center reveal">
       <div class="kicker">The roster</div>
@@ -522,7 +497,7 @@
 <div class="wrap"><div class="divider-line"></div></div>
 
 <!-- EXPLORE -->
-<section class="band" id="explore">
+<section class="band" id="explore" data-nav="Explore">
   <div class="wrap">
     <div class="sec-head center reveal">
       <div class="kicker">Explore the world</div>
@@ -552,7 +527,7 @@
 <div class="wrap"><div class="divider-line"></div></div>
 
 <!-- GET IT -->
-<section class="band" id="get">
+<section class="band" id="get" data-nav="Get it">
   <div class="wrap">
     <div class="sec-head center reveal">
       <div class="kicker">Play it</div>
@@ -652,10 +627,7 @@ npm run <span class="g">build</span></pre>
   "use strict";
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  /* nav shadow on scroll */
-  var nav = document.getElementById('nav');
-  function onScroll(){ if(window.scrollY > 12) nav.classList.add('scrolled'); else nav.classList.remove('scrolled'); }
-  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+  /* (top-nav scroll state is handled by the shared nav widget, assets/nav.js) */
 
   /* reveal on view */
   var revs = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
@@ -699,20 +671,7 @@ npm run <span class="g">build</span></pre>
       } else runStats();
     });
 
-  /* active nav link */
-  var linkMap = {};
-  document.querySelectorAll('.nav-links a[href^="#"]').forEach(function(a){ linkMap[a.getAttribute('href').slice(1)] = a; });
-  var secs = ['overview','systems','classes','get'].map(function(id){ return document.getElementById(id); }).filter(Boolean);
-  if('IntersectionObserver' in window){
-    var io3 = new IntersectionObserver(function(es){
-      es.forEach(function(e){
-        var id = e.target.id, a = linkMap[id];
-        if(!a) return;
-        if(e.isIntersecting){ Object.keys(linkMap).forEach(function(k){ linkMap[k].classList.remove('active'); }); a.classList.add('active'); }
-      });
-    }, {rootMargin:'-45% 0px -50% 0px'});
-    secs.forEach(function(s){ io3.observe(s); });
-  }
+  /* (section scroll-spy is handled by the shared dot-rail widget, assets/sectionnav.js) */
 
   /* ambient node-graph backdrop (passive-tree / data-web motif) */
   var canvas = document.getElementById('bg-canvas');
@@ -794,5 +753,7 @@ npm run <span class="g">build</span></pre>
   if(reduce){ staticFrame(); } else { frame(); }
 })();
 </script>
+<script src="assets/nav.js"></script>
+<script src="assets/sectionnav.js"></script>
 </body>
 </html>
