@@ -13,11 +13,6 @@
     "forest": {
       "_todo": "The sealed deep-forest canopy is the known heaviest steady-state scene (veil fades + understory density). Budgeted here explicitly pending its own optimization pass — do NOT widen the shared caps to hide it.",
       "relative": { "gapP50Mul": 6, "gapP99Mul": 5 }
-    },
-    "tundra": {
-      "_todo": "Residual GPU-side weight (~29ms p50 at 1440p; JS sim+render under 8ms) that persists across layouts and survived the snow-tile hysteresis fix — needs an in-situ GPU profile (suspects: snow front accumulation rebakes, drift/ice overdraw stacking, the teardown-time 'GPU state invalid' log). Caps set to hold the CURRENT residual and still catch the 54ms/750-hitch flapping class if it ever returns.",
-      "relative": { "gapP50Mul": 8, "gapP99Mul": 7 },
-      "absolute": { "maxHitch40PerMin": 120, "maxHitch70PerMin": 8 }
     }
   }
 }

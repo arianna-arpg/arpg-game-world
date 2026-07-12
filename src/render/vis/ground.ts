@@ -22,7 +22,8 @@ import { regionKind } from '../../world/regions';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
 import { liquidBodyIsLive, paintBlendUnderlay, paintLiquidStatics, type DoodadVisualDef } from './painters';
 import { paintStructureFloors } from './floors';
-import { VIS_CFG } from './visConfig';
+import { releaseCanvas } from './sprites';
+import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './visConfig';
 
 function strSeed(s: string): number {
   let h = 5381;
@@ -128,7 +129,12 @@ export class GroundRenderer {
    *  break or a crawling fissure never rebakes a whole screen in one frame. */
   draw(ctx: CanvasRenderingContext2D, world: World,
     camX: number, camY: number, vw: number, vh: number): void {
+    if (VIS_ABLATE.has('ground')) return; // perf forensics (visConfig)
     if (this.zoneRef !== world.zone) {
+      // Release the old zone's whole cache NOW (≈ maxChunks × chunk² of
+      // pixels): left to the GC, a few zone hops of discarded floors pile
+      // up GPU-side and the collection lands as a hitch storm mid-play.
+      for (const e of this.chunks.values()) releaseCanvas(e.img);
       this.chunks.clear();
       this.zoneRef = world.zone;
       this.seed = strSeed(`${world.zone.id}|${world.zone.name}`);
@@ -165,6 +171,7 @@ export class GroundRenderer {
             if (!touched) {
               entry.v = ver; // untouched by any repaint — just adopt the version
             } else if (rebakes < VIS_CFG.ground.rebakesPerFrame && budgetLeft()) {
+              releaseCanvas(entry.img);
               entry.img = this.bake(world, wf, cx, cy);
               entry.v = ver;
               entry.b = this.bedsRev;
@@ -183,6 +190,8 @@ export class GroundRenderer {
             while (this.chunks.size > VIS_CFG.ground.maxChunks) {
               const oldest = this.chunks.keys().next().value;
               if (oldest === undefined) break;
+              const old = this.chunks.get(oldest);
+              if (old) releaseCanvas(old.img);
               this.chunks.delete(oldest);
             }
           } else {
@@ -215,6 +224,8 @@ export class GroundRenderer {
           while (this.chunks.size > VIS_CFG.ground.maxChunks) {
             const oldest = this.chunks.keys().next().value;
             if (oldest === undefined) break;
+            const old = this.chunks.get(oldest);
+            if (old) releaseCanvas(old.img);
             this.chunks.delete(oldest);
           }
           break outer;
@@ -277,6 +288,7 @@ export class GroundRenderer {
   }
 
   private bake(world: World, wf: GridWalkField | null, cx: number, cy: number): HTMLCanvasElement {
+    VIS_TELEMETRY.groundBakes++;
     const CFG = VIS_CFG.ground;
     const C = CFG.chunk;
     const theme = world.zone.theme;

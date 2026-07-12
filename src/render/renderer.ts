@@ -39,7 +39,7 @@ import { FACTIONS, MONSTERS } from '../data/monsters';
 import { hash01, hexToRgb, shade, valueNoise, withAlpha } from './vis/color';
 import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
-import { drawGlow, drawLongShadow, drawShadow, sunCast } from './vis/sprites';
+import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, crownSprite, crownVariantOf, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
@@ -48,7 +48,7 @@ import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
-import { VIS_CFG } from './vis/visConfig';
+import { VIS_ABLATE, VIS_CFG, VIS_TELEMETRY } from './vis/visConfig';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK } from './vis/aimtick';
 
 const SLOT_KEYS = ['LMB', 'RMB', '1', '2', '3', '4', '5', '6'];
@@ -165,9 +165,11 @@ export class Renderer {
     ctx.translate(-this.cam.x + shx, -this.cam.y + shy);
 
     this.drawFloor(world);
-    this.drawDoodads(world);
-    this.updateMotionFx(world);
-    this.drawMotionFx();     // wake ripples + snow pocks, over grounds, under actors
+    if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
+    if (!VIS_ABLATE.has('motionfx')) {
+      this.updateMotionFx(world);
+      this.drawMotionFx();   // wake ripples + snow pocks, over grounds, under actors
+    }
     this.drawAirPockets(world);     // underwater: round air-pocket wash + rising bubbles
     this.drawAltars(world);
     this.drawShrines(world);
@@ -190,11 +192,13 @@ export class Renderer {
     this.drawResourceOrbs(world);
     this.drawRemnants(world);
     for (const f of world.flashes) this.drawFlash(f);
-    for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
-    for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
-    for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
+    if (!VIS_ABLATE.has('actors')) {
+      for (const a of world.actors) if (!a.dead && a.worm) this.drawWormTail(a);
+      for (const a of world.actors) if (!a.dead) this.drawActor(a, world);
+      for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
+    }
     this.drawProjectiles(world);
-    this.drawCanopies(world);      // fake-2D depth: crowns above actors, faded near the hero
+    if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
     this.drawLabels(world);        // actor text (names/prompts) — above the fades, visibility-gated
     this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
@@ -207,7 +211,9 @@ export class Renderer {
     // emissive bloom — world-lit, drawn before the screen-space washes. The
     // world transform was translate(-cam + shake), so the effective camera
     // the lights must project through is cam - shake.
-    this.lightLayer.render(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
+    if (!VIS_ABLATE.has('lights')) {
+      this.lightLayer.render(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
+    }
 
     this.drawAtmosphere(world);
     this.drawStatusFx(world);     // status ailment overlays (edge vignettes/frost/stars)
@@ -869,6 +875,7 @@ export class Renderer {
   /** A screen-space wash for time of day and weather — subtle enough to keep
    *  the world readable, enough to feel the night close in and a storm gather. */
   private drawAtmosphere(world: World): void {
+    if (VIS_ABLATE.has('atmosphere')) return; // perf forensics (visConfig)
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
     // THE SUN-LIFT: high day brightens the whole scene with a warm additive
@@ -902,7 +909,7 @@ export class Renderer {
       ctx.fillStyle = `rgba(${r},${g},${b},${(0.05 + 0.12 * f.intensity).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
       // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts).
-      drawWeatherFx(ctx, f.kind, f.intensity, w, h, world.time);
+      if (!VIS_ABLATE.has('weatherfx')) drawWeatherFx(ctx, f.kind, f.intensity, w, h, world.time);
     }
     // EVENT ZONE WASH (world/zoneWash.ts): ground HELD by something — a
     // haunting's pale cold — colours the whole air of the zone. Smoothed
@@ -1073,10 +1080,12 @@ export class Renderer {
   private snowZoneRef: unknown = null;
 
   private drawSnowCover(world: World, vw: number, vh: number): void {
+    if (VIS_ABLATE.has('snowwash')) return; // perf forensics (visConfig)
     const cover = world.snowCover;
     if (cover <= 0.02) return;
     if (this.snowZoneRef !== world.zone) {
       this.snowZoneRef = world.zone;
+      for (const e of this.snowChunks.values()) releaseCanvas(e.img);
       this.snowChunks.clear();
     }
     const { ctx } = this;
@@ -1096,7 +1105,7 @@ export class Renderer {
         const key = `${cx},${cy}`;
         let e = this.snowChunks.get(key);
         if (!e || (Math.abs(e.cover - cover) > 0.06 && rebakes < 4)) {
-          if (e) rebakes++;
+          if (e) { rebakes++; releaseCanvas(e.img); }
           e = { img: this.bakeSnowChunk(cx * C, cy * C, C, cover), cover };
           this.snowChunks.set(key, e);
           // Cap rides the floor-chunk cap: it must exceed the largest visible
@@ -1105,6 +1114,8 @@ export class Renderer {
           while (this.snowChunks.size > VIS_CFG.ground.maxChunks) {
             const oldest = this.snowChunks.keys().next().value;
             if (oldest === undefined) break;
+            const old = this.snowChunks.get(oldest);
+            if (old) releaseCanvas(old.img);
             this.snowChunks.delete(oldest);
           }
         } else {
@@ -1121,6 +1132,7 @@ export class Renderer {
    *  (not the tile origin) so a cell straddling a tile seam paints the same
    *  noise on both sides — no seam lines. */
   private bakeSnowChunk(ox: number, oy: number, C: number, cover: number): HTMLCanvasElement {
+    VIS_TELEMETRY.snowBakes++;
     const c = document.createElement('canvas');
     c.width = C; c.height = C;
     const g = c.getContext('2d')!;
@@ -1145,6 +1157,7 @@ export class Renderer {
    *  cell painting left. Every STATIC cell (walls, still visuals, bevels,
    *  contact AO) bakes into the ground chunks; see vis/ground.ts. */
   private drawAnimatedRegions(world: World): void {
+    if (VIS_ABLATE.has('animregions')) return; // perf forensics (visConfig)
     const wf = world.walk;
     if (!(wf instanceof GridWalkField)) return;
     const { ctx } = this;

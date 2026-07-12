@@ -193,3 +193,23 @@ export const VIS_CFG = {
     fadeSec: 5,
   },
 } as const;
+
+// --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------
+// Not part of the visual fabric: normal play never touches either.
+
+/** Render passes to SKIP (perfSweep --ablate=…): the renderer checks pass
+ *  names at its pass boundaries, so a GPU-side cost invisible to the JS
+ *  timers can be attributed by turning passes off one run at a time at real
+ *  resolution. Empty = draw everything (the only state normal play sees). */
+export const VIS_ABLATE = new Set<string>();
+
+export function setVisAblate(passes: readonly string[]): void {
+  VIS_ABLATE.clear();
+  for (const p of passes) VIS_ABLATE.add(p);
+}
+
+/** Bake-churn counters (reset + read by the perf harness per sample window).
+ *  Every ground-chunk / snow-tile bake is a fresh chunk-sized canvas
+ *  allocation + GPU upload that the JS frame timers barely see — the counts
+ *  make that churn a first-class, reportable number. */
+export const VIS_TELEMETRY = { groundBakes: 0, snowBakes: 0 };

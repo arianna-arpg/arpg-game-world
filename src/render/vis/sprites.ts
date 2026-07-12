@@ -36,16 +36,38 @@ export function baked(key: string, w: number, h: number,
   paint(ctx, c.width, c.height);
   cache.set(key, c);
   if (cache.size > VIS_CFG.sprite.maxEntries) {
-    // Evict the stalest entry (Map preserves insertion order).
+    // Evict the stalest entry (Map preserves insertion order) and release
+    // its backing store NOW: every hit LRU-touches, so a victim is ≥cap
+    // bakes stale — nothing still draws it. A crown-dense forest churns
+    // this cache by the hundreds; left to the GC, the evicted pixels were
+    // the last standing source of the position-4 collection spike.
     const oldest = cache.keys().next().value;
-    if (oldest !== undefined) cache.delete(oldest);
+    if (oldest !== undefined) {
+      const victim = cache.get(oldest);
+      if (victim) releaseCanvas(victim);
+      cache.delete(oldest);
+    }
   }
   return c;
 }
 
-/** Drop every bake (dev/HMR hook; zone loads do NOT need this). */
+/** Drop every bake (dev/HMR hook; zone loads do NOT need this). Entries are
+ *  only unlinked, never released — a painter-side hold on a baked sprite
+ *  across this flush must keep drawing, not throw on a zeroed canvas. */
 export function clearBakes(): void {
   cache.clear();
+}
+
+/** Release a cache-owned canvas's backing store NOW (zero its dimensions)
+ *  instead of leaving ~800KB of pixels to the GC's leisure. A zone hop
+ *  discards a whole chunk cache (60 × chunk²) — left to garbage collection,
+ *  several zones' worth piles up in the GPU process and the collection storm
+ *  lands mid-sample on whatever zone runs NEXT (the perf sweep read that as
+ *  a "heavy biome" at a fixed matrix position). Callers must drop every
+ *  reference to the canvas right after. */
+export function releaseCanvas(c: HTMLCanvasElement): void {
+  c.width = 0;
+  c.height = 0;
 }
 
 // --- Shared primitive sprites ------------------------------------------------

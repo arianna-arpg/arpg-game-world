@@ -712,13 +712,26 @@ async function perfMode() {
     await wait(2500); // async boot: account load, world init, start menu
     const ready = await gameWin.webContents.executeJavaScript(`typeof window.__game`);
     if (ready !== 'object') throw new Error('window.__game is ' + ready + ' — game did not boot');
+    /** @type {any} */
     const opts = {
       seconds: Number(flagValue('--seconds') || budgets.sampleSeconds || 6),
       settleSeconds: Number(budgets.settleSeconds || 1.5),
       filter: flagValue('--filter') || '',
     };
+    // FORENSICS FLAGS: `--weather=snow|clear|…` pins a deterministic sky,
+    // `--ablate=snowwash,lights,…` skips render passes (src/dev/perf.ts).
+    // Either one makes this a diagnostic run: the gate still PRINTS its
+    // verdict, but never exits 2 — an ablated zone being fast (or a pinned
+    // storm being slow) is the experiment, not a regression.
+    const weatherFlag = flagValue('--weather');
+    if (weatherFlag !== null) opts.weather = weatherFlag;
+    const ablateFlag = flagValue('--ablate');
+    if (ablateFlag) opts.ablate = ablateFlag.split(',').map(s => s.trim()).filter(Boolean);
+    const forensics = weatherFlag !== null || !!ablateFlag;
     console.log(`PERF: sweeping tilesets (${opts.seconds}s steady + ${opts.settleSeconds}s entry per zone` +
-      (opts.filter ? `, filter '${opts.filter}'` : '') + `)…`);
+      (opts.filter ? `, filter '${opts.filter}'` : '') +
+      (opts.weather !== undefined ? `, weather pinned '${opts.weather || 'clear'}'` : '') +
+      (opts.ablate ? `, ablate [${opts.ablate.join(',')}]` : '') + `)…`);
     /** @type {any} */
     const report = await gameWin.webContents.executeJavaScript(
       `window.__game.perfSweep(${JSON.stringify(opts)})`, true);
@@ -736,8 +749,10 @@ async function perfMode() {
     const row = (z, name) =>
       `${name.padEnd(16)} ${String(z.gapP50).padStart(6)} ${String(z.gapP95).padStart(6)} ${String(z.gapP99).padStart(6)}` +
       ` ${String(z.gapMax).padStart(7)} ${String(z.hitch40).padStart(3)} ${String(z.entryWorstGap).padStart(7)}` +
-      ` ${String(z.simP99).padStart(6)} ${String(z.renP99).padStart(6)}  ${z.zone}`; // zone names already carry their variant
-    lines.push('tileset           gap50  gap95  gap99  gapMax h40   entry  sim99  ren99  zone');
+      ` ${String(z.simP99).padStart(6)} ${String(z.renP99).padStart(6)}` +
+      ` ${String(z.snowBakes ?? 0).padStart(5)} ${String(z.groundBakes ?? 0).padStart(5)} ${String(z.snowCover ?? 0).padStart(5)}` +
+      `  ${z.zone}`; // zone names already carry their variant
+    lines.push('tileset           gap50  gap95  gap99  gapMax h40   entry  sim99  ren99  snB   grB  cover  zone');
     lines.push(row(ctl, '(town ctl)'));
     for (const z of report.zones) {
       lines.push(row(z, z.tileset));
@@ -770,9 +785,10 @@ async function perfMode() {
     const stampStr = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
     const dir = path.join(BASE, 'balance', 'reports', 'perf_' + stampStr);
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ budgets, report, breaches }, null, 2));
+    fs.writeFileSync(path.join(dir, 'report.json'), JSON.stringify({ budgets, opts, report, breaches }, null, 2));
     fs.writeFileSync(path.join(dir, 'report.md'), [
       '# perf ' + stampStr, '',
+      ...(forensics ? [`FORENSICS RUN (weather '${opts.weather ?? '(natural)'}', ablate [${(opts.ablate ?? []).join(',')}]) — gate informative only.`, ''] : []),
       '```', ...lines, '```', '',
       breaches.length ? '## BREACHES\n' + breaches.map(b => '- ' + b).join('\n') : 'No budget breached.',
     ].join('\n'));
@@ -780,13 +796,13 @@ async function perfMode() {
 
     if (errors.length) throw new Error(errors.join('; '));
     if (breaches.length) {
-      console.log('PERF BREACHED:');
+      console.log(forensics ? 'PERF (forensics — informative only):' : 'PERF BREACHED:');
       for (const b of breaches) console.log('  - ' + b);
     } else {
       console.log('PERF OK — no budget breached.');
     }
     gameServer?.close();
-    app.exit(breaches.length ? 2 : 0);
+    app.exit(forensics ? 0 : (breaches.length ? 2 : 0));
   } catch (e) {
     console.log('PERF FAILED: ' + String(e));
     gameServer?.close();
