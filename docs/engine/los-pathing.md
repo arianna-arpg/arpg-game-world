@@ -67,6 +67,26 @@ Celestial skills (`meteor`, `meteor_storm`, `meteoric_bombardment`,
   (`CastingState.losLost`).
 - **Aim assist**: wall-hidden targets break the reticle lock like veiled ones.
 
+## Dwell reach (`World.dwellReachable`)
+
+Every dwell — NPC counters, town sites, sidezone mouths, realm gates, ward
+seals, toll keepers, zone exits, corpses, revives — asks one attention rule
+before its timer builds: can the dweller honestly reach the object? Tuning
+lives in `data/transit.ts` (`DWELL_CFG` + per-row `reach`, per-npcRole
+`npcReach`), never inline:
+
+- **`radius`** — proximity alone (contact acts: door pushes, a hull nosing
+  shore — the plank/shore IS the occluder a ray would argue with).
+- **`sight`** — the ray must reach it, cast on `DWELL_CFG.sightChannel`
+  (**'shot' on purpose**: crowns veil eyes but must never blind your own
+  hands — a mouth under a canopy stays enterable; true walls stop both
+  channels, which is the point). A hit within `sightSlack` of the target is
+  forgiven — an object's own frame never hides it. The family default.
+- **`roof`** — same roof as a roofed object (`roofedStructureAt`), the
+  cellar-hatch `indoorsOnly` ideology generalized; open-air objects degrade
+  to `sight`. Mireille's counter runs this: her care is served under the
+  inn's roof, never dwelled through its wall (`npcReach.innkeep`).
+
 ## Pathing (`World.pathField`)
 
 The zone's pathing authority: the walk grid where one exists (warrens,

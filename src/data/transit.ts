@@ -31,6 +31,47 @@ export interface TransitRing {
   alpha?: number;
 }
 
+/** How honestly the player must REACH a dwell object before its dwell builds:
+ *  'radius' — proximity alone (contact acts: pushing a door, a ship nosing
+ *             the shore);
+ *  'sight'  — a clear occlusion line from the dweller to the object
+ *             (DWELL_CFG.sightChannel) — walls stop a dwell, because nobody
+ *             attends to what a wall hides;
+ *  'roof'   — under the SAME ROOF as a roofed object (the cellar-hatch
+ *             `indoorsOnly` ideology, generalized); an OPEN-AIR object
+ *             degrades to 'sight', so a package's courtyard innkeep stays
+ *             dwellable. */
+export type DwellReach = 'radius' | 'sight' | 'roof';
+
+/** THE DWELL-REACH RULESET — one attention discipline for every dwell in the
+ *  game (transit families here, NPC counters and town sites in world.ts).
+ *  A dwell is an act of attention: it should only build toward an object the
+ *  player can honestly attend to — never through the inn's wall, never
+ *  through a house into the cellar. Tune HERE, never inline. */
+export const DWELL_CFG = {
+  /** The family default when a row/role pins nothing. */
+  reach: 'sight' as DwellReach,
+  /** Which channel of the one occlusion ray (engine/los.ts) 'sight' reach
+   *  casts. 'shot' ON PURPOSE: canopy crowns and veils blind EYES (the veil
+   *  rule) but must never blind your own hands — a cave mouth under a forest
+   *  crown stays enterable; true walls stop both channels, which is the whole
+   *  point of the rule. */
+  sightChannel: 'shot' as 'shot' | 'sight',
+  /** A ray hit landing within this many px of the object still counts as
+   *  reached — the object's own frame (a counter lip, the hatch stone, a
+   *  bench slab) never hides the object it belongs to. */
+  sightSlack: 20,
+  /** Per-npcRole reach overrides for the NPC/site dwells that tune outside
+   *  the transit rows. The innkeep serves UNDER HER ROOF — you dwell her
+   *  counter from inside the inn, never through its wall. */
+  npcReach: { innkeep: 'roof' } as Record<string, DwellReach | undefined>,
+};
+
+/** Reach for an npcRole-bound dwell (Mireille's counter, the smith's stock…). */
+export function npcDwellReach(role: string): DwellReach {
+  return DWELL_CFG.npcReach[role] ?? DWELL_CFG.reach;
+}
+
 export interface TransitDef {
   /** Registry key. Sub-kinds chain: 'family:sub' falls back to 'family'. */
   kind: string;
@@ -40,6 +81,8 @@ export interface TransitDef {
   radius?: number;
   /** The progress ring the renderer fills while the dwell builds. */
   ring: TransitRing;
+  /** How the dweller must reach this kind (ABSENT = DWELL_CFG.reach). */
+  reach?: DwellReach;
 }
 
 export const TRANSITS: Record<string, TransitDef> = {};
@@ -69,6 +112,12 @@ export function transitDwell(kind: string, fallback = 0.5): number {
 /** Stand-on trigger radius for a kind (family-chained). */
 export function transitRadius(kind: string, fallback: number): number {
   return transitOf(kind)?.radius ?? fallback;
+}
+
+/** Dwell-reach discipline for a kind (family-chained; DWELL_CFG.reach when
+ *  the row pins nothing). The engine asks this beside every transitDwell(). */
+export function transitReach(kind: string): DwellReach {
+  return transitOf(kind)?.reach ?? DWELL_CFG.reach;
 }
 
 /** The default ring when a kind never declared one (the classic portal ring). */
@@ -103,15 +152,18 @@ registerTransit({ kind: 'sidezone', dwell: 0.55, radius: 28, ring: { radius: 30 
 // ('realm_gate:demon', …) may pin their own rows; this covers the family.
 registerTransit({ kind: 'realm_gate', dwell: 0.5, radius: 32, ring: { radius: 44 } });
 
-// Structure doors: push (dwell) on a closed door and it swings.
-registerTransit({ kind: 'door', dwell: 0.45, ring: { radius: 32, color: '#c8b47a' } });
+// Structure doors: push (dwell) on a closed door and it swings. Reach is
+// 'radius' — a push is CONTACT, honest from either face of the plank; the
+// door itself is the occluder, so a sight ray would argue with the act.
+registerTransit({ kind: 'door', dwell: 0.45, ring: { radius: 32, color: '#c8b47a' }, reach: 'radius' });
 
 // Holdfast toll keepers: the parley dwell (a touch longer — deliberate).
 registerTransit({ kind: 'holdfast', dwell: 0.7, radius: 78, ring: { radius: 40, color: '#d0a850' } });
 
 // Voyage landfall: the linger-to-land ring at sea (the dwell SECONDS live on
 // VOYAGE_CFG.landingDwell × the ship's landingMul — only the ring is here).
-registerTransit({ kind: 'voyage_landing', dwell: 0.9, ring: { radius: 34, color: '#7fd0ff' } });
+// Reach 'radius': the hull NOSING the shore is the contact, not a gaze.
+registerTransit({ kind: 'voyage_landing', dwell: 0.9, ring: { radius: 34, color: '#7fd0ff' }, reach: 'radius' });
 
 // The Delver's mineshaft platform: dwell to descend / climb out. (Its ring is
 // new — the one dwell that never drew progress; teal to match the platform.)

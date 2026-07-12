@@ -71,7 +71,8 @@ import {
 import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './shapes';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
-import { transitDwell, transitRadius } from '../data/transit';
+import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } from '../data/transit';
+import type { DwellReach } from '../data/transit';
 import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
 import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
@@ -1177,10 +1178,16 @@ registerConvertRule('chargesEmpty', (caster, inst) =>
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
 const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
-/** Her WELCOME GIFT: skills handed over on the first dwell, once per
- *  character — free of any unlock (the innkeeper's kindness, not a Vault
- *  service). Both flask founts, so every hero owns the alchemist's loop. */
+/** Her WELCOME GIFT: flask skill GEMS pressed into your hands on the first
+ *  dwell, once per character — free of any unlock (the innkeeper's kindness,
+ *  not a Vault service). ITEMS, not grants: the gems land in the carried
+ *  skill inventory and Mireille TALKS you through the one loop every gem in
+ *  the game follows — book (B), learn, bar — so the welcome doubles as the
+ *  in-universe tutorial for a mannerism that stays true forever. The run
+ *  ledger remembers the hand-over (the cellar_entered discovery pattern),
+ *  so selling the gems can never farm her kindness. */
 const MIREILLE_GIFT_SKILLS = ['life_flask', 'mana_flask'];
+const MIREILLE_GIFT_LEDGER = 'mireille_flasks_given';
 const MIREILLE_XP_BUFF_SEC = 300;   // a 5-minute blessing
 const MIREILLE_XP_BUFF_MULT = 0.05; // +5% experience while it lasts
 const MIREILLE_XP_REFRESH = 240;    // only (re)grant when below this (no spam)
@@ -2511,7 +2518,8 @@ export class World {
       if (!seat.actor.downed) { if (seat.reviveDwellBy.size) seat.reviveDwellBy.clear(); continue; }
       for (const ally of this.seats) {
         if (ally === seat || ally.actor.dead || ally.actor.downed) continue;
-        const close = dist(ally.actor.pos, seat.actor.pos) <= REVIVE_RADIUS;
+        const close = dist(ally.actor.pos, seat.actor.pos) <= REVIVE_RADIUS
+          && this.dwellReachable(ally.actor.pos, seat.actor.pos);
         if (close && this.seatIdle(ally)) {
           const t = (seat.reviveDwellBy.get(ally.id) ?? 0) + dt;
           seat.reviveDwellBy.set(ally.id, t);
@@ -5438,7 +5446,8 @@ export class World {
     const hf = this.sim.huntField;
     if (!hf) return;
     if (this.huntFootprint && !this.player.dead && !this.player.downed) {
-      if (dist(this.player.pos, this.huntFootprint.pos) <= 50 + this.player.radius) {
+      if (dist(this.player.pos, this.huntFootprint.pos) <= 50 + this.player.radius
+        && this.dwellReachable(this.player.pos, this.huntFootprint.pos)) {
         this.huntFootprintDwell += dt;
         if (this.huntFootprintDwell >= hf.surge().dwellSeconds) {
           this.huntFootprint = null;
@@ -6467,7 +6476,8 @@ export class World {
     if (info.quest === 'offer') {
       this.amalgamPickDwell = [];
       const necro = this.actorById(site.necroId);
-      if (necro && dist(necro.pos, this.player.pos) <= AMALGAM_RADIUS) {
+      if (necro && dist(necro.pos, this.player.pos) <= AMALGAM_RADIUS
+        && this.dwellReachable(this.player.pos, necro.pos, npcDwellReach('bonewright'))) {
         this.amalgamNecroDwell += dt;
         if (this.amalgamNecroDwell >= AMALGAM_DWELL) { this.amalgamNecroDwell = 0; this.acceptAmalgamHunt(); }
       } else this.amalgamNecroDwell = 0;
@@ -6476,7 +6486,8 @@ export class World {
       const spots = this.amalgamPickSpots(site.center, info.offered);
       if (this.amalgamPickDwell.length !== spots.length) this.amalgamPickDwell = spots.map(() => 0);
       for (let i = 0; i < spots.length; i++) {
-        if (dist(spots[i].pos, this.player.pos) <= AMALGAM_PICK_RADIUS) {
+        if (dist(spots[i].pos, this.player.pos) <= AMALGAM_PICK_RADIUS
+          && this.dwellReachable(this.player.pos, spots[i].pos)) {
           this.amalgamPickDwell[i] += dt;
           if (this.amalgamPickDwell[i] >= AMALGAM_PICK_DWELL) {
             this.amalgamPickDwell[i] = 0;
@@ -6710,7 +6721,8 @@ export class World {
   private updateDelver(dt: number): void {
     if (!this.descentSite || this.descentRun || this.descentSpent.has(this.zone.id)) return;
     if (this.player.dead || this.player.downed) { this.descentShaftDwell = 0; return; }
-    if (dist(this.player.pos, this.descentSite.platform) <= transitRadius('descent_shaft', 72) && this.playerIdle()) {
+    if (dist(this.player.pos, this.descentSite.platform) <= transitRadius('descent_shaft', 72) && this.playerIdle()
+      && this.dwellReachable(this.player.pos, this.descentSite.platform, transitReach('descent_shaft'))) {
       this.descentShaftDwell += dt;
       if (this.descentShaftDwell >= transitDwell('descent_shaft')) { this.descentShaftDwell = 0; this.descend(); }
     } else this.descentShaftDwell = 0;
@@ -6803,7 +6815,9 @@ export class World {
   nearDelver(seat: Seat = this.localSeat): boolean {
     const site = this.descentSite;
     if (!site || this.descentRun) return false;
-    return this.actors.some(a => a.id === site.delverId && !a.dead && dist(a.pos, seat.actor.pos) <= DELVER_RADIUS);
+    return this.actors.some(a => a.id === site.delverId && !a.dead
+      && dist(a.pos, seat.actor.pos) <= DELVER_RADIUS
+      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('delver')));
   }
 
   /** Buy one of the Delver's wares for Depth Echoes (mirrors buyVendorGem).
@@ -9495,7 +9509,8 @@ export class World {
 
   /** Is the seat's hero standing close enough to a Sacrificial Font to use it? */
   nearFont(seat: Seat = this.localSeat): boolean {
-    return this.fonts.some(f => dist(f.pos, seat.actor.pos) <= 150);
+    return this.fonts.some(f => dist(f.pos, seat.actor.pos) <= 150
+      && this.dwellReachable(seat.actor.pos, f.pos));
   }
 
   /** Does this live actor's def declare the given open NPC role? Behavior
@@ -9509,7 +9524,8 @@ export class World {
   nearSmith(seat: Seat = this.localSeat): boolean {
     return this.actors.some(a =>
       this.hasNpcRole(a, 'vendor')
-      && dist(a.pos, seat.actor.pos) <= 160);
+      && dist(a.pos, seat.actor.pos) <= 160
+      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('vendor')));
   }
 
   /** The essence price on one of Brandt's wares: gems off the static tables,
@@ -9568,11 +9584,14 @@ export class World {
     return this.seatIdle(this.localSeat);
   }
 
-  /** Mireille, if the player is standing within her counter's radius. */
+  /** Mireille, if the player is standing within her counter's radius AND can
+   *  honestly reach her (npcReach 'innkeep' = 'roof': her care is served
+   *  UNDER the inn's roof, never dwelled through its wall from the square). */
   private getMireille(): Actor | null {
     return this.actors.find(a =>
       this.hasNpcRole(a, 'innkeep')
-      && dist(a.pos, this.player.pos) <= MIREILLE_RADIUS) ?? null;
+      && dist(a.pos, this.player.pos) <= MIREILLE_RADIUS
+      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('innkeep'))) ?? null;
   }
 
   /** Is the player by Mireille? (Used by the renderer for her locked-talk box.) */
@@ -9585,27 +9604,52 @@ export class World {
       || featureEnabled(this.account, FEATURE.MIREILLE_XP_BUFF);
   }
 
-  /** Is Mireille's welcome gift still owed? (Any gift skill unknown.) Public:
-   *  the renderer swaps her locked-talk line for an invitation while it is. */
-  mireilleGiftPending(): boolean {
-    return MIREILLE_GIFT_SKILLS.some(id => !!SKILLS[id] && !this.meta.knownSkills.has(id));
+  /** Is Mireille's welcome gift still OWED? Once per character: never after
+   *  the ledger remembers the hand-over, and never for a copy the hero
+   *  already knows or carries (a resumed save that learned the flasks, a
+   *  drop, a vendor buy all count — her kindness fills gaps, it never
+   *  duplicates). Public: innkeepPrompt swaps her talk line while it is. */
+  mireilleGiftOwed(): boolean {
+    if (this.ledger[MIREILLE_GIFT_LEDGER]) return false;
+    return MIREILLE_GIFT_SKILLS.some(id => !!SKILLS[id]
+      && !this.meta.knownSkills.has(id)
+      && !this.meta.skillInv.some(i => i.def.id === id));
+  }
+
+  /** The gift-taught LOOP, read back for her directions: any gift gem still
+   *  CARRIED unlearned (the book step), else any LEARNED gift flask not yet
+   *  on the action bar (the bar step). Null once the lesson is lived. */
+  private mireilleGiftLesson(): 'learn' | 'bar' | null {
+    const carried = MIREILLE_GIFT_SKILLS.some(id => !this.meta.knownSkills.has(id)
+      && this.meta.skillInv.some(i => i.def.id === id));
+    if (carried) return 'learn';
+    const unbound = MIREILLE_GIFT_SKILLS.some(id => this.meta.knownSkills.has(id)
+      && !this.player.skills.some(s => s?.def.id === id));
+    return unbound ? 'bar' : null;
   }
 
   /** The innkeep's prompt above her head while the player is near (renderer):
-   *  the welcome-gift invitation while the flasks are still owed, else the
-   *  locked-care note until any of her Vault services unlock. ROLE-BOUND like
-   *  its caravanner/bonewright/delver siblings — any body a package dresses
-   *  in npcRole 'innkeep' gets the prompt, no renderer edit. */
+   *  the welcome-gift invitation while the flasks are still owed, then her
+   *  DIRECTIONS through the gem loop the gift teaches, else the locked-care
+   *  note until any of her Vault services unlock. ROLE-BOUND like its
+   *  caravanner/bonewright/delver siblings — any body a package dresses in
+   *  npcRole 'innkeep' gets the prompt, no renderer edit. */
   innkeepPrompt(): string | null {
     if (!this.nearMireille()) return null;
-    if (this.mireilleGiftPending()) return 'Come here, dear — I keep flasks for new faces.';
+    if (this.mireilleGiftOwed()) return 'Come here, dear — I keep flasks for new faces.';
+    // The handed gift TEACHES: she names the player's own next move in the
+    // one loop every skill gem follows — and the line clears the moment
+    // they make it. An in-universe tutorial: no popup, no forced hand.
+    const lesson = this.mireilleGiftLesson();
+    if (lesson === 'learn') return 'Open your book (B), love — press those flasks to memory.';
+    if (lesson === 'bar') return 'Now set them to your bar, dear — a flask out of reach is no flask at all.';
     if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
     return null;
   }
 
   /** Mireille's service, by which of her unlocks the account owns: restore LIFE,
    *  restore MANA, and/or grant a 5-minute +5% experience blessing — plus her
-   *  WELCOME GIFT (both flask founts, first dwell, no unlock needed) and, with
+   *  WELCOME GIFT (both flask gems HANDED OVER, first dwell, no unlock) and, with
    *  a resource's care unlocked, a full REPLENISH of every known orb-fed fount
    *  of that resource (an any-orb catalyst fount counts for both). Returns true
    *  if anything was actually given (so the dwell consumes its cooldown). */
@@ -9613,27 +9657,26 @@ export class World {
     const p = this.player;
     let did = false;
     const parts: string[] = [];
-    // THE WELCOME GIFT — once per character (a resumed save that already
-    // knows the flasks skips; drops/vendor copies count as known too).
-    let gifted = false;
-    for (const sid of MIREILLE_GIFT_SKILLS) {
-      if (!SKILLS[sid] || this.meta.knownSkills.has(sid)) continue;
-      const inst = makeSkillInstance(SKILLS[sid], 1, SKILL_RARITIES.magic.sockets);
-      inst.rarity = 'magic';
-      this.meta.knownSkills.set(sid, inst);
-      gifted = true;
-    }
-    if (gifted) {
-      did = true; parts.push('the flasks');
-      // The gift lands READY: each flask takes the first EMPTY bar slot
-      // (never displacing a chosen skill) so the founts read on the bar —
-      // and their equipMods start shaking orbs loose — the moment she
-      // hands them over. The equip-mod sync fingerprints the bar itself.
+    // THE WELCOME GIFT — once per character (the run ledger remembers), and
+    // only the gaps: a copy already known or carried is never duplicated.
+    // The gems land in the HAND (skillInv), not on the bar: the hero equips
+    // them THEMSELVES, with Mireille's talk directing each step — the same
+    // book→learn→bar loop every gem they'll ever loot follows. Teaching by
+    // doing, not by doing-for.
+    if (this.mireilleGiftOwed()) {
+      let gifted = false;
       for (const sid of MIREILLE_GIFT_SKILLS) {
-        const inst = this.meta.knownSkills.get(sid);
-        if (!inst || p.skills.includes(inst)) continue;
-        const free = p.skills.findIndex(s => s === null);
-        if (free >= 0) p.skills[free] = inst;
+        if (!SKILLS[sid] || this.meta.knownSkills.has(sid)
+          || this.meta.skillInv.some(i => i.def.id === sid)) continue;
+        const inst = makeSkillInstance(SKILLS[sid], 1, SKILL_RARITIES.magic.sockets);
+        inst.rarity = 'magic';
+        this.meta.skillInv.push(inst);
+        gifted = true;
+      }
+      if (gifted) {
+        bumpLedger(this.ledger, MIREILLE_GIFT_LEDGER);
+        did = true; parts.push('two flasks, into your hands');
+        this.text(vec(p.pos.x, p.pos.y - 22), 'Open your book (B), love.', '#d8b87a', 13);
       }
     }
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && p.life < p.maxLife()) {
@@ -9678,7 +9721,7 @@ export class World {
     // her, or while the player is acting. Her WELCOME GIFT (the flasks) needs
     // no unlock — the dwell builds for it even on a fresh account.
     if (this.player.dead || this.player.downed || this.getMireille() === null
-      || (!this.mireilleUnlocked() && !this.mireilleGiftPending()) || !this.playerIdle()) {
+      || (!this.mireilleUnlocked() && !this.mireilleGiftOwed()) || !this.playerIdle()) {
       this.mireilleDwell = 0;
       return;
     }
@@ -9694,7 +9737,8 @@ export class World {
   nearCampfire(): boolean {
     return featureEnabled(this.account, FEATURE.CAMPFIRE)
       && this.zone.id === START_ZONE
-      && dist(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y)) <= CAMPFIRE_RADIUS;
+      && dist(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y)) <= CAMPFIRE_RADIUS
+      && this.dwellReachable(this.player.pos, vec(CAMPFIRE_SITE.x, CAMPFIRE_SITE.y));
   }
 
   /** Lingering by the campfire REFRESHES the wilds after a short dwell (mirrors
@@ -9732,7 +9776,8 @@ export class World {
   nearSalvage(seat: Seat = this.localSeat): boolean {
     return this.salvageUnlocked()
       && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y)) <= SALVAGE_CFG.stationRadius;
+      && dist(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y)) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y));
   }
 
   /** Linger at the bench → open the salvage/craft menu (flag → main loop). */
@@ -9754,7 +9799,8 @@ export class World {
   nearTracker(seat: Seat = this.localSeat): boolean {
     return featureEnabled(this.account, FEATURE.TRACKER)
       && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y)) <= SALVAGE_CFG.stationRadius;
+      && dist(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y)) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y));
   }
 
   /** Linger by the fire → open the BESTIARY (flag → main loop). */
@@ -9776,7 +9822,8 @@ export class World {
   nearOracle(seat: Seat = this.localSeat): boolean {
     return featureEnabled(this.account, FEATURE.ORACLE_STONE)
       && this.zone.id === START_ZONE
-      && dist(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y)) <= SALVAGE_CFG.stationRadius;
+      && dist(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y)) <= SALVAGE_CFG.stationRadius
+      && this.dwellReachable(seat.actor.pos, vec(ORACLE_SITE.x, ORACLE_SITE.y));
   }
 
   private updateOracle(dt: number): void {
@@ -9856,7 +9903,8 @@ export class World {
   nearCaravan(seat: Seat = this.localSeat): boolean {
     if (!featureEnabled(this.account, FEATURE.CARAVAN)) return false;
     return this.actors.some(a => this.hasNpcRole(a, 'caravanner')
-      && dist(a.pos, seat.actor.pos) <= CARAVAN_RADIUS);
+      && dist(a.pos, seat.actor.pos) <= CARAVAN_RADIUS
+      && this.dwellReachable(seat.actor.pos, a.pos, npcDwellReach('caravanner')));
   }
 
   /** Is caravan band N selectable? band 0 (home) is always available with the base
@@ -10024,7 +10072,8 @@ export class World {
   private updateSail(dt: number): void {
     const dock = this.portDock();
     const active = !!dock && this.canSail()
-      && this.playerIdle() && dist(this.player.pos, dock.pos) <= 110;
+      && this.playerIdle() && dist(this.player.pos, dock.pos) <= 110
+      && this.dwellReachable(this.player.pos, dock.pos);
     if (!this.sailGate.fire(active, dt, CARAVAN_DWELL)) return;
     this.enterSailing();
   }
@@ -10519,7 +10568,8 @@ export class World {
     if (!post || post.captain.dead) return;
     if (this.player.dead || this.player.downed) { this.mercDwell = 0; return; }
     const cfg = MERC_CFG.outpost;
-    const near = dist(post.captain.pos, this.player.pos) <= cfg.radius;
+    const near = dist(post.captain.pos, this.player.pos) <= cfg.radius
+      && this.dwellReachable(this.player.pos, post.captain.pos, npcDwellReach('captain'));
     if (!near) { this.mercDwell = 0; this.mercDwellFired = false; return; }
     const foeNear = this.actors.some(a =>
       a.team === 'enemy' && !a.dead && !a.passive && !a.untargetable
@@ -11051,7 +11101,8 @@ export class World {
   private getQuestGiver(defId?: string): Actor | null {
     return this.actors.find(a =>
       (defId ? a.defId === defId && !a.dead : this.hasNpcRole(a, 'questgiver'))
-      && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS) ?? null;
+      && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
+      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver'))) ?? null;
   }
 
   /** ANY of these giver defIds standing near the player (quests may list
@@ -11084,7 +11135,8 @@ export class World {
    *  vocation's shrine spirit, future field boards)? Registry-derived. */
   nearAnyQuestGiver(): boolean {
     return this.actors.some(a => !a.dead && a.defId && QUEST_GIVER_IDS.has(a.defId)
-      && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS);
+      && dist(a.pos, this.player.pos) <= QUESTGIVER_RADIUS
+      && this.dwellReachable(this.player.pos, a.pos, npcDwellReach('questgiver')));
   }
 
   /** Prompt text above a nearby quest giver, or null. */
@@ -11584,7 +11636,8 @@ export class World {
     if (this.player.dead || this.player.downed) return;
     for (const c of this.playerCorpses) {
       if (c.reclaimed) { c.dwell = 0; continue; }
-      if (dist(c.pos, this.player.pos) > CORPSE_RADIUS || !this.playerIdle() || !this.canReclaim(c)) {
+      if (dist(c.pos, this.player.pos) > CORPSE_RADIUS || !this.playerIdle() || !this.canReclaim(c)
+        || !this.dwellReachable(this.player.pos, c.pos)) {
         c.dwell = 0;
         continue;
       }
@@ -21915,7 +21968,8 @@ export class World {
         ? this.roofedStructureAt(this.player.pos) : null;
       const onMouth = (cm: { pos: Vec2; kind: string; roof?: PlacedStructure | null }): boolean =>
         dist(this.player.pos, cm.pos) <= transitRadius(`sidezone:${cm.kind}`, 28) + this.player.radius
-        && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof));
+        && (!sidezoneOf(cm.kind)?.indoorsOnly || (!!cm.roof && cm.roof === playerRoof))
+        && this.dwellReachable(this.player.pos, cm.pos, transitReach(`sidezone:${cm.kind}`));
       if (this.caveExitGrace) {
         if (!this.caveEntrances.some(onMouth)) this.caveExitGrace = false;
         this.caveDwellIdx = -1;
@@ -21948,7 +22002,10 @@ export class World {
             if (!dr || dr.open || dr.broken) continue;
             if (dr.mode !== 'dwell' && dr.mode !== 'both') continue;
             const dd = dist(hero.pos, d.pos);
-            if (dd <= d.radius + hero.radius + DOOR_REACH && dd < doorD) { doorD = dd; onDoor = d; }
+            // Reach honors the 'door' transit row ('radius' today: a push is
+            // contact — the plank itself is the occluder a ray would argue with).
+            if (dd <= d.radius + hero.radius + DOOR_REACH && dd < doorD
+              && this.dwellReachable(hero.pos, d.pos, transitReach('door'))) { doorD = dd; onDoor = d; }
           }
         }
         if (onDoor?.door) {
@@ -21988,7 +22045,8 @@ export class World {
         let onGate: { pos: Vec2; kind: string; key: string; enter: () => void } | null = null, bestGD = Infinity;
         for (const g of gates) {
           const d = dist(this.player.pos, g.pos);
-          if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD) { bestGD = d; onGate = g; }
+          if (d <= transitRadius(`realm_gate:${g.kind}`, 32) + this.player.radius && d < bestGD
+            && this.dwellReachable(this.player.pos, g.pos, transitReach(`realm_gate:${g.kind}`))) { bestGD = d; onGate = g; }
         }
         if (onGate && this.playerIdle() && !this.player.push) {
           if (this.realmDwellKey !== onGate.key) {
@@ -22010,7 +22068,8 @@ export class World {
           let onSeal: Doodad | null = null, sealD = Infinity;
           for (const s of this.arenaWard.seals) {
             const d = dist(this.player.pos, s.pos);
-            if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + this.player.radius && d < sealD) { sealD = d; onSeal = s; }
+            if (d <= transitRadius(`ward_seal:${s.kind}`, 30) + this.player.radius && d < sealD
+              && this.dwellReachable(this.player.pos, s.pos, transitReach(`ward_seal:${s.kind}`))) { sealD = d; onSeal = s; }
           }
           if (onSeal && this.playerIdle() && !this.player.push) {
             if (this.wardDwellSeal !== onSeal) { this.wardDwellSeal = onSeal; this.wardDwellStart = this.time; }
@@ -22027,7 +22086,8 @@ export class World {
         // un-roused — drawing steel cancels the parley. A CONSUMED latch ('done') keeps
         // it from re-firing while you stand; it re-arms when you step away / act.
         const keeper = this.holdfastKeeper();
-        const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78);
+        const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78)
+          && this.dwellReachable(this.player.pos, keeper.pos, transitReach('holdfast'));
         if (nearKeeper && this.playerIdle() && !this.player.push) {
           if (this.holdfastDwellKey !== 'done') {
             if (this.holdfastDwellKey !== 'holdfast') { this.holdfastDwellKey = 'holdfast'; this.holdfastDwellPos = vec(keeper!.pos.x, keeper!.pos.y); this.holdfastDwellStart = this.time; }
@@ -22074,6 +22134,8 @@ export class World {
       for (const e of this.exits) {
         const d = dist(this.player.pos, e.pos);
         if (d > e.radius) continue;
+        if (!this.dwellReachable(this.player.pos, e.pos,
+          transitReach(e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit'))) continue;
         if (this.isExitLocked(e)) { if (d < lockedD) { lockedD = d; lockedExit = e; } continue; }
         if (d < bestD) { bestD = d; onExit = e; }
       }
@@ -23186,6 +23248,32 @@ export class World {
     const len = dist(from, to) || 1;
     return vec(from.x + (to.x - from.x) * (back / len),
                from.y + (to.y - from.y) * (back / len));
+  }
+
+  /** THE DWELL-REACH RULE (data/transit.ts DWELL_CFG + per-row `reach` /
+   *  per-role npcReach overrides): may a dwell build from `from` toward an
+   *  object at `target`? A dwell is an act of attention, so it only builds
+   *  toward an object the dweller can honestly attend to:
+   *    'radius' — trusts the caller's proximity check alone (contact acts:
+   *               door pushes, a hull nosing shore);
+   *    'sight'  — the occlusion ray must reach it (walls stop a dwell; the
+   *               object's own frame within sightSlack is forgiven; cast on
+   *               DWELL_CFG.sightChannel so canopy veils never blind your
+   *               own hands);
+   *    'roof'   — same roof as a ROOFED object (the cellar-hatch
+   *               `indoorsOnly` ideology, generalized), degrading to 'sight'
+   *               in the open so a package's courtyard innkeep stays
+   *               dwellable.
+   *  Every dwell family and NPC counter asks THIS — one attention
+   *  discipline, tuned entirely from data. */
+  dwellReachable(from: Vec2, target: Vec2, reach: DwellReach = DWELL_CFG.reach): boolean {
+    if (reach === 'radius') return true;
+    if (reach === 'roof') {
+      const home = this.roofedStructureAt(target);
+      if (home) return this.roofedStructureAt(from) === home;
+    }
+    const hit = castRay(this, from, target, DWELL_CFG.sightChannel);
+    return !hit || hit.d >= dist(from, target) - DWELL_CFG.sightSlack;
   }
 
   /** Perception rays, memoized (TTL LOS_CFG.memoTtl): acquireTarget probes
