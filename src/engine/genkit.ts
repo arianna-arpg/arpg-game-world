@@ -167,6 +167,22 @@ export class Mask {
 // Each ORs its shape into the given mask (world-space params) and returns it,
 // so shapes chain: disc(m, …); ring(m, …).
 
+/** Rasterize a filled ELLIPSE into the mask (the colosseum's pit + stands;
+ *  any oval clearing). Same bounded-bbox discipline as disc(). */
+export function ellipseDisc(m: Mask, x: number, y: number, rx: number, ry: number): Mask {
+  const sx = Math.max(1e-3, rx), sy = Math.max(1e-3, ry);
+  const cx0 = Math.max(0, m.cx(x - sx)), cx1 = Math.min(m.cols - 1, m.cx(x + sx));
+  const cy0 = Math.max(0, m.cy(y - sy)), cy1 = Math.min(m.rows - 1, m.cy(y + sy));
+  for (let cy = cy0; cy <= cy1; cy++) {
+    for (let cx = cx0; cx <= cx1; cx++) {
+      const c = m.center(cx, cy);
+      const dx = (c.x - x) / sx, dy = (c.y - y) / sy;
+      if (dx * dx + dy * dy <= 1) m.data[cy * m.cols + cx] = 1;
+    }
+  }
+  return m;
+}
+
 export function disc(m: Mask, x: number, y: number, r: number): Mask {
   const r2 = r * r;
   // Bounded to the circle's bbox — same cells set, but a fuse pass rasterizing

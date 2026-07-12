@@ -98,6 +98,13 @@ export interface FractureSurge {
   };
   /** Base XP for sealing a chasm (the final / divert seal multiplies this). */
   chasmRewardXp: number;
+  /** XP per zone level on a chasm seal (chasmRewardXp + level × this). */
+  chasmXpPerLevel: number;
+  /** The divert-seal premium multiplying the chasm reward (the doc's
+   *  "final/divert seal multiplies it" — now truly data). */
+  divertRewardMul: number;
+  /** The full run-through payout (no hops left): the big bounty. */
+  sealReward: { xpBase: number; xpPerLevel: number; gems: number };
   /** Seconds an UNengaged fracture lingers before it recycles (so an abandoned
    *  one never blocks all future fractures). Reset while a run is live. */
   idleLife: number;

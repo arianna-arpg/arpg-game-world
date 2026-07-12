@@ -202,6 +202,8 @@ export type KnownDoodadKind =
   // The abyss kit (the fracture capstone's lightless deep)
   | 'abyss_crack'      // a glowing fissure underfoot — the abyss showing through
   | 'abyss_spine'      // a jagged riven spike — the deep's teeth, reefs of them
+  // The grand arena (the colosseum recipe's seats)
+  | 'crowd_row'        // a bench-row of spectators facing the pit — bobbing, cheering, fickle
   // The river-of-flame kit (hell's artery — the flame course's bank vocabulary)
   | 'hellforge_anvil'  // the demons' great forge-altar: a slag plinth, an ember throat (the terminus monument)
   | 'soul_cage'        // a gibbet cage on a leaning post — the river's toll, still glowing faintly
@@ -871,6 +873,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The abyss kit: cracks glow underfoot; spines reef into jagged cover.
   abyss_crack: { overlap: 'ground', walkOnly: true },
   abyss_spine: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 44, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The colosseum's seats: pure scenery on the stands (the recipe places them
+  // over wall cells deliberately — the crowd sits WHERE you cannot walk).
+  crowd_row: { overlap: 'ground' },
   // The river-of-flame kit: the forge-altar monument (a composition centerpiece,
   // huge spacing so two never crowd), gibbet cages that split when struck (the
   // strike-surface seam), banner poles you duck behind but shoot past, and
@@ -1741,17 +1746,23 @@ export function setBoundaryGateBuilder(b: BoundaryGateBuilder): void { boundaryG
 export function generateLayout(
   def: ZoneDef, arena: { w: number; h: number },
   rng: Rng, entry: Vec2, exits: Vec2[],
+  // EXTRA fixtures a live system injects for THIS load only (crusade works
+  // matching the tier held at entry) — same pipeline as authored fixtures
+  // (plan walls carve the grid, doors/slots/breakables live, footprints
+  // reserve), never mutating the def. Omitted everywhere else = byte-identical.
+  extraFixtures?: { structure: string; x: number; y: number }[],
 ): GeneratedLayout {
   const ctx: GenCtx = {
     rng, arena, entry, exits, level: def.level, seed: def.seed, geo: def.geo,
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
   };
+  const allFixtures = [...(def.fixtures ?? []), ...(extraFixtures ?? [])];
   // LEGACY FIXTURES first (common to EVERY layout): hand-placed structures at
   // exact zone coordinates (the town's smithy stands where the town says it
   // stands). They reserve their footprints, so whatever layout generator runs
   // flows around them.
-  for (const f of def.fixtures ?? []) {
+  for (const f of allFixtures) {
     const s = STRUCTURES[f.structure];
     if (s && !s.plan && !s.generator) placeStructure(ctx, s, vec(f.x, f.y));
   }
@@ -1779,7 +1790,7 @@ export function generateLayout(
   // which would wipe a plan fixture's painted walls into ghost geometry (roofs
   // over open rock, unenforced ramparts) if it painted first. Placing here, the
   // fixture carves into whatever grid the layout built (or ensures one).
-  for (const f of def.fixtures ?? []) {
+  for (const f of allFixtures) {
     const s = STRUCTURES[f.structure];
     if (s && (s.plan || s.generator)) placeStructurePlan(ctx, s, vec(f.x, f.y));
   }
@@ -2980,6 +2991,9 @@ registerStamp('rime_node', (ctx, spec) => stampSolid(ctx, 'rime_node', spec.radi
 registerStamp('stone_node', (ctx, spec) => stampSolid(ctx, 'stone_node', spec.radius ?? [16, 22]));
 registerStamp('abyss_crack', stampSingle('abyss_crack', [20, 34]));
 registerStamp('abyss_spine', (ctx, spec) => stampSolid(ctx, 'abyss_spine', spec.radius ?? [12, 22]));
+// The colosseum's seats (recipe-placed in rings; the stamp keeps the kind a
+// legal tileset row for any other builder that wants a bench of watchers).
+registerStamp('crowd_row', stampSingle('crowd_row', [20, 28]));
 // The river-of-flame kit: the forge-altar (cluster-anchored in practice; the
 // stamp keeps it a legal tileset row), gibbet cages, banners, bone-pyres.
 registerStamp('hellforge_anvil', (ctx, spec) => stampSolid(ctx, 'hellforge_anvil', spec.radius ?? [38, 46]));

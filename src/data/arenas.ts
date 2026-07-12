@@ -39,6 +39,23 @@ export interface ArenaWardSpec {
   announceAll?: string;
 }
 
+/** THE CROWD (a colosseum arena's stands — the 'crowd_row' seats the recipe
+ *  places). The boss can CALL CHALLENGERS out of it, and the stands EMPTY
+ *  when the crown falls — both engine-driven off this data. */
+export interface ArenaCrowdSpec {
+  /** The crowd doodad kind seated by the arena's recipe (default 'crowd_row'). */
+  kind?: string;
+  /** CHAMPION CALLS: at each boss life fraction (descending), the nearest
+   *  crowd rows answer — members vault the rail as fighters (the arena's
+   *  roster), and the rows that answered empty. The add-phase as data. */
+  championCalls?: { atLifeFrac: number; count: [number, number]; announce?: string }[];
+  /** When the boss falls, the stands DISPERSE: rows fade out over a staggered
+   *  window this long (seconds). Omit = the crowd keeps its seats. */
+  disperseOnBossDeathSec?: number;
+  /** The dispersal bulletin. */
+  disperseAnnounce?: string;
+}
+
 /** One event realm's build sheet. Every field optional — an empty spec is
  *  exactly the classic realm (the event's fallback tileset, native layout
  *  roll, packs [2,4]×[2,3], boss on entry). */
@@ -61,6 +78,8 @@ export interface ArenaSpec {
   packs?: { count: [number, number]; size: [number, number] };
   /** Ward seals gating the boss — see ArenaWardSpec. */
   wards?: ArenaWardSpec;
+  /** A living CROWD on the arena's stands — see ArenaCrowdSpec. */
+  crowd?: ArenaCrowdSpec;
 }
 
 // The stock seal doodads: pure triggers (never block movement or shots), kept

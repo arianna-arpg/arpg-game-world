@@ -86,6 +86,9 @@ const FRACTURE_SURGE: FractureSurge = {
     clearPerLevel: 0.22,    // …+ this per zone level (scales with depth)
   },
   chasmRewardXp: 42,        // per-chasm seal XP base (final/divert seal multiplies it)
+  chasmXpPerLevel: 6,       // + this per zone level on every chasm seal
+  divertRewardMul: 1.5,     // the divert-seal premium over the chasm reward
+  sealReward: { xpBase: 140, xpPerLevel: 24, gems: 3 }, // the run-through bounty
   idleLife: 480,            // an unengaged fracture recycles after this (touch resets it)
 };
 

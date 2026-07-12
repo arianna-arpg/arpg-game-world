@@ -112,6 +112,8 @@ const DEADWAKE_SURGE: DeadwakeSurge = {
       { id: 'deadwake_bonelord', weight: 1 }, // the uber boss (Crowned on spawn)
     ],
     garrison: [8, 12],
+    bossBump: 2,        // the Bonelord out-levels its own garrison
+    bossXpFloor: 400,   // an uber pays like one
     reward: { xpBase: 600, xpPerLevel: 80, gems: 8 },
   },
   color: '#7a5aa6',

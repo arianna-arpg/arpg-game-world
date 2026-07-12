@@ -100,6 +100,9 @@ export interface NecropolisCfg {
   /** The uber BOSS pool (rolled, Crowned) + the arena garrison size. */
   bossPool: PackTableEntry[];
   garrison: [number, number];
+  /** The Bonelord's spawn shaping (fed to spawnArenaBoss — was hardcoded). */
+  bossBump: number;
+  bossXpFloor: number;
   /** The purge bounty (the combined-event payoff). */
   reward: { xpBase: number; xpPerLevel: number; gems: number };
   /** Optional arena build sheet (data/arenas.ts) — forced recipe, fixed name,

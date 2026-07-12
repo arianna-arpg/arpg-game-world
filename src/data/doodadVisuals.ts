@@ -840,6 +840,13 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     longShadow: 1.1, painter: 'shard', order: 51, shadow: 0.55,
     params: { points: 4, color: '#140a20', material: 'stone', edgeGlow: { color: 'theme:accent|#b060e8', alpha: 0.45 } },
   },
+  // THE GRAND ARENA's crowd: bench-rows of bobbing spectators on the stands
+  // (colosseum recipe). Order above the wall band they sit on; the favor they
+  // wave catches the theme's accent. They EMPTY (wilt) when the crown falls.
+  crowd_row: {
+    painter: 'crowdRow', order: 56,
+    params: { bench: '#4a3f30', accent: 'theme:accent|#e8c85a' },
+  },
   // THE RIVER-OF-FLAME KIT (hell's artery — data/tilesets.ts 'river_of_flame').
   // The forge monument breathes deep ember light (the terminus beacon you
   // steer toward down the whole artery); gibbet cages hold pale soul-wisps

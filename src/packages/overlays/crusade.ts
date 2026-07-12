@@ -68,9 +68,11 @@ export interface CrusadeTier {
   amp: number;
   /** Local-clear reward multiplier at this tier. */
   rewardMul: number;
-  /** Extra structures scattered to make a converted capital a doodad LABYRINTH
-   *  (the "traversing a faction city" feel). Only the converted tier sets it. */
-  cityFill?: { structure: string; count: [number, number] };
+  /** Extra structures scattered to make a converted capital a FACTION CITY —
+   *  a weighted street-mix (the village kit: cottages, longhouses, a chapel,
+   *  rampart runs) plus an optional town SQUARE raised once near the works.
+   *  Only the converted tier sets it. */
+  cityFill?: { structures: { structure: string; weight: number }[]; count: [number, number]; square?: string };
 }
 
 /** The whole spreading-state-machine config (tunable data, carried by the def). */
@@ -117,7 +119,15 @@ export interface CrusadeSurge {
    *  `arena` (data/arenas.ts) makes the sanctum DISTINCT with one row — a
    *  forced layout recipe, a fixed name, pack density, even boss-warding
    *  seals — riding the same pipeline as every event realm. */
-  sanctum: { atSecondsHeld: number; tileset: string; rewardMul: number; levelBonus: number; arena?: ArenaSpec };
+  sanctum: {
+    atSecondsHeld: number; tileset: string; rewardMul: number; levelBonus: number;
+    /** Premium on the Leader kill per CONVERTED zone the crusade held (the
+     *  network-scaled spoils — was a hardcoded 0.25). */
+    rewardPerConverted: number;
+    /** The Leader's spawn shaping (fed to spawnArenaBoss). */
+    bossBump: number; xpFloor: number;
+    arena?: ArenaSpec;
+  };
   /** CLASH (Crusade vs Crusade): when two different-faction crusades' fronts meet,
    *  the stronger side wrests the contested border zone — a tug-of-war warfront that
    *  shifts on its own, which the player can tip by thinning a side. */
@@ -155,7 +165,7 @@ export interface CrusadeInfo {
   countMul: number;
   amp: number;
   rewardMul: number;
-  cityFill?: { structure: string; count: [number, number] };
+  cityFill?: { structures: { structure: string; weight: number }[]; count: [number, number]; square?: string };
   /** A converted stronghold whose sanctum gate has torn open (host-only mint). */
   sanctumReady: boolean;
 }
@@ -409,7 +419,7 @@ export class CrusadeField implements WorldOverlay {
     for (const hz of this.held.values()) if (hz.crusadeId === crusadeId && this.tierIdxFor(hz) >= 4) converted++;
     for (const [zid, hz] of [...this.held]) if (hz.crusadeId === crusadeId) this.held.delete(zid);
     this.crusades = this.crusades.filter(x => x.id !== crusadeId);
-    return this.cfg.sanctum.rewardMul * (1 + 0.25 * converted);
+    return this.cfg.sanctum.rewardMul * (1 + this.cfg.sanctum.rewardPerConverted * converted);
   }
 
   /** Mark a crusade's sanctum realm as minted (so the engine mints it once). */

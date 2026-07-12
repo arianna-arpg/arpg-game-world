@@ -93,11 +93,41 @@ const CRUSADE_SURGE: CrusadeSurge = {
     { tier: 4, label: 'Converted', atSecondsHeld: 230, structure: 'crusade_bastion',
       garrison: [8, 12], leaderRarity: 'crowned', leaderTag: null,
       suppressNatives: true, countMul: 0.6, amp: 2.0, rewardMul: 3.2,
-      cityFill: { structure: 'crusade_rampart', count: [3, 5] } },
+      // The faction CITY: a street-mix off the shared village kit (real plan
+      // structures — roofs, doors, floors) around a raised town square, rampart
+      // runs keeping the labyrinth feel. Pure data — retune the mix freely.
+      cityFill: {
+        structures: [
+          { structure: 'cottage', weight: 3 },
+          { structure: 'longhouse', weight: 2 },
+          { structure: 'crusade_rampart', weight: 2 },
+          { structure: 'market_row', weight: 1 },
+          { structure: 'chapel', weight: 1 },
+        ],
+        count: [4, 6],
+        square: 'village_square',
+      } },
   ],
   // The capital's sanctum tears open `atSecondsHeld` after it converts; stepping
-  // through it enters the Leader's inner realm (minted like a cave).
-  sanctum: { atSecondsHeld: 55, tileset: 'crypt', rewardMul: 3.5, levelBonus: 4 },
+  // through it enters the Leader's GRAND ARENA — a gladiatorial colosseum where
+  // the Leader fights before his own people: the crowd answers his champion-
+  // calls (rows vault the rail as an add-phase), and the stands EMPTY when the
+  // crown falls. All data (data/arenas.ts ArenaCrowdSpec).
+  sanctum: {
+    atSecondsHeld: 55, tileset: 'grand_arena', rewardMul: 3.5, levelBonus: 4,
+    rewardPerConverted: 0.25, // Leader-kill premium per converted zone held
+    bossBump: 2, xpFloor: 140, // the Leader's spawn shaping (spawnArenaBoss)
+    arena: {
+      crowd: {
+        championCalls: [
+          { atLifeFrac: 0.55, count: [2, 3], announce: 'The Leader beckons — challengers vault the rail!' },
+          { atLifeFrac: 0.22, count: [3, 4], announce: 'A last cry to the stands — the faithful answer!' },
+        ],
+        disperseOnBossDeathSec: 3.2,
+        disperseAnnounce: 'The stands fall silent — the crowd melts away from a fallen crown.',
+      },
+    },
+  },
   // CLASH (Crusade vs Crusade): where two different-faction fronts meet, the
   // stronger side wrests the border zone — a tug-of-war that shifts the warfront on
   // its own. takeMargin > 1 so a weak vanguard can never overrun a mighty capital

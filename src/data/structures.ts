@@ -547,93 +547,127 @@ export const STRUCTURES: Record<string, StructureDef> = {
   //     gate) so the kill hooks can resolve the tier. Reused for ANY crusading
   //     faction — these are siege-works, not faction-specific art.
 
-  // TOUCHED — a planted outpost: a brazier and a few sandbag rocks. Few changes.
+  // TOUCHED — a planted watch-post: corner stakes, the muster fire, the raised
+  // standard. Open-air (no roof) — the lightest footprint on the ladder.
   crusade_outpost: {
-    id: 'crusade_outpost', halfW: 56, halfH: 56,
-    props: [
-      { kind: 'campfire', x: 0, y: 0, radius: 13 },
-      { kind: 'rock', x: -34, y: 18, radius: 11 },
-      { kind: 'rock', x: 32, y: 22, radius: 10 },
+    id: 'crusade_outpost', halfW: 91, halfH: 65, cellSize: 26,
+    plan: [
+      '##___##',
+      '#__F__#',
+      '___G___',
+      '#__H__#',
+      '##___##',
     ],
   },
 
-  // OCCUPIED — a war camp: a palisade box with a south gate and a muster fire.
+  // OCCUPIED — the war camp: a palisade box, a BREAKABLE south gate, muster
+  // fires, the quartermaster's stores. A true plan now: the gate is a real
+  // door object and the crates/barrels actually spawn (the old walls/props
+  // path silently dropped its breakables).
   crusade_camp: {
-    id: 'crusade_camp', halfW: 150, halfH: 130,
-    walls: [
-      { x: -150, y: -130, dir: 'h', length: 300 }, // north
-      { x: -150, y: 130, dir: 'h', length: 110 },   // south, left of gate
-      { x: 90, y: 130, dir: 'h', length: 60 },      // south, right of gate
-      { x: -150, y: -130, dir: 'v', length: 260 },  // west
-      { x: 150, y: -130, dir: 'v', length: 260 },   // east
-    ],
-    props: [
-      { kind: 'campfire', x: 0, y: -10, radius: 15 },
-      { kind: 'rock', x: -90, y: 70, radius: 12 },
-      { kind: 'rock', x: 95, y: 60, radius: 12 },
-    ],
-    breakables: [
-      { id: 'crate', x: 55, y: 50 },
-      { id: 'barrel', x: -55, y: 55 },
+    id: 'crusade_camp', halfW: 156, halfH: 78, cellSize: 26,
+    plan: [
+      '############',
+      '#_G______H_#',
+      '#___F______#',
+      '#B________C#',
+      '#_H____F_G_#',
+      '#####XX#####',
     ],
   },
 
-  // ENTRENCHED — a fortress: thick outer walls, twin gate towers, an inner keep.
+  // ENTRENCHED — the fortress: real curtain walls off the castle generator —
+  // corner TOWER SLOTS the garrison mans, arrow-slit windows, a breakable gate.
   crusade_fortress: {
-    id: 'crusade_fortress', halfW: 210, halfH: 180,
-    walls: [
-      { x: -210, y: -180, dir: 'h', length: 170 }, // north, left of gate
-      { x: 40, y: -180, dir: 'h', length: 170 },    // north, right of gate
-      { x: -210, y: 180, dir: 'h', length: 420 },   // south
-      { x: -210, y: -180, dir: 'v', length: 360 },  // west
-      { x: 210, y: -180, dir: 'v', length: 360 },   // east
-      // inner keep — a smaller chamber, door to the south
-      { x: -70, y: -50, dir: 'h', length: 140 },    // keep north
-      { x: -70, y: -50, dir: 'v', length: 90 },     // keep west
-      { x: 70, y: -50, dir: 'v', length: 90 },      // keep east
-    ],
-    props: [
-      { kind: 'campfire', x: 0, y: -5, radius: 14 },
-      { kind: 'rock', x: -170, y: 0, radius: 16 },  // left tower mass
-      { kind: 'rock', x: 170, y: 0, radius: 16 },   // right tower mass
-    ],
-    breakables: [
-      { id: 'crate', x: 120, y: 110 },
-      { id: 'barrel', x: -120, y: 115 },
-    ],
+    id: 'crusade_fortress', halfW: 225, halfH: 195, cellSize: 30,
+    generator: 'castle', genParams: { w: [13, 15], h: [11, 13], gates: [1, 1], gateChar: 'X' },
+    roofs: 'auto', roofStyle: 'stone',
   },
 
-  // CONVERTED — the bastion: the capital keep at the heart of the faction-city,
-  //   a thick double-walled core. The sanctum gate is placed at its centre by the
-  //   engine (where the Crusade Leader's realm tears open).
+  // CONVERTED — the bastion: the capital keep, CONCENTRIC (breach the outer
+  // ring and the approach to the inner gate is a killing ground). The sanctum
+  // gate tears open at its heart (engine-placed).
   crusade_bastion: {
-    id: 'crusade_bastion', halfW: 180, halfH: 160,
-    walls: [
-      { x: -180, y: -160, dir: 'h', length: 150 }, // north, left of gate
-      { x: 60, y: -160, dir: 'h', length: 120 },    // north, right of gate
-      { x: -180, y: 160, dir: 'h', length: 360 },   // south
-      { x: -180, y: -160, dir: 'v', length: 320 },  // west
-      { x: 180, y: -160, dir: 'v', length: 320 },   // east
-      // inner ring around the sanctum focus
-      { x: -90, y: -80, dir: 'h', length: 70 },
-      { x: 30, y: -80, dir: 'h', length: 60 },
-      { x: -90, y: -80, dir: 'v', length: 160 },
-      { x: 90, y: -80, dir: 'v', length: 160 },
-    ],
-    props: [
-      { kind: 'campfire', x: -120, y: 110, radius: 13 },
-      { kind: 'campfire', x: 120, y: 110, radius: 13 },
+    id: 'crusade_bastion', halfW: 240, halfH: 210, cellSize: 30,
+    generator: 'castle', genParams: { w: [15, 17], h: [13, 15], concentric: true, gates: [1, 1], gateChar: 'X' },
+    roofs: 'auto', roofStyle: 'stone',
+  },
+
+  // CONVERTED filler — a parapet-topped rampart RUN (a real region-painted
+  // wall now), scattered so the faction-city traverses as a labyrinth of works.
+  crusade_rampart: {
+    id: 'crusade_rampart', halfW: 91, halfH: 26, cellSize: 26,
+    plan: [
+      '#######',
+      '__PPP__',
     ],
   },
 
-  // CONVERTED filler — a rampart segment scattered across the city arena to make
-  //   the converted zone a doodad LABYRINTH (the "traversing a faction city" feel).
-  crusade_rampart: {
-    id: 'crusade_rampart', halfW: 90, halfH: 64,
-    walls: [
-      { x: -90, y: -64, dir: 'h', length: 130 },
-      { x: 30, y: -64, dir: 'v', length: 128 },
+  // --- THE VILLAGE KIT --------------------------------------------------------
+  // Settlement pieces every builder shares: the crusade's converted capitals
+  // fill their streets with these (CrusadeTier.cityFill), and a metropolis
+  // face can roll them straight. All plan structures — real walls, doors,
+  // roofs, floors — speaking the shared legend vocabulary; a new piece is one
+  // def, no engine edits.
+
+  // A one-room cottage: hearth-corner stores under a timber roof.
+  cottage: {
+    id: 'cottage', halfW: 91, halfH: 65, cellSize: 26,
+    plan: [
+      '#######',
+      '#b...p#',
+      '#.....#',
+      '#f...C#',
+      '###D###',
     ],
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+  },
+
+  // The longhouse: a hall that sleeps a work-crew — benches down the middle,
+  // stores at both gables.
+  longhouse: {
+    id: 'longhouse', halfW: 143, halfH: 65, cellSize: 26,
+    plan: [
+      '###########',
+      '#p..b...bz#',
+      '#.........#',
+      '#B..f...bC#',
+      '#####D#####',
+    ],
+    roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+  },
+
+  // The chapel: a slate-roofed nave — braziers at the altar wall, bench rows,
+  // flagstone underfoot.
+  chapel: {
+    id: 'chapel', halfW: 91, halfH: 91, cellSize: 26,
+    plan: [
+      '#######',
+      '#z...z#',
+      '#.....#',
+      '#b...b#',
+      '#.....#',
+      '#b...b#',
+      '###D###',
+    ],
+    roofs: 'auto', roofStyle: 'slate', floorStyle: 'flagstone',
+  },
+
+  // The village square: an open cobbled plaza — market stalls facing in,
+  // standards and lanterns, the common fire at its heart. No walls: the
+  // square is the negative space the streets pour into.
+  village_square: {
+    id: 'village_square', halfW: 150, halfH: 105, cellSize: 30,
+    plan: [
+      '__________',
+      '_M__G___M_',
+      '____L_____',
+      '_H___F__H_',
+      '_____L____',
+      '_M___G__M_',
+      '__________',
+    ],
+    courtyardFloorStyle: 'cobble',
   },
 
   // --- PLAN STRUCTURES (generator-emitted blueprints) ------------------------

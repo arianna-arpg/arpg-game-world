@@ -4197,6 +4197,60 @@ const pentagram: GroupPainter = (env, group) => {
   ctx.globalAlpha = 1;
 };
 
+/** CROWD ROW — a bench of spectators on the colosseum stands, facing `rot`
+ *  (the pit): two staggered ranks of heads over a bench strip, every head
+ *  bobbing on its own beat, torches of excitement in the theme's accent.
+ *  Respects `wilt` (the transient fade — the stands EMPTY when the crown
+ *  falls: rows sink and thin as their ttl runs). Params: bench, skins[],
+ *  garb[], accent. */
+const crowdRow: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bench?: string; skins?: string[]; garb?: string[]; accent?: string };
+  const { ctx, theme, time } = env;
+  const bench = resolveColor(p.bench, theme, '#4a3f30');
+  const skins = p.skins ?? ['#d8b090', '#c89a74', '#a87858', '#8a6248'];
+  const garb = p.garb ?? ['#7a4a3a', '#5a6a44', '#4a5a7a', '#7a6a3a', '#6a4a6a'];
+  const accent = resolveColor(p.accent, theme, '#e8c85a');
+  for (const o of group) {
+    const seed = ((o.pos.x * 19 + o.pos.y * 3) | 0) >>> 0;
+    const R = o.radius;
+    const fade = 1 - (o.wilt ?? 0);          // the dispersal: rows thin + sink
+    if (fade <= 0.02) continue;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((o.rot ?? 0) + Math.PI / 2);  // bench runs perpendicular to the facing
+    ctx.globalAlpha = 0.85 * fade;
+    // The bench strip.
+    ctx.fillStyle = bench;
+    ctx.fillRect(-R, -R * 0.16, R * 2, R * 0.34);
+    // Two staggered ranks of heads, bobbing (the near rank leans toward the pit).
+    for (let rank = 0; rank < 2; rank++) {
+      const n = 4 - rank;
+      for (let i = 0; i < n; i++) {
+        const hx = -R + R * 2 * ((i + 0.5 + rank * 0.5) / (n + rank * 0.5));
+        const phase = hash01(i + rank * 7, seed) * Math.PI * 2;
+        const bob = Math.sin(time * (1.6 + hash01(i, seed + 5) * 1.2) + phase) * 1.6;
+        const hy = -R * 0.3 - rank * R * 0.34 + bob * fade + (1 - fade) * R * 0.5;
+        const hr = R * (0.13 + hash01(i + rank * 3, seed + 9) * 0.035);
+        ctx.globalAlpha = (rank === 0 ? 0.95 : 0.8) * fade;
+        // Garb (shoulders) then the head.
+        ctx.fillStyle = garb[(seed + i * 5 + rank * 11) % garb.length];
+        ctx.beginPath(); ctx.ellipse(hx, hy + hr * 0.9, hr * 1.4, hr * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = skins[(seed + i * 7 + rank * 13) % skins.length];
+        ctx.beginPath(); ctx.arc(hx, hy, hr, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // A raised favor now and then — the crowd's colors catching light.
+    if (hash01(3, seed) > 0.55) {
+      const wave = Math.sin(time * 2.2 + seed * 0.2);
+      ctx.globalAlpha = (0.4 + 0.3 * wave) * fade;
+      ctx.fillStyle = accent;
+      ctx.fillRect(-R * 0.1, -R * 0.72 - wave * 2, R * 0.2, R * 0.3);
+    }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+};
+
 /** LEY CHANNEL — a flowing energy conduit underfoot (the leyline kit): a dark
  *  groove, a bright CORE line whose dashes stream along the channel (animated
  *  dashOffset — the current visibly FLOWS), soft side-glow. Faces its `rot`
@@ -6172,7 +6226,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
-  tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, door, breach, landmass, beacon, fallback,
+  tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, crowdRow, door, breach, landmass, beacon, fallback,
   pyre, hangingCage, warBanner, hellforge,
   gateArch, tortureRack,
 };

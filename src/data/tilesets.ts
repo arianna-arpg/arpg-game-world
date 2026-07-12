@@ -1635,6 +1635,44 @@ export const TILESETS: Record<string, TilesetDef> = {
   //     pack tables below are just a sane fallback. Distinct palettes give each
   //     rift its own feel. ---
 
+  // THE GRAND ARENA — a gladiatorial colosseum (Daresso's bones): a bright
+  // sand pit under open sky, thick stands FULL OF CROWD (the colosseum
+  // recipe seats crowd_row spectators facing the fight), gate mouths where
+  // the ways in breach the ring, standards and braziers on the rail. Realm-
+  // only: the crusade sanctum fights its Leader here, before his people —
+  // who answer his champion-calls, and abandon him when he falls.
+  grand_arena: {
+    id: 'grand_arena', frontier: false,
+    nameFirst: ['Gilded', 'Roaring', 'Sunbleached', 'Crowned', 'Thousand-Eye', 'Bloodsanded', 'Triumphal', 'Laurelled', 'Clamoring', 'Old Victory', 'Banner-Hung', "Champion's", "Gladiator's", 'Oathsworn', 'Spearwall', 'Trumpet-Rung'],
+    nameSecond: ['Colosseum', 'Arena', 'Circus', 'Pit', 'Amphitheatre', 'Proving Grounds', 'Ring', 'Cauldron', 'Stands', 'Crucible', 'Bloodfloor', 'Spectacle', 'Court', 'Tourney Field', 'Grand Tier', 'Royal Box'],
+    theme: {
+      dayLight: 1.1,
+      // The pit is BRIGHT sand (clarity: the fight reads against it); the
+      // stands run darker stonework; the accent is the crowd's gold.
+      floor: '#b89f72', grid: '#a8905f', border: '#6a5a40',
+      obstacle: '#8a7a5c', obstacleEdge: '#5a4c38', accent: '#e8c85a',
+      wall: '#7a6a4c', mud: '#8a744e', chasm: '#241c12',
+      ground: {
+        palette: ['#a08a5e', '#ab9367', '#b89f72', '#c2ab80', '#ccb68c'],
+        bias: 0.52, alpha: 0.5, speckles: 0.7,
+      },
+    },
+    sizeW: [1250, 1500], sizeH: [980, 1150],
+    forceLayout: 'colosseum',
+    layoutParams: { standWidth: 130, crowdStep: 56, rimBanners: 10 },
+    layout: [], // the recipe IS the set-piece — no scatter competes with the pit
+    packs: {
+      count: [2, 3], size: [2, 3],
+      table: [
+        { id: 'bandit_cutthroat', weight: 2 },
+        { id: 'bandit_bruiser', weight: 2 },
+        { id: 'bandit_keeper', weight: 1 },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
   // ABYSSAL — a lightless void: jagged shards, yawning chasms, grasping tendrils.
   // THE ABYSSAL RIFT — the fracture capstone's lightless deep, PoE-abyss
   // bones: a near-black crust the abyss GLOWS THROUGH (crack-runs chained

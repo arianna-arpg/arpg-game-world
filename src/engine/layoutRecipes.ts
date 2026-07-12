@@ -27,7 +27,7 @@ import {
   placeLandmarkById, raiseStructure, setBoundaryGateBuilder, areaFreeOf, doodadRuleOf, type GenCtx,
 } from './levelgen';
 import {
-  Mask, band, disc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
+  Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
 } from './genkit';
 
 /** The negative-space region a carved recipe leaves between its passages —
@@ -895,3 +895,101 @@ function steppesLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('steppes', steppesLayout);
+
+// --- COLOSSEUM (the grand arena) --------------------------------------------------
+// Daresso's bones: a bright SAND PIT under open sky, ringed by a thick STAND
+// the crowd fills (spectator rows facing the fight), gate mouths breaching it
+// where the portals stem in, banners and braziers on the pit rim. Beyond the
+// stands: the outer works (solid negative). Everything a knob: layoutParams
+// {pitFracX/Y, standWidth, mouthWidth, crowdKind, crowdStep, crowdRows,
+// rimBanners} — and the crowd kind is data, so any event can seat its own.
+function colosseumLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  const cx = arena.w / 2, cy = arena.h / 2;
+  const rx = arena.w * layoutParam(def, 'pitFracX', 0.3);
+  const ry = arena.h * layoutParam(def, 'pitFracY', 0.3);
+  const standW = layoutParam(def, 'standWidth', 130);
+  const mouthHalf = layoutParam(def, 'mouthWidth', 88) / 2;
+
+  // Outside the outer works: solid dark.
+  const neg = Mask.forRect(0, 0, arena.w, arena.h);
+  neg.invert();
+  paintRegion(grid, neg, negativeRegion(def));
+
+  // A point on the pit-rim ellipse toward `p` (the stems aim here, the crowd
+  // seats ride scaled copies of the same parametric ring).
+  const rimToward = (p: Vec2): Vec2 => {
+    const a = Math.atan2((p.y - cy) / Math.max(1, ry), (p.x - cx) / Math.max(1, rx));
+    return vec(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry);
+  };
+
+  // THE STANDS: an elliptical annulus of wall, breached by a mouth at every
+  // portal stem (subtract, then paint — the steppes' openings discipline).
+  const stands = Mask.forRect(0, 0, arena.w, arena.h);
+  ellipseDisc(stands, cx, cy, rx + standW, ry + standW);
+  const pit = Mask.forRect(0, 0, arena.w, arena.h);
+  ellipseDisc(pit, cx, cy, rx, ry);
+  const mouths = Mask.forRect(0, 0, arena.w, arena.h);
+  const stemAngles: number[] = [];
+  for (const pt of [ctx.entry, ...ctx.exits]) {
+    const rim = rimToward(pt);
+    stemAngles.push(Math.atan2(rim.y - cy, rim.x - cx));
+    const stem = wanderPath(rng, pt, rim, { step: 80, wobble: 8 });
+    band(mouths, stem, mouthHalf);
+    disc(mouths, pt.x, pt.y, 96);
+    reserveArtery(ctx, stem, mouthHalf);
+  }
+  stands.subtract(pit);
+  stands.subtract(mouths);
+  paintRegion(grid, stands, 'wall');
+  // Paint the WALKABLE back over the negative (paint-over order is the
+  // recipe discipline): the pit floor, then every mouth stem + portal pocket.
+  paintRegion(grid, pit, 'ground');
+  paintRegion(grid, mouths, 'ground');
+  ctx.pois.push(vec(cx, cy));
+  // Keep the fight floor swept: the pit reserves against scatter (the rim
+  // dressing below is deliberate; a reservation is how a clearing promises).
+  reserveArtery(ctx, [vec(cx - rx * 0.5, cy), vec(cx + rx * 0.5, cy)], Math.min(rx, ry) * 0.62);
+
+  // THE CROWD: seated rows along the stand, facing the pit (rot → center),
+  // skipping the mouths. Two tiers by default; all data.
+  const crowdKind = layoutParam(def, 'crowdKind', 'crowd_row');
+  const crowdRows = layoutParam(def, 'crowdRows', 2);
+  const crowdStep = layoutParam(def, 'crowdStep', 58);
+  for (let row = 0; row < crowdRows; row++) {
+    const f = (row + 0.62) / (crowdRows + 0.55); // seat depth within the stand
+    const crx = rx + standW * f, cry = ry + standW * f;
+    const circumference = Math.PI * (3 * (crx + cry) - Math.sqrt((3 * crx + cry) * (crx + 3 * cry)));
+    const n = Math.max(8, Math.round(circumference / crowdStep));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + row * 0.5 * (crowdStep / crx);
+      if (stemAngles.some(s => {
+        let d = Math.abs(a - s) % (Math.PI * 2);
+        if (d > Math.PI) d = Math.PI * 2 - d;
+        return d < (mouthHalf + 34) / Math.min(crx, cry);
+      })) continue;
+      const p = vec(cx + Math.cos(a) * crx, cy + Math.sin(a) * cry);
+      // Face the pit: the row looks INWARD (its painter fans heads along rot's
+      // perpendicular, bobbing toward the fight).
+      ctx.doodads.push({ pos: p, radius: 24, kind: crowdKind, rot: a + Math.PI });
+    }
+  }
+
+  // The pit rim's dressing: standards + braziers pacing the rail (skip mouths).
+  const rimBanners = layoutParam(def, 'rimBanners', 8);
+  for (let i = 0; i < rimBanners; i++) {
+    const a = (i / rimBanners) * Math.PI * 2 + 0.18;
+    if (stemAngles.some(s => {
+      let d = Math.abs(a - s) % (Math.PI * 2);
+      if (d > Math.PI) d = Math.PI * 2 - d;
+      return d < (mouthHalf + 40) / Math.min(rx, ry);
+    })) continue;
+    const p = vec(cx + Math.cos(a) * (rx - 26), cy + Math.sin(a) * (ry - 26));
+    ctx.doodads.push({ pos: p, radius: 10, kind: i % 2 === 0 ? 'banner_post' : 'brazier', rot: a });
+  }
+
+  // The tileset's dressing (kept sparse — the arena IS the set-piece).
+  scatterDecoration(ctx, def);
+}
+registerLayout('colosseum', colosseumLayout);

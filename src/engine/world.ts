@@ -70,7 +70,7 @@ import {
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
 import { transitDwell, transitRadius } from '../data/transit';
-import type { ArenaSpec, ArenaWardSpec } from '../data/arenas';
+import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
 import '../data/arenas'; // side-effect: the ward-seal doodad rules register
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
@@ -1639,6 +1639,9 @@ export class World {
   /** Crusade-held zones whose forces (structures + garrison + leader) were already
    *  materialized this zone visit — one muster per visit. Cleared per loadZone. */
   private materializedCrusades = new Set<string>();
+  /** Where this zone's crusade WORKS were raised at generation (the fixture
+   *  injection's center) — the garrison musters here. Null on unheld ground. */
+  private crusadeWorksAt: Vec2 | null = null;
   /** Wake ids whose Deadwake host-LEADER has been placed in the current zone visit
    *  (one leader per wake per visit; cleared per loadZone). The relentless STREAM is
    *  driven separately by updateDeadwakeStream on its own timer. */
@@ -1804,6 +1807,12 @@ export class World {
   /** The live arena WARD RITUAL (data/arenas.ts): standing seals + the boss
    *  they gate. Null when the current zone runs no ritual. */
   private arenaWard: { spec: ArenaWardSpec; boss: ArenaBossSpec; seals: Doodad[]; total: number } | null = null;
+  /** The live arena CROWD (data/arenas.ts): the stands watch the boss — its
+   *  champion-call ladder + the dispersal-on-death. Null = no crowd here. */
+  private arenaCrowd: {
+    spec: ArenaCrowdSpec; roster: PackTableEntry[]; levelBonus: number;
+    bossId: number | null; callIdx: number; dispersed: boolean;
+  } | null = null;
   /** Dwell-to-shatter progress on a ward seal (mirrors the realm-gate dwell). */
   private wardDwellSeal: Doodad | null = null;
   private wardDwellStart = 0;
@@ -2724,6 +2733,7 @@ export class World {
     this.doorDwellId = '';  // dwell-to-open-a-door resets too (doors rebuild)
     this.arenaWard = null;  // a ward ritual is zone-local (re-raised on realm entry)
     this.wardDwellSeal = null;
+    this.arenaCrowd = null; // the stands are zone-local too
     this.escapeTimer = 2.5;
     this.lockHint = 0;
     this.mireilleDwell = 0; // dwell resets on zone change (cooldown intentionally persists)
@@ -2829,7 +2839,14 @@ export class World {
     const layoutSeed = memory?.seed ?? def.seed ?? rollSeed();
     this.currentZoneSeed = layoutSeed;
     const rng = new Rng(layoutSeed);
-    const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos));
+    // CRUSADE WORKS ride the REAL structure pipeline: a held zone's tier
+    // structures inject as per-load fixtures (plan walls carve the walk grid,
+    // gates are true doors, tower slots man, breakables live, footprints
+    // reserve + hold aprons) at seats deterministic per seed + tier — never
+    // stamped over portals, never ghost-geometry.
+    const crusadeWorks = this.crusadeFixtureSpecs(def, entry);
+    this.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
+    const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), crusadeWorks?.fixtures);
     this.doodads = layout.doodads;
     this.bridges = layout.doodads.filter(d => doodadRuleOf(d.kind).spans);
     this.grounds = layout.doodads.filter(d => GROUND_KINDS.includes(d.kind));
@@ -5315,7 +5332,7 @@ export class World {
     run.chasmsSealed++;
     bumpLedger(this.ledger, 'fracture_chasms_cleared');
     this.flashes.push({ pos: vec(at.x, at.y), radius: surge.chasm.radius, color: run.color, life: 0.5, maxLife: 0.5 });
-    this.grantXp(Math.round(surge.chasmRewardXp + this.zone.level * 6));
+    this.grantXp(Math.round(surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel));
     this.dropGemAt(at);
     if (run.chasmsSealed < run.chasmsTarget) {
       run.phase = 'fissure';
@@ -5347,7 +5364,7 @@ export class World {
         // The marker first TRAVELS to the next zone (purely visual) before surfacing —
         // from this zone's node toward the destination's node.
         ff.divert(dest, this.zone.map, this.zoneMap[dest].map);
-        this.grantXp(Math.round((surge.chasmRewardXp + this.zone.level * 6) * 1.5));
+        this.grantXp(Math.round((surge.chasmRewardXp + this.zone.level * surge.chasmXpPerLevel) * surge.divertRewardMul));
         this.dropGemAt(at);
         this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: run.color, life: 0.7, maxLife: 0.7 });
         this.text(vec(at.x, at.y - 30),
@@ -5359,8 +5376,8 @@ export class World {
     }
     // No hops left (or nowhere to divert): the fracture is run through — big payout.
     bumpLedger(this.ledger, 'fractures_sealed');
-    this.grantXp(Math.round(140 + this.zone.level * 24));
-    for (let i = 0; i < 3; i++) this.dropGemAt(at);
+    this.grantXp(Math.round(surge.sealReward.xpBase + this.zone.level * surge.sealReward.xpPerLevel));
+    for (let i = 0; i < surge.sealReward.gems; i++) this.dropGemAt(at);
     this.flashes.push({ pos: vec(at.x, at.y), radius: 150, color: run.color, life: 0.7, maxLife: 0.7 });
     this.text(vec(at.x, at.y - 36), 'The fracture collapses — sealed!', '#ffd700', 18);
     // STACKED RNG (the capstone): only a FULL max-span run (span ≥ minSpan) gets a
@@ -7285,7 +7302,10 @@ export class World {
     // CLOSER (so the eruption-in-fire reads as happening to you, not across the
     // map) — but past a standoff so it's a warning, not a point-blank ambush.
     const at = this.clampPos(live ? this.farPoint(280, true) : this.farPoint(360, true), 28);
-    const champId = this.sim.demonField?.surge()?.portal?.champion?.monsterId ?? 'balor_warlord';
+    // DIMENSION-CORRECT field (the surface-only shortcut spawned the surface
+    // champion at a hell epicenter — every sibling read already went through
+    // demonFieldFor; this was the straggler).
+    const champId = this.sim.demonFieldFor(this.zone.dimension)?.surge()?.portal?.champion?.monsterId ?? 'balor_warlord';
     const balor = this.createMonster(champId, lvl + 2, 'enemy');
     balor.faction = facId;
     if (this.sim.factionInvasionActive(facId, this.player.level)) this.promoteRarity(balor, 'crowned');
@@ -7415,19 +7435,31 @@ export class World {
     }
     this.caveReturn = { zoneId: this.zone.id, pos: vec(o.returnPos.x, o.returnPos.y), entryFrom: this.entryFrom };
     this.loadZone(o.caveId, this.zone.id); // deliberately NO onNodeCharted — realms are off-graph
+    let bossActor: Actor | null = null;
     if (a?.wards) this.raiseArenaWards(a.wards, o.boss);
-    else this.spawnArenaBoss(o.boss);
+    else bossActor = this.spawnArenaBoss(o.boss);
+    // THE CROWD takes its seats (data/arenas.ts): watching the boss, ready to
+    // answer its champion-calls, gone the moment the crown falls. A warded
+    // boss joins the watch when it manifests (breakArenaSeal wires the id).
+    if (a?.crowd) {
+      this.arenaCrowd = {
+        spec: a.crowd, roster: o.boss.garrisonTable ?? o.rosterTable,
+        levelBonus: o.boss.levelBonus ?? 0,
+        bossId: bossActor?.id ?? null, callIdx: 0, dispersed: false,
+      };
+    }
   }
 
   /** Field an arena's boss + court from its ArenaBossSpec — the ONE spawn loop
    *  behind the realm Balor, the Bonelord, the crusade Leader and the fracture
-   *  champion. Differences are spec fields, never copies of this code. */
-  private spawnArenaBoss(spec: ArenaBossSpec): void {
+   *  champion. Differences are spec fields, never copies of this code.
+   *  Returns the boss (the crowd fabric watches it), or null on a bad spec. */
+  private spawnArenaBoss(spec: ArenaBossSpec): Actor | null {
     const lvl = Math.max(1, this.zone.level + (spec.levelBonus ?? 0));
     const bossLvl = lvl + (spec.bossBump ?? 0);
     const bossId = spec.monsterId
       ?? (spec.pool?.length ? this.weightedPick(spec.pool, bossLvl) : undefined);
-    if (!bossId || !MONSTERS[bossId]) return;
+    if (!bossId || !MONSTERS[bossId]) return null;
     const at = this.clampPos(this.farPoint(spec.far ?? 420), 30);
     const boss = this.createMonster(bossId, bossLvl, 'enemy');
     boss.faction = spec.faction;
@@ -7453,6 +7485,7 @@ export class World {
         spec.announce.replace('{name}', MONSTERS[bossId]?.name ?? boss.name),
         spec.announceColor ?? '#e86a4a', 18);
     }
+    return boss;
   }
 
   /** Raise the WARD RITUAL: scatter the seals across the arena (walkable,
@@ -7521,7 +7554,71 @@ export class World {
     this.text(vec(this.player.pos.x, this.player.pos.y - 80),
       ward.spec.announceAll ?? 'The last seal breaks — the warded one manifests!', '#ffd700', 18);
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 170, color: '#ff6a3a', life: 0.9, maxLife: 0.9 });
-    this.spawnArenaBoss(boss);
+    const manifested = this.spawnArenaBoss(boss);
+    if (this.arenaCrowd) this.arenaCrowd.bossId = manifested?.id ?? null; // the stands turn to watch
+  }
+
+  /** THE CROWD WATCHES (data/arenas.ts ArenaCrowdSpec): champion-calls pull
+   *  fighters out of the stands at the boss's life thresholds (the nearest
+   *  rows answer and empty), and the whole crowd DISPERSES — staggered fades
+   *  through the transient-doodad wilt — the moment the crown falls. */
+  private updateArenaCrowd(): void {
+    const ac = this.arenaCrowd;
+    if (!ac || ac.dispersed || ac.bossId == null) return;
+    const boss = this.actors.find(x => x.id === ac.bossId);
+    if (!boss) return;
+    const kind = ac.spec.kind ?? 'crowd_row';
+    if (boss.dead) {
+      // The crown has fallen: the stands empty in a stagger (each row its own
+      // ttl → a wave of departures, not a blink).
+      const win = ac.spec.disperseOnBossDeathSec ?? 0;
+      ac.dispersed = true;
+      if (win <= 0) return;
+      for (const d of this.doodads) {
+        if (d.kind !== kind) continue;
+        const stagger = (hashStr(`${d.pos.x | 0},${d.pos.y | 0}`) % 997) / 997;
+        const life = win * (0.35 + 0.65 * stagger);
+        d.wilt = 0;
+        this.transientDoodads.push({ d, ttl: life, maxTtl: life, owner: boss, kind: 'arena_crowd' });
+      }
+      this.text(vec(boss.pos.x, boss.pos.y - 70),
+        ac.spec.disperseAnnounce ?? 'The stands fall silent — and empty.', '#e8d8a8', 16);
+      return;
+    }
+    const calls = ac.spec.championCalls ?? [];
+    if (ac.callIdx >= calls.length) return;
+    const call = calls[ac.callIdx];
+    if (boss.life / boss.maxLife() > call.atLifeFrac) return;
+    ac.callIdx++;
+    if (!ac.roster.length) return;
+    // The nearest rows answer the call — members vault the rail as fighters,
+    // and the benches that answered empty on the spot.
+    const rows = this.doodads
+      .filter(d => d.kind === kind && (d.wilt ?? 0) <= 0)
+      .sort((p, q) => dist(p.pos, boss.pos) - dist(q.pos, boss.pos));
+    const lvl = Math.max(1, this.zone.level + ac.levelBonus);
+    const n = randInt(call.count[0], call.count[1]);
+    let called = 0;
+    for (let k = 0; k < rows.length && called < n; k++) {
+      const row = rows[k];
+      const m = this.createMonster(this.weightedPick(ac.roster, lvl), lvl, 'enemy');
+      m.faction = boss.faction;
+      m.tag = 'arena_challenger';
+      // Step down off the stands, toward the fight.
+      const dx = boss.pos.x - row.pos.x, dy = boss.pos.y - row.pos.y;
+      const dl = Math.hypot(dx, dy) || 1;
+      m.pos = this.clampPos(vec(row.pos.x + (dx / dl) * 70, row.pos.y + (dy / dl) * 70), m.radius);
+      this.actors.push(m);
+      called++;
+      this.flashes.push({ pos: vec(row.pos.x, row.pos.y), radius: 46, color: '#e8c85a', life: 0.4, maxLife: 0.4 });
+      const life = 0.7;
+      row.wilt = 0;
+      this.transientDoodads.push({ d: row, ttl: life, maxTtl: life, owner: boss, kind: 'arena_crowd' });
+    }
+    if (called > 0) {
+      this.text(vec(boss.pos.x, boss.pos.y - 64),
+        call.announce ?? 'Challengers vault the rail!', '#e8c85a', 17);
+    }
   }
 
   // ------------------------------------------------------- crusade materialize
@@ -7542,21 +7639,12 @@ export class World {
     if (!roster?.table?.length) return;
     bumpLedger(this.ledger, 'crusade_seen'); // DISCOVERY — surfaces the Vault tuning
     const lvl = Math.max(1, this.zone.level);
-    // The works: stamp the tier structure (+ a labyrinth of ramparts on a
-    // converted city) into the live arena, centred far from the player AND other
-    // co-occurring events (so a festival zone's structures don't overlap).
-    const center = this.clampPos(this.farPoint(420, true), 24);
-    const stamped: Doodad[] = [];
-    if (info.structure && STRUCTURES[info.structure]) {
-      stamped.push(...structureDoodads(STRUCTURES[info.structure], center));
-    }
-    if (info.cityFill && STRUCTURES[info.cityFill.structure]) {
-      const fills = randInt(info.cityFill.count[0], info.cityFill.count[1]);
-      for (let i = 0; i < fills; i++) {
-        stamped.push(...structureDoodads(STRUCTURES[info.cityFill.structure], this.clampPos(this.farPoint(340), 24)));
-      }
-    }
-    for (const d of stamped) { d.pos = this.clampPos(vec(d.pos.x, d.pos.y), d.radius); this.doodads.push(d); }
+    // THE WORKS are real structures now — injected at zone GENERATION as
+    // fixtures (crusadeFixtureSpecs → generateLayout extraFixtures), so plan
+    // walls carve the walk grid, gates are true doors, tower slots man, and
+    // nothing ever stamps over a portal. This muster fields only the LIVING:
+    // the garrison + its tier-promoted, tagged commander, at the works.
+    const center = this.crusadeWorksAt ?? this.clampPos(this.farPoint(420, true), 24);
     // The garrison: a crusade pack with a tier-promoted, tagged commander. The
     // converted city's defenders are untagged — you reach the Leader through the
     // sanctum gate, not by clearing the streets.
@@ -7575,6 +7663,74 @@ export class World {
     const fname = (roster.name ?? info.faction).replace(/^the /, '');
     this.text(vec(this.player.pos.x, this.player.pos.y - 92),
       `${fname} — ${info.label} crusade ground!`, info.color, 16);
+  }
+
+  /** THE CRUSADE WORKS AS FIXTURES: compute this held zone's tier structures
+   *  for the layout mint — the main works far from the entry and clear of
+   *  every portal, the converted city's street-mix (weighted village kit)
+   *  spread around them, the town square raised once beside the works.
+   *  Deterministic per zone seed + tier (re-entry at the same tier rebuilds
+   *  identically; a tier-up regrows the works on the next visit). Returns
+   *  null on unheld/ineligible ground. */
+  private crusadeFixtureSpecs(def: ZoneDef, entry: Vec2): { fixtures: { structure: string; x: number; y: number }[]; center: Vec2 } | null {
+    if (this.inCave || def.caveDepth != null || def.special || def.objective.kind === 'safe') return null;
+    const info = this.sim.crusadeField?.crusadeOn(def.id);
+    if (!info?.structure || !STRUCTURES[info.structure]) return null;
+    const rng = new Rng((((def.seed ?? 0) ^ 0xc205) + info.tier * 0x9e37) >>> 0);
+    const { w, h } = this.arena;
+    const margin = 200;
+    const exitPts = this.exits.map(e => e.pos);
+    const clearOf = (p: Vec2, entryClear: number, portalClear: number): boolean =>
+      dist(p, entry) >= entryClear && exitPts.every(x => dist(p, x) >= portalClear);
+    // The main works: the candidate FARTHEST from the entry that clears every
+    // portal (fixed-count draws — a rejected candidate never shifts later
+    // rolls, the findSpot discipline).
+    let center = vec(w / 2, h / 2);
+    let bestD = -1;
+    for (let t = 0; t < 12; t++) {
+      const p = vec(rng.range(margin, w - margin), rng.range(margin, h - margin));
+      const d = dist(p, entry);
+      if (clearOf(p, 320, 260) && d > bestD) { bestD = d; center = p; }
+    }
+    const fixtures: { structure: string; x: number; y: number }[] = [
+      { structure: info.structure, x: center.x, y: center.y },
+    ];
+    const placed: Vec2[] = [vec(center.x, center.y)];
+    // The town square: raised once, a street's remove from the works.
+    if (info.cityFill?.square && STRUCTURES[info.cityFill.square]) {
+      for (let t = 0; t < 8; t++) {
+        const a = rng.range(0, Math.PI * 2);
+        const p = vec(
+          clamp(center.x + Math.cos(a) * rng.range(300, 420), margin, w - margin),
+          clamp(center.y + Math.sin(a) * rng.range(300, 420), margin, h - margin));
+        if (!clearOf(p, 260, 220) || placed.some(q => dist(p, q) < 280)) continue;
+        fixtures.push({ structure: info.cityFill.square, x: p.x, y: p.y });
+        placed.push(p);
+        break;
+      }
+    }
+    // The street-mix: weighted picks spread around the works.
+    if (info.cityFill?.structures?.length) {
+      const fills = rng.int(info.cityFill.count[0], info.cityFill.count[1]);
+      const total = info.cityFill.structures.reduce((a, s) => a + s.weight, 0);
+      for (let i = 0; i < fills; i++) {
+        let roll = rng.range(0, total);
+        let pick = info.cityFill.structures[0].structure;
+        for (const s of info.cityFill.structures) { roll -= s.weight; if (roll <= 0) { pick = s.structure; break; } }
+        if (!STRUCTURES[pick]) continue;
+        for (let t = 0; t < 10; t++) {
+          const a = rng.range(0, Math.PI * 2);
+          const p = vec(
+            clamp(center.x + Math.cos(a) * rng.range(260, 560), margin, w - margin),
+            clamp(center.y + Math.sin(a) * rng.range(260, 560), margin, h - margin));
+          if (!clearOf(p, 240, 200) || placed.some(q => dist(p, q) < 230)) continue;
+          fixtures.push({ structure: pick, x: p.x, y: p.y });
+          placed.push(p);
+          break;
+        }
+      }
+    }
+    return { fixtures, center };
   }
 
   // ------------------------------------------------------- contagion materialize
@@ -8325,8 +8481,8 @@ export class World {
       rosterTable: df.surge().floodRoster,
       returnPos: portalPos,
       boss: {
-        pool: cfg.bossPool, faction, levelBonus: cfg.levelBonus, bossBump: 2,
-        tag: 'necropolis_boss', xpFloor: 400, far: 440,
+        pool: cfg.bossPool, faction, levelBonus: cfg.levelBonus, bossBump: cfg.bossBump,
+        tag: 'necropolis_boss', xpFloor: cfg.bossXpFloor, far: 440,
         garrison: { count: cfg.garrison, spread: 140 },
         garrisonTable: df.surge().floodRoster,
         announce: '{name} holds the Necropolis!', announceColor: '#e8dcb0',
@@ -8371,8 +8527,8 @@ export class World {
       rosterTable: (FACTIONS[faction]?.table ?? []).filter(e => e.id !== leaderId),
       returnPos: portalPos,
       boss: {
-        monsterId: leaderId, faction, levelBonus: surge.sanctum.levelBonus, bossBump: 2,
-        tag: 'crusade_leader', xpFloor: 140,
+        monsterId: leaderId, faction, levelBonus: surge.sanctum.levelBonus, bossBump: surge.sanctum.bossBump,
+        tag: 'crusade_leader', xpFloor: surge.sanctum.xpFloor,
         garrison: { count: [6, 10] },
         announce: '{name} commands the sanctum!', announceColor: '#ffd700',
       },
@@ -19350,6 +19506,9 @@ export class World {
           ctx.grantXp(Math.round(rr.xpBase + ctx.zone.level * rr.xpPerLevel));
           for (let i = 0; i < rr.gems; i++) ctx.dropGemAt(ctx.actor.pos);
         }
+        // The reward is CONSUMED (sibling handlers' symmetry) — the crumble-on-
+        // leave rides the overlay's defeated flag, not this context.
+        this.necropolisRealmContext = null;
         ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 58),
           defeated ? 'The Bonelord falls — leave the Necropolis and the cycle breaks anew!' : 'The Bonelord falls!',
           '#f0e8cc', 20);
@@ -20572,6 +20731,7 @@ export class World {
     this.updateHoldfastSite();
     this.updateIncursionEvents(dt);
     this.updateDoodadEffects(dt);
+    this.updateArenaCrowd();
     this.updateAttunements(dt);
     this.updateTerraforms(dt);
     if (this.event && !this.event.done) this.event.tick(dt);
