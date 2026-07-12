@@ -18,6 +18,7 @@
 import { PAD_CFG } from '../core/gamepad';
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
+import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
 
@@ -81,6 +82,12 @@ export interface Settings {
    *  'recent': strictly around a recent change. 'always': pinned on — the
    *  min-maxer's steady readout. */
   poolBars: PoolBarsMode;
+  /** Where a RELAUNCHED saved run wakes (meta/worldstate.ts): 'exact' — the
+   *  spot (and situation) the save captured, so quitting out of trouble
+   *  hands the trouble right back; 'town' — the Lastlight sanctuary (the
+   *  world stays explored either way; only the body moves). A character
+   *  MODE may pin this and ignore the setting (CharacterModeDef.resume). */
+  resumeSpawn: ResumeSpawn;
 }
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
@@ -96,6 +103,7 @@ export interface SettingsSave {
   castTelegraphs?: boolean;
   aimTick?: Partial<AimTickOptions>;
   poolBars?: PoolBarsMode;
+  resumeSpawn?: ResumeSpawn;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -177,6 +185,7 @@ export const makeSettings = (): Settings => ({
   castTelegraphs: true,
   aimTick: { ...DEFAULT_AIM_TICK },
   poolBars: 'smart',
+  resumeSpawn: WORLDSTATE_CFG.resume,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -190,6 +199,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   castTelegraphs: s.castTelegraphs,
   aimTick: { ...s.aimTick },
   poolBars: s.poolBars,
+  resumeSpawn: s.resumeSpawn,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -234,5 +244,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     },
     // Unknown values (a renamed mode) fall back to the default methodology.
     poolBars: s.poolBars === 'always' || s.poolBars === 'recent' ? s.poolBars : 'smart',
+    // Unknown values fall back to the engine default (WORLDSTATE_CFG.resume).
+    resumeSpawn: s.resumeSpawn === 'town' || s.resumeSpawn === 'exact' ? s.resumeSpawn : WORLDSTATE_CFG.resume,
   };
 }

@@ -98,6 +98,24 @@ export interface WorldOverlay {
   activityAt?(zid: string): number;
   /** Paint the field onto the minimap. */
   renderMap(nodes: ZoneDef[]): MapLayer;
+  /** WORLDSTATE PERSISTENCE (optional, opt-in per overlay) — the seam a saved
+   *  run resumes its living world through (meta/worldstate.ts rides these in
+   *  the character save). `snapshot` returns this field's durable state as
+   *  PURE JSON (no class instances, no functions); `restore` rebuilds from a
+   *  prior snapshot, TOLERANTLY — the value arrives `unknown` because it may
+   *  be from an older build; validate shape, drop what no longer resolves,
+   *  and never throw (a bad snapshot just means this field starts fresh).
+   *  An overlay implementing NEITHER simply restarts on resume (transient
+   *  fields — a drifting front, a marching host — may prefer exactly that);
+   *  the sim re-seeds un-restored overlays over the restored graph via
+   *  onNodeCharted, so every field always knows the nodes.
+   *  CONTRACT for zone-minting overlays: an overlay whose events MINT zones
+   *  (eventOwned defs) must snapshot/restore if those zones should survive a
+   *  relaunch — un-restored overlays get their eventOwned zones SCRUBBED
+   *  from the resumed graph (the same transience rule completedObjectives
+   *  always encoded). */
+  snapshot?(): unknown;
+  restore?(snap: unknown): void;
 }
 
 /** Fold several biases into one: counts multiply, faction muls multiply,

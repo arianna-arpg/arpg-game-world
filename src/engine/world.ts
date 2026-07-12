@@ -175,6 +175,10 @@ import { saveCharacter, rebuildSkill } from '../meta/character';
 import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { SIM_TAP } from './tap';
 import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
+import {
+  WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeEnemyMemo, sanitizeWorldZones,
+  type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type WorldStateSave,
+} from '../meta/worldstate';
 
 export type { Doodad } from './levelgen';
 
@@ -7039,33 +7043,19 @@ export class World {
     return !!m && this.time - m.savedAt < ZONE_MEMORY_TTL;
   }
 
-  /** Snapshot the zone we're LEAVING: its layout seed + the living base-population
-   *  enemies (fromZoneGen). Skips town (safe), the boundless abyss, and unvisited
-   *  SURFACE ground. CAVES are now captured (a left side area keeps its state). */
-  private captureZoneMemory(): void {
+  /** PURE capture of the CURRENT zone's memory (seed + living base enemies +
+   *  door states), or null where memory doesn't apply. No side effects — the
+   *  worldstate serializer calls this mid-play (every autosave), so it must
+   *  never nudge overlays or ledgers; the leave-time verbs live in
+   *  captureZoneMemory. */
+  private zoneMemorySnapshot(): ZoneMemory | null {
     const z = this.zone;
     // Skip town (safe), the streamed abyss (boundless), unvisited SURFACE ground (caves
     // never chart, so they bypass the visited gate), and WAVES zones — whose progression
     // is a timed sequence (this.wave), not a static population, so remembering their
     // stray camp/garrison enemies while the wave counter resets would double the fight.
     if (!z || z.boundless || z.objective.kind === 'safe' || z.objective.kind === 'waves'
-      || (!this.inCave && !this.visited.has(z.id))) return;
-    // CONCLAVE: leaving a zone with a live ritual. If ALL its cultists still stand,
-    // the rite INCUBATES (the hidden Eldritch counter ticks toward an awakening); if
-    // the player thinned but didn't clear them, the disrupted site simply disperses.
-    // Either way the cultists migrate on — they are never zone-memory captured below
-    // (not fromZoneGen), so the site is gone and a fresh one re-rolls elsewhere.
-    if (this.ritualSite && !this.ritualSite.subdued && this.ritualSite.zoneId === z.id) {
-      const cf = this.sim.conclaveField;
-      let alive = 0;
-      for (const id of this.ritualSite.cultistIds) { const a = this.actorById(id); if (a && !a.dead) alive++; }
-      if (alive >= this.ritualSite.cultistIds.length) {
-        cf?.incubate(z.id);
-        bumpLedger(this.ledger, 'rituals_incubated');
-      } else {
-        cf?.clearRitual(z.id);
-      }
-    }
+      || (!this.inCave && !this.visited.has(z.id))) return null;
     const enemies: ZoneEnemyMemo[] = [];
     for (const a of this.actors) {
       if (a.dead || a.team !== 'enemy' || !a.fromZoneGen || !a.defId || a.doorId) continue;
@@ -7082,7 +7072,35 @@ export class World {
       if (!d.door || (!d.door.open && !d.door.broken)) continue;
       (doorState ??= {})[d.door.id] = d.door.broken ? 'broken' : 'open';
     }
-    this.zoneMemory.set(z.id, { seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState });
+    return { seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState };
+  }
+
+  /** Snapshot the zone we're LEAVING: its layout seed + the living base-population
+   *  enemies (fromZoneGen). Skips town (safe), the boundless abyss, and unvisited
+   *  SURFACE ground. CAVES are now captured (a left side area keeps its state). */
+  private captureZoneMemory(): void {
+    const z = this.zone;
+    const memo = this.zoneMemorySnapshot();
+    if (!z || !memo) return; // same skip rules as ever (snapshot owns them)
+    // CONCLAVE: leaving a zone with a live ritual. If ALL its cultists still stand,
+    // the rite INCUBATES (the hidden Eldritch counter ticks toward an awakening); if
+    // the player thinned but didn't clear them, the disrupted site simply disperses.
+    // Either way the cultists migrate on — they are never zone-memory captured below
+    // (not fromZoneGen), so the site is gone and a fresh one re-rolls elsewhere.
+    // (A LEAVE-time verb — deliberately outside zoneMemorySnapshot, which the
+    // autosave serializer calls while still STANDING in the zone.)
+    if (this.ritualSite && !this.ritualSite.subdued && this.ritualSite.zoneId === z.id) {
+      const cf = this.sim.conclaveField;
+      let alive = 0;
+      for (const id of this.ritualSite.cultistIds) { const a = this.actorById(id); if (a && !a.dead) alive++; }
+      if (alive >= this.ritualSite.cultistIds.length) {
+        cf?.incubate(z.id);
+        bumpLedger(this.ledger, 'rituals_incubated');
+      } else {
+        cf?.clearRitual(z.id);
+      }
+    }
+    this.zoneMemory.set(z.id, memo);
   }
 
   /** Restore a remembered zone's base enemies: drop the freshly-spawned batch and
@@ -7112,6 +7130,221 @@ export class World {
     this.text(vec(this.player.pos.x, this.player.pos.y - 60),
       'You bank the campfire — the wilds stir anew.', '#ffb84a', 16);
     this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 120, color: '#ff9a3a', life: 0.7, maxLife: 0.7 });
+  }
+
+  // --- WORLDSTATE PERSISTENCE (meta/worldstate.ts — the world half of a save) ---
+
+  /** Serialize the LIVING WORLD for the character save: the zone graph
+   *  (event-owned defs ride only while CLAIMED — by the active quest log
+   *  today; a snapshotting overlay claims its own tomorrow), discovery, the
+   *  world clock, TTL-fresh zone memory INCLUDING the zone underfoot (pure
+   *  capture — an exact resume faces the same monsters at the same health),
+   *  quests, the player's spot + vitals, and every opted-in overlay snapshot
+   *  (WorldSim.snapshotOverlays). PURE — no world mutation, safe mid-frame
+   *  on every autosave. */
+  serializeWorldState(): WorldStateSave {
+    const questZones = new Set(this.activeQuests.map(q => q.zoneId));
+    const zones: ZoneDef[] = [];
+    for (const z of Object.values(this.zoneMap)) {
+      // The TRANSIENCE RULE: an unclaimed event zone re-rolls with its event.
+      if (z.eventOwned && !questZones.has(z.id)) continue;
+      const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
+      delete clone.exitBoundaries; // transient — re-derived every zone load
+      zones.push(clone);
+    }
+    // Heal the roads at WRITE time too (an exit into scrubbed event ground
+    // would otherwise dangle until the next resume's load-side healing).
+    const kept = new Set(zones.map(z => z.id));
+    for (const z of zones) {
+      z.exits = z.exits.filter(e => e.to === '?' || kept.has(e.to));
+      if (z.searoutes) z.searoutes = z.searoutes.filter(id => kept.has(id));
+    }
+    // Zone memory: every TTL-fresh remembered zone (graph zones + the
+    // sanctioned cave_ namespace — cave ids are stable per mouth, so a side
+    // area re-minted next session finds its survivors), topped by a LIVE
+    // pure capture of the zone we're standing in.
+    const memory: SavedZoneMemory[] = [];
+    const memoOf = (zoneId: string, m: ZoneMemory): SavedZoneMemory => ({
+      zoneId, seed: m.seed, savedAt: m.savedAt,
+      enemies: m.enemies.map(e => ({ ...e })),
+      ...(m.doorState ? { doorState: { ...m.doorState } } : {}),
+    });
+    for (const [zid, m] of this.zoneMemory) {
+      if (zid === this.zone.id) continue; // superseded by the live capture below
+      if (!kept.has(zid) && !zid.startsWith('cave_')) continue;
+      if (this.time - m.savedAt >= ZONE_MEMORY_TTL) continue; // spent — drop the weight
+      memory.push(memoOf(zid, m));
+    }
+    const live = this.zoneMemorySnapshot();
+    if (live) memory.push(memoOf(this.zone.id, live));
+    // The player's SPOT: the on-graph zone underfoot, or — underground — the
+    // ladder's surface anchor at the mouth we'd climb out to. Off-graph
+    // pockets with no return (a realm, mid-voyage) resolve to no spot at all:
+    // the resume degrades to the town wake, never a dangling id.
+    const outermost = this.caveStack[0] ?? this.caveReturn;
+    const spotZone = this.zoneMap[this.zone.id] ? this.zone.id
+      : (outermost && this.zoneMap[outermost.zoneId] ? outermost.zoneId : null);
+    const spotPos = this.zoneMap[this.zone.id] ? this.player.pos
+      : (outermost && this.zoneMap[outermost.zoneId] ? outermost.pos : null);
+    const p = this.player;
+    const vfrac = (cur: number, max: number): number => max > 0 ? clamp(cur / max, 0, 1) : 1;
+    return {
+      schemaVersion: WORLD_SCHEMA_VERSION,
+      zones,
+      nextGenId: this.nextGenId,
+      time: this.time,
+      visited: [...this.visited].filter(id => kept.has(id)),
+      discoveredWaypoints: [...this.discoveredWaypoints].filter(id => kept.has(id)),
+      memory,
+      quests: {
+        active: this.activeQuests.map(q => ({ ...q })),
+        completed: [...this.completedQuests],
+      },
+      ...(spotZone && spotPos ? {
+        player: {
+          zoneId: spotZone, x: spotPos.x, y: spotPos.y,
+          vitals: {
+            life: vfrac(p.life, p.maxLife()),
+            mana: vfrac(p.mana, p.maxMana()),
+            es: vfrac(p.es, p.maxEs()),
+          },
+        },
+      } : {}),
+      overlays: this.sim.snapshotOverlays(),
+    };
+  }
+
+  /** Adopt a saved worldstate onto this (freshly-built, already-seated)
+   *  World: swap in the sanitized zone graph, restore discovery/clock/
+   *  memory/quests, hand each overlay its snapshot, and re-seed the restored
+   *  graph into the fields that didn't bring their own state. Returns false
+   *  (world untouched) when the save can't stand up — the caller then keeps
+   *  the fresh world, exactly as before worldstate existed.
+   *  CONTRACT: call AFTER createPlayer + applySavedCharacter, and ALWAYS
+   *  follow with resumeSpawn() — the current zone still points at the
+   *  pre-adopt def until that reload. */
+  adoptWorldState(ws: WorldStateSave | undefined | null): boolean {
+    if (!ws || ws.schemaVersion !== WORLD_SCHEMA_VERSION) return false;
+    if (typeof ws.time !== 'number' || !Number.isFinite(ws.time)) return false;
+    // Event zones survive only while CLAIMED — by a still-active quest whose
+    // def still exists. (An overlay that restores its own zones would add its
+    // claims here through its snapshot — the seam is open, none do yet.)
+    const claimed = new Set(
+      (ws.quests?.active ?? [])
+        .filter(q => q && typeof q.questId === 'string' && QUESTS[q.questId] && typeof q.zoneId === 'string')
+        .map(q => q.zoneId));
+    const healed = sanitizeWorldZones(ws.zones, claimed);
+    if (!healed) return false;
+    this.zoneMap = healed;
+    // The mint counter resumes past every persisted gen_<n> id (belt: scan
+    // them too, so a hand-edited save can never mint a colliding id).
+    this.nextGenId = Math.max(1, Math.floor(ws.nextGenId) || 1);
+    for (const id of Object.keys(healed)) {
+      const m = /^gen_(\d+)$/.exec(id);
+      if (m) this.nextGenId = Math.max(this.nextGenId, Number(m[1]) + 1);
+    }
+    this.time = Math.max(0, ws.time);
+    this.visited = new Set((ws.visited ?? []).filter(id => typeof id === 'string' && healed[id]));
+    this.discoveredWaypoints = new Set(
+      (ws.discoveredWaypoints ?? []).filter(id => typeof id === 'string' && healed[id]));
+    // Zone memory: structural scrub per memo; unknown monster defs stay in the
+    // list (restoreZoneEnemies already skips them — one tolerance point);
+    // rarity re-validates against the live registry.
+    this.zoneMemory.clear();
+    for (const raw of ws.memory ?? []) {
+      const m = raw as SavedZoneMemory | null;
+      if (!m || typeof m.zoneId !== 'string' || !Array.isArray(m.enemies)) continue;
+      if (!healed[m.zoneId] && !m.zoneId.startsWith('cave_')) continue;
+      if (typeof m.seed !== 'number' || !Number.isFinite(m.seed)
+        || typeof m.savedAt !== 'number' || !Number.isFinite(m.savedAt)) continue;
+      if (this.time - m.savedAt >= ZONE_MEMORY_TTL) continue;
+      const enemies: ZoneEnemyMemo[] = [];
+      for (const e of m.enemies) {
+        const memo = sanitizeEnemyMemo(e);
+        if (!memo) continue;
+        enemies.push({
+          defId: memo.defId, level: memo.level, x: memo.x, y: memo.y, life: memo.life,
+          ...(memo.faction ? { faction: memo.faction } : {}),
+          ...(memo.rarity && RARITY_DEFS[memo.rarity as MonsterRarity] ? { rarity: memo.rarity as MonsterRarity } : {}),
+          ...(memo.tag ? { tag: memo.tag } : {}),
+          ...(memo.name ? { name: memo.name } : {}),
+        });
+      }
+      const doorState: Record<string, 'open' | 'broken'> = {};
+      let doors = 0;
+      for (const [id, st] of Object.entries(m.doorState ?? {})) {
+        if (st === 'open' || st === 'broken') { doorState[id] = st; doors++; }
+      }
+      this.zoneMemory.set(m.zoneId, {
+        seed: m.seed, savedAt: m.savedAt, enemies,
+        ...(doors ? { doorState } : {}),
+      });
+    }
+    // Quests: active entries whose def AND zone both still stand; the
+    // completed set rides verbatim (stale ids gate nothing — QUESTS lookups
+    // simply miss them).
+    this.activeQuests = (ws.quests?.active ?? [])
+      .filter(q => q && typeof q.questId === 'string' && QUESTS[q.questId]
+        && typeof q.zoneId === 'string' && healed[q.zoneId])
+      .map(q => ({ questId: q.questId, zoneId: q.zoneId, fieldDone: !!q.fieldDone }));
+    this.completedQuests = new Set(
+      (ws.quests?.completed ?? []).filter((id): id is string => typeof id === 'string'));
+    // Objective clears survive only for ground that actually persisted: event
+    // overlays re-seed DETERMINISTICALLY (same run seed ⇒ same crusade/demon
+    // zone keys), so a stale clear-key would pre-clear the freshly re-rolled
+    // event — the exact bug the old save-strip prefix filter existed to close.
+    this.scrubStaleObjectives();
+    // Overlays: each opted-in field takes its snapshot back; everything else
+    // is re-seeded over the restored graph exactly as mint-time charting
+    // would have (floating zones excepted — they chart when a road forms).
+    const restored = this.sim.restoreOverlays(ws.overlays);
+    this.sim.reseedGraph(Object.values(healed), this.simView(), restored);
+    return true;
+  }
+
+  /** Drop objective-clear keys for ground that doesn't exist in THIS world —
+   *  the stable cave_ namespace excepted (cave ids are deterministic per
+   *  mouth, so a persisted side-area clear finds its cave again; a stale one
+   *  gates nothing). Called by adoptWorldState, and by the resume path when
+   *  a save carries NO adoptable world (the fresh-reroll guard). */
+  scrubStaleObjectives(): void {
+    this.completedObjectives = new Set(
+      [...this.completedObjectives].filter(id => this.zoneMap[id] || id.startsWith('cave_')));
+  }
+
+  /** Wake a resumed character per the resolved policy (meta/worldstate.ts):
+   *  'exact' re-enters the saved zone at the saved spot with the saved
+   *  vitals (floored by WORLDSTATE_CFG.exactVitalsFloor) — Alt-F4 hands back
+   *  exactly the situation it tried to flee; 'town' (and every unresolvable
+   *  spot — a scrubbed zone, a corrupt coord) wakes in Lastlight. ALWAYS
+   *  loads a zone, so the post-adopt world is consistent either way. */
+  resumeSpawn(policy: ResumeSpawn, spot: SavedPlayerSpot | undefined | null): void {
+    const exact = policy === 'exact' && spot && this.zoneMap[spot.zoneId]
+      && Number.isFinite(spot.x) && Number.isFinite(spot.y) ? spot : null;
+    if (!exact) { this.loadZone(START_ZONE); return; }
+    this.loadZone(exact.zoneId);
+    // Stand the party at the saved spot (loadZone placed them at the entry
+    // portal): the hero exactly there, allies + carried minions in a loose
+    // ring — the same offsets loadZone itself deals.
+    const p = this.player;
+    p.pos = this.clampPos(vec(exact.x, exact.y), p.radius);
+    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+    for (const a of this.actors) {
+      if (a === p) continue;
+      const carried = seatActors.has(a) || (!!a.owner && seatActors.has(a.owner));
+      if (!carried) continue;
+      a.pos = this.clampPos(vec(exact.x + rand(-80, 80), exact.y + rand(-80, 80)), a.radius);
+    }
+    // Vitals: proportional restore with a reaction floor — an exact wake is
+    // honest about how hurt you were, not a free refill.
+    const v = exact.vitals;
+    if (v) {
+      const floor = WORLDSTATE_CFG.exactVitalsFloor;
+      const frac = (f: number | undefined): number => clamp(Math.max(floor, f ?? 1), 0, 1);
+      p.life = Math.max(1, p.maxLife() * frac(v.life));
+      p.mana = p.maxMana() * frac(v.mana);
+      p.es = p.maxEs() * frac(v.es);
+    }
   }
 
   /** First living actor with this tag (optionally narrowed to a defId). */

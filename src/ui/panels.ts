@@ -3633,6 +3633,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <button id="opt-foresight">${this.getSettings().castTelegraphs ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Reawaken After Quit</span>
+        <button id="opt-resume" title="Where a relaunched save wakes:
+WHERE YOU STOOD — the exact spot, situation, and wounds the save captured (quitting out of trouble hands the trouble back)
+IN LASTLIGHT — the sanctuary; the world stays explored, only you walk home
+(A character mode may pin this choice.)">${this.getSettings().resumeSpawn === 'town'
+          ? 'IN LASTLIGHT' : 'WHERE YOU STOOD'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Aim Ticks (facing pointers)</span>
         <span>${Object.values(AIM_TICK_STYLES).map(st =>
           `<button data-aimtick-style="${st.id}" style="margin-left:5px;${st.id === s.aimTick.style
@@ -3690,6 +3698,14 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-foresight')!.addEventListener('click', () => {
       const st = this.getSettings();
       st.castTelegraphs = !st.castTelegraphs;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
+    // REAWAKEN AFTER QUIT: where a relaunched save wakes (meta/worldstate.ts).
+    // Player agency by default; a mode's `resume` pin outranks it at resume.
+    root.querySelector<HTMLElement>('#opt-resume')!.addEventListener('click', () => {
+      const st = this.getSettings();
+      st.resumeSpawn = st.resumeSpawn === 'town' ? 'exact' : 'town';
       this.saveSettings();
       this.renderKeybinds(root, onBack);
     });

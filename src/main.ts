@@ -44,9 +44,10 @@ import {
 } from './meta/persistence';
 import {
   applySavedCharacter, clearCharacter, loadCharacter, loadCharacterAsync,
-  loadRosterSave, persistRun,
+  loadRosterSave, persistRun, persistRunDurable,
   type CharacterSave,
 } from './meta/character';
+import { resolveResumeSpawn } from './meta/worldstate';
 import { freeRosterSlot, mintCharId, modeById, type RosterEntry } from './meta/modes';
 import { healMercEngagements, releaseMercsOf } from './meta/mercs';
 import type { Settings } from './meta/settings';
@@ -249,6 +250,22 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
  *  can transpose them. */
 const startPicked = (d: ClassDef, modeId?: string, name?: string): void => startGame(d, undefined, modeId, name);
 
+/** THE WAKEFUL WORLD: stand the saved world back up around a freshly-resumed
+ *  character — adopt the save's world section (zone graph, discovery, clock,
+ *  quests, zone memory, overlay snapshots), then wake per the resolved policy
+ *  (mode pin ▷ player setting ▷ engine default). A save with NO adoptable
+ *  world resumes fresh exactly as before worldstate existed — with its
+ *  generated objective keys scrubbed, so a re-rolled world can't wake
+ *  pre-cleared ground. Shared by both resume paths (run slot + roster). */
+function restoreWorldState(world: World, save: CharacterSave): void {
+  if (!save.world || !world.adoptWorldState(save.world)) {
+    world.scrubStaleObjectives(); // fresh reroll — createPlayer already stood us in town
+    return;
+  }
+  const mode = modeById(world.meta.modeId);
+  world.resumeSpawn(resolveResumeSpawn(mode.resume, settings.resumeSpawn), save.world.player);
+}
+
 /** Resume an account-roster character (an Immortal vessel) from its own slot.
  *  Async (disk-first load); a missing/corrupt slot just returns to the menu —
  *  the entry stays listed, deletion is only ever the player's deliberate call. */
@@ -270,6 +287,7 @@ function resumeRosterChar(entry: RosterEntry): void {
     // Identity drift heal: the save is the authority on mode/stage, the roster
     // card on charId — an old save missing its id re-adopts the card's.
     if (!world.meta.charId) world.meta.charId = entry.charId;
+    restoreWorldState(world, save); // the vessel's world wakes with it
     lastSentZone = '';
     if (COOP_ALLY) spawnCoopAlly();
     ui.resetRunView();
@@ -301,6 +319,7 @@ function resumeGame(preloaded?: CharacterSave | null): void {
     ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
     return;
   }
+  restoreWorldState(world, save);        // …and the world wakes around it
   if (COOP_ALLY) spawnCoopAlly();
   ui.resetRunView();        // same rule as startGame: fresh World, fresh view state
   deathShown = false;
@@ -1141,4 +1160,24 @@ function toStartMenu(): void {
 
 /** Leave a co-op session and return to the menu (client or host). */
 function leaveCoop(): void { toStartMenu(); }
+
+// THE QUIT FLUSH: Alt-F4, the window ✕, a tab close — one last DURABLE save
+// (sendBeacon, the same machinery the permadeath wipe trusts to survive a
+// closing tab) so the worldstate captures the CLOSING MOMENT, not the last
+// 20s autosave tick. This is what makes the 'exact' resume honest: quitting
+// out of a bad fight relaunches into that same bad fight, position, wounds
+// and all. Host-only (a co-op client owns no save); a dead run never flushes
+// (its slot was durably wiped by the death flow — a late write would
+// resurrect the corpse). pagehide AND beforeunload both fire on some paths,
+// so a short debounce keeps it to one beacon.
+let lastQuitFlush = -Infinity;
+function quitFlush(): void {
+  if (!running || world.gameOver || !net.isHost) return;
+  const now = performance.now();
+  if (now - lastQuitFlush < 1000) return;
+  lastQuitFlush = now;
+  persistRunDurable(account, world);
+}
+window.addEventListener('pagehide', quitFlush);
+window.addEventListener('beforeunload', quitFlush);
 requestAnimationFrame(frame);

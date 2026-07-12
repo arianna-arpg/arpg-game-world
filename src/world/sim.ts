@@ -414,6 +414,67 @@ export class WorldSim {
     return (this.overlays.find(o => o.id === id && (o.dimension ?? 'surface') === dim) as T | undefined) ?? null;
   }
 
+  // --- WORLDSTATE PERSISTENCE (meta/worldstate.ts rides the character save) ---
+
+  /** The persistence key an overlay instance saves under: its id, salted by
+   *  dimension for non-surface twins ('faction', 'demon_invasion@hell'). */
+  private overlayKey(o: WorldOverlay): string {
+    const dim = o.dimension ?? 'surface';
+    return dim === 'surface' ? o.id : `${o.id}@${dim}`;
+  }
+
+  /** Collect every opted-in field's durable state (WorldOverlay.snapshot), plus
+   *  the two non-overlay ledgers under reserved ':'-prefixed keys (no overlay
+   *  id may start with ':'). A snapshot() that throws just skips that field —
+   *  saving never takes the run down. */
+  snapshotOverlays(): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const o of this.overlays) {
+      if (!o.snapshot) continue;
+      try {
+        const s = o.snapshot();
+        if (s !== undefined) out[this.overlayKey(o)] = s;
+      } catch (e) { console.warn(`[worldstate] overlay '${this.overlayKey(o)}' snapshot failed — skipped`, e); }
+    }
+    try { out[':reputation'] = this.reputation.snapshot(); } catch { /* fresh on resume */ }
+    try { out[':drives'] = this.drives.snapshot(); } catch { /* fresh on resume */ }
+    return out;
+  }
+
+  /** Hand each saved snapshot back to its field (matched by key — an overlay
+   *  missing this run, or one that no longer implements restore, is skipped).
+   *  Returns the overlay KEYS actually restored, so the engine's graph-reseed
+   *  can leave them alone; a restore() that throws counts as NOT restored. */
+  restoreOverlays(data: Record<string, unknown> | undefined): Set<string> {
+    const restored = new Set<string>();
+    if (!data || typeof data !== 'object') return restored;
+    for (const o of this.overlays) {
+      const key = this.overlayKey(o);
+      if (!o.restore || !(key in data)) continue;
+      try { o.restore(data[key]); restored.add(key); }
+      catch (e) { console.warn(`[worldstate] overlay '${key}' restore failed — starts fresh`, e); }
+    }
+    if (':reputation' in data) { try { this.reputation.restore(data[':reputation']); } catch { /* fresh */ } }
+    if (':drives' in data) { try { this.drives.restore(data[':drives']); } catch { /* fresh */ } }
+    return restored;
+  }
+
+  /** Re-seed a RESTORED zone graph into the fields that did NOT restore their
+   *  own snapshot: every un-restored overlay sees each on-graph node of its
+   *  dimension once, exactly as the mint-time onNodeCharted would have shown
+   *  it (floating zones excepted — they chart when a road forms, same as at
+   *  mint). Restored overlays are skipped: their snapshot IS their seeding. */
+  reseedGraph(zones: ZoneDef[], view: OverlayView, restored: ReadonlySet<string>): void {
+    for (const o of this.overlays) {
+      if (restored.has(this.overlayKey(o))) continue;
+      for (const z of zones) {
+        if (z.floating) continue;
+        if ((o.dimension ?? 'surface') !== (z.dimension ?? 'surface')) continue;
+        o.onNodeCharted(z, this.scopedView(view, o.dimension));
+      }
+    }
+  }
+
   /** The demon-invasion instance governing a dimension (surface = the cached
    *  legacy field). See overlayFor. */
   demonFieldFor(dimension?: string): DemonInvasionField | null {

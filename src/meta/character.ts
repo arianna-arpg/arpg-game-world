@@ -24,9 +24,10 @@ import type { ItemInstance } from '../engine/items';
 import type { Attributes } from '../engine/stats';
 import { emptyEssences, type PlayerMeta, type World } from '../engine/world';
 import type { ExpeditionManifest } from '../packages/manifest';
-import { diskBeacon, diskGet, diskPut, saveAccount } from './persistence';
+import { diskBeacon, diskGet, diskPut, saveAccount, saveAccountDurable } from './persistence';
 import { DEATH_SCHEMA, MAX_DEATH_RECORDS, type DeathRecord } from './death';
 import { DEFAULT_MODE_ID, mintCharId, modeById, type RosterEntry } from './modes';
+import type { WorldStateSave } from './worldstate';
 import type { MercSnapshot } from './mercs';
 import type { Account } from './account';
 
@@ -97,10 +98,11 @@ export interface CharacterSave {
   // per-run trigger counters. Wired into World in serialize/applySavedCharacter.
   expedition?: ExpeditionManifest;
   ledger?: Record<string, number>;
-  /** STATIC zone ids whose objective reward was claimed this run. Generated /
-   *  quest / cave zones are re-minted fresh each run and must NOT persist their
-   *  reward-gate (a serialized quest_<id> key would block its own quest reward on
-   *  resume), so serializeCharacter filters those prefixes out. Optional. */
+  /** Zone ids whose objective reward was claimed this run. Persists for every
+   *  zone the WORLDSTATE section carries (plus the stable cave_ namespace —
+   *  cave ids are deterministic per mouth), and is scrubbed against the live
+   *  graph on resume (World.scrubStaleObjectives), so a re-rolled event zone
+   *  can never wake pre-cleared. Optional. */
   completedObjectives?: string[];
   /** CHARACTER MODE (meta/modes.ts): the life-contract + ladder stage + roster
    *  identity. Optional → every pre-mode save loads as a plain mortal. */
@@ -114,6 +116,13 @@ export interface CharacterSave {
   /** THE HIRED BLADE (meta/mercs.ts): the contract rides the patron's save —
    *  snapshot INLINE (resilient to roster churn), refs for pool release. */
   mercenary?: { name: string; snapshot: MercSnapshot; mercId?: string; templateId?: string };
+  /** THE WAKEFUL WORLD (meta/worldstate.ts): the world half of the run — the
+   *  minted zone graph, discovery, the clock, zone memory, quests, the spot
+   *  the character stood on, and per-overlay snapshots. Optional → a save
+   *  without one (or one that fails to stand up) resumes as a fresh world,
+   *  exactly the pre-worldstate behavior. Applied by the RESUME path
+   *  (World.adoptWorldState + resumeSpawn), never by applySavedCharacter. */
+  world?: WorldStateSave;
 }
 
 const saveSkill = (i: SkillInstance): SavedSkill => ({
@@ -126,6 +135,11 @@ const saveSkill = (i: SkillInstance): SavedSkill => ({
 
 export function serializeCharacter(world: World): CharacterSave {
   const m = world.meta;
+  // The world half rides every character save (one atomic write — the build
+  // and the ground it stood on can never tear apart). Its kept-zone set also
+  // decides which objective clears persist: exactly the ground that does.
+  const ws = world.serializeWorldState();
+  const keptZones = new Set(ws.zones.map(z => z.id));
   return {
     schemaVersion: CHAR_SCHEMA_VERSION,
     classId: m.classDef.id,
@@ -166,14 +180,18 @@ export function serializeCharacter(world: World): CharacterSave {
     level: world.player.level,
     expedition: world.manifest,
     ledger: { ...world.ledger },
-    // Only STATIC zones persist (generated/quest/cave/crusade/demon zones re-mint
-    // fresh each run from the overlay's re-seeded RNG, so a persisted clear-key
-    // would wrongly suppress a re-rolled same-id zone's reward on resume).
-    completedObjectives: [...world.completedObjectives].filter(id => !/^(gen_|quest_|cave_|crusade_|demon_)/.test(id)),
+    // Clears persist for exactly the ground the worldstate carries, plus the
+    // stable cave_ namespace (deterministic per mouth). Event zones the
+    // worldstate scrubbed (unclaimed eventOwned — they re-roll with their
+    // events) drop their keys here too, so a re-seeded same-id event can
+    // never wake pre-cleared — the rule the old prefix filter hardcoded,
+    // now derived from ownership itself.
+    completedObjectives: [...world.completedObjectives].filter(id => keptZones.has(id) || id.startsWith('cave_')),
     modeId: m.modeId,
     modeStage: m.modeStage,
     charId: m.charId,
     deaths: world.charDeaths.map(d => ({ ...d })),
+    world: ws,
     ...(world.hiredMerc ? {
       mercenary: {
         name: world.hiredMerc.name,
@@ -322,6 +340,20 @@ export function saveCharacter(world: World): void {
   diskPut(slot, body);
 }
 
+/** DURABLE character write (sendBeacon) for the QUIT FLUSH: a fire-and-forget
+ *  fetch can be dropped when the window closes mid-flight (Alt-F4, the ✕),
+ *  and the worldstate's exact-resume promise is only as honest as the last
+ *  write that actually landed. Same routing as saveCharacter. */
+export function saveCharacterDurable(world: World): void {
+  const slot = saveSlotFor(world);
+  if (slot < 0) return;
+  let body: string;
+  try { body = JSON.stringify(serializeCharacter(world)); }
+  catch { return; }
+  try { window.localStorage.setItem(charKeyFor(slot), body); } catch { /* ignore */ }
+  diskBeacon(slot, body);
+}
+
 export function clearCharacter(): void {
   try { window.localStorage.removeItem(CHAR_KEY); } catch { /* ignore */ }
   // DURABLE wipe: must survive the player closing the game on the death screen,
@@ -373,5 +405,15 @@ export function persistRun(account: Account, world: World): void {
   saveCharacter(world);
   if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
     saveAccount(account);
+  }
+}
+
+/** persistRun's DURABLE twin — the QUIT FLUSH (window closing under us). Both
+ *  writes ride sendBeacon so the closing tab still delivers them; everything
+ *  else is byte-identical to persistRun. */
+export function persistRunDurable(account: Account, world: World): void {
+  saveCharacterDurable(world);
+  if (modeById(world.meta.modeId).save === 'roster' && syncRosterEntry(account, world)) {
+    saveAccountDurable(account);
   }
 }

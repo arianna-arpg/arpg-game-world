@@ -80,6 +80,24 @@ export class WorldDrives {
   entries(): [string, number][] {
     return [...this.meters.entries()];
   }
+
+  /** WORLDSTATE: a people's wants survive a relaunch (meta/worldstate.ts).
+   *  Restore drops meters whose spec was unregistered since the save — an
+   *  unknown key would never drift or be readable anyway. */
+  snapshot(): unknown {
+    return Object.fromEntries(this.meters);
+  }
+
+  restore(snap: unknown): void {
+    if (!snap || typeof snap !== 'object') return;
+    this.meters.clear();
+    for (const [key, v] of Object.entries(snap as Record<string, unknown>)) {
+      if (typeof v !== 'number' || !Number.isFinite(v)) continue;
+      const spec = WORLD_DRIVES[key.slice(key.indexOf(':') + 1)];
+      if (!spec) continue;
+      this.meters.set(key, Math.min(spec.max ?? 1, Math.max(spec.min ?? 0, v)));
+    }
+  }
 }
 
 // --- Core specs -------------------------------------------------------------

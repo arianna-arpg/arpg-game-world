@@ -191,6 +191,32 @@ export class WeatherField implements WorldOverlay {
     // a new node needs no seeding.
   }
 
+  /** WORLDSTATE: the live fronts are the field's whole durable state (the rng
+   *  keeps rolling from its run-seeded stream — front birth is transient). */
+  snapshot(): unknown {
+    return { fronts: this.fronts.map(f => ({ ...f, pos: { ...f.pos }, vel: { ...f.vel } })) };
+  }
+
+  /** Rebuild the sky tolerantly: a front whose kind was unregistered since the
+   *  save (or whose numbers don't parse) is simply gone — never a crash. */
+  restore(snap: unknown): void {
+    const s = snap as { fronts?: unknown[] } | null;
+    if (!s || !Array.isArray(s.fronts)) return;
+    this.fronts.length = 0;
+    for (const raw of s.fronts) {
+      const f = raw as Partial<WeatherFront> | null;
+      if (!f || typeof f.kind !== 'string' || !WEATHER_DEFS[f.kind]) continue;
+      if (!f.pos || !f.vel || ![f.pos.x, f.pos.y, f.vel.x, f.vel.y, f.radius, f.age, f.life]
+        .every(n => typeof n === 'number' && Number.isFinite(n))) continue;
+      if (this.fronts.length >= scaledCap(MAX_FRONTS, this.concurrencyScale)) break;
+      this.fronts.push({
+        kind: f.kind, pos: { x: f.pos.x, y: f.pos.y }, vel: { x: f.vel.x, y: f.vel.y },
+        radius: f.radius!, intensity: clamp(f.intensity ?? 0, 0, 1),
+        age: Math.max(0, f.age!), life: Math.max(1, f.life!),
+      });
+    }
+  }
+
   /** The strongest front covering this zone's node, or null (= clear). */
   sample(zone: ZoneDef): WeatherFront | null {
     let best: WeatherFront | null = null;

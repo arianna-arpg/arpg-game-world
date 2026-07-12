@@ -144,6 +144,40 @@ export class FactionField implements WorldOverlay {
     return this.conquered.get(zoneId) ?? null;
   }
 
+  /** WORLDSTATE: territory IS the world's memory — the per-node influence
+   *  bags and the conquest ledger both persist (pure JSON already). */
+  snapshot(): unknown {
+    return {
+      field: Object.fromEntries([...this.field].map(([id, inf]) => [id, { ...inf }])),
+      conquered: Object.fromEntries(this.conquered),
+    };
+  }
+
+  /** Rebuild tolerantly: non-finite influence entries drop; a stale zone id
+   *  (a scrubbed event zone) just sits inert until pruned by disuse — the
+   *  field only ever steps view.nodes, so it can never act on a ghost. */
+  restore(snap: unknown): void {
+    const s = snap as { field?: Record<string, unknown>; conquered?: Record<string, unknown> } | null;
+    if (!s || typeof s !== 'object') return;
+    if (s.field && typeof s.field === 'object') {
+      this.field.clear();
+      for (const [id, raw] of Object.entries(s.field)) {
+        if (!raw || typeof raw !== 'object') continue;
+        const inf: NodeInfluence = {};
+        for (const [f, v] of Object.entries(raw as Record<string, unknown>)) {
+          if (typeof v === 'number' && Number.isFinite(v)) inf[f] = clamp(v, 0, INF_CAP);
+        }
+        this.field.set(id, inf);
+      }
+    }
+    if (s.conquered && typeof s.conquered === 'object') {
+      this.conquered.clear();
+      for (const [id, f] of Object.entries(s.conquered)) {
+        if (typeof f === 'string') this.conquered.set(id, f);
+      }
+    }
+  }
+
   /** Undo every conquest a faction made — its taken zones revert to their
    *  original holders, who grow back into them via homeostasis. Called when a
    *  faction's warlord falls, so a wiped-out frontier always has a way home. */

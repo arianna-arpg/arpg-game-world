@@ -36,6 +36,7 @@
 // ---------------------------------------------------------------------------
 
 import { FEATURE, LEDGER_ACCOUNT_DEATHS, ROSTER_SLOT_BASE, type Account } from './account';
+import type { ResumeSpawn } from './worldstate';
 
 /** One rung of a mode's death ladder. Every field is a policy the engine
  *  reads at the moment it matters — nothing here is decorative. */
@@ -98,6 +99,12 @@ export interface CharacterModeDef {
    *  wiped by permadeath; 'roster' = an owned, cross-session account slot
    *  (the character is a persistent possession, not a run). */
   save: 'run' | 'roster';
+  /** PIN the relaunch wake policy (meta/worldstate.ts): 'exact' = wake at the
+   *  saved spot in the saved situation (the anti-Alt-F4 covenant — quitting
+   *  saves you from nothing); 'town' = always wake in Lastlight. UNDEFINED =
+   *  the player's Settings choose (the default for both stock modes — where
+   *  you wake is agency, not contract, unless a mode swears otherwise). */
+  resume?: ResumeSpawn;
   /** Roster capacity = base + one per owned extraFlag (Vault slot unlocks).
    *  Required when save === 'roster'. */
   rosterPool?: { base: number; extraFlags: string[] };

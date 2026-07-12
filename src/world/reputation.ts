@@ -36,6 +36,19 @@ export class Reputation {
     return [...this.favor.entries()].filter(([, v]) => v !== 0).sort((a, b) => b[1] - a[1]);
   }
 
+  /** WORLDSTATE: who owes you survives a relaunch (meta/worldstate.ts). */
+  snapshot(): unknown {
+    return Object.fromEntries(this.favor);
+  }
+
+  restore(snap: unknown): void {
+    if (!snap || typeof snap !== 'object') return;
+    this.favor.clear();
+    for (const [f, v] of Object.entries(snap as Record<string, unknown>)) {
+      if (typeof v === 'number' && Number.isFinite(v)) this.favor.set(f, v);
+    }
+  }
+
   /** Short HUD blurb for the faction you stand best with ('' if none yet). */
   hud(): string {
     const top = this.entries()[0];
