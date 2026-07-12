@@ -10,7 +10,7 @@ import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presen
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import {
-  CREW_CFG, summonCrewOf, supportFits, supportRidesMinions,
+  CREW_CFG, DEFAULT_RELOAD_SKILL, summonCrewOf, supportFits, supportRidesMinions,
   type Delivery, type SkillDef, type SupportDef,
 } from '../engine/skills';
 import { PROCS } from './procs';
@@ -639,6 +639,25 @@ export function validateContent(): void {
   };
   for (const s of Object.values(SKILLS)) checkSummonContract(`skill ${s.id}`, s.delivery);
   for (const sup of Object.values(SUPPORTS)) checkSummonContract(`support ${sup.id} (summon graft)`, sup.summon);
+  // MUNITION grafts (SupportDef.munition): the rack must exist, be noDrop
+  // (it is a convert payload), and actually restore — a typo'd reload id is
+  // a dead button the moment the chambered bank hits zero.
+  for (const sup of Object.values(SUPPORTS)) {
+    if (!sup.munition) continue;
+    if (sup.munition.rounds < 1) {
+      warn(`support ${sup.id}: munition.rounds ${sup.munition.rounds} — a bank needs at least one round`);
+    }
+    const rid = sup.munition.reloadSkillId ?? DEFAULT_RELOAD_SKILL;
+    const r = SKILLS[rid];
+    if (!r) {
+      warn(`support ${sup.id}: munition reload '${rid}' is not a catalog skill`);
+    } else {
+      if (!r.noDrop) warn(`support ${sup.id}: munition reload '${rid}' should be noDrop (a convert payload)`);
+      if (!r.effects.some(f => f.type === 'restoreSkillCharges')) {
+        warn(`support ${sup.id}: munition reload '${rid}' carries no restoreSkillCharges — the rack racks nothing`);
+      }
+    }
+  }
 
   // A 'slot'-homed charge (ChargeDef.hud) needs at least one catalog
   // SPENDER — a skill or support chargeCost — to pin its pips on;

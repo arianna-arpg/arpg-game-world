@@ -497,6 +497,14 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'plume', x: 0.36, scale: 0.6 },
     ],
   },
+  bandit_powder_witch: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.3, scale: 0.9, params: { eyes: true } },
+      { kind: 'staff', rot: -0.3, params: { orb: 'glow' } },
+      { kind: 'runes', params: { n: 3 } },
+    ],
+  },
   spearman: {
     parts: [
       { kind: 'torso' },

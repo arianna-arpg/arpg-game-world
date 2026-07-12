@@ -111,6 +111,14 @@ export const AMALGAM_PARTS: AmalgamPartSpec[] = [
     grantSkill: 'grenado',
     drop: { skill: 'grenado', gems: 1 },
   },
+  {
+    // The chambered graft: the boss's FIRST skill gains three fat rounds and
+    // then must stand racking — you build the reload window in yourself.
+    id: 'chambered_eye', label: 'Chambered Eye', epithet: 'the Thrice-Spoken', glyph: '⁂',
+    mods: [mod('castSpeed', 'increased', 0.2), mod('mana', 'flat', 120)],
+    grantSkill: 'firebolt', grantSupport: 'chambered_casting',
+    drop: { support: 'chambered_casting', gems: 1 },
+  },
 ];
 
 /** The whole Amalgamation mechanic as data — every number is a knob. */

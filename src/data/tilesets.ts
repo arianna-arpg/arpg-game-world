@@ -1699,6 +1699,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // through every face: the leyline IS the place.
   leyline_nexus: {
     id: 'leyline_nexus', frontier: false,
+    // Someone farms these leylines: battery rows in swept work-yards.
+    compositions: [{ composition: 'energist_cache', chance: 0.45 }],
     nameFirst: ['Resonant', 'Arcane', 'Shimmering', 'Sundered', 'Humming', 'Crystalline', 'Luminous', 'Etherbright', 'Flux-Wracked', 'Singing', 'Glimmering', 'Spellbound', 'Aether-Charged', 'Pulsing', 'Radiant', 'Star-Threaded', 'Manaforged', 'Coruscant'],
     nameSecond: ['Nexus', 'Confluence', 'Weave', 'Lattice', 'Wellspring', 'Leyline', 'Conflux', 'Skein', 'Junction', 'Spire', 'Wellhead', 'Matrix', 'Vortex', 'Threadwork', 'Font', 'Loom'],
     theme: {
@@ -1822,6 +1824,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // tentacle mutation lands in Pass 2c). biome 'eldritch' tints it on the heat-map.
   eldritch: {
     id: 'eldritch', frontier: false,
+    // Abandoned works: whoever racked these cells did not stay to spend them.
+    compositions: [{ composition: 'energist_cache', chance: 0.2 }],
     nameFirst: ['Writhing', 'Unblinking', 'Gibbering', 'Squamous', 'Whispering', 'Fathomless', 'Maddening', 'Coiling', 'Slithering', 'Unknowable', 'Pallid', 'Eyeless', 'Murmuring', 'Tendril-Choked', 'Cyclopean', 'Nameless', 'Aberrant', 'Star-Spawned'],
     nameSecond: ['Reach', 'Maw', 'Hollow', 'Gaze', 'Tangle', 'Verge', 'Coil', 'Tangleweb', 'Sprawl', 'Murmur', 'Whorl', 'Brood', 'Snarl', 'Wound', 'Threshold', 'Tendrils'],
     theme: {
@@ -2096,6 +2100,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // laser beams (the crystal_beam effect) → a constant-movement dance.
   crystal: {
     id: 'crystal', biome: 'crystal',
+    compositions: [{ composition: 'energist_cache', chance: 0.25 }],
     nameFirst: ['Prismatic', 'Shardbound', 'Glittering', 'Faceted', 'Resonant', 'Lucent', 'Refractive', 'Gleaming', 'Crystalline', 'Spectral', 'Glassgrown', 'Iridescent', 'Singing', 'Brilliant', 'Geodebound', 'Glasswrought', 'Sparkling', 'Light-Riven'],
     nameSecond: ['Geode', 'Spires', 'Lattice', 'Vault', 'Reach', 'Hollow', 'Shards', 'Facets', 'Cluster', 'Prism', 'Spindle', 'Fields', 'Cavern', 'Array', 'Bloom', 'Drift'],
     theme: {

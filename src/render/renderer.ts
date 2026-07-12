@@ -5,7 +5,7 @@
 
 import { clamp, dist, type Vec2 } from '../core/math';
 import { DEFAULT_CURSOR_OPTIONS, drawAimReticle } from '../core/cursor';
-import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, skillContextTags, SKILL_RARITIES } from '../engine/skills';
+import { instanceChargeCost, instanceMeta, instanceMods, instanceStrikeTiming, instanceTrigger, instanceUseCharges, skillContextTags, SKILL_RARITIES } from '../engine/skills';
 import { ITEM_RARITIES } from '../engine/items';
 import { VESTIGES } from '../data/vestiges';
 import { ESSENCES } from '../data/essences';
@@ -3793,11 +3793,13 @@ export class Renderer {
           const frac = clamp(cd / cdTotal, 0, 1);
           ctx.fillRect(x + 4, by + 4, slot - 8, (slot - 8) * frac);
         }
-        // USE-CHARGE pips (SkillDef.useCharges): the bank across the slot's
-        // top edge — bright = loaded, hollow = recovering. An empty bank
-        // dims the slot like a cooldown would — UNLESS the slot converted
-        // (the reload face is the live button; hollow pips already say why).
-        if (def.useCharges) {
+        // USE-CHARGE pips (instanceUseCharges — a native bank OR a socketed
+        // munition graft's: a CHAMBERED cast reads at the button exactly
+        // like a gun): the bank across the slot's top edge — bright =
+        // loaded, hollow = recovering. An empty bank dims the slot like a
+        // cooldown would — UNLESS the slot converted (the reload face is
+        // the live button; hollow pips already say why).
+        if (instanceUseCharges(inst)) {
           const bank = p.skillChargeBank(inst);
           const cap = p.skillChargeCap(inst);
           if (bank.count <= 0 && face === def) {
@@ -3807,6 +3809,29 @@ export class Renderer {
           for (let c = 0; c < Math.min(cap, 8); c++) {
             ctx.fillStyle = c < bank.count ? '#ffe86a' : 'rgba(90,90,110,0.8)';
             ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
+          }
+        }
+        // UNLEASH SEAL tics (World.unleashSealsOf): banked ghost-repeats as
+        // small diamonds along the BOTTOM edge — bright = a seal ready to
+        // salvo, hollow = still winding. The count-badge lane (top-right)
+        // stays reserved for living things; seals get their own shape and
+        // shore so the two never read as each other.
+        {
+          const seals = world.unleashSealsOf(p, inst);
+          if (seals) {
+            for (let c = 0; c < Math.min(seals.max, 8); c++) {
+              const sx = x + 9 + c * 8, sy = by + slot - 8;
+              ctx.beginPath();
+              ctx.moveTo(sx, sy - 3.4); ctx.lineTo(sx + 3.4, sy);
+              ctx.lineTo(sx, sy + 3.4); ctx.lineTo(sx - 3.4, sy);
+              ctx.closePath();
+              if (c < seals.count) { ctx.fillStyle = '#b8d858'; ctx.fill(); }
+              else {
+                ctx.strokeStyle = 'rgba(184,216,88,0.45)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+              }
+            }
           }
         }
         // FOUNT PIPS (ChargeDef.hud 'slot'): a spender's bank rides its

@@ -3050,6 +3050,38 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // THE MUNITION CONVERSION (SupportDef.munition) — Gathered Casting's
+  // sibling lane: any cast becomes an AMMUNITION skill. Three chambered
+  // rounds, each cast entirely normal but genuinely LARGER — more damage,
+  // wider area, surer ailments, longer-lived work — then the empty press
+  // becomes the Re-energize rite (engine DEFAULT_RELOAD_SKILL). grantsTags
+  // hands the host 'munition', so Swift Hands quickens ITS rack, Bandolier
+  // deepens ITS chambers, and Dead Man's Round crowns ITS final shot — the
+  // whole gun family composes onto a fireball. (No meta rack on purpose:
+  // metas are seat-bound, and the munition FIELD rides minions — a future
+  // crew-facing munition gem forwards whole, its minions running the same
+  // rack cycle the bandits do; this one excludes summons for its own feel.)
+  chambered_casting: {
+    id: 'chambered_casting', name: 'Chambered Casting',
+    description: 'CHAMBER the skill: three rounds, each cast as normal but 20% harder, a third wider, surer of its ailments and longer-lived — read at the button like any ammunition. Spent dry, the press becomes the RE-ENERGIZE rite before it speaks again.',
+    color: '#9ae0c8',
+    requiresTags: ['attack', 'spell'],
+    excludeTags: ['channel', 'flask', 'aura', 'summon', 'totem', 'guard'],
+    grantsTags: ['munition'],
+    munition: { rounds: 3 },
+    mods: [
+      mod('damage', 'more', 0.2),
+      mod('aoeRadius', 'increased', 0.3),
+      mod('statusChance', 'flat', 0.25),
+      mod('effectDuration', 'increased', 0.25),
+    ],
+    perLevel: [
+      mod('damage', 'more', 0.03),
+      mod('aoeRadius', 'increased', 0.04),
+    ],
+    weight: 6,
+  },
+
   // --- Trajectory levers (the §4 batch) ---------------------------------------
 
   ricochet: {

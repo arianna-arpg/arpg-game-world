@@ -1899,6 +1899,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'strafer' }, // one thunderclap, then the long open ram
     detection: 1.3,
   },
+  bandit_powder_witch: {
+    id: 'bandit_powder_witch', name: 'Powder Witch',
+    color: '#8ec8b0', shape: 'star', radius: 13, look: 'bandit_powder_witch',
+    base: { life: 54, moveSpeed: 118, accuracy: 104, mana: 90, manaRegen: 7 },
+    mods: [mod('life', 'more', 0.5)],
+    // The CHAMBERED demo in the wild: three fat firebolts (the graft's more/
+    // wider/surer payoff), then she stands there RE-ENERGIZING — the same
+    // rack cycle the gunners run, worn by a caster (MonsterGrant sockets
+    // the same gem a player would; the cast pipeline does the rest).
+    skills: ['firebolt'],
+    grants: [{ atLevel: 1, support: 'chambered_casting', on: 'firebolt' }],
+    xp: 26, faction: 'bandit',
+    brain: { type: 'strafer' },
+    detection: 1.15,
+  },
 
   // --- MYCELIA: "The Bloom" — the fungal 'fungal' faction --------------------
   //     Patron of the mycelia biome + the spore-bloom's spawn. contexts:['mycelia']

@@ -587,6 +587,27 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'cairn', order: 54, shadow: 0.55, longShadow: 0.8,
     params: { color: '#41434c', edge: '#16181e' },
   },
+  // --- The energist cache (the spell-chamber kit; rules in formations.ts) --
+  // Live cells: squat teal vessels with a lit heart — struck, they spill
+  // their keeping (brittle orb tradition). The light breathes at parity
+  // with every other small emissive.
+  charge_cell: {
+    painter: 'shard', order: 52, shadow: 0.4,
+    params: { points: 4, color: '#2e6a62', material: 'crystal', coreGlow: { color: '#8fe8d8' } },
+    light: { radius: -2, color: '#7fd8c8', intensity: 0.22, flicker: 1.2 },
+  },
+  // Capacitor pylons: worked monoliths with a pulsing gem inset — the
+  // battery row's standing bones (solid; the slab's obelisk lane).
+  rune_capacitor: {
+    painter: 'slab', order: 54, shadow: 0.6, longShadow: 1.3,
+    params: { shape: 'monolith', fill: '#3a4450', edge: '#141a22', gem: { color: '#7fd8c8' } },
+    light: { radius: -2.6, color: '#7fd8c8', intensity: 0.25 },
+  },
+  // Spent cells: the same vessel, dead — dark glass, no light, shed clutter.
+  spent_cell: {
+    painter: 'shard', order: 50, shadow: 0.3,
+    params: { points: 4, color: '#2c3236', material: 'crystal' },
+  },
   crystal_cluster: {
     longShadow: 0.6, painter: 'shard', order: 50, shadow: 0.5,
     params: { points: 7, color: '#4a7aa8', material: 'crystal', coreGlow: { color: '#9fd8ff' } },

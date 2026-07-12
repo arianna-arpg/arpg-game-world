@@ -2451,6 +2451,49 @@ export function instanceChargeCost(inst: SkillInstance): SkillDef['chargeCost'] 
   return inst.def.chargeCost;
 }
 
+// --- THE MUNITION CONVERSION (SupportDef.munition) ---------------------------
+// Chambered Casting's lane: a socketed gem CONVERTS any bar-cast into an
+// AMMUNITION skill — `rounds` manual-reload uses (no trickle, no magazine),
+// each cast entirely normal, and the EMPTY press becomes the graft's reload
+// skill through the ordinary 'chargesEmpty' conversion. The gem's own mods
+// carry the payoff (the whole point of chambering); grantsTags can hand the
+// host 'munition' so family gems and passives compose onto it.
+
+/** The reload every munition graft racks with when it names none — an
+ *  ordinary noDrop catalog skill (data/skills.ts), swap-able per gem. */
+export const DEFAULT_RELOAD_SKILL = 're_energize';
+
+/** The use-charge economy riding an instance: the skill's OWN bank wins (a
+ *  native ammunition skill ignores a graft's bank — one economy per slot);
+ *  else the first socketed MUNITION CONVERSION banks its rounds. Every
+ *  mechanical read (spend, cap, recovery, HUD pips, dry-press refusal)
+ *  goes through here so a grafted bank behaves exactly like a native one. */
+export function instanceUseCharges(inst: SkillInstance): SkillDef['useCharges'] | undefined {
+  if (inst.def.useCharges) return inst.def.useCharges;
+  for (const s of hostSockets(inst)) {
+    if (s.def.munition) return { max: s.def.munition.rounds };
+  }
+  return undefined;
+}
+
+/** The conversion riding an instance: innate SkillDef.convert wins; else a
+ *  munition graft converts the EMPTY bank into its reload skill. One face
+ *  per slot — first source wins (mirrors instanceChargeCost). */
+export function instanceConvert(inst: SkillInstance): ConvertSpec | undefined {
+  if (inst.def.convert) return inst.def.convert;
+  for (const s of hostSockets(inst)) {
+    if (s.def.munition) {
+      return { when: 'chargesEmpty', skillId: s.def.munition.reloadSkillId ?? DEFAULT_RELOAD_SKILL };
+    }
+  }
+  return undefined;
+}
+
+/** UNLEASH tuning (the seal-banking repeat support): one seal accrues per
+ *  `interval` seconds the skill rests, capped by the unleashMax stat. The
+ *  executeSkill read and the HUD tics share this one clock. */
+export const UNLEASH_CFG = { interval: 1.4 };
+
 // --- Targeting: restricting a skill to specific targets ----------------------
 
 export interface TargetingSpec {
@@ -3339,6 +3382,15 @@ export interface SupportDef {
    *  by arranging gems (Skeletal Strike before Self-Destruct: lunge, then
    *  the bang). */
   meta?: { skillId: string; label: string };
+  /** THE MUNITION CONVERSION (Chambered Casting): the host becomes an
+   *  AMMUNITION skill — `rounds` manual-reload uses read at the button as
+   *  pips, each cast entirely normal, the empty press converting into
+   *  `reloadSkillId` (default DEFAULT_RELOAD_SKILL) through the ordinary
+   *  'chargesEmpty' seam. Inert on hosts with a NATIVE bank (one economy
+   *  per slot — instanceUseCharges). The gem's `mods` carry the payoff and
+   *  `grantsTags: ['munition']` lets the family's gems and tag-filtered
+   *  investment compose onto the chambered host. */
+  munition?: { rounds: number; reloadSkillId?: string };
   /** A DEVOUR graft (Ravenous Pact): minions of the host skill EAT the
    *  owner's other minions on a beat for healing and a feast-buff (see
    *  DevourSpec — the apex economy, grafted onto any summon). */
@@ -3789,6 +3841,10 @@ const MINION_RIDABLE_FIELD_LIST = [
   'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'zoneSizeOver',
   'cadence', 'pendulum', 'echo', 'summon', 'fuse', 'gather', 'shellGraft',
   'variance', 'sequel', 'contagion',
+  // Munition grafts RIDE: a minion with a chambered skill fires it dry and
+  // then presses the empty face — pressUsable routes the press into the
+  // rack cast, the same autonomous reload cycle the gunner bandits run.
+  'munition',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every

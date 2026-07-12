@@ -176,3 +176,17 @@ registerComposition({
     { kind: 'bone_pile', count: [2, 4], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 41 } } },
   ],
 });
+
+// AN ENERGIST CACHE: a battery row in a swept work-yard — capacitor pylons
+// strung in a line, live cells racked between them (brittle: struck, they
+// spill their keeping as orbs), dead ones shed along the bank (the
+// formation's own every-3 litter). The arcane sibling of the powder
+// cache: terrain that PAYS when grazed instead of burning.
+registerComposition({
+  id: 'energist_cache',
+  sites: [{ id: 'yard', radius: [100, 140] }],
+  pre: [{ kind: 'clearing', at: 'yard', count: [1, 1], radius: [46, 62] }],
+  post: [
+    { kind: 'formation', formation: 'capacitor_bank', at: 'yard', count: [1, 1] },
+  ],
+});

@@ -23,7 +23,7 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -1159,9 +1159,10 @@ registerConvertRule('companionsFull', (caster, inst, world) =>
 // THE 'chargesEmpty' CONVERSION RULE: a use-charge skill with a DRY bank
 // presses as its converted face — the ammunition idiom (an empty scattergun
 // becomes its own reload; a restoreSkillCharges payload turns it back).
-// Registered beside its sibling; the registry stays the open seam.
+// Graft-aware (instanceUseCharges), so a CHAMBERED cast runs dry the same
+// way. Registered beside its sibling; the registry stays the open seam.
 registerConvertRule('chargesEmpty', (caster, inst) =>
-  !!inst.def.useCharges && caster.skillChargeBank(inst).count <= 0);
+  !!instanceUseCharges(inst) && caster.skillChargeBank(inst).count <= 0);
 
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
@@ -11713,7 +11714,7 @@ export class World {
    *  full Tame presents the Whistle) — else the skill itself. The renderer
    *  reads this so the button never lies about what a press will do. */
   slotFaceOf(caster: Actor, inst: SkillInstance): SkillDef {
-    const conv = inst.def.convert;
+    const conv = instanceConvert(inst); // innate OR a munition graft's reload
     return conv && SKILLS[conv.skillId] && convertRuleHolds(conv.when, caster, inst, this)
       ? SKILLS[conv.skillId]
       : inst.def;
@@ -11725,7 +11726,7 @@ export class World {
    *  canUse so an exhausted gun still gets pressed: the press is the
    *  reload, and the vulnerability window it opens is the design. */
   pressUsable(caster: Actor, inst: SkillInstance): boolean {
-    const conv = inst.def.convert;
+    const conv = instanceConvert(inst);
     if (conv && SKILLS[conv.skillId]
       && convertRuleHolds(conv.when, caster, inst, this)) {
       const minted = this.mintMetaInstance(caster, inst, conv.skillId);
@@ -11733,6 +11734,17 @@ export class World {
       return caster.canUse(minted);
     }
     return caster.canUse(inst);
+  }
+
+  /** Banked UNLEASH seals on a slot (the HUD tics): seals accrue per
+   *  UNLEASH_CFG.interval seconds the skill rests, capped by the stat.
+   *  Null when nothing on the slot banks seals — the lane stays free. */
+  unleashSealsOf(caster: Actor, inst: SkillInstance): { count: number; max: number } | null {
+    const max = Math.round(caster.sheet.get('unleashMax',
+      skillContextTags(inst.def), instanceMods(inst)));
+    if (max <= 0) return null;
+    const rested = this.time - (inst.state?.lastUseAt ?? -999);
+    return { count: Math.min(max, Math.floor(rested / UNLEASH_CFG.interval)), max };
   }
 
   /** Refund a just-stamped cooldown (a whistle with no bond must never burn
@@ -12065,7 +12077,7 @@ export class World {
     // Tame's press whistles ITS OWN companion. The HUD already presented
     // this face (slotFaceOf); the button does what it showed.
     {
-      const conv = inst.def.convert;
+      const conv = instanceConvert(inst); // innate OR a munition graft's rack
       if (conv && SKILLS[conv.skillId]
         && convertRuleHolds(conv.when, caster, inst, this)) {
         const minted = this.mintMetaInstance(caster, inst, conv.skillId);
@@ -12275,7 +12287,8 @@ export class World {
     // stepsFromBank (Riftstep): the bank AT PRESS TIME is the step count —
     // 3 banked = a 3-step flicker off ONE spent round. Captured before the
     // spend; deeper reserves buy quadratic storms (more steps AND presses).
-    const bankSteps = def.useCharges?.stepsFromBank
+    const useCharges = instanceUseCharges(inst); // native bank OR a munition graft's
+    const bankSteps = useCharges?.stepsFromBank
       ? Math.max(1, caster.skillChargeBank(inst).count) : undefined;
     // The press that runs the bank DRY: finalRoundDamage pays off (base ×1,
     // a pure opt-in lever), and a MAGAZINE stamps its reload clock NOW —
@@ -12283,13 +12296,13 @@ export class World {
     // presses never touch it; executeSkill skips magazine stamps entirely),
     // flagging the bank so expiry pours the refill in updateTimers.
     let roundMult = 1;
-    if (def.useCharges) {
+    if (useCharges) {
       caster.spendSkillCharge(inst);
       const bank = caster.skillChargeBank(inst);
       if (bank.count <= 0) {
         roundMult = caster.sheet.get('finalRoundDamage',
           skillContextTags(def), instanceMods(inst));
-        if (def.useCharges.magazine && def.cooldown > 0) {
+        if (useCharges.magazine && def.cooldown > 0) {
           this.stampSkillCooldown(caster, inst, def.cooldown);
           bank.reloading = true;
         }
@@ -12855,7 +12868,7 @@ export class World {
     // MAGAZINE skills never stamp here: their cooldown IS the reload cycle,
     // stamped by the press that spends the last round (useSkill) — a
     // mid-mag use must never touch the clock.
-    if (!opts.noCooldown && !def.useCharges?.magazine) {
+    if (!opts.noCooldown && !instanceUseCharges(inst)?.magazine) {
       this.stampSkillCooldown(caster, inst, def.cooldown);
     }
 
@@ -14428,13 +14441,13 @@ export class World {
       if (fx.type === 'restoreSkillCharges') {
         const banks: SkillInstance[] = [];
         if (fx.scope === 'all') {
-          for (const s of caster.skills) if (s?.def.useCharges) banks.push(s);
+          for (const s of caster.skills) if (s && instanceUseCharges(s)) banks.push(s);
         } else {
           const host = inst.hostSkillId
             ? caster.skills.find(s => s?.def.id === inst.hostSkillId)
             : undefined;
           const own = host ?? (def.useCharges ? inst : undefined);
-          if (own?.def.useCharges) banks.push(own);
+          if (own && instanceUseCharges(own)) banks.push(own);
         }
         let loaded = 0;
         for (const b of banks) {
@@ -14725,7 +14738,7 @@ export class World {
       if (unleashMax > 0) {
         const st = (inst.state ??= {});
         repeats += Math.min(Math.round(unleashMax),
-          Math.floor((this.time - (st.lastUseAt ?? -999)) / 1.4));
+          Math.floor((this.time - (st.lastUseAt ?? -999)) / UNLEASH_CFG.interval));
         st.lastUseAt = this.time;
       }
       if (repeats > 0) {

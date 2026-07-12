@@ -5992,6 +5992,19 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'restoreSkillCharges' }],
   },
 
+  // THE DEFAULT RACK for munition GRAFTS (engine DEFAULT_RELOAD_SKILL): a
+  // chambered spell's empty press becomes this rite unless its gem names
+  // another — an ordinary catalog skill, so retuning the whole conversion's
+  // feel is editing ONE row (and reloadSpeed shortens it like any rack).
+  re_energize: {
+    id: 're_energize', name: 'Re-energize', noDrop: true,
+    description: 'Draw the spent chambers back to brimming — a stood rite that refills the vessel to its cap.',
+    tags: ['reload', 'munition'], color: '#9ae0c8',
+    manaCost: 0, cooldown: 0, useTime: 1.2,
+    delivery: { type: 'self' },
+    effects: [{ type: 'restoreSkillCharges' }],
+  },
+
   grenado: {
     id: 'grenado', name: 'Grenado',
     description: 'A fizzing iron apple, thrown by the fistful — three to the satchel, then buckles and straps (the refill clock) while you run. Bursts where it lands; the burst is the point.',

@@ -433,3 +433,30 @@ registerFormation({
     { kind: 'rock', radius: [12, 20], every: 3, jitter: 18, rot: true },
   ],
 });
+
+// --- THE ENERGIST CACHE (the spell-chamber kit) -------------------------------
+// The arcane sibling of the powder dump — doodad semantics registered beside
+// their arrangement (the open registerDoodadRule seam). Charge cells are
+// brittle vessels that SPILL their keeping when struck (the orb tradition);
+// capacitors are solid worked monuments; spent cells are dead clutter the
+// works shed — the story of a battery row told in three kinds.
+registerDoodadRule('charge_cell', {
+  overlap: 'inert', spacing: 24,
+  brittle: { on: ['hit', 'touch'], orbChance: 0.65, text: 'the cell discharges!', color: '#7fd8c8' },
+});
+registerDoodadRule('rune_capacitor', {
+  overlap: 'solid', blocksMove: true, spacing: 30,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('spent_cell', { overlap: 'ground', spacing: 22 });
+
+// A CAPACITOR BANK: worked pylons pacing a line, live cells racked between,
+// dead ones shed along it — someone farms the leyline here, or someone did.
+registerFormation({
+  id: 'capacitor_bank', arrange: 'line', span: [260, 460], step: 58,
+  pieces: [
+    { kind: 'rune_capacitor', radius: [13, 18], jitter: 6, rot: true },
+    { kind: 'charge_cell', radius: [10, 14], every: 2, jitter: 14 },
+    { kind: 'spent_cell', radius: [9, 12], every: 3, jitter: 20, rot: true },
+  ],
+});

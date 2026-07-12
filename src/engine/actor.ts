@@ -13,6 +13,7 @@ import {
 import { DEFENSE_CFG } from './defense';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
+  instanceUseCharges,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
   type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec,
 } from './skills';
@@ -1891,7 +1892,7 @@ export class Actor {
     //    (÷ skillChargeRate), until full.
     //  - Neither: manual ammunition — nothing here moves the bank.
     for (const inst of this.skills) {
-      const uc = inst?.def.useCharges;
+      const uc = inst ? instanceUseCharges(inst) : undefined;
       if (!uc) continue;
       const st = this.skillChargeBank(inst!);
       const cap = this.skillChargeCap(inst!);
@@ -2117,7 +2118,7 @@ export class Actor {
   /** Effective use-charge maximum: spec max + the skillCharges stat
    *  (queried with the skill's tags — "+1 melee skill charge" is a filter). */
   skillChargeCap(inst: SkillInstance): number {
-    const uc = inst.def.useCharges;
+    const uc = instanceUseCharges(inst); // graft-aware: a chambered cast banks too
     if (!uc) return 0;
     return Math.max(1, Math.round(uc.max + this.sheet.get('skillCharges',
       skillContextTags(inst.def), instanceMods(inst))));
@@ -2354,8 +2355,10 @@ export class Actor {
     if (d0.type === 'ground' && d0.strobe && this.strobes.has(inst.def.id)) {
       return true;
     }
-    // USE-CHARGES: an empty bank is the dry spell (recovery ticks it back).
-    if (inst.def.useCharges && this.skillChargeBank(inst).count <= 0) return false;
+    // USE-CHARGES: an empty bank is the dry spell (recovery ticks it back) —
+    // graft-aware, so a chambered cast runs dry exactly like a native gun
+    // (the PRESS still converts to the reload upstream of this refusal).
+    if (instanceUseCharges(inst) && this.skillChargeBank(inst).count <= 0) return false;
     // INVOCATION: nothing woven, nothing to release.
     if (inst.def.invokes && this.runes.length === 0) return false;
     const cost = this.skillCost(inst);

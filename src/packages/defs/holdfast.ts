@@ -46,6 +46,7 @@ const BANDIT_FACTION: FactionSpec = {
     { id: 'bandit_fusilier', weight: 2, presence: { from: 4, fadeIn: 3 } },
     { id: 'bandit_grenadier', weight: 1, presence: { from: 7, fadeIn: 4 } },
     { id: 'bandit_matchlock', weight: 1, presence: { from: 10, fadeIn: 5 } },
+    { id: 'bandit_powder_witch', weight: 1, presence: { from: 6, fadeIn: 4 } },
   ],
 };
 
