@@ -21,6 +21,7 @@ import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { doodadRuleOf, type Doodad } from '../engine/levelgen';
+import { PROJ_FORM_GEO } from '../engine/projForms';
 import { transitRing } from '../data/transit';
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
 import { boundaryGateOf } from '../data/boundaryGates';
@@ -3429,7 +3430,6 @@ export class Renderer {
 
   private drawProjectiles(world: World): void {
     const { ctx } = this;
-    const t = performance.now() / 1000;
     this.drawTethers(world);
     for (const p of world.projectiles) {
       // Every projectile is ENERGY IN FLIGHT now: an additive glow underlay
@@ -3454,24 +3454,34 @@ export class Renderer {
       ctx.save();
       ctx.translate(p.pos.x, p.pos.y);
       const r = p.radius;
+      // Form geometry rides PROJ_FORM_GEO — the SAME factors the sim's hit
+      // test uses (engine/projForms.ts), so the pixels and the hitbox can't
+      // drift. Animated forms clock on p.age (sim time, deterministic, on
+      // the co-op wire), never wall-clock.
       switch (p.shape) {
-        case 'square':
-          ctx.rotate(p.dir + t * 6); // tumbling hammer feel
-          ctx.fillRect(-r * 0.8, -r * 0.8, r * 1.6, r * 1.6);
+        case 'square': {
+          const g = PROJ_FORM_GEO.square;
+          ctx.rotate(p.dir + p.age * g.tumbleRate); // tumbling hammer feel
+          ctx.fillRect(-r * g.half, -r * g.half, r * g.half * 2, r * g.half * 2);
           break;
-        case 'line':
+        }
+        case 'line': {
+          const g = PROJ_FORM_GEO.line;
           ctx.rotate(p.dir);
-          ctx.fillRect(-r * 1.8, -r * 0.35, r * 3.6, r * 0.7);
+          ctx.fillRect(-r * g.hAlong, -r * g.hAcross, r * g.hAlong * 2, r * g.hAcross * 2);
           break;
+        }
         case 'triangle':
           ctx.rotate(p.dir + Math.PI / 2);
           ctx.beginPath();
-          ctx.moveTo(0, -r); ctx.lineTo(r * 0.85, r); ctx.lineTo(-r * 0.85, r);
+          ctx.moveTo(0, -r);
+          ctx.lineTo(r * PROJ_FORM_GEO.triangle.base, r);
+          ctx.lineTo(-r * PROJ_FORM_GEO.triangle.base, r);
           ctx.closePath();
           ctx.fill();
           break;
         case 'octagon': {
-          ctx.rotate(t * 2);
+          ctx.rotate(p.age * PROJ_FORM_GEO.octagon.spinRate);
           ctx.beginPath();
           for (let k = 0; k < 8; k++) {
             const a = (k / 8) * Math.PI * 2;
@@ -3482,41 +3492,46 @@ export class Renderer {
           ctx.fill();
           break;
         }
-        case 'bar':
+        case 'bar': {
           // A wide front perpendicular to travel — the beam wall.
+          const g = PROJ_FORM_GEO.bar;
           ctx.rotate(p.dir);
-          ctx.fillRect(-r * 0.3, -r * 1.9, r * 0.6, r * 3.8);
-          ctx.globalAlpha = 0.4;
-          ctx.fillRect(-r * 0.75, -r * 1.5, r * 0.45, r * 3);
+          ctx.fillRect(-r * g.hAlong, -r * g.hAcross, r * g.hAlong * 2, r * g.hAcross * 2);
+          ctx.globalAlpha = g.ghost.alpha;
+          ctx.fillRect(-r * g.ghost.back, -r * g.ghost.hAcross, r * g.ghost.hAlong * 2, r * g.ghost.hAcross * 2);
           ctx.globalAlpha = 1;
           break;
+        }
         case 'arc': {
           // A crescent opening backward (the pulse).
+          const g = PROJ_FORM_GEO.arc;
           ctx.rotate(p.dir);
           ctx.strokeStyle = p.color;
-          ctx.lineWidth = r * 0.55;
+          ctx.lineWidth = r * g.stroke;
           ctx.lineCap = 'round';
           ctx.beginPath();
-          ctx.arc(-r * 0.6, 0, r * 1.45, -Math.PI * 0.42, Math.PI * 0.42);
+          ctx.arc(-r * g.back, 0, r * g.ring, -g.halfWin, g.halfWin);
           ctx.stroke();
-          ctx.globalAlpha = 0.45;
-          ctx.lineWidth = r * 0.3;
+          ctx.globalAlpha = g.ghost.alpha;
+          ctx.lineWidth = r * g.ghost.stroke;
           ctx.beginPath();
-          ctx.arc(-r * 1.1, 0, r * 1.2, -Math.PI * 0.38, Math.PI * 0.38);
+          ctx.arc(-r * g.ghost.back, 0, r * g.ghost.ring, -g.ghost.halfWin, g.ghost.halfWin);
           ctx.stroke();
           ctx.globalAlpha = 1;
           break;
         }
         case 'wave': {
-          // A rolling sine front (the siege wave).
+          // A rolling sine front (the siege wave) — the exact curve the hit
+          // test samples: touch the flame, take the flame.
+          const g = PROJ_FORM_GEO.wave;
           ctx.rotate(p.dir + Math.PI / 2);
           ctx.strokeStyle = p.color;
-          ctx.lineWidth = r * 0.5;
+          ctx.lineWidth = r * g.stroke;
           ctx.lineCap = 'round';
           ctx.beginPath();
-          const span = r * 1.9;
+          const span = r * g.span;
           for (let wx = -span; wx <= span; wx += 4) {
-            const wy = Math.sin((wx / span) * Math.PI * 2 + t * 8) * r * 0.4;
+            const wy = Math.sin((wx / span) * Math.PI * 2 + p.age * g.phaseRate) * r * g.amp;
             if (wx === -span) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy);
           }
           ctx.stroke();

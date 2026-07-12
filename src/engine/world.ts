@@ -69,6 +69,7 @@ import {
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './shapes';
+import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
 import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } from '../data/transit';
@@ -25691,6 +25692,29 @@ export class World {
         || (p.maxAge !== undefined && p.age >= p.maxAge)
         || (!tethered && !this.arena.boundless
             && (p.pos.x < 0 || p.pos.x > this.arena.w || p.pos.y < 0 || p.pos.y > this.arena.h));
+  /** Does this flight's body touch the circle (cx, cy, cr)? THE projectile
+   *  body test (engine/projForms.ts): the geometry IS the drawn form — Fire
+   *  Siege hits along its rolling flame line, a bar along its wall — from
+   *  the same PROJ_FORM_GEO factors the renderer strokes. A skill whose art
+   *  runs looser than its body opts back to the classic radius disc with
+   *  delivery.hitForm: 'circle'. */
+  private projTouches(p: Projectile, cx: number, cy: number, cr: number): boolean {
+    if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') {
+      const dx = cx - p.pos.x, dy = cy - p.pos.y;
+      return dx * dx + dy * dy <= (p.radius + cr) * (p.radius + cr);
+    }
+    return projFormTouches(p.shape, p.pos.x, p.pos.y, p.dir, p.radius, p.age, cx, cy, cr);
+  }
+
+  /** The flight's leading-edge reach along its heading — what terrain
+   *  contact uses, so a thin rolling front dies when the FRONT meets the
+   *  wall instead of a full disc early (center-line blocking; see
+   *  projFormNose). */
+  private projNose(p: Projectile): number {
+    if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') return p.radius;
+    return p.radius * projFormNose(p.shape);
+  }
+
       // Did a fatal end land ON A BODY (pierce spent, guarded stop) rather
       // than spend itself (range, walls, arrivals)? The SequelSpec
       // 'hit'|'expire' lever reads this at the death payout below.
@@ -25736,7 +25760,7 @@ export class World {
           // secret wall stops the arrow THAT opened it).
           const br = doodadRuleOf(o.kind).brittle;
           if (br && !o.gone && br.on.includes('hit')
-            && dist(p.pos, o.pos) <= p.radius + o.radius) {
+            && this.projTouches(p, o.pos.x, o.pos.y, o.radius)) {
             this.popBrittle(o);
           }
           if (!blocksProjectiles(o)) continue;
@@ -25745,7 +25769,7 @@ export class World {
           // slab face (hit-surface fabric): a shot slips through a doorway
           // beside a closed door's slab line instead of dying on the old
           // breach-spanning circle.
-          if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, p.radius + 1e-9)) {
+          if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, this.projNose(p) + 1e-9)) {
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
@@ -25995,7 +26019,7 @@ export class World {
           if (c.dead || !c.construct?.castOnStruck || c.team !== p.caster.team) continue;
           const until = p.hits.get(c.id);
           if (until !== undefined && p.age < until) continue;
-          if (dist(p.pos, c.pos) > p.radius + c.radius) continue;
+          if (!this.projTouches(p, c.pos.x, c.pos.y, c.radius)) continue;
           p.hits.set(c.id, p.rehit ? p.age + p.rehit : Infinity);
           if (this.ringBell(c)) {
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: 14, color: p.color, life: 0.15, maxLife: 0.15 });
@@ -26009,7 +26033,7 @@ export class World {
           // SELECTIVE PIERCE (Heartchaser): everything but the prey is
           // mist — the arrow passes harmlessly through the crowd.
           if (p.preyId !== undefined && enemy.id !== p.preyId) continue;
-          if (dist(p.pos, enemy.pos) <= p.radius + enemy.radius) {
+          if (this.projTouches(p, enemy.pos.x, enemy.pos.y, enemy.radius)) {
             // A raised shield in the projectile's path stops it cold —
             // no pierce, no chain, no statuses. Just a dent in the shield.
             const guardRaw = Object.values(rollSkillDamage(p.caster, p.inst).amounts)

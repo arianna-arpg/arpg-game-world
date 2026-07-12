@@ -84,7 +84,10 @@ export interface CastW {
   guardArc?: number;           // guard spec arcDeg (mode === 'guard')
 }
 
-export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; }
+/** `a` = flight age (sim seconds): the deterministic phase clock the form
+ *  painters roll on (wave crest, square tumble) — client and host draw the
+ *  same curve the host's hit test sampled. */
+export interface ProjW { p: Vec2W; d: number; r: number; c: string; sh: string; a: number; }
 /** A tether band, RENDER-ONLY on the client (the host owns the damage ticks). */
 export interface TetherW { ax: number; ay: number; bx: number; by: number; c: string; w: number; }
 export interface DropW { p: Vec2W; bob: number; kind: 'skill' | 'support' | 'gear' | 'vestige' | 'essence'; color: string; rarity?: string; name?: string; vid?: string; eid?: string; cnt?: number; }
@@ -367,7 +370,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
     seats, seatMeta,
     vendor: world.vendorStock.map(vendorEntryW), vendorRestockAt: world.vendorRestockAt,
     actors: world.actors.filter(a => !a.dead || a.isPlayerKind()).map(actorToW),
-    projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape })),
+    projectiles: world.projectiles.map(p => ({ p: v2(p.pos), d: p.dir, r: p.radius, c: p.color, sh: p.shape, a: p.age })),
     tethers: world.tethers.map(t => ({
       ax: Math.round(t.ax), ay: Math.round(t.ay), bx: Math.round(t.bx), by: Math.round(t.by),
       c: t.color, w: t.width,
@@ -538,7 +541,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
 
   // Lightweight entities — plain render structs the renderer reads positionally.
   world.projectiles = snap.projectiles.map(p => ({
-    pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh,
+    pos: { x: p.p[0], y: p.p[1] }, dir: p.d, radius: p.r, color: p.c, shape: p.sh, age: p.a ?? 0,
   })) as unknown as World['projectiles'];
   world.tethers = (snap.tethers ?? []).map(t => ({
     ax: t.ax, ay: t.ay, bx: t.bx, by: t.by, color: t.c, width: t.w,

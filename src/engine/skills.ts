@@ -25,8 +25,11 @@ import type { CurveKind } from './curves';
  */
 export type CountSpec = number | [number, number];
 
-/** Visual + flavor form of a projectile. Collision stays radius-based —
- *  wide forms (bar / arc / wave) pair with a large radius for wide hits. */
+/** Form of a projectile — visual AND collision (engine/projForms.ts): the
+ *  hit test samples the same PROJ_FORM_GEO curve the renderer strokes, so
+ *  wide forms (bar / arc / wave) hit exactly where their art travels.
+ *  ProjectileDelivery.hitForm: 'circle' opts a skill back to the classic
+ *  radius disc. */
 export type ProjectileShape =
   | 'circle' | 'square' | 'line' | 'triangle' | 'octagon'
   | 'bar'    // a wide front perpendicular to travel (beams, force walls)
@@ -856,6 +859,13 @@ export interface ProjectileDelivery {
   count?: CountSpec;      // base projectile count (player adds projectileCount stat)
   spreadDeg?: number;     // total fan angle when firing multiple
   shape?: ProjectileShape;
+  /** How the flight COLLIDES with bodies (engine/projForms.ts):
+   *  'visual' (the default) — the hit test IS the drawn form, from the same
+   *  PROJ_FORM_GEO factors the renderer strokes: a wave hits along its
+   *  rolling flame line, a bar along its wall, an arc along its crescent.
+   *  'circle' — the classic disc of `radius`, for a skill whose art is
+   *  deliberately looser than its body. */
+  hitForm?: 'visual' | 'circle';
   trajectory?: TrajectorySpec;
   /**
    * FIRING STYLE — how the volley leaves the origin (stat-convertible:
