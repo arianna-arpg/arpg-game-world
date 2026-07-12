@@ -1,0 +1,67 @@
+name: Deploy site to GitHub Pages
+
+# Regenerates the site's data from src/data on every push, then deploys.
+# This is what keeps the Database (and later the Passive Tree) at parity with
+# the game: the JSON is never committed by hand — it's rebuilt here each time.
+
+on:
+  push:
+    branches: [main]
+    # Rebuild when the game data, the site, or the pipeline changes.
+    paths:
+      - 'src/data/**'
+      - 'site/**'
+      - 'scripts/export-web-data.ts'
+      - '.github/workflows/pages.yml'
+      - 'package.json'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let an in-progress one finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Export game data → site/data/*.json
+        run: npx tsx scripts/export-web-data.ts
+
+      # --- Phase 3 (optional, uncomment when embedding the playable demo) ---
+      # The game is already a static Vite build; serve it under /play.
+      # Vite needs a relative base so hashed assets resolve at the sub-path.
+      # - name: Build the in-browser demo
+      #   run: |
+      #     npx vite build --base=./ --outDir site/play
+      #     # (or add an npm script: "build:web": "vite build --base=./ --outDir site/play")
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

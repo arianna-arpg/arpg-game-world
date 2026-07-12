@@ -15,6 +15,7 @@
     "sim": "tsx balance/cli.ts",
     "genqa": "tsx balance/genqa.ts",
     "eventqa": "tsx balance/eventqa.ts",
+    "export-web-data": "tsx scripts/export-web-data.ts",
     "game": "electron .",
     "game:play": "electron . --play",
     "smoke": "electron . --smoke-test=game",

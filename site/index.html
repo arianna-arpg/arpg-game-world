@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hollow Wake — a data-driven top-down action RPG</title>
+<script>document.documentElement.className += ' js';</script>
+<meta name="description" content="Hollow Wake is a top-down action RPG built around one idea: every system is open, modular data. Skills are loot, classes are only a starting point, and one engine runs the player, the monsters, and everything they summon.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#08090e;
+    --bg-2:#0c0e15;
+    --panel:#11131d;
+    --panel-2:#161926;
+    --line:rgba(255,255,255,.08);
+    --line-2:rgba(255,255,255,.14);
+    --ink:#e9eaf2;
+    --ink-dim:#a3a9bd;
+    --ink-faint:#6b7189;
+    --teal:#4fd6c4;
+    --teal-hi:#7ff0e1;
+    --ember:#ff8a4c;
+    --ember-hi:#ffb277;
+    --violet:#a98bff;
+    --gold:#e9c46a;
+    --green:#7bd88f;
+    --crimson:#ef6b6b;
+    --steel:#9fb2c9;
+    --maxw:1160px;
+    --r:16px;
+    --r-sm:11px;
+    --shadow:0 24px 60px -24px rgba(0,0,0,.75);
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  body{
+    margin:0;
+    font-family:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  h1,h2,h3{margin:0;line-height:1.1;font-weight:600}
+  p{margin:0}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px}
+  .mono{font-family:'Space Grotesk',ui-monospace,monospace}
+  .display{font-family:'Cinzel',serif}
+
+  /* ---------- background field ---------- */
+  #bg-canvas{position:fixed;inset:0;width:100%;height:100%;z-index:0;opacity:.9}
+  .bg-veil{position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:
+      radial-gradient(1100px 640px at 78% -8%, rgba(79,214,196,.16), transparent 60%),
+      radial-gradient(900px 620px at 12% 8%, rgba(169,139,255,.14), transparent 62%),
+      radial-gradient(1200px 700px at 50% 108%, rgba(255,138,76,.10), transparent 60%);
+  }
+  .bg-grid{position:fixed;inset:0;z-index:1;pointer-events:none;opacity:.5;
+    background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+    background-size:64px 64px;
+    mask-image:radial-gradient(circle at 50% 30%, #000 0%, transparent 78%);
+    -webkit-mask-image:radial-gradient(circle at 50% 30%, #000 0%, transparent 78%);
+  }
+  .content{position:relative;z-index:2}
+
+  /* ---------- nav ---------- */
+  header.nav{position:sticky;top:0;z-index:50;transition:background .3s,border-color .3s,backdrop-filter .3s}
+  header.nav.scrolled{background:rgba(8,9,14,.72);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;height:70px}
+  .brand{display:flex;align-items:center;gap:12px;font-family:'Cinzel',serif;font-weight:700;letter-spacing:.14em;font-size:15px}
+  .brand .mark{width:26px;height:26px;flex:0 0 auto}
+  .nav-links{display:flex;align-items:center;gap:30px;font-size:14.5px}
+  .nav-links a{color:var(--ink-dim);transition:color .2s;position:relative}
+  .nav-links a:hover,.nav-links a.active{color:var(--ink)}
+  .nav-links a.gh{color:var(--ink);display:inline-flex;align-items:center;gap:7px}
+  .nav-cta{border:1px solid var(--line-2);padding:8px 16px;border-radius:999px;font-weight:600;font-size:13.5px;
+    background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.01));transition:border-color .2s,transform .2s}
+  .nav-cta:hover{border-color:var(--teal);transform:translateY(-1px)}
+  .nav-toggle{display:none}
+  @media(max-width:820px){
+    .nav-links{display:none}
+  }
+
+  /* ---------- hero ---------- */
+  .hero{padding:96px 0 78px;text-align:center;position:relative}
+  .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;font-size:12.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--teal-hi);
+    padding:7px 16px;border:1px solid var(--line);border-radius:999px;background:rgba(79,214,196,.06)}
+  .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ember);box-shadow:0 0 12px var(--ember)}
+  .hero h1{font-family:'Cinzel',serif;font-weight:700;font-size:clamp(52px,10vw,116px);letter-spacing:.02em;margin:26px 0 4px;
+    background:linear-gradient(180deg,#ffffff 8%, #cfd6e6 52%, #7f8aa6 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 60px rgba(79,214,196,.18)}
+  .hero .tagline{font-family:'Space Grotesk',sans-serif;font-size:clamp(17px,2.4vw,23px);font-weight:500;color:var(--ink);letter-spacing:.01em}
+  .hero .tagline b{background:linear-gradient(90deg,var(--teal),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:600}
+  .hero .pitch{max-width:640px;margin:22px auto 0;color:var(--ink-dim);font-size:17.5px}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:34px}
+  .btn{display:inline-flex;align-items:center;gap:10px;padding:14px 26px;border-radius:12px;font-weight:600;font-size:15.5px;
+    transition:transform .18s,box-shadow .18s,border-color .18s,background .18s;cursor:pointer;border:1px solid transparent}
+  .btn:hover{transform:translateY(-2px)}
+  .btn-primary{background:linear-gradient(180deg,var(--ember-hi),var(--ember));color:#2a1403;box-shadow:0 14px 34px -12px rgba(255,138,76,.6)}
+  .btn-primary:hover{box-shadow:0 18px 40px -12px rgba(255,138,76,.75)}
+  .btn-ghost{border-color:var(--line-2);color:var(--ink);background:rgba(255,255,255,.03)}
+  .btn-ghost:hover{border-color:var(--teal);background:rgba(79,214,196,.07)}
+  .hero-meta{margin-top:30px;display:flex;gap:10px 20px;justify-content:center;flex-wrap:wrap;font-family:'Space Grotesk',sans-serif;font-size:13px;color:var(--ink-faint);letter-spacing:.04em}
+  .hero-meta span{display:inline-flex;align-items:center;gap:8px}
+  .hero-meta .sep{width:4px;height:4px;border-radius:50%;background:var(--line-2)}
+  .hero-meta b{color:var(--ink-dim);font-weight:500}
+
+  /* ---------- stat band ---------- */
+  .stats{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
+  .stat-grid{display:grid;grid-template-columns:repeat(6,1fr)}
+  .stat{padding:30px 18px;text-align:center;border-left:1px solid var(--line)}
+  .stat:first-child{border-left:none}
+  .stat .num{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:clamp(26px,3.4vw,38px);color:var(--ink);
+    background:linear-gradient(180deg,var(--teal-hi),var(--teal));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .stat .lbl{font-size:12.5px;color:var(--ink-faint);letter-spacing:.14em;text-transform:uppercase;margin-top:6px}
+  @media(max-width:820px){.stat-grid{grid-template-columns:repeat(3,1fr)}.stat:nth-child(4){border-left:none}.stat:nth-child(-n+3){border-bottom:1px solid var(--line)}}
+  @media(max-width:460px){.stat-grid{grid-template-columns:repeat(2,1fr)}.stat{border-left:1px solid var(--line)!important}.stat:nth-child(odd){border-left:none!important}}
+
+  /* ---------- generic section ---------- */
+  section.band{padding:96px 0;position:relative}
+  .sec-head{max-width:720px;margin-bottom:52px}
+  .sec-head.center{margin-left:auto;margin-right:auto;text-align:center}
+  .kicker{font-family:'Space Grotesk',sans-serif;font-size:13px;letter-spacing:.26em;text-transform:uppercase;color:var(--teal);font-weight:600}
+  .sec-head h2{font-size:clamp(30px,4.6vw,46px);margin:16px 0 16px;letter-spacing:-.01em;font-weight:600}
+  .sec-head p{color:var(--ink-dim);font-size:18px}
+  .divider-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-2),transparent)}
+
+  /* ---------- pillars ---------- */
+  .pillars{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+  .pillar{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r);padding:30px;position:relative;overflow:hidden;transition:border-color .25s,transform .25s}
+  .pillar:hover{border-color:var(--line-2);transform:translateY(-3px)}
+  .pillar::before{content:"";position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent,var(--teal));opacity:.7}
+  .pillar .icon{width:44px;height:44px;border-radius:11px;display:grid;place-items:center;margin-bottom:18px;
+    background:color-mix(in srgb,var(--accent,var(--teal)) 16%, transparent);border:1px solid color-mix(in srgb,var(--accent,var(--teal)) 34%, transparent)}
+  .pillar h3{font-size:21px;margin-bottom:9px;font-family:'Space Grotesk',sans-serif}
+  .pillar p{color:var(--ink-dim);font-size:15.5px}
+  @media(max-width:720px){.pillars{grid-template-columns:1fr}}
+
+  /* ---------- pipeline visual ---------- */
+  .deepdive-intro{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
+  @media(max-width:880px){.deepdive-intro{grid-template-columns:1fr;gap:36px}}
+  .di-copy h2{font-size:clamp(28px,4vw,40px);margin-bottom:18px;font-weight:600}
+  .di-copy p{color:var(--ink-dim);font-size:16.5px;margin-bottom:16px}
+  .di-copy .lede{color:var(--ink);font-size:18px}
+  .pipe{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:26px;box-shadow:var(--shadow)}
+  .pipe .pipe-title{font-family:'Space Grotesk',sans-serif;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:20px;display:flex;align-items:center;gap:10px}
+  .pipe .pipe-title::after{content:"";flex:1;height:1px;background:var(--line)}
+  .pipe-stage{display:flex;align-items:center;gap:16px;padding:13px 15px;border-radius:11px;border:1px solid var(--line);margin-bottom:11px;background:var(--bg-2);position:relative}
+  .pipe-stage:last-child{margin-bottom:0}
+  .pipe-stage .st-i{font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--bg);font-weight:700;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto}
+  .pipe-stage .st-name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px}
+  .pipe-stage .st-desc{color:var(--ink-faint);font-size:13px;margin-left:auto;text-align:right}
+  .pipe-arrow{text-align:center;color:var(--line-2);font-size:13px;margin:-4px 0 7px}
+
+  /* ---------- systems grid ---------- */
+  .sys-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  @media(max-width:880px){.sys-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.sys-grid{grid-template-columns:1fr}}
+  .sys{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:24px;transition:background .25s,border-color .25s}
+  .sys:hover{background:var(--panel-2);border-color:var(--line-2)}
+  .sys .tag{font-family:'Space Grotesk',sans-serif;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent,var(--teal));font-weight:600}
+  .sys h3{font-size:18px;margin:9px 0 8px;font-family:'Space Grotesk',sans-serif}
+  .sys p{color:var(--ink-dim);font-size:14.5px}
+  .sys code{font-family:'Space Grotesk',monospace;font-size:12.5px;color:var(--ink-faint);background:rgba(255,255,255,.04);padding:1px 6px;border-radius:5px}
+
+  /* ---------- architecture ---------- */
+  .arch{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
+  .arch-col{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r-sm);padding:22px}
+  .arch-col .h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .arch-col .h .dot{width:9px;height:9px;border-radius:50%;background:var(--accent,var(--teal));box-shadow:0 0 10px var(--accent,var(--teal))}
+  .arch-col .h .path{font-family:'Space Grotesk',monospace;font-weight:600;font-size:14.5px}
+  .arch-col ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:7px}
+  .arch-col li{font-family:'Space Grotesk',monospace;font-size:12px;color:var(--ink-dim);background:rgba(255,255,255,.04);border:1px solid var(--line);padding:4px 9px;border-radius:6px}
+
+  /* ---------- tooling ---------- */
+  .tools{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+  @media(max-width:720px){.tools{grid-template-columns:1fr}}
+  .tool{display:flex;gap:18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:22px 24px;align-items:flex-start}
+  .tool .cmd{font-family:'Space Grotesk',monospace;font-size:13px;color:var(--teal-hi);background:rgba(79,214,196,.08);border:1px solid rgba(79,214,196,.18);padding:6px 11px;border-radius:8px;white-space:nowrap;flex:0 0 auto;margin-top:2px}
+  .tool h3{font-size:16.5px;font-family:'Space Grotesk',sans-serif;margin-bottom:5px}
+  .tool p{color:var(--ink-dim);font-size:14px}
+
+  /* ---------- classes ---------- */
+  .cls-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+  @media(max-width:900px){.cls-grid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.cls-grid{grid-template-columns:1fr}}
+  .cls{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:22px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s}
+  .cls:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--accent) 45%, var(--line))}
+  .cls::after{content:"";position:absolute;inset:0;background:radial-gradient(120px 80px at 100% 0%, color-mix(in srgb,var(--accent) 20%, transparent), transparent 70%);opacity:.55;pointer-events:none}
+  .cls .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;position:relative;z-index:1}
+  .cls .nm{font-family:'Cinzel',serif;font-weight:600;font-size:19px}
+  .cls .role{font-family:'Space Grotesk',sans-serif;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 34%, transparent);padding:3px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%, transparent)}
+  .cls p{color:var(--ink-dim);font-size:14px;position:relative;z-index:1}
+
+  /* ---------- get it ---------- */
+  .get{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  @media(max-width:820px){.get{grid-template-columns:1fr}}
+  .get-card{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r);padding:32px}
+  .get-card h3{font-family:'Space Grotesk',sans-serif;font-size:22px;margin-bottom:6px}
+  .get-card .sub{color:var(--ink-faint);font-size:14px;margin-bottom:22px}
+  .plat{display:flex;gap:14px;align-items:center;padding:15px 0;border-top:1px solid var(--line)}
+  .plat .pi{width:36px;height:36px;flex:0 0 auto;display:grid;place-items:center;color:var(--teal-hi)}
+  .plat .pt{font-weight:600;font-size:15px}
+  .plat .pd{color:var(--ink-faint);font-size:13px}
+  .plat .parrow{margin-left:auto;color:var(--ink-faint)}
+  pre.code{background:#05060a;border:1px solid var(--line);border-radius:11px;padding:18px 20px;overflow:auto;font-family:'Space Grotesk',ui-monospace,monospace;font-size:13.5px;line-height:1.9;color:var(--ink-dim);margin:0}
+  pre.code .c{color:var(--ink-faint)}
+  pre.code .g{color:var(--teal-hi)}
+  .note{margin-top:18px;font-size:13.5px;color:var(--ink-faint);display:flex;gap:9px;align-items:flex-start}
+  .note svg{flex:0 0 auto;margin-top:2px;color:var(--ember)}
+
+  /* ---------- status callout ---------- */
+  .status{background:linear-gradient(120deg,rgba(255,138,76,.08),rgba(169,139,255,.06));border:1px solid var(--line);border-radius:var(--r);padding:30px 34px;display:flex;gap:22px;align-items:flex-start}
+  .status .badge{font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--ember-hi);border:1px solid rgba(255,138,76,.34);background:rgba(255,138,76,.1);padding:6px 12px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
+  .status p{color:var(--ink-dim);font-size:15.5px}
+  .status b{color:var(--ink)}
+  @media(max-width:600px){.status{flex-direction:column;gap:14px}}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line);padding:56px 0 40px;background:var(--bg-2)}
+  .foot-top{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;align-items:flex-start}
+  .foot-brand{font-family:'Cinzel',serif;font-weight:700;letter-spacing:.14em;font-size:17px;display:flex;align-items:center;gap:12px}
+  .foot-links{display:flex;gap:40px;flex-wrap:wrap}
+  .foot-col h4{font-family:'Space Grotesk',sans-serif;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-faint);margin:0 0 14px;font-weight:600}
+  .foot-col a{display:block;color:var(--ink-dim);font-size:14.5px;margin-bottom:9px;transition:color .2s}
+  .foot-col a:hover{color:var(--teal)}
+  .foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--ink-faint);font-size:13.5px}
+  .foot-bottom .stack{font-family:'Space Grotesk',monospace}
+
+  /* ---------- reveal (gated on .js so it degrades to fully visible without JS) ---------- */
+  .reveal{transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
+  html.js .reveal{opacity:0;transform:translateY(24px)}
+  html.js .reveal.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion:reduce){html.js .reveal{opacity:1;transform:none;transition:none}}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas" aria-hidden="true"></canvas>
+<div class="bg-veil" aria-hidden="true"></div>
+<div class="bg-grid" aria-hidden="true"></div>
+
+<div class="content">
+
+<!-- NAV -->
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a href="#top" class="brand" aria-label="Hollow Wake home">
+      <svg class="mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" stroke="url(#g1)" stroke-width="1.5"/>
+        <circle cx="16" cy="16" r="4.4" fill="url(#g1)"/>
+        <circle cx="16" cy="3" r="1.7" fill="#4fd6c4"/><circle cx="27.3" cy="22" r="1.7" fill="#a98bff"/><circle cx="4.7" cy="22" r="1.7" fill="#ff8a4c"/>
+        <path d="M16 16 L16 3 M16 16 L27.3 22 M16 16 L4.7 22" stroke="url(#g1)" stroke-width="1.1" opacity=".55"/>
+        <defs><linearGradient id="g1" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs>
+      </svg>
+      HOLLOW WAKE
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#systems">Systems</a>
+      <a href="#classes">Classes</a>
+      <a href="database/">Database</a>
+      <a href="tree/">Passive&nbsp;Tree</a>
+      <a href="play/">Play</a>
+      <a href="https://github.com/arianna-arpg/arpg-game-world" class="gh" target="_blank" rel="noopener">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+      <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="nav-cta" target="_blank" rel="noopener">Download</a>
+    </nav>
+    <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="nav-cta nav-toggle" target="_blank" rel="noopener" style="display:none">Download</a>
+  </div>
+</header>
+
+<span id="top"></span>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <span class="eyebrow"><span class="dot"></span> Top-down action RPG · In development</span>
+    <h1 class="display">Hollow Wake</h1>
+    <p class="tagline">Every system is <b>open, modular data.</b></p>
+    <p class="pitch">A top-down action RPG where skills are loot, classes are only a starting point, and one engine runs the player, the monsters, and everything they summon. Push into an endless, hand-seeded frontier — and try to bring your build back alive.</p>
+    <div class="cta-row">
+      <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="btn btn-primary" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+        Download the build
+      </a>
+      <a href="https://github.com/arianna-arpg/arpg-game-world" class="btn btn-ghost" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        View source on GitHub
+      </a>
+    </div>
+    <div class="hero-meta">
+      <span><b>v0.2.1</b></span><span class="sep"></span>
+      <span>Windows</span><span class="sep"></span>
+      <span>Linux</span><span class="sep"></span>
+      <span>Steam Deck</span><span class="sep"></span>
+      <span>Controller-native</span><span class="sep"></span>
+      <span>TypeScript · Canvas&nbsp;2D · Electron</span>
+    </div>
+  </div>
+</section>
+
+<!-- STAT BAND -->
+<div class="stats" id="overview">
+  <div class="wrap">
+    <div class="stat-grid" id="statgrid">
+      <div class="stat"><div class="num" data-key="skills" data-fallback="350+">350+</div><div class="lbl">Skills</div></div>
+      <div class="stat"><div class="num" data-key="supports" data-fallback="200+">200+</div><div class="lbl">Supports</div></div>
+      <div class="stat"><div class="num" data-key="monsters" data-fallback="150+">150+</div><div class="lbl">Monsters</div></div>
+      <div class="stat"><div class="num" data-key="passives" data-fallback="230+">230+</div><div class="lbl">Passive nodes</div></div>
+      <div class="stat"><div class="num" data-key="classes" data-exact="1" data-fallback="15">15</div><div class="lbl">Classes</div></div>
+      <div class="stat"><div class="num">&infin;</div><div class="lbl">Frontier</div></div>
+    </div>
+    <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--ink-faint)">Scope at a glance, rounded — the exact, current figures live in the <a href="database/" style="color:var(--teal)">Database</a>, generated from the game's own data.</p>
+  </div>
+</div>
+
+<!-- PILLARS -->
+<section class="band">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <div class="kicker">Why it's different</div>
+      <h2>An ARPG that's systems all the way down</h2>
+      <p>Most of the depth you'd build with special cases, Hollow Wake builds with data. That single decision changes how the whole game plays.</p>
+    </div>
+    <div class="pillars">
+      <div class="pillar reveal" style="--accent:var(--ember)">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
+        <h3>Skills are loot</h3>
+        <p>Skills drop from monsters and level up by being sacrificed at fonts — not from your character level. Your build is what you find and how you socket it. Character XP buys passive points instead.</p>
+      </div>
+      <div class="pillar reveal" style="--accent:var(--teal)">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/></svg></div>
+        <h3>Classes are starting points, not cages</h3>
+        <p>Each of the 15 classes is a starting spread of attributes and signature skills — and nothing more. Every class draws from the same shared skill and passive pools, so where you end up is entirely yours.</p>
+      </div>
+      <div class="pillar reveal" style="--accent:var(--violet)">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></div>
+        <h3>One engine runs everything</h3>
+        <p>The player, monsters, and minions all act through a single skill pipeline. A summoner's skeletons literally run on the same skills the monsters do — because to the engine, there's no difference.</p>
+      </div>
+      <div class="pillar reveal" style="--accent:var(--green)">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-7 4 14 2-7h4"/></svg></div>
+        <h3>An endless, hand-seeded frontier</h3>
+        <p>Two hand-authored anchors — the starting town and Wayfarer's Crossroads — open onto an effectively infinite procedural world, reshaped by optional per-run content packages and rival factions warring on shared ground.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider-line"></div></div>
+
+<!-- DEEP DIVE INTRO -->
+<section class="band" id="systems">
+  <div class="wrap">
+    <div class="deepdive-intro">
+      <div class="di-copy reveal">
+        <div class="kicker">Under the hood</div>
+        <h2>Composed from data, resolved by one shared engine</h2>
+        <p class="lede">Skills, supports, monsters, statuses, passives, items and zones are all plain data entries. Adding content means adding an entry under <span class="mono" style="color:var(--teal-hi)">src/data/</span> — the engine already knows how to run it.</p>
+        <p>Every number in the game flows through the same layered, tag-scaled modifier formula, implemented once and shared by every system. Content authors compose behaviour out of tags and modifiers rather than writing new engine code — which is why the content count grows without the engine getting heavier.</p>
+        <p>It's written in TypeScript, rendered on an HTML5 Canvas 2D layer called the <b style="color:var(--ink)">visual fabric</b>, and wrapped in an Electron desktop shell with a one-click update flow.</p>
+      </div>
+      <div class="pipe reveal" role="img" aria-label="The shared damage and stat pipeline: flat, then increased, then more, then override, then crit.">
+        <div class="pipe-title">The shared modifier pipeline</div>
+        <div class="pipe-stage"><span class="st-i" style="background:var(--steel)">1</span><span class="st-name">flat</span><span class="st-desc">base + added values</span></div>
+        <div class="pipe-arrow">↓</div>
+        <div class="pipe-stage"><span class="st-i" style="background:var(--teal)">2</span><span class="st-name">increased</span><span class="st-desc">additive % pool</span></div>
+        <div class="pipe-arrow">↓</div>
+        <div class="pipe-stage"><span class="st-i" style="background:var(--violet)">3</span><span class="st-name">more</span><span class="st-desc">multiplicative</span></div>
+        <div class="pipe-arrow">↓</div>
+        <div class="pipe-stage"><span class="st-i" style="background:var(--ember)">4</span><span class="st-name">override</span><span class="st-desc">behaviour-warping</span></div>
+        <div class="pipe-arrow">↓</div>
+        <div class="pipe-stage"><span class="st-i" style="background:var(--gold)">5</span><span class="st-name">crit</span><span class="st-desc">final roll</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SYSTEMS GRID -->
+<section class="band" style="padding-top:0">
+  <div class="wrap">
+    <div class="sys-grid">
+      <div class="sys reveal" style="--accent:var(--ember)">
+        <div class="tag">Skills &amp; Supports</div>
+        <h3>One schema, endless combos</h3>
+        <p>Actives and the support gems that reshape them share one schema. Socket a support and it warps the skill's tags, projectiles, repeats, or targeting — no special-casing. Browse every one in the <a href="database/" style="color:var(--ember)">Database</a>.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--gold)">
+        <div class="tag">Items &amp; Affixes</div>
+        <h3>A full loot economy</h3>
+        <p>Base families, a wide affix gamut, uniques, and socketable <b style="color:var(--ink)">vestiges</b> with Epitaph words — rolled by one generator into a grid "tetris-bag" inventory.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--teal)">
+        <div class="tag">Passive Tree</div>
+        <h3>One vast graph</h3>
+        <p>Keystones and notables, with raw attributes placed on the graph itself. Points come from XP; the tree is where classes quietly diverge — soon plannable in the <a href="tree/" style="color:var(--teal)">build tool</a>.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--crimson)">
+        <div class="tag">AI &amp; Factions</div>
+        <h3>Enemies with agendas</h3>
+        <p>Composable AI archetypes drive every monster, and rival factions hold ally/hostile relationships — so enemies fight each other on shared terrain, not just you. Meet the bestiary in the <a href="database/" style="color:var(--crimson)">Database</a>.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--green)">
+        <div class="tag">Procedural Frontier</div>
+        <h3>A world with no edge</h3>
+        <p>Past the two authored anchors, level generation runs over a growing matrix of tilesets, variants, formations and compositions — verified by a headless QA sweep that asserts the generation invariants.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--violet)">
+        <div class="tag">Visual Fabric</div>
+        <h3>Data-driven rendering</h3>
+        <p>One flat colour becomes a full shaded look: a materials registry, baked sprites and bodies, a doodad-painter library, a dynamic light layer, and weather — new doodads are one data entry.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--steel)">
+        <div class="tag">Co-op</div>
+        <h3>Host-authoritative multiplayer</h3>
+        <p>Play together locally or over WebRTC. The host owns the simulation; the same engine and save meta-layer run underneath a solo or shared session.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--ember)">
+        <div class="tag">Death &amp; the Vault</div>
+        <h3>Stakes you can choose</h3>
+        <p>Permadeath with corpse recovery is the default — but content packages like Immortal and Mercenary rewrite the rules of death. An account-level Vault carries progression across characters, whatever mode you play.</p>
+      </div>
+      <div class="sys reveal" style="--accent:var(--teal)">
+        <div class="tag">Systems vocabulary</div>
+        <h3>The shared alphabet</h3>
+        <p>Ten attributes, a spread of damage types, and a deep vocabulary of status effects, charge resources and procs — the primitives every skill, monster and item is spelled out of.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ARCHITECTURE -->
+<section class="band" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">Repository map</div>
+      <h2>Where it all lives</h2>
+      <p>One engine at the core, content as data beside it, a renderer and headless harnesses around it, and an Electron shell on top.</p>
+    </div>
+    <div class="arch">
+      <div class="arch-col reveal" style="--accent:var(--teal)">
+        <div class="h"><span class="dot"></span><span class="path">src/engine/</span></div>
+        <ul><li>world.ts</li><li>stats.ts</li><li>damage.ts</li><li>status.ts</li><li>skills.ts</li><li>actor.ts</li><li>ai.ts</li><li>brain.ts</li><li>los.ts</li><li>presence.ts</li><li>levelgen.ts</li><li>items.ts</li><li>itemgen.ts</li><li>loot.ts</li></ul>
+      </div>
+      <div class="arch-col reveal" style="--accent:var(--ember)">
+        <div class="h"><span class="dot"></span><span class="path">src/data/</span></div>
+        <ul><li>skills.ts</li><li>supports.ts</li><li>monsters.ts</li><li>passives.ts</li><li>classes.ts</li><li>zones.ts</li><li>tilesets.ts</li><li>procs.ts</li><li>itembases.ts</li><li>itemaffixes.ts</li><li>uniques.ts</li><li>vestiges.ts</li></ul>
+      </div>
+      <div class="arch-col reveal" style="--accent:var(--violet)">
+        <div class="h"><span class="dot"></span><span class="path">src/render/</span></div>
+        <ul><li>Canvas 2D renderer</li><li>materials registry</li><li>sprite bake cache</li><li>doodad painters</li><li>dynamic light</li><li>weather</li></ul>
+      </div>
+      <div class="arch-col reveal" style="--accent:var(--green)">
+        <div class="h"><span class="dot"></span><span class="path">src/sim/</span></div>
+        <ul><li>headless boot</li><li>seeded runner</li><li>build injection</li><li>metric taps</li></ul>
+      </div>
+      <div class="arch-col reveal" style="--accent:var(--gold)">
+        <div class="h"><span class="dot"></span><span class="path">src/ui · net · meta/</span></div>
+        <ul><li>DOM panels</li><li>co-op transport</li><li>account / save</li><li>permadeath</li></ul>
+      </div>
+      <div class="arch-col reveal" style="--accent:var(--steel)">
+        <div class="h"><span class="dot"></span><span class="path">launcher/</span></div>
+        <ul><li>Electron shell</li><li>update flow</li><li>loopback save server</li><li>packaging</li></ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TOOLING -->
+<section class="band" style="padding-top:0">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">Built to be verified</div>
+      <h2>Harnesses, not vibes</h2>
+      <p>No unit-test runner — instead, the real engine runs headless and deterministic. Correctness is a type-check plus a set of self-checking harnesses you run after touching the area they cover.</p>
+    </div>
+    <div class="tools">
+      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;sim</span><div><h3>Balance harness</h3><p>The real engine, headless and seeded. Ranks every skill at equal investment, runs the skill × support no-op matrix, prints per-class power curves, and audits the item economy.</p></div></div>
+      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;perf</span><div><h3>Performance harness</h3><p>Boots the real desktop game and samples true frame telemetry per procedural zone, gating each biome against the same run's town control.</p></div></div>
+      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;genqa</span><div><h3>Generation QA</h3><p>Runs level generation across the whole authored tileset and variant matrix over many seeds, asserting determinism, reachability and the other generation invariants.</p></div></div>
+      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;smoke</span><div><h3>Boot smoke tests</h3><p>Headless Electron self-checks that boot the real game and launcher windows and assert they actually come up before you ship.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- CLASSES -->
+<section class="band" id="classes">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <div class="kicker">The roster</div>
+      <h2>Fifteen ways to begin</h2>
+      <p>Pick a starting kit — then let the loot decide who you become. Every class pulls from the same shared skill and passive pools.</p>
+    </div>
+    <div class="cls-grid">
+      <div class="cls reveal" style="--accent:var(--steel)"><div class="top"><span class="nm">Warrior</span><span class="role">Melee</span></div><p>A disciplined front-line fighter. Heavy blows, heavier armor, and a war cry that turns the tide.</p></div>
+      <div class="cls reveal" style="--accent:var(--teal)"><div class="top"><span class="nm">Magician</span><span class="role">Caster</span></div><p>A mystic mage that flings forth the destructive elemental powers of fire, frost and storm.</p></div>
+      <div class="cls reveal" style="--accent:var(--violet)"><div class="top"><span class="nm">Rogue</span><span class="role">Stealth</span></div><p>A renegade rogue that dispatches its enemies with no one around being any the wiser.</p></div>
+      <div class="cls reveal" style="--accent:var(--crimson)"><div class="top"><span class="nm">Berserker</span><span class="role">Fury</span></div><p>Trades safety for speed and fury. Heavy strikes stack into a whirlwind of carnage — and leech life back.</p></div>
+      <div class="cls reveal" style="--accent:var(--teal)"><div class="top"><span class="nm">Sorcerer</span><span class="role">Caster</span></div><p>A scholar of the destructive elements that has mastered the way of decimating clusters of enemies at once.</p></div>
+      <div class="cls reveal" style="--accent:var(--green)"><div class="top"><span class="nm">Ranger</span><span class="role">Ranged</span></div><p>Death from afar. Arrows that pierce ranks, knives that fan across the field.</p></div>
+      <div class="cls reveal" style="--accent:var(--gold)"><div class="top"><span class="nm">Guardian</span><span class="role">Tank</span></div><p>A bulky defender of the front-lines, hard to ignore and even harder to put down.</p></div>
+      <div class="cls reveal" style="--accent:var(--violet)"><div class="top"><span class="nm">Summoner</span><span class="role">Minions</span></div><p>Commands the dead and the elemental. Your minions run on the same skills monsters do.</p></div>
+      <div class="cls reveal" style="--accent:var(--teal)"><div class="top"><span class="nm">Swashbuckler</span><span class="role">Duelist</span></div><p>A duelist who is never where the blow lands. Dashes through enemy lines, blades first.</p></div>
+      <div class="cls reveal" style="--accent:var(--steel)"><div class="top"><span class="nm">Juggernaut</span><span class="role">Tank</span></div><p>It hits and it takes hits. And it does not stop.</p></div>
+      <div class="cls reveal" style="--accent:var(--ember)"><div class="top"><span class="nm">Pyromancer</span><span class="role">Fire</span></div><p>Fueled by explosions and fire. Burns it all — with fire.</p></div>
+      <div class="cls reveal" style="--accent:var(--violet)"><div class="top"><span class="nm">Assassin</span><span class="role">Stealth</span></div><p>Bleeds their enemies dry before moving in for the kill, all the while being unseen.</p></div>
+      <div class="cls reveal" style="--accent:var(--green)"><div class="top"><span class="nm">Necromancer</span><span class="role">Minions</span></div><p>Death is a resource. Raise what falls, curse what stands, and exhale a ring of venom.</p></div>
+      <div class="cls reveal" style="--accent:var(--gold)"><div class="top"><span class="nm">Cleric</span><span class="role">Support</span></div><p>The line holds because someone holds it together. Mends the wounded, sanctifies the ground.</p></div>
+      <div class="cls reveal" style="--accent:var(--green)"><div class="top"><span class="nm">Tamer</span><span class="role">Beastmaster</span></div><p>A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus.</p></div>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider-line"></div></div>
+
+<!-- EXPLORE -->
+<section class="band" id="explore">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <div class="kicker">Explore the world</div>
+      <h2>Live tools, straight from the game data</h2>
+      <p>These pull from the same <span class="mono" style="color:var(--teal-hi)">src/data/</span> files the game runs on — regenerated on every deploy, so they never fall out of date.</p>
+    </div>
+    <div class="pillars" style="grid-template-columns:repeat(3,1fr)">
+      <a class="pillar reveal" href="database/" style="--accent:var(--teal);text-align:left">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div>
+        <h3>Database</h3>
+        <p>Search and filter every skill, support gem, and monster — with the full authored entry for each. <span style="color:var(--teal)">Open →</span></p>
+      </a>
+      <a class="pillar reveal" href="tree/" style="--accent:var(--violet);text-align:left">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="4" r="2"/><circle cx="5" cy="14" r="2"/><circle cx="19" cy="14" r="2"/><circle cx="12" cy="20" r="2"/><path d="M12 6v4m0 0l-5.5 3M12 10l6 3M7 15l4 4m6-4l-4 4"/></svg></div>
+        <h3>Passive Tree <span class="chip" style="vertical-align:middle">In progress</span></h3>
+        <p>Plan a build on the real tree — allocate nodes, watch your stats total up, share the link. <span style="color:var(--violet)">Preview →</span></p>
+      </a>
+      <a class="pillar reveal" href="play/" style="--accent:var(--ember);text-align:left">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg></div>
+        <h3>Play in browser <span class="chip" style="vertical-align:middle">In progress</span></h3>
+        <p>A free, in-browser demo of the prototype. Downloads give the full experience with saved characters. <span style="color:var(--ember)">Preview →</span></p>
+      </a>
+    </div>
+  </div>
+</section>
+
+<div class="wrap"><div class="divider-line"></div></div>
+
+<!-- GET IT -->
+<section class="band" id="get">
+  <div class="wrap">
+    <div class="sec-head center reveal">
+      <div class="kicker">Play it</div>
+      <h2>Grab a build, or run the source</h2>
+      <p>Packaged desktop builds for Windows and Linux, or clone the repo and run it in your browser in one command.</p>
+    </div>
+    <div class="get">
+      <div class="get-card reveal">
+        <h3>Play a build</h3>
+        <div class="sub">From the GitHub Releases page — the launcher auto-checks for updates.</div>
+        <a class="plat" href="https://github.com/arianna-arpg/arpg-game-world/releases" target="_blank" rel="noopener">
+          <span class="pi"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.5l7-1v7H3v-6zM11 4.3L21 3v9h-10V4.3zM3 12.5h7v7l-7-1v-6zM11 12.5h10v9l-10-1.4v-7.6z"/></svg></span>
+          <span><span class="pt">Windows</span><br><span class="pd">HollowWake-Setup-&lt;ver&gt;.exe · per-user, no admin</span></span>
+          <span class="parrow">→</span>
+        </a>
+        <a class="plat" href="https://github.com/arianna-arpg/arpg-game-world/releases" target="_blank" rel="noopener">
+          <span class="pi"><svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a5 5 0 00-5 5c0 2 .8 3 .8 4.5 0 1-1.5 1.8-2.6 3.4-1 1.4-1.7 3-1.2 4.4.4 1.2 1.6 1.3 2.6.9.5 1 1.7 1.5 3.4 1.5s2.9-.5 3.4-1.5c1 .4 2.2.3 2.6-.9.5-1.4-.2-3-1.2-4.4-1.1-1.6-2.6-2.4-2.6-3.4 0-1.5.8-2.5.8-4.5a5 5 0 00-5-5z"/></svg></span>
+          <span><span class="pt">Linux &amp; Steam Deck</span><br><span class="pd">.AppImage · <code style="font-family:'Space Grotesk',monospace;font-size:12px">chmod +x</code> and run</span></span>
+          <span class="parrow">→</span>
+        </a>
+        <div class="note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
+          <span>On a Steam Deck, add it as a non-Steam game — there's a one-line installer and full controller notes in <b style="color:var(--ink-dim)">STEAM.md</b>. Controllers work in the browser build too.</span>
+        </div>
+      </div>
+      <div class="get-card reveal">
+        <h3>Run from source</h3>
+        <div class="sub">Requires Node.js and npm. Then:</div>
+<pre class="code"><span class="c"># first-time setup</span>
+npm install
+
+<span class="c"># browser dev mode → localhost:5173</span>
+npm run <span class="g">dev</span>
+
+<span class="c"># the desktop app (Electron)</span>
+npm run <span class="g">game</span>
+
+<span class="c"># type-check + production build</span>
+npm run <span class="g">build</span></pre>
+        <div class="note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><circle cx="12" cy="12" r="9"/></svg>
+          <span><b style="color:var(--ink-dim)">Controls:</b> WASD to move, LMB/RMB + 1–6 for skills, C / B / P / M for character, skills, tree and map — all rebindable.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATUS -->
+<section class="band" style="padding-top:0">
+  <div class="wrap reveal">
+    <div class="status">
+      <span class="badge">Early prototype</span>
+      <p>Hollow Wake is in active development. The <b>systems are broad and working</b> — skills, supports, items, passives, procedural worlds, AI, factions, co-op and permadeath — but the presentation is intentionally minimal for now: art is deliberate placeholder geometry rendered through the shading layer, and audio isn't in yet. Expect balance, content and class identity to keep shifting between versions.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="foot-top">
+      <div>
+        <div class="foot-brand">
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="13" stroke="url(#g2)" stroke-width="1.5"/><circle cx="16" cy="16" r="4.4" fill="url(#g2)"/><defs><linearGradient id="g2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs></svg>
+          HOLLOW WAKE
+        </div>
+        <p style="color:var(--ink-faint);font-size:14px;margin-top:14px;max-width:340px">A top-down action RPG built around one idea: every system is open, modular data.</p>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h4>Project</h4>
+          <a href="https://github.com/arianna-arpg/arpg-game-world" target="_blank" rel="noopener">Source on GitHub</a>
+          <a href="https://github.com/arianna-arpg/arpg-game-world/releases" target="_blank" rel="noopener">Releases &amp; downloads</a>
+          <a href="https://github.com/arianna-arpg/arpg-game-world/blob/main/README.md" target="_blank" rel="noopener">README</a>
+        </div>
+        <div class="foot-col">
+          <h4>Explore</h4>
+          <a href="#overview">Overview</a>
+          <a href="#systems">Systems</a>
+          <a href="#classes">Classes</a>
+          <a href="#get">Get it</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>Made by Arianna · Prototype v0.2.1</span>
+      <span class="stack">TypeScript · Vite · Canvas 2D · Electron</span>
+    </div>
+  </div>
+</footer>
+
+</div><!-- /content -->
+
+<script>
+(function(){
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* nav shadow on scroll */
+  var nav = document.getElementById('nav');
+  function onScroll(){ if(window.scrollY > 12) nav.classList.add('scrolled'); else nav.classList.remove('scrolled'); }
+  onScroll(); window.addEventListener('scroll', onScroll, {passive:true});
+
+  /* reveal on view */
+  var revs = Array.prototype.slice.call(document.querySelectorAll('.reveal'));
+  function revealAll(){ revs.forEach(function(el){ el.classList.add('in'); }); }
+  if('IntersectionObserver' in window && !reduce){
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target);} });
+    }, {threshold:.12, rootMargin:'0px 0px -8% 0px'});
+    revs.forEach(function(el){ io.observe(el); });
+    /* safety net: never leave content stuck hidden if the observer misfires */
+    setTimeout(function(){ revs.forEach(function(el){ var r=el.getBoundingClientRect(); if(r.top < window.innerHeight*1.2) el.classList.add('in'); }); }, 2600);
+  } else { revealAll(); }
+
+  /* stat band — numbers come from the exported data/meta.json so they never go
+     stale. Real deploy → floored live counts ("400+"); sample/preview or no data
+     → the curated round fallbacks in the markup. Classes shows the exact count. */
+  function floorNice(n){ if(n<100) return Math.floor(n/10)*10; if(n<1000) return Math.floor(n/50)*50; return Math.floor(n/100)*100; }
+  function animateStat(el, text){
+    var m = String(text).match(/^(\d+)(\D*)$/);
+    if(!m || reduce){ el.textContent = text; return; }
+    var target = parseInt(m[1],10), suffix = m[2]||'', start=null, dur=1400;
+    (function step(ts){ if(start===null) start=ts; var p=Math.min((ts-start)/dur,1); var e=1-Math.pow(1-p,3);
+      el.textContent = Math.round(target*e) + (p>=1?suffix:''); if(p<1) requestAnimationFrame(step); })(performance.now());
+  }
+  var stats = Array.prototype.slice.call(document.querySelectorAll('#statgrid .num[data-key]'));
+  function runStats(){ stats.forEach(function(el){ animateStat(el, el.getAttribute('data-final') || el.textContent); }); }
+  fetch('data/meta.json',{cache:'no-cache'}).then(function(r){ return r.ok?r.json():null; }).catch(function(){ return null; })
+    .then(function(meta){
+      stats.forEach(function(el){
+        var key = el.getAttribute('data-key'), val = el.getAttribute('data-fallback') || el.textContent;
+        if(meta && !meta.sample && meta.counts && meta.counts[key]!=null){
+          var c = meta.counts[key];
+          val = el.getAttribute('data-exact') ? String(c) : floorNice(c) + '+';
+        }
+        el.setAttribute('data-final', val); el.textContent = val;
+      });
+      var grid = document.getElementById('statgrid');
+      if('IntersectionObserver' in window && grid){
+        var io2 = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ runStats(); io2.disconnect(); } }); }, {threshold:.5});
+        io2.observe(grid);
+      } else runStats();
+    });
+
+  /* active nav link */
+  var linkMap = {};
+  document.querySelectorAll('.nav-links a[href^="#"]').forEach(function(a){ linkMap[a.getAttribute('href').slice(1)] = a; });
+  var secs = ['overview','systems','classes','get'].map(function(id){ return document.getElementById(id); }).filter(Boolean);
+  if('IntersectionObserver' in window){
+    var io3 = new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        var id = e.target.id, a = linkMap[id];
+        if(!a) return;
+        if(e.isIntersecting){ Object.keys(linkMap).forEach(function(k){ linkMap[k].classList.remove('active'); }); a.classList.add('active'); }
+      });
+    }, {rootMargin:'-45% 0px -50% 0px'});
+    secs.forEach(function(s){ io3.observe(s); });
+  }
+
+  /* ambient node-graph backdrop (passive-tree / data-web motif) */
+  var canvas = document.getElementById('bg-canvas');
+  if(!canvas) return;
+  var ctx = canvas.getContext('2d');
+  var W=0,H=0,dpr=Math.min(window.devicePixelRatio||1, 1.75);
+  var nodes=[], embers=[], LINK=140;
+  var COLORS=['#4fd6c4','#a98bff','#ff8a4c'];
+  function resize(){
+    W=canvas.clientWidth; H=canvas.clientHeight;
+    canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    var count = Math.round(Math.min(90, Math.max(38, (W*H)/22000)));
+    nodes=[];
+    for(var i=0;i<count;i++){
+      nodes.push({
+        x:Math.random()*W, y:Math.random()*H,
+        vx:(Math.random()-.5)*.14, vy:(Math.random()-.5)*.14,
+        r:Math.random()*1.6+1.0,
+        c:COLORS[i%3]
+      });
+    }
+    embers=[];
+    var ec=Math.round(Math.min(26, W/60));
+    for(var j=0;j<ec;j++){ embers.push(newEmber(true)); }
+  }
+  function newEmber(init){
+    return { x:Math.random()*W, y: init?Math.random()*H:H+10, r:Math.random()*1.5+.5,
+             vy:-(Math.random()*.35+.15), a:Math.random()*.5+.2, tw:Math.random()*6.28 };
+  }
+  function frame(){
+    ctx.clearRect(0,0,W,H);
+    /* links */
+    for(var i=0;i<nodes.length;i++){
+      var a=nodes[i];
+      a.x+=a.vx; a.y+=a.vy;
+      if(a.x<0||a.x>W) a.vx*=-1;
+      if(a.y<0||a.y>H) a.vy*=-1;
+      for(var k=i+1;k<nodes.length;k++){
+        var b=nodes[k], dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy);
+        if(d<LINK){
+          var al=(1-d/LINK)*.22;
+          ctx.strokeStyle='rgba(120,150,200,'+al+')';
+          ctx.lineWidth=.6;
+          ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+        }
+      }
+    }
+    /* nodes */
+    for(var n=0;n<nodes.length;n++){
+      var p=nodes[n];
+      ctx.beginPath();
+      ctx.fillStyle=p.c;
+      ctx.globalAlpha=.55;
+      ctx.arc(p.x,p.y,p.r,0,6.2832); ctx.fill();
+      ctx.globalAlpha=.13;
+      ctx.arc(p.x,p.y,p.r*3.2,0,6.2832); ctx.fill();
+      ctx.globalAlpha=1;
+    }
+    /* embers */
+    for(var e=0;e<embers.length;e++){
+      var m=embers[e];
+      m.y+=m.vy; m.x+=Math.sin((m.tw+=0.01))*0.25;
+      if(m.y< -12){ embers[e]=newEmber(false); }
+      ctx.beginPath();
+      ctx.fillStyle='rgba(255,150,90,'+m.a+')';
+      ctx.arc(m.x,m.y,m.r,0,6.2832); ctx.fill();
+    }
+    raf=requestAnimationFrame(frame);
+  }
+  var raf=null;
+  resize();
+  window.addEventListener('resize', function(){ resize(); if(reduce){ staticFrame(); } });
+  function staticFrame(){
+    /* draw a single frame with no animation */
+    ctx.clearRect(0,0,W,H);
+    for(var n=0;n<nodes.length;n++){ var p=nodes[n]; ctx.beginPath(); ctx.fillStyle=p.c; ctx.globalAlpha=.5; ctx.arc(p.x,p.y,p.r,0,6.2832); ctx.fill(); ctx.globalAlpha=1; }
+  }
+  if(reduce){ staticFrame(); } else { frame(); }
+})();
+</script>
+</body>
+</html>

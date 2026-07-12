@@ -1,0 +1,5 @@
+# These JSON files are generated from src/data by scripts/export-web-data.ts
+# (run locally via `npm run export-web-data`, and automatically in CI on deploy).
+# They are the parity seam — never edit or commit them by hand.
+*.json
+!.gitignore
