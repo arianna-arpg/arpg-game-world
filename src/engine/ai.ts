@@ -39,8 +39,11 @@ const spacingScratch: Actor[] = [];
 
 /** Tags whose actor stays NEUTRAL — no targeting, movement, or casting — until a
  *  wounding strike ROUSES it (World.resolveHit sets the per-actor aiAwakened latch).
- *  ONE registry so a new neutral (Conclave cultists, Migration herds, the Holdfast
- *  toll-wardens) is a data entry here, not another hardcoded `if (tag === …)` branch. */
+ *  An OPEN registry: the engine seeds the built-in five (Conclave cultists,
+ *  Migration herds, the Holdfast toll-wardens, Brigand bands, Wayfarers); a
+ *  package adds its own species with registerDormantTag(tag, reset?) — never
+ *  by editing this list. (A new species usually also wants a rouse rule —
+ *  World.rouseRules in world.ts — which decides HOW a wounding hit wakes it.) */
 export const DORMANT_TAGS = new Set<string>(['ritual_cultist', 'migrant', 'toll_bandit', 'brigand', 'wayfarer']);
 
 /** A roused neutral COOLS BACK to dormant after disengagement. */
@@ -102,6 +105,18 @@ export const NEUTRAL_RESET: Record<string, NeutralResetRule> = {
   wayfarer: { coolDownSecs: 6, disengageDist: 300 },    // travelers FORGIVE — back off and they return to the road
   // ritual_cultist intentionally omitted — a roused cultist stays hostile.
 };
+
+/** Register a NEW dormant species: `tag` joins the dormancy gate (updateAI
+ *  holds the body until aiAwakened), and `reset` — when given — lets a roused
+ *  one cool back to neutral (omit it for latched-once hostility, the ritual-
+ *  cultist temperament). Idempotent per tag: a Set membership carries no
+ *  payload to fight over, and re-registering a reset simply retunes it (a
+ *  package hot-reloading its own row must not warn). Call at module init from
+ *  the package's own def file — the seed lists above never grow again. */
+export function registerDormantTag(tag: string, reset?: NeutralResetRule): void {
+  DORMANT_TAGS.add(tag);
+  if (reset) NEUTRAL_RESET[tag] = reset;
+}
 
 // === THE COMMAND FABRIC ========================================================
 // Orders are open, data-driven VERBS an actor can be put UNDER: `kind` names a

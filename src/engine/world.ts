@@ -17088,7 +17088,7 @@ export class World {
    *  Each cfg() reads the LIVE overlay tuning per hit (null = that package is
    *  not in this run's manifest — the tag never rouses). woundFrac 1 = any
    *  landed hit bites; radius 0 = only the struck one wakes. A new dormant
-   *  species is one row here + a DORMANT_TAGS entry (ai.ts). */
+   *  species is one row here + registerDormantTag(tag, reset?) (ai.ts). */
   private readonly rouseRules: Record<string, () => {
     woundFrac: number; radius: number; toast: string; color: string; size: number;
   } | null> = {
