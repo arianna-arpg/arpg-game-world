@@ -544,7 +544,8 @@ function sweepSupports(args: Args): void {
   const inert = result.probed.filter(p => p.verdict === 'inert');
   const costOnly = result.probed.filter(p => p.verdict === 'cost_only');
   const negligible = result.probed.filter(p => p.verdict === 'negligible');
-  console.log(`\nVerdicts: effective ${result.probed.filter(p => p.verdict === 'effective').length} · inert ${inert.length} · cost_only ${costOnly.length} · negligible ${negligible.length}`);
+  const blind = result.probed.filter(p => p.verdict === 'blind');
+  console.log(`\nVerdicts: effective ${result.probed.filter(p => p.verdict === 'effective').length} · inert ${inert.length} · cost_only ${costOnly.length} · negligible ${negligible.length} · blind ${blind.length}`);
   if (inert.length) {
     console.log(`\nINERT pairs (socket accepted, byte-identical episodes — the bug list):`);
     for (const p of inert.slice(0, 25)) {
@@ -599,6 +600,9 @@ function compatMarkdown(result: MatrixResult): string {
     p => `- \`${p.skillId}\` + \`${p.supportId}\` — moved: ${p.moved.map(m => m.key).join(', ')}`);
   section('NEGLIGIBLE — diverged under noise (escalate seeds/duration before claiming)',
     probedBy('negligible') as PairProbeResult[],
+    p => `- \`${p.skillId}\` + \`${p.supportId}\``);
+  section('BLIND — the standard probes cannot measure this pairing (unmeasured, NOT a bug)',
+    probedBy('blind') as PairProbeResult[],
     p => `- \`${p.skillId}\` + \`${p.supportId}\``);
   const suspects = result.census.rows.filter(r => r.suspect);
   if (suspects.length) {

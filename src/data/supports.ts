@@ -493,8 +493,13 @@ export const SUPPORTS: Record<string, SupportDef> = {
   },
   load_bearing_flaw: {
     id: 'load_bearing_flaw', name: 'Load-Bearing Flaw',
-    description: 'This skill\'s constructs are built WRONG on purpose: your own hits demolish them at four times the rate, and each one DETONATES as it dies — broken, shattered, evicted or expired alike. Any totem becomes the conjured-ordnance game.',
-    color: '#c8b090', requiresTags: ['totem'],
+    description: 'This skill\'s constructs are built WRONG on purpose: your own hits demolish them at four times the rate, and each one DETONATES as it dies — broken, shattered, evicted or expired alike. Any construct becomes the conjured-ordnance game.',
+    // Construct-GENERIC: breakableGraft reads the deployed object, whatever
+    // its family — the 'construct' capability tag (folded onto every
+    // construct delivery at registry load) is the honest gate. dropTags
+    // keeps the gem's DROP identity with the totem/trap/mine crowd.
+    color: '#c8b090', requiresTags: ['construct'],
+    dropTags: ['totem', 'trap', 'mine'],
     breakableGraft: {
       ownerMult: 4,
       deathBurst: { radius: 100, fraction: 1.1 },
@@ -3159,7 +3164,12 @@ export const SUPPORTS: Record<string, SupportDef> = {
   pulsing_ramparts: {
     id: 'pulsing_ramparts', name: 'Pulsing Ramparts',
     description: 'The skill\'s deployed objects RADIATE: every beat, 40% of its roll washes everything beside them — effects and all. Bone Prison becomes the cage that cooks; a totem hurts just by standing.',
-    color: '#c8a8b8', requiresTags: ['totem', 'trap', 'mine'],
+    // 'construct' = the capability fold over every construct delivery — the
+    // description's own promise ("Bone Prison becomes the cage that cooks")
+    // was REFUSED by the old totem/trap/mine gate; barriers/pods/echoes are
+    // deployed objects too. dropTags keeps the drop identity family-scoped.
+    color: '#c8a8b8', requiresTags: ['construct'],
+    dropTags: ['totem', 'trap', 'mine'],
     mods: [mod('manaCost', 'more', 0.3)],
     constructFx: { pulse: { interval: 1.0, radius: 48, damageScale: 0.4 } },
     perLevel: [mod('damage', 'increased', 0.06)],
@@ -3169,7 +3179,10 @@ export const SUPPORTS: Record<string, SupportDef> = {
   violent_genesis: {
     id: 'violent_genesis', name: 'Violent Genesis',
     description: 'The skill\'s deployed objects ERUPT as they arrive — 60% of its roll in a ring around each placement. Every wall segment is a landing shell; every trap announces itself in blood.',
-    color: '#e88a58', requiresTags: ['totem', 'trap', 'mine'],
+    // Same capability gate as pulsing_ramparts — "every wall segment is a
+    // landing shell" needs walls to be socketable.
+    color: '#e88a58', requiresTags: ['construct'],
+    dropTags: ['totem', 'trap', 'mine'],
     mods: [mod('manaCost', 'more', 0.25)],
     constructFx: { burst: { radius: 78, damageScale: 0.6 } },
     perLevel: [mod('damage', 'increased', 0.06)],

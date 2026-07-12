@@ -82,8 +82,17 @@ export const COMPAT_CFG = {
  *  row is conservative and cites its proof — census suspects quote it.
  *  Extend when a new tag-gated mechanic ships. */
 export const MECHANIC_EVIDENCE: { tag: SkillTag; has: (def: SkillDef) => boolean; evidence: string }[] = [
-  { tag: 'projectile', has: d => d.delivery.type === 'projectile' || d.delivery.type === 'detonateProjectile', evidence: 'delivery fires flights' },
-  { tag: 'aoe', has: d => ['nova', 'storm', 'cone', 'ground', 'detonateProjectile'].includes(d.delivery.type), evidence: 'delivery is area-shaped' },
+  // detonateProjectile deliberately absent from 'projectile' evidence: it
+  // CONSUMES a flight already in the air (Cold Snap pops your fireball), it
+  // fires none of its own — the tag refusal there is honest vocabulary.
+  { tag: 'projectile', has: d => d.delivery.type === 'projectile', evidence: 'delivery fires flights' },
+  // Cones deliberately absent from 'aoe' evidence: the tag is a SCALING
+  // identity (aoe investment applies), not hit geometry — narrow thrusts
+  // and drain threads are cones that honestly refuse area gems, while the
+  // beam family (3° arcs!) opts IN. Novas/storms/grounds have no such
+  // split: area IS their identity. (2026-07-12 census triage: all four
+  // untagged cones checked out as design, zero as hygiene.)
+  { tag: 'aoe', has: d => ['nova', 'storm', 'ground', 'detonateProjectile'].includes(d.delivery.type), evidence: 'delivery is area-shaped' },
   { tag: 'melee', has: d => d.delivery.type === 'melee', evidence: 'delivery is a swing' },
   { tag: 'movement', has: d => ['dash', 'blink', 'leap'].includes(d.delivery.type), evidence: 'delivery moves the caster' },
   { tag: 'summon', has: d => d.delivery.type === 'summon', evidence: 'delivery mints minions' },
@@ -359,7 +368,23 @@ export const CHANNEL_LANES: Record<string, 'output' | 'defense' | 'cost'> = {
   mana_floor: 'cost', presses: 'cost', repeats: 'cost',
 };
 
-export type PairVerdictKind = 'effective' | 'cost_only' | 'negligible' | 'inert';
+export type PairVerdictKind = 'effective' | 'cost_only' | 'negligible' | 'inert' | 'blind';
+
+/** PROBE BLINDNESS — pairings the standard probes CANNOT measure honestly,
+ *  as data. A matching pair's inert-looking result reports as 'blind'
+ *  (unmeasured), never as a bug. Extend when a new geometry/lifecycle blind
+ *  spot is understood; every rule names itself in the report. */
+export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: SupportDef) => boolean }[] = [
+  {
+    // A cursor-origin flight aimed AT the foe travels ~0px, so flight-
+    // distance payloads (trails) never step. Real play aims the origin
+    // short and bores through — the pairing works, the pilot can't show it.
+    note: 'cursor-origin flight travels ~0px at the aim — travel-scoped payloads unmeasurable under this pilot',
+    when: (def, sup) =>
+      def.delivery.type === 'projectile' && def.delivery.origin === 'cursor'
+      && (sup.trail !== undefined || sup.fissureTrail !== undefined),
+  },
+];
 
 export interface ChannelDelta { key: string; bare: number | string; pair: number | string; rel: number }
 
@@ -527,6 +552,12 @@ export function runCompatMatrix(opts: MatrixOpts, onProgress?: (msg: string) => 
     const { episodes: pairEps } = runScenario(pairScen, { seeds, baseSeed });
     result.episodesRun += pairEps.length;
     const cls = classifyPair(bare, pairEps);
+    // A known-blind pairing may LOOK inert/negligible under this probe —
+    // report it as unmeasured instead of minting a false bug.
+    const blind = BLINDNESS_RULES.find(r => r.when(def, sup));
+    if (blind && (cls.verdict === 'inert' || cls.verdict === 'negligible')) {
+      cls.verdict = 'blind';
+    }
     const warnings = [...new Set([...bare, ...pairEps].flatMap(e => e.warnings))];
     result.probed.push({
       skillId: row.skillId,

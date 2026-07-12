@@ -21,6 +21,11 @@ export type SkillTag =
   | 'attack' | 'spell' | 'melee' | 'projectile' | 'aoe' | 'duration'
   | 'movement' | 'summon' | 'minion' | 'warcry' | 'buff' | 'storm'
   | 'aura' | 'totem' | 'trap' | 'mine' | 'corpse'
+  // 'construct' marks EVERY construct-delivery skill (totems, traps, mines,
+  // barriers, pods, echoes) — FOLDED ON at registry load (data/skills.ts),
+  // never hand-authored. Construct-generic supports (constructFx,
+  // breakableGraft) gate on it; family-scoped gems keep totem/trap/mine.
+  | 'construct'
   | 'channel' | 'instant' | 'curse' | 'guard' | 'targeted'
   | 'mirage' | 'clone' | 'sweep' | 'overdrive' | 'overcharge' | 'heal'
   // 'persistent' marks contract summons that REVIVE on a timer (golems) —

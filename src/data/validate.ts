@@ -562,6 +562,19 @@ export function validateContent(): void {
     }
   }
 
+  // CONSTRUCT-FX FODDER honesty: a construct def carrying a damage roll but
+  // no 'damage' effect starves every hit that resolves through its instance
+  // — resolveHit's hasDamage gate skips applyHit, so grafted pulses/bursts
+  // (Pulsing Ramparts, Violent Genesis) and any other fx reader "hit" for
+  // ZERO while statuses still ride. The roll's presence proves intent; make
+  // the dead gate loud. (Learned from the cage that cooked for nothing.)
+  for (const s of Object.values(SKILLS)) {
+    if (s.delivery.type === 'construct' && s.baseDamage
+      && !s.effects.some(e => e.type === 'damage')) {
+      warn(`skill ${s.id}: construct carries baseDamage but no 'damage' effect — grafted construct-fx hits resolve for ZERO (add the effect or drop the roll)`);
+    }
+  }
+
   // SUMMON CONTRACTS: `decay` (the unlife death-clock) and `persistent` (the
   // reserve-and-respawn contract) are documented mutually exclusive but read
   // in independent branches — a def carrying both mints a minion with a death

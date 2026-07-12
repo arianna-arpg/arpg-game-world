@@ -2695,12 +2695,19 @@ export const SKILLS: Record<string, SkillDef> = {
     description: 'Erupt a ring of bone walls at the target point — what is inside stays inside until the bone breaks. Martyrdom and Unstable Flesh make the bars themselves explosive.',
     tags: ['spell', 'summon', 'minion', 'physical', 'duration'], color: '#d8d0b8',
     manaCost: 22, cooldown: 8, useTime: 0.8,
+    // The wall never strikes ON CAST (nothing resolves hits at plant time) —
+    // this roll + damage effect exist for CONSTRUCT-FX readers: Pulsing
+    // Ramparts' beat and Violent Genesis' arrival scale off the host's roll
+    // and resolve through the ordinary hit pipeline, and a roll of NOTHING
+    // (or a damage-less effect list — resolveHit's hasDamage gate) made the
+    // documented "cage that cooks" cook for zero. Per-segment, kept lean.
+    baseDamage: { physical: [6, 10] },
     delivery: {
       type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
       ring: { segments: 10, radius: 78 },
       range: 0, duration: 6, maxActive: 10, life: 30, placeRange: 340,
     },
-    effects: [],
+    effects: [{ type: 'damage' }],
     requirements: { willpower: 18, intelligence: 12 },
     ai: { range: 320, weight: 1, keepDistance: 260 },
   },
@@ -2711,12 +2718,15 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['spell', 'summon', 'minion', 'physical', 'duration'], color: '#c8bca0',
     manaCost: 16, cooldown: 6, useTime: 0.6,
     targeting: { target: 'enemy', castRange: 320 },
+    // Construct-fx fodder like bone_prison (roll + damage effect for the
+    // grafted pulse/burst hit pipeline): tighter ring, meaner bars.
+    baseDamage: { physical: [7, 12] },
     delivery: {
       type: 'construct', kind: 'barrier', look: 'construct_barrier_bone',
       ring: { segments: 8, radius: 50 },
       range: 0, duration: 4, maxActive: 8, life: 20, placeRange: 320,
     },
-    effects: [],
+    effects: [{ type: 'damage' }],
     requirements: { willpower: 16 },
     ai: { range: 300, weight: 2, keepDistance: 240 },
   },
@@ -2769,12 +2779,15 @@ export const SKILLS: Record<string, SkillDef> = {
     description: 'Raise a wall of three stone segments across your facing. Enemies must shoot it, hack through it, or go around.',
     tags: ['spell', 'guard', 'duration'], color: '#a8a090',
     manaCost: 18, cooldown: 8, useTime: 0.6,
+    // Construct-fx fodder (see bone_prison — roll + damage effect for the
+    // grafted hit pipeline): stone hits harder per segment, but only three.
+    baseDamage: { physical: [9, 14] },
     delivery: {
       type: 'construct', kind: 'barrier',
       range: 0, duration: 12, maxActive: 6, life: 70,
       placeRange: 160, wallSegments: 3,
     },
-    effects: [],
+    effects: [{ type: 'damage' }],
     requirements: { strength: 16, intelligence: 12 },
     ai: { range: 220, weight: 1 },
     leveling: { perLevel: [mod('minionLife', 'increased', 0.18)] },
@@ -9235,5 +9248,16 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 470, weight: 2, keepDistance: 280 },
   },
 };
+
+// THE CONSTRUCT CAPABILITY FOLD: every construct-delivery skill IS
+// 'construct'-capable by construction — the tag is derived here, once, so a
+// new trap/barrier/pod def can never forget it and construct-generic
+// supports (constructFx, breakableGraft) gate on one honest word. Family
+// identity tags (totem/trap/mine) stay hand-authored beside it.
+for (const def of Object.values(SKILLS)) {
+  if (def.delivery.type === 'construct' && !def.tags.includes('construct')) {
+    def.tags.push('construct');
+  }
+}
 
 export const SKILL_LIST: SkillDef[] = Object.values(SKILLS);
