@@ -151,7 +151,7 @@ import {
   ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnKillStat, orbOnHurtStat,
   orbRefundStat,
 } from '../data/orbs';
-import { chooseEvent, type EventContext, type EventReward } from './events';
+import { chooseEvent, ZONE_EVENT_CFG, type EventContext, type EventReward } from './events';
 import { ActiveZoneEvent } from './zoneEvent';
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
@@ -1912,6 +1912,11 @@ export class World {
   /** The event playing out in this zone — a patrol, caravan, or siege.
    *  Transient: re-chosen on every entry, its rewards flow to persistent stores. */
   event: ActiveZoneEvent | null = null;
+  /** THE ZONE-RUNTIME REGISTRY (buildZoneRuntimes) — one row per package's
+   *  in-zone runtime; loadZone + materializeLiveZoneEvents walk it instead of
+   *  three hand-maintained per-package ladders. Closure-building only (no
+   *  field dereference until called), so the initializer order is safe. */
+  private readonly zoneRuntimes = this.buildZoneRuntimes();
 
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
@@ -3262,7 +3267,9 @@ export class World {
       // ONLY the spore suppression (not biome/encounter density) — so a non-spore zone's
       // ambient-event cadence stays byte-identical.
       const sup = this.sim.myceliaField?.suppressionAt(def.id) ?? 1;
-      const choice = (sup >= 1 || Math.random() < sup) ? chooseEvent(ctx, Math.random()) : null;
+      // The registry cascade (engine/events.ts): each registered kind gets the
+      // shared roll in priority order, gated per-biome by zonePolicy.
+      const choice = (sup >= 1 || Math.random() < sup) ? chooseEvent(ctx, def, Math.random()) : null;
       if (choice) {
         const ev = new ActiveZoneEvent(this, choice.kind, choice.primary, choice.secondary);
         ev.spawn(layout.camps, layout.pois);
@@ -3295,93 +3302,16 @@ export class World {
     // CORPSE RUN: spawn any prior death whose coordinate matches this zone.
     this.spawnPlayerCorpses(def);
 
-    // WARBANDS: fresh zone visit → no host materialized yet. If a host has ALREADY
-    // reached this zone (you walked into an invasion in progress), its warband
-    // stands at the entry it marched in by.
-    this.materializedHosts.clear();
-    this.warbandMarches.length = 0;
-    this.materializedEpicenters.clear();
-    this.demonPortals.length = 0;
-    this.materializedCrusades.clear();
-    this.materializedDeadwakes.clear();
-    this.deadwakeStreamTimer = 0;
-    this.materializedMigrations.clear();
-    this.migrationStreamTimer = 0;
-    // Haunts re-stand on re-entry (anchor / walking Wailing One at their
-    // overlay-remembered wounds) — mid-play spawns are never zone-memory
-    // captured, so without this a revisited haunt stood empty and unbreakable.
-    this.materializedHaunts.clear();
-    this.hauntStreamTimer = 0;
-    this.materializedBrigands.clear();
-    this.brigandLingerLeft = 0;
-    this.brigandsDrifting = false;
-    this.materializedContagion.clear();
-    this.materializedMycelia.clear();
-    this.materializedHoldfasts.clear();
-    this.holdfastSite = null;
-    this.holdfastDwellKey = '';
-    this.necropolisPortals.length = 0;
-    this.crusadePortals.length = 0;
-    this.fractureRifts.length = 0;
-    this.huntFootprint = null;
-    this.huntFootprintDwell = 0;
-    this.huntBeast = null;
-    this.materializedHunts.clear();
-    this.fractureRun = null;
-    this.materializedFractures.clear();
-    this.ritualSite = null;
-    this.materializedRituals.clear();
-    this.amalgamSite = null;
-    this.materializedAmalgam.clear();
-    this.materializedAmalgamMobs.clear();
-    this.amalgamNecroDwell = 0;
-    this.amalgamPickDwell = [];
-    // DESCENT: the Delver site + dwell/stream timers reset per zone (re-rolled on cave
-    // re-entry). descentRun is NOT reset here — descend()/resurfaceFromDescent() own it.
-    this.descentSite = null;
-    this.descentShaftDwell = 0;
-    this.descentSpawnTimer = 0;
-    this.materializedObservers.clear();
-    this.eventAnchors.length = 0;
-    // A SPECIAL arena hosts NO overlay content on entry either — mirror the
-    // materializeLiveZoneEvents `this.zone.special` guard so the on-entry path can't
-    // squat a Balor/crusade/hunt/fracture on the clean boss stage (the eventOwned
-    // contract). The overlay SELECTORS also exclude it, but this is the central catch.
+    // THE ZONE-RUNTIME REGISTRY (see buildZoneRuntimes): every package's
+    // per-zone reset runs, then — on ordinary ground — every enter() fires.
+    // A SPECIAL arena hosts NO overlay content on entry — mirror the
+    // materializeLiveZoneEvents `this.zone.special` guard so the on-entry path
+    // can't squat a Balor/crusade/hunt/fracture on the clean boss stage (the
+    // eventOwned contract). The overlay SELECTORS also exclude it, but this is
+    // the central catch.
+    for (const r of this.zoneRuntimes) r.reset?.();
     if (!isCave && !def.special) {
-      const host = this.sim.invasion.hosts.find(h => h.arrived && h.targetZoneId === def.id);
-      if (host) this.spawnWarband(host);
-      // You walked into a Demon Invasion's epicenter — the Balor holds court here.
-      // (Resolved against the instance governing THIS zone's dimension.)
-      const inv = this.sim.demonFieldFor(def.dimension)?.invasionOn(def.id);
-      if (inv?.isEpicenter) this.spawnEpicenter(inv);
-      // A Crusade holds this ground — raise its works (camp / fortress / city)
-      // and post its garrison, scaled to how long it's been held.
-      const cru = this.sim.crusadeField?.crusadeOn(def.id);
-      if (cru) this.materializeCrusade(cru);
-      // CONTAGION: a corrupted zone fields its plague (+ Patient Zero at the source).
-      this.materializeContagion(def);
-      // MYCELIA: a spore-laced zone fields its fungal horde (+ the Heartbloom at the core).
-      this.materializeMycelia(def);
-      // HOLDFAST: raise the toll-gate + its wardens around a sealed bonus exit.
-      this.placeHoldfast(def);
-      // THE DEADWAKE pours in via the per-frame updateDeadwakeStream (a relentless
-      // stream while a tide covers this zone), not a one-off flood on entry.
-      // THE HUNT: place a footprint (if the beast is still untracked) or spawn the
-      // beast itself if this is where it currently stands (health preserved).
-      this.placeHuntContent(def);
-      // FRACTURES: materialize the volatile fracture object if one sits here…
-      this.placeFractureContent(def);
-      // …and re-materialize a PENDING capstone rift's portal (survives leaving).
-      this.placeFractureRiftContent(def);
-      // CONCLAVE: raise the Occult ritual site (pentagram + cultists) if one sits here.
-      this.placeRitualSite(def);
-      // AMALGAMATION: raise the Bonewright (+ graves / risen boss) and any miniboss.
-      this.placeAmalgamation(def);
-      this.placeAmalgamMiniboss(def);
-      // …and the Eldritch Observer, if this is an Incursion epicenter zone.
-      this.materializeObserver(def);
-      // …and the Caravanner that waits at a minted caravan destination (round-trip home).
-      this.placeCaravanReturn(def);
+      for (const r of this.zoneRuntimes) r.enter?.(def, false);
     } else {
       // DESCENT: a normal cave may host a Delver (rolled per mouth, gated). The
       // DESCENT abyss itself (cave_descent_*) never hosts one — it IS the dive.
@@ -3390,6 +3320,164 @@ export class World {
       // sets descentRun before loadZone, so this fires on the first descent frame.)
       if (this.descentRun && this.descentRun.caveId === def.id) this.enterDescentZone();
     }
+  }
+
+  /** THE ZONE-RUNTIME REGISTRY — one row per package's in-zone runtime, built
+   *  once (closures over `this`, the worldKillRules pattern for stateful rows).
+   *  Replaces the three hand-maintained per-package ladders (the loadZone reset
+   *  ladder, the on-entry materialize ladder, and materializeLiveZoneEvents'
+   *  re-invoke subset) with ONE dispatch spine: a new package registers a row
+   *  here instead of editing three distant call sites.
+   *    reset  — clear per-zone materialization state (every loadZone).
+   *    enter  — fire the event's zone content. Called once at the loadZone
+   *             tail (live=false, ordinary ground only) and — unless noLive —
+   *             re-invoked each frame (live=true) so an overlay that BINDS or
+   *             SPREADS to the standing zone materializes the moment it lands
+   *             (each runtime's own guards make the re-invoke idempotent). */
+  private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean }[] {
+    return [
+      {
+        // Fresh zone visit → no host materialized yet. If a host has ALREADY
+        // reached this zone (you walked into an invasion in progress), its
+        // warband stands at the entry it marched in by. On-entry only —
+        // live arrivals are driven by the update loop's arrivals drain.
+        id: 'warbands', noLive: true,
+        reset: () => { this.materializedHosts.clear(); this.warbandMarches.length = 0; },
+        enter: (def) => {
+          const host = this.sim.invasion.hosts.find(h => h.arrived && h.targetZoneId === def.id);
+          if (host) this.spawnWarband(host);
+        },
+      },
+      {
+        // You walked into (or a live eruption seized) a Demon Invasion's
+        // epicenter — the Balor holds court. Resolved against the instance
+        // governing THIS zone's dimension; a live eruption gets the
+        // meteor-storm warning entrance (the `live` flag).
+        id: 'demon_invasion',
+        reset: () => { this.materializedEpicenters.clear(); this.demonPortals.length = 0; },
+        enter: (def, live) => {
+          const inv = this.sim.demonFieldFor(def.dimension)?.invasionOn(def.id);
+          if (inv?.isEpicenter && (!live || !this.materializedEpicenters.has(inv.id))) this.spawnEpicenter(inv, live);
+        },
+      },
+      {
+        // A Crusade holds this ground — raise its works (camp / fortress /
+        // city) and post its garrison, scaled to how long it's been held.
+        id: 'crusade',
+        reset: () => { this.materializedCrusades.clear(); this.crusadePortals.length = 0; },
+        enter: (def, live) => {
+          const cru = this.sim.crusadeField?.crusadeOn(def.id);
+          if (cru && (!live || !this.materializedCrusades.has(def.id))) this.materializeCrusade(cru);
+        },
+      },
+      {
+        // THE DEADWAKE pours in via the per-frame updateDeadwakeStream (a
+        // relentless stream while a tide covers this zone) — reset only.
+        id: 'deadwake',
+        reset: () => { this.materializedDeadwakes.clear(); this.deadwakeStreamTimer = 0; this.necropolisPortals.length = 0; },
+      },
+      {
+        // The herd pours via updateMigrationStream — reset only.
+        id: 'migration',
+        reset: () => { this.materializedMigrations.clear(); this.migrationStreamTimer = 0; },
+      },
+      {
+        // Haunts re-stand on re-entry (anchor / walking Wailing One at their
+        // overlay-remembered wounds) via the per-frame updateHauntStream —
+        // mid-play spawns are never zone-memory captured, so without this
+        // reset a revisited haunt stood empty and unbreakable.
+        id: 'haunting',
+        reset: () => { this.materializedHaunts.clear(); this.hauntStreamTimer = 0; },
+      },
+      {
+        // The band pours via updateBrigandRaid — reset only.
+        id: 'brigands',
+        reset: () => { this.materializedBrigands.clear(); this.brigandLingerLeft = 0; this.brigandsDrifting = false; },
+      },
+      {
+        // CONTAGION: a corrupted zone fields its plague (+ Patient Zero at the
+        // source) — and one that SPREAD onto the standing zone fields it live.
+        id: 'contagion',
+        reset: () => { this.materializedContagion.clear(); },
+        enter: (def) => this.materializeContagion(def),
+      },
+      {
+        // MYCELIA: a spore-laced zone fields its fungal horde (+ the
+        // Heartbloom at the core); a bloom that spread here fields it live.
+        id: 'mycelia',
+        reset: () => { this.materializedMycelia.clear(); },
+        enter: (def) => this.materializeMycelia(def),
+      },
+      {
+        // HOLDFAST: raise the toll-gate + its wardens around a sealed bonus
+        // exit (rolled at the zone's first load; raised live if not yet built).
+        id: 'holdfast',
+        reset: () => { this.materializedHoldfasts.clear(); this.holdfastSite = null; this.holdfastDwellKey = ''; },
+        enter: (def) => this.placeHoldfast(def),
+      },
+      {
+        // THE HUNT: place a footprint (while the beast is untracked) or spawn
+        // the beast itself where it stands (health preserved) — including a
+        // locate/relocate that resolves onto the standing zone.
+        id: 'hunt',
+        reset: () => {
+          this.huntFootprint = null; this.huntFootprintDwell = 0;
+          this.huntBeast = null; this.materializedHunts.clear();
+        },
+        enter: (def) => this.placeHuntContent(def),
+      },
+      {
+        // FRACTURES: the volatile fracture object if one sits (or diverted)
+        // here, and — on entry only — a PENDING capstone rift's portal.
+        id: 'fractures',
+        reset: () => { this.fractureRun = null; this.materializedFractures.clear(); this.fractureRifts.length = 0; },
+        enter: (def, live) => {
+          if (!live || !this.fractureRun) this.placeFractureContent(def);
+          if (!live) this.placeFractureRiftContent(def);
+        },
+      },
+      {
+        // CONCLAVE: raise the Occult ritual site (pentagram + cultists) —
+        // including one that opened on the standing zone.
+        id: 'conclave',
+        reset: () => { this.ritualSite = null; this.materializedRituals.clear(); },
+        enter: (def) => { if (!this.ritualSite) this.placeRitualSite(def); },
+      },
+      {
+        // AMALGAMATION: the Bonewright (+ graves / risen boss) and any
+        // rare-undead miniboss — including a build that migrated here.
+        id: 'amalgamation',
+        reset: () => {
+          this.amalgamSite = null; this.materializedAmalgam.clear();
+          this.materializedAmalgamMobs.clear(); this.amalgamNecroDwell = 0; this.amalgamPickDwell = [];
+        },
+        enter: (def) => {
+          if (!this.amalgamSite) this.placeAmalgamation(def);
+          this.placeAmalgamMiniboss(def);
+        },
+      },
+      {
+        // DESCENT: the Delver site + dwell/stream timers reset per zone
+        // (re-rolled on cave re-entry); the Delver itself is CAVE content
+        // (the loadZone else-branch). descentRun is NOT reset here —
+        // descend()/resurfaceFromDescent() own it.
+        id: 'descent',
+        reset: () => { this.descentSite = null; this.descentShaftDwell = 0; this.descentSpawnTimer = 0; },
+      },
+      {
+        // INCURSION: the Eldritch Observer, if this is an epicenter zone —
+        // including a reach that bound the standing zone.
+        id: 'incursion',
+        reset: () => { this.materializedObservers.clear(); this.eventAnchors.length = 0; },
+        enter: (def) => this.materializeObserver(def),
+      },
+      {
+        // The Caravanner waiting at a minted caravan destination (the
+        // round-trip home) — on-entry only.
+        id: 'caravan_return', noLive: true,
+        enter: (def) => this.placeCaravanReturn(def),
+      },
+    ];
   }
 
   /** The Hunt's per-zone work: drop a footprint to read (while the beast is
@@ -3461,34 +3549,13 @@ export class World {
    *  warning entrance (the `live` flag). */
   private materializeLiveZoneEvents(): void {
     if (this.inCave || this.zone.special) return; // a special arena hosts no overlay events
-    const inv = this.sim.demonFieldFor(this.zone.dimension)?.invasionOn(this.zone.id);
-    if (inv?.isEpicenter && !this.materializedEpicenters.has(inv.id)) this.spawnEpicenter(inv, true);
-    const cru = this.sim.crusadeField?.crusadeOn(this.zone.id);
-    if (cru && !this.materializedCrusades.has(this.zone.id)) this.materializeCrusade(cru);
-    // A contagion that SPREAD into the zone the player is already in materializes now
-    // (idempotent — guarded by materializedContagion).
-    this.materializeContagion(this.zone);
-    // A bloom that SPREAD into the zone the player is already in fields its horde now
-    // (idempotent — guarded by materializedMycelia).
-    this.materializeMycelia(this.zone);
-    // A Holdfast (rolled at the zone's first load) raises its gate now if not yet built
-    // (idempotent — guarded by materializedHoldfasts).
-    this.placeHoldfast(this.zone);
-    // (The Deadwake stream is driven per-frame by updateDeadwakeStream, not here.)
-    // A fracture that opened in the zone the player is ALREADY in (or diverted to
-    // it) materializes now (idempotent — guarded by materializedFractures).
-    if (!this.fractureRun) this.placeFractureContent(this.zone);
-    // A ritual that opened in the zone the player is ALREADY in materializes now.
-    if (!this.ritualSite) this.placeRitualSite(this.zone);
-    // A Bonewright that opened (or migrated) into the current zone materializes now.
-    if (!this.amalgamSite) this.placeAmalgamation(this.zone);
-    this.placeAmalgamMiniboss(this.zone);
-    this.materializeObserver(this.zone);
-    // The Hunt beast may be LOCATED in the zone the player is already standing in
-    // (a dead-end locate, or a relocate that resolved here): materialize it in place.
-    // Idempotent — spawnHuntBeast is guarded by materializedHunts, the track by the
-    // live huntFootprint — so this fires exactly once, like the events above.
-    this.placeHuntContent(this.zone);
+    // Every zone runtime's enter() re-fires with live=true (unless it opted
+    // out via noLive) — each is idempotent by its own guards, so an overlay
+    // that binds/spreads onto the standing zone materializes the moment it
+    // lands, exactly once.
+    for (const r of this.zoneRuntimes) {
+      if (!r.noLive) r.enter?.(this.zone, true);
+    }
   }
 
   /** Materialize an arrived invasion host as a real warband: a coherent pack of
@@ -7559,7 +7626,8 @@ export class World {
 
   /** Pay out a finished event: xp, gem drops, and faction favor. */
   payEventReward(faction: string, r: EventReward, at: Vec2, msg: string): void {
-    this.grantXp(Math.round((40 + this.zone.level * 30) * r.xpMul));
+    const rc = ZONE_EVENT_CFG.reward;
+    this.grantXp(Math.round((rc.xpBase + this.zone.level * rc.xpPerLevel) * r.xpMul));
     for (let i = 0; i < r.gems; i++) this.dropGemAt(at);
     if (r.rep) this.sim.reputation.add(faction, r.rep);
     const name = (FACTIONS[faction]?.name ?? faction).replace(/^the /, '');
