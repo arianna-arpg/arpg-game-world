@@ -97,4 +97,6 @@ export const MIGRATION: ContentPackage = {
   defaultEnabled: true,
   world: { overlay: (ctx) => new MigrationField(ctx, MIGRATION_SURGE) },
   factions: [BEAST_FACTION],
+  validate: (look) =>
+    MIGRATION_SURGE.roster.filter(e => !look.monster(e.id)).map(e => `herd monster '${e.id}' unknown`),
 };

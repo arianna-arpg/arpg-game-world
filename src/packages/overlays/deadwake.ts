@@ -40,7 +40,7 @@ import { dayCycle } from '../../world/daynight';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -221,6 +221,11 @@ interface ActiveNecropolis {
 
 export class DeadwakeField implements WorldOverlay {
   readonly id = 'deadwake';
+  /** Durable: the hidden corpse counter, the rolling tides, and the standing
+   *  Necropolis are all run-long arcs — a quit must never drain the wake (or
+   *  spare the player a Necropolis they raised). */
+  readonly persistence = 'durable' as const;
+  readonly mapLabel = 'Deadwake';
 
   /** The hidden Corpse Accumulation counter, and whether an undead kill has ARMED
    *  it. While a Necropolis stands, accumulation runs regardless of `armed`. */
@@ -258,11 +263,14 @@ export class DeadwakeField implements WorldOverlay {
     const generating = this.armed || this.necroGenerating();
 
     // 1. SIMULATED accrual — a player-independent drip (gate-gated; a Necropolis
-    //    keeps it ticking even when the player never re-armed it).
+    //    keeps it ticking even when the player never re-armed it). The drip rides
+    //    the package's IGNITION lever (pressure × frequency.rate) — how fast the
+    //    counter crests IS how often tides break loose, so the Vault weight and
+    //    the rate crank finally reach the Deadwake like every other event.
     if (generating && g.active && this.counter < this.cfg.threshold) {
       const a = this.cfg.accrual;
       const dripMul = a.simDripDayMul + (a.simDripNightMul - a.simDripDayMul) * night;
-      this.counter += a.simDripPerSec * dripMul * dt;
+      this.counter += a.simDripPerSec * dripMul * g.ignitionMul * dt;
     }
 
     // 2. DRIFT + SWELL — every tide swells (its variant's roam vs engaged rate) and
@@ -271,10 +279,13 @@ export class DeadwakeField implements WorldOverlay {
     const speed = this.cfg.daySpeed + (this.cfg.nightSpeed - this.cfg.daySpeed) * night;
     const bounds = this.visibleBounds(view);
     const here = view.byId[view.currentZoneId];
+    // SEVERITY lever: how fast a tide SWELLS (its carried-horde growth) — the
+    // crusade-clamped band, so a cranked mix can't compound into a wall of dead.
+    const sev = clamp(g.severityMul || 1, 0, 1.5);
     for (const w of this.wakes) {
       w.age += dt;
       const eng = this.engaged(w, here);
-      w.strength = Math.min(w.maxStrength, w.strength + (eng ? w.engagedGrowth : w.roamGrowth) * dt);
+      w.strength = Math.min(w.maxStrength, w.strength + (eng ? w.engagedGrowth : w.roamGrowth) * sev * dt);
       if (eng) continue; // pouring into the player's zone — it holds
       this.drift(w, speed, dt, bounds, view.terrain);
     }
@@ -417,10 +428,11 @@ export class DeadwakeField implements WorldOverlay {
     return true;
   }
 
-  /** The player slew an undead foe — a VERY LOW chance ARMS the dormant counter. */
+  /** The player slew an undead foe — a VERY LOW chance ARMS the dormant counter.
+   *  The roll rides the IGNITION lever like every other event's trigger. */
   noteUndeadSlain(): void {
     if (this.armed || !this.gate().active) return;
-    if (this.rng.chance(this.cfg.armChance)) this.armed = true;
+    if (this.rng.chance(Math.min(1, this.cfg.armChance * this.gate().ignitionMul))) this.armed = true;
   }
 
   /** A corpse-making event (death / summon / consumed corpse) feeds the counter.
@@ -430,6 +442,74 @@ export class DeadwakeField implements WorldOverlay {
     const a = this.cfg.accrual;
     const base = kind === 'death' ? a.death : kind === 'summon' ? a.summon : a.corpse;
     this.counter += base * (undead ? a.undeadMul : 1);
+  }
+
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: the counter/arm state, every rolling tide, the Necropolis, the
+   *  collision memory (so a resume never re-rolls consume on ground the tide
+   *  already washed), and any undrained consume wins. Coords, not zone ids —
+   *  no zones minted, no claims. */
+  snapshot(): unknown {
+    return {
+      counter: this.counter, armed: this.armed,
+      wakes: this.wakes.map(w => ({ ...w, coord: { ...w.coord } })),
+      necropolis: this.necropolis ? { ...this.necropolis, coord: { ...this.necropolis.coord } } : null,
+      coveredLast: [...this.coveredLast],
+      consumedZones: [...this.consumedZones],
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as { counter?: unknown; armed?: unknown; wakes?: unknown[]; necropolis?: unknown; coveredLast?: unknown[]; consumedZones?: unknown[]; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    if (num(s.counter)) this.counter = Math.max(0, s.counter);
+    this.armed = !!s.armed;
+    if (num(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    if (Array.isArray(s.wakes)) {
+      this.wakes = [];
+      for (const raw of s.wakes) {
+        const w = raw as Partial<ActiveWake> | null;
+        if (!w || typeof w.id !== 'string' || typeof w.variant !== 'string') continue;
+        if (!w.coord || ![w.coord.x, w.coord.y].every(num)) continue;
+        if (![w.heading, w.age, w.strength, w.maxStrength, w.roamGrowth, w.engagedGrowth].every(num)) continue;
+        this.wakes.push({
+          id: w.id, coord: { x: w.coord!.x, y: w.coord!.y }, heading: w.heading!, age: w.age!,
+          strength: w.strength!, maxStrength: w.maxStrength!, roamGrowth: w.roamGrowth!,
+          engagedGrowth: w.engagedGrowth!, color: typeof w.color === 'string' ? w.color : (this.cfg.color ?? DEADWAKE_VIOLET),
+          variant: w.variant,
+        });
+      }
+    }
+    const n = s.necropolis as Partial<ActiveNecropolis> | null;
+    this.necropolis = null;
+    if (n && typeof n === 'object' && typeof n.id === 'string'
+      && n.coord && [n.coord.x, n.coord.y].every(num) && [n.heading, n.age].every(num)) {
+      this.necropolis = {
+        id: n.id, coord: { x: n.coord!.x, y: n.coord!.y }, heading: n.heading!, age: n.age!,
+        // The bound arena is OFF-GRAPH and never survives a relaunch — null it;
+        // the seat re-binds a fresh arena the next time the player steps in.
+        zoneId: null,
+        defeated: !!n.defeated,
+      };
+    }
+    if (Array.isArray(s.coveredLast)) {
+      this.coveredLast = new Set(s.coveredLast.filter((z): z is string => typeof z === 'string'));
+    }
+    if (Array.isArray(s.consumedZones)) {
+      this.consumedZones.length = 0;
+      for (const z of s.consumedZones) if (typeof z === 'string') this.consumedZones.push(z);
+    }
+  }
+
+  /** Tides steer by coordinate, so only the zone-keyed memories prune. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    this.coveredLast = new Set([...this.coveredLast].filter(z => has(z)));
+    for (let i = this.consumedZones.length - 1; i >= 0; i--) {
+      if (!has(this.consumedZones[i])) this.consumedZones.splice(i, 1);
+    }
   }
 
   /** A streamed undead fell — the tide SWELLS (each casualty feeds the next). */
@@ -544,13 +624,11 @@ export class DeadwakeField implements WorldOverlay {
     else if (p.coord.y > bounds.maxY) { p.coord.y = bounds.maxY; p.heading = -p.heading; }
   }
 
-  /** May a Deadwake STREAM into / hold on / consume a zone? Kept in LOCKSTEP with
-   *  the engine's stream guard (world.ts updateDeadwakeStream): never a cave, a
-   *  special arena, a floating/eventOwned event node, a sanctuary, or forbidden
-   *  ground (else a tide could stall on / consume a zone that streams nothing). */
+  /** May a Deadwake STREAM into / hold on / consume a zone? THE shared predicate
+   *  (zonePolicy) — in lockstep with the engine's stream guard by construction
+   *  (else a tide could stall on / consume a zone that streams nothing). */
   private streamable(z: ZoneDef): boolean {
-    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && eventAllowed('deadwake', z);
+    return eventTargetable(this.id, z);
   }
 
   /** Is the wake currently POURING into the player's zone (so it holds position)? */

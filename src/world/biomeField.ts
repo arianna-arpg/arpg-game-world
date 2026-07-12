@@ -20,6 +20,10 @@ import { registerZoneInfoSource } from './zoneInfo';
 
 export class BiomeField implements WorldOverlay {
   readonly id = 'biomefield';
+  /** Transient BY DERIVATION: the base field is pure seed math, and its live
+   *  WARPS are re-pushed each tick by their owners (mycelia's transformed
+   *  zones, invasion scorches) from state those systems persist themselves. */
+  readonly persistence = 'transient' as const;
   readonly mapLabel = 'Biomes';
   /** Active local warps of the field (the heat-source seam — the Mycelia bloom,
    *  a demonic invasion's scorch, an incursion's blight all push these). */

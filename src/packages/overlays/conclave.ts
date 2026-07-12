@@ -24,7 +24,7 @@ import { Rng } from '../../core/rng';
 import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
@@ -97,6 +97,9 @@ interface ActiveRitual {
 
 export class ConclaveField implements WorldOverlay {
   readonly id = 'conclave';
+  /** Durable: the hidden incubation tally is a run-long fuse — quitting must
+   *  never defuse (or re-light) the Eldritch awakening it builds toward. */
+  readonly persistence = 'durable' as const;
 
   /** The hidden incubation tally — fully-incubated rituals (all five cultists
    *  survived the player leaving). Drives the subtle pentagram "tell" (drawn
@@ -176,9 +179,8 @@ export class ConclaveField implements WorldOverlay {
   devOpenRitual(view: OverlayView, zoneId: string): boolean {
     if (this.rituals.has(zoneId)) return false;
     const z = view.byId[zoneId];
-    if (!z || z.caveDepth != null || z.floating
-      || z.objective.kind === 'safe' || z.objective.kind === 'waves'
-      || !z.packs?.table?.length) return false;
+    if (!z || !eventTargetable(this.id, z)
+      || z.objective.kind === 'waves' || !z.packs?.table?.length) return false;
     this.rituals.set(zoneId, { id: `ritual_${this.seq++}`, zoneId });
     return true;
   }
@@ -209,6 +211,52 @@ export class ConclaveField implements WorldOverlay {
     return [...this.rituals.values()].map(r => ({ id: r.id, zoneId: r.zoneId }));
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: the live sites, the hidden fuse, the latch, any undelivered
+   *  ignition, and the id counter. No zones minted here (the awakening mints
+   *  through the Incursion field, which claims its own). */
+  snapshot(): unknown {
+    return {
+      rituals: [...this.rituals.values()].map(r => ({ ...r })),
+      incubationCounter: this.incubationCounter,
+      ignited: this.ignited,
+      pendingIgnition: this.pendingIgnition ? { archetype: this.pendingIgnition.archetype, origin: { ...this.pendingIgnition.origin } } : null,
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as {
+      rituals?: unknown[]; incubationCounter?: unknown; ignited?: unknown;
+      pendingIgnition?: { archetype?: unknown; origin?: { x?: unknown; y?: unknown } } | null; seq?: unknown;
+    } | null;
+    if (!s || typeof s !== 'object') return;
+    if (typeof s.incubationCounter === 'number' && Number.isFinite(s.incubationCounter)) {
+      this.incubationCounter = Math.max(0, Math.floor(s.incubationCounter));
+    }
+    this.ignited = !!s.ignited;
+    if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    if (s.pendingIgnition && typeof s.pendingIgnition.archetype === 'string'
+      && typeof s.pendingIgnition.origin?.x === 'number' && typeof s.pendingIgnition.origin?.y === 'number') {
+      this.pendingIgnition = { archetype: s.pendingIgnition.archetype, origin: { x: s.pendingIgnition.origin.x, y: s.pendingIgnition.origin.y } };
+    }
+    if (Array.isArray(s.rituals)) {
+      this.rituals.clear();
+      for (const raw of s.rituals) {
+        const r = raw as Partial<ActiveRitual> | null;
+        if (!r || typeof r.id !== 'string' || typeof r.zoneId !== 'string') continue;
+        this.rituals.set(r.zoneId, { id: r.id, zoneId: r.zoneId });
+      }
+    }
+  }
+
+  /** A culled zone's rite simply vanishes — dispersed, NOT incubated (the
+   *  counter only ever ticks through the real leave-them-alive path). */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const zid of [...this.rituals.keys()]) if (!has(zid)) this.rituals.delete(zid);
+  }
+
   // --- internals -------------------------------------------------------------
 
   private maybeOpen(view: OverlayView): void {
@@ -226,11 +274,9 @@ export class ConclaveField implements WorldOverlay {
     // lands it in already-explored ground. Materializes lazily on entry (by-id), so a
     // fresh-zone ritual simply appears the first time the player walks in.
     const cands = view.nodes.filter(z =>
-      z.id !== view.currentZoneId
-      && z.caveDepth == null && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && z.objective.kind !== 'waves'
-      && !!z.packs?.table?.length && !this.rituals.has(z.id)
-      && eventAllowed('conclave', z));
+      z.id !== view.currentZoneId && eventTargetable(this.id, z)
+      && z.objective.kind !== 'waves'
+      && !!z.packs?.table?.length && !this.rituals.has(z.id));
     if (!cands.length) return;
     const fresh = cands.filter(z => !view.visited.has(z.id));
     const charted = cands.filter(z => view.visited.has(z.id));

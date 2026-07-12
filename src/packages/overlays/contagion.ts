@@ -37,7 +37,7 @@ import type { World } from '../../engine/world';
 import { coordDist } from '../../world/coords';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { CONTAGION_COLORS } from '../../world/palette';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -136,6 +136,11 @@ interface InfectedZone {
 
 export class ContagionField implements WorldOverlay {
   readonly id = 'contagion';
+  /** Durable: a half-traced plague is an investigation arc — the infection
+   *  ball, the revealed trail, and a running cure all resume (no quit-to-cure
+   *  cheese, no lost trace-home progress). */
+  readonly persistence = 'durable' as const;
+  readonly mapLabel = 'Contagion';
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -329,6 +334,69 @@ export class ContagionField implements WorldOverlay {
     return out;
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: outbreaks (reveal Sets flattened to arrays), the infection map,
+   *  and the id counter. Rides existing edges only — no zones minted. */
+  snapshot(): unknown {
+    return {
+      outbreaks: this.outbreaks.map(o => ({
+        id: o.id, sourceZoneId: o.sourceZoneId, spreadAcc: o.spreadAcc, seen: o.seen,
+        revealed: [...o.revealed], curing: o.curing, cureAcc: o.cureAcc,
+        curedThrough: o.curedThrough, dead: o.dead,
+      })),
+      infected: [...this.infected.entries()].map(([zid, z]) => ({ zid, ...z })),
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as { outbreaks?: unknown[]; infected?: unknown[]; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    if (Array.isArray(s.outbreaks)) {
+      this.outbreaks = [];
+      for (const raw of s.outbreaks) {
+        const o = raw as { id?: unknown; sourceZoneId?: unknown; spreadAcc?: unknown; seen?: unknown; revealed?: unknown; curing?: unknown; cureAcc?: unknown; curedThrough?: unknown; dead?: unknown } | null;
+        if (!o || typeof o.id !== 'string' || typeof o.sourceZoneId !== 'string') continue;
+        if (o.dead) continue; // a finished outbreak stays finished
+        this.outbreaks.push({
+          id: o.id, sourceZoneId: o.sourceZoneId,
+          spreadAcc: typeof o.spreadAcc === 'number' && Number.isFinite(o.spreadAcc) ? o.spreadAcc : 0,
+          seen: !!o.seen,
+          revealed: new Set(Array.isArray(o.revealed) ? o.revealed.filter((z): z is string => typeof z === 'string') : []),
+          curing: !!o.curing,
+          cureAcc: typeof o.cureAcc === 'number' && Number.isFinite(o.cureAcc) ? o.cureAcc : 0,
+          curedThrough: typeof o.curedThrough === 'number' && Number.isFinite(o.curedThrough) ? Math.floor(o.curedThrough) : -1,
+          dead: false,
+        });
+      }
+    }
+    if (Array.isArray(s.infected)) {
+      this.infected.clear();
+      const live = new Set(this.outbreaks.map(o => o.id));
+      for (const raw of s.infected) {
+        const z = raw as { zid?: unknown; runId?: unknown; hops?: unknown } | null;
+        if (!z || typeof z.zid !== 'string' || typeof z.runId !== 'string' || !live.has(z.runId)) continue;
+        if (typeof z.hops !== 'number' || !Number.isFinite(z.hops) || z.hops < 0) continue;
+        // Intensity re-derives from hops against the LIVE config (a re-tuned
+        // falloff applies to a resumed plague — config wins over cache).
+        this.infect(z.zid, z.runId, Math.floor(z.hops));
+      }
+    }
+  }
+
+  /** Culled ground sheds its infection; an outbreak whose SOURCE was culled can
+   *  never field Patient Zero again, so it turns to CURING and recedes out —
+   *  the graceful end, never an immortal plague. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const zid of [...this.infected.keys()]) if (!has(zid)) this.infected.delete(zid);
+    for (const o of this.outbreaks) {
+      o.revealed = new Set([...o.revealed].filter(z => has(z)));
+      if (!has(o.sourceZoneId) && !o.curing) { o.curing = true; o.cureAcc = 0; o.curedThrough = -1; }
+    }
+  }
+
   // --- dev seam (the QA Event tab) -------------------------------------------
 
   /** DEV: ignite an outbreak whose SOURCE is the given (current) zone, pre-spread to
@@ -345,12 +413,10 @@ export class ContagionField implements WorldOverlay {
 
   // --- internals -------------------------------------------------------------
 
-  /** May the plague INFECT / spread into a zone? Kept in lockstep with the engine's
-   *  materialize guard: never a cave, special arena, floating / event-owned node, a
-   *  sanctuary (the town), or biome-forbidden ground. */
+  /** May the plague INFECT / spread into a zone? THE shared predicate
+   *  (zonePolicy) — in lockstep with the engine's materialize guard. */
   private streamable(z: ZoneDef): boolean {
-    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && eventAllowed('contagion', z);
+    return eventTargetable(this.id, z);
   }
 
   private intensityFor(hops: number): number {

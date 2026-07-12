@@ -40,7 +40,7 @@ import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { registerZoneWashSource } from '../../world/zoneWash';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
@@ -142,6 +142,11 @@ interface RestlessGrief {
 
 export class HauntField implements WorldOverlay {
   readonly id = 'haunting';
+  /** Durable: the design's whole promise is "effort is never wasted" — banked
+   *  wounds (carried griefs) and standing haunts must survive a relaunch, or
+   *  a quit at dawn silently breaks the carry-wound covenant. */
+  readonly persistence = 'durable' as const;
+  readonly mapLabel = 'Hauntings';
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -301,6 +306,81 @@ export class HauntField implements WorldOverlay {
   /** Wounds waiting to ride the next settle (QA / tests). */
   carriedCount(): number { return this.carried.length; }
 
+  /** A settled grief keeps its ground restless (feeds the bloom); a broken
+   *  anchor — the locked, must-be-faced state — weighs double. */
+  activityAt(zoneId: string): number {
+    const h = this.haunts.find(x => x.zoneId === zoneId);
+    return h ? (h.anchorBroken ? 2 : 1) : 0;
+  }
+
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: standing haunts (wounds included), the banked carry-wounds,
+   *  the reprieve clock, undrained dissipations, and the id counter. */
+  snapshot(): unknown {
+    return {
+      haunts: this.haunts.map(h => ({ ...h, coord: { ...h.coord } })),
+      carried: this.carried.map(c => ({ ...c })),
+      dissipated: this.dissipated.map(d => ({ ...d })),
+      cooldownLeft: this.cooldownLeft,
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as { haunts?: unknown[]; carried?: unknown[]; dissipated?: unknown[]; cooldownLeft?: unknown; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    const frac = (v: unknown, def: number): number =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : def;
+    if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    if (typeof s.cooldownLeft === 'number' && Number.isFinite(s.cooldownLeft)) this.cooldownLeft = Math.max(0, s.cooldownLeft);
+    if (Array.isArray(s.haunts)) {
+      this.haunts = [];
+      for (const raw of s.haunts) {
+        const h = raw as Partial<ActiveHaunt> | null;
+        if (!h || typeof h.id !== 'string' || typeof h.zoneId !== 'string') continue;
+        if (!h.coord || ![h.coord.x, h.coord.y].every(n => typeof n === 'number' && Number.isFinite(n))) continue;
+        if (typeof h.ttlLeft !== 'number' || !Number.isFinite(h.ttlLeft)) continue;
+        this.haunts.push({
+          id: h.id, zoneId: h.zoneId, coord: { x: h.coord.x, y: h.coord.y },
+          ttlLeft: h.ttlLeft, anchorBroken: !!h.anchorBroken,
+          anchorLifeFrac: frac(h.anchorLifeFrac, 1), bossLifeFrac: frac(h.bossLifeFrac, 1),
+          waneFrac: frac(h.waneFrac, 0),
+          // A DEV pin is a live-session probe, never a saved fact.
+        });
+      }
+    }
+    if (Array.isArray(s.carried)) {
+      this.carried = [];
+      for (const raw of s.carried) {
+        const c = raw as Partial<RestlessGrief> | null;
+        if (!c || typeof c !== 'object') continue;
+        this.carried.push({
+          anchorBroken: !!c.anchorBroken,
+          anchorLifeFrac: frac(c.anchorLifeFrac, 1),
+          bossLifeFrac: frac(c.bossLifeFrac, 1),
+        });
+      }
+    }
+    if (Array.isArray(s.dissipated)) {
+      this.dissipated = [];
+      for (const raw of s.dissipated) {
+        const d = raw as { id?: unknown; zoneId?: unknown; color?: unknown } | null;
+        if (!d || typeof d.id !== 'string' || typeof d.zoneId !== 'string') continue;
+        this.dissipated.push({ id: d.id, zoneId: d.zoneId, color: typeof d.color === 'string' ? d.color : (this.cfg.color ?? HAUNT_PALE) });
+      }
+    }
+  }
+
+  /** A culled zone's grief banks its wounds — exactly the dissipation path,
+   *  so even the sanitizer honors the carry-wound covenant. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (let i = this.haunts.length - 1; i >= 0; i--) {
+      if (!has(this.haunts[i].zoneId)) this.dissipate(i);
+    }
+    this.dissipated = this.dissipated.filter(d => has(d.zoneId));
+  }
+
   /** Read-only snapshot for the map markers. */
   peek(): ReadonlyArray<{ id: string; x: number; y: number; broken: boolean; waneFrac: number }> {
     return this.haunts.map(h => ({
@@ -323,10 +403,9 @@ export class HauntField implements WorldOverlay {
 
   // --- internals -------------------------------------------------------------
 
-  /** May a grief settle here? Ordinary combat ground only. */
+  /** May a grief settle here? THE shared predicate (zonePolicy). */
   private hauntable(z: ZoneDef): boolean {
-    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && eventAllowed('haunting', z);
+    return eventTargetable(this.id, z);
   }
 
   private tryIgnite(view: OverlayView): void {

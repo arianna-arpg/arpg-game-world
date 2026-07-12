@@ -132,11 +132,15 @@ import type { FractureCapstone, FractureSurge } from '../packages/overlays/fract
 import type { IncursionArchetype } from '../packages/overlays/incursion';
 import type { HoldfastDest, GuardianSpec } from '../packages/holdfast';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
+import { ENCOUNTER_CFG } from '../packages/encounters';
 import { gateOf } from '../packages/weighting';
 import type { ActiveEncounter } from './encounter';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
+import { claimedZonesFromBag } from '../world/overlay';
+import { collectBulletins, BULLETIN_CFG } from '../world/bulletins';
+import { eventTargetable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherStrike } from '../world/weather';
 import { dayCycle } from '../world/daynight';
@@ -1129,9 +1133,9 @@ function rollPackSize(archs: PackArchetype[]): number {
   return randInt(last.size[0], last.size[1]);
 }
 const WAYPOINT_CLEAR = 500;      // safe bubble cleared of enemies around a waypoint landing
-const ENCOUNTER_OPEN_CHANCE = 0.16; // per qualifying zone load, at package pressure 1
+// (Encounter placement chance / field cap / close-reward terms live in
+// ENCOUNTER_CFG — packages/encounters.ts — so the framework tunes as data.)
 const EVENT_SPACING = 240;       // min gap between co-occurring world-event centers (legibility)
-const ENCOUNTER_CAP = 26;        // max living enemies inside an open encounter field
 const FRACTURE_FOE_CAP = 24;     // max living fracture-spewed foes (perf + clearability)
 const ZONE_MEMORY_TTL = 600;     // seconds of GAME TIME a left zone is remembered (10 min)
 // (Dwell seconds + stand-on radii + progress-ring styles for every transit
@@ -3611,12 +3615,8 @@ export class World {
   private placeEncounters(def: ZoneDef): void {
     const o = def.objective;
     if (o.kind === 'safe' || o.kind === 'waves' || this.inCave) return;
-    // Encounters are SURFACE content until a def declares otherwise — without
-    // this gate, a surface package's Breach diamonds seeded in hell (the
-    // confirmed event bleed-over). Per-dimension encounters ride the same
-    // seam the overlays use when an EncounterDef grows a `dimensions` field.
-    if (def.dimension) return;
     if (!def.packs?.table?.length) return;
+    const zoneDim = def.dimension ?? 'surface';
     const gates = this.sim.gatesFor(this.player.level);
     // Roll each ACTIVE encounter package independently off its OWN package seed.
     // (Previously a single shared encRng was seeded from a hardcoded 'breach'
@@ -3631,12 +3631,17 @@ export class World {
       if (!gate.active) continue; // package off / below its start level → no discovery yet
       if (spec.surge) continue;   // spatial world events (Demon Invasion) place at
                                   // their epicenter, never as a random in-zone diamond
+      // An encounter places only in its declared dimensions (default surface) —
+      // the same seam the overlays use, so a surface package's diamonds never
+      // seed in hell unless its def says so.
+      if (!(spec.dimensions ?? ['surface']).includes(zoneDim)) continue;
+      if (!eventTargetable(spec.packageId, def)) continue; // biome policy + structural floor
       const rng = new Rng((packageSeed(this.manifest.seed, spec.packageId) ^ hashStr(def.id)) >>> 0);
       // Per-zone (encounterDensity), per-biome (eventDensityMul), and live MYCELIA
       // suppression compose onto the package pressure — a Field expanse seeds more
       // breaches; a spore-smothered zone seeds fewer (the bloom's tug-of-war).
       const densityMul = this.eventDensityFor(def);
-      if (!rng.chance(clamp(ENCOUNTER_OPEN_CHANCE * gate.ignitionMul * densityMul, 0, 0.85))) continue;
+      if (!rng.chance(clamp(ENCOUNTER_CFG.openChance * gate.ignitionMul * densityMul, 0, ENCOUNTER_CFG.openChanceCap))) continue;
       winners.push({ def: spec, scale: rng.weighted(spec.scales), rng });
     }
     if (!winners.length) return;
@@ -3671,7 +3676,7 @@ export class World {
       if (e.phase !== 'open') continue;
       e.radius = Math.min(e.scale.maxRadius, e.radius + e.scale.growthPerSec * dt);
       e.spawnTimer -= dt;
-      if (e.spawnTimer <= 0 && this.insideCount(e) < ENCOUNTER_CAP) {
+      if (e.spawnTimer <= 0 && this.insideCount(e) < ENCOUNTER_CFG.fieldCap) {
         e.spawnTimer = this.encRng.range(e.scale.spawnInterval[0], e.scale.spawnInterval[1]);
         this.spawnInRadius(e, this.encRng.int(e.scale.spawnBatch[0], e.scale.spawnBatch[1]));
       }
@@ -3717,7 +3722,7 @@ export class World {
     this.text(vec(e.pos.x, e.pos.y - 30), `${e.def.label} sealed!`, e.def.trigger.color, 18);
     this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: e.radius, color: e.def.trigger.color, life: 0.5, maxLife: 0.5 });
     const mul = e.scale.rewardMul;
-    this.grantXp(Math.round((40 + this.zone.level * 12) * mul));
+    this.grantXp(Math.round((ENCOUNTER_CFG.reward.xpBase + this.zone.level * ENCOUNTER_CFG.reward.xpPerLevel) * mul));
     const gems = 1 + Math.floor(mul);
     for (let i = 0; i < gems; i++) this.dropGemAt(e.pos);
   }
@@ -6502,7 +6507,10 @@ export class World {
     if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
     if (!df.delverAllowed(this.player.level)) return;
     const roll = new Rng(((def.seed ?? 0) ^ 0xde17e2) >>> 0); // stable per mouth
-    if (!roll.chance(df.surge().delverChance)) return;
+    // The draw stays seeded per mouth; the THRESHOLD folds in the package's
+    // live ignition lever (pressure × frequency.rate), so the Vault weight and
+    // the rate crank reach the abyss like every other event's ignition roll.
+    if (!roll.chance(df.delverChanceNow())) return;
     const center = this.clampPos(this.farPoint(360, true), 30);
     const delver = this.createMonster('descent_delver', Math.max(1, def.level), 'enemy');
     delver.tag = 'descent_delver';
@@ -7325,11 +7333,15 @@ export class World {
    *  (WorldSim.snapshotOverlays). PURE — no world mutation, safe mid-frame
    *  on every autosave. */
   serializeWorldState(): WorldStateSave {
-    const questZones = new Set(this.activeQuests.map(q => q.zoneId));
+    // Snapshot the overlays FIRST: their bags carry the ownedZones claims
+    // (world/overlay.ts convention) that decide which event ground rides.
+    const overlays = this.sim.snapshotOverlays();
+    const claimed = new Set(this.activeQuests.map(q => q.zoneId));
+    for (const id of claimedZonesFromBag(overlays)) claimed.add(id);
     const zones: ZoneDef[] = [];
     for (const z of Object.values(this.zoneMap)) {
       // The TRANSIENCE RULE: an unclaimed event zone re-rolls with its event.
-      if (z.eventOwned && !questZones.has(z.id)) continue;
+      if (z.eventOwned && !claimed.has(z.id)) continue;
       const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
       delete clone.exitBoundaries; // transient — re-derived every zone load
       zones.push(clone);
@@ -7392,7 +7404,7 @@ export class World {
           },
         },
       } : {}),
-      overlays: this.sim.snapshotOverlays(),
+      overlays,
     };
   }
 
@@ -7409,12 +7421,15 @@ export class World {
     if (!ws || ws.schemaVersion !== WORLD_SCHEMA_VERSION) return false;
     if (typeof ws.time !== 'number' || !Number.isFinite(ws.time)) return false;
     // Event zones survive only while CLAIMED — by a still-active quest whose
-    // def still exists. (An overlay that restores its own zones would add its
-    // claims here through its snapshot — the seam is open, none do yet.)
+    // def still exists, or by an overlay snapshot's ownedZones (the claim
+    // convention in world/overlay.ts). The bag is scanned RAW here — no
+    // overlay has restored yet, so a save that fails to stand up leaves
+    // every field untouched (the fail-safe contract).
     const claimed = new Set(
       (ws.quests?.active ?? [])
         .filter(q => q && typeof q.questId === 'string' && QUESTS[q.questId] && typeof q.zoneId === 'string')
         .map(q => q.zoneId));
+    for (const id of claimedZonesFromBag(ws.overlays)) claimed.add(id);
     const healed = sanitizeWorldZones(ws.zones, claimed);
     if (!healed) return false;
     this.zoneMap = healed;
@@ -7479,7 +7494,10 @@ export class World {
     // Overlays: each opted-in field takes its snapshot back; everything else
     // is re-seeded over the restored graph exactly as mint-time charting
     // would have (floating zones excepted — they chart when a road forms).
+    // The prune pass then drops any restored row whose zone the sanitizer
+    // culled, so a ghost entry can never hold a cap slot or pin a marker.
     const restored = this.sim.restoreOverlays(ws.overlays);
+    this.sim.pruneOverlayZones(id => !!healed[id]);
     this.sim.reseedGraph(Object.values(healed), this.simView(), restored);
     return true;
   }
@@ -7678,14 +7696,15 @@ export class World {
     const facId = info.type.factions?.[0] ?? 'demon';
     const roster = FACTIONS[facId];
     if (!roster?.table?.length) return;
-    const champId = this.sim.demonFieldFor(this.zone.dimension)?.surge()?.portal?.champion?.monsterId;
+    const surge = this.sim.demonFieldFor(this.zone.dimension)?.surge();
+    const champId = surge?.portal?.champion?.monsterId;
     const pool = roster.table.filter(e => e.id !== champId); // craters spit lessers, not the Balor
     const meteorLvl = Math.max(1, this.zone.level + info.strengthBonus);
     const m = this.createMonster(this.weightedPick(pool.length ? pool : roster.table, meteorLvl),
       meteorLvl, 'enemy');
     m.faction = facId;
     m.pos = this.clampPos(vec(at.x, at.y), m.radius);
-    if (this.demonHeadcount(facId) >= ENCOUNTER_CAP && m.defId) {
+    if (surge && this.demonHeadcount(facId) >= surge.meteorHeadcountCap && m.defId) {
       // Zone already swarming → the crater leaves a raisable corpse instead of
       // another live demon (caps density; feeds necromancers — corpse compounding).
       this.corpses.push({ pos: vec(at.x, at.y), defId: m.defId, level: m.level, maxLife: m.maxLife(), remaining: CORPSE_DURATION });
@@ -20903,24 +20922,13 @@ export class World {
     this.updateLooters();         // scavengers snatch coveted ground drops
     this.maybeOpenDemonPortal();
     this.maybeOpenCrusadePortal();
-    // War bulletins: a zone changed hands somewhere on the map.
-    for (const c of this.sim.faction.conquests) {
-      const zn = this.zoneMap[c.zoneId]?.name ?? c.zoneId;
-      const fn = FACTIONS[c.faction]?.name ?? c.faction;
+    // WORLD BULLETINS (world/bulletins.ts): every registered source drains its
+    // fresh "something happened somewhere" lines — faction conquests, crusade
+    // front shifts, and any future overlay's notices — through ONE registry.
+    // A new overlay registers a source at import time; no engine edit.
+    for (const b of collectBulletins(this)) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 110),
-        c.reclaimed ? `${fn} reclaim ${zn}!` : `${zn} falls to ${fn}!`, '#e8a050', 15);
-    }
-    this.sim.faction.conquests.length = 0;
-    // CRUSADE CLASH bulletins: a warfront shifted — one crusade overran a rival.
-    const crf = this.sim.crusadeField;
-    if (crf && crf.frontShifts.length) {
-      for (const s of crf.frontShifts) {
-        const zn = this.zoneMap[s.zoneId]?.name ?? s.zoneId;
-        const to = (FACTIONS[s.faction]?.name ?? s.faction).replace(/^the /, '');
-        const from = (FACTIONS[s.from]?.name ?? s.from).replace(/^the /, '');
-        this.text(vec(this.player.pos.x, this.player.pos.y - 110), `${to} overrun ${from} at ${zn}!`, '#e8a050', 15);
-      }
-      crf.frontShifts.length = 0;
+        b.text, b.color ?? BULLETIN_CFG.color, b.size ?? BULLETIN_CFG.size);
     }
 
     // THE DEADWAKE collides: charted zones its tide has rolled onto AND won the

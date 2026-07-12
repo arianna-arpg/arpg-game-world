@@ -26,13 +26,12 @@ import { coordDist, type MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
 const STEP = 0.5;
-const ARRIVE_DIST = 16;        // band pos within this of the target node = ARRIVED
 const BRIGAND_RUST = '#9a6a3a';
 
 /** A flavour a fresh raid rolls — how big the ONE pack it unleashes is. */
@@ -78,6 +77,8 @@ export interface BrigandSurge {
   color?: string;
   /** Min node-distance origin→target (a real march in). */
   minSpan: number;
+  /** Band pos within this of the target node = ARRIVED (map-space slack). */
+  arriveDist: number;
 }
 
 /** What the engine reads to drop the pack on the zone the band has reached. */
@@ -109,6 +110,11 @@ interface ActiveBand {
 
 export class BrigandField implements WorldOverlay {
   readonly id = 'brigands';
+  /** Transient BY DESIGN (the movers doctrine): a band mid-march on quit has
+   *  "moved on by your return" — that line IS the feature's fiction, so the
+   *  honest resume is exactly the restart. */
+  readonly persistence = 'transient' as const;
+  readonly mapLabel = 'Brigands';
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -138,7 +144,7 @@ export class BrigandField implements WorldOverlay {
       } else if (b.phase === 'march') {
         const dx = b.target.x - b.pos.x, dy = b.target.y - b.pos.y;
         const d = Math.hypot(dx, dy);
-        if (d <= ARRIVE_DIST) {
+        if (d <= this.cfg.arriveDist) {
           b.phase = 'present';
           b.presentLeft = this.rng.range(this.cfg.presentSeconds[0], this.cfg.presentSeconds[1]);
         } else {
@@ -219,6 +225,11 @@ export class BrigandField implements WorldOverlay {
     return null;
   }
 
+  /** A band prowling (or bearing down on) a zone stirs it (feeds the bloom). */
+  activityAt(zoneId: string): number {
+    return this.bandTargeting(zoneId) ? 1 : 0;
+  }
+
   /** The engine calls this once it materializes a band's pack — clears the spent raid. */
   retire(id: string): void { this.bands = this.bands.filter(b => b.id !== id); }
 
@@ -249,10 +260,9 @@ export class BrigandField implements WorldOverlay {
 
   // --- internals -------------------------------------------------------------
 
-  /** May a raid TARGET / strike this zone? */
+  /** May a raid TARGET / strike this zone? THE shared predicate (zonePolicy). */
   private raidable(z: ZoneDef): boolean {
-    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && eventAllowed('brigands', z);
+    return eventTargetable(this.id, z);
   }
 
   private makeBand(origin: MapCoord, target: MapCoord, targetZoneId: string): ActiveBand {

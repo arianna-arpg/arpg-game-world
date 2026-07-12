@@ -12,8 +12,6 @@ import { Rng } from '../core/rng';
 import { FACTIONS, MONSTERS } from '../data/monsters';
 import type { PackTableEntry, ZoneDef } from '../data/zones';
 import type { AmalgamationField } from '../packages/overlays/amalgamation';
-import { validateAmalgamParts } from '../packages/overlays/amalgamation';
-import { AMALGAM_PARTS } from '../packages/defs/amalgamation';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import type { ConclaveField } from '../packages/overlays/conclave';
@@ -32,8 +30,14 @@ import type { HuntField } from '../packages/overlays/hunt';
 import type { ExpeditionManifest } from '../packages/manifest';
 import { DEFAULT_FREQUENCY, type FrequencyProfile } from '../packages/frequency';
 import { PACKAGE_BY_ID, packageSeed } from '../packages/registry';
-import type { PackageGate } from '../packages/types';
+import type { PackageGate, RegistryLookups } from '../packages/types';
+import { validatePackages } from '../packages/validation';
 import { gateOf, resolveGates } from '../packages/weighting';
+import { TILESETS } from '../data/tilesets';
+import { SIDEZONES } from '../data/sidezones';
+import { STRUCTURES } from '../data/structures';
+import { hasStructureGen } from '../engine/structureGen';
+import type { BreachField } from '../packages/overlays/breach';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
 import { boundaryGateIds } from '../data/boundaryGates';
 import { setClimateOrigin } from './climate';
@@ -61,6 +65,23 @@ export interface ResolvedSpawn {
   table: PackTableEntry[];
   countMul: number;
   injectFactions: string[];
+}
+
+/** The live-registry membership predicates the package-validation sweep runs
+ *  against (packages/validation.ts). Exported so the event QA harness asserts
+ *  the exact same contract the boot warning checks. */
+export function packageLookups(): RegistryLookups {
+  return {
+    monster: id => !!MONSTERS[id],
+    skill: id => !!SKILLS[id],
+    support: id => !!SUPPORTS[id],
+    faction: id => !!FACTIONS[id],
+    tileset: id => !!TILESETS[id],
+    layout: id => hasLayout(id),
+    structure: id => !!STRUCTURES[id] || hasStructureGen(id),
+    sidezone: id => !!SIDEZONES[id],
+    biome: id => !!BIOMES[id],
+  };
 }
 
 export class WorldSim {
@@ -135,6 +156,10 @@ export class WorldSim {
    *  hordes + the Heartbloom, suppress events, and warp the biome; it feeds the bloom
    *  per-zone event activity and calls cull()/onHeartbloomSlain() back. */
   readonly myceliaField: MyceliaField | null;
+  /** The breach overlay if its package is in the manifest, else null — ambient
+   *  minimap flavor whose devIgnite the Events tab drives (the in-zone Breach
+   *  encounter itself rides the encounter pipeline, not this field). */
+  readonly breachField: BreachField | null;
   /** Per-faction favor earned from events and warlord kills. Persists per run. */
   readonly reputation = new Reputation();
   /** FACTION/WORLD WANTS (world/drives.ts): named slow meters — dread,
@@ -246,8 +271,13 @@ export class WorldSim {
     if (badEn.length) console.warn('[boundary] enclave biome(s) name unregistered gate(s):', badEn);
     const badLv = validateLevelField();
     if (badLv.length) console.warn('[levelfield] LEVEL_FIELD_CFG invalid:', badLv);
-    const badAm = validateAmalgamParts(AMALGAM_PARTS, id => !!SKILLS[id], id => !!SUPPORTS[id]);
-    if (badAm.length) console.warn('[amalgamation] parts reference unknown skill/support id(s):', badAm);
+    // ONE shared package sweep (packages/validation.ts): common shapes
+    // generically + each def's own colocated validate() — the per-package
+    // bespoke blocks that used to live here are gone, and a NEW package gets
+    // full id validation for free. The event QA harness runs the same sweep
+    // and FAILS the build where this only warns.
+    const badPkg = validatePackages(packageLookups());
+    if (badPkg.length) console.warn('[packages] def validation problems:', badPkg);
     this.overlays = [this.biomeField, this.weather, this.faction, this.warlord, this.invasion, this.incursionField, ...extra];
     // Cache the demon-invasion overlay (if the package is in this run's manifest)
     // so the engine can reach it without scanning the overlay list every tick.
@@ -266,49 +296,13 @@ export class WorldSim {
     this.amalgamationField = surface<AmalgamationField>('amalgamation') ?? null;
     this.descentField = surface<DescentField>('descent') ?? null;
     this.deadwakeField = surface<DeadwakeField>('deadwake') ?? null;
-    if (this.deadwakeField) {
-      const s = this.deadwakeField.surge();
-      const badDw = [...s.floodRoster, ...s.leaderPool, ...s.necropolis.bossPool].map(e => e.id).filter(id => !MONSTERS[id]);
-      if (badDw.length) console.warn('[deadwake] roster references unknown monster id(s):', badDw);
-    }
     this.migrationField = surface<MigrationField>('migration') ?? null;
-    if (this.migrationField) {
-      const badMg = this.migrationField.surge().roster.map(e => e.id).filter(id => !MONSTERS[id]);
-      if (badMg.length) console.warn('[migration] roster references unknown monster id(s):', badMg);
-    }
     this.brigandField = surface<BrigandField>('brigands') ?? null;
-    if (this.brigandField) {
-      const badBr = this.brigandField.surge().roster.map(e => e.id).filter(id => !MONSTERS[id]);
-      if (badBr.length) console.warn('[brigands] roster references unknown monster id(s):', badBr);
-    }
     this.hauntField = surface<HauntField>('haunting') ?? null;
-    if (this.hauntField) {
-      const s = this.hauntField.surge();
-      const badHa = [...s.roster, { id: s.anchorId, weight: 1 }, { id: s.bossId, weight: 1 }]
-        .map(e => e.id).filter(id => !MONSTERS[id]);
-      if (badHa.length) console.warn('[haunting] roster/anchor/boss references unknown monster id(s):', badHa);
-    }
     this.contagionField = surface<ContagionField>('contagion') ?? null;
-    if (this.contagionField) {
-      const s = this.contagionField.surge();
-      const badCg = [...(FACTIONS[s.faction]?.table ?? []), { id: s.bossDefId, weight: 1 }]
-        .map(e => e.id).filter(id => !MONSTERS[id]);
-      if (badCg.length) console.warn('[contagion] roster/boss references unknown monster id(s):', badCg);
-    }
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
-    if (this.holdfastField) {
-      const badHf = this.holdfastField.surge().defs
-        .flatMap(d => [d.guardian.keeperId, ...(d.guardian.rosterIds ?? [])])
-        .filter(id => !MONSTERS[id]);
-      if (badHf.length) console.warn('[holdfast] guardian references unknown monster id(s):', badHf);
-    }
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
-    if (this.myceliaField) {
-      const s = this.myceliaField.surge();
-      const badMy = [...(FACTIONS[s.faction]?.table ?? []), { id: s.heartbloom.defId, weight: 1 }]
-        .map(e => e.id).filter(id => !MONSTERS[id]);
-      if (badMy.length) console.warn('[mycelia] roster/heartbloom references unknown monster id(s):', badMy);
-    }
+    this.breachField = surface<BreachField>('breach') ?? null;
     this.invasion.gate = (f) => this.warlord.canInvade(f);
     // Per-faction invasion launch scale = the governing package's pressure (0 if
     // no package governs it, or its package is off / below its start level).
@@ -388,10 +382,13 @@ export class WorldSim {
     for (const id of this.weatherPkgIds) wp += gateOf(view.gates, id).ignitionMul;
     this.weather.spawnScale = wp;
     // The global concurrency crank lifts the migrated-feature caps too (storm
-    // fronts, warband hosts), so a frequency boost actually shows MORE at once.
+    // fronts, warband hosts, incursion landings), so a frequency boost actually
+    // shows MORE at once — the always-on infra fields have no package gate, so
+    // the sim hands each the lever directly.
     const conc = this.effectiveFrequency().concurrency;
     this.weather.concurrencyScale = conc;
     this.invasion.concurrencyScale = conc;
+    this.incursionField.concurrencyScale = conc;
     // Faction/world wants drift on their clocks (dread cools between culls).
     this.drives.update(dt);
     for (const o of this.overlays) o.update(dt, this.scopedView(view, o.dimension));
@@ -439,6 +436,19 @@ export class WorldSim {
     try { out[':reputation'] = this.reputation.snapshot(); } catch { /* fresh on resume */ }
     try { out[':drives'] = this.drives.snapshot(); } catch { /* fresh on resume */ }
     return out;
+  }
+
+  /** POST-RESUME SCRUB: hand every field a membership test for the healed
+   *  graph (WorldOverlay.pruneZones) so zone-keyed state whose zone the
+   *  sanitizer culled is dropped — a ghost row can never hold a concurrency
+   *  slot, feed activityAt, or pin a marker. A prune that throws is skipped
+   *  (that field just keeps its rows; they stay inert by the view contract). */
+  pruneOverlayZones(has: (zoneId: string) => boolean): void {
+    for (const o of this.overlays) {
+      if (!o.pruneZones) continue;
+      try { o.pruneZones(has); }
+      catch (e) { console.warn(`[worldstate] overlay '${this.overlayKey(o)}' prune failed — rows kept inert`, e); }
+    }
   }
 
   /** Hand each saved snapshot back to its field (matched by key — an overlay

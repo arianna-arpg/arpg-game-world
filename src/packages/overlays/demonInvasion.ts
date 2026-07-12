@@ -15,6 +15,7 @@
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../../core/math';
+import { eventTargetable } from '../../world/zonePolicy';
 import { Rng } from '../../core/rng';
 import type { ZoneDef } from '../../data/zones';
 import { coordDist, type MapCoord } from '../../world/coords';
@@ -76,6 +77,10 @@ export interface MintRequest {
 
 export class DemonInvasionField implements WorldOverlay {
   readonly id = 'demon_invasion';
+  /** Durable: a festering invasion is the package's whole arc — its age (the
+   *  stage ladder), its storm radius, and its minted epicenter zone all resume;
+   *  minted ground rides the ownedZones claim (per instance, per dimension). */
+  readonly persistence = 'durable' as const;
   readonly mapLabel = 'Demon Rifts';
   /** Which DIMENSION this instance governs (stamped by the sim at construction
    *  for non-surface instances — the per-dimension world-state seam). The
@@ -142,7 +147,7 @@ export class DemonInvasionField implements WorldOverlay {
     const info = this.invasionOn(zone.id);
     if (!info) return NO_BIAS;
     const factionMul: Record<string, number> = {};
-    for (const f of info.type.factions ?? ['demon']) factionMul[f] = 1.6;
+    for (const f of info.type.factions ?? ['demon']) factionMul[f] = this.cfg.stormFactionMul;
     return { countMul: 1, factionMul, injectFactions: [] };
   }
 
@@ -245,6 +250,79 @@ export class DemonInvasionField implements WorldOverlay {
     return this.invasions.map(i => ({ id: i.id, type: i.type.id, age: i.age, radius: i.radius, zoneId: i.zoneId, stageIdx: this.stageIdxFor(i) }));
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: each invasion stores its TYPE BY ID (rebound against the live
+   *  surge on restore, so a re-tuned flavor applies to a resumed storm), plus
+   *  any undrained mints and the namespaced counter. `ownedZones` claims every
+   *  bound epicenter zone — minted rift ground rides the save. */
+  snapshot(): unknown {
+    return {
+      ownedZones: this.invasions.map(i => i.zoneId).filter((z): z is string => !!z),
+      invasions: this.invasions.map(i => ({
+        id: i.id, typeId: i.type.id, coord: { ...i.coord }, anchorZoneId: i.anchorZoneId,
+        zoneId: i.zoneId, age: i.age, radius: i.radius, minted: i.minted,
+      })),
+      mintRequests: this.mintRequests.map(m => ({ ...m, coord: { ...m.coord } })),
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as { invasions?: unknown[]; mintRequests?: unknown[]; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    if (num(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    if (Array.isArray(s.invasions)) {
+      this.invasions = [];
+      for (const raw of s.invasions) {
+        const i = raw as { id?: unknown; typeId?: unknown; coord?: { x?: unknown; y?: unknown }; anchorZoneId?: unknown; zoneId?: unknown; age?: unknown; radius?: unknown; minted?: unknown } | null;
+        if (!i || typeof i.id !== 'string' || typeof i.typeId !== 'string') continue;
+        const type = this.cfg.types.find(t => t.id === i.typeId);
+        if (!type) continue; // the flavor left the surge — that storm is spent
+        if (!i.coord || !num(i.coord.x) || !num(i.coord.y) || !num(i.age) || !num(i.radius)) continue;
+        if (typeof i.anchorZoneId !== 'string') continue;
+        this.invasions.push({
+          id: i.id, type, coord: { x: i.coord.x, y: i.coord.y }, anchorZoneId: i.anchorZoneId,
+          zoneId: typeof i.zoneId === 'string' ? i.zoneId : null,
+          age: Math.max(0, i.age), radius: Math.max(0, i.radius), minted: !!i.minted,
+        });
+      }
+    }
+    if (Array.isArray(s.mintRequests)) {
+      this.mintRequests.length = 0;
+      const live = new Set(this.invasions.map(i => i.id));
+      for (const raw of s.mintRequests) {
+        const m = raw as Partial<MintRequest> | null;
+        if (!m || typeof m.invId !== 'string' || !live.has(m.invId)) continue;
+        if (typeof m.zoneKey !== 'string' || typeof m.tileset !== 'string' || typeof m.anchorZoneId !== 'string') continue;
+        if (!m.coord || !num(m.coord.x) || !num(m.coord.y) || !num(m.level)) continue;
+        this.mintRequests.push({
+          invId: m.invId, coord: { x: m.coord.x, y: m.coord.y },
+          anchorZoneId: m.anchorZoneId, zoneKey: m.zoneKey, tileset: m.tileset, level: m.level,
+        });
+      }
+    }
+  }
+
+  /** An invasion whose bound zone the sanitizer culled (claims make this rare)
+   *  unbinds and re-queues its mint — the storm re-tears its ground rather
+   *  than raining forever on a void. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const inv of this.invasions) {
+      if (inv.anchorZoneId && !has(inv.anchorZoneId)) inv.anchorZoneId = '';
+      if (inv.zoneId && !has(inv.zoneId)) {
+        inv.zoneId = null;
+        inv.minted = false;
+        this.mintRequests.push({
+          invId: inv.id, coord: { ...inv.coord }, anchorZoneId: inv.anchorZoneId,
+          zoneKey: `demon_${inv.id}`, tileset: this.cfg.epicenterTileset,
+          level: Math.max(1, this.nodesById[inv.anchorZoneId]?.level ?? 1),
+        });
+      }
+    }
+  }
+
   // --- internals -------------------------------------------------------------
 
   private stageIdxFor(inv: ActiveInvasion): number {
@@ -264,9 +342,9 @@ export class DemonInvasionField implements WorldOverlay {
    *  spawns the Balor next frame. (QA only; see dev/gemSpawner.) */
   devIgnite(view: OverlayView, zoneId: string): boolean {
     const here = view.byId[zoneId];
-    // Mirror the production filter (+ the sibling dev seams): never seize a safe
-    // town, a cave, or a floating node as an epicenter.
-    if (!here || here.caveDepth != null || here.floating || here.eventOwned || here.objective.kind === 'safe') return false;
+    // THE shared predicate (zonePolicy): never seize a safe town, a cave, a
+    // floating node, a special arena, or biome-forbidden ground as an epicenter.
+    if (!here || !eventTargetable(this.id, here)) return false;
     this.invasions.push({
       id: `inv_${this.idTag}${this.seq++}`, type: this.rng.weighted(this.cfg.types),
       coord: { x: here.map.x, y: here.map.y }, anchorZoneId: zoneId, zoneId,
@@ -343,9 +421,9 @@ export class DemonInvasionField implements WorldOverlay {
   private nearestChartedNode(c: MapCoord, view: OverlayView, anchorId: string): ZoneDef | null {
     let best: ZoneDef | null = null, bd = Infinity;
     for (const z of view.nodes) {
-      // Never seize a sanctuary (the safe town), a cave, or a not-yet-wired
-      // floating zone — the epicenter must be real, hostile ground.
-      if (z.caveDepth != null || z.id === anchorId || z.floating || z.eventOwned || z.objective.kind === 'safe') continue;
+      // THE shared predicate (zonePolicy): the epicenter must be real, hostile,
+      // biome-permitted ground — never a sanctuary, cave, arena, or event turf.
+      if (z.id === anchorId || !eventTargetable(this.id, z)) continue;
       const d = coordDist(z.map, c);
       if (d < bd) { bd = d; best = z; }
     }

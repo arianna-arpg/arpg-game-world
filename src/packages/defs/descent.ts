@@ -87,4 +87,11 @@ export const DESCENT: ContentPackage = {
   defaultEnabled: true,
   world: { overlay: (ctx) => new DescentField(ctx, DESCENT_SURGE) },
   factions: [DEPTHKIN_FACTION],
+  validate: (look) => [
+    ...(look.faction(DESCENT_SURGE.faction) ? [] : [`surge faction '${DESCENT_SURGE.faction}' unknown`]),
+    // The abyss mints from the 'descent' tileset (World.enterDescent) — keep the
+    // id honest here so a rename can never fall back to a warned cavern.
+    ...(look.tileset('descent') ? [] : [`the 'descent' tileset is unregistered`]),
+    ...(look.monster('descent_delver') ? [] : [`the 'descent_delver' shaft-keeper is unknown`]),
+  ],
 };

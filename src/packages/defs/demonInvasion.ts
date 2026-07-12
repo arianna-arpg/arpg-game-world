@@ -107,6 +107,8 @@ const BALOR_SURGE: DemonSurge = {
   maxRadius: 460,
   radiusGrowthPerSec: 7,
   inRadiusSlack: 30,
+  meteorHeadcountCap: 26,  // a swarming zone's craters leave corpses, not more bodies
+  stormFactionMul: 1.6,    // in-radius walk-in spawns lean toward the invaders
   maxLifeSec: 600,
   triggerChance: 0.008,
   maxConcurrent: 1,
@@ -178,6 +180,22 @@ export const DEMON_INVASION: ContentPackage = {
     // ignition) lives on ITS dimension row (world/dimensions.ts events), so
     // "hell erupts more often" is the dimension's dial, not this package's.
     dimensions: ['surface', 'underworld'],
+  },
+  // BALOR_SURGE is handed STRAIGHT to the overlay (no EncounterDef carries it),
+  // so the generic encounter sweep never sees it — validate its ids here.
+  validate: (look) => {
+    const out: string[] = [];
+    const s = BALOR_SURGE;
+    if (!look.skill(s.meteorSkillId)) out.push(`meteor skill '${s.meteorSkillId}' unknown`);
+    if (!look.tileset(s.epicenterTileset)) out.push(`epicenter tileset '${s.epicenterTileset}' unknown`);
+    if (!look.tileset(s.portal.tileset)) out.push(`portal tileset '${s.portal.tileset}' unknown`);
+    if (!look.monster(s.portal.champion.monsterId)) out.push(`champion '${s.portal.champion.monsterId}' unknown`);
+    for (const t of s.types) {
+      for (const f of t.factions ?? []) if (!look.faction(f)) out.push(`type '${t.id}' faction '${f}' unknown`);
+      if (t.realm?.tileset && !look.tileset(t.realm.tileset)) out.push(`type '${t.id}' realm tileset '${t.realm.tileset}' unknown`);
+      if (t.realm?.layoutType && !look.layout(t.realm.layoutType)) out.push(`type '${t.id}' realm layout '${t.realm.layoutType}' unknown`);
+    }
+    return out;
   },
 };
 

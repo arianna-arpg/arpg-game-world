@@ -89,6 +89,7 @@ const FRACTURE_SURGE: FractureSurge = {
   chasmXpPerLevel: 6,       // + this per zone level on every chasm seal
   divertRewardMul: 1.5,     // the divert-seal premium over the chasm reward
   sealReward: { xpBase: 140, xpPerLevel: 24, gems: 3 }, // the run-through bounty
+  travelSeconds: 4,         // the visual glide between zones on a divert (marker transit)
   idleLife: 480,            // an unengaged fracture recycles after this (touch resets it)
 };
 
@@ -124,4 +125,17 @@ export const FRACTURES: ContentPackage = {
   defaultEnabled: true,
   world: { overlay: (ctx) => new FractureField(ctx, FRACTURE_SURGE) },
   factions: [ABYSSAL_FACTION],
+  validate: (look) => {
+    const out: string[] = [];
+    for (const v of FRACTURE_SURGE.variants) {
+      if (!look.faction(v.faction)) out.push(`variant '${v.variant}' faction '${v.faction}' unknown`);
+      const cap = v.capstone;
+      if (!cap) continue;
+      if (!look.monster(cap.boss)) out.push(`capstone '${v.variant}' boss '${cap.boss}' unknown`);
+      if (!look.tileset(cap.tileset)) out.push(`capstone '${v.variant}' tileset '${cap.tileset}' unknown`);
+      if (cap.arena?.tileset && !look.tileset(cap.arena.tileset)) out.push(`capstone '${v.variant}' arena tileset '${cap.arena.tileset}' unknown`);
+      if (cap.arena?.layoutType && !look.layout(cap.arena.layoutType)) out.push(`capstone '${v.variant}' arena layout '${cap.arena.layoutType}' unknown`);
+    }
+    return out;
+  },
 };

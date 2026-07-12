@@ -37,13 +37,13 @@ export const WARBANDS: ContentPackage = {
   defaultStartLevel: 3,
   defaultEnabled: true,
   world: { invasionFactions: WARBAND_FACTIONS },
-  rewards: {
-    warlord_bounty: { rep: 25, gems: 2, ledger: { warlords_killed: 1 } },
-  },
-  quests: [
-    { id: 'warbands_cull', label: 'Cull the war-hosts', steps: [{ id: 's1', label: 'Break 3 sieges', counter: 'sieges', need: 3 }], reward: { gems: 3 } },
-  ],
+  // (The old declarative `rewards`/`quests` stubs are gone with their dead
+  // framework seams: the REAL warlord bounty is the killHandlers.ts row, and
+  // real quests live in src/quests/. Dead declarations shadowing live systems
+  // were exactly the drift the event QA now forbids.)
   relationships: [
     { a: 'breach', b: 'warbands', kind: 'amplifies', strength: 1.15 },
   ],
+  validate: (look) =>
+    WARBAND_FACTIONS.filter(f => !look.faction(f)).map(f => `invasion faction '${f}' unknown`),
 };

@@ -60,6 +60,10 @@ export interface DescentSurge {
 
 export class DescentField implements WorldOverlay {
   readonly id = 'descent';
+  /** Transient BY EMPTINESS: this field holds config only — the delve itself
+   *  is an off-graph cave run the engine drives, and a quit mid-delve resolves
+   *  through the cave/return path, never through overlay state. */
+  readonly persistence = 'transient' as const;
   private readonly gate: () => PackageGate;
   private readonly cfg: DescentSurge;
 
@@ -76,6 +80,14 @@ export class DescentField implements WorldOverlay {
 
   /** Is the package live at this character level (gate active)? Gates the Delver roll. */
   delverAllowed(charLevel: number): boolean { return this.gate().active && charLevel > 0; }
+  /** The per-mouth Delver chance with the package's live IGNITION lever folded
+   *  in (pressure × frequency.rate) — the engine rolls its seeded per-mouth
+   *  draw against THIS, so the Vault weight and the rate crank reach the abyss
+   *  exactly like every other event's ignition. */
+  delverChanceNow(): number {
+    const g = this.gate();
+    return g.active ? Math.min(1, this.cfg.delverChance * g.ignitionMul) : 0;
+  }
   /** The live config the engine reads (geometry, drain, payout, spawn). */
   surge(): DescentSurge { return this.cfg; }
 }

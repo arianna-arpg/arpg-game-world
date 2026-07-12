@@ -50,6 +50,9 @@ const BLEED = 28;       // influence drained from every zone when it dies
 
 export class WarlordField implements WorldOverlay {
   readonly id = 'warlord' as const;
+  /** Transient BY DERIVATION: lords re-crown each tick from the (persisted)
+   *  faction territory, so saving them would only duplicate that truth. */
+  readonly persistence = 'transient' as const;
   readonly mapLabel = 'Warlords';
   readonly lords = new Map<string, WarlordState>();
   private faction: FactionField;

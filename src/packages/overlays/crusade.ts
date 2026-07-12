@@ -32,9 +32,10 @@ import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
 import { coordDist, DIRS, projectCoord, type Dir, type MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
+import { registerBulletinSource } from '../../world/bulletins';
 import { scaledCap } from '../frequency';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { factionsInContext } from '../../world/traits';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -92,6 +93,12 @@ export interface CrusadeSurge {
   networkRange: number;
   /** Floor on a far zone's maturation-rate multiplier. */
   minNetFactor: number;
+  /** Ceiling on a near-capital zone's maturation-rate multiplier (the top of
+   *  the proximity gradient; the capital itself uses strongholdAccel). */
+  maxNetFactor: number;
+  /** A pushed frontier lands no closer than this to ground the crusade already
+   *  holds (map-units — keeps the simulated front stepping OUTWARD). */
+  frontierDedupDist: number;
   /** Seconds (×pressure) between a Crusade claiming another zone. */
   claimInterval: number;
   /** Cap on zones one Crusade holds. */
@@ -208,6 +215,11 @@ interface CrusadeZone {
 
 export class CrusadeField implements WorldOverlay {
   readonly id = 'crusade';
+  /** Durable: a crusade is the slowest arc in the game — capitals mature over
+   *  minutes of held time toward the sanctum. Territory, maturation clocks,
+   *  and minted strongholds all resume; minted ground rides ownedZones. */
+  readonly persistence = 'durable' as const;
+  readonly mapLabel = 'Crusades';
   /** Mint seam the engine drains (host-only): strongholds + pushed frontiers. */
   readonly mintRequests: CrusadeMintRequest[] = [];
 
@@ -447,6 +459,104 @@ export class CrusadeField implements WorldOverlay {
     });
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: every crusade, the whole held-territory map (maturation clocks
+   *  included), undrained mints + front-shift bulletins, and the counter.
+   *  `ownedZones` claims every held zone AND every pending mint's key-target —
+   *  claiming seized (ordinary) ground is harmless; claiming minted strongholds
+   *  and frontiers is what lets the war survive a relaunch. */
+  snapshot(): unknown {
+    return {
+      ownedZones: [...this.held.keys()],
+      crusades: this.crusades.filter(c => !c.dead).map(c => ({
+        ...c, strongholdCoord: { ...c.strongholdCoord },
+      })),
+      held: [...this.held.entries()].map(([zid, h]) => ({ zid, ...h })),
+      mintRequests: this.mintRequests.map(m => ({ ...m, coord: { ...m.coord } })),
+      frontShifts: this.frontShifts.map(f => ({ ...f })),
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as { crusades?: unknown[]; held?: unknown[]; mintRequests?: unknown[]; frontShifts?: unknown[]; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    if (num(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    if (Array.isArray(s.crusades)) {
+      this.crusades = [];
+      for (const raw of s.crusades) {
+        const c = raw as Partial<ActiveCrusade> | null;
+        if (!c || typeof c.id !== 'string' || typeof c.faction !== 'string') continue;
+        if (!FACTIONS[c.faction]) continue; // the marching faction left the registries
+        if (!c.strongholdCoord || ![c.strongholdCoord.x, c.strongholdCoord.y].every(num)) continue;
+        if (![c.age, c.mints, c.claimAcc].every(num)) continue;
+        this.crusades.push({
+          id: c.id, faction: c.faction,
+          color: typeof c.color === 'string' ? c.color : (FACTION_COLORS[c.faction] ?? this.cfg.color ?? CRUSADE_GOLD),
+          dir: DIRS.includes(c.dir as Dir) ? c.dir as Dir : DIRS[0],
+          strongholdId: typeof c.strongholdId === 'string' ? c.strongholdId : null,
+          strongholdCoord: { x: c.strongholdCoord.x, y: c.strongholdCoord.y },
+          anchorId: typeof c.anchorId === 'string' ? c.anchorId : '',
+          age: c.age!, minted: !!c.minted, mints: Math.max(0, Math.floor(c.mints!)),
+          claimAcc: c.claimAcc!, sanctumMinted: !!c.sanctumMinted, dead: false,
+        });
+      }
+    }
+    if (Array.isArray(s.held)) {
+      this.held.clear();
+      const live = new Set(this.crusades.map(c => c.id));
+      for (const raw of s.held) {
+        const h = raw as { zid?: unknown; crusadeId?: unknown; faction?: unknown; ageHeld?: unknown; netFactor?: unknown; isStronghold?: unknown } | null;
+        if (!h || typeof h.zid !== 'string' || typeof h.crusadeId !== 'string' || !live.has(h.crusadeId)) continue;
+        if (typeof h.faction !== 'string' || !num(h.ageHeld) || !num(h.netFactor)) continue;
+        this.held.set(h.zid, {
+          crusadeId: h.crusadeId, faction: h.faction,
+          ageHeld: Math.max(0, h.ageHeld), netFactor: h.netFactor, isStronghold: !!h.isStronghold,
+        });
+      }
+    }
+    if (Array.isArray(s.mintRequests)) {
+      this.mintRequests.length = 0;
+      const live = new Set(this.crusades.map(c => c.id));
+      for (const raw of s.mintRequests) {
+        const m = raw as Partial<CrusadeMintRequest> | null;
+        if (!m || typeof m.crusadeId !== 'string' || !live.has(m.crusadeId)) continue;
+        if (typeof m.zoneKey !== 'string' || typeof m.tileset !== 'string' || typeof m.anchorZoneId !== 'string') continue;
+        if (!m.coord || ![m.coord.x, m.coord.y].every(num) || !num(m.level)) continue;
+        if (m.kind !== 'stronghold' && m.kind !== 'frontier') continue;
+        this.mintRequests.push({
+          crusadeId: m.crusadeId, coord: { x: m.coord.x, y: m.coord.y },
+          anchorZoneId: m.anchorZoneId, zoneKey: m.zoneKey, tileset: m.tileset,
+          level: m.level, kind: m.kind,
+        });
+      }
+    }
+    if (Array.isArray(s.frontShifts)) {
+      this.frontShifts.length = 0;
+      for (const raw of s.frontShifts) {
+        const f = raw as { zoneId?: unknown; faction?: unknown; from?: unknown } | null;
+        if (!f || typeof f.zoneId !== 'string' || typeof f.faction !== 'string' || typeof f.from !== 'string') continue;
+        this.frontShifts.push({ zoneId: f.zoneId, faction: f.faction, from: f.from });
+      }
+    }
+  }
+
+  /** Culled ground falls out of the war; a crusade whose CAPITAL was culled is
+   *  disowned (it can no longer spread — the same cascading defeat a clash
+   *  inflicts), and the fallen-crusade sweep in update() finishes it off. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const zid of [...this.held.keys()]) if (!has(zid)) this.held.delete(zid);
+    for (const c of this.crusades) {
+      if (c.strongholdId && !has(c.strongholdId)) c.strongholdId = null;
+      if (c.anchorId && !has(c.anchorId)) c.anchorId = '';
+    }
+    for (let i = this.frontShifts.length - 1; i >= 0; i--) {
+      if (!has(this.frontShifts[i].zoneId)) this.frontShifts.splice(i, 1);
+    }
+  }
+
   // --- internals -------------------------------------------------------------
 
   private registerHeld(zoneId: string, c: ActiveCrusade, isStronghold: boolean): void {
@@ -455,7 +565,7 @@ export class CrusadeField implements WorldOverlay {
     let netFactor = isStronghold ? this.cfg.strongholdAccel : this.cfg.minNetFactor;
     if (!isStronghold && z) {
       const d = coordDist(z.map, c.strongholdCoord);
-      netFactor = clamp(1.2 - d / this.cfg.networkRange, this.cfg.minNetFactor, 1.2);
+      netFactor = clamp(this.cfg.maxNetFactor - d / this.cfg.networkRange, this.cfg.minNetFactor, this.cfg.maxNetFactor);
     }
     this.held.set(zoneId, { crusadeId: c.id, faction: c.faction, ageHeld: 0, netFactor, isStronghold });
   }
@@ -543,7 +653,7 @@ export class CrusadeField implements WorldOverlay {
    *  materializes a meaty tier (a fortress by default) immediately, in-place. (QA.) */
   devIgnite(view: OverlayView, zoneId: string, ageSeconds = 130): boolean {
     const here = view.byId[zoneId];
-    if (!here || here.caveDepth != null || here.floating || here.eventOwned || here.objective.kind === 'safe') return false;
+    if (!here || !eventTargetable(this.id, here)) return false;
     const faction = this.pickFaction();
     if (!faction) return false;
     const id = `cru_${this.seq++}`;
@@ -607,7 +717,7 @@ export class CrusadeField implements WorldOverlay {
         const dir = DIRS[this.rng.int(0, DIRS.length - 1)];
         const coord = projectCoord(fz.map, dir, 1);
         // Skip if this crusade already holds a node ~at the coordinate.
-        const dup = mine.some(([zid]) => { const z = this.nodesById[zid]; return !!z && coordDist(z.map, coord) < 52; });
+        const dup = mine.some(([zid]) => { const z = this.nodesById[zid]; return !!z && coordDist(z.map, coord) < this.cfg.frontierDedupDist; });
         if (!dup) {
           const key = `crusade_${c.id}_f${c.mints++}`;
           this.mintRequests.push({
@@ -629,8 +739,9 @@ export class CrusadeField implements WorldOverlay {
       for (const e of z.exits) {
         if (e.to === '?') continue;
         const nb = view.byId[e.to];
-        if (!nb || this.held.has(nb.id) || nb.objective.kind === 'safe' || nb.caveDepth != null || nb.eventOwned) continue;
-        if (!eventAllowed('crusade', nb)) continue; // a biome may forbid the crusade (no march into the deep sea)
+        // THE shared predicate (zonePolicy): no march into a sanctuary, cave,
+        // arena, another event's ground, or a biome that forbids the crusade.
+        if (!nb || this.held.has(nb.id) || !eventTargetable(this.id, nb)) continue;
         cands.add(nb.id);
       }
     }
@@ -658,6 +769,21 @@ export class CrusadeField implements WorldOverlay {
 // A stronghold banner (visible even in the fog, like a quest target — it PULLS
 // the player toward the distant crusade), upgrading to a Leader skull once the
 // capital converts and its sanctum opens.
+// CRUSADE CLASH bulletins: a warfront shifted — one crusade overran a rival.
+// (Registered source; the engine's single collectBulletins pump drains us.)
+registerBulletinSource((world: World) => {
+  const cf = world.sim.crusadeField;
+  if (!cf || !cf.frontShifts.length) return [];
+  const out = cf.frontShifts.map(s => {
+    const zn = world.zoneMap[s.zoneId]?.name ?? s.zoneId;
+    const to = (FACTIONS[s.faction]?.name ?? s.faction).replace(/^the /, '');
+    const from = (FACTIONS[s.from]?.name ?? s.from).replace(/^the /, '');
+    return { text: `${to} overrun ${from} at ${zn}!` };
+  });
+  cf.frontShifts.length = 0;
+  return out;
+});
+
 registerMarkerSource((world: World): MapMarker[] => {
   const cf = world.sim.crusadeField;
   if (!cf) return [];

@@ -70,6 +70,8 @@ const CRUSADE_SURGE: CrusadeSurge = {
   strongholdAccel: 2.6,   // the capital festers ~2.6× faster → converts first
   networkRange: 320,      // proximity-to-stronghold accel falls off over this
   minNetFactor: 0.35,
+  maxNetFactor: 1.2,      // the top of the proximity gradient (near-capital zones)
+  frontierDedupDist: 52,  // a pushed frontier lands no closer than this to held ground
   claimInterval: 22,      // the vanguard pushes a node roughly every 22s (×pressure)
   maxHeldZones: 7,
   frontierMintChance: 0.6, // mostly SIMULATE forward into the wilds (floating nodes)…
@@ -175,6 +177,22 @@ export const CRUSADE: ContentPackage = {
     // Warbands lead the vanguard — with both live, crusades press harder.
     { a: 'warbands', b: 'crusade', kind: 'amplifies', strength: 1.15 },
   ],
+  validate: (look) => {
+    const out: string[] = [];
+    const s = CRUSADE_SURGE;
+    if (!look.tileset(s.strongholdTileset)) out.push(`stronghold tileset '${s.strongholdTileset}' unknown`);
+    for (const t of s.tiers) {
+      if (t.structure && !look.structure(t.structure)) out.push(`tier ${t.tier} structure '${t.structure}' unknown`);
+      for (const cs of t.cityFill?.structures ?? []) {
+        if (!look.structure(cs.structure)) out.push(`cityFill structure '${cs.structure}' unknown`);
+      }
+      if (t.cityFill?.square && !look.structure(t.cityFill.square)) out.push(`cityFill square '${t.cityFill.square}' unknown`);
+    }
+    if (!look.tileset(s.sanctum.tileset)) out.push(`sanctum tileset '${s.sanctum.tileset}' unknown`);
+    if (s.sanctum.arena?.tileset && !look.tileset(s.sanctum.arena.tileset)) out.push(`sanctum arena tileset '${s.sanctum.arena.tileset}' unknown`);
+    if (s.sanctum.arena?.layoutType && !look.layout(s.sanctum.arena.layoutType)) out.push(`sanctum arena layout '${s.sanctum.arena.layoutType}' unknown`);
+    return out;
+  },
 };
 
 // A Crusade camp / fortress COMMANDER — felling it LIBERATES the zone (its

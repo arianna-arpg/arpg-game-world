@@ -57,6 +57,9 @@ export interface HoldfastInfo {
 
 export class HoldfastField implements WorldOverlay {
   readonly id = 'holdfast';
+  /** Durable: the lock LEDGER is the whole feature — a paid toll stays paid
+   *  and a slaughtered gate stays sealed across relaunches (snapshot below). */
+  readonly persistence = 'durable' as const;
 
   private readonly seed: number;
   private readonly gate: () => PackageGate;
@@ -98,7 +101,7 @@ export class HoldfastField implements WorldOverlay {
       const def = this.pickDef(zone.level, rng);
       if (def) {
         const side = (['n', 's', 'e', 'w'] as const)[rng.int(0, 3)];
-        const at = rng.pick([0.2, 0.32, 0.68, 0.8]); // OFF-CENTER — the randomized, non-cardinal locale
+        const at = rng.pick(this.cfg.exitLocales); // OFF-CENTER — the randomized, non-cardinal locale
         info = {
           defId: def.id, lockId: `holdfast:${zone.id}`, side, at, locked: true, resolved: 'sealed',
           exitAppended: false, exitDefIndex: -1,
@@ -153,6 +156,53 @@ export class HoldfastField implements WorldOverlay {
     return out;
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: every rolled decision, INCLUDING the nulls ("rolled, nothing
+   *  here") — the no-re-roll memory is as durable as the locks. No zones are
+   *  minted by this field, so no ownedZones claim rides (the bonus exit's
+   *  destination mints through the ordinary frontier path). */
+  snapshot(): unknown {
+    return { infos: [...this.infos.entries()] };
+  }
+
+  /** Rebuild tolerantly: a row whose guardian def was unregistered since the
+   *  save degrades to null (the zone simply hosts nothing — never a re-roll
+   *  into a DIFFERENT guardian, which could double-append an exit); malformed
+   *  rows drop. exitAppended/exitDefIndex ride verbatim — the zone graph that
+   *  carries the appended exit is saved/restored alongside us. */
+  restore(snap: unknown): void {
+    const s = snap as { infos?: unknown } | null;
+    if (!s || !Array.isArray(s.infos)) return;
+    const SIDES = new Set(['n', 's', 'e', 'w']);
+    const RESOLVED = new Set(['sealed', 'open', 'failed']);
+    this.infos.clear();
+    for (const row of s.infos) {
+      if (!Array.isArray(row) || row.length !== 2 || typeof row[0] !== 'string') continue;
+      const [zid, raw] = row as [string, unknown];
+      if (raw === null) { this.infos.set(zid, null); continue; }
+      const i = raw as Partial<HoldfastInfo>;
+      if (!i || typeof i !== 'object') continue;
+      if (typeof i.defId !== 'string' || !this.def(i.defId)) { this.infos.set(zid, null); continue; }
+      if (typeof i.lockId !== 'string' || !SIDES.has(i.side as string)) continue;
+      if (typeof i.at !== 'number' || !Number.isFinite(i.at)) continue;
+      if (!RESOLVED.has(i.resolved as string)) continue;
+      this.infos.set(zid, {
+        defId: i.defId, lockId: i.lockId, side: i.side as HoldfastInfo['side'], at: i.at,
+        locked: !!i.locked, resolved: i.resolved as HoldfastInfo['resolved'],
+        exitAppended: !!i.exitAppended,
+        exitDefIndex: typeof i.exitDefIndex === 'number' && Number.isFinite(i.exitDefIndex) ? i.exitDefIndex : -1,
+        ...(i.seenBumped ? { seenBumped: true } : {}),
+        ...(i.destOverride && typeof i.destOverride === 'object' ? { destOverride: { ...i.destOverride } } : {}),
+        decorRoad: !!i.decorRoad, decorCampfire: !!i.decorCampfire,
+      });
+    }
+  }
+
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const zid of [...this.infos.keys()]) if (!has(zid)) this.infos.delete(zid);
+  }
+
   /** DEV: force a fresh sealed holdfast in this zone regardless of the gate/roll (QA).
    *  The engine then appends the exit + raises the gate (World.devForceHoldfast). */
   devForce(zone: ZoneDef): HoldfastInfo | null {
@@ -162,7 +212,7 @@ export class HoldfastField implements WorldOverlay {
     const def = this.pickDef(zone.level, rng) ?? this.cfg.defs[0];
     if (!def) return null;
     const side = (['n', 's', 'e', 'w'] as const)[rng.int(0, 3)];
-    const at = rng.pick([0.2, 0.32, 0.68, 0.8]);
+    const at = rng.pick(this.cfg.exitLocales);
     const info: HoldfastInfo = {
       defId: def.id, lockId: `holdfast:${zone.id}`, side, at, locked: true, resolved: 'sealed',
       exitAppended: false, exitDefIndex: -1,

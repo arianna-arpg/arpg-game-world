@@ -28,6 +28,7 @@ import type { ZoneDef } from '../../data/zones';
 import { DIRS, MAP_DIR, projectCoord, type MapCoord } from '../../world/coords';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
+import { scaledCap } from '../frequency';
 import type { World } from '../../engine/world';
 
 /** Approx node-units per graph hop (the 'graph'/'hybrid' reach maps a tentacle's
@@ -89,6 +90,10 @@ export interface IncursionTermination {
   observer?: string;
   /** How much resolving one zone's event retracts the reach (hybrid only). */
   cleanseRetract?: number;
+  /** Observer-kill reward multiplier: base + festerBonusMax × min(1, age /
+   *  festerSeconds) — "the longer it spread, the richer the collapse". Optional
+   *  (defaults preserve the classic 1.5 + up to 2 over 240s). */
+  observerReward?: { base: number; festerBonusMax: number; festerSeconds: number };
 }
 
 /** How a per-fire COUNT scales with the zone's influence intensity:
@@ -275,8 +280,17 @@ export const INCURSION_ARCHETYPES: Record<string, IncursionArchetype> = {
 
 export class IncursionField implements WorldOverlay {
   readonly id = 'incursion';
+  /** Durable: a landed blight is the long arc of its triggering package (the
+   *  Conclave's whole incubation pays into it) — epicenters, reach, and minted
+   *  ground all resume; its zones ride the ownedZones claim. */
+  readonly persistence = 'durable' as const;
+  readonly mapLabel = 'Incursions';
   /** Engine-drained mint seam (host-only): hidden epicenter zones + biome warps. */
   readonly mintRequests: IncursionMintRequest[] = [];
+  /** Global concurrency crank (frequency.concurrency, set by WorldSim) — the
+   *  always-on infra field has no package gate, so the sim hands it the run's
+   *  lever directly (the weather/invasion migrated-feature pattern). */
+  concurrencyScale = 1;
 
   private rng: Rng;
   private incursions: Incursion[] = [];
@@ -302,8 +316,10 @@ export class IncursionField implements WorldOverlay {
       const a = INCURSION_ARCHETYPES[inc.archetype];
       if (!a) continue;
       // GROWTH CAP: once enough charted zones are under the blight, hold the reach
-      // (tentacles may still writhe/shrink, but the front stops advancing).
-      const frozen = a.cap.maxInfluencedZones > 0 && this.influencedCount(inc, a) >= a.cap.maxInfluencedZones;
+      // (tentacles may still writhe/shrink, but the front stops advancing). The
+      // global concurrency crank widens how much ground one blight may hold.
+      const frozen = a.cap.maxInfluencedZones > 0
+        && this.influencedCount(inc, a) >= scaledCap(a.cap.maxInfluencedZones, this.concurrencyScale);
       for (const ep of inc.epicenters) {
         for (const pod of ep.pods) {
           pod.angle += this.rng.range(-1, 1) * a.spread.wander * dt; // writhe (swing)
@@ -384,7 +400,8 @@ export class IncursionField implements WorldOverlay {
   ignite(archetypeId: string, origin: MapCoord, level: number): { announce: string; color: string } | null {
     const a = INCURSION_ARCHETYPES[archetypeId];
     if (!a) return null;
-    if (this.incursions.filter(i => i.archetype === archetypeId && !i.dead).length >= a.cap.maxConcurrent) return null;
+    if (this.incursions.filter(i => i.archetype === archetypeId && !i.dead).length
+      >= scaledCap(a.cap.maxConcurrent, this.concurrencyScale)) return null;
     // The cluster lands FAR off in a random cardinal-ish direction from the origin.
     const dir = DIRS[this.rng.int(0, DIRS.length - 1)];
     const steps = this.rng.int(a.mintDistance[0], a.mintDistance[1]);
@@ -502,7 +519,9 @@ export class IncursionField implements WorldOverlay {
       const i = inc.epicenters.findIndex(e => e.zoneId === zoneId);
       if (i < 0) continue;
       inc.epicenters.splice(i, 1);
-      const mul = 1.5 + Math.min(2, inc.age / 120);
+      const r = INCURSION_ARCHETYPES[inc.archetype]?.termination.observerReward
+        ?? { base: 1.5, festerBonusMax: 2, festerSeconds: 240 };
+      const mul = r.base + r.festerBonusMax * Math.min(1, inc.age / Math.max(1, r.festerSeconds));
       if (!inc.epicenters.length) inc.dead = true;
       return mul;
     }
@@ -523,6 +542,99 @@ export class IncursionField implements WorldOverlay {
         for (const pod of ep.pods) {
           pod.len = Math.max(0, pod.len - amount);
           pod.target = Math.max(0, pod.target - amount);
+        }
+      }
+    }
+  }
+
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: every live incursion (epicenters, pods, age), any UNDRAINED mint
+   *  requests, and the counter. `ownedZones` (the claim convention) names every
+   *  BOUND epicenter zone so the minted eldritch ground rides the save. */
+  snapshot(): unknown {
+    const ownedZones: string[] = [];
+    for (const inc of this.incursions) {
+      if (inc.dead) continue;
+      for (const ep of inc.epicenters) if (ep.zoneId) ownedZones.push(ep.zoneId);
+    }
+    return {
+      ownedZones,
+      incursions: this.incursions.filter(i => !i.dead).map(inc => ({
+        id: inc.id, archetype: inc.archetype,
+        origin: { ...inc.origin }, center: { ...inc.center }, age: inc.age, dead: false,
+        epicenters: inc.epicenters.map(ep => ({
+          id: ep.id, coord: { ...ep.coord }, zoneId: ep.zoneId,
+          pods: ep.pods.map(p => ({ ...p })),
+        })),
+      })),
+      mintRequests: this.mintRequests.map(m => ({ ...m, coord: { ...m.coord } })),
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as { incursions?: unknown[]; mintRequests?: unknown[]; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    const num = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+    const coord = (c: unknown): MapCoord | null => {
+      const m = c as { x?: unknown; y?: unknown } | null;
+      return m && num(m.x) && num(m.y) ? { x: m.x, y: m.y } : null;
+    };
+    if (num(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    if (Array.isArray(s.incursions)) {
+      this.incursions = [];
+      for (const raw of s.incursions) {
+        const i = raw as { id?: unknown; archetype?: unknown; origin?: unknown; center?: unknown; age?: unknown; epicenters?: unknown[] } | null;
+        if (!i || typeof i.id !== 'string' || typeof i.archetype !== 'string') continue;
+        if (!INCURSION_ARCHETYPES[i.archetype]) continue; // archetype unregistered since the save
+        const origin = coord(i.origin), center = coord(i.center);
+        if (!origin || !center || !num(i.age) || !Array.isArray(i.epicenters)) continue;
+        const epicenters: Epicenter[] = [];
+        for (const eraw of i.epicenters) {
+          const e = eraw as { id?: unknown; coord?: unknown; zoneId?: unknown; pods?: unknown[] } | null;
+          if (!e || typeof e.id !== 'string') continue;
+          const c = coord(e.coord);
+          if (!c || !Array.isArray(e.pods)) continue;
+          const pods: Pseudopod[] = [];
+          for (const praw of e.pods) {
+            const p = praw as { angle?: unknown; len?: unknown; target?: unknown } | null;
+            if (!p || ![p.angle, p.len, p.target].every(num)) continue;
+            pods.push({ angle: p.angle as number, len: p.len as number, target: p.target as number });
+          }
+          if (!pods.length) continue;
+          epicenters.push({ id: e.id, coord: c, zoneId: typeof e.zoneId === 'string' ? e.zoneId : null, pods });
+        }
+        if (!epicenters.length) continue; // nothing left standing — the incursion is spent
+        this.incursions.push({ id: i.id, archetype: i.archetype, origin, center, epicenters, age: i.age, dead: false });
+      }
+    }
+    if (Array.isArray(s.mintRequests)) {
+      this.mintRequests.length = 0;
+      for (const raw of s.mintRequests) {
+        const m = raw as Partial<IncursionMintRequest> | null;
+        if (!m || typeof m.id !== 'string' || typeof m.zoneKey !== 'string' || typeof m.tileset !== 'string') continue;
+        const c = coord(m.coord);
+        if (!c || !num(m.level)) continue;
+        this.mintRequests.push({
+          id: m.id, coord: c, zoneKey: m.zoneKey, tileset: m.tileset, level: m.level,
+          ...(typeof m.biome === 'string' ? { biome: m.biome } : {}),
+          ...(num(m.biomeRadius) ? { biomeRadius: m.biomeRadius } : {}),
+          ...(num(m.biomeStrength) ? { biomeStrength: m.biomeStrength } : {}),
+        } as IncursionMintRequest);
+      }
+    }
+  }
+
+  /** A bound epicenter whose zone the sanitizer culled (claims make this RARE —
+   *  structural corruption only) unbinds: the reach + events keep firing, but
+   *  its Observer payoff is gone, so warn loudly rather than fail silently. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const inc of this.incursions) {
+      for (const ep of inc.epicenters) {
+        if (ep.zoneId && !has(ep.zoneId)) {
+          console.warn(`[incursion] epicenter '${ep.id}' lost its minted zone '${ep.zoneId}' — unbound (no Observer there)`);
+          ep.zoneId = null;
         }
       }
     }

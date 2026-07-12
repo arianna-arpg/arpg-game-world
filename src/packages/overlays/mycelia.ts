@@ -27,7 +27,7 @@ import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { SPORE_COLORS } from '../../world/palette';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
@@ -50,6 +50,8 @@ export interface MyceliaSurge {
   minIntensity: number;
   /** Per-second passive density fade (the bloom needs feeding to hold ground). */
   densityDecay: number;
+  /** Density a fresh DORMANT seed starts at (the faint home patch). */
+  seedDensity: number;
   /** The CAP: total Σ density the bloom may hold. Grows as it's fed, shrinks on cull. */
   massStart: number;
   massPerFeed: number; // mass gained per spread while fed
@@ -113,8 +115,22 @@ export interface SporeInfo {
   label: string;
 }
 
+// State-machine internals (algorithm shape, not content knobs — the designer
+// levers all live on MyceliaSurge):
+/** Fraction of flareThreshold below which a starved, collapsed bloom re-calms. */
+const DORMANT_CALM_FRAC = 0.25;
+/** Fraction of pushThreshold the push-pressure must cool to before re-spreading. */
+const SPREAD_RESUME_FRAC = 0.4;
+/** How heavily event-activity outweighs hop-distance when the bloom picks food. */
+const ACTIVITY_SCORE_WEIGHT = 10;
+
 export class MyceliaField implements WorldOverlay {
   readonly id = 'mycelia';
+  /** Durable: a saturating bloom is a slow siege — its reach, its mass, and
+   *  the zones it has WARPED to fungal biome all resume (the engine re-paints
+   *  the biome warps from transformedZones() on the first tick back). */
+  readonly persistence = 'durable' as const;
+  readonly mapLabel = 'Mycelia';
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -300,6 +316,67 @@ export class MyceliaField implements WorldOverlay {
     return [...this.spores].map(([zid, z]) => ({ zoneId: zid, density: z.density, isCore: b?.coreZoneId === zid }));
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: the bloom, the spore map, the pending push flag, the counter.
+   *  The activity feed is NOT saved — the engine re-feeds it every tick. */
+  snapshot(): unknown {
+    return {
+      bloom: this.bloom ? { ...this.bloom } : null,
+      spores: [...this.spores.entries()].map(([zid, z]) => ({ zid, ...z })),
+      pushedBackPending: this.pushedBackPending,
+      seq: this.seq,
+    };
+  }
+
+  restore(snap: unknown): void {
+    const s = snap as { bloom?: unknown; spores?: unknown[]; pushedBackPending?: unknown; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    const STATES = new Set<BloomState>(['dormant', 'spread', 'pushed', 'withdraw']);
+    if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    this.pushedBackPending = !!s.pushedBackPending;
+    const b = s.bloom as Partial<ActiveBloom> | null;
+    this.bloom = null;
+    if (b && typeof b === 'object'
+      && typeof b.id === 'string' && typeof b.homeZoneId === 'string' && typeof b.coreZoneId === 'string'
+      && STATES.has(b.state as BloomState)
+      && [b.mass, b.flareCharge, b.spreadAcc, b.recedeAcc, b.pushPressure, b.chaseZones, b.age]
+        .every(n => typeof n === 'number' && Number.isFinite(n))) {
+      this.bloom = {
+        id: b.id, homeZoneId: b.homeZoneId, coreZoneId: b.coreZoneId,
+        mass: b.mass!, state: b.state as BloomState, flareCharge: b.flareCharge!,
+        spreadAcc: b.spreadAcc!, recedeAcc: b.recedeAcc!, pushPressure: b.pushPressure!,
+        chaseZones: b.chaseZones!, age: b.age!,
+      };
+    }
+    this.spores.clear();
+    if (this.bloom && Array.isArray(s.spores)) {
+      for (const raw of s.spores) {
+        const z = raw as { zid?: unknown; density?: unknown; hops?: unknown } | null;
+        if (!z || typeof z.zid !== 'string') continue;
+        if (![z.density, z.hops].every(n => typeof n === 'number' && Number.isFinite(n))) continue;
+        this.spores.set(z.zid, { density: clamp(z.density as number, 0, 1), hops: Math.max(0, Math.floor(z.hops as number)) });
+      }
+      // A bloom with no ground under it (all spores dropped) recycles cleanly.
+      if (!this.spores.size) this.bloom = null;
+    }
+  }
+
+  /** Culled ground sheds its spores; a culled CORE recoils to the thickest
+   *  remaining zone (the chase move, minus the chase debt); a bloom with no
+   *  ground left recycles (re-ignites on its own clock later). */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    for (const zid of [...this.spores.keys()]) if (!has(zid)) this.spores.delete(zid);
+    const b = this.bloom;
+    if (!b) return;
+    if (!this.spores.size) { this.bloom = null; return; }
+    if (!this.spores.has(b.coreZoneId)) {
+      let best: string | null = null, bd = -1;
+      for (const [zid, z] of this.spores) if (z.density > bd) { bd = z.density; best = zid; }
+      if (best) { b.coreZoneId = best; this.rehop(); } else { this.bloom = null; }
+    }
+  }
+
   // --- dev seam --------------------------------------------------------------
 
   /** DEV: ignite a bloom whose HOME + core is the given (current) zone, pre-charged so it
@@ -318,8 +395,7 @@ export class MyceliaField implements WorldOverlay {
   // --- internals -------------------------------------------------------------
 
   private streamable(z: ZoneDef): boolean {
-    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && eventAllowed(this.id, z);
+    return eventTargetable(this.id, z);
   }
 
   private totalDensity(): number {
@@ -354,7 +430,7 @@ export class MyceliaField implements WorldOverlay {
     if (!homes.length) return;
     const home = homes[this.rng.int(0, homes.length - 1)];
     this.bloom = this.makeBloom(home.id);
-    this.spores.set(home.id, { density: 0.45, hops: 0 }); // a faint dormant seed
+    this.spores.set(home.id, { density: this.cfg.seedDensity, hops: 0 }); // a faint dormant seed
   }
 
   /** The fixed-cadence state machine. */
@@ -375,12 +451,12 @@ export class MyceliaField implements WorldOverlay {
         if (this.totalDensity() > b.mass) this.eatTail();
         if (b.pushPressure >= cfg.pushThreshold) b.state = 'pushed';
         // Starved + dormant-low: the bloom calms back to its home.
-        else if (b.flareCharge < cfg.flareThreshold * 0.25 && this.totalActivity() <= 0 && this.spores.size <= 1) b.state = 'dormant';
+        else if (b.flareCharge < cfg.flareThreshold * DORMANT_CALM_FRAC && this.totalActivity() <= 0 && this.spores.size <= 1) b.state = 'dormant';
         break;
       case 'pushed':
         this.relocateCore();
         if (b.mass <= cfg.withdrawMass || b.chaseZones >= cfg.chaseLimit) { b.state = 'withdraw'; b.recedeAcc = 0; this.pushedBackPending = true; }
-        else if (b.pushPressure < cfg.pushThreshold * 0.4 && b.flareCharge >= cfg.flareThreshold) b.state = 'spread';
+        else if (b.pushPressure < cfg.pushThreshold * SPREAD_RESUME_FRAC && b.flareCharge >= cfg.flareThreshold) b.state = 'spread';
         break;
       case 'withdraw':
         b.recedeAcc += STEP;
@@ -391,7 +467,7 @@ export class MyceliaField implements WorldOverlay {
           const home = view.byId[b.homeZoneId];
           if (home && this.streamable(home)) {
             this.bloom = this.makeBloom(home.id);
-            this.spores.set(home.id, { density: 0.45, hops: 0 });
+            this.spores.set(home.id, { density: this.cfg.seedDensity, hops: 0 });
           } else {
             this.bloom = null; // home gone — recycle entirely (re-ignites elsewhere later)
           }
@@ -422,7 +498,7 @@ export class MyceliaField implements WorldOverlay {
     let best: string | null = null, bestScore = -1;
     for (const [zid, ph] of cand) {
       if (ph + 1 > this.cfg.maxHops) continue;
-      const score = (this.activity.get(zid) ?? 0) * 10 - ph;
+      const score = (this.activity.get(zid) ?? 0) * ACTIVITY_SCORE_WEIGHT - ph;
       if (score > bestScore) { bestScore = score; best = zid; }
     }
     if (!best || (this.activity.get(best) ?? 0) <= 0) return; // no food adjacent → coalesce

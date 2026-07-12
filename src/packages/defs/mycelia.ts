@@ -27,6 +27,7 @@ const MYCELIA_SURGE: MyceliaSurge = {
   maxHops: 6,
   minIntensity: 0.15,
   densityDecay: 0.02,     // spores slowly fade without feeding
+  seedDensity: 0.45,      // the faint dormant home patch a fresh/recycled bloom starts at
   massStart: 1.5,         // ≈ a couple of zones at first
   massPerFeed: 0.4,       // the mass grows as it feeds…
   massMax: 5,             // …up to a hard cap (then it must eat its tail to keep spreading)
@@ -102,6 +103,13 @@ export const MYCELIA: ContentPackage = {
   defaultEnabled: true,
   world: { overlay: (ctx) => new MyceliaField(ctx, MYCELIA_SURGE) },
   factions: [FUNGAL_FACTION],
+  validate: (look) => {
+    const out: string[] = [];
+    if (!look.faction(MYCELIA_SURGE.faction)) out.push(`surge faction '${MYCELIA_SURGE.faction}' unknown`);
+    if (!look.monster(MYCELIA_SURGE.heartbloom.defId)) out.push(`heartbloom '${MYCELIA_SURGE.heartbloom.defId}' unknown`);
+    if (!look.biome(MYCELIA_SURGE.homeBiome)) out.push(`homeBiome '${MYCELIA_SURGE.homeBiome}' unknown`);
+    return out;
+  },
 };
 
 // MYCELIA: a slain fungal CULLS the bloom's grip on this zone (density drops; sustained

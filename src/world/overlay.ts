@@ -78,6 +78,17 @@ export interface MapLayer {
  *  net-new content package can append its own overlay (e.g. 'breach'). */
 export interface WorldOverlay {
   readonly id: string;
+  /** THE PERSISTENCE PLEDGE (required — every field answers the relaunch
+   *  question out loud, never by omission):
+   *    'durable'   — this field's cross-zone state is part of the wakeful
+   *                  world; it MUST implement snapshot() AND restore(), and a
+   *                  relaunch resumes it mid-arc.
+   *    'transient' — this field deliberately restarts on resume (a drifting
+   *                  front, a marching band — weather-like motion whose loss
+   *                  is the design); it implements NEITHER hook.
+   *  The event QA harness asserts the pledge matches the implementation, so
+   *  a durable field can never silently lose its hooks (or vice versa). */
+  readonly persistence: 'durable' | 'transient';
   /** Human label for the map's layer-toggle chips (default: the id). */
   readonly mapLabel?: string;
   /** The DIMENSION this field lives in (default 'surface'). The sim hands the
@@ -98,24 +109,50 @@ export interface WorldOverlay {
   activityAt?(zid: string): number;
   /** Paint the field onto the minimap. */
   renderMap(nodes: ZoneDef[]): MapLayer;
-  /** WORLDSTATE PERSISTENCE (optional, opt-in per overlay) — the seam a saved
-   *  run resumes its living world through (meta/worldstate.ts rides these in
-   *  the character save). `snapshot` returns this field's durable state as
-   *  PURE JSON (no class instances, no functions); `restore` rebuilds from a
-   *  prior snapshot, TOLERANTLY — the value arrives `unknown` because it may
-   *  be from an older build; validate shape, drop what no longer resolves,
-   *  and never throw (a bad snapshot just means this field starts fresh).
-   *  An overlay implementing NEITHER simply restarts on resume (transient
-   *  fields — a drifting front, a marching host — may prefer exactly that);
-   *  the sim re-seeds un-restored overlays over the restored graph via
-   *  onNodeCharted, so every field always knows the nodes.
-   *  CONTRACT for zone-minting overlays: an overlay whose events MINT zones
-   *  (eventOwned defs) must snapshot/restore if those zones should survive a
-   *  relaunch — un-restored overlays get their eventOwned zones SCRUBBED
-   *  from the resumed graph (the same transience rule completedObjectives
-   *  always encoded). */
+  /** WORLDSTATE PERSISTENCE (required for `persistence: 'durable'` fields) —
+   *  the seam a saved run resumes its living world through (meta/worldstate.ts
+   *  rides these in the character save). `snapshot` returns this field's
+   *  durable state as PURE JSON (no class instances, no functions, no Maps —
+   *  it must survive JSON.stringify/parse byte-identically); `restore`
+   *  rebuilds from a prior snapshot, TOLERANTLY — the value arrives `unknown`
+   *  because it may be from an older build; validate shape, drop what no
+   *  longer resolves, and never throw (a bad snapshot just means this field
+   *  starts fresh). A 'transient' overlay implements NEITHER and simply
+   *  restarts on resume; the sim re-seeds un-restored overlays over the
+   *  restored graph via onNodeCharted, so every field always knows the nodes.
+   *  THE ZONE-CLAIM CONVENTION for zone-minting overlays: an overlay whose
+   *  events MINT zones (eventOwned defs — demon epicenters, crusade holds,
+   *  incursion landings) must include `ownedZones: string[]` at the TOP LEVEL
+   *  of its snapshot, naming every event zone its current state owns. The
+   *  save path reads that field generically on BOTH sides (write: an owned
+   *  zone rides into the save; resume: it survives the transience scrub) —
+   *  one convention, no per-overlay engine code. Un-claimed eventOwned zones
+   *  are SCRUBBED on resume and the event re-rolls fresh (the same transience
+   *  rule completedObjectives always encoded). */
   snapshot?(): unknown;
   restore?(snap: unknown): void;
+  /** POST-RESUME SCRUB (optional; durable fields holding zone-keyed state
+   *  should implement it) — called once after a resumed graph is adopted,
+   *  with a membership test for the healed graph. Drop state rows whose zone
+   *  was culled by the sanitizer so a ghost entry can never hold a
+   *  concurrency slot, feed activityAt, or pin a marker to a void. */
+  pruneZones?(has: (zoneId: string) => boolean): void;
+}
+
+/** Scan a saved per-overlay snapshot bag for THE ZONE-CLAIM CONVENTION
+ *  (`ownedZones: string[]` at a snapshot's top level) and fold every claim
+ *  into one set. PURE and tolerant — runs BEFORE any overlay restores (the
+ *  sanitizer needs claims first, and a failed adopt must leave overlays
+ *  untouched), so it reads the raw bag, never live overlay state. */
+export function claimedZonesFromBag(bag: Record<string, unknown> | undefined | null): Set<string> {
+  const out = new Set<string>();
+  if (!bag || typeof bag !== 'object') return out;
+  for (const snap of Object.values(bag)) {
+    const owned = (snap as { ownedZones?: unknown } | null | undefined)?.ownedZones;
+    if (!Array.isArray(owned)) continue;
+    for (const id of owned) if (typeof id === 'string' && id) out.add(id);
+  }
+  return out;
 }
 
 /** Fold several biases into one: counts multiply, faction muls multiply,

@@ -22,6 +22,17 @@ export interface PolicyZone {
   layoutType?: string;
 }
 
+/** The structural shape eventTargetable reads on top of PolicyZone — every
+ *  field optional, matching ZoneDef's own optionality, so any ZoneDef passes
+ *  straight in. */
+export interface TargetableZone extends PolicyZone {
+  caveDepth?: number;
+  special?: boolean;
+  floating?: boolean;
+  eventOwned?: boolean;
+  objective?: { kind: string };
+}
+
 function passes(id: string, deny?: string[], allow?: string[]): boolean {
   if (deny && deny.includes(id)) return false;
   if (allow && allow.length > 0 && !allow.includes(id)) return false;
@@ -39,10 +50,28 @@ export function factionAllowed(faction: string, zone: PolicyZone): boolean {
 
 /** May this EVENT (an overlay id: 'demon_invasion' | 'crusade' | 'fractures' |
  *  'hunt' | 'conclave' | 'breach' | …) target this zone? Callers compose this with
- *  their existing objective.kind/cave/floating checks. */
+ *  their existing objective.kind/cave/floating checks — or better, call
+ *  eventTargetable below, which composes them for you. */
 export function eventAllowed(eventId: string, zone: PolicyZone): boolean {
   const b = zone.biome ? BIOMES[zone.biome] : undefined;
   if (b && !passes(eventId, b.denyEvents, b.allowEvents)) return false;
   // (Phase-2 LayoutDef event policy ANDs in here.)
   return true;
+}
+
+/** THE ONE TARGET-ELIGIBILITY PREDICATE — "may this event LAND on this zone".
+ *
+ *  Composes the structural invariants every event must respect (no caves, no
+ *  floating un-roaded nodes, no event-owned ground — another event already
+ *  holds it, and special arenas are eventOwned by mint — no sanctuaries) with
+ *  the per-biome event policy above. Before this existed, each overlay
+ *  copy-pasted the chain and the copies DRIFTED (some dropped `!special`, some
+ *  skipped eventAllowed entirely); every overlay now routes here, so a new
+ *  structural invariant lands in ONE line and holds for every event at once.
+ *  Site-specific extras (visited-only, needs-packs, level bands) stay at the
+ *  call site — this is the floor, not the whole gate. */
+export function eventTargetable(eventId: string, zone: TargetableZone): boolean {
+  if (zone.caveDepth != null || zone.floating || zone.eventOwned || zone.special) return false;
+  if (zone.objective && zone.objective.kind === 'safe') return false;
+  return eventAllowed(eventId, zone);
 }

@@ -158,6 +158,18 @@ export const DEADWAKE: ContentPackage = {
     // A world thick with marching war-hosts dies more, feeding the tide.
     { a: 'warbands', b: 'deadwake', kind: 'amplifies', strength: 1.1 },
   ],
+  validate: (look) => {
+    const out: string[] = [];
+    const s = DEADWAKE_SURGE;
+    if (!look.faction(s.faction)) out.push(`surge faction '${s.faction}' unknown`);
+    for (const e of [...s.floodRoster, ...s.leaderPool, ...s.necropolis.bossPool]) {
+      if (!look.monster(e.id)) out.push(`roster monster '${e.id}' unknown`);
+    }
+    if (!look.tileset(s.necropolis.tileset)) out.push(`necropolis tileset '${s.necropolis.tileset}' unknown`);
+    if (s.necropolis.arena?.tileset && !look.tileset(s.necropolis.arena.tileset)) out.push(`necropolis arena tileset '${s.necropolis.arena.tileset}' unknown`);
+    if (s.necropolis.arena?.layoutType && !look.layout(s.necropolis.arena.layoutType)) out.push(`necropolis arena layout '${s.necropolis.arena.layoutType}' unknown`);
+    return out;
+  },
 };
 
 // A streamed Deadwake undead fell — the tide SWELLS (death is everlasting;

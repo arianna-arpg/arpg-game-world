@@ -56,6 +56,9 @@ const WARBAND_FULL = 8;         // a warband at full strength; the pump scales w
 
 export class InvasionField implements WorldOverlay {
   readonly id = 'invasion' as const;
+  /** Transient BY DESIGN (the movers doctrine): a marching host mid-road on
+   *  quit simply re-launches next session — weather-like motion, no arc lost. */
+  readonly persistence = 'transient' as const;
   readonly mapLabel = 'Invasions';
   readonly hosts: InvasionHost[] = [];
   /** Hosts that REACHED their target this tick — the engine drains this each

@@ -131,4 +131,9 @@ export const HAUNTING: ContentPackage = {
   defaultStartLevel: 3,
   defaultEnabled: true,
   world: { overlay: (ctx) => new HauntField(ctx, HAUNT_SURGE) },
+  validate: (look) => [
+    ...HAUNT_SURGE.roster.filter(e => !look.monster(e.id)).map(e => `apparition '${e.id}' unknown`),
+    ...(look.monster(HAUNT_SURGE.anchorId) ? [] : [`anchor '${HAUNT_SURGE.anchorId}' unknown`]),
+    ...(look.monster(HAUNT_SURGE.bossId) ? [] : [`boss '${HAUNT_SURGE.bossId}' unknown`]),
+  ],
 };

@@ -24,8 +24,10 @@
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../core/math';
-import { factionStance, MONSTERS } from '../data/monsters';
+import { FACTIONS, factionStance, MONSTERS } from '../data/monsters';
 import type { ZoneDef } from '../data/zones';
+import type { World } from '../engine/world';
+import { registerBulletinSource } from './bulletins';
 import { patronFaction } from './biomes';
 import { factionAllowed } from './zonePolicy';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
@@ -58,6 +60,7 @@ export interface FactionOwner {
 
 export class FactionField implements WorldOverlay {
   readonly id = 'faction' as const;
+  readonly persistence = 'durable' as const; // territory survives a relaunch (snapshot below)
   readonly mapLabel = 'Territory';
   private field = new Map<string, NodeInfluence>();
   private acc = 0;
@@ -354,3 +357,16 @@ export class FactionField implements WorldOverlay {
     }
   }
 }
+
+// --- war bulletins (registered on import — the engine's collect drains us) ----
+registerBulletinSource((world: World) => {
+  const q = world.sim.faction.conquests;
+  if (!q.length) return [];
+  const out = q.map(c => {
+    const zn = world.zoneMap[c.zoneId]?.name ?? c.zoneId;
+    const fn = FACTIONS[c.faction]?.name ?? c.faction;
+    return { text: c.reclaimed ? `${fn} reclaim ${zn}!` : `${zn} falls to ${fn}!` };
+  });
+  q.length = 0;
+  return out;
+});

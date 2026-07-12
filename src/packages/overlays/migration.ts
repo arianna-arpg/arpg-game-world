@@ -28,7 +28,7 @@ import { fieldRegionAt, FIELD_BIOME } from '../../world/fieldRegion';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
@@ -140,6 +140,11 @@ function segDist(p: MapCoord, a: MapCoord, b: MapCoord): number {
 
 export class MigrationField implements WorldOverlay {
   readonly id = 'migration';
+  /** Transient BY DESIGN (the movers doctrine): a herd mid-crossing on quit is
+   *  weather — it has passed by the time you return, and a fresh crossing
+   *  ignites on its own clock. No arc is lost, so nothing is saved. */
+  readonly persistence = 'transient' as const;
+  readonly mapLabel = 'Migrations';
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -234,6 +239,11 @@ export class MigrationField implements WorldOverlay {
   /** Live config (the engine reads the stream / roster / rouse knobs). */
   surge(): MigrationSurge { return this.cfg; }
 
+  /** A rolling herd IS something happening here (feeds the Mycelia bloom). */
+  activityAt(zoneId: string): number {
+    return this.migrationOn(zoneId) ? 1 : 0;
+  }
+
   /** The migration whose band currently rolls over a zone, or null. Spares non-
    *  streamable ground (caves / special / event-owned / sanctuaries / forbidden). */
   migrationOn(zoneId: string): MigrationInfo | null {
@@ -304,12 +314,11 @@ export class MigrationField implements WorldOverlay {
 
   // --- internals -------------------------------------------------------------
 
-  /** May the herd STREAM through a zone? Kept in LOCKSTEP with the engine's stream
-   *  guard (world.ts updateMigrationStream): never a cave, special arena, floating /
-   *  event-owned node, sanctuary, or biome-forbidden ground. */
+  /** May the herd STREAM through a zone? THE shared predicate (zonePolicy
+   *  eventTargetable) — one line, in lockstep with every other event's floor
+   *  and the engine's stream guard by construction. */
   private streamable(z: ZoneDef): boolean {
-    return z.caveDepth == null && !z.special && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && eventAllowed('migration', z);
+    return eventTargetable(this.id, z);
   }
 
   /** Roll a fresh crossing between two sampled Field points (seeded at the variant). */

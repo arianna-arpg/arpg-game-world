@@ -144,35 +144,24 @@ export interface WorldHooks {
   dimensions?: string[];
 }
 
-// --- rewards / quests / events (declarative; wired incrementally) ------------
+// --- validation (colocated with the def; run once at sim boot + by eventqa) --
 
-export interface RewardSpec {
-  rep?: number;
-  gems?: number;
-  xpMul?: number;
-  /** Counters bumped when this reward fires (feeds quests + unlocks). */
-  ledger?: Ledger;
-}
-
-export interface QuestStep {
-  id: string;
-  label: string;
-  counter: string;
-  need: number;
-}
-
-export interface QuestSpec {
-  id: string;
-  label: string;
-  steps: QuestStep[];
-  reward?: RewardSpec;
-}
-
-export interface PackageEvent {
-  id: string;
-  kind: string;
-  weight: number;
-  reward?: RewardSpec;
+/** Membership tests over the LIVE content registries, handed to each package's
+ *  `validate` so a def can prove every id it references still resolves. Plain
+ *  predicates (not the registries themselves) keep this leaf pure. */
+export interface RegistryLookups {
+  monster(id: string): boolean;
+  skill(id: string): boolean;
+  support(id: string): boolean;
+  faction(id: string): boolean;
+  /** A REGISTERED tileset id (mintable look). */
+  tileset(id: string): boolean;
+  /** A registered layout generator (engine/levelgen hasLayout). */
+  layout(id: string): boolean;
+  /** A registered structure stamp id. */
+  structure(id: string): boolean;
+  sidezone(id: string): boolean;
+  biome(id: string): boolean;
 }
 
 // --- relationships (faction stance overrides + inter-package interaction) ----
@@ -255,12 +244,18 @@ export interface ContentPackage {
    *  faction behind an unlock condition (the Bandit toll-gate). One more HoldfastDef =
    *  a new guardian, pure data. See holdfast.ts. */
   holdfasts?: HoldfastDef[];
-  events?: PackageEvent[];
-  rewards?: Record<string, RewardSpec>;
-  quests?: QuestSpec[];
   factions?: FactionSpec[];
   relationships?: Relationship[];
   /** Fixtures planted inside registered sidezones at their mint — a package
    *  building in rooms it doesn't own (see FurnishSpec). */
   furnish?: FurnishSpec[];
+  /** SELF-VALIDATION, colocated with the def: return a human-readable line per
+   *  id this package references that no longer resolves (a renamed monster, a
+   *  typo'd tileset — the silent-fallback class of bug). The sim runs every
+   *  package's validate at boot (one shared loop — no more per-package blocks)
+   *  and the event QA harness fails the build on any hit. COMMON shapes
+   *  (faction rosters, encounter factions, furnish sidezones/structures,
+   *  relationship ids) are swept generically by validatePackages — declare
+   *  here only what's private to your surge config. */
+  validate?(look: RegistryLookups): string[];
 }

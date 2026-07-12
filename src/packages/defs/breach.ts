@@ -8,8 +8,17 @@
 // ---------------------------------------------------------------------------
 
 import type { EncounterDef } from '../encounters';
-import { BreachField } from '../overlays/breach';
+import { BreachField, type BreachSurge } from '../overlays/breach';
 import type { ContentPackage, FactionSpec } from '../types';
+
+/** The ambient breach mechanic as data — every number is a knob (the in-zone
+ *  encounter below owns the combat side; this drives the map-level tears). */
+const BREACH_SURGE: BreachSurge = {
+  igniteChance: 0.05,      // per step, at pressure 1
+  maxConcurrent: 2,        // standing tears at once (×concurrency crank)
+  lifeSeconds: [70, 130],  // how long a tear gapes (×severity crank)
+  stepSeconds: 0.5,
+};
 
 /** The Riftspawn faction, grafted into the data registries at boot. */
 const BREACH_FACTION: FactionSpec = {
@@ -56,8 +65,6 @@ const BREACH_ENCOUNTER: EncounterDef = {
   ledger: {
     onEncounter: 'breach_encountered', // first open → "Breach discovered"
     onClose: 'breaches_closed',        // the investment milestone (Investigation @ 5)
-    onCollapse: 'breach_variant_entered',
-    onChampion: 'breach_champion_seen',
   },
 };
 
@@ -79,10 +86,11 @@ export const BREACH: ContentPackage = {
     { id: 'breach_invest', label: 'Breach Investigation', requirement: 'Seal 5 Breaches', cost: 120,
       test: (ctx) => (ctx.ledger.breaches_closed ?? 0) >= 5,
       grants: { weight: { min: 0, max: 80 } } },          // widen the frequency band
-    { id: 'breach_explore', label: 'Breach Exploration', requirement: 'Seal 15 Breaches or face a Breach Champion', cost: 220,
-      // Reachable NOW via a deep seal-count; once the Phase-3 collapse → Champion
-      // chain ships (bumping breach_champion_seen), facing one is the faster path.
-      test: (ctx) => (ctx.ledger.breach_champion_seen ?? 0) >= 1 || (ctx.ledger.breaches_closed ?? 0) >= 15,
+    { id: 'breach_explore', label: 'Breach Exploration', requirement: 'Seal 15 Breaches', cost: 220,
+      // Purely the deep seal-count: the ledger contract (event QA) forbids a
+      // tier reading a counter nothing bumps — when the collapse → Champion
+      // chain ships, its key re-enters HERE with its bump, never before.
+      test: (ctx) => (ctx.ledger.breaches_closed ?? 0) >= 15,
       grants: { weight: { min: 0, max: 100 }, startLevel: { min: 0, max: 101 } } }, // free reign + enable/disable
   ],
   modifiers: [
@@ -95,7 +103,7 @@ export const BREACH: ContentPackage = {
   defaultStartLevel: 10,         // breaches begin appearing at character level 10…
   defaultEnabled: true,         // …and they're a base-game feature DISCOVERED in play
                                 // (the Vault unlock gates TUNING, not the feature).
-  world: { overlay: (ctx) => new BreachField(ctx) },
+  world: { overlay: (ctx) => new BreachField(ctx, BREACH_SURGE) },
   encounters: [BREACH_ENCOUNTER],
   factions: [BREACH_FACTION],
   relationships: [

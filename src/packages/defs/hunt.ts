@@ -47,4 +47,8 @@ export const HUNT: ContentPackage = {
   defaultStartLevel: 8,
   defaultEnabled: true,
   world: { overlay: (ctx) => new HuntField(ctx, HUNT_SURGE) },
+  validate: (look) => HUNT_SURGE.beasts.flatMap(b => [
+    ...(look.faction(b.faction) ? [] : [`beast faction '${b.faction}' unknown`]),
+    ...(look.monster(b.defId) ? [] : [`beast '${b.defId}' unknown`]),
+  ]),
 };

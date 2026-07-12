@@ -95,6 +95,10 @@ export const CONTAGION: ContentPackage = {
   defaultEnabled: true,
   world: { overlay: (ctx) => new ContagionField(ctx, CONTAGION_SURGE) },
   factions: [PLAGUE_FACTION],
+  validate: (look) => [
+    ...(look.faction(CONTAGION_SURGE.faction) ? [] : [`plague faction '${CONTAGION_SURGE.faction}' unknown`]),
+    ...(look.monster(CONTAGION_SURGE.bossDefId) ? [] : [`Patient Zero '${CONTAGION_SURGE.bossDefId}' unknown`]),
+  ],
 };
 
 // PATIENT ZERO — felling the source boss does NOT cure the infected zones at

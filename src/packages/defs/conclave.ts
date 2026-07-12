@@ -112,6 +112,10 @@ export const CONCLAVE: ContentPackage = {
   defaultEnabled: true,
   world: { overlay: (ctx) => new ConclaveField(ctx, CONCLAVE_SURGE) },
   factions: [OCCULT_FACTION, ELDRITCH_FACTION],
+  validate: (look) => [
+    ...(look.monster(CONCLAVE_SURGE.ritual.cultistId) ? [] : [`cultist '${CONCLAVE_SURGE.ritual.cultistId}' unknown`]),
+    ...(look.monster(CONCLAVE_SURGE.ritual.bloodDemonId) ? [] : [`blood-demon '${CONCLAVE_SURGE.ritual.bloodDemonId}' unknown`]),
+  ],
 };
 
 // CONCLAVE: a slain cultist may erupt into an Eldritch blood-demon — the

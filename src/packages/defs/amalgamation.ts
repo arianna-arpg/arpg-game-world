@@ -23,7 +23,7 @@
 import { vec } from '../../core/math';
 import { registerKillHandler } from '../../engine/killHandlers';
 import { mod } from '../../engine/stats';
-import { AmalgamationField, type AmalgamationSurge, type AmalgamPartSpec } from '../overlays/amalgamation';
+import { AmalgamationField, validateAmalgamParts, type AmalgamationSurge, type AmalgamPartSpec } from '../overlays/amalgamation';
 import type { ContentPackage, FactionSpec } from '../types';
 
 /** THE PART REGISTRY — the build-your-own-boss menu. Each part bends the boss (stat
@@ -188,6 +188,18 @@ export const AMALGAMATION: ContentPackage = {
   defaultEnabled: true,
   world: { overlay: (ctx) => new AmalgamationField(ctx, AMALGAMATION_SURGE) },
   factions: [AMALGAM_FACTION],
+  validate: (look) => {
+    const out: string[] = [];
+    if (!look.monster(AMALGAMATION_SURGE.necromancerId)) out.push(`necromancer '${AMALGAMATION_SURGE.necromancerId}' unknown`);
+    if (!look.monster(AMALGAMATION_SURGE.bossBaseId)) out.push(`boss base '${AMALGAMATION_SURGE.bossBaseId}' unknown`);
+    for (const id of AMALGAMATION_SURGE.minibossIds) {
+      if (!look.monster(id)) out.push(`miniboss '${id}' unknown`);
+    }
+    // The part registry's boot validator (grant/drop skill + support ids) folds
+    // straight in — each miss is already a "part:kind:id" line.
+    out.push(...validateAmalgamParts(AMALGAM_PARTS, look.skill, look.support));
+    return out;
+  },
 };
 
 // AMALGAMATION: the marked undead falls — return to the Bonewright to graft a

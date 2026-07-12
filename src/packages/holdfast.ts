@@ -101,6 +101,10 @@ export interface HoldfastDef {
 export interface HoldfastSurge {
   /** Per uncharted-zone base chance a holdfast is raised (×ignitionMul ×encounterDensity). */
   openChance: number;
+  /** The OFF-CENTER locales the bonus exit may roll along its wall (fractions
+   *  of the side's span — deliberately never 0.5, so a holdfast reads as a
+   *  side path, not the main road). */
+  exitLocales: number[];
   /** The guardian registry — add an entry, get a new holdfast (pure data). */
   defs: HoldfastDef[];
 }
@@ -156,5 +160,6 @@ export const HOLDFAST_DEFS: HoldfastDef[] = [BANDIT_TOLLGATE, BANDIT_TOLLGATE_CH
 
 export const HOLDFAST_SURGE: HoldfastSurge = {
   openChance: 0.22, // ~1 in 5 uncharted zones raises a holdfast (×density ×pressure)
+  exitLocales: [0.2, 0.32, 0.68, 0.8],
   defs: HOLDFAST_DEFS,
 };

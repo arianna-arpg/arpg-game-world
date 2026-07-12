@@ -31,13 +31,12 @@ import { FACTIONS } from '../../data/monsters';
 import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
 const STEP = 0.5;
 const FRACTURE_VIOLET = '#8a4ae0';
-const TRAVEL_SECS = 4;     // seconds the (purely-visual) fracture marker glides to its next zone
 
 /** A variant's CAPSTONE reward realm — the off-graph boss chamber the rift opens
  *  into. Pure data: a new faction's capstone is one of these + a boss def + a
@@ -105,6 +104,9 @@ export interface FractureSurge {
   divertRewardMul: number;
   /** The full run-through payout (no hops left): the big bounty. */
   sealReward: { xpBase: number; xpPerLevel: number; gems: number };
+  /** Seconds the volatile fracture GLIDES between zones after a divert — the
+   *  purely-visual transit its map marker rides before it surfaces anew. */
+  travelSeconds: number;
   /** Seconds an UNengaged fracture lingers before it recycles (so an abandoned
    *  one never blocks all future fractures). Reset while a run is live. */
   idleLife: number;
@@ -171,6 +173,9 @@ interface ActiveFracture {
 
 export class FractureField implements WorldOverlay {
   readonly id = 'fractures';
+  /** Durable: a fracture mid-chase spans zones, and an EARNED capstone rift
+   *  "persists until its boss is slain" — a relaunch must resume both. */
+  readonly persistence = 'durable' as const;
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -192,7 +197,7 @@ export class FractureField implements WorldOverlay {
     // becomes the active diverted fracture in that zone.
     if (this.fracture?.travel) {
       this.fracture.idle = 0; // in transit counts as engaged — never recycle mid-flight
-      this.fracture.travel.t += dt / TRAVEL_SECS;
+      this.fracture.travel.t += dt / this.cfg.travelSeconds;
       if (this.fracture.travel.t >= 1) {
         this.fracture.zoneId = this.fracture.travel.toZoneId;
         this.fracture.diverted = true;
@@ -286,6 +291,92 @@ export class FractureField implements WorldOverlay {
     };
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: the running fracture, the pending rift, and the id counter. An
+   *  IN-TRANSIT save LANDS the fracture at its destination — the glide is pure
+   *  theatre (fractureIn() is null en route; the hop was already spent at
+   *  divert()), so resuming at the far end loses nothing but marker travel.
+   *  The rift's capstone spec is CONFIG, not state — restore re-resolves it
+   *  from the live variant — and its boss CHAMBER is an OFF-GRAPH realm
+   *  (caveMap, minted fresh on entry — never a graph node), so there are no
+   *  ownedZones claims to make: the rift's host zone is ordinary charted ground. */
+  snapshot(): unknown {
+    const f = this.fracture;
+    const r = this.rift;
+    return {
+      fracture: f ? {
+        id: f.id, faction: f.faction, color: f.color, variant: f.variant,
+        zoneId: f.travel ? f.travel.toZoneId : f.zoneId,
+        hopsRemaining: f.hopsRemaining,
+        diverted: f.travel ? true : f.diverted,
+        span: f.span,
+      } : null,
+      rift: r ? {
+        zoneId: r.zoneId, id: r.id, pos: { x: r.pos.x, y: r.pos.y },
+        faction: r.faction, color: r.color, variant: r.variant, level: r.level,
+      } : null,
+      seq: this.seq,
+    };
+  }
+
+  /** Rebuild tolerantly: a fracture (or rift) whose variant left the surge
+   *  roster — or whose faction no longer exists — simply ends; a fresh one
+   *  ignites on its own clock. The rift re-takes its CAPSTONE from the live
+   *  variant (the exact object openFractureRift read at open time), so a
+   *  renamed boss or tileset can never ride in from an old save. */
+  restore(snap: unknown): void {
+    const s = snap as { fracture?: unknown; rift?: unknown; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    this.fracture = null;
+    this.rift = null;
+    const f = s.fracture as Partial<ActiveFracture> | null;
+    if (f && typeof f === 'object'
+      && typeof f.id === 'string' && typeof f.faction === 'string'
+      && typeof f.variant === 'string' && typeof f.zoneId === 'string'
+      && [f.hopsRemaining, f.span].every(n => typeof n === 'number' && Number.isFinite(n))
+      && FACTIONS[f.faction]
+      && this.cfg.variants.some(v => v.variant === f.variant && v.faction === f.faction)) {
+      this.fracture = {
+        id: f.id, faction: f.faction,
+        color: typeof f.color === 'string' ? f.color : (FACTION_COLORS[f.faction] ?? FRACTURE_VIOLET),
+        variant: f.variant, zoneId: f.zoneId,
+        hopsRemaining: Math.max(0, Math.floor(f.hopsRemaining as number)),
+        diverted: !!f.diverted,
+        idle: 0, // a relaunch re-arms the recycle clock (idleLife guards neglect, not saves)
+        span: Math.max(1, Math.floor(f.span as number)),
+        travel: null, // transit never persists — snapshot() already landed it
+      };
+    }
+    const r = s.rift as Partial<RiftInfo> | null;
+    if (r && typeof r === 'object'
+      && typeof r.zoneId === 'string' && typeof r.id === 'string'
+      && typeof r.faction === 'string' && typeof r.variant === 'string'
+      && typeof r.level === 'number' && Number.isFinite(r.level)
+      && !!r.pos && [r.pos.x, r.pos.y].every(n => typeof n === 'number' && Number.isFinite(n))) {
+      const v = this.cfg.variants.find(x => x.variant === r.variant && x.faction === r.faction);
+      if (v?.capstone && FACTIONS[r.faction]) {
+        this.rift = {
+          zoneId: r.zoneId, id: r.id, pos: { x: r.pos.x, y: r.pos.y },
+          faction: r.faction,
+          color: typeof r.color === 'string' ? r.color : (FACTION_COLORS[r.faction] ?? FRACTURE_VIOLET),
+          variant: r.variant, level: Math.max(1, Math.floor(r.level)),
+          cap: v.capstone,
+        };
+      }
+    }
+  }
+
+  /** The run needs its ground: the fracture's zone (or, mid-glide, its
+   *  destination) culled → the run ends; the rift's host zone culled → the
+   *  rift is lost with it (rare by construction — rifts open on charted ground). */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    const f = this.fracture;
+    if (f && !has(f.travel ? f.travel.toZoneId : f.zoneId)) this.fracture = null;
+    if (this.rift && !has(this.rift.zoneId)) this.rift = null;
+  }
+
   // --- internals -------------------------------------------------------------
 
   /** DEV: force a fracture into the given (current) zone, in-place; refuses while
@@ -294,7 +385,7 @@ export class FractureField implements WorldOverlay {
   devIgnite(view: OverlayView, zoneId: string): boolean {
     if (this.fracture) return false; // one-at-a-time (matches production; no orphan)
     const spot = view.byId[zoneId];
-    if (!spot || spot.caveDepth != null || spot.floating || spot.eventOwned || spot.objective.kind === 'safe') return false;
+    if (!spot || !eventTargetable(this.id, spot)) return false;
     const v = this.pickVariant();
     if (!v) return false;
     const total = this.cfg.zoneSpan[1];
@@ -309,9 +400,7 @@ export class FractureField implements WorldOverlay {
     if (!this.rng.chance(clamp(this.cfg.triggerChance * this.gate().ignitionMul, 0, 1))) return;
     // A fracture opens in a CHARTED (visited), non-safe, non-cave, non-floating
     // node — ground you can return to (the map marker pulls you back to it).
-    const spots = view.nodes.filter(n =>
-      view.visited.has(n.id) && n.caveDepth == null && !n.floating && !n.eventOwned && n.objective.kind !== 'safe'
-      && eventAllowed('fractures', n));
+    const spots = view.nodes.filter(n => view.visited.has(n.id) && eventTargetable(this.id, n));
     if (!spots.length) return;
     const v = this.pickVariant();
     if (!v) return;

@@ -54,6 +54,7 @@ const BRIGAND_SURGE: BrigandSurge = {
   ],
   color: '#9a6a3a',
   minSpan: 220,            // origin + target must be ≥ this apart (a real march in)
+  arriveDist: 16,          // this close to the mark = arrived (map-space slack)
 };
 
 export const BRIGANDS: ContentPackage = {
@@ -82,4 +83,8 @@ export const BRIGANDS: ContentPackage = {
   defaultStartLevel: 2,
   defaultEnabled: true,
   world: { overlay: (ctx) => new BrigandField(ctx, BRIGAND_SURGE) },
+  validate: (look) => [
+    ...(look.faction(BRIGAND_SURGE.faction) ? [] : [`band faction '${BRIGAND_SURGE.faction}' unknown`]),
+    ...BRIGAND_SURGE.roster.filter(e => !look.monster(e.id)).map(e => `band monster '${e.id}' unknown`),
+  ],
 };

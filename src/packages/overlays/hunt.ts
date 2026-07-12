@@ -23,7 +23,7 @@ import type { World } from '../../engine/world';
 import type { MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { FACTION_COLORS } from '../../world/palette';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
@@ -83,6 +83,9 @@ interface ActiveHunt {
 
 export class HuntField implements WorldOverlay {
   readonly id = 'hunt';
+  /** Durable: a half-bloodied quarry mid-chase is an ARC, not weather — the
+   *  remembrance (life fraction, phase, trail progress) resumes exactly. */
+  readonly persistence = 'durable' as const;
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -168,6 +171,54 @@ export class HuntField implements WorldOverlay {
 
   isBeast(huntId: string): boolean { return this.hunt?.id === huntId; }
 
+  /** A located, living beast keeps its zone restless (feeds the bloom); the
+   *  quiet trail does not — tracks are a whisper, not turmoil. */
+  activityAt(zoneId: string): number {
+    const h = this.hunt;
+    return h && h.revealed && h.lifeFrac > 0 && h.currentZoneId === zoneId ? 1 : 0;
+  }
+
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: the whole remembrance verbatim (+ the id counter, so a resumed
+   *  run can never mint a colliding hunt id). No zones minted → no claims. */
+  snapshot(): unknown {
+    return { hunt: this.hunt ? { ...this.hunt, lairCoord: { ...this.hunt.lairCoord } } : null, seq: this.seq };
+  }
+
+  /** Rebuild tolerantly: a quarry whose beast def left the surge roster (or
+   *  whose numbers don't parse) ends the hunt — a fresh one ignites on its own
+   *  clock. The trail/beast zone rides verbatim; pruneZones handles culls. */
+  restore(snap: unknown): void {
+    const s = snap as { hunt?: unknown; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    const h = s.hunt as Partial<ActiveHunt> | null;
+    this.hunt = null;
+    if (!h || typeof h !== 'object') return;
+    if (typeof h.id !== 'string' || typeof h.beastDefId !== 'string' || typeof h.faction !== 'string') return;
+    if (!this.cfg.beasts.some(b => b.defId === h.beastDefId && b.faction === h.faction)) return;
+    if (typeof h.lairZoneId !== 'string' || typeof h.currentZoneId !== 'string') return;
+    if (!h.lairCoord || ![h.lairCoord.x, h.lairCoord.y].every(n => typeof n === 'number' && Number.isFinite(n))) return;
+    if (![h.tracksTotal, h.tracksFound, h.lifeFrac, h.phaseIdx].every(n => typeof n === 'number' && Number.isFinite(n))) return;
+    if ((h.lifeFrac as number) <= 0) return; // a dead quarry stays dead
+    this.hunt = {
+      id: h.id, beastDefId: h.beastDefId, faction: h.faction,
+      color: typeof h.color === 'string' ? h.color : (FACTION_COLORS[h.faction] ?? HUNT_GOLD),
+      lairZoneId: h.lairZoneId, lairCoord: { x: h.lairCoord.x, y: h.lairCoord.y },
+      currentZoneId: h.currentZoneId, revealed: !!h.revealed,
+      tracksTotal: Math.max(1, Math.floor(h.tracksTotal as number)),
+      tracksFound: Math.max(0, Math.floor(h.tracksFound as number)),
+      lifeFrac: clamp(h.lifeFrac as number, 0, 1), phaseIdx: Math.floor(h.phaseIdx as number),
+    };
+  }
+
+  /** The chase needs its ground: if the trail/beast zone was culled the hunt
+   *  ends (the lair marker alone is not a hunt). */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    if (this.hunt && !has(this.hunt.currentZoneId)) this.hunt = null;
+  }
+
   /** Read-only snapshot for markers / tests. */
   peek(): { id: string; beastDefId: string; faction: string; color: string; lairZoneId: string; coord: MapCoord; currentZoneId: string; revealed: boolean; lifeFrac: number; phaseIdx: number } | null {
     const h = this.hunt;
@@ -182,7 +233,7 @@ export class HuntField implements WorldOverlay {
   devIgnite(view: OverlayView, zoneId: string): boolean {
     if (this.hunt) return false; // one-at-a-time (matches production; no orphan)
     const lair = view.byId[zoneId];
-    if (!lair || lair.caveDepth != null || lair.floating || lair.eventOwned || lair.objective.kind === 'safe') return false;
+    if (!lair || !eventTargetable(this.id, lair)) return false;
     const beast = this.pickBeast();
     if (!beast) return false;
     this.hunt = {
@@ -196,12 +247,10 @@ export class HuntField implements WorldOverlay {
 
   private maybeIgnite(view: OverlayView): void {
     if (!this.rng.chance(clamp(this.cfg.triggerChance * this.gate().ignitionMul, 0, 1))) return;
-    // The FIRST tracks appear in a random CHARTED, non-safe/cave/floating node OTHER
-    // than where the player stands — so the hunt begins as a zone you navigate to.
+    // The FIRST tracks appear in a random CHARTED, eligible node OTHER than
+    // where the player stands — so the hunt begins as a zone you navigate to.
     const lairs = view.nodes.filter(n =>
-      view.visited.has(n.id) && n.id !== view.currentZoneId
-      && n.caveDepth == null && !n.floating && !n.eventOwned && n.objective.kind !== 'safe'
-      && eventAllowed('hunt', n));
+      view.visited.has(n.id) && n.id !== view.currentZoneId && eventTargetable(this.id, n));
     if (!lairs.length) return;
     const beast = this.pickBeast();
     if (!beast) return;

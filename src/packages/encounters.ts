@@ -38,16 +38,24 @@ export interface EncounterScale {
   rewardMul: number;
 }
 
-/** The reality-collapse variant config (Phase 3 — a closed breach may collapse
- *  into a timed sub-zone leading to a champion). Declared now so the type is
- *  stable; unused until the collapse chain ships. */
-export interface EncounterCollapse {
-  chance: number;
-  findTime: number;
-  timePerKill: number;
-  tileset: string;
-  champion: { monsterId: string; levelBonus: number; ledgerKill: string };
-}
+/** THE SHARED ENCOUNTER FRAMEWORK KNOBS — engine-side levers every in-zone
+ *  encounter obeys, config here rather than constants in world.ts (the same
+ *  discipline as LOS_CFG / DROP_CFG). Per-encounter numbers stay on the DEF;
+ *  these are the cross-encounter invariants. */
+export const ENCOUNTER_CFG = {
+  /** Per-qualifying-zone base placement chance at pressure 1 (×ignitionMul
+   *  ×zone encounterDensity ×biome eventDensityMul ×mycelia suppression). */
+  openChance: 0.16,
+  /** Hard ceiling on the folded placement chance — even a cranked run keeps
+   *  SOME zones quiet, so encounters never read as guaranteed furniture. */
+  openChanceCap: 0.85,
+  /** Max living enemies inside an open field — the spawn pulses hold while
+   *  the arena is saturated (frame-cost + fairness floor). */
+  fieldCap: 26,
+  /** Close-reward formula terms: xp = (base + level × perLevel) × rewardMul;
+   *  gems = 1 + floor(rewardMul). */
+  reward: { xpBase: 40, xpPerLevel: 12 },
+} as const;
 
 // --- DEMON INVASION: the spatial, escalating world-event layer ---------------
 //
@@ -134,6 +142,12 @@ export interface DemonSurge {
   radiusGrowthPerSec: number;
   /** Slack added to a zone's in-radius test (a forgiving edge). */
   inRadiusSlack: number;
+  /** Live in-zone demon headcount past which a meteor impact leaves a raisable
+   *  CORPSE instead of another body (density cap + the corpse-compounding feed). */
+  meteorHeadcountCap: number;
+  /** Ambient walk-in spawn-table multiplier on the invasion's factions inside
+   *  the storm radius (the storm bleeding into the ordinary monster mix). */
+  stormFactionMul: number;
   /** Hard lifetime cap (seconds); an utterly ignored invasion finally burns out. */
   maxLifeSec: number;
   /** Per-second base chance (×pressure) a fresh invasion ignites. */
@@ -161,14 +175,15 @@ export interface DemonSurge {
   };
 }
 
-/** The ledger keys an encounter bumps — these drive the discovery ladder. */
+/** The ledger keys an encounter bumps — these drive the discovery ladder.
+ *  EVERY key here must be READ by some unlock/tier (and vice versa): the
+ *  event QA harness enforces the contract in both directions, so a key only
+ *  enters this type alongside the code that bumps it. */
 export interface EncounterLedger {
   /** Bumped when the player OPENS one (first time → the feature is discovered). */
   onEncounter: string;
   /** Bumped when one closes (the investment milestone, e.g. breaches_closed). */
   onClose: string;
-  onCollapse?: string;
-  onChampion?: string;
 }
 
 /** A declarative in-zone encounter. Lives on ContentPackage.encounters[]. */
@@ -188,7 +203,10 @@ export interface EncounterDef {
   /** Tiny radius nudge per kill. */
   radiusPerKill: number;
   ledger: EncounterLedger;
-  collapse?: EncounterCollapse;
+  /** The DIMENSIONS this encounter may place in (default ['surface']) — the
+   *  same seam the overlays use (WorldHooks.dimensions), so "breaches tear in
+   *  hell too" is one data line, never an engine edit. */
+  dimensions?: string[];
   /** Promotes this encounter into a spatial, escalating DEMON INVASION world
    *  event (growing storm radius + meteors + portal). Undefined = a plain in-zone
    *  encounter (Breach). The overlay reads this; the in-zone field uses scales. */

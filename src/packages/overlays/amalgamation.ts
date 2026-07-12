@@ -33,7 +33,7 @@ import type { Modifier } from '../../engine/stats';
 import type { World } from '../../engine/world';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
-import { eventAllowed } from '../../world/zonePolicy';
+import { eventTargetable } from '../../world/zonePolicy';
 import { scaledCap } from '../frequency';
 import type { OverlayBuildCtx, PackageGate } from '../types';
 
@@ -138,6 +138,9 @@ interface ActiveAmalgamation {
 
 export class AmalgamationField implements WorldOverlay {
   readonly id = 'amalgamation';
+  /** Durable: a Bonewright build is a LONG arc — chosen parts, the armed hunt,
+   *  a half-bloodied risen boss — and a relaunch must resume it mid-graft. */
+  readonly persistence = 'durable' as const;
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -167,6 +170,11 @@ export class AmalgamationField implements WorldOverlay {
 
   /** Live config (the engine reads geometry, reward, the part registry). */
   surge(): AmalgamationSurge { return this.cfg; }
+
+  /** Event-activity fed to the bloom (WorldOverlay.activityAt): the zone where
+   *  the Bonewright works — and, at the end, its risen boss stands. The hunt's
+   *  marked quarry stays quiet — a bone marker is a whisper, not turmoil. */
+  activityAt(zoneId: string): number { return this.active?.zoneId === zoneId ? 1 : 0; }
 
   /** The part spec by id (engine assembles the boss + resolves drops from these). */
   partById(id: string): AmalgamPartSpec | undefined {
@@ -246,15 +254,83 @@ export class AmalgamationField implements WorldOverlay {
     return this.active?.quest === 'hunt' ? this.active.minibossZoneId : null;
   }
 
+  // --- worldstate (the persistence pledge) -----------------------------------
+
+  /** Pure JSON: the whole build verbatim (+ the id counter, so a resumed run
+   *  can never mint a colliding amalgamation id). Nothing here mints zones —
+   *  the Bonewright and its quarry both land on EXISTING graph nodes — so
+   *  there are no ownedZones claims to make. */
+  snapshot(): unknown {
+    const a = this.active;
+    return {
+      active: a ? { ...a, chosenParts: [...a.chosenParts], offered: [...a.offered] } : null,
+      seq: this.seq,
+    };
+  }
+
+  /** Rebuild tolerantly. Any part id that left the AMALGAM_PARTS registry drops
+   *  the WHOLE build, not just the part — stage/partsNeeded/offered are all
+   *  woven around the chosen set, and a boss assembled from a thinned union
+   *  would be a different creature than the one the player built; a fresh
+   *  Bonewright rolls later. A dangling HUNT (miniboss def gone from the surge
+   *  roster) parks the build back at 'offer' instead: the grafted parts are the
+   *  arc worth keeping, and the Bonewright simply deals a new hunt. */
+  restore(snap: unknown): void {
+    const s = snap as { active?: unknown; seq?: unknown } | null;
+    if (!s || typeof s !== 'object') return;
+    if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
+    const a = s.active as Partial<ActiveAmalgamation> | null;
+    this.active = null;
+    if (!a || typeof a !== 'object') return;
+    if (typeof a.id !== 'string' || typeof a.zoneId !== 'string') return;
+    if (![a.stage, a.partsNeeded, a.bossLifeFrac].every(n => typeof n === 'number' && Number.isFinite(n))) return;
+    if (!(['offer', 'hunt', 'choose', 'boss'] as AmalgamQuest[]).includes(a.quest as AmalgamQuest)) return;
+    const ids = (v: unknown): string[] | null =>
+      Array.isArray(v) && v.every(x => typeof x === 'string') ? [...(v as string[])] : null;
+    const chosen = ids(a.chosenParts);
+    const offered = ids(a.offered);
+    if (!chosen || !offered) return;
+    if ([...chosen, ...offered].some(id => !this.cfg.parts.some(p => p.id === id))) return;
+    let quest = a.quest as AmalgamQuest;
+    let minibossZoneId = typeof a.minibossZoneId === 'string' ? a.minibossZoneId : null;
+    let minibossDefId = typeof a.minibossDefId === 'string' ? a.minibossDefId : null;
+    if (quest === 'hunt' && (!minibossZoneId || !minibossDefId || !this.cfg.minibossIds.includes(minibossDefId))) {
+      quest = 'offer';
+    }
+    if (quest !== 'hunt') { minibossZoneId = null; minibossDefId = null; }
+    this.active = {
+      id: a.id, zoneId: a.zoneId,
+      stage: Math.max(0, Math.floor(a.stage as number)),
+      partsNeeded: Math.max(1, Math.floor(a.partsNeeded as number)),
+      chosenParts: chosen, offered, quest, minibossZoneId, minibossDefId,
+      // The same floor setBossLife holds live — a risen boss resumes bloodied, never dead.
+      bossLifeFrac: clamp(a.bossLifeFrac as number, 0.02, 1),
+    };
+  }
+
+  /** The build needs its ground. The Bonewright's zone culled → the whole build
+   *  drops (a fresh one rolls later, uncharted, somewhere new); only the hunt's
+   *  TARGET zone culled → park the build back at 'offer' — the Bonewright deals
+   *  a new hunt, and the grafted parts survive. */
+  pruneZones(has: (zoneId: string) => boolean): void {
+    const a = this.active;
+    if (!a) return;
+    if (!has(a.zoneId)) { this.active = null; return; }
+    if (a.minibossZoneId && !has(a.minibossZoneId)) {
+      a.minibossZoneId = null;
+      a.minibossDefId = null;
+      if (a.quest === 'hunt') a.quest = 'offer';
+    }
+  }
+
   // --- DEV ---------------------------------------------------------------------
 
   /** DEV: force a Bonewright into the given zone (mirrors the maybeOpen filter). */
   devOpen(view: OverlayView, zoneId: string): boolean {
     if (this.active) return false;
     const z = view.byId[zoneId];
-    if (!z || z.caveDepth != null || z.floating || z.eventOwned
-      || z.objective.kind === 'safe' || z.objective.kind === 'waves'
-      || !z.packs?.table?.length) return false;
+    if (!z || !eventTargetable(this.id, z)
+      || z.objective.kind === 'waves' || !z.packs?.table?.length) return false;
     this.open(zoneId);
     return true;
   }
@@ -271,10 +347,9 @@ export class AmalgamationField implements WorldOverlay {
     // Bonewright is something you DISCOVER, not something handed to you on the map.
     const cands = view.nodes.filter(z =>
       z.id !== view.currentZoneId
-      && z.caveDepth == null && !z.floating && !z.eventOwned
-      && z.objective.kind !== 'safe' && z.objective.kind !== 'waves'
-      && !!z.packs?.table?.length
-      && eventAllowed('amalgamation', z));
+      && eventTargetable(this.id, z)
+      && z.objective.kind !== 'waves'
+      && !!z.packs?.table?.length);
     if (!cands.length) return;
     const fresh = cands.filter(z => !view.visited.has(z.id));
     const charted = cands.filter(z => view.visited.has(z.id));
