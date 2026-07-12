@@ -8,11 +8,12 @@
 // the D2-style base progression is homogeneous by construction (which is what
 // lets uniques pinned to a family scale wherever they drop).
 //
-// Belts run on the EXOTIC defense kinds (poise / endurance) to keep the
-// defense-kind registry honestly open; jewelry carries identity IMPLICITS
-// instead of budgets. Weapon/offhand/quiver categories are registered in the
-// schema but ship no bases yet — the day they do, drops/affixes/uniques
-// already know how to treat them.
+// The EXOTIC defense kinds live in the grid too: belts run pure poise /
+// endurance, and the armor_poise / evasion_insight combo columns (stats.ts's
+// canonical pairings) put base poise and insight on every armour category.
+// Jewelry carries identity IMPLICITS instead of budgets. Weapon/offhand/
+// quiver categories are registered in the schema but ship no bases yet —
+// the day they do, drops/affixes/uniques already know how to treat them.
 // ---------------------------------------------------------------------------
 
 import type { ItemBaseDef, ItemCategory, RangedLineDef } from '../engine/items';
@@ -77,6 +78,20 @@ const DEF_COMBOS: DefCombo[] = [
     key: 'evasion_es', mix: { evasion: 1, energyShield: 1 },
     names: { helmet: 'Cowl', chest: 'Shroud', gloves: 'Wraps', boots: 'Sandals', legs: 'Windtrews' },
     affinity: { caster: 1.6, ranger: 1.3 },
+  },
+  // The EXOTIC pairings — stats.ts's canonical lanes (armor↔poise,
+  // evasion↔insight) as wearable families: base poise/insight across the
+  // whole doll, which is what the LOCAL "% … on this item" affixes scale
+  // and what makes deep pool investment a real wardrobe, not a belt slot.
+  {
+    key: 'armor_poise', mix: { armor: 1, poise: 1 },
+    names: { helmet: 'Barbute', chest: 'Bulwark Plate', gloves: 'Vambraces', boots: 'Sabatons', legs: 'Tassets' },
+    affinity: { defense: 1.8, martial: 1.3 },
+  },
+  {
+    key: 'evasion_insight', mix: { evasion: 1, insight: 1 },
+    names: { helmet: "Seer's Coif", chest: 'Stalker Garb', gloves: 'Tracker Mitts', boots: 'Waystriders', legs: 'Scout Breeks' },
+    affinity: { ranger: 1.5, defense: 1.3 },
   },
 ];
 
@@ -201,6 +216,11 @@ export const BASE_LIST: ItemBaseDef[] = [
   jewel('amulet_bone', 'Bone Amulet', 'amulet', [line('vitality', 'flat', [3, 6])], 30, { sustain: 1.5 }),
   jewel('amulet_pearl', 'Pearl Amulet', 'amulet', [line('energyShield', 'flat', [10, 18])], 25, { caster: 2 }),
   jewel('amulet_carnelian', 'Carnelian Amulet', 'amulet', [line('healPower', 'increased', [0.05, 0.1])], 20, { sustain: 1.8 }),
+  // Exotic-pool identities — poise and insight get the same jewelry
+  // presence ES has with the Pearl: implicit BASE investment the global
+  // "% increased" affixes then scale.
+  jewel('amulet_agate', 'Agate Amulet', 'amulet', [line('poise', 'flat', [10, 18])], 25, { defense: 1.6 }),
+  jewel('ring_moonstone', 'Moonstone Ring', 'ring', [line('insight', 'flat', [6, 12])], 30, { defense: 1.3, ranger: 1.2 }),
 ];
 
 export const ITEM_BASES: Record<string, ItemBaseDef> =

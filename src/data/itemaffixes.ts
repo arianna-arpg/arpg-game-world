@@ -17,10 +17,16 @@
 // resists, speeds, crit, sustain). Base gating rides base TAGS (category ids,
 // 'armour', 'jewelry', defense kinds), so a family declares WHERE it rolls in
 // the same vocabulary bases declare what they are.
+//
+// SCOPES: defense families come in LOCAL ("… on this item" — folds into the
+// item's own defense header, priced hot because it scales one item) and
+// GLOBAL (character-wide, priced at a fraction) flavors, generated per
+// DefenseKind by DEFENSE_GAMUT below. The display suffix is the contract:
+// a line without "on this item" ALWAYS means your whole character.
 // ---------------------------------------------------------------------------
 
 import {
-  ITEM_CFG,
+  DEFENSE_KINDS, ITEM_CFG,
   type AffixDef, type AffixKind, type AffixTierDef, type ModLineDef,
 } from '../engine/items';
 import {
@@ -41,6 +47,10 @@ interface FamOpts {
   modKind?: ModKind;
   tags?: SkillTag[];
   when?: ConditionId;
+  /** LOCAL SCOPE: the single line modifies THIS ITEM's own stats (the fold
+   *  in itemgen) instead of the wearer's sheet — displays " on this item".
+   *  Multi-line families set `local` per line in `lines` instead. */
+  local?: boolean;
   /** Multi-line families (hybrids, all-res) override the single line. */
   lines?: ModLineDef[];
   /** Top-tier MAX per line (scalar broadcast when lines share a scale). */
@@ -74,6 +84,7 @@ const LADDER_CURVE = 1.15;
 function fam(o: FamOpts): AffixDef {
   const lines: ModLineDef[] = o.lines ?? [{
     stat: o.stat!, kind: o.modKind ?? 'flat', tags: o.tags, when: o.when,
+    ...(o.local ? { local: true } : {}),
   }];
   const tops = Array.isArray(o.top) ? o.top : lines.map(() => o.top as number);
   const floor = o.floor ?? DEFAULT_FLOOR;
@@ -124,6 +135,145 @@ const DEFENSE = 'defense';
 const SUSTAIN = 'sustain';
 
 const cap = (s: string): string => s[0].toUpperCase() + s.slice(1);
+
+// ------------------------------------------------ defense gamut (generated) -
+//
+// Every registered DefenseKind gets the SAME three-lane wardrobe, minted from
+// one spec row — the LOCAL/GLOBAL doctrine in data form:
+//  · <id>_flat        LOCAL  — "+45 Energy Shield on this item". Slot-flavored
+//                              gates (poise reads belt/torso, insight head/feet).
+//  · <id>_pct         LOCAL  — "60% increased Armor on this item". Rolls ONLY
+//                              on bases CARRYING the kind (its mix tag), so the
+//                              multiplier always has something to multiply.
+//  · <id>_pct_global  GLOBAL — "10% increased Armor", character-wide, priced
+//                              several times lower BECAUSE it scales everything.
+//                              Jewelry/belt territory — and since a belt can
+//                              carry both scopes at once, the two phrasings
+//                              teach themselves on sight.
+// A kind may also open a GLOBAL FLAT lane (ES's classic jewelry roll).
+// Registering a new defense kind ships its whole wardrobe with one row here.
+
+/** Per-kind knobs for the generated local/global defense affix gamut. */
+interface DefenseGamutSpec {
+  /** DEFENSE_KINDS key (also the mix tag bases carry). */
+  kind: string;
+  /** Affix id stem ('es' → es_flat / es_pct / es_pct_global). */
+  id: string;
+  flatNames: string[];
+  pctNames: string[];
+  globalNames: string[];
+  /** Local flat: T1 top, floor, slot gates, weight. */
+  flatTop: number;
+  flatFloor?: number;
+  flatTags: string[];
+  flatWeight?: number;
+  /** Local %: T1 top override (exotic pools run cooler than the big three). */
+  pctTop?: number;
+  pctWeight?: number;
+  /** Global %: T1 top / weight overrides. */
+  globalTop?: number;
+  globalWeight?: number;
+  /** Open the global FLAT jewelry lane at this top (omit = no such lane). */
+  globalFlatTop?: number;
+  globalFlatNames?: string[];
+  themes?: string[];
+}
+
+/** LOCAL % tops — item-defining because they scale ONE item. */
+const LOCAL_PCT_TOP = 0.8;
+/** GLOBAL % top — deliberately a fraction of the local ceiling; mid tiers
+ *  read "10% increased X" against the local lane's "50% … on this item". */
+const GLOBAL_PCT_TOP = 0.15;
+/** Where the global % lanes live: jewelry plus the belt bridge slot (a belt
+ *  can roll BOTH scopes of one stat — the built-in teaching moment). */
+const GLOBAL_PCT_TAGS = ['jewelry', 'belt'];
+
+const DEFENSE_GAMUT: DefenseGamutSpec[] = [
+  {
+    kind: 'armor', id: 'armor', themes: [DEFENSE],
+    flatNames: ['Adamant', 'Lacquered', 'Studded', 'Boiled'],
+    flatTop: 160, flatFloor: 0.1, flatTags: ['armour'], flatWeight: 110,
+    pctNames: ['Impregnable', 'Reinforced', 'Riveted'],
+    globalNames: ['Bastioned', 'Fortified', 'Bolstered'],
+  },
+  {
+    kind: 'evasion', id: 'evasion', themes: [DEFENSE, RANGER],
+    flatNames: ['Phantasmal', 'Limber', 'Supple', 'Oiled'],
+    flatTop: 140, flatFloor: 0.1, flatTags: ['armour'], flatWeight: 110,
+    pctNames: ['Untouchable', 'Nimble', 'Fleet'],
+    globalNames: ['Spectral', 'Elusive', 'Shifting'],
+  },
+  {
+    kind: 'energyShield', id: 'es', themes: [CASTER],
+    flatNames: ['Radiant', 'Gleaming', 'Shining', 'Glimmering'],
+    flatTop: 45, flatFloor: 0.12, flatTags: ['armour'], flatWeight: 90,
+    pctNames: ['Resplendent', 'Luminous', 'Bright'],
+    globalNames: ['Aetheric', 'Otherworldly', 'Numinous'],
+    // The classic jewelry lane: global flat ES on rings/amulets.
+    globalFlatTop: 30, globalFlatNames: ['Opalescent', 'Pearled', 'Lustrous'],
+  },
+  // The exotic pools — smaller multipliers (the pools are cheaper per point),
+  // same three-lane shape: invest in ONE great poise item, or in the pool.
+  {
+    kind: 'poise', id: 'poise', themes: [DEFENSE],
+    flatNames: ['Immovable', 'Unyielding', 'Braced'],
+    flatTop: 60, flatTags: ['belt', 'chest', 'helmet'], flatWeight: 70,
+    pctNames: ['Adamantine', 'Rooted', 'Planted'],
+    globalNames: ['Steadfast', 'Grounded', 'Composed'],
+    pctTop: 0.65, pctWeight: 60, globalWeight: 40,
+  },
+  {
+    kind: 'endurance', id: 'endurance', themes: [DEFENSE, SUSTAIN],
+    flatNames: ['Marathon', 'Tireless', 'Enduring'],
+    flatTop: 45, flatTags: ['belt'], flatWeight: 70,
+    pctNames: ['Indefatigable', 'Unflagging'],
+    globalNames: ['Persevering', 'Stubborn'],
+    pctTop: 0.65, pctWeight: 60, globalWeight: 40,
+  },
+  {
+    kind: 'insight', id: 'insight', themes: [DEFENSE],
+    flatNames: ['Oracular', 'Keen', 'Watchful'],
+    flatTop: 40, flatTags: ['helmet', 'boots'], flatWeight: 70,
+    pctNames: ['Illuminated', 'Clear-Eyed'],
+    globalNames: ['Clairvoyant', 'Perceptive', 'Heedful'],
+    pctTop: 0.65, pctWeight: 60, globalWeight: 40,
+  },
+];
+
+/** Mint one kind's wardrobe: local flat, local %, global % (+ global flat). */
+function defenseGamut(spec: DefenseGamutSpec): AffixDef[] {
+  const stat = DEFENSE_KINDS[spec.kind].stat;
+  const out: AffixDef[] = [
+    fam({
+      id: `${spec.id}_flat`, kind: 'prefix', themes: spec.themes, local: true,
+      names: spec.flatNames, stat, top: spec.flatTop,
+      floor: spec.flatFloor ?? 0.15, baseTags: spec.flatTags,
+      weight: spec.flatWeight ?? 90,
+    }),
+    fam({
+      id: `${spec.id}_pct`, kind: 'prefix', themes: spec.themes, local: true,
+      names: spec.pctNames, stat, modKind: 'increased',
+      top: spec.pctTop ?? LOCAL_PCT_TOP, floor: 0.2,
+      baseTags: [spec.kind], weight: spec.pctWeight ?? 90,
+    }),
+    fam({
+      id: `${spec.id}_pct_global`, kind: 'prefix', themes: spec.themes,
+      names: spec.globalNames, stat, modKind: 'increased',
+      top: spec.globalTop ?? GLOBAL_PCT_TOP, floor: 0.2,
+      baseTags: GLOBAL_PCT_TAGS, weight: spec.globalWeight ?? 50,
+    }),
+  ];
+  if (spec.globalFlatTop !== undefined) {
+    out.push(fam({
+      id: `${spec.id}_flat_global`, kind: 'prefix', themes: spec.themes,
+      names: spec.globalFlatNames ?? spec.flatNames, stat,
+      top: spec.globalFlatTop, floor: 0.15, baseTags: ['jewelry'], weight: 60,
+    }));
+  }
+  return out;
+}
+
+const DEFENSE_AFFIXES: AffixDef[] = DEFENSE_GAMUT.flatMap(defenseGamut);
 
 // ---------------------------------------------------- registry-generated ---
 
@@ -233,54 +383,9 @@ const PREFIXES: AffixDef[] = [
     names: ['Azure', 'Cerulean', 'Sapphirine', 'Beryl'],
     stat: 'mana', top: 60, floor: 0.1, weight: 100,
   }),
-  fam({
-    id: 'es_flat', kind: 'prefix', themes: [CASTER],
-    names: ['Radiant', 'Gleaming', 'Shining', 'Glimmering'],
-    stat: 'energyShield', top: 45, floor: 0.12, weight: 90,
-  }),
-  fam({
-    id: 'es_pct', kind: 'prefix', themes: [CASTER],
-    names: ['Resplendent', 'Luminous', 'Bright'],
-    stat: 'energyShield', modKind: 'increased', top: 0.35, floor: 0.2,
-    baseTags: ['armour'], weight: 80,
-  }),
-  fam({
-    id: 'armor_flat', kind: 'prefix', themes: [DEFENSE],
-    names: ['Adamant', 'Lacquered', 'Studded', 'Boiled'],
-    stat: 'armor', top: 160, floor: 0.1, baseTags: ['armour'], weight: 110,
-  }),
-  fam({
-    id: 'armor_pct', kind: 'prefix', themes: [DEFENSE],
-    names: ['Impregnable', 'Reinforced', 'Riveted'],
-    stat: 'armor', modKind: 'increased', top: 0.4, floor: 0.2,
-    baseTags: ['armour'], weight: 90,
-  }),
-  fam({
-    id: 'evasion_flat', kind: 'prefix', themes: [DEFENSE, RANGER],
-    names: ['Phantasmal', 'Limber', 'Supple', 'Oiled'],
-    stat: 'evasion', top: 140, floor: 0.1, baseTags: ['armour'], weight: 110,
-  }),
-  fam({
-    id: 'evasion_pct', kind: 'prefix', themes: [DEFENSE, RANGER],
-    names: ['Untouchable', 'Nimble', 'Fleet'],
-    stat: 'evasion', modKind: 'increased', top: 0.4, floor: 0.2,
-    baseTags: ['armour'], weight: 90,
-  }),
-  fam({
-    id: 'poise', kind: 'prefix', themes: [DEFENSE],
-    names: ['Immovable', 'Unyielding', 'Braced'],
-    stat: 'poise', top: 60, floor: 0.15, baseTags: ['belt', 'chest', 'helmet'], weight: 70,
-  }),
-  fam({
-    id: 'endurance', kind: 'prefix', themes: [DEFENSE],
-    names: ['Marathon', 'Tireless', 'Enduring'],
-    stat: 'endurance', top: 45, floor: 0.15, baseTags: ['belt'], weight: 70,
-  }),
-  fam({
-    id: 'insight', kind: 'prefix', themes: [DEFENSE],
-    names: ['Oracular', 'Keen', 'Watchful'],
-    stat: 'insight', top: 40, floor: 0.15, baseTags: ['helmet', 'boots'], weight: 70,
-  }),
+  // The whole defense wardrobe — local flat / local % / global % for every
+  // registered DefenseKind — is GENERATED above (DEFENSE_GAMUT).
+  ...DEFENSE_AFFIXES,
   fam({
     id: 'thorns', kind: 'prefix', themes: [DEFENSE],
     names: ['Bristling', 'Barbed', 'Spiked'],
@@ -350,7 +455,8 @@ const PREFIXES: AffixDef[] = [
   fam({
     id: 'hybrid_armor_evasion', kind: 'prefix', themes: [DEFENSE],
     names: ["Scrapper's", "Skirmisher's"],
-    lines: [{ stat: 'armor', kind: 'flat' }, { stat: 'evasion', kind: 'flat' }],
+    // Both lines LOCAL — the hybrid armours the piece itself, PoE-style.
+    lines: [{ stat: 'armor', kind: 'flat', local: true }, { stat: 'evasion', kind: 'flat', local: true }],
     top: [90, 80], floor: 0.2, count: 3, baseTags: ['armour'], weight: 45,
   }),
   ...ADDED_AFFIXES,
@@ -515,6 +621,17 @@ const SUFFIXES: AffixDef[] = [
     names: ['of Warding', 'of Parrying'],
     stat: 'blockChance', top: 0.08, floor: 0.3, count: 3,
     baseTags: ['offhand'], weight: 60,
+  }),
+  // Dormant until weapon bases ship — the WEAPON-LOCAL lane, pre-proven:
+  // "% increased Critical Strike Chance on this item" folds over the
+  // weapon's OWN base crit (once weapon bases seed it), never the sheet.
+  // Global crit stays the crit_chance family above; the two phrasings are
+  // the whole disambiguation.
+  fam({
+    id: 'crit_pct_local', kind: 'suffix', themes: [MARTIAL, CASTER], local: true,
+    names: ['of the Honed Edge', 'of the Whetted Edge'],
+    stat: 'critChance', modKind: 'increased', top: 0.35, floor: 0.25, count: 4,
+    baseTags: ['weapon'], weight: 60,
   }),
   fam({
     id: 'all_res', kind: 'suffix',

@@ -32,6 +32,21 @@
 // its DefenseKind weights. New defense kinds, slots, or whole categories are
 // registry rows, not engine edits.
 //
+// LOCAL vs GLOBAL — the two SCOPES a mod line can have:
+//  · GLOBAL (default) — the line joins the wearer's stat sheet like any
+//    passive: "10% increased Energy Shield" scales your whole pool.
+//  · LOCAL (ModLineDef.local) — the line modifies THIS ITEM's own stats
+//    before they ever reach the sheet: (base + Σlocal flat)·(1 + Σlocal
+//    increased)·Π(1 + local more), folded by itemgen and shown already
+//    applied in the defense header. Local lines display with the
+//    ITEM_CFG.localLineSuffix (" on this item") so the two scopes are
+//    distinguishable at a glance, and local values run several times
+//    hotter than their global cousins BECAUSE they scale one item.
+//    Any line anywhere can be local — affixes, implicits, unique lines —
+//    and the fold is stat-agnostic: today it rides base defenses; the day
+//    weapon bases seed their own damage/crit, "% increased crit chance on
+//    this item" folds through the same seam.
+//
 // This file is the SCHEMA + CONFIG only (no data imports — data files import
 // types from here, itemgen.ts composes both; same layering as skills.ts).
 // ---------------------------------------------------------------------------
@@ -124,6 +139,11 @@ export const DEFENSE_KINDS: Record<string, DefenseKindDef> = {
   insight:      { stat: 'insight',      label: 'Insight',       coeff: 0.55 },
 };
 
+/** stat → terse defense label ('Energy Shield') for item defense headers —
+ *  the sheet's own labels say 'Maximum Energy Shield'; the header is curt. */
+export const DEFENSE_LABEL_BY_STAT: Record<string, string> =
+  Object.fromEntries(Object.values(DEFENSE_KINDS).map(k => [k.stat, k.label]));
+
 // ----------------------------------------------------------- mod lines -----
 
 /** One declarative stat line — the SHAPE of a Modifier without its value.
@@ -139,6 +159,11 @@ export interface ModLineDef {
   gauge?: string;
   /** This line re-uses the FIRST line's roll (an all-res block moves as one). */
   sharedRoll?: boolean;
+  /** LOCAL SCOPE: the line modifies THIS ITEM's own stats (folded into the
+   *  defense header by itemgen) instead of the wearer's sheet. Displays with
+   *  ITEM_CFG.localLineSuffix. Legal kinds: flat/increased/more of a plain
+   *  stat — no when/tags/gauge/fromStat (the validator warns otherwise). */
+  local?: boolean;
 }
 
 /** A mod line WITH its own range — implicits and unique lines. The range is
@@ -361,6 +386,10 @@ export const ITEM_CFG = {
   uniqueTierScale: 0.12,
   implicitTierScale: 0.1,
 
+  /** Display suffix marking LOCAL-scope lines ("+45 Energy Shield on this
+   *  item") — the one glance-read that separates them from global lines. */
+  localLineSuffix: ' on this item',
+
   /** Drop-time item rarity weights (loot tables may override per entry). */
   rarityWeights: { common: 52, magic: 33, rare: 13, unique: 2 } as Record<ItemRarity, number>,
 
@@ -478,7 +507,7 @@ const CONDITION_LABELS: Record<ConditionId, string> = {
   esRecharging: 'while energy shield is recharging',
 };
 
-function statLabel(stat: string): string {
+export function statLabel(stat: string): string {
   // Attribute grants (+12 Strength) are legal mod lines with no STAT_DEFS
   // entry — their display name lives on the attribute registry instead.
   return STAT_DEFS[stat]?.label ?? ATTRIBUTES[stat as AttributeId]?.label ?? stat;
@@ -521,5 +550,6 @@ export function formatModLine(line: ModLineDef, v: number): string {
   if (line.tags && line.tags.length) core += ` with ${line.tags.join(' ')} skills`;
   if (line.when) core += ` ${CONDITION_LABELS[line.when]}`;
   if (line.gauge) core += ` per ${line.gauge.replace('status:', 'stack of ')}`;
+  if (line.local) core += ITEM_CFG.localLineSuffix;
   return core;
 }

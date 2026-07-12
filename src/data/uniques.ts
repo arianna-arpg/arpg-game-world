@@ -11,7 +11,9 @@
 // already owns: tag filters (melee-only damage), actor conditions (while
 // moving / on low mana), stat LINKS (gain X% of life regen as thorns —
 // single-hop rule enforced by the stats engine), the generated apply_/
-// damageVs_/minionApply_<status> families, and negative ranges (downsides).
+// damageVs_/minionApply_<status> families, negative ranges (downsides),
+// and LOCAL scope (`local: true` — the line scales THIS item's own stats,
+// displays "… on this item", and is priced hot because of it).
 // Gameplay-warping uniques (procs, skill grants) get their hooks the day
 // those lines are registered as stats/registries — no new item machinery.
 // ---------------------------------------------------------------------------
@@ -24,7 +26,8 @@ export const UNIQUE_LIST: UniqueDef[] = [
     flavor: 'The road never asked her name; it simply made room.',
     lines: [
       { stat: 'moveSpeed', kind: 'increased', range: [0.12, 0.18] },
-      { stat: 'evasion', kind: 'increased', range: [0.25, 0.4] },
+      // LOCAL — the boots themselves are slippery; sized for one item.
+      { stat: 'evasion', kind: 'increased', range: [0.25, 0.4], local: true },
       { stat: 'insight', kind: 'flat', range: [20, 35] },
       { stat: 'damage', kind: 'increased', range: [0.08, 0.12], when: 'moving' },
     ],
@@ -78,7 +81,9 @@ export const UNIQUE_LIST: UniqueDef[] = [
     minIlvl: 9,
     flavor: 'A crown for the body once the body agrees to leave.',
     lines: [
-      { stat: 'energyShield', kind: 'increased', range: [0.4, 0.6] },
+      // LOCAL — a 40-60% window is one-item pricing; global it would dwarf
+      // every affix in the game.
+      { stat: 'energyShield', kind: 'increased', range: [0.4, 0.6], local: true },
       { stat: 'esRechargeRate', kind: 'increased', range: [0.2, 0.3] },
       { stat: 'mana', kind: 'flat', range: [30, 50] },
       // The bargain — a real downside line (negative range, scales too).
@@ -99,7 +104,8 @@ export const UNIQUE_LIST: UniqueDef[] = [
     id: 'aegis_of_the_drowned', name: 'Aegis of the Drowned', baseId: 'chest_armor', weight: 90,
     flavor: 'The hull held. The crew did not. The hull held.',
     lines: [
-      { stat: 'armor', kind: 'increased', range: [0.5, 0.8] },
+      // LOCAL — "the hull held": this plate, half again as thick.
+      { stat: 'armor', kind: 'increased', range: [0.5, 0.8], local: true },
       { stat: 'thorns', kind: 'flat', range: [15, 25] },
       // A stat LINK line: thorns fed by life regen (single-hop by engine rule).
       { stat: 'thorns', kind: 'link', fromStat: 'lifeRegen', range: [1.5, 2.5], tierScale: 0 },

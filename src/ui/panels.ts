@@ -1043,7 +1043,9 @@ export class UI {
     if (!item) return null;
     const d = describeItem(item);
     const lines: string[] = [`<div style="color:#9a94a8;font-size:10px">${d.baseLine}</div>`];
-    for (const s of d.defense) lines.push(`<div style="color:#e0d8c8">${s}</div>`);
+    // Item-own defenses; locally-augmented values tint affix-blue (the same
+    // "modified" language PoE speaks — base-white vs touched-blue).
+    for (const s of d.defense) lines.push(`<div style="color:${s.augmented ? '#8fa3e8' : '#e0d8c8'}">${s.text}</div>`);
     for (const s of d.implicit) lines.push(`<div style="color:#b8a8e0">${s}</div>`);
     for (const a of d.affix) {
       lines.push(`<div style="color:#8fa3e8">${a.text}

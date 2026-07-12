@@ -24,10 +24,10 @@ import { ITEM_BASES } from '../data/itembases';
 import { UNIQUES, UNIQUE_LIST } from '../data/uniques';
 import { epitaphFor, VESTIGES, type VestigeLine } from '../data/vestiges';
 import {
-  DEFENSE_KINDS, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS,
+  DEFENSE_KINDS, DEFENSE_LABEL_BY_STAT, ITEM_CFG, ITEM_RARITIES, ITEM_RARITY_IDS,
   baseBonusFor, defenseBudget, formatModLine, formatStatValue, lerpRange,
-  levelReqForTier, roundStatValue, slotsForCategory, socketCap, tierForIlvl,
-  tieredBaseName,
+  levelReqForTier, roundStatValue, slotsForCategory, socketCap, statLabel,
+  tierForIlvl, tieredBaseName,
   type AffixDef, type AffixKind, type AffixRollState, type AffixTierDef,
   type ItemBaseDef, type ItemCategory, type ItemInstance, type ItemRarity,
   type ModLineDef, type RangedLineDef, type UniqueDef,
@@ -479,7 +479,9 @@ function rangedLineValue(line: RangedLineDef, roll: number, tier: number, defaul
 }
 
 /** Base defense contributions: the slot budget split by the family's mix,
- *  priced per kind, lifted by the base roll (+superior). */
+ *  priced per kind, lifted by the base roll (+superior). These are the
+ *  item-own SEEDS the local fold multiplies over — weapon bases will seed
+ *  their damage/crit through the same shape the day they ship. */
 function defenseMods(base: ItemBaseDef, item: ItemInstance): Modifier[] {
   if (!base.defense) return [];
   const budget = defenseBudget(item.ilvl, item.tier, base.category) * (1 + baseBonusFor(item));
@@ -495,45 +497,93 @@ function defenseMods(base: ItemBaseDef, item: ItemInstance): Modifier[] {
   return out;
 }
 
-/** Every Modifier this item grants while worn — base defenses, implicits,
- *  affixes, unique lines. Pure derivation from the instance's stored rolls. */
-export function compileItemMods(item: ItemInstance): Modifier[] {
-  const base = ITEM_BASES[item.baseId];
-  if (!base) return [];
-  const out: Modifier[] = defenseMods(base, item);
-
+/** Visit every rolled line on the instance with its derived value —
+ *  implicits, affixes, unique lines. ONE walker shared by the compiler and
+ *  the local fold, so the sheet and the tooltip can never disagree. */
+function eachItemLine(
+  base: ItemBaseDef, item: ItemInstance,
+  visit: (line: ModLineDef, value: number) => void,
+): void {
   (base.implicits ?? []).forEach((line, i) => {
-    out.push({
-      stat: line.stat, kind: line.kind,
-      value: rangedLineValue(line, item.implicitRolls[i] ?? 0.5, item.tier, ITEM_CFG.implicitTierScale),
-      tags: line.tags, when: line.when, fromStat: line.fromStat, gauge: line.gauge,
-    });
+    visit(line, rangedLineValue(line, item.implicitRolls[i] ?? 0.5, item.tier, ITEM_CFG.implicitTierScale));
   });
-
   for (const a of item.affixes) {
     const def = ITEM_AFFIXES[a.id];
     const tierDef = def?.tiers[a.tier];
     if (!def || !tierDef) continue;
     def.lines.forEach((line, i) => {
       const roll = line.sharedRoll ? a.rolls[0] : a.rolls[i];
-      out.push({
-        stat: line.stat, kind: line.kind,
-        value: roundStatValue(lerpRange(tierDef.ranges[i], roll ?? 0.5)),
-        tags: line.tags, when: line.when, fromStat: line.fromStat, gauge: line.gauge,
-      });
+      visit(line, roundStatValue(lerpRange(tierDef.ranges[i], roll ?? 0.5)));
     });
   }
-
   if (item.uniqueId) {
-    const u = UNIQUES[item.uniqueId];
-    u?.lines.forEach((line, i) => {
-      out.push({
-        stat: line.stat, kind: line.kind,
-        value: rangedLineValue(line, item.uniqueRolls?.[i] ?? 0.5, item.tier, ITEM_CFG.uniqueTierScale),
-        tags: line.tags, when: line.when, fromStat: line.fromStat, gauge: line.gauge,
-      });
+    UNIQUES[item.uniqueId]?.lines.forEach((line, i) => {
+      visit(line, rangedLineValue(line, item.uniqueRolls?.[i] ?? 0.5, item.tier, ITEM_CFG.uniqueTierScale));
     });
   }
+}
+
+// ------------------------------------------------------- local-scope fold --
+
+/** One folded ITEM-OWN stat (a defense-header row): the base-budget seed
+ *  with every LOCAL line multiplied through. `augmented` marks stats any
+ *  local line touched (the UI tints those, PoE-style). */
+export interface OwnStatFold {
+  stat: string;
+  value: number;
+  augmented: boolean;
+}
+
+/** Fold the item's OWN stats: (seed + Σlocal flat)·(1 + Σlocal increased)
+ *  ·Π(1 + local more), floored at 0. Stat-agnostic on purpose — a local
+ *  flat can CREATE a stat the base doesn't carry (flat Energy Shield on a
+ *  Warplate mints a hybrid), and a local increase over nothing folds to
+ *  nothing. Items without local lines fold to exactly their seeds. */
+export function foldOwnStats(base: ItemBaseDef, item: ItemInstance): OwnStatFold[] {
+  const seed = new Map<string, number>();
+  for (const m of defenseMods(base, item)) seed.set(m.stat, m.value);
+  const flat = new Map<string, number>();
+  const inc = new Map<string, number>();
+  const more = new Map<string, number>();
+  const touched = new Set<string>();
+  eachItemLine(base, item, (line, v) => {
+    if (!line.local) return;
+    touched.add(line.stat);
+    if (line.kind === 'flat') flat.set(line.stat, (flat.get(line.stat) ?? 0) + v);
+    else if (line.kind === 'increased') inc.set(line.stat, (inc.get(line.stat) ?? 0) + v);
+    else if (line.kind === 'more') more.set(line.stat, (1 + (more.get(line.stat) ?? 0)) * (1 + v) - 1);
+  });
+  // Registry order first (armor, evasion, ES, poise, …), created stats after.
+  const order = [...new Set([
+    ...Object.values(DEFENSE_KINDS).map(k => k.stat).filter(s => seed.has(s) || touched.has(s)),
+    ...seed.keys(), ...touched.keys(),
+  ])];
+  const out: OwnStatFold[] = [];
+  for (const stat of order) {
+    const value = roundStatValue(Math.max(0,
+      ((seed.get(stat) ?? 0) + (flat.get(stat) ?? 0))
+      * (1 + (inc.get(stat) ?? 0)) * (1 + (more.get(stat) ?? 0))));
+    if (value > 0) out.push({ stat, value, augmented: touched.has(stat) });
+  }
+  return out;
+}
+
+/** Every Modifier this item grants while worn — the folded item-own stats
+ *  (base defenses × local lines), then every GLOBAL line. Pure derivation
+ *  from the instance's stored rolls. */
+export function compileItemMods(item: ItemInstance): Modifier[] {
+  const base = ITEM_BASES[item.baseId];
+  if (!base) return [];
+  const out: Modifier[] = foldOwnStats(base, item)
+    .map(f => ({ stat: f.stat, kind: 'flat' as const, value: f.value }));
+
+  eachItemLine(base, item, (line, value) => {
+    if (line.local) return; // already folded into the item-own stats above
+    out.push({
+      stat: line.stat, kind: line.kind, value,
+      tags: line.tags, when: line.when, fromStat: line.fromStat, gauge: line.gauge,
+    });
+  });
 
   // SOCKETED VESTIGES: deterministic lines by the HOST's category ('default'
   // fallback) — the same Kessa reads differently in a chest than in gloves,
@@ -564,8 +614,9 @@ export interface ItemDescription {
   color: string;
   baseLine: string;
   reqLine: string;
-  /** Base defense values ('Armor 84'). */
-  defense: string[];
+  /** Item-own defense rows ('Armor 84'), local lines already folded in —
+   *  `augmented` marks values a local line touched (UI tints them). */
+  defense: { text: string; augmented: boolean }[];
   /** Superior + base implicit lines. */
   implicit: string[];
   /** Rolled affix lines with their tier tag ('T2', 'EX'). */
@@ -604,8 +655,11 @@ export function describeItem(item: ItemInstance): ItemDescription {
   };
   if (!base) return d;
 
-  for (const m of defenseMods(base, item)) {
-    d.defense.push(`${DEFENSE_KINDS[Object.keys(DEFENSE_KINDS).find(k => DEFENSE_KINDS[k].stat === m.stat) ?? '']?.label ?? m.stat} ${m.value}`);
+  for (const f of foldOwnStats(base, item)) {
+    d.defense.push({
+      text: `${DEFENSE_LABEL_BY_STAT[f.stat] ?? statLabel(f.stat)} ${formatStatValue(f.stat, 'flat', f.value)}`,
+      augmented: f.augmented,
+    });
   }
   if (item.superior !== undefined) {
     d.implicit.push(`Superior (+${Math.round(baseBonusFor(item) * 100)}% base)`);
@@ -783,8 +837,21 @@ function ensureValidated(): void {
   if (validated) return;
   validated = true;
   const warn = (msg: string): void => { console.warn(`[items] ${msg}`); };
+  // LOCAL lines fold arithmetically into the item's own stats — filters and
+  // exotic kinds have no meaning there (and attributes are never item-own).
+  const lintLocal = (owner: string, line: ModLineDef): void => {
+    if (!line.local) return;
+    if (line.kind !== 'flat' && line.kind !== 'increased' && line.kind !== 'more') {
+      warn(`${owner}: local lines fold flat/increased/more only (got '${line.kind}')`);
+    }
+    if (line.when || line.tags?.length || line.gauge || line.fromStat) {
+      warn(`${owner}: local lines take no when/tags/gauge/fromStat filters`);
+    }
+    if (isAttributeId(line.stat)) warn(`${owner}: attribute '${line.stat}' cannot be local`);
+  };
   for (const a of ITEM_AFFIX_LIST) {
     for (const line of a.lines) {
+      lintLocal(`affix '${a.id}'`, line);
       if (isAttributeId(line.stat)) {
         // Attribute grants route through Actor.setAttributes (recalcSeat
         // splits them out of the sheet) — FLAT adds points, INCREASED feeds
@@ -805,6 +872,7 @@ function ensureValidated(): void {
   for (const u of UNIQUE_LIST) {
     if (!ITEM_BASES[u.baseId]) warn(`unique '${u.id}' pinned to unknown base '${u.baseId}'`);
     for (const line of u.lines) {
+      lintLocal(`unique '${u.id}'`, line);
       if (isAttributeId(line.stat)) {
         if (line.kind !== 'flat' && line.kind !== 'increased') {
           warn(`unique '${u.id}': attribute '${line.stat}' supports flat/increased lines only (got '${line.kind}')`);
@@ -818,5 +886,6 @@ function ensureValidated(): void {
     for (const k of Object.keys(b.defense ?? {})) {
       if (!DEFENSE_KINDS[k]) warn(`base '${b.id}' uses unknown defense kind '${k}'`);
     }
+    for (const line of b.implicits ?? []) lintLocal(`base '${b.id}' implicit`, line);
   }
 }
