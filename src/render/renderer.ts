@@ -20,7 +20,8 @@ import type { World } from '../engine/world';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
-import { doodadRuleOf, type Doodad } from '../engine/levelgen';
+import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, type Doodad } from '../engine/levelgen';
+import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
 import { transitRing } from '../data/transit';
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
@@ -212,6 +213,7 @@ export class Renderer {
     this.drawLabels(world);        // actor text (names/prompts) — above the fades, visibility-gated
     this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule
     this.drawTexts(world);
+    if (world.devHitboxes) this.drawHitboxOverlay(world); // dev truth-layer: surfaces + forms as outlines
     this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
 
     ctx.restore();
@@ -3551,6 +3553,103 @@ export class Renderer {
       }
       ctx.restore();
     }
+  }
+
+  /** DEV OVERLAY (world.devHitboxes): outline every collision truth in view —
+   *  doodad move surfaces (red) and shot surfaces where they differ (orange),
+   *  actor bodies (white), and each flight's drawn-form hit test (cyan),
+   *  all straight from the same resolvers the sim consults (hitSurfaceOf /
+   *  PROJ_FORM_GEO). If the outline hugs the pixels, the fabric is honest. */
+  private drawHitboxOverlay(world: World): void {
+    const { ctx } = this;
+    // cam is the view's TOP-LEFT world corner (see toWorld); canvas.width may
+    // be device-pixel scaled, which only widens the cull window — harmless.
+    const z = this.zoom, cw = this.canvas.width / z, ch = this.canvas.height / z;
+    const x0 = this.cam.x - 160, x1 = this.cam.x + cw + 160;
+    const y0 = this.cam.y - 160, y1 = this.cam.y + ch + 160;
+    ctx.save();
+    ctx.lineWidth = 1.4;
+    const outlineShape = (s: HitShape, ax: number, ay: number): void => {
+      ctx.beginPath();
+      if (s.kind === 'circle') {
+        ctx.arc(ax, ay, s.r, 0, Math.PI * 2);
+      } else {
+        ctx.save();
+        ctx.translate(ax, ay);
+        ctx.rotate(s.rot ?? 0);
+        ctx.rect(-s.hw, -s.hh, s.hw * 2, s.hh * 2);
+        ctx.restore();
+      }
+      ctx.stroke();
+    };
+    for (const d of world.doodads) {
+      if (d.gone || d.pos.x < x0 || d.pos.x > x1 || d.pos.y < y0 || d.pos.y > y1) continue;
+      if (blocksMovement(d)) {
+        ctx.strokeStyle = 'rgba(255,80,80,0.9)';
+        outlineShape(hitSurfaceOf(d, 'move'), d.pos.x, d.pos.y);
+      }
+      if (blocksProjectiles(d)) {
+        const shot = hitSurfaceOf(d, 'shot');
+        const move = blocksMovement(d) ? hitSurfaceOf(d, 'move') : null;
+        if (!move || JSON.stringify(shot) !== JSON.stringify(move)) {
+          ctx.strokeStyle = 'rgba(255,170,60,0.8)';
+          outlineShape(shot, d.pos.x, d.pos.y);
+        }
+      }
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+    for (const a of world.actors) {
+      if (a.dead || a.pos.x < x0 || a.pos.x > x1 || a.pos.y < y0 || a.pos.y > y1) continue;
+      ctx.beginPath();
+      ctx.arc(a.pos.x, a.pos.y, a.radius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(80,230,255,0.9)';
+    for (const p of world.projectiles) {
+      if (p.pos.x < x0 || p.pos.x > x1 || p.pos.y < y0 || p.pos.y > y1) continue;
+      const r = p.radius;
+      ctx.save();
+      ctx.translate(p.pos.x, p.pos.y);
+      switch (p.shape) {
+        case 'line': case 'bar': {
+          const g = PROJ_FORM_GEO[p.shape];
+          ctx.rotate(p.dir);
+          ctx.strokeRect(-r * g.hAlong, -r * g.hAcross, r * g.hAlong * 2, r * g.hAcross * 2);
+          break;
+        }
+        case 'arc': {
+          const g = PROJ_FORM_GEO.arc;
+          ctx.rotate(p.dir);
+          ctx.beginPath();
+          ctx.arc(-r * g.back, 0, r * g.ring + r * g.stroke * 0.5, -g.halfWin, g.halfWin);
+          ctx.arc(-r * g.back, 0, Math.max(1, r * g.ring - r * g.stroke * 0.5), g.halfWin, -g.halfWin, true);
+          ctx.closePath();
+          ctx.stroke();
+          break;
+        }
+        case 'wave': {
+          const g = PROJ_FORM_GEO.wave;
+          ctx.rotate(p.dir + Math.PI / 2);
+          const span = r * g.span;
+          for (const side of [-1, 1]) {
+            ctx.beginPath();
+            for (let wx = -span; wx <= span; wx += 6) {
+              const wy = Math.sin((wx / span) * Math.PI * 2 + p.age * g.phaseRate) * r * g.amp
+                + side * r * g.stroke * 0.5;
+              if (wx === -span) ctx.moveTo(wx, wy); else ctx.lineTo(wx, wy);
+            }
+            ctx.stroke();
+          }
+          break;
+        }
+        default:
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
   }
 
   private drawTexts(world: World): void {

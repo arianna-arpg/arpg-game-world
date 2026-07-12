@@ -5262,6 +5262,12 @@ export class World {
   /** DEV: toggle noclip (phase through walls). Returns the new state. */
   devToggleNoclip(): boolean { this.devNoclip = !this.devNoclip; return this.devNoclip; }
 
+  /** DEV: live hit-surface overlay — the renderer outlines every blocker's
+   *  TRUE surface (hitSurfaceOf) and every flight's drawn-form hit test, so
+   *  "the pixels are the hitbox" is checkable by eye. Returns the new state. */
+  devHitboxes = false;
+  devToggleHitboxes(): boolean { this.devHitboxes = !this.devHitboxes; return this.devHitboxes; }
+
   /** DEV: the zone list for the travel picker, nearest-first by map coordinate. */
   devZoneList(): { id: string; name: string; level: number; biome?: string }[] {
     const cur = this.zoneMap[this.zone.id]?.map ?? { x: 0, y: 0 };
@@ -25652,6 +25658,29 @@ export class World {
     });
   }
 
+  /** Does this flight's body touch the circle (cx, cy, cr)? THE projectile
+   *  body test (engine/projForms.ts): the geometry IS the drawn form — Fire
+   *  Siege hits along its rolling flame line, a bar along its wall — from
+   *  the same PROJ_FORM_GEO factors the renderer strokes. A skill whose art
+   *  runs looser than its body opts back to the classic radius disc with
+   *  delivery.hitForm: 'circle'. */
+  private projTouches(p: Projectile, cx: number, cy: number, cr: number): boolean {
+    if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') {
+      const dx = cx - p.pos.x, dy = cy - p.pos.y;
+      return dx * dx + dy * dy <= (p.radius + cr) * (p.radius + cr);
+    }
+    return projFormTouches(p.shape, p.pos.x, p.pos.y, p.dir, p.radius, p.age, cx, cy, cr);
+  }
+
+  /** The flight's leading-edge reach along its heading — what terrain
+   *  contact uses, so a thin rolling front dies when the FRONT meets the
+   *  wall instead of a full disc early (center-line blocking; see
+   *  projFormNose). */
+  private projNose(p: Projectile): number {
+    if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') return p.radius;
+    return p.radius * projFormNose(p.shape);
+  }
+
   private updateProjectiles(dt: number): void {
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
@@ -25692,29 +25721,6 @@ export class World {
         || (p.maxAge !== undefined && p.age >= p.maxAge)
         || (!tethered && !this.arena.boundless
             && (p.pos.x < 0 || p.pos.x > this.arena.w || p.pos.y < 0 || p.pos.y > this.arena.h));
-  /** Does this flight's body touch the circle (cx, cy, cr)? THE projectile
-   *  body test (engine/projForms.ts): the geometry IS the drawn form — Fire
-   *  Siege hits along its rolling flame line, a bar along its wall — from
-   *  the same PROJ_FORM_GEO factors the renderer strokes. A skill whose art
-   *  runs looser than its body opts back to the classic radius disc with
-   *  delivery.hitForm: 'circle'. */
-  private projTouches(p: Projectile, cx: number, cy: number, cr: number): boolean {
-    if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') {
-      const dx = cx - p.pos.x, dy = cy - p.pos.y;
-      return dx * dx + dy * dy <= (p.radius + cr) * (p.radius + cr);
-    }
-    return projFormTouches(p.shape, p.pos.x, p.pos.y, p.dir, p.radius, p.age, cx, cy, cr);
-  }
-
-  /** The flight's leading-edge reach along its heading — what terrain
-   *  contact uses, so a thin rolling front dies when the FRONT meets the
-   *  wall instead of a full disc early (center-line blocking; see
-   *  projFormNose). */
-  private projNose(p: Projectile): number {
-    if ((p.inst.def.delivery as ProjectileDelivery).hitForm === 'circle') return p.radius;
-    return p.radius * projFormNose(p.shape);
-  }
-
       // Did a fatal end land ON A BODY (pierce spent, guarded stop) rather
       // than spend itself (range, walls, arrivals)? The SequelSpec
       // 'hit'|'expire' lever reads this at the death payout below.
@@ -27463,6 +27469,12 @@ export class World {
   private ensureDoodadIdx(): void {
     if (this.doodadIdxArr !== this.doodads || this.doodadIdxLen !== this.doodads.length
       || this.doodadIdxRev !== this.doodadsRev) {
+      // Broad-phase bound refresh (hit-surface fabric): a doodad whose true
+      // surface pokes past its visual radius (door slabs) must insert wider,
+      // or corner queries would miss it. Stamped HERE — the one chokepoint
+      // every doodad list change already flows through — so gen-time,
+      // package, terraform, and snapshot-applied doodads all self-heal.
+      for (const d of this.doodads) normalizeDoodadBound(d);
       this.doodadIdx.build(this.doodads);
       this.doodadIdxArr = this.doodads;
       this.doodadIdxLen = this.doodads.length;
@@ -27559,6 +27571,32 @@ export class World {
     return g;
   }
 
+  /** Stamp one move-blocker's TRUE surface (+ NAV_CFG.pad) onto the nav grid.
+   *  Discs keep the classic fillDisc; oblong surfaces mark exactly the cells
+   *  their padded shape covers — so the pathfield squeezes a doorway the
+   *  same way feet do (clampPos parity via the shared hit-surface fabric). */
+  private stampNavSurface(g: GridWalkField, d: Doodad): void {
+    const s = hitSurfaceOf(d, 'move');
+    if (s.kind === 'circle') {
+      g.fillDisc(d.pos.x, d.pos.y, s.r + NAV_CFG.pad, 'wall');
+      return;
+    }
+    const { ex, ey } = shapeAabbHalf(s);
+    const pad = NAV_CFG.pad;
+    const step = g.cellSize;
+    // March cell centers across the padded bounding window; a center within
+    // pad of the surface blocks (matches fillDisc's center-in-reach rule).
+    const x0 = d.pos.x - ex - pad, x1 = d.pos.x + ex + pad;
+    const y0 = d.pos.y - ey - pad, y1 = d.pos.y + ey + pad;
+    for (let cy = (Math.floor(y0 / step) + 0.5) * step; cy <= y1 + step / 2; cy += step) {
+      for (let cx = (Math.floor(x0 / step) + 0.5) * step; cx <= x1 + step / 2; cx += step) {
+        if (shapeDistance(s, d.pos.x, d.pos.y, cx, cy) < pad) {
+          g.fillRegion(cx, cy, cx, cy, 'wall');
+        }
+      }
+    }
+  }
+
   /** Is `target` swallowed by a veil patch the viewer isn't inside? THE one
    *  concealment predicate — aim assist, hover naming, and future vision
    *  consumers share it. Patch semantics: step under the same leaves (or
@@ -27569,7 +27607,7 @@ export class World {
     return this.veilPatchAt(viewer.pos) !== tp;
   }
 
-  /** The blocking doodad whose disc (± margin) covers this point, if any —
+  /** The blocking doodad whose SURFACE (± margin) covers this point, if any —
    *  bridged chasm spans excepted, exactly like clampPos. Powers spawn
    *  placement rejection and the unstuck sentinel. */
   private pointInSolid(x: number, y: number, margin = 0): Doodad | null {
@@ -27590,12 +27628,6 @@ export class World {
    *  actor can never be born into (or left inside) a wall to pingpong forever. */
   findFreeSpot(at: Vec2, radius: number): Vec2 {
     const p = this.clampPos(vec(at.x, at.y), radius);
-      // Broad-phase bound refresh (hit-surface fabric): a doodad whose true
-      // surface pokes past its visual radius (door slabs) must insert wider,
-      // or corner queries would miss it. Stamped HERE — the one chokepoint
-      // every doodad list change already flows through — so gen-time,
-      // package, terraform, and snapshot-applied doodads all self-heal.
-      for (const d of this.doodads) normalizeDoodadBound(d);
     if (!this.pointInSolid(p.x, p.y, radius * 0.4)) return p;
     for (let ring = 1; ring <= 7; ring++) {
       const rr = ring * 55;
@@ -27637,18 +27669,14 @@ export class World {
         if (!push) continue;
         if (o.kind === 'chasm' && this.bridges.some(b => dist(out, b.pos) <= b.radius)) continue;
         moved = true;
-        if (d < 0.01) { out.x = o.pos.x + minD; continue; }
-        const f = minD / d;
-        out.x = o.pos.x + (out.x - o.pos.x) * f;
-        out.y = o.pos.y + (out.y - o.pos.y) * f;
+        out.x = push.x; out.y = push.y;
         // CLASSIFY (opt-in): record what stopped us, for the collision-proc + fall
         // seam. A FALL-able chasm reports 'void' (→ recovery), else a 'wall' impact.
         if (opts?.out) {
           const fall = o.kind === 'chasm' && o.fall;
-          const n = Math.hypot(out.x - o.pos.x, out.y - o.pos.y) || 1;
           opts.out.hit = fall ? 'void' : 'wall'; opts.out.at = vec(o.pos.x, o.pos.y);
           opts.out.blockedKind = fall ? 'void' : o.kind;
-          opts.out.normal = { x: (out.x - o.pos.x) / n, y: (out.y - o.pos.y) / n };
+          opts.out.normal = { x: push.nx, y: push.ny };
         }
       }
       if (!moved) break;
@@ -27695,32 +27723,6 @@ export class World {
       }
     }
     return out;
-  /** Stamp one move-blocker's TRUE surface (+ NAV_CFG.pad) onto the nav grid.
-   *  Discs keep the classic fillDisc; oblong surfaces mark exactly the cells
-   *  their padded shape covers — so the pathfield squeezes a doorway the
-   *  same way feet do (clampPos parity via the shared hit-surface fabric). */
-  private stampNavSurface(g: GridWalkField, d: Doodad): void {
-    const s = hitSurfaceOf(d, 'move');
-    if (s.kind === 'circle') {
-      g.fillDisc(d.pos.x, d.pos.y, s.r + NAV_CFG.pad, 'wall');
-      return;
-    }
-    const { ex, ey } = shapeAabbHalf(s);
-    const pad = NAV_CFG.pad;
-    const step = g.cellSize;
-    // March cell centers across the padded bounding window; a center within
-    // pad of the surface blocks (matches fillDisc's center-in-reach rule).
-    const x0 = d.pos.x - ex - pad, x1 = d.pos.x + ex + pad;
-    const y0 = d.pos.y - ey - pad, y1 = d.pos.y + ey + pad;
-    for (let cy = (Math.floor(y0 / step) + 0.5) * step; cy <= y1 + step / 2; cy += step) {
-      for (let cx = (Math.floor(x0 / step) + 0.5) * step; cx <= x1 + step / 2; cx += step) {
-        if (shapeDistance(s, d.pos.x, d.pos.y, cx, cy) < pad) {
-          g.fillRegion(cx, cy, cx, cy, 'wall');
-        }
-      }
-    }
-  }
-
   }
 
   /** Swept walkability resolve (Phase 2): the farthest point along from→to that

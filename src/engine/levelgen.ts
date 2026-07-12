@@ -712,7 +712,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The bog set: mire dressing + the contracting-fume hazard flower. The
   // bloom's pop is pure BrittleSpec data — its fume names venom_seep, so the
   // cloud inherits the skill's own closing SIZE ENVELOPE (it shrinks away).
-  sunken_log: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['lava', 'chasm'] },
+  sunken_log: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['lava', 'chasm'],
+    surface: { hw: 1.7, hh: 0.62 } }, // the log painter's trunk proportions
   marsh_wisp: { overlap: 'inert', spacing: 34 },
   peat_mound: { overlap: 'solid', blocksMove: true, spacing: 28, forbidOn: ['water', 'lava', 'chasm'] },
   venom_bloom: { overlap: 'inert', spacing: 24,
@@ -748,14 +749,24 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   ice_spike: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24 },
   snowman:   { overlap: 'solid', blocksMove: true, spacing: 60 },
   signpost:  { overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.35 },
-  firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50 },
+  // OBLONG FURNITURE (DoodadRule.surface, the hit-surface fabric): kinds whose
+  // painter draws an oriented oblong collide as that oblong — half-extents as
+  // fractions of the channel radius, spun by the SAME `rot` the painter reads,
+  // so hitbox and pixels agree in every placement mode (scatter, formation
+  // rot:'chain', structure sills). Fractions mirror the painter's drawn
+  // proportions — keep the two in sync when retuning either. Kinds left as
+  // discs on purpose: rib_arch (multi-hoop arch — needs multi-part surfaces),
+  // gallows/soul_cage (walk-on platform / hanging cage: the small bodyScale
+  // disc IS the intent), wall/cliff (stamped as overlapping runs — rect
+  // joints would open pinholes).
+  firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50, surface: { hw: 1.05, hh: 0.55 } },
   // Settlement + wayside clutter (towns, roads, farms, ruins).
   fountain:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 140 },
   well:      { overlap: 'solid', blocksMove: true, spacing: 110 },
   lantern_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
-  bench:     { overlap: 'solid', blocksMove: true, spacing: 60 },
-  market_stall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90 },
-  broken_cart:  { overlap: 'solid', blocksMove: true, spacing: 80 },
+  bench:     { overlap: 'solid', blocksMove: true, spacing: 60, surface: { hw: 1.0, hh: 0.42 } },
+  market_stall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, surface: { hw: 0.9, hh: 0.85 } },
+  broken_cart:  { overlap: 'solid', blocksMove: true, spacing: 80, surface: { hw: 0.85, hh: 0.55, angle: 0.22 } },
   scarecrow: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
   hay_bale:  { overlap: 'solid', blocksMove: true, spacing: 55 },
   pot_cluster: { overlap: 'solid', blocksMove: true, spacing: 45 },
@@ -795,7 +806,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   weathered_statue: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   wayshrine:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 160, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   gallows:        { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 200, bodyScale: 0.45, forbidOn: ['water', 'lava', 'chasm'] },
-  fishing_rack:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70, bodyScale: 0.5, forbidOn: ['lava', 'chasm'] },
+  fishing_rack:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70, bodyScale: 0.5, forbidOn: ['lava', 'chasm'],
+    // Post-to-post rail line (fracs ride the 0.5 body radius → 1.05r × 0.175r).
+    surface: { hw: 2.1, hh: 0.35 } },
   charcoal_mound: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 150, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   // The scavenger-web dressing: graveland + mire texture. gel_pool is a
   // POURED ground liquid (contiguous organic bodies, fuse-welded) — the
@@ -828,7 +841,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The doodad kingdom (round 4).
   dead_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, bodyScale: 0.35 },
   stump:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 22 },
-  log:       { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26 },
+  log:       { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26, surface: { hw: 1.7, hh: 0.62 } },
   flowers:   { overlap: 'ground' },
   reeds:     { overlap: 'ground', walkOnly: true },
   cactus:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30, forbidOn: ['water', 'chasm'] },
@@ -888,7 +901,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // below consult Doodad.door state, so opening/breaking it clears movement,
   // shots, and sight in one flip. A window passes shots + sight, never bodies.
   door:   { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true },
-  window: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false },
+  window: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
+    surface: { hw: 0.7, hh: 0.28 } }, // the sill slab — flush with its wall run, no room-side bulge
   dock:   { overlap: 'trigger', spacing: 40 },
   breach: { overlap: 'trigger', spacing: 60 },
   // The Voyage's streamed coastline: the boat can't drive ashore, but a
@@ -932,7 +946,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // shoot over); niches are the reliquary's shelf-walls (full blocks — rows of
   // them read as corridors); pits open where the overflow was tipped.
   bone_mound:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
-  ossuary_niche: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  ossuary_niche: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    // The shelf bar (reliquary rows lay these rot:'chain' — flat corridor
+    // walls now, not scalloped circle-chains).
+    surface: { hw: 0.95, hh: 0.46 } },
   charnel_pit:   { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 130, forbidOn: ['water', 'lava', 'chasm'] },
   // The leyline kit: conduits flow underfoot (pure ground glow — the chain
   // formations draw literal leylines); fonts break the surface as crystal;
@@ -971,7 +988,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   gate_arch:     { overlap: 'ground', walkOnly: true },
   gate_pylon:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   hate_brazier:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
-  torture_rack:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  torture_rack:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 0.85, hh: 0.5 } }, // the rack bed + rollers — low dark furniture, not a pillar
   hate_idol:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 110, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
 };
 

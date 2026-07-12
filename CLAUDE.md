@@ -73,6 +73,9 @@ changes.
   raycast: one shot/sight ray over doodads + grid regions, `LOS_CFG`
   delivery defaults, the `phasing` stat lever; AI pathing rides
   `World.pathField()` — docs in `docs/engine/los-pathing.md`),
+  `shapes.ts` + `projForms.ts` (the HIT-SURFACE fabric: doodad collision
+  shapes as data via `hitSurfaceOf`, projectile drawn-form hit tests via
+  `PROJ_FORM_GEO` — docs in `docs/engine/hit-surfaces.md`),
   `presence.ts` (leveled-list
   spawn envelopes: weight-vs-level curves on any monster-table entry or
   MonsterDef, folded at `World.weightedPick(table, atLevel)`),

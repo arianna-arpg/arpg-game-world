@@ -61,7 +61,13 @@ export const locationTab: DevTabDef = {
       const w = runActive(); if (!w) { flash('start a run first'); return; }
       flash(`killed ${w.devKillAll()} enemies`);
     });
-    cheatRow.append(ghostBtn, noclipBtn, killBtn);
+    // The hit-surface truth-layer: outlines every blocker's real surface and
+    // every flight's drawn-form hit test (engine/shapes.ts + projForms.ts).
+    const hitboxBtn = btn('Hitboxes: OFF', () => {
+      const w = runActive(); if (!w) return;
+      hitboxBtn.textContent = `Hitboxes: ${w.devToggleHitboxes() ? 'ON' : 'OFF'}`;
+    });
+    cheatRow.append(ghostBtn, noclipBtn, hitboxBtn, killBtn);
 
     /** Run a travel action, flash its note, and re-render (the graph moved). */
     const act = (fn: (w: NonNullable<ReturnType<typeof runActive>>) => string | null): void => {
