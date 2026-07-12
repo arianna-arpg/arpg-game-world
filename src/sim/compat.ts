@@ -374,6 +374,11 @@ export type PairVerdictKind = 'effective' | 'cost_only' | 'negligible' | 'inert'
  *  as data. A matching pair's inert-looking result reports as 'blind'
  *  (unmeasured), never as a bug. Extend when a new geometry/lifecycle blind
  *  spot is understood; every rule names itself in the report. */
+/** Does the support carry any mod touching one of these stats (mods or
+ *  perLevel)? The conditional-payload blindness rows key on this. */
+const supModsStat = (sup: SupportDef, stats: string[]): boolean =>
+  [...sup.mods, ...(sup.perLevel ?? [])].some(m => stats.includes(m.stat));
+
 export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: SupportDef) => boolean }[] = [
   {
     // A cursor-origin flight aimed AT the foe travels ~0px, so flight-
@@ -383,6 +388,41 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     when: (def, sup) =>
       def.delivery.type === 'projectile' && def.delivery.origin === 'cursor'
       && (sup.trail !== undefined || sup.fissureTrail !== undefined),
+  },
+  // ---- CONDITIONAL-PAYLOAD classes (2026-07-12 full-run triage): gems whose
+  // function demands a mechanism, verb, or event the standard probes never
+  // supply. Each row names the missing condition; a pair matching one
+  // reports 'blind', never a false INERT. When a probe shape LEARNS the
+  // condition (a stealth pilot, a shift-pressing pilot), delete its row and
+  // the class re-enters measurement automatically.
+  {
+    note: 'companion gem: fuse-rider stats (fuseDelay/fusePower) need a FUSE on the host — none present in a single-gem probe',
+    when: (def, sup) => supModsStat(sup, ['fuseDelay', 'fusePower']) && !def.fuse,
+  },
+  {
+    note: 'companion gem: tether-rider stats need a TETHER on the host — none present in a single-gem probe',
+    when: (def, sup) => supModsStat(sup, ['tetherDamage', 'tetherWidth', 'tetherRadius']) && !def.tether && sup.tether === undefined,
+  },
+  {
+    note: 'death-dependent payload (dotPropagates) — the immortal dummy never dies, so propagation never fires',
+    when: (def, sup) => supModsStat(sup, ['dotPropagates']) && probeKindFor(def, sup).kind === 'dummy',
+  },
+  {
+    note: 'leech is unobservable at full vitals against a passive target (nothing to refill)',
+    when: (def, sup) => supModsStat(sup, ['lifeLeech', 'manaLeech']) && probeKindFor(def, sup).kind === 'dummy',
+  },
+  {
+    note: 'ambush/stealth bonus — no pilot performs the stealth verb',
+    when: (_def, sup) => supModsStat(sup, ['ambushBonus', 'stealthRegen']),
+  },
+  {
+    note: 'granted META action — pilots never shift-press, so the grant goes unexercised',
+    when: (_def, sup) => sup.meta !== undefined,
+  },
+  {
+    note: 'sacrifice needs a STANDING MINION beside the caster — solo rigs field none',
+    when: (def, sup) => sup.sacrifice !== undefined
+      && def.delivery.type !== 'summon' && !def.tags.includes('minion'),
   },
 ];
 

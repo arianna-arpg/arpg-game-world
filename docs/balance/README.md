@@ -201,6 +201,13 @@ wrong; baselines express "don't move things by accident" and are exact.
   a support-power table); cost alone = **cost_only** (a tax with no observed
   function — the partial-no-op bucket); nothing beyond noise =
   **negligible** (indeterminate — escalate seeds/duration, never cite as-is).
+- **blind** = the standard probes cannot raise this pairing's condition
+  (`BLINDNESS_RULES`, data): cursor-origin travel payloads, companion gems
+  without their mechanism (fuse/tether riders), death-dependent payloads vs
+  the immortal dummy, leech at full vitals, stealth verbs and shift-metas no
+  pilot performs. Blind is UNMEASURED, never evidence of breakage — and
+  teaching a probe the missing verb (then deleting the row) re-enters the
+  whole class into measurement.
 - Crew-fit pairs probe KEYED: the resonance gem rides both runs, so the
   verdict is about the boarded behavior, not the (by-design) dormant
   keyless socket.
