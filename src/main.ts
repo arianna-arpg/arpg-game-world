@@ -34,7 +34,7 @@ import { WebRtcTransport } from './net/webrtc';
 import { openCoopLobby } from './ui/lobby';
 import { CLASSES, type ClassDef } from './data/classes';
 import { DEV, GAME_TITLE } from './config';
-import { mountDevGemSpawner } from './dev/gemSpawner';
+import { mountDevPanel } from './dev/panel';
 import { mountPassiveEditor } from './dev/passiveEditor';
 import { perfSweep, type PerfSweepOpts, type PerfSweepReport } from './dev/perf';
 import { applyCredits, creditsForDeath, isClassUnlocked, LEDGER_ACCOUNT_DEATHS, type Account } from './meta/account';
@@ -412,8 +412,8 @@ window.__game = {
 // Cross-check the data files; authoring mistakes warn instead of failing silently.
 validateContent();
 
-// DEV: the gem spawner QA tool (config.ts DEV.gemSpawner). Off (0) = no-op.
-if (DEV.gemSpawner) mountDevGemSpawner(() => world);
+// DEV: the tabbed dev panel (config.ts DEV.panel). Off (0) = no-op.
+if (DEV.panel) mountDevPanel(() => world);
 // DEV: the passive-tree editor (config.ts DEV.passiveTreeEditor). Off (0) = no-op.
 if (DEV.passiveTreeEditor) mountPassiveEditor(ui);
 

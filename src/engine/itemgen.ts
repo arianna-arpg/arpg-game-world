@@ -28,9 +28,9 @@ import {
   baseBonusFor, defenseBudget, formatModLine, formatStatValue, lerpRange,
   levelReqForTier, roundStatValue, slotsForCategory, socketCap, tierForIlvl,
   tieredBaseName,
-  type AffixDef, type AffixRollState, type AffixTierDef, type ItemBaseDef,
-  type ItemCategory, type ItemInstance, type ItemRarity, type ModLineDef,
-  type RangedLineDef, type UniqueDef,
+  type AffixDef, type AffixKind, type AffixRollState, type AffixTierDef,
+  type ItemBaseDef, type ItemCategory, type ItemInstance, type ItemRarity,
+  type ModLineDef, type RangedLineDef, type UniqueDef,
 } from './items';
 import { STAT_DEFS, isAttributeId, type Modifier } from './stats';
 
@@ -342,6 +342,128 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
   if (unique) {
     item.uniqueId = unique.id;
     item.uniqueRolls = rollLineSet(unique.lines.length, rng);
+    for (let i = 1; i < unique.lines.length; i++) {
+      if (unique.lines[i].sharedRoll) item.uniqueRolls[i] = item.uniqueRolls[0];
+    }
+  }
+  return item;
+}
+
+// ----------------------------------------------------------------- forge ---
+
+/** One explicit affix on a forged item. */
+export interface ForgeAffixPick {
+  /** Affix id — must belong to the base's tag-gated pool (illegal picks are
+   *  dropped, never bent into an instance no drop could produce). */
+  id: string;
+  /** Tier INDEX into AffixDef.tiers (best-first, exquisite included). Omitted
+   *  = the best ilvl-legal tier; an explicit index may exceed the ilvl gate
+   *  on purpose (testing a top tier on a low item). */
+  tier?: number;
+}
+
+export interface ForgeItemOpts {
+  ilvl: number;
+  /** Exact base family (or implied by uniqueId). */
+  baseId?: string;
+  /** Exact unique — implies its base and rarity 'unique'. */
+  uniqueId?: string;
+  /** Default: 'unique' with uniqueId, else 'rare' when affixes are picked,
+   *  else 'common'. */
+  rarity?: ItemRarity;
+  /** Explicit affix families (family-deduped, kind-capped by the rarity). */
+  affixes?: ForgeAffixPick[];
+  /** Top up the remaining prefix/suffix slots with normal weighted rolls. */
+  fillRandom?: boolean;
+  /** Pin EVERY numeric roll (base/superior/implicits/affixes/unique lines) to
+   *  this 0..1 quality. Omitted = random, exactly like a drop. */
+  quality?: number;
+  /** Force the superior implicit (commons only). */
+  superior?: boolean;
+  /** Exact socket count, clamped to the category cap (0 = none). Omitted =
+   *  the natural rarity-weighted roll. */
+  sockets?: number;
+  rng?: RngFn;
+}
+
+/** DELIBERATE mint — the dev/QA and future-bench counterpart to rollItem's
+ *  weighted lottery. Same registries, same instance shape, same derivation:
+ *  everything is spec'd instead of rolled, so a tester (or a crafting recipe)
+ *  can ask for "this base, these families at these tiers, max rolls" and get
+ *  a legal item the whole pipeline already knows how to price and describe.
+ *  Returns null only for unknown ids — never mints an off-registry instance. */
+export function forgeItem(opts: ForgeItemOpts): ItemInstance | null {
+  ensureValidated();
+  const rng = opts.rng ?? Math.random;
+  const q = opts.quality;
+  const roll = (): number => (q !== undefined ? Math.min(1, Math.max(0, q)) : rng());
+  const rollSet = (n: number): number[] => { const out: number[] = []; for (let i = 0; i < n; i++) out.push(roll()); return out; };
+  const ilvl = Math.max(1, Math.round(opts.ilvl));
+
+  const unique = opts.uniqueId ? UNIQUES[opts.uniqueId] : undefined;
+  if (opts.uniqueId && !unique) return null;
+  const rarity: ItemRarity = unique ? 'unique' : opts.rarity ?? (opts.affixes?.length ? 'rare' : 'common');
+  const base = ITEM_BASES[unique?.baseId ?? opts.baseId ?? ''];
+  if (!base) return null;
+
+  const caps = ITEM_CFG.affixSlots[rarity];
+  const pools = affixPoolsFor(base);
+  const used = new Set<string>();
+  const counts: Record<AffixKind, number> = { prefix: 0, suffix: 0 };
+  const affixes: AffixRollState[] = [];
+  for (const pick of opts.affixes ?? []) {
+    const def = ITEM_AFFIXES[pick.id];
+    if (!def || used.has(def.family)) continue;
+    if (!(def.kind === 'prefix' ? pools.prefix : pools.suffix).includes(def)) continue;
+    if (counts[def.kind] >= (def.kind === 'prefix' ? caps.prefixes : caps.suffixes)) continue;
+    const tier = pick.tier !== undefined
+      ? Math.max(0, Math.min(def.tiers.length - 1, Math.round(pick.tier)))
+      : eligibleTiers(def, ilvl, rarity)[0]?.index ?? def.tiers.length - 1;
+    used.add(def.family);
+    counts[def.kind]++;
+    const rolls = rollSet(def.lines.length);
+    for (let i = 1; i < def.lines.length; i++) if (def.lines[i].sharedRoll) rolls[i] = rolls[0];
+    affixes.push({ id: def.id, tier, rolls });
+  }
+  if (opts.fillRandom) {
+    for (const kind of ['prefix', 'suffix'] as const) {
+      const cap = kind === 'prefix' ? caps.prefixes : caps.suffixes;
+      const pool = kind === 'prefix' ? pools.prefix : pools.suffix;
+      while (counts[kind] < cap) {
+        const a = rollOneAffix(base, pool, used, ilvl, rarity, rng);
+        if (!a) break; // pool exhausted for this kind
+        if (q !== undefined) a.rolls = a.rolls.map(() => Math.min(1, Math.max(0, q)));
+        counts[kind]++;
+        affixes.push(a);
+      }
+    }
+  }
+
+  const tier = tierForIlvl(ilvl);
+  const superior = rarity === 'common' && (opts.superior ?? false);
+  const item: ItemInstance = {
+    uid: nextItemUid(),
+    baseId: base.id,
+    ilvl,
+    tier,
+    rarity,
+    name: mintName(base, tier, rarity, affixes, unique, superior, rng),
+    baseRoll: roll(),
+    implicitRolls: (base.implicits ?? []).map(() => roll()),
+    affixes,
+  };
+  if (superior) item.superior = roll();
+  const cap = socketCap(base.category);
+  if (opts.sockets !== undefined) {
+    const n = Math.max(0, Math.min(cap, Math.round(opts.sockets)));
+    if (n > 0) item.sockets = new Array<string | null>(n).fill(null);
+  } else if (cap > 0 && rng() < ITEM_CFG.sockets.chanceByRarity[rarity]) {
+    const n = Math.min(cap, pickWeighted(ITEM_CFG.sockets.countWeights[rarity], rng)?.n ?? 1);
+    item.sockets = new Array<string | null>(n).fill(null);
+  }
+  if (unique) {
+    item.uniqueId = unique.id;
+    item.uniqueRolls = rollSet(unique.lines.length);
     for (let i = 1; i < unique.lines.length; i++) {
       if (unique.lines[i].sharedRoll) item.uniqueRolls[i] = item.uniqueRolls[0];
     }

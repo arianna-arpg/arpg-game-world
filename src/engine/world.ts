@@ -96,7 +96,7 @@ import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from 
 import { Rng, rollSeed } from '../core/rng';
 import { ALTARS, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
-import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, OCEAN_BIOME } from '../world/biomes';
+import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
 import { EAGER_WORLD_WEB } from '../config';
@@ -110,7 +110,7 @@ import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
-import { dimensionDef, dimensionBiomeAt, dimensionsEnteredBy } from '../world/dimensions';
+import { dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy } from '../world/dimensions';
 import { courseBiomeAt, courseMintHints, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 
@@ -4939,6 +4939,188 @@ export class World {
     this.linkBackTo(this.zone, dest); // …and a road into it from here
     this.loadZone(dest.id, this.zone.id);
     return true;
+  }
+
+  /** DEV NAVIGATION — every lever registry-derived (BIOMES / BIOME_FIELD /
+   *  DIMENSIONS / zoneMap / visited), so a new biome or dimension appears in
+   *  the dev panel with zero tool edits. Scan shape lives here, not inline. */
+  private static readonly DEV_NAV = {
+    /** Ring sweep over the live biome sampler: start/step/ceiling radius (map
+     *  units) and angular step (radians) — devTravelToField's proven shape. */
+    scan: { r0: 120, step: 80, max: 6000, arc: 0.14 },
+  };
+
+  /** The dimension id a zone belongs to (zones store surface as undefined). */
+  private zoneDim(z: ZoneDef): string { return z.dimension ?? 'surface'; }
+
+  /** DEV: the Location tab's one view — every registered dimension (with
+   *  discovery + reachability) and every non-virtual biome (with where it can
+   *  occur and how much of it is minted/visited in this run). */
+  devLocationCatalog(): {
+    dimension: string;
+    dimensions: { id: string; label: string; color: string; here: boolean; discovered: boolean; reachable: boolean }[];
+    biomes: { id: string; label: string; color: string; occursIn: string[]; minted: number; visited: number }[];
+  } {
+    const curDim = this.zoneDim(this.zone);
+    const nodes = Object.values(this.zoneMap);
+    const dimensions = dimensionIds().map(id => {
+      const d = dimensionDef(id);
+      return {
+        id, label: d.label, color: d.color,
+        here: id === curDim,
+        discovered: this.discoveredDimensions.has(id),
+        // Reachable = has minted ground to jump to, or a declared entry to tear.
+        reachable: nodes.some(z => this.zoneDim(z) === id) || !!d.entry?.gate,
+      };
+    });
+    // WHERE each biome can occur — surface heat-map seeds + every dimension's
+    // palette and course-only throughlines. A biome in none of them is
+    // realm/arena-only: reachable exactly when some event has minted it.
+    const occurs = new Map<string, Set<string>>();
+    const addOcc = (biome: string, dim: string): void => {
+      let s = occurs.get(biome);
+      if (!s) occurs.set(biome, s = new Set());
+      s.add(dim);
+    };
+    for (const s of BIOME_FIELD) addOcc(s.biome, 'surface');
+    for (const id of dimensionIds()) {
+      const d = dimensionDef(id);
+      for (const b of d.biomes ?? []) addOcc(b.biome, id);
+      for (const c of d.courses ?? []) addOcc(c.biome, id);
+    }
+    const counts = new Map<string, { minted: number; visited: number }>();
+    for (const z of nodes) {
+      if (!z.biome) continue;
+      const c = counts.get(z.biome) ?? { minted: 0, visited: 0 };
+      c.minted++;
+      if (this.visited.has(z.id)) c.visited++;
+      counts.set(z.biome, c);
+    }
+    const biomes = Object.entries(BIOMES)
+      .filter(([, info]) => !info.virtual)
+      .map(([id, info]) => ({
+        id, label: info.label, color: info.mapColor,
+        occursIn: [...(occurs.get(id) ?? [])],
+        minted: counts.get(id)?.minted ?? 0,
+        visited: counts.get(id)?.visited ?? 0,
+      }));
+    return { dimension: curDim, dimensions, biomes };
+  }
+
+  /** DEV: jump to a DIMENSION — its minted gate first (the anchor waypoint),
+   *  else its nearest-to-nothing first minted node (prefer visited ground),
+   *  else tear it open through the real enterDimension crossing. Returns an
+   *  arrival note, or null when the dimension is unreachable data. */
+  devTravelToDimension(dimId: string): string | null {
+    if (!dimensionIds().includes(dimId)) return null;
+    const dim = dimensionDef(dimId);
+    if (dimId === this.zoneDim(this.zone)) return `already in ${dim.label}`;
+    const gateId = dim.entry?.gate.id;
+    if (gateId && this.zoneMap[gateId]) {
+      this.devTravelTo(gateId);
+      return `→ ${this.zoneMap[gateId].name}`;
+    }
+    const nodes = Object.values(this.zoneMap).filter(z => this.zoneDim(z) === dimId);
+    if (nodes.length) {
+      const dest = nodes.find(z => this.visited.has(z.id)) ?? nodes[0];
+      this.devTravelTo(dest.id);
+      return `→ ${dest.name}`;
+    }
+    if (dim.entry?.gate) {
+      this.enterDimension(dimId); // the one sanctioned crossing — mints the gate
+      return `breached → ${dim.entry.gate.name}`;
+    }
+    return null;
+  }
+
+  /** DEV: jump to a BIOME. mode 'explored' = the nearest zone of it you have
+   *  visited; 'unexplored' = the nearest you haven't — and when none is minted
+   *  anywhere, ring-scan the LIVE biome samplers (surface heat map first when
+   *  it can occur here, then each dimension that palettes it, crossing through
+   *  devTravelToDimension when needed) and MINT the find through the real
+   *  placeZoneAt path with two-way roads. biome undefined + 'unexplored' =
+   *  "surprise me": every never-visited biome is a target at once, so the scan
+   *  lands on whichever unseen country is nearest. Returns an arrival note or
+   *  null when nothing qualifies. */
+  devTravelToBiome(biome: string | undefined, mode: 'explored' | 'unexplored'): string | null {
+    const curDim = this.zoneDim(this.zone);
+    const catalog = this.devLocationCatalog();
+    const targets = new Set<string>();
+    if (biome) {
+      if (!BIOMES[biome] || BIOMES[biome].virtual) return null;
+      targets.add(biome);
+    } else {
+      for (const b of catalog.biomes) if (b.visited === 0) targets.add(b.id);
+      if (!targets.size) return null; // every biome in the registry has been walked
+    }
+    const here = this.zone.map;
+    const wantVisited = mode === 'explored';
+    // 1) Minted ground first — nearest matching zone, same dimension preferred
+    //    (cross-dimension map distance is meaningless, so it's a fallback tier).
+    const cands = Object.values(this.zoneMap).filter(z =>
+      z.id !== this.zone.id && z.biome && targets.has(z.biome)
+      && this.visited.has(z.id) === wantVisited);
+    const nearest = (pool: ZoneDef[]): ZoneDef | null => pool.reduce<ZoneDef | null>(
+      (best, z) => !best || coordDist(z.map, here) < coordDist(best.map, here) ? z : best, null);
+    const dest = nearest(cands.filter(z => this.zoneDim(z) === curDim)) ?? nearest(cands);
+    if (dest) {
+      this.devTravelTo(dest.id);
+      return `→ ${dest.name} (${dest.biome})`;
+    }
+    if (wantVisited) return null; // nothing of it explored yet — nothing to revisit
+    // 2) Nothing minted → scan the live field(s) and mint the nearest region.
+    //    Dimension order: here first, then every other dimension that can grow it.
+    const occursIn = new Set<string>();
+    for (const b of catalog.biomes) if (targets.has(b.id)) for (const d of b.occursIn) occursIn.add(d);
+    if (!occursIn.size) return null; // realm-only biome — an event mints it, not the field
+    const scanDims = [curDim, ...[...occursIn].filter(d => d !== curDim)];
+    for (const dimId of scanDims) {
+      if (!occursIn.has(dimId)) continue; // curDim may not grow any target — skip to one that does
+      // Cross first (the mint must anchor + road INSIDE its own dimension —
+      // a cross-dimension back-edge is a graph defect by doctrine).
+      if (dimId !== curDim && this.devTravelToDimension(dimId) === null) continue;
+      const found = this.devScanForBiome(dimId, targets);
+      if (found) return found;
+      if (dimId !== curDim) this.devTravelToDimension(curDim); // scan failed — come home
+    }
+    return null;
+  }
+
+  /** Ring-sweep one dimension's live biome sampler for any target biome and
+   *  MINT the first hit through placeZoneAt (heat-map authoritative, two-way
+   *  roads, charted into the sim) — then walk in. Runs FROM the current zone,
+   *  which must already sit in dimId. */
+  private devScanForBiome(dimId: string, targets: Set<string>): string | null {
+    const surface = dimId === 'surface';
+    const sampler = surface ? this.biomeFor : this.dimensionBiomeFor(dimId);
+    const cfg = World.DEV_NAV.scan;
+    const here = this.zone.map;
+    let hit: { x: number; y: number } | null = null;
+    for (let r = cfg.r0; r <= cfg.max && !hit; r += cfg.step) {
+      for (let a = 0; a < Math.PI * 2; a += cfg.arc) {
+        const c = { x: Math.round(here.x + Math.cos(a) * r), y: Math.round(here.y + Math.sin(a) * r) };
+        if (surface && this.continentFor(c).kind === 'ocean') continue; // the land ends — no minting at sea
+        if (targets.has(sampler(c))) { hit = c; break; }
+      }
+    }
+    if (!hit) return null;
+    const anchor = this.zoneMap[this.zone.id] ?? this.zone;
+    const gen = placeZoneAt(hit, anchor, this.zoneMap, this.nextGenId++, {
+      biomeFor: sampler, levelFor: this.levelFor,
+      biomeDepthFor: surface ? this.biomeDepthFor : undefined,
+      climateFor: this.climateFor, fieldBiome: true,
+      dimension: surface ? undefined : dimId,
+      courseFor: this.courseMintFor(surface ? undefined : dimId),
+    });
+    // Field-region hits become the mega-zone, exactly like a walked frontier.
+    if (surface) this.fieldifyZone(gen, fieldRegionAt(hit, this.sim.biomeField.fieldSeed));
+    if (!surface) gen.level += dimensionDef(dimId).levelBonus ?? 0;
+    this.zoneMap[gen.id] = gen;
+    this.sim.onNodeCharted(gen, this.simView());
+    this.linkBackTo(gen, this.zone);
+    this.linkBackTo(this.zone, gen);
+    this.loadZone(gen.id, this.zone.id);
+    return `minted → ${gen.name} (${gen.biome ?? '?'})`;
   }
 
   /** DEV: ghost — invuln + untargetable (AI ignores you, nothing can stop your
