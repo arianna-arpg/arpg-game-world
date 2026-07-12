@@ -18,6 +18,13 @@ release/
 # committed — it's an asset, not output.
 build/build-info.json
 
+# ── In-browser demo build ────────────────────────────────────
+# The playable web demo is built into site/play by CI (and locally
+# with `npm run build:web`) via `vite build --outDir site/play`.
+# Like dist/, it's generated output — never committed. CI rebuilds
+# it on every deploy, so the live /play/ always matches the source.
+/site/play/
+
 # ── Game saves ───────────────────────────────────────────────
 # Personal runtime state that changes every session. Ignored so
 # your play history doesn't bloat the repo. To keep ONE sample

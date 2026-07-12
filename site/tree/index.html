@@ -4,22 +4,75 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Passive Tree Builder — Hollow Wake</title>
-<meta name="description" content="Plan a Hollow Wake build on the real passive tree — coming as Phase 2 of the site.">
+<meta name="description" content="Plan a Hollow Wake build on the real passive tree — allocate from your class start, total stats live, and share a build with a link.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="../assets/site.css">
 <style>
-  .hero-mini{padding:60px 0 30px;text-align:center}
-  .soon{display:inline-flex;align-items:center;gap:9px;font-family:var(--font-head);font-size:12px;letter-spacing:.16em;text-transform:uppercase;font-weight:700;color:var(--violet);border:1px solid rgba(169,139,255,.34);background:rgba(169,139,255,.1);padding:6px 13px;border-radius:999px}
-  .hero-mini h1{font-family:var(--font-display);font-size:clamp(34px,6vw,58px);margin:22px 0 10px}
-  .hero-mini p{color:var(--ink-dim);max-width:600px;margin:0 auto;font-size:17px}
-  .preview{max-width:760px;margin:36px auto 0;background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:26px;text-align:left}
-  .preview h3{font-family:var(--font-head);font-size:17px;margin-bottom:14px}
-  .plan{list-style:none;margin:0;padding:0;display:grid;gap:11px}
-  .plan li{display:flex;gap:12px;align-items:flex-start;color:var(--ink-dim);font-size:14.5px}
-  .plan li svg{flex:0 0 auto;margin-top:3px;color:var(--violet)}
-  .treeviz{margin-top:30px;border-radius:var(--r);overflow:hidden;border:1px solid var(--line)}
+  /* ---- tree builder layout ---- */
+  .tbar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:6px 0 14px}
+  .tbar .grow{flex:1 1 auto}
+  .field{display:flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:8px 12px}
+  .field label{font-family:var(--font-head);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint)}
+  .field select,.field input{background:transparent;border:0;color:var(--ink);font-family:var(--font-body);font-size:14px;outline:none}
+  .field select{cursor:pointer}
+  .field select option{background:var(--panel-2);color:var(--ink)}
+  #search{min-width:150px}
+  .pts{font-family:var(--font-head);font-size:14px;color:var(--ink)}
+  .pts b{color:var(--teal);font-size:16px}
+  .pts.over b{color:var(--ember-hi)}
+
+  .tlayout{display:grid;grid-template-columns:1fr 320px;gap:16px;align-items:start}
+  @media(max-width:900px){.tlayout{grid-template-columns:1fr}}
+
+  .canvas-wrap{position:relative;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:
+      radial-gradient(1200px 800px at 50% 40%, rgba(79,214,196,.05), transparent 70%), var(--bg-2);
+      height:min(72vh,720px);touch-action:none}
+  #tree{display:block;width:100%;height:100%;cursor:grab}
+  #tree.grabbing{cursor:grabbing}
+  .canvas-hint{position:absolute;left:12px;bottom:10px;font-size:12px;color:var(--ink-faint);pointer-events:none;background:rgba(8,9,14,.6);padding:4px 9px;border-radius:8px}
+  .zoombtns{position:absolute;right:12px;bottom:10px;display:flex;gap:6px}
+  .zoombtns button{width:32px;height:32px;border-radius:9px;border:1px solid var(--line-2);background:rgba(17,19,29,.85);color:var(--ink);font-size:18px;cursor:pointer;line-height:1}
+  .zoombtns button:hover{border-color:var(--teal)}
+
+  /* floating node tooltip */
+  #tip{position:absolute;pointer-events:none;z-index:5;max-width:280px;background:var(--panel-2);border:1px solid var(--line-2);
+      border-radius:11px;padding:11px 13px;box-shadow:var(--shadow);opacity:0;transform:translateY(4px);transition:opacity .12s}
+  #tip.on{opacity:1;transform:none}
+  #tip .tk{font-family:var(--font-head);font-size:10px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;margin-bottom:3px}
+  #tip .tn{font-family:var(--font-head);font-weight:600;font-size:14px;color:var(--ink);margin-bottom:4px}
+  #tip .td{font-size:13px;color:var(--ink-dim);line-height:1.45}
+  #tip .thint{margin-top:7px;font-size:11px;color:var(--ink-faint)}
+
+  /* side panel */
+  .side{display:grid;gap:14px}
+  .card-p{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:16px 17px}
+  .card-p h3{font-family:var(--font-head);font-size:13px;letter-spacing:.04em;color:var(--ink);margin-bottom:12px;display:flex;justify-content:space-between;align-items:baseline}
+  .card-p h3 .sub{font-family:var(--font-body);font-size:12px;color:var(--ink-faint);font-weight:400}
+  .totals{display:grid;gap:7px}
+  .totals .row{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;border-bottom:1px dashed var(--line);padding-bottom:6px}
+  .totals .row:last-child{border-bottom:0}
+  .totals .row .v{font-family:var(--font-mono);color:var(--teal-hi);white-space:nowrap}
+  .totals .row .v.neg{color:var(--ember-hi)}
+  .totals .grp-label{font-family:var(--font-head);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-top:6px}
+  .totals-empty{color:var(--ink-faint);font-size:13px}
+
+  .legend{display:grid;gap:8px;font-size:12.5px;color:var(--ink-dim)}
+  .legend .li{display:flex;align-items:center;gap:9px}
+  .legend .sw{width:14px;height:14px;border-radius:50%;flex:0 0 auto;border:1.5px solid rgba(255,255,255,.5)}
+
+  .selnode .sn-name{font-family:var(--font-head);font-weight:600;font-size:15px;color:var(--ink)}
+  .selnode .sn-kind{font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-family:var(--font-head);font-weight:700}
+  .selnode .sn-desc{font-size:13.5px;color:var(--ink-dim);margin-top:6px;line-height:1.5}
+  .selnode .sn-id{font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);margin-top:8px}
+  .minibtn{border:1px solid var(--line-2);background:rgba(255,255,255,.03);color:var(--ink);border-radius:9px;padding:7px 13px;font-size:13px;font-weight:600;cursor:pointer}
+  .minibtn:hover{border-color:var(--teal)}
+  .minibtn-row{display:flex;gap:8px;flex-wrap:wrap}
+  .toast{position:fixed;left:50%;bottom:26px;translate:-50% 12px;background:var(--panel-2);border:1px solid var(--line-2);
+      border-radius:11px;padding:11px 18px;font-size:13.5px;color:var(--ink);box-shadow:var(--shadow);opacity:0;transition:opacity .2s,translate .2s;pointer-events:none;z-index:80}
+  .toast.on{opacity:1;translate:-50% 0}
+  .loading{padding:80px 0;text-align:center;color:var(--ink-faint)}
 </style>
 </head>
 <body>
@@ -42,28 +95,76 @@
 </header>
 
 <main class="wrap">
-  <div class="hero-mini">
-    <span class="soon"><span class="dot" style="width:6px;height:6px;border-radius:50%;background:var(--violet)"></span> Phase 2 · In progress</span>
-    <h1 class="display">Passive Tree Builder</h1>
-    <p>A full interactive build planner on Hollow Wake's real 233-node tree — allocate from your class start, watch stats total live, and share a build with a link.</p>
+  <div class="pagehead">
+    <div class="kicker">Build planner</div>
+    <h1>Passive Tree Builder</h1>
+    <p>Hollow Wake's real passive tree, rendered straight from the game data. Pick a class, allocate outward from your start, and watch every modifier total live. <span id="nodecount"></span></p>
   </div>
 
-  <div class="preview">
-    <h3>What's landing here</h3>
-    <ul class="plan">
-      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> The real tree, rendered from each node's authored <span class="mono" style="color:var(--ink)">x/y</span> and <span class="mono" style="color:var(--ink)">links</span> — pan, zoom, and click to allocate.</li>
-      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Connectivity enforced from your class start; keystones and notables called out.</li>
-      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> A live stat summary that adds up every allocated node's modifiers.</li>
-      <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 6L9 17l-5-5"/></svg> Shareable build URLs — send someone your exact allocation.</li>
-    </ul>
-    <p style="color:var(--ink-faint);font-size:13.5px;margin-top:18px">The passive data is already exported to <span class="mono">data/passives.json</span> by the same pipeline that feeds the <a href="../database/" style="color:var(--teal)">Database</a> — so the builder plugs straight in and stays at parity with the game.</p>
+  <div id="banner"></div>
+
+  <div class="tbar">
+    <div class="field">
+      <label for="classsel">Class</label>
+      <select id="classsel" aria-label="Class"></select>
+    </div>
+    <div class="field">
+      <label for="levelinp">Level</label>
+      <input id="levelinp" type="number" min="1" max="100" value="90" style="width:50px" aria-label="Character level">
+    </div>
+    <div class="pts" id="ptsbox"><b id="ptsval">0</b> / <span id="ptsmax">91</span> points</div>
+    <div class="grow"></div>
+    <div class="field">
+      <label for="search">Find</label>
+      <input id="search" type="search" placeholder="node name or stat…" autocomplete="off">
+    </div>
+    <button class="minibtn" id="resetbtn" title="Deallocate everything">Reset</button>
+    <button class="minibtn" id="sharebtn" title="Copy a link to this exact build">Share build</button>
+  </div>
+
+  <div class="tlayout">
+    <div class="canvas-wrap">
+      <canvas id="tree"></canvas>
+      <div id="tip" role="tooltip"></div>
+      <div class="canvas-hint">Drag to pan · scroll to zoom · click a reachable node to allocate</div>
+      <div class="zoombtns">
+        <button id="zin" aria-label="Zoom in">+</button>
+        <button id="zout" aria-label="Zoom out">−</button>
+        <button id="zfit" aria-label="Fit tree" title="Fit to view">⤢</button>
+      </div>
+      <div class="loading" id="loading">Loading the tree…</div>
+    </div>
+
+    <aside class="side">
+      <div class="card-p">
+        <h3>Build totals <span class="sub" id="allocsub">0 nodes</span></h3>
+        <div class="totals" id="totals"><div class="totals-empty">Allocate nodes to see their combined modifiers here.</div></div>
+      </div>
+      <div class="card-p selnode" id="selcard" hidden>
+        <div class="sn-kind" id="snkind"></div>
+        <div class="sn-name" id="snname"></div>
+        <div class="sn-desc" id="sndesc"></div>
+        <div class="sn-id" id="snid"></div>
+        <div class="minibtn-row" style="margin-top:12px"><button class="minibtn" id="snalloc"></button></div>
+      </div>
+      <div class="card-p">
+        <h3>Legend</h3>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="card-p" style="color:var(--ink-faint);font-size:12.5px;line-height:1.55">
+        Rendered from <span class="mono" style="color:var(--ink-dim)">data/passives.json</span>, generated by the same pipeline that feeds the
+        <a href="../database/" style="color:var(--teal)">Database</a> — so this planner stays at parity with the game.
+      </div>
+    </aside>
   </div>
 </main>
 
 <footer class="site"><div class="wrap row">
-  <span>Hollow Wake — passive tree builder coming in Phase 2</span>
-  <span><a href="../">Home</a> · <a href="../database/">Database</a> · <a href="https://github.com/arianna-arpg/arpg-game-world" target="_blank" rel="noopener">GitHub</a></span>
+  <span>Hollow Wake — build planner on the live passive data</span>
+  <span><a href="../">Home</a> · <a href="../database/">Database</a> · <a href="../play/">Play</a> · <a href="https://github.com/arianna-arpg/arpg-game-world" target="_blank" rel="noopener">GitHub</a></span>
 </div></footer>
 </div>
+<div class="toast" id="toast"></div>
+<script src="../assets/tree.js"></script>
 </body>
 </html>

@@ -9,11 +9,14 @@ on:
     branches: [main]
     # Rebuild when the game data, the site, or the pipeline changes.
     paths:
-      - 'src/data/**'
+      - 'src/**'
+      - 'index.html'
+      - 'vite.config.ts'
       - 'site/**'
       - 'scripts/export-web-data.ts'
       - '.github/workflows/pages.yml'
       - 'package.json'
+      - 'package-lock.json'
   workflow_dispatch: {}
 
 permissions:
@@ -43,13 +46,15 @@ jobs:
       - name: Export game data → site/data/*.json
         run: npx tsx scripts/export-web-data.ts
 
-      # --- Phase 3 (optional, uncomment when embedding the playable demo) ---
-      # The game is already a static Vite build; serve it under /play.
-      # Vite needs a relative base so hashed assets resolve at the sub-path.
-      # - name: Build the in-browser demo
-      #   run: |
-      #     npx vite build --base=./ --outDir site/play
-      #     # (or add an npm script: "build:web": "vite build --base=./ --outDir site/play")
+      # --- Phase 3: the playable in-browser demo, built into site/play ---
+      # The game is a static Vite build; --base=./ keeps hashed asset URLs
+      # relative so they resolve at the /arpg-game-world/play/ sub-path.
+      # Uses `npx vite build` directly (not `npm run build`) to skip the tsc
+      # gate — esbuild does no type-checking, so the demo deploys regardless of
+      # in-flight type state. Saves fall back to localStorage on this static
+      # host (no /__save endpoint) — see src/meta/persistence.ts.
+      - name: Build the in-browser demo → site/play
+        run: npx vite build --base=./ --outDir site/play --emptyOutDir
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

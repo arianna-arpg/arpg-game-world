@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:web": "vite build --base=./ --outDir site/play --emptyOutDir",
     "preview": "vite preview",
     "check": "tsc --noEmit && tsc -p tsconfig.launcher.json && tsc -p tsconfig.sim.json",
     "sim": "tsx balance/cli.ts",
