@@ -23646,6 +23646,29 @@ export class World {
         const turn = Math.min(Math.abs(diff), (spec.turnRate ?? 2.5) * dt);
         a.facing += Math.sign(diff) * turn;
         this.tickChannelSupports(a, cs, dt);
+        // CAST-WHILE-GUARDING metronome: the held stance raises a guardBeat
+        // trigger event on its own slow clock — the shield-hand sibling of
+        // channelBeat, aimed along the shield. The beat only OFFERS a cast;
+        // each gem's LARGE default ICD (TRIGGER_CFG.icd.guardBeat) decides
+        // how often one is taken. Depth 0: guards can never be triggered.
+        cs.trigBeat = (cs.trigBeat ?? TRIGGER_CFG.guardInterval) - dt;
+        if (cs.trigBeat <= 0) {
+          cs.trigBeat += TRIGGER_CFG.guardInterval;
+          this.rollTriggers(a, 'guardBeat',
+            { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
+        }
+        // GUARD PULSE (GuardSpec.pulse): the stance tolls its component
+        // skill on its own clock while held — free and cooldown-less, the
+        // strobe discipline (Defiant Bulwark's rolling challenge).
+        if (spec.pulse) {
+          cs.guardPulseT = (cs.guardPulseT ?? spec.pulse.interval) - dt;
+          if (cs.guardPulseT <= 0) {
+            cs.guardPulseT += spec.pulse.interval;
+            this.executeSkill(a, this.mintMetaInstance(a, cs.inst, spec.pulse.skillId),
+              vec(cs.aim.x, cs.aim.y),
+              { noCooldown: true, noRepeat: true, keepFacing: true });
+          }
+        }
         // Timed stances (Riposte) drop themselves.
         if (spec.maxDuration && (cs.channelTime ?? 0) >= spec.maxDuration) {
           cs.held = false;

@@ -30,7 +30,7 @@ import {
 } from './brain';
 import { runAIActions } from './aiActions';
 import { LOS_CFG } from './los';
-import type { SkillInstance } from './skills';
+import { socketSpec, type SkillInstance } from './skills';
 import type { World } from './world';
 
 /** Scratch for moveToward's spacing neighbor query (single-threaded AI
@@ -422,6 +422,25 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     target = ordered;
     best = dist(actor.pos, ordered.pos);
     actor.aiTargetId = ordered.id;
+  }
+
+  // TAUNTED (the challenge fabric) — a LIVE taunt outranks the actor's own
+  // pick AND any standing order: attention is the whole point of the
+  // status, and no sight is required (the challenge was heard, not seen).
+  // The taunter must still be a legal mark (alive, hostile, targetable);
+  // ignoreTaunt brains — the un-cheesable bosses — shrug the retarget
+  // exactly as they shrug decoys (the off-target damage penalty still
+  // bites them at the damage chokepoint).
+  if (!tuning.target?.ignoreTaunt) {
+    const ts = actor.statuses.find(s => s.id === 'taunted' && s.casterId !== undefined);
+    const taunter = ts ? world.actorById(ts.casterId!) : undefined;
+    if (taunter && !taunter.dead && !taunter.untargetable
+      && world.hostileTo(actor, taunter)) {
+      target = taunter;
+      best = dist(actor.pos, taunter.pos);
+      actor.aiTargetId = taunter.id;
+      actor.aggroed = true;
+    }
   }
 
   // LEASH (TargetSpec.leash): guardians give up the marathon. Beyond the
@@ -1199,7 +1218,10 @@ function pickSkill(
   // opening; the gunner walks into weapon range to do it).
   const usable = actor.skills.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
-    && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard)
+    // Mid-stance the menu narrows to the combo verbs — def-declared or
+    // socket-granted (Guarded Casting makes any carried spell one).
+    && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard
+      || !!socketSpec(s, 'guardCast'))
     && world.pressUsable(actor, s) && best <= rangeOf(s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
     && (!world.aiNeedsFireLine(actor, s) || fireLine()));

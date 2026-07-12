@@ -2471,6 +2471,85 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('guardParryPower', 'increased', 0.12)] },
   },
 
+  // --- The guard hall grows: the challenge fabric + stance textures --------
+  // (Taunt is a STATUS — see engine/status.ts 'taunted' — so everything
+  // below is plain data riding the ordinary apply fabric.)
+
+  challenging_shout: {
+    id: 'challenging_shout', name: 'Challenging Shout',
+    description: 'BELLOW A CHALLENGE: every enemy around you is TAUNTED — blades turn to YOU, and whatever still swings at your allies lands soft. Instant, and shoutable from BEHIND A RAISED GUARD: the wall itself calls the fight over.',
+    tags: ['warcry', 'aoe', 'duration', 'instant'], color: '#e0763a',
+    manaCost: 12, cooldown: 10, useTime: 0,
+    usableWhileGuarding: true,
+    delivery: { type: 'nova', radius: 240, affects: 'enemies' },
+    effects: [{ type: 'status', status: 'taunted', chance: 1 }],
+    requirements: { strength: 16 },
+    ai: { range: 200, weight: 1.4 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.08), mod('cooldownRecovery', 'increased', 0.06)] },
+  },
+
+  // The Defiant Bulwark's rolling dare (GuardSpec.pulse tolls these).
+  taunt_pulse: {
+    id: 'taunt_pulse', name: 'Defiant Challenge', noDrop: true,
+    description: 'The bulwark\'s rolling dare. A component payload: guard pulses toll these.',
+    tags: ['warcry', 'aoe', 'instant'], color: '#e0763a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'nova', radius: 170, affects: 'enemies' },
+    effects: [{ type: 'status', status: 'taunted', chance: 1, durationOverride: 2.5 }],
+  },
+
+  defiant_bulwark: {
+    id: 'defiant_bulwark', name: 'Defiant Bulwark',
+    description: 'Raise a JEERING WALL: a broad guard that DARES the field — while it holds, a rolling challenge TAUNTS everything near you every couple of seconds. The tank\'s stance: the fight comes to the shield because the shield insists.',
+    tags: ['guard', 'channel', 'duration', 'warcry'], color: '#d88a4a',
+    manaCost: 11, cooldown: 6, useTime: 0,
+    castMode: 'guard',
+    guard: {
+      arcDeg: 130, shieldLife: 70, moveFactor: 0.35, turnRate: 2.2,
+      pulse: { skillId: 'taunt_pulse', interval: 2 },
+      bash: { mult: 0.6, range: 70, arcDeg: 110, stunChance: 0.25, knockback: 50 },
+    },
+    delivery: { type: 'self' },
+    effects: [],
+    requirements: { strength: 20 },
+    ai: { range: 200, weight: 2 },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.15), mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  marching_bulwark: {
+    id: 'marching_bulwark', name: 'Marching Bulwark',
+    description: 'The phalanx-step: a NARROW tower guard you can genuinely WALK behind — three-quarters pace, shield braced, line advancing. Thinner protection than planting your feet, but the wall MOVES. Release still bashes.',
+    tags: ['guard', 'channel', 'duration'], color: '#b0a878',
+    manaCost: 10, cooldown: 5, useTime: 0,
+    castMode: 'guard',
+    guard: {
+      arcDeg: 90, shieldLife: 55, moveFactor: 0.75, turnRate: 2.8,
+      bash: { mult: 0.8, range: 70, arcDeg: 100, stunChance: 0.3, knockback: 60 },
+    },
+    delivery: { type: 'self' },
+    effects: [],
+    requirements: { strength: 16, dexterity: 12 },
+    ai: { range: 220, weight: 2 },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.16), mod('moveSpeed', 'increased', 0.02, undefined, 'guarding')] },
+  },
+
+  runeward: {
+    id: 'runeward', name: 'Runeward',
+    description: 'A SORCERER\'S GUARD: a rune-lit ward raised like a shield — modest and slow-footed, but spellwork cast from behind it burns 25% HOTTER while the stance holds. Made for Guarded Casting and the guard-beat gems: the bruiser-mage\'s home ground.',
+    tags: ['guard', 'channel', 'duration'], color: '#8a9ae8',
+    manaCost: 9, cooldown: 5, useTime: 0,
+    castMode: 'guard',
+    guard: {
+      arcDeg: 140, shieldLife: 50, moveFactor: 0.35, turnRate: 2.4,
+    },
+    innateMods: [mod('damage', 'increased', 0.25, ['spell'], 'guarding')],
+    delivery: { type: 'self' },
+    effects: [],
+    requirements: { willpower: 16, strength: 10 },
+    ai: { range: 220, weight: 2 },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.12), mod('damage', 'increased', 0.05, ['spell'], 'guarding')] },
+  },
+
   discipline: {
     id: 'discipline', name: 'Discipline',
     description: 'TOGGLE AURA (reserves 35 mana): you and allies in the radius gain +40 maximum energy shield. Capacitor and Insulation supports tune the recharge for everyone covered.',

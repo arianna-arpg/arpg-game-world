@@ -1035,7 +1035,14 @@ export type TriggerKind =
   /** A hit of the owner's whose damage dice landed in the top of their
    *  range (see TriggerSpec.rollTop) — the cast-on-jackpot event. Hits
    *  that rolled no live range never raise it: no dice, no jackpot. */
-  | 'highRoll';
+  | 'highRoll'
+  /** The owner's HELD GUARD STANCE keeps its own slow metronome — the
+   *  shield-hand sibling of channelBeat, raised every TRIGGER_CFG
+   *  .guardInterval held seconds. Each gem's LARGE default ICD paces the
+   *  actual casts: spellwork from behind a raised shield is deliberately
+   *  an unhurried art (this is the automated lane — Guarded Casting is
+   *  the deliberate one). */
+  | 'guardBeat';
 
 export const TRIGGER_CFG = {
   /** Max BASE use time (def.useTime) a skill may have and still be
@@ -1050,6 +1057,9 @@ export const TRIGGER_CFG = {
     crit: 0.15, damageTaken: 0.25, channelBeat: 0.35, overchargeStage: 0,
     channelFinish: 0,
     statusApply: 0.2, block: 0.5, kill: 0.4, highRoll: 0.25,
+    // The guard chant's LARGE gap — the whole trade of casting hands-free
+    // from behind a raised shield (a spec's icd can retune per gem).
+    guardBeat: 6,
   } as Record<TriggerKind, number>,
   /** highRoll: default top-of-the-dice fraction a hit must land in to
    *  raise the event (a spec's rollTop wins; the owner's highRollWindow
@@ -1061,6 +1071,10 @@ export const TRIGGER_CFG = {
   /** channelBeat: the global metronome — seconds of held channel between
    *  event beats (each gem's own ICD paces it further). */
   channelInterval: 0.4,
+  /** guardBeat: the stance's metronome — seconds of held guard between
+   *  event beats. Coarser than a channel's: the beat only OFFERS a cast;
+   *  each gem's own (large) ICD decides how often one is taken. */
+  guardInterval: 1,
   /** Trigger chance is capped here per event, however stacked. */
   chanceCap: 0.95,
 } as const;
@@ -2218,6 +2232,15 @@ export interface GuardSpec {
    * bashes; a full-shield release hits hardest.
    */
   bash?: { mult: number; range: number; arcDeg: number; stunChance?: number; knockback?: number };
+  /**
+   * GUARD PULSE: the held stance tolls a component skill on its own clock
+   * — every `interval` held seconds the component fires from the guardian,
+   * free and cooldown-less, aimed along the shield (Defiant Bulwark's
+   * rolling challenge). The guard-family sibling of a channel's pulses:
+   * any guard may carry one, and the component is ordinary skill data —
+   * a taunt nova today, a mend or a lava lick tomorrow.
+   */
+  pulse?: { skillId: string; interval: number };
 }
 
 /** A channel's growth term. `curve` back-loads the payoff: 'quadratic' =
@@ -2493,6 +2516,22 @@ export function instanceConvert(inst: SkillInstance): ConvertSpec | undefined {
  *  `interval` seconds the skill rests, capped by the unleashMax stat. The
  *  executeSkill read and the HUD tics share this one clock. */
 export const UNLEASH_CFG = { interval: 1.4 };
+
+/** GUARDED CASTING tuning (the DELIBERATE cast-while-guarding lane —
+ *  SupportDef.guardCast). The gem data references these so the whole
+ *  bruiser-spellsword trade retunes from one place: the imposed clock is
+ *  the price of an explicit, aimed cast from behind a raised shield.
+ *  (The automated lane is the guardBeat trigger — TRIGGER_CFG.) */
+export const GUARD_CAST_CFG = {
+  /** Cooldown the gem imposes on its host (mod 'addedCooldown', still
+   *  reducible by cooldownRecovery — the austerity precedent). */
+  gatedCooldown: 4,
+  /** Per gem level beyond 1: the clock buys down. */
+  gatedCooldownPerLevel: -0.25,
+  /** The reward side — the shielded cast lands harder ('more' damage):
+   *  deliberate, scheduled spellwork should feel like a finisher. */
+  moreDamage: 0.2,
+} as const;
 
 // --- Targeting: restricting a skill to specific targets ----------------------
 
@@ -3436,6 +3475,16 @@ export interface SupportDef {
    *  REAL cast bar in succession, rooted like any bar (castMove /
    *  castMobility investments still walk it). */
   triggerPermit?: true;
+  /** GUARD CAST (Guarded Casting — the DELIBERATE cast-while-guarding
+   *  lane): the host may be PRESSED while a held stance runs, and the
+   *  press is INSTANT — the stance itself is the wind-up, so even a
+   *  heavy bar fires as the Lance-Thrust-style combo blow. This field
+   *  only lifts the hold-combo refusal and forces the instant; pair it
+   *  with `gate: { guard: true }` to LOCK the host to the stance (grey
+   *  off-guard, refused at press) and an `addedCooldown` mod to price it
+   *  (GUARD_CAST_CFG carries the canonical numbers). Kept separate on
+   *  purpose: each piece composes alone. */
+  guardCast?: true;
   /** CARRIER STRAIN: top-level hits with this skill have `chance` to hand
    *  ONE random status from the struck victim to its nearest neighbor —
    *  the hit-borne contagion, with the transplant knobs inline. */
@@ -3817,6 +3866,11 @@ const MINION_SEAT_BOUND_FIELD_LIST = [
   // Listed here so the key never forwards a copy of itself aboard: it
   // serves the host lane, opening the door for the cargo beside it.
   'resonance',
+  // A press discipline: the deliberate mid-stance combo press is the
+  // player's verb (minion casters neither hold the seat's stances nor
+  // read its hold-combo gate — the automated guardBeat lane is already
+  // seat-bound through 'trigger').
+  'guardCast',
 ] as const satisfies readonly (keyof SupportDef)[];
 export const MINION_SEAT_BOUND_SUPPORT_FIELDS: ReadonlySet<string> =
   new Set(MINION_SEAT_BOUND_FIELD_LIST);

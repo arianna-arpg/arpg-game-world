@@ -529,7 +529,9 @@ export function validateContent(): void {
     // Match's whole point is riding a Time Fuse graft — the loadout-time
     // composition this audit deliberately leaves alone. Likewise 'gather'
     // (read for every bar-cast at useSkill) and 'shellGraft' (gated by
-    // its own requiresTags ['guard'] — the tag fit IS the audit).
+    // its own requiresTags ['guard'] — the tag fit IS the audit). And
+    // 'guardCast' (read at every press — canUse's hold-combo lift and
+    // skillUseTime's instant force are delivery-agnostic by design).
   ];
   // The map audits itself: a stat row naming a dead stat is map drift.
   for (const row of GRAFT_READ_SITES) {
@@ -681,6 +683,19 @@ export function validateContent(): void {
   for (const s of Object.values(SKILLS)) {
     if (s.meta && !SKILLS[s.meta.skillId]) {
       warn(`skill ${s.id}: meta payload '${s.meta.skillId}' is not a catalog skill`);
+    }
+    // GUARD PULSE: a typo'd component never tolls; a pulse-bearing skill
+    // that isn't a guard stance never ticks the clock at all.
+    if (s.guard?.pulse) {
+      if (!SKILLS[s.guard.pulse.skillId]) {
+        warn(`skill ${s.id}: guard pulse '${s.guard.pulse.skillId}' is not a catalog skill`);
+      }
+      if (s.castMode !== 'guard') {
+        warn(`skill ${s.id}: guard.pulse on a non-guard castMode — the stance tick never runs`);
+      }
+      if (s.guard.pulse.interval <= 0) {
+        warn(`skill ${s.id}: guard pulse interval must be positive`);
+      }
     }
     // THE GATHER FAMILY sanity: a completion-gated release needs a
     // completion to reach (maxHold's ceiling or a fillable brim), and an

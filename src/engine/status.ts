@@ -57,6 +57,10 @@ export interface StatusDef {
    *  expiry or death. The pop is not a hit and can never bank, so the
    *  economy is structurally loop-free (the inverse Echoing Might). */
   dischargeOnHit?: true;
+  /** The NEWEST applier takes over the status's casterId on re-apply
+   *  (taunt: the louder challenge wins the bearer's attention). Default:
+   *  the FIRST applier keeps it — DoT credit never migrates mid-burn. */
+  refreshCaster?: true;
   /** Canonical fraction-of-the-hit dealt per second when this status is
    *  applied by a STAT-GRANTED chance (the apply_<id> stat family) rather
    *  than a skill's own status effect. Element-agnostic by design: a
@@ -132,6 +136,18 @@ export function tuneAilmentChance(id: string, authored: number): number {
   if (!t || authored >= t.identityThreshold) return authored;
   return authored * t.incidentalScale;
 }
+
+/** THE TAUNT FABRIC's teeth. The 'taunted' status itself (duration, the
+ *  refreshCaster hand-off) lives in STATUS_DEFS like any ailment, and
+ *  afflictionExpiry resists it like any affliction — this carries only
+ *  the levers no def field expresses. */
+export const TAUNT_CFG = {
+  /** 'more'-style damage penalty a taunted attacker suffers against anyone
+   *  who is NOT its taunter — how the status bites bearers whose targeting
+   *  cannot be forced (the player's own hand) and brains that refuse to
+   *  turn (ignoreTaunt bosses). Folded beside the damageVs family. */
+  offTargetLess: 0.3,
+} as const;
 
 export const STATUS_DEFS: Record<string, StatusDef> = {
   burn: {
@@ -315,6 +331,19 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     baseline: { dps: 4, perLevel: 1.2 },
     lashOut: { interval: 0.8, radius: 120, factor: 1.2 },
     mods: [mod('detectionRange', 'more', -0.4)],
+  },
+  // TAUNTED (the challenge fabric): attention itself, as a status. The
+  // APPLIER (casterId — refreshCaster: the newest shout wins) becomes the
+  // bearer's whole fight: AI bearers — monsters, minions, mercenaries —
+  // are FORCED onto the taunter (ai.ts / mercbrain.ts, honoring
+  // TargetSpec.ignoreTaunt for the un-cheesable bosses), and ANY bearer,
+  // the player included, deals TAUNT_CFG.offTargetLess LESS to everyone
+  // who is not their taunter — the teeth that bite even a human hand.
+  // Reached like any ailment: apply_taunted / minionApply_taunted stats,
+  // skill status effects, guard pulses — the whole apply fabric works.
+  taunted: {
+    label: 'Taunted', color: '#e0763a', duration: 3,
+    refreshCaster: true,
   },
   // EXPOSED (#12): a weak spot painted on the health bar just below the
   // wound — hit them INTO the window for 40% more; punch through it and

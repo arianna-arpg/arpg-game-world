@@ -67,6 +67,16 @@ export class MercInput implements PlayerInputSource {
       if (d < best) { best = d; target = e; }
     }
 
+    // TAUNTED: a live taunt drags the merc's blade to the taunter — the
+    // same contract every AI actor honors (mercs sit a player seat, but
+    // the challenge fabric doesn't care whose hands are on the reins).
+    const ts = actor.statuses.find(s => s.id === 'taunted' && s.casterId !== undefined);
+    const drawn = ts ? world.actorById(ts.casterId!) : undefined;
+    if (drawn && !drawn.dead && !drawn.untargetable && world.hostileTo(actor, drawn)) {
+      target = drawn;
+      best = dist(actor.pos, drawn.pos);
+    }
+
     // PRIORITY 1 — a fight in reach (and inside the patron leash): approach to
     // the build's preferred gap, hold the primary, and on a cadence flourish
     // ONE other bar slot — the pipeline validates cost/cooldown, so a wrong

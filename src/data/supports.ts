@@ -10,7 +10,7 @@
 // ---------------------------------------------------------------------------
 
 import { mod } from '../engine/stats';
-import { AOE_SHAPE, PROJ_RETURN } from '../engine/skills';
+import { AOE_SHAPE, PROJ_RETURN, GUARD_CAST_CFG } from '../engine/skills';
 import type { SupportDef } from '../engine/skills';
 
 export const SUPPORTS: Record<string, SupportDef> = {
@@ -358,6 +358,17 @@ export const SUPPORTS: Record<string, SupportDef> = {
     mods: [],
     perLevel: [mod('triggerChance', 'flat', 0.05)],
     weight: 4, minDropLevel: 10,
+  },
+  cast_while_guarding: {
+    id: 'cast_while_guarding', name: 'Cast while Guarding',
+    description: 'Socket this into a QUICK skill and it fires itself on a SLOW, patient beat while you hold ANY guard — sorcery kept burning behind the shield wall, hands never leaving the straps. Its key only arms and disarms it. This is the automated lane; Guarded Casting is the deliberate one.',
+    color: '#a8c090', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    // No spec icd: the LARGE default clock (TRIGGER_CFG.icd.guardBeat)
+    // rules, so the whole lane retunes from one place.
+    trigger: { on: 'guardBeat', chance: 1 },
+    mods: [],
+    perLevel: [mod('damage', 'more', 0.04)],
+    weight: 4, minDropLevel: 12,
   },
   cast_on_overcharge: {
     id: 'cast_on_overcharge', name: 'Cast on Overcharge',
@@ -1965,6 +1976,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  bodyguard_doctrine: {
+    id: 'bodyguard_doctrine', name: 'Bodyguard Doctrine',
+    description: 'Minions from this skill TAUNT with 30% of their hits — a retinue that insists, loudly, that the fight is with THEM. Pair with Meat Shield and let the wall do the arguing.',
+    color: '#b08868', requiresTags: ['summon'],
+    mods: [mod('minionApply_taunted', 'flat', 0.3)],
+    perLevel: [mod('minionApply_taunted', 'flat', 0.05)],
+    weight: 5,
+  },
+
   // --- Tether gems ---------------------------------------------------------------
   // A tether is a LIVE LINE between two anchors (see TetherSpec): spawned
   // object ↔ caster, object ↔ sibling objects, or caster ↔ resolved target.
@@ -2405,6 +2425,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
     mods: [mod('apply_frozen', 'flat', 0.06)],
     perLevel: [mod('apply_frozen', 'flat', 0.02)],
     weight: 4,
+  },
+
+  provocation: {
+    id: 'provocation', name: 'Provocation',
+    description: '35% chance for hits to TAUNT: the struck thing forgets its plans — its blade turns to YOU, and everything it swings at anyone ELSE lands soft. The tank\'s opening argument; the un-cheesable refuse the turn but still pull their punches.',
+    color: '#e0763a',
+    mods: [mod('apply_taunted', 'flat', 0.35)],
+    perLevel: [mod('apply_taunted', 'flat', 0.06)],
+    weight: 5,
   },
 
   potency: {
@@ -3461,6 +3490,26 @@ export const SUPPORTS: Record<string, SupportDef> = {
     meta: { skillId: 'phalanx_thrust', label: 'Thrust' },
     perLevel: [mod('guardStrength', 'increased', 0.06)],
     weight: 5,
+  },
+
+  // --- Guarded Casting (the deliberate cast-while-guarding lane) ------------
+  // The inverse of Phalanx: not a thrust granted TO the guard, but a whole
+  // spell SWORN to it. The host greys off-guard (gate), fires as an instant
+  // combo press mid-stance (guardCast), and pays for the privilege on a
+  // scheduled clock (addedCooldown) — every number in GUARD_CAST_CFG.
+  guarded_casting: {
+    id: 'guarded_casting', name: 'Guarded Casting',
+    description: 'The supported skill is SWORN TO THE SHIELD: castable only while a guard is raised — where it fires INSTANTLY, block sustained throughout, harder-hitting, on a ~4-second clock (levels shave it). The deliberate lane: every cast an aimed, chosen answer from behind the wall. Spellsword discipline.',
+    color: '#c8b890',
+    excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    guardCast: true,
+    gate: { guard: true },
+    mods: [
+      mod('addedCooldown', 'flat', GUARD_CAST_CFG.gatedCooldown),
+      mod('damage', 'more', GUARD_CAST_CFG.moreDamage),
+    ],
+    perLevel: [mod('addedCooldown', 'flat', GUARD_CAST_CFG.gatedCooldownPerLevel)],
+    weight: 4, minDropLevel: 12,
   },
 };
 

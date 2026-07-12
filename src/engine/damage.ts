@@ -21,7 +21,7 @@ import {
 import { DEFENSE_CFG } from './defense';
 import type { Actor } from './actor';
 import { instanceMods, skillContextTags, type SkillInstance } from './skills';
-import { STATUS_DEFS } from './status';
+import { STATUS_DEFS, TAUNT_CFG } from './status';
 import { SIM_TAP } from './tap';
 
 export interface DamagePacket {
@@ -421,6 +421,15 @@ function applyHitCore(attacker: Actor, target: Actor, packet: DamagePacket): Hit
   for (const s of target.statuses) {
     const v = attacker.sheet.get('damageVs_' + s.id, packet.tags, packet.extra);
     if (v !== 0) vsMult *= 1 + v * s.stacks;
+  }
+  // TAUNTED ATTACKER (the challenge fabric): swinging at anyone who is NOT
+  // your taunter lands weaker — the status's teeth on bearers whose
+  // targeting can't be forced (the player's own hand) and on brains that
+  // refuse to turn (ignoreTaunt bosses feel the pull even while they
+  // shrug the retarget). Hits only, like the family it rides beside.
+  const taunt = attacker.statuses.find(s => s.id === 'taunted');
+  if (taunt?.casterId !== undefined && taunt.casterId !== target.id) {
+    vsMult *= 1 - TAUNT_CFG.offTargetLess;
   }
   if (vsMult !== 1) {
     for (const t of Object.keys(packet.amounts) as DamageType[]) {

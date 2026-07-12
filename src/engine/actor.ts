@@ -13,7 +13,7 @@ import {
 import { DEFENSE_CFG } from './defense';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
-  instanceUseCharges,
+  instanceUseCharges, socketSpec,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
   type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec,
 } from './skills';
@@ -54,6 +54,9 @@ export interface CastingState {
   // guard state: the shield's remaining and starting health
   shield?: number;
   maxShield?: number;
+  /** GuardSpec.pulse clock — seconds until the held stance next tolls its
+   *  component skill (Defiant Bulwark's rolling challenge). */
+  guardPulseT?: number;
   // charge state — uses elapsed/total as the charge fraction
   // perfect / timed / multitude state
   empowered?: number;
@@ -82,8 +85,10 @@ export interface CastingState {
   chargesSpent?: number;
   /** INVOCATION weave clock: held channels bank one rune per second. */
   runeTick?: number;
-  /** CAST-WHILE-CHANNELING metronome: counts down to the next channelBeat
-   *  trigger event while the channel is held (TRIGGER_CFG.channelInterval). */
+  /** CAST-WHILE-HOLDING metronome: counts down to the next channelBeat /
+   *  guardBeat trigger event while the stance is held (TRIGGER_CFG
+   *  .channelInterval / .guardInterval — one field serves both: a single
+   *  casting state never runs two stances). */
   trigBeat?: number;
   /** RITUAL GROUND: this cast bar PLANTS a channeler construct at the aim
    *  instead of resolving the skill (the channel-to-cast conversion). */
@@ -1611,7 +1616,12 @@ export class Actor {
       // max — hitting harder and hitting often both matter.
       existing.rupture = ((existing.rupture ?? 0) + (opts.rupture ?? 0)) || undefined;
       existing.ruptureType = existing.ruptureType ?? opts.ruptureType;
-      existing.casterId = existing.casterId ?? opts.casterId;
+      // FIRST APPLIER holds the credit by default (DoT attribution never
+      // migrates mid-burn) — but refreshCaster statuses hand it to the
+      // NEWEST applier: a taunt answered by a louder taunt must turn.
+      existing.casterId = def.refreshCaster && opts.casterId !== undefined
+        ? opts.casterId
+        : existing.casterId ?? opts.casterId;
       existing.brood = existing.brood ?? opts.brood;
       if (opts.leech) existing.leech = Math.max(existing.leech ?? 0, opts.leech);
     }
@@ -2144,6 +2154,11 @@ export class Actor {
 
   /** Cast time of a skill after attack/cast speed. 0 = instant. */
   skillUseTime(inst: SkillInstance): number {
+    // GUARDED CASTING (SupportDef.guardCast): the socketed press is INSTANT
+    // — the held stance is the wind-up, so the bar collapses to the
+    // Lance-Thrust-style combo blow (and the hold-combo gate's instant
+    // requirement passes by construction).
+    if (socketSpec(inst, 'guardCast')) return 0;
     return inst.def.useTime / this.speedFactor(inst);
   }
 
@@ -2326,6 +2341,7 @@ export class Actor {
     const holdCombo = heldMode
       && this.skillUseTime(inst) <= 0.001
       && (!!inst.def.usableWhileGuarding
+        || !!socketSpec(inst, 'guardCast')
         || (inst.hostSkillId !== undefined
           && this.casting!.inst.def.id === inst.hostSkillId));
     if (holdCombo) {
