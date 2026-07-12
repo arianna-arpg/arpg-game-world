@@ -472,6 +472,31 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'pauldrons', role: 'wood' },
     ],
   },
+  // The powder kin — bandits who took up guns (the munitions family's
+  // monster face). Quiver = the bolt drum; keg = the grenado satchel.
+  bandit_fusilier: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.32, scale: 0.85 },
+      { kind: 'musket' },
+      { kind: 'quiver', scale: 0.8 },
+    ],
+  },
+  bandit_grenadier: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.3, scale: 0.9 },
+      { kind: 'keg', x: -0.34, scale: 0.5 },
+    ],
+  },
+  bandit_matchlock: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.32, scale: 0.85 },
+      { kind: 'musket', params: { len: 1.35 } },
+      { kind: 'plume', x: 0.36, scale: 0.6 },
+    ],
+  },
   spearman: {
     parts: [
       { kind: 'torso' },

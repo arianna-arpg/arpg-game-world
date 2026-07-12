@@ -778,8 +778,10 @@ export class Actor {
    *  trickles a resource until spent. Life flows through healBy. */
   restoreStreams: { resource: 'life' | 'mana' | 'es'; perSec: number; remaining: number }[] = [];
   /** USE-CHARGE banks per skill id (SkillDef.useCharges): the count and
-   *  the running recovery timer. Lazily seeded FULL on first query. */
-  skillChargeState = new Map<string, { count: number; timer: number }>();
+   *  the running recovery timer. Lazily seeded FULL on first query.
+   *  `reloading` marks a magazine mid-cycle (the emptying press stamped
+   *  the skill's cooldown) — expiry pours the refill and clears it. */
+  skillChargeState = new Map<string, { count: number; timer: number; reloading?: boolean }>();
   /** LIFE SEAL (Mortis Seal): while set, healBy cannot raise life above
    *  this value — the toggle stamps it on, clears it off. */
   lifeSealAt?: number;
@@ -1881,14 +1883,26 @@ export class Actor {
       if (st.remaining <= 0) this.restoreStreams.splice(i, 1);
     }
 
-    // USE-CHARGE recovery (SkillDef.useCharges): one charge back per
-    // `recharge` seconds (÷ skillChargeRate), per equipped bank, until full.
+    // USE-CHARGE recovery (SkillDef.useCharges), per equipped bank:
+    //  - MAGAZINE lane: the emptying press stamped the skill's cooldown and
+    //    flagged the bank; expiry pours the refill back in ONE go (an active
+    //    reload — restoreSkillCharges — beats it by wiping clock and flag).
+    //  - TRICKLE lane (recharge): one round back per `recharge` seconds
+    //    (÷ skillChargeRate), until full.
+    //  - Neither: manual ammunition — nothing here moves the bank.
     for (const inst of this.skills) {
       const uc = inst?.def.useCharges;
       if (!uc) continue;
       const st = this.skillChargeBank(inst!);
       const cap = this.skillChargeCap(inst!);
+      if (st.reloading && !this.cooldowns.has(inst!.def.id)) {
+        st.reloading = false;
+        const refill = uc.magazine && uc.magazine !== true
+          ? (uc.magazine.refill ?? cap) : cap;
+        st.count = Math.min(cap, st.count + refill);
+      }
       if (st.count >= cap) { st.timer = 0; continue; }
+      if (!uc.recharge) continue;
       st.timer += dt * this.sheet.get('skillChargeRate',
         skillContextTags(inst!.def), instanceMods(inst!));
       if (st.timer >= uc.recharge) {
@@ -2091,7 +2105,7 @@ export class Actor {
 
   /** The live use-charge bank for a skill (seeded FULL on first touch —
    *  a fresh bar starts loaded). */
-  skillChargeBank(inst: SkillInstance): { count: number; timer: number } {
+  skillChargeBank(inst: SkillInstance): { count: number; timer: number; reloading?: boolean } {
     let st = this.skillChargeState.get(inst.def.id);
     if (!st) {
       st = { count: this.skillChargeCap(inst), timer: 0 };
@@ -2115,12 +2129,16 @@ export class Actor {
     st.count = Math.max(0, st.count - 1);
   }
 
-  /** Attack or cast speed factor for a skill (by tag), with skill-local mods. */
+  /** Attack or cast speed factor for a skill (by tag), with skill-local mods.
+   *  'reload'-tagged skills ALSO ride the reloadSpeed stat — the racking
+   *  hand speeds up on top of whichever base speed applies. */
   speedFactor(inst: SkillInstance): number {
     const tags = skillContextTags(inst.def);
     const extra = instanceMods(inst);
-    return tags.has('attack') ? this.sheet.get('attackSpeed', tags, extra)
+    const base = tags.has('attack') ? this.sheet.get('attackSpeed', tags, extra)
       : this.sheet.get('castSpeed', tags, extra);
+    return tags.has('reload')
+      ? base * this.sheet.get('reloadSpeed', tags, extra) : base;
   }
 
   /** Cast time of a skill after attack/cast speed. 0 = instant. */

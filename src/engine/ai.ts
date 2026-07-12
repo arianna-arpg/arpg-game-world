@@ -1193,10 +1193,14 @@ function pickSkill(
   let fire: boolean | undefined;
   const fireLine = (): boolean =>
     fire ??= !target || world.lineOfFire(actor.pos, target.pos);
+  // pressUsable, not raw canUse: a convert-held press is judged as the
+  // face it would cast — an empty magazine still gets pressed (the press
+  // IS the reload, and the standing-there-racking window is the player's
+  // opening; the gunner walks into weapon range to do it).
   const usable = actor.skills.filter((s): s is SkillInstance =>
     !!s && !!s.def.ai && !reserved?.has(s.def.id)
     && (!guarding || !!s.def.usableWhileGuarding || !!s.def.requiresGuard)
-    && actor.canUse(s) && best <= rangeOf(s)
+    && world.pressUsable(actor, s) && best <= rangeOf(s)
     && !(s.def.delivery.type === 'aura' && actor.activeAuras.has(s.def.id))
     && (!world.aiNeedsFireLine(actor, s) || fireLine()));
   if (!usable.length) return null;

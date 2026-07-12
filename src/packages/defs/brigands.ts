@@ -31,11 +31,14 @@ const BRIGAND_SURGE: BrigandSurge = {
   lingerSeconds: [80, 140],// once landed, the pack prowls this long (calm) before drifting off
   radius: 11,              // map-glyph ring size (the marching arrow / arrival pulse)
   faction: 'bandit',
-  // The pack's ROSTER — the existing bandit monster defs (cutthroats are the bulk).
+  // The pack's ROSTER — the existing bandit monster defs (cutthroats are the
+  // bulk; the powder kin ride along so raids crackle with gunfire).
   roster: [
     { id: 'bandit_cutthroat', weight: 5 },
     { id: 'bandit_bruiser', weight: 2 },
     { id: 'bandit_keeper', weight: 1 },
+    { id: 'bandit_fusilier', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'bandit_grenadier', weight: 1, presence: { from: 7, fadeIn: 4 } },
   ],
   levelBonus: 0,
   aggroRadius: 300,        // stray within this of a brigand and the band turns hostile…

@@ -793,6 +793,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // WASTELAND — the demon rift's scorched fringe: lava flows and broken stone.
   wasteland: {
     id: 'wasteland',
+    // War-land keeps its ordnance: abandoned powder dumps that answer stray fire.
+    compositions: [{ composition: 'powder_cache', chance: 0.28 }],
     nameFirst: ['Blasted', 'Cindertorn', 'Hellcracked', 'Ruinous', 'Emberblight', 'Scorched', 'Riftburnt', 'Ashbroken', 'Brimstone', 'Sulfurous', 'Cracked', 'Desolate', 'Smouldering', 'Wretched', 'Hateforged', 'Slagheap', 'Damnedmarch', 'Charbroken'],
     nameSecond: ['Waste', 'Barrens', 'Scar', 'Reach', 'Expanse', 'Flats', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Cinders', 'Drift', 'Span', 'Wilds'],
     theme: {
@@ -1611,7 +1613,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // maze of corridors and chambers carved into the rock).
   highland: {
     id: 'highland', biome: 'highland',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
     nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Highlands', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {
@@ -1936,7 +1938,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // bbox. A wide-open, exploration-leaning hub (objectives favour clear/escape).
   grassland: {
     id: 'grassland', biome: 'field',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }, { composition: 'powder_cache', chance: 0.15 }],
     nameFirst: ['Sunlit', 'Windswept', 'Verdant', 'Rolling', 'Emerald', 'Goldengrass', 'Wildflower', 'Open', 'Boundless', 'Whispergrass', 'Far-Reaching', 'Sunwashed', 'Breezy', 'Tallgrass', 'Endless', 'Sweeping', 'Lark-Sung', 'Greenswept'],
     nameSecond: ['Fields', 'Meadows', 'Expanse', 'Greens', 'Pastures', 'Lowlands', 'Reach', 'Plains', 'Prairie', 'Steppe', 'Sprawl', 'Veldt', 'Downs', 'Grasslands', 'Range', 'Heath'],
     theme: {

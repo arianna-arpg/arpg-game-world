@@ -1150,6 +1150,12 @@ function eventCount(cfg: { perFire: number; intensityFloor: number; intensityGai
 // world state; the registry itself is the open seam (engine/skills.ts).
 registerConvertRule('companionsFull', (caster, inst, world) =>
   world.companionBondsOfSkill(caster, inst.def.id) >= world.companionCapOf(inst));
+// THE 'chargesEmpty' CONVERSION RULE: a use-charge skill with a DRY bank
+// presses as its converted face — the ammunition idiom (an empty scattergun
+// becomes its own reload; a restoreSkillCharges payload turns it back).
+// Registered beside its sibling; the registry stays the open seam.
+registerConvertRule('chargesEmpty', (caster, inst) =>
+  !!inst.def.useCharges && caster.skillChargeBank(inst).count <= 0);
 
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
@@ -2321,7 +2327,14 @@ export class World {
       a.aimPos = vec(aim.x, aim.y);
       // Keep a running cast fed (held state, aim tracking, mid-cast presses).
       if (a.casting) {
-        const ci = a.skills.findIndex(s => s === a.casting!.inst);
+        // Identity first; a MINTED payload (convert/meta — hostSkillId
+        // stamped, never a bar entry) is fed by ITS HOST'S button: holding
+        // the empty scattergun holds its rack channel, releasing cuts the
+        // reload short. Without this, off-bar holds die on the next frame.
+        let ci = a.skills.findIndex(s => s === a.casting!.inst);
+        if (ci < 0 && a.casting.inst.hostSkillId !== undefined) {
+          ci = a.skills.findIndex(s => s?.def.id === a.casting!.inst.hostSkillId);
+        }
         a.casting.held = ci >= 0 ? !!inp.held[ci] : false;
         if (ci >= 0 && inp.edge[ci]) this.castPress(a);
         if (a.casting.mode === 'channel' || a.casting.mode === 'charge'
@@ -11597,11 +11610,42 @@ export class World {
       : inst.def;
   }
 
+  /** Press-aware usability: judge the skill a press would ACTUALLY cast —
+   *  the converted face while its rule holds (an empty magazine presses as
+   *  its reload), else the skill itself. The AI reads THIS instead of raw
+   *  canUse so an exhausted gun still gets pressed: the press is the
+   *  reload, and the vulnerability window it opens is the design. */
+  pressUsable(caster: Actor, inst: SkillInstance): boolean {
+    const conv = inst.def.convert;
+    if (conv && SKILLS[conv.skillId]
+      && convertRuleHolds(conv.when, caster, inst, this)) {
+      const minted = this.mintMetaInstance(caster, inst, conv.skillId);
+      minted.sockets = inst.sockets; // same sharing rule as the press itself
+      return caster.canUse(minted);
+    }
+    return caster.canUse(inst);
+  }
+
   /** Refund a just-stamped cooldown (a whistle with no bond must never burn
    *  its long clock). */
   private refundCooldown(caster: Actor, skillId: string): void {
     caster.cooldowns.delete(skillId);
     caster.cooldownTotals.delete(skillId);
+  }
+
+  /** Stamp a skill's cooldown through the ONE formula every stamper shares:
+   *  the addedCooldown levy joins the base, and tag-scoped cooldownRecovery
+   *  is divided against the global tick rate (updateTimers already ticks at
+   *  the global rate — this keeps scoped investment honest, not doubled). */
+  private stampSkillCooldown(caster: Actor, inst: SkillInstance, base: number): void {
+    const tags = skillContextTags(inst.def);
+    const extra = instanceMods(inst);
+    const cdBase = base + caster.sheet.get('addedCooldown', tags, extra);
+    if (cdBase <= 0) return;
+    const cdSet = cdBase / Math.max(0.1,
+      caster.sheet.get('cooldownRecovery', tags, extra) / caster.sheet.get('cooldownRecovery'));
+    caster.cooldowns.set(inst.def.id, cdSet);
+    caster.cooldownTotals.set(inst.def.id, cdSet); // the HUD sweep's denominator
   }
 
   /** Attempt the TAMING: taxonomy already gated targeting (requiresMonsterTags);
@@ -11915,8 +11959,14 @@ export class World {
       const conv = inst.def.convert;
       if (conv && SKILLS[conv.skillId]
         && convertRuleHolds(conv.when, caster, inst, this)) {
-        return this.useSkill(caster,
-          this.mintMetaInstance(caster, inst, conv.skillId), aim, seatPress);
+        const minted = this.mintMetaInstance(caster, inst, conv.skillId);
+        // The slot's GEMS ride its converted face — a press of this slot
+        // IS the converted skill, so the socket array is SHARED and the
+        // hostSockets tag-admission decides per face what actually fits
+        // (Swift Hands in the gun quickens the gun's own reload; a melee
+        // gem stays inert on it). Live reference: re-socketing propagates.
+        minted.sockets = inst.sockets;
+        return this.useSkill(caster, minted, aim, seatPress);
       }
     }
     // PREREQUISITE GATES: an unmet gate is the ONE canUse refusal worth a
@@ -12118,7 +12168,24 @@ export class World {
     // spend; deeper reserves buy quadratic storms (more steps AND presses).
     const bankSteps = def.useCharges?.stepsFromBank
       ? Math.max(1, caster.skillChargeBank(inst).count) : undefined;
-    if (def.useCharges) caster.spendSkillCharge(inst);
+    // The press that runs the bank DRY: finalRoundDamage pays off (base ×1,
+    // a pure opt-in lever), and a MAGAZINE stamps its reload clock NOW —
+    // the skill's own cooldown starts as the last round leaves (mid-mag
+    // presses never touch it; executeSkill skips magazine stamps entirely),
+    // flagging the bank so expiry pours the refill in updateTimers.
+    let roundMult = 1;
+    if (def.useCharges) {
+      caster.spendSkillCharge(inst);
+      const bank = caster.skillChargeBank(inst);
+      if (bank.count <= 0) {
+        roundMult = caster.sheet.get('finalRoundDamage',
+          skillContextTags(def), instanceMods(inst));
+        if (def.useCharges.magazine && def.cooldown > 0) {
+          this.stampSkillCooldown(caster, inst, def.cooldown);
+          bank.reloading = true;
+        }
+      }
+    }
 
     // A committed BASE press arms the combo chain's first step.
     if (def.comboChain?.skills.length) {
@@ -12179,7 +12246,7 @@ export class World {
         elapsed: 0,
         total,
         held: true,
-        baseMult: cc.mult,
+        baseMult: cc.mult * roundMult,
         chargesSpent: cc.consumed,
         targetInfo: targetInfo ?? undefined,
         // trackAim:false channels fire their pulses at THIS stamped point
@@ -12204,7 +12271,7 @@ export class World {
     // ceremonial (999-mana pools), so their casts carry no paidCost.
     const paid = caster.construct ? undefined : cost;
     const cc = this.consumeChargeCost(caster, inst);
-    const baseMult = cc.mult;
+    const baseMult = cc.mult * roundMult;
 
     // CONCENTRATION (the precision cast): the held bar fills only while the
     // cursor rides the QUARRY resolved at press — no quarry, no cast (the
@@ -12676,12 +12743,11 @@ export class World {
     // The addedCooldown LEVY (Austerity / Apotheosis): supports impose a
     // long clock in trade — flat seconds joining the base, still divided
     // by cooldownRecovery (an imposed cooldown stays a reducible one).
-    const cdBase = def.cooldown + caster.sheet.get('addedCooldown', tags, extra);
-    if (cdBase > 0 && !opts.noCooldown) {
-      const cdSet = cdBase / Math.max(0.1,
-        caster.sheet.get('cooldownRecovery', tags, extra) / caster.sheet.get('cooldownRecovery'));
-      caster.cooldowns.set(def.id, cdSet);
-      caster.cooldownTotals.set(def.id, cdSet); // the HUD sweep's denominator
+    // MAGAZINE skills never stamp here: their cooldown IS the reload cycle,
+    // stamped by the press that spends the last round (useSkill) — a
+    // mid-mag use must never touch the clock.
+    if (!opts.noCooldown && !def.useCharges?.magazine) {
+      this.stampSkillCooldown(caster, inst, def.cooldown);
     }
 
     const d = def.delivery;
@@ -14241,6 +14307,49 @@ export class World {
               caster.pos.y + Math.sin(ang) * 40), '#a8d8a0');
           });
           this.text(vec(caster.pos.x, caster.pos.y - 24), 'the bond answers', '#a8d8a0', 12);
+        }
+      }
+      // THE RELOAD (restoreSkillCharges): rounds pour back into use-charge
+      // banks. hostSkillId scopes it to the skill this press was minted for
+      // (the empty gun's own 'chargesEmpty' convert or meta rack); a skill
+      // carrying its own bank tops itself; 'all' sweeps every equipped bank
+      // (the bandolier). A host refill also WIPES the host's running
+      // cooldown — the ACTIVE reload beats the magazine's lazy clock — and
+      // a rack with nothing to load refunds itself (the whistle rule).
+      if (fx.type === 'restoreSkillCharges') {
+        const banks: SkillInstance[] = [];
+        if (fx.scope === 'all') {
+          for (const s of caster.skills) if (s?.def.useCharges) banks.push(s);
+        } else {
+          const host = inst.hostSkillId
+            ? caster.skills.find(s => s?.def.id === inst.hostSkillId)
+            : undefined;
+          const own = host ?? (def.useCharges ? inst : undefined);
+          if (own?.def.useCharges) banks.push(own);
+        }
+        let loaded = 0;
+        for (const b of banks) {
+          const bank = caster.skillChargeBank(b);
+          const cap = caster.skillChargeCap(b);
+          const add = Math.min(cap - bank.count, fx.amount ?? cap);
+          if (add <= 0) continue;
+          bank.count += add;
+          bank.reloading = false; // the hands beat the clock
+          this.refundCooldown(caster, b.def.id);
+          loaded += add;
+        }
+        if (loaded > 0) {
+          this.text(vec(caster.pos.x, caster.pos.y - 20), 'loaded', def.color, 11);
+          // A per-beat CHANNEL reload that tops its (single) host releases
+          // the hands — the drum is full, the pulses stop themselves.
+          const cs = caster.casting;
+          if (cs && cs.inst === inst && cs.mode === 'channel'
+            && fx.scope !== 'all' && banks.length
+            && caster.skillChargeBank(banks[0]).count >= caster.skillChargeCap(banks[0])) {
+            cs.held = false;
+          }
+        } else if (banks.length) {
+          this.refundCooldown(caster, def.id); // nothing to load — never a wasted rack
         }
       }
       if (fx.type === 'recallMinions') {

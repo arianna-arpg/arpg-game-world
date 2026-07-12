@@ -13,7 +13,7 @@
 // pack freely among themselves — a windrow's crowns are supposed to knit.
 // ---------------------------------------------------------------------------
 
-import { registerFormation } from '../engine/levelgen';
+import { registerDoodadRule, registerFormation } from '../engine/levelgen';
 
 // A WINDBREAK: conifers marching in a line, brush huddled at their feet.
 registerFormation({
@@ -322,5 +322,79 @@ registerFormation({
   pieces: [
     { kind: 'rib_arch', radius: [16, 24], jitter: 3, rot: 'chain' },
     { kind: 'bone_cairn', radius: [11, 15], every: 3, jitter: 10 },
+  ],
+});
+
+// --- THE MUNITIONS DUMP (the powder-cache kit) -------------------------------
+// Doodad semantics registered HERE beside their arrangement (the open
+// registerDoodadRule seam — no levelgen edit): the keg is a brittle 'hit'
+// BOMB (its fume mints infernal_rift's eruption after a fizzing fuse), the
+// bundled charges are lootable and pop smaller, and the shot pyramid is
+// honest solid cover. Every fight near the cache is a wager.
+registerDoodadRule('powder_keg', {
+  overlap: 'inert', spacing: 24,
+  brittle: {
+    on: ['hit'], text: 'the keg goes up!', color: '#ff8a4a',
+    fume: { skillId: 'infernal_rift', radius: 80, linger: 0.8, dmgMult: 2.2, delay: 0.65, color: '#ff8a4a' },
+  },
+});
+registerDoodadRule('munition_cache', {
+  overlap: 'inert', spacing: 26,
+  brittle: {
+    on: ['hit'], orbChance: 0.3, gemChance: 0.12, text: 'the charges split!', color: '#e8b060',
+    fume: { skillId: 'infernal_rift', radius: 52, linger: 0.6, dmgMult: 1.1, delay: 0.5, color: '#ff9a5a' },
+  },
+});
+registerDoodadRule('shot_stack', {
+  overlap: 'solid', blocksMove: true, spacing: 26,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+
+// A POWDER CACHE: someone's munitions dump — kegs racked in a tight ring,
+// shot pyramided beside them, bundled charges still strapped. One stray
+// shot and the whole larder answers.
+registerFormation({
+  id: 'powder_cache', arrange: 'orbit', span: [70, 105], step: 38,
+  params: { rings: [1, 1], innerFrac: 0.9 },
+  pieces: [
+    { kind: 'powder_keg', radius: [11, 15], jitter: 8, rot: true },
+    { kind: 'shot_stack', radius: [12, 16], every: 3, jitter: 10, rot: true },
+    { kind: 'munition_cache', radius: [12, 16], every: 4, jitter: 12, rot: true },
+  ],
+});
+
+// --- THE RIVER-OF-FLAME GRAMMAR (hell's artery — data/tilesets 'river_of_flame') --
+
+// THE BANNER ROAD: legion war-banners pacing an approach the demons still
+// keep, cinders drifting the lane (all inert — the doctrine holds on home
+// turf too: no fake-live hazards ride a formation).
+registerFormation({
+  id: 'banner_row', arrange: 'line', span: [300, 540], step: 84,
+  pieces: [
+    { kind: 'demon_banner', radius: [11, 15], jitter: 8, rot: true },
+    { kind: 'cinder', radius: [20, 30], every: 2, jitter: 26 },
+  ],
+});
+
+// A SOUL GALLERY: gibbet cages strung down the bank, bone heaped beneath —
+// the toll the river collects. Ride it with a `where: {field:'shore',
+// kinds:['lava'], …}` band so the meander hangs over the flame it feeds.
+registerFormation({
+  id: 'soul_gallery', arrange: 'meander', span: [280, 520], step: 56,
+  params: { wobble: 32 },
+  pieces: [
+    { kind: 'soul_cage', radius: [11, 15], jitter: 10, rot: true },
+    { kind: 'bone_pile', radius: [12, 18], every: 2, jitter: 20, rot: true },
+  ],
+});
+
+// A PYRE WATCH: bone-pyres burning pale down the old bank road, banners
+// between them — the demons light the river's way for their own.
+registerFormation({
+  id: 'pyre_watch', arrange: 'meander', span: [300, 560], step: 72,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'pyre_heap', radius: [16, 22], jitter: 12, rot: true },
+    { kind: 'demon_banner', radius: [11, 14], every: 3, jitter: 16, rot: true },
   ],
 });

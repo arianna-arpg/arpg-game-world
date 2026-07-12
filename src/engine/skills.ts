@@ -2644,6 +2644,23 @@ export interface WhistleCompanionEffect {
   type: 'whistleCompanion';
 }
 
+/** THE RELOAD (the ammunition economy's refill): pours rounds back into
+ *  use-charge banks (SkillDef.useCharges). scope 'host' (default) reaches
+ *  the skill this press was MINTED FOR (hostSkillId — the empty gun whose
+ *  'chargesEmpty' convert or meta produced it), falling back to the skill's
+ *  own bank when it carries one; 'all' tops up EVERY equipped bank (the
+ *  bandolier sweep). `amount` is rounds per RESOLUTION (omit = fill to the
+ *  cap) — so a channel-mode reload with amount 1 loads shell by shell,
+ *  releasable early with a part-filled drum (a topped drum releases the
+ *  channel itself). A host refill also WIPES the host's running cooldown
+ *  (the ACTIVE reload beats the magazine's lazy clock), and a rack with
+ *  nothing to load refunds this skill's own cooldown (whistle rule). */
+export interface RestoreSkillChargesEffect {
+  type: 'restoreSkillCharges';
+  amount?: number;
+  scope?: 'host' | 'all';
+}
+
 /** CHRONO (#19): shaves every OTHER learned skill's running cooldown —
  *  flat seconds and/or a fraction of what remains. Never its own (the
  *  clock that winds others can't wind itself). */
@@ -2955,7 +2972,8 @@ export type SkillEffect =
   | DetonateMinionsEffect | SpawnCorpseEffect | ShatterConstructsEffect
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
-  | RecallImpalesEffect | TameEffect | WhistleCompanionEffect;
+  | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
+  | RestoreSkillChargesEffect;
 
 // --- The skill definition ---------------------------------------------------
 
@@ -2976,16 +2994,33 @@ export interface SkillDef {
    *  `lifePctCur` bills a fraction of CURRENT life instead (Bonespray's
    *  marrow price: cheap when bleeding out, dear at full blood). */
   costScaling?: { manaPctMax?: number; lifePctMax?: number; lifePctCur?: number };
-  /** USE-CHARGES: the skill banks `max` uses and recovers them ONE AT A
-   *  TIME, every `recharge` seconds (÷ skillChargeRate; max + the
-   *  skillCharges stat) — spammable down to empty, then a dry spell.
-   *  Replaces the cooldown as the pacing device (keep cooldown 0). The
-   *  reference charge economy the flask/cadence family runs on.
+  /** USE-CHARGES: the skill banks `max` uses (+ the skillCharges stat) and
+   *  spends one per press — spammable down to empty, then a dry spell.
+   *  THREE recovery lanes, chosen by the data (composable, but pick one):
+   *   - recharge: the TRICKLE — one round back every `recharge` seconds
+   *     (÷ skillChargeRate). Replaces the cooldown as the pacing device
+   *     (keep cooldown 0). The reference economy the flask/cadence
+   *     family runs on.
+   *   - magazine: the MAGAZINE — rounds never trickle; the press that
+   *     spends the LAST one stamps the skill's own `cooldown` (which must
+   *     be > 0 — it IS the reload clock, so cooldownRecovery invests in
+   *     it), and expiry pours `refill` rounds back at once (default: to
+   *     the cap). Mid-mag presses never touch the clock.
+   *   - NEITHER: manual ammunition — only a restoreSkillCharges payload
+   *     refills the bank, usually via convert 'chargesEmpty' (the empty
+   *     gun presses as its own reload) and/or a meta reload on shift
+   *     (the tactical top-off). Composes WITH magazine: the active
+   *     reload wipes the running clock — racking beats waiting.
    *  `stepsFromBank` (Riftstep): the press resolves ONCE PER BANKED charge
    *  (3 banked = a 3-step flicker; 1 = a single step) while spending only
    *  the one — the bank is the multiplier, not the ammunition. Deliberate
    *  opt-in: most charge skills should just eat a round, not multiply. */
-  useCharges?: { max: number; recharge: number; stepsFromBank?: boolean };
+  useCharges?: {
+    max: number;
+    recharge?: number;
+    stepsFromBank?: boolean;
+    magazine?: { refill?: number } | true;
+  };
   /** Combo resource consumption: requires and spends charges on use.
    *  'all' consumes everything (min `minimum`); damagePerCharge is a
    *  MORE multiplier per charge consumed. */

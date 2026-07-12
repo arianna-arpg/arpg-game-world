@@ -3012,6 +3012,44 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // --- Munition supports (the ammunition fabric's investment lane) ----------
+  // All gated on the 'munition' tag: the guns, not the cadence family.
+  // The shared-sockets rule (convert mints ride the slot's gems) is what
+  // lets reloadSpeed here reach the gun's OWN reload cast.
+
+  bandolier: {
+    id: 'bandolier', name: 'Bandolier',
+    description: 'Two more rounds in every bank this gun carries — but the webbing drags the swing of it: 10% reduced damage. Capacity is its own playstyle.',
+    color: '#c8a878', requiresTags: ['munition'],
+    mods: [
+      mod('skillCharges', 'flat', 2),
+      mod('damage', 'increased', -0.1),
+    ],
+    perLevel: [mod('damage', 'increased', 0.02)],
+    weight: 7,
+  },
+
+  swift_hands: {
+    id: 'swift_hands', name: 'Swift Hands',
+    description: 'The racking hand learns the gun: 40% increased Reload Speed, and magazine clocks (this skill\'s own cooldown) recover 25% faster.',
+    color: '#e8d8a0', requiresTags: ['munition'],
+    mods: [
+      mod('reloadSpeed', 'increased', 0.4),
+      mod('cooldownRecovery', 'increased', 0.25),
+    ],
+    perLevel: [mod('reloadSpeed', 'increased', 0.06)],
+    weight: 7,
+  },
+
+  dead_mans_round: {
+    id: 'dead_mans_round', name: "Dead Man's Round",
+    description: 'The LAST round in the bank leaves the muzzle 50% harder. Spend down to it — or rack short of full on purpose and live at the bottom of the drum.',
+    color: '#d86048', requiresTags: ['munition'],
+    mods: [mod('finalRoundDamage', 'more', 0.5)],
+    perLevel: [mod('finalRoundDamage', 'more', 0.05)],
+    weight: 5,
+  },
+
   // --- Trajectory levers (the §4 batch) ---------------------------------------
 
   ricochet: {

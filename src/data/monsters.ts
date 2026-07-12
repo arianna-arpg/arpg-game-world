@@ -1865,6 +1865,40 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'juggernaut', enrage: 0.4 },
     detection: 0.85,
   },
+  // --- The POWDER KIN: bandits who took up guns. Their whole threat rides
+  //     the ammunition fabric — they fire the bank DRY and then stand there
+  //     RACKING (the empty press converts to the reload cast), so the
+  //     reload window IS the counterplay the player learns by watching.
+  bandit_fusilier: {
+    id: 'bandit_fusilier', name: 'Bandit Fusilier',
+    color: '#b09468', shape: 'trapezoid', radius: 13, look: 'bandit_fusilier',
+    base: { life: 52, moveSpeed: 128, accuracy: 108, mana: 0 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['bolt_repeater'],
+    xp: 20, faction: 'bandit',
+    brain: { type: 'strafer' }, // holds range, works the drum dry, racks
+    detection: 1.1,
+  },
+  bandit_grenadier: {
+    id: 'bandit_grenadier', name: 'Bandit Grenadier',
+    color: '#c07848', shape: 'octagon', radius: 15, look: 'bandit_grenadier',
+    base: { life: 68, moveSpeed: 118, accuracy: 100, armor: 20, mana: 0 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['grenado'],
+    xp: 24, faction: 'bandit',
+    brain: { type: 'strafer' },
+    detection: 0.95,
+  },
+  bandit_matchlock: {
+    id: 'bandit_matchlock', name: 'Matchlock Marksman',
+    color: '#a8a090', shape: 'trapezoid', radius: 13, look: 'bandit_matchlock',
+    base: { life: 58, moveSpeed: 122, accuracy: 118, mana: 0 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['arquebus'],
+    xp: 28, faction: 'bandit',
+    brain: { type: 'strafer' }, // one thunderclap, then the long open ram
+    detection: 1.3,
+  },
 
   // --- MYCELIA: "The Bloom" — the fungal 'fungal' faction --------------------
   //     Patron of the mycelia biome + the spore-bloom's spawn. contexts:['mycelia']

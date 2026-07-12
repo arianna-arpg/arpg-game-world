@@ -695,6 +695,23 @@ export function validateContent(): void {
         warn(`skill ${s.id}: convert rule '${s.convert.when}' is not in CONVERT_RULES`);
       }
     }
+    // AMMUNITION honesty (SkillDef.useCharges lanes):
+    //  - a MAGAZINE's cooldown IS its reload clock — cooldown 0 means the
+    //    emptying press stamps nothing and the bank never refills;
+    //  - 'chargesEmpty' conversion needs a bank to run dry;
+    //  - a bank with NO lane back (no trickle, no magazine, no convert, no
+    //    meta rack) empties once and is a dead button forever.
+    if (s.useCharges) {
+      if (s.useCharges.magazine && !(s.cooldown > 0)) {
+        warn(`skill ${s.id}: useCharges.magazine with cooldown ${s.cooldown} — the cooldown is the reload clock, give it one`);
+      }
+      if (!s.useCharges.recharge && !s.useCharges.magazine
+        && !s.convert && !s.meta) {
+        warn(`skill ${s.id}: use-charge bank has no way back — no recharge, no magazine, no convert/meta reload`);
+      }
+    } else if (s.convert?.when === 'chargesEmpty') {
+      warn(`skill ${s.id}: convert rule 'chargesEmpty' without useCharges — the bank can never run dry`);
+    }
     for (const cid of s.comboChain?.skills ?? []) {
       if (!SKILLS[cid]) warn(`skill ${s.id}: combo step '${cid}' is not a catalog skill`);
     }
@@ -715,6 +732,13 @@ export function validateContent(): void {
       }
       if (fx.type === 'minionCast' && !SKILLS[fx.skillId]) {
         warn(`skill ${s.id}: minionCast order '${fx.skillId}' is not a catalog skill`);
+      }
+      // A host-scoped reload only finds its bank when MINTED for a host
+      // (convert/meta) or when the skill banks its own rounds — dropped as
+      // a gem and bar-cast, it racks nothing.
+      if (fx.type === 'restoreSkillCharges' && fx.scope !== 'all'
+        && !s.useCharges && !s.noDrop) {
+        warn(`skill ${s.id}: host-scoped restoreSkillCharges on a droppable skill with no own bank — mark it noDrop (a convert/meta payload) or scope it 'all'`);
       }
     }
   }

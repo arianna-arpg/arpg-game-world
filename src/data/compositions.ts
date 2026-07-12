@@ -146,3 +146,33 @@ registerComposition({
     { kind: 'bone_pile', count: [3, 5], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 29 } } },
   ],
 });
+
+// A POWDER CACHE: an abandoned munitions dump in a scratched-out clearing —
+// kegs racked in a ring, shot pyramided, charge bundles still strapped. The
+// kegs are brittle 'hit' bombs (their fume mints infernal_rift's eruption),
+// so the cache is terrain-as-wager: cover that shoots back if you graze it.
+registerComposition({
+  id: 'powder_cache',
+  sites: [{ id: 'dump', radius: [90, 130] }],
+  pre: [{ kind: 'clearing', at: 'dump', count: [1, 1], radius: [42, 58] }],
+  post: [{ kind: 'formation', formation: 'powder_cache', at: 'dump', count: [1, 1] }],
+});
+
+// THE HELLFORGE LANDING: where the River of Flame ends, the demons' great
+// forge stands on its swept court — the terminus reward the underworld's
+// course GUARANTEES (dimensions.ts rolls it at chance 1 on terminus zones;
+// any hell tileset may also roll it rare). The clearing is the court; the
+// hellforge_works cluster plants the monument INSIDE it (centerpiece
+// pieces); a banner road walks the approach and the river's toll hangs in
+// its galleries. Geometry contract with hellforge_works — tune together.
+registerComposition({
+  id: 'hellforge_landing',
+  sites: [{ id: 'forge', radius: [150, 200] }],
+  pre: [{ kind: 'clearing', at: 'forge', count: [1, 1], radius: [62, 78] }],
+  post: [
+    { kind: 'cluster', cluster: 'hellforge_works', at: 'forge', count: [1, 1] },
+    { kind: 'formation', formation: 'banner_row', count: [1, 1] },
+    { kind: 'formation', formation: 'soul_gallery', count: [0, 1] },
+    { kind: 'bone_pile', count: [2, 4], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 41 } } },
+  ],
+});

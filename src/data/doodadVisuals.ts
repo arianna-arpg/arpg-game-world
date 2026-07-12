@@ -571,6 +571,22 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'potCluster', order: 52, shadow: 0.4,
     params: { clay: '#8a8074', lid: '#6a6258' },
   },
+  // --- Munitions dressing (the powder-cache kit; rules in formations.ts) ---
+  // Kegs: dark staved wood under iron lids (the potCluster reskin rule).
+  powder_keg: {
+    painter: 'potCluster', order: 53, shadow: 0.45,
+    params: { clay: '#6a4a2e', lid: '#3e4048' },
+  },
+  // Bundled charges: stacked round ends, leather-dark (firewoodPile reskin).
+  munition_cache: {
+    painter: 'firewoodPile', order: 52, shadow: 0.4,
+    params: { wood: '#584634' },
+  },
+  // Pyramided iron shot: the cairn courses read as racked cannonballs.
+  shot_stack: {
+    painter: 'cairn', order: 54, shadow: 0.55, longShadow: 0.8,
+    params: { color: '#41434c', edge: '#16181e' },
+  },
   crystal_cluster: {
     longShadow: 0.6, painter: 'shard', order: 50, shadow: 0.5,
     params: { points: 7, color: '#4a7aa8', material: 'crystal', coreGlow: { color: '#9fd8ff' } },

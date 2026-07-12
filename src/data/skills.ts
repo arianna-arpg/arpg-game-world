@@ -5904,6 +5904,111 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  // --- THE MUNITIONS FAMILY (powder & shot) --------------------------------
+  // Use-charge banks fired DRY and then RELOADED — the three reference
+  // ammunition economies, one per lane of the fabric:
+  //  - bolt_repeater: the MAGAZINE — its cooldown IS the auto-reload clock,
+  //    stamped only by the press that spends the last round;
+  //  - scattergun: the CHANNEL reload — an empty gun converts into a
+  //    shell-by-shell rack ('chargesEmpty'), releasable early, and shift
+  //    racks tactically at any fill;
+  //  - arquebus: the CAST reload — one round, one thunder, one long ram.
+  // All tagged 'munition' so family supports (Bandolier, Swift Hands,
+  // Dead Man's Round) and tag-filtered passives reach every gun at once;
+  // reload payloads are ordinary noDrop catalog skills tagged 'reload'
+  // (their bars divide by the reloadSpeed stat).
+
+  bolt_repeater: {
+    id: 'bolt_repeater', name: 'Bolt Repeater',
+    description: 'An eight-bolt drum worked as fast as the finger — no trickle, no mercy. Spending the LAST bolt starts the reload clock; when it runs out the drum racks itself full in one motion. Mid-drum, the clock never moves.',
+    tags: ['attack', 'projectile', 'physical', 'munition'], color: '#c8a878',
+    manaCost: 0, cooldown: 3.5, useTime: 0.3,
+    useCharges: { max: 8, magazine: true },
+    baseDamage: { physical: [7, 11] },
+    delivery: { type: 'projectile', speed: 640, radius: 6, range: 470 },
+    effects: [{ type: 'damage' }],
+    requirements: { dexterity: 16 },
+    ai: { range: 420, weight: 2, keepDistance: 260 },
+    thresholds: [
+      { level: 12, label: 'Extended drum', mods: [mod('skillCharges', 'flat', 2)] },
+    ],
+  },
+
+  scattergun: {
+    id: 'scattergun', name: 'Scattergun',
+    description: 'THREE shells of wide, brutal shot — and no clock to save you: the empty gun BECOMES its own reload, a shell-by-shell channel you may cut short and fight on whatever you racked. Shift reloads early; a topped drum lowers your hands itself.',
+    tags: ['attack', 'projectile', 'physical', 'aoe', 'munition'], color: '#d89050',
+    manaCost: 0, cooldown: 0, useTime: 0.5,
+    useCharges: { max: 3 },
+    convert: { when: 'chargesEmpty', skillId: 'reload_shells' },
+    meta: { skillId: 'reload_shells', label: 'Reload' },
+    baseDamage: { physical: [4, 7] },
+    delivery: {
+      type: 'projectile', speed: 520, radius: 5, range: 240,
+      count: 7, spreadDeg: 42,
+    },
+    effects: [{ type: 'damage' }],
+    requirements: { strength: 12, dexterity: 12 },
+    ai: { range: 200, weight: 2 },
+  },
+
+  // The scattergun's rack — a channel loading ONE shell per beat (the
+  // restoreSkillCharges handler ends the channel itself at a topped drum).
+  reload_shells: {
+    id: 'reload_shells', name: 'Ram Shells', noDrop: true,
+    description: 'Shell by shell the drum refills — one per beat of the channel. Cut it short and fight with what you racked; a topped drum lowers the hands itself.',
+    tags: ['reload', 'munition', 'channel'], color: '#d89050',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    castMode: 'channel',
+    channel: { interval: 0.55, windup: 0.4, move: 'slowed', moveFactor: 0.55 },
+    delivery: { type: 'self' },
+    effects: [{ type: 'restoreSkillCharges', amount: 1 }],
+  },
+
+  arquebus: {
+    id: 'arquebus', name: 'Long Arquebus',
+    description: 'One round. One thunderclap that pierces a rank. Then the gun IS the reload — a long, honest ram stood still before it speaks again. Charge investment deepens the bank, and one full rite fills all of it.',
+    tags: ['attack', 'projectile', 'physical', 'munition'], color: '#b8a890',
+    manaCost: 0, cooldown: 0, useTime: 0.45,
+    useCharges: { max: 1 },
+    convert: { when: 'chargesEmpty', skillId: 'reload_powder' },
+    baseDamage: { physical: [30, 44] },
+    innateMods: [mod('critChance', 'flat', 0.05)],
+    delivery: { type: 'projectile', speed: 900, radius: 5, range: 560, pierce: 2 },
+    effects: [{ type: 'damage' }],
+    requirements: { dexterity: 20, strength: 10 },
+    ai: { range: 500, weight: 2, keepDistance: 320 },
+    minDropLevel: 4,
+  },
+
+  // The arquebus's rite — a plain bar cast that fills the bank TO ITS CAP
+  // (however deep +skillCharges investment has made it).
+  reload_powder: {
+    id: 'reload_powder', name: 'Powder & Ball', noDrop: true,
+    description: 'Powder, wad, ball, rod — the full rite, stood still. The bank fills to its cap when the bar completes.',
+    tags: ['reload', 'munition'], color: '#b8a890',
+    manaCost: 0, cooldown: 0, useTime: 1.5,
+    delivery: { type: 'self' },
+    effects: [{ type: 'restoreSkillCharges' }],
+  },
+
+  grenado: {
+    id: 'grenado', name: 'Grenado',
+    description: 'A fizzing iron apple, thrown by the fistful — three to the satchel, then buckles and straps (the refill clock) while you run. Bursts where it lands; the burst is the point.',
+    tags: ['attack', 'projectile', 'fire', 'aoe', 'munition'], color: '#e07840',
+    manaCost: 0, cooldown: 6, useTime: 0.6,
+    useCharges: { max: 3, magazine: true },
+    baseDamage: { fire: [16, 24] },
+    delivery: {
+      type: 'projectile', speed: 340, radius: 8, range: 330,
+      explode: { radius: 72, damageScale: 1 },
+    },
+    effects: [{ type: 'damage' }],
+    requirements: { strength: 16 },
+    ai: { range: 300, weight: 2, keepDistance: 200 },
+    minDropLevel: 3,
+  },
+
   galvanic_reserve: {
     id: 'galvanic_reserve', name: 'Galvanic Reserve',
     description: 'STATIC builds as you walk and when you are struck. Release it to hurl lightning at up to five of the nearest enemies — every banked charge burned makes the discharge crueler.',

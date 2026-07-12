@@ -41,6 +41,11 @@ const BANDIT_FACTION: FactionSpec = {
     { id: 'bandit_cutthroat', weight: 5, presence: { to: 15, fadeOut: 7 } },
     { id: 'bandit_bruiser', weight: 2 },
     { id: 'bandit_keeper', weight: 1, presence: { from: 5, fadeIn: 3, to: 18, fadeOut: 8 } },
+    // The powder kin arrive once the roads harden — guns are a mid-world
+    // habit, and the marksman's long rifle stays a deep-road terror.
+    { id: 'bandit_fusilier', weight: 2, presence: { from: 4, fadeIn: 3 } },
+    { id: 'bandit_grenadier', weight: 1, presence: { from: 7, fadeIn: 4 } },
+    { id: 'bandit_matchlock', weight: 1, presence: { from: 10, fadeIn: 5 } },
   ],
 };
 

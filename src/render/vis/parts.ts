@@ -949,6 +949,35 @@ const bow: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** Long gun shouldered on the off-side — wooden stock, slim metal barrel,
+ *  lock and muzzle glints where they meet and end. params: len (1 = the
+ *  carbine; 1.3+ = the long rifle that outreaches its bearer). */
+const musket: PartPainter = (ctx, r, spec, pal) => {
+  const wood = rampFor(spec, pal, 'wood');
+  const metal = pal.metal;
+  const len = P(spec, 'len', 1);
+  place(ctx, r, spec, (c, R) => {
+    const x = R * 0.42, y = -R * 0.58;
+    c.save();
+    c.translate(x, y);
+    c.rotate(-0.5); // shouldered diagonal, muzzle forward
+    c.lineCap = 'round';
+    // Stock: the rear reach, thick wood.
+    c.strokeStyle = wood.base;
+    c.lineWidth = Math.max(2.4, R * 0.16);
+    c.beginPath(); c.moveTo(-R * 0.5 * len, 0); c.lineTo(R * 0.12, 0); c.stroke();
+    // Barrel: the front reach, slim metal.
+    c.strokeStyle = metal.base;
+    c.lineWidth = Math.max(1.6, R * 0.09);
+    c.beginPath(); c.moveTo(0, 0); c.lineTo(R * 0.85 * len, 0); c.stroke();
+    // Muzzle + lock glints.
+    c.fillStyle = metal.light;
+    c.beginPath(); c.arc(R * 0.85 * len, 0, Math.max(1, R * 0.05), 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(R * 0.08, 0, Math.max(1, R * 0.055), 0, Math.PI * 2); c.fill();
+    c.restore();
+  });
+};
+
 // ============================================================ ETHEREAL / FX
 
 /** Glow ring (halos, wards). */
@@ -3508,7 +3537,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   skull, ribs, spineTrail, crown,
   hood, tatters, pauldrons,
   eyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
-  claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow,
+  claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow, musket,
   halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes,
   shell, caps, capDome, gillFrill, fronds, tail, stinger, fins,
   barkPlates, branchArms, stalactites, nestTwigs,

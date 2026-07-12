@@ -96,6 +96,21 @@ export const AMALGAM_PARTS: AmalgamPartSpec[] = [
     grantSkill: 'frost_nova',
     drop: { skill: 'frost_nova', gems: 1 },
   },
+  // The MUNITIONS parts — grafts that give the boss an ammunition economy
+  // (it fires the bank dry, then stands there RACKING: you build your own
+  // reload window into the thing you must then exploit).
+  {
+    id: 'trigger_hand', label: 'Trigger Hand', epithet: 'the Fusilier', glyph: '⌖',
+    mods: [mod('attackSpeed', 'increased', 0.25), mod('accuracy', 'flat', 60)],
+    grantSkill: 'bolt_repeater',
+    drop: { skill: 'bolt_repeater', gems: 1 },
+  },
+  {
+    id: 'powder_gut', label: 'Powder Gut', epithet: 'the Shrapnel-Sown', glyph: '✸',
+    mods: [mod('fireRes', 'flat', 0.4), mod('damage', 'increased', 0.35)],
+    grantSkill: 'grenado',
+    drop: { skill: 'grenado', gems: 1 },
+  },
 ];
 
 /** The whole Amalgamation mechanic as data — every number is a knob. */

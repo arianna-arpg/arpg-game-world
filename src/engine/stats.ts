@@ -43,6 +43,14 @@ export type SkillTag =
   // investment reaches ONLY the drinks — "20% increased Restoration with
   // flasks" is an ordinary modifier, never a bespoke hook.
   | 'flask'
+  // 'munition' marks the ammunition family (use-charge banks fired dry and
+  // RELOADED — magazine cooldowns or reload conversions) so family-wide
+  // supports and tag-filtered investment can find the guns.
+  | 'munition'
+  // 'reload' marks the reload actions themselves (the racking hand between
+  // magazines): their cast/channel time divides by the reloadSpeed stat,
+  // and reload-scoped modifiers reach ONLY the rack, never the shot.
+  | 'reload'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
@@ -178,6 +186,14 @@ export const STAT_DEFS: Record<string, StatDef> = {
   skillCharges:   { label: 'Additional Skill Charges', base: 0 },
   /** Multiplier on use-charge recovery speed. */
   skillChargeRate:{ label: 'Skill Charge Recovery', base: 1, min: 0.1 },
+  // THE AMMUNITION LANES (SkillDef.useCharges beyond the trickle):
+  /** Multiplier on 'reload'-tagged cast/channel speed — the racking hand
+   *  (folds into speedFactor beside attack/cast speed, so investment
+   *  shortens the bar AND quickens reload-channel beats alike). */
+  reloadSpeed:    { label: 'Reload Speed', base: 1, min: 0.1 },
+  /** MORE damage on the press that spends a bank's LAST round (base ×1 —
+   *  a pure opt-in lever for "the final shell hits hardest" supports). */
+  finalRoundDamage: { label: 'Final Round Damage', base: 1, min: 0 },
 
   // Offense
   accuracy:       { label: 'Accuracy Rating', base: 80, min: 1 },

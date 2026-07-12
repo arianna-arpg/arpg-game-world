@@ -3779,11 +3779,12 @@ export class Renderer {
         }
         // USE-CHARGE pips (SkillDef.useCharges): the bank across the slot's
         // top edge — bright = loaded, hollow = recovering. An empty bank
-        // dims the slot like a cooldown would.
+        // dims the slot like a cooldown would — UNLESS the slot converted
+        // (the reload face is the live button; hollow pips already say why).
         if (def.useCharges) {
           const bank = p.skillChargeBank(inst);
           const cap = p.skillChargeCap(inst);
-          if (bank.count <= 0) {
+          if (bank.count <= 0 && face === def) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.fillRect(x + 4, by + 4, slot - 8, slot - 8);
           }
