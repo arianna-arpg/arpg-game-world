@@ -2849,8 +2849,12 @@ const caveMouth: GroupPainter = (env, group, def) => {
  *  warm ground halo that CLIPS to the lit polygon (vis/sight.ts), so the glow
  *  pools against a wall instead of melting into or through it. */
 const campfire: GroupPainter = (env, group, def) => {
-  const { ctx, world, time } = env;
-  const p = (def.params ?? {}) as { bowl?: boolean };
+  const { ctx, world, time, theme } = env;
+  const p = (def.params ?? {}) as { bowl?: boolean; flame?: ColorSpec };
+  // FLAME family: one param retints the whole fire (halo, licks, core, embers)
+  // — soulfire braziers, witch-lights. Unset = the classic warm hexes verbatim.
+  const fl = p.flame ? resolveColor(p.flame, theme) : null;
+  const F = (dflt: string, lift: number): string => (fl ? shade(fl, lift) : dflt);
   for (const o of group) {
     const R = o.radius;
     const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
@@ -2862,9 +2866,9 @@ const campfire: GroupPainter = (env, group, def) => {
     ctx.save();
     if (poly) ctx.clip(polygonPath(poly));
     const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.3, o.pos.x, o.pos.y, haloR * flick);
-    g.addColorStop(0, withAlpha('#ffae52', 0.26 * flick));
-    g.addColorStop(0.6, withAlpha('#ff8838', 0.12 * flick));
-    g.addColorStop(1, withAlpha('#ff8838', 0));
+    g.addColorStop(0, withAlpha(F('#ffae52', 0.12), 0.26 * flick));
+    g.addColorStop(0.6, withAlpha(F('#ff8838', 0), 0.12 * flick));
+    g.addColorStop(1, withAlpha(F('#ff8838', 0), 0));
     ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(o.pos.x, o.pos.y, haloR, 0, Math.PI * 2);
@@ -2911,7 +2915,7 @@ const campfire: GroupPainter = (env, group, def) => {
         ctx.moveTo(o.pos.x - Math.cos(a) * R * 0.58, o.pos.y - Math.sin(a) * R * 0.58);
         ctx.lineTo(o.pos.x + Math.cos(a) * R * 0.58, o.pos.y + Math.sin(a) * R * 0.58);
         ctx.stroke();
-        ctx.strokeStyle = withAlpha('#ff6a2a', 0.4 + 0.4 * flick);
+        ctx.strokeStyle = withAlpha(F('#ff6a2a', -0.08), 0.4 + 0.4 * flick);
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo(o.pos.x - Math.cos(a) * R * 0.3, o.pos.y - Math.sin(a) * R * 0.3);
@@ -2926,15 +2930,15 @@ const campfire: GroupPainter = (env, group, def) => {
       const lr = R * (0.26 + 0.28 * lick) * flick;
       const lx = o.pos.x + Math.cos(a) * R * 0.22, ly = o.pos.y + Math.sin(a) * R * 0.22;
       ctx.globalAlpha = 0.5 + 0.3 * lick;
-      ctx.fillStyle = i % 2 ? '#ff8838' : '#ffb84a';
+      ctx.fillStyle = i % 2 ? F('#ff8838', 0) : F('#ffb84a', 0.18);
       ctx.beginPath();
       ctx.ellipse(lx, ly, lr, lr * 0.62, a, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-    ctx.fillStyle = '#ffd24a';
+    ctx.fillStyle = F('#ffd24a', 0.35);
     ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.3 * flick, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = withAlpha('#fff4c8', 0.9);
+    ctx.fillStyle = withAlpha(F('#fff4c8', 0.75), 0.9);
     ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.15 * flick, 0, Math.PI * 2); ctx.fill();
     // Live embers: motes spiral off the fire and die (deterministic phases).
     for (let i = 0; i < 6; i++) {
@@ -2942,7 +2946,7 @@ const campfire: GroupPainter = (env, group, def) => {
       const ea = hash01(i, seed + 17) * Math.PI * 2 + time * 0.4 + phase * 1.8;
       const ed = R * (0.35 + phase * 1.5);
       ctx.globalAlpha = (1 - phase) * (0.55 + 0.35 * flick);
-      ctx.fillStyle = phase < 0.4 ? '#ffc25e' : '#ff7a3a';
+      ctx.fillStyle = phase < 0.4 ? F('#ffc25e', 0.25) : F('#ff7a3a', -0.02);
       ctx.beginPath();
       ctx.arc(o.pos.x + Math.cos(ea) * ed, o.pos.y + Math.sin(ea) * ed,
         1.1 + (1 - phase) * 1.3, 0, Math.PI * 2);
@@ -5970,6 +5974,141 @@ const hellforge: GroupPainter = (env, group, def) => {
   }
 };
 
+// --- THE BOUNDARY-GATE KIT (enclave façades: the mouth a walled biome shows) ----
+
+/** A MONUMENTAL ARCH spanning a gate mouth: jamb stacks, a voussoir curve,
+ *  the keystone, chains off the soffit, and a cold under-glow breathing in
+ *  the opening. rot aligns the span across the throat; every color is a
+ *  param so each enclave's stone answers its own biome. */
+const gateArch: GroupPainter = (env, group, def) => {
+  const { ctx, time, theme } = env;
+  const p = (def.params ?? {}) as { stone?: ColorSpec; edge?: ColorSpec; glow?: ColorSpec };
+  const stone = resolveColor(p.stone, theme, '#211d2b');
+  const edge = resolveColor(p.edge, theme, '#3d3750');
+  const glow = resolveColor(p.glow, theme, '#7de84a');
+  for (const o of group) {
+    const R = o.radius; // half-span of the mouth
+    const seed = ((o.pos.x * 31 + o.pos.y * 7) | 0) >>> 0;
+    const breathe = 0.65 + 0.25 * Math.sin(time * 1.7 + seed * 0.23);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The cold light standing in the opening (under the arch, over the lane).
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R * 1.1 * breathe);
+    g.addColorStop(0, withAlpha(glow, 0.22 * breathe));
+    g.addColorStop(1, withAlpha(glow, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(0, 0, R * 1.1, R * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+    // Jamb stacks at both ends of the span: coursed blocks, sun-caught edges.
+    for (const s of [-1, 1]) {
+      const jx = s * R;
+      ctx.fillStyle = stone;
+      ctx.beginPath();
+      ctx.roundRect(jx - R * 0.16, -R * 0.5, R * 0.32, R * 1.0, 3);
+      ctx.fill();
+      ctx.strokeStyle = edge; ctx.lineWidth = 1.4; ctx.stroke();
+      ctx.strokeStyle = withAlpha(shade(stone, 0.35), 0.7);
+      ctx.lineWidth = 1;
+      for (let c = -1; c <= 1; c++) {
+        ctx.beginPath();
+        ctx.moveTo(jx - R * 0.15, c * R * 0.26);
+        ctx.lineTo(jx + R * 0.15, c * R * 0.26 + (hash01(c + 2, seed) - 0.5) * 2);
+        ctx.stroke();
+      }
+    }
+    // The SPAN: a heavy lintel bowing over the mouth (top-down foreshortening:
+    // an arc bowed "north" in local space), voussoir ticks, the keystone.
+    const bow = R * 0.55;
+    ctx.strokeStyle = stone;
+    ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(6, R * 0.3);
+    ctx.beginPath();
+    ctx.moveTo(-R, -R * 0.1);
+    ctx.quadraticCurveTo(0, -bow - R * 0.1, R, -R * 0.1);
+    ctx.stroke();
+    ctx.strokeStyle = withAlpha(edge, 0.9);
+    ctx.lineWidth = 1.2;
+    for (let i = 1; i < 6; i++) {
+      const t = i / 6;
+      const ax = -R + 2 * R * t;
+      const ay = -R * 0.1 - (4 * bow * t * (1 - t)) * 0.5; // along the quad curve
+      const na = Math.atan2(-(1 - 2 * t) * bow, R); // curve normal-ish
+      ctx.beginPath();
+      ctx.moveTo(ax - Math.sin(na) * R * 0.14, ay - Math.cos(na) * R * 0.14);
+      ctx.lineTo(ax + Math.sin(na) * R * 0.14, ay + Math.cos(na) * R * 0.14);
+      ctx.stroke();
+    }
+    ctx.fillStyle = shade(stone, 0.25);
+    ctx.beginPath();
+    ctx.roundRect(-R * 0.13, -bow - R * 0.24, R * 0.26, R * 0.3, 2);
+    ctx.fill();
+    ctx.strokeStyle = edge; ctx.lineWidth = 1.2; ctx.stroke();
+    // Chains off the soffit — the toll's hooks, swaying a breath.
+    ctx.strokeStyle = shade(stone, 0.45);
+    ctx.lineWidth = 1.3;
+    for (const s of [-0.45, 0.45]) {
+      const sway = Math.sin(time * 1.3 + s * 5 + seed * 0.31) * R * 0.04;
+      for (let l = 0; l < 3; l++) {
+        ctx.beginPath();
+        ctx.ellipse(s * R + sway * (l / 3), -R * 0.06 + l * R * 0.09, R * 0.03, R * 0.045, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+};
+
+/** A TORTURE RACK: the frame, the rollers, the straps — and the stain
+ *  beneath it. Inert furniture that makes a hall confess what it is. */
+const tortureRack: GroupPainter = (env, group, def) => {
+  const { ctx, theme } = env;
+  const p = (def.params ?? {}) as { wood?: ColorSpec; iron?: ColorSpec; stain?: ColorSpec };
+  const wood = resolveColor(p.wood, theme, '#2e2118');
+  const iron = resolveColor(p.iron, theme, '#3a3630');
+  const stain = resolveColor(p.stain, theme, '#3a0a12');
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 17) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The stain first — older than the frame's current tenant.
+    ctx.fillStyle = withAlpha(stain, 0.55);
+    ctx.beginPath();
+    ctx.ellipse(r * 0.15, r * 0.2, r * 0.8, r * 0.5, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // The bed: two long rails + cross-slats.
+    const L = r * 1.5, W = r * 0.8;
+    ctx.strokeStyle = wood; ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(3, r * 0.18);
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(-L / 2, s * W / 2); ctx.lineTo(L / 2, s * W / 2); ctx.stroke();
+    }
+    ctx.lineWidth = Math.max(2, r * 0.11);
+    for (let i = 0; i < 4; i++) {
+      const x = -L / 2 + (i + 0.5) * (L / 4);
+      ctx.strokeStyle = shade(wood, (hash01(i, seed) - 0.5) * 0.2);
+      ctx.beginPath(); ctx.moveTo(x, -W / 2); ctx.lineTo(x + r * 0.05, W / 2); ctx.stroke();
+    }
+    // Rollers at both ends + the crank cross.
+    ctx.strokeStyle = iron;
+    ctx.lineWidth = Math.max(2.5, r * 0.14);
+    for (const s of [-1, 1]) {
+      ctx.beginPath(); ctx.moveTo(s * L / 2, -W / 2 - r * 0.1); ctx.lineTo(s * L / 2, W / 2 + r * 0.1); ctx.stroke();
+    }
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(L / 2 + r * 0.16, -r * 0.22); ctx.lineTo(L / 2 + r * 0.16, r * 0.22); ctx.stroke();
+    ctx.beginPath(); ctx.arc(L / 2 + r * 0.16, 0, r * 0.1, 0, Math.PI * 2); ctx.stroke();
+    // Straps: taut lines toward the head roller.
+    ctx.strokeStyle = withAlpha(shade(wood, 0.4), 0.8);
+    ctx.lineWidth = 1.2;
+    for (const s of [-0.3, 0.3]) {
+      ctx.beginPath(); ctx.moveTo(-L * 0.2, s * W); ctx.lineTo(-L / 2, s * W * 0.4); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
@@ -5984,6 +6123,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   statue, wayshrine, gallows, fishingRack, kilnMound,
   tentacleField, pentagram, wardSeal, bonePile, boneShelf, door, breach, landmass, beacon, fallback,
   pyre, hangingCage, warBanner, hellforge,
+  gateArch, tortureRack,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------

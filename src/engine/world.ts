@@ -96,7 +96,8 @@ import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from 
 import { Rng, rollSeed } from '../core/rng';
 import { ALTARS, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
-import { patronFaction, biomesForFaction, biomeEventDensity, OCEAN_BIOME } from '../world/biomes';
+import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, OCEAN_BIOME } from '../world/biomes';
+import { boundaryGateOf } from '../data/boundaryGates';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
@@ -215,6 +216,10 @@ export interface ZoneExit {
   label: string;
   /** Index into the zone def's exits array (frontier resolution). */
   defIndex: number;
+  /** BOUNDARY-GATE treatment id (data/boundaryGates.ts) when this exit
+   *  crosses an enclave biome's boundary — restyles the portal (accent,
+   *  glyph, dwell ring) and streams to co-op clients like the label. */
+  boundary?: string;
 }
 
 /** A telegraphed death-burst in flight. GATHER = the coalesce wind-up (the escape window);
@@ -2780,6 +2785,10 @@ export class World {
     if (!isCave) this.eagerChartNeighbors(def);
 
     this.exits = def.exits.map((e, i) => this.placeExit(e, i));
+    // Stash the boundary annotations on the def (index-aligned, TRANSIENT —
+    // re-derived every load) so generateLayout below can erect the gate
+    // terrain for whichever exits cross an enclave boundary.
+    def.exitBoundaries = this.exits.map(x => x.boundary);
     // BELT-AND-SUSPENDERS: whatever def data or edge-snapping produced, no two
     // live portals may overlap (an overlapped pair leaves one of them un-dwellable
     // — the "can't choose which zone I enter" hard-lock). Runs BEFORE the layout
@@ -4130,6 +4139,12 @@ export class World {
     // On an ellipse zone, pull the rect-edge portal onto the reachable rim. On a FIELD
     // zone, snap it onto the heat-map blob's edge in this direction (the expanse corners).
     const pos = (this.zone.field && this.fieldExitPos(e)) || exitInside(edge, this.arena);
+    // BOUNDARY GATE: does this edge cross an enclave biome's boundary? Rides
+    // the same prediction seam as the level preview below — an unminted
+    // frontier already knows what looms behind it. Streams to clients like
+    // the label; the layout pipeline reads the same ids off def.exitBoundaries.
+    const boundary = this.boundaryGateFor(e);
+    const bgLabel = boundaryGateOf(boundary)?.label;
     if (e.to === '?') {
       // A frontier: the zone behind it doesn't exist yet. PREVIEW its danger by
       // sampling the difficulty field at the SAME coordinate the mint will use
@@ -4140,7 +4155,8 @@ export class World {
       const lv = this.levelFor(projectCoord(this.zone.map, e.side));
       return {
         pos, radius: PORTAL_RADIUS, to: '?', defIndex,
-        label: `Uncharted · Lv ${lv}`,
+        label: `Uncharted · Lv ${lv}${bgLabel ? ` · ${bgLabel}` : ''}`,
+        ...(boundary ? { boundary } : {}),
       };
     }
     const dest = this.zoneMap[e.to] ?? this.caveMap[e.to];
@@ -4152,8 +4168,34 @@ export class World {
     }
     const sub = dest.objective.kind === 'waves' && dest.objective.waves === 0
       ? 'endless' : `Lv ${dest.level}`;
-    const label = this.inCave ? `Surface · ${dest.name}` : `${dest.name} · ${sub}`;
-    return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label };
+    const label = `${this.inCave ? `Surface · ${dest.name}` : `${dest.name} · ${sub}`}${bgLabel ? ` · ${bgLabel}` : ''}`;
+    return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label, ...(boundary ? { boundary } : {}) };
+  }
+
+  /** The boundary-gate treatment an exit wears, or undefined for a plain
+   *  portal. An ENCLAVE biome (BiomeInfo.enclave) walls itself: an edge with
+   *  exactly ONE end inside it carries the enclave's gate — seen from BOTH
+   *  sides of the crossing (approaching, you face its mouth; inside, the way
+   *  back out wears the same stone). Resolved exits read the neighbour's
+   *  actual biome; frontiers PREDICT via the same heat-map sample the mint
+   *  will use. Locked (holdfast) and cross-dimension edges keep their own
+   *  dressings. Pure per (graph, field) — reload/co-op re-derive identically. */
+  private boundaryGateFor(e: ZoneExitDef): string | undefined {
+    if (e.crossDim || e.lock) return undefined;
+    const from = this.zone.biome;
+    let to: string | undefined;
+    if (e.to === '?') {
+      const c = projectCoord(this.zone.map, e.side);
+      to = this.zone.dimension ? this.dimensionBiomeFor(this.zone.dimension)(c) : this.biomeFor(c);
+    } else {
+      to = (this.zoneMap[e.to] ?? this.caveMap[e.to])?.biome;
+    }
+    if (!to || to === from) return undefined;
+    const fromGate = from ? BIOMES[from]?.enclave?.gate : undefined;
+    const toGate = BIOMES[to]?.enclave?.gate;
+    if (toGate && !fromGate) return toGate;
+    if (fromGate && !toGate) return fromGate;
+    return undefined;
   }
 
   /** THE LIVE OVERLAP RESOLVE — the last line of defense behind the def-level
@@ -21270,7 +21312,9 @@ export class World {
       // onto a portal must never carry you off (it's not your intent).
       if (onExit && this.playerIdle() && !this.player.push) {
         if (this.exitDwellIdx !== onExit.defIndex) { this.exitDwellIdx = onExit.defIndex; this.exitDwellStart = this.time; }
-        if (this.time - this.exitDwellStart >= transitDwell('zone_exit')) {
+        // A boundary-gate exit dwells on its own transit row (family-chained:
+        // 'zone_exit:<gate>' falls back to 'zone_exit' when no row is registered).
+        if (this.time - this.exitDwellStart >= transitDwell(onExit.boundary ? `zone_exit:${onExit.boundary}` : 'zone_exit')) {
           this.travelThrough(onExit);
           return; // everything else this frame belongs to the old zone
         }
@@ -21286,7 +21330,8 @@ export class World {
     if (this.exitDwellIdx < 0) return null;
     const e = this.exits.find(x => x.defIndex === this.exitDwellIdx);
     if (!e) return null;
-    return { pos: vec(e.pos.x, e.pos.y), frac: clamp((this.time - this.exitDwellStart) / transitDwell('zone_exit'), 0, 1), kind: 'zone_exit' };
+    const kind = e.boundary ? `zone_exit:${e.boundary}` : 'zone_exit';
+    return { pos: vec(e.pos.x, e.pos.y), frac: clamp((this.time - this.exitDwellStart) / transitDwell(kind), 0, 1), kind };
   }
 
   /** Dwell-to-enter progress on the sidezone mouth the player lingers on

@@ -111,6 +111,9 @@ registerDimension({
     { biome: 'steppes', weight: 4 },
     { biome: 'volcanic', weight: 3 },
     { biome: 'flesh', weight: 2 },
+    // THE DURANCE — the hate-citadel: rare ENCLAVE regions (BiomeInfo.enclave)
+    // that wall themselves behind boundary gates; interiors, not country.
+    { biome: 'durance', weight: 1.5 },
     { biome: 'grave', weight: 1 },
   ],
   levelBonus: 3,

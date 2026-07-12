@@ -791,6 +791,34 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { flame: '#9fd4ff', bone: '#cfc4ac' },
     light: { radius: -2.6, color: '#a8d0ff', intensity: 0.5, flicker: 2.2 },
   },
+  // THE BOUNDARY-GATE + DURANCE KIT: the arch reads in the enclave's own
+  // stone (theme-tinted, so every walled biome's gate answers its palette)
+  // with a cold under-glow; pylons are coursed monoliths; the citadel's
+  // braziers burn hate-green (one campfire param — the flame family retint);
+  // racks are low dark furniture; the idol watches with a faint lit gaze.
+  gate_arch: {
+    painter: 'gateArch', order: 56, shadow: 0.35, longShadow: 1.4,
+    params: { stone: 'theme:wall|#211d2b', edge: 'theme:obstacleEdge|#3d3750', glow: 'theme:accent|#7de84a' },
+    light: { radius: -1.6, color: '#7de84a', intensity: 0.3, flicker: 1.6 },
+  },
+  gate_pylon: {
+    painter: 'slab', order: 54, shadow: 0.6, longShadow: 1.6,
+    params: { shape: 'monolith', fill: 'theme:wall|#211d2b', edge: 'theme:obstacleEdge|#3d3750' },
+  },
+  hate_brazier: {
+    painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,
+    params: { bowl: true, flame: '#7de84a' },
+    light: { radius: -5.5, color: '#7de84a', intensity: 0.5, flicker: 5 },
+  },
+  torture_rack: {
+    painter: 'tortureRack', order: 52, shadow: 0.45, longShadow: 0.8,
+    params: { wood: '#2e2118', iron: '#3a3630', stain: '#3a0a12' },
+  },
+  hate_idol: {
+    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.5,
+    params: { stone: 'theme:obstacle|#2a2433', moss: '#4a7a42' },
+    light: { radius: -2.0, color: '#7de84a', intensity: 0.18, flicker: 1.2 },
+  },
   tooth_row: {
     painter: 'teethRow', order: 52, shadow: 0.45,
     params: { gum: '#6a1a28', enamel: '#e8e0d0' },

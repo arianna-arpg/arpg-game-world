@@ -87,6 +87,12 @@ export function transitRing(kind: string): TransitRing {
 // Zone-exit portals: the classic dwell-to-travel. Ring tints with the zone.
 registerTransit({ kind: 'zone_exit', dwell: 0.5, ring: { radius: 36 } });
 
+// BOUNDARY-GATE exits (family-chained: 'zone_exit:<gateId>' — unregistered
+// gate ids fall back to the family row above). Crossing an enclave's wall is
+// a heavier, slower threshold: the pause IS the foreboding. The Durance's
+// ring burns its hate-green.
+registerTransit({ kind: 'zone_exit:durance_gate', dwell: 0.7, ring: { radius: 44, width: 4, color: '#7de84a' } });
+
 // Sidezone mouths (cave entrances, hatches, pit maws). This row is the FAMILY
 // DEFAULT: a SidezoneDef.dwell still overrides per kind (data/sidezones.ts),
 // and a 'sidezone:<kind>' row here can restyle one mouth's ring.

@@ -43,6 +43,7 @@ import { MAIN_REALM, PASSIVE_REALMS, openRealms, realmIdOf, realmOf, realmOpen }
 import { SUPPORTS } from '../data/supports';
 import { VOCATIONS, vocationRootId } from '../data/vocations';
 import { BIOMES, biomeOf } from '../world/biomes';
+import { boundaryGateOf } from '../data/boundaryGates';
 import { dimensionDef } from '../world/dimensions';
 import { collectMarkers } from '../world/mapMarkers';
 import { zoneInfoFor, type ZoneInfoEntry } from '../world/zoneInfo';
@@ -2998,9 +2999,17 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         if (drawn.has(key)) continue;
         drawn.add(key);
         const known = visited.has(z.id) || visited.has(e.to);
+        // A road crossing an ENCLAVE biome's wall wears the gate's accent —
+        // the map telegraphs "that way lies the Durance" the same way the
+        // portal itself does (derived inline: both endpoint defs are in hand).
+        const enGate = (BIOMES[b.biome ?? '']?.enclave && !BIOMES[z.biome ?? '']?.enclave)
+          ? BIOMES[b.biome ?? '']?.enclave
+          : (BIOMES[z.biome ?? '']?.enclave && !BIOMES[b.biome ?? '']?.enclave)
+            ? BIOMES[z.biome ?? '']?.enclave : undefined;
+        const enAccent = enGate ? boundaryGateOf(enGate.gate)?.accent : undefined;
         edges += `<line x1="${z.map.x}" y1="${z.map.y}" x2="${b.map.x}" y2="${b.map.y}"
-          stroke="${known ? '#5a5a72' : '#2c2c3a'}" stroke-width="2"
-          ${known ? '' : 'stroke-dasharray="4 5"'}/>`;
+          stroke="${enAccent && known ? enAccent : known ? '#5a5a72' : '#2c2c3a'}" stroke-width="${enAccent && known ? 2.6 : 2}"
+          ${known ? '' : 'stroke-dasharray="4 5"'}${enAccent && known ? ' stroke-opacity="0.75"' : ''}/>`;
       }
       // SEA LANES: crossings you have sailed (searoutes, recorded on landing)
       // — a dashed blue arc over the water, the naval half of the road graph.

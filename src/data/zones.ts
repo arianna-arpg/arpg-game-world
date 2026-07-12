@@ -391,6 +391,13 @@ export interface ZoneDef {
   /** Sea routes sailed FROM this port (port zone ids) — map styling + the
    *  Sail menu's memory of established crossings. */
   searoutes?: string[];
+  /** BOUNDARY-GATE annotations, index-aligned with `exits` — the treatment id
+   *  each exit wears where it crosses an ENCLAVE biome's boundary (data/
+   *  boundaryGates.ts). TRANSIENT: the World re-derives it at every zone load
+   *  from the live graph + heat map (placeExit's prediction seam) just before
+   *  generateLayout, so the layout pipeline can erect the gate terrain. Never
+   *  authored, never saved — deterministic given the run. */
+  exitBoundaries?: (string | undefined)[];
   /** Layout GENERATOR knobs, merged tileset ← biome ← spec at mint — the
    *  "same tileset, tweak its generation" seam: volcanic as a spiral cauldron,
    *  a winding road, or an open expanse is one param, not three tilesets.

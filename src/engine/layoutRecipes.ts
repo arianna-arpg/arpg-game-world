@@ -21,9 +21,10 @@
 
 import { vec, type Vec2 } from '../core/math';
 import type { ZoneDef } from '../data/zones';
+import { boundaryGateOf } from '../data/boundaryGates';
 import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
-  placeLandmarkById, raiseStructure, type GenCtx,
+  placeLandmarkById, raiseStructure, setBoundaryGateBuilder, areaFreeOf, doodadRuleOf, type GenCtx,
 } from './levelgen';
 import {
   Mask, band, disc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
@@ -684,6 +685,149 @@ export function carveGateTerrace(ctx: GenCtx, at: Vec2,
   ctx.mustReach.push(vec(mouth.x + inward.x * 150, mouth.y + inward.y * 150));
   return { rect, mouth, inward };
 }
+
+/** Raise a BOUNDARY GATE at a portal: the monumental face an ENCLAVE biome
+ *  shows the world (data/boundaryGates.ts). A façade wall band pierced by one
+ *  arched mouth on the portal's own axis, a walled THROAT you walk through —
+ *  "entering the structure" as terrain — pylons bookending the face, cold
+ *  lights on the lip, the enclave's toll dressed along the front. Runs for
+ *  EVERY layout family (generateLayout raises it off def.exitBoundaries via
+ *  the registered-builder seam), so it splices whatever scatter came before
+ *  it out of its footprint, reserves it against whatever comes after, bakes
+ *  its floor through the synthetic-structure record, and hands the invariant
+ *  the ground past the throat (the carveGateTerrace discipline, faced the
+ *  other way: the terrace descends OUT of a fortress; the gate walks IN). */
+export function carveBoundaryGate(ctx: GenCtx, at: Vec2, gateId: string): void {
+  const g = boundaryGateOf(gateId);
+  if (!g) return;
+  const grid = ensureGrid(ctx);
+  const { arena, rng } = ctx;
+  const CELL = 30;
+  const q = (v: number): number => Math.round(v / CELL) * CELL;
+  // Which wall does the portal hug? The gate grows INWARD from that edge.
+  const dl = at.x, dr = arena.w - at.x, dt = at.y, db = arena.h - at.y;
+  const m = Math.min(dl, dr, dt, db);
+  const ix = m === dl ? 1 : m === dr ? -1 : 0;
+  const iy = ix !== 0 ? 0 : (m === dt ? 1 : -1);
+  const tx = -iy, ty = ix; // tangent along the façade
+  const halfW = Math.max(CELL * 5, q(g.halfWidth ?? 240));
+  const depth = Math.max(CELL * 4, q(g.depth ?? 180));
+  const mouthW = Math.max(CELL * 3, q(g.mouthWidth ?? 130));
+  const wallRegion = g.wallRegion ?? 'rampart';
+  const back = CELL * 2; // the façade tucks behind the portal line
+  // Footprint: tangent span ±halfW, from just behind the portal to depth inward.
+  const c0 = vec(at.x - ix * back, at.y - iy * back);
+  const x0 = q(Math.min(c0.x, c0.x + ix * (depth + back)) - Math.abs(tx) * halfW);
+  const y0 = q(Math.min(c0.y, c0.y + iy * (depth + back)) - Math.abs(ty) * halfW);
+  const w = ix !== 0 ? depth + back : halfW * 2;
+  const h = ix !== 0 ? halfW * 2 : depth + back;
+  const rect = {
+    x: Math.max(0, Math.min(arena.w - w, x0)),
+    y: Math.max(0, Math.min(arena.h - h, y0)),
+    w, h,
+  };
+  // The gate arrives AFTER the base layout — splice whatever scatter/liquid
+  // discs it would swallow (rim-aware, the causeway discipline).
+  for (let k = ctx.doodads.length - 1; k >= 0; k--) {
+    const d = ctx.doodads[k];
+    if (d.pos.x > rect.x - d.radius && d.pos.x < rect.x + rect.w + d.radius
+      && d.pos.y > rect.y - d.radius && d.pos.y < rect.y + rect.h + d.radius) {
+      ctx.doodads.splice(k, 1);
+    }
+  }
+  // Ground first (the whole footprint is walkable under the baked floor)...
+  grid.fillRegion(rect.x, rect.y, rect.x + rect.w - 0.01, rect.y + rect.h - 0.01, 'ground');
+  const wall = (wx: number, wy: number, ww: number, wh: number): void => {
+    if (ww > 0.5 && wh > 0.5) grid.fillRegion(wx, wy, wx + ww - 0.01, wy + wh - 0.01, wallRegion);
+  };
+  // ...then the FAÇADE band across the portal line (mouth gap on the portal's
+  // own tangent coordinate), then the THROAT's flank walls running inward.
+  const mouthLo = ix !== 0 ? q(at.y - mouthW / 2) : q(at.x - mouthW / 2);
+  let mouthC: Vec2;
+  if (ix !== 0) {
+    const fx = ix > 0 ? rect.x : rect.x + rect.w - CELL; // façade strip at the outer face
+    wall(fx, rect.y, CELL, Math.max(0, mouthLo - rect.y));
+    wall(fx, mouthLo + mouthW, CELL, Math.max(0, rect.y + rect.h - (mouthLo + mouthW)));
+    const t0 = fx + (ix > 0 ? CELL : -depth + CELL);
+    wall(t0, mouthLo - CELL, depth - CELL, CELL);
+    wall(t0, mouthLo + mouthW, depth - CELL, CELL);
+    mouthC = vec(fx + CELL / 2, mouthLo + mouthW / 2);
+  } else {
+    const fy = iy > 0 ? rect.y : rect.y + rect.h - CELL;
+    wall(rect.x, fy, Math.max(0, mouthLo - rect.x), CELL);
+    wall(mouthLo + mouthW, fy, Math.max(0, rect.x + rect.w - (mouthLo + mouthW)), CELL);
+    const t0 = fy + (iy > 0 ? CELL : -depth + CELL);
+    wall(mouthLo - CELL, t0, CELL, depth - CELL);
+    wall(mouthLo + mouthW, t0, CELL, depth - CELL);
+    mouthC = vec(mouthLo + mouthW / 2, fy + CELL / 2);
+  }
+  const inward = vec(ix, iy);
+  // THE DRESSING — direct pushes (the geometry IS the placement): the arch
+  // spanning the mouth, pylons bookending the face, lights on the throat's
+  // lip, the enclave's toll along the outer front.
+  if (g.archKind !== '') {
+    ctx.doodads.push({
+      pos: vec(mouthC.x + inward.x * (CELL * 0.6), mouthC.y + inward.y * (CELL * 0.6)),
+      radius: mouthW * 0.55, kind: g.archKind ?? 'gate_arch',
+      rot: Math.atan2(ty, tx),
+    });
+  }
+  if (g.pylonKind) {
+    for (const s of [-1, 1]) {
+      ctx.doodads.push({
+        pos: vec(mouthC.x + tx * s * (halfW - CELL * 1.4), mouthC.y + ty * s * (halfW - CELL * 1.4)),
+        radius: 24, kind: g.pylonKind, rot: Math.atan2(ty, tx),
+      });
+    }
+  }
+  const brazierKind = g.brazierKind ?? 'brazier';
+  if (brazierKind) {
+    for (const s of [-1, 1]) {
+      ctx.doodads.push({
+        pos: vec(mouthC.x + inward.x * CELL * 1.6 + tx * s * (mouthW / 2 + 20),
+          mouthC.y + inward.y * CELL * 1.6 + ty * s * (mouthW / 2 + 20)),
+        radius: 10, kind: brazierKind,
+      });
+    }
+  }
+  for (const row of g.dress ?? []) {
+    const rule = doodadRuleOf(row.kind);
+    for (let i = 0, n = rng.int(row.count[0], row.count[1]); i < n; i++) {
+      // Along the outer face, never in the mouth's lane. Draws happen BEFORE
+      // the filters (findSpot discipline) so a rejected spot never shifts the
+      // sequence of later pieces.
+      const off = rng.range(-(halfW - 50), halfW - 50);
+      const r = rng.range(11, 16);
+      const rot = rng.range(0, Math.PI * 2);
+      if (Math.abs(off) < mouthW / 2 + 40) continue;
+      const p = vec(mouthC.x - inward.x * CELL * 1.6 + tx * off, mouthC.y - inward.y * CELL * 1.6 + ty * off);
+      // The dress honors its kind's ground gates like every scatter path —
+      // a banner never plants in the river it fronts (genqa's inverse
+      // invariant holds for composable pushes too).
+      if (rule.forbidOn && !areaFreeOf(ctx, p, r, rule.forbidOn)) continue;
+      ctx.doodads.push({ pos: p, radius: r, kind: row.kind, rot });
+    }
+  }
+  // Bookkeeping — the carveGateTerrace discipline: reserve the footprint,
+  // keep the walking lane open portal→throat→zone, bake the floor, and hand
+  // the invariant the ground past the gate.
+  ctx.reserved.push({ rect, margin: 10 });
+  reserveArtery(ctx, [
+    vec(at.x - inward.x * 40, at.y - inward.y * 40),
+    vec(mouthC.x + inward.x * (depth + 120), mouthC.y + inward.y * (depth + 120)),
+  ], Math.max(50, mouthW * 0.5));
+  ctx.structures = ctx.structures ?? [];
+  ctx.structures.push({
+    id: `boundary_gate#${ctx.structures.length}`, defId: `boundary_gate:${gateId}`,
+    rect, cellSize: CELL, roofs: [], roofStyle: 'stone',
+    floors: [{ ...rect }], floorStyle: g.floorStyle ?? 'flagstone',
+    courtyards: [], doors: [], slots: [],
+  });
+  ctx.mustReach = ctx.mustReach ?? [];
+  ctx.mustReach.push(vec(mouthC.x + inward.x * (depth + 60), mouthC.y + inward.y * (depth + 60)));
+}
+// Register as THE boundary-gate builder (levelgen raises it per annotated exit).
+setBoundaryGateBuilder(carveBoundaryGate);
 
 function steppesLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;

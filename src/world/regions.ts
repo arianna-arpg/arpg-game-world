@@ -325,6 +325,13 @@ registerRegion({ id: 'flesh_wall', walkable: false, blocks: true, label: 'the fl
   // The pale strained-membrane rim: the floor throbs in the same reds, so the
   // WALL announces itself at its boundary or you run face-first into meat.
   visual: { fill: '#3a0e16', alpha: 1, edge: { color: '#8a3a46', width: 5 } } });
+// DURANCE WALL: the hate-citadel's dressed black masonry (the durance biome's
+// interior negative space + its boundary-gate façades). A TRUE WALL, coursed
+// like rampart so the halls read BUILT, not cave-carved; the sickly-green rim
+// announces it in its own near-black floor's tones (the flesh-wall lesson).
+registerRegion({ id: 'durance_wall', walkable: false, blocks: true, label: 'the durance',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#1d1a26', alpha: 1, masonry: true, edge: { color: '#4a7a42', width: 4 } } });
 // FUNGAL WALL: the dense living MYCELIUM between a mycelia grotto's chambers (the negative
 // space the myceliaLayout carves into). Non-walkable + blocks like a wall, but a deep
 // purple-fungal visual so the warren reads as carved-from-mushroom, NOT the black void.

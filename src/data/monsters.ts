@@ -3363,6 +3363,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.0, deathBurst: { mode: 'implode', damageFrac: 1.4, coalesce: 0.8 },
     brain: { type: 'bomber', fuseRange: 56, fuseTime: 0.6 },
   },
+  // The Durance's toy: a stitched marionette that sprints the halls and dies
+  // LOUDLY — the implode IS the monster (the searing_spawn pattern in hate's
+  // colors, coalesce tuned DOWN: a doll barely telegraphs — the D2 lesson,
+  // kept honest by the short fuse + small radius).
+  stygian_doll: {
+    id: 'stygian_doll', name: 'Stygian Doll',
+    color: '#7de84a', shape: 'pentagon', radius: 9, material: 'bone', look: 'ash_whelp',
+    base: { life: 16, moveSpeed: 210, accuracy: 70, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 9, faction: 'demon',
+    scaleVariance: [0.85, 1.05],
+    detection: 1.1,
+    deathBurst: { mode: 'implode', damageFrac: 1.5, damageType: 'chaos', coalesce: 0.45, radius: 70 },
+    brain: { type: 'bomber', fuseRange: 48, fuseTime: 0.4 },
+  },
   dread_fiend: {
     id: 'dread_fiend', name: 'Dread Fiend',
     color: '#b81e3a', shape: 'star', radius: 16, material: 'ember', look: 'demon_brute',

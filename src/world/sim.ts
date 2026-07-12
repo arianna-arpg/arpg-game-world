@@ -34,7 +34,8 @@ import { DEFAULT_FREQUENCY, type FrequencyProfile } from '../packages/frequency'
 import { PACKAGE_BY_ID, packageSeed } from '../packages/registry';
 import type { PackageGate } from '../packages/types';
 import { gateOf, resolveGates } from '../packages/weighting';
-import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD } from './biomes';
+import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
+import { boundaryGateIds } from '../data/boundaryGates';
 import { setClimateOrigin } from './climate';
 import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
 import { validateCourses } from './courses';
@@ -236,6 +237,13 @@ export class WorldSim {
     if (badCo.length) console.warn('[courses] course(s) reference unknown biome(s):', badCo);
     const badCoT = biomesWithoutTileset(dims.flatMap(d => (d.courses ?? []).map(c => c.biome)));
     if (badCoT.length) console.warn('[courses] course biomes with NO frontier tileset (fall back to inherited):', badCoT);
+    // ENCLAVE biomes must name a REGISTERED boundary gate (a typo'd id would
+    // silently mint plain portals — the wall would just... not be there).
+    const gateIds = new Set(boundaryGateIds());
+    const badEn = Object.entries(BIOMES)
+      .filter(([, b]) => b.enclave && !gateIds.has(b.enclave.gate))
+      .map(([id, b]) => `${id}: ${b.enclave!.gate}`);
+    if (badEn.length) console.warn('[boundary] enclave biome(s) name unregistered gate(s):', badEn);
     const badLv = validateLevelField();
     if (badLv.length) console.warn('[levelfield] LEVEL_FIELD_CFG invalid:', badLv);
     const badAm = validateAmalgamParts(AMALGAM_PARTS, id => !!SKILLS[id], id => !!SUPPORTS[id]);

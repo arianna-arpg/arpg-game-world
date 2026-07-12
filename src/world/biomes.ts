@@ -84,6 +84,14 @@ export interface BiomeInfo {
    *  ground (grave stays unconditioned on purpose — the universal filler that
    *  guarantees every cell keeps a candidate). */
   climate?: Record<string, ClimateSpec>;
+  /** An ENCLAVE biome walls itself: every zone edge with exactly one end
+   *  inside it wears the named boundary gate (data/boundaryGates.ts) — a
+   *  monumental façade + portal treatment, seen from BOTH sides of the
+   *  crossing. The whole region reads as ONE structure you enter (the
+   *  Durance idiom). Structural string ref — this leaf never imports the
+   *  registry; the World resolves it at placeExit, boot validation checks
+   *  it names a real gate. */
+  enclave?: { gate: string };
 }
 
 export const BIOMES: Record<string, BiomeInfo> = {
@@ -146,6 +154,23 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'demon_pit', chance: 0.16 }, { landmark: 'abyssal_gulf', chance: 0.12 },
       { landmark: 'lava_coast', chance: 0.1 },
     ] },
+  // THE DURANCE: the hate-citadel — hell's first ENCLAVE biome. Its Voronoi
+  // regions read as ONE structure spanning zones: every edge crossing its
+  // boundary wears the durance gate (data/boundaryGates.ts — the monumental
+  // façade + throat you walk THROUGH, seen from both sides), and inside,
+  // every zone is an INTERIOR — black-masonry torture halls on the dungeon/
+  // edifice room-graphs, tiled floors, doors that stay ground, the courts of
+  // hate burning cold green. Tight spacing (halls pack against halls); a
+  // heavy wash so the citadel reads as a solid block on the hell tab — a
+  // KEEP, not country. No climate gate: the citadel stands where it wills.
+  durance: { patronFaction: 'demon', mapColor: '#3f5a46', label: 'Durance', spacing: 56,
+    washOpacity: 0.24,
+    enclave: { gate: 'durance_gate' },
+    allowedLayouts: { dungeon: 3, edifice: 1 },
+    layoutParams: {
+      interiorWall: 'durance_wall', floorStyle: 'tile',
+      corridorCells: 2.2, doorChance: 0.5, rooms: [9, 14],
+    } },
   // THE OUTER STEPPES: the Underworld's scorched marches — open plains cut by
   // the angular wall-runs of abandoned hellworks (the 'steppes' recipe),
   // abyssal maws burning through the crust, the legions' stakes on the old

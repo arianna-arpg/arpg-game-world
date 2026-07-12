@@ -619,7 +619,12 @@ export interface DoodadW {
    *  predicted collision + render + grid repaint mirror the host's doors. */
   door?: DoodadDoor;
 }
-export interface ExitW { p: Vec2W; r: number; to: string; label: string; }
+export interface ExitW {
+  p: Vec2W; r: number; to: string; label: string;
+  /** Boundary-gate treatment id (data/boundaryGates.ts) — crosses like the
+   *  label so client portals wear the enclave's accent/glyph/ring. */
+  b?: string;
+}
 export interface ZoneMsg {
   zoneId: string; name: string; level: number;
   /** The zone's DIMENSION ('surface' omitted) — the client's map tab, dimension
@@ -647,7 +652,7 @@ export function serializeZone(world: World): ZoneMsg {
     arena: { w: world.arena.w, h: world.arena.h, shape: world.arena.shape },
     theme: world.zone.theme,
     doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door })),
-    exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label })),
+    exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label, b: e.boundary })),
     waypoint: world.waypointPos ? v2(world.waypointPos) : null,
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,
     structures: world.structures.length ? world.structures : undefined,
@@ -678,6 +683,9 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.walk = msg.walk ? GridWalkField.unpack(msg.walk) : null;
   world.exits = msg.exits.map(e => ({
     pos: { x: e.p[0], y: e.p[1] }, radius: e.r, to: e.to, label: e.label, defIndex: 0,
+    // Boundary-gate treatment crosses like the label (accent/glyph/ring on
+    // the client read the same data row the host resolved).
+    boundary: e.b,
   }));
   world.waypointPos = msg.waypoint ? { x: msg.waypoint[0], y: msg.waypoint[1] } : null;
 }

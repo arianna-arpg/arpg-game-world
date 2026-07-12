@@ -1064,6 +1064,113 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE DURANCE — the hate-citadel's interior (biome 'durance': hell's first
+  // ENCLAVE — every crossing into or out of it wears the durance boundary
+  // gate). Black coursed masonry on the dungeon/edifice room-graphs, tiled
+  // floors, cold green light, the instruments left mid-use. The first fully
+  // INDOOR biome: ambientDark carries the gloom, the braziers and the idol's
+  // gaze carry the light, and the gore underfoot carries the story.
+  durance: {
+    id: 'durance', biome: 'durance',
+    nameFirst: ['Durance', 'Halls', 'Oubliettes', 'Galleries', 'Vaults', 'Cloisters', 'Cells', 'Depths', 'Courts', 'Chambers', 'Warrens', 'Reliquaries'],
+    nameSecond: ['of Hate', 'of Anguish', 'of the Flayed', 'of Chains', 'of the Silent', 'of Sorrow', 'of the Council', 'of Penance', 'of the Hooded', 'of Wailing', 'of the Kept', 'of Spite'],
+    theme: {
+      // Deep interior dark — the citadel lights its own halls (hate-green
+      // braziers, the idol's gaze); day never reaches here.
+      heat: 0.4, dayLight: 0.85, nightDark: 0.85, ambientDark: 0.45,
+      ambientFx: [
+        { kind: 'spores', intensity: 0.3, color: '#7de84a' },
+        { kind: 'motes', intensity: 0.18, color: '#5aa44a' },
+      ],
+      ground: {
+        // Cold flag-black with a breath of green — the halls' tiled murk.
+        palette: ['#0c0d11', '#12131a', '#181a22', '#1e2027', '#242730'],
+        bias: 0.4, alpha: 0.5, scale: 0.9, speckles: 0.5, strength: 1.0,
+      },
+      floor: '#0d0d12', grid: '#16161e', border: '#2c3a30',
+      obstacle: '#242030', obstacleEdge: '#44405c', accent: '#7de84a',
+      // Theme wall a full luminance step over the floor (the contrast guard);
+      // the interior negative space itself is the durance_wall REGION (its
+      // own coursed-masonry fill + green rim — world/regions.ts).
+      wall: '#232030', chasm: '#07070c', mud: '#1c1418', sand: '#3a3630',
+    },
+    // Halls, not country: the smallest frontier footprints in hell, never
+    // elliptical (architecture is rectangular).
+    sizeW: [1900, 2600], sizeH: [1400, 1900], ellipseChance: 0,
+    // The tileset leans harder than the biome default: heavier doors, a
+    // touch more breakable (the halls are old), same black-stone knobs.
+    layoutParams: {
+      interiorWall: 'durance_wall', floorStyle: 'tile',
+      corridorCells: 2.2, doorChance: 0.55, doorBreakChance: 0.35,
+    },
+    // What EVERY hall keeps: the stains, the webs of long custody, its own
+    // cold lights, and the bones of the kept.
+    common: [
+      { kind: 'gore', count: [1, 3] },
+      { kind: 'web', count: [2, 4] },
+      { kind: 'hate_brazier', count: [2, 4] },
+      { kind: 'bone_pile', count: [1, 3] },
+    ],
+    layout: [
+      // THE HALLS: the working face — the instruments, the toll, the watch.
+      { kind: 'torture_rack', count: [2, 4] },
+      { kind: 'soul_cage', count: [1, 3] },
+      { kind: 'hate_idol', count: [1, 2] },
+      { kind: 'burial_urn', count: [2, 4] },
+      { kind: 'clay_pots', count: [1, 3] },
+      { kind: 'hell_chain', count: [1, 2] },
+      { kind: 'rib_arch', count: [0, 1] },
+    ],
+    variants: [
+      // HALLS OF ANGUISH: the working wing — racks in ranks, the cages full,
+      // the gallows waiting. (A variant REPLACES the base; common rides.)
+      {
+        name: 'Anguish',
+        layout: [
+          { kind: 'torture_rack', count: [4, 7] },
+          { kind: 'soul_cage', count: [2, 4] },
+          { kind: 'gallows', count: [0, 1] },
+          { kind: 'gore', count: [2, 4] },
+          { kind: 'hate_idol', count: [1, 2] },
+          { kind: 'burial_urn', count: [1, 3] },
+        ],
+      },
+      // THE BLOOD COURT: the audience wing — the floors run, the idols
+      // multiply, and the braziers burn taller for the watching.
+      {
+        name: 'Blood Court',
+        layout: [
+          { kind: 'gore', count: [4, 8], radius: [30, 52] },
+          { kind: 'hate_idol', count: [2, 3] },
+          { kind: 'hate_brazier', count: [2, 3] },
+          { kind: 'torture_rack', count: [1, 2] },
+          { kind: 'soul_cage', count: [1, 2] },
+          { kind: 'hell_chain', count: [1, 3] },
+        ],
+      },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      table: [
+        { id: 'blood_mite', weight: 3, presence: { to: 18, fadeOut: 8 } },
+        // The citadel's toys: stitched marionettes that die loudly.
+        { id: 'stygian_doll', weight: 3, presence: { from: 8, fadeIn: 3 } },
+        { id: 'ruin_chanter', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'blood_golem', weight: 2, presence: { from: 10, fadeIn: 4 } },
+        { id: 'chained_tormentor', weight: 2, presence: { from: 12, fadeIn: 5 } },
+        { id: 'bloodgorger', weight: 2, presence: { from: 14, fadeIn: 5 } },
+        { id: 'dread_fiend', weight: 2, presence: { from: 16, fadeIn: 5 } },
+        { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
   // CRYPT — a forsaken graveland of headstones, broken tombs, and the risen.
   crypt: {
     id: 'crypt',

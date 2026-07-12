@@ -23,6 +23,7 @@ import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
 import { doodadRuleOf, type Doodad } from '../engine/levelgen';
 import { transitRing } from '../data/transit';
 import { EVENT_COLOR, gateLookOf } from '../data/gateVisuals';
+import { boundaryGateOf } from '../data/boundaryGates';
 import { VEIL_DEFAULTS } from '../engine/veil';
 import { DEFENSE_CFG } from '../engine/defense';
 import { QUEST_GIVER_IDS } from '../quests/defs';
@@ -1916,7 +1917,11 @@ export class Renderer {
     const t = performance.now() / 1000;
     for (const e of world.exits) {
       const locked = world.isExitLocked(e);
-      const accent = locked ? '#6a6a72' : world.zone.theme.accent;
+      // A BOUNDARY-GATE exit answers in its enclave's color (the gate row's
+      // accent), not the zone's — the crossing reads as somewhere ELSE from
+      // both sides of the wall. Data: data/boundaryGates.ts.
+      const bg = !locked ? boundaryGateOf(e.boundary) : undefined;
+      const accent = locked ? '#6a6a72' : bg?.accent ?? world.zone.theme.accent;
       const pulse = locked ? 1 : 1 + 0.06 * Math.sin(t * 2.4);
       // Soft glow
       ctx.globalAlpha = 0.12 + 0.04 * Math.sin(t * 2.4);
@@ -1957,6 +1962,17 @@ export class Renderer {
         ctx.strokeRect(e.pos.x - 7, e.pos.y - 3, 14, 11);
         ctx.beginPath();
         ctx.arc(e.pos.x, e.pos.y - 4, 5, Math.PI, 0);
+        ctx.stroke();
+      } else if (bg) {
+        // A small arch glyph over the disc (the padlock idiom): two jambs +
+        // the span — "a gate stands here", legible at any zoom.
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(e.pos.x - 7, e.pos.y + 7);
+        ctx.lineTo(e.pos.x - 7, e.pos.y - 2);
+        ctx.arc(e.pos.x, e.pos.y - 2, 7, Math.PI, 0);
+        ctx.lineTo(e.pos.x + 7, e.pos.y + 7);
         ctx.stroke();
       }
     }

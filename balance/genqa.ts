@@ -316,6 +316,37 @@ for (const id of ['dungeon', 'labyrinth', 'edifice']) {
   });
 }
 
+// --- 3c. BOUNDARY GATES on every enclave biome's layouts ----------------------
+// Live, the World stamps def.exitBoundaries at load (placeExit's prediction
+// seam); headless defs author it directly so the gate composable — façade,
+// throat, doodad splice, reservation, floor bake — is exercised against BOTH
+// the enclave's own interiors (the inside face) and representative open
+// layouts (the outside face), with the reachability invariant holding through
+// the mouth. Auto-derives from BiomeInfo.enclave: a future walled biome joins
+// this group the day it is tagged, unedited.
+for (const [biomeId, b] of Object.entries(BIOMES)) {
+  if (!b.enclave) continue;
+  const faces = [...new Set([...Object.keys(b.allowedLayouts ?? {}), 'plains', 'riverland'])];
+  for (const layoutId of faces) {
+    runCase(`boundary:${biomeId}@${layoutId}`, {
+      id: `qa_bgate_${biomeId}_${layoutId}`, name: `QA gate ${layoutId}`, level: 8,
+      size: { w: 2400, h: 1800 },
+      theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
+      layout: [
+        { kind: 'rocks', count: [4, 7] },
+        { kind: 'water', count: [1, 2] }, { kind: 'grass', count: [3, 5] },
+      ],
+      layoutType: layoutId,
+      ...(b.layoutParams ? { layoutParams: b.layoutParams } : {}),
+      // Both of runCase's generated exits wear the gate (the hook reads
+      // positions from ctx.exits, ids from this array — def.exits stays []).
+      exitBoundaries: [b.enclave.gate, b.enclave.gate],
+      objective: { kind: 'clear' },
+      exits: [], map: { x: 0, y: 0 },
+    });
+  }
+}
+
 // --- 4. Every composition, FORCED (chance 1) ---------------------------------
 // The tileset sweep exercises compositions probabilistically; this group pins
 // every bundle at least once per seed over a representative liquid-y def (the

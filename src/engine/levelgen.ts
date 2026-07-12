@@ -196,7 +196,13 @@ export type KnownDoodadKind =
   | 'hellforge_anvil'  // the demons' great forge-altar: a slag plinth, an ember throat (the terminus monument)
   | 'soul_cage'        // a gibbet cage on a leaning post — the river's toll, still glowing faintly
   | 'demon_banner'     // a legion war-banner: scorched pole, ragged pennant, a lit glyph
-  | 'pyre_heap';       // a mounded bone-pyre burning pale — the banks keep their own lights
+  | 'pyre_heap'        // a mounded bone-pyre burning pale — the banks keep their own lights
+  // The boundary-gate + durance kit (enclave façades; the hate-citadel's halls)
+  | 'gate_arch'        // a monumental arch spanning a boundary-gate mouth (walk-under span)
+  | 'gate_pylon'       // a coursed monolith bookending a gate façade
+  | 'hate_brazier'     // an iron bowl burning cold green — the citadel lights its own
+  | 'torture_rack'     // the frame, the rollers, the stain — a hall that confesses what it is
+  | 'hate_idol';       // a hooded effigy the halls are kept for — its gaze is the decor
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -831,6 +837,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['hit'], text: 'the cage splits — a soul slips free', color: '#9fd4ff', orbChance: 0.12 } },
   demon_banner:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 88, bodyScale: 0.35, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   pyre_heap:     { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 96, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The boundary-gate + durance kit: the arch is a walk-UNDER span (its stone
+  // flies overhead — nothing on the ground blocks); pylons and idols are true
+  // monuments; the rack is low furniture you shoot over.
+  gate_arch:     { overlap: 'ground', walkOnly: true },
+  gate_pylon:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  hate_brazier:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
+  torture_rack:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  hate_idol:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 110, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -1640,7 +1654,10 @@ function stampEmberVent(ctx: GenCtx): void {
 }
 
 /** Is this disc free of the given doodad kinds? (Site suitability.) */
-function areaFreeOf(ctx: GenCtx, p: Vec2, radius: number, kinds: DoodadKind[]): boolean {
+/** No doodad of the listed kinds within reach — the forbidOn ground test
+ *  (exported for composables that direct-push dressing: they honor the same
+ *  ground gates the scatter does, or genqa's inverse invariant flags them). */
+export function areaFreeOf(ctx: GenCtx, p: Vec2, radius: number, kinds: DoodadKind[]): boolean {
   return !ctx.doodads.some(d =>
     kinds.includes(d.kind) && dist(p, d.pos) < radius + d.radius);
 }
@@ -1666,6 +1683,15 @@ const BORDER = 50;
 /** Radius (around each entry/exit) that a CONVEX layout's blocking doodads are
  *  cleared from post-generation, so a scattered solid never walls off a portal. */
 const EXIT_CLEAR_CARVE = 95;
+
+/** The BOUNDARY-GATE builder (layoutRecipes registers carveBoundaryGate at
+ *  import — the setRouteGuard idiom, so this core never imports a recipe).
+ *  generateLayout raises it at every exit whose def.exitBoundaries entry
+ *  names a treatment (data/boundaryGates.ts); null (boot order, bare tests)
+ *  = plain portals, nothing lost. */
+type BoundaryGateBuilder = (ctx: GenCtx, at: Vec2, gateId: string) => void;
+let boundaryGateBuilder: BoundaryGateBuilder | null = null;
+export function setBoundaryGateBuilder(b: BoundaryGateBuilder): void { boundaryGateBuilder = b; }
 
 /** Generate a zone's terrain from its layout spec. */
 export function generateLayout(
@@ -1693,6 +1719,18 @@ export function generateLayout(
   // Dispatch to the zone's layout generator (default 'plains' = byte-identical).
   const gen = LAYOUT_GENERATORS[def.layoutType ?? 'plains'] ?? plainsLayout;
   gen(ctx, def);
+  // BOUNDARY GATES: exits crossing an ENCLAVE biome's boundary wear its
+  // monumental gate (data/boundaryGates.ts) — raised for EVERY layout family.
+  // The annotation rides the def (stamped per-load by the World off the same
+  // heat-map prediction the portal labels use). After the base layout so the
+  // façade carves into the final terrain; before landmark/structure rolls so
+  // they honor its reservation. Zones without annotations draw nothing.
+  if (boundaryGateBuilder && def.exitBoundaries) {
+    for (let i = 0; i < ctx.exits.length && i < def.exitBoundaries.length; i++) {
+      const b = def.exitBoundaries[i];
+      if (b) boundaryGateBuilder(ctx, ctx.exits[i], b);
+    }
+  }
   // PLAN fixtures raise AFTER the layout: a grid generator REPLACES ctx.walk,
   // which would wipe a plan fixture's painted walls into ghost geometry (roofs
   // over open rock, unenforced ramparts) if it painted first. Placing here, the
@@ -2894,6 +2932,13 @@ registerStamp('hellforge_anvil', (ctx, spec) => stampSolid(ctx, 'hellforge_anvil
 registerStamp('soul_cage', stampSingle('soul_cage', [11, 15]));
 registerStamp('demon_banner', stampSingle('demon_banner', [11, 15]));
 registerStamp('pyre_heap', stampSingle('pyre_heap', [16, 24]));
+// The boundary-gate + durance kit (arch/pylon are composable-pushed in
+// practice; their stamps keep them legal tileset rows).
+registerStamp('gate_arch', stampSingle('gate_arch', [60, 80]));
+registerStamp('gate_pylon', (ctx, spec) => stampSolid(ctx, 'gate_pylon', spec.radius ?? [20, 28]));
+registerStamp('hate_brazier', stampSingle('hate_brazier', [8, 11]));
+registerStamp('torture_rack', stampSingle('torture_rack', [16, 22]));
+registerStamp('hate_idol', stampSingle('hate_idol', [14, 20]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the

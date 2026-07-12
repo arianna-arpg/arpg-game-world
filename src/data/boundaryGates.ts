@@ -1,0 +1,86 @@
+// ---------------------------------------------------------------------------
+// BOUNDARY GATES — the treatment an exit wears where it crosses an ENCLAVE
+// biome's boundary, as pure data.
+//
+// An enclave biome (BiomeInfo.enclave) walls itself: every zone edge with
+// exactly ONE end inside it carries the enclave's declared gate, seen from
+// BOTH sides — approaching the Durance you face its gate; standing inside,
+// the way back out wears the same stone. The World resolves the treatment at
+// placeExit (the same coordinate-prediction seam the "Uncharted · Lv N"
+// labels ride, so an unminted frontier already knows a gate looms behind
+// it); the layout pipeline erects the TERRAIN half through the registered
+// gate builder (layoutRecipes.carveBoundaryGate); the renderer + transit
+// registry dress the portal itself.
+//
+// One def covers both halves so a new walled biome is ONE row here + an
+// `enclave` tag on its biome — no engine edits. The future biome-MELDING
+// pass rides the same edge-sampling seam with blend bands instead of gates.
+// ---------------------------------------------------------------------------
+
+/** One boundary-gate treatment (registered; ids referenced from
+ *  BiomeInfo.enclave.gate). */
+export interface BoundaryGateDef {
+  id: string;
+  // --- TERRAIN (consumed by carveBoundaryGate) ------------------------------
+  /** Façade half-span across the portal axis (world units; default 230). */
+  halfWidth?: number;
+  /** Gatehouse throat depth into the zone (default 170). */
+  depth?: number;
+  /** Width of the mouth/passage through the façade (default 130). */
+  mouthWidth?: number;
+  /** Façade/flank wall region (a registered true-wall; default 'rampart'). */
+  wallRegion?: string;
+  /** Baked floor under the throat + apron (FLOOR_STYLES id; default 'flagstone'). */
+  floorStyle?: string;
+  /** Walk-under arch doodad spanning the mouth ('' skips; default 'gate_arch'). */
+  archKind?: string;
+  /** Flanking monoliths at the façade's ends ('' skips). */
+  pylonKind?: string;
+  /** Lights flanking the mouth ('' skips; default 'brazier'). */
+  brazierKind?: string;
+  /** Extra dressing scattered along the façade's outer face. */
+  dress?: { kind: string; count: [number, number] }[];
+  // --- PORTAL LOOK (consumed by drawExits / transit) -------------------------
+  /** Ring/glow tint override for the portal (default: zone accent). */
+  accent?: string;
+  /** Label flavor appended to the portal label ("the Durance gapes"). */
+  label?: string;
+}
+
+const BOUNDARY_GATES: Record<string, BoundaryGateDef> = {};
+
+/** Register a boundary-gate treatment (warns on collision — two enclaves may
+ *  SHARE a gate id on purpose, but never silently fight over one). */
+export function registerBoundaryGate(def: BoundaryGateDef): void {
+  if (BOUNDARY_GATES[def.id]) console.warn(`[boundary] re-registering gate '${def.id}' — overriding`);
+  BOUNDARY_GATES[def.id] = def;
+}
+
+/** The treatment for an id (undefined for unknown — callers degrade to a
+ *  plain portal, never crash the load). */
+export function boundaryGateOf(id: string | undefined): BoundaryGateDef | undefined {
+  return id ? BOUNDARY_GATES[id] : undefined;
+}
+
+/** Every registered id (boot validation: enclave biomes must name real gates). */
+export function boundaryGateIds(): string[] { return Object.keys(BOUNDARY_GATES); }
+
+// --- STOCK ROWS ---------------------------------------------------------------
+
+// THE DURANCE GATE: the hate-citadel's mouth — a black-masonry façade pierced
+// by one arched throat, pylons like headstones for giants, cold green fire on
+// the lip, the toll of the halls hung out front. Foreboding is the POINT:
+// the player should read "I am about to enter something's house".
+registerBoundaryGate({
+  id: 'durance_gate',
+  halfWidth: 240, depth: 180, mouthWidth: 130,
+  wallRegion: 'durance_wall', floorStyle: 'tile',
+  archKind: 'gate_arch', pylonKind: 'gate_pylon', brazierKind: 'hate_brazier',
+  dress: [
+    { kind: 'soul_cage', count: [1, 2] },
+    { kind: 'bone_pile', count: [1, 3] },
+    { kind: 'demon_banner', count: [0, 2] },
+  ],
+  accent: '#7de84a',
+  label: 'the Durance gapes',
+});
