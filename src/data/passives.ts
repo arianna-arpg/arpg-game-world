@@ -93,6 +93,10 @@ const nodes: PassiveNode[] = [
   { id: "swb_s4", name: "Critical Strike Multiplier", description: "+15% critical strike multiplier", kind: "small", x: 4728, y: 870, mods: [mod("critMulti", "flat", 0.15)], links: [] },
   { id: "swb_n2", name: "Opportunist", description: "+6% critical strike chance, +25% critical strike multiplier", kind: "notable", x: 4554, y: 1158, mods: [mod("critChance", "flat", 0.06), mod("critMulti", "flat", 0.25)], links: ["swb_s4"] },
   { id: "swb_key", name: "Phantom Step", description: "KEYSTONE: 80% more evasion, but 15% less maximum life", kind: "keystone", x: 2760, y: 30, mods: [mod("evasion", "more", 0.8), mod("life", "more", -0.15)], links: ["swb_n1"] },
+  // THE IRONTURN LANE (STAT_TRADES): the dodger's training re-poured as
+  // plate. Both sides are DIAL STATS (evasionForgone / evasionToArmor), so
+  // the rate can be raised and the renunciation eased by later content.
+  { id: "ironturn", name: "Ironturn", description: "KEYSTONE: renounce all evasion; 60% of it is read again as armor", kind: "keystone", x: 3312, y: 240, mods: [mod("evasionForgone", "flat", 1), mod("evasionToArmor", "flat", 0.6)], links: ["swb_n1"] },
   { id: "dex_start", name: "Way of Dexterity", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 3444, y: 2748, attributes: { dexterity: 3 }, links: [] },
   { id: "rng_s1", name: "Steady Aim", description: "12% increased projectile damage", kind: "small", x: 3564, y: 2460, mods: [mod("damage", "increased", 0.12, ["projectile"])], links: ["dex_start"] },
   { id: "rng_s2", name: "Eagle Eye", description: "+40 accuracy", kind: "small", x: 3750, y: 2784, mods: [mod("accuracy", "flat", 40)], links: ["rng_s3", "dex_start", "cha_start"] },
@@ -306,6 +310,13 @@ const nodes: PassiveNode[] = [
   { id: "cha_start", name: "Way of Charisma", description: "A starting point of the nine-pointed star. Any class may path through it.", kind: "start", x: 3504, y: 3090, attributes: { charisma: 3 }, links: [] },
   { id: "cha_p0", name: "Foresight", description: "+10 maximum insight", kind: "small", x: 4080, y: 3150, mods: [mod("insight", "flat", 10)], links: ["cha_start"] },
   { id: "cha_p1", name: "Read the Room", description: "10% increased evasion, +5 maximum insight", kind: "small", x: 4344, y: 3132, mods: [mod("evasion", "increased", 0.1), mod("insight", "flat", 5)], links: ["cha_p0"] },
+  // THE INVERTED EYE: insight re-read as a ROOTED discipline — stillness
+  // pools it (slowly: the ~6s ramp-in vs the 2.5s wear-off is the price),
+  // motion bleeds it. insightInversion is a continuous dial, so a future
+  // half-inverted hybrid is one ordinary modifier, not a new mechanic;
+  // Settling Stone shows the ramp itself is investable.
+  { id: "cha_key_root", name: "The Unmoved Eye", description: "KEYSTONE: insight pools in STILLNESS instead of motion — planted feet ramp it in over ~6 seconds; walking bleeds it", kind: "keystone", x: 4620, y: 3210, mods: [mod("insightInversion", "flat", 1)], links: ["cha_p1"] },
+  { id: "settling_stone", name: "Settling Stone", description: "Rooted insight ramps in 25% faster; +10 maximum insight", kind: "notable", x: 4860, y: 3132, mods: [mod("insightStillTaper", "increased", -0.25), mod("insight", "flat", 10)], links: ["cha_key_root"] },
   // The ES-DoT lever, socketed into the tree: baseline shields no longer
   // blank damage over time — this keystone BUYS a big slice of it back.
   { id: "wil_x1", name: "Still Mind", description: "KEYSTONE: While you have energy shield, take 60% less damage over time. +15 maximum energy shield", kind: "keystone", x: 1176, y: 2796, mods: [mod("esDotResist", "flat", 0.6), mod("energyShield", "flat", 15)], links: ["node_42", "node_52"] },
@@ -324,6 +335,10 @@ const nodes: PassiveNode[] = [
   // on-hit refill + overcharge crest, and the break/re-arm proc payoffs.
   { id: "forged_rhythm", name: "Forged Rhythm", description: "25% increased poise recovery; your broken poise re-arms at 75% of maximum", kind: "notable", x: 2220, y: 3168, mods: [mod("poiseRegenPct", "increased", 0.25), mod("poiseRearmAt", "flat", -0.25)], links: ["for_p1"] },
   { id: "rising_crest", name: "Rising Crest", description: "+2 poise gained on hit; poise gains can overcharge 20% past maximum", kind: "notable", x: 2004, y: 3054, mods: [mod("poiseOnHit", "flat", 2), mod("poiseOvercharge", "flat", 0.2)], links: ["forged_rhythm"] },
+  // THE BONEWRIGHT LANE (STAT_TRADES): the mage-shield renounced for
+  // footing — the paladin gone full bonk. Dials, not flags: esToPoise and
+  // esForgone are stats later content can push either way.
+  { id: "bonewright_oath", name: "Bonewright Oath", description: "KEYSTONE: renounce all energy shield; 45% of it is read again as maximum poise", kind: "keystone", x: 1770, y: 3300, mods: [mod("esForgone", "flat", 1), mod("esToPoise", "flat", 0.45)], links: ["rising_crest"] },
   { id: "shatterplate_doctrine", name: "Shatterplate Doctrine", description: "+20 maximum poise; your poise breaking hurls the bar's shards as shrapnel (Shatterplate)", kind: "notable", x: 2124, y: 3906, mods: [mod("poise", "flat", 20), mod("proc_shatterplate", "flat", 1)], links: ["for_p0"] },
   { id: "broken_fury", name: "Broken Fury", description: "While your poise is broken, deal 15% more damage; your poise breaking rouses Unbroken Wrath", kind: "notable", x: 1932, y: 4056, mods: [mod("damage", "more", 0.15, undefined, "poiseBroken"), mod("proc_unbroken_wrath", "flat", 1)], links: ["shatterplate_doctrine"] },
   { id: "twice_quenched", name: "Twice-Quenched Steel", description: "Your poise re-arming tempers it (Tempered Re-arm); +10 maximum poise", kind: "notable", x: 2364, y: 3018, mods: [mod("proc_tempered_rearm", "flat", 1), mod("poise", "flat", 10)], links: ["forged_rhythm"] },

@@ -2303,7 +2303,7 @@ export interface GuardSpec {
  *  overcharge headroom all honored); a POISE drain routes damagePoise, so
  *  brackets ring on the way down and a floor-0 pump genuinely BREAKS its own
  *  bar (Sundered and all — the reckless build's bargain). */
-export type ConduitPool = 'life' | 'mana' | 'es' | 'poise' | 'ward' | 'guard';
+export type ConduitPool = 'life' | 'mana' | 'es' | 'poise' | 'ward' | 'guard' | 'insight';
 
 /** THE CONDUIT — a continuous resource PUMP: while the host skill is ENGAGED
  *  (any HELD cast — guard, channel, charge, overcharge — or a burning

@@ -30,7 +30,7 @@ import {
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardSpec,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
   type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
-  type TetherSpec,
+  type TetherSpec, type ConduitSpec,
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
 import { autoPlace, overlappingItems, placeAt, removeFromBag } from './inventory';
@@ -9155,6 +9155,7 @@ export class World {
       if (g.attributesPct) for (const a of ATTRIBUTE_IDS) attrsPct[a] += g.attributesPct[a] ?? 0;
       if (g.mods) passiveMods.push(...g.mods);
     };
+    const wornConduits: ConduitSpec[] = [];
     for (const id of m.allocated) {
       const node = PASSIVE_NODES[id];
       if (!node) continue;
@@ -9165,10 +9166,16 @@ export class World {
       if (node.choice) {
         for (const oid of chosenOf(m.choices, id)) {
           const opt = choiceOptionOf(node, oid);
-          if (opt) fold(opt);
+          if (opt) {
+            fold(opt);
+            // WORN CONDUITS (option.conduit): actor-level pumps — derived
+            // state exactly like the graft lane below, rebuilt every recalc.
+            if (opt.conduit) wornConduits.push(opt.conduit);
+          }
         }
       }
     }
+    p.wornConduits = wornConduits.length ? wornConduits : undefined;
     // GEAR: attribute-granting lines (+12 Strength — stat names registered in
     // ATTRIBUTES, not STAT_DEFS) are ATTRIBUTE grants, not sheet stats. They
     // join the attrs accumulation here so they flow through the ONE
@@ -12106,6 +12113,9 @@ export class World {
         if (opt.graft && SUPPORTS[opt.graft.support] && a.skills[0]) {
           (a.skills[0].grafts ??= []).push({ def: SUPPORTS[opt.graft.support], level: opt.graft.level ?? 1 });
         }
+        // A boon-rolled WORN CONDUIT rides the same actor-level lane the
+        // player's allocations use — parity by construction.
+        if (opt.conduit) (a.wornConduits ??= []).push(opt.conduit);
       }
       if (mods.length) a.sheet.setSource(`boon:${group.id}`, mods);
     }

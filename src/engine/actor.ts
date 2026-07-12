@@ -742,6 +742,14 @@ export class Actor {
    *  incoming hits to slip the brunt, refilled only while MOVING. The live
    *  reduction is insightDR × insightMomentum() (the velocity taper). */
   insight = 0;
+  /** WORN CONDUITS — actor-level resource pumps granted by ALLOCATIONS
+   *  (PassiveChoiceOption.conduit; monster boons ride the same seam), not
+   *  sockets: no gem slot spent, no skill binding. DERIVED state — the
+   *  meta recalc rebuilds it, never saved. Ticked every frame at the tail
+   *  of updateConduits; the pool adapters are the whole engagement gate
+   *  (a guard endpoint reads 0/0 off-stance and idles; an always-valid
+   *  pair genuinely runs always — that is what WORN means). */
+  wornConduits?: ConduitSpec[];
   /** ENDURANCE — the break-less pool (D4-Fortify shape): flat enduranceDR
    *  while ANY of it holds, spending what it prevents; empty = nothing.
    *  No break state, no status — the deliberate contrast with poise. */
@@ -1092,11 +1100,24 @@ export class Actor {
   /** The insight VELOCITY TAPER: 1 while moving (within the grace window),
    *  easing to 0 over the insightTaper stat's seconds once planted. Dashes,
    *  leaps, and live knockback all count as motion (they zero idleFor), so
-   *  the momentum window survives a dodge-roll through the pack. */
+   *  the momentum window survives a dodge-roll through the pack.
+   *  THE INVERSION (insightInversion, 0..1): a CONTINUOUS blend toward the
+   *  opposite reading — stillness ramps momentum IN over the (deliberately
+   *  longer) insightStillTaper stat's seconds, and motion reads as 0. At 1
+   *  the curves swap outright (the rooted duelist: plant, settle, trade);
+   *  between, both flows contribute their share — a dial, not a flag, so
+   *  half-inverted hybrids and "inverted while guarding" conditionals are
+   *  all ordinary modifiers. Refill rides this same value (updateTimers),
+   *  so an inverted pool genuinely FILLS while planted. */
   insightMomentum(): number {
     const idle = this.idleFor - DEFENSE_CFG.insight.graceWindow;
-    if (idle <= 0) return 1;
-    return Math.max(0, 1 - idle / Math.max(0.1, this.sheet.get('insightTaper')));
+    const moving = idle <= 0 ? 1
+      : Math.max(0, 1 - idle / Math.max(0.1, this.sheet.get('insightTaper')));
+    const inv = Math.min(1, this.sheet.get('insightInversion'));
+    if (inv <= 0) return moving;
+    const still = idle <= 0 ? 0
+      : Math.min(1, idle / Math.max(0.1, this.sheet.get('insightStillTaper')));
+    return moving * (1 - inv) + still * inv;
   }
 
   /** Drain the poise bar (damage.ts mitigation + any future data source).
@@ -1526,6 +1547,16 @@ export class Actor {
       const eff = this.sheet.get('conduitEfficiency', tags, extra);
       if (rate <= 0 || eff <= 0) continue;
       for (const spec of specs) this.tickConduit(spec, dt, rate, eff);
+    }
+    // WORN pumps (allocation-granted, no socket): stats read UNTAGGED —
+    // they belong to no skill, so skill-tag-filtered investment stays with
+    // the skill lane while gear-wide dials reach both.
+    if (this.wornConduits?.length) {
+      const rate = this.sheet.get('conduitRate');
+      const eff = this.sheet.get('conduitEfficiency');
+      if (rate > 0 && eff > 0) {
+        for (const spec of this.wornConduits) this.tickConduit(spec, dt, rate, eff);
+      }
     }
   }
 
@@ -2150,9 +2181,11 @@ export class Actor {
         this.poiseBroken = false;
       }
 
-      // INSIGHT refills with MOTION only: the regen rides the same momentum
-      // taper as the reduction, so a sprint refills briskly, the lingering
-      // window trickles, and a statue reads nothing.
+      // INSIGHT refills along its MOMENTUM: the regen rides the same taper
+      // as the reduction, so a sprint refills briskly, the lingering window
+      // trickles, and a statue reads nothing — unless the INVERSION dial is
+      // set, in which case the statue is the one being paid (the rooted
+      // stance fills while planted; insightMomentum owns the blend).
       const maxInsight = this.maxInsight();
       if (maxInsight > 0) {
         const momentum = this.insightMomentum();
@@ -2574,6 +2607,26 @@ const CONDUIT_POOLS: Record<ConduitPool, {
       return before - a.poise;
     },
     feed: (a, amt) => a.gainPoise(amt),
+  },
+  insight: {
+    // The momentum pool: absent (max 0) on the uninvested... except insight
+    // ships with a universal base — most actors CAN pump it. Drains touch
+    // only the METER, never the momentum taper (stillness/motion stays the
+    // bearer's business); feeds clamp at max — there is no gain gate to
+    // route (the refill in updateTimers writes directly, and so do we).
+    cur: a => a.insight,
+    max: a => a.maxInsight(),
+    room: a => Math.max(0, a.maxInsight() - a.insight),
+    drain: (a, amt) => {
+      const take = Math.min(amt, Math.max(0, a.insight));
+      a.insight -= take;
+      return take;
+    },
+    feed: (a, amt) => {
+      const before = a.insight;
+      a.insight = Math.min(a.maxInsight(), a.insight + amt);
+      return a.insight - before;
+    },
   },
   ward: {
     // Uncapped pool: its decay is its cap. %-drains read the CURRENT as

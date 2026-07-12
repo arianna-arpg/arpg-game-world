@@ -3614,6 +3614,16 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4, minDropLevel: 10,
   },
 
+  stillmind_conduit: {
+    id: 'stillmind_conduit', name: 'Stillmind Conduit',
+    description: 'While the supported guard HOLDS, your INSIGHT decants into the wall — the watcher\'s momentum, spent as masonry. Sings loudest under an inverted eye: root, let stillness pool the mind, and let the mind hold the line.',
+    color: '#b0c8e8', requiresTags: ['guard'],
+    conduit: { from: 'insight', to: 'guard', drainPct: 0.1, ratio: 2.2, floor: 0.2 },
+    mods: [],
+    perLevel: [mod('conduitEfficiency', 'increased', 0.07)],
+    weight: 4, minDropLevel: 10,
+  },
+
   // --- The breaker suite: aim your damage at a DEFENSE LAYER ----------------
   // The enemy-defense-textures doctrine read from the attacker's side: each
   // gem tunes WHICH layer the supported skill's damage bites — poise bars,

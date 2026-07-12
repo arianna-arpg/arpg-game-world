@@ -85,6 +85,34 @@ export const DAMAGE_COLOR: Record<DamageType, string> = {
  *  BASELINE — the single-hop golden rule (see StatSheet.compute). */
 export type ModKind = 'flat' | 'increased' | 'more' | 'override' | 'link';
 
+/** STAT TRADES — the swap fabric: `to` GAINS rate × the source's baseline
+ *  while `from` is FORGONE by a fraction — and BOTH dials are ordinary
+ *  registered stats (rateStat / forgoStat), so a keystone is two plain
+ *  mods, a partial conversion is an affix-sized value, and the dials
+ *  themselves can be modified by anything that writes a modifier ("20%
+ *  increased Evasion Read as Armor" genuinely works). No flags anywhere.
+ *  Reads follow the link golden rules (StatSheet.compute): the grant reads
+ *  the source at its links-and-trades-disabled, PRE-FORGO baseline
+ *  (single-hop — no chains, no cycles), joins the target's BASE layer (its
+ *  own increased/more scale it), and the forgo scales the source's FINAL
+ *  value (registry clamps still apply after). A new swap is ONE row here
+ *  plus its two dial stats in STAT_DEFS — nothing else. Dial stats must
+ *  never themselves be a trade's from/to (validate.ts enforces). */
+export interface StatTrade {
+  from: string;
+  to: string;
+  /** The GAIN dial: `to` += (this stat's value) × from's baseline. */
+  rateStat: string;
+  /** The FORGO dial: `from` ×= 1 − clamp01(this stat's value). */
+  forgoStat: string;
+}
+export const STAT_TRADES: StatTrade[] = [
+  // The iron-reflexes lane: the dodger's training re-read as plate.
+  { from: 'evasion', to: 'armor', rateStat: 'evasionToArmor', forgoStat: 'evasionForgone' },
+  // The bonewright lane: the mage-shield renounced for footing.
+  { from: 'energyShield', to: 'poise', rateStat: 'esToPoise', forgoStat: 'esForgone' },
+];
+
 /**
  * Actor-state conditions a modifier can demand ("40% more damage while on
  * low life"). The actor recomputes its active set each frame and pushes it
@@ -277,6 +305,16 @@ export const STAT_DEFS: Record<string, StatDef> = {
   insight:        { label: 'Maximum Insight', base: 30, min: 0 },
   /** Damage reduction at FULL momentum (tapers with it). */
   insightDR:      { label: 'Insight Damage Reduction', base: 0.5, min: 0, max: 0.9, percent: true },
+  /** THE INVERSION DIAL (0..1): blends insight's momentum source from
+   *  MOTION (0, the default) to STILLNESS (1) — at 1, planting your feet
+   *  ramps momentum in over insightStillTaper seconds and walking bleeds
+   *  it; between, both flows blend. A dial, not a flag: half-inverted
+   *  hybrids are a real allocation. */
+  insightInversion: { label: 'Insight Inversion', base: 0, min: 0, max: 1, percent: true },
+  /** Seconds of unbroken STILLNESS to reach full inverted momentum —
+   *  deliberately LONGER than insightTaper's wear-off (the rooted stance
+   *  is EARNED slowly, lost fast; both ends are investable stats). */
+  insightStillTaper: { label: 'Rooted Insight Ramp', base: 6, min: 0.5 },
   /** Fraction of max insight recovered per second of MOVEMENT. Deliberately
    *  lean at base: an uninvested pool runs dry in the first exchange and
    *  stays functionally dry — investment in the pool raises the ABSOLUTE
@@ -473,6 +511,18 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** Exchange-rate multiplier on every conduit — more delivered per point
    *  drained. The efficiency lever gems, gear and passives invest in. */
   conduitEfficiency: { label: 'Conduit Efficiency', base: 1, min: 0 },
+
+  // STAT-TRADE DIALS (see STAT_TRADES): both sides of every swap are plain
+  // stats — a keystone writes them flat, gear scales them, and conditional
+  // or tag-filtered versions work like any other modifier.
+  /** Fraction of evasion's baseline READ AS armor (the gain dial). */
+  evasionToArmor: { label: 'Evasion Read as Armor', base: 0, min: 0 },
+  /** Fraction of evasion RENOUNCED (the forgo dial; 1 = all of it). */
+  evasionForgone: { label: 'Evasion Forgone', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of energy shield's baseline READ AS maximum poise. */
+  esToPoise:      { label: 'Energy Shield Read as Poise', base: 0, min: 0 },
+  /** Fraction of energy shield RENOUNCED (1 = the whole lattice). */
+  esForgone:      { label: 'Energy Shield Forgone', base: 0, min: 0, max: 1, percent: true },
 
   // Thorns — the retaliation suite (#14). All victim-side.
   /** Flat damage returned to ANY attacker whose hit lands on you —
@@ -1193,7 +1243,30 @@ export class StatSheet {
       }
     }
 
+    // STAT TRADES, the GAIN side (see STAT_TRADES): grants mirror links —
+    // base-layer join, baseline source read. The baseline is PRE-FORGO
+    // (noLinks disables the forgo below too), so a full forgo still
+    // converts the whole pool: Iron-Reflexes math, by construction.
+    if (!noLinks) {
+      for (const t of STAT_TRADES) {
+        if (t.to !== stat) continue;
+        const rate = this.compute(t.rateStat, contextTags, extra);
+        if (rate <= 0) continue;
+        flat += rate * this.compute(t.from, contextTags, extra, undefined, true);
+      }
+    }
+
     let value = override !== undefined ? override : (base + flat) * (1 + increased) * moreMult;
+    // STAT TRADES, the FORGO side: the source keeps 1 − forgone. Applied to
+    // the FINAL fold (after increased/more — renouncing means renouncing
+    // the investments too), before the registry clamps.
+    if (!noLinks) {
+      for (const t of STAT_TRADES) {
+        if (t.from !== stat) continue;
+        const forgone = this.compute(t.forgoStat, contextTags, extra);
+        if (forgone > 0) value *= Math.max(0, 1 - Math.min(1, forgone));
+      }
+    }
     if (def) {
       if (def.min !== undefined) value = Math.max(def.min, value);
       if (def.max !== undefined) value = Math.min(def.max, value);
@@ -1264,6 +1337,12 @@ const STAT_BLURBS: Record<string, string> = {
   guardStrength: 'How much punishment a raised guard absorbs before it breaks.',
   conduitRate: 'How fast your conduits pump — the drain side of every running resource conversion.',
   conduitEfficiency: 'How much a conduit delivers per point it drains — the exchange rate on every running conversion.',
+  evasionToArmor: 'This fraction of your evasion is read again as armor — the swap\'s gain dial.',
+  evasionForgone: 'This fraction of your evasion is renounced outright — the swap\'s forgo dial.',
+  esToPoise: 'This fraction of your energy shield is read again as maximum poise — the swap\'s gain dial.',
+  esForgone: 'This fraction of your energy shield is renounced outright — the swap\'s forgo dial.',
+  insightInversion: 'Blends what feeds insight: 0 = motion (the default), 1 = stillness — planted feet ramp it in, walking bleeds it.',
+  insightStillTaper: 'Seconds of unbroken stillness to reach full inverted momentum — the rooted stance is earned slowly.',
   energyShield: 'A second life pool that soaks damage first and recharges after a quiet moment — but a wound mid-recharge interrupts the flow and the wait starts over.',
   esRechargeSteadfast: 'The chance a wound fails to interrupt a running energy shield recharge.',
   esDotResist: 'How much of a damage-over-time seep the shield stops before it reaches life.',

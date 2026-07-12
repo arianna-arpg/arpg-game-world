@@ -25,6 +25,7 @@
 // ---------------------------------------------------------------------------
 
 import { gaugeMod, mod, type Attributes, type Modifier } from '../engine/stats';
+import type { ConduitSpec } from '../engine/skills';
 
 /** A GRAFT: a support-gem payload a passive power can carry, BINDABLE onto
  *  one learned skill (the Grim Dawn devotion-binding shape). The support is
@@ -57,6 +58,13 @@ export interface PassiveChoiceOption {
   mods?: Modifier[];
   /** Bindable skill-graft this option grants while chosen. */
   graft?: GraftSpec;
+  /** A WORN CONDUIT this option grants while chosen (see ConduitSpec /
+   *  Actor.wornConduits): an actor-level resource pump — no socket spent,
+   *  no skill binding. The pool adapters gate it (a guard endpoint idles
+   *  off-stance by construction), and the conduitRate / conduitEfficiency
+   *  stats scale it like every other pump. The guardian's poise-fed walls
+   *  WITHOUT the gem slot: the opt-in the support economy doesn't tax. */
+  conduit?: ConduitSpec;
 }
 
 export interface PassiveChoiceGroup {
@@ -197,7 +205,9 @@ export function validatePassiveChoices(
       if (seen.has(o.id)) warn(`choice group ${g.id}: duplicate option id '${o.id}'`);
       seen.add(o.id);
       if (!o.name || !o.description) warn(`choice group ${g.id}: option '${o.id}' missing name/description`);
-      if (!o.attributes && !o.attributesPct && !o.mods?.length) {
+      // Structured payloads (a bindable graft, a worn conduit) are grants
+      // too — an option carrying only one of those is fully alive.
+      if (!o.attributes && !o.attributesPct && !o.mods?.length && !o.graft && !o.conduit) {
         warn(`choice group ${g.id}: option '${o.id}' grants nothing`);
       }
     }
@@ -386,6 +396,12 @@ registerChoiceGroup({
     { id: 'shield', name: 'Shield Doctrine', description: '+6% block chance', mods: [mod('blockChance', 'flat', 0.06)] },
     { id: 'anvil', name: 'Anvil Doctrine', description: '+25 maximum poise', mods: [mod('poise', 'flat', 25)] },
     { id: 'salve', name: 'Salve Doctrine', description: '15% of hits that land on your life flow back as healing over 6s', mods: [mod('recuperate', 'flat', 0.15)] },
+    // WORN CONDUITS (option.conduit): the pump WITHOUT the socket — the
+    // allocation opt-in beside the gem economy. The pool adapters gate
+    // them (a guard endpoint idles off-stance), and conduitRate /
+    // conduitEfficiency investment scales them like every other pump.
+    { id: 'communion', name: 'Communion Doctrine', description: 'While any guard holds, your poise drains steadily into the wall — a worn conduit: no socket, no binding; it stops at a quarter of your bar', conduit: { from: 'poise', to: 'guard', drainPct: 0.06, ratio: 1.8, floor: 0.25 } },
+    { id: 'wellspring', name: 'Wellspring Doctrine', description: 'Spare mana seeps continuously into your poise — a worn conduit that keeps a 40% mana reserve and idles while the bar is whole', conduit: { from: 'mana', to: 'poise', drainPct: 0.03, ratio: 1.0, floor: 0.4 } },
   ],
 });
 

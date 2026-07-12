@@ -21,7 +21,7 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunement
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
 import { CHOICE_GROUPS, validatePassiveChoices } from './passiveChoices';
 import { validatePassiveRealms } from './passiveRealms';
-import { STAT_DEFS } from '../engine/stats';
+import { STAT_DEFS, STAT_TRADES } from '../engine/stats';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, type StampSpec, type StructureRoll } from './zones';
@@ -650,6 +650,33 @@ export function validateContent(): void {
         && !sup.requiresTags?.includes('guard')) {
         warn(`support ${sup.id}: conduit touches 'guard' but the gem doesn't require the 'guard' tag — `
           + `off-stance hosts read the endpoint as 0 forever`);
+      }
+    }
+    // WORN conduits (PassiveChoiceOption.conduit) get the same spec sanity.
+    // No engagement row: the pool adapters ARE the gate for a worn pump
+    // (a guard endpoint reads 0/0 off-stance and idles by construction).
+    for (const g of Object.values(CHOICE_GROUPS)) {
+      for (const opt of g.options) {
+        if (!opt.conduit) continue;
+        for (const p of specProblems(opt.conduit)) {
+          warn(`choice ${g.id}/${opt.id}: conduit ${p}`);
+        }
+      }
+    }
+  }
+
+  // THE STAT-TRADE REGISTRY (STAT_TRADES): every endpoint and dial must be
+  // a registered stat, and a DIAL must never itself be a trade endpoint —
+  // that is the recursion the single-hop fold can't otherwise see.
+  {
+    const endpoints = new Set(STAT_TRADES.flatMap(t => [t.from, t.to]));
+    for (const t of STAT_TRADES) {
+      for (const s of [t.from, t.to, t.rateStat, t.forgoStat]) {
+        if (!STAT_DEFS[s]) warn(`stat trade ${t.from}->${t.to}: '${s}' is not a registered stat`);
+      }
+      if (t.from === t.to) warn(`stat trade ${t.from}->${t.to}: trades a stat into itself`);
+      if (endpoints.has(t.rateStat) || endpoints.has(t.forgoStat)) {
+        warn(`stat trade ${t.from}->${t.to}: a dial stat is also a trade endpoint — recursive fold`);
       }
     }
   }
