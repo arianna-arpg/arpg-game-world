@@ -47,6 +47,9 @@ export const eventsTab: DevTabDef = {
       forceEvent('Holdfast (toll gate here)', (w) => w.devForceHoldfast()),
       forceEvent('Mycelia (bloom here)', (w, v, z) => w.sim.myceliaField?.devIgnite(v, z) ?? false),
       forceEvent('Haunting (grief here)', (w, v, z) => w.sim.hauntField?.devIgnite(v, z) ?? false),
+      forceEvent('Breach (tear here)', (w, v, z) => (w.sim.breachField?.devIgnite(v, z) ?? null) !== null),
+      forceEvent('Amalgamation (Bonewright here)', (w, v, z) => w.sim.amalgamationField?.devOpen(v, z) ?? false),
+      forceEvent('Vendetta (post a writ)', (w, v, z) => w.sim.vendettaField?.devIgnite(v, z) ?? false),
     );
 
     // Incursion + incubation have bespoke signatures (a far landing / a counter).
@@ -122,10 +125,44 @@ export const eventsTab: DevTabDef = {
       }
     };
 
+    // --- GATE INSPECTOR: the resolved per-package gates, live -----------------
+    // The one QA window into the weighting math: what resolveGates actually
+    // produced for the character's level (share / pressure / the three muls),
+    // straight off the sim's memo — if a package "never fires", this says
+    // whether its gate is even open before anyone blames its overlay.
+    const gateWrap = document.createElement('div');
+    css(gateWrap, { fontSize: '11px', whiteSpace: 'pre', fontFamily: 'monospace', lineHeight: '1.5' });
+    const syncGates = (): void => {
+      const w = runActive();
+      if (!w) { gateWrap.textContent = '(start a run first)'; return; }
+      const gates = w.sim.gatesFor(w.player.level);
+      const rows: string[] = [
+        `lv ${w.player.level} · ` +
+        `freq rate ${w.sim.effectiveFrequency().rate}× / caps ${w.sim.effectiveFrequency().concurrency}× / size ${w.sim.effectiveFrequency().severity}×`,
+        'package            act share press  ign×  sev×  cap×',
+      ];
+      for (const e of w.manifest.packages) {
+        const g = gates.get(e.id);
+        if (!g) continue;
+        rows.push(
+          e.id.padEnd(18)
+          + (g.active ? ' ON ' : ' –  ')
+          + g.share.toFixed(2).padStart(5)
+          + g.pressure.toFixed(2).padStart(6)
+          + g.ignitionMul.toFixed(2).padStart(6)
+          + g.severityMul.toFixed(2).padStart(6)
+          + g.concurrencyMul.toFixed(2).padStart(6),
+        );
+      }
+      gateWrap.textContent = rows.join('\n');
+    };
+    const gateRefresh = btn('Refresh gates', syncGates);
+
     pane.append(
       section('Force event in CURRENT zone'), spawnRow,
       section('Live event frequency (this run)'), freqWrap, freqReset,
+      section('Resolved package gates (live)'), gateWrap, gateRefresh,
     );
-    return { el: pane, onShow: syncFreq };
+    return { el: pane, onShow: () => { syncFreq(); syncGates(); } };
   },
 };
