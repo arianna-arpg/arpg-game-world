@@ -23,7 +23,7 @@ import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf }
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
@@ -12396,6 +12396,14 @@ export class World {
     return caster.canUse(inst);
   }
 
+  /** The live SELF-STACK pile on a slot (the HUD ticks): count and cap,
+   *  or null when no pile rides the instance. */
+  selfStacksOf(inst: SkillInstance): { count: number; max: number } | null {
+    const spec = instanceSelfStack(inst);
+    if (!spec) return null;
+    return { count: Math.min(spec.maxStacks, inst.state?.stackN ?? 0), max: spec.maxStacks };
+  }
+
   /** Banked UNLEASH seals on a slot (the HUD tics): seals accrue per
    *  UNLEASH_CFG.interval seconds the skill rests, capped by the stat.
    *  Null when nothing on the slot banks seals — the lane stays free. */
@@ -13210,12 +13218,17 @@ export class World {
       if (frac >= 0.72) {
         cs.empowered = 1 + (timing?.bonus ?? 0.7);
         this.text(caster.pos, 'Perfect!', '#ffd700', 14);
+        // The made window IS an event — skill expression as a trigger.
+        this.rollTriggers(caster, 'flawless',
+          { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
       }
     } else if (cs.mode === 'timed' && !cs.pressUsed) {
       cs.pressUsed = true;
       if (cs.indicatorAt !== undefined && Math.abs(frac - cs.indicatorAt) <= 0.08) {
         cs.empowered = 1 + (timing?.bonus ?? 1.2);
         this.text(caster.pos, 'Flawless!', '#ffd700', 14);
+        this.rollTriggers(caster, 'flawless',
+          { aim: vec(cs.aim.x, cs.aim.y), sourceInst: cs.inst });
       }
     } else if (cs.mode === 'multitude') {
       cs.presses = Math.min(15, (cs.presses ?? 1) + 1);
@@ -14720,6 +14733,15 @@ export class World {
         // comet travels SLOWER — remaining is TIME, so distance holds.
         const dashSpeed = d.speed * (opts.speedMult ?? 1);
         caster.dash = { dir: caster.facing, speed: dashSpeed, remaining: d.distance / dashSpeed };
+        // PHASING dash (DashDelivery.phase — the Iai draw): the ordinary
+        // 'phasing' STATUS for the flight plus a breath, so the body goes
+        // THROUGH the crowd regardless of mass or poise (separateActors
+        // honors the stat) and the icon tells the truth about why.
+        if (d.phase) {
+          const want = d.distance / dashSpeed + 0.25;
+          caster.applyStatus('phasing', 0,
+            want / (STATUS_DEFS['phasing']?.duration ?? 4), def.name);
+        }
         // Damage along the corridor is applied during movement (update()).
         (caster as Actor & { dashSkill?: SkillInstance }).dashSkill = inst;
         (caster as Actor & { dashHits?: Set<number> }).dashHits = new Set();
@@ -15436,6 +15458,18 @@ export class World {
     // spends one round off every consumeOnUse buff (same predicate as
     // remnants — echo/pulse/repeat executions never eat a round).
     if (!opts.noRepeat && !opts.noCooldown) this.consumeAmmunition(caster, def);
+    // SELF-STACKS (instanceSelfStack): every completed REAL use feeds the
+    // skill's OWN pile — mods that exist only inside this instance's fold
+    // (the per-skill frenzy). Decay bleeds in Actor.updateTimers; echo
+    // ghosts and pulses never feed it (same predicate as the cycle below).
+    if (!opts.noRepeat && !opts.noCooldown) {
+      const ss = instanceSelfStack(inst);
+      if (ss) {
+        const st = (inst.state ??= {});
+        st.stackN = Math.min(ss.maxStacks, (st.stackN ?? 0) + 1);
+        st.stackT = ss.duration;
+      }
+    }
     // CAST CYCLE (SkillDef.castCycle): every Nth completed REAL use grants
     // the cycle's buff, then the count resets — "the third cast imbues".
     if (!opts.noRepeat && !opts.noCooldown && def.castCycle) {

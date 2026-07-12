@@ -30,6 +30,7 @@ export const MONSTER_THEMES: Record<string, string> = {
   bandit_bruiser: 'bandit',
   bulwark_thane: 'bandit',
   bandit_wardcaster: 'bandit',
+  steppe_ronin: 'bandit',
   zombie: 'undead',
   skeleton_warrior: 'undead',
   skeleton_archer: 'undead',

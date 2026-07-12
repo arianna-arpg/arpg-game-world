@@ -1960,6 +1960,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 28, faction: 'bandit',
     detection: 0.9,
   },
+  // The masterless duelist: a timed-bar READER in enemy hands. The AI's
+  // finesse system presses Iai's flawless window (the same Flawless! the
+  // player earns — you can hear it practicing), the phasing draw carries
+  // it THROUGH your front line, and its kata ramps itself per-skill like
+  // any player's would. Full fabric parity: nothing here is bespoke.
+  steppe_ronin: {
+    id: 'steppe_ronin', name: 'Steppe Ronin',
+    color: '#c8b8a0', shape: 'trapezoid', radius: 13, look: 'bandit',
+    base: { life: 66, moveSpeed: 148, accuracy: 112, evasion: 50, insight: 30, mana: 50, manaRegen: 5 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['iai_strike', 'thousand_cuts'],
+    xp: 30, faction: 'bandit',
+    brain: { type: 'skirmish', withdraw: 1.1, skillUse: { finesse: { chance: 0.7 } } },
+    detection: 1.1,
+  },
   bandit_powder_witch: {
     id: 'bandit_powder_witch', name: 'Powder Witch',
     color: '#8ec8b0', shape: 'star', radius: 13, look: 'bandit_powder_witch',

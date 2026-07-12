@@ -3834,6 +3834,31 @@ export class Renderer {
             }
           }
         }
+        // SELF-STACK ticks (World.selfStacksOf): the skill's OWN pile as
+        // small chevrons climbing the LEFT edge — the blade's heat, read
+        // at the button that built it. Bright = a held stack, hollow =
+        // room to ramp; the pile bleeds while the skill rests, and these
+        // bleed with it. Left shore: seals keep the bottom, banks the top.
+        {
+          const pile = world.selfStacksOf(inst);
+          if (pile) {
+            for (let c = 0; c < Math.min(pile.max, 8); c++) {
+              const sx = x + 6, sy = by + slot - 14 - c * 7;
+              ctx.beginPath();
+              ctx.moveTo(sx - 3, sy + 2.6);
+              ctx.lineTo(sx, sy - 2.6);
+              ctx.lineTo(sx + 3, sy + 2.6);
+              if (c < pile.count) {
+                ctx.strokeStyle = '#e8b458';
+                ctx.lineWidth = 2;
+              } else {
+                ctx.strokeStyle = 'rgba(232,180,88,0.35)';
+                ctx.lineWidth = 1;
+              }
+              ctx.stroke();
+            }
+          }
+        }
         // FOUNT PIPS (ChargeDef.hud 'slot'): a spender's bank rides its
         // own slot — one registry-tinted disc per banked sip, hollow up
         // to the folded cap, so "how many drinks are left" reads at the

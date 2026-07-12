@@ -359,6 +359,15 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('triggerChance', 'flat', 0.05)],
     weight: 4, minDropLevel: 10,
   },
+  cast_on_flawless: {
+    id: 'cast_on_flawless', name: 'Cast on Flawless',
+    description: 'Socket this into a QUICK skill and every PERFECT or FLAWLESS press you land casts it for you — read the bar, and the read answers with a second blade. Its key only arms and disarms it. Skill expression as a trigger: the window you make is the spell you get.',
+    color: '#ffd700', excludeTags: ['channel', 'guard', 'aura', 'movement'],
+    trigger: { on: 'flawless', chance: 1 },
+    mods: [],
+    perLevel: [mod('damage', 'more', 0.04)],
+    weight: 4, minDropLevel: 10,
+  },
   cast_while_guarding: {
     id: 'cast_while_guarding', name: 'Cast while Guarding',
     description: 'Socket this into a QUICK skill and it fires itself on a SLOW, patient beat while you hold ANY guard — sorcery kept burning behind the shield wall, hands never leaving the straps. Its key only arms and disarms it. This is the automated lane; Guarded Casting is the deliberate one.',
@@ -3566,6 +3575,25 @@ export const SUPPORTS: Record<string, SupportDef> = {
     ],
     perLevel: [mod('esShred', 'more', 0.08), mod('apply_voided', 'flat', 0.03)],
     weight: 5,
+  },
+
+  // --- The kata gem: rent the per-skill frenzy to any blade -----------------
+  building_rhythm: {
+    id: 'building_rhythm', name: 'Building Rhythm',
+    description: 'The supported skill TEACHES ITSELF: each cast grants a stack that sharpens and quickens THAT SKILL ALONE — six deep, and the whole pile DROPS after two idle seconds. Any blade can learn the kata; none may rest. (Channels hold, they don\'t recast — they refuse this gem.)',
+    color: '#e8b458',
+    excludeTags: ['channel', 'aura'],
+    selfStack: {
+      mods: [
+        mod('damage', 'increased', 0.05),
+        mod('attackSpeed', 'increased', 0.03),
+        mod('castSpeed', 'increased', 0.03),
+      ],
+      maxStacks: 6, duration: 2, decay: 'all',
+    },
+    mods: [],
+    perLevel: [mod('damage', 'increased', 0.02)],
+    weight: 5, minDropLevel: 8,
   },
 };
 

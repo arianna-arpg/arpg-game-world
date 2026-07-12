@@ -861,20 +861,26 @@ export const SKILLS: Record<string, SkillDef> = {
   },
 
   // The DISARM hard-cast: one drawing cut, and the sword arm forgets.
+  // REWORKED (the samurai pass): the draw is now a TIMED bar and the cut
+  // is a PHASING dash — the anime iai in engine grammar. castMode 'timed'
+  // + SkillDef.timing tunes the innate window; DashDelivery.phase grants
+  // the phasing status for the flight (through the crowd, mass and poise
+  // be damned); the corridor cuts and DISARMS everything it passes.
   iai_strike: {
     id: 'iai_strike', name: 'Iai Strike',
-    description: 'The draw IS the cut: heavy single-target damage, and the victim is DISARMED — no attacks for three seconds.',
-    tags: ['attack', 'melee', 'physical', 'targeted'], color: '#e8e4d8',
-    manaCost: 9, cooldown: 12, useTime: 0.7,
-    baseDamage: { physical: [30, 46] },
-    targeting: { target: 'enemy', castRange: 120 },
-    delivery: { type: 'target' },
+    description: 'THE DRAW IS THE CUT: an indicator rides the draw-bar — press it FLAWLESSLY and the stroke lands 150% harder. The cut itself is a PHASING dash: you pass THROUGH the line, mass and poise be damned, and everything in the corridor is slashed and DISARMED. Sheathe, read, vanish.',
+    tags: ['attack', 'melee', 'physical', 'movement'], color: '#e8e4d8',
+    manaCost: 11, cooldown: 9, useTime: 0.85,
+    castMode: 'timed',
+    timing: { kind: 'timed', bonus: 1.5 },
+    baseDamage: { physical: [26, 40] },
+    delivery: { type: 'dash', distance: 250, speed: 1500, width: 64, phase: true },
     effects: [
       { type: 'damage' },
       { type: 'status', status: 'disarm', chance: 1 },
     ],
-    requirements: { dexterity: 16, prowess: 10 },
-    ai: { range: 110, weight: 3 },
+    requirements: { dexterity: 18, prowess: 10 },
+    ai: { range: 220, weight: 3 },
     leveling: { perLevel: [mod('damage', 'increased', 0.12, ['melee'])] },
   },
 
@@ -2619,6 +2625,47 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { intelligence: 16 },
     ai: { range: 340, weight: 2, keepDistance: 200 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('apply_voided', 'flat', 0.04)] },
+  },
+
+  // --- The samurai kata: rhythm, timing, the one perfect draw ---------------
+  // (Three rhythms, deliberately distinct: Thousand Cuts RAMPS ITSELF
+  // (SelfStackSpec — the per-skill frenzy), Sheathed Moon charges ONE
+  // stroke, Iai Strike reads a WINDOW. zanshin_cut's every-third-bleed
+  // already covers the cycle rhythm — four fabrics, no overlaps.)
+
+  thousand_cuts: {
+    id: 'thousand_cuts', name: 'Thousand Cuts',
+    description: 'The kata that TEACHES ITSELF: each cut hastens and sharpens THIS BLADE ALONE — eight stacks deep, peeling away in moments when the rhythm rests. Not charges, not a blessing: the skill itself, ramping. Keep cutting.',
+    tags: ['attack', 'melee', 'physical'], color: '#e8d8c0',
+    manaCost: 5, cooldown: 0, useTime: 0.42,
+    baseDamage: { physical: [7, 12] },
+    selfStack: {
+      mods: [mod('damage', 'increased', 0.05), mod('attackSpeed', 'increased', 0.05)],
+      maxStacks: 8, duration: 2.2, decay: 'peel',
+    },
+    delivery: { type: 'melee', range: 88, arcDeg: 70 },
+    effects: [{ type: 'damage' }],
+    requirements: { dexterity: 16, prowess: 8 },
+    ai: { range: 85, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09)] },
+  },
+
+  sheathed_moon: {
+    id: 'sheathed_moon', name: 'Sheathed Moon',
+    description: 'CHARGED: hold to SHEATHE — the blade drinks the stillness — and release a moonlit crescent whose edge and reach grow with the wait, up to 2.6x. The iaijutsu counterweight to Thousand Cuts: one perfect stroke against a thousand.',
+    tags: ['attack', 'melee', 'physical', 'aoe'], color: '#d8e8f8',
+    manaCost: 12, cooldown: 3, useTime: 0,
+    castMode: 'charge',
+    chargeUp: { maxTime: 2, minScale: 0.6, maxScale: 2.6, aoeScaleMax: 1.6 },
+    baseDamage: { physical: [18, 30] },
+    delivery: { type: 'melee', range: 120, arcDeg: 160 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.4, magnitude: 0.35 },
+    ],
+    requirements: { dexterity: 18, prowess: 12 },
+    ai: { range: 110, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.05)] },
   },
 
   discipline: {

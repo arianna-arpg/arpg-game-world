@@ -393,9 +393,18 @@ export function instanceTurret(inst: SkillInstance): { castSkillId: string; life
  *  window becomes the release window). One discipline per use. */
 export function instanceStrikeTiming(inst: SkillInstance): StrikeTimingSpec | undefined {
   for (const s of hostSockets(inst)) if (s.def.strikeTiming) return s.def.strikeTiming;
-  if (inst.def.castMode === 'perfect') return { kind: 'perfect' };
-  if (inst.def.castMode === 'timed') return { kind: 'timed', bonus: 1.2 };
+  // The skill's own timing spec tunes its innate window (Iai Strike's
+  // wider flawless bonus); the castMode alone falls to the old baselines.
+  if (inst.def.castMode === 'perfect') return inst.def.timing ?? { kind: 'perfect' };
+  if (inst.def.castMode === 'timed') return inst.def.timing ?? { kind: 'timed', bonus: 1.2 };
   return undefined;
+}
+
+/** The self-stack pile a use feeds: a socketed graft (Building Rhythm)
+ *  WINS over the skill's own — one pile per use. */
+export function instanceSelfStack(inst: SkillInstance): SelfStackSpec | undefined {
+  for (const s of hostSockets(inst)) if (s.def.selfStack) return s.def.selfStack;
+  return inst.def.selfStack;
 }
 
 /**
@@ -1042,7 +1051,12 @@ export type TriggerKind =
    *  actual casts: spellwork from behind a raised shield is deliberately
    *  an unhurried art (this is the automated lane — Guarded Casting is
    *  the deliberate one). */
-  | 'guardBeat';
+  | 'guardBeat'
+  /** The owner LANDS a strike-timing window — a Perfect!/Flawless! press
+   *  (castMode 'perfect'/'timed' or a strikeTiming graft). The reward for
+   *  reading the bar, raised from castPress the instant the window is
+   *  made: "cast on flawless" is skill expression as a trigger event. */
+  | 'flawless';
 
 export const TRIGGER_CFG = {
   /** Max BASE use time (def.useTime) a skill may have and still be
@@ -1060,6 +1074,8 @@ export const TRIGGER_CFG = {
     // The guard chant's LARGE gap — the whole trade of casting hands-free
     // from behind a raised shield (a spec's icd can retune per gem).
     guardBeat: 6,
+    // Flawless presses are already paced by the cast bars that host them.
+    flawless: 0.5,
   } as Record<TriggerKind, number>,
   /** highRoll: default top-of-the-dice fraction a hit must land in to
    *  raise the event (a spec's rollTop wins; the owner's highRollWindow
@@ -1576,6 +1592,12 @@ export interface DashDelivery {
    *  a full DropZoneSpec: envelopes breathe each drop, durationBySpeed
    *  reads the DASH's pace. */
   trailZone?: DropZoneSpec;
+  /** PHASING dash (the Iai draw): the launch grants the 'phasing' STATUS
+   *  for the dash's flight (+ a breath) — the body passes THROUGH the
+   *  crowd regardless of mass or poise (separateActors already honors the
+   *  stat; walls still stand). Corridor damage applies as ever: the blade
+   *  goes through, and everything it went through knows. */
+  phase?: true;
 }
 
 /** Teleportation: instant, delayed (Warp), or behind a targeted enemy. */
@@ -2193,6 +2215,27 @@ export interface StrikeTimingSpec {
   /** MORE bonus on success (default 0.7 perfect / 1.2 timed — the
    *  baselines Snipe and Timed Strike always had). */
   bonus?: number;
+}
+
+/**
+ * SELF-STACKS: the per-skill frenzy. Every completed REAL use of the host
+ * feeds a pile that lives on THIS INSTANCE — the mods fold into
+ * instanceMods × stacks, so they exist only inside this one skill's
+ * queries (damage, speed, cost, cooldown … of THIS blade and nothing
+ * else). The pile bleeds while the skill rests: one stack peels per
+ * lapsed `duration` (default), or the whole pile drops ('all'). The
+ * deliberate contrast with charges (actor-wide) and buffs (sheet-wide):
+ * a ramping skill that must be PLAYED to stay hot. Decay ticks in
+ * Actor.updateTimers; the stamp rides executeSkill's real-use gate.
+ */
+export interface SelfStackSpec {
+  /** Skill-LOCAL mods granted PER STACK (folded ×stacks in instanceMods). */
+  mods: Modifier[];
+  maxStacks: number;
+  /** Seconds a fresh cast keeps the pile alive (each use resets the clock). */
+  duration: number;
+  /** Lapse behavior: 'peel' one stack per duration (default) or drop 'all'. */
+  decay?: 'peel' | 'all';
 }
 
 /**
@@ -3308,6 +3351,16 @@ export interface SkillDef {
    *  baked innately (pairs with BuffEffect.nextHit for guaranteed riders). */
   castCycle?: { count: number; buff: BuffEffect };
 
+  /** SELF-STACKS (the per-skill frenzy): every completed REAL use feeds a
+   *  pile that buffs ONLY THIS SKILL — see SelfStackSpec. A socketed
+   *  Building Rhythm graft WINS over the skill's own (one pile per use). */
+  selfStack?: SelfStackSpec;
+
+  /** INNATE strike-timing window tuning for castMode 'perfect'/'timed' —
+   *  the data lever over the old hardcoded defaults (a socketed
+   *  strikeTiming graft still wins; see instanceStrikeTiming). */
+  timing?: StrikeTimingSpec;
+
   /** CROWD EMPOWERMENT (the warcry-power shape): at execution, tally the
    *  WEIGHTED enemies within `radius` (DEFENSE_CFG.empower weights — a
    *  boss counts for several men) into a POWER score; the use deals
@@ -3614,6 +3667,11 @@ export interface SupportDef {
    *  press inside the zone on bar casts, the RELEASE inside the zone on
    *  overcharge holds. */
   strikeTiming?: StrikeTimingSpec;
+  /** A SELF-STACK pile this support grafts (Building Rhythm): every real
+   *  use of the host feeds mods that exist ONLY inside this instance's
+   *  fold — the per-skill frenzy, rented by the socket. WINS over the
+   *  skill's own pile (one per use). See SelfStackSpec. */
+  selfStack?: SelfStackSpec;
   /** A PROJECTILE TRAIL this support grafts onto the skill (Detonating
    *  Passage's path blasts, Scorched Wake's burning ground). See ProjTrailSpec. */
   trail?: ProjTrailSpec;
@@ -3831,6 +3889,11 @@ export interface SkillInstance {
     /** SEQUEL chain depth (SequelSpec): how many completion-casts deep
      *  this instance was minted — the authored-cycle lid. */
     seqDepth?: number;
+    /** SELF-STACKS (SelfStackSpec): the pile this instance built by being
+     *  cast, and the bleed clock until the next peel/drop. Transient —
+     *  a fresh session starts cold, like every ramp. */
+    stackN?: number;
+    stackT?: number;
     /** CONTAGION lineage (ContagionSpec): this release-cast's generation
      *  and the actors the chain has already infected (the shared set rides
      *  the whole lineage — the wave only travels outward). */
@@ -3905,6 +3968,9 @@ const MINION_RIDABLE_FIELD_LIST = [
   'followUp', 'zoneFollow', 'exposure', 'zoneGrow', 'zoneSizeOver',
   'cadence', 'pendulum', 'echo', 'summon', 'fuse', 'gather', 'shellGraft',
   'variance', 'sequel', 'contagion',
+  // A minion spamming its one bolt ramps it honestly — the pile lives on
+  // the minion's own instance and ticks in its own updateTimers.
+  'selfStack',
   // Munition grafts RIDE: a minion with a chambered skill fires it dry and
   // then presses the empty face — pressUsable routes the press into the
   // rack cast, the same autonomous reload cycle the gunner bandits run.
@@ -4084,6 +4150,15 @@ export function instanceMods(inst: SkillInstance): Modifier[] {
     if (sl > 0 && socket.def.perLevel) {
       for (const m of socket.def.perLevel) out.push({ ...m, value: m.value * sl });
     }
+  }
+  // SELF-STACKS (SkillDef.selfStack / a Building Rhythm graft): the pile
+  // this instance built by being CAST — ×stacks, and skill-local by
+  // construction: THIS blade quickens, nothing else does. Decay ticks in
+  // Actor.updateTimers; the stamp rides executeSkill's real-use gate.
+  const ss = instanceSelfStack(inst);
+  const stacks = inst.state?.stackN ?? 0;
+  if (ss && stacks > 0) {
+    for (const m of ss.mods) out.push({ ...m, value: m.value * stacks });
   }
   // ...EXCEPT THE CREW TAX: a gem actively boarding the crew (riding, the
   // door open, not already serving the host) bills its COST-family mods

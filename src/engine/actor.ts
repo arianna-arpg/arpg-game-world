@@ -13,7 +13,7 @@ import {
 import { DEFENSE_CFG } from './defense';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
-  instanceUseCharges, socketSpec,
+  instanceUseCharges, socketSpec, instanceSelfStack,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
   type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec,
 } from './skills';
@@ -1775,6 +1775,20 @@ export class Actor {
     for (const [id, t] of this.cooldowns) {
       const left = t - dt * cdr;
       if (left <= 0) this.cooldowns.delete(id); else this.cooldowns.set(id, left);
+    }
+    // SELF-STACKS bleed (SelfStackSpec): each skill's own pile fades while
+    // the skill rests — peel one stack per lapsed duration (default) or
+    // drop the lot ('all'). The stamp side lives in executeSkill.
+    for (const inst of this.skills) {
+      const st = inst?.state;
+      if (!st?.stackN) continue;
+      const spec = instanceSelfStack(inst!);
+      if (!spec) { st.stackN = 0; continue; }
+      st.stackT = (st.stackT ?? spec.duration) - dt;
+      if (st.stackT <= 0) {
+        if ((spec.decay ?? 'peel') === 'all') st.stackN = 0;
+        else { st.stackN -= 1; st.stackT = spec.duration; }
+      }
     }
     if (this.useLock > 0) this.useLock -= dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;

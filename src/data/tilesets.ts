@@ -2009,6 +2009,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'alpha_stalker', weight: 2, presence: { from: 10, fadeIn: 5 } },
         // The crag executioner: breaks the bar, then passes The Verdict.
         { id: 'pit_mauler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The masterless blade drifts the high passes, practicing.
+        { id: 'steppe_ronin', weight: 1, presence: { from: 5, fadeIn: 3 } },
         { id: 'gale_elemental', weight: 1, presence: { to: 18, fadeOut: 9 } },
         // The Horned Tribes' home crags — the full muster, khan at depth.
         { id: 'beastkin_gorer', weight: 3 },
