@@ -59,3 +59,21 @@ registerCluster({
     { kind: 'sea_rock', radius: [14, 22], count: [0, 2], ring: [60, 170], rot: true },
   ],
 });
+
+// THE HELLFORGE WORKS: the demons' great forge-altar on its swept court —
+// the monument at dead center (a composition CENTERPIECE: it stands inside
+// the clearing that exists for it), braziers ringing the court's edge, the
+// litter of the work (bone, titan chain) kept outside the sweep. Geometry
+// contract with hellforge_landing's clearing (≤78): anvil ≤46 fits well
+// inside; braziers ride ring 62-82 as centerpieces; litter starts ≥ 92.
+registerCluster({
+  id: 'hellforge_works',
+  anchor: { radius: 64, kind: 'hellforge_anvil' },
+  pieces: [
+    { kind: 'hellforge_anvil', radius: [40, 46], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'brazier', radius: [11, 14], count: [3, 4], ring: [62, 82], rot: true, centerpiece: true },
+    { kind: 'bone_pile', radius: [13, 20], count: [2, 4], ring: [92, 150], rot: true },
+    { kind: 'hell_chain', radius: [16, 24], count: [2, 3], ring: [92, 140], rot: true },
+  ],
+  poi: true,
+});

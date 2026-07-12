@@ -19,6 +19,7 @@ import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, biomeSpacing } from '../world/biomes';
 import { dimensionsEnteredBy } from '../world/dimensions';
+import type { CourseMintHints } from '../world/courses';
 
 // The node-space coordinate vocabulary (Dir, MapCoord, MAP_DIR, projectCoord) now
 // lives in world/coords — a pure leaf shared with the world overlays. Re-exported
@@ -150,6 +151,13 @@ export interface ZoneSpec {
    *  whole tileset (theme/packs/layout/biome) for the region explored into. Set only
    *  by generateZone; authored/quest/event mints leave it false (spec.tileset wins). */
   fieldBiome?: boolean;
+  /** COURSE sampler (world/courses.ts through the World's dimension closures,
+   *  same idiom as biomeFor): when this mint lands ON a declared throughline,
+   *  the hints carry the artery's recipe knobs (river orientation), terminus
+   *  rolls, and the continuation sides worldgen must keep open. Honored only
+   *  with fieldBiome (the winding-bend discipline: directed mints stay
+   *  byte-identical, drawing zero extra RNG). */
+  courseFor?: (c: MapCoord) => CourseMintHints | null;
   /** Layout-generator knob overrides for THIS mint (merged over tileset + biome
    *  params) — a directed event zone can force the spiral variant. */
   layoutParams?: Record<string, unknown>;
@@ -475,6 +483,13 @@ export function placeZoneAt(
   const zoneBiome = tileset.biome ?? spec.biomeFor?.(target);
   const nodeSep = biomeSpacing(zoneBiome);
 
+  // COURSE hints — does this mint ride a declared throughline? Gated on
+  // fieldBiome (the winding-bend discipline) and CROSS-CHECKED against the
+  // sampled biome: a feather-band coord whose dither fell OFF the course gets
+  // no artery dressing, so hints and heat map never disagree.
+  const courseHints = spec.fieldBiome ? spec.courseFor?.(target) ?? null : null;
+  const onCourse = courseHints && courseHints.spec.biome === zoneBiome ? courseHints : null;
+
   // Map node: start at the target, then PUSH AWAY from any crowding neighbour until it
   // clears the biome's spacing — a deterministic-ish push (toward the gap, not a random
   // walk) GUARANTEES non-overlap (no more tangled, stacked nodes). Considers ALL nodes
@@ -488,6 +503,18 @@ export function placeZoneAt(
   if (spec.fieldBiome) {
     const wind = rng.range(-LABYRINTH_WIND, LABYRINTH_WIND);
     map.x += -ny * wind; map.y += nx * wind;
+  }
+  // COURSE HUG: a throughline keeps its zones ON the line — pull the node
+  // toward the course centerline (capped at the spec's hug), so a cardinal
+  // frontier step off this node can't fall out of the corridor at a bend and
+  // break the followable chain. Deterministic (no rng); course mints only.
+  if (onCourse && onCourse.hug > 0) {
+    const pl = Math.hypot(onCourse.centerPull.x, onCourse.centerPull.y);
+    if (pl > 1) {
+      const f = Math.min(1, onCourse.hug / pl);
+      map.x += onCourse.centerPull.x * f;
+      map.y += onCourse.centerPull.y * f;
+    }
   }
   // Find the nearest neighbour inside the spacing radius; push directly away from it
   // by the deficit (+ a hair), with a small seeded angle jitter so two coincident
@@ -558,6 +585,18 @@ export function placeZoneAt(
     w: Math.round(baseW),
     h: Math.round(clamp(baseW * aspect, tileset.sizeH[0], tileset.sizeH[1] * 1.4)),
   };
+  // COURSE CONTINUATION: a zone on a throughline GUARANTEES a way onward along
+  // it (up- and downstream) — a 1-frontier roll on the wrong side must never
+  // dead-end the artery. Appended after the size roll so the 'at' pick spaces
+  // against the real footprint; append-only (the weave/defIndex invariant).
+  // Draws RNG only for course mints, so every other mint's stream is untouched.
+  if (onCourse) {
+    for (const side of onCourse.continueSides) {
+      if (side === backSide || exits.some(e => e.side === side)) continue;
+      const at = findNonCollidingAt(side, exits, rng, size) ?? bestSpacedAt(side, exits, size);
+      exits.push({ to: '?', side, at, tileset: tileset.id });
+    }
+  }
   // Biome (computed above as zoneBiome): the authored tileset tag wins; else the
   // heat-map FIELD fills it. The biome then dictates which LAYOUT GENERATOR shapes the
   // zone (default 'plains'), stored on the def so revisits replay the topology.
@@ -584,12 +623,16 @@ export function placeZoneAt(
     ...(biome ? BIOMES[biome]?.landmarks ?? [] : []),
     // A port ALWAYS gets its shoreline (the harbor's reason to exist).
     ...(spec.port ? [{ landmark: 'coast', chance: 1 }] : []),
+    ...(onCourse?.landmarks ?? []),
   ];
   // COMPOSITION ROLLS: the whole-zone coordinated bundles, same merge + bake
   // discipline as structures/landmarks (special arenas skip them too).
   const compositionRolls = spec.special ? [] : [
     ...(tileset.compositions ?? []),
     ...(biome ? BIOMES[biome]?.compositions ?? [] : []),
+    // A course TERMINUS bakes its reward rolls onto the def like any other
+    // roll source (revisits/co-op replay them — the same discipline).
+    ...(onCourse?.compositions ?? []),
   ];
   // GEO context — how deep inside its biome blob the zone sits (0 = edge, 1 =
   // interior), from the EXISTING biome-depth sampler (sim.biomeField.sampleDepth,
@@ -605,11 +648,13 @@ export function placeZoneAt(
       } : {}),
     }
     : undefined;
-  // Layout knobs, spec ▷ tileset ▷ biome (most-specific wins) — baked so
-  // revisits/co-op replay the same recipe tweaks.
+  // Layout knobs, spec ▷ course ▷ tileset ▷ biome (most-specific wins) — baked
+  // so revisits/co-op replay the same recipe tweaks. A course slots UNDER the
+  // spec (a directed mint may still override the artery's orientation).
   const layoutParams = {
     ...(biome ? BIOMES[biome]?.layoutParams : undefined),
     ...tileset.layoutParams,
+    ...onCourse?.layoutParams,
     ...spec.layoutParams,
   };
   // WAYPOINT VETO: no waypoint may spawn within an existing exclusion zone's radius
@@ -699,6 +744,7 @@ export function generateZone(
   levelFor?: (c: MapCoord) => number,
   biomeDepthFor?: (c: MapCoord) => number,
   climateFor?: (c: MapCoord, dimension?: string) => Record<string, number>,
+  courseFor?: (c: MapCoord) => CourseMintHints | null,
 ): ZoneDef {
   const target = projectCoord(source.map, exitDef.side);
   // fieldBiome: this is a RANDOM frontier — let the heat maps decide. biomeFor picks
@@ -706,7 +752,7 @@ export function generateZone(
   // sets the level from the difficulty field at `target` (the same coord placeExit previews).
   // The child inherits its source's DIMENSION (hell grows hell) — baked pre-weave.
   return placeZoneAt(target, source, zoneMap, genIndex,
-    { tileset: exitDef.tileset, biomeFor, levelFor, biomeDepthFor, climateFor, fieldBiome: true, dimension: source.dimension });
+    { tileset: exitDef.tileset, biomeFor, levelFor, biomeDepthFor, climateFor, courseFor, fieldBiome: true, dimension: source.dimension });
 }
 
 /**

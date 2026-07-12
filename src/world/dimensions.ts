@@ -12,6 +12,7 @@
 import type { MapCoord } from './coords';
 import { BIOME_FIELD_CFG, fieldBiomePick } from './biomes';
 import { registerDimensionClimate, type DimensionAxisOverride } from './climate';
+import type { CourseSpec } from './courses';
 
 /** How a dimension is ENTERED — data, not a bespoke function. 'cave_breach' =
  *  delving minDepth caves deep tears a breach whose realm gate mints the
@@ -63,6 +64,12 @@ export interface DimensionDef {
   /** How this dimension is entered (see DimensionEntry). Omitted = no entry
    *  of its own (the surface — you start there). */
   entry?: DimensionEntry;
+  /** Winding biome THROUGHLINES across this dimension's heat map (world/
+   *  courses.ts): each paints its biome along a seeded polyline springing at
+   *  its anchor, guarantees onward frontiers so the artery can be FOLLOWED,
+   *  and can hold terminus rolls at its far end. A course-only biome (listed
+   *  in no palette) exists exclusively along its line — a PLACE, not patches. */
+  courses?: CourseSpec[];
 }
 
 /** The event-tempo multiplier a package's overlay runs at inside a dimension. */
@@ -119,6 +126,19 @@ registerDimension({
   // Hell's TEMPO: demonic incursions erupt two-and-a-half times as often below
   // the world as above it — the same package, a different world-state's pulse.
   events: { packages: { demon_invasion: 2.5 } },
+  // THE RIVER OF FLAME — hell's artery (the D2 Act 4 throughline made real):
+  // a winding course springing at the Hellgate's doorstep, painting the
+  // course-only 'flame' biome down a ~2200-unit meander. Zones minted on it
+  // chain into one followable river (worldgen guarantees onward frontiers +
+  // hands the recipe its up/downstream edges), and the HELLFORGE stands
+  // guaranteed where the river ends. All shape numbers are course data —
+  // tune the meander here, never in engine code.
+  courses: [{
+    id: 'river_of_flame', biome: 'flame', anchor: 'gate',
+    length: 2200, halfWidth: 150, feather: 80, seedSalt: 0xf1a8e,
+    label: 'The River of Flame',
+    terminus: { radius: 260, compositions: [{ composition: 'hellforge_landing', chance: 1 }] },
+  }],
   // Entered by delving: a surface cave ladder three deep tears a breach whose
   // realm gate mints The Hellgate (the one marked cross-dimension road).
   entry: {

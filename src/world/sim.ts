@@ -36,7 +36,8 @@ import type { PackageGate } from '../packages/types';
 import { gateOf, resolveGates } from '../packages/weighting';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD } from './biomes';
 import { setClimateOrigin } from './climate';
-import { dimensionPackageTempo } from './dimensions';
+import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
+import { validateCourses } from './courses';
 import { LevelField, validateLevelField } from './levelField';
 import { START_ZONE, ZONES } from '../data/zones';
 import { biomesWithoutTileset } from '../data/tilesets';
@@ -227,6 +228,14 @@ export class WorldSim {
     // (else a mint in that region falls back to the inherited line — the old bug).
     const badT = biomesWithoutTileset(BIOME_FIELD.map(s => s.biome));
     if (badT.length) console.warn('[biomes] BIOME_FIELD biomes with NO frontier tileset (fall back to inherited):', badT);
+    // COURSES are field authorities too: their biomes must exist AND resolve to
+    // a frontier tileset (a course painting an unminttable biome would dress
+    // hell's artery in warned deepwood fallback).
+    const dims = dimensionIds().map(dimensionDef);
+    const badCo = validateCourses(dims);
+    if (badCo.length) console.warn('[courses] course(s) reference unknown biome(s):', badCo);
+    const badCoT = biomesWithoutTileset(dims.flatMap(d => (d.courses ?? []).map(c => c.biome)));
+    if (badCoT.length) console.warn('[courses] course biomes with NO frontier tileset (fall back to inherited):', badCoT);
     const badLv = validateLevelField();
     if (badLv.length) console.warn('[levelfield] LEVEL_FIELD_CFG invalid:', badLv);
     const badAm = validateAmalgamParts(AMALGAM_PARTS, id => !!SKILLS[id], id => !!SUPPORTS[id]);

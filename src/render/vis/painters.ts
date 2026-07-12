@@ -5730,6 +5730,246 @@ const stairFlight: GroupPainter = (env, group, def) => {
   }
 };
 
+// --- THE RIVER-OF-FLAME KIT (hell's artery: the forge, the toll, the road) -------
+
+/** A BONE-PYRE burning pale: a mounded heap of the counted dead, soul-fire
+ *  standing off it — the banks keep their own lights. Colors are params so a
+ *  future rite can burn any shade (default: cold soulfire over old bone). */
+const pyre: GroupPainter = (env, group, def) => {
+  const { ctx, world, time, theme } = env;
+  const p = (def.params ?? {}) as { flame?: ColorSpec; bone?: ColorSpec };
+  const flame = resolveColor(p.flame, theme, '#9fd4ff');
+  const bone = resolveColor(p.bone, theme, '#cfc4ac');
+  for (const o of group) {
+    const R = o.radius;
+    const seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
+    const flick = 0.8 + 0.14 * Math.sin(time * 9 + seed * 0.13) + 0.06 * Math.sin(time * 21 + o.pos.y);
+    // Pale halo, pooled at the walls (the campfire discipline).
+    const haloR = R * 2.1;
+    const poly = litPolygon(world, o.pos.x, o.pos.y, haloR);
+    ctx.save();
+    if (poly) ctx.clip(polygonPath(poly));
+    const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.3, o.pos.x, o.pos.y, haloR * flick);
+    g.addColorStop(0, withAlpha(flame, 0.2 * flick));
+    g.addColorStop(1, withAlpha(flame, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, haloR, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // Char bed, then the mounded dead: lumps shading paler toward the crown.
+    ctx.fillStyle = '#1c1512';
+    ctx.beginPath(); ctx.ellipse(o.pos.x, o.pos.y + R * 0.12, R * 1.02, R * 0.62, 0, 0, Math.PI * 2); ctx.fill();
+    for (let i = 0; i < 7; i++) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const d = (0.15 + hash01(i, seed + 2) * 0.55) * R;
+      const lr = R * (0.24 + hash01(i, seed + 4) * 0.2) * (1 - d / (R * 1.6));
+      const lx = o.pos.x + Math.cos(a) * d, ly = o.pos.y + Math.sin(a) * d * 0.55 - (0.5 - d / (R * 1.4)) * R * 0.34;
+      ctx.fillStyle = shade(bone, -0.28 + (1 - d / R) * 0.3 + (hash01(i, seed + 6) - 0.5) * 0.14);
+      ctx.beginPath(); ctx.ellipse(lx, ly, lr * 1.25, lr * 0.85, a, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = withAlpha('#241d16', 0.5); ctx.lineWidth = 1; ctx.stroke();
+    }
+    // Soul-fire tongues off the crown — cold light, no smoke.
+    for (let i = 0; i < 3; i++) {
+      const a = -Math.PI / 2 + (i - 1) * 0.42 + 0.1 * Math.sin(time * 5 + i * 2.1 + seed);
+      const fh = R * (0.7 + 0.28 * Math.sin(time * 7.3 + i * 1.7 + seed * 0.31));
+      const bx = o.pos.x + (i - 1) * R * 0.24, by = o.pos.y - R * 0.4;
+      ctx.fillStyle = withAlpha(flame, (0.34 + 0.2 * flick) * (1 - i * 0.18));
+      ctx.beginPath();
+      ctx.moveTo(bx - R * 0.14, by);
+      ctx.quadraticCurveTo(bx + Math.cos(a) * fh * 0.4, by + Math.sin(a) * fh * 0.7, bx + Math.cos(a) * fh * 0.2, by + Math.sin(a) * fh);
+      ctx.quadraticCurveTo(bx + R * 0.1, by + Math.sin(a) * fh * 0.5, bx + R * 0.14, by);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+};
+
+/** A GIBBET CAGE on a leaning post — the river's toll. The cage sways on its
+ *  chain; a faint pale wisp still burns inside (the brittle rule pops it). */
+const hangingCage: GroupPainter = (env, group, def) => {
+  const { ctx, time, theme } = env;
+  const p = (def.params ?? {}) as { iron?: ColorSpec; wisp?: ColorSpec; wood?: ColorSpec };
+  const iron = resolveColor(p.iron, theme, '#2a2622');
+  const wisp = resolveColor(p.wisp, theme, '#9fd4ff');
+  const wood = resolveColor(p.wood, theme, '#33201a');
+  for (const o of group) {
+    const seed = ((o.pos.x * 7 + o.pos.y * 13) | 0) >>> 0;
+    const r = o.radius;
+    const h = r * (3.4 + hash01(seed, 2) * 0.7);
+    const lean = (hash01(seed, 5) - 0.5) * 0.3;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(lean);
+    // Post + arm (the impaler's shaft grammar, with a gallows crook).
+    ctx.strokeStyle = wood; ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(2.5, r * 0.3);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -h); ctx.lineTo(r * 1.1, -h + r * 0.18); ctx.stroke();
+    ctx.strokeStyle = withAlpha(shade(wood, 0.3), 0.6);
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(-r * 0.08, 0); ctx.lineTo(-r * 0.08, -h); ctx.stroke();
+    // The cage swings from the arm's end — chain, ribs, and what's left inside.
+    const sway = Math.sin(time * 1.1 + seed * 0.37) * 0.09;
+    ctx.translate(r * 1.1, -h + r * 0.18);
+    ctx.rotate(sway);
+    const cw = r * 0.62, chh = r * 1.05, top = r * 0.5;
+    ctx.strokeStyle = shade(iron, 0.12); ctx.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) { // chain links
+      ctx.beginPath(); ctx.ellipse(0, top * (0.2 + i * 0.3), r * 0.07, r * 0.11, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+    // Wisp glow THROUGH the bars first, so the iron reads in front of it.
+    const wa = 0.22 + 0.14 * Math.sin(time * 2.3 + seed * 0.61);
+    const g = ctx.createRadialGradient(0, top + chh * 0.55, 0, 0, top + chh * 0.55, cw * 1.5);
+    g.addColorStop(0, withAlpha(wisp, wa));
+    g.addColorStop(1, withAlpha(wisp, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, top + chh * 0.55, cw * 1.5, 0, Math.PI * 2); ctx.fill();
+    // The cage: crown ring, rib bars meeting at the foot, a girdle band.
+    ctx.strokeStyle = iron; ctx.lineWidth = Math.max(1.6, r * 0.12);
+    ctx.beginPath(); ctx.ellipse(0, top, cw * 0.72, cw * 0.3, 0, 0, Math.PI * 2); ctx.stroke();
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * cw * 0.34, top + cw * 0.1);
+      ctx.quadraticCurveTo(i * cw * 0.5, top + chh * 0.55, 0, top + chh);
+      ctx.stroke();
+    }
+    ctx.beginPath(); ctx.ellipse(0, top + chh * 0.52, cw * 0.56, cw * 0.22, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** A LEGION WAR-BANNER: scorched pole, ragged pennant combing in the heat,
+ *  a lit glyph smouldering on the cloth. Cloth/trim/glyph are params — every
+ *  legion flies its own colors off one painter. */
+const warBanner: GroupPainter = (env, group, def) => {
+  const { ctx, time, theme } = env;
+  const p = (def.params ?? {}) as { cloth?: ColorSpec; pole?: ColorSpec; glyph?: ColorSpec };
+  const cloth = resolveColor(p.cloth, theme, '#6e1418');
+  const pole = resolveColor(p.pole, theme, '#241a14');
+  const glyph = resolveColor(p.glyph, theme, '#ff8a4a');
+  for (const o of group) {
+    const seed = ((o.pos.x * 19 + o.pos.y * 3) | 0) >>> 0;
+    const r = o.radius;
+    const h = r * (3.6 + hash01(seed, 1) * 0.8);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((hash01(seed, 7) - 0.5) * 0.14);
+    // Footing spoil + the pole with its cross-arm.
+    ctx.fillStyle = shade(pole, -0.3);
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.6, r * 0.26, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = pole; ctx.lineCap = 'round';
+    ctx.lineWidth = Math.max(2.5, r * 0.24);
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -h); ctx.stroke();
+    ctx.lineWidth = Math.max(2, r * 0.18);
+    ctx.beginPath(); ctx.moveTo(-r * 0.95, -h + r * 0.3); ctx.lineTo(r * 0.95, -h + r * 0.3); ctx.stroke();
+    // The pennant: hangs from the arm, torn hem, a slow heat-comb wave.
+    const wv = Math.sin(time * 1.6 + seed * 0.41) * r * 0.12;
+    const top = -h + r * 0.34, drop = r * 1.7, wHalf = r * 0.88;
+    ctx.fillStyle = cloth;
+    ctx.beginPath();
+    ctx.moveTo(-wHalf, top);
+    ctx.lineTo(wHalf, top);
+    ctx.lineTo(wHalf * 0.9 + wv, top + drop * 0.72);
+    // Torn hem: three tongues, each combed by the wave.
+    for (let i = 2; i >= -2; i -= 2) {
+      ctx.lineTo(i * wHalf * 0.33 + wv * (1 + 0.3 * i), top + drop * (0.95 + hash01(i + 3, seed) * 0.12));
+      ctx.lineTo((i - 1) * wHalf * 0.33 + wv, top + drop * 0.78);
+    }
+    ctx.lineTo(-wHalf * 0.9 + wv * 0.6, top + drop * 0.72);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(cloth, -0.4), 0.8); ctx.lineWidth = 1; ctx.stroke();
+    // Sun side + the smouldering glyph.
+    ctx.fillStyle = withAlpha(shade(cloth, 0.25), 0.5);
+    ctx.beginPath(); ctx.moveTo(-wHalf, top); ctx.lineTo(-wHalf * 0.2, top); ctx.lineTo(-wHalf * 0.3 + wv * 0.5, top + drop * 0.7); ctx.lineTo(-wHalf * 0.85 + wv * 0.6, top + drop * 0.6); ctx.closePath(); ctx.fill();
+    const ga = 0.5 + 0.3 * Math.sin(time * 3.1 + seed * 0.53);
+    ctx.strokeStyle = withAlpha(glyph, ga); ctx.lineWidth = Math.max(1.2, r * 0.09);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.22 + wv * 0.4, top + drop * 0.28);
+    ctx.lineTo(r * 0.2 + wv * 0.4, top + drop * 0.4);
+    ctx.moveTo(r * 0.18 + wv * 0.4, top + drop * 0.24);
+    ctx.lineTo(-r * 0.18 + wv * 0.4, top + drop * 0.46);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** THE HELLFORGE: the demons' great forge-altar — a slag plinth, the iron
+ *  mass, an ember throat that breathes, chain draped off its horn. The
+ *  terminus monument of the River of Flame (one per landing; spacing keeps
+ *  it singular). */
+const hellforge: GroupPainter = (env, group, def) => {
+  const { ctx, world, time, theme } = env;
+  const p = (def.params ?? {}) as { iron?: ColorSpec; ember?: ColorSpec };
+  const iron = resolveColor(p.iron, theme, '#1c1714');
+  const ember = resolveColor(p.ember, theme, '#ff6a22');
+  for (const o of group) {
+    const R = o.radius;
+    const seed = ((o.pos.x * 29 + o.pos.y * 11) | 0) >>> 0;
+    const breathe = 0.75 + 0.2 * Math.sin(time * 2.2 + seed * 0.19) + 0.05 * Math.sin(time * 9.7);
+    // Forge-light halo, pooled at the walls.
+    const haloR = R * 2.6;
+    const poly = litPolygon(world, o.pos.x, o.pos.y, haloR);
+    ctx.save();
+    if (poly) ctx.clip(polygonPath(poly));
+    const g = ctx.createRadialGradient(o.pos.x, o.pos.y, R * 0.4, o.pos.x, o.pos.y, haloR * breathe);
+    g.addColorStop(0, withAlpha(ember, 0.24 * breathe));
+    g.addColorStop(1, withAlpha(ember, 0));
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, haloR, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The slag plinth: a heaped dark base, cooled runnels streaking it.
+    ctx.fillStyle = '#14100d';
+    ctx.beginPath(); ctx.ellipse(0, R * 0.18, R * 1.05, R * 0.55, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(ember, -0.25), 0.35);
+    ctx.lineWidth = 1.4;
+    for (let i = 0; i < 4; i++) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * R * 0.5, R * 0.1 + Math.sin(a) * R * 0.2);
+      ctx.lineTo(Math.cos(a) * R * 1.0, R * 0.22 + Math.sin(a) * R * 0.4);
+      ctx.stroke();
+    }
+    // The iron mass: beveled block + the horn, edges catching the throat-light.
+    const bw = R * 1.3, bh = R * 1.0, topY = -R * 0.9;
+    ctx.fillStyle = iron;
+    ctx.beginPath();
+    ctx.moveTo(-bw * 0.5, R * 0.05);
+    ctx.lineTo(-bw * 0.42, topY);
+    ctx.lineTo(bw * 0.34, topY);
+    ctx.lineTo(bw * 0.62, topY + bh * 0.24); // the horn's shoulder
+    ctx.lineTo(bw * 0.95, topY + bh * 0.16); // the horn
+    ctx.lineTo(bw * 0.88, topY + bh * 0.38);
+    ctx.lineTo(bw * 0.5, topY + bh * 0.44);
+    ctx.lineTo(bw * 0.44, R * 0.05);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = shade(iron, 0.35); ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = withAlpha(shade(iron, 0.5), 0.35);
+    ctx.beginPath(); ctx.moveTo(-bw * 0.42, topY); ctx.lineTo(bw * 0.34, topY); ctx.lineTo(bw * 0.3, topY + bh * 0.1); ctx.lineTo(-bw * 0.38, topY + bh * 0.1); ctx.closePath(); ctx.fill();
+    // The ember throat: a breathing maw in the block's face.
+    const tg = ctx.createRadialGradient(-bw * 0.02, topY + bh * 0.62, 0, -bw * 0.02, topY + bh * 0.62, R * 0.52 * breathe);
+    tg.addColorStop(0, withAlpha('#fff3c8', 0.9 * breathe));
+    tg.addColorStop(0.35, withAlpha(ember, 0.8 * breathe));
+    tg.addColorStop(1, withAlpha(ember, 0));
+    ctx.fillStyle = tg;
+    ctx.beginPath(); ctx.ellipse(-bw * 0.02, topY + bh * 0.62, R * 0.46, R * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    // Sparks climbing off the throat.
+    for (let i = 0; i < 3; i++) {
+      const ph = (time * (0.7 + i * 0.23) + hash01(i, seed) * 7) % 1;
+      ctx.fillStyle = withAlpha('#ffd9a0', (1 - ph) * 0.8);
+      ctx.beginPath();
+      ctx.arc(-bw * 0.02 + Math.sin((time + i) * 3.1) * R * 0.16, topY + bh * 0.5 - ph * R * 1.1, Math.max(0.8, R * 0.04 * (1 - ph)), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Chain off the horn (the hell_chain grammar, hung).
+    ctx.strokeStyle = shade(iron, 0.2); ctx.lineWidth = 1.4;
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.ellipse(bw * 0.9, topY + bh * (0.42 + i * 0.14), R * 0.05, R * 0.08, 0.2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
@@ -5743,6 +5983,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
   tentacleField, pentagram, wardSeal, bonePile, boneShelf, door, breach, landmass, beacon, fallback,
+  pyre, hangingCage, warBanner, hellforge,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------

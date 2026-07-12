@@ -48,6 +48,20 @@ const INVASION_TYPES: InvasionType[] = [
       packs: { count: [3, 5], size: [3, 4] },
     },
   },
+  // The river breaking its banks — a surging assault whose realm is the
+  // RIVER OF FLAME itself: a riverland arena pouring lava bank to bank
+  // (riverSides forced — the same orientation lever the underworld's course
+  // hands its zones), swimmers in the flow and the toll-galleries watching
+  // the crossings. The artery biome, reachable through the invasion fabric.
+  {
+    id: 'flame_tide', label: 'Flame Tide', weight: 2, ageScale: 1.1, strengthMul: 1.1, meteorMul: 1.1, color: '#ff6a22',
+    realm: {
+      tileset: 'river_of_flame', name: 'The Flooding Flame',
+      layoutType: 'riverland',
+      layoutParams: { riverSides: ['w', 'e'], riverWidth: [140, 200], causeways: [1, 2], isles: [1, 2] },
+      packs: { count: [3, 5], size: [3, 5] },
+    },
+  },
   // Elite rite — rare, brutal, and ramps to the portal FASTEST (ageScale 1.5).
   // Its realm is the CHAOS-SANCTUARY move: a hellion-rift sanctum warded by
   // seals — break every seal (each unleashes its guard) and ONLY THEN does the

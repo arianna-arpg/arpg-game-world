@@ -3106,9 +3106,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         } else {
           for (let y = oy0; y <= oy1; y += step) {
             for (let x = ox0; x <= ox1; x += step) {
-              const fill = BIOMES[world.dimensionBiomeAtMap(dim, { x: x + step / 2, y: y + step / 2 })]?.mapColor;
-              if (!fill) continue;
-              ocean += `<rect x="${x}" y="${y}" width="${step}" height="${step}" fill="${fill}" opacity="0.12"/>`;
+              const info = BIOMES[world.dimensionBiomeAtMap(dim, { x: x + step / 2, y: y + step / 2 })];
+              if (!info) continue;
+              // Honor the per-biome wash lever (surface parity): a course-
+              // painted artery pops against the palette wash instead of every
+              // biome flattening to one hardcoded opacity.
+              ocean += `<rect x="${x}" y="${y}" width="${step}" height="${step}" fill="${info.mapColor}" opacity="${(info.washOpacity ?? 0.12).toFixed(2)}"/>`;
             }
           }
           this.oceanCache = { key, svg: ocean };

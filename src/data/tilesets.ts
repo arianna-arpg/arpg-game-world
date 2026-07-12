@@ -947,6 +947,123 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE RIVER OF FLAME — hell's artery (biome 'flame': COURSE-ONLY, painted
+  // along the Underworld's declared throughline, never rolled by a palette).
+  // Every zone is a riverland pouring lava, oriented by the course's
+  // riverSides so consecutive zones read as ONE continuous flow; the banks
+  // carry the demons' own works — gibbet galleries, banner roads, pale
+  // pyres — and the Hellforge waits where the water... where the FIRE ends.
+  river_of_flame: {
+    id: 'river_of_flame', biome: 'flame',
+    nameFirst: ['Molten', 'Burning', 'Weeping', 'Sunless', 'Blistered', 'Chained', 'Slagbound', 'Scalding', 'Dolorous', 'Smokewreathed', 'Cindershot', 'Seething', 'Forgelit', 'Wailing', 'Cauterized', 'Tolling'],
+    nameSecond: ['Banks', 'Reach', 'Meander', 'Course', 'Shallows', 'Crossing', 'Strand', 'Bend', 'Confluence', 'Channel', 'Run', 'Narrows', 'Fords', 'Verge', 'Toll'],
+    theme: {
+      heat: 1, dayLight: 0.9, nightDark: 0.82, ambientDark: 0.22,
+      // The river lights itself: heavier embers on the wind, deeper shimmer.
+      ambientFx: [
+        { kind: 'motes', intensity: 0.55, color: '#ff9a4a' },
+        { kind: 'heatHaze', intensity: 0.35, color: '#ffc9a0' },
+      ],
+      ground: {
+        // Charred basalt banks — near-black, warming toward the old flows.
+        palette: ['#140b08', '#1d1009', '#27150a', '#301a0c', '#3a200e'],
+        bias: 0.44, alpha: 0.5, stretchX: 1.4, speckles: 0.8, strength: 1.1,
+      },
+      floor: '#150c07', grid: '#22120a', border: '#5c2c14',
+      obstacle: '#2e1714', obstacleEdge: '#6a3520', accent: '#ff7a2a',
+      // Wall stays a luminance step above the floor (the contrast guard).
+      wall: '#3c2028', lava: '#801c08', chasm: '#100406', mud: '#2e1c10', sand: '#66513a',
+    },
+    // Long zones, always rectangular: the river wants a run, not a bowl.
+    sizeW: [2600, 3400], sizeH: [1600, 2200], ellipseChance: 0,
+    // The tileset leans harder than the biome default: a wider flood, isles
+    // in the flow (spec ▷ tileset ▷ biome; the course's riverSides ride the
+    // same merge one layer up).
+    layoutParams: { riverWidth: [120, 180], causeways: [2, 3], isles: [1, 3] },
+    // What EVERY face of the river keeps: torn ground first (solids honour
+    // their forbidOn), the live vents of the flow, and the toll galleries
+    // hung out over the fire (the shore band measures the poured river).
+    common: [
+      { kind: 'cinder', count: [1, 3] },
+      { kind: 'ember_fissure', count: [2, 4] },
+      { kind: 'lava_vent', count: [1, 2], where: { field: 'shore', max: 0.55, params: { kinds: ['lava'], reach: 170 } } },
+      { kind: 'ember_vent', count: [1, 3], where: { field: 'shore', max: 0.6, params: { kinds: ['lava'], reach: 190 } } },
+      { kind: 'formation', count: [1, 1], formation: 'soul_gallery', where: { field: 'shore', max: 0.5, params: { kinds: ['lava'], reach: 150 } } },
+    ],
+    layout: [
+      // THE BANKS: the open face — obsidian levees, the legion's road dress.
+      { kind: 'obsidian', count: [3, 6] },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'soul_cage', count: [1, 3] },
+      { kind: 'demon_banner', count: [1, 3] },
+      { kind: 'pyre_heap', count: [1, 2] },
+      { kind: 'hell_chain', count: [1, 3] },
+      { kind: 'rocks', count: [6, 10], radius: [22, 44] },
+      { kind: 'rock_spire', count: [1, 2] },
+      { kind: 'scree', count: [1, 3] },
+      { kind: 'formation', count: [0, 1], formation: 'banner_row' },
+      { kind: 'formation', count: [0, 1], formation: 'cinder_vein' },
+    ],
+    variants: [
+      // CHARNEL FORDS: the crossing country — the toll paid in bone. (A
+      // variant REPLACES the base layout; the common rows above ride along.)
+      {
+        name: 'Charnel Fords',
+        layout: [
+          { kind: 'bone_pile', count: [4, 7] },
+          { kind: 'rib_arch', count: [1, 3] },
+          { kind: 'pyre_heap', count: [2, 4] },
+          { kind: 'soul_cage', count: [2, 4] },
+          { kind: 'obsidian', count: [2, 4] },
+          { kind: 'rocks', count: [5, 9], radius: [22, 40] },
+          { kind: 'formation', count: [1, 1], formation: 'pyre_watch' },
+          { kind: 'formation', count: [0, 1], formation: 'bone_trail' },
+        ],
+      },
+      // FORGE APPROACH: the worked reach — chain runs, banner roads, the
+      // smoke of industry; obelisks marking the way to the landing.
+      {
+        name: 'Forge Approach',
+        layout: [
+          { kind: 'hell_chain', count: [3, 5] },
+          { kind: 'demon_banner', count: [2, 5] },
+          { kind: 'brazier', count: [1, 3] },
+          { kind: 'charcoal_mound', count: [1, 3] },
+          { kind: 'black_obelisk', count: [1, 2] },
+          { kind: 'obsidian', count: [2, 5] },
+          { kind: 'rocks', count: [5, 8], radius: [22, 40] },
+          { kind: 'formation', count: [1, 2], formation: 'banner_row' },
+        ],
+      },
+    ],
+    // The landing rolls rare OFF-terminus too (the course's terminus zone
+    // forces it at chance 1 through the extraCompositions seam).
+    compositions: [{ composition: 'hellforge_landing', chance: 0.06 }],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'imp', weight: 3, presence: { to: 24, fadeOut: 12 } },
+        { id: 'hellhound', weight: 2 },
+        { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        // The river's own: swimmers in the flow, the lurker under the fords.
+        { id: 'magma_swimmer', weight: 3, presence: { from: 6, fadeIn: 3 } },
+        { id: 'magma_lurker', weight: 2, presence: { from: 10, fadeIn: 4 } },
+        { id: 'ember_elemental', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'dread_fiend', weight: 2, presence: { from: 12, fadeIn: 5 } },
+        { id: 'chained_tormentor', weight: 2, presence: { from: 16, fadeIn: 5 } },
+        { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'ember_rift',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
   // CRYPT — a forsaken graveland of headstones, broken tombs, and the risen.
   crypt: {
     id: 'crypt',

@@ -13,6 +13,7 @@
 
 import type { ZoneDef } from '../data/zones';
 import { BIOMES, BIOME_FIELD_CFG, OCEAN_BIOME, biomeAt, biomeDepth, fieldNoise, resetFieldPickMemo, type BiomeFieldModifier } from './biomes';
+import { resetCourseMemo } from './courses';
 import { coordDist, type MapCoord } from './coords';
 import { NO_BIAS, type MapLayer, type SpawnBias, type WorldOverlay } from './overlay';
 import { registerZoneInfoSource } from './zoneInfo';
@@ -27,7 +28,10 @@ export class BiomeField implements WorldOverlay {
   constructor(private readonly seed: number) {
     // A fresh field = a fresh world: drop the module-level cell-pick memo so
     // nothing from a previous run (or a dev-session module swap) lingers.
+    // Course polylines ride the same lifecycle (their anchors — gate zones —
+    // are per-run too).
     resetFieldPickMemo();
+    resetCourseMemo();
   }
 
   /** The biome-field seed — a Field mega-zone stashes it on its def so the layout

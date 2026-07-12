@@ -130,6 +130,22 @@ export const BIOMES: Record<string, BiomeInfo> = {
     structures: [{ structure: 'siege_castle', chance: 0 }, { structure: 'watchtower', chance: 0.15 }],
     landmarks: [{ landmark: 'lava_coast', chance: 0.18 }, { landmark: 'caldera', chance: 0.12 },
       { landmark: 'demon_pit', chance: 0.2 }, { landmark: 'void_pillars', chance: 0.1 }] },
+  // THE RIVER OF FLAME — hell's ARTERY, the first COURSE-ONLY biome: seeded
+  // into NO palette (surface or underworld), it exists exclusively where the
+  // Underworld's declared course paints it (world/courses.ts, dimensions.ts).
+  // A place you find and then FOLLOW — every zone on it carries the river
+  // (riverland pouring lava, oriented by the course's riverSides so
+  // consecutive zones read as ONE continuous flow), its banks the demons'
+  // own works. Tight spacing (the chain hugs its line); a heavy map wash so
+  // the artery reads as a winding vein of fire on the hell tab.
+  flame: { patronFaction: 'demon', mapColor: '#f0641e', label: 'River of Flame', spacing: 62,
+    washOpacity: 0.26,
+    allowedLayouts: { riverland: 1 },
+    layoutParams: { riverLiquid: 'lava', causeways: [2, 3], riverWidth: [110, 170], isles: [1, 3] },
+    landmarks: [
+      { landmark: 'demon_pit', chance: 0.16 }, { landmark: 'abyssal_gulf', chance: 0.12 },
+      { landmark: 'lava_coast', chance: 0.1 },
+    ] },
   // THE OUTER STEPPES: the Underworld's scorched marches — open plains cut by
   // the angular wall-runs of abandoned hellworks (the 'steppes' recipe),
   // abyssal maws burning through the crust, the legions' stakes on the old

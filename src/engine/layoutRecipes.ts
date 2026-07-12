@@ -166,10 +166,23 @@ function riverlandLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
   const grid = ensureGrid(ctx);
   const liquidId = layoutParam(def, 'riverLiquid', 'water');
-  // The river crosses the LONG axis, winding.
+  // ORIENTATION: riverSides [enterSide, exitSide] carves the spine between
+  // those zone edges — a COURSE (world/courses.ts) hands every zone on a
+  // throughline its up/downstream pair so consecutive zones read as ONE
+  // continuous flow. Absent = the classic long-axis crossing. Either path
+  // draws exactly TWO rng values (the endpoint laterals) — the draw-order
+  // contract that keeps course-less riverlands byte-identical.
+  const sides = layoutParam<[string, string] | undefined>(def, 'riverSides', undefined);
+  const edgePoint = (side: string): Vec2 =>
+    side === 'w' ? vec(30, rng.range(arena.h * 0.3, arena.h * 0.7))
+      : side === 'e' ? vec(arena.w - 30, rng.range(arena.h * 0.3, arena.h * 0.7))
+        : side === 'n' ? vec(rng.range(arena.w * 0.3, arena.w * 0.7), 30)
+          : vec(rng.range(arena.w * 0.3, arena.w * 0.7), arena.h - 30);
   const horizontal = arena.w >= arena.h;
-  const from = horizontal ? vec(30, rng.range(arena.h * 0.3, arena.h * 0.7)) : vec(rng.range(arena.w * 0.3, arena.w * 0.7), 30);
-  const to = horizontal ? vec(arena.w - 30, rng.range(arena.h * 0.3, arena.h * 0.7)) : vec(rng.range(arena.w * 0.3, arena.w * 0.7), arena.h - 30);
+  const from = sides ? edgePoint(sides[0])
+    : horizontal ? vec(30, rng.range(arena.h * 0.3, arena.h * 0.7)) : vec(rng.range(arena.w * 0.3, arena.w * 0.7), 30);
+  const to = sides ? edgePoint(sides[1])
+    : horizontal ? vec(arena.w - 30, rng.range(arena.h * 0.3, arena.h * 0.7)) : vec(rng.range(arena.w * 0.3, arena.w * 0.7), arena.h - 30);
   const pts = wanderPath(rng, from, to, { step: 150, wobble: 90, bowFrac: 0.2 });
   const width = layoutParam(def, 'riverWidth', [90, 150]) as [number, number];
   const halfW = rng.range(width[0], width[1]) / 2;
@@ -227,6 +240,35 @@ function riverlandLayout(ctx: GenCtx, def: ZoneDef): void {
       vec(at.x - Math.cos(perp) * reach, at.y - Math.sin(perp) * reach),
       vec(at.x + Math.cos(perp) * reach, at.y + Math.sin(perp) * reach),
     ], 44);
+  }
+  // MID-RIVER ISLES: walkable islets spliced out of the flow — obsidian bars
+  // in a river of flame, gravel bars in a ford — perch/loot pockets (each
+  // joins ctx.pois). Rolls NOTHING unless the biome asks: the [0,0] default
+  // draws zero rng, so every course-less riverland stream stays byte-identical.
+  const isles = layoutParam(def, 'isles', [0, 0]) as [number, number];
+  if (isles[1] > 0) {
+    const liquidKinds = new Set([
+      liquidOf(liquidId).doodad,
+      ...(freezeAt !== undefined ? [liquidOf(layoutParam(def, 'frozenLiquid', 'ice')).doodad] : []),
+    ].filter((k): k is NonNullable<typeof k> => !!k));
+    for (let i = 0, n2 = rng.int(isles[0], isles[1]); i < n2; i++) {
+      const idx = Math.max(1, Math.min(pts.length - 2, rng.int(1, pts.length - 2)));
+      const at = pts[idx];
+      const along = Math.atan2(pts[idx + 1].y - pts[idx - 1].y, pts[idx + 1].x - pts[idx - 1].x);
+      const perp = along + Math.PI / 2;
+      const off = rng.range(-halfW * 0.35, halfW * 0.35);
+      const c = vec(at.x + Math.cos(perp) * off, at.y + Math.sin(perp) * off);
+      const r = rng.range(40, Math.max(46, halfW * 0.55));
+      // Splice the liquid off the islet — rim-aware (the causeway discipline):
+      // a disc overhanging the islet blocks it as surely as one centered there.
+      for (let k = ctx.doodads.length - 1; k >= 0; k--) {
+        const d = ctx.doodads[k];
+        if (liquidKinds.has(d.kind) && Math.hypot(d.pos.x - c.x, d.pos.y - c.y) < r + d.radius * 0.7) {
+          ctx.doodads.splice(k, 1);
+        }
+      }
+      ctx.pois.push(vec(c.x, c.y));
+    }
   }
   scatterDecoration(ctx, def);
 }

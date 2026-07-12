@@ -110,6 +110,7 @@ import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt, dimensionsEnteredBy } from '../world/dimensions';
+import { courseBiomeAt, courseMintHints, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 
 /** Options for clampPos: a per-move DISPLACEMENT POLICY (lets a flicker/teleport
@@ -3757,7 +3758,7 @@ export class World {
       // pressure — full parity with the main mint path below.
       const lockBiomeFor = source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor;
       const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, lockBiomeFor, this.levelFor,
-        source.dimension ? undefined : this.biomeDepthFor, this.climateFor);
+        source.dimension ? undefined : this.biomeDepthFor, this.climateFor, this.courseMintFor(source.dimension));
       // The earned road must lead to LAND (this branch bypasses the ocean gate).
       if (!gen.dimension && this.continentFor(gen.map).kind === 'ocean') gen.map = this.pullToLand(gen.map);
       if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
@@ -3833,7 +3834,8 @@ export class World {
     const gen = source.field
       ? placeZoneAt(target, source, this.zoneMap, this.nextGenId++,
         { tileset: exitDef.tileset, biomeFor, levelFor: this.levelFor, biomeDepthFor: depthFor, climateFor: this.climateFor, fieldBiome: true, dimension: source.dimension })
-      : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, depthFor, this.climateFor);
+      : generateZone(source, exitDef, this.zoneMap, this.nextGenId++, biomeFor, this.levelFor, depthFor, this.climateFor,
+        this.courseMintFor(source.dimension));
     this.fieldifyZone(gen, ext);
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     this.zoneMap[gen.id] = gen;
@@ -3844,10 +3846,67 @@ export class World {
     return gen;
   }
 
-  /** A DIMENSION's biome sampler (its own jittered-Voronoi palette). */
+  /** A DIMENSION's biome sampler (its own jittered-Voronoi palette), composed
+   *  with any declared COURSES — throughlines override the palette along their
+   *  corridors (world/courses.ts). A course whose gate has not torn open yet
+   *  stays dormant (nothing in that dimension has minted either). */
   private dimensionBiomeFor(dimId: string): (c: { x: number; y: number }) => string {
     const seed = (this.sim.biomeField.fieldSeed ^ 0xd1a0) >>> 0;
-    return (c) => dimensionBiomeAt(dimId, c, seed);
+    const courses = this.liveCourses(dimId);
+    if (!courses.length) return (c) => dimensionBiomeAt(dimId, c, seed);
+    return (c) => {
+      for (const { spec, anchor } of courses) {
+        const b = courseBiomeAt([spec], anchor, c, seed);
+        if (b) return b;
+      }
+      return dimensionBiomeAt(dimId, c, seed);
+    };
+  }
+
+  /** The declared courses of a dimension (zoneInfo attribution + debug). */
+  courseSpecsFor(dimId: string): readonly CourseSpec[] {
+    return dimensionDef(dimId).courses ?? [];
+  }
+
+  /** A course's anchor coordinate, if resolvable yet. 'gate' = the dimension's
+   *  minted gate zone (the one coordinate every client's zoneMap agrees on —
+   *  pure given the save, so revisits/co-op re-derive the identical course).
+   *  Unknown anchor kinds stay dormant: data waiting on a future resolver. */
+  private courseAnchor(dimId: string, spec: CourseSpec): { x: number; y: number } | undefined {
+    if (spec.anchor === 'gate') {
+      const gateId = dimensionDef(dimId).entry?.gate.id;
+      return gateId ? this.zoneMap[gateId]?.map : undefined;
+    }
+    return undefined;
+  }
+
+  /** Every course of a dimension whose anchor is LIVE (resolved). */
+  private liveCourses(dimId: string): { spec: CourseSpec; anchor: { x: number; y: number } }[] {
+    const specs = dimensionDef(dimId).courses;
+    if (!specs?.length) return [];
+    const out: { spec: CourseSpec; anchor: { x: number; y: number } }[] = [];
+    for (const spec of specs) {
+      const anchor = this.courseAnchor(dimId, spec);
+      if (anchor) out.push({ spec, anchor });
+    }
+    return out;
+  }
+
+  /** Mint-hint sampler for a dimension's courses (ZoneSpec.courseFor — the
+   *  same closure idiom as biomeFor). Undefined when the dimension declares
+   *  none, so every other mint path pays nothing. */
+  private courseMintFor(dimId: string | undefined): ((c: { x: number; y: number }) => CourseMintHints | null) | undefined {
+    if (!dimId) return undefined;
+    const courses = this.liveCourses(dimId);
+    if (!courses.length) return undefined;
+    const seed = (this.sim.biomeField.fieldSeed ^ 0xd1a0) >>> 0;
+    return (c) => {
+      for (const { spec, anchor } of courses) {
+        const h = courseMintHints([spec], anchor, c, seed);
+        if (h) return h;
+      }
+      return null;
+    };
   }
 
   /** BREACH into a DIMENSION (the bottom of a cave ladder today; any future

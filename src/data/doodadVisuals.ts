@@ -766,6 +766,31 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       glow: { color: '#d8cdb0', alpha: 0.1 },
     },
   },
+  // THE RIVER-OF-FLAME KIT (hell's artery — data/tilesets.ts 'river_of_flame').
+  // The forge monument breathes deep ember light (the terminus beacon you
+  // steer toward down the whole artery); gibbet cages hold pale soul-wisps
+  // (cold light against the river's orange — the two-tone read); the pyres
+  // burn the same pale fire; banners carry no light source of their own (the
+  // glyph smoulder is painter-side, cheaper than a light).
+  hellforge_anvil: {
+    painter: 'hellforge', order: 54, shadow: 0.6, longShadow: 1.2,
+    params: { iron: 'theme:obstacle|#1c1714', ember: 'theme:accent|#ff6a22' },
+    light: { radius: -3.2, color: '#ff7a2a', intensity: 0.8, flicker: 2.4 },
+  },
+  soul_cage: {
+    painter: 'hangingCage', order: 53, shadow: 0.4, longShadow: 1.4,
+    params: { iron: '#2a2622', wisp: '#9fd4ff', wood: '#33201a' },
+    light: { radius: -2.4, color: '#9fd4ff', intensity: 0.4, flicker: 1.8 },
+  },
+  demon_banner: {
+    painter: 'warBanner', order: 53, shadow: 0.35, longShadow: 1.5,
+    params: { cloth: '#6e1418', pole: '#241a14', glyph: 'theme:accent|#ff8a4a' },
+  },
+  pyre_heap: {
+    painter: 'pyre', order: 49, shadow: 0.4,
+    params: { flame: '#9fd4ff', bone: '#cfc4ac' },
+    light: { radius: -2.6, color: '#a8d0ff', intensity: 0.5, flicker: 2.2 },
+  },
   tooth_row: {
     painter: 'teethRow', order: 52, shadow: 0.45,
     params: { gum: '#6a1a28', enamel: '#e8e0d0' },

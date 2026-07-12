@@ -3270,6 +3270,10 @@ export interface ClusterPiece {
   packed?: boolean;
   /** Draw a random spin per piece (trees/rocks read better rotated). */
   rot?: boolean;
+  /** A composition CENTERPIECE: may stand inside reservations — the clearing
+   *  that swept its court exists FOR it (scatter stays out, the monument
+   *  stands). Every other gate still holds (solids, walk, forbidOn). */
+  centerpiece?: boolean;
 }
 
 export interface ClusterDef {
@@ -3316,7 +3320,7 @@ function stampCluster(ctx: GenCtx, def: ClusterDef): void {
       const rot = piece.rot ? ctx.rng.range(0, Math.PI * 2) : undefined;
       const p = vec(center.x + Math.cos(ang) * off, center.y + Math.sin(ang) * off);
       if (!clearOf(ctx, p, r, hard)) continue;
-      if (inReserved(ctx, p, r)) continue;
+      if (!piece.centerpiece && inReserved(ctx, p, r)) continue;
       if (ctx.walk && walkGated(piece.kind) && !ruleIgnored(ctx, 'walk') && !ctx.walk.isWalkable(p.x, p.y)) continue;
       // The kind's forbidOn holds for cluster pieces exactly as it does for
       // findSpot placements and formation pieces (a cluster's cairn must not
