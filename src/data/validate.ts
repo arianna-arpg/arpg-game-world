@@ -11,7 +11,7 @@ import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
 import {
   CREW_CFG, DEFAULT_RELOAD_SKILL, summonCrewOf, supportFits, supportRidesMinions,
-  type Delivery, type SkillDef, type SupportDef,
+  type Delivery, type SkillDef, type SupportDef, type ConduitSpec,
 } from '../engine/skills';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
@@ -603,6 +603,53 @@ export function validateContent(): void {
       if (!r.noDrop) warn(`support ${sup.id}: munition reload '${rid}' should be noDrop (a convert payload)`);
       if (!r.effects.some(f => f.type === 'restoreSkillCharges')) {
         warn(`support ${sup.id}: munition reload '${rid}' carries no restoreSkillCharges — the rack racks nothing`);
+      }
+    }
+  }
+
+  // THE CONDUIT FABRIC (SkillDef.conduits / SupportDef.conduit): a pump only
+  // runs while its host is ENGAGED — a held bar (guard/channel/charge-up/
+  // overcharge) or a burning toggle. Both seats get the same spec sanity;
+  // seat-specific rows catch pumps that could never engage at all, and
+  // guard endpoints on hosts that never raise a stance (the endpoint reads
+  // 0 forever — a silent no-op socket).
+  {
+    const engagementTags: readonly string[] = ['guard', 'channel', 'aura'];
+    const specProblems = (sp: ConduitSpec): string[] => {
+      const out: string[] = [];
+      if (sp.from === sp.to) out.push(`pumps '${sp.from}' into itself`);
+      if (sp.ratio <= 0) out.push('ratio must be positive');
+      if ((sp.drainPct ?? 0) <= 0 && (sp.drainFlat ?? 0) <= 0) out.push('needs drainPct or drainFlat > 0');
+      if (sp.floor !== undefined && (sp.floor < 0 || sp.floor >= 1)) out.push(`floor ${sp.floor} outside [0, 1)`);
+      return out;
+    };
+    const engages = (s: SkillDef): boolean =>
+      !!(s.guard || s.channel || s.chargeUp || s.overcharge
+        || (s.delivery.type === 'aura' && s.delivery.mode === 'toggle')
+        || s.delivery.type === 'summon');
+    for (const s of Object.values(SKILLS)) {
+      if (!s.conduits?.length) continue;
+      for (const sp of s.conduits) {
+        for (const p of specProblems(sp)) warn(`skill ${s.id}: conduit ${p}`);
+        if ((sp.from === 'guard' || sp.to === 'guard') && !s.guard) {
+          warn(`skill ${s.id}: conduit touches 'guard' but the skill raises no stance — the endpoint reads 0 forever`);
+        }
+      }
+      if (!engages(s)) {
+        warn(`skill ${s.id}: conduits on a skill with no held bar and no toggle — the pump can never engage`);
+      }
+    }
+    for (const sup of Object.values(SUPPORTS)) {
+      if (!sup.conduit) continue;
+      for (const p of specProblems(sup.conduit)) warn(`support ${sup.id}: conduit ${p}`);
+      if (!sup.requiresTags?.some(t => engagementTags.includes(t))) {
+        warn(`support ${sup.id}: conduit gem without a guard/channel/aura requiresTags gate — `
+          + `it can socket where nothing ever engages the pump`);
+      }
+      if ((sup.conduit.from === 'guard' || sup.conduit.to === 'guard')
+        && !sup.requiresTags?.includes('guard')) {
+        warn(`support ${sup.id}: conduit touches 'guard' but the gem doesn't require the 'guard' tag — `
+          + `off-stance hosts read the endpoint as 0 forever`);
       }
     }
   }

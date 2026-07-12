@@ -13,9 +13,10 @@ import {
 import { DEFENSE_CFG } from './defense';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
-  instanceUseCharges, socketSpec, instanceSelfStack,
+  instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, CONDUIT_CFG,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
-  type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec,
+  type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec, type ConduitSpec,
+  type ConduitPool,
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
@@ -1502,6 +1503,54 @@ export class Actor {
     this.moveAcc = 0;
   }
 
+  /** THE CONDUIT TICK (see ConduitSpec): every equipped skill's pumps — innate
+   *  plus socket-grafted — run while that skill is ENGAGED: its cast HELD
+   *  (guard / channel / charge / overcharge; `held` is the one flag every
+   *  hold mode shares) or its toggle burning (aura or summon contract).
+   *  Feeds route the canonical gain gates; drains honor floors; the pump
+   *  draws only what the destination has room for. Stats are read per host
+   *  (tags + instance mods), so investment reaches every seat — and a gem's
+   *  own perLevel mods scale the very pump it grafts. */
+  private updateConduits(dt: number): void {
+    for (const inst of this.skills) {
+      if (!inst) continue;
+      const specs = instanceConduits(inst);
+      if (specs.length === 0) continue;
+      const engaged = (!!this.casting?.held && this.casting.inst === inst)
+        || this.activeAuras.has(inst.def.id)
+        || this.summonToggles.has(inst.def.id);
+      if (!engaged) continue;
+      const tags = skillContextTags(inst.def);
+      const extra = instanceMods(inst);
+      const rate = this.sheet.get('conduitRate', tags, extra);
+      const eff = this.sheet.get('conduitEfficiency', tags, extra);
+      if (rate <= 0 || eff <= 0) continue;
+      for (const spec of specs) this.tickConduit(spec, dt, rate, eff);
+    }
+  }
+
+  /** One pump, one frame: draw from the source (never past its floor, never
+   *  more than the destination can hold at the exchange rate), deliver
+   *  through the destination's gain gate. A source that yields nothing (a
+   *  BROKEN poise bar is drain-inert) feeds nothing — no free lunches
+   *  through dead pools. */
+  private tickConduit(spec: ConduitSpec, dt: number, rate: number, eff: number): void {
+    const src = CONDUIT_POOLS[spec.from];
+    const dst = CONDUIT_POOLS[spec.to];
+    const srcMax = src.max(this);
+    if (srcMax <= 0) return;                     // endpoint absent (no guard raised)
+    const room = dst.room(this);
+    if (room < CONDUIT_CFG.minRoom) return;       // destination full: the pump idles
+    const perPoint = spec.ratio * eff;
+    const want = ((spec.drainPct ?? 0) * srcMax + (spec.drainFlat ?? 0)) * rate * dt;
+    if (perPoint <= 0 || want <= 0) return;
+    const avail = src.cur(this) - srcMax * (spec.floor ?? CONDUIT_CFG.floor);
+    if (avail <= 0) return;                      // source resting at its floor
+    const drained = src.drain(this, Math.min(want, avail, room / perPoint));
+    if (drained <= 0) return;
+    dst.feed(this, drained * perPoint);
+  }
+
   private syncBuffSource(id: string): void {
     const buff = this.buffs.get(id);
     if (!buff) { this.sheet.removeSource('buff:' + id); return; }
@@ -1803,6 +1852,9 @@ export class Actor {
 
     // Charge personalities: decay clocks, drains, per-second taps.
     this.updateCharges(dt);
+
+    // Resource pumps: every engaged skill's conduits, innate + grafted.
+    this.updateConduits(dt);
 
     // Buffs
     for (const [id, buff] of this.buffs) {
@@ -2449,3 +2501,118 @@ export class Actor {
     return true;
   }
 }
+
+/** One endpoint per pumpable pool — the registry the conduit tick walks
+ *  (see ConduitSpec). cur/max define the working pool (ward, uncapped,
+ *  reads its CURRENT as the %-base); room is the space a feed may still
+ *  fill; drain returns what actually LEFT (a broken poise bar yields 0);
+ *  feed routes THE canonical gain gate so every conduit obeys the same law
+ *  as every other source in the game. A new pumpable pool is one entry
+ *  here plus its name in the ConduitPool union — no other code. */
+const CONDUIT_POOLS: Record<ConduitPool, {
+  cur(a: Actor): number;
+  max(a: Actor): number;
+  room(a: Actor): number;
+  drain(a: Actor, amount: number): number;
+  feed(a: Actor, amount: number): number;
+}> = {
+  life: {
+    cur: a => a.life,
+    max: a => a.maxLife(),
+    // healBy owns the true cap (ceiling, seals, healTaken) — room here only
+    // pre-gates the draw; a seared bearer genuinely wastes transfused blood.
+    room: a => Math.max(0, a.lifeCeiling() - a.life),
+    drain: (a, amt) => {
+      // The hard safety under any spec: a pump bleeds you white, never dead.
+      const take = Math.min(amt,
+        Math.max(0, a.life - a.maxLife() * CONDUIT_CFG.lifeFloor));
+      a.life -= take;
+      return take;
+    },
+    feed: (a, amt) => a.healBy(amt),
+  },
+  mana: {
+    cur: a => a.mana,
+    max: a => a.maxMana(),
+    room: a => Math.max(0, a.maxMana() - a.mana),
+    drain: (a, amt) => {
+      const take = Math.min(amt, Math.max(0, a.mana));
+      a.mana -= take;
+      return take;
+    },
+    feed: (a, amt) => {
+      const before = a.mana;
+      a.mana = Math.min(a.maxMana(), a.mana + amt);
+      return a.mana - before;
+    },
+  },
+  es: {
+    // Drains are WITHDRAWALS (the esToMana rule): no recharge interruption,
+    // no break events — the shield is spent, not wounded.
+    cur: a => a.es,
+    max: a => a.maxEs(),
+    room: a => Math.max(0, a.maxEs() - a.es),
+    drain: (a, amt) => {
+      const take = Math.min(amt, Math.max(0, a.es));
+      a.es -= take;
+      return take;
+    },
+    feed: (a, amt) => a.gainEs(amt),
+  },
+  poise: {
+    // Drains route damagePoise: brackets RING on the way down and a floor-0
+    // pump BREAKS its own bar (drain-inert while broken — the recovery
+    // climb can't be farmed). Feeds route gainPoise: they speed a broken
+    // bar's climb and may crest into overcharge headroom.
+    cur: a => a.poise,
+    max: a => a.maxPoise(),
+    room: a => Math.max(0,
+      a.maxPoise() * (1 + a.sheet.get('poiseOvercharge')) - a.poise),
+    drain: (a, amt) => {
+      const before = a.poise;
+      a.damagePoise(amt, a);
+      return before - a.poise;
+    },
+    feed: (a, amt) => a.gainPoise(amt),
+  },
+  ward: {
+    // Uncapped pool: its decay is its cap. %-drains read the CURRENT as
+    // their base (exponential draw-down); feeds always have room.
+    cur: a => a.ward,
+    max: a => a.ward,
+    room: () => Number.POSITIVE_INFINITY,
+    drain: (a, amt) => {
+      const take = Math.min(amt, Math.max(0, a.ward));
+      a.ward -= take;
+      return take;
+    },
+    feed: (a, amt) => a.gainWard(amt),
+  },
+  guard: {
+    // The HELD stance's shield: absent (0/0) unless a guard is raised, so
+    // guard-endpoint pumps idle off-stance by construction. Feeds cap at
+    // the stance's live maximum (a Transgression crest may have raised
+    // it); drains floor by spec — a default-floor pump never eats the
+    // wall out from under its bearer.
+    cur: a => a.casting?.mode === 'guard' ? (a.casting.shield ?? 0) : 0,
+    max: a => a.casting?.mode === 'guard' ? (a.casting.maxShield ?? 0) : 0,
+    room: a => a.casting?.mode === 'guard'
+      ? Math.max(0, (a.casting.maxShield ?? 0) - (a.casting.shield ?? 0))
+      : 0,
+    drain: (a, amt) => {
+      const cs = a.casting;
+      if (cs?.mode !== 'guard') return 0;
+      const take = Math.min(amt, Math.max(0, cs.shield ?? 0));
+      cs.shield = (cs.shield ?? 0) - take;
+      return take;
+    },
+    feed: (a, amt) => {
+      const cs = a.casting;
+      if (cs?.mode !== 'guard') return 0;
+      const fed = Math.min(amt,
+        Math.max(0, (cs.maxShield ?? 0) - (cs.shield ?? 0)));
+      cs.shield = (cs.shield ?? 0) + fed;
+      return fed;
+    },
+  },
+};

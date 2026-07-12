@@ -467,6 +467,12 @@ export const STAT_DEFS: Record<string, StatDef> = {
   blockChance:    { label: 'Block Chance', base: 0, min: 0, max: 0.6, percent: true },
   /** Multiplier on guard-skill shield health. */
   guardStrength:  { label: 'Guard Strength', base: 1, min: 0.1 },
+  /** Throughput multiplier on every CONDUIT the actor runs (see ConduitSpec):
+   *  scales the DRAIN side; what's drawn still converts at the ratio. */
+  conduitRate:     { label: 'Conduit Rate', base: 1, min: 0 },
+  /** Exchange-rate multiplier on every conduit — more delivered per point
+   *  drained. The efficiency lever gems, gear and passives invest in. */
+  conduitEfficiency: { label: 'Conduit Efficiency', base: 1, min: 0 },
 
   // Thorns — the retaliation suite (#14). All victim-side.
   /** Flat damage returned to ANY attacker whose hit lands on you —
@@ -1256,6 +1262,8 @@ const STAT_BLURBS: Record<string, string> = {
   blockChance: 'The odds an incoming hit is blocked.',
   blockPower: 'The fraction of a blocked hit that is stopped.',
   guardStrength: 'How much punishment a raised guard absorbs before it breaks.',
+  conduitRate: 'How fast your conduits pump — the drain side of every running resource conversion.',
+  conduitEfficiency: 'How much a conduit delivers per point it drains — the exchange rate on every running conversion.',
   energyShield: 'A second life pool that soaks damage first and recharges after a quiet moment — but a wound mid-recharge interrupts the flow and the wait starts over.',
   esRechargeSteadfast: 'The chance a wound fails to interrupt a running energy shield recharge.',
   esDotResist: 'How much of a damage-over-time seep the shield stops before it reaches life.',

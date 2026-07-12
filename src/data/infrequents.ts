@@ -35,4 +35,6 @@ export const MONSTER_THEMES: Record<string, string> = {
   skeleton_warrior: 'undead',
   skeleton_archer: 'undead',
   hollow_bannerman: 'undead',
+  cistern_warden: 'undead',
+  transfusion_acolyte: 'undead',
 };

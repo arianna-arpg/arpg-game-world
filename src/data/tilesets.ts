@@ -802,7 +802,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'wasteland',
     // War-land keeps its ordnance: abandoned powder dumps that answer stray
     // fire — and the muster grounds the war was drilled in.
-    compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }, { composition: 'fallen_colossus', chance: 0.12 }],
+    compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }, { composition: 'fallen_colossus', chance: 0.12 }, { composition: 'cistern_court', chance: 0.12 }],
     nameFirst: ['Blasted', 'Cindertorn', 'Hellcracked', 'Ruinous', 'Emberblight', 'Scorched', 'Riftburnt', 'Ashbroken', 'Brimstone', 'Sulfurous', 'Cracked', 'Desolate', 'Smouldering', 'Wretched', 'Hateforged', 'Slagheap', 'Damnedmarch', 'Charbroken'],
     nameSecond: ['Waste', 'Barrens', 'Scar', 'Reach', 'Expanse', 'Flats', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Cinders', 'Drift', 'Span', 'Wilds'],
     theme: {
@@ -1182,7 +1182,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // CRYPT — a forsaken graveland of headstones, broken tombs, and the risen.
   crypt: {
     id: 'crypt',
-    compositions: [{ composition: 'boneyard_court', chance: 0.4 }],
+    compositions: [{ composition: 'boneyard_court', chance: 0.4 }, { composition: 'cistern_court', chance: 0.2 }],
     // What a graveland always keeps, whichever face it shows: burial goods
     // underfoot, a wall that hides more than bones, sealed urns and their
     // tenants, grave mold, the odd briar grown fat on the soil.
@@ -1974,7 +1974,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // maze of corridors and chambers carved into the rock).
   highland: {
     id: 'highland', biome: 'highland',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.14 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.14 }, { composition: 'cistern_court', chance: 0.1 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
     nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Highlands', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {

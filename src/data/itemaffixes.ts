@@ -558,6 +558,22 @@ const SUFFIXES: AffixDef[] = [
     stat: 'poiseOvercharge', top: 0.25, floor: 0.3,
     baseTags: ['belt', 'amulet'], weight: 45,
   }),
+  // CONDUIT levers — the resource-pump fabric's two dials, investable on
+  // gear: throughput (how hard every running pump draws) and the exchange
+  // rate (how much it delivers per point drained). Tag-filtered like every
+  // stat, so "conduits on guard skills" is a passive away.
+  fam({
+    id: 'conduit_rate', kind: 'suffix', themes: [DEFENSE, SUSTAIN],
+    names: ['of the Open Duct', 'of the Millrace'],
+    stat: 'conduitRate', modKind: 'increased', top: 0.35, floor: 0.25,
+    baseTags: ['belt', 'gloves'], weight: 40,
+  }),
+  fam({
+    id: 'conduit_efficiency', kind: 'suffix', themes: [DEFENSE, SUSTAIN],
+    names: ['of Fair Exchange', 'of the Alchemist\'s Due'],
+    stat: 'conduitEfficiency', modKind: 'increased', top: 0.3, floor: 0.25,
+    baseTags: ['amulet', 'chest'], weight: 40,
+  }),
   // ES recharge levers: the flow's speed, and its refusal to be interrupted.
   fam({
     id: 'es_recharge_rate', kind: 'suffix', themes: [CASTER, DEFENSE],

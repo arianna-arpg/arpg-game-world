@@ -2283,6 +2283,22 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('aoeRadius', 'increased', 0.06)] },
   },
 
+  wellspring_stance: {
+    id: 'wellspring_stance', name: 'Wellspring Stance',
+    description: 'TOGGLE: your focus pools DOWNWARD — while the stance burns, spare MANA seeps into your FOOTING: poise refills in combat, not just in the calm after it (the pump keeps a third of your mana untouchable and idles while the bar is whole). Recomposure quickens too. The unshakable duelist\'s idle: stand, settle, set.',
+    tags: ['spell', 'aura', 'buff', 'duration'], color: '#c8b878',
+    manaCost: 0, cooldown: 0.5, useTime: 0.3,
+    delivery: {
+      type: 'aura', mode: 'toggle',
+      aura: { radius: 60, selfMods: [mod('poiseRegenPct', 'increased', 0.25)] },
+    },
+    conduits: [{ from: 'mana', to: 'poise', drainPct: 0.035, ratio: 1.2, floor: 0.35 }],
+    effects: [],
+    requirements: { strength: 12, willpower: 12 },
+    ai: { range: 130, weight: 1.2 },
+    leveling: { perLevel: [mod('conduitEfficiency', 'increased', 0.08)] },
+  },
+
   preservation: {
     id: 'preservation', name: 'Preservation',
     description: 'For 10 seconds, you and allies inside regenerate +4 life per second, and every 3 seconds a pulse heals 4% of maximum life. (Pulse base is data: maxLife, maxMana, or lifeRegen.)',
@@ -2554,6 +2570,24 @@ export const SKILLS: Record<string, SkillDef> = {
     requirements: { willpower: 16, strength: 10 },
     ai: { range: 220, weight: 2 },
     leveling: { perLevel: [mod('guardStrength', 'increased', 0.12), mod('damage', 'increased', 0.05, ['spell'], 'guarding')] },
+  },
+
+  stone_communion: {
+    id: 'stone_communion', name: 'Stone Communion',
+    description: 'Raise a COMMUNING WALL: a broad guard fed by your own footing — while the stance holds, POISE drains steadily into the shield, rebuilding it between blows (see engine: the conduit fabric). The pump draws only while the wall is dented and never below a quarter of your bar. Stack poise deep and the stone drinks deep: the bar is the fuel tank, the wall is the engine.',
+    tags: ['guard', 'channel', 'duration'], color: '#a89878',
+    manaCost: 10, cooldown: 6, useTime: 0,
+    castMode: 'guard',
+    guard: {
+      arcDeg: 140, shieldLife: 55, moveFactor: 0.35, turnRate: 2.2,
+      bash: { mult: 0.7, range: 70, arcDeg: 110, stunChance: 0.3, knockback: 45 },
+    },
+    conduits: [{ from: 'poise', to: 'guard', drainPct: 0.09, ratio: 2.0, floor: 0.25 }],
+    delivery: { type: 'self' },
+    effects: [],
+    requirements: { strength: 18, willpower: 10 },
+    ai: { range: 220, weight: 2 },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.12), mod('conduitEfficiency', 'increased', 0.08)] },
   },
 
   // --- The breaker suite: skills aimed at a DEFENSE LAYER -------------------

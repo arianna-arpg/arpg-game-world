@@ -680,6 +680,50 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'artillery' },
   },
 
+  // The cistern-keeper (the conduit pass's guard pole): a barrow sentinel
+  // whose WALL is fed by its own deep poise — Stone Communion through the
+  // same conduit fabric players build with. Break the carried cistern and
+  // the pump chokes: the part IS the counterplay lesson.
+  cistern_warden: {
+    id: 'cistern_warden', name: 'Cistern Warden',
+    color: '#a8b8a0', shape: 'ribcage', radius: 15, material: 'bone', look: 'skeleton_warrior',
+    base: { life: 95, moveSpeed: 105, accuracy: 96, armor: 30, poise: 90, mana: 50, manaRegen: 5 },
+    skills: ['stone_communion', 'cleave'],
+    xp: 34, faction: 'undead',
+    detection: 0.8,
+    parts: [{
+      monster: 'soul_cistern', dx: -0.9, dy: 0.1, lifeFrac: 0.35, breakDamage: 0.1,
+      // Crack the jar and the pump chokes to a dribble.
+      breakMods: [mod('conduitRate', 'more', -0.6)],
+    }],
+  },
+  // The jar itself: a full monster def — a composite part today, an
+  // entity-creator composable tomorrow (parts ARE monster defs).
+  soul_cistern: {
+    id: 'soul_cistern', name: 'Soul Cistern',
+    color: '#8ad0c8', shape: 'circle', radius: 8, look: 'construct_totem',
+    noNemesis: true,
+    base: { life: 55, moveSpeed: 0, poise: 30 },
+    skills: [],
+    xp: 0, faction: 'undead',
+  },
+
+  // The grave-priest that CHANNELS the thread while its own blood feeds the
+  // working — sanguine_feed granted on lifedrain through the ordinary
+  // kit-grant lane (the lane router sockets it), so the monster runs the
+  // same conduit fabric players build with: life pays for mana pays for
+  // the drain that refills the life. A little perpetual-motion horror.
+  transfusion_acolyte: {
+    id: 'transfusion_acolyte', name: 'Transfusion Acolyte',
+    color: '#b06a7a', shape: 'hexagon', radius: 13, material: 'bone', look: 'barrow_wight',
+    base: { life: 60, moveSpeed: 110, accuracy: 95, poise: 30, mana: 55, manaRegen: 4 },
+    skills: ['lifedrain', 'claw'],
+    grants: [{ atLevel: 1, support: 'sanguine_feed', on: 'lifedrain' }],
+    xp: 30, faction: 'undead',
+    detection: 0.85,
+    brain: { type: 'artillery' },
+  },
+
   // The close-work wraith (#41): fights at arm's length with a small reap.
   blade_wraith: {
     id: 'blade_wraith', name: 'Blade Wraith',
@@ -5592,6 +5636,10 @@ export const FACTIONS: Record<string, {
       { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'barrow_wight', weight: 1, presence: { from: 10, fadeIn: 5 } },
       { id: 'banshee', weight: 1, presence: { from: 14, fadeIn: 6 } },
+      // The cistern-tenders: the conduit pass's wing — the warden's wall
+      // drinks its own poise; the acolyte's blood pays for its thread.
+      { id: 'cistern_warden', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      { id: 'transfusion_acolyte', weight: 1, presence: { from: 9, fadeIn: 4 } },
     ],
   },
   nightkin: {

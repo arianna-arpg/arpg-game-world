@@ -554,6 +554,27 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'palisade', order: 52, longShadow: 0.6,
     params: { fill: '#6a5238', edge: '#2c2418', material: 'wood' },
   },
+  // --- The cistern-court kit (the conduit pass): old blood-plumbing ---------
+  // Existing painters in grave-stone clothes; the faint teal lights are
+  // data (the dynamic light layer), not renderer edits — "something still
+  // pools here" sold entirely from this file.
+  stone_cistern: {
+    painter: 'well', order: 54, shadow: 0.55, longShadow: 0.7,
+    light: { radius: -2.0, color: '#8ad0c8', intensity: 0.12 },
+  },
+  votive_basin: {
+    painter: 'fountain', order: 53, shadow: 0.45,
+    light: { radius: -1.6, color: '#8ad0c8', intensity: 0.12 },
+  },
+  offering_urns: {
+    painter: 'potCluster', order: 53, shadow: 0.5,
+    params: { clay: '#5a5248', lid: '#8ad0c8' },
+  },
+  dry_runnel: {
+    painter: 'leyLine', order: 30,
+    params: { color: '#4aa89a' },
+    light: { radius: -2.2, color: '#4aa89a', intensity: 0.1 },
+  },
   // --- The fallen-colossus kit: ruin at landmark scale, stone clothes -------
   colossus_head: {
     painter: 'statue', order: 54, shadow: 0.65, longShadow: 1.2,

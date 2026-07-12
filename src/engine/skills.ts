@@ -356,6 +356,16 @@ export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
   return out;
 }
 
+/** Every resource pump riding an instance: the skill's own conduits plus
+ *  each socketed graft (see ConduitSpec). ALL of them run while the host is
+ *  engaged — pumps compose rather than compete, so there is deliberately
+ *  no first-wins here. */
+export function instanceConduits(inst: SkillInstance): ConduitSpec[] {
+  const out = [...(inst.def.conduits ?? [])];
+  for (const s of hostSockets(inst)) if (s.def.conduit) out.push(s.def.conduit);
+  return out;
+}
+
 /** The brood clause riding an instance (first socket graft wins). */
 export function instanceBrood(inst: SkillInstance): BroodSpec | undefined {
   for (const s of hostSockets(inst)) if (s.def.brood) return s.def.brood;
@@ -2286,6 +2296,55 @@ export interface GuardSpec {
   pulse?: { skillId: string; interval: number };
 }
 
+/** The pools a CONDUIT may pump between. 'guard' is the HELD stance's shield
+ *  health — it exists only while a guard is raised (endpoints read 0 and the
+ *  pump idles otherwise). Every FEED routes the pool's canonical gain gate
+ *  (healBy / gainEs / gainPoise / gainWard — heal scaling, fill seams and
+ *  overcharge headroom all honored); a POISE drain routes damagePoise, so
+ *  brackets ring on the way down and a floor-0 pump genuinely BREAKS its own
+ *  bar (Sundered and all — the reckless build's bargain). */
+export type ConduitPool = 'life' | 'mana' | 'es' | 'poise' | 'ward' | 'guard';
+
+/** THE CONDUIT — a continuous resource PUMP: while the host skill is ENGAGED
+ *  (any HELD cast — guard, channel, charge, overcharge — or a burning
+ *  aura/contract toggle), `from` drains to feed `to`, dt-continuous. The
+ *  pump is a smart one: it draws ONLY what the destination has room for
+ *  (nothing wasted at the cap) and never pulls the source past its floor.
+ *  Rates ride the conduitRate stat, the exchange rides conduitEfficiency —
+ *  both queried with the host's tags + instance mods, so gems, gear and
+ *  passives all reach in. Two seats: SkillDef.conduits (a stance BUILT of
+ *  its pump) and SupportDef.conduit (grafted). Every pump on an instance
+ *  runs side by side — chain gems and mana can back poise can back guard,
+ *  two pumps deep. That composition is the point. */
+export interface ConduitSpec {
+  from: ConduitPool;
+  to: ConduitPool;
+  /** Fraction of FROM's working maximum drained per second (× conduitRate).
+   *  An uncapped pool (ward) reads its CURRENT as the base, so a %-drain
+   *  draws down exponentially. */
+  drainPct?: number;
+  /** Flat FROM drained per second (× conduitRate). */
+  drainFlat?: number;
+  /** TO gained per point of FROM drained (× conduitEfficiency). */
+  ratio: number;
+  /** The pump stops when FROM sits at/below this fraction of its working
+   *  max (default CONDUIT_CFG.floor). floor 0 on a poise pump drinks the
+   *  bar through the BREAK; floor 0 on life still honors the hard
+   *  CONDUIT_CFG.lifeFloor — a pump may bleed you white, never dead. */
+  floor?: number;
+}
+
+/** The conduit fabric's module dials — data, not code. */
+export const CONDUIT_CFG = {
+  /** Default source floor (fraction of working max) when a spec names none. */
+  floor: 0.15,
+  /** LIFE is never pumped below this fraction of max, whatever the spec. */
+  lifeFloor: 0.1,
+  /** Destinations this close to full (absolute points) don't engage the
+   *  pump — hysteresis against cap-edge micro-sips. */
+  minRoom: 0.5,
+} as const;
+
 /** A channel's growth term. `curve` back-loads the payoff: 'quadratic' =
  *  per × t² (feeble start, compounding hold), 'exponential' = per × (2^t − 1)
  *  (doubles each held second). Default linear. `max` caps all of them. */
@@ -3187,6 +3246,12 @@ export interface SkillDef {
   /** Stage-banked hold behavior (castMode 'overcharge' — or grafted onto
    *  any bar-cast skill by a support's OverchargeSpec). */
   overcharge?: OverchargeSpec;
+  /** RESOURCE PUMPS built into the skill (see ConduitSpec): they run while
+   *  this skill is ENGAGED — its guard/channel/hold HELD, its toggle
+   *  burning. A stance whose identity IS the conversion (Stone Communion's
+   *  poise-fed wall) declares them here; supports graft more through
+   *  SupportDef.conduit and every pump runs side by side. */
+  conduits?: ConduitSpec[];
 
   /** Base damage rolled per use, by type. Omit for pure utility skills. */
   baseDamage?: Partial<Record<DamageType, [number, number]>>;
@@ -3672,6 +3737,13 @@ export interface SupportDef {
    *  fold — the per-skill frenzy, rented by the socket. WINS over the
    *  skill's own pile (one per use). See SelfStackSpec. */
   selfStack?: SelfStackSpec;
+  /** A RESOURCE PUMP this support grafts onto the host (see ConduitSpec):
+   *  it runs while the HOST is engaged — its held stance up, its toggle
+   *  burning. Stoneblood Conduit drains the bearer's poise to recharge
+   *  their raised guard; gate the gem with requiresTags so it only sockets
+   *  where an engagement exists to run it. COMPOSES: every socketed pump
+   *  ticks beside the skill's own — deliberately no first-wins. */
+  conduit?: ConduitSpec;
   /** A PROJECTILE TRAIL this support grafts onto the skill (Detonating
    *  Passage's path blasts, Scorched Wake's burning ground). See ProjTrailSpec. */
   trail?: ProjTrailSpec;
@@ -3975,6 +4047,9 @@ const MINION_RIDABLE_FIELD_LIST = [
   // then presses the empty face — pressUsable routes the press into the
   // rack cast, the same autonomous reload cycle the gunner bandits run.
   'munition',
+  // A pump RIDES: the forwarded minion runs it in its OWN updateConduits
+  // against its OWN pools — a guarding thrall genuinely feeds its wall.
+  'conduit',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every

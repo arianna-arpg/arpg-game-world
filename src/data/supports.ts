@@ -3534,6 +3534,86 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 4, minDropLevel: 12,
   },
 
+  // --- THE CONDUIT FAMILY (SupportDef.conduit): resource pumps --------------
+  // One fabric (Actor.updateConduits), many exchanges: while the HOST is
+  // engaged — its stance held, its toggle burning — `from` drains to feed
+  // `to` through the canonical gain gates. The pump only draws what the
+  // destination has room for, and stops at the source's floor. Build the
+  // source deep and the pump is an engine: the poise-stacked wall drinks
+  // its own footing. requiresTags keeps every gem where an engagement
+  // exists to run it (validate.ts audits exactly that), and the pumps
+  // COMPOSE — socket two and mana can back poise can back guard.
+
+  stoneblood_conduit: {
+    id: 'stoneblood_conduit', name: 'Stoneblood Conduit',
+    description: 'While the supported guard HOLDS, your POISE drains steadily into the wall — the shield rebuilt mid-blow out of your own footing. The pump only draws while the wall is dented, and never below a quarter of your bar: stack poise deep and the stone drinks deep, but it will not break your stance for you. The poise-tank\'s wall: your defense is the fuel.',
+    color: '#a89878', requiresTags: ['guard'],
+    conduit: { from: 'poise', to: 'guard', drainPct: 0.08, ratio: 2.0, floor: 0.25 },
+    mods: [],
+    perLevel: [mod('conduitEfficiency', 'increased', 0.07)],
+    weight: 5, minDropLevel: 8,
+  },
+
+  reckless_transfusion: {
+    id: 'reckless_transfusion', name: 'Reckless Transfusion',
+    description: 'The greedy sibling: your POISE pours HARD into the supported guard — faster and richer than any disciplined pump, and it does NOT stop at the bottom. It will drink your bar through the BREAK: Sundered, brackets ringing, the lot — and then sip nothing until the bar re-arms. The wall you buy is magnificent; the legs you buy it with are yours.',
+    color: '#c05a48', requiresTags: ['guard'],
+    conduit: { from: 'poise', to: 'guard', drainPct: 0.15, ratio: 2.6, floor: 0 },
+    mods: [],
+    perLevel: [mod('conduitRate', 'increased', 0.06)],
+    weight: 3, minDropLevel: 14,
+  },
+
+  bulwarks_tithe: {
+    id: 'bulwarks_tithe', name: 'Bulwark\'s Tithe',
+    description: 'The pump turned around: while the supported guard HOLDS, the WALL pays a steady tithe into your POISE — the shield keeps your footing armed through the storm, and it stops before it eats itself (never below a sixth of the wall). The anti-stagger tank: let the stance take the wear so the bar never breaks.',
+    color: '#8ab8d8', requiresTags: ['guard'],
+    conduit: { from: 'guard', to: 'poise', drainPct: 0.06, ratio: 0.6, floor: 0.15 },
+    mods: [],
+    perLevel: [mod('conduitEfficiency', 'increased', 0.07)],
+    weight: 5, minDropLevel: 8,
+  },
+
+  sanguine_feed: {
+    id: 'sanguine_feed', name: 'Sanguine Feed',
+    description: 'While the supported CHANNEL is held, your blood feeds the working: LIFE drains steadily into MANA — the pump idles whenever the blue bar is full, and it will bleed you white but never dead. The blood-mage\'s bargain: the spell keeps burning as long as you do.',
+    color: '#b05a90', requiresTags: ['channel'],
+    conduit: { from: 'life', to: 'mana', drainPct: 0.035, ratio: 1.4, floor: 0.1 },
+    mods: [],
+    perLevel: [mod('conduitEfficiency', 'increased', 0.07)],
+    weight: 4, minDropLevel: 10,
+  },
+
+  crystal_cistern: {
+    id: 'crystal_cistern', name: 'Crystal Cistern',
+    description: 'While the supported guard HOLDS, your ENERGY SHIELD decants into the wall — the crystal backing the stone. A withdrawal, not a wound: the drain never interrupts a recharge, and it rests at a floor so the lattice is never drunk dry. The ES-tank\'s guard: two shields, one wall.',
+    color: '#8ad8e8', requiresTags: ['guard'],
+    conduit: { from: 'es', to: 'guard', drainPct: 0.07, ratio: 1.6, floor: 0.2 },
+    mods: [],
+    perLevel: [mod('conduitRate', 'increased', 0.06)],
+    weight: 4, minDropLevel: 12,
+  },
+
+  thoughtburn: {
+    id: 'thoughtburn', name: 'Thoughtburn',
+    description: 'While the supported CHANNEL is held, your ENERGY SHIELD burns as fuel: the lattice drains steadily into MANA and the working drinks it. A withdrawal, not a wound — recharges flow undisturbed beneath it. The archmage\'s reserve tank: the shield is just mana you haven\'t spent yet.',
+    color: '#a8b8f0', requiresTags: ['channel'],
+    conduit: { from: 'es', to: 'mana', drainPct: 0.05, ratio: 1.2, floor: 0.15 },
+    mods: [],
+    perLevel: [mod('conduitEfficiency', 'increased', 0.07)],
+    weight: 4, minDropLevel: 12,
+  },
+
+  overflow_reservoir: {
+    id: 'overflow_reservoir', name: 'Overflow Reservoir',
+    description: 'While the supported TOGGLE burns, spare MANA seeps into your ENERGY SHIELD — the unspent surplus banked as lattice instead of sloshing at the cap. The pump keeps a working half-tank of mana untouchable and idles whenever the shield is whole: pure surplus, never the rent.',
+    color: '#7ac0d8', requiresTags: ['aura'],
+    conduit: { from: 'mana', to: 'es', drainPct: 0.04, ratio: 1.0, floor: 0.5 },
+    mods: [],
+    perLevel: [mod('conduitEfficiency', 'increased', 0.07)],
+    weight: 4, minDropLevel: 10,
+  },
+
   // --- The breaker suite: aim your damage at a DEFENSE LAYER ----------------
   // The enemy-defense-textures doctrine read from the attacker's side: each
   // gem tunes WHICH layer the supported skill's damage bites — poise bars,

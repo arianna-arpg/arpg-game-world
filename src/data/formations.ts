@@ -517,6 +517,55 @@ registerFormation({
   ],
 });
 
+// --- THE CISTERN COURT (the conduit pass's set dressing) ----------------------
+// The old blood-plumbing of barrow country: a stone cistern holding court
+// over votive basins and offering urns, and the dry runnels that once fed
+// it ringing the yard. Someone built the dead a PUMP. All four kinds ride
+// existing painters via params (well / fountain / potCluster / leyLine) —
+// zero renderer edits, the visual-fabric contract. The basins and urns are
+// brittle strike-toys (terrain that PAYS when grazed, the energist rule).
+registerDoodadRule('stone_cistern', {
+  overlap: 'solid', blocksMove: true, spacing: 34,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('votive_basin', {
+  overlap: 'solid', blocksMove: true, spacing: 26,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  brittle: { on: ['hit'], orbChance: 0.1, text: 'the basin cracks — what it held runs out!', color: '#8ad0c8' },
+});
+registerDoodadRule('offering_urns', {
+  overlap: 'solid', blocksMove: true, spacing: 24,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  brittle: { on: ['hit'], orbChance: 0.15, text: 'the urns spill their keeping!', color: '#c8b088' },
+});
+// The runnel is a GLOW UNDERFOOT (inert, walkable — the clay_pots class):
+// a gutter that still remembers what it carried.
+registerDoodadRule('dry_runnel', { overlap: 'inert', spacing: 12 });
+
+// The court's goods, huddled around the wellhead: the cistern anchoring
+// the ring, basins and urns crowding it — brittle cover for the fight
+// that finds the place.
+registerFormation({
+  id: 'cistern_ring', arrange: 'orbit', span: [36, 78], step: 44,
+  params: { rings: [1, 2], innerFrac: 0.5 },
+  pieces: [
+    { kind: 'offering_urns', radius: [9, 12], jitter: 10, rot: true },
+    { kind: 'votive_basin', radius: [10, 13], every: 3, jitter: 8, rot: true },
+    { kind: 'stone_cistern', radius: [13, 16], every: 4, jitter: 6 },
+  ],
+});
+
+// The dry plumbing: runnel glows pacing a wide ring around the court —
+// inert decals, so the yard stays fully walkable (the gaps aren't even
+// needed; the ring is the suggestion of a ring).
+registerFormation({
+  id: 'runnel_ring', arrange: 'orbit', span: [96, 132], step: 40,
+  params: { rings: [1, 1] },
+  pieces: [
+    { kind: 'dry_runnel', radius: [16, 22], jitter: 4, rot: true },
+  ],
+});
+
 // --- THE FALLEN COLOSSUS (the ruin-at-landmark-scale kit) ---------------------
 // Something vast broke here long before the map had a name. The breaker
 // pass's set dressing: everything with a bar breaks, given time. Four kinds,

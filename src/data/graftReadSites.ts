@@ -80,6 +80,10 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   // its own requiresTags ['guard'] — the tag fit IS the audit). And
   // 'guardCast' (read at every press — canUse's hold-combo lift and
   // skillUseTime's instant force are delivery-agnostic by design).
+  // Likewise 'conduit' — engagement-gated per-frame in Actor.updateConduits
+  // (any held bar or burning toggle), delivery-agnostic by design; its
+  // gems gate themselves with guard/channel/aura requiresTags and
+  // validate.ts audits exactly that, so the tag fit IS the audit.
 ];
 
 /** Does this support CARRY the row's payload (field set / stat modded)? */

@@ -188,6 +188,22 @@ registerComposition({
   ],
 });
 
+// THE CISTERN COURT: the old blood-plumbing of barrow country — a stone
+// cistern holding court over votive basins and offering urns, the dry
+// runnels that once fed it ringing the yard. Someone built the dead a
+// PUMP: the conduit pass's set dressing (the wardens that still tend such
+// courts spawn from the same graves the fiction says they would). The
+// runnel ring is inert glow, so the yard stays fully walkable by design.
+registerComposition({
+  id: 'cistern_court',
+  sites: [{ id: 'court', radius: [120, 160] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [70, 95] }],
+  post: [
+    { kind: 'formation', formation: 'cistern_ring', at: 'court', count: [1, 1] },
+    { kind: 'formation', formation: 'runnel_ring', at: 'court', count: [1, 1] },
+  ],
+});
+
 // THE HELLFORGE LANDING: where the River of Flame ends, the demons' great
 // forge stands on its swept court — the terminus reward the underworld's
 // course GUARANTEES (dimensions.ts rolls it at chance 1 on terminus zones;
