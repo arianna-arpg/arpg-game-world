@@ -25,6 +25,11 @@ export interface TilesetVariant {
   name: string;
   /** Replaces the tileset's base layout when this variant is rolled. */
   layout: StampSpec[];
+  /** THEME overrides merged over the tileset's base theme at mint — a face can
+   *  RECOLOR itself (the leyline's pyre/gale/rime/stone elements, a hot-spring
+   *  tundra) without a whole sibling tileset. Doodad visuals authored with
+   *  'theme:' tokens tint along for free. Absent = the base theme, byte-identical. */
+  theme?: Partial<ZoneTheme>;
 }
 
 export interface TilesetDef {
@@ -1631,23 +1636,41 @@ export const TILESETS: Record<string, TilesetDef> = {
   //     rift its own feel. ---
 
   // ABYSSAL — a lightless void: jagged shards, yawning chasms, grasping tendrils.
+  // THE ABYSSAL RIFT — the fracture capstone's lightless deep, PoE-abyss
+  // bones: a near-black crust the abyss GLOWS THROUGH (crack-runs chained
+  // underfoot), riven spike-reefs raking the ground into lanes, and true
+  // bottomless rents (fall recovery) that make the crossing itself the
+  // hazard. The winding cave-gut is its natural shape — narrow ways over
+  // the drop. Everything violet: the Abyssal faction's own light.
   abyssal_rift: {
     id: 'abyssal_rift', frontier: false,
     nameFirst: ['Yawning', 'Sunless', 'Hungering', 'Lightless', 'Riven', 'Devouring', 'Gnashing', 'Voidtorn', 'Maddening', 'Eldergloom', 'Soulrent', 'Unmade', 'Screaming', 'Blacktide', 'Annihilent', 'Coilshadow', 'Abyssborn', 'Witherdark'],
     nameSecond: ['Abyss', 'Maw', 'Deep', 'Descent', 'Hollow', 'Rift', 'Gulf', 'Void', 'Throat', 'Sink', 'Chasm', 'Tear', 'Vortex', 'Wound', 'Pit', 'Nadir'],
     theme: {
-      ambientDark: 0.45,
-      floor: '#0a0610', grid: '#150b20', border: '#3a2150',
-      obstacle: '#281838', obstacleEdge: '#5a3a7a', accent: '#b060e8',
-      chasm: '#050108', mud: '#160c1e', water: '#1a0f2c', lava: '#5a1c8a',
+      ambientDark: 0.5,
+      floor: '#070409', grid: '#100a18', border: '#3a2150',
+      obstacle: '#221430', obstacleEdge: '#54367a', accent: '#b060e8',
+      chasm: '#040108', mud: '#140b1c', water: '#180e2a', lava: '#5a1c8a',
+      // The crust: black loam the violet glow bleeds up through.
+      ground: {
+        palette: ['#050308', '#0a0610', '#100a18', '#181026', '#241638'],
+        bias: 0.42, alpha: 0.55, speckles: 0.7,
+      },
     },
     sizeW: [1300, 1700], sizeH: [1000, 1300],
-    layout: [
-      { kind: 'rocks', count: [14, 20], radius: [18, 46] },
-      { kind: 'cliff', count: [3, 5] },
-      { kind: 'chasm', count: [2, 4] },
-      { kind: 'ravine', count: [1, 2] },
+    caveLayouts: { winding: 2, plains: 1 }, // narrow ways over the drop
+    common: [
+      { kind: 'formation', count: [2, 3], formation: 'crack_run' },
+      { kind: 'abyss_crack', count: [2, 4] },
       { kind: 'vines', count: [2, 4] },
+    ],
+    layout: [
+      { kind: 'abyssal_rent', count: [2, 3] },
+      { kind: 'formation', count: [1, 2], formation: 'spine_reef' },
+      { kind: 'abyss_spine', count: [6, 10] },
+      { kind: 'rocks', count: [10, 14], radius: [18, 42] },
+      { kind: 'cliff', count: [2, 4] },
+      { kind: 'ravine', count: [1, 2] },
     ],
     packs: {
       count: [3, 5], size: [3, 5],
@@ -1665,22 +1688,87 @@ export const TILESETS: Record<string, TilesetDef> = {
   },
 
   // LEYLINE — an arcane confluence: crystal nodes, energy pools, rime channels.
+  // THE LEYLINE NEXUS — the fracture capstone's elemental confluence. ONE kit
+  // (currents underfoot, crystal fonts, resonance nodes), FOUR element FACES:
+  // each variant re-THEMES the arena (TilesetVariant.theme — the accent tints
+  // every 'theme:'-token doodad free) and swaps in its element's ground truth
+  // + its resonance node — the standing hazard that changes how the ground is
+  // crossed. Pyre volleys arcing orbs over poured lava; gale lances random
+  // beams; rime chills a wash band over frozen pools; stone grinds among
+  // dense rubble and drops. The current — the ley_current chains — runs
+  // through every face: the leyline IS the place.
   leyline_nexus: {
     id: 'leyline_nexus', frontier: false,
     nameFirst: ['Resonant', 'Arcane', 'Shimmering', 'Sundered', 'Humming', 'Crystalline', 'Luminous', 'Etherbright', 'Flux-Wracked', 'Singing', 'Glimmering', 'Spellbound', 'Aether-Charged', 'Pulsing', 'Radiant', 'Star-Threaded', 'Manaforged', 'Coruscant'],
     nameSecond: ['Nexus', 'Confluence', 'Weave', 'Lattice', 'Wellspring', 'Leyline', 'Conflux', 'Skein', 'Junction', 'Spire', 'Wellhead', 'Matrix', 'Vortex', 'Threadwork', 'Font', 'Loom'],
     theme: {
+      ambientDark: 0.26,
       floor: '#070d15', grid: '#0d1822', border: '#2a5066',
       obstacle: '#1a3a4a', obstacleEdge: '#3a6a8a', accent: '#60d0ff',
       chasm: '#030810', mud: '#0c1a22', water: '#0a2c44',
+      ground: {
+        palette: ['#05090f', '#0a121c', '#101c2a', '#182a3a', '#22384c'],
+        bias: 0.46, alpha: 0.5, speckles: 0.9,
+      },
     },
     sizeW: [1300, 1700], sizeH: [1000, 1300],
+    caveLayouts: { plains: 2, winding: 1 },
+    // The current runs through EVERY face: leyline chains + surfacing fonts.
+    common: [
+      { kind: 'formation', count: [2, 3], formation: 'ley_current' },
+      { kind: 'ley_font', count: [2, 4] },
+      { kind: 'rocks', count: [8, 12], radius: [16, 34] },
+    ],
     layout: [
-      { kind: 'rocks', count: [14, 20], radius: [18, 42] },
       { kind: 'cliff', count: [3, 5] },
       { kind: 'water', count: [2, 4] },
       { kind: 'ice', count: [1, 3] },
       { kind: 'chasm', count: [1, 2] },
+    ],
+    variants: [
+      // PYRE — the current runs molten: ember accent, poured lava, orb-volley nodes.
+      { name: 'pyre confluence',
+        theme: { accent: '#ff8a3a', border: '#5a2a12', obstacle: '#3a1a10', obstacleEdge: '#7a3a1e',
+          mud: '#1e0e08', ground: { palette: ['#0f0705', '#180b06', '#221008', '#30160a', '#42200e'], bias: 0.44, alpha: 0.55, speckles: 1.1 } },
+        layout: [
+          { kind: 'lava', count: [2, 4] },
+          { kind: 'cinder', count: [1, 2] },
+          { kind: 'pyre_node', count: [3, 5] },
+          { kind: 'cliff', count: [2, 4] },
+          { kind: 'chasm', count: [0, 1] },
+        ] },
+      // GALE — the current crackles: storm accent, charged leavings, beam-lance nodes.
+      { name: 'gale confluence',
+        theme: { accent: '#8fd8ff', border: '#2a4a66', obstacle: '#14303e', obstacleEdge: '#3a6a8a',
+          ground: { palette: ['#060b12', '#0b141e', '#12202c', '#1a2e3e', '#264052'], bias: 0.48, alpha: 0.5, speckles: 1.3 } },
+        layout: [
+          { kind: 'gale_node', count: [3, 5] },
+          { kind: 'charged_crystal', count: [4, 7] },
+          { kind: 'static_bloom', count: [3, 5] },
+          { kind: 'storm_glass', count: [2, 4] },
+          { kind: 'cliff', count: [2, 4] },
+        ] },
+      // RIME — the current freezes: ice accent, frozen pools, chill-band nodes.
+      { name: 'rime confluence',
+        theme: { accent: '#b8e8ff', border: '#3a5a76', obstacle: '#1c3448', obstacleEdge: '#4a7294',
+          water: '#0e3450', ground: { palette: ['#070d14', '#0d1620', '#14222e', '#1e3242', '#2c4658'], bias: 0.5, alpha: 0.5, speckles: 1.2 } },
+        layout: [
+          { kind: 'ice', count: [3, 5] },
+          { kind: 'water', count: [2, 3] },
+          { kind: 'rime_node', count: [3, 5] },
+          { kind: 'cliff', count: [2, 4] },
+        ] },
+      // STONE — the current grinds: earthen accent, dense rubble and drops, grind nodes.
+      { name: 'stone confluence',
+        theme: { accent: '#d8b06a', border: '#4a3a22', obstacle: '#2e2418', obstacleEdge: '#5e4a2e',
+          ground: { palette: ['#0b0906', '#14100a', '#1e1810', '#282016', '#342a1c'], bias: 0.44, alpha: 0.55, speckles: 1.0 } },
+        layout: [
+          { kind: 'stone_node', count: [3, 5] },
+          { kind: 'rocks', count: [10, 14], radius: [20, 44] },
+          { kind: 'cliff', count: [3, 5] },
+          { kind: 'chasm', count: [2, 3] },
+          { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
+        ] },
     ],
     packs: {
       count: [3, 5], size: [3, 5],

@@ -2757,15 +2757,15 @@ export class World {
     this.event = null;
     this.encounters = [];
     this.transientDoodads = []; // terraform growths are zone-local (the doodad list itself was just rebuilt)
-    // THE HEAT STANDS OFF THE MELT: every lava pool and magma_core wall
-    // radiates a heat_wash — a band around the rim (never inside; standing
-    // IN the melt is standDamage's province) that licks the uninsured with
-    // small fire on a chance beat. Attached here, the ONE seam every gen
-    // path pours through (tileset stamps, landmark pours, cave mints).
+    // RULE-EFFECT ATTACH: a kind whose DOODAD_RULES row declares a standing
+    // `effect` (lava's heat wash, a leyline node's element surge) gets it
+    // here with a randomized first cooldown — the ONE seam every gen path
+    // pours through (tileset stamps, landmark pours, cave mints). What used
+    // to be a lava/magma_core special case is now any kind's data row.
     for (const d of this.doodads) {
-      if ((d.kind === 'lava' || d.kind === 'magma_core') && !d.effect) {
-        d.effect = { id: 'heat_wash', interval: 1.1, cd: rand(0, 1.1), radius: 64, chance: 0.55, power: 3 };
-      }
+      if (d.effect) continue;
+      const rEff = doodadRuleOf(d.kind).effect;
+      if (rEff) d.effect = { ...rEff, cd: rand(0, rEff.interval) };
     }
     this.vocationSites = [];    // secret-vocation shrines re-place per load (deterministic)
     this.wave = 0;
@@ -6835,10 +6835,14 @@ export class World {
   private effectCrystalBeam(d: Doodad, eff: DoodadEffect): void {
     if (!chance(eff.chance)) return;
     const len = eff.radius, halfW = eff.width ?? 16;
+    // The beam's ELEMENT + tint are effect data ('gale_node' lances storm by
+    // default; a future kind says element:'cold' with one field).
+    const element = eff.element ?? 'lightning';
+    const col = eff.color ?? '#9fd8ff';
     const dir = rand(0, Math.PI * 2);
     const ex = Math.cos(dir), ey = Math.sin(dir);
     // Beam visual (telegraph + strike in one — reuse facing for dir, radius for length).
-    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: len, color: '#9fd8ff', life: 0.32, maxLife: 0.32, beam: true, facing: dir });
+    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: len, color: col, life: 0.32, maxLife: 0.32, beam: true, facing: dir });
     const dmg = eff.power + this.zone.level * 1.2;
     for (const a of this.actors) {
       if (!this.isEffectTarget(a, eff)) continue;
@@ -6846,10 +6850,10 @@ export class World {
       const t = rx * ex + ry * ey;                 // distance along the ray
       if (t < 0 || t > len) continue;
       if (Math.abs(rx * ey - ry * ex) > halfW + a.radius) continue; // perpendicular band
-      const taken = dmg * (1 - a.sheet.get('lightningRes')) * a.sheet.get('damageTaken');
+      const taken = dmg * (1 - (resistValue(a, element) || 0)) * a.sheet.get('damageTaken');
       a.life -= taken;
       a.hitFlash = 0.15;
-      this.text(vec(a.pos.x, a.pos.y - 14), Math.round(taken).toString(), '#9fd8ff', 12);
+      this.text(vec(a.pos.x, a.pos.y - 14), Math.round(taken).toString(), col, 12);
       if (a.life <= 0 && !a.dead) this.kill(a);
     }
   }
@@ -6951,6 +6955,10 @@ export class World {
     // of discs — sweeping every actor per firing was the zone's biggest CPU
     // regression). The grid returns build-order candidates, so the per-actor
     // chance() rolls draw in exactly the order the full sweep drew them.
+    // The wash's ELEMENT + tint are effect data ('fire' classic; a rime node
+    // says element:'cold' — one field, same band physics).
+    const element = eff.element ?? 'fire';
+    const col = eff.color ?? '#ff8a3a';
     for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.heatWashScratch)) {
       if (a.dead || a.flying || a.construct || a.invulnerable) continue;
       if (a.habitat?.kind === d.kind || a.immuneGround?.includes(d.kind)) continue;
@@ -6958,13 +6966,13 @@ export class World {
       if (dd <= d.radius || dd > d.radius + eff.radius) continue;
       if (!chance(eff.chance)) continue;
       const heat = eff.power * (1 + this.zone.level * 0.08)
-        * (1 - resistValue(a, 'fire'));
+        * (1 - (resistValue(a, element) || 0));
       if (heat <= 0) continue;
       a.life -= heat;
       a.hitFlash = 0.1;
       this.flashes.push({
         pos: vec(a.pos.x, a.pos.y), radius: a.radius + 6,
-        color: '#ff8a3a', life: 0.18, maxLife: 0.18,
+        color: col, life: 0.18, maxLife: 0.18,
       });
       if (a.life <= 0 && !a.dead) this.kill(a);
     }

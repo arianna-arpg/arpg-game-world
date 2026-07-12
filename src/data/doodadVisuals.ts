@@ -766,6 +766,59 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       glow: { color: '#d8cdb0', alpha: 0.1 },
     },
   },
+  // THE LEYLINE KIT (the fracture capstone's confluences — 'leyline_nexus').
+  // Everything keys 'theme:accent', so each element FACE (a TilesetVariant
+  // theme override) recolors the whole kit with zero extra rows: the pyre
+  // face runs ember, the rime face ice — one kit, four currents.
+  ley_conduit: {
+    painter: 'leyLine', order: 30,
+    params: { color: 'theme:accent|#60d0ff' },
+    light: { radius: -2.2, color: 'theme:accent|#60d0ff', intensity: 0.14 },
+  },
+  ley_font: {
+    longShadow: 0.6, painter: 'shard', order: 50, shadow: 0.5,
+    params: { points: 6, color: 'theme:obstacle|#1a3a4a', material: 'crystal', coreGlow: { color: 'theme:accent|#9fd8ff' } },
+    light: { radius: -2.4, color: 'theme:accent|#7fc0f0', intensity: 0.24 },
+  },
+  // The resonance nodes: one shard body each, tinted to its element (fixed
+  // colors — the node IS its element even on a sibling face), pulsing light.
+  pyre_node: {
+    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    params: { points: 5, color: '#3a1408', material: 'crystal', coreGlow: { color: '#ff8a3a' } },
+    light: { radius: -3, color: '#ff8a3a', intensity: 0.34, flicker: 2.6 },
+  },
+  gale_node: {
+    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    params: { points: 5, color: '#12303a', material: 'crystal', coreGlow: { color: '#8fd8ff' } },
+    light: { radius: -3, color: '#8fd8ff', intensity: 0.34, flicker: 3.2 },
+  },
+  rime_node: {
+    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    params: { points: 5, color: '#16283a', material: 'crystal', coreGlow: { color: '#b8e8ff' } },
+    light: { radius: -3, color: '#b8e8ff', intensity: 0.3, flicker: 1.6 },
+  },
+  stone_node: {
+    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    params: { points: 5, color: '#2e2418', material: 'stone', coreGlow: { color: '#d8b06a' } },
+    light: { radius: -2.4, color: '#d8b06a', intensity: 0.22, flicker: 1.2 },
+  },
+  // THE ABYSS KIT ('abyssal_rift', PoE-style): glowing fissures underfoot,
+  // riven spikes reefing into jagged cover — all in the faction's violet.
+  abyss_crack: {
+    painter: 'chasmPit', order: 38,
+    params: {
+      rim: { color: '#2a1440', alpha: 0.5, grow: 4 },
+      core: { color: '#060210' },
+      bands: 0,
+      cracks: { chance: 0.9, color: 'theme:accent|#b060e8' },
+      glow: { color: 'theme:accent|#b060e8', alpha: 0.22 },
+    },
+    light: { radius: -2.4, color: 'theme:accent|#b060e8', intensity: 0.26, flicker: 1.8 },
+  },
+  abyss_spine: {
+    longShadow: 1.1, painter: 'shard', order: 51, shadow: 0.55,
+    params: { points: 4, color: '#140a20', material: 'stone', edgeGlow: { color: 'theme:accent|#b060e8', alpha: 0.45 } },
+  },
   // THE RIVER-OF-FLAME KIT (hell's artery — data/tilesets.ts 'river_of_flame').
   // The forge monument breathes deep ember light (the terminus beacon you
   // steer toward down the whole artery); gibbet cages hold pale soul-wisps

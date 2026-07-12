@@ -455,10 +455,12 @@ export function placeZoneAt(
   // dressing that CHANGES; common carries what the biome always is.
   let layout = tileset.layout;
   let variantName: string | undefined;
+  let variantTheme: Partial<ZoneDef['theme']> | undefined;
   if (tileset.variants && tileset.variants.length) {
     const v = rng.pick(tileset.variants);
     variantName = v.name;
     layout = v.layout;
+    variantTheme = v.theme; // a face may RECOLOR itself (merged over base below)
   }
   if (tileset.common && tileset.common.length) layout = [...tileset.common, ...layout];
 
@@ -667,7 +669,8 @@ export function placeZoneAt(
     id, name, level,
     size,
     shape, biome,
-    theme: spec.special ? SPECIAL_ARENA_THEME : tileset.theme,
+    theme: spec.special ? SPECIAL_ARENA_THEME
+      : variantTheme ? { ...tileset.theme, ...variantTheme } : tileset.theme,
     layout,
     ...(layoutType !== 'plains' ? { layoutType } : {}),
     objective,
@@ -856,13 +859,14 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // legible at the door ("The Necropolis (bonefields)").
   let rows = ts.layout;
   let variantName: string | undefined;
+  let variantTheme: Partial<ZoneDef['theme']> | undefined;
   if (opts?.variant && ts.variants?.length) {
     const v = ts.variants.find(x => x.name === opts.variant);
-    if (v) { rows = v.layout; variantName = v.name; }
+    if (v) { rows = v.layout; variantName = v.name; variantTheme = v.theme; }
     else console.warn(`[worldgen] mintCave '${id}': tileset '${ts.id}' has no variant '${opts.variant}' — base layout`);
   } else if (opts?.rollVariant && ts.variants?.length) {
     const v = rng.pick(ts.variants);
-    rows = v.layout; variantName = v.name;
+    rows = v.layout; variantName = v.name; variantTheme = v.theme;
   }
   // COMMON rows ride along whichever face rolled — the brittle-kit doctrine
   // (what the biome always IS must not vanish when a face is chosen) now
@@ -881,7 +885,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     size: { w, h },
     shape: 'rect',                          // caves stay rect — no ellipse rim math
     ...(ts.boundless ? { boundless: true } : {}),
-    theme: ts.theme,
+    theme: variantTheme ? { ...ts.theme, ...variantTheme } : ts.theme,
     layout,
     ...(layoutType ? { layoutType } : {}),
     ...(opts?.layoutParams ? { layoutParams: opts.layoutParams } : {}),

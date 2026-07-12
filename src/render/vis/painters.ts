@@ -4197,6 +4197,57 @@ const pentagram: GroupPainter = (env, group) => {
   ctx.globalAlpha = 1;
 };
 
+/** LEY CHANNEL — a flowing energy conduit underfoot (the leyline kit): a dark
+ *  groove, a bright CORE line whose dashes stream along the channel (animated
+ *  dashOffset — the current visibly FLOWS), soft side-glow. Faces its `rot`
+ *  (formations lay chains with rot:'chain', so runs read as one leyline).
+ *  Params: color (the element — author 'theme:accent' and every themed face
+ *  tints it free), depth (groove tone). */
+const leyLine: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: string; depth?: string };
+  const { ctx, theme, time } = env;
+  const col = resolveColor(p.color, theme, '#60d0ff');
+  const depth = resolveColor(p.depth, theme, '#05080c');
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 31) | 0) >>> 0;
+    const R = o.radius;
+    const L = R * 2.2, W = Math.max(6, R * 0.34);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The groove: a dark bed the current runs in.
+    ctx.globalAlpha = 0.55;
+    ctx.fillStyle = depth;
+    ctx.beginPath(); ctx.ellipse(0, 0, L / 2, W, 0, 0, Math.PI * 2); ctx.fill();
+    // Side-glow pooling out of the channel.
+    const grad = ctx.createRadialGradient(0, 0, W * 0.4, 0, 0, L * 0.52);
+    grad.addColorStop(0, withAlpha(col, 0.16));
+    grad.addColorStop(1, withAlpha(col, 0));
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.ellipse(0, 0, L * 0.52, W * 2.1, 0, 0, Math.PI * 2); ctx.fill();
+    // The current: a streaming dashed core + a faint steady rail.
+    ctx.strokeStyle = withAlpha(col, 0.35);
+    ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(-L / 2, 0); ctx.lineTo(L / 2, 0); ctx.stroke();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([9, 13]);
+    ctx.lineDashOffset = -time * 34 - (seed % 22); // the flow (seed staggers runs)
+    ctx.beginPath(); ctx.moveTo(-L / 2, 0); ctx.lineTo(L / 2, 0); ctx.stroke();
+    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    // Breathing motes drifting the channel.
+    for (let i = 0; i < 2; i++) {
+      const f = ((time * 0.22 + i * 0.5 + (seed % 7) * 0.1) % 1);
+      ctx.globalAlpha = 0.5 * Math.sin(f * Math.PI);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(-L / 2 + L * f, 0, 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+};
+
 /** BONE PILE / MOUND — the ossuary's heaped dead: irregular strata mounding
  *  toward a pale crown, skulls half-sunk in the drift, stray ribs arcing off
  *  the slope. One painter serves drift-piles and true dunes alike (the radius
@@ -6121,7 +6172,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
-  tentacleField, pentagram, wardSeal, bonePile, boneShelf, door, breach, landmass, beacon, fallback,
+  tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, door, breach, landmass, beacon, fallback,
   pyre, hangingCage, warBanner, hellforge,
   gateArch, tortureRack,
 };

@@ -60,7 +60,10 @@ const FRACTURE_SURGE: FractureSurge = {
     { variant: 'abyssal', faction: 'abyssal', weight: 3,
       capstone: { boss: 'abyssal_tyrant', tileset: 'abyssal_rift', levelBonus: 3, rewardMul: 3.0 } },
     { variant: 'leyline', faction: 'elemental', weight: 2,
-      capstone: { boss: 'leyline_sovereign', tileset: 'leyline_nexus', levelBonus: 3, rewardMul: 3.0 } },
+      // The chamber rolls an ELEMENT FACE per dive (leyline_nexus variants:
+      // pyre/gale/rime/stone confluences — re-themed, re-hazarded, one kit).
+      capstone: { boss: 'leyline_sovereign', tileset: 'leyline_nexus', levelBonus: 3, rewardMul: 3.0,
+        arena: { rollVariant: true } } },
     { variant: 'hellion', faction: 'demon', weight: 1,
       capstone: { boss: 'hellion_tyrant', tileset: 'hellion_rift', levelBonus: 3, rewardMul: 3.2 } },
   ],

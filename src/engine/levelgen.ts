@@ -28,7 +28,7 @@ import { runStructureGen } from './structureGen';
 // Type-only: veil.ts value-imports this module (rules/Doodad); the type flows
 // back erased, so there is no runtime cycle.
 import type { VeilSpec } from './veil';
-import type { Modifier } from './stats';
+import type { DamageType, Modifier } from './stats';
 import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
 import { isFieldPixel } from '../world/fieldRegion';
@@ -192,6 +192,16 @@ export type KnownDoodadKind =
   | 'bone_mound'       // a heaped dune of the counted dead — the bonefields' skyline
   | 'ossuary_niche'    // a stacked bone-shelf wall piece — reliquary rows are made of these
   | 'charnel_pit'      // a sunken pit the ossuary tips its overflow into — pale-rimmed, dark-hearted
+  // The leyline kit (the fracture capstone's elemental confluences)
+  | 'ley_conduit'      // a flowing energy channel underfoot — chain formations draw the leylines
+  | 'ley_font'         // a crystal upwelling where the current breaks surface
+  | 'pyre_node'        // a resonance node bleeding FIRE — volleys molten orbs (rule-effect)
+  | 'gale_node'        // a resonance node bleeding STORM — lances a lightning beam (rule-effect)
+  | 'rime_node'        // a resonance node bleeding FROST — a freezing wash band (rule-effect)
+  | 'stone_node'       // a resonance node bleeding EARTH — a grinding dust band (rule-effect)
+  // The abyss kit (the fracture capstone's lightless deep)
+  | 'abyss_crack'      // a glowing fissure underfoot — the abyss showing through
+  | 'abyss_spine'      // a jagged riven spike — the deep's teeth, reefs of them
   // The river-of-flame kit (hell's artery — the flame course's bank vocabulary)
   | 'hellforge_anvil'  // the demons' great forge-altar: a slag plinth, an ember throat (the terminus monument)
   | 'soul_cage'        // a gibbet cage on a leaning post — the river's toll, still glowing faintly
@@ -234,6 +244,12 @@ export interface DoodadEffect {
   target?: 'opponent' | 'ally' | 'owner';
   /** target:'owner' only — the actor id the effect fights for. */
   ownerId?: number;
+  /** DAMAGE ELEMENT for direct-damage effects (beam/wash): the resist rolled
+   *  against. Defaults preserve each handler's classic element (beam
+   *  lightning, wash fire) — a rime node says 'cold' with one field. */
+  element?: DamageType;
+  /** Presentation tint for the effect's flash/text (defaults per handler). */
+  color?: string;
   /** Seconds between attempts. */
   interval: number;
   /** Live countdown, managed by the engine tick (omit at authoring). */
@@ -472,6 +488,11 @@ export interface DoodadRule {
    *  caveSeeds): only its dedicated stamp may emit it — clusters/legends/fx
    *  layers are validator-forbidden from placing it (the zip would shear). */
   seedPaired?: boolean;
+  /** A STANDING HAZARD this kind always carries — attached at zone load with a
+   *  randomized first cooldown (World's rule-effect pass). THE data seam for
+   *  environmental hazards: lava's heat wash, a leyline node's element surge —
+   *  one row here instead of a kind-keyed engine special case. */
+  effect?: DoodadEffect;
   /** ENGULFING terrain: when a stamp lays this kind, earlier solids/triggers
    *  its discs cover are spliced (a boulder hovering over a fresh chasm is a
    *  draw error). FALSE keeps the lapping look (a pool around its boulders).
@@ -682,8 +703,13 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // 'lava' RegionKind carries the standDamage; fliers, habitat-matched
   // bodies and immuneGround bearers wade free). The impassable molten
   // WALL — the caldera's spiral — is the separate magma_core kind below.
-  lava:      { overlap: 'ground', pour: {}, hazardGround: true },
-  magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false, pour: { fuseGap: 0 } },
+  // The heat stands off the melt: both melt kinds carry their rim-band wash
+  // as RULE DATA (the world's rule-effect attach) — the old engine special
+  // case, now one row any hazard kind can author.
+  lava:      { overlap: 'ground', pour: {}, hazardGround: true,
+    effect: { id: 'heat_wash', interval: 1.1, radius: 64, chance: 0.55, power: 3 } },
+  magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false, pour: { fuseGap: 0 },
+    effect: { id: 'heat_wash', interval: 1.1, radius: 64, chance: 0.55, power: 3 } },
   // The wayfarer kit: story furniture for roads, coasts and working woods.
   weathered_statue: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   wayshrine:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 160, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -827,6 +853,24 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   bone_mound:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   ossuary_niche: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   charnel_pit:   { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 130, forbidOn: ['water', 'lava', 'chasm'] },
+  // The leyline kit: conduits flow underfoot (pure ground glow — the chain
+  // formations draw literal leylines); fonts break the surface as crystal;
+  // the RESONANCE NODES carry each element's standing hazard as RULE DATA
+  // (DoodadRule.effect) — the playstyle changer: pyre volleys, gale lances,
+  // rime chill bands, stone grind. Every number is authorable per kind.
+  ley_conduit: { overlap: 'ground', walkOnly: true },
+  ley_font:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  pyre_node:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 190, forbidOn: ['water', 'lava', 'chasm'],
+    effect: { id: 'lava_orb', skillId: 'magma_glob', interval: 3.6, radius: 330, chance: 0.5, power: 5 } },
+  gale_node:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 190, forbidOn: ['water', 'lava', 'chasm'],
+    effect: { id: 'crystal_beam', interval: 2.8, radius: 300, width: 15, chance: 0.55, power: 7 } },
+  rime_node:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 190, forbidOn: ['lava', 'chasm'],
+    effect: { id: 'heat_wash', element: 'cold', color: '#9fd8ff', interval: 1.2, radius: 110, chance: 0.5, power: 4 } },
+  stone_node:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 190, forbidOn: ['water', 'lava', 'chasm'],
+    effect: { id: 'heat_wash', element: 'physical', color: '#d8b06a', interval: 1.4, radius: 96, chance: 0.5, power: 5 } },
+  // The abyss kit: cracks glow underfoot; spines reef into jagged cover.
+  abyss_crack: { overlap: 'ground', walkOnly: true },
+  abyss_spine: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 44, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   // The river-of-flame kit: the forge-altar monument (a composition centerpiece,
   // huge spacing so two never crowd), gibbet cages that split when struck (the
   // strike-surface seam), banner poles you duck behind but shoot past, and
@@ -2926,6 +2970,16 @@ registerStamp('abyssal_rent', (ctx, spec) => {
 registerStamp('bone_mound', (ctx, spec) => stampSolid(ctx, 'bone_mound', spec.radius ?? [26, 48]));
 registerStamp('ossuary_niche', (ctx, spec) => stampSolid(ctx, 'ossuary_niche', spec.radius ?? [18, 26]));
 registerStamp('charnel_pit', stampSingle('charnel_pit', [26, 44]));
+// The leyline + abyss kits: fonts and resonance nodes stand solid; conduits
+// and cracks lay as ground glow (their chains come from formations).
+registerStamp('ley_conduit', stampSingle('ley_conduit', [18, 28]));
+registerStamp('ley_font', (ctx, spec) => stampSolid(ctx, 'ley_font', spec.radius ?? [14, 24]));
+registerStamp('pyre_node', (ctx, spec) => stampSolid(ctx, 'pyre_node', spec.radius ?? [16, 22]));
+registerStamp('gale_node', (ctx, spec) => stampSolid(ctx, 'gale_node', spec.radius ?? [16, 22]));
+registerStamp('rime_node', (ctx, spec) => stampSolid(ctx, 'rime_node', spec.radius ?? [16, 22]));
+registerStamp('stone_node', (ctx, spec) => stampSolid(ctx, 'stone_node', spec.radius ?? [16, 22]));
+registerStamp('abyss_crack', stampSingle('abyss_crack', [20, 34]));
+registerStamp('abyss_spine', (ctx, spec) => stampSolid(ctx, 'abyss_spine', spec.radius ?? [12, 22]));
 // The river-of-flame kit: the forge-altar (cluster-anchored in practice; the
 // stamp keeps it a legal tileset row), gibbet cages, banners, bone-pyres.
 registerStamp('hellforge_anvil', (ctx, spec) => stampSolid(ctx, 'hellforge_anvil', spec.radius ?? [38, 46]));

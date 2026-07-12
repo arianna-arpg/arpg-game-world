@@ -398,3 +398,38 @@ registerFormation({
     { kind: 'demon_banner', radius: [11, 14], every: 3, jitter: 16, rot: true },
   ],
 });
+
+// --- THE LEYLINE + ABYSS GRAMMAR (fracture capstone arenas) -------------------
+
+// A LEY CURRENT: the leyline itself — conduit segments facing along a
+// meandering chain (rot:'chain'), fonts breaking surface where it pools.
+// Two or three currents crossing an arena ARE the confluence.
+registerFormation({
+  id: 'ley_current', arrange: 'meander', span: [420, 720], step: 46,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'ley_conduit', radius: [18, 26], jitter: 3, rot: 'chain' },
+    { kind: 'ley_font', radius: [13, 20], every: 5, jitter: 16 },
+  ],
+});
+
+// A CRACK RUN: the abyss showing through — fissures chained into a wandering
+// tear, spines jutting where the crust broke.
+registerFormation({
+  id: 'crack_run', arrange: 'meander', span: [360, 640], step: 50,
+  params: { wobble: 38 },
+  pieces: [
+    { kind: 'abyss_crack', radius: [18, 30], jitter: 4, rot: 'chain' },
+    { kind: 'abyss_spine', radius: [11, 18], every: 3, jitter: 20, rot: true },
+  ],
+});
+
+// A SPINE REEF: the deep's teeth in a raking line — jagged cover that turns
+// open ground into lanes.
+registerFormation({
+  id: 'spine_reef', arrange: 'line', span: [280, 520], step: 40,
+  pieces: [
+    { kind: 'abyss_spine', radius: [12, 22], jitter: 10, rot: true },
+    { kind: 'rock', radius: [12, 20], every: 3, jitter: 18, rot: true },
+  ],
+});
