@@ -45,9 +45,10 @@ import { vec } from '../src/core/math';
 import { generateZone, randomizeStarterWeb, spacedExitAt, MIN_PORTAL_SEP } from '../src/engine/worldgen';
 import {
   generateLayout, validateStamps, validateCompositions, compositionDefs,
-  doodadRuleOf, layoutIds, blocksMovement,
+  doodadRuleOf, layoutIds, blocksMovement, normalizeDoodadBound,
   type Doodad, type GeneratedLayout,
 } from '../src/engine/levelgen';
+import { shapeBoundR } from '../src/engine/shapes';
 import { GridWalkField } from '../src/world/gridWalk';
 import { TILESETS } from '../src/data/tilesets';
 import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
@@ -127,6 +128,33 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
   const mouths = doodads.filter(d => d.kind === 'cave_entrance').length;
   if (mouths !== layout.caveSeeds.length) {
     fails.push(`${name}: caveSeeds zip sheared (${mouths} mouths vs ${layout.caveSeeds.length} seeds)`);
+  }
+  // HIT-SURFACE fabric invariants (engine/shapes.ts):
+  //  - every door doodad carries an authored slab rect that stays INSIDE its
+  //    cells rect (the slab is the door you see, never wider than the breach);
+  //  - any authored/rule surface keeps the broad-phase promise after
+  //    normalizeDoodadBound: shapeBoundR(surface) ≤ max(radius, boundR), or
+  //    spatial-index queries near a slab corner would miss the doodad.
+  for (const d of doodads) {
+    normalizeDoodadBound(d);
+    if (d.hitbox) {
+      const bound = Math.max(d.radius, d.boundR ?? 0);
+      if (shapeBoundR(d.hitbox) > bound + 0.01) {
+        fails.push(`${name}: ${d.kind} hitbox bound ${shapeBoundR(d.hitbox).toFixed(1)} exceeds broad-phase ${bound.toFixed(1)}`);
+        break;
+      }
+    }
+    if (d.kind === 'door') {
+      const c = d.door?.cells;
+      if (!d.hitbox || d.hitbox.kind !== 'rect') {
+        fails.push(`${name}: door ${d.door?.id ?? '?'} lacks its slab rect hitbox`);
+        break;
+      }
+      if (c && (d.hitbox.hw > c.w / 2 + 0.01 || d.hitbox.hh > c.h / 2 + 0.01)) {
+        fails.push(`${name}: door ${d.door?.id ?? '?'} slab (${d.hitbox.hw.toFixed(0)}×${d.hitbox.hh.toFixed(0)}) pokes past its cells (${c.w}×${c.h})`);
+        break;
+      }
+    }
   }
   // Grid reachability: the universal invariant, asserted from outside. Both
   // endpoints snap exactly the way ensureReachability's own check snaps (a

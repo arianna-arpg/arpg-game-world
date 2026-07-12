@@ -23,7 +23,7 @@ import { vec, type Vec2 } from '../core/math';
 import type { StampSpec, ZoneDef } from '../data/zones';
 import { GridWalkField } from '../world/gridWalk';
 import {
-  layoutParam, registerLayout, scatterDecoration, stampEntries,
+  doorSurfaceOf, layoutParam, registerLayout, scatterDecoration, stampEntries,
   type DoodadDoor, type GenCtx, type PlacedDoor, type PlacedStructure,
 } from './levelgen';
 
@@ -261,6 +261,10 @@ function interiorLayout(ctx: GenCtx, def: ZoneDef, preset?: Record<string, unkno
     ctx.doodads.push({
       pos, radius: Math.max(cells.w, cells.h) / 2,
       kind: 'door', dir: Math.atan2(normal.y, normal.x), door,
+      // The slab IS the hitbox (hit-surface fabric): flush with the wall
+      // line, thin as the drawn bar — the old breach-spanning circle is what
+      // made Durance corridors feel like running into invisible walls.
+      hitbox: doorSurfaceOf(cells, normal),
     });
     placedDoors.push({ door, pos, normal });
   };

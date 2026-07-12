@@ -20,7 +20,14 @@
 // lazily whenever the doodad list changes (see World.doodadsAt).
 // ---------------------------------------------------------------------------
 
-export interface SpatialDisc { pos: { x: number; y: number }; radius: number }
+export interface SpatialDisc {
+  pos: { x: number; y: number };
+  radius: number;
+  /** Broad-phase override when the item's true surface pokes past `radius`
+   *  (a door slab's rect corners — see levelgen.normalizeDoodadBound).
+   *  Insertion coverage uses max of the two; queries are unchanged. */
+  boundR?: number;
+}
 
 /** Tuning: cell size trades bucket fan-out vs bucket length; queryPad must
  *  stay ≥ the fattest query body (boss radii, colossal projectiles). */
@@ -42,7 +49,7 @@ export class DiscIndex<T extends SpatialDisc> {
     const pad = SPATIAL_CFG.queryPad;
     this.buckets.clear();
     for (const it of items) {
-      const r = it.radius + pad;
+      const r = (it.boundR !== undefined && it.boundR > it.radius ? it.boundR : it.radius) + pad;
       const x0 = Math.floor((it.pos.x - r) / cell), x1 = Math.floor((it.pos.x + r) / cell);
       const y0 = Math.floor((it.pos.y - r) / cell), y1 = Math.floor((it.pos.y + r) / cell);
       for (let cy = y0; cy <= y1; cy++) {

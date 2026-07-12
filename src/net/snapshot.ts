@@ -19,6 +19,7 @@
 import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
 import type { Doodad, DoodadDoor, PlacedStructure } from '../engine/levelgen';
+import type { HitShape } from '../engine/shapes';
 import type { ZoneTheme } from '../data/zones';
 import type { ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
@@ -618,6 +619,10 @@ export interface DoodadW {
   /** Door state (kind 'door'): id + open/broken + cell rect, so the client's
    *  predicted collision + render + grid repaint mirror the host's doors. */
   door?: DoodadDoor;
+  /** The true collision surface (hit-surface fabric) — shipped so the
+   *  client's predicted clampPos squeezes a doorway exactly as the host's
+   *  does (boundR is re-derived client-side at index rebuild). */
+  hitbox?: HitShape;
 }
 export interface ExitW {
   p: Vec2W; r: number; to: string; label: string;
@@ -651,7 +656,7 @@ export function serializeZone(world: World): ZoneMsg {
     dimension: world.zone.dimension,
     arena: { w: world.arena.w, h: world.arena.h, shape: world.arena.shape },
     theme: world.zone.theme,
-    doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door })),
+    doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox })),
     exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label, b: e.boundary })),
     waypoint: world.waypointPos ? v2(world.waypointPos) : null,
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,
@@ -668,7 +673,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   world.zone.dimension = msg.dimension;
   world.doodads = msg.doodads.map(d => ({
-    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door,
+    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox,
   })) as Doodad[];
   world.structures = msg.structures ?? [];
   // The zone the CLIENT's terrain currently mirrors — the guard that keeps a

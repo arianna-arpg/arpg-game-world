@@ -35,7 +35,8 @@
 // ---------------------------------------------------------------------------
 
 import type { Doodad } from './levelgen';
-import { blocksProjectiles, blocksSightOf, bodyRadiusOf } from './levelgen';
+import { blocksProjectiles, blocksSightOf, hitSurfaceOf } from './levelgen';
+import { rayShapeT } from './shapes';
 import { regionKind } from '../world/regions';
 import { GridWalkField } from '../world/gridWalk';
 import type { WalkField } from '../world/walk';
@@ -115,26 +116,19 @@ export function castRay(
   let bestT = Infinity;
   let kind: RayHit['kind'] = 'doodad';
 
-  // --- doodad discs (spatial-index buckets sampled along the segment) -------
-  const lenSq = dx * dx + dy * dy;
+  // --- doodad surfaces (spatial-index buckets sampled along the segment) ----
+  // Geometry rides the hit-surface fabric (engine/shapes.ts): discs keep the
+  // exact classic ray/circle entry math; oblong surfaces (door slabs) resolve
+  // by the slab test — so an arrow-slit beside a closed door's slab line
+  // reads exactly as the pixels promise. Start-inside blocks at t=0 (the
+  // veil rule) on every shape.
   const steps = Math.ceil(len / SPATIAL_CFG.queryPad);
   for (let i = 0; i <= steps; i++) {
     const ts = steps > 0 ? i / steps : 0;
     for (const o of env.doodadsAt(from.x + dx * ts, from.y + dy * ts)) {
       if (channel === 'shot' ? !blocksProjectiles(o) : !blocksSightOf(o)) continue;
-      const r = channel === 'shot' ? bodyRadiusOf(o) : o.radius;
-      if (r <= 0) continue;
-      const fx = from.x - o.pos.x, fy = from.y - o.pos.y;
-      const b = 2 * (fx * dx + fy * dy);
-      const c = fx * fx + fy * fy - r * r;
-      const disc = b * b - 4 * lenSq * c;
-      if (disc <= 0) continue;
-      const sq = Math.sqrt(disc);
-      const t0 = (-b - sq) / (2 * lenSq);
-      const t1 = (-b + sq) / (2 * lenSq);
-      if (t1 <= 0 || t0 >= 1) continue;   // wholly behind / beyond the segment
-      const tHit = Math.max(0, t0);       // start-inside blocks at t=0 (veil rule)
-      if (tHit < bestT) { bestT = tHit; kind = 'doodad'; }
+      const t = rayShapeT(hitSurfaceOf(o, channel), o.pos.x, o.pos.y, from.x, from.y, dx, dy);
+      if (t !== null && t < bestT) { bestT = t; kind = 'doodad'; }
     }
   }
 

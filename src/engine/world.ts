@@ -65,8 +65,10 @@ import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDe
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
+  hitSurfaceOf, normalizeDoodadBound,
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
+import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './shapes';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
 import { transitDwell, transitRadius } from '../data/transit';
@@ -25651,19 +25653,36 @@ export class World {
           }
           if (!blocksProjectiles(o)) continue;
           if (o.gone) continue; // popped this very step — nothing left to hit
-          // Arrows fly UNDER the leaves and stop on the bole (bodyRadiusOf).
-          if (dist(p.pos, o.pos) <= p.radius + bodyRadiusOf(o)) {
+          // Arrows fly UNDER the leaves and stop on the bole — or on the true
+          // slab face (hit-surface fabric): a shot slips through a doorway
+          // beside a closed door's slab line instead of dying on the old
+          // breach-spanning circle.
+          if (shapeContains(hitSurfaceOf(o, 'shot'), o.pos.x, o.pos.y, p.pos.x, p.pos.y, p.radius + 1e-9)) {
             this.flashes.push({ pos: vec(p.pos.x, p.pos.y), radius: p.radius + 6, color: p.color, life: 0.15, maxLife: 0.15 });
             if (p.bounces && p.bounces > 0) {
               p.bounces--;
-              // Reflect the heading across the circle's outward normal.
-              const nx = Math.cos(angleTo(o.pos, p.pos)), ny = Math.sin(angleTo(o.pos, p.pos));
-              const dx = Math.cos(p.guideDir), dy = Math.sin(p.guideDir);
-              const dot2 = 2 * (dx * nx + dy * ny);
-              p.guideDir = p.dir = Math.atan2(dy - dot2 * ny, dx - dot2 * nx);
-              // Step clear of the surface so one wall isn't hit twice.
-              p.pos.x = o.pos.x + nx * (o.radius + p.radius + 2);
-              p.pos.y = o.pos.y + ny * (o.radius + p.radius + 2);
+              const surf = hitSurfaceOf(o, 'shot');
+              if (surf.kind === 'circle') {
+                // Reflect the heading across the circle's outward normal —
+                // the classic path, byte-for-byte (crown-radius step-clear).
+                const nx = Math.cos(angleTo(o.pos, p.pos)), ny = Math.sin(angleTo(o.pos, p.pos));
+                const dx = Math.cos(p.guideDir), dy = Math.sin(p.guideDir);
+                const dot2 = 2 * (dx * nx + dy * ny);
+                p.guideDir = p.dir = Math.atan2(dy - dot2 * ny, dx - dot2 * nx);
+                // Step clear of the surface so one wall isn't hit twice.
+                p.pos.x = o.pos.x + nx * (o.radius + p.radius + 2);
+                p.pos.y = o.pos.y + ny * (o.radius + p.radius + 2);
+              } else {
+                // Oblong surface: reflect across the face normal and step
+                // clear along it — a shot banks off a door slab like a wall.
+                const push = pushOutOfShape(surf, o.pos.x, o.pos.y, p.pos.x, p.pos.y, p.radius + 2);
+                if (push) {
+                  const dx = Math.cos(p.guideDir), dy = Math.sin(p.guideDir);
+                  const dot2 = 2 * (dx * push.nx + dy * push.ny);
+                  p.guideDir = p.dir = Math.atan2(dy - dot2 * push.ny, dx - dot2 * push.nx);
+                  p.pos.x = push.x; p.pos.y = push.y;
+                }
+              }
               p.anchor.x = p.pos.x; p.anchor.y = p.pos.y;
             } else {
               dead = true;
@@ -27418,13 +27437,13 @@ export class World {
       if (doodadRuleOf(d.kind).spans) { spans.push(d); continue; }
       if (!blocksMovement(d)) continue;
       if (d.kind === 'chasm') {
-        g.fillDisc(d.pos.x, d.pos.y, bodyRadiusOf(d) + NAV_CFG.pad, 'wall');
+        this.stampNavSurface(g, d);
       } else {
         solids.push(d);
       }
     }
     for (const s of spans) g.fillDisc(s.pos.x, s.pos.y, s.radius, 'ground');
-    for (const o of solids) g.fillDisc(o.pos.x, o.pos.y, bodyRadiusOf(o) + NAV_CFG.pad, 'wall');
+    for (const o of solids) this.stampNavSurface(g, o);
     return g;
   }
 
@@ -27444,9 +27463,8 @@ export class World {
   private pointInSolid(x: number, y: number, margin = 0): Doodad | null {
     for (const o of this.doodadsAt(x, y)) {
       if (!blocksMovement(o)) continue;
-      const dx = x - o.pos.x, dy = y - o.pos.y;
-      const reach = bodyRadiusOf(o) + margin; // the TRUNK, not the crown
-      if (dx * dx + dy * dy >= reach * reach) continue;
+      // The TRUNK (or the true slab surface) — never the crown.
+      if (!shapeContains(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, x, y, margin)) continue;
       if (o.kind === 'chasm' && this.bridges.some(b => dist(vec(x, y), b.pos) <= b.radius)) continue;
       return o;
     }
@@ -27460,6 +27478,12 @@ export class World {
    *  actor can never be born into (or left inside) a wall to pingpong forever. */
   findFreeSpot(at: Vec2, radius: number): Vec2 {
     const p = this.clampPos(vec(at.x, at.y), radius);
+      // Broad-phase bound refresh (hit-surface fabric): a doodad whose true
+      // surface pokes past its visual radius (door slabs) must insert wider,
+      // or corner queries would miss it. Stamped HERE — the one chokepoint
+      // every doodad list change already flows through — so gen-time,
+      // package, terraform, and snapshot-applied doodads all self-heal.
+      for (const d of this.doodads) normalizeDoodadBound(d);
     if (!this.pointInSolid(p.x, p.y, radius * 0.4)) return p;
     for (let ring = 1; ring <= 7; ring++) {
       const rr = ring * 55;
@@ -27493,9 +27517,12 @@ export class World {
       let moved = false;
       for (const o of this.doodadsAt(out.x, out.y)) {
         if (!blocksMovement(o)) continue;
-        const d = dist(out, o.pos);
-        const minD = bodyRadiusOf(o) + radius; // walk under canopies; trunks stop you
-        if (d >= minD) continue;
+        // The hit-surface fabric: trunks (discs) keep the classic radial
+        // slide byte-for-byte; oblong surfaces (door slabs, benches) push
+        // out through their true face — walking into a door slides you
+        // along the plank, not around an invisible circle.
+        const push = pushOutOfShape(hitSurfaceOf(o, 'move'), o.pos.x, o.pos.y, out.x, out.y, radius);
+        if (!push) continue;
         if (o.kind === 'chasm' && this.bridges.some(b => dist(out, b.pos) <= b.radius)) continue;
         moved = true;
         if (d < 0.01) { out.x = o.pos.x + minD; continue; }
@@ -27556,6 +27583,32 @@ export class World {
       }
     }
     return out;
+  /** Stamp one move-blocker's TRUE surface (+ NAV_CFG.pad) onto the nav grid.
+   *  Discs keep the classic fillDisc; oblong surfaces mark exactly the cells
+   *  their padded shape covers — so the pathfield squeezes a doorway the
+   *  same way feet do (clampPos parity via the shared hit-surface fabric). */
+  private stampNavSurface(g: GridWalkField, d: Doodad): void {
+    const s = hitSurfaceOf(d, 'move');
+    if (s.kind === 'circle') {
+      g.fillDisc(d.pos.x, d.pos.y, s.r + NAV_CFG.pad, 'wall');
+      return;
+    }
+    const { ex, ey } = shapeAabbHalf(s);
+    const pad = NAV_CFG.pad;
+    const step = g.cellSize;
+    // March cell centers across the padded bounding window; a center within
+    // pad of the surface blocks (matches fillDisc's center-in-reach rule).
+    const x0 = d.pos.x - ex - pad, x1 = d.pos.x + ex + pad;
+    const y0 = d.pos.y - ey - pad, y1 = d.pos.y + ey + pad;
+    for (let cy = (Math.floor(y0 / step) + 0.5) * step; cy <= y1 + step / 2; cy += step) {
+      for (let cx = (Math.floor(x0 / step) + 0.5) * step; cx <= x1 + step / 2; cx += step) {
+        if (shapeDistance(s, d.pos.x, d.pos.y, cx, cy) < pad) {
+          g.fillRegion(cx, cy, cx, cy, 'wall');
+        }
+      }
+    }
+  }
+
   }
 
   /** Swept walkability resolve (Phase 2): the farthest point along from→to that

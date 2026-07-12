@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import { dist, vec, type Vec2 } from '../core/math';
+import { shapeBoundR, type HitShape } from './shapes';
 import type { Rng } from '../core/rng';
 import type { PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
@@ -323,6 +324,15 @@ export interface Doodad {
    *  derivations (blocksMovement/-Projectiles/-SightOf) consult `open`, so one
    *  state flip opens the way for movement, shots, and AI vision at once. */
   door?: DoodadDoor;
+  /** THE TRUE COLLISION SURFACE (engine/shapes.ts), when it isn't a disc —
+   *  a door's slab rect, authored at gen time in world orientation. Absent =
+   *  the classic disc (radius / bodyRadiusOf per channel). Consumers never
+   *  read this directly: hitSurfaceOf() is the one resolver. */
+  hitbox?: HitShape;
+  /** Broad-phase bound for the spatial index when `hitbox` (or a rule-level
+   *  surface) pokes past `radius` — max(radius, shapeBoundR). OWNED by
+   *  normalizeDoodadBound (stamped at index-rebuild time); never author it. */
+  boundR?: number;
 }
 
 /** The live state a door doodad carries. Ids are deterministic per zone seed
@@ -339,6 +349,29 @@ export interface DoodadDoor {
   life?: number;
   /** Dwell-to-open seconds override (else the DOORS config default). */
   dwell?: number;
+}
+
+/** The door SLAB's collision tuning (the hit-surface fabric): how deep the
+ *  closed slab stands along its normal. Breadth always spans the full breach
+ *  (flush with the jamb cells — no seam a body could wedge into), depth is
+ *  the slab you see: the drawn bar is 12px deep, and a hair of pad keeps
+ *  bodies off the planks. Never deeper than the breach cell itself. */
+export const DOOR_SURFACE_CFG = {
+  /** Half-depth of the closed slab along the door normal, px. */
+  slabHalfDepth: 8,
+};
+
+/** The one place a door's cells rect becomes its collision slab: breadth
+ *  spans the cells, depth is the slab config clamped to the cells' own
+ *  thin axis. `normal` picks which axis is depth. Both door creation sites
+ *  (interior room mouths, plan-structure breaches) route through here. */
+export function doorSurfaceOf(
+  cells: { x: number; y: number; w: number; h: number }, normal: Vec2,
+): HitShape {
+  const alongX = Math.abs(normal.x) >= Math.abs(normal.y); // normal points through the wall
+  const hw = alongX ? Math.min(DOOR_SURFACE_CFG.slabHalfDepth, cells.w / 2) : cells.w / 2;
+  const hh = alongX ? cells.h / 2 : Math.min(DOOR_SURFACE_CFG.slabHalfDepth, cells.h / 2);
+  return { kind: 'rect', hw, hh };
 }
 
 /** A garrisonable position inside a placed structure (a tower core). AI claims
@@ -505,6 +538,15 @@ export interface DoodadRule {
    *  still occludes, shades, and blocks AI sight — so you walk (and fight)
    *  UNDER the leaves. Omitted = the whole disc is solid (today's kinds). */
   bodyScale?: number;
+  /** OBLONG BODY (the hit-surface fabric, engine/shapes.ts): this kind's true
+   *  surface is a RECT, half-extents `hw`/`hh` as fractions of the channel
+   *  radius (bodyRadiusOf for feet/shots, full radius for sight), oriented by
+   *  the instance's spin (`rot`, the default) or facing (`dir`) plus a fixed
+   *  `angle` offset — so a bench blocks as the plank you see, not as an
+   *  invisible circle swallowing the path beside it. One row per kind; a
+   *  per-instance Doodad.hitbox (doors) overrides entirely. Keep the painter
+   *  and the fractions in agreement — the drawn footprint IS the contract. */
+  surface?: { hw: number; hh: number; orient?: 'rot' | 'dir'; angle?: number };
   /** BRITTLE: a lifeless breakable — no life bar, no kill ladder; it POPS.
    *  Pure data: any kind (or a package/legend kind via registerDoodadRule)
    *  becomes a pot, a crumbling plug, or a secret door with one row. */
@@ -589,6 +631,43 @@ export interface BrittleSpec {
  *  keep the full visual radius (the canopy is real to eyes, not to feet). */
 export function bodyRadiusOf(d: Doodad): number {
   return d.radius * (doodadRule(d.kind).bodyScale ?? 1);
+}
+
+/** Which body a consumer is asking about: feet ('move'), effects ('shot'),
+ *  or eyes ('sight'). Mirrors the classic trunk/crown split — move/shot
+ *  resolve at bodyRadiusOf, sight at the full visual radius. */
+export type SurfaceChannel = 'move' | 'shot' | 'sight';
+
+/** THE hit-surface resolver — every collision consumer (clampPos, castRay,
+ *  nav stamping, the projectile terrain sweep, the debug overlay) asks HERE,
+ *  never invents geometry from a kind. Resolution order:
+ *    1. Doodad.hitbox — a per-instance authored surface (doors), already in
+ *       world orientation; identical across channels.
+ *    2. DoodadRule.surface — the kind's oblong body, scaled by the channel
+ *       radius and spun by the instance's rot/dir.
+ *    3. The classic disc at the channel radius (all existing kinds). */
+export function hitSurfaceOf(d: Doodad, channel: SurfaceChannel): HitShape {
+  if (d.hitbox) return d.hitbox;
+  const rule = doodadRule(d.kind);
+  const r = channel === 'sight' ? d.radius : bodyRadiusOf(d);
+  const sf = rule.surface;
+  if (sf) {
+    const spin = sf.orient === 'dir' ? (d.dir ?? d.rot ?? 0) : (d.rot ?? d.dir ?? 0);
+    return { kind: 'rect', hw: r * sf.hw, hh: r * sf.hh, rot: spin + (sf.angle ?? 0) };
+  }
+  return { kind: 'circle', r };
+}
+
+/** Broad-phase radius the spatial index must insert this doodad at — the
+ *  visual radius unless a surface pokes past it (a door slab's corners).
+ *  World stamps `boundR` through here on every index rebuild, so runtime
+ *  doodads (terraforms, mutations, snapshot-applied guests) self-heal. */
+export function normalizeDoodadBound(d: Doodad): void {
+  const rule = doodadRule(d.kind);
+  if (!d.hitbox && !rule.surface) { d.boundR = undefined; return; }
+  // Sight resolves at the widest channel radius, so it bounds all three.
+  const b = shapeBoundR(hitSurfaceOf(d, 'sight'));
+  d.boundR = b > d.radius ? b : undefined;
 }
 
 const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
@@ -2547,6 +2626,9 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     ctx.doodads.push({
       pos, radius: Math.max(cellsRect.w, cellsRect.h) / 2,
       kind: 'door', dir: Math.atan2(n.y, n.x), door,
+      // The slab IS the hitbox: flush with the wall line, thin as the bar
+      // you see — not the old breach-spanning circle bulging into the yard.
+      hitbox: doorSurfaceOf(cellsRect, n),
     });
     placed.doors.push({ door, pos, normal: n });
   }
