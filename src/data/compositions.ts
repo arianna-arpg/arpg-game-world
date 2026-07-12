@@ -158,6 +158,22 @@ registerComposition({
   post: [{ kind: 'formation', formation: 'powder_cache', at: 'dump', count: [1, 1] }],
 });
 
+// A WAR CAMP: a muster ground stamped into its own clearing — a spiked
+// fence punctuated by standards, and inside it the furniture of drill and
+// mess (dummies that burst into straw, racks that clatter, a drum, a fire).
+// The set dresses the fiction the packages act: warbands march OUT of
+// grounds like these. The fence ring's step is generous by design — the
+// gaps are the gates, so reachability never hinges on luck.
+registerComposition({
+  id: 'war_camp',
+  sites: [{ id: 'muster', radius: [150, 200] }],
+  pre: [{ kind: 'clearing', at: 'muster', count: [1, 1], radius: [95, 130] }],
+  post: [
+    { kind: 'formation', formation: 'muster_fence', at: 'muster', count: [1, 1] },
+    { kind: 'formation', formation: 'camp_goods', at: 'muster', count: [1, 1] },
+  ],
+});
+
 // THE HELLFORGE LANDING: where the River of Flame ends, the demons' great
 // forge stands on its swept court — the terminus reward the underworld's
 // course GUARANTEES (dimensions.ts rolls it at chance 1 on terminus zones;

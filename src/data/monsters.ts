@@ -648,6 +648,38 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 0.9,
   },
 
+  // The HOLLOW BANNERMAN: a dead standard-bearer whose CHALLENGE still
+  // carries — his shout TAUNTS the living (your minions wheel onto him;
+  // your own blade lands soft elsewhere) while the WAR BANNER on his back
+  // rallies the dead around him. The banner is a breakable composite part:
+  // tear it down FIRST or fight a rallied host — a priority-target puzzle
+  // built from two ordinary data entries.
+  hollow_bannerman: {
+    id: 'hollow_bannerman', name: 'Hollow Bannerman',
+    color: '#b8ae96', shape: 'ribcage', radius: 14, material: 'bone', look: 'skeleton_warrior',
+    base: { life: 70, moveSpeed: 118, accuracy: 96, armor: 22, poise: 50, mana: 60, manaRegen: 6 },
+    skills: ['challenging_shout', 'cleave'],
+    xp: 30, faction: 'undead',
+    detection: 0.85,
+    parts: [{
+      monster: 'war_banner_mast', dx: -0.8, dy: 0, lifeFrac: 0.3, breakDamage: 0.12,
+      // Losing the standard takes the wind out of him too.
+      breakMods: [mod('damage', 'more', -0.15)],
+    }],
+  },
+  // The banner itself: a planted standard that RALLIES the dead. A full
+  // monster def — a composite part today, an entity-creator composable
+  // tomorrow (parts ARE monster defs: one entry, both uses).
+  war_banner_mast: {
+    id: 'war_banner_mast', name: 'War Banner',
+    color: '#a83a3a', shape: 'circle', radius: 9, look: 'construct_totem',
+    noNemesis: true,
+    base: { life: 60, moveSpeed: 0, mana: 120, manaRegen: 8, poise: 40 },
+    skills: ['rallying_howl'],
+    xp: 0, faction: 'undead',
+    brain: { type: 'artillery' },
+  },
+
   // The close-work wraith (#41): fights at arm's length with a small reap.
   blade_wraith: {
     id: 'blade_wraith', name: 'Blade Wraith',
@@ -1898,6 +1930,35 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 28, faction: 'bandit',
     brain: { type: 'strafer' }, // one thunderclap, then the long open ram
     detection: 1.3,
+  },
+  // The SHIELD-WALL of the warband: a thane who ADVANCES behind a marching
+  // guard, thrusts through it, and CALLS THE FIGHT — his challenging shout
+  // taunts your minions off their marks (the challenge fabric working for
+  // the other side). Poise-pole texture: crack the stance, then the man.
+  bulwark_thane: {
+    id: 'bulwark_thane', name: 'Bulwark Thane',
+    color: '#8a7a52', shape: 'octagon', radius: 16, look: 'bandit_bruiser',
+    base: { life: 110, moveSpeed: 108, accuracy: 102, armor: 40, poise: 70, mana: 60, manaRegen: 6 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['marching_bulwark', 'bastion_thrust', 'challenging_shout', 'cleave'],
+    xp: 30, faction: 'bandit', adorn: 'horns',
+    brain: { type: 'juggernaut' },
+    detection: 0.85,
+  },
+  // The GUARDED-CASTING demo in the wild: she raises a rune-lit ward and
+  // PRESSES her firebolt through it — the same gem, the same instant
+  // combo-press pipeline a player's spellsword runs, worn by the other
+  // side (the AI's mid-stance menu admits socket-granted combo verbs).
+  // Counterplay: break the modest shield, or eat a scheduled bolt.
+  bandit_wardcaster: {
+    id: 'bandit_wardcaster', name: 'Wardcaster',
+    color: '#9a8ac8', shape: 'star', radius: 13, look: 'bandit_powder_witch',
+    base: { life: 60, moveSpeed: 116, accuracy: 102, armor: 12, mana: 90, manaRegen: 7 },
+    mods: [mod('life', 'more', 0.5)],
+    skills: ['runeward', 'firebolt', 'claw'],
+    grants: [{ atLevel: 1, support: 'guarded_casting', on: 'firebolt' }],
+    xp: 28, faction: 'bandit',
+    detection: 0.9,
   },
   bandit_powder_witch: {
     id: 'bandit_powder_witch', name: 'Powder Witch',

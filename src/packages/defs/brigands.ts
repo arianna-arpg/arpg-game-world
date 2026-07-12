@@ -39,6 +39,9 @@ const BRIGAND_SURGE: BrigandSurge = {
     { id: 'bandit_keeper', weight: 1 },
     { id: 'bandit_fusilier', weight: 2, presence: { from: 4, fadeIn: 3 } },
     { id: 'bandit_grenadier', weight: 1, presence: { from: 7, fadeIn: 4 } },
+    // Seasoned warbands march behind a shield-wall (and its taunt).
+    { id: 'bulwark_thane', weight: 1, presence: { from: 5, fadeIn: 3 } },
+    { id: 'bandit_wardcaster', weight: 1, presence: { from: 6, fadeIn: 3 } },
   ],
   levelBonus: 0,
   aggroRadius: 300,        // stray within this of a brigand and the band turns hostile…

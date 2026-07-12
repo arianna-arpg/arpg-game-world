@@ -532,6 +532,28 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   scarecrow: { painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.6 },
   hay_bale: { painter: 'hayBale', order: 53, shadow: 0.55, longShadow: 0.8 },
   pot_cluster: { painter: 'potCluster', order: 53, shadow: 0.5 },
+  // --- The war-camp kit (muster grounds): existing painters, new clothes ----
+  battle_standard: {
+    painter: 'warBanner', order: 53, shadow: 0.35, longShadow: 1.5,
+    params: { cloth: '#a83a2e', pole: '#4a3826', glyph: '#e8d8a0' },
+  },
+  shield_rack: {
+    painter: 'fishingRack', order: 53, shadow: 0.35, longShadow: 0.8,
+    // The rail hangs bossed steel, not the day's catch.
+    params: { wood: '#5e4a32', fish: '#8a8ea0' },
+  },
+  sparring_dummy: {
+    painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.4,
+    params: { coat: '#a89058' },
+  },
+  war_drum: {
+    painter: 'potCluster', order: 53, shadow: 0.5,
+    params: { clay: '#7a5638', lid: '#c8a878' },
+  },
+  palisade_spikes: {
+    painter: 'palisade', order: 52, longShadow: 0.6,
+    params: { fill: '#6a5238', edge: '#2c2418', material: 'wood' },
+  },
   // --- The brittle kit (DoodadRule.brittle): lifeless breakables ------------
   clay_pots: { painter: 'potCluster', order: 52, shadow: 0.35 },
   // A fissured plug: the boulder painter with cracks turned all the way up —

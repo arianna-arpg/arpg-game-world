@@ -798,8 +798,9 @@ export const TILESETS: Record<string, TilesetDef> = {
   // WASTELAND — the demon rift's scorched fringe: lava flows and broken stone.
   wasteland: {
     id: 'wasteland',
-    // War-land keeps its ordnance: abandoned powder dumps that answer stray fire.
-    compositions: [{ composition: 'powder_cache', chance: 0.28 }],
+    // War-land keeps its ordnance: abandoned powder dumps that answer stray
+    // fire — and the muster grounds the war was drilled in.
+    compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }],
     nameFirst: ['Blasted', 'Cindertorn', 'Hellcracked', 'Ruinous', 'Emberblight', 'Scorched', 'Riftburnt', 'Ashbroken', 'Brimstone', 'Sulfurous', 'Cracked', 'Desolate', 'Smouldering', 'Wretched', 'Hateforged', 'Slagheap', 'Damnedmarch', 'Charbroken'],
     nameSecond: ['Waste', 'Barrens', 'Scar', 'Reach', 'Expanse', 'Flats', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Cinders', 'Drift', 'Span', 'Wilds'],
     theme: {
@@ -1245,6 +1246,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'bone_serpent', weight: 2, presence: { from: 10, fadeIn: 4 } },
         { id: 'lich_marshal', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        // The dead march under standards where the host has WOKEN.
+        { id: 'hollow_bannerman', weight: 1, presence: { from: 7, fadeIn: 4 } },
         // Bats roost among the barrows (they thin as worthier dead wake).
         { id: 'cave_bat', weight: 1, presence: { to: 14, fadeOut: 6 } },
         // The apparition wing + the Court's thralls, deeper in.
@@ -1418,7 +1421,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // MEADOW — a gentle grove breather: grass, scattered trees, low-threat wilds.
   meadow: {
     id: 'meadow',
-    compositions: [{ composition: 'orchard_rows', chance: 0.4 }],
+    compositions: [{ composition: 'orchard_rows', chance: 0.4 }, { composition: 'war_camp', chance: 0.1 }],
     nameFirst: ['Sunlit', 'Wildflower', 'Greenhollow', 'Honeybrook', 'Dappled', 'Springmoor', 'Cloverhill', 'Larksong', 'Daisychain', 'Goldengrass', 'Breezy', 'Sweetgrass', 'Buttercup', 'Gentlebrook', 'Verdant', 'Mossglen', 'Petalfall', 'Hazysun'],
     nameSecond: ['Meadow', 'Glade', 'Pasture', 'Vale', 'Downs', 'Greens', 'Lea', 'Field', 'Heath', 'Commons', 'Bloom', 'Reach', 'Dell', 'Sward', 'Clearing', 'Holt'],
     theme: {
@@ -1967,7 +1970,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // maze of corridors and chambers carved into the rock).
   highland: {
     id: 'highland', biome: 'highland',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
     nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Highlands', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {
@@ -2293,7 +2296,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // bbox. A wide-open, exploration-leaning hub (objectives favour clear/escape).
   grassland: {
     id: 'grassland', biome: 'field',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }, { composition: 'powder_cache', chance: 0.15 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }, { composition: 'powder_cache', chance: 0.15 }, { composition: 'war_camp', chance: 0.14 }],
     nameFirst: ['Sunlit', 'Windswept', 'Verdant', 'Rolling', 'Emerald', 'Goldengrass', 'Wildflower', 'Open', 'Boundless', 'Whispergrass', 'Far-Reaching', 'Sunwashed', 'Breezy', 'Tallgrass', 'Endless', 'Sweeping', 'Lark-Sung', 'Greenswept'],
     nameSecond: ['Fields', 'Meadows', 'Expanse', 'Greens', 'Pastures', 'Lowlands', 'Reach', 'Plains', 'Prairie', 'Steppe', 'Sprawl', 'Veldt', 'Downs', 'Grasslands', 'Range', 'Heath'],
     theme: {

@@ -460,3 +460,59 @@ registerFormation({
     { kind: 'spent_cell', radius: [9, 12], every: 3, jitter: 20, rot: true },
   ],
 });
+
+// --- THE WAR CAMP (the muster-ground kit) -------------------------------------
+// The martial sibling of the powder dump — the taunt-and-guard pass's set
+// dressing. Someone drills here: a spiked fence punctuated by standards,
+// and inside it the furniture of readiness. All five kinds ride existing
+// painters via params (warBanner / fishingRack / scarecrow / potCluster /
+// palisade) — zero renderer edits, the visual-fabric contract.
+registerDoodadRule('battle_standard', {
+  overlap: 'solid', blocksMove: true, spacing: 30,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('shield_rack', {
+  overlap: 'solid', blocksMove: true, spacing: 26,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  brittle: { on: ['hit'], orbChance: 0.12, text: 'the rack clatters apart!', color: '#c8b088' },
+});
+registerDoodadRule('sparring_dummy', {
+  overlap: 'solid', blocksMove: true, spacing: 24,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  brittle: { on: ['hit'], orbChance: 0.05, text: 'straw flies!', color: '#d8c890' },
+});
+registerDoodadRule('war_drum', {
+  overlap: 'solid', blocksMove: true, spacing: 24,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  brittle: { on: ['hit'], text: 'BOOM.', color: '#e8a860' },
+});
+registerDoodadRule('palisade_spikes', {
+  overlap: 'solid', blocksMove: true, spacing: 20,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+
+// The fence: spiked stakes pacing a wide ring, a standard every few posts.
+// Step stays generous — the gaps ARE the gates (reachability by design).
+registerFormation({
+  id: 'muster_fence', arrange: 'orbit', span: [120, 165], step: 52,
+  params: { rings: [1, 1] },
+  pieces: [
+    { kind: 'palisade_spikes', radius: [10, 14], jitter: 6, rot: true },
+    { kind: 'battle_standard', radius: [9, 11], every: 5, jitter: 4, rot: true },
+  ],
+});
+
+// The camp's business, huddled inside: dummies that burst into straw, racks
+// that clatter, a drum, a fire, fodder — struck-surface toys for the mallet
+// fabric, cover for the fight that finds the place.
+registerFormation({
+  id: 'camp_goods', arrange: 'orbit', span: [34, 78], step: 46,
+  params: { rings: [1, 2], innerFrac: 0.55 },
+  pieces: [
+    { kind: 'sparring_dummy', radius: [9, 12], jitter: 10, rot: true },
+    { kind: 'shield_rack', radius: [11, 14], every: 3, jitter: 8, rot: true },
+    { kind: 'war_drum', radius: [9, 12], every: 4, jitter: 8, rot: true },
+    { kind: 'campfire', radius: [10, 12], every: 5, jitter: 6 },
+    { kind: 'hay_bale', radius: [10, 13], every: 3, jitter: 10, rot: true },
+  ],
+});
