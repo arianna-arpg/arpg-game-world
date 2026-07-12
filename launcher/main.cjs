@@ -767,11 +767,16 @@ async function perfMode() {
       if (z.gapP50 > capP50) breaches.push(`${z.tileset}: gapP50 ${z.gapP50}ms > cap ${capP50.toFixed(1)} (town ${ctl.gapP50} x${relZ.gapP50Mul} +${relZ.slackMs})`);
       if (z.gapP99 > capP99) breaches.push(`${z.tileset}: gapP99 ${z.gapP99}ms > cap ${capP99.toFixed(1)} (town ${ctl.gapP99} x${relZ.gapP99Mul} +${relZ.slackMs})`);
       if (absZ.gapMaxMs != null && z.gapMax > absZ.gapMaxMs) breaches.push(`${z.tileset}: gapMax ${z.gapMax}ms > ${absZ.gapMaxMs}`);
-      if (absZ.maxHitch40PerMin != null && z.hitch40 * 60 / secs > absZ.maxHitch40PerMin) {
-        breaches.push(`${z.tileset}: ${z.hitch40} frames >40ms in ${secs}s (${(z.hitch40 * 60 / secs).toFixed(1)}/min > ${absZ.maxHitch40PerMin}/min)`);
+      // Hitch rates carry a GRACE COUNT (absolute.hitchGraceCount): a short
+      // window quantizes rate brutally (8s can only express 0 or ≥7.5/min),
+      // so a rate breach additionally needs more than `grace` offending
+      // frames — one stray OS/driver frame is noise, two is a pattern.
+      const grace = absZ.hitchGraceCount ?? 0;
+      if (absZ.maxHitch40PerMin != null && z.hitch40 > grace && z.hitch40 * 60 / secs > absZ.maxHitch40PerMin) {
+        breaches.push(`${z.tileset}: ${z.hitch40} frames >40ms in ${secs}s (${(z.hitch40 * 60 / secs).toFixed(1)}/min > ${absZ.maxHitch40PerMin}/min, grace ${grace})`);
       }
-      if (absZ.maxHitch70PerMin != null && z.hitch70 * 60 / secs > absZ.maxHitch70PerMin) {
-        breaches.push(`${z.tileset}: ${z.hitch70} frames >70ms in ${secs}s (${(z.hitch70 * 60 / secs).toFixed(1)}/min > ${absZ.maxHitch70PerMin}/min)`);
+      if (absZ.maxHitch70PerMin != null && z.hitch70 > grace && z.hitch70 * 60 / secs > absZ.maxHitch70PerMin) {
+        breaches.push(`${z.tileset}: ${z.hitch70} frames >70ms in ${secs}s (${(z.hitch70 * 60 / secs).toFixed(1)}/min > ${absZ.maxHitch70PerMin}/min, grace ${grace})`);
       }
       if (absZ.entryWorstGapMs != null && z.entryWorstGap > absZ.entryWorstGapMs) {
         breaches.push(`${z.tileset}: entry burst ${z.entryWorstGap}ms > ${absZ.entryWorstGapMs}`);
