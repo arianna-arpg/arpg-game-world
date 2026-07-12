@@ -80,10 +80,10 @@ export type MetaAction =
   | { t: 'payToll'; index: number }                            // Holdfast: surrender support idx (-1 = random) to open the gate
   | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
   // GEAR (items are addressed by uid — stable across bag re-sorts and the wire).
-  | { t: 'equipItem'; uid: number; slot?: string }             // bag item → doll slot (auto-picks when omitted)
-  | { t: 'unequipItem'; slot: string }                         // doll slot → bag (fails full)
+  | { t: 'equipItem'; uid: number; slot?: string }             // bag OR worn item → doll slot (auto-picks when omitted; worn→worn swaps through the vacated slot)
+  | { t: 'unequipItem'; slot: string; x?: number; y?: number } // doll slot → bag (x/y: exact cell, fails blocked; omitted: first fit, fails full)
   | { t: 'moveItem'; uid: number; x: number; y: number }       // bag re-place (swap when exactly one blocker)
-  | { t: 'dropItem'; uid: number }                             // bag item → ground
+  | { t: 'dropItem'; uid: number }                             // bag OR worn item → ground
   | { t: 'pickupItem' }                                        // nearest ground gear within reach → bag
   // SALVAGE (dwell-gated, TWO LANES): 'break' at the bench pays the rarity's
   // essence + craft lore; 'sell' at a scrap counter pays coarse volume only.

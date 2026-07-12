@@ -265,6 +265,12 @@
     .dnd-ghost.miss { border-color: #6a6478; opacity: 0.75; }
     [data-drop].dnd-can { outline: 1px dashed rgba(200,168,75,0.55); outline-offset: 1px; }
     [data-drop].dnd-over { outline: 2px solid var(--gold); outline-offset: 1px; background: rgba(200,168,75,0.12); }
+    /* The element a payload lifted FROM — "this is what's in the air". */
+    [data-drag].dnd-src { opacity: 0.55; outline: 2px dashed rgba(232,224,208,0.8); outline-offset: 1px; }
+    /* The world canvas takes drops (drag gear out = discard at your feet),
+       but a full-viewport outline would be absurd — there, the ghost chip's
+       lit/miss border IS the affordance. */
+    #game.dnd-can, #game.dnd-over { outline: none; background: none; }
     body.dnd-active, body.dnd-active * { cursor: grabbing !important; }
     #account-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
@@ -453,7 +459,9 @@
   </style>
 </head>
 <body>
-  <canvas id="game"></canvas>
+  <!-- The world itself is a drop target: gear and gems dragged out of the
+       panels land at your feet (ui/dnd.ts 'ground'). -->
+  <canvas id="game" data-drop="ground"></canvas>
   <div id="class-select" class="panel hidden"></div>
   <div id="char-sheet" class="panel hidden"></div>
   <div id="inventory" class="panel hidden"></div>

@@ -979,7 +979,8 @@ function isValidMetaAction(a: MetaAction): boolean {
     case 'payToll': return Number.isInteger(a.index) && a.index >= -1; // -1 = a random gem
     // GEAR intents — uids/cells are untrusted client numbers, ids plain strings.
     case 'equipItem': return isIdx(a.uid) && (a.slot === undefined || isStr(a.slot));
-    case 'unequipItem': return isStr(a.slot);
+    case 'unequipItem': return isStr(a.slot)
+      && ((a.x === undefined && a.y === undefined) || (isIdx(a.x) && isIdx(a.y)));
     case 'moveItem': return isIdx(a.uid) && isIdx(a.x) && isIdx(a.y);
     case 'dropItem': return isIdx(a.uid);
     case 'salvageItem': return isIdx(a.uid) && isLane(a.lane);
@@ -11974,7 +11975,7 @@ export class World {
       case 'payToll': this.payHoldfastToll(action.index, seat); break;
       case 'vocationQuest': this.acceptVocationQuest(action.questId, seat); break;
       case 'equipItem': this.equipItem(seat, action.uid, action.slot); break;
-      case 'unequipItem': this.unequipItem(seat, action.slot); break;
+      case 'unequipItem': this.unequipItem(seat, action.slot, action.x, action.y); break;
       case 'moveItem': this.moveBagItem(seat, action.uid, action.x, action.y); break;
       case 'dropItem': this.dropGearFromBag(seat, action.uid); break;
       case 'pickupItem': this.pickupNearestGear(seat); break;
@@ -20691,12 +20692,23 @@ export class World {
     return seat.meta.items.find(i => i.uid === uid);
   }
 
-  /** Wear a bag item. Slot omitted → first enabled compatible slot, favoring
-   *  an empty one (the two-ring rule falls out of the registry, not code). */
+  /** The doll slot currently WEARING an item by uid, or undefined — gear
+   *  intents address items wherever they live, bag and body alike. */
+  private wornSlotOf(seat: Seat, uid: number): string | undefined {
+    return Object.keys(seat.meta.equipped).find(sid => seat.meta.equipped[sid]?.uid === uid);
+  }
+
+  /** Wear an item — from the bag OR from another doll slot (a worn ring
+   *  dragged to the other hand). Slot omitted → first enabled compatible
+   *  slot, favoring an empty one (the two-ring rule falls out of the
+   *  registry, not code). A worn→worn move swaps THROUGH the vacated slot
+   *  when the displaced piece fits it; otherwise the swap-out returns to
+   *  the bag — or the floor, never the void. */
   equipItem(seat: Seat, uid: number, slotId?: string): void {
     const m = seat.meta;
     const p = seat.actor;
-    const item = this.bagItem(seat, uid);
+    const fromSlot = this.wornSlotOf(seat, uid);
+    const item = this.bagItem(seat, uid) ?? (fromSlot ? m.equipped[fromSlot] : undefined);
     if (!item) return;
     const base = ITEM_BASES[item.baseId];
     if (!base) return;
@@ -20707,28 +20719,46 @@ export class World {
       if (options.length === 0) return;
       slot = options.find(s => !m.equipped[s.id]) ?? options[0];
     }
+    if (fromSlot === slot.id) return; // re-seating in place — nothing to do
     const req = itemLevelReq(item);
     if (p.level < req) {
       this.failNote(p, 'equip:' + uid, `requires level ${req}`);
       return;
     }
-    removeFromBag(m.items, uid);
+    if (fromSlot) delete m.equipped[fromSlot];
+    else removeFromBag(m.items, uid);
     const prev = m.equipped[slot.id];
     m.equipped[slot.id] = item;
     delete item.x;
     delete item.y;
-    // The swap-out returns to the bag — or the floor, never the void.
-    if (prev && !autoPlace(m.items, prev)) this.dropGearAt(p.pos, prev, seat.id);
+    if (prev) {
+      // Displaced piece: the vacated source slot first (the true swap), then
+      // the bag, then the floor.
+      const back = fromSlot ? SLOT_BY_ID[fromSlot] : undefined;
+      const prevBase = ITEM_BASES[prev.baseId];
+      if (back?.enabled && prevBase && back.accepts.includes(prevBase.category) && !m.equipped[back.id]) {
+        m.equipped[back.id] = prev;
+      } else if (!autoPlace(m.items, prev)) {
+        this.dropGearAt(p.pos, prev, seat.id);
+      }
+    }
     this.recalcSeat(seat);
     this.text(p.pos, item.name, ITEM_RARITIES[item.rarity].color, 13);
     this.markMetaDirty(seat);
   }
 
-  unequipItem(seat: Seat, slotId: string): void {
+  /** Take a worn piece off — to an EXACT bag cell when given (fails blocked,
+   *  the aimed drop never lands somewhere surprising), else first fit. */
+  unequipItem(seat: Seat, slotId: string, x?: number, y?: number): void {
     const m = seat.meta;
     const item = m.equipped[slotId];
     if (!item) return;
-    if (!autoPlace(m.items, item)) {
+    if (x !== undefined && y !== undefined) {
+      if (!placeAt(m.items, item, x, y)) {
+        this.failNote(seat.actor, 'unequip:' + slotId, 'no room there');
+        return;
+      }
+    } else if (!autoPlace(m.items, item)) {
       this.failNote(seat.actor, 'unequip:' + slotId, 'no room in the bag');
       return;
     }
@@ -20759,10 +20789,20 @@ export class World {
     other.x = otherFrom.x; other.y = otherFrom.y;
   }
 
+  /** Discard gear to the ground — from the bag OR straight off the body
+   *  (a worn piece dragged onto the world sheds its stats as it falls). */
   dropGearFromBag(seat: Seat, uid: number): void {
     const m = seat.meta;
-    if (!this.bagItem(seat, uid)) return;
-    const item = removeFromBag(m.items, uid);
+    const fromSlot = this.wornSlotOf(seat, uid);
+    let item: ItemInstance | undefined;
+    if (fromSlot) {
+      item = m.equipped[fromSlot];
+      delete m.equipped[fromSlot];
+      this.recalcSeat(seat);
+    } else {
+      if (!this.bagItem(seat, uid)) return;
+      item = removeFromBag(m.items, uid);
+    }
     if (!item) return;
     this.dropGearAt(seat.actor.pos, item, seat.id);
     this.markMetaDirty(seat);

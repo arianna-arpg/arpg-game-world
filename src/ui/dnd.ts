@@ -19,16 +19,25 @@
 //                   on an accepting target drops it; re-clicking the source
 //                   cancels. The pad- and one-handed-mouse twin.
 //
+// TWO UNIVERSAL COURTESIES (every source earns them, none re-implements):
+//   • modifier clicks never lift — shift/ctrl/alt clicks are a panel's own
+//     verbs (shift-drop etc.); only a PLAIN click starts a click-lift.
+//   • presses routed through a control INSIDE a source (a row's buttons)
+//     belong to that control — the fabric neither arms nor lifts. A source
+//     that IS a button (a doll slot) still lifts fine.
+//
 // Built on POINTER events, never native HTML5 drag — so the pad pointer's
 // synthesized press-glide-release (ui/padpointer.ts) drives it unmodified,
 // and core/input.ts's anti-grab kill-switch never needs waving past.
 //
 // While a payload is up: every visible accepting target wears `.dnd-can`,
-// the one under the cursor wears `.dnd-over`, and a ghost chip rides the
-// pointer (`.dnd-ghost`, `.miss` off-target) — styles in index.html beside
-// the panel CSS. Escape or right-click cancels (capture — the book stays
-// open; the SECOND Escape closes it). Panels that close mid-gesture call
-// dndCancel() so a ghost never outlives its surface.
+// the one under the cursor wears `.dnd-over`, the element it lifted FROM
+// wears `.dnd-src` (all three re-earned on the mark beat — re-renders can't
+// shed them), and a ghost chip rides the pointer (`.dnd-ghost`, `.miss`
+// off-target) — styles in index.html beside the panel CSS. Escape or
+// right-click cancels (capture — the book stays open; the SECOND Escape
+// closes it). Panels that close mid-gesture call dndCancel() so a ghost
+// never outlives its surface.
 //
 // Headless-safe: listeners install lazily on first registration, behind a
 // `typeof document` guard — the sim's arena never touches this module, but
@@ -79,8 +88,10 @@ export interface DropTargetDef {
    *  affordance and gates the drop itself. */
   accepts(payload: DragPayload, arg: string): boolean;
   /** The landing — runs once per accepted drop. Consumers route mutations
-   *  through their own lanes (requestMeta etc.); the fabric only delivers. */
-  drop(payload: DragPayload, arg: string): void;
+   *  through their own lanes (requestMeta etc.); the fabric only delivers.
+   *  `el` is the element the payload landed on — for targets that answer a
+   *  drop with an in-place affordance (a flash, a shake) rather than state. */
+  drop(payload: DragPayload, arg: string, el: HTMLElement): void;
 }
 
 const SOURCES = new Map<string, DragSourceDef>();
@@ -132,6 +143,16 @@ function parseAttr(el: Element | null, attr: string): { el: HTMLElement; kind: s
   return { el: hit, kind: i < 0 ? raw : raw.slice(0, i), arg: i < 0 ? '' : raw.slice(i + 1) };
 }
 
+/** Interactive controls keep their own gestures: a press or click routed
+ *  through a control INSIDE a source (a row's Level/Drop button) belongs to
+ *  that control, never to the fabric. The source being such a control ITSELF
+ *  (a doll-slot button) is fine — then the gesture is unambiguous. */
+const INNER_CONTROLS = 'button, input, select, textarea, a[href]';
+function ownedByInnerControl(target: EventTarget | null, sourceEl: HTMLElement): boolean {
+  const ctl = target instanceof Element ? target.closest(INNER_CONTROLS) : null;
+  return !!ctl && ctl !== sourceEl && sourceEl.contains(ctl);
+}
+
 /** The accepting target under a viewport point, or null. */
 function targetAt(x: number, y: number): { def: DropTargetDef; arg: string; el: HTMLElement } | null {
   if (!carried) return null;
@@ -159,9 +180,11 @@ function moveGhost(x: number, y: number): void {
   ghost.style.transform = `translate(${x + DND_CFG.ghostOffset.x}px, ${y + DND_CFG.ghostOffset.y}px)`;
 }
 
-/** Sweep every visible target: accepting ones wear `.dnd-can`. Re-run on a
- *  beat (DND_CFG.markEvery) so panels that re-render mid-gesture re-earn
- *  their marks — the attribute IS the registration. */
+/** Sweep every visible target: accepting ones wear `.dnd-can`, and the
+ *  element(s) whose data-drag matches the carried payload wear `.dnd-src`
+ *  (the "this is what's in the air" affordance). Re-run on a beat
+ *  (DND_CFG.markEvery) so panels that re-render mid-gesture re-earn their
+ *  marks — the attribute IS the registration. */
 function markTargets(force: boolean): void {
   const now = performance.now();
   if (!force && now - lastMark < DND_CFG.markEvery) return;
@@ -170,6 +193,10 @@ function markTargets(force: boolean): void {
     const t = parseAttr(el, 'data-drop');
     const def = t && TARGETS.get(t.kind);
     el.classList.toggle('dnd-can', !!(def && carried && def.accepts(carried, t!.arg)));
+  }
+  for (const el of document.querySelectorAll<HTMLElement>('[data-drag]')) {
+    const s = parseAttr(el, 'data-drag');
+    el.classList.toggle('dnd-src', !!(carried && s && s.kind === carried.kind && s.arg === carried.arg));
   }
 }
 
@@ -182,7 +209,7 @@ function hover(x: number, y: number): void {
 }
 
 /** Land (target given) or cancel (null) — the ONE teardown path. */
-function drop(hit: { def: DropTargetDef; arg: string } | null): void {
+function drop(hit: { def: DropTargetDef; arg: string; el: HTMLElement } | null): void {
   const p = carried;
   armed = null;
   carried = null;
@@ -192,7 +219,8 @@ function drop(hit: { def: DropTargetDef; arg: string } | null): void {
   hoverEl = null;
   document.body.classList.remove('dnd-active');
   for (const el of document.querySelectorAll<HTMLElement>('.dnd-can')) el.classList.remove('dnd-can');
-  if (p && hit) hit.def.drop(p, hit.arg);
+  for (const el of document.querySelectorAll<HTMLElement>('.dnd-src')) el.classList.remove('dnd-src');
+  if (p && hit) hit.def.drop(p, hit.arg, hit.el);
 }
 
 function install(): void {
@@ -208,7 +236,9 @@ function install(): void {
     }
     if (e.button !== 0) return;
     const s = parseAttr(e.target as Element, 'data-drag');
-    if (s && SOURCES.has(s.kind)) armed = { ...s, x: e.clientX, y: e.clientY };
+    if (s && SOURCES.has(s.kind) && !ownedByInnerControl(e.target, s.el)) {
+      armed = { ...s, x: e.clientX, y: e.clientY };
+    }
   }, true);
 
   document.addEventListener('pointermove', (e) => {
@@ -262,9 +292,12 @@ function install(): void {
       return; // clicks elsewhere keep working; the carry rides along
     }
     if (!carried) {
+      // Modifier clicks are VERBS (shift-drop, ctrl-compare, whatever a panel
+      // means by them) — a lift only ever rides a plain click.
+      if (e.shiftKey || e.ctrlKey || e.altKey || e.metaKey) return;
       const s = parseAttr(e.target as Element, 'data-drag');
       const src = s && SOURCES.get(s.kind);
-      if (src?.clickLift) {
+      if (src?.clickLift && !ownedByInnerControl(e.target, s!.el)) {
         const p = src.payload(s!.arg, s!.el);
         if (p) lift(p, 'lift', e.clientX, e.clientY);
         // No swallow: the source's ordinary click verb (select, open) still runs.

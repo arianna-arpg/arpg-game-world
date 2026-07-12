@@ -47,15 +47,10 @@ export class Input {
     // inside the game, so both are cut off at the source; panel wheel-scroll
     // and the SVG pan gestures (pointer events) are unaffected.
     //
-    // EXCEPTION — DELIBERATE drag-and-drop: anything marked draggable="true"
-    // (vestige inlaying today; every dnd mechanic to come) is a real game
-    // gesture, not a stray grab. The kill-switch waves those through; the
-    // accidental-drag classes (selections, images, links) stay suppressed.
-    window.addEventListener('dragstart', e => {
-      const el = e.target as HTMLElement | null;
-      if (el && typeof el.closest === 'function' && el.closest('[draggable="true"]')) return;
-      e.preventDefault();
-    });
+    // NO exceptions: every deliberate drag gesture in the game rides THE
+    // DRAG FABRIC (ui/dnd.ts), which is pure pointer events — a dragstart
+    // reaching this listener is always a stray browser grab.
+    window.addEventListener('dragstart', e => e.preventDefault());
     window.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });
   }
 

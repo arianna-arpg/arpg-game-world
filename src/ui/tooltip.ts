@@ -112,6 +112,11 @@ export function bindTooltips(
   };
 
   const show = (el: HTMLElement, e: { clientX: number; clientY: number }): void => {
+    // While the drag fabric carries a payload (body.dnd-active — its public
+    // in-flight signal), the hover card stays DOWN: the ghost chip and the
+    // target marks own the pointer's attention, and a card popping over the
+    // drop path mid-carry is pure noise. No import — the class IS the seam.
+    if (document.body.classList.contains('dnd-active')) { hide(); return; }
     if (el !== cur) {
       if (!render(el, false)) { hide(); return; }
       cur = el;

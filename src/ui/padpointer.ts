@@ -26,10 +26,11 @@
 // (PAD_CFG.activeWindow) and goes away the moment the surfaces close,
 // retiring cleanly (any in-flight drag is cancelled, hover is parted).
 //
-// KNOWN SEAMS: native HTML5 drag-and-drop (vestige inlaying's draggable
-// gesture) can't be synthesized from script — pad players use click-to-lift
-// flows (bag items already work that way). CSS :hover styling likewise skips
-// synthetic events; the ring itself is the hover feedback.
+// KNOWN SEAMS: CSS :hover styling skips synthetic events; the ring itself is
+// the hover feedback. (The old native-HTML5-drag seam is GONE: every drag
+// gesture rides THE DRAG FABRIC (ui/dnd.ts) — pure pointer events — so the
+// pad's press-glide-release drives inventory, vestige, and grimoire drags
+// unmodified, and click-lift remains the one-button twin.)
 // ---------------------------------------------------------------------------
 
 import { PAD_CFG, PadState, PadTuning, synthEscape } from '../core/gamepad';

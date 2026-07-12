@@ -19,7 +19,8 @@ import {
   type SkillDef, type SkillInstance, type SupportInstance,
 } from '../engine/skills';
 import { MAX_LEARNED_SKILLS, OFFERINGS_PER_POINT } from '../engine/world';
-import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, slotsForCategory, socketCap, type ItemInstance } from '../engine/items';
+import { EQUIP_SLOTS, ITEM_CFG, ITEM_RARITIES, SLOT_BY_ID, slotsForCategory, socketCap, type ItemInstance } from '../engine/items';
+import { canPlaceAt, overlappingItems } from '../engine/inventory';
 import { VESTIGES, VESTIGE_LIST } from '../data/vestiges';
 import { compareItemMods, describeItem, itemGridSize, type ModCompareRow } from '../engine/itemgen';
 import { ITEM_BASES } from '../data/itembases';
@@ -78,6 +79,13 @@ import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
 /** Neutral accent for packages that declare no colour of their own. */
 const PKG_FALLBACK_COLOR = '#888';
+
+/** Item-category glyphs — bag tiles and the drag fabric's ghost chip share
+ *  one vocabulary (a lifted thing looks like the tile it left). */
+const CATEGORY_GLYPHS: Record<string, string> = {
+  helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
+  ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹',
+};
 
 /** The SCRAP-WHEEL cursor (vendor salvage mode): a gear glyph rendered into
  *  an SVG data-URI, crosshair fallback where custom cursors are refused. */
@@ -180,25 +188,12 @@ export class UI {
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
   private buildFlapOpen = false;
-  /** True while a vestige drag is in flight — refreshInventory HOLDS STILL
-   *  (an innerHTML rebuild destroys the drag source, which cancels a native
-   *  drag mid-gesture; the world map's drag uses the same discipline). */
-  private invDragging = false;
-  /** CLICK-TO-LIFT vestige: the id lifted by a click, awaiting a socket (or
-   *  a socketed item) click to inlay — the pad-friendly twin of the native
-   *  drag, which script can't synthesize. A ghost chip trails the cursor. */
-  private liftedVestige: string | null = null;
-  private vestigeGhost: HTMLDivElement;
   /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
    *  support gems — one panel, one key, zero overlapping windows. */
   invTab: 'gear' | 'skills' | 'gems' = 'gear';
   /** Tab last RENDERED — scroll restores only within the same tab (the
    *  skill book's golden rule, applied here). */
   private lastInvTab: 'gear' | 'skills' | 'gems' | null = null;
-  /** Bag item LIFTED by a click, awaiting its next click (a cell / a doll
-   *  slot / another item to swap with). Uid-addressed so it survives the
-   *  panel's innerHTML re-renders; self-heals if the item vanishes. */
-  private heldItemUid: number | null = null;
   /** The floating CHOICE-NODE popup (appended to body — it must ride above
    *  the SVG and survive nothing: every refresh/pan/close dismisses it). */
   private choicePopup: HTMLDivElement | null = null;
@@ -316,19 +311,6 @@ export class UI {
     bindTooltips(this.passiveTree,
       (el) => el.dataset.tip === 'pnode' ? this.passiveNodeTooltip(el.dataset.node!) : null,
       { proximity: { selector: '.tree-node', radiusPx: 30, hysteresis: 0.35 } });
-    // The lifted-vestige ghost: the glyph rides the cursor while a vestige is
-    // lifted (real mouse moves and the pad pointer's synthetic ones both
-    // bubble to the document, so one listener serves both devices).
-    this.vestigeGhost = document.createElement('div');
-    this.vestigeGhost.style.cssText =
-      'position:fixed;left:0;top:0;pointer-events:none;z-index:10001;display:none;'
-      + 'font:bold 17px Verdana;text-shadow:0 0 6px rgba(0,0,0,0.9)';
-    document.body.appendChild(this.vestigeGhost);
-    document.addEventListener('mousemove', (e) => {
-      if (this.liftedVestige) {
-        this.vestigeGhost.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 14}px)`;
-      }
-    });
     this.updateHintBar(); // replace the static index.html placeholder with live binds
 
     // THE GRIMOIRE BINDING GESTURE (ui/dnd.ts — the drag fabric's first
@@ -360,6 +342,230 @@ export class UI {
         this.getWorld().requestMeta({ t: 'attuneSpectre', skillId, formId: p.arg });
         this.refreshBestiary();
         if (this.inventoryOpen) this.refreshInventory();
+      },
+    });
+    this.installGearDnd();
+  }
+
+  // --- THE GEAR LANES (ui/dnd.ts) --------------------------------------------
+  // The whole inventory speaks the ONE drag fabric — the same twin gestures
+  // (press-drag / click-lift) the grimoire taught. Sources mint payloads,
+  // targets consume them through requestMeta, and the DOM declares every
+  // participant with data-drag / data-drop attributes that survive re-renders.
+  // No lane keeps private lift state; the fabric IS the carry.
+
+  /** Where a gearItem payload was lifted from: 'bag' or a doll slot id. */
+  private payloadOrigin(p: { data?: unknown }): string {
+    const d = p.data as { from?: string } | undefined;
+    return d?.from ?? 'bag';
+  }
+
+  /** Resolve a gearItem payload's live item (bag or doll — never stale). */
+  private payloadGear(p: { arg: string }): ItemInstance | undefined {
+    const m = this.getWorld().meta;
+    const uid = Number(p.arg);
+    return m.items.find(i => i.uid === uid)
+      ?? Object.values(m.equipped).find(i => i?.uid === uid);
+  }
+
+  /** The forgiving vestige landing (whole tile / worn chip): first EMPTY
+   *  socket takes it; all full → the pips flash gold and nothing is consumed
+   *  (an overwrite is only ever an AIMED pip drop, never guessed). */
+  private forgivingInlay(el: HTMLElement, uid: number, vestigeId: string): void {
+    const sockets = this.findItem(uid)?.sockets;
+    if (!sockets?.length) return;
+    const empty = sockets.findIndex(s => s === null);
+    if (empty >= 0) { this.socketVestige(uid, empty, vestigeId); return; }
+    el.querySelectorAll<HTMLElement>('[data-sock]').forEach(pip => {
+      pip.style.textShadow = '0 0 8px #ffd700';
+      window.setTimeout(() => { pip.style.textShadow = ''; }, 650);
+    });
+  }
+
+  private installGearDnd(): void {
+    const world = (): World => this.getWorld();
+    const gearRefresh = (): void => { this.refreshInventory(); this.refreshCharSheet(); };
+
+    // SOURCES ----------------------------------------------------------------
+    // Bag tiles AND worn doll chips lift the same payload kind; `data.from`
+    // remembers the origin so targets can route move vs unequip vs re-slot.
+    registerDragSource({
+      kind: 'gearItem',
+      clickLift: true,
+      payload: (arg) => {
+        const item = this.payloadGear({ arg });
+        if (!item) return null;
+        const m = world().meta;
+        const from = Object.keys(m.equipped).find(s => m.equipped[s]?.uid === item.uid) ?? 'bag';
+        const cat = ITEM_BASES[item.baseId]?.category ?? 'ring';
+        const color = ITEM_RARITIES[item.rarity].color;
+        return {
+          kind: 'gearItem', arg, label: item.name, data: { from },
+          ghostHtml: `<span style="color:${color}">${CATEGORY_GLYPHS[cat] ?? '?'} ${item.name}</span>`,
+        };
+      },
+    });
+    // Satchel vestige rows (the native-HTML5 drag these rows used to carry is
+    // gone — the fabric's pointer gestures serve mouse and pad alike).
+    registerDragSource({
+      kind: 'vestige',
+      clickLift: true,
+      payload: (vid) => {
+        const v = VESTIGES[vid];
+        if (!v || (world().meta.vestiges[vid] ?? 0) <= 0) return null;
+        return {
+          kind: 'vestige', arg: vid, label: v.name,
+          ghostHtml: `<span style="color:${v.color};font-weight:bold">${v.glyph}</span>`
+            + `<span style="color:${v.color}">${v.name.split(',')[0]}</span>`,
+        };
+      },
+    });
+    // Carried gem rows (skill & support tabs) — draggable to the world to
+    // discard; identity rides the payload so a shifted index never drops the
+    // wrong gem. Press-drag only: the rows are dense with button verbs.
+    registerDragSource({
+      kind: 'skillGem',
+      payload: (arg) => {
+        const inst = world().meta.skillInv[Number(arg)];
+        if (!inst) return null;
+        return {
+          kind: 'skillGem', arg, label: inst.def.name,
+          data: { defId: inst.def.id, level: inst.level },
+          ghostHtml: `<span style="color:${SKILL_RARITIES[inst.rarity ?? 'common'].color}">◆ ${inst.def.name}</span>`,
+        };
+      },
+    });
+    registerDragSource({
+      kind: 'supportGem',
+      payload: (arg) => {
+        const gem = world().meta.inventory[Number(arg)];
+        if (!gem) return null;
+        return {
+          kind: 'supportGem', arg, label: gem.def.name,
+          data: { defId: gem.def.id, level: gem.level },
+          ghostHtml: `<span style="color:${gem.def.color}">◆ ${gem.def.name}</span>`,
+        };
+      },
+    });
+
+    // TARGETS ----------------------------------------------------------------
+    // Empty bag cells: the payload's ORIGIN cell lands here (click-place
+    // parity — the lit cells teach the anchor rule live). Bag re-places may
+    // swap through ONE blocker (the engine's tetris rule); worn pieces must
+    // land clean — their blocker has no slot to retreat to.
+    registerDropTarget({
+      kind: 'bagCell',
+      accepts: (p, arg) => {
+        if (p.kind !== 'gearItem') return false;
+        const item = this.payloadGear(p);
+        if (!item) return false;
+        const [x, y] = arg.split(':').map(Number);
+        const bag = world().meta.items;
+        if (canPlaceAt(bag, item, x, y)) return true;
+        return this.payloadOrigin(p) === 'bag' && overlappingItems(bag, item, x, y).length === 1;
+      },
+      drop: (p, arg) => {
+        const [x, y] = arg.split(':').map(Number);
+        const uid = Number(p.arg);
+        const from = this.payloadOrigin(p);
+        if (from === 'bag') world().requestMeta({ t: 'moveItem', uid, x, y });
+        else world().requestMeta({ t: 'unequipItem', slot: from, x, y });
+        gearRefresh();
+      },
+    });
+    // Occupied tiles: a gear payload swaps with the tile's item (bag→bag
+    // through the engine's single-blocker rule at the tile's origin; worn→bag
+    // as a swap-equip when the tile's piece fits the vacated slot). A vestige
+    // payload takes the forgiving inlay.
+    registerDropTarget({
+      kind: 'gearTile',
+      accepts: (p, arg) => {
+        const uid = Number(arg);
+        if (p.kind === 'vestige') return !!this.findItem(uid)?.sockets?.length;
+        if (p.kind !== 'gearItem' || Number(p.arg) === uid) return false;
+        const from = this.payloadOrigin(p);
+        if (from === 'bag') return true;
+        const tile = this.findItem(uid);
+        const base = tile && ITEM_BASES[tile.baseId];
+        const slot = SLOT_BY_ID[from];
+        return !!(tile && base && slot && slot.accepts.includes(base.category));
+      },
+      drop: (p, arg, el) => {
+        const uid = Number(arg);
+        if (p.kind === 'vestige') { this.forgivingInlay(el, uid, p.arg); return; }
+        const from = this.payloadOrigin(p);
+        if (from === 'bag') {
+          const tile = this.findItem(uid);
+          if (tile?.x === undefined || tile.y === undefined) return;
+          world().requestMeta({ t: 'moveItem', uid: Number(p.arg), x: tile.x, y: tile.y });
+        } else {
+          // Worn piece onto a compatible bag item: wear THAT item in the
+          // vacated slot — the engine returns this one to the bag.
+          world().requestMeta({ t: 'equipItem', uid, slot: from });
+        }
+        gearRefresh();
+      },
+    });
+    // Doll slots: gear equips (or re-slots, worn→worn); a vestige takes the
+    // forgiving inlay on whatever the slot wears. Category gates the light-up;
+    // the ENGINE speaks on level requirements (failNote) — the UI never
+    // pretends an authority it lacks.
+    registerDropTarget({
+      kind: 'equipSlot',
+      accepts: (p, slotId) => {
+        const m = world().meta;
+        if (p.kind === 'vestige') return !!m.equipped[slotId]?.sockets?.length;
+        if (p.kind !== 'gearItem') return false;
+        if (this.payloadOrigin(p) === slotId) return false; // its own slot
+        const item = this.payloadGear(p);
+        const base = item && ITEM_BASES[item.baseId];
+        const slot = SLOT_BY_ID[slotId];
+        return !!(base && slot?.enabled && slot.accepts.includes(base.category));
+      },
+      drop: (p, slotId, el) => {
+        if (p.kind === 'vestige') {
+          const worn = world().meta.equipped[slotId];
+          if (worn) this.forgivingInlay(el, worn.uid, p.arg);
+          return;
+        }
+        world().requestMeta({ t: 'equipItem', uid: Number(p.arg), slot: slotId });
+        gearRefresh();
+      },
+    });
+    // Socket pips: the PRECISE vestige landing — occupied or not (an aimed,
+    // deliberate overwrite, exactly the old drag's pip drop).
+    registerDropTarget({
+      kind: 'sock',
+      accepts: (p) => p.kind === 'vestige',
+      drop: (p, arg) => {
+        const [uid, sock] = arg.split(':').map(Number);
+        this.socketVestige(uid, sock, p.arg);
+      },
+    });
+    // THE WORLD: the game canvas takes gear and gems alike — dragging a thing
+    // out of the panel onto the ground drops it at your feet (the oldest ARPG
+    // gesture there is). Gems re-resolve by identity in case the list shifted
+    // under a slow carry.
+    registerDropTarget({
+      kind: 'ground',
+      accepts: (p) => p.kind === 'gearItem' || p.kind === 'skillGem' || p.kind === 'supportGem',
+      drop: (p) => {
+        const w = world();
+        if (p.kind === 'gearItem') {
+          w.requestMeta({ t: 'dropItem', uid: Number(p.arg) });
+        } else {
+          const d = p.data as { defId?: string; level?: number } | undefined;
+          const list: { def: { id: string }; level: number }[] =
+            p.kind === 'skillGem' ? w.meta.skillInv : w.meta.inventory;
+          let idx = Number(p.arg);
+          if (list[idx]?.def.id !== d?.defId || list[idx]?.level !== d?.level) {
+            idx = list.findIndex(g => g.def.id === d?.defId && g.level === d?.level);
+          }
+          if (idx < 0) return; // vanished mid-carry (learned/salvaged) — abandon
+          w.requestMeta(p.kind === 'skillGem'
+            ? { t: 'dropSkill', index: idx } : { t: 'dropSupport', index: idx });
+        }
+        gearRefresh();
       },
     });
   }
@@ -895,7 +1101,7 @@ export class UI {
           })
           .join('') || '<span style="color:#8a8678">no socketable skill</span>';
         return `
-          <div class="skill-entry" style="border-left:3px solid ${gem.def.color}">
+          <div class="skill-entry" data-drag="supportGem:${idx}" style="border-left:3px solid ${gem.def.color}">
             <div class="name">${gem.def.name} <span style="color:#ffd700">Lv ${gem.level}</span>
               <span style="color:#8a8678;font-weight:normal;font-size:10px">support gem</span></div>
             <div class="desc">${gem.def.description}</div>
@@ -926,7 +1132,7 @@ export class UI {
         : 'No requirements';
       const blocker = dupe ? 'already learned' : slotsFull ? 'all slots full' : !ok ? 'requirements unmet' : '';
       return `
-        <div class="skill-entry" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
+        <div class="skill-entry" data-drag="skillGem:${idx}" style="border-left:3px solid ${SKILL_RARITIES[inst.rarity ?? 'common'].color}">
           <div class="name">${def.name} <span style="color:#ffd700">Lv ${inst.level}</span> ${this.rarityTagHtml(inst)}</div>
           <div class="tags">${def.tags.join(' · ')}</div>
           <div class="desc">${def.description}</div>
@@ -977,7 +1183,7 @@ export class UI {
     this.inventoryOpen = !this.inventoryOpen;
     this.inventory.classList.toggle('hidden', !this.inventoryOpen);
     if (this.inventoryOpen) this.refreshInventory();
-    else { this.heldItemUid = null; this.setLiftedVestige(null); hideTooltip(); }
+    else { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
   }
 
   /** An item anywhere on this seat — bag or doll (tooltips serve both). */
@@ -1097,82 +1303,71 @@ export class UI {
 
   refreshInventory(): void {
     if (!this.inventoryOpen) return;
-    if (this.invDragging) return; // a rebuild mid-drag kills the native drag
+    // (No mid-drag freeze: the fabric's gestures ride data attributes that
+    // survive innerHTML rebuilds — a re-render mid-carry re-earns its marks
+    // on the next beat. The old native drag needed the world to hold still.)
     const m = this.getWorld().meta;
     const CELL = 34;
     const W = ITEM_CFG.inventory.w;
     const H = ITEM_CFG.inventory.h;
-    const held = this.heldItemUid !== null ? m.items.find(i => i.uid === this.heldItemUid) : undefined;
-    if (this.heldItemUid !== null && !held) this.heldItemUid = null; // vanished (equipped/dropped) — self-heal
 
     // --- the doll: every ENABLED slot from the registry, in registry order ---
-    // While an item is LIFTED, every slot that ACCEPTS it lights up — worn or
-    // empty alike (a swap target matters as much as a hole). The slot a plain
-    // equip would take (first empty, else first — World.equipItem's own rule)
-    // outlines SOLID; sibling candidates (the other ring) outline dashed.
-    const heldBase = held ? ITEM_BASES[held.baseId] : undefined;
-    const candidates = heldBase ? slotsForCategory(heldBase.category) : [];
-    const autoSlotId = candidates.length
-      ? (candidates.find(s => !m.equipped[s.id]) ?? candidates[0]).id : null;
+    // Every slot is a drop target (data-drop); worn chips are ALSO drag
+    // sources — a worn piece lifts off the body the same way a bag piece
+    // lifts off its tile. The fabric paints the can/over/src affordances.
     const doll = EQUIP_SLOTS.filter(s => s.enabled).map(slot => {
       const worn = m.equipped[slot.id];
-      const takes = heldBase && slot.accepts.includes(heldBase.category);
-      const border = worn ? ITEM_RARITIES[worn.rarity].color : takes ? '#7ec8a0' : '#3a3644';
-      const glow = takes
-        ? `outline:2px ${slot.id === autoSlotId ? 'solid' : 'dashed'} #7ec8a0;outline-offset:1px;box-shadow:0 0 9px rgba(126,200,160,0.45);`
-        : '';
+      const border = worn ? ITEM_RARITIES[worn.rarity].color : '#3a3644';
       const wornPips = worn?.sockets?.length ? ` <span style="font-size:12px">${worn.sockets.map((vid, si) => {
         const v = vid ? VESTIGES[vid] : null;
-        return `<span data-sock="${worn.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
+        return `<span data-sock="${worn.uid}:${si}" data-drop="sock:${worn.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
           style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
       }).join('')}</span>` : '';
-      const swapMark = takes && worn
-        ? ' <span style="color:#7ec8a0;font-size:11px" title="Click to swap the lifted item in here">⇄</span>' : '';
       const label = worn
-        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>${swapMark}${wornPips}`
+        ? `<span style="color:${ITEM_RARITIES[worn.rarity].color}">${worn.name}</span>${wornPips}`
         : `<span style="color:#5a5668">${slot.label}</span>`;
-      return `<button data-doll="${slot.id}" ${worn ? `data-tip="item" data-item-uid="${worn.uid}"` : ''}
+      return `<button data-doll="${slot.id}" data-drop="equipSlot:${slot.id}"
+        ${worn ? `data-drag="gearItem:${worn.uid}" data-tip="item" data-item-uid="${worn.uid}"` : ''}
         style="display:block;width:170px;margin:3px 0;padding:6px 8px;text-align:left;font-size:10px;
-        background:#1a1722;border:1px solid ${border};${glow}border-radius:4px;cursor:pointer">${label}</button>`;
+        background:#1a1722;border:1px solid ${border};border-radius:4px;cursor:pointer">${label}</button>`;
     }).join('');
 
-    // --- the bag: cells (click targets) under absolutely-positioned tiles ---
+    // --- the bag: cells (drop targets) under absolutely-positioned tiles ---
+    // A cell is where a carried piece's ORIGIN lands; the fabric lights the
+    // cells a fit is legal on, so the anchor rule teaches itself.
     let cells = '';
     for (let y = 0; y < H; y++) {
       for (let x = 0; x < W; x++) {
-        cells += `<div data-cell="${x}:${y}" style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
+        cells += `<div data-cell="${x}:${y}" data-drop="bagCell:${x}:${y}" style="position:absolute;left:${x * CELL}px;top:${y * CELL}px;
           width:${CELL - 2}px;height:${CELL - 2}px;background:#16131d;border:1px solid #2a2634"></div>`;
       }
     }
-    const GLYPH: Record<string, string> = {
-      helmet: '⛑', chest: '🛡', gloves: '🧤', boots: '👢', legs: '👖', belt: '➰',
-      ring: '💍', amulet: '📿', weapon: '⚔', offhand: '🛡', quiver: '🏹',
-    };
-    // Socket pips: each socket renders as a DROP TARGET pip on its tile —
-    // filled shows the vestige's glyph in its color, empty shows ◇.
+    // Socket pips: each socket renders as a PRECISE drop target pip on its
+    // tile — filled shows the vestige's glyph in its color, empty shows ◇.
     const pipRow = (i: ItemInstance): string => {
       if (!i.sockets?.length) return '';
       return `<div style="position:absolute;bottom:0;left:0;right:0;text-align:center;font-size:12px;line-height:13px">
         ${i.sockets.map((vid, si) => {
           const v = vid ? VESTIGES[vid] : null;
-          return `<span data-sock="${i.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
+          return `<span data-sock="${i.uid}:${si}" data-drop="sock:${i.uid}:${si}" title="${v ? v.name : 'Empty socket — drop a vestige here'}"
             style="color:${v?.color ?? '#5a5668'};padding:0 2px;cursor:copy">${v?.glyph ?? '◇'}</span>`;
         }).join('')}
       </div>`;
     };
+    // Tiles: drag sources AND drop targets (another piece swaps; a vestige
+    // inlays forgivingly). The fabric's .dnd-src mark dims a lifted tile.
     const tiles = m.items.map(i => {
       if (i.x === undefined || i.y === undefined) return '';
       const s = itemGridSize(i);
       const r = ITEM_RARITIES[i.rarity];
-      const isHeld = i.uid === this.heldItemUid;
       const cat = ITEM_BASES[i.baseId]?.category ?? 'ring';
       return `<div data-tip="item" data-item-uid="${i.uid}" data-bag-item="1"
+        data-drag="gearItem:${i.uid}" data-drop="gearTile:${i.uid}"
         style="position:absolute;left:${i.x * CELL}px;top:${i.y * CELL}px;
         width:${s.w * CELL - 2}px;height:${s.h * CELL - 2}px;background:#221e2c;
         border:2px solid ${r.color};border-radius:3px;cursor:pointer;box-sizing:border-box;
         display:flex;align-items:center;justify-content:center;font-size:${Math.min(s.w, s.h) > 1 ? 16 : 12}px;
-        ${isHeld ? 'outline:2px dashed #e8e0d0;opacity:0.7;' : ''}
-        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${GLYPH[cat] ?? '?'}${pipRow(i)}</div>`;
+        ${i.rarity === 'unique' ? `box-shadow:0 0 10px ${r.color};` : ''}">${CATEGORY_GLYPHS[cat] ?? '?'}${pipRow(i)}</div>`;
     }).join('');
 
     // The SATCHEL: a little pouch flap on the panel's edge holding the
@@ -1197,15 +1392,12 @@ export class UI {
             return `<div style="border-top:1px dashed #4a3a5a;margin-top:6px;padding-top:5px">
               ${owned.map(v => {
                 const n = this.getWorld().meta.vestiges[v.id];
-                const lifted = this.liftedVestige === v.id;
-                return `<div draggable="true" data-vestige="${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
-                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:grab${lifted
-                    ? ';outline:1px solid var(--gold);background:rgba(200,168,75,0.12)' : ''}">${v.glyph} ${n}
+                return `<div data-drag="vestige:${v.id}" data-tip="vestige" data-vestige-id="${v.id}"
+                  style="font-size:11px;color:${v.color};margin:2px 0;cursor:grab">${v.glyph} ${n}
                   <span style="color:#6a6478;font-size:9px">${v.name.split(',')[0]}</span></div>`;
               }).join('')}
-              <div style="color:#5a5668;font-size:8px;margin-top:3px">${this.liftedVestige
-                ? 'lifted — click a socket ◇ (or a socketed item) to inlay · click it again to cancel'
-                : 'drag — or click to lift — a vestige, then a socket ◇'}</div>
+              <div style="color:#5a5668;font-size:8px;margin-top:3px">drag — or click to lift — a vestige,
+                then a socket ◇ (a socketed item takes it in its first empty slot)</div>
             </div>`;
           })()}
         </div>` : ''}`;
@@ -1248,9 +1440,9 @@ export class UI {
           <h3>Bag <span style="color:#8a8678;font-weight:normal">(${m.items.length} item${m.items.length === 1 ? '' : 's'})</span></h3>
           <div style="position:relative;width:${W * CELL}px;height:${H * CELL}px">${cells}${tiles}</div>
           <div style="margin-top:8px;color:#8a8678;font-size:10px">
-            click: lift / place (a lone blocker swaps) · double-click: equip ·
-            lifted → doll slot: equip there · worn slot click: unequip ·
-            shift-click: drop to ground · ${pickupHint}
+            drag — or click to lift — any piece: bag ↔ doll ↔ the other slot,
+            onto another item to swap, onto the world to drop it ·
+            double-click: equip / unequip · shift-click: drop to ground · ${pickupHint}
           </div>
         </div>
       </div>`;
@@ -1283,7 +1475,12 @@ export class UI {
     this.wireInventory();
   }
 
-  /** Re-attach bag/doll click handlers after a re-render (the panels' idiom). */
+  /** Re-attach bag/doll click handlers after a re-render (the panels' idiom).
+   *  DRAG AND DROP LIVES ELSEWHERE: every lift/carry/land is the fabric's
+   *  (installGearDnd — data-drag/data-drop in the markup above); only plain
+   *  click VERBS are wired here, and the fabric's courtesies keep the two
+   *  from ever colliding (modifier clicks never lift; a drag's afterglow
+   *  click is swallowed). */
   private wireInventory(): void {
     const world = this.getWorld();
     const q = <T extends HTMLElement>(sel: string): T[] => [...this.inventory.querySelectorAll<T>(sel)];
@@ -1291,99 +1488,9 @@ export class UI {
       this.satchelOpen = !this.satchelOpen;
       this.refreshInventory();
     });
-    // VESTIGE drag-and-drop — a first-class gesture (core/input.ts waves
-    // draggable-marked elements past its anti-grab kill-switch):
-    //  · satchel rows are the SOURCES;
-    //  · every socket PIP is a precise target — dropping there inlays THAT
-    //    socket, occupied or not (an aimed, deliberate overwrite);
-    //  · the whole TILE / worn chip is the forgiving target — the first
-    //    EMPTY socket takes it; if none is empty the pips flash gold, and
-    //    overwriting is never guessed on the player's behalf.
-    const dropVid = (e: DragEvent): string | null => {
-      const vid = e.dataTransfer?.getData('text/plain') ?? '';
-      return vid && VESTIGES[vid] ? vid : null;
-    };
-    // ONE inlay path for both gestures (native drag AND click-to-lift) —
-    // the two may never disagree on what a socket click/drop does.
-    const socketDrop = (uid: number, socket: number, vid: string): void => {
-      this.invDragging = false; // drop fires before dragend — unfreeze first
-      this.socketVestige(uid, socket, vid);
-    };
-    const highlight = (el: HTMLElement, on: boolean): void => {
-      el.style.outline = on ? '2px solid var(--gold, #c8a84b)' : '';
-    };
-    q<HTMLElement>('[data-vestige]').forEach(el => {
-      el.addEventListener('dragstart', (e) => {
-        e.stopPropagation(); // never let a window-level suppressor see it
-        e.dataTransfer?.setData('text/plain', el.dataset.vestige!);
-        if (e.dataTransfer) e.dataTransfer.effectAllowed = 'copy';
-        hideTooltip();       // the hover card must not shadow the drop path
-        this.setLiftedVestige(null); // a real drag supersedes a lift
-        this.invDragging = true;
-      });
-      el.addEventListener('dragend', () => {
-        if (!this.invDragging) return; // a landed drop already refreshed
-        this.invDragging = false;
-        this.refreshInventory();       // clear lingering highlights
-      });
-      // CLICK-TO-LIFT: the pad-friendly (and one-handed-mouse) twin of the
-      // drag — click lifts the vestige onto the cursor, the next socket (or
-      // socketed item) click inlays it, re-clicking the row cancels.
-      el.addEventListener('click', (e) => {
-        const vid = el.dataset.vestige!;
-        this.setLiftedVestige(this.liftedVestige === vid ? null : vid, { x: e.clientX, y: e.clientY });
-        this.refreshInventory();
-      });
-    });
-    q<HTMLElement>('[data-sock]').forEach(el => {
-      el.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
-      el.addEventListener('dragenter', () => highlight(el, true));
-      el.addEventListener('dragleave', () => highlight(el, false));
-      el.addEventListener('drop', (e) => {
-        e.preventDefault();
-        e.stopPropagation(); // the tile beneath must not double-handle it
-        const vid = dropVid(e);
-        if (!vid) return;
-        const [uid, sock] = el.dataset.sock!.split(':');
-        socketDrop(Number(uid), Number(sock), vid);
-      });
-      // A pip click must never lift the tile underneath — and while a vestige
-      // is LIFTED, the pip click is the precise inlay (occupied or not: an
-      // aimed, deliberate overwrite, exactly like the drag's pip drop).
-      el.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const vid = this.liftedVestige;
-        if (!vid) return;
-        const [uid, sock] = el.dataset.sock!.split(':');
-        this.setLiftedVestige(null);
-        socketDrop(Number(uid), Number(sock), vid);
-      });
-    });
-    const wireItemTarget = (el: HTMLElement, uid: number): void => {
-      if (!this.findItem(uid)?.sockets?.length) return; // socketless ≠ target
-      el.addEventListener('dragover', (e) => { e.preventDefault(); if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'; });
-      el.addEventListener('dragenter', () => highlight(el, true));
-      el.addEventListener('dragleave', () => highlight(el, false));
-      el.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const vid = dropVid(e);
-        if (!vid) return;
-        highlight(el, false);
-        const empty = this.findItem(uid)?.sockets?.findIndex(s => s === null) ?? -1;
-        if (empty >= 0) { socketDrop(uid, empty, vid); return; }
-        // Every socket full: flash the pips — pick one to overwrite, aimed.
-        el.querySelectorAll<HTMLElement>('[data-sock]').forEach(p => {
-          p.style.textShadow = '0 0 8px #ffd700';
-          window.setTimeout(() => { p.style.textShadow = ''; }, 650);
-        });
-      });
-    };
-    q<HTMLElement>('[data-bag-item]').forEach(el => wireItemTarget(el, Number(el.dataset.itemUid)));
-    q<HTMLElement>('[data-doll][data-item-uid]').forEach(el => wireItemTarget(el, Number(el.dataset.itemUid)));
     q<HTMLButtonElement>('button[data-invtab]').forEach(btn => btn.addEventListener('click', () => {
       this.invTab = btn.dataset.invtab as typeof this.invTab;
-      this.heldItemUid = null; // a lifted item has no meaning off the gear tab
-      this.setLiftedVestige(null); // nor does a lifted vestige
+      dndCancel(); // a carry has no meaning across a tab flip
       this.refreshInventory();
     }));
     // The Build drawer rides EVERY tab (its handle hangs on the panel edge):
@@ -1402,68 +1509,40 @@ export class UI {
       return; // no gear handlers to attach on gem tabs
     }
 
+    // CLICK VERBS on gear (the fast paths beside the drag):
+    //  · double-click a bag tile = equip (auto slot) — its mirror, double-
+    //    click a worn chip = unequip (first fit). One symmetry, zero aiming.
+    //  · shift-click either = drop to the ground (the drag-to-world twin).
     q<HTMLElement>('[data-bag-item]').forEach(el => {
       const uid = Number(el.dataset.itemUid);
       el.addEventListener('click', (e) => {
-        // A lifted VESTIGE outranks the item-lift gesture: clicking a socketed
-        // tile inlays into its first empty socket (the drag's forgiving rule).
-        if (this.liftedVestige) { this.inlayLifted(el, uid); return; }
-        if (e.shiftKey) {
-          world.requestMeta({ t: 'dropItem', uid });
-          if (this.heldItemUid === uid) this.heldItemUid = null;
-          this.refreshInventory();
-          return;
-        }
-        if (this.heldItemUid !== null && this.heldItemUid !== uid) {
-          // Held → clicked item: try the tetris SWAP at its cells.
-          const target = this.findItem(uid);
-          const heldUid = this.heldItemUid;
-          if (target?.x !== undefined && target.y !== undefined) {
-            const tx = target.x;
-            const ty = target.y;
-            world.requestMeta({ t: 'moveItem', uid: heldUid, x: tx, y: ty });
-            // Applied synchronously (host / optimistic client) — drop the lift
-            // only if the swap actually landed; otherwise stay lifted.
-            const moved = this.findItem(heldUid);
-            if (moved && moved.x === tx && moved.y === ty) this.heldItemUid = null;
-          }
-        } else {
-          this.heldItemUid = this.heldItemUid === uid ? null : uid;
-        }
+        if (!e.shiftKey) return; // plain clicks belong to the fabric's lift
+        world.requestMeta({ t: 'dropItem', uid });
         this.refreshInventory();
       });
       el.addEventListener('dblclick', () => {
         world.requestMeta({ t: 'equipItem', uid });
-        this.heldItemUid = null;
         this.refreshInventory();
+        this.refreshCharSheet();
       });
     });
-
-    q<HTMLElement>('[data-cell]').forEach(el => el.addEventListener('click', () => {
-      if (this.heldItemUid === null) return;
-      const [x, y] = el.dataset.cell!.split(':').map(Number);
-      world.requestMeta({ t: 'moveItem', uid: this.heldItemUid, x, y });
-      this.heldItemUid = null;
-      this.refreshInventory();
-    }));
-
-    q<HTMLElement>('[data-doll]').forEach(el => el.addEventListener('click', () => {
-      // Same vestige-first rule on worn gear (empty doll slots just no-op).
-      if (this.liftedVestige) {
-        const uid = Number(el.dataset.itemUid ?? NaN);
-        if (Number.isFinite(uid)) this.inlayLifted(el, uid);
-        return;
-      }
+    q<HTMLElement>('[data-doll]').forEach(el => {
       const slot = el.dataset.doll!;
-      if (this.heldItemUid !== null) {
-        world.requestMeta({ t: 'equipItem', uid: this.heldItemUid, slot });
-        this.heldItemUid = null;
-      } else if (this.getWorld().meta.equipped[slot]) {
+      el.addEventListener('click', (e) => {
+        if (!e.shiftKey) return; // plain click = the fabric's lift (or a drop)
+        const worn = this.getWorld().meta.equipped[slot];
+        if (!worn) return;
+        world.requestMeta({ t: 'dropItem', uid: worn.uid });
+        this.refreshInventory();
+        this.refreshCharSheet();
+      });
+      el.addEventListener('dblclick', () => {
+        if (!this.getWorld().meta.equipped[slot]) return;
         world.requestMeta({ t: 'unequipItem', slot });
-      }
-      this.refreshInventory();
-      this.refreshCharSheet(); // worn stats moved — keep the open sheet honest
-    }));
+        this.refreshInventory();
+        this.refreshCharSheet(); // worn stats moved — keep the open sheet honest
+      });
+    });
   }
 
   /** The one socketVestige request path — native drag drops and click-to-lift
@@ -1474,39 +1553,6 @@ export class UI {
     this.refreshCharSheet();
   }
 
-  /** Lift (or drop) a vestige onto the cursor: the ghost glyph trails the
-   *  pointer until a socket click inlays it or the lift is cancelled. */
-  private setLiftedVestige(vid: string | null, at?: { x: number; y: number }): void {
-    this.liftedVestige = vid;
-    const g = this.vestigeGhost;
-    if (!vid) { g.style.display = 'none'; return; }
-    const v = VESTIGES[vid];
-    g.textContent = v?.glyph ?? '◆';
-    g.style.color = v?.color ?? 'var(--gold)';
-    if (at) g.style.transform = `translate(${at.x + 12}px, ${at.y + 14}px)`;
-    g.style.display = 'block';
-  }
-
-  /** Inlay the LIFTED vestige into an item's first EMPTY socket; if every
-   *  socket is full, flash the pips so the overwrite stays an aimed pip-click
-   *  — the native drag's exact forgiving-target rule. Socketless items are
-   *  not targets (the lift survives the misclick). */
-  private inlayLifted(el: HTMLElement, uid: number): void {
-    const vid = this.liftedVestige;
-    if (!vid) return;
-    const sockets = this.findItem(uid)?.sockets;
-    if (!sockets?.length) return;
-    const empty = sockets.findIndex(s => s === null);
-    if (empty >= 0) {
-      this.setLiftedVestige(null);
-      this.socketVestige(uid, empty, vid);
-      return;
-    }
-    el.querySelectorAll<HTMLElement>('[data-sock]').forEach(p => {
-      p.style.textShadow = '0 0 8px #ffd700';
-      window.setTimeout(() => { p.style.textShadow = ''; }, 650);
-    });
-  }
 
   // ---------------------------------------------------------- salvage station
 
@@ -4131,8 +4177,7 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
   hideAll(): void {
     this.charSheetOpen = false;
     this.inventoryOpen = false;
-    this.heldItemUid = null;
-    this.setLiftedVestige(null); // never strand the ghost on a closed panel
+    dndCancel(); // never strand a carried ghost on a closed panel
     this.inventory.classList.add('hidden');
     this.salvageOpen = false;
     this.craftTargetUid = null;
