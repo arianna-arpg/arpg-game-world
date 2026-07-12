@@ -123,6 +123,13 @@ export class Renderer {
     return { x: p.x / this.zoom + this.cam.x, y: p.y / this.zoom + this.cam.y };
   }
 
+  /** World -> screen coordinates — toWorld's exact inverse (used to hand the
+   *  reticle's position to the mouse on an aim-source switch). Uses the last
+   *  rendered camera, which is at most one frame stale. */
+  toScreen(p: { x: number; y: number }): Vec2 {
+    return { x: (p.x - this.cam.x) * this.zoom, y: (p.y - this.cam.y) * this.zoom };
+  }
+
   render(world: World): void {
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;

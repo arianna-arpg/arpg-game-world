@@ -54,7 +54,7 @@ import {
   ACTION_IDS, ACTION_LABELS, keyDisplay, PAD_ACTION_IDS, PAD_ACTION_LABELS,
   type ActionId, type PadActionId, type Settings,
 } from '../meta/settings';
-import { PAD_CFG, padDisplay } from '../core/gamepad';
+import { PAD_CFG, padDisplay, AIM_ASSIST_MODES } from '../core/gamepad';
 import { wipeRosterSlot, type CharacterSave } from '../meta/character';
 import {
   availableModes, DEFAULT_MODE_ID, modeById, rosterCapacity, rosterOf, stageOf,
@@ -3612,9 +3612,18 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           value="${Math.round(s.pad.pointerSpeed)}"> <b id="val-padspeed">${Math.round(s.pad.pointerSpeed)}</b></span>
       </div>
       <div class="rebind-row">
+        <span>Aim Sensitivity (right stick)</span>
+        <span class="pad-opt"><input type="range" id="opt-aimsens" min="0" max="100" step="5"
+          value="${Math.round(s.pad.aimSensitivity * 100)}"> <b id="val-aimsens">${Math.round(s.pad.aimSensitivity * 100)}%</b></span>
+      </div>
+      <div class="rebind-row">
         <span>Aim Assist (reticle magnetism)</span>
         <span class="pad-opt"><input type="range" id="opt-aimassist" min="0" max="100" step="5"
           value="${Math.round(s.pad.aimAssist * 100)}"> <b id="val-aimassist">${s.pad.aimAssist <= 0 ? 'OFF' : `${Math.round(s.pad.aimAssist * 100)}%`}</b></span>
+      </div>
+      <div class="rebind-row">
+        <span>Aim Assist Style</span>
+        <button id="opt-assistmode" title="${AIM_ASSIST_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}">${(AIM_ASSIST_MODES.find(m => m.id === s.pad.assistMode) ?? AIM_ASSIST_MODES[0]).name}</button>
       </div>
       <div class="rebind-row">
         <span>Swap Sticks (southpaw)</span>
@@ -3735,7 +3744,18 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     slider('deadzone', v => { this.getSettings().pad.deadzone = v / 100; }, v => `${v}%`);
     slider('aimreach', v => { this.getSettings().pad.aimRadius = v; }, v => String(v));
     slider('padspeed', v => { this.getSettings().pad.pointerSpeed = v; }, v => String(v));
+    slider('aimsens', v => { this.getSettings().pad.aimSensitivity = v / 100; }, v => `${v}%`);
     slider('aimassist', v => { this.getSettings().pad.aimAssist = v / 100; }, v => v <= 0 ? 'OFF' : `${v}%`);
+    // AIM ASSIST STYLE: cycle the delivery-mode registry (core/gamepad.ts) —
+    // 'cursor' steers the aim itself (no snap-back on a broken lock), 'view'
+    // keeps the legacy bend-the-shot-only mechanic selectable.
+    root.querySelector<HTMLElement>('#opt-assistmode')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = AIM_ASSIST_MODES.findIndex(m => m.id === st.pad.assistMode);
+      st.pad.assistMode = AIM_ASSIST_MODES[(i + 1) % AIM_ASSIST_MODES.length].id;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
     // AIM TICK opacity: fades every facing pointer; 0 hides them outright
     // (the see-the-fight option). The renderer reads Settings live — the
     // drag shows on the battlefield behind the menu, next frame.

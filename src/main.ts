@@ -6,7 +6,7 @@
 import { Input } from './core/input';
 import { PAD_CFG, PadState, synthEscape, type FakePad, type PadTuning } from './core/gamepad';
 import { applyCursor } from './core/cursor';
-import { assistAim } from './engine/aimassist';
+import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
@@ -72,6 +72,10 @@ applyCursor(settings.cursor);
 const padTuning = (): PadTuning => ({
   deadzone: settings.pad.deadzone,
   stickCurve: PAD_CFG.stickCurve,
+  // The player's aim-sensitivity dial, resolved across the engine's exponent
+  // span — 0.5 lands exactly on stickCurve (the classic feel).
+  aimCurve: PAD_CFG.aimCurve.relaxed
+    + (PAD_CFG.aimCurve.twitchy - PAD_CFG.aimCurve.relaxed) * settings.pad.aimSensitivity,
   triggerThreshold: PAD_CFG.triggerThreshold,
   aimMinRadius: PAD_CFG.aim.minRadius,
   aimMaxRadius: settings.pad.aimRadius,
@@ -87,22 +91,41 @@ const padPointer = new PadPointer(pad, padTuning);
 let aimSource: 'mouse' | 'pad' = 'mouse';
 const lastMouse = { x: -1, y: -1 };
 let mouseReclaim = 0;
-// The pad's visible aim: the assisted reticle point + the soft-lock target,
+// The game's visible aim: the assisted reticle point + the soft-lock target,
 // refreshed by readLocalInput and fed to the renderer each frame.
 let padLock: number | null = null;
 let padAimView: { x: number; y: number; lockId: number | null } | null = null;
+// MOUSE HANDOFF (PAD_CFG.mouseHandoff): when the mouse reclaims aim from the
+// pad, this screen-space offset carries the reticle's position into the
+// mouse's aim — aim = arrow + offset — so targeting continues from where the
+// reticle truly was instead of flipping to wherever the arrow sat parked. It
+// melts with mouse travel until arrow and aim are one and the arrow returns.
+let mouseHandoff: { x: number; y: number } | null = null;
+
+/** The one gate for drawing the in-world game reticle (and hiding the OS
+ *  arrow): live play, no menus/pointer, a hero who can act. Both the renderer
+ *  feed and the handoff's honesty rule (below) key off this. */
+function reticleAllowed(): boolean {
+  return running && !ui.uiBlocking() && !padPointer.active
+    && !world.player.dead && !world.player.downed;
+}
 
 /** Feed the renderer this frame's aim view: the HUD mouse plus — while the
- *  PAD owns the reticle in live play — the assisted aim point (and soft-lock
- *  target) the in-world reticle draws at. The canvas hides the OS arrow
- *  whenever the reticle is the cursor; deliberate mouse travel (the reclaim
- *  threshold above) brings the arrow straight back. */
+ *  PAD owns the reticle in live play, or a mouse HANDOFF is still carrying
+ *  the pad's aim — the aim point (and soft-lock target) the in-world reticle
+ *  draws at. The canvas hides the OS arrow whenever the reticle is the
+ *  cursor; once the handoff melts (or a menu needs the arrow) it returns. */
 function feedRendererAim(): void {
   renderer.hudMouse = input.mouse;
-  const padOwns = aimSource === 'pad' && running && !ui.uiBlocking()
-    && !padPointer.active && !world.player.dead && !world.player.downed;
-  renderer.padAim = padOwns ? padAimView : null;
-  const wantCursor = padOwns ? 'none' : '';
+  const allowed = reticleAllowed();
+  // HONESTY RULE: the moment the OS arrow must be visible (menus, pointer
+  // mode, death), its position is truth again — a hidden handoff offset
+  // would mean clicking one place and aiming another. Drop it.
+  if (mouseHandoff && !allowed) mouseHandoff = null;
+  const padOwns = aimSource === 'pad' && allowed;
+  const handoffOwns = aimSource === 'mouse' && mouseHandoff !== null && allowed;
+  renderer.padAim = (padOwns || handoffOwns) ? padAimView : null;
+  const wantCursor = (padOwns || handoffOwns) ? 'none' : '';
   if (canvas.style.cursor !== wantCursor) canvas.style.cursor = wantCursor;
 }
 
@@ -440,7 +463,7 @@ void (async (): Promise<void> => {
  *  it no longer touches the world directly — World.applyInputs does that, for
  *  every seat uniformly. `aim` is converted to WORLD space here so it's
  *  camera-independent (the one value that must survive the wire). */
-function readLocalInput(): PlayerInput | null {
+function readLocalInput(dt: number): PlayerInput | null {
   const p = world.player;
   if (p.dead || p.downed) return null;
   if (ui.escapeMenuOpen) return null;
@@ -467,14 +490,58 @@ function readLocalInput(): PlayerInput | null {
   // target. The assisted point IS the reticle the renderer draws — what you
   // see is exactly what every castAtCursor skill receives.
   let aim = renderer.toWorld(input.mouse);
+  if (aimSource === 'mouse' && mouseHandoff) {
+    // A live HANDOFF: the pad's reticle handed the mouse this offset — aim
+    // rides arrow+offset (melting in tick's motion block) so the switch
+    // never flips facing toward a stale, parked arrow.
+    aim = renderer.toWorld({
+      x: input.mouse.x + mouseHandoff.x,
+      y: input.mouse.y + mouseHandoff.y,
+    });
+    padAimView = { x: aim.x, y: aim.y, lockId: null };
+  }
   if (aimSource === 'pad' && padLive) {
     const t = padTuning();
     const reach = pad.aimReach(pad.aimMag > 0 ? pad.aimMag : pad.lastAimMag, t);
     const raw = { x: p.pos.x + pad.lastAimDir.x * reach, y: p.pos.y + pad.lastAimDir.y * reach };
-    const assisted = assistAim(world, p, raw, padLock, settings.pad.aimAssist);
-    padLock = assisted.targetId;
-    aim = { x: assisted.x, y: assisted.y };
-    padAimView = { x: aim.x, y: aim.y, lockId: padLock };
+    // A zero-length frame (timer-resolution twins) must not re-run the
+    // assist: the corrected glide strength would be exactly 0, and a
+    // 0-strength assist reads as "free aim" — wiping the held lock and
+    // flickering the view to raw for one frame. Deliver last frame's point
+    // (buttons and movement below still read normally).
+    if (dt <= 0 && padAimView) {
+      aim = { x: padAimView.x, y: padAimView.y };
+    } else {
+      // Delivery mode (AIM_ASSIST_MODES; a held skill's def may someday
+      // override this per skill). In 'cursor' mode with the stick at rest
+      // the write-back below COMPOUNDS frame over frame — correct the blend
+      // so the settle/track rate matches strength-per-frame at glideRefHz on
+      // any monitor. A live stick frame is absolute (no compounding).
+      const mode = settings.pad.assistMode;
+      const sBase = settings.pad.aimAssist;
+      const strength = (mode === 'cursor' && pad.aimMag === 0 && sBase < 1)
+        ? 1 - Math.pow(1 - sBase, dt * AIM_ASSIST.glideRefHz)
+        : sBase;
+      const assisted = assistAim(world, p, raw, padLock, strength);
+      padLock = assisted.targetId;
+      aim = { x: assisted.x, y: assisted.y };
+      if (mode === 'cursor' && padLock !== null) {
+        // THE ASSIST MOVES THE CURSOR: fold the assisted point back into the
+        // pad's sticky aim, so a broken lock (death, dash, wall) or a device
+        // switch continues from where the reticle visibly is — never a snap
+        // back to the pre-assist raw point. Hero-relative dir + reach is the
+        // sticky aim's native space; reach inversion clamps to the player's
+        // envelope (a target hugging the hero parks the cursor at min reach
+        // in its direction — direction, and so facing, is always preserved).
+        const dx = aim.x - p.pos.x, dy = aim.y - p.pos.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 1e-3) {
+          const mag = (dist - t.aimMinRadius) / Math.max(1, t.aimMaxRadius - t.aimMinRadius);
+          pad.setStickyAim({ x: dx / dist, y: dy / dist }, mag);
+        }
+      }
+      padAimView = { x: aim.x, y: aim.y, lockId: padLock };
+    }
   }
 
   // Slots 0/1 are LMB/RMB (fixed) — on a pad they're ordinary binds; slots
@@ -643,10 +710,31 @@ function tick(now: number): void {
     lastMouse.x = input.mouse.x; lastMouse.y = input.mouse.y;
     if (aimSource === 'pad') {
       mouseReclaim += moved;
-      if (mouseReclaim >= PAD_CFG.mouseReclaimPx) { aimSource = 'mouse'; mouseReclaim = 0; }
+      if (mouseReclaim >= PAD_CFG.mouseReclaimPx) {
+        aimSource = 'mouse'; mouseReclaim = 0;
+        // THE RETICLE HANDS THE MOUSE THE CURSOR: the switch starts aiming
+        // exactly where the reticle was (assist and all), not wherever the
+        // arrow sat parked — the offset melts with travel (block below).
+        // Only while the reticle was truly the cursor (live play): if the
+        // arrow was visible (menus etc.), its own position is the truth.
+        if (padAimView && reticleAllowed()) {
+          const rs = renderer.toScreen(padAimView);
+          mouseHandoff = { x: rs.x - input.mouse.x, y: rs.y - input.mouse.y };
+        }
+      }
+    } else if (mouseHandoff) {
+      // MELT the handoff with deliberate travel — each px of motion scales
+      // the offset by (1 − px/mergePx); once it's within doneEps of zero,
+      // arrow and aim are one and the honest OS arrow returns.
+      const h = PAD_CFG.mouseHandoff;
+      const k = Math.max(0, 1 - moved / h.mergePx);
+      mouseHandoff.x *= k; mouseHandoff.y *= k;
+      if (Math.hypot(mouseHandoff.x, mouseHandoff.y) < h.doneEps) mouseHandoff = null;
     }
   }
-  if (pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; }
+  // Any live aim-stick deflection reclaims the reticle for the pad (and ends
+  // any mouse handoff — the pad's sticky cursor is absolute again).
+  if (pad.aimMag > 0) { aimSource = 'pad'; mouseReclaim = 0; mouseHandoff = null; }
   padPointer.update(dt, ui.uiBlocking() || !running, nowSec);
   if (pad.justPressed(PAD_CFG.escapeButton)) synthEscape();
 
@@ -659,7 +747,7 @@ function tick(now: number): void {
       // 2. Gather this frame's per-seat intent into the transport. The local seat
       //    reads the OS; other LOCAL seats (the scripted ally) poll their source.
       //    A REMOTE seat's intent arrives through the transport's own pump.
-      const li = readLocalInput();
+      const li = readLocalInput(dt);
       if (li) net.sendInput(net.self, li);
       for (const seat of world.seats) {
         if (seat.id === net.self) continue;
@@ -774,7 +862,7 @@ function tick(now: number): void {
     } else {
       // ---- CLIENT: run NO sim. Send local input, render the host's snapshot. ----
       handleLocalPanels();
-      const li = readLocalInput();
+      const li = readLocalInput(dt);
       if (li) {
         // Stamp + buffer the input for prediction, THEN send it. The host echoes
         // the last-applied seq; predictOwnHero replays everything newer locally.

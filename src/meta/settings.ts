@@ -15,7 +15,7 @@
 // START is the pad's hardwired Escape, mirroring the keyboard rule.
 // ---------------------------------------------------------------------------
 
-import { PAD_CFG } from '../core/gamepad';
+import { PAD_CFG, AIM_ASSIST_MODES, type AimAssistMode } from '../core/gamepad';
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
@@ -48,6 +48,16 @@ export interface PadOptions {
    *  reticle snaps fully onto the held target. The radii and stickiness live
    *  in engine/aimassist.ts; this is the one player-facing dial. */
   aimAssist: number;
+  /** AIM sensitivity (0..1): how eagerly the right stick's tilt becomes
+   *  reach. Maps across PAD_CFG.aimCurve — 0 relaxed (fine control near
+   *  center), 1 twitchy (reach leaps on a small tilt); 0.5 is the engine's
+   *  classic response. Aim stick only — movement keeps the engine curve. */
+  aimSensitivity: number;
+  /** How the soft assist DELIVERS its pull — an AIM_ASSIST_MODES id
+   *  (core/gamepad.ts): 'cursor' (default) steers the aim cursor itself so
+   *  a broken lock never snaps your facing back; 'view' is the legacy
+   *  bend-the-shot-only mechanic, kept selectable on purpose. */
+  assistMode: AimAssistMode;
 }
 
 export interface Settings {
@@ -141,6 +151,8 @@ export const DEFAULT_PAD_OPTIONS: PadOptions = {
   pointerSpeed: PAD_CFG.pointer.speed,
   swapSticks: false,
   aimAssist: 0.5,
+  aimSensitivity: 0.5,
+  assistMode: 'cursor',
 };
 
 /** Human labels for the rebind UI, in display order. */
@@ -226,6 +238,9 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
       pointerSpeed: clamp(s.pad?.pointerSpeed ?? d.pointerSpeed, 200, 3000),
       swapSticks: !!(s.pad?.swapSticks ?? d.swapSticks),
       aimAssist: clamp(s.pad?.aimAssist ?? d.aimAssist, 0, 1),
+      aimSensitivity: clamp(s.pad?.aimSensitivity ?? d.aimSensitivity, 0, 1),
+      assistMode: AIM_ASSIST_MODES.some(m => m.id === s.pad?.assistMode)
+        ? s.pad!.assistMode! : d.assistMode,
     },
     // Cursor identity: unknown styles (a removed mod entry) fall back to the
     // default; the color takes any CSS-safe #rrggbb, else the default tint.

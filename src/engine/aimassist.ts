@@ -17,6 +17,19 @@
 // The radii live here (AIM_ASSIST) as engine tunables; the strength is the
 // one player-facing dial. Pure function — the caller owns the held-target id
 // between frames, so tests can drive it without a main loop.
+//
+// DELIVERY is the caller's choice, named by an AIM_ASSIST_MODES id
+// (core/gamepad.ts — Settings.pad.assistMode picks; a SkillDef override may
+// someday out-vote it per skill):
+//   • 'cursor' (default): the caller writes the assisted point BACK into the
+//     pad's sticky aim (PadState.setStickyAim) every locked frame — the
+//     assist really moves the cursor, so a broken lock or a device handoff
+//     continues from where the reticle visibly is, never snapping to a stale
+//     raw point. While the stick rests, that write-back compounds: the
+//     cursor settles onto (and then gently tracks) the held target. The
+//     compounding is frame-rate corrected against glideRefHz below.
+//   • 'view' (legacy): no write-back — the blend bends the delivered shot
+//     and reticle only, and the raw stick point stays the resting truth.
 // ---------------------------------------------------------------------------
 
 import type { World } from './world';
@@ -29,11 +42,17 @@ export interface AimAssistTuning {
   /** A held target keeps its lock while its edge stays within this of the
    *  raw point (> acquireRadius = sticky). */
   breakRadius: number;
+  /** Frame-rate reference for the 'cursor' mode settle/track rate: with the
+   *  stick at rest the per-frame blend COMPOUNDS (cursor ← delivered), so
+   *  the caller corrects strength to behave like strength-per-frame AT this
+   *  Hz on any monitor — a 144Hz player's lock settles no faster. */
+  glideRefHz: number;
 }
 
 export const AIM_ASSIST: AimAssistTuning = {
   acquireRadius: 110,
   breakRadius: 175,
+  glideRefHz: 60,
 };
 
 export interface AssistedAim {

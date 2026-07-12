@@ -29,6 +29,14 @@ export const PAD_CFG = {
   /** Response exponent past the deadzone: 1 = linear, higher = finer control
    *  near center without giving up full-tilt speed. */
   stickCurve: 1.5,
+  /** AIM-STICK SENSITIVITY SPAN: Settings.pad.aimSensitivity (0..1) maps
+   *  linearly across these exponent ends for the AIM stick only — relaxed
+   *  (high exponent = soft, fine control near center) through twitchy
+   *  (sub-linear = reach leaps out on a small tilt). The midpoint lands
+   *  exactly on stickCurve, so the default dial position IS the classic feel.
+   *  The move stick and menu pointer stay on stickCurve — walking precision
+   *  is not an aim preference. */
+  aimCurve: { relaxed: 2.5, twitchy: 0.5 },
   /** Analog triggers (LT/RT) count as "pressed" past this pull fraction. */
   triggerThreshold: 0.35,
   /** Aim-stick reach: deflection maps min→max world units from the hero.
@@ -65,10 +73,46 @@ export const PAD_CFG = {
    *  (accumulated) to reclaim aim — a desk bump or sensor drift on an idle
    *  mouse must never yank targeting to wherever the arrow was abandoned. */
   mouseReclaimPx: 10,
+  /** MOUSE HANDOFF: when the mouse does reclaim aim from the pad, the
+   *  reticle HANDS IT the cursor — aim begins exactly where the reticle was
+   *  (a parked, invisible arrow must never flip your facing), carried by a
+   *  screen-space offset that MELTS as the mouse travels: each px of travel
+   *  scales the offset down by (1 − px/mergePx), so arrow and aim re-unify
+   *  after roughly mergePx of deliberate motion and the honest OS arrow
+   *  returns. doneEps = the offset length (px) that counts as unified. */
+  mouseHandoff: { mergePx: 240, doneEps: 2 },
   /** The pad counts as the ACTIVE input source for this long after its last
    *  activity (seconds) — drives pointer-mode handoff between mouse and pad. */
   activeWindow: 4,
 } as const;
+
+// ---------------------------------------------------------------------------
+// AIM ASSIST DELIVERY MODES — how the soft assist (engine/aimassist.ts) hands
+// its pull to the game. A registry, not a flag: settings validates against it,
+// the options screen iterates it, and a future SkillDef-level override can
+// name an id to force a mode per skill (a beam that must bend without moving
+// your cursor, say) without touching this file.
+// ---------------------------------------------------------------------------
+export type AimAssistMode = 'cursor' | 'view';
+export interface AimAssistModeDef {
+  id: AimAssistMode;
+  /** Player-facing button label (options screen). */
+  name: string;
+  /** One-line tooltip explaining the feel. */
+  blurb: string;
+}
+export const AIM_ASSIST_MODES: AimAssistModeDef[] = [
+  {
+    id: 'cursor',
+    name: 'MOVES THE CURSOR',
+    blurb: 'The assist steers your aim itself — when a lock breaks or you grab the mouse, aim continues from where the reticle truly is. While the stick rests, a held lock gently tracks its target.',
+  },
+  {
+    id: 'view',
+    name: 'BENDS THE SHOT',
+    blurb: 'The assist curves the delivered shot and reticle only; your underlying stick aim never moves, and losing the lock returns aim to your raw stick point.',
+  },
+];
 
 /** Standard-mapping button names, in w3c index order (0–16). */
 export const PAD_BUTTON_ORDER = [
@@ -100,6 +144,9 @@ export function padDisplay(code: string): string {
 export interface PadTuning {
   deadzone: number;
   stickCurve: number;
+  /** AIM stick's response exponent — resolved from Settings.pad.aimSensitivity
+   *  across PAD_CFG.aimCurve; the move stick stays on stickCurve. */
+  aimCurve: number;
   triggerThreshold: number;
   aimMinRadius: number;
   aimMaxRadius: number;
@@ -244,7 +291,7 @@ export class PadState {
     const ax = (i: number): number => src.axes[i] ?? 0;
     const swap = t.swapSticks;
     const mv = shapeStick(ax(swap ? 2 : 0), ax(swap ? 3 : 1), t.deadzone, t.stickCurve);
-    const am = shapeStick(ax(swap ? 0 : 2), ax(swap ? 1 : 3), t.deadzone, t.stickCurve);
+    const am = shapeStick(ax(swap ? 0 : 2), ax(swap ? 1 : 3), t.deadzone, t.aimCurve);
     this.move.x = mv.x; this.move.y = mv.y; this.moveMag = mv.mag;
 
     // SNAPBACK FILTER: a deflection collapsing faster than a hand steers is a
@@ -270,6 +317,17 @@ export class PadState {
       this.aimStick.x = this.aimStick.y = 0; this.aimMag = 0;
     }
     if (mv.mag > 0 || am.mag > 0) this.lastActive = nowSec;
+  }
+
+  /** External aim steering — the 'cursor' assist mode writes the assisted
+   *  point back HERE, making the sticky aim (the pad's persistent cursor)
+   *  really and truly follow the assist. Live stick samples keep absolute
+   *  priority: the very next poll with a live, unfiltered deflection
+   *  overwrites whatever was steered — the player always wins the stick. */
+  setStickyAim(dir: { x: number; y: number }, mag: number): void {
+    this.lastAimDir.x = dir.x;
+    this.lastAimDir.y = dir.y;
+    this.lastAimMag = Math.min(1, Math.max(0, mag));
   }
 
   /** True once per physical press of the bound button ('' never fires). */
