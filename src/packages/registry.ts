@@ -25,6 +25,7 @@ import { MIGRATION } from './defs/migration';
 import { MYCELIA } from './defs/mycelia';
 import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
+import { VENDETTA } from './defs/vendetta';
 import { WARBANDS } from './defs/warbands';
 import type { EncounterDef } from './encounters';
 import type { HoldfastDef } from './holdfast';
@@ -48,6 +49,7 @@ export const PACKAGES: ContentPackage[] = [
   BRIGANDS,
   MYCELIA,
   HAUNTING,
+  VENDETTA,
   PIT,
   FACTION_POLITICS,
 ];
@@ -75,6 +77,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   holdfast: 0x401d,
   brigands: 0xb21a,
   mycelia: 0x14ce,
+  vendetta: 0x0e4d,
   pit: 0x9147,
 };
 

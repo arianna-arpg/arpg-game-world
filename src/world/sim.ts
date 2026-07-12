@@ -38,6 +38,7 @@ import { SIDEZONES } from '../data/sidezones';
 import { STRUCTURES } from '../data/structures';
 import { hasStructureGen } from '../engine/structureGen';
 import type { BreachField } from '../packages/overlays/breach';
+import type { VendettaField } from '../packages/overlays/vendetta';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
 import { boundaryGateIds } from '../data/boundaryGates';
 import { setClimateOrigin } from './climate';
@@ -160,6 +161,11 @@ export class WorldSim {
    *  minimap flavor whose devIgnite the Events tab drives (the in-zone Breach
    *  encounter itself rides the encounter pipeline, not this field). */
   readonly breachField: BreachField | null;
+  /** The vendetta overlay if its package is in the manifest, else null — the
+   *  engine reads wantsAmbush() to spring hunter squads and calls settleWrit()
+   *  from the warrant kill row; the sim mirrors each faction's grudge meter in
+   *  (setGrudges) and drains settled/expired writs back onto the meters. */
+  readonly vendettaField: VendettaField | null;
   /** Per-faction favor earned from events and warlord kills. Persists per run. */
   readonly reputation = new Reputation();
   /** FACTION/WORLD WANTS (world/drives.ts): named slow meters — dread,
@@ -303,6 +309,7 @@ export class WorldSim {
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     this.breachField = surface<BreachField>('breach') ?? null;
+    this.vendettaField = surface<VendettaField>('vendetta') ?? null;
     this.invasion.gate = (f) => this.warlord.canInvade(f);
     // Per-faction invasion launch scale = the governing package's pressure (0 if
     // no package governs it, or its package is off / below its start level).
@@ -391,7 +398,28 @@ export class WorldSim {
     this.incursionField.concurrencyScale = conc;
     // Faction/world wants drift on their clocks (dread cools between culls).
     this.drives.update(dt);
+    // VENDETTA's grudge bridge: mirror each faction's meter INTO the pure
+    // overlay before it ticks (it can't reach WorldDrives itself)…
+    const vf = this.vendettaField;
+    if (vf) {
+      const driveId = vf.surge().driveId;
+      const suffix = `:${driveId}`;
+      vf.setGrudges(this.drives.entries()
+        .filter(([key]) => key.endsWith(suffix) && !key.startsWith('*'))
+        .map(([key, v]) => [key.slice(0, key.length - suffix.length), v] as [string, number]));
+    }
     for (const o of this.overlays) o.update(dt, this.scopedView(view, o.dimension));
+    // …and drain settled/expired writs back ONTO the meters after: a settled
+    // (or abandoned) writ breaks that people's anger to the surge's floor.
+    if (vf) {
+      const cfg = vf.surge();
+      for (const list of [vf.settledPending, vf.expirePending]) {
+        for (const f of list.splice(0)) {
+          const cur = this.drives.get(cfg.driveId, f);
+          if (cur > cfg.settleGrudge) this.drives.bump(cfg.driveId, cfg.settleGrudge - cur, f);
+        }
+      }
+    }
   }
 
   onNodeCharted(zone: ZoneDef, view: OverlayView): void {

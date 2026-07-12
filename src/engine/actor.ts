@@ -640,6 +640,10 @@ export class Actor {
   patrolFollow?: number;
   /** Event/role marker: 'patrol' | 'caravan' | 'ambush' | 'siege_atk' | 'siege_def' | 'warlord'. */
   tag?: string;
+  /** The event INSTANCE this actor belongs to (a writ id, a rift id, …) — the
+   *  generic key a tag-matched kill row resolves back to its event with, so
+   *  per-instance events never lean on zone identity to find their kill. */
+  eventKey?: string;
   /** Spawned as part of a zone's BASE population (packs/boss/spawners/camps/
    *  garrisons/faction-war) — NOT an overlay/event spawn. Zone Memory snapshots
    *  exactly these so a re-entered zone restores what you left. */

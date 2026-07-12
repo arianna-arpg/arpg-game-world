@@ -1917,6 +1917,9 @@ export class World {
    *  three hand-maintained per-package ladders. Closure-building only (no
    *  field dereference until called), so the initializer order is safe. */
   private readonly zoneRuntimes = this.buildZoneRuntimes();
+  /** VENDETTA: zones whose entry roll already sprung (or declined) a squad
+   *  this visit — one spring per visit, like every materialized-set sibling. */
+  private materializedWrits = new Set<string>();
 
   // --- the current zone -------------------------------------------------
   zone: ZoneDef = this.zoneMap[START_ZONE];
@@ -3472,12 +3475,54 @@ export class World {
         enter: (def) => this.materializeObserver(def),
       },
       {
+        // VENDETTA: a standing writ may spring its hunter squad on the entered
+        // (or stood-in) zone — the ambush the reprisal promised. The roll is
+        // one-shot per zone visit (materializedWrits).
+        id: 'vendetta',
+        reset: () => { this.materializedWrits.clear(); },
+        enter: (def) => this.springVendettaAmbush(def),
+      },
+      {
         // The Caravanner waiting at a minted caravan destination (the
         // round-trip home) — on-entry only.
         id: 'caravan_return', noLive: true,
         enter: (def) => this.placeCaravanReturn(def),
       },
     ];
+  }
+
+  /** VENDETTA: drain the discovery flag, then roll ONE ambush for this zone
+   *  visit. A hit spawns the squad at the zone's far edge — already hunting
+   *  (no dormancy: they came for YOU) — with the WARRANT-HOLDER promoted from
+   *  its ranks, carrying the writ id its kill row settles. */
+  private springVendettaAmbush(def: ZoneDef): void {
+    const vf = this.sim.vendettaField;
+    if (!vf) return;
+    // One-shot discovery: the first writ POSTED this run (bulletin already
+    // announced it) surfaces the Vault card.
+    if (vf.consumeSeen()) bumpLedger(this.ledger, 'writs_seen');
+    if (this.materializedWrits.has(def.id)) return;
+    const spec = vf.wantsAmbush(def);
+    if (!spec) return;
+    this.materializedWrits.add(def.id);
+    const level = Math.max(1, def.level + spec.levelBonus);
+    const at = this.clampPos(this.farPoint(430, true), 24);
+    let warrant: Actor | null = null;
+    for (let i = 0; i < spec.size; i++) {
+      const h = this.spawnEventActor(spec.roster, level, 'enemy', spec.faction, 'vendetta_hunter');
+      h.pos = this.clampNear(at, 70);
+      h.eventKey = spec.writId;
+      h.aiAwakened = true; // hunters arrive HUNTING — no dormancy gate
+      if (!warrant || h.maxLife() > warrant.maxLife()) warrant = h;
+    }
+    if (warrant) {
+      warrant.tag = 'vendetta_warrant';
+      warrant.level = Math.max(warrant.level, level + spec.warrant.levelBonus);
+      this.promoteRarity(warrant, spec.warrant.promote);
+      warrant.xpValue = Math.max(warrant.xpValue, spec.warrant.xpFloor);
+    }
+    this.text(vec(this.player.pos.x, this.player.pos.y - 90),
+      `${spec.tierLabel} — hunters spring the ambush!`, spec.color, 16);
   }
 
   /** The Hunt's per-zone work: drop a footprint to read (while the beast is
