@@ -151,6 +151,52 @@ function normClass(c: Record<string, any>) {
 }
 
 // ---------------------------------------------------------------------------
+// unique-item normalizer — reuses the ENGINE's own line describers so a
+// unique's tooltip text on the site is identical to what the game shows.
+// A unique line is {stat, kind, range:[lo,hi], local?, when?, tags?}; we
+// render the full [min–max] roll range (more evocative than a single roll).
+// ---------------------------------------------------------------------------
+function rangeLine(line: Record<string, any>, fmt: Record<string, any>): Record<string, any> {
+  const lo = line.range?.[0] ?? line.value ?? 0;
+  const hi = line.range?.[1] ?? line.value ?? lo;
+  const aLo = Math.abs(lo), aHi = Math.abs(hi);
+  const smallAbs = Math.min(aLo, aHi), bigAbs = Math.max(aLo, aHi);
+  const signed = (lo + hi) < 0 ? -bigAbs : bigAbs;   // representative value → right +/−, increased/reduced
+  let text: string;
+  if (typeof fmt.formatModLine !== 'function') {
+    text = `${line.stat} ${lo}..${hi}`;              // degrade gracefully if the describer isn't importable
+  } else if (lo === hi) {
+    text = fmt.formatModLine(line, hi);
+  } else {
+    // formatModLine renders a 'link' value with kind 'more' (as a %) and an
+    // 'override' with 'flat' — format the endpoints the SAME way, or the splice
+    // below won't match (a link range would collapse to a single value).
+    const vkind = line.kind === 'link' ? 'more' : line.kind === 'override' ? 'flat' : line.kind;
+    const full = fmt.formatModLine(line, signed);     // e.g. "+7 Fire Damage"
+    const bigStr = fmt.formatStatValue(line.stat, vkind, bigAbs);
+    const smallStr = fmt.formatStatValue(line.stat, vkind, smallAbs);
+    text = full.replace(bigStr, `${smallStr}–${bigStr}`); // "+4–7 Fire Damage"
+  }
+  return {
+    text, stat: line.stat, kind: line.kind, min: lo, max: hi,
+    local: !!line.local, when: line.when ?? null,
+    tags: Array.isArray(line.tags) ? line.tags : null,
+  };
+}
+
+function normUnique(u: Record<string, any>, bases: Record<string, any>, fmt: Record<string, any>) {
+  const base = bases?.[u.baseId];
+  return {
+    id: u.id, name: u.name ?? u.id, kind: 'unique',
+    baseId: u.baseId ?? null, baseName: base?.name ?? u.baseId ?? null,
+    category: base?.category ?? null,
+    flavor: u.flavor ?? '', minIlvl: u.minIlvl ?? null,
+    mods: Array.isArray(u.lines) ? u.lines.map((ln: any) => rangeLine(ln, fmt)) : [],
+    raw: u,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
 async function main() {
@@ -176,6 +222,13 @@ async function main() {
   const monstersMod = await load('src/data/monsters.ts');
   const passivesMod = await load('src/data/passives.ts');
   const classesMod  = await load('src/data/classes.ts');
+  const uniquesMod  = await load('src/data/uniques.ts');
+  const basesMod    = await load('src/data/itembases.ts');
+  const itemsFmt    = await load('src/engine/items.ts');   // formatModLine / formatStatValue / statLabel
+  // status.ts registers the generated apply_/damageVs_/minionApply_<status>
+  // stat families into the shared STAT_DEFS at load — import it (side effect
+  // only) so those unique lines get real labels instead of raw stat ids.
+  await load('src/engine/status.ts');
 
   // ---- skills & supports -------------------------------------------------
   const skills = toList(pick(skillsMod, ['SKILLS', 'skills'], 'skills'), 'SKILLS')
@@ -239,6 +292,11 @@ async function main() {
     bounds,
   };
 
+  // ---- uniques (named legendary items — the showcase headline) -----------
+  const itemBases = (pick(basesMod, ['ITEM_BASES'], 'itemBases') ?? {}) as Record<string, any>;
+  const uniques = toList(pick(uniquesMod, ['UNIQUE_LIST', 'UNIQUES', 'uniques'], 'uniques'), 'UNIQUES')
+    .map((u) => normUnique(u, itemBases, itemsFmt));
+
   // ---- meta (counts + filter facets) -------------------------------------
   const meta = {
     game: 'Hollow Wake',
@@ -250,6 +308,7 @@ async function main() {
       monsters: monsters.length,
       classes: classes.length,
       passives: passives.nodes.length,
+      uniques: uniques.length,
     },
     facets: {
       skillTags: uniqSorted([...skills, ...supports].flatMap((s) => s.tags)),
@@ -270,6 +329,7 @@ async function main() {
   writeJson('monsters.json', monsters);
   writeJson('classes.json', classes);
   writeJson('passives.json', passives);
+  writeJson('uniques.json', uniques);
   writeJson('meta.json', meta);
 
   log('counts:', JSON.stringify(meta.counts));

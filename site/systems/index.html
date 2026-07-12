@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en" data-page="systems">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Under the Hood — Hollow Wake</title>
+<meta name="description" content="How Hollow Wake works: every system is open, modular data run by one shared engine. The design philosophy, the modifier pipeline, the architecture, and the verification harnesses.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  .lead{max-width:760px}
+  .lead .big{font-family:var(--font-head);font-size:clamp(19px,2.4vw,23px);line-height:1.5;color:var(--ink);font-weight:500}
+  .lead p{color:var(--ink-dim);margin-top:16px;font-size:15.5px;line-height:1.7}
+  .lead .mono{color:var(--teal-hi)}
+  section.blk{padding:46px 0;border-top:1px solid var(--line)}
+  .blk h2{font-family:var(--font-head);font-size:clamp(22px,3vw,28px);letter-spacing:-.01em;margin-bottom:8px}
+  .blk .kick{margin-bottom:18px}
+  .blk .intro{color:var(--ink-dim);font-size:15px;line-height:1.7;max-width:720px;margin-bottom:26px}
+
+  /* modifier pipeline */
+  .pipe{display:flex;flex-wrap:wrap;gap:12px;align-items:stretch}
+  .pstage{flex:1 1 180px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:16px 17px;position:relative}
+  .pstage .n{font-family:var(--font-mono);font-size:11px;color:var(--bg);font-weight:700;width:24px;height:24px;border-radius:7px;display:grid;place-items:center;margin-bottom:11px}
+  .pstage h4{font-family:var(--font-head);font-size:15px;margin-bottom:5px}
+  .pstage p{color:var(--ink-dim);font-size:13px;line-height:1.55}
+  .pstage code{font-family:var(--font-mono);color:var(--teal-hi);font-size:12px}
+  .formula{margin-top:24px;background:#05060a;border:1px solid var(--line);border-radius:11px;padding:16px 18px;font-family:var(--font-mono);font-size:13.5px;color:var(--ink-dim);overflow-x:auto;white-space:nowrap}
+  .formula b{color:var(--teal-hi);font-weight:400}
+
+  /* architecture columns */
+  .arch{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+  .acol{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:20px}
+  .acol .h{display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .acol .h .p{font-family:var(--font-mono);font-size:12.5px;color:var(--teal);font-weight:600}
+  .acol .d{color:var(--ink-dim);font-size:13px;line-height:1.55;margin-bottom:12px}
+  .acol ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+  .acol li{font-family:var(--font-mono);font-size:11px;color:var(--ink-dim);border:1px solid var(--line);background:rgba(255,255,255,.02);padding:3px 8px;border-radius:6px}
+
+  /* harness cards */
+  .harn{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}
+  .hcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:20px}
+  .hcard code{font-family:var(--font-mono);font-size:13px;color:var(--ember-hi);display:block;margin-bottom:9px}
+  .hcard p{color:var(--ink-dim);font-size:13.5px;line-height:1.6}
+  .cards2{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+  .fcard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:22px}
+  .fcard h4{font-family:var(--font-head);font-size:16px;margin-bottom:8px}
+  .fcard p{color:var(--ink-dim);font-size:13.5px;line-height:1.6}
+  .fcard .mono{color:var(--teal-hi);font-size:12.5px}
+  .endcta{display:flex;gap:14px;flex-wrap:wrap;margin-top:20px}
+</style>
+</head>
+<body>
+<div class="bg-veil" aria-hidden="true"></div>
+<div class="page">
+<header data-hwnav></header>
+
+<main class="wrap">
+  <div class="pagehead" data-nav="Thesis">
+    <div class="kicker">Under the hood</div>
+    <h1>One engine. Everything else is data.</h1>
+    <div class="lead" style="margin-top:16px">
+      <p class="big">Hollow Wake is built around a single idea: skills, monsters, statuses, passives, items, biomes, and world-events are all plain <span class="mono">data</span> entries, composed by one shared engine.</p>
+      <p>This page is the deep dive for the curious — how the systems interlock, why adding content almost never touches engine code, and how it all stays honest. If you're here to play, the <a href="../" style="color:var(--teal)">home page</a> is the tour you want; this is the machine room.</p>
+    </div>
+  </div>
+
+  <section class="blk" data-nav="Pipeline">
+    <div class="kick kicker">The modifier engine</div>
+    <h2>Every number flows through one formula</h2>
+    <p class="intro">There is exactly one place a stat is computed. Flat additions, then <em>increased</em> (additive percentages), then <em>more</em> (multiplicative), then a hard <em>override</em> — every modifier in the game, from a passive node to a monster's innate to a unique's downside, is just a line that joins one of these layers. Content authors compose behavior out of tags and modifiers instead of writing new engine code.</p>
+    <div class="pipe">
+      <div class="pstage"><div class="n" style="background:var(--steel)">1</div><h4>flat</h4><p>Raw additions to the base. <code>+35 Maximum Life</code></p></div>
+      <div class="pstage"><div class="n" style="background:var(--teal)">2</div><h4>increased</h4><p>Additive percentages, summed together. <code>+47% increased melee damage</code></p></div>
+      <div class="pstage"><div class="n" style="background:var(--ember)">3</div><h4>more</h4><p>Multiplicative — each one its own factor. <code>×1.25 more</code></p></div>
+      <div class="pstage"><div class="n" style="background:var(--violet)">4</div><h4>override</h4><p>Replaces the result outright. Keystones live here.</p></div>
+    </div>
+    <div class="formula"><b>value</b> = override ?? ( (base + Σflat) × (1 + Σincreased) × Π(1 + more) )  <span style="color:var(--ink-faint)">// then clamped to the stat's min/max, filtered by tags</span></div>
+    <p class="intro" style="margin-top:24px">Because it's tag-scaled, the same line means different things in different contexts: <span class="mono" style="color:var(--teal-hi)">10% increased damage [melee]</span> only applies to melee. Tags are how one formula serves a whole game.</p>
+  </section>
+
+  <section class="blk" data-nav="One pipeline">
+    <div class="kick kicker">Actors</div>
+    <h2>The player, the monsters, and your minions all run the same skills</h2>
+    <p class="intro">There is one entity model and one skill pipeline — <span class="mono" style="color:var(--teal-hi)">World.useSkill()</span>. A fireball behaves identically whether a sorcerer casts it, a monster breathes it, or your summoned skeleton throws it. A summoner's minions literally run on the same skill definitions the monsters do. Classes are starting kits, not cages — every class draws from the same shared skill and passive pools.</p>
+    <div class="cards2">
+      <div class="fcard"><h4>Skills are loot, not unlocks</h4><p>Active skills and support gems drop from the world and level up by sacrificing gems at fonts — not from character levels. Character XP buys passive points instead. Your build is the skills you find and the supports you socket into them.</p></div>
+      <div class="fcard"><h4>Data in, no engine changes</h4><p>Adding a skill, support, monster, passive, proc, item base, affix, unique, or class means adding an entry under <span class="mono">src/data/</span>. The engine already knows how to run it — the same seams a new line reaches are the seams every existing line uses.</p></div>
+    </div>
+  </section>
+
+  <section class="blk" data-nav="Architecture">
+    <div class="kick kicker">Repository map</div>
+    <h2>Where it all lives</h2>
+    <p class="intro">One engine, content as data, a Canvas 2D renderer, and an Electron shell around it.</p>
+    <div class="arch">
+      <div class="acol"><div class="h"><span class="p">src/engine/</span></div><div class="d">The systems: the core loop &amp; <span class="mono">useSkill</span>, the layered modifier engine, damage, status, the one actor model, composable AI, occlusion &amp; pathing, procedural generation.</div><ul><li>world.ts</li><li>stats.ts</li><li>damage.ts</li><li>actor.ts</li><li>ai · brain</li><li>levelgen</li></ul></div>
+      <div class="acol"><div class="h"><span class="p">src/data/</span></div><div class="d">The content, as data: skills, supports, monsters, passives, classes, zones, tilesets, procs — plus the whole item layer (bases, affixes, uniques, vestiges).</div><ul><li>skills.ts</li><li>monsters.ts</li><li>passives.ts</li><li>uniques.ts</li><li>tilesets.ts</li></ul></div>
+      <div class="acol"><div class="h"><span class="p">src/render/</span></div><div class="d">Canvas 2D renderer + the visual fabric: a materials registry, sprite bake cache, a doodad painter library, a dynamic light layer, and weather particles — a new doodad kind is one data entry, no renderer edits.</div><ul><li>vis/materials</li><li>doodad painters</li><li>light layer</li></ul></div>
+      <div class="acol"><div class="h"><span class="p">src/packages/</span></div><div class="d">Optional per-run world-event overlays — Warbands, Breach, Contagion, Demon Invasion and the rest — each a self-contained, run-locked manifest layered onto the world graph.</div><ul><li>20 event packages</li></ul></div>
+      <div class="acol"><div class="h"><span class="p">src/sim/</span></div><div class="d">The browser-safe half of the balance harness: headless boot, a seeded episode runner, build injection, and observe-only metric taps that are null-cost when unset.</div><ul><li>arena · builds</li><li>metric taps</li></ul></div>
+      <div class="acol"><div class="h"><span class="p">src/ui · net · meta · launcher</span></div><div class="d">DOM panels, the co-op transport, the account / save / permadeath meta-layer, and the Electron desktop shell (update flow, loopback save server, launcher window).</div><ul><li>ui panels</li><li>meta / saves</li><li>launcher</li></ul></div>
+    </div>
+    <p class="intro" style="margin-top:22px">Entry point: <span class="mono" style="color:var(--teal-hi)">index.html → src/main.ts</span>. The working conventions and a deeper subsystem tour live in <span class="mono">CLAUDE.md</span> and the docs.</p>
+  </section>
+
+  <section class="blk" data-nav="Verification">
+    <div class="kick kicker">Correctness</div>
+    <h2>Harnesses, not vibes</h2>
+    <p class="intro">There's no unit-test runner. Correctness is gated by type-checking plus a set of headless harnesses that boot the real engine — so a change to the data can't quietly break the game.</p>
+    <div class="harn">
+      <div class="hcard"><code>npm run sim</code><p>The balance harness — the real engine, headless and deterministic (seeded). Ranks every skill at equal investment, runs the skill × support no-op matrix, prints per-class power curves, and audits the item economy.</p></div>
+      <div class="hcard"><code>npm run perf</code><p>The performance harness — boots the real desktop game and samples frame telemetry per procedural biome, gating each against a town control.</p></div>
+      <div class="hcard"><code>npm run genqa</code><p>The generation QA sweep — runs level generation across the whole authored tileset/variant matrix over several seeds and asserts the generation invariants.</p></div>
+      <div class="hcard"><code>npm run eventqa</code><p>The event-fabric gate — a 168-check invariant sweep over every world-event: persistence, ownership claims, and full parity with the game's own event tab.</p></div>
+    </div>
+  </section>
+
+  <section class="blk" data-nav="Build it">
+    <div class="kick kicker">Open source</div>
+    <h2>Read it, run it, extend it</h2>
+    <p class="intro">The whole thing is open. Clone it, add a line of data, and watch the engine run it — or just read how a system you liked in-game actually works.</p>
+    <div class="endcta">
+      <a class="btn btn-primary" href="https://github.com/arianna-arpg/arpg-game-world" target="_blank" rel="noopener">Browse the source on GitHub</a>
+      <a class="btn btn-ghost" href="../database/">Open the live Database</a>
+    </div>
+  </section>
+</main>
+
+<footer class="site"><div class="wrap row">
+  <span>Hollow Wake — one engine, content as data.</span>
+  <span><a href="../">Home</a> · <a href="../database/">Database</a> · <a href="https://github.com/arianna-arpg/arpg-game-world" target="_blank" rel="noopener">GitHub</a></span>
+</div></footer>
+</div>
+<script src="../assets/nav.js"></script>
+<script src="../assets/sectionnav.js"></script>
+</body>
+</html>

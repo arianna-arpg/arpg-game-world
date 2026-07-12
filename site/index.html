@@ -142,49 +142,7 @@
   .pillar p{color:var(--ink-dim);font-size:15.5px}
   @media(max-width:720px){.pillars{grid-template-columns:1fr}}
 
-  /* ---------- pipeline visual ---------- */
-  .deepdive-intro{display:grid;grid-template-columns:1.05fr .95fr;gap:48px;align-items:center}
-  @media(max-width:880px){.deepdive-intro{grid-template-columns:1fr;gap:36px}}
-  .di-copy h2{font-size:clamp(28px,4vw,40px);margin-bottom:18px;font-weight:600}
-  .di-copy p{color:var(--ink-dim);font-size:16.5px;margin-bottom:16px}
-  .di-copy .lede{color:var(--ink);font-size:18px}
-  .pipe{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:26px;box-shadow:var(--shadow)}
-  .pipe .pipe-title{font-family:'Space Grotesk',sans-serif;font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-faint);margin-bottom:20px;display:flex;align-items:center;gap:10px}
-  .pipe .pipe-title::after{content:"";flex:1;height:1px;background:var(--line)}
-  .pipe-stage{display:flex;align-items:center;gap:16px;padding:13px 15px;border-radius:11px;border:1px solid var(--line);margin-bottom:11px;background:var(--bg-2);position:relative}
-  .pipe-stage:last-child{margin-bottom:0}
-  .pipe-stage .st-i{font-family:'Space Grotesk',sans-serif;font-size:12px;color:var(--bg);font-weight:700;width:26px;height:26px;border-radius:7px;display:grid;place-items:center;flex:0 0 auto}
-  .pipe-stage .st-name{font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:15px}
-  .pipe-stage .st-desc{color:var(--ink-faint);font-size:13px;margin-left:auto;text-align:right}
-  .pipe-arrow{text-align:center;color:var(--line-2);font-size:13px;margin:-4px 0 7px}
-
-  /* ---------- systems grid ---------- */
-  .sys-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  @media(max-width:880px){.sys-grid{grid-template-columns:repeat(2,1fr)}}
-  @media(max-width:560px){.sys-grid{grid-template-columns:1fr}}
-  .sys{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:24px;transition:background .25s,border-color .25s}
-  .sys:hover{background:var(--panel-2);border-color:var(--line-2)}
-  .sys .tag{font-family:'Space Grotesk',sans-serif;font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent,var(--teal));font-weight:600}
-  .sys h3{font-size:18px;margin:9px 0 8px;font-family:'Space Grotesk',sans-serif}
-  .sys p{color:var(--ink-dim);font-size:14.5px}
-  .sys code{font-family:'Space Grotesk',monospace;font-size:12.5px;color:var(--ink-faint);background:rgba(255,255,255,.04);padding:1px 6px;border-radius:5px}
-
-  /* ---------- architecture ---------- */
-  .arch{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px}
-  .arch-col{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r-sm);padding:22px}
-  .arch-col .h{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-  .arch-col .h .dot{width:9px;height:9px;border-radius:50%;background:var(--accent,var(--teal));box-shadow:0 0 10px var(--accent,var(--teal))}
-  .arch-col .h .path{font-family:'Space Grotesk',monospace;font-weight:600;font-size:14.5px}
-  .arch-col ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:7px}
-  .arch-col li{font-family:'Space Grotesk',monospace;font-size:12px;color:var(--ink-dim);background:rgba(255,255,255,.04);border:1px solid var(--line);padding:4px 9px;border-radius:6px}
-
-  /* ---------- tooling ---------- */
-  .tools{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
-  @media(max-width:720px){.tools{grid-template-columns:1fr}}
-  .tool{display:flex;gap:18px;background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:22px 24px;align-items:flex-start}
-  .tool .cmd{font-family:'Space Grotesk',monospace;font-size:13px;color:var(--teal-hi);background:rgba(79,214,196,.08);border:1px solid rgba(79,214,196,.18);padding:6px 11px;border-radius:8px;white-space:nowrap;flex:0 0 auto;margin-top:2px}
-  .tool h3{font-size:16.5px;font-family:'Space Grotesk',sans-serif;margin-bottom:5px}
-  .tool p{color:var(--ink-dim);font-size:14px}
+  /* (modifier-pipeline / systems-grid / architecture / tooling styles moved to the Systems page) */
 
   /* ---------- classes ---------- */
   .cls-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -233,6 +191,37 @@
   .foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--ink-faint);font-size:13.5px}
   .foot-bottom .stack{font-family:'Space Grotesk',monospace}
 
+  /* ---------- player sections: biomes / events / living world / builds ---------- */
+  .tag-cloud{display:flex;flex-wrap:wrap;gap:10px}
+  .tchip{font-family:var(--font-head);font-size:13.5px;color:var(--ink-dim);border:1px solid var(--line);background:rgba(255,255,255,.02);padding:8px 14px;border-radius:999px;transition:color .2s,border-color .2s,transform .2s;white-space:nowrap}
+  .tchip:hover{color:var(--ink);border-color:var(--line-2);transform:translateY(-1px)}
+  .tchip.hot{color:var(--ember-hi);border-color:rgba(255,138,76,.3)}
+  .tchip.cold{color:var(--teal-hi);border-color:rgba(79,214,196,.25)}
+  .tchip.deep{color:var(--violet);border-color:rgba(169,139,255,.3)}
+  .tchip .sub{color:var(--ink-faint);font-size:11px;margin-left:5px}
+  .grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:14px}
+  .ecard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:16px 18px;transition:border-color .2s,transform .2s}
+  .ecard:hover{border-color:var(--line-2);transform:translateY(-2px)}
+  .ecard h4{font-family:var(--font-head);font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+  .ecard h4 .d{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+  .ecard p{color:var(--ink-dim);font-size:13px;line-height:1.55}
+  .living-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:16px}
+  .lcard{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r-sm);padding:22px}
+  .lcard .ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;margin-bottom:14px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
+  .lcard h4{font-family:var(--font-head);font-size:16px;margin-bottom:8px}
+  .lcard p{color:var(--ink-dim);font-size:13.5px;line-height:1.6}
+  .lcard b{color:var(--ink)}
+  .build-cols{display:grid;grid-template-columns:.85fr 1.15fr;gap:36px;align-items:start}
+  @media(max-width:880px){.build-cols{grid-template-columns:1fr;gap:26px}}
+  .build-facts{display:grid;gap:16px}
+  .bfact{display:flex;gap:14px;align-items:flex-start}
+  .bfact .n{font-family:var(--font-head);font-size:21px;color:var(--teal-hi);font-weight:700;line-height:1;min-width:66px}
+  .bfact .t{color:var(--ink-dim);font-size:13.5px;line-height:1.5}
+  .bfact .t b{color:var(--ink);font-weight:600}
+  .showhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+  .showhead h3{font-family:var(--font-head);font-size:16px}
+  .showhead a{color:var(--teal);font-size:13px}
+
   /* ---------- reveal (gated on .js so it degrades to fully visible without JS) ---------- */
   .reveal{transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
   html.js .reveal{opacity:0;transform:translateY(24px)}
@@ -259,8 +248,8 @@
   <div class="wrap">
     <span class="eyebrow"><span class="dot"></span> Top-down action RPG · In development</span>
     <h1 class="display">Hollow Wake</h1>
-    <p class="tagline">Every system is <b>open, modular data.</b></p>
-    <p class="pitch">A top-down action RPG where skills are loot, classes are only a starting point, and one engine runs the player, the monsters, and everything they summon. Push into an endless, hand-seeded frontier — and try to bring your build back alive.</p>
+    <p class="tagline">A world that keeps <b>generating itself.</b></p>
+    <p class="pitch">A top-down action RPG about pushing into an endless, self-minting frontier — dozens of biomes, world-events that erupt on their own clocks, factions warring over ground you don't own, and a build made from the skills you find. Descend, explore, get strong. Then try to bring it back alive.</p>
     <div class="cta-row">
       <a href="https://github.com/arianna-arpg/arpg-game-world/releases" class="btn btn-primary" target="_blank" rel="noopener">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
@@ -276,8 +265,7 @@
       <span>Windows</span><span class="sep"></span>
       <span>Linux</span><span class="sep"></span>
       <span>Steam Deck</span><span class="sep"></span>
-      <span>Controller-native</span><span class="sep"></span>
-      <span>TypeScript · Canvas&nbsp;2D · Electron</span>
+      <span>Controller-native</span>
     </div>
   </div>
 </section>
@@ -286,10 +274,10 @@
 <div class="stats" id="overview">
   <div class="wrap">
     <div class="stat-grid" id="statgrid">
-      <div class="stat"><div class="num" data-key="skills" data-fallback="350+">350+</div><div class="lbl">Skills</div></div>
-      <div class="stat"><div class="num" data-key="supports" data-fallback="200+">200+</div><div class="lbl">Supports</div></div>
-      <div class="stat"><div class="num" data-key="monsters" data-fallback="150+">150+</div><div class="lbl">Monsters</div></div>
-      <div class="stat"><div class="num" data-key="passives" data-fallback="230+">230+</div><div class="lbl">Passive nodes</div></div>
+      <div class="stat"><div class="num" data-key="skills" data-fallback="500+">500+</div><div class="lbl">Skills</div></div>
+      <div class="stat"><div class="num" data-key="supports" data-fallback="300+">300+</div><div class="lbl">Supports</div></div>
+      <div class="stat"><div class="num" data-key="monsters" data-fallback="300+">300+</div><div class="lbl">Monsters</div></div>
+      <div class="stat"><div class="num" data-key="passives" data-fallback="450+">450+</div><div class="lbl">Passive nodes</div></div>
       <div class="stat"><div class="num" data-key="classes" data-exact="1" data-fallback="15">15</div><div class="lbl">Classes</div></div>
       <div class="stat"><div class="num">&infin;</div><div class="lbl">Frontier</div></div>
     </div>
@@ -297,34 +285,29 @@
   </div>
 </div>
 
-<!-- PILLARS -->
-<section class="band" data-nav="Overview">
+<!-- WORLD -->
+<section class="band" data-nav="World">
   <div class="wrap">
     <div class="sec-head center reveal">
-      <div class="kicker">Why it's different</div>
-      <h2>An ARPG that's systems all the way down</h2>
-      <p>Most of the depth you'd build with special cases, Hollow Wake builds with data. That single decision changes how the whole game plays.</p>
+      <div class="kicker">Infinite by design</div>
+      <h2>A world that generates itself, and never stops</h2>
+      <p>Two hand-built anchors — the town of Lastlight and Wayfarer's Crossroads — open onto a frontier with no edge. Step through a frontier portal and a fresh zone is minted and stitched onto the map, one level deeper. It grows as far as you're willing to walk.</p>
     </div>
     <div class="pillars">
+      <div class="pillar reveal" style="--accent:var(--green)">
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/></svg></div>
+        <h3>The map grows as you explore</h3>
+        <p>Frontier portals mint a brand-new zone on the way through and graft it into the world graph. There's no end of content — the graph itself is the difficulty curve, every step deeper raising the stakes.</p>
+      </div>
       <div class="pillar reveal" style="--accent:var(--ember)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/></svg></div>
-        <h3>Skills are loot</h3>
-        <p>Skills drop from monsters and level up by being sacrificed at fonts — not from your character level. Your build is what you find and how you socket it. Character XP buys passive points instead.</p>
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v14m0 0l-5-5m5 5l5-5M5 21h14"/></svg></div>
+        <h3>Descend into the Underworld</h3>
+        <p>The frontier doesn't only spread — it goes down. Delve deep enough and you tear open the Hellgate: hell steppes, volcanic cauldrons, and the River of Flame winding to a guaranteed Hellforge.</p>
       </div>
       <div class="pillar reveal" style="--accent:var(--teal)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19"/></svg></div>
-        <h3>Classes are starting points, not cages</h3>
-        <p>Each of the 15 classes is a starting spread of attributes and signature skills — and nothing more. Every class draws from the same shared skill and passive pools, so where you end up is entirely yours.</p>
-      </div>
-      <div class="pillar reveal" style="--accent:var(--violet)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg></div>
-        <h3>One engine runs everything</h3>
-        <p>The player, monsters, and minions all act through a single skill pipeline. A summoner's skeletons literally run on the same skills the monsters do — because to the engine, there's no difference.</p>
-      </div>
-      <div class="pillar reveal" style="--accent:var(--green)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l2-7 4 14 2-7h4"/></svg></div>
-        <h3>An endless, hand-seeded frontier</h3>
-        <p>Two hand-authored anchors — the starting town and Wayfarer's Crossroads — open onto an effectively infinite procedural world, reshaped by optional per-run content packages and rival factions warring on shared ground.</p>
+        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
+        <h3>Every zone asks something different</h3>
+        <p>Clear the packs, survive the waves, escape a zone that never goes quiet, destroy the spawners, or hunt down the boss. Objectives vary the play, so no two runs feel like the same checklist.</p>
       </div>
     </div>
   </div>
@@ -332,136 +315,149 @@
 
 <div class="wrap"><div class="divider-line"></div></div>
 
-<!-- DEEP DIVE INTRO -->
-<section class="band" id="systems" data-nav="Systems">
-  <div class="wrap">
-    <div class="deepdive-intro">
-      <div class="di-copy reveal">
-        <div class="kicker">Under the hood</div>
-        <h2>Composed from data, resolved by one shared engine</h2>
-        <p class="lede">Skills, supports, monsters, statuses, passives, items and zones are all plain data entries. Adding content means adding an entry under <span class="mono" style="color:var(--teal-hi)">src/data/</span> — the engine already knows how to run it.</p>
-        <p>Every number in the game flows through the same layered, tag-scaled modifier formula, implemented once and shared by every system. Content authors compose behaviour out of tags and modifiers rather than writing new engine code — which is why the content count grows without the engine getting heavier.</p>
-        <p>It's written in TypeScript, rendered on an HTML5 Canvas 2D layer called the <b style="color:var(--ink)">visual fabric</b>, and wrapped in an Electron desktop shell with a one-click update flow.</p>
-      </div>
-      <div class="pipe reveal" role="img" aria-label="The shared damage and stat pipeline: flat, then increased, then more, then override, then crit.">
-        <div class="pipe-title">The shared modifier pipeline</div>
-        <div class="pipe-stage"><span class="st-i" style="background:var(--steel)">1</span><span class="st-name">flat</span><span class="st-desc">base + added values</span></div>
-        <div class="pipe-arrow">↓</div>
-        <div class="pipe-stage"><span class="st-i" style="background:var(--teal)">2</span><span class="st-name">increased</span><span class="st-desc">additive % pool</span></div>
-        <div class="pipe-arrow">↓</div>
-        <div class="pipe-stage"><span class="st-i" style="background:var(--violet)">3</span><span class="st-name">more</span><span class="st-desc">multiplicative</span></div>
-        <div class="pipe-arrow">↓</div>
-        <div class="pipe-stage"><span class="st-i" style="background:var(--ember)">4</span><span class="st-name">override</span><span class="st-desc">behaviour-warping</span></div>
-        <div class="pipe-arrow">↓</div>
-        <div class="pipe-stage"><span class="st-i" style="background:var(--gold)">5</span><span class="st-name">crit</span><span class="st-desc">final roll</span></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- SYSTEMS GRID -->
-<section class="band" style="padding-top:0">
-  <div class="wrap">
-    <div class="sys-grid">
-      <div class="sys reveal" style="--accent:var(--ember)">
-        <div class="tag">Skills &amp; Supports</div>
-        <h3>One schema, endless combos</h3>
-        <p>Actives and the support gems that reshape them share one schema. Socket a support and it warps the skill's tags, projectiles, repeats, or targeting — no special-casing. Browse every one in the <a href="database/" style="color:var(--ember)">Database</a>.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--gold)">
-        <div class="tag">Items &amp; Affixes</div>
-        <h3>A full loot economy</h3>
-        <p>Base families, a wide affix gamut, uniques, and socketable <b style="color:var(--ink)">vestiges</b> with Epitaph words — rolled by one generator into a grid "tetris-bag" inventory.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--teal)">
-        <div class="tag">Passive Tree</div>
-        <h3>One vast graph</h3>
-        <p>Keystones and notables, with raw attributes placed on the graph itself. Points come from XP; the tree is where classes quietly diverge — now plannable in the <a href="tree/" style="color:var(--teal)">build tool</a>.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--crimson)">
-        <div class="tag">AI &amp; Factions</div>
-        <h3>Enemies with agendas</h3>
-        <p>Composable AI archetypes drive every monster, and rival factions hold ally/hostile relationships — so enemies fight each other on shared terrain, not just you. Meet the bestiary in the <a href="database/" style="color:var(--crimson)">Database</a>.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--green)">
-        <div class="tag">Procedural Frontier</div>
-        <h3>A world with no edge</h3>
-        <p>Past the two authored anchors, level generation runs over a growing matrix of tilesets, variants, formations and compositions — verified by a headless QA sweep that asserts the generation invariants.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--violet)">
-        <div class="tag">Visual Fabric</div>
-        <h3>Data-driven rendering</h3>
-        <p>One flat colour becomes a full shaded look: a materials registry, baked sprites and bodies, a doodad-painter library, a dynamic light layer, and weather — new doodads are one data entry.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--steel)">
-        <div class="tag">Co-op</div>
-        <h3>Host-authoritative multiplayer</h3>
-        <p>Play together locally or over WebRTC. The host owns the simulation; the same engine and save meta-layer run underneath a solo or shared session.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--ember)">
-        <div class="tag">Death &amp; the Vault</div>
-        <h3>Stakes you can choose</h3>
-        <p>Permadeath with corpse recovery is the default — but content packages like Immortal and Mercenary rewrite the rules of death. An account-level Vault carries progression across characters, whatever mode you play.</p>
-      </div>
-      <div class="sys reveal" style="--accent:var(--teal)">
-        <div class="tag">Systems vocabulary</div>
-        <h3>The shared alphabet</h3>
-        <p>Ten attributes, a spread of damage types, and a deep vocabulary of status effects, charge resources and procs — the primitives every skill, monster and item is spelled out of.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ARCHITECTURE -->
-<section class="band" style="padding-top:0" data-nav="Architecture">
+<!-- BIOMES -->
+<section class="band" style="padding-top:0" data-nav="Biomes">
   <div class="wrap">
     <div class="sec-head reveal">
-      <div class="kicker">Repository map</div>
-      <h2>Where it all lives</h2>
-      <p>One engine at the core, content as data beside it, a renderer and headless harnesses around it, and an Electron shell on top.</p>
+      <div class="kicker">The lay of the land</div>
+      <h2>Dozens of lands, one growing frontier</h2>
+      <p>The world is stitched from a deep roster of biomes — verdant to infernal — each with its own terrain, set-pieces, and monster ecology that shifts by depth. Push the frontier and what you meet re-weights by where you are.</p>
     </div>
-    <div class="arch">
-      <div class="arch-col reveal" style="--accent:var(--teal)">
-        <div class="h"><span class="dot"></span><span class="path">src/engine/</span></div>
-        <ul><li>world.ts</li><li>stats.ts</li><li>damage.ts</li><li>status.ts</li><li>skills.ts</li><li>actor.ts</li><li>ai.ts</li><li>brain.ts</li><li>los.ts</li><li>presence.ts</li><li>levelgen.ts</li><li>items.ts</li><li>itemgen.ts</li><li>loot.ts</li></ul>
+    <div class="tag-cloud reveal">
+      <span class="tchip">Deepwood</span>
+      <span class="tchip">Forest</span>
+      <span class="tchip">Taiga</span>
+      <span class="tchip cold">Tundra</span>
+      <span class="tchip hot">Cinderlands</span>
+      <span class="tchip hot">Desert</span>
+      <span class="tchip">Jungle</span>
+      <span class="tchip">Mire</span>
+      <span class="tchip">Wasteland</span>
+      <span class="tchip">Highland</span>
+      <span class="tchip">Marsh</span>
+      <span class="tchip">Meadow</span>
+      <span class="tchip cold">Crystal</span>
+      <span class="tchip hot">Volcanic</span>
+      <span class="tchip cold">Deepsea</span>
+      <span class="tchip hot">Hell Steppes</span>
+      <span class="tchip hot">River of Flame</span>
+      <span class="tchip deep">The Durance</span>
+      <span class="tchip deep">Flesh Warrens</span>
+      <span class="tchip deep">The Ossuary</span>
+      <span class="tchip deep">The Descent</span>
+      <span class="tchip">Grand Arena</span>
+      <span class="tchip deep">Leyline Nexus</span>
+      <span class="tchip deep">Mycelia</span>
+    </div>
+    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">Some — the Ossuary, the Grand Arena, the rifts — are landmark set-pieces reached through specific events, not common terrain you roll into.</p>
+  </div>
+</section>
+
+<!-- EVENTS -->
+<section class="band" style="padding-top:0" data-nav="Events">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">The world runs without you</div>
+      <h2>Twenty world-events, each its own mini-campaign</h2>
+      <p>Optional overlays erupt across the map on their own clocks — war-hosts, plagues, rifts, hunts, invasions. Chase them, dodge them, or get caught inside. A few of the twenty:</p>
+    </div>
+    <div class="grid-cards reveal">
+      <div class="ecard"><h4><span class="d" style="background:var(--crimson)"></span>Warbands</h4><p>Roving war-hosts marshal behind crowned champions and march the frontier looking for a fight.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--gold)"></span>The Iron Crusade</h4><p>A faction plants a banner and crusades zone by zone until a faction-city rises — and its leader must fall.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--ember)"></span>Demon Invasion</h4><p>A rift-born host seizes a coordinate, raises a growing Demon Storm of meteors, and festers toward a portal to the Balor's realm.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--green)"></span>Contagion</h4><p>An invisible plague creeps zone by zone from a hidden Patient Zero. Clearing infected ground does nothing — you have to trace the pulse to its heart.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--violet)"></span>Deadwake</h4><p>Your own killing feeds a hidden tide of the dead. When it crests, a travelling undead mass rolls the map — and two tides fuse into a wandering necropolis.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--steel)"></span>The Hunt</h4><p>Footprints lead to a great beast. Bloody it and it flees across zones, wounds and all, until you finally run it down.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--teal)"></span>The Descent</h4><p>A Delver offers a mineshaft into a boundless lightless abyss. Push back the dark, harvest Echoes, and resurface before the deep takes you.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--violet)"></span>The Abyssal</h4><p>A volatile rift you trip by running over it. A fissure crawls as you chase it against a nested timer, diverting from zone to zone.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--crimson)"></span>Amalgamation</h4><p>A roving Necromancer sends you to harvest body parts and <em>build</em> the boss — and its drops — that you'll then have to slay.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--steel)"></span>The Haunting</h4><p>By night, grief settles on charted ground. Break its anchor and it grows a throat — the Wailing One walks.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--ember)"></span>Vendetta</h4><p>Cull one people too hard and they post a bounty. Hunter squads spring from the roads, the price rising the longer you dodge. Quitting is not an escape.</p></div>
+      <div class="ecard"><h4><span class="d" style="background:var(--gold)"></span>The Pit</h4><p>Break the cellar floor into an endless-wave arena that scales to whoever dares it — the Pit Lord every fifth wave.</p></div>
+    </div>
+    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">…and more: Breach, Conclave, the Wild Herds, Brigands, Holdfast, Mycelia, Storm Fronts, and faction politics. Twenty in all — each a self-contained package layered onto the world.</p>
+  </div>
+</section>
+
+<!-- BREATHING WORLD -->
+<section class="band" style="padding-top:0" data-nav="Living">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">A breathing world</div>
+      <h2>Factions fight over ground you don't own</h2>
+      <p>Territory is a living field. Ten factions gain and lose ground based on which of their monsters are alive, and go to war with each other — a zone you knew as undead can flip to goblin colours while you're away. The clock and the weather change who's out there.</p>
+    </div>
+    <div class="living-grid">
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21V5l8-3 8 3v16M4 9h16M4 15h16"/></svg></div>
+        <h4>Territory that shifts</h4>
+        <p>Zones become <b>owned</b>, <b>contested</b> — where two hostile factions both spawn and tear into each other — or <b>conquered</b>, flipping the whole population. You're the lever: thin out the goblins here and goblin power falls.</p>
       </div>
-      <div class="arch-col reveal" style="--accent:var(--ember)">
-        <div class="h"><span class="dot"></span><span class="path">src/data/</span></div>
-        <ul><li>skills.ts</li><li>supports.ts</li><li>monsters.ts</li><li>passives.ts</li><li>classes.ts</li><li>zones.ts</li><li>tilesets.ts</li><li>procs.ts</li><li>itembases.ts</li><li>itemaffixes.ts</li><li>uniques.ts</li><li>vestiges.ts</li></ul>
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/></svg></div>
+        <h4>Day, dusk, night, dawn</h4>
+        <p>A full day/night wheel turns as you play — and it's load-bearing. The Haunting only binds after dark, and dawn unbinds it. What hunts you depends on the hour.</p>
       </div>
-      <div class="arch-col reveal" style="--accent:var(--violet)">
-        <div class="h"><span class="dot"></span><span class="path">src/render/</span></div>
-        <ul><li>Canvas 2D renderer</li><li>materials registry</li><li>sprite bake cache</li><li>doodad painters</li><li>dynamic light</li><li>weather</li></ul>
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a4 4 0 014-4 5 5 0 019.5-1.5A3.5 3.5 0 0119 15H6a2 2 0 01-2-1z"/><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2"/></svg></div>
+        <h4>Weather with teeth</h4>
+        <p>Rain, storm, fog, ashfall, snow — and the <b>Blood Moon</b>, under which the undead walk twice as thick. Every front re-weights who spawns where.</p>
       </div>
-      <div class="arch-col reveal" style="--accent:var(--green)">
-        <div class="h"><span class="dot"></span><span class="path">src/sim/</span></div>
-        <ul><li>headless boot</li><li>seeded runner</li><li>build injection</li><li>metric taps</li></ul>
-      </div>
-      <div class="arch-col reveal" style="--accent:var(--gold)">
-        <div class="h"><span class="dot"></span><span class="path">src/ui · net · meta/</span></div>
-        <ul><li>DOM panels</li><li>co-op transport</li><li>account / save</li><li>permadeath</li></ul>
-      </div>
-      <div class="arch-col reveal" style="--accent:var(--steel)">
-        <div class="h"><span class="dot"></span><span class="path">launcher/</span></div>
-        <ul><li>Electron shell</li><li>update flow</li><li>loopback save server</li><li>packaging</li></ul>
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--violet)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 15c1.5 1 3 1 4.5 0s3-1 4.5 0 3 1 4.5 0 3-1 4.5 0M5 15V8l6-3 6 3v7"/></svg></div>
+        <h4>The sea is a place</h4>
+        <p>Cast off from a dock and you <i>are</i> the boat — the coastline streams in, and every shore you nose up to lands a real, generated zone, with one-off voyage islands riding on top.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- TOOLING -->
-<section class="band" style="padding-top:0">
+<!-- LIVE & DIE -->
+<section class="band" style="padding-top:0" data-nav="Death">
   <div class="wrap">
     <div class="sec-head reveal">
-      <div class="kicker">Built to be verified</div>
-      <h2>Harnesses, not vibes</h2>
-      <p>No unit-test runner — instead, the real engine runs headless and deterministic. Correctness is a type-check plus a set of self-checking harnesses you run after touching the area they cover.</p>
+      <div class="kicker">Your contract with the dark</div>
+      <h2>Death means something — you decide how much</h2>
+      <p>Run <b>Mortal</b> and a fall ends the character, pays the essence tithe, and leaves a corpse any successor can reclaim. Swear the <b>Immortal</b> covenant and death can't keep you — the world stops counting. Hire fallen heroes, or bring a friend.</p>
     </div>
-    <div class="tools">
-      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;sim</span><div><h3>Balance harness</h3><p>The real engine, headless and seeded. Ranks every skill at equal investment, runs the skill × support no-op matrix, prints per-class power curves, and audits the item economy.</p></div></div>
-      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;perf</span><div><h3>Performance harness</h3><p>Boots the real desktop game and samples true frame telemetry per procedural zone, gating each biome against the same run's town control.</p></div></div>
-      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;genqa</span><div><h3>Generation QA</h3><p>Runs level generation across the whole authored tileset and variant matrix over many seeds, asserting determinism, reachability and the other generation invariants.</p></div></div>
-      <div class="tool reveal"><span class="cmd">npm&nbsp;run&nbsp;smoke</span><div><h3>Boot smoke tests</h3><p>Headless Electron self-checks that boot the real game and launcher windows and assert they actually come up before you ship.</p></div></div>
+    <div class="living-grid">
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--crimson)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 00-4 12.7V18h8v-3.3A7 7 0 0012 2z"/><path d="M9 21h6M10 18v3M14 18v3"/></svg></div>
+        <h4>Corpse runs</h4>
+        <p>Your death drops a reclaimable corpse holding your equipped gear, marked on the world map — the skill and support gems you carried are lost to the fall. The road back is part of the danger.</p>
+      </div>
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3 2.7-5 6-5s6 2 6 5"/><path d="M16 8l2 2 4-4"/></svg></div>
+        <h4>Mercenaries</h4>
+        <p>Hire archetype blades at the outpost — the archer, the desert warrior, the caster-for-coin — synthesized fresh at your own power. Retired heroes become veterans.</p>
+      </div>
+      <div class="lcard reveal">
+        <div class="ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="9" r="3"/><circle cx="17" cy="9" r="2.4"/><path d="M2 20c0-3 2.5-5 6-5s6 2 6 5M14.5 15c2.8.2 5 2.2 5 5"/></svg></div>
+        <h4>Early co-op</h4>
+        <p>Play together, host-authoritative; enemies scale with the party so solo stays untouched. Early support, still being hardened — but the seats are there.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BUILDS + SHOWCASE -->
+<section class="band" style="padding-top:0" data-nav="Builds">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <div class="kicker">Make it yours</div>
+      <h2>Skills are loot. Everything is a lever.</h2>
+      <p>You don't unlock skills on a class tree — you find them. Active skills and supports drop as gems, slot into any build, and recombine into your own way to play. Hover anything in the rack to see the real numbers.</p>
+    </div>
+    <div class="build-cols">
+      <div class="build-facts reveal">
+        <div class="bfact"><span class="n">15</span><span class="t"><b>classes</b>, each a starting kit of attributes and signature skills — never a cage. Specialize into one of <b>15 vocations</b>, from the Warbringer to the Stormweaver.</span></div>
+        <div class="bfact"><span class="n">450+</span><span class="t">a deep <b>passive tree</b> — keystones, notables, and raw attributes placed on the graph itself — all plannable in the <a href="tree/" style="color:var(--teal)">build tool</a>.</span></div>
+        <div class="bfact"><span class="n" style="font-size:26px">◆</span><span class="t">a growing chase layer of named <b>uniques</b> and socketable <b>Vestiges</b> that spell runic Words — the drop that turns a skill into a whole archetype.</span></div>
+      </div>
+      <div class="reveal">
+        <div class="showhead"><h3>The rack</h3><a href="database/">Browse all 500+ in the Database →</a></div>
+        <div data-showcase></div>
+      </div>
     </div>
   </div>
 </section>
@@ -606,10 +602,10 @@ npm run <span class="g">build</span></pre>
         </div>
         <div class="foot-col">
           <h4>Explore</h4>
-          <a href="#overview">Overview</a>
-          <a href="#systems">Systems</a>
-          <a href="#classes">Classes</a>
-          <a href="#get">Get it</a>
+          <a href="database/">Database</a>
+          <a href="tree/">Passive Tree</a>
+          <a href="play/">Play in browser</a>
+          <a href="systems/">Under the hood</a>
         </div>
       </div>
     </div>
@@ -753,6 +749,7 @@ npm run <span class="g">build</span></pre>
   if(reduce){ staticFrame(); } else { frame(); }
 })();
 </script>
+<script src="assets/showcase.js"></script>
 <script src="assets/nav.js"></script>
 <script src="assets/sectionnav.js"></script>
 </body>

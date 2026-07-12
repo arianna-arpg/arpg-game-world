@@ -19,6 +19,7 @@
     { id: 'database', label: 'Database',     href: 'database/' },
     { id: 'tree',     label: 'Passive Tree', href: 'tree/', short: 'Tree' },
     { id: 'play',     label: 'Play',         href: 'play/' },
+    { id: 'systems',  label: 'Systems',      href: 'systems/' },
   ];
   var ACTIONS = [
     { id: 'github',   label: 'GitHub',   href: REPO,               icon: true },
