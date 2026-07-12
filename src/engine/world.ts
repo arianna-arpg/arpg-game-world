@@ -2768,16 +2768,6 @@ export class World {
     this.event = null;
     this.encounters = [];
     this.transientDoodads = []; // terraform growths are zone-local (the doodad list itself was just rebuilt)
-    // RULE-EFFECT ATTACH: a kind whose DOODAD_RULES row declares a standing
-    // `effect` (lava's heat wash, a leyline node's element surge) gets it
-    // here with a randomized first cooldown — the ONE seam every gen path
-    // pours through (tileset stamps, landmark pours, cave mints). What used
-    // to be a lava/magma_core special case is now any kind's data row.
-    for (const d of this.doodads) {
-      if (d.effect) continue;
-      const rEff = doodadRuleOf(d.kind).effect;
-      if (rEff) d.effect = { ...rEff, cd: rand(0, rEff.interval) };
-    }
     this.vocationSites = [];    // secret-vocation shrines re-place per load (deterministic)
     this.wave = 0;
     this.waveTimer = WAVE_CFG.firstDelay;
@@ -2848,6 +2838,18 @@ export class World {
     this.crusadeWorksAt = crusadeWorks ? vec(crusadeWorks.center.x, crusadeWorks.center.y) : null;
     const layout = generateLayout(def, this.arena, rng, entry, this.exits.map(e => e.pos), crusadeWorks?.fixtures);
     this.doodads = layout.doodads;
+    // RULE-EFFECT ATTACH: a kind whose DOODAD_RULES row declares a standing
+    // `effect` (lava's heat wash, a leyline node's element surge) gets it
+    // here — on the FRESH doodad list, with a randomized first cooldown —
+    // the ONE seam every gen path pours through (tileset stamps, landmark
+    // pours, cave mints). The old lava/magma_core special case ran BEFORE
+    // this assignment and armed the PREVIOUS zone's array — any kind's data
+    // row now arms the zone actually being loaded.
+    for (const d of this.doodads) {
+      if (d.effect) continue;
+      const rEff = doodadRuleOf(d.kind).effect;
+      if (rEff) d.effect = { ...rEff, cd: rand(0, rEff.interval) };
+    }
     this.bridges = layout.doodads.filter(d => doodadRuleOf(d.kind).spans);
     this.grounds = layout.doodads.filter(d => GROUND_KINDS.includes(d.kind));
     this.walk = layout.walk ?? null; // a non-convex layout's walkability (else convex)
