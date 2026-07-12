@@ -187,7 +187,16 @@ export type KnownDoodadKind =
   | 'hell_chain'       // a titan chain bolted into the crust, running toward something below
   | 'ember_fissure'    // a glowing rent in the ground — the fire underneath showing through
   | 'abyssal_rent'     // blocks movement not shots, stamped fall:true — a bottomless tear (fall recovery)
-  | 'gate_stair';      // a switchback stair flight — the descent off a gate terrace (recipe-placed)
+  | 'gate_stair'       // a switchback stair flight — the descent off a gate terrace (recipe-placed)
+  // The ossuary kit (the Necropolis' interior sanctum — bone as the ground truth)
+  | 'bone_mound'       // a heaped dune of the counted dead — the bonefields' skyline
+  | 'ossuary_niche'    // a stacked bone-shelf wall piece — reliquary rows are made of these
+  | 'charnel_pit'      // a sunken pit the ossuary tips its overflow into — pale-rimmed, dark-hearted
+  // The river-of-flame kit (hell's artery — the flame course's bank vocabulary)
+  | 'hellforge_anvil'  // the demons' great forge-altar: a slag plinth, an ember throat (the terminus monument)
+  | 'soul_cage'        // a gibbet cage on a leaning post — the river's toll, still glowing faintly
+  | 'demon_banner'     // a legion war-banner: scorched pole, ragged pennant, a lit glyph
+  | 'pyre_heap';       // a mounded bone-pyre burning pale — the banks keep their own lights
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -806,6 +815,22 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   ember_fissure: { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 70, forbidOn: ['water', 'lava', 'chasm'] },
   abyssal_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true, hazardGround: true },
   gate_stair:    { overlap: 'ground', walkOnly: true },
+  // The ossuary kit: mounds are the bonefields' rolling skyline (step around,
+  // shoot over); niches are the reliquary's shelf-walls (full blocks — rows of
+  // them read as corridors); pits open where the overflow was tipped.
+  bone_mound:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  ossuary_niche: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  charnel_pit:   { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 130, forbidOn: ['water', 'lava', 'chasm'] },
+  // The river-of-flame kit: the forge-altar monument (a composition centerpiece,
+  // huge spacing so two never crowd), gibbet cages that split when struck (the
+  // strike-surface seam), banner poles you duck behind but shoot past, and
+  // low bone-pyres. Every solid lists the full liquid forbidOn (the inverse
+  // invariant genqa asserts).
+  hellforge_anvil: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 200, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  soul_cage:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    brittle: { on: ['hit'], text: 'the cage splits — a soul slips free', color: '#9fd4ff', orbChance: 0.12 } },
+  demon_banner:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 88, bodyScale: 0.35, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  pyre_heap:     { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 96, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -2858,6 +2883,17 @@ registerStamp('abyssal_rent', (ctx, spec) => {
   const p = findSpot(ctx, r, false, 44, true, 'abyssal_rent');
   if (p) ctx.doodads.push({ pos: p, radius: r, kind: 'abyssal_rent', fall: true });
 });
+// The ossuary kit: bone dunes, reliquary shelf-walls, and the overflow pits —
+// the Necropolis' interior vocabulary (data/tilesets.ts 'ossuary').
+registerStamp('bone_mound', (ctx, spec) => stampSolid(ctx, 'bone_mound', spec.radius ?? [26, 48]));
+registerStamp('ossuary_niche', (ctx, spec) => stampSolid(ctx, 'ossuary_niche', spec.radius ?? [18, 26]));
+registerStamp('charnel_pit', stampSingle('charnel_pit', [26, 44]));
+// The river-of-flame kit: the forge-altar (cluster-anchored in practice; the
+// stamp keeps it a legal tileset row), gibbet cages, banners, bone-pyres.
+registerStamp('hellforge_anvil', (ctx, spec) => stampSolid(ctx, 'hellforge_anvil', spec.radius ?? [38, 46]));
+registerStamp('soul_cage', stampSingle('soul_cage', [11, 15]));
+registerStamp('demon_banner', stampSingle('demon_banner', [11, 15]));
+registerStamp('pyre_heap', stampSingle('pyre_heap', [16, 24]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
@@ -3308,6 +3344,9 @@ function stampCluster(ctx: GenCtx, def: ClusterDef): void {
 export interface FormationPiece {
   kind: DoodadKind;
   radius: [number, number];
+  // (rot below: `true` = random spin per piece; `'chain'` = face ALONG the
+  // anchor chain — walls and shelf-rows align to their line, a ring's pieces
+  // face its tangent. 'chain' draws NO rng — the heading is the chain's own.)
   /** Plant at every Nth chain anchor (default 1 = each anchor). */
   every?: number;
   /** Radial scatter around the anchor (default 0 = dead on the chain). */
@@ -3315,7 +3354,7 @@ export interface FormationPiece {
   /** Pieces per selected anchor (default [1, 1]). */
   count?: [number, number];
   /** Random spin per piece (trees/stones read better rotated). */
-  rot?: boolean;
+  rot?: boolean | 'chain';
 }
 
 export interface FormationDef {
@@ -3527,6 +3566,14 @@ function stampFormation(ctx: GenCtx, def: FormationDef): void {
   const anchors = arranger(ctx, def, start, ctx.rng);
   if (anchors.length < 2) return;
   const formationStart = ctx.doodads.length;
+  // 'chain' rot: face ALONG the chain (a row's line, a ring's tangent) —
+  // computed from the anchors themselves, so it costs the rng stream NOTHING
+  // (boolean rot keeps drawing exactly as before).
+  const chainRot = (i: number): number => {
+    const a = anchors[i === anchors.length - 1 ? i - 1 : i];
+    const b = anchors[i === anchors.length - 1 ? i : i + 1];
+    return Math.atan2(b.y - a.y, b.x - a.x);
+  };
   for (const piece of def.pieces) {
     const rule = doodadRule(piece.kind);
     const hard = !!rule.blocksMove;
@@ -3538,7 +3585,8 @@ function stampFormation(ctx: GenCtx, def: FormationDef): void {
         // Draws BEFORE filters (findSpot discipline): a rejected anchor must
         // not shift the sequence for the rest of the chain.
         const r = ctx.rng.range(piece.radius[0], piece.radius[1]);
-        const rot = piece.rot ? ctx.rng.range(0, Math.PI * 2) : undefined;
+        const rot = piece.rot === 'chain' ? chainRot(i)
+          : piece.rot ? ctx.rng.range(0, Math.PI * 2) : undefined;
         let p = anchors[i];
         if (piece.jitter) {
           const ang = ctx.rng.range(0, Math.PI * 2);

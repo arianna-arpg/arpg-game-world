@@ -768,6 +768,13 @@ export interface CaveMintOpts {
   layoutParams?: Record<string, unknown>;
   /** A fixed name instead of the tileset's rolled one. */
   name?: string;
+  /** Force a NAMED tileset variant's layout (the same sub-biome machinery
+   *  generated zones roll, reachable for minted pockets). Unknown name warns
+   *  and keeps the base. */
+  variant?: string;
+  /** ROLL one of the tileset's variants (seeded — one extra draw, opts
+   *  callers only): each minted seat/arena shows a different face. */
+  rollVariant?: boolean;
 }
 
 export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId = 'cavern', opts?: CaveMintOpts): ZoneDef {
@@ -797,12 +804,33 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   const breach = depth >= caveBreachDepth() && !parent.dimension;
   const chances = CAVE_LADDER.deeperChance;
   const deeper = !breach && rng.chance(chances[Math.min(depth - 1, chances.length - 1)] ?? 0);
-  const layout = deeper ? [...ts.layout, { kind: 'cave' as const, count: [1, 1] as [number, number] }] : ts.layout;
+  // VARIANT (opts callers only — the no-opts stream stays byte-identical): a
+  // named or seeded-rolled TilesetVariant replaces the base stamps, exactly
+  // as a generated zone's roll would. The tag joins the name so the face is
+  // legible at the door ("The Necropolis (bonefields)").
+  let rows = ts.layout;
+  let variantName: string | undefined;
+  if (opts?.variant && ts.variants?.length) {
+    const v = ts.variants.find(x => x.name === opts.variant);
+    if (v) { rows = v.layout; variantName = v.name; }
+    else console.warn(`[worldgen] mintCave '${id}': tileset '${ts.id}' has no variant '${opts.variant}' — base layout`);
+  } else if (opts?.rollVariant && ts.variants?.length) {
+    const v = rng.pick(ts.variants);
+    rows = v.layout; variantName = v.name;
+  }
+  // COMMON rows ride along whichever face rolled — the brittle-kit doctrine
+  // (what the biome always IS must not vanish when a face is chosen) now
+  // holds for minted pockets exactly as it does for generated zones.
+  const layout = [
+    ...(ts.common ?? []), ...rows,
+    ...(deeper ? [{ kind: 'cave' as const, count: [1, 1] as [number, number] }] : []),
+  ];
+  const baseName = opts?.name ?? (depth >= 2 && !breach ? `Deep ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
+    : breach ? `${rng.pick(ts.nameFirst)} Breach`
+      : `${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`);
   return {
     id,
-    name: opts?.name ?? (depth >= 2 && !breach ? `Deep ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
-      : breach ? `${rng.pick(ts.nameFirst)} Breach`
-        : `${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`),
+    name: variantName ? `${baseName} (${variantName})` : baseName,
     level: parent.level + (depth >= 2 ? 1 : 0),
     size: { w, h },
     shape: 'rect',                          // caves stay rect — no ellipse rim math

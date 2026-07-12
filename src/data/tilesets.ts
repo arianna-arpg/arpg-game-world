@@ -1035,6 +1035,98 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE OSSUARY — the Necropolis' interior sanctum (realm-only: frontier
+  // false; the deadwake uber arena mints it, rolling a variant per seat).
+  // Bone IS the ground truth here: pale heaped dead over dark charnel loam —
+  // the graveland's purple gloom stays outside. CLARITY doctrine: the floor
+  // runs DARK and matte so every pale solid (mounds, shelf-rows, arches)
+  // reads at a glance; braziers + niche candle-glow anchor the sightlines;
+  // the two variants keep distinct silhouettes (rolling dunes vs ruled rows).
+  ossuary: {
+    id: 'ossuary', frontier: false,
+    nameFirst: ['Ossuary', 'Charnel', 'Bonewrought', 'Marrow', 'Reliquary', 'Skullbound', 'Palebone', 'Sepulchral', 'Hollowbone', 'Gravemarrow', 'Ivory', 'Femur-Laid', 'Knucklebone', 'Sanctified', 'Vaultbone', 'Litany', 'Requiem', 'Cist-Cold'],
+    nameSecond: ['Sanctum', 'Vaults', 'Galleries', 'Reliquary', 'Bonefields', 'Cloister', 'Undercroft', 'Chambers', 'Tiers', 'Repository', 'Rotunda', 'Stacks', 'Cists', 'Wells', 'Procession', 'Charnel'],
+    theme: {
+      ambientDark: 0.22,
+      floor: '#171310', grid: '#201b16', border: '#5a5142',
+      // Obstacle = BONE: the generic rock/cliff stamps reskin into pale
+      // knuckle-rubble and bone bluffs with zero painter edits.
+      obstacle: '#c9bda2', obstacleEdge: '#7a705c', accent: '#e8dcb0',
+      wall: '#b3a88c', mud: '#2e2822', chasm: '#080605',
+      // Bone-flecked charnel loam: dark mottle with pale chips surfacing.
+      ground: {
+        palette: ['#141009', '#1d1812', '#262019', '#332c22', '#4a4234', '#7a6f58'],
+        bias: 0.42, alpha: 0.5, speckles: 1.5, strength: 1.1,
+      },
+    },
+    sizeW: [1400, 1800], sizeH: [1050, 1350], biome: 'ossuary',
+    caveLayouts: { plains: 1 }, // the open charnel crawl — the STAMPS carry the identity
+    compositions: [{ composition: 'charnel_rotunda', chance: 0.5 }],
+    // What the sanctum always IS, whichever face it shows: litter drifts,
+    // sealed urns and their tenants, marrow-fires, counted-dead markers, the
+    // odd overflow pit, a great bone chunk barring a lane.
+    common: [
+      { kind: 'bone_pile', count: [8, 14] },
+      { kind: 'bone', count: [2, 4] },
+      { kind: 'burial_urn', count: [3, 6] },
+      { kind: 'brazier', count: [2, 4] },
+      { kind: 'bone_cairn', count: [2, 4] },
+      { kind: 'charnel_pit', count: [1, 2] },
+    ],
+    layout: [
+      { kind: 'bone_mound', count: [3, 5] },
+      { kind: 'rib_arch', count: [3, 5] },
+      { kind: 'ossuary_niche', count: [2, 4] },
+      { kind: 'rocks', count: [4, 6], radius: [14, 26] },
+      { kind: 'formation', count: [1, 2], formation: 'charnel_dunes' },
+      { kind: 'formation', count: [0, 1], formation: 'reliquary_rows' },
+      { kind: 'fog_bank', count: [1, 2] },
+    ],
+    variants: [
+      // The open face: rolling dunes of the counted dead, pits where the
+      // overflow was tipped — silhouette = mounded curves, long sightlines.
+      { name: 'bonefields', layout: [
+        { kind: 'bone_mound', count: [7, 10] },
+        { kind: 'bone_pile', count: [10, 16] },
+        { kind: 'charnel_pit', count: [2, 3] },
+        { kind: 'formation', count: [2, 3], formation: 'charnel_dunes' },
+        { kind: 'rib_arch', count: [2, 4] },
+        { kind: 'rocks', count: [2, 4], radius: [14, 26] },
+        { kind: 'fog_bank', count: [1, 2] },
+      ] },
+      // The kept face: ruled corridor-rows of shelf-walls under candle-glow,
+      // a processional colonnade — silhouette = straight lines, tight lanes.
+      { name: 'reliquary', layout: [
+        { kind: 'formation', count: [3, 5], formation: 'reliquary_rows' },
+        { kind: 'formation', count: [1, 2], formation: 'ossuary_colonnade' },
+        { kind: 'ossuary_niche', count: [4, 7] },
+        { kind: 'burial_urn', count: [3, 5] },
+        { kind: 'brazier', count: [2, 3] },
+        { kind: 'bone_mound', count: [1, 2] },
+      ] },
+    ],
+    // The sanctum's dead are BONE + SPIRIT — no flesh, no vermin (the crypt
+    // keeps its zombies; identity is the roster too).
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'skeleton_warrior', weight: 3 },
+        { id: 'skeleton_archer', weight: 3 },
+        { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
+        { id: 'bone_serpent', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'barrow_wight', weight: 2, presence: { from: 10, fadeIn: 5 } },
+        { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'banshee', weight: 1, presence: { from: 12, fadeIn: 6 } },
+        { id: 'lich_marshal', weight: 1, presence: { from: 14, fadeIn: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+    ],
+  },
+
   // BEACH — a sun-bleached coast: sand, wading shallows, palms, scattered wilds.
   beach: {
     id: 'beach',

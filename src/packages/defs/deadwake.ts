@@ -101,7 +101,12 @@ const DEADWAKE_SURGE: DeadwakeSurge = {
     driftSpeed: 1.5,        // a SLOW, ponderous crawl (no fixed anchor) — the player has
                             // time to reach a zone it touches and take the gate in
     accessRadius: 100,      // a charted zone within this of the seat opens a gate in
-    tileset: 'crypt',
+    // The seat's interior is the OSSUARY — its own bone-true tileset
+    // (data/tilesets.ts), not the graveland's purple gloom. Each fused seat
+    // rolls a FACE (bonefields dunes / reliquary rows), named at the door:
+    // "The Necropolis (reliquary)".
+    tileset: 'ossuary',
+    arena: { name: 'The Necropolis', rollVariant: true },
     levelBonus: 4,          // the arena's dead outclass the open world
     bossPool: [
       { id: 'deadwake_bonelord', weight: 1 }, // the uber boss (Crowned on spawn)

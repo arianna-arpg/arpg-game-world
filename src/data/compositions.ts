@@ -132,3 +132,17 @@ registerComposition({
     { kind: 'hell_chain', count: [2, 4], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 13 } } },
   ],
 });
+
+// A CHARNEL ROTUNDA: the ossuary's swept ceremonial round — ribcage arches
+// ringing a bare court (the boss ground the Necropolis keeps clear), bone
+// drifts feathering off wherever the noise runs shallow. Geometry contract
+// with rib_rotunda's inner ring — tune BOTH sides together.
+registerComposition({
+  id: 'charnel_rotunda',
+  sites: [{ id: 'court', radius: [140, 180] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [52, 70] }],
+  post: [
+    { kind: 'formation', formation: 'rib_rotunda', at: 'court', count: [1, 1] },
+    { kind: 'bone_pile', count: [3, 5], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 29 } } },
+  ],
+});

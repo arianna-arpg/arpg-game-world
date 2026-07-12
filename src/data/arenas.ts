@@ -51,6 +51,12 @@ export interface ArenaSpec {
   layoutType?: string;
   /** Recipe knobs, exactly as a biome would pass them. */
   layoutParams?: Record<string, unknown>;
+  /** Force a NAMED tileset variant's stamp layout (TilesetDef.variants). */
+  variant?: string;
+  /** ROLL one of the tileset's variants per mint — each seat of the event
+   *  shows a different face ("The Necropolis (bonefields)" this cycle, the
+   *  reliquary the next). */
+  rollVariant?: true;
   /** Ambient pack density (the roster stays the event's own). */
   packs?: { count: [number, number]; size: [number, number] };
   /** Ward seals gating the boss — see ArenaWardSpec. */

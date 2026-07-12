@@ -7277,8 +7277,10 @@ export class World {
   }): void {
     const a = o.arena;
     if (!this.caveMap[o.caveId]) {
-      const opts = a && (a.layoutType !== undefined || a.layoutParams !== undefined || a.name !== undefined)
-        ? { layoutType: a.layoutType, layoutParams: a.layoutParams, name: a.name } : undefined;
+      const opts = a && (a.layoutType !== undefined || a.layoutParams !== undefined || a.name !== undefined
+        || a.variant !== undefined || a.rollVariant)
+        ? { layoutType: a.layoutType, layoutParams: a.layoutParams, name: a.name,
+            variant: a.variant, rollVariant: a.rollVariant } : undefined;
       const realm = mintCave(this.zone, (this.manifest.seed ^ hashStr(o.caveId)) >>> 0, o.caveId,
         a?.tileset ?? o.tileset, opts);
       if (o.levelOverride !== undefined) realm.level = Math.max(1, o.levelOverride);

@@ -727,6 +727,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'ribArch', order: 53, shadow: 0.5, longShadow: 0.8,
     params: { bone: '#d8cdb8' },
   },
+  // THE OSSUARY KIT (the Necropolis' interior sanctum — data/tilesets.ts
+  // 'ossuary'). Bone dunes crowd the bonefields; shelf-walls stack into
+  // reliquary rows (their candle-glow is the row's own light, a clarity
+  // anchor); the overflow pits open pale-rimmed and dark-hearted.
+  bone_mound: {
+    painter: 'bonePile', order: 53, shadow: 0.55, longShadow: 0.9,
+    params: { bone: '#cfc4a8', dark: '#6a604e', skulls: 3 },
+  },
+  ossuary_niche: {
+    painter: 'boneShelf', order: 54, shadow: 0.55, longShadow: 1.0,
+    params: { bone: '#c9bda0', dark: '#57503f', skulls: 4 },
+    light: { radius: -1.8, color: '#ffd9a0', intensity: 0.14, flicker: 1.6 },
+  },
+  charnel_pit: {
+    painter: 'chasmPit', order: 39,
+    params: {
+      rim: { color: '#8a8070', alpha: 0.55, grow: 5 },
+      core: { color: '#0a0806' },
+      bands: 1,
+      cracks: { chance: 0.7, color: '#cfc4a8' },
+      glow: { color: '#d8cdb0', alpha: 0.1 },
+    },
+  },
   tooth_row: {
     painter: 'teethRow', order: 52, shadow: 0.45,
     params: { gum: '#6a1a28', enamel: '#e8e0d0' },

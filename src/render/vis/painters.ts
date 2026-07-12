@@ -4193,6 +4193,138 @@ const pentagram: GroupPainter = (env, group) => {
   ctx.globalAlpha = 1;
 };
 
+/** BONE PILE / MOUND — the ossuary's heaped dead: irregular strata mounding
+ *  toward a pale crown, skulls half-sunk in the drift, stray ribs arcing off
+ *  the slope. One painter serves drift-piles and true dunes alike (the radius
+ *  scales the detail counts). Params: bone (base), dark (hollows), skulls. */
+const bonePile: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bone?: string; dark?: string; skulls?: number };
+  const { ctx, theme } = env;
+  const bone = resolveColor(p.bone, theme, '#cfc4a8');
+  const dark = resolveColor(p.dark, theme, '#6a604e');
+  for (const o of group) {
+    const seed = ((o.pos.x * 11 + o.pos.y * 29) | 0) >>> 0;
+    const R = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Strata: three irregular lobes climbing to the crown, lighter as they rise.
+    for (let s = 0; s < 3; s++) {
+      const f = 1 - s * 0.3;
+      const verts = 9 + (seed + s) % 3;
+      ctx.beginPath();
+      for (let i = 0; i <= verts; i++) {
+        const a = (i / verts) * Math.PI * 2;
+        const rr = R * f * (0.86 + hash01(i + s * 31, seed) * 0.26);
+        const x = Math.cos(a) * rr, y = Math.sin(a) * rr * 0.82 - s * R * 0.1;
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = shade(bone, -0.34 + s * 0.17);
+      ctx.fill();
+      ctx.strokeStyle = shade(dark, s * 0.1);
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    // Skulls half-buried in the drift (eye sockets toward the viewer).
+    const skulls = Math.max(1, Math.round((p.skulls ?? 3) * (R / 36)));
+    for (let i = 0; i < skulls; i++) {
+      const a = hash01(i, seed + 7) * Math.PI * 2;
+      const d = R * (0.25 + hash01(i, seed + 13) * 0.5);
+      const sx = Math.cos(a) * d, sy = Math.sin(a) * d * 0.8 - R * 0.08;
+      const sr = R * (0.1 + hash01(i, seed + 17) * 0.05);
+      ctx.fillStyle = shade(bone, 0.22);
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = shade(dark, -0.25);
+      ctx.beginPath();
+      ctx.arc(sx - sr * 0.34, sy - sr * 0.08, sr * 0.22, 0, Math.PI * 2);
+      ctx.arc(sx + sr * 0.34, sy - sr * 0.08, sr * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Stray ribs arcing off the slope.
+    ctx.strokeStyle = shade(bone, 0.12);
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    const ribs = 2 + (seed % 3);
+    for (let i = 0; i < ribs; i++) {
+      const a = hash01(i, seed + 23) * Math.PI * 2;
+      const d = R * (0.6 + hash01(i, seed + 29) * 0.3);
+      const x = Math.cos(a) * d, y = Math.sin(a) * d * 0.82;
+      ctx.beginPath();
+      ctx.arc(x, y, R * 0.2, a - 0.4, a + 1.3);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** OSSUARY NICHE — a reliquary shelf-wall from above: a thick coursed bar of
+ *  stacked long bones, a skull row set down its spine, darker mortar seams and
+ *  end caps. Faces its `rot` (formations lay them with rot:'chain', so rows
+ *  read as corridors). Params: bone, dark, skulls (row density). */
+const boneShelf: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bone?: string; dark?: string; skulls?: number };
+  const { ctx, theme } = env;
+  const bone = resolveColor(p.bone, theme, '#c9bda0');
+  const dark = resolveColor(p.dark, theme, '#57503f');
+  for (const o of group) {
+    const seed = ((o.pos.x * 23 + o.pos.y * 7) | 0) >>> 0;
+    const R = o.radius;
+    const L = R * 1.9, W = R * 0.92; // the shelf bar: long along the row
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // Footing shadow-pan, then the bar body.
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = shade(dark, -0.4);
+    ctx.beginPath(); ctx.ellipse(0, 0, L * 0.6, W * 0.72, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = shade(bone, -0.1);
+    ctx.beginPath();
+    ctx.roundRect(-L / 2, -W / 2, L, W, W * 0.2);
+    ctx.fill();
+    ctx.strokeStyle = shade(dark, 0.05);
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+    // Long-bone courses: lengthwise seams with knuckle ends per course.
+    const courses = 3;
+    for (let cI = 0; cI < courses; cI++) {
+      const y = -W / 2 + W * ((cI + 0.5) / courses);
+      ctx.strokeStyle = shade(dark, 0.18);
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-L / 2 + 3, y); ctx.lineTo(L / 2 - 3, y); ctx.stroke();
+      ctx.globalAlpha = 1;
+      // Knuckle nubs punctuating the course (stacked femur ends).
+      const nubs = 3 + ((seed + cI) % 2);
+      for (let i = 0; i < nubs; i++) {
+        const x = -L / 2 + L * ((i + 0.5 + hash01(i, seed + cI * 13) * 0.3) / nubs);
+        ctx.fillStyle = shade(bone, 0.16);
+        ctx.beginPath(); ctx.arc(x, y - W / (courses * 2) * 0.5, W * 0.07, 0, Math.PI * 2); ctx.fill();
+      }
+    }
+    // The skull row down the spine.
+    const skulls = Math.max(2, Math.round((p.skulls ?? 4) * (R / 22)));
+    for (let i = 0; i < skulls; i++) {
+      const x = -L / 2 + L * ((i + 0.5) / skulls) + (hash01(i, seed + 41) - 0.5) * 4;
+      const sr = W * (0.16 + hash01(i, seed + 43) * 0.04);
+      ctx.fillStyle = shade(bone, 0.26);
+      ctx.beginPath(); ctx.arc(x, 0, sr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = shade(dark, -0.2);
+      ctx.beginPath();
+      ctx.arc(x - sr * 0.35, -sr * 0.1, sr * 0.24, 0, Math.PI * 2);
+      ctx.arc(x + sr * 0.35, -sr * 0.1, sr * 0.24, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // End caps: the row's darker binding posts.
+    ctx.fillStyle = shade(dark, 0.12);
+    ctx.fillRect(-L / 2 - 1.5, -W / 2, 3.5, W);
+    ctx.fillRect(L / 2 - 2, -W / 2, 3.5, W);
+    ctx.restore();
+  }
+};
+
 /** ARENA WARD SEALS (data/arenas.ts) — the ritual anchors gating a realm's
  *  boss. A ground sigil: scorched pan, twin rune rings (the outer binding
  *  slowly orbits), a bound star rolled five- or six-pointed per seal, and a
@@ -5610,7 +5742,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
-  tentacleField, pentagram, wardSeal, door, breach, landmass, beacon, fallback,
+  tentacleField, pentagram, wardSeal, bonePile, boneShelf, door, breach, landmass, beacon, fallback,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------

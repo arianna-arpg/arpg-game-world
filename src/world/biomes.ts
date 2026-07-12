@@ -112,6 +112,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
     layoutParams: { ruined: 0.85 },
     structures: [{ structure: 'hedge_labyrinth', chance: 0 }, { structure: 'watchtower', chance: 0.2 }],
     landmarks: [{ landmark: 'sinkhole', chance: 0.15 }, { landmark: 'tar_pool', chance: 0.2 }] },
+  // THE OSSUARY: the Necropolis' interior sanctum — bone country, not grave
+  // country (the graveland keeps its purple gloom and its tombstones; here
+  // the dead ARE the terrain). Realm-only today: no climate row, no dimension
+  // palette seat — the deadwake arena mints it directly; registering it here
+  // gives the tag a HOME (patron, wildlife gate, layout pick) so any future
+  // field/palette row is one line.
+  ossuary: { patronFaction: 'undead', mapColor: '#cfc4ac', label: 'Ossuary', spacing: 64,
+    allowedLayouts: { plains: 1 },
+    landmarks: [{ landmark: 'sinkhole', chance: 0.12 }] },
   // RIFT: siege castles + the RIVER OF FLAME (riverland pouring lava, stone
   // causeways spanning it — the D2 Act 4 artery).
   rift:   { patronFaction: 'demon',  mapColor: '#a83a2a', label: 'Rift', spacing: 64,

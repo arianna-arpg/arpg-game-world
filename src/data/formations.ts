@@ -276,3 +276,51 @@ registerFormation({
     { kind: 'static_bloom', radius: [10, 15], every: 2, jitter: 24 },
   ],
 });
+
+// --- THE OSSUARY GRAMMAR (the Necropolis' interior — data/tilesets 'ossuary') --
+
+// CHARNEL DUNES: the bonefields' rolling skyline — heaped mounds wandering in
+// a drift-line, litter spilling between them (mounds pack among themselves;
+// the drift is supposed to knit).
+registerFormation({
+  id: 'charnel_dunes', arrange: 'meander', span: [340, 620], step: 56,
+  params: { wobble: 40 },
+  pieces: [
+    { kind: 'bone_mound', radius: [26, 44], jitter: 12, rot: true },
+    { kind: 'bone_pile', radius: [16, 26], jitter: 30 },
+  ],
+});
+
+// RELIQUARY ROWS: shelf-walls of stacked dead facing ALONG their line
+// (rot:'chain'), sealed urns set at their feet — one row per formation; the
+// reliquary variant rolls several for its corridor grid.
+registerFormation({
+  id: 'reliquary_rows', arrange: 'line', span: [300, 540], step: 46,
+  pieces: [
+    { kind: 'ossuary_niche', radius: [20, 28], jitter: 4, rot: 'chain' },
+    { kind: 'burial_urn', radius: [10, 14], every: 3, jitter: 18 },
+  ],
+});
+
+// AN OSSUARY COLONNADE: great ribcage arches pacing a processional way,
+// litter drifted along it — the sanctum's avenue.
+registerFormation({
+  id: 'ossuary_colonnade', arrange: 'line', span: [360, 620], step: 84,
+  pieces: [
+    { kind: 'rib_arch', radius: [18, 30], jitter: 6, rot: 'chain' },
+    { kind: 'bone_pile', radius: [12, 18], every: 2, jitter: 24 },
+  ],
+});
+
+// A RIB ROTUNDA: arches ringing a swept court, each facing the ring's tangent
+// — the composition centerpiece. Geometry contract vs its clearing (see
+// charnel_rotunda): inner ring 115×0.92−3 ≈ 103 stays outside a reserved
+// court of ≤70 + piece 24 = 94 — tune BOTH sides together.
+registerFormation({
+  id: 'rib_rotunda', arrange: 'orbit', span: [115, 155], step: 44,
+  params: { rings: [1, 1], innerFrac: 0.92 },
+  pieces: [
+    { kind: 'rib_arch', radius: [16, 24], jitter: 3, rot: 'chain' },
+    { kind: 'bone_cairn', radius: [11, 15], every: 3, jitter: 10 },
+  ],
+});
