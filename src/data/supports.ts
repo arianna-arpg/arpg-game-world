@@ -3566,9 +3566,11 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   bulwarks_tithe: {
     id: 'bulwarks_tithe', name: 'Bulwark\'s Tithe',
-    description: 'The pump turned around: while the supported guard HOLDS, the WALL pays a steady tithe into your POISE — the shield keeps your footing armed through the storm, and it stops before it eats itself (never below a sixth of the wall). The anti-stagger tank: let the stance take the wear so the bar never breaks.',
+    description: 'The pump turned around: while the supported guard HOLDS, the WALL pays a steady tithe into your POISE — the shield keeps your footing armed through the storm, and it rests ABOVE the bash line (never below a third of the wall), so the release blow stays loaded. The anti-stagger tank: let the stance take the wear so the bar never breaks.',
     color: '#8ab8d8', requiresTags: ['guard'],
-    conduit: { from: 'guard', to: 'poise', drainPct: 0.06, ratio: 0.6, floor: 0.15 },
+    // Floor 0.3 deliberately clears the 25% shield-bash release threshold:
+    // a long-held tithe must never silently forfeit the release blow.
+    conduit: { from: 'guard', to: 'poise', drainPct: 0.06, ratio: 0.6, floor: 0.3 },
     mods: [],
     perLevel: [mod('conduitEfficiency', 'increased', 0.07)],
     weight: 5, minDropLevel: 8,

@@ -1525,9 +1525,13 @@ export class Actor {
   }
 
   /** THE CONDUIT TICK (see ConduitSpec): every equipped skill's pumps — innate
-   *  plus socket-grafted — run while that skill is ENGAGED: its cast HELD
-   *  (guard / channel / charge / overcharge; `held` is the one flag every
-   *  hold mode shares) or its toggle burning (aura or summon contract).
+   *  plus socket-grafted — run while that skill is ENGAGED: a held STANCE
+   *  mode (HELD_PUMP_MODES — plain/perfect/timed bars also carry `held`
+   *  while the button is down, and a bar-cast must never pump) or its
+   *  toggle burning (aura — toggle and duration both — or a summon
+   *  contract). The hold matches by DEF ID, the updateCharges
+   *  channelSecond precedent: meta-minted holds of the same skill count;
+   *  a convert's foreign face deliberately does not.
    *  Feeds route the canonical gain gates; drains honor floors; the pump
    *  draws only what the destination has room for. Stats are read per host
    *  (tags + instance mods), so investment reaches every seat — and a gem's
@@ -1537,7 +1541,9 @@ export class Actor {
       if (!inst) continue;
       const specs = instanceConduits(inst);
       if (specs.length === 0) continue;
-      const engaged = (!!this.casting?.held && this.casting.inst === inst)
+      const cs = this.casting;
+      const engaged = (!!cs?.held && HELD_PUMP_MODES.has(cs.mode)
+          && cs.inst.def.id === inst.def.id)
         || this.activeAuras.has(inst.def.id)
         || this.summonToggles.has(inst.def.id);
       if (!engaged) continue;
@@ -2535,6 +2541,13 @@ export class Actor {
   }
 }
 
+/** The cast modes whose `held` means a STANCE is genuinely up. Plain,
+ *  perfect, timed and totem-plant bars all carry `held: true` while the
+ *  button is down — a bar-cast must never pump, so the conduit tick gates
+ *  on THIS set (the validator's engages() mirrors it). */
+const HELD_PUMP_MODES: ReadonlySet<CastMode> =
+  new Set<CastMode>(['guard', 'channel', 'charge', 'overcharge']);
+
 /** One endpoint per pumpable pool — the registry the conduit tick walks
  *  (see ConduitSpec). cur/max define the working pool (ward, uncapped,
  *  reads its CURRENT as the %-base); room is the space a feed may still
@@ -2565,9 +2578,16 @@ const CONDUIT_POOLS: Record<ConduitPool, {
     feed: (a, amt) => a.healBy(amt),
   },
   mana: {
+    // The WORKING pool is the UNRESERVED band (availableMaxMana), the same
+    // ceiling every other mana-gain path honors (leech, restores, the
+    // regen clamp): feeds cap there — reserved space is not room, and
+    // anything poured into it would be confiscated by the regen clamp a
+    // few lines later; %-drains and floors read it as their base, so a
+    // heavy reservation shrinks the pump instead of starving it against a
+    // phantom maximum; a fully-reserved bar reads max 0 and pumps idle.
     cur: a => a.mana,
-    max: a => a.maxMana(),
-    room: a => Math.max(0, a.maxMana() - a.mana),
+    max: a => a.availableMaxMana(),
+    room: a => Math.max(0, a.availableMaxMana() - a.mana),
     drain: (a, amt) => {
       const take = Math.min(amt, Math.max(0, a.mana));
       a.mana -= take;
@@ -2575,7 +2595,7 @@ const CONDUIT_POOLS: Record<ConduitPool, {
     },
     feed: (a, amt) => {
       const before = a.mana;
-      a.mana = Math.min(a.maxMana(), a.mana + amt);
+      a.mana = Math.min(a.availableMaxMana(), a.mana + amt);
       return a.mana - before;
     },
   },

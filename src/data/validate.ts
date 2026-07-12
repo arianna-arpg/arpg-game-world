@@ -623,15 +623,24 @@ export function validateContent(): void {
       if (sp.floor !== undefined && (sp.floor < 0 || sp.floor >= 1)) out.push(`floor ${sp.floor} outside [0, 1)`);
       return out;
     };
+    // Mirrors Actor.updateConduits exactly: a held STANCE mode reachable
+    // from the def (spec + MATCHING castMode — a guard spec whose castMode
+    // isn't 'guard' never raises), ANY aura (toggle and duration both
+    // register in activeAuras), or a TOGGLE summon contract (only
+    // persistent.toggle populates summonToggles).
     const engages = (s: SkillDef): boolean =>
-      !!(s.guard || s.channel || s.chargeUp || s.overcharge
-        || (s.delivery.type === 'aura' && s.delivery.mode === 'toggle')
-        || s.delivery.type === 'summon');
+      !!((s.guard && s.castMode === 'guard')
+        || (s.channel && s.castMode === 'channel')
+        || (s.chargeUp && s.castMode === 'charge')
+        || (s.overcharge && s.castMode === 'overcharge')
+        || s.delivery.type === 'aura'
+        || (s.delivery.type === 'summon' && !!s.delivery.persistent?.toggle));
     for (const s of Object.values(SKILLS)) {
       if (!s.conduits?.length) continue;
       for (const sp of s.conduits) {
         for (const p of specProblems(sp)) warn(`skill ${s.id}: conduit ${p}`);
-        if ((sp.from === 'guard' || sp.to === 'guard') && !s.guard) {
+        // Spec + matching castMode, or the stance never actually raises.
+        if ((sp.from === 'guard' || sp.to === 'guard') && !(s.guard && s.castMode === 'guard')) {
           warn(`skill ${s.id}: conduit touches 'guard' but the skill raises no stance — the endpoint reads 0 forever`);
         }
       }
