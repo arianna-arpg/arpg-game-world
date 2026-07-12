@@ -48,6 +48,14 @@ export type SkillTag =
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 export const DAMAGE_TYPES: readonly DamageType[] = ['physical', 'fire', 'cold', 'lightning', 'chaos'];
 
+/** The three ELEMENTS — the canonical subset element-keyed mechanics iterate
+ *  (remnants, runes, conduction). For MEMBERSHIP and iteration only: sites
+ *  that PRIORITIZE among elements (ordered .find with a per-site fallback)
+ *  keep their own ordered literals — the order there is a local design
+ *  decision, not this list's business. */
+export const ELEMENTAL_TYPES = ['fire', 'cold', 'lightning'] as const;
+export type ElementalType = typeof ELEMENTAL_TYPES[number];
+
 /** Canonical per-element tint — the single source of truth for damage-flavored
  *  FX (death-burst orbs/implosions, martyrdom blasts, …) so a re-theme touches
  *  one place and every element (incl. `physical`) renders distinctly. */

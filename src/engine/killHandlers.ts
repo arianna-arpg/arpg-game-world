@@ -119,12 +119,13 @@ registerKillHandler({
   },
 });
 
-// THE GILDED SCAMP's hoard: its death pays a gem burst on top of whatever
-// its sack spills (the sack itself returns in World.kill — nothing the
-// scamp snatched is ever lost; this is the chase's own prize).
+// THE GILDED HOARD: a hoard-bearer's death pays a gem burst on top of
+// whatever its sack spills (the sack itself returns in World.kill — nothing
+// a scamp snatched is ever lost; this is the chase's own prize). Tag-keyed
+// like every sibling row: any def wearing 'gilded_hoard' joins the payout.
 registerKillHandler({
   id: 'scamp_hoard',
-  when: ctx => ctx.actor.defId === 'gilded_scamp' && ctx.credit,
+  when: ctx => ctx.actor.tag === 'gilded_hoard' && ctx.credit,
   run: ctx => {
     for (let i = 0; i < 3; i++) ctx.dropGemAt(ctx.actor.pos);
     ctx.text(ctx.actor.pos, 'the hoard spills!', '#e8c84a', 16);

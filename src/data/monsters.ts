@@ -2772,6 +2772,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: [],
     xp: 45,
     looter: { reach: 32 },
+    // The hoard-bearer role: its death spills a bonus gem burst (the
+    // scamp_hoard kill row keys on THIS tag, never the def id — any future
+    // gilded creature joins the payout by wearing it).
+    tag: 'gilded_hoard',
     // The purse under the sack: every solid blow also shakes ESSENCE loose —
     // the hunt trail that likely FIRST introduces the currency to a player.
     essenceSpill: {},

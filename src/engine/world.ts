@@ -60,7 +60,7 @@ import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocat
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
-import { ATTRIBUTE_IDS, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
+import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
@@ -8752,6 +8752,18 @@ export class World {
     return MIREILLE_GIFT_SKILLS.some(id => !!SKILLS[id] && !this.meta.knownSkills.has(id));
   }
 
+  /** The innkeep's prompt above her head while the player is near (renderer):
+   *  the welcome-gift invitation while the flasks are still owed, else the
+   *  locked-care note until any of her Vault services unlock. ROLE-BOUND like
+   *  its caravanner/bonewright/delver siblings — any body a package dresses
+   *  in npcRole 'innkeep' gets the prompt, no renderer edit. */
+  innkeepPrompt(): string | null {
+    if (!this.nearMireille()) return null;
+    if (this.mireilleGiftPending()) return 'Come here, dear — I keep flasks for new faces.';
+    if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
+    return null;
+  }
+
   /** Mireille's service, by which of her unlocks the account owns: restore LIFE,
    *  restore MANA, and/or grant a 5-minute +5% experience blessing — plus her
    *  WELCOME GIFT (both flask founts, first dwell, no unlock needed) and, with
@@ -14548,7 +14560,7 @@ export class World {
       && this.remnants.length < 14) {
       const rc = caster.sheet.get('remnantOnCast', tags, extra);
       if (rc > 0 && chance(Math.min(0.5, rc))) {
-        const els = (['fire', 'cold', 'lightning'] as const).filter(el => def.tags.includes(el));
+        const els = ELEMENTAL_TYPES.filter(el => def.tags.includes(el));
         if (els.length) {
           const ang = rand(0, Math.PI * 2);
           const r = rand(40, 70);
@@ -23757,7 +23769,7 @@ export class World {
 
   /** A remnant empowers exactly ONE cast of its element, then is spent. */
   private consumeRemnants(caster: Actor, def: SkillDef): void {
-    for (const el of ['fire', 'cold', 'lightning'] as const) {
+    for (const el of ELEMENTAL_TYPES) {
       if (def.tags.includes(el) && caster.buffs.has('remnant_' + el)) {
         caster.removeBuff('remnant_' + el);
       }
