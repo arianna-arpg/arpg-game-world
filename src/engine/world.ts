@@ -1443,17 +1443,23 @@ interface DescentRun {
   depth: number;
 }
 
-/** A "linger to act" timer with a CONSUMED latch: fires ONCE when `active` has held
- *  true for `threshold` seconds, then will NOT fire again until `active` goes false —
- *  i.e. the player must BREAK the dwell (move away / stop idling) to trigger it again.
- *  The reusable shape for proximity menus + one-shot dwell actions (the Caravan). NOT
- *  for continuous lingering like Mireille's heal, which wants to keep firing. */
+/** A "linger to act" timer with a CONSUMED latch: fires ONCE when `building`
+ *  has held true for `threshold` seconds, then will NOT fire again until
+ *  `engaged` goes false — ONE fire per APPROACH. The two conditions are
+ *  deliberately split: `engaged` is presence alone (in range/reach of the
+ *  object) and is all that holds the latch; `building` adds the accrual
+ *  gates (idle, stocked, becalmed…) and resets only the TIMER. So closing
+ *  the opened menu, swinging a sword, or the counter's own restock flicker
+ *  never re-prompts a hero camped beside the smith — they must step OUT of
+ *  the ring and return to be asked again. The reusable shape for proximity
+ *  menus + one-shot dwell actions (the Caravan). NOT for continuous
+ *  lingering like Mireille's heal, which wants to keep firing. */
 class Dwell {
   private t = 0;
   private consumed = false;
-  fire(active: boolean, dt: number, threshold: number): boolean {
-    if (!active) { this.t = 0; this.consumed = false; return false; }
-    if (this.consumed) return false;
+  fire(building: boolean, engaged: boolean, dt: number, threshold: number): boolean {
+    if (!engaged) { this.t = 0; this.consumed = false; return false; }
+    if (this.consumed || !building) { this.t = 0; return false; }
     this.t += dt;
     if (this.t < threshold) return false;
     this.consumed = true;
@@ -9788,10 +9794,12 @@ export class World {
       && this.dwellReachable(seat.actor.pos, vec(SALVAGE_SITE.x, SALVAGE_SITE.y));
   }
 
-  /** Linger at the bench → open the salvage/craft menu (flag → main loop). */
+  /** Linger at the bench → open the salvage/craft menu (flag → main loop).
+   *  ONE ask per approach: standing at the bench holds the latch; only
+   *  stepping out of range re-arms it. */
   private updateSalvage(dt: number): void {
-    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearSalvage();
-    if (!this.salvageGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    const engaged = !this.player.dead && !this.player.downed && this.nearSalvage();
+    if (!this.salvageGate.fire(engaged && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
     this.salvageDwellRequested = true;
   }
 
@@ -9811,10 +9819,11 @@ export class World {
       && this.dwellReachable(seat.actor.pos, vec(TRACKER_SITE.x, TRACKER_SITE.y));
   }
 
-  /** Linger by the fire → open the BESTIARY (flag → main loop). */
+  /** Linger by the fire → open the BESTIARY (flag → main loop). One ask per
+   *  approach (see Dwell). */
   private updateTracker(dt: number): void {
-    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearTracker();
-    if (!this.trackerGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    const engaged = !this.player.dead && !this.player.downed && this.nearTracker();
+    if (!this.trackerGate.fire(engaged && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
     this.trackerDwellRequested = true;
   }
 
@@ -9835,8 +9844,8 @@ export class World {
   }
 
   private updateOracle(dt: number): void {
-    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearOracle();
-    if (!this.oracleGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    const engaged = !this.player.dead && !this.player.downed && this.nearOracle();
+    if (!this.oracleGate.fire(engaged && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
     this.oracleDwellRequested = true;
   }
 
@@ -9862,11 +9871,22 @@ export class World {
     return VENDORS.some(v => v.salvage?.(this) && v.near(this, seat));
   }
 
-  /** Linger at a stocked counter → open the Vendor screen (flag → main). */
+  /** Linger at a stocked counter → open the Vendor screen (flag → main).
+   *  ONE ask per approach: being AT the counter (any near vendor, stocked or
+   *  not) holds the latch, so a hero camped by the smith is never re-prompted
+   *  by closing the screen, swinging a sword, or the restock timer minting
+   *  fresh shelves — only stepping out of range re-arms the ask. Stock still
+   *  gates the BUILD: an empty counter never opens a bare screen. */
   private updateVendors(dt: number): void {
-    const active = !this.player.dead && !this.player.downed && this.playerIdle()
-      && VENDORS.some(v => v.near(this, this.localSeat) && v.stock(this).length > 0);
-    if (!this.vendorGate.fire(active, dt, SALVAGE_CFG.stationDwell)) return;
+    let engaged = false, stocked = false;
+    if (!this.player.dead && !this.player.downed) {
+      for (const v of VENDORS) {
+        if (!v.near(this, this.localSeat)) continue;
+        engaged = true;
+        if (v.stock(this).length > 0) { stocked = true; break; }
+      }
+    }
+    if (!this.vendorGate.fire(engaged && stocked && this.playerIdle(), engaged, dt, SALVAGE_CFG.stationDwell)) return;
     this.vendorDwellRequested = true;
   }
 
@@ -10079,10 +10099,9 @@ export class World {
    *  Gated by the same law the portals answer to (canSail). */
   private updateSail(dt: number): void {
     const dock = this.portDock();
-    const active = !!dock && this.canSail()
-      && this.playerIdle() && dist(this.player.pos, dock.pos) <= 110
+    const engaged = !!dock && dist(this.player.pos, dock.pos) <= 110
       && this.dwellReachable(this.player.pos, dock.pos);
-    if (!this.sailGate.fire(active, dt, CARAVAN_DWELL)) return;
+    if (!this.sailGate.fire(engaged && this.canSail() && this.playerIdle(), engaged, dt, CARAVAN_DWELL)) return;
     this.enterSailing();
   }
 
@@ -10412,10 +10431,10 @@ export class World {
   /** Linger by the Caravanner → open the band menu (a UI callback; World can't import
    *  the UI). A cooldown keeps it from instantly re-opening after the player closes it. */
   private updateCaravan(dt: number): void {
-    const active = !this.player.dead && !this.player.downed && this.playerIdle() && this.nearCaravan();
-    // Fires ONCE per approach (consumed until the player breaks the dwell by moving
-    // away) — so closing the menu while still standing here won't re-open it.
-    if (!this.caravanGate.fire(active, dt, CARAVAN_DWELL)) return;
+    const engaged = !this.player.dead && !this.player.downed && this.nearCaravan();
+    // Fires ONCE per approach (consumed until the player steps OUT of range)
+    // — so closing the menu while still standing here won't re-open it.
+    if (!this.caravanGate.fire(engaged && this.playerIdle(), engaged, dt, CARAVAN_DWELL)) return;
     if (this.zone.id === START_ZONE) {
       this.caravanDwellRequested = true; // in town: the main loop opens the band menu
     } else {
@@ -22131,20 +22150,24 @@ export class World {
         // HOLDFAST: dwell beside the toll keeper to pay (a gem taken at random) or open
         // the bargain menu (drop-to-choose). Only while the gate is sealed + the wardens
         // un-roused — drawing steel cancels the parley. A CONSUMED latch ('done') keeps
-        // it from re-firing while you stand; it re-arms when you step away / act.
+        // it from re-firing while you stand; it re-arms ONLY when you step out of the
+        // ring (one parley per approach — closing the bargain menu or acting beside the
+        // keeper never re-prompts; the Dwell-gate discipline, hand-rolled for the ring).
         const keeper = this.holdfastKeeper();
         const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78)
           && this.dwellReachable(this.player.pos, keeper.pos, transitReach('holdfast'));
-        if (nearKeeper && this.playerIdle() && !this.player.push) {
-          if (this.holdfastDwellKey !== 'done') {
+        if (!nearKeeper) {
+          this.holdfastDwellKey = ''; // stepped out of the ring → re-arm
+        } else if (this.holdfastDwellKey !== 'done') {
+          if (this.playerIdle() && !this.player.push) {
             if (this.holdfastDwellKey !== 'holdfast') { this.holdfastDwellKey = 'holdfast'; this.holdfastDwellPos = vec(keeper!.pos.x, keeper!.pos.y); this.holdfastDwellStart = this.time; }
             if (this.time - this.holdfastDwellStart >= transitDwell('holdfast')) {
               this.holdfastDwellKey = 'done'; // consumed — won't re-fire until you move away
               this.onHoldfastDwell();
             }
+          } else {
+            this.holdfastDwellKey = ''; // acting/knocked resets PROGRESS — never the consumed latch
           }
-        } else {
-          this.holdfastDwellKey = ''; // stepped off / acting / knocked → re-arm
         }
       }
     }
