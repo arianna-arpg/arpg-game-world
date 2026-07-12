@@ -3511,6 +3511,49 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('addedCooldown', 'flat', GUARD_CAST_CFG.gatedCooldownPerLevel)],
     weight: 4, minDropLevel: 12,
   },
+
+  // --- The breaker suite: aim your damage at a DEFENSE LAYER ----------------
+  // The enemy-defense-textures doctrine read from the attacker's side: each
+  // gem tunes WHICH layer the supported skill's damage bites — poise bars,
+  // insight flow, energy shields — so hunting a texture is a build, and
+  // (since every lever is an ordinary stat/status) monsters wield the same
+  // knives back through their own kits.
+  concussive_blows: {
+    id: 'concussive_blows', name: 'Concussive Blows',
+    description: 'The bar-breaker: 15% less damage, but DOUBLE poise damage — and the break you earn is worth more: Sundered lasts 50% longer and your hits land 20% harder on the sundered. Crack the stance, then spend the window.',
+    color: '#c8a058',
+    mods: [
+      mod('damage', 'more', -0.15),
+      mod('poiseDamage', 'more', 1),
+      mod('sunderDuration', 'increased', 0.5),
+      mod('damageVs_sundered', 'flat', 0.2),
+    ],
+    perLevel: [mod('poiseDamage', 'increased', 0.15)],
+    weight: 5,
+  },
+  flowbreaker: {
+    id: 'flowbreaker', name: 'Flowbreaker',
+    description: 'The anti-dodge: hits land TOO TRUE TO READ — half the target\'s insight slip is denied outright, accuracy climbs 25%, and 35% of hits leave the target REELING (insight stops replenishing). The runner\'s rhythm, taken away.',
+    color: '#c8a8e8',
+    mods: [
+      mod('insightPen', 'flat', 0.5),
+      mod('accuracy', 'increased', 0.25),
+      mod('apply_reeling', 'flat', 0.35),
+    ],
+    perLevel: [mod('insightPen', 'flat', 0.06), mod('apply_reeling', 'flat', 0.04)],
+    weight: 5,
+  },
+  voidrend: {
+    id: 'voidrend', name: 'Voidrend',
+    description: 'The ward-eater: every point the target\'s energy shield soaks is SHREDDED for 1.8 — the pool strips fast and cheap — and 30% of hits leave it VOIDED (recharge stops cold). Made for the glass and the glimmering.',
+    color: '#9a8ae8',
+    mods: [
+      mod('esShred', 'more', 0.8),
+      mod('apply_voided', 'flat', 0.3),
+    ],
+    perLevel: [mod('esShred', 'more', 0.08), mod('apply_voided', 'flat', 0.03)],
+    weight: 5,
+  },
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);

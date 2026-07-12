@@ -3179,6 +3179,16 @@ export interface SkillDef {
    *  stacks consumed instead — (mult−1) × stacks MORE (Execution). */
   shatterStatus?: { statuses: string[]; mult: number; perStack?: boolean };
 
+  /** THE EXECUTIONER'S LICENSE: against a target whose POISE BAR IS BROKEN
+   *  (the live actor state, not the fading Sundered debuff), the hit
+   *  carries `mult` × the victim's MAX POISE as flat physical — the
+   *  cleaved bar paid back as burst, rolled into the ordinary hit so
+   *  crits, conversions and riders all apply. Pair with targeting
+   *  `requiresStatus: 'sundered'` for the deliberate execute (greyed
+   *  until the break window); the rider alone makes any swing
+   *  opportunistic. Enemies read the same field — bars break both ways. */
+  poiseReap?: { mult: number };
+
   /** Static Shock: hits also strip this fraction of the target's CURRENT
    *  life (typed, resisted, scaled by damageTaken — and it cannot kill). */
   currentLifeDamage?: number;

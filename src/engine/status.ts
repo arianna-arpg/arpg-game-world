@@ -332,6 +332,23 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     lashOut: { interval: 0.8, radius: 120, factor: 1.2 },
     mods: [mod('detectionRange', 'more', -0.4)],
   },
+  // REELING (the flow broken): INSIGHT stops replenishing while it lasts —
+  // the read is gone; what's already banked still spends. The anti-dodge
+  // status (Flowbreaker's teeth, the veilstalker's lash): pure data, since
+  // insight refills only through insightRegenPct and statuses mod the
+  // bearer. Counterplay runs both ways — enemies can be made to reel too.
+  reeling: {
+    label: 'Reeling', color: '#c8a8e8', duration: 4,
+    mods: [mod('insightRegenPct', 'more', -1)],
+  },
+  // VOIDED (the shield unsung): ENERGY-SHIELD recharge stops while it
+  // lasts — the rate floors (stat min leaves a negligible drip) and the
+  // wait stretches; what's still banked soaks as ever. The anti-ward
+  // status (Voidrend's teeth, the null adept's lance).
+  voided: {
+    label: 'Voided', color: '#9a8ae8', duration: 3,
+    mods: [mod('esRechargeRate', 'more', -1), mod('esRechargeDelay', 'increased', 1)],
+  },
   // TAUNTED (the challenge fabric): attention itself, as a status. The
   // APPLIER (casterId — refreshCaster: the newest shout wins) becomes the
   // bearer's whole fight: AI bearers — monsters, minions, mercenaries —

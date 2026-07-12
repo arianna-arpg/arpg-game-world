@@ -13409,6 +13409,18 @@ export class World {
         if (victim) victim.life = Math.max(1, victim.life - victim.life * t.drainsTargetLife);
       }
     }
+    // POISE REAP (the executioner's license): vs a poise-BROKEN target the
+    // hit carries the cleaved bar itself — mult × the victim's max poise as
+    // flat physical, folded into the ordinary roll (crits, conversions and
+    // riders all apply). Keys on the LIVE broken bar, so the usability
+    // window (targeting requiresStatus 'sundered') and the payoff can be
+    // tuned independently — and enemies reap broken players the same way.
+    if (def.poiseReap && targetInfo?.actor?.poiseBroken) {
+      const reap = targetInfo.actor.maxPoise() * def.poiseReap.mult;
+      if (reap > 0) {
+        flatBonus = { ...(flatBonus ?? {}), physical: (flatBonus?.physical ?? 0) + reap };
+      }
+    }
     // RESOURCE-AS-DAMAGE: what the press ACTUALLY PAID returns as flat
     // damage of the skill's OWN types (pro-rata over baseDamage, so it
     // feels like more of the skill and converts like everything typed),

@@ -278,8 +278,14 @@ export function mitigateTyped(
   if (total > 0 && target.insight > 0) {
     const momentum = target.insightMomentum();
     if (momentum > 0) {
+      // The attacker's insightPen DENIES a fraction of the slip — the blow
+      // too true to read (armorPen's rhythm-sibling). Since the pool only
+      // spends what it actually avoided, piercing also spares the meter:
+      // you beat the read, not the bank.
+      const pierce = opts?.attacker
+        ? Math.min(1, opts.attacker.sheet.get('insightPen', opts.tags, opts.extra)) : 0;
       const eff = target.sheet.get('insightEfficiency');
-      const want = total * target.sheet.get('insightDR') * momentum;
+      const want = total * target.sheet.get('insightDR') * momentum * (1 - pierce);
       const avoided = Math.min(want, target.insight * eff);
       if (avoided > 0) {
         target.insight = Math.max(0, target.insight - avoided / eff);
@@ -334,7 +340,9 @@ export function mitigateTyped(
     aura.ledger.balance += skim;
     total -= skim;
   }
-  return soakDamage(target, total);
+  return soakDamage(target, total, opts?.attacker
+    ? { pen: { attacker: opts.attacker, tags: opts.tags, extra: opts.extra } }
+    : undefined);
 }
 
 /** Apply a rolled packet to a defender. Returns what actually landed. */
@@ -534,7 +542,12 @@ function interruptEsRecharge(target: Actor): void {
  */
 function soakDamage(
   target: Actor, total: number,
-  opts?: { esBypass?: number; delayOnDrainOnly?: boolean },
+  opts?: {
+    esBypass?: number; delayOnDrainOnly?: boolean;
+    /** Attacker context for the shred levers (HITS only — the DoT path
+     *  deliberately passes none: afflictions seep, they don't shred). */
+    pen?: { attacker: Actor; tags?: ReadonlySet<SkillTag>; extra?: readonly Modifier[] };
+  },
 ): number {
   if (total <= 0) return total;
   if (!opts?.delayOnDrainOnly && target.sheet.get('energyShield') > 0) {
@@ -565,11 +578,18 @@ function soakDamage(
   // arrives seeps past the gate (esDotBypass); the rest drains the shield.
   if (total > 0 && target.es > 0) {
     const bypass = Math.min(1, Math.max(0, opts?.esBypass ?? 0));
-    const e = Math.min(target.es, total * (1 - bypass));
+    // ES SHRED (the anti-ward lever): the attacker's esShred multiplies
+    // shield drained per point of damage the shield soaks — above 1 the
+    // pool strips faster AND each stripped point spends less of the blow.
+    // At the base of 1 this is byte-identical to the classic drain.
+    const shred = opts?.pen
+      ? Math.max(0.25, opts.pen.attacker.sheet.get('esShred', opts.pen.tags, opts.pen.extra))
+      : 1;
+    const e = Math.min(target.es, total * (1 - bypass) * shred);
     if (e > 0) {
       const hadShield = target.es > 0.5;
       target.es -= e;
-      total -= e;
+      total -= e / shred;
       if (opts?.delayOnDrainOnly) {
         interruptEsRecharge(target);
       }

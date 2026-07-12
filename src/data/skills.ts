@@ -2550,6 +2550,77 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('guardStrength', 'increased', 0.12), mod('damage', 'increased', 0.05, ['spell'], 'guarding')] },
   },
 
+  // --- The breaker suite: skills aimed at a DEFENSE LAYER -------------------
+  // (Attacker-side texture hunting: poise bars, insight flow, energy
+  // shields. Every one carries an ai block — monsters hunt YOUR layers
+  // with the same verbs.)
+
+  sunder_maul: {
+    id: 'sunder_maul', name: 'Sunder Maul',
+    description: 'A slow overhead CRUMPLER built to break STANCES, not bodies: modest damage, but it hits poise two and a half times as hard and the Sundered it leaves lasts half again as long. The setup half of the executioner\'s grammar.',
+    tags: ['attack', 'melee', 'physical'], color: '#c8a058',
+    manaCost: 9, cooldown: 3, useTime: 0.7,
+    baseDamage: { physical: [14, 24] },
+    innateMods: [mod('poiseDamage', 'more', 1.5), mod('sunderDuration', 'increased', 0.5)],
+    delivery: { type: 'melee', range: 100, arcDeg: 90 },
+    effects: [{ type: 'damage' }],
+    requirements: { strength: 18 },
+    ai: { range: 95, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09), mod('poiseDamage', 'increased', 0.1)] },
+  },
+
+  verdict: {
+    id: 'verdict', name: 'The Verdict',
+    description: 'THE EXECUTE: usable only on a SUNDERED target — while their bar lies broken, the blow carries the cleaved poise itself as flat damage (150% of their maximum). Break the stance, then pass sentence; invest in Sundered duration to widen the court\'s hours. Enemies pass it too.',
+    tags: ['attack', 'melee', 'physical'], color: '#e84a3a',
+    manaCost: 14, cooldown: 8, useTime: 0.55,
+    baseDamage: { physical: [20, 34] },
+    targeting: { target: 'enemy', requiresStatus: 'sundered', castRange: 110 },
+    poiseReap: { mult: 1.5 },
+    delivery: { type: 'melee', range: 110, arcDeg: 60 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 40 },
+    ],
+    requirements: { strength: 22 },
+    ai: { range: 105, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  severing_lash: {
+    id: 'severing_lash', name: 'Severing Lash',
+    description: 'A whip-crack aimed at the RHYTHM, not the flesh: it reads true through 60% of the target\'s insight, rarely misses a runner, and half the time leaves them REELING — insight stops replenishing. The counter to everything that never stands still.',
+    tags: ['attack', 'melee', 'physical'], color: '#c8a8e8',
+    manaCost: 8, cooldown: 2.5, useTime: 0.45,
+    baseDamage: { physical: [12, 20] },
+    innateMods: [mod('insightPen', 'flat', 0.6), mod('accuracy', 'increased', 0.3)],
+    delivery: { type: 'melee', range: 145, arcDeg: 40 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'reeling', chance: 0.5 },
+    ],
+    requirements: { dexterity: 16, strength: 10 },
+    ai: { range: 140, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09), mod('insightPen', 'flat', 0.04)] },
+  },
+
+  null_lance: {
+    id: 'null_lance', name: 'Null Lance',
+    description: 'A humming void-dart that UNSINGS WARDS: every point an energy shield soaks is shredded double, and 60% of hits leave the shield VOIDED — recharge stops cold. Carried by null adepts for exactly one reason: mages.',
+    tags: ['spell', 'projectile', 'chaos'], color: '#9a8ae8',
+    manaCost: 9, cooldown: 1.5, useTime: 0.5,
+    baseDamage: { chaos: [10, 18] },
+    innateMods: [mod('esShred', 'more', 1)],
+    delivery: { type: 'projectile', speed: 420, radius: 7, range: 380 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'voided', chance: 0.6 },
+    ],
+    requirements: { intelligence: 16 },
+    ai: { range: 340, weight: 2, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('apply_voided', 'flat', 0.04)] },
+  },
+
   discipline: {
     id: 'discipline', name: 'Discipline',
     description: 'TOGGLE AURA (reserves 35 mana): you and allies in the radius gain +40 maximum energy shield. Capacitor and Insulation supports tune the recharge for everyone covered.',

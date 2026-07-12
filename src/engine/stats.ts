@@ -372,6 +372,16 @@ export const STAT_DEFS: Record<string, StatDef> = {
   chaosPen:       { label: 'Chaos Penetration', base: 0, min: 0, percent: true },
   /** Fraction of the victim's armor ignored by your physical hits. */
   armorPen:       { label: 'Armor Penetration', base: 0, min: 0, max: 1, percent: true },
+  /** Fraction of the victim's INSIGHT slip your hits DENY (armorPen's
+   *  rhythm-sibling, the anti-dodge lever): the blow lands too true to
+   *  read. The pool only spends what it actually avoided, so piercing
+   *  also spares the victim's meter — you beat the read, not the bank. */
+  insightPen:     { label: 'Insight Penetration', base: 0, min: 0, max: 1, percent: true },
+  /** ATTACKER multiplier on ENERGY SHIELD drained per point of damage the
+   *  shield soaks (hits only — DoTs seep past shields, they don't shred).
+   *  Above 1 strips the pool faster AND spends less of the blow per point
+   *  stripped; below 1 is the gentle hand that leaves wards standing. */
+  esShred:        { label: 'Energy Shield Shred', base: 1, min: 0.25 },
 
   // Sustain for the OTHER pools (life has lifeOnHit/lifeLeech; ward has
   // wardLeech — these complete the family).
