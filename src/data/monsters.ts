@@ -2986,6 +2986,92 @@ export const MONSTERS: Record<string, MonsterDef> = {
     faction: 'elemental',
   },
 
+  // --- The breaker bestiary: enemies that hunt YOUR defense layers -------
+  // (the enemy-defense-textures doctrine, attacker side: each of these
+  // wields one of the layer levers — poiseDamage, insightPen, esShred —
+  // through the same stats and skills the player's breaker suite uses.)
+
+  // The poise-crusher with the full executioner's grammar: maul until the
+  // bar breaks, then THE VERDICT lands the cleaved poise as burst. The
+  // pattern is readable and the counterplay is the lesson: don't let the
+  // bar break in reach of it.
+  pit_mauler: {
+    id: 'pit_mauler', name: 'Pit Mauler',
+    color: '#8a6a48', shape: 'octagon', radius: 18, material: 'fur', look: 'behemoth',
+    base: { life: 130, moveSpeed: 105, accuracy: 102, armor: 36, poise: 60, mana: 60, manaRegen: 6 },
+    mods: [mod('life', 'more', 0.3)],
+    skills: ['sunder_maul', 'verdict', 'claw'],
+    xp: 34, faction: 'beast', tags: ['beast'], adorn: 'horns',
+    brain: { type: 'juggernaut', enrage: 0.35 },
+    detection: 0.9,
+  },
+  // The anti-dodge predator: its lash reads through insight and leaves the
+  // quarry REELING — the runner's rhythm taken away, then run down.
+  veilstalker: {
+    id: 'veilstalker', name: 'Veilstalker',
+    color: '#9a86c8', shape: 'trapezoid', radius: 13, material: 'fur', look: 'stalker',
+    base: { life: 58, moveSpeed: 172, accuracy: 118, evasion: 60, insight: 40, mana: 40, manaRegen: 5 },
+    skills: ['severing_lash', 'claw'],
+    xp: 26, faction: 'predator', tags: ['beast'],
+    brain: { type: 'skirmish', withdraw: 1.2 },
+    detection: 1.15,
+  },
+  // The anti-mage: a wraith that exists to unsing wards — null lances
+  // shred energy shields double and stop their recharge cold.
+  null_adept: {
+    id: 'null_adept', name: 'Null Adept',
+    color: '#8a7ae0', shape: 'diamond', radius: 13, material: 'ethereal', look: 'blade_wraith',
+    base: { life: 52, moveSpeed: 132, accuracy: 104, mana: 120, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['null_lance', 'claw'],
+    xp: 28, faction: 'eldritch',
+    brain: { type: 'artillery' },
+    detection: 1.1,
+  },
+  // THE FIRST ES-POLE MONSTERS: the bestiary finally wears the shield the
+  // affix gamut sells. The sentinel's pool is the fight — and its floating
+  // AEGIS CRYSTAL (a breakable composite part) is what keeps the pool
+  // coming back: crack the crystal FIRST or duel a recharging wall.
+  // Voidrend and Null Lance are the knives it teaches you to carry.
+  glassguard_sentinel: {
+    id: 'glassguard_sentinel', name: 'Glassguard Sentinel',
+    color: '#a8d8e8', shape: 'rectangle', radius: 18, look: 'sentinel',
+    base: { life: 70, energyShield: 110, moveSpeed: 95, accuracy: 100, armor: 20, mana: 60, manaRegen: 6 },
+    mods: [mod('esRechargeRate', 'increased', 0.5)],
+    skills: ['frostbolt', 'heavy_strike'],
+    xp: 40, faction: 'elemental',
+    brain: { type: 'protector', target: { leash: { radius: 520, heal: true } } },
+    detection: 0.95,
+    parts: [{
+      monster: 'aegis_crystal', dx: -0.9, dy: 0.9, lifeFrac: 0.25, breakDamage: 0.1,
+      // Shattering the crystal all but silences the recharge — the pool
+      // it has is the pool it gets.
+      breakMods: [mod('esRechargeRate', 'more', -0.9)],
+    }],
+  },
+  // The sentinel's floating keystone — a full monster def, so it serves as
+  // a composite part today and an entity-creator composable tomorrow.
+  aegis_crystal: {
+    id: 'aegis_crystal', name: 'Aegis Crystal',
+    color: '#c8ecf8', shape: 'diamond', radius: 8, look: 'construct_pylon',
+    noNemesis: true,
+    base: { life: 45, energyShield: 20, moveSpeed: 0, mana: 60, manaRegen: 6 },
+    skills: ['spark_bolt'],
+    xp: 0, faction: 'elemental',
+    brain: { type: 'artillery' },
+  },
+  // The glimmer-chaff around the glass: tiny, shield-first zappers that
+  // teach the shred lesson cheap.
+  lumen_wisp: {
+    id: 'lumen_wisp', name: 'Lumen Wisp',
+    color: '#bfe8ff', shape: 'oval', radius: 9, look: 'gale_elemental',
+    base: { life: 14, energyShield: 30, moveSpeed: 168, mana: 60, manaRegen: 8 },
+    skills: ['spark_bolt'],
+    xp: 12, faction: 'elemental',
+    brain: { type: 'flanker' },
+    detection: 1.1,
+  },
+
   // --- The Sylvan court: wardens of the deep groves. Gnolls burn their
   // trees; the dead offend their soil. The wild beasts they let be.
 

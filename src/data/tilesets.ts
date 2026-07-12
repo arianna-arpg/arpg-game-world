@@ -680,6 +680,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'grove_singer', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'spitting_horror', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'fen_hound', weight: 1 },
+        // The canopy's anti-dodge answer: it reads the runner's rhythm.
+        { id: 'veilstalker', weight: 2, presence: { from: 6, fadeIn: 3 } },
         // The jungle's own green wood, waking.
         { id: 'sylvan_sapling', weight: 2, presence: { to: 12, fadeOut: 5 } },
         { id: 'twig_snarl', weight: 2, presence: { from: 4, fadeIn: 2, to: 22, fadeOut: 9 } },
@@ -800,7 +802,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'wasteland',
     // War-land keeps its ordnance: abandoned powder dumps that answer stray
     // fire — and the muster grounds the war was drilled in.
-    compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }],
+    compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }, { composition: 'fallen_colossus', chance: 0.12 }],
     nameFirst: ['Blasted', 'Cindertorn', 'Hellcracked', 'Ruinous', 'Emberblight', 'Scorched', 'Riftburnt', 'Ashbroken', 'Brimstone', 'Sulfurous', 'Cracked', 'Desolate', 'Smouldering', 'Wretched', 'Hateforged', 'Slagheap', 'Damnedmarch', 'Charbroken'],
     nameSecond: ['Waste', 'Barrens', 'Scar', 'Reach', 'Expanse', 'Flats', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Cinders', 'Drift', 'Span', 'Wilds'],
     theme: {
@@ -1892,6 +1894,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         { id: 'conclave_blood_demon', weight: 3 },
         { id: 'conclave_eldritch_horror', weight: 1 },
+        // The ward-unsinger stalks where wards matter most.
+        { id: 'null_adept', weight: 2 },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1970,7 +1974,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // maze of corridors and chambers carved into the rock).
   highland: {
     id: 'highland', biome: 'highland',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'powder_cache', chance: 0.18 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.14 }],
     nameFirst: ['Craggy', 'Windswept', 'Stoneback', 'Highreach', 'Granite', 'Cloudbound', 'Rugged', 'Skyworn', 'Bleakcrag', 'Frostcap', 'Eagle-Haunted', 'Hewnstone', 'Loftbound', 'Grey-Peaked', 'Stormcrest', 'Boulderfall', 'Wind-Scoured', 'Stark'],
     nameSecond: ['Pass', 'Crags', 'Bluffs', 'Heights', 'Ridge', 'Tor', 'Summit', 'Escarp', 'Highlands', 'Cairn', 'Peaks', 'Spur', 'Scree', 'Cliffs', 'Saddle', 'Overlook'],
     theme: {
@@ -2003,6 +2007,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'stone_sentinel', weight: 2, presence: { from: 10, fadeIn: 5 } },
         { id: 'troll_mauler', weight: 1, presence: { from: 9, fadeIn: 5 } },
         { id: 'alpha_stalker', weight: 2, presence: { from: 10, fadeIn: 5 } },
+        // The crag executioner: breaks the bar, then passes The Verdict.
+        { id: 'pit_mauler', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'gale_elemental', weight: 1, presence: { to: 18, fadeOut: 9 } },
         // The Horned Tribes' home crags — the full muster, khan at depth.
         { id: 'beastkin_gorer', weight: 3 },
@@ -2169,6 +2175,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'hex_weaver', weight: 1, presence: { from: 8, fadeIn: 4 } },
         // The leyline's own batteries.
         { id: 'shard_spire', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        // The ES POLE lives here: glimmer-chaff early, the glass wall deeper.
+        { id: 'lumen_wisp', weight: 3, presence: { to: 14, fadeOut: 6 } },
+        { id: 'glassguard_sentinel', weight: 2, presence: { from: 7, fadeIn: 4 } },
       ],
     },
     spawnerId: 'rime_stone',
@@ -2296,7 +2305,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // bbox. A wide-open, exploration-leaning hub (objectives favour clear/escape).
   grassland: {
     id: 'grassland', biome: 'field',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }, { composition: 'powder_cache', chance: 0.15 }, { composition: 'war_camp', chance: 0.14 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }, { composition: 'powder_cache', chance: 0.15 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.1 }],
     nameFirst: ['Sunlit', 'Windswept', 'Verdant', 'Rolling', 'Emerald', 'Goldengrass', 'Wildflower', 'Open', 'Boundless', 'Whispergrass', 'Far-Reaching', 'Sunwashed', 'Breezy', 'Tallgrass', 'Endless', 'Sweeping', 'Lark-Sung', 'Greenswept'],
     nameSecond: ['Fields', 'Meadows', 'Expanse', 'Greens', 'Pastures', 'Lowlands', 'Reach', 'Plains', 'Prairie', 'Steppe', 'Sprawl', 'Veldt', 'Downs', 'Grasslands', 'Range', 'Heath'],
     theme: {

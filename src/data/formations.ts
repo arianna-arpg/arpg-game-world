@@ -516,3 +516,37 @@ registerFormation({
     { kind: 'hay_bale', radius: [10, 13], every: 3, jitter: 10, rot: true },
   ],
 });
+
+// --- THE FALLEN COLOSSUS (the ruin-at-landmark-scale kit) ---------------------
+// Something vast broke here long before the map had a name. The breaker
+// pass's set dressing: everything with a bar breaks, given time. Four kinds,
+// all existing painters in stone clothes (statue / boulder / log / slab).
+registerDoodadRule('colossus_head', {
+  overlap: 'solid', blocksMove: true, spacing: 34,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('colossus_fist', {
+  overlap: 'solid', blocksMove: true, spacing: 28,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('broken_column', {
+  overlap: 'solid', blocksMove: true, spacing: 24,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('ruin_plinth', {
+  overlap: 'solid', blocksMove: true, spacing: 26,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  brittle: { on: ['hit'], orbChance: 0.1, text: 'the plinth crumbles!', color: '#a8a08e' },
+});
+
+// The collapsed colonnade: column drums down a long line, a fist and the
+// odd surviving plinth punctuating the fall.
+registerFormation({
+  id: 'colossus_wreck', arrange: 'line', span: [190, 320], step: 48,
+  pieces: [
+    { kind: 'broken_column', radius: [11, 16], jitter: 12, rot: true },
+    { kind: 'ruin_plinth', radius: [12, 16], every: 3, jitter: 10, rot: true },
+    { kind: 'colossus_fist', radius: [14, 19], every: 4, jitter: 14, rot: true },
+    { kind: 'rubble', radius: [9, 13], every: 2, jitter: 18, rot: true },
+  ],
+});

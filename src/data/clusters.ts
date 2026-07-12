@@ -77,3 +77,18 @@ registerCluster({
   ],
   poi: true,
 });
+
+// THE COLOSSUS CROWN: the fallen head itself, half-buried in what it shed
+// coming down — the centerpiece stands inside the clearing minted for it
+// (fallen_colossus composition; geometry contract with its pre-clearing).
+registerCluster({
+  id: 'colossus_crown',
+  anchor: { radius: 24, kind: 'colossus_head' },
+  pieces: [
+    { kind: 'colossus_head', radius: [20, 26], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'rubble', radius: [8, 14], count: [3, 5], ring: [34, 74], rot: true },
+    { kind: 'scree', radius: [10, 16], count: [2, 4], ring: [44, 92], rot: true },
+    { kind: 'broken_column', radius: [10, 15], count: [1, 3], ring: [50, 100], rot: true },
+  ],
+  poi: true,
+});

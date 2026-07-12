@@ -554,6 +554,23 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'palisade', order: 52, longShadow: 0.6,
     params: { fill: '#6a5238', edge: '#2c2418', material: 'wood' },
   },
+  // --- The fallen-colossus kit: ruin at landmark scale, stone clothes -------
+  colossus_head: {
+    painter: 'statue', order: 54, shadow: 0.65, longShadow: 1.2,
+    params: { stone: '#9a9488', moss: '#5a6e42' },
+  },
+  colossus_fist: {
+    painter: 'boulder', order: 54, shadow: 0.6, longShadow: 0.8,
+    params: { color: '#95907f', edge: '#4a463c', material: 'stone', cracks: 0.7, grain: true },
+  },
+  broken_column: {
+    painter: 'log', order: 52, shadow: 0.5, longShadow: 0.6,
+    params: { color: '#8f8a7a', moss: '#5a6e42' },
+  },
+  ruin_plinth: {
+    painter: 'slab', order: 53, shadow: 0.55, longShadow: 0.9,
+    params: { shape: 'monolith', fill: '#8a8578', edge: '#45413a' },
+  },
   // --- The brittle kit (DoodadRule.brittle): lifeless breakables ------------
   clay_pots: { painter: 'potCluster', order: 52, shadow: 0.35 },
   // A fissured plug: the boulder painter with cracks turned all the way up —

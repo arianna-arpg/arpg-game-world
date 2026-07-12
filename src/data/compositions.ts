@@ -158,6 +158,20 @@ registerComposition({
   post: [{ kind: 'formation', formation: 'powder_cache', at: 'dump', count: [1, 1] }],
 });
 
+// THE FALLEN COLOSSUS: something vast broke here, long before the map had
+// a name — the head half-buried in its own rubble at dead center, the
+// colonnade it once crowned collapsed in a line across the wreck-field.
+// The breaker pass's monument: everything with a bar breaks, given time.
+registerComposition({
+  id: 'fallen_colossus',
+  sites: [{ id: 'wreck', radius: [150, 200] }],
+  pre: [{ kind: 'clearing', at: 'wreck', count: [1, 1], radius: [85, 115] }],
+  post: [
+    { kind: 'cluster', cluster: 'colossus_crown', at: 'wreck', count: [1, 1] },
+    { kind: 'formation', formation: 'colossus_wreck', at: 'wreck', count: [1, 1] },
+  ],
+});
+
 // A WAR CAMP: a muster ground stamped into its own clearing — a spiked
 // fence punctuated by standards, and inside it the furniture of drill and
 // mess (dummies that burst into straw, racks that clatter, a drum, a fire).
