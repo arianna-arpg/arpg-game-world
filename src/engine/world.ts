@@ -2869,6 +2869,17 @@ export class World {
     // flag-off case is a no-op. (Charts from this zone's context, like the lazy path did.)
     if (!isCave) this.eagerChartNeighbors(def);
 
+    // ROADLESS-DIMENSION HEAL: a persisted cross-edge into (or out of) a
+    // dimension that has since sworn off its road (DimensionEntry.road:
+    // false) strips at load — older saves carried a Firmament↔surface road,
+    // and a stripped edge heals the def permanently (worldstate tolerance).
+    if (def.exits.some(e => e.crossDim)) {
+      const roadless = (to: string): boolean =>
+        [def.dimension, this.zoneMap[to]?.dimension].some(d =>
+          d !== undefined && dimensionDef(d).entry?.road === false);
+      const kept = def.exits.filter(e => !e.crossDim || !roadless(e.to));
+      if (kept.length !== def.exits.length) def.exits = kept;
+    }
     this.exits = def.exits.map((e, i) => this.placeExit(e, i));
     // Stash the boundary annotations on the def (index-aligned, TRANSIENT —
     // re-derived every load) so generateLayout below can erect the gate
@@ -3441,7 +3452,10 @@ export class World {
         }
       }
       this.collapse = buildZoneCollapse(cspec, this.walk,
-        new Rng((this.currentZoneSeed ^ COLLAPSE_CFG.salt) >>> 0), this.zoneEntry, goal);
+        new Rng((this.currentZoneSeed ^ COLLAPSE_CFG.salt) >>> 0), this.zoneEntry, goal,
+        // Every exit portal HOLDS its ground (the anti-soft-lock floor): the
+        // melt may strand you from a door tactically, never permanently.
+        this.exits.map(e => vec(e.pos.x, e.pos.y)));
     }
 
     // THE ZONE-RUNTIME REGISTRY (see buildZoneRuntimes): every package's
@@ -4260,6 +4274,11 @@ export class World {
       // everything on the town).
       const originId = (this.caveStack[0] ?? this.caveReturn)?.zoneId ?? START_ZONE;
       const surfaceAnchor = this.zoneMap[originId] ?? this.zoneMap[START_ZONE];
+      // A ROADLESS dimension (DimensionEntry.road: false — the Aetherial)
+      // mints its gate with NO cross-edge in either direction: the realm is
+      // reached by its own mechanism alone. A roaded gate (the Hellgate)
+      // keeps the classic crossDim back-edge — THE one sanctioned crossing.
+      const roadless = dim.entry?.road === false;
       const gen = placeZoneAt(surfaceAnchor.map, surfaceAnchor, this.zoneMap, this.nextGenId++, {
         id: gateId,
         tileset: pickTilesetForBiome(gateSpec.biome, new Rng((this.manifest.seed ^ gateSpec.seedSalt) >>> 0)) ?? 'wasteland',
@@ -4274,10 +4293,10 @@ export class World {
         forceWaypoint: dim.waypoints !== false,
         dimension: dim.id,
         objective: { kind: 'clear' }, // arrivals carry no entryFrom — never gated
-        // The way home is placeZoneAt's back-edge to the (other-dimension)
-        // anchor — THE one sanctioned crossing, marked crossDim on the exit
-        // so every seal/validator knows it from a defect.
-        gateCross: true,
+        // A realm HUB fans wide: the gate is where the dimension's own web
+        // grows from, so it opens three ways instead of the frontier 1-2.
+        forceFrontiers: 3,
+        ...(roadless ? { noBackEdge: true } : { gateCross: true }),
       });
       // No onNodeCharted: gate zones sit outside every overlay's ledgers.
       this.zoneMap[gateId] = gen;

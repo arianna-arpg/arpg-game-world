@@ -119,6 +119,11 @@ export interface CollapseSpec {
   goal?: { doodad?: string };
   /** Radius around the goal that never melts (default COLLAPSE_CFG). */
   goalClear?: number;
+  /** Radius around every OTHER held point (exit portals — the World passes
+   *  them) that never melts (default COLLAPSE_CFG.portalClear). The way out
+   *  must always have ground to stand on — a melted portal is a soft-lock,
+   *  not a challenge (the fall stays the pressure; the door stays a door). */
+  portalClear?: number;
   /** Radius around the entry protected from AMBIENT melt for `entryGrace`
    *  seconds (contact still respects only the goal platform). */
   entryClear?: number;
@@ -137,6 +142,9 @@ export const COLLAPSE_CFG = {
   goalClear: 140,
   entryClear: 120,
   entryGrace: 10,
+  /** Default never-melt radius around every exit portal (the anti-soft-lock
+   *  floor — smaller than the goal's so retreat reads possible, not cozy). */
+  portalClear: 95,
   /** Default coyote seconds before a voided cell drops its occupant. */
   fallGrace: 0.35,
   /** Default spine halo (cells). */
@@ -179,7 +187,8 @@ export class CollapseField {
   readonly goalPos: { x: number; y: number };
 
   constructor(spec: CollapseSpec, walk: CollapseWalk, rng: CollapseRng,
-    entry: { x: number; y: number }, goal: { x: number; y: number }) {
+    entry: { x: number; y: number }, goal: { x: number; y: number },
+    holds: readonly { x: number; y: number }[] = []) {
     this.spec = spec;
     this.walk = walk;
     this.goalPos = { x: goal.x, y: goal.y };
@@ -201,14 +210,20 @@ export class CollapseField {
       canMelt[i] = walk.isWalkable(x, y) && this.meltable.has(walk.regionAt(x, y));
       if (!canMelt[i]) this.state[i] = CollapseCell.Immune;
     }
-    // The goal platform never melts; the entry pad holds against the ambient
-    // clock for a grace (contact still spares only the goal).
+    // The goal platform never melts, and neither does the ground under any
+    // HELD point (exit portals — the World passes them): the way out always
+    // has floor. The entry pad holds against the ambient clock for a grace
+    // (contact still spares only the true immunities).
     const goalClear = spec.goalClear ?? COLLAPSE_CFG.goalClear;
+    const portalClear = spec.portalClear ?? COLLAPSE_CFG.portalClear;
     const entryClear = spec.entryClear ?? COLLAPSE_CFG.entryClear;
     const entryGrace = spec.entryGrace ?? COLLAPSE_CFG.entryGrace;
     for (let i = 0; i < n; i++) {
       if (this.state[i] === CollapseCell.Immune) continue;
-      if (Math.hypot(cx(i) - goal.x, cy(i) - goal.y) <= goalClear) this.state[i] = CollapseCell.Immune;
+      if (Math.hypot(cx(i) - goal.x, cy(i) - goal.y) <= goalClear) { this.state[i] = CollapseCell.Immune; continue; }
+      for (const h of holds) {
+        if (Math.hypot(cx(i) - h.x, cy(i) - h.y) <= portalClear) { this.state[i] = CollapseCell.Immune; break; }
+      }
     }
 
     // --- The spine: the entry→goal walk over meltable+walkable ground. -----
@@ -434,10 +449,12 @@ export class CollapseField {
 }
 
 /** Stand a zone's collapse up, or null when the theme asks for none / the
- *  zone has no walk grid to melt (convex layouts can't collapse). */
+ *  zone has no walk grid to melt (convex layouts can't collapse). `holds`
+ *  are the never-melt anchors beyond the goal — every exit portal. */
 export function buildZoneCollapse(spec: CollapseSpec | undefined,
   walk: CollapseWalk | null, rng: CollapseRng,
-  entry: { x: number; y: number }, goal: { x: number; y: number } | null): CollapseField | null {
+  entry: { x: number; y: number }, goal: { x: number; y: number } | null,
+  holds: readonly { x: number; y: number }[] = []): CollapseField | null {
   if (!spec || !walk) return null;
-  return new CollapseField(spec, walk, rng, entry, goal ?? entry);
+  return new CollapseField(spec, walk, rng, entry, goal ?? entry, holds);
 }

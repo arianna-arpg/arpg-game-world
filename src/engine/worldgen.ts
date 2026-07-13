@@ -122,6 +122,11 @@ export interface ZoneSpec {
   /** Push a reciprocal road onto the anchor (quest/bounty). The frontier path
    *  leaves this false — travelThrough mutates the existing '?' exit instead. */
   linkBack?: boolean;
+  /** Mint with NO back-edge to the anchor while staying CHARTED + visible (a
+   *  roadless dimension gate — DimensionEntry.road: false). Unlike `floating`
+   *  it never wires in later: the zone is reached by its own mechanism (a
+   *  geyser, a fall), not by road. */
+  noBackEdge?: boolean;
   /** Mint UNCHARTED + DISCONNECTED: no back-edge, no reciprocal, no weave — a
    *  fog-of-war target wired into the graph later by connectFloatingZone on
    *  approach. The deliberate inverse of a force-connected directed mint. */
@@ -564,7 +569,7 @@ export function placeZoneAt(
   const srcDim = src?.dimension ?? 'surface';
   const myDim = spec.dimension ?? 'surface';
   let backEdge: ZoneExitDef[] = [];
-  if (src && !spec.floating) {
+  if (src && !spec.floating && !spec.noBackEdge) {
     if (srcDim === myDim) backEdge = [{ to: src.id, side: backSide }];
     else if (spec.gateCross) backEdge = [{ to: src.id, side: backSide, crossDim: true }];
     else {

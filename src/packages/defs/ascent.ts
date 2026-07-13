@@ -62,6 +62,10 @@ const SERAPHIC_FACTION: FactionSpec = {
   ],
 };
 
+/** The launch shelves' reserved name pool ("<X> Crossing" — shelves alone
+ *  wear 'Crossing'; the realm web's pools dropped it to keep the map honest). */
+const CROSSING_NAMES = ['Skyshoal', 'Cloudreach', 'Dawnfield', 'Empyrean', 'Heavenspan', 'Zenith', 'Aurelian', 'Vesper'];
+
 // THE SHELF MOUTH: any placed 'sky_geyser' doodad is a dwell-to-ride launch
 // (SidezoneDef.traversal = the sky_launch cinematic; the engine captures the
 // parent's aerial as the shelf's understory during the windup). The pocket
@@ -79,6 +83,11 @@ registerSidezone({
     // The shelf hangs DIRECTLY over its geyser: the anchor maps falls back
     // onto the land 1:1 and frames the understory's captured window.
     def.below = { zoneId: parent.id, ax: pos.x, ay: pos.y };
+    // The shelf is AETHER GROUND: the biome tag keeps the surface fauna
+    // fallback out (an unset biome reads the 'plains' WILDLIFE table — the
+    // hares-arming-the-clouds incident) and lets biome-keyed systems read
+    // the shelf honestly.
+    def.biome = 'aether';
     // The crossing runs hotter than the land below (floored by the hero —
     // a late return to an old geyser still puts up a fight).
     def.level = Math.max(parent.level + ASCENT_SURGE.shelfLevelBonus,
@@ -86,7 +95,12 @@ registerSidezone({
     // Crossing IS the objective: the shelf trickles wardens forever and pays
     // its bounty at the way out — never a sealed exit over a melting floor.
     def.objective = { kind: 'escape', interval: ASCENT_SURGE.shelfTrickle };
-    def.name = `${def.name.replace(/ Breach$/, '')}`;
+    // A RESERVED name shape: every launch shelf is "<X> Crossing" — and only
+    // shelves are (the aether web pools dropped 'Crossing'), so the map can
+    // never confuse a transient crossing with realm country. Deterministic
+    // per shelf; the rolled variant face keeps its suffix.
+    const first = CROSSING_NAMES[(seed >>> 3) % CROSSING_NAMES.length];
+    def.name = `${first} Crossing${def.variantName ? ` (${def.variantName})` : ''}`;
     return def;
   },
 });

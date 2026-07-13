@@ -2515,7 +2515,10 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'aether',
     biome: 'aether',
     nameFirst: ['Aether', 'Empyrean', 'Dawnfield', 'Cloudreach', 'Heavenspan', 'Skyshoal', 'Zenith'],
-    nameSecond: ['Shelf', 'Steps', 'Drift', 'Reaches', 'Causeway', 'Crossing', 'Shoal'],
+    // 'Crossing' is RESERVED for launch shelves (defs/ascent.ts renames its
+    // pockets "<X> Crossing") — web zones must never collide with a shelf's
+    // name shape or the map reads as a loop that isn't there.
+    nameSecond: ['Shelf', 'Steps', 'Drift', 'Reaches', 'Causeway', 'Shoal', 'Expanse'],
     theme: {
       floor: '#dfe6f4', grid: '#c2cde4', border: '#8fa3cc',
       obstacle: '#e7ecf7', obstacleEdge: '#a9b6d4', accent: '#ffe9a8',

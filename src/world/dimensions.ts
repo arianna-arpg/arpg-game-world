@@ -35,6 +35,13 @@ export interface DimensionEntry {
     /** Gate seed = manifest.seed ^ seedSalt (deterministic across clients). */
     seedSalt: number;
   };
+  /** Does the gate keep a WALKABLE ROAD to its surface anchor (the Hellgate
+   *  pattern — default true)? `false` = the gate mints with NO cross-edge in
+   *  either direction: the dimension touches the world only through its own
+   *  entry mechanism (the Aetherial: geysers up, falls down — a realm you
+   *  could stroll into from a crossroads portal is not a realm above the
+   *  sky). Persisted cross-edges from older saves heal at load. */
+  road?: boolean;
   /** A DOODAD KIND that stands as this dimension's realm gate wherever a
    *  layout places one (the Ascent's shining arch at a cloud shelf's far
    *  end). The engine's realm-gate dwell loop scans zone doodads against
@@ -214,6 +221,10 @@ registerDimension({
     kind: 'sky_launch',
     gate: { id: 'ae_gate', name: 'The Firmament', biome: 'aether_sanctum', seedSalt: 0xa54c }, // 'ASCent'
     gateDoodad: 'ascendant_gate',
+    // NO ROAD DOWN: heaven is not a neighborhood. The realm touches the
+    // world through geysers and falls alone — the Firmament keeps no
+    // walkable edge to the surface (and older saves' edges heal at load).
+    road: false,
   },
 });
 
