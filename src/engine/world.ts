@@ -115,6 +115,7 @@ import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_CFG, FogField } from './fog';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
+import { buildZoneFlux, ConjuredGround, FLUX_CFG, type FluxField } from './flux';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
@@ -1586,6 +1587,15 @@ export class World {
    *  flakes inward, and only the eroding causeway to the goal stands last.
    *  Zone-transient (rebuilt each loadZone; the dream re-knits on return). */
   collapse: CollapseField | null = null;
+  /** THE LIVING FLUX (engine/flux.ts): this zone's SHIFTING ground, when its
+   *  theme carries a FluxSpec — pads phase on seeded rhythms, carrier rafts
+   *  shuttle their lanes bearing riders, gusts shove. Zone-transient. */
+  flux: FluxField | null = null;
+  /** CONJURED GROUND (engine/flux.ts): the ledger of walkable cloud skills
+   *  called into being (World.conjureCloud) — over any conjurable void, in
+   *  any grid zone. Annexes cells from collapse/flux and returns them on
+   *  expiry; it frays and lets go like everything else. Zone-transient. */
+  conjured: ConjuredGround | null = null;
   /** A LIVE VERTICAL CROSSING (engine/traversal.ts): the geyser launch / the
    *  fall through the clouds. While set, the player is pinned, locked out of
    *  skills and untargetable; the zone swap fires behind the veil. */
@@ -3454,6 +3464,38 @@ export class World {
         // melt may strand you from a door tactically, never permanently.
         this.exits.map(e => vec(e.pos.x, e.pos.y)));
     }
+
+    // THE LIVING FLUX (engine/flux.ts): stand this zone's shifting ground up
+    // when its theme asks for it — pads, lanes and carriers all derive from
+    // the kinds the layout painted; the salted stream keeps the fog contract.
+    // The ladder anchor is the spec's named doodad, else the farthest exit.
+    this.flux = null;
+    const fspec = this.zone.theme.flux;
+    if (fspec && this.walk instanceof GridWalkField) {
+      let fgoal: Vec2 | null = null;
+      if (fspec.goal?.doodad) {
+        const g = this.doodads.find(d => d.kind === fspec.goal!.doodad);
+        if (g) fgoal = vec(g.pos.x, g.pos.y);
+      }
+      if (!fgoal) {
+        let bd = -1;
+        for (const e of this.exits) {
+          const d = dist(e.pos, this.zoneEntry);
+          if (d > bd) { bd = d; fgoal = vec(e.pos.x, e.pos.y); }
+        }
+      }
+      this.flux = buildZoneFlux(fspec, this.walk,
+        new Rng((this.currentZoneSeed ^ FLUX_CFG.salt) >>> 0), this.zoneEntry, fgoal,
+        this.exits.map(e => vec(e.pos.x, e.pos.y)));
+    }
+
+    // CONJURED GROUND: every grid zone gets the ledger (conjurable region
+    // kinds gate where it actually works — data, not a biome check). Wired
+    // to whichever fabrics stood up so annexed cells melt/phase honestly.
+    this.conjured = this.walk instanceof GridWalkField
+      ? new ConjuredGround(this.walk, id => !!regionKind(id)?.conjurable,
+        { collapse: this.collapse, flux: this.flux })
+      : null;
 
     // THE ZONE-RUNTIME REGISTRY (see buildZoneRuntimes): every package's
     // per-zone reset runs, then — on ordinary ground — every enter() fires.
@@ -22584,6 +22626,8 @@ export class World {
     this.updateHeat(dt);
     this.updateFog(dt);
     this.updateCollapse(dt);
+    this.updateFlux(dt);
+    this.conjured?.update(dt);
     this.updateShrines();
     this.updateAltars();
     this.updateChests(dt);
@@ -23274,15 +23318,7 @@ export class World {
   private updateCollapse(dt: number): void {
     const cf = this.collapse;
     if (!cf) return;
-    const eligible: Actor[] = [];
-    for (const a of this.actors) {
-      // Grounded bodies only: the airborne, the floating, and the mid-leap
-      // are the sky's own; a traversing player is already between worlds.
-      if (a.dead || a.flying || a.levitates || a.leap || a.dash) continue;
-      if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
-      eligible.push(a);
-    }
-    const ev = cf.update(dt, eligible);
+    const ev = cf.update(dt, this.groundFallEligible());
     if (ev.voided.length) {
       // A few soft cloud-bursts per tick sell the crumble without flooding.
       for (let i = 0; i < Math.min(6, ev.voided.length); i++) {
@@ -23295,10 +23331,31 @@ export class World {
       this.text(vec(this.player.pos.x, this.player.pos.y - 56), 'the causeway is failing — run!', '#ffd27f', 16);
       this.shake = Math.max(this.shake, 5);
     }
-    if (!ev.fell.length) return;
+    this.routeSkyFalls(ev.fell);
+  }
+
+  /** Who the vertical fabrics may drop this tick: grounded bodies only — the
+   *  airborne, the floating and the mid-leap are the sky's own; a traversing
+   *  player is already between worlds. Shared by collapse and flux. */
+  private groundFallEligible(): Actor[] {
+    const eligible: Actor[] = [];
+    for (const a of this.actors) {
+      if (a.dead || a.flying || a.levitates || a.leap || a.dash) continue;
+      if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
+      eligible.push(a);
+    }
+    return eligible;
+  }
+
+  /** Route who a vertical fabric reports fallen — the ONE consequence path
+   *  (collapse, flux and expired conjured ground all land here): the player
+   *  drops through to the land below, allies scramble to standing ground,
+   *  and the sky simply keeps whatever else it swallowed. */
+  private routeSkyFalls(fell: readonly { pos: Vec2 }[]): void {
+    if (!fell.length) return;
     const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
-    for (const f of ev.fell) {
-      const a = f as Actor; // the field hands back the same objects it was given
+    for (const f of fell) {
+      const a = f as Actor; // the fields hand back the same objects they were given
       if (a === this.player) {
         this.beginSkyfall();
         continue;
@@ -23317,6 +23374,70 @@ export class World {
       const idx = this.actors.indexOf(a);
       if (idx >= 0) this.actors.splice(idx, 1);
     }
+  }
+
+  // --- THE FLUX consequences (engine/flux.ts) --------------------------------
+
+  /** Tick the zone's shifting ground and route what it reports: the drift's
+   *  opening cue, carrier riders (moved through the mover contract), gust
+   *  shoves, dispersal puffs, and every fall — the same skyfall the collapse
+   *  routes. */
+  private updateFlux(dt: number): void {
+    const ff = this.flux;
+    if (!ff) return;
+    const eligible = this.groundFallEligible();
+    const ev = ff.update(dt, eligible);
+    if (ev.driftBegun) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 56), 'the drift begins — the clouds will not wait', '#cfe0ff', 16);
+      this.shake = Math.max(this.shake, 3);
+      // Anything the spawn tables stood on cloud that has now LEFT scrambles
+      // to standing ground once — packs placed mid-lane don't rain out of a
+      // zone the player hasn't even crossed yet. Fliers never needed it.
+      for (const a of eligible) {
+        if (a === this.player || a.team === 'player') continue;
+        if (ff.voidAt(a.pos.x, a.pos.y)) {
+          const s = this.walk?.snapToWalkable(a.pos);
+          if (s) a.pos = vec(s.x, s.y);
+        }
+      }
+    }
+    // Carrier riders travel their raft's delta THROUGH confinement (the
+    // mover contract: per-frame movers pass `from`), so a raft sliding past
+    // an isle hands its rider off instead of shoving them through it.
+    for (const r of ev.rode) {
+      const a = r.a as Actor;
+      const to = this.clampPos(vec(a.pos.x + r.dx, a.pos.y + r.dy), a.radius, a.pos);
+      a.pos = to;
+    }
+    // The gust: a zone-wide shove while it holds (fliers ride it free unless
+    // the spec says otherwise); the warning text fires on its edge.
+    if (ev.gustBegan) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 48), 'the wind rises!', '#bfe0f8', 15);
+      this.shake = Math.max(this.shake, 2);
+    }
+    const gust = ff.gustNow();
+    const gspec = ff.spec.gusts;
+    if (gust?.phase === 'hold' && gspec) {
+      const push = gspec.push * dt;
+      for (const a of this.actors) {
+        if (a.dead || (a.flying && !gspec.liftFliers)) continue;
+        if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
+        const to = this.clampPos(vec(a.pos.x + gust.x * push, a.pos.y + gust.y * push), a.radius, a.pos);
+        a.pos = to;
+      }
+    }
+    for (let i = 0; i < Math.min(4, ev.dispersed.length); i++) {
+      const v = ev.dispersed[i];
+      this.flashes.push({ pos: vec(v.x, v.y), radius: 30, color: '#e6edfb', life: 0.5, maxLife: 0.5 });
+    }
+    this.routeSkyFalls(ev.fell);
+  }
+
+  /** CONJURED GROUND (engine/flux.ts): call walkable cloud into being over
+   *  any conjurable void — the seam skills ride. Returns cells now holding
+   *  (0 = nothing conjurable there; the caller reads that as a fizzle). */
+  conjureCloud(x: number, y: number, r: number, secs: number): number {
+    return this.conjured?.conjure(x, y, r, secs) ?? 0;
   }
 
   /** The nearest CHARTED zone of a dimension to a map coordinate — the
@@ -23353,7 +23474,9 @@ export class World {
   private beginSkyfall(): void {
     if (this.traversal) return;
     const shelf = this.zone;
-    const fall = shelf.theme.collapse?.fall;
+    // Whichever vertical fabric this zone runs owns the fall's meaning; a
+    // conjured cloud expiring over authored sky rides the same answer.
+    const fall = shelf.theme.collapse?.fall ?? shelf.theme.flux?.fall;
     const hurt = (): void => {
       if (fall?.damageFrac) this.applyEnvDamage(this.player, { amount: 0, pctMaxLife: fall.damageFrac, type: 'physical', canKill: false });
     };
@@ -28723,7 +28846,8 @@ export class World {
     // coyote grace decides — escape belongs to the CRUMBLING phase, before
     // the flip. Genuine off-mesh corruption (walls) keeps the rescue.
     const start = wf.isWalkable(from.x, from.y) ? from
-      : this.collapse?.voidAt(from.x, from.y) ? from
+      : (this.collapse?.voidAt(from.x, from.y) || this.flux?.voidAt(from.x, from.y)
+        || this.conjured?.voidAt(from.x, from.y)) ? from
       : wf.snapToWalkable(from);
     const full = this.walkSweep(start, to, crossFall);
     if (full.x === to.x && full.y === to.y) return full;

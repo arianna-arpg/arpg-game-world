@@ -29,6 +29,8 @@
 // Pure leaf: structural slice types only — no engine imports, no cycles.
 // ---------------------------------------------------------------------------
 
+import { gridBfs, gridSpine } from './gridSpine';
+
 /** Cell states. SOLID ground arms on contact, crumbles visibly, then voids. */
 export const enum CollapseCell { Solid = 0, Arming = 1, Crumbling = 2, Void = 3, Immune = 4 }
 
@@ -229,61 +231,11 @@ export class CollapseField {
     // --- The spine: the entry→goal walk over meltable+walkable ground. -----
     // BFS from the goal cell (4-connected over WALKABLE cells — immune ground
     // like structure floors still carries the path), then gradient-walk from
-    // the entry. Distances double as the "along the way" clock for the sweep.
-    const walkableAt = (i: number): boolean => walk.isWalkable(cx(i), cy(i));
-    const bfs = (seeds: number[]): Int32Array => {
-      const d = new Int32Array(n).fill(-1);
-      const q: number[] = [];
-      for (const s of seeds) if (s >= 0 && s < n && walkableAt(s)) { d[s] = 0; q.push(s); }
-      for (let head = 0; head < q.length; head++) {
-        const c = q[head], gx = c % walk.cols, gy = c / walk.cols | 0, nd = d[c] + 1;
-        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-          const nx = gx + dx, ny = gy + dy;
-          if (nx < 0 || ny < 0 || nx >= walk.cols || ny >= walk.rows) continue;
-          const nc = ny * walk.cols + nx;
-          if (d[nc] >= 0 || !walkableAt(nc)) continue;
-          d[nc] = nd; q.push(nc);
-        }
-      }
-      return d;
-    };
-    const cellOf = (p: { x: number; y: number }): number =>
-      Math.min(walk.rows - 1, Math.max(0, Math.floor(p.y / cell))) * walk.cols
-      + Math.min(walk.cols - 1, Math.max(0, Math.floor(p.x / cell)));
-    const goalCell = cellOf(goal);
-    const dGoal = bfs([goalCell]);
-    // Gradient-walk entry→goal. An entry cut off from the goal (shouldn't
-    // happen — generation guarantees reachability) degrades to a goal-only
-    // spine: the platform still stands, everything else runs the rim clock.
-    const spine: number[] = [];
-    let cur = cellOf(entry);
-    if (dGoal[cur] < 0) {
-      // Snap to the nearest cell that reaches the goal.
-      let best = -1, bd = Infinity;
-      for (let i = 0; i < n; i++) {
-        if (dGoal[i] < 0) continue;
-        const dd = (cx(i) - entry.x) ** 2 + (cy(i) - entry.y) ** 2;
-        if (dd < bd) { bd = dd; best = i; }
-      }
-      cur = best >= 0 ? best : goalCell;
-    }
-    let guard = n + 4;
-    while (cur !== goalCell && guard-- > 0) {
-      spine.push(cur);
-      const gx = cur % walk.cols, gy = cur / walk.cols | 0;
-      let next = -1, bd = dGoal[cur];
-      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const nx = gx + dx, ny = gy + dy;
-        if (nx < 0 || ny < 0 || nx >= walk.cols || ny >= walk.rows) continue;
-        const nc = ny * walk.cols + nx;
-        if (dGoal[nc] >= 0 && dGoal[nc] < bd) { bd = dGoal[nc]; next = nc; }
-      }
-      if (next < 0) break;
-      cur = next;
-    }
-    spine.push(goalCell);
-    this.spine = Int32Array.from(spine);
-    const dSpine = bfs(spine);
+    // the entry (engine/gridSpine.ts — the geometry both vertical fabrics
+    // share). Distances double as the "along the way" clock for the sweep.
+    const { spine, dGoal } = gridSpine(walk, entry, goal);
+    this.spine = spine;
+    const dSpine = gridBfs(walk, Array.from(spine));
 
     // --- The schedule: rim-first wavefront + late entry-first spine sweep. --
     const amb = spec.ambient;
@@ -359,6 +311,28 @@ export class CollapseField {
   }
   /** Is the causeway's own erosion underway (state, not edge)? */
   get causewayFailing(): boolean { return this.spineBegun; }
+
+  /** THE CONJURE SEAM (engine/flux.ts ConjuredGround): a caller stands this
+   *  cell back up — mark it Immune (the melt schedule, contact arming and the
+   *  fall test all respect Immune) and hand back the prior state to restore.
+   *  In practice only VOID / IMMUNE cells are ever annexed (conjurable region
+   *  kinds are all void kinds), but the seam stays general. */
+  annexCell(i: number): number {
+    if (i < 0 || i >= this.state.length) return CollapseCell.Immune;
+    const prior = this.state[i];
+    this.state[i] = CollapseCell.Immune;
+    this.active.delete(i);
+    return prior;
+  }
+
+  /** Return an annexed cell to the schedule's conclusion. A cell that was
+   *  mid-arming/mid-crumble when annexed comes back VOID — its moment passed
+   *  while the conjure held it (the timers did not wait). */
+  releaseCell(i: number, prior: number): void {
+    if (i < 0 || i >= this.state.length) return;
+    this.state[i] = prior === CollapseCell.Arming || prior === CollapseCell.Crumbling
+      ? CollapseCell.Void : prior;
+  }
 
   /** Advance the dissolution. `actors` are the world-prefiltered occupants
    *  (grounded, fall-eligible); `feet` are the contact-arming subset (usually

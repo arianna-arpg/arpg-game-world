@@ -165,6 +165,11 @@ export interface RegionKind {
   /** SURFACE REFLECTION: bodies standing on this ground draw a faded flipped
    *  ghost beneath them (the frozen mirror). */
   surfaceMirror?: boolean;
+  /** CONJURABLE: walkable cloud may be CALLED INTO BEING over this kind
+   *  (World.conjureCloud — the flux fabric's second half). A data flag on
+   *  void kinds, never an id list in engine code: the open sky takes a
+   *  conjured bridge; a rock wall does not. */
+  conjurable?: boolean;
 }
 
 /** A generic ENVIRONMENTAL-SURVIVAL meter (breath today; heat/cold/corruption
@@ -322,9 +327,45 @@ registerRegion({
   id: 'cloud_void', walkable: false, blocks: false, label: 'the open sky',
   boundaryPolicy: { kind: 'block' },
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  conjurable: true,
   // The cloud lip: sunlit white on every standing side, so each gap reads as
   // torn cloud-edge; the fill only ever shows with no understory beneath.
   visual: { fill: '#10131d', alpha: 1, window: true, edge: { color: '#f2f6fd', width: 6 } },
+});
+// --- THE FLUX KINDS (engine/flux.ts — living, shifting ground) --------------
+// All four are WINDOW visuals with NO edge and NO animate: the baked floor
+// holds a clean hole while the FLUX LAYER (render/vis/fluxLayer.ts) draws the
+// living cloud — forming, breathing, tattering — exactly where the walkable
+// truth is. That bake-identity is what lets the fabric repaint cells QUIETLY
+// (no dirty rects, no chunk churn) a dozen times a minute. The lip-less read
+// is deliberate too: a flux basin's rims belong to the living clouds, not to
+// baked paint that would go stale the moment a pad phased.
+// FLUX VOID: the sky inside a flux basin — where a pad or lane is NOT.
+registerRegion({
+  id: 'flux_void', walkable: false, blocks: false, label: 'the open sky',
+  boundaryPolicy: { kind: 'block' },
+  crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  conjurable: true,
+  visual: { fill: '#10131d', alpha: 1, window: true },
+});
+// SHIFTING CLOUD: a phasing pad's ground while it stands. Honest at both
+// ends of its cycle: not yet walkable while forming, still walkable while
+// fraying — the tatter IS the countdown.
+registerRegion({
+  id: 'cloud_flux', walkable: true, blocks: false, label: 'the shifting cloud',
+  visual: { fill: '#10131d', alpha: 1, window: true },
+});
+// DRIFT LANE: a carrier's footprint (and, during the warmup, the whole lane
+// band). Walkable exactly where a raft currently holds the sky open.
+registerRegion({
+  id: 'cloud_lane', walkable: true, blocks: false, label: 'the drift',
+  visual: { fill: '#10131d', alpha: 1, window: true },
+});
+// CONJURED CLOUD: ground a skill called into being (World.conjureCloud). It
+// frays and lets go like everything else — the sky keeps no promises long.
+registerRegion({
+  id: 'cloud_conjured', walkable: true, blocks: false, label: 'the conjured cloud',
+  visual: { fill: '#10131d', alpha: 1, window: true },
 });
 // FRAIL CLOUD: cloud-stuff that was never meant to hold you — the High
 // Heavens' ephemeral spans and fraying skirts. Walkable and honest about it:

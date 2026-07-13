@@ -142,8 +142,15 @@ export class GridWalkField implements WalkField {
 
   /** Paint a WORLD-space rectangle [x0,y0]-[x1,y1] with a REGION KIND. Sets the
    *  per-cell kind byte AND derives the walkable mask from that kind's policy — the
-   *  Phase-3 primitive (void/deep_water/air_pocket/ground/wall are all kinds). */
-  fillRegion(x0: number, y0: number, x1: number, y1: number, id: string): void {
+   *  Phase-3 primitive (void/deep_water/air_pocket/ground/wall are all kinds).
+   *
+   *  `quiet` is the BAKE-INERT contract (the flux fabric's steady churn): the
+   *  caller promises the repaint cannot change a baked pixel — every kind it
+   *  writes is a `window` visual with no edge — so the version still bumps
+   *  (pathing + region labels stay honest) but NO dirty rect is pushed: floor
+   *  chunks never stale and the dirty ring never floods under a drift of a
+   *  dozen moving carriers. Never pass it for a repaint a bake can see. */
+  fillRegion(x0: number, y0: number, x1: number, y1: number, id: string, quiet = false): void {
     const byte = this.kindByte(id);
     const walkable = regionKind(id)?.walkable ? 1 : 0;
     const a = this.cx(Math.min(x0, x1)), b = this.cx(Math.max(x0, x1));
@@ -152,6 +159,7 @@ export class GridWalkField implements WalkField {
       const i = cy * this.cols + cx;
       this.kind[i] = byte; this.mask[i] = walkable;
     }
+    if (quiet) { this.version++; return; }
     // No eager cache clears: pushDirty's version bump lazily stales the
     // region labels and distance fields (they refresh in place, budgeted).
     this.pushDirty(x0, y0, x1, y1);

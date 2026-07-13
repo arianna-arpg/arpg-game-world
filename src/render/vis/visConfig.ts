@@ -257,6 +257,33 @@ export const VIS_CFG = {
     /** Dust motes per voiding cell (world flashes ride the rest). */
     dust: 3,
   },
+
+  /** THE FLUX LAYER (vis/fluxLayer.ts — the render half of engine/flux.ts).
+   *  Pad phases / carrier positions come from the sim (one truth with the
+   *  walkable grid); these knobs shape presentation only. Default cloud
+   *  tints — a theme's FluxSpec.look overrides per zone. Ablate: 'flux'. */
+  flux: {
+    /** Baked cloud sprite size (one per tint, cached). */
+    sprite: 128,
+    /** View-cull pad beyond each pad/carrier bound. */
+    cullPad: 200,
+    /** How far the drawn cloud overhangs the walkable truth (visuals may
+     *  promise a LITTLE more than collision — the boundary block forgives;
+     *  never less: an invisible floor edge is a lie). */
+    lobeOver: 1.18,
+    /** Default tints (FluxSpec.look wins): the standing body, the sunlit
+     *  crest, the dusking tatter, the player-called cloud. */
+    body: '#e9eef9',
+    crest: '#ffffff',
+    fray: '#98a2c2',
+    conjure: '#cfeaff',
+    /** Fraying flicker rate (Hz-ish) + how hard lobes scatter outward. */
+    flicker: 13,
+    scatterFrac: 0.55,
+    /** Gust streaks: count across the view + streak length (world units). */
+    streaks: 44,
+    streakLen: 92,
+  },
 } as const;
 
 // --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------

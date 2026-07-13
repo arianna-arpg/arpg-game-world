@@ -18,6 +18,7 @@ import type { MonsterRarity } from '../engine/rarity';
 import type { PresenceSpec } from '../engine/presence';
 import type { ZoneFogSpec } from '../engine/fog';
 import type { CollapseSpec } from '../engine/collapse';
+import type { FluxSpec } from '../engine/flux';
 
 /** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
  *  a weight-vs-level envelope — or a named band — deciding how present this
@@ -293,6 +294,14 @@ export interface ZoneTheme {
    *  future rotting-bridge or cracking-ice theme is another spec). Needs a
    *  grid layout (convex zones can't melt). Variants override wholesale. */
   collapse?: CollapseSpec;
+  /** LIVING FLUX (the flux fabric, engine/flux.ts): this zone's ground
+   *  SHIFTS — phasing pads gather, stand, fray and disperse on seeded
+   *  rhythms; carrier rafts shuttle their lanes bearing whoever stands on
+   *  them; gusts shove the unwary toward the edge. Everything derives from
+   *  the painted grid kinds (cloud_flux / cloud_lane / flux_void); the spec
+   *  sets only the TEMPO. Needs a grid layout. Variants override wholesale.
+   *  Composes with `collapse` when their governed kinds are disjoint. */
+  flux?: FluxSpec;
   /** THE UNDERSTORY (render/vis/understory.ts): what shows through this
    *  zone's `window` region cells. 'cloudsea' = the endless procedural cloud
    *  deck. A zone with `ZoneDef.below` shows the CAPTURED zone beneath it
