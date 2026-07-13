@@ -333,12 +333,17 @@ export class CollapseField {
     return melt ? gone / melt : 0;
   }
 
-  /** One-time flag flip when the causeway itself begins to erode. */
+  /** ONE-SHOT edge: true on exactly the tick the causeway begins to erode,
+   *  false forever after (the caller fires its warning + shake ONCE — the
+   *  earlier draft returned the latch itself and re-fired every tick: the
+   *  spammed-popup bug). `spineBegun` stays readable for state queries. */
   spineEroding(): boolean {
-    if (this.spineBegun || this.clock < this.spineStart) return this.spineBegun;
+    if (this.spineBegun || this.clock < this.spineStart) return false;
     this.spineBegun = true;
     return true;
   }
+  /** Is the causeway's own erosion underway (state, not edge)? */
+  get causewayFailing(): boolean { return this.spineBegun; }
 
   /** Advance the dissolution. `actors` are the world-prefiltered occupants
    *  (grounded, fall-eligible); `feet` are the contact-arming subset (usually

@@ -28619,7 +28619,16 @@ export class World {
    *  from tunneling across a wall, and never snaps to the wrong-side region. */
   private walkResolve(from: Vec2, to: Vec2, crossFall = false): Vec2 {
     const wf = this.walk!;
-    const start = wf.isWalkable(from.x, from.y) ? from : wf.snapToWalkable(from);
+    // COLLAPSE-OWNED GROUND: an actor whose cell just MELTED under them is
+    // mid-teeter — the floor left THEM, they didn't leave the floor. The
+    // off-mesh rescue snap must not fire (it read as a free teleport to the
+    // nearest standing cloud and made the fall unreachable in real play):
+    // they hold where the ground was, input finds no purchase, and the
+    // coyote grace decides — escape belongs to the CRUMBLING phase, before
+    // the flip. Genuine off-mesh corruption (walls) keeps the rescue.
+    const start = wf.isWalkable(from.x, from.y) ? from
+      : this.collapse?.voidAt(from.x, from.y) ? from
+      : wf.snapToWalkable(from);
     const full = this.walkSweep(start, to, crossFall);
     if (full.x === to.x && full.y === to.y) return full;
     // Blocked: also try single-axis slides so a diagonal-into-wall slides along the
