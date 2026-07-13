@@ -2427,6 +2427,46 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.35, scale: 0.7, params: { n: 2 } }],
     shadowScale: 0.6,
   },
+  /** The lampad: the candle-bearer — robed, haloed, lantern raised, incense
+   *  trailing. Carried by the light, not by wings. */
+  lampad_vigil: {
+    parts: [
+      { kind: 'robe', scale: 0.95, role: 'cloth' },
+      { kind: 'lantern', y: 0.5, scale: 1.0, role: 'glow' },
+      { kind: 'censer', y: -0.45, scale: 0.75 },
+      { kind: 'halo', scale: 0.9, alpha: 0.5 },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.6,
+  },
+  /** The power: plate over feathers — helm, shield, the folded wing sweep. */
+  power_bastion: {
+    parts: [
+      { kind: 'featherWings', scale: 1.05, role: 'cloth' },
+      { kind: 'armorPlates', scale: 1.0, role: 'metal' },
+      { kind: 'shield', scale: 1.0, role: 'metal' },
+      { kind: 'trident', scale: 1.0, role: 'metal' },
+      { kind: 'helm', x: 0.3, scale: 0.95, role: 'metal' },
+      { kind: 'halo', scale: 0.85, alpha: 0.35 },
+    ],
+  },
+  /** The throne: the greater wheel — ringed segments, eyes all through,
+   *  runes turning, a fire that never spends itself. */
+  throne_law: {
+    parts: [
+      { kind: 'halo', scale: 1.5, alpha: 0.45 },
+      { kind: 'segmentRings', scale: 1.1, role: 'glow' },
+      { kind: 'disc', scale: 0.75 },
+      { kind: 'eyeCluster', scale: 1.05, role: 'glow' },
+      { kind: 'runes', scale: 1.25, params: { n: 5 } },
+    ],
+    live: [
+      { kind: 'flames', y: -0.2, scale: 0.8 },
+      { kind: 'wisps', x: -0.25, scale: 0.9, params: { n: 3 } },
+    ],
+    shadowScale: 0.65,
+    banding: 'hoops',
+  },
   /** The principality: laurel and sunburst — the whole kata, crowned. */
   principality: {
     parts: [

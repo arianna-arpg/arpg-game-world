@@ -9429,6 +9429,68 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 240, weight: 1 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('damage', 'increased', 0.08)] },
   },
+
+  // The kata's second wing (the Host expansion): the Powers' lance, the
+  // Heralds' horn, the Lampads' candle-light — all lootable, like everything
+  // the enemy knows.
+
+  radiant_lance: {
+    id: 'radiant_lance', name: 'Radiant Lance',
+    description: 'A spear of hardened dawn, thrown flat and FAST — it passes through the first bodies it judges and keeps going. The Powers carry ranks of these.',
+    tags: ['attack', 'projectile', 'physical', 'lightning', 'javelin'], color: '#ffe9c8',
+    manaCost: 8, cooldown: 0, useTime: 0.8,
+    baseDamage: { physical: [8, 13], lightning: [5, 9] },
+    delivery: { type: 'projectile', speed: 660, radius: 7, range: 560, pierce: 2 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.15 },
+    ],
+    requirements: { strength: 14, dexterity: 14 },
+    minDropLevel: 10,
+    ai: { range: 500, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+    thresholds: [
+      { level: 10, label: 'It keeps going', mods: [mod('pierceCount', 'flat', 2)] },
+    ],
+  },
+
+  trumpet_peal: {
+    id: 'trumpet_peal', name: 'Trumpet Peal',
+    description: 'One note, spoken AT you: a flattening wedge of sound that throws the line back and leaves ears ringing — bewildered hands aim at where the world used to be. The Choir\'s heralds open every engagement with it.',
+    tags: ['spell', 'warcry', 'aoe', 'lightning'], color: '#f2e2b8',
+    manaCost: 15, cooldown: 7, useTime: 0.6,
+    baseDamage: { lightning: [7, 12] },
+    delivery: { type: 'cone', range: 210, arcDeg: 55 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 44 },
+      { type: 'status', status: 'bewilder', chance: 0.35 },
+    ],
+    requirements: { willpower: 16 },
+    minDropLevel: 11,
+    ai: { range: 190, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  votive_ward: {
+    id: 'votive_ward', name: 'Votive Ward',
+    description: 'Light a standing candle of the Host: for its span, you and allies inside shrug a share of all harm, and every few heartbeats the flame closes wounds. The Lampads carry these against the dark between the stars.',
+    tags: ['spell', 'aura', 'buff', 'aoe', 'duration', 'heal'], color: '#ffd9a0',
+    manaCost: 26, cooldown: 12, useTime: 0.6,
+    delivery: {
+      type: 'aura', mode: 'duration', duration: 9,
+      aura: {
+        radius: 135,
+        allyMods: [mod('damageTaken', 'more', -0.06)],
+        pulse: { interval: 2.5, healAllies: { base: 'maxLife', amount: 0.03 } },
+      },
+    },
+    effects: [],
+    requirements: { willpower: 18 },
+    minDropLevel: 11,
+    ai: { range: 150, weight: 1.5 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.05)] },
+  },
 };
 
 // THE CONSTRUCT CAPABILITY FOLD: every construct-delivery skill IS

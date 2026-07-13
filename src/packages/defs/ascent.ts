@@ -53,9 +53,12 @@ const SERAPHIC_FACTION: FactionSpec = {
     { id: 'cherub_wisp', weight: 4 },
     { id: 'watcher_unblinking', weight: 3 },
     { id: 'virtue_lance', weight: 3 },
+    { id: 'power_of_the_bastion', weight: 2.5 },
     { id: 'ophan_wheel', weight: 2 },
     { id: 'herald_of_the_choir', weight: 2 },
+    { id: 'lampad_of_the_vigil', weight: 2 },
     { id: 'dominion_scales', weight: 1 },
+    { id: 'throne_of_the_law', weight: 1 },
   ],
 };
 

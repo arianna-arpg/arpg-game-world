@@ -5899,18 +5899,69 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'strafer' },
   },
 
-  /** The herald: a warhorn over the choir — its cry RALLIES the Host, and
-   *  wisps fighting near their herald fight like something watched them. */
+  /** The herald: a warhorn over the choir — the PEAL opens every engagement
+   *  (thrown lines, ringing ears), the rally keeps it won, and wisps fighting
+   *  near their herald fight like something watched them. */
   herald_of_the_choir: {
     id: 'herald_of_the_choir', name: 'Herald of the Choir',
     color: '#f2e2b8', shape: 'pentagon', radius: 13, material: 'ethereal', look: 'herald_choir',
     base: { life: 85, moveSpeed: 110, mana: 140, manaRegen: 8 },
-    skills: ['war_cry', 'feather_volley'], xp: 26, faction: 'seraphic',
+    skills: ['trumpet_peal', 'war_cry'], xp: 26, faction: 'seraphic',
     flier: true, levitates: true,
     bond: { mods: [mod('damage', 'increased', 0.2), mod('attackSpeed', 'increased', 0.1)], radius: 180 },
     grants: [{ atLevel: 14, skill: 'judgement_pillar' }],
     presence: 'host_vigil',
     brain: { type: 'commander' },
+  },
+
+  /** The lampad: the candle-bearer between the choirs — her votive flame
+   *  shields and mends whatever fights inside it. Kill the light first, or
+   *  fight a ward that keeps closing. Floats (never falls), walks the air
+   *  slowly — she is carried BY the light, not by wings. */
+  lampad_of_the_vigil: {
+    id: 'lampad_of_the_vigil', name: 'Lampad of the Vigil',
+    color: '#ffd9a0', shape: 'oval', radius: 12, material: 'ethereal', look: 'lampad_vigil',
+    base: { life: 70, moveSpeed: 90, mana: 180, manaRegen: 10, energyShield: 25 },
+    skills: ['votive_ward', 'talon_rake'], xp: 26, faction: 'seraphic',
+    levitates: true,
+    presence: { from: 11, fadeIn: 5 },
+    gemBias: ['aura', 'heal'],
+    brain: { type: 'caster' },
+  },
+
+  /** The power: the Host's INFANTRY — plate over feathers, lances in ranks.
+   *  It walks (the second deliberate walker: a line that holds ground can be
+   *  dropped WITH the ground), and its front is a wall until you get behind
+   *  it. */
+  power_of_the_bastion: {
+    id: 'power_of_the_bastion', name: 'Power of the Bastion',
+    color: '#e8e2d0', shape: 'trapezoid', radius: 14, material: 'stone', look: 'power_bastion',
+    base: { life: 150, moveSpeed: 85, armor: 35, poise: 45, accuracy: 100, mana: 70, manaRegen: 5 },
+    mods: [mod('lightningRes', 'flat', 0.3)],
+    skills: ['radiant_lance', 'claw'], xp: 34, faction: 'seraphic',
+    shellGuard: { side: 'front', max: 60, arcDeg: 140, regenDelay: 4, regenRate: 10 },
+    presence: { from: 11, fadeIn: 5 },
+    gemBias: ['javelin', 'projectile'],
+    brain: { type: 'skirmish', withdraw: 0.9 },
+  },
+
+  /** The throne: the greater wheel — the law made LATTICE. Light-chains bind
+   *  it to its kin (the tether kit-part: a cycling band that burns whatever
+   *  stands between the wheel and its choir), rings of dawn pulse from its
+   *  rim, and pillars fall where it looks. Break the chain-holders first or
+   *  fight inside a cage of light. */
+  throne_of_the_law: {
+    id: 'throne_of_the_law', name: 'Throne of the Law',
+    color: '#ffe082', shape: 'circle', radius: 16, material: 'ethereal', look: 'throne_law',
+    base: { life: 190, moveSpeed: 80, mana: 220, manaRegen: 11, energyShield: 60 },
+    mods: [mod('lightningRes', 'flat', 0.5), mod('fireRes', 'flat', 0.3)],
+    skills: ['aureole', 'judgement_pillar'], xp: 64, faction: 'seraphic',
+    flier: true, levitates: true,
+    tether: { dps: 6, damageType: 'lightning', width: 12, radius: 340, period: 6, duty: 3, color: '#ffe9a8' },
+    deathBurst: { mode: 'implode', damageFrac: 1.1, coalesce: 0.7, damageType: 'lightning' },
+    presence: { from: 13, fadeIn: 5 },
+    gemBias: ['lightning', 'duration'],
+    brain: { type: 'strafer' },
   },
 
   /** The lancer: a virtue that falls OUT of the sky point-first — Skyfall is
