@@ -82,6 +82,13 @@ changes.
   `fog.ts` (THE FOG FABRIC: living, roaming fog banks as data —
   FogBankDef kinds + ZoneTheme.fog specs; the drawn lobes are the hit
   surface, statuses granted while inside — docs in `docs/engine/fog.md`),
+  `collapse.ts` + `traversal.ts` + `render/vis/understory.ts` (THE VERTICAL
+  FABRICS: dissolving ground as a `ZoneTheme.collapse` spec — contact
+  crumble + seeded rim-inward melt, an eroding-but-guaranteed causeway to
+  a never-melting goal; registered vertical-crossing cinematics
+  (`data/traversals.ts`); the world far BELOW shown through `window`
+  region cells — the Ascent/Aetherial ride all three; docs in
+  `docs/engine/collapse.md`),
   `levelgen.ts`, `worldgen.ts`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),
