@@ -58,8 +58,12 @@ One def file (`src/packages/defs/<id>.ts`) + one registry line
   `registerBulletinSource` (world notices — faction conquests and crusade
   front-shifts already ride it), `registerKillHandler` (bounties; use
   `Actor.eventKey` to resolve a kill back to its event INSTANCE),
-  `registerWorldDrive` (slow meters like vendetta's grudge). All import-time;
-  no engine edits.
+  `registerWorldDrive` (slow meters like vendetta's grudge),
+  `registerEdgeBlockSource` (`world/edgeBlocks.ts` — hold a ROAD of the zone
+  graph shut at runtime; the travel gate + the sealed-exit hint consult one
+  fold. Contract: never cut the charted graph apart — BFS-guard your picks
+  like the world-serpent does. Waypoints stay ungated by design). All
+  import-time; no engine edits.
 - **`devIgnite(view, zoneId)`** — every event exposes a force-spawn the dev
   Events tab drives (eventqa asserts presence). The tab also shows the live
   gate inspector (share/pressure/muls per package).

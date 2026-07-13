@@ -39,6 +39,7 @@ import { STRUCTURES } from '../data/structures';
 import { hasStructureGen } from '../engine/structureGen';
 import type { BreachField } from '../packages/overlays/breach';
 import type { VendettaField } from '../packages/overlays/vendetta';
+import type { WorldBossField } from '../packages/overlays/worldboss';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
 import { boundaryGateIds } from '../data/boundaryGates';
 import { setClimateOrigin } from './climate';
@@ -166,6 +167,11 @@ export class WorldSim {
    *  from the warrant kill row; the sim mirrors each faction's grudge meter in
    *  (setGrudges) and drains settled/expired writs back onto the meters. */
   readonly vendettaField: VendettaField | null;
+  /** The SURFACE world-boss overlay if its package is in the manifest, else
+   *  null — the engine reads wallsFor/passingIn/fightAt/pendingMints to
+   *  materialize the sovereigns and the serpent's road blockade; non-surface
+   *  instances (Ashvein below) resolve via worldBossFieldFor/-All. */
+  readonly worldBossField: WorldBossField | null;
   /** Per-faction favor earned from events and warlord kills. Persists per run. */
   readonly reputation = new Reputation();
   /** FACTION/WORLD WANTS (world/drives.ts): named slow meters — dread,
@@ -310,6 +316,7 @@ export class WorldSim {
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     this.breachField = surface<BreachField>('breach') ?? null;
     this.vendettaField = surface<VendettaField>('vendetta') ?? null;
+    this.worldBossField = surface<WorldBossField>('worldboss') ?? null;
     this.invasion.gate = (f) => this.warlord.canInvade(f);
     // Per-faction invasion launch scale = the governing package's pressure (0 if
     // no package governs it, or its package is off / below its start level).
@@ -524,6 +531,19 @@ export class WorldSim {
    *  drain walks them all so each world-state's rifts tear in its own graph. */
   demonFieldsAll(): DemonInvasionField[] {
     return this.overlays.filter(o => o.id === 'demon_invasion') as DemonInvasionField[];
+  }
+
+  /** The world-boss instance governing a dimension (surface = the cached field). */
+  worldBossFieldFor(dimension?: string): WorldBossField | null {
+    if ((dimension ?? 'surface') === 'surface') return this.worldBossField;
+    return this.overlayFor<WorldBossField>('worldboss', dimension);
+  }
+
+  /** Every live world-boss instance (all dimensions) — the engine's mint drain,
+   *  the edge-block gate, and the kill row walk them all so each world-state's
+   *  sovereigns stand up in their own graph. */
+  worldBossFieldsAll(): WorldBossField[] {
+    return this.overlays.filter(o => o.id === 'worldboss') as WorldBossField[];
   }
 
   /** A zone's EVENT ACTIVITY from the living world: the sum of every overlay's

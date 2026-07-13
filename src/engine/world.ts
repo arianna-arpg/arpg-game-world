@@ -144,6 +144,8 @@ import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
 import { claimedZonesFromBag } from '../world/overlay';
 import { collectBulletins, BULLETIN_CFG } from '../world/bulletins';
+import { edgeBlockAt } from '../world/edgeBlocks';
+import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldboss';
 import { eventTargetable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherStrike } from '../world/weather';
@@ -1682,6 +1684,24 @@ export class World {
   private materializedMigrations = new Set<string>();
   /** Countdown to the next Migration stream-pour while a herd crosses this zone. */
   private migrationStreamTimer = 0;
+  /** WORLD BOSSES (packages/defs/worldboss.ts): sovereign instances whose fight
+   *  already stood up this visit (cleared per loadZone — re-entry re-materializes
+   *  from overlay state, wounds preserved). */
+  private materializedWorldBoss = new Set<string>();
+  /** The serpent's coil walls raised in THIS zone: sealed neighbour id → the
+   *  segment doodads laid so far (they close progressively; crumbled live when
+   *  the serpent dies). Cleared per loadZone. */
+  private wbWalls = new Map<string, Doodad[]>();
+  /** The PASSING serpent body slithering this zone (driven — wheeled by
+   *  updateWorldBosses toward its departure road), and the crossing it
+   *  belongs to (so one crossing spawns one body). */
+  private wbPassing: Actor | null = null;
+  private wbPassingKey = '';
+  private wbPassingGoal: Vec2 | null = null;
+  /** The standing sovereign fight in THIS zone (life-synced to the overlay;
+   *  despawned live if its instance departs unbeaten). */
+  private wbBoss: Actor | null = null;
+  private wbBossKey = '';
   /** Brigand band ids whose pack has already been DROPPED in this zone (one pack + ledger
    *  per band per visit; cleared per loadZone). The nomadic raid is driven by
    *  updateBrigandRaid — a band that arrives spawns ONE wandering pack, then retires. */
@@ -3329,8 +3349,16 @@ export class World {
     // materializeLiveZoneEvents `this.zone.special` guard so the on-entry path
     // can't squat a Balor/crusade/hunt/fracture on the clean boss stage (the
     // eventOwned contract). The overlay SELECTORS also exclude it, but this is
-    // the central catch.
+    // the central catch. Rows flagged `ownedGround` are the one exception:
+    // the event that MINTED a special arena must still stand its fight up
+    // there (its selector only ever fires in zones its own overlay bound,
+    // so nothing forfeits the contract).
     for (const r of this.zoneRuntimes) r.reset?.();
+    if (!isCave && def.special) {
+      for (const r of this.zoneRuntimes) {
+        if (r.ownedGround) r.enter?.(def, false);
+      }
+    }
     if (!isCave && !def.special) {
       for (const r of this.zoneRuntimes) r.enter?.(def, false);
     } else {
@@ -3355,7 +3383,7 @@ export class World {
    *             re-invoked each frame (live=true) so an overlay that BINDS or
    *             SPREADS to the standing zone materializes the moment it lands
    *             (each runtime's own guards make the re-invoke idempotent). */
-  private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean }[] {
+  private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean; ownedGround?: boolean }[] {
     return [
       {
         // Fresh zone visit → no host materialized yet. If a host has ALREADY
@@ -3401,6 +3429,23 @@ export class World {
         // The herd pours via updateMigrationStream — reset only.
         id: 'migration',
         reset: () => { this.materializedMigrations.clear(); this.migrationStreamTimer = 0; },
+      },
+      {
+        // WORLD BOSSES: a settled serpent head / manifest apparition /
+        // enthroned lair fields its fight — including one that manifests on
+        // the standing zone live. Coil walls + the passing body are driven
+        // per-frame by updateWorldBosses (they grow/move with time).
+        // ownedGround: the minted arenas are SPECIAL zones — this row is
+        // their owner and must fire there (fightAt only ever matches zones
+        // this overlay bound, so foreign special stages stay clean).
+        id: 'worldboss', ownedGround: true,
+        reset: () => {
+          this.materializedWorldBoss.clear();
+          this.wbWalls.clear();
+          this.wbPassing = null; this.wbPassingKey = ''; this.wbPassingGoal = null;
+          this.wbBoss = null; this.wbBossKey = '';
+        },
+        enter: (def) => this.materializeWorldBossFight(def),
       },
       {
         // Haunts re-stand on re-entry (anchor / walking Wailing One at their
@@ -3611,13 +3656,16 @@ export class World {
    *  once, the moment the event lands. A live demon eruption gets a meteor-storm
    *  warning entrance (the `live` flag). */
   private materializeLiveZoneEvents(): void {
-    if (this.inCave || this.zone.special) return; // a special arena hosts no overlay events
+    if (this.inCave) return;
     // Every zone runtime's enter() re-fires with live=true (unless it opted
     // out via noLive) — each is idempotent by its own guards, so an overlay
     // that binds/spreads onto the standing zone materializes the moment it
-    // lands, exactly once.
+    // lands, exactly once. A special arena hosts no FOREIGN overlay events
+    // (only ownedGround rows — the arena's own minter — may fire there).
     for (const r of this.zoneRuntimes) {
-      if (!r.noLive) r.enter?.(this.zone, true);
+      if (r.noLive) continue;
+      if (this.zone.special && !r.ownedGround) continue;
+      r.enter?.(this.zone, true);
     }
   }
 
@@ -9006,6 +9054,238 @@ export class World {
       // Axis-slide yields ~zero progress against an inside corner / unreachable mark: abandon it.
       if (Math.hypot(a.pos.x - px, a.pos.y - py) < 0.5 && dist(a.pos, goal) >= REPICK) a.aiFleeGoal = undefined;
     }
+  }
+
+  // ------------------------------------------------ world bosses (the Primeval)
+  //
+  // The engine half of packages/overlays/worldboss.ts. The overlay owns every
+  // decision (paths, timers, seals, wounds); the engine only MATERIALIZES:
+  // mints the arenas it owes, lays/crumbles the serpent's coil walls, wheels
+  // the passing body across the zone, stands the fights up, and mirrors boss
+  // health back. Travel gating rides the edge-block registry (isExitLocked).
+
+  /** Per-frame: mint drain + in-zone serpent fabric + standing-fight sync. */
+  private updateWorldBosses(dt: number): void {
+    // 1. MINT DRAIN — every instance (each dimension's sovereigns take ground
+    //    in their own graph).
+    for (const f of this.sim.worldBossFieldsAll()) {
+      for (const req of f.pendingMints()) this.mintWorldBossZone(f, req);
+    }
+    const f = this.sim.worldBossFieldFor(this.zone.dimension);
+    if (!f) return;
+    this.updateWorldBossWalls(f);
+    this.updateWorldBossPassing(f, dt);
+    // 2. THE STANDING FIGHT — mirror health; despawn a sovereign whose stay ran out.
+    if (this.wbBoss) {
+      const m = this.wbBoss;
+      const fight = f.fightAt(this.zone.id);
+      if (m.dead) {
+        this.wbBoss = null; // the kill row already resolved the fall
+      } else if (!fight || fight.instanceId !== this.wbBossKey) {
+        // Departed unbeaten (the apparition's clock ran out) — it sinks away
+        // whole, its silhouette parts with it.
+        for (const p of m.partActors ?? []) {
+          if (p.dead) continue;
+          const i = this.actors.indexOf(p);
+          if (i >= 0) this.actors.splice(i, 1);
+        }
+        this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 180, color: '#c8a03c', life: 0.9, maxLife: 0.9 });
+        this.slipAway(m, `${m.name} sinks away…`);
+        this.wbBoss = null;
+      } else {
+        f.setBossLife(fight.instanceId, Math.max(0.005, m.life / m.maxLife()));
+      }
+    }
+  }
+
+  /** Mint the zone an overlay instance owes (a settled serpent's arena, a
+   *  lair): a SPECIAL (event-owned, overlay-claimed) zone road-linked to its
+   *  anchor. Deterministic id + seed; syncZoneExits surfaces the new road
+   *  live if the player is standing in the anchor as it forms. */
+  private mintWorldBossZone(f: WorldBossField, req: WorldBossMint): void {
+    const anchor = this.zoneMap[req.anchorZoneId];
+    if (!anchor) return;
+    const id = `wb_${req.kind}_${req.instanceId}`;
+    if (this.zoneMap[id]) { f.bindMint(req.instanceId, id); return; }
+    // A free flank: one node-step off the anchor, preferring an empty side
+    // (placeZoneAt's anti-crowd nudge handles the rest).
+    let target = projectCoord(anchor.map, 's');
+    for (const side of ['e', 'w', 's', 'n'] as const) {
+      const c = projectCoord(anchor.map, side);
+      if (!Object.values(this.zoneMap).some(z => coordDist(z.map, c) < 60)) { target = c; break; }
+    }
+    const gen = placeZoneAt(target, anchor, this.zoneMap, this.nextGenId++, {
+      id,
+      name: req.zoneName,
+      level: Math.max(1, anchor.level + (req.def.levelBonus ?? 0)),
+      special: true,          // fixed arena theme + eventOwned (the overlay claims it in ownedZones)
+      linkBack: true,         // a real road from the anchor — findable, walkable
+      objective: { kind: 'clear' }, // slaying the sovereign IS clearing the ground
+      seed: (this.manifest.seed ^ hashStr(id)) >>> 0,
+      ...(anchor.dimension ? { dimension: anchor.dimension } : {}),
+    });
+    this.zoneMap[id] = gen;
+    this.sim.onNodeCharted(gen, this.simView());
+    f.bindMint(req.instanceId, id);
+  }
+
+  /** The serpent's coil walls in the standing zone: one plug arc per sealed
+   *  road, laid progressively as the seal closes (outer ends first — the gap
+   *  shuts in the middle, in front of you), crumbled live when the serpent
+   *  dies or its blockade heals. */
+  private updateWorldBossWalls(f: WorldBossField): void {
+    const walls = f.wallsFor(this.zone.id);
+    const live = new Set<string>();
+    const wcfg = f.surge().roamer.wall;
+    for (const w of walls) {
+      live.add(w.toZoneId);
+      const e = this.exits.find(x => x.to === w.toZoneId);
+      if (!e) continue;
+      let placed = this.wbWalls.get(w.toZoneId);
+      if (!placed) {
+        placed = [];
+        this.wbWalls.set(w.toZoneId, placed);
+        if (!this.materializedWorldBoss.has(`wall:${w.serpentId}`)) {
+          this.materializedWorldBoss.add(`wall:${w.serpentId}`);
+          bumpLedger(this.ledger, 'worldboss_seen');
+          this.text(vec(e.pos.x, e.pos.y - 46), 'the coils close on this pass!', w.color, 14);
+        }
+      }
+      const want = Math.min(wcfg.count, Math.round(clamp(w.sealFrac, 0, 1) * wcfg.count));
+      if (placed.length >= want) continue;
+      const spots = this.wyrmWallSpots(e, wcfg.count, wcfg.dist);
+      for (let i = placed.length; i < want && i < spots.length; i++) {
+        const p = spots[i];
+        // Never entomb a hero: a segment that would land on a player-team body
+        // waits for them to move (it fills in on a later frame).
+        if (this.actors.some(a => !a.dead && a.team === 'player'
+          && dist(a.pos, p) < wcfg.radius + a.radius + 10)) break;
+        const d: Doodad = { pos: vec(p.x, p.y), radius: wcfg.radius, kind: w.wallKind, rot: (i * 2.39996) % (Math.PI * 2) };
+        this.doodads.push(d);
+        placed.push(d);
+        this.flashes.push({ pos: vec(p.x, p.y), radius: 42, color: w.color, life: 0.35, maxLife: 0.35 });
+      }
+    }
+    // The serpent died (or its blockade healed): its plugs crumble where we stand.
+    for (const [key, list] of [...this.wbWalls]) {
+      if (live.has(key)) continue;
+      for (const d of list) {
+        d.gone = true;
+        const i = this.doodads.indexOf(d);
+        if (i >= 0) this.doodads.splice(i, 1);
+        this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: 44, color: '#8a7a5c', life: 0.5, maxLife: 0.5 });
+      }
+      this.wbWalls.delete(key);
+      if (list.length) {
+        this.text(vec(this.player.pos.x, this.player.pos.y - 80),
+          'the coils crumble — the pass is open!', '#c8a03c', 15);
+      }
+    }
+  }
+
+  /** The coil-plug arc for one sealed portal: `count` spots fanned into the
+   *  zone around the door, ordered OUTER-ENDS-FIRST so the middle gap closes
+   *  last — the door visibly shuts in front of you. */
+  private wyrmWallSpots(e: ZoneExit, count: number, reach: number): Vec2[] {
+    const inward = Math.atan2(this.arena.h / 2 - e.pos.y, this.arena.w / 2 - e.pos.x);
+    const spread = Math.PI * 0.85;
+    const arc: Vec2[] = [];
+    for (let k = 0; k < count; k++) {
+      const t = count === 1 ? 0.5 : k / (count - 1);
+      const ang = inward + (t - 0.5) * spread;
+      arc.push(this.clampPos(vec(e.pos.x + Math.cos(ang) * reach, e.pos.y + Math.sin(ang) * reach), 20));
+    }
+    const order: Vec2[] = [];
+    let lo = 0, hi = count - 1;
+    while (lo <= hi) {
+      order.push(arc[lo]);
+      if (hi !== lo) order.push(arc[hi]);
+      lo++; hi--;
+    }
+    return order;
+  }
+
+  /** The PASSING body: while the serpent's head crosses the standing zone, a
+   *  driven, untouchable worm-body slithers door to door — the glimpse, and
+   *  the living clock on the closing gap. */
+  private updateWorldBossPassing(f: WorldBossField, dt: number): void {
+    const pass = f.passingIn(this.zone.id);
+    const key = pass ? `${pass.serpentId}:${pass.toZoneId}` : '';
+    if (pass && pass.def.roam && !this.wbPassing && this.wbPassingKey !== key) {
+      const doorOut = this.exits.find(x => x.to === pass.toZoneId);
+      if (doorOut) {
+        const doorIn = pass.fromZoneId ? this.exits.find(x => x.to === pass.fromZoneId) : null;
+        const start = doorIn ? vec(doorIn.pos.x, doorIn.pos.y)
+          : this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), 60);
+        const m = this.createMonster(pass.def.roam.passingMonster, this.zone.level, 'enemy');
+        m.pos = this.clampPos(vec(start.x, start.y), m.radius);
+        m.tag = 'wb_passing';
+        this.actors.push(m);
+        this.wbPassing = m;
+        this.wbPassingKey = key;
+        this.wbPassingGoal = vec(doorOut.pos.x, doorOut.pos.y);
+        if (!this.materializedWorldBoss.has(`pass:${pass.serpentId}`)) {
+          this.materializedWorldBoss.add(`pass:${pass.serpentId}`);
+          bumpLedger(this.ledger, 'worldboss_seen');
+        }
+        this.text(vec(m.pos.x, m.pos.y - 60),
+          `${pass.def.name} passes through — slip by before the coils seal!`, pass.def.color, 15);
+      }
+    }
+    if (this.wbPassing) {
+      const m = this.wbPassing;
+      const goal = this.wbPassingGoal;
+      if (m.dead || !goal) {
+        this.wbPassing = null; this.wbPassingGoal = null;
+      } else if (dist(m.pos, goal) < 46 || !f.passingIn(this.zone.id)) {
+        this.slipAway(m, 'the earth swallows it whole');
+        this.wbPassing = null; this.wbPassingGoal = null;
+      } else {
+        this.moveActor(m, goal.x - m.pos.x, goal.y - m.pos.y, dt);
+      }
+    }
+  }
+
+  /** On-entry materializer (zone-runtime row): stand the zone's sovereign up
+   *  from overlay state — wounds preserved, escort at its feet, the throne
+   *  beneath the enthroned. Idempotent per instance per visit. */
+  private materializeWorldBossFight(def: ZoneDef): void {
+    const f = this.sim.worldBossFieldFor(def.dimension);
+    if (!f) return;
+    const fight = f.fightAt(def.id);
+    if (!fight || this.materializedWorldBoss.has(fight.instanceId) || this.wbBoss) return;
+    const at = this.clearTransitSpot(this.clampPos(this.farPoint(340), 80), 110);
+    // The LAIR's throne rises first — the habitat ground the sovereign binds to
+    // (the per-frame confine sweep welds the body to the nearest matching dais).
+    if (fight.archetype === 'lair' && fight.def.lair) {
+      this.doodads.push({ pos: vec(at.x, at.y), radius: 130, kind: fight.def.lair.structureKind });
+    }
+    // Minted arenas already carry the level bonus; an apparition stands in an
+    // ordinary zone and takes it here.
+    const lvl = Math.max(1, def.level + (fight.archetype === 'apparition' ? (fight.def.levelBonus ?? 0) : 0));
+    const m = this.createMonster(fight.def.monster, lvl, 'enemy');
+    m.pos = vec(at.x, at.y);
+    m.tag = 'worldboss_boss';
+    m.eventKey = fight.instanceId;
+    this.actors.push(m);
+    if (fight.bossLifeFrac < 1) m.life = Math.max(1, m.maxLife() * fight.bossLifeFrac);
+    const esc = fight.def.escort;
+    if (esc && esc.table.length) {
+      const n = randInt(esc.count[0], esc.count[1]);
+      for (let k = 0; k < n; k++) {
+        const g = this.createMonster(this.weightedPick(esc.table, lvl), lvl, 'enemy');
+        g.pos = this.clampPos(vec(at.x + rand(-150, 150), at.y + rand(-150, 150)), g.radius);
+        this.actors.push(g);
+      }
+    }
+    if (fight.archetype === 'apparition') {
+      this.flashes.push({ pos: vec(at.x, at.y), radius: 200, color: fight.def.color, life: 0.9, maxLife: 0.9 });
+      this.text(vec(at.x, at.y - 70), `${fight.def.name} has RISEN!`, fight.def.color, 18);
+    }
+    this.wbBoss = m;
+    this.wbBossKey = fight.instanceId;
+    this.materializedWorldBoss.add(fight.instanceId);
+    bumpLedger(this.ledger, 'worldboss_seen');
   }
 
   // ----------------------------------------------------- necropolis (the uber)
@@ -21193,6 +21473,7 @@ export class World {
     this.updateHauntStream(dt);
     this.updateNecropolis();
     this.updateMigrationStream(dt);
+    this.updateWorldBosses(dt);
     this.updateBrigandRaid(dt);
     this.updateNeutralCooldown(); // roused neutrals lose interest + re-dormant on disengage
     this.pruneEngageTokens();     // stale/dead attack-token holders rotate out
@@ -22211,11 +22492,14 @@ export class World {
       }
       if (!onExit && lockedExit && this.lockHint <= 0) {
         this.lockHint = 1.5;
-        // A HOLDFAST exit shows its guardian's bespoke hint (a toll, not the objective).
+        // A HOLDFAST exit shows its guardian's bespoke hint (a toll, not the
+        // objective); a road held by a living EVENT names its holder instead.
         const led = this.zone.exits[lockedExit.defIndex];
         const gdef = led?.lock && this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
+        const eb = led && led.to !== '?' ? edgeBlockAt(this, this.zone.id, led.to) : null;
         this.text(vec(lockedExit.pos.x, lockedExit.pos.y - 40),
-          gdef ? gdef.sealedHint : 'sealed — finish the objective', '#d05050', 13);
+          eb ? eb.reason : gdef ? gdef.sealedHint : 'sealed — finish the objective',
+          eb?.color ?? '#d05050', 13);
       }
       // Dwell builds only while standing idle AND not being KNOCKED — a knockback
       // onto a portal must never carry you off (it's not your intent).
@@ -22423,6 +22707,11 @@ export class World {
     // so a damaged world self-heals into "a rift that never opens" instead of a
     // door to the wrong plane. Diagnosis lands in the console via placeExit.
     if (this.isIllegalCrossDim(ed)) return true;
+    // EDGE BLOCKADE (world/edgeBlocks.ts): a living event holds this road shut
+    // (the world-serpent's coils). Checked BEFORE the objectiveDone early-out —
+    // clearing a zone never opens a strangled pass; only the event's own end
+    // does. Any overlay can hold a road via registerEdgeBlockSource.
+    if (ed && ed.to !== '?' && edgeBlockAt(this, this.zone.id, ed.to)) return true;
     if (this.objectiveDone) return false;
     const o = this.zone.objective;
     const gates = o.kind === 'boss' || o.kind === 'spawners'

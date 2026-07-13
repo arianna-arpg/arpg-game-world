@@ -5508,6 +5508,289 @@ export const MONSTERS: Record<string, MonsterDef> = {
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 2.0, brain: { type: 'basic' },
   },
+
+  // ==========================================================================
+  // THE PRIMEVAL — the world-boss sovereigns (packages/defs/worldboss.ts).
+  // Rare forces of nature outside every war: contexts:['worldboss'] keeps the
+  // whole family out of ordinary generation — these bodies exist only where
+  // the WorldBossField stands them up. Each sovereign is a composite
+  // (MonsterDef.parts silhouettes) driving a script FSM; the engine stamps
+  // tag 'worldboss_boss' + the instance eventKey at spawn.
+  // ==========================================================================
+
+  // VHORUN, the Sunder-WyRM's HEAD — the settled serpent's fight. Erupted and
+  // anchored (moveSpeed 0): it repositions only by BURROW-teleport in Act II.
+  // Four hitboxes: the neck root, the maw (the prize weakspot), two coils.
+  primeval_wyrm_head: {
+    id: 'primeval_wyrm_head', name: 'Vhorun, the Sunder-Wyrm',
+    color: '#7fb069', shape: 'oval', radius: 30, material: 'chitin', look: 'sand_wyrm',
+    base: { life: 950, moveSpeed: 0, accuracy: 130, armor: 45, mana: 280, manaRegen: 14, weight: 9 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', 0.3), mod('damage', 'increased', 0.4)],
+    skills: ['venom_bolt', 'bile_spray', 'ground_slam'],
+    xp: 640, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.4, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 2.6,
+    worm: { length: 10, spacing: 20, taper: 0.9 },
+    ambush: { radius: 340, announce: 'The ground HEAVES — Vhorun rises!' },
+    scaling: { life: { incPerLevel: 0.15 } },
+    parts: [
+      { monster: 'primeval_wyrm_maw', dx: 1.35, dy: 0, lifeFrac: 0.4, breakDamage: 0.16 },
+      {
+        monster: 'primeval_wyrm_coil', dx: -0.4, dy: 1.35, lifeFrac: 0.26, breakDamage: 0.08,
+        breakMods: [mod('damageTaken', 'increased', 0.12)],
+      },
+      {
+        monster: 'primeval_wyrm_coil', dx: -0.4, dy: -1.35, lifeFrac: 0.26, breakDamage: 0.08,
+        breakMods: [mod('damageTaken', 'increased', 0.12)],
+      },
+    ],
+    brain: {
+      type: 'artillery',
+      script: [
+        { // ACT I — the LURKING COIL: spit and slam from the crater.
+          id: 'coiled',
+          cadences: [{ every: 5.5, first: 3, actions: [{ do: 'cast', skill: 'bile_spray', at: 'target', force: true }] }],
+          goto: [{ to: 'thrash', atLifeFrac: 0.62 }],
+        },
+        { // ACT II — it THRASHES: burrows away and erupts anew, venom raining.
+          id: 'thrash',
+          rewardGems: 1,
+          announce: 'Vhorun THRASHES — the earth splits under it!',
+          mods: [mod('damage', 'more', 0.3), mod('attackSpeed', 'increased', 0.2)],
+          onEnter: [
+            { do: 'teleport', to: 'awayFromTarget', range: 300 },
+            { do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 175, delay: 0.85, push: { strength: 220 } },
+          ],
+          cadences: [{ every: 7, actions: [{ do: 'ring', skill: 'venom_bolt', radius: 150, count: 6, waves: 1, delay: 0.9, at: 'anchor' }] }],
+          goto: [{ to: 'fury', atLifeFrac: 0.28 }],
+        },
+        { // ACT III — the BROOD: its spawn boil up and WARD it; break the ward.
+          id: 'fury',
+          rewardGems: 2,
+          announce: 'The Sunder-Wyrm keens — its brood answers!',
+          mods: [mod('damage', 'more', 0.4)],
+          onEnter: [
+            { do: 'summon', monster: 'primeval_spawn', count: 4, ring: 220, at: 'anchor', tag: 'wyrm_brood' },
+            { do: 'ward', tag: 'wyrm_brood', announce: 'The brood breaks — Vhorun is BARED!' },
+          ],
+          cadences: [{ every: 3, actions: [{ do: 'push', radius: 240, strength: 140, from: 'anchor' }] }],
+          goto: [],
+        },
+      ],
+    },
+  },
+  primeval_wyrm_maw: {
+    id: 'primeval_wyrm_maw', name: 'Sunder-Maw',
+    color: '#a4cc7e', shape: 'oval', radius: 17, material: 'chitin', look: 'leviathan_head',
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    base: { life: 220, moveSpeed: 0, mana: 140, manaRegen: 10, poise: 70 },
+    skills: ['venom_bolt'], xp: 0,
+    brain: { type: 'artillery' },
+  },
+  primeval_wyrm_coil: {
+    id: 'primeval_wyrm_coil', name: 'Sunder-Coil',
+    color: '#6a9458', shape: 'oval', radius: 15, material: 'chitin',
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    base: { life: 150, moveSpeed: 0, mana: 80, manaRegen: 6, poise: 50 },
+    skills: ['whirling_reap'], xp: 0,
+  },
+  // The PASSING body — the glimpse as it slithers a zone: engine-wheeled
+  // (driven), untouchable scenery-in-motion with a long trailing worm.
+  primeval_wyrm_passing: {
+    id: 'primeval_wyrm_passing', name: 'Vhorun, the Sunder-Wyrm',
+    color: '#7fb069', shape: 'oval', radius: 22, material: 'chitin', look: 'sand_wyrm',
+    base: { life: 100, moveSpeed: 120, mana: 0 },
+    skills: [], xp: 0,
+    faction: 'primeval', tags: ['primeval'],
+    worm: { length: 14, spacing: 18, taper: 0.92 },
+    driven: true, passive: true, invulnerable: true, untargetable: true,
+    noNemesis: true, noBestiary: true,
+  },
+
+  // CRAGMAW, the Orogeny — the walking mountain (timed apparition). Two fist
+  // silhouettes; sunder one and the slam is DISARMED.
+  primeval_cragmaw: {
+    id: 'primeval_cragmaw', name: 'Cragmaw, the Orogeny',
+    color: '#b0916a', shape: 'octagon', radius: 27, material: 'stone', look: 'golem',
+    base: { life: 880, moveSpeed: 46, accuracy: 125, armor: 85, mana: 220, manaRegen: 12, weight: 9 },
+    mods: [mod('fireRes', 'flat', 0.3), mod('coldRes', 'flat', 0.3), mod('damage', 'increased', 0.4)],
+    skills: ['ground_slam', 'hurl_debris', 'cleave'],
+    xp: 600, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.3, turnSpeed: 2.2,
+    scaling: { life: { incPerLevel: 0.15 } },
+    parts: [
+      { monster: 'primeval_cragmaw_fist', dx: 0.85, dy: 1.25, lifeFrac: 0.28, breakDamage: 0.1, breakDisables: ['ground_slam'] },
+      {
+        monster: 'primeval_cragmaw_fist', dx: 0.85, dy: -1.25, lifeFrac: 0.28, breakDamage: 0.1,
+        breakMods: [mod('damageTaken', 'increased', 0.12)],
+      },
+    ],
+    brain: {
+      type: 'juggernaut',
+      script: [
+        { // ACT I — the MOUNTAIN WALKS: shockwave slams that hurl you back.
+          id: 'mountain',
+          cadences: [{ every: 4.5, first: 3, actions: [{ do: 'nova', skill: 'ground_slam', at: 'self', zoneRadius: 180, delay: 0.85, push: { strength: 240 } }] }],
+          goto: [{ to: 'barrage', atLifeFrac: 0.55 }],
+        },
+        { // ACT II — the BARRAGE: it plants itself and rains the hillside down.
+          id: 'barrage',
+          use: { type: 'artillery' },
+          rewardGems: 1,
+          announce: 'Cragmaw tears the hillside loose — SHELTER!',
+          mods: [mod('damage', 'more', 0.35), mod('attackSpeed', 'increased', 0.15)],
+          cadences: [{ every: 6, actions: [{ do: 'ring', skill: 'hurl_debris', radius: 160, count: 5, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
+          goto: [{ to: 'landslide', atLifeFrac: 0.22 }],
+        },
+        { // ACT III — the LANDSLIDE: shards of it break off and swarm.
+          id: 'landslide',
+          use: { type: 'swarm' },
+          rewardGems: 2,
+          announce: 'The Orogeny CRUMBLES FORWARD — it will bury you!',
+          mods: [mod('moveSpeed', 'more', 0.4), mod('damage', 'more', 0.4)],
+          onEnter: [{ do: 'summon', monster: 'primeval_spawn', count: 3, ring: 200, at: 'anchor', tag: 'cragmaw_shard' }],
+          cadences: [{ every: 2.8, actions: [{ do: 'push', radius: 230, strength: 150, from: 'anchor' }] }],
+          goto: [],
+        },
+      ],
+      impulses: [{ type: 'swarm', every: [7, 10], duration: [1.3, 1.8], announce: 'It charges — a rockslide with intent!' }],
+    },
+  },
+  primeval_cragmaw_fist: {
+    id: 'primeval_cragmaw_fist', name: 'Orogen Fist',
+    color: '#9a7c56', shape: 'octagon', radius: 13, material: 'stone',
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    base: { life: 130, moveSpeed: 0, mana: 60, manaRegen: 6, poise: 60 },
+    skills: ['cleave'], xp: 0,
+  },
+
+  // ASHVEIN, the Furnace Below — hell's own sovereign (UNDERWORLD-ONLY: the
+  // def's dimension row keeps it off the surface instance's roster entirely).
+  primeval_ashvein: {
+    id: 'primeval_ashvein', name: 'Ashvein, the Furnace Below',
+    color: '#e06a2a', shape: 'star', radius: 25, material: 'ember', look: 'magma_lurker',
+    base: { life: 820, moveSpeed: 62, accuracy: 135, armor: 55, mana: 320, manaRegen: 16 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('chaosRes', 'flat', 0.4), mod('damage', 'increased', 0.4)],
+    skills: ['magma_glob', 'flame_wave', 'meteor_storm'],
+    xp: 640, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.4, levitates: true,
+    scaling: { life: { incPerLevel: 0.15 } },
+    brain: {
+      type: 'artillery',
+      script: [
+        { // ACT I — the SMOLDER: globs and rolling fire.
+          id: 'smolder',
+          cadences: [{ every: 5, first: 3, actions: [{ do: 'nova', skill: 'magma_glob', at: 'self', zoneRadius: 165, delay: 0.85, push: { strength: 180 } }] }],
+          goto: [{ to: 'furnace', atLifeFrac: 0.55 }],
+        },
+        { // ACT II — the FURNACE OPENS: cinders boil out and WARD it under a
+          // falling sky.
+          id: 'furnace',
+          rewardGems: 1,
+          announce: 'The furnace OPENS — the sky catches fire!',
+          mods: [mod('damage', 'more', 0.35)],
+          onEnter: [
+            { do: 'summon', monster: 'primeval_cinder', count: 4, ring: 210, at: 'anchor', tag: 'ashvein_cinder' },
+            { do: 'ward', tag: 'ashvein_cinder', announce: 'The cinders gutter — Ashvein is BARED!' },
+          ],
+          cadences: [{ every: 9, actions: [{ do: 'cast', skill: 'meteor_storm', at: 'target', force: true }] }],
+          goto: [{ to: 'ruin', atLifeFrac: 0.22 }],
+        },
+        { // ACT III — RUIN: it hunts, fire ringing off it in waves.
+          id: 'ruin',
+          use: { type: 'swarm' },
+          rewardGems: 2,
+          announce: 'Ashvein RUPTURES — run between the waves!',
+          mods: [mod('moveSpeed', 'more', 0.45), mod('damage', 'more', 0.45)],
+          cadences: [{ every: 5, actions: [{ do: 'ring', skill: 'magma_glob', radius: 170, count: 7, waves: 2, waveGap: 0.5, delay: 1.0, at: 'anchor' }] }],
+          goto: [],
+        },
+      ],
+    },
+  },
+
+  // VELKETH, the Enthroned Husk — the lair sovereign: habitat-bound to the
+  // husk_throne dais it erupts from (hard-confined; it IS the arena's far
+  // wall), sweeping the chamber with two anchored arm silhouettes.
+  primeval_velketh: {
+    id: 'primeval_velketh', name: 'Velketh, the Enthroned Husk',
+    color: '#9a6ad2', shape: 'pentagon', radius: 24, material: 'void',
+    base: { life: 900, moveSpeed: 0, accuracy: 135, armor: 50, mana: 320, manaRegen: 18, weight: 9 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3), mod('damage', 'increased', 0.45)],
+    skills: ['lash_roots', 'venom_bolt', 'bile_spray'],
+    xp: 660, boss: true, noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    detection: 1.6, vision: { arcDeg: 360, rearMul: 1 }, turnSpeed: 2.0,
+    habitat: { kind: 'husk_throne', grace: 48 },
+    ambush: { radius: 300, announce: 'The husk SPLITS along old seams — Velketh wakes!' },
+    scaling: { life: { incPerLevel: 0.15 } },
+    parts: [
+      {
+        monster: 'primeval_velketh_arm', dx: 1.15, dy: 1.5, lifeFrac: 0.3, breakDamage: 0.1,
+        breakMods: [mod('damageTaken', 'increased', 0.12)],
+      },
+      {
+        monster: 'primeval_velketh_arm', dx: 1.15, dy: -1.5, lifeFrac: 0.3, breakDamage: 0.1,
+        breakMods: [mod('damageTaken', 'increased', 0.12)],
+      },
+    ],
+    brain: {
+      type: 'artillery',
+      script: [
+        { // ACT I — ENTHRONED: it never leaves the dais; the chamber comes to it.
+          id: 'enthroned',
+          cadences: [{ every: 5.5, first: 3.5, actions: [{ do: 'ring', skill: 'venom_bolt', radius: 140, count: 5, waves: 1, delay: 0.85, at: 'anchor' }] }],
+          goto: [{ to: 'clutch', atLifeFrac: 0.55 }],
+        },
+        { // ACT II — the CLUTCH: its brood swarms out of the husk and WARDS it.
+          id: 'clutch',
+          rewardGems: 1,
+          announce: 'The throne DISGORGES its clutch!',
+          mods: [mod('damage', 'more', 0.35)],
+          onEnter: [
+            { do: 'summon', monster: 'primeval_spawn', count: 4, ring: 190, at: 'anchor', tag: 'velketh_clutch' },
+            { do: 'ward', tag: 'velketh_clutch', announce: 'The clutch is broken — the husk is BARED!' },
+          ],
+          goto: [{ to: 'paroxysm', atLifeFrac: 0.22 }],
+        },
+        { // ACT III — PAROXYSM: bile in sheets, the chamber shoved away in beats.
+          id: 'paroxysm',
+          rewardGems: 2,
+          announce: 'Velketh convulses — the whole chamber HEAVES!',
+          mods: [mod('damage', 'more', 0.45), mod('attackSpeed', 'increased', 0.2)],
+          cadences: [
+            { every: 2.6, actions: [{ do: 'push', radius: 240, strength: 150, from: 'anchor' }] },
+            { every: 6, actions: [{ do: 'cast', skill: 'bile_spray', at: 'target', force: true }] },
+          ],
+          goto: [],
+        },
+      ],
+    },
+  },
+  primeval_velketh_arm: {
+    id: 'primeval_velketh_arm', name: 'Husk Arm',
+    color: '#7e56ae', shape: 'oval', radius: 13, material: 'void',
+    noNemesis: true, faction: 'primeval', tags: ['primeval'],
+    base: { life: 140, moveSpeed: 0, mana: 70, manaRegen: 6, poise: 50 },
+    skills: ['whirling_reap'], xp: 0,
+  },
+
+  // The sovereigns' BROODS — chaff the fights summon (and the escort tables).
+  primeval_spawn: {
+    id: 'primeval_spawn', name: 'Primeval Spawn',
+    color: '#a8a05c', shape: 'oval', radius: 10, material: 'chitin',
+    base: { life: 42, moveSpeed: 126, mana: 0 },
+    skills: ['claw'], xp: 12,
+    faction: 'primeval', tags: ['primeval'],
+    brain: { type: 'swarm' },
+  },
+  primeval_cinder: {
+    id: 'primeval_cinder', name: 'Cinderling',
+    color: '#e08a4a', shape: 'oval', radius: 10, material: 'ember',
+    base: { life: 38, moveSpeed: 132, mana: 60, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.6)],
+    skills: ['firebolt'], xp: 14,
+    faction: 'primeval', tags: ['primeval'],
+    brain: { type: 'strafer' },
+  },
 };
 
 // ---------------------------------------------------------------------------

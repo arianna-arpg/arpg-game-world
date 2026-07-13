@@ -1051,6 +1051,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -2.6, color: '#ff9a50', intensity: 0.32, flicker: 2.2 },
   },
   ward_seal_broken: { painter: 'wardSeal', order: 57, params: { broken: true } },
+  // WORLD BOSSES (packages/defs/worldboss.ts) — the serpent's coil wall: a
+  // scaled hide-mound plugging a sealed pass (rules registered by the package;
+  // the engine lays and crumbles them at runtime).
+  wyrm_coil: {
+    longShadow: 0.8,
+    painter: 'boulder', order: 55, shadow: 0.65,
+    params: {
+      color: '#5c7a4c', edge: '#2c3e24', material: 'chitin', contrast: 1.1,
+      cluster: 0.35, grain: true, strata: {},
+    },
+  },
+  // Velketh's throne — the great husk dais the lair sovereign is fused to
+  // (ground overlay: the boss STANDS on it; it never blocks).
+  husk_throne: {
+    painter: 'liquid', order: 26,
+    blend: { strength: 0.45, feather: 26, color: '#3a2a48' },
+    params: {
+      rim: { color: '#7e56ae', alpha: 0.5, grow: 4 },
+      core: { color: '#3a2a48', alpha: 0.72 },
+      squiggles: { color: '#9a6ad2' },
+    },
+    light: { radius: -1.6, color: '#9a6ad2', intensity: 0.22, flicker: 1.2 },
+  },
   breach: {
     painter: 'breach', order: 58,
     params: { edge: '#d84a2a', label: 'the Breach' },

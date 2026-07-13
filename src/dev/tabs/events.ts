@@ -50,6 +50,14 @@ export const eventsTab: DevTabDef = {
       forceEvent('Breach (tear here)', (w, v, z) => (w.sim.breachField?.devIgnite(v, z) ?? null) !== null),
       forceEvent('Amalgamation (Bonewright here)', (w, v, z) => w.sim.amalgamationField?.devOpen(v, z) ?? false),
       forceEvent('Vendetta (post a writ)', (w, v, z) => w.sim.vendettaField?.devIgnite(v, z) ?? false),
+      // WORLD BOSSES: the three archetypes, each on its own trigger. The
+      // serpent wakes HERE (watch the map: it slithers, roads seal behind it);
+      // the apparition skips its herald and manifests in this zone; the lair
+      // anchors to this zone and mints its throne-zone off the mint drain.
+      forceEvent('World Serpent (wakes here)', (w, v, z) => w.sim.worldBossField?.devIgnite(v, z) ?? false),
+      forceEvent('World Boss (manifests here)', (w, v, z) =>
+        w.sim.worldBossFieldFor(w.zone.dimension)?.devManifest(v, z) ?? false),
+      forceEvent('World Boss Lair (grows here)', (w, v, z) => w.sim.worldBossField?.devLair(v, z) ?? false),
     );
 
     // Incursion + incubation have bespoke signatures (a far landing / a counter).

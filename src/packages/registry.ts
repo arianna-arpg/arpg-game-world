@@ -27,6 +27,7 @@ import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
 import { VENDETTA } from './defs/vendetta';
 import { WARBANDS } from './defs/warbands';
+import { WORLDBOSS } from './defs/worldboss';
 import type { EncounterDef } from './encounters';
 import type { HoldfastDef } from './holdfast';
 import type { ContentPackage, FurnishSpec, UnlockRequirement } from './types';
@@ -50,6 +51,7 @@ export const PACKAGES: ContentPackage[] = [
   MYCELIA,
   HAUNTING,
   VENDETTA,
+  WORLDBOSS,
   PIT,
   FACTION_POLITICS,
 ];
@@ -79,6 +81,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   mycelia: 0x14ce,
   vendetta: 0x0e4d,
   pit: 0x9147,
+  worldboss: 0xb055,
 };
 
 function hashId(id: string): number {
