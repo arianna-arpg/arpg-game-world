@@ -599,3 +599,42 @@ registerFormation({
     { kind: 'rubble', radius: [9, 13], every: 2, jitter: 18, rot: true },
   ],
 });
+
+// --- THE GLOAMWOOD SET (the haunted wood's composed dressings) --------------
+
+// PUMPKIN ROWS: the croft's planted ranks — gourd tangles in rank and file,
+// a carved lantern grinning down every fifth plot. Harvest that outlived
+// its farmers.
+registerFormation({
+  id: 'pumpkin_rows', arrange: 'grid', span: [240, 380], step: 56,
+  params: { rowGap: 60, aspect: 0.7 },
+  pieces: [
+    { kind: 'pumpkin_patch', radius: [14, 22], jitter: 10 },
+    { kind: 'jack_o_lantern', radius: [9, 12], every: 5, jitter: 14 },
+    { kind: 'hay_bale', radius: [12, 16], every: 6, jitter: 18, rot: true },
+  ],
+});
+
+// THE GALLOWS COURT: gibbets ringing the drop — the wood keeps its
+// sentences where everyone must pass them. Pairs with a clearing ≤ 72
+// (span×innerFrac 118 ≥ clearR 72 + piece 26 + jitter 10 — the numeric
+// clearing/ring contract).
+registerFormation({
+  id: 'gallows_court', arrange: 'orbit', span: [125, 175], step: 78,
+  params: { rings: [1, 1], innerFrac: 0.95 },
+  pieces: [
+    { kind: 'hanging_cage', radius: [20, 26], jitter: 10, rot: true },
+    { kind: 'gallows', radius: [24, 30], every: 4, jitter: 8, rot: true },
+  ],
+});
+
+// THE HANGED ROAD: cages strung down a bend among dead snags — sparse by
+// design; the sway does the talking.
+registerFormation({
+  id: 'gibbet_lane', arrange: 'meander', span: [320, 560], step: 120,
+  params: { wobble: 38 },
+  pieces: [
+    { kind: 'hanging_cage', radius: [20, 26], jitter: 12, rot: true },
+    { kind: 'dead_tree', radius: [14, 22], every: 2, jitter: 28, rot: true },
+  ],
+});

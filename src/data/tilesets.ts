@@ -329,6 +329,140 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE GLOAMWOOD — the HAUNTED forest: the same sealed knitting roof gone
+  // grey and crooked, under a sun that never quite arrives (dayLight 0.55 —
+  // noon is dusk here; night goes near-black). Its weather is the LIVING
+  // FOG: gloam-shrouds swallow whole clearings and the wood's dead drink
+  // them (mistfed), so the murk is territory — bait them out, or ride the
+  // same banks veiled. Crofts nobody tends, courts where sentences still
+  // hang, crows that see you long before you see them.
+  gloamwood: {
+    id: 'gloamwood',
+    compositions: [
+      { composition: 'hangmans_hill', chance: 0.35 },
+      { composition: 'witchs_croft', chance: 0.35 },
+    ],
+    nameFirst: ['Gloamwood', 'Duskhollow', 'Ravenmourn', 'Widowshade', 'Hangmans', 'Palegrove', 'Mourning', 'Shrouded', 'Witchlight', 'Hollowmoor', 'Blackbough', 'Grimhallow', 'Candlewake', 'Nightbriar', 'Sorrowfen', 'Cinderveil', 'Wolfsvigil', 'Lanternlost'],
+    nameSecond: ['Weald', 'Hollow', 'Thicket', 'Copse', 'Vale', 'Reach', 'Crossing', 'Wood', 'Glen', 'Bourne', 'Shade', 'Warren', 'Mile', 'Parish', 'Vigil', 'Acre'],
+    theme: {
+      // Perpetual dusk: the noon lift barely arrives; nights sink near-black.
+      dayLight: 0.55,
+      nightDark: 0.86,
+      heat: 0.35,
+      // The wood's own weather: tall coiling shrouds the dead drink, grave
+      // pools among the stones, river-mist where the water runs.
+      fog: { banks: [2, 4], kinds: [{ id: 'gloam_shroud', weight: 2 }, { id: 'grave_mist' }, { id: 'river_mist' }] },
+      ground: {
+        // Grey-green loam under leaf-rot: desaturated, dark-biased; the
+        // clearing lift stays WAN — gaps read as paler gloom, never sun.
+        palette: ['#101410', '#161c17', '#1d241c', '#242e24', '#31402f', '#4a5a44'],
+        bias: 0.44, alpha: 0.5, strength: 1.05,
+        clearing: { reach: 150, lift: 0.22 },
+      },
+      ambientFx: [{ kind: 'motes', color: '#9ab0a0', intensity: 0.7 }],
+      floor: '#0c100c', grid: '#131a14', border: '#2c3a30',
+      obstacle: '#2e4030', obstacleEdge: '#4d6a50', accent: '#a8e0b0',
+      mud: '#1a2216', chasm: '#040704', water: '#14303a', wall: '#3a3226',
+      tree: '#2b3b33', grass: '#3c4a38',
+      // Trails read as bare cold earth, not gravel.
+      road: '#463c2c',
+    },
+    sizeW: [2600, 3800], sizeH: [1900, 2700], ellipseChance: 0.2, biome: 'gloamwood',
+    // FURNITURE ONLY — the forest recipe plants the crooked roof (the gloam
+    // tree mix rides the BIOME's layoutParams); these rows pool into
+    // whatever the crowns leave open.
+    layout: [
+      { kind: 'dead_tree', count: [3, 6] },
+      { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [2, 4] },
+      { kind: 'web', count: [1, 3] },
+      { kind: 'tombstone', count: [3, 7] },
+      { kind: 'wayshrine', count: [0, 1] }, { kind: 'signpost', count: [0, 1] },
+      { kind: 'rocks', count: [3, 6], radius: [18, 32] },
+      { kind: 'river', count: [0, 1] },
+      { kind: 'bog', count: [0, 1] },
+      { kind: 'ruin', count: [0, 2] },
+    ],
+    // Whatever face it shows: gloom-glades reserved first, a lantern someone
+    // STILL carves, old bones, urns, briars — and somewhere, cages.
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [100, 170] },
+      { kind: 'jack_o_lantern', count: [1, 3] },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'burial_urn', count: [0, 2] },
+      { kind: 'briarwood', count: [1, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'gibbet_lane' },
+    ],
+    variants: [
+      // The tended dead: rows under the crooked roof — the parish that
+      // stayed to keep its yard.
+      { name: 'hallowed yard', layout: [
+        { kind: 'tombstone', count: [10, 16] },
+        { kind: 'formation', count: [2, 3], formation: 'gravestone_rows' },
+        { kind: 'weathered_statue', count: [1, 2] },
+        { kind: 'black_obelisk', count: [0, 1] },
+        { kind: 'dead_tree', count: [2, 4] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 28] },
+        { kind: 'ruin', count: [0, 1] },
+      ] },
+      // The sentence mile: the road the wood judges you on.
+      { name: "hangman's reach", layout: [
+        { kind: 'formation', count: [1, 2], formation: 'gibbet_lane' },
+        { kind: 'gallows', count: [0, 1] },
+        { kind: 'dead_tree', count: [3, 6] },
+        { kind: 'web', count: [1, 3] },
+        { kind: 'rocks', count: [2, 5], radius: [16, 30] },
+        { kind: 'ruin', count: [0, 1] },
+        { kind: 'broken_cart', count: [0, 1] },
+      ] },
+      // Witchlight: the crofts — the cute face of the wrongness.
+      { name: 'witchlight', layout: [
+        { kind: 'formation', count: [1, 2], formation: 'pumpkin_rows' },
+        { kind: 'jack_o_lantern', count: [2, 5] },
+        { kind: 'scarecrow', count: [1, 2] },
+        { kind: 'hay_bale', count: [1, 3] },
+        { kind: 'mushroom_ring', count: [0, 1] },
+        { kind: 'river', count: [0, 1] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 28] },
+      ] },
+    ],
+    packs: {
+      count: [5, 8], size: [3, 5],
+      // Duskwood end to end: crows and shamblers on the fringe; wolves,
+      // thralls and hags in the middle depths; weres, wights, the banshee
+      // and the Rider where the roof seals.
+      table: [
+        { id: 'carrion_crow', weight: 3, presence: { to: 20, fadeOut: 10 } },
+        { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'zombie', weight: 2, presence: { to: 18, fadeOut: 9 } },
+        { id: 'skeleton_warrior', weight: 1, presence: { to: 20, fadeOut: 10 } },
+        { id: 'hollow_lantern', weight: 2 },
+        { id: 'dire_wolf', weight: 3, presence: { from: 4, fadeIn: 2 } },
+        { id: 'moon_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'grave_hag', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'vampire_thrall', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'crimson_bat', weight: 2, presence: { to: 22, fadeOut: 10 } },
+        { id: 'orb_weaver', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'werewolf', weight: 2, presence: { from: 11, fadeIn: 5 } },
+        { id: 'barrow_wight', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'banshee', weight: 1, presence: { from: 13, fadeIn: 6 } },
+        { id: 'dusk_rider', weight: 1, presence: { from: 12, fadeIn: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'waves', weight: 1 },
+    ],
+    structures: [
+      { structure: 'pillaged_township', chance: 0.15 },
+      { structure: 'watchtower', chance: 0.1 },
+    ],
+  },
+
   // THE TAIGA — the winter FOREST: where the tundra is open and howling,
   // the taiga is close and hushed — dense conifer stands you disappear
   // beneath, standing drifts, frozen pools, firewood caches of travelers

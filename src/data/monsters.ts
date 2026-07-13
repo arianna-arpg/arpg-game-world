@@ -4839,6 +4839,67 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE GLOAMWOOD (the haunted wood's own: carrion, crones, lanterns,
+  //     and the rider whose sentence never ended) ----------------------------
+  // The carrion crow: the wood's eyes — a mobbing swarm that harries and
+  // scatters. Kill the watchers or be watched.
+  carrion_crow: {
+    id: 'carrion_crow', name: 'Carrion Crow',
+    color: '#2a2d34', shape: 'triangle', radius: 8, material: 'fur', look: 'carrion_crow',
+    base: { life: 16, moveSpeed: 210, accuracy: 100, evasion: 85, mana: 10, manaRegen: 2 },
+    skills: ['talon_rake'], xp: 6, faction: 'wild', tags: ['beast'],
+    flier: true, levitates: true,
+    detection: 1.6, // the watchers see FAR — the wood knows you came in
+    brain: {
+      type: 'swarm',
+      morale: { skittish: { radius: 90, duration: [0.6, 1.2] } },
+      move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 },
+    },
+  },
+  // The grave hag: the wood's crone — she curses from the second rank,
+  // wakes the buried, and drinks whatever despairs. MISTFED in her own
+  // grave-mist: pull her out of the murk or share it veiled.
+  grave_hag: {
+    id: 'grave_hag', name: 'Grave Hag',
+    color: '#8a9a7a', shape: 'star', radius: 13, material: 'cloth', look: 'grave_hag',
+    base: { life: 75, moveSpeed: 120, evasion: 40, mana: 180, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.3)],
+    skills: ['raise_dead', 'despair', 'essence_drain'], xp: 34, faction: 'undead',
+    gemBias: ['curse', 'minion'], wardPriority: 1,
+    detection: 1.1, brain: { type: 'commander' },
+  },
+  // The hollow lantern: a carved grin that floats where the fog goes — it
+  // RIDES the banks (x_seek_fog, data/fog.ts) and burns brighter fed by
+  // them (mistfed). The lure: follow the light, find the court.
+  hollow_lantern: {
+    id: 'hollow_lantern', name: 'Hollow Lantern',
+    color: '#d8722a', shape: 'pentagon', radius: 10, material: 'ethereal', look: 'hollow_lantern',
+    base: { life: 40, moveSpeed: 145, evasion: 75, mana: 120, manaRegen: 9 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.3)],
+    skills: ['firebolt'], xp: 20, faction: 'undead',
+    levitates: true,
+    detection: 1.2,
+    brain: {
+      type: 'strafer',
+      // Between volleys it slips toward the nearest living fog bank — the
+      // registered x_seek_fog beat (a short gloaming blink, never a march).
+      rules: [{ when: {}, every: [5, 9], hold: [0.1, 0.2], actions: [{ do: 'x_seek_fog' }] }],
+    },
+  },
+  // The dusk rider: the sentence that never ended — a headless drape at a
+  // gallop. Locked charges, a scythe the width of the road, and it does not
+  // stop where you were. The Gloamwood's elite.
+  dusk_rider: {
+    id: 'dusk_rider', name: 'Dusk Rider',
+    color: '#3a3444', shape: 'hexagon', radius: 16, material: 'cloth', look: 'dusk_rider',
+    base: { life: 200, moveSpeed: 200, accuracy: 120, evasion: 40, armor: 45, mana: 60, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.3)],
+    skills: ['gore_rend', 'heavy_strike'], xp: 60, faction: 'undead',
+    grants: [{ atLevel: 20, support: 'multistrike', on: 'heavy_strike', chance: 0.5 }],
+    detection: 1.3, wardPriority: 2,
+    brain: { type: 'juggernaut', enrage: 0.5, move: { style: 'charge', commitRange: 420, chargeSpeed: 2.8 } },
+  },
+
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
   dire_wolf: {
     id: 'dire_wolf', name: 'Dire Wolf',

@@ -11,6 +11,7 @@
 // ---------------------------------------------------------------------------
 
 import { registerFogBank } from '../engine/fog';
+import { registerAIAction } from '../engine/aiActions';
 
 /** MIST — the common drifting murk. The generic veil the old static
  *  fog_bank doodads granted, now alive: it wanders the open ground, breathes,
@@ -93,4 +94,29 @@ registerFogBank({
     { status: 'fogveiled' },
     { status: 'mistfed', factions: ['undead'] },
   ],
+});
+
+// --- FOG-RIDING CHOREOGRAPHY -------------------------------------------------
+// x_seek_fog: a gloaming BLINK toward the nearest living bank — not a march,
+// a fade-and-reappear (the gloomling idiom, mechanically a clamped
+// displacement). Monsters whose defs carry `{ do: 'x_seek_fog' }` beats slip
+// back into the murk between volleys and drink it (their fog grants do the
+// rest). A zone with no fog, or an actor already inside some, no-ops — the
+// rule simply tries again next window.
+registerAIAction('x_seek_fog', (world, actor) => {
+  const fog = world.fog;
+  if (!fog) return;
+  if (fog.inFog(actor.pos.x, actor.pos.y, actor.radius * 0.5)) return;
+  const bank = fog.nearestBank(actor.pos.x, actor.pos.y);
+  if (!bank) return;
+  const dx = bank.pos.x - actor.pos.x;
+  const dy = bank.pos.y - actor.pos.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 24) return;
+  // A generous stride: banks DRIFT while the beat cools down, and a dense
+  // roof steals part of every landing to the clamp's slide.
+  const hop = Math.min(d, 340);
+  actor.pos = world.clampPos(
+    { x: actor.pos.x + (dx / d) * hop, y: actor.pos.y + (dy / d) * hop },
+    actor.radius);
 });

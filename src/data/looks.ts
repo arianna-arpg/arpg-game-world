@@ -1959,6 +1959,53 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 2 } }],
   },
 
+  // --- THE GLOAMWOOD (carrion, crones, lanterns, the rider) ----------------
+  /** The carrion crow: a ragged wedge — all wings, beak, and appetite. */
+  carrion_crow: {
+    parts: [
+      { kind: 'featherWings', scale: 1.15, role: 'dark' },
+      { kind: 'disc', scale: 0.5, role: 'dark' },
+      { kind: 'tailFeathers', x: -0.45, scale: 0.7, role: 'dark' },
+      { kind: 'beak', x: 0.45, scale: 0.85 },
+      { kind: 'eyes', color: '#d8b04a', params: { spread: 0.3, dist: 0.4, size: 0.1 } },
+    ],
+  },
+  /** The grave hag: bent under a hood, tatters to the ground, a crook
+   *  tipped with somebody. */
+  grave_hag: {
+    parts: [
+      { kind: 'tatters', params: { n: 5 } },
+      { kind: 'robe', scale: 0.9, role: 'dark' },
+      { kind: 'staff', y: -0.08, params: { skullTip: true } },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.6, params: { n: 2 } }],
+  },
+  /** The hollow lantern: a carved grin floating in its own candle-light —
+   *  the mask IS the face; the flame never sits still. */
+  hollow_lantern: {
+    parts: [
+      { kind: 'disc', scale: 0.75 },
+      { kind: 'mask', scale: 0.62, role: 'glow' },
+      { kind: 'halo', scale: 1.0, alpha: 0.55, role: 'glow' },
+    ],
+    live: [
+      { kind: 'flames', scale: 0.5, role: 'glow' },
+      { kind: 'wisps', scale: 0.6, params: { n: 2 } },
+    ],
+  },
+  /** The dusk rider: a headless drape at a gallop — cape streaming, scythe
+   *  out. No head. That's the point. */
+  dusk_rider: {
+    parts: [
+      { kind: 'cape', scale: 1.1, role: 'dark' },
+      { kind: 'torso', scale: 0.8, role: 'dark' },
+      { kind: 'pauldrons', scale: 0.9 },
+      { kind: 'scythe', y: 0.08, params: { len: 1.0 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.45, scale: 0.9, params: { n: 3 } }],
+  },
+
   // --- THE NIGHT COURT (vampires, weres — and their wolves) ----------------
   /** A thrall: bled pale, collared cape, its master's fangs. */
   vampire_thrall: {

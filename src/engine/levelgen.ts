@@ -75,6 +75,10 @@ export type KnownDoodadKind =
   | 'conifer'   // evergreen spire (pine crown; tundra/deepwood)
   | 'ancient_tree' // a forest ELDER: huge crown, thick bole, packs hide beneath
   | 'forest_oak' // the FOREST's canopy body: a broad veiled crown built to knit into sealed masses
+  | 'gloam_oak' // the GLOAMWOOD's canopy body: the same knitting crown gone grey-dark and crooked
+  | 'pumpkin_patch' // walkable gourd tangle (the croft rows; harvest that outlived its farmers)
+  | 'jack_o_lantern' // a lone CARVED gourd, candle-lit — grins in the dark, pops when struck
+  | 'hanging_cage' // a gibbet: post + chained cage, bone bundle inside (the hanged road)
   | 'ice_spike' // a rimed crystal fang jutting from frozen ground (taiga/tundra)
   | 'snowman'   // someone built it and left; it watches (winter clutter)
   | 'signpost'  // a fingerboard post naming ways travelers stopped taking
@@ -740,6 +744,16 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
    *  the forest recipe plants them closer than their crowns span, so the
    *  veil index reads whole stands as single sealed masses. */
   forest_oak: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 12, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.22, veil: {} },
+  /** The GLOAMWOOD's canopy body: forest_oak's exact walk-under/veil
+   *  mechanics under a grey-dark crooked crown (the haunted wood seals its
+   *  roof the same way the green one does). */
+  gloam_oak: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 12, occlude: { pad: 12, alpha: 0.3 }, bodyScale: 0.22, veil: {} },
+  // The Gloamwood croft kit: a walkable gourd tangle, its lone carved
+  // cousin (inert, candle-lit, pops), and the hanged road's gibbets.
+  pumpkin_patch: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  jack_o_lantern: { overlap: 'inert', spacing: 44,
+    brittle: { on: ['hit'], orbChance: 0.3, text: 'the lantern gutters…', color: '#ffb44a' } },
+  hanging_cage: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm'] },
   /** A forest ELDER: a huge crown over a thick bole — the dense-forest
    *  anchor (whole packs ambush beneath one). Veiled: even a lone elder's
    *  crown is a PATCH (aim assist can't hold what waits beneath), and where
@@ -3008,6 +3022,13 @@ registerStamp('cairn', stampSingle('cairn', [11, 16]));
 registerStamp('weathered_statue', stampSingle('weathered_statue', [16, 24]));
 registerStamp('wayshrine', stampSingle('wayshrine', [13, 18]));
 registerStamp('gallows', stampSingle('gallows', [22, 30]));
+// The Gloamwood croft kit: crooked canopy single (the recipe plants the
+// mass; authored rows can still call one down), gourd tangles, the lone
+// carved lantern, the hanged road's gibbets.
+registerStamp('gloam_oak', stampSingle('gloam_oak', [38, 58]));
+registerStamp('pumpkin_patch', (ctx, spec) => stampBlob(ctx, 'pumpkin_patch', spec.radius ?? [16, 30], [2, 4], false));
+registerStamp('jack_o_lantern', stampSingle('jack_o_lantern', [9, 12]));
+registerStamp('hanging_cage', stampSingle('hanging_cage', [20, 27]));
 registerStamp('fishing_rack', stampSingle('fishing_rack', [16, 24]));
 registerStamp('charcoal_mound', stampSingle('charcoal_mound', [18, 28]));
 registerStamp('scree', (ctx, spec) => stampBlob(ctx, 'scree', spec.radius ?? [18, 46], [3, 6], false));

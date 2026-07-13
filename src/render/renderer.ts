@@ -49,6 +49,7 @@ import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
 import { drawFogLayer } from './vis/fogLayer';
+import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';

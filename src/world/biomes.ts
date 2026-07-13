@@ -109,6 +109,28 @@ export const BIOMES: Record<string, BiomeInfo> = {
     climate: { temperature: 'mild', moisture: 'damp' },
     allowedLayouts: { forest: 1 },
     landmarks: [{ landmark: 'lake', chance: 0.25 }, { landmark: 'secluded_valley', chance: 0.15 }] },
+  // THE GLOAMWOOD: the HAUNTED forest — the same sealed-roof recipe under a
+  // crooked grey-dark tree mix (layoutParams.forestTrees), riverland faces
+  // where the mist can roll its banks, winding wood-roads between. Claims
+  // the COOL half of the damp woods (the forest keeps the mild half — the
+  // taiga/tundra split, applied to woodland; two soft gates so neither belt
+  // starves). Its weather is the living fog; its dead drink it.
+  gloamwood: { patronFaction: 'undead', mapColor: '#3a4a40', label: 'Gloamwood', spacing: 62,
+    climate: { temperature: { to: 0.55, fadeOut: 0.15 }, moisture: { from: 0.42, fadeIn: 0.12 } },
+    allowedLayouts: { forest: 3, riverland: 1.5, winding: 1 },
+    layoutParams: {
+      // The crooked roof: gloam oaks knit the same sealed masses, bare snags
+      // break the canopy line, briars snarl the understory edge.
+      forestTrees: [
+        { kind: 'gloam_oak', weight: 5, radius: [38, 58] },
+        { kind: 'dead_tree', weight: 2, radius: [14, 24] },
+        { kind: 'tree', weight: 1, radius: [20, 30] },
+        { kind: 'briarwood', weight: 1, radius: [18, 26] },
+      ],
+      forestCoverEdge: 0.4, forestCoverDeep: 0.8,
+      forestClearings: [2, 5],
+    },
+    landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.12 }] },
   // Gravelands raise mausoleum labyrinths (a rare whole-zone hedge-maze bastion)
   // and the odd lone watchtower among the tombs.
   // GRAVELANDS: plains, mausoleum-labyrinth bastions, and RUINED NECROPOLIS
@@ -383,6 +405,8 @@ export interface BiomeSeedDef {
 export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'grove', weight: 1.2 },
   { biome: 'forest', weight: 1.3 },
+  { biome: 'gloamwood', weight: 1.2 }, // the cool-damp woods: haunted where the forest ends
+
   { biome: 'field', weight: 1.1 },
   { biome: 'grave', weight: 1.0 },
   { biome: 'desert', weight: 2.0 },

@@ -236,3 +236,34 @@ registerComposition({
     { kind: 'formation', formation: 'capacitor_bank', at: 'yard', count: [1, 1] },
   ],
 });
+
+// HANGMAN'S HILL: a bare rise where the wood keeps its sentences — the drop
+// cleared at the heart, gibbets (and the gallows among them) ringing it,
+// the graves of the sentenced in rows somewhere below. The Gloamwood's
+// court; geometry pairs gallows_court's orbit with the ≤72 clearing.
+registerComposition({
+  id: 'hangmans_hill',
+  sites: [{ id: 'drop', radius: [150, 200] }],
+  pre: [{ kind: 'clearing', at: 'drop', count: [1, 1], radius: [55, 72] }],
+  post: [
+    { kind: 'formation', formation: 'gallows_court', at: 'drop', count: [1, 1] },
+    { kind: 'formation', formation: 'gravestone_rows', count: [1, 2] },
+  ],
+});
+
+// THE WITCH'S CROFT: a worked plot the wood grew back over — pumpkin ranks
+// around a swept yard, bales and a cart nobody hitched again, lanterns
+// someone STILL carves. Wrong in the way tended things are wrong where no
+// tender lives.
+registerComposition({
+  id: 'witchs_croft',
+  pre: [{ kind: 'clearing', count: [1, 1], radius: [70, 100] }],
+  post: [
+    { kind: 'formation', formation: 'pumpkin_rows', count: [1, 2] },
+    { kind: 'scarecrow', count: [1, 2] },
+    { kind: 'hay_bale', count: [1, 3] },
+    { kind: 'broken_cart', count: [0, 1] },
+    { kind: 'jack_o_lantern', count: [1, 3] },
+    { kind: 'mushroom_ring', count: [0, 1] },
+  ],
+});

@@ -417,6 +417,30 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.22, roots: 5, color: '#41321f' },
     canopy: { painter: 'leafCrown', params: { fill: '#274f1d' } },
   },
+  // The GLOAMWOOD's canopy body: the same knitting oak gone grey-dark — a
+  // desaturated blue-green crown over a near-black crooked bole, so the
+  // haunted roof reads as its own DEAD mass beside any living wood.
+  gloam_oak: {
+    longShadow: 0.95,
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.24, roots: 6, color: '#241f1a' },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2b3b33' } },
+  },
+  // The croft kit (paintersGloam.ts): gourd tangles, the lit lone lantern
+  // (light spec = the candle), the hanged road's swaying gibbets.
+  pumpkin_patch: {
+    painter: 'gourds', order: 46,
+    blend: { strength: 0.3, feather: 22, color: '#2a2418' },
+    params: { color: '#c8681e', stem: '#5a6a30', vine: '#3c4a26' },
+  },
+  jack_o_lantern: {
+    painter: 'gourds', order: 47, shadow: 0.3,
+    params: { color: '#d8722a', stem: '#5a6a30', glow: '#ffb44a', lit: true, n: 1 },
+    light: { radius: -2.6, color: '#ff9a3a', intensity: 0.28, flicker: 1.3 },
+  },
+  hanging_cage: {
+    painter: 'gibbet', order: 55, shadow: 0.45, longShadow: 1.6,
+    params: { wood: '#4c3e2c', iron: '#3a3d44', bone: '#c9bda2' },
+  },
   // Giant fungus wears the WALK-UNDER TREE mechanism now: a real pale-ringed
   // STALK at ground level (the trunk painter, fungal-toned, sized to the
   // bodyScale trunk), the parametric cap riding the canopy pass above.
