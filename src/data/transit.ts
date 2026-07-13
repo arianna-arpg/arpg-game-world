@@ -169,6 +169,16 @@ registerTransit({ kind: 'voyage_landing', dwell: 0.9, ring: { radius: 34, color:
 // new — the one dwell that never drew progress; teal to match the platform.)
 registerTransit({ kind: 'descent_shaft', dwell: 1.0, radius: 72, ring: { radius: 40, color: '#7fe0d8' } });
 
+// The SKY GEYSER (the Ascent's mouth): a deliberate mount — you stand INTO
+// the spray and let it take you. A longer dwell than a cave mouth: riding a
+// geyser should never happen by accident. Wide ring, spray-pale.
+registerTransit({ kind: 'sidezone:sky_geyser', dwell: 0.9, radius: 34, ring: { radius: 42, color: '#bfe8f4' } });
+
+// The ASCENDANT GATE (the Aetherial's realm gate, DimensionEntry.gateDoodad):
+// the far end of a dissolving crossing — the dwell is quick because the
+// ground you're standing on may not wait for a slow one.
+registerTransit({ kind: 'realm_gate:dim_aetherial', dwell: 0.45, radius: 36, ring: { radius: 46, color: '#ffe9a8' } });
+
 // Ward seals: the ritual anchors that ward an arena's boss (data/arenas.ts).
 // Dwell one to shatter it; the ring burns infernal.
 registerTransit({ kind: 'ward_seal', dwell: 0.9, radius: 30, ring: { radius: 34, color: '#ff9a50' } });

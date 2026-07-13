@@ -96,6 +96,28 @@ registerFogBank({
   ],
 });
 
+/** AETHER VEIL — the cloud realm's own breath: tall, bright, slow-coiling
+ *  drifts of sunlit vapor that wrap whole causeways. Everyone inside is
+ *  veiled (the fog hides you from senses, not from physics — the standing
+ *  rule); the Host drifts through it like it isn't there because to them
+ *  it isn't: it is more of the same sky they wear. */
+registerFogBank({
+  id: 'aether_veil',
+  color: '#e6ecf8',
+  alpha: 0.3,
+  radius: [130, 220],
+  lobes: [6, 10],
+  drift: [8, 16],
+  meander: 0.2,
+  swirl: 0.05,
+  breathe: 0.22,
+  churn: 0.28,
+  life: [48, 96],
+  rampFrac: 0.3,
+  overFrac: 0.5,
+  grants: [{ status: 'fogveiled' }],
+});
+
 // --- FOG-RIDING CHOREOGRAPHY -------------------------------------------------
 // x_seek_fog: a gloaming BLINK toward the nearest living bank — not a march,
 // a fade-and-reappear (the gloomling idiom, mechanically a clamped

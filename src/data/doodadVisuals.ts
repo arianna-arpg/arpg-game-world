@@ -1133,4 +1133,38 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'beacon', order: 59,
     light: { radius: 120, color: '#7fd0ff', intensity: 0.4 },
   },
+
+  // --- The AETHERIAL kit (vis/paintersAether.ts — the cloud shelves) --------
+  cloud_billow: {
+    painter: 'cloudBillow', order: 44, shadow: 0.25,
+    params: { body: 'theme:obstacle|#e7ecf7', shadow: 'theme:obstacleEdge|#a9b6d4', crown: '#fdfdff' },
+  },
+  aether_crystal: {
+    painter: 'aetherCrystal', order: 50, shadow: 0.3,
+    params: { body: '#bcd6ff', deep: '#6c86c8', gleam: '#ffffff' },
+    light: { radius: -3.2, color: '#9fc4ff', intensity: 0.4, flicker: 0.8 },
+  },
+  seraph_statue: {
+    painter: 'seraphStatue', order: 54, shadow: 0.5, longShadow: 1.4,
+    params: { marble: '#e3e2dc', shadow: '#9a9aa4', gold: '#d8b56a' },
+  },
+  harp_pillar: {
+    painter: 'harpPillar', order: 53, shadow: 0.45, longShadow: 1.2,
+    params: { marble: '#e6e5df', string: '#ffe9a8', gold: '#d8b56a' },
+    light: { radius: -2.2, color: '#ffe9a8', intensity: 0.16 },
+  },
+  prayer_bell: {
+    painter: 'prayerBell', order: 52, shadow: 0.35,
+    params: { bronze: '#b9935a', marble: '#e0dfd8', cord: '#c8d4ea' },
+  },
+  ascendant_gate: {
+    painter: 'ascendantGate', order: 58, shadow: 0.4,
+    params: { marble: '#e8e7e1', light: 'theme:accent|#ffeeb8', gold: '#d8b56a' },
+    light: { radius: -3.6, color: '#ffe9a8', intensity: 0.5, flicker: 0.6 },
+  },
+  sky_geyser: {
+    painter: 'skyGeyser', order: 47, shadow: 0.2,
+    params: { stone: '#8a8d96', water: '#7fc4d8', spray: '#eef6fb' },
+    light: { radius: -2.6, color: '#9fd8e8', intensity: 0.2 },
+  },
 };

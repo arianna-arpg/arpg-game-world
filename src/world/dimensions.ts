@@ -155,6 +155,40 @@ registerDimension({
     gate: { id: 'uw_gate', name: 'The Hellgate', biome: 'rift', seedSalt: 0x4e11 },
   },
 });
+registerDimension({
+  id: 'aetherial', label: 'The Aetherial', color: '#9fc0e8',
+  // The realm above the clouds: for now one biome — the dissolving cloud
+  // shelves (the 'aether' tileset's torn lattices). The FIRMAMENT (the
+  // sanctum biome) is deliberately NOT in the palette: it exists only where
+  // the gate mints it — country grows from shelves; the sanctum is a place.
+  biomes: [
+    { biome: 'aether', weight: 1 },
+  ],
+  levelBonus: 4,
+  // The high air: cold, thin, and bone-dry — no seas above the sky. The
+  // shared affinity machinery has one biome to paint today; the axes stand
+  // ready for the realm's future country (auroral tundra-shoals? storm
+  // shelves in the wettest reaches?) to gate against.
+  climate: {
+    temperature: { base: 0.3, layers: [{ kind: 'noise', cell: 1000, amp: 0.18, salt: 0x0ae1 }] },
+    moisture: { base: 0.24, layers: [{ kind: 'noise', cell: 900, amp: 0.2, salt: 0x0ae2 }] },
+    maritime: { base: 0, layers: [] },
+  },
+  // The Host keeps its own weather: world events run at HALF tempo above
+  // the clouds (and the aether biome's own denies gate the worst offenders).
+  events: { densityMul: 0.5 },
+  // Entered by RIDING A SKY GEYSER (the Ascent): the launch drops you on a
+  // collapsing shelf hung over the very zone you left; crossing its eroding
+  // causeway to the ASCENDANT GATE (entry.gateDoodad — the realm-gate dwell
+  // loop scans it) mints The Firmament, the waypoint home the realm's own
+  // frontiers grow from. The structural inverse of the Underworld's breach:
+  // hell is delved into; heaven must be survived INTO.
+  entry: {
+    kind: 'sky_launch',
+    gate: { id: 'ae_gate', name: 'The Firmament', biome: 'aether_sanctum', seedSalt: 0xa54c }, // 'ASCent'
+    gateDoodad: 'ascendant_gate',
+  },
+});
 
 function hashCell(a: number, b: number, seed: number): number {
   let h = (seed ^ 0x9e3779b9) >>> 0;

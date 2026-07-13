@@ -334,6 +334,24 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // a tint over a land heat-map that isn't there.
   ocean: { patronFaction: 'wild', mapColor: '#142e47', label: 'Open Sea',
     virtual: true, washOpacity: 0.62 },
+  // THE AETHER — the Aetherial dimension's cloud shelves (dimension-palette-
+  // only: no climate gate, no surface field entry — the realm above mints it
+  // from its own weighted palette, the durance/steppes pattern). Every zone
+  // is a torn lattice of cloud isles over open sky whose ground DISSOLVES
+  // (the tileset's theme carries the CollapseSpec); the Host keeps events
+  // quiet up here — the realm is its own event.
+  aether: { patronFaction: 'seraphic', mapColor: '#9fc0e8', label: 'Aether', spacing: 88,
+    allowedLayouts: { aether_lattice: 1 },
+    eventDensityMul: 0.5,
+    denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
+  // THE FIRMAMENT — the Aetherial's SANCTUM face (its gate zone's biome, and
+  // one day its cities'): the same lattice recipe run dense and unbroken —
+  // no sky-holes, wide causeways, and the tileset that claims this biome
+  // carries NO CollapseSpec. Never in the dimension's frontier palette.
+  aether_sanctum: { patronFaction: 'seraphic', mapColor: '#c8d8f4', label: 'Firmament', spacing: 88,
+    allowedLayouts: { aether_lattice: 1 },
+    eventDensityMul: 0.3,
+    layoutParams: { isles: [5, 7], isleRadius: [200, 300], causewayWidth: [70, 95], holes: [0, 0] } },
 };
 
 /** The imposed sea biome's id (see BIOMES.ocean — virtual, continent-imposed). */

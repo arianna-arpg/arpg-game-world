@@ -52,6 +52,7 @@ import { drawFogLayer } from './vis/fogLayer';
 import { UnderstoryLayer } from './vis/understory';
 import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
+import './vis/paintersAether'; // side-effect: the Aetherial kit's painters register
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';

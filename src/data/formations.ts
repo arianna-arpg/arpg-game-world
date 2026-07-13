@@ -638,3 +638,25 @@ registerFormation({
     { kind: 'dead_tree', radius: [14, 22], every: 2, jitter: 28, rot: true },
   ],
 });
+
+// THE HARP ARCADE (the Aetherial): a paced line of strung pillars — the
+// colonnade the wind plays crossing the shelf. Straight and deliberate:
+// built things stand in ranks even where the ground beneath them doesn't last.
+registerFormation({
+  id: 'harp_arcade', arrange: 'line', span: [280, 480], step: 92,
+  pieces: [
+    { kind: 'harp_pillar', radius: [10, 13], jitter: 6 },
+    { kind: 'prayer_bell', radius: [9, 11], every: 4, jitter: 10, rot: true },
+  ],
+});
+
+// THE CHOIR STATUES (the Aetherial): bowed seraphim ringing a common center
+// — whatever they mourn or guard stood (or fell) in the middle. Crystals
+// gleam in the gaps between them.
+registerFormation({
+  id: 'choir_statues', arrange: 'ring', span: [150, 230], step: 88,
+  pieces: [
+    { kind: 'seraph_statue', radius: [16, 22], jitter: 6, rot: 'chain' },
+    { kind: 'aether_crystal', radius: [12, 16], every: 3, jitter: 14 },
+  ],
+});

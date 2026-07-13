@@ -1128,3 +1128,109 @@ function colosseumLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('colosseum', colosseumLayout);
+
+// --- AETHER LATTICE (the cloud shelves above the world) -------------------------
+// A drift of cloud ISLES over open sky, joined by winding causeways — the
+// negative space is `skyRegion` (cloud_void by default: a WINDOW down onto
+// whatever the understory shows, never a black wall), and big isles are
+// punched with smaller sky-holes so the whole shelf reads as torn lace.
+// The far end raises the ASCENDANT GATE on its own reserved landing — the
+// realm-gate doodad the dwell loop consults, the never-melting platform the
+// collapse fabric's spine runs to (CollapseSpec.goal names it). mustReach
+// makes the generation invariant own the promise the collapse relies on.
+// All knobs are layoutParams: the sanctum face runs the same recipe dense
+// and unbroken; a frontier shelf runs it airy and riddled.
+function aetherLatticeLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  // The open sky first: everything is a window down.
+  const all = Mask.forRect(0, 0, arena.w, arena.h);
+  all.invert();
+  paintRegion(grid, all, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  const carve = Mask.forRect(0, 0, arena.w, arena.h);
+  const M = 100;
+  const isleR = layoutParam(def, 'isleRadius', [140, 250]) as [number, number];
+  const isleN = layoutParam(def, 'isles', [6, 9]) as [number, number];
+  const isles: Vec2[] = [];
+  for (let i = 0, n = rng.int(isleN[0], isleN[1]); i < n; i++) {
+    const r = rng.range(isleR[0], isleR[1]);
+    const cx = rng.range(M + r * 0.6, Math.max(M + r * 0.6, arena.w - M - r * 0.6));
+    const cy = rng.range(M + r * 0.6, Math.max(M + r * 0.6, arena.h - M - r * 0.6));
+    // Lobed, not round: 2-3 overlapping discs per isle so coasts read torn.
+    disc(carve, cx, cy, r);
+    for (let l = 0, ln = rng.int(1, 2); l < ln; l++) {
+      const a = rng.range(0, Math.PI * 2);
+      disc(carve, cx + Math.cos(a) * r * 0.55, cy + Math.sin(a) * r * 0.55, r * rng.range(0.45, 0.7));
+    }
+    isles.push(vec(cx, cy));
+  }
+  // Portal isles: the entry + every exit stands on its own cloud.
+  for (const pt of [ctx.entry, ...ctx.exits]) {
+    disc(carve, pt.x, pt.y, 130);
+    isles.push(vec(pt.x, pt.y));
+  }
+  // THE GATE LANDING: the far end of the crossing — the isle farthest from
+  // the entry, given a clean reserved platform of its own.
+  let gate = isles[0];
+  let bd = -1;
+  for (const p of isles) {
+    const d = (p.x - ctx.entry.x) ** 2 + (p.y - ctx.entry.y) ** 2;
+    if (d > bd) { bd = d; gate = p; }
+  }
+  disc(carve, gate.x, gate.y, 150);
+
+  // CAUSEWAYS: chain every isle to its nearest already-linked neighbour
+  // (one connected drift), then a couple of long loops so the lattice has
+  // more than one answer. Reserved — scatter can never plug the crossing.
+  const cwW = layoutParam(def, 'causewayWidth', [46, 66]) as [number, number];
+  const linked: Vec2[] = [isles[isles.length - 1]];
+  const pending = isles.slice(0, -1);
+  while (pending.length) {
+    let bi = 0, bj = 0, best = Infinity;
+    for (let i = 0; i < pending.length; i++) {
+      for (let j = 0; j < linked.length; j++) {
+        const d = (pending[i].x - linked[j].x) ** 2 + (pending[i].y - linked[j].y) ** 2;
+        if (d < best) { best = d; bi = i; bj = j; }
+      }
+    }
+    const from = linked[bj], to = pending.splice(bi, 1)[0];
+    const pts = wanderPath(rng, from, to, { step: 110, wobble: 46, bowFrac: 0.22 });
+    const halfW = rng.range(cwW[0], cwW[1]) / 2;
+    band(carve, pts, halfW);
+    reserveArtery(ctx, pts, halfW);
+    linked.push(to);
+  }
+  for (let i = 0, n = rng.int(1, 3); i < n && isles.length > 2; i++) {
+    const a = rng.pick(isles), b = rng.pick(isles);
+    if (a === b) continue;
+    band(carve, wanderPath(rng, a, b, { step: 120, wobble: 60, bowFrac: 0.3 }), rng.range(20, 30));
+  }
+  paintRegion(grid, carve, 'ground');
+
+  // SKY-HOLES: punch the lace — small windows down through the big isles,
+  // kept clear of portals and the gate landing (a hole under a portal is a
+  // trap, not a view). The sanctum face sets holes: [0, 0].
+  const holeN = layoutParam(def, 'holes', [7, 12]) as [number, number];
+  const holes = Mask.forRect(0, 0, arena.w, arena.h);
+  const keepClear = [...isles.slice(-1 - ctx.exits.length), gate, ctx.entry, ...ctx.exits];
+  for (let i = 0, n = rng.int(holeN[0], holeN[1]); i < n; i++) {
+    const at = rng.pick(isles);
+    const hx = at.x + rng.range(-120, 120), hy = at.y + rng.range(-120, 120);
+    const hr = rng.range(28, 64);
+    if (keepClear.some(p => (p.x - hx) ** 2 + (p.y - hy) ** 2 < (hr + 150) ** 2)) continue;
+    disc(holes, hx, hy, hr);
+  }
+  paintRegion(grid, holes, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  // The gate itself: the crossing's whole point. POI + mustReach — the
+  // reachability invariant now owns the promise the collapse spine keeps.
+  ctx.doodads.push({ pos: vec(gate.x, gate.y), radius: 26, kind: 'ascendant_gate' });
+  ctx.pois.push(vec(gate.x, gate.y));
+  (ctx.mustReach ??= []).push(vec(gate.x, gate.y));
+  ctx.reserved.push({ pos: vec(gate.x, gate.y), radius: 120 });
+
+  // The tileset's dressing scatters walk-gated over the standing cloud.
+  scatterDecoration(ctx, def);
+}
+registerLayout('aether_lattice', aetherLatticeLayout);

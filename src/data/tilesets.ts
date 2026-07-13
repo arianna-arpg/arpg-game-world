@@ -2500,6 +2500,231 @@ export const TILESETS: Record<string, TilesetDef> = {
       { structure: 'market_row', chance: 0.14 },
     ],
   },
+
+  // =========================================================================
+  // THE AETHER — the cloud shelves of the Aetherial (the Ascent's realm).
+  // A torn lattice of sunlit cloud isles over open sky: every gap is a
+  // WINDOW down onto the world below (the understory — the very zone your
+  // geyser erupted from, or the endless cloud sea), and the ground itself
+  // DOES NOT LAST: theme.collapse melts it rim-inward while your own
+  // footfalls crumble the causeway behind you. Cross to the Ascendant Gate
+  // before the sky reclaims the shelf; fall, and the world below catches
+  // you where you dropped. The Vigilant Host needs no ground — you do.
+  // =========================================================================
+  aether: {
+    id: 'aether',
+    biome: 'aether',
+    nameFirst: ['Aether', 'Empyrean', 'Dawnfield', 'Cloudreach', 'Heavenspan', 'Skyshoal', 'Zenith'],
+    nameSecond: ['Shelf', 'Steps', 'Drift', 'Reaches', 'Causeway', 'Crossing', 'Shoal'],
+    theme: {
+      floor: '#dfe6f4', grid: '#c2cde4', border: '#8fa3cc',
+      obstacle: '#e7ecf7', obstacleEdge: '#a9b6d4', accent: '#ffe9a8',
+      wall: '#c8d2e8', water: '#9fd8e8',
+      dayLight: 1.25, nightDark: 0.5, heat: 0.35,
+      // The floor is CLOUD: broad soft features, a bright bias, barely any
+      // speckle — form comes from the palette swing, not grit.
+      ground: {
+        palette: ['#c3cee6', '#d2dbee', '#e1e8f6', '#eef2fa', '#f9fbff'],
+        bias: 0.6, alpha: 0.55, scale: 1.7, strength: 0.9, speckles: 0.3, evenness: 0.3,
+      },
+      ambientFx: [
+        { kind: 'motes', color: '#ffffff', intensity: 0.7 },
+        { kind: 'aurora', color: '#9fd8ff', intensity: 0.3 },
+      ],
+      fog: { banks: [2, 4], kinds: [{ id: 'aether_veil' }] },
+      // No zone hangs below a frontier shelf (only launch shelves set
+      // ZoneDef.below) — the gaps look down on the endless cloud sea.
+      understory: 'cloudsea',
+      // THE SIGNATURE: the shelf dissolves. Rim flakes inward from ~10s,
+      // footfalls crumble the floor ~3.3s behind you, the causeway erodes
+      // entry-first once its holdout lapses — and the Gate's platform never
+      // melts. Falls drop THROUGH to the zone below (launch shelves) or
+      // scramble you to the rim (frontier shelves, no zone beneath).
+      collapse: {
+        region: 'cloud_void',
+        crumble: 1.1,
+        contact: { delay: 2.2, radius: 12 },
+        ambient: { start: 10, band: 0.9, jitter: 6, holdout: 26, sweep: 55, halo: 2 },
+        fall: { kind: 'below', damageFrac: 0.05, grace: 0.4 },
+        goal: { doodad: 'ascendant_gate' },
+      },
+    },
+    sizeW: [2200, 3100], sizeH: [1600, 2300], ellipseChance: 0,
+    forceLayout: 'aether_lattice',
+    layout: [
+      { kind: 'cloud_billow', count: [10, 16] },
+      { kind: 'aether_crystal', count: [4, 8] },
+      { kind: 'harp_pillar', count: [3, 6] },
+      { kind: 'prayer_bell', count: [1, 3] },
+      { kind: 'seraph_statue', count: [1, 3] },
+      { kind: 'flowers', count: [1, 3] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 140] },
+    ],
+    variants: [
+      // DAWNSHELF: the golden hour — warmer light, kinder dissolution.
+      {
+        name: 'dawnshelf',
+        layout: [
+          { kind: 'cloud_billow', count: [10, 15] },
+          { kind: 'aether_crystal', count: [6, 10] },
+          { kind: 'harp_pillar', count: [4, 7] },
+          { kind: 'seraph_statue', count: [2, 4] },
+          { kind: 'flowers', count: [2, 4] },
+        ],
+        theme: {
+          accent: '#ffd88a', dayLight: 1.35,
+          ground: {
+            palette: ['#cfc9dc', '#e0d8e4', '#eee6ee', '#f8f0ea', '#fff8ea'],
+            bias: 0.64, alpha: 0.55, scale: 1.7, strength: 0.9, speckles: 0.3, evenness: 0.3,
+          },
+          collapse: {
+            region: 'cloud_void',
+            crumble: 1.3,
+            contact: { delay: 2.8, radius: 12 },
+            ambient: { start: 14, band: 1.05, jitter: 7, holdout: 32, sweep: 62, halo: 2 },
+            fall: { kind: 'below', damageFrac: 0.04, grace: 0.45 },
+            goal: { doodad: 'ascendant_gate' },
+          },
+        },
+      },
+      // DUSKSHOAL: the violet hour — deeper sky, a hastier dissolution.
+      {
+        name: 'duskshoal',
+        layout: [
+          { kind: 'cloud_billow', count: [9, 14] },
+          { kind: 'aether_crystal', count: [5, 9] },
+          { kind: 'prayer_bell', count: [2, 4] },
+          { kind: 'seraph_statue', count: [1, 2] },
+        ],
+        theme: {
+          floor: '#c9cfe6', accent: '#c8b8ff', nightDark: 0.62, dayLight: 1.05,
+          ground: {
+            palette: ['#9aa2c6', '#adb4d4', '#c2c8e2', '#d6daee', '#ebeefa'],
+            bias: 0.55, alpha: 0.55, scale: 1.7, strength: 0.95, speckles: 0.3, evenness: 0.3,
+          },
+          ambientFx: [
+            { kind: 'motes', color: '#c8b8ff', intensity: 0.7 },
+            { kind: 'aurora', color: '#b09fee', intensity: 0.5 },
+          ],
+          collapse: {
+            region: 'cloud_void',
+            crumble: 0.95,
+            contact: { delay: 1.9, radius: 12 },
+            ambient: { start: 8, band: 0.75, jitter: 5, holdout: 22, sweep: 48, halo: 2 },
+            fall: { kind: 'below', damageFrac: 0.06, grace: 0.35 },
+            goal: { doodad: 'ascendant_gate' },
+          },
+        },
+      },
+      // STORMSHOAL: the grey hour — the deck churns; footfalls barely hold.
+      {
+        name: 'stormshoal',
+        layout: [
+          { kind: 'cloud_billow', count: [12, 18] },
+          { kind: 'aether_crystal', count: [3, 6] },
+          { kind: 'harp_pillar', count: [2, 4] },
+        ],
+        theme: {
+          floor: '#cdd3e0', accent: '#9fd8e8', dayLight: 0.95,
+          ground: {
+            palette: ['#9ba4b8', '#adb5c8', '#c0c7d6', '#d3d9e4', '#e8ecf3'],
+            bias: 0.52, alpha: 0.6, scale: 1.5, strength: 1.05, speckles: 0.4, evenness: 0.25,
+          },
+          ambientFx: [{ kind: 'motes', color: '#d8e4f0', intensity: 1 }],
+          fog: { banks: [3, 5], kinds: [{ id: 'aether_veil', weight: 2 }, { id: 'mist' }] },
+          collapse: {
+            region: 'cloud_void',
+            crumble: 0.9,
+            contact: { delay: 1.6, radius: 14 },
+            ambient: { start: 9, band: 0.85, jitter: 8, holdout: 24, sweep: 50, halo: 2 },
+            fall: { kind: 'below', damageFrac: 0.06, grace: 0.35 },
+            goal: { doodad: 'ascendant_gate' },
+          },
+        },
+      },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },  // a choir — wisps in numbers
+        { weight: 5, size: [2, 4] },  // a ward — the standard patrol
+        { weight: 3, size: [1, 2] },  // a vigil — one warden, watching
+      ],
+      table: [
+        { id: 'cherub_wisp', weight: 4 },
+        { id: 'watcher_unblinking', weight: 3 },
+        { id: 'virtue_lance', weight: 3 },
+        { id: 'ophan_wheel', weight: 2 },
+        { id: 'herald_of_the_choir', weight: 2, presence: { from: 12, fadeIn: 4 } },
+        { id: 'dominion_scales', weight: 1.5, presence: { from: 13, fadeIn: 5 } },
+        { id: 'principality_of_dawn', weight: 0.5, presence: { from: 15, fadeIn: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled (no 'spawners' objective up here)
+    // ESCAPE weighs heaviest by design: the dissolving shelf IS an escape.
+    objectives: [{ kind: 'escape', weight: 3 }, { kind: 'clear', weight: 2 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.4 },
+      { composition: 'harp_gallery', chance: 0.35 },
+    ],
+  },
+
+  // THE FIRMAMENT — the Aetherial's sanctum face: the gate zone's tileset
+  // (biome 'aether_sanctum' resolves here). The same lattice run dense and
+  // UNBROKEN — wide causeways, no sky-holes, and NO CollapseSpec: this
+  // ground holds. The waypoint home the shelves are crossed to reach.
+  aether_sanctum: {
+    id: 'aether_sanctum',
+    biome: 'aether_sanctum',
+    nameFirst: ['Firmament', 'Empyrean', 'Zenith', 'Aurelian'],
+    nameSecond: ['Landing', 'Vault', 'Court', 'Rest'],
+    theme: {
+      floor: '#e4e9f6', grid: '#cbd4e8', border: '#98abd0',
+      obstacle: '#ecf0f9', obstacleEdge: '#b2bed8', accent: '#ffe9a8',
+      wall: '#d0d8ec', water: '#9fd8e8',
+      dayLight: 1.3, nightDark: 0.45, heat: 0.4,
+      ground: {
+        palette: ['#ccd5ea', '#dae1f1', '#e7ecf7', '#f2f5fb', '#fcfdff'],
+        bias: 0.64, alpha: 0.5, scale: 1.8, strength: 0.85, speckles: 0.35, evenness: 0.35,
+      },
+      ambientFx: [
+        { kind: 'motes', color: '#ffffff', intensity: 0.6 },
+        { kind: 'aurora', color: '#ffe9a8', intensity: 0.25 },
+      ],
+      fog: { banks: [1, 2], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+    },
+    sizeW: [2000, 2600], sizeH: [1500, 1900], ellipseChance: 0,
+    forceLayout: 'aether_lattice',
+    layoutParams: { isles: [5, 7], isleRadius: [200, 300], causewayWidth: [70, 95], holes: [0, 0] },
+    layout: [
+      { kind: 'cloud_billow', count: [8, 12] },
+      { kind: 'seraph_statue', count: [3, 5] },
+      { kind: 'harp_pillar', count: [5, 9] },
+      { kind: 'prayer_bell', count: [2, 4] },
+      { kind: 'aether_crystal', count: [3, 5] },
+      { kind: 'flowers', count: [2, 4] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [100, 150] },
+    ],
+    packs: {
+      count: [2, 3], size: [2, 3],
+      table: [
+        { id: 'cherub_wisp', weight: 3 },
+        { id: 'virtue_lance', weight: 2 },
+        { id: 'dominion_scales', weight: 1, presence: { from: 13, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled
+    objectives: [{ kind: 'clear', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.5 },
+      { composition: 'vault_of_dawn', chance: 0.6 },
+    ],
+  },
 };
 
 // --- BIOME → TILESET resolver (the heat-map-authoritative mint) --------------

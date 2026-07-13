@@ -222,7 +222,15 @@ export type KnownDoodadKind =
   | 'toll_post'        // a squared timber corner post bookending a palisade façade
   | 'hate_brazier'     // an iron bowl burning cold green — the citadel lights its own
   | 'torture_rack'     // the frame, the rollers, the stain — a hall that confesses what it is
-  | 'hate_idol';       // a hooded effigy the halls are kept for — its gaze is the decor
+  | 'hate_idol'        // a hooded effigy the halls are kept for — its gaze is the decor
+  // The Aetherial kit (the cloud shelves above the world — the Ascent)
+  | 'cloud_billow'     // a heaped sunlit cloud-mound: the shelf's boulder
+  | 'aether_crystal'   // a splay of luminous shards leaning out of the cloud (lit)
+  | 'seraph_statue'    // pale marble: a bowed winged figure on a plinth, gold-leafed
+  | 'harp_pillar'      // a slender fluted column strung with shimmering light
+  | 'prayer_bell'      // a small bronze bell in a marble yoke, swaying a whisper
+  | 'ascendant_gate'   // THE realm gate: leaning posts, a broken arch, breathing light
+  | 'sky_geyser';      // the surface-side mouth of the Ascent: a breathing spray vent
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -1009,6 +1017,20 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   torture_rack:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     surface: { hw: 0.85, hh: 0.5 } }, // the rack bed + rollers — low dark furniture, not a pillar
   hate_idol:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 110, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The Aetherial kit — cloud furniture never blocks SHOTS (there is nothing
+  // up here an arrow would argue with except marble), and the built things
+  // refuse liquid ground out of habit even though the shelves carry none.
+  cloud_billow:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26, bodyScale: 0.85 },
+  aether_crystal: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 60 },
+  seraph_statue:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  harp_pillar:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, bodyScale: 0.9 },
+  prayer_bell:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70 },
+  // The gate is a TRIGGER (the realm-gate dwell loop owns the interaction) —
+  // bodies pass its threshold freely; the dwell ring is the door.
+  ascendant_gate: { overlap: 'trigger', spacing: 400 },
+  // The geyser mouth is a sidezone TRIGGER (data/sidezones.ts registers the
+  // dwell); huge spacing — one spring is a landmark, two is a puddle field.
+  sky_geyser:     { overlap: 'trigger', spacing: 500 },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -3154,6 +3176,12 @@ registerStamp('torture_rack', stampSingle('torture_rack', [16, 22]));
 registerStamp('hate_idol', stampSingle('hate_idol', [14, 20]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
+// The Aetherial kit: cloud furniture + the choir's marble.
+registerStamp('cloud_billow', stampSingle('cloud_billow', [22, 44]));
+registerStamp('aether_crystal', stampSingle('aether_crystal', [13, 22]));
+registerStamp('seraph_statue', stampSingle('seraph_statue', [16, 24]));
+registerStamp('harp_pillar', stampSingle('harp_pillar', [10, 14]));
+registerStamp('prayer_bell', stampSingle('prayer_bell', [9, 12]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));

@@ -267,3 +267,41 @@ registerComposition({
     { kind: 'mushroom_ring', count: [0, 1] },
   ],
 });
+
+// THE CHOIR RING (the Aetherial): a cleared court of bowed marble ringing
+// whatever the Host still mourns — statues facing the center, crystals
+// gleaming between them, a bell to mark hours nobody keeps anymore.
+registerComposition({
+  id: 'choir_ring',
+  sites: [{ id: 'court', radius: [140, 190] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [60, 85] }],
+  post: [
+    { kind: 'formation', formation: 'choir_statues', at: 'court', count: [1, 1] },
+    { kind: 'prayer_bell', count: [1, 2] },
+  ],
+});
+
+// THE HARP GALLERY (the Aetherial): a strung arcade crossing the shelf,
+// dream-blossoms drifting along its feet — the wind's own instrument.
+registerComposition({
+  id: 'harp_gallery',
+  sites: [{ id: 'walk', radius: [150, 210] }],
+  pre: [{ kind: 'clearing', at: 'walk', count: [1, 1], radius: [55, 75] }],
+  post: [
+    { kind: 'formation', formation: 'harp_arcade', at: 'walk', count: [1, 2] },
+    { kind: 'flowers', count: [1, 2] },
+  ],
+});
+
+// THE VAULT OF DAWN (the Firmament): the sanctum's crowned court — statues
+// and crystal ringing the treasure the crossing was for.
+registerComposition({
+  id: 'vault_of_dawn',
+  sites: [{ id: 'vault', radius: [150, 200] }],
+  pre: [{ kind: 'clearing', at: 'vault', count: [1, 1], radius: [70, 95] }],
+  post: [
+    { kind: 'formation', formation: 'choir_statues', at: 'vault', count: [1, 1] },
+    { kind: 'formation', formation: 'harp_arcade', at: 'vault', count: [0, 1] },
+    { kind: 'aether_crystal', count: [2, 4] },
+  ],
+});
