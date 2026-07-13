@@ -109,24 +109,51 @@ interface StaticGroup {
   blend: boolean; body: boolean;
 }
 
+/** One live chunk: its bake, the walk version + beds rev it reflects, and a
+ *  monotonic bake stamp (`at`) — the stale queue re-bakes OLDEST first. */
+interface ChunkEntry { img: HTMLCanvasElement; v: number; b: number; at: number }
+
 export class GroundRenderer {
-  private chunks = new Map<string, { img: HTMLCanvasElement; v: number; b: number }>();
+  private chunks = new Map<string, ChunkEntry>();
   private zoneRef: unknown = null;
   private seed = 0;
   private staticGroups: StaticGroup[] = [];
-  private staticCount = -1;
-  /** Bumped whenever the static bed/body groups re-gather (doodad set
-   *  changed) — chunks baked under an older rev are STALE, not discarded:
-   *  they keep drawing while the budgeted loop re-bakes them a few per
-   *  frame. The old clear() rebaked the whole viewport in ONE frame — a
-   *  guaranteed hitch every time a barrel popped mid-fight. */
+  /** Gather keys — identity, length, rev: the doodadsAt/veilIndex idiom, so
+   *  in-place mutations (markDoodadsChanged) re-sync too, and a same-frame
+   *  pop+push that nets the same length can't slip through. */
+  private staticArr: unknown = null;
+  private staticLen = -1;
+  private staticRev = -1;
+  /** Every baked-kind doodad as of the last gather with the reach rect its
+   *  bed/body paints — the identity-keyed diff source for localized
+   *  staleness. */
+  private prevBaked = new Map<Doodad, { kind: string; x0: number; y0: number; x1: number; y1: number }>();
+  private bedsPrimed = false;
+  /** Monotonic revision of the baked bed/body set. Changes push their reach
+   *  rects onto `bedsDirty` (a bounded ring — overflow raises the flood rev),
+   *  so a brittle pop or a melting ice patch stales ONLY the chunks it
+   *  touches. The old count-keyed rev staled every chunk in the cache on any
+   *  doodad-list change: under churn (temp-ground builds, event spawns) the
+   *  whole viewport re-staled every few frames, the per-frame rebake budget
+   *  was eaten forever by the first chunks in scan order, and everything
+   *  after them starved — on a melting shelf that read as voided clouds
+   *  whose visuals never punched through. */
   private bedsRev = 0;
+  private bedsDirty: { x0: number; y0: number; x1: number; y1: number; rev: number }[] = [];
+  private bedsFloodRev = 0;
+  /** Monotonic bake sequence, stamped per bake (see ChunkEntry.at). */
+  private bakeSeq = 0;
 
   /** Blit the visible floor. The caller owns any arena clip (rect/ellipse).
-   *  Chunks carry the walk-grid version they baked at; a repaint re-bakes
-   *  ONLY the chunks its dirty rect touched, spread over frames by a budget
-   *  (a stale chunk keeps drawing its old self until its turn) — so a door
-   *  break or a crawling fissure never rebakes a whole screen in one frame. */
+   *  Chunks carry the walk-grid version + beds rev they baked at; a repaint
+   *  re-bakes ONLY the chunks its dirty rects touched, spread over frames by
+   *  a budget (a stale chunk keeps drawing its old self until its turn) — so
+   *  a door break or a crawling fissure never rebakes a whole screen in one
+   *  frame. Three phases: inventory the window, bake fairly (never-baked
+   *  first, then stale OLDEST-BAKE-first — the old single scan spent the
+   *  whole budget on the first stale chunks in reading order every frame, so
+   *  under sustained churn the bottom of the screen never repainted), then
+   *  blit in spatial order. */
   draw(ctx: CanvasRenderingContext2D, world: World,
     camX: number, camY: number, vw: number, vh: number): void {
     if (VIS_ABLATE.has('ground')) return; // perf forensics (visConfig)
@@ -138,7 +165,11 @@ export class GroundRenderer {
       this.chunks.clear();
       this.zoneRef = world.zone;
       this.seed = strSeed(`${world.zone.id}|${world.zone.name}`);
-      this.staticCount = -1; // re-gather the static groups for the new zone
+      // Re-arm the static gather for the new zone.
+      this.staticArr = null; this.staticLen = -1; this.staticRev = -1;
+      this.prevBaked.clear();
+      this.bedsDirty.length = 0;
+      this.bedsPrimed = false;
     }
     if (VIS_CFG.ground.bakeBlend || VIS_CFG.ground.bakeLiquidBody) this.syncStaticGroups(world);
     const C = VIS_CFG.ground.chunk;
@@ -151,58 +182,67 @@ export class GroundRenderer {
       x1 = Math.min(Math.floor(Math.max(0, world.arena.w - 1) / C), x1);
       y1 = Math.min(Math.floor(Math.max(0, world.arena.h - 1) / C), y1);
     }
-    let rebakes = 0;
-    let bakedNew = false;
     const bakeT0 = performance.now();
     const budgetLeft = (): boolean =>
       performance.now() - bakeT0 < VIS_CFG.ground.bakeBudgetMs;
+
+    // --- PASS 1: inventory the visible window. LRU-touch live entries; sort
+    // what needs work into never-baked vs stale (walk repaint or bed change).
+    const missing: { key: string; cx: number; cy: number }[] = [];
+    const stale: { entry: ChunkEntry; cx: number; cy: number }[] = [];
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         const key = `${cx},${cy}`;
-        let entry = this.chunks.get(key);
-        if (entry) {
-          // LRU touch.
-          this.chunks.delete(key);
-          this.chunks.set(key, entry);
-          const bedsStale = entry.b !== this.bedsRev;
-          if (bedsStale || (entry.v < ver && wf)) {
-            const touched = bedsStale
-              || (wf ? this.chunkStale(wf, entry.v, cx * C, cy * C, C) : false);
-            if (!touched) {
-              entry.v = ver; // untouched by any repaint — just adopt the version
-            } else if (rebakes < VIS_CFG.ground.rebakesPerFrame && budgetLeft()) {
-              releaseCanvas(entry.img);
-              entry.img = this.bake(world, wf, cx, cy);
-              entry.v = ver;
-              entry.b = this.bedsRev;
-              rebakes++;
-            } // else: budget spent — keep drawing the old bake, retry next frame
-          }
-        } else {
-          // A never-baked visible chunk: guarantee ONE bake per frame so
-          // streaming always progresses, then hold the rest to the TIME
-          // budget — the old unbounded path baked a whole screenful in one
-          // frame after a teleport or a cache flush (the zone-entry stall).
-          if (!bakedNew || budgetLeft()) {
-            entry = { img: this.bake(world, wf, cx, cy), v: ver, b: this.bedsRev };
-            bakedNew = true;
-            this.chunks.set(key, entry);
-            while (this.chunks.size > VIS_CFG.ground.maxChunks) {
-              const oldest = this.chunks.keys().next().value;
-              if (oldest === undefined) break;
-              const old = this.chunks.get(oldest);
-              if (old) releaseCanvas(old.img);
-              this.chunks.delete(oldest);
-            }
-          } else {
-            // Over budget: a flat floor stand-in this frame; the real bake
-            // lands within the next frame or two.
-            ctx.fillStyle = world.zone.theme.floor;
-            ctx.fillRect(cx * C, cy * C, C, C);
-            continue;
-          }
+        const entry = this.chunks.get(key);
+        if (!entry) { missing.push({ key, cx, cy }); continue; }
+        this.chunks.delete(key); this.chunks.set(key, entry); // LRU touch
+        const bedsStale = entry.b < this.bedsFloodRev
+          || this.bedsTouched(entry.b, cx * C, cy * C, C);
+        if (bedsStale || (wf && entry.v < ver)) {
+          const touched = bedsStale
+            || (wf ? this.chunkStale(wf, entry.v, cx * C, cy * C, C) : false);
+          // Untouched by any repaint — just adopt the current stamps.
+          if (!touched) { entry.v = ver; entry.b = this.bedsRev; }
+          else stale.push({ entry, cx, cy });
         }
-        ctx.drawImage(entry.img, cx * C, cy * C);
+      }
+    }
+
+    // --- PASS 2: bake. Never-baked chunks first (ONE is always allowed —
+    // streaming must progress; the rest hold to the time budget), then stale
+    // chunks oldest-bake-first under the count + time budgets. A stale chunk
+    // re-bakes INTO its own canvas — zero alloc, zero GC pressure (the old
+    // release+create pair churned ~0.8MB of backing store per rebake, and a
+    // melting shelf rebakes continuously).
+    let rebakes = 0;
+    let bakedNew = false;
+    for (const m of missing) {
+      if (bakedNew && !budgetLeft()) break; // stand in flat this frame
+      this.chunks.set(m.key,
+        { img: this.bake(world, wf, m.cx, m.cy), v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+      bakedNew = true;
+      this.evictOverCap();
+    }
+    stale.sort((a, b) => a.entry.at - b.entry.at);
+    for (const s of stale) {
+      if (rebakes >= VIS_CFG.ground.rebakesPerFrame || !budgetLeft()) break;
+      s.entry.img = this.bake(world, wf, s.cx, s.cy, s.entry.img);
+      s.entry.v = ver; s.entry.b = this.bedsRev; s.entry.at = ++this.bakeSeq;
+      rebakes++;
+    }
+
+    // --- PASS 3: blit the window in spatial order. Chunks whose bake didn't
+    // land this frame draw the flat floor stand-in (missing) or their old
+    // self (stale) until their turn comes.
+    for (let cy = y0; cy <= y1; cy++) {
+      for (let cx = x0; cx <= x1; cx++) {
+        const entry = this.chunks.get(`${cx},${cy}`);
+        if (entry) {
+          ctx.drawImage(entry.img, cx * C, cy * C);
+        } else {
+          ctx.fillStyle = world.zone.theme.floor;
+          ctx.fillRect(cx * C, cy * C, C, C);
+        }
       }
     }
     // PREFETCH: bake at most one not-yet-baked chunk in the ring just
@@ -220,26 +260,48 @@ export class GroundRenderer {
           if (cy >= y0 && cy <= y1 && cx >= x0 && cx <= x1) continue; // visible: handled above
           const key = `${cx},${cy}`;
           if (this.chunks.get(key)) continue;
-          this.chunks.set(key, { img: this.bake(world, wf, cx, cy), v: ver, b: this.bedsRev });
-          while (this.chunks.size > VIS_CFG.ground.maxChunks) {
-            const oldest = this.chunks.keys().next().value;
-            if (oldest === undefined) break;
-            const old = this.chunks.get(oldest);
-            if (old) releaseCanvas(old.img);
-            this.chunks.delete(oldest);
-          }
+          this.chunks.set(key,
+            { img: this.bake(world, wf, cx, cy), v: ver, b: this.bedsRev, at: ++this.bakeSeq });
+          this.evictOverCap();
           break outer;
         }
       }
     }
   }
 
-  /** Did any repaint since `bakedV` touch this chunk's rect? Falls back to
+  /** Drop least-recently-used chunks past the cache cap, freeing their
+   *  backing stores eagerly (see releaseCanvas). */
+  private evictOverCap(): void {
+    while (this.chunks.size > VIS_CFG.ground.maxChunks) {
+      const oldest = this.chunks.keys().next().value;
+      if (oldest === undefined) break;
+      const old = this.chunks.get(oldest);
+      if (old) releaseCanvas(old.img);
+      this.chunks.delete(oldest);
+    }
+  }
+
+  /** Did any repaint since `bakedV` touch this chunk's rect? Padded by one
+   *  walk cell: the bake reads a one-cell ring PAST its border (rim edges,
+   *  bevels, contact AO), so a repaint just outside — a melt on the far side
+   *  of a chunk seam — must stale this side's cloud-lip too. Falls back to
    *  stale when the dirty ring has already dropped rects that new. */
   private chunkStale(wf: GridWalkField, bakedV: number, ox: number, oy: number, C: number): boolean {
     if (bakedV <= wf.dirtyFloodV) return true;
+    const pad = wf.cell;
     for (const r of wf.dirty) {
       if (r.v <= bakedV) continue;
+      if (r.x1 < ox - pad || r.x0 > ox + C + pad || r.y1 < oy - pad || r.y0 > oy + C + pad) continue;
+      return true;
+    }
+    return false;
+  }
+
+  /** Did any baked bed/body CHANGE since `bakedB` touch this chunk's rect?
+   *  (The rects already carry their full blend reach — no extra pad.) */
+  private bedsTouched(bakedB: number, ox: number, oy: number, C: number): boolean {
+    for (const r of this.bedsDirty) {
+      if (r.rev <= bakedB) continue;
       if (r.x1 < ox || r.x0 > ox + C || r.y1 < oy || r.y0 > oy + C) continue;
       return true;
     }
@@ -247,17 +309,20 @@ export class GroundRenderer {
   }
 
   /** Gather (or re-gather when the doodad list changed) every kind whose
-   *  blend bed and/or liquid body bakes with the floor. Bake-time consumers
-   *  only — never per frame. */
+   *  blend bed and/or liquid body bakes with the floor, then DIFF the baked
+   *  set against the last gather (object identity) and stale only what a
+   *  change actually reaches. MARK, never clear: live chunks keep drawing
+   *  their old bake and re-bake through the per-frame budget, so a mid-fight
+   *  barrel pop costs a few staggered LOCAL rebakes — not one whole-screen
+   *  hitch, and not (the count-keyed rev's failure) a whole-viewport
+   *  staleness storm on every temp-ground tick. Bake-time consumers only —
+   *  the gather itself re-runs only when (identity, length, rev) move. */
   private syncStaticGroups(world: World): void {
-    if (this.staticCount === world.doodads.length) return;
-    this.staticCount = world.doodads.length;
-    // Doodad set changed (a brittle popped, a growth landed) → baked beds/
-    // bodies are stale. MARK, never clear: live chunks keep drawing their
-    // old bake and re-bake through the per-frame budget, so a mid-fight
-    // barrel pop costs a few staggered rebakes instead of one whole-screen
-    // hitch frame.
-    this.bedsRev++;
+    if (this.staticArr === world.doodads && this.staticLen === world.doodads.length
+      && this.staticRev === world.doodadRev) return;
+    this.staticArr = world.doodads;
+    this.staticLen = world.doodads.length;
+    this.staticRev = world.doodadRev;
     const byKind = new Map<string, Doodad[]>();
     for (const d of world.doodads) {
       const def = DOODAD_VISUALS[d.kind];
@@ -269,6 +334,8 @@ export class GroundRenderer {
       if (arr) arr.push(d); else byKind.set(d.kind, [d]);
     }
     this.staticGroups = [];
+    const next = new Map<Doodad, { kind: string; x0: number; y0: number; x1: number; y1: number }>();
+    let flood = false;
     for (const [kind, list] of byKind) {
       const def = DOODAD_VISUALS[kind]!;
       let maxR = 0;
@@ -283,16 +350,69 @@ export class GroundRenderer {
         def, list, pad, blend,
         body: def.painter === 'liquid' && !liquidBodyIsLive(def),
       });
+      for (const d of list) {
+        const reach = d.radius + pad;
+        next.set(d, {
+          kind,
+          x0: d.pos.x - reach, y0: d.pos.y - reach,
+          x1: d.pos.x + reach, y1: d.pos.y + reach,
+        });
+      }
     }
     this.staticGroups.sort((a, b) => (a.def.order ?? 50) - (b.def.order ?? 50));
+
+    // First gather of a zone: nothing is baked yet — adopt without staling.
+    if (!this.bedsPrimed) {
+      this.bedsPrimed = true;
+      this.prevBaked = next;
+      return;
+    }
+    // THE DIFF: appeared, vanished, or reshaped since the last gather. A
+    // 'path' blend kind floods instead — pathBand strokes whole CHAINS, so a
+    // changed node redraws segments far beyond its own reach (runtime path
+    // changes are rare; roads are generation-time).
+    const changed: { x0: number; y0: number; x1: number; y1: number }[] = [];
+    const mark = (kind: string, r: { x0: number; y0: number; x1: number; y1: number }): void => {
+      if (DOODAD_VISUALS[kind]?.blend?.mode === 'path') flood = true;
+      else changed.push(r);
+    };
+    for (const [d, r] of next) {
+      const old = this.prevBaked.get(d);
+      if (!old) { mark(r.kind, r); continue; }
+      this.prevBaked.delete(d); // consumed — whatever remains has vanished
+      if (old.kind !== r.kind || old.x0 !== r.x0 || old.y0 !== r.y0
+        || old.x1 !== r.x1 || old.y1 !== r.y1) {
+        mark(old.kind, old);
+        mark(r.kind, r);
+      }
+    }
+    for (const [, old] of this.prevBaked) mark(old.kind, old);
+    this.prevBaked = next;
+    if (!flood && !changed.length) return; // churn was all non-baked kinds — nothing stales
+    this.bedsRev++;
+    if (flood) {
+      this.bedsFloodRev = this.bedsRev;
+      this.bedsDirty.length = 0;
+    } else {
+      for (const r of changed) this.bedsDirty.push({ ...r, rev: this.bedsRev });
+      while (this.bedsDirty.length > VIS_CFG.ground.bedsDirtyMax) {
+        const dropped = this.bedsDirty.shift()!;
+        this.bedsFloodRev = Math.max(this.bedsFloodRev, dropped.rev);
+      }
+    }
   }
 
-  private bake(world: World, wf: GridWalkField | null, cx: number, cy: number): HTMLCanvasElement {
+  /** Bake one chunk. Pass `reuse` (the chunk's outgoing canvas) on a REBAKE:
+   *  re-setting width resets the surface in place, so a continuously-melting
+   *  floor re-bakes into the same backing store instead of churning a fresh
+   *  ~0.8MB canvas per rebake through the allocator (the GC-hitch tax). */
+  private bake(world: World, wf: GridWalkField | null, cx: number, cy: number,
+    reuse?: HTMLCanvasElement): HTMLCanvasElement {
     VIS_TELEMETRY.groundBakes++;
     const CFG = VIS_CFG.ground;
     const C = CFG.chunk;
     const theme = world.zone.theme;
-    const c = document.createElement('canvas');
+    const c = reuse ?? document.createElement('canvas');
     c.width = C; c.height = C;
     const ctx = c.getContext('2d')!;
     const ox = cx * C, oy = cy * C; // world coords of the chunk origin

@@ -45,4 +45,10 @@ export interface WalkField {
    *  something actually stands in the way — open ground keeps its beelines
    *  (no 4-connected staircase), warrens path exactly as before. */
   lineWalkable?(from: Vec2, to: Vec2): boolean;
+  /** Per-tick housekeeping seam: the World calls this once at the top of each
+   *  sim tick so an implementation can reset its per-tick cache budgets (the
+   *  grid's stale path-field refresh allowance). Optional — a model with no
+   *  tick-scoped caches simply omits it. Tick-driven, never wall-clock, so
+   *  the deterministic sim harness sees identical behavior. */
+  beginFrame?(): void;
 }

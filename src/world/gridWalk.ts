@@ -17,6 +17,32 @@ import { regionKind } from './regions';
 
 export const DEFAULT_CELL = 30;
 
+/** Framework knobs for the grid's repaint + cache machinery — every collapse,
+ *  terraform and door break rides these, so they live here as config, never
+ *  as inline magic numbers. */
+export const WALK_CFG = {
+  /** Dirty-rect ring capacity. A living collapse can void a couple dozen
+   *  cells in ONE tick (each its own rect) and a GC hitch makes the sim run
+   *  catch-up ticks before the renderer next consumes the ring — at 64 the
+   *  ring flooded routinely and every baked chunk went stale at once. */
+  dirtyMax: 192,
+  /** LRU slots for BFS distance fields (see distCache field doc). */
+  distCacheMax: 32,
+  /** STALE distance-field refreshes allowed per tick (beginFrame resets).
+   *  A repaint no longer clears the path cache — fields go stale and
+   *  re-shoot a few per tick, budgeted, while chasers keep steering on the
+   *  slightly-stale field (stepToward reads the walkable mask LIVE, so
+   *  nobody ever steps onto a freshly-voided cell). The old eager clear made
+   *  every pathing monster re-run a full-grid BFS — with a fresh Int32Array
+   *  each — EVERY tick for as long as ground kept melting: the aetherial
+   *  ambient-melt GC-hitch lag. */
+  distRefreshPerTick: 3,
+  /** Hard staleness bound (ticks): a field the budget never reached refreshes
+   *  anyway once this old, so a big herd's tail can't steer on ancient
+   *  distances forever. Deterministic — tick-counted, never wall-clock. */
+  distMaxStaleTicks: 30,
+} as const;
+
 /** The transferable form of a GridWalkField (co-op: ship region kinds, derive the
  *  walkable mask client-side). `kinds` is the byte→region-id table so a client maps
  *  the packed bytes identically regardless of its own registration order. */
@@ -45,27 +71,48 @@ export class GridWalkField implements WalkField {
    *  that version counts as stale (correct, just less precise). */
   readonly dirty: { x0: number; y0: number; x1: number; y1: number; v: number }[] = [];
   dirtyFloodV = 0;
-  private static readonly DIRTY_MAX = 64;
 
   private pushDirty(x0: number, y0: number, x1: number, y1: number): void {
     this.version++;
     this.dirty.push({ x0: Math.min(x0, x1), y0: Math.min(y0, y1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), v: this.version });
-    if (this.dirty.length > GridWalkField.DIRTY_MAX) {
+    if (this.dirty.length > WALK_CFG.dirtyMax) {
       const dropped = this.dirty.shift()!;
       this.dirtyFloodV = Math.max(this.dirtyFloodV, dropped.v);
     }
   }
-  /** Connected-component label per cell (-1 = blocked / unlabeled). Lazy. */
+  /** Connected-component label per cell (-1 = blocked / unlabeled). Lazy,
+   *  version-stamped, recomputed IN PLACE — a repaint costs nothing until the
+   *  next reachable() actually asks. */
   private region: Int32Array | null = null;
+  private regionV = -1;
   /** LRU of BFS distance-fields keyed by target cell — so the common mix of the
    *  player cell + a few brain targets (caster strafe / assassin / commander) all
    *  stay warm in a frame instead of evicting each other (single-slot thrash).
    *  Sized for a FIELD's worth of wanderers: a big herd pathing to distinct
    *  targets under an 8-slot cache recomputed a full-grid BFS nearly every
    *  pathStep (~1.4ms × dozens of actors × every frame — the "Fields
-   *  sometimes stutter" report). ~130KB per field on the largest grids. */
-  private distCache = new Map<number, Int32Array>();
-  private static readonly DIST_CACHE_MAX = 32;
+   *  sometimes stutter" report). ~130KB per field on the largest grids.
+   *  Entries are VERSION-STAMPED, refreshed in place under the per-tick
+   *  budget (WALK_CFG.distRefreshPerTick — see beginFrame). */
+  private distCache = new Map<number, { d: Int32Array; v: number; t: number }>();
+  /** One retired distance field kept for reuse — an eviction hands its array
+   *  to the next miss instead of the GC. */
+  private spareDist: Int32Array | null = null;
+  /** Scratch BFS/flood queue shared by every recompute on this grid. */
+  private scratchQ: number[] = [];
+  /** Tick counter + per-tick refresh budget (see beginFrame). Un-ticked
+   *  grids (generation, headless QA) keep an infinite budget — every stale
+   *  query refreshes immediately, the pre-budget behavior. */
+  private tick = 0;
+  private refreshesLeft = Infinity;
+
+  /** ONE call per sim tick (the World's update makes it — the WalkField
+   *  seam): resets the stale-field refresh budget and advances the staleness
+   *  clock. Purely tick-counted, so the sim harness stays deterministic. */
+  beginFrame(): void {
+    this.tick++;
+    this.refreshesLeft = WALK_CFG.distRefreshPerTick;
+  }
 
   constructor(w: number, h: number, cell = DEFAULT_CELL) {
     this.cell = cell;
@@ -105,7 +152,8 @@ export class GridWalkField implements WalkField {
       const i = cy * this.cols + cx;
       this.kind[i] = byte; this.mask[i] = walkable;
     }
-    this.region = null; this.distCache.clear();
+    // No eager cache clears: pushDirty's version bump lazily stales the
+    // region labels and distance fields (they refresh in place, budgeted).
     this.pushDirty(x0, y0, x1, y1);
   }
 
@@ -128,7 +176,6 @@ export class GridWalkField implements WalkField {
       const i = gy * this.cols + gx;
       this.kind[i] = byte; this.mask[i] = walkable;
     }
-    this.region = null; this.distCache.clear();
     this.pushDirty(cx - r, cy - r, cx + r, cy + r);
   }
 
@@ -240,14 +287,44 @@ export class GridWalkField implements WalkField {
   }
 
   /** BFS distance-field to a target cell, LRU-cached (all chasers of one target
-   *  share its field; a few distinct targets coexist without evicting each other). */
+   *  share its field; a few distinct targets coexist without evicting each other).
+   *  A stale hit (the grid repainted since it shot) refreshes IN PLACE under the
+   *  per-tick budget — else it serves as-is: stepToward reads the walkable mask
+   *  live, so a stale field can misroute a step or two, never step onto void. */
   private distanceTo(tCell: number): Int32Array {
     const hit = this.distCache.get(tCell);
-    if (hit) { this.distCache.delete(tCell); this.distCache.set(tCell, hit); return hit; } // refresh LRU
-    const n = this.cols * this.rows;
-    const d = new Int32Array(n).fill(-1);
+    if (hit) {
+      this.distCache.delete(tCell); this.distCache.set(tCell, hit); // refresh LRU
+      if (hit.v !== this.version
+        && (this.refreshesLeft > 0 || this.tick - hit.t >= WALK_CFG.distMaxStaleTicks)) {
+        this.refreshesLeft--;
+        this.bfsInto(hit.d, tCell);
+        hit.v = this.version; hit.t = this.tick;
+      }
+      return hit.d;
+    }
+    // A genuinely new target always shoots (serving nothing isn't an option);
+    // the array comes from the last eviction when one is waiting.
+    const d = this.spareDist ?? new Int32Array(this.cols * this.rows);
+    this.spareDist = null;
+    this.bfsInto(d, tCell);
+    this.distCache.set(tCell, { d, v: this.version, t: this.tick });
+    if (this.distCache.size > WALK_CFG.distCacheMax) {
+      const oldest = this.distCache.keys().next().value as number; // evict oldest
+      const old = this.distCache.get(oldest);
+      this.distCache.delete(oldest);
+      if (old) this.spareDist = old.d;
+    }
+    return d;
+  }
+
+  /** Shoot a BFS distance field from `tCell` into `d` (reused storage). */
+  private bfsInto(d: Int32Array, tCell: number): void {
+    d.fill(-1);
     d[tCell] = 0;
-    const q = [tCell];
+    const q = this.scratchQ;
+    q.length = 0;
+    q.push(tCell);
     for (let head = 0; head < q.length; head++) {
       const c = q[head], cx = c % this.cols, cy = (c / this.cols) | 0, nd = d[c] + 1;
       for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -258,22 +335,23 @@ export class GridWalkField implements WalkField {
         d[nc] = nd; q.push(nc);
       }
     }
-    this.distCache.set(tCell, d);
-    if (this.distCache.size > GridWalkField.DIST_CACHE_MAX) {
-      this.distCache.delete(this.distCache.keys().next().value as number); // evict oldest
-    }
-    return d;
+    q.length = 0; // don't pin a grid-sized queue between recomputes
   }
 
-  /** Connected-component labels (flood-fill), computed once and cached. */
+  /** Connected-component labels (flood-fill), version-stamped and recomputed
+   *  in place — reachable() stays exact through every repaint, without the
+   *  old alloc-per-repaint churn. */
   private regions(): Int32Array {
-    if (this.region) return this.region;
+    if (this.region && this.regionV === this.version) return this.region;
     const n = this.cols * this.rows;
-    const reg = new Int32Array(n).fill(-1);
+    const reg = this.region ?? (this.region = new Int32Array(n));
+    reg.fill(-1);
     let label = 0;
+    const q = this.scratchQ;
     for (let start = 0; start < n; start++) {
       if (this.mask[start] !== 1 || reg[start] >= 0) continue;
-      const q = [start]; reg[start] = label;
+      q.length = 0;
+      q.push(start); reg[start] = label;
       for (let head = 0; head < q.length; head++) {
         const c = q[head], cx = c % this.cols, cy = (c / this.cols) | 0;
         for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -286,7 +364,8 @@ export class GridWalkField implements WalkField {
       }
       label++;
     }
-    this.region = reg;
+    q.length = 0;
+    this.regionV = this.version;
     return reg;
   }
 

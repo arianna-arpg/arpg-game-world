@@ -21746,6 +21746,11 @@ export class World {
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.
     this.actorGridRev++;
+    // Walk-field tick housekeeping (the WalkField seam): resets the stale
+    // path-field refresh budget on whichever grid is steering feet this zone
+    // (the layout's own, or the convex nav rake).
+    this.walk?.beginFrame?.();
+    this.convexNav?.beginFrame?.();
     // A survived death's fade/wake sequence (character modes). The world keeps
     // simulating beneath the dark — the death itself was already banked.
     if (this.pendingRespawn) this.updateModeRespawn(dt);
@@ -28461,6 +28466,10 @@ export class World {
    *  radius edits) must call this so the index re-syncs. Pushes and splices
    *  are covered by the length check and need nothing. */
   markDoodadsChanged(): void { this.doodadsRev++; }
+  /** The doodad-list revision, readable — anything that CACHES against the
+   *  doodad set (the renderer's baked blend beds) keys on (list identity,
+   *  length, THIS) exactly like the internal spatial/veil indexes. */
+  get doodadRev(): number { return this.doodadsRev; }
 
   // --- VEILS: contiguous canopy cover (engine/veil.ts) ----------------------
   private veilIdx: VeilIndex | null = null;

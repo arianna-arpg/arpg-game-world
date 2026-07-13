@@ -1295,6 +1295,9 @@ export class Renderer {
         let alpha = vis.alpha ?? 1;
         if (vis.animate === 'pulse') alpha *= 0.6 + 0.4 * Math.sin(performance.now() / 650 + cx * 0.3 + cy * 0.3);
         else if (vis.animate === 'drift') alpha *= 0.8 + 0.2 * Math.sin(performance.now() / 900 + cx * 0.2);
+        // SHIMMER (the frail cloud): a quick, cell-desynced glitter — the wash
+        // itself is the warning, so it has to LIVE, not sit like paint.
+        else if (vis.animate === 'shimmer') alpha *= 0.55 + 0.45 * Math.sin(performance.now() / 480 + (cx * 7 + cy * 13) * 0.53);
         ctx.globalAlpha = Math.max(0, alpha);
         ctx.fillStyle = vis.fill;
         ctx.fillRect(cx * cell, cy * cell, cell + 0.6, cell + 0.6);

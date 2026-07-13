@@ -148,6 +148,14 @@ export const VIS_CFG = {
      *  whole-doodad sprites (brush clumps, ferns) instead of live stroke
      *  storms — the understory half of the deep-forest fix. */
     bakeDoodads: true,
+    /** Dirty-rect ring for baked-bed/body doodad CHANGES (brittle pops, temp
+     *  grounds appearing/melting): each add/remove stales ONLY the chunks its
+     *  blend reach touches. Overflow degrades to whole-cache staleness (the
+     *  flood rev) — the old behavior, which re-staled EVERY visible chunk on
+     *  every doodad count change and, under churn (an ice-patch build, a
+     *  melting shelf), starved the rebake budget on the same few chunks
+     *  while the rest never repainted. */
+    bedsDirtyMax: 96,
   },
 
   /** Dynamic light layer. */

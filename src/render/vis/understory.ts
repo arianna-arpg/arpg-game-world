@@ -292,6 +292,10 @@ export class UnderstoryLayer {
     if (VIS_ABLATE.has('understory')) return false;
     if (tied) this.ensureBelow(world);
     const snap = this.snaps.get(zone.id);
+    // LRU touch: crossing a wide realm web must evict the LEAST-RECENTLY-SEEN
+    // aerial, not the oldest-minted one (insertion order re-minted the zone
+    // you bounce between most — a periodic paint hitch for no reason).
+    if (snap) { this.snaps.delete(zone.id); this.snaps.set(zone.id, snap); }
     const sea = !snap; // no land resolved/painted — the endless deck
     const CFG = VIS_CFG.understory;
 
