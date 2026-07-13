@@ -42,7 +42,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     blend: { strength: 0.5, feather: 30, color: '#39432a' },
     params: {
       rim: { color: '#39432a', alpha: 0.6, grow: 3 },
-      core: { color: '#5a6e34', alpha: 0.5, grow: -8 },
+      // Core grow stays ≥ 0: the old -8 inset shrank the pour's lattice
+      // cells apart and the one body fragmented into visible circles. The
+      // two-tone murk now comes from `heart` wells (union-clipped, jittered).
+      core: { color: '#46542c', alpha: 0.5 },
+      heart: { color: '#66783c', alpha: 0.3 },
       squiggles: { color: '#7a8a4a' },
       bubbles: { color: '#a8bc72' },
     },
@@ -179,11 +183,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { base: '#6fae4a', strand: '#9fd47a', pulse: '#d8ffb0' },
     light: { radius: -1.3, color: '#8fd06f', intensity: 0.14 },
   },
+  // The JUNGLE WALL you fire through — a woven creeper tangle now, not the
+  // old flat disc-in-a-disc: lobed mat, escaping tendril curls, leaf pairs
+  // (the thicket wraps its bramble in this mat; mire/jungle roll it alone).
   vines: {
-    painter: 'liquid', order: 30,
+    painter: 'vineMat', order: 30, bakeWhole: 'static',
     params: {
-      core: { color: '#1f3a1c', alpha: 1, grow: 2 },
-      inner: { color: '#000000', alpha: 0.4, grow: -6 },
+      mat: '#1f3a1c', strand: '#3a6428', leaf: '#4a7a30',
+      bloom: { color: '#c8b0e0', chance: 0.1 },
     },
   },
   ice: {
@@ -685,6 +692,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   static_bloom: {
     painter: 'sparkle', order: 47,
+    // Storm-cool flakes (the painter's defaults are the Light's warm gold).
+    params: { fill: '#e8f2ff', edge: '#9fc8ff' },
     light: { radius: -2.6, color: '#cfe4ff', intensity: 0.25, flicker: 9 },
   },
   storm_glass: {
@@ -728,7 +737,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       rim: { color: '#6e8a3c', alpha: 0.55, grow: 3 },
       core: { color: '#55702f', alpha: 0.6 },
       sheen: { color: '#b7d478' },
-      bubbles: { color: '#cfe89a' },
+      // Denser than the bog's default: slow-bubbling is the gel's signature,
+      // so even a lone habitat pool keeps a live well or two.
+      bubbles: { color: '#cfe89a', density: 0.9 },
     },
   },
   // A drowned stele barely proud of the water — old work, older silence.
@@ -946,6 +957,20 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'slab', order: 54, shadow: 0.6, longShadow: 1.6,
     params: { shape: 'monolith', fill: 'theme:wall|#211d2b', edge: 'theme:obstacleEdge|#3d3750' },
   },
+  // THE TOLL-GATE's timber kit (boundary gate 'toll_gate' — the Holdfast
+  // waypost): a lashed-log arch over the barred mouth and squared corner
+  // posts. Wood tones stay FIXED (bandit carpentry travels with the crew —
+  // it doesn't sample the biome's rock), and the arch's light burns warm:
+  // the "somebody keeps this lit" tell against the Durance's cold green.
+  toll_arch: {
+    painter: 'gateArch', order: 56, shadow: 0.35, longShadow: 1.4,
+    params: { stone: '#4a3a22', edge: '#6e5836', glow: '#e8b458' },
+    light: { radius: -1.6, color: '#ffbe6a', intensity: 0.26, flicker: 2.2 },
+  },
+  toll_post: {
+    painter: 'slab', order: 54, shadow: 0.6, longShadow: 1.6,
+    params: { shape: 'monolith', fill: '#4a3a22', edge: '#6e5836' },
+  },
   hate_brazier: {
     painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,
     params: { bowl: true, flame: '#7de84a' },
@@ -987,9 +1012,15 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { shape: 'monolith', fill: '#1c1830', edge: '#7a4fb0', gem: { color: '#a06ad8' } },
     light: { radius: -2.4, color: '#a06ad8', intensity: 0.22 },
   },
+  // A REAL crystalline cluster now (what the kind always promised): warm
+  // faceted shards, pulsing core, Light motes rising off the facets — the
+  // glow itself is the light layer's (flicker at parity with every other
+  // emissive), never a painted halo disc.
   light_spot: {
-    painter: 'sparkle', order: 54,
-    light: { radius: -3.4, color: '#ffe08a', intensity: 0.5 },
+    longShadow: 0.5, painter: 'shard', order: 54, shadow: 0.4,
+    params: { points: 6, color: '#c8a84e', material: 'crystal',
+      coreGlow: { color: '#fff2c0' }, motes: { color: '#ffe9a8' } },
+    light: { radius: -3.4, color: '#ffe08a', intensity: 0.5, flicker: 1.8 },
   },
   descent_platform: {
     painter: 'platformRing', order: 54,

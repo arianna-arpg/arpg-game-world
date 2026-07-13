@@ -354,14 +354,25 @@ function padsOf(world: World, w: Doodad): PadSpot[] {
 export interface LiquidParams {
   /** Rim pass (grown silhouette under the core). */
   rim?: { color: ColorSpec; alpha: number; grow: number };
-  /** The body fill. */
+  /** The body fill. `grow` shrinks/grows PER DISC before the union: keep it
+   *  ≥ 0 on poured kinds — a negative grow pulls lattice cells apart and the
+   *  one body fragments into visible circles (use `heart` for inset tones). */
   core: { color: ColorSpec; alpha: number; grow?: number };
-  /** An inset pass (road track, bog sheen, vine dark heart). */
+  /** An inset pass — same per-disc grow hazard as `core`: poured kinds
+   *  should reach for `heart` instead of a negative grow. */
   inner?: { color: ColorSpec; alpha: number; grow: number };
+  /** Soft murk WELLS: seeded, jittered radial lightening per disc, blitted
+   *  inside the merged-silhouette clip at bake time — the union-safe inset
+   *  that `core.grow < 0` used to fake on big single discs. The jitter keeps
+   *  a pour's checker lattice from ever reading as a dot grid. */
+  heart?: { color: ColorSpec; alpha?: number };
   /** Expanding rings over deep liquid (water). */
   ripples?: { color: ColorSpec };
-  /** Drifting sine squiggles (bog murk). */
-  squiggles?: { color: ColorSpec };
+  /** Drifting sine squiggles (bog murk): a GROUP pass — world-anchored rows
+   *  clipped to the merged body, so a poured lattice never reads as circles
+   *  and a whole marsh costs ONE stroke (the per-disc rows were the seam-
+   *  revealing cousin of the ice sheen's per-disc storm). */
+  squiggles?: { color: ColorSpec; spacing?: number; amp?: number };
   /** Ford overlay on `shallow` discs. `lighten` derives the tone from the
    *  CORE color (one hue family, depth told by tone); the fill is a soft
    *  per-disc radial gradient so shallows MELD into the deep, never a
@@ -383,8 +394,10 @@ export interface LiquidParams {
   crawl?: { color: ColorSpec };
   /** Static crust cracks (lava, dried beds). */
   crackle?: { color: ColorSpec };
-  /** A slow swelling bubble that POPS on its cycle (bog). */
-  bubbles?: { color: ColorSpec };
+  /** A slow swelling bubble that POPS on its cycle (bog). `density` scales
+   *  each disc's chance of hosting one by its AREA, so a poured lattice
+   *  breathes a few scattered wells — never one bubble per lattice cell. */
+  bubbles?: { color: ColorSpec; density?: number };
   /** Wet darker blotches (mud). */
   blotch?: { color: ColorSpec };
   /** Pale floating scum patches (swamp). */
@@ -460,6 +473,24 @@ export function paintLiquidStatics(env: PaintEnv, group: readonly Doodad[],
     }
     ctx.globalAlpha = 1;
   }
+  if (p.heart) {
+    // Murk wells: jittered soft lightening per disc, clipped to the merged
+    // body — organic mottling over a pour, a soft heart on a lone stamp.
+    const spr = alphaDiscSprite(resolveColor(p.heart.color, theme), [[0, 1], [1, 0]], 'heart');
+    ctx.save();
+    blobPath(ctx, group);
+    ctx.clip();
+    ctx.globalAlpha = p.heart.alpha ?? 0.3;
+    for (const d of group) {
+      const seed = ((d.pos.x * 7 + d.pos.y * 11) | 0) >>> 0;
+      const r = d.radius * (0.8 + hash01(seed, 3) * 0.5);
+      const x = d.pos.x + (hash01(seed, 7) - 0.5) * d.radius * 0.6;
+      const y = d.pos.y + (hash01(seed, 11) - 0.5) * d.radius * 0.6;
+      ctx.drawImage(spr, x - r, y - r, r * 2, r * 2);
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
   if (p.melt) {
     const hot = resolveColor(p.melt.hot, theme);
     const crust = resolveColor(p.melt.crust, theme);
@@ -509,21 +540,36 @@ const liquid: GroupPainter = (env, group, def) => {
     }
   }
   if (p.squiggles) {
+    // Murk strands: WORLD-anchored sine rows clipped to the merged body —
+    // every disc of a poured marsh shares the same continuous strands, so
+    // the lattice never shows, and the whole group is one path + one stroke
+    // (row/sample positions quantize to absolute world coords, so panning
+    // the cull window never re-phases them).
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const d of group) {
+      x0 = Math.min(x0, d.pos.x - d.radius); y0 = Math.min(y0, d.pos.y - d.radius);
+      x1 = Math.max(x1, d.pos.x + d.radius); y1 = Math.max(y1, d.pos.y + d.radius);
+    }
+    const S = p.squiggles.spacing ?? 32, amp = p.squiggles.amp ?? 2.6;
+    ctx.save();
+    blobPath(ctx, group);
+    ctx.clip();
     ctx.globalAlpha = 0.3;
     ctx.strokeStyle = resolveColor(p.squiggles.color, theme);
     ctx.lineWidth = 1.2;
-    for (const d of group) {
-      for (let k = 0; k < 3; k++) {
-        const yy = d.pos.y - d.radius * 0.4 + k * d.radius * 0.4;
-        ctx.beginPath();
-        for (let x = -d.radius * 0.7; x <= d.radius * 0.7; x += 6) {
-          const wy = yy + Math.sin(x * 0.12 + time * 1.5 + k) * 3;
-          if (x <= -d.radius * 0.7) ctx.moveTo(d.pos.x + x, wy);
-          else ctx.lineTo(d.pos.x + x, wy);
-        }
-        ctx.stroke();
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    const xq0 = Math.floor(x0 / 8) * 8;
+    for (let yy = (Math.floor(y0 / S) + 0.5) * S; yy <= y1; yy += S) {
+      const k = Math.round(yy / S);
+      for (let x = xq0; x <= x1 + 8; x += 8) {
+        const wy = yy + Math.sin(x * 0.12 + time * 1.5 + k * 1.7) * amp;
+        if (x === xq0) ctx.moveTo(x, wy); else ctx.lineTo(x, wy);
       }
     }
+    ctx.stroke();
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
   if (p.pads && p.pads.biomes.includes(env.world.zone.biome ?? '')) {
     // Lily pads live on the COASTLINE: candidate rim spots that face open
@@ -694,11 +740,15 @@ const liquid: GroupPainter = (env, group, def) => {
     }
   }
   if (p.bubbles) {
-    // The bog breathes: one bubble per disc swells on its own clock, POPS
-    // (a fading ring), and starts again.
+    // The bog breathes: a bubble swells on its own clock, POPS (a fading
+    // ring), and starts again. Host discs pass an AREA-scaled seeded roll —
+    // a lone big stamp keeps its bubble, a poured lattice breathes a few
+    // scattered wells instead of one ring per checker cell.
     const col = resolveColor(p.bubbles.color, theme);
+    const dens = p.bubbles.density ?? 0.35;
     for (const d of group) {
       const seed = ((d.pos.x * 3 + d.pos.y * 13) | 0) >>> 0;
+      if (hash01(seed, 29) > (d.radius * d.radius * dens) / 3200) continue;
       const period = 2.6 + hash01(seed, 5) * 2.2;
       const cyc = ((time + hash01(seed, 9) * period) % period) / period;
       const bx = d.pos.x + (hash01(seed, 13) - 0.5) * d.radius * 0.9;
@@ -1324,6 +1374,9 @@ export interface ShardParams {
   coreGlow?: { color: ColorSpec };
   /** Accent-stroked facet edge (obsidian). */
   edgeGlow?: { color: ColorSpec; alpha: number };
+  /** Light MOTES rising off the crystals, each on its own cycle (the
+   *  Descent's light spots — any glowing kind may opt in). */
+  motes?: { color: ColorSpec; count?: number };
 }
 
 /** Faceted crystalline/volcanic shards. */
@@ -1363,6 +1416,23 @@ const shard: GroupPainter = (env, group, def) => {
       ctx.beginPath();
       ctx.arc(0, 0, o.radius * 0.4, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (p.motes) {
+      // Motes drift up off the facets, brightest mid-rise, reborn each cycle.
+      const col = resolveColor(p.motes.color, theme);
+      const seed = ((o.pos.x * 11 + o.pos.y * 5) | 0) >>> 0;
+      ctx.fillStyle = col;
+      for (let i = 0; i < (p.motes.count ?? 4); i++) {
+        const period = 2.2 + hash01(i, seed) * 1.8;
+        const cyc = ((time + hash01(i, seed + 3) * period) / period) % 1;
+        const a = hash01(i, seed + 7) * Math.PI * 2;
+        const dd = o.radius * (0.3 + hash01(i, seed + 11) * 0.6);
+        ctx.globalAlpha = 0.7 * Math.sin(cyc * Math.PI);
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * dd, Math.sin(a) * dd - cyc * o.radius * 1.1,
+          0.9 + hash01(i, seed + 13) * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -1950,17 +2020,17 @@ const slab: GroupPainter = (env, group, def) => {
   }
 };
 
-/** Glowing crystalline star-clusters (Descent light spots). */
+/** Pulsing star-flakes + hopping spark ticks (static blooms). The GLOW is
+ *  the light layer's job (LightSpec, flicker at parity with every emissive)
+ *  — the old painted halo disc doubled it as a flat geometric circle. */
 const sparkle: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { halo?: ColorSpec; fill?: ColorSpec; edge?: ColorSpec };
+  const p = (def.params ?? {}) as { fill?: ColorSpec; edge?: ColorSpec };
   const { ctx, theme, time } = env;
   for (const o of group) {
     const r = o.radius, pulse = 0.55 + 0.45 * Math.sin(time * 3 + o.pos.x * 0.05);
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     ctx.save();
-    ctx.globalAlpha = 0.22 * pulse;
-    ctx.fillStyle = resolveColor(p.halo, theme, '#ffe08a');
-    ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, r * 2.6, 0, Math.PI * 2); ctx.fill();
-    ctx.globalAlpha = 0.95;
+    ctx.globalAlpha = 0.6 + 0.35 * pulse;
     ctx.fillStyle = resolveColor(p.fill, theme, '#fff2c0');
     ctx.strokeStyle = resolveColor(p.edge, theme, '#ffd060');
     ctx.lineWidth = 1.5;
@@ -1971,6 +2041,18 @@ const sparkle: GroupPainter = (env, group, def) => {
       ctx.lineTo(o.pos.x + Math.cos(a + 0.5) * r * 0.4, o.pos.y + Math.sin(a + 0.5) * r * 0.4);
       ctx.lineTo(o.pos.x, o.pos.y);
       ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    // Spark ticks hopping around the flakes, each on its own clock.
+    for (let i = 0; i < 3; i++) {
+      const ph = time * (1.3 + hash01(i, seed) * 1.4) + i * 2.1;
+      const a = hash01(i, seed + 5) * Math.PI * 2 + ph * 0.7;
+      const dd = r * (0.75 + 0.45 * Math.sin(ph));
+      const x = o.pos.x + Math.cos(a) * dd, y = o.pos.y + Math.sin(a) * dd;
+      ctx.globalAlpha = 0.35 + 0.35 * Math.sin(ph * 2.3);
+      ctx.beginPath();
+      ctx.moveTo(x - 2, y); ctx.lineTo(x + 2, y);
+      ctx.moveTo(x, y - 2); ctx.lineTo(x, y + 2);
+      ctx.stroke();
     }
     ctx.globalAlpha = 1;
     ctx.restore();
@@ -3020,6 +3102,109 @@ const trunk: GroupPainter = (env, group, def) => {
     ctx.beginPath();
     ctx.arc(o.pos.x, o.pos.y, r * 0.82, -2.5, -1.1);
     ctx.stroke();
+  }
+};
+
+export interface VineMatParams {
+  /** The tangle bed the weave sits on. */
+  mat?: ColorSpec;
+  /** Creeper strand stroke (a darker sibling alternates). */
+  strand?: ColorSpec;
+  /** Leaf fill (the lit tone derives). */
+  leaf?: ColorSpec;
+  /** Chance-rolled blooms riding the weave — pure data accent. */
+  bloom?: { color: ColorSpec; chance?: number };
+}
+
+/** A VINE MAT — the jungle wall you fire through: a lobed tangle bed, a
+ *  woven ring of creeper strands with tendrils curling out past the rim,
+ *  leaf pairs riding the weave. Replaces the last flat gradient-disc look
+ *  (a single liquid disc drew the thicket's mat as a geometric circle).
+ *  Seeded per disc so no two mats repeat; fully static, so bakeWhole blits
+ *  it — tendril reach stays inside the bake frame (≤ 1.6 × radius). */
+const vineMat: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as unknown as VineMatParams;
+  const { ctx, theme } = env;
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const mat = resolveColor(p.mat, theme, '#1f3a1c');
+    const strand = resolveColor(p.strand, theme, '#3a6428');
+    const leaf = resolveColor(p.leaf, theme, '#4a7a30');
+    const leafLit = shade(leaf, 0.2);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.rot !== undefined) ctx.rotate(o.rot);
+    // The tangle bed: a lobed dark mass — never a geometric circle.
+    ctx.globalAlpha = 0.92;
+    ctx.fillStyle = mat;
+    ctx.beginPath();
+    const lobes = 9;
+    for (let k = 0; k <= lobes; k++) {
+      const a = (k / lobes) * Math.PI * 2;
+      const rr = r * (0.72 + 0.2 * Math.abs(Math.sin(a * 2.7 + seed % 7)) + hash01(k % lobes, seed) * 0.1);
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.quadraticCurveTo(Math.cos(a - 0.35) * rr * 1.14, Math.sin(a - 0.35) * rr * 1.14, x, y);
+    }
+    ctx.closePath();
+    ctx.fill();
+    // Shadowed heart — depth under the weave.
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = shade(mat, -0.4);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2); ctx.fill();
+    // THE WEAVE: creeper strands looping through the mat, the first two
+    // escaping the rim as curling tendrils (the tangle's proof it GROWS).
+    ctx.globalAlpha = 1;
+    ctx.lineCap = 'round';
+    const strands = 5 + (seed % 2);
+    for (let i = 0; i < strands; i++) {
+      const a0 = (i / strands) * Math.PI * 2 + hash01(i, seed + 3) * 1.2;
+      const esc = i < 2;
+      const reach = r * (esc ? 1.2 + hash01(i, seed + 5) * 0.25 : 0.8 + hash01(i, seed + 5) * 0.15);
+      const cx = Math.cos(a0 + 1.1) * r * (0.65 + hash01(i, seed + 7) * 0.3);
+      const cy = Math.sin(a0 + 1.1) * r * (0.65 + hash01(i, seed + 9) * 0.3);
+      ctx.strokeStyle = i % 2 ? strand : shade(strand, -0.18);
+      ctx.lineWidth = Math.max(1.4, r * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a0 + 2.4) * r * 0.4, Math.sin(a0 + 2.4) * r * 0.4);
+      ctx.quadraticCurveTo(cx, cy, Math.cos(a0) * reach, Math.sin(a0) * reach);
+      ctx.stroke();
+      if (esc) {
+        // The tendril CURL: a hook spiraling off the strand's end.
+        ctx.lineWidth = Math.max(1, r * 0.045);
+        ctx.beginPath();
+        ctx.arc(Math.cos(a0) * reach + Math.cos(a0 + 1.2) * r * 0.09,
+          Math.sin(a0) * reach + Math.sin(a0 + 1.2) * r * 0.09,
+          r * 0.09, a0 - 2.6, a0 + 1.8);
+        ctx.stroke();
+      }
+    }
+    // Leaf pairs riding the weave (+ chance-rolled blooms).
+    const leaves = 9 + (seed % 4);
+    for (let i = 0; i < leaves; i++) {
+      const a = hash01(i, seed + 17) * Math.PI * 2;
+      const dd = r * (0.3 + hash01(i, seed + 19) * 0.62);
+      const lx = Math.cos(a) * dd, ly = Math.sin(a) * dd;
+      const rot = hash01(i, seed + 23) * Math.PI * 2;
+      const lr = r * (0.1 + hash01(i, seed + 29) * 0.06);
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = i % 3 ? leaf : leafLit;
+      for (const s of [-1, 1]) {
+        ctx.beginPath();
+        ctx.ellipse(lx + Math.cos(rot + s * 0.9) * lr, ly + Math.sin(rot + s * 0.9) * lr,
+          lr, lr * 0.45, rot + s * 0.9, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (p.bloom && hash01(i, seed + 31) < (p.bloom.chance ?? 0.12)) {
+        ctx.fillStyle = resolveColor(p.bloom.color, theme);
+        ctx.beginPath();
+        ctx.arc(lx, ly, Math.max(1.2, lr * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
   }
 };
 
@@ -6218,7 +6403,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
   shard, vent, pod, dome, bones, slab, sparkle, platformRing,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth, hatch,
-  campfire, groundShadow, trunk, brush, fern, gravelPath, shimmer, fogFloor,
+  campfire, groundShadow, trunk, brush, fern, vineMat, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
   finBlade, impaler, groundChain, stairFlight,

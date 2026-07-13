@@ -21,7 +21,7 @@
 import { dist, vec, type Vec2 } from '../core/math';
 import { shapeBoundR, type HitShape } from './shapes';
 import type { Rng } from '../core/rng';
-import type { PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
+import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
 import { MONSTERS } from '../data/monsters';
 import { presenceTable } from './presence';
@@ -213,6 +213,8 @@ export type KnownDoodadKind =
   // The boundary-gate + durance kit (enclave façades; the hate-citadel's halls)
   | 'gate_arch'        // a monumental arch spanning a boundary-gate mouth (walk-under span)
   | 'gate_pylon'       // a coursed monolith bookending a gate façade
+  | 'toll_arch'        // a lashed-log arch over a toll-gate's barred mouth (warm-lit walk-under)
+  | 'toll_post'        // a squared timber corner post bookending a palisade façade
   | 'hate_brazier'     // an iron bowl burning cold green — the citadel lights its own
   | 'torture_rack'     // the frame, the rollers, the stain — a hall that confesses what it is
   | 'hate_idol';       // a hooded effigy the halls are kept for — its gaze is the decor
@@ -826,7 +828,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   charged_crystal: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 130, bodyScale: 0.75, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   static_bloom:    { overlap: 'ground' },
   storm_glass:     { overlap: 'ground', forbidOn: ['water', 'lava', 'chasm'] },
-  vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false },
+  vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, spin: true },
   bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground', pour: {} },
   swamp:     { overlap: 'ground', pour: {}, hazardGround: true },
@@ -987,6 +989,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // monuments; the rack is low furniture you shoot over.
   gate_arch:     { overlap: 'ground', walkOnly: true },
   gate_pylon:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The toll-gate's timber kit (the Holdfast waypost — same policies as the
+  // stone kit above: the arch is a walk-under span, the post a true solid).
+  toll_arch:     { overlap: 'ground', walkOnly: true },
+  toll_post:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   hate_brazier:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
   torture_rack:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     surface: { hw: 0.85, hh: 0.5 } }, // the rack bed + rollers — low dark furniture, not a pillar
@@ -1839,6 +1845,16 @@ type BoundaryGateBuilder = (ctx: GenCtx, at: Vec2, gateId: string) => void;
 let boundaryGateBuilder: BoundaryGateBuilder | null = null;
 export function setBoundaryGateBuilder(b: BoundaryGateBuilder): void { boundaryGateBuilder = b; }
 
+/** The EXIT-ROAD builder (layoutRecipes registers carveApproachRoad at
+ *  import — the boundary-gate idiom, so this core never imports a recipe).
+ *  generateLayout lays a traveled way for every exit whose def.exitRoads
+ *  entry carries a spec (a TRANSIENT per-load annotation the World stamps
+ *  beside exitBoundaries); null (boot order, bare tests) = plain ground,
+ *  nothing lost. */
+type ExitRoadBuilder = (ctx: GenCtx, def: ZoneDef, exitIndex: number, spec: ExitRoadSpec) => void;
+let exitRoadBuilder: ExitRoadBuilder | null = null;
+export function setExitRoadBuilder(b: ExitRoadBuilder): void { exitRoadBuilder = b; }
+
 /** Generate a zone's terrain from its layout spec. */
 export function generateLayout(
   def: ZoneDef, arena: { w: number; h: number },
@@ -1881,6 +1897,18 @@ export function generateLayout(
     for (let i = 0; i < ctx.exits.length && i < def.exitBoundaries.length; i++) {
       const b = def.exitBoundaries[i];
       if (b) boundaryGateBuilder(ctx, ctx.exits[i], b);
+    }
+  }
+  // EXIT ROADS: exits annotated with a TRAVELED-WAY spec (def.exitRoads —
+  // stamped per-load beside exitBoundaries; the Holdfast's kept gravel road
+  // is the first rider) get a worn way carved from a source portal to their
+  // mouth. After the gates, so a road can END at a façade's throat instead
+  // of under its walls; before the landmark/structure rolls, so they honor
+  // its artery reservation. Zones without annotations draw nothing.
+  if (exitRoadBuilder && def.exitRoads) {
+    for (let i = 0; i < ctx.exits.length && i < def.exitRoads.length; i++) {
+      const r = def.exitRoads[i];
+      if (r) exitRoadBuilder(ctx, def, i, r);
     }
   }
   // PLAN fixtures raise AFTER the layout: a grid generator REPLACES ctx.walk,
