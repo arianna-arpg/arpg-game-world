@@ -75,6 +75,17 @@ export class UnderstoryLayer {
     ctx.scale(scale, scale);
     ctx.translate(-req.ox, -req.oy);
 
+    // Only the LAND paints — a shelf window wider than the zone below leaves
+    // the overhang transparent, so the draw pass's open sky shows past the
+    // land's true edge instead of a floor-tinted phantom continent.
+    const bx0 = Math.max(req.ox, 0), by0 = Math.max(req.oy, 0);
+    const bx1 = Math.min(req.ox + req.w, world.arena.w);
+    const by1 = Math.min(req.oy + req.h, world.arena.h);
+    if (bx1 <= bx0 || by1 <= by0) { ctx.restore(); this.snaps.set(req.key, { img: c, scale, w: req.w, h: req.h }); return; }
+    ctx.beginPath();
+    ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
+    ctx.clip();
+
     // The land: base floor + a coarse read of its palette mottle.
     ctx.fillStyle = theme.floor;
     ctx.fillRect(req.ox, req.oy, req.w, req.h);

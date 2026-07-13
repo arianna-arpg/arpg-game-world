@@ -12,6 +12,7 @@ import { BREACH } from './defs/breach';
 import { BRIGANDS } from './defs/brigands';
 import { CONCLAVE } from './defs/conclave';
 import { CONTAGION } from './defs/contagion';
+import { ASCENT } from './defs/ascent';
 import { CRUSADE } from './defs/crusade';
 import { DEADWAKE } from './defs/deadwake';
 import { DESCENT } from './defs/descent';
@@ -43,6 +44,7 @@ export const PACKAGES: ContentPackage[] = [
   CONCLAVE,
   AMALGAMATION,
   DESCENT,
+  ASCENT,
   DEADWAKE,
   MIGRATION,
   CONTAGION,
@@ -73,6 +75,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   conclave: 0xc04a,
   amalgamation: 0xa17a,
   descent: 0xde5c,
+  ascent: 0xa5ce,
   deadwake: 0xdead,
   migration: 0x819a,
   contagion: 0xc047,

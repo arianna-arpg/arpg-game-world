@@ -5876,7 +5876,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['talon_rake'], xp: 10, faction: 'seraphic',
     flier: true, levitates: true,
     volatile: { skillId: 'aureole', chance: 0.2, icd: 3 },
-    presence: 'host_vigil',
+    // Deliberately BANDLESS: the choir's least is the table's floor — however
+    // low a shelf runs, something still sings (an all-banded table would sit
+    // empty below the vigil and fall back to unshaped weights).
     detection: 1.2,
     scaleVariance: [0.85, 1.15],
     brain: { type: 'swarm' },

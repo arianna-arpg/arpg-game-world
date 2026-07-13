@@ -3454,6 +3454,13 @@ export class World {
   private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean; ownedGround?: boolean }[] {
     return [
       {
+        // ASCENT: an eligible open-sky zone may vent a sky geyser (rolled
+        // per zone, gated + ignition-scaled through the overlay). On-entry
+        // only — a geyser is discovered, never erupts under your feet.
+        id: 'ascent', noLive: true,
+        enter: (def) => this.placeAscentGeyser(def),
+      },
+      {
         // Fresh zone visit → no host materialized yet. If a host has ALREADY
         // reached this zone (you walked into an invasion in progress), its
         // warband stands at the entry it marched in by. On-entry only —
@@ -6788,6 +6795,55 @@ export class World {
 
   /** Roll + place a Delver in a freshly-entered normal cave (deterministic per cave
    *  mouth via its seed). The DESCENT abyss itself never hosts one. */
+  /** ASCENT (packages/defs/ascent.ts): an eligible open-sky surface zone may
+   *  vent a SKY GEYSER — the dwell-to-ride mouth of the realm above. Seeded
+   *  per zone (a given zone always/never vents), gated + ignition-scaled
+   *  through the overlay; the mouth joins the shared sidezone dwell loop with
+   *  a POSITION-FREE pocket seed (the spring may resurface elsewhere on a
+   *  revisit, but it always opens onto the SAME shelf). */
+  private placeAscentGeyser(def: ZoneDef): void {
+    const af = this.sim.ascentField;
+    if (!af || this.inCave || def.caveDepth != null) return;
+    if ((def.dimension ?? 'surface') !== 'surface') return; // geysers vent from the world's own ground
+    if (def.special || def.eventOwned) return;
+    if (def.objective.kind === 'safe' || def.objective.kind === 'waves') return;
+    if (def.theme.ambientDark != null) return; // open sky only — a roofed geyser goes nowhere
+    const surge = af.surge();
+    if (surge.geyserBiomes.length && !surge.geyserBiomes.includes(def.biome ?? '')) return;
+    if (!af.geyserAllowed(this.player.level)) return;
+    const roll = new Rng(((def.seed ?? 0) ^ 0xa5ce47) >>> 0); // stable per zone
+    if (!roll.chance(af.geyserChanceNow())) return;
+    // The spring: a seeded pick well clear of the door + the transit spots.
+    let at: Vec2 | null = null;
+    for (let tries = 0; tries < 24 && !at; tries++) {
+      const p = this.clampPos(vec(
+        roll.range(140, Math.max(160, this.arena.w - 140)),
+        roll.range(140, Math.max(160, this.arena.h - 140))), 34);
+      if (dist(p, this.zoneEntry) < 420) continue; // not at the door
+      at = this.clearTransitSpot(p);
+    }
+    if (!at) return;
+    this.doodads.push({ pos: vec(at.x, at.y), radius: 30, kind: 'sky_geyser' });
+    // The spring's pool: warm water lapping the terrace (ground overlay —
+    // wading, wake rings, the works ride the ordinary region machinery).
+    for (let i = 0; i < 3; i++) {
+      const a = roll.range(0, Math.PI * 2);
+      const pool = { pos: vec(at.x + Math.cos(a) * 26, at.y + Math.sin(a) * 26), radius: roll.range(22, 32), kind: 'water' as const };
+      this.doodads.push(pool);
+      this.grounds.push(pool);
+    }
+    // The mouth joins the sidezone machinery like a layout-placed one — but
+    // its pocket seed is POSITION-FREE (one geyser per zone → one shelf per
+    // zone, however the spring wanders between visits).
+    this.caveEntrances.push({
+      pos: this.clampPos(vec(at.x, at.y), 28),
+      seed: hashStr(`${def.id}:sky_geyser`),
+      kind: 'sky_geyser',
+    });
+    bumpLedger(this.ledger, 'geysers_seen'); // DISCOVERY — surfaces the Vault unlock
+    this.text(vec(at.x, at.y - 36), 'A geyser roars toward the sky…', '#9fd8ff', 15);
+  }
+
   private placeDescentDelver(def: ZoneDef): void {
     const df = this.sim.descentField;
     if (!df || !this.inCave || def.id.startsWith('cave_descent_')) return;
@@ -22928,6 +22984,7 @@ export class World {
     if (!this.caveMap[id]) {
       this.caveMap[id] = sz.mint({
         parent: this.zone, seed: cm.seed, id,
+        pos: { x: cm.pos.x, y: cm.pos.y },
         playerLevel: this.player.level,
         pkgActive: (pid) => this.sim.packageActive(pid, this.player.level),
       });

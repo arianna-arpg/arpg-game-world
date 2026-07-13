@@ -30,6 +30,9 @@ export interface SidezoneMintCtx {
   seed: number;
   /** The pocket's zone id (already prefixed/keyed by the engine). */
   id: string;
+  /** The MOUTH's world position in the parent — the anchor a vertical pocket
+   *  hangs its ZoneDef.below on (the geyser the shelf floats above). */
+  pos: { x: number; y: number };
   /** The entering hero's character level (arena scaling, level floors). */
   playerLevel: number;
   /** Is a content package live on this run (manifest-enabled + start gate)? */

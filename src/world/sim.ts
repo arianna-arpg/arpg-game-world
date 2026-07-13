@@ -16,6 +16,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import type { ConclaveField } from '../packages/overlays/conclave';
 import type { ContagionField } from '../packages/overlays/contagion';
+import type { AscentField } from '../packages/overlays/ascent';
 import type { DescentField } from '../packages/overlays/descent';
 import type { HoldfastField } from '../packages/overlays/holdfast';
 import type { MyceliaField } from '../packages/overlays/mycelia';
@@ -128,6 +129,10 @@ export class WorldSim {
    *  reads its gate + config (DescentSurge) to roll the Delver in caves and run the
    *  boundless abyss (darkness/light/streaming/payout). It owns no cross-zone state. */
   readonly descentField: DescentField | null;
+  /** The ascent overlay if its package is in the manifest, else null — the engine
+   *  reads its gate + config (AscentSurge) to vent sky geysers in eligible zones;
+   *  the shelf/collapse/gate machinery is all data-driven ground. No cross-zone state. */
+  readonly ascentField: AscentField | null;
   /** The deadwake overlay if its package is in the manifest, else null — the engine
    *  reads its hidden corpse counter (via accrue/noteUndeadSlain), floods the host
    *  off deadwakeOn(), and drains its consumedZones to deplete events it rolls over. */
@@ -308,6 +313,7 @@ export class WorldSim {
     this.conclaveField = surface<ConclaveField>('conclave') ?? null;
     this.amalgamationField = surface<AmalgamationField>('amalgamation') ?? null;
     this.descentField = surface<DescentField>('descent') ?? null;
+    this.ascentField = surface<AscentField>('ascent') ?? null;
     this.deadwakeField = surface<DeadwakeField>('deadwake') ?? null;
     this.migrationField = surface<MigrationField>('migration') ?? null;
     this.brigandField = surface<BrigandField>('brigands') ?? null;

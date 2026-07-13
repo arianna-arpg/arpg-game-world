@@ -3715,6 +3715,9 @@ export const SUPPORTS: Record<string, SupportDef> = {
     id: 'parting_judgement', name: 'Parting Judgement',
     description: 'Where this skill\'s projectiles END their flight, a JUDGEMENT PILLAR falls on the spot at 60% effect — every shot a sentence, every landing a verdict.',
     color: '#ffd27f', requiresTags: ['projectile'],
+    // NOTE: shares parting_gift's known crew-lane inert pair (raise_spectre/
+    // revive board sequel gems onto raised minions that never read them) —
+    // one behavior class, so whatever fixes the frost gem fixes this one.
     sequel: { skillId: 'judgement_pillar', damageScale: 0.6 },
     mods: [mod('manaCost', 'more', 0.25)],
     perLevel: [mod('damage', 'increased', 0.05, ['fire'])],
