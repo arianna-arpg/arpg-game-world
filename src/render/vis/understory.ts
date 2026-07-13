@@ -1,28 +1,39 @@
 // ---------------------------------------------------------------------------
 // THE UNDERSTORY — what lies far BELOW the ground you stand on.
 //
-// A cloud shelf hangs directly above the zone its geyser erupted from; every
-// gap in the clouds (the `window` region cells the ground baker punches
-// clear) looks DOWN onto that land. This layer paints that view, drawn each
-// frame UNDER the ground chunks so it shows only through the holes:
+// Every gap in a vertical zone (the `window` region cells the ground baker
+// punches clear) looks DOWN onto the world beneath. This layer paints that
+// view, drawn each frame UNDER the ground chunks so it shows only through
+// the holes. Three sources, best-first:
 //
-//   • SNAPSHOT mode — while the departure zone is still live (the launch
-//     windup), the renderer captures a hazed aerial of it: floor + mottle,
-//     region cells, every doodad as its far-below silhouette. Keyed by the
-//     destination zone id; drawn with a gentle parallax so the land slides
-//     against the shelf as the camera moves — the read that you are HIGH.
-//   • CLOUD-SEA mode (ZoneTheme.understory:'cloudsea') — no land below, only
-//     the endless sunlit deck: procedural billows, drifting, lit from above.
-//     Also the fallback when a shelf's snapshot never existed (a dev jump,
-//     a resumed run) — the dream doesn't apologize.
+//   • LIVE CAPTURE — while the departure zone is still materialized (the
+//     launch windup), snapshot its exact hazed aerial: floor + mottle,
+//     region cells, every doodad, every runtime change. Keyed by the
+//     destination id; requested via TraversalCapture.
+//   • HEADLESS CAPTURE — no live capture around? Mint the below zone's
+//     layout deterministically from its own def (generateLayout — the same
+//     recipe a real visit runs) and paint the same aerial. Serves BOTH
+//     anchored shelves re-entered later (ZoneDef.below → a 1:1 window on
+//     the anchor) AND the Nether tie (World.skyBelowDef — the whole
+//     resolved surface zone STRETCHED beneath the realm zone, so flying
+//     the realm north shows the world's north sliding past below, and the
+//     proportional fall lands you on the very ground you saw).
+//   • CLOUD-SEA (ZoneTheme.understory:'cloudsea') — no land below at all:
+//     the endless sunlit deck, procedural, drifting. Also the last-resort
+//     fallback (a field/boundless zone below that can't mint headlessly).
 //
 // Cloud SHADOWS drift across whichever floor shows. Knobs in
 // VIS_CFG.understory; ablate pass name 'understory'.
 // ---------------------------------------------------------------------------
 
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
+import type { ZoneDef, ZoneTheme } from '../../data/zones';
+import { generateLayout, type Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
 import type { TraversalCapture } from '../../engine/traversal';
+import { Rng } from '../../core/rng';
+import { PORTAL_EDGE_INSET } from '../../engine/worldgen';
+import { exitInside } from '../../world/shape';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
 import { mix, shade, valueNoise, withAlpha } from './color';
@@ -31,16 +42,25 @@ import { VIS_ABLATE, VIS_CFG } from './visConfig';
 
 interface UnderstorySnap {
   img: HTMLCanvasElement;
-  /** Canvas px per world unit. */
-  scale: number;
-  /** World dims of the captured window (== the shelf's arena dims). */
+  /** World dims the snap draws across in the CURRENT zone (its dest rect). */
   w: number;
   h: number;
 }
 
+/** Everything the aerial painter reads — built from the LIVE world (launch
+ *  capture) or from a headless generateLayout of the below zone's def. */
+interface UnderScene {
+  theme: ZoneTheme;
+  arenaW: number;
+  arenaH: number;
+  doodads: readonly Doodad[];
+  walk: GridWalkField | null;
+  structures: readonly { rect?: { x: number; y: number; w: number; h: number } }[];
+}
+
 /** The far-below tint family a doodad kind falls into, resolved against the
- *  DEPARTURE zone's theme — silhouettes, not portraits (haze eats detail). */
-function doodadTint(kind: string, theme: World['zone']['theme']): { color: string; alpha: number; grow: number } | null {
+ *  BELOW zone's theme — silhouettes, not portraits (haze eats detail). */
+function doodadTint(kind: string, theme: ZoneTheme): { color: string; alpha: number; grow: number } | null {
   if (DOODAD_VISUALS[kind]?.canopy) return { color: theme.tree ?? '#2e4422', alpha: 0.85, grow: 1.7 };
   if (kind.includes('water') || kind === 'shallows') return { color: theme.water ?? '#1d4254', alpha: 0.9, grow: 1.15 };
   if (kind === 'lava' || kind.includes('ember') || kind === 'cinder') return { color: theme.lava ?? '#7a2a12', alpha: 0.9, grow: 1.1 };
@@ -55,46 +75,135 @@ function doodadTint(kind: string, theme: World['zone']['theme']): { color: strin
 }
 
 export class UnderstoryLayer {
-  /** Snapshots keyed by DESTINATION zone id (small LRU). */
+  /** Snapshots keyed by the zone id they hang UNDER (small LRU). */
   private snaps = new Map<string, UnderstorySnap>();
+  /** Zone ids whose headless mint failed — don't retry every frame. */
+  private declined = new Set<string>();
 
   has(key: string): boolean { return this.snaps.has(key); }
 
   /** Capture the live world's given rect as `key`'s far-below view. Called by
    *  the renderer during a launch windup — the one moment the departure zone
-   *  is still fully materialized. One-time cost, hidden under the cinematic. */
+   *  is still fully materialized (runtime changes and all). */
   capture(world: World, req: TraversalCapture): void {
+    const scene: UnderScene = {
+      theme: world.zone.theme,
+      arenaW: world.arena.w, arenaH: world.arena.h,
+      doodads: world.doodads,
+      walk: world.walk instanceof GridWalkField ? world.walk : null,
+      structures: (world.structures ?? []) as UnderScene['structures'],
+    };
+    this.stash(req.key, this.paintScene(scene, req.ox, req.oy, req.w, req.h), req.w, req.h);
+  }
+
+  /** Stand the below-view up WITHOUT a live capture: mint the below zone's
+   *  layout headlessly from its def (deterministic — the same recipe a real
+   *  visit runs) and paint the aerial. Anchored (ZoneDef.below): a 1:1
+   *  window centered on the anchor. Over-tied (World.skyBelowDef): the WHOLE
+   *  below zone, stretched under this one (the Nether-tie view the
+   *  proportional fall agrees with). One-time cost at first draw. */
+  private ensureBelow(world: World): void {
+    const zone = world.zone;
+    if (this.snaps.has(zone.id) || this.declined.has(zone.id)) return;
+    const anchored = zone.below ?? null;
+    const belowDef: ZoneDef | null = anchored
+      ? world.zoneMap[anchored.zoneId] ?? null
+      : world.skyBelowDef();
+    if (!belowDef) return; // nothing below — cloudsea handles it
+    // Field megazones need the live web; boundless zones have no fixed
+    // layout — both decline to the cloud sea rather than lie.
+    if (belowDef.field || belowDef.boundless) { this.declined.add(zone.id); return; }
+    const scene = this.headlessScene(belowDef);
+    if (!scene) { this.declined.add(zone.id); return; }
+    if (anchored) {
+      this.stash(zone.id, this.paintScene(scene,
+        anchored.ax - zone.size.w / 2, anchored.ay - zone.size.h / 2,
+        zone.size.w, zone.size.h), zone.size.w, zone.size.h);
+    } else {
+      // Stretch: the whole world-below fills the realm zone's own rect.
+      this.stash(zone.id, this.paintScene(scene, 0, 0, scene.arenaW, scene.arenaH),
+        zone.size.w, zone.size.h);
+    }
+  }
+
+  /** Mint a zone's layout headlessly for painting — the genqa idiom: its own
+   *  def, its own seed, portal pixels from the same side/at math placeExit
+   *  runs. Entry sits at center (only the portal-clear splice reads it; the
+   *  aerial can't see that detail through the haze). */
+  private headlessScene(def: ZoneDef): UnderScene | null {
+    try {
+      const arena = { w: def.size.w, h: def.size.h };
+      const bounds = { w: arena.w, h: arena.h, shape: def.shape ?? 'rect' as const };
+      const inset = PORTAL_EDGE_INSET;
+      const exits = def.exits.map(e => {
+        const t = e.at ?? 0.5;
+        const edge = e.side === 'n' ? { x: Math.min(Math.max(arena.w * t, inset), arena.w - inset), y: inset }
+          : e.side === 's' ? { x: Math.min(Math.max(arena.w * t, inset), arena.w - inset), y: arena.h - inset }
+          : e.side === 'w' ? { x: inset, y: Math.min(Math.max(arena.h * t, inset), arena.h - inset) }
+          : { x: arena.w - inset, y: Math.min(Math.max(arena.h * t, inset), arena.h - inset) };
+        return exitInside(edge, bounds);
+      });
+      const layout = generateLayout(def, arena,
+        new Rng((def.seed ?? 1) >>> 0),
+        { x: arena.w / 2, y: arena.h / 2 }, exits);
+      return {
+        theme: def.theme,
+        arenaW: arena.w, arenaH: arena.h,
+        doodads: layout.doodads,
+        walk: layout.walk instanceof GridWalkField ? layout.walk : null,
+        structures: (layout.structures ?? []) as UnderScene['structures'],
+      };
+    } catch (e) {
+      console.warn(`[understory] headless mint of '${def.id}' declined:`, e);
+      return null;
+    }
+  }
+
+  private stash(key: string, img: HTMLCanvasElement, w: number, h: number): void {
+    this.snaps.set(key, { img, w, h });
     const CFG = VIS_CFG.understory;
-    const scale = Math.min(CFG.scale, CFG.maxDim / Math.max(req.w, req.h));
+    while (this.snaps.size > CFG.maxSnaps) {
+      const oldest = this.snaps.keys().next().value;
+      if (oldest === undefined) break;
+      const old = this.snaps.get(oldest);
+      if (old) releaseCanvas(old.img);
+      this.snaps.delete(oldest);
+    }
+  }
+
+  /** Paint the given window of a scene as a hazed aerial. */
+  private paintScene(scene: UnderScene, ox: number, oy: number, w: number, h: number): HTMLCanvasElement {
+    const CFG = VIS_CFG.understory;
+    const scale = Math.min(CFG.scale, CFG.maxDim / Math.max(w, h));
     const c = document.createElement('canvas');
-    c.width = Math.max(2, Math.ceil(req.w * scale));
-    c.height = Math.max(2, Math.ceil(req.h * scale));
+    c.width = Math.max(2, Math.ceil(w * scale));
+    c.height = Math.max(2, Math.ceil(h * scale));
     const ctx = c.getContext('2d')!;
-    const theme = world.zone.theme;
+    const theme = scene.theme;
     ctx.save();
     ctx.scale(scale, scale);
-    ctx.translate(-req.ox, -req.oy);
+    ctx.translate(-ox, -oy);
 
-    // Only the LAND paints — a shelf window wider than the zone below leaves
-    // the overhang transparent, so the draw pass's open sky shows past the
+    // Only the LAND paints — a window wider than the zone below leaves the
+    // overhang transparent, so the draw pass's open sky shows past the
     // land's true edge instead of a floor-tinted phantom continent.
-    const bx0 = Math.max(req.ox, 0), by0 = Math.max(req.oy, 0);
-    const bx1 = Math.min(req.ox + req.w, world.arena.w);
-    const by1 = Math.min(req.oy + req.h, world.arena.h);
-    if (bx1 <= bx0 || by1 <= by0) { ctx.restore(); this.snaps.set(req.key, { img: c, scale, w: req.w, h: req.h }); return; }
+    const bx0 = Math.max(ox, 0), by0 = Math.max(oy, 0);
+    const bx1 = Math.min(ox + w, scene.arenaW);
+    const by1 = Math.min(oy + h, scene.arenaH);
+    if (bx1 <= bx0 || by1 <= by0) { ctx.restore(); return c; }
     ctx.beginPath();
     ctx.rect(bx0, by0, bx1 - bx0, by1 - by0);
     ctx.clip();
 
     // The land: base floor + a coarse read of its palette mottle.
     ctx.fillStyle = theme.floor;
-    ctx.fillRect(req.ox, req.oy, req.w, req.h);
+    ctx.fillRect(ox, oy, w, h);
     const gs = theme.ground ?? {};
     const pal = gs.palette && gs.palette.length >= 2 ? gs.palette : null;
     const step = 24 / Math.min(1, scale * 4); // coarse cells — an aerial, not a floor
     const ns = VIS_CFG.ground.noiseScale / (gs.scale ?? 1);
-    for (let y = req.oy; y < req.oy + req.h; y += step) {
-      for (let x = req.ox; x < req.ox + req.w; x += step) {
+    for (let y = by0; y < by1; y += step) {
+      for (let x = bx0; x < bx1; x += step) {
         const n = Math.max(0, Math.min(1, 0.5 + (valueNoise(x * ns, y * ns, 7) - 0.5) * 2.4));
         if (pal) {
           const t = n * (pal.length - 1);
@@ -111,11 +220,11 @@ export class UnderstoryLayer {
     ctx.globalAlpha = 1;
 
     // Region cells (grid zones): walls and painted grounds at their true tones.
-    const wf = world.walk instanceof GridWalkField ? world.walk : null;
+    const wf = scene.walk;
     if (wf) {
       const cell = wf.cell;
-      const gx0 = Math.max(0, Math.floor(req.ox / cell)), gx1 = Math.min(wf.cols - 1, Math.floor((req.ox + req.w) / cell));
-      const gy0 = Math.max(0, Math.floor(req.oy / cell)), gy1 = Math.min(wf.rows - 1, Math.floor((req.oy + req.h) / cell));
+      const gx0 = Math.max(0, Math.floor(bx0 / cell)), gx1 = Math.min(wf.cols - 1, Math.floor(bx1 / cell));
+      const gy0 = Math.max(0, Math.floor(by0 / cell)), gy1 = Math.min(wf.rows - 1, Math.floor(by1 / cell));
       const wallFill = theme.wall ?? theme.obstacle ?? '#101014';
       for (let gy = gy0; gy <= gy1; gy++) {
         for (let gx = gx0; gx <= gx1; gx++) {
@@ -134,18 +243,18 @@ export class UnderstoryLayer {
     }
 
     // Structures: far-below slabs.
-    for (const s of world.structures ?? []) {
-      const r = (s as { rect?: { x: number; y: number; w: number; h: number } }).rect;
+    for (const s of scene.structures) {
+      const r = s.rect;
       if (!r) continue;
       ctx.fillStyle = withAlpha(theme.wall ?? theme.obstacle, 0.75);
       ctx.fillRect(r.x, r.y, r.w, r.h);
     }
 
     // Doodads: grounds first (they lie flat), then everything standing.
-    const flat: typeof world.doodads = [], tall: typeof world.doodads = [];
-    for (const d of world.doodads) {
-      if (d.pos.x + d.radius < req.ox || d.pos.x - d.radius > req.ox + req.w
-        || d.pos.y + d.radius < req.oy || d.pos.y - d.radius > req.oy + req.h) continue;
+    const flat: Doodad[] = [], tall: Doodad[] = [];
+    for (const d of scene.doodads) {
+      if (d.pos.x + d.radius < bx0 || d.pos.x - d.radius > bx1
+        || d.pos.y + d.radius < by0 || d.pos.y - d.radius > by1) continue;
       (DOODAD_VISUALS[d.kind]?.canopy ? tall : flat).push(d);
     }
     for (const list of [flat, tall]) {
@@ -169,15 +278,7 @@ export class UnderstoryLayer {
     ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = withAlpha(CFG.haze, CFG.hazeAlpha);
     ctx.fillRect(0, 0, c.width, c.height);
-
-    this.snaps.set(req.key, { img: c, scale, w: req.w, h: req.h });
-    while (this.snaps.size > CFG.maxSnaps) {
-      const oldest = this.snaps.keys().next().value;
-      if (oldest === undefined) break;
-      const old = this.snaps.get(oldest);
-      if (old) releaseCanvas(old.img);
-      this.snaps.delete(oldest);
-    }
+    return c;
   }
 
   /** Draw the far-below view across the visible rect (world space, called
@@ -186,10 +287,12 @@ export class UnderstoryLayer {
   draw(ctx: CanvasRenderingContext2D, world: World,
     camX: number, camY: number, vw: number, vh: number, time: number): boolean {
     const zone = world.zone;
-    const snap = zone.below ? this.snaps.get(zone.id) : undefined;
-    const sea = zone.theme.understory === 'cloudsea' || (!!zone.below && !snap);
-    if (!snap && !sea) return false;
+    const tied = !!zone.below || !!world.skyBelowDef?.();
+    if (!tied && zone.theme.understory !== 'cloudsea') return false;
     if (VIS_ABLATE.has('understory')) return false;
+    if (tied) this.ensureBelow(world);
+    const snap = this.snaps.get(zone.id);
+    const sea = !snap; // no land resolved/painted — the endless deck
     const CFG = VIS_CFG.understory;
 
     // The open sky behind everything (falls away past the land's window).
@@ -207,7 +310,7 @@ export class UnderstoryLayer {
       ctx.imageSmoothingEnabled = true;
       ctx.drawImage(snap.img, 0, 0, snap.img.width, snap.img.height, 0, 0, snap.w, snap.h);
       ctx.restore();
-    } else {
+    } else if (sea) {
       // The endless cloud sea: two octaves of drifting billows, lit from above.
       const pf = CFG.seaParallax;
       const ox = ccx * (1 - pf), oy = ccy * (1 - pf);

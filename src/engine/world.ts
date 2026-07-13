@@ -3405,6 +3405,20 @@ export class World {
     // CORPSE RUN: spawn any prior death whose coordinate matches this zone.
     this.spawnPlayerCorpses(def);
 
+    // THE NETHER TIE (DimensionDef.over): a realm that HANGS OVER another
+    // resolves the ground beneath it — the nearest charted zone of the world
+    // below at THIS zone's own coordinate. Falls drop into it (proportional
+    // landing) and the understory's windows look down on its true terrain.
+    // Authored anchors (ZoneDef.below — launch shelves) outrank the resolver.
+    this.skyBelow = null;
+    {
+      const over = dimensionDef(def.dimension).over;
+      if (over !== undefined && !def.below) {
+        const id = this.nearestZoneOf(over, def.map);
+        if (id) this.skyBelow = { zoneId: id };
+      }
+    }
+
     // THE LIVING COLLAPSE (engine/collapse.ts): stand this zone's dissolving
     // ground up when its theme asks for it. Rolls on a SALTED copy of the
     // zone seed (never layout/spawn rng — the fog contract); the goal (the
@@ -23223,19 +23237,28 @@ export class World {
     }
   }
 
-  /** The nearest CHARTED surface zone to a map coordinate — where a body
-   *  falling out of a realm with no anchored ground beneath it comes down
-   *  (the realm hangs over the world; the world is always down there).
-   *  Special/boss stages refuse sky arrivals. */
-  private nearestSurfaceZoneId(at: { x: number; y: number }): string | null {
+  /** The nearest CHARTED zone of a dimension to a map coordinate — the
+   *  Nether tie's resolver (DimensionDef.over): both webs share one
+   *  coordinate space, so this IS "the ground directly beneath you" at zone
+   *  granularity. Special/boss stages refuse sky arrivals. */
+  private nearestZoneOf(dimId: string, at: { x: number; y: number }): string | null {
     let best: string | null = null, bd = Infinity;
     for (const z of Object.values(this.zoneMap)) {
-      if ((z.dimension ?? 'surface') !== 'surface' || z.special) continue;
+      if ((z.dimension ?? 'surface') !== dimId || z.special) continue;
       const d = (z.map.x - at.x) ** 2 + (z.map.y - at.y) ** 2;
       if (d < bd) { bd = d; best = z.id; }
     }
     return best;
   }
+
+  /** The zone this one HANGS OVER, resolved per loadZone (DimensionDef.over
+   *  + this zone's own coordinate): what falls drop into and what the
+   *  understory's windows look down on. Authored anchors (ZoneDef.below —
+   *  launch shelves) outrank the resolver; null on grounded dimensions. */
+  skyBelowDef(): ZoneDef | null {
+    return this.skyBelow ? this.zoneMap[this.skyBelow.zoneId] ?? null : null;
+  }
+  private skyBelow: { zoneId: string } | null = null;
 
   /** The floor under the player is gone — THE DROP. Every fall in a vertical
    *  realm truly falls (the old rim-scramble teleport read as rubberbanding):
@@ -23259,28 +23282,30 @@ export class World {
       this.text(vec(this.player.pos.x, this.player.pos.y - 32), 'you scramble back onto standing ground!', '#cfe0ff', 14);
       return;
     }
-    // Resolve where the world catches you: the anchored zone below, else the
-    // nearest charted surface zone, else home. (below may name a pocket —
-    // resolve against both maps the way loadZone will.)
+    // Resolve where the world catches you: the anchored zone below (launch
+    // shelves), else the ground this zone HANGS OVER (the Nether tie,
+    // resolved at loadZone), else home. (below may name a pocket — resolve
+    // against both maps the way loadZone will.)
     const below = shelf.below;
     const anchored = !!below && !!(this.zoneMap[below.zoneId] ?? this.caveMap[below.zoneId]);
     const destId = anchored ? below!.zoneId
-      : this.nearestSurfaceZoneId(shelf.map) ?? START_ZONE;
+      : this.skyBelow?.zoneId ?? this.nearestZoneOf('surface', shelf.map) ?? START_ZONE;
     const from = vec(this.player.pos.x, this.player.pos.y);
+    // The PROPORTIONAL drop: where you stood on the shelf is where you land
+    // on the ground below (the stretch the understory's windows show) — fall
+    // through a hole and come down on the very terrain you saw through it.
+    const fx = Math.min(1, Math.max(0, from.x / Math.max(1, shelf.size.w)));
+    const fy = Math.min(1, Math.max(0, from.y / Math.max(1, shelf.size.h)));
     this.beginTraversal('sky_fall', {
       swap: () => {
         const ret = this.caveReturn;
         this.caveReturn = this.caveStack.pop() ?? null;
         this.loadZone(destId, (ret && ret.zoneId === destId ? ret.entryFrom : null) ?? undefined);
         // Anchored: map the fall point through the shelf's center↔anchor.
-        // Unanchored: come down over open ground mid-zone — never on the
-        // entry portal (a sky-fall that lands you on a door reads as a
-        // teleport, not a fall).
+        // Unanchored: the proportional spot on the resolved ground.
         const land = anchored
           ? this.clampPos(vec(below!.ax + (from.x - shelf.size.w / 2), below!.ay + (from.y - shelf.size.h / 2)), this.player.radius)
-          : this.clampPos(vec(
-            this.arena.w / 2 + rand(-this.arena.w * 0.22, this.arena.w * 0.22),
-            this.arena.h / 2 + rand(-this.arena.h * 0.22, this.arena.h * 0.22)), this.player.radius);
+          : this.clampPos(vec(fx * this.arena.w, fy * this.arena.h), this.player.radius);
         this.player.pos = vec(land.x, land.y);
         const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
         for (const a of this.actors) {

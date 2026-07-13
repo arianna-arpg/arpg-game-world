@@ -67,6 +67,14 @@ export interface DimensionDef {
    *  this: a waypoint into dissolving ground is a stuck-loop machine, and
    *  heaven with a shortcut is just a lobby. */
   waypoints?: boolean;
+  /** This dimension HANGS OVER another (the Nether tie): both webs share the
+   *  one map-coordinate space, so every zone here resolves the nearest
+   *  charted zone of `over` at its own coordinate as the ground beneath it —
+   *  FALLS drop into that zone (landing at the proportional spot you fell
+   *  from), and the understory's windows look down on its actual terrain.
+   *  Separate webs, attached worlds: fly the realm north and the land
+   *  passing below is the north of the world you left. */
+  over?: string;
   /** PER-DIMENSION EVENT TEMPO — this world-state's own frequency levers.
    *  densityMul scales every package overlay's ignition here (default 1);
    *  packages[id] overrides per package (demonic incursions ×2.5 below the
@@ -164,12 +172,15 @@ registerDimension({
 });
 registerDimension({
   id: 'aetherial', label: 'The Aetherial', color: '#9fc0e8',
-  // The realm above the clouds: for now one biome — the dissolving cloud
-  // shelves (the 'aether' tileset's torn lattices). The FIRMAMENT (the
-  // sanctum biome) is deliberately NOT in the palette: it exists only where
-  // the gate mints it — country grows from shelves; the sanctum is a place.
+  // The realm above the clouds, two moods wide: the dissolving cloud
+  // SHELVES (the 'aether' torn lattices) and the built HIGH SPIRES (courts
+  // and ephemeral spans — only the fray falls). The FIRMAMENT (the sanctum
+  // biome) is deliberately NOT in the palette: it exists only where the
+  // gate mints it — country grows from shelves and spires; the sanctum is
+  // a place.
   biomes: [
     { biome: 'aether', weight: 1 },
+    { biome: 'aether_spires', weight: 0.9 },
   ],
   levelBonus: 4,
   // The high air: cold, thin, and bone-dry — no seas above the sky. The
@@ -189,6 +200,10 @@ registerDimension({
   // ground dissolves is a rubberband loop waiting to happen; the Firmament
   // holds the door, not a shortcut.
   waypoints: false,
+  // THE NETHER TIE: the Aetherial hangs OVER the surface — one coordinate
+  // space, two webs. Falls resolve the nearest charted surface zone at the
+  // faller's own coordinate; the understory shows that zone's true ground.
+  over: 'surface',
   // Entered by RIDING A SKY GEYSER (the Ascent): the launch drops you on a
   // collapsing shelf hung over the very zone you left; crossing its eroding
   // causeway to the ASCENDANT GATE (entry.gateDoodad — the realm-gate dwell
