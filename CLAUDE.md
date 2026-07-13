@@ -79,6 +79,9 @@ changes.
   `presence.ts` (leveled-list
   spawn envelopes: weight-vs-level curves on any monster-table entry or
   MonsterDef, folded at `World.weightedPick(table, atLevel)`),
+  `fog.ts` (THE FOG FABRIC: living, roaming fog banks as data —
+  FogBankDef kinds + ZoneTheme.fog specs; the drawn lobes are the hit
+  surface, statuses granted while inside — docs in `docs/engine/fog.md`),
   `levelgen.ts`, `worldgen.ts`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),

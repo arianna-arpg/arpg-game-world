@@ -19,6 +19,10 @@ src/render/
     painters.ts      — the parametric doodad painter library + canopy crown painters
     lights.ts        — the darkness/emissive light layer
     weatherFx.ts     — WEATHER_FX registry: weather kind → particle look
+    fogLayer.ts      — the LIVING FOG passes (engine/fog.ts banks: body
+                       under actors, tall share over canopies — the drawn
+                       lobes are the same states the gameplay hit-test
+                       reads; knobs VIS_CFG.fog, ablate pass 'fog')
 src/data/
   doodadVisuals.ts   — DOODAD_VISUALS: every doodad kind → painter + params + light
 ```
