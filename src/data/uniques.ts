@@ -141,6 +141,34 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'accuracy', kind: 'flat', range: [60, 100] },
     ],
   },
+  // --- The Aetherial's relics (the Ascent's own prizes) ----------------------
+  // THE THOUSAND STEPS: the causeway-runner's boots — momentum as doctrine.
+  // Made for the shelves (the floor is leaving; so are you), honest anywhere.
+  {
+    id: 'thousand_steps', name: 'The Thousand Steps', baseId: 'boots_evasion', weight: 70,
+    minIlvl: 10,
+    flavor: 'Count them later.',
+    lines: [
+      { stat: 'moveSpeed', kind: 'increased', range: [0.14, 0.2] },
+      { stat: 'evasion', kind: 'increased', range: [0.3, 0.45], local: true },
+      { stat: 'damage', kind: 'increased', range: [0.12, 0.18], tags: ['movement'] },
+      { stat: 'damage', kind: 'increased', range: [0.08, 0.12], when: 'moving' },
+    ],
+  },
+  // THE HALO OF THE NINTH CHOIR: the aureole-caster's crown — the Host's
+  // arithmetic of light: every shock on the ledger pays you back.
+  {
+    id: 'halo_ninth_choir', name: 'Halo of the Ninth Choir', baseId: 'helmet_es', weight: 65,
+    minIlvl: 12,
+    flavor: 'Eight choirs sing. The ninth keeps count.',
+    lines: [
+      { stat: 'energyShield', kind: 'increased', range: [0.3, 0.5], local: true },
+      { stat: 'castSpeed', kind: 'increased', range: [0.08, 0.12] },
+      { stat: 'damage', kind: 'increased', range: [0.15, 0.25], tags: ['lightning'] },
+      { stat: 'apply_shock', kind: 'flat', range: [0.1, 0.15] },
+      { stat: 'lightningRes', kind: 'flat', range: [0.1, 0.15] },
+    ],
+  },
 ];
 
 export const UNIQUES: Record<string, UniqueDef> =

@@ -111,6 +111,17 @@ export const VESTIGE_LIST: VestigeDef[] = [
       default: [{ stat: 'minionRegen', kind: 'flat', value: 1.5 }],
     },
   },
+  // The Aetherial's own remembered name — carried down by whoever survives
+  // the crossing. Boots remember the causeway; helm the halo's arithmetic.
+  {
+    id: 'seraphiel', name: 'Seraphiel, Vestige of the Host', glyph: 'ᛋ', color: '#ffe9a8', weight: 42,
+    effects: {
+      boots: [{ stat: 'moveSpeed', kind: 'increased', value: 0.06 }],
+      helmet: [{ stat: 'apply_shock', kind: 'flat', value: 0.08 }],
+      gloves: [{ stat: 'damage', kind: 'increased', value: 0.08, tags: ['movement'] }],
+      default: [{ stat: 'lightningRes', kind: 'flat', value: 0.1 }],
+    },
+  },
 ];
 
 export const VESTIGES: Record<string, VestigeDef> =
