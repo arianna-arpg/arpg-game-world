@@ -27013,9 +27013,11 @@ export class World {
             if (dd - v.radius > reach || dd < 6) continue;
             const stepIn = Math.min(z.pull * dt, dd - 4);
             const ang = angleTo(v.pos, z.pos);
+            // Origin-aware confine (a MOVE): suction drags a victim along a
+            // grid wall's face — never snapToWalkable's cell-center hop.
             v.pos = this.clampPos(vec(
               v.pos.x + Math.cos(ang) * stepIn,
-              v.pos.y + Math.sin(ang) * stepIn), v.radius);
+              v.pos.y + Math.sin(ang) * stepIn), v.radius, v.pos);
           }
         }
         // Pillar of Flame: the cage closes — the safe center shrinks away.
@@ -27302,10 +27304,12 @@ export class World {
       if (!gale) continue; // sheltered or becalmed
       const push = WIND_CFG.pushPerSec * dt / Math.max(0.4, a.effectiveWeight());
       if (push <= 0.001) continue;
+      // Origin-aware confine (a MOVE): a gale pressing a body against a grid
+      // wall holds it at the face — never snapToWalkable's cell-center hop.
       a.pos = this.clampPos(vec(
         a.pos.x + gale.x * push,
         a.pos.y + gale.y * push,
-      ), a.radius);
+      ), a.radius, a.pos);
     }
   }
 
@@ -27470,15 +27474,22 @@ export class World {
           const wa = a.effectiveWeight();
           const wb = b.effectiveWeight();
           const aShare = aFixed ? 0 : bFixed ? 1 : wb / (wa + wb);
+          // The shove is a MOVE, not a placement: resolve with the pre-shove
+          // origin so a body pressed against a grid wall holds the face.
+          // Origin-less clampPos takes the placement branch — snapToWalkable's
+          // cell-CENTER hop — and a crowded wall-press rubberbands forever
+          // (pop out ~half a cell, walk back in, pop out again).
           if (!aFixed && aShare > 0) {
+            const fx = a.pos.x, fy = a.pos.y;
             a.pos.x -= Math.cos(ang) * overlap * aShare;
             a.pos.y -= Math.sin(ang) * overlap * aShare;
-            a.pos = this.clampPos(a.pos, a.radius);
+            a.pos = this.clampPos(a.pos, a.radius, vec(fx, fy));
           }
           if (!bFixed && aShare < 1) {
+            const fx = b.pos.x, fy = b.pos.y;
             b.pos.x += Math.cos(ang) * overlap * (1 - aShare);
             b.pos.y += Math.sin(ang) * overlap * (1 - aShare);
-            b.pos = this.clampPos(b.pos, b.radius);
+            b.pos = this.clampPos(b.pos, b.radius, vec(fx, fy));
           }
         }
       }
