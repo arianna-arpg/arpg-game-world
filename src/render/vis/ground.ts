@@ -536,8 +536,15 @@ export class GroundRenderer {
         const x = gx * cell - ox, y = gy * cell - oy;
         const vis = def?.visual;
         if (vis) {
-          // Static visuals bake; ANIMATED ones stay live (renderer overlay).
-          if (!vis.animate) {
+          // WINDOW regions (RegionVisualSpec.window): PUNCH the cell clear —
+          // erase base fill, mottle, speckle, beds, everything — so whatever
+          // draws BENEATH the ground layer (the understory: the zone far
+          // below a cloud shelf) shows through the hole. The rim edge below
+          // still bakes: a torn cloud-lip around every gap.
+          if (vis.window) {
+            ctx.clearRect(x, y, cell + 0.6, cell + 0.6);
+          } else if (!vis.animate) {
+            // Static visuals bake; ANIMATED ones stay live (renderer overlay).
             ctx.globalAlpha = vis.alpha ?? 1;
             ctx.fillStyle = vis.fill;
             ctx.fillRect(x, y, cell + 0.6, cell + 0.6);

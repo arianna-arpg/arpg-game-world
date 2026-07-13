@@ -88,6 +88,12 @@ export interface RegionVisualSpec {
    *  the built-structure read. A flag, not an id compare: any future
    *  fortification region opts in with one word. */
   masonry?: boolean;
+  /** A WINDOW to whatever renders BENEATH the ground layer: the baker CLEARS
+   *  these cells instead of filling them, so the understory (the zone far
+   *  below a cloud shelf, a starfield, the frame backdrop) shows through the
+   *  hole. `fill` becomes the no-understory fallback tint only; the `edge`
+   *  rim still bakes — a cloud lip around every gap. */
+  window?: boolean;
 }
 
 /** A once-on-enter status (bog poison, tentacle stun). amount scales with zone
@@ -300,6 +306,23 @@ registerRegion({
   boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'fire', canKill: true } },
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
   visual: { fill: '#0c0407', alpha: 1, edge: { color: '#a83a16', width: 5 } },
+});
+// CLOUD VOID: the gap where a cloud shelf has fallen away (the collapse
+// fabric's melt region) — and the Aetherial's authored sky-gaps. The void's
+// physics (bodies can't cross, shots and sight sail over, levitators float
+// free) under the SKY's own read: a WINDOW region — the ground baker clears
+// these cells so the understory (the zone far below, the endless cloud sea)
+// shows THROUGH the hole instead of painting an abyss-black pit. Brushing the
+// gap is forgiving — confined at the lip, a scare of damage — because the
+// real drop is the floor crumbling UNDER you (the collapse fabric routes that
+// fall, per the zone's CollapseSpec, all the way down to the land below).
+registerRegion({
+  id: 'cloud_void', walkable: false, blocks: false, label: 'the open sky',
+  boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.05, type: 'physical', canKill: false } },
+  crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  // The cloud lip: sunlit white on every standing side, so each gap reads as
+  // torn cloud-edge; the fill only ever shows with no understory beneath.
+  visual: { fill: '#10131d', alpha: 1, window: true, edge: { color: '#f2f6fd', width: 6 } },
 });
 // DEEP WATER: walkable but you SWIM (slowed) and your BREATH drains; out of air
 // you start drowning (the survival system). The underwater zones' open sea.

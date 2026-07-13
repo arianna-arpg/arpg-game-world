@@ -506,6 +506,20 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     beneficial: true,
     mods: [mod('phasing', 'flat', 1)],
   },
+  // WINDSWEPT — the geyser's uplift clinging to your heels (the sky-launch
+  // traversal's landing gift): a few strides of lightness on the clouds.
+  windswept: {
+    label: 'Windswept', color: '#bfe0ff', duration: 3.5,
+    beneficial: true,
+    mods: [mod('moveSpeed', 'increased', 0.12)],
+  },
+  // WINDED — the landing after the cloud gave way: knees bent, breath gone
+  // for a heartbeat. A brief heaviness, never a spiral (the fall itself cost
+  // whatever the shelf's CollapseSpec priced it at).
+  winded: {
+    label: 'Winded', color: '#c8d4ea', duration: 1.4,
+    mods: [mod('moveSpeed', 'increased', -0.15)],
+  },
 
   living_bomb: {
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,

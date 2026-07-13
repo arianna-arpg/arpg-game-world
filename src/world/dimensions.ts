@@ -35,6 +35,12 @@ export interface DimensionEntry {
     /** Gate seed = manifest.seed ^ seedSalt (deterministic across clients). */
     seedSalt: number;
   };
+  /** A DOODAD KIND that stands as this dimension's realm gate wherever a
+   *  layout places one (the Ascent's shining arch at a cloud shelf's far
+   *  end). The engine's realm-gate dwell loop scans zone doodads against
+   *  every registered gateDoodad — data, never a kind literal in world.ts.
+   *  cave_breach entries don't need one (the breach doodad is its own path). */
+  gateDoodad?: string;
 }
 
 export interface DimensionDef {

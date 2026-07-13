@@ -114,6 +114,8 @@ import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_CFG, FogField } from './fog';
+import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
+import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy } from '../world/dimensions';
@@ -1568,6 +1570,21 @@ export class World {
   /** Are we currently inside a cave sub-zone? */
   get inCave(): boolean { return this.caveReturn !== null; }
 
+  /** THE LIVING COLLAPSE (engine/collapse.ts): this zone's dissolving ground,
+   *  when its theme carries a CollapseSpec — cells crumble underfoot, the rim
+   *  flakes inward, and only the eroding causeway to the goal stands last.
+   *  Zone-transient (rebuilt each loadZone; the dream re-knits on return). */
+  collapse: CollapseField | null = null;
+  /** A LIVE VERTICAL CROSSING (engine/traversal.ts): the geyser launch / the
+   *  fall through the clouds. While set, the player is pinned, locked out of
+   *  skills and untargetable; the zone swap fires behind the veil. */
+  traversal: TraversalState | null = null;
+  /** Where the crossing pinned the traveler (re-anchored after the swap). */
+  private traversalAnchor: Vec2 | null = null;
+  /** Realm-gate doodads standing in this zone, resolved per loadZone against
+   *  every registered DimensionEntry.gateDoodad (data, never a kind literal). */
+  private dimGates: { pos: Vec2; dimId: string }[] = [];
+
   /** Live in-zone ENCOUNTERS (Breach diamonds + their open fields). Zone-local,
    *  rebuilt each loadZone, never serialized — re-rolls from the run seed. */
   encounters: ActiveEncounter[] = [];
@@ -2934,6 +2951,18 @@ export class World {
       this.breachPos = vec(p.x, p.y);
       this.doodads.push({ pos: vec(p.x, p.y), radius: 30, kind: 'breach' });
     }
+    // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad): any registered
+    // dimension whose entry names a gate doodad KIND turns every standing
+    // doodad of that kind into a realm gate here (the Ascent's shining arch
+    // at a cloud shelf's far end). Pure registry scan — no kind literals.
+    this.dimGates = [];
+    for (const dimId of dimensionIds()) {
+      const gd = dimensionDef(dimId).entry?.gateDoodad;
+      if (!gd) continue;
+      for (const d of this.doodads) {
+        if (d.kind === gd) this.dimGates.push({ pos: vec(d.pos.x, d.pos.y), dimId });
+      }
+    }
     // Reset the boss-fight runtime + its FX HERE (before the boss-spawn block below
     // sets bossRun) — the late overlay-reset block runs AFTER the population spawn
     // and would otherwise clobber a freshly-inited bossRun.
@@ -3356,6 +3385,31 @@ export class World {
 
     // CORPSE RUN: spawn any prior death whose coordinate matches this zone.
     this.spawnPlayerCorpses(def);
+
+    // THE LIVING COLLAPSE (engine/collapse.ts): stand this zone's dissolving
+    // ground up when its theme asks for it. Rolls on a SALTED copy of the
+    // zone seed (never layout/spawn rng — the fog contract); the goal (the
+    // never-melting platform the spine runs to) is the spec's named doodad,
+    // else the exit standing farthest from the entry. Convex zones (no walk
+    // grid) can't melt — buildZoneCollapse declines them.
+    this.collapse = null;
+    const cspec = this.zone.theme.collapse;
+    if (cspec && this.walk instanceof GridWalkField) {
+      let goal: Vec2 | null = null;
+      if (cspec.goal?.doodad) {
+        const g = this.doodads.find(d => d.kind === cspec.goal!.doodad);
+        if (g) goal = vec(g.pos.x, g.pos.y);
+      }
+      if (!goal) {
+        let bd = -1;
+        for (const e of this.exits) {
+          const d = dist(e.pos, this.zoneEntry);
+          if (d > bd) { bd = d; goal = vec(e.pos.x, e.pos.y); }
+        }
+      }
+      this.collapse = buildZoneCollapse(cspec, this.walk,
+        new Rng((this.currentZoneSeed ^ COLLAPSE_CFG.salt) >>> 0), this.zoneEntry, goal);
+    }
 
     // THE ZONE-RUNTIME REGISTRY (see buildZoneRuntimes): every package's
     // per-zone reset runs, then — on ordinary ground — every enter() fires.
@@ -21459,6 +21513,9 @@ export class World {
     // A survived death's fade/wake sequence (character modes). The world keeps
     // simulating beneath the dark — the death itself was already banked.
     if (this.pendingRespawn) this.updateModeRespawn(dt);
+    // A live VERTICAL CROSSING (geyser launch / cloud fall): the traversal
+    // owns the player until the veil clears; the world keeps simulating.
+    if (this.traversal) this.updateTraversal(dt);
     if (this.lowLifeHitFlash > 0) this.lowLifeHitFlash = Math.max(0, this.lowLifeHitFlash - dt);
     if (this.mireilleXpBuff > 0) this.mireilleXpBuff = Math.max(0, this.mireilleXpBuff - dt);
 
@@ -22285,6 +22342,7 @@ export class World {
     this.updateTerrainEffects(dt);
     this.updateHeat(dt);
     this.updateFog(dt);
+    this.updateCollapse(dt);
     this.updateShrines();
     this.updateAltars();
     this.updateChests(dt);
@@ -22359,7 +22417,7 @@ export class World {
     // is dwelled exactly like a surface one; enterSidezone stacks the way home).
     // indoorsOnly kinds (the cellar hatch) also demand the player stand under
     // the SAME ROOF as the mouth — nobody dwells a hatch through a house wall.
-    if (!this.player.dead && !this.player.downed) {
+    if (!this.player.dead && !this.player.downed && !this.traversal) {
       // Player-side roof resolved ONCE per frame; each mouth carries its own
       // precomputed home roof (loadZone) — the indoors gate is two compares.
       const playerRoof = this.caveEntrances.some(c => c.roof !== undefined && c.roof !== null)
@@ -22381,6 +22439,20 @@ export class World {
           const cm = this.caveEntrances[mouthIdx];
           if (this.time - this.caveDwellStart >= dwellOf(cm.kind)) {
             this.caveDwellIdx = -1;
+            // A TRAVERSAL mouth (SidezoneDef.traversal — the geyser) rides the
+            // vertical-crossing cinematic: mint the pocket NOW (its `below`
+            // anchor sizes the understory capture), start the crossing, and
+            // step in behind the veil. Classic mouths keep the instant step.
+            const sz = sidezoneOf(cm.kind);
+            if (sz?.traversal) {
+              const dest = this.mintSidezone(cm);
+              const cap: TraversalCapture | undefined = dest?.below ? {
+                key: dest.id,
+                ox: dest.below.ax - dest.size.w / 2, oy: dest.below.ay - dest.size.h / 2,
+                w: dest.size.w, h: dest.size.h,
+              } : undefined;
+              if (dest && this.beginTraversal(sz.traversal, { capture: cap, swap: () => this.enterSidezone(cm) })) return;
+            }
             this.enterSidezone(cm);
             return; // everything else this frame belongs to the old zone
           }
@@ -22432,6 +22504,16 @@ export class World {
           // when a second breach-entered layer ever ships.
           const bd = dimensionsEnteredBy('cave_breach')[0];
           if (bd) gates.push({ pos: this.breachPos, kind: 'breach', key: `breach:${bd.id}`, enter: () => this.enterDimension(bd.id) });
+        }
+        // DIMENSION GATE DOODADS (DimensionEntry.gateDoodad, scanned per
+        // loadZone): the Ascent's shining arch — dwell it to cross into its
+        // dimension. Radius/dwell ride per-kind transit rows like every gate
+        // ('realm_gate:dim_<id>' chains to the 'realm_gate' family).
+        for (const g of this.dimGates) {
+          gates.push({
+            pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
+            enter: () => this.enterDimension(g.dimId),
+          });
         }
         for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
         for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
@@ -22553,8 +22635,9 @@ export class World {
           eb?.color ?? '#d05050', 13);
       }
       // Dwell builds only while standing idle AND not being KNOCKED — a knockback
-      // onto a portal must never carry you off (it's not your intent).
-      if (onExit && this.playerIdle() && !this.player.push) {
+      // onto a portal must never carry you off (it's not your intent). A live
+      // traversal owns the player outright — no portal can claim them mid-air.
+      if (onExit && this.playerIdle() && !this.player.push && !this.traversal) {
         if (this.exitDwellIdx !== onExit.defIndex) { this.exitDwellIdx = onExit.defIndex; this.exitDwellStart = this.time; }
         // A boundary-gate exit dwells on its own transit row (family-chained:
         // 'zone_exit:<gate>' falls back to 'zone_exit' when no row is registered).
@@ -22833,9 +22916,12 @@ export class World {
    *  sim. Classic caves keep their historical id shape (`cave_<zone>_<seed>`);
    *  other kinds prefix theirs (`cave_<kind>_<zone>_<seed>`) — everything keeps
    *  the cave_ prefix so save-side filters treat all pockets alike. */
-  private enterSidezone(cm: { pos: Vec2; seed: number; kind: string }): void {
+  /** Mint (or fetch the cached) pocket behind a sidezone mouth — split from
+   *  enterSidezone so a TRAVERSAL mouth can size its understory capture off
+   *  the minted def BEFORE the crossing's veil hides the parent zone. */
+  private mintSidezone(cm: { pos: Vec2; seed: number; kind: string }): ZoneDef | null {
     const sz = sidezoneOf(cm.kind);
-    if (!sz) return;
+    if (!sz) return null;
     const id = cm.kind === 'cave_entrance'
       ? `cave_${this.zone.id}_${cm.seed}`
       : `cave_${cm.kind}_${this.zone.id}_${cm.seed}`;
@@ -22846,7 +22932,14 @@ export class World {
         pkgActive: (pid) => this.sim.packageActive(pid, this.player.level),
       });
     }
-    const dest = this.caveMap[id];
+    return this.caveMap[id];
+  }
+
+  private enterSidezone(cm: { pos: Vec2; seed: number; kind: string }): void {
+    const sz = sidezoneOf(cm.kind);
+    if (!sz) return;
+    const dest = this.mintSidezone(cm);
+    if (!dest) return;
     // FURNISH on EVERY entry (idempotent): a package whose gate opens mid-run
     // (a startLevel reached after the room first minted) still gets to build —
     // the pocket regenerates from its def each load, so a fixture added now
@@ -22862,7 +22955,156 @@ export class World {
     // home on the ladder stack; climbing out pops it back.
     if (this.caveReturn) this.caveStack.push(this.caveReturn);
     this.caveReturn = { zoneId: this.zone.id, pos: vec(cm.pos.x, cm.pos.y), entryFrom: this.entryFrom, kind: cm.kind };
-    this.loadZone(id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
+    this.loadZone(dest.id, this.zone.id); // deliberately NO sim.onNodeCharted — pockets are off-graph
+  }
+
+  // --- THE TRAVERSAL FABRIC (engine/traversal.ts): vertical crossings -------
+
+  /** Start a registered vertical crossing. The player is pinned, untargetable
+   *  and locked out of skills until the veil clears; `swap` fires the zone
+   *  change at the end of `rise`, hidden behind the veil. One at a time. */
+  beginTraversal(id: string, opts?: { swap?: () => void; done?: () => void; capture?: TraversalCapture }): boolean {
+    const def = traversalDef(id);
+    if (!def || this.traversal) return false;
+    this.traversal = { def, phase: 'windup', t: 0, ...opts };
+    this.traversalAnchor = vec(this.player.pos.x, this.player.pos.y);
+    this.player.invulnerable = true;
+    this.player.untargetable = true;
+    this.player.casting = null;
+    this.player.dash = null;
+    this.player.push = null;
+    if (def.text) this.text(vec(this.player.pos.x, this.player.pos.y - 44), def.text, def.textColor ?? '#cfe0ff', 15);
+    return true;
+  }
+
+  private updateTraversal(dt: number): void {
+    const s = this.traversal;
+    if (!s) return;
+    const p = this.player;
+    s.t += dt;
+    // The crossing owns the body: pinned to its anchor, skills locked out,
+    // shoves shrugged off. The world keeps simulating around it.
+    p.useLock = Math.max(p.useLock, 0.2);
+    p.push = null;
+    if (this.traversalAnchor) { p.pos.x = this.traversalAnchor.x; p.pos.y = this.traversalAnchor.y; }
+    if (s.phase === 'windup') {
+      if (s.def.shake) this.shake = Math.max(this.shake, s.def.shake * Math.min(1, s.t / Math.max(0.01, s.def.windup)));
+      if (s.t >= s.def.windup) { s.phase = 'rise'; s.t = 0; }
+      return;
+    }
+    if (s.phase === 'rise') {
+      if (s.t < s.def.rise) return;
+      // The veil is shut: swap worlds behind it, then re-anchor on wherever
+      // the swap set the player down.
+      s.phase = 'land';
+      s.t = 0;
+      if (!s.swapped) {
+        s.swapped = true;
+        s.swap?.();
+        this.traversalAnchor = vec(p.pos.x, p.pos.y);
+      }
+      return;
+    }
+    // land: the veil clears over the new ground.
+    if (s.t < s.def.land) return;
+    this.traversal = null;
+    this.traversalAnchor = null;
+    p.invulnerable = false;
+    p.untargetable = false;
+    if (s.def.status) p.applyStatus(s.def.status.id, 0, s.def.status.duration ?? 1, 'the crossing');
+    s.done?.();
+  }
+
+  // --- THE COLLAPSE consequences (engine/collapse.ts) ------------------------
+
+  /** Tick the zone's dissolving ground and route what it reports: crumble
+   *  bursts, the one-time causeway warning, and every FALL — the player drops
+   *  through to the land below (or scrambles out), allies snap to standing
+   *  ground, and the sky simply keeps whatever else it swallowed. */
+  private updateCollapse(dt: number): void {
+    const cf = this.collapse;
+    if (!cf) return;
+    const eligible: Actor[] = [];
+    for (const a of this.actors) {
+      // Grounded bodies only: the airborne, the floating, and the mid-leap
+      // are the sky's own; a traversing player is already between worlds.
+      if (a.dead || a.flying || a.levitates || a.leap || a.dash) continue;
+      if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
+      eligible.push(a);
+    }
+    const ev = cf.update(dt, eligible);
+    if (ev.voided.length) {
+      // A few soft cloud-bursts per tick sell the crumble without flooding.
+      for (let i = 0; i < Math.min(6, ev.voided.length); i++) {
+        const v = ev.voided[i];
+        this.flashes.push({ pos: vec(v.x, v.y), radius: 26, color: '#e6edfb', life: 0.45, maxLife: 0.45 });
+      }
+      this.shake = Math.max(this.shake, Math.min(2.2, 0.4 + ev.voided.length * 0.1));
+    }
+    if (cf.spineEroding()) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 56), 'the causeway is failing — run!', '#ffd27f', 16);
+      this.shake = Math.max(this.shake, 5);
+    }
+    if (!ev.fell.length) return;
+    const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+    for (const f of ev.fell) {
+      const a = f as Actor; // the field hands back the same objects it was given
+      if (a === this.player) {
+        this.beginSkyfall();
+        continue;
+      }
+      if (seatActors.has(a) || a.team === 'player') {
+        // Allies scramble: snapped to the nearest standing ground, shaken.
+        const s = this.walk?.snapToWalkable(a.pos) ?? this.zoneEntry;
+        this.teleportActor(a, vec(s.x, s.y), '#cfe0ff');
+        continue;
+      }
+      // The sky keeps what falls: gone outright — no corpse, no loot, no
+      // credit (it fell; nobody killed it).
+      this.flashes.push({ pos: vec(a.pos.x, a.pos.y), radius: a.radius + 16, color: '#dfe8fa', life: 0.4, maxLife: 0.4 });
+      this.text(vec(a.pos.x, a.pos.y - 22), 'falls!', '#c8d4ea', 12);
+      a.dead = true;
+      const idx = this.actors.indexOf(a);
+      if (idx >= 0) this.actors.splice(idx, 1);
+    }
+  }
+
+  /** The floor under the player is gone. On a shelf that hangs over real land
+   *  (ZoneDef.below + fall.kind 'below'), drop THROUGH — the sky-fall crossing
+   *  lands them on the world beneath at the very spot they fell, the shelf's
+   *  anchor mapping between the two. Anywhere else: scramble out at the rim. */
+  private beginSkyfall(): void {
+    if (this.traversal) return;
+    const shelf = this.zone;
+    const below = shelf.below;
+    const fall = shelf.theme.collapse?.fall;
+    if (!below || fall?.kind !== 'below') {
+      const s = this.walk?.snapToWalkable(this.player.pos) ?? this.zoneEntry;
+      this.teleportActor(this.player, vec(s.x, s.y), '#cfe0ff');
+      if (fall?.damageFrac) this.applyEnvDamage(this.player, { amount: 0, pctMaxLife: fall.damageFrac, type: 'physical', canKill: false });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 32), 'you scramble back onto standing cloud!', '#cfe0ff', 14);
+      return;
+    }
+    const from = vec(this.player.pos.x, this.player.pos.y);
+    this.beginTraversal('sky_fall', {
+      swap: () => {
+        // Map the fall point through the shelf's anchor onto the land below:
+        // the shelf's center hangs above (ax, ay), so offsets carry 1:1.
+        const dx = from.x - shelf.size.w / 2, dy = from.y - shelf.size.h / 2;
+        const ret = this.caveReturn;
+        this.caveReturn = this.caveStack.pop() ?? null;
+        this.loadZone(below.zoneId, (ret && ret.zoneId === below.zoneId ? ret.entryFrom : null) ?? undefined);
+        const land = this.clampPos(vec(below.ax + dx, below.ay + dy), this.player.radius);
+        this.player.pos = vec(land.x, land.y);
+        const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
+        for (const a of this.actors) {
+          if (a === this.player || !seatActors.has(a)) continue;
+          a.pos = this.clampPos(vec(land.x + rand(-60, 60), land.y + rand(30, 70)), a.radius);
+        }
+        this.caveExitGrace = true; // in case the fall lands you back at the mouth
+        if (fall.damageFrac) this.applyEnvDamage(this.player, { amount: 0, pctMaxLife: fall.damageFrac, type: 'physical', canKill: false });
+      },
+    });
   }
 
   /** PACKAGE FURNISH: manifest-active packages may plant fixtures inside a

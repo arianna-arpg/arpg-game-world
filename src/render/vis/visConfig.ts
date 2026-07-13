@@ -207,6 +207,48 @@ export const VIS_CFG = {
     /** Extra drawn density at full 'fog' weather-front strength. */
     weatherAlphaBoost: 0.3,
   },
+
+  /** THE UNDERSTORY (vis/understory.ts) — the world seen far below through
+   *  `window` region cells (cloud shelves). Ablate pass name: 'understory'. */
+  understory: {
+    /** Snapshot resolution: canvas px per world unit (capped by maxDim). */
+    scale: 0.22,
+    maxDim: 2048,
+    /** Parallax factor for the captured land (1 = glued to the shelf;
+     *  smaller = deeper). Anchored at the camera center. */
+    parallax: 0.9,
+    /** Parallax for the procedural cloud sea (reads deeper than land). */
+    seaParallax: 0.82,
+    /** The open sky behind everything below. */
+    sky: '#222b42',
+    /** Altitude haze baked over every capture. */
+    haze: '#a9b8da',
+    hazeAlpha: 0.42,
+    /** How much color the height drinks from the land (0..1). */
+    desat: 0.45,
+    /** Cloud-sea billow tones. */
+    seaDark: '#5e6d92',
+    seaLight: '#c8d4ea',
+    /** Drifting cloud shadows over the floor below. */
+    shadows: 3,
+    shadowAlpha: 0.09,
+    /** Snapshot LRU (each up to maxDim² px — release eagerly on evict). */
+    maxSnaps: 3,
+  },
+
+  /** COLLAPSE FX (the render half of engine/collapse.ts): how crumbling
+   *  cells shiver and crack before they fall. Ablate pass name: 'collapse'. */
+  collapseFx: {
+    /** Peak wobble offset (px) at full crumble. */
+    wobble: 2.6,
+    /** Crack line color/alpha over a crumbling cell. */
+    crack: '#f4f7ff',
+    crackAlpha: 0.5,
+    /** Sinking darken toward the void (0..1 at full crumble). */
+    sink: 0.34,
+    /** Dust motes per voiding cell (world flashes ride the rest). */
+    dust: 3,
+  },
 } as const;
 
 // --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------

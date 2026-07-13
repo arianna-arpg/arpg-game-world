@@ -23,6 +23,7 @@ import '../engine/layoutRecipes';
 import '../engine/interiorGen';
 import '../data/compositions';
 import '../data/fog';
+import '../data/traversals';
 import { validateContent } from '../data/validate';
 import { registerAllPackageFactions } from '../packages/factionGen';
 import { buildManifest } from '../packages/manifest';

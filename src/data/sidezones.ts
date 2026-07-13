@@ -51,6 +51,12 @@ export interface SidezoneDef {
   /** 'character': the pocket's level re-stamps from the entering hero on EVERY
    *  visit — a scaling arena, not a fixed-level hole. */
   levelWith?: 'character';
+  /** A TRAVERSAL id (engine/traversal.ts): entering this pocket is a vertical
+   *  CROSSING, not a step — the dwell starts the registered cinematic (a
+   *  geyser's launch) and the zone swap fires behind its veil. A pocket whose
+   *  minted def carries `below` also asks the renderer to capture the parent
+   *  as its understory during the windup. Absent = the classic instant step. */
+  traversal?: string;
   /** Build the pocket's ZoneDef. Minted once per entrance (cached in caveMap);
    *  keep it pure — the same ctx must yield the same def. */
   mint: (ctx: SidezoneMintCtx) => ZoneDef;

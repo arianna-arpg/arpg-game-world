@@ -49,6 +49,8 @@ import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
 import { drawFogLayer } from './vis/fogLayer';
+import { UnderstoryLayer } from './vis/understory';
+import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
@@ -160,6 +162,14 @@ export class Renderer {
     ctx.fillStyle = '#0a0a0e';
     ctx.fillRect(0, 0, w, h);
 
+    // A LAUNCH in progress asks for its understory: capture the DEPARTURE
+    // zone's aerial while it is still live — the swap will hide it behind
+    // the veil, and the shelf above will look down on this very ground.
+    const trav = world.traversal;
+    if (trav?.capture && !this.understory.has(trav.capture.key)) {
+      this.understory.capture(world, trav.capture);
+    }
+
     // Per-frame doodad culling: everything the ground/canopy doodad passes
     // draw comes from this view-clipped, kind-grouped set (see cullDoodads).
     this.cullDoodads(world, vw, vh);
@@ -177,6 +187,7 @@ export class Renderer {
     ctx.translate(-this.cam.x + shx, -this.cam.y + shy);
 
     this.drawFloor(world);
+    this.drawCollapseOverlay(world); // crumbling cloud cells: shiver, crack, let go
     if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
     if (!VIS_ABLATE.has('motionfx')) {
       this.updateMotionFx(world);
@@ -246,6 +257,7 @@ export class Renderer {
     this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
     this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
+    this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
     this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
   }
 
@@ -1041,6 +1053,11 @@ export class Renderer {
     ctx.beginPath();
     ctx.rect(0, 0, w, h);
     ctx.clip();
+    // THE UNDERSTORY (vis/understory.ts): the world far BELOW, drawn first so
+    // it shows only through the ground chunks' punched `window` cells — the
+    // land a cloud shelf hangs over, or the endless cloud sea. Zones with
+    // neither pay a single early-out.
+    this.understory.draw(ctx, world, this.cam.x, this.cam.y, vw, vh, world.time);
     // The floor itself: baked noise-mottled chunks (vis/ground.ts) — texture,
     // speckle, wall bevels and contact AO all land in one drawImage per chunk.
     this.ground.draw(ctx, world, this.cam.x, this.cam.y, vw, vh);
@@ -1217,6 +1234,97 @@ export class Renderer {
   private culledAll: Doodad[] = [];
   /** The baked-floor chunk cache (vis/ground.ts). */
   private ground = new GroundRenderer();
+  /** The world far below (vis/understory.ts): captured aerials + cloud sea,
+   *  drawn under the ground chunks so only `window` cells reveal it. */
+  private understory = new UnderstoryLayer();
+
+  /** CRUMBLING CELLS (engine/collapse.ts live state): each arming/crumbling
+   *  cloud cell shivers, cracks and darkens toward the drop — drawn live over
+   *  the baked floor (void cells themselves re-bake through the walk grid's
+   *  own dirty rects). View-culled; ablate pass name 'collapse'. */
+  private drawCollapseOverlay(world: World): void {
+    const cf = world.collapse;
+    if (!cf || !cf.active.size || VIS_ABLATE.has('collapse')) return;
+    const CFG = VIS_CFG.collapseFx;
+    const { ctx } = this;
+    const cell = cf.walk.cell;
+    const vw = this.canvas.width / this.zoom, vh = this.canvas.height / this.zoom;
+    const x0 = this.cam.x - cell, x1 = this.cam.x + vw + cell;
+    const y0 = this.cam.y - cell, y1 = this.cam.y + vh + cell;
+    for (const i of cf.active) {
+      const gx = i % cf.walk.cols, gy = (i / cf.walk.cols) | 0;
+      const wx = gx * cell, wy = gy * cell;
+      if (wx < x0 || wx > x1 || wy < y0 || wy > y1) continue;
+      const frac = cf.crumbleFrac(i);
+      const arming = frac < 0;
+      const f = arming ? 0 : frac;
+      // The shiver: harder as the cell lets go.
+      const t = world.time * (7 + (i % 5));
+      const jx = Math.sin(t + i) * CFG.wobble * (0.25 + f);
+      const jy = Math.cos(t * 1.3 + i * 2.7) * CFG.wobble * (0.25 + f);
+      // Sinking: the cell darkens toward the drop beneath it.
+      ctx.globalAlpha = arming ? 0.1 : 0.12 + f * CFG.sink;
+      ctx.fillStyle = '#0c1220';
+      ctx.fillRect(wx + jx, wy + jy, cell, cell);
+      if (!arming) {
+        // Cracks: bright fissures spidering from the cell heart.
+        ctx.globalAlpha = CFG.crackAlpha * (0.3 + f * 0.7);
+        ctx.strokeStyle = CFG.crack;
+        ctx.lineWidth = 1.4;
+        ctx.beginPath();
+        const cx = wx + cell / 2 + jx, cy = wy + cell / 2 + jy;
+        for (let k = 0; k < 3; k++) {
+          const ang = (i * 2.39996 + k * 2.094) % (Math.PI * 2);
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(cx + Math.cos(ang) * cell * (0.3 + f * 0.45),
+            cy + Math.sin(ang) * cell * (0.3 + f * 0.45));
+        }
+        ctx.stroke();
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /** A VERTICAL CROSSING's screen film (engine/traversal.ts): wind streaks
+   *  rushing past the view while the body rises or falls, and the whiteout
+   *  veil the zone swap hides behind. Covers the HUD by design — cinema. */
+  private drawTraversalFx(world: World): void {
+    const s = world.traversal;
+    if (!s) return;
+    const { ctx, canvas } = this;
+    const st = s.def.streaks;
+    if (st && s.phase !== 'windup') {
+      const f = s.phase === 'rise'
+        ? Math.min(1, s.t / Math.max(0.01, s.def.rise))
+        : 1 - Math.min(1, s.t / Math.max(0.01, s.def.land));
+      ctx.save();
+      ctx.strokeStyle = st.color;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < st.count; i++) {
+        const x = ((i * 379 + 83) % 997) / 997 * canvas.width;
+        const len = 50 + ((i * 131) % 170);
+        const speed = 1000 + ((i * 257) % 800);
+        const span = canvas.height + len * 2 + 200;
+        const yRun = (world.time * speed + i * 613) % span;
+        const y = st.dir > 0 ? yRun - len - 100 : canvas.height + len + 100 - yRun;
+        ctx.globalAlpha = 0.45 * f * (0.4 + ((i * 7) % 10) / 16);
+        ctx.lineWidth = 1.2 + (i % 3);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x, y + len * st.dir);
+        ctx.stroke();
+      }
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    }
+    const veil = traversalVeil(s);
+    if (veil > 0) {
+      ctx.globalAlpha = veil;
+      ctx.fillStyle = s.def.veil;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.globalAlpha = 1;
+    }
+  }
   /** MOTION FX — transient liquid reactions to moving bodies: wake ripples
    *  on water, pock marks pressed into snow. Renderer-owned (pure visuals),
    *  cleared on zone change. */
@@ -2390,14 +2498,23 @@ export class Renderer {
     // Body (untouchable spirits ghostly; stealthed/invisible actors faded)
     ctx.save();
     ctx.translate(x, y);
+    // A LIVE TRAVERSAL owns the traveler's pose: the geyser's rise swells the
+    // body toward the camera over its pinned, thinning shadow; the fall
+    // shrinks and spins it away into the hole (engine/traversal.ts eases).
+    const tpose = a === world.player && world.traversal ? traversalPose(world.traversal) : null;
     // Grounding: the soft contact shadow under every body — drawn BEFORE the
     // leap swell so an airborne leaper's shadow stays put while the body rises.
-    drawShadow(ctx, 0, 0, a.radius, a.untargetable ? 0.4 : 1);
+    drawShadow(ctx, 0, 0, a.radius, (a.untargetable ? 0.4 : 1) * (tpose ? Math.max(0.05, tpose.shadow) : 1));
     // The hero wears a soft class-colored ground halo — you find yourself in a
     // brawl by presence, not by hunting the cursor.
     if (a === world.player) {
       drawGlow(ctx, 0, a.radius * 0.3, a.radius * VIS_CFG.body.heroHaloScale,
         a.color, VIS_CFG.body.heroHaloAlpha, false);
+    }
+    if (tpose) {
+      ctx.translate(0, -tpose.lift);
+      ctx.scale(tpose.scale, tpose.scale);
+      if (tpose.spin) ctx.rotate(tpose.spin);
     }
     // TRUE FLIGHT reads at a glance: the body rides LIFTED and bobbing
     // above its grounded shadow (drawn at the true position before this).
@@ -2422,6 +2539,7 @@ export class Renderer {
       }
     }
     if (a.untargetable) ctx.globalAlpha = 0.55;
+    if (tpose) ctx.globalAlpha = 1; // a traversal's rise stays solid — cinema, not stealth
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;
     else if (a.sheet.get('detectability') < 1) ctx.globalAlpha = 0.55;
     // Echo riders: a ghost-faded copy of their owner — the dashed seam ring

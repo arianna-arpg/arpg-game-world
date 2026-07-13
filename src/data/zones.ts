@@ -17,6 +17,7 @@
 import type { MonsterRarity } from '../engine/rarity';
 import type { PresenceSpec } from '../engine/presence';
 import type { ZoneFogSpec } from '../engine/fog';
+import type { CollapseSpec } from '../engine/collapse';
 
 /** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
  *  a weight-vs-level envelope — or a named band — deciding how present this
@@ -285,6 +286,18 @@ export interface ZoneTheme {
    *  drawn shape IS the hit surface. Rolled on a SALTED stream (never moves
    *  layout rng). No spec = only sky-born mist under a 'fog' weather front. */
   fog?: ZoneFogSpec;
+  /** LIVING COLLAPSE (the collapse fabric, engine/collapse.ts): this zone's
+   *  ground DISSOLVES — cells crumble where feet touch, the rim flakes away
+   *  on a seeded schedule marching inward, and the last standing ground is
+   *  one eroding causeway to the goal (the Aetherial's cloud shelves; any
+   *  future rotting-bridge or cracking-ice theme is another spec). Needs a
+   *  grid layout (convex zones can't melt). Variants override wholesale. */
+  collapse?: CollapseSpec;
+  /** THE UNDERSTORY (render/vis/understory.ts): what shows through this
+   *  zone's `window` region cells. 'cloudsea' = the endless procedural cloud
+   *  deck. A zone with `ZoneDef.below` shows the CAPTURED zone beneath it
+   *  instead (this field is its fallback when no capture exists). */
+  understory?: 'cloudsea';
   /** BIOME HEAT (0 = frozen … 1 = scorching; default 0.5 temperate) — the
    *  melt-rate lever for SNOW ACCUMULATION (World.updateSnow): a frozen
    *  theme keeps a permanent snow floor and lets snowfall deepen it; a hot
@@ -406,6 +419,12 @@ export interface ZoneDef {
   /** Which DIMENSION this zone belongs to (default 'surface'). The map shows
    *  one dimension per tab; frontiers inherit their source's dimension. */
   dimension?: string;
+  /** THE ZONE DIRECTLY BELOW this one (a cloud shelf hangs over the land its
+   *  geyser erupted from): `zoneId` is the ground a collapse-fall drops you
+   *  to, `ax`/`ay` the point in THAT zone this zone's center hangs above —
+   *  the anchor both the fall mapping and the understory capture share.
+   *  Pure data (serializes verbatim); set by whatever mints the shelf. */
+  below?: { zoneId: string; ax: number; ay: number };
   /** CAVE LADDER depth (caves only): 1 = a surface cave, 2 = a cave within a
    *  cave (the Depths flavor), 3 = the bottom — it holds a BREACH.
    *  Presence IS the cave/off-graph discriminator (mintCave is the sole writer):
