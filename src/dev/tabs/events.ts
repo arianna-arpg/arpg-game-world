@@ -54,7 +54,7 @@ export const eventsTab: DevTabDef = {
       // serpent wakes HERE (watch the map: it slithers, roads seal behind it);
       // the apparition skips its herald and manifests in this zone; the lair
       // anchors to this zone and mints its throne-zone off the mint drain.
-      forceEvent('World Serpent (wakes here)', (w, v, z) => w.sim.worldBossField?.devIgnite(v, z) ?? false),
+      forceEvent('World Serpent (wakes here/nearby)', (w, v, z) => w.sim.worldBossField?.devIgnite(v, z) ?? false),
       forceEvent('World Boss (manifests here)', (w, v, z) =>
         w.sim.worldBossFieldFor(w.zone.dimension)?.devManifest(v, z) ?? false),
       forceEvent('World Boss Lair (grows here)', (w, v, z) => w.sim.worldBossField?.devLair(v, z) ?? false),

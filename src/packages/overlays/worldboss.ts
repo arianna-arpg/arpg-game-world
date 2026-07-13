@@ -640,20 +640,25 @@ export class WorldBossField implements WorldOverlay {
 
   // --- dev seams (the QA Events tab) ---------------------------------------------
 
-  /** DEV: wake a serpent whose path BEGINS at this zone, so the blockade and
-   *  the passing head play out in front of you. */
+  /** DEV: wake a serpent whose path BEGINS at this zone when this zone can
+   *  host one, else from the nearest eligible visited ground (the serpent is
+   *  a MAP event — pressing the button in town must still produce a wyrm).
+   *  A force button FORCES: the per-def level floor is waived (that gate
+   *  belongs to passive ignition, not QA). */
   devIgnite(view: OverlayView, zoneId: string): boolean {
-    return this.tryWakeSerpent(view, zoneId);
+    return this.tryWakeSerpent(view, zoneId, true);
   }
 
-  /** DEV: manifest an apparition in THIS zone at once (herald skipped). */
+  /** DEV: manifest an apparition in THIS zone at once (herald skipped, level
+   *  floor waived — a force button forces; the zone must still be eligible
+   *  ground, so sanctuaries refuse like every other in-zone event button). */
   devManifest(view: OverlayView, zoneId: string, defId?: string): boolean {
     const z = view.byId[zoneId];
     if (!z || !this.targetable(z)) return false;
     const def = defId
       ? this.cfg.defs.find(d => d.id === defId && d.archetype === 'apparition'
         && (d.dimension ?? 'surface') === (this.dimension ?? 'surface')) ?? null
-      : this.pickDef('apparition', view.charLevel);
+      : this.pickDef('apparition', Number.POSITIVE_INFINITY);
     if (!def) return false;
     const a: ActiveApparition = {
       id: `wb_${this.seq++}`, defId: def.id, zoneId,
@@ -666,11 +671,12 @@ export class WorldBossField implements WorldOverlay {
     return true;
   }
 
-  /** DEV: grow a lair anchored to THIS zone (the engine mints on its drain). */
+  /** DEV: grow a lair anchored to THIS zone (the engine mints on its drain;
+   *  level floor waived — a force button forces). */
   devLair(view: OverlayView, zoneId: string): boolean {
     const z = view.byId[zoneId];
     if (!z || !this.targetable(z)) return false;
-    const def = this.pickDef('lair', view.charLevel);
+    const def = this.pickDef('lair', Number.POSITIVE_INFINITY);
     if (!def) return false;
     this.lairs.push({ id: `wb_${this.seq++}`, defId: def.id, hostZoneId: zoneId, lairZoneId: null, bossLifeFrac: 1 });
     return true;
@@ -714,17 +720,19 @@ export class WorldBossField implements WorldOverlay {
 
   /** Wake a serpent: roll a def, walk a chain over VISITED eligible ground,
    *  and REFUSE any chain whose sealed roads would cut the charted graph
-   *  apart (all visited nodes must stay mutually reachable). */
-  private tryWakeSerpent(view: OverlayView, forceStart?: string): boolean {
-    const def = this.pickDef('roamer', view.charLevel);
+   *  apart (all visited nodes must stay mutually reachable). `preferStart`
+   *  biases the wake to a zone (the dev button); ineligible preferred ground
+   *  (a sanctuary) falls back to the whole pool. `force` waives the per-def
+   *  level floor (dev only — passive ignition always passes the real level). */
+  private tryWakeSerpent(view: OverlayView, preferStart?: string, force = false): boolean {
+    const def = this.pickDef('roamer', force ? Number.POSITIVE_INFINITY : view.charLevel);
     if (!def?.roam) return false;
     const eligible = (id: string): boolean => {
       const z = view.byId[id];
       return !!z && view.visited.has(id) && this.targetable(z);
     };
-    const starts = forceStart
-      ? (eligible(forceStart) ? [forceStart] : [])
-      : view.nodes.filter(z => eligible(z.id)).map(z => z.id);
+    const pool = view.nodes.filter(z => eligible(z.id)).map(z => z.id);
+    const starts = preferStart && eligible(preferStart) ? [preferStart] : pool;
     if (!starts.length) return false;
 
     for (let attempt = 0; attempt < 8; attempt++) {
