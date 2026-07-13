@@ -1190,12 +1190,17 @@ const MIREILLE_COOLDOWN = 5;     // seconds before she'll heal again
  *  dwell, once per character — free of any unlock (the innkeeper's kindness,
  *  not a Vault service). ITEMS, not grants: the gems land in the carried
  *  skill inventory and Mireille TALKS you through the one loop every gem in
- *  the game follows — book (B), learn, bar — so the welcome doubles as the
+ *  the game follows — inventory, learn, bar — so the welcome doubles as the
  *  in-universe tutorial for a mannerism that stays true forever. The run
  *  ledger remembers the hand-over (the cellar_entered discovery pattern),
  *  so selling the gems can never farm her kindness. */
 const MIREILLE_GIFT_SKILLS = ['life_flask', 'mana_flask'];
 const MIREILLE_GIFT_LEDGER = 'mireille_flasks_given';
+/** THE LESSON'S REWARD: the first time her flasks sit LEARNED and ON THE
+ *  BAR, Mireille tops both founts to the brim — once per character (run
+ *  ledger), free of any unlock. The tutorial ends on a full drink, not an
+ *  empty cup: the player's first sip teaches what the pips are FOR. */
+const MIREILLE_FILL_LEDGER = 'mireille_flasks_filled';
 const MIREILLE_XP_BUFF_SEC = 300;   // a 5-minute blessing
 const MIREILLE_XP_BUFF_MULT = 0.05; // +5% experience while it lasts
 const MIREILLE_XP_REFRESH = 240;    // only (re)grant when below this (no spam)
@@ -7089,8 +7094,8 @@ export class World {
   delverPrompt(): string | null {
     if (!this.nearDelver()) return null;
     return this.descentSpent.has(this.zone.id)
-      ? 'Open your book (B) to trade — the shaft below is spent.'
-      : 'Open your book (B) to trade — or dwell the shaft to descend.';
+      ? 'Linger to trade — the shaft below is spent.'
+      : 'Linger to trade — or dwell the shaft to descend.';
   }
 
   /** The live descent readout for the renderer (HUD depth/echoes, the darkness
@@ -10099,8 +10104,8 @@ export class World {
   }
 
   /** The gift-taught LOOP, read back for her directions: any gift gem still
-   *  CARRIED unlearned (the book step), else any LEARNED gift flask not yet
-   *  on the action bar (the bar step). Null once the lesson is lived. */
+   *  CARRIED unlearned (the inventory step), else any LEARNED gift flask not
+   *  yet on the action bar (the bar step). Null once the lesson is lived. */
   private mireilleGiftLesson(): 'learn' | 'bar' | null {
     const carried = MIREILLE_GIFT_SKILLS.some(id => !this.meta.knownSkills.has(id)
       && this.meta.skillInv.some(i => i.def.id === id));
@@ -10122,8 +10127,11 @@ export class World {
     // The handed gift TEACHES: she names the player's own next move in the
     // one loop every skill gem follows — and the line clears the moment
     // they make it. An in-universe tutorial: no popup, no forced hand.
+    // ('{bind:…}' tokens resolve at the DISPLAY surface against the LIVE
+    // keyboard/controller binds — resolveBindTokens, meta/settings.ts — so
+    // her directions can never name a key the player rebound away.)
     const lesson = this.mireilleGiftLesson();
-    if (lesson === 'learn') return 'Open your book (B), love — press those flasks to memory.';
+    if (lesson === 'learn') return 'Open your inventory ({bind:panelInv}), love — press those flasks to memory.';
     if (lesson === 'bar') return 'Now set them to your bar, dear — a flask out of reach is no flask at all.';
     if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
     return null;
@@ -10143,8 +10151,8 @@ export class World {
     // only the gaps: a copy already known or carried is never duplicated.
     // The gems land in the HAND (skillInv), not on the bar: the hero equips
     // them THEMSELVES, with Mireille's talk directing each step — the same
-    // book→learn→bar loop every gem they'll ever loot follows. Teaching by
-    // doing, not by doing-for.
+    // inventory→learn→bar loop every gem they'll ever loot follows. Teaching
+    // by doing, not by doing-for.
     if (this.mireilleGiftOwed()) {
       let gifted = false;
       for (const sid of MIREILLE_GIFT_SKILLS) {
@@ -10158,7 +10166,7 @@ export class World {
       if (gifted) {
         bumpLedger(this.ledger, MIREILLE_GIFT_LEDGER);
         did = true; parts.push('two flasks, into your hands');
-        this.text(vec(p.pos.x, p.pos.y - 22), 'Open your book (B), love.', '#d8b87a', 13);
+        this.text(vec(p.pos.x, p.pos.y - 22), 'Open your inventory ({bind:panelInv}), love.', '#d8b87a', 13);
       }
     }
     if (featureEnabled(this.account, FEATURE.MIREILLE_HEAL_LIFE) && p.life < p.maxLife()) {
@@ -10199,6 +10207,25 @@ export class World {
    *  then a cooldown. No keypress — walk into her or stay near. */
   private updateMireille(dt: number): void {
     if (this.mireilleCd > 0) this.mireilleCd -= dt;
+    // THE LESSON'S REWARD (once, ledger-remembered): the first time she sees
+    // her flasks LEARNED and ON THE BAR, she fills both founts to the brim.
+    // No dwell, no unlock, no cooldown — the payoff lands the moment you
+    // step back into her reach with the lesson lived, even if the last bind
+    // happened out in the square.
+    if (this.ledger[MIREILLE_GIFT_LEDGER] && !this.ledger[MIREILLE_FILL_LEDGER]
+      && !this.player.dead && !this.player.downed
+      && this.getMireille() !== null && this.mireilleGiftLesson() === null) {
+      bumpLedger(this.ledger, MIREILLE_FILL_LEDGER);
+      const p = this.player;
+      for (const sid of MIREILLE_GIFT_SKILLS) {
+        const inst = this.meta.knownSkills.get(sid);
+        for (const cg of inst?.def.chargeGain ?? []) {
+          if (cg.on !== 'orbPickup') continue;
+          p.gainCharge(cg.charge, 999, cg.max, inst!);
+        }
+      }
+      this.text(p.pos, 'Mireille: there, love — full to the brim.', '#a0d8a0', 14);
+    }
     // Dwell only builds toward an AVAILABLE service: not while dead, away from
     // her, or while the player is acting. Her WELCOME GIFT (the flasks) needs
     // no unlock — the dwell builds for it even on a fresh account.

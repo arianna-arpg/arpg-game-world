@@ -178,6 +178,10 @@ export class UI {
    *  tears both down on every re-render / navigation. */
   armPadCapture: ((cb: (code: string) => void) => void) | null = null;
   disarmPadCapture: (() => void) | null = null;
+  /** Wired by main (same altitude as the capture bridge): has the CONTROLLER
+   *  spoken recently? Slot labels and bind hints follow the device of the
+   *  moment — pad glyphs while it drives, keyboard keys when the mouse does. */
+  getPadActive: (() => boolean) | null = null;
 
   charSheetOpen = false;
   inventoryOpen = false;
@@ -648,9 +652,18 @@ export class UI {
     }).join('');
   }
 
-  /** Bar-slot key labels from the live keybinds (slots 0/1 fixed to mouse). */
+  /** Bar-slot labels from the LIVE binds: the pad map (RT/LT/Ⓐ…) while the
+   *  controller is active, else the keybinds (slots 0/1 fixed to mouse) — so
+   *  the Build drawer's bind buttons always name the button the player will
+   *  actually press, on whichever device is in their hands. */
   private slotLabels(): string[] {
-    const kb = this.getSettings().keybinds;
+    const s = this.getSettings();
+    if (this.getPadActive?.()) {
+      const pb = s.padBinds;
+      return [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
+        pb.skillSlot4, pb.skillSlot5, pb.skillSlot6, pb.skillSlot7].map(padDisplay);
+    }
+    const kb = s.keybinds;
     return ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
       kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
   }

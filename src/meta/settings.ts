@@ -15,7 +15,7 @@
 // START is the pad's hardwired Escape, mirroring the keyboard rule.
 // ---------------------------------------------------------------------------
 
-import { PAD_CFG, AIM_ASSIST_MODES, type AimAssistMode } from '../core/gamepad';
+import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../core/gamepad';
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
@@ -184,6 +184,27 @@ const KEY_DISPLAY_NAMES: Record<string, string> = {
 /** Human-readable label for a stored key value. */
 export function keyDisplay(key: string): string {
   return KEY_DISPLAY_NAMES[key] ?? key.toUpperCase();
+}
+
+/** LIVE-BIND TOKENS — text that names a control never bakes the key in.
+ *  A string carries '{bind:<actionId>}' (any ActionId / PadActionId) and the
+ *  surface that DISPLAYS it resolves the token at draw time through this —
+ *  against the live keybinds, or the pad map while the controller has spoken
+ *  recently — so a rebind (or picking the controller up mid-line) re-labels
+ *  every hint the same frame. World-authored prompts need no import to
+ *  participate: the token is plain text; only display surfaces resolve it.
+ *  (The retired Skill Book key taught the hardcoded-hotkey lesson.) */
+const BIND_TOKEN_RE = /\{bind:([A-Za-z0-9]+)\}/g;
+export function resolveBindTokens(text: string, s: Settings, padActive: boolean): string {
+  if (!text.includes('{bind:')) return text;
+  return text.replace(BIND_TOKEN_RE, (token, id: string) => {
+    const pad = s.padBinds[id as PadActionId];
+    const key = s.keybinds[id as ActionId];
+    if (pad === undefined && key === undefined) return token; // unknown action: stay legible
+    if (padActive && pad) return padDisplay(pad);
+    if (key) return keyDisplay(key);
+    return pad ? padDisplay(pad) : '—'; // pad-only actions (slots 0/1) off-pad
+  });
 }
 
 export const makeSettings = (): Settings => ({

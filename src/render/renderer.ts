@@ -36,7 +36,8 @@ import { QUEST_GIVER_IDS } from '../quests/defs';
  *  edges from popping at the screen border. */
 const RENDER_CULL_PAD = 150;
 import { roofStyle } from '../data/structures';
-import { DEFAULT_KEYBINDS, keyDisplay, type ActionId, type Settings } from '../meta/settings';
+import { DEFAULT_KEYBINDS, keyDisplay, resolveBindTokens, type ActionId, type Settings } from '../meta/settings';
+import { padDisplay } from '../core/gamepad';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
 import { FACTIONS, MONSTERS } from '../data/monsters';
@@ -105,6 +106,11 @@ export class Renderer {
     window.addEventListener('resize', () => this.resize());
   }
 
+  /** Wired by main.ts (same altitude as getSettings): has the CONTROLLER
+   *  spoken recently? Drives which map — keyboard or pad — bind tokens and
+   *  slot labels read, so every hint follows the device of the moment. */
+  getPadActive?: () => boolean;
+
   /** Live keybind label for one action — every HUD hint that names a key
    *  goes through this, so hints can never drift from a rebind (the retired
    *  Skill Book key taught that lesson). */
@@ -112,11 +118,28 @@ export class Renderer {
     return keyDisplay(this.getSettings?.().keybinds[id] ?? DEFAULT_KEYBINDS[id]);
   }
 
-  /** Bar-slot key labels, derived from the live keybinds (slots 0/1 fixed to
+  /** Resolve '{bind:…}' tokens in display text against the LIVE binds —
+   *  keyboard, or the pad map while the controller is active (see
+   *  meta/settings.ts resolveBindTokens). The queueLabel and floating-text
+   *  chokepoints run every world-authored prompt through this, so no hint
+   *  can name a key the player rebound away or a device they put down. */
+  private resolveText(text: string): string {
+    const s = this.getSettings?.();
+    return s ? resolveBindTokens(text, s, this.getPadActive?.() ?? false) : text;
+  }
+
+  /** Bar-slot labels, derived from the live binds: the pad map (RT/LT/Ⓐ…)
+   *  while the controller is active, else the keybinds (slots 0/1 fixed to
    *  mouse). Falls back to the defaults if no settings are wired in. */
   private slotKeys(): string[] {
-    const kb = this.getSettings?.().keybinds;
-    if (!kb) return SLOT_KEYS;
+    const s = this.getSettings?.();
+    if (!s) return SLOT_KEYS;
+    if (this.getPadActive?.()) {
+      const pb = s.padBinds;
+      return [pb.skillSlot0, pb.skillSlot1, pb.skillSlot2, pb.skillSlot3,
+        pb.skillSlot4, pb.skillSlot5, pb.skillSlot6, pb.skillSlot7].map(padDisplay);
+    }
+    const kb = s.keybinds;
     return ['LMB', 'RMB', kb.skillSlot2, kb.skillSlot3, kb.skillSlot4,
       kb.skillSlot5, kb.skillSlot6, kb.skillSlot7].map(keyDisplay);
   }
@@ -1641,7 +1664,7 @@ export class Renderer {
    *  dy stacks lines: 8 hugs the scalp (names), 22 rides above the bars. */
   private queueLabel(a: Actor, text: string, color: string, dy: number,
     opts?: { font?: string; stroke?: boolean }): void {
-    this.labels.push({ a, text, color, dy, font: opts?.font ?? 'bold 11px Verdana', stroke: opts?.stroke ?? true });
+    this.labels.push({ a, text: this.resolveText(text), color, dy, font: opts?.font ?? 'bold 11px Verdana', stroke: opts?.stroke ?? true });
   }
 
   /** How readable a label anchored at this POINT may be (0..1), keyed on the
@@ -3842,13 +3865,16 @@ export class Renderer {
     const { ctx } = this;
     ctx.textAlign = 'center';
     for (const t of world.texts) {
+      // Bind tokens resolve at DRAW, not at spawn — a float naming a key
+      // stays honest even if the player rebinds (or grabs the pad) mid-air.
+      const txt = this.resolveText(t.text);
       ctx.globalAlpha = clamp(t.life / t.maxLife, 0, 1);
       ctx.font = `bold ${t.size}px Verdana`;
       ctx.fillStyle = t.color;
       ctx.strokeStyle = 'rgba(0,0,0,0.7)';
       ctx.lineWidth = 3;
-      ctx.strokeText(t.text, t.pos.x, t.pos.y);
-      ctx.fillText(t.text, t.pos.x, t.pos.y);
+      ctx.strokeText(txt, t.pos.x, t.pos.y);
+      ctx.fillText(txt, t.pos.x, t.pos.y);
     }
     ctx.globalAlpha = 1;
   }
@@ -4116,6 +4142,11 @@ export class Renderer {
           for (let c = 0; c < Math.min(cap, 8); c++) {
             ctx.fillStyle = c < bank.count ? '#ffe86a' : 'rgba(90,90,110,0.8)';
             ctx.fillRect(x + 5 + c * 6, by + 5, 4, 4);
+            // A hairline dark rim so the loaded count reads against any
+            // slot art — the fill colors carry the meaning, the rim the edge.
+            ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x + 5.5 + c * 6, by + 5.5, 3, 3);
           }
         }
         // UNLEASH SEAL tics (World.unleashSealsOf): banked ghost-repeats as
@@ -4183,6 +4214,12 @@ export class Renderer {
               if (c < held) {
                 ctx.fillStyle = chargeColor(cc.charge);
                 ctx.fill();
+                // A hairline dark rim around each FILLED sip: the tint
+                // stays the message, the rim keeps the count legible
+                // against slot art and cooldown shade alike.
+                ctx.strokeStyle = 'rgba(0,0,0,0.85)';
+                ctx.lineWidth = 1;
+                ctx.stroke();
               } else {
                 ctx.fillStyle = 'rgba(10,10,16,0.75)';
                 ctx.fill();

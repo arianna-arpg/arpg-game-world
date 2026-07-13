@@ -221,6 +221,13 @@ const ui = new UI(
 // device layer directly — same altitude as its getSettings/saveSettings deps).
 ui.armPadCapture = (cb) => pad.armCapture(cb);
 ui.disarmPadCapture = () => pad.disarmCapture();
+// DEVICE OF THE MOMENT: bind hints, '{bind:…}' prompt tokens, and slot labels
+// all follow whichever device spoke last (the pad's recency window —
+// PAD_CFG.activeWindow). One arbiter, injected at the same altitude as the
+// settings getters: neither surface ever touches the device layer directly.
+const padActiveNow = (): boolean => pad.activeRecently(performance.now() / 1000);
+renderer.getPadActive = padActiveNow;
+ui.getPadActive = padActiveNow;
 
 let running = false;
 let deathShown = false;
