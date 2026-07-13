@@ -19,6 +19,11 @@ import type { EssenceSpillSpec } from './essences';
 // generic tiers live in engine/presence.ts PRESENCE_BANDS).
 registerPresenceBand('legion_muster', { from: 26, fadeIn: 8 });
 
+// The Vigilant Host's shared tier band (the Aetherial's wardens): the choir
+// musters from the shelf-crossing levels on — retune ONE envelope and the
+// whole realm's pressure shifts (the legion_muster pattern).
+registerPresenceBand('host_vigil', { from: 10, fadeIn: 5 });
+
 // DEATH DIVISION has ONE seam and it is the brain's: `onDeath: [{do:'summon',
 // …}]` (viscous_ooze, galvanic_ooze). A MonsterDef-level split kit-part was
 // briefly added here and REVERTED — two mechanisms for one concept is how
@@ -5851,6 +5856,120 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['firebolt'], xp: 14,
     faction: 'primeval', tags: ['primeval'],
     brain: { type: 'strafer' },
+  },
+
+  // --- THE VIGILANT HOST (faction 'seraphic' — the Aetherial's wardens) ------
+  // Angels are not friends. The Host keeps the realm above the clouds, and it
+  // keeps it FROM you: choirs of wisps, wheels of eyes, lancers falling out of
+  // the light. Most of the Host FLIES (flier + levitates) — the collapsing
+  // shelves are THEIR ground precisely because they need no ground; the
+  // Dominion, deliberately, walks. Contexts keep them out of surface
+  // generation (they appear via the aether tilesets + the seraphic roster).
+
+  /** The choir's least: a mote of light with wings — a poked NEST of light
+   *  (volatile: struck, it may flash a free Aureole back at the world). */
+  cherub_wisp: {
+    id: 'cherub_wisp', name: 'Cherub Wisp',
+    color: '#ffe9b8', shape: 'oval', radius: 9, material: 'ethereal', look: 'cherub_wisp',
+    base: { life: 26, moveSpeed: 185, evasion: 65, mana: 40, manaRegen: 5 },
+    mods: [mod('lightningRes', 'flat', 0.4)],
+    skills: ['talon_rake'], xp: 10, faction: 'seraphic',
+    flier: true, levitates: true,
+    volatile: { skillId: 'aureole', chance: 0.2, icd: 3 },
+    presence: 'host_vigil',
+    detection: 1.2,
+    scaleVariance: [0.85, 1.15],
+    brain: { type: 'swarm' },
+  },
+
+  /** The wheel of eyes: a slow orbit that never blinks, pulsing rings of
+   *  dawn — and imploding into one last radiant verdict when broken. */
+  ophan_wheel: {
+    id: 'ophan_wheel', name: 'Ophan of the Wheel',
+    color: '#ffd88a', shape: 'circle', radius: 13, material: 'ethereal', look: 'ophan_wheel',
+    base: { life: 64, moveSpeed: 95, mana: 120, manaRegen: 9, energyShield: 30 },
+    mods: [mod('lightningRes', 'flat', 0.5)],
+    skills: ['aureole'], xp: 22, faction: 'seraphic',
+    flier: true, levitates: true,
+    deathBurst: { mode: 'implode', damageFrac: 0.9, coalesce: 0.6, damageType: 'lightning' },
+    presence: 'host_vigil',
+    gemBias: ['lightning', 'aoe'],
+    brain: { type: 'strafer' },
+  },
+
+  /** The herald: a warhorn over the choir — its cry RALLIES the Host, and
+   *  wisps fighting near their herald fight like something watched them. */
+  herald_of_the_choir: {
+    id: 'herald_of_the_choir', name: 'Herald of the Choir',
+    color: '#f2e2b8', shape: 'pentagon', radius: 13, material: 'ethereal', look: 'herald_choir',
+    base: { life: 85, moveSpeed: 110, mana: 140, manaRegen: 8 },
+    skills: ['war_cry', 'feather_volley'], xp: 26, faction: 'seraphic',
+    flier: true, levitates: true,
+    bond: { mods: [mod('damage', 'increased', 0.2), mod('attackSpeed', 'increased', 0.1)], radius: 180 },
+    grants: [{ atLevel: 14, skill: 'judgement_pillar' }],
+    presence: 'host_vigil',
+    brain: { type: 'commander' },
+  },
+
+  /** The lancer: a virtue that falls OUT of the sky point-first — Skyfall is
+   *  its whole doctrine of approach. */
+  virtue_lance: {
+    id: 'virtue_lance', name: 'Virtue of the Lance',
+    color: '#ffefc8', shape: 'kite', radius: 12, material: 'ethereal', look: 'virtue_lance',
+    base: { life: 95, moveSpeed: 135, accuracy: 105, mana: 60, manaRegen: 5 },
+    skills: ['claw', 'skyfall'], xp: 28, faction: 'seraphic',
+    flier: true, levitates: true,
+    presence: 'host_vigil',
+    gemBias: ['movement', 'melee'],
+    brain: { type: 'skirmish', withdraw: 1.1 },
+  },
+
+  /** The judge: marble made law. It does not fly — the one Host body the
+   *  crumbling clouds can claim — and it does not care: a front-guard shell
+   *  and pillars of verdict make approaching it the whole problem. */
+  dominion_scales: {
+    id: 'dominion_scales', name: 'Dominion of Scales',
+    color: '#e0d8c8', shape: 'trapezoid', radius: 17, material: 'stone', look: 'dominion_scales',
+    base: { life: 240, moveSpeed: 62, armor: 45, poise: 60, mana: 160, manaRegen: 7 },
+    mods: [mod('fireRes', 'flat', 0.3), mod('lightningRes', 'flat', 0.3)],
+    skills: ['judgement_pillar'], xp: 48, faction: 'seraphic',
+    shellGuard: { side: 'front', max: 80, arcDeg: 120, regenDelay: 4, regenRate: 12 },
+    presence: 'host_vigil',
+    gemBias: ['spell', 'duration'],
+    brain: { type: 'juggernaut' },
+  },
+
+  /** The watcher: one unblinking eye on white wings, advancing only when
+   *  unwatched (the stalk axis) and fanning feathers from a distance. */
+  watcher_unblinking: {
+    id: 'watcher_unblinking', name: 'Unblinking Watcher',
+    color: '#e8ecf8', shape: 'oval', radius: 11, material: 'ethereal', look: 'watcher_eye',
+    base: { life: 58, moveSpeed: 120, accuracy: 115, evasion: 55, mana: 90, manaRegen: 6 },
+    skills: ['feather_volley'], xp: 24, faction: 'seraphic',
+    flier: true, levitates: true,
+    presence: 'host_vigil',
+    detection: 1.6,
+    brain: { type: 'skirmish', withdraw: 1.3, behavior: { stalk: { arcDeg: 70, creep: 0.6 } } },
+  },
+
+  /** The Host's anchor: a PRINCIPALITY — laurel, sunburst, the whole kata.
+   *  The sanctum's warden and the shelf-crossing's worst weather. */
+  principality_of_dawn: {
+    id: 'principality_of_dawn', name: 'Principality of Dawn',
+    color: '#ffe9a8', shape: 'star', radius: 19, material: 'ethereal', look: 'principality',
+    base: { life: 420, moveSpeed: 105, armor: 25, poise: 80, mana: 220, manaRegen: 10, energyShield: 80 },
+    mods: [mod('lightningRes', 'flat', 0.5), mod('fireRes', 'flat', 0.3)],
+    skills: ['skyfall', 'judgement_pillar', 'feather_volley'], xp: 140, faction: 'seraphic',
+    flier: true, levitates: true,
+    presence: { from: 14, fadeIn: 6 },
+    gemBias: ['lightning', 'movement'],
+    brain: {
+      type: 'commander',
+      phases: [
+        { atLifeFrac: 0.55, mods: [mod('castSpeed', 'increased', 0.2), mod('attackSpeed', 'increased', 0.15)] },
+        { atLifeFrac: 0.25, mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'increased', 0.2)] },
+      ],
+    },
   },
 };
 

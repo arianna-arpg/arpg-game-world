@@ -2360,6 +2360,85 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.2, scale: 0.9, params: { n: 3 } }],
     shadowScale: 0.7,
   },
+
+  // --- THE VIGILANT HOST (the Aetherial's wardens — feathers, halos, law) ----
+  /** The cherub wisp: a burning mote in a ring, on the smallest wings. */
+  cherub_wisp: {
+    parts: [
+      { kind: 'featherWings', scale: 0.9, role: 'glow' },
+      { kind: 'disc', scale: 0.55 },
+      { kind: 'halo', scale: 0.9, alpha: 0.6 },
+      { kind: 'eyes', params: { n: 2, spread: 0.45, dist: 0.3, size: 0.12 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.75, params: { n: 2 } }],
+    shadowScale: 0.55,
+  },
+  /** The ophan: a wheel that is all eyes, ringed in its own dawn. */
+  ophan_wheel: {
+    parts: [
+      { kind: 'halo', scale: 1.35, alpha: 0.5 },
+      { kind: 'disc', scale: 0.8 },
+      { kind: 'eyeCluster', scale: 1.0, role: 'glow' },
+      { kind: 'runes', scale: 1.1, params: { n: 4 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.2, scale: 0.8, params: { n: 3 } }],
+    shadowScale: 0.6,
+    banding: 'hoops',
+  },
+  /** The herald: robed, winged, the warhorn raised over the choir. */
+  herald_choir: {
+    parts: [
+      { kind: 'featherWings', scale: 1.15, role: 'cloth' },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'warhorn', y: 0.45, scale: 0.95, role: 'metal' },
+      { kind: 'halo', scale: 0.95, alpha: 0.55 },
+    ],
+  },
+  /** The virtue: a lancer falling point-first out of the light. */
+  virtue_lance: {
+    parts: [
+      { kind: 'featherWings', scale: 1.2, role: 'glow' },
+      { kind: 'robe', scale: 0.85 },
+      { kind: 'trident', scale: 1.05, role: 'metal' },
+      { kind: 'halo', scale: 0.85, alpha: 0.5 },
+      { kind: 'plume', x: 0.3, scale: 0.8 },
+    ],
+  },
+  /** The dominion: marble made law — plates, the open book, the scales' chains. */
+  dominion_scales: {
+    parts: [
+      { kind: 'armorPlates', scale: 1.05, role: 'metal' },
+      { kind: 'robe', scale: 1.0, role: 'cloth' },
+      { kind: 'book', y: 0.5, scale: 0.9 },
+      { kind: 'chains', scale: 0.95, role: 'metal' },
+      { kind: 'halo', scale: 1.1, alpha: 0.45 },
+      { kind: 'laurel', x: 0.25, scale: 0.9, role: 'glow' },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The watcher: one unblinking eye carried on white wings. */
+  watcher_eye: {
+    parts: [
+      { kind: 'featherWings', scale: 1.25, role: 'glow' },
+      { kind: 'disc', scale: 0.7 },
+      { kind: 'eyes', params: { n: 1, spread: 0, dist: 0.05, size: 0.34 } },
+      { kind: 'halo', scale: 0.8, alpha: 0.4 },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.6,
+  },
+  /** The principality: laurel and sunburst — the whole kata, crowned. */
+  principality: {
+    parts: [
+      { kind: 'sunburst', scale: 1.5, alpha: 0.45, role: 'glow' },
+      { kind: 'featherWings', scale: 1.3, role: 'glow' },
+      { kind: 'robe', scale: 1.0 },
+      { kind: 'sword', scale: 1.1, role: 'metal' },
+      { kind: 'laurel', x: 0.3, scale: 1.0, role: 'glow' },
+      { kind: 'halo', scale: 1.15, alpha: 0.65 },
+    ],
+    live: [{ kind: 'wisps', x: -0.25, scale: 1.0, params: { n: 3 } }],
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look
