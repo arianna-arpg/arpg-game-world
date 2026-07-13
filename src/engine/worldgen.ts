@@ -80,6 +80,9 @@ export function nearestNode(
   const dim = dimension ?? 'surface';
   for (const z of Object.values(zoneMap)) {
     if (z.caveDepth != null || exclude?.has(z.id)) continue;
+    // A POCKET is never an anchor: wiring anything to a purchased cul-de-sac
+    // would forge the second road its contract forbids.
+    if (z.pocket) continue;
     // Anchors never cross dimensions: a surface quest/caravan/float must not
     // wire itself to a hell node that happens to share the coordinate plane.
     if ((z.dimension ?? 'surface') !== dim) continue;
@@ -131,6 +134,12 @@ export interface ZoneSpec {
    *  fog-of-war target wired into the graph later by connectFloatingZone on
    *  approach. The deliberate inverse of a force-connected directed mint. */
   floating?: boolean;
+  /** Mint a PURCHASED-POCKET dead-end (a Holdfast's earned ground): keeps the
+   *  back-edge to the anchor but rolls NO frontiers, appends no course
+   *  continuations, and never weaves — its one road is the way in. The def is
+   *  stamped `pocket: true`, which every road-forming path (weave, the eager
+   *  web's link-to-near, anchor searches) honors as "never link into". */
+  pocket?: boolean;
   /** Mint HIDDEN from the world map (world.visible / auto-fit) — an Incursion
    *  landing obscured until approached. Cleared on approach/entry. */
   concealed?: boolean;
@@ -326,6 +335,7 @@ function weaveConnections(fresh: ZoneDef, zoneMap: Record<string, ZoneDef>, rng:
       (z.dimension ?? 'surface') === (fresh.dimension ?? 'surface') && // roads never cross dimensions
       z.objective.kind !== 'safe' &&            // never link a sanctuary
       z.caveDepth == null &&                    // caves live off-graph anyway
+      !z.pocket &&                              // a purchased cul-de-sac keeps its one road
       !z.floating && !z.concealed &&           // never weave into an UNWIRED / HIDDEN zone (a concealed
                                                // Incursion epicenter reveals + wires via connectFloatingZone,
                                                // which clears both flags BEFORE it weaves — so this only blocks
@@ -578,7 +588,10 @@ export function placeZoneAt(
   }
   const exits: ZoneExitDef[] = backEdge;
   const openSides = (['n', 's', 'e', 'w'] as const).filter(s => s !== backSide);
-  const frontiers = spec.forceFrontiers ?? rng.int(1, 2);
+  // A POCKET is a cul-de-sac by contract: the back-edge is its ONLY road, so
+  // it rolls no frontiers at all (and skips the roll's rng draw — pockets are
+  // new callers, every existing mint's stream is untouched).
+  const frontiers = spec.pocket ? 0 : spec.forceFrontiers ?? rng.int(1, 2);
   for (let i = 0; i < frontiers && openSides.length; i++) {
     const side = openSides.splice(rng.int(0, openSides.length - 1), 1)[0];
     exits.push({ to: '?', side, at: rng.pick([0.35, 0.5, 0.65]), tileset: tileset.id });
@@ -597,7 +610,8 @@ export function placeZoneAt(
   // dead-end the artery. Appended after the size roll so the 'at' pick spaces
   // against the real footprint; append-only (the weave/defIndex invariant).
   // Draws RNG only for course mints, so every other mint's stream is untouched.
-  if (onCourse) {
+  // A POCKET never continues an artery — a dead-end is the whole point.
+  if (onCourse && !spec.pocket) {
     for (const side of onCourse.continueSides) {
       if (side === backSide || exits.some(e => e.side === side)) continue;
       const at = findNonCollidingAt(side, exits, rng, size) ?? bestSpacedAt(side, exits, size);
@@ -701,12 +715,15 @@ export function placeZoneAt(
     ...(Object.keys(layoutParams).length ? { layoutParams } : {}),
     ...(spec.port ? { port: true } : {}),
     ...(spec.dimension ? { dimension: spec.dimension } : {}),
+    ...(spec.pocket ? { pocket: true } : {}),
   };
   // Directed placements (quests) link the reciprocal road on the anchor here;
   // the frontier path leaves linkBack false (travelThrough mutates its '?' exit).
   // A FLOATING zone forges NONE of this at mint — connectFloatingZone does it on
   // approach (so it sits disconnected on the map until you explore to it).
-  if (!spec.floating) {
+  // A POCKET forges only its back-edge: no reciprocal (its frontier caller
+  // mutates the locked exit), and NEVER the opportunistic weave — one road.
+  if (!spec.floating && !spec.pocket) {
     // The reciprocal obeys the SAME dimension seal as the back-edge: a
     // mismatched anchor gains no road into this zone (a directed mint whose
     // anchor fell back to a cross-dimension zone would otherwise stamp the

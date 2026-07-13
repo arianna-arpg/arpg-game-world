@@ -2030,10 +2030,15 @@ export function generateLayout(
   // reachability invariant and joins its required points, so a mouth in a
   // sealed pocket gets carved to. The paired seed derives from the zone seed
   // (lockstep append with the seeds list).
+  // A purchased POCKET (ZoneDef.pocket) shares the guarantee: its guardian's
+  // PocketSpec floors a cave row into the layout as a PROMISE ("something
+  // under the camp worth the digging") — but a bespoke generator that never
+  // walks def.layout (the field expanse) would silently drop it. Same force,
+  // same seed zip, same reachability join.
   // (Boundless zones — the Descent's streamed abyss — are exempt: their layout
   // deliberately hosts no deeper mouth, and a mouth in the starter patch would
   // splice the Underworld ladder into a mode built around resurfacing.)
-  if (def.caveDepth && !def.breach && !def.boundless
+  if ((def.caveDepth || def.pocket) && !def.breach && !def.boundless
     && def.layout.some(s => s.kind === 'cave')
     && !ctx.doodads.some(d => d.kind === 'cave_entrance')) {
     let best: Vec2 | null = null;

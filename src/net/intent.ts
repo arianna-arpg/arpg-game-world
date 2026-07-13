@@ -77,7 +77,7 @@ export type MetaAction =
   | { t: 'dropSkill'; index: number }                          // skillInv idx → world
   | { t: 'dropSupport'; index: number }                        // inventory idx → world
   | { t: 'caravanTo'; band: number }                           // Caravan: escort to band N (0 = home)
-  | { t: 'payToll'; index: number }                            // Holdfast: surrender support idx (-1 = random) to open the gate
+  | { t: 'payToll'; index: number }                            // Holdfast: pay the keeper's toll (essence/gem per the guardian's UnlockSpec; index = legacy wire shape)
   | { t: 'vocationQuest'; questId: string }                    // Vocation menu: undertake a chain step
   // GEAR (items are addressed by uid — stable across bag re-sorts and the wire).
   | { t: 'equipItem'; uid: number; slot?: string }             // bag OR worn item → doll slot (auto-picks when omitted; worn→worn swaps through the vacated slot)

@@ -85,6 +85,7 @@ export function packageLookups(): RegistryLookups {
     boundaryGate: id => boundaryGateIds().includes(id),
     sidezone: id => !!SIDEZONES[id],
     biome: id => !!BIOMES[id],
+    dimension: id => dimensionIds().includes(id),
   };
 }
 

@@ -626,7 +626,6 @@ function handleLocalPanels(): void {
     if (ui.minigameRunning()) return;
     if (ui.escapeMenuOpen) { ui.hideEscapeMenu(); return; }
     if (ui.caravanOpen) { ui.closeCaravan(); return; }
-    if (ui.tollOpen) { ui.closeToll(); return; }
     if (ui.vendorOpen) { ui.closeVendor(); return; }
     if (ui.salvageOpen) { ui.closeSalvage(); return; }
     if (ui.oracleOpen) { ui.closeOracle(); return; }
@@ -828,13 +827,8 @@ function tick(now: number): void {
       }
       // (The dock dwell now CASTS OFF into the sailing mode directly — handled
       // inside world.updateSail; the Sail menu panel stays dormant.)
-      // A Holdfast keeper (drop-to-choose) asks to open the toll bargain menu.
-      if (world.holdfastTollRequested) {
-        world.holdfastTollRequested = false;
-        if (!ui.tollOpen) ui.showToll();
-      }
-      // Close a lingering toll menu if the wardens were slain / roused mid-bargain.
-      if (ui.tollOpen && !world.holdfastParleyOpen()) ui.closeToll();
+      // (The Holdfast toll pays directly on the keeper dwell — an essence price
+      // needs no bargain menu; the prompt over the keeper advertises the ask.)
       feedRendererAim();
       const perfRenT0 = performance.now();
       renderer.render(world);

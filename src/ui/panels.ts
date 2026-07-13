@@ -126,7 +126,6 @@ export class UI {
   private passiveTree = document.getElementById('passive-tree')!;
   private worldMap = document.getElementById('world-map')!;
   private caravanMenu = document.getElementById('caravan-menu')!;
-  private tollMenu = document.getElementById('toll-menu')!;
   private salvageMenu = document.getElementById('salvage-menu')!;
   private oracleMenu = document.getElementById('oracle-menu')!;
   private bestiaryMenu = document.getElementById('bestiary-menu')!;
@@ -210,7 +209,6 @@ export class UI {
   mapOpen = false;
   caravanOpen = false;
   mercOpen = false;
-  tollOpen = false;
   salvageOpen = false;
   /** Station view state: which tab, and the craft tab's chosen piece. */
   private salvageTab: 'salvage' | 'craft' = 'salvage';
@@ -681,7 +679,7 @@ export class UI {
    *  surfaces join here and every input layer follows for free. */
   uiBlocking(): boolean {
     return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
-      || this.caravanOpen || this.mercOpen || this.tollOpen || this.salvageOpen
+      || this.caravanOpen || this.mercOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.vocationOpen
       || this.bestiaryOpen
       || !this.startMenu.classList.contains('hidden');
@@ -2975,45 +2973,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     this.vocationMenu.querySelector<HTMLButtonElement>('[data-vocation-close]')?.addEventListener('click', () => this.closeVocationMenu());
   }
 
-  showToll(): void {
-    this.hideAll();
-    this.tollOpen = true;
-    this.tollMenu.classList.remove('hidden');
-    this.refreshToll();
-  }
-
-  closeToll(): void {
-    this.tollOpen = false;
-    this.tollMenu.classList.add('hidden');
-    // Re-arm is automatic: the keeper dwell is a consumed latch — it re-fires only once
-    // the player steps away and breaks the dwell (so closing won't instantly re-open).
-  }
-
-  /** The toll BARGAIN (drop-to-choose): offer ONE unsocketed support gem; the wardens
-   *  take it and the gate opens, the gem you give steering the hidden road. Picks route
-   *  through requestMeta (host-authoritative), mirroring the Caravan menu. */
-  refreshToll(): void {
-    if (!this.tollOpen) return;
-    const world = this.getWorld();
-    const gems = world.holdfastTollGems();
-    const rows = gems.length
-      ? gems.map((g, i) => `<div class="skill-entry">
-          <div class="name" style="color:${esc(g.color)}">${esc(g.name)}</div>
-          <div class="bind-btns"><button data-toll="${i}">Offer this</button></div>
-        </div>`).join('')
-      : `<div class="skill-entry"><div class="desc">You carry no loose support gems to offer the wardens.</div></div>`;
-    this.tollMenu.innerHTML = `<h2>The Toll</h2>`
-      + `<div class="desc" style="margin:-4px 0 10px 0;font-style:italic">"One gem buys your passage, traveller. Choose well — what you give shapes what lies beyond."</div>`
-      + rows
-      + `<div class="bind-btns" style="margin-top:10px"><button data-toll-close>Walk away</button></div>`;
-    this.tollMenu.querySelectorAll<HTMLButtonElement>('button[data-toll]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        world.requestMeta({ t: 'payToll', index: Number(btn.dataset.toll) });
-        this.closeToll();
-      });
-    });
-    this.tollMenu.querySelector<HTMLButtonElement>('[data-toll-close]')?.addEventListener('click', () => this.closeToll());
-  }
+  // (The Holdfast toll menu retired: an essence toll pays directly on the
+  // keeper dwell — the prompt over the keeper advertises the ask, and the
+  // zone-info panel prices sealed gates. No bargain surface to manage.)
 
   refreshMap(): void {
     if (!this.mapOpen) return;
@@ -4208,7 +4170,6 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     this.caravanOpen = false;
     this.mercOpen = false;
     this.mercMenu.classList.add('hidden');
-    this.tollOpen = false;
     this.sailOpen = false;
     this.vocationOpen = false;
     this.classSelect.classList.add('hidden');
@@ -4216,7 +4177,6 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     this.passiveTree.classList.add('hidden');
     this.worldMap.classList.add('hidden');
     this.caravanMenu.classList.add('hidden');
-    this.tollMenu.classList.add('hidden');
     this.sailMenu.classList.add('hidden');
     this.vocationMenu.classList.add('hidden');
     this.deathScreen.classList.add('hidden');

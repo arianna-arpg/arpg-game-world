@@ -34,7 +34,7 @@ export interface VoyageIslandDef {
   objective: ObjectiveSpec;
   /** ± on the radial danger price at the island's coordinate. */
   levelDelta?: number;
-  /** Override the tileset's population (the applyHoldfastDest pattern). */
+  /** Override the tileset's population (the packsOverride pattern). */
   packs?: PackSpec;
   /** Extra structure/landmark rolls stamped onto the island's zone. */
   structures?: { structure: string; chance: number; count?: [number, number] }[];

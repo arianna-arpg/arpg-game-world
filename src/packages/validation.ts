@@ -140,14 +140,28 @@ function validateHoldfast(p: ContentPackage, h: HoldfastDef, look: RegistryLooku
   const bad = (msg: string): void => { out.push(`${p.id}: holdfast '${h.id}' ${msg}`); };
   if (!look.boundaryGate(h.gate)) bad(`names unknown boundary gate '${h.gate}'`);
   if (h.road && !(h.road.chance > 0 && h.road.chance <= 1)) bad(`road.chance ${h.road.chance} outside (0..1]`);
+  for (const d of h.dims ?? []) if (!look.dimension(d)) bad(`dims names unknown dimension '${d}'`);
   if (!look.faction(h.guardian.factionId)) bad(`guardian names unknown faction '${h.guardian.factionId}'`);
   if (!look.monster(h.guardian.keeperId)) bad(`guardian keeper names unknown monster '${h.guardian.keeperId}'`);
   for (const id of h.guardian.rosterIds ?? []) if (!look.monster(id)) bad(`guardian roster names unknown monster '${id}'`);
   if (!(h.weight > 0)) bad(`weight must be > 0`);
   if (h.maxLevel !== undefined && h.minLevel > h.maxLevel) bad(`minLevel ${h.minLevel} > maxLevel ${h.maxLevel}`);
   if (h.reward.vendorMonsterId && !look.monster(h.reward.vendorMonsterId)) bad(`reward vendor names unknown monster '${h.reward.vendorMonsterId}'`);
-  for (const [tag, dest] of Object.entries(h.reward.gemTagToDest ?? {})) {
-    if (dest.faction && !look.faction(dest.faction)) bad(`gemTagToDest['${tag}'] names unknown faction '${dest.faction}'`);
-    if (dest.tileset && !look.tileset(dest.tileset)) bad(`gemTagToDest['${tag}'] names unknown tileset '${dest.tileset}'`);
+  // The essence toll's curve must ask a real price (a zero toll is a free gate
+  // wearing a paywall's clothes — author reward.destLevelDelta 0 instead).
+  if (h.unlock.kind === 'pay-currency') {
+    const flat = h.unlock.cost ?? 0, per = h.unlock.costPerLevel ?? 0;
+    if (flat <= 0 && per <= 0) bad(`pay-currency unlock declares no cost (cost/costPerLevel both unset or ≤ 0)`);
+    if (!h.unlock.currency) bad(`pay-currency unlock names no currency`);
+  }
+  // The pocket's enrichment must be sane data: a real bounty multiplier and
+  // feature floors that guarantee at least one of a kind within a valid range.
+  if (h.pocket) {
+    if (h.pocket.bounty !== undefined && !(h.pocket.bounty > 0)) bad(`pocket.bounty ${h.pocket.bounty} must be > 0`);
+    if (h.pocket.tileset && !look.tileset(h.pocket.tileset)) bad(`pocket names unknown tileset '${h.pocket.tileset}'`);
+    for (const f of h.pocket.features ?? []) {
+      if (!(f.min >= 1)) bad(`pocket feature '${f.kind}' min ${f.min} must be ≥ 1`);
+      if (f.max !== undefined && f.max < f.min) bad(`pocket feature '${f.kind}' max ${f.max} < min ${f.min}`);
+    }
   }
 }

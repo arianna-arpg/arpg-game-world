@@ -2,22 +2,25 @@
 // HOLDFAST — fortified, LOCKED bonus exits raised in the wilds (a net-new package).
 //
 // On entering an uncharted zone there's a chance a guardian faction raises a sealed
-// bonus exit — a side path you must EARN. The Bandit toll-wardens are the first: pay
-// a loose support gem (one taken at random, or one you choose — and your choice
-// steers what lies beyond) and the gate opens; or cut the wardens down and gamble on
-// the gate bursting (it usually won't). Discovered in play (runs at defaults from a
-// low level, like Deadwake/Migration); the Vault unlock gates TUNING. Every guardian,
-// unlock condition, and reward is a HoldfastDef literal (holdfast.ts), so a Goblin
-// camp on a cave, a true coin toll, or a temple gate is PURE DATA.
+// bonus exit — a purchased side-pocket you must EARN. The toll is MORTAL ESSENCE
+// (the account meta-currency): pay the wardens and the gate opens onto a rich
+// dead-end pocket (boosted drops, a guaranteed cave under the camp) whose only
+// road leads back through the gate; or cut the wardens down and gamble on the gate
+// bursting (it usually won't). Discovered in play (runs at defaults from a low
+// level, like Deadwake/Migration); the Vault unlock gates TUNING. Every guardian,
+// unlock condition, and reward is a HoldfastDef literal (holdfast.ts) with a
+// DIMENSION band — the Bandit toll on the surface, the Durance tithe-gate in the
+// underworld — so a Goblin camp on a cave or a seraphic vigil is PURE DATA.
 //
-// It fields a DEDICATED 'bandit' faction — an opportunist human host. It is wired into
-// WARBAND_FACTIONS as a FORWARD HOOK so it can march in Warbands the day bandits hold
-// ground; today, kept NEUTRAL (no faction grudges, so the toll-wardens are never
-// attacked by natives), they appear as Holdfast guardians. Giving them a baseline
-// foothold (a pack-table native or biome patron) is the future step that lights the
-// warband path — without a hostile relation, which would rouse the neutral wardens.
+// It fields DEDICATED guardian factions — the 'bandit' host (surface) and the
+// 'durance_toll' fiend crew (underworld). Both are NEUTRAL by design (no faction
+// grudges, so the toll-wardens are never attacked by natives; placeHoldfast also
+// stamps the guardian faction onto the mustered crew so a warring native can't
+// pick a fight with a sleeping gate). Bandits are wired into WARBAND_FACTIONS as
+// a FORWARD HOOK so they can march in Warbands the day they hold ground.
 // ---------------------------------------------------------------------------
 
+import { registerDormantTag } from '../../engine/ai';
 import { HoldfastField } from '../overlays/holdfast';
 import { HOLDFAST_DEFS, HOLDFAST_SURGE } from '../holdfast';
 import { allHoldfastDefs } from '../registry';
@@ -50,10 +53,36 @@ const BANDIT_FACTION: FactionSpec = {
   ],
 };
 
+/** THE TITHE CREW — the underworld gate's fiends, a DEDICATED neutral faction
+ *  (contexts:['holdfast'] only: they exist to hold tithe-gates, never baseline
+ *  gen). Deliberately WITHOUT relations even though its bodies are Legion
+ *  stock — the crew must never inherit the demon faction's wars, or natives
+ *  would rouse a sleeping gate (the exact reason the bandits are neutral). */
+const DURANCE_TOLL_FACTION: FactionSpec = {
+  id: 'durance_toll',
+  name: 'the Tithe Crew',
+  color: '#7de84a',
+  traits: { roaming: 0.2, aggression: 0.9, warlordHome: 'capital', contexts: ['holdfast'] },
+  roster: [
+    { id: 'brimstone_cantor', weight: 1 },
+    { id: 'hellhound', weight: 3 },
+    { id: 'dread_fiend', weight: 2 },
+  ],
+};
+
+// DORMANCY, data-driven: every declared guardian's neutralTag joins the AI
+// dormancy registry with the shared toll temperament — wardens settle back to
+// the gate once you break off (their aim is profit, not slaughter). A future
+// def in THIS registry is dormant + forgiving for free; a def in another
+// package registers its own tag the same one-line way (the ai.ts contract).
+for (const d of HOLDFAST_DEFS) {
+  registerDormantTag(d.guardian.neutralTag, { coolDownSecs: 8, disengageDist: 360 });
+}
+
 export const HOLDFAST: ContentPackage = {
   id: 'holdfast',
   label: 'Holdfast',
-  blurb: 'The wilds are not empty. Press into uncharted ground and you may find a fortified gate barring a hidden path — raised by opportunists who hold the road and ask a price. The bandit wardens take a gem for passage (one at random, or one you name — and what you give shapes what waits beyond). Cut them down instead and the gate will likely stay shut, the bonus road lost. Pay, fight, or find another way; the toll is yours to weigh.',
+  blurb: 'The wilds are not empty. Press into uncharted ground and you may find a fortified gate barring a hidden side-pocket — raised by guardians who hold the road and ask a price in Mortal Essence. Pay, and the gate opens onto rich ground: fatter spoils, and always something under the camp worth the digging. Cut the wardens down instead and the gate will likely stay shut, the pocket lost. Pay, fight, or walk on; the toll is yours to weigh.',
   cost: 110,
   // DISCOVERED in play (runs at defaults from a low level); the Vault unlock gates TUNING.
   unlock: {
@@ -83,6 +112,6 @@ export const HOLDFAST: ContentPackage = {
   // its own. The registry⇄def import cycle is safe: the aggregate is CALLED at
   // overlay construction (WorldSim boot), long after both modules initialize.
   world: { overlay: (ctx) => new HoldfastField(ctx, { ...HOLDFAST_SURGE, defs: allHoldfastDefs() }) },
-  factions: [BANDIT_FACTION],
+  factions: [BANDIT_FACTION, DURANCE_TOLL_FACTION],
   holdfasts: HOLDFAST_DEFS,
 };

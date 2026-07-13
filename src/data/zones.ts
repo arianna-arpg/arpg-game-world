@@ -490,6 +490,17 @@ export interface ZoneDef {
   /** Multiplier on the encounter-diamond open chance (default 1) — lets a big zone seed
    *  proportionally more breaches without touching the global cadence. */
   encounterDensity?: number;
+  /** LOOT RICHNESS multiplier (default 1) on the kill-path drop-chance gates
+   *  (DROP_CFG.killItemChance / killGemChance / vestigeChance in World.rollDrops)
+   *  — THE zone-level "rich ground" lever. Never touches guaranteed paths (boss
+   *  tables, per-monster hoards). Set at mint (a Holdfast pocket's earned haul,
+   *  a future gilded event's field); serializes with the graph. */
+  bounty?: number;
+  /** A PURCHASED-POCKET dead-end (a Holdfast's earned ground): its only road
+   *  leads back through the gate that sold it. The world web treats it as a
+   *  cul-de-sac — never weave-linked, never an eager-web link target, never an
+   *  anchor for other mints (worldgen honors this flag everywhere roads form). */
+  pocket?: boolean;
 }
 
 /** Describes a FIELD mega-zone's mapping from in-zone PIXELS back to world NODE space,

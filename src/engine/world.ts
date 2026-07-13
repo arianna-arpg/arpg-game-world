@@ -138,7 +138,7 @@ import type { MigrationInfo, MigrationSurge } from '../packages/overlays/migrati
 import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
 import type { IncursionArchetype } from '../packages/overlays/incursion';
-import type { HoldfastDest, GuardianSpec } from '../packages/holdfast';
+import { holdfastTollCost, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
 import { ENCOUNTER_CFG } from '../packages/encounters';
 import { gateOf } from '../packages/weighting';
@@ -1758,9 +1758,6 @@ export class World {
   /** The live Holdfast in the current zone: the keeper to dwell, the wardens to track
    *  for the slaughter outcome, and the gate doodads to splice away on unlock. */
   private holdfastSite: { zoneId: string; lockId: string; defId: string; keeperId: number; banditIds: number[]; gateDoodads: Doodad[] } | null = null;
-  /** Drop-to-choose: set when the player dwells a bargaining keeper, so the main loop
-   *  opens the toll gem-pick menu (the caravan dwell→menu pattern). */
-  holdfastTollRequested = false;
   /** Dwell-to-pay latch on the toll keeper (renderer ring), like the realm-gate dwell. */
   private holdfastDwellKey = '';
   private holdfastDwellPos: Vec2 = { x: 0, y: 0 };
@@ -4093,28 +4090,11 @@ export class World {
    *  the new zone into the graph + charts it; returns the zone the frontier leads to. The
    *  CALLER sets exitDef.to = result.id (the source→result edge); we forge result→source. */
   private chartFrontier(source: ZoneDef, exitDef: ZoneExitDef): ZoneDef {
-    // HOLDFAST bonus exit (lock'd): always mint a FRESH zone (skip the field mint-once +
-    // eager-web LINK paths) so the earned road is genuinely new, applying any chosen-gem
-    // dest theme (drop-to-choose). Fires once — travelThrough then sets exitDef.to.
-    if (exitDef.lock) {
-      // A hell holdfast's earned road samples HELL's palette (the surface field
-      // would dress a hell bonus zone in meadow greens) and carries hell's level
-      // pressure — full parity with the main mint path below.
-      const lockBiomeFor = source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor;
-      const gen = generateZone(source, exitDef, this.zoneMap, this.nextGenId++, lockBiomeFor, this.levelFor,
-        source.dimension ? undefined : this.biomeDepthFor, this.climateFor, this.courseMintFor(source.dimension));
-      // The earned road must lead to LAND (this branch bypasses the ocean gate).
-      if (!gen.dimension && this.continentFor(gen.map).kind === 'ocean') gen.map = this.pullToLand(gen.map);
-      if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
-      const hf = this.sim.holdfastField;
-      const gdef = hf ? hf.def(hf.infoFor(source.id)?.defId ?? '') : undefined;
-      if (gdef?.reward.destLevelDelta) gen.level = Math.max(1, gen.level + gdef.reward.destLevelDelta); // the base reward bias
-      const dest = hf?.destOverrideFor(source.id);
-      if (dest) this.applyHoldfastDest(gen, dest); // + the chosen-gem theme (drop-to-choose)
-      this.zoneMap[gen.id] = gen;
-      this.sim.onNodeCharted(gen, this.simView());
-      return gen;
-    }
+    // HOLDFAST bonus exit (lock'd): resolves into a purchased POCKET — a fresh
+    // dead-end minted through the shared placement primitive (never the field
+    // mint-once / eager-web LINK paths: the earned ground is genuinely new).
+    // Same timing as every frontier; the LOCK gates travel, not the mint.
+    if (exitDef.lock) return this.mintHoldfastPocket(source, exitDef);
     const seed = this.sim.biomeField.fieldSeed;
     // A FIELD source spans a big region, so its frontiers project from the region BOUNDARY
     // (one step past the blob edge) — not the node point, which would land back INSIDE the
@@ -4310,15 +4290,62 @@ export class World {
   /** Legacy alias — the underworld's cave-breach gate (kept for dev tooling). */
   enterUnderworld(): void { this.enterDimension('underworld'); }
 
-  /** Apply a Holdfast dest theme to a freshly-minted bonus zone (drop-to-choose: the
-   *  surrendered gem dictates what spawns). A faction override floods the zone with that
-   *  faction's roster; a level delta shifts its danger. Pure data, resolved here. */
-  private applyHoldfastDest(gen: ZoneDef, dest: HoldfastDest): void {
-    // Keep the terrain; only the POPULATION is re-themed for v1 (the gem dictates who lives there).
-    if (dest.faction && FACTIONS[dest.faction]?.table?.length) {
-      gen.packs = { count: gen.packs?.count ?? [3, 4], size: gen.packs?.size ?? [2, 4], table: FACTIONS[dest.faction].table };
+  /** Mint the sealed ground behind a Holdfast gate — a purchased POCKET, through
+   *  the SAME placement primitive as every directed mint (placeZoneAt with
+   *  ZoneSpec.pocket): back-edge to the host zone only, no frontiers, no weave,
+   *  and the web never links into it. Samples its home plane's palette + level
+   *  pressure exactly like the ordinary frontier path (hell grows hell), then
+   *  lets the guardian's PocketSpec enrich the ground. Rides the ordinary
+   *  frontier TIMING — eager under EAGER_WORLD_WEB, on-travel otherwise; the
+   *  lock gates travel, never the mint (isExitLocked). */
+  private mintHoldfastPocket(source: ZoneDef, exitDef: ZoneExitDef): ZoneDef {
+    const hf = this.sim.holdfastField;
+    const gdef = hf ? hf.def(hf.infoFor(source.id)?.defId ?? '') : undefined;
+    const pocket = gdef?.pocket;
+    let target = projectCoord(source.map, exitDef.side);
+    // The earned ground must be LAND — a pocket never mints a port (the ocean
+    // gate belongs to the open frontier path alone).
+    if (!source.dimension && this.continentFor(target).kind === 'ocean') target = this.pullToLand(target);
+    const gen = placeZoneAt(target, source, this.zoneMap, this.nextGenId++, {
+      // A def may force its pocket's tileset; otherwise the heat-map biome at
+      // the coord decides (fieldBiome), sampled from the source's OWN plane.
+      tileset: pocket?.tileset ?? exitDef.tileset,
+      biomeFor: source.dimension ? this.dimensionBiomeFor(source.dimension) : this.biomeFor,
+      levelFor: this.levelFor,
+      biomeDepthFor: source.dimension ? undefined : this.biomeDepthFor,
+      climateFor: this.climateFor,
+      fieldBiome: !pocket?.tileset,
+      dimension: source.dimension,
+      pocket: true,
+    });
+    if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
+    if (gdef?.reward.destLevelDelta) gen.level = Math.max(1, gen.level + gdef.reward.destLevelDelta); // the base reward bias
+    if (pocket) this.applyPocketSpec(gen, pocket);
+    this.zoneMap[gen.id] = gen;
+    this.sim.onNodeCharted(gen, this.simView());
+    return gen;
+  }
+
+  /** Enrich a freshly-minted pocket from its guardian's PocketSpec: stamp the
+   *  loot BOUNTY lever (ZoneDef.bounty → rollDrops) and floor the promised
+   *  side-features — raising an existing layout row's count range to at least
+   *  [min, max], or appending the row when the tileset carries none. Fresh row
+   *  copies only: tileset layout arrays are shared literals, never mutated. */
+  private applyPocketSpec(gen: ZoneDef, pocket: PocketSpec): void {
+    if (pocket.bounty && pocket.bounty > 0) gen.bounty = pocket.bounty;
+    if (pocket.features?.length) {
+      const rows = [...gen.layout];
+      for (const f of pocket.features) {
+        const i = rows.findIndex(r => r.kind === f.kind);
+        if (i >= 0) {
+          const [lo, hi] = rows[i].count;
+          rows[i] = { ...rows[i], count: [Math.max(lo, f.min), Math.max(hi, f.max ?? f.min)] };
+        } else {
+          rows.push({ kind: f.kind, count: [f.min, f.max ?? f.min] });
+        }
+      }
+      gen.layout = rows;
     }
-    if (dest.levelDelta) gen.level = Math.max(1, gen.level + dest.levelDelta);
   }
 
   /** A FIELD zone's frontier target: one node-step PAST the region boundary in the exit's
@@ -4334,14 +4361,15 @@ export class World {
 
   /** Nearest existing real node within CONNECT_DIST of `target` that a frontier from
    *  `source` may LINK to instead of minting a twin (the interwoven web). Skips self,
-   *  caves, sanctuaries, floating/concealed mints, and nodes `source` already connects to
+   *  caves, sanctuaries, floating/concealed mints, purchased pockets (a cul-de-sac
+   *  keeps its one road), and nodes `source` already connects to
    *  (so one zone's two frontiers don't both collapse onto the same neighbour). */
   private nearestLinkable(target: { x: number; y: number }, source: ZoneDef, side: ZoneExitDef['side']): ZoneDef | null {
     const ux = side === 'e' ? 1 : side === 'w' ? -1 : 0; // the frontier's cardinal direction
     const uy = side === 's' ? 1 : side === 'n' ? -1 : 0;
     let best: ZoneDef | null = null, bd = CONNECT_DIST;
     for (const z of Object.values(this.zoneMap)) {
-      if (z.id === source.id || z.caveDepth != null || z.floating || z.concealed) continue;
+      if (z.id === source.id || z.caveDepth != null || z.floating || z.concealed || z.pocket) continue;
       if ((z.dimension ?? 'surface') !== (source.dimension ?? 'surface')) continue; // the web never crosses dimensions
       if (z.objective.kind === 'safe') continue;
       if (source.exits.some(x => x.to === z.id)) continue; // already linked — don't duplicate
@@ -4365,8 +4393,10 @@ export class World {
     if (!EAGER_WORLD_WEB || zone.caveDepth != null || zone.objective.kind === 'safe') return;
     // Snapshot the '?' exits up front, since we rebuild zone.exits at the end (the drop pass)
     // — iterate a stable array, never the one we mutate. A LOCKED frontier (a Holdfast
-    // bonus exit) is SKIPPED: it must stay '?' (uncharted) behind its gate, mint-on-unlock.
-    const frontiers = zone.exits.filter(x => x.to === '?' && !x.lock);
+    // bonus exit) resolves like every other: its pocket mints eagerly (chartFrontier's
+    // lock branch), pre-recognized on the map behind its gate — the LOCK gates travel
+    // (isExitLocked), never the chart. One mint discipline for the whole web.
+    const frontiers = zone.exits.filter(x => x.to === '?');
     const drop = new Set<ZoneExitDef>();
     for (const e of frontiers) {
       const gen = this.chartFrontier(zone, e);
@@ -6325,7 +6355,9 @@ export class World {
    *  the eager web skips it (it stays '?', mint-on-unlock behind the gate). */
   private rollHoldfast(def: ZoneDef): void {
     const hf = this.sim.holdfastField;
-    if (!hf || def.special || def.eventOwned || def.floating || def.objective.kind === 'safe') return;
+    // A purchased POCKET never hosts its own holdfast — a toll behind a toll
+    // would chain cul-de-sacs off the web (and re-sell ground already bought).
+    if (!hf || def.special || def.eventOwned || def.floating || def.pocket || def.objective.kind === 'safe') return;
     // Holdfast density = its original encounterDensity × the live MYCELIA suppression ONLY
     // (NOT the full eventDensityFor — keep biome density out of the holdfast roll so a
     // spore-laced zone raises fewer gates without otherwise re-tuning shipped behaviour).
@@ -6411,6 +6443,11 @@ export class World {
     const banditIds: number[] = [];
     const keeper = this.createMonster(g.keeperId, lvl, 'enemy');
     keeper.tag = g.neutralTag;
+    // The guardian FACTION claims its crew (over the monster def's own): the
+    // toll factions are relation-less by design, so a zone's warring natives
+    // can never pick a fight with a sleeping gate (a fiend crew of Legion
+    // bodies must not inherit the Legion's wars).
+    keeper.faction = g.factionId;
     keeper.pos = this.clampPos(vec(standC.x + tx * rand(-20, 20) + inward.x * rand(0, 24),
       standC.y + ty * rand(-20, 20) + inward.y * rand(0, 24)), keeper.radius);
     this.actors.push(keeper); banditIds.push(keeper.id);
@@ -6419,6 +6456,7 @@ export class World {
     for (let i = 0; i < guards; i++) {
       const c = this.createMonster(pool[i % pool.length], lvl, 'enemy');
       c.tag = g.neutralTag;
+      c.faction = g.factionId;
       const flank = i % 2 === 0 ? 1 : -1;
       c.pos = this.clampPos(vec(
         standC.x + tx * flank * (throat.mouthWidth / 2 + rand(10, 62)) + inward.x * rand(-16, 44),
@@ -6472,23 +6510,18 @@ export class World {
     return site ? (this.sim.holdfastField?.def(site.defId)?.guardian ?? null) : null;
   }
 
-  /** Fired when the player finishes dwelling the keeper: pay at random (random-take) or
-   *  open the bargain menu (drop-to-choose, if the player has loose gems to offer). */
+  /** Fired when the player finishes dwelling the keeper: request the toll pay
+   *  (host-authoritative — a client's dwell routes the same payToll intent). */
   private onHoldfastDwell(): void {
-    const site = this.holdfastSite;
-    const gdef = site ? this.sim.holdfastField?.def(site.defId) : null;
-    if (!gdef) return;
-    if (gdef.unlock.payment === 'drop-to-choose' && this.localSeat.meta.inventory.length > 0) {
-      this.holdfastTollRequested = true; // the main loop opens the gem-pick menu
-    } else {
-      this.requestMeta({ t: 'payToll', index: -1 }); // random-take (-1) / empty handled below
-    }
+    this.requestMeta({ t: 'payToll', index: -1 }); // index is legacy wire shape (unused)
   }
 
-  /** Pay the toll: surrender ONE loose support gem (index<0 = a random one the warden
-   *  seizes; index≥0 = the one you chose) and open the gate. drop-to-choose: the gem's
-   *  primary tag steers the hidden road. Host-authoritative (a client routes via payToll). */
-  payHoldfastToll(index: number, seat: Seat = this.localSeat): boolean {
+  /** Pay the toll and open the gate — the unlock resolves by the guardian's
+   *  UnlockSpec: 'pay-currency' (mortal) debits the ACCOUNT's Mortal Essence
+   *  (holdfastTollCost — the mid-run essence dump); 'pay-gem' random-take
+   *  seizes one loose support gem from the paying seat. Host-authoritative
+   *  (a client routes via the payToll intent). `index` is legacy wire shape. */
+  payHoldfastToll(_index: number, seat: Seat = this.localSeat): boolean {
     const site = this.holdfastSite;
     const hf = this.sim.holdfastField;
     if (!site || !hf || !hf.isLocked(site.zoneId, site.lockId)) return false;
@@ -6498,36 +6531,52 @@ export class World {
     if (!keeper) return false;
     if (dist(seat.actor.pos, keeper.pos) > transitRadius('holdfast', 78) + 50) return false;
     const gdef = hf.def(site.defId);
-    if (!gdef || gdef.unlock.kind !== 'pay-gem') return false; // only the gem toll pays here
-    const inv = seat.meta.inventory;
-    if (inv.length === 0) {
-      this.text(seat.actor.pos, 'the wardens sneer — you carry nothing worth taking', '#d05050', 13);
-      return false; // no loose gems → the gate stays sealed (find another road)
+    if (!gdef) return false;
+    const u = gdef.unlock;
+    if (u.kind === 'pay-currency' && u.currency === 'mortal') {
+      // The Mortal Essence purse is the HOST's account — only the local seat
+      // spends it (a guest's dwell nudges the host to treat, never their purse).
+      if (seat !== this.localSeat) {
+        this.text(seat.actor.pos, "only the expedition's leader can pay the wardens", '#c8b048', 13);
+        return false;
+      }
+      const cost = holdfastTollCost(gdef, this.zone.level);
+      if (this.account.credits < cost) {
+        this.text(seat.actor.pos, `the wardens want ${cost} ${META_CURRENCY_LABEL} — come back richer`, '#d05050', 13);
+        return false;
+      }
+      this.account.credits -= cost;
+      this.accountDirty = true; // the main loop books the account save (merc-hire parity)
+      this.text(keeper.pos, `the wardens take ${cost} ${META_CURRENCY_LABEL}`, gdef.marker?.color ?? '#c8a04a', 14);
+      this.openHoldfastExit('the toll is paid — the gate opens!');
+      return true;
     }
-    const idx = index < 0 ? Math.floor(rand(0, inv.length)) : index;
-    if (idx < 0 || idx >= inv.length) return false;
-    const gem = inv[idx];
-    inv.splice(idx, 1); // the warden TAKES it (consumed, not dropped to the ground)
-    this.markMetaDirty(seat);
-    if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
-    // drop-to-choose: the surrendered gem's tag picks the hidden road's flavour.
-    let dest: HoldfastDest | undefined;
-    if (gdef.unlock.payment === 'drop-to-choose' && gdef.reward.gemTagToDest) {
-      for (const t of gem.def.requiresTags ?? []) { const d = gdef.reward.gemTagToDest[t]; if (d) { dest = d; break; } }
+    if (u.kind === 'pay-gem') {
+      const inv = seat.meta.inventory;
+      if (inv.length === 0) {
+        this.text(seat.actor.pos, 'the wardens sneer — you carry nothing worth taking', '#d05050', 13);
+        return false; // no loose gems → the gate stays sealed (find another road)
+      }
+      const idx = Math.floor(rand(0, inv.length)); // random-take: the warden chooses
+      const gem = inv[idx];
+      inv.splice(idx, 1); // the warden TAKES it (consumed, not dropped to the ground)
+      this.markMetaDirty(seat);
+      if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+      this.text(keeper.pos, `the wardens take your ${gem.def.name}`, gem.def.color, 14);
+      this.openHoldfastExit('the toll is paid — the gate opens!');
+      return true;
     }
-    this.text(keeper.pos, `the wardens take your ${gem.def.name}`, gem.def.color, 14);
-    this.openHoldfastExit('the toll is paid — the gate opens!', dest);
-    return true;
+    return false; // unimplemented unlock kinds never pay (pickDef keeps them from rolling)
   }
 
-  /** Open the holdfast gate: unlock the overlay (carrying any chosen-gem dest theme),
-   *  splice the sealed BAR out of the mouth (the façade + road are terrain and
-   *  remain — a paid toll leaves a kept waypost), and flash + toast the open path. */
-  private openHoldfastExit(msg: string, dest?: HoldfastDest): void {
+  /** Open the holdfast gate: unlock the overlay, splice the sealed BAR out of
+   *  the mouth (the façade + road are terrain and remain — a paid toll leaves
+   *  a kept waypost), and flash + toast the open path. */
+  private openHoldfastExit(msg: string): void {
     const site = this.holdfastSite;
     const hf = this.sim.holdfastField;
     if (!site || !hf) return;
-    hf.unlock(site.zoneId, dest);
+    hf.unlock(site.zoneId);
     bumpLedger(this.ledger, 'holdfasts_opened');
     if (site.gateDoodads.length) this.doodads = this.doodads.filter(d => !site.gateDoodads.includes(d));
     const portal = this.exits.find(e => this.zone.exits[e.defIndex]?.lock === site.lockId);
@@ -6544,23 +6593,19 @@ export class World {
     return { pos: vec(this.holdfastDwellPos.x, this.holdfastDwellPos.y), frac: clamp((this.time - this.holdfastDwellStart) / transitDwell('holdfast'), 0, 1), kind: 'holdfast' };
   }
 
-  /** The toll prompt to draw over the keeper when the player is near (renderer), or null. */
+  /** The toll prompt to draw over the keeper when the player is near (renderer),
+   *  or null. An essence toll ADVERTISES its price — the player weighs the purse
+   *  before dwelling, no menu needed. */
   holdfastTollPrompt(): { pos: Vec2; text: string } | null {
     const k = this.holdfastKeeper();
     if (!k || dist(this.player.pos, k.pos) > transitRadius('holdfast', 78) + 30) return null;
     const gdef = this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
-    const choose = gdef?.unlock.payment === 'drop-to-choose';
-    return { pos: vec(k.pos.x, k.pos.y - 34), text: choose ? 'dwell to offer a gem' : 'dwell to pay the toll (a gem)' };
+    const u = gdef?.unlock;
+    const price = gdef && u?.kind === 'pay-currency' && u.currency === 'mortal'
+      ? `${holdfastTollCost(gdef, this.zone.level)} ${META_CURRENCY_LABEL}`
+      : 'a gem';
+    return { pos: vec(k.pos.x, k.pos.y - 34), text: `dwell to pay the toll (${price})` };
   }
-
-  /** The unsocketed support gems the player can offer (for the toll bargain menu). */
-  holdfastTollGems(): { name: string; color: string }[] {
-    return this.localSeat.meta.inventory.map(g => ({ name: g.def.name, color: g.def.color }));
-  }
-
-  /** Is a toll keeper still alive + un-roused + sealed (so the bargain menu is valid)?
-   *  The main loop closes a lingering menu when this goes false (wardens slain mid-bargain). */
-  holdfastParleyOpen(): boolean { return !!this.holdfastKeeper(); }
 
   /** DEV: force a sealed Holdfast in the CURRENT zone — append the locked bonus
    *  exit, then RELOAD the zone in place: the gate façade and the kept road are
@@ -18755,12 +18800,9 @@ export class World {
       const mf = this.sim.migrationField;
       return mf ? { woundFrac: 1, radius: mf.surge().rouseRadius, toast: 'The herd turns — the adults charge!', color: '#d8a24a', size: 14 } : null;
     },
-    // A WOUNDING strike past the guardian's woundFrac rouses the whole gang;
-    // a glancing / splash hit never starts the fight (anti-accidental guard).
-    toll_bandit: () => {
-      const gd = this.holdfastGuardian();
-      return gd ? { woundFrac: gd.woundFrac, radius: gd.rouseRadius, toast: 'The wardens draw steel!', color: '#d8a24a', size: 14 } : null;
-    },
+    // (Holdfast guardian tags resolve GENERICALLY in rouseOnWound — the live
+    // site's GuardianSpec carries the wound/radius knobs for ANY guardian def,
+    // so no per-tag row can rot here as new tolls join the registry.)
     // Neutral HUMANS on the roads: strike one and the nearby band answers —
     // hunters draw bows, pilgrims scatter (their morale). They forgive
     // (NEUTRAL_RESET) once you break off.
@@ -18770,11 +18812,21 @@ export class World {
     }),
   };
 
+  /** The rouse rule for the LIVE holdfast site's wardens (any guardian def —
+   *  the GuardianSpec carries the knobs; a wounding strike past woundFrac
+   *  rouses the whole gang, a glancing / splash hit never starts the fight). */
+  private holdfastRouseRule(tag: string): { woundFrac: number; radius: number; toast: string; color: string; size: number } | null {
+    const gd = this.holdfastGuardian();
+    if (!gd || gd.neutralTag !== tag) return null;
+    return { woundFrac: gd.woundFrac, radius: gd.rouseRadius, toast: 'The wardens draw steel!', color: '#d8a24a', size: 14 };
+  }
+
   /** Apply the target's rouse rule after a landed hit (no-op for tagless /
-   *  already-roused actors). */
+   *  already-roused actors). Static rows first; holdfast guardian tags
+   *  resolve through the live site's own GuardianSpec (data, not a row). */
   private rouseOnWound(target: Actor): void {
     if (!target.tag || target.aiAwakened) return;
-    const rule = this.rouseRules[target.tag]?.();
+    const rule = this.rouseRules[target.tag]?.() ?? this.holdfastRouseRule(target.tag);
     if (!rule) return;
     if (rule.woundFrac < 1
       && !(target.life > 0 && target.life <= target.maxLife() * rule.woundFrac)) return;
@@ -21654,14 +21706,19 @@ export class World {
 
   private rollDrops(actor: Actor): void {
     const def = actor.defId ? MONSTERS[actor.defId] : undefined;
-    const count = def?.drops ?? (def?.boss ? DROP_CFG.bossGemDrops : chance(DROP_CFG.killGemChance) ? 1 : 0);
+    // RICH GROUND: the zone's BOUNTY lever (ZoneDef.bounty, default 1) scales
+    // the kill-path CHANCE gates — never the guaranteed paths (boss tables,
+    // per-monster hoards, elite bonus rolls). A Holdfast pocket's earned haul,
+    // a future gilded event's field — one zone-level multiplier, pure data.
+    const bounty = this.zone.bounty ?? 1;
+    const count = def?.drops ?? (def?.boss ? DROP_CFG.bossGemDrops : chance(DROP_CFG.killGemChance * bounty) ? 1 : 0);
     for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
     // table; elite leaders add bonus rolls (crowned promote to the apex table).
     const tables: string[] = [];
     if (def?.loot) tables.push(def.loot);
     else if (def?.boss) tables.push(DROP_CFG.bossTable);
-    else if (chance(DROP_CFG.killItemChance)) tables.push(DROP_CFG.killTable);
+    else if (chance(DROP_CFG.killItemChance * bounty)) tables.push(DROP_CFG.killTable);
     const tier = actor.rarity ?? 'normal';
     const bonus = DROP_CFG.eliteBonusItemRolls[tier] ?? 0;
     for (let i = 0; i < bonus; i++) tables.push(DROP_CFG.eliteBonusTable[tier]);
@@ -21675,7 +21732,7 @@ export class World {
       }
     }
     // VESTIGES shed on their own low chance — the socket economy's trickle.
-    if (chance(DROP_CFG.vestigeChance)) {
+    if (chance(DROP_CFG.vestigeChance * bounty)) {
       const vid = rollVestigeId();
       if (vid) this.dropVestigeAt(actor.pos, vid);
     }
@@ -22740,12 +22797,13 @@ export class World {
             this.wardDwellSeal = null;
           }
         }
-        // HOLDFAST: dwell beside the toll keeper to pay (a gem taken at random) or open
-        // the bargain menu (drop-to-choose). Only while the gate is sealed + the wardens
-        // un-roused — drawing steel cancels the parley. A CONSUMED latch ('done') keeps
-        // it from re-firing while you stand; it re-arms ONLY when you step out of the
-        // ring (one parley per approach — closing the bargain menu or acting beside the
-        // keeper never re-prompts; the Dwell-gate discipline, hand-rolled for the ring).
+        // HOLDFAST: dwell beside the toll keeper to pay (Mortal Essence, or a gem
+        // seized at random — the guardian's UnlockSpec decides). Only while the gate
+        // is sealed + the wardens un-roused — drawing steel cancels the parley. A
+        // CONSUMED latch ('done') keeps it from re-firing while you stand; it re-arms
+        // ONLY when you step out of the ring (one parley per approach — a refused
+        // toll or acting beside the keeper never re-prompts; the Dwell-gate
+        // discipline, hand-rolled for the ring).
         const keeper = this.holdfastKeeper();
         const nearKeeper = !!keeper && dist(this.player.pos, keeper.pos) <= transitRadius('holdfast', 78)
           && this.dwellReachable(this.player.pos, keeper.pos, transitReach('holdfast'));
@@ -23060,11 +23118,11 @@ export class World {
     }
     // Passive scenery (a Training Dummy, a barrel) isn't "hunting" you — only a
     // real threat nearby blocks waypointing. NEUTRAL, un-roused AMBIENT bodies
-    // (a passing herd, grazing wildlife, toll wardens — the whole AMBIENT_TAGS
-    // registry, not a hand-picked subset that rots as packages grow) never
-    // count; a ROUSED one does (it's genuinely hunting).
+    // (a passing herd, grazing wildlife, toll wardens — the whole ambient
+    // registry incl. live guardian tags, not a hand-picked subset that rots
+    // as packages grow) never count; a ROUSED one does (it's genuinely hunting).
     if (this.enemiesOf(this.player).some(e => !e.passive
-      && !(AMBIENT_TAGS.has(e.tag ?? '') && !e.aiAwakened) && dist(e.pos, this.player.pos) < 350)) {
+      && !(this.isAmbientTag(e.tag) && !e.aiAwakened) && dist(e.pos, this.player.pos) < 350)) {
       this.text(this.player.pos, 'cannot waypoint while hunted', '#d05050', 13);
       return false;
     }
@@ -28042,15 +28100,25 @@ export class World {
 
   // ---------------------------------------------------------------- waves ---
 
+  /** Is this tag AMBIENT (never an objective, never a threat until roused)?
+   *  The static AMBIENT_TAGS registry, PLUS every holdfast guardian's
+   *  neutralTag from the live overlay — a new guardian def (any package,
+   *  any dimension) is ambient-exempt with zero engine edits. */
+  isAmbientTag(tag: string | undefined): boolean {
+    if (!tag) return false;
+    return AMBIENT_TAGS.has(tag) || !!this.sim.holdfastField?.guardianTags().has(tag);
+  }
+
   /** Living enemies that count toward objectives (caches and such don't).
-   *  AMBIENT_TAGS bearers are excluded wholesale — see the registry above.
+   *  Ambient bearers are excluded wholesale — see isAmbientTag (the static
+   *  registry + the live holdfast guardian tags).
    *  noObjective defs are the SOFT-LOCK GUARD: bodies whose habitat a
    *  build may be unable to reach (a void angler over its chasm) never
    *  gate a clear — they fight and drop, but the zone finishes without
    *  them. */
   private countedEnemies(): Actor[] {
     return this.actors.filter(a => a.team === 'enemy' && !a.dead
-      && !(a.tag && AMBIENT_TAGS.has(a.tag))
+      && !this.isAmbientTag(a.tag)
       && !(a.defId && (MONSTERS[a.defId]?.passive || MONSTERS[a.defId]?.noObjective)));
   }
 

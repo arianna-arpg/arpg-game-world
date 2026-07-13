@@ -3,25 +3,29 @@
 //
 // When the player first enters an UNCHARTED zone, this field decides ONCE (a seeded,
 // gated roll) whether that zone raises a fortified LOCKED bonus exit, which guardian
-// holds it (a HoldfastDef from the registry), and where the exit sits (a randomized
+// holds it (a HoldfastDef from the registry — only guardians whose `dims` band
+// claims the zone's dimension may roll), and where the exit sits (a randomized
 // off-cardinal locale). It then REMEMBERS that decision + the live lock state
 // (sealed → open, or slaughtered → failed) for the whole run, surviving leaving the
 // zone AND the Campfire refresh — the only home that does (mirrors ConclaveField).
 //
 // PURE of the engine: it owns the decision + the durable state; the engine reads
 // infoFor()/isLocked() to append the exit, raise the gate + wardens, and resolve the
-// dwell-pay / kill, calling unlock()/markFailed() back. It never spawns or mints.
+// dwell-pay / kill, calling unlock()/markFailed() back. It never spawns or mints —
+// the pocket behind the gate mints through the ORDINARY frontier path (World
+// .mintHoldfastPocket via chartFrontier), on the same eager/lazy timing as any exit.
 // ---------------------------------------------------------------------------
 
 import { clamp } from '../../core/math';
 import { Rng } from '../../core/rng';
 import type { ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
+import { META_CURRENCY_LABEL } from '../../meta/account';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import type { OverlayBuildCtx, PackageGate } from '../types';
-import type { HoldfastDef, HoldfastDest, HoldfastSurge } from '../holdfast';
+import { holdfastTollCost, unlockImplemented, type HoldfastDef, type HoldfastSurge } from '../holdfast';
 
 /** FNV-1a string hash (per-zone seed salt; mirrors registry.ts hashId). */
 function hashStr(s: string): number {
@@ -48,8 +52,6 @@ export interface HoldfastInfo {
   exitDefIndex: number;
   /** The discovery ledger was bumped (once per holdfast, not per re-muster). */
   seenBumped?: boolean;
-  /** drop-to-choose: the surrendered gem's theme override, applied when the dest mints. */
-  destOverride?: HoldfastDest;
   /** The KEPT-ROAD roll (once, stable across re-musters and reloads): whether
    *  this holdfast's zone annotates its exit with the guardian's road spec, so
    *  generation carves a traveled way to the gate (World.exitRoadAnnotations). */
@@ -65,6 +67,9 @@ export class HoldfastField implements WorldOverlay {
   private readonly seed: number;
   private readonly gate: () => PackageGate;
   private readonly cfg: HoldfastSurge;
+  /** Every guardian's neutralTag (the engine's ambient/objective exclusions
+   *  read this — a new guardian def is ambient-exempt with zero engine edits). */
+  private readonly tags: Set<string>;
   /** zoneId → decided info, or null = "rolled, no holdfast here" (so it never re-rolls). */
   private infos = new Map<string, HoldfastInfo | null>();
 
@@ -72,6 +77,7 @@ export class HoldfastField implements WorldOverlay {
     this.seed = ctx.seed;
     this.gate = ctx.gate;
     this.cfg = surge;
+    this.tags = new Set(surge.defs.map(d => d.guardian.neutralTag));
   }
 
   // --- WorldOverlay (this field is a STATE STORE; the engine drives the runtime) ---
@@ -88,6 +94,10 @@ export class HoldfastField implements WorldOverlay {
   /** A guardian def by id. */
   def(defId: string): HoldfastDef | undefined { return this.cfg.defs.find(d => d.id === defId); }
 
+  /** Every registered guardian's neutralTag — the engine's ambient-tag and
+   *  rouse-rule fabrics consult this instead of hardcoding tag literals. */
+  guardianTags(): ReadonlySet<string> { return this.tags; }
+
   /** DECIDE ONCE whether this zone hosts a holdfast (seeded + gated). Returns the
    *  durable info (a mutable ref the engine records the appended exit index onto), or
    *  null. Re-entry returns the same stored decision — never a re-roll. `density` is
@@ -99,7 +109,7 @@ export class HoldfastField implements WorldOverlay {
     const g = this.gate();
     const rng = new Rng((this.seed ^ hashStr(zone.id)) >>> 0);
     if (g.active && rng.chance(clamp(this.cfg.openChance * g.ignitionMul * density, 0, 1))) {
-      const def = this.pickDef(zone.level, rng);
+      const def = this.pickDef(zone, rng);
       if (def) {
         const side = (['n', 's', 'e', 'w'] as const)[rng.int(0, 3)];
         const at = rng.pick(this.cfg.exitLocales); // OFF-CENTER — the randomized, non-cardinal locale
@@ -126,24 +136,18 @@ export class HoldfastField implements WorldOverlay {
     return !!i && i.locked && (!lockId || i.lockId === lockId);
   }
 
-  /** Open the gate (toll met) — optionally carrying the chosen-gem dest theme. */
-  unlock(zoneId: string, dest?: HoldfastDest): void {
+  /** Open the gate (toll met). */
+  unlock(zoneId: string): void {
     const i = this.infos.get(zoneId);
     if (!i || !i.locked) return;
     i.locked = false;
     i.resolved = 'open';
-    if (dest) i.destOverride = dest;
   }
 
   /** The wardens were slaughtered and the gate did NOT burst — sealed for the run. */
   markFailed(zoneId: string): void {
     const i = this.infos.get(zoneId);
     if (i && i.locked) i.resolved = 'failed';
-  }
-
-  /** The dest theme override for a paid drop-to-choose holdfast (chartFrontier reads it). */
-  destOverrideFor(zoneId: string): HoldfastDest | null {
-    return this.infos.get(zoneId)?.destOverride ?? null;
   }
 
   /** Read-only snapshot of SEALED holdfasts for the map markers / zone-info / tests. */
@@ -171,7 +175,9 @@ export class HoldfastField implements WorldOverlay {
    *  save degrades to null (the zone simply hosts nothing — never a re-roll
    *  into a DIFFERENT guardian, which could double-append an exit); malformed
    *  rows drop. exitAppended/exitDefIndex ride verbatim — the zone graph that
-   *  carries the appended exit is saved/restored alongside us. */
+   *  carries the appended exit is saved/restored alongside us. (An old save's
+   *  decorCampfire / destOverride keys are simply ignored — the campfire is
+   *  gate dress now, and the retired gem-bargain no longer steers the mint.) */
   restore(snap: unknown): void {
     const s = snap as { infos?: unknown } | null;
     if (!s || !Array.isArray(s.infos)) return;
@@ -194,8 +200,7 @@ export class HoldfastField implements WorldOverlay {
         exitAppended: !!i.exitAppended,
         exitDefIndex: typeof i.exitDefIndex === 'number' && Number.isFinite(i.exitDefIndex) ? i.exitDefIndex : -1,
         ...(i.seenBumped ? { seenBumped: true } : {}),
-        ...(i.destOverride && typeof i.destOverride === 'object' ? { destOverride: { ...i.destOverride } } : {}),
-        decorRoad: !!i.decorRoad, // (an old save's decorCampfire key is simply ignored)
+        decorRoad: !!i.decorRoad,
       });
     }
   }
@@ -210,7 +215,12 @@ export class HoldfastField implements WorldOverlay {
     const existing = this.infos.get(zone.id);
     if (existing && existing.locked) return existing; // re-pressing reuses the live gate (no duplicate exit)
     const rng = new Rng((this.seed ^ hashStr(zone.id) ^ 0x77) >>> 0);
-    const def = this.pickDef(zone.level, rng) ?? this.cfg.defs[0];
+    // QA may skip the LEVEL band (force a gate anywhere useful) but never the
+    // DIMENSION law — a bandit palisade forced into hell would QA a state the
+    // real roll can never produce. No def claims this plane → nothing forces.
+    const dim = zone.dimension ?? 'surface';
+    const def = this.pickDef(zone, rng)
+      ?? this.cfg.defs.find(d => unlockImplemented(d.unlock) && (d.dims ?? ['surface']).includes(dim));
     if (!def) return null;
     const side = (['n', 's', 'e', 'w'] as const)[rng.int(0, 3)];
     const at = rng.pick(this.cfg.exitLocales);
@@ -225,14 +235,17 @@ export class HoldfastField implements WorldOverlay {
 
   // --- internals -------------------------------------------------------------
 
-  /** Weighted pick from the guardian defs whose level band fits this zone. Only defs
-   *  whose unlock + reward kinds are IMPLEMENTED roll — a future half-wired guardian
-   *  (pay-currency / cull-faction / temp-vendor …) stays dormant rather than failing
-   *  open (silently seizing a gem via the pay-gem path). Fail SAFE, not open. */
-  private pickDef(zoneLevel: number, rng: Rng): HoldfastDef | null {
+  /** Weighted pick from the guardian defs whose DIMENSION band + level band fit
+   *  this zone. Only defs whose unlock + reward kinds are IMPLEMENTED roll
+   *  (unlockImplemented — the one shared predicate): a future half-wired
+   *  guardian stays dormant rather than failing open. Fail SAFE, not open —
+   *  and a plane no def claims never raises a gate at all. */
+  private pickDef(zone: ZoneDef, rng: Rng): HoldfastDef | null {
+    const dim = zone.dimension ?? 'surface';
     const pool = this.cfg.defs.filter(d =>
-      d.unlock.kind === 'pay-gem' && d.reward.kind === 'open-exit'
-      && zoneLevel >= d.minLevel && (d.maxLevel === undefined || zoneLevel <= d.maxLevel));
+      unlockImplemented(d.unlock) && d.reward.kind === 'open-exit'
+      && (d.dims ?? ['surface']).includes(dim)
+      && zone.level >= d.minLevel && (d.maxLevel === undefined || zone.level <= d.maxLevel));
     if (!pool.length) return null;
     let total = 0;
     for (const d of pool) total += d.weight;
@@ -261,8 +274,14 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   const info = world.sim.holdfastField?.infoFor(zoneId);
   if (!info || !info.locked || info.resolved === 'failed') return [];
   const def = world.sim.holdfastField?.def(info.defId);
+  // Price the toll on the panel (an essence gate advertises its ask — the
+  // player weighs the purse against the pocket before walking back).
+  const level = world.zoneMap[zoneId]?.level ?? 1;
+  const ask = def && def.unlock.kind === 'pay-currency' && def.unlock.currency === 'mortal'
+    ? `the wardens ask ${holdfastTollCost(def, level)} ${META_CURRENCY_LABEL}`
+    : 'deal with the guardians';
   return [{
     kind: 'event', icon: def?.marker?.glyph ?? '⚑', color: def?.marker?.color ?? '#c8a04a',
-    label: def?.name ?? 'Holdfast', detail: 'a sealed bonus path — deal with the guardians', z: 12,
+    label: def?.name ?? 'Holdfast', detail: `a sealed side-pocket — ${ask}`, z: 12,
   }];
 });

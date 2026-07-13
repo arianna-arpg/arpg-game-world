@@ -165,6 +165,9 @@ export interface RegistryLookups {
   boundaryGate(id: string): boolean;
   sidezone(id: string): boolean;
   biome(id: string): boolean;
+  /** A registered DIMENSION id (world/dimensions.ts; 'surface' included) —
+   *  holdfast dims bands and future plane-scoped defs resolve here. */
+  dimension(id: string): boolean;
 }
 
 // --- relationships (faction stance overrides + inter-package interaction) ----
