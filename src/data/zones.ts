@@ -16,6 +16,7 @@
 
 import type { MonsterRarity } from '../engine/rarity';
 import type { PresenceSpec } from '../engine/presence';
+import type { ZoneFogSpec } from '../engine/fog';
 
 /** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
  *  a weight-vs-level envelope — or a named band — deciding how present this
@@ -278,6 +279,12 @@ export interface ZoneTheme {
    *  the winter AURORA, drifting fungal SPORES. Screen-space, stateless,
    *  data-extensible. */
   ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores'; intensity?: number; color?: string }[];
+  /** LIVING FOG (the fog fabric, engine/fog.ts): which fog KINDS this zone
+   *  breathes and how many banks roll per visit. Banks drift, coil, breathe
+   *  and dissipate; standing in live fog grants the kind's statuses — the
+   *  drawn shape IS the hit surface. Rolled on a SALTED stream (never moves
+   *  layout rng). No spec = only sky-born mist under a 'fog' weather front. */
+  fog?: ZoneFogSpec;
   /** BIOME HEAT (0 = frozen … 1 = scorching; default 0.5 temperate) — the
    *  melt-rate lever for SNOW ACCUMULATION (World.updateSnow): a frozen
    *  theme keeps a permanent snow floor and lets snowfall deepen it; a hot

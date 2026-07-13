@@ -48,6 +48,7 @@ import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, crownSprite, crownVariantOf, 
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
+import { drawFogLayer } from './vis/fogLayer';
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
@@ -190,6 +191,11 @@ export class Renderer {
     this.drawAmalgamPicks(world);  // the Bonewright's body-part choice spots
     this.drawCampfireHint(world);  // "linger to refresh" prompt by the town campfire
     this.drawExits(world);
+    // THE LIVING FOG, body pass (vis/fogLayer.ts): under actors and combat
+    // telegraphs — the terrain mists over, the fight stays readable.
+    if (world.fog && !VIS_ABLATE.has('fog')) {
+      drawFogLayer(this.ctx, world.fog, 'under', this.cam.x, this.cam.y, vw, vh);
+    }
     this.drawZones(world);
     this.drawDeathBursts(world);   // coalescing spore/orb gather + the tracking volatile orb
     this.drawEncounters(world);    // breach diamonds + their growing fields (under actors)
@@ -209,6 +215,11 @@ export class Renderer {
     }
     this.drawProjectiles(world);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
+    // THE LIVING FOG, tall pass: the lifted share of each bank wraps bodies
+    // walking deep inside — over crowns, still under roofs and labels.
+    if (world.fog && !VIS_ABLATE.has('fog')) {
+      drawFogLayer(this.ctx, world.fog, 'over', this.cam.x, this.cam.y, vw, vh);
+    }
     this.drawRoofs(world);         // structure roofs: interiors reveal only when you're inside
     this.drawLabels(world);        // actor text (names/prompts) — above the fades, visibility-gated
     this.drawEliteNameHover(world); // cursor nameplate — same layer, same concealment rule

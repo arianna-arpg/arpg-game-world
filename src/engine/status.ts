@@ -195,12 +195,22 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     hitMagnitude: 0.45, baseline: { dps: 2, perLevel: 0.9 },
     pop: { fraction: 0.4 },
   },
-  /** FOG-VEILED (the fog_bank region): the murk swallows your outline —
-   *  detectability drops while you stand deep in it. Refreshed per tick
-   *  standing in fog; the short duration is the linger when stepping out. */
+  /** FOG-VEILED (the FOG FABRIC, engine/fog.ts): the murk swallows your
+   *  outline — detectability drops while you stand in LIVE fog (a bank's
+   *  drawn lobes are its hit surface; dissipated edges grant nothing).
+   *  Refreshed while inside; the short duration is the linger stepping out. */
   fogveiled: {
     label: 'Fog-Veiled', color: '#b8c4cc', duration: 1.2,
     mods: [mod('detectability', 'more', -0.35)],
+  },
+  /** MIST-FED (the fog fabric): dead things DRINK the fog — grave-mist and
+   *  gloam-shroud banks grant this to their own kind (FogGrant faction
+   *  filters), so the murk is territory, not decoration. The counterplay
+   *  writes itself: bait them out of the bank, or ride the same fog veiled
+   *  and cut the fight loose from the weather. Refresh/linger idiom. */
+  mistfed: {
+    label: 'Mist-Fed', color: '#9fc9a9', duration: 1.6,
+    mods: [mod('damage', 'increased', 0.12), mod('lifeRegen', 'flat', 3)],
   },
   /** CANOPIED (the veil system, engine/veil.ts): the leaves swallow your
    *  outline — detectability drops while you stand under an unbroken crown.

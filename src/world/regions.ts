@@ -266,11 +266,8 @@ registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'th
 // ROAD: a packed gravel path — a VERY mild move-speed boost (moveScale, NOT a status, so
 // there's no status icon for so minor an effect). The first consumer of the moveScale seam.
 registerRegion({ id: 'road', walkable: true, blocks: false, label: 'the road', moveScale: 1.04 });
-// FOG BANK: volumetric drifting murk (canopy-layer clouds fade near the hero).
-// Standing DEEP in it veils you — detectability drops while the fog holds
-// (fogveiled status) — the graphics ARE the stealth here.
-registerRegion({ id: 'fog_bank', walkable: true, blocks: false, label: 'the fog', standStatus: 'fogveiled',
-  enterText: { text: 'veiled…', color: '#b8c4cc' } });
+// (fog_bank region RETIRED: volumetric fog is the LIVING fog fabric now —
+//  engine/fog.ts grants fogveiled from roaming banks; no ground region.)
 // WEBBING: sticky sheets slow like mire (spider country).
 registerRegion({ id: 'web', walkable: true, blocks: false, label: 'the webbing', standStatus: 'mired',
   enterText: { text: 'webbed!', color: '#d8d4c8' } });
@@ -375,6 +372,9 @@ registerRegion({ id: 'parapet', walkable: false, blocks: true, label: 'the parap
   blocksShot: false, blocksSight: false, visual: { fill: '#4a4f5e', alpha: 0.9 } });
 // WINDOW: an arrow-slit in a rampart line. Same policy as parapet (see + shoot
 // through, never walk through) — a distinct id so blueprints, renders, and future
+// rules can tell a slit from a battlement.
+registerRegion({ id: 'window', walkable: false, blocks: true, label: 'the window',
+  blocksShot: false, blocksSight: false, visual: { fill: '#2b3140', alpha: 0.85 } });
 // PALISADE: a staked-timber curtain — the built wall of whoever stacks wood
 // instead of coursing stone (war camps, toll-gates, frontier holdfasts). A
 // TRUE WALL like rampart (stops movement, shots and sight — sharpened stakes
@@ -383,6 +383,3 @@ registerRegion({ id: 'parapet', walkable: false, blocks: true, label: 'the parap
 registerRegion({ id: 'palisade', walkable: false, blocks: true, label: 'the palisade',
   blocksShot: true, blocksSight: true,
   visual: { fill: '#41301b', alpha: 1, edge: { color: '#7a6236', width: 4 } } });
-// rules can tell a slit from a battlement.
-registerRegion({ id: 'window', walkable: false, blocks: true, label: 'the window',
-  blocksShot: false, blocksSight: false, visual: { fill: '#2b3140', alpha: 0.85 } });

@@ -52,6 +52,8 @@ import { liquidIds } from '../engine/genkit';
 import { BIOMES } from '../world/biomes';
 import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
+import { validateFog } from '../engine/fog';
+import './fog'; // side-effect: the fog bank defs register before validation
 import { VOYAGE_ISLANDS } from './voyageIslands';
 import { Rng } from '../core/rng';
 
@@ -199,6 +201,18 @@ export function validateContent(): void {
   // skill, sky-spawnable kinds carry a skyWeight) — the open WeatherKind's
   // safety net, exactly as validateStamps backstops the open StampKind.
   for (const msg of validateWeather(id => !!SKILLS[id])) warn(msg);
+
+  // FOG: every bank's grants name real statuses; every theme fog spec (base
+  // AND variant overrides) names registered banks — the fog fabric's safety
+  // net, same contract as weather above.
+  const fogSpecs: { owner: string; spec: NonNullable<typeof TILESETS[string]['theme']['fog']> }[] = [];
+  for (const t of Object.values(TILESETS)) {
+    if (t.theme.fog) fogSpecs.push({ owner: `tileset '${t.id}'`, spec: t.theme.fog });
+    for (const v of t.variants ?? []) {
+      if (v.theme?.fog) fogSpecs.push({ owner: `tileset '${t.id}' variant '${v.name}'`, spec: v.theme.fog });
+    }
+  }
+  for (const msg of validateFog(id => !!STATUS_DEFS[id], fogSpecs)) warn(msg);
 
   // STRUCTURES: plans resolve their legend, generators exist (and a fixed-seed
   // SAMPLE of each generator def emits only known chars), roof styles resolve,

@@ -192,6 +192,21 @@ export const VIS_CFG = {
      *  may override via WEATHER_FX.fadeIn (a storm can SLAM by design). */
     fadeSec: 5,
   },
+
+  /** THE FOG LAYER (vis/fogLayer.ts — the render half of engine/fog.ts).
+   *  Lobe alphas/motion come from the sim (one truth with the hit test);
+   *  these knobs only shape presentation. Ablate pass name: 'fog'. */
+  fog: {
+    /** Baked billow sprite size (one per fog color, cached). */
+    sprite: 128,
+    /** Density multipliers per pass (art-direction trims, not gameplay). */
+    underMul: 1,
+    overMul: 1,
+    /** View-cull pad beyond each bank's live bound. */
+    cullPad: 240,
+    /** Extra drawn density at full 'fog' weather-front strength. */
+    weatherAlphaBoost: 0.3,
+  },
 } as const;
 
 // --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------

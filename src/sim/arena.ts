@@ -22,6 +22,7 @@ import '../data/landmarks';
 import '../engine/layoutRecipes';
 import '../engine/interiorGen';
 import '../data/compositions';
+import '../data/fog';
 import { validateContent } from '../data/validate';
 import { registerAllPackageFactions } from '../packages/factionGen';
 import { buildManifest } from '../packages/manifest';

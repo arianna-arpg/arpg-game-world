@@ -53,7 +53,8 @@ export type KnownDoodadKind =
   // Biome-expansion terrain (batch 6)
   | 'sand'      // ground overlay: wind-blown grit that slows like mud
   | 'heat_shimmer' // ground overlay: wavering desert air — stacks sunscorch (World.updateHeat)
-  | 'fog_bank'  // ground overlay + canopy clouds: drifting murk that VEILS you (fogveiled)
+  // (fog_bank RETIRED: volumetric fog is the LIVING fog fabric now — roaming
+  //  banks on ZoneTheme.fog, engine/fog.ts — not a stamped doodad.)
   // The doodad kingdom (round 4): biome furniture with playstyle edges.
   | 'dead_tree' // bare snag — solid, no canopy (swamps, wastes, battlefields)
   | 'stump'     // cut bole — blocks feet, NOT shots (logging sites, fell groves)
@@ -837,9 +838,6 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   ice:       { overlap: 'ground', pour: {} },
   sand:      { overlap: 'ground', pour: {} },
   heat_shimmer: { overlap: 'ground', walkOnly: true, forbidOn: ['water', 'chasm'] },
-  // Fog CLOUDS ride the canopy pass (occlude) so the murk covers whoever
-  // stands inside — and parts around the hero like every other crown.
-  fog_bank:  { overlap: 'ground', walkOnly: true, occlude: { pad: 24, alpha: 0.4 } },
   // The doodad kingdom (round 4).
   dead_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, bodyScale: 0.35 },
   stump:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 22 },
@@ -2988,8 +2986,6 @@ registerStamp('brush', (ctx) => stampBlob(ctx, 'brush', [20, 56], [3, 6], false)
 registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
 // Desert heat: shimmering-air patches (sunscorch fields — World.updateHeat).
 registerStamp('heat_shimmer', (ctx, spec) => stampBlob(ctx, 'heat_shimmer', spec.radius ?? [40, 85], [2, 4], false));
-// Volumetric fog: drifting murk banks (fogveiled stealth inside).
-registerStamp('fog_bank', (ctx, spec) => stampBlob(ctx, 'fog_bank', spec.radius ?? [45, 90], [2, 4], false));
 // The doodad kingdom (round 4): singles place like trees; patches blob.
 const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
   (ctx: GenCtx, spec: StampSpec): void => {

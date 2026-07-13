@@ -17,6 +17,7 @@ import './data/landmarks'; // side-effect: registers the geographic landmark rec
 import './engine/layoutRecipes'; // side-effect: registers the composed layout recipes
 import './engine/interiorGen'; // side-effect: registers the interior layouts (dungeon/labyrinth/edifice) + room roles
 import './data/compositions'; // side-effect: registers the whole-zone composition bundles
+import './data/fog'; // side-effect: registers the living fog bank kinds
 import { updateAI } from './engine/ai';
 import { World } from './engine/world';
 import { buildManifest, reconcileManifest, type ExpeditionManifest } from './packages/manifest';

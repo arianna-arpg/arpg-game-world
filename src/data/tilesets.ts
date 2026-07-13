@@ -117,13 +117,16 @@ export const TILESETS: Record<string, TilesetDef> = {
         clearing: { reach: 130, lift: 0.3 },
       },
       nightDark: 0.78,
+      // LIVING FOG (engine/fog.ts): roaming banks replace the old static
+      // fog_bank doodads — the same veil, but now it moves and you move with it.
+      fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
       floor: '#0d150c', grid: '#142112', border: '#2a452a',
       obstacle: '#223c1c', obstacleEdge: '#3a6030', accent: '#8ed45e',
       mud: '#1b2914', chasm: '#030703', water: '#173a4a', wall: '#46371f',
     },
     sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'grove',
     layout: [
-      { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] }, { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [0, 2] },
+      { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [1, 3] }, { kind: 'mushroom_ring', count: [0, 1] },
       { kind: 'charcoal_mound', count: [0, 1] },
       { kind: 'conifers', count: [6, 10] }, { kind: 'ancient_tree', count: [1, 3] },
       { kind: 'trees', count: [14, 20], radius: [14, 28] },
@@ -221,6 +224,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         clearing: { reach: 150, lift: 0.34 },
       },
       nightDark: 0.76,
+      fog: { banks: [1, 2], kinds: [{ id: 'mist', weight: 2 }, { id: 'river_mist' }] },
       floor: '#0f1a0c', grid: '#152413', border: '#2c4a28',
       obstacle: '#254220', obstacleEdge: '#3e6a34', accent: '#9ade66',
       mud: '#1d2b15', chasm: '#040804', water: '#1a3e4e', wall: '#4a3a22',
@@ -237,7 +241,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     layout: [
       { kind: 'log', count: [2, 5] }, { kind: 'stump', count: [2, 4] },
       { kind: 'flowers', count: [1, 3] }, { kind: 'grass', count: [3, 6] },
-      { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [0, 2] },
+      { kind: 'mushroom_ring', count: [0, 1] },
       { kind: 'charcoal_mound', count: [0, 1] }, { kind: 'wayshrine', count: [0, 1] },
       { kind: 'rocks', count: [3, 6], radius: [18, 32] },
       { kind: 'river', count: [0, 1] },
@@ -274,7 +278,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { name: 'briar-snarled', layout: [
         { kind: 'log', count: [2, 4] }, { kind: 'stump', count: [2, 4] },
         { kind: 'thicket', count: [2, 4] }, { kind: 'vines', count: [1, 3] },
-        { kind: 'mushroom_ring', count: [0, 1] }, { kind: 'fog_bank', count: [1, 2] },
+        { kind: 'mushroom_ring', count: [0, 1] },
         { kind: 'rocks', count: [3, 5], radius: [18, 30] },
         { kind: 'bog', count: [0, 1] },
         { kind: 'ruin', count: [0, 1] },
@@ -342,6 +346,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       heat: 0,
       ground: { scale: 1.6, strength: 0.85, speckles: 0.9 },
       ambientFx: [{ kind: 'aurora' }],
+      fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
       floor: '#101820', grid: '#16222c', border: '#2f4a56',
       obstacle: '#263c48', obstacleEdge: '#41667a', accent: '#9adcc8',
       mud: '#8aa8ba', chasm: '#03060b', water: '#1a3e54', wall: '#3a4854',
@@ -363,7 +368,6 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Extra drift where the WORLD runs cold (the baked climate axis): the
       // taiga's frigid heart banks deeper snow than its mild frontier.
       { kind: 'snowdrift', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, max: 0.42 } },
-      { kind: 'fog_bank', count: [1, 3] },
       { kind: 'dead_tree', count: [1, 3] },
       { kind: 'rocks', count: [6, 10], radius: [20, 40] },
       { kind: 'cairn', count: [0, 2] }, { kind: 'boulder_field', count: [0, 1] },
@@ -417,6 +421,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       dayLight: 1.12,
       heat: 0.05,
       ground: { scale: 1.9, strength: 0.9, speckles: 0.7 },
+      fog: { banks: [1, 2], kinds: [{ id: 'mist' }] },
       floor: '#0c1115', grid: '#131c24', border: '#33505f',
       obstacle: '#2a4150', obstacleEdge: '#487086', accent: '#8ed0ec',
       mud: '#93b6c8', chasm: '#03060b', water: '#1c4258', wall: '#3e4c58',
@@ -424,7 +429,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     sizeW: [2600, 3600], sizeH: [1700, 2500], ellipseChance: 0.3, biome: 'tundra',
     layout: [
       { kind: 'snowdrift', count: [5, 9], where: { field: 'noise', max: 0.47, params: { scale: 640, seed: 3 } } },
-      { kind: 'geyser', count: [0, 2] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [1, 3] },
+      { kind: 'geyser', count: [0, 2] }, { kind: 'dead_tree', count: [1, 3] },
       { kind: 'conifers', count: [8, 14] },
       { kind: 'rocks', count: [8, 14], radius: [22, 46] },
       { kind: 'cairn', count: [1, 2] }, { kind: 'scree', count: [1, 3] },
@@ -731,13 +736,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Bog', 'Fen', 'Marsh', 'Sloughs', 'Swale', 'Lowland', 'Sump', 'Wetland', 'Quag', 'Reeds', 'Shallows', 'Sink', 'Morass', 'Hollow', 'Reach', 'Mudflat'],
     theme: {
       ground: { scale: 1.35, strength: 1.15 },
+      // The mire's fog ROLLS: river_mist anchors on the blackwater and
+      // drifts its banks — walk with it and the veil holds.
+      fog: { banks: [2, 4], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
       floor: '#10140e', grid: '#18201a', border: '#3a4a38',
       obstacle: '#2a3a2c', obstacleEdge: '#46603e', accent: '#8ab060',
       mud: '#1c2a16', water: '#1a3a30', tree: '#2a4a2a',
     },
     sizeW: [2300, 3200], sizeH: [1600, 2300], ellipseChance: 0.2, biome: 'grave',
     layout: [
-      { kind: 'dead_tree', count: [4, 8] }, { kind: 'reeds', count: [2, 4] }, { kind: 'fog_bank', count: [2, 4] }, { kind: 'web', count: [0, 2] },
+      { kind: 'dead_tree', count: [4, 8] }, { kind: 'reeds', count: [2, 4] }, { kind: 'web', count: [0, 2] },
       { kind: 'swamp', count: [3, 5] },
       { kind: 'bog', count: [2, 4] },
       { kind: 'water', count: [1, 2] },
@@ -1218,13 +1226,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Forsaken', 'Mouldering', 'Sepulchral', 'Grave-Still', 'Ossuary', 'Tombshadow', 'Gravecold', 'Bonewreathed', 'Restless', 'Coffinwood', 'Palewatch', 'Sunkengrave', 'Gloomtomb', 'Ash-Interred', 'Mortwood', 'Wraithgrey', 'Cryptgloom', 'Deathwatch'],
     nameSecond: ['Crypt', 'Necropolis', 'Barrows', 'Catacomb', 'Tombs', 'Restless Field', 'Sepulchre', 'Graveyard', 'Mausoleum', 'Vaults', 'Boneyard', 'Reliquary', 'Charnel', 'Hollow', 'Tomb-Row', 'Gravefield'],
     theme: {
+      // Grave-mist pools among the headstones and FEEDS the dead (mistfed).
+      fog: { banks: [1, 2], kinds: [{ id: 'grave_mist' }] },
       floor: '#0d0d12', grid: '#16161f', border: '#3a3a52',
       obstacle: '#2e2e44', obstacleEdge: '#50506e', accent: '#b090d8',
       mud: '#1a1a24', water: '#1c2030',
     },
     sizeW: [2000, 2900], sizeH: [1500, 2200], ellipseChance: 0.15, biome: 'grave',
     layout: [
-      { kind: 'bone_pile', count: [3, 6] }, { kind: 'brazier', count: [1, 3] }, { kind: 'web', count: [1, 3] }, { kind: 'fog_bank', count: [1, 2] }, { kind: 'dead_tree', count: [2, 4] },
+      { kind: 'bone_pile', count: [3, 6] }, { kind: 'brazier', count: [1, 3] }, { kind: 'web', count: [1, 3] }, { kind: 'dead_tree', count: [2, 4] },
       { kind: 'weathered_statue', count: [0, 2] }, { kind: 'gallows', count: [0, 1] },
       { kind: 'tombstone', count: [14, 22] },
       { kind: 'ruin', count: [2, 3] },
@@ -1284,6 +1294,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Sanctum', 'Vaults', 'Galleries', 'Reliquary', 'Bonefields', 'Cloister', 'Undercroft', 'Chambers', 'Tiers', 'Repository', 'Rotunda', 'Stacks', 'Cists', 'Wells', 'Procession', 'Charnel'],
     theme: {
       ambientDark: 0.22,
+      fog: { banks: [1, 2], kinds: [{ id: 'grave_mist' }] },
       floor: '#171310', grid: '#201b16', border: '#5a5142',
       // Obstacle = BONE: the generic rock/cliff stamps reskin into pale
       // knuckle-rubble and bone bluffs with zero painter edits.
@@ -1316,7 +1327,6 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'rocks', count: [4, 6], radius: [14, 26] },
       { kind: 'formation', count: [1, 2], formation: 'charnel_dunes' },
       { kind: 'formation', count: [0, 1], formation: 'reliquary_rows' },
-      { kind: 'fog_bank', count: [1, 2] },
     ],
     variants: [
       // The open face: rolling dunes of the counted dead, pits where the
@@ -1328,7 +1338,6 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'formation', count: [2, 3], formation: 'charnel_dunes' },
         { kind: 'rib_arch', count: [2, 4] },
         { kind: 'rocks', count: [2, 4], radius: [14, 26] },
-        { kind: 'fog_bank', count: [1, 2] },
       ] },
       // The kept face: ruled corridor-rows of shelf-walls under candle-glow,
       // a processional colonnade — silhouette = straight lines, tight lanes.
@@ -2035,6 +2044,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameSecond: ['Marsh', 'Fen', 'Mire', 'Bog', 'Sump', 'Wetland', 'Slough', 'Quag', 'Reeds', 'Morass', 'Lowwater', 'Shallows', 'Mudflat', 'Sink', 'Hollow', 'Mere'],
     theme: {
       nightDark: 0.72,
+      fog: { banks: [2, 3], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
       ground: { scale: 1.4, strength: 1.15 },
       floor: '#0e140e', grid: '#16201a', border: '#3a5240',
       obstacle: '#2a3a2c', obstacleEdge: '#496a4e', accent: '#8ad08a',
@@ -2042,7 +2052,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     sizeW: [2200, 3000], sizeH: [1600, 2300], ellipseChance: 0.25,
     layout: [
-      { kind: 'reeds', count: [3, 6] }, { kind: 'geyser', count: [1, 3] }, { kind: 'fog_bank', count: [1, 3] }, { kind: 'dead_tree', count: [2, 4] },
+      { kind: 'reeds', count: [3, 6] }, { kind: 'geyser', count: [1, 3] }, { kind: 'dead_tree', count: [2, 4] },
       { kind: 'fern', count: [1, 3] }, { kind: 'fishing_rack', count: [0, 1] },
       { kind: 'bog', count: [3, 5] }, { kind: 'water', count: [2, 4] },
       { kind: 'swamp', count: [2, 3] }, { kind: 'trees', count: [4, 7] },

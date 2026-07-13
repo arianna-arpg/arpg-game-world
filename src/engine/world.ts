@@ -113,6 +113,7 @@ import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../wo
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
+import { buildZoneFog, FOG_CFG, FogField } from './fog';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy } from '../world/dimensions';
@@ -2945,6 +2946,14 @@ export class World {
     // everyone else starts bare and lets the sky decide.
     this.snowCover = (this.zone.theme.heat ?? 0.5) <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
     this.tempGrounds = [];
+    // THE LIVING FOG (engine/fog.ts): banks gather on a SALTED copy of the
+    // layout seed — fog can never advance layout/spawn rng — and roam from
+    // there, transient like all ambient texture. Open-sky zones (no
+    // ambientDark) also breed sky-born mist under a 'fog' weather front.
+    this.fog = buildZoneFog(
+      this.zone.theme.fog, this.currentZoneSeed, this.arena, this.doodads,
+      new Rng((this.currentZoneSeed ^ FOG_CFG.salt) >>> 0),
+      this.zone.theme.ambientDark == null);
     // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
     // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
     const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
@@ -22275,6 +22284,7 @@ export class World {
     this.updatePendingContagions();
     this.updateTerrainEffects(dt);
     this.updateHeat(dt);
+    this.updateFog(dt);
     this.updateShrines();
     this.updateAltars();
     this.updateChests(dt);
@@ -23788,6 +23798,24 @@ export class World {
    *  in heat≤0.05 biomes. Renderer washes the floor + presses pocks by it;
    *  the movement artery slows by it (SNOW_CFG). Transient per visit. */
   snowCover = 0;
+
+  /** THE LIVING FOG this zone breathes (engine/fog.ts): roaming banks whose
+   *  drawn lobes ARE the gameplay surface — statuses granted while inside,
+   *  edges honest as they dissipate. Rebuilt each loadZone (ambient texture,
+   *  never serialized); null where fog can never appear. Renderer draws
+   *  banks under + over actors; dev-inspect via __game.world().fog. */
+  fog: FogField | null = null;
+
+  /** Tick the fog field: drift/coil/dissipate + dress occupants. A 'fog'
+   *  WEATHER front over this zone breeds sky-born banks and thickens the
+   *  authored ones — the node-scale sky and the in-zone banks stay ONE
+   *  weather system end to end. */
+  private updateFog(dt: number): void {
+    if (!this.fog) return;
+    const f = this.sim.weather.sample(this.zone);
+    const k = f?.kind === 'fog' ? f.intensity : 0;
+    this.fog.update(dt, this.time, k, this.actors);
+  }
 
   private updateSnow(dt: number): void {
     const heat = this.zone.theme.heat ?? 0.5;
@@ -28298,8 +28326,8 @@ export class World {
         soft = { kind: 'road', deep: false }; // benign — only when no nastier ground covers the point
       } else if (!soft && regionKind(d.kind)) {
         // REGISTRY FALLBACK: any OTHER ground kind with a RegionKind row
-        // (fog_bank's veil, webbing's mire, the reeds' concealment — and
-        // every future package kind) reports itself without joining this
+        // (webbing's mire, the reeds' concealment — and every future
+        // package kind) reports itself without joining this
         // hand-priority chain. Registered = sensed.
         soft = { kind: d.kind, deep: false };
       }

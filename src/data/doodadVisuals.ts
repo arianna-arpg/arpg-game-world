@@ -205,13 +205,8 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'shimmer', order: 34,
     params: { color: '#ffe8c0' },
   },
-  /** Volumetric fog: a faint floor wash here; the swirling BILLOWS ride the
-   *  canopy pass (fogCloud) so the murk covers whoever stands inside. */
-  fog_bank: {
-    painter: 'fogFloor', order: 36,
-    params: { color: '#aab6c2' },
-    canopy: { painter: 'fogCloud', params: { fill: '#aab6c2' } },
-  },
+  // (fog_bank visuals RETIRED: volumetric fog is the LIVING fog fabric —
+  //  render/vis/fogLayer.ts draws roaming banks; no doodad entry.)
 
   // --- The doodad kingdom (round 4) ----------------------------------------
   flowers: {
