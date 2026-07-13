@@ -17,6 +17,7 @@ import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
 import { BOSS_BAR_XP_MIN, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
+import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
@@ -256,6 +257,7 @@ export class Renderer {
     this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
     this.drawEncounterHud(world); // breach timer bar (screen-space)
     this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
+    this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
     this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
     this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
@@ -788,17 +790,21 @@ export class Renderer {
     const frac = run.maxTimer > 0 ? clamp(run.timer / run.maxTimer, 0, 1) : 0;
     const chasing = run.phase === 'fissure' && !world.player.dead && !world.player.downed
       && dist(world.player.pos, run.head) <= (world.sim.fractureField?.surge().chaseRadius ?? 150) + world.player.radius;
+    // Freshly surfaced after a divert: the arrival grace holds the clock while
+    // the player crosses the zone — the bar reads "held", not "you're losing".
+    const surfaced = run.phase === 'fissure' && !chasing && run.grace > 0;
     const label = run.phase === 'chasm'
       ? `Chasm ${run.chasmsSealed + 1}/${run.chasmsTarget} — clear it!`
-      : chasing ? 'Fissure — chasing (timer held)' : 'Fissure — closing!';
+      : chasing ? 'Fissure — chasing (timer held)'
+        : surfaced ? 'Fracture surfaced — run it down! (timer held)' : 'Fissure — closing!';
     ctx.textAlign = 'center';
     ctx.font = 'bold 13px Verdana';
     ctx.fillStyle = run.color;
     ctx.fillText(label, w / 2, by - 6);
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(bx, by, bw, bh);
-    // Held (chasing) = steady faction violet; draining = warm → red as it empties.
-    if (chasing) {
+    // Held (chasing / surfaced grace) = steady faction violet; draining = warm → red.
+    if (chasing || surfaced) {
       ctx.fillStyle = run.color;
     } else {
       const r = Math.round(150 + (1 - frac) * 90), g = Math.round(70 + frac * 110);
@@ -807,6 +813,55 @@ export class Renderer {
     ctx.fillRect(bx, by, bw * frac, bh);
     ctx.strokeStyle = '#0a0a0e'; ctx.lineWidth = 1;
     ctx.strokeRect(bx, by, bw, bh);
+  }
+
+  /** ATTENTION POINTERS (world/attention.ts): a screen-edge chevron + glyph disc
+   *  toward every registered must-find point that is currently OFF-screen — the
+   *  in-zone counterpart of the world-map markers. On-screen targets draw nothing
+   *  (their own world visuals carry it). Generic pass: features join by
+   *  registerAttentionSource, never by editing this. */
+  private drawAttentionPointers(world: World): void {
+    const pts = collectAttention(world);
+    if (!pts.length) return;
+    const { ctx, canvas } = this;
+    const w = canvas.width, h = canvas.height;
+    const m = ATTENTION_CFG.margin, slack = ATTENTION_CFG.onScreenSlack;
+    const t = world.time;
+    for (const p of pts) {
+      const s = this.toScreen(p.pos);
+      if (s.x >= -slack && s.x <= w + slack && s.y >= -slack && s.y <= h + slack) continue; // visible — the world owns it
+      const cx = clamp(s.x, m, w - m), cy = clamp(s.y, m, h - m);
+      const ang = Math.atan2(s.y - cy, s.x - cx);
+      const pulse = 0.72 + 0.28 * Math.sin(t * 5);
+      ctx.save();
+      ctx.translate(cx, cy);
+      // The chevron: a small wedge just past the disc, aimed along the true bearing.
+      ctx.rotate(ang);
+      ctx.globalAlpha = 0.92 * pulse;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.moveTo(24, 0); ctx.lineTo(13, -8); ctx.lineTo(13, 8); ctx.closePath();
+      ctx.fill();
+      ctx.rotate(-ang);
+      // The disc + glyph (matches the event's map-marker identity).
+      ctx.globalAlpha = 0.88;
+      ctx.fillStyle = 'rgba(10,10,14,0.8)';
+      ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = p.color; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(0, 0, 13, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.font = '12px Verdana'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.glyph, 0, 1);
+      // The label, on the screen-centre side of the disc (never off the edge).
+      if (p.label) {
+        ctx.font = '10px Verdana'; ctx.textBaseline = 'alphabetic';
+        ctx.textAlign = cx < 110 ? 'left' : cx > w - 110 ? 'right' : 'center';
+        ctx.globalAlpha = 0.85;
+        ctx.fillText(p.label, 0, cy < h / 2 ? 30 : -22);
+      }
+      ctx.restore();
+    }
   }
 
   /** Status-ailment screen overlays — EDGE-hugging so the centered HUD stays

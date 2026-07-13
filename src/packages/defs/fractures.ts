@@ -74,7 +74,8 @@ const FRACTURE_SURGE: FractureSurge = {
   zoneSpan: [2, 4],         // origin + diverts — the fracture crosses 2-4 zones
   chasmsPerZone: [2, 3],    // chasms to clear in a zone before it diverts onward
   baseTimer: 30,            // the origin zone's nested timer (s)
-  divertTimer: 40,          // a diverted zone refreshes to this (longer) timer
+  divertTimer: 55,          // a diverted zone refreshes to this (longer) timer
+  divertGrace: 45,          // a diverted surface HOLDS its clock this long (or until first engaged)
   fissureSpeed: 72,         // px/s the head crawls while you chase it
   chaseRadius: 155,         // stay within this of the head to advance it / pause the timer
   fissureSpawnInterval: [1.6, 2.6], // trickle of crawl-out foes by the moving head

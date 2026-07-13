@@ -29,6 +29,7 @@ import { Rng } from '../../core/rng';
 import type { ArenaSpec } from '../../data/arenas';
 import { FACTIONS } from '../../data/monsters';
 import type { World } from '../../engine/world';
+import { registerAttentionSource, type AttentionPoint } from '../../world/attention';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
 import { eventTargetable } from '../../world/zonePolicy';
@@ -80,6 +81,12 @@ export interface FractureSurge {
   baseTimer: number;
   /** A DIVERTED zone refreshes to this (longer, more forgiving) timer. */
   divertTimer: number;
+  /** ARRIVAL GRACE (s): a diverted fracture surfaces ALREADY LIVE, but its
+   *  collapse clock holds this long — or until the player first engages the
+   *  head (chaseRadius), whichever first — so the player who chased it into a
+   *  fresh zone always gets a fair window to CROSS that zone and find it. A
+   *  run-over origin trigger never uses this (the player is standing on it). */
+  divertGrace: number;
   /** Fissure crawl speed (px/s) while the player chases its head. */
   fissureSpeed: number;
   /** Player must be within this radius of the head to advance it (the chase). */
@@ -465,6 +472,36 @@ registerMarkerSource((world: World): MapMarker[] => {
       glyph: '✷', fill: '#0a0410', stroke: r.color, text: r.color, r: 11,
       title: `A ${r.variant} RIFT awaits — a champion stirs within`, fog: 'always', z: 19,
     });
+  }
+  return out;
+});
+
+// --- in-zone attention pointers (world/attention.ts — same zero-edit contract) --
+//
+// The map marker says which ZONE the fracture is in; these edge chevrons say
+// where in THIS zone — the live run's current focus (the volatile object, the
+// crawling head, the open chasm) and any pending rift portal. Without them a
+// diverted fracture that surfaced across an uncrossed zone was a draining timer
+// the player couldn't find — the "it never spawned" bug this pass retires.
+registerAttentionSource((world: World): AttentionPoint[] => {
+  const out: AttentionPoint[] = [];
+  const run = world.fractureView();
+  if (run && run.phase !== 'done') {
+    if (run.phase === 'dormant') {
+      out.push({ id: `fracture-run-${run.id}`, pos: run.origin, color: run.color, glyph: '🕳', label: 'a volatile fracture', z: 6 });
+    } else if (run.phase === 'fissure') {
+      out.push({
+        id: `fracture-run-${run.id}`, pos: run.head, color: run.color, glyph: '🕳',
+        label: run.grace > 0 ? 'the fracture — run it down!' : 'the fissure — chase it!', z: 8,
+      });
+    } else if (run.phase === 'chasm' && run.chasm) {
+      out.push({ id: `fracture-run-${run.id}`, pos: run.chasm, color: run.color, glyph: '🕳', label: 'the chasm — clear it!', z: 8 });
+    }
+  }
+  // A pending rift's portal, in the zone you're standing in (too rare to lose
+  // to a missed glance — its map marker already pulls you to the zone).
+  for (const r of world.fractureRiftsView()) {
+    out.push({ id: `fracture-rift-${r.variant}`, pos: r.pos, color: r.color, glyph: '✷', label: `the ${r.variant} rift`, z: 7 });
   }
   return out;
 });

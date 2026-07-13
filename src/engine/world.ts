@@ -1344,6 +1344,12 @@ export interface FractureRun {
    *  them in a walled zone). When it can't make progress, the chasm ERUPTS where the
    *  head stands — so a fissure can never crawl forever (the permanent-fracture bug). */
   stuck: number;
+  /** ARRIVAL GRACE (a diverted surface only): seconds the freshly-surfaced fissure
+   *  waits before its collapse clock arms — the player still has to CROSS the zone
+   *  to reach it, and a timer that drains before they could possibly have seen the
+   *  fracture reads as "it never spawned". Spent by first engagement (entering
+   *  chaseRadius) or by expiry, whichever first; 0 = armed (normal nested rules). */
+  grace: number;
 }
 
 /** The live, in-zone runtime of the UNMADE boss fight — the choreography state for
@@ -3850,10 +3856,16 @@ export class World {
     return this.clampPos(vec(cx, 90), 16);
   }
 
+  /** Compass label for the direction of `to` as seen from `from` (screen N = top) —
+   *  the shared bearing every "…from the north!" announce derives from. */
+  private bearingOf(from: Vec2, to: Vec2): string {
+    const dx = to.x - from.x, dy = to.y - from.y;
+    return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'north' : 'south') : (dx < 0 ? 'west' : 'east');
+  }
+
   /** Compass label for a point relative to the arena centre (screen N = top). */
   private compassFrom(at: Vec2): string {
-    const dx = at.x - this.arena.w / 2, dy = at.y - this.arena.h / 2;
-    return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'north' : 'south') : (dx < 0 ? 'west' : 'east');
+    return this.bearingOf(vec(this.arena.w / 2, this.arena.h / 2), at);
   }
 
   // ------------------------------------------------------- in-zone encounters
@@ -5658,12 +5670,20 @@ export class World {
       chasm: null, chasmDoodad: null, chasmSpawn: 0, chasmSpawned: new Set(),
       chasmClear: 0, chasmsSealed: 0,
       chasmsTarget: this.fractureRng.int(surge.chasmsPerZone[0], surge.chasmsPerZone[1]),
-      stuck: 0,
+      stuck: 0, grace: 0,
     };
-    // A DIVERTED fracture arrives ALREADY LIVE (the map marker raced you here):
-    // its longer timer is already draining as you close in. The ORIGIN fracture
-    // sits dormant, waiting to be run over.
-    if (info.longerTimer) this.beginFissure(this.fractureRun, 'The fracture surfaces here — run it down!');
+    // A DIVERTED fracture arrives ALREADY LIVE (the map marker raced you here) —
+    // but under its ARRIVAL GRACE: the collapse clock holds until you first close
+    // in (or the grace runs out), so surfacing across a zone you haven't crossed
+    // yet is findable, not a silent fail. The ORIGIN fracture sits dormant,
+    // waiting to be run over.
+    if (info.longerTimer) {
+      this.beginFissure(this.fractureRun, 'The fracture surfaces here — run it down!');
+      // The surface announce above draws at the fissure (likely off-screen);
+      // tell the PLAYER where to run, in their own field of view.
+      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+        `The fracture has surfaced to the ${this.bearingOf(this.player.pos, at)} — run it down! (M)`, info.color, 15);
+    }
   }
 
   /** Run over the volatile object → the fissure erupts (no dwell — it's twitchy). */
@@ -5689,6 +5709,9 @@ export class World {
     run.timer = run.maxTimer;
     run.trickle = 0;
     run.stuck = 0;
+    // Only a DIVERTED surface gets the arrival grace — a run-over trigger starts
+    // with the player standing on the fissure, so its clock is fair immediately.
+    run.grace = run.longerTimer ? surge.divertGrace : 0;
     run.chasmsSealed = 0;
     ff.touch();
     this.flashes.push({ pos: vec(run.origin.x, run.origin.y), radius: 90, color: run.color, life: 0.6, maxLife: 0.6 });
@@ -5707,12 +5730,17 @@ export class World {
       const chasing = !this.player.dead && !this.player.downed
         && dist(this.player.pos, run.head) <= surge.chaseRadius + this.player.radius;
       if (chasing) {
+        run.grace = 0; // first engagement SPENDS the arrival grace — nested rules own it now
         this.advanceFissure(dt, surge);
         run.trickle -= dt;
         if (run.trickle <= 0 && this.fractureFoeCount() < 6) {
           run.trickle = this.fractureRng.range(surge.fissureSpawnInterval[0], surge.fissureSpawnInterval[1]);
           this.spawnFractureFoes(run.head, 1, surge.chasm.radius * 0.5);
         }
+      } else if (run.grace > 0) {
+        // Freshly surfaced after a divert: the collapse clock holds while the
+        // player crosses the zone toward it (grace expires → it arms anyway).
+        run.grace = Math.max(0, run.grace - dt);
       } else {
         run.timer -= dt;
         if (run.timer <= 0) { this.failFracture(); return; }

@@ -22,6 +22,10 @@
 //               a fresh sim reproduces the exact snapshot (roundtrip); two
 //               sims on one seed stay byte-identical (determinism); an
 //               everything-culled prune never throws
+//   fracture    the divert handoff: in transit ⇒ active nowhere; the glide
+//               lands EXACTLY on the destination zone (longer timer); a
+//               mid-transit save resolves to the destination; grace/idle
+//               config coherent (the "never spawned" regression net)
 //   ledger      the unlock contract: every ledger key any unlock/tier READS
 //               is BUMPED somewhere in src/ (source-scan) — no impossible
 //               unlocks; every EncounterLedger key is read by some unlock
@@ -303,6 +307,86 @@ function runSim(seed: number, steps: number): { sim: WorldSim; zoneMap: Record<s
       ['worldBossField.devLair', typeof s.worldBossField?.devLair === 'function'],
     ];
     for (const [name, present] of devSeams) assert(present, 'lifecycle', `dev seam ${name} present`);
+  }
+}
+
+// === 5b. FRACTURE DIVERT LIFECYCLE ===========================================
+// The cross-zone handoff the chase depends on: a diverted fracture is nowhere
+// while its marker glides (nothing may materialize), LANDS exactly on its
+// destination zone when the glide ends (fractureIn surfaces it, longer-timer),
+// and a mid-transit save resolves to the DESTINATION (the glide is theatre).
+// Regression net for "chased it into the next zone and it never spawned".
+console.log('eventqa: fracture divert lifecycle');
+{
+  const { sim, zoneMap, time } = runSim(0xf2ac, 0);
+  const ff = sim.fractureField;
+  if (!ff) {
+    fail('fracture', 'sim.fractureField accessor missing');
+  } else {
+    // The starter seed web is tiny (town + one field zone); a real divert lands
+    // on ground the engine CHARTS on demand (pickRovingDest generates a '?'
+    // frontier). Mirror that: mint a destination node into the QA web.
+    const seedHost = Object.values(zoneMap).find(z => z.objective.kind !== 'safe' && z.caveDepth == null && !z.floating);
+    if (seedHost) {
+      const dest = JSON.parse(JSON.stringify(seedHost)) as ZoneDef;
+      dest.id = 'qa_divert_dest';
+      dest.name = 'QA Divert Destination';
+      zoneMap[dest.id] = dest;
+    }
+    const view = starterView(sim, zoneMap, time);
+    const surge = ff.surge();
+    // Config coherence for the new arrival-grace lever set.
+    assert(surge.divertGrace > 0, 'fracture', `divertGrace is live (${surge.divertGrace}s)`);
+    assert(surge.divertTimer >= surge.baseTimer, 'fracture', 'divertTimer at least as forgiving as baseTimer');
+    assert(surge.travelSeconds > 0, 'fracture', 'travelSeconds positive (the glide exists)');
+    assert(surge.idleLife > surge.travelSeconds + surge.divertGrace, 'fracture',
+      'idleLife outlasts glide + grace (a chased fracture cannot idle out mid-handoff)');
+
+    // Ignite somewhere targetable, then divert to another valid host.
+    let zoneA = '';
+    for (const n of view.nodes) { if (ff.devIgnite(view, n.id)) { zoneA = n.id; break; } }
+    assert(zoneA !== '', 'fracture', 'devIgnite found a targetable starter zone');
+    const zoneB = view.nodes.find(z => z.id !== zoneA && z.caveDepth == null && !z.floating
+      && !z.eventOwned && z.objective.kind !== 'safe')?.id ?? '';
+    assert(zoneB !== '', 'fracture', 'a second valid host exists to divert to');
+    if (zoneA && zoneB) {
+      const origin = ff.fractureIn(zoneA);
+      assert(!!origin && !origin.longerTimer, 'fracture', 'ignited fracture surfaces at its origin (base timer)');
+      const hops0 = ff.peek()?.hopsRemaining ?? 0;
+      assert(hops0 > 0, 'fracture', 'dev-ignited fracture has hops to spend');
+
+      ff.divert(zoneB, { x: 0, y: 0 }, { x: 120, y: 80 });
+      // IN TRANSIT: active nowhere (the engine must not materialize it) but
+      // visibly travelling, and the hop already spent.
+      assert(ff.fractureIn(zoneA) === null && ff.fractureIn(zoneB) === null, 'fracture', 'in transit ⇒ active in NO zone');
+      assert(ff.peek()?.travelPos != null, 'fracture', 'in transit ⇒ the marker glides (travelPos live)');
+      assert((ff.peek()?.hopsRemaining ?? -1) === hops0 - 1, 'fracture', 'divert spends exactly one hop');
+      assert(ff.activityAt(zoneB) === 0, 'fracture', 'no event-activity bloom until it lands');
+
+      // MID-TRANSIT SAVE lands at the destination (snapshot pledge).
+      const snap = ff.snapshot() as { fracture?: { zoneId?: string; diverted?: boolean } };
+      assert(snap.fracture?.zoneId === zoneB && snap.fracture?.diverted === true, 'fracture',
+        'mid-transit snapshot resolves to the destination, diverted');
+      const pkg = PACKAGE_BY_ID['fractures'];
+      const fresh = pkg?.world?.overlay?.({ seed: 0xf2ac, gate: () => INACTIVE_GATE, biomeSeed: 0xf2ac }) as typeof ff | undefined;
+      if (fresh?.restore) {
+        fresh.restore(JSON.parse(JSON.stringify(snap)));
+        const landed = fresh.fractureIn(zoneB);
+        assert(!!landed && landed.longerTimer, 'fracture', 'restored mid-transit save surfaces AT the destination (longer timer)');
+      } else {
+        fail('fracture', 'fractures overlay restore hook missing');
+      }
+
+      // ARRIVAL: step the live overlay past the glide — it must surface in the
+      // destination (and only there), as the longer-timer diverted instance.
+      const steps = Math.ceil((surge.travelSeconds + 0.6) / 0.5);
+      for (let i = 0; i < steps; i++) ff.update(0.5, view);
+      const arrived = ff.fractureIn(zoneB);
+      assert(!!arrived && arrived.longerTimer, 'fracture', 'glide complete ⇒ fracture surfaces in the destination (longer timer)');
+      assert(ff.fractureIn(zoneA) === null, 'fracture', 'origin zone released after the divert');
+      assert(ff.peek()?.travelPos == null, 'fracture', 'arrival clears the glide');
+      assert(ff.activityAt(zoneB) === 1, 'fracture', 'landed fracture feeds the activity bloom');
+    }
   }
 }
 

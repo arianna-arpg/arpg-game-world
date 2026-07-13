@@ -55,15 +55,29 @@ One def file (`src/packages/defs/<id>.ts`) + one registry line
 - **Free surfaces** — `activityAt` (feeds the mycelia bloom), `mapLabel` +
   `renderMap` (map layer chips), `registerMarkerSource` / \
   `registerZoneInfoSource` (map pins + the zone info box),
-  `registerBulletinSource` (world notices — faction conquests and crusade
-  front-shifts already ride it), `registerKillHandler` (bounties; use
-  `Actor.eventKey` to resolve a kill back to its event INSTANCE),
+  `registerAttentionSource` (`world/attention.ts` — IN-zone screen-edge
+  chevrons toward a live must-find point: the map marker says which zone,
+  this says where in it; draws only while the target is off-screen. The
+  fracture run rides it; the hunt beast or a descent shaft can join with one
+  registration), `registerBulletinSource` (world notices — faction conquests
+  and crusade front-shifts already ride it), `registerKillHandler` (bounties;
+  use `Actor.eventKey` to resolve a kill back to its event INSTANCE),
   `registerWorldDrive` (slow meters like vendetta's grudge),
   `registerEdgeBlockSource` (`world/edgeBlocks.ts` — hold a ROAD of the zone
   graph shut at runtime; the travel gate + the sealed-exit hint consult one
   fold. Contract: never cut the charted graph apart — BFS-guard your picks
   like the world-serpent does. Waypoints stay ungated by design). All
   import-time; no engine edits.
+- **Roving-arrival fairness** — an event that lands LIVE in a zone the player
+  has not crossed yet (the fracture's divert is the template) must arm its
+  fail clock fairly: an ARRIVAL GRACE holds the timer until first engagement
+  or a config window expires (`FractureSurge.divertGrace`), and the surface
+  announce speaks at the PLAYER with a bearing, not only at the (likely
+  off-screen) event. A timer that can expire before the player could possibly
+  have seen the event reads as "it never spawned" — eventqa's `fracture`
+  group pins the whole divert handoff (in-transit ⇒ active nowhere, lands
+  exactly on the destination, mid-transit save resolves to the destination,
+  grace/idle coherence).
 - **`devIgnite(view, zoneId)`** — every event exposes a force-spawn the dev
   Events tab drives (eventqa asserts presence). The tab also shows the live
   gate inspector (share/pressure/muls per package).
@@ -89,7 +103,7 @@ One def file (`src/packages/defs/<id>.ts`) + one registry line
 | Gate | What it holds |
 | --- | --- |
 | `npx tsc --noEmit` | the types, incl. the persistence pledge being present |
-| `npm run eventqa` | the eight invariant groups (registry, pledge, gate math, manifest, lifecycle/determinism/restore, ledger contract, zone policy, zone events) |
+| `npm run eventqa` | the nine invariant groups (registry, pledge, gate math, manifest, lifecycle/determinism/restore, fracture divert handoff, ledger contract, zone policy, zone events) |
 | `npm run sim -- baseline check --suite smoke` | combat regression (events off in the arena by design) |
 | `npm run genqa` | any generation your event's tilesets/layouts/compositions touch |
 
