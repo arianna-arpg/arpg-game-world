@@ -9491,6 +9491,111 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 150, weight: 1.5 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.05)] },
   },
+
+  // ==========================================================================
+  // THE GALE FAMILY — wind made a weapon, and made a ROAD. Loot of the
+  // Driftways (the aether_drift biome): skills that shove, hasten, and —
+  // the family's signature — CONJURE WALKABLE CLOUD (the flux fabric's
+  // second half). Over the drift they bridge basins and melted causeways;
+  // over solid land the conjures fizzle free and the wind still cuts.
+  // ==========================================================================
+
+  zephyr_step: {
+    id: 'zephyr_step', name: 'Zephyr Step',
+    description: 'Run WITH the wind for a breath — and the sky remembers where you ran: the dash lays a trail of standing cloud behind it, a bridge at full sprint over any gap the heavens left open. Over honest ground, it is only speed.',
+    tags: ['movement'], color: '#bfe8f4',
+    manaCost: 14, cooldown: 3.5, useTime: 0,
+    delivery: {
+      type: 'dash', distance: 260, speed: 920, width: 0,
+      trailConjure: { radius: 40, duration: 4 },
+    },
+    effects: [],
+    requirements: { dexterity: 16 },
+    minDropLevel: 8,
+    leveling: { perLevel: [mod('cooldownRecovery', 'increased', 0.04)] },
+    thresholds: [
+      { level: 10, label: 'The sky remembers longer', mods: [mod('effectDuration', 'increased', 0.4)] },
+    ],
+  },
+
+  cloudcall: {
+    id: 'cloudcall', name: 'Cloudcall',
+    description: 'Ask the sky for GROUND: a standing cloud gathers where you point, holds a handful of heartbeats, and lets go the way all clouds do. A bridge, a sniper\'s perch past the rim, a rescue under a falling friend — the drift answers, briefly.',
+    tags: ['spell', 'aoe', 'duration'], color: '#cfeaff',
+    manaCost: 22, cooldown: 8, useTime: 0.5,
+    delivery: { type: 'ground', radius: 60, castRange: 480, occlusion: 'free' },
+    effects: [
+      { type: 'conjure', radius: 60, duration: 6 },
+    ],
+    requirements: { willpower: 15 },
+    minDropLevel: 9,
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06), mod('aoeRadius', 'increased', 0.04)] },
+    thresholds: [
+      { level: 12, label: 'A wider answer', mods: [mod('aoeRadius', 'increased', 0.3)] },
+    ],
+  },
+
+  gale_lash: {
+    id: 'gale_lash', name: 'Gale Lash',
+    description: 'A flat whipcrack of compressed air: it cuts, it THROWS, and on the drift a throw is a sentence — the shove that puts a body past a pad\'s edge lets the sky finish the argument.',
+    tags: ['attack', 'aoe', 'physical'], color: '#dce8f4',
+    manaCost: 7, cooldown: 0, useTime: 0.7,
+    baseDamage: { physical: [9, 15] },
+    delivery: { type: 'cone', range: 200, arcDeg: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 60 },
+      { type: 'status', status: 'winded', chance: 0.35 },
+    ],
+    requirements: { strength: 12, dexterity: 12 },
+    minDropLevel: 8,
+    ai: { range: 180, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+    thresholds: [
+      { level: 10, label: 'The wind leans harder', mods: [mod('apply_winded', 'flat', 0.25)] },
+    ],
+  },
+
+  downburst: {
+    id: 'downburst', name: 'Downburst',
+    description: 'Pull a column of high cold air DOWN: a heartbeat of gathering stillness, then the sky lands all at once — flattened grass, thrown bodies, and ears that ring like struck bronze.',
+    tags: ['spell', 'aoe', 'cold', 'duration'], color: '#a8d4e8',
+    manaCost: 24, cooldown: 6, useTime: 0.55,
+    baseDamage: { cold: [14, 22], physical: [6, 10] },
+    delivery: { type: 'ground', radius: 95, castRange: 460, delay: 0.9 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 70 },
+      { type: 'status', status: 'winded', chance: 0.5 },
+    ],
+    requirements: { willpower: 18 },
+    minDropLevel: 10,
+    ai: { range: 420, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  tailwind: {
+    id: 'tailwind', name: 'Tailwind',
+    description: 'Set the wind at every friendly back: for its span, allies inside move like the weather is on their side — because it is. The drift-folk cross whole basins on one good tailwind.',
+    tags: ['spell', 'aura', 'buff', 'aoe', 'duration'], color: '#bfe0f8',
+    manaCost: 25, cooldown: 12, useTime: 0.6,
+    delivery: {
+      type: 'aura', mode: 'duration', duration: 8,
+      aura: {
+        radius: 140,
+        allyMods: [
+          mod('moveSpeed', 'increased', 0.14),
+          mod('attackSpeed', 'increased', 0.06),
+          mod('castSpeed', 'increased', 0.06),
+        ],
+      },
+    },
+    effects: [],
+    requirements: { willpower: 14, dexterity: 12 },
+    minDropLevel: 9,
+    ai: { range: 150, weight: 1.5 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.05)] },
+  },
 };
 
 // THE CONSTRUCT CAPABILITY FOLD: every construct-delivery skill IS

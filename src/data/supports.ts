@@ -1753,6 +1753,59 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 7,
   },
 
+  // --- The GALE gems (the Driftways' wind-craft) ----------------------------
+  crosswind: {
+    id: 'crosswind', name: 'Crosswind',
+    description: 'Lend your shots the wind: they fly a quarter again as fast and SWERVE on the gusts — a flight no shield wall times cleanly. (Reads the flight axes: speed + erraticism; composers compose.)',
+    color: '#bfe0f8', requiresTags: ['projectile'],
+    mods: [
+      mod('projectileSpeed', 'increased', 0.25),
+      mod('erraticPower', 'flat', 3),
+    ],
+    perLevel: [mod('projectileSpeed', 'increased', 0.05)],
+    weight: 7,
+  },
+
+  updraft: {
+    id: 'updraft', name: 'Updraft',
+    description: 'Every blow carries LIFT: struck bodies lose their footing to a rising shove (winded), and your follow-through hits the staggered harder. On shifting ground, a body with no footing is halfway to falling.',
+    color: '#cfe4f0', requiresTags: ['attack'],
+    mods: [
+      mod('apply_winded', 'flat', 0.4),
+      mod('damageVs_winded', 'increased', 0.2),
+    ],
+    perLevel: [mod('apply_winded', 'flat', 0.04), mod('damageVs_winded', 'increased', 0.03)],
+    weight: 7,
+  },
+
+  slipstream: {
+    id: 'slipstream', name: 'Slipstream',
+    description: 'The supported skill leaves wind at your back: each cast grants a stride of slipstream — four deep, gone after a couple of idle heartbeats. Casters who keep moving keep the weather.',
+    color: '#d4ecf8',
+    excludeTags: ['channel', 'aura'],
+    selfStack: {
+      mods: [mod('moveSpeed', 'increased', 0.05)],
+      maxStacks: 4, duration: 2.2, decay: 'all',
+    },
+    mods: [],
+    perLevel: [mod('moveSpeed', 'increased', 0.01)],
+    weight: 6, minDropLevel: 8,
+  },
+
+  cloudborne: {
+    id: 'cloudborne', name: 'Cloudborne',
+    description: 'Teach any movement skill the Zephyr\'s trick: dashes CONJURE standing cloud along their travel; blinks and leaps keep one where you left (the cloudTrail axis — wider and longer-held per level). Over solid land the strides fizzle free; over the open sky, your escape IS the bridge.',
+    // NOTE: the support matrix reads this INERT — an ENVIRONMENTAL false
+    // positive: sim_arena's floor has no conjurable void, so every conjure
+    // correctly fizzles and episodes stay byte-identical. The read site is
+    // live (verified in-browser over a drift zone); a future arena with a
+    // conjurable strip would move it to `effective`.
+    color: '#cfeaff', requiresTags: ['movement'],
+    mods: [mod('cloudTrail', 'flat', 1)],
+    perLevel: [mod('cloudTrail', 'flat', 0.25)],
+    weight: 5, minDropLevel: 9,
+  },
+
   tethered_orbit: {
     id: 'tethered_orbit', name: 'Tethered Orbit',
     description: 'Projectiles circle you on a held tether instead of flying forward. Pair with Vortex for a widening gyre.',

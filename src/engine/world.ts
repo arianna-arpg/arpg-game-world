@@ -14891,6 +14891,15 @@ export class World {
 
       case 'ground': {
         const at = this.clampGroundTarget(caster, aim, d, inst);
+        // CONJURED CLOUD lands at the GROUND TARGET (the generic effect
+        // executor's origin is the caster — Shatterstep departure
+        // semantics; a CALLED cloud goes where you point it).
+        for (const fx of def.effects) {
+          if (fx.type === 'conjure') {
+            this.conjureCloud(at.x, at.y, fx.radius * aoeScale,
+              fx.duration * caster.sheet.get('effectDuration', tags, extra));
+          }
+        }
         const isCurse = def.tags.includes('curse');
         const curseAllies = isCurse && caster.sheet.get('hedonism', tags, extra) > 0;
         // EXCLUSIVE placements (Netherfissure): the new wound extinguishes
@@ -15538,6 +15547,12 @@ export class World {
           d.trailZone ?? (mt > 0
             ? { radius: 32, duration: 2.2, tickInterval: 0.4, damageScale: mt }
             : undefined);
+        // Zephyr Step / Cloudborne: a conjure-trail spec from the delivery
+        // OR the cloudTrail stat — the dash lays walkable sky-road as it
+        // travels (free fizzle over solid land).
+        const ct = caster.sheet.get('cloudTrail', tags, extra);
+        (caster as Actor & { dashConjureSpec?: { radius: number; duration: number } }).dashConjureSpec =
+          d.trailConjure ?? (ct > 0 ? { radius: 30 + ct * 6, duration: 2.5 + ct * 0.5 } : undefined);
         // Dive Bomb: the launch point erupts.
         this.moveBlast(caster, inst, caster.pos);
         break;
@@ -15561,6 +15576,11 @@ export class World {
             caster.pos.y + Math.sin(caster.facing) * dd);
         }
         dest = this.clampPos(dest, caster.radius);
+        // Cloudborne: the vanish-point keeps a cloud where you left (the
+        // arrival is already confined to standing ground — departure is
+        // the honest half a blink can gift).
+        const ctB = caster.sheet.get('cloudTrail', tags, extra);
+        if (ctB > 0) this.conjureCloud(caster.pos.x, caster.pos.y, 30 + ctB * 6, 2.5 + ctB * 0.5);
         // Dive Bomb: erupt where you vanish...
         this.moveBlast(caster, inst, caster.pos);
         if (d.delay && d.delay > 0) {
@@ -15610,6 +15630,11 @@ export class World {
         caster.untargetable = true; // airborne: nothing can touch them
         caster.dash = null;
         caster.useLock = Math.max(caster.useLock, d.airTime + 0.1);
+        // Cloudborne: the take-off point keeps a cloud underfoot — leap
+        // OFF a fraying pad and leave yourself a way back (the landing is
+        // already confined to standing ground).
+        const ctL = caster.sheet.get('cloudTrail', tags, extra);
+        if (ctL > 0) this.conjureCloud(caster.pos.x, caster.pos.y, 30 + ctL * 6, 2.5 + ctL * 0.5);
         // Dive Bomb: the take-off point erupts.
         this.moveBlast(caster, inst, caster.pos);
         break;
@@ -16002,6 +16027,14 @@ export class World {
       // the DEPARTURE point (Shatterstep's ice patch where you stood).
       if (fx.type === 'terrain') {
         this.addTempGround(origin, fx.kind, fx.radius * aoeScale, fx.duration * durScale);
+      }
+      // CONJURED CLOUD (the flux fabric's second half): walkable ground
+      // called into being at the resolution origin — over conjurable void
+      // only (solid land fizzles the call for free). Ground deliveries
+      // handle their own conjures AT THE TARGET (the case block above);
+      // everything else conjures where the skill resolved.
+      if (fx.type === 'conjure' && d.type !== 'ground') {
+        this.conjureCloud(origin.x, origin.y, fx.radius * aoeScale, fx.duration * durScale);
       }
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
@@ -22498,6 +22531,18 @@ export class World {
         // each drop, and durationBySpeed reads the DASH's own pace — a
         // laden charge-dash (speedAtFull) sows different ground than a
         // full-tilt one.
+        // CLOUD TRAIL (Zephyr Step / the cloudTrail stat, stashed at cast):
+        // the dash lays walkable sky-road as it travels — every ~30 units,
+        // one conjure (free fizzle over solid land).
+        const conjSpec = (a as Actor & { dashConjureSpec?: { radius: number; duration: number } }).dashConjureSpec;
+        if (conjSpec) {
+          const cc = a as Actor & { conjTrailDist?: number };
+          cc.conjTrailDist = (cc.conjTrailDist ?? 99) + step;
+          if (cc.conjTrailDist >= 30) {
+            cc.conjTrailDist = 0;
+            this.conjureCloud(a.pos.x, a.pos.y, conjSpec.radius, conjSpec.duration);
+          }
+        }
         const trail = (a as Actor & { dashTrailSpec?: DropZoneSpec }).dashTrailSpec;
         if (inst && trail) {
           const carrier = a as Actor & { trailDist?: number };
