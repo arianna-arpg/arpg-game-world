@@ -9328,6 +9328,107 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [{ type: 'damage' }],
     ai: { range: 470, weight: 2, keepDistance: 280 },
   },
+
+  // ======================= The EMPYREAN kata ================================
+  // The Aetherial's own arts — verticality, radiance, judgement — brought
+  // down by whoever survives the crossing. Five distinct rhythms (the samurai
+  // lesson): a dive, a ramping halo, a spoken verdict, a fan of feathers, and
+  // a step out of your own silhouette. The Vigilant Host casts the same five.
+
+  skyfall: {
+    id: 'skyfall', name: 'Skyfall',
+    description: 'Hurl yourself skyward — untouchable, clearing every gap — and come down as the judgement of altitude: a radiant shockwave that throws the unworthy from their feet.',
+    tags: ['attack', 'melee', 'physical', 'lightning', 'aoe', 'movement'], color: '#ffe9a8',
+    manaCost: 14, cooldown: 6, useTime: 0,
+    baseDamage: { physical: [10, 16], lightning: [8, 14] },
+    delivery: { type: 'leap', range: 380, airTime: 0.7, radius: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 48 },
+      { type: 'status', status: 'shock', chance: 0.3 },
+    ],
+    requirements: { strength: 18, dexterity: 14 },
+    minDropLevel: 10,
+    ai: { range: 340, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12), mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  aureole: {
+    id: 'aureole', name: 'Aureole',
+    description: 'A ring of dawn bursts from your brow — and the halo BRIGHTENS: each pulse within its rhythm sharpens and hastens the next, six stacks deep, fading when the light rests.',
+    tags: ['spell', 'lightning', 'aoe'], color: '#fff2c8',
+    manaCost: 11, cooldown: 0, useTime: 0.6,
+    baseDamage: { lightning: [9, 15] },
+    selfStack: {
+      mods: [mod('damage', 'increased', 0.06), mod('castSpeed', 'increased', 0.05)],
+      maxStacks: 6, duration: 2.4, decay: 'peel',
+    },
+    delivery: { type: 'nova', radius: 140 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.2 },
+    ],
+    requirements: { intelligence: 16, willpower: 10 },
+    minDropLevel: 10,
+    ai: { range: 130, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  judgement_pillar: {
+    id: 'judgement_pillar', name: 'Judgement Pillar',
+    description: 'Name the ground and the sky answers: a column of white fire stands there, burning all it holds — then speaks its verdict a SECOND time (the buried strike). The Host\'s dominions bring these down unbidden.',
+    tags: ['spell', 'fire', 'lightning', 'aoe', 'duration'], color: '#ffd27f',
+    manaCost: 19, cooldown: 3.5, useTime: 0.75,
+    baseDamage: { fire: [7, 11], lightning: [6, 10] },
+    delivery: {
+      type: 'ground', radius: 42, castRange: 320,
+      lingerDuration: 2.6, tickInterval: 0.35,
+      pulse: { delay: 1.3 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.4, magnitude: 0.5 },
+    ],
+    requirements: { intelligence: 22 },
+    minDropLevel: 12,
+    ai: { range: 300, weight: 2, keepDistance: 220 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12), mod('effectDuration', 'increased', 0.05)] },
+  },
+
+  feather_volley: {
+    id: 'feather_volley', name: 'Feather Volley',
+    description: 'A wing\'s worth of razor feathers, fanned across the arc — light as breath leaving, heavy as verdicts arriving.',
+    tags: ['attack', 'projectile', 'physical'], color: '#eef2fb',
+    manaCost: 9, cooldown: 0, useTime: 0.85,
+    baseDamage: { physical: [7, 12] },
+    delivery: { type: 'projectile', count: 5, spreadDeg: 32, speed: 520, radius: 6, range: 480 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.2, magnitude: 0.4 },
+    ],
+    requirements: { dexterity: 20 },
+    minDropLevel: 10,
+    ai: { range: 430, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+    thresholds: [
+      { level: 8, label: 'A fuller wing', mods: [mod('projectileCount', 'flat', 1)] },
+      { level: 16, label: 'Both wings', mods: [mod('projectileCount', 'flat', 1)] },
+    ],
+  },
+
+  cloudstep: {
+    id: 'cloudstep', name: 'Cloudstep',
+    description: 'Step OUT of yourself: a soundless phasing glide, leaving your own image standing behind to be struck in your stead. The gap closes; the cloud you were disperses.',
+    tags: ['attack', 'physical', 'movement'], color: '#cfe0f4',
+    manaCost: 10, cooldown: 4, useTime: 0,
+    baseDamage: { physical: [4, 7] },
+    delivery: { type: 'dash', distance: 260, speed: 1600, width: 0, phase: true, decoyDuration: 1.4 },
+    effects: [{ type: 'damage' }],
+    requirements: { dexterity: 16, willpower: 8 },
+    minDropLevel: 10,
+    ai: { range: 240, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('damage', 'increased', 0.08)] },
+  },
 };
 
 // THE CONSTRUCT CAPABILITY FOLD: every construct-delivery skill IS

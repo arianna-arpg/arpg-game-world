@@ -3687,6 +3687,39 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('damage', 'increased', 0.02)],
     weight: 5, minDropLevel: 8,
   },
+
+  // --- The EMPYREAN gems (the Aetherial's arts, rentable) --------------------
+  lightbrand: {
+    id: 'lightbrand', name: 'Lightbrand',
+    description: 'Hits BRAND with judgement: 10% chance to shock — and every stack of shock on the victim feeds THIS skill 7% increased damage. Not the storm\'s scatter; the exploiter\'s ledger.',
+    color: '#ffe9a8', requiresTags: ['lightning'],
+    mods: [
+      mod('apply_shock', 'flat', 0.1),
+      mod('damageVs_shock', 'increased', 0.07),
+    ],
+    perLevel: [mod('damageVs_shock', 'increased', 0.02)],
+    weight: 5, minDropLevel: 10,
+  },
+  terminal_velocity: {
+    id: 'terminal_velocity', name: 'Terminal Velocity',
+    description: 'Altitude is a weapon: movement skills deal 18% MORE damage — the fall behind every strike. Costs more; momentum always does.',
+    color: '#cfe0f4', requiresTags: ['movement'],
+    mods: [
+      mod('damage', 'more', 0.18),
+      mod('manaCost', 'more', 0.25),
+    ],
+    perLevel: [mod('damage', 'increased', 0.1)],
+    weight: 5, minDropLevel: 10,
+  },
+  parting_judgement: {
+    id: 'parting_judgement', name: 'Parting Judgement',
+    description: 'Where this skill\'s projectiles END their flight, a JUDGEMENT PILLAR falls on the spot at 60% effect — every shot a sentence, every landing a verdict.',
+    color: '#ffd27f', requiresTags: ['projectile'],
+    sequel: { skillId: 'judgement_pillar', damageScale: 0.6 },
+    mods: [mod('manaCost', 'more', 0.25)],
+    perLevel: [mod('damage', 'increased', 0.05, ['fire'])],
+    weight: 4, minDropLevel: 12,
+  },
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);
