@@ -138,7 +138,8 @@ function validateEncounter(p: ContentPackage, e: EncounterDef, look: RegistryLoo
 
 function validateHoldfast(p: ContentPackage, h: HoldfastDef, look: RegistryLookups, out: string[]): void {
   const bad = (msg: string): void => { out.push(`${p.id}: holdfast '${h.id}' ${msg}`); };
-  if (!look.structure(h.structure)) bad(`names unknown structure '${h.structure}'`);
+  if (!look.boundaryGate(h.gate)) bad(`names unknown boundary gate '${h.gate}'`);
+  if (h.road && !(h.road.chance > 0 && h.road.chance <= 1)) bad(`road.chance ${h.road.chance} outside (0..1]`);
   if (!look.faction(h.guardian.factionId)) bad(`guardian names unknown faction '${h.guardian.factionId}'`);
   if (!look.monster(h.guardian.keeperId)) bad(`guardian keeper names unknown monster '${h.guardian.keeperId}'`);
   for (const id of h.guardian.rosterIds ?? []) if (!look.monster(id)) bad(`guardian roster names unknown monster '${id}'`);

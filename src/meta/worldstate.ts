@@ -140,8 +140,9 @@ function sanitizeZoneDef(raw: unknown): ZoneDef | null {
   z.exits = z.exits.filter(e =>
     e && typeof e.to === 'string' && SIDES.has(e.side as string)
     && (e.at === undefined || isFiniteNum(e.at)));
-  // Transient annotation — re-derived every zone load; never persisted.
+  // Transient annotations — re-derived every zone load; never persisted.
   delete z.exitBoundaries;
+  delete z.exitRoads;
   // Registry scrubs: packs reference live monsters, a war needs both armies,
   // a spawner objective needs its spawner def, a layout family must exist.
   if (z.packs?.table) {

@@ -160,6 +160,9 @@ export interface RegistryLookups {
   layout(id: string): boolean;
   /** A registered structure stamp id. */
   structure(id: string): boolean;
+  /** A registered boundary-gate treatment id (data/boundaryGates.ts) —
+   *  holdfast gates and enclave façades resolve here. */
+  boundaryGate(id: string): boolean;
   sidezone(id: string): boolean;
   biome(id: string): boolean;
 }

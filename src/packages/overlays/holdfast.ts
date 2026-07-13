@@ -50,9 +50,10 @@ export interface HoldfastInfo {
   seenBumped?: boolean;
   /** drop-to-choose: the surrendered gem's theme override, applied when the dest mints. */
   destOverride?: HoldfastDest;
-  /** Rolled-once visual variants (stable across re-musters): a road through the gate, a campfire. */
+  /** The KEPT-ROAD roll (once, stable across re-musters and reloads): whether
+   *  this holdfast's zone annotates its exit with the guardian's road spec, so
+   *  generation carves a traveled way to the gate (World.exitRoadAnnotations). */
   decorRoad: boolean;
-  decorCampfire: boolean;
 }
 
 export class HoldfastField implements WorldOverlay {
@@ -105,7 +106,7 @@ export class HoldfastField implements WorldOverlay {
         info = {
           defId: def.id, lockId: `holdfast:${zone.id}`, side, at, locked: true, resolved: 'sealed',
           exitAppended: false, exitDefIndex: -1,
-          decorRoad: rng.chance(def.decor?.roadChance ?? 0), decorCampfire: rng.chance(def.decor?.campfireChance ?? 0),
+          decorRoad: rng.chance(def.road?.chance ?? 0),
         };
       }
     }
@@ -194,7 +195,7 @@ export class HoldfastField implements WorldOverlay {
         exitDefIndex: typeof i.exitDefIndex === 'number' && Number.isFinite(i.exitDefIndex) ? i.exitDefIndex : -1,
         ...(i.seenBumped ? { seenBumped: true } : {}),
         ...(i.destOverride && typeof i.destOverride === 'object' ? { destOverride: { ...i.destOverride } } : {}),
-        decorRoad: !!i.decorRoad, decorCampfire: !!i.decorCampfire,
+        decorRoad: !!i.decorRoad, // (an old save's decorCampfire key is simply ignored)
       });
     }
   }
@@ -216,7 +217,7 @@ export class HoldfastField implements WorldOverlay {
     const info: HoldfastInfo = {
       defId: def.id, lockId: `holdfast:${zone.id}`, side, at, locked: true, resolved: 'sealed',
       exitAppended: false, exitDefIndex: -1,
-      decorRoad: rng.chance(def.decor?.roadChance ?? 0), decorCampfire: rng.chance(def.decor?.campfireChance ?? 0),
+      decorRoad: !!def.road, // QA shows the full thing: any def with a road spec lays it
     };
     this.infos.set(zone.id, info);
     return info;

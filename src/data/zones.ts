@@ -198,6 +198,26 @@ export interface CompositionRoll {
   chance: number;
 }
 
+/** A TRAVELED-WAY annotation (ZoneDef.exitRoads): carve a worn road from a
+ *  source portal to the annotated exit at generation time — the forest
+ *  game-trail fabric lifted into a per-exit, any-system seam (layoutRecipes.
+ *  carveApproachRoad). Every knob is data; a spec with no fields is the
+ *  stock gravel trail. */
+export interface ExitRoadSpec {
+  /** Which portal the road sets out from: the layout's entry anchor, or the
+   *  nearest/farthest OTHER portal to the destination (default 'entry').
+   *  Whichever is picked, a source sitting ON the destination re-picks the
+   *  farthest distinct anchor, so the way always spans real ground. */
+  from?: 'entry' | 'nearest' | 'farthest';
+  /** Doodad kind chained along the way (default 'road' — the gravel path:
+   *  path-mode blend, moveScale, the one worn-ground implementation). */
+  kind?: string;
+  /** Per-disc radius band (default [16, 22] — the game-trail gauge). */
+  radius?: [number, number];
+  /** wanderPath knobs (defaults mirror the forest trails). */
+  step?: number; wobble?: number; bowFrac?: number;
+}
+
 export interface ZoneExitDef {
   /** Destination zone id — or '?' for an ungenerated frontier. */
   to: string;
@@ -398,6 +418,12 @@ export interface ZoneDef {
    *  generateLayout, so the layout pipeline can erect the gate terrain. Never
    *  authored, never saved — deterministic given the run. */
   exitBoundaries?: (string | undefined)[];
+  /** EXIT-ROAD annotations, index-aligned with `exits` — a TRAVELED WAY the
+   *  layout pipeline carves from a source portal to that exit (layoutRecipes.
+   *  carveApproachRoad; a Holdfast's kept gravel road is the first rider).
+   *  TRANSIENT like exitBoundaries: stamped per-load by the World, never
+   *  authored, never saved. */
+  exitRoads?: (ExitRoadSpec | undefined)[];
   /** Layout GENERATOR knobs, merged tileset ← biome ← spec at mint — the
    *  "same tileset, tweak its generation" seam: volcanic as a spiral cauldron,
    *  a winding road, or an open expanse is one param, not three tilesets.

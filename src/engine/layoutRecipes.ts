@@ -20,11 +20,13 @@
 // ---------------------------------------------------------------------------
 
 import { vec, type Vec2 } from '../core/math';
-import type { ZoneDef } from '../data/zones';
-import { boundaryGateOf } from '../data/boundaryGates';
+import type { ExitRoadSpec, ZoneDef } from '../data/zones';
+import { boundaryGateOf, type BoundaryGateDef } from '../data/boundaryGates';
+import { GridWalkField } from '../world/gridWalk';
 import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
-  placeLandmarkById, raiseStructure, setBoundaryGateBuilder, areaFreeOf, doodadRuleOf, type GenCtx,
+  placeLandmarkById, raiseStructure, setBoundaryGateBuilder, setExitRoadBuilder,
+  areaFreeOf, doodadRuleOf, type GenCtx,
 } from './levelgen';
 import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
@@ -585,6 +587,77 @@ export interface GateTerrace {
   inward: Vec2;
 }
 
+/** Which arena wall does a portal hug? Unit CARDINAL pointing INWARD from
+ *  that edge — the one alignment convention every portal-grown feature
+ *  shares (gate terraces, boundary gates, approach roads, and the World's
+ *  runtime pieces seated at a gate's mouth). Tie-breaks left→right→top→
+ *  bottom, the order the original inline blocks used. */
+export function inwardCardinal(arena: { w: number; h: number }, at: Vec2): Vec2 {
+  const dl = at.x, dr = arena.w - at.x, dt = at.y, db = arena.h - at.y;
+  const m = Math.min(dl, dr, dt, db);
+  const ix = m === dl ? 1 : m === dr ? -1 : 0;
+  return vec(ix, ix !== 0 ? 0 : (m === dt ? 1 : -1));
+}
+
+/** The resolved GEOMETRY of a boundary gate raised at a portal — inward
+ *  cardinal, tangent, quantized footprint, the mouth on the façade line and
+ *  the throat's INNER opening — computed ONCE here so the terrain carve and
+ *  the World's runtime (sealed bars, toll wardens, prompts) seat against the
+ *  same stone. Pure math, no rng; `g` absent falls to the registry defaults
+ *  so callers may resolve an unregistered id defensively. */
+export interface GateThroat {
+  /** Unit cardinal pointing INWARD (into the zone) from the portal's wall. */
+  inward: Vec2;
+  /** Unit tangent along the façade. */
+  tangent: Vec2;
+  /** Mouth center on the façade line (the arch stands here). */
+  mouth: Vec2;
+  /** Center of the throat's INNER opening — where the lane meets the zone. */
+  inner: Vec2;
+  /** The gate's full footprint rect (clamped into the arena). */
+  rect: { x: number; y: number; w: number; h: number };
+  halfWidth: number; depth: number; back: number; mouthWidth: number;
+}
+
+export function gateThroatAt(arena: { w: number; h: number }, at: Vec2,
+  g?: BoundaryGateDef): GateThroat {
+  const CELL = 30;
+  const q = (v: number): number => Math.round(v / CELL) * CELL;
+  const inward = inwardCardinal(arena, at);
+  const ix = inward.x, iy = inward.y;
+  const tx = -iy, ty = ix; // tangent along the façade
+  const halfW = Math.max(CELL * 5, q(g?.halfWidth ?? 240));
+  const depth = Math.max(CELL * 4, q(g?.depth ?? 180));
+  const mouthW = Math.max(CELL * 3, q(g?.mouthWidth ?? 130));
+  const back = CELL * 2; // the façade tucks behind the portal line
+  // Footprint: tangent span ±halfW, from just behind the portal to depth inward.
+  const c0 = vec(at.x - ix * back, at.y - iy * back);
+  const x0 = q(Math.min(c0.x, c0.x + ix * (depth + back)) - Math.abs(tx) * halfW);
+  const y0 = q(Math.min(c0.y, c0.y + iy * (depth + back)) - Math.abs(ty) * halfW);
+  const w = ix !== 0 ? depth + back : halfW * 2;
+  const h = ix !== 0 ? halfW * 2 : depth + back;
+  const rect = {
+    x: Math.max(0, Math.min(arena.w - w, x0)),
+    y: Math.max(0, Math.min(arena.h - h, y0)),
+    w, h,
+  };
+  // The mouth's tangent coordinate (the façade strip's gap) and the two
+  // centers the runtime cares about: the mouth on the façade line, and the
+  // inner opening where the throat's flank walls end.
+  const mouthLo = ix !== 0 ? q(at.y - mouthW / 2) : q(at.x - mouthW / 2);
+  let mouth: Vec2, inner: Vec2;
+  if (ix !== 0) {
+    const fx = ix > 0 ? rect.x : rect.x + rect.w - CELL;
+    mouth = vec(fx + CELL / 2, mouthLo + mouthW / 2);
+    inner = vec(fx + (ix > 0 ? depth : CELL - depth), mouthLo + mouthW / 2);
+  } else {
+    const fy = iy > 0 ? rect.y : rect.y + rect.h - CELL;
+    mouth = vec(mouthLo + mouthW / 2, fy + CELL / 2);
+    inner = vec(mouthLo + mouthW / 2, fy + (iy > 0 ? depth : CELL - depth));
+  }
+  return { inward, tangent: vec(tx, ty), mouth, inner, rect, halfWidth: halfW, depth, back, mouthWidth: mouthW };
+}
+
 /** Raise a GATE TERRACE at a portal: a raised, floored ledge grown inward from
  *  the portal's own wall, flanked by wall bands, closed by a front lip whose
  *  one opening is a switchback stair down to the field — the "descending out
@@ -599,10 +672,7 @@ export function carveGateTerrace(ctx: GenCtx, at: Vec2,
   const CELL = 30;
   const q = (v: number): number => Math.round(v / CELL) * CELL;
   // Which wall does the portal hug? The terrace grows INWARD from that edge.
-  const dl = at.x, dr = arena.w - at.x, dt = at.y, db = arena.h - at.y;
-  const m = Math.min(dl, dr, dt, db);
-  const ix = m === dl ? 1 : m === dr ? -1 : 0;
-  const iy = ix !== 0 ? 0 : (m === dt ? 1 : -1);
+  const { x: ix, y: iy } = inwardCardinal(arena, at);
   const halfW = Math.max(CELL * 4, q(p.halfWidth ?? 200));
   const depth = Math.max(CELL * 5, q(p.depth ?? 250));
   const stairW = Math.max(CELL * 3, q(p.stairWidth ?? 120));
@@ -704,28 +774,14 @@ export function carveBoundaryGate(ctx: GenCtx, at: Vec2, gateId: string): void {
   const { arena, rng } = ctx;
   const CELL = 30;
   const q = (v: number): number => Math.round(v / CELL) * CELL;
-  // Which wall does the portal hug? The gate grows INWARD from that edge.
-  const dl = at.x, dr = arena.w - at.x, dt = at.y, db = arena.h - at.y;
-  const m = Math.min(dl, dr, dt, db);
-  const ix = m === dl ? 1 : m === dr ? -1 : 0;
-  const iy = ix !== 0 ? 0 : (m === dt ? 1 : -1);
-  const tx = -iy, ty = ix; // tangent along the façade
-  const halfW = Math.max(CELL * 5, q(g.halfWidth ?? 240));
-  const depth = Math.max(CELL * 4, q(g.depth ?? 180));
-  const mouthW = Math.max(CELL * 3, q(g.mouthWidth ?? 130));
+  // The SHARED geometry (gateThroatAt): which wall the portal hugs, the
+  // quantized footprint, the mouth and inner-opening centers — the World's
+  // runtime (sealed bars, wardens) seats against these same numbers.
+  const throat = gateThroatAt(arena, at, g);
+  const ix = throat.inward.x, iy = throat.inward.y;
+  const tx = throat.tangent.x, ty = throat.tangent.y;
+  const { halfWidth: halfW, depth, mouthWidth: mouthW, rect } = throat;
   const wallRegion = g.wallRegion ?? 'rampart';
-  const back = CELL * 2; // the façade tucks behind the portal line
-  // Footprint: tangent span ±halfW, from just behind the portal to depth inward.
-  const c0 = vec(at.x - ix * back, at.y - iy * back);
-  const x0 = q(Math.min(c0.x, c0.x + ix * (depth + back)) - Math.abs(tx) * halfW);
-  const y0 = q(Math.min(c0.y, c0.y + iy * (depth + back)) - Math.abs(ty) * halfW);
-  const w = ix !== 0 ? depth + back : halfW * 2;
-  const h = ix !== 0 ? halfW * 2 : depth + back;
-  const rect = {
-    x: Math.max(0, Math.min(arena.w - w, x0)),
-    y: Math.max(0, Math.min(arena.h - h, y0)),
-    w, h,
-  };
   // The gate arrives AFTER the base layout — splice whatever scatter/liquid
   // discs it would swallow (rim-aware, the causeway discipline).
   for (let k = ctx.doodads.length - 1; k >= 0; k--) {
@@ -808,6 +864,24 @@ export function carveBoundaryGate(ctx: GenCtx, at: Vec2, gateId: string): void {
       ctx.doodads.push({ pos: p, radius: r, kind: row.kind, rot });
     }
   }
+  // The INNER dressing — the camp a KEPT gate lives around, spread past the
+  // throat's inner opening where travelers are actually stopped (a warden's
+  // fire, fodder, stacked wood — the toll-gate's lived-in read). Same
+  // discipline as the outer dress: draws before filters, ground gates
+  // honored, the lane's own width kept clear. Absent = zero draws.
+  for (const row of g.dressInner ?? []) {
+    const rule = doodadRuleOf(row.kind);
+    for (let i = 0, n = rng.int(row.count[0], row.count[1]); i < n; i++) {
+      const off = rng.range(-(halfW - 50), halfW - 50);
+      const r = rng.range(11, 16);
+      const rot = rng.range(0, Math.PI * 2);
+      if (Math.abs(off) < mouthW / 2 + 40) continue;
+      const p = vec(mouthC.x + inward.x * (depth + CELL) + tx * off,
+        mouthC.y + inward.y * (depth + CELL) + ty * off);
+      if (rule.forbidOn && !areaFreeOf(ctx, p, r, rule.forbidOn)) continue;
+      ctx.doodads.push({ pos: p, radius: r, kind: row.kind, rot });
+    }
+  }
   // Bookkeeping — the carveGateTerrace discipline: reserve the footprint,
   // keep the walking lane open portal→throat→zone, bake the floor, and hand
   // the invariant the ground past the gate.
@@ -828,6 +902,67 @@ export function carveBoundaryGate(ctx: GenCtx, at: Vec2, gateId: string): void {
 }
 // Register as THE boundary-gate builder (levelgen raises it per annotated exit).
 setBoundaryGateBuilder(carveBoundaryGate);
+
+/** Carve a TRAVELED WAY from a source portal to an exit — the forest game
+ *  trail lifted into the per-exit annotation fabric (ZoneDef.exitRoads): a
+ *  wandering polyline, reserved as an artery so nothing re-plugs it, chained
+ *  'road' ground discs (path-mode blend + moveScale ride the kind), and a
+ *  corridor CUT through walled layouts (the wardens cleared their road; a
+ *  convex zone carves nothing — its ground is already open). GATE-AWARE: an
+ *  exit that also wears a boundary gate (def.exitBoundaries, same index)
+ *  receives the road at its throat's inner opening, so the way reads
+ *  source portal → open country → the gate's mouth, never under its walls. */
+export function carveApproachRoad(ctx: GenCtx, def: ZoneDef, exitIndex: number,
+  spec: ExitRoadSpec): void {
+  const target = ctx.exits[exitIndex];
+  if (!target) return;
+  const { rng, arena } = ctx;
+  // Where the way ENDS: the gate's inner opening plus a step of clearance
+  // (the camp ground), or the portal itself when no façade stands there.
+  const gate = boundaryGateOf(def.exitBoundaries?.[exitIndex]);
+  const throat = gate ? gateThroatAt(arena, target, gate) : null;
+  const end = throat
+    ? vec(throat.inner.x + throat.inward.x * 40, throat.inner.y + throat.inward.y * 40)
+    : vec(target.x, target.y);
+  // Where it SETS OUT: the entry anchor, or the nearest/farthest OTHER
+  // portal — and a source sitting on the destination (the player arrived
+  // THROUGH this exit; a portal pair hugging one corner) re-picks the
+  // farthest distinct anchor so the way always spans real ground.
+  const others = [ctx.entry, ...ctx.exits.filter((_, i) => i !== exitIndex)];
+  const d2 = (p: Vec2): number => (p.x - end.x) * (p.x - end.x) + (p.y - end.y) * (p.y - end.y);
+  const farthest = (): Vec2 => others.reduce((best, p) => (d2(p) > d2(best) ? p : best), others[0]);
+  const mode = spec.from ?? 'entry';
+  let from = mode === 'entry' ? ctx.entry
+    : mode === 'nearest' ? others.reduce((best, p) => (d2(p) < d2(best) ? p : best), others[0])
+      : farthest();
+  if (Math.hypot(from.x - end.x, from.y - end.y) < 260) from = farthest();
+  if (Math.hypot(from.x - end.x, from.y - end.y) < 260) return; // nothing distinct spans — no road
+  const pts = wanderPath(rng, from, end, {
+    step: spec.step ?? 120, wobble: spec.wobble ?? 55, bowFrac: spec.bowFrac ?? 0.3,
+  });
+  // Through a WALLED layout the road is CUT, not just worn: carve a corridor
+  // along the way so the gravel always lies on open ground.
+  if (ctx.walk instanceof GridWalkField) {
+    for (let i = 0; i < pts.length - 1; i++) {
+      ctx.walk.carveCorridor(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, 54);
+    }
+  }
+  reserveArtery(ctx, pts, 30);
+  const band = spec.radius ?? [16, 22];
+  const kind = spec.kind ?? 'road';
+  for (let k = 0; k < pts.length - 1; k++) {
+    const a = pts[k], b = pts[k + 1];
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 30));
+    for (let t = 0; t <= steps; t++) {
+      ctx.doodads.push({
+        pos: vec(a.x + (b.x - a.x) * (t / steps), a.y + (b.y - a.y) * (t / steps)),
+        radius: rng.range(band[0], band[1]), kind,
+      });
+    }
+  }
+}
+// Register as THE exit-road builder (levelgen lays it per annotated exit).
+setExitRoadBuilder(carveApproachRoad);
 
 function steppesLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;

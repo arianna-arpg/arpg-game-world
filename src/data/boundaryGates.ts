@@ -40,6 +40,10 @@ export interface BoundaryGateDef {
   brazierKind?: string;
   /** Extra dressing scattered along the façade's outer face. */
   dress?: { kind: string; count: [number, number] }[];
+  /** Dressing scattered along the INNER (zone-side) approach — the camp a
+   *  kept gate lives around (a warden's fire, fodder, stacked wood), where
+   *  travelers actually arrive. Same count-range grammar as `dress`. */
+  dressInner?: { kind: string; count: [number, number] }[];
   // --- PORTAL LOOK (consumed by drawExits / transit) -------------------------
   /** Ring/glow tint override for the portal (default: zone accent). */
   accent?: string;
@@ -83,4 +87,30 @@ registerBoundaryGate({
   ],
   accent: '#7de84a',
   label: 'the Durance gapes',
+});
+
+// THE ROADWARDEN TOLL-GATE: the Holdfast guardians' timber waypost — a staked
+// palisade face pierced by one barred mouth, squared corner posts, iron
+// fire-baskets either side of the lane, and the wardens' camp dressed on the
+// zone-side approach where travelers are stopped. Lived-in is the POINT: a
+// kept fire, fodder, stacked wood — somebody HOLDS this road. HoldfastDefs
+// reference this row by id (HoldfastDef.gate); generation raises everything
+// here, while the runtime adds only what must react to the lock (the sealed
+// bar across the mouth, the wardens themselves).
+registerBoundaryGate({
+  id: 'toll_gate',
+  halfWidth: 190, depth: 150, mouthWidth: 110,
+  wallRegion: 'palisade', floorStyle: 'packed',
+  archKind: 'toll_arch', pylonKind: 'toll_post', brazierKind: 'brazier',
+  dress: [
+    { kind: 'banner_post', count: [0, 2] },
+    { kind: 'broken_cart', count: [0, 1] },
+  ],
+  dressInner: [
+    { kind: 'campfire', count: [0, 1] },
+    { kind: 'hay_bale', count: [0, 2] },
+    { kind: 'firewood_pile', count: [0, 1] },
+  ],
+  accent: '#c8a04a',
+  label: 'a warded toll',
 });

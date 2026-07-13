@@ -375,6 +375,14 @@ registerRegion({ id: 'parapet', walkable: false, blocks: true, label: 'the parap
   blocksShot: false, blocksSight: false, visual: { fill: '#4a4f5e', alpha: 0.9 } });
 // WINDOW: an arrow-slit in a rampart line. Same policy as parapet (see + shoot
 // through, never walk through) — a distinct id so blueprints, renders, and future
+// PALISADE: a staked-timber curtain — the built wall of whoever stacks wood
+// instead of coursing stone (war camps, toll-gates, frontier holdfasts). A
+// TRUE WALL like rampart (stops movement, shots and sight — sharpened stakes
+// stand taller than a head); flat timber fill, no masonry coursing, a pale
+// cut-top rim so the stake line reads at a glance against dark ground.
+registerRegion({ id: 'palisade', walkable: false, blocks: true, label: 'the palisade',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#41301b', alpha: 1, edge: { color: '#7a6236', width: 4 } } });
 // rules can tell a slit from a battlement.
 registerRegion({ id: 'window', walkable: false, blocks: true, label: 'the window',
   blocksShot: false, blocksSight: false, visual: { fill: '#2b3140', alpha: 0.85 } });

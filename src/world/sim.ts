@@ -81,6 +81,7 @@ export function packageLookups(): RegistryLookups {
     tileset: id => !!TILESETS[id],
     layout: id => hasLayout(id),
     structure: id => !!STRUCTURES[id] || hasStructureGen(id),
+    boundaryGate: id => boundaryGateIds().includes(id),
     sidezone: id => !!SIDEZONES[id],
     biome: id => !!BIOMES[id],
   };

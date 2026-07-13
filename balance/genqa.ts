@@ -375,6 +375,33 @@ for (const [biomeId, b] of Object.entries(BIOMES)) {
   }
 }
 
+// --- 3d. HOLDFAST GATE + KEPT ROAD over representative layout families --------
+// Live, a Holdfast's locked bonus exit wears its guardian's gate ('toll_gate')
+// through the SAME exitBoundaries seam the enclaves use, plus an exitRoads
+// entry that carves the traveled way source-portal → gate mouth. Headless
+// defs author both annotations directly so the road composable — the wander,
+// the artery reservation, the corridor CUT through walled layouts, the
+// gate-aware endpoint — is exercised over open, canopy, carved-grid and
+// liquid families with every invariant (portals, reachability, inverse
+// forbidOn, determinism) holding through it.
+for (const layoutId of ['plains', 'forest', 'winding', 'riverland']) {
+  runCase(`holdfast:${layoutId}`, {
+    id: `qa_holdfast_${layoutId}`, name: `QA toll ${layoutId}`, level: 6,
+    size: { w: 2400, h: 1800 },
+    theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
+    layout: [
+      { kind: 'rocks', count: [4, 7] },
+      { kind: 'water', count: [1, 2] }, { kind: 'grass', count: [3, 5] },
+    ],
+    layoutType: layoutId,
+    // Exit 0 is the holdfast: it wears the toll gate AND receives the road.
+    exitBoundaries: ['toll_gate', undefined],
+    exitRoads: [{ from: 'entry' }, undefined],
+    objective: { kind: 'clear' },
+    exits: [], map: { x: 0, y: 0 },
+  });
+}
+
 // --- 4. Every composition, FORCED (chance 1) ---------------------------------
 // The tileset sweep exercises compositions probabilistically; this group pins
 // every bundle at least once per seed over a representative liquid-y def (the

@@ -61,13 +61,14 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraform
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
-import { START_ZONE, ZONES, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { START_ZONE, ZONES, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
-  blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout, structureDoodads,
+  blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
   hitSurfaceOf, normalizeDoodadBound,
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
+import { gateThroatAt } from './layoutRecipes';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './shapes';
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
@@ -2844,6 +2845,10 @@ export class World {
     // re-derived every load) so generateLayout below can erect the gate
     // terrain for whichever exits cross an enclave boundary.
     def.exitBoundaries = this.exits.map(x => x.boundary);
+    // EXIT ROADS ride the same transient seam: a zone whose Holdfast rolled a
+    // KEPT ROAD annotates that exit with its guardian's road spec, and the
+    // layout pipeline carves the traveled way (source portal → gate mouth).
+    def.exitRoads = this.exitRoadAnnotations(def);
     // BELT-AND-SUSPENDERS: whatever def data or edge-snapping produced, no two
     // live portals may overlap (an overlapped pair leaves one of them un-dwellable
     // — the "can't choose which zone I enter" hard-lock). Runs BEFORE the layout
@@ -4385,10 +4390,17 @@ export class World {
    *  sides of the crossing (approaching, you face its mouth; inside, the way
    *  back out wears the same stone). Resolved exits read the neighbour's
    *  actual biome; frontiers PREDICT via the same heat-map sample the mint
-   *  will use. Locked (holdfast) and cross-dimension edges keep their own
-   *  dressings. Pure per (graph, field) — reload/co-op re-derive identically. */
+   *  will use. A HOLDFAST-locked exit wears its GUARDIAN'S own gate (the
+   *  toll façade — the same annotation fabric, a different registry row);
+   *  cross-dimension edges keep their own dressings. Pure per (graph,
+   *  field, overlay state) — reload/co-op re-derive identically. */
   private boundaryGateFor(e: ZoneExitDef): string | undefined {
-    if (e.crossDim || e.lock) return undefined;
+    if (e.lock) {
+      const info = this.sim.holdfastField?.infoFor(this.zone.id);
+      if (info && info.lockId === e.lock) return this.sim.holdfastField?.def(info.defId)?.gate;
+      return undefined; // a foreign lock (not this zone's holdfast) stays undressed
+    }
+    if (e.crossDim) return undefined;
     const from = this.zone.biome;
     let to: string | undefined;
     if (e.to === '?') {
@@ -6153,10 +6165,12 @@ export class World {
   // --- HOLDFAST: the in-zone locked-bonus-exit runtime ----------------------
   //
   // The HoldfastField overlay owns the durable per-zone decision + lock state; the
-  // engine builds the runtime: it APPENDS the bonus exit on first arrival, raises the
-  // gate + neutral wardens, runs the dwell-to-pay (a gem taken at random, or one you
-  // choose — which steers the hidden road), and resolves a slaughter (a low chance the
-  // gate bursts). Mirrors the Conclave ritual + Crusade structure-stamp patterns.
+  // engine builds the runtime: it APPENDS the bonus exit on first arrival (whose
+  // annotations then make generateLayout raise the gate façade + kept road as
+  // TERRAIN — boundaryGateFor/exitRoadAnnotations), musters the sealed bar +
+  // neutral wardens at the generated mouth, runs the dwell-to-pay (a gem taken at
+  // random, or one you choose — which steers the hidden road), and resolves a
+  // slaughter (a low chance the gate bursts). Mirrors the Conclave ritual pattern.
 
   /** Roll (once) whether this freshly-entered uncharted zone raises a Holdfast, and if
    *  so APPEND its locked bonus '?' frontier (a randomized off-cardinal locale). Called
@@ -6179,9 +6193,32 @@ export class World {
     info.exitAppended = true;
   }
 
-  /** Raise the Holdfast's gate + wardens around its bonus-exit portal (one muster per
-   *  visit; the lock STATE persists on the overlay). The wardens are tagged with the
-   *  guardian's neutralTag so dormancy / rouse / dwell-pay / slaughter all resolve. */
+  /** The per-exit TRAVELED-WAY annotations for this load (index-aligned with
+   *  def.exits, the exitBoundaries discipline; the Holdfast's kept road is
+   *  the first rider — any system may claim an index). Returns undefined for
+   *  an unannotated zone so its generation stays byte-identical. */
+  private exitRoadAnnotations(def: ZoneDef): (ExitRoadSpec | undefined)[] | undefined {
+    const hf = this.sim.holdfastField;
+    const info = hf?.infoFor(def.id);
+    if (!hf || !info || !info.decorRoad) return undefined;
+    const road = hf.def(info.defId)?.road;
+    if (!road) return undefined;
+    const idx = def.exits.findIndex(e => e.lock === info.lockId);
+    if (idx < 0) return undefined;
+    const out: (ExitRoadSpec | undefined)[] = new Array<ExitRoadSpec | undefined>(def.exits.length).fill(undefined);
+    const { chance: _rolledAtEnsure, ...spec } = road;
+    out[idx] = spec;
+    return out;
+  }
+
+  /** Muster the Holdfast's RUNTIME at its generated gate (one muster per visit;
+   *  the lock STATE persists on the overlay). The façade, throat, posts,
+   *  braziers, camp dressing and the kept road are all TERRAIN now — raised by
+   *  generateLayout off the exitBoundaries/exitRoads annotations, directionally
+   *  aligned to the exit's own wall — so only what must REACT to the lock is
+   *  materialized here: the sealed timber bar across the mouth (spliced on
+   *  unlock) and the wardens, tagged with the guardian's neutralTag so
+   *  dormancy / rouse / dwell-pay / slaughter all resolve. */
   private placeHoldfast(def: ZoneDef): void {
     const hf = this.sim.holdfastField;
     if (!hf || this.inCave) return;
@@ -6199,53 +6236,51 @@ export class World {
     if (!gdef || !portal) return;
     if (!info.seenBumped) { info.seenBumped = true; bumpLedger(this.ledger, 'holdfast_seen'); } // DISCOVERY (once) — surfaces the Vault unlock
     const lvl = Math.max(1, def.level);
-    // Stamp the fortification just INSIDE the portal (toward the arena centre), so the
-    // gate faces the exit and the wardens muster at it.
-    const inx = this.arena.w / 2 - portal.pos.x, iny = this.arena.h / 2 - portal.pos.y;
-    const il = Math.hypot(inx, iny) || 1;
-    const gateCenter = this.clampPos(vec(portal.pos.x + (inx / il) * 90, portal.pos.y + (iny / il) * 90), 30);
+    // The gate's geometry — the SAME numbers the terrain carve used
+    // (gateThroatAt), so the bar seats flush in the mouth's lane and the
+    // wardens stand where the road meets the throat.
+    const throat = gateThroatAt(this.arena, portal.pos, boundaryGateOf(gdef.gate));
+    const inward = throat.inward, tx = throat.tangent.x, ty = throat.tangent.y;
+    // THE BAR: sealed timber across the throat's inner opening while the toll
+    // stands — the one piece that must vanish on unlock, so it alone (plus the
+    // wardens) is runtime. Palisade-post 'wall' doodads by default; a def may
+    // name its own barKind, or '' for an unbarred (purely warded) mouth.
     const gateDoodads: Doodad[] = [];
-    if (STRUCTURES[gdef.structure]) {
-      for (const d of structureDoodads(STRUCTURES[gdef.structure], gateCenter)) {
-        d.pos = this.clampPos(vec(d.pos.x, d.pos.y), d.radius);
+    const barKind = gdef.barKind ?? 'wall';
+    if (barKind) {
+      const barR = 13;
+      for (let s = -(throat.mouthWidth / 2) + barR * 0.6; s <= throat.mouthWidth / 2 - barR * 0.6; s += barR * 1.5) {
+        const d: Doodad = { pos: vec(throat.inner.x + tx * s, throat.inner.y + ty * s), radius: barR, kind: barKind };
         this.doodads.push(d);
         gateDoodads.push(d);
       }
     }
-    // VISUAL VARIANTS (rolled once, stable across re-musters) — so tolls aren't identical.
-    // NOT gate doodads: a road is a MAINTAINED way that persists when the gate opens.
-    if (info.decorRoad) {
-      // A gravel road from the portal INWARD through the gate (and a bit past it), so the
-      // toll reads as a deliberate waypost on a kept road (and grants the mild speed boost).
-      const rdx = inx / il, rdy = iny / il;
-      for (let s = -12; s <= 300; s += 22) {
-        const rp = this.clampPos(vec(portal.pos.x + rdx * s, portal.pos.y + rdy * s), 20);
-        const rd: Doodad = { pos: vec(rp.x, rp.y), radius: 20, kind: 'road' };
-        this.doodads.push(rd);
-        this.grounds.push(rd); // sensed by groundAt → the road's moveScale applies
-      }
-    }
-    if (info.decorCampfire) {
-      this.doodads.push({ pos: this.clampPos(vec(gateCenter.x - 72, gateCenter.y + 20), 13), radius: 13, kind: 'campfire' });
-    }
-    // The WARDENS: a keeper (the dwell-target you pay) + a few guards, NEUTRAL until roused.
+    // THE WARDENS: housed at the throat's inner opening — the toll stand on
+    // the road where travelers arrive. The keeper (the dwell-target you pay)
+    // holds the lane's own axis; the guards flank the mouth. NEUTRAL until roused.
+    const standC = this.clampPos(vec(
+      throat.inner.x + inward.x * 64, throat.inner.y + inward.y * 64), 30);
     const g = gdef.guardian;
     const banditIds: number[] = [];
     const keeper = this.createMonster(g.keeperId, lvl, 'enemy');
     keeper.tag = g.neutralTag;
-    keeper.pos = this.clampPos(vec(gateCenter.x + rand(-26, 26), gateCenter.y + rand(-6, 34)), keeper.radius);
+    keeper.pos = this.clampPos(vec(standC.x + tx * rand(-20, 20) + inward.x * rand(0, 24),
+      standC.y + ty * rand(-20, 20) + inward.y * rand(0, 24)), keeper.radius);
     this.actors.push(keeper); banditIds.push(keeper.id);
     const pool = g.rosterIds?.length ? g.rosterIds : [g.keeperId];
     const guards = randInt(g.count[0], g.count[1]);
     for (let i = 0; i < guards; i++) {
       const c = this.createMonster(pool[i % pool.length], lvl, 'enemy');
       c.tag = g.neutralTag;
-      c.pos = this.clampPos(vec(gateCenter.x + rand(-92, 92), gateCenter.y + rand(-24, 72)), c.radius);
+      const flank = i % 2 === 0 ? 1 : -1;
+      c.pos = this.clampPos(vec(
+        standC.x + tx * flank * (throat.mouthWidth / 2 + rand(10, 62)) + inward.x * rand(-16, 44),
+        standC.y + ty * flank * (throat.mouthWidth / 2 + rand(10, 62)) + inward.y * rand(-16, 44)), c.radius);
       this.actors.push(c); banditIds.push(c.id);
     }
     this.holdfastSite = { zoneId: def.id, lockId: info.lockId, defId: gdef.id, keeperId: keeper.id, banditIds, gateDoodads };
-    this.flashes.push({ pos: vec(gateCenter.x, gateCenter.y), radius: 120, color: gdef.marker?.color ?? '#c8a04a', life: 0.7, maxLife: 0.7 });
-    this.text(vec(gateCenter.x, gateCenter.y - 54), `${gdef.name} — ${gdef.sealedHint}`, gdef.marker?.color ?? '#c8a04a', 16);
+    this.flashes.push({ pos: vec(standC.x, standC.y), radius: 120, color: gdef.marker?.color ?? '#c8a04a', life: 0.7, maxLife: 0.7 });
+    this.text(vec(standC.x, standC.y - 54), `${gdef.name} — ${gdef.sealedHint}`, gdef.marker?.color ?? '#c8a04a', 16);
   }
 
   /** Per-frame: if every warden of an UNPAID holdfast has fallen, resolve the slaughter
@@ -6339,7 +6374,8 @@ export class World {
   }
 
   /** Open the holdfast gate: unlock the overlay (carrying any chosen-gem dest theme),
-   *  splice the gate doodads away, and flash + toast the now-open path. */
+   *  splice the sealed BAR out of the mouth (the façade + road are terrain and
+   *  remain — a paid toll leaves a kept waypost), and flash + toast the open path. */
   private openHoldfastExit(msg: string, dest?: HoldfastDest): void {
     const site = this.holdfastSite;
     const hf = this.sim.holdfastField;
@@ -6379,21 +6415,25 @@ export class World {
    *  The main loop closes a lingering menu when this goes false (wardens slain mid-bargain). */
   holdfastParleyOpen(): boolean { return !!this.holdfastKeeper(); }
 
-  /** DEV: force a sealed Holdfast in the CURRENT zone — append the locked bonus exit,
-   *  surface its portal live, and raise the gate + wardens at once. (QA Event tab.) */
+  /** DEV: force a sealed Holdfast in the CURRENT zone — append the locked bonus
+   *  exit, then RELOAD the zone in place: the gate façade and the kept road are
+   *  GENERATED terrain (exitBoundaries/exitRoads annotations), so the QA button
+   *  shows the real minted thing, not a runtime approximation. (QA Event tab.) */
   devForceHoldfast(): boolean {
     const hf = this.sim.holdfastField;
     if (!hf || this.inCave || this.zone.special || this.zone.objective.kind === 'safe') return false;
     const info = hf.devForce(this.zone);
     if (!info) return false;
     if (!info.exitAppended) {
-      this.zone.exits.push({ to: '?', side: info.side, at: info.at, lock: info.lockId });
+      this.zone.exits.push({ to: '?', side: info.side, at: spacedExitAt(this.zone, info.side, info.at), lock: info.lockId });
       info.exitDefIndex = this.zone.exits.length - 1;
       info.exitAppended = true;
-      this.syncZoneExits(); // surface the new portal without leaving + re-entering
     }
     this.materializedHoldfasts.delete(this.zone.id); // allow a fresh muster
-    this.placeHoldfast(this.zone);
+    // Re-enter "from" a real neighbour when one exists, so the layout's entry
+    // anchor (and any entry-sourced road) reads like an ordinary arrival.
+    const back = this.zone.exits.find(e => e.to !== '?' && !e.lock)?.to;
+    this.loadZone(this.zone.id, back);
     return true;
   }
 
@@ -7534,6 +7574,7 @@ export class World {
       if (z.eventOwned && !claimed.has(z.id)) continue;
       const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
       delete clone.exitBoundaries; // transient — re-derived every zone load
+      delete clone.exitRoads;      // transient — the road annotation rides the same seam
       zones.push(clone);
     }
     // Heal the roads at WRITE time too (an exit into scrubbed event ground

@@ -442,27 +442,10 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
   },
 
-  // A HOLDFAST toll-gate: a fortified barricade — two posts and a wall with a central
-  // gap straddling the bonus exit — raised by a guardian faction (the Bandit wardens).
-  // No `garrison`: the Holdfast runtime spawns its own TAGGED wardens (neutral until
-  // roused) so the dwell/pay/kill hooks resolve, and the engine splices these gate
-  // walls away on unlock. Stamped live around the portal by World.placeHoldfast.
-  toll_gate: {
-    id: 'toll_gate', halfW: 130, halfH: 64,
-    walls: [
-      { x: -130, y: -48, dir: 'v', length: 96 },  // left post
-      { x: 130, y: -48, dir: 'v', length: 96 },   // right post
-      { x: -130, y: -48, dir: 'h', length: 92 },  // top bar, left of the gate gap
-      { x: 40, y: -48, dir: 'h', length: 90 },     // top bar, right of the gate gap
-    ],
-    props: [
-      { kind: 'rock', x: 96, y: 34, radius: 12 }, // a marker stone (the wardens' fire is rolled decor)
-    ],
-    breakables: [
-      { id: 'crate', x: -58, y: 22 },
-      { id: 'barrel', x: 72, y: 18 },
-    ],
-  },
+  // (The old 'toll_gate' STRUCTURES stamp is retired: a Holdfast's gate is a
+  // BOUNDARY-GATE row now — data/boundaryGates.ts 'toll_gate' — raised into
+  // the zone's generated terrain by the exitBoundaries annotation, with only
+  // the sealed bar + wardens materialized at runtime by World.placeHoldfast.)
 
   // --- FACTION POIs (batch 6): pre-inhabited strongholds. Each posts a guard
   //     pack of its garrison faction, so the right structure in the right

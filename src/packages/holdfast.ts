@@ -13,6 +13,8 @@
 // per-zone lock state lives on the HoldfastField overlay. Mirrors encounters.ts.
 // ---------------------------------------------------------------------------
 
+import type { ExitRoadSpec } from '../data/zones';
+
 /** HOW a holdfast opens. v1 implements 'pay-gem'; the rest are typed for the data
  *  model (a future entry fills in one resolver branch, no type churn). */
 export type UnlockKind = 'pay-gem' | 'pay-currency' | 'cull-faction' | 'event-adjacent';
@@ -75,8 +77,21 @@ export interface GuardianSpec {
 export interface HoldfastDef {
   id: string;
   name: string;
-  /** STRUCTURES key stamped around the bonus-exit portal (the fortification). */
-  structure: string;
+  /** BOUNDARY-GATE row (data/boundaryGates.ts) raised INTO the zone's generated
+   *  terrain at the bonus-exit portal — the Durance fabric: façade, throat,
+   *  arch, posts, braziers and camp dressing are all LAYOUT, directionally
+   *  aligned to the exit's own wall (where the hidden road leads on the world
+   *  map). The runtime adds only the sealed bar + the wardens. */
+  gate: string;
+  /** The sealed-mouth BARRIER doodads raised across the throat while locked
+   *  (spliced on unlock). Default 'wall' — the palisade-post painter; '' = an
+   *  unbarred, purely warded mouth (the lock alone seals the portal). */
+  barKind?: string;
+  /** The KEPT ROAD: chance (rolled once per holdfast, stable across re-musters)
+   *  that generation carves a traveled way from a source portal to the gate —
+   *  the lived-in read. The remaining knobs are the ExitRoadSpec the layout
+   *  pipeline consumes verbatim (source portal, gauge, wander). */
+  road?: { chance: number } & ExitRoadSpec;
   guardian: GuardianSpec;
   unlock: UnlockSpec;
   reward: RewardSpec;
@@ -91,10 +106,6 @@ export interface HoldfastDef {
   slaughterOpensChance: number;
   /** Map marker for a sealed holdfast (fog:'charted'). */
   marker?: { glyph: string; color: string };
-  /** Per-instance VISUAL VARIANTS rolled at placement (so gates aren't all identical):
-   *  a gravel ROAD running through the gate aligned to the exit (the toll reads as a
-   *  maintained, deliberate waypost), and/or a campfire. Each is an independent chance. */
-  decor?: { roadChance?: number; campfireChance?: number };
 }
 
 /** Global Holdfast knobs carried by the package (the gate config + the registry). */
@@ -124,19 +135,23 @@ const BANDIT_MARKER = { glyph: '⚑', color: '#c8a04a' };
 /** A warden seizes ONE of your loose support gems at random; the gate opens. */
 export const BANDIT_TOLLGATE: HoldfastDef = {
   id: 'bandit_tollgate', name: 'Roadwarden Toll',
-  structure: 'toll_gate', guardian: BANDIT_GUARDIAN,
+  gate: 'toll_gate', guardian: BANDIT_GUARDIAN,
+  // The wardens usually keep a road (the lived-in read); the odd toll on raw
+  // ground reads as freshly raised. Sourced at the layout's entry anchor, so
+  // arriving travelers walk in ON the way that leads to the gate.
+  road: { chance: 0.8, from: 'entry' },
   unlock: { kind: 'pay-gem', payment: 'random-take', gemKind: 'support' },
   reward: { kind: 'open-exit', destLevelDelta: 0 },
   sealedHint: 'the toll-gate bars the way — pay the wardens, or find another road',
   weight: 2, minLevel: 1, slaughterOpensChance: 0.1, marker: BANDIT_MARKER,
-  decor: { roadChance: 0.5, campfireChance: 0.55 },
 };
 
 /** The wardens let you CHOOSE which gem to surrender — and the gem you give steers
  *  what waits down the road (a martial gem → a brute warren, an arcane gem → a crypt…). */
 export const BANDIT_TOLLGATE_CHOICE: HoldfastDef = {
   id: 'bandit_tollgate_choice', name: "Roadwarden's Bargain",
-  structure: 'toll_gate', guardian: BANDIT_GUARDIAN,
+  gate: 'toll_gate', guardian: BANDIT_GUARDIAN,
+  road: { chance: 0.8, from: 'entry' },
   unlock: { kind: 'pay-gem', payment: 'drop-to-choose', gemKind: 'support' },
   reward: {
     kind: 'open-exit', destLevelDelta: 0,
@@ -151,7 +166,6 @@ export const BANDIT_TOLLGATE_CHOICE: HoldfastDef = {
   },
   sealedHint: 'the wardens will bargain — offer a gem of your choosing',
   weight: 1, minLevel: 1, slaughterOpensChance: 0.1, marker: BANDIT_MARKER,
-  decor: { roadChance: 0.5, campfireChance: 0.55 },
 };
 
 /** The guardian registry (the open seam — Goblin-cave / coin-toll / temple are
