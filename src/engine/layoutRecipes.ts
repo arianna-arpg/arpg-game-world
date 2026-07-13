@@ -1234,3 +1234,147 @@ function aetherLatticeLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('aether_lattice', aetherLatticeLayout);
+
+// --- AETHER SPIRES (the High Heavens) --------------------------------------------
+// Great BASES of cloudscape crowned with AUREATE COURTS — pale marble floors,
+// tiered spires, statue rings, braziers — joined by narrow, ephemeral SPANS.
+// The architecture is FOREVER: courts, portals and stable decks never melt.
+// The frailty lives at the edges of things: every base wears a FRAYING RIM of
+// cloud_frail, and each bridge ROLLS stable or frail — the shimmering wash IS
+// the warning (CollapseSpec.melts names cloud_frail alone, so a fight on a
+// frail span drops the span, never the court). D3's High Heavens, walked.
+// Knobs are layoutParams: bases, baseRadius, courtFrac, frailRim,
+// bridgeFrailChance, spans width.
+function aetherSpiresLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  const all = Mask.forRect(0, 0, arena.w, arena.h);
+  all.invert();
+  paintRegion(grid, all, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  const M = 120;
+  const baseR = layoutParam(def, 'baseRadius', [210, 300]) as [number, number];
+  const baseN = layoutParam(def, 'bases', [4, 6]) as [number, number];
+  const frailRim = layoutParam(def, 'frailRim', 0.22) as number; // rim share that frays
+  interface Base { x: number; y: number; r: number; court: boolean }
+  const bases: Base[] = [];
+  for (let i = 0, n = rng.int(baseN[0], baseN[1]); i < n; i++) {
+    const r = rng.range(baseR[0], baseR[1]);
+    const cx = rng.range(M + r * 0.7, Math.max(M + r * 0.7, arena.w - M - r * 0.7));
+    const cy = rng.range(M + r * 0.7, Math.max(M + r * 0.7, arena.h - M - r * 0.7));
+    bases.push({ x: cx, y: cy, r, court: false });
+  }
+  // Portal footings: the entry + every exit stands on its own small STABLE deck.
+  for (const pt of [ctx.entry, ...ctx.exits]) bases.push({ x: pt.x, y: pt.y, r: 135, court: false });
+
+  // Paint each base: a frail SKIRT first, the stable deck over its heart —
+  // so the rim (and only the rim) may let go. Lobes keep coasts torn.
+  const frail = Mask.forRect(0, 0, arena.w, arena.h);
+  const deck = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const b of bases) {
+    disc(frail, b.x, b.y, b.r);
+    disc(deck, b.x, b.y, b.r * (1 - frailRim));
+    for (let l = 0, ln = rng.int(1, 2); l < ln; l++) {
+      const a = rng.range(0, Math.PI * 2);
+      const lr = b.r * rng.range(0.4, 0.6);
+      const lx = b.x + Math.cos(a) * b.r * 0.6, ly = b.y + Math.sin(a) * b.r * 0.6;
+      disc(frail, lx, ly, lr);
+      disc(deck, lx, ly, lr * (1 - frailRim));
+    }
+  }
+
+  // THE SPANS: chain every base to its nearest linked neighbour, then a loop
+  // or two. Each span ROLLS its footing — stable stone-cloud, or the
+  // ephemeral frail ribbon that shimmers and lets go. Straight and built
+  // (low wobble): these are BRIDGES, not game trails. All reserved.
+  // WIDTH FLOOR: band() marks cells whose CENTER falls inside halfW — under
+  // ~GEN_CELL*0.75 a span rasterizes as broken dashes (the genqa
+  // unreachable-exit lesson), so the narrowest honest bridge is ~46 wide.
+  const spanW = layoutParam(def, 'spans', [46, 58]) as [number, number];
+  const frailChance = layoutParam(def, 'bridgeFrailChance', 0.45) as number;
+  const linked: Base[] = [bases[bases.length - 1]];
+  const pending = bases.slice(0, -1);
+  const bridge = (a: Base, b: Base): void => {
+    const pts = wanderPath(rng, { x: a.x, y: a.y }, { x: b.x, y: b.y }, { step: 150, wobble: 20, bowFrac: 0.1 });
+    const halfW = rng.range(spanW[0], spanW[1]) / 2;
+    band(rng.chance(frailChance) ? frail : deck, pts, halfW);
+    reserveArtery(ctx, pts, halfW);
+    // Gateposts: braziers FLANKING each span mouth (perpendicular offset —
+    // never in the throat: a lamp that seals its own bridge lights nothing).
+    const ang = Math.atan2(b.y - a.y, b.x - a.x);
+    for (const end of [a, b]) {
+      const out = end === a ? ang : ang + Math.PI;
+      const mx = end.x + Math.cos(out) * (end.r * 0.6);
+      const my = end.y + Math.sin(out) * (end.r * 0.6);
+      for (const s of [-1, 1]) {
+        ctx.doodads.push({
+          pos: vec(mx + Math.cos(out + Math.PI / 2) * s * (halfW + 16),
+            my + Math.sin(out + Math.PI / 2) * s * (halfW + 16)),
+          radius: rng.range(9, 11), kind: 'aureate_brazier',
+        });
+      }
+    }
+  };
+  while (pending.length) {
+    let bi = 0, bj = 0, best = Infinity;
+    for (let i = 0; i < pending.length; i++) {
+      for (let j = 0; j < linked.length; j++) {
+        const d = (pending[i].x - linked[j].x) ** 2 + (pending[i].y - linked[j].y) ** 2;
+        if (d < best) { best = d; bi = i; bj = j; }
+      }
+    }
+    const to = pending.splice(bi, 1)[0];
+    bridge(linked[bj], to);
+    linked.push(to);
+  }
+  for (let i = 0, n = rng.int(1, 2); i < n && bases.length > 3; i++) {
+    const a = rng.pick(bases), b = rng.pick(bases);
+    if (a !== b) bridge(a, b);
+  }
+
+  // Lay the ground: frail skirt UNDER, stable deck OVER (paint order is the
+  // guarantee — decks and courts always win where they overlap the fray).
+  paintRegion(grid, frail, 'cloud_frail');
+  paintRegion(grid, deck, 'ground');
+
+  // THE COURTS: the largest bases raise architecture — a marble floor, the
+  // tiered spire (or a statue court on lesser ones), braziers at the rim.
+  const courts = [...bases].filter(b => b.r > 170).sort((a, b) => b.r - a.r)
+    .slice(0, rng.int(2, 3));
+  const court = Mask.forRect(0, 0, arena.w, arena.h);
+  courts.forEach((b, i) => {
+    b.court = true;
+    disc(court, b.x, b.y, b.r * 0.52);
+    ctx.pois.push(vec(b.x, b.y));
+    ctx.reserved.push({ pos: vec(b.x, b.y), radius: 60 });
+    if (i === 0) {
+      // The grandest court holds the Spire of Dawn itself.
+      ctx.doodads.push({ pos: vec(b.x, b.y), radius: rng.range(28, 36), kind: 'spire_of_dawn' });
+      (ctx.mustReach ??= []).push(vec(b.x, b.y));
+    } else {
+      // Lesser courts: a bowed ring of the Host's marble.
+      const n = rng.int(4, 6);
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2 + rng.range(0, 0.5);
+        ctx.doodads.push({
+          pos: vec(b.x + Math.cos(a) * b.r * 0.34, b.y + Math.sin(a) * b.r * 0.34),
+          radius: rng.range(16, 22), kind: 'seraph_statue', rot: a + Math.PI,
+        });
+      }
+    }
+    // Court rim: braziers pacing the marble's edge.
+    const braziers = rng.int(3, 5);
+    for (let k = 0; k < braziers; k++) {
+      const a = (k / braziers) * Math.PI * 2 + 0.4;
+      ctx.doodads.push({
+        pos: vec(b.x + Math.cos(a) * b.r * 0.5, b.y + Math.sin(a) * b.r * 0.5),
+        radius: rng.range(9, 12), kind: 'aureate_brazier',
+      });
+    }
+  });
+  paintRegion(grid, court, 'aureate_court');
+
+  // The tileset's dressing scatters walk-gated over deck and fray alike.
+  scatterDecoration(ctx, def);
+}
+registerLayout('aether_spires', aetherSpiresLayout);

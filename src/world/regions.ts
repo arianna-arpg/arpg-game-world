@@ -326,6 +326,24 @@ registerRegion({
   // torn cloud-edge; the fill only ever shows with no understory beneath.
   visual: { fill: '#10131d', alpha: 1, window: true, edge: { color: '#f2f6fd', width: 6 } },
 });
+// FRAIL CLOUD: cloud-stuff that was never meant to hold you — the High
+// Heavens' ephemeral spans and fraying skirts. Walkable and honest about it:
+// a duskier, faintly SHIMMERING wash marks every span that may let go (the
+// stable deck wears no wash at all — the distinction IS the read). The
+// collapse fabric names it via CollapseSpec.melts, so on spire ground ONLY
+// frail cells ever crumble: the courts and the marble stand forever.
+registerRegion({
+  id: 'cloud_frail', walkable: true, blocks: false, label: 'the frail cloud',
+  visual: { fill: '#8e97b8', alpha: 0.3, animate: 'shimmer' },
+});
+// AUREATE COURT: the High Heavens' built floor — pale gold-washed marble
+// coursework atop the great cloud bases (a walkable region, so the same
+// paint serves any future celestial architecture). Never in any melts list:
+// what the Host BUILT does not fall.
+registerRegion({
+  id: 'aureate_court', walkable: true, blocks: false, label: 'the court',
+  visual: { fill: '#efe9d6', alpha: 0.5 },
+});
 // DEEP WATER: walkable but you SWIM (slowed) and your BREATH drains; out of air
 // you start drowning (the survival system). The underwater zones' open sea.
 registerRegion({

@@ -1167,4 +1167,15 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { stone: '#8a8d96', water: '#7fc4d8', spray: '#eef6fb' },
     light: { radius: -2.6, color: '#9fd8e8', intensity: 0.2 },
   },
+  // The High Heavens kit (aether_spires): the monument + the court's fire.
+  spire_of_dawn: {
+    painter: 'spireOfDawn', order: 56, shadow: 0.55, longShadow: 2.2,
+    params: { marble: '#eceade', gold: '#d8b56a', light: 'theme:accent|#fff2c8' },
+    light: { radius: -4.2, color: '#ffeeb8', intensity: 0.55, flicker: 0.5 },
+  },
+  aureate_brazier: {
+    painter: 'campfire', order: 53, shadow: 0.4, longShadow: 0.6,
+    params: { bowl: true, flame: '#fff2c8' },
+    light: { radius: -5, color: '#ffe9a8', intensity: 0.5, flicker: 4 },
+  },
 };

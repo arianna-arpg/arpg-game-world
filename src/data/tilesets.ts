@@ -2674,6 +2674,122 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE HIGH SPIRES — the Aetherial's built country (the D3 High Heavens
+  // read): great cloudscape bases crowned with AUREATE COURTS — marble
+  // floors, the tiered Spire of Dawn, statue rings, braziers — joined by
+  // narrow EPHEMERAL SPANS. Two clouds, one honest read: the stable deck
+  // wears the plain floor; the FRAIL cloud (base rims, rolled bridges)
+  // shimmers dusk-grey — and it alone melts (CollapseSpec.melts), contact-
+  // only: no ambient wavefront gnaws the courts, but a fight held on a
+  // frail span drops the span. What the Host built does not fall.
+  aether_spires: {
+    id: 'aether_spires',
+    biome: 'aether_spires',
+    nameFirst: ['Aurelian', 'Empyrean', 'Zenith', 'Highspire', 'Dawnhold', 'Vesperal'],
+    nameSecond: ['Courts', 'Spans', 'Gallery', 'Approach', 'Terraces', 'Processional'],
+    theme: {
+      floor: '#e6e9f4', grid: '#cbd3e8', border: '#9aabce',
+      obstacle: '#eef1f9', obstacleEdge: '#b0bcd6', accent: '#ffdf9a',
+      wall: '#d2d9ec', water: '#9fd8e8',
+      dayLight: 1.3, nightDark: 0.48, heat: 0.4,
+      ground: {
+        palette: ['#c9d2e8', '#d7def0', '#e4e9f6', '#f0f3fb', '#fbfcff'],
+        bias: 0.62, alpha: 0.52, scale: 1.8, strength: 0.85, speckles: 0.3, evenness: 0.32,
+      },
+      ambientFx: [
+        { kind: 'motes', color: '#fff2d8', intensity: 0.7 },
+        { kind: 'aurora', color: '#ffdf9a', intensity: 0.3 },
+      ],
+      fog: { banks: [1, 3], kinds: [{ id: 'aether_veil' }] },
+      // The Nether tie usually resolves the true surface below; the deck is
+      // the fallback past the charted world's edge.
+      understory: 'cloudsea',
+      // CONTACT-ONLY, FRAIL-ONLY: the fabric's melts list is the whole
+      // doctrine — courts, decks and portals are not in it.
+      collapse: {
+        region: 'cloud_void',
+        melts: ['cloud_frail'],
+        crumble: 1.2,
+        contact: { delay: 2.0, radius: 12 },
+        fall: { kind: 'below', damageFrac: 0.05, grace: 0.4 },
+      },
+    },
+    sizeW: [2400, 3200], sizeH: [1700, 2400], ellipseChance: 0,
+    forceLayout: 'aether_spires',
+    layout: [
+      { kind: 'cloud_billow', count: [6, 10] },
+      { kind: 'seraph_statue', count: [2, 4] },
+      { kind: 'harp_pillar', count: [4, 8] },
+      { kind: 'prayer_bell', count: [2, 4] },
+      { kind: 'aether_crystal', count: [3, 6] },
+      { kind: 'flowers', count: [1, 3] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [90, 130] },
+    ],
+    variants: [
+      // VESPERAL GALLERY: the violet hour over the courts — frailer spans.
+      {
+        name: 'vesperal gallery',
+        layout: [
+          { kind: 'cloud_billow', count: [5, 9] },
+          { kind: 'seraph_statue', count: [3, 5] },
+          { kind: 'harp_pillar', count: [5, 9] },
+          { kind: 'aether_crystal', count: [4, 7] },
+        ],
+        theme: {
+          floor: '#d4d6ea', accent: '#c8b8ff', dayLight: 1.05, nightDark: 0.6,
+          ground: {
+            palette: ['#a8aecd', '#bac0da', '#ccd1e6', '#dee1f0', '#f0f2fa'],
+            bias: 0.56, alpha: 0.52, scale: 1.8, strength: 0.9, speckles: 0.3, evenness: 0.32,
+          },
+          ambientFx: [
+            { kind: 'motes', color: '#d8ccff', intensity: 0.7 },
+            { kind: 'aurora', color: '#b09fee', intensity: 0.45 },
+          ],
+          understory: 'cloudsea',
+          collapse: {
+            region: 'cloud_void',
+            melts: ['cloud_frail'],
+            crumble: 1.0,
+            contact: { delay: 1.6, radius: 13 },
+            fall: { kind: 'below', damageFrac: 0.06, grace: 0.35 },
+          },
+        },
+      },
+    ],
+    // Where the shelves are crossed, the courts are HELD: the Host's line
+    // troops guard the architecture (walkers can hold ground that holds).
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'cherub_wisp', weight: 3 },
+        { id: 'power_of_the_bastion', weight: 3, presence: { from: 11, fadeIn: 4 } },
+        { id: 'virtue_lance', weight: 2.5 },
+        { id: 'lampad_of_the_vigil', weight: 2.5, presence: { from: 11, fadeIn: 4 } },
+        { id: 'herald_of_the_choir', weight: 2, presence: { from: 12, fadeIn: 4 } },
+        { id: 'dominion_scales', weight: 2, presence: { from: 13, fadeIn: 5 } },
+        { id: 'ophan_wheel', weight: 1.5 },
+        { id: 'throne_of_the_law', weight: 1.5, presence: { from: 13, fadeIn: 5 } },
+        { id: 'watcher_unblinking', weight: 1.5 },
+        { id: 'principality_of_dawn', weight: 0.6, presence: { from: 15, fadeIn: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled
+    // The courts STAND — so the fights are stand-up fights: clear-weighted,
+    // with escape as the rarer mood (a processional overrun).
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
+    compositions: [
+      { composition: 'choir_ring', chance: 0.45 },
+      { composition: 'harp_gallery', chance: 0.4 },
+    ],
+  },
+
   // THE FIRMAMENT — the Aetherial's sanctum face: the gate zone's tileset
   // (biome 'aether_sanctum' resolves here). The same lattice run dense and
   // UNBROKEN — wide causeways, no sky-holes, and NO CollapseSpec: this

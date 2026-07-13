@@ -230,7 +230,10 @@ export type KnownDoodadKind =
   | 'harp_pillar'      // a slender fluted column strung with shimmering light
   | 'prayer_bell'      // a small bronze bell in a marble yoke, swaying a whisper
   | 'ascendant_gate'   // THE realm gate: leaning posts, a broken arch, breathing light
-  | 'sky_geyser';      // the surface-side mouth of the Ascent: a breathing spray vent
+  | 'sky_geyser'       // the surface-side mouth of the Ascent: a breathing spray vent
+  // The High Heavens kit (the aether_spires biome — courts and spans)
+  | 'spire_of_dawn'    // the monumental tiered spire, lanced with standing light
+  | 'aureate_brazier'; // a gold bowl burning white — the courts light their own
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -1031,6 +1034,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The geyser mouth is a sidezone TRIGGER (data/sidezones.ts registers the
   // dwell); huge spacing — one spring is a landmark, two is a puddle field.
   sky_geyser:     { overlap: 'trigger', spacing: 500 },
+  // The High Heavens kit: the spire is a TRUE monument (blocks shots — solid
+  // marble tiers); the brazier is court furniture.
+  spire_of_dawn:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 300, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  aureate_brazier: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 44 },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -3182,6 +3189,9 @@ registerStamp('aether_crystal', stampSingle('aether_crystal', [13, 22]));
 registerStamp('seraph_statue', stampSingle('seraph_statue', [16, 24]));
 registerStamp('harp_pillar', stampSingle('harp_pillar', [10, 14]));
 registerStamp('prayer_bell', stampSingle('prayer_bell', [9, 12]));
+// The High Heavens kit: monuments of the courts.
+registerStamp('spire_of_dawn', stampSingle('spire_of_dawn', [26, 36]));
+registerStamp('aureate_brazier', stampSingle('aureate_brazier', [9, 12]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));

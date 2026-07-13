@@ -356,6 +356,65 @@ const skyGeyser: GroupPainter = (env, group, def) => {
   }
 };
 
+/** THE SPIRE OF DAWN — the High Heavens' monument: concentric marble tiers
+ *  climbing to a needle that holds a standing lance of light. Top-down: the
+ *  tiers read as rings, the needle as a bright heart, the lance as a slow
+ *  halo-flare the light layer finishes. */
+const spireOfDawn: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { marble?: ColorSpec; gold?: ColorSpec; light?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const marble = resolveColor(p.marble, theme, '#eceade');
+  const gold = resolveColor(p.gold, theme, '#d8b56a');
+  const light = resolveColor(p.light, theme, '#fff2c8');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 43 + o.pos.y * 29) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The stepped tiers: each ring lit on its sun side, seamed in gold.
+    for (let i = 4; i >= 1; i--) {
+      const tr = r * (0.24 + i * 0.19);
+      ctx.fillStyle = shade(marble, 0.02 * (4 - i) - 0.08);
+      ctx.beginPath();
+      ctx.arc(0, 0, tr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = withAlpha(shade(marble, 0.14), 0.75);
+      ctx.beginPath();
+      ctx.arc(-tr * 0.18, -tr * 0.18, tr * 0.82, Math.PI * 0.85, Math.PI * 1.85);
+      ctx.arc(0, 0, tr, Math.PI * 1.85, Math.PI * 0.85, true);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(gold, 0.6);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, tr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // Buttress fins between the outer tiers.
+    ctx.fillStyle = shade(marble, -0.16);
+    for (let k = 0; k < 6; k++) {
+      const a = (k / 6) * Math.PI * 2 + hash01(seed, 2) * 0.5;
+      ctx.save();
+      ctx.rotate(a);
+      ctx.fillRect(r * 0.62, -r * 0.05, r * 0.34, r * 0.1);
+      ctx.restore();
+    }
+    // The needle heart + the standing lance (a breathing flare).
+    const breathe = 0.7 + Math.sin(time * 1.3 + seed) * 0.3;
+    for (let i = 3; i >= 1; i--) {
+      ctx.fillStyle = withAlpha(light, 0.18 * breathe * i);
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.1 * i, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = light;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.09, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+PAINTERS.spireOfDawn = spireOfDawn;
 PAINTERS.cloudBillow = cloudBillow;
 PAINTERS.aetherCrystal = aetherCrystal;
 PAINTERS.seraphStatue = seraphStatue;

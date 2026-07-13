@@ -352,6 +352,16 @@ export const BIOMES: Record<string, BiomeInfo> = {
     allowedLayouts: { aether_lattice: 1 },
     eventDensityMul: 0.3,
     layoutParams: { isles: [5, 7], isleRadius: [200, 300], causewayWidth: [70, 95], holes: [0, 0] } },
+  // THE HIGH SPIRES — the Aetherial's built country (the D3 High Heavens
+  // read): great cloud bases crowned with aureate courts and tiered spires,
+  // joined by narrow ephemeral spans. The architecture never falls; the
+  // FRAY does — base rims and rolled bridges are cloud_frail, the one kind
+  // the biome's CollapseSpec melts. In the dimension's frontier palette
+  // beside the shelves: the realm's two moods.
+  aether_spires: { patronFaction: 'seraphic', mapColor: '#e0d8b8', label: 'High Spires', spacing: 90,
+    allowedLayouts: { aether_spires: 1 },
+    eventDensityMul: 0.4,
+    denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
 };
 
 /** The imposed sea biome's id (see BIOMES.ocean — virtual, continent-imposed). */
