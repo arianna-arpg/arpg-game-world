@@ -60,6 +60,13 @@ export interface DimensionDef {
    *  gravelands keep the cooler marches). Registered into the climate leaf at
    *  registerDimension time; everything else rides the shared field pick. */
   climate?: Record<string, DimensionAxisOverride>;
+  /** WAYPOINTS in this world-state (default true). `false` = NO zone here
+   *  ever carries one — not the gate, not a frontier roll, and fast-travel
+   *  refuses the whole dimension: the realm must be CROSSED every time
+   *  (persisted defs from older saves heal at load). The Aetherial swears
+   *  this: a waypoint into dissolving ground is a stuck-loop machine, and
+   *  heaven with a shortcut is just a lobby. */
+  waypoints?: boolean;
   /** PER-DIMENSION EVENT TEMPO — this world-state's own frequency levers.
    *  densityMul scales every package overlay's ignition here (default 1);
    *  packages[id] overrides per package (demonic incursions ×2.5 below the
@@ -177,6 +184,11 @@ registerDimension({
   // The Host keeps its own weather: world events run at HALF tempo above
   // the clouds (and the aether biome's own denies gate the worst offenders).
   events: { densityMul: 0.5 },
+  // NO WAYPOINTS above the clouds: the realm is crossed (geyser up, gate
+  // through, fall out) — never teleported into. A waypoint on a shelf whose
+  // ground dissolves is a rubberband loop waiting to happen; the Firmament
+  // holds the door, not a shortcut.
+  waypoints: false,
   // Entered by RIDING A SKY GEYSER (the Ascent): the launch drops you on a
   // collapsing shelf hung over the very zone you left; crossing its eroding
   // causeway to the ASCENDANT GATE (entry.gateDoodad — the realm-gate dwell

@@ -48,6 +48,10 @@ export const eventsTab: DevTabDef = {
       forceEvent('Mycelia (bloom here)', (w, v, z) => w.sim.myceliaField?.devIgnite(v, z) ?? false),
       forceEvent('Haunting (grief here)', (w, v, z) => w.sim.hauntField?.devIgnite(v, z) ?? false),
       forceEvent('Breach (tear here)', (w, v, z) => (w.sim.breachField?.devIgnite(v, z) ?? null) !== null),
+      // ASCENT: vent a sky geyser beside the player — dwell into the spray to
+      // ride the launch (the shelf is the zone's own: same pocket the organic
+      // roll would open). Works anywhere with standing ground, even the town.
+      forceEvent('Sky Geyser (vent here)', (w) => w.devSpawnGeyser()),
       forceEvent('Amalgamation (Bonewright here)', (w, v, z) => w.sim.amalgamationField?.devOpen(v, z) ?? false),
       forceEvent('Vendetta (post a writ)', (w, v, z) => w.sim.vendettaField?.devIgnite(v, z) ?? false),
       // WORLD BOSSES: the three archetypes, each on its own trigger. The

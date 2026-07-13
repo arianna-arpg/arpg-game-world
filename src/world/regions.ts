@@ -312,13 +312,15 @@ registerRegion({
 // physics (bodies can't cross, shots and sight sail over, levitators float
 // free) under the SKY's own read: a WINDOW region — the ground baker clears
 // these cells so the understory (the zone far below, the endless cloud sea)
-// shows THROUGH the hole instead of painting an abyss-black pit. Brushing the
-// gap is forgiving — confined at the lip, a scare of damage — because the
-// real drop is the floor crumbling UNDER you (the collapse fabric routes that
-// fall, per the zone's CollapseSpec, all the way down to the land below).
+// shows THROUGH the hole instead of painting an abyss-black pit. The lip is
+// a PLAIN CONFINEMENT — no damage, no eject, no per-frame "fell!" chatter:
+// walking against a gap just stops you, like a shore (the old fall-at-edge
+// recovery read as rubberbanding). The one true drop is the floor crumbling
+// UNDER you — the collapse fabric routes that fall, per the zone's
+// CollapseSpec, all the way down to the land below.
 registerRegion({
   id: 'cloud_void', walkable: false, blocks: false, label: 'the open sky',
-  boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.05, type: 'physical', canKill: false } },
+  boundaryPolicy: { kind: 'block' },
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
   // The cloud lip: sunlit white on every standing side, so each gap reads as
   // torn cloud-edge; the fill only ever shows with no understory beneath.

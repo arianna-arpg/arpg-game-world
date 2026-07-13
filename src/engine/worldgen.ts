@@ -18,7 +18,7 @@ import type { ObjectiveSpec, ZoneDef, ZoneExitDef } from '../data/zones';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, biomeSpacing } from '../world/biomes';
-import { dimensionsEnteredBy } from '../world/dimensions';
+import { dimensionDef, dimensionsEnteredBy } from '../world/dimensions';
 import type { CourseMintHints } from '../world/courses';
 
 // The node-space coordinate vocabulary (Dir, MapCoord, MAP_DIR, projectCoord) now
@@ -662,7 +662,10 @@ export function placeZoneAt(
   // WAYPOINT VETO: no waypoint may spawn within an existing exclusion zone's radius
   // (the anti-teleport gate around a boss arena). Excludes the zone being minted from
   // its own radius. Measured in Euclidean node-space (the same convention everywhere).
-  const wpCand = spec.forceWaypoint ?? rng.chance(0.3);
+  // A WAYPOINTLESS DIMENSION (DimensionDef.waypoints: false — the Aetherial)
+  // vetoes outright, AFTER the ??-chain so the seeded draw order is untouched.
+  const wpCand = (spec.forceWaypoint ?? rng.chance(0.3))
+    && dimensionDef(spec.dimension).waypoints !== false;
   const wpBlocked = Object.values(zoneMap).some(z =>
     z.wpExclusionRadius !== undefined && z.id !== id && coordDist(target, z.map) < z.wpExclusionRadius);
   const def: ZoneDef = {

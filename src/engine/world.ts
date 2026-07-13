@@ -3281,6 +3281,14 @@ export class World {
       this.fonts.push({ pos: this.clampPos(vec(at.x, at.y), 18) });
     }
     // The waypoint, for zones that carry one (the town's always burns).
+    // A WAYPOINTLESS DIMENSION (DimensionDef.waypoints: false) heals any
+    // persisted def that predates the vow — the flag strips, the attunement
+    // forgets, and no ring ever lights up here again (save tolerance: older
+    // Aetherial saves carried a Firmament waypoint).
+    if (def.waypoint && dimensionDef(def.dimension).waypoints === false) {
+      def.waypoint = false;
+      this.discoveredWaypoints.delete(def.id);
+    }
     this.waypointPos = null;
     if (def.waypoint) {
       const at = def.id === START_ZONE
@@ -4246,7 +4254,10 @@ export class World {
         level: Math.max(this.zone.level + (dim.levelBonus ?? 0), this.player.level),
         seed: (this.manifest.seed ^ gateSpec.seedSalt) >>> 0,
         name: gateSpec.name,
-        forceWaypoint: true, // the anchor: once attuned, the dimension is a map-travel away
+        // The anchor: once attuned, the dimension is a map-travel away —
+        // UNLESS the dimension swears off waypoints entirely (the Aetherial:
+        // heaven with a shortcut is just a lobby; you cross every time).
+        forceWaypoint: dim.waypoints !== false,
         dimension: dim.id,
         objective: { kind: 'clear' }, // arrivals carry no entryFrom — never gated
         // The way home is placeZoneAt's back-edge to the (other-dimension)
@@ -6856,25 +6867,49 @@ export class World {
       at = this.clearTransitSpot(p);
     }
     if (!at) return;
+    this.ventGeyser(at, hashStr(`${def.id}:sky_geyser`));
+    bumpLedger(this.ledger, 'geysers_seen'); // DISCOVERY — surfaces the Vault unlock
+  }
+
+  /** Stand a sky geyser up at a spot: the mouth doodad, the warm spring
+   *  dressing, and the sidezone entrance (the shared dwell loop owns the
+   *  ride from here). `pocketSeed` keys the shelf — POSITION-FREE for the
+   *  organic roll (one geyser per zone → one shelf per zone, however the
+   *  spring wanders between visits). */
+  private ventGeyser(at: Vec2, pocketSeed: number): void {
     this.doodads.push({ pos: vec(at.x, at.y), radius: 30, kind: 'sky_geyser' });
     // The spring's pool: warm water lapping the terrace (ground overlay —
     // wading, wake rings, the works ride the ordinary region machinery).
     for (let i = 0; i < 3; i++) {
-      const a = roll.range(0, Math.PI * 2);
-      const pool = { pos: vec(at.x + Math.cos(a) * 26, at.y + Math.sin(a) * 26), radius: roll.range(22, 32), kind: 'water' as const };
+      const a = rand(0, Math.PI * 2);
+      const pool = { pos: vec(at.x + Math.cos(a) * 26, at.y + Math.sin(a) * 26), radius: rand(22, 32), kind: 'water' as const };
       this.doodads.push(pool);
       this.grounds.push(pool);
     }
-    // The mouth joins the sidezone machinery like a layout-placed one — but
-    // its pocket seed is POSITION-FREE (one geyser per zone → one shelf per
-    // zone, however the spring wanders between visits).
     this.caveEntrances.push({
       pos: this.clampPos(vec(at.x, at.y), 28),
-      seed: hashStr(`${def.id}:sky_geyser`),
+      seed: pocketSeed,
       kind: 'sky_geyser',
     });
-    bumpLedger(this.ledger, 'geysers_seen'); // DISCOVERY — surfaces the Vault unlock
     this.text(vec(at.x, at.y - 36), 'A geyser roars toward the sky…', '#9fd8ff', 15);
+  }
+
+  /** DEV: force a sky geyser to vent beside the player (Events tab) — the
+   *  Ascent's mouth without the lottery. Same shelf as the zone's organic
+   *  geyser would open (position-free pocket seed), no discovery ledger. */
+  devSpawnGeyser(): boolean {
+    const p = this.player;
+    let at: Vec2 | null = null;
+    for (let tries = 0; tries < 16 && !at; tries++) {
+      const ang = rand(0, Math.PI * 2);
+      const cand = this.clampPos(vec(
+        p.pos.x + Math.cos(ang) * rand(80, 140),
+        p.pos.y + Math.sin(ang) * rand(80, 140)), 34);
+      at = this.clearTransitSpot(cand);
+    }
+    if (!at) return false;
+    this.ventGeyser(at, hashStr(`${this.zone.id}:sky_geyser`));
+    return true;
   }
 
   private placeDescentDelver(def: ZoneDef): void {
@@ -22971,6 +23006,13 @@ export class World {
   travelToWaypoint(zoneId: string): boolean {
     if (!this.discoveredWaypoints.has(zoneId) || this.zone.id === zoneId) return false;
     if (this.player.dead || this.gameOver) return false;
+    // A waypointless DIMENSION refuses fast-travel outright (belt over the
+    // mint-side veto: an attunement smuggled in by an older save still
+    // cannot fire — the Aetherial is crossed, never teleported into).
+    if (dimensionDef(this.zoneMap[zoneId]?.dimension).waypoints === false) {
+      this.text(this.player.pos, 'no road bends that high — the realm must be crossed', '#9fc0e8', 13);
+      return false;
+    }
     // ANTI-TELEPORT gate: refuse fast-travel to a waypoint sitting within an arena's
     // exclusion radius — even if it was attuned before the arena existed — so the
     // player must trek the last few zones each run (Mephisto-style farming friction).
@@ -23181,40 +23223,75 @@ export class World {
     }
   }
 
-  /** The floor under the player is gone. On a shelf that hangs over real land
-   *  (ZoneDef.below + fall.kind 'below'), drop THROUGH — the sky-fall crossing
-   *  lands them on the world beneath at the very spot they fell, the shelf's
-   *  anchor mapping between the two. Anywhere else: scramble out at the rim. */
+  /** The nearest CHARTED surface zone to a map coordinate — where a body
+   *  falling out of a realm with no anchored ground beneath it comes down
+   *  (the realm hangs over the world; the world is always down there).
+   *  Special/boss stages refuse sky arrivals. */
+  private nearestSurfaceZoneId(at: { x: number; y: number }): string | null {
+    let best: string | null = null, bd = Infinity;
+    for (const z of Object.values(this.zoneMap)) {
+      if ((z.dimension ?? 'surface') !== 'surface' || z.special) continue;
+      const d = (z.map.x - at.x) ** 2 + (z.map.y - at.y) ** 2;
+      if (d < bd) { bd = d; best = z.id; }
+    }
+    return best;
+  }
+
+  /** The floor under the player is gone — THE DROP. Every fall in a vertical
+   *  realm truly falls (the old rim-scramble teleport read as rubberbanding):
+   *  a shelf with an anchor (ZoneDef.below) lands you on the land beneath at
+   *  the very spot you fell (the anchor maps 1:1); anywhere else the sky
+   *  resolves the nearest charted SURFACE zone under the realm and lets you
+   *  go over open ground there. `fall.kind: 'eject'` remains the data option
+   *  for ground that should scramble instead of drop (a future crumbling
+   *  bridge over a river, not over a world). */
   private beginSkyfall(): void {
     if (this.traversal) return;
     const shelf = this.zone;
-    const below = shelf.below;
     const fall = shelf.theme.collapse?.fall;
-    if (!below || fall?.kind !== 'below') {
+    const hurt = (): void => {
+      if (fall?.damageFrac) this.applyEnvDamage(this.player, { amount: 0, pctMaxLife: fall.damageFrac, type: 'physical', canKill: false });
+    };
+    if (fall?.kind === 'eject') {
       const s = this.walk?.snapToWalkable(this.player.pos) ?? this.zoneEntry;
       this.teleportActor(this.player, vec(s.x, s.y), '#cfe0ff');
-      if (fall?.damageFrac) this.applyEnvDamage(this.player, { amount: 0, pctMaxLife: fall.damageFrac, type: 'physical', canKill: false });
-      this.text(vec(this.player.pos.x, this.player.pos.y - 32), 'you scramble back onto standing cloud!', '#cfe0ff', 14);
+      hurt();
+      this.text(vec(this.player.pos.x, this.player.pos.y - 32), 'you scramble back onto standing ground!', '#cfe0ff', 14);
       return;
     }
+    // Resolve where the world catches you: the anchored zone below, else the
+    // nearest charted surface zone, else home. (below may name a pocket —
+    // resolve against both maps the way loadZone will.)
+    const below = shelf.below;
+    const anchored = !!below && !!(this.zoneMap[below.zoneId] ?? this.caveMap[below.zoneId]);
+    const destId = anchored ? below!.zoneId
+      : this.nearestSurfaceZoneId(shelf.map) ?? START_ZONE;
     const from = vec(this.player.pos.x, this.player.pos.y);
     this.beginTraversal('sky_fall', {
       swap: () => {
-        // Map the fall point through the shelf's anchor onto the land below:
-        // the shelf's center hangs above (ax, ay), so offsets carry 1:1.
-        const dx = from.x - shelf.size.w / 2, dy = from.y - shelf.size.h / 2;
         const ret = this.caveReturn;
         this.caveReturn = this.caveStack.pop() ?? null;
-        this.loadZone(below.zoneId, (ret && ret.zoneId === below.zoneId ? ret.entryFrom : null) ?? undefined);
-        const land = this.clampPos(vec(below.ax + dx, below.ay + dy), this.player.radius);
+        this.loadZone(destId, (ret && ret.zoneId === destId ? ret.entryFrom : null) ?? undefined);
+        // Anchored: map the fall point through the shelf's center↔anchor.
+        // Unanchored: come down over open ground mid-zone — never on the
+        // entry portal (a sky-fall that lands you on a door reads as a
+        // teleport, not a fall).
+        const land = anchored
+          ? this.clampPos(vec(below!.ax + (from.x - shelf.size.w / 2), below!.ay + (from.y - shelf.size.h / 2)), this.player.radius)
+          : this.clampPos(vec(
+            this.arena.w / 2 + rand(-this.arena.w * 0.22, this.arena.w * 0.22),
+            this.arena.h / 2 + rand(-this.arena.h * 0.22, this.arena.h * 0.22)), this.player.radius);
         this.player.pos = vec(land.x, land.y);
         const seatActors = new Set<Actor>(this.seats.map(s => s.actor));
         for (const a of this.actors) {
           if (a === this.player || !seatActors.has(a)) continue;
           a.pos = this.clampPos(vec(land.x + rand(-60, 60), land.y + rand(30, 70)), a.radius);
         }
-        this.caveExitGrace = true; // in case the fall lands you back at the mouth
-        if (fall.damageFrac) this.applyEnvDamage(this.player, { amount: 0, pctMaxLife: fall.damageFrac, type: 'physical', canKill: false });
+        this.caveExitGrace = true; // in case the fall lands you back at a mouth
+        hurt();
+        if (!anchored) {
+          this.text(vec(land.x, land.y - 40), `the sky lets you go — ${this.zone.name} rises to meet you`, '#9fc0e8', 14);
+        }
       },
     });
   }

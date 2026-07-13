@@ -48,9 +48,15 @@ collapse erodes.
 - **Who falls** — the field reports; the World routes. Fliers/levitators are
   immune (`a.flying || a.levitates`), mid-leap/mid-dash bodies are skipped
   (dash out of a crumbling cell!), the player gets the coyote `fall.grace`
-  then the sky-fall crossing (or an eject-scramble when nothing hangs below),
-  ally seats snap to standing ground, and everything else is simply KEPT by
-  the sky — no corpse, no loot, no credit.
+  then the sky-fall crossing, ally seats snap to standing ground, and
+  everything else is simply KEPT by the sky — no corpse, no loot, no credit.
+- **Where you land** — every fall truly DROPS (`fall.kind: 'below'`): the
+  anchored zone beneath (`ZoneDef.below`, 1:1 through the shelf's center),
+  else the nearest charted SURFACE zone under the realm (open-ground landing,
+  never on a portal), else home. `'eject'` remains the data option for ground
+  that should scramble instead of drop. The LIP of a gap is a plain
+  confinement — no damage, no per-frame recovery: the only fall is the floor
+  leaving you.
 - Runtime: `World.collapse: CollapseField | null`, built at the loadZone tail,
   ticked in `updateCollapse` beside fog/heat. Renderer wobble/crack overlay =
   `drawCollapseOverlay` reading `field.active` + `crumbleFrac(i)` (ablate pass
