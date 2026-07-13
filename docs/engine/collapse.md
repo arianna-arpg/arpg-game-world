@@ -50,13 +50,21 @@ collapse erodes.
   (dash out of a crumbling cell!), the player gets the coyote `fall.grace`
   then the sky-fall crossing, ally seats snap to standing ground, and
   everything else is simply KEPT by the sky — no corpse, no loot, no credit.
-- **Where you land** — every fall truly DROPS (`fall.kind: 'below'`): the
-  anchored zone beneath (`ZoneDef.below`, 1:1 through the shelf's center),
-  else the nearest charted SURFACE zone under the realm (open-ground landing,
-  never on a portal), else home. `'eject'` remains the data option for ground
-  that should scramble instead of drop. The LIP of a gap is a plain
-  confinement — no damage, no per-frame recovery: the only fall is the floor
-  leaving you.
+- **Where you land — THE NETHER TIE** (`DimensionDef.over`): a realm that
+  hangs over another shares its map-coordinate space, and every zone in it
+  resolves the nearest charted zone of the world below at its own coordinate
+  (`World.skyBelow`, per loadZone; authored `ZoneDef.below` anchors outrank
+  it). Every fall truly DROPS (`fall.kind: 'below'`): anchored shelves land
+  1:1 through the shelf's center; over-tied zones land at the PROPORTIONAL
+  spot — where you stood above is where you come down, on the very terrain
+  the windows showed. `'eject'` remains the data option. The LIP of a gap is
+  a plain confinement — no damage, no per-frame recovery: the only fall is
+  the floor leaving you.
+- **Selective ground** (`melts`) — the High Spires pattern: register a
+  second walkable cloud (`cloud_frail`, a shimmering dusk wash — the visual
+  IS the warning) and name it alone in `melts`. Courts, decks and portals
+  stay `ground` and never arm; contact-only specs (no `ambient`) make the
+  frailty purely trafficked — a fight held on a frail span drops the span.
 - Runtime: `World.collapse: CollapseField | null`, built at the loadZone tail,
   ticked in `updateCollapse` beside fog/heat. Renderer wobble/crack overlay =
   `drawCollapseOverlay` reading `field.active` + `crumbleFrac(i)` (ablate pass
@@ -91,9 +99,16 @@ against the shelf:
   clipped to the land's true bounds, altitude haze + desaturation baked) into
   an LRU keyed by the destination id (`TraversalCapture`). One-time cost,
   hidden under the cinematic.
+- **Headless mode** — no live capture around (dev jump, re-entered shelf,
+  any over-tied realm zone): the below zone's layout mints deterministically
+  from its own def (`generateLayout`, portal pixels from the placeExit math)
+  and paints the same aerial. Anchored shelves get their 1:1 window;
+  over-tied zones get the WHOLE resolved surface zone STRETCHED beneath them
+  — the stretch the proportional fall agrees with. Field/boundless zones
+  decline honestly.
 - **Cloud-sea mode** (`ZoneTheme.understory: 'cloudsea'`) — the endless
-  procedural deck; also the fallback when a shelf's capture never existed
-  (dev jump, resumed run). Drifting cloud shadows cross both.
+  procedural deck; the last-resort fallback. Drifting cloud shadows cross
+  everything.
 - `ZoneDef.below: { zoneId, ax, ay }` is the shared anchor: the shelf's
   center hangs over `(ax, ay)`, so falls map 1:1 and the capture window
   frames the same ground the holes reveal. Pure data; serializes verbatim.
