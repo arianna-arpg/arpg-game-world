@@ -362,6 +362,17 @@ export const BIOMES: Record<string, BiomeInfo> = {
     allowedLayouts: { aether_spires: 1 },
     eventDensityMul: 0.4,
     denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
+  // THE DRIFTWAYS — the Aetherial's wind country (the realm's third mood):
+  // anchor isles strung across open sky, crossed on the FLUX fabric's own
+  // ground — phasing stepping-stone pads, shuttling carrier rafts, gusts
+  // that shove (the tileset's theme carries the FluxSpec). Pools in the
+  // realm's WETTEST reaches — the storm shelves the climate axes were
+  // waiting for (dimensions.ts foretold them).
+  aether_drift: { patronFaction: 'seraphic', mapColor: '#a8dce8', label: 'Driftways', spacing: 92,
+    climate: { moisture: { from: 0.26, fadeIn: 0.1 } },
+    allowedLayouts: { aether_drift: 1 },
+    eventDensityMul: 0.4,
+    denyEvents: ['demon_invasion', 'contagion', 'mycelia'] },
 };
 
 /** The imposed sea biome's id (see BIOMES.ocean — virtual, continent-imposed). */

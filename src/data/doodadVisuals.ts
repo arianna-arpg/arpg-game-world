@@ -1178,4 +1178,33 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { bowl: true, flame: '#fff2c8' },
     light: { radius: -5, color: '#ffe9a8', intensity: 0.5, flicker: 4 },
   },
+  // The Driftways kit (aether_drift): wind furniture — poles, lanterns,
+  // chimes, vanes, the sculpted vapor-stone, and the vane-crowned monument.
+  zephyr_totem: {
+    painter: 'zephyrTotem', order: 52, shadow: 0.4, longShadow: 0.9,
+    params: { wood: '#b9c4dc', carve: '#7f8db4', streamer: '#bfe8f4' },
+    light: { radius: -3.2, color: '#bfe8f4', intensity: 0.22, flicker: 2 },
+  },
+  sky_lantern: {
+    painter: 'skyLantern', order: 55, shadow: 0.18,
+    params: { paper: '#ffe6c0', frame: '#c88a4a', glow: '#ffd27f' },
+    light: { radius: -4.2, color: '#ffd9a0', intensity: 0.42, flicker: 3 },
+  },
+  chime_stand: {
+    painter: 'chimeStand', order: 52, shadow: 0.35,
+    params: { frame: '#e6e5df', chime: '#d8e8f4', cord: '#8a90a8' },
+  },
+  gale_vane: {
+    painter: 'galeVane', order: 51, shadow: 0.3,
+    params: { pole: '#9aa4c0', vane: '#ffd27f', tail: '#dce6f2' },
+  },
+  cloud_coral: {
+    painter: 'cloudCoral', order: 46, shadow: 0.28,
+    params: { body: 'theme:obstacle|#e4ebf6', shade: 'theme:obstacleEdge|#a2b2d2', rim: '#fdfdff' },
+  },
+  spire_of_gales: {
+    painter: 'spireOfGales', order: 58, shadow: 0.5, longShadow: 1.6,
+    params: { marble: '#e6e5df', gold: '#d8b56a', streamer: '#bfe8f4' },
+    light: { radius: -2.6, color: '#bfe8f4', intensity: 0.3 },
+  },
 };

@@ -660,3 +660,23 @@ registerFormation({
     { kind: 'aether_crystal', radius: [12, 16], every: 3, jitter: 14 },
   ],
 });
+
+// THE TOTEM RING (the Driftways): wind-spirit poles circling a common
+// center, a vane posted between them — the drift-folk's compass rose.
+registerFormation({
+  id: 'totem_ring', arrange: 'ring', span: [130, 200], step: 82,
+  pieces: [
+    { kind: 'zephyr_totem', radius: [11, 15], jitter: 7 },
+    { kind: 'gale_vane', radius: [9, 12], every: 3, jitter: 12, rot: true },
+  ],
+});
+
+// THE CHIME WALK (the Driftways): a wandering line of aeolian chimes with
+// lanterns pacing it — the wind's own colonnade, played not built.
+registerFormation({
+  id: 'chime_walk', arrange: 'meander', span: [280, 480], step: 76,
+  pieces: [
+    { kind: 'chime_stand', radius: [10, 13], jitter: 9 },
+    { kind: 'sky_lantern', radius: [8, 11], every: 3, jitter: 12 },
+  ],
+});

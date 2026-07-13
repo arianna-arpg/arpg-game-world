@@ -355,6 +355,22 @@ registerRegion({
   id: 'cloud_flux', walkable: true, blocks: false, label: 'the shifting cloud',
   visual: { fill: '#10131d', alpha: 1, window: true },
 });
+// THE ALTERNATORS: cloud_flux's identical twins. A stepping-stone chain
+// interleaves A-B-A-B so TOUCHING pads remain SEPARATE platforms — flux
+// components split per kind — while the chain stays contiguous for the
+// generation reachability invariant. The THIRD kind is the satellite's: a
+// side-stone hangs off any chain pad without ever fusing chains together
+// (a B-kind satellite touching the next B pad cascade-merged whole chains
+// into 200-cell mega-pads — the live-QA lesson). Same policy, same window;
+// only the component math tells them apart.
+registerRegion({
+  id: 'cloud_flux_b', walkable: true, blocks: false, label: 'the shifting cloud',
+  visual: { fill: '#10131d', alpha: 1, window: true },
+});
+registerRegion({
+  id: 'cloud_flux_c', walkable: true, blocks: false, label: 'the shifting cloud',
+  visual: { fill: '#10131d', alpha: 1, window: true },
+});
 // DRIFT LANE: a carrier's footprint (and, during the warmup, the whole lane
 // band). Walkable exactly where a raft currently holds the sky open.
 registerRegion({

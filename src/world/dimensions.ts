@@ -188,6 +188,10 @@ registerDimension({
   biomes: [
     { biome: 'aether', weight: 1 },
     { biome: 'aether_spires', weight: 0.9 },
+    // THE DRIFTWAYS — the wind country: ground that comes and goes (the
+    // flux fabric). Its climate gate pools it in the realm's wettest
+    // reaches — the storm shelves foretold below.
+    { biome: 'aether_drift', weight: 0.9 },
   ],
   levelBonus: 4,
   // The high air: cold, thin, and bone-dry — no seas above the sky. The

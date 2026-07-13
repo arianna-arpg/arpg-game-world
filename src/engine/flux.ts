@@ -129,8 +129,13 @@ export interface FluxSpec {
   /** Region kind flux ground shows while GONE (default 'flux_void' — a
    *  window visual with NO edge; the flux layer draws the living rims). */
   region?: string;
-  /** Walkable kind whose painted components become phasing PADS. */
-  phases?: string;
+  /** Walkable kind(s) whose painted components become phasing PADS. The
+   *  default TRIO (cloud_flux + _b + _c) is the ALTERNATOR idiom: a
+   *  generator interleaves A/B down a stepping-stone chain — touching pads
+   *  stay SEPARATE platforms (components split per kind) while the chain
+   *  stays CONTIGUOUS for the generation reachability invariant — and hangs
+   *  satellites off it in C, which fuses with neither chain kind. */
+  phases?: string | string[];
   /** Walkable kind whose painted bands become carrier LANES. */
   carries?: string;
   /** Kind protected cells solidify into at build (portal clears, slivers). */
@@ -193,6 +198,8 @@ export interface FluxEvents {
 
 interface FluxPad {
   cells: Int32Array;
+  /** The pad's own painted kind (alternator pads rewrite as themselves). */
+  kind: string;
   cx: number; cy: number;
   /** View-cull bound (center → farthest cell + a cell). */
   bound: number;
@@ -251,7 +258,7 @@ export class FluxField {
   readonly warmup: number;
   private readonly fallGrace: number;
   private readonly voidKind: string;
-  private readonly padKind: string;
+  private readonly padKinds: Set<string>;
   private readonly laneKind: string;
   private driftBegunFlag = false;
   private readonly teeter = new WeakMap<FluxActorLike, number>();
@@ -270,7 +277,8 @@ export class FluxField {
     this.warmup = spec.warmup ?? FLUX_CFG.warmup;
     this.fallGrace = spec.fall?.grace ?? FLUX_CFG.fallGrace;
     this.voidKind = spec.region ?? 'flux_void';
-    this.padKind = spec.phases ?? 'cloud_flux';
+    this.padKinds = new Set(Array.isArray(spec.phases) ? spec.phases
+      : spec.phases ? [spec.phases] : ['cloud_flux', 'cloud_flux_b', 'cloud_flux_c']);
     this.laneKind = spec.carries ?? 'cloud_lane';
     const stable = spec.stable ?? 'ground';
     const n = walk.cols * walk.rows;
@@ -286,7 +294,7 @@ export class FluxField {
     // baked ground — never an invisible always-on cloud.
     const portalClear = spec.portalClear ?? FLUX_CFG.portalClear;
     const kindAt = (i: number): string => walk.regionAt(cx(i), cy(i));
-    const isPad = (i: number): boolean => kindAt(i) === this.padKind;
+    const isPad = (i: number): boolean => this.padKinds.has(kindAt(i));
     const isLane = (i: number): boolean => kindAt(i) === this.laneKind;
     const clearPts = [...holds, goal];
     const protectedAt = (i: number): boolean =>
@@ -323,8 +331,17 @@ export class FluxField {
     const laneComps: number[][] = [];
     for (let i = 0; i < n; i++) {
       if (seen[i]) continue;
-      if (isPad(i)) padComps.push(flood(i, isPad));
-      else if (isLane(i)) laneComps.push(flood(i, isLane));
+      if (isPad(i)) {
+        // PER-KIND flood — the whole alternator idiom: a component is cells
+        // of ONE pad kind, so interleaved A-B chains split into separate
+        // platforms exactly where the kinds change hands. (A union flood
+        // here fused entire chains into 200-cell mega-pads: the live-QA
+        // lesson this comment survives.)
+        const k = kindAt(i);
+        padComps.push(flood(i, j => kindAt(j) === k));
+      } else if (isLane(i)) {
+        laneComps.push(flood(i, isLane));
+      }
     }
     // Slivers solidify: a two-cell blinker reads as noise, not rhythm.
     const keepPads: number[][] = [];
@@ -389,7 +406,8 @@ export class FluxField {
       }
       const idx = this.pads.length;
       this.pads.push({
-        cells: Int32Array.from(comp), cx: pcx, cy: pcy, bound: bound + cell,
+        cells: Int32Array.from(comp), kind: kindAt(comp[0]),
+        cx: pcx, cy: pcy, bound: bound + cell,
         offset: off !== undefined ? ((off % 1) + 1) % 1 : this.rng.range(0, scatter),
         rung: p.rung, seed, lobes, walkNow: true,
       });
@@ -514,13 +532,16 @@ export class FluxField {
   }
 
   /** A carrier's position/heading along its lane at time t: shuttle with an
-   *  end dwell, phase-offset per raft. Pure — never integrated. */
+   *  end dwell, phase-offset per raft. Pure — never integrated. Rafts hold
+   *  still through the warmup (their runs begin when the drift does), so
+   *  drift-begin hands each one off with NO teleport. */
   private carrierPosAt(lane: FluxLane, c: FluxCarrier, t: number):
     { x: number; y: number; hx: number; hy: number; moving: boolean } {
+    const tt = Math.max(0, t - this.warmup);
     const dwell = this.spec.carrier?.dwell ?? FLUX_CFG.carrierDwell;
     const legT = lane.len / Math.max(1, c.speed);
     const cycle = 2 * (legT + dwell);
-    const u = ((t / cycle + c.phase) % 1 + 1) % 1;
+    const u = ((tt / cycle + c.phase) % 1 + 1) % 1;
     let dist: number, forward: boolean, moving = true;
     const uu = u * cycle;
     if (uu < legT) { dist = (uu / legT) * lane.len; forward = true; }
@@ -589,7 +610,7 @@ export class FluxField {
     if (!this.annexed.delete(i)) return false;
     const pi = this.cellPad[i];
     if (pi >= 0) {
-      this.writeCellKind(i, this.padWalkableAt(this.pads[pi]) ? this.padKind : this.voidKind);
+      this.writeCellKind(i, this.padWalkableAt(this.pads[pi]) ? this.pads[pi].kind : this.voidKind);
       return true;
     }
     const li = this.cellLane[i];
@@ -622,10 +643,14 @@ export class FluxField {
       this.driftBegunFlag = true;
       if (this.pads.length || this.lanes.length) events.driftBegun = true;
       // Lanes let go of everything but their rafts in one honest burst.
+      // Each raft's occupied set primes HERE so the first moving tick diffs
+      // against the truth (an unprimed set would orphan ghost-walkable
+      // cells at the raft's starting berth forever).
       for (const lane of this.lanes) {
         const keep = new Set<number>();
         for (const c of lane.carriers) {
-          for (const i of this.rasterizeCarrier(lane, c)) keep.add(i);
+          c.occupied = this.rasterizeCarrier(lane, c);
+          for (const i of c.occupied) keep.add(i);
         }
         for (const i of lane.member) {
           if (keep.has(i) || this.annexed.has(i)) continue;
@@ -640,7 +665,7 @@ export class FluxField {
         const walkNow = this.padWalkableAt(pad);
         if (walkNow === pad.walkNow) continue;
         pad.walkNow = walkNow;
-        const id = walkNow ? this.padKind : this.voidKind;
+        const id = walkNow ? pad.kind : this.voidKind;
         for (const i of pad.cells) {
           if (this.annexed.has(i)) continue;
           this.writeCellKind(i, id);

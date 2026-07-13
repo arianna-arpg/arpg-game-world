@@ -305,3 +305,28 @@ registerComposition({
     { kind: 'aether_crystal', count: [2, 4] },
   ],
 });
+
+// THE VANE COURT (the Driftways): the drift-folk's compass rose — totems
+// ringing a cleared reading of the wind, crystal glinting between them.
+registerComposition({
+  id: 'vane_court',
+  sites: [{ id: 'court', radius: [130, 180] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [55, 80] }],
+  post: [
+    { kind: 'formation', formation: 'totem_ring', at: 'court', count: [1, 1] },
+    { kind: 'aether_crystal', count: [1, 2] },
+  ],
+});
+
+// THE CHIME GALLERY (the Driftways): a wandering walk of aeolian chimes on
+// an anchor isle — stand here long enough and the gusts announce themselves
+// in song before they ever reach you.
+registerComposition({
+  id: 'chime_gallery',
+  sites: [{ id: 'walk', radius: [140, 200] }],
+  pre: [{ kind: 'clearing', at: 'walk', count: [1, 1], radius: [50, 70] }],
+  post: [
+    { kind: 'formation', formation: 'chime_walk', at: 'walk', count: [1, 2] },
+    { kind: 'sky_lantern', count: [1, 2] },
+  ],
+});

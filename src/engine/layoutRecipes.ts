@@ -1378,3 +1378,230 @@ function aetherSpiresLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('aether_spires', aetherSpiresLayout);
+
+// --- AETHER DRIFT (the Driftways) -------------------------------------------
+// The Aetherial's WIND COUNTRY: anchor isles of standing cloud strung across
+// open sky, joined not by causeways but by the DRIFT — stepping-stone chains
+// of phasing pads and long carrier lanes, all of it painted region kinds the
+// flux fabric (engine/flux.ts) wakes at runtime. The platformer's promise as
+// generation: every crossing is walkable AT GENERATION TIME (the
+// reachability invariant and genqa prove the whole route), and honest at
+// RUNTIME (the fabric makes exactly that ground come and go).
+//
+// THE ALTERNATOR IDIOM: pad chains interleave cloud_flux / cloud_flux_b so
+// consecutive stepping stones TOUCH (contiguity for generation) yet remain
+// SEPARATE platforms (flux components split per kind — each phases alone).
+// Adaptive stepping guarantees each overlap is at least a rasterized cell
+// wide (the band() width-floor lesson, applied to lenses).
+//
+// Knobs are layoutParams: isles, isleRadius, basinHalf, padR, padOverlap,
+// satelliteEvery, laneHalf, loops.
+function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  // The open sky first (the lipped OUTER void — flux basins repaint their
+  // own lip-less sky under every crossing).
+  const all = Mask.forRect(0, 0, arena.w, arena.h);
+  all.invert();
+  paintRegion(grid, all, layoutParam(def, 'skyRegion', 'cloud_void'));
+
+  const M = 120;
+  const isleR = layoutParam(def, 'isleRadius', [130, 190]) as [number, number];
+  const isleN = layoutParam(def, 'isles', [4, 6]) as [number, number];
+  interface Isle { x: number; y: number; r: number; anchor: boolean }
+  const isles: Isle[] = [];
+  for (let i = 0, n = rng.int(isleN[0], isleN[1]); i < n; i++) {
+    const r = rng.range(isleR[0], isleR[1]);
+    isles.push({
+      x: rng.range(M + r * 0.7, Math.max(M + r * 0.7, arena.w - M - r * 0.7)),
+      y: rng.range(M + r * 0.7, Math.max(M + r * 0.7, arena.h - M - r * 0.7)),
+      r, anchor: false,
+    });
+  }
+  // THE MONUMENT ISLE: the farthest true isle raises the Spire of Gales —
+  // picked before the portal footings join so it stands in country, not on
+  // a doorstep.
+  let monument = isles[0];
+  let bd = -1;
+  for (const p of isles) {
+    const d = (p.x - ctx.entry.x) ** 2 + (p.y - ctx.entry.y) ** 2;
+    if (d > bd) { bd = d; monument = p; }
+  }
+  // Portal footings: the entry + every exit stands on its own standing cloud.
+  for (const pt of [ctx.entry, ...ctx.exits]) isles.push({ x: pt.x, y: pt.y, r: 125, anchor: true });
+
+  // Paint the isles (lobed coasts, the lattice's read).
+  const carve = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const b of isles) {
+    disc(carve, b.x, b.y, b.r);
+    for (let l = 0, ln = rng.int(1, 2); l < ln; l++) {
+      const a = rng.range(0, Math.PI * 2);
+      disc(carve, b.x + Math.cos(a) * b.r * 0.55, b.y + Math.sin(a) * b.r * 0.55, b.r * rng.range(0.4, 0.6));
+    }
+  }
+
+  // --- THE CROSSINGS: chain every isle to its nearest linked neighbour, ----
+  // then a loop or two. Each link rolls PAD CHAIN or CARRIER LANE — and the
+  // zone always carries both moods: the longest link is forced a lane, the
+  // shortest a chain.
+  const basinHalfP = layoutParam(def, 'basinHalf', [100, 135]) as [number, number];
+  const padRP = layoutParam(def, 'padR', [44, 58]) as [number, number];
+  const padOverlapP = layoutParam(def, 'padOverlap', [26, 38]) as [number, number];
+  const satEvery = layoutParam(def, 'satelliteEvery', 3) as number;
+  const laneHalfP = layoutParam(def, 'laneHalf', [26, 31]) as [number, number];
+  const basin = Mask.forRect(0, 0, arena.w, arena.h);
+  const laneM = Mask.forRect(0, 0, arena.w, arena.h);
+  const padA = Mask.forRect(0, 0, arena.w, arena.h);
+  const padB = Mask.forRect(0, 0, arena.w, arena.h);
+  const padC = Mask.forRect(0, 0, arena.w, arena.h); // satellites only
+
+  interface Link { a: Isle; b: Isle; len: number }
+  const links: Link[] = [];
+  const linked: Isle[] = [isles[isles.length - 1]];
+  const pending = isles.slice(0, -1);
+  while (pending.length) {
+    let bi = 0, bj = 0, best = Infinity;
+    for (let i = 0; i < pending.length; i++) {
+      for (let j = 0; j < linked.length; j++) {
+        const d = (pending[i].x - linked[j].x) ** 2 + (pending[i].y - linked[j].y) ** 2;
+        if (d < best) { best = d; bi = i; bj = j; }
+      }
+    }
+    const to = pending.splice(bi, 1)[0];
+    links.push({ a: linked[bj], b: to, len: Math.sqrt(best) });
+    linked.push(to);
+  }
+  // Loop links DEDUPE against every existing pair: two crossings routed
+  // between the same two isles overlap paths and fuse their pad chains.
+  const linkKey = (a: Isle, b: Isle): string =>
+    `${Math.min(isles.indexOf(a), isles.indexOf(b))}:${Math.max(isles.indexOf(a), isles.indexOf(b))}`;
+  const seenLinks = new Set(links.map(l => linkKey(l.a, l.b)));
+  for (let i = 0, n = rng.int(1, layoutParam(def, 'loops', 2) as number); i < n && isles.length > 3; i++) {
+    const a = rng.pick(isles), b = rng.pick(isles);
+    if (a === b || seenLinks.has(linkKey(a, b))) continue;
+    seenLinks.add(linkKey(a, b));
+    links.push({ a, b, len: Math.hypot(b.x - a.x, b.y - a.y) });
+  }
+  let longest = links[0], shortest = links[0];
+  for (const l of links) {
+    if (l.len > longest.len) longest = l;
+    if (l.len < shortest.len) shortest = l;
+  }
+
+  const lanterns: { x: number; y: number }[] = [];
+  for (const link of links) {
+    const isLane = link === longest ? true : link === shortest ? false
+      : rng.chance(link.len > 520 ? 0.55 : 0.25);
+    if (isLane) {
+      // A CARRIER LANE: straight and deliberate (a shipping run, not a game
+      // trail). The band rides the width floor honestly (52-62 wide).
+      const pts = wanderPath(rng, { x: link.a.x, y: link.a.y }, { x: link.b.x, y: link.b.y },
+        { step: 160, wobble: 16, bowFrac: 0.08 });
+      const halfW = rng.range(laneHalfP[0], laneHalfP[1]);
+      band(basin, pts, halfW + rng.range(basinHalfP[0], basinHalfP[1]) * 0.55);
+      band(laneM, pts, halfW);
+      reserveArtery(ctx, pts, halfW + 24);
+      // Dock lanterns flanking each mouth (perpendicular — never in the
+      // throat: the span-brazier lesson) and WIDE of the raft's sweep: the
+      // stakes are pass-through, but a lantern the raft plows past every
+      // run reads wrong.
+      const ang = Math.atan2(link.b.y - link.a.y, link.b.x - link.a.x);
+      for (const end of [link.a, link.b]) {
+        const out = end === link.a ? ang : ang + Math.PI;
+        const mx = end.x + Math.cos(out) * (end.r * 0.72);
+        const my = end.y + Math.sin(out) * (end.r * 0.72);
+        for (const s of [-1, 1]) {
+          lanterns.push({
+            x: mx + Math.cos(out + Math.PI / 2) * s * (halfW + 44),
+            y: my + Math.sin(out + Math.PI / 2) * s * (halfW + 44),
+          });
+        }
+      }
+    } else {
+      // A PAD CHAIN: stepping stones walked off the wander path with
+      // ADAPTIVE spacing — each pad overlaps its neighbour by a full
+      // rasterized cell (contiguous at generation), alternating kinds so
+      // each remains its own platform at runtime. LOW wobble: a fold-back
+      // brings same-kind pads k and k+2 into contact and fuses them.
+      const pts = wanderPath(rng, { x: link.a.x, y: link.a.y }, { x: link.b.x, y: link.b.y },
+        { step: 120, wobble: 24, bowFrac: 0.12 });
+      band(basin, pts, rng.range(basinHalfP[0], basinHalfP[1]));
+      reserveArtery(ctx, pts, 70);
+      // Walk the polyline by arc length, dropping pads as we go.
+      const cum: number[] = [0];
+      for (let k = 1; k < pts.length; k++) {
+        cum.push(cum[k - 1] + Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y));
+      }
+      const total = cum[cum.length - 1];
+      const at = (d: number): Vec2 => {
+        let k = 1;
+        while (k < cum.length - 1 && cum[k] < d) k++;
+        const seg = Math.max(0.001, cum[k] - cum[k - 1]);
+        const f = Math.min(1, Math.max(0, (d - cum[k - 1]) / seg));
+        return vec(pts[k - 1].x + (pts[k].x - pts[k - 1].x) * f, pts[k - 1].y + (pts[k].y - pts[k - 1].y) * f);
+      };
+      // The stepper keeps TWO invariants at once: adjacent (opposite-kind)
+      // pads overlap by a rasterized cell (contiguity), and same-kind pads
+      // two apart stay separated by a margin that survives the arc→chord
+      // shrink (fusion cascades read as one mega-platform — the live-QA
+      // lesson). Feasible by construction for the roll ranges here.
+      let dNow = 0, flip = rng.chance(0.5), padIdx = 0;
+      let rCur = rng.range(padRP[0], padRP[1]);
+      let dBack1 = -Infinity, rBack1 = 0; // the pad just placed (opposite kind)
+      let dBack2 = -Infinity, rBack2 = 0; // two back — the SAME kind as this one
+      while (dNow < total) {
+        // Same-kind separation guard against the pad two back (arc distance
+        // with a margin that survives the arc→chord shrink).
+        if (dNow - dBack2 < rCur + rBack2 + 14) {
+          dNow = dBack2 + rCur + rBack2 + 14;
+          if (dNow >= total) break;
+        }
+        const p = at(dNow);
+        disc(flip ? padA : padB, p.x, p.y, rCur);
+        // A satellite hop every few pads: a side stone for the risk-taker's
+        // shortcut or the stranded moment's out. ALWAYS the third kind — it
+        // touches its host without fusing to either chain kind (a same-kind
+        // satellite bridging pads k and k+1 cascade-merged whole chains).
+        if (padIdx > 0 && padIdx % satEvery === 0 && dNow + 120 < total) {
+          const q = at(Math.min(total, dNow + 24));
+          const tang = Math.atan2(q.y - p.y, q.x - p.x) + Math.PI / 2;
+          const sr = rng.range(34, 46);
+          const side = rng.chance(0.5) ? 1 : -1;
+          const off = rCur + sr - rng.range(26, 34);
+          disc(padC, p.x + Math.cos(tang) * side * off, p.y + Math.sin(tang) * side * off, sr);
+        }
+        dBack2 = dBack1; rBack2 = rBack1;
+        dBack1 = dNow; rBack1 = rCur;
+        const rNext = rng.range(padRP[0], padRP[1]);
+        dNow += rCur + rNext - rng.range(padOverlapP[0], padOverlapP[1]);
+        rCur = rNext;
+        flip = !flip;
+        padIdx++;
+      }
+    }
+  }
+
+  // Lay the ground: basins' own lip-less sky UNDER, lanes and pads over it,
+  // the standing isles LAST (coasts always win where a crossing lands).
+  paintRegion(grid, basin, layoutParam(def, 'fluxRegion', 'flux_void'));
+  paintRegion(grid, laneM, 'cloud_lane');
+  paintRegion(grid, padA, 'cloud_flux');
+  paintRegion(grid, padB, 'cloud_flux_b');
+  paintRegion(grid, padC, 'cloud_flux_c');
+  paintRegion(grid, carve, 'ground');
+
+  // The monument: the Spire of Gales, POI + mustReach (genqa proves the
+  // drift can be crossed to it — the runtime fabric keeps it honest).
+  ctx.doodads.push({ pos: vec(monument.x, monument.y), radius: rng.range(26, 32), kind: 'spire_of_gales' });
+  ctx.pois.push(vec(monument.x, monument.y));
+  (ctx.mustReach ??= []).push(vec(monument.x, monument.y));
+  ctx.reserved.push({ pos: vec(monument.x, monument.y), radius: 110 });
+  // Dock lanterns placed after the ground exists (they stand on coasts).
+  for (const l of lanterns) {
+    ctx.doodads.push({ pos: vec(l.x, l.y), radius: rng.range(8, 11), kind: 'sky_lantern' });
+  }
+
+  // The tileset's dressing scatters walk-gated over the standing cloud.
+  scatterDecoration(ctx, def);
+}
+registerLayout('aether_drift', aetherDriftLayout);

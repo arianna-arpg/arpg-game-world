@@ -233,7 +233,14 @@ export type KnownDoodadKind =
   | 'sky_geyser'       // the surface-side mouth of the Ascent: a breathing spray vent
   // The High Heavens kit (the aether_spires biome — courts and spans)
   | 'spire_of_dawn'    // the monumental tiered spire, lanced with standing light
-  | 'aureate_brazier'; // a gold bowl burning white — the courts light their own
+  | 'aureate_brazier'  // a gold bowl burning white — the courts light their own
+  // The Driftways kit (the aether_drift biome — wind country over the flux)
+  | 'zephyr_totem'     // a carved wind-spirit pole trailing pale streamers (lit)
+  | 'sky_lantern'      // a tethered paper lantern bobbing on the wind (warm light)
+  | 'chime_stand'      // an aeolian chime frame — the wind plays the zone's score
+  | 'gale_vane'        // a weathervane arrow leaning hard into the prevailing run
+  | 'cloud_coral'      // wind-sculpted vapor-stone: layered shelf-fins, rim-lit
+  | 'spire_of_gales';  // the monument: a tiered vane-crowned spire, streamered
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -1038,6 +1045,18 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // marble tiers); the brazier is court furniture.
   spire_of_dawn:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 300, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   aureate_brazier: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 44 },
+  // The Driftways kit: wind furniture — thin poles and light frames an arrow
+  // sails past (nothing here blocks shots but the monument), spaced open so
+  // the drift's own clouds stay the star.
+  zephyr_totem:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, bodyScale: 0.8 },
+  // The lantern is a LIGHT ON A STRING — its stake is no barrier: bodies
+  // walk through freely (a dock post that scrapes riders off their raft is
+  // a trap, not decor — the live-ride QA found exactly that).
+  sky_lantern:    { overlap: 'ground', spacing: 56 },
+  chime_stand:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85 },
+  gale_vane:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7 },
+  cloud_coral:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 34, bodyScale: 0.88 },
+  spire_of_gales: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 300, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -3197,6 +3216,13 @@ registerStamp('prayer_bell', stampSingle('prayer_bell', [9, 12]));
 // The High Heavens kit: monuments of the courts.
 registerStamp('spire_of_dawn', stampSingle('spire_of_dawn', [26, 36]));
 registerStamp('aureate_brazier', stampSingle('aureate_brazier', [9, 12]));
+// The Driftways kit: wind furniture.
+registerStamp('zephyr_totem', stampSingle('zephyr_totem', [11, 15]));
+registerStamp('sky_lantern', stampSingle('sky_lantern', [8, 11]));
+registerStamp('chime_stand', stampSingle('chime_stand', [10, 13]));
+registerStamp('gale_vane', stampSingle('gale_vane', [9, 12]));
+registerStamp('cloud_coral', stampSingle('cloud_coral', [16, 30]));
+registerStamp('spire_of_gales', stampSingle('spire_of_gales', [24, 32]));
 // The flesh kit: breathing membranes, pulsing veins, watching stalks, the
 // last tenant's ribs, and (rarely) a row of teeth.
 registerStamp('flesh_membrane', (ctx, spec) => stampBlob(ctx, 'flesh_membrane', spec.radius ?? [24, 48], [3, 5], false));

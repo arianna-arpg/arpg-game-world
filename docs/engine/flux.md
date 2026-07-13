@@ -21,9 +21,17 @@ rest at build:
 
 | Painted kind | Becomes |
 | --- | --- |
-| `cloud_flux` | PADS — connected components phase as one platform each |
+| `cloud_flux` / `_b` / `_c` | PADS — connected components OF ONE KIND phase as one platform each |
 | `cloud_lane` | LANES — each band's skeleton hosts spaced, shuttling carriers |
 | `flux_void` | the sky inside a flux basin (a `window` visual, NO edge) |
+
+**THE ALTERNATOR IDIOM** — the trio exists so stepping-stone chains can be
+CONTIGUOUS at generation (the reachability invariant walks them) yet
+SEPARATE platforms at runtime: interleave `cloud_flux` / `cloud_flux_b`
+down a chain (touching pads of different kinds never fuse — components are
+per-kind) and hang satellites off it in `cloud_flux_c` (which fuses with
+neither chain kind). A union flood here once welded whole chains into
+200-cell mega-pads; the per-kind flood is the fabric's load-bearing line.
 
 Any generator, stamp, formation or composition that can paint cells can
 build flux country; the `FluxSpec` on the theme sets only the TEMPO. Pads

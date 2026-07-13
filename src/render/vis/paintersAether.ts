@@ -414,6 +414,324 @@ const spireOfDawn: GroupPainter = (env, group, def) => {
   }
 };
 
+// ===========================================================================
+// THE DRIFTWAYS KIT (aether_drift) — wind furniture. Everything here reads
+// MOTION: streamers and chimes lean one seeded prevailing way and flutter on
+// the frame clock, so even the still ground says which way the sky is going.
+// ===========================================================================
+
+/** A ZEPHYR TOTEM — a carved wind-spirit pole trailing pale streamers. */
+const zephyrTotem: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; carve?: ColorSpec; streamer?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const wood = resolveColor(p.wood, theme, '#b9c4dc');
+  const carve = resolveColor(p.carve, theme, '#7f8db4');
+  const streamer = resolveColor(p.streamer, theme, '#bfe8f4');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 19 + o.pos.y * 11) | 0) >>> 0;
+    const wind = hash01(seed, 1) * Math.PI * 2; // the prevailing lean
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Footing shadow + the pole seen from above: a ringed disc.
+    ctx.fillStyle = withAlpha(carve, 0.4);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.16, r * 0.8, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = wood;
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.52, 0, Math.PI * 2);
+    ctx.fill();
+    // Carved rings: the spirit's spiraling grooves.
+    ctx.strokeStyle = carve;
+    ctx.lineWidth = 1.6;
+    for (let k = 0; k < 3; k++) {
+      ctx.beginPath();
+      ctx.arc(0, 0, r * (0.18 + k * 0.14), wind + k, wind + k + Math.PI * 1.4);
+      ctx.stroke();
+    }
+    // The crown notch: a pale carved eye looking downwind.
+    ctx.fillStyle = shade(wood, 0.18);
+    ctx.beginPath();
+    ctx.arc(Math.cos(wind) * r * 0.2, Math.sin(wind) * r * 0.2, r * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    // Streamers: two or three ribbons flowing downwind, fluttering.
+    const n = 2 + Math.floor(hash01(seed, 4) * 2);
+    for (let k = 0; k < n; k++) {
+      const flut = Math.sin(time * (2.2 + k * 0.7) + seed + k * 2.1) * 0.22;
+      const a = wind + (k - (n - 1) / 2) * 0.34 + flut * 0.4;
+      const len = r * (1.5 + hash01(seed, 8 + k) * 0.9);
+      const mx = Math.cos(a + flut * 0.5) * len * 0.55, my = Math.sin(a + flut * 0.5) * len * 0.55;
+      const ex = Math.cos(a) * len, ey = Math.sin(a) * len;
+      ctx.strokeStyle = withAlpha(streamer, 0.85 - k * 0.14);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 2.4 - k * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5);
+      ctx.quadraticCurveTo(mx, my, ex, ey + Math.sin(time * 3 + k) * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** A SKY LANTERN — a tethered paper lantern bobbing on the wind: warm light
+ *  on a leash (the light layer supplies the radiance). */
+const skyLantern: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { paper?: ColorSpec; frame?: ColorSpec; glow?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const paper = resolveColor(p.paper, theme, '#ffe6c0');
+  const frame = resolveColor(p.frame, theme, '#c88a4a');
+  const glow = resolveColor(p.glow, theme, '#ffd27f');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 29 + o.pos.y * 17) | 0) >>> 0;
+    const bobX = Math.sin(time * 1.1 + seed) * r * 0.18;
+    const bobY = Math.sin(time * 1.4 + seed * 1.7) * r * 0.14;
+    const lx = bobX + r * 0.2, ly = -r * 0.7 + bobY; // floats up-right of its stake
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The stake + tether.
+    ctx.fillStyle = shade(frame, -0.25);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(frame, 0.7);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.quadraticCurveTo(lx * 0.4, ly * 0.55, lx, ly);
+    ctx.stroke();
+    // The lantern: glow halo, paper body, ribs, a warm heart.
+    ctx.fillStyle = withAlpha(glow, 0.18);
+    ctx.beginPath();
+    ctx.arc(lx, ly, r * 0.85, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = paper;
+    ctx.beginPath();
+    ctx.ellipse(lx, ly, r * 0.46, r * 0.56, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(frame, 0.8);
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.ellipse(lx, ly, r * 0.46, r * 0.56, 0, 0, Math.PI * 2);
+    ctx.moveTo(lx - r * 0.46, ly);
+    ctx.lineTo(lx + r * 0.46, ly);
+    ctx.stroke();
+    ctx.fillStyle = withAlpha(glow, 0.9);
+    ctx.beginPath();
+    ctx.arc(lx, ly + r * 0.08, r * 0.16, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** An AEOLIAN CHIME STAND — two posts, a lintel, and a rank of swaying
+ *  tubes: the wind plays the zone's score. */
+const chimeStand: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { frame?: ColorSpec; chime?: ColorSpec; cord?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const frame = resolveColor(p.frame, theme, '#e6e5df');
+  const chime = resolveColor(p.chime, theme, '#d8e8f4');
+  const cord = resolveColor(p.cord, theme, '#8a90a8');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 23) | 0) >>> 0;
+    const rot = hash01(seed, 1) * Math.PI;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(rot);
+    // Posts + lintel (seen from above: a thin bar between two feet).
+    ctx.fillStyle = shade(frame, -0.2);
+    ctx.beginPath();
+    ctx.arc(-r * 0.85, 0, r * 0.2, 0, Math.PI * 2);
+    ctx.arc(r * 0.85, 0, r * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = frame;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.85, 0);
+    ctx.lineTo(r * 0.85, 0);
+    ctx.stroke();
+    // The tubes: hung in a rank, each swaying to its own beat.
+    const n = 4 + Math.floor(hash01(seed, 3) * 2);
+    for (let k = 0; k < n; k++) {
+      const x = -r * 0.66 + (k / (n - 1)) * r * 1.32;
+      const sway = Math.sin(time * (1.8 + k * 0.33) + seed + k) * r * 0.12;
+      const len = r * (0.34 + hash01(seed, 6 + k) * 0.3);
+      ctx.strokeStyle = withAlpha(cord, 0.8);
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x + sway, len * 0.4);
+      ctx.stroke();
+      ctx.strokeStyle = shade(chime, hash01(seed, 12 + k) * 0.12 - 0.02);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 2.6;
+      ctx.beginPath();
+      ctx.moveTo(x + sway, len * 0.4);
+      ctx.lineTo(x + sway * 1.5, len * 0.4 + len);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** A GALE VANE — a weathervane arrow leaning hard into the prevailing run:
+ *  the drift's direction, posted. */
+const galeVane: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { pole?: ColorSpec; vane?: ColorSpec; tail?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const pole = resolveColor(p.pole, theme, '#9aa4c0');
+  const vane = resolveColor(p.vane, theme, '#ffd27f');
+  const tail = resolveColor(p.tail, theme, '#dce6f2');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 31 + o.pos.y * 7) | 0) >>> 0;
+    const dir = hash01(seed, 1) * Math.PI * 2 + Math.sin(time * 0.9 + seed) * 0.08;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The pole footing.
+    ctx.fillStyle = shade(pole, -0.2);
+    ctx.beginPath();
+    ctx.arc(0, 0, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.rotate(dir);
+    // The shaft, the head, the split tail feathers.
+    ctx.strokeStyle = pole;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.8, 0);
+    ctx.lineTo(r * 0.62, 0);
+    ctx.stroke();
+    ctx.fillStyle = vane;
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.lineTo(r * 0.5, -r * 0.22);
+    ctx.lineTo(r * 0.5, r * 0.22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = withAlpha(tail, 0.9);
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.8, 0);
+      ctx.lineTo(-r * 1.06, s * r * 0.26);
+      ctx.lineTo(-r * 0.58, s * r * 0.08);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/** CLOUD CORAL — wind-sculpted vapor-stone: stacked crescent shelf-fins
+ *  fanned downwind, shadowed beneath, rim-lit above. The drift's reef. */
+const cloudCoral: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { body?: ColorSpec; shade?: ColorSpec; rim?: ColorSpec };
+  const { ctx, theme } = env;
+  const body = resolveColor(p.body, theme, '#e4ebf6');
+  const dark = resolveColor(p.shade, theme, '#a2b2d2');
+  const rim = resolveColor(p.rim, theme, '#fdfdff');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 37 + o.pos.y * 3) | 0) >>> 0;
+    const wind = hash01(seed, 1) * Math.PI * 2;
+    const fins = 3 + Math.floor(hash01(seed, 2) * 3);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Root shadow.
+    ctx.fillStyle = withAlpha(dark, 0.7);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.18, r * 0.9, r * 0.55, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Fins: crescents fanned downwind, each smaller and paler than the last.
+    for (let k = fins - 1; k >= 0; k--) {
+      const a = wind + (k - (fins - 1) / 2) * 0.5;
+      const d = r * (0.12 + k * 0.16);
+      const fr = r * (0.72 - k * 0.1) * (0.8 + hash01(seed, 6 + k) * 0.35);
+      const fx = Math.cos(a) * d, fy = Math.sin(a) * d * 0.8;
+      ctx.fillStyle = shade(body, -0.06 + k * 0.045);
+      ctx.beginPath();
+      ctx.ellipse(fx, fy, fr, fr * 0.62, a, 0, Math.PI * 2);
+      ctx.fill();
+      // The lit rim on the windward crest.
+      ctx.strokeStyle = withAlpha(rim, 0.7 - k * 0.1);
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.ellipse(fx, fy - fr * 0.12, fr * 0.85, fr * 0.5, a, Math.PI * 1.05, Math.PI * 1.95);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** THE SPIRE OF GALES — the Driftways monument: tiered marble crowned with
+ *  a great vane and long streamers running the prevailing way. */
+const spireOfGales: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { marble?: ColorSpec; gold?: ColorSpec; streamer?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const marble = resolveColor(p.marble, theme, '#e6e5df');
+  const gold = resolveColor(p.gold, theme, '#d8b56a');
+  const streamer = resolveColor(p.streamer, theme, '#bfe8f4');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 11 + o.pos.y * 29) | 0) >>> 0;
+    const wind = hash01(seed, 1) * Math.PI * 2;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Tiers: three stacked discs, lit-side split like the dawn spire.
+    for (let k = 0; k < 3; k++) {
+      const tr = r * (1 - k * 0.28);
+      ctx.fillStyle = shade(marble, -0.14 + k * 0.05);
+      ctx.beginPath();
+      ctx.arc(0, 0, tr, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = withAlpha(shade(marble, 0.12), 0.75);
+      ctx.beginPath();
+      ctx.arc(-tr * 0.16, -tr * 0.16, tr * 0.84, Math.PI * 0.85, Math.PI * 1.85);
+      ctx.arc(0, 0, tr, Math.PI * 1.85, Math.PI * 0.85, true);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(gold, 0.55);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(0, 0, tr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    // The crown vane: a gold arrow riding the wind's set.
+    ctx.save();
+    ctx.rotate(wind + Math.sin(time * 0.8 + seed) * 0.06);
+    ctx.strokeStyle = shade(gold, -0.1);
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.34, 0);
+    ctx.lineTo(r * 0.3, 0);
+    ctx.stroke();
+    ctx.fillStyle = gold;
+    ctx.beginPath();
+    ctx.moveTo(r * 0.5, 0);
+    ctx.lineTo(r * 0.24, -r * 0.12);
+    ctx.lineTo(r * 0.24, r * 0.12);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+    // Long streamers off the crown, fluttering downwind.
+    for (let k = 0; k < 4; k++) {
+      const flut = Math.sin(time * (1.9 + k * 0.5) + seed + k * 1.7) * 0.18;
+      const a = wind + (k - 1.5) * 0.22 + flut * 0.5;
+      const len = r * (1.7 + hash01(seed, 9 + k) * 0.8);
+      ctx.strokeStyle = withAlpha(streamer, 0.75 - k * 0.12);
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 2.2 - k * 0.35;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.4, Math.sin(a) * r * 0.4);
+      ctx.quadraticCurveTo(Math.cos(a + flut) * len * 0.55, Math.sin(a + flut) * len * 0.55,
+        Math.cos(a) * len, Math.sin(a) * len + Math.sin(time * 2.6 + k) * 2.5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 PAINTERS.spireOfDawn = spireOfDawn;
 PAINTERS.cloudBillow = cloudBillow;
 PAINTERS.aetherCrystal = aetherCrystal;
@@ -422,3 +740,9 @@ PAINTERS.harpPillar = harpPillar;
 PAINTERS.prayerBell = prayerBell;
 PAINTERS.ascendantGate = ascendantGate;
 PAINTERS.skyGeyser = skyGeyser;
+PAINTERS.zephyrTotem = zephyrTotem;
+PAINTERS.skyLantern = skyLantern;
+PAINTERS.chimeStand = chimeStand;
+PAINTERS.galeVane = galeVane;
+PAINTERS.cloudCoral = cloudCoral;
+PAINTERS.spireOfGales = spireOfGales;

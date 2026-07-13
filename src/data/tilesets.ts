@@ -2793,6 +2793,179 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE DRIFTWAYS — the Aetherial's wind country (the realm's third mood,
+  // pooled in its wettest reaches): anchor isles strung across open sky,
+  // crossed on the FLUX fabric's own ground. theme.flux is THE signature —
+  // stepping-stone pads phase on ladder rhythms, carrier rafts shuttle the
+  // long lanes bearing whoever stands on them, and (on the harder faces)
+  // GUSTS warn and then shove. Read the rhythm or the sky lets you go: falls
+  // drop through to the world below, the same proportional drop the shelves
+  // taught. Croc and the plumber both walked so this biome could drift.
+  aether_drift: {
+    id: 'aether_drift',
+    biome: 'aether_drift',
+    nameFirst: ['Drift', 'Zephyr', 'Windward', 'Skysworn', 'Cirrus', 'Gale', 'Aeolian'],
+    // 'Crossing' stays RESERVED for launch shelves (defs/ascent.ts).
+    nameSecond: ['Ways', 'Steps', 'Passage', 'Shoals', 'Currents', 'Span'],
+    theme: {
+      floor: '#dce6f2', grid: '#bfcde2', border: '#87a0c8',
+      obstacle: '#e4ebf6', obstacleEdge: '#a2b2d2', accent: '#9fe0e8',
+      wall: '#c4d0e6', water: '#9fd8e8',
+      dayLight: 1.2, nightDark: 0.52, heat: 0.3,
+      ground: {
+        palette: ['#bccbe2', '#ccd8ea', '#dce4f2', '#eaeff8', '#f7fafe'],
+        bias: 0.58, alpha: 0.55, scale: 1.6, strength: 0.9, speckles: 0.3, evenness: 0.3,
+      },
+      ambientFx: [
+        { kind: 'motes', color: '#e8f4ff', intensity: 0.9 },
+        { kind: 'aurora', color: '#9fe0e8', intensity: 0.35 },
+      ],
+      fog: { banks: [1, 3], kinds: [{ id: 'aether_veil' }] },
+      understory: 'cloudsea',
+      // THE SIGNATURE: the drift. The base face is the temperate one —
+      // roomy solid windows, patient rafts, no gusts. Variants swap the
+      // whole spec (the collapse precedent: tempo is a face, not a dial).
+      flux: {
+        phase: { period: 11, solidFrac: 0.62, form: 2.2, fray: 2.6 },
+        carrier: { radius: [46, 60], speed: [42, 58], dwell: 1.6, per: 430 },
+        fall: { kind: 'below', damageFrac: 0.05, grace: 0.45 },
+        warmup: 7,
+        look: { body: '#e9eef9', crest: '#ffffff', fray: '#96a2c4' },
+      },
+    },
+    sizeW: [2300, 3200], sizeH: [1700, 2400], ellipseChance: 0,
+    forceLayout: 'aether_drift',
+    layout: [
+      { kind: 'cloud_billow', count: [7, 11] },
+      { kind: 'zephyr_totem', count: [3, 6] },
+      { kind: 'sky_lantern', count: [3, 6] },
+      { kind: 'chime_stand', count: [3, 6] },
+      { kind: 'gale_vane', count: [2, 4] },
+      { kind: 'cloud_coral', count: [3, 6] },
+      { kind: 'aether_crystal', count: [2, 5] },
+      { kind: 'flowers', count: [1, 2] },
+    ],
+    common: [
+      { kind: 'clearing', count: [1, 2], radius: [80, 120] },
+    ],
+    variants: [
+      // MORNING DRIFT: the kind face — golden light, long stands, slow rafts.
+      {
+        name: 'morning drift',
+        layout: [
+          { kind: 'cloud_billow', count: [8, 12] },
+          { kind: 'zephyr_totem', count: [3, 5] },
+          { kind: 'sky_lantern', count: [4, 7] },
+          { kind: 'chime_stand', count: [4, 7] },
+          { kind: 'cloud_coral', count: [4, 7] },
+          { kind: 'flowers', count: [2, 4] },
+        ],
+        theme: {
+          accent: '#ffd88a', dayLight: 1.32,
+          ground: {
+            palette: ['#c6c8dc', '#d6d6e6', '#e6e2ee', '#f2ecf0', '#fcf6ec'],
+            bias: 0.62, alpha: 0.55, scale: 1.6, strength: 0.88, speckles: 0.3, evenness: 0.3,
+          },
+          flux: {
+            phase: { period: 12.5, solidFrac: 0.68, form: 2.4, fray: 3.0 },
+            carrier: { radius: [50, 64], speed: [38, 50], dwell: 1.8, per: 460 },
+            fall: { kind: 'below', damageFrac: 0.04, grace: 0.5 },
+            warmup: 8,
+            look: { body: '#f2ede9', crest: '#fff8ea', fray: '#a8a4bc' },
+          },
+        },
+      },
+      // RACING GALE: the wind has somewhere to be — quick cycles, fast
+      // rafts, and the first face where the gusts start shoving.
+      {
+        name: 'racing gale',
+        layout: [
+          { kind: 'cloud_billow', count: [6, 10] },
+          { kind: 'zephyr_totem', count: [4, 7] },
+          { kind: 'gale_vane', count: [3, 6] },
+          { kind: 'chime_stand', count: [3, 5] },
+          { kind: 'aether_crystal', count: [3, 6] },
+        ],
+        theme: {
+          accent: '#8fe0d8', dayLight: 1.1,
+          ambientFx: [
+            { kind: 'motes', color: '#e8f4ff', intensity: 1.3 },
+            { kind: 'aurora', color: '#8fe0d8', intensity: 0.4 },
+          ],
+          flux: {
+            phase: { period: 8.5, solidFrac: 0.55, form: 1.8, fray: 2.2 },
+            carrier: { radius: [44, 56], speed: [62, 82], dwell: 1.0, per: 380 },
+            gusts: { every: [22, 34], warn: 1.8, hold: 2.6, push: 115 },
+            fall: { kind: 'below', damageFrac: 0.05, grace: 0.4 },
+            warmup: 6,
+            look: { body: '#e6eef8', crest: '#ffffff', fray: '#8e9cc0' },
+          },
+        },
+      },
+      // SHEARWIND CHURN: the violet storm-hour — brief stands, hard shoves,
+      // the drift at its least sentimental. The realm's white-knuckle face.
+      {
+        name: 'shearwind churn',
+        layout: [
+          { kind: 'cloud_billow', count: [8, 13] },
+          { kind: 'zephyr_totem', count: [4, 6] },
+          { kind: 'gale_vane', count: [3, 5] },
+          { kind: 'cloud_coral', count: [4, 8] },
+          { kind: 'aether_crystal', count: [4, 7] },
+        ],
+        theme: {
+          floor: '#c6cce0', accent: '#b8a8f0', dayLight: 0.95, nightDark: 0.62,
+          ground: {
+            palette: ['#96a0c0', '#a8b0cc', '#bcc2da', '#d0d5e6', '#e6e9f4'],
+            bias: 0.52, alpha: 0.58, scale: 1.5, strength: 1.0, speckles: 0.4, evenness: 0.26,
+          },
+          ambientFx: [
+            { kind: 'motes', color: '#d4dcf0', intensity: 1.2 },
+            { kind: 'aurora', color: '#b09fee', intensity: 0.5 },
+          ],
+          fog: { banks: [2, 4], kinds: [{ id: 'aether_veil', weight: 2 }, { id: 'mist' }] },
+          flux: {
+            phase: { period: 7, solidFrac: 0.5, form: 1.5, fray: 1.8 },
+            carrier: { radius: [42, 54], speed: [56, 74], dwell: 0.8, per: 360 },
+            gusts: { every: [16, 26], warn: 1.5, hold: 3.2, push: 155 },
+            fall: { kind: 'below', damageFrac: 0.06, grace: 0.35 },
+            warmup: 6,
+            look: { body: '#dde2f2', crest: '#f4f2ff', fray: '#7e88ae' },
+          },
+        },
+      },
+    ],
+    // The wind favors WINGS: the drift's patrols float free of the rhythm
+    // the intruder must read — the deliberate walkers are the rare, heavy
+    // exception (the ground can claim them). Galekin natives join the mix
+    // when their roster mints.
+    packs: {
+      count: [4, 6], size: [2, 4],
+      archetypes: [
+        { weight: 3, size: [4, 7] },
+        { weight: 5, size: [2, 4] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'cherub_wisp', weight: 4 },
+        { id: 'watcher_unblinking', weight: 3 },
+        { id: 'ophan_wheel', weight: 2.5 },
+        { id: 'virtue_lance', weight: 2 },
+        { id: 'lampad_of_the_vigil', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'herald_of_the_choir', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
+        { id: 'dominion_scales', weight: 1, presence: { from: 13, fadeIn: 5 } },
+        { id: 'principality_of_dawn', weight: 0.5, presence: { from: 15, fadeIn: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar', // never rolled (no 'spawners' objective up here)
+    objectives: [{ kind: 'clear', weight: 2 }, { kind: 'escape', weight: 2 }],
+    compositions: [
+      { composition: 'vane_court', chance: 0.4 },
+      { composition: 'chime_gallery', chance: 0.35 },
+      { composition: 'choir_ring', chance: 0.15 },
+    ],
+  },
+
   // THE FIRMAMENT — the Aetherial's sanctum face: the gate zone's tileset
   // (biome 'aether_sanctum' resolves here). The same lattice run dense and
   // UNBROKEN — wide causeways, no sky-holes, and NO CollapseSpec: this

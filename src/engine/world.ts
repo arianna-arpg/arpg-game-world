@@ -23418,7 +23418,11 @@ export class World {
     const gust = ff.gustNow();
     const gspec = ff.spec.gusts;
     if (gust?.phase === 'hold' && gspec) {
-      const push = gspec.push * dt;
+      // The shove wears a sine envelope — it RISES, peaks, and releases like
+      // weather instead of switching on like a conveyor (and the ramp gives
+      // a rider one last beat to fight for the raft's heart).
+      const envelope = Math.sin(Math.PI * (1 - gust.f));
+      const push = gspec.push * envelope * dt;
       for (const a of this.actors) {
         if (a.dead || (a.flying && !gspec.liftFliers)) continue;
         if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
@@ -23444,10 +23448,10 @@ export class World {
    *  Nether tie's resolver (DimensionDef.over): both webs share one
    *  coordinate space, so this IS "the ground directly beneath you" at zone
    *  granularity. Special/boss stages refuse sky arrivals. */
-  private nearestZoneOf(dimId: string, at: { x: number; y: number }): string | null {
+  private nearestZoneOf(dimId: string, at: { x: number; y: number }, excludeId?: string): string | null {
     let best: string | null = null, bd = Infinity;
     for (const z of Object.values(this.zoneMap)) {
-      if ((z.dimension ?? 'surface') !== dimId || z.special) continue;
+      if ((z.dimension ?? 'surface') !== dimId || z.special || z.id === excludeId) continue;
       const d = (z.map.x - at.x) ** 2 + (z.map.y - at.y) ** 2;
       if (d < bd) { bd = d; best = z.id; }
     }
@@ -23493,8 +23497,10 @@ export class World {
     // against both maps the way loadZone will.)
     const below = shelf.below;
     const anchored = !!below && !!(this.zoneMap[below.zoneId] ?? this.caveMap[below.zoneId]);
+    // A zone can never be BELOW ITSELF (a dev-minted surface flux zone would
+    // otherwise resolve its own coordinate and fall into itself).
     const destId = anchored ? below!.zoneId
-      : this.skyBelow?.zoneId ?? this.nearestZoneOf('surface', shelf.map) ?? START_ZONE;
+      : this.skyBelow?.zoneId ?? this.nearestZoneOf('surface', shelf.map, shelf.id) ?? START_ZONE;
     const from = vec(this.player.pos.x, this.player.pos.y);
     // The PROPORTIONAL drop: where you stood on the shelf is where you land
     // on the ground below (the stretch the understory's windows show) — fall
