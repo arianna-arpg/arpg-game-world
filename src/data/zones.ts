@@ -548,6 +548,13 @@ export interface ZoneDef {
    *  TRANSIENT like exitBoundaries: stamped per-load by the World, never
    *  authored, never saved. */
   exitRoads?: (ExitRoadSpec | undefined)[];
+  /** BIOME-MELD annotations, index-aligned with `exits` — the meld id (data/
+   *  melds.ts) of the DIFFERENT biome each exit faces, when that biome
+   *  declares an edge dressing: the layout pipeline grows a band of the
+   *  foreign kit along that edge ("you can see the jungle from here").
+   *  TRANSIENT like exitBoundaries: stamped per-load by the World off the
+   *  same heat-map prediction seam, never authored, never saved. */
+  exitMelds?: (string | undefined)[];
   /** Layout GENERATOR knobs, merged tileset ← biome ← spec at mint — the
    *  "same tileset, tweak its generation" seam: volcanic as a spiral cauldron,
    *  a winding road, or an open expanse is one param, not three tilesets.

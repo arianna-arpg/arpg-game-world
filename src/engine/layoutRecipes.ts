@@ -20,14 +20,16 @@
 // ---------------------------------------------------------------------------
 
 import { vec, type Vec2 } from '../core/math';
+import { Rng } from '../core/rng';
 import type { ExitRoadSpec, ZoneDef } from '../data/zones';
 import { boundaryGateOf, type BoundaryGateDef } from '../data/boundaryGates';
+import { meldOf, MELD_CFG } from '../data/melds';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind } from '../world/regions';
 import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
   placeLandmarkById, raiseStructure, setBoundaryGateBuilder, setExitRoadBuilder,
-  areaFreeOf, doodadRuleOf, type GenCtx,
+  setMeldBuilder, stamp, areaFreeOf, doodadRuleOf, type GenCtx,
 } from './levelgen';
 import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
@@ -964,6 +966,49 @@ export function carveApproachRoad(ctx: GenCtx, def: ZoneDef, exitIndex: number,
 }
 // Register as THE exit-road builder (levelgen lays it per annotated exit).
 setExitRoadBuilder(carveApproachRoad);
+
+/** Grow a BIOME MELD — the NEIGHBOR biome's kit growing across this zone's
+ *  edge (ZoneDef.exitMelds, the third rider on the per-exit annotation
+ *  fabric): the registered meld's rows are stamped through the ordinary
+ *  machinery under an edge WHERE band (axisX/axisY), so every placement
+ *  gate — walk-gating, forbidOn, reservations, spacing, the portal splice —
+ *  applies as if the tileset had authored them. The rows draw from a
+ *  DEDICATED rng (zone seed ^ exit index): a '?' frontier later resolving to
+ *  a different biome re-dresses the band WITHOUT shifting the zone's own
+ *  layout stream (zone memory replays clean). */
+export function buildBiomeMeld(ctx: GenCtx, def: ZoneDef, exitIndex: number,
+  meldId: string): void {
+  const meld = meldOf(meldId);
+  const target = ctx.exits[exitIndex];
+  if (!meld || !target) return;
+  const { arena } = ctx;
+  // Which edge does this exit sit on? The nearest arena side — the same
+  // resolution the throat geometry uses for its inward cardinal.
+  const dists: [number, 'w' | 'e' | 'n' | 's'][] = [
+    [target.x, 'w'], [arena.w - target.x, 'e'], [target.y, 'n'], [arena.h - target.y, 's'],
+  ];
+  dists.sort((a, b) => a[0] - b[0]);
+  const side = dists[0][1];
+  const band = meld.band ?? MELD_CFG.band;
+  const where = side === 'w' ? { field: 'axisX', max: band / Math.max(1, arena.w) }
+    : side === 'e' ? { field: 'axisX', min: 1 - band / Math.max(1, arena.w) }
+      : side === 'n' ? { field: 'axisY', max: band / Math.max(1, arena.h) }
+        : { field: 'axisY', min: 1 - band / Math.max(1, arena.h) };
+  const saved = ctx.rng;
+  ctx.rng = new Rng((((def.seed ?? 1) ^ (0x6d31 + exitIndex * 0x9e37)) >>> 0) || 1);
+  try {
+    for (const row of meld.rows) {
+      const n = ctx.rng.int(row.count[0], row.count[1]);
+      for (let i = 0; i < n; i++) {
+        stamp(ctx, { kind: row.kind, count: [1, 1], radius: row.radius, where });
+      }
+    }
+  } finally {
+    ctx.rng = saved;
+  }
+}
+// Register as THE biome-meld builder (levelgen grows it per annotated exit).
+setMeldBuilder(buildBiomeMeld);
 
 function steppesLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;

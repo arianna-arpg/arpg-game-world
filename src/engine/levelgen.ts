@@ -2113,6 +2113,16 @@ type ExitRoadBuilder = (ctx: GenCtx, def: ZoneDef, exitIndex: number, spec: Exit
 let exitRoadBuilder: ExitRoadBuilder | null = null;
 export function setExitRoadBuilder(b: ExitRoadBuilder): void { exitRoadBuilder = b; }
 
+/** The BIOME-MELD builder (layoutRecipes registers buildBiomeMeld at import —
+ *  the boundary-gate idiom, so this core never imports a recipe or the meld
+ *  registry). generateLayout grows a band of the NEIGHBOR biome's kit along
+ *  every exit edge whose def.exitMelds entry names a meld (a TRANSIENT
+ *  per-load annotation the World stamps beside exitBoundaries); null (boot
+ *  order, bare tests) = plain edges, nothing lost. */
+type MeldBuilder = (ctx: GenCtx, def: ZoneDef, exitIndex: number, meldId: string) => void;
+let meldBuilder: MeldBuilder | null = null;
+export function setMeldBuilder(b: MeldBuilder): void { meldBuilder = b; }
+
 /** Generate a zone's terrain from its layout spec. */
 export function generateLayout(
   def: ZoneDef, arena: { w: number; h: number },
@@ -2171,6 +2181,21 @@ export function generateLayout(
     for (let i = 0; i < ctx.exits.length && i < def.exitRoads.length; i++) {
       const r = def.exitRoads[i];
       if (r) exitRoadBuilder(ctx, def, i, r);
+    }
+  }
+  // BIOME MELDS: exits facing a DIFFERENT biome wear that neighbor's edge
+  // dressing (def.exitMelds — stamped per-load beside exitBoundaries off the
+  // same heat-map prediction seam): a band of the foreign kit growing along
+  // this zone's edge, so "there really is a jungle past that treeline" reads
+  // in the TERRAIN before the crossing. After gates + roads (the growth
+  // dresses around them); before landmarks/structures/fuse (pours and
+  // reservations act on it like any other scatter). Zones without
+  // annotations draw nothing — and the builder itself draws from a
+  // DEDICATED rng, so annotation presence never shifts this stream.
+  if (meldBuilder && def.exitMelds && !ctx.lite) {
+    for (let i = 0; i < ctx.exits.length && i < def.exitMelds.length; i++) {
+      const m = def.exitMelds[i];
+      if (m) meldBuilder(ctx, def, i, m);
     }
   }
   // PLAN fixtures raise AFTER the layout: a grid generator REPLACES ctx.walk,
@@ -3176,7 +3201,7 @@ function compileFieldGate(ctx: GenCtx, where: WhereSpec | undefined): GenCtx['fi
   };
 }
 
-function stamp(ctx: GenCtx, spec: StampSpec): void {
+export function stamp(ctx: GenCtx, spec: StampSpec): void {
   const h = STAMP_HANDLERS[spec.kind];
   if (!h) {
     if (!unknownStampWarned.has(spec.kind)) {

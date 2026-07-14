@@ -108,6 +108,7 @@ import { ALTARS, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines'
 import { WorldSim } from '../world/sim';
 import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
+import { meldOf } from '../data/melds';
 import { fieldRegionAt, isFieldPixel, FIELD_BIOME, type FieldExtent } from '../world/fieldRegion';
 import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
@@ -253,6 +254,11 @@ export interface ZoneExit {
    *  crosses an enclave biome's boundary — restyles the portal (accent,
    *  glyph, dwell ring) and streams to co-op clients like the label. */
   boundary?: string;
+  /** BIOME-MELD id (data/melds.ts) when this exit faces a DIFFERENT biome
+   *  that declares an edge dressing — the layout pipeline grows the foreign
+   *  kit along this edge, and the label wears the meld's breath. Host-side
+   *  only (terrain ships as doodads; the label streams verbatim). */
+  meld?: string;
 }
 
 /** A telegraphed death-burst in flight. GATHER = the coalesce wind-up (the escape window);
@@ -3006,6 +3012,10 @@ export class World {
     // KEPT ROAD annotates that exit with its guardian's road spec, and the
     // layout pipeline carves the traveled way (source portal → gate mouth).
     def.exitRoads = this.exitRoadAnnotations(def);
+    // BIOME MELDS ride it too: exits facing a different biome that declares
+    // an edge dressing grow a band of the foreign kit (data/melds.ts) along
+    // this zone's edge — the terrain says "jungle ahead" before the label.
+    def.exitMelds = this.exits.map(x => x.meld);
     // BELT-AND-SUSPENDERS: whatever def data or edge-snapping produced, no two
     // live portals may overlap (an overlapped pair leaves one of them un-dwellable
     // — the "can't choose which zone I enter" hard-lock). Runs BEFORE the layout
@@ -5749,6 +5759,12 @@ export class World {
     // the label; the layout pipeline reads the same ids off def.exitBoundaries.
     const boundary = this.boundaryGateFor(e);
     const bgLabel = boundaryGateOf(boundary)?.label;
+    // BIOME MELD: does a DIFFERENT biome past this edge declare an edge
+    // dressing? Same prediction seam; the layout pipeline grows the band off
+    // def.exitMelds, and the label wears the meld's breath so the terrain
+    // and the words agree ("the green presses close").
+    const meld = this.meldFor(e);
+    const meldLabel = meldOf(meld)?.label;
     if (e.to === '?') {
       // A frontier: the zone behind it doesn't exist yet. PREVIEW its danger by
       // sampling the difficulty field at the SAME coordinate the mint will use
@@ -5759,8 +5775,9 @@ export class World {
       const lv = this.levelFor(projectCoord(this.zone.map, e.side));
       return {
         pos, radius: PORTAL_RADIUS, to: '?', defIndex,
-        label: `Uncharted · Lv ${lv}${bgLabel ? ` · ${bgLabel}` : ''}`,
+        label: `Uncharted · Lv ${lv}${bgLabel ? ` · ${bgLabel}` : ''}${meldLabel ? ` · ${meldLabel}` : ''}`,
         ...(boundary ? { boundary } : {}),
+        ...(meld ? { meld } : {}),
       };
     }
     const dest = this.zoneMap[e.to] ?? this.caveMap[e.to];
@@ -5772,8 +5789,12 @@ export class World {
     }
     const sub = dest.objective.kind === 'waves' && dest.objective.waves === 0
       ? 'endless' : `Lv ${dest.level}`;
-    const label = `${this.inCave ? `Surface · ${dest.name}` : `${dest.name} · ${sub}`}${bgLabel ? ` · ${bgLabel}` : ''}`;
-    return { pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label, ...(boundary ? { boundary } : {}) };
+    const label = `${this.inCave ? `Surface · ${dest.name}` : `${dest.name} · ${sub}`}${bgLabel ? ` · ${bgLabel}` : ''}${meldLabel ? ` · ${meldLabel}` : ''}`;
+    return {
+      pos, radius: PORTAL_RADIUS, to: e.to, defIndex, label,
+      ...(boundary ? { boundary } : {}),
+      ...(meld ? { meld } : {}),
+    };
   }
 
   /** The boundary-gate treatment an exit wears, or undefined for a plain
@@ -5807,6 +5828,29 @@ export class World {
     if (toGate && !fromGate) return toGate;
     if (fromGate && !toGate) return fromGate;
     return undefined;
+  }
+
+  /** The BIOME-MELD id an exit wears, or undefined for a plain edge: the
+   *  DIFFERENT biome past this exit declares its edge dressing (BiomeInfo
+   *  .meld → data/melds.ts), and this zone's edge grows a band of that kit
+   *  — "you can see the jungle from here." Same resolution discipline as
+   *  boundaryGateFor: resolved exits read the neighbour's ACTUAL biome, '?'
+   *  frontiers PREDICT via the heat-map sample the mint will use, so the
+   *  promise the terrain makes is the promise the mint keeps. Deliberately
+   *  one-directional (only the FOREIGN kit grows in — a zone needs no
+   *  preview of itself); locked and cross-dimension edges stay unmixed. */
+  private meldFor(e: ZoneExitDef): string | undefined {
+    if (e.lock || e.crossDim) return undefined;
+    const from = this.zone.biome;
+    let to: string | undefined;
+    if (e.to === '?') {
+      const c = projectCoord(this.zone.map, e.side);
+      to = this.zone.dimension ? this.dimensionBiomeFor(this.zone.dimension)(c) : this.biomeFor(c);
+    } else {
+      to = (this.zoneMap[e.to] ?? this.caveMap[e.to])?.biome;
+    }
+    if (!to || to === from) return undefined;
+    return BIOMES[to]?.meld;
   }
 
   /** THE LIVE OVERLAP RESOLVE — the last line of defense behind the def-level
@@ -9138,6 +9182,7 @@ export class World {
       const clone = JSON.parse(JSON.stringify(z)) as ZoneDef;
       delete clone.exitBoundaries; // transient — re-derived every zone load
       delete clone.exitRoads;      // transient — the road annotation rides the same seam
+      delete clone.exitMelds;      // transient — the meld annotation rides the same seam
       zones.push(clone);
     }
     // Heal the roads at WRITE time too (an exit into scrubbed event ground

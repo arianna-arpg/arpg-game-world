@@ -190,6 +190,7 @@ function sanitizeZoneDef(raw: unknown): ZoneDef | null {
   // Transient annotations — re-derived every zone load; never persisted.
   delete z.exitBoundaries;
   delete z.exitRoads;
+  delete z.exitMelds;
   // Registry scrubs: packs reference live monsters, a war needs both armies,
   // a spawner objective needs its spawner def, a layout family must exist.
   if (z.packs?.table) {

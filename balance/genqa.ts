@@ -52,6 +52,7 @@ import { shapeBoundR } from '../src/engine/shapes';
 import { GridWalkField } from '../src/world/gridWalk';
 import { TILESETS } from '../src/data/tilesets';
 import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
+import { MELDS } from '../src/data/melds';
 import { BIOMES } from '../src/world/biomes';
 import { CLIMATE_AXES } from '../src/world/climate';
 import { interiorRoleDefs } from '../src/engine/interiorGen';
@@ -264,6 +265,9 @@ const layoutSources = [
   ]),
   // Interior room-role furnishings are stamped inside dungeon rooms.
   ...interiorRoleDefs().map(r => ({ source: `interiorRole ${r.id}`, specs: (r.furnish ?? []) as StampSpec[] })),
+  // Biome-meld rows are ordinary stamp rows the edge-band builder emits —
+  // an unregistered kind here would silently skip at generation time.
+  ...Object.values(MELDS).map(m => ({ source: `meld ${m.id}`, specs: m.rows as StampSpec[] })),
 ];
 const registryErrors = [
   ...validateStamps(layoutSources),
@@ -276,6 +280,9 @@ const registryErrors = [
   ...Object.entries(BIOMES).flatMap(([id, b]) => (b.compositions ?? [])
     .filter(r => !compositionDefs().some(c => c.id === r.composition))
     .map(r => `biome ${id}: unregistered composition '${r.composition}'`)),
+  // A biome naming an edge dressing must name a REGISTERED one.
+  ...Object.entries(BIOMES).flatMap(([id, b]) =>
+    b.meld && !MELDS[b.meld] ? [`biome ${id}: unregistered meld '${b.meld}'`] : []),
 ];
 
 // --- 2. Every tileset, base + variants --------------------------------------
@@ -400,6 +407,35 @@ for (const layoutId of ['plains', 'forest', 'winding', 'riverland']) {
     objective: { kind: 'clear' },
     exits: [], map: { x: 0, y: 0 },
   });
+}
+
+// --- 3e. BIOME MELDS over open + carved-grid layout families ------------------
+// Live, the World stamps def.exitMelds at load (placeExit's prediction seam —
+// the third rider on the gates/roads annotation fabric); headless defs author
+// it directly so the edge-band composable — the axis WHERE gate, the dedicated
+// per-exit rng, every placement rule — is exercised over an open family and
+// the jungle's own carved thicket, with all invariants (portals, reachability,
+// inverse forbidOn, byte determinism) holding through it. Auto-derives from
+// the MELDS registry: a future biome's edge dressing joins this group the day
+// it registers, unedited.
+for (const m of Object.values(MELDS)) {
+  for (const layoutId of ['plains', 'thicket']) {
+    runCase(`meld:${m.id}@${layoutId}`, {
+      id: `qa_meld_${m.id}_${layoutId}`, name: `QA meld ${layoutId}`, level: 6,
+      size: { w: 2400, h: 1800 },
+      theme: { floor: '#161616', grid: '#222', border: '#555', obstacle: '#333', obstacleEdge: '#666', accent: '#999' },
+      layout: [
+        { kind: 'rocks', count: [4, 7] },
+        { kind: 'water', count: [1, 2] }, { kind: 'grass', count: [3, 5] },
+      ],
+      layoutType: layoutId,
+      // Both generated exits wear the foreign kit (the hook reads positions
+      // from ctx.exits, ids from this array — def.exits stays []).
+      exitMelds: [m.id, m.id],
+      objective: { kind: 'clear' },
+      exits: [], map: { x: 0, y: 0 },
+    });
+  }
 }
 
 // --- 4. Every composition, FORCED (chance 1) ---------------------------------

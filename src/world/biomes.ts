@@ -92,6 +92,13 @@ export interface BiomeInfo {
    *  registry; the World resolves it at placeExit, boot validation checks
    *  it names a real gate. */
   enclave?: { gate: string };
+  /** BIOME MELD id (data/melds.ts) — this biome's edge dressing: any
+   *  NEIGHBORING zone whose exit faces this biome grows a band of this
+   *  meld's kit along that edge ("the green presses close" — you can see
+   *  the jungle from here). Structural string ref like the enclave gate;
+   *  the World resolves it at placeExit off the same heat-map prediction
+   *  seam, boot validation checks it names a registered meld. */
+  meld?: string;
 }
 
 export const BIOMES: Record<string, BiomeInfo> = {
@@ -140,6 +147,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // tightest node web in the game: the green packs against itself.
   jungle: { patronFaction: 'sylvan', mapColor: '#1f7a42', label: 'Jungle', spacing: 54,
     climate: { temperature: 'warm', moisture: 'wet' },
+    meld: 'jungle_meld',
     allowedLayouts: { thicket: 4, forest: 1 },
     layoutParams: {
       // The thicket dials — the claustrophobia gradient in one place: lanes
@@ -244,6 +252,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // desert-dominant because every competitor thins there too).
   desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 104,
     climate: { temperature: 'warm', moisture: 'dry' },
+    meld: 'desert_meld',
     structures: [{ structure: 'grand_castle', chance: 0.1 }, { structure: 'watchtower', chance: 0.3, count: [1, 2] }],
     landmarks: [{ landmark: 'oasis', chance: 0.3 }, { landmark: 'canyon', chance: 0.25 }, { landmark: 'sinkhole', chance: 0.12 },
       { landmark: 'maggot_burrow', chance: 0.14 }] },
@@ -297,6 +306,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // aurora overhead. Wolves and worse den here.
   taiga:    { patronFaction: 'wild',   mapColor: '#9ec4b4', label: 'Taiga', spacing: 62,
     climate: { temperature: 'cold', moisture: { from: 0.32, fadeIn: 0.18 } },
+    meld: 'taiga_meld',
     allowedLayouts: { plains: 3, riverland: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.6 },
     landmarks: [{ landmark: 'frozen_lake', chance: 0.3 }, { landmark: 'secluded_valley', chance: 0.15 }] },

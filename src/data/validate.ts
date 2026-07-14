@@ -49,6 +49,7 @@ import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS, LOOKS, SELF_DRESSING_KINDS } from './
 import { STRUCTURES, legendCell, hasRoofStyle, type StructureDef } from './structures';
 import { hasStructureGen, runStructureGen } from '../engine/structureGen';
 import { liquidIds } from '../engine/genkit';
+import { MELDS } from './melds';
 import { BIOMES } from '../world/biomes';
 import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
@@ -79,8 +80,20 @@ export function validateContent(): void {
       { source: `composition ${c.id} post`, specs: c.post ?? [], allowAt: true },
     ]),
     ...interiorRoleDefs().map(r => ({ source: `interiorRole ${r.id}`, specs: r.furnish ?? [] })),
+    // Biome-meld rows speak the same stamp vocabulary (the edge WHERE band is
+    // compiled by the builder; the rows themselves are plain stamp rows).
+    ...Object.values(MELDS).map(m => ({ source: `meld ${m.id}`, specs: m.rows as StampSpec[] })),
   ];
   for (const msg of validateStamps(layoutSources)) warn(msg);
+
+  // BIOME MELDS: a biome naming an edge dressing must name a REGISTERED one;
+  // an overridden band must be positive (a zero band is a silent no-op).
+  for (const [id, b] of Object.entries(BIOMES)) {
+    if (b.meld && !MELDS[b.meld]) warn(`biome ${id}: unregistered meld '${b.meld}'`);
+  }
+  for (const m of Object.values(MELDS)) {
+    if (m.band !== undefined && !(m.band > 0)) warn(`meld ${m.id}: band ${m.band} must be > 0`);
+  }
 
   // COMPOSITIONS: local invariants (at→site refs, when-gate keys against the
   // climate axes) + every roll on a zone/tileset/biome naming a registered
