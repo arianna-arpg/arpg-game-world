@@ -18,6 +18,7 @@
 import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../core/gamepad';
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
+import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode } from '../ui/mapConfig';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
@@ -106,6 +107,13 @@ export interface Settings {
    *  the fat-finger-near-death dial: whether a stray press mid-dodge may
    *  cost you the half-second is YOUR risk budget, so the switch is yours. */
   improvisedStrike: boolean;
+  /** WORLD-MAP NAME CARDS (ui/mapConfig.ts MAP_LABEL_MODES): 'hover' (default)
+   *  keeps the chart clean — a zone's card rises under the cursor, and stays
+   *  for the pinned zone, the zone you stand in, and pinLabel kinds (towns —
+   *  data/zoneKinds.ts), which no mode ever hides. 'always' prints every
+   *  charted name, classic-map style. Cards never intercept the cursor in ANY
+   *  mode — map hit-testing belongs to zone geometry alone. */
+  mapLabels: MapLabelMode;
 }
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
@@ -123,6 +131,7 @@ export interface SettingsSave {
   poolBars?: PoolBarsMode;
   resumeSpawn?: ResumeSpawn;
   improvisedStrike?: boolean;
+  mapLabels?: MapLabelMode;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -229,6 +238,7 @@ export const makeSettings = (): Settings => ({
   poolBars: 'smart',
   resumeSpawn: WORLDSTATE_CFG.resume,
   improvisedStrike: true,
+  mapLabels: MAP_CFG.labelMode,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -244,6 +254,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   poolBars: s.poolBars,
   resumeSpawn: s.resumeSpawn,
   improvisedStrike: s.improvisedStrike,
+  mapLabels: s.mapLabels,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -294,5 +305,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     // Unknown values fall back to the engine default (WORLDSTATE_CFG.resume).
     resumeSpawn: s.resumeSpawn === 'town' || s.resumeSpawn === 'exact' ? s.resumeSpawn : WORLDSTATE_CFG.resume,
     improvisedStrike: s.improvisedStrike ?? true,
+    // Unknown values (a renamed mode) fall back to the registry default.
+    mapLabels: MAP_LABEL_MODES.some(m => m.id === s.mapLabels) ? s.mapLabels! : MAP_CFG.labelMode,
   };
 }

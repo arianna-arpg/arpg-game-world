@@ -26,7 +26,8 @@
 // ---------------------------------------------------------------------------
 
 import { FACTIONS, MONSTERS } from '../data/monsters';
-import { START_ZONE, type ZoneDef } from '../data/zones';
+import { START_ZONE, ZONES, type ZoneDef } from '../data/zones';
+import { ZONE_KINDS } from '../data/zoneKinds';
 import { hasLayout } from '../engine/levelgen';
 
 export const WORLD_SCHEMA_VERSION = 1;
@@ -191,6 +192,18 @@ function sanitizeZoneDef(raw: unknown): ZoneDef | null {
   delete z.exitBoundaries;
   delete z.exitRoads;
   delete z.exitMelds;
+  // KIND is IDENTITY, and live registries own identity: an authored zone
+  // re-adopts its authored kind (a save minted before the town was kinded
+  // still wakes wearing the ring), and a generated zone's saved kind must
+  // still resolve in ZONE_KINDS or it drops to plain ground.
+  const authored = ZONES[z.id];
+  if (authored) {
+    if (authored.kind === undefined) delete z.kind;
+    else z.kind = authored.kind;
+  } else if (z.kind !== undefined && !ZONE_KINDS[z.kind]) {
+    console.warn(`[worldstate] zone '${z.id}': kind '${z.kind}' unregistered — dropped`);
+    delete z.kind;
+  }
   // Registry scrubs: packs reference live monsters, a war needs both armies,
   // a spawner objective needs its spawner def, a layout family must exist.
   if (z.packs?.table) {

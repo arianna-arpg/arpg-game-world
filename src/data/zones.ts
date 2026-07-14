@@ -469,6 +469,12 @@ export interface ZoneDef {
   map: { x: number; y: number };
   /** This zone holds a waypoint — attune it once, fast-travel forever. */
   waypoint?: boolean;
+  /** ZONE KIND — an open identity id into ZONE_KINDS (data/zoneKinds.ts): what
+   *  this zone IS (a town today; sanctums/outposts tomorrow), driving the world
+   *  map's indicator ring/glyph, the never-hidden name card, and the info-pane
+   *  chip. Absent = plain ground. Identity, not state: worldstate's sanitizer
+   *  re-asserts the live registry's kind for authored zones on save-restore. */
+  kind?: string;
   /** Minted UNCHARTED + DISCONNECTED (no road) — a fog-of-war quest target you
    *  must EXPLORE toward; a road forms on approach (cleared then). The inverse of
    *  the demon-invasion force-connect. Absent = normally connected. */
@@ -642,6 +648,7 @@ export const ZONES: Record<string, ZoneDef> = {
   // — and past it, a world minted fresh every run.
   lastlight: {
     id: 'lastlight', name: 'Lastlight',
+    kind: 'town', // the identity lever (data/zoneKinds.ts): ring + glyph on the map, a card no label mode hides
     level: 0,
     size: { w: 1400, h: 1000 },
     // HOME reads warm: lamplit earth tones, flowering verges, a fountain

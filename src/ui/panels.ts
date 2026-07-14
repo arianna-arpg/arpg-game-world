@@ -66,6 +66,7 @@ import { isConfigured, PACKAGES } from '../packages/registry';
 import type { ContentPackage } from '../packages/types';
 import { QUEST_CATEGORY_COLORS, type QuestCategory } from '../quests/types';
 import type { ZoneDef } from '../data/zones';
+import { zoneKindOf } from '../data/zoneKinds';
 import { esc } from './dom';
 import { bindTooltips, hideTooltip, type TooltipContent } from './tooltip';
 import { runRuneMinigame, runSmithMinigame } from './minigames';
@@ -74,6 +75,7 @@ import { oracleRerollCost } from '../data/essences';
 import { ITEM_AFFIXES } from '../data/itemaffixes';
 import { formatModLine, lerpRange, roundStatValue } from '../engine/items';
 import { attachPanZoom, clampZoom, PANZOOM_DEFAULTS } from './panzoom';
+import { MAP_CFG, MAP_LABEL_MODES } from './mapConfig';
 import { applyCursor, CURSOR_COLORS, CURSOR_STYLES } from '../core/cursor';
 import { AIM_TICK_STYLES } from '../render/vis/aimtick';
 
@@ -3148,7 +3150,17 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       }
     }
 
+    // THE INTERACTIVITY CONTRACT (ui/mapConfig.ts): only zone GEOMETRY answers
+    // the cursor — the disc, the waypoint diamond, and their invisible hit
+    // halos. TEXT NEVER HIT-TESTS, and NAME CARDS render as a separate top
+    // layer below, so a label can never cover a neighbor's waypoint and steal
+    // its click (the clustered-map dead-waypoint bug). Cards obey the player's
+    // Settings.mapLabels mode ('hover' = rise under the cursor; 'always' = the
+    // classic full chart) — except pinLabel kinds (data/zoneKinds.ts — towns),
+    // the pinned zone, and the zone you stand in, whose cards stay FIXED on.
+    const labelMode = this.getSettings().mapLabels;
     let nodes = '';
+    let cards = '';
     for (const z of zones) {
       if (!world.visible(z)) continue; // fog policy (gentle now; dynamic later)
       const known = visited.has(z.id);
@@ -3164,36 +3176,62 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // from the sim sit on top, so you see both the land and who holds it.
       const bi = known || scouted ? biomeOf(z) : null;
       const fill = known || scouted ? (bi?.mapColor ?? z.theme.accent) : '#26262e';
+      // ZONE-KIND identity (data/zoneKinds.ts — the town's ring + glyph). Fog
+      // gates it exactly like the name: an unvisited minted town keeps its secret.
+      const kd = known || scouted ? zoneKindOf(z) : undefined;
       const lvText = z.objective.kind === 'waves' && z.objective.waves === 0
         ? 'endless waves' : `monster lv ${z.level}`;
-      const sub = bi ? `${bi.label} · ${lvText}` : lvText;
+      const sub = kd ? `${kd.label}${kd.subLabel ? ` — ${kd.subLabel}` : ''}`
+        : bi ? `${bi.label} · ${lvText}` : lvText;
       // Each node is one <g data-zone> so a delegated hover handler can identify
       // the zone with no geometry math (the browser hit-tests the SVG for us); the
       // existing .wp-node click + the drag-guard still target the inner elements.
       const pinned = this.pinnedZone === z.id;
-      const here = current ? `<text x="${z.map.x}" y="${z.map.y - 18}" text-anchor="middle"
-          font-size="9" fill="#ffd700">YOU ARE HERE</text>` : '';
+      const r = current ? 13 : 10;
+      const travelAttrs = canTravel ? ` class="wp-node" data-wp="${z.id}" style="cursor:pointer"` : '';
       // A FIELD zone renders like any other node: ONE circle, centred on the region (its
       // def.map is the blob centre). The region BOUNDS live on def.field but are NOT drawn —
       // the player understands a Field is a single zone, and the bbox stays available as the
       // Field's spatial "event node" (a stormfront / incursion can later target/show over it).
       nodes += `<g data-zone="${z.id}" style="cursor:help">
-        <circle cx="${z.map.x}" cy="${z.map.y}" r="${current ? 13 : 10}"
+        <circle cx="${z.map.x}" cy="${z.map.y}" r="${MAP_CFG.nodeHitR}" fill="none" pointer-events="all"${travelAttrs}/>
+        <circle cx="${z.map.x}" cy="${z.map.y}" r="${r}"
           fill="${fill}" fill-opacity="${known ? 0.85 : scouted ? 0.55 : 1}"
           stroke="${pinned ? '#5ad8d8' : current ? '#ffd700' : known ? '#d8d4c8' : scouted ? '#8fd4ff' : '#4a4a5e'}"
-          stroke-width="${pinned ? 3 : current ? 3 : 1.5}" ${scouted ? 'stroke-dasharray="3 3"' : ''}
-          ${canTravel ? `class="wp-node" data-wp="${z.id}" style="cursor:pointer"` : ''}/>
+          stroke-width="${pinned ? 3 : current ? 3 : 1.5}" ${scouted ? 'stroke-dasharray="3 3"' : ''}${travelAttrs}/>
+        ${kd?.ring ? `<circle cx="${z.map.x}" cy="${z.map.y}" r="${r + (kd.ring.gap ?? 3.5)}" fill="none"
+          stroke="${kd.ring.color}" stroke-width="${kd.ring.width ?? 1.6}" pointer-events="none"/>` : ''}
+        ${kd?.glyph ? `<text x="${z.map.x}" y="${(z.map.y + (kd.glyph.dy ?? 3.5)).toFixed(1)}" text-anchor="middle"
+          font-size="${kd.glyph.size ?? 10}" fill="${kd.glyph.color}" pointer-events="none">${kd.glyph.char}</text>` : ''}
         ${wp ? `<rect x="${z.map.x - 16.5}" y="${z.map.y - 16.5}" width="9" height="9"
-          fill="#5ad8d8" transform="rotate(45 ${z.map.x - 12} ${z.map.y - 12})"
-          ${canTravel ? `class="wp-node" data-wp="${z.id}" style="cursor:pointer"` : ''}>
-          <title>Waypoint — click to travel</title></rect>` : ''}
+          fill="#5ad8d8" transform="rotate(45 ${z.map.x - 12} ${z.map.y - 12})"${travelAttrs}/>
+        <circle cx="${z.map.x - 12}" cy="${z.map.y - 12}" r="${MAP_CFG.wpHitR}" fill="none" pointer-events="all"${travelAttrs}>
+          <title>${canTravel ? 'Waypoint — click to travel' : 'Waypoint (attuned)'}</title></circle>` : ''}
         ${z.port ? `<text x="${z.map.x + 14}" y="${z.map.y - 10}" text-anchor="middle"
           font-size="11" fill="#9ad0e8">⚓<title>Port — sail from its dock</title></text>` : ''}
+        ${current ? `<text x="${z.map.x}" y="${z.map.y - 18}" text-anchor="middle"
+          font-size="9" fill="#ffd700" pointer-events="none">YOU ARE HERE</text>` : ''}</g>`;
+
+      // The NAME CARD: fixed (always-mode / pinLabel kind / pinned / you-are-
+      // here), else hover-revealed by wireMapControls flipping `display` — no
+      // rebuild on hover. A BACKDROP makes a card a card (hover tooltips, the
+      // pin, towns); blanket always-mode labels stay bare text — the classic
+      // chart, minus its hitboxes.
+      const name = known || scouted ? z.name : '???';
+      const fixed = labelMode === 'always' || !!kd?.pinLabel || pinned || current;
+      const backdrop = labelMode !== 'always' || pinned || !!kd?.pinLabel;
+      const showSub = known || scouted;
+      const C = MAP_CFG.card;
+      const cw = Math.max(name.length * C.charW, (showSub ? sub.length : 0) * C.subCharW) + C.padX * 2;
+      cards += `<g class="zone-card" data-zl="${z.id}"${fixed ? ' data-fixed="1"' : ''}
+        ${fixed || this.hoveredZone === z.id ? '' : 'display="none"'} pointer-events="none">
+        ${backdrop ? `<rect x="${(z.map.x - cw / 2).toFixed(1)}" y="${z.map.y + C.top}" width="${cw.toFixed(1)}"
+          height="${showSub ? C.hWithSub : C.h}" rx="${C.rx}" fill="${C.fill}"
+          stroke="${kd?.ring?.color ?? C.stroke}" stroke-width="1"/>` : ''}
         <text x="${z.map.x}" y="${z.map.y + 26}" text-anchor="middle"
-          font-size="11" fill="${known ? '#d8d4c8' : scouted ? '#a8c4d8' : '#55555f'}">${known || scouted ? z.name : '???'}</text>
-        ${known || scouted ? `<text x="${z.map.x}" y="${z.map.y + 38}" text-anchor="middle"
-          font-size="9" fill="${bi ? bi.mapColor : '#8a8678'}">${sub}</text>` : ''}
-        ${here}</g>`;
+          font-size="11" fill="${kd?.labelColor ?? (known ? '#d8d4c8' : scouted ? '#a8c4d8' : '#55555f')}">${esc(name)}</text>
+        ${showSub ? `<text x="${z.map.x}" y="${z.map.y + 38}" text-anchor="middle"
+          font-size="9" fill="${kd ? kd.labelColor ?? '#8a8678' : bi ? bi.mapColor : '#8a8678'}">${esc(sub)}</text>` : ''}</g>`;
     }
 
     // World-sim overlays: drifting weather fronts and faction territory.
@@ -3276,9 +3314,15 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       const cx = node ? node.map.x : (m.coord?.x ?? 0);
       const cy = node ? node.map.y : (m.coord?.y ?? 0);
       const r = m.r ?? 9;
-      deaths += `<g><title>${esc(m.title)}</title>`
+      // A zone-anchored marker is an ALIAS of its node, never an occluder (the
+      // interactivity contract — ui/mapConfig.ts): it carries data-zone so
+      // hover/pin resolve through it, and the node's travel click when one
+      // exists — clicking the quest "?" on a waypoint zone just GOES there.
+      const mTravel = node && world.discoveredWaypoints.has(node.id) && world.zone.id !== node.id;
+      deaths += `<g${node ? ` data-zone="${node.id}"` : ''}${mTravel ? ` class="wp-node" data-wp="${node.id}"` : ''}
+        style="cursor:${mTravel ? 'pointer' : 'help'}"><title>${esc(m.title)}</title>`
         + `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${m.fill}" stroke="${m.stroke}" stroke-width="1.5"/>`
-        + `<text x="${cx}" y="${(cy + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="${m.text}">${m.glyph}</text></g>`;
+        + `<text x="${cx}" y="${(cy + 4).toFixed(1)}" text-anchor="middle" font-size="11" fill="${m.text}" pointer-events="none">${m.glyph}</text></g>`;
     }
 
     // The map grows as frontiers are charted — fit the view to the VISIBLE graph
@@ -3310,7 +3354,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <span style="color:#6a6a78"> · scroll to zoom, drag to pan · hover a zone, click to pin</span></div>
       ${this.mapLayerChipsHtml(allLayers)}
       <div class="map-body">
-        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:grab;touch-action:none">${ocean}${simUnder}${edges}${stubs}${nodes}${deaths}${simOver}</svg>
+        <svg id="world-map-svg" viewBox="${this.mapViewBox()}" style="cursor:grab;touch-action:none">${ocean}${simUnder}${edges}${stubs}${nodes}${deaths}${simOver}${cards}</svg>
         <aside id="map-aside">${this.zoneBoxHtml(world)}</aside>
       </div>`;
     const aside = this.worldMap.querySelector<HTMLElement>('#map-aside');
@@ -3428,16 +3472,41 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     const zoneId = this.boxZoneId(world);
     const zone = world.zoneMap[zoneId];
     const charted = world.visited.has(zoneId);
-    const name = charted && zone ? zone.name : '???';
+    // RECON parity with the chart: a surveyed zone shows its real name and
+    // identity here too — the old visited-only gate said '???' in the box
+    // while the map plainly printed the name beside it.
+    const scouted = !charted && world.surveyed.has(zoneId);
+    const revealed = (charted || scouted) && !!zone;
+    const name = revealed ? zone!.name : '???';
     const pinned = this.pinnedZone === zoneId;
+    // IDENTITY CHIPS — what this ground IS at a glance, mirroring the chart's
+    // own glyphs: kind (Town), biome · monster level, waypoint, port.
+    const kd = revealed ? zoneKindOf(zone!) : undefined;
+    const bi = revealed ? biomeOf(zone!) : null;
+    const chips: string[] = [];
+    if (kd) {
+      const kc = kd.ring?.color ?? '#ffd700';
+      chips.push(`<span class="zi-chip" style="color:${kc};border-color:${kc}">${kd.glyph ? esc(kd.glyph.char) + ' ' : ''}${esc(kd.label)}${kd.subLabel ? ` — ${esc(kd.subLabel)}` : ''}</span>`);
+    } else if (revealed) {
+      const lvText = zone!.objective.kind === 'waves' && zone!.objective.waves === 0
+        ? 'endless waves' : `monster lv ${zone!.level}`;
+      chips.push(`<span class="zi-chip">${bi ? esc(bi.label) + ' · ' : ''}${lvText}</span>`);
+    }
+    if (world.discoveredWaypoints.has(zoneId)) {
+      chips.push(`<span class="zi-chip" style="color:#5ad8d8;border-color:#3a7a7a">◆ waypoint${zoneId !== world.zone.id ? ' — click its node to travel' : ''}</span>`);
+    }
+    if (revealed && zone!.port) chips.push(`<span class="zi-chip" style="color:#9ad0e8;border-color:#4a7a9a">⚓ port</span>`);
     const head = `<div class="zi-zone">${esc(name)}`
       + (pinned ? ` <span class="zi-pin" data-unpin="1">📌 unpin</span>` : '')
       + `</div>`
-      + `<div class="zi-hint">${zoneId === world.zone.id ? 'you are here' : pinned ? 'pinned' : 'hovering'}</div>`;
+      + `<div class="zi-hint">${zoneId === world.zone.id ? 'you are here' : pinned ? 'pinned' : scouted ? 'scouted from afar — unwalked' : 'hovering'}</div>`
+      + (chips.length ? `<div class="zi-chips">${chips.join('')}</div>` : '');
 
     const entries = zoneInfoFor(world, zoneId);
     if (entries.length === 0) {
-      const msg = charted ? 'Nothing of note here.' : 'Uncharted — explore to reveal.';
+      const msg = charted ? 'Nothing of note here.'
+        : scouted ? 'Scouted from afar — walk its ground to learn more.'
+          : 'Uncharted — explore to reveal.';
       return head + `<div class="zi-empty">${msg}</div>`;
     }
     const groups: { kind: ZoneInfoEntry['kind']; title: string }[] = [
@@ -3517,6 +3586,16 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     });
     const zoneAt = (e: Event): string | null =>
       (e.target as Element).closest('[data-zone]')?.getAttribute('data-zone') ?? null;
+    // Flip a hover-revealed name card in place (no rebuild — a rebuild would
+    // reset zoom/pan). Fixed cards (towns, the pin, always-mode, you-are-here)
+    // carry data-fixed and never flip.
+    const hoverCard = (zid: string | null, show: boolean): void => {
+      if (!zid) return;
+      const card = svg.querySelector<SVGGElement>(`.zone-card[data-zl="${zid}"]:not([data-fixed])`);
+      if (!card) return;
+      if (show) card.removeAttribute('display');
+      else card.setAttribute('display', 'none');
+    };
     attachPanZoom(svg, {
       getZoom: () => this.mapZoom,
       setZoom: (z) => { this.mapZoom = z; },
@@ -3524,14 +3603,24 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       box: () => this.mapBox,
       apply,
       ignore: '.wp-node', // let waypoint travel-clicks through
-      // HOVER preview — update only the side box (a pin, if set, takes precedence
-      // inside boxZoneId, so hovering elsewhere while pinned leaves the box alone).
+      // HOVER preview — raise the zone's name card and update the side box (a
+      // pin, if set, takes precedence inside boxZoneId, so hovering elsewhere
+      // while pinned leaves the box alone; the card still follows the cursor).
       onIdleMove: (e) => {
         const zid = zoneAt(e);
-        if (zid !== this.hoveredZone) { this.hoveredZone = zid; this.renderZoneBox(); }
+        if (zid !== this.hoveredZone) {
+          hoverCard(this.hoveredZone, false);
+          hoverCard(zid, true);
+          this.hoveredZone = zid;
+          this.renderZoneBox();
+        }
       },
       onLeave: () => {
-        if (this.hoveredZone !== null) { this.hoveredZone = null; this.renderZoneBox(); }
+        if (this.hoveredZone !== null) {
+          hoverCard(this.hoveredZone, false);
+          this.hoveredZone = null;
+          this.renderZoneBox();
+        }
       },
       // CLICK a zone to PIN it (toggle) — so the cursor can leave to scroll the box.
       // Drag-ending clicks are already swallowed by attachPanZoom; waypoint nodes
@@ -3780,6 +3869,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <button id="opt-foresight">${this.getSettings().castTelegraphs ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Map Zone Names</span>
+        <button id="opt-maplabels" title="How the world map wears its name cards:
+${MAP_LABEL_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}
+Towns keep their card in every mode, and cards never block a waypoint's click.">${(MAP_LABEL_MODES.find(m => m.id === s.mapLabels) ?? MAP_LABEL_MODES[0]).name}</button>
+      </div>
+      <div class="rebind-row">
         <span>Reawaken After Quit</span>
         <button id="opt-resume" title="Where a relaunched save wakes:
 WHERE YOU STOOD — the exact spot, situation, and wounds the save captured (quitting out of trouble hands the trouble back)
@@ -3855,6 +3950,17 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       const st = this.getSettings();
       st.castTelegraphs = !st.castTelegraphs;
       this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
+    // MAP ZONE NAMES: cycle the label-mode registry (ui/mapConfig.ts) — hover-
+    // revealed (clean chart) or always-on (classic). pinLabel kinds (towns)
+    // ignore the dial by design, and cards never hit-test in any mode.
+    root.querySelector<HTMLElement>('#opt-maplabels')!.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = MAP_LABEL_MODES.findIndex(m => m.id === st.mapLabels);
+      st.mapLabels = MAP_LABEL_MODES[(i + 1) % MAP_LABEL_MODES.length].id;
+      this.saveSettings();
+      this.refreshMap(); // live behind the menu if the map is open (no-op otherwise)
       this.renderKeybinds(root, onBack);
     });
     // REAWAKEN AFTER QUIT: where a relaunched save wakes (meta/worldstate.ts).
