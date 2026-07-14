@@ -484,6 +484,32 @@ registerRegion({ id: 'tallgrass', walkable: false, blocks: true, label: 'the tal
   // Explicit, deliberate: the Field's hedge is a SOFT boundary — never an arrow-stopper.
   blocksShot: false, blocksSight: false });
 
+// --- THE DUNE SEA (the 'dunefield' recipe, layoutRecipes.ts) ------------------
+// DUNE FACE: the steep slip-wall of a marching sand ridge — the parapet policy
+// in sand: bodies never climb it, but shots and SIGHT sail over the crest, so
+// the erg stays a landscape of long views and forced detours, never a corridor
+// maze (claustrophobia belongs to the jungle). The recipe guarantees slipface
+// BREACHES through every ridge — the passes caravans died looking for.
+registerRegion({ id: 'duneface', walkable: false, blocks: true, label: 'the dune face',
+  blocksShot: false, blocksSight: false,
+  // Raised sand over the dark floor, a sunlit comb on every walkable-facing
+  // side — the ridge reads as a lit EDGE falling toward you, not wall paint.
+  visual: { fill: '#4a3a1e', alpha: 1, edge: { color: '#d8b878', width: 5 } } });
+// SOFT SAND: the loose lee where a ridge sheds itself — deep going, slow.
+// A moveScale (the road's seam, inverted) instead of a status on purpose:
+// crossing a dune sea means wading a dozen lees an hour, and a status pip
+// strobing on every one would be noise (the mired icon keeps meaning bogs).
+registerRegion({ id: 'softsand', walkable: true, blocks: false, label: 'the soft sand',
+  moveScale: 0.82,
+  visual: { fill: '#2e2412', alpha: 0.5 } });
+// HARDPAN: wind-rammed clay and salt scoured flat between the ridges — the
+// desert's own road (the caravans knew). The dunefield recipe threads pan
+// lanes ALONG the prevailing wind: walking the grain of the land is faster
+// than fighting it, and the lanes make that legible underfoot.
+registerRegion({ id: 'hardpan', walkable: true, blocks: false, label: 'the hardpan',
+  moveScale: 1.05,
+  visual: { fill: '#1f1a10', alpha: 0.55 } });
+
 // --- STRUCTURE REGIONS (the plan-structure framework) ------------------------
 // RAMPART: dressed structural stone — a castle/fortress curtain wall. A TRUE
 // WALL (stops shots and sight, like wall/flesh_wall/fungal_wall): storming a

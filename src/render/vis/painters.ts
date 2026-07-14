@@ -4398,6 +4398,64 @@ const cactus: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A DUNE CREST from above: the ridge's bright windward comb over a soft lee
+ *  shadow, laid along the doodad's rot so the dunefield recipe's rails read
+ *  as one marching ridge line (local -y = windward, +y = the lee the recipe
+ *  aims downwind). Time-free on purpose — bakeWhole:'static' blits it. */
+const duneCrest: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { sand?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.sand, theme, '#c9a86a');
+  const lit = mix(base, '#fff8e0', 0.42);
+  const dark = shade(base, -0.52);
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 29) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // Lee apron: the shed slope falling downwind.
+    ctx.fillStyle = withAlpha(dark, 0.42);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.34, r * 1.2, r * 0.52, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The ridge segment's body.
+    ctx.fillStyle = withAlpha(shade(base, -0.16), 0.9);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.16, r * 0.46, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The windward face takes the light.
+    ctx.fillStyle = withAlpha(base, 0.85);
+    ctx.beginPath();
+    ctx.ellipse(0, -r * 0.16, r * 1.02, r * 0.3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The comb: a serrated bright crest line.
+    ctx.strokeStyle = withAlpha(lit, 0.9);
+    ctx.lineWidth = Math.max(1.4, r * 0.09);
+    ctx.beginPath();
+    const teeth = 4 + (seed % 3);
+    for (let i = 0; i <= teeth; i++) {
+      const t = i / teeth;
+      const x = (t - 0.5) * r * 2;
+      const y = -r * (0.3 + 0.1 * Math.sin(t * Math.PI)) + (hash01(i, seed) - 0.5) * r * 0.12;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // Spill streaks: sand the crest let go down the lee.
+    ctx.strokeStyle = withAlpha(dark, 0.5);
+    ctx.lineWidth = 1.1;
+    const spills = 2 + (seed % 3);
+    for (let i = 0; i < spills; i++) {
+      const x = (hash01(i, seed + 5) - 0.5) * r * 1.7;
+      ctx.beginPath();
+      ctx.moveTo(x, -r * 0.06);
+      ctx.lineTo(x + (hash01(i, seed + 9) - 0.5) * r * 0.3, r * (0.5 + hash01(i, seed + 13) * 0.3));
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 /** A SPIDER WEB sheet: radial spokes + sagging rings, pale and sticky. */
 const web: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
@@ -6858,7 +6916,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   membrane, veins, eyeStalk, ribArch, teethRow,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
-  cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
+  cactus, duneCrest, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,

@@ -63,6 +63,7 @@ export type KnownDoodadKind =
   | 'flowers'   // meadow color drifts — pure decoration
   | 'reeds'     // water-edge blades — CONCEALS like brush (ambush margins)
   | 'cactus'    // desert solid — swollen lobes and spines
+  | 'dune_crest' // the marching ridge's comb — pure terrain art laid along dunefield rails
   | 'web'       // sticky sheet — slows like mire (spider country)
   | 'geyser'    // scalding vent mouth — steams and glows (marsh/tundra)
   | 'snowdrift' // wind-piled powder — decoration (tundra)
@@ -813,6 +814,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
       text: 'the sac bursts!', color: '#9a72c8',
       spawn: { monster: 'caul_tick', count: [1, 2], chance: 0.18, text: 'something skitters out!' } } },
   caul_eyes: { overlap: 'inert', spacing: 44 },
+  // THE DUNE SEA's crest comb (dunefield recipe): pure ridge ART riding the
+  // duneface region cells — the REGION is the collision truth, so the comb
+  // is inert and sits happily on non-walkable sand (no walk gate to fight).
+  dune_crest: { overlap: 'inert', spacing: 0 },
   // The maw is GROUND (nothing to trip on — the reel is the obstacle):
   // hazardGround keeps ambient spawns off the lip, the auto-attached effect
   // reels the nearest intruder each beat and bites whatever reaches the lip.
@@ -3441,6 +3446,7 @@ registerStamp('dead_tree', stampSingle('dead_tree', [14, 26]));
 registerStamp('stump', stampSingle('stump', [9, 15]));
 registerStamp('log', stampSingle('log', [12, 20]));
 registerStamp('cactus', stampSingle('cactus', [10, 18]));
+registerStamp('dune_crest', stampSingle('dune_crest', [24, 40]));
 registerStamp('geyser', stampSingle('geyser', [12, 17]));
 registerStamp('brazier', stampSingle('brazier', [8, 11]));
 registerStamp('standing_stone', stampSingle('standing_stone', [12, 20]));

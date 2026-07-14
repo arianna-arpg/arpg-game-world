@@ -235,6 +235,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'cactus', order: 53, shadow: 0.6, longShadow: 0.8,
     params: { color: '#4a7a3c' },
   },
+  // The dune sea's marching combs — recipe-planted along dunefield rails.
+  // The duneface REGION beneath is the collision truth; this is the light on
+  // it. Ground-order (36): terrain art, never furniture. No contact shadow —
+  // a dune does not stand on the sand, it IS the sand.
+  dune_crest: {
+    painter: 'duneCrest', order: 36, bakeWhole: 'static',
+    params: { sand: 'theme:sand|#c9a86a' },
+  },
   dead_tree: {
     painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: '#4a4038' },

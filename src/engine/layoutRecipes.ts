@@ -1077,6 +1077,144 @@ function steppesLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('steppes', steppesLayout);
 
+// --- DUNEFIELD (the Great Erg) ----------------------------------------------------
+// The desert's signature topology: long crescent RIDGES marching across one
+// seeded PREVAILING WIND — bodies detour while shots and sight sail over (the
+// duneface region is sand's parapet), slipface BREACHES are the passes, the
+// loose LEE of every ridge wades slow (softsand), and wind-rammed HARDPAN
+// lanes run the grain of the land like roads nobody built. Every dial is a
+// layoutParam so the desert's faces (waste/erg/glasspan) tune ONE recipe:
+//   duneGap            spacing between ridge rails along the wind
+//   duneCrestW         painted crest half-width band
+//   duneWobble/duneBow ridge wander + barchan bowing
+//   duneBreachEvery/R  slip-pass cadence + mouth radius
+//   duneLee            softsand reach shed downwind of each crest
+//   dunePans           hardpan lane count band
+//   duneCombEvery      crest-comb doodad cadence (0 = no comb art)
+// Reachability is guaranteed twice: breaches every few hundred px per rail,
+// then a reachable()-checked corridor per exit (the field recipe's lesson).
+function dunefieldLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  // ONE prevailing wind per zone: every ridge, lee, pan and comb agrees.
+  const wind = rng.int(0, 7) * (Math.PI / 4) + rng.range(-0.16, 0.16);
+  const across = wind + Math.PI / 2;
+  const dirX = Math.cos(wind), dirY = Math.sin(wind);
+  const acX = Math.cos(across), acY = Math.sin(across);
+  const cx = arena.w / 2, cy = arena.h / 2;
+  const diag = Math.hypot(arena.w, arena.h);
+
+  const gapBand = layoutParam(def, 'duneGap', [300, 440]) as [number, number];
+  const crestWBand = layoutParam(def, 'duneCrestW', [22, 36]) as [number, number];
+  const wobble = layoutParam(def, 'duneWobble', 46);
+  const bow = layoutParam(def, 'duneBow', 0.2);
+  const breachEvery = layoutParam(def, 'duneBreachEvery', [380, 620]) as [number, number];
+  const breachR = layoutParam(def, 'duneBreachR', [46, 68]) as [number, number];
+  const leeReach = layoutParam(def, 'duneLee', 46);
+  const panBand = layoutParam(def, 'dunePans', [1, 2]) as [number, number];
+  const combEvery = layoutParam(def, 'duneCombEvery', 120);
+
+  const crests = Mask.forRect(0, 0, arena.w, arena.h);
+  const lee = crests.like();
+  const pans = crests.like();
+  const openings = crests.like();
+  const portals = [ctx.entry, ...ctx.exits];
+
+  // HARDPAN lanes first — they breach whatever ridge they cross.
+  for (let i = 0, n = rng.int(panBand[0], panBand[1]); i < n; i++) {
+    const off = rng.range(-0.3, 0.3) * diag;
+    const drift = rng.range(-260, 260);
+    const from = vec(cx - dirX * diag * 0.6 + acX * off, cy - dirY * diag * 0.6 + acY * off);
+    const to = vec(cx + dirX * diag * 0.6 + acX * (off + drift), cy + dirY * diag * 0.6 + acY * (off + drift));
+    band(pans, wanderPath(rng, from, to, { step: 190, wobble: 60, bowFrac: 0.16 }), rng.range(26, 40));
+  }
+
+  // RIDGE RAILS: ridgelines march ACROSS the wind, spaced down its length.
+  const rails: Vec2[][] = [];
+  let at = -diag / 2 + rng.range(120, gapBand[0]);
+  while (at < diag / 2 - 140) {
+    const rcx = cx + dirX * at, rcy = cy + dirY * at;
+    const from = vec(rcx - acX * diag * 0.62, rcy - acY * diag * 0.62);
+    const to = vec(rcx + acX * diag * 0.62, rcy + acY * diag * 0.62);
+    const pts = wanderPath(rng, from, to, { step: 160, wobble, bowFrac: bow });
+    rails.push(pts);
+    const w = rng.range(crestWBand[0], crestWBand[1]);
+    band(crests, pts, w);
+    // The LEE: the same line shed downwind — the slog behind every crest.
+    band(lee, pts.map(p => vec(p.x + dirX * (w + leeReach * 0.8), p.y + dirY * (w + leeReach * 0.8))), leeReach);
+    // SLIPFACE BREACHES: passes opened along the ridge on a seeded cadence.
+    let walked = 0;
+    let next = rng.range(breachEvery[0], breachEvery[1]) * rng.range(0.35, 0.7);
+    for (let k = 0; k < pts.length - 1; k++) {
+      const a = pts[k], b = pts[k + 1];
+      const seg = Math.hypot(b.x - a.x, b.y - a.y);
+      while (walked + seg >= next) {
+        const t = (next - walked) / seg;
+        const bx = a.x + (b.x - a.x) * t, by = a.y + (b.y - a.y) * t;
+        if (bx > 70 && by > 70 && bx < arena.w - 70 && by < arena.h - 70) {
+          disc(openings, bx, by, rng.range(breachR[0], breachR[1]));
+          // A few passes become POIs: patrols and quests find the throats.
+          if (ctx.pois.length < 8 && rng.chance(0.3)) ctx.pois.push(vec(bx, by));
+        }
+        next += rng.range(breachEvery[0], breachEvery[1]);
+      }
+      walked += seg;
+    }
+    at += rng.range(gapBand[0], gapBand[1]);
+  }
+
+  // Mouths and earlier reservations always breathe (composition courts, sites).
+  for (const p of portals) disc(openings, p.x, p.y, 170);
+  for (const r of ctx.reserved) {
+    if ('pos' in r) disc(openings, r.pos.x, r.pos.y, r.radius + 24);
+    else disc(openings, r.rect.x + r.rect.w / 2, r.rect.y + r.rect.h / 2,
+      Math.hypot(r.rect.w, r.rect.h) / 2 + (r.margin ?? 0) + 24);
+  }
+
+  crests.subtract(pans).subtract(openings);
+  lee.subtract(crests).subtract(pans);
+  paintRegion(grid, pans, 'hardpan');
+  paintRegion(grid, lee, 'softsand');
+  paintRegion(grid, crests, 'duneface');
+
+  // Belt-and-suspenders: every exit stays walkable from the entry, whatever
+  // the ridge dice rolled (the field recipe's guarantee).
+  for (const e of ctx.exits) {
+    if (!grid.reachable(ctx.entry, e)) grid.carveCorridor(ctx.entry.x, ctx.entry.y, e.x, e.y, 30);
+  }
+
+  // THE CREST COMB — ridge art laid along the painted rails (inert; the
+  // region is the collision truth). Skipped under LITE, skippable by data.
+  if (!ctx.lite && combEvery > 0) {
+    for (const pts of rails) {
+      let walked = 0, next = combEvery * 0.5;
+      for (let k = 0; k < pts.length - 1; k++) {
+        const a = pts[k], b = pts[k + 1];
+        const seg = Math.hypot(b.x - a.x, b.y - a.y);
+        const t0 = Math.atan2(b.y - a.y, b.x - a.x);
+        // Local +y must fall DOWNWIND so the painter's lee shadow lands true.
+        const rot = Math.sin(wind - t0) < 0 ? t0 + Math.PI : t0;
+        while (walked + seg >= next) {
+          const t = (next - walked) / seg;
+          const px = a.x + (b.x - a.x) * t, py = a.y + (b.y - a.y) * t;
+          next += combEvery * rng.range(0.82, 1.24);
+          if (px < 60 || py < 60 || px > arena.w - 60 || py > arena.h - 60) continue;
+          if (openings.has(px, py) || pans.has(px, py)) continue;
+          ctx.doodads.push({
+            pos: vec(px, py), radius: rng.range(30, 46),
+            kind: 'dune_crest', rot: rot + rng.range(-0.12, 0.12),
+          });
+        }
+        walked += seg;
+      }
+    }
+  }
+
+  // The tileset's own dressing pools into the troughs (self-gates under lite).
+  scatterDecoration(ctx, def);
+}
+registerLayout('dunefield', dunefieldLayout);
+
 // --- COLOSSEUM (the grand arena) --------------------------------------------------
 // Daresso's bones: a bright SAND PIT under open sky, ringed by a thick STAND
 // the crowd fills (spectator rows facing the fight), gate mouths breaching it
