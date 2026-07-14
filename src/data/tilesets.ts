@@ -788,51 +788,94 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // JUNGLE — the Sylvan court's deep growth: palms, vines, impassable thickets.
+  // JUNGLE — the strangling green. Where the FOREST is a ROOF (open floor,
+  // canopy overhead), the JUNGLE is a THROAT: one living VERDURE mass carved
+  // into narrow game trails and small glades (the 'thicket' recipe owns the
+  // topology — walls that block step, shot AND sight), with the growth itself
+  // cuttable: brush PLUGS choke the throats, pocket DENS wait behind them,
+  // face-cuts pay whoever carves into the mass. Sightlines are measured in
+  // strides; everything here is what fills them.
   jungle: {
     id: 'jungle',
-    // The heat swells marsh bladders in clearing and dense floor alike.
+    // The always-kit, on EVERY face: the cuttable fabric + the wet-heat
+    // texture. Curtains blind the lanes, blooms light the gloom, bladders
+    // swell in the mulch — and the growth CROWDS THE HEART (radial bands:
+    // more ferns, more plugs the deeper you push).
     common: [
-      { kind: 'gas_pod', count: [1, 2] },
+      { kind: 'liana_veil', count: [3, 6] },
+      { kind: 'jungle_bloom', count: [2, 4] },
+      { kind: 'gas_pod', count: [1, 3] },
+      { kind: 'strangler_root', count: [2, 4] },
       // The canopy drips harder where the WORLD runs wet (climate strata).
-      { kind: 'vines', count: [0, 2], where: { field: 'climate', params: { axis: 'moisture' }, min: 0.55 } },
+      { kind: 'vines', count: [1, 3], where: { field: 'climate', params: { axis: 'moisture' }, min: 0.55 } },
+      { kind: 'fern', count: [2, 4], where: { field: 'radial', max: 0.55 } },
+      { kind: 'jungle_brush', count: [1, 3], where: { field: 'radial', max: 0.5 } },
     ],
     variants: [
-      { name: 'clearing', layout: [
-        { kind: 'trees', count: [8, 12] }, { kind: 'grove', count: [3, 4] },
-        { kind: 'grass', count: [4, 6] }, { kind: 'brush', count: [3, 5] },
-        { kind: 'palm', count: [4, 7] }, { kind: 'vines', count: [1, 2] },
-        { kind: 'thicket', count: [1, 2] }, { kind: 'swamp', count: [1, 2] },
-        { kind: 'river', count: [0, 1] }, { kind: 'cave', count: [0, 1] },
+      // The flora face: growth for growth's sake — emergent giants over a
+      // floor that never stops moving.
+      { name: 'green hell', layout: [
+        { kind: 'canopy_colossus', count: [2, 3] },
+        { kind: 'palm', count: [6, 10] }, { kind: 'trees', count: [4, 7] },
+        { kind: 'fern', count: [3, 5] }, { kind: 'brush', count: [3, 5] },
+        { kind: 'thicket', count: [2, 3] }, { kind: 'jungle_bloom', count: [1, 3] },
+        { kind: 'swamp', count: [1, 2] }, { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
       ] },
-      { name: 'dense floor', layout: [
-        { kind: 'palm', count: [16, 22] }, { kind: 'vines', count: [5, 8] },
-        { kind: 'thicket', count: [5, 7] }, { kind: 'trees', count: [10, 14] },
-        { kind: 'brush', count: [4, 6] }, { kind: 'swamp', count: [2, 3] },
-        { kind: 'grove', count: [1, 2] }, { kind: 'cave', count: [0, 1] },
-        { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
+      // The swallowed-court face: the green is still digesting somebody's
+      // civilization — idols, column drums, urns old enough to answer back.
+      { name: 'strangler court', layout: [
+        { kind: 'mossy_idol', count: [2, 4] },
+        { kind: 'fallen_column', count: [3, 6] },
+        { kind: 'weathered_statue', count: [1, 2] },
+        { kind: 'rubble', count: [2, 4] },
+        { kind: 'burial_urn', count: [2, 4] },
+        { kind: 'liana_veil', count: [2, 4] },
+        { kind: 'palm', count: [4, 7] }, { kind: 'trees', count: [3, 5] },
+        { kind: 'cave', count: [0, 1] },
+      ] },
+      // The toxin face: the wet heat ferments — pods, caps and blooms in a
+      // floor gone soft; bring your own antidote.
+      { name: 'fevered floor', layout: [
+        { kind: 'gas_pod', count: [3, 5] },
+        { kind: 'puffcap_cluster', count: [2, 4] },
+        { kind: 'venom_bloom', count: [2, 3] },
+        { kind: 'marsh_wisp', count: [1, 3] },
+        { kind: 'swamp', count: [2, 3] }, { kind: 'mud', count: [1, 2] },
+        { kind: 'palm', count: [4, 7] }, { kind: 'fern', count: [2, 4] },
+        { kind: 'cave', count: [0, 1] },
       ] },
     ],
     nameFirst: ['Verdant', 'Tangleroot', 'Emerald', 'Fevered', 'Greenmaw', 'Vinewrought', 'Overgrown', 'Mistleaf', 'Rotbloom', 'Canopied', 'Thornvine', 'Sapheart', 'Fernshade', 'Leafshroud', 'Jadewild', 'Snarlgreen', 'Humid', 'Tanglevein'],
     nameSecond: ['Canopy', 'Snarl', 'Depths', 'Hollow', 'Thicket', 'Wilds', 'Tangle', 'Overgrowth', 'Verge', 'Hush', 'Reach', 'Mire', 'Bower', 'Greens', 'Vinework', 'Floor'],
     theme: {
-      floor: '#08140a', grid: '#0e1f10', border: '#2a5a2c',
+      // Wet green-on-green: the loam reads ALIVE (hue-preserving mottle over
+      // a five-stop leaf-litter ramp), dark margins where the water stands,
+      // sun-wells where the roof breaks. wall = the verdure's own fill so the
+      // walk-mask fallback and the region visual agree (guard gap ≈ .14).
+      ground: {
+        palette: ['#0d1a0e', '#142a12', '#1c3a18', '#26501e', '#315f28'],
+        bias: 0.55, alpha: 0.6, speckles: 1.3,
+        coast: { reach: 80, shift: -0.35, kinds: ['water', 'swamp', 'bog'] },
+        clearing: { reach: 120, lift: 0.28 },
+      },
+      fog: { banks: [1, 3], kinds: [{ id: 'mist' }] },
+      ambientFx: [{ kind: 'motes', intensity: 0.7 }, { kind: 'heatHaze', intensity: 0.3 }],
+      dayLight: 0.9, nightDark: 0.8,
+      floor: '#0a140b', grid: '#101f10', border: '#2a5a2c',
       obstacle: '#1c4a1e', obstacleEdge: '#357538', accent: '#6ed060',
-      tree: '#2f6a34', mud: '#14260f', water: '#16404a', wall: '#3a4a22',
+      tree: '#2f6a34', mud: '#14260f', water: '#16404a', wall: '#22421a', road: '#3f351f',
     },
-    sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'grove',
+    sizeW: [2400, 3400], sizeH: [1600, 2400], ellipseChance: 0.25, biome: 'jungle',
+    // The authored/probe default face (generated zones always roll a variant).
     layout: [
-      { kind: 'ancient_tree', count: [1, 2] },
-      { kind: 'palm', count: [12, 18] },
-      { kind: 'vines', count: [3, 6] },
+      { kind: 'canopy_colossus', count: [1, 2] },
+      { kind: 'palm', count: [5, 9] },
+      { kind: 'trees', count: [4, 7] },
       { kind: 'fern', count: [2, 5] },
-      { kind: 'thicket', count: [3, 5] },
-      { kind: 'trees', count: [6, 10] },
-      { kind: 'grove', count: [2, 3] },
       { kind: 'brush', count: [3, 5] },
+      { kind: 'thicket', count: [1, 2] },
       { kind: 'swamp', count: [1, 2] },
-      { kind: 'river', count: [0, 1] },
       { kind: 'cave', count: [0, 1] },
       { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
     ],
@@ -860,10 +903,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
+    // No 'procession' here: an escort cart cannot cut brush, and the thicket
+    // is proudly full of things that must be cut. The lanes belong to feet.
     objectives: [
       { kind: 'offering', weight: 1 },
-      { kind: 'bounty', weight: 1 },
-      { kind: 'procession', weight: 1 },
+      { kind: 'bounty', weight: 1.5 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },

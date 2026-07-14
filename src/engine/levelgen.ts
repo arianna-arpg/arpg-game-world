@@ -240,7 +240,18 @@ export type KnownDoodadKind =
   | 'chime_stand'      // an aeolian chime frame — the wind plays the zone's score
   | 'gale_vane'        // a weathervane arrow leaning hard into the prevailing run
   | 'cloud_coral'      // wind-sculpted vapor-stone: layered shelf-fins, rim-lit
-  | 'spire_of_gales';  // the monument: a tiered vane-crowned spire, streamered
+  | 'spire_of_gales'   // the monument: a tiered vane-crowned spire, streamered
+  // The undergrowth kit (the JUNGLE's cut-your-own-path fabric)
+  | 'jungle_brush'     // a dense plug of growth choking a trail — one good cut opens it
+  | 'verdure_face'     // brush knotted over the living wall — cut it and carve INTO the mass
+  | 'liana_veil'       // a hanging curtain of lianas: bodies part it, eyes do not
+  | 'canopy_colossus'  // an emergent giant whose crown roofs half a glade (walk-under)
+  | 'strangler_root'   // a buttress-root fin heaved out of the loam — low, solid, old
+  | 'jungle_bloom'     // a luminous understory flower — the gloom lights its own
+  // The sunken-ruin kit (what the jungle swallowed)
+  | 'ruin_gate'        // a root-split descent into the old halls (sidezone mouth)
+  | 'mossy_idol'       // a toppled stone head half-eaten by moss — somebody was worshipped here
+  | 'fallen_column';   // a column drum lying where it rolled — the colonnade's bones
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -1057,6 +1068,38 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   gale_vane:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7 },
   cloud_coral:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 34, bodyScale: 0.88 },
   spire_of_gales: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 300, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // THE UNDERGROWTH KIT — the jungle's cut-your-own-path fabric. The plug and
+  // the face-cut are DOORS MADE OF VEGETATION: they stand on walkable ground
+  // (the doors-stay-ground doctrine — reachability, AI topology and ambient
+  // spawns all see open trail), while bodies, arrows and EYES stop until
+  // somebody cuts. brittle on:['hit'] = any damaging delivery pops them
+  // (strikeSurfaces + projectile flight): the machete, the stray fireball,
+  // and the monster crashing through after you all open the same way.
+  jungle_brush: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 30,
+    forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    brittle: { on: ['hit'], orbChance: 0.1, text: 'you hack through!', color: '#4f7a2c',
+      spawn: { monster: 'emerald_mantis', count: [1, 1], chance: 0.07, text: 'the brush erupts!' } } },
+  // The face-cut pays like a secret wall but HIDES like nothing — the tell is
+  // the wall itself: cut the knot and the pop carves a pocket INTO the verdure.
+  verdure_face: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 40,
+    brittle: { on: ['hit'], carve: 52, orbChance: 0.5, gemChance: 0.28,
+      text: 'you carve into the green!', color: '#5f8a34' } },
+  // The curtain: walk THROUGH it freely — but neither you nor they see past
+  // it until crossed (occlude fades its strands for whoever stands under).
+  liana_veil: { overlap: 'inert', blocksMove: false, blocksShot: false, blocksSight: true,
+    spacing: 46, spin: true, occlude: { pad: 8, alpha: 0.3 } },
+  canopy_colossus: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90,
+    occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.18, veil: {} },
+  strangler_root: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30,
+    forbidOn: ['water', 'lava', 'chasm'] },
+  jungle_bloom: { overlap: 'inert', spacing: 36 },
+  // The sunken-ruin kit: the gate is a sidezone TRIGGER (data/sidezones.ts
+  // registers the dwell + mint); the idol and the column drum are the old
+  // court's furniture — pale stone solids the green is still swallowing.
+  ruin_gate:     { overlap: 'trigger', spacing: 500 },
+  mossy_idol:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  fallen_column: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 36,
+    forbidOn: ['water', 'lava', 'chasm'], surface: { hw: 1.6, hh: 0.55, orient: 'rot' } },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -1693,6 +1736,150 @@ function myceliaLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('mycelia', myceliaLayout);
 
+/** THE THICKET (the jungle) — claustrophobia as terrain. The whole zone is one
+ *  living VERDURE mass (a step/shot/SIGHT-blocking wall region) carved into a
+ *  web of narrow game trails and small glades; the deeper toward the heart,
+ *  the tighter the lanes and the denser the growth (every lever keys off the
+ *  same rect-normalized radial the WHERE field uses). What makes it a JUNGLE
+ *  and not a maze: the walls are CUTTABLE — brush PLUGS choke trail throats
+ *  (doors made of vegetation: the cells stay ground, so reachability, AI
+ *  topology and ambient spawns read open trail while bodies/arrows/eyes stop
+ *  until somebody cuts), pocket DENS hide behind plugged throats carved off
+ *  the lanes, and verdure FACE-CUTS pay whoever hacks into the mass itself.
+ *  All knobs are layoutParams (biome/tileset/spec-mergeable). */
+function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = new GridWalkField(arena.w, arena.h, 30);
+  const wallKind = layoutParam<string>(def, 'thicketWall', 'verdure');
+  grid.fillRegion(0, 0, arena.w, arena.h, wallKind);
+  const cx = arena.w / 2, cy = arena.h / 2;
+  // 0 at the heart → 1 on the border (matches the 'radial' gen field).
+  const rad = (x: number, y: number): number =>
+    Math.max(Math.abs(x - cx) / Math.max(1, cx), Math.abs(y - cy) / Math.max(1, cy));
+  const tightenAt = layoutParam<number>(def, 'thicketCoreTighten', 0.6);
+  const tighten = (x: number, y: number): number => tightenAt + (1 - tightenAt) * rad(x, y);
+  const M = 90;
+
+  // 1. THE HEART — the deepest glade, dead center: the zone's one wide room
+  // (ruin courts, POIs and the worst of the packs pool here by walk-gating).
+  const heartBand = layoutParam<[number, number]>(def, 'thicketHeart', [110, 150]);
+  const heartR = rng.range(heartBand[0], heartBand[1]);
+  grid.fillDisc(cx, cy, heartR, 'ground');
+  const chambers: Vec2[] = [vec(cx, cy)];
+
+  // 2. GLADES — pocket clearings scattered through the mass, SMALLER the
+  // deeper they sit (the rim breathes; the interior presses in).
+  const gladeBand = layoutParam<[number, number]>(def, 'thicketGlades', [6, 9]);
+  const gladeR = layoutParam<[number, number]>(def, 'thicketGladeR', [70, 130]);
+  const glades = rng.int(gladeBand[0], gladeBand[1]);
+  for (let i = 0; i < glades; i++) {
+    const r0 = rng.range(gladeR[0], gladeR[1]);
+    const gx = rng.range(M + r0, Math.max(M + r0, arena.w - M - r0));
+    const gy = rng.range(M + r0, Math.max(M + r0, arena.h - M - r0));
+    const r = r0 * (0.55 + 0.45 * rad(gx, gy));
+    grid.fillDisc(gx, gy, r, 'ground');
+    chambers.push(vec(gx, gy));
+  }
+
+  // 3. PORTAL MOUTHS + THE TRAIL WEB — every portal gets a small clearing and
+  // a winding tube in; the chamber chain + loops make the lane web. Trail
+  // width TIGHTENS toward the heart (the claustrophobia gradient).
+  const trailBand = layoutParam<[number, number]>(def, 'thicketTrailW', [26, 40]);
+  const wander = (a: Vec2, b: Vec2): void => {
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+    const halfW = Math.max(20, rng.range(trailBand[0], trailBand[1]) * tighten(mx, my));
+    carveWander(grid, a, b, halfW, rng);
+  };
+  for (const pt of [ctx.entry, ...ctx.exits]) {
+    const px = Math.min(Math.max(pt.x, M + 100), arena.w - M - 100);
+    const py = Math.min(Math.max(pt.y, M + 100), arena.h - M - 100);
+    grid.fillDisc(px, py, 100, 'ground');
+    wander(vec(pt.x, pt.y), vec(px, py));
+    chambers.push(vec(px, py));
+  }
+  for (let i = 1; i < chambers.length; i++) wander(chambers[i - 1], chambers[i]);
+  const loopBand = layoutParam<[number, number]>(def, 'thicketLoops', [2, 4]);
+  const loops = rng.int(loopBand[0], loopBand[1]);
+  for (let i = 0; i < loops; i++) wander(rng.pick(chambers), rng.pick(chambers));
+  // The heart is never a dead end: two extra spokes guarantee ways THROUGH.
+  for (let i = 0; i < 2; i++) wander(chambers[0], rng.pick(chambers));
+  ctx.walk = grid;
+
+  // 4. BRUSH PLUGS — cuttable vegetation doors on narrow trail throats
+  // (walkable corridor cells walled across one axis). Denser toward the
+  // heart; never near a portal; spaced so lanes breathe between cuts.
+  const cs = 30;
+  const plugChance = layoutParam<number>(def, 'thicketPlugChance', 0.42);
+  const plugCore = layoutParam<number>(def, 'thicketPlugCoreBonus', 0.34);
+  const plugSpacing = layoutParam<number>(def, 'thicketPlugSpacing', 150);
+  const walk = (x: number, y: number): boolean => grid.isWalkable(x, y);
+  const plugs: Vec2[] = [];
+  const trailCells: Vec2[] = [];
+  for (let y = cs * 3; y < arena.h - cs * 3; y += cs) {
+    for (let x = cs * 3; x < arena.w - cs * 3; x += cs) {
+      if (!walk(x, y)) continue;
+      trailCells.push(vec(x, y));
+      const throatX = walk(x - cs, y) && walk(x + cs, y) && !walk(x, y - cs) && !walk(x, y + cs);
+      const throatY = walk(x, y - cs) && walk(x, y + cs) && !walk(x - cs, y) && !walk(x + cs, y);
+      if (!throatX && !throatY) continue;
+      const p = vec(x, y);
+      if (dist(p, ctx.entry) < 300 || ctx.exits.some(e => dist(p, e) < 190)) continue;
+      if (inReserved(ctx, p, 26)) continue;
+      if (plugs.some(q => dist(p, q) < plugSpacing)) continue;
+      if (!rng.chance(Math.min(0.92, plugChance + plugCore * (1 - rad(x, y))))) continue;
+      plugs.push(p);
+      ctx.doodads.push({ pos: p, radius: rng.range(23, 30), kind: 'jungle_brush', rot: rng.range(0, Math.PI * 2) });
+    }
+  }
+
+  // 5. POCKET DENS — small chambers carved INTO the mass off a trail, joined
+  // by one plugged throat: the packs that wait, the caches that pay.
+  const denBand = layoutParam<[number, number]>(def, 'thicketDens', [2, 4]);
+  const denR = layoutParam<[number, number]>(def, 'thicketDenR', [55, 85]);
+  const dens = rng.int(denBand[0], denBand[1]);
+  let made = 0;
+  for (let t = 0; t < dens * 14 && made < dens; t++) {
+    const at = trailCells.length ? trailCells[rng.int(0, trailCells.length - 1)] : null;
+    if (!at) break;
+    const dir = rng.pick([vec(1, 0), vec(-1, 0), vec(0, 1), vec(0, -1)]);
+    const r = rng.range(denR[0], denR[1]);
+    const c = vec(at.x + dir.x * (r + 52), at.y + dir.y * (r + 52));
+    if (c.x < M + r || c.y < M + r || c.x > arena.w - M - r || c.y > arena.h - M - r) continue;
+    if (dist(c, ctx.entry) < 320 || ctx.exits.some(e => dist(c, e) < 260)) continue;
+    // The den must be cut from SOLID growth (a den punched into another lane
+    // is just a lane) — probe the disc's cross before carving.
+    if (walk(c.x, c.y) || walk(c.x + r * 0.7, c.y) || walk(c.x - r * 0.7, c.y)
+      || walk(c.x, c.y + r * 0.7) || walk(c.x, c.y - r * 0.7)) continue;
+    grid.fillDisc(c.x, c.y, r, 'ground');
+    grid.carveCorridor(at.x, at.y, c.x, c.y, 22);
+    const throat = vec((at.x + c.x) / 2, (at.y + c.y) / 2);
+    ctx.doodads.push({ pos: throat, radius: 26, kind: 'jungle_brush', rot: rng.range(0, Math.PI * 2) });
+    ctx.doodads.push({ pos: vec(c.x + rng.range(-14, 14), c.y + rng.range(-14, 14)), radius: rng.range(10, 14), kind: 'clay_pots' });
+    made++;
+  }
+
+  // 6. FACE-CUTS — brush-knotted spots on the verdure itself that pay whoever
+  // carves in (the secret wall's jungle twin, hidden in plain sight).
+  const cutBand = layoutParam<[number, number]>(def, 'thicketFaceCuts', [1, 3]);
+  const cuts = rng.int(cutBand[0], cutBand[1]);
+  for (let i = 0; i < cuts; i++) stamp(ctx, { kind: 'verdure_face', count: [1, 1] });
+
+  // 7. THE GAME TRAIL — beaten earth traced along the entry→heart lane (pure
+  // pathStep follow: draw-free, deterministic), so the way IN reads walked.
+  let cur = vec(ctx.entry.x, ctx.entry.y);
+  for (let step = 0; step < 320; step++) {
+    const nxt = grid.pathStep(cur, chambers[0]);
+    if (!nxt) break;
+    if (step % 2 === 0) ctx.doodads.push({ pos: vec(nxt.x, nxt.y), radius: 20, kind: 'road' });
+    if (dist(nxt, chambers[0]) < 40) break;
+    cur = nxt;
+  }
+
+  // The tileset's own scatter walk-gates into the lanes/glades/dens.
+  plainsLayout(ctx, def);
+}
+registerLayout('thicket', thicketLayout);
+
 /** Integer clamp helper for area-scaled flora counts. */
 function clampInt(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, Math.round(v)));
@@ -2247,7 +2434,13 @@ function ensureDoodadNavigability(ctx: GenCtx): void {
   const softBy = new Map<number, number[]>(); // cell → doodad indices
   for (let i = 0; i < ctx.doodads.length; i++) {
     const d = ctx.doodads[i];
-    if (!doodadRule(d.kind).blocksMove || d.kind === 'door') continue;
+    const rule = doodadRule(d.kind);
+    // Doors count OPEN, and so does anything brittle to a STRIKE (the jungle's
+    // brush plugs, crystal lattices): a blocker any hit pops is a door made of
+    // matter, not a seal — cutting through is the intended traversal, so the
+    // belt must not "rescue" the zone by deleting the very walls the biome is
+    // about. (Derived from the rule, never a kind literal.)
+    if (!rule.blocksMove || d.kind === 'door' || rule.brittle?.on.includes('hit')) continue;
     const hard = d.keep || inReserved(ctx, d.pos, d.radius);
     const rr = bodyRadiusOf(d) + 12;
     const gx0 = Math.max(0, Math.floor((d.pos.x - rr) / cs));
@@ -3150,6 +3343,43 @@ registerStamp('secret_wall', (ctx) => {
     radius: 16, kind: 'secret_wall',
   });
 });
+// The verdure FACE-CUT sites a brush knot on a lane-facing wall cell (grid
+// zones — the verdure IS the wall its pop carves into); convex zones tuck it
+// against a big standing solid like its stone twin above. Draw counts: one
+// pick when candidates exist, none otherwise (the secret_wall discipline).
+registerStamp('verdure_face', (ctx) => {
+  const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  if (grid) {
+    const cs = grid.cell;
+    const spots: Vec2[] = [];
+    for (let y = cs * 2; y < ctx.arena.h - cs * 2; y += cs) {
+      for (let x = cs * 2; x < ctx.arena.w - cs * 2; x += cs) {
+        if (!grid.isWalkable(x, y)) continue;
+        if (dist(vec(x, y), ctx.entry) < 300) continue;
+        if (inReserved(ctx, vec(x, y), 24)) continue;
+        if (!grid.isWalkable(x + cs, y) || !grid.isWalkable(x - cs, y)
+          || !grid.isWalkable(x, y + cs) || !grid.isWalkable(x, y - cs)) {
+          spots.push(vec(x, y));
+        }
+      }
+    }
+    if (!spots.length) return;
+    const p = spots[ctx.rng.int(0, spots.length - 1)];
+    ctx.doodads.push({ pos: p, radius: 17, kind: 'verdure_face', rot: ctx.rng.range(0, Math.PI * 2) });
+    return;
+  }
+  const hosts = ctx.doodads.filter(d =>
+    (d.kind === 'thicket' || d.kind === 'rock' || d.kind === 'cliff') && d.radius >= 26
+    && dist(d.pos, ctx.entry) > 300 && !inReserved(ctx, d.pos, d.radius));
+  if (!hosts.length) return;
+  const host = hosts[ctx.rng.int(0, hosts.length - 1)];
+  const ang = ctx.rng.range(0, Math.PI * 2);
+  ctx.doodads.push({
+    pos: vec(host.pos.x + Math.cos(ang) * (host.radius + 12),
+      host.pos.y + Math.sin(ang) * (host.radius + 12)),
+    radius: 17, kind: 'verdure_face', rot: ctx.rng.range(0, Math.PI * 2),
+  });
+});
 // The brittle kit, wave 2: hazard breakables (pop effects ride BrittleSpec).
 registerStamp('gas_pod', stampSingle('gas_pod', [14, 20]));
 registerStamp('burst_sac', stampSingle('burst_sac', [12, 18]));
@@ -3222,6 +3452,18 @@ registerStamp('torture_rack', stampSingle('torture_rack', [16, 22]));
 registerStamp('hate_idol', stampSingle('hate_idol', [14, 20]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
+// The undergrowth kit: the jungle's own scatter — cuttable plugs, sight-only
+// curtains, emergent giants, root fins, and the gloom's own lights.
+registerStamp('jungle_brush', stampSingle('jungle_brush', [22, 30]));
+registerStamp('liana_veil', stampSingle('liana_veil', [26, 40]));
+registerStamp('canopy_colossus', (ctx, spec) => stampTree(ctx, spec.radius ?? [64, 96], 'canopy_colossus'));
+registerStamp('strangler_root', (ctx, spec) => stampSolid(ctx, 'strangler_root', spec.radius ?? [16, 28]));
+registerStamp('jungle_bloom', stampSingle('jungle_bloom', [10, 14]));
+// The sunken-ruin kit: the old court's furniture (the gate itself is placed
+// by its composition cluster — this row exists for layouts that want strays).
+registerStamp('ruin_gate', stampSingle('ruin_gate', [26, 32]));
+registerStamp('mossy_idol', stampSingle('mossy_idol', [16, 24]));
+registerStamp('fallen_column', stampSingle('fallen_column', [14, 20]));
 // The Aetherial kit: cloud furniture + the choir's marble.
 registerStamp('cloud_billow', stampSingle('cloud_billow', [22, 44]));
 registerStamp('aether_crystal', stampSingle('aether_crystal', [13, 22]));

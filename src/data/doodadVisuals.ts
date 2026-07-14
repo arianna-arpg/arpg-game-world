@@ -393,6 +393,70 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       params: { fill: '#1e3c1a', edge: '#0c2410', spine: '#4a7034', thorns: true, berries: { chance: 0.5 } },
     },
   },
+  // --- THE UNDERGROWTH KIT (the jungle's cut-your-own-path fabric) ----------
+  // The PLUG: a wall of living growth choking a trail — dense true-bush body
+  // under a bramble crown, one good cut from opening. Reads DARKER than the
+  // walkable brush so "that way is work" lands at a glance.
+  jungle_brush: {
+    longShadow: 0.5,
+    painter: 'brush', order: 51, bakeWhole: 'static',
+    params: { color: '#12300f', leaves: 1.35, sprigs: true },
+    canopy: { painter: 'bramble', params: { fill: '#1a4416', edge: '#0a2408', spine: '#3f7a26', berries: { chance: 0.15 } } },
+    blend: { strength: 0.4, feather: 22, color: '#13260c' },
+  },
+  // The FACE-CUT: the same growth KNOTTED over the verdure wall — the brighter
+  // spine is the tell that this knot pays whoever carves in.
+  verdure_face: {
+    painter: 'brush', order: 51, bakeWhole: 'static',
+    params: { color: '#173a12', leaves: 1.3, sprigs: true },
+    canopy: { painter: 'bramble', params: { fill: '#1e4c18', edge: '#0a2408', spine: '#66a238' } },
+  },
+  // The CURTAIN: a vine mat underfoot, the draped strands riding the canopy
+  // pass ABOVE actors — the occlude fade parts them for whoever walks through.
+  liana_veil: {
+    painter: 'vineMat', order: 47, bakeWhole: 'static',
+    params: { mat: '#152a10', strand: '#2f5222', leaf: '#3f6a28', bloom: { color: '#b88ad0', chance: 0.08 } },
+    canopy: { painter: 'lianaCurtain', params: { vine: '#2c4a1e', leaf: '#4a7a30', bloom: '#c8a0e0' } },
+  },
+  // The EMERGENT GIANT: half a glade under one crown; the trunk is a pillar
+  // (bodyScale 0.18) you fight around while the roof hides both sides.
+  canopy_colossus: {
+    longShadow: 1.15,
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.18, roots: 6, color: '#3f3222' },
+    canopy: { painter: 'leafCrown', params: { fill: '#1d4418' } },
+  },
+  strangler_root: {
+    longShadow: 0.4, shadow: 0.3,
+    painter: 'buttressRoot', order: 50, bakeWhole: 'static',
+    params: { bark: '#4a3a24', moss: '#2f5a24' },
+  },
+  // The gloom lights its own: a swollen luminous bud on the jungle floor.
+  jungle_bloom: {
+    painter: 'pod', order: 50,
+    params: { body: '#1e3318', glow: '#8ff0b8', aspectY: 0.9, glowY: -0.2, glowR: 0.55, pulseRate: 0.5 },
+    light: { radius: -3.6, color: '#8ff0b8', intensity: 0.32, flicker: 1.1 },
+  },
+  // --- THE SUNKEN-RUIN KIT (what the jungle swallowed) -----------------------
+  // The gate: a root-split stone descent, its throat lit faintly green — the
+  // caveMouth vocabulary in overgrown masonry (the sidezone dwell owns entry).
+  ruin_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#6a705c', edge: '#8a8c74', material: 'stone',
+      glow: '#9fd07a', throat: '#0a0f08', teeth: {}, rubble: {},
+      vines: { color: 'theme:tree' },
+      label: 'the Sunken Ruin',
+    },
+    light: { radius: -2.2, color: '#9fd07a', intensity: 0.32, flicker: 1.8 },
+  },
+  mossy_idol: {
+    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.3,
+    params: { stone: '#7e8268', moss: '#3f6a2c' },
+  },
+  fallen_column: {
+    painter: 'log', order: 52, shadow: 0.5,
+    params: { color: '#7e786a', moss: '#4a6e3a' },
+  },
   palm: {
     longShadow: 0.8,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.26, roots: 3 },

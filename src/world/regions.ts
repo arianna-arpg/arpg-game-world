@@ -447,6 +447,22 @@ registerRegion({ id: 'fungal_wall', walkable: false, blocks: true, label: 'the m
   // Luminous hyphal weave along the rim — the grotto's own glow marks where
   // the soft dark becomes solid mycelium.
   visual: { fill: '#241634', alpha: 1, edge: { color: '#6a4a92', width: 5 } } });
+// VERDURE: the JUNGLE's living wall — the thicket layout's negative space is
+// one continuous mass of interlocked growth, not stone. Bodies, arrows and
+// SIGHT all stop at it (narrow lanes + blind green walls = the biome's
+// claustrophobia), and the brittle face-cut kinds carve pockets INTO it —
+// the one wall in the game you open with a machete. Leaf-lit rim over deep
+// green (fill lum ≈ .20 vs the jungle floor's ≈ .06 — CONTRAST GUARD clear).
+registerRegion({ id: 'verdure', walkable: false, blocks: true, label: 'the verdure',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#22421a', alpha: 1, edge: { color: '#4f7a2c', width: 5 } } });
+// RUIN WALL: root-riven masonry — the sunken ruin interiors' negative space
+// (the jungle swallowed a civilization; its halls are what's left). A TRUE
+// WALL like rampart, coursed so the halls read BUILT — the pale moss-grey rim
+// marks stone against the dark interior loam (the flesh-wall lesson).
+registerRegion({ id: 'ruin_wall', walkable: false, blocks: true, label: 'the old stone',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#2c342a', alpha: 1, masonry: true, edge: { color: '#5c6a4e', width: 4 } } });
 // AIR POCKET: a safe walkable bubble in an underwater zone — breath refills here
 // (no drain), the player's lifeline. Pure walkable + a visual tell.
 registerRegion({ id: 'air_pocket', walkable: true, blocks: false, label: 'air', visual: { fill: '#2a6a8a', alpha: 0.35, animate: 'pulse' } });

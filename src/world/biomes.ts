@@ -131,6 +131,35 @@ export const BIOMES: Record<string, BiomeInfo> = {
       forestClearings: [2, 5],
     },
     landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.12 }] },
+  // THE JUNGLE: the strangling green — the WET half of the WARM belt (the
+  // desert's ecological mirror: same heat, opposite water; the forest keeps
+  // the mild-damp middle). Its signature 'thicket' recipe carves game trails
+  // through one solid verdure mass — claustrophobia as terrain, with the
+  // walls themselves cuttable — and the forest recipe is its rarer OPEN face,
+  // grown in jungle wood and sealed near-shut at the region's heart. The
+  // tightest node web in the game: the green packs against itself.
+  jungle: { patronFaction: 'sylvan', mapColor: '#1f7a42', label: 'Jungle', spacing: 54,
+    climate: { temperature: 'warm', moisture: 'wet' },
+    allowedLayouts: { thicket: 4, forest: 1 },
+    layoutParams: {
+      // The thicket dials — the claustrophobia gradient in one place: lanes
+      // tighten toward the heart, plugs and dens thicken with them.
+      thicketGlades: [6, 9], thicketGladeR: [70, 130],
+      thicketTrailW: [26, 40], thicketCoreTighten: 0.6,
+      thicketPlugChance: 0.42, thicketPlugCoreBonus: 0.34, thicketPlugSpacing: 150,
+      thicketDens: [2, 4], thicketFaceCuts: [1, 3],
+      // The forest face in jungle wood: emergent giants over palms, briars
+      // in the snarl — and the roof runs nearly SEALED at the deep heart.
+      forestTrees: [
+        { kind: 'canopy_colossus', weight: 2, radius: [56, 84] },
+        { kind: 'palm', weight: 3, radius: [22, 34] },
+        { kind: 'tree', weight: 2, radius: [20, 30] },
+        { kind: 'briarwood', weight: 1, radius: [18, 26] },
+      ],
+      forestCoverEdge: 0.5, forestCoverDeep: 0.9,
+      forestClearings: [2, 4],
+    },
+    landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.1 }] },
   // Gravelands raise mausoleum labyrinths (a rare whole-zone hedge-maze bastion)
   // and the odd lone watchtower among the tombs.
   // GRAVELANDS: plains, mausoleum-labyrinth bastions, and RUINED NECROPOLIS
@@ -447,6 +476,7 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'grove', weight: 1.2 },
   { biome: 'forest', weight: 1.3 },
   { biome: 'gloamwood', weight: 1.2 }, // the cool-damp woods: haunted where the forest ends
+  { biome: 'jungle', weight: 1.6 },    // warm∧wet gate — high seed weight so its belt reads as one green throat
 
   { biome: 'field', weight: 1.1 },
   { biome: 'grave', weight: 1.0 },

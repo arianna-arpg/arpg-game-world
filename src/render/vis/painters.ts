@@ -3505,6 +3505,70 @@ const fern: GroupPainter = (env, group, def) => {
   }
 };
 
+/** THE BUTTRESS ROOT — a great tree's anchor fins heaved out of the loam:
+ *  4-6 tapered woody blades radiating from a low heart, each a curved wedge
+ *  with a sun-keyed ridge highlight, bark seams along the flanks, and moss
+ *  eating the shade side. The jungle's low solid (blocks feet, not arrows) —
+ *  and any future mangrove/swamp giant says different params. */
+const buttressRoot: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bark?: ColorSpec; moss?: ColorSpec };
+  const { ctx, theme } = env;
+  const bark = resolveColor(p.bark, theme, '#4a3a24');
+  const moss = resolveColor(p.moss, theme, theme.tree ?? '#2c4424');
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 29) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? hash01(seed, 1) * Math.PI * 2);
+    // The heart: a low rounded stump-knee the fins grow from.
+    ctx.fillStyle = shade(bark, -0.3);
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.34, 0, Math.PI * 2);
+    ctx.fill();
+    const fins = 4 + (seed % 3);
+    for (let i = 0; i < fins; i++) {
+      const a = (i / fins) * Math.PI * 2 + hash01(i, seed + 3) * 0.5;
+      const len = o.radius * (0.8 + hash01(i, seed + 7) * 0.35);
+      const half = 0.34 + hash01(i, seed + 11) * 0.12; // fin's angular half-width at the heart
+      const bow = (hash01(i, seed + 13) - 0.5) * 0.5;  // each blade leans its own way
+      const tipA = a + bow * 0.4;
+      const tip = { x: Math.cos(tipA) * len, y: Math.sin(tipA) * len };
+      const bl = { x: Math.cos(a - half) * o.radius * 0.3, y: Math.sin(a - half) * o.radius * 0.3 };
+      const br = { x: Math.cos(a + half) * o.radius * 0.3, y: Math.sin(a + half) * o.radius * 0.3 };
+      // Sun-keyed faces: the fin's two flanks read as lit + shaded wood.
+      const litSide = Math.cos(a - Math.PI * 0.75) > 0 ? 0.16 : -0.1;
+      ctx.fillStyle = shade(bark, litSide);
+      ctx.beginPath();
+      ctx.moveTo(bl.x, bl.y);
+      ctx.quadraticCurveTo((bl.x + tip.x) * 0.5 + Math.cos(a + Math.PI / 2) * bow * len * 0.5,
+        (bl.y + tip.y) * 0.5 + Math.sin(a + Math.PI / 2) * bow * len * 0.5, tip.x, tip.y);
+      ctx.quadraticCurveTo((br.x + tip.x) * 0.55, (br.y + tip.y) * 0.55, br.x, br.y);
+      ctx.closePath();
+      ctx.fill();
+      // The ridge line: a bright spine along the blade's crest.
+      ctx.strokeStyle = shade(bark, 0.28);
+      ctx.lineWidth = 1.1;
+      ctx.globalAlpha = 0.7;
+      ctx.beginPath();
+      ctx.moveTo((bl.x + br.x) * 0.5, (bl.y + br.y) * 0.5);
+      ctx.lineTo(tip.x * 0.94, tip.y * 0.94);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      // Moss creeps up the shade flank of the older fins.
+      if (hash01(i, seed + 17) < 0.55) {
+        ctx.fillStyle = moss;
+        ctx.globalAlpha = 0.5;
+        ctx.beginPath();
+        ctx.arc(tip.x * 0.42 + Math.cos(a + Math.PI / 2) * 2, tip.y * 0.42 + Math.sin(a + Math.PI / 2) * 2,
+          Math.max(1.6, o.radius * 0.12 * hash01(i, seed + 19) + 1.4), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+    ctx.restore();
+  }
+};
+
 // --- THE FUNGAL KIT -----------------------------------------------------------
 // Mycelia's identity vocabulary: the floor is a NETWORK (hyphae with nutrient
 // pulses traveling the strands), the walls grow SHELVES, and the fairy rings
@@ -6553,7 +6617,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   statue, wayshrine, gallows, fishingRack, kilnMound,
   tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, crowdRow, door, breach, landmass, beacon, surveySpire, fallback,
   pyre, hangingCage, warBanner, hellforge,
-  gateArch, tortureRack,
+  gateArch, tortureRack, buttressRoot,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------
@@ -7035,9 +7099,74 @@ const kelpCrown: CanopyPainter = (env, o, alpha, params) => {
   ctx.restore();
 };
 
+/** THE LIANA CURTAIN — a bough slung across the lane trailing hanging vine
+ *  strands: bodies part it (walk-through), eyes do not (its rule blocks
+ *  sight), and the occlude fade IS the parting — the strands ghost open for
+ *  whoever stands beneath. Strands sway live off-phase; paired leaves ride
+ *  each fall; a chance bloom hangs where the light never reaches. */
+const lianaCurtain: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { vine?: ColorSpec; leaf?: ColorSpec; bloom?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const vine = resolveColor(p.vine, theme, shade(theme.tree ?? '#2c4424', -0.12));
+  const leaf = resolveColor(p.leaf, theme, shade(theme.tree ?? '#2c4424', 0.2));
+  const seed = ((o.pos.x * 11 + o.pos.y * 23) | 0) >>> 0;
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  ctx.rotate(o.rot ?? hash01(seed, 1) * Math.PI);
+  ctx.lineCap = 'round';
+  // The bough: the dark bar the curtain hangs from.
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.strokeStyle = shade(vine, -0.35);
+  ctx.lineWidth = Math.max(2.4, o.radius * 0.1);
+  ctx.beginPath();
+  ctx.moveTo(-o.radius, 0);
+  ctx.quadraticCurveTo(0, -o.radius * 0.14, o.radius, 0);
+  ctx.stroke();
+  // The strands: each falls from its own point on the bough, bows with its
+  // own sway phase, and carries paired leaves sized to its reach.
+  const strands = 7 + (seed % 4);
+  for (let i = 0; i < strands; i++) {
+    const t = (i + 0.5) / strands;
+    const x0 = -o.radius + t * o.radius * 2;
+    const fall = o.radius * (0.55 + hash01(i, seed + 5) * 0.6);
+    const sway = Math.sin(time * 1.1 + i * 1.7 + seed * 0.3) * o.radius * 0.07;
+    const tone = i % 2 ? vine : shade(vine, 0.12);
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.strokeStyle = tone;
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(x0, 0);
+    ctx.quadraticCurveTo(x0 + sway * 0.6, fall * 0.55, x0 + sway, fall);
+    ctx.stroke();
+    // Leaf pairs down the fall.
+    ctx.fillStyle = leaf;
+    const leaves = 2 + (((seed >> i) & 3) % 2);
+    for (let l = 1; l <= leaves; l++) {
+      const lt = l / (leaves + 1);
+      const lx = x0 + sway * lt * lt, ly = fall * lt;
+      const ls = Math.max(1.5, o.radius * 0.07 * (1 - lt * 0.3));
+      ctx.globalAlpha = alpha * 0.8;
+      ctx.beginPath();
+      ctx.ellipse(lx - ls, ly, ls, ls * 0.5, 0.6, 0, Math.PI * 2);
+      ctx.ellipse(lx + ls, ly + 1, ls, ls * 0.5, -0.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The one hanging bloom a curtain sometimes keeps.
+    if (p.bloom && hash01(i, seed + 27) < 0.12) {
+      ctx.fillStyle = resolveColor(p.bloom, theme, '#c8b0e0');
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.beginPath();
+      ctx.arc(x0 + sway, fall + 2, Math.max(1.8, o.radius * 0.06), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+};
+
 export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
   bramble, palmCrown, mushroomCrown, discCrown, leafCrown, pineCrown, fogCloud,
-  kelpCrown,
+  kelpCrown, lianaCurtain,
 };
 
 /** Canopy painters whose pixels are a pure function of (radius, position
