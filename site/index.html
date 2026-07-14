@@ -611,18 +611,22 @@ npm run <span class="g">build</span></pre>
      there the mark simply stays anchored in the hero. */
   var mwrap = document.querySelector('.hero-mark-wrap'), mlock = document.querySelector('.hero-lockup');
   if(mwrap && mlock && !reduce){
-    var mAX = 0, mADocY = 0;
+    var mAX = 0, mADocY = 0, mLastP = 0;
+    /* jitter offsets — written by the twitch engine below, composed into
+       every placement write so scroll and jitter never fight */
+    var jx = 0, jy = 0, jr = 0, jTimer = null;
     var mPlace = function(){
       var vw = window.innerWidth, vh = window.innerHeight, s = window.scrollY || window.pageYOffset || 0;
-      var t = Math.min(1, s/(vh*1.05)), p = t*t*(3-2*t);   /* smoothstep = the creep */
+      var t = Math.min(1, s/(vh*2.0)), p = t*t*(3-2*t);   /* smoothstep over ~2 viewports — the creep is patient */
       var heroW = Math.min(Math.max(300, vw*.44), 560);
       var obsW  = Math.min(vh*.72, vw*.8, 700);
       var ay = mADocY - s;
       var x = mAX + (vw/2 - mAX)*p, y = ay + (vh*.5 - ay)*p;
       mwrap.style.width = (heroW + (obsW - heroW)*p) + 'px';
       /* -52%→-50% self-offset blends in so p=0 matches the CSS anchor exactly */
-      mwrap.style.transform = 'translate(' + x + 'px,' + y + 'px) translate(-50%,' + (-52 + 2*p) + '%)';
+      mwrap.style.transform = 'translate(' + (x + jx) + 'px,' + (y + jy) + 'px) translate(-50%,' + (-52 + 2*p) + '%)' + (jr ? ' rotate(' + jr + 'deg)' : '');
       mwrap.style.opacity = String(1 - .45*p);
+      mLastP = p;
     };
     var mMeasure = function(){
       var r = mlock.getBoundingClientRect();
@@ -630,6 +634,47 @@ npm run <span class="g">build</span></pre>
       mADocY = r.top + (window.scrollY || window.pageYOffset || 0) + r.height/2;
       mPlace();
     };
+
+    /* THE TWITCH — once the Observer has detached and re-anchored (parked),
+       it occasionally moves when you aren't quite looking: every 6–14s one
+       of two tells, gated on being parked and the tab being visible.
+       'twitch' = a small decaying wobble in a random direction (~half a
+       second, a few px). 'lean' = the rarer one: a slow 2–4px drift with a
+       hair of rotation, a held beat, then a quick snap back to true — the
+       "did it move? ...no. ...right?" of it. Never while it's still riding
+       the title, never under reduced-motion (this whole block is gated). */
+    var jGap = function(){ return 6000 + Math.random()*8000; };
+    var jSchedule = function(ms){ clearTimeout(jTimer); jTimer = setTimeout(jEvent, ms); };
+    var jEvent = function(){
+      if(document.hidden || mLastP < .92){ jSchedule(2500 + Math.random()*2500); return; }
+      var t0 = performance.now();
+      var ang = Math.random()*6.283, ux = Math.cos(ang), uy = Math.sin(ang);
+      if(Math.random() < .78){ /* twitch */
+        var dur = 350 + Math.random()*280, amp = 3 + Math.random()*4;
+        (function step(){
+          var e = (performance.now() - t0)/dur;
+          if(e >= 1){ jx = jy = 0; mPlace();
+            /* the double-take: sometimes it twitches again, right after */
+            jSchedule(Math.random() < .3 ? 220 + Math.random()*260 : jGap()); return; }
+          var k = Math.sin(e*Math.PI*2.6)*(1-e)*(1-e)*amp;
+          jx = ux*k; jy = uy*k; mPlace();
+          requestAnimationFrame(step);
+        })();
+      } else { /* lean */
+        var out = 900 + Math.random()*500, hold = 500 + Math.random()*700, back = 140;
+        var amp2 = 2 + Math.random()*2, rot = Math.random()*2.4 - 1.2;
+        (function step(){
+          var tm = performance.now() - t0;
+          if(tm < out){ var e1 = tm/out, s1 = e1*e1*(3-2*e1); jx = ux*amp2*s1; jy = uy*amp2*s1; jr = rot*s1; }
+          else if(tm < out + hold){ jx = ux*amp2; jy = uy*amp2; jr = rot; }
+          else if(tm < out + hold + back){ var e2 = (tm - out - hold)/back; jx = ux*amp2*(1-e2); jy = uy*amp2*(1-e2); jr = rot*(1-e2); }
+          else { jx = jy = jr = 0; mPlace(); jSchedule(jGap()); return; }
+          mPlace();
+          requestAnimationFrame(step);
+        })();
+      }
+    };
+
     mwrap.classList.add('observing');
     window.addEventListener('scroll', mPlace, {passive:true});
     window.addEventListener('resize', mMeasure);
@@ -637,6 +682,10 @@ npm run <span class="g">build</span></pre>
     window.addEventListener('load', mMeasure);
     if(document.fonts && document.fonts.ready && document.fonts.ready.then) document.fonts.ready.then(mMeasure);
     mMeasure();
+    jSchedule(jGap());
+    /* QA handle: state + a manual trigger; drives nothing on its own */
+    window.__hwobs = { get state(){ return { p: mLastP, jx: jx, jy: jy, jr: jr }; }, jolt: jEvent,
+      test: function(x, y, r){ jx = x||0; jy = y||0; jr = r||0; mPlace(); } };
   }
 
   /* stat band — numbers come from the exported data/meta.json so they never go
