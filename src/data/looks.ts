@@ -2748,6 +2748,91 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 1.1,
   },
 
+  // =================================== THE SIROCCO COURT (the deep desert)
+  /** The court's blade: veils that never stop moving, knives that seem to. */
+  mirage_dancer: {
+    parts: [
+      { kind: 'robe', color: '#e8d8a8', scale: 1.0 },
+      { kind: 'daggers', color: '#f0e4c0', role: 'metal', scale: 0.95 },
+      { kind: 'hood', color: '#d4b878', scale: 0.9 },
+      { kind: 'eyes', color: '#fff2c0', params: { spread: 0.24, dist: 0.55, size: 0.08 } },
+    ],
+    live: [{ kind: 'veilSashes', color: '#f0e4c0', scale: 1.05 }],
+    shadowScale: 0.9,
+  },
+  /** Hot air holding a blade — half there by construction. */
+  heat_double: {
+    parts: [
+      { kind: 'robe', color: '#f0e4c0', alpha: 0.5, scale: 0.95 },
+      { kind: 'daggers', color: '#fff2d8', alpha: 0.5, scale: 0.9 },
+    ],
+    live: [{ kind: 'wisps', color: '#ffe8b0', role: 'glow', alpha: 0.6 }],
+    shadowScale: 0.4,
+  },
+  /** The dead lake's cured dead: crusted, seamed, and packed with brine. */
+  salt_husk: {
+    parts: [
+      { kind: 'torso', color: '#e8e0c8', scale: 1.05 },
+      { kind: 'crystalGrowths', color: '#f4eedc', scale: 0.9 },
+      { kind: 'stitchSeams', color: '#b8ae90', scale: 1.0 },
+      { kind: 'eyes', color: '#6a6046', params: { spread: 0.3, dist: 0.5, size: 0.07 } },
+    ],
+    shadowScale: 1.0,
+  },
+  /** Light going through a body the wrong way (the new glassFins part). */
+  glass_stalker: {
+    parts: [
+      { kind: 'carapace', color: '#bcd8d4', alpha: 0.75, scale: 1.0 },
+      { kind: 'glassFins', color: '#d8f0ec', scale: 1.0, params: { fins: 5 } },
+      { kind: 'claws', color: '#e8fff8', scale: 1.05, params: { talons: 2 } },
+      { kind: 'eyes', color: '#ffffff', params: { spread: 0.26, dist: 0.62, size: 0.07 } },
+    ],
+    shadowScale: 0.55,
+  },
+  /** A wind that learned appetite — mostly sash, barely body. */
+  dust_djinn: {
+    parts: [
+      { kind: 'robe', color: '#d8b878', scale: 1.05 },
+      { kind: 'maw', color: '#4a3a1e', scale: 0.6 },
+    ],
+    live: [
+      { kind: 'veilSashes', color: '#c9a86a', scale: 1.15, params: { sashes: 4 } },
+      { kind: 'wisps', color: '#e8d0a0', role: 'glow', alpha: 0.7 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The chaplain of noon: sunburst, censer, and no doubts whatsoever. */
+  sun_priest: {
+    parts: [
+      { kind: 'robe', color: '#c8963a', scale: 1.0 },
+      { kind: 'sunburst', color: '#ffd870', scale: 0.8 },
+      { kind: 'censer', color: '#8a6e34', role: 'metal', scale: 0.9 },
+      { kind: 'halo', color: '#ffe8a0', scale: 1.1 },
+    ],
+    shadowScale: 0.95,
+  },
+  /** The reason caravans walk the hardpan. */
+  sandmaw_burrower: {
+    parts: [
+      { kind: 'segmentRings', color: '#c9a86a', scale: 1.1 },
+      { kind: 'serpentHead', color: '#b08d52', scale: 1.0 },
+      { kind: 'mandibles', color: '#7a5c2c', scale: 1.05 },
+    ],
+    banding: 'hoops',
+    shadowScale: 1.05,
+  },
+  /** The court crowned: gold, brand, and a smile from somewhere else. */
+  mirage_khagan: {
+    parts: [
+      { kind: 'robe', color: '#f0c880', scale: 1.1 },
+      { kind: 'crown', color: '#ffe8a0', role: 'metal', scale: 0.9 },
+      { kind: 'brand', color: '#ff9a3a', scale: 0.95 },
+      { kind: 'halo', color: '#fff2c0', scale: 1.2, alpha: 0.7 },
+    ],
+    live: [{ kind: 'veilSashes', color: '#ffe8c0', scale: 1.2, params: { sashes: 4 } }],
+    shadowScale: 0.95,
+  },
+
   // =================================== THE JUNGLEKIN (the strangling green)
   /** Fronds with intent: a lean stalker wearing the understory. */
   fern_stalker: {

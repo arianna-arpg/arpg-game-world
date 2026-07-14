@@ -3504,6 +3504,54 @@ const chest: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** TRAILING VEIL-SASHES — the Sirocco Court's cloth in a wind that never
+ *  quits. Live (reads t for the stream); params: sashes (count). The
+ *  entity-creator's "always in motion" cloth word. */
+const veilSashes: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'cloth');
+  const sashes = P(spec, 'sashes', 3);
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = 0; i < sashes; i++) {
+      const a = Math.PI + (i - (sashes - 1) / 2) * 0.55;
+      const sway = Math.sin(t * 2.3 + i * 1.9) * 0.35;
+      c.strokeStyle = withAlpha(i % 2 ? ramp.light : ramp.base, 0.85);
+      c.lineWidth = Math.max(1.2, R * (0.11 - i * 0.015));
+      c.beginPath();
+      c.moveTo(Math.cos(a) * R * 0.3, Math.sin(a) * R * 0.3);
+      c.quadraticCurveTo(
+        Math.cos(a + sway) * R * 0.85, Math.sin(a + sway) * R * 0.85,
+        Math.cos(a + sway * 1.6) * R * 1.3, Math.sin(a + sway * 1.6) * R * 1.3);
+      c.stroke();
+    }
+  });
+};
+
+/** TRANSLUCENT GLASS FINS — light going through a body the wrong way (the
+ *  glasspan's ambusher). Static; params: fins (count). */
+const glassFins: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const fins = P(spec, 'fins', 4);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < fins; i++) {
+      const a = (i / fins) * Math.PI * 2 + 0.4;
+      c.save();
+      c.rotate(a);
+      c.fillStyle = withAlpha(ramp.light, 0.32);
+      c.beginPath();
+      c.moveTo(R * 0.3, 0);
+      c.lineTo(R * 1.12, -R * 0.16);
+      c.lineTo(R * 0.98, R * 0.1);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = withAlpha(ramp.highlight, 0.75);
+      c.lineWidth = 1;
+      c.stroke();
+      c.restore();
+    }
+  });
+};
+
 /** A hanging BELL under its yoke — doom-heralds, plague criers, the tolling
  *  faithful. In live[] it sways; params: swing. */
 const bell: PartPainter = (ctx, r, spec, pal, t = 0) => {
@@ -3538,7 +3586,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   hood, tatters, pauldrons,
   eyes, maw, snout, mandibles, horns, ears, tusks, spikes, wings,
   claws, scythe, staff, sword, daggers, trident, mace, axe, shield, bow, musket,
-  halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes,
+  halo, runes, wisps, flames, emberSparks, lavaCracks, puffMotes, veilSashes, glassFins,
   shell, caps, capDome, gillFrill, fronds, tail, stinger, fins,
   barkPlates, branchArms, stalactites, nestTwigs,
   oozeLobes, fleshFolds, eyeCluster, raptorArms, segmentRings,

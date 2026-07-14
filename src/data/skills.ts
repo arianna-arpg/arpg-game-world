@@ -140,6 +140,81 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 90, weight: 2 },
   },
 
+  // ============== The Sirocco Court's verbs (desert monsters) ==============
+  // The void_hook doctrine: monster verbs DROP as gems on purpose — kill the
+  // court, learn its arts. All lootable, all presence-humble.
+
+  mirage_knife: {
+    id: 'mirage_knife', name: 'Mirage Knife',
+    description: 'A cut from a hand that seems a stride LEFT of where it lands — heat-bent light makes the blade hard to answer.',
+    tags: ['attack', 'melee', 'fire'], color: '#e8d8a8',
+    manaCost: 4, cooldown: 0, useTime: 0.42,
+    baseDamage: { physical: [6, 10], fire: [3, 6] },
+    delivery: { type: 'melee', range: 60, arcDeg: 70 },
+    effects: [{ type: 'damage' }],
+    requirements: { dexterity: 14 },
+    minDropLevel: 7, dropWeight: 0.7,
+    ai: { range: 55, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('attackSpeed', 'increased', 0.02)] },
+  },
+
+  heat_split: {
+    id: 'heat_split', name: 'Heat Split',
+    description: 'Step SIDEWAYS through the shimmer and leave a double of hot air standing in the argument — it holds a blade, for a while.',
+    tags: ['spell', 'summon', 'fire'], color: '#f0d8b0',
+    manaCost: 14, cooldown: 9, useTime: 0.4,
+    delivery: { type: 'summon', monsterId: 'heat_double', count: 1, maxActive: 2, duration: 12 },
+    effects: [],
+    requirements: { intelligence: 14 },
+    minDropLevel: 9, dropWeight: 0.6,
+    ai: { range: 300, weight: 2, keepDistance: 140 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.08), mod('minionLife', 'increased', 0.08)] },
+  },
+
+  salt_burst: {
+    id: 'salt_burst', name: 'Salt Burst',
+    description: 'The cured dead do not bleed — they SHATTER outward, a ring of stinging brine-shard.',
+    tags: ['spell', 'aoe', 'physical'], color: '#e8e0c8',
+    manaCost: 10, cooldown: 6, useTime: 0.5,
+    baseDamage: { physical: [9, 15] },
+    delivery: { type: 'nova', radius: 95 },
+    effects: [{ type: 'damage' }],
+    requirements: { strength: 14 },
+    minDropLevel: 7, dropWeight: 0.7,
+    ai: { range: 70, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  whirl_of_grit: {
+    id: 'whirl_of_grit', name: 'Whirl of Grit',
+    description: 'Spin the ground itself into a scouring cone — sand at speed argues with skin, and wins.',
+    tags: ['spell', 'aoe', 'physical'], color: '#d8b878',
+    manaCost: 9, cooldown: 4, useTime: 0.55,
+    baseDamage: { physical: [8, 13] },
+    delivery: { type: 'cone', range: 150, arcDeg: 55 },
+    effects: [{ type: 'damage' }, { type: 'knockback', strength: 90 }],
+    requirements: { intelligence: 12, dexterity: 10 },
+    minDropLevel: 8, dropWeight: 0.7,
+    ai: { range: 130, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.03)] },
+  },
+
+  solar_litany: {
+    id: 'solar_litany', name: 'Solar Litany',
+    description: 'A verse the sun taught the sand: speak it and BURN brighter for a while. (The Court\'s priests teach it to their whole line — the brain buffs kin; the gem buffs you.)',
+    tags: ['spell', 'buff', 'fire', 'duration'], color: '#ffd870',
+    manaCost: 12, cooldown: 11, useTime: 0.7,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'sun_sworn', duration: 6,
+      mods: [mod('damage', 'increased', 0.2, ['fire']), mod('castSpeed', 'increased', 0.1)],
+    }],
+    requirements: { willpower: 16 },
+    minDropLevel: 10, dropWeight: 0.6,
+    ai: { range: 240, weight: 2, keepDistance: 160 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
+  },
+
   // ======================= Fire ============================================
 
   firebolt: {

@@ -6983,6 +6983,151 @@ export const MONSTERS: Record<string, MonsterDef> = {
       ],
     },
   },
+
+  // ==========================================================================
+  // THE SIROCCO COURT — the deep desert's own (the gnolls keep the rim; past
+  // the shimmer line the sand answers to older tenants). Presence-staged so
+  // the court only musters where the country runs deep and hot; every verb
+  // they cast is lootable (the void_hook doctrine).
+  // ==========================================================================
+
+  /** The court's blade: a duelist the heat refuses to hold still. At half
+   *  life she steps THROUGH the shimmer and leaves a double arguing. */
+  mirage_dancer: {
+    id: 'mirage_dancer', name: 'Mirage Dancer',
+    color: '#e8d8a8', shape: 'triangle', radius: 11, material: 'cloth', look: 'mirage_dancer',
+    base: { life: 46, moveSpeed: 168, accuracy: 100, evasion: 85, mana: 40, manaRegen: 3 },
+    mods: [mod('fireRes', 'flat', 0.4)],
+    skills: ['mirage_knife', 'heat_split'], xp: 22,
+    faction: 'sirocco',
+    gemBias: ['fire', 'melee'],
+    presence: { from: 6, fadeIn: 3 },
+    aggro: { fury: 1.15, waver: 0.9 },
+    brain: {
+      type: 'flanker',
+      move: { style: 'dart', dart: [0.3, 0.5], pause: [0.12, 0.28] },
+      phases: [{ atLifeFrac: 0.5, announce: 'the dancer steps through the shimmer—' }],
+    },
+  },
+
+  /** What the dancer leaves behind: hot air holding a blade. It fights for
+   *  a breath or two and scatters — killing it early is a real answer. */
+  heat_double: {
+    id: 'heat_double', name: 'Heat Double',
+    color: '#f0e4c0', shape: 'triangle', radius: 10, material: 'ethereal', look: 'heat_double',
+    base: { life: 14, moveSpeed: 160, accuracy: 90, evasion: 40, mana: 0 },
+    skills: ['mirage_knife'], xp: 2,
+    faction: 'sirocco',
+    noBestiary: true,
+    brain: { type: 'skirmish' },
+  },
+
+  /** The cured dead of the dead lake: slow, patient, and packed with brine —
+   *  they do not bleed, they SHATTER (kill it at arm's length or pay). */
+  salt_husk: {
+    id: 'salt_husk', name: 'Salt Husk',
+    color: '#e8e0c8', shape: 'square', radius: 14, material: 'stone', look: 'salt_husk',
+    base: { life: 120, moveSpeed: 62, accuracy: 88, armor: 22, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.3), mod('coldRes', 'flat', -0.25)],
+    skills: ['claw', 'salt_burst'], xp: 24,
+    faction: 'sirocco',
+    gemBias: ['physical', 'aoe'],
+    // No def-level envelope: the husk is the Court's teaching tier (every
+    // TABLE that fields it shapes its own depth) — and the faction roster
+    // keeps a live candidate at L1-2 for rouse/garrison shaping.
+    // They don't bleed — they SHATTER: kill it at arm's length or pay.
+    deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'physical', coalesce: 0.55, radius: 92 },
+    brain: { type: 'juggernaut' },
+  },
+
+  /** The pan's ambusher: a body the light goes THROUGH wrong. It waits in
+   *  plain sight the way glass waits in grass. */
+  glass_stalker: {
+    id: 'glass_stalker', name: 'Glass Stalker',
+    color: '#bcd8d4', shape: 'triangle', radius: 12, material: 'crystal', look: 'glass_stalker',
+    base: { life: 58, moveSpeed: 150, accuracy: 105, evasion: 60, mana: 0 },
+    mods: [mod('critChance', 'flat', 0.15), mod('coldRes', 'flat', -0.2)],
+    skills: ['claw'], xp: 24,
+    faction: 'sirocco',
+    gemBias: ['physical', 'melee'],
+    presence: { from: 8, fadeIn: 4 },
+    ambush: { radius: 140, announce: 'the light bends wrong—' },
+    brain: { type: 'assassin' },
+  },
+
+  /** A wind that learned appetite: erratic, contemptuous of footing, and
+   *  fond of scouring whatever argues back. */
+  dust_djinn: {
+    id: 'dust_djinn', name: 'Dust Djinn',
+    color: '#d8b878', shape: 'star', radius: 13, material: 'ethereal', look: 'dust_djinn',
+    base: { life: 66, moveSpeed: 120, accuracy: 95, mana: 90, manaRegen: 6, evasion: 45 },
+    mods: [mod('physRes', 'flat', 0.2)],
+    skills: ['whirl_of_grit'], xp: 28,
+    faction: 'sirocco',
+    levitates: true,
+    gemBias: ['aoe', 'physical'],
+    presence: { from: 9, fadeIn: 4 },
+    brain: { type: 'caster', move: { style: 'holdRange', hold: 180, band: [0.7, 1.2] } },
+  },
+
+  /** The court's chaplain: the litany keeps the line burning brighter than
+   *  the sun strictly agreed to. Kill the verse first. */
+  sun_priest: {
+    id: 'sun_priest', name: 'Sun Priest',
+    color: '#ffd870', shape: 'pentagon', radius: 13, material: 'cloth', look: 'sun_priest',
+    base: { life: 70, moveSpeed: 88, accuracy: 95, mana: 140, manaRegen: 8 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['firebolt', 'solar_litany'], xp: 30,
+    faction: 'sirocco',
+    gemBias: ['fire', 'buff'],
+    presence: { from: 10, fadeIn: 4 },
+    brain: {
+      type: 'caster',
+      rules: [{
+        // The verse the whole line hears — the spore_caller idiom in fire.
+        when: { alliesWithin: { count: 2, radius: 280 } }, every: [10, 15], hold: [0.3, 0.5],
+        announce: 'the priest lifts the litany…',
+        actions: [{ do: 'buff', buff: { type: 'buff', id: 'sun_sworn_kin', duration: 6, mods: [mod('damage', 'increased', 0.16), mod('attackSpeed', 'increased', 0.08)] } }],
+      }],
+    },
+  },
+
+  /** The thing under the soft sand — the reason caravans walk the hardpan.
+   *  A worm the erg's own size envelope can make a horror of. */
+  sandmaw_burrower: {
+    id: 'sandmaw_burrower', name: 'Sandmaw Burrower',
+    color: '#c9a86a', shape: 'hexagon', radius: 16, material: 'chitin', look: 'sandmaw_burrower',
+    base: { life: 150, moveSpeed: 105, accuracy: 92, armor: 14, mana: 0 },
+    skills: ['claw'], xp: 34,
+    faction: 'sirocco',
+    worm: { length: 5, spacing: 0.6 },
+    gemBias: ['physical'],
+    presence: { from: 8, fadeIn: 4 },
+    scaleVariance: [0.85, 1.35], scaleStats: true,
+    ambush: { radius: 150, announce: 'the sand swells underfoot…' },
+    brain: { type: 'juggernaut' },
+  },
+
+  /** THE MIRAGE KHAGAN — the court crowned (WARLORD_OF.sirocco): a king whose
+   *  claim is that you have never once seen him first. Doubles at each knee
+   *  of his life bar; the last third fights in a scouring wind. */
+  mirage_khagan: {
+    id: 'mirage_khagan', name: 'Mirage Khagan',
+    color: '#f0c880', shape: 'star', radius: 16, material: 'cloth', look: 'mirage_khagan',
+    base: { life: 300, moveSpeed: 118, accuracy: 105, evasion: 55, mana: 160, manaRegen: 8 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('physRes', 'flat', 0.15)],
+    skills: ['mirage_knife', 'heat_split', 'whirl_of_grit'], xp: 120,
+    faction: 'sirocco',
+    gemBias: ['fire', 'melee'],
+    presence: { from: 12, fadeIn: 5 },
+    brain: {
+      type: 'flanker',
+      phases: [
+        { atLifeFrac: 0.66, announce: 'The Khagan smiles from somewhere else.', onEnter: [{ do: 'summon', monster: 'heat_double', count: 2, ring: 110 }] },
+        { atLifeFrac: 0.33, mods: [mod('attackSpeed', 'increased', 0.2)], announce: 'The wind takes his side!', onEnter: [{ do: 'summon', monster: 'heat_double', count: 2, ring: 110 }] },
+      ],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -7045,6 +7190,11 @@ const RELATIONS: Record<string, FactionStance> = {
   'junglekin|undead': 'hostile',
   'junglekin|demon': 'hostile',
   'junglekin|fungal': 'ally',
+  // The Sirocco Court: the deep desert disputes its rim with the gnolls and
+  // suffers no scavengers — three-way fights in the erg are the point.
+  'sirocco|gnoll': 'hostile',
+  'sirocco|goblin': 'hostile',
+  'sirocco|wild': 'hostile',
   // The Night Court keeps the old courtesies: the dead serve, the groves
   // burn, and the Horned Tribes are prey that fights back.
   'nightkin|undead': 'ally',
@@ -7302,6 +7452,20 @@ export const FACTIONS: Record<string, {
       { id: 'nerve_weaver', weight: 2, presence: { from: 8, fadeIn: 4 } },
       { id: 'vor_maw', weight: 1, presence: { from: 10, fadeIn: 4 } },
       { id: 'chrysalid_broodmother', weight: 1, presence: { from: 12, fadeIn: 5 } },
+    ],
+  },
+  // The deep desert's own: dancers and husks carry the early court, the
+  // glass and the wind arrive where the country runs hot enough to deserve
+  // them, the priest and the worm keep the heart.
+  sirocco: {
+    name: 'the Sirocco Court',
+    table: [
+      { id: 'mirage_dancer', weight: 3 },
+      { id: 'salt_husk', weight: 3 },
+      { id: 'glass_stalker', weight: 2, presence: { from: 8, fadeIn: 4 } },
+      { id: 'dust_djinn', weight: 2, presence: { from: 9, fadeIn: 4 } },
+      { id: 'sun_priest', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      { id: 'sandmaw_burrower', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
 };

@@ -91,6 +91,9 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Junglekin — the strangling green's tribes: they barely leave the
   // treeline (the walls ARE the argument) and never cede a lane of it.
   junglekin: { roaming: 0.25, aggression: 1.0, warlordHome: 'origin', homeBiome: 'jungle', eventRange: 160, contexts: ['baseline'], temper: 'territorial' },
+  // The Sirocco Court — the deep desert's own: half-roaming (the court walks
+  // its country), territorial about every yard of it.
+  sirocco: { roaming: 0.45, aggression: 0.95, warlordHome: 'origin', homeBiome: 'desert', eventRange: 150, contexts: ['baseline'], temper: 'territorial' },
   // The Emberkin — the cinder country's tribe: rooted vent-tenders who barely
   // march but never, ever cede the calderas (the volcanic biome finally has a
   // native banner; its long war is with the Legion treating the fires as a door).
