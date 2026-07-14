@@ -93,6 +93,14 @@ export type ObjectiveSpec = (
    *  roads never lock, the zone's TTL refresh deals a fresh caravan). All
    *  numbers default from data/processions.ts PROCESSION_CFG. */
   | { kind: 'procession'; robbers?: PackTableEntry[]; puffEvery?: [number, number]; speedMul?: number }
+  /** THE BOUNTY WRIT: `count` of the zone's own bodies walk it as MARKED
+   *  QUARRY — named (the nemesis vocabulary), promoted to `rarity`, roaming
+   *  with the population. Claim every writ (any death counts — the world is
+   *  allowed to do your work) and the objective completes. The hunt is pure
+   *  population state: Zone Memory resumes a half-claimed writ with the SAME
+   *  named marks at the same wounds, for free. Numbers default from
+   *  data/bounties.ts BOUNTY_CFG. */
+  | { kind: 'bounty'; count?: [number, number]; rarity?: MonsterRarity; stacks?: number }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -102,7 +110,7 @@ export type ObjectiveSpec = (
  *  ObjectiveTuning.seal overrides its kind's row. */
 export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   safe: false, clear: false, waves: false, escape: false, spawners: false,
-  boss: true, beacon: false, procession: false,
+  boss: true, beacon: false, procession: false, bounty: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -117,7 +125,7 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
  *  locks its roads, yet still stakes its reward. Endless arenas never do —
  *  nothing completes. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
-  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession']);
+  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty']);
 
 export function objectiveEarnsChest(o: ObjectiveSpec): boolean {
   if (o.kind === 'waves' && o.waves === 0) return false;

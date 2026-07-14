@@ -20,6 +20,7 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 | `beacon`     | charge the SURVEY SPIRE(S) by holding ground beside them —    |
 |              | `count` 2+ is the ATTUNEMENT CIRCUIT (smaller waystones)      |
 | `procession` | escort the caravan to the far crossing — WINNABLE and LOSEABLE |
+| `bounty`     | claim every WRIT — named rare quarry roaming with the population |
 
 ## Exit-seal POLICY (not physics)
 
@@ -114,6 +115,30 @@ faction-caravan zone event (retired from engine/events.ts).
   sealed chest). LOSE: the cart dies → `World.objectiveLost` — the bounty is
   forfeit, the HUD says so, NOTHING locks, and the loss rides the Zone Memory
   rider until the TTL/campfire refresh deals a fresh caravan.
+
+## The BOUNTY WRIT (`kind: 'bounty'`)
+
+All numbers in `src/data/bounties.ts` `BOUNTY_CFG`; per-zone overrides on the
+spec (`count`, `rarity`, `stacks`). The PoE2-style rare hunt as data:
+
+- The zone posts writs on `count` of its OWN bodies (rolled from the
+  effective spawn table — eligible defs only: no passives, spawners,
+  noObjective habitat-bound or NPCs; a roster-less zone posts writs on
+  existing counted bodies instead). Each mark is promoted (`promoteRarity`,
+  stackable), minted a NAME from the nemesis vocabulary
+  (`mintNemesisName` — faction pools apply, deduped per zone), tagged
+  `bounty_mark`, and spawned at reachable spawn points to roam.
+- The hunt is PURE POPULATION STATE: remaining = living marks, completion
+  when none stand, ANY death counts (a faction brawl that fells a mark did
+  your work — the same honesty as 'clear'). Zone Memory therefore resumes a
+  half-claimed writ with the SAME named quarry at the same wounds — names,
+  rarity, tags and HP all already ride `ZoneEnemyMemo`. Zero new
+  persistence.
+- Per-writ claim beat rides the kill-handler fabric (`bounty_writ_claim`:
+  a taste of xp, the `bounty_writs_claimed` ledger, the claim text).
+- The chevron holds its tongue until `chevronWhenRemaining` (2) marks are
+  left — a hunt stays a hunt; only the last stragglers get pointed at, BY
+  NAME.
 
 ## `objectiveLost` (the loseable-objective seam)
 

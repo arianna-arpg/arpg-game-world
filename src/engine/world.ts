@@ -64,6 +64,7 @@ import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat
 import { START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
 import { PROCESSION_CFG } from '../data/processions';
+import { BOUNTY_CFG } from '../data/bounties';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -187,7 +188,7 @@ import {
 import { MERC_TEMPLATES, MERC_TEMPLATE_BY_ID, type MercTemplateDef } from '../data/mercenaries';
 import { MercInput } from './mercbrain';
 import {
-  NEMESIS_CFG, bumpGrudge, formNemesis, grudgeTier, nemesisTitle, peekSaga,
+  NEMESIS_CFG, bumpGrudge, formNemesis, grudgeTier, mintNemesisName, nemesisTitle, peekSaga,
   promoteNemesis, recordDeed, resolveNemesisSlain, sagaKey, touchSaga,
   type NemesisRecord,
 } from '../meta/nemesis';
@@ -3386,6 +3387,46 @@ export class World {
       const m = this.createMonster(ls.id, Math.max(1, def.level), 'enemy');
       m.pos = vec(ls.pos.x, ls.pos.y);
       this.actors.push(m);
+    }
+    // BOUNTY WRITS: `count` of the zone's own bodies walk it as MARKED QUARRY —
+    // named from the nemesis vocabulary, promoted, tagged, roaming with the
+    // population. Spawned INSIDE the tagging window, so Zone Memory resumes a
+    // half-claimed hunt with the SAME named marks at the same wounds (names,
+    // rarity, tags and HP all ride ZoneEnemyMemo — no rider needed). A
+    // completed zone posts no new writs; the board is settled.
+    if (o.kind === 'bounty' && !this.objectiveDone) {
+      const n = rng.int(o.count?.[0] ?? BOUNTY_CFG.count[0], o.count?.[1] ?? BOUNTY_CFG.count[1]);
+      const { table } = this.effectiveSpawn(def, this.baseTable(def));
+      const eligible = table.filter(en => {
+        const md = MONSTERS[en.id];
+        return !!md && !md.passive && !md.noObjective && !md.spawner && !md.npcRole;
+      });
+      for (let i = 0; i < n; i++) {
+        let m: Actor | null;
+        if (eligible.length) {
+          const type = this.weightedPick(eligible, Math.max(1, def.level));
+          m = this.createMonster(type, Math.max(1, def.level), 'enemy');
+          m.pos = this.spawnPoint(24);
+          this.actors.push(m);
+        } else {
+          // No eligible roster (a strange zone) — post the writ on an existing
+          // counted body instead; an empty zone simply posts fewer writs.
+          m = this.countedEnemies().find(a =>
+            a.tag !== 'bounty_mark' && (a.rarity ?? 'normal') === 'normal') ?? null;
+          if (!m) break;
+        }
+        this.promoteRarityStacked(m, o.rarity ?? BOUNTY_CFG.rarity, o.stacks ?? BOUNTY_CFG.stacks);
+        // Two writs must never name the same quarry (a small pool re-rolls a
+        // few times, then concedes — a rare double is livable, a common one
+        // reads as a bug).
+        const fac = m.faction ?? (m.defId ? MONSTERS[m.defId]?.faction : undefined) ?? '';
+        let name = mintNemesisName(fac, () => rng.next());
+        for (let tries = 0; tries < 4 && this.actors.some(a => a !== m && a.tag === 'bounty_mark' && a.name === name); tries++) {
+          name = mintNemesisName(fac, () => rng.next());
+        }
+        m.name = name;
+        m.tag = 'bounty_mark';
+      }
     }
     // WILDLIFE: the biome's ambient fauna (WILDLIFE registry) — hares that
     // exist to be chased, the wolf packs that chase them. AMBIENT_TAGS
@@ -24369,6 +24410,15 @@ export class World {
     };
   }
 
+  // (Docs: docs/engine/objectives.md — the bounty section.)
+  /** The live BOUNTY board, for the attention fabric: the marks still owing
+   *  their writs (position + name — the chevron says who). */
+  bountyView(): { remaining: number; marks: { pos: Vec2; name: string }[] } | null {
+    if (this.zone.objective.kind !== 'bounty' || this.objectiveDone) return null;
+    const marks = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark');
+    return { remaining: marks.length, marks: marks.map(a => ({ pos: a.pos, name: a.name })) };
+  }
+
   /** The live PROCESSION, for the attention fabric + the HUD: the cart's
    *  stand, the march fraction, and the win/lose flags. */
   processionView(): {
@@ -29869,6 +29919,17 @@ export class World {
         return;
       }
 
+      case 'bounty': {
+        // THE BOUNTY WRIT: pure population state — the hunt is over when no
+        // marked quarry stands (any death counts; the per-writ beat rides the
+        // kill-handler fabric). An emptied board completes like a cleared zone.
+        if (!this.objectiveDone
+          && !this.actors.some(a => !a.dead && a.tag === 'bounty_mark')) {
+          this.completeObjective('Every writ is claimed!');
+        }
+        return;
+      }
+
       case 'procession': {
         // ESCORT THE CARAVAN: dormant until the rally dwell, then a path-field
         // march toward the crossing. Robbers ADJACENT stop the wheels; the
@@ -30699,6 +30760,10 @@ export class World {
         if (!v || (!v.started && !v.rolling)) return 'A caravan waits by the gate — linger beside it to set out';
         if (!v.rolling) return 'The caravan holds — linger beside it to move on';
         return `Escort the caravan — ${Math.round(v.frac * 100)}% of the way`;
+      }
+      case 'bounty': {
+        const n = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark').length;
+        return `Hunt the marked — ${n} writ${n === 1 ? '' : 's'} unclaimed`;
       }
     }
   }
