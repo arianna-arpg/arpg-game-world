@@ -744,6 +744,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'palm', count: [8, 12] }, { kind: 'sand', count: [4, 6] },
         { kind: 'rocks', count: [2, 4], radius: [20, 44] }, { kind: 'grass', count: [1, 2] },
         { kind: 'heat_shimmer', count: [1, 3] },
+        { kind: 'sun_awning', count: [1, 2] },
         { kind: 'cave', count: [0, 1] },
         { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
         // Shade arcs ringing the pool: the strand centers near the water the
@@ -757,6 +758,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       dayLight: 1.6,
       heat: 1,
+      swelter: 0.85,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }, { kind: 'sandDrift', intensity: 0.5 }],
       // Sun-bleached scrub floor: a sand-to-dust gradient with a light bias —
       // the waste must READ as sand at a glance, never night-bog (live QA).
@@ -778,6 +780,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [0, 1] },
       { kind: 'heat_shimmer', count: [2, 4] },
       { kind: 'camp', count: [0, 1] },
+      { kind: 'sun_awning', count: [0, 2] },
       { kind: 'cave', count: [0, 2] },
       { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
     ],
@@ -869,6 +872,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     theme: {
       dayLight: 1.65,
       heat: 1.05,
+      swelter: 1,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.9 }, { kind: 'sandDrift', intensity: 0.8 }],
       // The open erg is SAND ALL THE WAY DOWN: a pure light-biased dune
       // gradient (evenness ~0.5 lays it on solid — no dark floor bleed).
@@ -888,6 +892,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [0, 1] },
       { kind: 'heat_shimmer', count: [3, 6] },
       { kind: 'camp', count: [0, 1] },
+      { kind: 'sun_awning', count: [0, 1] },
       { kind: 'cave', count: [0, 1] },
     ],
     common: [
@@ -965,13 +970,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'formation', count: [1, 2], formation: 'salt_procession' },
         { kind: 'glass_shard', count: [1, 3] },
         { kind: 'heat_shimmer', count: [6, 9] },
-      ], theme: { dayLight: 1.9 } },
+      ], theme: { dayLight: 1.9, swelter: 1.35 } },
     ],
     nameFirst: ['Saltcrack', 'Glasswaste', 'Suncracked', 'Burnglass', 'Witherglass', 'Bleachbone', 'Blinding', 'Dead-Lake', 'Shatterpan', 'Whitefire', 'Cracklace', 'Stillheat'],
     nameSecond: ['Pan', 'Flats', 'Glass', 'Mirror', 'Bed', 'Blind', 'Table', 'Waste', 'Floor', 'Shimmer'],
     theme: {
       dayLight: 1.75,
       heat: 1.1,
+      swelter: 1.2,
       ambientFx: [{ kind: 'heatHaze', intensity: 1 }, { kind: 'sandDrift', intensity: 0.6 }],
       // A pale cracked floor — pan polygons, not dunes: near-isotropic scale,
       // a bright-biased palette so the flat reads bleached under the sun.

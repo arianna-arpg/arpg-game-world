@@ -258,6 +258,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'boneArch', order: 54, shadow: 0.55, longShadow: 1.1,
     params: { bone: '#d8ccb0' },
   },
+  // Walk-under shade (rule.occlude feeds World.isShaded): poles + thrown
+  // shadow below, the striped cloth fly above on the canopy pass — LIVE
+  // (not CANOPY_STATIC) so cloth and poles share the instance's rotation.
+  sun_awning: {
+    painter: 'awningPoles', order: 49,
+    params: { pole: '#6a5636' },
+    canopy: { painter: 'awningCloth', params: { cloth: '#b8683a', stripe: '#e8d8b0' } },
+  },
   dead_tree: {
     painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: '#4a4038' },

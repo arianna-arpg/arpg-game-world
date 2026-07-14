@@ -4576,6 +4576,39 @@ const boneArch: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A SUN AWNING's ground story: four pole feet and the cloth's thrown
+ *  shade — the shadow IS the promise (drawn under actors; the cloth above
+ *  rides the canopy pass with the SAME rotation). */
+const awningPoles: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { pole?: ColorSpec };
+  const { ctx, theme } = env;
+  const pole = resolveColor(p.pole, theme, '#6a5636');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 7 + o.pos.y * 13) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? hash01(seed, 1) * Math.PI * 2);
+    // The thrown shade, offset sunward-away.
+    ctx.fillStyle = withAlpha('#000000', 0.22);
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.94 + 7, -r * 0.56 + 9);
+    ctx.lineTo(r * 0.94 + 7, -r * 0.56 + 9);
+    ctx.lineTo(r * 0.88 + 7, r * 0.56 + 9);
+    ctx.lineTo(-r * 0.88 + 7, r * 0.56 + 9);
+    ctx.closePath();
+    ctx.fill();
+    // Pole feet.
+    ctx.fillStyle = pole;
+    for (const [px, py] of [[-r * 0.94, -r * 0.58], [r * 0.94, -r * 0.58], [r * 0.88, r * 0.58], [-r * 0.88, r * 0.58]]) {
+      ctx.beginPath();
+      ctx.arc(px, py, Math.max(2, r * 0.07), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
 /** A SPIDER WEB sheet: radial spokes + sagging rings, pale and sticky. */
 const web: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
@@ -7036,7 +7069,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   membrane, veins, eyeStalk, ribArch, teethRow,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
-  cactus, duneCrest, saltPillar, boneArch, web, deadTree, stump, log, snowman, signpost, firewoodPile,
+  cactus, duneCrest, saltPillar, boneArch, awningPoles, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
@@ -7441,6 +7474,47 @@ const discCrown: CanopyPainter = (env, o, alpha) => {
   ctx.globalAlpha = 1;
 };
 
+/** A SUN AWNING's cloth fly, riding the canopy pass: a taut striped
+ *  rectangle canted on its poles, a bright sun-edge on the windward hem.
+ *  Time-free (CANOPY_STATIC bakes it); the walk-under fade is the shade
+ *  promise made visible — step beneath and the cloth ghosts open. */
+const awningCloth: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { cloth?: ColorSpec; stripe?: ColorSpec };
+  const { ctx, theme } = env;
+  const cloth = resolveColor(p.cloth, theme, '#b8683a');
+  const stripe = resolveColor(p.stripe, theme, '#e8d8b0');
+  const seed = ((o.pos.x * 7 + o.pos.y * 13) | 0) >>> 0;
+  const r = o.radius;
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  ctx.rotate((o.rot ?? hash01(seed, 1) * Math.PI * 2));
+  ctx.globalAlpha = alpha * 0.92;
+  // The cloth: a slightly trapezoid quad (one edge sags off its shorter pole).
+  const sag = r * (0.06 + hash01(seed, 3) * 0.08);
+  ctx.fillStyle = cloth;
+  ctx.beginPath();
+  ctx.moveTo(-r, -r * 0.62);
+  ctx.lineTo(r, -r * 0.62 + sag);
+  ctx.lineTo(r * 0.94, r * 0.62);
+  ctx.lineTo(-r * 0.94, r * 0.62 - sag);
+  ctx.closePath();
+  ctx.fill();
+  // Stripes along the weave.
+  ctx.fillStyle = withAlpha(stripe, 0.8);
+  for (let i = -2; i <= 2; i += 2) {
+    ctx.fillRect(-r * 0.96, i * r * 0.18 - r * 0.07, r * 1.9, r * 0.14);
+  }
+  // The sun hem.
+  ctx.strokeStyle = withAlpha(mix(cloth, '#ffffff', 0.45), 0.9);
+  ctx.lineWidth = Math.max(1.2, r * 0.06);
+  ctx.beginPath();
+  ctx.moveTo(-r, -r * 0.62);
+  ctx.lineTo(r, -r * 0.62 + sag);
+  ctx.stroke();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+};
+
 /** The KELP CROWN — a giant kelp's frond whorl riding the canopy pass: two
  *  LAYERS of tapered ribbon fronds (broad dark unders, bright narrow overs)
  *  radiating off-phase from the stipe, each swaying on its own current beat,
@@ -7591,7 +7665,7 @@ const lianaCurtain: CanopyPainter = (env, o, alpha, params) => {
 
 export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
   bramble, palmCrown, mushroomCrown, discCrown, leafCrown, pineCrown, fogCloud,
-  kelpCrown, lianaCurtain,
+  kelpCrown, lianaCurtain, awningCloth,
 };
 
 /** Canopy painters whose pixels are a pure function of (radius, position

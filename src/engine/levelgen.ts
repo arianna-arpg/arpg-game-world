@@ -67,6 +67,7 @@ export type KnownDoodadKind =
   | 'salt_pillar' // the glasspan's forest: a squat wind-eroded salt column
   | 'glass_shard' // lightning-fused pane heaved from the pan — brittle, sings apart
   | 'bone_arch'  // a colossus rib breaking the sand — the bonepan's architecture
+  | 'sun_awning' // a traveler's cloth fly on poles — walk-under SHADE (the heat's mercy)
   | 'web'       // sticky sheet — slows like mire (spider country)
   | 'geyser'    // scalding vent mouth — steams and glows (marsh/tundra)
   | 'snowdrift' // wind-piled powder — decoration (tundra)
@@ -831,6 +832,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   bone_arch: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 120, bodyScale: 0.85,
     forbidOn: ['water', 'lava', 'chasm'],
     surface: { hw: 1.6, hh: 0.35, orient: 'rot' } },
+  // WALK-UNDER SHADE: occlude is what World.isShaded reads, so standing
+  // beneath the fly SHEDS sunscorch — a placeable answer to the swelter tax
+  // (camps and oasis courts wear them; compositions will too).
+  sun_awning: { overlap: 'ground', spacing: 90,
+    forbidOn: ['water', 'lava', 'chasm'],
+    occlude: { pad: 8, alpha: 0.35 } },
   // The maw is GROUND (nothing to trip on — the reel is the obstacle):
   // hazardGround keeps ambient spawns off the lip, the auto-attached effect
   // reels the nearest intruder each beat and bites whatever reaches the lip.
@@ -3463,6 +3470,7 @@ registerStamp('dune_crest', stampSingle('dune_crest', [24, 40]));
 registerStamp('salt_pillar', stampSingle('salt_pillar', [10, 16]));
 registerStamp('glass_shard', stampSingle('glass_shard', [8, 14]));
 registerStamp('bone_arch', stampSingle('bone_arch', [22, 34]));
+registerStamp('sun_awning', stampSingle('sun_awning', [26, 36]));
 registerStamp('geyser', stampSingle('geyser', [12, 17]));
 registerStamp('brazier', stampSingle('brazier', [8, 11]));
 registerStamp('standing_stone', stampSingle('standing_stone', [12, 20]));

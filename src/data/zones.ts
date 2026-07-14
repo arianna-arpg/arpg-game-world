@@ -401,6 +401,14 @@ export interface ZoneTheme {
    *  theme keeps a permanent snow floor and lets snowfall deepen it; a hot
    *  one sheds cover in moments. Future thermal systems read the same dial. */
   heat?: number;
+  /** OPEN-SUN SWELTER (World.updateHeat): zones that declare this bake
+   *  sunscorch stacks under bare daylight — no shimmer pocket required —
+   *  scaled by the zone's own baked climate temperature. The desert
+   *  country's tax: unshaded daylight is the hazard, shade/night/water the
+   *  relief, shimmer fields the fast lane. 0/absent = only shimmer bakes
+   *  (every non-desert biome, byte-identical). ~0.85 waste, 1 erg,
+   *  1.2 glasspan. All cadence math in HEAT_CFG. */
+  swelter?: number;
   /** DAYTIME BRIGHTNESS multiplier on the noon sun-lift (default 1): a
    *  desert swelters at 1.6, a canopied wood barely brightens at 0.7. */
   dayLight?: number;

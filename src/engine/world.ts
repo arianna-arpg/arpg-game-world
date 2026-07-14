@@ -392,12 +392,24 @@ export const BOSS_BAR_XP_MIN = 100;
 export const LOW_LIFE_FLASH_SEC = 0.45;
 
 /** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
- *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched). */
+ *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched);
+ *  the cap's consequence lives on its buildup ladder (heatstroke). */
 export const HEAT_CFG = {
   /** Seconds per stack gained while standing in a heat shimmer, unshaded. */
   stackEvery: 1.4,
   /** Seconds per stack shed while in shade (canopy, roof, or night). */
   dwindleEvery: 0.9,
+  /** OPEN-SUN base cadence (ZoneTheme.swelter zones): seconds per stack at
+   *  swelter 1 in a temperate-baked zone. Effective cadence =
+   *  sunStackEvery / (swelter × (tempBase + tempGain × geo temperature)) —
+   *  the world's own heat map decides which deserts scorch hardest. */
+  sunStackEvery: 3.4,
+  tempBase: 0.55,
+  tempGain: 0.9,
+  /** Daylight gate for the open sun (dayCycle light above this bakes; dawn
+   *  and dusk are the crossing hours the caravans kept — night is already
+   *  shade via isShaded). */
+  sunUpMin: 0.55,
 };
 
 /** DIRECTIONAL WIND tunables (World.windAt). A weather front's drift vector
@@ -26421,13 +26433,27 @@ export class World {
    * poison on ENTRY. Because these are ordinary statuses, they show as
    * pips, scale with the stat engine, and anything else can apply them.
    */
-  /** DESERT HEAT — the sunscorch loop. Standing in a heat-shimmer field
-   *  bakes stacks on (each eroding fire resistance, capped by the status
-   *  def); SHADE dwindles them — under a canopy crown, beneath a roof, or
-   *  once night falls. Neither shimmer nor shade = the heat holds. Player
-   *  seats only (monsters live here). All cadence knobs in HEAT_CFG. */
+  /** DESERT HEAT — the sunscorch loop. TWO lanes bake stacks on (each
+   *  eroding fire resistance; at the cap the buildup ladder converts them
+   *  into HEATSTROKE): the fast lane is standing in a heat-shimmer field;
+   *  the slow lane is BARE DAYLIGHT itself in any zone whose theme declares
+   *  `swelter` (the desert country) — cadence scaled by the zone's baked
+   *  climate temperature, so the erg's hot heart cooks faster than its rim.
+   *  SHADE dwindles stacks — a canopy crown (palms, awnings), a roof, or
+   *  night. In swelter country there is no neutral ground while the sun is
+   *  up: you are baking or you are sheltering — that is the commitment the
+   *  biome asks. Elsewhere, no shimmer and no shade = the heat holds
+   *  (byte-identical to the old loop). Player seats only (monsters live
+   *  here). All cadence knobs in HEAT_CFG. */
   private heatTimers = new Map<number, number>();
   private updateHeat(dt: number): void {
+    const swelter = this.zone.theme.swelter ?? 0;
+    const sunUp = swelter > 0 && dayCycle(this.time).light > HEAT_CFG.sunUpMin;
+    // The zone's baked climate temperature (worldgen geo) — 0.5 when unbaked.
+    const bakedT = this.zoneMap[this.zone.id]?.geo?.climate?.temperature ?? 0.5;
+    const sunEvery = sunUp
+      ? HEAT_CFG.sunStackEvery / (swelter * (HEAT_CFG.tempBase + HEAT_CFG.tempGain * bakedT))
+      : Infinity;
     for (const s of this.seats) {
       const a = s.actor;
       if (a.dead || a.downed) continue;
@@ -26442,8 +26468,9 @@ export class World {
         }
       }
       const shaded = this.isShaded(a);
-      if (inField && !shaded) {
-        if (t >= HEAT_CFG.stackEvery) {
+      const bakeEvery = inField ? HEAT_CFG.stackEvery : sunEvery;
+      if (bakeEvery < Infinity && !shaded) {
+        if (t >= bakeEvery) {
           t = 0;
           a.applyStatus('sunscorched', 0, 1, 'the desert sun');
           if ((a.statuses.find(x => x.id === 'sunscorched')?.stacks ?? 0) === 1) {

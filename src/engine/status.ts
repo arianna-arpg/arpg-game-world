@@ -229,16 +229,32 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Canopied', color: '#4e7a3c', duration: 1.2,
     mods: [mod('detectability', 'more', -0.35)],
   },
-  /** DESERT HEAT (World.updateHeat): standing in a heat-shimmer field bakes
-   *  stacks on; shade (a canopy, a roof, the night) dwindles them. Each stack
-   *  erodes fire resistance — the desert softens you up for its burns. The
-   *  world manages stacks directly; duration is only a safety TTL. */
+  /** DESERT HEAT (World.updateHeat): shimmer fields — and, in swelter
+   *  country, bare daylight — bake stacks on; shade (a canopy, a roof, the
+   *  night) dwindles them. Each stack erodes fire resistance — the desert
+   *  softens you up for its burns — and AT THE CAP the buildup ladder
+   *  consumes them into HEATSTROKE: the sun finally wins a round. The world
+   *  manages stacks directly; duration is only a safety TTL. */
   sunscorched: {
     label: 'Sunscorched', color: '#ffb64a', duration: 8,
     element: 'fire',
-    stacking: true, maxStacks: 8,
+    stacking: true, maxStacks: 8, buildup: { into: 'heatstroke' },
     mods: [mod('fireRes', 'flat', -0.05)],
     modsPerStack: true,
+  },
+  /** What sunscorched builds into at cap (the chill→frozen ladder in fire):
+   *  a hard SLOW, never a stun — you keep fighting, you stop striding, and
+   *  the desert makes you pay for every league you refused to respect.
+   *  Consuming the stacks also resets the fire-res erosion: the ladder
+   *  breathes instead of compounding. */
+  heatstroke: {
+    label: 'Heatstroke', color: '#ff7a3a', duration: 5,
+    element: 'fire',
+    mods: [
+      mod('moveSpeed', 'more', -0.18),
+      mod('attackSpeed', 'more', -0.12),
+      mod('castSpeed', 'more', -0.12),
+    ],
   },
   // Chill BUILDS UP: each application stacks intensity, and at max stacks
   // the chill is consumed into a FREEZE — a long, hard stun.
