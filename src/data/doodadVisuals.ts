@@ -877,6 +877,20 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       glow: { color: '#d8cdb0', alpha: 0.1 },
     },
   },
+  // THE EXTRACTION WELL (the seam's ground fixture — the node BODY stands on
+  // it). Living face breathes marrow-light + motes; the spent face is the
+  // same pan, drained and cracked (the kind-swap fires when a seam settles).
+  // Marrow-pale by default; the light does the "reads as interactable" work.
+  marrow_well: {
+    painter: 'marrowWell', order: 30,
+    params: { color: '#a5e3b4', rim: 'theme:obstacle|#4a5648' },
+    light: { radius: -3.0, color: '#a5e3b4', intensity: 0.34, flicker: 1.4 },
+  },
+  marrow_well_spent: {
+    painter: 'marrowWell', order: 30,
+    params: { color: '#3a443c', rim: 'theme:obstacle|#4a5648', spent: true },
+  },
+
   // THE LEYLINE KIT (the fracture capstone's confluences — 'leyline_nexus').
   // Everything keys 'theme:accent', so each element FACE (a TilesetVariant
   // theme override) recolors the whole kit with zero extra rows: the pyre

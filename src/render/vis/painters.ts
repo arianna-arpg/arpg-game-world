@@ -2077,6 +2077,71 @@ const platformRing: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A POOL OF POWER: a dark opening ringed by rim stones, skinned with a
+ *  luminous breathing film and slow rising motes — the extraction seam's
+ *  well, and any future font of anything (ley pools, blood springs) via the
+ *  color params. `spent: true` stills it: the film drains, cracks radiate,
+ *  the motes die — the same geometry, emptied (the ward-seal doctrine). */
+const marrowWell: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec; rim?: ColorSpec; spent?: boolean };
+  const { ctx, theme, time } = env;
+  const col = resolveColor(p.color, theme, '#a5e3b4');
+  const rim = resolveColor(p.rim, theme, '#4a5648');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The opening — dark water-table black, slightly oval (a ground feature).
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#050a08';
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.82, 0, 0, Math.PI * 2); ctx.fill();
+    if (!p.spent) {
+      // The living film: a breathing sheet of marrow-light + a brighter core.
+      const pulse = 0.5 + 0.5 * Math.sin(time * 1.6 + seed % 7);
+      ctx.globalAlpha = 0.30 + 0.22 * pulse;
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.86, r * 0.7, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 0.35 + 0.3 * pulse;
+      ctx.fillStyle = shade(col, 0.35);
+      ctx.beginPath(); ctx.ellipse(0, 0, r * 0.38, r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+      // Rising motes, each on its own clock, drifting up and dying.
+      for (let i = 0; i < 4; i++) {
+        const ph = (time * (0.5 + hash01(i, seed) * 0.5) + hash01(i, seed + 3)) % 1;
+        const mx = (hash01(i, seed + 9) - 0.5) * r * 1.1;
+        ctx.globalAlpha = (1 - ph) * 0.5;
+        ctx.fillStyle = shade(col, 0.5);
+        ctx.beginPath(); ctx.arc(mx, -ph * r * 1.5, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      // Spent: a dry pan with radiating cracks — the scar remembers the shape.
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = shade(rim, -0.25);
+      ctx.lineWidth = 1.2;
+      for (let i = 0; i < 5; i++) {
+        const a = hash01(i, seed) * Math.PI * 2;
+        const len = r * (0.5 + hash01(i, seed + 4) * 0.45);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * r * 0.2, Math.sin(a) * r * 0.16);
+        ctx.lineTo(Math.cos(a + 0.25) * len, Math.sin(a + 0.25) * len * 0.82);
+        ctx.stroke();
+      }
+    }
+    // Rim stones: a broken ring of worn stone lips (shared by both faces).
+    ctx.globalAlpha = 0.95;
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + hash01(i, seed + 11) * 0.4;
+      const sr = 2.2 + hash01(i, seed + 13) * 2.4;
+      ctx.fillStyle = shade(rim, hash01(i, seed + 17) * 0.3 - 0.1);
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * r, Math.sin(a) * r * 0.82, sr, sr * 0.75, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
 /** Swaying translucent kelp blades. */
 /** KELP STANDS (and reed beds, params.reed): tapered RIBBON blades — two
  *  curved edges filled, a lit midrib, a slow current sway. Kelp floats gas
@@ -6401,7 +6466,7 @@ const tortureRack: GroupPainter = (env, group, def) => {
 
 export const PAINTERS: Record<string, GroupPainter> = {
   liquid, chasmPit, cliffMass, mound, boulder, cairn: cairnPainter, scree,
-  shard, vent, pod, dome, bones, slab, sparkle, platformRing,
+  shard, vent, pod, dome, bones, slab, sparkle, platformRing, marrowWell,
   kelp, coral, sapling, plank, dock, palisade, windowSlit, caveMouth, hatch,
   campfire, groundShadow, trunk, brush, fern, vineMat, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
