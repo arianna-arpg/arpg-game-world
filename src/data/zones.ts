@@ -101,6 +101,15 @@ export type ObjectiveSpec = (
    *  named marks at the same wounds, for free. Numbers default from
    *  data/bounties.ts BOUNTY_CFG. */
   | { kind: 'bounty'; count?: [number, number]; rarity?: MonsterRarity; stacks?: number }
+  /** OFFERINGS TO THE ALTAR: an altar from the registry (data/shrines.ts —
+   *  `altarId` pins one; absent = a weighted roll, so a storm or gilded altar
+   *  reshapes the whole ask) stands at a POI. Kills WITHIN ITS FIELD power
+   *  it, `need` deep — any death counts, credited or not, ambient or not
+   *  (a migration herd stampeding through, or the storm's own bolts, feed it
+   *  too). Nothing left alive before it's sated? The objective STALLS — not
+   *  lost, just hungry — until a world event brings new blood. Numbers
+   *  default from data/objectives.ts OFFERING_CFG. */
+  | { kind: 'offering'; need?: [number, number]; altarId?: string }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -110,7 +119,7 @@ export type ObjectiveSpec = (
  *  ObjectiveTuning.seal overrides its kind's row. */
 export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   safe: false, clear: false, waves: false, escape: false, spawners: false,
-  boss: true, beacon: false, procession: false, bounty: false,
+  boss: true, beacon: false, procession: false, bounty: false, offering: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -125,7 +134,7 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
  *  locks its roads, yet still stakes its reward. Endless arenas never do —
  *  nothing completes. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
-  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty']);
+  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession', 'bounty', 'offering']);
 
 export function objectiveEarnsChest(o: ObjectiveSpec): boolean {
   if (o.kind === 'waves' && o.waves === 0) return false;

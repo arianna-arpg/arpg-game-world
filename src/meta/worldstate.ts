@@ -95,6 +95,8 @@ export interface SavedZoneMemory {
    *  ZoneMemory.procession — lost flag, cart spot + life, march origin,
    *  pinned crossing). */
   procession?: SavedProcessionMemo;
+  /** OFFERING zones: how fed the hungering altar was at capture. */
+  altarOffered?: number;
 }
 
 /** The procession rider, plain JSON (mirrors the engine's shape). */

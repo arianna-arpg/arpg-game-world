@@ -939,6 +939,7 @@ function rollObjective(
     case 'circuit': return { kind: 'beacon', count: rng.int(3, 4), chargeSec: 8 };
     case 'procession': return { kind: 'procession' }; // numbers default from PROCESSION_CFG
     case 'bounty': return { kind: 'bounty' };         // numbers default from BOUNTY_CFG
+    case 'offering': return { kind: 'offering' };     // altar + numbers roll at load
     default: return { kind: 'clear' };
   }
 }

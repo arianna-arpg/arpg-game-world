@@ -21,6 +21,7 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 |              | `count` 2+ is the ATTUNEMENT CIRCUIT (smaller waystones)      |
 | `procession` | escort the caravan to the far crossing — WINNABLE and LOSEABLE |
 | `bounty`     | claim every WRIT — named rare quarry roaming with the population |
+| `offering`   | FEED the altar — kills inside its field power it; stalls, never fails |
 
 ## Exit-seal POLICY (not physics)
 
@@ -139,6 +140,44 @@ spec (`count`, `rarity`, `stacks`). The PoE2-style rare hunt as data:
 - The chevron holds its tongue until `chevronWhenRemaining` (2) marks are
   left — a hunt stays a hunt; only the last stragglers get pointed at, BY
   NAME.
+
+## THE OFFERING (`kind: 'offering'`) + the altar fabric
+
+The altar system (data/shrines.ts) as an objective. `AltarDef` now carries
+BEHAVIOR VERBS beyond its modifier aura, each optional, each data:
+
+- `bolts` — a LOCALIZED STORM: telegraphed strikes (the weather-strike shape,
+  fired through the shared `fireStrikeAt` pipeline) rain on random points
+  inside the field, frying friend and foe — risk versus reward as ground.
+- `killGems` — kills inside the field spill bonus gems (any death, credited
+  or not — the field rewards blood, not authorship).
+- `mend` — a heal pulse to EVERYONE inside, enemies included.
+- `weight` — the POI roll's rarity dial.
+
+Rows: wrath/haste/bulwark/blood (the originals) + the Gathering Storm,
+Gilded, Mending, and Still Hours. Ambient POI altars weight-roll from the
+same registry the objective borrows.
+
+The OFFERING objective (numbers in data/objectives.ts OFFERING_CFG; spec
+overrides `need`, `altarId`): an altar stands at the first POI — pinned by
+`altarId` or weight-rolled, so a storm/gilded/mending roll reshapes the whole
+ask. Kills WITHIN ITS FIELD power it, `need` deep, through a worldKillRules
+row at the kill chokepoint — ANY death counts, credited or not, ambient or
+not. A migration herd stampeding through the light, a warband brawl, the
+storm altar's own bolts: all offerings. Fed progress rides Zone Memory
+(`altarOffered`).
+
+THE STALL (not a loss): if nothing lives in the zone before the altar is
+sated, the HUD reads hungry — and the state is DERIVED from the living
+population each frame, never latched, so any world event that spawns new
+bodies revives the hunt by existing. Losing is impossible; only waiting.
+
+## STRAGGLER CHEVRONS (cross-kind parity)
+
+data/objectives.ts STRAGGLER_CFG: the last few counted enemies of a 'clear'
+(≤3) and the last spawner of a 'spawners' (≤1) get edge chevrons, labeled by
+name — the same mercy the bounty's marks get. One attention source reads
+`World.objectiveStragglersView()`; thresholds are data.
 
 ## `objectiveLost` (the loseable-objective seam)
 

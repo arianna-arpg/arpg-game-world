@@ -5,10 +5,21 @@
 // timed buff and the shrine goes dark. An ALTAR is a standing field: its
 // modifiers apply to EVERYONE inside the radius — you, your minions, and
 // the things hunting you — so fights bend around where the altar stands.
-// Both are pure modifier bundles; new ones are one data entry.
+//
+// Altars also carry BEHAVIOR VERBS beyond flat modifiers, each optional,
+// each pure data (the engine runs whichever a row declares):
+//   bolts    — a LOCALIZED STORM: telegraphed strikes rain on random points
+//              inside the field, frying friend and foe alike (the weather-
+//              strike pipeline, altar-local) — risk versus reward made ground.
+//   killGems — kills INSIDE the field spill bonus gems (greed with teeth).
+//   mend     — a heal pulse to EVERYONE inside, your enemies included.
+// New shrines/altars are one data entry; the OFFERING objective
+// (data/objectives.ts) borrows any altar row as its hungering centerpiece,
+// so a new altar kind is automatically a new objective flavor too.
 // ---------------------------------------------------------------------------
 
 import { mod, type Modifier } from '../engine/stats';
+import type { WeatherStrike } from '../world/weather';
 
 export interface ShrineDef {
   id: string;
@@ -55,6 +66,18 @@ export interface AltarDef {
   radius: number;
   /** Applied to every actor inside — friend, foe, and minion alike. */
   mods: Modifier[];
+  /** LOCALIZED STORM: telegraphed strikes on random points inside the field,
+   *  hitting EVERYONE beneath (the weather-strike shape, altar-local — the
+   *  telegraph disc is dodgeable and the AI reads it like any blast). */
+  bolts?: WeatherStrike;
+  /** Kills INSIDE the field spill bonus gems (rolled per death). */
+  killGems?: { chance: number; count: [number, number] };
+  /** A heal pulse to EVERYONE inside every `every` seconds — your enemies
+   *  included (heal = base + perLevel × zone level). Bring burst, or fight
+   *  outside the light. */
+  mend?: { every: number; base: number; perLevel: number };
+  /** POI roll weight (default 1) — rarer altars stand on rarer ground. */
+  weight?: number;
 }
 
 export const ALTARS: AltarDef[] = [
@@ -77,5 +100,42 @@ export const ALTARS: AltarDef[] = [
   {
     id: 'blood_altar', name: 'Altar of Blood', color: '#b03048', radius: 160,
     mods: [mod('lifeLeech', 'flat', 0.06), mod('lifeRegen', 'more', -1)],
+  },
+  // --- The behavior-verb rows (the parity expansion) -------------------------
+  // THE GATHERING STORM: bolts rain inside the field on everyone — the small
+  // damage edge is the wager, the sky is the house. Slower and tighter than
+  // true weather (the weather front's own storm_call, re-tuned by data).
+  {
+    id: 'storm_altar', name: 'Altar of the Gathering Storm', color: '#8fb8ff', radius: 180,
+    mods: [mod('damage', 'more', 0.12)],
+    bolts: { skillId: 'storm_call', radius: 52, telegraph: 0.75, ratePerSec: 0.55 },
+    weight: 0.8,
+  },
+  // GILDED: greed with teeth — kills inside spill bonus gems, but the field
+  // sharpens everything's appetite for YOU too.
+  {
+    id: 'gilded_altar', name: 'Gilded Altar', color: '#ffd76a', radius: 160,
+    mods: [mod('damageTaken', 'more', 0.1)],
+    killGems: { chance: 0.45, count: [1, 2] },
+    weight: 0.9,
+  },
+  // MENDING: the light heals EVERYONE it touches. Sustain heaven for you —
+  // and for the thing you're trying to kill. Bring burst, or step out.
+  {
+    id: 'mending_altar', name: 'Altar of Mending', color: '#7fd0a0', radius: 170,
+    mods: [],
+    mend: { every: 2.2, base: 7, perLevel: 1.6 },
+    weight: 0.9,
+  },
+  // STILL HOURS: everyone slows under the pale light — melee heaven, kiting
+  // hell; the timeflow feel as pure ground.
+  {
+    id: 'still_altar', name: 'Altar of Still Hours', color: '#b8c8e8', radius: 170,
+    mods: [
+      mod('moveSpeed', 'more', -0.15),
+      mod('attackSpeed', 'more', -0.15),
+      mod('castSpeed', 'more', -0.15),
+    ],
+    weight: 0.7,
   },
 ];

@@ -65,6 +65,7 @@ import { START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSp
 import { BEACON_CFG } from '../data/beacons';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
+import { OFFERING_CFG, STRAGGLER_CFG } from '../data/objectives';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -227,11 +228,16 @@ export interface Shrine {
   used: boolean;
 }
 
-/** A standing field whose modifiers apply to EVERYONE inside. */
+/** A standing field whose modifiers apply to EVERYONE inside. The behavior
+ *  verbs (bolts / mend) keep their clocks here; `objective` marks the
+ *  OFFERING objective's hungering centerpiece (its kills-inside feed it). */
 export interface Altar {
   pos: Vec2;
   def: AltarDef;
   affected: Set<number>;
+  objective?: boolean;
+  boltTimer?: number;
+  mendTimer?: number;
 }
 
 /** A placed portal to a connected zone; step onto it to travel. */
@@ -1438,6 +1444,8 @@ interface ZoneMemory {
     x?: number; y?: number; life?: number;
     sx?: number; sy?: number; destIdx?: number;
   };
+  /** OFFERING zones: how fed the hungering altar was at capture. */
+  altarOffered?: number;
 }
 
 /** The live, in-zone runtime of a Conclave RITUAL SITE — the pentagram + its ring
@@ -2174,6 +2182,10 @@ export class World {
    *  the reward, never the road. Rides Zone Memory, so the loss stands until
    *  the zone's TTL refresh deals fresh ground. */
   objectiveLost = false;
+  /** The OFFERING objective's runtime: which altar hungers (index into
+   *  this.altars), how fed it is, how deep the need runs. Zone-local; the
+   *  fed count rides Zone Memory (altarOffered). */
+  private offering: { altarIdx: number; offered: number; need: number } | null = null;
   /** LURE FABRIC — world points idle enemies DRIFT toward (a charging survey
    *  spire today; bait items or noise-maker skills ride the same call later).
    *  Each holder re-stamps its row every frame (`until` = a short linger), so
@@ -2957,6 +2969,7 @@ export class World {
     this.waveActive = false;
     this.spires = [];       // beacon fixtures re-place below (charges ride Zone Memory)
     this.procession = null; // the escort re-stages below (state rides Zone Memory)
+    this.offering = null;   // the hungering altar re-stages below (fed count rides Zone Memory)
     this.objectiveLost = false; // re-armed from the memory rider below
     this.lures.clear();     // lures are zone-local
 
@@ -3462,6 +3475,27 @@ export class World {
       const poiSpot = (minDist: number): Vec2 => pois.length
         ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
         : this.farPoint(minDist);
+      const rollAltar = (): AltarDef =>
+        rng.weighted(ALTARS.map(d => ({ d, weight: d.weight ?? 1 }))).d;
+      // THE OFFERING ALTAR (kind 'offering'): the objective's centerpiece takes
+      // the FIRST spot — an altar from the registry (spec-pinned or weight-
+      // rolled, so a storm or gilded row reshapes the whole ask), hungry for
+      // `need` deaths inside its field. Offered progress rides Zone Memory;
+      // a finished zone keeps no hungering altar (the ground is sated).
+      if (o.kind === 'offering' && !this.objectiveDone) {
+        const at = poiSpot(650);
+        const adef = (o.altarId && ALTARS.find(a => a.id === o.altarId)) || rollAltar();
+        this.altars.push({
+          pos: this.clampPos(vec(at.x, at.y), 16), def: adef,
+          affected: new Set(), objective: true,
+        });
+        const need = rng.int(o.need?.[0] ?? OFFERING_CFG.need[0], o.need?.[1] ?? OFFERING_CFG.need[1]);
+        this.offering = {
+          altarIdx: this.altars.length - 1,
+          offered: Math.min(memory?.altarOffered ?? 0, need),
+          need,
+        };
+      }
       const caches = (rng.chance(0.5) ? 1 : 0) + (rng.chance(0.15) ? 1 : 0);
       for (let i = 0; i < caches; i++) {
         const c = this.createMonster('gem_cache', def.level, 'enemy');
@@ -3475,7 +3509,7 @@ export class World {
       }
       if (rng.chance(0.45)) {
         const at = poiSpot(600);
-        this.altars.push({ pos: this.clampPos(vec(at.x, at.y), 16), def: rng.pick(ALTARS), affected: new Set() });
+        this.altars.push({ pos: this.clampPos(vec(at.x, at.y), 16), def: rollAltar(), affected: new Set() });
       }
     }
     // Reward chests: gated objectives earn a locked treasure; the wilds
@@ -9011,6 +9045,8 @@ export class World {
       ...(z.objective.kind === 'beacon' && this.spires.length
         ? { spireCharges: this.spires.map(s => s.charge) } : {}),
       ...(procession ? { procession } : {}),
+      ...(z.objective.kind === 'offering' && this.offering
+        ? { altarOffered: this.offering.offered } : {}),
     };
   }
 
@@ -9115,6 +9151,7 @@ export class World {
       ...(m.wave !== undefined ? { wave: m.wave, waveActive: !!m.waveActive } : {}),
       ...(m.spireCharges ? { spireCharges: [...m.spireCharges] } : {}),
       ...(m.procession ? { procession: { ...m.procession } } : {}),
+      ...(m.altarOffered !== undefined ? { altarOffered: m.altarOffered } : {}),
     });
     for (const [zid, m] of this.zoneMemory) {
       if (zid === this.zone.id) continue; // superseded by the live capture below
@@ -9240,6 +9277,8 @@ export class World {
           : typeof m.spireCharge === 'number' && Number.isFinite(m.spireCharge)
             ? { spireCharges: [Math.max(0, m.spireCharge)] } : {}),
         ...(procMemo ? { procession: procMemo } : {}),
+        ...(typeof m.altarOffered === 'number' && Number.isFinite(m.altarOffered)
+          ? { altarOffered: Math.max(0, Math.floor(m.altarOffered)) } : {}),
       });
     }
     // Quests: active entries whose def AND zone both still stand; the
@@ -9386,6 +9425,13 @@ export class World {
   /** Telegraph one bolt at a random point in the arena; the zone pipeline lands
    *  it a moment later, frying the player and the monsters caught beneath. */
   private fireLightning(strike: WeatherStrike): void {
+    this.fireStrikeAt(strike, vec(rand(70, this.arena.w - 70), rand(70, this.arena.h - 70)));
+  }
+
+  /** Telegraph one strike AT a point — the shared sky-hazard verb (weather
+   *  lightning fires arena-wide; a storm ALTAR fires inside its own field).
+   *  Rides the zone pipeline: telegraphed, hit-everyone, AI-dodgeable. */
+  private fireStrikeAt(strike: { skillId: string; radius: number; telegraph: number }, at: Vec2): void {
     const skill = SKILLS[strike.skillId];
     if (!skill) return;
     if (!this.stormCaster) {
@@ -9396,12 +9442,11 @@ export class World {
     }
     const caster = this.stormCaster;
     caster.level = Math.max(1, this.zone.level);
-    const at = vec(rand(70, this.arena.w - 70), rand(70, this.arena.h - 70));
     caster.pos = vec(at.x, at.y); // so a raised guard can still block it fairly
     // The bolt scales with the zone the way a monster's own skills do.
     const inst = makeSkillInstance(skill, 1 + Math.floor(this.zone.level / 3));
     this.zones.push({
-      pos: at, radius: strike.radius, caster, inst, color: skill.color,
+      pos: vec(at.x, at.y), radius: strike.radius, caster, inst, color: skill.color,
       delay: strike.telegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
       dmgMult: 1, depth: 1, hitAll: true,
@@ -22080,6 +22125,47 @@ export class World {
    *  rouseRules pattern). A package whose state lives on its overlay registers
    *  through registerKillHandler from its def file, never here. */
   private readonly worldKillRules: KillRule[] = [
+    // GILDED ALTARS (AltarDef.killGems): a death INSIDE any gem-spilling
+    // altar's field pays out — credited or not (the field rewards blood,
+    // not authorship; a storm-bolt kill under a gilded altar is the jackpot
+    // the two rows earn together).
+    {
+      id: 'altar_kill_gems',
+      when: ctx => ctx.actor.team === 'enemy' && this.altars.some(al =>
+        al.def.killGems && dist(ctx.actor.pos, al.pos) - ctx.actor.radius <= al.def.radius),
+      run: ctx => {
+        for (const al of this.altars) {
+          const kg = al.def.killGems;
+          if (!kg || dist(ctx.actor.pos, al.pos) - ctx.actor.radius > al.def.radius) continue;
+          if (rand(0, 1) >= kg.chance) continue;
+          const n = randInt(kg.count[0], kg.count[1]);
+          for (let k = 0; k < n; k++) ctx.dropGemAt(ctx.actor.pos);
+          ctx.flash(ctx.actor.pos, 40, al.def.color, 0.4);
+        }
+      },
+    },
+    // THE OFFERING (kind 'offering'): any death inside the hungering altar's
+    // field feeds it — credited or not, ambient or not. A migration herd
+    // stampeding through, a warband brawl, the storm altar's own bolts: the
+    // altar cares only that blood fell inside the light.
+    {
+      id: 'offering_altar_feed',
+      when: ctx => {
+        const of = this.offering;
+        if (!of || this.objectiveDone || ctx.actor.team !== 'enemy') return false;
+        const al = this.altars[of.altarIdx];
+        return !!al && of.offered < of.need
+          && dist(ctx.actor.pos, al.pos) - ctx.actor.radius <= al.def.radius;
+      },
+      run: ctx => {
+        const of = this.offering!;
+        const al = this.altars[of.altarIdx];
+        of.offered = Math.min(of.need, of.offered + 1);
+        ctx.flash(al.pos, 54, OFFERING_CFG.accent, 0.4);
+        ctx.text(vec(al.pos.x, al.pos.y - 26),
+          `the altar feeds — ${of.offered}/${of.need}`, OFFERING_CFG.accent, 13);
+      },
+    },
     // DESCENT: a slain brood-member pays Echoes (× depth) into the dive's haul
     // — scoped by the surge's own faction, never a literal.
     {
@@ -23981,7 +24067,7 @@ export class World {
     this.updateFlux(dt);
     this.conjured?.update(dt);
     this.updateShrines();
-    this.updateAltars();
+    this.updateAltars(dt);
     this.updateChests(dt);
 
     this.updateLeaps(dt);
@@ -24410,7 +24496,40 @@ export class World {
     };
   }
 
-  // (Docs: docs/engine/objectives.md — the bounty section.)
+  /** The core kinds' STRAGGLERS, for the attention fabric: the last few
+   *  counted enemies of a 'clear', the last spawner(s) of a 'spawners' —
+   *  named, so the chevron says who (parity with the bounty's treatment;
+   *  thresholds in data/objectives.ts STRAGGLER_CFG). */
+  objectiveStragglersView(): { kind: 'clear' | 'spawners'; points: { pos: Vec2; name: string }[] } | null {
+    const o = this.zone.objective;
+    if (this.objectiveDone || this.objectiveLost) return null;
+    if (o.kind === 'clear') {
+      const left = this.countedEnemies();
+      if (!left.length || left.length > STRAGGLER_CFG.clear.remaining) return null;
+      return { kind: 'clear', points: left.map(a => ({ pos: a.pos, name: a.name })) };
+    }
+    if (o.kind === 'spawners') {
+      const left = this.livingSpawners();
+      if (!left.length || left.length > STRAGGLER_CFG.spawners.remaining) return null;
+      return { kind: 'spawners', points: left.map(a => ({ pos: a.pos, name: a.name })) };
+    }
+    return null;
+  }
+
+  /** The live OFFERING altar, for the attention fabric + the HUD: where it
+   *  hungers, how fed, and whether the zone has anything left to feed it. */
+  offeringView(): { pos: Vec2; offered: number; need: number; stalled: boolean; done: boolean } | null {
+    const of = this.offering;
+    if (this.zone.objective.kind !== 'offering' || !of) return null;
+    const al = this.altars[of.altarIdx];
+    if (!al) return null;
+    return {
+      pos: al.pos, offered: of.offered, need: of.need,
+      stalled: of.offered < of.need && !this.actors.some(a => a.team === 'enemy' && !a.dead),
+      done: this.objectiveDone,
+    };
+  }
+
   /** The live BOUNTY board, for the attention fabric: the marks still owing
    *  their writs (position + name — the chevron says who). */
   bountyView(): { remaining: number; marks: { pos: Vec2; name: string }[] } | null {
@@ -26275,8 +26394,11 @@ export class World {
     }
   }
 
-  /** Altars: their field touches EVERYONE inside — yours and theirs. */
-  private updateAltars(): void {
+  /** Altars: their field touches EVERYONE inside — yours and theirs. Beyond
+   *  the modifier aura, the BEHAVIOR VERBS run here (data/shrines.ts): the
+   *  localized storm's bolts, the mending pulse. Kill-side verbs (killGems,
+   *  the offering feed) live on worldKillRules — deaths report there. */
+  private updateAltars(dt: number): void {
     this.altars.forEach((al, i) => {
       const src = 'altar:' + i;
       const inside = new Set<number>();
@@ -26290,6 +26412,37 @@ export class World {
         if (al.affected.has(a.id) && !inside.has(a.id)) a.sheet.removeSource(src);
       }
       al.affected = inside;
+      // THE LOCALIZED STORM: bolts on random ground inside the field, friend
+      // and foe alike — the weather-strike pipeline, altar-local (telegraphed,
+      // dodgeable, AI-readable like any blast disc).
+      const bolts = al.def.bolts;
+      if (bolts && bolts.ratePerSec > 0) {
+        al.boltTimer = (al.boltTimer ?? rand(0, 1 / bolts.ratePerSec)) - dt;
+        if (al.boltTimer <= 0) {
+          al.boltTimer = 1 / bolts.ratePerSec;
+          const ang = rand(0, Math.PI * 2);
+          const r = Math.sqrt(rand(0, 1)) * Math.max(0, al.def.radius - bolts.radius * 0.5);
+          this.fireStrikeAt(bolts, vec(al.pos.x + Math.cos(ang) * r, al.pos.y + Math.sin(ang) * r));
+        }
+      }
+      // THE MENDING PULSE: heal EVERYONE inside — enemies included (bring
+      // burst, or fight outside the light).
+      const mend = al.def.mend;
+      if (mend) {
+        al.mendTimer = (al.mendTimer ?? mend.every) - dt;
+        if (al.mendTimer <= 0) {
+          al.mendTimer = mend.every;
+          const heal = mend.base + mend.perLevel * Math.max(1, this.zone.level);
+          let touched = 0;
+          for (const a of this.actors) {
+            if (a.dead || !inside.has(a.id)) continue;
+            if (a.healBy(heal) > 0) touched++;
+          }
+          if (touched > 0) {
+            this.flashes.push({ pos: vec(al.pos.x, al.pos.y), radius: al.def.radius * 0.5, color: al.def.color, life: 0.35, maxLife: 0.35 });
+          }
+        }
+      }
     });
   }
 
@@ -29930,6 +30083,24 @@ export class World {
         return;
       }
 
+      case 'offering': {
+        // THE OFFERING: the feed itself happens at the kill chokepoint
+        // (worldKillRules 'offering_altar_feed'); this drives only the
+        // completion latch. The STALL is never latched — it is DERIVED from
+        // the living population each frame (objectiveText), so any world
+        // event that brings new blood revives the hunt by existing.
+        const of = this.offering;
+        if (this.objectiveDone || !of) return;
+        if (of.offered >= of.need) {
+          const al = this.altars[of.altarIdx];
+          if (al) {
+            this.flashes.push({ pos: vec(al.pos.x, al.pos.y), radius: al.def.radius, color: OFFERING_CFG.accent, life: 0.9, maxLife: 0.9 });
+          }
+          this.completeObjective('The altar is sated!');
+        }
+        return;
+      }
+
       case 'procession': {
         // ESCORT THE CARAVAN: dormant until the rally dwell, then a path-field
         // march toward the crossing. Robbers ADJACENT stop the wheels; the
@@ -30764,6 +30935,17 @@ export class World {
       case 'bounty': {
         const n = this.actors.filter(a => !a.dead && a.tag === 'bounty_mark').length;
         return `Hunt the marked — ${n} writ${n === 1 ? '' : 's'} unclaimed`;
+      }
+      case 'offering': {
+        const of = this.offering;
+        if (!of) return 'Find the hungering altar';
+        const alive = this.actors.some(a => a.team === 'enemy' && !a.dead);
+        if (!alive && of.offered < of.need) {
+          // STALLED, not lost — derived, so a migration/warband/storm that
+          // spawns new bodies revives the hunt with zero bookkeeping.
+          return 'The altar hungers — nothing lives to offer it (the wilds may yet provide)';
+        }
+        return `Feed the altar — ${of.offered}/${of.need} offerings (slay within its light)`;
       }
     }
   }
