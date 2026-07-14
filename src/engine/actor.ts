@@ -7,7 +7,7 @@
 
 import { chance, vec, type Vec2 } from '../core/math';
 import {
-  StatSheet, attributeModifiers,
+  LOW_LIFE_FRAC, StatSheet, attributeModifiers,
   type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
 import { DEFENSE_CFG } from './defense';
@@ -1764,7 +1764,7 @@ export class Actor {
     const maxMana = this.maxMana();
     const maxEs = this.maxEs();
     let mask = 0;
-    if (this.life < maxLife * 0.35) mask |= 1;                         // lowLife
+    if (this.life < maxLife * LOW_LIFE_FRAC) mask |= 1;                // lowLife
     if (this.life >= maxLife * 0.95) mask |= 2;                        // fullLife
     if (maxMana > 0 && this.mana < maxMana * 0.25) mask |= 4;          // lowMana
     if (maxMana > 0 && this.mana >= maxMana * 0.95) mask |= 8;         // fullMana

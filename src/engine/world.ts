@@ -60,7 +60,7 @@ import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocat
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
-import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
+import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, LOW_LIFE_FRAC, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
 import { PROCESSION_CFG } from '../data/processions';
@@ -384,6 +384,11 @@ function isStealthed(a: Actor): boolean {
  *  of the screen; shipped over the wire for co-op clients). One threshold, one
  *  place — the renderer and the snapshot both read it. */
 export const BOSS_BAR_XP_MIN = 100;
+
+/** Seconds the hit-while-low screen surge lasts (World.lowLifeHitFlash is set
+ *  to this and counts down; the renderer normalizes against it to draw one
+ *  smooth decaying bloom over the low-life vignette). */
+export const LOW_LIFE_FLASH_SEC = 0.45;
 
 /** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
  *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched). */
@@ -2254,7 +2259,8 @@ export class World {
    *  cadence rather than per blow (formations/promotions save immediately). */
   private lastSagaFlushAt = -999;
   kills = 0;
-  /** Seconds remaining on the low-life "took a hit" red screen blink (renderer). */
+  /** Seconds remaining on the hit-while-low screen surge (starts at
+   *  LOW_LIFE_FLASH_SEC; the renderer draws it over the low-life vignette). */
   lowLifeHitFlash = 0;
   /** World clock in seconds (drives Unleash seal accrual). */
   time = 0;
@@ -20817,10 +20823,11 @@ export class World {
           a.alertFrom ??= vec(caster.pos.x, caster.pos.y);
         }
       }
-      // A hit landed on the player while at low life — kick the red screen blink.
+      // A hit landed on the player while at low life — kick the renderer's
+      // hit-while-low surge (one smooth bloom over the low-life vignette).
       if (target === this.player && this.player.life > 0
-        && this.player.life < this.player.maxLife() * 0.35) {
-        this.lowLifeHitFlash = 0.45;
+        && this.player.life < this.player.maxLife() * LOW_LIFE_FRAC) {
+        this.lowLifeHitFlash = LOW_LIFE_FLASH_SEC;
       }
       this.text(target.pos, Math.round(dealt).toString(),
         result.crit ? '#ffd24a' : '#ffffff', result.crit ? 18 : 13);

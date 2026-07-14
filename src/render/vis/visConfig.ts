@@ -5,6 +5,8 @@
 // draw code.
 // ---------------------------------------------------------------------------
 
+import { LOW_LIFE_FRAC } from '../../engine/stats';
+
 export const VIS_CFG = {
   /** Where the key light sits (radians, screen space). Volume shading, gloss
    *  bands and long doodad shadows all agree on this one sun. */
@@ -191,6 +193,61 @@ export const VIS_CFG = {
     zoneWashFadeSec: 2.5,
     /** Safety ceiling on any zone wash's alpha — no event whites out the field. */
     zoneWashMaxAlpha: 0.3,
+  },
+
+  /** THE LOW-LIFE VIGNETTE (renderer.drawLowLifeGlow): blood seeps in from
+   *  the screen edge once life crosses the lowLife line, and at the last
+   *  sliver a slow LUB-DUB heartbeat presses the vignette inward and flushes
+   *  it redder for a moment — a wound you inhabit, not an alarm strobing at
+   *  you. Every rate here sits far below flash territory by design.
+   *  Settings.lowLifePulse gates the continuous part; the hit-while-low
+   *  surge (world.lowLifeHitFlash) always draws. */
+  lowLife: {
+    /** Life fraction where the seep begins — the gameplay 'lowLife' line
+     *  (stats.LOW_LIFE_FRAC), so the screen and "on low life" gear agree
+     *  about when low starts. */
+    startFrac: LOW_LIFE_FRAC,
+    /** Below this life fraction the heartbeat joins the steady seep. */
+    beatFrac: 0.15,
+    /** Steady vignette alpha: a whisper at startFrac → this deep at 0 life. */
+    alphaFloor: 0.05,
+    alphaCeil: 0.32,
+    /** Clear-center radius (× the screen's short side): where the seep sits
+     *  at startFrac (kissing the corners) → at 0 life (crept well in). */
+    innerFrom: 0.46,
+    innerTo: 0.24,
+    /** The bright band's position along the gradient run (0 = clear-center
+     *  edge … 1 = screen corner) and its alpha share of the rim's. */
+    midStop: 0.55,
+    midAlpha: 0.6,
+    /** The blood: bright leading band, dark pooled rim, and the arterial
+     *  flush a heartbeat (or a fresh wound) briefly lends them. */
+    mid: '#c01212',
+    edge: '#5c0008',
+    flush: '#ff2a1c',
+    /** The heartbeat: two smooth gaussian swells per cycle (positions/widths
+     *  in cycle-phase units), then a long quiet diastole. Slow by design —
+     *  periodFrom at the beatFrac line easing to periodTo at 0 life
+     *  (≈37→67 bpm): dread, never strobe. */
+    beat: {
+      periodFrom: 1.6,
+      periodTo: 0.9,
+      lub: { at: 0.10, width: 0.045, amp: 1.0 },
+      dub: { at: 0.30, width: 0.06, amp: 0.55 },
+      /** At a full swell: extra alpha (× the steady level), inward press
+       *  (× the screen's short side), and colour lerp toward `flush`. */
+      alphaBoost: 0.5,
+      reach: 0.07,
+      flushMix: 0.75,
+    },
+    /** Struck while low: ONE smoothstep bloom that decays over the world
+     *  timer (LOW_LIFE_FLASH_SEC) — an impact, never a blink. Absolute peak
+     *  alpha, inward press, and flush lerp at the moment of the hit. */
+    hit: {
+      alpha: 0.38,
+      reach: 0.05,
+      flushMix: 0.5,
+    },
   },
 
   /** Screen-space weather + ambient particles. */

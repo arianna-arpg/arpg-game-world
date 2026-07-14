@@ -15,7 +15,7 @@ import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
-import { BOSS_BAR_XP_MIN, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
+import { BOSS_BAR_XP_MIN, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import { dayCycle } from '../world/daynight';
@@ -77,6 +77,29 @@ const ORB_ARCS = {
 };
 
 const warnedUnrenderedKinds = new Set<string>();
+
+/** The low-life vignette's heartbeat waveform: two smooth gaussian swells per
+ *  cycle (the lub, then the softer dub from VIS_CFG.lowLife.beat), then a long
+ *  quiet diastole. Phase in [0,1); each swell is also evaluated one cycle to
+ *  either side so a bump straddling the seam stays continuous. Smoothness is
+ *  the safety property here — the vignette breathes, it never steps. */
+function lubDub(phase: number): number {
+  const { lub, dub } = VIS_CFG.lowLife.beat;
+  let v = 0;
+  for (const b of [lub, dub]) {
+    for (const ph of [phase - 1, phase, phase + 1]) {
+      const d = (ph - b.at) / b.width;
+      v += b.amp * Math.exp(-0.5 * d * d);
+    }
+  }
+  return Math.min(1, v);
+}
+
+/** Lerp two hex colours, returned as the "r,g,b" body of an rgba() string. */
+function blendRgb(from: string, to: string, k: number): string {
+  const a = hexToRgb(from), b = hexToRgb(to);
+  return `${Math.round(a[0] + (b[0] - a[0]) * k)},${Math.round(a[1] + (b[1] - a[1]) * k)},${Math.round(a[2] + (b[2] - a[2]) * k)}`;
+}
 
 /** Shared empty params for canopy defs that declare none — identity-stable
  *  so sprite-bake keys are too (see the drawCanopies bake path). */
@@ -290,7 +313,7 @@ export class Renderer {
 
     this.drawAtmosphere(world);
     this.drawStatusFx(world);     // status ailment overlays (edge vignettes/frost/stars)
-    this.drawLowLifeGlow(world);  // blinking red edge on a low-life hit
+    this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge
     this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
     this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
     this.drawEncounterHud(world); // breach timer bar (screen-space)
@@ -969,36 +992,64 @@ export class Renderer {
     ctx.font = '12px Verdana';
   }
 
-  /** Low-life edge vignette: a CONTINUOUS pulse while life sits low —
-   *  faster and harder the deeper the wound (30% murmurs; 1% pounds) —
-   *  plus the sharper hit-flash blink stacked on top. The pulse honors
-   *  the settings toggle: a 1/1-life or 90%-reserved build would live
-   *  inside a permanent alarm otherwise. */
+  /** Heartbeat cycle phase (0..1) + the renderer-clock stamp behind it —
+   *  phase is INTEGRATED per frame (never t × rate) so a quickening heart
+   *  slides its tempo without skipping or doubling a beat. */
+  private beatPhase = 0;
+  private beatPrevT = -1;
+
+  /** THE LOW-LIFE VIGNETTE: blood seeps in from the screen edge as life
+   *  sinks under the lowLife line, and at the last sliver a slow lub-dub
+   *  heartbeat presses the vignette inward and flushes it redder for a
+   *  moment — a wound you inhabit, not an alarm strobing at you. All levers
+   *  in VIS_CFG.lowLife. The continuous part honors the settings toggle
+   *  (a 1/1-life or 90%-reserved build would dwell inside a permanent wound
+   *  otherwise); the hit-while-low surge draws regardless — you always
+   *  learn you were struck while low. */
   private drawLowLifeGlow(world: World): void {
+    const C = VIS_CFG.lowLife;
+    const p = world.player;
+    const frac = p.maxLife() > 0 ? Math.max(0, p.life) / p.maxLife() : 1;
+    // The heart rides the RENDERER's clock, like the other screen FX — a
+    // chronomancer stops the world, not your own pulse.
+    const now = performance.now() / 1000;
+    const dt = this.beatPrevT < 0 ? 0 : clamp(now - this.beatPrevT, 0, 0.1);
+    this.beatPrevT = now;
+    const pulseOn = this.getSettings?.().lowLifePulse ?? true;
+    let steady = 0, beat = 0;
+    if (pulseOn && !p.dead && frac < C.startFrac) {
+      const sev = 1 - frac / C.startFrac;              // 0 at the line … 1 at empty
+      steady = C.alphaFloor + (C.alphaCeil - C.alphaFloor) * sev;
+      if (frac < C.beatFrac) {
+        const depth = 1 - frac / C.beatFrac;           // how far under the beat line
+        const period = C.beat.periodFrom + (C.beat.periodTo - C.beat.periodFrom) * depth;
+        this.beatPhase = (this.beatPhase + dt / period) % 1;
+        beat = lubDub(this.beatPhase) * depth;         // swells in across the beat band
+      } else this.beatPhase = 0;                       // re-crossing leads with a fresh lub
+    }
+    // Struck while low: ONE smoothstep bloom that decays with the world
+    // timer — the impact registers, nothing blinks. Combines with the
+    // heartbeat by max (a surge over a systole never stacks toward opaque)
+    // and draws even with the pulse toggled off.
+    const u = world.lowLifeHitFlash > 0
+      ? Math.min(world.lowLifeHitFlash / LOW_LIFE_FLASH_SEC, 1) : 0;
+    const surge = u * u * (3 - 2 * u);
+    const a = Math.max(steady * (1 + C.beat.alphaBoost * beat), C.hit.alpha * surge);
+    if (a <= 0.005) return;
     const { ctx, canvas } = this;
     const w = canvas.width, h = canvas.height;
-    const p = world.player;
-    let a = 0;
-    const pulseOn = this.getSettings?.().lowLifePulse ?? true;
-    const frac = p.maxLife() > 0 ? Math.max(0, p.life) / p.maxLife() : 1;
-    if (pulseOn && !p.dead && frac < 0.35) {
-      const severity = 1 - frac / 0.35;             // 0 at 35% … 1 at 0%
-      const speed = 2.2 + 7 * severity;             // heartbeat quickens
-      const wave = 0.5 + 0.5 * Math.sin(world.time * speed * Math.PI);
-      a = (0.10 + 0.38 * severity) * (0.45 + 0.55 * wave);
-    }
-    // The hit-flash blink stacks over the pulse (and works alone when the
-    // pulse is toggled off — you always learn you were struck while low).
-    const f = world.lowLifeHitFlash;
-    if (f > 0) {
-      const blink = Math.sin(f * Math.PI * 4) > 0 ? 1 : 0.35;
-      a = Math.max(a, (f / 0.45) * blink * 0.42);
-    }
-    if (a <= 0.005) return;
-    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.28, w / 2, h / 2, Math.hypot(w, h) / 2);
+    // The seep: the clear centre tightens as life ebbs; each systole (and
+    // each fresh wound) presses it further inward for a breath.
+    const sev = 1 - Math.min(frac / C.startFrac, 1);
+    const inner = Math.max(0, C.innerFrom + (C.innerTo - C.innerFrom) * sev
+      - C.beat.reach * beat - C.hit.reach * surge) * Math.min(w, h);
+    const flush = Math.min(1, C.beat.flushMix * beat + C.hit.flushMix * surge);
+    const mid = blendRgb(C.mid, C.flush, flush);
+    const edge = blendRgb(C.edge, C.flush, flush * 0.6);
+    const grd = ctx.createRadialGradient(w / 2, h / 2, inner, w / 2, h / 2, Math.hypot(w, h) / 2);
     grd.addColorStop(0, 'rgba(0,0,0,0)');
-    grd.addColorStop(0.6, `rgba(200,0,0,${(a * 0.5).toFixed(3)})`);
-    grd.addColorStop(1, `rgba(255,0,0,${a.toFixed(3)})`);
+    grd.addColorStop(C.midStop, `rgba(${mid},${(a * C.midAlpha).toFixed(3)})`);
+    grd.addColorStop(1, `rgba(${edge},${a.toFixed(3)})`);
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, w, h);
   }

@@ -70,9 +70,10 @@ export interface Settings {
   /** The thematic mouse cursor + pad reticle identity (core/cursor.ts):
    *  a style from the registry and a tint that survives visual clutter. */
   cursor: CursorOptions;
-  /** The continuous low-life edge pulse (severity-scaled). OFF is a real
-   *  build choice: a 1/1-life or 90%-reserved hero would otherwise live
-   *  inside a permanent alarm. */
+  /** The continuous low-life blood vignette (seeps in as life ebbs; a slow
+   *  heartbeat presses it inward at the last sliver — VIS_CFG.lowLife). OFF
+   *  is a real build choice: a 1/1-life or 90%-reserved hero would otherwise
+   *  dwell inside a permanent wound. The hit-while-low surge always shows. */
   lowLifePulse: boolean;
   /** GEAR pickup style: 'vacuum' (default) hoovers ground gear by walking
    *  over it, exactly like gems; 'key' keeps it a deliberate press (the

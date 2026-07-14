@@ -120,6 +120,13 @@ export const STAT_TRADES: StatTrade[] = [
   { from: 'energyShield', to: 'poise', rateStat: 'esToPoise', forgoStat: 'esForgone' },
 ];
 
+/** THE 'lowLife' LINE: life below this fraction of max counts as low. One
+ *  constant, three systems in agreement — the actor's condition mask (so
+ *  "on low life" gear/passives wake here), the world's hit-while-low screen
+ *  surge gate, and the renderer's blood vignette (VIS_CFG.lowLife.startFrac
+ *  defaults to it) all begin at the same breath. */
+export const LOW_LIFE_FRAC = 0.35;
+
 /**
  * Actor-state conditions a modifier can demand ("40% more damage while on
  * low life"). The actor recomputes its active set each frame and pushes it

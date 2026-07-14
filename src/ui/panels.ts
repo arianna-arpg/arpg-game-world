@@ -3764,7 +3764,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       <h1>Options</h1>
       <div class="rebind-row">
         <span>Low-Life Screen Pulse</span>
-        <button id="opt-lowlife">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
+        <button id="opt-lowlife" title="Blood seeps in at the screen edge while life is low, pressing inward on a slow heartbeat at the last sliver. OFF: only the struck-while-low surge shows (the sane pick for 1/1-life or heavy-reservation builds).">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
         <span>Improvised Strike (empty slots swing)</span>
