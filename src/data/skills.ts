@@ -9574,6 +9574,53 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.04)] },
   },
 
+  gust_burst: {
+    id: 'gust_burst', name: 'Gust Burst',
+    description: 'Clap the air FLAT: a ring of hard wind that harms nothing and MOVES everything — thrown back, winded, and (on shifting ground) suddenly negotiating with the edge. The drift-folk\'s hello.',
+    tags: ['spell', 'warcry', 'aoe'], color: '#d8ecf8',
+    manaCost: 18, cooldown: 9, useTime: 0.4,
+    delivery: { type: 'nova', radius: 130 },
+    effects: [
+      { type: 'knockback', strength: 85 },
+      { type: 'status', status: 'winded', chance: 0.6 },
+    ],
+    requirements: { willpower: 12 },
+    minDropLevel: 9,
+    ai: { range: 120, weight: 2 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  squall_dart: {
+    id: 'squall_dart', name: 'Squall Dart',
+    description: 'A stitched needle of storm-charge that rides the wind\'s own weave — it arrives when the air says so, not when the eye does. The zephyr eels spit ranks of these.',
+    tags: ['spell', 'projectile', 'lightning'], color: '#bfe0f8',
+    manaCost: 6, cooldown: 0, useTime: 0.55,
+    baseDamage: { lightning: [7, 12], physical: [3, 5] },
+    delivery: { type: 'projectile', speed: 540, radius: 6, range: 520 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.12 },
+    ],
+    requirements: { willpower: 12, dexterity: 10 },
+    minDropLevel: 9,
+    ai: { range: 460, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  wisp_call: {
+    id: 'wisp_call', name: 'Wisp Call',
+    description: 'Whistle down a handful of cirrus fingerlings — quick, biting scraps of living cloud that harry whatever you\'re pointing at. The shepherds never travel alone.',
+    tags: ['spell', 'summon', 'minion'], color: '#dcecf8',
+    manaCost: 18, cooldown: 3, useTime: 0.7,
+    delivery: { type: 'summon', monsterId: 'cirrus_fingerling', count: 1, maxActive: 3 },
+    meta: { skillId: 'command_assault', label: 'Attack!' },
+    effects: [],
+    requirements: { willpower: 14 },
+    minDropLevel: 12,
+    ai: { range: 400, weight: 2, keepDistance: 280 },
+    leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.12)] },
+  },
+
   tailwind: {
     id: 'tailwind', name: 'Tailwind',
     description: 'Set the wind at every friendly back: for its span, allies inside move like the weather is on their side — because it is. The drift-folk cross whole basins on one good tailwind.',

@@ -589,6 +589,13 @@ export class FluxField {
   /** 0..1 through the warmup (1 = the drift is live). HUD/renderer. */
   warmupFrac(): number { return Math.min(1, this.clock / Math.max(0.01, this.warmup)); }
 
+  /** The pad governing a point, if any — the AI steering query (x_ride_flux
+   *  hops a walker off its fraying stone the way x_seek_fog chases banks). */
+  padAt(x: number, y: number): FluxPad | null {
+    const i = this.cellIndex(x, y);
+    return i >= 0 && this.cellPad[i] >= 0 ? this.pads[this.cellPad[i]] : null;
+  }
+
   private cellIndex(x: number, y: number): number {
     const gx = Math.floor(x / this.walk.cell), gy = Math.floor(y / this.walk.cell);
     if (gx < 0 || gy < 0 || gx >= this.walk.cols || gy >= this.walk.rows) return -1;

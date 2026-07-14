@@ -62,6 +62,25 @@ const SERAPHIC_FACTION: FactionSpec = {
   ],
 };
 
+/** THE GALEKIN — the Driftways' weather-fauna (the realm's WILD kin beside
+ *  the Host's wardens; the Host judges, the wind just LIVES here). Realm
+ *  content like the seraphic: contexts:['aetherial'], no warlord, no
+ *  relations — they meet the world only through the drift tilesets' packs. */
+const GALEKIN_FACTION: FactionSpec = {
+  id: 'galekin',
+  name: 'the Galekin',
+  color: '#bfe0f8',
+  traits: { roaming: 0.6, aggression: 0.7, warlordHome: 'capital', contexts: ['aetherial'] },
+  roster: [
+    { id: 'cirrus_fingerling', weight: 4 },
+    { id: 'drift_ray', weight: 3 },
+    { id: 'zephyr_eel', weight: 2.5 },
+    { id: 'gale_djinn', weight: 2 },
+    { id: 'nimbus_shepherd', weight: 1.5 },
+    { id: 'thunderhead_tyrant', weight: 0.6 },
+  ],
+};
+
 /** The launch shelves' reserved name pool ("<X> Crossing" — shelves alone
  *  wear 'Crossing'; the realm web's pools dropped it to keep the map honest). */
 const CROSSING_NAMES = ['Skyshoal', 'Cloudreach', 'Dawnfield', 'Empyrean', 'Heavenspan', 'Zenith', 'Aurelian', 'Vesper'];
@@ -141,7 +160,7 @@ export const ASCENT: ContentPackage = {
   defaultStartLevel: 10,
   defaultEnabled: true,
   world: { overlay: (ctx) => new AscentField(ctx, ASCENT_SURGE) },
-  factions: [SERAPHIC_FACTION],
+  factions: [SERAPHIC_FACTION, GALEKIN_FACTION],
   validate: (look) => [
     ...(look.faction('seraphic') ? [] : [`the 'seraphic' faction is unknown`]),
     // The shelf mints from the 'aether' tileset and the gate zone from

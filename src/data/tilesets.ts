@@ -2935,26 +2935,27 @@ export const TILESETS: Record<string, TilesetDef> = {
         },
       },
     ],
-    // The wind favors WINGS: the drift's patrols float free of the rhythm
-    // the intruder must read — the deliberate walkers are the rare, heavy
-    // exception (the ground can claim them). Galekin natives join the mix
-    // when their roster mints.
+    // The wind favors WINGS: the GALEKIN — the drift's own weather-fauna —
+    // float free of the rhythm the intruder must read (the shepherd is the
+    // deliberate walker: the ground can claim it, x_ride_flux is how it
+    // argues), with Host patrols passing through on their own errands.
     packs: {
       count: [4, 6], size: [2, 4],
       archetypes: [
-        { weight: 3, size: [4, 7] },
-        { weight: 5, size: [2, 4] },
-        { weight: 3, size: [1, 2] },
+        { weight: 3, size: [4, 7] },  // a shoal — fingerlings in numbers
+        { weight: 5, size: [2, 4] },  // a current — the standard drift
+        { weight: 3, size: [1, 2] },  // a weather-front — one big body
       ],
       table: [
-        { id: 'cherub_wisp', weight: 4 },
-        { id: 'watcher_unblinking', weight: 3 },
-        { id: 'ophan_wheel', weight: 2.5 },
-        { id: 'virtue_lance', weight: 2 },
-        { id: 'lampad_of_the_vigil', weight: 2, presence: { from: 11, fadeIn: 4 } },
-        { id: 'herald_of_the_choir', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
-        { id: 'dominion_scales', weight: 1, presence: { from: 13, fadeIn: 5 } },
-        { id: 'principality_of_dawn', weight: 0.5, presence: { from: 15, fadeIn: 6 } },
+        { id: 'cirrus_fingerling', weight: 4 },
+        { id: 'drift_ray', weight: 3 },
+        { id: 'zephyr_eel', weight: 2.5, presence: { from: 10, fadeIn: 4 } },
+        { id: 'gale_djinn', weight: 2, presence: { from: 11, fadeIn: 4 } },
+        { id: 'nimbus_shepherd', weight: 1.5, presence: { from: 12, fadeIn: 4 } },
+        { id: 'cherub_wisp', weight: 1.5 },
+        { id: 'watcher_unblinking', weight: 1 },
+        { id: 'virtue_lance', weight: 1 },
+        { id: 'thunderhead_tyrant', weight: 0.6, presence: { from: 14, fadeIn: 6 } },
       ],
     },
     spawnerId: 'bone_altar', // never rolled (no 'spawners' objective up here)

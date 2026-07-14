@@ -2479,6 +2479,78 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', x: -0.25, scale: 1.0, params: { n: 3 } }],
   },
+
+  // --- THE GALEKIN (the Driftways' weather-fauna) ---------------------------
+  /** The fingerling: a fin-flick of living cloud, mostly suggestion. */
+  cirrus_fingerling: {
+    parts: [
+      { kind: 'fins', scale: 0.95 },
+      { kind: 'eyes', scale: 0.7 },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.3,
+  },
+  /** The ray: all WING — a wide glider with a rudder tail. */
+  drift_ray: {
+    parts: [
+      { kind: 'fins', scale: 1.55 },
+      { kind: 'dorsalRidge', scale: 0.7 },
+      { kind: 'tailFin', scale: 0.9 },
+      { kind: 'eyes', scale: 0.8 },
+    ],
+    live: [{ kind: 'wisps', x: -0.4, scale: 0.6, params: { n: 2 } }],
+    shadowScale: 0.5,
+  },
+  /** The eel: a ribboned storm-serpent, charge crawling its rings. */
+  zephyr_eel: {
+    parts: [
+      { kind: 'segmentRings', scale: 1.1 },
+      { kind: 'serpentHead', scale: 0.95 },
+      { kind: 'fins', scale: 0.6, y: 0.2 },
+      { kind: 'tailFin', scale: 0.7 },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.45,
+  },
+  /** The djinn: torn weather wearing a face it borrowed. */
+  gale_djinn: {
+    parts: [
+      { kind: 'tatters', scale: 1.05, role: 'cloth' },
+      { kind: 'mask', scale: 0.8 },
+      { kind: 'orb', y: 0.45, scale: 0.7, role: 'glow' },
+    ],
+    live: [
+      { kind: 'wisps', x: -0.3, scale: 0.9, params: { n: 3 } },
+      { kind: 'breathPuff', scale: 0.8 },
+    ],
+    shadowScale: 0.5,
+  },
+  /** The shepherd: robed, hooded, crook in hand, one feather in the band —
+   *  the only galekin dressed for WALKING. */
+  nimbus_shepherd: {
+    parts: [
+      { kind: 'robe', scale: 0.95, role: 'cloth' },
+      { kind: 'hood', scale: 0.85, role: 'cloth' },
+      { kind: 'staff', scale: 1.05 },
+      { kind: 'plume', x: 0.2, scale: 0.7 },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.65,
+  },
+  /** The tyrant: an anvil-head mass crowned and crawling with charge. */
+  thunderhead_tyrant: {
+    parts: [
+      { kind: 'blob', scale: 1.15 },
+      { kind: 'dorsalRidge', scale: 0.9 },
+      { kind: 'crown', scale: 0.7, role: 'metal' },
+      { kind: 'eyeCluster', scale: 0.75 },
+    ],
+    live: [
+      { kind: 'wisps', x: -0.3, scale: 1.0, params: { n: 3 } },
+      { kind: 'emberSparks', scale: 0.9 },
+    ],
+    shadowScale: 0.55,
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

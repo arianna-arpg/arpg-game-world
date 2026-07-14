@@ -11,6 +11,8 @@ import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/st
 import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine/actor';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
+import { registerAIAction } from '../engine/aiActions';
+import { FluxPhase } from '../engine/flux';
 import type { PackTableEntry } from './zones';
 import type { EssenceSpillSpec } from './essences';
 
@@ -6024,6 +6026,110 @@ export const MONSTERS: Record<string, MonsterDef> = {
       ],
     },
   },
+
+  // ==========================================================================
+  // THE GALEKIN — the Driftways' own weather-fauna (faction registered by
+  // the ascent package beside the Host: realm content, contexts aetherial).
+  // The wind favors WINGS: most of the kin float free of the flux rhythm the
+  // intruder must read — the shepherd is the deliberate WALKER (the ground
+  // can claim it; x_ride_flux is how it argues), and every kit here shoves,
+  // weaves or hastens: fights on shifting ground are fights ABOUT footing.
+  // ==========================================================================
+
+  /** The fingerling: a biting scrap of living cloud. BANDLESS by design —
+   *  the roster's floor never sits empty at any level (the cherub lesson). */
+  cirrus_fingerling: {
+    id: 'cirrus_fingerling', name: 'Cirrus Fingerling',
+    color: '#dcecf8', shape: 'oval', radius: 7, material: 'ethereal', look: 'cirrus_fingerling',
+    base: { life: 16, moveSpeed: 132, mana: 20, manaRegen: 3 },
+    skills: ['talon_rake'], xp: 6, faction: 'galekin',
+    flier: true, levitates: true,
+    brain: { type: 'swarm' },
+  },
+
+  /** The ray: a wide-winged glider that banks in for one raking pass and
+   *  swings wide again — reading its circuit is the whole fight. */
+  drift_ray: {
+    id: 'drift_ray', name: 'Drift Ray',
+    color: '#c2d6ea', shape: 'oval', radius: 13, material: 'ethereal', look: 'drift_ray',
+    base: { life: 62, moveSpeed: 118, mana: 30, manaRegen: 4, evasion: 40 },
+    skills: ['talon_rake'], xp: 18, faction: 'galekin',
+    flier: true, levitates: true,
+    gemBias: ['movement'],
+    brain: { type: 'skirmish', withdraw: 1.1 },
+  },
+
+  /** The eel: a ribbon of storm that WEAVES — its darts inherit the wind
+   *  (erraticPower on the def: the squall_dart flight no shield times). */
+  zephyr_eel: {
+    id: 'zephyr_eel', name: 'Zephyr Eel',
+    color: '#a8ccec', shape: 'oval', radius: 10, material: 'ethereal', look: 'zephyr_eel',
+    base: { life: 55, moveSpeed: 108, mana: 90, manaRegen: 6 },
+    mods: [mod('erraticPower', 'flat', 4), mod('lightningRes', 'flat', 0.4)],
+    skills: ['squall_dart'], xp: 22, faction: 'galekin',
+    flier: true, levitates: true,
+    presence: { from: 10, fadeIn: 4 },
+    gemBias: ['lightning', 'projectile'],
+    brain: { type: 'caster' },
+  },
+
+  /** The djinn: bottled weather with opinions — downbursts called onto your
+   *  footing, and a flat clap of wind when you close the gap. */
+  gale_djinn: {
+    id: 'gale_djinn', name: 'Gale Djinn',
+    color: '#b8d8e8', shape: 'kite', radius: 13, material: 'ethereal', look: 'gale_djinn',
+    base: { life: 95, moveSpeed: 96, mana: 220, manaRegen: 10, energyShield: 35 },
+    mods: [mod('coldRes', 'flat', 0.3), mod('lightningRes', 'flat', 0.3)],
+    skills: ['downburst', 'gust_burst'], xp: 34, faction: 'galekin',
+    levitates: true,
+    presence: { from: 11, fadeIn: 4 },
+    gemBias: ['cold', 'aoe'],
+    brain: { type: 'caster' },
+  },
+
+  /** The shepherd: the galekin's DELIBERATE WALKER — it herds fingerlings,
+   *  sets the wind at its flock's back, and reads the drift like a local:
+   *  when its stepping stone frays it HOPS to standing cloud (x_ride_flux).
+   *  Catch it mid-hop, or drop it with the pad it lingered on. */
+  nimbus_shepherd: {
+    id: 'nimbus_shepherd', name: 'Nimbus Shepherd',
+    color: '#cadeee', shape: 'pentagon', radius: 14, material: 'ethereal', look: 'nimbus_shepherd',
+    base: { life: 135, moveSpeed: 92, armor: 15, poise: 30, mana: 220, manaRegen: 9 },
+    skills: ['wisp_call', 'tailwind', 'gale_lash'], xp: 42, faction: 'galekin',
+    presence: { from: 12, fadeIn: 4 },
+    gemBias: ['minion', 'buff'],
+    brain: {
+      type: 'commander',
+      // The drift-local's footing sense: when its stepping stone frays it
+      // hops to standing cloud (the registered x_ride_flux beat — a quick
+      // skip, never a march across the very void it flees). The beat runs
+      // FAST: the fray window is short and the teeter grace shorter — a
+      // slow check cadence is how the first live shepherd fell.
+      rules: [{ when: {}, every: [1.2, 2.2], hold: [0.05, 0.1], actions: [{ do: 'x_ride_flux' }] }],
+    },
+  },
+
+  /** The tyrant: an anvil-head thunderstorm that learned to WANT things.
+   *  Downbursts in ranks, a shoving ring when crowded, wisps on call — and
+   *  a final discharge when the storm gives out. */
+  thunderhead_tyrant: {
+    id: 'thunderhead_tyrant', name: 'Thunderhead Tyrant',
+    color: '#8fa8c8', shape: 'star', radius: 17, material: 'ethereal', look: 'thunderhead_tyrant',
+    base: { life: 300, moveSpeed: 88, poise: 60, mana: 260, manaRegen: 11, energyShield: 60 },
+    mods: [mod('lightningRes', 'flat', 0.5), mod('coldRes', 'flat', 0.3)],
+    skills: ['downburst', 'gust_burst', 'wisp_call'], xp: 90, faction: 'galekin',
+    flier: true, levitates: true,
+    deathBurst: { mode: 'implode', damageFrac: 1.0, coalesce: 0.6, damageType: 'lightning' },
+    presence: { from: 14, fadeIn: 6 },
+    gemBias: ['lightning', 'aoe'],
+    brain: {
+      type: 'commander',
+      phases: [
+        { atLifeFrac: 0.5, mods: [mod('castSpeed', 'increased', 0.2)] },
+        { atLifeFrac: 0.22, mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'increased', 0.15)] },
+      ],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -6283,6 +6389,40 @@ export const FACTIONS: Record<string, {
     ],
   },
 };
+
+// --- FLUX-RIDING CHOREOGRAPHY -------------------------------------------------
+// x_ride_flux: the drift-local's footing sense — a WALKER whose stepping
+// stone is deep into its fray (or already gone under them, mid-teeter) HOPS
+// to the nearest STANDING pad: a quick skip, not a march (the x_seek_fog
+// blink idiom). No flux field, solid footing, or no refuge in reach — the
+// rule no-ops and tries again next window (no refuge = it rides the fray
+// down, and the sky keeps it: drama the fabric already routes).
+registerAIAction('x_ride_flux', (world, actor) => {
+  const f = world.flux;
+  if (!f || actor.flying || actor.levitates) return;
+  const pad = f.padAt(actor.pos.x, actor.pos.y);
+  if (!pad) return;
+  const { s } = f.padPhase(pad);
+  // Bail at the FIRST sign of fray (a local knows the rhythm — waiting out
+  // half the warning is how tourists die) and mid-teeter if the beat only
+  // lands after the floor already left.
+  if (s !== FluxPhase.Fraying && s !== FluxPhase.Gone) return;
+  let best: { cx: number; cy: number } | null = null, bd = 380 * 380;
+  for (const p of f.pads) {
+    if (p === pad || !p.walkNow) continue;
+    if (f.padPhase(p).s !== FluxPhase.Solid) continue;
+    const dd = (p.cx - actor.pos.x) ** 2 + (p.cy - actor.pos.y) ** 2;
+    if (dd < bd) { bd = dd; best = p; }
+  }
+  if (!best) return;
+  // The skip: an origin-less clamp (a nimble hop reads as a short blink —
+  // walking would argue with the very void it flees).
+  actor.pos = world.clampPos({ x: best.cx, y: best.cy }, actor.radius);
+  world.flashes.push({
+    pos: { x: actor.pos.x, y: actor.pos.y }, radius: actor.radius + 12,
+    color: '#dcecf8', life: 0.35, maxLife: 0.35,
+  });
+});
 
 /** Spawn weights per wave tier — which monsters appear as waves escalate. */
 export const WAVE_TABLE: { minWave: number; ids: string[] }[] = [
