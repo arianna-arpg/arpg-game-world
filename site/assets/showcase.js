@@ -47,16 +47,34 @@
       return;
     }
 
+    var PREFER = {
+      skills: function (s) { return (s.damageTypes && s.damageTypes.length) && s.description; },
+      supports: function (s) { return s.description; },
+    };
     var TABS = [
-      { key: 'skills',   label: 'Skills',   type: 'skill',   accent: 'var(--ember)',
-        items: featured(skills, 18, function (s) { return (s.damageTypes && s.damageTypes.length) && s.description; }) },
-      { key: 'supports', label: 'Supports', type: 'support', accent: 'var(--violet)',
-        items: featured(supports, 14, function (s) { return s.description; }) },
-      { key: 'uniques',  label: 'Uniques',  type: 'unique',  accent: 'var(--gold)',
+      { key: 'skills',   label: 'Skills',   type: 'skill',   accent: 'var(--ember)', pool: skills,   n: 18,
+        items: featured(skills, 18, PREFER.skills) },
+      { key: 'supports', label: 'Supports', type: 'support', accent: 'var(--violet)', pool: supports, n: 14,
+        items: featured(supports, 14, PREFER.supports) },
+      { key: 'uniques',  label: 'Uniques',  type: 'unique',  accent: 'var(--gold)',  pool: uniques,  n: uniques.length,
         items: uniques },
     ].filter(function (t) { return t.items.length; });
 
     var current = TABS[0].key;
+
+    // Fisher–Yates spread — the shuffle re-deals the current tab from its
+    // full pool (same prefer gate as the first deal), so the rack rarely
+    // reads the same twice. Mirrors the decks' shuffle.
+    function sample(list, n) {
+      var a = list.slice();
+      for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+      return a.slice(0, Math.min(n, a.length));
+    }
+    function reshuffle(t) {
+      var pool = t.pool, pref = PREFER[t.key];
+      if (pref) { var p = pool.filter(pref); if (p.length >= t.n) pool = p; }
+      t.items = sample(pool, t.n);
+    }
 
     mount.innerHTML =
       '<div class="hwsc">' +
@@ -65,6 +83,7 @@
             return '<button class="hwsc-tab" role="tab" data-key="' + t.key + '" aria-selected="' + (t.key === current) + '" style="--tab:' + t.accent + '">' +
               t.label + ' <span class="hwsc-n">' + t.items.length + '</span></button>';
           }).join('') +
+          '<button type="button" class="hwsc-shuffle" aria-label="Show a different spread">Shuffle <span aria-hidden="true">↻</span></button>' +
         '</div>' +
         '<div class="hwsc-rack" id="hwsc-rack"></div>' +
         '<div class="hwsc-hint">Hover a chip to inspect it — real data, straight from the game.</div>' +
@@ -166,6 +185,11 @@
     window.addEventListener('scroll', hideTip, { passive: true });
 
     mount.querySelector('.hwsc-tabs').addEventListener('click', function (e) {
+      if (e.target.closest('.hwsc-shuffle')) {
+        var t = TABS.filter(function (x) { return x.key === current; })[0];
+        if (t) { reshuffle(t); hideTip(); renderRack(); }
+        return;
+      }
       var b = e.target.closest('.hwsc-tab'); if (!b) return;
       current = b.getAttribute('data-key');
       Array.prototype.forEach.call(mount.querySelectorAll('.hwsc-tab'), function (x) { x.setAttribute('aria-selected', x === b); });
@@ -183,6 +207,11 @@
   '.hwsc-tab:hover{color:var(--ink,#e9eaf2)}' +
   '.hwsc-tab[aria-selected="true"]{color:#0b0c11;background:var(--tab,#ff8a4c);border-color:transparent}' +
   '.hwsc-n{opacity:.7;font-size:11px}' +
+  '.hwsc-shuffle{margin-left:auto;font-family:var(--font-head,sans-serif);font-size:12.5px;font-weight:600;letter-spacing:.02em;color:var(--ink-dim,#a3a9bd);background:rgba(255,255,255,.03);border:1px solid var(--line-2,rgba(255,255,255,.14));padding:6px 13px;border-radius:999px;cursor:pointer;transition:color .2s,border-color .2s,background .2s,transform .15s}' +
+  '.hwsc-shuffle:hover{color:var(--ink,#e9eaf2);border-color:var(--teal,#4fd6c4);background:rgba(79,214,196,.07)}' +
+  '.hwsc-shuffle:active{transform:scale(.96)}' +
+  '.hwsc-shuffle span{display:inline-block;transition:transform .3s}' +
+  '.hwsc-shuffle:hover span{transform:rotate(180deg)}' +
   '.hwsc-rack{display:flex;flex-wrap:wrap;gap:9px;min-height:44px}' +
   '.hwsc-chip{display:inline-flex;align-items:center;gap:8px;font-family:var(--font-body,sans-serif);font-size:13.5px;color:var(--ink,#e9eaf2);background:rgba(255,255,255,.03);border:1px solid var(--line-2,rgba(255,255,255,.14));border-left:3px solid var(--c,#ff8a4c);border-radius:9px;padding:8px 13px;cursor:pointer;transition:transform .15s,border-color .15s,background .15s}' +
   '.hwsc-chip:hover,.hwsc-chip:focus-visible{transform:translateY(-2px);background:rgba(255,255,255,.06);outline:none}' +

@@ -112,6 +112,7 @@
     transform:translate(-50%,-52%);z-index:0;will-change:transform,opacity}
   .hero-mark-wrap.observing{position:fixed;left:0;top:0;z-index:-1}
   .hero-mark{display:block;width:100%;height:auto;opacity:.15;animation:hw-mark 7.2s ease-in-out infinite;will-change:transform,opacity}
+  .hero-eye{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
   .hero h1{position:relative;z-index:1;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(56px,15vw,120px);letter-spacing:.02em;margin:0;
     background:linear-gradient(180deg,#ffffff 8%, #cfd6e6 52%, #8b96b4 100%);-webkit-background-clip:text;background-clip:text;
     color:transparent;-webkit-text-fill-color:transparent;
@@ -265,6 +266,17 @@
         <circle cx="5.6" cy="22" r="2" fill="#ff8a4c" opacity=".16"/><circle cx="5.6" cy="22" r=".8" fill="#ff8a4c"/>
         <defs><linearGradient id="hwHeroGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs>
       </svg>
+      <!-- THE EYE — dormant in the hollow. Rarely, once the Observer has
+           parked, the lid opens for a moment and the pupil finds your
+           cursor. A separate svg so the breath's opacity keyframes can't
+           dim it: when it opens, it is MEANT to be seen. -->
+      <svg class="hero-eye" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <g class="hw-eyeg" opacity="0" transform="translate(16 16) scale(1 0) translate(-16 -16)">
+          <ellipse class="hw-iris" cx="16" cy="16" rx="3.2" ry="2.5" fill="#e6f4f1" opacity=".92"/>
+          <circle class="hw-pupil" cx="16" cy="16" r="1.15" fill="#07090f"/>
+          <circle cx="15.55" cy="15.45" r=".26" fill="#ffffff" opacity=".85"/>
+        </g>
+      </svg>
       </div>
       <h1 class="display">Hollow Wake</h1>
     </div>
@@ -301,7 +313,6 @@
       <div class="stat"><div class="num" data-key="classes" data-fallback="20+">20+</div><div class="lbl">Classes</div></div>
       <div class="stat"><div class="num">&infin;</div><div class="lbl">Frontier</div></div>
     </div>
-    <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--ink-faint)">Scope at a glance, floored hard on purpose — the + always means there's plenty more. The exact, current figures live in the <a href="database/" style="color:var(--teal)">Database</a>, generated from the game's own data.</p>
   </div>
 </div>
 
@@ -318,11 +329,6 @@
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5 5-2z"/></svg></div>
         <h3>The map grows as you explore</h3>
         <p>Frontier portals mint a brand-new zone on the way through and graft it into the world graph. There's no end of content — the graph itself is the difficulty curve, every step deeper raising the stakes.</p>
-      </div>
-      <div class="pillar reveal" style="--accent:var(--ember)">
-        <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--ember)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v14m0 0l-5-5m5 5l5-5M5 21h14"/></svg></div>
-        <h3>Descend into the Underworld</h3>
-        <p>The frontier doesn't only spread — it goes down. Delve deep enough and you tear open the Hellgate: hell steppes, volcanic cauldrons, and the River of Flame winding to a guaranteed Hellforge.</p>
       </div>
       <div class="pillar reveal" style="--accent:var(--teal)">
         <div class="icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>
@@ -615,6 +621,10 @@ npm run <span class="g">build</span></pre>
     /* jitter offsets — written by the twitch engine below, composed into
        every placement write so scroll and jitter never fight */
     var jx = 0, jy = 0, jr = 0, jTimer = null;
+    /* eye state: boost pulls the wrap's opacity toward full while the lid is
+       open — the mark is faint by design; the eye is not */
+    var eyeBoost = 0, lastEye = 0;
+    var eyeG = mwrap.querySelector('.hw-eyeg'), eyePupil = mwrap.querySelector('.hw-pupil');
     var mPlace = function(){
       var vw = window.innerWidth, vh = window.innerHeight, s = window.scrollY || window.pageYOffset || 0;
       var t = Math.min(1, s/(vh*2.0)), p = t*t*(3-2*t);   /* smoothstep over ~2 viewports — the creep is patient */
@@ -625,7 +635,8 @@ npm run <span class="g">build</span></pre>
       mwrap.style.width = (heroW + (obsW - heroW)*p) + 'px';
       /* -52%→-50% self-offset blends in so p=0 matches the CSS anchor exactly */
       mwrap.style.transform = 'translate(' + (x + jx) + 'px,' + (y + jy) + 'px) translate(-50%,' + (-52 + 2*p) + '%)' + (jr ? ' rotate(' + jr + 'deg)' : '');
-      mwrap.style.opacity = String(1 - .45*p);
+      var base = 1 - .45*p;
+      mwrap.style.opacity = String(base + (.97 - base)*eyeBoost);
       mLastP = p;
     };
     var mMeasure = function(){
@@ -645,8 +656,41 @@ npm run <span class="g">build</span></pre>
        the title, never under reduced-motion (this whole block is gated). */
     var jGap = function(){ return 6000 + Math.random()*8000; };
     var jSchedule = function(ms){ clearTimeout(jTimer); jTimer = setTimeout(jEvent, ms); };
+    var smoothT = function(e){ return e*e*(3-2*e); };
+    var setEye = function(k, px, py){
+      if(!eyeG) return;
+      eyeG.setAttribute('opacity', k < .02 ? '0' : '1');
+      eyeG.setAttribute('transform', 'translate(16 16) scale(1 ' + k.toFixed(3) + ') translate(-16 -16)');
+      if(eyePupil){ eyePupil.setAttribute('cx', (16 + px).toFixed(2)); eyePupil.setAttribute('cy', (16 + py).toFixed(2)); }
+    };
+    /* THE EYE — the lid in the hollow opens for a breathless moment: rise,
+       a beat, one saccade (the pupil finds your cursor — nobody at the
+       glass and it picks its own spot to study), then shut. */
+    var eyeEvent = function(){
+      lastEye = performance.now();
+      var t0 = lastEye;
+      var r = mwrap.getBoundingClientRect(), ecx = r.left + r.width/2, ecy = r.top + r.height/2;
+      var lx, ly, canPtr = (typeof ptr === 'object' && ptr && ptr.x > -9000);
+      if(canPtr){ var dx = ptr.x - ecx, dy = ptr.y - ecy, dd = Math.sqrt(dx*dx + dy*dy) || 1; lx = dx/dd; ly = dy/dd; }
+      else { var a2 = Math.random()*6.283; lx = Math.cos(a2); ly = Math.sin(a2); }
+      var OPEN = 260, HOLD = 650 + Math.random()*450, CLOSE = 190, SACC = 180 + Math.random()*160;
+      (function step(){
+        var t = performance.now() - t0, k, px = 0, py = 0;
+        if(t < OPEN){ k = smoothT(t/OPEN); }
+        else if(t < OPEN + HOLD){ k = 1; if(t - OPEN > SACC){ px = lx*.85; py = ly*.85; } }
+        else if(t < OPEN + HOLD + CLOSE){ k = 1 - smoothT((t - OPEN - HOLD)/CLOSE); px = lx*.85; py = ly*.85; }
+        else { eyeBoost = 0; setEye(0, 0, 0); mPlace(); jSchedule(jGap()); return; }
+        eyeBoost = k; setEye(k, px, py); mPlace();
+        requestAnimationFrame(step);
+      })();
+    };
     var jEvent = function(){
       if(document.hidden || mLastP < .92){ jSchedule(2500 + Math.random()*2500); return; }
+      /* the eye is rarer than rare: never in the first 75s, at most once per
+         75s after that, and only a 7% roll even then — most visitors will
+         never see it, which is the point */
+      var nowE = performance.now();
+      if(nowE > 75e3 && nowE - lastEye > 75e3 && Math.random() < .07){ eyeEvent(); return; }
       var t0 = performance.now();
       var ang = Math.random()*6.283, ux = Math.cos(ang), uy = Math.sin(ang);
       if(Math.random() < .78){ /* twitch */
@@ -684,8 +728,9 @@ npm run <span class="g">build</span></pre>
     mMeasure();
     jSchedule(jGap());
     /* QA handle: state + a manual trigger; drives nothing on its own */
-    window.__hwobs = { get state(){ return { p: mLastP, jx: jx, jy: jy, jr: jr }; }, jolt: jEvent,
-      test: function(x, y, r){ jx = x||0; jy = y||0; jr = r||0; mPlace(); } };
+    window.__hwobs = { get state(){ return { p: mLastP, jx: jx, jy: jy, jr: jr, eye: eyeBoost }; }, jolt: jEvent, blink: eyeEvent,
+      test: function(x, y, r){ jx = x||0; jy = y||0; jr = r||0; mPlace(); },
+      eyeTest: function(k, px, py){ eyeBoost = k||0; setEye(k||0, px||0, py||0); mPlace(); } };
   }
 
   /* stat band — numbers come from the exported data/meta.json so they never go
