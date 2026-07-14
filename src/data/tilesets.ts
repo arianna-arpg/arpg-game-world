@@ -13,7 +13,7 @@ import type { CompositionRoll, LandmarkRoll, PackSpec, StampSpec, StructureRoll,
 import type { Rng } from '../core/rng';
 
 export interface ObjectiveWeight {
-  kind: 'clear' | 'escape' | 'spawners' | 'waves';
+  kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon';
   weight: number;
 }
 
@@ -191,6 +191,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
@@ -318,6 +319,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 1 },
@@ -452,6 +454,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 1 },
@@ -540,6 +543,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'rime_stone',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
@@ -611,6 +615,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'rime_stone',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
@@ -660,6 +665,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'ember_rift',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 2 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 3 },
@@ -755,6 +761,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
@@ -835,6 +842,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
@@ -932,6 +940,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
@@ -989,6 +998,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'ember_rift',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 2 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 3 },
@@ -1090,6 +1100,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'ember_rift',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 1 },
       { kind: 'spawners', weight: 2 },
@@ -1559,6 +1570,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
@@ -1621,6 +1633,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'waves', weight: 2 },
@@ -1669,6 +1682,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
@@ -2176,7 +2190,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'rime_stone',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }],
   },
 
   // MARSH — fetid wetland (biome 'marsh', → islands layout = boggy islets between
@@ -2241,7 +2255,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'waves', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'waves', weight: 1 }, { kind: 'beacon', weight: 1 }],
   },
 
   // FLESH — a writhing pulsing-flesh warren (biome:'flesh', → the circular flesh
@@ -2296,7 +2310,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     // The Glut's own spawners-objective destructible: burst the blooms.
     spawnerId: 'corpse_bloom',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }],
   },
 
   // CRYSTAL — prismatic shard fields (biome:'crystal'). Crystal doodads fire random
@@ -2340,7 +2354,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'rime_stone',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }],
   },
 
   // VOLCANIC — an erupting caldera (biome:'volcanic'). Lava vents periodically
@@ -2398,7 +2412,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'beacon', weight: 1 }],
   },
 
   // MYCELIA — a bioluminescent fungal warren (biome:'mycelia' → the carved fungal-grotto
@@ -2460,7 +2474,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     // The Bloom fruits its own spawners-objective destructibles.
     spawnerId: 'spore_sac',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }],
   },
 
   // FIELD — the open grassland EXPANSE (biome:'field'). The bespoke 'field' layout
@@ -2514,7 +2528,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'spawners', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'spawners', weight: 1 }, { kind: 'beacon', weight: 1 }],
     structures: [
       { structure: 'market_row', chance: 0.14 },
     ],

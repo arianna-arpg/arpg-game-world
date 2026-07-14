@@ -536,6 +536,21 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         }
         return;
       }
+      // LURE FABRIC (World.setLure/lureFor): a live lure — a charging survey
+      // spire, a future bait or noise — DRAWS the unaware toward its point.
+      // Idle-only by construction (this branch is targetless), so combat,
+      // orders, morale and fear all outrank the pull; drives and squad
+      // demeanor DEFER to it (a supernatural glow beats hunger's amble).
+      // The standoff ring keeps the drawn milling around the light instead
+      // of stacking onto it.
+      if (!actor.isMinion()) {
+        const lure = world.lureFor(actor);
+        if (lure && dist(actor.pos, lure.pos) > lure.standoff) {
+          actor.facing = angleTo(actor.pos, lure.pos);
+          moveToward(actor, world, lure.pos, dt * lure.pace);
+          return;
+        }
+      }
       // DRIVE-DRIVEN IDLE LIFE (BehaviorSpec.seek): wants pull the idle
       // body — hunger walks toward prey it can't yet see (scent outranges
       // the sight cone), greed toward unclaimed shinies. A drive rule

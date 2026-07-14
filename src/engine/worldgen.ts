@@ -933,6 +933,7 @@ function rollObjective(
     case 'escape': return { kind: 'escape', interval: [2.2, 3.6] };
     case 'spawners': return { kind: 'spawners', spawnerId, count: [2, 3] };
     case 'waves': return { kind: 'waves', waves: rng.int(3, 4) };
+    case 'beacon': return { kind: 'beacon' }; // numbers default from BEACON_CFG
     default: return { kind: 'clear' };
   }
 }

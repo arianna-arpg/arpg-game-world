@@ -44,8 +44,21 @@ export interface PackSpec {
   table: PackTableEntry[];
 }
 
-/** What the zone asks of you. Locked exits open when the objective is met. */
-export type ObjectiveSpec =
+/** Tuning every objective row may carry regardless of kind. */
+export interface ObjectiveTuning {
+  /** Exit policy override: do the zone's OTHER exits (all but the one you
+   *  entered through) stay sealed until the objective is met? Absent = the
+   *  kind's OBJECTIVE_SEALS default. Policy is data at both levels — one zone
+   *  can seal where its kind doesn't (a special gauntlet), or open where its
+   *  kind seals (a boss you may flee). */
+  seal?: boolean;
+}
+
+/** What the zone asks of you. Whether an UNMET objective seals the exits is
+ *  POLICY, not physics: OBJECTIVE_SEALS below (per kind) + the per-zone `seal`
+ *  override. Progress on unsealed objectives rides Zone Memory instead of a
+ *  locked door — leaving mid-fight costs nothing but the walk back. */
+export type ObjectiveSpec = (
   /** A sanctuary: nothing spawns, nothing seals, nothing is asked. */
   | { kind: 'safe' }
   | { kind: 'clear' }
@@ -59,7 +72,45 @@ export type ObjectiveSpec =
   | { kind: 'escape'; interval: [number, number] }
   /** Destructible spawner objects seed the zone; destroy them all. */
   | { kind: 'spawners'; spawnerId: string; count: [number, number] }
-  | { kind: 'boss'; id: string; levelBonus?: number; uber?: UberPolicy; promote?: BossPromote };
+  | { kind: 'boss'; id: string; levelBonus?: number; uber?: UberPolicy; promote?: BossPromote }
+  /** A dormant SURVEY SPIRE stands at a POI: hold your ground beside it and it
+   *  charges (seconds: chargeSec → the 'beacon' transit row → BEACON_CFG);
+   *  banked charge LURES idle wanderers toward the glow (the world's own
+   *  population is the pressure — no waves, no bonus spawns); at full charge
+   *  it flares and SURVEYS the overworld within `revealRadius` map units
+   *  (charts '?' frontiers, lifts concealment, marks map intel). All numbers
+   *  default from data/beacons.ts BEACON_CFG. */
+  | { kind: 'beacon'; chargeSec?: number; lureRadius?: number; revealRadius?: number }
+) & ObjectiveTuning;
+
+/** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
+ *  exits? Bosses keep the classic arena commitment; everything else leaves the
+ *  roads open — "crossing a zone boundary never punishes you" extends to
+ *  objectives now that wave/spawner progress rides Zone Memory. A zone's
+ *  ObjectiveTuning.seal overrides its kind's row. */
+export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
+  safe: false, clear: false, waves: false, escape: false, spawners: false,
+  boss: true, beacon: false,
+};
+
+/** Does this zone's UNMET objective seal its exits? (An endless arena never
+ *  seals — there is nothing to finish.) */
+export function objectiveSeals(o: ObjectiveSpec): boolean {
+  if (o.kind === 'waves' && o.waves === 0) return false;
+  return o.seal ?? OBJECTIVE_SEALS[o.kind];
+}
+
+/** Which kinds bank a sealed objective CHEST (the treasure that unlocks on
+ *  completion). DECOUPLED from exit-sealing on purpose: a waves zone no longer
+ *  locks its roads, yet still stakes its reward. Endless arenas never do —
+ *  nothing completes. */
+export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
+  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon']);
+
+export function objectiveEarnsChest(o: ObjectiveSpec): boolean {
+  if (o.kind === 'waves' && o.waves === 0) return false;
+  return OBJECTIVE_CHEST_KINDS.has(o.kind);
+}
 
 /** OPT-IN difficulty spike: promote the boss to an elite RARITY at spawn, optionally
  *  STACKING it (each stack re-applies the rarity's stat mods, compounding life/damage)

@@ -61,7 +61,8 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraform
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
-import { START_ZONE, ZONES, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { BEACON_CFG } from '../data/beacons';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -1409,6 +1410,15 @@ interface ZoneMemory {
    *  a splintered door stays splintered, for as long as the memory lives.
    *  Follows the memory's scope + TTL — never gate progression on it. */
   doorState?: Record<string, 'open' | 'broken'>;
+  /** WAVES zones: the assault's progress at capture — the wave counter plus
+   *  whether a wave was mid-fight (its survivors ride `enemies` like any other
+   *  population). Exits no longer seal on waves, so a boundary cross must
+   *  never reset the gauntlet. */
+  wave?: number;
+  waveActive?: boolean;
+  /** BEACON zones: the survey spire's banked charge (seconds) at capture —
+   *  a half-charged spire resumes where it stood. */
+  spireCharge?: number;
 }
 
 /** The live, in-zone runtime of a Conclave RITUAL SITE — the pentagram + its ring
@@ -2074,6 +2084,10 @@ export class World {
   discoveredWaypoints = new Set<string>();
   exits: ZoneExit[] = [];
   visited = new Set<string>();
+  /** Zone ids known by RECON rather than boots — a finished survey spire marks
+   *  everything in its pulse. Map INTEL only (real names/levels on ground you
+   *  haven't walked); never gates travel or events. Persisted with the world. */
+  surveyed = new Set<string>();
   /** The zone we entered from (its portal stays unlocked). */
   entryFrom: string | null = null;
   /** Set once the zone's objective is met (pays the bounty, unseals exits). */
@@ -2105,6 +2119,15 @@ export class World {
   wave = 0;
   waveTimer = WAVE_CFG.firstDelay; // countdown to next wave while no enemies remain
   waveActive = false;
+  /** The zone's live SURVEY SPIRE (beacon objective): where it stands, its
+   *  banked charge, and the fixture whose kind flips dormant → lit. Zone-local;
+   *  the charge persists across boundary crossings via Zone Memory. */
+  private spire: { pos: Vec2; charge: number; doodad: Doodad } | null = null;
+  /** LURE FABRIC — world points idle enemies DRIFT toward (a charging survey
+   *  spire today; bait items or noise-maker skills ride the same call later).
+   *  Each holder re-stamps its row every frame (`until` = a short linger), so
+   *  a stalled source fades on its own. Zone-local, cleared on load. */
+  private lures = new Map<string, { pos: Vec2; radius: number; pace: number; standoff: number; until: number }>();
   gameOver = false;
   /** Why the run ended — 'death' (records a corpse) or 'forfeit' (does not).
    *  An overridable seam: a future 'retire' reason or co-op rules slot in here. */
@@ -2881,6 +2904,8 @@ export class World {
     this.wave = 0;
     this.waveTimer = WAVE_CFG.firstDelay;
     this.waveActive = false;
+    this.spire = null;   // beacon fixture re-places below (charge rides Zone Memory)
+    this.lures.clear();  // lures are zone-local
 
     // HOLDFAST: on first arrival in an uncharted zone, maybe raise a fortified, LOCKED
     // bonus exit (appended to def.exits BEFORE eager-charting + portal placement, so it
@@ -3200,6 +3225,27 @@ export class World {
         this.actors.push(s);
       }
     }
+    // SURVEY SPIRE (beacon): the objective fixture stands at a POI — dormant
+    // stone until a hero holds ground beside it (updateObjective drives the
+    // charge, the lure, and the survey). A finished zone keeps a LIT spire
+    // (scenery — proof the ground is surveyed); a remembered half-charge
+    // resumes exactly where it stood. Placement rides the layout rng, so a
+    // remembered seed puts the spire back on the same stone.
+    if (o.kind === 'beacon') {
+      const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(620);
+      const pos = this.clampPos(vec(at.x, at.y), BEACON_CFG.radius);
+      const spireDoodad: Doodad = {
+        pos: vec(pos.x, pos.y), radius: BEACON_CFG.radius,
+        kind: this.objectiveDone ? BEACON_CFG.kindLit : BEACON_CFG.kind,
+      };
+      this.doodads.push(spireDoodad);
+      const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
+      this.spire = {
+        pos: vec(pos.x, pos.y),
+        charge: this.objectiveDone ? need : Math.min(memory?.spireCharge ?? 0, need),
+        doodad: spireDoodad,
+      };
+    }
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
       for (const c of layout.camps) {
@@ -3252,6 +3298,15 @@ export class World {
     // left (cleared stays cleared; survivors keep their wounds + positions).
     this.zoneGenTagging = false;
     if (memory) this.restoreZoneEnemies(memory);
+    // WAVES REMEMBERED: a left assault resumes where it stood — the counter and
+    // the mid-wave survivors both ride Zone Memory (exits no longer seal on
+    // waves, so an open road must never reset the gauntlet). A completed arena
+    // stays completed via completedObjectives; past the TTL the fight re-arms
+    // fresh, like every other forgotten ground.
+    if (memory && o.kind === 'waves' && !this.objectiveDone) {
+      this.wave = Math.max(0, Math.floor(memory.wave ?? 0));
+      this.waveActive = !!memory.waveActive;
+    }
     // A CLEARED side area stays cleared PERMANENTLY (run-long), even past the memory
     // TTL: drop its base population so re-entry never re-stocks a one-time cave (the
     // objective is already done; exits are already open). Surface zones still refresh.
@@ -3288,8 +3343,10 @@ export class World {
     // arena — its reward is the quest turn-in, not a zone chest.)
     this.chests = [];
     if (!def.special && o.kind !== 'safe') {
-      const gated = o.kind === 'boss' || o.kind === 'spawners'
-        || (o.kind === 'waves' && o.waves > 0);
+      // Chest-worthiness is its own policy row (objectiveEarnsChest) — DECOUPLED
+      // from exit-sealing, so an unsealed waves/spawners zone still stakes its
+      // locked treasure on the objective.
+      const gated = objectiveEarnsChest(o);
       // No objective chest on a zone whose reward was already claimed this run.
       if (gated && !this.completedObjectives.has(def.id) && rng.chance(0.75)) {
         const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(500);
@@ -4805,6 +4862,14 @@ export class World {
    *  nodes), so it's bounded to one ring. No-op for caves/sanctuaries or with the flag off. */
   private eagerChartNeighbors(zone: ZoneDef): void {
     if (!EAGER_WORLD_WEB || zone.caveDepth != null || zone.objective.kind === 'safe') return;
+    this.chartNeighborsOf(zone);
+  }
+
+  /** The flagless CORE of eagerChartNeighbors: resolve `zone`'s '?' frontiers
+   *  into real neighbours (mint or link). The eager web calls it per visit
+   *  (behind EAGER_WORLD_WEB + its scope gates above); a finished SURVEY
+   *  SPIRE calls it across its whole reveal pulse (surveyAround). */
+  private chartNeighborsOf(zone: ZoneDef): void {
     // Snapshot the '?' exits up front, since we rebuild zone.exits at the end (the drop pass)
     // — iterate a stable array, never the one we mutate. A LOCKED frontier (a Holdfast
     // bonus exit) resolves like every other: its pocket mints eagerly (chartFrontier's
@@ -4826,6 +4891,43 @@ export class World {
       zone.exits.length = 0;
       zone.exits.push(...kept);
     }
+  }
+
+  /** RECON SURVEY (the spire's flare): reveal the overworld within `radius`
+   *  map units of `origin`. Every node inside the pulse resolves its '?'
+   *  frontiers into real neighbours (the eager-web mint path); freshly minted
+   *  nodes that land inside the pulse chart THEIRS in turn — so the reveal is
+   *  bounded by the radius, not a ring count. Concealed ground inside the
+   *  pulse is unveiled, and every node touched is marked SURVEYED (map intel:
+   *  real names/levels on ground you haven't walked — panels reads the set).
+   *  Same-dimension only; floating/event-owned/pocket ground keeps its own
+   *  lifecycle (surveyed-markable, never force-charted). Returns how many
+   *  nodes are newly known. If the CURRENT zone gains exits, the next frame's
+   *  syncZoneExits drain places the live portals ("a path opens!"). */
+  private surveyAround(origin: ZoneDef, radius: number): number {
+    const dim = origin.dimension ?? 'surface';
+    const inPulse = (z: ZoneDef): boolean =>
+      (z.dimension ?? 'surface') === dim && z.caveDepth == null && !z.pocket
+      && Math.hypot(z.map.x - origin.map.x, z.map.y - origin.map.y) <= radius;
+    const charted = new Set<string>();
+    for (;;) {
+      const batch = Object.values(this.zoneMap).filter(z =>
+        !charted.has(z.id) && inPulse(z)
+        && z.objective.kind !== 'safe' && !z.floating && !z.eventOwned);
+      if (!batch.length) break;
+      for (const z of batch) {
+        charted.add(z.id);
+        this.chartNeighborsOf(z);
+      }
+    }
+    let news = 0;
+    for (const z of Object.values(this.zoneMap)) {
+      if (!inPulse(z)) continue;
+      if (z.concealed) z.concealed = false; // recon out-scries concealment
+      if (!this.surveyed.has(z.id) && !this.visited.has(z.id)) news++;
+      this.surveyed.add(z.id);
+    }
+    return news;
   }
 
   /** Shape a freshly-minted Field zone to its contiguous heat-map region: resize the
@@ -8149,11 +8251,14 @@ export class World {
    *  captureZoneMemory. */
   private zoneMemorySnapshot(): ZoneMemory | null {
     const z = this.zone;
-    // Skip town (safe), the streamed abyss (boundless), unvisited SURFACE ground (caves
-    // never chart, so they bypass the visited gate), and WAVES zones — whose progression
-    // is a timed sequence (this.wave), not a static population, so remembering their
-    // stray camp/garrison enemies while the wave counter resets would double the fight.
-    if (!z || z.boundless || z.objective.kind === 'safe' || z.objective.kind === 'waves'
+    // Skip town (safe), the streamed abyss (boundless), and unvisited SURFACE
+    // ground (caves never chart, so they bypass the visited gate). WAVES zones
+    // are remembered like everything else now: the counter + mid-wave survivors
+    // ride the memo (wave/waveActive below; spawnWave flags its bodies
+    // fromZoneGen), so the old double-fight hazard — remembered camp enemies
+    // stacked on a reset counter — cannot arise: nothing about the fight resets
+    // while the memory lives.
+    if (!z || z.boundless || z.objective.kind === 'safe'
       || (!this.inCave && !this.visited.has(z.id))) return null;
     const enemies: ZoneEnemyMemo[] = [];
     for (const a of this.actors) {
@@ -8171,7 +8276,13 @@ export class World {
       if (!d.door || (!d.door.open && !d.door.broken)) continue;
       (doorState ??= {})[d.door.id] = d.door.broken ? 'broken' : 'open';
     }
-    return { seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState };
+    return {
+      seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState,
+      // Objective-progress riders, per kind: the wave gauntlet's position, the
+      // spire's banked charge. Done-ness itself lives in completedObjectives.
+      ...(z.objective.kind === 'waves' ? { wave: this.wave, waveActive: this.waveActive } : {}),
+      ...(z.objective.kind === 'beacon' && this.spire ? { spireCharge: this.spire.charge } : {}),
+    };
   }
 
   /** Snapshot the zone we're LEAVING: its layout seed + the living base-population
@@ -8272,6 +8383,8 @@ export class World {
       zoneId, seed: m.seed, savedAt: m.savedAt,
       enemies: m.enemies.map(e => ({ ...e })),
       ...(m.doorState ? { doorState: { ...m.doorState } } : {}),
+      ...(m.wave !== undefined ? { wave: m.wave, waveActive: !!m.waveActive } : {}),
+      ...(m.spireCharge !== undefined ? { spireCharge: m.spireCharge } : {}),
     });
     for (const [zid, m] of this.zoneMemory) {
       if (zid === this.zone.id) continue; // superseded by the live capture below
@@ -8298,6 +8411,7 @@ export class World {
       nextGenId: this.nextGenId,
       time: this.time,
       visited: [...this.visited].filter(id => kept.has(id)),
+      surveyed: [...this.surveyed].filter(id => kept.has(id)),
       discoveredWaypoints: [...this.discoveredWaypoints].filter(id => kept.has(id)),
       memory,
       quests: {
@@ -8352,6 +8466,7 @@ export class World {
     }
     this.time = Math.max(0, ws.time);
     this.visited = new Set((ws.visited ?? []).filter(id => typeof id === 'string' && healed[id]));
+    this.surveyed = new Set((ws.surveyed ?? []).filter(id => typeof id === 'string' && healed[id]));
     this.discoveredWaypoints = new Set(
       (ws.discoveredWaypoints ?? []).filter(id => typeof id === 'string' && healed[id]));
     // Zone memory: structural scrub per memo; unknown monster defs stay in the
@@ -8385,6 +8500,12 @@ export class World {
       this.zoneMemory.set(m.zoneId, {
         seed: m.seed, savedAt: m.savedAt, enemies,
         ...(doors ? { doorState } : {}),
+        // Objective-progress riders (waves counter, spire charge): finite,
+        // clamped-at-use numbers; anything malformed simply drops.
+        ...(typeof m.wave === 'number' && Number.isFinite(m.wave)
+          ? { wave: Math.max(0, Math.floor(m.wave)), waveActive: !!m.waveActive } : {}),
+        ...(typeof m.spireCharge === 'number' && Number.isFinite(m.spireCharge)
+          ? { spireCharge: Math.max(0, m.spireCharge) } : {}),
       });
     }
     // Quests: active entries whose def AND zone both still stand; the
@@ -23504,7 +23625,54 @@ export class World {
     add(this.descentDwellView());
     add(this.wardDwellView());
     add(this.extractionDwellView());
+    // The survey spire's charge ring (the 'beacon' transit row styles it).
+    const sv = this.spireView();
+    if (sv && !sv.done) add({ pos: sv.pos, frac: sv.frac, kind: 'beacon' });
     return out;
+  }
+
+  /** The live SURVEY SPIRE, for the renderer's ring pass + the attention
+   *  fabric: where it stands, its charge fraction, whether the survey is done. */
+  spireView(): { pos: Vec2; frac: number; done: boolean } | null {
+    const o = this.zone.objective;
+    const sp = this.spire;
+    if (!sp || o.kind !== 'beacon') return null;
+    const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
+    return {
+      pos: sp.pos,
+      frac: need > 0 ? clamp(sp.charge / need, 0, 1) : 1,
+      done: this.objectiveDone,
+    };
+  }
+
+  // --- LURE FABRIC: monster-attention points (the mapMarkers/attention idea,
+  // pointed the OTHER way — at the population, not the player) ---------------
+
+  /** Hold a lure at `pos` this frame: idle enemies within `radius` DRIFT
+   *  toward it at `pace`× walk speed, stopping `standoff` out so the drawn
+   *  crowd mills around the point instead of stacking onto it. The holder
+   *  re-stamps its row every frame; a stalled source fades after `linger`
+   *  seconds on its own. Idle-only by construction (the AI consults lureFor
+   *  in its targetless branch) — a lure DRAWS the unaware, it never
+   *  overrides combat, orders, or fear. */
+  setLure(id: string, pos: Vec2, radius: number, pace: number, standoff: number, linger = 0.6): void {
+    this.lures.set(id, { pos: vec(pos.x, pos.y), radius, pace, standoff, until: this.time + linger });
+  }
+
+  /** The nearest live lure pulling at this body, or null. Minions follow
+   *  their leash, NPCs their posts, the passive their stillness — only the
+   *  wild enemy population answers the pull (ambient critters included:
+   *  moths to the light; they were never a threat and stay none). */
+  lureFor(a: Actor): { pos: Vec2; pace: number; standoff: number } | null {
+    if (!this.lures.size || a.passive || a.team !== 'enemy') return null;
+    let best: { pos: Vec2; pace: number; standoff: number } | null = null;
+    let bd = Infinity;
+    for (const [id, l] of this.lures) {
+      if (this.time > l.until) { this.lures.delete(id); continue; }
+      const d = dist(a.pos, l.pos);
+      if (d <= l.radius && d < bd) { bd = d; best = { pos: l.pos, pace: l.pace, standoff: l.standoff }; }
+    }
+    return best;
   }
 
   /** Claim the nearest FREE garrison slot (a tower core) within reach: the
@@ -23607,9 +23775,12 @@ export class World {
   }
 
   /**
-   * Objective-gated travel: in boss / spawner / finite-wave zones, every
-   * portal except the one you entered through stays sealed until the
-   * objective is met. Escape and clear zones never lock — fleeing is legal.
+   * Objective-gated travel: where the SEAL POLICY says so (OBJECTIVE_SEALS
+   * per kind + the zone's ObjectiveTuning.seal override — data at both
+   * levels), every portal except the one you entered through stays sealed
+   * until the objective is met. Default policy: only BOSS arenas seal —
+   * waves/spawners roads stay open, their progress riding Zone Memory, so
+   * leaving mid-fight costs nothing but the walk back.
    */
   isExitLocked(e: ZoneExit): boolean {
     // HOLDFAST: a fortified bonus exit stays sealed until its toll is met — INDEPENDENT
@@ -23628,10 +23799,7 @@ export class World {
     // does. Any overlay can hold a road via registerEdgeBlockSource.
     if (ed && ed.to !== '?' && edgeBlockAt(this, this.zone.id, ed.to)) return true;
     if (this.objectiveDone) return false;
-    const o = this.zone.objective;
-    const gates = o.kind === 'boss' || o.kind === 'spawners'
-      || (o.kind === 'waves' && o.waves > 0);
-    return gates && e.to !== this.entryFrom;
+    return objectiveSeals(this.zone.objective) && e.to !== this.entryFrom;
   }
 
   /**
@@ -28843,6 +29011,47 @@ export class World {
         }
         return;
 
+      case 'beacon': {
+        // The SURVEY SPIRE: presence (not idleness — you will be fighting)
+        // inside the hold ring builds the charge; banked charge holds a LURE
+        // so the zone's own population drifts in as the pressure; full charge
+        // flares the spire and SURVEYS the overworld around this zone.
+        const sp = this.spire;
+        if (this.objectiveDone || !sp) return;
+        const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
+        const held = !this.player.dead
+          && dist(this.player.pos, sp.pos) <= transitRadius('beacon', BEACON_CFG.holdRadius)
+          && this.dwellReachable(this.player.pos, sp.pos, transitReach('beacon'));
+        if (held) {
+          const was = sp.charge;
+          sp.charge = Math.min(need, sp.charge + dt);
+          if (was <= 0 && sp.charge > 0) {
+            this.text(vec(sp.pos.x, sp.pos.y - 40),
+              'the spire stirs — the wilds turn toward its light…', BEACON_CFG.accent, 14);
+            this.flashes.push({ pos: vec(sp.pos.x, sp.pos.y), radius: 90, color: BEACON_CFG.accent, life: 0.5, maxLife: 0.5 });
+          }
+        }
+        // A lit wick draws moths whether or not the hero stands by it: the lure
+        // holds while ANY charge is banked and the work is unfinished. No waves,
+        // no bonus spawns — the pull only redirects who already lives here.
+        if (sp.charge > 0) {
+          this.setLure('survey_spire', sp.pos,
+            o.lureRadius ?? BEACON_CFG.lureRadius, BEACON_CFG.lurePace, BEACON_CFG.lureStandoff);
+        }
+        if (sp.charge >= need) {
+          sp.doodad.kind = BEACON_CFG.kindLit; // the flare IS the reward beat
+          this.markDoodadsChanged();
+          this.flashes.push({ pos: vec(sp.pos.x, sp.pos.y), radius: 240, color: BEACON_CFG.flare, life: 0.9, maxLife: 0.9 });
+          const news = this.surveyAround(this.zone, o.revealRadius ?? BEACON_CFG.revealRadius);
+          this.completeObjective('The spire flares — the land is surveyed!');
+          if (news > 0) {
+            this.text(vec(sp.pos.x, sp.pos.y - 64),
+              `${news} new ${news === 1 ? 'place' : 'places'} charted`, BEACON_CFG.flare, 14);
+          }
+        }
+        return;
+      }
+
       case 'escape': {
         // The zone never empties — pressure until you find the way out.
         // (The bounty pays when you step through a portal.)
@@ -28955,6 +29164,9 @@ export class World {
       if (bad) p = vec(a.x, a.y);
       m.pos = this.clampPos(p, m.radius);
       if (frenzy) this.applyWaveFrenzy(m, frenzy);
+      // Wave bodies ARE this zone's population: flag them for Zone Memory so a
+      // boundary cross remembers the mid-wave survivors alongside the counter.
+      m.fromZoneGen = true;
       this.actors.push(m);
     }
     // Boss cadence is the OBJECTIVE'S data (bossEveryWaves/bossId) — any
@@ -28963,6 +29175,7 @@ export class World {
       const boss = this.createMonster(o.bossId, level + 1, 'enemy');
       boss.pos = this.spawnPoint(boss.radius);
       if (frenzy) this.applyWaveFrenzy(boss, frenzy);
+      boss.fromZoneGen = true; // the wave's lord is remembered like its rank and file
       this.actors.push(boss);
       this.text(vec(this.player.pos.x, this.player.pos.y - 60), `${boss.name} emerges!`, '#ff5050', 20);
     }
@@ -29569,6 +29782,12 @@ export class World {
       case 'waves': return o.waves === 0
         ? `Endless waves — wave ${this.wave}`
         : `Survive the assault — wave ${Math.min(this.wave, o.waves)}/${o.waves}`;
+      case 'beacon': {
+        const v = this.spireView();
+        return v && v.frac > 0
+          ? `Charge the survey spire — ${Math.round(v.frac * 100)}%`
+          : 'Find the survey spire and hold your ground beside it';
+      }
     }
   }
 

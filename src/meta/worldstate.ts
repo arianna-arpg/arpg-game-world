@@ -82,6 +82,12 @@ export interface SavedZoneMemory {
   savedAt: number;
   enemies: SavedEnemyMemo[];
   doorState?: Record<string, 'open' | 'broken'>;
+  /** WAVES zones: the assault's progress at capture (see the engine's
+   *  ZoneMemory) — a resume mid-gauntlet faces wave N, not wave 1. */
+  wave?: number;
+  waveActive?: boolean;
+  /** BEACON zones: the survey spire's banked charge (seconds) at capture. */
+  spireCharge?: number;
 }
 
 export interface SavedQuestEntry { questId: string; zoneId: string; fieldDone: boolean; }
@@ -106,6 +112,9 @@ export interface WorldStateSave {
   /** World clock (game seconds): day/night phase + zone-memory TTL basis. */
   time: number;
   visited: string[];
+  /** Zone ids known by RECON (a survey spire's pulse) rather than boots —
+   *  map intel only. Absent on older saves (they simply have no intel). */
+  surveyed?: string[];
   discoveredWaypoints: string[];
   memory?: SavedZoneMemory[];
   quests?: { active: SavedQuestEntry[]; completed: string[] };

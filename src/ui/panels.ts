@@ -3057,13 +3057,18 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     for (const z of zones) {
       if (!world.visible(z)) continue; // fog policy (gentle now; dynamic later)
       const known = visited.has(z.id);
+      // RECON INTEL (world.surveyed — a survey spire's pulse): ground you know
+      // OF but haven't walked. Reads like charted terrain (real name, biome,
+      // level) at a scouting remove — washed fill, a dashed rim in the
+      // spire's tint — so the flare visibly buys you the lay of the land.
+      const scouted = !known && world.surveyed.has(z.id);
       const current = world.zone.id === z.id;
       const wp = world.discoveredWaypoints.has(z.id);
       const canTravel = wp && !current;
       // Charted ground reads as its biome (a terrain map); the faction washes
       // from the sim sit on top, so you see both the land and who holds it.
-      const bi = known ? biomeOf(z) : null;
-      const fill = known ? (bi?.mapColor ?? z.theme.accent) : '#26262e';
+      const bi = known || scouted ? biomeOf(z) : null;
+      const fill = known || scouted ? (bi?.mapColor ?? z.theme.accent) : '#26262e';
       const lvText = z.objective.kind === 'waves' && z.objective.waves === 0
         ? 'endless waves' : `monster lv ${z.level}`;
       const sub = bi ? `${bi.label} · ${lvText}` : lvText;
@@ -3079,9 +3084,9 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       // Field's spatial "event node" (a stormfront / incursion can later target/show over it).
       nodes += `<g data-zone="${z.id}" style="cursor:help">
         <circle cx="${z.map.x}" cy="${z.map.y}" r="${current ? 13 : 10}"
-          fill="${fill}" fill-opacity="${known ? 0.85 : 1}"
-          stroke="${pinned ? '#5ad8d8' : current ? '#ffd700' : known ? '#d8d4c8' : '#4a4a5e'}"
-          stroke-width="${pinned ? 3 : current ? 3 : 1.5}"
+          fill="${fill}" fill-opacity="${known ? 0.85 : scouted ? 0.55 : 1}"
+          stroke="${pinned ? '#5ad8d8' : current ? '#ffd700' : known ? '#d8d4c8' : scouted ? '#8fd4ff' : '#4a4a5e'}"
+          stroke-width="${pinned ? 3 : current ? 3 : 1.5}" ${scouted ? 'stroke-dasharray="3 3"' : ''}
           ${canTravel ? `class="wp-node" data-wp="${z.id}" style="cursor:pointer"` : ''}/>
         ${wp ? `<rect x="${z.map.x - 16.5}" y="${z.map.y - 16.5}" width="9" height="9"
           fill="#5ad8d8" transform="rotate(45 ${z.map.x - 12} ${z.map.y - 12})"
@@ -3090,8 +3095,8 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         ${z.port ? `<text x="${z.map.x + 14}" y="${z.map.y - 10}" text-anchor="middle"
           font-size="11" fill="#9ad0e8">⚓<title>Port — sail from its dock</title></text>` : ''}
         <text x="${z.map.x}" y="${z.map.y + 26}" text-anchor="middle"
-          font-size="11" fill="${known ? '#d8d4c8' : '#55555f'}">${known ? z.name : '???'}</text>
-        ${known ? `<text x="${z.map.x}" y="${z.map.y + 38}" text-anchor="middle"
+          font-size="11" fill="${known ? '#d8d4c8' : scouted ? '#a8c4d8' : '#55555f'}">${known || scouted ? z.name : '???'}</text>
+        ${known || scouted ? `<text x="${z.map.x}" y="${z.map.y + 38}" text-anchor="middle"
           font-size="9" fill="${bi ? bi.mapColor : '#8a8678'}">${sub}</text>` : ''}
         ${here}</g>`;
     }

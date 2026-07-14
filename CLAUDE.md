@@ -95,12 +95,16 @@ changes.
   `StatusDef.timeScale` stasis/slow statuses; world- and per-actor scales,
   solo-only menu policy via `Timeflow.allowHold` — docs in
   `docs/engine/timeflow.md`),
-  `levelgen.ts`, `worldgen.ts`;
+  `levelgen.ts`, `worldgen.ts`.
+  ZONE OBJECTIVES are a data vocabulary (ObjectiveSpec + per-kind
+  `OBJECTIVE_SEALS` exit policy + `data/beacons.ts` survey spires and the
+  monster-LURE fabric — docs in `docs/engine/objectives.md`);
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),
   `loot.ts` (nestable loot tables + DROP_CFG kill-path levers).
 - `src/data/` — content as data: `skills.ts`, `supports.ts`, `monsters.ts`,
-  `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`; items:
+  `passives.ts`, `classes.ts`, `zones.ts`, `tilesets.ts`, `procs.ts`,
+  `beacons.ts` (survey-spire objective tuning); items:
   `itembases.ts` (base families), `itemaffixes.ts` (the affix gamut via
   `fam()`), `uniques.ts`, `loottables.ts`, `vestiges.ts` (socketables +
   Epitaph words). Adding content here needs no engine changes.

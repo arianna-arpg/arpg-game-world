@@ -5005,6 +5005,81 @@ const beacon: GroupPainter = (env, group) => {
   }
 };
 
+/** The SURVEY SPIRE (the 'beacon' zone objective): a stepped stone plinth, a
+ *  tapered needle, and the scrying gem at its tip. One painter, two dressings:
+ *  `lit: false` is the dormant monument (a slow dull glint — something sleeps
+ *  in the stone); `lit: true` blazes — halo breathing wide, a light shaft up
+ *  the needle, spark motes ringing the tip. The engine swaps the doodad KIND
+ *  (survey_spire → survey_spire_lit) at full charge; both kinds land here. */
+const surveySpire: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { stone?: ColorSpec; gem?: ColorSpec; lit?: boolean };
+  const { ctx, theme, time } = env;
+  const stone = resolveColor(p.stone, theme, '#646c7a');
+  const gem = resolveColor(p.gem, theme, '#8fd4ff');
+  for (const o of group) {
+    const r = o.radius;
+    const pulse = p.lit
+      ? 0.55 + 0.45 * Math.sin(time * 3.1 + o.pos.x * 0.013)
+      : 0.35 + 0.25 * Math.sin(time * 1.1 + o.pos.x * 0.013);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Lit ground halo under everything (the banked light spilling out).
+    if (p.lit) {
+      ctx.globalAlpha = 0.10 + 0.10 * pulse;
+      ctx.fillStyle = gem;
+      ctx.beginPath(); ctx.arc(0, 0, r * (2.4 + pulse * 0.8), 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    // Stepped plinth: two weathered discs.
+    ctx.fillStyle = shade(stone, -0.25);
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = stone;
+    ctx.beginPath(); ctx.arc(0, -r * 0.12, r * 0.66, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    // The needle: a tall taper up-screen, lit on its left face.
+    const h = r * 2.9;
+    ctx.fillStyle = shade(stone, 0.08);
+    ctx.beginPath();
+    ctx.moveTo(0, -h); ctx.lineTo(r * 0.30, -r * 0.2); ctx.lineTo(-r * 0.30, -r * 0.2);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = shade(stone, 0.45);
+    ctx.beginPath();
+    ctx.moveTo(0, -h); ctx.lineTo(-r * 0.30, -r * 0.2); ctx.lineTo(-r * 0.06, -r * 0.2);
+    ctx.closePath(); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Rune seams up the taper — they catch the gem's tint as it wakes.
+    ctx.strokeStyle = withAlpha(gem, p.lit ? 0.5 + 0.4 * pulse : 0.25 + 0.2 * pulse);
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(0, -h * 0.92); ctx.lineTo(0, -r * 0.3);
+    ctx.moveTo(-r * 0.12, -h * 0.55); ctx.lineTo(r * 0.12, -h * 0.55);
+    ctx.moveTo(-r * 0.09, -h * 0.34); ctx.lineTo(r * 0.09, -h * 0.34);
+    ctx.stroke();
+    // The scrying gem at the tip.
+    const gr = r * (p.lit ? 0.34 : 0.26) + pulse * r * 0.08;
+    if (p.lit) {
+      ctx.globalAlpha = 0.30 + 0.25 * pulse;
+      ctx.fillStyle = gem;
+      ctx.beginPath(); ctx.arc(0, -h, gr * 2.6, 0, Math.PI * 2); ctx.fill();
+      // Spark motes ringing the tip.
+      ctx.globalAlpha = 0.75;
+      for (let k = 0; k < 3; k++) {
+        const a = time * 1.7 + k * (Math.PI * 2 / 3) + o.pos.y * 0.01;
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * gr * 3.1, -h + Math.sin(a) * gr * 1.6, 1.5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = p.lit ? 0.95 : 0.5 + 0.3 * pulse;
+    ctx.fillStyle = gem;
+    ctx.beginPath(); ctx.arc(0, -h, gr, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
 /** SOMEONE BUILT A SNOWMAN — two stacked snowballs from above, coal eyes
  *  toward the facing, stick arms akimbo. Winter's most important doodad. */
 const snowman: GroupPainter = (env, group) => {
@@ -6476,7 +6551,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
-  tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, crowdRow, door, breach, landmass, beacon, fallback,
+  tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, crowdRow, door, breach, landmass, beacon, surveySpire, fallback,
   pyre, hangingCage, warBanner, hellforge,
   gateArch, tortureRack,
 };

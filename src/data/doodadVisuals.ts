@@ -1147,6 +1147,20 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'beacon', order: 59,
     light: { radius: 120, color: '#7fd0ff', intensity: 0.4 },
   },
+  // --- SURVEY SPIRES (the 'beacon' zone objective — data/beacons.ts) --------
+  // One painter, two kinds: the engine swaps dormant → lit at full charge (a
+  // pure KIND swap, so the bake cache and the light layer both follow the
+  // data). The dormant stone barely breathes; the lit one is a landmark lamp.
+  survey_spire: {
+    painter: 'surveySpire', order: 54, shadow: 0.5, longShadow: 1.6,
+    params: { stone: 'theme:obstacle|#646c7a', gem: '#8fd4ff' },
+    light: { radius: -2.6, color: '#8fd4ff', intensity: 0.16 },
+  },
+  survey_spire_lit: {
+    painter: 'surveySpire', order: 54, shadow: 0.5, longShadow: 1.6,
+    params: { stone: 'theme:obstacle|#646c7a', gem: '#bfe8ff', lit: true },
+    light: { radius: -5.0, color: '#9fdcff', intensity: 0.6, flicker: 1.6 },
+  },
 
   // --- The AETHERIAL kit (vis/paintersAether.ts — the cloud shelves) --------
   cloud_billow: {
