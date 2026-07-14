@@ -1309,6 +1309,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'fountain', order: 53, shadow: 0.4,
     light: { radius: -2.0, color: '#bfe0f8', intensity: 0.18 },
   },
+  // --- THE WEATHERWORKS KIT (grounded weather, any land biome) -------------
+  // The Aetherial dressing's earthbound cousins: same painters, humbler
+  // dress — a vapor floor-pool (liquid painter in mist tones), a brittle
+  // storm-crystal (aetherCrystal in charged grey-green), and the
+  // haven-stone (the waystone's painter wearing the Cloudherd's tint).
+  mist_pool: {
+    painter: 'liquid', order: 46,
+    blend: { strength: 0.28, feather: 20, color: '#cfd8e6' },
+    params: {
+      core: { color: '#d4deea', alpha: 0.22 },
+      tufts: { color: '#c4d2e2', flower: '#eef4fa' },
+    },
+  },
+  stormglass_shard: {
+    painter: 'aetherCrystal', order: 50, shadow: 0.25,
+    params: { body: '#cfd8b8', deep: '#8a9a6c', gleam: '#fdffe8' },
+    light: { radius: -2.6, color: '#e8f0c8', intensity: 0.28, flicker: 1.8 },
+  },
+  haven_stone: {
+    painter: 'surveySpire', order: 54, shadow: 0.5, longShadow: 1.2,
+    params: { stone: 'theme:obstacle|#68707e', gem: '#cfeaff' },
+    light: { radius: -2.8, color: '#cfeaff', intensity: 0.2, flicker: 0.6 },
+  },
   // Pale fleece-grass (the liquid tuft painter in cloud colors) — the
   // grazers' pasture; soft floor the shelves read as LIVED ON.
   cloudwool_tuft: {

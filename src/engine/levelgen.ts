@@ -246,6 +246,11 @@ export type KnownDoodadKind =
   | 'gale_vane'        // a weathervane arrow leaning hard into the prevailing run
   | 'cloud_coral'      // wind-sculpted vapor-stone: layered shelf-fins, rim-lit
   | 'spire_of_gales'   // the monument: a tiered vane-crowned spire, streamered
+  // THE WEATHERWORKS KIT — grounded weather ANY land biome may wear (the
+  // Aetherial dressing's earthbound cousins; the Cloudherd's world-echo)
+  | 'mist_pool'        // a shallow hollow where cold vapor pools and slides (soft floor)
+  | 'stormglass_shard' // a storm-charged crystal tine — brittle; pops feed the 'surface' craft
+  | 'haven_stone'      // a squat standing stone breathing a slow ring of sheltering vapor
   // The undergrowth kit (the JUNGLE's cut-your-own-path fabric)
   | 'jungle_brush'     // a dense plug of growth choking a trail — one good cut opens it
   | 'verdure_face'     // brush knotted over the living wall — cut it and carve INTO the mass
@@ -1136,6 +1141,16 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   updraft_vent:   { overlap: 'ground', spacing: 90,
     effect: { id: 'status_wash', statusId: 'windswept', interval: 0.8, radius: 46, chance: 1, power: 2.5 } },
   cloudwool_tuft: { overlap: 'ground', spacing: 36 },
+  // THE WEATHERWORKS KIT — grounded weather for any land biome: a vapor
+  // floor-pool, a brittle storm-crystal (surface-proc food anywhere), and
+  // the haven-stone — the status_wash axis breathing the Cloudherd's own
+  // cloudhaven, so the world teaches the vocabulary before any gem drops
+  // (the found-not-taught doctrine).
+  mist_pool:        { overlap: 'ground', spacing: 60 },
+  stormglass_shard: { overlap: 'solid', spacing: 76, blocksMove: true, blocksShot: false,
+    brittle: { on: ['hit'], text: 'the stormglass rings apart!', color: '#e8f0c8' } },
+  haven_stone:      { overlap: 'solid', spacing: 150, blocksMove: true, blocksShot: false,
+    effect: { id: 'status_wash', statusId: 'cloudhaven', interval: 0.8, radius: 52, chance: 1, power: 2.5 } },
   chime_stand:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85 },
   gale_vane:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7 },
   cloud_coral:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 34, bodyScale: 0.88 },
@@ -3647,6 +3662,9 @@ registerStamp('skyglass_spur', stampSingle('skyglass_spur', [9, 14]));
 registerStamp('updraft_vent', stampSingle('updraft_vent', [16, 22]));
 registerStamp('cloudwool_tuft', stampSingle('cloudwool_tuft', [10, 16]));
 registerStamp('chime_stand', stampSingle('chime_stand', [10, 13]));
+registerStamp('mist_pool', stampSingle('mist_pool', [16, 24]));
+registerStamp('stormglass_shard', stampSingle('stormglass_shard', [9, 14]));
+registerStamp('haven_stone', stampSingle('haven_stone', [12, 16]));
 registerStamp('gale_vane', stampSingle('gale_vane', [9, 12]));
 registerStamp('cloud_coral', stampSingle('cloud_coral', [16, 30]));
 registerStamp('spire_of_gales', stampSingle('spire_of_gales', [24, 32]));

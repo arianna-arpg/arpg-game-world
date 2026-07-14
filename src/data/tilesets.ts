@@ -528,6 +528,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'camp', count: [0, 1] },
       // Brittle ice fangs — shatter when brushed.
       { kind: 'icicle_cluster', count: [1, 3] },
+      // Cold vapor pooling in the hollows (the Weatherworks kit).
+      { kind: 'mist_pool', count: [1, 2] },
     ],
     packs: {
       count: [6, 9], size: [3, 6],
@@ -599,6 +601,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'ruin', count: [0, 1] },
       { kind: 'camp', count: [0, 1] },
       { kind: 'icicle_cluster', count: [2, 4] },
+      // Storm-charged glass the white wind seeded (brittle; Weatherworks kit).
+      { kind: 'stormglass_shard', count: [1, 2] },
     ],
     packs: {
       count: [6, 9], size: [3, 6],
@@ -1900,6 +1904,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
       // Old field lines: hedgerows the pasture grew back around.
       { kind: 'formation', count: [1, 2], formation: 'oak_hedgerow' },
+      // Morning weather that never quite burns off (the Weatherworks kit).
+      { kind: 'mist_pool', count: [1, 3] },
+      { kind: 'haven_stone', count: [0, 1] },
     ],
     packs: {
       count: [5, 7], size: [2, 4],
@@ -2464,6 +2471,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Storm-swept moors remember their strikes.
       { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
       { kind: 'charged_crystal', count: [0, 2] },
+      // What the strikes LEAVE: charged brittle glass + a sheltering stone
+      // the drovers camp against (the Weatherworks kit).
+      { kind: 'stormglass_shard', count: [1, 3] },
+      { kind: 'haven_stone', count: [0, 1] },
       // Crags crown the HIGH ground (elevation strata: coherent height noise
       // domed toward the zone's heart).
       { kind: 'rocks', count: [2, 4], radius: [20, 44],
@@ -2808,6 +2819,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Blooms pool in the LOW folds (elevation strata — the hollows keep
       // their water; the rises keep their grass).
       { kind: 'flowers', count: [1, 3], where: { field: 'elevation', max: 0.4, params: { scale: 700 } } },
+      // The drovers' weather: pooled morning vapor in the same low folds,
+      // and a haven-stone to camp against (the Weatherworks kit).
+      { kind: 'mist_pool', count: [1, 2], where: { field: 'elevation', max: 0.4, params: { scale: 700 } } },
+      { kind: 'haven_stone', count: [0, 1] },
     ],
     packs: {
       count: [6, 9], size: [3, 5],

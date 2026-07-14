@@ -5095,7 +5095,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#d8b06a', shape: 'octagon', radius: 12, material: 'cloth', look: 'beastkin_ritualist',
     base: { life: 55, moveSpeed: 120, mana: 150, manaRegen: 10 },
     mods: [mod('fireRes', 'flat', 0.3)],
-    skills: ['firebolt', 'despair', 'war_cry'], xp: 30, faction: 'beastkin', adorn: 'horns',
+    // Low Ceiling: the tribes drop weather on archers — a hostile use of
+    // the same conjure seam the player's Cloudherd rides (enemy-side
+    // smother; the counterplay is stepping out from under their murk).
+    skills: ['firebolt', 'despair', 'war_cry', 'low_ceiling'], xp: 30, faction: 'beastkin', adorn: 'horns',
     gemBias: ['spell', 'fire'], wardPriority: 1,
     detection: 1.2,
     brain: { type: 'artillery', squad: { idle: { style: 'siege' } } },
@@ -6961,7 +6964,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#cfe0f4', shape: 'star', radius: 15, material: 'ethereal', look: 'zephyrid_matron',
     base: { life: 240, moveSpeed: 100, mana: 240, manaRegen: 10, energyShield: 50, evasion: 30 },
     mods: [mod('coldRes', 'flat', 0.4), mod('lightningRes', 'flat', 0.3)],
-    skills: ['updraft_burst', 'skyhook', 'cirrus_veil'], xp: 96, faction: 'zephyrid',
+    // Stormcradle is HER side's domain: the matron raises a charged camp
+    // over her flock (side-filtered grants — the cloud takes the sky's
+    // side, and standing in it winds YOU). The Cloudherd vocabulary,
+    // taught by the world before any gem drops.
+    skills: ['updraft_burst', 'skyhook', 'cirrus_veil', 'stormcradle'], xp: 96, faction: 'zephyrid',
     presence: { from: 12, fadeIn: 5 },
     gemBias: ['cold', 'aoe'],
     brain: {
