@@ -238,6 +238,10 @@ export type KnownDoodadKind =
   // The Driftways kit (the aether_drift biome — wind country over the flux)
   | 'zephyr_totem'     // a carved wind-spirit pole trailing pale streamers (lit)
   | 'sky_lantern'      // a tethered paper lantern bobbing on the wind (warm light)
+  | 'mist_font'        // a carved basin breathing a slow plume of cool vapor (soft light)
+  | 'skyglass_spur'    // a lone brittle crystal tine — one blow and it sings apart
+  | 'updraft_vent'     // a breathing rift in the cloud: stand in the plume, walk quicker
+  | 'cloudwool_tuft'   // pale fleece-grass the grazers crop — the shelf's soft floor
   | 'chime_stand'      // an aeolian chime frame — the wind plays the zone's score
   | 'gale_vane'        // a weathervane arrow leaning hard into the prevailing run
   | 'cloud_coral'      // wind-sculpted vapor-stone: layered shelf-fins, rim-lit
@@ -1089,6 +1093,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // TETHERED float: a lantern bobbing on its line may hang over the gaps off
   // a drift coast — the one dressing that's ALLOWED off the standing cloud.
   sky_lantern:    { overlap: 'ground', spacing: 56, voidOk: true },
+  mist_font:      { overlap: 'solid', spacing: 120, blocksMove: true, blocksShot: false },
+  skyglass_spur:  { overlap: 'solid', spacing: 72, blocksMove: true, blocksShot: false,
+    brittle: { on: ['hit'], text: 'the skyglass sings apart!', color: '#cfe8f8' } },
+  // THE SPEED PAD axis (status_wash): stand in the plume, walk quicker —
+  // the whole pad/font/choke family is one DoodadRule.effect row per kind.
+  updraft_vent:   { overlap: 'ground', spacing: 170,
+    effect: { id: 'status_wash', statusId: 'windswept', interval: 0.8, radius: 46, chance: 1, power: 2.5 } },
+  cloudwool_tuft: { overlap: 'ground', spacing: 36 },
   chime_stand:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85 },
   gale_vane:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7 },
   cloud_coral:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 34, bodyScale: 0.88 },
@@ -3586,6 +3598,10 @@ registerStamp('aureate_brazier', stampSingle('aureate_brazier', [9, 12]));
 // The Driftways kit: wind furniture.
 registerStamp('zephyr_totem', stampSingle('zephyr_totem', [11, 15]));
 registerStamp('sky_lantern', stampSingle('sky_lantern', [8, 11]));
+registerStamp('mist_font', stampSingle('mist_font', [14, 18]));
+registerStamp('skyglass_spur', stampSingle('skyglass_spur', [9, 14]));
+registerStamp('updraft_vent', stampSingle('updraft_vent', [16, 22]));
+registerStamp('cloudwool_tuft', stampSingle('cloudwool_tuft', [10, 16]));
 registerStamp('chime_stand', stampSingle('chime_stand', [10, 13]));
 registerStamp('gale_vane', stampSingle('gale_vane', [9, 12]));
 registerStamp('cloud_coral', stampSingle('cloud_coral', [16, 30]));

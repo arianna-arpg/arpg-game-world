@@ -1255,6 +1255,36 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { body: '#bcd6ff', deep: '#6c86c8', gleam: '#ffffff' },
     light: { radius: -3.2, color: '#9fc4ff', intensity: 0.4, flicker: 0.8 },
   },
+  // A lone icier tine of the same crystal painter — brittle (one blow and it
+  // sings apart): the shelves get something to CUT and the lurker gets kin
+  // to hide among.
+  skyglass_spur: {
+    painter: 'aetherCrystal', order: 50, shadow: 0.25,
+    params: { body: '#d4ecf8', deep: '#8fb4d8', gleam: '#ffffff' },
+    light: { radius: -2.6, color: '#bfe4f8', intensity: 0.3, flicker: 0.5 },
+  },
+  // The vent painter in sky dress: a breathing rift whose plume QUICKENS
+  // (DoodadRule.effect status_wash → windswept) — the speed-pad made ground.
+  updraft_vent: {
+    painter: 'vent', order: 46,
+    params: { rim: '#b8c6de', throat: '#8fa3cc', hot: '#dcecf8', core: '#ffffff' },
+    light: { radius: -2.4, color: '#dceafc', intensity: 0.22, flicker: 2.4 },
+  },
+  // The fountain painter breathing cold vapor instead of votive water.
+  mist_font: {
+    painter: 'fountain', order: 53, shadow: 0.4,
+    light: { radius: -2.0, color: '#bfe0f8', intensity: 0.18 },
+  },
+  // Pale fleece-grass (the liquid tuft painter in cloud colors) — the
+  // grazers' pasture; soft floor the shelves read as LIVED ON.
+  cloudwool_tuft: {
+    painter: 'liquid', order: 47,
+    blend: { strength: 0.3, feather: 18, color: '#e8eff9' },
+    params: {
+      core: { color: '#e8eff9', alpha: 0.2 },
+      tufts: { color: '#dce6f4', flower: '#ffffff' },
+    },
+  },
   seraph_statue: {
     painter: 'seraphStatue', order: 54, shadow: 0.5, longShadow: 1.4,
     params: { marble: '#e3e2dc', shadow: '#9a9aa4', gold: '#d8b56a' },

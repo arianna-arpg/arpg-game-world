@@ -2787,6 +2787,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'prayer_bell', count: [1, 3] },
       { kind: 'seraph_statue', count: [1, 3] },
       { kind: 'flowers', count: [1, 3] },
+      // The wild dressing: fleece pasture, singing brittle tines, and the
+      // breathing rifts whose plumes quicken a crossing (speed pads).
+      { kind: 'cloudwool_tuft', count: [3, 7] },
+      { kind: 'skyglass_spur', count: [2, 5] },
+      { kind: 'updraft_vent', count: [1, 2] },
     ],
     common: [
       { kind: 'clearing', count: [1, 2], radius: [90, 140] },
@@ -2958,6 +2963,11 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'prayer_bell', count: [2, 4] },
       { kind: 'aether_crystal', count: [3, 6] },
       { kind: 'flowers', count: [1, 3] },
+      // Court dressing: vapor fonts on the terraces, singing tines between
+      // the spans, a breathing rift where the processions quicken.
+      { kind: 'mist_font', count: [1, 3] },
+      { kind: 'skyglass_spur', count: [1, 4] },
+      { kind: 'updraft_vent', count: [0, 2] },
     ],
     common: [
       { kind: 'clearing', count: [1, 2], radius: [90, 130] },
