@@ -17,6 +17,7 @@ import { CRUSADE } from './defs/crusade';
 import { DEADWAKE } from './defs/deadwake';
 import { DESCENT } from './defs/descent';
 import { DEMON_INVASION } from './defs/demonInvasion';
+import { EXTRACTION } from './defs/extraction';
 import { FACTION_POLITICS } from './defs/factionPolitics';
 import { FRACTURES } from './defs/fractures';
 import { HAUNTING } from './defs/haunting';
@@ -46,6 +47,7 @@ export const PACKAGES: ContentPackage[] = [
   DESCENT,
   ASCENT,
   DEADWAKE,
+  EXTRACTION,
   MIGRATION,
   CONTAGION,
   HOLDFAST,
@@ -77,6 +79,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   descent: 0xde5c,
   ascent: 0xa5ce,
   deadwake: 0xdead,
+  extraction: 0xe57a,
   migration: 0x819a,
   contagion: 0xc047,
   holdfast: 0x401d,

@@ -13,6 +13,29 @@ import type { EncounterDef, EncounterScale } from '../packages/encounters';
 
 export type EncPhase = 'dormant' | 'open' | 'closing';
 
+/** EXTRACT-ONLY runtime riding an ActiveEncounter (def.extract set). One
+ *  optional bag keeps plain encounters byte-identical. Zone-local like its
+ *  host — a defense abandoned mid-draw resets with the zone. */
+export interface ExtractRuntime {
+  /** The node body's actor id (a driven, team-player objective). */
+  nodeId: number;
+  /** The well doodad under it (index-free identity; kind-swapped at end). */
+  well?: import('./levelgen').Doodad;
+  /** Dwell-to-arm bookkeeping (the realm-gate pattern). */
+  dwellStart: number;
+  /** Seconds the defense has stood (the payout basis; clock counts down in
+   *  the host's `timer`, this counts UP for the fraction math). */
+  stood: number;
+  /** Next threat re-seed (the standing-disturbance beacon). */
+  reseedAt: number;
+  /** Zone-entry bearings per swarmer id — "whence they came", for dispersal. */
+  entries: Map<number, Vec2>;
+  /** Set once the end state resolved (deplete/shatter), before 'closing'. */
+  settled?: 'depleted' | 'shattered';
+  /** The discovery line spoke once (first attentive approach). */
+  spoke?: boolean;
+}
+
 export interface ActiveEncounter {
   def: EncounterDef;
   /** The scale rolled at placement (fixes baseTime / radii / spawn cadence). */
@@ -33,4 +56,6 @@ export interface ActiveEncounter {
   /** Actor ids spawned by this encounter (so their kills feed it even if they
    *  wander out of the radius). */
   spawned: Set<number>;
+  /** Extract-mode runtime (def.extract) — absent on plain encounters. */
+  ex?: ExtractRuntime;
 }

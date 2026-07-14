@@ -113,6 +113,29 @@ function validateEncounter(p: ContentPackage, e: EncounterDef, look: RegistryLoo
     if (s.spawnBatch[0] > s.spawnBatch[1]) sb(`spawnBatch lo > hi`);
     if (s.maxRadius < s.startRadius) sb(`maxRadius < startRadius`);
   }
+  // The two promotions are exclusive: an encounter is a door OR a prize.
+  if (e.surge && e.extract) bad(`declares both surge and extract — pick one promotion`);
+  const x = e.extract;
+  if (x) {
+    if (!(x.node.lifeBase > 0)) bad(`extract node.lifeBase must be > 0`);
+    if (!(x.arm.dwellSec > 0)) bad(`extract arm.dwellSec must be > 0`);
+    if (!(x.arm.radius > 0)) bad(`extract arm.radius must be > 0`);
+    if (!(x.swarm.fieldCap >= 1)) bad(`extract swarm.fieldCap must be >= 1`);
+    if (x.swarm.intervalStart[0] > x.swarm.intervalStart[1]) bad(`extract swarm.intervalStart lo > hi`);
+    if (x.swarm.intervalEnd[0] > x.swarm.intervalEnd[1]) bad(`extract swarm.intervalEnd lo > hi`);
+    if (x.swarm.batchStart[0] > x.swarm.batchStart[1]) bad(`extract swarm.batchStart lo > hi`);
+    if (x.swarm.batchEnd[0] > x.swarm.batchEnd[1]) bad(`extract swarm.batchEnd lo > hi`);
+    if (x.swarm.entryRadius[0] > x.swarm.entryRadius[1]) bad(`extract swarm.entryRadius lo > hi`);
+    if (!(x.swarm.mixChance >= 0 && x.swarm.mixChance <= 1)) bad(`extract swarm.mixChance out of [0,1]`);
+    if (x.swarm.source === 'factions' && !e.factions.length) bad(`extract source 'factions' with no factions`);
+    if (!(x.yield.packets >= 1)) bad(`extract yield.packets must be >= 1`);
+    if (!(x.yield.minFrac >= 0 && x.yield.minFrac < 1)) bad(`extract yield.minFrac out of [0,1)`);
+    if (!x.ledgerLost) bad(`extract ledgerLost must be non-empty`);
+    if (x.disperse.lingerSec[0] > x.disperse.lingerSec[1]) bad(`extract disperse.lingerSec lo > hi`);
+    for (const s of e.scales) {
+      if (!(s.nodeLifeMul && s.nodeLifeMul > 0)) bad(`scale '${s.id}' needs nodeLifeMul > 0 under extract`);
+    }
+  }
   const g = e.surge;
   if (!g) return;
   if (!look.skill(g.meteorSkillId)) bad(`surge meteorSkillId names unknown skill '${g.meteorSkillId}'`);

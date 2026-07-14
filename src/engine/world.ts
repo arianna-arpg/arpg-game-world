@@ -47,7 +47,7 @@ import { MONSTER_THEMES } from '../data/infrequents';
 import { VENDORS } from '../data/vendors';
 import { ITEM_BASES } from '../data/itembases';
 import { SKILL_LIST, SKILLS } from '../data/skills';
-import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
+import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE, MONSTER_TURN_DEFAULT, factionStance, temperOf, type MonsterDef, type DeathBurstDef, type DeathBurstMode } from '../data/monsters';
 import { presenceMul, presenceTable } from './presence';
 import { killRuleMatches, killRules, type KillCtx, type KillRule } from './killHandlers';
 import { CLASSES, classSkillStat, PROGRESSION, type ClassDef } from '../data/classes';
@@ -156,7 +156,8 @@ import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherStrike } from '../world/weather';
 import { dayCycle } from '../world/daynight';
 import { clampToBounds, exitInside, samplePoint, type Bounds } from '../world/shape';
-import { distFromHome, traitsOf, isDeathAligned } from '../world/traits';
+import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
+import { extractionLookFor } from '../data/extraction';
 import { REMNANT_KINDS, remnantDropStat } from '../data/remnants';
 import {
   ORB_DEFS, ORB_CAP, orbAmount, orbOnHitStat, orbOnKillStat, orbOnHurtStat,
@@ -1609,6 +1610,11 @@ export class World {
   /** Live in-zone ENCOUNTERS (Breach diamonds + their open fields). Zone-local,
    *  rebuilt each loadZone, never serialized — re-rolls from the run seed. */
   encounters: ActiveEncounter[] = [];
+  /** EXTRACTION DISPERSAL ORDERS: survivors of a settled extraction walking
+   *  home to their recorded entry point (mode 'wary' cancels if struck —
+   *  the rouse sets aiAwakened; 'resolute' never turns). Territorial bodies
+   *  enter with a future leaveAt — the lingering expedition. Zone-local. */
+  private extractionDepartures: { id: number; leaveAt: number; goal: Vec2; arrive: number; mode: 'resolute' | 'wary'; walking?: boolean }[] = [];
   /** TERRAFORM growths alive in this zone (data/attunements.ts): each entry
    *  tracks a doodad this pass PUSHED into `doodads` plus its lifespan. Zone-
    *  local, never serialized; cleared each loadZone (the doodad list itself is
@@ -3617,6 +3623,12 @@ export class World {
         reset: () => { this.materializedHaunts.clear(); this.hauntStreamTimer = 0; },
       },
       {
+        // Extraction: the seam itself re-rolls with the zone (encounter
+        // fabric), but standing DISPERSAL ORDERS are zone-local state.
+        id: 'extraction',
+        reset: () => { this.extractionDepartures.length = 0; },
+      },
+      {
         // The band pours via updateBrigandRaid — reset only.
         id: 'brigands',
         reset: () => { this.materializedBrigands.clear(); this.brigandLingerLeft = 0; this.brigandsDrifting = false; },
@@ -3981,6 +3993,10 @@ export class World {
       // seed in hell unless its def says so.
       if (!(spec.dimensions ?? ['surface']).includes(zoneDim)) continue;
       if (!eventTargetable(spec.packageId, def)) continue; // biome policy + structural floor
+      // EXTRACT encounters ask the overlay's SPENT LEDGER: a drained seam's
+      // ground stays quiet until it replenishes (the essence-faucet guard the
+      // deterministic per-zone roll needs — mycelia-suppression pattern).
+      if (spec.extract && this.sim.extractionField?.nodeAvailable(def.id) === false) continue;
       const rng = new Rng((packageSeed(this.manifest.seed, spec.packageId) ^ hashStr(def.id)) >>> 0);
       // Per-zone (encounterDensity), per-biome (eventDensityMul), and live MYCELIA
       // suppression compose onto the package pressure — a Field expanse seeds more
@@ -3996,11 +4012,15 @@ export class World {
       : winners[new Rng((this.manifest.seed ^ hashStr(def.id) ^ 0xe11c) >>> 0).int(0, winners.length - 1)];
     this.encRng = chosen.rng; // spawn pulses continue from the chosen package's stream
     const at = this.clampPos(this.farPoint(520, true), 24);
-    this.encounters.push({
+    const enc: ActiveEncounter = {
       def: chosen.def, scale: chosen.scale, pos: vec(at.x, at.y), phase: 'dormant',
       radius: chosen.scale.startRadius, timer: 0, maxTimer: 0, spawnTimer: 0,
       kills: 0, bonusUsed: 0, spawned: new Set(),
-    });
+    };
+    this.encounters.push(enc);
+    // An EXTRACT encounter stands its node the moment the zone does — the seam
+    // is scenery you can find, not a diamond that pops on approach.
+    if (enc.def.extract) this.materializeExtractionNode(enc);
   }
 
   /** Step onto the diamond → OPEN the field. Bumps the discovery ledger. */
@@ -4015,9 +4035,12 @@ export class World {
     this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: e.scale.startRadius, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
   }
 
-  /** Grow each open field, pulse spawns inside it, drain the kill-fed timer. */
+  /** Grow each open field, pulse spawns inside it, drain the kill-fed timer.
+   *  (Extract encounters branch to their own driver — dwell-armed, counting
+   *  DOWN, defended — so this path stays byte-identical for the plain kind.) */
   private updateEncounters(dt: number): void {
     for (const e of this.encounters) {
+      if (e.def.extract) { this.updateExtraction(e, dt); continue; }
       if (e.phase !== 'open') continue;
       e.radius = Math.min(e.scale.maxRadius, e.radius + e.scale.growthPerSec * dt);
       e.spawnTimer -= dt;
@@ -4031,6 +4054,9 @@ export class World {
     for (let i = this.encounters.length - 1; i >= 0; i--) {
       if (this.encounters[i].phase === 'closing') this.encounters.splice(i, 1);
     }
+    // Dispersal orders OUTLIVE their encounter (the walk home continues after
+    // the seam entry is spliced) — swept here, every frame, host-side.
+    this.updateExtractionDepartures(dt);
   }
 
   /** Spawn n monsters from the encounter roster, UNIFORMLY inside its radius. */
@@ -4092,6 +4118,340 @@ export class World {
 
   /** Read-only view for the renderer (ring + diamond + timer bar). */
   encountersView(): readonly ActiveEncounter[] { return this.encounters; }
+
+  // ------------------------------------------------- EXTRACTION (defend-the-node)
+  // The inverse breach: the placed object is the PRIZE. Dwell to tap it, a
+  // rolled clock runs DOWN, the zone's own population pours in fixated on the
+  // node (the tuning graft + threat chart), and the yield — essence — scales
+  // with how long the stand held. Every number rides the def's ExtractSpec.
+
+  /** Stand the seam up with the zone (dormant: untargetable scenery until the
+   *  dwell arms it). The body is per-biome (data/extraction.ts); the well
+   *  doodad under it carries the light + the spent face; dressing scatters
+   *  the "environmental shift" the locals are about to object to. */
+  private materializeExtractionNode(e: ActiveEncounter): void {
+    const spec = e.def.extract!;
+    const look = extractionLookFor(this.zone.biome);
+    const lvl = Math.max(1, this.zone.level);
+    const node = this.createMonster(look.node, lvl, 'player');
+    const target = Math.round((spec.node.lifeBase + lvl * spec.node.lifePerLevel) * (e.scale.nodeLifeMul ?? 1));
+    node.sheet.setSource('extract_node', [{ stat: 'life', kind: 'flat', value: Math.max(0, target - node.maxLife()) }]);
+    node.life = node.maxLife();
+    node.pos = vec(e.pos.x, e.pos.y);
+    node.untargetable = true;   // scenery until tapped —
+    node.invulnerable = true;   // — no ambient wanderer chews the prize early
+    node.tag = 'extraction_node';
+    node.eventKey = `extraction:${this.zone.id}`;
+    this.actors.push(node);
+    const well: Doodad = { pos: vec(e.pos.x, e.pos.y + 6), radius: 26, kind: look.well ?? 'marrow_well' };
+    this.doodads.push(well);
+    e.ex = { nodeId: node.id, well, dwellStart: 0, stood: 0, reseedAt: 0, entries: new Map() };
+    // Per-biome dressing on radial bands (the runtime ring-scatter idiom).
+    for (const row of look.dressing ?? []) {
+      const n = this.encRng.int(row.count[0], row.count[1]);
+      for (let i = 0; i < n; i++) {
+        const ang = this.encRng.range(0, Math.PI * 2);
+        const r = this.encRng.range(row.ring[0], row.ring[1]);
+        const spot = this.findFreeSpot(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
+        if (spot) this.doodads.push({ pos: spot, radius: this.encRng.range(9, 14), kind: row.kind });
+      }
+    }
+  }
+
+  /** Per-frame extraction driver (dormant = the dwell; open = the defense).
+   *  Branches out of updateEncounters so the plain-encounter path stays
+   *  byte-identical. */
+  private updateExtraction(e: ActiveEncounter, dt: number): void {
+    const spec = e.def.extract!;
+    const ex = e.ex;
+    if (!ex) { e.phase = 'closing'; return; }
+    const node = this.actorById(ex.nodeId);
+    if (e.phase === 'dormant') {
+      if (!node || node.dead) { e.phase = 'closing'; return; } // paranoia — dormant nodes are invulnerable
+      const engaged = !this.player.dead
+        && dist(this.player.pos, e.pos) <= spec.arm.radius + this.player.radius
+        && this.dwellReachable(this.player.pos, e.pos, transitReach('extraction'));
+      if (!engaged || !this.playerIdle()) { ex.dwellStart = 0; return; }
+      if (ex.dwellStart === 0) {
+        ex.dwellStart = this.time;
+        if (!ex.spoke) {
+          ex.spoke = true;
+          this.text(vec(e.pos.x, e.pos.y - 40), spec.text.found, extractionLookFor(this.zone.biome).accent, 13);
+        }
+      }
+      if (this.time - ex.dwellStart >= transitDwell('extraction', spec.arm.dwellSec)) this.armExtraction(e);
+      return;
+    }
+    if (e.phase !== 'open') return;
+    if (!node || node.dead) { this.settleExtraction(e, 'shattered'); return; }
+    ex.stood += dt;
+    e.timer -= dt;
+    // The swarm director: cadence + batch LERP from their start bands to their
+    // end bands along elapsed^rampPower — the long draw ends in a crescendo.
+    const frac = clamp(ex.stood / Math.max(1, e.scale.baseTime), 0, 1);
+    const ramp = Math.pow(frac, spec.swarm.rampPower);
+    e.spawnTimer -= dt;
+    if (e.spawnTimer <= 0 && this.extractionSwarmAlive(e) < spec.swarm.fieldCap) {
+      const i0 = spec.swarm.intervalStart, i1 = spec.swarm.intervalEnd;
+      e.spawnTimer = this.encRng.range(i0[0] + (i1[0] - i0[0]) * ramp, i0[1] + (i1[1] - i0[1]) * ramp);
+      const b0 = spec.swarm.batchStart, b1 = spec.swarm.batchEnd;
+      const batch = Math.round(this.encRng.range(b0[0] + (b1[0] - b0[0]) * ramp, b0[1] + (b1[1] - b0[1]) * ramp));
+      this.spawnExtractionSwarm(e, Math.max(1, batch));
+    }
+    // The standing disturbance: re-seed node threat so decayed grudges drift
+    // back to the work (× each body's own fixation).
+    if (this.time >= ex.reseedAt) {
+      ex.reseedAt = this.time + spec.swarm.beaconSec;
+      for (const id of e.spawned) {
+        const a = this.actorById(id);
+        if (!a || a.dead) continue;
+        const fix = (a.defId ? MONSTERS[a.defId]?.aggro?.fixation : undefined) ?? 1;
+        a.addThreat(ex.nodeId, spec.swarm.pulseThreat * fix);
+      }
+    }
+    if (e.timer <= 0) this.settleExtraction(e, 'depleted');
+  }
+
+  /** The dwell fires: the clock starts and the ground answers. */
+  private armExtraction(e: ActiveEncounter): void {
+    const spec = e.def.extract!;
+    const ex = e.ex!;
+    const node = this.actorById(ex.nodeId);
+    if (!node || node.dead) return;
+    e.phase = 'open';
+    e.timer = e.scale.baseTime;
+    e.maxTimer = e.scale.baseTime;
+    e.spawnTimer = 1.4; // one breath before the first pulse — see it begin
+    node.untargetable = false;
+    node.invulnerable = false;
+    bumpLedger(this.ledger, e.def.ledger.onEncounter); // DISCOVERY — the Vault card surfaces
+    const look = extractionLookFor(this.zone.biome);
+    this.text(vec(e.pos.x, e.pos.y - 30), `${e.scale.label} — ${spec.text.armed}`, look.accent, 16);
+    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 90, color: look.accent, life: 0.6, maxLife: 0.6 });
+  }
+
+  /** Living swarmers THIS extraction fielded (its own cap, below the shared
+   *  fieldCap — a defense is a stand, not a drowning). */
+  private extractionSwarmAlive(e: ActiveEncounter): number {
+    let n = 0;
+    for (const id of e.spawned) {
+      const a = this.actorById(id);
+      if (a && !a.dead) n++;
+    }
+    return n;
+  }
+
+  /** One rim-entry point for a swarmer: a ring band off the node, shoved off
+   *  any camping hero (the deadwake standoff, cheap edition). */
+  private extractionEntryPoint(e: ActiveEncounter): Vec2 {
+    const spec = e.def.extract!;
+    let last = vec(e.pos.x, e.pos.y);
+    for (let tries = 0; tries < 5; tries++) {
+      const ang = this.encRng.range(0, Math.PI * 2);
+      const r = this.encRng.range(spec.swarm.entryRadius[0], spec.swarm.entryRadius[1]);
+      last = this.clampPos(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
+      if (dist(last, this.player.pos) >= 170) break;
+    }
+    return last;
+  }
+
+  /** Pour one pulse: the zone's OWN population (conquest-aware), seasoned by
+   *  the def's minority rosters, each body grafted to fixate on the node —
+   *  and its entry point remembered, for the walk home. */
+  private spawnExtractionSwarm(e: ActiveEncounter, n: number): void {
+    const spec = e.def.extract!;
+    const ex = e.ex!;
+    const lvl = Math.max(1, this.zone.level + spec.swarm.levelBonus);
+    const native = spec.swarm.source === 'native'
+      ? this.effectiveSpawn(this.zone, this.baseTable(this.zone)).table : [];
+    for (let i = 0; i < n; i++) {
+      let table = native;
+      let fac: string | undefined;
+      if (!table.length || (spec.swarm.mixChance > 0 && this.encRng.chance(spec.swarm.mixChance))) {
+        const facId = this.encRng.pick(e.def.factions);
+        const roster = FACTIONS[facId];
+        if (roster?.table.length) { table = roster.table; fac = facId; }
+      }
+      if (!table.length) continue;
+      const type = this.weightedPick(table, lvl);
+      const m = this.createMonster(type, lvl, 'enemy');
+      m.faction = fac ?? MONSTERS[type]?.faction;
+      m.tag = 'extraction_spawn';
+      m.eventKey = `extraction:${this.zone.id}`;
+      const at = this.extractionEntryPoint(e);
+      m.pos = this.clampPos(vec(at.x + rand(-30, 30), at.y + rand(-30, 30)), m.radius);
+      ex.entries.set(m.id, vec(m.pos.x, m.pos.y));
+      // THE FIXATION GRAFT: the disturbance is the enemy — until you out-shout
+      // it on the chart (resolveHit books your damage × your threatGen), then
+      // decay melts the grudge and the body drifts back to work.
+      const ag = m.defId ? MONSTERS[m.defId]?.aggro : undefined;
+      m.aiTuning = {
+        target: {
+          prefer: 'highestThreat', relentless: true, stickiness: spec.swarm.stickiness,
+          threat: { damage: ag?.fury ?? 1, decay: spec.swarm.decay * (ag?.waver ?? 1) },
+        },
+      };
+      m.addThreat(ex.nodeId, spec.swarm.seedThreat * (ag?.fixation ?? 1));
+      m.aiTargetId = ex.nodeId;
+      m.aggroed = true;
+      e.spawned.add(m.id);
+      this.actors.push(m);
+    }
+  }
+
+  /** The end, either way: pay by how long the stand held, mark the ground
+   *  spent, and send the swarm home — each body by its own temper. */
+  private settleExtraction(e: ActiveEncounter, outcome: 'depleted' | 'shattered'): void {
+    const spec = e.def.extract!;
+    const ex = e.ex!;
+    if (ex.settled) return;
+    ex.settled = outcome;
+    e.phase = 'closing';
+    const look = extractionLookFor(this.zone.biome);
+    const full = outcome === 'depleted';
+    const frac = full ? 1 : clamp(ex.stood / Math.max(1, e.scale.baseTime), 0, 1);
+    this.payExtraction(e, frac, full);
+    if (full) bumpLedger(this.ledger, e.def.ledger.onClose);
+    else bumpLedger(this.ledger, spec.ledgerLost);
+    this.text(vec(e.pos.x, e.pos.y - 30), full ? spec.text.depleted : spec.text.shattered, look.accent, 16);
+    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 130, color: look.accent, life: 0.6, maxLife: 0.6 });
+    // The node body: a drained seam empties quietly; a shattered one already fell.
+    const node = this.actorById(ex.nodeId);
+    if (node && !node.dead && full) this.slipAway(node, '');
+    // The well stills — the same painter, spent (the ward-seal kind-swap).
+    if (ex.well && !ex.well.kind.endsWith('_spent')) ex.well.kind = `${ex.well.kind}_spent`;
+    // Map memory: this ground is spent until it replenishes.
+    this.sim.extractionField?.markSpent(this.zone.id, this.time);
+    // DISPERSAL — the swarm goes home the way it came, each by its temper.
+    for (const id of e.spawned) {
+      const a = this.actorById(id);
+      if (!a || a.dead) continue;
+      const goal = ex.entries.get(id) ?? this.nearestExitPos(a.pos) ?? vec(a.pos.x, a.pos.y);
+      const temper = temperOf(a.defId ? MONSTERS[a.defId] : undefined, factionTemper(a.faction));
+      if (temper === 'territorial') {
+        // The expedition: drop the fixation, hold the ground on a leash, then go.
+        a.aiTuning = { target: { leash: { radius: spec.arm.radius + 190 } } };
+        a.aiAnchor = vec(e.pos.x, e.pos.y);
+        this.extractionDepartures.push({
+          id, goal, arrive: spec.disperse.arriveDist, mode: 'resolute',
+          leaveAt: this.time + this.encRng.range(spec.disperse.lingerSec[0], spec.disperse.lingerSec[1]),
+        });
+      } else {
+        this.extractionDepartures.push({
+          id, goal, arrive: spec.disperse.arriveDist,
+          mode: temper === 'skittish' ? 'resolute' : 'wary', leaveAt: this.time,
+        });
+      }
+    }
+  }
+
+  /** The pot: small, tunable, honest. Packets scatter at the node and ride
+   *  the ordinary essence pickup (grantEssence → the essence_touched ledger →
+   *  the Vault's salvage station surfaces through play). */
+  private payExtraction(e: ActiveEncounter, frac: number, full: boolean): void {
+    const y = e.def.extract!.yield;
+    if (frac < y.minFrac) return;
+    const lvl = Math.max(1, this.zone.level);
+    const pot = Math.round((y.potBase + lvl * y.potPerLevel) * e.scale.rewardMul
+      * (full ? 1 : Math.pow(frac, y.partialPower)));
+    if (pot <= 0) return;
+    const packets = Math.min(y.packets, pot);
+    const per = Math.floor(pot / packets);
+    let rem = pot - per * packets;
+    for (let i = 0; i < packets; i++) {
+      const count = per + (rem-- > 0 ? 1 : 0);
+      // The grade climb — the essences.ts tierRungs idiom, sweetened on a
+      // full stand; stops at the first level-fail or chance-miss.
+      let tier = Math.max(0, ESSENCE_IDS.indexOf(y.essence as EssenceId));
+      for (const rung of y.rungs) {
+        if (tier >= ESSENCE_IDS.length - 1) break;
+        if (lvl < rung.atLevel) break;
+        if (!this.encRng.chance(Math.min(1, rung.chance + (full ? y.fullDefenseRungBonus : 0)))) break;
+        tier++;
+      }
+      this.dropEssenceAt(vec(e.pos.x + rand(-34, 34), e.pos.y + rand(-30, 30)),
+        { essence: ESSENCE_IDS[tier], count });
+    }
+    const xp = Math.round((y.xpBase + lvl * y.xpPerLevel) * e.scale.rewardMul * frac);
+    if (xp > 0) this.grantXp(xp);
+  }
+
+  /** Walk the dispersal orders: territorial bodies hold until their leaveAt;
+   *  walkers steer home dormant ('extraction_leaver*' tags gate their AI) and
+   *  slip away at the entry point. A wary walker STRUCK on the way out is
+   *  re-awakened by the rouse rule and turns for good. */
+  private updateExtractionDepartures(dt: number): void {
+    if (!this.extractionDepartures.length) return;
+    for (let i = this.extractionDepartures.length - 1; i >= 0; i--) {
+      const d = this.extractionDepartures[i];
+      const a = this.actorById(d.id);
+      if (!a || a.dead) { this.extractionDepartures.splice(i, 1); continue; }
+      if (this.time < d.leaveAt) continue; // the expedition holds
+      if (!d.walking) {
+        d.walking = true;
+        a.aiTuning = undefined;      // the graft lifts — and the brain sleeps below
+        a.threat.clear();
+        a.aiTargetId = undefined;
+        a.aiCommand = undefined;
+        a.aiAwakened = false;
+        a.aiFleeGoal = vec(d.goal.x, d.goal.y);
+        a.tag = d.mode === 'resolute' ? 'extraction_leaver_resolute' : 'extraction_leaver';
+      }
+      if (d.mode === 'wary' && a.aiAwakened) {
+        // Struck on the way out — the departure is off; the native brain fights.
+        a.tag = 'extraction_spawn';
+        this.extractionDepartures.splice(i, 1);
+        continue;
+      }
+      const goal = a.aiFleeGoal!;
+      a.facing = angleTo(a.pos, goal);
+      this.moveActor(a, goal.x - a.pos.x, goal.y - a.pos.y, dt);
+      if (dist(a.pos, goal) < d.arrive) {
+        this.slipAway(a, '');
+        this.extractionDepartures.splice(i, 1);
+      }
+    }
+  }
+
+  /** Dwell-progress ring while lingering at a dormant seam (dwellRingsView). */
+  private extractionDwellView(): { pos: Vec2; frac: number; kind: string } | null {
+    for (const e of this.encounters) {
+      if (!e.def.extract || e.phase !== 'dormant' || !e.ex || e.ex.dwellStart === 0) continue;
+      const need = transitDwell('extraction', e.def.extract.arm.dwellSec);
+      return { pos: e.pos, frac: clamp((this.time - e.ex.dwellStart) / need, 0, 1), kind: 'extraction' };
+    }
+    return null;
+  }
+
+  /** "Linger to tap…" prompt near a dormant seam (the campfire-hint fabric). */
+  extractionHint(): { pos: Vec2; text: string } | null {
+    for (const e of this.encounters) {
+      if (!e.def.extract || e.phase !== 'dormant') continue;
+      if (dist(this.player.pos, e.pos) > e.def.extract.arm.radius + 90) continue;
+      const look = extractionLookFor(this.zone.biome);
+      return { pos: vec(e.pos.x, e.pos.y), text: `Linger to tap the ${look.title}.` };
+    }
+    return null;
+  }
+
+  /** DEV (Events tab): force a seam into THIS zone, dormant and ready to tap.
+   *  Clears the overlay's spent mark first so a drained zone can re-seed. */
+  devForceExtraction(): boolean {
+    const spec = allEncounterSpecs().find(s => s.extract);
+    if (!spec || this.inCave || this.zone.objective.kind === 'safe') return false;
+    this.sim.extractionField?.devIgnite(this.devOverlayView(), this.zone.id);
+    if (this.encounters.some(x => x.def.extract && x.phase !== 'closing')) return true;
+    const rng = new Rng(((this.time * 997) | 0) ^ 0xe57a);
+    const at = this.clampPos(this.farPoint(420, true), 24);
+    const enc: ActiveEncounter = {
+      def: spec, scale: rng.weighted(spec.scales), pos: vec(at.x, at.y), phase: 'dormant',
+      radius: spec.scales[0].startRadius, timer: 0, maxTimer: 0, spawnTimer: 0,
+      kills: 0, bonusUsed: 0, spawned: new Set(),
+    };
+    this.encounters.push(enc);
+    this.materializeExtractionNode(enc);
+    return true;
+  }
 
   /** Open demon-realm rifts in the current zone, for the renderer. */
   demonPortalsView(): readonly { pos: Vec2; invId: string }[] { return this.demonPortals; }
@@ -17646,6 +18006,10 @@ export class World {
     // furniture (bone walls, embeds) doesn't — kind registry default, and
     // any skill may declare the exception on its delivery.
     c.aims = d.aims ?? CONSTRUCT_KIND_AIMS[d.kind];
+    // DECOY: the delivery's own claim (Lodestone), or granted by a socketed
+    // gem through the caster's constructTaunt stat (Beckoning — any totem
+    // build becomes a decoy build).
+    if (d.taunt || caster.sheet.get('constructTaunt', tags, extra) > 0) c.taunt = true;
     // TREE OF LIFE: the reservoir starts as a sapling and swells as its
     // side's violence feeds it (resolveHit banks into `stored`).
     if (d.healBurst) {
@@ -18885,6 +19249,13 @@ export class World {
       woundFrac: 1, radius: 260,
       toast: 'The wayfarers cry out!', color: '#d8c08a', size: 13,
     }),
+    // A WARY extraction leaver: it was going home, but a wound on the way out
+    // turns it for good (no reset row — the grudge latches; its 'resolute'
+    // sibling tag has NO rouse rule and never wakes: it keeps walking).
+    extraction_leaver: () => ({
+      woundFrac: 1, radius: 0,
+      toast: 'It rounds on you!', color: '#a5e3b4', size: 13,
+    }),
   };
 
   /** The rouse rule for the LIVE holdfast site's wardens (any guardian def —
@@ -19199,11 +19570,20 @@ export class World {
       // licenses the victim's counter-blows.
       if (dealt > 0) target.recentHurt = 0;
       // THE THREAT CHART: a landed hit books aggro against the attacker —
-      // weighted by the victim's brain (TargetSpec.threat.damage), melted by
-      // the AI tick's decay, and READ only by prefer:'highestThreat' brains.
+      // weighted by the victim's brain (TargetSpec.threat.damage; the per-body
+      // tuning graft outranks the base, matching resolveMachines' merge order),
+      // scaled by the ATTACKER's threatGen stat (the attention lever: goads
+      // shout, quiet hands whisper), melted by the AI tick's decay, and READ
+      // only by prefer:'highestThreat' brains.
       if (target.brain && dealt > 0) {
-        const tw = normalizeBrain(target.brain).base.target?.threat?.damage ?? 1;
-        if (tw > 0) target.addThreat(caster.id, dealt * tw);
+        const tw = target.aiTuning?.target?.threat?.damage
+          ?? normalizeBrain(target.brain).base.target?.threat?.damage ?? 1;
+        if (tw > 0) {
+          // threatGen folds with the SKILL's context (tags + socketed gems),
+          // so Clamor makes one skill loud and Quiet Hand makes one quiet.
+          const gen = caster.sheet.get('threatGen', skillContextTags(def), instanceMods(inst));
+          if (gen > 0) target.addThreat(caster.id, dealt * tw * gen);
+        }
       }
       // FRAGILE buffs (Tempo): a LANDED hit wipes every clearOnHit buff on
       // the victim — absorbed/ES-soaked hits still count (this sits after
@@ -22919,9 +23299,12 @@ export class World {
 
     // Encounter diamonds: step onto a dormant one to OPEN it. No return — you
     // keep playing in this zone; the field grows around you and floods with foes.
+    // (EXTRACT encounters never step-open: theirs is the DWELL — an act of
+    // attention, armed by updateExtraction — a knockback across a seam must
+    // not start a defense.)
     if (!this.player.dead && !this.player.downed) {
       for (const e of this.encounters) {
-        if (e.phase !== 'dormant') continue;
+        if (e.phase !== 'dormant' || e.def.extract) continue;
         if (dist(this.player.pos, e.pos) <= this.player.radius + e.def.trigger.activateRadius) {
           this.openEncounter(e);
         }
@@ -23054,6 +23437,7 @@ export class World {
     add(this.holdfastDwellView());
     add(this.descentDwellView());
     add(this.wardDwellView());
+    add(this.extractionDwellView());
     return out;
   }
 

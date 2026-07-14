@@ -39,6 +39,7 @@ import { SIDEZONES } from '../data/sidezones';
 import { STRUCTURES } from '../data/structures';
 import { hasStructureGen } from '../engine/structureGen';
 import type { BreachField } from '../packages/overlays/breach';
+import type { ExtractionField } from '../packages/overlays/extraction';
 import type { VendettaField } from '../packages/overlays/vendetta';
 import type { WorldBossField } from '../packages/overlays/worldboss';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
@@ -169,6 +170,11 @@ export class WorldSim {
    *  minimap flavor whose devIgnite the Events tab drives (the in-zone Breach
    *  encounter itself rides the encounter pipeline, not this field). */
   readonly breachField: BreachField | null;
+  /** The extraction overlay if its package is in the manifest, else null — the
+   *  SPENT LEDGER: placeEncounters asks nodeAvailable() before seeding a seam,
+   *  the engine calls markSpent() when one ends (the in-zone defense rides the
+   *  encounter pipeline, not this field). */
+  readonly extractionField: ExtractionField | null;
   /** The vendetta overlay if its package is in the manifest, else null — the
    *  engine reads wantsAmbush() to spring hunter squads and calls settleWrit()
    *  from the warrant kill row; the sim mirrors each faction's grudge meter in
@@ -323,6 +329,7 @@ export class WorldSim {
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     this.breachField = surface<BreachField>('breach') ?? null;
+    this.extractionField = surface<ExtractionField>('extraction') ?? null;
     this.vendettaField = surface<VendettaField>('vendetta') ?? null;
     this.worldBossField = surface<WorldBossField>('worldboss') ?? null;
     this.invasion.gate = (f) => this.warlord.canInvade(f);

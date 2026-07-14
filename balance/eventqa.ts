@@ -305,6 +305,7 @@ function runSim(seed: number, steps: number): { sim: WorldSim; zoneMap: Record<s
       ['worldBossField.devIgnite', typeof s.worldBossField?.devIgnite === 'function'],
       ['worldBossField.devManifest', typeof s.worldBossField?.devManifest === 'function'],
       ['worldBossField.devLair', typeof s.worldBossField?.devLair === 'function'],
+      ['extractionField.devIgnite', typeof s.extractionField?.devIgnite === 'function'],
     ];
     for (const [name, present] of devSeams) assert(present, 'lifecycle', `dev seam ${name} present`);
   }
@@ -390,6 +391,55 @@ console.log('eventqa: fracture divert lifecycle');
   }
 }
 
+// === 5c. EXTRACTION SPENT-LEDGER + EXTRACT HONESTY ===========================
+// The seam's economy guard: a drained zone must not re-roll its essence
+// faucet on a door-hinge (spent survives snapshot/restore), yet the world
+// keeps breathing (replenishment). Plus the countdown-honesty invariant: an
+// extract clock is NEVER kill-fed — the yield ceiling is the rolled timer.
+console.log('eventqa: extraction spent-ledger + honesty');
+{
+  const pkg = PACKAGES.find(p => p.id === 'extraction');
+  if (!pkg?.world?.overlay) {
+    fail('extraction', 'extraction package/overlay missing from the registry');
+  } else {
+    const LIVE_GATE = { active: true, share: 1, pressure: 1, ignitionMul: 1, severityMul: 1, concurrencyMul: 1 };
+    type XF = { nodeAvailable(z: string): boolean; markSpent(z: string, t: number): void;
+      devIgnite(v: unknown, z: string): boolean; update(dt: number, v: unknown): void;
+      snapshot?(): unknown; restore?(s: unknown): void; pruneZones?(has: (z: string) => boolean): void };
+    const mk = (): XF => pkg.world!.overlay!({ seed: 0xe57a, gate: () => LIVE_GATE, biomeSeed: 0xe57a }) as unknown as XF;
+    const viewAt = (time: number): unknown => ({ time, byId: { quarry: { id: 'quarry' } }, nodes: [{ id: 'quarry' }] });
+
+    const f = mk();
+    assert(f.nodeAvailable('quarry'), 'extraction', 'fresh ground is seam-eligible');
+    f.markSpent('quarry', 100);
+    assert(!f.nodeAvailable('quarry'), 'extraction', 'a drained zone is burned');
+    // The pledge carries the burn: snapshot → fresh instance → restore.
+    const g = mk();
+    g.restore!(f.snapshot!());
+    assert(!g.nodeAvailable('quarry'), 'extraction', 'spent ground survives snapshot→restore');
+    // Replenishment: far past respawnSec the ground quietly refills.
+    g.update(0.5, viewAt(100 + 24 * 3600));
+    assert(g.nodeAvailable('quarry'), 'extraction', 'a spent seam replenishes after its clock');
+    // Prune drops unknown ground without throwing.
+    f.pruneZones!(() => false);
+    assert(f.nodeAvailable('quarry'), 'extraction', 'pruned ground is forgotten (eligible again)');
+    // devIgnite clears the burn and answers by gate + structural floor.
+    const h = mk();
+    h.markSpent('quarry', 5);
+    assert(h.devIgnite(viewAt(6), 'quarry'), 'extraction', 'devIgnite clears the spent mark (gate live)');
+    assert(h.nodeAvailable('quarry'), 'extraction', 'devIgnite leaves the ground eligible');
+
+    // The honesty invariant, over every extract encounter any package ships.
+    for (const e of allEncounterSpecs()) {
+      if (!e.extract) continue;
+      assert(e.timePerKill === 0 && e.radiusPerKill === 0, 'extraction',
+        `extract encounter '${e.id}' clock is not kill-fed`);
+      assert(e.scales.every(s => (s.maxBonusTime ?? 0) === 0), 'extraction',
+        `extract encounter '${e.id}' has no bonus-time snowball`);
+    }
+  }
+}
+
 // === 6. THE LEDGER CONTRACT ===================================================
 console.log('eventqa: ledger contract (reads ⊆ bumps)');
 {
@@ -413,6 +463,7 @@ console.log('eventqa: ledger contract (reads ⊆ bumps)');
   for (const e of allEncounterSpecs()) {
     bumped.add(e.ledger.onEncounter);
     bumped.add(e.ledger.onClose);
+    if (e.extract) bumped.add(e.extract.ledgerLost); // settleExtraction bumps it verbatim
   }
   // Milestone/meta keys the engine writes dynamically (reached_level_<n>,
   // vocation ids, quest rewards) — the dynamic namespaces the scan can't see.

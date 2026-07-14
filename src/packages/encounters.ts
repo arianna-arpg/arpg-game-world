@@ -20,9 +20,12 @@ import type { ArenaSpec } from '../data/arenas';
 export interface EncounterScale {
   id: string;
   label: string;
-  /** Relative likelihood this scale is chosen at placement (rng.weighted). */
+  /** Relative likelihood this scale is chosen at placement (rng.weighted).
+   *  For EXTRACT encounters this is the "long draws are rare" dial: the
+   *  richest seams carry the smallest weights. */
   weight: number;
-  /** Seconds the field stays open at base — the VARIABLE scale knob. */
+  /** Seconds the field stays open at base — the VARIABLE scale knob. For an
+   *  extract encounter this is the rolled DEFENSE clock (the yield ceiling). */
   baseTime: number;
   /** Cap on the total kill-fed time added over baseTime (caps the snowball). */
   maxBonusTime: number;
@@ -34,8 +37,11 @@ export interface EncounterScale {
   spawnInterval: [number, number];
   /** Monsters per pulse (rolled in this range). */
   spawnBatch: [number, number];
-  /** Scales the close reward (xp + gems). */
+  /** Scales the close reward (xp + gems; for extract: the essence pot). */
   rewardMul: number;
+  /** EXTRACT-ONLY: multiplier on the node's hit points at this scale (a
+   *  longer draw stands a sturdier node). Plain encounters ignore it. */
+  nodeLifeMul?: number;
 }
 
 /** THE SHARED ENCOUNTER FRAMEWORK KNOBS — engine-side levers every in-zone
@@ -175,6 +181,142 @@ export interface DemonSurge {
   };
 }
 
+// --- EXTRACTION: the defend-the-node INVERSION of the encounter clock --------
+//
+// An Extract encounter flips the breach contract end-for-end. The placed object
+// is not a door for monsters — it is the PRIZE: a seam where the world's marrow
+// wells up. The player DWELLS to tap it (an act of attention, never a step-on),
+// a defense clock runs DOWN rather than bleeding out, and the zone itself
+// objects to the disturbance — the LOCAL population pours in fixated on the
+// node (the per-body tuning graft + the threat chart), turning on the player
+// only when given a reason and drifting back when the reason melts. The yield
+// is ESSENCE, scaled by how long the defense stood; the rolled clock is the
+// ceiling. When it ends — drained dry or torn down — the spawns cease and the
+// swarm DISPERSES back the way it came, each body by its own temper.
+//
+// Attached via EncounterDef.extract (the DemonSurge promotion pattern):
+// undefined = a plain encounter, byte-identical, wholly unaffected.
+
+/** The node body's mechanics (its per-biome FACE lives in data/extraction.ts —
+ *  the EXTRACTION_LOOKS registry; these numbers are look-independent). */
+export interface ExtractNodeSpec {
+  /** Node hit points: (lifeBase + zoneLevel × lifePerLevel) × scale.nodeLifeMul. */
+  lifeBase: number;
+  lifePerLevel: number;
+}
+
+/** The dwell that ARMS the draw (the transit row 'extraction' carries the
+ *  ring feel; these are the mechanics). */
+export interface ExtractArmSpec {
+  /** Seconds lingered in reach before the tap begins. */
+  dwellSec: number;
+  /** Engage ring around the node within which the dwell builds. */
+  radius: number;
+}
+
+/** THE SWARM DIRECTOR — who pours in, and how the pour escalates while the
+ *  clock drains. All cadences LERP from their Start band to their End band
+ *  along elapsed^rampPower, so a long draw ends in a crescendo. */
+export interface ExtractSwarmSpec {
+  /** 'native' = the zone's own (conquest-aware) population — the disturbed-
+   *  locals thesis; the def's `factions` rosters are then a MINORITY seasoning
+   *  rolled at `mixChance` (the essence-drawn opportunists that follow seams
+   *  anywhere). 'factions' = classic roster-only filling (breach behavior). */
+  source: 'native' | 'factions';
+  /** Chance a pulse body rolls from the def's factions instead of the zone. */
+  mixChance: number;
+  intervalStart: [number, number];
+  intervalEnd: [number, number];
+  batchStart: [number, number];
+  batchEnd: [number, number];
+  /** Escalation curve exponent over elapsed fraction (1 = linear). */
+  rampPower: number;
+  /** Living swarmers cap — deliberately below ENCOUNTER_CFG.fieldCap so a
+   *  defense stays a stand, not a drowning. */
+  fieldCap: number;
+  /** Swarm level over zone level. */
+  levelBonus: number;
+  /** Spawn ring distance from the node (rolled; rim entry, never on top). */
+  entryRadius: [number, number];
+  // --- the FIXATION numbers (the tuning graft + the threat chart) ------------
+  /** Threat toward the node stamped at spawn (× the body's aggro.fixation). */
+  seedThreat: number;
+  /** Threat re-seeded every beaconSec while the node stands — the standing
+   *  disturbance that pulls wandering attention back. */
+  pulseThreat: number;
+  beaconSec: number;
+  /** Grafted threat decay per second (× aggro.waver; the chart default is
+   *  0.08). High = player grudges melt fast and the swarm returns to work. */
+  decay: number;
+  /** Grafted lock loyalty (>1 = a challenger must beat the hold by margin). */
+  stickiness: number;
+}
+
+/** THE YIELD — paid as essence PACKETS on the ground (dropEssenceAt →
+ *  grantEssence → the essence_touched ledger, so the Vault's salvage station
+ *  surfaces through play with zero extra wiring). Deliberately SMALL numbers:
+ *  the seam is a bootstrap faucet, never a fortune (the essence economy is
+ *  reined tight on purpose). */
+export interface ExtractYieldSpec {
+  /** Base grade every packet starts at ('coarse'). */
+  essence: string;
+  /** Full-completion packet budget: (potBase + zoneLevel × potPerLevel) ×
+   *  scale.rewardMul, then × frac^partialPower for a broken stand. */
+  potBase: number;
+  potPerLevel: number;
+  /** Ground packets the pot is scattered across (each rolls its own grade). */
+  packets: number;
+  /** Early-shatter penalty exponent (>1 = breaking early pays LESS than
+   *  time-linear — the defense is worth finishing). */
+  partialPower: number;
+  /** Stands shorter than this fraction of the clock pay nothing at all. */
+  minFrac: number;
+  /** Grade-climb rungs (the essences.ts tierRungs idiom): rolled per packet
+   *  IN ORDER, stopping at the first level-fail or chance-miss. */
+  rungs: { atLevel: number; chance: number }[];
+  /** Added to every rung chance when the clock ran its FULL course. */
+  fullDefenseRungBonus: number;
+  /** A little xp so the stand is never dead time (× rewardMul × frac). */
+  xpBase: number;
+  xpPerLevel: number;
+}
+
+/** DISPERSAL — the disturbance ends (drained OR torn down): spawns cease and
+ *  every living swarmer goes home along its own entry bearing. HOW it leaves
+ *  is its temper (MonsterDef.temper → FACTION_TRAITS.temper → 'wary'):
+ *  skittish keeps walking even under fire, wary re-awakens if struck,
+ *  territorial holds the ground a while first — a small expedition. */
+export interface ExtractDisperseSpec {
+  /** Territorial hold before leaving, rolled per body (a staggered ebb). */
+  lingerSec: [number, number];
+  /** Close enough to the entry point = gone (the slipAway exit). */
+  arriveDist: number;
+}
+
+/** The whole extract block. Every string the HUD speaks lives in `text` —
+ *  tone is data, not engine prose. */
+export interface ExtractSpec {
+  node: ExtractNodeSpec;
+  arm: ExtractArmSpec;
+  swarm: ExtractSwarmSpec;
+  yield: ExtractYieldSpec;
+  disperse: ExtractDisperseSpec;
+  /** Bumped when a defended node is DESTROYED (the loss half of the ledger;
+   *  onClose stays the completion). Unread by tiers today — a future "learn
+   *  from failure" rung may read it, and the bump is already honest. */
+  ledgerLost: string;
+  text: {
+    /** Floated when the node is first sighted (discovery flavor). */
+    found: string;
+    /** Floated when the dwell fires and the clock starts. */
+    armed: string;
+    /** Full completion. */
+    depleted: string;
+    /** The node fell. */
+    shattered: string;
+  };
+}
+
 /** The ledger keys an encounter bumps — these drive the discovery ladder.
  *  EVERY key here must be READ by some unlock/tier (and vice versa): the
  *  event QA harness enforces the contract in both directions, so a key only
@@ -211,4 +353,9 @@ export interface EncounterDef {
    *  event (growing storm radius + meteors + portal). Undefined = a plain in-zone
    *  encounter (Breach). The overlay reads this; the in-zone field uses scales. */
   surge?: DemonSurge;
+  /** Promotes this encounter into a DEFEND-THE-NODE extraction (the inverse
+   *  clock: dwell-armed, counting DOWN, the placed object is the prize and the
+   *  zone's own population comes to break it). Undefined = a plain encounter,
+   *  byte-identical. Mutually exclusive with `surge`. */
+  extract?: ExtractSpec;
 }

@@ -48,6 +48,7 @@ export const eventsTab: DevTabDef = {
       forceEvent('Mycelia (bloom here)', (w, v, z) => w.sim.myceliaField?.devIgnite(v, z) ?? false),
       forceEvent('Haunting (grief here)', (w, v, z) => w.sim.hauntField?.devIgnite(v, z) ?? false),
       forceEvent('Breach (tear here)', (w, v, z) => (w.sim.breachField?.devIgnite(v, z) ?? null) !== null),
+      forceEvent('Extraction (seam here)', (w) => w.devForceExtraction()),
       // ASCENT: vent a sky geyser beside the player — dwell into the spray to
       // ride the launch (the shelf is the zone's own: same pocket the organic
       // roll would open). Works anywhere with standing ground, even the town.
