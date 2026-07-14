@@ -1778,6 +1778,18 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
     chambers.push(vec(gx, gy));
   }
 
+  // 2b. RESERVED GROUND becomes GLADE: a composition's pre-clearing (or any
+  // earlier circle reservation) was a PROMISE of open ground — a convex zone
+  // keeps scatter out of it, but in a carved layout the verdure itself must
+  // honor it, or the ruin court the composition planned would sit ENTOMBED
+  // in solid wall and every site-pinned piece would fail its walk gate.
+  // Realize each as a carved glade and let the trail web pick it up.
+  for (const r of ctx.reserved) {
+    if (!('pos' in r) || !('radius' in r)) continue; // rects are structures' business
+    grid.fillDisc(r.pos.x, r.pos.y, r.radius + 12, 'ground');
+    chambers.push(vec(r.pos.x, r.pos.y));
+  }
+
   // 3. PORTAL MOUTHS + THE TRAIL WEB — every portal gets a small clearing and
   // a winding tube in; the chamber chain + loops make the lane web. Trail
   // width TIGHTENS toward the heart (the claustrophobia gradient).
@@ -1816,8 +1828,13 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
     for (let x = cs * 3; x < arena.w - cs * 3; x += cs) {
       if (!walk(x, y)) continue;
       trailCells.push(vec(x, y));
-      const throatX = walk(x - cs, y) && walk(x + cs, y) && !walk(x, y - cs) && !walk(x, y + cs);
-      const throatY = walk(x, y - cs) && walk(x, y + cs) && !walk(x - cs, y) && !walk(x + cs, y);
+      // A throat = the lane runs along ONE axis while the wall presses in
+      // within TWO cells on both perpendicular sides (trails are 2-3 cells
+      // wide — demanding wall at exactly one cell found almost nothing).
+      const walledY = (!walk(x, y - cs) || !walk(x, y - 2 * cs)) && (!walk(x, y + cs) || !walk(x, y + 2 * cs));
+      const walledX = (!walk(x - cs, y) || !walk(x - 2 * cs, y)) && (!walk(x + cs, y) || !walk(x + 2 * cs, y));
+      const throatX = walk(x - cs, y) && walk(x + cs, y) && walledY;
+      const throatY = walk(x, y - cs) && walk(x, y + cs) && walledX;
       if (!throatX && !throatY) continue;
       const p = vec(x, y);
       if (dist(p, ctx.entry) < 300 || ctx.exits.some(e => dist(p, e) < 190)) continue;
@@ -1825,7 +1842,7 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
       if (plugs.some(q => dist(p, q) < plugSpacing)) continue;
       if (!rng.chance(Math.min(0.92, plugChance + plugCore * (1 - rad(x, y))))) continue;
       plugs.push(p);
-      ctx.doodads.push({ pos: p, radius: rng.range(23, 30), kind: 'jungle_brush', rot: rng.range(0, Math.PI * 2) });
+      ctx.doodads.push({ pos: p, radius: rng.range(26, 34), kind: 'jungle_brush', rot: rng.range(0, Math.PI * 2) });
     }
   }
 

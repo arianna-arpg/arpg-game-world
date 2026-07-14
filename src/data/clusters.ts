@@ -103,6 +103,9 @@ registerCluster({
   id: 'ruin_court',
   anchor: { radius: 28, kind: 'ruin_gate' },
   pieces: [
+    // The anchor names the SITING profile; the gate itself is the
+    // centerpiece piece (the hellforge-anvil idiom).
+    { kind: 'ruin_gate', radius: [26, 30], count: [1, 1], ring: [0, 1], centerpiece: true },
     { kind: 'colossus_head', radius: [16, 21], count: [1, 2], ring: [40, 52], rot: true, centerpiece: true },
     { kind: 'burial_urn', radius: [11, 15], count: [1, 3], ring: [34, 50], rot: true, centerpiece: true },
     { kind: 'broken_column', radius: [12, 17], count: [2, 4], ring: [104, 165], rot: true },
