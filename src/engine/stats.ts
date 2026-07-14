@@ -26,6 +26,11 @@ export type SkillTag =
   // never hand-authored. Construct-generic supports (constructFx,
   // breakableGraft) gate on it; family-scoped gems keep totem/trap/mine.
   | 'construct'
+  // 'conjure' marks every skill that CALLS CLOUD (a conjure effect, a
+  // conjuring trail on its delivery) — folded on at registry load beside
+  // 'construct', never hand-authored. Cloud-generic supports (Thunderhead,
+  // Silver Lining, Slow Weather) gate on it; Cloudborne grantsTags it.
+  | 'conjure'
   | 'channel' | 'instant' | 'curse' | 'guard' | 'targeted'
   | 'mirage' | 'clone' | 'sweep' | 'overdrive' | 'overcharge' | 'heal'
   // 'persistent' marks contract summons that REVIVE on a timer (golems) —

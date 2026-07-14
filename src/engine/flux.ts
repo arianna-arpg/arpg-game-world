@@ -791,6 +791,21 @@ export function buildZoneFlux(spec: FluxSpec | undefined, walk: FluxWalk | null,
 // expiry; recently-released cells keep a short teeter grace so the
 // walkResolve guard treats "my conjured floor just vanished" exactly like
 // every other floor that leaves you.
+//
+// THE CLOUD PRESENCE (the second use every conjure carries): a call is not
+// only cells — it is a PUFF, a standing body of vapor recorded wherever the
+// skill asked, over ANY ground at all. Over conjurable void the puff's
+// cells hold you up; over honest land there is nothing to stand ON, but the
+// cloud itself still STANDS — drawn by the flux layer, granting its gifts
+// to whoever keeps inside it (ConjureGrant rows: the fog fabric's
+// refresh-while-inside / linger-on-exit idiom, plus the owner-relative
+// `side` filter a called cloud needs — fog belongs to the weather, but a
+// called cloud belongs to its CALLER, whoever's side that is). One skill,
+// two honest readings: a bridge where the world is missing, a domain where
+// it isn't. Nothing here is biome code: what a cloud grants is data on the
+// skill (ConjureEffect.grants), on the delivery (trailConjure.grants), or
+// on the caster's stats (data/conjury.ts CONJURE_RIDERS — how supports
+// teach every cloud a new gift).
 // ===========================================================================
 
 /** Framework knobs for every conjured cloud (skills scale radius/duration). */
@@ -804,7 +819,72 @@ export const CONJURE_CFG = {
   fray: 1.4,
   /** Post-release teeter window (voidAt answers true this long). */
   releaseGrace: 1.0,
+  /** Presence sweep cadence (granted statuses last ≥0.6s; the fog contract). */
+  applyEvery: 0.25,
+  /** Standing presences the sky holds at once (oldest forgets first). */
+  maxPuffs: 64,
+  /** Heeling clouds (ConjuredPuff.follow) re-pave beneath their body this
+   *  often / this long — the continuous stride Own Sky pays out. */
+  followEvery: 0.18,
+  followHold: 1.3,
+  /** Pave-disc ceiling under a heeling cloud (its drawn r may be wider). */
+  followPaveR: 40,
+  /** Causeway conjures (ConjureEffect.line): disc spacing as a share of
+   *  the disc radius, and the hop ceiling no road outgrows. */
+  lineStep: 0.85,
+  lineMaxHops: 18,
+  /** Stat-taught trails (bare cloudTrail with no delivery spec): disc
+   *  radius / hold seconds grown by the stat's own value. */
+  statTrail: { radius: 30, radiusPer: 6, hold: 2.5, holdPer: 0.5 },
+  /** Floating-source label granted statuses wear. */
+  sourceLabel: 'the called cloud',
 } as const;
+
+/** One gift a called cloud grants its occupants — the fog grant idiom
+ *  (SHORT statuses, refreshed while inside, lingering briefly on exit),
+ *  plus the owner-relative `side` filter conjures add. Filters are
+ *  conjunctive; omit them all and everyone inside wears it. */
+export interface ConjureGrant {
+  status: string;
+  /** Relative to the conjurer: 'allies' = the caller's own team,
+   *  'enemies' = whoever the caller's world calls hostile. */
+  side?: 'allies' | 'enemies';
+  /** Absolute filters (the fog vocabulary), for exotic data. */
+  teams?: readonly string[];
+  factions?: readonly string[];
+  notFactions?: readonly string[];
+}
+
+/** The actor slice a puff dresses (mirrors FogActorLike — same idiom). */
+export interface ConjureOccupantLike {
+  pos: { x: number; y: number };
+  radius: number;
+  dead: boolean;
+  team: string;
+  faction?: string;
+  applyStatus(id: string, dps: number, durationScale: number, source: string): void;
+}
+
+/** One standing body of called vapor — the presence half of a conjure. */
+export interface ConjuredPuff {
+  x: number;
+  y: number;
+  r: number;
+  until: number;
+  grants: readonly ConjureGrant[];
+  /** The caller's team at cast (side filters resolve against it). */
+  team: string | null;
+  /** The caller while it lives — side:'enemies' prefers the live oracle. */
+  owner: ConjureOccupantLike | null;
+  /** The puff HEELS this body (Own Sky): center tracks it, cells pave
+   *  beneath it on a cadence, and the cloud disperses when it dies. */
+  follow: ConjureOccupantLike | null;
+  /** Render tint (default VIS_CFG.flux.conjure). */
+  look?: string;
+  seed: number;
+  /** Billow layout, rolled once at the call (render-only). */
+  lobes: { dx: number; dy: number; r: number; j: number }[];
+}
 
 /** The fabric peers a conjure may annex cells from (structural — the World
  *  wires whichever fields the zone actually stood up). */
@@ -823,30 +903,84 @@ interface ConjuredCell {
 }
 
 /** One zone's ledger of player-called ground. Built beside the fields at
- *  loadZone (any grid zone gets one — conjurable kinds gate where it works),
- *  ticked with them, drawn by the flux layer. */
+ *  loadZone — EVERY zone gets one: the WALKABLE half needs a grid walk and
+ *  conjurable kinds under it (convex interiors and honest floors place 0
+ *  cells), but the PRESENCE half stands anywhere a skill can be cast.
+ *  Ticked beside the fields, drawn by the flux layer. */
 export class ConjuredGround {
-  private readonly walk: FluxWalk;
+  private readonly walk: FluxWalk | null;
   private readonly canOver: (kindId: string) => boolean;
   private readonly peers: ConjurePeers;
+  /** Owner-relative hostility oracle for side:'enemies' grants (the World
+   *  wires its own; the fallback is bare team inequality). */
+  private readonly hostile: (owner: ConjureOccupantLike, other: ConjureOccupantLike) => boolean;
   readonly cells = new Map<number, ConjuredCell>();
+  /** The standing presences — every call records one, over ANY ground. */
+  readonly puffs: ConjuredPuff[] = [];
   /** Cells released in the last releaseGrace seconds (teeter guard ring). */
   private readonly gone = new Map<number, number>();
+  private applyAcc = 0;
+  private followAcc = 0;
+  /** Billow-layout stream (render-only jitter; gameplay never reads it). */
+  private lobeSeed = 0x9e3779b9;
   clock = 0;
 
-  constructor(walk: FluxWalk, canOver: (kindId: string) => boolean, peers: ConjurePeers = {}) {
+  constructor(walk: FluxWalk | null, canOver: (kindId: string) => boolean, peers: ConjurePeers = {},
+    hostile?: (owner: ConjureOccupantLike, other: ConjureOccupantLike) => boolean) {
     this.walk = walk;
     this.canOver = canOver;
     this.peers = peers;
+    this.hostile = hostile ?? ((o, a): boolean => a.team !== o.team);
   }
 
   /** Any cloud held right now (renderer early-out)? */
-  get live(): boolean { return this.cells.size > 0; }
+  get live(): boolean { return this.cells.size > 0 || this.puffs.length > 0; }
 
-  /** Call cloud into being: every conjurable cell whose center lies within
-   *  `r` of (x,y) stands walkable for `secs`. Already-conjured cells extend.
-   *  Returns how many cells now hold (0 = nothing here to stand on). */
-  conjure(x: number, y: number, r: number, secs: number): number {
+  /** Call cloud into being: the WALKABLE half (every conjurable cell whose
+   *  center lies within `r` stands for `secs` — zero cells over honest
+   *  land) plus the PRESENCE half (a puff recorded regardless, carrying
+   *  the call's grants). Returns how many cells now hold — callers may
+   *  read 0 as "no bridge here", never as "nothing happened". */
+  conjure(x: number, y: number, r: number, secs: number, opts?: {
+    grants?: readonly ConjureGrant[];
+    team?: string | null;
+    owner?: ConjureOccupantLike | null;
+    follow?: ConjureOccupantLike | null;
+    look?: string;
+  }): number {
+    const placed = this.conjureCells(x, y, r, secs);
+    // A heeling cloud refreshes in place — recasting Own Sky renews the one
+    // nimbus rather than flocking a second onto the same knees.
+    const follow = opts?.follow ?? null;
+    if (follow) {
+      const held = this.puffs.find(p => p.follow === follow);
+      if (held) {
+        held.until = Math.max(held.until, this.clock + secs);
+        held.r = r;
+        held.grants = opts?.grants ?? held.grants;
+        if (opts?.look !== undefined) held.look = opts.look;
+        return placed;
+      }
+    }
+    this.puffs.push({
+      x, y, r, until: this.clock + secs,
+      grants: opts?.grants ?? [],
+      team: opts?.team ?? null,
+      owner: opts?.owner ?? null,
+      follow,
+      ...(opts?.look !== undefined ? { look: opts.look } : {}),
+      seed: (this.rand01() * 1e9) | 0,
+      lobes: this.rollLobes(r),
+    });
+    // The sky forgets its oldest promise past the cap.
+    if (this.puffs.length > CONJURE_CFG.maxPuffs) this.puffs.shift();
+    return placed;
+  }
+
+  /** The walkable half alone (heel-paving, trail internals). Convex zones
+   *  have no grid to hold cloud — the presence half is the whole call. */
+  private conjureCells(x: number, y: number, r: number, secs: number): number {
+    if (!this.walk) return 0;
     const walk = this.walk, cell = walk.cell;
     const gx0 = Math.max(0, Math.floor((x - r) / cell));
     const gx1 = Math.min(walk.cols - 1, Math.floor((x + r) / cell));
@@ -882,8 +1016,11 @@ export class ConjuredGround {
     return placed;
   }
 
-  /** Advance the ledger; expiry releases cells back to their owners. */
-  update(dt: number): void {
+  /** Advance the ledger; expiry releases cells back to their owners; the
+   *  presences heel, pave, expire, and dress their occupants on the fog
+   *  cadence. `occupants` is the world's live actor slice (optional so
+   *  bare-ledger callers keep working; no occupants = no grants). */
+  update(dt: number, occupants: readonly ConjureOccupantLike[] = []): void {
     this.clock += dt;
     if (this.cells.size) {
       for (const [i, c] of this.cells) {
@@ -895,11 +1032,101 @@ export class ConjuredGround {
         if (this.clock - at > CONJURE_CFG.releaseGrace) this.gone.delete(i);
       }
     }
+    if (!this.puffs.length) return;
+
+    // --- The presences: heel, expire, pave, dress. ---------------------------
+    for (const p of this.puffs) {
+      if (!p.follow) continue;
+      // A dead body's cloud lets go now (the heel outlives nobody).
+      if (p.follow.dead) { p.until = Math.min(p.until, this.clock); continue; }
+      p.x = p.follow.pos.x;
+      p.y = p.follow.pos.y;
+    }
+    for (let i = this.puffs.length - 1; i >= 0; i--) {
+      if (this.puffs[i].until <= this.clock) this.puffs.splice(i, 1);
+    }
+    // Heeling clouds pay out a short-lived stride beneath their body — over
+    // conjurable void the bridge is CONTINUOUS under whoever they follow;
+    // over honest land the pave fizzles free like any other call.
+    this.followAcc += dt;
+    if (this.followAcc >= CONJURE_CFG.followEvery) {
+      this.followAcc = 0;
+      for (const p of this.puffs) {
+        if (!p.follow) continue;
+        this.conjureCells(p.x, p.y, Math.min(p.r, CONJURE_CFG.followPaveR), CONJURE_CFG.followHold);
+      }
+    }
+    // Dress the occupants on the apply cadence (the fog contract).
+    this.applyAcc += dt;
+    if (this.applyAcc >= CONJURE_CFG.applyEvery) {
+      this.applyAcc = 0;
+      this.dressOccupants(occupants);
+    }
+  }
+
+  /** Grant every live puff's gifts to whoever stands inside it — the fog
+   *  fabric's dressOccupants, with the owner-relative side filters a
+   *  called cloud adds. Statuses refresh while inside; their own short
+   *  durations are the linger on stepping out. */
+  private dressOccupants(occupants: readonly ConjureOccupantLike[]): void {
+    for (const p of this.puffs) {
+      if (!p.grants.length) continue;
+      for (const a of occupants) {
+        if (a.dead) continue;
+        const dx = a.pos.x - p.x, dy = a.pos.y - p.y;
+        const reach = p.r + a.radius * 0.5;
+        if (dx * dx + dy * dy > reach * reach) continue;
+        for (const g of p.grants) {
+          if (g.side === 'allies' && (p.team === null || a.team !== p.team)) continue;
+          if (g.side === 'enemies') {
+            const oracle = p.owner && !p.owner.dead ? p.owner : null;
+            if (oracle ? !this.hostile(oracle, a)
+              : (p.team === null || a.team === p.team)) continue;
+          }
+          if (g.teams && !g.teams.includes(a.team)) continue;
+          if (g.factions && (!a.faction || !g.factions.includes(a.faction))) continue;
+          if (g.notFactions && a.faction && g.notFactions.includes(a.faction)) continue;
+          a.applyStatus(g.status, 0, 1, CONJURE_CFG.sourceLabel);
+        }
+      }
+    }
+  }
+
+  /** Fray progress of a PRESENCE (0 fresh … 1 about to disperse) — the
+   *  renderer's tatter read, sibling of fracOf for cells. */
+  puffFrac(p: ConjuredPuff): number {
+    return Math.min(1, Math.max(0, 1 - (p.until - this.clock) / CONJURE_CFG.fray));
+  }
+
+  /** Billow layout for one presence: a handful of lobes spread over the
+   *  disc (the pad-lobe idiom, rolled on the render-only stream). */
+  private rollLobes(r: number): ConjuredPuff['lobes'] {
+    const K = Math.max(4, Math.min(9, Math.round(r / 14)));
+    const lobes: ConjuredPuff['lobes'] = [{ dx: 0, dy: 0, r: r * 0.72, j: this.rand01() }];
+    for (let k = 0; k < K; k++) {
+      const ang = this.rand01() * Math.PI * 2;
+      const d = r * (0.25 + this.rand01() * 0.5);
+      lobes.push({
+        dx: Math.cos(ang) * d,
+        dy: Math.sin(ang) * d * 0.82,
+        r: r * (0.34 + this.rand01() * 0.26),
+        j: this.rand01(),
+      });
+    }
+    return lobes;
+  }
+
+  /** mulberry32 step — layout jitter only, never gameplay. */
+  private rand01(): number {
+    let t = (this.lobeSeed = (this.lobeSeed + 0x6d2b79f5) >>> 0);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
   private releaseCell(i: number): void {
     const c = this.cells.get(i);
-    if (!c) return;
+    if (!c || !this.walk) return;
     this.cells.delete(i);
     if (c.fluxOwned && this.peers.flux?.release(i)) {
       // The drift rewrote its own truth.
@@ -915,6 +1142,7 @@ export class ConjuredGround {
 
   /** Did a conjured floor just leave this point (teeter guard)? */
   voidAt(x: number, y: number): boolean {
+    if (!this.walk) return false;
     const gx = Math.floor(x / this.walk.cell), gy = Math.floor(y / this.walk.cell);
     if (gx < 0 || gy < 0 || gx >= this.walk.cols || gy >= this.walk.rows) return false;
     return this.gone.has(gy * this.walk.cols + gx);

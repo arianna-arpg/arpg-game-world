@@ -122,7 +122,8 @@ import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField } from './creep';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
-import { buildZoneFlux, ConjuredGround, FLUX_CFG, type FluxField } from './flux';
+import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
+import { CONJURE_RIDERS } from '../data/conjury';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
@@ -1542,6 +1543,16 @@ class Dwell {
    *  player INSIDE the dwell radius (a sail landing drops you at the dock) and
    *  the gate must not re-fire until they break the dwell by stepping away. */
   consume(): void { this.consumed = true; }
+}
+
+/** A dash's conjure-trail, RESOLVED at cast (grants folded with the cast's
+ *  tag/extra context — travel ticks have no context to read riders with)
+ *  and stashed on the dasher for the trail-laying travel ticks. */
+interface DashConjureStash {
+  radius: number;
+  duration: number;
+  grants: readonly ConjureGrant[];
+  look?: string;
 }
 
 export class World {
@@ -3809,10 +3820,16 @@ export class World {
     // CONJURED GROUND: every grid zone gets the ledger (conjurable region
     // kinds gate where it actually works — data, not a biome check). Wired
     // to whichever fabrics stood up so annexed cells melt/phase honestly.
-    this.conjured = this.walk instanceof GridWalkField
-      ? new ConjuredGround(this.walk, id => !!regionKind(id)?.conjurable,
-        { collapse: this.collapse, flux: this.flux })
-      : null;
+    // EVERY zone gets the ledger (a convex interior holds presences with no
+    // walkable half — the cells simply never place; conjurable region kinds
+    // gate where the bridge half works — data, not a biome check).
+    this.conjured = new ConjuredGround(
+      this.walk instanceof GridWalkField ? this.walk : null,
+      id => !!regionKind(id)?.conjurable,
+      { collapse: this.collapse, flux: this.flux },
+      // Side:'enemies' grants read the world's own hostility, not bare
+      // team inequality (neutral fauna keeps out of other people's storms).
+      (o, a) => this.hostileTo(o as Actor, a as Actor));
 
     // THE ZONE-RUNTIME REGISTRY (see buildZoneRuntimes): every package's
     // per-zone reset runs, then — on ordinary ground — every enter() fires.
@@ -16444,8 +16461,28 @@ export class World {
         // semantics; a CALLED cloud goes where you point it).
         for (const fx of def.effects) {
           if (fx.type === 'conjure') {
-            this.conjureCloud(at.x, at.y, fx.radius * aoeScale,
-              fx.duration * caster.sheet.get('effectDuration', tags, extra));
+            const cr = fx.radius * aoeScale;
+            const cd = fx.duration * caster.sheet.get('effectDuration', tags, extra);
+            const conjOpts = {
+              caster,
+              grants: this.conjureGrantsFor(caster, tags, extra, fx.grants),
+              ...(fx.look !== undefined ? { look: fx.look } : {}),
+              ...(fx.follow ? { follow: true } : {}),
+            };
+            if (fx.line) {
+              // THE CAUSEWAY: pave discs from the caster's feet to the aim
+              // point — spacing/cap are framework knobs, never the skill's.
+              const ldx = at.x - caster.pos.x, ldy = at.y - caster.pos.y;
+              const len = Math.hypot(ldx, ldy);
+              const lstep = Math.max(1, cr * CONJURE_CFG.lineStep);
+              const hops = Math.min(CONJURE_CFG.lineMaxHops, Math.max(1, Math.round(len / lstep)));
+              for (let h = 1; h <= hops; h++) {
+                this.conjureCloud(caster.pos.x + (ldx * h) / hops,
+                  caster.pos.y + (ldy * h) / hops, cr, cd, conjOpts);
+              }
+            } else {
+              this.conjureCloud(at.x, at.y, cr, cd, conjOpts);
+            }
           }
         }
         const isCurse = def.tags.includes('curse');
@@ -17096,11 +17133,23 @@ export class World {
             ? { radius: 32, duration: 2.2, tickInterval: 0.4, damageScale: mt }
             : undefined);
         // Zephyr Step / Cloudborne: a conjure-trail spec from the delivery
-        // OR the cloudTrail stat — the dash lays walkable sky-road as it
-        // travels (free fizzle over solid land).
+        // OR the cloudTrail stat — the dash lays standing cloud as it
+        // travels (sky-road over conjurable void, wind-lane vapor over
+        // honest land). Grants resolve HERE, with the cast's context —
+        // the travel ticks have no tags/extra to read riders with.
         const ct = caster.sheet.get('cloudTrail', tags, extra);
-        (caster as Actor & { dashConjureSpec?: { radius: number; duration: number } }).dashConjureSpec =
-          d.trailConjure ?? (ct > 0 ? { radius: 30 + ct * 6, duration: 2.5 + ct * 0.5 } : undefined);
+        const stCT = CONJURE_CFG.statTrail;
+        const baseCT = d.trailConjure
+          ?? (ct > 0 ? { radius: stCT.radius + ct * stCT.radiusPer, duration: stCT.hold + ct * stCT.holdPer } : undefined);
+        (caster as Actor & { dashConjureSpec?: DashConjureStash }).dashConjureSpec = baseCT
+          ? {
+            radius: baseCT.radius, duration: baseCT.duration,
+            grants: this.conjureGrantsFor(caster, tags, extra,
+              (baseCT as { grants?: readonly ConjureGrant[] }).grants),
+            ...((baseCT as { look?: string }).look !== undefined
+              ? { look: (baseCT as { look?: string }).look } : {}),
+          }
+          : undefined;
         // Dive Bomb: the launch point erupts.
         this.moveBlast(caster, inst, caster.pos);
         break;
@@ -17128,7 +17177,12 @@ export class World {
         // arrival is already confined to standing ground — departure is
         // the honest half a blink can gift).
         const ctB = caster.sheet.get('cloudTrail', tags, extra);
-        if (ctB > 0) this.conjureCloud(caster.pos.x, caster.pos.y, 30 + ctB * 6, 2.5 + ctB * 0.5);
+        if (ctB > 0) {
+          const st = CONJURE_CFG.statTrail;
+          this.conjureCloud(caster.pos.x, caster.pos.y,
+            st.radius + ctB * st.radiusPer, st.hold + ctB * st.holdPer,
+            { caster, grants: this.conjureGrantsFor(caster, tags, extra) });
+        }
         // Dive Bomb: erupt where you vanish...
         this.moveBlast(caster, inst, caster.pos);
         if (d.delay && d.delay > 0) {
@@ -17182,7 +17236,12 @@ export class World {
         // OFF a fraying pad and leave yourself a way back (the landing is
         // already confined to standing ground).
         const ctL = caster.sheet.get('cloudTrail', tags, extra);
-        if (ctL > 0) this.conjureCloud(caster.pos.x, caster.pos.y, 30 + ctL * 6, 2.5 + ctL * 0.5);
+        if (ctL > 0) {
+          const st = CONJURE_CFG.statTrail;
+          this.conjureCloud(caster.pos.x, caster.pos.y,
+            st.radius + ctL * st.radiusPer, st.hold + ctL * st.holdPer,
+            { caster, grants: this.conjureGrantsFor(caster, tags, extra) });
+        }
         // Dive Bomb: the take-off point erupts.
         this.moveBlast(caster, inst, caster.pos);
         break;
@@ -17576,13 +17635,19 @@ export class World {
       if (fx.type === 'terrain') {
         this.addTempGround(origin, fx.kind, fx.radius * aoeScale, fx.duration * durScale);
       }
-      // CONJURED CLOUD (the flux fabric's second half): walkable ground
-      // called into being at the resolution origin — over conjurable void
-      // only (solid land fizzles the call for free). Ground deliveries
-      // handle their own conjures AT THE TARGET (the case block above);
-      // everything else conjures where the skill resolved.
+      // CONJURED CLOUD (the flux fabric's second half): a standing cloud
+      // called into being at the resolution origin — the walkable half
+      // holds over conjurable void, the PRESENCE half stands anywhere,
+      // granting the call's gifts. Ground deliveries handle their own
+      // conjures AT THE TARGET (the case block above); everything else
+      // conjures where the skill resolved.
       if (fx.type === 'conjure' && d.type !== 'ground') {
-        this.conjureCloud(origin.x, origin.y, fx.radius * aoeScale, fx.duration * durScale);
+        this.conjureCloud(origin.x, origin.y, fx.radius * aoeScale, fx.duration * durScale, {
+          caster,
+          grants: this.conjureGrantsFor(caster, tags, extra, fx.grants),
+          ...(fx.look !== undefined ? { look: fx.look } : {}),
+          ...(fx.follow ? { follow: true } : {}),
+        });
       }
       if (fx.type === 'gainCharge') {
         caster.gainCharge(fx.charge, fx.amount, fx.max, inst);
@@ -24166,15 +24231,19 @@ export class World {
         // laden charge-dash (speedAtFull) sows different ground than a
         // full-tilt one.
         // CLOUD TRAIL (Zephyr Step / the cloudTrail stat, stashed at cast):
-        // the dash lays walkable sky-road as it travels — every ~30 units,
-        // one conjure (free fizzle over solid land).
-        const conjSpec = (a as Actor & { dashConjureSpec?: { radius: number; duration: number } }).dashConjureSpec;
+        // the dash lays standing cloud as it travels — every ~30 units,
+        // one conjure (sky-road over conjurable void; over honest land the
+        // presence stands as a wind-lane granting the stash's gifts).
+        const conjSpec = (a as Actor & { dashConjureSpec?: DashConjureStash }).dashConjureSpec;
         if (conjSpec) {
           const cc = a as Actor & { conjTrailDist?: number };
           cc.conjTrailDist = (cc.conjTrailDist ?? 99) + step;
           if (cc.conjTrailDist >= 30) {
             cc.conjTrailDist = 0;
-            this.conjureCloud(a.pos.x, a.pos.y, conjSpec.radius, conjSpec.duration);
+            this.conjureCloud(a.pos.x, a.pos.y, conjSpec.radius, conjSpec.duration, {
+              caster: a, grants: conjSpec.grants,
+              ...(conjSpec.look !== undefined ? { look: conjSpec.look } : {}),
+            });
           }
         }
         const trail = (a as Actor & { dashTrailSpec?: DropZoneSpec }).dashTrailSpec;
@@ -24307,7 +24376,7 @@ export class World {
     this.updateCreep(dt);
     this.updateCollapse(dt);
     this.updateFlux(dt);
-    this.conjured?.update(dt);
+    this.conjured?.update(dt, this.actors);
     this.updateShrines();
     this.updateAltars(dt);
     this.updateChests(dt);
@@ -25330,11 +25399,42 @@ export class World {
     this.routeSkyFalls(ev.fell);
   }
 
-  /** CONJURED GROUND (engine/flux.ts): call walkable cloud into being over
-   *  any conjurable void — the seam skills ride. Returns cells now holding
-   *  (0 = nothing conjurable there; the caller reads that as a fizzle). */
-  conjureCloud(x: number, y: number, r: number, secs: number): number {
-    return this.conjured?.conjure(x, y, r, secs) ?? 0;
+  /** CONJURED GROUND (engine/flux.ts): call a standing cloud into being —
+   *  the seam skills ride. The WALKABLE half holds only over conjurable
+   *  void (returns cells now holding; 0 = no bridge here), but the cloud's
+   *  PRESENCE stands wherever it was called: drawn vapor granting `grants`
+   *  to occupants, over any ground at all. Pass the caster so side filters
+   *  resolve and heeling clouds know whose knees to ride. */
+  conjureCloud(x: number, y: number, r: number, secs: number, opts?: {
+    caster?: Actor;
+    grants?: readonly ConjureGrant[];
+    look?: string;
+    follow?: boolean;
+  }): number {
+    if (!this.conjured) return 0;
+    const caster = opts?.caster;
+    return this.conjured.conjure(x, y, r, secs, {
+      grants: opts?.grants ?? [],
+      team: caster?.team ?? null,
+      owner: caster ?? null,
+      follow: opts?.follow && caster ? caster : null,
+      ...(opts?.look !== undefined ? { look: opts.look } : {}),
+    });
+  }
+
+  /** Assemble a conjure's grant rows: the skill's own + every CONJURE_RIDERS
+   *  row whose stat rides this cast (data/conjury.ts — how supports teach
+   *  every cloud a new gift). Read with the cast's own tag/extra context so
+   *  socketed supports actually reach the stat. */
+  private conjureGrantsFor(caster: Actor, tags: ReadonlySet<SkillTag>, extra: Modifier[],
+    base?: readonly ConjureGrant[]): readonly ConjureGrant[] {
+    let out: ConjureGrant[] | null = base ? [...base] : null;
+    for (const rider of CONJURE_RIDERS) {
+      if (caster.sheet.get(rider.stat, tags, extra) > 0) {
+        (out ??= []).push(rider.grant);
+      }
+    }
+    return out ?? [];
   }
 
   /** The nearest CHARTED zone of a dimension to a map coordinate — the

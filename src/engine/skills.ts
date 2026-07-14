@@ -16,6 +16,7 @@
 
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
 import type { CurveKind } from './curves';
+import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
@@ -1619,12 +1620,13 @@ export interface DashDelivery {
    *  stat; walls still stand). Corridor damage applies as ever: the blade
    *  goes through, and everything it went through knows. */
   phase?: true;
-  /** CLOUD TRAIL (Zephyr Step): the dash CONJURES walkable cloud every few
+  /** CLOUD TRAIL (Zephyr Step): the dash CONJURES standing cloud every few
    *  strides of travel (World.conjureCloud) — a bridge laid at a run over
-   *  any conjurable void; over solid land the strides fizzle free. The
-   *  `cloudTrail` STAT reads at the same site, so a support can teach any
-   *  dash to leave sky-road. */
-  trailConjure?: { radius: number; duration: number };
+   *  any conjurable void; over solid land the strides keep their PRESENCE
+   *  half (drawn vapor granting `grants` to occupants — the wind-lane the
+   *  Gale family paves). The `cloudTrail` STAT reads at the same site, so
+   *  a support can teach any dash to leave sky-road. */
+  trailConjure?: { radius: number; duration: number; grants?: readonly ConjureGrant[]; look?: string };
 }
 
 /** Teleportation: instant, delayed (Warp), or behind a targeted enemy. */
@@ -2957,17 +2959,35 @@ export interface TerrainEffect {
   duration: number;
 }
 
-/** CONJURES WALKABLE CLOUD at the resolution origin (World.conjureCloud —
- *  the flux fabric's second half): standable ground called into being over
- *  any conjurable void (sky-gaps, flux basins, melted causeways). Honest
- *  ground — it frays through its last seconds and lets go, and whichever
- *  vertical fabric governs the cells routes the fall. Over solid land it
- *  simply fizzles (nothing conjurable there — no cost refund, the sky owes
- *  you nothing). Radius scales with area mods, duration with effectDuration. */
+/** CONJURES A CLOUD at the resolution origin (World.conjureCloud — the
+ *  flux fabric's second half), and a called cloud is TWO honest things at
+ *  once. The WALKABLE half: standable ground called into being over any
+ *  conjurable void (sky-gaps, flux basins, melted causeways) — it frays
+ *  through its last seconds and lets go, and whichever vertical fabric
+ *  governs the cells routes the fall; over solid land this half fizzles
+ *  free (nothing to stand ON that wasn't already there). The PRESENCE
+ *  half: the cloud itself stands wherever it was called — drawn vapor,
+ *  granting `grants` to whoever keeps inside it (the fog idiom; the
+ *  caster's supports may add rider grants via data/conjury.ts) — so the
+ *  same cast is a bridge over the hungry sky and a DOMAIN over honest
+ *  dirt. Radius scales with area mods, duration with effectDuration. */
 export interface ConjureEffect {
   type: 'conjure';
   radius: number;
   duration: number;
+  /** Gifts the standing cloud grants its occupants (side-filtered,
+   *  refresh-while-inside). Rider stats (CONJURE_RIDERS) add to these. */
+  grants?: readonly ConjureGrant[];
+  /** The cloud HEELS the caster (Own Sky): it rides at their knees,
+   *  paving a continuous stride beneath them over conjurable void, and
+   *  disperses if they fall. One heel per caster — recasts renew it. */
+  follow?: true;
+  /** CAUSEWAY: pave a ROAD of discs from the caster's feet to the aim
+   *  point (spacing/cap in CONJURE_CFG) instead of one disc — a bridge
+   *  laid in a single cast, a wind-lane the length of the party. */
+  line?: true;
+  /** Render tint for this skill's clouds (VIS_CFG.flux.conjure default). */
+  look?: string;
 }
 
 /** Restores a resource immediately (Power Surge, resource orbs). Poise

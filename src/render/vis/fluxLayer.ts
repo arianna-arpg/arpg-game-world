@@ -200,21 +200,51 @@ export function drawFluxLayer(ctx: CanvasRenderingContext2D, world: World,
   // --- Conjured clouds: the player's own ground, honest to the last. -------
   const conj = world.conjured;
   const wf = world.walk;
-  if (conj?.live && wf instanceof GridWalkField) {
-    const spr = cloudSprite(VIS_CFG.flux.conjure);
+  if (conj?.live) {
     const crestS = cloudSprite(VIS_CFG.flux.crest);
-    const cell = wf.cell;
-    for (const [i, c] of conj.cells) {
-      const x = (i % wf.cols + 0.5) * cell, y = ((i / wf.cols | 0) + 0.5) * cell;
-      if (!inView(x, y, cell * 2)) continue;
-      const f = conj.fracOf(c);
-      let a = 0.95 * (1 - f * 0.85);
-      if (f > 0.45) a *= 0.7 + 0.3 * Math.sin(time * VIS_CFG.flux.flicker + i * 0.7);
-      const r = cell * 1.35 * VIS_CFG.flux.lobeOver * (1 - f * 0.18);
-      blitLobe(ctx, spr, x, y, r, a);
+    if (wf instanceof GridWalkField && conj.cells.size) {
+      const spr = cloudSprite(VIS_CFG.flux.conjure);
+      const cell = wf.cell;
+      for (const [i, c] of conj.cells) {
+        const x = (i % wf.cols + 0.5) * cell, y = ((i / wf.cols | 0) + 0.5) * cell;
+        if (!inView(x, y, cell * 2)) continue;
+        const f = conj.fracOf(c);
+        let a = 0.95 * (1 - f * 0.85);
+        if (f > 0.45) a *= 0.7 + 0.3 * Math.sin(time * VIS_CFG.flux.flicker + i * 0.7);
+        const r = cell * 1.35 * VIS_CFG.flux.lobeOver * (1 - f * 0.18);
+        blitLobe(ctx, spr, x, y, r, a);
+        if (f < 0.3) {
+          ctx.globalAlpha = 0.26;
+          ctx.drawImage(crestS, x - r * 0.62 - r * 0.2, y - r * 0.62 - r * 0.24, r * 1.24, r * 1.24);
+        }
+      }
+    }
+
+    // --- The PRESENCES: the cloud that stands wherever it was called. -----
+    // Over conjurable void the cells above already read as floor; over
+    // honest land this soft billow IS the skill's whole visible body — a
+    // knee-high vapor domain, breathing, tattering out through its fray.
+    for (const p of conj.puffs) {
+      if (!inView(p.x, p.y, p.r * 1.9)) continue;
+      const f = conj.puffFrac(p);
+      const spr = cloudSprite(p.look ?? VIS_CFG.flux.conjure);
+      let a = VIS_CFG.flux.puffAlpha * (1 - f * 0.8);
+      if (f > 0.5) a *= 0.72 + 0.28 * Math.sin(time * VIS_CFG.flux.flicker + p.seed);
+      if (a <= 0.01) continue;
+      const bob = Math.sin(time * 1.4 + p.seed * 0.001) * VIS_CFG.flux.puffBob;
+      for (let k = 0; k < p.lobes.length; k++) {
+        const l = p.lobes[k];
+        const wob = Math.sin(time * 1.1 + p.seed * 0.001 + k * 1.9) * 2;
+        blitLobe(ctx, spr, p.x + l.dx + wob, p.y + l.dy + bob,
+          l.r * (1 - f * 0.15), a * (k === 0 ? 1 : 0.82));
+      }
+      // Sunlit crest while fresh — the same top-light standing floors wear,
+      // faded so a land-borne domain never claims to be walkable sky.
       if (f < 0.3) {
-        ctx.globalAlpha = 0.26;
-        ctx.drawImage(crestS, x - r * 0.62 - r * 0.2, y - r * 0.62 - r * 0.24, r * 1.24, r * 1.24);
+        const l0 = p.lobes[0];
+        const cr = l0.r * (1 - f * 0.15);
+        ctx.globalAlpha = 0.18 * (1 - f / 0.3);
+        ctx.drawImage(crestS, p.x - cr * 0.62 - cr * 0.2, p.y + bob - cr * 0.62 - cr * 0.26, cr * 1.24, cr * 1.24);
       }
     }
   }

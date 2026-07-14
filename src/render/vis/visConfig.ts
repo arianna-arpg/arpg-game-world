@@ -363,6 +363,11 @@ export const VIS_CFG = {
     /** Gust streaks: count across the view + streak length (world units). */
     streaks: 44,
     streakLen: 92,
+    /** Conjured PRESENCES (the puff standing over any ground): body alpha —
+     *  soft enough to fight through, present enough to read as a domain —
+     *  and the idle hover bob (world units). */
+    puffAlpha: 0.5,
+    puffBob: 2.5,
   },
 } as const;
 

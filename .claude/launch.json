@@ -30,6 +30,13 @@
       "autoPort": false
     },
     {
+      "name": "arpg-dev-qa3",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--", "--port", "5295", "--strictPort"],
+      "port": 5295,
+      "autoPort": false
+    },
+    {
       "name": "arpg-frozen-preview",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "preview", "--", "--port", "4189", "--strictPort"],

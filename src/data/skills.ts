@@ -10272,19 +10272,21 @@ export const SKILLS: Record<string, SkillDef> = {
   // ==========================================================================
   // THE GALE FAMILY — wind made a weapon, and made a ROAD. Loot of the
   // Driftways (the aether_drift biome): skills that shove, hasten, and —
-  // the family's signature — CONJURE WALKABLE CLOUD (the flux fabric's
+  // the family's signature — CONJURE STANDING CLOUD (the flux fabric's
   // second half). Over the drift they bridge basins and melted causeways;
-  // over solid land the conjures fizzle free and the wind still cuts.
+  // over solid land the same cloud STANDS AS WEATHER (the presence half:
+  // drawn vapor granting its gifts to whoever keeps inside), so every
+  // conjure is a bridge in one country and a domain in all the others.
   // ==========================================================================
 
   zephyr_step: {
     id: 'zephyr_step', name: 'Zephyr Step',
-    description: 'Run WITH the wind for a breath — and the sky remembers where you ran: the dash lays a trail of standing cloud behind it, a bridge at full sprint over any gap the heavens left open. Over honest ground, it is only speed.',
+    description: 'Run WITH the wind for a breath — and the sky remembers where you ran: the dash lays a trail of standing cloud behind it, a bridge at full sprint over any gap the heavens left open. Over honest ground the trail is a WIND-LANE — allies who run where you ran borrow the sky\'s pace.',
     tags: ['movement'], color: '#bfe8f4',
     manaCost: 14, cooldown: 3.5, useTime: 0,
     delivery: {
       type: 'dash', distance: 260, speed: 920, width: 0,
-      trailConjure: { radius: 40, duration: 4 },
+      trailConjure: { radius: 40, duration: 4, grants: [{ status: 'windlane', side: 'allies' }] },
     },
     effects: [],
     requirements: { dexterity: 16 },
@@ -10297,12 +10299,12 @@ export const SKILLS: Record<string, SkillDef> = {
 
   cloudcall: {
     id: 'cloudcall', name: 'Cloudcall',
-    description: 'Ask the sky for GROUND: a standing cloud gathers where you point, holds a handful of heartbeats, and lets go the way all clouds do. A bridge, a sniper\'s perch past the rim, a rescue under a falling friend — the drift answers, briefly.',
-    tags: ['spell', 'aoe', 'duration'], color: '#cfeaff',
+    description: 'Ask the sky for GROUND: a standing cloud gathers where you point, holds a handful of heartbeats, and lets go the way all clouds do. A bridge, a sniper\'s perch past the rim, a rescue under a falling friend — and over land that never needed holding, a HAVEN: the vapor swallows allied outlines and softens the aim against them.',
+    tags: ['spell', 'aoe', 'duration', 'buff'], color: '#cfeaff',
     manaCost: 22, cooldown: 8, useTime: 0.5,
     delivery: { type: 'ground', radius: 60, castRange: 480, occlusion: 'free' },
     effects: [
-      { type: 'conjure', radius: 60, duration: 6 },
+      { type: 'conjure', radius: 60, duration: 6, grants: [{ status: 'cloudhaven', side: 'allies' }] },
     ],
     requirements: { willpower: 15 },
     minDropLevel: 9,
@@ -10420,6 +10422,106 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 150, weight: 1.5 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.05)] },
   },
+
+  // ==========================================================================
+  // THE CLOUDHERD CANON — clouds put to WORK. Where the Gale lays roads and
+  // the Cirrus changes what you are, the Cloudherd keeps WEATHER the way
+  // farmers keep stock: every skill here calls a standing cloud (the
+  // conjure seam — bridge over the hungry sky, domain over honest dirt)
+  // and each names a different GIFT for whoever keeps inside it. All pure
+  // data on one seam: a new herd-cloud is a ConjureEffect row with its own
+  // grants, never an engine edit.
+  // ==========================================================================
+
+  own_sky: {
+    id: 'own_sky', name: 'Own Sky',
+    description: 'Whistle a nimbus down to HEEL: a personal cloud rides at your knees, swallowing outlines and softening the aim against whoever huddles close — and where the world runs out, it pours itself under your feet, a stride of standing cloud paid out step by step for as long as it lasts.',
+    tags: ['spell', 'buff', 'duration', 'aoe'], color: '#d8ecff',
+    manaCost: 28, cooldown: 14, useTime: 0.4,
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'conjure', radius: 46, duration: 8, follow: true, grants: [{ status: 'cloudhaven', side: 'allies' }] },
+    ],
+    requirements: { willpower: 16, intelligence: 10 },
+    minDropLevel: 11,
+    ai: { range: 220, weight: 0.8 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06), mod('aoeRadius', 'increased', 0.03)] },
+    thresholds: [
+      { level: 12, label: 'The nimbus learns your name', mods: [mod('effectDuration', 'increased', 0.35)] },
+    ],
+  },
+
+  stormcradle: {
+    id: 'stormcradle', name: 'Stormcradle',
+    description: 'Call down a thunderhead and make CAMP in it: allies inside lace every blow with the cloud\'s own charge and swing the heavier for it, while the winds that cradle them keep stealing the enemy\'s breath. Over the open sky it is also, of course, ground.',
+    tags: ['spell', 'aoe', 'duration', 'lightning', 'buff'], color: '#e8e8c0',
+    manaCost: 24, cooldown: 10, useTime: 0.55,
+    delivery: { type: 'ground', radius: 70, castRange: 420, occlusion: 'free' },
+    effects: [
+      {
+        type: 'conjure', radius: 70, duration: 7, look: '#e8e8b0',
+        grants: [
+          { status: 'stormlaced', side: 'allies' },
+          { status: 'winded', side: 'enemies' },
+        ],
+      },
+    ],
+    requirements: { willpower: 18, intelligence: 12 },
+    minDropLevel: 12,
+    ai: { range: 380, weight: 1.6 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06), mod('aoeRadius', 'increased', 0.04)] },
+    thresholds: [
+      { level: 10, label: 'The cradle holds its charge', mods: [mod('effectDuration', 'increased', 0.3)] },
+    ],
+  },
+
+  balmcloud: {
+    id: 'balmcloud', name: 'Balmcloud',
+    description: 'Low weather with a silver underside: allies beneath it knit flesh and focus for as long as they keep to the damp — step out and the mending fades with it. The herd-folk raise one over every camp, every stand, every slow retreat.',
+    tags: ['spell', 'aoe', 'duration', 'buff', 'heal'], color: '#e4f0fa',
+    manaCost: 24, cooldown: 11, useTime: 0.5,
+    delivery: { type: 'ground', radius: 64, castRange: 400, occlusion: 'free' },
+    effects: [
+      { type: 'conjure', radius: 64, duration: 7, look: '#e4f0fa', grants: [{ status: 'silverlined', side: 'allies' }] },
+    ],
+    requirements: { willpower: 17 },
+    minDropLevel: 10,
+    ai: { range: 200, weight: 1.2 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.07), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  mistral_causeway: {
+    id: 'mistral_causeway', name: 'Mistral Causeway',
+    description: 'Lay a ROAD of standing cloud from your feet to where you point — a causeway over the hungry sky, a wind-lane over honest dirt that keeps the whole party at the weather\'s pace. The drift-folk pave their processions with it.',
+    tags: ['spell', 'aoe', 'duration', 'buff'], color: '#cfe6f8',
+    manaCost: 26, cooldown: 12, useTime: 0.6,
+    delivery: { type: 'ground', radius: 34, castRange: 520, occlusion: 'free' },
+    effects: [
+      { type: 'conjure', radius: 34, duration: 5, line: true, grants: [{ status: 'windlane', side: 'allies' }] },
+    ],
+    requirements: { willpower: 14, dexterity: 12 },
+    minDropLevel: 10,
+    ai: { range: 300, weight: 0.5 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.07), mod('aoeRadius', 'increased', 0.03)] },
+    thresholds: [
+      { level: 12, label: 'The road remembers', mods: [mod('effectDuration', 'increased', 0.4)] },
+    ],
+  },
+
+  low_ceiling: {
+    id: 'low_ceiling', name: 'Low Ceiling',
+    description: 'Drop the weather ON them: a pressing cloud that swallows THEIR sight and spoils THEIR aim while it squats where you put it. The herd\'s answer to archers, watchposts and anything that thinks distance is safety — walk your own murk in after it.',
+    tags: ['spell', 'aoe', 'duration'], color: '#aab6cc',
+    manaCost: 22, cooldown: 9, useTime: 0.55,
+    delivery: { type: 'ground', radius: 66, castRange: 440, occlusion: 'free' },
+    effects: [
+      { type: 'conjure', radius: 66, duration: 6, look: '#9aa8c2', grants: [{ status: 'smothered', side: 'enemies' }] },
+    ],
+    requirements: { intelligence: 15, willpower: 12 },
+    minDropLevel: 11,
+    ai: { range: 400, weight: 1.8, keepDistance: 220 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06), mod('aoeRadius', 'increased', 0.04)] },
+  },
 };
 
 // THE CONSTRUCT CAPABILITY FOLD: every construct-delivery skill IS
@@ -10431,6 +10533,18 @@ for (const def of Object.values(SKILLS)) {
   if (def.delivery.type === 'construct' && !def.tags.includes('construct')) {
     def.tags.push('construct');
   }
+}
+
+// THE CONJURE CAPABILITY FOLD (the construct fold's sibling): every skill
+// that CALLS CLOUD — a conjure effect, or a conjuring trail on its delivery
+// — IS 'conjure'-capable by construction, so a new herd-cloud can never
+// forget the word and cloud-generic supports (Thunderhead, Silver Lining,
+// Slow Weather) gate on it honestly. Cloudborne grantsTags the same word
+// onto whatever movement skill it teaches to conjure.
+for (const def of Object.values(SKILLS)) {
+  const callsCloud = def.effects.some(fx => fx.type === 'conjure')
+    || (def.delivery.type === 'dash' && !!def.delivery.trailConjure);
+  if (callsCloud && !def.tags.includes('conjure')) def.tags.push('conjure');
 }
 
 export const SKILL_LIST: SkillDef[] = Object.values(SKILLS);

@@ -560,6 +560,49 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     beneficial: true,
     mods: [mod('levitation', 'flat', 1), mod('moveSpeed', 'increased', 0.1)],
   },
+  // --- THE CALLED CLOUD'S GIFTS (conjured-cloud presences, engine/flux.ts) --
+  // Standing in a cloud a SKILL called grants these on the fog idiom:
+  // refreshed while inside, the short duration is the linger stepping out.
+  // WHICH cloud grants WHAT is pure data — ConjureEffect.grants rows on the
+  // skill, trailConjure rows on the delivery, CONJURE_RIDERS stats from
+  // supports (data/conjury.ts). Anything else may apply them too.
+  //
+  // CLOUD HAVEN — the standing cloud swallows outlines and softens aim:
+  // harder to notice, harder to hit, for whoever keeps to the vapor.
+  cloudhaven: {
+    label: 'Cloud Haven', color: '#cfeaff', duration: 1.0,
+    beneficial: true,
+    mods: [mod('detectability', 'more', -0.35), mod('evasion', 'increased', 0.2)],
+  },
+  // WIND LANE — the laid trail is a ROAD: allies who run where the cloud
+  // was called borrow the wind's pace (the Gale family's motto, kept).
+  windlane: {
+    label: 'Wind Lane', color: '#bfe8f4', duration: 0.9,
+    beneficial: true,
+    mods: [mod('moveSpeed', 'increased', 0.15)],
+  },
+  // STORM-LACED — the thunderhead takes your side: blows struck from
+  // inside the charged cloud carry its sting (apply_shock rides the
+  // ordinary ailment pipeline; no bespoke hooks).
+  stormlaced: {
+    label: 'Storm-Laced', color: '#e8e8a8', duration: 1.0,
+    beneficial: true,
+    mods: [mod('apply_shock', 'flat', 0.2), mod('damage', 'increased', 0.08)],
+  },
+  // SILVER-LINED — the cloud's underside is a slow mending: flesh and
+  // focus knit while the weather holds over you.
+  silverlined: {
+    label: 'Silver-Lined', color: '#dcecf8', duration: 1.0,
+    beneficial: true,
+    mods: [mod('lifeRegenPct', 'flat', 0.02), mod('manaRegen', 'increased', 0.25)],
+  },
+  // SMOTHERED — the hostile reading of the same weather (Low Ceiling):
+  // the cloud pressed down onto a body swallows ITS sight and spoils its
+  // aim. Refresh/linger idiom like every other terrain status.
+  smothered: {
+    label: 'Smothered', color: '#9aa8c2', duration: 1.0,
+    mods: [mod('detectionRange', 'more', -0.45), mod('accuracy', 'increased', -0.15)],
+  },
 
   living_bomb: {
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,

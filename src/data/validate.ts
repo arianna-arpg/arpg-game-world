@@ -57,6 +57,7 @@ import { validateFog } from '../engine/fog';
 import './fog'; // side-effect: the fog bank defs register before validation
 import { validateCreep } from '../engine/creep';
 import './creeps'; // side-effect: the creep kind defs register before validation
+import { validateConjury } from './conjury';
 import { VOYAGE_ISLANDS } from './voyageIslands';
 import { Rng } from '../core/rng';
 
@@ -240,6 +241,25 @@ export function validateContent(): void {
     }
   }
   for (const msg of validateCreep(id => !!STATUS_DEFS[id], creepSpecs)) warn(msg);
+
+  // CONJURY: rider grants (data/conjury.ts) and every skill's conjure /
+  // trailConjure grant rows name real statuses — the called-cloud presence
+  // rides the fog/creep safety-net contract.
+  for (const msg of validateConjury(id => !!STATUS_DEFS[id])) warn(msg);
+  for (const def of Object.values(SKILLS)) {
+    const grantRows: { src: string; grants?: readonly { status: string }[] }[] = [];
+    for (const fx of def.effects) {
+      if (fx.type === 'conjure') grantRows.push({ src: `skill '${def.id}' conjure`, ...(fx.grants ? { grants: fx.grants } : {}) });
+    }
+    if (def.delivery.type === 'dash' && def.delivery.trailConjure?.grants) {
+      grantRows.push({ src: `skill '${def.id}' trailConjure`, grants: def.delivery.trailConjure.grants });
+    }
+    for (const row of grantRows) {
+      for (const g of row.grants ?? []) {
+        if (!STATUS_DEFS[g.status]) warn(`${row.src}: grant names unknown status '${g.status}'`);
+      }
+    }
+  }
 
   // STRUCTURES: plans resolve their legend, generators exist (and a fixed-seed
   // SAMPLE of each generator def emits only known chars), roof styles resolve,

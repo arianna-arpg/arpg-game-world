@@ -1946,16 +1946,45 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   cloudborne: {
     id: 'cloudborne', name: 'Cloudborne',
-    description: 'Teach any movement skill the Zephyr\'s trick: dashes CONJURE standing cloud along their travel; blinks and leaps keep one where you left (the cloudTrail axis — wider and longer-held per level). Over solid land the strides fizzle free; over the open sky, your escape IS the bridge.',
-    // NOTE: the support matrix reads this INERT — an ENVIRONMENTAL false
-    // positive: sim_arena's floor has no conjurable void, so every conjure
-    // correctly fizzles and episodes stay byte-identical. The read site is
-    // live (verified in-browser over a drift zone); a future arena with a
-    // conjurable strip would move it to `effective`.
+    description: 'Teach any movement skill the Zephyr\'s trick: dashes CONJURE standing cloud along their travel; blinks and leaps keep one where you left (the cloudTrail axis — wider and longer-held per level). Over the open sky your escape IS the bridge; over solid land the strides stand as wind-lane vapor, hastening whoever runs your road.',
+    // NOTE (history): the support matrix once read this INERT — sim_arena's
+    // floor has no conjurable void, so the WALKABLE half always fizzled.
+    // The presence half ended that: stat-taught trails now carry the
+    // windlane rider (data/conjury.ts), so the trail grants pace on ANY
+    // floor and episodes diverge honestly. grantsTags feeds the fold: a
+    // Cloudborne'd dash counts as 'conjure' for Thunderhead & kin.
     color: '#cfeaff', requiresTags: ['movement'],
+    grantsTags: ['conjure'],
     mods: [mod('cloudTrail', 'flat', 1)],
     perLevel: [mod('cloudTrail', 'flat', 0.25)],
     weight: 5, minDropLevel: 9,
+  },
+
+  thunderhead: {
+    id: 'thunderhead', name: 'Thunderhead',
+    description: 'The supported skill\'s called clouds come CHARGED: allies inside lace every blow with shock and swing a shade harder — the sky was always going to take a side. Levels keep the weather standing longer.',
+    color: '#e8e8a8', requiresTags: ['conjure'],
+    mods: [mod('cloudCharge', 'flat', 1)],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 5, minDropLevel: 11,
+  },
+
+  silver_lining: {
+    id: 'silver_lining', name: 'Silver Lining',
+    description: 'The supported skill\'s called clouds carry silver rain: allies inside knit flesh and focus while the weather holds. Every cloud has one now. Levels keep the rain falling longer.',
+    color: '#dcecf8', requiresTags: ['conjure'],
+    mods: [mod('cloudSalve', 'flat', 1)],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 5, minDropLevel: 10,
+  },
+
+  slow_weather: {
+    id: 'slow_weather', name: 'Slow Weather',
+    description: 'The supported skill\'s weather refuses to pass: called clouds gather WIDER and stand LONGER — the herd\'s answer to a sky that keeps taking its gifts back.',
+    color: '#c8d8ea', requiresTags: ['conjure'],
+    mods: [mod('effectDuration', 'increased', 0.3), mod('aoeRadius', 'increased', 0.1)],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 6, minDropLevel: 9,
   },
 
   tethered_orbit: {
