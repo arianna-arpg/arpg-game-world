@@ -938,7 +938,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   caul_sac: {
     painter: 'pod', order: 53, shadow: 0.45,
-    params: { body: '#3a2c48', glow: '#9a72c8', pulseRate: 1.1 },
+    // Full PodParams contract (aspectY/glowY/glowR/pulseRate are required —
+    // a missing one is a NaN gradient and a dead frame, ask the live QA).
+    params: {
+      body: '#3a2c48', glow: '#9a72c8', veins: '#5a4468',
+      aspectY: 1.15, glowY: -0.08, glowR: 0.45, pulseRate: 1.1,
+    },
     light: { radius: -1.8, color: '#9a72c8', intensity: 0.12, flicker: 1.1 },
   },
   caul_eyes: {
