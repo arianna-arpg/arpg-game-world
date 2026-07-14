@@ -119,11 +119,14 @@ lanes stay solid bands — each subsystem activates on its spec alone.
 
 ## Conjured ground (the fabric's second half)
 
-`World.conjureCloud(x, y, r, secs)` — walkable cloud CALLED INTO BEING, the
-seam skills ride (a dash that leaves a cloud trail; a pad cast at the
-cursor; a bridge over a melted causeway). Works in ANY grid zone, gated by
-DATA: only region kinds flagged `conjurable` (cloud_void, flux_void) take a
-conjure — the registry answers, never a biome check.
+`World.conjureCloud(x, y, r, secs, opts?)` — a standing cloud CALLED INTO
+BEING, the seam skills ride (a dash that leaves a cloud trail; a pad cast
+at the cursor; a bridge over a melted causeway). A call is TWO honest
+things at once:
+
+**The walkable half** works in any grid zone, gated by DATA: only region
+kinds flagged `conjurable` (cloud_void, flux_void) take cells — the
+registry answers, never a biome check.
 
 - Cells are ANNEXED from whichever fabric governs them — a collapse melt
   schedule marks them Immune and restores its conclusion on release
@@ -137,11 +140,38 @@ conjure — the registry answers, never a biome check.
   their authored sky-gaps; an expiry there scrambles (rescue snap) instead
   of dropping — no fall spec, no fall.
 
+**The presence half** (`ConjuredPuff`) stands ANYWHERE the skill asked —
+every zone carries the ledger now, convex interiors included. The puff is
+drawn vapor (the flux layer's billow idiom) granting `ConjureGrant` rows
+to occupants on the fog cadence: `status` + optional owner-relative `side`
+('allies'/'enemies' — resolved against the caller's team, with the world's
+own hostility oracle) + the absolute fog filters (teams/factions/
+notFactions). Statuses stay short — refresh-while-inside, linger-on-exit.
+
+- Grant sources fold at the call site (`World.conjureGrantsFor`, read with
+  the cast's own tag/extra context): the skill's `ConjureEffect.grants` /
+  `trailConjure.grants`, plus every `CONJURE_RIDERS` row (data/conjury.ts)
+  whose stat rides the caster — how supports (Thunderhead, Silver Lining)
+  teach every cloud a new gift without naming a skill.
+- `ConjureEffect.follow` HEELS the cloud to its caster (one per caster;
+  recasts renew) and pays out a short-lived pave beneath them
+  (`CONJURE_CFG.followEvery/followHold`) — a continuous bridge over void.
+- `ConjureEffect.line` paves a CAUSEWAY of discs from the caster's feet to
+  the aim (`CONJURE_CFG.lineStep/lineMaxHops`).
+- The 'conjure' SkillTag is FOLDED on at registry load (any conjure effect
+  or conjuring trail — the construct fold's sibling); cloud-generic
+  supports gate on it, and Cloudborne `grantsTags` it onto taught skills.
+- Boot validation: rider + skill grant rows must name real statuses
+  (validateConjury beside validateFog/validateCreep in data/validate.ts).
+
 ## Runtime shape
 
-`World.flux: FluxField | null` + `World.conjured: ConjuredGround | null`,
-built at the loadZone tail beside the collapse, ticked in `updateFlux` /
-`conjured.update` beside it. Open predicates: `ownedAt`, `voidAt`,
+`World.flux: FluxField | null` + `World.conjured: ConjuredGround | null`
+(non-null in EVERY zone now — a convex zone's ledger simply never places
+cells), built at the loadZone tail beside the collapse, ticked in
+`updateFlux` / `conjured.update(dt, actors)` beside it (the actor slice
+feeds the presence sweep; `conjured.puffs` + `puffFrac(p)` are open to the
+renderer and AI). Open predicates: `ownedAt`, `voidAt`,
 `gustNow()`, `warmupFrac()`, `padPhase(pad)` — AI drives, packages and the
 renderer all read the same field. Renderer: `drawFluxLayer` right after the
 collapse overlay (clouds are GROUND: under doodads and actors); knobs in
@@ -151,7 +181,9 @@ collapse overlay (clouds are GROUND: under doodads and actors); knobs in
 
 - A new shifting biome = paint the kinds + a `FluxSpec` on any grid theme
   (variants override wholesale — run three tempos on three faces).
-- A new conjure skill = one `world.conjureCloud` call from any effect.
+- A new conjure skill = one `ConjureEffect` row (radius/duration/grants/
+  follow/line/look) — no engine edits; a new cloud GIFT = one status + one
+  grant row (or one `CONJURE_RIDERS` row + a stat-granting support).
 - Monster flux-craft: `FluxField` pads/carriers are open — an
   `x_ride_flux` AI action (seek a standing pad; hop before the fray) rides
   `padPhase` exactly like `x_seek_fog` rides the fog field.
