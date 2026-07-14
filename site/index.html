@@ -653,6 +653,19 @@ npm run <span class="g">build</span></pre>
   /* the graph's flickers ARE the insignia's three points — teal / violet /
      ember, same hexes as the mark in the nav, the hero and the footer. */
   var COLORS=['#4fd6c4','#a98bff','#ff8a4c'];
+
+  /* THE FIDGET LAYER — the backdrop is quietly interactive: the pointer
+     (mouse, pen, or a dragging finger) carries a soft repulsion field the
+     motes bounce off — parked it barely bends the drift, swept through them
+     it scatters — and every click/tap drops a stone into the pool: an
+     expanding ripple that shoves the motes as its wavefront passes. Ambient
+     by design: passive listeners, nothing ever blocks the page, and
+     prefers-reduced-motion keeps the whole layer still. */
+  var ptr={x:-1e4,y:-1e4,px:-1e4,py:-1e4,speed:0};
+  var ripples=[];
+  var PTR_R=100, PTR_R2=PTR_R*PTR_R, PTR_PUSH=.5, PTR_EMBER=70, PTR_EMBER2=PTR_EMBER*PTR_EMBER;
+  var RIP_LIFE=100, RIP_MAX=150, RIP_BAND=26, RIP_PUSH=.9;
+  function parkPtr(){ ptr.x=ptr.px=-1e4; ptr.y=ptr.py=-1e4; ptr.speed=0; }
   function resize(){
     W=canvas.clientWidth; H=canvas.clientHeight;
     canvas.width=Math.floor(W*dpr); canvas.height=Math.floor(H*dpr);
@@ -663,6 +676,8 @@ npm run <span class="g">build</span></pre>
       nodes.push({
         x:Math.random()*W, y:Math.random()*H,
         vx:(Math.random()-.5)*.14, vy:(Math.random()-.5)*.14,
+        /* dv* = disturbance from the fidget layer; decays back to pure drift */
+        dvx:0, dvy:0,
         r:Math.random()*1.9+1.1,
         c:COLORS[i%3]
       });
@@ -677,12 +692,48 @@ npm run <span class="g">build</span></pre>
   }
   function frame(){
     ctx.clearRect(0,0,W,H);
+    /* ripples — the stone drops, the pool answers (drawn beneath the web) */
+    for(var rq=ripples.length-1;rq>=0;rq--){
+      var w=ripples[rq]; w.t++;
+      var p=w.t/RIP_LIFE;
+      if(p>=1){ ripples.splice(rq,1); continue; }
+      w.r=RIP_MAX*(1-Math.pow(1-p,3));
+      var al=.26*Math.pow(1-p,1.8);
+      ctx.strokeStyle='rgba(150,185,220,'+al+')';
+      ctx.lineWidth=1.2;
+      ctx.beginPath(); ctx.arc(w.x,w.y,w.r,0,6.2832); ctx.stroke();
+      if(w.r>34){ /* the trailing second wave of the drop */
+        ctx.strokeStyle='rgba(150,185,220,'+(al*.5)+')';
+        ctx.beginPath(); ctx.arc(w.x,w.y,w.r*.62,0,6.2832); ctx.stroke();
+      }
+    }
+    /* pointer field gain — parked ≈ a whisper, swept ≈ a real shove */
+    var pmx=ptr.x-ptr.px, pmy=ptr.y-ptr.py;
+    ptr.speed=ptr.speed*.8+Math.min(40,Math.sqrt(pmx*pmx+pmy*pmy))*.2;
+    ptr.px=ptr.x; ptr.py=ptr.y;
+    var ptrGain=.3+Math.min(1,ptr.speed/16)*.7;
     /* links */
     for(var i=0;i<nodes.length;i++){
       var a=nodes[i];
-      a.x+=a.vx; a.y+=a.vy;
-      if(a.x<0||a.x>W) a.vx*=-1;
-      if(a.y<0||a.y>H) a.vy*=-1;
+      var rx=a.x-ptr.x, ry=a.y-ptr.y, rd2=rx*rx+ry*ry;
+      if(rd2<PTR_R2 && rd2>1){
+        var rd=Math.sqrt(rd2), fall=1-rd/PTR_R;
+        var push=fall*fall*PTR_PUSH*ptrGain;
+        a.dvx+=(rx/rd)*push; a.dvy+=(ry/rd)*push;
+      }
+      for(var q=0;q<ripples.length;q++){
+        var rp=ripples[q], ddx=a.x-rp.x, ddy=a.y-rp.y;
+        var dd=Math.sqrt(ddx*ddx+ddy*ddy)||1, band=Math.abs(dd-rp.r);
+        if(band<RIP_BAND){
+          var amp=1-rp.t/RIP_LIFE;
+          var bf=(1-band/RIP_BAND)*amp*amp*RIP_PUSH;
+          a.dvx+=(ddx/dd)*bf; a.dvy+=(ddy/dd)*bf;
+        }
+      }
+      a.x+=a.vx+a.dvx; a.y+=a.vy+a.dvy;
+      a.dvx*=.9; a.dvy*=.9;
+      if(a.x<0||a.x>W){ a.vx*=-1; a.dvx=0; a.x=a.x<0?0:W; }
+      if(a.y<0||a.y>H){ a.vy*=-1; a.dvy=0; a.y=a.y<0?0:H; }
       for(var k=i+1;k<nodes.length;k++){
         var b=nodes[k], dx=a.x-b.x, dy=a.y-b.y, d=Math.sqrt(dx*dx+dy*dy);
         if(d<LINK){
@@ -708,6 +759,9 @@ npm run <span class="g">build</span></pre>
     for(var e=0;e<embers.length;e++){
       var m=embers[e];
       m.y+=m.vy; m.x+=Math.sin((m.tw+=0.01))*0.25;
+      /* embers part around the pointer — a lighter touch than the motes */
+      var ex=m.x-ptr.x, ey=m.y-ptr.y, ed2=ex*ex+ey*ey;
+      if(ed2<PTR_EMBER2 && ed2>1){ var ed=Math.sqrt(ed2); m.x+=(ex/ed)*(1-ed/PTR_EMBER)*.9; }
       if(m.y< -12){ embers[e]=newEmber(false); }
       ctx.beginPath();
       ctx.fillStyle='rgba(255,138,76,'+m.a+')'; /* --ember, the mark's third point */
@@ -718,6 +772,22 @@ npm run <span class="g">build</span></pre>
   var raf=null;
   resize();
   window.addEventListener('resize', function(){ resize(); if(reduce){ staticFrame(); } });
+
+  /* fidget-layer input: pointer events cover mouse, pen and touch alike.
+     A lifted finger leaves no field behind; a parked mouse keeps its. */
+  if(!reduce){
+    window.addEventListener('pointermove', function(e){ ptr.x=e.clientX; ptr.y=e.clientY; }, {passive:true});
+    window.addEventListener('pointerdown', function(e){
+      ptr.x=e.clientX; ptr.y=e.clientY;
+      if(ripples.length>=6) ripples.shift();
+      ripples.push({x:e.clientX, y:e.clientY, t:0, r:0});
+    }, {passive:true});
+    window.addEventListener('pointerup', function(e){ if(e.pointerType!=='mouse') parkPtr(); }, {passive:true});
+    window.addEventListener('pointercancel', parkPtr, {passive:true});
+    document.documentElement.addEventListener('mouseleave', parkPtr);
+  }
+  /* QA handle (the site's __game): state only, drives nothing */
+  window.__hwbg = { get nodes(){ return nodes; }, get ripples(){ return ripples; }, get ptr(){ return ptr; } };
   function staticFrame(){
     /* draw a single frame with no animation */
     ctx.clearRect(0,0,W,H);
