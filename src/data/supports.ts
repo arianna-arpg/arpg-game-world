@@ -1753,6 +1753,50 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 7,
   },
 
+  // --- The ATTENTION gems (the threat chart, socketed) -----------------------
+  // threatGen is an attention lever, never a damage one: it scales how loudly
+  // the supported skill's damage books on the victim's chart (resolveHit folds
+  // it per-skill). Only highestThreat brains — and every grafted extraction
+  // swarm — read the chart, so these gems shine brightest where the world is
+  // already arguing about who to bite.
+
+  clamor: {
+    id: 'clamor', name: 'Clamor',
+    // NOTE: the support matrix reads this INERT in the arena — an ENVIRONMENTAL
+    // false positive (the cloudborne precedent): sim duels field ONE candidate
+    // target, so a louder chart changes no decision and episodes stay
+    // byte-identical. The read site is resolveHit's threat booking; verified
+    // LIVE in-browser (an out-booked extraction swarmer retargets).
+    description: 'The supported skill lands LOUD: every wound it deals books three times the threat on the victim\'s chart. Glue for the shield-bearer — make one skill your argument and the swarm forgets the seam, the healer, and everyone you\'re standing in front of.',
+    color: '#e8c87a', requiresTags: ['attack', 'spell'],
+    mods: [mod('threatGen', 'more', 2.0)],
+    perLevel: [mod('threatGen', 'more', 0.25)],
+    weight: 6, minDropLevel: 6,
+  },
+
+  quiet_hand: {
+    id: 'quiet_hand', name: 'Quiet Hand',
+    // NOTE: the support matrix may read this INERT in the arena — an
+    // ENVIRONMENTAL false positive: sim duels field one candidate target, so
+    // nothing exists to out-shout. The read site is resolveHit's threat
+    // booking (live wherever a chart has two names on it — verified against
+    // the extraction swarm in-browser).
+    description: 'The supported skill lands SOFT on the chart: two-thirds less threat per wound. The assassin\'s manners — cut deep without becoming the conversation; beside a Lodestone or a shield-bearer, you simply never come up.',
+    color: '#b8c8c0', requiresTags: ['attack', 'spell'],
+    mods: [mod('threatGen', 'more', -0.65)],
+    perLevel: [mod('threatGen', 'more', -0.03)],
+    weight: 6, minDropLevel: 6,
+  },
+
+  beckoning: {
+    id: 'beckoning', name: 'Beckoning',
+    description: 'Constructs from the supported skill TAUNT — every totem, turret and trap wants to be hit (the decoy pull), and stands a third tougher to survive the wanting. Any construct build becomes a decoy build: the turret line IS the front line.',
+    color: '#a5e3b4', requiresTags: ['construct'],
+    mods: [mod('constructTaunt', 'flat', 1), mod('minionLife', 'increased', 0.35)],
+    perLevel: [mod('minionLife', 'increased', 0.05)],
+    weight: 5, minDropLevel: 8,
+  },
+
   // --- The GALE gems (the Driftways' wind-craft) ----------------------------
   crosswind: {
     id: 'crosswind', name: 'Crosswind',

@@ -2538,6 +2538,67 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('guardStrength', 'increased', 0.15), mod('aoeRadius', 'increased', 0.05)] },
   },
 
+  // --- The ATTENTION-CRAFT lane (the threat chart, played as a hand) --------
+  // The taunt STATUS is the loud half (challenging_shout, provocation); these
+  // work the LEDGER itself: threatGen (how loudly your damage books on every
+  // chart), the taunting construct decoy, and the ranged single-pull. All of
+  // it reads the extraction swarm's fixation graft honestly — the same chart
+  // decides whether a disturbed native keeps chewing the seam or turns on you.
+
+  lodestone: {
+    id: 'lodestone', name: 'Lodestone',
+    description: 'Plant a humming stone that WANTS to be hit: every eye nearby prefers it to any living thing (the decoy pull). It is REAL — wound it and it hums on; break it and the spell is spent. The pack-splitter, the trap-baiter, the seam-defender\'s second body.',
+    tags: ['spell', 'construct', 'duration'], color: '#a5e3b4',
+    manaCost: 26, cooldown: 11, useTime: 0.5,
+    delivery: {
+      type: 'construct', kind: 'totem', taunt: true, aims: false,
+      range: 0, duration: 8, maxActive: 1, life: 90, placeRange: 320,
+    },
+    effects: [],
+    requirements: { willpower: 14 },
+    minDropLevel: 6,
+    leveling: { perLevel: [mod('minionLife', 'increased', 0.09), mod('effectDuration', 'increased', 0.04)] },
+    thresholds: [
+      { level: 12, label: 'A louder stone', mods: [mod('constructMaxCount', 'flat', 1)] },
+    ],
+  },
+
+  goad: {
+    id: 'goad', name: 'Goad',
+    description: 'A thrown insult with a stone in it: one struck body MUST answer you (taunted), peeled off its pack without waking the rest. The herder\'s crook — pull the brute away from the seam, or the archer away from its wall. Loud by nature: the hit books DOUBLE on the chart.',
+    tags: ['attack', 'projectile'], color: '#e8c87a',
+    manaCost: 8, cooldown: 5, useTime: 0.45,
+    baseDamage: { physical: [7, 12] },
+    delivery: { type: 'projectile', speed: 420, radius: 8, range: 540 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'taunted', chance: 1 },
+    ],
+    innateMods: [mod('threatGen', 'more', 1.0)],
+    requirements: { strength: 12, dexterity: 10 },
+    minDropLevel: 5,
+    ai: { range: 480, weight: 1.4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09), mod('projectileSpeed', 'increased', 0.03)] },
+  },
+
+  quiet_step: {
+    id: 'quiet_step', name: 'Quiet Step',
+    description: 'Walk beneath notice: for a few breaths your blows WHISPER on every chart (threat generation cut to a fraction) and your outline reads smaller (harder to detect). The swarm remembers the seam, not you — step aside and let the tide pass; strike from the hush and slip back out of the argument.',
+    tags: ['spell', 'duration'], color: '#b8c8c0',
+    manaCost: 18, cooldown: 14, useTime: 0.3,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'quiet_step', duration: 5,
+      mods: [mod('threatGen', 'more', -0.75), mod('detectability', 'increased', -0.3)],
+    }],
+    requirements: { dexterity: 16 },
+    minDropLevel: 7,
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.05)] },
+    thresholds: [
+      { level: 14, label: 'Beneath the argument', mods: [mod('cooldownRecovery', 'increased', 0.25)] },
+    ],
+  },
+
   marching_bulwark: {
     id: 'marching_bulwark', name: 'Marching Bulwark',
     description: 'The phalanx-step: a NARROW tower guard you can genuinely WALK behind — three-quarters pace, shield braced, line advancing. Thinner protection than planting your feet, but the wall MOVES. Release still bashes.',
