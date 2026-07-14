@@ -130,6 +130,7 @@ export class UI {
   private oracleMenu = document.getElementById('oracle-menu')!;
   private bestiaryMenu = document.getElementById('bestiary-menu')!;
   private vendorMenu = document.getElementById('vendor-menu')!;
+  private boroughMenu = document.getElementById('borough-menu')!;
   private sailMenu = document.getElementById('sail-menu')!;
   private vocationMenu = document.getElementById('vocation-menu')!;
   private mercMenu = document.getElementById('merc-menu')!;
@@ -220,6 +221,9 @@ export class UI {
   private bestiaryPage = 0;
   private bestiarySel: string | null = null;
   vendorOpen = false;
+  /** The Borough arming panel: which villager the dwell offered. */
+  boroughOpen = false;
+  private boroughFolkId = -1;
   /** The scrap wheel: while ON, the vendor screen's sell-half is live and
    *  clicks BREAK your things for essence. Reset on close — never sticky. */
   private scrapMode = false;
@@ -570,6 +574,18 @@ export class UI {
         gearRefresh();
       },
     });
+    // THE BOROUGH ARMING PANEL: drop a bag piece onto the open panel to gift
+    // it to the villager under parley (the same intent the panel's buttons
+    // route — one authority, two gestures).
+    registerDropTarget({
+      kind: 'armFolk',
+      accepts: (p) => p.kind === 'gearItem',
+      drop: (p, arg) => {
+        world().requestMeta({ t: 'armFolkItem', folkId: Number(arg), uid: Number(p.arg) });
+        this.refreshBorough();
+        gearRefresh();
+      },
+    });
   }
 
   /** The local seat's GRIMOIRE-capable skill instances (delivery.grimoire),
@@ -681,7 +697,7 @@ export class UI {
     return this.anyPanelOpen() || this.escapeMenuOpen || this.minigameActive
       || this.caravanOpen || this.mercOpen || this.salvageOpen
       || this.oracleOpen || this.vendorOpen || this.sailOpen || this.vocationOpen
-      || this.bestiaryOpen
+      || this.bestiaryOpen || this.boroughOpen
       || !this.startMenu.classList.contains('hidden');
   }
 
@@ -2031,6 +2047,85 @@ export class UI {
         this.essCostText(sellSupportYield(gem)))).join('');
     const all = gear + skills + sups;
     return all || '<div style="color:#8a8678;font-size:11px">Nothing carried worth selling.</div>';
+  }
+
+  // --- THE BOROUGH ARMING PANEL (packages/defs/borough.ts) -------------------
+  // Opened by the arming dwell (world.boroughArmRequested → main.ts). One
+  // villager per parley; gifts and essence route through requestMeta like
+  // every meta mutation (host-authoritative, co-op-replicated).
+
+  showBorough(folkId: number): void {
+    this.boroughFolkId = folkId;
+    this.boroughOpen = true;
+    this.boroughMenu.classList.remove('hidden');
+    this.refreshBorough();
+  }
+
+  closeBorough(): void {
+    this.boroughOpen = false;
+    this.boroughFolkId = -1;
+    this.boroughMenu.classList.add('hidden');
+    delete this.boroughMenu.dataset.drop;
+    hideTooltip();
+  }
+
+  refreshBorough(): void {
+    if (!this.boroughOpen) return;
+    const world = this.getWorld();
+    const v = world.boroughArmView(this.boroughFolkId);
+    if (!v) { this.closeBorough(); return; } // the folk fell or the stand resolved — parley over
+    const m = world.localSeat.meta;
+    const stage = v.stage === 'muster'
+      ? `the horde comes — <b>${Math.ceil(v.timer)}s</b> to prepare`
+      : v.stage === 'assault'
+        ? `<b style="color:#d85a4a">UNDER ASSAULT</b> — ${Math.ceil(v.timer)}s of fury left`
+        : '<b style="color:#d85a4a">drive off the stragglers!</b>';
+    const lifePct = Math.round(100 * v.folk.life / Math.max(1, v.folk.maxLife()));
+    const gearRows = m.items.map(i =>
+      `<button data-bgive="${i.uid}" data-tip="item" data-item-uid="${i.uid}"
+        style="color:${ITEM_RARITIES[i.rarity].color}">${i.name}</button>`).join(' ')
+      || '<span style="color:#8a8678;font-size:11px">Your bag is empty.</span>';
+    const essRows = ESSENCE_IDS.map(id => {
+      const pkg = v.arming.essence[id];
+      if (!pkg) return '';
+      const have = m.essences[id] ?? 0;
+      const stacks = v.stacks[id] ?? 0;
+      const capped = stacks >= pkg.maxStacks;
+      const e = ESSENCES[id];
+      return `<div style="display:flex;align-items:center;gap:8px;margin:2px 0">
+        <span style="color:${e.color};min-width:150px">${e.glyph} ${e.label}</span>
+        <span style="font-size:11px;color:#b8b4a4;flex:1">${pkg.label}
+          <span style="color:#8a8678">(${stacks}/${pkg.maxStacks})</span></span>
+        <button data-bess="${id}" ${capped || have < pkg.cost ? 'disabled' : ''}>
+          ${capped ? 'sated' : `${pkg.cost} ${e.glyph} (have ${have})`}</button>
+      </div>`;
+    }).join('');
+    // The whole panel is a drop target: drag a bag piece onto it to gift it.
+    this.boroughMenu.dataset.drop = `armFolk:${v.folk.id}`;
+    this.boroughMenu.innerHTML = `
+      <h3 style="color:#e8c87a">⌂ Arm ${v.folk.name}</h3>
+      <div style="font-size:12px;color:#b8b4a4;margin-bottom:6px">
+        ${stage} &nbsp;·&nbsp; folk standing: <b>${v.folkAlive}/${v.folkTotal}</b>
+        &nbsp;·&nbsp; ${v.folk.name}: ${lifePct}% &nbsp;·&nbsp; gifts ${v.gifts}/${v.maxGifts}
+      </div>
+      <div style="font-size:11px;color:#8a8678;margin-bottom:4px">
+        Gift a piece of gear (drag it onto this panel, or click below) — its lines become theirs, for good.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;max-height:130px;overflow-y:auto">${gearRows}</div>
+      <div style="margin-top:8px;font-size:11px;color:#8a8678">…or pour essence into their blood (coarse and above):</div>
+      ${essRows}
+      <div class="bind-btns" style="margin-top:8px"><button data-borough-close>Step back</button></div>`;
+    const q = <T extends HTMLElement>(sel: string): T[] => [...this.boroughMenu.querySelectorAll<T>(sel)];
+    const refresh = (): void => { this.refreshBorough(); this.refreshInventory(); };
+    q<HTMLButtonElement>('button[data-bgive]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'armFolkItem', folkId: this.boroughFolkId, uid: Number(btn.dataset.bgive) });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-bess]').forEach(btn => btn.addEventListener('click', () => {
+      world.requestMeta({ t: 'armFolkEssence', folkId: this.boroughFolkId, essence: btn.dataset.bess! });
+      refresh();
+    }));
+    q<HTMLButtonElement>('button[data-borough-close]').forEach(btn =>
+      btn.addEventListener('click', () => this.closeBorough()));
   }
 
   refreshVendor(): void {
@@ -4180,6 +4275,10 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     this.scrapMode = false;
     this.vendorMenu.style.cursor = '';
     this.vendorMenu.classList.add('hidden');
+    this.boroughOpen = false;
+    this.boroughFolkId = -1;
+    this.boroughMenu.classList.add('hidden');
+    delete this.boroughMenu.dataset.drop;
     this.treeOpen = false;
     this.closeChoicePopup();
     this.mapOpen = false;

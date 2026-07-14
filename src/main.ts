@@ -642,6 +642,7 @@ function handleLocalPanels(): void {
     if (ui.bestiaryOpen) { ui.closeBestiary(); return; }
     if (ui.sailOpen) { ui.closeSail(); return; }
     if (ui.mercOpen) { ui.closeMercMenu(); return; }
+    if (ui.boroughOpen) { ui.closeBorough(); return; }
     // The vocation choice menu closes through its OWN close (not hideAll):
     // closeVocationMenu also DECLINES the offer, else the dwell re-pops the
     // menu the instant the pause menu comes down.
@@ -823,6 +824,11 @@ function tick(now: number): void {
       if (world.mercOutpostRequested && !ui.escapeMenuOpen) {
         world.mercOutpostRequested = false;
         if (!ui.mercOpen) ui.showMercMenu();
+      }
+      // A borough villager's arming dwell asks to open the arming panel.
+      if (world.boroughArmRequested && !ui.escapeMenuOpen) {
+        world.boroughArmRequested = false;
+        if (!ui.boroughOpen) ui.showBorough(world.boroughArmFolkId);
       }
       // The run wrote an ACCOUNT-scoped unlock (a vocation grant) — persist it
       // now, so closing the game without dying can't lose it.

@@ -8,6 +8,7 @@
 
 import type { Account } from '../meta/account';
 import { AMALGAMATION } from './defs/amalgamation';
+import { BOROUGH } from './defs/borough';
 import { BREACH } from './defs/breach';
 import { BRIGANDS } from './defs/brigands';
 import { CONCLAVE } from './defs/conclave';
@@ -48,6 +49,7 @@ export const PACKAGES: ContentPackage[] = [
   ASCENT,
   DEADWAKE,
   EXTRACTION,
+  BOROUGH,
   MIGRATION,
   CONTAGION,
   HOLDFAST,
@@ -80,6 +82,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   ascent: 0xa5ce,
   deadwake: 0xdead,
   extraction: 0xe57a,
+  borough: 0xb0f0,
   migration: 0x819a,
   contagion: 0xc047,
   holdfast: 0x401d,

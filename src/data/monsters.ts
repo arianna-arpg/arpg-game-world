@@ -3452,6 +3452,33 @@ export const MONSTERS: Record<string, MonsterDef> = {
     invulnerable: true,
   },
 
+  // BOROUGH FOLK — the defended villagers (packages/defs/borough.ts). The
+  // deliberate INVERSE of the town scenery above: real moveSpeed (never
+  // anchored), no passive, no invulnerable — the horde can perceive, chase,
+  // and kill them, and that possibility IS the event. They spawn huddled
+  // under the dormant 'borough_huddled' tag (no rouse rule — unarmed folk
+  // are helpless); ARMING clears the tag and their own brain fights through
+  // the one shared pipeline. Stats stay modest on purpose: the player's
+  // gifts and essence are what make them matter.
+  borough_villager: {
+    id: 'borough_villager', name: 'Villager',
+    color: '#d8c08a', shape: 'circle', radius: 12, look: 'npc_trader',
+    base: { life: 55, moveSpeed: 120, accuracy: 100, mana: 20, manaRegen: 4 },
+    skills: ['cleave'], // a farmhand's hatchet — the gifts do the rest
+    xp: 0,
+    noNemesis: true, // a rescued villager promoted to nemesis would read as nonsense
+  },
+  borough_warden: {
+    id: 'borough_warden', name: 'Borough Warden',
+    color: '#c8a84b', shape: 'pentagon', radius: 14, look: 'npc_captain',
+    base: { life: 120, moveSpeed: 116, accuracy: 102, armor: 24, mana: 40, manaRegen: 4 },
+    skills: ['heavy_strike', 'war_cry'],
+    xp: 0,
+    brain: { type: 'juggernaut', enrage: 0.5 }, // the one professional in the hamlet
+    wardPriority: 1,
+    noNemesis: true,
+  },
+
   // THE HEARTWOOD — a secret vocation's shrine spirit (data/vocations.ts:
   // Greenwarden). Seeds itself into sylvan-patron groves; the same passive+
   // invulnerable giver shape as the townsfolk, so the whole quest machinery

@@ -15,6 +15,9 @@
 // ---------------------------------------------------------------------------
 
 import type { ArenaSpec } from '../data/arenas';
+import type { EssenceId } from '../data/essences';
+import type { ItemRarity } from '../engine/items';
+import type { Modifier } from '../engine/stats';
 
 /** One size band an encounter can roll into — the small-vs-large variance. */
 export interface EncounterScale {
@@ -317,6 +320,129 @@ export interface ExtractSpec {
   };
 }
 
+// --- BOROUGH: the defend-the-FOLK promotion — a village worth saving ---------
+//
+// A Borough encounter places a small settlement of FRIENDLY townsfolk in wild
+// country. Found, it musters: a countdown to an incoming horde (the deadwake
+// thesis pointed at a home). During the muster the player may ARM the folk —
+// gifting real gear (its compiled mods graft onto the body) or spending the
+// essence wallet on data-defined stat packages — and an armed villager steps
+// out of the huddle and FIGHTS through the one shared pipeline. Unarmed folk
+// stay huddled (a dormant tag with no rouse rule: helpless on purpose). The
+// horde is the zone's own population poured through the extraction swarm
+// director, fixated on the FOLK via the threat chart — so the attention-craft
+// levers (Goad, the Quiet Hand) are, emergently, the bodyguard lane. Survivors
+// emigrate to Lastlight and its population GROWS (the BoroughField overlay) —
+// the founding stone of the run's town-building layer.
+//
+// Attached via EncounterDef.borough (the ExtractSpec promotion pattern):
+// undefined = a plain encounter, byte-identical, wholly unaffected.
+
+/** The townsfolk themselves — who lives here, and how many. */
+export interface BoroughFolkSpec {
+  /** Weighted roster of folk bodies (MonsterDef ids, spawned team-player). */
+  roster: { id: string; weight: number }[];
+  /** Folk count rolled at placement, keyed by the rolled scale's id — a
+   *  bigger settlement shelters (and can lose) more souls. Every scale id
+   *  must have a row (validated). */
+  byScale: Record<string, [number, number]>;
+  /** Folk level over zone level (their bodies' scaling base). */
+  levelBonus: number;
+  /** Huddle ring radius around the hearth where the folk cluster. */
+  huddleRadius: number;
+}
+
+/** The muster — discovery starts a fair, visible countdown (roving-arrival
+ *  doctrine: no clock ever runs before the player could have seen it). */
+export interface BoroughMusterSpec {
+  /** Countdown seconds between discovery and the assault. */
+  seconds: number;
+  /** Coming within this range (with an honest sight line) DISCOVERS the
+   *  settlement and starts the muster. */
+  discoverRadius: number;
+  /** When arming is allowed: only during the muster, or right through the
+   *  assault (battlefield triage). */
+  armWindow: 'muster' | 'always';
+}
+
+/** THE ARMING TABLE — every way a villager can be made to matter, as data.
+ *  Both channels graft named mod bundles onto the folk's own StatSheet
+ *  (the garrison-claim idiom), so arming rides the ordinary stat engine. */
+export interface BoroughArmingSpec {
+  /** Reach around a folk body within which the arming dwell builds. */
+  radius: number;
+  /** Idle seconds before the arming panel is offered (transit row
+   *  'borough_arm' can retune; this is the fallback). */
+  dwellSec: number;
+  /** Most gear gifts one villager can carry. */
+  maxGifts: number;
+  /** Baseline granted by ANY gear gift — the act of being armed at all —
+   *  scaled by the gift's rarity multiplier below, then folded in WITH the
+   *  item's own compiled mods. */
+  gearBaseline: Modifier[];
+  /** × gearBaseline per gift rarity (a rare blade arms harder than a stick). */
+  giftRarityMul: Record<ItemRarity, number>;
+  /** Per-tier essence packages: each application costs `cost` of that tint
+   *  and stacks its mods linearly up to `maxStacks`. `label` is the panel's
+   *  honest description of one stack. */
+  essence: Record<EssenceId, { cost: number; maxStacks: number; label: string; mods: Modifier[] }>;
+}
+
+/** The assault — the horde itself rides the SHARED swarm director shape
+ *  (ExtractSwarmSpec): cadence/batch ramp bands, fixation seeding, the
+ *  threat-chart numbers. One shape, two consumers, zero drift. */
+export interface BoroughAssaultSpec {
+  /** Spawner duration is the rolled scale's baseTime; after it lapses,
+   *  stragglers get this long before the field force-settles. */
+  graceSec: number;
+  swarm: ExtractSwarmSpec;
+  /** How the leftover horde goes home when it ends (the extraction
+   *  dispersal fabric, reused verbatim). */
+  disperse: ExtractDisperseSpec;
+}
+
+/** The refuge — survivors walk out and join Lastlight. */
+export interface BoroughRefugeeSpec {
+  /** Lastlight population added per surviving villager. */
+  populationPer: number;
+  /** Close enough to the exit = away (the slipAway despawn). */
+  arriveDist: number;
+  /** Close xp: (xpBase + xpPerSurvivor × survivors) × scale.rewardMul. */
+  xpBase: number;
+  xpPerSurvivor: number;
+}
+
+/** The whole borough block. Every string the HUD speaks lives in `text`. */
+export interface BoroughSpec {
+  folk: BoroughFolkSpec;
+  muster: BoroughMusterSpec;
+  arming: BoroughArmingSpec;
+  assault: BoroughAssaultSpec;
+  refugees: BoroughRefugeeSpec;
+  /** The settlement's dressing: a hearth doodad at the green plus ring-
+   *  scattered camp scatter (the extraction dressing idiom — small kinds
+   *  only, so a runtime stamp can never wall a path). */
+  site: {
+    center: { kind: string };
+    dressing: { kind: string; count: [number, number]; ring: [number, number] }[];
+  };
+  /** Bumped when the folk are wiped (the loss half; onClose stays the hold). */
+  ledgerLost: string;
+  /** Bumped BY survivor count when refugees reach Lastlight (a tally future
+   *  account rungs may read; already honest). */
+  ledgerRefugees: string;
+  text: {
+    /** Floated at discovery, as the muster clock starts. */
+    found: string;
+    /** Floated when the muster lapses and the horde breaks. */
+    assault: string;
+    /** The stand held — survivors take the road. */
+    held: string;
+    /** Every villager fell. */
+    lost: string;
+  };
+}
+
 /** The ledger keys an encounter bumps — these drive the discovery ladder.
  *  EVERY key here must be READ by some unlock/tier (and vice versa): the
  *  event QA harness enforces the contract in both directions, so a key only
@@ -349,6 +475,11 @@ export interface EncounterDef {
    *  same seam the overlays use (WorldHooks.dimensions), so "breaches tear in
    *  hell too" is one data line, never an engine edit. */
   dimensions?: string[];
+  /** BIOME allowlist (ZoneDef.biome ids): absent = anywhere the structural
+   *  floor admits; present = ONLY these grounds may seed it (a village
+   *  settles temperate country; a seam wells up anywhere). The generic
+   *  companion to `dimensions`, checked at the same placement gate. */
+  biomes?: string[];
   /** Promotes this encounter into a spatial, escalating DEMON INVASION world
    *  event (growing storm radius + meteors + portal). Undefined = a plain in-zone
    *  encounter (Breach). The overlay reads this; the in-zone field uses scales. */
@@ -358,4 +489,9 @@ export interface EncounterDef {
    *  zone's own population comes to break it). Undefined = a plain encounter,
    *  byte-identical. Mutually exclusive with `surge`. */
   extract?: ExtractSpec;
+  /** Promotes this encounter into a DEFEND-THE-FOLK borough (a friendly
+   *  settlement, a mustered countdown, an armable militia, refugees for
+   *  Lastlight). Undefined = a plain encounter, byte-identical. Mutually
+   *  exclusive with `surge` and `extract`. */
+  borough?: BoroughSpec;
 }

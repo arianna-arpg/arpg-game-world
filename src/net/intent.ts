@@ -95,4 +95,7 @@ export type MetaAction =
   | { t: 'rerollAffix'; uid: number; affix: number; score: number }   // Oracle COMMUNION: reroll + seal one line
   // SOCKETS & VESTIGES (deterministic craft):
   | { t: 'socketVestige'; uid: number; socket: number; vestigeId: string } // consume a vestige into a socket (overwrites destroy)
-  | { t: 'craftSocket'; uid: number };                                // bench-chisel +1 socket (shares the crafted slot)
+  | { t: 'craftSocket'; uid: number }                                 // bench-chisel +1 socket (shares the crafted slot)
+  // BOROUGH (the arming panel — folk are addressed by actor id, items by uid):
+  | { t: 'armFolkItem'; folkId: number; uid: number }                 // gift a bag item → its mods graft onto the villager
+  | { t: 'armFolkEssence'; folkId: number; essence: string };         // spend one essence-package application on the villager

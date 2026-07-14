@@ -36,12 +36,46 @@ export interface ExtractRuntime {
   spoke?: boolean;
 }
 
+/** BOROUGH-ONLY runtime riding an ActiveEncounter (def.borough set). Zone-
+ *  local like its host — a settlement abandoned mid-muster resets with the
+ *  zone (the movers doctrine; only the SPENT ground and the refugees who
+ *  made it out persist, on the BoroughField overlay). */
+export interface BoroughRuntime {
+  /** Where the open phase stands: the countdown, the pour, the mop-up. */
+  stage: 'muster' | 'assault' | 'grace';
+  /** Actor ids of every villager stood up at materialize (dead ones stay
+   *  listed — survivors = the living subset). */
+  folkIds: number[];
+  /** Seconds the assault has run (the swarm director's ramp basis). */
+  stood: number;
+  /** Next threat re-seed (the standing-peril beacon, extraction idiom). */
+  reseedAt: number;
+  /** Mop-up deadline once the spawner lapses (time-based). */
+  graceUntil: number;
+  /** Zone-entry bearings per horde body — "whence they came", for dispersal. */
+  entries: Map<number, Vec2>;
+  /** Per-horde-body fixated villager (re-picked when the quarry falls). */
+  quarry: Map<number, number>;
+  /** ARMING ledger per folk id: gear gifts given + essence stacks per tint.
+   *  (What the panel shows; the mods themselves live on the folk's sheet.) */
+  arms: Map<number, { gifts: number; stacks: Record<string, number> }>;
+  /** Arming dwell bookkeeping: folk id → dwell start time (0 = not building),
+   *  and the one-ask-per-approach latch (cleared when reach is left). */
+  armDwellStart: Map<number, number>;
+  armAsked: Set<number>;
+  /** Set once the end state resolved, before 'closing'. */
+  settled?: 'held' | 'lost';
+}
+
 export interface ActiveEncounter {
   def: EncounterDef;
   /** The scale rolled at placement (fixes baseTime / radii / spawn cadence). */
   scale: EncounterScale;
   pos: Vec2;
   phase: EncPhase;
+  /** Optional HUD-bar label override (a staged encounter re-titles its bar:
+   *  "the horde comes" vs "hold the line"). Absent = scale.label. */
+  hudLabel?: string;
   /** Current field radius (grows passively + per kill while open). */
   radius: number;
   /** Seconds left before it closes. */
@@ -58,4 +92,6 @@ export interface ActiveEncounter {
   spawned: Set<number>;
   /** Extract-mode runtime (def.extract) — absent on plain encounters. */
   ex?: ExtractRuntime;
+  /** Borough-mode runtime (def.borough) — absent on plain encounters. */
+  bo?: BoroughRuntime;
 }

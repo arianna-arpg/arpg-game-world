@@ -38,6 +38,7 @@ import { TILESETS } from '../data/tilesets';
 import { SIDEZONES } from '../data/sidezones';
 import { STRUCTURES } from '../data/structures';
 import { hasStructureGen } from '../engine/structureGen';
+import type { BoroughField } from '../packages/overlays/borough';
 import type { BreachField } from '../packages/overlays/breach';
 import type { ExtractionField } from '../packages/overlays/extraction';
 import type { VendettaField } from '../packages/overlays/vendetta';
@@ -175,6 +176,13 @@ export class WorldSim {
    *  the engine calls markSpent() when one ends (the in-zone defense rides the
    *  encounter pipeline, not this field). */
   readonly extractionField: ExtractionField | null;
+  /** The borough overlay if its package is in the manifest, else null — the
+   *  SPENT LEDGER + LASTLIGHT'S POPULATION: placeEncounters asks
+   *  siteAvailable() before seeding a settlement, the engine calls
+   *  markSpent()/addRefugees() when one resolves, and any economy consumer
+   *  (Brandt's shelf, future scouting parties) reads `population` through a
+   *  data curve (data/boroughs.ts). */
+  readonly boroughField: BoroughField | null;
   /** The vendetta overlay if its package is in the manifest, else null — the
    *  engine reads wantsAmbush() to spring hunter squads and calls settleWrit()
    *  from the warrant kill row; the sim mirrors each faction's grudge meter in
@@ -330,6 +338,7 @@ export class WorldSim {
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     this.breachField = surface<BreachField>('breach') ?? null;
     this.extractionField = surface<ExtractionField>('extraction') ?? null;
+    this.boroughField = surface<BoroughField>('borough') ?? null;
     this.vendettaField = surface<VendettaField>('vendetta') ?? null;
     this.worldBossField = surface<WorldBossField>('worldboss') ?? null;
     this.invasion.gate = (f) => this.warlord.canInvade(f);

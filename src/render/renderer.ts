@@ -717,7 +717,9 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.font = 'bold 13px Verdana';
     ctx.fillStyle = open.def.trigger.color;
-    ctx.fillText(open.scale.label, w / 2, by - 6);
+    // A staged encounter re-titles its bar (the borough's muster → assault);
+    // plain encounters keep speaking their scale.
+    ctx.fillText(open.hudLabel ?? open.scale.label, w / 2, by - 6);
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(bx, by, bw, bh);
     // Drains warm → red as time runs out.
@@ -2136,6 +2138,7 @@ export class Renderer {
       { h: world.oracleHint(), ring: '#b06bd4', ink: '#d0a8e8' },
       { h: world.trackerHint(), ring: '#a8c87a', ink: '#c8e0a8' },
       { h: world.extractionHint(), ring: '#a5e3b4', ink: '#c8f0d4' },
+      { h: world.boroughHint(), ring: '#e8c87a', ink: '#f0dfae' },
     ];
     const { ctx } = this;
     const t = world.time;

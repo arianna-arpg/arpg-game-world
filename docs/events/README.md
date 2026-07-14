@@ -95,8 +95,14 @@ One def file (`src/packages/defs/<id>.ts`) + one registry line
   gating by def id. These are faction-politics substrate — deliberately NOT
   scaled by the frequency crank.
 - **Encounters** (`packages/encounters.ts`) — in-zone placed events ride
-  `EncounterDef` (+ `dimensions` for non-surface placement). Shared framework
-  knobs live in `ENCOUNTER_CFG`; per-encounter numbers on the def.
+  `EncounterDef` (+ `dimensions` for non-surface placement, + `biomes` as an
+  optional ground allowlist — a village settles temperate country, a seam
+  wells up anywhere). Shared framework knobs live in `ENCOUNTER_CFG`;
+  per-encounter numbers on the def. Three PROMOTIONS deepen the base shape,
+  mutually exclusive: `surge` (Demon Invasion's spatial world-event),
+  `extract` (defend-the-node), `borough` (defend-the-FOLK: friendly
+  villagers, a mustered countdown, the arming table, refugees who grow
+  Lastlight's population on the BoroughField overlay).
 
 ## The gates
 

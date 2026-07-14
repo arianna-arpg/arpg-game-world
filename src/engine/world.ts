@@ -144,8 +144,10 @@ import type { IncursionArchetype } from '../packages/overlays/incursion';
 import { holdfastTollCost, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
 import { ENCOUNTER_CFG } from '../packages/encounters';
+import type { BoroughSpec, ExtractDisperseSpec } from '../packages/encounters';
 import { gateOf } from '../packages/weighting';
-import type { ActiveEncounter } from './encounter';
+import type { ActiveEncounter, BoroughRuntime } from './encounter';
+import { boroughVendorWeights } from '../data/boroughs';
 import { rollRarity, rarityMods, RARITY_DEFS, type MonsterRarity } from './rarity';
 import { MONSTER_NAME_CFG, rollMonsterName } from '../data/monsterNames';
 import type { OverlayView } from '../world/overlay';
@@ -1001,6 +1003,10 @@ function isValidMetaAction(a: MetaAction): boolean {
         && (a.score === undefined || (typeof a.score === 'number' && Number.isFinite(a.score)));
     case 'socketVestige': return isIdx(a.uid) && isIdx(a.socket) && isStr(a.vestigeId);
     case 'craftSocket': return isIdx(a.uid);
+    // BOROUGH arming — folk by actor id, gifts by uid, tints plain strings
+    // (the mutators re-validate against the live spec's own tables).
+    case 'armFolkItem': return isIdx(a.folkId) && isIdx(a.uid);
+    case 'armFolkEssence': return isIdx(a.folkId) && isStr(a.essence);
     case 'rerollAffix':
       return isIdx(a.uid) && isIdx(a.affix) && typeof a.score === 'number' && Number.isFinite(a.score);
     default: return false;
@@ -1631,6 +1637,15 @@ export class World {
    *  the rouse sets aiAwakened; 'resolute' never turns). Territorial bodies
    *  enter with a future leaveAt — the lingering expedition. Zone-local. */
   private extractionDepartures: { id: number; leaveAt: number; goal: Vec2; arrive: number; mode: 'resolute' | 'wary'; walking?: boolean }[] = [];
+  /** BOROUGH refugees on the road out after a held stand — wheeled by the
+   *  world tick (the migration idiom; their 'borough_refugee' tag keeps the
+   *  brain dormant). Zone-local; the souls were already counted at settle. */
+  private boroughRefugees: { id: number; goal: Vec2; arrive: number }[] = [];
+  /** A villager's arming dwell fired: main.ts opens the arming panel (the
+   *  station-menu indirection — a flag, not a callback; World can't import
+   *  the UI). folkId names the villager the panel targets. */
+  boroughArmRequested = false;
+  boroughArmFolkId = -1;
   /** TERRAFORM growths alive in this zone (data/attunements.ts): each entry
    *  tracks a doodad this pass PUSHED into `doodads` plus its lifespan. Zone-
    *  local, never serialized; cleared each loadZone (the doodad list itself is
@@ -3698,6 +3713,16 @@ export class World {
         reset: () => { this.extractionDepartures.length = 0; },
       },
       {
+        // Borough: the settlement re-rolls with the zone (encounter fabric),
+        // but the refugees' walk and the arming-panel ask are zone-local.
+        id: 'borough',
+        reset: () => {
+          this.boroughRefugees.length = 0;
+          this.boroughArmRequested = false;
+          this.boroughArmFolkId = -1;
+        },
+      },
+      {
         // The band pours via updateBrigandRaid — reset only.
         id: 'brigands',
         reset: () => { this.materializedBrigands.clear(); this.brigandLingerLeft = 0; this.brigandsDrifting = false; },
@@ -4061,11 +4086,18 @@ export class World {
       // the same seam the overlays use, so a surface package's diamonds never
       // seed in hell unless its def says so.
       if (!(spec.dimensions ?? ['surface']).includes(zoneDim)) continue;
+      // …and only on its declared GROUNDS, when it declares any (the generic
+      // biome allowlist — a village settles temperate country; an unbiomed
+      // zone counts as outside every allowlist).
+      if (spec.biomes && (!def.biome || !spec.biomes.includes(def.biome))) continue;
       if (!eventTargetable(spec.packageId, def)) continue; // biome policy + structural floor
       // EXTRACT encounters ask the overlay's SPENT LEDGER: a drained seam's
       // ground stays quiet until it replenishes (the essence-faucet guard the
       // deterministic per-zone roll needs — mycelia-suppression pattern).
       if (spec.extract && this.sim.extractionField?.nodeAvailable(def.id) === false) continue;
+      // BOROUGH encounters ask theirs: settled ground (held or lost) stays
+      // quiet until the country resettles.
+      if (spec.borough && this.sim.boroughField?.siteAvailable(def.id) === false) continue;
       const rng = new Rng((packageSeed(this.manifest.seed, spec.packageId) ^ hashStr(def.id)) >>> 0);
       // Per-zone (encounterDensity), per-biome (eventDensityMul), and live MYCELIA
       // suppression compose onto the package pressure — a Field expanse seeds more
@@ -4090,6 +4122,8 @@ export class World {
     // An EXTRACT encounter stands its node the moment the zone does — the seam
     // is scenery you can find, not a diamond that pops on approach.
     if (enc.def.extract) this.materializeExtractionNode(enc);
+    // A BOROUGH stands its hearths + folk the same way: a place you FIND.
+    if (enc.def.borough) this.materializeBorough(enc);
   }
 
   /** Step onto the diamond → OPEN the field. Bumps the discovery ledger. */
@@ -4110,6 +4144,7 @@ export class World {
   private updateEncounters(dt: number): void {
     for (const e of this.encounters) {
       if (e.def.extract) { this.updateExtraction(e, dt); continue; }
+      if (e.def.borough) { this.updateBorough(e, dt); continue; }
       if (e.phase !== 'open') continue;
       e.radius = Math.min(e.scale.maxRadius, e.radius + e.scale.growthPerSec * dt);
       e.spawnTimer -= dt;
@@ -4126,6 +4161,8 @@ export class World {
     // Dispersal orders OUTLIVE their encounter (the walk home continues after
     // the seam entry is spliced) — swept here, every frame, host-side.
     this.updateExtractionDepartures(dt);
+    // …and so does the refugees' road to Lastlight.
+    this.updateBoroughRefugees(dt);
   }
 
   /** Spawn n monsters from the encounter roster, UNIFORMLY inside its radius. */
@@ -4313,12 +4350,18 @@ export class World {
   /** One rim-entry point for a swarmer: a ring band off the node, shoved off
    *  any camping hero (the deadwake standoff, cheap edition). */
   private extractionEntryPoint(e: ActiveEncounter): Vec2 {
-    const spec = e.def.extract!;
-    let last = vec(e.pos.x, e.pos.y);
+    return this.swarmEntryPoint(e.pos, e.def.extract!.swarm.entryRadius);
+  }
+
+  /** The shared rim-entry roll every in-zone swarm uses (extraction seams,
+   *  borough assaults): a ring band off `at`, re-rolled up to five times to
+   *  land 170+ px from a camping hero. */
+  private swarmEntryPoint(at: Vec2, band: [number, number]): Vec2 {
+    let last = vec(at.x, at.y);
     for (let tries = 0; tries < 5; tries++) {
       const ang = this.encRng.range(0, Math.PI * 2);
-      const r = this.encRng.range(spec.swarm.entryRadius[0], spec.swarm.entryRadius[1]);
-      last = this.clampPos(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
+      const r = this.encRng.range(band[0], band[1]);
+      last = this.clampPos(vec(at.x + Math.cos(ang) * r, at.y + Math.sin(ang) * r), 14);
       if (dist(last, this.player.pos) >= 170) break;
     }
     return last;
@@ -4392,22 +4435,35 @@ export class World {
     // Map memory: this ground is spent until it replenishes.
     this.sim.extractionField?.markSpent(this.zone.id, this.time);
     // DISPERSAL — the swarm goes home the way it came, each by its temper.
-    for (const id of e.spawned) {
+    this.disperseSwarmBodies(e.spawned, ex.entries, e.pos, spec.arm.radius + 190, spec.disperse);
+  }
+
+  /** Send a settled disturbance's swarm home along its recorded entries, each
+   *  body by its own TEMPER (skittish keeps walking under fire, wary
+   *  re-awakens if struck, territorial holds the ground on a leash first) —
+   *  THE dispersal fabric, shared by every swarm event (extraction seams,
+   *  borough assaults; the walkers themselves ride extractionDepartures'
+   *  update loop). */
+  private disperseSwarmBodies(
+    spawned: Set<number>, entries: Map<number, Vec2>, anchor: Vec2,
+    leashRadius: number, disperse: ExtractDisperseSpec,
+  ): void {
+    for (const id of spawned) {
       const a = this.actorById(id);
       if (!a || a.dead) continue;
-      const goal = ex.entries.get(id) ?? this.nearestExitPos(a.pos) ?? vec(a.pos.x, a.pos.y);
+      const goal = entries.get(id) ?? this.nearestExitPos(a.pos) ?? vec(a.pos.x, a.pos.y);
       const temper = temperOf(a.defId ? MONSTERS[a.defId] : undefined, factionTemper(a.faction));
       if (temper === 'territorial') {
         // The expedition: drop the fixation, hold the ground on a leash, then go.
-        a.aiTuning = { target: { leash: { radius: spec.arm.radius + 190 } } };
-        a.aiAnchor = vec(e.pos.x, e.pos.y);
+        a.aiTuning = { target: { leash: { radius: leashRadius } } };
+        a.aiAnchor = vec(anchor.x, anchor.y);
         this.extractionDepartures.push({
-          id, goal, arrive: spec.disperse.arriveDist, mode: 'resolute',
-          leaveAt: this.time + this.encRng.range(spec.disperse.lingerSec[0], spec.disperse.lingerSec[1]),
+          id, goal, arrive: disperse.arriveDist, mode: 'resolute',
+          leaveAt: this.time + this.encRng.range(disperse.lingerSec[0], disperse.lingerSec[1]),
         });
       } else {
         this.extractionDepartures.push({
-          id, goal, arrive: spec.disperse.arriveDist,
+          id, goal, arrive: disperse.arriveDist,
           mode: temper === 'skittish' ? 'resolute' : 'wary', leaveAt: this.time,
         });
       }
@@ -4519,6 +4575,498 @@ export class World {
     };
     this.encounters.push(enc);
     this.materializeExtractionNode(enc);
+    return true;
+  }
+
+  // ---------------------------------------------------- BOROUGH (defend-the-folk)
+  // The extraction fabric pointed at PEOPLE: a friendly settlement stands with
+  // the zone; an honest sighting starts a fair MUSTER countdown; the horde
+  // pours through the shared swarm director fixated on the FOLK (the threat
+  // chart — so Goad and the Quiet Hand are the bodyguard levers, for free);
+  // survivors take the road to Lastlight and its population grows (the
+  // BoroughField overlay). Every number rides the def's BoroughSpec.
+
+  /** Stand the settlement up with the zone: hearth + camp dressing + the
+   *  folk — team-player bodies, huddled dormant ('borough_huddled' has no
+   *  rouse rule: unarmed villagers are DELIBERATELY helpless), and sheltered
+   *  (untargetable/invulnerable) until the muster makes the stand real, so
+   *  no ambient wanderer eats the village before it can be found. */
+  private materializeBorough(e: ActiveEncounter): void {
+    const spec = e.def.borough!;
+    const lvl = Math.max(1, this.zone.level + spec.folk.levelBonus);
+    // The hearth + ring dressing (small kinds only — a runtime stamp must
+    // never wall a path; the extraction ring-scatter idiom).
+    this.doodads.push({ pos: vec(e.pos.x, e.pos.y + 6), radius: 18, kind: spec.site.center.kind });
+    for (const row of spec.site.dressing) {
+      const n = this.encRng.int(row.count[0], row.count[1]);
+      for (let i = 0; i < n; i++) {
+        const ang = this.encRng.range(0, Math.PI * 2);
+        const r = this.encRng.range(row.ring[0], row.ring[1]);
+        const spot = this.findFreeSpot(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), 14);
+        if (spot) this.doodads.push({ pos: spot, radius: this.encRng.range(10, 14), kind: row.kind });
+      }
+    }
+    const bo: BoroughRuntime = {
+      stage: 'muster', folkIds: [], stood: 0, reseedAt: 0, graceUntil: 0,
+      entries: new Map(), quarry: new Map(), arms: new Map(),
+      armDwellStart: new Map(), armAsked: new Set(),
+    };
+    const band = spec.folk.byScale[e.scale.id] ?? [3, 4];
+    const count = this.encRng.int(band[0], band[1]);
+    for (let i = 0; i < count; i++) {
+      const type = this.weightedPick(spec.folk.roster, lvl);
+      const f = this.createMonster(type, lvl, 'player');
+      const ang = this.encRng.range(0, Math.PI * 2);
+      const r = Math.sqrt(this.encRng.next()) * spec.folk.huddleRadius;
+      f.pos = this.clampPos(vec(e.pos.x + Math.cos(ang) * r, e.pos.y + Math.sin(ang) * r), f.radius);
+      f.tag = 'borough_huddled';
+      f.untargetable = true;
+      f.invulnerable = true;
+      f.eventKey = `borough:${this.zone.id}`;
+      bo.folkIds.push(f.id);
+      this.actors.push(f);
+    }
+    e.bo = bo;
+  }
+
+  /** The living villagers of a borough (dead ids stay listed on the runtime —
+   *  survivors are this subset). */
+  private boroughFolkAlive(e: ActiveEncounter): Actor[] {
+    const out: Actor[] = [];
+    for (const id of e.bo?.folkIds ?? []) {
+      const a = this.actorById(id);
+      if (a && !a.dead) out.push(a);
+    }
+    return out;
+  }
+
+  /** Living horde bodies THIS borough fielded (its own cap, extraction-style). */
+  private boroughSwarmAlive(e: ActiveEncounter): number {
+    let n = 0;
+    for (const id of e.spawned) {
+      const a = this.actorById(id);
+      if (a && !a.dead) n++;
+    }
+    return n;
+  }
+
+  /** Per-frame borough driver: dormant = the sighting; open = muster →
+   *  assault → grace. Branches out of updateEncounters so the plain path
+   *  stays byte-identical. */
+  private updateBorough(e: ActiveEncounter, dt: number): void {
+    const spec = e.def.borough!;
+    const bo = e.bo;
+    if (!bo) { e.phase = 'closing'; return; }
+    if (e.phase === 'closing') return;
+    if (e.phase === 'dormant') {
+      // DISCOVERY: an honest sighting starts the muster (roving-arrival
+      // fairness — no clock ever runs before the player could have seen it).
+      if (!this.player.dead
+        && dist(this.player.pos, e.pos) <= spec.muster.discoverRadius
+        && this.dwellReachable(this.player.pos, e.pos)) {
+        this.startBoroughMuster(e);
+      }
+      return;
+    }
+    const folk = this.boroughFolkAlive(e);
+    if (!folk.length) { this.settleBorough(e, 'lost'); return; }
+    if (spec.muster.armWindow === 'always' || bo.stage === 'muster') {
+      this.updateBoroughArming(e, folk);
+    }
+    if (bo.stage === 'muster') {
+      e.timer -= dt;
+      if (e.timer <= 0) this.beginBoroughAssault(e);
+      return;
+    }
+    if (bo.stage === 'assault') {
+      bo.stood += dt;
+      e.timer = Math.max(0, e.timer - dt);
+      // The swarm director: cadence + batch LERP start→end along
+      // elapsed^rampPower — the assault ends in a crescendo (shared shape).
+      const sw = spec.assault.swarm;
+      const frac = clamp(bo.stood / Math.max(1, e.scale.baseTime), 0, 1);
+      const ramp = Math.pow(frac, sw.rampPower);
+      e.spawnTimer -= dt;
+      if (e.spawnTimer <= 0 && this.boroughSwarmAlive(e) < sw.fieldCap) {
+        const i0 = sw.intervalStart, i1 = sw.intervalEnd;
+        e.spawnTimer = this.encRng.range(i0[0] + (i1[0] - i0[0]) * ramp, i0[1] + (i1[1] - i0[1]) * ramp);
+        const b0 = sw.batchStart, b1 = sw.batchEnd;
+        const batch = Math.round(this.encRng.range(b0[0] + (b1[0] - b0[0]) * ramp, b0[1] + (b1[1] - b0[1]) * ramp));
+        this.spawnBoroughWave(e, Math.max(1, batch));
+      }
+      // The standing peril: re-seed folk threat so a Goad's stolen grudges
+      // drift back to the village — each body's own quarry, re-picked live.
+      if (this.time >= bo.reseedAt) {
+        bo.reseedAt = this.time + sw.beaconSec;
+        for (const id of e.spawned) {
+          const a = this.actorById(id);
+          if (!a || a.dead) continue;
+          const q = bo.quarry.get(id);
+          let qa = q !== undefined ? this.actorById(q) : undefined;
+          if (!qa || qa.dead) {
+            qa = folk[this.encRng.int(0, folk.length - 1)];
+            bo.quarry.set(id, qa.id);
+          }
+          const fix = (a.defId ? MONSTERS[a.defId]?.aggro?.fixation : undefined) ?? 1;
+          a.addThreat(qa.id, sw.pulseThreat * fix);
+        }
+      }
+      if (e.timer <= 0) {
+        bo.stage = 'grace';
+        bo.graceUntil = this.time + spec.assault.graceSec;
+        e.hudLabel = `${e.scale.label} — drive them off!`;
+      }
+      return;
+    }
+    // 'grace': the pour has lapsed — the stand resolves when the field
+    // clears or the stragglers' clock runs out (they disperse either way).
+    if (this.boroughSwarmAlive(e) === 0 || this.time >= bo.graceUntil) {
+      this.settleBorough(e, 'held');
+    }
+  }
+
+  /** The sighting: the muster clock starts and the stand becomes REAL — the
+   *  folk step out of shelter (targetable, killable, losable). */
+  private startBoroughMuster(e: ActiveEncounter): void {
+    const spec = e.def.borough!;
+    e.phase = 'open';
+    e.bo!.stage = 'muster';
+    e.timer = spec.muster.seconds;
+    e.maxTimer = spec.muster.seconds;
+    e.hudLabel = `${e.scale.label} — the horde comes`;
+    bumpLedger(this.ledger, e.def.ledger.onEncounter); // DISCOVERY — the Vault card surfaces
+    for (const f of this.boroughFolkAlive(e)) { f.untargetable = false; f.invulnerable = false; }
+    this.text(vec(e.pos.x, e.pos.y - 34), spec.text.found, e.def.trigger.color, 15);
+    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 110, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
+  }
+
+  /** The muster lapses: the horde breaks (spawner armed, clock re-set). */
+  private beginBoroughAssault(e: ActiveEncounter): void {
+    const bo = e.bo!;
+    bo.stage = 'assault';
+    bo.stood = 0;
+    bo.reseedAt = 0;
+    e.timer = e.scale.baseTime;
+    e.maxTimer = e.scale.baseTime;
+    e.spawnTimer = 1.4; // one breath before the first pour — see it begin
+    e.hudLabel = `${e.scale.label} — hold the line!`;
+    this.text(vec(e.pos.x, e.pos.y - 34), e.def.borough!.text.assault, '#d85a4a', 16);
+    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 150, color: '#d85a4a', life: 0.7, maxLife: 0.7 });
+  }
+
+  /** Pour one pulse: the zone's OWN population (conquest-aware), each body
+   *  grafted to fixate on a villager — and its entry point remembered, for
+   *  the walk home. The extraction swarm, pointed at people. */
+  private spawnBoroughWave(e: ActiveEncounter, n: number): void {
+    const spec = e.def.borough!;
+    const bo = e.bo!;
+    const folk = this.boroughFolkAlive(e);
+    if (!folk.length) return;
+    const sw = spec.assault.swarm;
+    const lvl = Math.max(1, this.zone.level + sw.levelBonus);
+    const native = sw.source === 'native'
+      ? this.effectiveSpawn(this.zone, this.baseTable(this.zone)).table : [];
+    for (let i = 0; i < n; i++) {
+      let table = native;
+      let fac: string | undefined;
+      if (!table.length || (sw.mixChance > 0 && this.encRng.chance(sw.mixChance))) {
+        const facId = e.def.factions.length ? this.encRng.pick(e.def.factions) : undefined;
+        const roster = facId ? FACTIONS[facId] : undefined;
+        if (roster?.table.length) { table = roster.table; fac = facId; }
+      }
+      if (!table.length) continue;
+      const type = this.weightedPick(table, lvl);
+      const m = this.createMonster(type, lvl, 'enemy');
+      m.faction = fac ?? MONSTERS[type]?.faction;
+      m.tag = 'borough_raider';
+      m.eventKey = `borough:${this.zone.id}`;
+      const at = this.swarmEntryPoint(e.pos, sw.entryRadius);
+      m.pos = this.clampPos(vec(at.x + rand(-30, 30), at.y + rand(-30, 30)), m.radius);
+      bo.entries.set(m.id, vec(m.pos.x, m.pos.y));
+      // THE FIXATION GRAFT: the FOLK are the enemy — until the player
+      // out-books them on the chart (damage × threatGen), then decay melts
+      // the grudge and the body returns to the sack.
+      const quarry = folk[this.encRng.int(0, folk.length - 1)];
+      bo.quarry.set(m.id, quarry.id);
+      const ag = m.defId ? MONSTERS[m.defId]?.aggro : undefined;
+      m.aiTuning = {
+        target: {
+          prefer: 'highestThreat', relentless: true, stickiness: sw.stickiness,
+          threat: { damage: ag?.fury ?? 1, decay: sw.decay * (ag?.waver ?? 1) },
+        },
+      };
+      m.addThreat(quarry.id, sw.seedThreat * (ag?.fixation ?? 1));
+      m.aiTargetId = quarry.id;
+      m.aggroed = true;
+      e.spawned.add(m.id);
+      this.actors.push(m);
+    }
+  }
+
+  /** The end, either way: count the living, grow Lastlight, send the horde
+   *  home by temper, rest the ground until the country resettles. */
+  private settleBorough(e: ActiveEncounter, outcome: 'held' | 'lost'): void {
+    const spec = e.def.borough!;
+    const bo = e.bo!;
+    if (bo.settled) return;
+    bo.settled = outcome;
+    e.phase = 'closing';
+    const held = outcome === 'held';
+    const survivors = this.boroughFolkAlive(e);
+    if (held) bumpLedger(this.ledger, e.def.ledger.onClose);
+    else bumpLedger(this.ledger, spec.ledgerLost);
+    this.text(vec(e.pos.x, e.pos.y - 30), held ? spec.text.held : spec.text.lost, e.def.trigger.color, 16);
+    this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: 130, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
+    // Map memory: this ground is settled (either way) until it resettles.
+    this.sim.boroughField?.markSpent(this.zone.id, this.time);
+    if (held && survivors.length) {
+      // THE REFUGE: population grows NOW — the walk out is theatre, and
+      // leaving the zone mid-stride never uncounts a soul who made it.
+      const souls = survivors.length * spec.refugees.populationPer;
+      this.sim.boroughField?.addRefugees(souls);
+      bumpLedger(this.ledger, spec.ledgerRefugees, souls);
+      const xp = Math.round((spec.refugees.xpBase + spec.refugees.xpPerSurvivor * survivors.length) * e.scale.rewardMul);
+      if (xp > 0) this.grantXp(xp);
+      // The road out: dormant resolute walkers, wheeled by the world tick.
+      for (const f of survivors) {
+        f.tag = 'borough_refugee';
+        f.aiAwakened = false;
+        f.threat.clear();
+        f.aiTargetId = undefined;
+        f.aiTuning = undefined;
+        const goal = this.nearestExitPos(f.pos) ?? vec(e.pos.x, e.pos.y);
+        f.aiFleeGoal = vec(goal.x, goal.y);
+        this.boroughRefugees.push({ id: f.id, goal: vec(goal.x, goal.y), arrive: spec.refugees.arriveDist });
+      }
+    }
+    // DISPERSAL — the horde goes home the way it came, each by its temper.
+    this.disperseSwarmBodies(e.spawned, bo.entries, e.pos, e.scale.startRadius + 190, spec.assault.disperse);
+  }
+
+  /** Wheel the refugees out (the migration idiom: dormant bodies the world
+   *  tick walks). Arrival = slipAway; a walker felled on the road just stops
+   *  counting — the souls were credited at settle. */
+  private updateBoroughRefugees(dt: number): void {
+    if (!this.boroughRefugees.length) return;
+    for (let i = this.boroughRefugees.length - 1; i >= 0; i--) {
+      const r = this.boroughRefugees[i];
+      const a = this.actorById(r.id);
+      if (!a || a.dead) { this.boroughRefugees.splice(i, 1); continue; }
+      a.facing = angleTo(a.pos, r.goal);
+      this.moveActor(a, r.goal.x - a.pos.x, r.goal.y - a.pos.y, dt);
+      if (dist(a.pos, r.goal) < r.arrive) {
+        this.slipAway(a, '');
+        this.boroughRefugees.splice(i, 1);
+      }
+    }
+  }
+
+  /** The arming dwell: linger by a villager (idle, honest reach) and the
+   *  panel is offered — ONCE per approach per folk (leave reach to re-ask;
+   *  the extraction dwell bookkeeping, per body). */
+  private updateBoroughArming(e: ActiveEncounter, folk: Actor[]): void {
+    const spec = e.def.borough!;
+    const bo = e.bo!;
+    const reach = transitReach('borough_arm');
+    const radius = transitRadius('borough_arm', spec.arming.radius);
+    let nearest: Actor | null = null;
+    let nd = Infinity;
+    for (const f of folk) {
+      const d = dist(this.player.pos, f.pos);
+      if (d > radius + this.player.radius || !this.dwellReachable(this.player.pos, f.pos, reach)) {
+        bo.armDwellStart.delete(f.id);
+        bo.armAsked.delete(f.id); // out of reach = the approach ended; re-ask next time
+        continue;
+      }
+      if (d < nd) { nd = d; nearest = f; }
+    }
+    if (!nearest || this.player.dead) return;
+    for (const f of folk) if (f !== nearest) bo.armDwellStart.delete(f.id);
+    if (bo.armAsked.has(nearest.id)) return;
+    if (!this.playerIdle()) { bo.armDwellStart.delete(nearest.id); return; }
+    const start = bo.armDwellStart.get(nearest.id) ?? 0;
+    if (start === 0) { bo.armDwellStart.set(nearest.id, this.time); return; }
+    if (this.time - start >= transitDwell('borough_arm', spec.arming.dwellSec)) {
+      bo.armAsked.add(nearest.id);
+      bo.armDwellStart.delete(nearest.id);
+      this.boroughArmFolkId = nearest.id;
+      this.boroughArmRequested = true; // main.ts opens the panel (station-menu indirection)
+    }
+  }
+
+  /** Arming-dwell progress ring (dwellRingsView; the 'borough_arm' transit row). */
+  private boroughDwellView(): { pos: Vec2; frac: number; kind: string } | null {
+    for (const e of this.encounters) {
+      if (!e.def.borough || e.phase !== 'open' || !e.bo) continue;
+      const need = transitDwell('borough_arm', e.def.borough.arming.dwellSec);
+      for (const [fid, start] of e.bo.armDwellStart) {
+        if (start === 0) continue;
+        const f = this.actorById(fid);
+        if (!f || f.dead) continue;
+        return { pos: vec(f.pos.x, f.pos.y), frac: clamp((this.time - start) / need, 0, 1), kind: 'borough_arm' };
+      }
+    }
+    return null;
+  }
+
+  /** "Linger to arm…" prompt near a villager (the campfire-hint fabric). */
+  boroughHint(): { pos: Vec2; text: string } | null {
+    for (const e of this.encounters) {
+      if (!e.def.borough || e.phase !== 'open' || !e.bo) continue;
+      const spec = e.def.borough;
+      if (spec.muster.armWindow === 'muster' && e.bo.stage !== 'muster') continue;
+      const radius = transitRadius('borough_arm', spec.arming.radius);
+      for (const id of e.bo.folkIds) {
+        const f = this.actorById(id);
+        if (!f || f.dead) continue;
+        if (dist(this.player.pos, f.pos) > radius + 60) continue;
+        return { pos: vec(f.pos.x, f.pos.y), text: `Linger to arm ${f.name}.` };
+      }
+    }
+    return null;
+  }
+
+  /** The one borough standing in this zone (UI view; null when none). */
+  private boroughOf(folkId: number): { e: ActiveEncounter; spec: BoroughSpec } | null {
+    for (const e of this.encounters) {
+      if (!e.def.borough || !e.bo || e.phase !== 'open') continue;
+      if (e.bo.folkIds.includes(folkId)) return { e, spec: e.def.borough };
+    }
+    return null;
+  }
+
+  /** The folk's arming ledger (lazily minted on the runtime). */
+  private boroughArmsOf(e: ActiveEncounter, folkId: number): { gifts: number; stacks: Record<string, number> } {
+    let arms = e.bo!.arms.get(folkId);
+    if (!arms) { arms = { gifts: 0, stacks: {} }; e.bo!.arms.set(folkId, arms); }
+    return arms;
+  }
+
+  /** Any first arm clears the huddle — the villager's own brain takes over
+   *  and it fights through the one shared pipeline. */
+  private armBoroughFolk(folk: Actor): void {
+    if (folk.tag === 'borough_huddled') {
+      folk.tag = undefined;
+      this.text(vec(folk.pos.x, folk.pos.y - 38), 'armed!', '#e8c87a', 12);
+    }
+    folk.fillResources(); // re-seat life/mana so the graft shows immediately
+  }
+
+  /** The arming panel's read: the villager, its ledger, the stand's clock.
+   *  Null once the folk is gone or no borough stands (a stale panel closes). */
+  boroughArmView(folkId: number): {
+    folk: Actor; gifts: number; maxGifts: number; stacks: Record<string, number>;
+    arming: BoroughSpec['arming']; stage: string; timer: number;
+    folkAlive: number; folkTotal: number;
+  } | null {
+    const found = this.boroughOf(folkId);
+    if (!found) return null;
+    const { e } = found;
+    const folk = this.actorById(folkId);
+    if (!folk || folk.dead) return null;
+    const arms = e.bo!.arms.get(folkId);
+    return {
+      folk,
+      gifts: arms?.gifts ?? 0,
+      maxGifts: found.spec.arming.maxGifts,
+      stacks: { ...(arms?.stacks ?? {}) },
+      arming: found.spec.arming,
+      stage: e.bo!.stage,
+      timer: e.timer,
+      folkAlive: this.boroughFolkAlive(e).length,
+      folkTotal: e.bo!.folkIds.length,
+    };
+  }
+
+  /** Gift a bag item to a villager: the item leaves the bag FOR GOOD, its
+   *  compiled mods graft onto the folk's own sheet (the garrison-claim
+   *  idiom) plus the armed baseline × the gift's rarity — and the villager
+   *  steps out of the huddle, a militiaman now. Host-authoritative (a
+   *  client routes the armFolkItem intent). */
+  armFolkWithItem(folkId: number, uid: number, seat: Seat = this.localSeat): boolean {
+    const found = this.boroughOf(folkId);
+    if (!found) return false;
+    const { e, spec } = found;
+    if (spec.muster.armWindow === 'muster' && e.bo!.stage !== 'muster') return false;
+    const folk = this.actorById(folkId);
+    if (!folk || folk.dead) return false;
+    if (dist(seat.actor.pos, folk.pos) > transitRadius('borough_arm', spec.arming.radius) + 60) return false;
+    const arms = this.boroughArmsOf(e, folkId);
+    if (arms.gifts >= spec.arming.maxGifts) {
+      this.failNote(seat.actor, 'borough:' + folkId, `${folk.name} carries all they can`);
+      return false;
+    }
+    const idx = seat.meta.items.findIndex(i => i.uid === uid);
+    if (idx < 0) return false;
+    const item = seat.meta.items[idx];
+    seat.meta.items.splice(idx, 1);
+    arms.gifts++;
+    // The gift's worth: its OWN compiled lines (affixes carry through for
+    // real) + the armed baseline scaled by rarity (any stick makes a
+    // militiaman; a rare blade makes a soldier). Attribute lines land as
+    // inert stats on a folk sheet — harmless by design.
+    const mul = spec.arming.giftRarityMul[item.rarity] ?? 1;
+    folk.sheet.setSource(`borough:gift:${item.uid}`, [
+      ...spec.arming.gearBaseline.map(m => ({ ...m, value: m.value * mul })),
+      ...compileItemMods(item),
+    ]);
+    this.armBoroughFolk(folk);
+    this.text(vec(folk.pos.x, folk.pos.y - 24), `${folk.name} takes up ${item.name}!`, ITEM_RARITIES[item.rarity].color, 13);
+    this.markMetaDirty(seat);
+    if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+    return true;
+  }
+
+  /** Spend one essence-package application on a villager (the per-tint
+   *  tables on the def; linear stacking up to the tint's cap). */
+  armFolkWithEssence(folkId: number, tint: string, seat: Seat = this.localSeat): boolean {
+    const found = this.boroughOf(folkId);
+    if (!found) return false;
+    const { e, spec } = found;
+    if (spec.muster.armWindow === 'muster' && e.bo!.stage !== 'muster') return false;
+    const pkg = (spec.arming.essence as Record<string, BoroughSpec['arming']['essence'][EssenceId] | undefined>)[tint];
+    if (!pkg || !(tint in ESSENCES)) return false;
+    const tintId = tint as EssenceId;
+    const folk = this.actorById(folkId);
+    if (!folk || folk.dead) return false;
+    if (dist(seat.actor.pos, folk.pos) > transitRadius('borough_arm', spec.arming.radius) + 60) return false;
+    const arms = this.boroughArmsOf(e, folkId);
+    const stacks = arms.stacks[tint] ?? 0;
+    if (stacks >= pkg.maxStacks) {
+      this.failNote(seat.actor, 'borough:' + folkId, `${folk.name} can hold no more ${ESSENCES[tintId].label}`);
+      return false;
+    }
+    if (!this.spendEssence(seat, { essence: tintId, count: pkg.cost }, 'borough:' + folkId)) return false;
+    arms.stacks[tint] = stacks + 1;
+    // Linear stacking: ONE named source per tint, mods × stack count —
+    // setSource replaces, so re-application is idempotent by construction.
+    folk.sheet.setSource(`borough:ess:${tint}`,
+      pkg.mods.map(m => ({ ...m, value: m.value * (stacks + 1) })));
+    this.armBoroughFolk(folk);
+    this.text(vec(folk.pos.x, folk.pos.y - 24),
+      `${ESSENCES[tintId].glyph} ${folk.name} strengthens!`, ESSENCES[tintId].color, 13);
+    this.markMetaDirty(seat);
+    if (seat === this.localSeat && !this.clientActionHook) saveCharacter(this);
+    return true;
+  }
+
+  /** DEV (Events tab): raise a settlement in THIS zone, dormant and ready to
+   *  be found. Clears the overlay's spent mark first; the biome allowlist is
+   *  deliberately bypassed (a dev seam forces, it never argues). */
+  devForceBorough(): boolean {
+    const spec = allEncounterSpecs().find(s => s.borough);
+    if (!spec || this.inCave || this.zone.objective.kind === 'safe') return false;
+    this.sim.boroughField?.devIgnite(this.devOverlayView(), this.zone.id);
+    if (this.encounters.some(x => x.def.borough && x.phase !== 'closing')) return true;
+    const rng = new Rng(((this.time * 997) | 0) ^ 0xb0f0);
+    const at = this.clampPos(this.farPoint(420, true), 24);
+    const enc: ActiveEncounter = {
+      def: spec, scale: rng.weighted(spec.scales), pos: vec(at.x, at.y), phase: 'dormant',
+      radius: spec.scales[0].startRadius, timer: 0, maxTimer: 0, spawnTimer: 0,
+      kills: 0, bonusUsed: 0, spawned: new Set(),
+    };
+    this.encounters.push(enc);
+    this.materializeBorough(enc);
     return true;
   }
 
@@ -13148,6 +13696,8 @@ export class World {
       case 'rerollAffix': this.rerollAffix(seat, action.uid, action.affix, action.score); break;
       case 'socketVestige': this.socketVestige(seat, action.uid, action.socket, action.vestigeId); break;
       case 'craftSocket': this.craftSocket(seat, action.uid); break;
+      case 'armFolkItem': this.armFolkWithItem(action.folkId, action.uid, seat); break;
+      case 'armFolkEssence': this.armFolkWithEssence(action.folkId, action.essence, seat); break;
     }
     // Whatever changed, re-replicate this seat's meta to its owner client.
     this.markMetaDirty(seat);
@@ -22311,9 +22861,13 @@ export class World {
     // bigger shelf. Rolls anchor to the LOCAL hero's level (the shopper).
     const shelf = VENDOR_ITEM_CFG.slots
       + (featureEnabled(this.account, FEATURE.BRANDT_EXTRA_GEMS) ? VENDOR_ITEM_CFG.extraSlots : 0);
+    // THE PROSPERITY CURVE: a fuller Lastlight attracts finer wares — the
+    // authored weights lifted by the refugee population (data/boroughs.ts;
+    // population 0, or the Borough package off, = the authored table verbatim).
+    const shelfWeights = boroughVendorWeights(this.sim.boroughField?.population ?? 0);
     for (let i = 0; i < shelf; i++) {
       const ilvl = Math.max(1, this.player.level + randInt(-VENDOR_ITEM_CFG.ilvlJitter, VENDOR_ITEM_CFG.ilvlJitter));
-      const item = rollItem({ ilvl, rarityWeights: VENDOR_ITEM_CFG.rarityWeights });
+      const item = rollItem({ ilvl, rarityWeights: shelfWeights });
       if (item) out.push({ kind: 'item', item });
     }
     return out;
@@ -23625,6 +24179,7 @@ export class World {
     add(this.descentDwellView());
     add(this.wardDwellView());
     add(this.extractionDwellView());
+    add(this.boroughDwellView());
     // The survey spire's charge ring (the 'beacon' transit row styles it).
     const sv = this.spireView();
     if (sv && !sv.done) add({ pos: sv.pos, frac: sv.frac, kind: 'beacon' });
