@@ -311,7 +311,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // VOLCANIC: one tileset, THREE generations (the recipe-tweak showcase) — a
   // spiral cauldron over a lava sea, a winding lava-tube gut, or open plains;
   // the layoutParams pour lava into whichever recipe rolls.
-  volcanic: { patronFaction: 'demon',    mapColor: '#d84a1e', label: 'Volcanic', spacing: 92,
+  // (Patron flipped demon→emberkin: the cinder country finally has NATIVES —
+  // the Legion remains its invader, not its landlord.)
+  volcanic: { patronFaction: 'emberkin', mapColor: '#d84a1e', label: 'Volcanic', spacing: 92,
     climate: { temperature: 'scorching', wildness: { from: 0.25, fadeIn: 0.2 } },
     allowedLayouts: { plains: 2, spiral: 1, winding: 1 },
     layoutParams: { negativeLiquid: 'lava', riverLiquid: 'lava' },

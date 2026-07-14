@@ -12,6 +12,7 @@
 // ---------------------------------------------------------------------------
 
 import { FACTIONS } from '../data/monsters';
+import type { TemperId } from '../data/monsters';
 import type { ZoneDef } from '../data/zones';
 
 /** Display name without the leading article ("Goblin Warband", not "the …") —
@@ -48,6 +49,12 @@ export interface FactionTraits {
    *  systems (the Deadwake's accrual reads this, never a faction literal — a
    *  future lich cult or wraith host joins the loop with one flag). */
   deathAligned?: boolean;
+  /** DISPERSAL TEMPER default for this faction's bodies (MonsterDef.temper
+   *  overrides per def; absent everywhere = 'wary'). How the faction behaves
+   *  when a disturbance that drew it (an extraction, a swarm event) ENDS:
+   *  skittish scatters home even under fire; wary leaves unless struck;
+   *  territorial hardens into a lingering expedition before it goes. */
+  temper?: TemperId;
 }
 
 export const DEFAULT_TRAITS: FactionTraits = { roaming: 1, aggression: 1, warlordHome: 'capital' };
@@ -58,35 +65,45 @@ const DEFAULT_CONTEXTS = ['baseline'];
 export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The mortal & beast war-hosts are baseline natives that can ALSO be raised
   // into a Crusade (Warbands leading the vanguard). Demons keep their own event.
-  goblin: { roaming: 1.0, aggression: 1.1, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
-  gnoll: { roaming: 0.9, aggression: 1.0, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
-  wild: { roaming: 0.7, aggression: 0.8, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
+  goblin: { roaming: 1.0, aggression: 1.1, warlordHome: 'capital', contexts: ['baseline', 'crusade'], temper: 'territorial' },
+  gnoll: { roaming: 0.9, aggression: 1.0, warlordHome: 'capital', contexts: ['baseline', 'crusade'], temper: 'territorial' },
+  wild: { roaming: 0.7, aggression: 0.8, warlordHome: 'capital', contexts: ['baseline', 'crusade'], temper: 'skittish' },
   elemental: { roaming: 0.55, aggression: 0.8, warlordHome: 'capital', contexts: ['baseline', 'crusade', 'fractures'] },
-  sylvan: { roaming: 0.35, aggression: 0.6, warlordHome: 'origin', homeBiome: 'grove', eventRange: 160, contexts: ['baseline', 'crusade'] },
+  sylvan: { roaming: 0.35, aggression: 0.6, warlordHome: 'origin', homeBiome: 'grove', eventRange: 160, contexts: ['baseline', 'crusade'], temper: 'territorial' },
   // Rooted factions home on their BIOME (the sylvan pattern): with the static
   // web cut to town + hub there is no authored graveyard/rift to originZone —
   // the undead throne on whatever grave-biome ground the run mints, the Legion
   // on its rifts. (originZone stays a valid lever for future authored ground.)
   undead: { roaming: 0.18, aggression: 0.5, warlordHome: 'origin', homeBiome: 'grave', eventRange: 150, contexts: ['baseline', 'crusade'], deathAligned: true },
-  demon: { roaming: 0.85, aggression: 1.6, warlordHome: 'origin', homeBiome: 'rift', eventRange: 240, contexts: ['baseline', 'fractures'] },
+  demon: { roaming: 0.85, aggression: 1.6, warlordHome: 'origin', homeBiome: 'rift', eventRange: 240, contexts: ['baseline', 'fractures'], temper: 'territorial' },
   // The Deep — marine-only (contexts:['marine'], NOT baseline), so it never seeds
   // ordinary war/territory; it appears purely via the marine tilesets' pack tables.
-  deep: { roaming: 0.3, aggression: 1.0, warlordHome: 'origin', homeBiome: 'deepsea', contexts: ['marine'] },
+  deep: { roaming: 0.3, aggression: 1.0, warlordHome: 'origin', homeBiome: 'deepsea', contexts: ['marine'], temper: 'skittish' },
   // The Horned Tribes — highland raiders: they march far and gladly (the
   // gnolls' allies on the winter roads), throne wherever the strongest holds.
-  beastkin: { roaming: 0.95, aggression: 1.1, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
+  beastkin: { roaming: 0.95, aggression: 1.1, warlordHome: 'capital', contexts: ['baseline', 'crusade'], temper: 'territorial' },
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },
   // The Night Court — patient predators: they range at their own pace and
   // throne wherever the feeding is richest.
   nightkin: { roaming: 0.6, aggression: 1.2, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
+  // The Emberkin — the cinder country's tribe: rooted vent-tenders who barely
+  // march but never, ever cede the calderas (the volcanic biome finally has a
+  // native banner; its long war is with the Legion treating the fires as a door).
+  emberkin: { roaming: 0.3, aggression: 0.9, warlordHome: 'origin', homeBiome: 'volcanic', eventRange: 170, contexts: ['baseline'], temper: 'territorial' },
 };
 
 /** Does this faction feed the corpse-tide loops (Deadwake accrual)? Reads the
  *  trait row — never compare a faction id literal for death-alignment. */
 export function isDeathAligned(faction: string | undefined): boolean {
   return !!(faction && FACTION_TRAITS[faction]?.deathAligned);
+}
+
+/** This faction's dispersal-temper DEFAULT (undefined = no faction stance;
+ *  the resolver in data/monsters.ts `temperOf` falls through to 'wary'). */
+export function factionTemper(faction: string | undefined): TemperId | undefined {
+  return faction ? FACTION_TRAITS[faction]?.temper : undefined;
 }
 
 export function traitsOf(faction: string): FactionTraits {

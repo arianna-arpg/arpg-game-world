@@ -2361,6 +2361,209 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.7,
   },
 
+  // ===================================== THE EXTRACTION SEAMS (node bodies)
+  // Stationary GROWTHS, not creatures: no eyes, no facing read — a formation
+  // the world pushed up, per-biome faces over one mechanical body. All stand
+  // on the marrow_well doodad (the glow + the spent scar live there).
+
+  /** The default face: a pale crystalline upwelling, veined and weeping light. */
+  marrow_wellspring: {
+    parts: [
+      { kind: 'blob', color: '#7a9a86', params: { irr: 0.12, seed: 3 } },
+      { kind: 'veinweb', color: '#a5e3b4', alpha: 0.7, scale: 0.9 },
+      { kind: 'crystalGrowths', color: '#cfeedd', scale: 1.05 },
+      { kind: 'gem', color: '#e8fff0', y: -0.1, scale: 0.5 },
+    ],
+    live: [{ kind: 'wisps', color: '#cfeedd', scale: 0.9, params: { n: 3 } }],
+    shadowScale: 0.8,
+  },
+  /** The wood's face: a swollen rootbole, moss-shouldered, sap beading gold. */
+  marrow_bole: {
+    parts: [
+      { kind: 'blob', color: '#5a4632', params: { irr: 0.22, seed: 9 } },
+      { kind: 'roots', color: '#4a3826', scale: 1.15 },
+      { kind: 'mossPatch', color: '#6a8a4a', x: -0.15, scale: 0.8 },
+      { kind: 'veinweb', color: '#d8c26a', alpha: 0.65, scale: 0.7 },
+      { kind: 'caps', color: '#c8a86a', x: 0.25, y: 0.2, scale: 0.4, alpha: 0.9 },
+    ],
+    live: [{ kind: 'wisps', color: '#d8c26a', scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.9,
+  },
+  /** The gloam's face: a cold heart of pale light behind a cage of dark stone. */
+  marrow_gloamheart: {
+    parts: [
+      { kind: 'blob', color: '#2e3240', params: { irr: 0.18, seed: 5 } },
+      { kind: 'veinweb', color: '#b9a8e8', alpha: 0.8, scale: 0.95 },
+      { kind: 'gem', color: '#d8ccf8', y: -0.05, scale: 0.55 },
+      { kind: 'halo', color: '#b9a8e8', scale: 1.05, alpha: 0.4 },
+    ],
+    live: [{ kind: 'wisps', color: '#c8bcf0', scale: 1.0, params: { n: 4 } }],
+    shadowScale: 0.75,
+  },
+  /** The Bloom's face: a crowned cap venting spore-light in slow breaths. */
+  marrow_sporecrown: {
+    parts: [
+      { kind: 'capDome', color: '#8a6a9a', scale: 1.1 },
+      { kind: 'sporeVents', color: '#d8b8e8', scale: 0.85 },
+      { kind: 'veinweb', color: '#d8b8e8', alpha: 0.55, scale: 0.7 },
+    ],
+    live: [{ kind: 'puffMotes', color: '#e0c8f0', scale: 0.9, params: { n: 3 } }],
+    shadowScale: 0.9,
+  },
+  /** The cinder country's face: a cracked obsidian boil, ember-marrow inside. */
+  marrow_cinderseam: {
+    parts: [
+      { kind: 'blob', color: '#3a2e2a', params: { irr: 0.2, seed: 7 } },
+      { kind: 'lavaCracks', color: '#f0a860', scale: 1.0 },
+      { kind: 'gem', color: '#ffd8a0', y: 0.05, scale: 0.4, alpha: 0.9 },
+    ],
+    live: [{ kind: 'emberSparks', color: '#ffb870', scale: 0.9, params: { n: 3 } }],
+    shadowScale: 0.85,
+  },
+  /** The waterline face: a brine-slick spiral bedded in polyps. */
+  marrow_brinepool: {
+    parts: [
+      { kind: 'blob', color: '#3a5a5e', params: { irr: 0.16, seed: 11 } },
+      { kind: 'polyps', color: '#6ab8b0', scale: 0.95 },
+      { kind: 'shellSpiral', color: '#a8d8d0', x: 0.1, scale: 0.7 },
+      { kind: 'veinweb', color: '#8fd8d0', alpha: 0.6, scale: 0.75 },
+    ],
+    live: [{ kind: 'wisps', color: '#a8e0d8', scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.85,
+  },
+  /** The Glut's face: a knotted bloom of meat, sacs straining with marrow. */
+  marrow_gorebloom: {
+    parts: [
+      { kind: 'fleshFolds', color: '#9a5a5a', scale: 1.05 },
+      { kind: 'bloatSacs', color: '#c88a8a', scale: 0.9 },
+      { kind: 'veinweb', color: '#e8a0a0', alpha: 0.75, scale: 0.85 },
+    ],
+    live: [{ kind: 'wisps', color: '#e8b0a8', scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.9,
+  },
+
+  // ======================================== THE EMBERKIN (the cinder tribe)
+  /** A scrap of living ash: a smouldering mote with ember eyes. */
+  ashling: {
+    parts: [
+      { kind: 'blob', color: '#4a3228', params: { irr: 0.22, seed: 6 } },
+      { kind: 'lavaCracks', color: '#ff9a4a', scale: 0.8 },
+      { kind: 'eyes', color: '#ffd8a0', params: { spread: 0.4, dist: 0.55, size: 0.1 } },
+    ],
+    live: [{ kind: 'emberSparks', color: '#ffb870', scale: 0.8, params: { n: 2 } }],
+    shadowScale: 0.6,
+  },
+  /** The vent-hound: a lean runner maned in fire. */
+  cinder_hound: {
+    parts: [
+      { kind: 'torso', color: '#6a3a26', scale: 1.0 },
+      { kind: 'snout', color: '#4a2a1c', x: 0.45, scale: 0.8 },
+      { kind: 'mane', color: '#ff8a3a', scale: 0.9 },
+      { kind: 'tail', color: '#5a3222', x: -0.55, scale: 0.8 },
+      { kind: 'eyes', color: '#ffd06a', params: { spread: 0.32, dist: 0.66, size: 0.09 } },
+    ],
+    live: [{ kind: 'emberSparks', color: '#ff9a4a', scale: 0.6, params: { n: 2 } }],
+  },
+  /** Slag on legs: a cooling shell over a furnace heart, shield-forward. */
+  slag_brute: {
+    parts: [
+      { kind: 'carapace', color: '#5a3a2a', scale: 1.1 },
+      { kind: 'armorPlates', color: '#48281a', scale: 0.95 },
+      { kind: 'lavaCracks', color: '#ff8a3a', scale: 0.85 },
+      { kind: 'claws', color: '#3a241a', scale: 1.1, params: { talons: 2 } },
+      { kind: 'eyes', color: '#ffc060', params: { spread: 0.3, dist: 0.6, size: 0.08 } },
+    ],
+    shadowScale: 1.05,
+  },
+  /** The litany-keeper: ash-robes, a censer of coals, a voice like a bellows. */
+  vent_priest: {
+    parts: [
+      { kind: 'robe', color: '#7a4a2e', scale: 1.0 },
+      { kind: 'hood', color: '#5a3420', x: 0.2, scale: 0.85 },
+      { kind: 'censer', color: '#c86a2a', y: 0.45, scale: 0.75 },
+      { kind: 'runes', color: '#ffb870', scale: 0.8, params: { n: 3 } },
+    ],
+    live: [{ kind: 'breathPuff', color: '#c8a08a', x: 0.4, scale: 0.7 }],
+  },
+  /** The tribe-mother: crowned in cooled horn-slag, drape stitched with vents. */
+  emberkin_matriarch: {
+    parts: [
+      { kind: 'robe', color: '#8a4a26', scale: 1.15 },
+      { kind: 'drape', color: '#6a3a20', scale: 1.0 },
+      { kind: 'crownOfHorns', color: '#3a241a', x: 0.3, scale: 0.9 },
+      { kind: 'staff', color: '#4a2e1c', params: { orb: 'glow' } },
+      { kind: 'runes', color: '#ffb870', scale: 0.95, params: { n: 4 } },
+      { kind: 'eyes', color: '#ffd8a0', params: { spread: 0.3, dist: 0.62, size: 0.09 } },
+    ],
+    live: [{ kind: 'emberSparks', color: '#ffb870', scale: 1.0, params: { n: 3 } }],
+    shadowScale: 1.1,
+  },
+
+  // =================================== THE TIDELINE + THE LATTICE (fills)
+  /** A skittering wrack-crab: all legs and hurry, spray-spotted. */
+  tide_skitter: {
+    parts: [
+      { kind: 'carapace', color: '#5a8a84', scale: 0.9 },
+      { kind: 'legs', color: '#48706a', scale: 1.1, params: { pairs: 3 } },
+      { kind: 'pincers', color: '#6aa89e', scale: 0.8 },
+      { kind: 'spots', color: '#8fd0c8', scale: 0.7 },
+      { kind: 'eyestalks', color: '#a8e0d8', x: 0.4, scale: 0.6 },
+    ],
+    shadowScale: 0.7,
+  },
+  /** The reef that moves: barnacled stone until it lurches, polyp-backed. */
+  reef_lurcher: {
+    parts: [
+      { kind: 'shell', color: '#4a6a66', scale: 1.1 },
+      { kind: 'polyps', color: '#6ab0a8', scale: 0.85 },
+      { kind: 'barbs', color: '#3a5450', scale: 0.9 },
+      { kind: 'claws', color: '#38524e', scale: 1.15, params: { talons: 3 } },
+      { kind: 'eyes', color: '#c8f0e8', params: { spread: 0.26, dist: 0.6, size: 0.07 } },
+    ],
+    shadowScale: 0.95,
+  },
+  /** Wreck-timber walking: hull ribs, weed-drape, a lantern that still burns. */
+  tidewrack_shambler: {
+    parts: [
+      { kind: 'torso', color: '#5a4a38', scale: 1.15 },
+      { kind: 'ribs', color: '#6a5a44', scale: 0.9, params: { pairs: 3, span: 0.8 } },
+      { kind: 'drape', color: '#4a6a58', scale: 1.0, alpha: 0.85 },
+      { kind: 'barbs', color: '#3a3228', scale: 0.8 },
+      { kind: 'lantern', color: '#a8d8c8', x: 0.42, y: 0.3, scale: 0.7 },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#4a6a58', scale: 0.8 }],
+    shadowScale: 1.05,
+  },
+  /** The lattice-crawler: ring-segmented glass, light bending along it. */
+  prism_creeper: {
+    parts: [
+      { kind: 'segmentRings', color: '#9ac0e8', scale: 1.05 },
+      { kind: 'crystalGrowths', color: '#cfe0f8', scale: 0.8 },
+      { kind: 'legs', color: '#7a9ac8', scale: 1.0, params: { pairs: 4 } },
+      { kind: 'eyes', color: '#e8f4ff', params: { spread: 0.3, dist: 0.62, size: 0.08 } },
+    ],
+    shadowScale: 0.8,
+  },
+  /** A note given a body: one shard, humming — it ends in a chord. */
+  resonant_shardling: {
+    parts: [
+      { kind: 'gem', color: '#cfe0f8', scale: 1.0 },
+      { kind: 'crystalGrowths', color: '#e8f0ff', scale: 0.7 },
+      { kind: 'halo', color: '#b8d0f8', scale: 0.9, alpha: 0.35 },
+    ],
+    live: [{ kind: 'wisps', color: '#dce8ff', scale: 0.6, params: { n: 2 } }],
+    shadowScale: 0.6,
+  },
+  /** The vent's breath given wings — ambient, harmless, beautiful. */
+  ember_wisp: {
+    parts: [
+      { kind: 'blob', color: '#c86a2a', scale: 0.7, params: { irr: 0.15, seed: 4 } },
+      { kind: 'halo', color: '#ffb870', scale: 1.0, alpha: 0.4 },
+    ],
+    live: [{ kind: 'emberSparks', color: '#ffd8a0', scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.4,
+  },
+
   // --- THE VIGILANT HOST (the Aetherial's wardens — feathers, halos, law) ----
   /** The cherub wisp: a burning mote in a ring, on the smallest wings. */
   cherub_wisp: {

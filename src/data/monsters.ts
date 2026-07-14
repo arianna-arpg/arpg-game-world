@@ -143,6 +143,31 @@ export interface MonsterBoon {
   chance?: number;
 }
 
+/** The AGGRO PERSONALITY axes (MonsterDef.aggro) — pure multipliers, all
+ *  default 1, read by whatever grafts a targeting tune onto the body (the
+ *  extraction swarm director today; any beacon/objective event tomorrow).
+ *  They shape ATTENTION, never damage. */
+export interface AggroSpec {
+  /** × threat seeded toward the event's objective (single-mindedness). */
+  fixation?: number;
+  /** × threat booked when this body takes damage (how hard it turns). */
+  fury?: number;
+  /** × threat decay while grafted (high = grudges melt, it drifts back). */
+  waver?: number;
+}
+
+/** DISPERSAL TEMPERS — the vocabulary for "the disturbance ended; now what".
+ *  An open union stays extensible (a future 'zealous' that never leaves is
+ *  one string + one branch at the disperse site, no type surgery). */
+export type TemperId = 'skittish' | 'wary' | 'territorial';
+
+/** Resolve a body's temper: def override → faction default → 'wary'.
+ *  (Faction defaults live in world/traits.ts FACTION_TRAITS.temper — data,
+ *  not code, so a pack table's whole personality is two lines.) */
+export function temperOf(def: MonsterDef | undefined, factionTemper?: TemperId): TemperId {
+  return def?.temper ?? factionTemper ?? 'wary';
+}
+
 export interface MonsterDef {
   id: string;
   name: string;
@@ -243,6 +268,26 @@ export interface MonsterDef {
   /** Multiplier on detection range (1 = baseline). Low shambles past you
    *  (zombie 0.55); high senses you from afar (blood mite 1.6). */
   detection?: number;
+  /** AGGRO PERSONALITY (the attention axes, read wherever an event grafts a
+   *  targeting tune onto this body — extraction swarms today, any future
+   *  beacon-chaser tomorrow). All default 1; each is a pure multiplier:
+   *  - `fixation` scales threat SEEDED toward the event's objective (a sapper
+   *    at 2.5 barely notices you; a coward at 0.4 forgets the objective the
+   *    moment anything moves),
+   *  - `fury` scales threat booked when this body TAKES damage (how hard it
+   *    turns on its attacker),
+   *  - `waver` scales its threat DECAY (high = grudges melt fast and it
+   *    drifts back to the objective; low = it holds the grudge). */
+  aggro?: AggroSpec;
+  /** DISPERSAL TEMPER — how this body behaves when the disturbance that
+   *  summoned it ENDS (an extraction settles, a swarm event closes):
+   *  - `'skittish'` turns for home at once and keeps walking even if struck,
+   *  - `'wary'` leaves too, but a wound on the way out re-awakens it (the
+   *    default posture),
+   *  - `'territorial'` stays a while — the swarm hardens into a small
+   *    expedition holding the ground before it finally drifts off.
+   *  Resolution order: def.temper → FACTION_TRAITS[faction].temper → 'wary'. */
+  temper?: TemperId;
   /** LEVELED-LIST envelope (engine/presence.ts): this def's GLOBAL weight-vs-
    *  level curve, multiplied into every table/pool that selects it by id —
    *  the "never below 18, anywhere" or "disperses past 14, everywhere" lever.
@@ -573,6 +618,21 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   mycelia: [
     { id: 'glow_moth', chance: 0.5, count: [2, 5] },
     { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
+  ],
+  // The cinder country breathes: wisps rising off the vents (they flee — the
+  // land's small lives are still lives).
+  volcanic: [
+    { id: 'ember_wisp', chance: 0.6, count: [2, 4] },
+  ],
+  // The lattice hums with moth-light.
+  crystal: [
+    { id: 'glow_moth', chance: 0.55, count: [2, 4] },
+  ],
+  // The gloam keeps its small hearts too — moths at the tallow stumps,
+  // squirrels that won't be caught.
+  gloamwood: [
+    { id: 'glow_moth', chance: 0.45, count: [2, 4] },
+    { id: 'squirrel', chance: 0.4, count: [2, 3] },
   ],
 };
 
@@ -3458,6 +3518,273 @@ export const MONSTERS: Record<string, MonsterDef> = {
     wardPriority: 3, // protectors post themselves on the cart above all else
   },
 
+  // --- EXTRACTION SEAM BODIES (defend-the-node objectives) -------------------
+  // One mechanical body, seven biome faces (data/extraction.ts picks by biome;
+  // packages can register more). Driven like the cart: no brain, the engine's
+  // extraction runtime owns arming/HP/settlement. Life here is nominal — the
+  // spawner stamps the real pool from the ExtractSpec's level curve × the
+  // rolled scale's nodeLifeMul. Never bestiary/nemesis material: it's a PLACE.
+
+  marrow_wellspring: {
+    id: 'marrow_wellspring', name: 'Marrow Wellspring',
+    color: '#a5e3b4', shape: 'circle', radius: 22, material: 'crystal', look: 'marrow_wellspring',
+    base: { life: 60, moveSpeed: 0, armor: 8, evasion: 0, mana: 0 },
+    skills: [], xp: 0, driven: true, noBestiary: true, noNemesis: true,
+  },
+  marrow_bole: {
+    id: 'marrow_bole', name: 'Sapheart Bole',
+    color: '#a8d878', shape: 'circle', radius: 23, material: 'wood', look: 'marrow_bole',
+    base: { life: 60, moveSpeed: 0, armor: 10, evasion: 0, mana: 0 },
+    skills: [], xp: 0, driven: true, noBestiary: true, noNemesis: true,
+  },
+  marrow_gloamheart: {
+    id: 'marrow_gloamheart', name: 'Gloamheart',
+    color: '#b9a8e8', shape: 'circle', radius: 21, material: 'stone', look: 'marrow_gloamheart',
+    base: { life: 60, moveSpeed: 0, armor: 9, evasion: 0, mana: 0 },
+    skills: [], xp: 0, driven: true, noBestiary: true, noNemesis: true,
+  },
+  marrow_sporecrown: {
+    id: 'marrow_sporecrown', name: 'Sporecrown',
+    color: '#d8b8e8', shape: 'circle', radius: 23, material: 'chitin', look: 'marrow_sporecrown',
+    base: { life: 60, moveSpeed: 0, armor: 7, evasion: 0, mana: 0 },
+    skills: [], xp: 0, driven: true, noBestiary: true, noNemesis: true,
+  },
+  marrow_cinderseam: {
+    id: 'marrow_cinderseam', name: 'Cinderseam',
+    color: '#f0a860', shape: 'circle', radius: 22, material: 'ember', look: 'marrow_cinderseam',
+    base: { life: 60, moveSpeed: 0, armor: 11, evasion: 0, mana: 0 },
+    skills: [], xp: 0, driven: true, noBestiary: true, noNemesis: true,
+  },
+  marrow_brinepool: {
+    id: 'marrow_brinepool', name: 'Brinepool Seam',
+    color: '#8fd8d0', shape: 'circle', radius: 22, material: 'chitin', look: 'marrow_brinepool',
+    base: { life: 60, moveSpeed: 0, armor: 8, evasion: 0, mana: 0 },
+    skills: [], xp: 0, driven: true, noBestiary: true, noNemesis: true,
+  },
+  marrow_gorebloom: {
+    id: 'marrow_gorebloom', name: 'Gorebloom',
+    color: '#e89a9a', shape: 'circle', radius: 23, material: 'flesh', look: 'marrow_gorebloom',
+    base: { life: 60, moveSpeed: 0, armor: 6, evasion: 0, mana: 0 },
+    skills: [], xp: 0, driven: true, noBestiary: true, noNemesis: true,
+  },
+
+  // --- THE MARROW-DRAWN (extraction's opportunist faction) -------------------
+  // Essence-starved creatures that follow seams into ANY country — the
+  // minority seasoning in every extraction swarm (contexts:['extraction'] on
+  // the FactionSpec keeps them out of ordinary generation). Their aggro rows
+  // exercise the personality axes: the moth barely notices you, the tyrant
+  // never forgives. All skittish by faction temper — the marrow stops, so
+  // does their interest.
+
+  marrow_moth: {
+    id: 'marrow_moth', name: 'Marrow Moth',
+    color: '#cfeedd', shape: 'triangle', radius: 9, material: 'chitin', look: 'glow_moth',
+    base: { life: 14, moveSpeed: 200, accuracy: 85, evasion: 60, mana: 15, manaRegen: 3 },
+    skills: ['talon_rake'], xp: 6,
+    faction: 'marrowdrawn',
+    flier: true, levitates: true,
+    // Single-minded and flighty: fixates hard, forgets you almost at once.
+    aggro: { fixation: 1.6, fury: 0.5, waver: 1.7 },
+    brain: { type: 'swarm' },
+  },
+  marrow_leech: {
+    id: 'marrow_leech', name: 'Marrow Leech',
+    color: '#9ac8a8', shape: 'oval', radius: 12, material: 'slime', look: 'lesser_ooze',
+    base: { life: 34, moveSpeed: 120, accuracy: 75, mana: 0 },
+    mods: [mod('lifeOnHit', 'flat', 3)],
+    skills: ['claw'], xp: 10,
+    faction: 'marrowdrawn',
+    // Drinks whatever bleeds nearest — and remembers who cut it.
+    aggro: { fixation: 1.2, fury: 1.4, waver: 0.7 },
+    brain: { type: 'flanker' },
+  },
+  seep_burrower: {
+    id: 'seep_burrower', name: 'Seep Burrower',
+    color: '#b8a878', shape: 'oval', radius: 13, material: 'chitin', look: 'rockgrub',
+    base: { life: 44, moveSpeed: 110, accuracy: 80, armor: 14, mana: 40, manaRegen: 4 },
+    skills: ['claw'], xp: 12,
+    faction: 'marrowdrawn',
+    // The sapper: tunnel-visioned on the seam, deaf to almost everything else.
+    aggro: { fixation: 2.0, fury: 0.7, waver: 1.2 },
+    brain: {
+      type: 'juggernaut',
+      rules: [{
+        when: { distUnder: 600 }, every: [11, 16], hold: [0.3, 0.5],
+        actions: [{ do: 'burrow', kinds: ['sand', 'mud', 'bog', 'swamp'], damageFrac: 0.18, emergeRadius: 60, announce: 'the ground churns…' }],
+      }],
+    },
+  },
+  vein_glutton: {
+    id: 'vein_glutton', name: 'Vein Glutton',
+    color: '#7aa88a', shape: 'hexagon', radius: 19, material: 'flesh', look: 'viscous_ooze',
+    base: { life: 130, moveSpeed: 70, accuracy: 70, armor: 22, mana: 0 },
+    mods: [mod('lifeOnHit', 'flat', 5)],
+    skills: ['claw'], xp: 22,
+    faction: 'marrowdrawn',
+    scaleVariance: [0.9, 1.25],
+    // Placid bulk: hard to distract, slow to anger, quick to forget.
+    aggro: { fixation: 1.4, fury: 0.8, waver: 1.2 },
+    brain: { type: 'juggernaut' },
+  },
+  marrow_tyrant: {
+    id: 'marrow_tyrant', name: 'Marrow Tyrant',
+    color: '#5a8a6a', shape: 'pentagon', radius: 17, material: 'chitin', look: 'bolete_brute',
+    base: { life: 150, moveSpeed: 105, accuracy: 95, armor: 18, mana: 60, manaRegen: 5 },
+    skills: ['claw', 'bile_spray'], xp: 45,
+    faction: 'marrowdrawn',
+    // The one that never forgives: strike it once and the seam can wait.
+    aggro: { fixation: 0.8, fury: 1.6, waver: 0.5 },
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 500 }, every: [12, 18], hold: [0.3, 0.5],
+        actions: [{ do: 'shout', radius: 420 }],
+      }],
+    },
+  },
+
+  // --- THE EMBERKIN (the cinder country claims a NAME) -----------------------
+  // The volcanic biome fielded nine bodies and no allegiance — the one
+  // frontier country with no native banner. The Emberkin are its tribe:
+  // vent-born folk who tend the fires like herds. Territorial to the bone
+  // (their ground IS their argument), hostile to the demons who treat the
+  // calderas as a door. Warlord: the Matriarch.
+
+  ashling: {
+    id: 'ashling', name: 'Ashling',
+    color: '#e8925a', shape: 'diamond', radius: 8, material: 'ember', look: 'ashling',
+    base: { life: 15, moveSpeed: 165, accuracy: 80, mana: 30, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.6)],
+    skills: ['firebolt'], xp: 6,
+    faction: 'emberkin',
+    deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'fire', radius: 42, coalesce: 0.4 },
+    brain: { type: 'swarm' },
+  },
+  cinder_hound: {
+    id: 'cinder_hound', name: 'Cinder Hound',
+    color: '#d87a4a', shape: 'triangle', radius: 12, material: 'ember', look: 'cinder_hound',
+    base: { life: 42, moveSpeed: 190, accuracy: 90, evasion: 30, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.5)],
+    skills: ['claw'], xp: 12,
+    faction: 'emberkin',
+    // A hound turns on whatever bites it — and forgets just as fast.
+    aggro: { fury: 1.4, waver: 1.4 },
+    brain: { type: 'flanker' },
+  },
+  slag_brute: {
+    id: 'slag_brute', name: 'Slag Brute',
+    color: '#a85a32', shape: 'hexagon', radius: 18, material: 'stone', look: 'slag_brute',
+    base: { life: 140, moveSpeed: 80, accuracy: 85, armor: 30, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.75)],
+    skills: ['claw'], xp: 26,
+    faction: 'emberkin',
+    shellGuard: { side: 'front', max: 50, arcDeg: 130, regenDelay: 5, regenRate: 10 },
+    turnSpeed: 3.2,
+    // Slag doesn't startle: single-minded, slow to turn, slower to forgive.
+    aggro: { fixation: 1.5, fury: 0.8, waver: 0.7 },
+    brain: { type: 'juggernaut' },
+  },
+  vent_priest: {
+    id: 'vent_priest', name: 'Vent Priest',
+    color: '#e8a86a', shape: 'pentagon', radius: 13, material: 'cloth', look: 'vent_priest',
+    base: { life: 60, moveSpeed: 95, accuracy: 95, mana: 120, manaRegen: 8 },
+    mods: [mod('fireRes', 'flat', 0.6)],
+    skills: ['firebolt'], xp: 24,
+    faction: 'emberkin',
+    brain: {
+      type: 'caster',
+      rules: [{
+        // The litany: kin near the priest burn hotter for a few breaths.
+        when: { alliesWithin: { count: 2, radius: 300 } }, every: [10, 15], hold: [0.3, 0.5],
+        announce: 'the priest feeds the fire…',
+        actions: [{ do: 'buff', buff: { type: 'buff', id: 'vent_litany', duration: 6, mods: [mod('damage', 'increased', 0.25)] } }],
+      }],
+    },
+  },
+  emberkin_matriarch: {
+    id: 'emberkin_matriarch', name: 'Emberkin Matriarch',
+    color: '#f0b060', shape: 'star', radius: 16, material: 'ember', look: 'emberkin_matriarch',
+    base: { life: 200, moveSpeed: 90, accuracy: 100, armor: 16, mana: 150, manaRegen: 9 },
+    mods: [mod('fireRes', 'flat', 0.8)],
+    skills: ['firebolt'], xp: 60,
+    faction: 'emberkin',
+    // The tribe-mother answers insult with the whole tribe.
+    aggro: { fury: 1.5, waver: 0.6 },
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 520 }, every: [13, 19], hold: [0.4, 0.6],
+        announce: 'the Matriarch calls the vents!',
+        actions: [{ do: 'summon', monster: 'ashling', count: 3, ring: 48 }],
+      }],
+    },
+  },
+
+  // --- MARINE FILL (beach / isle / deepsea ran thin) --------------------------
+
+  tide_skitter: {
+    id: 'tide_skitter', name: 'Tide Skitter',
+    color: '#8fd0c8', shape: 'oval', radius: 9, material: 'chitin', look: 'tide_skitter',
+    base: { life: 20, moveSpeed: 175, accuracy: 80, evasion: 45, mana: 0 },
+    skills: ['claw'], xp: 7,
+    faction: 'wild',
+    temper: 'skittish',
+    brain: { type: 'swarm', move: { style: 'skitter' } },
+  },
+  reef_lurcher: {
+    id: 'reef_lurcher', name: 'Reef Lurcher',
+    color: '#5a9a94', shape: 'oval', radius: 15, material: 'chitin', look: 'reef_lurcher',
+    base: { life: 85, moveSpeed: 105, accuracy: 90, armor: 20, mana: 0 },
+    skills: ['claw'], xp: 20,
+    ambush: { radius: 150, announce: 'the reef MOVES —' },
+    // Patient stone until stepped past; holds its grudge like a barnacle.
+    aggro: { fury: 1.3, waver: 0.6 },
+    brain: { type: 'assassin' },
+  },
+  tidewrack_shambler: {
+    id: 'tidewrack_shambler', name: 'Tidewrack Shambler',
+    color: '#6a8a7e', shape: 'square', radius: 17, material: 'wood', look: 'tidewrack_shambler',
+    base: { life: 150, moveSpeed: 70, accuracy: 75, armor: 26, mana: 0 },
+    mods: [mod('coldRes', 'flat', 0.5)],
+    skills: ['claw'], xp: 28,
+    scaleVariance: [0.9, 1.3],
+    // Driftwood doesn't care who's hammering on it.
+    aggro: { fixation: 1.6, fury: 0.6, waver: 1.0 },
+    brain: { type: 'juggernaut' },
+  },
+
+  // --- CRYSTAL FILL (the elemental country gets bodies of its own) ------------
+
+  prism_creeper: {
+    id: 'prism_creeper', name: 'Prism Creeper',
+    color: '#b8d8f0', shape: 'oval', radius: 12, material: 'crystal', look: 'prism_creeper',
+    base: { life: 48, moveSpeed: 130, accuracy: 85, evasion: 55, mana: 0 },
+    mods: [mod('lightningRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 16,
+    faction: 'elemental',
+    brain: { type: 'flanker', move: { style: 'weave' } },
+  },
+  resonant_shardling: {
+    id: 'resonant_shardling', name: 'Resonant Shardling',
+    color: '#cfe0f8', shape: 'diamond', radius: 9, material: 'crystal', look: 'resonant_shardling',
+    base: { life: 22, moveSpeed: 150, accuracy: 80, mana: 0 },
+    skills: ['claw'], xp: 8,
+    faction: 'elemental',
+    deathBurst: { mode: 'implode', damageFrac: 0.55, damageType: 'lightning', radius: 46, coalesce: 0.4 },
+    brain: { type: 'swarm' },
+  },
+
+  // --- Ambient fauna: the ember wisp (volcanic wildlife) ----------------------
+  ember_wisp: {
+    id: 'ember_wisp', name: 'Ember Wisp',
+    color: '#ffb870', shape: 'diamond', radius: 6, material: 'ember', look: 'ember_wisp',
+    base: { life: 8, moveSpeed: 150, mana: 0 },
+    skills: [], xp: 2,
+    tag: 'critter',
+    flier: true, levitates: true,
+    brain: { type: 'flee' },
+  },
+
   // --- Summonable allies (minions are just monsters on your team) ----------
 
   flame_sprite: {
@@ -4415,6 +4742,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['heavy_strike', 'root_grasp', 'splinter_volley'], xp: 40, faction: 'sylvan',
     scaling: { armor: { flatPerLevel: 2 } },
     detection: 1.0,
+    // Wood remembers the axe: slow to notice a disturbance, near-impossible
+    // to shake once you've cut it.
+    aggro: { fixation: 0.6, fury: 1.8, waver: 0.4 },
     // Wood turns like wood: the warden's strikes wait for the trunk to bear.
     brain: { type: 'protector', behavior: { castArc: 0.55 } },
   },
@@ -4914,6 +5244,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 85, moveSpeed: 190, accuracy: 110, evasion: 45, mana: 25, manaRegen: 4 },
     skills: ['gore_rend'], xp: 22, tag: 'predator', faction: 'beast', tags: ['beast'],
     detection: 1.6,
+    // A wolf answers blood with blood — and moves on the moment it stops.
+    aggro: { fury: 1.5, waver: 1.4 },
+    temper: 'skittish',
     brain: {
       type: 'pack',
       target: { prey: ['critter'] },
@@ -4960,6 +5293,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 30, moveSpeed: 150, accuracy: 90, armor: 25, mana: 0 },
     skills: ['claw'], xp: 8,
     detection: 0.9,
+    // A worker works: the task first, the intruder barely.
+    aggro: { fixation: 2.2, fury: 0.4, waver: 1.5 },
+    temper: 'territorial',
     brain: { type: 'swarm', squad: { idle: { style: 'drill' }, formation: 'column' } },
   },
   formic_soldier: {
@@ -4977,6 +5313,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     shellGuard: { side: 'front', max: 55, regenDelay: 4, regenRate: 14, color: '#b09060' },
     scaling: { armor: { flatPerLevel: 1.2 } },
     detection: 1.1,
+    // The line holds its orders: fixed on the objective, hard to peel.
+    aggro: { fixation: 1.8, fury: 0.9, waver: 0.8 },
+    temper: 'territorial',
     // The colony COORDINATES like nothing else alive: the preset's ring
     // discipline plus tight elbow room — soldiers arrive as a closing
     // pincer, never a shoving file. Insect drill, insect geometry.
@@ -6176,6 +6515,10 @@ const RELATIONS: Record<string, FactionStance> = {
   'flesh|sylvan': 'hostile',
   'flesh|beastkin': 'hostile',
   'flesh|demon': 'hostile',
+  // The Emberkin tend the fires the Legion treats as a DOOR — the cinder
+  // country's one long war. Raw flame respects raw flame.
+  'emberkin|demon': 'hostile',
+  'emberkin|elemental': 'ally',
   // The Night Court keeps the old courtesies: the dead serve, the groves
   // burn, and the Horned Tribes are prey that fights back.
   'nightkin|undead': 'ally',
@@ -6322,6 +6665,16 @@ export const FACTIONS: Record<string, {
       { id: 'alpha_stalker', weight: 1, presence: { from: 11, fadeIn: 5 } },
     ],
   },
+  emberkin: {
+    name: 'the Emberkin',
+    table: [
+      { id: 'ashling', weight: 4 },
+      { id: 'cinder_hound', weight: 3 },
+      { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'vent_priest', weight: 2, presence: { from: 8, fadeIn: 4 } },
+      { id: 'emberkin_matriarch', weight: 1, presence: { from: 13, fadeIn: 5 } },
+    ],
+  },
   demon: {
     name: 'the Infernal Legion',
     nubHorns: true,
@@ -6422,6 +6775,24 @@ registerAIAction('x_ride_flux', (world, actor) => {
     pos: { x: actor.pos.x, y: actor.pos.y }, radius: actor.radius + 12,
     color: '#dcecf8', life: 0.35, maxLife: 0.35,
   });
+});
+
+// x_rally_to_target — the commander's finger: kin within 420u ADOPT my current
+// target outright (lock + a seeded grudge on the chart), where {do:'shout'}
+// merely widens their eyes. Composable on any brain via rules/phases/cadences;
+// pairs with aggro.fury bodies for packs that answer insult as one. The threat
+// seed rides the chart's ordinary decay, so a rally fades unless it's fed.
+registerAIAction('x_rally_to_target', (world, actor, _act, target) => {
+  if (!target || target.dead) return;
+  for (const kin of world.actors) {
+    if (kin.dead || kin === actor || kin.team !== actor.team || kin.passive || kin.construct) continue;
+    if (kin.faction !== actor.faction) continue;
+    const dx = kin.pos.x - actor.pos.x, dy = kin.pos.y - actor.pos.y;
+    if (dx * dx + dy * dy > 420 * 420) continue;
+    kin.aiTargetId = target.id;
+    kin.aggroed = true;
+    kin.addThreat(target.id, 40);
+  }
 });
 
 /** Spawn weights per wave tier — which monsters appear as waves escalate. */

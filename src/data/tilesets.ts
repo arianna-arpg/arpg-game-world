@@ -1552,6 +1552,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'deep_thresher', weight: 2 },
         { id: 'deep_angler', weight: 1, presence: { from: 7, fadeIn: 3 } },
         { id: 'sand_wyrm', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // The tideline's own: skitter swarms in the wrack, lurchers in the reef.
+        { id: 'tide_skitter', weight: 3, presence: { to: 18, fadeOut: 9 } },
+        { id: 'reef_lurcher', weight: 1, presence: { from: 5, fadeIn: 3 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1658,6 +1661,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'deep_thresher', weight: 2 },
         { id: 'deep_angler', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'deep_tidecaller', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        // The isle's own tideline fauna + what the storms wreck ashore.
+        { id: 'tide_skitter', weight: 3, presence: { to: 18, fadeOut: 9 } },
+        { id: 'reef_lurcher', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'tidewrack_shambler', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -2107,6 +2114,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'deep_angler', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'deep_tidecaller', weight: 2, presence: { from: 10, fadeIn: 4 } },
         { id: 'deep_leviathan', weight: 1, presence: { from: 16, fadeIn: 8 } },
+        // Wrecks walk down here too — and the reefs hold their breath.
+        { id: 'tidewrack_shambler', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'reef_lurcher', weight: 2 },
       ],
     },
     spawnerId: 'bone_altar',
@@ -2324,6 +2334,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The ES POLE lives here: glimmer-chaff early, the glass wall deeper.
         { id: 'lumen_wisp', weight: 3, presence: { to: 14, fadeOut: 6 } },
         { id: 'glassguard_sentinel', weight: 2, presence: { from: 7, fadeIn: 4 } },
+        // Living lattice: weaving creepers and shardlings that SHATTER.
+        { id: 'prism_creeper', weight: 2 },
+        { id: 'resonant_shardling', weight: 3, presence: { to: 20, fadeOut: 10 } },
       ],
     },
     spawnerId: 'rime_stone',
@@ -2376,6 +2389,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         // in after it), and the deeper cracks hold anglers.
         { id: 'magma_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'void_angler', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // THE EMBERKIN — the country's native banner (patron faction): the
+        // tribe thickens with level as the unaligned fauna thins.
+        { id: 'ashling', weight: 3 },
+        { id: 'cinder_hound', weight: 2 },
+        { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'vent_priest', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
