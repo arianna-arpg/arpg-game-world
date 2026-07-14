@@ -513,6 +513,14 @@ registerRegion({ id: 'hardpan', walkable: true, blocks: false, label: 'the hardp
   moveScale: 1.05,
   visual: { fill: '#8a7a4e', alpha: 0.3 } });
 
+// SUNKSTONE WALL: the buried vault's dressed sandstone — the negative space
+// of halls the desert swallowed (the ruin_wall contract in sand tones). A
+// TRUE WALL, coursed so the vault reads BUILT; the pale-gold rim announces
+// stone against the dark interior dust (the flesh-wall lesson).
+registerRegion({ id: 'sunkstone_wall', walkable: false, blocks: true, label: 'the old sandstone',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#332a18', alpha: 1, masonry: true, edge: { color: '#8a7448', width: 4 } } });
+
 // --- STRUCTURE REGIONS (the plan-structure framework) ------------------------
 // RAMPART: dressed structural stone — a castle/fortress curtain wall. A TRUE
 // WALL (stops shots and sight, like wall/flesh_wall/fungal_wall): storming a

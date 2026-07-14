@@ -110,6 +110,20 @@ registerSidezone({
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'sunken_ruin', { rollVariant: true }),
 });
 
+// --- THE BURIED VAULT --------------------------------------------------------
+// The desert's descent (the buried_village composition plants the gate): a
+// lost village's underworks, preserved by the same sands that erased its
+// streets. Each gate rolls its own face — two vaults in one erg read as two
+// cellars of one dead town. The 'vault_entered' ledger key is the desert's
+// GATEWAY SEAM (the ruin_entered pattern): the Sun & Sand gem pools and any
+// future expedition simply name it.
+registerSidezone({
+  kind: 'vault_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'vault_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'buried_vault', { rollVariant: true }),
+});
+
 // --- THE LASTLIGHT CELLAR ----------------------------------------------------
 // Under the spare house's floorboards: a small, barren stone room — the
 // blacksmith's flagstone underfoot (the cellar_room slab structure), a crate

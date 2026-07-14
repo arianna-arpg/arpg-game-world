@@ -266,6 +266,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { pole: '#6a5636' },
     canopy: { painter: 'awningCloth', params: { cloth: '#b8683a', stripe: '#e8d8b0' } },
   },
+  // The buried village's descent: the cave-mouth painter in sandstone — no
+  // vines (deserts stay bare; the painter's theme gate skips them), an amber
+  // votive glow so the one door still kept reads KEPT.
+  vault_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#6a5834', edge: '#927448', material: 'stone',
+      glow: '#e8b060', throat: '#0f0a04',
+      teeth: {}, rubble: {},
+      label: 'the Buried Vault',
+    },
+    light: { radius: -2.2, color: '#e8b060', intensity: 0.32, flicker: 1.8 },
+  },
   dead_tree: {
     painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: '#4a4038' },

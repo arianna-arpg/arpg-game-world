@@ -361,3 +361,53 @@ registerComposition({
     { kind: 'rubble', count: [1, 3], where: { field: 'noise', max: 0.4, params: { scale: 420, seed: 11 } } },
   ],
 });
+
+// --- THE DESERT'S LOST PLACES ------------------------------------------------
+// Three pocket stories the sands tell (the dune country's compositions —
+// every one a cleared site the dunefield recipe's ridge masks route around).
+
+// THE OASIS HAVEN: the inhabited pocket — water, palms, cloth shade (real
+// relief: the swelter loop reads the awnings and crowns), a cold campfire
+// whose owners are a matter of timing. Where there is water there is an
+// ambush eventually; the packs know the bargain too.
+registerComposition({
+  id: 'oasis_haven',
+  sites: [{ id: 'well', radius: [150, 190] }],
+  pre: [{ kind: 'clearing', at: 'well', count: [1, 1], radius: [58, 76] }],
+  post: [
+    { kind: 'cluster', cluster: 'haven_court', at: 'well', count: [1, 1] },
+    // The green STOPS where the water's argument does (shore strata).
+    { kind: 'grass', count: [1, 3], where: { field: 'shore', max: 0.5, params: { kinds: ['water'], reach: 260 } } },
+    { kind: 'palm', count: [0, 2], where: { field: 'shore', max: 0.4, params: { kinds: ['water'], reach: 240 } } },
+  ],
+});
+
+// THE BURIED VILLAGE: a settlement the sands took back — column stubs, urns,
+// and one lintel still holding its doorway DOWN (the vault_gate sidezone;
+// entering sets the 'vault_entered' ledger — the desert's gateway seam).
+// Deeper country remembers more of it (the biomeDepth gate).
+registerComposition({
+  id: 'buried_village',
+  when: { biomeDepth: { min: 0.35 } },
+  sites: [{ id: 'square', radius: [160, 200] }],
+  pre: [{ kind: 'clearing', at: 'square', count: [1, 1], radius: [60, 80] }],
+  post: [
+    { kind: 'cluster', cluster: 'sunken_court', at: 'square', count: [1, 1] },
+    { kind: 'rubble', count: [2, 4], where: { field: 'radial', max: 0.6 } },
+    { kind: 'broken_column', count: [1, 3], where: { field: 'noise', max: 0.42, params: { scale: 380, seed: 23 } } },
+  ],
+});
+
+// THE CARAVAN GRAVEYARD: the trade that stopped mid-stride — a wreck line
+// keeled over in file, urns spilled between (brittle: looting pays, and
+// sometimes objects), vultures' leavings everywhere. No gate, no relief:
+// just the road's argument, lost.
+registerComposition({
+  id: 'caravan_graveyard',
+  sites: [{ id: 'span', radius: [120, 160] }],
+  pre: [{ kind: 'clearing', at: 'span', count: [1, 1], radius: [44, 60] }],
+  post: [
+    { kind: 'formation', formation: 'caravan_wreck', at: 'span', count: [1, 1] },
+    { kind: 'bone_pile', count: [1, 3], where: { field: 'radial', max: 0.6 } },
+  ],
+});

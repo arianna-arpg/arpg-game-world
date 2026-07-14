@@ -93,6 +93,47 @@ registerCluster({
   poi: true,
 });
 
+// THE HAVEN COURT: an inhabited oasis pocket — water at the heart, palms
+// and awnings ringing it (real SHADE: the swelter loop's mercy, placeable),
+// green only where the water's reach argues for it. The desert's one
+// bargain: everything alive in the erg knows where this is. Geometry keeps
+// the ruin-court contract (centerpieces ≤ 52 inside the pre-clearing).
+registerCluster({
+  id: 'haven_court',
+  anchor: { radius: 30 },
+  pieces: [
+    { kind: 'water', radius: [58, 78], count: [1, 1], ring: [0, 1], centerpiece: true },
+    // The damp margin (ONE broad mud lobe, not 'shallows' — that's a stamp
+    // macro, not a piece kind; and not a ring of small discs — near-touch
+    // pairs read as fuse misses to genqa): the pool's reach on the ground.
+    { kind: 'mud', radius: [36, 50], count: [1, 1], ring: [44, 66], centerpiece: true },
+    { kind: 'palm', radius: [16, 24], count: [3, 5], ring: [96, 150], rot: true },
+    { kind: 'sun_awning', radius: [26, 34], count: [1, 2], ring: [110, 170], rot: true },
+    { kind: 'grass', radius: [22, 34], count: [2, 3], ring: [90, 150] },
+    { kind: 'reeds', radius: [12, 18], count: [2, 4], ring: [64, 100] },
+    { kind: 'campfire', radius: [9, 11], count: [0, 1], ring: [118, 165] },
+  ],
+  poi: true,
+});
+
+// THE SUNKEN COURT: a village square the sands kept — column stubs and
+// urns around the one lintel still holding a doorway DOWN (vault_gate =
+// the sidezone mouth; 'vault_entered' is the gateway ledger).
+registerCluster({
+  id: 'sunken_court',
+  anchor: { radius: 28, kind: 'vault_gate' },
+  pieces: [
+    { kind: 'vault_gate', radius: [26, 30], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'burial_urn', radius: [11, 15], count: [1, 3], ring: [36, 52], rot: true, centerpiece: true },
+    { kind: 'broken_column', radius: [12, 17], count: [3, 5], ring: [104, 170], rot: true },
+    { kind: 'ruin_plinth', radius: [12, 16], count: [1, 2], ring: [108, 172], rot: true },
+    { kind: 'rubble', radius: [12, 20], count: [2, 4], ring: [108, 178], rot: true },
+    { kind: 'bone_pile', radius: [10, 16], count: [1, 3], ring: [112, 180] },
+    { kind: 'sun_awning', radius: [24, 30], count: [0, 1], ring: [120, 176], rot: true },
+  ],
+  poi: true,
+});
+
 // THE RUIN COURT (the jungle's sunken-ruin doorstep): the root-split descent
 // at dead center — a SIDEZONE mouth (dwell to enter the halls below) — with
 // the swallowed court's furniture around it: a toppled head, urns that

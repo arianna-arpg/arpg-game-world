@@ -916,7 +916,12 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     theme: variantTheme ? { ...ts.theme, ...variantTheme } : ts.theme,
     layout,
     ...(layoutType ? { layoutType } : {}),
-    ...(opts?.layoutParams ? { layoutParams: opts.layoutParams } : {}),
+    // The spec ▷ tileset merge the surface mint honors: a cave tileset's own
+    // layoutParams (interiorWall, floorStyle, room dials) finally reach their
+    // generators; explicit opts still win per key. (The buried vault's
+    // sandstone — and the sunken ruin's authored ruin_wall — ride this.)
+    ...(ts.layoutParams || opts?.layoutParams
+      ? { layoutParams: { ...ts.layoutParams, ...opts?.layoutParams } } : {}),
     objective: { kind: 'clear' },           // never gates the way back out
     packs: ts.packs,
     exits: [{ to: parent.id, side: 's' }],  // the sole exit — back to the surface

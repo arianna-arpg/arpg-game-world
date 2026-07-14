@@ -68,6 +68,7 @@ export type KnownDoodadKind =
   | 'glass_shard' // lightning-fused pane heaved from the pan — brittle, sings apart
   | 'bone_arch'  // a colossus rib breaking the sand — the bonepan's architecture
   | 'sun_awning' // a traveler's cloth fly on poles — walk-under SHADE (the heat's mercy)
+  | 'vault_gate' // stairs under a half-swallowed lintel — DOWN into the buried vault (sidezone)
   | 'web'       // sticky sheet — slows like mire (spider country)
   | 'geyser'    // scalding vent mouth — steams and glows (marsh/tundra)
   | 'snowdrift' // wind-piled powder — decoration (tundra)
@@ -699,6 +700,63 @@ export interface BrittleSpec {
     damage?: { amount?: number; pctMaxLife?: number; type?: string; canKill?: boolean } };
 }
 
+/** FORBIDON WINS, GLOBALLY (see generateLayout): the stamp gate's inverse as
+ *  one final pass. findSpot gates a solid against the ground that exists
+ *  when it stamps; landmarks, cluster pieces, melds and post compositions
+ *  keep pouring ground AFTERWARDS — so any solid overlapping a ground
+ *  doodad its rule forbids is spliced here, order-independent, whoever
+ *  poured it. Coarse-bucketed so a mega-zone stays O(n); seedPaired kinds
+ *  keep their parallel seed list zipped (the cave-mouth contract). */
+function sweepForbiddenGround(ctx: GenCtx): void {
+  const forbidden = new Set<string>();
+  for (const d of ctx.doodads) {
+    const f = doodadRule(d.kind).forbidOn;
+    if (f) for (const k of f) forbidden.add(k);
+  }
+  if (!forbidden.size) return;
+  const CELL = 96;
+  const buckets = new Map<number, Doodad[]>();
+  let maxR = 0;
+  for (const g of ctx.doodads) {
+    if (!forbidden.has(g.kind)) continue;
+    if (doodadRule(g.kind).overlap !== 'ground') continue;
+    const key = Math.floor(g.pos.x / CELL) * 100000 + Math.floor(g.pos.y / CELL);
+    const list = buckets.get(key);
+    if (list) list.push(g); else buckets.set(key, [g]);
+    if (g.radius > maxR) maxR = g.radius;
+  }
+  if (!buckets.size) return;
+  for (let i = ctx.doodads.length - 1; i >= 0; i--) {
+    const d = ctx.doodads[i];
+    if (d.keep) continue;
+    const f = doodadRule(d.kind).forbidOn;
+    if (!f || !f.length) continue;
+    const reach = d.radius + maxR;
+    const x0 = Math.floor((d.pos.x - reach) / CELL), x1 = Math.floor((d.pos.x + reach) / CELL);
+    const y0 = Math.floor((d.pos.y - reach) / CELL), y1 = Math.floor((d.pos.y + reach) / CELL);
+    let hit = false;
+    scan: for (let bx = x0; bx <= x1; bx++) {
+      for (let by = y0; by <= y1; by++) {
+        const list = buckets.get(bx * 100000 + by);
+        if (!list) continue;
+        for (const g of list) {
+          if (g === d || !f.includes(g.kind)) continue;
+          const dx = d.pos.x - g.pos.x, dy = d.pos.y - g.pos.y;
+          const rr = d.radius + g.radius;
+          if (dx * dx + dy * dy < rr * rr) { hit = true; break scan; }
+        }
+      }
+    }
+    if (!hit) continue;
+    if (doodadRule(d.kind).seedPaired) {
+      let ordinal = 0;
+      for (let k = 0; k < i; k++) if (ctx.doodads[k].kind === d.kind) ordinal++;
+      if (ordinal < ctx.caveSeeds.length) ctx.caveSeeds.splice(ordinal, 1);
+    }
+    ctx.doodads.splice(i, 1);
+  }
+}
+
 /** The PHYSICAL radius of a doodad — the trunk, not the crown. Movement,
  *  projectile and spawn-clearance checks use this; sight/occlusion/shade
  *  keep the full visual radius (the canopy is real to eyes, not to feet). */
@@ -838,6 +896,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   sun_awning: { overlap: 'ground', spacing: 90,
     forbidOn: ['water', 'lava', 'chasm'],
     occlude: { pad: 8, alpha: 0.35 } },
+  // The buried village's way DOWN (sidezones.ts mints the vault) — the
+  // ruin_gate contract in sandstone.
+  vault_gate: { overlap: 'trigger', spacing: 500 },
   // The maw is GROUND (nothing to trip on — the reel is the obstacle):
   // hazardGround keeps ambient spawns off the lip, the auto-attached effect
   // reels the nearest intruder each beat and bites whatever reaches the lip.
@@ -2369,6 +2430,13 @@ export function generateLayout(
   // (stamps, landmarks, clusters, fx layers). Draw-free; runs before the
   // portal splice + reachability guards so they act on the final geometry.
   fuseGroundBodies(ctx);
+  // FORBIDON WINS, GLOBALLY: findSpot gates a solid against the ground that
+  // EXISTS when it stamps — but landmarks, cluster pieces, melds and post
+  // compositions keep pouring ground afterwards (an oasis under a scattered
+  // fulgurite). One order-independent inverse pass at the end: any solid
+  // overlapping a ground doodad its rule forbids is spliced — terrain wins,
+  // whoever poured it, whenever. Bucketed so a big zone stays O(n).
+  sweepForbiddenGround(ctx);
   // REACHABILITY GUARD: a CONVEX layout (no walk grid) scatters its solids without
   // exit awareness, so a rock / cliff / wall can land ON a portal and wall it off —
   // the player then can't reach the exit (seen on crusade-minted + wall-heavy zones).
@@ -3471,6 +3539,11 @@ registerStamp('salt_pillar', stampSingle('salt_pillar', [10, 16]));
 registerStamp('glass_shard', stampSingle('glass_shard', [8, 14]));
 registerStamp('bone_arch', stampSingle('bone_arch', [22, 34]));
 registerStamp('sun_awning', stampSingle('sun_awning', [26, 36]));
+registerStamp('vault_gate', stampSingle('vault_gate', [26, 32]));
+// Ruin furniture rows (clusters place these as pieces already; the buried
+// vault's tileset rows scatter them straight, so they need stamps too).
+registerStamp('broken_column', stampSingle('broken_column', [12, 17]));
+registerStamp('ruin_plinth', stampSingle('ruin_plinth', [12, 16]));
 registerStamp('geyser', stampSingle('geyser', [12, 17]));
 registerStamp('brazier', stampSingle('brazier', [8, 11]));
 registerStamp('standing_stone', stampSingle('standing_stone', [12, 20]));
@@ -3996,30 +4069,13 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   // kinds keep their parallel seed list zipped. Draw-free.
   // (A builder that POURS engulfing terrain can splice pre-build doodads and
   // shrink the array below preBuild — clamp, or the sweep reads past the end.)
-  const poured = ctx.doodads.slice(Math.min(preBuild, ctx.doodads.length));
   for (let i = Math.min(preBuild, ctx.doodads.length) - 1; i >= 0; i--) {
     const d = ctx.doodads[i];
     if (d.keep) continue;
-    // Reach covers rim-poured ground lapping a solid just OUTSIDE the rect
-    // (overlap radii, the forbidOn check's own geometry — genqa's contract).
-    if (Math.abs(d.pos.x - center.x) > r + d.radius + 80 || Math.abs(d.pos.y - center.y) > r + d.radius + 80) continue;
-    let cull = !grid.isWalkable(d.pos.x, d.pos.y);
-    // FORBIDON WINS TOO: a builder that POURS ground (a lake's water discs)
-    // under an earlier solid that forbids standing on it — the stamp gate's
-    // inverse, applied to terrain that arrived after the stamp (the dune
-    // country's shore fulgurites).
-    if (!cull) {
-      const forbid = doodadRule(d.kind).forbidOn;
-      if (forbid) {
-        for (const g of poured) {
-          if (!forbid.includes(g.kind)) continue;
-          const dx = d.pos.x - g.pos.x, dy = d.pos.y - g.pos.y;
-          const reach = d.radius + g.radius;
-          if (dx * dx + dy * dy < reach * reach) { cull = true; break; }
-        }
-      }
-    }
-    if (!cull) continue;
+    if (Math.abs(d.pos.x - center.x) > r + d.radius || Math.abs(d.pos.y - center.y) > r + d.radius) continue;
+    if (grid.isWalkable(d.pos.x, d.pos.y)) continue;
+    // (Solids over builder-POURED ground are the global sweepForbiddenGround
+    // pass's job — one inverse, every producer.)
     if (doodadRule(d.kind).seedPaired) {
       let ordinal = 0;
       for (let k = 0; k < i; k++) if (ctx.doodads[k].kind === d.kind) ordinal++;

@@ -206,6 +206,20 @@ registerFormation({
   ],
 });
 
+// A CARAVAN WRECK: the trade that stopped mid-stride — carts keeled over in
+// file (rot:'chain' keeps each square to the line of march), cargo urns
+// spilled between, and the bones of whatever was pulling. The urns keep the
+// brittle contract: looting the dead pays, and sometimes objects.
+registerFormation({
+  id: 'caravan_wreck', arrange: 'meander', span: [340, 620], step: 74,
+  params: { wobble: 22 },
+  pieces: [
+    { kind: 'broken_cart', radius: [16, 22], jitter: 10, rot: 'chain' },
+    { kind: 'burial_urn', radius: [10, 14], every: 2, jitter: 24, rot: true },
+    { kind: 'bone_pile', radius: [10, 16], every: 3, jitter: 26 },
+  ],
+});
+
 // A SALT PROCESSION: eroded pillars filing across the pan — the dead lake's
 // congregation, still standing where the water left them.
 registerFormation({

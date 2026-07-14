@@ -725,6 +725,11 @@ export const TILESETS: Record<string, TilesetDef> = {
   desert: {
     id: 'desert',
     depthAffinity: { to: 0.5, fadeOut: 0.3 },
+    compositions: [
+      { composition: 'oasis_haven', chance: 0.25 },
+      { composition: 'caravan_graveyard', chance: 0.2 },
+      { composition: 'buried_village', chance: 0.18 },
+    ],
     layoutParams: {
       duneGap: [360, 520], duneCrestW: [20, 32], dunePans: [1, 2],
       duneCombEvery: 100,
@@ -838,6 +843,11 @@ export const TILESETS: Record<string, TilesetDef> = {
   sandsea: {
     id: 'sandsea',
     depthAffinity: { from: 0.3, fadeIn: 0.3 },
+    compositions: [
+      { composition: 'oasis_haven', chance: 0.42 },
+      { composition: 'caravan_graveyard', chance: 0.3 },
+      { composition: 'buried_village', chance: 0.3 },
+    ],
     layoutParams: {
       duneGap: [260, 380], duneCrestW: [26, 42], duneLee: 56,
       dunePans: [1, 2], duneCombEvery: 84, duneBow: 0.26,
@@ -948,6 +958,10 @@ export const TILESETS: Record<string, TilesetDef> = {
   saltflat: {
     id: 'saltflat',
     depthAffinity: { from: 0.15, fadeIn: 0.25, mul: 0.7 },
+    compositions: [
+      { composition: 'caravan_graveyard', chance: 0.25 },
+      { composition: 'buried_village', chance: 0.2 },
+    ],
     layoutParams: {
       duneGap: [560, 800], duneCrestW: [16, 24], duneLee: 30,
       dunePans: [3, 5], duneCombEvery: 150,
@@ -1034,6 +1048,83 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bounty', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'escape', weight: 1 },
+    ],
+  },
+
+  // BURIED VAULT — the desert's descent (vault_gate sidezone): a lost
+  // village's underworks in dressed sandstone, preserved by the sands that
+  // erased its streets. Interior-only (frontier:false); the sunken_ruin
+  // contract in sand tones, garrisoned by what the dark kept.
+  buried_vault: {
+    id: 'buried_vault',
+    frontier: false,
+    caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1 },
+    layoutParams: {
+      interiorWall: 'sunkstone_wall', floorStyle: 'flagstone',
+      rooms: [6, 10], doorChance: 0.6, corridorCells: 2,
+    },
+    common: [
+      { kind: 'burial_urn', count: [2, 5] },
+      { kind: 'clay_pots', count: [1, 3] },
+      { kind: 'rubble', count: [2, 4] },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'brazier', count: [1, 2] },
+      { kind: 'secret_wall', count: [1, 2] },
+    ],
+    variants: [
+      // The cistern that outlived its well — dust where the water stood.
+      { name: 'dry cistern', layout: [
+        { kind: 'sand', count: [1, 3] },
+        { kind: 'broken_column', count: [2, 4] },
+        { kind: 'ruin_plinth', count: [1, 2] },
+      ] },
+      // The granary maze: stores looted mid-carry, doors that stopped mattering.
+      { name: 'granary maze', layout: [
+        { kind: 'clay_pots', count: [2, 4] },
+        { kind: 'broken_cart', count: [0, 2] },
+        { kind: 'rubble', count: [1, 3] },
+      ] },
+      // The king's cellar: somebody worth burying, and the fashion to prove it.
+      { name: "king's cellar", layout: [
+        { kind: 'burial_urn', count: [2, 4] },
+        { kind: 'standing_stone', count: [1, 2] },
+        { kind: 'ruin_plinth', count: [1, 3] },
+        { kind: 'brazier', count: [1, 2] },
+      ] },
+    ],
+    nameFirst: ['Buried', 'Swallowed', 'Sandlocked', 'Forgotten', 'Sunless', 'Drysunk', 'Old', 'Duneheld'],
+    nameSecond: ['Vaults', 'Underworks', 'Cellars', 'Granary', 'Cistern', 'Stores', 'Undercroft', 'Reliquary'],
+    theme: {
+      ground: {
+        palette: ['#171208', '#241c0e', '#332a16', '#43371e'],
+        bias: 0.52, alpha: 0.55, speckles: 0.7,
+      },
+      ambientDark: 0.36,
+      ambientFx: [{ kind: 'motes', intensity: 0.4 }],
+      floor: '#141008', grid: '#1c160c', border: '#5c4c2c',
+      obstacle: '#3a2f1a', obstacleEdge: '#6a5834', accent: '#e8c060',
+      wall: '#3a2f1a', sand: '#c9a86a', water: '#2a5a6a', mud: '#241c10',
+    },
+    sizeW: [1150, 1500], sizeH: [880, 1150], biome: 'ruin',
+    layout: [
+      { kind: 'rubble', count: [1, 3] },
+      { kind: 'broken_column', count: [1, 2] },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'bronze_scarab', weight: 3 },
+        { id: 'giant_maggot', weight: 2 },
+        { id: 'sand_skitterer', weight: 2 },
+        { id: 'skeleton_warrior', weight: 3 },
+        { id: 'skeleton_archer', weight: 2 },
+        { id: 'maggot_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 1 },
     ],
   },
 
@@ -3732,6 +3823,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   sandsea:        { title: 'Sand-Sea',          blurb: 'The Great Erg: a sea with a grain. Ridge after wind-combed ridge to the horizon, soft lees that swallow your stride, and an oasis exactly often enough to keep you believing the next shimmer.' },
   saltflat:       { title: 'Glasspan',          blurb: 'A dead lake remembered as a floor — cracked white hardpan, lightning fused to glass, salt pillars for a forest, and no shade anywhere the sun can reach.' },
   jungle:         { title: 'Jungle',            blurb: 'Choked living thicket — walls of growth that block step, shot AND sight, cuttable throats plugged with brush and dens waiting behind them.' },
+  buried_vault:   { title: 'Buried Vault',      blurb: 'A dead village’s underworks below the erg — dressed sandstone halls the dunes preserved, garrisoned by vermin, the risen, and whatever the urns were keeping.' },
   sunken_ruin:    { title: 'Sunken Ruins',      blurb: 'A drowned city that followed you down through a ruin-gate — flooded halls where something old still keeps to its rooms.' },
   mire:           { title: 'The Mire',          blurb: 'A drowned graveland of standing swamp, poison bog and rotted timber — footing that pulls at you and water that hides its teeth.' },
   wasteland:      { title: 'Wasteland',         blurb: "The demon rift's scorched fringe: lava flows over broken stone, the border where the world itself begins to burn." },
