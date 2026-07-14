@@ -215,6 +215,99 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
   },
 
+  // ================= SUN & SAND (the desert's own discipline) ==============
+  // Found, not taught: the pool unlocks by descending a buried vault
+  // ('vault_entered' — meta/unlocks.ts). The family's identity is
+  // WEAPONIZED SUNSCORCH: the same stacks the desert bakes onto you, turned
+  // on whatever stands in the light.
+
+  glass_lance: {
+    id: 'glass_lance', name: 'Glass Lance',
+    description: 'Fuse sand to a running spear of glass mid-throw — it arrives hot, fast, and honest.',
+    tags: ['spell', 'projectile', 'fire'], color: '#e8f0d8',
+    manaCost: 8, cooldown: 0, useTime: 0.6,
+    baseDamage: { physical: [6, 9], fire: [8, 13] },
+    delivery: { type: 'projectile', speed: 680, radius: 7, range: 480 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sunscorched', chance: 0.35 },
+    ],
+    requirements: { intelligence: 14, dexterity: 10 },
+    minDropLevel: 8,
+    ai: { range: 420, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('projectileSpeed', 'increased', 0.03)] },
+  },
+
+  dune_surge: {
+    id: 'dune_surge', name: 'Dune Surge',
+    description: 'Ride a standing wave of sand through the line — whoever it breaks over is SHOVED and scorched.',
+    tags: ['attack', 'melee', 'movement', 'physical'], color: '#d8b878',
+    manaCost: 10, cooldown: 5, useTime: 0.3,
+    baseDamage: { physical: [10, 16] },
+    delivery: { type: 'dash', distance: 240, speed: 860, width: 54 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 130 },
+      { type: 'status', status: 'sunscorched', chance: 0.5 },
+    ],
+    requirements: { strength: 12, dexterity: 12 },
+    minDropLevel: 9,
+    ai: { range: 220, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  mirage_step: {
+    id: 'mirage_step', name: 'Mirage Step',
+    description: 'Be briefly where the light says you are not — a blink that leaves your outline arguing behind you.',
+    tags: ['spell', 'movement', 'fire'], color: '#f0e4c0',
+    manaCost: 9, cooldown: 6, useTime: 0,
+    delivery: { type: 'blink', range: 300 },
+    effects: [{
+      type: 'buff', id: 'mirage_step_veil', duration: 2.5,
+      mods: [mod('evasion', 'increased', 0.35), mod('detectability', 'more', -0.3)],
+    }],
+    requirements: { dexterity: 14, intelligence: 10 },
+    minDropLevel: 10,
+    ai: { range: 260, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  sirocco_ring: {
+    id: 'sirocco_ring', name: 'Sirocco Ring',
+    description: 'Call the noon wind down in a ring of scouring heat — everything it touches starts to BAKE (sunscorch stacks, the desert\'s own arithmetic).',
+    tags: ['spell', 'aoe', 'fire', 'duration'], color: '#ffb64a',
+    manaCost: 14, cooldown: 7, useTime: 0.65,
+    baseDamage: { fire: [7, 12] },
+    delivery: { type: 'nova', radius: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sunscorched', chance: 1 },
+    ],
+    requirements: { intelligence: 16 },
+    minDropLevel: 11,
+    ai: { range: 100, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.03)] },
+  },
+
+  solar_brand: {
+    id: 'solar_brand', name: 'Solar Brand',
+    description: 'Point the sun at someone. The mark bakes on scorch after scorch until the light is done with them.',
+    tags: ['spell', 'fire', 'duration'], color: '#ffd870',
+    manaCost: 11, cooldown: 8, useTime: 0.5,
+    baseDamage: { fire: [5, 8] },
+    delivery: { type: 'target', splash: 40 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sunscorched', chance: 1 },
+      { type: 'status', status: 'sunscorched', chance: 1 },
+      { type: 'status', status: 'sunscorched', chance: 0.6 },
+    ],
+    requirements: { willpower: 14, intelligence: 12 },
+    minDropLevel: 12,
+    ai: { range: 380, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.09)] },
+  },
+
   // ======================= Fire ============================================
 
   firebolt: {

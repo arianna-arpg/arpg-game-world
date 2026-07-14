@@ -1960,6 +1960,35 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5, minDropLevel: 8,
   },
 
+  // --- The SUN & SAND gems (the desert discipline's grafts) ------------------
+  // The family's identity supported: sunscorch as ammunition. All three read
+  // universal sheet lanes (apply_<status> / damageVs_<status> / aoeRadius),
+  // so nothing here can go matrix-INERT on a fitting host.
+  sunbaked_edge: {
+    id: 'sunbaked_edge', name: 'Sunbaked Edge',
+    description: 'The skill fights on the desert\'s side: hits BAKE their victims (sunscorch — the fire-res erosion the noon sun charges), and the already-baked take more from it.',
+    color: '#ffb64a', requiresTags: ['fire'],
+    mods: [mod('apply_sunscorched', 'flat', 0.3), mod('damageVs_sunscorched', 'increased', 0.2)],
+    perLevel: [mod('apply_sunscorched', 'flat', 0.03), mod('damageVs_sunscorched', 'increased', 0.03)],
+    weight: 6,
+  },
+  noonglass: {
+    id: 'noonglass', name: 'Noonglass',
+    description: 'Focus the skill through a lens of pan-glass: it burns a shade harder, and part of its heat arrives as IGNITION.',
+    color: '#ff8a3a', requiresTags: ['fire'],
+    mods: [mod('apply_ignite', 'flat', 0.25), mod('damage', 'increased', 0.08)],
+    perLevel: [mod('apply_ignite', 'flat', 0.04)],
+    weight: 6,
+  },
+  scouring_grit: {
+    id: 'scouring_grit', name: 'Scouring Grit',
+    description: 'Load the skill\'s area with driven sand: it reaches wider, and everything inside gets scoured.',
+    color: '#d8b878', requiresTags: ['aoe'],
+    mods: [mod('aoeRadius', 'increased', 0.15), mod('damage', 'increased', 0.08)],
+    perLevel: [mod('aoeRadius', 'increased', 0.02)],
+    weight: 6,
+  },
+
   // --- The GALE gems (the Driftways' wind-craft) ----------------------------
   crosswind: {
     id: 'crosswind', name: 'Crosswind',

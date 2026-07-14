@@ -264,6 +264,11 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'gem_skills_wildcraft', kind: 'skill', cost: 190, reqLedger: 'ruin_entered', label: 'Skill Pool — the Wildcraft',
     description: 'Machete Arc, Blowdart, Vine Lash, Spore Bloom, Panther Pounce may drop. Learned the way it was first learned: by going in.',
     payload: { skillIds: ['machete_arc', 'blowdart', 'vine_lash', 'spore_bloom', 'panther_pounce'] } },
+  // The desert's discipline waits under the erg (the vault_entered ledger the
+  // vault_gate sidezone bumps — found, not taught).
+  { id: 'gem_skills_sunsand', kind: 'skill', cost: 190, reqLedger: 'vault_entered', label: 'Skill Pool — Sun & Sand',
+    description: 'Glass Lance, Dune Surge, Mirage Step, Sirocco Ring, Solar Brand may drop. The desert teaches whoever walks back out.',
+    payload: { skillIds: ['glass_lance', 'dune_surge', 'mirage_step', 'sirocco_ring', 'solar_brand'] } },
 
   // --- Support drop bundles -------------------------------------------------
   { id: 'sup_t2', kind: 'support', cost: 100, reqLevel: 0, label: 'Support Pool II',
@@ -275,6 +280,9 @@ export const UNLOCK_CATALOG: Unlockable[] = [
   { id: 'sup_wildcraft', kind: 'support', cost: 140, reqLedger: 'ruin_entered', label: 'Support Pool — the Wildcraft',
     description: 'Serrated Edge, Envenomed Tips, Smothering Spores may drop.',
     payload: { supportIds: ['serrated_edge', 'envenomed_tips', 'smothering_spores'] } },
+  { id: 'sup_sunsand', kind: 'support', cost: 140, reqLedger: 'vault_entered', label: 'Support Pool — Sun & Sand',
+    description: 'Sunbaked Edge, Noonglass, Scouring Grit may drop.',
+    payload: { supportIds: ['sunbaked_edge', 'noonglass', 'scouring_grit'] } },
   { id: 'sup_echoes', kind: 'support', cost: 200, reqLevel: 1, label: 'Support Pool — Echoes',
     description: 'Phantasmal Echo, Ancestral Call, Vessel of Shadow, Synchronicity may drop.',
     payload: { supportIds: ['phantasmal_echo', 'ancestral_call', 'vessel_of_shadow', 'synchronicity'] } },
