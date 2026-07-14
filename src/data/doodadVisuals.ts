@@ -279,6 +279,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2.2, color: '#e8b060', intensity: 0.32, flicker: 1.8 },
   },
+  // THE MIRAGE KIT: light, not matter — no shadow on purpose (a shadow is
+  // exactly what a mirage cannot afford), drawn late so the lie sits over
+  // the terrain it's telling you about.
+  mirage_oasis: { painter: 'mirageGhost', order: 56, params: { form: 'oasis' } },
+  mirage_bastion: { painter: 'mirageGhost', order: 56, params: { form: 'bastion' } },
+  mirage_caravan: { painter: 'mirageGhost', order: 56, params: { form: 'caravan' } },
   dead_tree: {
     painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: '#4a4038' },

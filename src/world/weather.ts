@@ -19,7 +19,7 @@ import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOve
 import { scaledCap } from '../packages/frequency';
 
 /** Weather kinds the engine registers out of the box ('clear' = no front). */
-export type KnownWeatherKind = 'clear' | 'rain' | 'storm' | 'fog' | 'ashfall' | 'bloodmoon';
+export type KnownWeatherKind = 'clear' | 'rain' | 'storm' | 'fog' | 'ashfall' | 'bloodmoon' | 'sandstorm';
 
 /** Open weather vocabulary (mirrors StampKind): the known kinds keep
  *  autocomplete/typo resistance, and a kind added via registerWeather rides
@@ -75,6 +75,13 @@ export interface WeatherDef {
    *  the way it travels. Consumed by World.windAt: headwinds slow movement,
    *  tailwinds hasten it, anchored solids upwind shelter you (WIND_CFG). */
   wind?: number;
+  /** BIRTH GEOGRAPHY: climate-axis bands the BIRTH node's baked geo must
+   *  satisfy for the sky to seed this kind THERE (a sandstorm rises from
+   *  hot dry country — then drifts wherever its vector argues). Axes read
+   *  def.geo.climate on the anchor node; nodes minted before climate
+   *  baking pass neutrally (the tolerance doctrine). No draws added, so
+   *  kinds without one keep their exact spawn streams. */
+  birthGeo?: Record<string, { min?: number; max?: number }>;
 }
 
 /** The registry of record — one row per weather kind. Every consumer is a
@@ -114,6 +121,18 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
   snow: {
     label: 'Snowfall', color: '#cfe0f0', countMul: 1.0, factionMul: { wild: 1.2 },
     wind: 0.45, rampFrac: 0.5, skyWeight: { day: 0.8, dusk: 1, night: 1 },
+  },
+  /** SANDSTORM — the desert country's own front, born only over hot dry
+   *  ground (birthGeo) and then going where it pleases. Its teeth are the
+   *  WIND fabric (storm-grade shove: fight the headwind or put a rock
+   *  between yourself and the sky — WIND_CFG shelter) and the gnolls who
+   *  hunt inside it; the grit itself is the WEATHER_FX row. */
+  sandstorm: {
+    label: 'Sandstorm', color: '#c9a86a', countMul: 1.3,
+    factionMul: { gnoll: 1.3 },
+    rampFrac: 0.3, wind: 0.95,
+    skyWeight: { day: 1.6, dusk: 1.2 },
+    birthGeo: { temperature: { min: 0.55 }, moisture: { max: 0.4 } },
   },
 };
 
@@ -258,15 +277,31 @@ export class WeatherField implements WorldOverlay {
     if (view.nodes.length === 0) return;
     if (this.spawnScale <= 0) return;
     if (!this.rng.chance(SPAWN_CHANCE * this.spawnScale)) return;
-    const anchor = this.rng.pick(view.nodes).map;
+    const node = this.rng.pick(view.nodes);
+    const anchor = node.map;
     const phase = dayCycle(view.time).phase;
     // Scan the registry for this phase's sky candidates — a registered package
     // kind joins the rotation with no engine edit. Stable-sorted by descending
     // weight, which reproduces the retired KIND_WEIGHTS arrays exactly, so the
     // single weighted() draw below picks the same kind for existing seeds.
+    // birthGeo kinds additionally require the anchor node's baked climate to
+    // agree (a sandstorm needs desert under it to rise) — a filter, no draws.
     const sky = Object.entries(WEATHER_DEFS)
       .map(([kind, d]) => ({ kind, weight: d.skyWeight?.[phase] ?? 0 }))
       .filter(c => c.weight > 0)
+      .filter(c => {
+        const bg = WEATHER_DEFS[c.kind].birthGeo;
+        if (!bg) return true;
+        const cl = node.geo?.climate;
+        if (!cl) return true; // unbaked node — the tolerance doctrine
+        for (const [axis, band] of Object.entries(bg)) {
+          const v = cl[axis];
+          if (v === undefined) continue;
+          if (band.min !== undefined && v < band.min) return false;
+          if (band.max !== undefined && v > band.max) return false;
+        }
+        return true;
+      })
       .sort((a, b) => b.weight - a.weight);
     if (!sky.length) return;
     const kind = this.rng.weighted(sky).kind;

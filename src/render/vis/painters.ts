@@ -4576,6 +4576,73 @@ const boneArch: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A MIRAGE: the desert's lie, drawn as LIGHT rather than matter — a pale
+ *  silhouette stack floating above a shimmer line, breathing and shearing
+ *  with the heat (live on purpose: the wobble IS the tell for anyone who
+ *  has been burned before). params.form picks the promise: 'oasis' palms
+ *  over water, 'bastion' walls and a tower, 'caravan' laden carts. */
+const mirageGhost: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { form?: string; tint?: ColorSpec };
+  const { ctx, time, theme } = env;
+  const tint = resolveColor(p.tint, theme, '#dff2f6');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 19 + o.pos.y * 41) | 0) >>> 0;
+    const breathe = 0.16 + 0.1 * (0.5 + 0.5 * Math.sin(time * 0.9 + seed * 0.37));
+    const shear = Math.sin(time * 1.7 + seed) * 0.06;
+    const lift = 6 + Math.sin(time * 0.6 + seed * 0.11) * 2.5;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y - lift);
+    ctx.transform(1, 0, shear, 1, 0, 0);
+    ctx.globalAlpha = breathe;
+    // The false water-line every mirage floats on.
+    ctx.fillStyle = tint;
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.34, r * 1.05, r * 0.16, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = tint;
+    ctx.lineWidth = 2;
+    if (p.form === 'bastion') {
+      // Crenellated wall + one tower, hollow strokes only — walls of heat.
+      ctx.strokeRect(-r * 0.9, -r * 0.34, r * 1.5, r * 0.6);
+      for (let i = 0; i < 5; i++) ctx.strokeRect(-r * 0.9 + i * r * 0.32, -r * 0.46, r * 0.16, r * 0.12);
+      ctx.strokeRect(r * 0.62, -r * 0.72, r * 0.34, r * 0.98);
+    } else if (p.form === 'caravan') {
+      // Two laden humps and their poles, waiting exactly like rest.
+      for (const sx of [-0.45, 0.35]) {
+        ctx.beginPath();
+        ctx.ellipse(sx * r, -r * 0.08, r * 0.4, r * 0.26, 0, Math.PI, 0);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(sx * r - r * 0.3, r * 0.2);
+        ctx.lineTo(sx * r + r * 0.3, r * 0.2);
+        ctx.stroke();
+      }
+      ctx.beginPath();
+      ctx.moveTo(r * 0.82, r * 0.2); ctx.lineTo(r * 0.82, -r * 0.5);
+      ctx.stroke();
+    } else {
+      // Palms leaning over water that isn't.
+      for (const [sx, lean] of [[-0.5, -0.24], [0.1, 0.18], [0.6, -0.1]] as const) {
+        const bx = sx * r, by = r * 0.26;
+        ctx.beginPath();
+        ctx.moveTo(bx, by);
+        ctx.quadraticCurveTo(bx + lean * r, by - r * 0.5, bx + lean * r * 1.6, by - r * 0.82);
+        ctx.stroke();
+        for (let f = 0; f < 4; f++) {
+          const a = -Math.PI / 2 + (f - 1.5) * 0.55 + lean;
+          ctx.beginPath();
+          ctx.moveTo(bx + lean * r * 1.6, by - r * 0.82);
+          ctx.lineTo(bx + lean * r * 1.6 + Math.cos(a) * r * 0.3, by - r * 0.82 + Math.sin(a) * r * 0.3);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  }
+};
+
 /** A SUN AWNING's ground story: four pole feet and the cloth's thrown
  *  shade — the shadow IS the promise (drawn under actors; the cloth above
  *  rides the canopy pass with the SAME rotation). */
@@ -7069,7 +7136,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   membrane, veins, eyeStalk, ribArch, teethRow,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
-  cactus, duneCrest, saltPillar, boneArch, awningPoles, web, deadTree, stump, log, snowman, signpost, firewoodPile,
+  cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,

@@ -797,6 +797,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
       { kind: 'fulgurite', count: [0, 2] },
       { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'mirage_oasis', count: [0, 1], where: { field: 'radial', min: 0.3 } },
       // Shimmer thickens where the WORLD bakes hottest (climate strata).
       { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
@@ -907,6 +908,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     common: [
       { kind: 'formation', count: [2, 3], formation: 'dune_ridges' },
+      { kind: 'mirage_oasis', count: [0, 2], where: { field: 'radial', min: 0.25 } },
+      { kind: 'mirage_bastion', count: [0, 1], where: { field: 'radial', min: 0.4 } },
       { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
       { kind: 'fulgurite', count: [0, 2] },
       { kind: 'bone_pile', count: [1, 3] },
@@ -1016,6 +1019,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     common: [
       { kind: 'formation', count: [0, 2], formation: 'salt_procession' },
+      { kind: 'mirage_oasis', count: [1, 2], where: { field: 'radial', min: 0.2 } },
+      { kind: 'mirage_caravan', count: [0, 1] },
       { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
       { kind: 'heat_shimmer', count: [1, 3], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.5 } },
     ],

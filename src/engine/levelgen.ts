@@ -69,6 +69,11 @@ export type KnownDoodadKind =
   | 'bone_arch'  // a colossus rib breaking the sand — the bonepan's architecture
   | 'sun_awning' // a traveler's cloth fly on poles — walk-under SHADE (the heat's mercy)
   | 'vault_gate' // stairs under a half-swallowed lintel — DOWN into the buried vault (sidezone)
+  // THE MIRAGE KIT — the desert's lie: distant promises that scatter into
+  // hot air when approached (brittle 'near' pops them; one sometimes objects)
+  | 'mirage_oasis'   // water and palms that were never there
+  | 'mirage_bastion' // a walled refuge on the horizon — walls of heat
+  | 'mirage_caravan' // a laden train at rest… until you hail it
   | 'web'       // sticky sheet — slows like mire (spider country)
   | 'geyser'    // scalding vent mouth — steams and glows (marsh/tundra)
   | 'snowdrift' // wind-piled powder — decoration (tundra)
@@ -899,6 +904,17 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The buried village's way DOWN (sidezones.ts mints the vault) — the
   // ruin_gate contract in sandstone.
   vault_gate: { overlap: 'trigger', spacing: 500 },
+  // THE MIRAGE KIT: inert light, not matter — bodies and shots pass clean
+  // through; walking close enough to KNOW pops the lie (brittle 'near', the
+  // whole existing machinery: text, poof tint, and the caravan's ambush on
+  // the spawn lane — the doodad→actor bridge, never a moving doodad).
+  mirage_oasis: { overlap: 'inert', spacing: 520,
+    brittle: { on: ['near'], reach: 120, text: 'the water was never there…', color: '#bfe8f0' } },
+  mirage_bastion: { overlap: 'inert', spacing: 640,
+    brittle: { on: ['near'], reach: 130, text: 'the walls scatter into heat…', color: '#bfe8f0' } },
+  mirage_caravan: { overlap: 'inert', spacing: 560,
+    brittle: { on: ['near'], reach: 120, text: 'it was never a caravan—', color: '#bfe8f0',
+      spawn: { monster: 'dune_stalker', count: [2, 3], chance: 0.45, text: 'the sand rises hunting!' } } },
   // The maw is GROUND (nothing to trip on — the reel is the obstacle):
   // hazardGround keeps ambient spawns off the lip, the auto-attached effect
   // reels the nearest intruder each beat and bites whatever reaches the lip.
@@ -3540,6 +3556,9 @@ registerStamp('glass_shard', stampSingle('glass_shard', [8, 14]));
 registerStamp('bone_arch', stampSingle('bone_arch', [22, 34]));
 registerStamp('sun_awning', stampSingle('sun_awning', [26, 36]));
 registerStamp('vault_gate', stampSingle('vault_gate', [26, 32]));
+registerStamp('mirage_oasis', stampSingle('mirage_oasis', [44, 62]));
+registerStamp('mirage_bastion', stampSingle('mirage_bastion', [50, 70]));
+registerStamp('mirage_caravan', stampSingle('mirage_caravan', [44, 60]));
 // Ruin furniture rows (clusters place these as pieces already; the buried
 // vault's tileset rows scatter them straight, so they need stamps too).
 registerStamp('broken_column', stampSingle('broken_column', [12, 17]));
