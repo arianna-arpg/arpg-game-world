@@ -3532,9 +3532,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     drops: 1,
   },
 
-  // A trader's cart: mortal and MOBILE (the heart of a caravan event). It never
-  // fights — the engine's event tick wheels it toward safety; its guards are
-  // faction troops fielded on your side, and a hostile pack may ambush it.
+  // A trader's cart: mortal and MOBILE — the heart of the PROCESSION objective
+  // (data/processions.ts). It never fights: the objective runtime wheels it
+  // toward the crossing, robbers converge on the goods, and losing the cart
+  // loses the objective. `driven`: no brain — the runtime owns every turn.
   caravan_cart: {
     id: 'caravan_cart', name: 'Caravan',
     color: '#b8904e', shape: 'square', radius: 18, material: 'wood', look: 'cart',

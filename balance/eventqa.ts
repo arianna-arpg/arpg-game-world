@@ -499,7 +499,7 @@ console.log('eventqa: zone policy ids');
 console.log('eventqa: zone-event registry');
 {
   const defs = zoneEventDefs();
-  assert(defs.length >= 3, 'zone-events', `registry holds ${defs.length} kinds`);
+  assert(defs.length >= 2, 'zone-events', `registry holds ${defs.length} kinds`);
   assert(new Set(defs.map(d => d.id)).size === defs.length, 'zone-events', 'kind ids unique');
   for (const d of defs) {
     assert(d.reward.rep >= 0 && d.reward.gems >= 0 && d.reward.xpMul >= 0, 'zone-events', `${d.id}: reward row sane`);
@@ -520,8 +520,12 @@ console.log('eventqa: zone-event registry');
   } else {
     ok('zone-events', 'no faction is hostile to goblins this build — siege priority untestable, skipped');
   }
-  const caravan = chooseEvent(base, plain, 0);
-  assert(caravan?.kind === 'caravan', 'zone-events', 'priority: settled owner ⇒ caravan before patrol');
+  // The ambient caravan is RETIRED — escorts are the 'procession' zone
+  // OBJECTIVE now (data/processions.ts), not a faction flavor roll. A settled
+  // owner's quiet ground rolls its patrol.
+  assert(!defs.some(d => d.id === 'caravan'), 'zone-events', 'the ambient caravan def is retired');
+  const settled = chooseEvent(base, plain, 0);
+  assert(settled?.kind === 'patrol', 'zone-events', 'priority: settled owner ⇒ patrol walks its beat');
   const patrol = chooseEvent({ ...base, ownerPower: 10 }, plain, 0.2);
   assert(patrol?.kind === 'patrol', 'zone-events', 'priority: weak owner ⇒ patrol');
   const nothing = chooseEvent({ ...base, owner: null, invader: null }, plain, 0.99);

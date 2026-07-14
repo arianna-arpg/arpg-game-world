@@ -53,6 +53,12 @@ export const BEACON_CFG = {
   kindLit: 'survey_spire_lit',
   /** Fixture body radius (world units). */
   radius: 15,
+  /** ATTUNEMENT CIRCUIT dressing (ObjectiveSpec count 2+): the smaller
+   *  WAYSTONE kinds each stone wears, and its body radius. Same painter,
+   *  its own looks rows — the circuit reads as kin, not clones. */
+  kindWay: 'waystone',
+  kindWayLit: 'waystone_lit',
+  wayRadius: 11,
   /** Accent used by the spire's texts / flashes / chevron (the gem's tint). */
   accent: '#8fd4ff',
   /** Flare tint at completion (the survey pulse). */
@@ -79,15 +85,27 @@ registerDoodadRule(BEACON_CFG.kindLit, {
   overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 300,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
 });
+// Waystones: the circuit's smaller kin — same discipline, tighter spacing
+// (several share one zone).
+registerDoodadRule(BEACON_CFG.kindWay, {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 220,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule(BEACON_CFG.kindWayLit, {
+  overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 220,
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
 
 // The objective's off-screen pointer: an un-charged spire is a needle in a
 // large zone; the chevron rides the shared attention fabric (mapMarkers'
-// in-zone sibling) so finding it never needs a wiki.
+// in-zone sibling) so finding it never needs a wiki. Points at the NEAREST
+// unfinished stone, so a circuit walks you leg by leg.
 registerAttentionSource((world: World): AttentionPoint[] => {
   const v = world.spireView();
   if (!v || v.done) return [];
+  const stone = v.count > 1 ? 'waystone' : 'spire';
   return [{
     id: 'survey_spire', pos: v.pos, color: BEACON_CFG.accent, glyph: '▲',
-    label: v.frac > 0 ? 'the spire charges' : 'a dormant spire', z: 2,
+    label: v.frac > 0 ? `the ${stone} charges` : `a dormant ${stone}`, z: 2,
   }];
 });

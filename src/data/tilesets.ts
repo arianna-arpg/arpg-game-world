@@ -13,7 +13,7 @@ import type { CompositionRoll, LandmarkRoll, PackSpec, StampSpec, StructureRoll,
 import type { Rng } from '../core/rng';
 
 export interface ObjectiveWeight {
-  kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon';
+  kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon' | 'circuit' | 'procession';
   weight: number;
 }
 
@@ -191,6 +191,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -319,6 +320,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -454,6 +456,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -543,6 +546,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'rime_stone',
     objectives: [
+      { kind: 'circuit', weight: 1 },
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'spawners', weight: 2 },
@@ -615,6 +620,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'rime_stone',
     objectives: [
+      { kind: 'circuit', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -761,6 +767,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'circuit', weight: 1 },
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -842,6 +850,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -940,6 +949,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -998,6 +1008,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'ember_rift',
     objectives: [
+      { kind: 'circuit', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 2 },
       { kind: 'escape', weight: 2 },
@@ -1570,6 +1581,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'circuit', weight: 1 },
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -1633,6 +1646,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'circuit', weight: 1 },
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -1682,6 +1697,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     },
     spawnerId: 'bone_altar',
     objectives: [
+      { kind: 'circuit', weight: 1 },
+      { kind: 'procession', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
@@ -2528,7 +2545,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
     },
     spawnerId: 'bone_altar',
-    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'spawners', weight: 1 }, { kind: 'beacon', weight: 1 }],
+    objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 2 }, { kind: 'spawners', weight: 1 }, { kind: 'beacon', weight: 1 }, { kind: 'circuit', weight: 1 }, { kind: 'procession', weight: 1 }],
     structures: [
       { structure: 'market_row', chance: 0.14 },
     ],

@@ -86,8 +86,44 @@ export interface SavedZoneMemory {
    *  ZoneMemory) — a resume mid-gauntlet faces wave N, not wave 1. */
   wave?: number;
   waveActive?: boolean;
-  /** BEACON zones: the survey spire's banked charge (seconds) at capture. */
+  /** BEACON zones: banked charge (seconds) at capture. `spireCharge` is the
+   *  legacy single-stone field (still read); `spireCharges` is per stone in
+   *  placement order (the ATTUNEMENT CIRCUIT's set). */
   spireCharge?: number;
+  spireCharges?: number[];
+  /** PROCESSION zones: the escort's stand at capture (see the engine's
+   *  ZoneMemory.procession — lost flag, cart spot + life, march origin,
+   *  pinned crossing). */
+  procession?: SavedProcessionMemo;
+}
+
+/** The procession rider, plain JSON (mirrors the engine's shape). */
+export interface SavedProcessionMemo {
+  lost?: boolean;
+  started?: boolean;
+  x?: number; y?: number; life?: number;
+  sx?: number; sy?: number; destIdx?: number;
+}
+
+/** Structural scrub for a persisted procession rider — finite numbers only,
+ *  booleans by identity; a rider with nothing valid left returns undefined. */
+export function sanitizeProcessionMemo(raw: unknown): SavedProcessionMemo | undefined {
+  const p = raw as Record<string, unknown> | null;
+  if (!p || typeof p !== 'object') return undefined;
+  const num = (v: unknown): number | undefined =>
+    typeof v === 'number' && Number.isFinite(v) ? v : undefined;
+  const out: SavedProcessionMemo = {};
+  if (p.lost === true) out.lost = true;
+  if (p.started === true) out.started = true;
+  const x = num(p.x), y = num(p.y);
+  if (x !== undefined && y !== undefined) { out.x = x; out.y = y; }
+  const life = num(p.life);
+  if (life !== undefined) out.life = Math.max(1, life);
+  const sx = num(p.sx), sy = num(p.sy);
+  if (sx !== undefined && sy !== undefined) { out.sx = sx; out.sy = sy; }
+  const di = num(p.destIdx);
+  if (di !== undefined && di >= 0) out.destIdx = Math.floor(di);
+  return Object.keys(out).length ? out : undefined;
 }
 
 export interface SavedQuestEntry { questId: string; zoneId: string; fieldDone: boolean; }

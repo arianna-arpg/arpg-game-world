@@ -2,20 +2,21 @@
 // ZONE EVENTS — the on-entry event REGISTRY (the choice as pure data + fns).
 //
 // When you walk into held ground, the world may be in the middle of something:
-// a faction PATROL marching its beat, a CARAVAN moving goods (which a rival may
-// ambush), or a SIEGE — an invader storming a camp the owner holds. Each kind
-// is ONE ZoneEventDef in the registry below: its trigger predicate (choose),
-// its tunables (cfg — no literals in the logic), its reward row, and its
-// engine-side spawn/tick handlers (which run through the generic
-// ActiveZoneEvent runner in zoneEvent.ts). Adding a fourth kind — a funeral
-// procession, a prisoner transfer, a tax collector — is ONE registerZoneEvent
-// call, no engine edits: the runner, the entry roll, the reward path, and the
-// zone-policy gate all read the registry.
+// a faction PATROL marching its beat, or a SIEGE — an invader storming a camp
+// the owner holds. Each kind is ONE ZoneEventDef in the registry below: its
+// trigger predicate (choose), its tunables (cfg — no literals in the logic),
+// its reward row, and its engine-side spawn/tick handlers (which run through
+// the generic ActiveZoneEvent runner in zoneEvent.ts). Adding a kind — a
+// funeral procession, a prisoner transfer, a tax collector — is ONE
+// registerZoneEvent call, no engine edits: the runner, the entry roll, the
+// reward path, and the zone-policy gate all read the registry. (The old
+// ambient CARAVAN def graduated into the 'procession' zone OBJECTIVE —
+// data/processions.ts.)
 //
 // Priority = registration order: the FIRST def whose choose() bites wins the
-// entry (sieges before caravans before patrols, as ever). Each def's choose is
-// gated per-biome through zonePolicy (eventAllowed by def id), so "no caravans
-// in the deep sea" is a biome data line.
+// entry (sieges before patrols, as ever). Each def's choose is gated
+// per-biome through zonePolicy (eventAllowed by def id), so "no patrols in
+// the deep sea" is a biome data line.
 //
 // These are the FACTION-POLITICS SUBSTRATE's events (the alwaysOn package):
 // deliberately NOT scaled by the frequency crank — they are the world's
@@ -25,10 +26,9 @@
 // No `World` import at runtime — defs receive it as a TYPE through the runner.
 // ---------------------------------------------------------------------------
 
-import { dist, vec, type Vec2 } from '../core/math';
+import { vec, type Vec2 } from '../core/math';
 import { FACTIONS, factionStance } from '../data/monsters';
 import { eventAllowed, type TargetableZone } from '../world/zonePolicy';
-import type { Actor } from './actor';
 import type { World } from './world';
 
 export interface EventContext {
@@ -187,75 +187,10 @@ registerZoneEvent({
   },
 });
 
-// --- CARAVAN — a settled owner moves goods near home; a rival may waylay. ----
-const CARAVAN_CFG = {
-  chanceNight: 0.15, chanceDay: 0.4,
-  /** The owner must be settled at least this strong to risk the roads. */
-  minOwnerPower: 45,
-  guards: 2, guardJitter: 50,
-  ambushers: 4, ambushJitter: 150,
-  /** Cart speed as a fraction of the shared actor move rate. */
-  cartSpeedMul: 0.6,
-  /** Within this of its exit, the cart departs (delivered). */
-  arriveDist: 90,
-} as const;
-
-registerZoneEvent({
-  id: 'caravan',
-  reward: { rep: 12, xpMul: 1.0, gems: 2 },
-  choose: (ctx, roll) => {
-    if (ctx.owner && ctx.nearHome && ctx.ownerPower >= CARAVAN_CFG.minOwnerPower && !ctx.invader
-      && roll < (ctx.isNight ? CARAVAN_CFG.chanceNight : CARAVAN_CFG.chanceDay)) {
-      const rival = ctx.contestants[1];
-      const ambusher = rival && factionStance(ctx.owner, rival) === 'hostile' ? rival : null;
-      return { kind: 'caravan', primary: ctx.owner, secondary: ambusher };
-    }
-    return null;
-  },
-  spawn: (w, run) => {
-    const roster = FACTIONS[run.primary];
-    if (!roster) { run.done = true; return; }
-    const level = Math.max(1, w.zone.level);
-    const cart = w.spawnEventActor([{ id: 'caravan_cart', weight: 1 }], level, 'player', run.primary, 'caravan');
-    cart.pos = w.farFromExit();
-    const goal = w.nearestExitPos(cart.pos);
-    if (!goal) { run.done = true; return; }
-    run.data.cart = cart;
-    run.data.goal = goal;
-    for (let i = 0; i < CARAVAN_CFG.guards; i++) {
-      const g = w.spawnEventActor(roster.table, level, 'player', run.primary, 'caravan');
-      g.pos = w.clampNear(cart.pos, CARAVAN_CFG.guardJitter);
-      g.owner = cart; // heel to the cart when nothing's attacking
-    }
-    if (run.secondary) {
-      const amb = FACTIONS[run.secondary];
-      if (amb) for (let i = 0; i < CARAVAN_CFG.ambushers; i++) {
-        const a = w.spawnEventActor(amb.table, level, 'enemy', run.secondary, 'ambush');
-        a.pos = w.clampNear(goal, CARAVAN_CFG.ambushJitter);
-      }
-    }
-    w.text(vec(w.player.pos.x, w.player.pos.y + ZONE_EVENT_CFG.announceDy),
-      `a ${shortName(run.primary)} caravan — see it through`, '#7ec8a0', 15);
-  },
-  tick: (w, run, dt) => {
-    const cart = run.data.cart as Actor | undefined;
-    const goal = run.data.goal as Vec2 | undefined;
-    if (!cart || cart.dead) {
-      if (cart) w.dropGemAt(cart.pos);           // scavenge the wreck
-      run.data.cart = undefined;
-      run.end('The caravan was lost.', '#d05050');
-      return;
-    }
-    if (goal) {
-      w.moveActor(cart, goal.x - cart.pos.x, goal.y - cart.pos.y, dt * CARAVAN_CFG.cartSpeedMul);
-      if (dist(cart.pos, goal) < CARAVAN_CFG.arriveDist) {
-        cart.dead = true;                         // it reaches the road and departs
-        run.data.cart = undefined;
-        run.reward(run.primary, 'Caravan delivered!');
-      }
-    }
-  },
-});
+// --- CARAVAN — RETIRED. Escorting goods is a first-class zone OBJECTIVE now
+// (data/zones.ts 'procession' + data/processions.ts): dwell-rallied, road-
+// carved, loseable, remembered across boundaries — not a faction flavor roll.
+// The old ambient def lived here; its cart body (caravan_cart) rides on.
 
 // --- PATROL — held home ground with a route; commoner in the dark. -----------
 const PATROL_CFG = {

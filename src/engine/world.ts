@@ -63,6 +63,7 @@ import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../d
 import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
+import { PROCESSION_CFG } from '../data/processions';
 import { CATCH_SPOT_LOOK, CONSTRUCT_LOOKS } from '../data/looks';
 import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
@@ -196,7 +197,7 @@ import { saveAccount, saveAccountDurable } from '../meta/persistence';
 import { SIM_TAP } from './tap';
 import { captureLoot, DEATH_SCHEMA, MAX_DEATH_RECORDS, CORPSE_MATCH_RADIUS, type DeathRecord, type SavedLoot } from '../meta/death';
 import {
-  WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeEnemyMemo, sanitizeWorldZones,
+  WORLD_SCHEMA_VERSION, WORLDSTATE_CFG, sanitizeEnemyMemo, sanitizeProcessionMemo, sanitizeWorldZones,
   type ResumeSpawn, type SavedPlayerSpot, type SavedZoneMemory, type WorldStateSave,
 } from '../meta/worldstate';
 
@@ -1422,9 +1423,20 @@ interface ZoneMemory {
    *  never reset the gauntlet. */
   wave?: number;
   waveActive?: boolean;
-  /** BEACON zones: the survey spire's banked charge (seconds) at capture —
-   *  a half-charged spire resumes where it stood. */
+  /** BEACON zones: each stone's banked charge (seconds) at capture, in
+   *  placement order — a half-charged spire (or circuit) resumes where it
+   *  stood. (`spireCharge` is the legacy single-stone field, still read.) */
   spireCharge?: number;
+  spireCharges?: number[];
+  /** PROCESSION zones: the escort's state at capture. `lost` marks a dead
+   *  cart (the objective stays forfeit until the memory lapses); otherwise
+   *  the cart re-waits dormant at (x,y) with `life`, keeping its original
+   *  march origin (sx,sy) and crossing (destIdx) so progress stays honest. */
+  procession?: {
+    lost?: boolean; started?: boolean;
+    x?: number; y?: number; life?: number;
+    sx?: number; sy?: number; destIdx?: number;
+  };
 }
 
 /** The live, in-zone runtime of a Conclave RITUAL SITE — the pentagram + its ring
@@ -2134,10 +2146,33 @@ export class World {
   wave = 0;
   waveTimer = WAVE_CFG.firstDelay; // countdown to next wave while no enemies remain
   waveActive = false;
-  /** The zone's live SURVEY SPIRE (beacon objective): where it stands, its
-   *  banked charge, and the fixture whose kind flips dormant → lit. Zone-local;
-   *  the charge persists across boundary crossings via Zone Memory. */
-  private spire: { pos: Vec2; charge: number; doodad: Doodad } | null = null;
+  /** The zone's live SURVEY SPIRES (beacon objective): each stone's stand,
+   *  banked charge, and the fixture whose kind flips dormant → lit. ONE entry
+   *  is the lone spire; several is the ATTUNEMENT CIRCUIT (ObjectiveSpec
+   *  count). Zone-local; charges persist across boundaries via Zone Memory. */
+  private spires: { pos: Vec2; charge: number; doodad: Doodad }[] = [];
+  /** The zone's live PROCESSION (escort objective): the caravan cart, its
+   *  crossing, and the march state. Zone-local; progress persists across
+   *  boundaries via Zone Memory (the cart re-waits DORMANT where you left
+   *  it — an unattended march never plays out off-screen). */
+  private procession: {
+    cartId: number | null;
+    /** Rolling right now (false = dormant, waiting on the rally dwell). */
+    rolling: boolean;
+    /** Ever rallied (keeps the progress denominator honest across re-entries). */
+    started: boolean;
+    startPos: Vec2;
+    dest: Vec2;
+    destIdx: number | null;
+    dwellStart: number;
+    puffAt: number;
+    heading: number;
+  } | null = null;
+  /** Set when a LOSEABLE objective is failed (the procession's cart dies):
+   *  the bounty is forfeit, the HUD says so, and NOTHING locks — losing costs
+   *  the reward, never the road. Rides Zone Memory, so the loss stands until
+   *  the zone's TTL refresh deals fresh ground. */
+  objectiveLost = false;
   /** LURE FABRIC — world points idle enemies DRIFT toward (a charging survey
    *  spire today; bait items or noise-maker skills ride the same call later).
    *  Each holder re-stamps its row every frame (`until` = a short linger), so
@@ -2919,8 +2954,10 @@ export class World {
     this.wave = 0;
     this.waveTimer = WAVE_CFG.firstDelay;
     this.waveActive = false;
-    this.spire = null;   // beacon fixture re-places below (charge rides Zone Memory)
-    this.lures.clear();  // lures are zone-local
+    this.spires = [];       // beacon fixtures re-place below (charges ride Zone Memory)
+    this.procession = null; // the escort re-stages below (state rides Zone Memory)
+    this.objectiveLost = false; // re-armed from the memory rider below
+    this.lures.clear();     // lures are zone-local
 
     // HOLDFAST: on first arrival in an uncharted zone, maybe raise a fortified, LOCKED
     // bonus exit (appended to def.exits BEFORE eager-charting + portal placement, so it
@@ -3240,26 +3277,73 @@ export class World {
         this.actors.push(s);
       }
     }
-    // SURVEY SPIRE (beacon): the objective fixture stands at a POI — dormant
-    // stone until a hero holds ground beside it (updateObjective drives the
-    // charge, the lure, and the survey). A finished zone keeps a LIT spire
-    // (scenery — proof the ground is surveyed); a remembered half-charge
-    // resumes exactly where it stood. Placement rides the layout rng, so a
-    // remembered seed puts the spire back on the same stone.
+    // SURVEY SPIRES (beacon): the objective fixtures stand at POIs — dormant
+    // stone until a hero holds ground beside one (updateObjective drives the
+    // charge, the lure, and the survey). count 1 = the lone spire; 2+ = the
+    // ATTUNEMENT CIRCUIT's smaller waystones. A finished zone keeps LIT
+    // stones (scenery — proof the ground is surveyed); remembered charges
+    // resume exactly, stone by stone. Placement rides the layout rng, so a
+    // remembered seed puts every stone back where it stood.
     if (o.kind === 'beacon') {
-      const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(620);
-      const pos = this.clampPos(vec(at.x, at.y), BEACON_CFG.radius);
-      const spireDoodad: Doodad = {
-        pos: vec(pos.x, pos.y), radius: BEACON_CFG.radius,
-        kind: this.objectiveDone ? BEACON_CFG.kindLit : BEACON_CFG.kind,
-      };
-      this.doodads.push(spireDoodad);
+      const count = Math.max(1, o.count ?? 1);
+      const circuit = count > 1;
+      const bodyR = circuit ? BEACON_CFG.wayRadius : BEACON_CFG.radius;
       const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-      this.spire = {
-        pos: vec(pos.x, pos.y),
-        charge: this.objectiveDone ? need : Math.min(memory?.spireCharge ?? 0, need),
-        doodad: spireDoodad,
-      };
+      const charges = memory?.spireCharges
+        ?? (memory?.spireCharge !== undefined ? [memory.spireCharge] : undefined);
+      for (let i = 0; i < count; i++) {
+        const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(620);
+        const pos = this.clampPos(vec(at.x, at.y), bodyR);
+        const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
+        const spireDoodad: Doodad = {
+          pos: vec(pos.x, pos.y), radius: bodyR,
+          kind: charge >= need
+            ? (circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit)
+            : (circuit ? BEACON_CFG.kindWay : BEACON_CFG.kind),
+        };
+        this.doodads.push(spireDoodad);
+        this.spires.push({ pos: vec(pos.x, pos.y), charge, doodad: spireDoodad });
+      }
+    }
+    // PROCESSION (escort): the caravan waits DORMANT beside the gate you came
+    // in by — immobile, immune cargo until the rally dwell sets it rolling
+    // (updateObjective owns the march, the robbers, the arrival, the loss).
+    // The memory rider re-stages a left march exactly: same crossing, cart
+    // re-waiting where you left it at its remembered health; a LOST caravan
+    // stays lost until the memory lapses and the zone deals a fresh one.
+    if (o.kind === 'procession' && !this.objectiveDone) {
+      const rider = memory?.procession;
+      if (rider?.lost) {
+        this.objectiveLost = true;
+      } else {
+        const destIdx = def.exitRoads?.findIndex(r => r !== undefined) ?? -1;
+        const destExit = destIdx >= 0 ? this.exits.find(x => x.defIndex === destIdx) : undefined;
+        // Roadless fallback (a dead-end pocket): the farthest POI stands in
+        // for the crossing — the escort runs, only the carved way is absent.
+        const dest = destExit ? vec(destExit.pos.x, destExit.pos.y)
+          : (pois.length ? vec(pois[pois.length - 1].x, pois[pois.length - 1].y) : this.farPoint(700));
+        const cart = this.createMonster(PROCESSION_CFG.cartId, Math.max(1, def.level), 'player');
+        const pool = Math.round(PROCESSION_CFG.lifeBase + Math.max(1, def.level) * PROCESSION_CFG.lifePerLevel);
+        cart.sheet.setSource('procession_cart', [{ stat: 'life', kind: 'flat', value: Math.max(0, pool - cart.maxLife()) }]);
+        cart.fillResources();
+        const spawnAt = rider?.x !== undefined && rider?.y !== undefined
+          ? vec(rider.x, rider.y)
+          : vec(this.zoneEntry.x + rand(-26, 26), this.zoneEntry.y + 44 + rand(-10, 10));
+        cart.pos = this.clampPos(this.findFreeSpot(spawnAt, cart.radius + 2) ?? spawnAt, cart.radius);
+        if (rider?.life !== undefined) cart.life = Math.max(1, Math.min(cart.maxLife(), rider.life));
+        cart.untargetable = true; // dormant cargo — nothing chews it before the rally
+        cart.invulnerable = true;
+        cart.tag = 'procession_cart';
+        cart.eventKey = `procession:${def.id}`;
+        this.actors.push(cart);
+        this.procession = {
+          cartId: cart.id, rolling: false, started: !!rider?.started,
+          startPos: rider?.sx !== undefined && rider?.sy !== undefined
+            ? vec(rider.sx, rider.sy) : vec(cart.pos.x, cart.pos.y),
+          dest, destIdx: destIdx >= 0 ? destIdx : null,
+          dwellStart: 0, puffAt: 0, heading: angleTo(cart.pos, dest),
+        };
+      }
     }
     // Walled camps post their guards — each watch is a squad.
     if (def.packs) {
@@ -7441,17 +7525,52 @@ export class World {
    *  the first rider — any system may claim an index). Returns undefined for
    *  an unannotated zone so its generation stays byte-identical. */
   private exitRoadAnnotations(def: ZoneDef): (ExitRoadSpec | undefined)[] | undefined {
+    let out: (ExitRoadSpec | undefined)[] | undefined;
+    const annotate = (idx: number, spec: ExitRoadSpec): void => {
+      (out ??= new Array<ExitRoadSpec | undefined>(def.exits.length).fill(undefined))[idx] = spec;
+    };
+    // HOLDFAST: a guardian's KEPT ROAD runs to its locked gate.
     const hf = this.sim.holdfastField;
     const info = hf?.infoFor(def.id);
-    if (!hf || !info || !info.decorRoad) return undefined;
-    const road = hf.def(info.defId)?.road;
-    if (!road) return undefined;
-    const idx = def.exits.findIndex(e => e.lock === info.lockId);
-    if (idx < 0) return undefined;
-    const out: (ExitRoadSpec | undefined)[] = new Array<ExitRoadSpec | undefined>(def.exits.length).fill(undefined);
-    const { chance: _rolledAtEnsure, ...spec } = road;
-    out[idx] = spec;
+    const road = info?.decorRoad ? hf?.def(info.defId)?.road : undefined;
+    if (info && road) {
+      const idx = def.exits.findIndex(e => e.lock === info.lockId);
+      if (idx >= 0) {
+        const { chance: _rolledAtEnsure, ...spec } = road;
+        annotate(idx, spec);
+      }
+    }
+    // PROCESSION: the caravan's TRAVELED WAY — entry portal to the crossing,
+    // carved at generation time so the land itself says where the goods are
+    // headed. The destination is picked here (and pinned by the Zone Memory
+    // rider), since the annotation must exist BEFORE the layout carves.
+    if (def.objective.kind === 'procession') {
+      const destIdx = this.pickProcessionDest(def);
+      if (destIdx != null) annotate(destIdx, { ...PROCESSION_CFG.road });
+    }
     return out;
+  }
+
+  /** The procession's crossing: the memory rider's pinned exit when fresh
+   *  (same crossing every re-entry), else the farthest unlocked portal from
+   *  the one we came in by. Null = no usable second exit (a dead-end pocket
+   *  — the escort degrades to a roadless far-POI run, staged at placement). */
+  private pickProcessionDest(def: ZoneDef): number | null {
+    const memo = !def.boundless && this.zoneMemoryFresh(def.id)
+      ? this.zoneMemory.get(def.id)!.procession : undefined;
+    if (memo?.destIdx !== undefined && def.exits[memo.destIdx]
+      && !def.exits[memo.destIdx].lock) return memo.destIdx;
+    const back = this.entryFrom ? this.exits.find(x => x.to === this.entryFrom) : undefined;
+    const from = back?.pos ?? vec(this.arena.w / 2, this.arena.h / 2);
+    let best: number | null = null, bd = -1;
+    for (const x of this.exits) {
+      const ed = def.exits[x.defIndex];
+      if (!ed || ed.lock) continue;                 // never march into a sealed gate
+      if (this.entryFrom && ed.to === this.entryFrom) continue; // outward, not back
+      const d = dist(x.pos, from);
+      if (d > bd) { bd = d; best = x.defIndex; }
+    }
+    return best;
   }
 
   /** Muster the Holdfast's RUNTIME at its generated gate (one muster per visit;
@@ -8824,12 +8943,33 @@ export class World {
       if (!d.door || (!d.door.open && !d.door.broken)) continue;
       (doorState ??= {})[d.door.id] = d.door.broken ? 'broken' : 'open';
     }
+    // PROCESSION rider: a lost escort stays lost for the memory's life; a live
+    // one re-waits where it stands (dormant on return — no off-screen march).
+    let procession: ZoneMemory['procession'];
+    if (z.objective.kind === 'procession' && !this.objectiveDone) {
+      const pr = this.procession;
+      const cart = pr?.cartId != null ? this.actorById(pr.cartId) : null;
+      if (this.objectiveLost || (pr && (!cart || cart.dead))) {
+        // A lost escort stays lost for the memory's life — even across a
+        // re-entry that never re-staged a cart (pr null, objectiveLost set).
+        procession = { lost: true, ...(pr?.destIdx != null ? { destIdx: pr.destIdx } : {}) };
+      } else if (pr && cart) {
+        procession = {
+          started: pr.started, x: cart.pos.x, y: cart.pos.y, life: cart.life,
+          sx: pr.startPos.x, sy: pr.startPos.y,
+          ...(pr.destIdx != null ? { destIdx: pr.destIdx } : {}),
+        };
+      }
+    }
     return {
       seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState,
       // Objective-progress riders, per kind: the wave gauntlet's position, the
-      // spire's banked charge. Done-ness itself lives in completedObjectives.
+      // stones' banked charges, the escort's stand. Done-ness itself lives in
+      // completedObjectives; a LOSS rides the procession rider.
       ...(z.objective.kind === 'waves' ? { wave: this.wave, waveActive: this.waveActive } : {}),
-      ...(z.objective.kind === 'beacon' && this.spire ? { spireCharge: this.spire.charge } : {}),
+      ...(z.objective.kind === 'beacon' && this.spires.length
+        ? { spireCharges: this.spires.map(s => s.charge) } : {}),
+      ...(procession ? { procession } : {}),
     };
   }
 
@@ -8932,7 +9072,8 @@ export class World {
       enemies: m.enemies.map(e => ({ ...e })),
       ...(m.doorState ? { doorState: { ...m.doorState } } : {}),
       ...(m.wave !== undefined ? { wave: m.wave, waveActive: !!m.waveActive } : {}),
-      ...(m.spireCharge !== undefined ? { spireCharge: m.spireCharge } : {}),
+      ...(m.spireCharges ? { spireCharges: [...m.spireCharges] } : {}),
+      ...(m.procession ? { procession: { ...m.procession } } : {}),
     });
     for (const [zid, m] of this.zoneMemory) {
       if (zid === this.zone.id) continue; // superseded by the live capture below
@@ -9045,15 +9186,19 @@ export class World {
       for (const [id, st] of Object.entries(m.doorState ?? {})) {
         if (st === 'open' || st === 'broken') { doorState[id] = st; doors++; }
       }
+      const procMemo = sanitizeProcessionMemo(m.procession);
       this.zoneMemory.set(m.zoneId, {
         seed: m.seed, savedAt: m.savedAt, enemies,
         ...(doors ? { doorState } : {}),
-        // Objective-progress riders (waves counter, spire charge): finite,
-        // clamped-at-use numbers; anything malformed simply drops.
+        // Objective-progress riders (waves counter, stone charges, the
+        // escort): finite, clamped-at-use numbers; malformed rows drop.
         ...(typeof m.wave === 'number' && Number.isFinite(m.wave)
           ? { wave: Math.max(0, Math.floor(m.wave)), waveActive: !!m.waveActive } : {}),
-        ...(typeof m.spireCharge === 'number' && Number.isFinite(m.spireCharge)
-          ? { spireCharge: Math.max(0, m.spireCharge) } : {}),
+        ...(Array.isArray(m.spireCharges)
+          ? { spireCharges: m.spireCharges.map(c => typeof c === 'number' && Number.isFinite(c) ? Math.max(0, c) : 0) }
+          : typeof m.spireCharge === 'number' && Number.isFinite(m.spireCharge)
+            ? { spireCharges: [Math.max(0, m.spireCharge)] } : {}),
+        ...(procMemo ? { procession: procMemo } : {}),
       });
     }
     // Quests: active entries whose def AND zone both still stand; the
@@ -24180,24 +24325,115 @@ export class World {
     add(this.wardDwellView());
     add(this.extractionDwellView());
     add(this.boroughDwellView());
-    // The survey spire's charge ring (the 'beacon' transit row styles it).
-    const sv = this.spireView();
-    if (sv && !sv.done) add({ pos: sv.pos, frac: sv.frac, kind: 'beacon' });
+    // The survey stones' charge rings — one per unfinished stone with any
+    // banked charge (the 'beacon' transit row styles them; full stones are
+    // lit monuments and need no gauge).
+    const bo = this.zone.objective;
+    if (bo.kind === 'beacon' && !this.objectiveDone && this.spires.length) {
+      const need = bo.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
+      for (const s of this.spires) {
+        if (s.charge < need) add({ pos: s.pos, frac: clamp(s.charge / Math.max(0.01, need), 0, 1), kind: 'beacon' });
+      }
+    }
+    // The procession's rally ring while the dwell builds at the dormant cart.
+    const pr = this.procession;
+    if (pr && !pr.rolling && !this.objectiveDone && !this.objectiveLost && pr.dwellStart > 0) {
+      const pv = this.processionView();
+      if (pv) add({
+        pos: pv.pos, kind: 'procession',
+        frac: clamp((this.time - pr.dwellStart) / transitDwell('procession', 0.9), 0, 1),
+      });
+    }
     return out;
   }
 
-  /** The live SURVEY SPIRE, for the renderer's ring pass + the attention
-   *  fabric: where it stands, its charge fraction, whether the survey is done. */
-  spireView(): { pos: Vec2; frac: number; done: boolean } | null {
+  /** The live SURVEY SPIRES, for the renderer's ring pass + the attention
+   *  fabric: features the NEAREST unfinished stone (the circuit walks you leg
+   *  by leg), plus the set's tally. */
+  spireView(): { pos: Vec2; frac: number; done: boolean; charged: number; count: number } | null {
     const o = this.zone.objective;
-    const sp = this.spire;
-    if (!sp || o.kind !== 'beacon') return null;
+    if (o.kind !== 'beacon' || !this.spires.length) return null;
     const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
+    const charged = this.spires.filter(s => s.charge >= need).length;
+    let pick = this.spires[0];
+    let bd = Infinity;
+    for (const s of this.spires) {
+      if (s.charge >= need) continue;
+      const d = dist(this.player.pos, s.pos);
+      if (d < bd) { bd = d; pick = s; }
+    }
     return {
-      pos: sp.pos,
-      frac: need > 0 ? clamp(sp.charge / need, 0, 1) : 1,
-      done: this.objectiveDone,
+      pos: pick.pos,
+      frac: need > 0 ? clamp(pick.charge / need, 0, 1) : 1,
+      done: this.objectiveDone, charged, count: this.spires.length,
     };
+  }
+
+  /** The live PROCESSION, for the attention fabric + the HUD: the cart's
+   *  stand, the march fraction, and the win/lose flags. */
+  processionView(): {
+    pos: Vec2; frac: number; started: boolean; rolling: boolean;
+    done: boolean; lost: boolean; lifeFrac: number;
+  } | null {
+    const o = this.zone.objective;
+    if (o.kind !== 'procession') return null;
+    const pr = this.procession;
+    const cart = pr?.cartId != null ? this.actorById(pr.cartId) : null;
+    const total = pr ? Math.max(1, dist(pr.startPos, pr.dest)) : 1;
+    return {
+      pos: cart ? cart.pos : pr ? pr.dest : this.zoneEntry,
+      frac: pr && cart ? clamp(1 - dist(cart.pos, pr.dest) / total, 0, 1)
+        : this.objectiveDone ? 1 : 0,
+      started: !!pr?.started, rolling: !!pr?.rolling,
+      done: this.objectiveDone, lost: this.objectiveLost,
+      lifeFrac: cart ? clamp(cart.life / Math.max(1, cart.maxLife()), 0, 1) : 0,
+    };
+  }
+
+  /** Bandits puff from smoke near the road ahead of the rolling cart — the
+   *  procession's only spawns, capped while enough robbers stand. Each wears
+   *  the FIXATION GRAFT (the extraction idiom): the GOODS are the enemy until
+   *  you out-shout them on the threat chart. */
+  private spawnProcessionAmbush(
+    pr: { heading: number }, cart: Actor, robbers?: PackTableEntry[],
+  ): void {
+    const cfg = PROCESSION_CFG;
+    const alive = this.actors.filter(a => !a.dead && a.tag === 'procession_robber').length;
+    if (alive >= cfg.puffCap) return;
+    const lvl = Math.max(1, this.zone.level);
+    const table = robbers ?? cfg.robbers;
+    const n = Math.min(randInt(cfg.puffCount[0], cfg.puffCount[1]), cfg.puffCap - alive);
+    const base = vec(
+      cart.pos.x + Math.cos(pr.heading) * cfg.puffLead,
+      cart.pos.y + Math.sin(pr.heading) * cfg.puffLead);
+    let spawned = 0;
+    for (let i = 0; i < n; i++) {
+      const type = this.weightedPick(table, lvl);
+      if (!MONSTERS[type]) continue;
+      const m = this.createMonster(type, lvl, 'enemy');
+      const at = vec(base.x + rand(-cfg.puffJitter, cfg.puffJitter),
+        base.y + rand(-cfg.puffJitter, cfg.puffJitter));
+      m.pos = this.clampPos(this.findFreeSpot(at, m.radius + 2) ?? this.clampNear(cart.pos, 150), m.radius);
+      m.tag = 'procession_robber';
+      m.eventKey = `procession:${this.zone.id}`;
+      const ag = m.defId ? MONSTERS[m.defId]?.aggro : undefined;
+      m.aiTuning = {
+        target: {
+          prefer: 'highestThreat', relentless: true, stickiness: cfg.fixation.stickiness,
+          threat: { damage: ag?.fury ?? 1, decay: cfg.fixation.decay * (ag?.waver ?? 1) },
+        },
+      };
+      m.addThreat(cart.id, cfg.fixation.seedThreat * (ag?.fixation ?? 1));
+      m.aiTargetId = cart.id;
+      m.aggroed = true;
+      m.aiAwakened = true;
+      this.actors.push(m);
+      this.flashes.push({ pos: vec(m.pos.x, m.pos.y), radius: 42, color: cfg.smoke, life: 0.5, maxLife: 0.5 });
+      spawned++;
+    }
+    if (spawned > 0) {
+      this.text(vec(base.x, base.y - 30), 'an ambush — they want the goods!', cfg.smoke, 13);
+    }
   }
 
   // --- LURE FABRIC: monster-attention points (the mapMarkers/attention idea,
@@ -29567,42 +29803,148 @@ export class World {
         return;
 
       case 'beacon': {
-        // The SURVEY SPIRE: presence (not idleness — you will be fighting)
-        // inside the hold ring builds the charge; banked charge holds a LURE
-        // so the zone's own population drifts in as the pressure; full charge
-        // flares the spire and SURVEYS the overworld around this zone.
-        const sp = this.spire;
-        if (this.objectiveDone || !sp) return;
+        // SURVEY SPIRES: presence (not idleness — you will be fighting)
+        // inside a stone's hold ring builds ITS charge; every stone with
+        // banked, unfinished charge holds a LURE, so the fight migrates with
+        // your work. When the last stone fills, the objective flares and
+        // SURVEYS the overworld around this zone. count 1 = the lone spire;
+        // 2+ = the ATTUNEMENT CIRCUIT (same rules, smaller stones).
+        if (this.objectiveDone || !this.spires.length) return;
+        const circuit = this.spires.length > 1;
+        const stone = circuit ? 'waystone' : 'spire';
         const need = o.chargeSec ?? transitDwell('beacon', BEACON_CFG.chargeSec);
-        const held = !this.player.dead
-          && dist(this.player.pos, sp.pos) <= transitRadius('beacon', BEACON_CFG.holdRadius)
-          && this.dwellReachable(this.player.pos, sp.pos, transitReach('beacon'));
-        if (held) {
-          const was = sp.charge;
-          sp.charge = Math.min(need, sp.charge + dt);
-          if (was <= 0 && sp.charge > 0) {
-            this.text(vec(sp.pos.x, sp.pos.y - 40),
-              'the spire stirs — the wilds turn toward its light…', BEACON_CFG.accent, 14);
-            this.flashes.push({ pos: vec(sp.pos.x, sp.pos.y), radius: 90, color: BEACON_CFG.accent, life: 0.5, maxLife: 0.5 });
+        const holdR = transitRadius('beacon', BEACON_CFG.holdRadius);
+        // The stone under work: the nearest unfinished one the hero reaches.
+        let held: { pos: Vec2; charge: number; doodad: Doodad } | null = null;
+        if (!this.player.dead) {
+          let bd = Infinity;
+          for (const s of this.spires) {
+            if (s.charge >= need) continue;
+            const d = dist(this.player.pos, s.pos);
+            if (d <= holdR && d < bd
+              && this.dwellReachable(this.player.pos, s.pos, transitReach('beacon'))) { bd = d; held = s; }
           }
         }
-        // A lit wick draws moths whether or not the hero stands by it: the lure
-        // holds while ANY charge is banked and the work is unfinished. No waves,
-        // no bonus spawns — the pull only redirects who already lives here.
-        if (sp.charge > 0) {
-          this.setLure('survey_spire', sp.pos,
-            o.lureRadius ?? BEACON_CFG.lureRadius, BEACON_CFG.lurePace, BEACON_CFG.lureStandoff);
+        if (held) {
+          const was = held.charge;
+          held.charge = Math.min(need, held.charge + dt);
+          if (was <= 0 && held.charge > 0) {
+            this.text(vec(held.pos.x, held.pos.y - 40),
+              `the ${stone} stirs — the wilds turn toward its light…`, BEACON_CFG.accent, 14);
+            this.flashes.push({ pos: vec(held.pos.x, held.pos.y), radius: 90, color: BEACON_CFG.accent, life: 0.5, maxLife: 0.5 });
+          }
+          if (held.charge >= need) {
+            // This stone is done — it lights NOW (the flare beat is per stone);
+            // the survey waits for the full set.
+            held.doodad.kind = circuit ? BEACON_CFG.kindWayLit : BEACON_CFG.kindLit;
+            this.markDoodadsChanged();
+            this.flashes.push({ pos: vec(held.pos.x, held.pos.y), radius: circuit ? 160 : 240, color: BEACON_CFG.flare, life: 0.8, maxLife: 0.8 });
+            const left = this.spires.filter(s => s.charge < need).length;
+            if (left > 0) {
+              this.text(vec(held.pos.x, held.pos.y - 56),
+                `the ${stone} hums — ${left} remain${left === 1 ? 's' : ''}`, BEACON_CFG.flare, 14);
+            }
+          }
         }
-        if (sp.charge >= need) {
-          sp.doodad.kind = BEACON_CFG.kindLit; // the flare IS the reward beat
-          this.markDoodadsChanged();
-          this.flashes.push({ pos: vec(sp.pos.x, sp.pos.y), radius: 240, color: BEACON_CFG.flare, life: 0.9, maxLife: 0.9 });
+        // Lit wicks draw moths whether or not the hero stands by them: every
+        // banked, unfinished stone keeps its pull. No waves, no bonus spawns —
+        // the lure only redirects who already lives here.
+        this.spires.forEach((s, i) => {
+          if (s.charge > 0 && s.charge < need) {
+            this.setLure(`survey_spire_${i}`, s.pos,
+              o.lureRadius ?? BEACON_CFG.lureRadius, BEACON_CFG.lurePace, BEACON_CFG.lureStandoff);
+          }
+        });
+        if (this.spires.every(s => s.charge >= need)) {
+          const last = held ?? this.spires[this.spires.length - 1];
           const news = this.surveyAround(this.zone, o.revealRadius ?? BEACON_CFG.revealRadius);
-          this.completeObjective('The spire flares — the land is surveyed!');
+          this.completeObjective(circuit
+            ? 'The circuit hums as one — the land is surveyed!'
+            : 'The spire flares — the land is surveyed!');
           if (news > 0) {
-            this.text(vec(sp.pos.x, sp.pos.y - 64),
+            this.text(vec(last.pos.x, last.pos.y - 64),
               `${news} new ${news === 1 ? 'place' : 'places'} charted`, BEACON_CFG.flare, 14);
           }
+        }
+        return;
+      }
+
+      case 'procession': {
+        // ESCORT THE CARAVAN: dormant until the rally dwell, then a path-field
+        // march toward the crossing. Robbers ADJACENT stop the wheels; the
+        // rolling cart's lure draws the zone's own population after the
+        // goods, and bandit ambushes puff from smoke on the march clock.
+        // Arrival completes; the cart's death LOSES the objective — bounty
+        // forfeit, roads open, the zone's TTL refresh deals a fresh caravan.
+        const pr = this.procession;
+        if (this.objectiveDone || this.objectiveLost || !pr || pr.cartId == null) return;
+        const cart = this.actorById(pr.cartId);
+        if (!cart || cart.dead) {
+          this.objectiveLost = true;
+          if (cart) {
+            this.dropGemAt(cart.pos); // scavenge the wreck
+            this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 90, color: PROCESSION_CFG.smoke, life: 0.7, maxLife: 0.7 });
+          }
+          pr.cartId = null;
+          this.text(vec(this.player.pos.x, this.player.pos.y - 50),
+            'The caravan is lost — its bounty with it.', '#d05050', 16);
+          return;
+        }
+        if (!pr.rolling) {
+          // The rally: linger at the wheel (presence — the road ahead is the
+          // fight). An entry GRACE keeps arrival from rallying the cart while
+          // you're still reading the ground (it waits at your own gate).
+          if (this.time - this.zoneEnteredAt < PROCESSION_CFG.entryGraceSec) { pr.dwellStart = 0; return; }
+          const engaged = !this.player.dead
+            && dist(this.player.pos, cart.pos) <= transitRadius('procession', 96)
+            && this.dwellReachable(this.player.pos, cart.pos, transitReach('procession'));
+          if (!engaged) { pr.dwellStart = 0; return; }
+          if (pr.dwellStart === 0) pr.dwellStart = this.time;
+          if (this.time - pr.dwellStart >= transitDwell('procession', 0.9)) {
+            pr.rolling = true;
+            pr.started = true;
+            pr.puffAt = this.time + rand(o.puffEvery?.[0] ?? PROCESSION_CFG.puffEvery[0],
+              o.puffEvery?.[1] ?? PROCESSION_CFG.puffEvery[1]);
+            cart.untargetable = false; // cargo on the road is cargo at risk
+            cart.invulnerable = false;
+            this.text(vec(cart.pos.x, cart.pos.y - 40),
+              'The procession sets out — see it through!', PROCESSION_CFG.accent, 15);
+            this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 80, color: PROCESSION_CFG.accent, life: 0.5, maxLife: 0.5 });
+          }
+          return;
+        }
+        // The goods pull: idle locals drift after the rolling cart and turn on
+        // it the moment they truly perceive it (team-player body, fair game).
+        this.setLure('procession', cart.pos,
+          PROCESSION_CFG.lureRadius, PROCESSION_CFG.lurePace, PROCESSION_CFG.lureStandoff);
+        // Robbed: any live foe at the wheels stops the cart dead.
+        const robbed = this.enemiesOf(cart).some(e => !e.dead && !e.passive
+          && dist(e.pos, cart.pos) <= PROCESSION_CFG.robRadius);
+        if (!robbed) {
+          // Steer on the zone's pathing authority (the ai.ts idiom): straight
+          // where the line is clean, flow-field steps around the terrain.
+          const pf = this.pathField();
+          let to = pr.dest;
+          if (pf?.pathStep && !(pf.lineWalkable?.(cart.pos, pr.dest) ?? false)) {
+            to = pf.pathStep(cart.pos, pr.dest) ?? pr.dest;
+          }
+          pr.heading = angleTo(cart.pos, to);
+          cart.facing = pr.heading;
+          this.moveActor(cart, to.x - cart.pos.x, to.y - cart.pos.y,
+            dt * (o.speedMul ?? PROCESSION_CFG.speedMul));
+        }
+        // Ambushes: bandits puff from smoke near the road ahead, capped while
+        // enough robbers still stand (never an infinite pile-up).
+        if (this.time >= pr.puffAt) {
+          pr.puffAt = this.time + rand(o.puffEvery?.[0] ?? PROCESSION_CFG.puffEvery[0],
+            o.puffEvery?.[1] ?? PROCESSION_CFG.puffEvery[1]);
+          this.spawnProcessionAmbush(pr, cart, o.robbers);
+        }
+        if (dist(cart.pos, pr.dest) <= PROCESSION_CFG.arriveDist) {
+          this.flashes.push({ pos: vec(cart.pos.x, cart.pos.y), radius: 110, color: PROCESSION_CFG.accent, life: 0.7, maxLife: 0.7 });
+          cart.dead = true; // it rolls through the crossing and away
+          pr.cartId = null;
+          this.completeObjective('The caravan arrives — the road held!');
         }
         return;
       }
@@ -30328,6 +30670,13 @@ export class World {
   objectiveText(): string {
     const o = this.zone.objective;
     if (o.kind === 'safe') return 'Sanctuary';
+    // A LOST objective reads as lost — and says what losing costs (nothing
+    // but the bounty; the roads never lock).
+    if (this.objectiveLost) {
+      return o.kind === 'procession'
+        ? 'The caravan was lost — the roads remain open'
+        : 'The objective was lost — the roads remain open';
+    }
     if (this.objectiveDone) return 'Cleared';
     switch (o.kind) {
       case 'clear': return `Clear the area — ${this.countedEnemies().length} remain`;
@@ -30339,9 +30688,17 @@ export class World {
         : `Survive the assault — wave ${Math.min(this.wave, o.waves)}/${o.waves}`;
       case 'beacon': {
         const v = this.spireView();
-        return v && v.frac > 0
+        if (!v) return 'Find the survey spire and hold your ground beside it';
+        if (v.count > 1) return `Attune the waystones — ${v.charged}/${v.count}`;
+        return v.frac > 0
           ? `Charge the survey spire — ${Math.round(v.frac * 100)}%`
           : 'Find the survey spire and hold your ground beside it';
+      }
+      case 'procession': {
+        const v = this.processionView();
+        if (!v || (!v.started && !v.rolling)) return 'A caravan waits by the gate — linger beside it to set out';
+        if (!v.rolling) return 'The caravan holds — linger beside it to move on';
+        return `Escort the caravan — ${Math.round(v.frac * 100)}% of the way`;
       }
     }
   }

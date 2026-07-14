@@ -1161,6 +1161,18 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { stone: 'theme:obstacle|#646c7a', gem: '#bfe8ff', lit: true },
     light: { radius: -5.0, color: '#9fdcff', intensity: 0.6, flicker: 1.6 },
   },
+  // The ATTUNEMENT CIRCUIT's waystones (ObjectiveSpec beacon count 2+): the
+  // spire's smaller kin on the same painter — teal-veined, humbler light.
+  waystone: {
+    painter: 'surveySpire', order: 54, shadow: 0.5, longShadow: 1.3,
+    params: { stone: 'theme:obstacle|#5e6a66', gem: '#7fe8c8' },
+    light: { radius: -2.4, color: '#7fe8c8', intensity: 0.14 },
+  },
+  waystone_lit: {
+    painter: 'surveySpire', order: 54, shadow: 0.5, longShadow: 1.3,
+    params: { stone: 'theme:obstacle|#5e6a66', gem: '#b8ffe4', lit: true },
+    light: { radius: -4.4, color: '#8ff0d4', intensity: 0.5, flicker: 1.4 },
+  },
 
   // --- The AETHERIAL kit (vis/paintersAether.ts — the cloud shelves) --------
   cloud_billow: {

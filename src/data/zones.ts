@@ -73,14 +73,26 @@ export type ObjectiveSpec = (
   /** Destructible spawner objects seed the zone; destroy them all. */
   | { kind: 'spawners'; spawnerId: string; count: [number, number] }
   | { kind: 'boss'; id: string; levelBonus?: number; uber?: UberPolicy; promote?: BossPromote }
-  /** A dormant SURVEY SPIRE stands at a POI: hold your ground beside it and it
-   *  charges (seconds: chargeSec → the 'beacon' transit row → BEACON_CFG);
-   *  banked charge LURES idle wanderers toward the glow (the world's own
-   *  population is the pressure — no waves, no bonus spawns); at full charge
-   *  it flares and SURVEYS the overworld within `revealRadius` map units
-   *  (charts '?' frontiers, lifts concealment, marks map intel). All numbers
-   *  default from data/beacons.ts BEACON_CFG. */
-  | { kind: 'beacon'; chargeSec?: number; lureRadius?: number; revealRadius?: number }
+  /** Dormant SURVEY SPIRES stand at POIs: hold your ground beside one and it
+   *  charges (seconds PER STONE: chargeSec → the 'beacon' transit row →
+   *  BEACON_CFG); banked charge LURES idle wanderers toward the glow (the
+   *  world's own population is the pressure — no waves, no bonus spawns).
+   *  When EVERY stone is full the objective flares and SURVEYS the overworld
+   *  within `revealRadius` map units (charts '?' frontiers, lifts
+   *  concealment, marks map intel). `count` 1 (default) is the lone spire;
+   *  2+ is the ATTUNEMENT CIRCUIT — smaller waystones, the fight migrating
+   *  stone to stone as the lure follows your work. All numbers default from
+   *  data/beacons.ts BEACON_CFG. */
+  | { kind: 'beacon'; count?: number; chargeSec?: number; lureRadius?: number; revealRadius?: number }
+  /** ESCORT THE CARAVAN: a cart waits DORMANT (immobile, immune) by the gate
+   *  you entered through; linger beside it and the procession sets out down a
+   *  carved gravel way toward the far exit. Robbers converge — the zone's own
+   *  population is drawn to the goods, and bandit ambushes puff from the
+   *  smoke as it rolls. The cart arriving intact completes the objective;
+   *  the cart destroyed LOSES it (objectiveLost — the bounty is forfeit, the
+   *  roads never lock, the zone's TTL refresh deals a fresh caravan). All
+   *  numbers default from data/processions.ts PROCESSION_CFG. */
+  | { kind: 'procession'; robbers?: PackTableEntry[]; puffEvery?: [number, number]; speedMul?: number }
 ) & ObjectiveTuning;
 
 /** Per-kind DEFAULT exit policy: does an UNMET objective seal the zone's other
@@ -90,7 +102,7 @@ export type ObjectiveSpec = (
  *  ObjectiveTuning.seal overrides its kind's row. */
 export const OBJECTIVE_SEALS: Record<ObjectiveSpec['kind'], boolean> = {
   safe: false, clear: false, waves: false, escape: false, spawners: false,
-  boss: true, beacon: false,
+  boss: true, beacon: false, procession: false,
 };
 
 /** Does this zone's UNMET objective seal its exits? (An endless arena never
@@ -105,7 +117,7 @@ export function objectiveSeals(o: ObjectiveSpec): boolean {
  *  locks its roads, yet still stakes its reward. Endless arenas never do —
  *  nothing completes. */
 export const OBJECTIVE_CHEST_KINDS: ReadonlySet<ObjectiveSpec['kind']> =
-  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon']);
+  new Set<ObjectiveSpec['kind']>(['boss', 'spawners', 'waves', 'beacon', 'procession']);
 
 export function objectiveEarnsChest(o: ObjectiveSpec): boolean {
   if (o.kind === 'waves' && o.waves === 0) return false;

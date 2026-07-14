@@ -934,6 +934,10 @@ function rollObjective(
     case 'spawners': return { kind: 'spawners', spawnerId, count: [2, 3] };
     case 'waves': return { kind: 'waves', waves: rng.int(3, 4) };
     case 'beacon': return { kind: 'beacon' }; // numbers default from BEACON_CFG
+    // The ATTUNEMENT CIRCUIT: several smaller waystones, a shorter hold each —
+    // the same beacon fabric wearing a count (the flexibility IS the point).
+    case 'circuit': return { kind: 'beacon', count: rng.int(3, 4), chargeSec: 8 };
+    case 'procession': return { kind: 'procession' }; // numbers default from PROCESSION_CFG
     default: return { kind: 'clear' };
   }
 }

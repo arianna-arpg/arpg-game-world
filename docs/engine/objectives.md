@@ -9,15 +9,17 @@ tileset's `objectives` weight table (`data/tilesets.ts` → worldgen
 
 ## Kinds
 
-| kind       | asks                                                        |
-|------------|-------------------------------------------------------------|
-| `safe`     | nothing — a sanctuary                                       |
-| `clear`    | kill the counted population                                 |
-| `waves`    | survive N waves (0 = endless arena); boss cadence as data   |
-| `escape`   | reach an exit under an endless trickle                      |
-| `spawners` | destroy the spawner objects                                 |
-| `boss`     | slay the named boss (uber/promote riders)                   |
-| `beacon`   | charge the SURVEY SPIRE by holding ground beside it         |
+| kind         | asks                                                          |
+|--------------|---------------------------------------------------------------|
+| `safe`       | nothing — a sanctuary                                         |
+| `clear`      | kill the counted population                                   |
+| `waves`      | survive N waves (0 = endless arena); boss cadence as data     |
+| `escape`     | reach an exit under an endless trickle                        |
+| `spawners`   | destroy the spawner objects                                   |
+| `boss`       | slay the named boss (uber/promote riders)                     |
+| `beacon`     | charge the SURVEY SPIRE(S) by holding ground beside them —    |
+|              | `count` 2+ is the ATTUNEMENT CIRCUIT (smaller waystones)      |
+| `procession` | escort the caravan to the far crossing — WINNABLE and LOSEABLE |
 
 ## Exit-seal POLICY (not physics)
 
@@ -74,6 +76,52 @@ spec (`chargeSec`, `lureRadius`, `revealRadius`).
 - The off-screen chevron rides the attention fabric (registered in
   data/beacons.ts); the charge ring rides the shared dwell-ring feed
   (`World.dwellRingsView`, styled by the transit row).
+
+## The ATTUNEMENT CIRCUIT (`kind: 'beacon', count: 2+`)
+
+The flexibility demonstration: ONE spec field transforms the objective. Each
+of `count` waystones (smaller kin of the spire — `waystone`/`waystone_lit`
+kinds, same painter) charges independently under the same presence rule; each
+banked, unfinished stone holds its own lure, so the fight MIGRATES with your
+work; each completed stone lights on the spot; the survey fires once, when the
+last stone fills. Worldgen rolls it as the `'circuit'` tileset weight
+(→ `{ kind: 'beacon', count: 3-4, chargeSec: 8 }`).
+
+## The PROCESSION (`kind: 'procession'`)
+
+All numbers in `src/data/processions.ts` `PROCESSION_CFG`; per-zone overrides
+on the spec (`robbers`, `puffEvery`, `speedMul`). Replaces the old ambient
+faction-caravan zone event (retired from engine/events.ts).
+
+- The cart (`caravan_cart`, `driven` — the runtime owns every turn of the
+  wheel) waits DORMANT beside the gate you entered through: immobile,
+  untargetable, invulnerable. Its life pool stamps from zone level.
+- The TRAVELED WAY: `exitRoadAnnotations` stamps a gravel-road ExitRoadSpec
+  from your entry to the chosen crossing (the farthest unlocked, non-entry
+  portal; pinned by the memory rider across re-entries), and the layout
+  pipeline carves it — the land itself says where the caravan is headed.
+  Dead-end pockets degrade to a roadless far-POI run.
+- RALLY: linger at the wheel (the 'procession' transit row: dwell/radius/
+  ring; an `entryGraceSec` keeps arrival from rallying it accidentally).
+  Then it rolls: path-field steering (the ai.ts `pathStep` idiom), pausing
+  DEAD while any robber stands at the wheels (`robRadius`).
+- PRESSURE, emergent: the rolling cart holds a LURE (idle locals drift after
+  the goods and attack what they perceive), plus BANDIT AMBUSHES puff from
+  smoke on the march clock (`puffEvery`/`puffCount`/`puffCap`), each wearing
+  the extraction-style FIXATION graft (`aiTuning` highestThreat + seeded
+  threat on the cart) — robbers rob; you out-shout them by fighting.
+- WIN: the cart reaches the crossing → `completeObjective` (bounty + the
+  sealed chest). LOSE: the cart dies → `World.objectiveLost` — the bounty is
+  forfeit, the HUD says so, NOTHING locks, and the loss rides the Zone Memory
+  rider until the TTL/campfire refresh deals a fresh caravan.
+
+## `objectiveLost` (the loseable-objective seam)
+
+A first-class outcome any future objective can set: HUD branch in
+`objectiveText`, per-load reset, Zone-Memory persistence, and — by
+construction — zero effect on travel (seals are policy, and lost zones read
+`objectiveSeals` exactly like unfinished ones). Losing costs the reward,
+never the road.
 
 ## The LURE fabric (monster attention)
 

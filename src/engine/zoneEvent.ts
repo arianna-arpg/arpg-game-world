@@ -17,7 +17,7 @@ import type { World } from './world';
 
 export class ActiveZoneEvent implements ZoneEventRun {
   done = false;
-  /** Per-kind scratch (a caravan stashes its cart + goal here) — the def owns
+  /** Per-kind scratch (a siege stashes its rosters here) — the def owns
    *  the shape; the runner just carries it. */
   data: Record<string, unknown> = {};
 
