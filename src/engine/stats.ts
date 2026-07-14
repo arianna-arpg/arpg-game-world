@@ -35,6 +35,9 @@ export type SkillTag =
   // 'javelin' marks the Impaler family (spears, lances, volleys) so
   // family-wide supports and tag-filtered investment can find them.
   | 'javelin'
+  // 'chrono' marks time-bending skills (SkillDef.chrono holds, stasis
+  // appliers) — the gate for chronomancy-scoped supports and investment.
+  | 'chrono'
   // 'fissure' marks skills that TEAR CRACKS (GroundDelivery.fissure /
   // fissureTrail) — the gate for fissure-fanning supports, so they can
   // never socket into a skill with no crack to fan.

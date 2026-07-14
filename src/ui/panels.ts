@@ -2928,12 +2928,17 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
   showVocationMenu(): void {
     this.hideAll();
     this.vocationOpen = true;
+    // An Ultimatum-style DECIDE-AT-LEISURE freeze: the 'menu:vocation'
+    // timeflow surface (TIME_CFG.surfaces) holds the world while the offer
+    // is weighed. Same solo-only policy as the pause menu.
+    this.getWorld().timeflow.holdSurface('menu:vocation');
     this.vocationMenu.classList.remove('hidden');
     this.refreshVocationMenu();
   }
 
   closeVocationMenu(): void {
     this.vocationOpen = false;
+    this.getWorld().timeflow.release('menu:vocation');
     this.vocationMenu.classList.add('hidden');
     // Suppress re-offer until the player breaks the dwell (walks away) — else
     // the menu would pop right back open while they stand by the giver.
@@ -3520,9 +3525,14 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
   // ------------------------------------------------------------ escape menu
 
   /** The in-run pause menu (Escape): resume, remap keys, end the run, or close.
-   *  While it's open `escapeMenuOpen` is true and gameplay input is paused. */
+   *  While it's open `escapeMenuOpen` is true, gameplay input is paused —
+   *  and the WORLD ITSELF holds still: the 'menu:escape' timeflow surface
+   *  (TIME_CFG.surfaces) freezes the sim while the menu is up. The engine's
+   *  allowHold policy (wired in main.ts) refuses the hold in live co-op —
+   *  a shared world is never one player's to stop. */
   showEscapeMenu(): void {
     this.escapeMenuOpen = true;
+    this.getWorld().timeflow.holdSurface('menu:escape');
     const root = this.escapeMenu;
 
     const showMain = (): void => {
@@ -3574,6 +3584,7 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
 
   hideEscapeMenu(): void {
     this.escapeMenuOpen = false;
+    this.getWorld().timeflow.release('menu:escape'); // the world breathes again
     this.disarmRebind(); // Esc-dismissal can close the keybind sub-view mid-arm
     this.escapeMenu.classList.add('hidden');
   }
@@ -4185,6 +4196,9 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     this.startMenu.classList.add('hidden');
     this.expeditionSetup.classList.add('hidden');
     this.escapeMenuOpen = false;
+    // Every menu-kind timeflow hold dies with its surface — hideAll is the
+    // belt under every "all panels clear" path (run start, death, resets).
+    this.getWorld().timeflow.releaseKind('menu');
     this.disarmRebind();
     hideTooltip();
   }

@@ -3953,6 +3953,50 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 620, weight: 2.5 },
   },
 
+  // ======================= Chronomancy ======================================
+  // TIME AS A SKILL FAMILY (engine/timeflow.ts). Two open lanes:
+  //   • SkillDef.chrono — the cast bends the WORLD's flow: a timeflow hold
+  //     exempting the caster's circle; held bodies AND their projectiles
+  //     hang mid-air and resume where they left off.
+  //   • the stasis / temporal_drag STATUSES (StatusDef.timeScale) — per-BODY
+  //     clocks, applied like any ailment: skill effects here, the generated
+  //     apply_stasis stat family, fog banks, ground, monster kits.
+  // Monsters cast these exactly as players do — an enemy chronomancer is one
+  // `ai:` field (the Abyssal Seer already schemes with Stasis Lock). The
+  // 'chrono' tag gates future family supports and tag-filtered investment.
+
+  time_stop: {
+    id: 'time_stop', name: 'Time Stop',
+    description: 'Seize the world\'s clock. Everything outside your own circle hangs mid-breath — arrows frozen in flight, jaws stopped mid-snap — until time remembers itself. What you loose meanwhile waits in the air with them.',
+    tags: ['spell', 'chrono', 'duration'], color: '#a8ecf0',
+    manaCost: 42, cooldown: 22, useTime: 0.55,
+    delivery: { type: 'self' },
+    chrono: {
+      scale: 0, duration: 2.6, exempt: 'pack',
+      hud: { tint: 'rgba(140,200,225,0.15)', label: 'Time Stop' },
+    },
+    effects: [], // the cast IS the effect — chrono carries the whole payload
+    requirements: { intelligence: 30, willpower: 22 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.05), mod('cooldownRecovery', 'increased', 0.04)] },
+  },
+
+  stasis_lock: {
+    id: 'stasis_lock', name: 'Stasis Lock',
+    description: 'A needle of unraveled time. The victim it takes hangs OUTSIDE the world — timers, wounds and thought suspended, a statue you may study or shatter — and any it merely grazes drags at half rate.',
+    tags: ['spell', 'projectile', 'chrono', 'chaos'], color: '#a8ecf0',
+    manaCost: 14, cooldown: 5, useTime: 0.6,
+    baseDamage: { chaos: [6, 10] },
+    delivery: { type: 'projectile', speed: 400, radius: 8, range: 480 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stasis', chance: 0.8 },
+      { type: 'status', status: 'temporal_drag', chance: 1 },
+    ],
+    requirements: { intelligence: 18, willpower: 10 },
+    ai: { range: 440, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('effectDuration', 'increased', 0.04)] },
+  },
+
   // ======================= The healer archetype ============================
   // Healing is a first-class FAMILY: the 'heal' tag gates its supports, the
   // healPower stat is its damage stat, HealEffect rides every delivery

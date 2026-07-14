@@ -254,6 +254,13 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // World.applyInputs (OS / scripted / remote intent), never the monster brain.
   // A DOWNED body (a felled companion awaiting revival) doesn't scheme either.
   if (actor.dead || actor.downed || world.seatOf(actor)) return;
+  // THE TIMEFLOW GATE (engine/timeflow.ts): a held body doesn't scheme —
+  // stasis and a paused world skip the brain outright; fractional time
+  // thinks (and so paces its cadences and kernels) in slow motion. Gated
+  // HERE so every caller — the live loop, the balance sim — inherits it.
+  const tf = world.timeflow.scaleFor(actor);
+  if (tf <= 0) return;
+  if (tf !== 1) dt *= tf;
   // Constructs (decoys included) act through the world, not the brain.
   if (actor.construct) return;
   // A stalk-creep stamp lives one combat tick only — cleared here so idle

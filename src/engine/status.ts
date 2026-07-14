@@ -108,6 +108,15 @@ export interface StatusDef {
    *  fraction, so the pop is as investable as everything else. Best on long,
    *  non-stacking DoTs — the whole loop is "load the wound, then strike it". */
   pop?: { fraction: number };
+  /** CHRONOMANCY (engine/timeflow.ts): the victim's OWN clock runs at this
+   *  rate while afflicted — 0 is stasis (timers, DoTs, casting, cooldowns,
+   *  regen, movement and thought all suspend; the body stays a targetable
+   *  statue), fractions are personal slow-motion. A chrono status's OWN
+   *  `remaining` burns on UNBENT seconds (it must be able to expire out of
+   *  the freeze it causes) — every other status on the body waits. Reachable
+   *  from anything that applies statuses: skill effects, procs, fog banks,
+   *  ground, monster kits. */
+  timeScale?: number;
 }
 
 /** GLOBAL AILMENT BASELINE TUNING — the "physical damage is physical damage"
@@ -256,6 +265,26 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
   },
   stun: {
     label: 'Stunned', color: '#cccccc', duration: 0.8, hardCC: true,
+  },
+  // CHRONOMANCY (StatusDef.timeScale → engine/timeflow.ts): the victim's own
+  // clock, bent. Ordinary statuses in every other way — hard-cast them, proc
+  // them (apply_stasis / apply_temporal_drag exist like every apply_), grant
+  // them from fog or ground, shrug them with ailmentResist.
+  stasis: {
+    // The body hangs OUTSIDE time: timers, DoTs, casting, cooldowns, regen,
+    // thought and motion all suspend — but the statue is still targetable
+    // (add damageTaken mods here to make a protective or a vulnerable
+    // stasis; the engine takes no side). hardCC so break-bars, CC counters
+    // and stun-family interactions all treat it as the lockdown it is.
+    label: 'Stasis', color: '#a8ecf0', duration: 1.2,
+    timeScale: 0, hardCC: true,
+  },
+  temporal_drag: {
+    // Personal slow-motion — the whole BODY at half rate (cooldowns, casts,
+    // DoTs and feet alike), distinct from chill's move-speed bite. Its own
+    // duration burns on unbent seconds (see StatusDef.timeScale).
+    label: 'Temporal Drag', color: '#7ea8c8', duration: 3,
+    timeScale: 0.5,
   },
   // SELECTIVE CC — the forbidsTags family: each locks ONE verb and leaves
   // the rest of the kit alive (the counterplay IS switching verbs).

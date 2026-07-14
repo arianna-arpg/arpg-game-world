@@ -89,6 +89,12 @@ changes.
   (`data/traversals.ts`); the world far BELOW shown through `window`
   region cells — the Ascent/Aetherial ride all three; docs in
   `docs/engine/collapse.md`),
+  `timeflow.ts` (THE TIMEFLOW FABRIC: time itself as data — one TimeHold
+  registry behind the pause menu's real pause, Ultimatum-style menu
+  freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and
+  `StatusDef.timeScale` stasis/slow statuses; world- and per-actor scales,
+  solo-only menu policy via `Timeflow.allowHold` — docs in
+  `docs/engine/timeflow.md`),
   `levelgen.ts`, `worldgen.ts`;
   items: `items.ts` (gear schema + every ITEM_CFG tunable), `itemgen.ts`
   (the one roller/compiler/describer), `inventory.ts` (tetris bag grid),

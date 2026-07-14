@@ -16,6 +16,7 @@
 
 import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
 import type { CurveKind } from './curves';
+import type { ChronoSpec } from './timeflow';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
 
@@ -3461,6 +3462,17 @@ export interface SkillDef {
    *  `dmgPerPower` more damage per point, and/or grants `buffPerPower`
    *  with one stack per point (its maxStacks caps the crowd bonus). */
   empower?: { radius: number; dmgPerPower?: number; buffPerPower?: BuffEffect };
+
+  /** CHRONOMANCY (engine/timeflow.ts): completing this cast HOLDS TIME — a
+   *  timeflow hold for `duration` seconds at `scale` (0 = stopped, fractions
+   *  = slow-motion), exempting the caster's chosen circle ('caster' walks
+   *  alone; 'pack' — the default — brings everything it owns; 'team' frees
+   *  its whole side; 'none' holds even the caster). Held bodies AND their
+   *  projectiles hang mid-air; the exempt act freely — and anything they
+   *  loose hangs too, landing when time resumes. Duration rides the
+   *  caster's effectDuration. Works for monsters exactly as for players —
+   *  the enemy chronomancer is one data entry. */
+  chrono?: ChronoSpec;
 
   /** LIFE-BOND FEED: this skill's damage feeds the caster's bond at this
    *  multiple of bondShare ("Ruin heals the bonded far more when it hits").

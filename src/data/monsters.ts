@@ -4215,7 +4215,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#a86adf', shape: 'diamond', radius: 12, material: 'void', look: 'hexer',
     base: { life: 52, moveSpeed: 135, mana: 110, manaRegen: 9 },
     mods: [mod('coldRes', 'flat', 0.3)],
-    skills: ['frostbolt'], xp: 19, faction: 'abyssal',
+    // The ENEMY CHRONOMANCER (engine/timeflow.ts): its Stasis Lock hangs a
+    // hero outside time — the same data-driven skill players can slot.
+    skills: ['frostbolt', 'stasis_lock'], xp: 19, faction: 'abyssal',
     detection: 1.25,
     brain: {
       type: 'strafer',

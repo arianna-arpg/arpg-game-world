@@ -204,13 +204,23 @@ function coopActive(): boolean {
   return net instanceof WebRtcTransport && net.peers().length > 1;
 }
 
+/** Stand a fresh World up with its SHELL POLICIES wired — the seam where the
+ *  transport layer (which the engine can't see) parameterizes engine fabrics.
+ *  Today: the timeflow's menu-hold gate — menus hard-pause the sim only when
+ *  this machine owns the one real sim AND no live peer shares it (a co-op
+ *  world is never one player's to stop; a client render-shell never holds). */
+function adoptWorld(w: World): World {
+  w.timeflow.allowHold = () => net.isHost && !coopActive();
+  return w;
+}
+
 // Graft every content package's factions into the shared data registries BEFORE
 // any World is built or the content validator runs (mutates FACTIONS/traits/…).
 registerAllPackageFactions();
 
 // A placeholder world until a run begins (the start menu is shown first); it is
 // replaced wholesale by startGame / resumeGame with the run's frozen manifest.
-let world = new World(account, Object.freeze(buildManifest(account, rollSeed())));
+let world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
 const ui = new UI(
   () => world, () => account, () => saveAccount(account),
   () => settings, () => saveSettings(settings),
@@ -264,7 +274,7 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   // The manifest is the run-LOCKED package config. Phase 4's Expedition screen
   // passes a configured one; otherwise build it from the account's saved prefs.
   const m = manifest ?? buildManifest(account, rollSeed());
-  world = new World(account, Object.freeze(m));
+  world = adoptWorld(new World(account, Object.freeze(m)));
   world.createPlayer(classDef, { modeId: mode.id, charId, name: charName });
   lastSentZone = '';        // force a fresh terrain broadcast for (re)joining clients
   if (COOP_ALLY) spawnCoopAlly();
@@ -310,7 +320,7 @@ function resumeRosterChar(entry: RosterEntry): void {
       return;
     }
     const manifest = reconcileManifest(save.expedition, account, rollSeed());
-    world = new World(account, Object.freeze(manifest));
+    world = adoptWorld(new World(account, Object.freeze(manifest)));
     world.createPlayer(classDef, { modeId: entry.modeId, charId: entry.charId });
     if (!applySavedCharacter(world, save)) {
       ui.showStartMenu(startPicked, resumeGame, openLobby, resumeRosterChar);
@@ -344,7 +354,7 @@ function resumeGame(preloaded?: CharacterSave | null): void {
   // Rebuild the run-locked manifest from the save (tolerant of removed packages);
   // its stored seed makes the resumed world deterministic.
   const manifest = reconcileManifest(save.expedition, account, rollSeed());
-  world = new World(account, Object.freeze(manifest));
+  world = adoptWorld(new World(account, Object.freeze(manifest)));
   world.createPlayer(classDef);          // builds a valid skeleton in town…
   if (!applySavedCharacter(world, save)) { // …then the save overwrites the build
     clearCharacter();
@@ -1063,6 +1073,10 @@ function unsubscribeFromHost(): void {
  *  RemoteInput drained from the transport). Idempotent on the seat id. */
 function onRemoteJoin(peer: PeerInfo): void {
   if (world.seats.some(s => s.id === peer.id)) return;
+  // A peer arriving ends any solo menu-pause mid-hold: the shared world is
+  // never one player's to stop (the allowHold policy refuses NEW holds in
+  // co-op; this sweeps one already standing when the session became live).
+  world.timeflow.releaseKind('menu');
   const cls = CLASSES.find(c => c.id === peer.classId) ?? CLASSES[0];
   world.addSeat(peer.id, cls, new RemoteInput(peer.id));
   // The joiner needs the current terrain immediately (not just on the next zone
@@ -1213,7 +1227,7 @@ function openLobby(): void {
  *  getters, but it never simulates — the frame loop's client branch applies the
  *  host's snapshots and renders. clientSeatId anchors the camera on OUR hero. */
 function startAsClient(classDef: ClassDef, selfSeat: string): void {
-  world = new World(account, Object.freeze(buildManifest(account, rollSeed())));
+  world = adoptWorld(new World(account, Object.freeze(buildManifest(account, rollSeed()))));
   world.createPlayer(classDef);   // a local shell (getters/camera/HUD) — not the authority
   world.clientSeatId = selfSeat;
   // META mutations on a client are INTENTS: ship them to the host (which owns every

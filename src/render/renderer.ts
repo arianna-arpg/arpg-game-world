@@ -284,6 +284,7 @@ export class Renderer {
     this.drawAtmosphere(world);
     this.drawStatusFx(world);     // status ailment overlays (edge vignettes/frost/stars)
     this.drawLowLifeGlow(world);  // blinking red edge on a low-life hit
+    this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
     this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
     this.drawEncounterHud(world); // breach timer bar (screen-space)
     this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
@@ -991,6 +992,33 @@ export class Renderer {
     grd.addColorStop(1, `rgba(255,0,0,${a.toFixed(3)})`);
     ctx.fillStyle = grd;
     ctx.fillRect(0, 0, w, h);
+  }
+
+  /** THE TIMEFLOW WASH (engine/timeflow.ts): while a hold carrying a hud
+   *  spec is live — a chronomancer's stop, an Ultimatum-style choice — wash
+   *  the screen in the hold's authored tint and name the moment in a quiet
+   *  breathing banner. Pure data: the hold brought the look; nothing here
+   *  knows any skill. (The escape menu's hold carries no hud — its DOM
+   *  covers the screen.) Shimmer rides performance.now(), the renderer's
+   *  clock — the WORLD clock is the thing that froze. */
+  private drawTimeflow(world: World): void {
+    const hud = world.timeflow.overlay();
+    if (!hud) return;
+    const { ctx, canvas } = this;
+    if (hud.tint) {
+      ctx.fillStyle = hud.tint;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    if (hud.label) {
+      const t = performance.now() / 1000;
+      ctx.save();
+      ctx.font = 'bold 13px Verdana';
+      ctx.textAlign = 'center';
+      ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 2.2);
+      ctx.fillStyle = '#a8ecf0';
+      ctx.fillText(`· ${hud.label.toUpperCase()} ·`, canvas.width / 2, 54);
+      ctx.restore();
+    }
   }
 
   /** A screen-space wash for time of day and weather — subtle enough to keep

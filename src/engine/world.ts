@@ -69,6 +69,7 @@ import {
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
 } from './levelgen';
 import { gateThroatAt } from './layoutRecipes';
+import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './shapes';
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
@@ -1492,6 +1493,11 @@ class Dwell {
 
 export class World {
   actors: Actor[] = [];
+  /** THE TIMEFLOW FABRIC (engine/timeflow.ts): every bend on the sim's
+   *  clock — the pause menu's hard hold, Ultimatum-style choice freezes,
+   *  chronomancer skill stops, stasis statuses — lives in this one
+   *  registry. Inert (scale 1, near-zero cost) until something holds. */
+  readonly timeflow = new Timeflow();
   projectiles: Projectile[] = [];
   zones: Zone[] = [];
   /** Mints unique sheet-source keys for domain zones. */
@@ -2431,8 +2437,14 @@ export class World {
       // client's prediction history stays trimmed and never replays stale inputs.
       if (inp?.seq !== undefined) this.lastInputSeq.set(seat.id, inp.seq);
       if (a.dead || a.downed) continue;
+      // THE TIMEFLOW BEND (engine/timeflow.ts): a held seat's intent is
+      // inert — a stasis'd (or menu-paused) hero neither moves nor casts;
+      // the DOM menus above stay live, and the seq ack above already kept
+      // client prediction honest. Fractional time bends the walk below.
+      const tf = this.timeflow.scaleFor(a);
+      if (tf <= 0) continue;
       if (!inp) continue;
-      this.moveActor(a, inp.dx, inp.dy, dt);
+      this.moveActor(a, inp.dx, inp.dy, tf === 1 ? dt : dt * tf);
       const aim = inp.aim;
       // LIVE aim for guided projectiles (guidePower) — refreshed every frame,
       // so a missile already in flight keeps chasing the moving cursor.
@@ -14382,6 +14394,31 @@ export class World {
     }
   }
 
+  /** Mint a timeflow hold from a ChronoSpec on behalf of `caster` — the one
+   *  bridge every time-bending source crosses (SkillDef.chrono today; procs,
+   *  vestige words or scripted moments tomorrow — hand each its own hold id
+   *  and duration and it composes). `exempt` names the caster's circle;
+   *  `world: true` bends the WHOLE sim instead (cinematic territory). */
+  castChrono(caster: Actor, spec: ChronoSpec, id: string, duration: number, label?: string): void {
+    let actors: ActorTimeFilter | undefined;
+    if (!spec.world) {
+      const ex = spec.exempt ?? 'pack';
+      actors = ex === 'caster' ? { exceptIds: [caster.id] }
+        : ex === 'pack' ? { exceptIds: [caster.id], exceptOwnedBy: [caster.id] }
+        : ex === 'team' ? { exceptTeam: caster.team }
+        : {}; // 'none': every body bends, the caster's included
+    }
+    this.timeflow.hold({
+      id, scale: spec.scale, kind: 'skill', duration, actors,
+      hud: spec.hud ?? {
+        tint: 'rgba(150,200,225,0.14)',
+        label: label ?? 'time bends',
+      },
+    });
+    this.text(vec(caster.pos.x, caster.pos.y - 26),
+      spec.scale <= 0 ? 'time stops!' : 'time bends!', '#a8ecf0', 14);
+  }
+
   /**
    * Resolve one use of a skill: deliveries, effects, totem conversion.
    * Costs and validation already happened at press time.
@@ -14446,6 +14483,16 @@ export class World {
         }
         this.text(vec(caster.pos.x, caster.pos.y - 22), `power ${power}`, def.color, 11);
       }
+    }
+    // CHRONOMANCY (SkillDef.chrono → engine/timeflow.ts): the cast bends
+    // TIME ITSELF — a timeflow hold exempting the caster's chosen circle,
+    // its span riding effectDuration investment like any other duration.
+    // One hold id per caster+skill, so a re-cast refreshes rather than
+    // stacking; scheduled repeats/sequence steps never re-mint it.
+    if (def.chrono && !opts.noRepeat) {
+      this.castChrono(caster, def.chrono, `chrono:${caster.id}:${def.id}`,
+        def.chrono.duration * caster.sheet.get('effectDuration', tags, extra),
+        def.name);
     }
     // SACRIFICE (support graft): the cast CONSUMES your nearest minion —
     // its remaining life becomes MORE damage on this use. The altar always
@@ -22197,6 +22244,15 @@ export class World {
 
   update(dt: number): void {
     if (this.gameOver) return;
+    // THE TIMEFLOW GATE (engine/timeflow.ts): holds age on RAW seconds
+    // first (a freeze must be able to expire out of the very clock it
+    // stops), then the folded WORLD scale bends this whole frame — 0 holds
+    // the world (the pause menu, an Ultimatum-style choice), fractions are
+    // world slow-motion. A held world still RENDERS (the loop keeps
+    // drawing); it just stops mutating, wholesale and drift-free.
+    const rawDt = dt;
+    dt *= this.timeflow.beginFrame(rawDt);
+    if (dt <= 0) return;
     this.time += dt;
     // Fresh actor-grid epoch: the AI phase just moved monsters (kernels call
     // moveActor directly), so spatial queries from here read current bodies.
@@ -22542,11 +22598,21 @@ export class World {
     if (this.lockHint > 0) this.lockHint -= dt;
 
     // Actors: timers, DoT, dash movement, lifespans.
+    const flowDt = dt; // the world-scaled frame; each body bends it below
     for (const a of this.actors) {
       if (a.dead) continue;
       // A downed co-op seat is frozen: no timers, DoT, regen, casting or movement
       // until an ally revives it. (life is 0; skipping avoids re-entering kill.)
       if (a.downed) continue;
+      // THE TIMEFLOW BEND (engine/timeflow.ts): each body lives at its own
+      // rate. A fully held one (stasis, a chronomancer's stop) suspends
+      // WHOLESALE — everything this loop body does: timers, DoTs, casting,
+      // dash, decay, lifespan — except its chrono statuses, which burn on
+      // raw seconds so the freeze can expire. Fractional rates SHADOW `dt`,
+      // so the entire body below inherits the bend untouched.
+      const atf = this.timeflow.actorScale(a);
+      if (atf <= 0) { a.tickChronoStatuses(rawDt); continue; }
+      const dt = atf === 1 ? flowDt : flowDt * atf;
       // EXPONENTIAL UNLIFE (decay minions): the survival meter drains at an
       // accelerating rate — unmitigable, only healing races it, and healing
       // loses on schedule. Death is REAL (Martyrdom, contracts, Deadwake).
@@ -22582,7 +22648,7 @@ export class World {
           continue;
         }
       }
-      const dot = a.updateTimers(dt);
+      const dot = a.updateTimers(dt, rawDt);
       if (dot) {
         // TYPED ticks: each element pools separately so tag-filtered DoT
         // interactions (esDotBypass per element, tagged damageTaken) apply.
@@ -24588,7 +24654,9 @@ export class World {
       const L = a.leap;
       if (!L) continue;
       if (a.dead) { a.leap = undefined; continue; }
-      L.timer -= dt;
+      // A held body hangs MID-LEAP (engine/timeflow.ts): its clock stops, so
+      // the interpolation below re-derives the same airborne point each frame.
+      L.timer -= dt * this.timeflow.actorScale(a);
       const t = clamp(1 - L.timer / L.total, 0, 1);
       // Airborne: raw interpolation, no terrain collision — you're above it.
       a.pos = vec(L.from.x + (L.dest.x - L.from.x) * t, L.from.y + (L.dest.y - L.from.y) * t);
@@ -25239,7 +25307,7 @@ export class World {
   private updateFollowUps(dt: number): void {
     for (let i = this.pendingFollowUps.length - 1; i >= 0; i--) {
       const p = this.pendingFollowUps[i];
-      p.timer -= dt;
+      p.timer -= dt * this.timeflow.actorScale(p.caster); // held casters' payloads wait
       if (p.timer > 0) continue;
       this.pendingFollowUps.splice(i, 1);
       if (p.caster.dead) continue;
@@ -25996,7 +26064,9 @@ export class World {
     for (let i = this.pendingSalvos.length - 1; i >= 0; i--) {
       const s = this.pendingSalvos[i];
       if (s.caster.dead) { this.pendingSalvos.splice(i, 1); continue; }
-      s.timer -= dt;
+      // A held caster's train holds with it (engine/timeflow.ts) — a frozen
+      // crossbowman's salvo does not keep firing around the freeze.
+      s.timer -= dt * this.timeflow.actorScale(s.caster);
       if (s.timer > 0) continue;
       s.timer += s.interval;
       const aim = s.caster.aimPos ?? s.aim;
@@ -26011,7 +26081,7 @@ export class World {
     for (let i = this.pendingSteps.length - 1; i >= 0; i--) {
       const s = this.pendingSteps[i];
       if (s.caster.dead) { this.pendingSteps.splice(i, 1); continue; }
-      s.timer -= dt;
+      s.timer -= dt * this.timeflow.actorScale(s.caster); // figures hold with their dancer
       if (s.timer > 0) continue;
       this.pendingSteps.splice(i, 1);
       this.executeSkill(s.caster, s.inst, s.aim, {
@@ -26023,7 +26093,7 @@ export class World {
     for (let i = this.pendingRepeats.length - 1; i >= 0; i--) {
       const r = this.pendingRepeats[i];
       if (r.caster.dead) { this.pendingRepeats.splice(i, 1); continue; }
-      r.timer -= dt;
+      r.timer -= dt * this.timeflow.actorScale(r.caster); // echoes hold with their voice
       if (r.timer > 0) continue;
       r.timer += r.interval;
       // Multistrike re-aims each strike at the nearest enemy in reach.
@@ -27199,8 +27269,16 @@ export class World {
   }
 
   private updateProjectiles(dt: number): void {
+    const flowDt = dt; // the world-scaled frame; each flight bends it below
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const p = this.projectiles[i];
+      // THE TIMEFLOW BEND (engine/timeflow.ts): a projectile flies on its
+      // CASTER's clock — a held caster's volley hangs mid-air and lands
+      // when time resumes (the frozen quiver is half the time-stop
+      // fantasy). The shadowed `dt` bends age, travel, zaps and steering.
+      const ptf = this.timeflow.actorScale(p.caster);
+      if (ptf <= 0) continue;
+      const dt = ptf === 1 ? flowDt : flowDt * ptf;
       const prev = vec(p.pos.x, p.pos.y);
       p.pos = this.advanceProjectile(p, dt);
       // Keep `dir` pointing along actual motion for rendering & chains.

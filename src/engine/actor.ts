@@ -1855,11 +1855,35 @@ export class Actor {
     if (sheetChanged) this.condSheet = this.sheet;
   }
 
+  /** RAW-CLOCK status tick for a body whose OWN time is fully held
+   *  (engine/timeflow.ts, actorScale 0 — the world skips its update
+   *  wholesale): only CHRONO statuses — the ones bending this body's time
+   *  (StatusDef.timeScale) — burn down, on unbent seconds, so a stasis
+   *  always expires out of the very freeze it causes. Everything else on
+   *  the body waits, exactly as frozen time should have it. */
+  tickChronoStatuses(rawDt: number): void {
+    for (let i = this.statuses.length - 1; i >= 0; i--) {
+      const s = this.statuses[i];
+      if (STATUS_DEFS[s.id]?.timeScale === undefined) continue;
+      s.remaining -= rawDt;
+      if (s.remaining <= 0) {
+        this.statuses.splice(i, 1);
+        this.expiredStatuses.push(s); // world processes ruptures
+        if (!this.statuses.some(o => o.id === s.id)) this.sheet.removeSource('status:' + s.id);
+      }
+    }
+  }
+
   /** Tick durations; returns the frame's DoT damage to inflict, BY DAMAGE
    *  TYPE (statuses without a dotType pool under 'untyped') — so the DoT
    *  pipeline can honour element-tagged interactions (esDotBypass per
-   *  element, tagged damageTaken). Null when nothing ticked. */
-  updateTimers(dt: number): Partial<Record<DamageType | 'untyped', number>> | null {
+   *  element, tagged damageTaken). Null when nothing ticked.
+   *  `chronoDt` is the UNBENT frame time (engine/timeflow.ts): statuses
+   *  that bend this body's clock (StatusDef.timeScale) burn their own
+   *  duration on it, so a temporal drag lasts its authored seconds — never
+   *  stretched by the very slow-motion it causes. Callers outside the
+   *  timeflow bend omit it (defaults to dt). */
+  updateTimers(dt: number, chronoDt = dt): Partial<Record<DamageType | 'untyped', number>> | null {
     this.refreshConditions();
     // The RECENT-WOUND clock (GateSpec.recentDamage — Reprisal's license):
     // seconds since this actor last took damage; the world zeroes it at
@@ -1933,7 +1957,8 @@ export class Actor {
     let dot: Partial<Record<DamageType | 'untyped', number>> | null = null;
     for (let i = this.statuses.length - 1; i >= 0; i--) {
       const s = this.statuses[i];
-      s.remaining -= dt;
+      // Chrono statuses expire on the unbent clock (see chronoDt above).
+      s.remaining -= STATUS_DEFS[s.id]?.timeScale !== undefined ? chronoDt : dt;
       if (s.dps > 0) {
         const sdef = STATUS_DEFS[s.id];
         const key = sdef?.dotType ?? 'untyped';
