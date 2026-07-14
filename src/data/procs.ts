@@ -199,6 +199,15 @@ export const PROCS: Record<string, ProcDef> = {
     effect: { type: 'extraHit', damageScale: 0.6 },
   },
 
+  // THE PARASITE'S SIP (the Caul arts): every landed hit drinks a little —
+  // flat, icd-gated, through healBy like every heal. The Parasitic Pact
+  // support is the first grantor; any affix/passive can wear it next.
+  parasite_sip: {
+    id: 'parasite_sip', name: 'Parasite\'s Sip',
+    color: '#9a72c8', trigger: 'hit', icd: 1.2,
+    effect: { type: 'heal', flat: 4 },
+  },
+
   // THE PATHCUTTER'S STRIDE — the machete-flow reward on the 'surface'
   // trigger: hack a plug open (or shatter any brittle) and move like you
   // mean it for a few breaths. Sheet-granted only (the 'of the Pathcutter'

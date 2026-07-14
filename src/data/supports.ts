@@ -54,6 +54,24 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The Symbiote grafts (the Caul arts' support pair) --------------------
+  grasping_tendrils: {
+    id: 'grasping_tendrils', name: 'Grasping Tendrils',
+    description: 'This skill\'s edge grows BARBS of living cord: hits snare far more readily, and the grip squeezes a little extra hurt out of whatever it holds.',
+    color: '#8a6ab0', requiresTags: ['melee'],
+    mods: [mod('apply_ensnared', 'flat', 0.2), mod('damage', 'increased', 0.08)],
+    perLevel: [mod('apply_ensnared', 'flat', 0.03)],
+    weight: 6,
+  },
+  parasitic_pact: {
+    id: 'parasitic_pact', name: 'Parasitic Pact',
+    description: 'Socket a hungry passenger: every landed hit lets it SIP (a small heal, briefly rationed) — and it sharpens its host out of pure self-interest.',
+    color: '#9a72c8', requiresTags: ['attack'],
+    mods: [mod('proc_parasite_sip', 'flat', 1), mod('damage', 'increased', 0.06)],
+    perLevel: [mod('damage', 'increased', 0.02)],
+    weight: 5,
+  },
+
   // --- The parity pass's family gems ------------------------------------------
   // Coverage for the tags the class expansion leans on: the skald's songs,
   // the chronomancer's clockwork (previously ZERO dedicated supports), the
