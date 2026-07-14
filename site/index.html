@@ -98,16 +98,26 @@
      can't drag-copy it, only read it. */
   .hero-lockup{position:relative;display:inline-block;margin:26px auto 4px;-webkit-user-select:none;user-select:none}
   .hero .eyebrow,.hero .tagline{-webkit-user-select:none;user-select:none}
+  /* Glyph glow lives on this radial layer, NOT on a text-shadow: Gecko
+     composites text-shadow over gradient-clipped text (mud), Blink behind it
+     (halo) — a separate layer renders identically in both. will-change on
+     every breathing element keeps the animation on the compositor (Firefox
+     otherwise re-rasterizes the gradient text per frame — the chop). */
   .hero-lockup::before{content:"";position:absolute;inset:-34% -18%;pointer-events:none;
-    background:radial-gradient(closest-side,rgba(79,214,196,.17),rgba(169,139,255,.08) 52%,transparent 76%);
-    animation:hw-glow 7.2s ease-in-out infinite}
-  .hero-mark{position:absolute;left:50%;top:50%;width:clamp(300px,44vw,560px);height:auto;pointer-events:none;
-    transform:translate(-50%,-52%);opacity:.15;animation:hw-mark 7.2s ease-in-out infinite}
+    background:radial-gradient(closest-side,rgba(79,214,196,.22),rgba(169,139,255,.10) 52%,transparent 76%);
+    animation:hw-glow 7.2s ease-in-out infinite;will-change:opacity}
+  /* the wrap owns PLACEMENT (and the observer takeover below); the svg owns
+     only its own breath, so the two transforms never fight */
+  .hero-mark-wrap{position:absolute;left:50%;top:50%;width:clamp(300px,44vw,560px);pointer-events:none;
+    transform:translate(-50%,-52%);z-index:0;will-change:transform,opacity}
+  .hero-mark-wrap.observing{position:fixed;left:0;top:0;z-index:-1}
+  .hero-mark{display:block;width:100%;height:auto;opacity:.15;animation:hw-mark 7.2s ease-in-out infinite;will-change:transform,opacity}
   .hero h1{position:relative;z-index:1;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(56px,15vw,120px);letter-spacing:.02em;margin:0;
-    background:linear-gradient(180deg,#ffffff 8%, #cfd6e6 52%, #8b96b4 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
-    text-shadow:0 0 60px rgba(79,214,196,.22);animation:hw-breathe 7.2s ease-in-out infinite}
+    background:linear-gradient(180deg,#ffffff 8%, #cfd6e6 52%, #8b96b4 100%);-webkit-background-clip:text;background-clip:text;
+    color:transparent;-webkit-text-fill-color:transparent;
+    animation:hw-breathe 7.2s ease-in-out infinite;will-change:transform}
   @keyframes hw-breathe{0%,100%{transform:scale(1)}44%{transform:scale(1.024)}}
-  @keyframes hw-mark{0%,100%{transform:translate(-50%,-52%) scale(1);opacity:.11}44%{transform:translate(-50%,-52%) scale(1.05);opacity:.21}}
+  @keyframes hw-mark{0%,100%{transform:scale(1);opacity:.11}44%{transform:scale(1.05);opacity:.21}}
   @keyframes hw-glow{0%,100%{opacity:.45}44%{opacity:1}}
   @media (prefers-reduced-motion:reduce){.hero h1,.hero-mark,.hero-lockup::before{animation:none}}
   .hero .tagline{font-family:'Space Grotesk',sans-serif;font-size:clamp(17px,2.4vw,23px);font-weight:500;color:var(--ink);letter-spacing:.01em}
@@ -245,6 +255,7 @@
          the same three colours the backdrop's flickers wear. Deliberately
          unselectable: the name is an impression, not a string to copy. -->
     <div class="hero-lockup">
+      <div class="hero-mark-wrap" aria-hidden="true">
       <svg class="hero-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
         <circle cx="16" cy="16" r="12" stroke="url(#hwHeroGrad)" stroke-width=".2" opacity=".8"/>
         <path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#hwHeroGrad)" stroke-width=".16" opacity=".55"/>
@@ -254,6 +265,7 @@
         <circle cx="5.6" cy="22" r="2" fill="#ff8a4c" opacity=".16"/><circle cx="5.6" cy="22" r=".8" fill="#ff8a4c"/>
         <defs><linearGradient id="hwHeroGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs>
       </svg>
+      </div>
       <h1 class="display">Hollow Wake</h1>
     </div>
     <p class="tagline">A world that keeps <b>generating itself.</b></p>
@@ -590,6 +602,42 @@ npm run <span class="g">build</span></pre>
     /* safety net: never leave content stuck hidden if the observer misfires */
     setTimeout(function(){ revs.forEach(function(el){ var r=el.getBoundingClientRect(); if(r.top < window.innerHeight*1.2) el.classList.add('in'); }); }, 2600);
   } else { revealAll(); }
+
+  /* THE OBSERVER — scroll, and the insignia detaches from the title to creep
+     toward the centre of the backdrop, where it stays for the whole page:
+     the thing that made the world, watching you read about it. Scroll-driven
+     only (it moves exactly as much as you do), fixed BEHIND all content
+     (z:-1 in the content plane), and skipped entirely under reduced-motion —
+     there the mark simply stays anchored in the hero. */
+  var mwrap = document.querySelector('.hero-mark-wrap'), mlock = document.querySelector('.hero-lockup');
+  if(mwrap && mlock && !reduce){
+    var mAX = 0, mADocY = 0;
+    var mPlace = function(){
+      var vw = window.innerWidth, vh = window.innerHeight, s = window.scrollY || window.pageYOffset || 0;
+      var t = Math.min(1, s/(vh*1.05)), p = t*t*(3-2*t);   /* smoothstep = the creep */
+      var heroW = Math.min(Math.max(300, vw*.44), 560);
+      var obsW  = Math.min(vh*.72, vw*.8, 700);
+      var ay = mADocY - s;
+      var x = mAX + (vw/2 - mAX)*p, y = ay + (vh*.5 - ay)*p;
+      mwrap.style.width = (heroW + (obsW - heroW)*p) + 'px';
+      /* -52%→-50% self-offset blends in so p=0 matches the CSS anchor exactly */
+      mwrap.style.transform = 'translate(' + x + 'px,' + y + 'px) translate(-50%,' + (-52 + 2*p) + '%)';
+      mwrap.style.opacity = String(1 - .45*p);
+    };
+    var mMeasure = function(){
+      var r = mlock.getBoundingClientRect();
+      mAX = r.left + r.width/2;
+      mADocY = r.top + (window.scrollY || window.pageYOffset || 0) + r.height/2;
+      mPlace();
+    };
+    mwrap.classList.add('observing');
+    window.addEventListener('scroll', mPlace, {passive:true});
+    window.addEventListener('resize', mMeasure);
+    /* re-anchor once the display font lands (Cinzel shifts the lockup box) */
+    window.addEventListener('load', mMeasure);
+    if(document.fonts && document.fonts.ready && document.fonts.ready.then) document.fonts.ready.then(mMeasure);
+    mMeasure();
+  }
 
   /* stat band — numbers come from the exported data/meta.json so they never go
      stale. Real deploy → floored live counts ("400+"); sample/preview or no data
