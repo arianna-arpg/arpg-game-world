@@ -2912,6 +2912,10 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'harp_pillar', count: [4, 7] },
           { kind: 'seraph_statue', count: [2, 4] },
           { kind: 'flowers', count: [2, 4] },
+          // Golden-hour pasture: the fleece lies thickest at dawn.
+          { kind: 'cloudwool_tuft', count: [5, 9] },
+          { kind: 'skyglass_spur', count: [1, 3] },
+          { kind: 'updraft_vent', count: [0, 2] },
         ],
         theme: {
           accent: '#ffd88a', dayLight: 1.35,
@@ -2937,6 +2941,10 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'aether_crystal', count: [5, 9] },
           { kind: 'prayer_bell', count: [2, 4] },
           { kind: 'seraph_statue', count: [1, 2] },
+          // Violet hour: the tines sing loudest at dusk; sparse pasture.
+          { kind: 'skyglass_spur', count: [3, 6] },
+          { kind: 'cloudwool_tuft', count: [2, 4] },
+          { kind: 'updraft_vent', count: [0, 1] },
         ],
         theme: {
           floor: '#c9cfe6', accent: '#c8b8ff', nightDark: 0.62, dayLight: 1.05,
@@ -2965,6 +2973,9 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'cloud_billow', count: [12, 18] },
           { kind: 'aether_crystal', count: [3, 6] },
           { kind: 'harp_pillar', count: [2, 4] },
+          // Storm country: the rifts breathe hardest here — speed-pad runs.
+          { kind: 'updraft_vent', count: [1, 3] },
+          { kind: 'skyglass_spur', count: [1, 3] },
         ],
         theme: {
           floor: '#cdd3e0', accent: '#9fd8e8', dayLight: 0.95,
@@ -3087,6 +3098,9 @@ export const TILESETS: Record<string, TilesetDef> = {
           { kind: 'seraph_statue', count: [3, 5] },
           { kind: 'harp_pillar', count: [5, 9] },
           { kind: 'aether_crystal', count: [4, 7] },
+          // Evening dressing: fonts steam violet, tines chorus the galleries.
+          { kind: 'mist_font', count: [1, 3] },
+          { kind: 'skyglass_spur', count: [2, 4] },
         ],
         theme: {
           floor: '#d4d6ea', accent: '#c8b8ff', dayLight: 1.05, nightDark: 0.6,

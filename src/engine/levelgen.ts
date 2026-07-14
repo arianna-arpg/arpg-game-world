@@ -1131,7 +1131,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['hit'], text: 'the skyglass sings apart!', color: '#cfe8f8' } },
   // THE SPEED PAD axis (status_wash): stand in the plume, walk quicker —
   // the whole pad/font/choke family is one DoodadRule.effect row per kind.
-  updraft_vent:   { overlap: 'ground', spacing: 170,
+  // Spacing stays modest: the torn lattices are CRAMPED, and a spacing that
+  // must clear every billow/pillar starves the roll to zero placements.
+  updraft_vent:   { overlap: 'ground', spacing: 90,
     effect: { id: 'status_wash', statusId: 'windswept', interval: 0.8, radius: 46, chance: 1, power: 2.5 } },
   cloudwool_tuft: { overlap: 'ground', spacing: 36 },
   chime_stand:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85 },
