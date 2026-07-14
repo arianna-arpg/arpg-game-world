@@ -54,6 +54,15 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
     label: 'Stealth', color: '#4a5a78',
   },
 
+  // VERSE (the skald's meter): banked one per sung verse — war_chant and
+  // dissonance each tap 'use' — and spent whole by the Coda. Mute fuel by
+  // design (damagePerCharge is the payoff); a rest too long and the music
+  // forgets itself.
+  verse: {
+    label: 'Verse', color: '#d8a8e0',
+    decay: { perSec: 0.5, delay: 8 },
+  },
+
   // RIPOSTE (Answering Steel): banked by MADE BLOCKS — guard, passive, or
   // parry — and spent by the answering thrust. Mute fuel; the meta-skill
   // is the payoff. Fades once the shield stops working.

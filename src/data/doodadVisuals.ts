@@ -632,6 +632,21 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'potCluster', order: 53, shadow: 0.5,
     params: { clay: '#7a5638', lid: '#c8a878' },
   },
+  // --- The parity-pass wayside kit (existing painters, new clothes) ---------
+  chronolith: {
+    painter: 'shard', order: 55, shadow: 0.6, longShadow: 1.5,
+    params: { points: 4, color: '#3a5a5e', material: 'stone', coreGlow: { color: '#8ae0e0' } },
+    light: { radius: -2.4, color: '#8ae0e0', intensity: 0.24, flicker: 9 },
+  },
+  meditation_cairn: {
+    painter: 'cairn', order: 54, shadow: 0.5, longShadow: 0.9,
+    params: { color: '#b8b4a8', edge: '#e8e0c8' },
+    light: { radius: -1.6, color: '#e8e0c8', intensity: 0.12 },
+  },
+  rusted_snare: {
+    painter: 'finBlade', order: 52, shadow: 0.3,
+    params: { color: '#7a6a52', edge: '#a89078' },
+  },
   palisade_spikes: {
     painter: 'palisade', order: 52, longShadow: 0.6,
     params: { fill: '#6a5238', edge: '#2c2418', material: 'wood' },

@@ -59,6 +59,10 @@ export type SkillTag =
   // magazines): their cast/channel time divides by the reloadSpeed stat,
   // and reload-scoped modifiers reach ONLY the rack, never the shot.
   | 'reload'
+  // 'song' marks the skald's battle-music (worn verse-banking fields and
+  // their crescendo spenders) so song-scoped supports and tag-filtered
+  // investment can find the whole hymnal, never one note.
+  | 'song'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';

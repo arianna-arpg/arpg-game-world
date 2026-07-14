@@ -39,7 +39,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'stun', chance: 0.35 },
       { type: 'knockback', strength: 90 },
     ],
-    requirements: { strength: 18 },
+    requirements: { strength: 14 },
     ai: { range: 55, weight: 3 },
   },
 
@@ -105,7 +105,7 @@ export const SKILLS: Record<string, SkillDef> = {
     baseDamage: { physical: [8, 12] },
     delivery: { type: 'nova', radius: 75 },
     effects: [{ type: 'damage' }],
-    requirements: { strength: 14, dexterity: 14 },
+    requirements: { strength: 14, dexterity: 10 },
     ai: { range: 65, weight: 2 },
   },
 
@@ -1114,7 +1114,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'summon', monsterId: 'skeleton_warrior', count: 1, maxActive: 4 },
     meta: { skillId: 'command_assault', label: 'Attack!' },
     effects: [],
-    requirements: { willpower: 16 },
+    requirements: { wisdom: 14, willpower: 10 },
     ai: { range: 400, weight: 2, keepDistance: 300 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
   },
@@ -1126,7 +1126,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 25, cooldown: 2.5, useTime: 1,
     delivery: { type: 'summon', monsterId: 'skeleton_archer', count: 1, maxActive: 2 },
     effects: [],
-    requirements: { willpower: 16 },
+    requirements: { wisdom: 14, willpower: 10 },
     ai: { range: 400, weight: 2, keepDistance: 300 },
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.15)] },
   },
@@ -1281,7 +1281,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'status', status: 'bleed', chance: 0.2, magnitude: 0.25 },
     ],
-    requirements: { dexterity: 18 },
+    requirements: { dexterity: 16 },
     ai: { range: 130, weight: 2 },
   },
 
@@ -1860,7 +1860,7 @@ export const SKILLS: Record<string, SkillDef> = {
       type: 'buff', id: 'invisibility', duration: 2.5,
       mods: [mod('invisible', 'override', 1)],
     }],
-    requirements: { dexterity: 22, intelligence: 10 },
+    requirements: { dexterity: 14, finesse: 10 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
   },
 
@@ -1871,7 +1871,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 10, cooldown: 6, useTime: 0,
     delivery: { type: 'dash', distance: 240, speed: 800, width: 0, decoyDuration: 6 },
     effects: [],
-    requirements: { dexterity: 16 },
+    requirements: { dexterity: 12, charisma: 6 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.1)] },
   },
 
@@ -2019,7 +2019,7 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'target' },
     effects: [{ type: 'damage' }],
     ai: { range: 60, weight: 3 },
-    requirements: { strength: 14 },
+    requirements: { dexterity: 12, finesse: 10 },
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
 
@@ -2037,7 +2037,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'status', status: 'stun', chance: 0.3 },
     ],
-    requirements: { strength: 14, dexterity: 10 },
+    requirements: { strength: 14, fortitude: 10 },
     leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
   },
 
@@ -2170,7 +2170,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'status', status: 'stun', chance: 0.2 },
     ],
-    requirements: { strength: 16, intelligence: 10 },
+    requirements: { strength: 10, fortitude: 12 },
     ai: { range: 220, weight: 2 },
     leveling: { perLevel: [mod('damage', 'increased', 0.12), mod('effectDuration', 'increased', 0.05)] },
   },
@@ -2471,7 +2471,7 @@ export const SKILLS: Record<string, SkillDef> = {
     baseDamage: { physical: [5, 8] },
     delivery: { type: 'projectile', speed: 440, radius: 6, range: 300, count: 5, spreadDeg: 70 },
     effects: [{ type: 'damage' }],
-    requirements: { dexterity: 22 },
+    requirements: { dexterity: 18 },
     ai: { range: 260, weight: 3, keepDistance: 180 },
   },
 
@@ -2567,7 +2567,7 @@ export const SKILLS: Record<string, SkillDef> = {
     innateMods: [mod('thorns', 'flat', 8, undefined, 'guarding')],
     delivery: { type: 'self' },
     effects: [],
-    requirements: { strength: 18 },
+    requirements: { strength: 12, fortitude: 12 },
     ai: { range: 220, weight: 2 },
     leveling: { perLevel: [mod('guardStrength', 'increased', 0.14), mod('thorns', 'flat', 2, undefined, 'guarding')] },
   },
@@ -2585,7 +2585,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'stun', chance: 0.35 },
       { type: 'knockback', strength: 30 },
     ],
-    requirements: { strength: 20 },
+    requirements: { strength: 12, fortitude: 14 },
     ai: { range: 100, weight: 2 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
@@ -2636,7 +2636,7 @@ export const SKILLS: Record<string, SkillDef> = {
     usableWhileGuarding: true,
     delivery: { type: 'nova', radius: 240, affects: 'enemies' },
     effects: [{ type: 'status', status: 'taunted', chance: 1 }],
-    requirements: { strength: 16 },
+    requirements: { strength: 12, charisma: 8 },
     ai: { range: 200, weight: 1.4 },
     leveling: { perLevel: [mod('aoeRadius', 'increased', 0.08), mod('cooldownRecovery', 'increased', 0.06)] },
   },
@@ -2706,7 +2706,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'taunted', chance: 1 },
     ],
     innateMods: [mod('threatGen', 'more', 1.0)],
-    requirements: { strength: 12, dexterity: 10 },
+    requirements: { dexterity: 12 },
     minDropLevel: 5,
     ai: { range: 480, weight: 1.4 },
     leveling: { perLevel: [mod('damage', 'increased', 0.09), mod('projectileSpeed', 'increased', 0.03)] },
@@ -2814,7 +2814,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'knockback', strength: 40 },
     ],
-    requirements: { strength: 22 },
+    requirements: { strength: 20 },
     ai: { range: 105, weight: 3 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
@@ -3042,7 +3042,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'absorb', amount: 45, duration: 8 },
       { type: 'status', status: 'warded', chance: 1 },
     ],
-    requirements: { willpower: 18, strength: 10 },
+    requirements: { fortitude: 14, willpower: 6 },
     ai: { range: 220, weight: 1 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.06)] },
   },
@@ -3131,7 +3131,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'status', status: 'bleed', chance: 0.35, magnitude: 0.4 },
     ],
-    requirements: { dexterity: 22 },
+    requirements: { dexterity: 16 },
     ai: { range: 52, weight: 3 },
   },
 
@@ -3142,7 +3142,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 15, cooldown: 9, useTime: 0.5,
     delivery: { type: 'nova', radius: 220, affects: 'allies' },
     effects: [{ type: 'status', status: 'rally', chance: 1 }],
-    requirements: { strength: 14, willpower: 14 },
+    requirements: { strength: 10, fortitude: 12 },
     ai: { range: 240, weight: 1 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.1), mod('aoeRadius', 'increased', 0.06)] },
   },
@@ -3359,7 +3359,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'stun', chance: 1 },
       { type: 'pull', stun: 1.4 },
     ],
-    requirements: { strength: 16, dexterity: 12 },
+    requirements: { strength: 12, prowess: 10 },
     ai: { range: 380, weight: 2 },
   },
 
@@ -3501,7 +3501,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'knockback', strength: 22 },
       { type: 'status', status: 'stun', chance: 0.12 },
     ],
-    requirements: { strength: 22 },
+    requirements: { strength: 20 },
     ai: { range: 110, weight: 2 },
   },
 
@@ -3862,7 +3862,7 @@ export const SKILLS: Record<string, SkillDef> = {
     manaCost: 18, cooldown: 16, useTime: 0,
     delivery: { type: 'self' },
     effects: [{ type: 'reduceCooldowns', seconds: 2, fraction: 0.25 }],
-    requirements: { intelligence: 20 },
+    requirements: { willpower: 14, intelligence: 12 },
     leveling: { perLevel: [mod('cooldownRecovery', 'increased', 0.06)] },
   },
 
@@ -3993,7 +3993,7 @@ export const SKILLS: Record<string, SkillDef> = {
       upkeep: { reserveMana: 30 },
     },
     effects: [],
-    requirements: { strength: 14, vitality: 12 },
+    requirements: { fortitude: 10, vitality: 12 },
     leveling: { perLevel: [mod('aoeRadius', 'increased', 0.06)] },
   },
 
@@ -4123,7 +4123,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'status', status: 'stasis', chance: 0.8 },
       { type: 'status', status: 'temporal_drag', chance: 1 },
     ],
-    requirements: { intelligence: 18, willpower: 10 },
+    requirements: { intelligence: 12, willpower: 12 },
     ai: { range: 440, weight: 2, keepDistance: 260 },
     leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('effectDuration', 'increased', 0.04)] },
   },
@@ -4214,7 +4214,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'heal', amount: 3, pctMax: 0.008 },
     ],
-    requirements: { willpower: 16, strength: 8 },
+    requirements: { willpower: 14 },
     ai: { range: 280, weight: 2 },
     leveling: { perLevel: [mod('healPower', 'increased', 0.07), mod('damage', 'increased', 0.07)] },
   },
@@ -4261,7 +4261,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'heal', amount: 7, pctMax: 0.02, excludeCaster: true },
     ],
-    requirements: { strength: 10, willpower: 12 },
+    requirements: { strength: 6, willpower: 12 },
     ai: { range: 65, weight: 2 },
     leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('healPower', 'increased', 0.08)] },
   },
@@ -5198,7 +5198,7 @@ export const SKILLS: Record<string, SkillDef> = {
       },
     },
     effects: [],
-    requirements: { dexterity: 16, intelligence: 12 },
+    requirements: { dexterity: 14, intelligence: 8 },
     leveling: {
       perLevel: [mod('mirageDamage', 'increased', 0.06), mod('minionLife', 'increased', 0.08)],
     },
@@ -5906,7 +5906,7 @@ export const SKILLS: Record<string, SkillDef> = {
       { type: 'damage' },
       { type: 'status', status: 'burn', chance: 0.4, magnitude: 0.35 },
     ],
-    requirements: { intelligence: 26 },
+    requirements: { intelligence: 20 },
     ai: { range: 400, weight: 2, keepDistance: 300 },
   },
 
@@ -6165,7 +6165,7 @@ export const SKILLS: Record<string, SkillDef> = {
     },
     delivery: { type: 'self' },
     effects: [],
-    requirements: { intelligence: 20, strength: 8 },
+    requirements: { intelligence: 18 },
     ai: { range: 200, weight: 1 },
     leveling: { perLevel: [mod('guardStrength', 'increased', 0.16)] },
   },
@@ -8010,6 +8010,294 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  // ======================= The class signatures =============================
+  // Starters minted for the CLASS PARITY pass: every class opens with three
+  // skills no other class opens with, and these fill the gaps the existing
+  // catalog left. All ordinary gems — droppable, supportable, monster-usable
+  // through the same pipeline (ai hints included on every one).
+
+  // The Juggernaut's fury engine (Frenzy went home to the drop pool): half
+  // the speed, twice the banking — the slow style feeding the same Fury
+  // court Reckoning empties. Mix-and-match with any fury verb you find.
+  piledriver: {
+    id: 'piledriver', name: 'Piledriver',
+    description: 'One blow, placed like a foundation: a slow crushing jab that BANKS TWO Fury and leans hard on the target\'s poise. The engine of the style that does not stop — bank with this, spend with Reckoning.',
+    tags: ['attack', 'melee', 'physical'], color: '#88b8e0',
+    manaCost: 5, cooldown: 0, useTime: 0.85,
+    baseDamage: { physical: [14, 22] },
+    innateMods: [mod('poiseDamage', 'more', 0.5)],
+    delivery: { type: 'melee', range: 55, arcDeg: 60 },
+    effects: [
+      { type: 'damage' },
+      { type: 'gainCharge', charge: 'fury', amount: 2, max: 5 },
+      { type: 'status', status: 'stun', chance: 0.15 },
+    ],
+    requirements: { strength: 14, fortitude: 8 },
+    ai: { range: 60, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  // The Tamer's approach: not the Rogue's vanishing act — a hunter's HUSH.
+  // Long, walking-pace quiet that keeps the threat chart soft, so the claim
+  // (or the first blow) happens on YOUR terms.
+  stalk: {
+    id: 'stalk', name: 'Stalk',
+    description: 'Drop into the hunter\'s hush: for a long while you read SMALLER to every eye (harder to notice) and your acts book QUIETER on the threat chart — at a careful step. The approach that lets a held gaze finish: the wild answers those who arrive unannounced.',
+    tags: ['buff', 'duration'], color: '#8aa87a',
+    manaCost: 10, cooldown: 10, useTime: 0.3,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'stalk', duration: 10,
+      mods: [
+        mod('detectability', 'more', -0.45),
+        mod('threatGen', 'more', -0.35),
+        mod('moveSpeed', 'increased', -0.08),
+      ],
+    }],
+    requirements: { dexterity: 10, wisdom: 8 },
+    ai: { range: 300, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  // The Trapper's strewn argument: not a device, a CONDITION OF THE GROUND.
+  // Cheap area denial that hobbles the rhythm (reeling) rather than the feet.
+  caltrops: {
+    id: 'caltrops', name: 'Caltrops',
+    description: 'Sling a fistful of forged spikes across the ground: whatever crosses the strewn field takes little cuts that BLEED — and half the time leaves REELING, its rhythm bled out through a punctured sole. The cheapest word for "not through here".',
+    tags: ['physical', 'aoe', 'duration'], color: '#b0a890',
+    manaCost: 8, cooldown: 3, useTime: 0.4,
+    baseDamage: { physical: [3, 5] },
+    delivery: {
+      type: 'ground', radius: 80, castRange: 280,
+      lingerDuration: 8, tickInterval: 0.6,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.5, magnitude: 0.3 },
+      { type: 'status', status: 'reeling', chance: 0.4 },
+    ],
+    requirements: { dexterity: 14 },
+    ai: { range: 260, weight: 2, keepDistance: 160 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.08), mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  // The Brawler's meter: jab, jab, CROSS. The fast half of the pit grammar —
+  // fury banked a knuckle at a time, the third beat swinging heavier.
+  one_two: {
+    id: 'one_two', name: 'One-Two',
+    description: 'Work the jab: fast, cheap knuckles that BANK Fury a hit at a time — and every THIRD beat is the cross, arming the next blow to land stunning. The pit\'s arithmetic: one, two, THREE.',
+    tags: ['attack', 'melee', 'physical'], color: '#d8a878',
+    manaCost: 2, cooldown: 0, useTime: 0.35,
+    baseDamage: { physical: [6, 10] },
+    castCycle: {
+      count: 3,
+      buff: {
+        type: 'buff', id: 'one_two_cross', duration: 6, maxStacks: 1,
+        mods: [],
+        nextHit: { tags: ['melee'], status: 'stun', statusScale: 1.5 },
+      },
+    },
+    delivery: { type: 'melee', range: 46, arcDeg: 50 },
+    effects: [
+      { type: 'damage' },
+      { type: 'gainCharge', charge: 'fury', amount: 1, max: 5 },
+    ],
+    requirements: { prowess: 10 },
+    ai: { range: 50, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('attackSpeed', 'increased', 0.02)] },
+  },
+
+  // The Brawler's answer to Reckoning — same Fury court, different verdict:
+  // Reckoning buys damage, the haymaker buys DISPLACEMENT. Spend where the
+  // wall is.
+  haymaker: {
+    id: 'haymaker', name: 'Haymaker',
+    description: 'Load the hips and SWING: a wound-up hook that spends EVERY banked Fury — each charge putting more weight behind it — and sends the catch REELING across the pit. The knockout is optional; the flight is not.',
+    tags: ['attack', 'melee', 'physical'], color: '#e08858',
+    manaCost: 7, cooldown: 2, useTime: 0.8,
+    baseDamage: { physical: [16, 26] },
+    chargeCost: { charge: 'fury', amount: 'all', optional: true, damagePerCharge: 0.15 },
+    innateMods: [mod('poiseDamage', 'more', 0.35)],
+    delivery: { type: 'melee', range: 50, arcDeg: 40 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 190 },
+      { type: 'status', status: 'stun', chance: 0.25 },
+    ],
+    requirements: { strength: 12, prowess: 10 },
+    ai: { range: 55, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  // The Warlord's planted word: a BANNER, not a shout — the rally that
+  // stays where you put it and holds the line around itself.
+  battle_standard: {
+    id: 'battle_standard', name: 'Battle Standard',
+    description: 'PLANT THE COLORS: a standing banner that rallies everyone fighting beneath it — harder blows, quicker feet — for as long as the cloth flies. Cut it down and the argument ends early; the line holds where the banner does.',
+    tags: ['spell', 'totem', 'aura', 'duration', 'warcry'], color: '#e0b060',
+    manaCost: 20, cooldown: 10, useTime: 0.6,
+    delivery: {
+      type: 'construct', kind: 'pylon', aims: false,
+      range: 0, duration: 16, maxActive: 1, life: 70, placeRange: 240,
+      aura: {
+        radius: 180,
+        allyMods: [mod('damage', 'increased', 0.12), mod('moveSpeed', 'increased', 0.05)],
+      },
+    },
+    effects: [],
+    requirements: { charisma: 12 },
+    ai: { range: 220, weight: 1 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.06), mod('effectDuration', 'increased', 0.06)] },
+    thresholds: [
+      { level: 12, label: 'A second front', mods: [mod('constructMaxCount', 'flat', 1)] },
+    ],
+  },
+
+  // The Warlord's pointed finger: the CHALLENGE fabric aimed at ONE body —
+  // peel it, open it, and let everyone see where to hit it.
+  single_out: {
+    id: 'single_out', name: 'Single Out',
+    description: 'NAME the one that dies first: the called target MUST answer you (taunted) and stands EXPOSED — a window on its health bar everyone in the warband can read. Loud by design: the call books double on the chart.',
+    tags: ['warcry', 'targeted', 'duration'], color: '#e8c04a',
+    manaCost: 10, cooldown: 8, useTime: 0.3,
+    targeting: { target: 'enemy', castRange: 480 },
+    innateMods: [mod('threatGen', 'more', 0.5)],
+    delivery: { type: 'target' },
+    effects: [
+      { type: 'status', status: 'taunted', chance: 1 },
+      { type: 'status', status: 'exposed', chance: 1 },
+    ],
+    requirements: { charisma: 10, strength: 8 },
+    ai: { range: 440, weight: 1.4 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('cooldownRecovery', 'increased', 0.05)] },
+  },
+
+  // --- The SKALD's hymnal (the 'song' family) -------------------------------
+  // Songs are WORN FIELDS on the thurible grammar — the music rides the
+  // singer — and every sung verse BANKS one Verse charge ('use' tap). The
+  // Coda empties the bank. Two songs, one spender: the meter is the build.
+  war_chant: {
+    id: 'war_chant', name: 'War Chant',
+    description: 'RAISE THE MARCHING VERSE: a ring of battle-music rides you, and allies who keep the beat inside it strike harder and faster while it plays. Every singing BANKS a Verse — the Coda spends them all.',
+    tags: ['spell', 'song', 'aoe', 'duration', 'buff'], color: '#d8a8e0',
+    manaCost: 14, cooldown: 6, useTime: 0.4,
+    chargeGain: [{ charge: 'verse', on: 'use', amount: 1, max: 5 }],
+    delivery: {
+      type: 'ground', radius: 130, castRange: 0,
+      lingerDuration: 6, tickInterval: 10,
+      noImpact: true, follow: true,
+      exposure: 0.5, exposureDomain: true,
+      domain: {
+        allyMods: [
+          mod('damage', 'increased', 0.1),
+          mod('attackSpeed', 'increased', 0.06),
+          mod('castSpeed', 'increased', 0.06),
+        ],
+      },
+    },
+    effects: [],
+    requirements: { charisma: 12 },
+    ai: { range: 200, weight: 1 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  dissonance: {
+    id: 'dissonance', name: 'Dissonance',
+    description: 'SING THE WRONG NOTE, on purpose, at everything: a grinding discord rides you, chewing at whoever stands in it and half-convincing them their own hands are wrong (befuddled). Every singing BANKS a Verse for the Coda.',
+    tags: ['spell', 'song', 'aoe', 'duration', 'chaos'], color: '#b088c8',
+    manaCost: 12, cooldown: 6, useTime: 0.4,
+    baseDamage: { chaos: [3, 6] },
+    chargeGain: [{ charge: 'verse', on: 'use', amount: 1, max: 5 }],
+    delivery: {
+      type: 'ground', radius: 130, castRange: 0,
+      lingerDuration: 6, tickInterval: 0.8,
+      noImpact: true, follow: true,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'befuddlement', chance: 0.15 },
+    ],
+    requirements: { charisma: 10, willpower: 6 },
+    ai: { range: 150, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('effectDuration', 'increased', 0.05)] },
+  },
+
+  coda: {
+    id: 'coda', name: 'Coda',
+    description: 'END THE SONG ON EVERYONE AT ONCE: a crashing final chord that spends EVERY banked Verse — each one swelling the blast — and leaves the crowd\'s ears ringing wrong (bewildered). Silence, as a weapon, arrives loudest.',
+    tags: ['spell', 'song', 'aoe', 'physical'], color: '#e8c8f0',
+    manaCost: 10, cooldown: 4, useTime: 0.5,
+    baseDamage: { physical: [12, 20] },
+    chargeCost: { charge: 'verse', amount: 'all', optional: true, damagePerCharge: 0.3 },
+    delivery: { type: 'nova', radius: 180 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 60 },
+      { type: 'status', status: 'bewilder', chance: 0.25 },
+    ],
+    requirements: { charisma: 14 },
+    ai: { range: 150, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  // The Beguiler's whisper: no new fabric — the MADDENED status (the
+  // miasma's madness) delivered as a single pointed suggestion.
+  beguile: {
+    id: 'beguile', name: 'Beguile',
+    description: 'A whispered suggestion with a hook in it: the struck mind turns MADDENED — swinging at whatever stands nearest, friend first — and half forget what their hands were doing (befuddled). You never drew a blade; that was the point.',
+    tags: ['spell', 'projectile', 'chaos', 'duration'], color: '#c890d8',
+    manaCost: 14, cooldown: 6, useTime: 0.45,
+    baseDamage: { chaos: [4, 7] },
+    delivery: { type: 'projectile', speed: 460, radius: 8, range: 480 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'maddened', chance: 1 },
+      { type: 'status', status: 'befuddlement', chance: 0.4 },
+    ],
+    requirements: { charisma: 12 },
+    ai: { range: 440, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('statusMagnitude', 'increased', 0.05)] },
+  },
+
+  // --- The ASCETIC's discipline (stillness as power) ------------------------
+  // The palm ramps ITSELF (self-stack, the kata grammar); the exhale is a
+  // held breath (charge cast). Both read willpower, neither reads rage.
+  mantra_strike: {
+    id: 'mantra_strike', name: 'Mantra Strike',
+    description: 'The open palm, repeated like a spoken truth: each strike settles the mantra deeper — THIS palm alone quickening and hitting harder, stroke on stroke, until the rhythm rests. Not fury. Practice.',
+    tags: ['attack', 'melee', 'physical'], color: '#e8e0c8',
+    manaCost: 3, cooldown: 0, useTime: 0.5,
+    baseDamage: { physical: [9, 15] },
+    selfStack: {
+      mods: [mod('damage', 'increased', 0.06), mod('poiseDamage', 'increased', 0.08)],
+      maxStacks: 6, duration: 2.5, decay: 'peel',
+    },
+    delivery: { type: 'melee', range: 50, arcDeg: 60 },
+    effects: [{ type: 'damage' }],
+    requirements: { willpower: 10, strength: 8 },
+    ai: { range: 55, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
+  long_exhale: {
+    id: 'long_exhale', name: 'Long Exhale',
+    description: 'HOLD THE BREATH — the stillness gathers into the lungs — then let it OUT: a rolling wall of forced air whose weight grows with the wait, shoving the line back WINDED. The monk\'s argument: patience, exhaled.',
+    tags: ['spell', 'physical', 'aoe'], color: '#c8e0d8',
+    manaCost: 10, cooldown: 3, useTime: 0,
+    castMode: 'charge',
+    chargeUp: { maxTime: 1.8, minScale: 0.7, maxScale: 2.4, aoeScaleMax: 1.5 },
+    baseDamage: { physical: [14, 22] },
+    delivery: { type: 'cone', range: 230, arcDeg: 50 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 130 },
+      { type: 'status', status: 'winded', chance: 0.4 },
+    ],
+    requirements: { willpower: 12 },
+    ai: { range: 200, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
   // ======================= Trajectories, returns & shrapnel ================
   // §4: the flight levers as skills — zig-zags that shed, bounces that work
   // the room, recurves, selective pierce, arced convergence, aimed spread.
@@ -9245,7 +9533,7 @@ export const SKILLS: Record<string, SkillDef> = {
       range: 0, duration: 7, maxActive: 1, life: 55, placeRange: 320,
     },
     effects: [],
-    requirements: { intelligence: 18 },
+    requirements: { willpower: 14, intelligence: 10 },
     ai: { range: 240, weight: 1 },
   },
 
@@ -9726,6 +10014,112 @@ export const SKILLS: Record<string, SkillDef> = {
     minDropLevel: 11,
     ai: { range: 150, weight: 1.5 },
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08), mod('aoeRadius', 'increased', 0.05)] },
+  },
+
+  // ==========================================================================
+  // THE CIRRUS KATA — the HIGH AIR itself, learned from the wild sky: vapor
+  // condensed to blade and body. Where the Empyrean speaks judgement and the
+  // Gale lays roads, the Cirrus CHANGES WHAT YOU ARE: its signature is
+  // CLOUDFORM (the 'levitation' stat — every vertical fabric reads it), a
+  // breath of walking on nothing. Loot of the zephyrid kin — the fauna of
+  // the open sky casts these five back at you first.
+  // ==========================================================================
+
+  updraft_burst: {
+    id: 'updraft_burst', name: 'Updraft Burst',
+    description: 'Name a patch of sky-floor and the high air REMEMBERS the geyser: a heartbeat later a column of rising vapor detonates there, hurling bodies aside and stealing the wind from their knees.',
+    tags: ['spell', 'cold', 'physical', 'aoe'], color: '#cfe8f8',
+    manaCost: 16, cooldown: 2.5, useTime: 0.65,
+    baseDamage: { cold: [8, 13], physical: [6, 10] },
+    delivery: {
+      type: 'ground', radius: 55, castRange: 340,
+      lingerDuration: 0.9, tickInterval: 0.9,
+      pulse: { delay: 0.55 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 52 },
+      { type: 'status', status: 'winded', chance: 1 },
+    ],
+    requirements: { intelligence: 16, dexterity: 10 },
+    minDropLevel: 9,
+    ai: { range: 320, weight: 2, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12), mod('aoeRadius', 'increased', 0.04)] },
+    thresholds: [
+      { level: 10, label: 'The sky inhales deeper', mods: [mod('knockback', 'increased', 0.5)] },
+    ],
+  },
+
+  cirrus_veil: {
+    id: 'cirrus_veil', name: 'Cirrus Veil',
+    description: 'Breathe OUT and condense: for a few strides your body is stabilized cloud-stuff — the dissolving ground cannot claim it, the open sky holds it up, and the gaps in the world are only weather. Lapse over nothing, and you are a falling thing again.',
+    tags: ['spell', 'buff', 'movement', 'duration'], color: '#dceafc',
+    manaCost: 18, cooldown: 9, useTime: 0.3,
+    delivery: { type: 'self' },
+    effects: [{ type: 'status', status: 'cloudform', chance: 1 }],
+    requirements: { intelligence: 14, willpower: 12 },
+    minDropLevel: 9,
+    ai: { range: 200, weight: 0.5 },
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.07), mod('cooldownRecovery', 'increased', 0.03)] },
+    thresholds: [
+      { level: 12, label: 'The condensation holds', mods: [mod('effectDuration', 'increased', 0.35)] },
+    ],
+  },
+
+  skyhook: {
+    id: 'skyhook', name: 'Skyhook',
+    description: 'Cast a crook of hardened wind and REEL: the caught body is dragged to your feet, breathless. The zephyrid matrons shepherd strays back onto the cloud with it — or off it.',
+    tags: ['spell', 'projectile', 'physical', 'cold'], color: '#b8d8ec',
+    manaCost: 12, cooldown: 5, useTime: 0.55,
+    baseDamage: { physical: [5, 9], cold: [4, 7] },
+    delivery: { type: 'projectile', speed: 700, radius: 7, range: 420 },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.3 },
+      { type: 'status', status: 'winded', chance: 1 },
+    ],
+    requirements: { dexterity: 14, willpower: 10 },
+    minDropLevel: 11,
+    ai: { range: 380, weight: 1.5, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('projectileSpeed', 'increased', 0.04)] },
+  },
+
+  squall_bite: {
+    id: 'squall_bite', name: 'Squall Bite',
+    description: 'The shrike\'s lesson: BE the gust. A flat, shrieking dive through the target line — the wound arrives before the wind does.',
+    tags: ['attack', 'physical', 'cold', 'movement'], color: '#c8dcee',
+    manaCost: 8, cooldown: 3, useTime: 0,
+    baseDamage: { physical: [7, 11], cold: [3, 6] },
+    delivery: { type: 'dash', distance: 230, speed: 1400, width: 30 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.3, magnitude: 0.4 },
+    ],
+    requirements: { dexterity: 18 },
+    minDropLevel: 9,
+    ai: { range: 210, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  static_discharge: {
+    id: 'static_discharge', name: 'Static Discharge',
+    description: 'Dry air owes a debt and you collect it: every cast winds the charge tighter — six turns deep — and the halo of sparks that leaps out grows crueler each time. The thunderheads of the high sky do nothing else all day.',
+    tags: ['spell', 'lightning', 'aoe'], color: '#e8e8a8',
+    manaCost: 10, cooldown: 0, useTime: 0.55,
+    baseDamage: { lightning: [8, 14] },
+    selfStack: {
+      mods: [mod('damage', 'increased', 0.07), mod('aoeRadius', 'increased', 0.04)],
+      maxStacks: 6, duration: 2.6, decay: 'peel',
+    },
+    delivery: { type: 'nova', radius: 125 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'shock', chance: 0.25 },
+    ],
+    requirements: { intelligence: 18 },
+    minDropLevel: 9,
+    ai: { range: 120, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
   },
 
   // ==========================================================================

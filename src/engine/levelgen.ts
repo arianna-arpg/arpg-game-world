@@ -251,7 +251,11 @@ export type KnownDoodadKind =
   // The sunken-ruin kit (what the jungle swallowed — the rest of the court
   // reuses the fallen-colossus vocabulary: colossus_head/broken_column/
   // ruin_plinth, data/formations.ts)
-  | 'ruin_gate';       // a root-split descent into the old halls (sidezone mouth)
+  | 'ruin_gate'        // a root-split descent into the old halls (sidezone mouth)
+  // The parity-pass wayside kit (the class expansion's world furniture)
+  | 'chronolith'       // a time-eaten monolith, teal-veined and faintly WRONG (ley country)
+  | 'meditation_cairn' // a balanced stone stack wearing a stillness of its own (high places)
+  | 'rusted_snare';    // an old jaw-trap, still wound — steps on it end badly
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -755,6 +759,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   venom_bloom: { overlap: 'inert', spacing: 24,
     brittle: { on: ['hit', 'near'], reach: 32, text: 'the bloom bursts!', color: '#a8d05a',
       fume: { skillId: 'venom_seep', radius: 62, linger: 3.4, dmgMult: 0.8, color: '#a8d05a' } } },
+  // The parity-pass wayside kit: ley furniture and one honest hazard. The
+  // snare is the trapper's craft left in the world — pure BrittleSpec, the
+  // collapse damage billing whoever springs it (rotten_bridge's grammar).
+  chronolith: { overlap: 'solid', blocksMove: true, spacing: 36, forbidOn: ['water', 'lava', 'chasm'] },
+  meditation_cairn: { overlap: 'inert', spacing: 30 },
+  rusted_snare: { overlap: 'inert', spacing: 26,
+    brittle: { on: ['touch', 'hit'], text: 'SNAP!', color: '#a89078',
+      collapse: { damage: { pctMaxLife: 0.08 } } } },
   // Canopy kinds (occlude): their crowns draw ABOVE actors and FADE when the
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
   // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
@@ -3322,6 +3334,11 @@ registerStamp('cairn', stampSingle('cairn', [11, 16]));
 registerStamp('weathered_statue', stampSingle('weathered_statue', [16, 24]));
 registerStamp('wayshrine', stampSingle('wayshrine', [13, 18]));
 registerStamp('gallows', stampSingle('gallows', [22, 30]));
+// The parity-pass wayside kit: ley clocks, high-country stillness, and the
+// poacher's tooth (its bite is a BrittleSpec — see DOODAD_RULES.rusted_snare).
+registerStamp('chronolith', stampSingle('chronolith', [16, 24]));
+registerStamp('meditation_cairn', stampSingle('meditation_cairn', [12, 16]));
+registerStamp('rusted_snare', stampSingle('rusted_snare', [8, 11]));
 // The Gloamwood croft kit: crooked canopy single (the recipe plants the
 // mass; authored rows can still call one down), gourd tangles, the lone
 // carved lantern, the hanged road's gibbets.

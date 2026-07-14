@@ -1135,6 +1135,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'sand', count: [1, 2] },
       { kind: 'ruin', count: [0, 2] },
       { kind: 'camp', count: [1, 2] },
+      // The war's little teeth outlived the war.
+      { kind: 'rusted_snare', count: [0, 3] },
       { kind: 'structure', count: [0, 1], structure: 'fortress_gate' },
     ],
     packs: {
@@ -2068,6 +2070,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'abyssal_seer', weight: 2 },
         { id: 'abyssal_render', weight: 2 },
         { id: 'abyssal_vanguard', weight: 1 },
+        // The chrono wing: the Seer's understudy and the still monk at the
+        // rim — the Chronomancer's and Ascetic's kits on the other side.
+        { id: 'abyssal_horologist', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'rift_ascetic', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -2108,6 +2114,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'formation', count: [2, 3], formation: 'ley_current' },
       { kind: 'ley_font', count: [2, 4] },
       { kind: 'rocks', count: [8, 12], radius: [16, 34] },
+      // Time pools badly near the current: the ley country grows its clocks.
+      { kind: 'chronolith', count: [1, 3] },
     ],
     layout: [
       { kind: 'cliff', count: [3, 5] },
@@ -2336,6 +2344,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'boulder_field', count: [1, 2] }, { kind: 'cairn', count: [1, 2] },
       { kind: 'scree', count: [1, 3] },
       { kind: 'gallows', count: [0, 1] }, { kind: 'wayshrine', count: [0, 1] },
+      // High-country stillness — and the poacher's craft left wound in the
+      // scree (the snare bills whoever springs it; watch your step).
+      { kind: 'meditation_cairn', count: [0, 2] },
+      { kind: 'rusted_snare', count: [0, 2] },
       // Rockslides strung downslope + a processional the old folk cut.
       { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
       { kind: 'formation', count: [0, 1], formation: 'standing_avenue' },

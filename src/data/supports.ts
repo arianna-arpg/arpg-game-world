@@ -54,6 +54,70 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The parity pass's family gems ------------------------------------------
+  // Coverage for the tags the class expansion leans on: the skald's songs,
+  // the chronomancer's clockwork (previously ZERO dedicated supports), the
+  // warcry hall, and the trapper's devices. All plain mod bundles — every
+  // stat here is read by the ordinary folds.
+  held_note: {
+    id: 'held_note', name: 'Held Note',
+    description: 'This song SUSTAINS: the music rings wider and refuses to end on the beat.',
+    color: '#d8a8e0', requiresTags: ['song'],
+    mods: [mod('effectDuration', 'increased', 0.3), mod('aoeRadius', 'increased', 0.15)],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 5,
+  },
+  countermelody: {
+    id: 'countermelody', name: 'Countermelody',
+    description: 'A second line UNDER this song: it works harder at everything the verse was already saying.',
+    color: '#c088d0', requiresTags: ['song'],
+    mods: [mod('damage', 'increased', 0.2), mod('statusChance', 'flat', 0.15)],
+    perLevel: [mod('damage', 'increased', 0.04)],
+    weight: 5,
+  },
+  lingering_moment: {
+    id: 'lingering_moment', name: 'Lingering Moment',
+    description: 'This skill\'s stolen seconds STRETCH: what it slows stays slowed, what it holds stays held.',
+    color: '#8ae0e8', requiresTags: ['chrono'],
+    mods: [mod('effectDuration', 'increased', 0.35), mod('statusMagnitude', 'increased', 0.15)],
+    perLevel: [mod('effectDuration', 'increased', 0.06)],
+    weight: 5,
+  },
+  borrowed_haste: {
+    id: 'borrowed_haste', name: 'Borrowed Haste',
+    description: 'This skill runs on ADVANCED time: it casts quicker and its clock winds back sooner. Somebody, somewhere, is owed.',
+    color: '#a8e8e0', requiresTags: ['chrono'],
+    mods: [mod('cooldownRecovery', 'increased', 0.3), mod('castSpeed', 'increased', 0.15)],
+    perLevel: [mod('cooldownRecovery', 'increased', 0.05)],
+    weight: 5,
+  },
+  commanding_presence: {
+    id: 'commanding_presence', name: 'Commanding Presence',
+    description: 'This shout CARRIES: a wider ring hears it, and the order stands longer.',
+    color: '#e8c04a', requiresTags: ['warcry'],
+    mods: [mod('aoeRadius', 'increased', 0.25), mod('effectDuration', 'increased', 0.25)],
+    perLevel: [mod('aoeRadius', 'increased', 0.04)],
+    weight: 5,
+  },
+  hair_trigger: {
+    id: 'hair_trigger', name: 'Hair Trigger',
+    description: 'This device is SET NERVOUS: laid quicker, rearmed sooner, wound a shade too tight to be safe.',
+    color: '#c8a878', requiresTags: ['trap', 'mine'],
+    mods: [mod('cooldownRecovery', 'increased', 0.3), mod('castSpeed', 'increased', 0.2)],
+    perLevel: [mod('cooldownRecovery', 'increased', 0.05)],
+    weight: 5,
+  },
+  tinkers_arsenal: {
+    id: 'tinkers_arsenal', name: 'Tinker\'s Arsenal',
+    description: 'One MORE of this device may stand at once, built sturdier — each hitting a little softer. Quantity is a quality.',
+    color: '#b8a068', requiresTags: ['trap', 'mine', 'totem'],
+    dropTags: ['trap', 'mine', 'totem'],
+    mods: [mod('constructMaxCount', 'flat', 1), mod('minionLife', 'increased', 0.2), mod('damage', 'more', -0.15)],
+    perLevel: [mod('minionLife', 'increased', 0.05)],
+    minDropLevel: 8,
+    weight: 4,
+  },
+
   // --- Channeling & guard supports -------------------------------------------
 
   // --- Sparks, luck & the roll's ends -------------------------------------------

@@ -899,6 +899,162 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // --- The parity twelve (+ the Tamer's own face at last) -------------------
+  class_tamer: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.3, scale: 0.85, role: 'cloth' },
+      { kind: 'whip' },
+      { kind: 'mane', scale: 0.6, role: 'accent' },
+    ],
+  },
+  class_breaker: {
+    parts: [
+      { kind: 'torso', scale: 1.03 },
+      { kind: 'armorPlates' },
+      { kind: 'hammer', scale: 1.1 },
+    ],
+  },
+  class_vanguard: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'pauldrons' },
+      { kind: 'shield', params: { kite: true } },
+      { kind: 'plume' },
+    ],
+  },
+  class_blademaster: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'cape', role: 'cloth' },
+      { kind: 'sword', params: { len: 1.25, w: 0.06 } },
+    ],
+  },
+  class_brawler: {
+    parts: [
+      { kind: 'torso', scale: 1.02 },
+      { kind: 'mane', scale: 0.7 },
+      { kind: 'chains' },
+    ],
+  },
+  class_sentinel: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'shield', scale: 1.1 },
+      { kind: 'helm' },
+      { kind: 'spikes', scale: 0.55, params: { n: 5 } },
+    ],
+  },
+  class_lancer: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'pauldrons', scale: 0.9 },
+      { kind: 'trident' },
+      { kind: 'quiver', role: 'wood' },
+    ],
+  },
+  class_trapper: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'apron', role: 'cloth' },
+      { kind: 'bow' },
+      { kind: 'net' },
+    ],
+  },
+  class_warlord: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'banner' },
+      { kind: 'sword' },
+    ],
+  },
+  class_skald: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'cape', role: 'accent' },
+      { kind: 'runes', color: '#d8a8e0', params: { n: 4 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.5, params: { n: 2 } }],
+  },
+  class_beguiler: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'cape', role: 'cloth' },
+      { kind: 'mask' },
+      { kind: 'daggers', params: { len: 0.45 } },
+    ],
+  },
+  class_chronomancer: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'halo', scale: 1.1, alpha: 0.45 },
+      { kind: 'runes', color: '#8ae0e0', params: { n: 3 } },
+    ],
+  },
+  class_ascetic: {
+    parts: [
+      { kind: 'robe', role: 'cloth' },
+      { kind: 'staff' },
+      { kind: 'halo', scale: 0.7, alpha: 0.4 },
+    ],
+  },
+
+  // --- The parity-pass adversaries (monsters.ts wears these) ----------------
+  bandit_trapsmith: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'hood', x: 0.32, scale: 0.85 },
+      { kind: 'net' },
+      { kind: 'quiver', scale: 0.8 },
+    ],
+  },
+  pit_champion: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'mane', scale: 0.7 },
+      { kind: 'chains' },
+    ],
+  },
+  warband_skald: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'cape', role: 'accent' },
+      { kind: 'runes', color: '#d8a8e0', params: { n: 3 } },
+    ],
+  },
+  camp_bannerman: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'pauldrons' },
+      { kind: 'banner' },
+      { kind: 'helm' },
+    ],
+  },
+  barrow_swordsaint: {
+    parts: [
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'cape', role: 'dark' },
+      { kind: 'sword', params: { len: 1.2, w: 0.06 } },
+      { kind: 'skull', x: 0.5 },
+    ],
+  },
+  abyssal_horologist: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'halo', scale: 1.05, alpha: 0.5 },
+      { kind: 'runes', color: '#8ae0e0', params: { n: 3 } },
+    ],
+  },
+  rift_ascetic: {
+    parts: [
+      { kind: 'robe', role: 'cloth' },
+      { kind: 'staff' },
+      { kind: 'halo', scale: 0.7, alpha: 0.45 },
+    ],
+  },
+
   // ============================================== ROUND-2 EXPANSION LOOKS
   /** A pit brute: tusked lump of muscle, all forward menace. */
   brute: {

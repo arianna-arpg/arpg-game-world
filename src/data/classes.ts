@@ -64,7 +64,10 @@ export const CLASSES: ClassDef[] = [
       intelligence: 22, wisdom: 10, willpower: 12,
       vitality: 8,
     },
-    bar: ['firebolt', 'frost_nova', 'shockfront', null, null, null, null, null],
+    // Fire, frost, STORM: the elemental trio completed (Shockfront — a
+    // strength-flavored force wall — marched off to the Vanguard's kit;
+    // the storm slot wants RANGE, so the ricochet, not the sputter).
+    bar: ['firebolt', 'frost_nova', 'chain_lightning', null, null, null, null, null],
     startNode: 'int_start', // elemental caster → the Intelligence point
   },
   {
@@ -78,7 +81,10 @@ export const CLASSES: ClassDef[] = [
       intelligence: 0, wisdom: 0, willpower: 0,
       vitality: 12,
     },
-    bar: ['frenzy', 'cloak', 'shadow_step', null, null, null, null, null],
+    // Cloak in, step BEHIND, and the knife explains itself — the kit is the
+    // sentence "no one saw it happen" (Frenzy was never the Rogue's word;
+    // it lives on in the drop pool and the Juggernaut bundle).
+    bar: ['backstab', 'cloak', 'shadow_step', null, null, null, null, null],
     startNode: 'fin_start', // the unseen blade → the Finesse point
   },
   {
@@ -176,7 +182,9 @@ export const CLASSES: ClassDef[] = [
       intelligence: 0, wisdom: 0, willpower: 2,
       vitality: 14,
     },
-    bar: ['frenzy', 'reckoning', 'stone_skin', null, null, null, null, null],
+    // Piledriver banks Fury slow and heavy; Reckoning spends it. The same
+    // court Frenzy once fed, at the tempo the slab actually swings.
+    bar: ['piledriver', 'reckoning', 'stone_skin', null, null, null, null, null],
     startNode: 'for_start', // does not stop → the Fortitude point
   },
   {
@@ -237,7 +245,7 @@ export const CLASSES: ClassDef[] = [
   },
   {
     id: 'tamer', name: 'Tamer',
-    look: 'class_ranger',
+    look: 'class_tamer',
     description: 'A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus, and fights beside the bond — the pet at the front, the whistle in reserve.',
     color: '#a8c87a',
     attributes: {
@@ -246,10 +254,217 @@ export const CLASSES: ClassDef[] = [
       intelligence: 0, wisdom: 14, willpower: 2,
       vitality: 10,
     },
-    // The sneak-and-claim opener BY DESIGN: cloak in, hold the gaze, and the
-    // wild answers — combat is what happens when the claim slips.
-    bar: ['wild_strike', 'tame_beast', 'cloak', null, null, null, null, null],
+    // The sneak-and-claim opener BY DESIGN, now in the Tamer's own words:
+    // STALK in (the hunter's hush, not the Rogue's cloak), hold the gaze,
+    // and the wild answers — GOAD peels one beast off the pack when the
+    // claim needs privacy, or pulls the fight when it slips.
+    bar: ['goad', 'tame_beast', 'stalk', null, null, null, null, null],
     startNode: 'wis_start', // the beast-bond is Wisdom's craft
+  },
+
+  // --- The PARITY twelve ------------------------------------------------------
+  // Every point of the nine-pointed star anchors exactly THREE classes now
+  // (validate.ts holds the kit contract; the star holds the identity). Most
+  // of these kits PROMOTE existing unbound catalog skills onto a ramp —
+  // the library was already deep enough to open nine of twelve doors.
+
+  {
+    id: 'breaker', name: 'Breaker',
+    look: 'class_breaker',
+    description: 'Stances are load-bearing. Crumple the poise, quake the ground under the rout, and pass The Verdict on whatever kneels.',
+    color: '#c8824a',
+    attributes: {
+      strength: 20, prowess: 6, fortitude: 12,
+      dexterity: 2, finesse: 0, charisma: 2,
+      intelligence: 0, wisdom: 0, willpower: 4,
+      vitality: 14,
+    },
+    // The executioner's grammar, unabridged: break (Sunder Maul), scatter
+    // (Earthquake), sentence (The Verdict — poiseReap on the broken).
+    bar: ['sunder_maul', 'earthquake', 'verdict', null, null, null, null, null],
+    startNode: 'str_start',
+  },
+  {
+    id: 'vanguard', name: 'Vanguard',
+    look: 'class_vanguard',
+    description: 'First through, shield still moving. A trampling charge, a wall of force, and a phalanx-step that never stops advancing.',
+    color: '#d8c07a',
+    attributes: {
+      strength: 16, prowess: 6, fortitude: 10,
+      dexterity: 12, finesse: 2, charisma: 4,
+      intelligence: 0, wisdom: 0, willpower: 0,
+      vitality: 10,
+    },
+    // Momentum as doctrine: Charge opens the line, Shockfront shoves it
+    // wider (reclaimed from the Magician — it was always a soldier's word),
+    // Marching Bulwark walks the ground you took.
+    bar: ['charge', 'shockfront', 'marching_bulwark', null, null, null, null, null],
+    startNode: 'str_start',
+  },
+  {
+    id: 'blademaster', name: 'Blademaster',
+    look: 'class_blademaster',
+    description: 'The sword as a sentence: the draw is the cut, every third stroke settles the mind, and a raised parry answers at double.',
+    color: '#c8d8e8',
+    attributes: {
+      strength: 12, prowess: 12, fortitude: 2,
+      dexterity: 18, finesse: 4, charisma: 2,
+      intelligence: 0, wisdom: 0, willpower: 0,
+      vitality: 10,
+    },
+    // Tempo, not fury: Iai Strike (the timed draw-dash), Zanshin Cut (the
+    // three-beat discipline), Riposte (the perfect window). All three were
+    // waiting unbound in the catalog for a class to carry them.
+    bar: ['iai_strike', 'zanshin_cut', 'riposte', null, null, null, null, null],
+    startNode: 'prw_start',
+  },
+  {
+    id: 'brawler', name: 'Brawler',
+    look: 'class_brawler',
+    description: 'No blade, no apology. Jab in rhythm, drag the coward back by the chain, and spend the whole bank on one swung hip.',
+    color: '#d8885a',
+    attributes: {
+      strength: 12, prowess: 14, fortitude: 8,
+      dexterity: 10, finesse: 2, charisma: 4,
+      intelligence: 0, wisdom: 0, willpower: 0,
+      vitality: 10,
+    },
+    // The pit grammar: One-Two banks Fury a knuckle at a time, Chain Pull
+    // brings the argument to you, Haymaker closes it — same Fury court as
+    // the Juggernaut, entirely different verdict.
+    bar: ['one_two', 'chain_pull', 'haymaker', null, null, null, null, null],
+    startNode: 'prw_start',
+  },
+  {
+    id: 'sentinel', name: 'Sentinel',
+    look: 'class_sentinel',
+    description: 'Hitting it is the mistake. A wall of spikes, a quilled aura, and a counter-blow licensed by whatever they just did to you.',
+    color: '#9ab0a8',
+    attributes: {
+      strength: 12, prowess: 2, fortitude: 16,
+      dexterity: 2, finesse: 0, charisma: 2,
+      intelligence: 0, wisdom: 2, willpower: 6,
+      vitality: 18,
+    },
+    // Retaliation as a kit: Spiked Bulwark (blocks bleed the striker),
+    // Bristleback (the quilled aura), Reprisal (the answer, gated on being
+    // hit within three heartbeats). The Guardian holds; the Sentinel bills.
+    bar: ['spiked_bulwark', 'bristleback', 'reprisal', null, null, null, null, null],
+    startNode: 'for_start',
+  },
+  {
+    id: 'lancer', name: 'Lancer',
+    look: 'class_lancer',
+    description: 'Leave steel in every wound, plant spears like fenceposts, then WRENCH the whole harvest home through the crowd at once.',
+    color: '#b8c8a0',
+    attributes: {
+      strength: 14, prowess: 6, fortitude: 2,
+      dexterity: 18, finesse: 2, charisma: 2,
+      intelligence: 0, wisdom: 2, willpower: 0,
+      vitality: 14,
+    },
+    // The impale loop entire: Skewer lodges the bank, Pinning Spear plants
+    // the field, Extraction pops every ledger and calls the steel home.
+    bar: ['skewer', 'pinning_spear', 'spear_recall', null, null, null, null, null],
+    startNode: 'dex_start',
+  },
+  {
+    id: 'trapper', name: 'Trapper',
+    look: 'class_trapper',
+    description: 'The battlefield is a workshop: strewn spikes, a buried snare, and a lane-locked ballista that never asks for orders twice.',
+    color: '#a8905a',
+    attributes: {
+      strength: 4, prowess: 2, fortitude: 2,
+      dexterity: 18, finesse: 12, charisma: 4,
+      intelligence: 4, wisdom: 0, willpower: 0,
+      vitality: 14,
+    },
+    // Field-craft, not spellcraft: Caltrops deny the ground, Aftershock
+    // Snare punishes the crossing, Ballista Sentry holds the lane.
+    bar: ['caltrops', 'aftershock_snare', 'ballista_sentry', null, null, null, null, null],
+    startNode: 'dex_start',
+  },
+  {
+    id: 'warlord', name: 'Warlord',
+    look: 'class_warlord',
+    description: 'Wars are won by whoever the field believes in. Plant the colors, name the first to die, and dare the rest to object.',
+    color: '#e0b060',
+    attributes: {
+      strength: 12, prowess: 8, fortitude: 6,
+      dexterity: 4, finesse: 0, charisma: 16,
+      intelligence: 0, wisdom: 0, willpower: 2,
+      vitality: 12,
+    },
+    // The first Charisma class: presence as mechanics. Battle Standard
+    // holds the line, Single Out opens the duel, Challenging Shout turns
+    // the whole room's argument onto you — insight pays for the attention.
+    bar: ['battle_standard', 'single_out', 'challenging_shout', null, null, null, null, null],
+    startNode: 'cha_start',
+  },
+  {
+    id: 'skald', name: 'Skald',
+    look: 'class_skald',
+    description: 'The battle keeps time whether it wants to or not. Two songs worn like weather, and a Coda that spends every banked verse at once.',
+    color: '#c890d8',
+    attributes: {
+      strength: 4, prowess: 4, fortitude: 2,
+      dexterity: 4, finesse: 4, charisma: 16,
+      intelligence: 2, wisdom: 6, willpower: 8,
+      vitality: 10,
+    },
+    // The song family debut: War Chant rallies (and banks a Verse per
+    // singing), Dissonance grinds (and banks), Coda spends the whole meter.
+    bar: ['war_chant', 'dissonance', 'coda', null, null, null, null, null],
+    startNode: 'cha_start',
+  },
+  {
+    id: 'beguiler', name: 'Beguiler',
+    look: 'class_beguiler',
+    description: 'Never be where the blow lands; ideally, be the reason it landed on their own line. Mirages, doubles, and one whispered madness.',
+    color: '#b878c8',
+    attributes: {
+      strength: 2, prowess: 0, fortitude: 0,
+      dexterity: 14, finesse: 10, charisma: 16,
+      intelligence: 8, wisdom: 2, willpower: 0,
+      vitality: 8,
+    },
+    // Misdirection as a kit: Decoy takes the blame, Shadow Clone returns
+    // fire from where you were, Beguile turns one mind on its own pack.
+    bar: ['decoy', 'shadow_clone', 'beguile', null, null, null, null, null],
+    startNode: 'cha_start',
+  },
+  {
+    id: 'chronomancer', name: 'Chronomancer',
+    look: 'class_chronomancer',
+    description: 'Time is a resource everyone else spends carelessly. A needle of stasis, a bubble of thickened seconds, and cooldowns wound backward.',
+    color: '#88d8d8',
+    attributes: {
+      strength: 2, prowess: 0, fortitude: 0,
+      dexterity: 2, finesse: 4, charisma: 4,
+      intelligence: 14, wisdom: 8, willpower: 16,
+      vitality: 10,
+    },
+    // The chrono fabric's first player-facing kit: Stasis Lock (the needle),
+    // Torpor Field (the thickened bubble), Time Dilation (the rewound bar).
+    bar: ['stasis_lock', 'torpor_field', 'time_dilation', null, null, null, null, null],
+    startNode: 'wil_start',
+  },
+  {
+    id: 'ascetic', name: 'Ascetic',
+    look: 'class_ascetic',
+    description: 'Fury is a debt; stillness pays cash. An open palm that practices itself sharper, a stance that pumps mind into poise, and one long-held breath.',
+    color: '#e8e0c8',
+    attributes: {
+      strength: 12, prowess: 4, fortitude: 10,
+      dexterity: 2, finesse: 2, charisma: 2,
+      intelligence: 0, wisdom: 4, willpower: 14,
+      vitality: 10,
+    },
+    // Willpower melee — the roster's first: Mantra Strike ramps itself,
+    // Wellspring Stance converts mana to poise, Long Exhale is patience
+    // released as a wall of air.
+    bar: ['mantra_strike', 'wellspring_stance', 'long_exhale', null, null, null, null, null],
+    startNode: 'wil_start',
   }
 ];
 
@@ -266,6 +481,20 @@ export const classSkillStat = (classId: string): string => `classSkill_${classId
 for (const c of CLASSES) {
   STAT_DEFS[classSkillStat(c.id)] = { label: `${c.name} Skill Levels`, base: 0 };
 }
+
+// --- Class-roster invariants (validate.ts enforces; UI reads) ---------------
+// The PARITY CONTRACT: every class is dealt the same hand — the same summed
+// attribute budget and the same starting-kit size — so class identity is
+// WHERE the points sit and WHICH three verbs open the run, never how many.
+// Kits are also globally UNIQUE (no skill opens two classes): a starter skill
+// is a class's signature, and the overlap detector treats sharing as drift.
+
+export const CLASS_CFG = {
+  /** Every ClassDef.attributes spread must sum to exactly this. */
+  attrBudget: 60,
+  /** Non-null skills every class bar starts with — the locked kit size. */
+  kitSize: 3,
+} as const;
 
 // --- Shared progression rules ----------------------------------------------
 

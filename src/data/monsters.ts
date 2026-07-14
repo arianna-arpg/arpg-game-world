@@ -2110,6 +2110,107 @@ export const MONSTERS: Record<string, MonsterDef> = {
     detection: 1.15,
   },
 
+  // --- The PARITY-PASS adversaries: the new class kits, worn by the other
+  //     side. Same doctrine as the ronin and the thane above — every one of
+  //     these wields the same gems a player's Trapper/Brawler/Skald/Warlord/
+  //     Blademaster/Chronomancer slots, through the same pipeline. Nothing
+  //     bespoke; the counterplay you learn against them is the build you
+  //     could be playing.
+  bandit_trapsmith: {
+    id: 'bandit_trapsmith', name: 'Snaresetter',
+    color: '#a8905a', shape: 'trapezoid', radius: 13, look: 'bandit_trapsmith',
+    base: { life: 56, moveSpeed: 138, accuracy: 106, evasion: 40, mana: 70, manaRegen: 6 },
+    mods: [mod('life', 'more', 0.5)],
+    // The player Trapper's exact kit-half: strewn ground + a buried snare,
+    // with a poacher's dart to herd you across both.
+    skills: ['caltrops', 'aftershock_snare', 'blowdart'],
+    xp: 26, faction: 'bandit',
+    brain: { type: 'skirmish', withdraw: 1.5 },
+    detection: 1.1,
+  },
+  pit_champion: {
+    id: 'pit_champion', name: 'Pit Champion',
+    color: '#d8885a', shape: 'octagon', radius: 16, look: 'pit_champion',
+    base: { life: 100, moveSpeed: 124, accuracy: 104, armor: 22, poise: 60, mana: 40, manaRegen: 4 },
+    mods: [mod('life', 'more', 0.5)],
+    // The Brawler's arithmetic in enemy hands: jabs bank Fury, the chain
+    // drags a runner back to the pit, the haymaker spends the whole purse.
+    skills: ['one_two', 'chain_pull', 'haymaker'],
+    xp: 28, faction: 'bandit',
+    brain: { type: 'juggernaut', enrage: 0.5 },
+    detection: 0.95,
+  },
+  warband_skald: {
+    id: 'warband_skald', name: 'Warband Skald',
+    color: '#c890d8', shape: 'star', radius: 13, look: 'warband_skald',
+    base: { life: 58, moveSpeed: 126, accuracy: 100, mana: 100, manaRegen: 8 },
+    mods: [mod('life', 'more', 0.5)],
+    // The support seat, hostile: the chant hastens the WARBAND, the discord
+    // grinds at you. Cut the singer and the camp loses its meter.
+    skills: ['war_chant', 'dissonance'],
+    xp: 26, faction: 'bandit',
+    brain: { type: 'skirmish', withdraw: 1.4 },
+    detection: 0.9,
+  },
+  camp_bannerman: {
+    id: 'camp_bannerman', name: 'Bannerman',
+    color: '#e0b060', shape: 'octagon', radius: 15, look: 'camp_bannerman',
+    base: { life: 84, moveSpeed: 116, accuracy: 104, armor: 24, poise: 50, mana: 60, manaRegen: 5 },
+    mods: [mod('life', 'more', 0.5)],
+    // The Warlord's grammar reversed: his standard rallies THEM, his call
+    // peels YOUR minions off their marks, his spear leaves steel behind.
+    skills: ['battle_standard', 'single_out', 'skewer'],
+    xp: 28, faction: 'bandit',
+    brain: { type: 'juggernaut' },
+    detection: 0.9,
+  },
+  barrow_swordsaint: {
+    id: 'barrow_swordsaint', name: 'Barrow Swordsaint',
+    color: '#c8d8e8', shape: 'trapezoid', radius: 13, material: 'bone', look: 'barrow_swordsaint',
+    base: { life: 70, moveSpeed: 142, accuracy: 112, evasion: 45, insight: 25, mana: 50, manaRegen: 5 },
+    // The Blademaster's tempo, risen: the three-beat discipline, the perfect
+    // window, the thrust from behind — a duel the grave never finished.
+    skills: ['zanshin_cut', 'riposte', 'backstab'],
+    xp: 30, faction: 'undead',
+    brain: { type: 'skirmish', withdraw: 1.1, skillUse: { finesse: { chance: 0.7 } } },
+    detection: 1.05,
+  },
+  gnoll_impaler: {
+    id: 'gnoll_impaler', name: 'Gnoll Impaler',
+    color: '#c89a60', shape: 'triangle', radius: 13, material: 'fur', look: 'gnoll',
+    base: { life: 62, moveSpeed: 152, accuracy: 108, evasion: 45, mana: 50, manaRegen: 5 },
+    // The Lancer's ledger with pack manners: lodge the steel, plant the
+    // fence, let the pack herd you onto it.
+    skills: ['skewer', 'pinning_spear'],
+    xp: 27, faction: 'gnoll', adorn: 'ears',
+    brain: { type: 'skirmish', withdraw: 1.2 },
+    detection: 1.15,
+  },
+  abyssal_horologist: {
+    id: 'abyssal_horologist', name: 'Abyssal Horologist',
+    color: '#8ad8d8', shape: 'diamond', radius: 12, material: 'void', look: 'abyssal_horologist',
+    base: { life: 60, moveSpeed: 130, mana: 110, manaRegen: 9 },
+    mods: [mod('coldRes', 'flat', 0.3)],
+    // The Seer's understudy — the Chronomancer's other two verbs: the
+    // thickened bubble your volley crawls through, the needle that hangs
+    // you outside the argument entirely.
+    skills: ['stasis_lock', 'torpor_field'],
+    xp: 24, faction: 'abyssal',
+    brain: { type: 'strafer' },
+    detection: 1.2,
+  },
+  rift_ascetic: {
+    id: 'rift_ascetic', name: 'Rift Ascetic',
+    color: '#e8e0c8', shape: 'diamond', radius: 13, material: 'void', look: 'rift_ascetic',
+    base: { life: 78, moveSpeed: 118, accuracy: 106, insight: 40, mana: 80, manaRegen: 7 },
+    // The Ascetic's stillness at the world's edge: the practiced palm, the
+    // stance that pumps mind into poise, one long-held breath off the rim.
+    skills: ['mantra_strike', 'wellspring_stance', 'long_exhale'],
+    xp: 26, faction: 'abyssal',
+    brain: { type: 'juggernaut' },
+    detection: 0.85,
+  },
+
   // --- MYCELIA: "The Bloom" — the fungal 'fungal' faction --------------------
   //     Patron of the mycelia biome + the spore-bloom's spawn. contexts:['mycelia']
   //     keeps them to fungal ground + the overlay's spread zones (never baseline war).
@@ -6786,6 +6887,8 @@ export const FACTIONS: Record<string, {
       // drinks its own poise; the acolyte's blood pays for its thread.
       { id: 'cistern_warden', weight: 1, presence: { from: 7, fadeIn: 4 } },
       { id: 'transfusion_acolyte', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      // The duel the grave never finished — the Blademaster's tempo, risen.
+      { id: 'barrow_swordsaint', weight: 1, presence: { from: 9, fadeIn: 5 } },
     ],
   },
   nightkin: {
@@ -6806,6 +6909,7 @@ export const FACTIONS: Record<string, {
       { id: 'gnoll_longshot', weight: 2, presence: { from: 4, fadeIn: 3 } },
       { id: 'gnoll_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
       { id: 'gnoll_trapper', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'gnoll_impaler', weight: 1, presence: { from: 7, fadeIn: 4 } },
     ],
   },
   elemental: {

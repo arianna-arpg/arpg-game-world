@@ -15,7 +15,7 @@ import {
 } from '../engine/skills';
 import { GRAFT_READ_SITES, rowUnreadBy, supportCarriesRow, type GraftReadRow } from './graftReadSites';
 import { PROCS } from './procs';
-import { CLASSES } from './classes';
+import { CLASSES, CLASS_CFG } from './classes';
 import { VOCATIONS, VOCATION_CFG } from './vocations';
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, MAX_ATTUNE_RADIUS } from './attunements';
 import { PASSIVE_NODES, vocationGateNodeId } from './passives';
@@ -965,6 +965,60 @@ export function validateContent(): void {
       if (bundles > 0) warn(`class ${c.id}: starter class has a class bundle (already always in the roll)`);
     } else if (bundles !== 1) {
       warn(`class ${c.id}: ${bundles} class bundles (needs exactly ONE to join the roll pool)`);
+    }
+  }
+
+  // CLASS KITS — the parity contract (classes.ts CLASS_CFG). Every class:
+  // the same attribute budget, the same kit size, a kit it can actually BIND
+  // (its own spread meets each starter's attribute gates), and a kit that is
+  // GLOBALLY unique — a starting skill is a class's signature, so one skill
+  // opening two classes is drift, not economy. Non-starter classes must also
+  // keep their bar gems purchasable: a bar skill missing from the class's own
+  // bundle can never DROP for that account line (the granted-spark hatch
+  // rescues the character, not the economy).
+  {
+    const kitOwner = new Map<string, string>();
+    const classIds = new Set<string>();
+    for (const c of CLASSES) {
+      if (classIds.has(c.id)) warn(`class ${c.id}: duplicate class id`);
+      classIds.add(c.id);
+      const kit = c.bar.filter((s): s is string => s !== null);
+      if (kit.length !== CLASS_CFG.kitSize) {
+        warn(`class ${c.id}: ${kit.length} starting skills (parity contract says exactly ${CLASS_CFG.kitSize})`);
+      }
+      const seen = new Set<string>();
+      for (const sid of kit) {
+        if (seen.has(sid)) warn(`class ${c.id}: '${sid}' bound twice on its own bar`);
+        seen.add(sid);
+        const def = SKILLS[sid];
+        if (!def) { warn(`class ${c.id}: bar names unknown skill '${sid}'`); continue; }
+        if (def.noDrop) warn(`class ${c.id}: bar skill '${sid}' is an internal noDrop payload`);
+        const owner = kitOwner.get(sid);
+        if (owner) warn(`class kits: '${sid}' opens BOTH ${owner} and ${c.id} (kits must not overlap)`);
+        else kitOwner.set(sid, c.id);
+        for (const [attr, need] of Object.entries(def.requirements ?? {})) {
+          const have = c.attributes[attr as keyof typeof c.attributes] ?? 0;
+          if (have < (need ?? 0)) {
+            warn(`class ${c.id}: cannot bind its own starter '${sid}' (${attr} ${have} < ${need})`);
+          }
+        }
+      }
+      const budget = Object.values(c.attributes).reduce((a, b) => a + (b ?? 0), 0);
+      if (budget !== CLASS_CFG.attrBudget) {
+        warn(`class ${c.id}: attribute spread sums to ${budget} (budget is ${CLASS_CFG.attrBudget})`);
+      }
+      const start = PASSIVE_NODES[c.startNode];
+      if (!start) warn(`class ${c.id}: startNode '${c.startNode}' not on the passive tree`);
+      else if (start.kind !== 'start') warn(`class ${c.id}: startNode '${c.startNode}' is not a start-kind node`);
+      if (c.look && !LOOKS[c.look]) warn(`class ${c.id}: look '${c.look}' not in LOOKS`);
+      if (!STARTER_CLASSES.includes(c.id)) {
+        const bundle = CLASS_BUNDLES.find(b => b.classId === c.id);
+        for (const sid of kit) {
+          if (bundle && !bundle.skillIds.includes(sid)) {
+            warn(`class ${c.id}: bar skill '${sid}' missing from its class bundle (could never drop)`);
+          }
+        }
+      }
     }
   }
 

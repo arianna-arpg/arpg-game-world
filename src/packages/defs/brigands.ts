@@ -42,6 +42,13 @@ const BRIGAND_SURGE: BrigandSurge = {
     // Seasoned warbands march behind a shield-wall (and its taunt).
     { id: 'bulwark_thane', weight: 1, presence: { from: 5, fadeIn: 3 } },
     { id: 'bandit_wardcaster', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    // The parity-pass wing: the new class kits, worn by the warband — a
+    // snare-layer, a pit fighter, a singer keeping the raid's meter, and a
+    // bannerman whose standard rallies THEM.
+    { id: 'bandit_trapsmith', weight: 1, presence: { from: 5, fadeIn: 3 } },
+    { id: 'pit_champion', weight: 1, presence: { from: 7, fadeIn: 4 } },
+    { id: 'warband_skald', weight: 1, presence: { from: 6, fadeIn: 3 } },
+    { id: 'camp_bannerman', weight: 1, presence: { from: 8, fadeIn: 4 } },
   ],
   levelBonus: 0,
   aggroRadius: 300,        // stray within this of a brigand and the band turns hostile…
