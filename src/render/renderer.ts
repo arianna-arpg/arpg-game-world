@@ -2234,6 +2234,19 @@ export class Renderer {
         ctx.stroke();
       }
     }
+    // DIMENSION-GATE labels (World.dimGatesView): a standing realm gate is
+    // marked exactly like an exit — destination name in the realm's accent
+    // under the arch — so the ascendant gate reads as "an exit to the
+    // Firmament", never anonymous decor. The doodad painter keeps the art.
+    for (const g of world.dimGatesView()) {
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 12px Verdana';
+      ctx.fillStyle = g.accent;
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.lineWidth = 3;
+      ctx.strokeText(g.label, g.pos.x, g.pos.y + g.radius + 20);
+      ctx.fillText(g.label, g.pos.x, g.pos.y + g.radius + 20);
+    }
     // Dwell progress rings — every "linger to act" family (exit portals, cave
     // mouths, realm gates, doors, toll keepers, descent platforms, …) feeds ONE
     // pass; each ring's radius/width/color is its transit KIND's data row

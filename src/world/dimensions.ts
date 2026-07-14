@@ -48,6 +48,13 @@ export interface DimensionEntry {
    *  every registered gateDoodad — data, never a kind literal in world.ts.
    *  cave_breach entries don't need one (the breach doodad is its own path). */
   gateDoodad?: string;
+  /** A registered TRAVERSAL id (data/traversals.ts) the gate crossing RIDES:
+   *  dwelling the gate plays the cinematic and the dimension swap fires
+   *  behind its veil (the geyser-mouth pattern) — the Ascent's arch launches
+   *  you upward AGAIN, steadier, and arriving at the gate zone's center
+   *  reads as landing there rather than popping into existence. Omitted =
+   *  the crossing is instant (the Hellgate's breach). */
+  traversal?: string;
 }
 
 export interface DimensionDef {
@@ -225,6 +232,11 @@ registerDimension({
     kind: 'sky_launch',
     gate: { id: 'ae_gate', name: 'The Firmament', biome: 'aether_sanctum', seedSalt: 0xa54c }, // 'ASCent'
     gateDoodad: 'ascendant_gate',
+    // The arch is a SECOND launch, steadier: the shelf drops away and the
+    // veil clears on sanctum ground — why every arrival stands at the
+    // Firmament's heart (loadZone centers a from-less entry) instead of at
+    // some door. The lore and the mechanics agree on purpose.
+    traversal: 'firmament_ascent',
     // NO ROAD DOWN: heaven is not a neighborhood. The realm touches the
     // world through geysers and falls alone — the Firmament keeps no
     // walkable edge to the surface (and older saves' edges heal at load).

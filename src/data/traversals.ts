@@ -34,6 +34,30 @@ registerTraversal({
   textColor: '#9fd8ff',
 });
 
+/** FIRMAMENT ASCENT — the ascendant gate takes you the rest of the way. The
+ *  same upward hurl as the geyser but STEADIER: a longer, calmer rise, the
+ *  white-gold of the sanctum instead of raw spray, barely a tremor — the
+ *  body is being RECEIVED, not thrown, condensing into a more stabilized
+ *  cloud-form as it climbs. The swap behind the veil is enterDimension, so
+ *  the veil clears on the Firmament's heart: this row is WHY the player
+ *  stands at the realm's center rather than popping into existence there
+ *  (DimensionEntry.traversal on the aetherial row). */
+registerTraversal({
+  id: 'firmament_ascent',
+  windup: 0.9,
+  rise: 1.6,
+  land: 1.1,
+  veil: '#f6f1e2',
+  veilPeak: 1,
+  scaleTo: 2.4,
+  lift: 52,
+  streaks: { count: 30, color: '#ffe9a8', dir: 1 },
+  shake: 3.5,
+  status: { id: 'windswept' },
+  text: 'the Firmament receives you…',
+  textColor: '#ffe9a8',
+});
+
 /** SKY FALL — the cloud gives way. A blink of teetering, then the body drops
  *  AWAY from the camera, tumbling, wisps rushing upward past the view; the
  *  white swallows you and clears on the land you once launched from — knees

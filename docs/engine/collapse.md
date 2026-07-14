@@ -24,9 +24,10 @@ ground. Needs a grid layout (`GridWalkField`); convex zones decline.
 | `crumble` | seconds a cell visibly shivers/cracks before voiding |
 | `contact` | `{ delay, radius?, warmup? }` — footfalls arm the floor; it follows you down |
 | `ambient` | `{ start, band, jitter, holdout, sweep, halo? }` — the seeded rim-inward wavefront + the spine's own late, entry-first erosion |
-| `fall` | `{ kind: 'below'\|'eject', damageFrac?, grace? }` — what losing the floor MEANS |
+| `fall` | `{ kind: 'below'\|'eject', damageFrac?, grace?, grasp? }` — what losing the floor MEANS |
 | `goal` | `{ doodad? }` — the never-melting platform the spine runs to (else the farthest exit) |
 | `goalClear` / `entryClear` / `entryGrace` | protected radii (defaults in `COLLAPSE_CFG`) |
+| `armMove` | MOVEMENT ARMING distance (default `COLLAPSE_CFG.armMoveDist`, `0` = armed at build) — see below |
 
 **THE GUARANTEE.** The schedule is computed outward-in over the
 distance-to-spine field (BFS from the entry→goal walk); the spine erodes on
@@ -37,6 +38,27 @@ other half of the promise: the `aether_lattice` recipe pushes the gate into
 `ctx.mustReach`, so the reachability invariant (and genqa) prove the path the
 collapse erodes.
 
+- **MOVEMENT ARMING (the grace period)** — the dissolution cannot begin until
+  a player has actually MOVED: the field holds its `clock` at zero (every
+  schedule quantity is clock-relative, so the whole choreography — ambient
+  wave, contact warmup, entry grace — waits as one) until a WAKE body (the
+  player party, passed by the World; monsters never wake it) steps
+  `armMove` world units (default `COLLAPSE_CFG.armMoveDist`) from where it
+  stood when the field went up. A player reading their inventory on arrival
+  melts nothing; re-entry rebuilds the field and re-graces it. The fall test
+  still runs pre-arm — pre-existing void keeps its teeth. `armMove: 0` opts a
+  spec back into arming at build.
+- **LEDGE GRASP (the fall predicate)** — a body is SUPPORTED while any part
+  of its grasp disc (`radius × (fall.grasp ?? WALK_CFG.ledgeGrasp)`) still
+  overlaps something that holds it — walkable ground or blocking mass,
+  anything but open void (`GridWalkField.supportedAt`). Touching a lip is a
+  grasp, like catching a cliff edge; only a body WHOLLY past all support runs
+  the coyote clock (teeter) or trips the boundary skyfall door. The swept
+  confine honors the same rule: a move may carry the center past the lip
+  while the body still overlaps standing cloud, so walking off is a
+  deliberate, continued act — brushing the edge never drops you. `grasp: 0`
+  restores the old center-point precision. One knob, every vertical fabric:
+  collapse teeter, flux teeter, and the movement boundary door all read it.
 - **Seed discipline** — the schedule rolls on `zoneSeed ^ COLLAPSE_CFG.salt`
   with a dedicated Rng; it never advances layout/spawn rng (the fog contract).
 - **Transience** — state rebuilds fresh each loadZone; leave and return and

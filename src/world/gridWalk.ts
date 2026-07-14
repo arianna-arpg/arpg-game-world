@@ -41,6 +41,14 @@ export const WALK_CFG = {
    *  anyway once this old, so a big herd's tail can't steer on ancient
    *  distances forever. Deterministic — tick-counted, never wall-clock. */
   distMaxStaleTicks: 30,
+  /** LEDGE GRASP: the fraction of an actor's radius that must be WHOLLY past
+   *  standing ground before the body reads unsupported (falls). At the edge
+   *  of a cliff you grasp the lip — you haven't fallen until your entire
+   *  bodily structure is in excess of the boundary. 1 = the full body must
+   *  clear the lip; 0 = the old center-point precision. Every vertical
+   *  fabric (collapse teeter, flux teeter, the boundary skyfall door) reads
+   *  this one knob; specs may override per zone via `fall.grasp`. */
+  ledgeGrasp: 0.9,
 } as const;
 
 /** The transferable form of a GridWalkField (co-op: ship region kinds, derive the
@@ -205,6 +213,34 @@ export class GridWalkField implements WalkField {
     const cx = Math.floor(x / this.cell), cy = Math.floor(y / this.cell);
     if (!this.inGrid(cx, cy)) return false;
     return this.mask[cy * this.cols + cx] === 1;
+  }
+
+  /** LEDGE GRASP (WALK_CFG.ledgeGrasp): is any part of a body disc still on
+   *  something that HOLDS it? Support means "not over open void" — walkable
+   *  ground or a blocking mass both count (a wall you're pressed into is not
+   *  sky); only void-like region cells (!walkable && !blocks — cloud_void,
+   *  flux_void) give nothing to grasp. r<=0 degrades to the center-point
+   *  test; an off-grid center defers to the arena bounds clamp (true). */
+  supportedAt(x: number, y: number, r: number): boolean {
+    if (r <= 0) return this.isWalkable(x, y);
+    const ccx = Math.floor(x / this.cell), ccy = Math.floor(y / this.cell);
+    if (!this.inGrid(ccx, ccy)) return true;
+    const gx0 = Math.max(0, Math.floor((x - r) / this.cell));
+    const gx1 = Math.min(this.cols - 1, Math.floor((x + r) / this.cell));
+    const gy0 = Math.max(0, Math.floor((y - r) / this.cell));
+    const gy1 = Math.min(this.rows - 1, Math.floor((y + r) / this.cell));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const rk = regionKind(this.kindList[this.kind[gy * this.cols + gx]]);
+        if (rk && !rk.walkable && !rk.blocks) continue; // void: nothing to hold
+        // Disc-vs-cell overlap: nearest point of the cell rect to the center.
+        const nx = Math.max(gx * this.cell, Math.min(x, (gx + 1) * this.cell));
+        const ny = Math.max(gy * this.cell, Math.min(y, (gy + 1) * this.cell));
+        const dx = nx - x, dy = ny - y;
+        if (dx * dx + dy * dy <= r * r) return true;
+      }
+    }
+    return false;
   }
 
   /** The REGION KIND id at a point (Phase 3) — 'wall' out of bounds. The engine's

@@ -29,6 +29,11 @@ import { registerAttentionSource, type AttentionPoint } from '../world/attention
 import { registerTransit } from './transit';
 
 export const BEACON_CFG = {
+  /** Door clearance (world units) a spire/waystone keeps from the zone's
+   *  entry, exits, mouths and gates at placement — a spire atop a portal is
+   *  a misclick machine (the shared INTERACT_PLACE_CFG idea, beacon-tuned:
+   *  a little wider, the lure crowd needs the room). */
+  portalClear: 130,
   /** Seconds of held ground to fully charge the spire. Precedence:
    *  ObjectiveSpec.chargeSec → the 'beacon' transit row's dwell → this. */
   chargeSec: 22,

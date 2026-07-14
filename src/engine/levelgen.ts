@@ -32,6 +32,7 @@ import type { VeilSpec } from './veil';
 import type { DamageType, Modifier } from './stats';
 import type { WalkField } from '../world/walk';
 import { GridWalkField } from '../world/gridWalk';
+import { regionKind } from '../world/regions';
 import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
 // erased at runtime — no actual module cycle exists.
@@ -277,6 +278,10 @@ export interface DoodadEffect {
    *  'magma_glob'; hazard clouds 'toxic_cloud') — data, so a vent can hurl
    *  anything registered without an engine edit. */
   skillId?: string;
+  /** status_wash effects: the STATUS_DEFS row breathed onto the band (an
+   *  updraft vent's windswept, a chill font's chill) — any registered
+   *  status, so a new pad/font/choke is pure data. */
+  statusId?: string;
   /** The side this effect serves. */
   faction?: string;
   /** Who the effect reaches for, resolved by the shared target scan: 'opponent'
@@ -547,6 +552,12 @@ export interface DoodadRule {
   spacing?: number;
   forbidOn?: DoodadKind[];
   walkOnly?: boolean;
+  /** May this kind stand over VOID-LIKE region cells (!walkable && !blocks —
+   *  cloud_void, flux_void, chasm 'void', 'abyss')? Default NO for EVERY
+   *  kind: nothing floats over open sky or a pit unless its rule says so (a
+   *  bridge plank, a hanging bloom would opt in). One data flag per kind =
+   *  the whole ground-required methodology, all zones. */
+  voidOk?: boolean;
   /** Renderer occlusion (fake-2D depth): when the LOCAL hero stands within
    *  `radius + pad` of this doodad, its draw fades toward `alpha` so the
    *  character reads through the canopy. Data-driven per kind. */
@@ -1075,7 +1086,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The lantern is a LIGHT ON A STRING — its stake is no barrier: bodies
   // walk through freely (a dock post that scrapes riders off their raft is
   // a trap, not decor — the live-ride QA found exactly that).
-  sky_lantern:    { overlap: 'ground', spacing: 56 },
+  // TETHERED float: a lantern bobbing on its line may hang over the gaps off
+  // a drift coast — the one dressing that's ALLOWED off the standing cloud.
+  sky_lantern:    { overlap: 'ground', spacing: 56, voidOk: true },
   chime_stand:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85 },
   gale_vane:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7 },
   cloud_coral:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 34, bodyScale: 0.88 },
@@ -1175,6 +1188,16 @@ function isSolid(kind: DoodadKind): boolean { return doodadRule(kind).overlap ==
 function walkGated(kind: DoodadKind): boolean {
   const rule = doodadRule(kind);
   return rule.walkOnly ?? (rule.overlap === 'solid' || rule.overlap === 'trigger');
+}
+
+/** GROUND REQUIRED: is this point over a VOID-LIKE region cell (!walkable &&
+ *  !blocks — open sky, a chasm)? Placement rejects it for every kind whose
+ *  rule doesn't opt out (DoodadRule.voidOk) — the walk gate keeps solids on
+ *  WALKABLE ground, this keeps even non-walk-gated overlays from FLOATING
+ *  over nothing. One methodology, every zone with a grid. */
+function overVoid(ctx: GenCtx, x: number, y: number): boolean {
+  const rk = ctx.walk?.regionAt ? regionKind(ctx.walk.regionAt(x, y)) : undefined;
+  return !!rk && !rk.walkable && !rk.blocks;
 }
 
 /** Does this disc overlap any SOLID doodad placed BEFORE index `before`? Cluster
@@ -2288,6 +2311,26 @@ export function generateLayout(
       }
     }
   }
+  // GROUND-REQUIRED SWEEP (DoodadRule.voidOk): whatever path placed it —
+  // recipe push, cluster, formation, composition, legend layer — nothing
+  // without the opt-out stands over a VOID-LIKE cell (open sky, a chasm).
+  // The placement-time gates (findSpot/cellGuarded/structure probes) catch
+  // what they can see; this outcome-side splice catches every OTHER path,
+  // present and future, so the genqa invariant holds by construction.
+  // Authored keeps and reserved fixture geometry are exempt — a fixture
+  // answers to its own siting probes.
+  if (ctx.walk) {
+    for (let i = ctx.doodads.length - 1; i >= 0; i--) {
+      const d = ctx.doodads[i];
+      if (d.keep || doodadRule(d.kind).voidOk || inReserved(ctx, d.pos, d.radius)) continue;
+      if (!overVoid(ctx, d.pos.x, d.pos.y)) continue;
+      if (doodadRule(d.kind).seedPaired) {
+        const ordinal = ctx.doodads.slice(0, i).filter(x => doodadRule(x.kind).seedPaired).length;
+        ctx.caveSeeds.splice(ordinal, 1);
+      }
+      ctx.doodads.splice(i, 1);
+    }
+  }
   // THE UNIVERSAL REACHABILITY INVARIANT: an entrance or exit that is not
   // accessible is neither an entrance nor an exit; an objective set-piece the
   // player cannot walk to may as well not exist. Draw-free (no rng), no-op
@@ -2747,6 +2790,19 @@ function findStructureSpot(
         vec(rect.x + 4, rect.y + 4), vec(rect.x + rect.w - 4, rect.y + 4),
         vec(rect.x + 4, rect.y + rect.h - 4), vec(rect.x + rect.w - 4, rect.y + rect.h - 4)];
       if (probes.some(p => !ctx.walk!.isWalkable(p.x, p.y))) continue;
+    }
+    // NO FLOATING KEEPS (any grid, ensured included): a footprint may stamp
+    // into rock — the build carves its own floor — but never overhang
+    // VOID-LIKE cells (open sky, chasm): the aether courts stand ON cloud.
+    // Center + corners + edge midpoints, the hazard-probe idiom, so an
+    // isle-straddling rect can't pass on corners alone.
+    if (ctx.walk) {
+      const vProbes = [c,
+        vec(rect.x + 4, rect.y + 4), vec(rect.x + rect.w - 4, rect.y + 4),
+        vec(rect.x + 4, rect.y + rect.h - 4), vec(rect.x + rect.w - 4, rect.y + rect.h - 4),
+        vec(c.x, rect.y + 4), vec(c.x, rect.y + rect.h - 4),
+        vec(rect.x + 4, c.y), vec(rect.x + rect.w - 4, c.y)];
+      if (vProbes.some(p => overVoid(ctx, p.x, p.y))) continue;
     }
     // Every door apron must land inside the arena and off reservations.
     const apronsOk = aprons.every(a => {
@@ -4674,6 +4730,10 @@ function findSpot(
     // checks so the rng draw sequence is byte-identical for callers passing no kind.
     if (rule) {
       if (!ruleIgnored(ctx, 'walk') && ctx.walk && walkGated(kind!) && !ctx.walk.isWalkable(p.x, p.y)) continue;
+      // GROUND REQUIRED: nothing stands over open void (cloud_void, chasm)
+      // unless its rule opts out — the walk gate covers walkability for
+      // solids; this covers FLOATING for the non-walk-gated overlays too.
+      if (!ruleIgnored(ctx, 'walk') && !rule.voidOk && overVoid(ctx, p.x, p.y)) continue;
       const forbid = over?.forbidOn ?? rule.forbidOn;
       if (!ruleIgnored(ctx, 'forbid') && forbid && !areaFreeOf(ctx, p, r, forbid)) continue;
     }
@@ -4803,6 +4863,8 @@ function cellGuarded(ctx: GenCtx, c: Vec2, cr: number, kind: DoodadKind, hard: b
   }
   if (inReserved(ctx, c, cr)) return true;
   if (!ruleIgnored(ctx, 'walk') && ctx.walk && walkGated(kind) && !ctx.walk.isWalkable(c.x, c.y)) return true;
+  // GROUND REQUIRED: a poured cell never floats over open void either.
+  if (!ruleIgnored(ctx, 'walk') && !doodadRule(kind).voidOk && overVoid(ctx, c.x, c.y)) return true;
   return false;
 }
 

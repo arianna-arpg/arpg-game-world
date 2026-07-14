@@ -104,7 +104,7 @@ import { QUEST_GIVER_IDS, QUESTS } from '../quests/defs';
 import type { QuestDef, QuestGateCtx } from '../quests/types';
 import { QUEST_CATEGORY_CAPS, DEFAULT_QUEST_CATEGORY, type QuestCategory } from '../quests/types';
 import { Rng, rollSeed } from '../core/rng';
-import { ALTARS, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
+import { ALTARS, INTERACT_PLACE_CFG, SHRINES, type AltarDef, type ShrineDef } from '../data/shrines';
 import { WorldSim } from '../world/sim';
 import { patronFaction, biomesForFaction, biomeEventDensity, BIOMES, BIOME_FIELD, OCEAN_BIOME } from '../world/biomes';
 import { boundaryGateOf } from '../data/boundaryGates';
@@ -114,7 +114,7 @@ import { EAGER_WORLD_WEB } from '../config';
 import { eventLevel as resolveEventLevel } from '../world/levelField';
 import { factionAllowed } from '../world/zonePolicy';
 import type { WalkField } from '../world/walk';
-import { GridWalkField } from '../world/gridWalk';
+import { GridWalkField, WALK_CFG } from '../world/gridWalk';
 import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../world/regions';
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
@@ -136,6 +136,10 @@ import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } 
 interface ClampOpts { disp?: DisplacementPolicy; out?: CollisionResult; }
 /** DEV noclip displacement: phase through walls/rocks/void (bounds still hold). */
 const NOCLIP_DISP: DisplacementPolicy = { ignoreConfine: true };
+/** A LEVITATING body's walk: void bands cross underfoot (the float), walls
+ *  still confine (it floats, it doesn't phase). Cloudform, levitating
+ *  monsters, and any future 'levitation' grant all move on this policy. */
+const LEVITATE_DISP: DisplacementPolicy = { ignoreFall: true };
 import type { ExpeditionManifest } from '../packages/manifest';
 import type { Ledger } from '../packages/types';
 import { bumpLedger, mergeLedger } from '../packages/ledger';
@@ -1654,8 +1658,9 @@ export class World {
   /** Where the crossing pinned the traveler (re-anchored after the swap). */
   private traversalAnchor: Vec2 | null = null;
   /** Realm-gate doodads standing in this zone, resolved per loadZone against
-   *  every registered DimensionEntry.gateDoodad (data, never a kind literal). */
-  private dimGates: { pos: Vec2; dimId: string }[] = [];
+   *  every registered DimensionEntry.gateDoodad (data, never a kind literal).
+   *  `radius` is the doodad's own (the label pass hangs text below it). */
+  private dimGates: { pos: Vec2; dimId: string; radius: number }[] = [];
 
   /** Live in-zone ENCOUNTERS (Breach diamonds + their open fields). Zone-local,
    *  rebuilt each loadZone, never serialized — re-rolls from the run seed. */
@@ -1924,6 +1929,8 @@ export class World {
     descent_trap: (d, eff) => this.effectDescentTrap(d, eff),
     spore_puff: (d, eff) => this.effectSporePuff(d, eff),
     growth_lash: (d, eff) => this.effectGrowthLash(d, eff),
+    status_wash: (d, eff) => this.effectStatusWash(d, eff),
+    maw_reel: (d, eff) => this.effectMawReel(d, eff),
   };
   /** Reusable hidden caster for environmental hazards (lava orbs) — like demonCaster. */
   private hazardCaster: Actor | null = null;
@@ -3109,7 +3116,7 @@ export class World {
       const gd = dimensionDef(dimId).entry?.gateDoodad;
       if (!gd) continue;
       for (const d of this.doodads) {
-        if (d.kind === gd) this.dimGates.push({ pos: vec(d.pos.x, d.pos.y), dimId });
+        if (d.kind === gd) this.dimGates.push({ pos: vec(d.pos.x, d.pos.y), dimId, radius: d.radius });
       }
     }
     // Reset the boss-fight runtime + its FX HERE (before the boss-spawn block below
@@ -3324,7 +3331,7 @@ export class World {
       const charges = memory?.spireCharges
         ?? (memory?.spireCharge !== undefined ? [memory.spireCharge] : undefined);
       for (let i = 0; i < count; i++) {
-        const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(620);
+        const at = this.interactSpot(pois, rng, 620, BEACON_CFG.portalClear);
         const pos = this.clampPos(vec(at.x, at.y), bodyR);
         const charge = this.objectiveDone ? need : Math.min(charges?.[i] ?? 0, need);
         const spireDoodad: Doodad = {
@@ -3490,9 +3497,9 @@ export class World {
     this.shrines = [];
     this.altars = [];
     if (!def.special && o.kind !== 'waves' && o.kind !== 'safe') {
-      const poiSpot = (minDist: number): Vec2 => pois.length
-        ? pois.splice(rng.int(0, pois.length - 1), 1)[0]
-        : this.farPoint(minDist);
+      // PLACEMENT HYGIENE: every interactive stand keeps the data-driven door
+      // clearance (INTERACT_PLACE_CFG / def.portalClear) — no altar atop a
+      // portal, however cramped the isles (interactSpot degrades gracefully).
       const rollAltar = (): AltarDef =>
         rng.weighted(ALTARS.map(d => ({ d, weight: d.weight ?? 1 }))).d;
       // THE OFFERING ALTAR (kind 'offering'): the objective's centerpiece takes
@@ -3501,8 +3508,8 @@ export class World {
       // `need` deaths inside its field. Offered progress rides Zone Memory;
       // a finished zone keeps no hungering altar (the ground is sated).
       if (o.kind === 'offering' && !this.objectiveDone) {
-        const at = poiSpot(650);
         const adef = (o.altarId && ALTARS.find(a => a.id === o.altarId)) || rollAltar();
+        const at = this.interactSpot(pois, rng, 650, adef.portalClear ?? INTERACT_PLACE_CFG.portalClear);
         this.altars.push({
           pos: this.clampPos(vec(at.x, at.y), 16), def: adef,
           affected: new Set(), objective: true,
@@ -3517,17 +3524,19 @@ export class World {
       const caches = (rng.chance(0.5) ? 1 : 0) + (rng.chance(0.15) ? 1 : 0);
       for (let i = 0; i < caches; i++) {
         const c = this.createMonster('gem_cache', def.level, 'enemy');
-        const at = poiSpot(600);
+        const at = this.interactSpot(pois, rng, 600, INTERACT_PLACE_CFG.portalClear);
         c.pos = this.clampPos(vec(at.x, at.y), c.radius);
         this.actors.push(c);
       }
       if (rng.chance(0.65)) {
-        const at = poiSpot(500);
-        this.shrines.push({ pos: this.clampPos(vec(at.x, at.y), 14), def: rng.pick(SHRINES), used: false });
+        const sdef = rng.pick(SHRINES);
+        const at = this.interactSpot(pois, rng, 500, sdef.portalClear ?? INTERACT_PLACE_CFG.portalClear);
+        this.shrines.push({ pos: this.clampPos(vec(at.x, at.y), 14), def: sdef, used: false });
       }
       if (rng.chance(0.45)) {
-        const at = poiSpot(600);
-        this.altars.push({ pos: this.clampPos(vec(at.x, at.y), 16), def: rollAltar(), affected: new Set() });
+        const adef = rollAltar();
+        const at = this.interactSpot(pois, rng, 600, adef.portalClear ?? INTERACT_PLACE_CFG.portalClear);
+        this.altars.push({ pos: this.clampPos(vec(at.x, at.y), 16), def: adef, affected: new Set() });
       }
     }
     // Reward chests: gated objectives earn a locked treasure; the wilds
@@ -3541,14 +3550,14 @@ export class World {
       const gated = objectiveEarnsChest(o);
       // No objective chest on a zone whose reward was already claimed this run.
       if (gated && !this.completedObjectives.has(def.id) && rng.chance(0.75)) {
-        const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(500);
+        const at = this.interactSpot(pois, rng, 500, INTERACT_PLACE_CFG.portalClear);
         this.chests.push({
           pos: this.clampPos(vec(at.x, at.y), 14),
           kind: 'objective', mimic: false, opened: false, lockTime: 0, maxLock: 0,
         });
       }
       if (o.kind !== 'waves' && rng.chance(0.3)) {
-        const at = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : this.farPoint(550);
+        const at = this.interactSpot(pois, rng, 550, INTERACT_PLACE_CFG.portalClear);
         this.chests.push({
           pos: this.clampPos(vec(at.x, at.y), 14),
           kind: 'timed', mimic: rng.chance(0.25), opened: false,
@@ -5277,6 +5286,27 @@ export class World {
     return out;
   }
 
+  /** Realm-gate DOODAD destination labels for the exit-label pass: a standing
+   *  dimension gate (the ascendant arch) is marked like any exit — named for
+   *  the gate zone it crosses to ("The Firmament", level once minted) in the
+   *  dimension's own accent — so every crossing reads as a DOOR, never decor.
+   *  The doodad's painter keeps the art; this is only the destination text. */
+  dimGatesView(): { pos: Vec2; radius: number; label: string; accent: string }[] {
+    const out: { pos: Vec2; radius: number; label: string; accent: string }[] = [];
+    for (const g of this.dimGates) {
+      const dd = dimensionDef(g.dimId);
+      const gate = dd.entry?.gate;
+      if (!gate) continue;
+      const minted = this.zoneMap[gate.id];
+      out.push({
+        pos: g.pos, radius: g.radius,
+        label: minted ? `${minted.name} · Lv ${minted.level}` : gate.name,
+        accent: dd.color,
+      });
+    }
+    return out;
+  }
+
   /** Resolve a '?' frontier of `source` into a real zone — the shared mint path:
    *  (1) FIELD MINT-ONCE — if the frontier opens onto a contiguous Field region that is
    *  ALREADY a charted zone, LINK to that one expanse (any side reaches it) instead of a
@@ -5558,8 +5588,9 @@ export class World {
   /** Nearest existing real node within CONNECT_DIST of `target` that a frontier from
    *  `source` may LINK to instead of minting a twin (the interwoven web). Skips self,
    *  caves, sanctuaries, floating/concealed mints, purchased pockets (a cul-de-sac
-   *  keeps its one road), and nodes `source` already connects to
-   *  (so one zone's two frontiers don't both collapse onto the same neighbour). */
+   *  keeps its one road), ROADLESS GATE HUBS (below), and nodes `source` already
+   *  connects to (so one zone's two frontiers don't both collapse onto the same
+   *  neighbour). */
   private nearestLinkable(target: { x: number; y: number }, source: ZoneDef, side: ZoneExitDef['side']): ZoneDef | null {
     const ux = side === 'e' ? 1 : side === 'w' ? -1 : 0; // the frontier's cardinal direction
     const uy = side === 's' ? 1 : side === 'n' ? -1 : 0;
@@ -5568,6 +5599,15 @@ export class World {
       if (z.id === source.id || z.caveDepth != null || z.floating || z.concealed || z.pocket) continue;
       if ((z.dimension ?? 'surface') !== (source.dimension ?? 'surface')) continue; // the web never crosses dimensions
       if (z.objective.kind === 'safe') continue;
+      // A ROADLESS GATE HUB (DimensionEntry.road === false — the Firmament)
+      // swore off roads: its edge set is exactly its minted frontiers,
+      // FOREVER. It sits at the web's origin coordinate, so a second-ring
+      // frontier curling back toward the origin used to link INTO it (the
+      // hub silently accreted inbound roads — the "Firmament exit that leads
+      // straight back to the Firmament" round-trip). Registry-driven: no new
+      // zone flags, and existing saves heal by construction (link decisions
+      // consult the live registry, never persisted edges).
+      if (this.roadlessGateHub(z)) continue;
       if (source.exits.some(x => x.to === z.id)) continue; // already linked — don't duplicate
       // DIRECTIONAL: only link to a node in this frontier's direction FROM the source (a ±50°
       // cone), so an 'e' frontier never links to a node that's actually NE/SE of us (which
@@ -5579,6 +5619,17 @@ export class World {
       if (d < bd) { bd = d; best = z; }
     }
     return best;
+  }
+
+  /** Is this zone a dimension's ROADLESS gate hub (DimensionEntry.road === false,
+   *  gate.id match)? Such a hub's edges are exactly its minted frontiers — the web
+   *  must never link INTO it (nearestLinkable) nor duplicate roads onto it. Pure
+   *  registry read: no persisted flags, nothing to heal. */
+  private roadlessGateHub(z: ZoneDef): boolean {
+    const dim = z.dimension;
+    if (!dim) return false;
+    const ent = dimensionDef(dim)?.entry;
+    return !!ent && ent.road === false && ent.gate.id === z.id;
   }
 
   /** Eagerly resolve EVERY unresolved '?' frontier of a just-visited zone into a real,
@@ -5901,29 +5952,61 @@ export class World {
    *  unusable and the outcome ambiguous). Deterministic staggered spiral from
    *  the proposal; returns the proposal itself when already clear, and falls
    *  back to it when the ground is crowded beyond hope (never fail the event). */
-  private clearTransitSpot(at: Vec2, clear = MIN_PORTAL_SEP + 14): Vec2 {
+  /** Every DOOR in the zone — where bodies arrive, leave, or cross: the entry
+   *  pad, exit portals, cave mouths, realm gates + rifts, the breach, the
+   *  descent platform, the waypoint, docks, dimension gates. Every clearance-
+   *  aware placement (transit spots, altars/shrines/spires/chests/caches)
+   *  measures against this ONE list — a new door kind joins here once. */
+  private doorSpots(): Vec2[] {
     const spots: Vec2[] = [
+      this.zoneEntry,
       ...this.exits.map(e => e.pos),
       ...this.caveEntrances.map(c => c.pos),
       ...this.demonPortals.map(g => g.pos),
       ...this.crusadePortals.map(g => g.pos),
       ...this.necropolisPortals.map(g => g.pos),
       ...this.fractureRifts.map(g => g.pos),
+      ...this.dimGates.map(g => g.pos),
     ];
     if (this.breachPos) spots.push(this.breachPos);
     if (this.descentSite) spots.push(this.descentSite.platform);
     if (this.waypointPos) spots.push(this.waypointPos);
     for (const d of this.doodads) if (d.kind === 'dock') spots.push(d.pos);
-    const clearOf = (p: Vec2): boolean => spots.every(s => dist(p, s) >= clear);
-    if (clearOf(at)) return at;
+    return spots;
+  }
+
+  /** Is a point at least `clear` from every door? (doorSpots) */
+  private clearOfDoors(p: Vec2, clear: number): boolean {
+    return this.doorSpots().every(s => dist(p, s) >= clear);
+  }
+
+  private clearTransitSpot(at: Vec2, clear = MIN_PORTAL_SEP + 14): Vec2 {
+    if (this.clearOfDoors(at, clear)) return at;
     for (let ring = 1; ring <= 5; ring++) {
       for (let k = 0; k < 8; k++) {
         const a = (k / 8) * Math.PI * 2 + ring * 0.39; // stagger rings so probes never line up
         const p = this.clampPos(vec(at.x + Math.cos(a) * clear * ring, at.y + Math.sin(a) * clear * ring), 30);
-        if (clearOf(p)) return p;
+        if (this.clearOfDoors(p, clear)) return p;
       }
     }
     return at;
+  }
+
+  /** A stand-clear spot for an INTERACTIVE placement (altar, shrine, spire,
+   *  chest, cache): prefer a generation POI that honors the door clearance
+   *  (rolled among the clear ones), then a far point that does, then SLIDE
+   *  the best candidate off the doors (clearTransitSpot) — placed farther is
+   *  fine, placed atop a portal is never. `pois` is consumed (splice), the
+   *  zone rng keeps the roll deterministic. Clearance is data:
+   *  INTERACT_PLACE_CFG.portalClear or the def's own portalClear. */
+  private interactSpot(pois: Vec2[], rng: Rng, minDist: number, clear: number): Vec2 {
+    const clearIdx: number[] = [];
+    for (let i = 0; i < pois.length; i++) if (this.clearOfDoors(pois[i], clear)) clearIdx.push(i);
+    if (clearIdx.length) return pois.splice(clearIdx[rng.int(0, clearIdx.length - 1)], 1)[0];
+    const far = this.farPoint(minDist);
+    if (this.clearOfDoors(far, clear)) return far;
+    const seed = pois.length ? pois.splice(rng.int(0, pois.length - 1), 1)[0] : far;
+    return this.clearTransitSpot(vec(seed.x, seed.y), clear);
   }
 
   /** An exit whose destination lives in ANOTHER dimension without the declared
@@ -8834,6 +8917,34 @@ export class World {
     if (victim.life <= 0 && !victim.dead) this.kill(victim);
   }
 
+  /** A MAW in the floor casts its tongue and REELS: the nearest intruder in
+   *  reach is dragged a step toward the pit each beat (pushActor — weight and
+   *  poise resist, the standing anchor contract), and whatever ends up at the
+   *  lip gets BITTEN. Pure terrain menace: chance-gated, faction-aware, no
+   *  actor — the doodad lane's half of the grab vocabulary (the killable
+   *  half is the vor_maw monster and its tongue_reel skill). */
+  private effectMawReel(d: Doodad, eff: DoodadEffect): void {
+    const victim = this.nearestInReach(d.pos, eff.radius, x => this.isEffectTarget(x, eff));
+    if (!victim || !chance(eff.chance)) return;
+    const gap = dist(victim.pos, d.pos);
+    const lip = d.radius + victim.radius + 6;
+    if (gap > lip) {
+      // The reel: a tongue-flick of impulse toward the pit, stronger the
+      // closer the catch (the maw commits to a nearly-landed meal).
+      const grip = 150 + 130 * Math.max(0, 1 - gap / eff.radius);
+      this.pushActor(victim, angleTo(victim.pos, d.pos), grip);
+      this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: Math.min(gap, eff.radius), color: '#b46a8a', life: 0.22, maxLife: 0.22, beam: true, facing: angleTo(d.pos, victim.pos) });
+      return;
+    }
+    // The bite: physical, through resistance, at the lip only.
+    const taken = (eff.power + this.zone.level * 0.9) * (1 - resistValue(victim, 'physical')) * victim.sheet.get('damageTaken');
+    victim.life -= taken;
+    victim.hitFlash = 0.15;
+    this.text(vec(victim.pos.x, victim.pos.y - 14), Math.round(taken).toString(), '#b46a8a', 13);
+    this.flashes.push({ pos: vec(d.pos.x, d.pos.y), radius: d.radius * 1.3, color: '#b46a8a', life: 0.3, maxLife: 0.3 });
+    if (victim.life <= 0 && !victim.dead) this.kill(victim);
+  }
+
   /** A cursed obelisk LASHES the nearest intruder in reach with a burst of dark
    *  energy (a claustrophobic ruin trap). Chance-gated; a quick radial flash tells.
    *  Mirrors the tentacle swing but reads as an ancient hazard, not a creature. */
@@ -8994,6 +9105,34 @@ export class World {
         color: col, life: 0.18, maxLife: 0.18,
       });
       if (a.life <= 0 && !a.dead) this.kill(a);
+    }
+  }
+
+  private readonly statusWashScratch: Actor[] = [];
+
+  /** STATUS WASH (DoodadEffect id 'status_wash'): the doodad BREATHES a
+   *  registered status onto every body in its band on a beat — an updraft
+   *  vent quickening travelers (windswept), a chill font numbing them, a
+   *  spore stone sickening them. `statusId` names any STATUS_DEFS row;
+   *  `power` is the applied duration in seconds (0 = the row's own);
+   *  `chance` gates per body per beat. Terrain plays no favorites: the
+   *  whole band is washed, fliers included (an updraft lifts wings too).
+   *  A new pad/font/choke kind is ONE DoodadRule.effect data row. */
+  private effectStatusWash(d: Doodad, eff: DoodadEffect): void {
+    const sid = eff.statusId;
+    if (!sid) return;
+    const sdef = STATUS_DEFS[sid];
+    const want = eff.power > 0 ? eff.power : (sdef?.duration ?? 3);
+    const col = eff.color ?? sdef?.color ?? '#dceafc';
+    for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.statusWashScratch)) {
+      if (a.dead || a.construct || a.invulnerable) continue;
+      if (dist(a.pos, d.pos) > d.radius + eff.radius) continue;
+      if (!chance(eff.chance)) continue;
+      a.applyStatus(sid, 0, want / Math.max(0.01, sdef?.duration ?? want), d.kind);
+      this.flashes.push({
+        pos: vec(a.pos.x, a.pos.y), radius: a.radius + 5,
+        color: col, life: 0.16, maxLife: 0.16,
+      });
     }
   }
 
@@ -24290,7 +24429,15 @@ export class World {
         for (const g of this.dimGates) {
           gates.push({
             pos: g.pos, kind: `dim_${g.dimId}`, key: `dim:${g.dimId}:${Math.round(g.pos.x)},${Math.round(g.pos.y)}`,
-            enter: () => this.enterDimension(g.dimId),
+            // A gate may RIDE a registered traversal (DimensionEntry.traversal):
+            // the crossing plays the cinematic and the dimension swap fires
+            // behind its veil (the geyser-mouth pattern) — the ascendant arch
+            // launches you again, steadier. No row = the old instant cross.
+            enter: () => {
+              const trav = dimensionDef(g.dimId).entry?.traversal;
+              if (trav) this.beginTraversal(trav, { swap: () => this.enterDimension(g.dimId) });
+              else this.enterDimension(g.dimId);
+            },
           });
         }
         for (const dp of this.demonPortals) gates.push({ pos: dp.pos, kind: 'demon', key: `demon:${dp.invId}`, enter: () => this.enterDemonRealm(dp.invId, dp.pos) });
@@ -24996,7 +25143,8 @@ export class World {
   private updateCollapse(dt: number): void {
     const cf = this.collapse;
     if (!cf) return;
-    const ev = cf.update(dt, this.groundFallEligible());
+    const elig = this.groundFallEligible();
+    const ev = cf.update(dt, elig, elig, this.wakeBodies());
     if (ev.voided.length) {
       // A few soft cloud-bursts per tick sell the crumble without flooding.
       for (let i = 0; i < Math.min(6, ev.voided.length); i++) {
@@ -25012,17 +25160,35 @@ export class World {
     this.routeSkyFalls(ev.fell);
   }
 
+  /** Does this body FLOAT above the ground fabric right now? The base flag
+   *  (MonsterDef.levitates) or any 'levitation' stat — the phasing doctrine:
+   *  one stat, so a status (cloudform), gear, a potion, or a whole floating
+   *  monster all grant it identically and every fall door reads it the same. */
+  levitating(a: Actor): boolean {
+    return a.levitates || a.sheet.get('levitation') > 0;
+  }
+
   /** Who the vertical fabrics may drop this tick: grounded bodies only — the
    *  airborne, the floating and the mid-leap are the sky's own; a traversing
    *  player is already between worlds. Shared by collapse and flux. */
   private groundFallEligible(): Actor[] {
     const eligible: Actor[] = [];
     for (const a of this.actors) {
-      if (a.dead || a.flying || a.levitates || a.leap || a.dash) continue;
+      if (a.dead || a.flying || this.levitating(a) || a.leap || a.dash) continue;
       if (a === this.player && (this.traversal || this.pendingRespawn)) continue;
       eligible.push(a);
     }
     return eligible;
+  }
+
+  /** The bodies whose MOVEMENT wakes a movement-armed fabric (collapse
+   *  grace): the player party — the host and every co-op seat. Monsters
+   *  pacing their clouds never start the melt; a player reading their
+   *  inventory on arrival melts nothing. */
+  private wakeBodies(): Actor[] {
+    const bodies: Actor[] = [this.player];
+    for (const s of this.seats) if (!s.actor.dead) bodies.push(s.actor);
+    return bodies;
   }
 
   /** Route who a vertical fabric reports fallen — the ONE consequence path
@@ -30792,7 +30958,7 @@ export class World {
         // classify what we were confined out of — the collision-proc / fall seam.
         // A fall-ignoring move crosses void bands to far walkable ground (walls still stop it).
         const desired = vec(out.x, out.y);
-        const r = this.walkResolve(from, out, !!disp?.ignoreFall);
+        const r = this.walkResolve(from, out, !!disp?.ignoreFall, radius * WALK_CFG.ledgeGrasp);
         out.x = r.x; out.y = r.y;
         if (opts?.out && (desired.x !== r.x || desired.y !== r.y)) {
           // Probe the cell JUST BEYOND the confined point toward the goal — that's
@@ -30819,27 +30985,34 @@ export class World {
    *  stays on walkable ground, with an axis-slide so walking into a wall slides
    *  along it rather than stopping dead. Prevents fast moves (dash/knockback/slip)
    *  from tunneling across a wall, and never snaps to the wrong-side region. */
-  private walkResolve(from: Vec2, to: Vec2, crossFall = false): Vec2 {
+  private walkResolve(from: Vec2, to: Vec2, crossFall = false, grasp = 0): Vec2 {
     const wf = this.walk!;
-    // COLLAPSE-OWNED GROUND: an actor whose cell just MELTED under them is
-    // mid-teeter — the floor left THEM, they didn't leave the floor. The
-    // off-mesh rescue snap must not fire (it read as a free teleport to the
-    // nearest standing cloud and made the fall unreachable in real play):
-    // they hold where the ground was, input finds no purchase, and the
-    // coyote grace decides — escape belongs to the CRUMBLING phase, before
-    // the flip. Genuine off-mesh corruption (walls) keeps the rescue.
+    // VOID-OWNED GROUND: an actor standing over ANY vertical void — a cell
+    // that just MELTED under them (mid-teeter), a lip they're GRASPING
+    // (WALK_CFG.ledgeGrasp), or open sky a lapsed cloudform stranded them
+    // on — is the FALL DOORS' business, not the rescue's. The off-mesh
+    // rescue snap must not fire (it read as a free teleport to the nearest
+    // standing cloud and made the fall unreachable in real play): they hold
+    // where the ground was, input finds no purchase, and the coyote grace /
+    // boundary door decide. Genuine off-mesh corruption (walls) keeps the
+    // rescue.
+    const fromVoid = (): boolean => {
+      const rk = regionKind(wf.regionAt?.(from.x, from.y));
+      return !!rk && !rk.walkable && !rk.blocks;
+    };
     const start = wf.isWalkable(from.x, from.y) ? from
       : (this.collapse?.voidAt(from.x, from.y) || this.flux?.voidAt(from.x, from.y)
-        || this.conjured?.voidAt(from.x, from.y)) ? from
+        || this.conjured?.voidAt(from.x, from.y) || fromVoid()
+        || (grasp > 0 && (wf.supportedAt?.(from.x, from.y, grasp) ?? false))) ? from
       : wf.snapToWalkable(from);
-    const full = this.walkSweep(start, to, crossFall);
+    const full = this.walkSweep(start, to, crossFall, grasp);
     if (full.x === to.x && full.y === to.y) return full;
     // Blocked: also try single-axis slides so a diagonal-into-wall slides along the
     // open axis. Pick whichever of {full, x-only, y-only} advanced furthest — each
     // is a STRAIGHT sweep from start, so the chosen move never cuts a corner / crosses
     // a wall (we deliberately don't chain H-then-V, which could clip the corner).
-    const xOnly = this.walkSweep(start, vec(to.x, start.y), crossFall);
-    const yOnly = this.walkSweep(start, vec(start.x, to.y), crossFall);
+    const xOnly = this.walkSweep(start, vec(to.x, start.y), crossFall, grasp);
+    const yOnly = this.walkSweep(start, vec(start.x, to.y), crossFall, grasp);
     const d2 = (p: Vec2): number => (p.x - start.x) ** 2 + (p.y - start.y) ** 2;
     let best = full;
     if (d2(xOnly) > d2(best)) best = xOnly;
@@ -30859,7 +31032,7 @@ export class World {
     if (!policy) return;
     // A LEVITATING actor floats over fall pits (void): no fall damage / eject — so it
     // can't be knocked into the void for a cheap kill. (Pathing still avoids void.)
-    if (a.levitates && policy.kind === 'fall') return;
+    if (this.levitating(a) && policy.kind === 'fall') return;
     // Debounce fall/eject/skyfall so being held against a void edge doesn't
     // melt the actor every frame — one recovery per ~0.6s.
     if (policy.kind === 'fall' || policy.kind === 'eject' || policy.kind === 'skyfall') {
@@ -30898,7 +31071,7 @@ export class World {
         // keeps the rest). The airborne and the floating never trigger it —
         // a dash sails the gap it entered (its landing answers to the
         // fields' teeter, not the boundary), wings ride the wind free.
-        if (a.flying || a.levitates || a.dash || a.leap) return;
+        if (a.flying || this.levitating(a) || a.dash || a.leap) return;
         if (a === this.player && (this.traversal || this.pendingRespawn)) return;
         this.routeSkyFalls([a]);
         return;
@@ -30937,17 +31110,21 @@ export class World {
   /** Walk the segment at sub-cell granularity; return the last reachable point.
    *  Normally stops at the first non-walkable sample. When `crossFall`, a FALL region
    *  (void: !walkable && !blocks) is treated as passable — so a fall-ignoring move
-   *  traverses a void band and lands on the far walkable side; WALLS still stop it. */
-  private walkSweep(start: Vec2, end: Vec2, crossFall = false): Vec2 {
+   *  traverses a void band and lands on the far walkable side; WALLS still stop it.
+   *  `grasp` > 0 is the LEDGE-GRASP radius: a sample over void stays passable while
+   *  any part of the body disc still overlaps standing ground — touching a lip is a
+   *  grasp; only carrying the whole body past all support is the walk-off. */
+  private walkSweep(start: Vec2, end: Vec2, crossFall = false, grasp = 0): Vec2 {
     const wf = this.walk!;
     const dx = end.x - start.x, dy = end.y - start.y;
     const len = Math.hypot(dx, dy);
     if (len < 0.0001) return vec(start.x, start.y);
     const passable = (px: number, py: number): boolean => {
       if (wf.isWalkable(px, py)) return true;
-      if (!crossFall) return false;
       const rk = regionKind(wf.regionAt?.(px, py));
-      return !!rk && !rk.walkable && !rk.blocks; // void: pass over
+      if (!rk || rk.walkable || rk.blocks) return false; // walls stop at the face
+      if (crossFall) return true; // fall-ignoring move sails the gap
+      return grasp > 0 && (wf.supportedAt?.(px, py, grasp) ?? false);
     };
     const gran = (wf.cellSize ?? 24) * 0.34;
     const steps = Math.max(1, Math.ceil(len / gran));
@@ -31198,8 +31375,11 @@ export class World {
     this.markSeatActed(a); // movement interrupts THAT seat's dwell
     // DEV noclip: the local hero phases through walls/rocks/void (bounds still
     // hold). TRUE FLIERS ride the same displacement policy — the wing cares
-    // nothing for rocks, walls or the gap beneath (levitates covers the void).
-    const disp = (this.devNoclip && a === this.player) || a.flying ? NOCLIP_DISP : undefined;
+    // nothing for rocks, walls or the gap beneath. A LEVITATOR (base flag or
+    // the 'levitation' stat — cloudform) floats over void bands but walls
+    // still confine it: it floats, it doesn't phase.
+    const disp = (this.devNoclip && a === this.player) || a.flying ? NOCLIP_DISP
+      : this.levitating(a) ? LEVITATE_DISP : undefined;
     if (traction >= 0.999) {
       // Solid ground: instant control, exactly as ever.
       a.vel.x = (dx / len) * speed;

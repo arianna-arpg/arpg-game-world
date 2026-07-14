@@ -26,10 +26,11 @@
 // is TRANSIENT: leave and return and the ground has re-knit itself whole —
 // the dream re-forms (worldstate movers doctrine).
 //
-// Pure leaf: structural slice types only — no engine imports, no cycles.
+// Pure leaf: structural slice types + leaf config only — no cycles.
 // ---------------------------------------------------------------------------
 
 import { gridBfs, gridSpine } from './gridSpine';
+import { WALK_CFG } from '../world/gridWalk';
 
 /** Cell states. SOLID ground arms on contact, crumbles visibly, then voids. */
 export const enum CollapseCell { Solid = 0, Arming = 1, Crumbling = 2, Void = 3, Immune = 4 }
@@ -47,6 +48,9 @@ export interface CollapseWalk {
   isWalkable(x: number, y: number): boolean;
   regionAt(x: number, y: number): string;
   fillRegion(x0: number, y0: number, x1: number, y1: number, id: string): void;
+  /** LEDGE GRASP: any part of a body disc still over something that holds it
+   *  (walkable ground or blocking mass — anything but open void). */
+  supportedAt(x: number, y: number, r: number): boolean;
 }
 
 /** The actor slice the field watches. The WORLD prefilters who is eligible
@@ -101,6 +105,10 @@ export interface CollapseFallSpec {
   damageFrac?: number;
   /** Coyote seconds standing on nothing before the fall claims you. */
   grace?: number;
+  /** LEDGE GRASP override: the fraction of the body's radius that must be
+   *  wholly past standing ground before it reads unsupported (default
+   *  WALK_CFG.ledgeGrasp). 0 = the old center-point precision. */
+  grasp?: number;
 }
 
 /** The whole mechanic as data, on a ZoneTheme (variants override wholesale). */
@@ -130,6 +138,12 @@ export interface CollapseSpec {
    *  seconds (contact still respects only the goal platform). */
   entryClear?: number;
   entryGrace?: number;
+  /** MOVEMENT ARMING: the dissolution holds its breath — no ambient clock, no
+   *  contact arming — until a WAKE body (the World passes the player party)
+   *  has moved this far from where it stood when the field went up (world
+   *  units; default COLLAPSE_CFG.armMoveDist, 0 disables and arms at build).
+   *  A player reading their inventory on arrival melts nothing. */
+  armMove?: number;
 }
 
 /** Framework constants — knobs that shape EVERY collapse, not one zone's. */
@@ -149,6 +163,11 @@ export const COLLAPSE_CFG = {
   portalClear: 95,
   /** Default coyote seconds before a voided cell drops its occupant. */
   fallGrace: 0.35,
+  /** Default MOVEMENT-ARMING distance (world units): collapse cannot begin
+   *  until a player has actually moved this far from their arrival stance.
+   *  Under one grid cell — a deliberate step arms it, an idle body never
+   *  does. Spec override: CollapseSpec.armMove (0 = armed at build). */
+  armMoveDist: 20,
   /** Default spine halo (cells). */
   halo: 2,
   /** Ambient melts released per tick at most — a rim ring arriving all at
@@ -182,6 +201,14 @@ export class CollapseField {
   private readonly meltable: Set<string>;
   private readonly contactWarmup: number;
   private readonly fallGrace: number;
+  /** LEDGE-GRASP fraction of an actor's radius (fall.grasp ?? WALK_CFG). */
+  private readonly graspFrac: number;
+  /** MOVEMENT ARMING: false until a wake body steps `armMove` from where it
+   *  stood at build — the whole choreography (clock-relative) waits with it. */
+  private armed: boolean;
+  private readonly armMove: number;
+  /** Where each wake body stood when first seen (WeakMap: leavers fall out). */
+  private readonly armOrigin = new WeakMap<CollapseActorLike, { x: number; y: number }>();
   /** Per-actor coyote clocks (keyed by the actor object). */
   private readonly teeter = new WeakMap<CollapseActorLike, number>();
   /** The spine path (cell indices, entry→goal) — renderer/debug may trace it. */
@@ -197,6 +224,9 @@ export class CollapseField {
     this.meltable = new Set(spec.melts ?? ['ground']);
     this.contactWarmup = spec.contact?.warmup ?? COLLAPSE_CFG.contactWarmup;
     this.fallGrace = spec.fall?.grace ?? COLLAPSE_CFG.fallGrace;
+    this.graspFrac = spec.fall?.grasp ?? WALK_CFG.ledgeGrasp;
+    this.armMove = spec.armMove ?? COLLAPSE_CFG.armMoveDist;
+    this.armed = this.armMove <= 0;
     const n = walk.cols * walk.rows;
     this.state = new Uint8Array(n);
     this.timer = new Float32Array(n);
@@ -334,16 +364,37 @@ export class CollapseField {
       ? CollapseCell.Void : prior;
   }
 
+  /** Has the dissolution actually begun ticking (movement-armed)? */
+  get isArmed(): boolean { return this.armed; }
+
   /** Advance the dissolution. `actors` are the world-prefiltered occupants
    *  (grounded, fall-eligible); `feet` are the contact-arming subset (usually
    *  the same list — separated so a levitating brood can still FALL-test
-   *  differently than it arms, if a future spec wants that). */
+   *  differently than it arms, if a future spec wants that); `wake` are the
+   *  bodies whose MOVEMENT wakes the field (the player party) — until one of
+   *  them steps `armMove` from its build stance, the clock holds and nothing
+   *  melts (the fall test still runs: pre-existing void keeps its teeth). */
   update(dt: number, actors: readonly CollapseActorLike[],
-    feet: readonly CollapseActorLike[] = actors): CollapseEvents {
-    this.clock += dt;
+    feet: readonly CollapseActorLike[] = actors,
+    wake: readonly CollapseActorLike[] = []): CollapseEvents {
     const events: CollapseEvents = { voided: [], fell: [] };
     const { walk, spec } = this;
     const cell = walk.cell;
+
+    // --- Movement arming: the ground holds its breath until someone steps. --
+    if (!this.armed) {
+      for (const a of wake) {
+        const o = this.armOrigin.get(a);
+        if (!o) { this.armOrigin.set(a, { x: a.pos.x, y: a.pos.y }); continue; }
+        const dx = a.pos.x - o.x, dy = a.pos.y - o.y;
+        if (dx * dx + dy * dy >= this.armMove * this.armMove) { this.armed = true; break; }
+      }
+      if (!this.armed) {
+        this.fallTest(dt, actors, events);
+        return events;
+      }
+    }
+    this.clock += dt;
 
     // --- Ambient releases: walk the sorted cursor up to the clock. ---------
     let released = 0;
@@ -403,10 +454,19 @@ export class CollapseField {
       events.voided.push({ x: (gx + 0.5) * cell, y: (gy + 0.5) * cell });
     }
 
-    // --- The fall test: who is standing on nothing? -------------------------
+    this.fallTest(dt, actors, events);
+    return events;
+  }
+
+  /** The fall test: who is standing on NOTHING? A body is SUPPORTED while any
+   *  part of its grasp disc still overlaps something that holds it (walkable
+   *  ground or blocking mass — the ledge is grasped, not fallen from); only
+   *  wholly past the lip does the coyote clock run. Reads the LIVE walk grid,
+   *  so melted cells and generation-void read identically. */
+  private fallTest(dt: number, actors: readonly CollapseActorLike[], events: CollapseEvents): void {
     for (const a of actors) {
       const i = this.cellIndex(a.pos.x, a.pos.y);
-      if (i < 0 || this.state[i] !== CollapseCell.Void) {
+      if (i < 0 || this.walk.supportedAt(a.pos.x, a.pos.y, a.radius * this.graspFrac)) {
         this.teeter.delete(a);
         continue;
       }
@@ -418,7 +478,6 @@ export class CollapseField {
         this.teeter.set(a, t);
       }
     }
-    return events;
   }
 }
 

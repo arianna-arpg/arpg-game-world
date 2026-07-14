@@ -50,6 +50,7 @@ import {
 } from '../src/engine/levelgen';
 import { shapeBoundR } from '../src/engine/shapes';
 import { GridWalkField } from '../src/world/gridWalk';
+import { regionKind } from '../src/world/regions';
 import { TILESETS } from '../src/data/tilesets';
 import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { MELDS } from '../src/data/melds';
@@ -109,6 +110,19 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
     }
   }
   if (forbidPairs.size) fails.push(`${name}: solids on forbidden ground (${[...forbidPairs].join(', ')})`);
+  // GROUND REQUIRED inverse (DoodadRule.voidOk): on a grid, no doodad stands
+  // with its center over a VOID-LIKE cell (open sky, chasm — !walkable &&
+  // !blocks) unless its rule opts out. The outcome-side of the placement
+  // gate, exactly like the forbidOn inverse above.
+  if (layout.walk instanceof GridWalkField) {
+    const floating = new Set<string>();
+    for (const d of doodads) {
+      if (doodadRuleOf(d.kind).voidOk) continue;
+      const rk = regionKind(layout.walk.regionAt(d.pos.x, d.pos.y));
+      if (rk && !rk.walkable && !rk.blocks) floating.add(d.kind);
+    }
+    if (floating.size) fails.push(`${name}: doodad(s) floating over void (${[...floating].join(', ')})`);
+  }
   // Portal clears: CONVEX zones only — the splice contract. Grid layouts'
   // promise is reachability (asserted below); their blockers may legally
   // neighbor a portal the flow-field routes around.

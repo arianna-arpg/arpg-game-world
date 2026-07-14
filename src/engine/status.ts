@@ -549,6 +549,17 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Winded', color: '#c8d4ea', duration: 1.4,
     mods: [mod('moveSpeed', 'increased', -0.15)],
   },
+  // CLOUDFORM — the body condenses into stabilized cloud-stuff and FLOATS:
+  // while it rides, every vertical fabric reads the bearer as levitating
+  // (collapse teeter, flux fray, the boundary voids — the 'levitation' stat,
+  // one lever like phasing) and void bands cross underfoot; walls still
+  // confine. Lapse mid-sky and the coyote clock finds you where you stand.
+  // The Mistral kata's signature state; granters set their own durations.
+  cloudform: {
+    label: 'Cloudform', color: '#dceafc', duration: 3,
+    beneficial: true,
+    mods: [mod('levitation', 'flat', 1), mod('moveSpeed', 'increased', 0.1)],
+  },
 
   living_bomb: {
     label: 'Living Bomb', color: '#ff6a2a', duration: 2.5,

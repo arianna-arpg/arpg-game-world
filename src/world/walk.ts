@@ -26,6 +26,13 @@ export interface WalkField {
   cellSize?: number;
   /** Is this point standable ground (not void / sea / wall)? */
   isWalkable(x: number, y: number): boolean;
+  /** LEDGE GRASP: is any part of a body disc (center, radius) still over
+   *  something that holds it — walkable ground or blocking mass, anything but
+   *  open void? Drives the vertical fabrics' fall tests + the swept confine so
+   *  touching a lip is a grasp, not a fall (WALK_CFG.ledgeGrasp scales the
+   *  radius). Optional: a model with no void concept omits it and callers
+   *  fall back to isWalkable. */
+  supportedAt?(x: number, y: number, r: number): boolean;
   /** The REGION KIND id at a point (Phase 3 typed regions) — drives the collision
    *  policy + per-frame region effects. Optional so a minimal impl may omit it. */
   regionAt?(x: number, y: number): string;

@@ -21,12 +21,26 @@
 import { mod, type Modifier } from '../engine/stats';
 import type { WeatherStrike } from '../world/weather';
 
+/** PLACEMENT HYGIENE for interactive stands (shrines, altars, gem caches,
+ *  chests, survey spires): the clearance every such placement keeps from the
+ *  zone's DOORS — entry pad, exit portals, cave mouths, realm gates, the
+ *  waypoint. An altar atop a portal is a misclick machine (the Aetherial's
+ *  cramped isles used to stack them); placements prefer a clear point of
+ *  interest, then a clear far point, then SLIDE off the doors — placed
+ *  farther is fine, placed atop is never. Per-def override: `portalClear`. */
+export const INTERACT_PLACE_CFG = {
+  /** Default door clearance (world units) for any interactive stand. */
+  portalClear: 120,
+} as const;
+
 export interface ShrineDef {
   id: string;
   name: string;
   color: string;
   duration: number;
   mods: Modifier[];
+  /** Door clearance override for this row (default INTERACT_PLACE_CFG). */
+  portalClear?: number;
 }
 
 export const SHRINES: ShrineDef[] = [
@@ -78,6 +92,8 @@ export interface AltarDef {
   mend?: { every: number; base: number; perLevel: number };
   /** POI roll weight (default 1) — rarer altars stand on rarer ground. */
   weight?: number;
+  /** Door clearance override for this row (default INTERACT_PLACE_CFG). */
+  portalClear?: number;
 }
 
 export const ALTARS: AltarDef[] = [

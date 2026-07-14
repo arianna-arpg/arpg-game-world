@@ -48,12 +48,13 @@
 // (it frays and lets go like everything else). It annexes cells from whichever
 // fabric owns them and returns them on expiry; the World routes consequences.
 //
-// Pure leaf: structural slice types only — no engine imports, no cycles
+// Pure leaf: structural slice types + leaf config only — no cycles
 // (gridSpine is a fellow leaf).
 // ---------------------------------------------------------------------------
 
 import type { CollapseActorLike, CollapseFallSpec, CollapseRng } from './collapse';
 import { gridBfs, gridSpine } from './gridSpine';
+import { WALK_CFG } from '../world/gridWalk';
 
 /** Pad phase states — what a pad IS this instant (renderer + fall logic). */
 export const enum FluxPhase { Gone = 0, Forming = 1, Solid = 2, Fraying = 3 }
@@ -72,6 +73,9 @@ export interface FluxWalk {
   isWalkable(x: number, y: number): boolean;
   regionAt(x: number, y: number): string;
   fillRegion(x0: number, y0: number, x1: number, y1: number, id: string, quiet?: boolean): void;
+  /** LEDGE GRASP: any part of a body disc still over something that holds it
+   *  (walkable ground or blocking mass — anything but open void). */
+  supportedAt(x: number, y: number, r: number): boolean;
 }
 
 /** PAD RHYTHM: the gather→stand→fray→gone cycle every phasing pad walks. */
@@ -257,6 +261,8 @@ export class FluxField {
   clock = 0;
   readonly warmup: number;
   private readonly fallGrace: number;
+  /** LEDGE-GRASP fraction of an actor's radius (fall.grasp ?? WALK_CFG). */
+  private readonly graspFrac: number;
   private readonly voidKind: string;
   private readonly padKinds: Set<string>;
   private readonly laneKind: string;
@@ -276,6 +282,7 @@ export class FluxField {
     this.rng = rng;
     this.warmup = spec.warmup ?? FLUX_CFG.warmup;
     this.fallGrace = spec.fall?.grace ?? FLUX_CFG.fallGrace;
+    this.graspFrac = spec.fall?.grasp ?? WALK_CFG.ledgeGrasp;
     this.voidKind = spec.region ?? 'flux_void';
     this.padKinds = new Set(Array.isArray(spec.phases) ? spec.phases
       : spec.phases ? [spec.phases] : ['cloud_flux', 'cloud_flux_b', 'cloud_flux_c']);
@@ -723,10 +730,13 @@ export class FluxField {
       this.gustAt = this.clock + this.rng.range(g.every[0], g.every[1]);
     }
 
-    // --- The fall test: who is standing on nothing? --------------------------
+    // --- The fall test: who is standing on nothing? LEDGE GRASP: a body is
+    // supported while any part of its grasp disc still overlaps standing
+    // ground — only wholly past the pad's lip does the coyote clock run.
     for (const a of actors) {
       const i = this.cellIndex(a.pos.x, a.pos.y);
-      if (i < 0 || this.owned[i] !== 1 || this.walk.isWalkable(a.pos.x, a.pos.y)) {
+      if (i < 0 || this.owned[i] !== 1
+        || this.walk.supportedAt(a.pos.x, a.pos.y, a.radius * this.graspFrac)) {
         this.teeter.delete(a);
         continue;
       }
