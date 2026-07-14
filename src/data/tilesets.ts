@@ -2335,6 +2335,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       floor: '#0a0f0b', grid: '#0f1810', border: '#3a5a44',
       obstacle: '#1c3a2c', obstacleEdge: '#3a6a4e', accent: '#7fce6a',
       chasm: '#040806', mud: '#10180e', water: '#0c2620', tree: '#2a4a36', wall: '#3a3a52',
+      // The Blight OWNS its epicenter ground now (the creep fabric): ambient
+      // blightgrowth pockets — the same skin its in-zone events spread into
+      // invaded country, grown thick where the incursion was born.
+      creep: { pockets: [2, 4], kinds: [{ id: 'blightgrowth' }] },
     },
     sizeW: [2200, 3000], sizeH: [1500, 2200], ellipseChance: 0.3, biome: 'eldritch',
     layout: [

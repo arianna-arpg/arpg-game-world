@@ -8672,14 +8672,20 @@ export class World {
     this.text(vec(f.pos.x, f.pos.y - f.radius - 6), 'corrupted!', '#7fce6a', 11);
   }
 
-  /** EVENT: sprout ensnaring tentacle-field ground patches away from the player. */
+  /** EVENT: sprout ensnaring tentacle-field ground patches away from the player —
+   *  and skin the site in BLIGHTGROWTH (the creep fabric): the corruption
+   *  finally owns ground you can see spread. The membrane grows live from
+   *  the landing (bornFrac 0), feeds the eldritch standing on it and mires
+   *  everyone else; the field's source cap saturates a long siege politely. */
   private eldritchTentacleField(intensity: number, a: IncursionArchetype): void {
     const cfg = a.eventConfig.tentacleField;
     if (cfg.perFire <= 0) return; // perFire 0 = this event is off
     const n = eventCount(cfg, intensity);
+    const blight = CREEPS['blightgrowth'];
     for (let k = 0; k < n; k++) {
       const at = this.clampPos(this.farPoint(cfg.farFrom), cfg.radius);
       this.addTempGround(at, 'tentacle_field', cfg.radius, cfg.duration);
+      if (blight) this.creepEnsure()?.addSource(blight, at.x, at.y, { bornFrac: 0 });
       this.flashes.push({ pos: vec(at.x, at.y), radius: cfg.radius, color: '#2a5a32', life: 0.5, maxLife: 0.5 });
     }
   }
@@ -22306,6 +22312,7 @@ export class World {
         this.actors.push(m);
         return m;
       },
+      cleanseCreepAt: (at, r) => this.creep?.cleanseAt(at.x, at.y, r) ?? 0,
       simView: () => this.simView(),
     };
   }

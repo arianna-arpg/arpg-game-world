@@ -59,6 +59,10 @@ export interface KillCtx {
   flash(at: Vec2, radius: number, color: string, life?: number): void;
   /** Spawn a hostile at a clamped position (the cultist's blood-demon verb). */
   spawnHostileAt(defId: string, level: number, at: Vec2): Actor;
+  /** Force-recede every creep-fabric source heart within `r` of `at` (the
+   *  cleanse payoff verb — an epicenter falls, the skin recoils). Returns
+   *  how many patches began recoiling; 0 where no field lives. */
+  cleanseCreepAt(at: Vec2, r: number): number;
   /** The sim's overlay view (the warlord power-break feeds it). */
   simView(): OverlayView;
 }
@@ -185,13 +189,17 @@ registerKillHandler({
     ctx.grantXp(Math.round((300 + ctx.zone.level * 52) * mul));
     const gems = 3 + Math.floor(mul);
     for (let i = 0; i < gems; i++) ctx.dropGemAt(ctx.actor.pos);
+    // The epicenter falls, the skin EVERYWHERE recoils — the blightgrowth
+    // the incursion's events grew here visibly lets go of the floor.
+    ctx.cleanseCreepAt(ctx.actor.pos, 1e9);
     ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 56),
       `The Eldritch presence recoils! (×${mul.toFixed(1)} spoils)`, '#7fce6a', 20);
   },
 });
 
 // CLEANSE: culling a corrupted foe or an Eldritch spawn RETRACTS the reach in
-// this zone — fighting the blight pushes the tentacles back (the tug-of-war).
+// this zone — fighting the blight pushes the tentacles back (the tug-of-war),
+// and the nearest patch of its ground-skin recoils with it.
 registerKillHandler({
   id: 'eldritch_cleanse',
   when: ctx => ctx.actor.corrupted || ctx.actor.tag === 'eldritch_spawn',
@@ -199,6 +207,7 @@ registerKillHandler({
     const ectx = ctx.sim.incursionField.eventContext(ctx.zone.id);
     if (ectx?.archetype.termination.cleanseRetract) {
       ctx.sim.incursionField.cleanse(ctx.zone.id, ectx.archetype.termination.cleanseRetract);
+      ctx.cleanseCreepAt(ctx.actor.pos, 260);
     }
   },
 });

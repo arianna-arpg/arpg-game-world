@@ -4631,30 +4631,85 @@ const gravelPath: GroupPainter = (env, group, def) => {
 };
 
 /** Writhing eldritch tentacle patches. */
+/** TENTACLE FIELDS — the incursion's ensnaring patches, brought onto the
+ *  modern fabric: a graded pool bedding into the floor, ramped arms (soft
+ *  glow under-stroke + shaded core + pale tip-curl) that writhe on slow
+ *  personal clocks, sucker freckles on the two longest, and one dim heart
+ *  node. Reads as the blightgrowth's reaching edge — the creep layer grows
+ *  the skin, these are its fingers. */
 const tentacleField: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { fill?: ColorSpec; arm?: ColorSpec };
+  const p = (def.params ?? {}) as { fill?: ColorSpec; arm?: ColorSpec; glow?: ColorSpec };
   const { ctx, theme, time } = env;
+  const fill = resolveColor(p.fill, theme, '#1c3a24');
+  const arm = resolveColor(p.arm, theme, '#3c6a44');
+  const glow = resolveColor(p.glow, theme, '#7fce6a');
+  ctx.lineCap = 'round';
   for (const o of group) {
-    ctx.globalAlpha = 0.22;
-    ctx.fillStyle = resolveColor(p.fill, theme, '#2a5a32');
+    const seed = ((o.pos.x * 23 + o.pos.y * 17) | 0) >>> 0;
+    // The pool: graded, darkest at heart, thinning into the floor. (Plain
+    // gradient — a zone holds a handful of patches; nothing to pool.)
+    const g = ctx.createRadialGradient(o.pos.x, o.pos.y, 0, o.pos.x, o.pos.y, o.radius);
+    g.addColorStop(0, withAlpha(shade(fill, -0.25), 0.5));
+    g.addColorStop(0.55, withAlpha(fill, 0.34));
+    g.addColorStop(1, withAlpha(fill, 0));
+    ctx.fillStyle = g;
     ctx.beginPath();
     ctx.arc(o.pos.x, o.pos.y, o.radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 0.8;
-    ctx.strokeStyle = resolveColor(p.arm, theme, '#7fce6a');
-    ctx.lineWidth = 2.5;
-    for (let s = 0; s < 7; s++) {
-      const ang = (s / 7) * Math.PI * 2 + Math.sin(time * 1.5 + s) * 0.4;
-      const len = o.radius * (0.55 + 0.4 * Math.abs(Math.sin(time * 2 + s)));
+    // The arms: each on its own slow clock, curling at the tip.
+    const arms = 6 + (seed % 3);
+    for (let s = 0; s < arms; s++) {
+      const wave = Math.sin(time * (0.9 + hash01(s, seed) * 0.7) + s * 2.1);
+      const ang = (s / arms) * Math.PI * 2 + hash01(s, seed + 3) * 0.8 + wave * 0.3;
+      const len = o.radius * (0.5 + 0.38 * (0.5 + 0.5 * Math.sin(time * 1.3 + s * 1.7 + seed * 0.01)));
+      const midX = o.pos.x + Math.cos(ang + 0.5 * wave) * len * 0.5;
+      const midY = o.pos.y + Math.sin(ang + 0.5 * wave) * len * 0.5;
+      const tipA = ang - 0.7 * wave;
       const ex = o.pos.x + Math.cos(ang) * len, ey = o.pos.y + Math.sin(ang) * len;
-      const cx = o.pos.x + Math.cos(ang + 0.6) * len * 0.5, cy = o.pos.y + Math.sin(ang + 0.6) * len * 0.5;
-      ctx.beginPath();
-      ctx.moveTo(o.pos.x, o.pos.y);
-      ctx.quadraticCurveTo(cx, cy, ex, ey);
+      const curlX = ex + Math.cos(tipA + Math.PI / 2) * len * 0.14;
+      const curlY = ey + Math.sin(tipA + Math.PI / 2) * len * 0.14;
+      const trace = (): void => {
+        ctx.beginPath();
+        ctx.moveTo(o.pos.x, o.pos.y);
+        ctx.quadraticCurveTo(midX, midY, ex, ey);
+        ctx.quadraticCurveTo(
+          ex + Math.cos(tipA) * len * 0.12, ey + Math.sin(tipA) * len * 0.12,
+          curlX, curlY);
+      };
+      // Soft glow bed, shaded core, pale lit edge at the tip third.
+      trace();
+      ctx.strokeStyle = withAlpha(glow, 0.16);
+      ctx.lineWidth = 5.2;
       ctx.stroke();
+      trace();
+      ctx.strokeStyle = withAlpha(shade(arm, -0.15), 0.9);
+      ctx.lineWidth = 2.6;
+      ctx.stroke();
+      ctx.strokeStyle = withAlpha(shade(arm, 0.3), 0.8);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(ex, ey);
+      ctx.quadraticCurveTo(
+        ex + Math.cos(tipA) * len * 0.12, ey + Math.sin(tipA) * len * 0.12,
+        curlX, curlY);
+      ctx.stroke();
+      // Sucker freckles down the two longest arms.
+      if (s < 2) {
+        ctx.fillStyle = withAlpha(glow, 0.4);
+        for (const f of [0.35, 0.55, 0.75]) {
+          ctx.beginPath();
+          ctx.arc(o.pos.x + (ex - o.pos.x) * f, o.pos.y + (ey - o.pos.y) * f, 1.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
-    ctx.globalAlpha = 1;
+    // The heart node: something under the pool is paying attention.
+    ctx.fillStyle = withAlpha(glow, 0.28 + 0.12 * Math.sin(time * 1.1 + seed * 0.1));
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, Math.max(2.5, o.radius * 0.07), 0, Math.PI * 2);
+    ctx.fill();
   }
+  ctx.globalAlpha = 1;
 };
 
 /** The conclave's ritual pentagram — heat rides the incubation counter. */
