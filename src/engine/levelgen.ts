@@ -1078,7 +1078,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   jungle_brush: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 30,
     forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], orbChance: 0.1, text: 'you hack through!', color: '#4f7a2c',
-      spawn: { monster: 'emerald_mantis', count: [1, 1], chance: 0.07, text: 'the brush erupts!' } } },
+      spawn: { monster: 'fern_stalker', count: [1, 1], chance: 0.07, text: 'the brush erupts!' } } },
   // The face-cut pays like a secret wall but HIDES like nothing — the tell is
   // the wall itself: cut the knot and the pop carves a pocket INTO the verdure.
   verdure_face: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true, spacing: 40,

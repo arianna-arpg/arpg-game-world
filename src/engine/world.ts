@@ -19485,7 +19485,7 @@ export class World {
       const br = doodadRuleOf(o.kind).brittle;
       if (!br || o.gone || !br.on.includes('hit')) continue;
       if (!within(o.pos, o.radius)) continue;
-      this.popBrittle(o);
+      this.popBrittle(o, striker);
     }
   }
 
@@ -28627,7 +28627,7 @@ export class World {
           const br = doodadRuleOf(o.kind).brittle;
           if (br && !o.gone && br.on.includes('hit')
             && this.projTouches(p, o.pos.x, o.pos.y, o.radius)) {
-            this.popBrittle(o);
+            this.popBrittle(o, p.caster ?? null);
           }
           if (!blocksProjectiles(o)) continue;
           if (o.gone) continue; // popped this very step — nothing left to hit
@@ -29825,6 +29825,23 @@ export class World {
    *  lingering press). WeakMap: popped/regenerated doodads just fall out. */
   private brittleDwell = new WeakMap<Doodad, number>();
 
+  /** SURFACE procs — rolled when this actor pops a brittle surface (the
+   *  jungle's brush plugs, a crystal lattice, a hidden face). Mirrors the
+   *  collision-proc roll with no skill context: sheet-only chance (neutral
+   *  tags, no instance mods), self-targeted effects. The trigger any
+   *  "cutting-flow" passive/affix rides — grant proc_<id> on the sheet and
+   *  hacking through the world starts paying. */
+  private rollSurfaceProcs(striker: Actor): void {
+    for (const proc of PROC_LIST) {
+      if (proc.trigger !== 'surface') continue;
+      if (!this.procGates(striker, proc, null)) continue;
+      const c = this.procChance(striker, proc, 0);
+      if (c <= 0 || !chance(c)) continue;
+      if (!this.procReady(striker, proc)) continue;
+      this.executeProc(proc, striker, null, null, 0);
+    }
+  }
+
   /** BRITTLE doodads (DoodadRule.brittle): lifeless breakables. 'touch' and
    *  'near' triggers probe the player's team here each tick (bucket-local);
    *  'hit' rides the projectile step. No life bars, no kill ladder — a pot
@@ -29837,12 +29854,12 @@ export class World {
         if (!br || d.gone) continue;
         const gap = dist(a.pos, d.pos);
         if (br.on.includes('touch') && gap <= a.radius + d.radius + 2) {
-          if (!br.dwell) { this.popBrittle(d); continue; }
+          if (!br.dwell) { this.popBrittle(d, a); continue; }
           this.brittleAccrue(d, br, dt);
           continue;
         }
         if (br.on.includes('near') && gap <= (br.reach ?? 40) + a.radius) {
-          if (!br.dwell) { this.popBrittle(d); continue; }
+          if (!br.dwell) { this.popBrittle(d, a); continue; }
           this.brittleAccrue(d, br, dt);
         }
       }
@@ -29865,8 +29882,11 @@ export class World {
 
   /** A lifeless breakable gives way: FX + spill + optional grid carve. The
    *  crumbling plug unblocks its own footprint; a secret wall carves INTO the
-   *  wall face behind it — the passage the stone was hiding. */
-  private popBrittle(d: Doodad): void {
+   *  wall face behind it — the passage the stone was hiding. `striker` is
+   *  whoever's blow (or boot) did it, when a body is known — the 'surface'
+   *  proc trigger rolls on them (cutting through the world is an act with
+   *  its own rewards; a timer-pop names nobody and rolls nothing). */
+  private popBrittle(d: Doodad, striker?: Actor | null): void {
     if (d.gone) return;
     d.gone = true;
     const i = this.doodads.indexOf(d);
@@ -29875,6 +29895,11 @@ export class World {
     // SAME list length, and the spatial/veil indices key on (identity, length,
     // rev) — length alone would leave them stale for that window.
     this.markDoodadsChanged();
+    // SURFACE PROCS: the pop is a trigger of its own (procs.ts 'surface').
+    // No skill instance exists at a pop, so the roll reads the striker's
+    // SHEET alone (passives, affixes, sheet-granted proc stats) — a
+    // skill-local gem grant can't reach here by design; the affix lane can.
+    if (striker && !striker.dead) this.rollSurfaceProcs(striker);
     const br = doodadRuleOf(d.kind).brittle;
     if (!br) return;
     const color = br.color ?? '#c8b89a';

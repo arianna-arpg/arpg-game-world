@@ -27,6 +27,7 @@ export const FACTION_COLORS: Record<string, string> = {
   flesh: '#c85a6a',
   nightkin: '#a83a5a',
   emberkin: '#e88a3a',
+  junglekin: '#3fae5c',
 };
 
 /** The Contagion overlay's sickly palette — a necrotic green that brightens toward

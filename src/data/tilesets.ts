@@ -891,24 +891,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [5, 8], size: [3, 5],
       table: [
-        { id: 'thorn_sprite', weight: 4, presence: { to: 20, fadeOut: 10 } },
-        { id: 'sylvan_warden', weight: 2 },
-        { id: 'briar_beast', weight: 2, presence: { from: 9, fadeIn: 4 } },
-        { id: 'grove_singer', weight: 1, presence: { from: 6, fadeIn: 3 } },
-        { id: 'spitting_horror', weight: 2, presence: { to: 16, fadeOut: 8 } },
-        { id: 'fen_hound', weight: 1 },
-        // The canopy's anti-dodge answer: it reads the runner's rhythm.
+        // THE JUNGLEKIN first — the green's own tribes hold their ground.
+        { id: 'fern_stalker', weight: 4, presence: { to: 18, fadeOut: 8 } },
+        { id: 'blowgun_wretch', weight: 3, presence: { to: 20, fadeOut: 9 } },
+        { id: 'spore_caller', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'strangler_maw', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'emerald_prowler', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'saurian_bulwark', weight: 2, presence: { from: 11, fadeIn: 5 } },
+        { id: 'verdant_tyrant', weight: 1, presence: { from: 14, fadeIn: 6 } },
+        // What was here before them: the canopy's own hunters and the silk.
         { id: 'veilstalker', weight: 2, presence: { from: 6, fadeIn: 3 } },
-        // The jungle's own green wood, waking.
-        { id: 'sylvan_sapling', weight: 2, presence: { to: 12, fadeOut: 5 } },
-        { id: 'twig_snarl', weight: 2, presence: { from: 4, fadeIn: 2, to: 22, fadeOut: 9 } },
-        { id: 'treant_warden', weight: 1, presence: { from: 12, fadeIn: 5 } },
-        { id: 'root_snarl', weight: 1, presence: { from: 10, fadeIn: 4 } },
-        // Prayer and silk in the green shade.
+        { id: 'spitting_horror', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'emerald_mantis', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'orb_weaver', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
-        { id: 'root_wraith', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'root_wraith', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -995,14 +992,15 @@ export const TILESETS: Record<string, TilesetDef> = {
     packs: {
       count: [4, 6], size: [3, 5],
       table: [
-        // The old dead first (the urns are load-bearing fiction), then what
-        // crawled in after them.
+        // The old dead first (the urns are load-bearing fiction), then the
+        // wardens the city left, then what crawled in after all of them.
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 2 },
+        { id: 'ruin_sentinel', weight: 2, presence: { from: 8, fadeIn: 3 } },
+        { id: 'blowgun_wretch', weight: 2, presence: { to: 16, fadeOut: 7 } },
+        { id: 'strangler_maw', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'orb_weaver', weight: 2 },
         { id: 'widow_matron', weight: 1, presence: { from: 10, fadeIn: 4 } },
-        { id: 'emerald_mantis', weight: 2 },
-        { id: 'veilstalker', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'root_wraith', weight: 2 },
       ],
     },

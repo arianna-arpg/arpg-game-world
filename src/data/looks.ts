@@ -2499,6 +2499,107 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 1.1,
   },
 
+  // =================================== THE JUNGLEKIN (the strangling green)
+  /** Fronds with intent: a lean stalker wearing the understory. */
+  fern_stalker: {
+    parts: [
+      { kind: 'torso', color: '#3f6a30', scale: 1.0 },
+      { kind: 'mossPatch', color: '#5a8a44', scale: 0.9 },
+      { kind: 'fronds', color: '#4a7a34', scale: 1.05 },
+      { kind: 'claws', color: '#2c4a20', scale: 1.05, params: { talons: 3 } },
+      { kind: 'eyes', color: '#d8f0a0', params: { spread: 0.32, dist: 0.6, size: 0.09 } },
+    ],
+    shadowScale: 0.95,
+  },
+  /** A hunched dart-tribesman: mask, pipe and a quiver of arguments. */
+  blowgun_wretch: {
+    parts: [
+      { kind: 'torso', color: '#6a5a3c', scale: 0.95 },
+      { kind: 'mask', color: '#c8b078', scale: 0.9 },
+      { kind: 'warpaint', color: '#7ec850', scale: 0.9 },
+      { kind: 'quiver', color: '#4a3a24', scale: 0.95 },
+      { kind: 'staff', color: '#8a6e42', scale: 0.8 },
+      { kind: 'eyes', color: '#c8e890', params: { spread: 0.28, dist: 0.58, size: 0.08 } },
+    ],
+    shadowScale: 0.9,
+  },
+  /** The caller: robes gone to moss, spore-vents where a censer would hang. */
+  spore_caller: {
+    parts: [
+      { kind: 'robe', color: '#5a6e38', scale: 1.1 },
+      { kind: 'drape', color: '#44562c', scale: 1.0 },
+      { kind: 'mossPatch', color: '#7aa848', scale: 0.95 },
+      { kind: 'sporeVents', color: '#a8d05a', scale: 0.9 },
+      { kind: 'staff', color: '#4a5a30', params: { orb: 'glow' } },
+      { kind: 'eyes', color: '#d8f0a0', params: { spread: 0.3, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'puffMotes', color: '#a8d05a', scale: 0.9, params: { n: 3 } }],
+    shadowScale: 1.0,
+  },
+  /** The maw in the mat: all mouth and roots — the vines were never idle. */
+  strangler_maw: {
+    parts: [
+      { kind: 'blob', color: '#2f5224', scale: 1.05 },
+      { kind: 'roots', color: '#3f6a30', scale: 1.1 },
+      { kind: 'mawRing', color: '#1c3312', scale: 0.85 },
+      { kind: 'barbs', color: '#6a9a3c', scale: 0.9 },
+      { kind: 'eyeCluster', color: '#c8e890', scale: 0.7 },
+    ],
+    live: [{ kind: 'wisps', color: '#7aa848', scale: 0.8, params: { n: 2 } }],
+    shadowScale: 1.0,
+  },
+  /** The cat the canopy dreams: spotted, whiskered, mostly implication. */
+  emerald_prowler: {
+    parts: [
+      { kind: 'torso', color: '#3f7a44', scale: 1.05 },
+      { kind: 'spots', color: '#2a5230', scale: 1.0 },
+      { kind: 'tuftEars', color: '#356a3a', scale: 0.9 },
+      { kind: 'whiskers', color: '#c8e8b0', scale: 0.9 },
+      { kind: 'fangs', color: '#e8f0d0', scale: 0.85 },
+      { kind: 'claws', color: '#24401e', scale: 1.1, params: { talons: 3 } },
+      { kind: 'eyes', color: '#ffe890', params: { spread: 0.3, dist: 0.62, size: 0.1 } },
+    ],
+    shadowScale: 1.0,
+  },
+  /** A walking rampart of scale and shell — argue with the other end. */
+  saurian_bulwark: {
+    parts: [
+      { kind: 'carapace', color: '#5a7a3c', scale: 1.1 },
+      { kind: 'scutes', color: '#44602c', scale: 1.0 },
+      { kind: 'dorsalRidge', color: '#36502a', scale: 0.95 },
+      { kind: 'tailClub', color: '#4a6a34', scale: 0.95 },
+      { kind: 'snout', color: '#52703a', scale: 0.9 },
+      { kind: 'eyes', color: '#ffd870', params: { spread: 0.26, dist: 0.66, size: 0.08 } },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The statue that was never a statue: coursed stone, moss in the joins. */
+  ruin_sentinel: {
+    parts: [
+      { kind: 'torso', color: '#8a8c74', scale: 1.1 },
+      { kind: 'armorPlates', color: '#6e7060', scale: 1.0 },
+      { kind: 'mossPatch', color: '#5a7a3c', scale: 0.95 },
+      { kind: 'stitchSeams', color: '#55684e', scale: 0.9 },
+      { kind: 'hammer', color: '#5e6052', scale: 1.05 },
+      { kind: 'eyes', color: '#9fd07a', params: { spread: 0.26, dist: 0.6, size: 0.09 } },
+    ],
+    shadowScale: 1.1,
+  },
+  /** The Tyrant: crest and frill over old chitin — the treeline's own crown. */
+  verdant_tyrant: {
+    parts: [
+      { kind: 'carapace', color: '#3f7a44', scale: 1.15 },
+      { kind: 'crest', color: '#6ed060', scale: 1.0 },
+      { kind: 'frill', color: '#2f5a34', scale: 1.05 },
+      { kind: 'barbs', color: '#8ac860', scale: 0.9 },
+      { kind: 'warpaint', color: '#d8f0a0', scale: 0.95 },
+      { kind: 'claws', color: '#24401e', scale: 1.15, params: { talons: 3 } },
+      { kind: 'eyes', color: '#ffe890', params: { spread: 0.3, dist: 0.64, size: 0.1 } },
+    ],
+    live: [{ kind: 'puffMotes', color: '#8ac860', scale: 0.9, params: { n: 2 } }],
+    shadowScale: 1.15,
+  },
+
   // =================================== THE TIDELINE + THE LATTICE (fills)
   /** A skittering wrack-crab: all legs and hurry, spray-spotted. */
   tide_skitter: {

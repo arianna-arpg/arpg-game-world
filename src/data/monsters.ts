@@ -3756,6 +3756,139 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE JUNGLEKIN (the strangling green claims a NAME) --------------------
+  // The jungle biome's tribe: dart-tribes and green-fed beasts who treat the
+  // verdure walls as home ground — every kit verb here is a WILDCRAFT skill
+  // (shared catalog: what they use, you can find). Defense textures spread
+  // wide by doctrine: evasive stalkers, frail dart-flesh, a poised shell, a
+  // rooted grappler, old stone. Warlord: the Verdant Tyrant.
+
+  fern_stalker: {
+    id: 'fern_stalker', name: 'Fern Stalker',
+    color: '#5a8a44', shape: 'triangle', radius: 11, material: 'verdant', look: 'fern_stalker',
+    base: { life: 38, moveSpeed: 150, accuracy: 90, evasion: 55, mana: 0 },
+    skills: ['claw'], xp: 12,
+    faction: 'junglekin',
+    // Scenery until you're past it — the brush you didn't cut.
+    ambush: { radius: 130, announce: 'the ferns move —' },
+    aggro: { fury: 1.2, waver: 1.1 },
+    gemBias: ['physical', 'melee'],
+    presence: { to: 18, fadeOut: 8 },
+    brain: { type: 'flanker', move: { style: 'lurk' } },
+  },
+  blowgun_wretch: {
+    id: 'blowgun_wretch', name: 'Blowgun Wretch',
+    color: '#8aa858', shape: 'oval', radius: 10, material: 'cloth', look: 'blowgun_wretch',
+    base: { life: 26, moveSpeed: 118, accuracy: 95, evasion: 25, mana: 40, manaRegen: 4 },
+    skills: ['blowdart'], xp: 11,
+    faction: 'junglekin',
+    temper: 'skittish',
+    gemBias: ['projectile', 'physical'],
+    presence: { to: 20, fadeOut: 9 },
+    brain: { type: 'caster' },
+  },
+  spore_caller: {
+    id: 'spore_caller', name: 'Spore Caller',
+    color: '#a8c86a', shape: 'pentagon', radius: 13, material: 'verdant', look: 'spore_caller',
+    base: { life: 55, moveSpeed: 92, accuracy: 95, mana: 130, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['spore_bloom'], xp: 24,
+    faction: 'junglekin',
+    gemBias: ['chaos', 'aoe'],
+    presence: { from: 6, fadeIn: 3 },
+    brain: {
+      type: 'caster',
+      rules: [{
+        // The caller seeds its kin: nearby junglekin fight wreathed in spores.
+        when: { alliesWithin: { count: 2, radius: 280 } }, every: [11, 16], hold: [0.3, 0.5],
+        announce: 'the caller seeds the air…',
+        actions: [{ do: 'buff', buff: { type: 'buff', id: 'spore_ward', duration: 6, mods: [mod('evasion', 'flat', 25), mod('lifeRegen', 'flat', 3)] } }],
+      }],
+    },
+  },
+  strangler_maw: {
+    id: 'strangler_maw', name: 'Strangler Maw',
+    color: '#3f6a30', shape: 'hexagon', radius: 16, material: 'verdant', look: 'strangler_maw',
+    base: { life: 130, moveSpeed: 55, accuracy: 90, armor: 18, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['constrictor_coil'], xp: 26,
+    faction: 'junglekin',
+    // It IS the vines: the body exists only where a mat grows, and confines
+    // itself to it — its coil is why you keep to the middle of the lane.
+    habitat: { kind: 'vines', minRadius: 24 },
+    noObjective: true,
+    aggro: { fixation: 1.5, waver: 0.5 },
+    gemBias: ['duration', 'physical'],
+    presence: { from: 8, fadeIn: 4 },
+    brain: { type: 'assassin' },
+  },
+  emerald_prowler: {
+    id: 'emerald_prowler', name: 'Emerald Prowler',
+    color: '#4a9a5c', shape: 'triangle', radius: 13, material: 'fur', look: 'emerald_prowler',
+    base: { life: 75, moveSpeed: 185, accuracy: 100, evasion: 60, mana: 30, manaRegen: 3 },
+    skills: ['claw', 'panther_pounce'], xp: 28,
+    faction: 'junglekin',
+    tags: ['beast'],
+    scaleVariance: [0.9, 1.15],
+    // A cat commits or vanishes; nothing in between.
+    aggro: { fury: 1.5, waver: 1.3 },
+    temper: 'wary',
+    gemBias: ['movement', 'melee'],
+    presence: { from: 9, fadeIn: 4 },
+    brain: { type: 'flanker', move: { style: 'lurk' } },
+  },
+  saurian_bulwark: {
+    id: 'saurian_bulwark', name: 'Saurian Bulwark',
+    color: '#6a8a4a', shape: 'hexagon', radius: 18, material: 'chitin', look: 'saurian_bulwark',
+    base: { life: 165, moveSpeed: 72, accuracy: 88, armor: 34, poise: 40, mana: 40, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw', 'crushing_leap'], xp: 32,
+    faction: 'junglekin',
+    tags: ['beast'],
+    shellGuard: { side: 'front', max: 55, arcDeg: 140, regenDelay: 5, regenRate: 11 },
+    turnSpeed: 3.0,
+    aggro: { fixation: 1.4, fury: 0.8, waver: 0.6 },
+    gemBias: ['physical', 'aoe'],
+    presence: { from: 11, fadeIn: 5 },
+    brain: { type: 'juggernaut' },
+  },
+  ruin_sentinel: {
+    id: 'ruin_sentinel', name: 'Ruin Sentinel',
+    color: '#8a8c74', shape: 'square', radius: 17, material: 'stone', look: 'ruin_sentinel',
+    base: { life: 190, moveSpeed: 62, accuracy: 92, armor: 48, poise: 55, mana: 50, manaRegen: 4 },
+    skills: ['heavy_strike', 'crushing_leap'], xp: 38,
+    faction: 'junglekin',
+    // Furniture until the halls are trespassed — the statue that was never
+    // a statue (the sunken ruins' own warden).
+    ambush: { radius: 150, announce: 'the old stone wakes —' },
+    aggro: { fixation: 1.8, fury: 0.5, waver: 0.3 },
+    gemBias: ['physical', 'melee'],
+    presence: { from: 10, fadeIn: 4 },
+    brain: { type: 'juggernaut' },
+  },
+  verdant_tyrant: {
+    id: 'verdant_tyrant', name: 'Verdant Tyrant',
+    color: '#3fae5c', shape: 'star', radius: 17, material: 'chitin', look: 'verdant_tyrant',
+    base: { life: 320, moveSpeed: 95, accuracy: 105, armor: 24, poise: 60, mana: 160, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['dart_volley', 'panther_pounce', 'spore_bloom'], xp: 95,
+    faction: 'junglekin',
+    gemBias: ['chaos', 'projectile'],
+    presence: { from: 14, fadeIn: 6 },
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 520 }, every: [14, 20], hold: [0.4, 0.6],
+        announce: 'the Tyrant whistles the treeline!',
+        actions: [{ do: 'summon', monster: 'blowgun_wretch', count: 2, ring: 56 }],
+      }],
+      phases: [
+        { atLifeFrac: 0.5, mods: [mod('attackSpeed', 'increased', 0.2)] },
+        { atLifeFrac: 0.25, mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'increased', 0.2)] },
+      ],
+    },
+  },
+
   // --- MARINE FILL (beach / isle / deepsea ran thin) --------------------------
 
   tide_skitter: {
@@ -6557,6 +6690,16 @@ const RELATIONS: Record<string, FactionStance> = {
   // country's one long war. Raw flame respects raw flame.
   'emberkin|demon': 'hostile',
   'emberkin|elemental': 'ally',
+  // The Junglekin hold the strangling green against ALL comers: the Sylvan
+  // court calls the jungle a garden gone feral (the tribes disagree with
+  // spears), the gnolls raid its edges for slaves, the dead offend the
+  // living green, and beasts of the open wild are simply prey that wandered
+  // in. Only the fungal bloom is kin — rot feeds the roots.
+  'junglekin|sylvan': 'hostile',
+  'junglekin|gnoll': 'hostile',
+  'junglekin|undead': 'hostile',
+  'junglekin|demon': 'hostile',
+  'junglekin|fungal': 'ally',
   // The Night Court keeps the old courtesies: the dead serve, the groves
   // burn, and the Horned Tribes are prey that fights back.
   'nightkin|undead': 'ally',
@@ -6711,6 +6854,18 @@ export const FACTIONS: Record<string, {
       { id: 'slag_brute', weight: 2, presence: { from: 6, fadeIn: 3 } },
       { id: 'vent_priest', weight: 2, presence: { from: 8, fadeIn: 4 } },
       { id: 'emberkin_matriarch', weight: 1, presence: { from: 13, fadeIn: 5 } },
+    ],
+  },
+  junglekin: {
+    name: 'the Junglekin',
+    table: [
+      { id: 'fern_stalker', weight: 4, presence: { to: 18, fadeOut: 8 } },
+      { id: 'blowgun_wretch', weight: 3 },
+      { id: 'spore_caller', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'emerald_prowler', weight: 2, presence: { from: 9, fadeIn: 4 } },
+      { id: 'saurian_bulwark', weight: 2, presence: { from: 11, fadeIn: 5 } },
+      { id: 'ruin_sentinel', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      { id: 'verdant_tyrant', weight: 1, presence: { from: 14, fadeIn: 6 } },
     ],
   },
   demon: {

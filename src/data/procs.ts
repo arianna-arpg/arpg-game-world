@@ -134,11 +134,17 @@ export interface ProcDef {
    *   'poiseRearmed'    your broken poise bar recovers and re-arms
    *   'chargeGain'      you actually gain a charge (see `charge` filter)
    *   'buffGain'        a buff is applied to you (see `buff` filter)
-   *   'orbPickup'       you scoop a resource orb (see `orb` filter) */
+   *   'orbPickup'       you scoop a resource orb (see `orb` filter)
+   *   'surface'         you POP a brittle surface (a brush plug, a lattice,
+   *                     a hidden face — World.popBrittle names the striker).
+   *                     SHEET-ONLY roll: no skill instance exists at a pop,
+   *                     so grant the chance via passives/affixes, never a
+   *                     skill-local gem mod. Self-effects only by doctrine
+   *                     (buff/gainCharge/restore — there is no victim). */
   trigger: 'hit' | 'kill' | 'collision' | 'statusApply'
     | 'block' | 'evade' | 'esBreak' | 'esRechargeStart' | 'esFilled'
     | 'poiseBreakDealt' | 'poiseBroken' | 'poiseBracket' | 'poiseRearmed'
-    | 'chargeGain' | 'buffGain' | 'orbPickup';
+    | 'chargeGain' | 'buffGain' | 'orbPickup' | 'surface';
   /** statusApply only: fires when one of THESE statuses lands (omit = any). */
   status?: string | string[];
   /** chargeGain only: fires for THESE charge ids (omit = any charge). */
@@ -191,6 +197,22 @@ export const PROCS: Record<string, ProcDef> = {
     id: 'brutal_strike', name: 'Brutal Strike',
     color: '#ff8a4a', trigger: 'hit',
     effect: { type: 'extraHit', damageScale: 0.6 },
+  },
+
+  // THE PATHCUTTER'S STRIDE — the machete-flow reward on the 'surface'
+  // trigger: hack a plug open (or shatter any brittle) and move like you
+  // mean it for a few breaths. Sheet-granted only (the 'of the Pathcutter'
+  // affix line is the first grantor); icd keeps a pot-cellar from becoming
+  // a permanent haste shrine.
+  pathcutter_stride: {
+    id: 'pathcutter_stride', name: 'Pathcutter\'s Stride',
+    color: '#6ed060', trigger: 'surface', icd: 1.5,
+    effect: {
+      type: 'buff', buff: {
+        type: 'buff', id: 'pathcutter_stride', duration: 3,
+        mods: [mod('moveSpeed', 'increased', 0.2), mod('attackSpeed', 'increased', 0.12)],
+      },
+    },
   },
 
   thunderstruck: {

@@ -445,6 +445,18 @@ const PREFIXES: AffixDef[] = [
     top: 0.18, floor: 0.3, count: 3,
     baseTags: ['amulet', 'ring', 'helmet'], weight: 55,
   }),
+  // The trailblazer's line: popping a brittle surface (a jungle brush plug,
+  // a crystal lattice, a hidden face) rolls Pathcutter's Stride — the
+  // 'surface' trigger's first grantor. UNTAGGED on purpose: the pop roll
+  // carries no skill context, so a tag-scoped line would never fold (see
+  // the 'surface' doctrine in procs.ts).
+  fam({
+    id: 'proc_pathcutter', kind: 'suffix',
+    names: ['of the Pathcutter', 'of the Trailmaker'],
+    stat: 'proc_pathcutter_stride',
+    top: 0.5, floor: 0.3, count: 3,
+    baseTags: ['boots', 'gloves', 'belt'], weight: 60,
+  }),
   // Hybrid demos — multi-line families with per-line tops.
   fam({
     id: 'hybrid_life_mana', kind: 'prefix',

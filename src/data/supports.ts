@@ -28,6 +28,32 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  // --- The Wildcraft disciplines (the jungle's arts, bottled) ----------------
+  serrated_edge: {
+    id: 'serrated_edge', name: 'Serrated Edge',
+    description: 'This skill\'s edge is TOOTHED: hits bleed far more readily, and cut a little deeper besides.',
+    color: '#a8563c', requiresTags: ['melee'],
+    mods: [mod('apply_bleed', 'flat', 0.35), mod('damage', 'increased', 0.1)],
+    perLevel: [mod('apply_bleed', 'flat', 0.05)],
+    weight: 6,
+  },
+  envenomed_tips: {
+    id: 'envenomed_tips', name: 'Envenomed Tips',
+    description: 'This skill\'s projectiles fly DIPPED: hits poison far more readily, and the toxin outstays its welcome.',
+    color: '#7ec850', requiresTags: ['projectile'],
+    mods: [mod('apply_poison', 'flat', 0.3), mod('effectDuration', 'increased', 0.15)],
+    perLevel: [mod('apply_poison', 'flat', 0.04)],
+    weight: 6,
+  },
+  smothering_spores: {
+    id: 'smothering_spores', name: 'Smothering Spores',
+    description: 'This skill\'s lingering work hangs THICKER: wider, longer, and laced with a poison that finds idle lungs.',
+    color: '#a8d05a', requiresTags: ['duration'],
+    mods: [mod('aoeRadius', 'increased', 0.15), mod('effectDuration', 'increased', 0.2), mod('apply_poison', 'flat', 0.15)],
+    perLevel: [mod('effectDuration', 'increased', 0.03)],
+    weight: 5,
+  },
+
   // --- Channeling & guard supports -------------------------------------------
 
   // --- Sparks, luck & the roll's ends -------------------------------------------

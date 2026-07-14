@@ -145,7 +145,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // walls themselves cuttable — and the forest recipe is its rarer OPEN face,
   // grown in jungle wood and sealed near-shut at the region's heart. The
   // tightest node web in the game: the green packs against itself.
-  jungle: { patronFaction: 'sylvan', mapColor: '#1f7a42', label: 'Jungle', spacing: 54,
+  jungle: { patronFaction: 'junglekin', mapColor: '#1f7a42', label: 'Jungle', spacing: 54,
     climate: { temperature: 'warm', moisture: 'wet' },
     meld: 'jungle_meld',
     allowedLayouts: { thicket: 4, forest: 1 },

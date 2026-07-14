@@ -497,6 +497,137 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 2, keepDistance: 240 },
   },
 
+  // ======================= THE WILDCRAFT ====================================
+  // The jungle's own arts — cutting, darting, snaring, spore-craft, the
+  // pounce. Shared player/monster (one catalog, one pipeline): the same
+  // machete that clears your lane clears the JUNGLEKIN's, and every one of
+  // these is a kit-part any future body can wear. Found as gems via the
+  // 'wildcraft' Vault bundles (unlocked by walking INTO a sunken ruin —
+  // the ruin_entered ledger).
+
+  machete_arc: {
+    id: 'machete_arc', name: 'Machete Arc',
+    description: 'A wide, workmanlike cut — brush, vines and whatever hides in them all part the same way. Bleeds what it doesn\'t fell.',
+    tags: ['attack', 'melee', 'aoe', 'physical'], color: '#9ac86a',
+    manaCost: 4, cooldown: 0, useTime: 0.55,
+    baseDamage: { physical: [9, 15] },
+    delivery: { type: 'cone', range: 92, arcDeg: 110 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.35, magnitude: 0.35 },
+    ],
+    requirements: { strength: 12, dexterity: 10 },
+    minDropLevel: 3,
+    ai: { range: 85, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  blowdart: {
+    id: 'blowdart', name: 'Blowdart',
+    description: 'A whisper of a shot with an argument on its tip. Barely wounds; profoundly poisons.',
+    tags: ['attack', 'projectile', 'physical'], color: '#7ec850',
+    manaCost: 3, cooldown: 0, useTime: 0.42,
+    baseDamage: { physical: [3, 6] },
+    delivery: { type: 'projectile', speed: 560, radius: 5, range: 480 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.85, magnitude: 0.5 },
+    ],
+    requirements: { dexterity: 14 },
+    minDropLevel: 4,
+    ai: { range: 440, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('apply_poison', 'flat', 0.02), mod('projectileSpeed', 'increased', 0.05)] },
+  },
+
+  vine_lash: {
+    id: 'vine_lash', name: 'Vine Lash',
+    description: 'Cast a living creeper and REEL: the catch is dragged to your feet and held rooted a breath — close enough to answer for itself.',
+    tags: ['spell', 'projectile', 'chaos'], color: '#4f9a3c',
+    manaCost: 9, cooldown: 4, useTime: 0.5,
+    baseDamage: { chaos: [8, 13] },
+    delivery: { type: 'projectile', speed: 620, radius: 7, range: 400, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.25 },
+      { type: 'status', status: 'rooted', chance: 1 },
+    ],
+    requirements: { willpower: 12, dexterity: 10 },
+    minDropLevel: 6,
+    ai: { range: 380, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  spore_bloom: {
+    id: 'spore_bloom', name: 'Spore Bloom',
+    description: 'Seed the air itself: a drifting bloom that the unhurried breathe in and regret. Linger and the jungle does your fighting.',
+    tags: ['spell', 'aoe', 'chaos', 'duration'], color: '#a8d05a',
+    manaCost: 11, cooldown: 2.5, useTime: 0.6,
+    baseDamage: { chaos: [4, 7] },
+    delivery: {
+      type: 'ground', radius: 88, castRange: 420,
+      lingerDuration: 4, tickInterval: 0.5, noImpact: true, exposure: 0.4,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.5, magnitude: 0.35 },
+    ],
+    requirements: { willpower: 16 },
+    minDropLevel: 7,
+    ai: { range: 400, weight: 2, keepDistance: 220 },
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.06), mod('effectDuration', 'increased', 0.07)] },
+  },
+
+  panther_pounce: {
+    id: 'panther_pounce', name: 'Panther Pounce',
+    description: 'The predator\'s answer to distance: airborne and untouchable, then all claws at once. Bleeds the landing.',
+    tags: ['attack', 'melee', 'physical', 'movement'], color: '#5aa848',
+    manaCost: 8, cooldown: 4.5, useTime: 0,
+    baseDamage: { physical: [11, 18] },
+    delivery: { type: 'leap', range: 300, airTime: 0.42, radius: 80 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'bleed', chance: 0.5, magnitude: 0.4 },
+    ],
+    requirements: { dexterity: 16 },
+    minDropLevel: 7,
+    ai: { range: 280, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11), mod('aoeRadius', 'increased', 0.04)] },
+  },
+
+  // Monster kit-parts of the family (noDrop — the JUNGLEKIN's own verbs,
+  // ready for any future body or entity-creator roster).
+  constrictor_coil: {
+    id: 'constrictor_coil', name: 'Constrictor Coil',
+    description: 'The maw\'s embrace: dragged in, held fast, and squeezed while it decides which end of you is food.',
+    tags: ['attack', 'melee', 'physical', 'duration'], color: '#3f7a34',
+    manaCost: 0, cooldown: 6, useTime: 0.5,
+    baseDamage: { physical: [8, 12] },
+    delivery: { type: 'projectile', speed: 700, radius: 7, range: 240, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.4 },
+      { type: 'status', status: 'rooted', chance: 1 },
+      { type: 'status', status: 'poison', chance: 0.5, magnitude: 0.3 },
+    ],
+    noDrop: true,
+    ai: { range: 230, weight: 3 },
+  },
+
+  dart_volley: {
+    id: 'dart_volley', name: 'Dart Volley',
+    description: 'Five breaths in one: a fan of poisoned darts from the treeline.',
+    tags: ['attack', 'projectile', 'physical'], color: '#8ec860',
+    manaCost: 0, cooldown: 5, useTime: 0.7,
+    baseDamage: { physical: [3, 5] },
+    delivery: { type: 'projectile', speed: 520, radius: 5, range: 460, count: 5, spreadDeg: 26 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.6, magnitude: 0.35 },
+    ],
+    noDrop: true,
+    ai: { range: 430, weight: 2, keepDistance: 250 },
+  },
+
   // POISON NOVA — the D2 Necromancer heirloom: ONE cast, a wall of venom in
   // every direction. Feeble direct hits; the POISON is the payload — long,
   // stacking, and cruel. The rays are evenly spaced but the whole ring
