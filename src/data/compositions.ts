@@ -330,3 +330,34 @@ registerComposition({
     { kind: 'sky_lantern', count: [1, 2] },
   ],
 });
+
+// THE SUNKEN RUIN: the jungle swallowed a civilization, and sometimes a court
+// of it stays chewable — a cleared old floor, the root-split GATE down into
+// its halls (a sidezone mouth: linger to descend), idols and urns the roots
+// kept, the collapsed colonnade marching off down the road the green ate.
+registerComposition({
+  id: 'sunken_ruin_site',
+  sites: [{ id: 'court', radius: [150, 190] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [56, 72] }],
+  post: [
+    { kind: 'cluster', cluster: 'ruin_court', at: 'court', count: [1, 1] },
+    { kind: 'formation', formation: 'colossus_wreck', count: [1, 1] },
+  ],
+});
+
+// THE TEMPLE OF THE GREEN: DEEP in the jungle's heart (the biomeDepth gate —
+// the region's rim keeps its modest courts), the ruin is a PRECINCT: a wider
+// sanctum floor, colonnades in two runs, urn stores against the growth. The
+// deeper you push, the more of the old city the green admits to keeping.
+registerComposition({
+  id: 'temple_of_the_green',
+  when: { biomeDepth: { min: 0.45 } },
+  sites: [{ id: 'precinct', radius: [170, 215] }],
+  pre: [{ kind: 'clearing', at: 'precinct', count: [1, 1], radius: [66, 84] }],
+  post: [
+    { kind: 'cluster', cluster: 'ruin_court', at: 'precinct', count: [1, 1] },
+    { kind: 'formation', formation: 'colossus_wreck', count: [1, 2] },
+    { kind: 'burial_urn', count: [2, 4], where: { field: 'radial', max: 0.55 } },
+    { kind: 'rubble', count: [1, 3], where: { field: 'noise', max: 0.4, params: { scale: 420, seed: 11 } } },
+  ],
+});

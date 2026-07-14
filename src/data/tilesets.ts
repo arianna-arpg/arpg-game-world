@@ -797,6 +797,15 @@ export const TILESETS: Record<string, TilesetDef> = {
   // strides; everything here is what fills them.
   jungle: {
     id: 'jungle',
+    // THE SUNKEN RUINS: courts of the swallowed civilization, each with a
+    // root-split gate DOWN into minted halls (the ruin_gate sidezone). The
+    // rim keeps modest courts; the temple precinct only grows where the
+    // region runs DEEP (the composition's biomeDepth gate) — push toward
+    // the heart and the green admits to more of the old city.
+    compositions: [
+      { composition: 'sunken_ruin_site', chance: 0.34 },
+      { composition: 'temple_of_the_green', chance: 0.5 },
+    ],
     // The always-kit, on EVERY face: the cuttable fabric + the wet-heat
     // texture. Curtains blind the lanes, blooms light the gloom, bladders
     // swell in the mulch — and the growth CROWDS THE HEART (radial bands:
@@ -823,10 +832,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'structure', count: [0, 1], structure: 'faction_hall' },
       ] },
       // The swallowed-court face: the green is still digesting somebody's
-      // civilization — idols, column drums, urns old enough to answer back.
+      // civilization — the fallen-colossus kit in jungle moss, urns old
+      // enough to answer back, a collapsed colonnade down the old road.
       { name: 'strangler court', layout: [
-        { kind: 'mossy_idol', count: [2, 4] },
-        { kind: 'fallen_column', count: [3, 6] },
+        { kind: 'formation', count: [1, 2], formation: 'colossus_wreck' },
         { kind: 'weathered_statue', count: [1, 2] },
         { kind: 'rubble', count: [2, 4] },
         { kind: 'burial_urn', count: [2, 4] },
@@ -914,6 +923,91 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
     ],
+  },
+
+  // THE SUNKEN RUIN — the halls under the jungle. A ruin_gate (composition-
+  // placed in jungle courts) descends into these minted interiors: root-riven
+  // masonry on the room-graph families (dungeon/edifice/labyrinth at cave
+  // scale), flagstone gone green at the seams, the old dead in their urns,
+  // secret walls that remember which stones were doors — and the growth that
+  // followed you down. Realm/pocket-only (frontier: false); every gate rolls
+  // its own face. The 'ruin_entered' ledger the sidezone bumps is THE GATEWAY
+  // SEAM a future content package can hang off wholesale.
+  sunken_ruin: {
+    id: 'sunken_ruin',
+    frontier: false,
+    caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 },
+    layoutParams: {
+      interiorWall: 'ruin_wall', floorStyle: 'flagstone',
+      rooms: [7, 11], doorChance: 0.6, corridorCells: 2,
+    },
+    // What EVERY face keeps: the urns and their tenants, pots someone cached,
+    // rubble off the old vaults, roots that got here first, the gloom's own
+    // lights — and at least one wall that sounds hollow.
+    common: [
+      { kind: 'burial_urn', count: [2, 4] },
+      { kind: 'clay_pots', count: [1, 3] },
+      { kind: 'rubble', count: [2, 4] },
+      { kind: 'strangler_root', count: [1, 3] },
+      { kind: 'jungle_bloom', count: [1, 3] },
+      { kind: 'gas_pod', count: [0, 2] },
+      { kind: 'secret_wall', count: [1, 2] },
+    ],
+    variants: [
+      // The green won: curtains across the halls, ferns in the floor seams,
+      // the colonnade's bones where the roof came down.
+      { name: 'overgrown halls', layout: [
+        { kind: 'liana_veil', count: [2, 4] },
+        { kind: 'fern', count: [2, 4] },
+        { kind: 'vines', count: [1, 3] },
+        { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
+      ] },
+      // The water table won: standing pools over the flagstone, drowned
+      // steles, wisp-light where the dark pools deepest.
+      { name: 'flooded undercroft', layout: [
+        { kind: 'water', count: [1, 2] },
+        { kind: 'mud', count: [1, 2] },
+        { kind: 'sunken_stone', count: [1, 3] },
+        { kind: 'marsh_wisp', count: [1, 2] },
+        { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
+      ] },
+    ],
+    nameFirst: ['Sunken', 'Swallowed', 'Rootbound', 'Verdigris', 'Mosswrit', 'Drowned', 'Forgotten', 'Greenlaid', 'Strangled', 'Old'],
+    nameSecond: ['Halls', 'Undercroft', 'Sanctum', 'Vaults', 'Precinct', 'Galleries', 'Cloister', 'Reliquary'],
+    theme: {
+      ground: {
+        palette: ['#141810', '#1b2016', '#232a1c', '#2c3424', '#37402c'],
+        bias: 0.5, alpha: 0.5, speckles: 0.9,
+      },
+      ambientDark: 0.32,
+      ambientFx: [{ kind: 'motes', intensity: 0.5 }],
+      floor: '#10130d', grid: '#181c14', border: '#3f4636',
+      obstacle: '#2c342a', obstacleEdge: '#55684e', accent: '#9fd07a',
+      wall: '#2c342a', tree: '#2f6a34', water: '#16404a', mud: '#141f10',
+    },
+    sizeW: [1150, 1500], sizeH: [880, 1150], biome: 'ruin',
+    // The authored/probe default face (minted gates always roll a variant).
+    layout: [
+      { kind: 'fern', count: [1, 3] },
+      { kind: 'vines', count: [1, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        // The old dead first (the urns are load-bearing fiction), then what
+        // crawled in after them.
+        { id: 'skeleton_warrior', weight: 3 },
+        { id: 'skeleton_archer', weight: 2 },
+        { id: 'orb_weaver', weight: 2 },
+        { id: 'widow_matron', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'emerald_mantis', weight: 2 },
+        { id: 'veilstalker', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'root_wraith', weight: 2 },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 1 }],
   },
 
   // MIRE — a drowned graveland: standing swamp, poison bog, rotted timber.

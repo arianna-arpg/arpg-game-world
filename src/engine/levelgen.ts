@@ -248,10 +248,10 @@ export type KnownDoodadKind =
   | 'canopy_colossus'  // an emergent giant whose crown roofs half a glade (walk-under)
   | 'strangler_root'   // a buttress-root fin heaved out of the loam — low, solid, old
   | 'jungle_bloom'     // a luminous understory flower — the gloom lights its own
-  // The sunken-ruin kit (what the jungle swallowed)
-  | 'ruin_gate'        // a root-split descent into the old halls (sidezone mouth)
-  | 'mossy_idol'       // a toppled stone head half-eaten by moss — somebody was worshipped here
-  | 'fallen_column';   // a column drum lying where it rolled — the colonnade's bones
+  // The sunken-ruin kit (what the jungle swallowed — the rest of the court
+  // reuses the fallen-colossus vocabulary: colossus_head/broken_column/
+  // ruin_plinth, data/formations.ts)
+  | 'ruin_gate';       // a root-split descent into the old halls (sidezone mouth)
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -1093,13 +1093,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   strangler_root: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30,
     forbidOn: ['water', 'lava', 'chasm'] },
   jungle_bloom: { overlap: 'inert', spacing: 36 },
-  // The sunken-ruin kit: the gate is a sidezone TRIGGER (data/sidezones.ts
-  // registers the dwell + mint); the idol and the column drum are the old
-  // court's furniture — pale stone solids the green is still swallowing.
+  // The sunken-ruin gate: a sidezone TRIGGER (data/sidezones.ts registers the
+  // dwell + mint). The rest of the swallowed court dresses in the existing
+  // fallen-colossus kit (colossus_head / broken_column / ruin_plinth).
   ruin_gate:     { overlap: 'trigger', spacing: 500 },
-  mossy_idol:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
-  fallen_column: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 36,
-    forbidOn: ['water', 'lava', 'chasm'], surface: { hw: 1.6, hh: 0.55, orient: 'rot' } },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -3484,11 +3481,9 @@ registerStamp('liana_veil', stampSingle('liana_veil', [26, 40]));
 registerStamp('canopy_colossus', (ctx, spec) => stampTree(ctx, spec.radius ?? [64, 96], 'canopy_colossus'));
 registerStamp('strangler_root', (ctx, spec) => stampSolid(ctx, 'strangler_root', spec.radius ?? [16, 28]));
 registerStamp('jungle_bloom', stampSingle('jungle_bloom', [10, 14]));
-// The sunken-ruin kit: the old court's furniture (the gate itself is placed
-// by its composition cluster — this row exists for layouts that want strays).
+// The sunken-ruin gate (usually composition-cluster-placed — this row exists
+// for layouts that want a stray descent).
 registerStamp('ruin_gate', stampSingle('ruin_gate', [26, 32]));
-registerStamp('mossy_idol', stampSingle('mossy_idol', [16, 24]));
-registerStamp('fallen_column', stampSingle('fallen_column', [14, 20]));
 // The Aetherial kit: cloud furniture + the choir's marble.
 registerStamp('cloud_billow', stampSingle('cloud_billow', [22, 44]));
 registerStamp('aether_crystal', stampSingle('aether_crystal', [13, 22]));

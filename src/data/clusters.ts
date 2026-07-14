@@ -92,3 +92,23 @@ registerCluster({
   ],
   poi: true,
 });
+
+// THE RUIN COURT (the jungle's sunken-ruin doorstep): the root-split descent
+// at dead center — a SIDEZONE mouth (dwell to enter the halls below) — with
+// the swallowed court's furniture around it: a toppled head, urns that
+// sometimes answer, the colonnade's bones starting where the clearing ends.
+// Geometry contract with sunken_ruin_site / temple_of_the_green clearings
+// (max 84): centerpieces stay ≤ 52; litter rings start ≥ 104 (84 + piece 19).
+registerCluster({
+  id: 'ruin_court',
+  anchor: { radius: 28, kind: 'ruin_gate' },
+  pieces: [
+    { kind: 'colossus_head', radius: [16, 21], count: [1, 2], ring: [40, 52], rot: true, centerpiece: true },
+    { kind: 'burial_urn', radius: [11, 15], count: [1, 3], ring: [34, 50], rot: true, centerpiece: true },
+    { kind: 'broken_column', radius: [12, 17], count: [2, 4], ring: [104, 165], rot: true },
+    { kind: 'ruin_plinth', radius: [12, 16], count: [1, 2], ring: [108, 170], rot: true },
+    { kind: 'rubble', radius: [12, 20], count: [1, 3], ring: [108, 175], rot: true },
+    { kind: 'jungle_bloom', radius: [10, 13], count: [0, 2], ring: [110, 180] },
+  ],
+  poi: true,
+});

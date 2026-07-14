@@ -93,6 +93,23 @@ registerSidezone({
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id),
 });
 
+// --- THE SUNKEN RUIN -----------------------------------------------------------
+// The jungle's swallowed halls: a ruin_gate doodad (composition-placed in the
+// jungle's cleared courts) descends into a minted 'sunken_ruin' interior —
+// the cave machinery wholesale: deterministic per-gate seed, clear-once,
+// zone memory, the ladder home. Each gate ROLLS its own face (overgrown
+// halls / flooded undercroft), so two ruins in one region read as two
+// buildings of one city. The 'ruin_entered' ledger key is THE GATEWAY SEAM:
+// a stable discovery hook any future content package, Vault unlockable or
+// expedition can gate on (the Pit's cellar_entered pattern) — the door is
+// already open; the package only has to name it.
+registerSidezone({
+  kind: 'ruin_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'ruin_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'sunken_ruin', { rollVariant: true }),
+});
+
 // --- THE LASTLIGHT CELLAR ----------------------------------------------------
 // Under the spare house's floorboards: a small, barren stone room — the
 // blacksmith's flagstone underfoot (the cellar_room slab structure), a crate

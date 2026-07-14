@@ -449,14 +449,6 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2.2, color: '#9fd07a', intensity: 0.32, flicker: 1.8 },
   },
-  mossy_idol: {
-    painter: 'statue', order: 54, shadow: 0.6, longShadow: 1.3,
-    params: { stone: '#7e8268', moss: '#3f6a2c' },
-  },
-  fallen_column: {
-    painter: 'log', order: 52, shadow: 0.5,
-    params: { color: '#7e786a', moss: '#4a6e3a' },
-  },
   palm: {
     longShadow: 0.8,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.26, roots: 3 },

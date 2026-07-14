@@ -188,6 +188,14 @@ export const BIOMES: Record<string, BiomeInfo> = {
   ossuary: { patronFaction: 'undead', mapColor: '#cfc4ac', label: 'Ossuary', spacing: 64,
     allowedLayouts: { plains: 1 },
     landmarks: [{ landmark: 'sinkhole', chance: 0.12 }] },
+  // THE SUNKEN RUIN: the swallowed civilization under the jungle — realm/
+  // pocket-only (no field seat, no climate row): the ruin_gate sidezone mints
+  // it (the ossuary pattern). Registering the tag gives it a HOME — patron
+  // for rouse/garrison logic, the wildlife gate (no hares in the undercroft)
+  // — so any future surface/palette seat is one line. The old dead keep
+  // these halls; what the green sends down keeps them company.
+  ruin: { patronFaction: 'undead', mapColor: '#5c6a4e', label: 'Sunken Ruin', spacing: 64,
+    allowedLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 } },
   // RIFT: siege castles + the RIVER OF FLAME (riverland pouring lava, stone
   // causeways spanning it — the D2 Act 4 artery).
   rift:   { patronFaction: 'demon',  mapColor: '#a83a2a', label: 'Rift', spacing: 64,
