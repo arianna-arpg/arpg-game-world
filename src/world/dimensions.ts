@@ -146,6 +146,11 @@ registerDimension({
     { biome: 'steppes', weight: 4 },
     { biome: 'volcanic', weight: 3 },
     { biome: 'flesh', weight: 2 },
+    // THE CAUL — the invader: hell-ONLY membrane country (never in the
+    // surface field) pooling where hell runs least arid — the organism
+    // grows where the stone sweats. Its climate affinity carves it a
+    // province of its own the way the steppes' heat-crest does.
+    { biome: 'caul', weight: 2 },
     // THE DURANCE — the hate-citadel: rare ENCLAVE regions (BiomeInfo.enclave)
     // that wall themselves behind boundary gates; interiors, not country.
     { biome: 'durance', weight: 1.5 },

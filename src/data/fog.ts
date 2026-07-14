@@ -118,6 +118,28 @@ registerFogBank({
   grants: [{ status: 'fogveiled' }],
 });
 
+/** CAUL MURK — the Caul's exhalation: a low black-oil haze that pools in
+ *  the membrane country and barely lifts (overFrac 0.15 — it LIES on the
+ *  floor like something breathed out and left). Slow, heavy, patient; the
+ *  ordinary fogveiled inside. The biome signature kind, gloam_shroud's
+ *  colder cousin. */
+registerFogBank({
+  id: 'caul_murk',
+  color: '#1a1420',
+  alpha: 0.42,
+  radius: [140, 240],
+  lobes: [6, 9],
+  drift: [4, 9],
+  meander: 0.16,
+  swirl: 0.04,
+  breathe: 0.14,
+  churn: 0.24,
+  life: [56, 104],
+  rampFrac: 0.36,
+  overFrac: 0.15,
+  grants: [{ status: 'fogveiled' }],
+});
+
 // --- FOG-RIDING CHOREOGRAPHY -------------------------------------------------
 // x_seek_fog: a gloaming BLINK toward the nearest living bank — not a march,
 // a fade-and-reappear (the gloomling idiom, mechanically a clamped

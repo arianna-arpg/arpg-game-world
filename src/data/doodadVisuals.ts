@@ -925,6 +925,35 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'ribArch', order: 53, shadow: 0.5, longShadow: 0.8,
     params: { bone: '#d8cdb8' },
   },
+  // THE CAUL KIT (the Giger key): black chitin over pale meat, cold violet
+  // light. Same shared heartbeat as the flesh kit — one organism, two moods.
+  chitin_fin: {
+    painter: 'chitinFin', order: 53, shadow: 0.5, longShadow: 0.9,
+    params: { plate: 'theme:obstacle|#2c2136', rim: '#6a5478', material: 'chitin' },
+  },
+  black_umbilic: {
+    painter: 'umbilic', order: 53, shadow: 0.6,
+    params: { cord: '#241a2c', rim: '#5a4468', glow: '#8a6ab0' },
+    light: { radius: -1.6, color: '#8a6ab0', intensity: 0.14, flicker: 0.7 },
+  },
+  caul_sac: {
+    painter: 'pod', order: 53, shadow: 0.45,
+    params: { body: '#3a2c48', glow: '#9a72c8', pulseRate: 1.1 },
+    light: { radius: -1.8, color: '#9a72c8', intensity: 0.12, flicker: 1.1 },
+  },
+  caul_eyes: {
+    painter: 'eyeStalk', order: 53, shadow: 0.5,
+    params: { flesh: '#3a2c48', sclera: '#d8cfe0', iris: '#9a72c8' },
+  },
+  maw_pit: {
+    painter: 'mawPit', order: 18,
+    blend: { strength: 0.42, feather: 18, color: '#221828' },
+  },
+  nerve_root: {
+    painter: 'veins', order: 29,
+    params: { vessel: '#382848', pulse: '#9a72c8', node: '#48305c' },
+    light: { radius: -1.5, color: '#8a6ab0', intensity: 0.1, flicker: 1 },
+  },
   // THE OSSUARY KIT (the Necropolis' interior sanctum — data/tilesets.ts
   // 'ossuary'). Bone dunes crowd the bonefields; shelf-walls stack into
   // reliquary rows (their candle-glow is the row's own light, a clarity

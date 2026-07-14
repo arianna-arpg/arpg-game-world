@@ -348,6 +348,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
   flesh:    { patronFaction: 'flesh',   mapColor: '#7a2a38', label: 'Flesh', spacing: 64,
     climate: { wildness: 'deepwild' },
     allowedLayouts: { flesh: 1 } },
+  // THE CAUL — hell-only (absent from BIOME_FIELD, present only in the
+  // underworld dimension's palette): the invading organism's membrane
+  // country. Winding gut-corridors with ichor throughlines, open sprawls,
+  // and ridge-marches that read as vertebrae once the chitin kit dresses
+  // them. Pools where hell runs least arid (the stone sweats there).
+  caul:     { patronFaction: 'caulborn', mapColor: '#241a2e', label: 'The Caul', spacing: 76,
+    climate: { moisture: { from: 0.22, fadeIn: 0.12 } },
+    allowedLayouts: { winding: 2, plains: 1, steppes: 1 },
+    layoutParams: { riverLiquid: 'gore', negativeLiquid: 'gore' } },
   // CAVERN — the biome tag for the underground tilesets (they previously
   // carried none, so cave zones fell back to PLAINS wildlife: hares in the
   // dark). No patron marches from here; the dark keeps its own.

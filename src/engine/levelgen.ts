@@ -260,7 +260,15 @@ export type KnownDoodadKind =
   // The parity-pass wayside kit (the class expansion's world furniture)
   | 'chronolith'       // a time-eaten monolith, teal-veined and faintly WRONG (ley country)
   | 'meditation_cairn' // a balanced stone stack wearing a stillness of its own (high places)
-  | 'rusted_snare';    // an old jaw-trap, still wound — steps on it end badly
+  | 'rusted_snare'     // an old jaw-trap, still wound — steps on it end badly
+  // The Caul kit (the Giger biome: black chitin over pale meat; the flesh
+  // kit's biomechanical sibling — same heartbeat, colder light)
+  | 'chitin_fin'       // angular black blade-plates heaved out of the ground in rows
+  | 'black_umbilic'    // a great braided cable rising out of frame — it goes somewhere
+  | 'caul_sac'         // a translucent egg-sac, dimly lit from inside; bursts when pressed
+  | 'caul_eyes'        // a stand of eye stalks; the irises track whoever crosses the room
+  | 'maw_pit'          // an orifice in the floor: reels wanderers lipward, bites at the lip
+  | 'nerve_root';      // black-violet vessel filaments webbing the floor, pulse riding them
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -782,6 +790,31 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   rusted_snare: { overlap: 'inert', spacing: 26,
     brittle: { on: ['touch', 'hit'], text: 'SNAP!', color: '#a89078',
       collapse: { damage: { pctMaxLife: 0.08 } } } },
+  // THE CAUL KIT — the terrain-that-fights doctrine, both lanes: fixed-point
+  // menace on the doodad-effect registry (maw_pit's reel), eruption on the
+  // brittle lane (caul_sac's ticks), and everything KILLABLE walks the actor
+  // pipeline instead (caul_lasher / vor_maw / amnion_creeper wear ambush).
+  chitin_fin: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 30, bodyScale: 0.9,
+    forbidOn: ['water', 'lava', 'chasm', 'gore'],
+    surface: { hw: 1.5, hh: 0.45, orient: 'rot' } },
+  black_umbilic: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 280,
+    forbidOn: ['water', 'lava', 'chasm', 'gore'],
+    occlude: { pad: 10, alpha: 0.3 } },
+  // The sac pops to a hit OR a close press — and sometimes what was inside
+  // objects (brittle.spawn: the doodad→actor bridge, the urn's contract).
+  caul_sac: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26,
+    forbidOn: ['water', 'lava', 'chasm', 'gore'],
+    brittle: { on: ['hit', 'near'], reach: 26, orbChance: 0.12,
+      text: 'the sac bursts!', color: '#9a72c8',
+      spawn: { monster: 'caul_tick', count: [1, 2], chance: 0.18, text: 'something skitters out!' } } },
+  caul_eyes: { overlap: 'inert', spacing: 44 },
+  // The maw is GROUND (nothing to trip on — the reel is the obstacle):
+  // hazardGround keeps ambient spawns off the lip, the auto-attached effect
+  // reels the nearest intruder each beat and bites whatever reaches the lip.
+  maw_pit: { overlap: 'ground', spacing: 240, hazardGround: true,
+    forbidOn: ['water', 'lava', 'chasm', 'gore'],
+    effect: { id: 'maw_reel', interval: 1.2, chance: 0.85, radius: 230, power: 9 } },
+  nerve_root: { overlap: 'inert', spacing: 50 },
   // Canopy kinds (occlude): their crowns draw ABOVE actors and FADE when the
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
   // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
@@ -3543,6 +3576,15 @@ registerStamp('abyssal_rent', (ctx, spec) => {
   const p = findSpot(ctx, r, false, 44, true, 'abyssal_rent');
   if (p) ctx.doodads.push({ pos: p, radius: r, kind: 'abyssal_rent', fall: true });
 });
+// The Caul kit: the invader's anatomy (data/tilesets.ts 'caul') — solid
+// fins/cables/sacs through the solid path (spacing + forbidOn honored),
+// ground orifices and nerve-webs through the plain scatter.
+registerStamp('chitin_fin', (ctx, spec) => stampSolid(ctx, 'chitin_fin', spec.radius ?? [16, 30]));
+registerStamp('black_umbilic', (ctx, spec) => stampSolid(ctx, 'black_umbilic', spec.radius ?? [22, 30]));
+registerStamp('caul_sac', (ctx, spec) => stampSolid(ctx, 'caul_sac', spec.radius ?? [12, 20]));
+registerStamp('caul_eyes', stampSingle('caul_eyes', [12, 18]));
+registerStamp('maw_pit', stampSingle('maw_pit', [26, 36]));
+registerStamp('nerve_root', stampSingle('nerve_root', [20, 30]));
 // The ossuary kit: bone dunes, reliquary shelf-walls, and the overflow pits —
 // the Necropolis' interior vocabulary (data/tilesets.ts 'ossuary').
 registerStamp('bone_mound', (ctx, spec) => stampSolid(ctx, 'bone_mound', spec.radius ?? [26, 48]));

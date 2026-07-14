@@ -44,6 +44,27 @@ registerFormation({
   ],
 });
 
+// A FIN RIDGE: chitin blade-plates marching in a dorsal line — the Caul's
+// spine showing through hell's skin — nerve roots webbing between them.
+registerFormation({
+  id: 'fin_ridge', arrange: 'meander', span: [300, 560], step: 46,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'chitin_fin', radius: [16, 30], jitter: 10, rot: true },
+    { kind: 'nerve_root', radius: [18, 26], every: 2, jitter: 24 },
+  ],
+});
+
+// A SAC CLUTCH: egg-sacs huddled around a maw — the nursery arrangement
+// nobody wants to interrupt (and the biome makes you: sacs pop to a press).
+registerFormation({
+  id: 'sac_clutch', arrange: 'ring', span: [110, 190], step: 40,
+  pieces: [
+    { kind: 'caul_sac', radius: [12, 20], jitter: 12 },
+    { kind: 'caul_eyes', radius: [12, 16], every: 3, jitter: 18 },
+  ],
+});
+
 // CEMETERY ROWS: aligned headstones — one row per formation; a tileset rolls
 // several for the churchyard grid.
 registerFormation({

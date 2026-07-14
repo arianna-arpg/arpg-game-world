@@ -1276,6 +1276,112 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // THE CAUL — hell-only membrane country (biome 'caul'): the invading
+  // organism the Underworld itself is afraid of. Giger's bargain honored in
+  // data: black chitin over pale meat, ichor throughlines, egg-light — and
+  // the TERRAIN FIGHTS: maw pits reel (doodad-effect lane), sacs erupt
+  // (brittle lane), and half the "decor" is caulborn wearing ambush (actor
+  // lane). The creep fabric is the biome's ground game — caulflesh pockets
+  // ambient, heart-anchored pockets on the monsters, kill the heart to
+  // take the floor back. Palette doctrine: near-black bruise violets, the
+  // wall a full luminance step above the floor (CONTRAST GUARD clear), and
+  // every light source diegetic (sacs, roots, the umbilic's weld-ring).
+  caul: {
+    id: 'caul', biome: 'caul',
+    nameFirst: ['Caulbound', 'Amniotic', 'Blackvein', 'Chrysalid', 'Nerveworn', 'Sunless', 'Weeping', 'Umbilic', 'Pale-Lit', 'Meatgrown'],
+    nameSecond: ['Sprawl', 'Warrens', 'Fold', 'Womb', 'Reach', 'Hollows', 'Nave', 'Depths', 'Gullet', 'Cradle'],
+    theme: {
+      heat: 0.62, dayLight: 0.7, nightDark: 0.85, ambientDark: 0.28,
+      ambientFx: [
+        { kind: 'motes', intensity: 0.3, color: '#8a6ab0' },
+      ],
+      ground: {
+        palette: ['#0b080e', '#140f18', '#1c1522', '#241a2c', '#2c2136'],
+        bias: 0.42, alpha: 0.55, scale: 1.4, speckles: 0.5, strength: 1.1,
+      },
+      floor: '#0f0b12', grid: '#181020', border: '#3a2c48',
+      obstacle: '#241a2e', obstacleEdge: '#5a4468', accent: '#9a72c8',
+      // Wall kept a full luminance step above the near-black floor so the
+      // baker's CONTRAST GUARD never has to rescue it.
+      wall: '#3a2438', chasm: '#060409', mud: '#221828', water: '#1a2430',
+      // The living fog + the living skin: the biome's two breaths.
+      fog: { banks: [1, 2], kinds: [{ id: 'caul_murk' }] },
+      creep: { pockets: [2, 4], kinds: [{ id: 'caulflesh' }] },
+    },
+    sizeW: [2400, 3400], sizeH: [1700, 2400], ellipseChance: 0.2,
+    layoutParams: { ridges: [2, 4], gateTerrace: { chance: 0.5 } },
+    layout: [
+      // Ground scars and pools FIRST (forbidOn honored by later solids).
+      { kind: 'gore', count: [1, 3], radius: [36, 70] },
+      { kind: 'maw_pit', count: [1, 2], radius: [26, 36] },
+      { kind: 'nerve_root', count: [2, 4], radius: [20, 30] },
+      // The skeleton showing through: fins, arches, the one great cable.
+      { kind: 'chitin_fin', count: [4, 8], radius: [16, 30] },
+      { kind: 'rib_arch', count: [1, 3] },
+      { kind: 'black_umbilic', count: [0, 1], radius: [22, 30] },
+      // The soft tissue: sacs, eyes, honest stone the organism grew over.
+      { kind: 'caul_sac', count: [3, 6], radius: [12, 20] },
+      { kind: 'caul_eyes', count: [2, 4], radius: [12, 18] },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'rocks', count: [5, 9], radius: [20, 40] },
+      { kind: 'rock_spire', count: [0, 2] },
+      { kind: 'formation', count: [1, 2], formation: 'fin_ridge' },
+      { kind: 'formation', count: [0, 1], formation: 'sac_clutch' },
+    ],
+    variants: [
+      // THE NURSERY: the clutch-dense mood — more sacs, more eyes, more
+      // regret for area builds that like popping things.
+      { name: 'Nursery', layout: [
+        { kind: 'gore', count: [1, 2], radius: [30, 56] },
+        { kind: 'maw_pit', count: [0, 1], radius: [24, 32] },
+        { kind: 'nerve_root', count: [3, 5], radius: [20, 30] },
+        { kind: 'caul_sac', count: [7, 12], radius: [12, 22] },
+        { kind: 'caul_eyes', count: [3, 6], radius: [12, 18] },
+        { kind: 'chitin_fin', count: [2, 4], radius: [14, 24] },
+        { kind: 'rib_arch', count: [1, 2] },
+        { kind: 'rocks', count: [4, 7], radius: [20, 36] },
+        { kind: 'formation', count: [1, 2], formation: 'sac_clutch' },
+      ] },
+      // THE OSSIFIED MARCH: the chitin mood — the organism's armor country,
+      // fins in processional ridges, barely any soft tissue to pop.
+      { name: 'Ossified', layout: [
+        { kind: 'chitin_fin', count: [7, 12], radius: [18, 34] },
+        { kind: 'rib_arch', count: [2, 4] },
+        { kind: 'black_umbilic', count: [0, 1], radius: [22, 30] },
+        { kind: 'nerve_root', count: [1, 3], radius: [18, 26] },
+        { kind: 'bone_pile', count: [2, 4] },
+        { kind: 'rocks', count: [6, 10], radius: [22, 42] },
+        { kind: 'rock_spire', count: [1, 2] },
+        { kind: 'formation', count: [2, 3], formation: 'fin_ridge' },
+      ] },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        { id: 'caul_tick', weight: 3, presence: { to: 20, fadeOut: 9 } },
+        { id: 'amnion_creeper', weight: 2 },
+        { id: 'caul_lasher', weight: 2 },
+        { id: 'nerve_weaver', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'vor_maw', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'chrysalid_broodmother', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'caul_heart', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // Kin from the far side of the membrane: the eldritch recognize
+        // their vanguard (RELATIONS ally) — a thin late-band seasoning.
+        { id: 'flesh_amalgam', weight: 1, presence: { from: 16, fadeIn: 6 } },
+      ],
+    },
+    spawnerId: 'birthing_pod',
+    objectives: [
+      { kind: 'offering', weight: 1 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
   // THE RIVER OF FLAME — hell's artery (biome 'flame': COURSE-ONLY, painted
   // along the Underworld's declared throughline, never rolled by a palette).
   // Every zone is a riverland pouring lava, oriented by the course's

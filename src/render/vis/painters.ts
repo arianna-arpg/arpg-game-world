@@ -4108,6 +4108,196 @@ const teethRow: GroupPainter = (env, group, def) => {
   }
 };
 
+// THE CAUL KIT — the flesh kit's biomechanical sibling (the Giger key):
+// hard black chitin where the warren is wet meat, cold violet light where
+// the warren glows ember. Same shared heartbeat, same "all palette on
+// params" contract — any invaded biome can borrow the vocabulary.
+
+/** CHITIN FINS — angular black blade-plates heaved out of the ground in
+ *  overlapping rows, glossed by the chitin material ramp: hell's bone
+ *  replaced by something harder that grew on purpose. */
+const chitinFin: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { plate?: ColorSpec; rim?: ColorSpec; material?: string };
+  const { ctx, theme } = env;
+  const ramp = rampOf(resolveColor(p.plate, theme, '#2c2136'), materialOf(p.material ?? 'chitin'));
+  const rim = resolveColor(p.rim, theme, '#6a5478');
+  for (const o of group) {
+    const seed = ((o.pos.x * 17 + o.pos.y * 29) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? (hash01(1, seed) - 0.5) * 0.9);
+    const blades = 2 + (seed % 3);
+    for (let i = 0; i < blades; i++) {
+      const bx = (i - (blades - 1) / 2) * r * 0.62;
+      const h = r * (0.85 + hash01(i, seed) * 0.5);
+      const w = r * (0.34 + hash01(i, seed + 3) * 0.14);
+      const lean = (hash01(i, seed + 7) - 0.5) * 0.5;
+      // The blade: an angular sail — base chord, one hard back edge, a
+      // notched leading edge (two facets so the light can pick a side).
+      const tipX = bx + Math.sin(lean) * h * 0.6, tipY = -h;
+      const notchX = bx + w * 0.55, notchY = -h * 0.45;
+      ctx.fillStyle = i % 2 ? ramp.base : ramp.shadow;
+      ctx.beginPath();
+      ctx.moveTo(bx - w, 0);
+      ctx.lineTo(bx - w * 0.5, -h * 0.3);
+      ctx.lineTo(tipX, tipY);
+      ctx.lineTo(notchX, notchY);
+      ctx.lineTo(bx + w, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(ramp.outline, 0.85);
+      ctx.lineWidth = 1.1;
+      ctx.stroke();
+      // The lit facet: the leading edge catches the world's one light.
+      ctx.fillStyle = withAlpha(ramp.highlight, 0.5);
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(notchX, notchY);
+      ctx.lineTo(bx + w, 0);
+      ctx.lineTo(bx + w * 0.72, 0);
+      ctx.lineTo(notchX - w * 0.2, notchY + h * 0.06);
+      ctx.closePath();
+      ctx.fill();
+      // One gloss streak down the back edge + the rim welt at the root.
+      ctx.strokeStyle = withAlpha(ramp.highlight, 0.9);
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(bx - w * 0.5, -h * 0.3);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.strokeStyle = withAlpha(rim, 0.5);
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(bx - w, 0);
+      ctx.lineTo(bx + w, 0);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+/** THE BLACK UMBILIC — a great twisted cable rising out of frame, seen
+ *  top-down: a coiled trunk of braided cords over a rootlet skirt, one dim
+ *  ring of light where it meets the floor. It goes somewhere. Nobody asks. */
+const umbilic: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { cord?: ColorSpec; rim?: ColorSpec; glow?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const cord = resolveColor(p.cord, theme, '#241a2c');
+  const rim = resolveColor(p.rim, theme, '#5a4468');
+  const glow = resolveColor(p.glow, theme, '#8a6ab0');
+  const hb = heartbeat(time, 0.6);
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 23) | 0) >>> 0;
+    const r = o.radius;
+    // Rootlet skirt: tapering cords gripping the floor.
+    ctx.lineCap = 'round';
+    const roots = 7 + (seed % 3);
+    for (let i = 0; i < roots; i++) {
+      const a = (i / roots) * Math.PI * 2 + hash01(i, seed) * 0.5;
+      const len = r * (0.5 + hash01(i, seed + 4) * 0.45);
+      ctx.strokeStyle = withAlpha(shade(cord, -0.15), 0.8);
+      ctx.lineWidth = Math.max(2, r * 0.09);
+      ctx.beginPath();
+      ctx.moveTo(o.pos.x + Math.cos(a) * r * 0.7, o.pos.y + Math.sin(a) * r * 0.7);
+      ctx.quadraticCurveTo(
+        o.pos.x + Math.cos(a + 0.2) * r * 1.05, o.pos.y + Math.sin(a + 0.2) * r * 1.05,
+        o.pos.x + Math.cos(a + 0.12) * (r * 0.7 + len), o.pos.y + Math.sin(a + 0.12) * (r * 0.7 + len));
+      ctx.stroke();
+    }
+    // The trunk: stacked discs darkening inward (a column read from above).
+    for (const [f, t] of [[1, -0.2], [0.82, 0], [0.62, 0.1], [0.4, 0.22]] as const) {
+      ctx.fillStyle = shade(cord, t);
+      ctx.beginPath();
+      ctx.arc(o.pos.x, o.pos.y, r * f, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The braid: spiral cords wound around the trunk — phase creeps so the
+    // cable is ALIVE, far too slowly to ever catch it moving.
+    const twist = time * 0.03 + hash01(3, seed) * 6;
+    ctx.strokeStyle = withAlpha(rim, 0.4);
+    ctx.lineWidth = Math.max(1.4, r * 0.07);
+    for (let i = 0; i < 4; i++) {
+      const a = twist + (i / 4) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.arc(o.pos.x, o.pos.y, r * 0.72, a, a + 1.1);
+      ctx.stroke();
+    }
+    // The floor weld: a dim pulse ring — the cable is a vessel, and it's on.
+    ctx.strokeStyle = withAlpha(glow, 0.16 + 0.1 * hb);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, r * 0.95, 0, Math.PI * 2);
+    ctx.stroke();
+    // Rim light on the lit side.
+    ctx.strokeStyle = withAlpha(rim, 0.7);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, r * 0.99, VIS_CFG.lightAngle - 1.1, VIS_CFG.lightAngle + 0.9);
+    ctx.stroke();
+  }
+};
+
+/** THE MAW PIT — an orifice in the floor: a dark gullet ringed by inward
+ *  teeth, breathing on the shared heartbeat. The doodad-effect maw_reel is
+ *  the verb; this is the face it wears. */
+const mawPit: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { gum?: ColorSpec; enamel?: ColorSpec; gullet?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const gum = resolveColor(p.gum, theme, '#4a2438');
+  const eRamp = rampOf(resolveColor(p.enamel, theme, '#c8bfae'), materialOf('bone'));
+  const gullet = resolveColor(p.gullet, theme, '#0a060e');
+  const hb = heartbeat(time, 0.7);
+  for (const o of group) {
+    const seed = ((o.pos.x * 19 + o.pos.y * 11) | 0) >>> 0;
+    const r = o.radius * (1 + hb * 0.035); // the gape breathes
+    // The lip: a raw welt ring bedding the pit into the floor.
+    ctx.fillStyle = withAlpha(gum, 0.55);
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, r * 1.12, 0, Math.PI * 2);
+    ctx.fill();
+    // The gullet: down, and down.
+    const g = ctx.createRadialGradient(o.pos.x, o.pos.y, r * 0.1, o.pos.x, o.pos.y, r);
+    g.addColorStop(0, gullet);
+    g.addColorStop(0.65, shade(gum, -0.45));
+    g.addColorStop(1, gum);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, r, 0, Math.PI * 2);
+    ctx.fill();
+    // The teeth: cones leaning INTO the hole, staggered heights, one gap
+    // (every mouth has a story).
+    const teeth = 9 + (seed % 4);
+    const gap = seed % teeth;
+    for (let i = 0; i < teeth; i++) {
+      if (i === gap) continue;
+      const a = (i / teeth) * Math.PI * 2 + hash01(i, seed) * 0.14;
+      const bx = o.pos.x + Math.cos(a) * r * 0.94, by = o.pos.y + Math.sin(a) * r * 0.94;
+      const len = r * (0.3 + hash01(i, seed + 5) * 0.18);
+      const wid = r * 0.09;
+      const tx = bx - Math.cos(a) * len, ty = by - Math.sin(a) * len;
+      ctx.fillStyle = i % 2 ? eRamp.base : eRamp.shadow;
+      ctx.beginPath();
+      ctx.moveTo(bx + Math.cos(a + Math.PI / 2) * wid, by + Math.sin(a + Math.PI / 2) * wid);
+      ctx.lineTo(bx - Math.cos(a + Math.PI / 2) * wid, by - Math.sin(a + Math.PI / 2) * wid);
+      ctx.lineTo(tx, ty);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(eRamp.outline, 0.5);
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+    // One wet sheen on the lit inner wall.
+    ctx.globalAlpha = 0.16 + 0.1 * hb;
+    ctx.strokeStyle = '#d8c8dc';
+    ctx.lineWidth = Math.max(1.6, r * 0.07);
+    ctx.beginPath();
+    ctx.arc(o.pos.x, o.pos.y, r * 0.72, VIS_CFG.lightAngle - 0.8, VIS_CFG.lightAngle + 0.6);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+};
+
 /** HEAT SHIMMER — wavering desert air: rising serpentine heat-lines and a
  *  faint hot lens over the ground. Barely-there by design; the sunscorch
  *  stacks it feeds are the teeth (World.updateHeat). */
@@ -6611,6 +6801,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   campfire, groundShadow, trunk, brush, fern, vineMat, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
+  chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
   cactus, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
