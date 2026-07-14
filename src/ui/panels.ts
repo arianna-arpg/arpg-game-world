@@ -3767,6 +3767,10 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
         <button id="opt-lowlife">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
       </div>
       <div class="rebind-row">
+        <span>Improvised Strike (empty slots swing)</span>
+        <button id="opt-improvised" title="Pressing an EMPTY bar slot swings a fixed, gemless improvised strike — the floor no kit falls beneath. Turn OFF to make empty slots dead keys (a stray press mid-dodge costs the swing's half-second; the risk budget is yours).">${this.getSettings().improvisedStrike ? 'ON' : 'OFF'}</button>
+      </div>
+      <div class="rebind-row">
         <span>Gear Pickup</span>
         <button id="opt-gearpickup">${this.getSettings().gearPickup === 'key'
           ? `PRESS ${keyDisplay(this.getSettings().keybinds.pickup)}` : 'WALK OVER'}</button>
@@ -3825,6 +3829,15 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     root.querySelector<HTMLElement>('#opt-lowlife')!.addEventListener('click', () => {
       const s = this.getSettings();
       s.lowLifePulse = !s.lowLifePulse;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
+    // The unarmed floor is default-ON and found-not-taught; the OFF switch
+    // exists so accidental empty-slot presses are the PLAYER's dial, not a
+    // death the game chose for them (see settings.ts improvisedStrike).
+    root.querySelector<HTMLElement>('#opt-improvised')!.addEventListener('click', () => {
+      const s = this.getSettings();
+      s.improvisedStrike = !s.improvisedStrike;
       this.saveSettings();
       this.renderKeybinds(root, onBack);
     });

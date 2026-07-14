@@ -98,6 +98,13 @@ export interface Settings {
    *  world stays explored either way; only the body moves). A character
    *  MODE may pin this and ignore the setting (CharacterModeDef.resume). */
   resumeSpawn: ResumeSpawn;
+  /** THE UNARMED FLOOR: pressing an EMPTY bar slot swings a fixed, gemless
+   *  Improvised Strike (data/skills.ts) — the guarantee that no kit is ever
+   *  locked out of touching the world. ON by default and FOUND, not taught
+   *  (the first swing names itself). OFF makes empty slots dead keys again —
+   *  the fat-finger-near-death dial: whether a stray press mid-dodge may
+   *  cost you the half-second is YOUR risk budget, so the switch is yours. */
+  improvisedStrike: boolean;
 }
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
@@ -114,6 +121,7 @@ export interface SettingsSave {
   aimTick?: Partial<AimTickOptions>;
   poolBars?: PoolBarsMode;
   resumeSpawn?: ResumeSpawn;
+  improvisedStrike?: boolean;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -219,6 +227,7 @@ export const makeSettings = (): Settings => ({
   aimTick: { ...DEFAULT_AIM_TICK },
   poolBars: 'smart',
   resumeSpawn: WORLDSTATE_CFG.resume,
+  improvisedStrike: true,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -233,6 +242,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   aimTick: { ...s.aimTick },
   poolBars: s.poolBars,
   resumeSpawn: s.resumeSpawn,
+  improvisedStrike: s.improvisedStrike,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -282,5 +292,6 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     poolBars: s.poolBars === 'always' || s.poolBars === 'recent' ? s.poolBars : 'smart',
     // Unknown values fall back to the engine default (WORLDSTATE_CFG.resume).
     resumeSpawn: s.resumeSpawn === 'town' || s.resumeSpawn === 'exact' ? s.resumeSpawn : WORLDSTATE_CFG.resume,
+    improvisedStrike: s.improvisedStrike ?? true,
   };
 }

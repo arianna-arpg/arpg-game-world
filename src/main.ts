@@ -586,6 +586,16 @@ function readLocalInput(dt: number): PlayerInput | null {
       return fromKey || fromPad;
     }),
   ];
+  // THE UNARMED-FLOOR opt-out (Settings.improvisedStrike): declined, an
+  // EMPTY slot's press never leaves this client — the world's floor rule
+  // (World.applyInputs' null-slot branch) stays universal; the refusal is
+  // local input-shaping, exactly like a keybind. Each co-op peer's setting
+  // shapes only their own hands.
+  if (!settings.improvisedStrike) {
+    for (let i = 0; i < held.length; i++) {
+      if (!p.skills[i]) { held[i] = false; edge[i] = false; }
+    }
+  }
   // The META layer (rebindable; shift by default): modifier+slot fires the
   // slot skill's META-ACTION (Detonate / Enrage / Thrust!) INSTEAD of a new
   // press. HELD states survive the modifier — a raised guard or a running

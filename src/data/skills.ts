@@ -8279,6 +8279,27 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
+  // THE UNARMED FLOOR: what an empty hand does when an empty SLOT is pressed
+  // (World.applyInputs' null-slot branch mints this for any seat; the local
+  // opt-out is Settings.improvisedStrike). No gem, no sockets, no leveling,
+  // no requirements — deliberately a FLOOR, never a build: the numbers stand
+  // still forever so any real kit outgrows it by level 2, but no character
+  // is ever locked out of touching the world (the Tamer between pets, the
+  // Chronomancer with every clock spent, the hero whose last gem went to
+  // the font). Ordinary in every other way — same cast lock, same aim, same
+  // pipeline — and it carries an ai hint, so a monster kit may slot it too
+  // (it IS the player-grade claw).
+  improvised_strike: {
+    id: 'improvised_strike', name: 'Improvised Strike', noDrop: true,
+    description: 'No gem, no discipline, no excuse — the swing you were born holding. It will never grow stronger, and it can never be taken away.',
+    tags: ['attack', 'melee', 'physical'], color: '#b8b0a0',
+    manaCost: 0, cooldown: 0, useTime: 0.55,
+    baseDamage: { physical: [4, 7] },
+    delivery: { type: 'melee', range: 48, arcDeg: 100 },
+    effects: [{ type: 'damage' }],
+    ai: { range: 50, weight: 1 },
+  },
+
   long_exhale: {
     id: 'long_exhale', name: 'Long Exhale',
     description: 'HOLD THE BREATH — the stillness gathers into the lungs — then let it OUT: a rolling wall of forced air whose weight grows with the wait, shoving the line back WINDED. The monk\'s argument: patience, exhaled.',

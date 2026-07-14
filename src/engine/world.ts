@@ -2524,6 +2524,24 @@ export class World {
     if (s) s.lastActedAt = this.time;
   }
 
+  /** THE UNARMED FLOOR's per-actor instance — minted lazily, held OUTSIDE
+   *  knownSkills on purpose: never learnable, never socketable, never
+   *  salvageable, never saved, never touched by recalcSeat's bonus-level
+   *  sweep. Level 1 forever is the CONTRACT (data/skills.ts
+   *  improvised_strike) — the floor holds still so every real gem outgrows
+   *  it. WeakMap: dead actors just fall out. */
+  private improvisedInst = new WeakMap<Actor, SkillInstance>();
+  /** Seats whose first improvised swing already introduced itself. */
+  private improvisedHinted = new WeakSet<Actor>();
+  private improvisedFor(a: Actor): SkillInstance {
+    let inst = this.improvisedInst.get(a);
+    if (!inst) {
+      inst = makeSkillInstance(SKILLS['improvised_strike'], 1);
+      this.improvisedInst.set(a, inst);
+    }
+    return inst;
+  }
+
   /** Apply this frame's per-seat intents to their actors — the ONE path that
    *  drives every player-kind hero (local OS input, scripted ally, or — next
    *  milestone — a remote peer). Same movement/cast/skill/facing logic the old
@@ -2572,7 +2590,24 @@ export class World {
       // Toggled auras respond to the press edge; everything else to the hold.
       for (let i = 0; i < a.skills.length; i++) {
         const inst = a.skills[i];
-        if (!inst) continue;
+        if (!inst) {
+          // THE UNARMED FLOOR: an EMPTY slot still answers — the improvised
+          // strike (data/skills.ts), through the same honest cast pipeline
+          // as any gem: it locks its useTime, obeys the aim, and does the
+          // same nothing everyone else's mid-cast press does. A GAME RULE,
+          // not a client nicety — remote seats get the same floor. The
+          // opt-out is LOCAL: Settings.improvisedStrike zeroes empty-slot
+          // intent at the client (main.ts), so a declined floor never even
+          // arrives here.
+          if (inp.held[i] && this.useSkill(a, this.improvisedFor(a), aim, true)
+            && !this.improvisedHinted.has(a)) {
+            // Found, not taught: the first swing names itself once.
+            this.improvisedHinted.add(a);
+            this.text(vec(a.pos.x, a.pos.y - 46),
+              'Bare hands answer an empty slot (Options can quiet them)', '#b8b0a0', 13);
+          }
+          continue;
+        }
         const toggle = (inst.def.delivery.type === 'aura' && inst.def.delivery.mode === 'toggle')
           || (inst.def.delivery.type === 'ground' && !!inst.def.delivery.strobe)
           || instanceTrigger(inst) !== undefined
