@@ -95,6 +95,11 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // march but never, ever cede the calderas (the volcanic biome finally has a
   // native banner; its long war is with the Legion treating the fires as a door).
   emberkin: { roaming: 0.3, aggression: 0.9, warlordHome: 'origin', homeBiome: 'volcanic', eventRange: 170, contexts: ['baseline'], temper: 'territorial' },
+  // The Caulborn — the membrane does the marching: the organism barely
+  // roams as BODIES; it spreads as GROUND (the creep fabric) and defends
+  // what it has skinned. Its long war is with the Legion — hell's landlord
+  // versus the thing remaking hell's tissue.
+  caulborn: { roaming: 0.15, aggression: 0.8, warlordHome: 'origin', homeBiome: 'caul', eventRange: 150, contexts: ['baseline'], temper: 'territorial' },
 };
 
 /** Does this faction feed the corpse-tide loops (Deadwake accrual)? Reads the

@@ -5215,6 +5215,145 @@ export const MONSTERS: Record<string, MonsterDef> = {
     spawner: true, noNemesis: true, drops: 0,
   },
 
+  // --- THE CAULBORN (faction 'caulborn' — the Caul's cold biomechanics) -----
+  // NOT the Glut. The Glut is hunger; the Caulborn are PURPOSE — an invading
+  // organism remaking hell inside its own membrane, black chitin over pale
+  // meat, everything joined by the same nerve. The family doctrine: the
+  // TERRAIN is the roster (rooted lashers, reeling maws, pods that walk),
+  // and the creep fabric is their ground game — hearts skin the floor, the
+  // skin feeds the kin (caulfed), and killing the heart takes the ground
+  // back. Ambushes throughout: the Caul's dread is that you never know
+  // which piece of the decor is a piece of the animal.
+  // The mite tier: hatched by sacs and mothers, a skittering carpet. Thin
+  // alone, dire on caulflesh (the skin's regen keeps the carpet standing).
+  caul_tick: {
+    id: 'caul_tick', name: 'Caul Tick',
+    color: '#4a3858', shape: 'oval', radius: 8, material: 'chitin', look: 'caul_tick',
+    base: { life: 26, moveSpeed: 180, accuracy: 92, evasion: 40, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'], xp: 6, faction: 'caulborn', tags: ['beast'],
+    presence: { to: 20, fadeOut: 9 },
+    detection: 1.1,
+    brain: { type: 'swarm', move: { style: 'skitter', dart: [0.2, 0.4], pause: [0.06, 0.16] } },
+  },
+  // The pod that walks: it reads as another sac until it doesn't. Creeps at
+  // a crawl, erupts into mites when it dies close enough to matter — kill
+  // it at range or inherit its brood at your boots.
+  amnion_creeper: {
+    id: 'amnion_creeper', name: 'Amnion Creeper',
+    color: '#5a4468', shape: 'oval', radius: 12, material: 'flesh', look: 'amnion_creeper',
+    base: { life: 85, moveSpeed: 34, accuracy: 96, armor: 15, poise: 25, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 18, faction: 'caulborn',
+    ambush: { radius: 130, announce: 'one of the pods is walking…' },
+    detection: 0.9,
+    brain: {
+      type: 'swarm',
+      onDeath: [{ do: 'summon', monster: 'caul_tick', count: 2, ring: 26, announce: 'the pod splits!' }],
+    },
+  },
+  // The rooted appendage: the biome's thesis monster — terrain that fights.
+  // moveSpeed 0 + 360° vision + a long honest wind-up; the fight is spacing,
+  // and the floor's decor keeps the question "which knot is live?" open.
+  caul_lasher: {
+    id: 'caul_lasher', name: 'Caul Lasher',
+    color: '#3a2c48', shape: 'oval', radius: 14, material: 'chitin', look: 'caul_lasher',
+    base: { life: 140, moveSpeed: 0, accuracy: 108, armor: 25, poise: 60, mana: 30, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('physRes', 'flat', 0.15)],
+    skills: ['caul_lash'], xp: 30, faction: 'caulborn',
+    ambush: { radius: 150, announce: 'the ground unknots…' },
+    turnSpeed: 3.2,
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.1, brain: { type: 'basic' },
+  },
+  // The reeling maw: tongue out, dinner in. An anchor by build (heavy poise
+  // = heavy effectiveWeight — it drags you, you don't drag it) whose pull is
+  // also melee's free ride to the kill: the void angler's bargain, on ground
+  // any build can stand on.
+  vor_maw: {
+    id: 'vor_maw', name: 'Vor Maw',
+    color: '#6a3a50', shape: 'oval', radius: 20, material: 'flesh', look: 'vor_maw',
+    base: { life: 260, moveSpeed: 0, accuracy: 110, armor: 30, poise: 95, mana: 90, manaRegen: 7 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('coldRes', 'flat', 0.2)],
+    skills: ['tongue_reel', 'devouring_maw'], xp: 52, faction: 'caulborn',
+    presence: { from: 10, fadeIn: 4 },
+    ambush: { radius: 210, announce: 'the floor is salivating…' },
+    turnSpeed: 2.6,
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.2, brain: { type: 'basic' },
+  },
+  // The nerve-priest: the mobile tier — it keeps its distance, jangles the
+  // floor's own nerves under your boots (ensnare), and spits venom while
+  // the rooted kin do the arithmetic.
+  nerve_weaver: {
+    id: 'nerve_weaver', name: 'Nerve Weaver',
+    color: '#7a5a9a', shape: 'triangle', radius: 12, material: 'void', look: 'nerve_weaver',
+    base: { life: 95, moveSpeed: 92, accuracy: 106, poise: 30, mana: 160, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['nerve_pulse', 'venom_bolt'], xp: 40, faction: 'caulborn',
+    presence: { from: 8, fadeIn: 4 },
+    detection: 1.1, brain: { type: 'skirmish', withdraw: 1.05 },
+  },
+  // The walking clutch: she lays where she stands, seeds her own skin, and
+  // her brood fights better on it (caulfed) — the creep fabric worn as a
+  // monster verb. Kill her and the ground itself gives the fight back.
+  chrysalid_broodmother: {
+    id: 'chrysalid_broodmother', name: 'Chrysalid Broodmother',
+    color: '#5a3a64', shape: 'cross', radius: 18, material: 'flesh', look: 'chrysalid_broodmother',
+    base: { life: 240, moveSpeed: 58, accuracy: 100, armor: 25, poise: 70, mana: 60, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['claw'], xp: 64, faction: 'caulborn',
+    presence: { from: 12, fadeIn: 5 },
+    creepSource: { kind: 'caulflesh', reach: [90, 140], bornFrac: 0.2 },
+    detection: 1.0,
+    brain: {
+      type: 'basic',
+      rules: [{
+        when: { distUnder: 520 }, every: [7, 11], hold: [0.2, 0.35],
+        actions: [{ do: 'summon', monster: 'caul_tick', count: 2, ring: 40, lifespan: 30, announce: 'the clutch hatches!' }],
+      }],
+      onDeath: [{ do: 'summon', monster: 'amnion_creeper', count: 2, ring: 34 }],
+    },
+  },
+  // THE HEART: the pocket's anchor — the membrane underfoot is ITS skin
+  // (creepSource born half-grown, still claiming floor as you arrive). It
+  // never chases; it resents (volatile nerve-jangle when struck) — and its
+  // death is the pocket's death: the skin recoils, the mired boots come
+  // free, the caulfed kin lose their table. Clearing the Caul means
+  // stopping hearts, and the fabric makes that legible without one line of
+  // objective code.
+  caul_heart: {
+    id: 'caul_heart', name: 'Caul Heart',
+    color: '#8a5a9a', shape: 'oval', radius: 19, material: 'flesh', look: 'caul_heart',
+    base: { life: 420, moveSpeed: 0, armor: 35, poise: 999, mana: 200, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.6), mod('fireRes', 'flat', -0.15)],
+    skills: [], xp: 90, faction: 'caulborn',
+    presence: { from: 9, fadeIn: 4 },
+    creepSource: { kind: 'caulflesh', reach: [150, 220], bornFrac: 0.5 },
+    volatile: { skillId: 'nerve_pulse', chance: 0.35, icd: 2.2 },
+    vision: { arcDeg: 360, rearMul: 1 },
+    turnSpeed: 4,
+    drops: 2,
+    detection: 0.8, brain: { type: 'basic' },
+  },
+  // The Caul's spawners-objective destructible: a straining clutch of sacs
+  // that keeps venting mites until burst (the corpse_bloom contract, in the
+  // invader's key).
+  birthing_pod: {
+    id: 'birthing_pod', name: 'Birthing Pod',
+    color: '#6a4a78', shape: 'oval', radius: 15, material: 'flesh', look: 'birthing_pod',
+    base: { life: 95, moveSpeed: 0, armor: 15, mana: 0 },
+    skills: [], xp: 12, faction: 'caulborn',
+    spawner: true, noNemesis: true, drops: 0,
+    brain: {
+      type: 'basic',
+      rules: [{
+        when: {}, every: [6, 9], hold: [0.1, 0.2],
+        actions: [{ do: 'summon', monster: 'caul_tick', count: 2, ring: 40, lifespan: 25 }],
+      }],
+    },
+  },
+
   // --- THE ROOKERIES & NEW FAUNA (faction 'beast', the ambient layer) -------
   // The bloodwing: the D2 blood hawk itself — wheels, dives, rakes, and is
   // gone. Hunts the meadow's own critters when you're not worth the stoop.
@@ -6807,6 +6946,13 @@ const RELATIONS: Record<string, FactionStance> = {
   'nightkin|sylvan': 'hostile',
   'nightkin|beastkin': 'hostile',
   'nightkin|demon': 'hostile',
+  // The Caulborn are the thing HELL is afraid of: an invading organism
+  // remaking the underworld inside its own membrane. The Legion fights for
+  // its home ground; the Glut resents a rival meat; the eldritch recognize
+  // kin — the same outside, wearing a body that works.
+  'caulborn|demon': 'hostile',
+  'caulborn|flesh': 'hostile',
+  'caulborn|eldritch': 'ally',
 };
 
 /** Diplomatic stance between two factions (order-insensitive). */
@@ -7036,6 +7182,21 @@ export const FACTIONS: Record<string, {
       { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
       { id: 'corpse_bloom', weight: 1 },
       { id: 'spire_of_eyes', weight: 1, presence: { from: 12, fadeIn: 5 } },
+    ],
+  },
+  caulborn: {
+    name: 'the Caulborn',
+    table: [
+      // Mites carpet the young membrane and thin with depth; the rooted
+      // tiers (lasher → maw) and the heart's court arrive as the organism
+      // digs in. Rooted bodies still muster in war zones — the Caul sends
+      // ground it intends to KEEP.
+      { id: 'caul_tick', weight: 3, presence: { to: 20, fadeOut: 9 } },
+      { id: 'amnion_creeper', weight: 2 },
+      { id: 'caul_lasher', weight: 2 },
+      { id: 'nerve_weaver', weight: 2, presence: { from: 8, fadeIn: 4 } },
+      { id: 'vor_maw', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      { id: 'chrysalid_broodmother', weight: 1, presence: { from: 12, fadeIn: 5 } },
     ],
   },
 };

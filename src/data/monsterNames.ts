@@ -61,7 +61,19 @@ export const MONSTER_NAMES = {
   ],
   /** Per-faction pool overrides (absent → defaults). A faction with its own
    *  tongue is one entry here — e.g. depthkin all-hiss suffixes. */
-  byFaction: {} as Record<string, { prefixes?: string[]; suffixes?: string[]; epithets?: string[] }>,
+  byFaction: {
+    // The Caulborn speak in wet anatomy: names that sound like something a
+    // surgeon would rather not have found.
+    caulborn: {
+      prefixes: ['Vor', 'Chryss', 'Amn', 'Umbil', 'Sinew', 'Ichor', 'Pale', 'Marrow', 'Vein', 'Chit'],
+      suffixes: ['ax', 'ule', 'ion', 'ith', 'urge', 'ome', 'ist', 'od', 'yx', 'ara'],
+      epithets: [
+        'the Firstgrown', 'the Still-Wet', 'of the Inner Skin', 'the Unborn Twice',
+        'the Quiet Pulse', 'Who Grew Wrong', 'the Graft', 'of the Black Amnion',
+        'the Patient Meat', 'the Latterborn', 'Who Remembers Hands', 'the Sutured',
+      ],
+    },
+  } as Record<string, { prefixes?: string[]; suffixes?: string[]; epithets?: string[] }>,
 };
 
 /** Weld a distinct monster name: compound (+ epithet at the config chance).

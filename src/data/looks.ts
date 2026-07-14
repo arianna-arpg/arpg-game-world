@@ -1926,6 +1926,99 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.7,
   },
 
+  // --- The Caulborn (black chitin over pale meat; the Giger key) -------------
+  // Family read: HARD dark carapace + WET pale undersides + one dim violet
+  // light somewhere it shouldn't be. Silhouettes stay distinct desaturated:
+  // tick = skittering wedge, creeper = walking egg, lasher = rooted whorl,
+  // maw = ringed orifice, weaver = crested priest, broodmother = segmented
+  // clutch, heart = veined organ, pod = straining sac-cluster.
+  /** The mite: a fingernail of chitin with too many legs. */
+  caul_tick: {
+    parts: [
+      { kind: 'carapace', scale: 0.92, params: { seed: 401 } },
+      { kind: 'legs', params: { n: 6, len: 0.55 } },
+      { kind: 'mandibles', scale: 0.7 },
+      { kind: 'eyes', color: '#9a72c8', params: { n: 2, spread: 0.3, dist: 0.55, size: 0.09 } },
+    ],
+  },
+  /** The pod that walks: an egg that grew legs it shouldn't have. */
+  amnion_creeper: {
+    parts: [
+      { kind: 'cocoon', scale: 1.0, params: { seed: 403 } },
+      { kind: 'legs', params: { n: 6, len: 0.4 }, role: 'dark' },
+      { kind: 'veinweb', params: { n: 3 } },
+      { kind: 'eyes', color: '#9a72c8', params: { n: 1, spread: 0, dist: 0.34, size: 0.11 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#3a2c48', params: { n: 3 } }],
+  },
+  /** The rooted whorl: barbed arms knotted around a knuckle of root. */
+  caul_lasher: {
+    parts: [
+      { kind: 'blob', scale: 0.55, params: { irr: 0.28, seed: 405 }, role: 'dark' },
+      { kind: 'tentacleRing', scale: 1.15, params: { n: 5 } },
+      { kind: 'barbs', scale: 0.9 },
+      { kind: 'eyeCluster', color: '#b48ae0', params: { n: 2, spread: 0.5, dist: 0.3 } },
+    ],
+    shadowScale: 0.8,
+  },
+  /** The reeling maw: a ringed orifice with a lure it doesn't need. */
+  vor_maw: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.2, seed: 407 } },
+      { kind: 'tentacleRing', scale: 0.72, params: { n: 4 }, role: 'dark' },
+      { kind: 'mawRing', scale: 0.95 },
+      { kind: 'lure', scale: 0.7, role: 'glow' },
+      { kind: 'eyeCluster', color: '#d8b0c8', params: { n: 4, spread: 0.85, dist: 0.55 } },
+    ],
+    shadowScale: 0.85,
+  },
+  /** The nerve-priest: a crested figure walking under a borrowed spine. */
+  nerve_weaver: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'carapace', scale: 0.72, params: { seed: 409 }, role: 'dark' },
+      { kind: 'dorsalRidge', scale: 1.05 },
+      { kind: 'eyestalks', scale: 0.8, color: '#9a72c8' },
+      { kind: 'veinweb', params: { n: 3 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, role: 'glow', params: { n: 3 } }],
+  },
+  /** The walking clutch: a segmented abdomen straining with the next tier. */
+  chrysalid_broodmother: {
+    parts: [
+      { kind: 'blob', scale: 1.1, params: { irr: 0.22, seed: 411 } },
+      { kind: 'segmentRings', scale: 1.0, role: 'dark' },
+      { kind: 'bloatSacs', scale: 0.95, params: { n: 6 } },
+      { kind: 'legs', params: { n: 6, len: 0.5 }, role: 'dark' },
+      { kind: 'mawRing', scale: 0.42 },
+      { kind: 'eyeCluster', color: '#b48ae0', params: { n: 5, spread: 0.7, dist: 0.45 } },
+    ],
+    live: [{ kind: 'oozeLobes', scale: 0.85, params: { n: 4 } }],
+    shadowScale: 0.9,
+  },
+  /** THE HEART: a veined organ the size of a door, mid-beat, mid-claim. */
+  caul_heart: {
+    parts: [
+      { kind: 'blob', scale: 1.08, alpha: 0.96, params: { irr: 0.18, seed: 413 } },
+      { kind: 'veinweb', params: { n: 8 } },
+      { kind: 'fleshFolds', params: { n: 4 } },
+      { kind: 'polyps', scale: 0.8, params: { n: 3 } },
+      { kind: 'orb', scale: 0.42, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, role: 'glow', params: { n: 2 } }],
+    shadowScale: 0.85,
+  },
+  /** The birthing pod: sacs straining around whatever comes next. */
+  birthing_pod: {
+    parts: [
+      { kind: 'egg', scale: 1.05, params: { seed: 415 } },
+      { kind: 'bloatSacs', scale: 1.0, params: { n: 5 } },
+      { kind: 'veinweb', params: { n: 2 } },
+      { kind: 'polyps', scale: 0.7, params: { n: 2 } },
+    ],
+    shadowScale: 0.75,
+  },
+
   // --- The rookeries & new fauna ---------------------------------------------
   /** The bloodwing: a broad-winged raptor, all shoulder and beak. */
   bloodwing: {

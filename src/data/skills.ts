@@ -9470,6 +9470,76 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
+  // --- THE CAULBORN's verbs (the Caul biome's terrain-that-fights kit) ------
+  // The lasher's swat: a wide, patient arc from a rooted appendage. The reach
+  // is the threat — the wind-up is long and honest, the punish is stepping in
+  // without watching the ground.
+  caul_lash: {
+    id: 'caul_lash', name: 'Caul Lash',
+    description: 'A rooted appendage unknots and SWATS — a long, patient arc that shoves whatever it catches. The ground was never just ground.',
+    tags: ['attack', 'melee', 'aoe', 'physical'], color: '#8a6ab0',
+    manaCost: 0, cooldown: 2.6, useTime: 0.85,
+    baseDamage: { physical: [14, 22] },
+    delivery: { type: 'melee', range: 118, arcDeg: 150 },
+    effects: [
+      { type: 'damage' },
+      { type: 'knockback', strength: 260, mode: 'shove' },
+    ],
+    ai: { range: 118, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  // The maw's cast-and-reel: void_hook's grammar in meat — a tongue that
+  // snaps out, barbs, and DRAGS the catch to the teeth. The pull is also the
+  // player's ticket to adjacency; the maw regrets nothing.
+  tongue_reel: {
+    id: 'tongue_reel', name: 'Tongue Reel',
+    description: 'A glistening tongue snaps out, barbs, and REELS the catch bodily to the teeth. Mind the ground between you and the maw — or spend the trip planning what you\'ll do when you arrive.',
+    tags: ['attack', 'projectile', 'physical'], color: '#b46a8a',
+    manaCost: 6, cooldown: 4, useTime: 0.7,
+    baseDamage: { physical: [8, 14] },
+    delivery: { type: 'projectile', speed: 640, radius: 9, range: 340, shape: 'line' },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.35 },
+    ],
+    ai: { range: 320, weight: 3, keepDistance: 140 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  // The chew: short, brutal, and it DRINKS — every landed bite knocks a
+  // life-orb loose that homes back to the maw (siphonOrb: sustain with
+  // travel time, dodgeable by walking away from your own blood).
+  devouring_maw: {
+    id: 'devouring_maw', name: 'Devouring Maw',
+    description: 'The teeth close. What they take, they KEEP — each bite shakes loose a bead of life that homes back into the maw unless its owner outruns it.',
+    tags: ['attack', 'melee', 'physical'], color: '#a04a5a',
+    manaCost: 0, cooldown: 1.6, useTime: 0.6,
+    baseDamage: { physical: [16, 26] },
+    delivery: { type: 'melee', range: 64, arcDeg: 100 },
+    effects: [
+      { type: 'damage' },
+      { type: 'siphonOrb', resource: 'life', amount: 10 },
+    ],
+    ai: { range: 64, weight: 4 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  // The weaver's jangle: a soft chaos ring that makes the floor's own nerves
+  // fire — brief ensnare, no burst. The dread is the second caster you
+  // didn't see while the first held your boots.
+  nerve_pulse: {
+    id: 'nerve_pulse', name: 'Nerve Pulse',
+    description: 'A ring of misfiring nerves rolls out through the floor — a soft chaos snap that seizes boots mid-stride. The Caul knows where you stand; you are standing on it.',
+    tags: ['spell', 'chaos', 'aoe', 'instant'], color: '#9a72c8',
+    manaCost: 10, cooldown: 3.2, useTime: 0.65,
+    baseDamage: { chaos: [9, 15] },
+    delivery: { type: 'nova', radius: 150 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'ensnared', chance: 0.4, magnitude: 1 },
+    ],
+    ai: { range: 150, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
   doomsayers_word: {
     id: 'doomsayers_word', name: 'Doomsayer\'s Word',
     description: 'Speak the sentence and let it ride: the bolt lands soft as a whisper — and three seconds later the Word RESOLVES all at once, rolled at whatever your power has become by then. The mark can read the clock; so can everything you socket (a Slow Match stretches the wait and sharpens the verdict).',
