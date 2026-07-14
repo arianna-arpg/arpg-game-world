@@ -306,7 +306,7 @@ export interface MonsterPartDef {
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
 export type { BrainDef, BrainType, BrainPhase, BrainImpulse } from './brain';
-import type { BrainDef, BrainType, CommandState } from './brain';
+import type { BrainDef, BrainType, BrainTuning, CommandState } from './brain';
 
 /** A worm/snake body: trailing segments that follow the head. */
 export interface WormBody {
@@ -405,6 +405,13 @@ export class Actor {
    *  and heals landed on its prey (world.resolveHit / applyHeal feed it; the
    *  AI tick decays it). Only `prefer: 'highestThreat'` brains READ it. */
   threat = new Map<number, number>();
+  /** THE TUNING GRAFT: a per-BODY brain layer stamped by the world's hand —
+   *  an extraction swarm fixating on the seep, a leashed expedition, a skill
+   *  that rewrites one monster's priorities. Merged LAST in resolveMachines
+   *  (over base/cycle/phases/rules/impulses), so the graft outranks the
+   *  body's own machines while it stands. Clear it and the native brain
+   *  resumes untouched. Null-cost when absent. */
+  aiTuning?: BrainTuning;
   /** The locked target's actor id (stickiness + engagement freshness). */
   aiTargetId?: number;
   /** Where the locked target was last seen (perception-memory investigation). */

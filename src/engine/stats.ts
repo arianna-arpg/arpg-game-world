@@ -1004,6 +1004,15 @@ export const STAT_DEFS: Record<string, StatDef> = {
   // Stealth & perception
   /** Multiplier on the range at which enemies detect this actor. */
   detectability:  { label: 'Detectability', base: 1, min: 0 },
+  /** Multiplier on the THREAT this actor's damage books on the victim's
+   *  chart (world.resolveHit): loud styles goad monsters onto themselves,
+   *  quiet hands slip down the ledger. Only `prefer: 'highestThreat'`
+   *  brains — and grafted event swarms — read the chart, so this is an
+   *  attention lever, never a damage one. */
+  threatGen:      { label: 'Threat Generation', base: 1, min: 0 },
+  /** > 0: constructs this actor spawns TAUNT (Actor.taunt decoys) — the
+   *  Beckoning gem's lane (spawnConstruct reads it per-skill). */
+  constructTaunt: { label: 'Constructs Taunt', base: 0 },
   /** > 0: enemies will not see or deliberately target this actor at all
    *  (area effects and projectiles still connect geometrically). */
   invisible:      { label: 'Invisible', base: 0 },

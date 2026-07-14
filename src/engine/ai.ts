@@ -44,7 +44,14 @@ const spacingScratch: Actor[] = [];
  *  package adds its own species with registerDormantTag(tag, reset?) — never
  *  by editing this list. (A new species usually also wants a rouse rule —
  *  World.rouseRules in world.ts — which decides HOW a wounding hit wakes it.) */
-export const DORMANT_TAGS = new Set<string>(['ritual_cultist', 'migrant', 'toll_bandit', 'brigand', 'wayfarer']);
+export const DORMANT_TAGS = new Set<string>([
+  'ritual_cultist', 'migrant', 'toll_bandit', 'brigand', 'wayfarer',
+  // Extraction dispersal walkers: 'extraction_leaver' wakes on a wound (its
+  // rouse rule in world.ts — the WARY temper); the '_resolute' variant has no
+  // rouse rule and never wakes — skittish bodies and spent expeditions keep
+  // walking even under fire.
+  'extraction_leaver', 'extraction_leaver_resolute',
+]);
 
 /** A roused neutral COOLS BACK to dormant after disengagement. */
 export interface NeutralResetRule {
@@ -823,6 +830,11 @@ function resolveMachines(actor: Actor, world: World, norm: NormalizedBrain): Bra
     actor.aiImpulseType = undefined; // a flee cancels any active impulse
   }
   if (actor.aiImpulseType) layers.push({ type: actor.aiImpulseType });
+
+  // --- the TUNING GRAFT: the per-BODY layer stamped by events/skills --------
+  // (Actor.aiTuning). Merged LAST — the world's hand outranks the body's own
+  // machines while the graft stands; clearing it restores the native brain.
+  if (actor.aiTuning) layers.push(actor.aiTuning);
 
   // Resolve each layer's preset (its `type`) into axes, then merge in order.
   return mergeTuning(...layers.map(l => (l ? tuningOf(l) : undefined)));
