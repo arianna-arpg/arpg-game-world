@@ -3910,6 +3910,16 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('damage', 'increased', 0.05, ['fire'])],
     weight: 4, minDropLevel: 12,
   },
+
+  // --- The CIRRUS gem (the high air, rentable) -------------------------------
+  rarefy: {
+    id: 'rarefy', name: 'Rarefy',
+    description: 'The skill is worked in HIGH THIN AIR: 50% of its physical damage arrives as cold instead — fully cold at maximum level. The Flameforged conversion\'s pale sibling; the mountain\'s answer to the forge.',
+    color: '#cfe8f8', requiresTags: ['physical'],
+    mods: [mod('convert_physical_cold', 'flat', 0.5)],
+    perLevel: [mod('convert_physical_cold', 'flat', 0.125)],
+    weight: 7, minDropLevel: 9,
+  },
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);

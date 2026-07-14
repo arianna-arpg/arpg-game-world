@@ -2892,6 +2892,12 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dominion_scales', weight: 1.5, presence: { from: 13, fadeIn: 5 } },
         { id: 'throne_of_the_law', weight: 1, presence: { from: 13, fadeIn: 5 } },
         { id: 'principality_of_dawn', weight: 0.5, presence: { from: 15, fadeIn: 6 } },
+        // The wild layer: the shelf country's own beasts threaded among the
+        // wardens (RELATIONS makes zephyrid × galekin ground fight itself).
+        { id: 'cloud_grazer', weight: 2, presence: { to: 16, fadeOut: 7 } },
+        { id: 'mistwing_shrike', weight: 1.5, presence: { to: 19, fadeOut: 8 } },
+        { id: 'skyglass_lurker', weight: 1.2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'zephyrid_matron', weight: 0.5, presence: { from: 12, fadeIn: 5 } },
       ],
     },
     spawnerId: 'bone_altar', // never rolled (no 'spawners' objective up here)
@@ -3007,6 +3013,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'throne_of_the_law', weight: 1.5, presence: { from: 13, fadeIn: 5 } },
         { id: 'watcher_unblinking', weight: 1.5 },
         { id: 'principality_of_dawn', weight: 0.6, presence: { from: 15, fadeIn: 6 } },
+        // The wilds between the courts: bulls hold the spans, lurkers keep
+        // the frail rims, shrikes stoop from the glare.
+        { id: 'stormbrow_bull', weight: 1.5, presence: { from: 10, fadeIn: 5 } },
+        { id: 'mistwing_shrike', weight: 1.2, presence: { to: 19, fadeOut: 8 } },
+        { id: 'skyglass_lurker', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar', // never rolled

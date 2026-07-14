@@ -3104,6 +3104,68 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.55,
   },
+
+  // --- THE ZEPHYRID KIN (the high sky's beasts — monsters.ts block) ---------
+  /** The shrike: swept wings and a beak like a dropped dagger. */
+  mistwing_shrike: {
+    parts: [
+      { kind: 'featherWings', scale: 1.25, role: 'glow' },
+      { kind: 'torso', scale: 0.6 },
+      { kind: 'beak', scale: 0.9 },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.32, size: 0.14 } },
+      { kind: 'plume', x: -0.25, scale: 0.7 },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.7, params: { n: 2 } }],
+    shadowScale: 0.5,
+  },
+  /** The lurker: a crouched fan of crystal facets with too many still eyes —
+   *  indistinguishable from the shelf's aether crystals until it isn't. */
+  skyglass_lurker: {
+    parts: [
+      { kind: 'carapace', scale: 1.0, role: 'metal' },
+      { kind: 'spikes', scale: 0.95 },
+      { kind: 'gem', y: -0.1, scale: 0.55, role: 'glow' },
+      { kind: 'eyes', params: { n: 4, spread: 0.7, dist: 0.28, size: 0.09 } },
+      { kind: 'claws', scale: 0.85 },
+    ],
+    shadowScale: 0.6,
+  },
+  /** The bull: a stormcloud that grew shoulders and a grudge. */
+  stormbrow_bull: {
+    parts: [
+      { kind: 'blob', scale: 1.2 },
+      { kind: 'horns', scale: 1.1, role: 'metal' },
+      { kind: 'dorsalRidge', scale: 0.85 },
+      { kind: 'eyes', params: { n: 2, spread: 0.5, dist: 0.3, size: 0.13 } },
+      { kind: 'legs', scale: 0.9 },
+    ],
+    live: [{ kind: 'emberSparks', scale: 0.8 }],
+    shadowScale: 0.8,
+  },
+  /** The grazer: a soft drifting puff, all fleece and mild eyes. */
+  cloud_grazer: {
+    parts: [
+      { kind: 'blob', scale: 1.05 },
+      { kind: 'spots', scale: 0.8, alpha: 0.4 },
+      { kind: 'eyes', params: { n: 2, spread: 0.35, dist: 0.3, size: 0.12 } },
+      { kind: 'ears', scale: 0.7 },
+    ],
+    live: [{ kind: 'wisps', x: -0.2, scale: 0.9, params: { n: 2 } }],
+    shadowScale: 0.45,
+  },
+  /** The matron: robes of weather, a crook of hardened wind, the brood's
+   *  crown — the wild sky in a queen's shape. */
+  zephyrid_matron: {
+    parts: [
+      { kind: 'featherWings', scale: 1.1, role: 'glow' },
+      { kind: 'robe', scale: 0.95, role: 'cloth' },
+      { kind: 'staff', scale: 1.0, role: 'metal' },
+      { kind: 'crown', scale: 0.6, role: 'metal' },
+      { kind: 'eyes', params: { n: 2, spread: 0.4, dist: 0.3, size: 0.12 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.9, params: { n: 3 } }],
+    shadowScale: 0.6,
+  },
 };
 
 /** Default portrait per deployed-construct kind (ConstructDelivery.look

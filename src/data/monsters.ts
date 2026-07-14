@@ -6880,6 +6880,97 @@ export const MONSTERS: Record<string, MonsterDef> = {
       ],
     },
   },
+
+  // ==========================================================================
+  // THE ZEPHYRID KIN — the high sky's BEASTS (the shelf-and-spire country's
+  // wild layer; the drift already has its weather-scraps). Where the Host
+  // judges and the Galekin simply weather, the zephyrids HUNT: a food chain
+  // above the clouds — shrikes stoop on fingerlings (RELATIONS), lurkers
+  // wait crystal-still by the lips, and the matron shepherds it all with the
+  // Cirrus kata the player can loot back. Realm content: faction registered
+  // by the ascent package, contexts:['aetherial'].
+  // ==========================================================================
+
+  /** The shrike: a raking dive out of the glare and a wide bank to come
+   *  again — kill it between passes or duel its shadow all day. */
+  mistwing_shrike: {
+    id: 'mistwing_shrike', name: 'Mistwing Shrike',
+    color: '#c8dcee', shape: 'kite', radius: 10, material: 'ethereal', look: 'mistwing_shrike',
+    base: { life: 40, moveSpeed: 165, evasion: 55, mana: 30, manaRegen: 4 },
+    skills: ['squall_bite'], xp: 16, faction: 'zephyrid',
+    flier: true, levitates: true,
+    presence: { to: 19, fadeOut: 8 },
+    gemBias: ['movement'],
+    brain: { type: 'flanker' },
+  },
+
+  /** The lurker: a predator that learned what the aether crystals look like
+   *  and stands among them, still as weather — then the crook of wind lands
+   *  and something is REELED toward the lip it waits beside. The one kin
+   *  that walks: ground that remembers footfalls remembers its patience. */
+  skyglass_lurker: {
+    id: 'skyglass_lurker', name: 'Skyglass Lurker',
+    color: '#b8d0e8', shape: 'triangle', radius: 12, material: 'crystal', look: 'skyglass_lurker',
+    base: { life: 88, moveSpeed: 120, evasion: 35, mana: 60, manaRegen: 6 },
+    mods: [mod('coldRes', 'flat', 0.4)],
+    skills: ['skyhook', 'claw'], xp: 30, faction: 'zephyrid',
+    detection: 0.7,
+    presence: { from: 8, fadeIn: 4 },
+    gemBias: ['cold'],
+    brain: { type: 'assassin' },
+  },
+
+  /** The bull: a walking thunderhead with shoulders — the charge winds
+   *  tighter every discharge, and the storm pays out all at once when the
+   *  body gives. The kin's deliberate WALKER (the dominion doctrine): a
+   *  line that holds ground can be dropped WITH the ground. */
+  stormbrow_bull: {
+    id: 'stormbrow_bull', name: 'Stormbrow Bull',
+    color: '#9fb4d0', shape: 'trapezoid', radius: 16, material: 'stone', look: 'stormbrow_bull',
+    base: { life: 210, moveSpeed: 92, armor: 20, poise: 70, mana: 120, manaRegen: 8 },
+    mods: [mod('lightningRes', 'flat', 0.5)],
+    skills: ['static_discharge', 'claw'], xp: 52, faction: 'zephyrid',
+    deathBurst: { mode: 'implode', damageFrac: 0.6, coalesce: 0.7, damageType: 'lightning' },
+    presence: { from: 10, fadeIn: 5 },
+    gemBias: ['lightning', 'aoe'],
+    brain: { type: 'juggernaut' },
+  },
+
+  /** The grazer: a drifting puff that eats light and minds its business —
+   *  the shelf's LIFE, and the shrike's lunch. Bursts into a cold sigh
+   *  when broken. Floats (sky fauna never arm the melt; the shelves stay
+   *  the player's problem). */
+  cloud_grazer: {
+    id: 'cloud_grazer', name: 'Cloud Grazer',
+    color: '#e6eef8', shape: 'oval', radius: 11, material: 'ethereal', look: 'cloud_grazer',
+    base: { life: 34, moveSpeed: 105, mana: 10, manaRegen: 1 },
+    skills: ['talon_rake'], xp: 8, faction: 'zephyrid',
+    levitates: true,
+    deathBurst: { mode: 'implode', damageFrac: 0.15, coalesce: 0.5, damageType: 'cold' },
+    presence: { to: 16, fadeOut: 7 },
+    scaleVariance: [0.8, 1.25],
+    brain: { type: 'flee' },
+  },
+
+  /** The matron: the wild sky's shepherd-queen — geysers called down on a
+   *  word, strays hooked back onto the cloud (or off it), and her own body
+   *  condensing to cloud-stuff when the ground argues. Every art she casts
+   *  is lootable: the Cirrus kata comes down from whoever survives her. */
+  zephyrid_matron: {
+    id: 'zephyrid_matron', name: 'Zephyrid Matron',
+    color: '#cfe0f4', shape: 'star', radius: 15, material: 'ethereal', look: 'zephyrid_matron',
+    base: { life: 240, moveSpeed: 100, mana: 240, manaRegen: 10, energyShield: 50, evasion: 30 },
+    mods: [mod('coldRes', 'flat', 0.4), mod('lightningRes', 'flat', 0.3)],
+    skills: ['updraft_burst', 'skyhook', 'cirrus_veil'], xp: 96, faction: 'zephyrid',
+    presence: { from: 12, fadeIn: 5 },
+    gemBias: ['cold', 'aoe'],
+    brain: {
+      type: 'caster',
+      phases: [
+        { atLifeFrac: 0.5, mods: [mod('castSpeed', 'increased', 0.2)], announce: 'The high air shrieks!', onEnter: [{ do: 'summon', monster: 'mistwing_shrike', count: 2, ring: 120 }] },
+      ],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -6898,6 +6989,8 @@ const RELATIONS: Record<string, FactionStance> = {
   'goblin|undead': 'hostile',
   'gnoll|undead': 'hostile',
   'sylvan|undead': 'hostile',
+  // The high sky has a food chain: shrikes stoop on the weather-scraps.
+  'galekin|zephyrid': 'hostile',
   // Gnolls run with the warband — and burn the groves.
   'gnoll|goblin': 'ally',
   'gnoll|sylvan': 'hostile',

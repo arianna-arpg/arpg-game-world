@@ -81,6 +81,25 @@ const GALEKIN_FACTION: FactionSpec = {
   ],
 };
 
+/** THE ZEPHYRID KIN — the high sky's BEASTS (the shelf-and-spire country's
+ *  wild layer; the drift keeps its weather-scraps). A food chain above the
+ *  clouds: RELATIONS makes them and the Galekin tear into each other on
+ *  shared ground. Realm content like both its neighbors: contexts
+ *  ['aetherial'], no warlord, no surface generation. */
+const ZEPHYRID_FACTION: FactionSpec = {
+  id: 'zephyrid',
+  name: 'the Zephyrid Kin',
+  color: '#cfe0f4',
+  traits: { roaming: 0.5, aggression: 1.0, warlordHome: 'capital', contexts: ['aetherial'] },
+  roster: [
+    { id: 'cloud_grazer', weight: 4 },
+    { id: 'mistwing_shrike', weight: 3 },
+    { id: 'skyglass_lurker', weight: 2 },
+    { id: 'stormbrow_bull', weight: 1.5 },
+    { id: 'zephyrid_matron', weight: 0.8 },
+  ],
+};
+
 /** The launch shelves' reserved name pool ("<X> Crossing" — shelves alone
  *  wear 'Crossing'; the realm web's pools dropped it to keep the map honest). */
 const CROSSING_NAMES = ['Skyshoal', 'Cloudreach', 'Dawnfield', 'Empyrean', 'Heavenspan', 'Zenith', 'Aurelian', 'Vesper'];
@@ -160,7 +179,7 @@ export const ASCENT: ContentPackage = {
   defaultStartLevel: 10,
   defaultEnabled: true,
   world: { overlay: (ctx) => new AscentField(ctx, ASCENT_SURGE) },
-  factions: [SERAPHIC_FACTION, GALEKIN_FACTION],
+  factions: [SERAPHIC_FACTION, GALEKIN_FACTION, ZEPHYRID_FACTION],
   validate: (look) => [
     ...(look.faction('seraphic') ? [] : [`the 'seraphic' faction is unknown`]),
     // The shelf mints from the 'aether' tileset and the gate zone from
