@@ -140,6 +140,7 @@ const CRUSADE_SURGE: CrusadeSurge = {
 export const CRUSADE: ContentPackage = {
   id: 'crusade',
   label: 'Crusades',
+  color: '#d8b040',
   blurb: 'A faction plants a banner in the wilds and CRUSADES — warbands spread its influence zone by zone until a faction-city rises and its leader must be cut down.',
   cost: 130,
   // DISCOVERED in play (runs at defaults from level 12); the Vault unlock gates

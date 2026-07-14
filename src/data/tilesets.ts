@@ -3426,3 +3426,70 @@ export function pickTilesetForBiome(biome: string, rng: Rng): string | undefined
 export function biomesWithoutTileset(fieldBiomes: string[]): string[] {
   return fieldBiomes.filter(b => !(TILESETS_BY_BIOME[b]?.length));
 }
+
+// ---------------------------------------------------------------------------
+// BIOME LORE — one display title + one-line blurb per TILESETS entry.
+//
+// Colocated with the tileset table on purpose: a biome's PROSE lives next to
+// its data, so the website's biome showcase reads a real source-of-truth field
+// (never hard-coded on the page) and the export's QA can flag any TILESETS id
+// missing lore — the same "every id resolves" discipline the packages use.
+// The `title` is the human-readable name (the tileset itself only carries the
+// procedural nameFirst/nameSecond parts); the `blurb` is what the card's hover
+// reveals. Keep every key in sync with TILESETS — BIOME_LORE_GAPS() below is
+// the assertion, run by the web export and available to any boot check.
+// ---------------------------------------------------------------------------
+export interface BiomeLore { title: string; blurb: string; }
+
+export const BIOME_LORE: Record<string, BiomeLore> = {
+  deepwood:       { title: 'Deepwood',          blurb: 'Deep old forest, green over green — fungal rot working below, thorns finding purchase above, and elder treants waking where the wood runs deepest.' },
+  forest:         { title: 'Forest',            blurb: 'A true canopy: a near-sealed roof of crowns you move UNDER to see into, trails of beaten earth threading between the sun-wells where the light pools.' },
+  gloamwood:      { title: 'Gloamwood',         blurb: 'Fog is territory here. Roaming banks feed the things that hunt from within them — bait them into the open, or ride the same murk unseen.' },
+  taiga:          { title: 'Taiga',             blurb: 'Close, hushed conifer dark — deep drifts, frozen pools, and the firewood caches of travelers who never came back, the aurora breathing overhead.' },
+  tundra:         { title: 'Tundra',            blurb: 'A frozen expanse under a permanent floor of snow, where every storm deepens the drifts and the cover never fully melts away.' },
+  cinderlands:    { title: 'Cinderlands',       blurb: 'Scorched black flats where fire has already passed — ash, ember and the heat-shimmer of a land still cooling from the burn.' },
+  desert:         { title: 'Desert',            blurb: 'Rolling dunes under a swelter sun, genuine war-origin ground prowled by gnoll and wild patrons far from any scrap of shade.' },
+  jungle:         { title: 'Jungle',            blurb: 'Choked living thicket — walls of growth that block step, shot AND sight, cuttable throats plugged with brush and dens waiting behind them.' },
+  sunken_ruin:    { title: 'Sunken Ruins',      blurb: 'A drowned city that followed you down through a ruin-gate — flooded halls where something old still keeps to its rooms.' },
+  mire:           { title: 'The Mire',          blurb: 'A drowned graveland of standing swamp, poison bog and rotted timber — footing that pulls at you and water that hides its teeth.' },
+  wasteland:      { title: 'Wasteland',         blurb: "The demon rift's scorched fringe: lava flows over broken stone, the border where the world itself begins to burn." },
+  hell_steppes:   { title: 'Hell Steppes',      blurb: "The underworld's fortress plateau — impaled warnings staked between the towers, one switchback stair the only way down onto the steppe." },
+  caul:           { title: 'The Caul',          blurb: 'A hell-born warren of bruise-violet flesh — sacs, roots and umbilics glowing their own diegetic light while the living ground tries to take you back.' },
+  river_of_flame: { title: 'River of Flame',    blurb: 'A continuous river of fire winding past gibbet galleries, banner roads and pale pyres to the Hellforge waiting where the flow finally ends.' },
+  durance:        { title: 'The Durance',       blurb: 'The first fully indoor biome — a torture-hold of cold green light, instruments left mid-use, and gore underfoot that carries the whole story.' },
+  crypt:          { title: 'The Crypt',         blurb: 'A forsaken graveland of headstones, broken tombs and the risen that simply will not stay buried.' },
+  ossuary:        { title: 'The Ossuary',       blurb: 'A dark, matte bone-vault — pale mounds, shelf-rows and arches picked out by braziers and niche-candles down its long sightlines.' },
+  beach:          { title: 'Coastline',         blurb: 'A sun-bleached coast of sand and wading shallows, palms leaning over scattered wilds where the open sea meets the edge of the map.' },
+  meadow:         { title: 'Meadow',            blurb: 'A gentle grove breather — grass, scattered trees and low-threat wilds, a stretch where the world catches its breath.' },
+  peninsula:      { title: 'Peninsula',         blurb: 'A near-round isle ringed entirely by water — all shore, nowhere to fall back to but the sea itself.' },
+  cavern:         { title: 'Caverns',           blurb: 'The tight, rocky underground a cave mouth descends into — off the world graph, reached only ever by going down.' },
+  descent:        { title: 'The Descent',       blurb: "A boundless lightless abyss the Delver's mineshaft drops into — push back the dark, harvest Echoes, and resurface before the deep keeps you." },
+  grand_arena:    { title: 'Grand Arena',       blurb: 'A sand pit under open sky ringed with roaring crowd-rows and braziered rails — the colosseum where the ways in breach the very seats.' },
+  abyssal_rift:   { title: 'The Abyssal',       blurb: "A winding cave-gut of narrow ways over bottomless rents, everything lit violet by the Abyssal faction's own cold light." },
+  leyline_nexus:  { title: 'Leyline Nexus',     blurb: 'A place made of raw current — pyre, gale, rime and stone chained along the ley-lines that run through every face of it. The leyline IS the place.' },
+  hellion_rift:   { title: 'Hellion Rift',      blurb: 'A riftborn pit of molten cracks, brimstone shards and charred ground where something worse than demons tore its way through.' },
+  eldritch:       { title: 'The Eldritch',      blurb: 'A concealed, tentacular growth floating far off the charted frontier — overgrown wrongness native to the Eldritch, found only by those who wander too far.' },
+  deepsea:        { title: 'The Deep Sea',      blurb: 'Open ocean that drowns you — mostly deep water dotted with air-pockets and void trenches; reach the next breath before your own runs out.' },
+  highland:       { title: 'Highlands',         blurb: 'Windswept crags carved into a mountain-pass maze of corridors and chambers threaded between the standing rock.' },
+  marsh:          { title: 'Marsh',             blurb: 'Fetid wetland of boggy islets strung between sluggish water and sucking mire, every step a negotiation with the ground.' },
+  flesh:          { title: 'Flesh Warrens',     blurb: 'A writhing, pulsing-flesh warren — chambers that throb around you, sparse organic clutter, and an aberrant swarm that belongs to the walls.' },
+  crystal:        { title: 'Crystal Fields',    blurb: 'Prismatic shard-fields where the crystals themselves fire off random laser beams — a place that keeps you moving or gets you cut.' },
+  volcanic:       { title: 'Volcanic Caldera',  blurb: 'An erupting caldera whose vents periodically lob arcing lava-orbs that splatter down into spreading pools of fire.' },
+  mycelia:        { title: 'Mycelia',           blurb: 'A bioluminescent fungal warren — towering caps, puffing spore-pods and a glowing hyphal carpet where the slow Bloom makes its home.' },
+  grassland:      { title: 'Grasslands',        blurb: 'Wide-open windblown grass — no trees, no water, no void, just an exploration-leaning breadth that rewards running the field.' },
+  aether:         { title: 'The Aetherial',     blurb: "The Host's first sky-shelf — cloud ground that dissolves under your feet, the world far below waiting to catch you where you drop." },
+  aether_spires:  { title: 'Aetherial Spires',  blurb: 'The built courts among the clouds — solid stone that holds, though a fight carried onto a frail connecting span will still drop the span.' },
+  aether_drift:   { title: 'Aetherial Drift',   blurb: 'Drifting cloud-rafts riding the wind — gusts warn and then shove; read the rhythm or the sky simply lets you go, straight down.' },
+  aether_sanctum: { title: 'Aetherial Sanctum', blurb: 'The dense, unbroken lattice at the crossing’s end — wide causeways, no sky-holes, ground that finally holds. The waypoint home.' },
+};
+
+/** QA seam: TILESETS ids with no BIOME_LORE, and lore keys pointing at no
+ *  tileset. The web export fails loud on the first list; keep both empty. */
+export function BIOME_LORE_GAPS(): { missingLore: string[]; orphanLore: string[] } {
+  const ids = new Set(Object.keys(TILESETS));
+  const keys = new Set(Object.keys(BIOME_LORE));
+  return {
+    missingLore: [...ids].filter(id => !keys.has(id)).sort(),
+    orphanLore: [...keys].filter(k => !ids.has(k)).sort(),
+  };
+}

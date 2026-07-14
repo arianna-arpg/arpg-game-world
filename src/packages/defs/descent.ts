@@ -61,6 +61,7 @@ const DEPTHKIN_FACTION: FactionSpec = {
 export const DESCENT: ContentPackage = {
   id: 'descent',
   label: 'Descent',
+  color: '#7f9ad8',
   blurb: 'A Delver in the caves offers a mineshaft into a boundless, lightless abyss. Push back the encroaching dark, slaughter the Depthkin for Echoes, and resurface to spend before the deep takes you.',
   cost: 130,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING, surfacing

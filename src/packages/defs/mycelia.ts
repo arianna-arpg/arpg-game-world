@@ -79,6 +79,7 @@ const FUNGAL_FACTION: FactionSpec = {
 export const MYCELIA: ContentPackage = {
   id: 'mycelia',
   label: 'Mycelia',
+  color: '#8fd06f',
   blurb: 'Somewhere in the wilds, a fungal bloom has taken root — and it is hungry. It feeds on turmoil: let war, ritual, or rift fester near it and it flares, hurling spores down the road toward the noise, smothering that land in mushrooms and choking out whatever else stirred there. Cut down its hordes and it recoils, drawing its mass back into itself and slinking off to thicker ground — you can chase it node to node, but harry it long enough and it folds back into its quiet grotto to wait. Strike the Heartbloom at its core to collapse it outright. It is never truly killed, only pushed back, forever creeping toward the next disturbance.',
   cost: 140,
   unlock: {

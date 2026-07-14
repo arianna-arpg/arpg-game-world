@@ -67,6 +67,7 @@ const BRIGAND_SURGE: BrigandSurge = {
 export const BRIGANDS: ContentPackage = {
   id: 'brigands',
   label: 'Brigands',
+  color: '#9a6a3a',
   blurb: 'No throne, no banner, no ground to hold — only the road and what travels it. A band of thieves musters in the wilds and marches on some unlucky stretch of the map, then prowls it for marks. Stay clear and they let you pass; stray too close and the whole band turns to rob you. Give them distance and they lose interest soon enough — their trade is the purse, not the grave.',
   cost: 110,
   unlock: {

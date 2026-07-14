@@ -69,6 +69,7 @@ const BEAST_FACTION: FactionSpec = {
 export const MIGRATION: ContentPackage = {
   id: 'migration',
   label: 'Migration',
+  color: '#b08a4a',
   blurb: 'The plains live and breathe on their own. Herds of wild beasts gather on the open Fields and migrate across the world toward distant grasslands, a great directional tide drawn over the map. Any ground they cross fills with a constant flow of ambling beasts — placid until you strike one, when the adults turn to gore and the young scatter. Give them room, or thin the herd; either way the world rolls on without you.',
   cost: 120,
   // DISCOVERED in play (runs at defaults from level 1); the Vault unlock gates TUNING,

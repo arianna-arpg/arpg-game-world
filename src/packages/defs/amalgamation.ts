@@ -162,6 +162,7 @@ const AMALGAM_FACTION: FactionSpec = {
 export const AMALGAMATION: ContentPackage = {
   id: 'amalgamation',
   label: 'Amalgamation',
+  color: '#9ad0b0',
   blurb: 'A roving Necromancer hunts you down work: slay the undead it marks, return to graft a body part, and BUILD the boss — and its drops — that you will then slaughter.',
   cost: 140,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING, surfacing

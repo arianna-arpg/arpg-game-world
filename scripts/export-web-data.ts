@@ -83,6 +83,36 @@ function uniqSorted(xs: Array<string | undefined | null>): string[] {
   return Array.from(new Set(xs.filter((x): x is string => typeof x === 'string' && x.length > 0))).sort();
 }
 
+/** id → display name fallback when no authored title exists ('hell_steppes' →
+ *  'Hell Steppes', keeping connectives low: 'river_of_flame' → 'River of Flame'). */
+const LOWER_WORDS = new Set(['of', 'the', 'and', 'in', 'to', 'a', 'on']);
+function titleize(id: string): string {
+  return String(id).split(/[_\s]+/).map((w, i) =>
+    (i > 0 && LOWER_WORDS.has(w)) ? w : w.charAt(0).toUpperCase() + w.slice(1)
+  ).join(' ');
+}
+
+/** Star-point prefix (a class's startNode 'str_start') → the attribute it
+ *  anchors. The 27-class roster seats exactly three classes on each point, so
+ *  this is the honest, data-derived "role" badge — no hand-authored roles. */
+const ATTR_LABEL: Record<string, string> = {
+  str: 'Strength', prw: 'Prowess', for: 'Fortitude', dex: 'Dexterity',
+  fin: 'Finesse', cha: 'Charisma', int: 'Intelligence', wis: 'Wisdom',
+  wil: 'Willpower', vit: 'Vitality',
+};
+function classPrimary(c: Record<string, any>): string | null {
+  const node = String(c.startNode ?? c.start ?? '');
+  const m = /^([a-z]+)_start$/.exec(node);
+  if (m && ATTR_LABEL[m[1]]) return ATTR_LABEL[m[1]];
+  // fallback: the tallest attribute in the spread (vitality is the shared pool)
+  let best: string | null = null, bestV = -Infinity;
+  for (const [k, v] of Object.entries(c.attributes ?? {})) {
+    if (k === 'vitality' || typeof v !== 'number') continue;
+    if (v > bestV) { bestV = v; best = k; }
+  }
+  return best ? best.charAt(0).toUpperCase() + best.slice(1) : null;
+}
+
 function writeJson(file: string, data: unknown) {
   fs.mkdirSync(OUT, { recursive: true });
   const p = path.join(OUT, file);
@@ -140,6 +170,10 @@ function normClass(c: Record<string, any>) {
     id: c.id,
     name: c.name ?? c.id,
     description: c.description ?? '',
+    color: c.color ?? null,
+    // The star-point the class anchors, surfaced as its "role" badge on the site.
+    primary: classPrimary(c),
+    look: c.look ?? null,
     attributes: c.attributes ?? c.attrs ?? null,
     // A class's signature skills live in `bar` (its starting skill slots,
     // null = empty), not a `skills` field. Drop the empty slots.
@@ -147,6 +181,72 @@ function normClass(c: Record<string, any>) {
           : (Array.isArray(c.skills) ? c.skills : []),
     start: c.start ?? c.startNode ?? null,
     raw: c,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// biome normalizer — a tileset is a BIOME the frontier grows. We emit the
+// facts that drive the site's biome showcase: the accent that colours the
+// card, the authored title + blurb (BIOME_LORE), whether it's common frontier
+// terrain or a landmark set-piece, and the "living fabrics" (fog/creep/…) that
+// make each hover surface a DIFFERENT set of facts — the variety the showcase
+// is built on. No `raw`: tilesets carry huge pack tables the site never needs.
+// ---------------------------------------------------------------------------
+function normBiome(t: Record<string, any>, lore: Record<string, any>) {
+  const theme = t.theme && typeof t.theme === 'object' ? t.theme : {};
+  const l = (lore && lore[t.id]) || {};
+  const fabrics: string[] = [];
+  if (theme.fog) fabrics.push('living fog');
+  if (theme.creep) fabrics.push('creep');
+  if (theme.collapse) fabrics.push('collapsing ground');
+  if (theme.flux) fabrics.push('shifting ground');
+  if (theme.understory) fabrics.push('open sky');
+  if (t.boundless) fabrics.push('boundless');
+  const ambientFx = Array.isArray(theme.ambientFx)
+    ? uniqSorted(theme.ambientFx.map((f: any) => f && f.kind)) : [];
+  return {
+    id: t.id,
+    title: l.title || titleize(t.id),
+    blurb: l.blurb || '',
+    accent: (typeof theme.accent === 'string' && theme.accent) ? theme.accent : null,
+    biomeTag: t.biome ?? null,
+    // false = a landmark / realm set-piece reached through a specific event,
+    // not common terrain you roll into at a frontier portal.
+    frontier: t.frontier !== false,
+    variants: Array.isArray(t.variants) ? t.variants.length : 0,
+    objectives: Array.isArray(t.objectives) ? uniqSorted(t.objectives.map((o: any) => o && o.kind)) : [],
+    fabrics,
+    ambientFx,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// event normalizer — a ContentPackage is a world-event overlay. label/blurb/
+// color already live on the def (it's the same data the Vault + Expedition
+// screens read), so this is mostly a projection + a couple of derived facets
+// (its unlock line, whether it's an always-on substrate or a place, how many
+// factions/encounters it fields) that let each card's hover read differently.
+// ---------------------------------------------------------------------------
+function normEvent(p: Record<string, any>) {
+  const world = p.world && typeof p.world === 'object' ? p.world : {};
+  const kind = p.alwaysOn ? 'substrate' : p.pressureless ? 'place' : 'event';
+  return {
+    id: p.id,
+    name: p.label ?? p.id,
+    blurb: p.blurb ?? '',
+    color: (typeof p.color === 'string' && p.color) ? p.color : null,
+    kind,
+    alwaysOn: !!p.alwaysOn,
+    pressureless: !!p.pressureless,
+    defaultEnabled: !!p.defaultEnabled,
+    unlock: p.unlock?.label ?? null,
+    modifiers: Array.isArray(p.modifiers)
+      ? p.modifiers.map((m: any) => ({ label: m.label, kind: m.kind, min: m.min, max: m.max })) : [],
+    factions: Array.isArray(p.factions) ? p.factions.map((f: any) => f?.name ?? f?.id).filter(Boolean) : [],
+    encounters: Array.isArray(p.encounters) ? p.encounters.length : 0,
+    holdfasts: Array.isArray(p.holdfasts) ? p.holdfasts.length : 0,
+    dimensions: Array.isArray(world.dimensions) ? world.dimensions : [],
+    tiers: Array.isArray(p.tiers) ? p.tiers.length : 0,
   };
 }
 
@@ -224,6 +324,9 @@ async function main() {
   const classesMod  = await load('src/data/classes.ts');
   const uniquesMod  = await load('src/data/uniques.ts');
   const basesMod    = await load('src/data/itembases.ts');
+  const tilesetsMod = await load('src/data/tilesets.ts');   // TILESETS + BIOME_LORE
+  const packagesMod = await load('src/packages/registry.ts'); // PACKAGES (world-events)
+  const vocationsMod = await load('src/data/vocations.ts');  // VOCATIONS (count only)
   const itemsFmt    = await load('src/engine/items.ts');   // formatModLine / formatStatValue / statLabel
   // status.ts registers the generated apply_/damageVs_/minionApply_<status>
   // stat families into the shared STAT_DEFS at load — import it (side effect
@@ -243,6 +346,21 @@ async function main() {
   // ---- classes -----------------------------------------------------------
   const classes = toList(pick(classesMod, ['CLASSES', 'classes'], 'classes'), 'CLASSES')
     .map(normClass);
+
+  // ---- biomes (tilesets the frontier grows) + their lore -----------------
+  const biomeLore = (tilesetsMod as any).BIOME_LORE ?? {};
+  const biomes = toList(pick(tilesetsMod, ['TILESETS', 'tilesets'], 'tilesets'), 'TILESETS')
+    .map((t) => normBiome(t, biomeLore))
+    .sort((a, b) => a.title.localeCompare(b.title));
+
+  // ---- world-events (content packages) -----------------------------------
+  const events = toList(pick(packagesMod, ['PACKAGES', 'packages'], 'packages'), 'PACKAGES')
+    .map(normEvent);
+  const vocationCount = Object.keys(
+    (pick(vocationsMod, ['VOCATIONS', 'vocations'], 'vocations') as Record<string, any>) ?? {}).length;
+  // base factions (packages graft more at runtime) — for the "N factions war
+  // over ground" line, read off the same monsters module already loaded.
+  const factionCount = Object.keys(((monstersMod as any).FACTIONS ?? {}) as Record<string, any>).length;
 
   // ---- passives (nodes + adjacency + per-class starts) -------------------
   const nodeRec = pick(passivesMod, ['PASSIVE_NODES', 'NODES', 'passiveNodes'], 'passives') as Record<string, any> | undefined;
@@ -309,6 +427,10 @@ async function main() {
       classes: classes.length,
       passives: passives.nodes.length,
       uniques: uniques.length,
+      biomes: biomes.length,
+      events: events.length,
+      vocations: vocationCount,
+      factions: factionCount,
     },
     facets: {
       skillTags: uniqSorted([...skills, ...supports].flatMap((s) => s.tags)),
@@ -330,11 +452,37 @@ async function main() {
   writeJson('classes.json', classes);
   writeJson('passives.json', passives);
   writeJson('uniques.json', uniques);
+  writeJson('biomes.json', biomes);
+  writeJson('events.json', events);
   writeJson('meta.json', meta);
 
   log('counts:', JSON.stringify(meta.counts));
+
+  // ---- QA pass -----------------------------------------------------------
+  // The export doubles as a content check: every biome card on the site is
+  // driven by an accent colour + an authored blurb, so a biome missing either
+  // would render a colourless / empty card. Flag them here rather than let a
+  // silent gap ship. (Lore key drift is caught by BIOME_LORE_GAPS at source.)
+  const gaps = typeof (tilesetsMod as any).BIOME_LORE_GAPS === 'function'
+    ? (tilesetsMod as any).BIOME_LORE_GAPS() as { missingLore: string[]; orphanLore: string[] }
+    : { missingLore: [], orphanLore: [] };
+  const noAccent = biomes.filter((b) => !b.accent).map((b) => b.id);
+  const noBlurb  = biomes.filter((b) => !b.blurb).map((b) => b.id);
+  const noColorEvents = events.filter((e) => !e.color).map((e) => e.id);
+  let qaFail = false;
+  if (gaps.missingLore.length) { qaFail = true; log(`QA: ${gaps.missingLore.length} tileset(s) with NO biome lore:`, gaps.missingLore.join(', ')); }
+  if (gaps.orphanLore.length)  { log(`QA: ${gaps.orphanLore.length} biome-lore key(s) point at no tileset:`, gaps.orphanLore.join(', ')); }
+  if (noAccent.length) { qaFail = true; log(`QA: ${noAccent.length} biome(s) with NO accent colour (card indicator):`, noAccent.join(', ')); }
+  if (noBlurb.length)  { qaFail = true; log(`QA: ${noBlurb.length} biome(s) with NO blurb:`, noBlurb.join(', ')); }
+  if (noColorEvents.length) { log(`QA: ${noColorEvents.length} event(s) with no accent colour (card falls back to neutral):`, noColorEvents.join(', ')); }
+  if (!qaFail) log('QA: biomes all have accent + blurb, lore keys in sync. OK');
+
   if (!skills.length && !monsters.length) {
     log('ERROR: exported 0 skills and 0 monsters — check the import names above.');
+    process.exit(1);
+  }
+  if (qaFail && process.env.WEB_DATA_STRICT) {
+    log('ERROR: QA gaps above and WEB_DATA_STRICT set — failing.');
     process.exit(1);
   }
   log('done.');

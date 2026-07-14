@@ -82,6 +82,7 @@ for (const d of HOLDFAST_DEFS) {
 export const HOLDFAST: ContentPackage = {
   id: 'holdfast',
   label: 'Holdfast',
+  color: '#c8a04a',
   blurb: 'The wilds are not empty. Press into uncharted ground and you may find a fortified gate barring a hidden side-pocket — raised by guardians who hold the road and ask a price in Mortal Essence. Pay, and the gate opens onto rich ground: fatter spoils, and always something under the camp worth the digging. Cut the wardens down instead and the gate will likely stay shut, the pocket lost. Pay, fight, or walk on; the toll is yours to weigh.',
   cost: 110,
   // DISCOVERED in play (runs at defaults from a low level); the Vault unlock gates TUNING.

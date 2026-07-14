@@ -108,6 +108,7 @@ registerKillHandler({
 export const HAUNTING: ContentPackage = {
   id: 'haunting',
   label: 'The Haunting',
+  color: '#b8c8e8',
   blurb: 'Grief does not bury well. By night it settles on some stretch of charted ground and holds it — the air runs cold, grave-lights drift the field, and the restless stream in around a standing anchor of sorrow. Leave it be and the dawn unbinds it, giving nothing. Or break the anchor — and understand that breaking it does not end the grief. It gives the grief a THROAT. The Wailing One walks until someone faces it — and if the light takes it first, watch the spirits thin and gutter as day nears, then remember this: the light erases nothing. What you cracked stays cracked, what you wounded stays wounded, and the grief returns to some other ground the next nightfall, carrying every blow.',
   cost: 120,
   unlock: {

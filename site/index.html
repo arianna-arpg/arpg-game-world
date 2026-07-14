@@ -92,9 +92,24 @@
   .eyebrow{display:inline-flex;align-items:center;gap:10px;font-family:'Space Grotesk',sans-serif;font-size:12.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--teal-hi);
     padding:7px 16px;border:1px solid var(--line);border-radius:999px;background:rgba(79,214,196,.06)}
   .eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--ember);box-shadow:0 0 12px var(--ember)}
-  .hero h1{font-family:'Cinzel',serif;font-weight:700;font-size:clamp(52px,10vw,116px);letter-spacing:.02em;margin:26px 0 4px;
-    background:linear-gradient(180deg,#ffffff 8%, #cfd6e6 52%, #7f8aa6 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
-    text-shadow:0 0 60px rgba(79,214,196,.18)}
+  /* THE LOCKUP — wordmark over the insignia, and the whole card BREATHES
+     (inhale to 44%, longer exhale). Thematic, and it pulls the eye to the
+     name itself. user-select:none on the card: the title is ephemeral — you
+     can't drag-copy it, only read it. */
+  .hero-lockup{position:relative;display:inline-block;margin:26px auto 4px;-webkit-user-select:none;user-select:none}
+  .hero .eyebrow,.hero .tagline{-webkit-user-select:none;user-select:none}
+  .hero-lockup::before{content:"";position:absolute;inset:-34% -18%;pointer-events:none;
+    background:radial-gradient(closest-side,rgba(79,214,196,.17),rgba(169,139,255,.08) 52%,transparent 76%);
+    animation:hw-glow 7.2s ease-in-out infinite}
+  .hero-mark{position:absolute;left:50%;top:50%;width:clamp(300px,44vw,560px);height:auto;pointer-events:none;
+    transform:translate(-50%,-52%);opacity:.15;animation:hw-mark 7.2s ease-in-out infinite}
+  .hero h1{position:relative;z-index:1;font-family:'Cinzel',serif;font-weight:700;font-size:clamp(56px,15vw,120px);letter-spacing:.02em;margin:0;
+    background:linear-gradient(180deg,#ffffff 8%, #cfd6e6 52%, #8b96b4 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+    text-shadow:0 0 60px rgba(79,214,196,.22);animation:hw-breathe 7.2s ease-in-out infinite}
+  @keyframes hw-breathe{0%,100%{transform:scale(1)}44%{transform:scale(1.024)}}
+  @keyframes hw-mark{0%,100%{transform:translate(-50%,-52%) scale(1);opacity:.11}44%{transform:translate(-50%,-52%) scale(1.05);opacity:.21}}
+  @keyframes hw-glow{0%,100%{opacity:.45}44%{opacity:1}}
+  @media (prefers-reduced-motion:reduce){.hero h1,.hero-mark,.hero-lockup::before{animation:none}}
   .hero .tagline{font-family:'Space Grotesk',sans-serif;font-size:clamp(17px,2.4vw,23px);font-weight:500;color:var(--ink);letter-spacing:.01em}
   .hero .tagline b{background:linear-gradient(90deg,var(--teal),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent;font-weight:600}
   .hero .pitch{max-width:640px;margin:22px auto 0;color:var(--ink-dim);font-size:17.5px}
@@ -144,17 +159,8 @@
 
   /* (modifier-pipeline / systems-grid / architecture / tooling styles moved to the Systems page) */
 
-  /* ---------- classes ---------- */
-  .cls-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-  @media(max-width:900px){.cls-grid{grid-template-columns:repeat(2,1fr)}}
-  @media(max-width:560px){.cls-grid{grid-template-columns:1fr}}
-  .cls{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:22px;position:relative;overflow:hidden;transition:transform .2s,border-color .2s}
-  .cls:hover{transform:translateY(-3px);border-color:color-mix(in srgb,var(--accent) 45%, var(--line))}
-  .cls::after{content:"";position:absolute;inset:0;background:radial-gradient(120px 80px at 100% 0%, color-mix(in srgb,var(--accent) 20%, transparent), transparent 70%);opacity:.55;pointer-events:none}
-  .cls .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;position:relative;z-index:1}
-  .cls .nm{font-family:'Cinzel',serif;font-weight:600;font-size:19px}
-  .cls .role{font-family:'Space Grotesk',sans-serif;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 34%, transparent);padding:3px 8px;border-radius:999px;background:color-mix(in srgb,var(--accent) 12%, transparent)}
-  .cls p{color:var(--ink-dim);font-size:14px;position:relative;z-index:1}
+  /* (the classes / biomes / events rosters are rendered as data-driven decks
+     by assets/decks.js, which injects its own scoped .hwdk* styles) */
 
   /* ---------- get it ---------- */
   .get{display:grid;grid-template-columns:1fr 1fr;gap:20px}
@@ -191,20 +197,7 @@
   .foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;color:var(--ink-faint);font-size:13.5px}
   .foot-bottom .stack{font-family:'Space Grotesk',monospace}
 
-  /* ---------- player sections: biomes / events / living world / builds ---------- */
-  .tag-cloud{display:flex;flex-wrap:wrap;gap:10px}
-  .tchip{font-family:var(--font-head);font-size:13.5px;color:var(--ink-dim);border:1px solid var(--line);background:rgba(255,255,255,.02);padding:8px 14px;border-radius:999px;transition:color .2s,border-color .2s,transform .2s;white-space:nowrap}
-  .tchip:hover{color:var(--ink);border-color:var(--line-2);transform:translateY(-1px)}
-  .tchip.hot{color:var(--ember-hi);border-color:rgba(255,138,76,.3)}
-  .tchip.cold{color:var(--teal-hi);border-color:rgba(79,214,196,.25)}
-  .tchip.deep{color:var(--violet);border-color:rgba(169,139,255,.3)}
-  .tchip .sub{color:var(--ink-faint);font-size:11px;margin-left:5px}
-  .grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:14px}
-  .ecard{background:var(--panel);border:1px solid var(--line);border-radius:var(--r-sm);padding:16px 18px;transition:border-color .2s,transform .2s}
-  .ecard:hover{border-color:var(--line-2);transform:translateY(-2px)}
-  .ecard h4{font-family:var(--font-head);font-size:15px;margin-bottom:6px;display:flex;align-items:center;gap:8px}
-  .ecard h4 .d{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
-  .ecard p{color:var(--ink-dim);font-size:13px;line-height:1.55}
+  /* ---------- player sections: living world / builds ---------- */
   .living-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(238px,1fr));gap:16px}
   .lcard{background:linear-gradient(180deg,var(--panel),var(--bg-2));border:1px solid var(--line);border-radius:var(--r-sm);padding:22px}
   .lcard .ic{width:40px;height:40px;border-radius:10px;display:grid;place-items:center;margin-bottom:14px;background:rgba(255,255,255,.03);border:1px solid var(--line)}
@@ -247,7 +240,22 @@
 <section class="hero" data-nav="Top">
   <div class="wrap">
     <span class="eyebrow"><span class="dot"></span> Top-down action RPG · In development</span>
-    <h1 class="display">Hollow Wake</h1>
+    <!-- THE LOCKUP: the insignia (same mark as the nav + footer) hides behind
+         the wordmark and the whole card breathes — hollow core, three points,
+         the same three colours the backdrop's flickers wear. Deliberately
+         unselectable: the name is an impression, not a string to copy. -->
+    <div class="hero-lockup">
+      <svg class="hero-mark" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <circle cx="16" cy="16" r="12" stroke="url(#hwHeroGrad)" stroke-width=".2" opacity=".8"/>
+        <path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#hwHeroGrad)" stroke-width=".16" opacity=".55"/>
+        <circle cx="16" cy="16" r="4.4" stroke="url(#hwHeroGrad)" stroke-width=".24"/>
+        <circle cx="16" cy="4" r="2" fill="#4fd6c4" opacity=".16"/><circle cx="16" cy="4" r=".8" fill="#4fd6c4"/>
+        <circle cx="26.4" cy="22" r="2" fill="#a98bff" opacity=".16"/><circle cx="26.4" cy="22" r=".8" fill="#a98bff"/>
+        <circle cx="5.6" cy="22" r="2" fill="#ff8a4c" opacity=".16"/><circle cx="5.6" cy="22" r=".8" fill="#ff8a4c"/>
+        <defs><linearGradient id="hwHeroGrad" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs>
+      </svg>
+      <h1 class="display">Hollow Wake</h1>
+    </div>
     <p class="tagline">A world that keeps <b>generating itself.</b></p>
     <p class="pitch">A top-down action RPG about pushing into an endless, self-minting frontier — dozens of biomes, world-events that erupt on their own clocks, factions warring over ground you don't own, and a build made from the skills you find. Descend, explore, get strong. Then try to bring it back alive.</p>
     <div class="cta-row">
@@ -261,7 +269,7 @@
       </a>
     </div>
     <div class="hero-meta">
-      <span><b>v0.2.1</b></span><span class="sep"></span>
+      <span><b data-meta-version>v0.2.1</b></span><span class="sep"></span>
       <span>Windows</span><span class="sep"></span>
       <span>Linux</span><span class="sep"></span>
       <span>Steam Deck</span><span class="sep"></span>
@@ -274,14 +282,14 @@
 <div class="stats" id="overview">
   <div class="wrap">
     <div class="stat-grid" id="statgrid">
-      <div class="stat"><div class="num" data-key="skills" data-fallback="500+">500+</div><div class="lbl">Skills</div></div>
-      <div class="stat"><div class="num" data-key="supports" data-fallback="300+">300+</div><div class="lbl">Supports</div></div>
-      <div class="stat"><div class="num" data-key="monsters" data-fallback="300+">300+</div><div class="lbl">Monsters</div></div>
-      <div class="stat"><div class="num" data-key="passives" data-fallback="450+">450+</div><div class="lbl">Passive nodes</div></div>
-      <div class="stat"><div class="num" data-key="classes" data-exact="1" data-fallback="15">15</div><div class="lbl">Classes</div></div>
+      <div class="stat"><div class="num" data-key="skills" data-fallback="350+">350+</div><div class="lbl">Skills</div></div>
+      <div class="stat"><div class="num" data-key="supports" data-fallback="200+">200+</div><div class="lbl">Supports</div></div>
+      <div class="stat"><div class="num" data-key="monsters" data-fallback="250+">250+</div><div class="lbl">Monsters</div></div>
+      <div class="stat"><div class="num" data-key="passives" data-fallback="250+">250+</div><div class="lbl">Passive nodes</div></div>
+      <div class="stat"><div class="num" data-key="classes" data-fallback="20+">20+</div><div class="lbl">Classes</div></div>
       <div class="stat"><div class="num">&infin;</div><div class="lbl">Frontier</div></div>
     </div>
-    <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--ink-faint)">Scope at a glance, rounded — the exact, current figures live in the <a href="database/" style="color:var(--teal)">Database</a>, generated from the game's own data.</p>
+    <p style="text-align:center;margin-top:20px;font-size:13px;color:var(--ink-faint)">Scope at a glance, floored hard on purpose — the + always means there's plenty more. The exact, current figures live in the <a href="database/" style="color:var(--teal)">Database</a>, generated from the game's own data.</p>
   </div>
 </div>
 
@@ -321,35 +329,10 @@
     <div class="sec-head reveal">
       <div class="kicker">The lay of the land</div>
       <h2>Dozens of lands, one growing frontier</h2>
-      <p>The world is stitched from a deep roster of biomes — verdant to infernal — each with its own terrain, set-pieces, and monster ecology that shifts by depth. Push the frontier and what you meet re-weights by where you are.</p>
+      <p>The world is stitched from a deep roster of biomes — verdant to infernal — each with its own terrain, set-pieces, and monster ecology that shifts by depth. Here's a handful; shuffle for more, and hover any card for the full read.</p>
     </div>
-    <div class="tag-cloud reveal">
-      <span class="tchip">Deepwood</span>
-      <span class="tchip">Forest</span>
-      <span class="tchip">Taiga</span>
-      <span class="tchip cold">Tundra</span>
-      <span class="tchip hot">Cinderlands</span>
-      <span class="tchip hot">Desert</span>
-      <span class="tchip">Jungle</span>
-      <span class="tchip">Mire</span>
-      <span class="tchip">Wasteland</span>
-      <span class="tchip">Highland</span>
-      <span class="tchip">Marsh</span>
-      <span class="tchip">Meadow</span>
-      <span class="tchip cold">Crystal</span>
-      <span class="tchip hot">Volcanic</span>
-      <span class="tchip cold">Deepsea</span>
-      <span class="tchip hot">Hell Steppes</span>
-      <span class="tchip hot">River of Flame</span>
-      <span class="tchip deep">The Durance</span>
-      <span class="tchip deep">Flesh Warrens</span>
-      <span class="tchip deep">The Ossuary</span>
-      <span class="tchip deep">The Descent</span>
-      <span class="tchip">Grand Arena</span>
-      <span class="tchip deep">Leyline Nexus</span>
-      <span class="tchip deep">Mycelia</span>
-    </div>
-    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">Some — the Ossuary, the Grand Arena, the rifts — are landmark set-pieces reached through specific events, not common terrain you roll into.</p>
+    <div class="reveal" data-deck="biomes" data-count="5" data-min="200" data-shuffle></div>
+    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">A card marked <b style="color:var(--ink-dim)">Landmark</b> — the Ossuary, the Grand Arena, the rifts — is a set-piece reached through a specific event, not common terrain you roll into.</p>
   </div>
 </section>
 
@@ -358,24 +341,11 @@
   <div class="wrap">
     <div class="sec-head reveal">
       <div class="kicker">The world runs without you</div>
-      <h2>Twenty world-events, each its own mini-campaign</h2>
-      <p>Optional overlays erupt across the map on their own clocks — war-hosts, plagues, rifts, hunts, invasions. Chase them, dodge them, or get caught inside. A few of the twenty:</p>
+      <h2>World-events, each its own mini-campaign</h2>
+      <p>Optional overlays erupt across the map on their own clocks — war-hosts, plagues, rifts, hunts, invasions. Chase them, dodge them, or get caught inside. Shuffle the deck, and hover a card for what wakes it and what it fields.</p>
     </div>
-    <div class="grid-cards reveal">
-      <div class="ecard"><h4><span class="d" style="background:var(--crimson)"></span>Warbands</h4><p>Roving war-hosts marshal behind crowned champions and march the frontier looking for a fight.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--gold)"></span>The Iron Crusade</h4><p>A faction plants a banner and crusades zone by zone until a faction-city rises — and its leader must fall.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--ember)"></span>Demon Invasion</h4><p>A rift-born host seizes a coordinate, raises a growing Demon Storm of meteors, and festers toward a portal to the Balor's realm.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--green)"></span>Contagion</h4><p>An invisible plague creeps zone by zone from a hidden Patient Zero. Clearing infected ground does nothing — you have to trace the pulse to its heart.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--violet)"></span>Deadwake</h4><p>Your own killing feeds a hidden tide of the dead. When it crests, a travelling undead mass rolls the map — and two tides fuse into a wandering necropolis.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--steel)"></span>The Hunt</h4><p>Footprints lead to a great beast. Bloody it and it flees across zones, wounds and all, until you finally run it down.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--teal)"></span>The Descent</h4><p>A Delver offers a mineshaft into a boundless lightless abyss. Push back the dark, harvest Echoes, and resurface before the deep takes you.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--violet)"></span>The Abyssal</h4><p>A volatile rift you trip by running over it. A fissure crawls as you chase it against a nested timer, diverting from zone to zone.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--crimson)"></span>Amalgamation</h4><p>A roving Necromancer sends you to harvest body parts and <em>build</em> the boss — and its drops — that you'll then have to slay.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--steel)"></span>The Haunting</h4><p>By night, grief settles on charted ground. Break its anchor and it grows a throat — the Wailing One walks.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--ember)"></span>Vendetta</h4><p>Cull one people too hard and they post a bounty. Hunter squads spring from the roads, the price rising the longer you dodge. Quitting is not an escape.</p></div>
-      <div class="ecard"><h4><span class="d" style="background:var(--gold)"></span>The Pit</h4><p>Break the cellar floor into an endless-wave arena that scales to whoever dares it — the Pit Lord every fifth wave.</p></div>
-    </div>
-    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">…and more: Breach, Conclave, the Wild Herds, Brigands, Holdfast, Mycelia, Storm Fronts, and faction politics. Twenty in all — each a self-contained package layered onto the world.</p>
+    <div class="reveal" data-deck="events" data-count="8" data-min="244" data-shuffle></div>
+    <p style="color:var(--ink-faint);font-size:13px;margin-top:16px">Each is a self-contained package layered onto the world — the mix you meet is tuned per run from the ones you've unlocked.</p>
   </div>
 </section>
 
@@ -385,7 +355,7 @@
     <div class="sec-head reveal">
       <div class="kicker">A breathing world</div>
       <h2>Factions fight over ground you don't own</h2>
-      <p>Territory is a living field. Ten factions gain and lose ground based on which of their monsters are alive, and go to war with each other — a zone you knew as undead can flip to goblin colours while you're away. The clock and the weather change who's out there.</p>
+      <p>Territory is a living field. <span data-count="factions">10+</span> factions gain and lose ground based on which of their monsters are alive, and go to war with each other — a zone you knew as undead can flip to goblin colours while you're away. The clock and the weather change who's out there.</p>
     </div>
     <div class="living-grid">
       <div class="lcard reveal">
@@ -450,12 +420,12 @@
     </div>
     <div class="build-cols">
       <div class="build-facts reveal">
-        <div class="bfact"><span class="n">15</span><span class="t"><b>classes</b>, each a starting kit of attributes and signature skills — never a cage. Specialize into one of <b>15 vocations</b>, from the Warbringer to the Stormweaver.</span></div>
-        <div class="bfact"><span class="n">450+</span><span class="t">a deep <b>passive tree</b> — keystones, notables, and raw attributes placed on the graph itself — all plannable in the <a href="tree/" style="color:var(--teal)">build tool</a>.</span></div>
+        <div class="bfact"><span class="n" data-count="classes">20+</span><span class="t"><b>classes</b>, each a starting kit of attributes and signature skills — never a cage. Specialize into one of <b data-count="vocations" data-count-exact>15</b> vocations, from the Warbringer to the Stormweaver.</span></div>
+        <div class="bfact"><span class="n" data-count="passives">250+</span><span class="t">a deep <b>passive tree</b> — keystones, notables, and raw attributes placed on the graph itself — all plannable in the <a href="tree/" style="color:var(--teal)">build tool</a>.</span></div>
         <div class="bfact"><span class="n" style="font-size:26px">◆</span><span class="t">a growing chase layer of named <b>uniques</b> and socketable <b>Vestiges</b> that spell runic Words — the drop that turns a skill into a whole archetype.</span></div>
       </div>
       <div class="reveal">
-        <div class="showhead"><h3>The rack</h3><a href="database/">Browse all 500+ in the Database →</a></div>
+        <div class="showhead"><h3>The rack</h3><a href="database/">Browse all <span data-count="skills">350+</span> in the Database →</a></div>
         <div data-showcase></div>
       </div>
     </div>
@@ -467,26 +437,10 @@
   <div class="wrap">
     <div class="sec-head center reveal">
       <div class="kicker">The roster</div>
-      <h2>Fifteen ways to begin</h2>
-      <p>Pick a starting kit — then let the loot decide who you become. Every class pulls from the same shared skill and passive pools.</p>
+      <h2>Pick where you begin</h2>
+      <p>Every class is just a starting kit — a spread across the ten attributes and three signature skills — never a cage. The loot decides who you actually become. Shuffle for another cut of the roster; hover a card for its kit.</p>
     </div>
-    <div class="cls-grid">
-      <div class="cls reveal" style="--accent:var(--steel)"><div class="top"><span class="nm">Warrior</span><span class="role">Melee</span></div><p>A disciplined front-line fighter. Heavy blows, heavier armor, and a war cry that turns the tide.</p></div>
-      <div class="cls reveal" style="--accent:var(--teal)"><div class="top"><span class="nm">Magician</span><span class="role">Caster</span></div><p>A mystic mage that flings forth the destructive elemental powers of fire, frost and storm.</p></div>
-      <div class="cls reveal" style="--accent:var(--violet)"><div class="top"><span class="nm">Rogue</span><span class="role">Stealth</span></div><p>A renegade rogue that dispatches its enemies with no one around being any the wiser.</p></div>
-      <div class="cls reveal" style="--accent:var(--crimson)"><div class="top"><span class="nm">Berserker</span><span class="role">Fury</span></div><p>Trades safety for speed and fury. Heavy strikes stack into a whirlwind of carnage — and leech life back.</p></div>
-      <div class="cls reveal" style="--accent:var(--teal)"><div class="top"><span class="nm">Sorcerer</span><span class="role">Caster</span></div><p>A scholar of the destructive elements that has mastered the way of decimating clusters of enemies at once.</p></div>
-      <div class="cls reveal" style="--accent:var(--green)"><div class="top"><span class="nm">Ranger</span><span class="role">Ranged</span></div><p>Death from afar. Arrows that pierce ranks, knives that fan across the field.</p></div>
-      <div class="cls reveal" style="--accent:var(--gold)"><div class="top"><span class="nm">Guardian</span><span class="role">Tank</span></div><p>A bulky defender of the front-lines, hard to ignore and even harder to put down.</p></div>
-      <div class="cls reveal" style="--accent:var(--violet)"><div class="top"><span class="nm">Summoner</span><span class="role">Minions</span></div><p>Commands the dead and the elemental. Your minions run on the same skills monsters do.</p></div>
-      <div class="cls reveal" style="--accent:var(--teal)"><div class="top"><span class="nm">Swashbuckler</span><span class="role">Duelist</span></div><p>A duelist who is never where the blow lands. Dashes through enemy lines, blades first.</p></div>
-      <div class="cls reveal" style="--accent:var(--steel)"><div class="top"><span class="nm">Juggernaut</span><span class="role">Tank</span></div><p>It hits and it takes hits. And it does not stop.</p></div>
-      <div class="cls reveal" style="--accent:var(--ember)"><div class="top"><span class="nm">Pyromancer</span><span class="role">Fire</span></div><p>Fueled by explosions and fire. Burns it all — with fire.</p></div>
-      <div class="cls reveal" style="--accent:var(--violet)"><div class="top"><span class="nm">Assassin</span><span class="role">Stealth</span></div><p>Bleeds their enemies dry before moving in for the kill, all the while being unseen.</p></div>
-      <div class="cls reveal" style="--accent:var(--green)"><div class="top"><span class="nm">Necromancer</span><span class="role">Minions</span></div><p>Death is a resource. Raise what falls, curse what stands, and exhale a ring of venom.</p></div>
-      <div class="cls reveal" style="--accent:var(--gold)"><div class="top"><span class="nm">Cleric</span><span class="role">Support</span></div><p>The line holds because someone holds it together. Mends the wounded, sanctifies the ground.</p></div>
-      <div class="cls reveal" style="--accent:var(--green)"><div class="top"><span class="nm">Tamer</span><span class="role">Beastmaster</span></div><p>A quiet hand and a steady gaze. Slips past the wild unseen, claims a beast with held focus.</p></div>
-    </div>
+    <div class="reveal" data-deck="classes" data-count="9" data-min="300" data-shuffle></div>
   </div>
 </section>
 
@@ -588,7 +542,7 @@ npm run <span class="g">build</span></pre>
     <div class="foot-top">
       <div>
         <div class="foot-brand">
-          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="13" stroke="url(#g2)" stroke-width="1.5"/><circle cx="16" cy="16" r="4.4" fill="url(#g2)"/><defs><linearGradient id="g2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs></svg>
+          <svg width="24" height="24" viewBox="0 0 32 32" fill="none" aria-hidden="true"><circle cx="16" cy="16" r="12" stroke="url(#g2)" stroke-width="1.4" opacity=".9"/><path d="M16 11.6V6.2M19.8 18.2l4.7 2.7M12.2 18.2l-4.7 2.7" stroke="url(#g2)" stroke-width="1.1" opacity=".55"/><circle cx="16" cy="16" r="4.4" stroke="url(#g2)" stroke-width="1.5"/><circle cx="16" cy="4" r="2.2" fill="#4fd6c4"/><circle cx="26.4" cy="22" r="2.2" fill="#a98bff"/><circle cx="5.6" cy="22" r="2.2" fill="#ff8a4c"/><defs><linearGradient id="g2" x1="0" y1="0" x2="32" y2="32"><stop stop-color="#7ff0e1"/><stop offset="1" stop-color="#a98bff"/></linearGradient></defs></svg>
           HOLLOW WAKE
         </div>
         <p style="color:var(--ink-faint);font-size:14px;margin-top:14px;max-width:340px">A top-down action RPG built around one idea: every system is open, modular data.</p>
@@ -610,7 +564,7 @@ npm run <span class="g">build</span></pre>
       </div>
     </div>
     <div class="foot-bottom">
-      <span>Made by Arianna · Prototype v0.2.1</span>
+      <span>Made by Arianna · Prototype <span data-meta-version>v0.2.1</span></span>
       <span class="stack">TypeScript · Vite · Canvas 2D · Electron</span>
     </div>
   </div>
@@ -640,7 +594,15 @@ npm run <span class="g">build</span></pre>
   /* stat band — numbers come from the exported data/meta.json so they never go
      stale. Real deploy → floored live counts ("400+"); sample/preview or no data
      → the curated round fallbacks in the markup. Classes shows the exact count. */
-  function floorNice(n){ if(n<100) return Math.floor(n/10)*10; if(n<1000) return Math.floor(n/50)*50; return Math.floor(n/100)*100; }
+  /* UNDERPROMISE on purpose: the shown floor sits well below the live count
+     (~2/3 for big catalogs, 3/4 for small rosters — a 27-class roster should
+     still read "20+"), so the "+" always hides meaningfully more content —
+     an expectation to shatter, never a rounding hedge. */
+  function floorNice(n){
+    var v = n * (n < 100 ? 0.75 : 0.65);
+    var step = v < 50 ? 5 : v < 100 ? 10 : v < 1000 ? 50 : 100;
+    return Math.floor(v / step) * step;
+  }
   function animateStat(el, text){
     var m = String(text).match(/^(\d+)(\D*)$/);
     if(!m || reduce){ el.textContent = text; return; }
@@ -660,6 +622,19 @@ npm run <span class="g">build</span></pre>
         }
         el.setAttribute('data-final', val); el.textContent = val;
       });
+      /* prose counts elsewhere on the page ([data-count="skills"] etc.) fill
+         from the same meta so nothing goes stale; rounded "+" unless -exact.
+         No meta / sample data → the markup's curated fallback stands. */
+      if(meta && !meta.sample && meta.counts){
+        Array.prototype.forEach.call(document.querySelectorAll('[data-count]'), function(el){
+          var k = el.getAttribute('data-count'), c = meta.counts[k];
+          if(c==null) return;
+          el.textContent = el.hasAttribute('data-count-exact') ? String(c) : floorNice(c) + '+';
+        });
+      }
+      if(meta && meta.version){
+        Array.prototype.forEach.call(document.querySelectorAll('[data-meta-version]'), function(el){ el.textContent = 'v' + meta.version; });
+      }
       var grid = document.getElementById('statgrid');
       if('IntersectionObserver' in window && grid){
         var io2 = new IntersectionObserver(function(es){ es.forEach(function(e){ if(e.isIntersecting){ runStats(); io2.disconnect(); } }); }, {threshold:.5});
@@ -675,6 +650,8 @@ npm run <span class="g">build</span></pre>
   var ctx = canvas.getContext('2d');
   var W=0,H=0,dpr=Math.min(window.devicePixelRatio||1, 1.75);
   var nodes=[], embers=[], LINK=140;
+  /* the graph's flickers ARE the insignia's three points — teal / violet /
+     ember, same hexes as the mark in the nav, the hero and the footer. */
   var COLORS=['#4fd6c4','#a98bff','#ff8a4c'];
   function resize(){
     W=canvas.clientWidth; H=canvas.clientHeight;
@@ -686,7 +663,7 @@ npm run <span class="g">build</span></pre>
       nodes.push({
         x:Math.random()*W, y:Math.random()*H,
         vx:(Math.random()-.5)*.14, vy:(Math.random()-.5)*.14,
-        r:Math.random()*1.6+1.0,
+        r:Math.random()*1.9+1.1,
         c:COLORS[i%3]
       });
     }
@@ -696,7 +673,7 @@ npm run <span class="g">build</span></pre>
   }
   function newEmber(init){
     return { x:Math.random()*W, y: init?Math.random()*H:H+10, r:Math.random()*1.5+.5,
-             vy:-(Math.random()*.35+.15), a:Math.random()*.5+.2, tw:Math.random()*6.28 };
+             vy:-(Math.random()*.35+.15), a:Math.random()*.55+.25, tw:Math.random()*6.28 };
   }
   function frame(){
     ctx.clearRect(0,0,W,H);
@@ -721,10 +698,10 @@ npm run <span class="g">build</span></pre>
       var p=nodes[n];
       ctx.beginPath();
       ctx.fillStyle=p.c;
-      ctx.globalAlpha=.55;
+      ctx.globalAlpha=.72;
       ctx.arc(p.x,p.y,p.r,0,6.2832); ctx.fill();
-      ctx.globalAlpha=.13;
-      ctx.arc(p.x,p.y,p.r*3.2,0,6.2832); ctx.fill();
+      ctx.globalAlpha=.2;
+      ctx.arc(p.x,p.y,p.r*3.6,0,6.2832); ctx.fill();
       ctx.globalAlpha=1;
     }
     /* embers */
@@ -733,7 +710,7 @@ npm run <span class="g">build</span></pre>
       m.y+=m.vy; m.x+=Math.sin((m.tw+=0.01))*0.25;
       if(m.y< -12){ embers[e]=newEmber(false); }
       ctx.beginPath();
-      ctx.fillStyle='rgba(255,150,90,'+m.a+')';
+      ctx.fillStyle='rgba(255,138,76,'+m.a+')'; /* --ember, the mark's third point */
       ctx.arc(m.x,m.y,m.r,0,6.2832); ctx.fill();
     }
     raf=requestAnimationFrame(frame);
@@ -750,6 +727,7 @@ npm run <span class="g">build</span></pre>
 })();
 </script>
 <script src="assets/showcase.js"></script>
+<script src="assets/decks.js"></script>
 <script src="assets/nav.js"></script>
 <script src="assets/sectionnav.js"></script>
 </body>
