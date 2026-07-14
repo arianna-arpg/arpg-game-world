@@ -51,6 +51,7 @@ import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
 import { drawFogLayer } from './vis/fogLayer';
+import { drawCreepLayer } from './vis/creepLayer';
 import { drawFluxLayer } from './vis/fluxLayer';
 import { UnderstoryLayer } from './vis/understory';
 import { traversalPose, traversalVeil } from '../engine/traversal';
@@ -219,6 +220,12 @@ export class Renderer {
     if ((world.flux || world.conjured?.live) && !VIS_ABLATE.has('flux')) {
       drawFluxLayer(this.ctx, world, this.cam.x, this.cam.y,
         this.canvas.width / this.zoom, this.canvas.height / this.zoom);
+    }
+    // THE CREEP (vis/creepLayer.ts): the living membrane — skin laid over
+    // the floor, so under doodads and actors; the drawn surface is the same
+    // geometry the fabric's grants read.
+    if (world.creep && !VIS_ABLATE.has('creep')) {
+      drawCreepLayer(this.ctx, world.creep, world.time, this.cam.x, this.cam.y, vw, vh);
     }
     if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
     if (!VIS_ABLATE.has('motionfx')) {

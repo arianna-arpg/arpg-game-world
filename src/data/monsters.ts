@@ -371,6 +371,14 @@ export interface MonsterDef {
    *  exempt from their OWN ground; this covers kin who merely visit —
    *  the magma swimmer crossing a pool it isn't burrowed in. */
   immuneGround?: string[];
+  /** CREEP HEART (the creep fabric, engine/creep.ts): this body anchors a
+   *  living membrane patch of the named creep KIND — planted at spawn,
+   *  growing out from under it, RECOILING when it dies (the source is
+   *  bound to the actor). Any monster may carry one: biome hearts, event
+   *  spreaders, broodmothers whose brood fights better on their own skin.
+   *  `reach` overrides the kind's roll; `bornFrac` starts the front
+   *  part-grown (default 0.12 — you should SEE it claim ground). */
+  creepSource?: { kind: string; reach?: [number, number]; bornFrac?: number };
   /** NEVER COUNTS toward zone objectives (clear counts and kin): bodies
    *  whose habitat the player may be unable to reach (a void angler over
    *  its chasm) must never gate progress — the soft-lock guard. The

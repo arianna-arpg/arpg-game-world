@@ -639,6 +639,32 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Ensnared', color: '#7fce6a', duration: 0.7,
     mods: [mod('moveSpeed', 'more', -0.7), mod('attackSpeed', 'more', -0.2)],
   },
+  /** THE CREEP FABRIC (engine/creep.ts): the membrane feeds its own — kinds
+   *  grant these via CreepGrant faction filters, so the skin is territory
+   *  the way grave-mist is (mistfed's pattern, grounded). Refresh/linger. */
+  caulfed: {
+    label: 'Caul-Fed', color: '#8a6ab0', duration: 1.6,
+    beneficial: true,
+    mods: [mod('damage', 'increased', 0.12), mod('lifeRegen', 'flat', 4)],
+  },
+  /** The caulflesh resents every other boot: a wet, sucking drag — terrain
+   *  texture, deliberately shy of the ensnared clutch (the Caul should feel
+   *  WRONG underfoot long before it feels unfair). */
+  caulmired: {
+    label: 'Caul-Mired', color: '#5a4468', duration: 1.2,
+    mods: [mod('moveSpeed', 'more', -0.12)],
+  },
+  /** The blightgrowth (the Eldritch incursion's creep) keeps the same pair
+   *  in its own sickly key. */
+  blightfed: {
+    label: 'Blight-Fed', color: '#7fce6a', duration: 1.6,
+    beneficial: true,
+    mods: [mod('damage', 'increased', 0.12), mod('lifeRegen', 'flat', 3)],
+  },
+  blightmired: {
+    label: 'Blight-Mired', color: '#587a52', duration: 1.2,
+    mods: [mod('moveSpeed', 'more', -0.1)],
+  },
 };
 
 export type { DamageType };

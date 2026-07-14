@@ -378,6 +378,10 @@ export class Actor {
   /** Lazy-spawn latch: parts attach on the root's first update tick, so
    *  every spawn path (packs, events, zone-memory restore) grows them. */
   partsSpawned?: boolean;
+  /** Creep-heart latch (MonsterDef.creepSource): the membrane plants on the
+   *  first update tick — after every spawn path has settled the body's true
+   *  position — and the planted source is bound to this life. */
+  creepPlanted?: boolean;
   /** Bomber fuse: armed countdown to self-detonation (renderer flashes it). */
   fuse?: number;
   /** Airborne leap in flight. */

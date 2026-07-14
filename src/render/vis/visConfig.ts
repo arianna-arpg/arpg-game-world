@@ -216,6 +216,28 @@ export const VIS_CFG = {
     weatherAlphaBoost: 0.3,
   },
 
+  /** THE CREEP LAYER (vis/creepLayer.ts — the render half of engine/creep.ts).
+   *  Membrane geometry/cover come from the sim (one rim function with the
+   *  hit test); these knobs only shape presentation. Ablate pass: 'creep'. */
+  creep: {
+    /** Baked membrane sprites kept before the oldest drops (one per source
+     *  personality; a zone holds ≤ CREEP_CFG.maxSources). */
+    maxBakes: 96,
+    /** Bake canvas pad past the rim ceiling (room for the lip glow). */
+    bakePad: 10,
+    /** View-cull pad beyond each source's live bound. */
+    cullPad: 160,
+    /** Breathing amplitude (scale sway on the shared warren heartbeat). */
+    breathe: 0.018,
+    /** The live pulse front riding heart→rim: alpha, stroke width, and
+     *  rim-crossings per heartbeat cycle. */
+    pulseAlpha: 0.14,
+    pulseWidth: 9,
+    pulseSpeed: 0.55,
+    /** Vein glow: the wide soft under-stroke's alpha share of the core. */
+    veinGlow: 0.35,
+  },
+
   /** THE UNDERSTORY (vis/understory.ts) — the world seen far below through
    *  `window` region cells (cloud shelves). Ablate pass name: 'understory'. */
   understory: {

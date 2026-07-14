@@ -54,6 +54,8 @@ import { CLIMATE_AXES, validateClimateSpecs } from '../world/climate';
 import { validateWeather } from '../world/weather';
 import { validateFog } from '../engine/fog';
 import './fog'; // side-effect: the fog bank defs register before validation
+import { validateCreep } from '../engine/creep';
+import './creeps'; // side-effect: the creep kind defs register before validation
 import { VOYAGE_ISLANDS } from './voyageIslands';
 import { Rng } from '../core/rng';
 
@@ -213,6 +215,18 @@ export function validateContent(): void {
     }
   }
   for (const msg of validateFog(id => !!STATUS_DEFS[id], fogSpecs)) warn(msg);
+
+  // CREEP: every kind's grants name real statuses; every theme creep spec
+  // (base AND variant overrides) names registered kinds — the creep fabric
+  // rides the fog fabric's exact safety-net contract.
+  const creepSpecs: { owner: string; spec: NonNullable<typeof TILESETS[string]['theme']['creep']> }[] = [];
+  for (const t of Object.values(TILESETS)) {
+    if (t.theme.creep) creepSpecs.push({ owner: `tileset '${t.id}'`, spec: t.theme.creep });
+    for (const v of t.variants ?? []) {
+      if (v.theme?.creep) creepSpecs.push({ owner: `tileset '${t.id}' variant '${v.name}'`, spec: v.theme.creep });
+    }
+  }
+  for (const msg of validateCreep(id => !!STATUS_DEFS[id], creepSpecs)) warn(msg);
 
   // STRUCTURES: plans resolve their legend, generators exist (and a fixed-seed
   // SAMPLE of each generator def emits only known chars), roof styles resolve,

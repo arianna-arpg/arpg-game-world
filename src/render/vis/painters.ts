@@ -3762,8 +3762,9 @@ const toadstools: GroupPainter = (env, group, def) => {
 
 /** The warren's shared pulse: a lub-dub heartbeat on one clock — two beats
  *  per cycle, the second softer. Everything living here throbs to the SAME
- *  heart, which is the unsettling part. */
-function heartbeat(t: number, rate = 0.85): number {
+ *  heart, which is the unsettling part. (Exported: the creep layer breathes
+ *  on this clock too — one organism, one pulse.) */
+export function heartbeat(t: number, rate = 0.85): number {
   const c = (t * rate) % 1;
   const beat = (at: number, w: number, amp: number): number => {
     const d = (c - at) / w;

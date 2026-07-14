@@ -82,6 +82,10 @@ changes.
   `fog.ts` (THE FOG FABRIC: living, roaming fog banks as data —
   FogBankDef kinds + ZoneTheme.fog specs; the drawn lobes are the hit
   surface, statuses granted while inside — docs in `docs/engine/fog.md`),
+  `creep.ts` (THE CREEP FABRIC: living ground membrane as data — CreepDef
+  kinds + ZoneTheme.creep pockets, runtime sources via World.creepEnsure /
+  MonsterDef.creepSource hearts that recoil on death; the drawn skin is
+  the hit surface — docs in `docs/engine/creep.md`),
   `collapse.ts` + `traversal.ts` + `render/vis/understory.ts` (THE VERTICAL
   FABRICS: dissolving ground as a `ZoneTheme.collapse` spec — contact
   crumble + seeded rim-inward melt, an eroding-but-guaranteed causeway to

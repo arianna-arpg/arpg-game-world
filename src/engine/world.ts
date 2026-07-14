@@ -119,6 +119,7 @@ import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
 import { buildZoneFog, FOG_CFG, FogField } from './fog';
+import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField } from './creep';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneFlux, ConjuredGround, FLUX_CFG, type FluxField } from './flux';
 import { traversalDef, type TraversalCapture, type TraversalState } from './traversal';
@@ -3121,6 +3122,13 @@ export class World {
       this.zone.theme.fog, this.currentZoneSeed, this.arena, this.doodads,
       new Rng((this.currentZoneSeed ^ FOG_CFG.salt) >>> 0),
       this.zone.theme.ambientDark == null);
+    // THE CREEP (engine/creep.ts): ambient membrane pockets seed on their
+    // OWN salted stream — like fog, creep can never advance layout/spawn
+    // rng. Runtime spreaders (packages, creep-heart monsters) plant more
+    // through creepEnsure(); everything here is rebuilt per visit.
+    this.creep = buildZoneCreep(
+      this.zone.theme.creep, this.arena,
+      new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0));
     // Cave mouths: pair each cave_entrance doodad with its stable seed (pushed
     // in lock-step by stampCaveMouth). Stepping onto one descends into a cave.
     const mouths = layout.doodads.filter(d => d.kind === 'cave_entrance');
@@ -24063,6 +24071,7 @@ export class World {
     this.updateTerrainEffects(dt);
     this.updateHeat(dt);
     this.updateFog(dt);
+    this.updateCreep(dt);
     this.updateCollapse(dt);
     this.updateFlux(dt);
     this.conjured?.update(dt);
@@ -24073,6 +24082,7 @@ export class World {
     this.updateLeaps(dt);
     this.updateWorms();
     this.updateParts();
+    this.updateCreepHearts();
     this.updateProjectiles(dt);
     this.updateZones(dt);
     this.updateEnemyTethers(dt);
@@ -25811,6 +25821,27 @@ export class World {
     }
   }
 
+  /** CREEP HEARTS (MonsterDef.creepSource): plant each declaring body's
+   *  membrane on its first update tick — the composite-parts lazy-attach
+   *  idiom, so every spawn path (packs, events, zone-memory restore) grows
+   *  the skin at the body's TRUE settled position. The source is bound to
+   *  the actor: the heart dies, the skin recoils, no cleanup code. */
+  private updateCreepHearts(): void {
+    for (const a of this.actors) {
+      if (a.dead || a.creepPlanted || !a.defId) continue;
+      const cs = MONSTERS[a.defId]?.creepSource;
+      if (!cs) continue;
+      a.creepPlanted = true;
+      const def = CREEPS[cs.kind];
+      if (!def) { console.warn(`[creep] '${a.defId}' names unknown creep kind '${cs.kind}'`); continue; }
+      const field = this.creepEnsure();
+      if (!field) continue;
+      const reach = cs.reach ? rand(cs.reach[0], cs.reach[1]) : undefined;
+      field.addSource(def, a.pos.x, a.pos.y,
+        { boundTo: a, bornFrac: cs.bornFrac ?? 0.12, ...(reach !== undefined ? { reach } : {}) });
+    }
+  }
+
   /** COMPOSITE MONSTERS (MonsterDef.parts): lazy-attach part actors to any
    *  live root that declares them, then hold every part rigid in the root's
    *  facing frame each tick. Parts are full actors — they aim/cast on their
@@ -26098,6 +26129,26 @@ export class World {
    *  banks under + over actors; dev-inspect via __game.world().fog. */
   fog: FogField | null = null;
 
+  /** THE CREEP this zone grows (engine/creep.ts): anchored membrane patches
+   *  whose drawn skin IS the gameplay surface — statuses granted while on
+   *  it, fronts that recoil when their heart dies. Rebuilt each loadZone
+   *  (ambient texture, never serialized); null until a theme spec or a
+   *  runtime source needs it. Dev-inspect via __game.world().creep. */
+  creep: CreepField | null = null;
+
+  /** The runtime seam every package/monster spreader uses: get the zone's
+   *  creep field, building an empty one on demand — creep is a fabric ANY
+   *  content can plant, not a biome privilege. Boundless zones refuse (no
+   *  stable bounds to skin), matching buildZoneCreep. */
+  creepEnsure(): CreepField | null {
+    if (this.creep) return this.creep;
+    if (this.arena.boundless) return null;
+    this.creep = new CreepField(
+      new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0),
+      this.arena.w, this.arena.h);
+    return this.creep;
+  }
+
   /** Tick the fog field: drift/coil/dissipate + dress occupants. A 'fog'
    *  WEATHER front over this zone breeds sky-born banks and thickens the
    *  authored ones — the node-scale sky and the in-zone banks stay ONE
@@ -26107,6 +26158,13 @@ export class World {
     const f = this.sim.weather.sample(this.zone);
     const k = f?.kind === 'fog' ? f.intensity : 0;
     this.fog.update(dt, this.time, k, this.actors);
+  }
+
+  /** Tick the creep field: fronts advance/recoil (bound hearts watched) +
+   *  dress occupants on the apply cadence. */
+  private updateCreep(dt: number): void {
+    if (!this.creep) return;
+    this.creep.update(dt, this.time, this.actors);
   }
 
   private updateSnow(dt: number): void {

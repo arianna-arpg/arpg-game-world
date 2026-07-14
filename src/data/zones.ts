@@ -17,6 +17,7 @@
 import type { MonsterRarity } from '../engine/rarity';
 import type { PresenceSpec } from '../engine/presence';
 import type { ZoneFogSpec } from '../engine/fog';
+import type { ZoneCreepSpec } from '../engine/creep';
 import type { CollapseSpec } from '../engine/collapse';
 import type { FluxSpec } from '../engine/flux';
 
@@ -367,6 +368,14 @@ export interface ZoneTheme {
    *  drawn shape IS the hit surface. Rolled on a SALTED stream (never moves
    *  layout rng). No spec = only sky-born mist under a 'fog' weather front. */
   fog?: ZoneFogSpec;
+  /** LIVING CREEP (the creep fabric, engine/creep.ts): pockets of organism
+   *  SKIN grown over the floor — anchored membrane patches that breathe,
+   *  feed their own faction and mire everyone else (the kind's grants; the
+   *  drawn skin IS the hit surface). Ambient pockets roll on a SALTED
+   *  stream (never moves layout rng); packages and creep-heart monsters
+   *  plant more at runtime through World.creepEnsure(). No spec = no
+   *  ambient creep. */
+  creep?: ZoneCreepSpec;
   /** LIVING COLLAPSE (the collapse fabric, engine/collapse.ts): this zone's
    *  ground DISSOLVES — cells crumble where feet touch, the rim flakes away
    *  on a seeded schedule marching inward, and the last standing ground is
