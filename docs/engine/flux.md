@@ -92,7 +92,17 @@ lanes stay solid bands — each subsystem activates on its spec alone.
   dirty rects (floor chunks never stale, the ring never floods). The living
   cloud is DRAWN by the flux layer from field state — form, breathe, tatter
   exactly where the walkable truth is. Never paint a flux kind with a baked
-  visual.
+  visual — and never let one BORDER an edge-bearing kind (`cloud_void`'s
+  sunlit lip bakes by its neighbors' LIVE walkability; a pad that phases
+  beside it strands a stale lip in the sky). Generators interpose the
+  fabric's own lip-less `flux_void` — the drift recipe grows its basins
+  under every pad and carries a gen-time tripwire warn genqa surfaces.
+- **THE EDGE IS A DOOR** — the flux voids carry `boundaryPolicy: 'skyfall'`:
+  stepping (or being SHOVED — a gale_lash sentence is real) past standing
+  cloud IS the proportional fall to the world below. No confinement lip, no
+  hard-lock: mistime every pad in a basin and the honest out is always down.
+  Wings, levitation and airborne moves (dash/leap) are exempt — a
+  zephyr_step sails the gap its own trail is still building.
 - **Who falls / who rides** — the World prefilters (grounded, not flying /
   levitating / mid-leap / traversing) and routes: riders travel their raft's
   delta THROUGH `clampPos` (the mover contract), gusts shove through the

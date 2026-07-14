@@ -1178,6 +1178,13 @@ export interface GenCtx {
   /** The zone's layout seed (def.seed), for seed-stable gen FIELDS (noise
    *  bands must not drift between the try-loop's samples or across co-op). */
   seed?: number;
+  /** LITE GENERATION (the understory's aerial): keep the recipe's own
+   *  GEOMETRY (grids, liquids, recipe-planted forests) but skip everything
+   *  a hazy 0.22-scale silhouette can't show — tileset scatter,
+   *  compositions, landmark/structure rolls, boundary gates, exit roads.
+   *  A below-zone that costs 200ms at full fidelity paints in a fraction;
+   *  NEVER set on a zone that will actually be played. */
+  lite?: boolean;
   /** The zone's baked geography (def.geo: biomeDepth + climate axes, sampled
    *  at mint) — read by geo-aware gen fields ('climate') and composition
    *  when-gates. Absent on authored/headless defs: consumers fall back to
@@ -1365,6 +1372,10 @@ registerGenField('climate', (ctx, params) => {
  *  set-piece over the convex floor. This is the byte-identical default; extracting
  *  it changes nothing for any existing zone. */
 function plainsLayout(ctx: GenCtx, def: ZoneDef): void {
+  // LITE (the understory's aerial): tileset scatter is exactly the detail a
+  // hazy silhouette can't show — recipes calling scatterDecoration and
+  // plains-based zones both skip it here, one gate for both paths.
+  if (ctx.lite) return;
   for (const spec of def.layout) {
     const n = ctx.rng.int(spec.count[0], spec.count[1]);
     for (let i = 0; i < n; i++) stamp(ctx, spec);
@@ -1924,11 +1935,14 @@ export function generateLayout(
   // (plan walls carve the grid, doors/slots/breakables live, footprints
   // reserve), never mutating the def. Omitted everywhere else = byte-identical.
   extraFixtures?: { structure: string; x: number; y: number }[],
+  // LITE (GenCtx.lite): the understory's aerial pass — geometry only.
+  opts?: { lite?: boolean },
 ): GeneratedLayout {
   const ctx: GenCtx = {
     rng, arena, entry, exits, level: def.level, seed: def.seed, geo: def.geo,
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
+    lite: opts?.lite,
   };
   const allFixtures = [...(def.fixtures ?? []), ...(extraFixtures ?? [])];
   // LEGACY FIXTURES first (common to EVERY layout): hand-placed structures at
@@ -1942,8 +1956,9 @@ export function generateLayout(
   // COMPOSITION PLANS (whole-zone planning): the zone's picked bundles resolve
   // their shared sites and stamp their PRE entries before the base layout, so
   // the negative space they promise suppresses the scatter that follows. Zones
-  // without composition rolls draw nothing here (byte-identical).
-  const compositions = planCompositions(ctx, def);
+  // without composition rolls draw nothing here (byte-identical). LITE skips
+  // planning wholesale (an aerial can't see a gallows court through the haze).
+  const compositions = ctx.lite ? [] : planCompositions(ctx, def);
   // Dispatch to the zone's layout generator (default 'plains' = byte-identical).
   const gen = LAYOUT_GENERATORS[def.layoutType ?? 'plains'] ?? plainsLayout;
   gen(ctx, def);
@@ -1953,7 +1968,7 @@ export function generateLayout(
   // heat-map prediction the portal labels use). After the base layout so the
   // façade carves into the final terrain; before landmark/structure rolls so
   // they honor its reservation. Zones without annotations draw nothing.
-  if (boundaryGateBuilder && def.exitBoundaries) {
+  if (boundaryGateBuilder && def.exitBoundaries && !ctx.lite) {
     for (let i = 0; i < ctx.exits.length && i < def.exitBoundaries.length; i++) {
       const b = def.exitBoundaries[i];
       if (b) boundaryGateBuilder(ctx, ctx.exits[i], b);
@@ -1965,7 +1980,7 @@ export function generateLayout(
   // mouth. After the gates, so a road can END at a façade's throat instead
   // of under its walls; before the landmark/structure rolls, so they honor
   // its artery reservation. Zones without annotations draw nothing.
-  if (exitRoadBuilder && def.exitRoads) {
+  if (exitRoadBuilder && def.exitRoads && !ctx.lite) {
     for (let i = 0; i < ctx.exits.length && i < def.exitRoads.length; i++) {
       const r = def.exitRoads[i];
       if (r) exitRoadBuilder(ctx, def, i, r);
@@ -1986,12 +2001,12 @@ export function generateLayout(
   // layout dispatch, so they are layout-agnostic (a field zone and a plains
   // zone roll alike) and draw rng only when the data exists (byte-identity
   // for every zone without rolls).
-  for (const roll of def.landmarks ?? []) {
+  for (const roll of ctx.lite ? [] : def.landmarks ?? []) {
     if (!ctx.rng.chance(roll.chance)) continue;
     const n = roll.count ? ctx.rng.int(roll.count[0], roll.count[1]) : 1;
     for (let i = 0; i < n; i++) stamp(ctx, { kind: 'landmark', landmark: roll.landmark, count: [1, 1] });
   }
-  for (const roll of def.structures ?? []) {
+  for (const roll of ctx.lite ? [] : def.structures ?? []) {
     if (!ctx.rng.chance(roll.chance)) continue;
     const n = roll.count ? ctx.rng.int(roll.count[0], roll.count[1]) : 1;
     for (let i = 0; i < n; i++) stamp(ctx, { kind: 'structure', structure: roll.structure, count: [1, 1] });

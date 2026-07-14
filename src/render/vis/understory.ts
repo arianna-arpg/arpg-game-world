@@ -143,9 +143,13 @@ export class UnderstoryLayer {
           : { x: arena.w - inset, y: Math.min(Math.max(arena.h * t, inset), arena.h - inset) };
         return exitInside(edge, bounds);
       });
+      // LITE generation: geometry + recipe-planted features only — the
+      // aerial can't see tileset dressing, compositions or landmark rolls
+      // through the haze, and a scatter-heavy zone below at full fidelity
+      // was a 200-300ms first-frame stall on every fresh zone entry.
       const layout = generateLayout(def, arena,
         new Rng((def.seed ?? 1) >>> 0),
-        { x: arena.w / 2, y: arena.h / 2 }, exits);
+        { x: arena.w / 2, y: arena.h / 2 }, exits, undefined, { lite: true });
       return {
         theme: def.theme,
         arenaW: arena.w, arenaH: arena.h,

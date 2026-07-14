@@ -45,7 +45,13 @@ export type RecoveryPolicy =
   | { kind: 'eject'; to: 'edge'; damage?: DamageSpec }
   | { kind: 'fall'; to: 'edge' | 'lastNode'; damage?: DamageSpec }
   | { kind: 'instakill' }
-  | { kind: 'teleport'; to: 'lastNode' | 'waypoint' };
+  | { kind: 'teleport'; to: 'lastNode' | 'waypoint' }
+  // THE EDGE IS A DOOR: stepping off standing cloud IS the fall — the world
+  // below catches you (the vertical fabrics' proportional skyfall; the sky
+  // keeps whatever else steps off). Wings, levitation and airborne moves
+  // (dash/leap) never trigger it. Ends every detached-island hard-lock: any
+  // edge, anywhere, is always a way down.
+  | { kind: 'skyfall' };
 
 /** Per-DISPLACEMENT override so no movement ability is ever boxed in by the
  *  walkability model. A flicker teleport / wall-phase / future "insane mechanic"
@@ -314,18 +320,19 @@ registerRegion({
 });
 // CLOUD VOID: the gap where a cloud shelf has fallen away (the collapse
 // fabric's melt region) — and the Aetherial's authored sky-gaps. The void's
-// physics (bodies can't cross, shots and sight sail over, levitators float
-// free) under the SKY's own read: a WINDOW region — the ground baker clears
-// these cells so the understory (the zone far below, the endless cloud sea)
-// shows THROUGH the hole instead of painting an abyss-black pit. The lip is
-// a PLAIN CONFINEMENT — no damage, no eject, no per-frame "fell!" chatter:
-// walking against a gap just stops you, like a shore (the old fall-at-edge
-// recovery read as rubberbanding). The one true drop is the floor crumbling
-// UNDER you — the collapse fabric routes that fall, per the zone's
-// CollapseSpec, all the way down to the land below.
+// physics (shots and sight sail over, levitators float free) under the
+// SKY's own read: a WINDOW region — the ground baker clears these cells so
+// the understory (the zone far below, the endless cloud sea) shows THROUGH
+// the hole instead of painting an abyss-black pit. THE EDGE IS A DOOR
+// (boundaryPolicy 'skyfall'): step off the cloud and the world below
+// catches you — the same proportional drop the crumbling floor routes. No
+// confinement lip, no rubberband, and NO HARD-LOCK: strand yourself on a
+// detached island and the way out is always one deliberate step off the
+// edge. (Two earlier drafts both lost: fall-to-edge read as rubberbanding;
+// a blocking lip hard-locked runners on melted-out islands.)
 registerRegion({
   id: 'cloud_void', walkable: false, blocks: false, label: 'the open sky',
-  boundaryPolicy: { kind: 'block' },
+  boundaryPolicy: { kind: 'skyfall' },
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
   conjurable: true,
   // The cloud lip: sunlit white on every standing side, so each gap reads as
@@ -341,9 +348,12 @@ registerRegion({
 // is deliberate too: a flux basin's rims belong to the living clouds, not to
 // baked paint that would go stale the moment a pad phased.
 // FLUX VOID: the sky inside a flux basin — where a pad or lane is NOT.
+// Same door as cloud_void: step off a pad's edge and you fall to the world
+// below — mistime a crossing and the honest out is always DOWN, never a
+// hard-lock against an invisible lip.
 registerRegion({
   id: 'flux_void', walkable: false, blocks: false, label: 'the open sky',
-  boundaryPolicy: { kind: 'block' },
+  boundaryPolicy: { kind: 'skyfall' },
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
   conjurable: true,
   visual: { fill: '#10131d', alpha: 1, window: true },

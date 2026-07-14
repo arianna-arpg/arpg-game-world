@@ -23,6 +23,7 @@ import { vec, type Vec2 } from '../core/math';
 import type { ExitRoadSpec, ZoneDef } from '../data/zones';
 import { boundaryGateOf, type BoundaryGateDef } from '../data/boundaryGates';
 import { GridWalkField } from '../world/gridWalk';
+import { regionKind } from '../world/regions';
 import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
   placeLandmarkById, raiseStructure, setBoundaryGateBuilder, setExitRoadBuilder,
@@ -1557,6 +1558,12 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
           if (dNow >= total) break;
         }
         const p = at(dNow);
+        // The basin grows UNDER every pad (grown past its rim): a flux kind
+        // must never border the lipped outer sky — the cloud_void edge bakes
+        // by its neighbors' LIVE walkability, and the fabric's quiet writes
+        // (bake-inert by contract) would leave that lip stale when the pad
+        // phased out. The fabric's own lip-less void is the spacer.
+        disc(basin, p.x, p.y, rCur + 36);
         disc(flip ? padA : padB, p.x, p.y, rCur);
         // A satellite hop every few pads: a side stone for the risk-taker's
         // shortcut or the stranded moment's out. ALWAYS the third kind — it
@@ -1568,7 +1575,9 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
           const sr = rng.range(34, 46);
           const side = rng.chance(0.5) ? 1 : -1;
           const off = rCur + sr - rng.range(26, 34);
-          disc(padC, p.x + Math.cos(tang) * side * off, p.y + Math.sin(tang) * side * off, sr);
+          const sx = p.x + Math.cos(tang) * side * off, sy = p.y + Math.sin(tang) * side * off;
+          disc(basin, sx, sy, sr + 36);
+          disc(padC, sx, sy, sr);
         }
         dBack2 = dBack1; rBack2 = rBack1;
         dBack1 = dNow; rBack1 = rCur;
@@ -1589,6 +1598,30 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
   paintRegion(grid, padB, 'cloud_flux_b');
   paintRegion(grid, padC, 'cloud_flux_c');
   paintRegion(grid, carve, 'ground');
+
+  // SELF-AUDIT (genqa surfaces console warns): no flux kind may border an
+  // EDGE-BEARING kind — that edge bakes by the flux cell's LIVE walkability,
+  // and the fabric's quiet writes would leave it stale mid-phase. The basin
+  // growth above is the guarantee; this scan is the tripwire that keeps it.
+  {
+    const fluxKinds = new Set(['cloud_flux', 'cloud_flux_b', 'cloud_flux_c', 'cloud_lane']);
+    let lipRisk = 0;
+    const cell = grid.cell;
+    for (let gy = 0; gy < grid.rows; gy++) {
+      for (let gx = 0; gx < grid.cols; gx++) {
+        if (!fluxKinds.has(grid.regionAt((gx + 0.5) * cell, (gy + 0.5) * cell))) continue;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = gx + dx, ny = gy + dy;
+          if (nx < 0 || ny < 0 || nx >= grid.cols || ny >= grid.rows) continue;
+          const nk = grid.regionAt((nx + 0.5) * cell, (ny + 0.5) * cell);
+          if (regionKind(nk)?.visual?.edge) { lipRisk++; break; }
+        }
+      }
+    }
+    if (lipRisk > 0) {
+      console.warn(`[aether_drift] ${lipRisk} flux cell(s) border an edge-bearing kind — stale-lip risk (grow the basin)`);
+    }
+  }
 
   // The monument: the Spire of Gales, POI + mustReach (genqa proves the
   // drift can be crossed to it — the runtime fabric keeps it honest).

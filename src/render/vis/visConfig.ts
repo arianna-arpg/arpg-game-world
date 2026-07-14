@@ -267,10 +267,11 @@ export const VIS_CFG = {
     sprite: 128,
     /** View-cull pad beyond each pad/carrier bound. */
     cullPad: 200,
-    /** How far the drawn cloud overhangs the walkable truth (visuals may
-     *  promise a LITTLE more than collision — the boundary block forgives;
-     *  never less: an invisible floor edge is a lie). */
-    lobeOver: 1.18,
+    /** How far the drawn cloud overhangs the walkable truth. Kept TIGHT:
+     *  cloud edges are now honest falls (the skyfall boundary — stepping
+     *  past the edge IS the drop), so a generous painted overhang would be
+     *  a lie in the dangerous direction. */
+    lobeOver: 1.06,
     /** Default tints (FluxSpec.look wins): the standing body, the sunlit
      *  crest, the dusking tatter, the player-called cloud. */
     body: '#e9eef9',

@@ -57,9 +57,12 @@ collapse erodes.
   it). Every fall truly DROPS (`fall.kind: 'below'`): anchored shelves land
   1:1 through the shelf's center; over-tied zones land at the PROPORTIONAL
   spot — where you stood above is where you come down, on the very terrain
-  the windows showed. `'eject'` remains the data option. The LIP of a gap is
-  a plain confinement — no damage, no per-frame recovery: the only fall is
-  the floor leaving you.
+  the windows showed. `'eject'` remains the data option. THE EDGE IS A DOOR
+  (`boundaryPolicy: 'skyfall'` on the cloud voids): the floor leaving you is
+  one fall, and STEPPING OFF is the other — walk past a gap's edge and the
+  world below catches you the same way. No confinement lip, and no hard-lock:
+  a runner stranded on a melted-out island always has one deliberate step
+  down. Wings, levitation and airborne moves (dash/leap) never trigger it.
 - **Selective ground** (`melts`) — the High Spires pattern: register a
   second walkable cloud (`cloud_frail`, a shimmering dusk wash — the visual
   IS the warning) and name it alone in `melts`. Courts, decks and portals

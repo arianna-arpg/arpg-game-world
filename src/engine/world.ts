@@ -28928,9 +28928,9 @@ export class World {
     // A LEVITATING actor floats over fall pits (void): no fall damage / eject — so it
     // can't be knocked into the void for a cheap kill. (Pathing still avoids void.)
     if (a.levitates && policy.kind === 'fall') return;
-    // Debounce fall/eject so being held against a void edge doesn't melt the actor
-    // every frame — one recovery per ~0.6s.
-    if (policy.kind === 'fall' || policy.kind === 'eject') {
+    // Debounce fall/eject/skyfall so being held against a void edge doesn't
+    // melt the actor every frame — one recovery per ~0.6s.
+    if (policy.kind === 'fall' || policy.kind === 'eject' || policy.kind === 'skyfall') {
       if (this.time - (a.lastFall ?? -9) < 0.6) return;
       a.lastFall = this.time;
     }
@@ -28959,6 +28959,18 @@ export class World {
         return;
       }
       case 'instakill': this.kill(a, false); return;
+      case 'skyfall': {
+        // THE EDGE IS A DOOR: stepping off standing cloud IS the fall — the
+        // ONE consequence path the vertical fabrics share (player → the
+        // proportional drop to the world below; ally seats snap; the sky
+        // keeps the rest). The airborne and the floating never trigger it —
+        // a dash sails the gap it entered (its landing answers to the
+        // fields' teeter, not the boundary), wings ride the wind free.
+        if (a.flying || a.levitates || a.dash || a.leap) return;
+        if (a === this.player && (this.traversal || this.pendingRespawn)) return;
+        this.routeSkyFalls([a]);
+        return;
+      }
       case 'teleport': {
         const to = policy.to === 'waypoint' && this.waypointPos ? this.waypointPos : pre;
         this.teleportActor(a, vec(to.x, to.y), '#6ac0f8');
