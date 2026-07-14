@@ -664,6 +664,38 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   scarecrow: { painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.6 },
   hay_bale: { painter: 'hayBale', order: 53, shadow: 0.55, longShadow: 0.8 },
   pot_cluster: { painter: 'potCluster', order: 53, shadow: 0.5 },
+  // --- The apothecary kit (brew-yards): existing painters, new clothes ------
+  // A glass still on its burner: the pot painter under a low warm flame —
+  // the light is the burner; the brittle rule is the glass.
+  alembic: {
+    painter: 'potCluster', order: 53, shadow: 0.45,
+    light: { radius: -3.2, color: '#a8e8d8', intensity: 0.3, flicker: 3 },
+  },
+  // Drying bundles on a rail — the fishing rack hung with the harvest's
+  // greens instead of the day's catch (the shield_rack re-dress idiom).
+  herb_rack: {
+    painter: 'fishingRack', order: 53, shadow: 0.35, longShadow: 0.8,
+    params: { wood: '#5e4a32', fish: '#7a9848' },
+  },
+  // A standing brew-pot over coals: the iron fire-bowl, green-lit — the
+  // brew glows, not the fire.
+  cauldron: {
+    painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,
+    params: { bowl: true },
+    light: { radius: -4.5, color: '#9ae8a0', intensity: 0.45, flicker: 4 },
+  },
+  // A clear upwelling pool — the liquid painter in springwater tones (the
+  // mist_pool dress, water-bright), a soft cool glow marking the well (the
+  // orb_spring effect is the point).
+  spring_pool: {
+    painter: 'liquid', order: 46,
+    blend: { strength: 0.26, feather: 18, color: '#5aa8b8' },
+    params: {
+      core: { color: '#4a98ac', alpha: 0.3 },
+      tufts: { color: '#7ac8d8', flower: '#d8f4f8' },
+    },
+    light: { radius: -2.2, color: '#a8e8f0', intensity: 0.22 },
+  },
   // --- The war-camp kit (muster grounds): existing painters, new clothes ----
   battle_standard: {
     painter: 'warBanner', order: 53, shadow: 0.35, longShadow: 1.5,

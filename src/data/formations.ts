@@ -75,6 +75,20 @@ registerFormation({
   ],
 });
 
+// A HERBALIST'S CROFT: the brew-yard — racks and stills ringing the work,
+// a cauldron or two among them, the day's pots where they were set down.
+// The apothecary kit as one reusable arrangement (gloamwood witches, wayside
+// healers, any camp a tileset hands it to).
+registerFormation({
+  id: 'herbalists_croft', arrange: 'ring', span: [120, 190], step: 46,
+  pieces: [
+    { kind: 'herb_rack', radius: [12, 16], jitter: 10, rot: true },
+    { kind: 'alembic', radius: [10, 13], every: 3, jitter: 14 },
+    { kind: 'cauldron', radius: [12, 16], every: 5, jitter: 12 },
+    { kind: 'clay_pots', radius: [10, 14], every: 4, jitter: 20 },
+  ],
+});
+
 // A PROCESSIONAL AVENUE: standing stones pacing a dead-straight old road.
 registerFormation({
   id: 'standing_avenue', arrange: 'line', span: [360, 640], step: 88,

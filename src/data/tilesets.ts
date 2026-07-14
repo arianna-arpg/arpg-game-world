@@ -274,6 +274,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'briarwood', count: [1, 2] },
       // An old field line the forest swallowed.
       { kind: 'formation', count: [0, 1], formation: 'oak_hedgerow' },
+      // Sometimes, a clear upwelling — the wood's own kindness (orbs on a
+      // beat; the flask founts drink from terrain here).
+      { kind: 'spring_pool', count: [0, 1] },
     ],
     variants: [
       // Sun-dappled fringe: more clearing furniture, lighter rot.
@@ -406,6 +409,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'burial_urn', count: [0, 2] },
       { kind: 'briarwood', count: [1, 2] },
       { kind: 'formation', count: [0, 1], formation: 'gibbet_lane' },
+      // Someone brews out here — a croft of racks and stills (the
+      // apothecary kit; the alembics shatter into spilled orbs).
+      { kind: 'formation', count: [0, 1], formation: 'herbalists_croft' },
     ],
     variants: [
       // The tended dead: rows under the crooked roof — the parish that
@@ -432,6 +438,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Witchlight: the crofts — the cute face of the wrongness.
       { name: 'witchlight', layout: [
         { kind: 'formation', count: [1, 2], formation: 'pumpkin_rows' },
+        { kind: 'formation', count: [1, 2], formation: 'herbalists_croft' },
         { kind: 'jack_o_lantern', count: [2, 5] },
         { kind: 'scarecrow', count: [1, 2] },
         { kind: 'hay_bale', count: [1, 3] },

@@ -284,7 +284,13 @@ export type KnownDoodadKind =
   | 'caul_sac'         // a translucent egg-sac, dimly lit from inside; bursts when pressed
   | 'caul_eyes'        // a stand of eye stalks; the irises track whoever crosses the room
   | 'maw_pit'          // an orifice in the floor: reels wanderers lipward, bites at the lip
-  | 'nerve_root';      // black-violet vessel filaments webbing the floor, pulse riding them
+  | 'nerve_root'       // black-violet vessel filaments webbing the floor, pulse riding them
+  // The apothecary kit (the drinking economy's terrain: brew-yards and
+  // the springs that feed the founts)
+  | 'alembic'          // a glass still on a burner — brittle; shatters into spilled orbs
+  | 'herb_rack'        // drying bundles on a rail — the herbalist's larder
+  | 'cauldron'         // a standing brew-pot over coals, lit from beneath
+  | 'spring_pool';     // a clear upwelling pool — WELLS UP resource orbs on a beat (orb_spring)
 
 /** Open doodad vocabulary: the known kinds keep autocomplete + the exhaustive
  *  DOODAD_RULES row check, while a package/structure/legend kind registered via
@@ -310,6 +316,10 @@ export interface DoodadEffect {
    *  updraft vent's windswept, a chill font's chill) — any registered
    *  status, so a new pad/font/choke is pure data. */
   statusId?: string;
+  /** orb_spring effects: the ORB_DEFS kind welled up (a life spring, a
+   *  mana seep, a wakeflame shrinespring — any registry orb). Omit for
+   *  the alternating life/mana breath. */
+  orbKind?: string;
   /** The side this effect serves. */
   faction?: string;
   /** Who the effect reaches for, resolved by the shared target scan: 'opponent'
@@ -922,6 +932,18 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     forbidOn: ['water', 'lava', 'chasm', 'gore'],
     effect: { id: 'maw_reel', interval: 1.2, chance: 0.85, radius: 230, power: 9 } },
   nerve_root: { overlap: 'inert', spacing: 50 },
+  // The apothecary kit: brew-yard furniture + the fount-feeding spring.
+  // The still is GLASS (brittle, orb-rich — smashing the workshop pays);
+  // the spring is GROUND that wells orbs up on a beat (orb_spring handler)
+  // — terrain feeding the whole drinking economy through the ordinary
+  // scoop: pours, flask sips and orbPickup procs all ride the same orb.
+  alembic: { overlap: 'inert', spacing: 40,
+    brittle: { on: ['hit', 'touch'], orbChance: 0.65, text: 'the still shatters!', color: '#b8d8e8' } },
+  herb_rack: { overlap: 'solid', blocksMove: true, spacing: 55 },
+  cauldron: { overlap: 'solid', blocksMove: true, spacing: 70 },
+  spring_pool: { overlap: 'ground', walkOnly: true, spacing: 460,
+    forbidOn: ['water', 'lava', 'chasm', 'gore'],
+    effect: { id: 'orb_spring', interval: 5, chance: 1, radius: 120, power: 1 } },
   // Canopy kinds (occlude): their crowns draw ABOVE actors and FADE when the
   // hero stands under them — the fake-2D depth layer (renderer drawCanopies).
   // TREES have TRUNKS now (bodyScale): feet and arrows respect the trunk,
@@ -3724,6 +3746,12 @@ registerStamp('caul_sac', (ctx, spec) => stampSolid(ctx, 'caul_sac', spec.radius
 registerStamp('caul_eyes', stampSingle('caul_eyes', [12, 18]));
 registerStamp('maw_pit', stampSingle('maw_pit', [26, 36]));
 registerStamp('nerve_root', stampSingle('nerve_root', [20, 30]));
+// The apothecary kit: brew-yard furniture (formations.ts herbalists_croft
+// composes them) + the lone wellspring pool.
+registerStamp('alembic', stampSingle('alembic', [10, 14]));
+registerStamp('herb_rack', (ctx, spec) => stampSolid(ctx, 'herb_rack', spec.radius ?? [12, 16]));
+registerStamp('cauldron', (ctx, spec) => stampSolid(ctx, 'cauldron', spec.radius ?? [12, 16]));
+registerStamp('spring_pool', stampSingle('spring_pool', [34, 52]));
 // The ossuary kit: bone dunes, reliquary shelf-walls, and the overflow pits —
 // the Necropolis' interior vocabulary (data/tilesets.ts 'ossuary').
 registerStamp('bone_mound', (ctx, spec) => stampSolid(ctx, 'bone_mound', spec.radius ?? [26, 48]));

@@ -1959,6 +1959,7 @@ export class World {
     growth_lash: (d, eff) => this.effectGrowthLash(d, eff),
     status_wash: (d, eff) => this.effectStatusWash(d, eff),
     maw_reel: (d, eff) => this.effectMawReel(d, eff),
+    orb_spring: (d, eff) => this.effectOrbSpring(d, eff),
   };
   /** Reusable hidden caster for environmental hazards (lava orbs) — like demonCaster. */
   private hazardCaster: Actor | null = null;
@@ -9210,6 +9211,39 @@ export class World {
         color: col, life: 0.16, maxLife: 0.16,
       });
     }
+  }
+
+  private readonly orbSpringScratch: Actor[] = [];
+  /** Alternating-breath state for kind-less orb springs (life, then mana). */
+  private orbSpringBreath = false;
+
+  /** ORB SPRING (DoodadEffect id 'orb_spring'): the pool WELLS UP a registry
+   *  orb on its beat while someone who could scoop it stands near — terrain
+   *  feeding the whole drinking economy through the ordinary orb seam (the
+   *  instant pour, flask fount sips, orbPickup procs and refunds — nothing
+   *  bespoke anywhere downstream). `orbKind` names any ORB_DEFS row (a
+   *  wakeflame shrinespring is one field); omitted, the spring BREATHES —
+   *  life and mana on alternating beats. `power` is orbs per beat; `chance`
+   *  gates the beat. Springs don't flood empty rooms: no drinker, no well. */
+  private effectOrbSpring(d: Doodad, eff: DoodadEffect): void {
+    if (this.orbs.length >= ORB_CAP) return;
+    let anyNear = false;
+    for (const a of this.actorsNear(d.pos.x, d.pos.y, d.radius + eff.radius, this.orbSpringScratch)) {
+      if (a.dead || a.construct) continue;
+      if (dist(a.pos, d.pos) > d.radius + eff.radius) continue;
+      anyNear = true; break;
+    }
+    if (!anyNear || !chance(eff.chance)) return;
+    const kind = eff.orbKind
+      ?? ((this.orbSpringBreath = !this.orbSpringBreath) ? 'life' : 'mana');
+    if (!ORB_DEFS[kind]) return;
+    for (let i = 0; i < Math.max(1, Math.round(eff.power)); i++) {
+      this.shedOrb(kind, vec(d.pos.x, d.pos.y), { scatter: Math.max(16, d.radius * 0.6) });
+    }
+    this.flashes.push({
+      pos: vec(d.pos.x, d.pos.y), radius: d.radius + 6,
+      color: eff.color ?? ORB_DEFS[kind].color ?? '#bfe8f4', life: 0.3, maxLife: 0.3,
+    });
   }
 
   // --- INCURSION PAYOFF (Pass 2d): the Observer boss --------------------------
