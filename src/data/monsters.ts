@@ -2011,7 +2011,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     color: '#7e6038', shape: 'octagon', radius: 17, look: 'bandit_bruiser',
     base: { life: 96, moveSpeed: 112, accuracy: 100, armor: 32, mana: 40, manaRegen: 4 },
     mods: [mod('life', 'more', 0.5)],
-    skills: ['heavy_strike', 'ground_slam'],
+    // Swig: the pocket brew — the enemy's side of the flask rule (a REFLEX
+    // drink, thirst-gated). The bruiser pulls at it MID-BRAWL, so the
+    // player watches the counterplay teach itself: burst him through it.
+    skills: ['heavy_strike', 'ground_slam', 'swig'],
     xp: 24, faction: 'bandit', adorn: 'horns',
     brain: { type: 'juggernaut', enrage: 0.4 },
     detection: 0.85,
@@ -2526,7 +2529,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     id: 'gnoll_butcher', name: 'Gnoll Butcher',
     color: '#a87838', shape: 'trapezoid', radius: 15, material: 'fur', look: 'gnoll_butcher',
     base: { life: 75, moveSpeed: 150, accuracy: 100, armor: 15, mana: 40, manaRegen: 5 },
-    skills: ['cleave', 'claw'],
+    // Veterans carry grog (swig: the reflex pocket brew) — a butcher who
+    // drinks through his own cleave wind-up is the drill line's medic.
+    skills: ['cleave', 'claw', 'swig'],
     xp: 22,
     // Butchers AVENGE a fallen leader instead of mourning it — and march
     // the drill line with the prowlers. Veterans: they heed the howler's

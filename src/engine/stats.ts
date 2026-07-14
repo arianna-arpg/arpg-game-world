@@ -516,6 +516,16 @@ export const STAT_DEFS: Record<string, StatDef> = {
    *  stream's total (0.03 = +3% of max per drink) — the percent lever
    *  passives/affixes grant so flat founts keep pace with big pools. */
   restorePctMax:  { label: 'Restored % of Maximum', base: 0, min: 0, percent: true },
+  /** > 0: the skill is a REFLEX — its instant press PIERCES the user's own
+   *  commitment (cast bars, channels, dashes, recovery) and resolves
+   *  alongside it (REFLEX_CFG.during picks the open states). The
+   *  from-outside twin of SkillDef.reflex: tag-scope it and any instant
+   *  skill joins the wrist ("flask skills are Reflexes" is one modifier). */
+  reflex:         { label: 'Reflex', base: 0, min: 0 },
+  /** > 0: THIRST gates (GateSpec.missing) are waived for this skill — a
+   *  brimming pool no longer refuses the drink. The rider-chaser's lever:
+   *  drink for the on-drink effects and let the pour spill. */
+  thirstless:     { label: 'Thirstless', base: 0, min: 0 },
   /** Victim-side chance to SHRUG an incoming ailment outright — queried
    *  with the status's element tag, so Purity of Fire resists ignites
    *  specifically while Purity of Elements resists the lot. */

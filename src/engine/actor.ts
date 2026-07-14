@@ -13,10 +13,10 @@ import {
 import { DEFENSE_CFG } from './defense';
 import {
   hostSockets, instanceMods, skillContextTags, instanceGates, instanceChargeCost, instanceChargeGain,
-  instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, CONDUIT_CFG,
+  instanceUseCharges, socketSpec, instanceSelfStack, instanceConduits, CONDUIT_CFG, REFLEX_CFG,
   type SkillInstance, type BuffEffect, type CastMode, type ConstructKind, type AuraSpec,
   type EchoRiderSpec, type LedgerSpec, type ChannelSpec, type BrimSpec, type ConduitSpec,
-  type ConduitPool,
+  type ConduitPool, type GateSpec,
 } from './skills';
 import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
@@ -831,6 +831,10 @@ export class Actor {
   cooldowns = new Map<string, number>();
   /** Time until the actor can act again (set by a skill's use time). */
   useLock = 0;
+  /** Pacing between PIERCED reflex presses (REFLEX_CFG.lock) — the wrist's
+   *  own beat, independent of useLock so a reflex never extends what the
+   *  body is doing (and a held flask key drinks at a cadence, not 60/s). */
+  reflexLock = 0;
 
   statuses: ActiveStatus[] = [];
   buffs = new Map<string, ActiveBuff>();
@@ -1916,6 +1920,7 @@ export class Actor {
       }
     }
     if (this.useLock > 0) this.useLock -= dt;
+    if (this.reflexLock > 0) this.reflexLock -= dt;
     if (this.hitFlash > 0) this.hitFlash -= dt;
     if (this.aiCooldown > 0) this.aiCooldown -= dt;
     // Evasion-entropy freshness: unattacked long enough, the accumulator
@@ -2437,25 +2442,51 @@ export class Actor {
       + (spec.cap.maxManaPct ?? 0) * this.maxMana();
   }
 
-  /** Are every gate's thresholds met (SkillDef.gate + socketed levies)?
-   *  All actor-local, so the HUD, the AI, and the press agree. */
-  gatesMet(inst: SkillInstance): boolean {
+  /** The first UNMET gate (SkillDef.gate + socketed levies), or null when
+   *  every threshold holds. All actor-local, so the HUD, the AI, and the
+   *  press agree — and the refusal can speak the gate's own `note`. */
+  unmetGate(inst: SkillInstance): GateSpec | null {
     for (const g of instanceGates(inst)) {
-      if (g.charge && (this.charges.get(g.charge.id) ?? 0) < g.charge.amount) return false;
-      if (g.buff && !this.buffs.has(g.buff)) return false;
+      if (g.charge && (this.charges.get(g.charge.id) ?? 0) < g.charge.amount) return g;
+      if (g.buff && !this.buffs.has(g.buff)) return g;
       if (g.resource) {
         const cur = g.resource.kind === 'mana' ? this.mana
           : g.resource.kind === 'life' ? this.life
           : g.resource.kind === 'es' ? this.es : this.ward;
-        if (cur < g.resource.amount) return false;
+        if (cur < g.resource.amount) return g;
       }
-      if (g.guard && this.casting?.mode !== 'guard') return false;
-      if (g.active && !this.activeAuras.has(g.active) && !this.summonToggles.has(g.active)) return false;
+      // THIRST (GateSpec.missing): a brimming pool refuses the drink —
+      // unless the `thirstless` stat waives it (the drink-for-the-rider
+      // lane: supports, passives and statuses all reach it per-skill).
+      if (g.missing && this.sheet.get('thirstless',
+        skillContextTags(inst.def), instanceMods(inst)) <= 0) {
+        const maxOf = (kind: 'life' | 'mana' | 'es'): number =>
+          kind === 'life' ? this.maxLife()
+          : kind === 'mana' ? this.availableMaxMana() : this.maxEs();
+        const short = (kind: 'life' | 'mana' | 'es'): number =>
+          maxOf(kind) - (kind === 'life' ? this.life
+            : kind === 'mana' ? this.mana : this.es);
+        // The floor: a flat dent, or pct of the pool — whichever is larger
+        // (pct is what lets one gate spec fit every body size).
+        const need = (kind: 'life' | 'mana' | 'es'): number =>
+          Math.max(g.missing!.amount ?? 1, (g.missing!.pct ?? 0) * maxOf(kind));
+        const met = g.missing.kind === 'any'
+          ? short('life') >= need('life') || short('mana') >= need('mana')
+          : short(g.missing.kind) >= need(g.missing.kind);
+        if (!met) return g;
+      }
+      if (g.guard && this.casting?.mode !== 'guard') return g;
+      if (g.active && !this.activeAuras.has(g.active) && !this.summonToggles.has(g.active)) return g;
       // RECENT-DAMAGE window (Reprisal): the counter-blow answers only
       // wounds — usable within `within` seconds of last taking damage.
-      if (g.recentDamage && this.recentHurt > g.recentDamage.within) return false;
+      if (g.recentDamage && this.recentHurt > g.recentDamage.within) return g;
     }
-    return true;
+    return null;
+  }
+
+  /** Are every gate's thresholds met? (unmetGate, as the yes/no.) */
+  gatesMet(inst: SkillInstance): boolean {
+    return this.unmetGate(inst) === null;
   }
 
   /** SELECTIVE CC (StatusDef.forbidsTags): any carried status that forbids
@@ -2470,6 +2501,32 @@ export class Actor {
       for (const t of forbids) if (inst.def.tags.includes(t)) return true;
     }
     return false;
+  }
+
+  /** Is this skill a REFLEX in this actor's hands — an instant press that
+   *  may pierce their own commitment? Innate (SkillDef.reflex) or granted
+   *  from outside (the `reflex` stat: supports, passives, statuses —
+   *  tag-scopable). Plain instant casts only: a skill that needs a bar or
+   *  a hold of its own can never ride the wrist. */
+  isReflex(inst: SkillInstance): boolean {
+    const def = inst.def;
+    if ((def.castMode ?? 'cast') !== 'cast' || def.channel || def.concentration) return false;
+    if (this.skillUseTime(inst) > 0.001) return false;
+    return def.reflex === true
+      || this.sheet.get('reflex', skillContextTags(def), instanceMods(inst)) > 0;
+  }
+
+  /** Does REFLEX_CFG leave every commitment this actor is CURRENTLY under
+   *  open to a reflex press? Chosen states (casts by mode, dash, recovery)
+   *  default open; suffered ones (stun) default closed. Dead never opens. */
+  private reflexOpen(): boolean {
+    const d = REFLEX_CFG.during;
+    if (this.dead) return false;
+    if (this.casting && d[this.casting.mode] === false) return false;
+    if (this.dash && d.dash === false) return false;
+    if (this.useLock > 0 && d.useLock === false) return false;
+    if (this.isStunned() && d.stun !== true) return false;
+    return true;
   }
 
   canUse(inst: SkillInstance): boolean {
@@ -2489,9 +2546,18 @@ export class Actor {
         || !!socketSpec(inst, 'guardCast')
         || (inst.hostSkillId !== undefined
           && this.casting!.inst.def.id === inst.hostSkillId));
-    if (holdCombo) {
-      if (this.dead || this.useLock > 0 || this.isStunned()) return false;
-    } else if (!this.canAct()) return false;
+    // THE REFLEX LANE (the flask rule): a reflex press pierces ANY open
+    // commitment — a running cast bar included, which no hold combo ever
+    // covered — paced by its own reflexLock instead of the body's clocks.
+    // Broader than holdCombo where both apply, so it's weighed first
+    // (reflexOpen already carries the dead/stun/dash/recovery policy).
+    const reflex = !this.canAct() && this.reflexLock <= 0
+      && this.isReflex(inst) && this.reflexOpen();
+    if (!reflex) {
+      if (holdCombo) {
+        if (this.dead || this.useLock > 0 || this.isStunned()) return false;
+      } else if (!this.canAct()) return false;
+    }
     if (this.cooldowns.has(inst.def.id)) return false;
     // Guard-locked skills (Transgression) demand a raised stance.
     if (inst.def.requiresGuard && this.casting?.mode !== 'guard') return false;

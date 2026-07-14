@@ -181,6 +181,19 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   flask_catalyst: {
     label: 'Catalyst', color: '#c8a848', hud: 'slot',
   },
+  // UTILITY FOUNTS (the buff-flask wing): any orb kind banks a sip; the
+  // drink pours a STANCE instead of a pool — quicksilver's heels, the
+  // stoneskin hide, the antidote's clean blood. Mute counters like their
+  // elder siblings: the payoff lives on each drink's buff.
+  flask_quicksilver: {
+    label: 'Quicksilver Fount', color: '#b8d8e8', hud: 'slot',
+  },
+  flask_stoneskin: {
+    label: 'Stoneskin Fount', color: '#a89878', hud: 'slot',
+  },
+  flask_antidote: {
+    label: 'Antidote Fount', color: '#88c878', hud: 'slot',
+  },
 
   // WAKEFLAME (the votive economy): funeral-vigil flames, shed as ORBS
   // (ORB_DEFS.wakeflame) by the skills that keep the wake, banked here on

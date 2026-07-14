@@ -98,7 +98,12 @@ changes.
   freezes (`TIME_CFG.surfaces`), `SkillDef.chrono` time-stop casts, and
   `StatusDef.timeScale` stasis/slow statuses; world- and per-actor scales,
   solo-only menu policy via `Timeflow.allowHold` — docs in
-  `docs/engine/timeflow.md`),
+  `docs/engine/timeflow.md`).
+  THE REFLEX FABRIC (flasks are never locked out): `SkillDef.reflex` /
+  the `reflex` stat + `REFLEX_CFG` open instant presses THROUGH the
+  user's own casts/dashes/recovery without disturbing them; the THIRST
+  gate (`GateSpec.missing`, waived by `thirstless`) refuses moot drinks
+  before any cost — docs in `docs/engine/reflex.md`.
   `levelgen.ts`, `worldgen.ts`.
   ZONE OBJECTIVES are a data vocabulary (ObjectiveSpec + per-kind
   `OBJECTIVE_SEALS` exit policy + `data/beacons.ts` survey spires and the

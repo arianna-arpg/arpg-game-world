@@ -6584,17 +6584,35 @@ export const SKILLS: Record<string, SkillDef> = {
   // keeps the OTHER philosophy on purpose — chargeCost 'all' + perCharge,
   // the scale-with-bank lane any skill can still choose. Learned flasks
   // also carry a passive drop chance (equipMods) — the alchemist's loop.
+  //
+  // THE DRINKING CONTRACT (three data levers, no bespoke code):
+  //  - reflex: true — the drink pierces your own commitment (a running
+  //    cast bar, a dash, swing recovery) and lands WITHOUT disturbing it.
+  //    REFLEX_CFG.during is the policy; the `reflex` stat extends the
+  //    wrist to anything else.
+  //  - gate.missing (THIRST) — a brimming pool refuses the press outright,
+  //    so a sip is NEVER eaten by a moot drink ("a use is a use"). The
+  //    `thirstless` stat waives it for drink-for-the-rider builds.
+  //  - the 'quaffing' marker buff — worn for the pour, so "while a flask
+  //    effect is running" is one gate/proc away for ANY content: gate on
+  //    { buff: 'quaffing' }, proc on trigger 'buffGain' + buff 'quaffing',
+  //    or hang passive mods off it.
 
   life_flask: {
     id: 'life_flask', name: 'Life Flask',
-    description: 'A fount of THREE sips — every life orb you scoop banks one. Drinking spends a single sip and pours a fixed draught of healing over a few seconds, deeper as the skill levels. Carried on the bar, it shakes life orbs loose from your hits.',
+    description: 'A fount of THREE sips — every life orb you scoop banks one. Drinking spends a single sip and pours a fixed draught of healing over a few seconds, deeper as the skill levels. A REFLEX: drinkable even mid-cast, and never wasted — a brimming heart refuses the pour. Carried on the bar, it shakes life orbs loose from your hits.',
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#d04848',
-    manaCost: 0, cooldown: 2, useTime: 0,
+    manaCost: 0, cooldown: 2, useTime: 0, reflex: true,
+    gate: { missing: { kind: 'life' }, note: 'brimming' },
     chargeGain: [{ charge: 'flask_life', amount: 1, max: 3, on: 'orbPickup', orbKind: 'life' }],
     chargeCost: { charge: 'flask_life', amount: 1 },
     equipMods: [mod('orbOnHit_life', 'flat', 0.05)],
     delivery: { type: 'self' },
-    effects: [{ type: 'restoreOverTime', resource: 'life', amount: 16, amountPerLevel: 4, duration: 3 }],
+    effects: [
+      { type: 'restoreOverTime', resource: 'life', amount: 16, amountPerLevel: 4, duration: 3 },
+      // The pour's public face: gates, procs and passives key on it.
+      { type: 'buff', id: 'quaffing', duration: 3, mods: [] },
+    ],
     thresholds: [
       { level: 12, label: 'Deeper draught', mods: [mod('chargeCap', 'flat', 1)] },
     ],
@@ -6603,14 +6621,18 @@ export const SKILLS: Record<string, SkillDef> = {
 
   mana_flask: {
     id: 'mana_flask', name: 'Mana Flask',
-    description: 'A fount of THREE sips — every mana orb you scoop banks one. Drinking spends a single sip and pours a fixed draught of mana over a few seconds, deeper as the skill levels. Carried on the bar, it shakes mana orbs loose from your hits.',
+    description: 'A fount of THREE sips — every mana orb you scoop banks one. Drinking spends a single sip and pours a fixed draught of mana over a few seconds, deeper as the skill levels. A REFLEX: drinkable even mid-cast, and never wasted — a brimming well refuses the pour. Carried on the bar, it shakes mana orbs loose from your hits.',
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#4a78d8',
-    manaCost: 0, cooldown: 2, useTime: 0,
+    manaCost: 0, cooldown: 2, useTime: 0, reflex: true,
+    gate: { missing: { kind: 'mana' }, note: 'brimming' },
     chargeGain: [{ charge: 'flask_mana', amount: 1, max: 3, on: 'orbPickup', orbKind: 'mana' }],
     chargeCost: { charge: 'flask_mana', amount: 1 },
     equipMods: [mod('orbOnHit_mana', 'flat', 0.05)],
     delivery: { type: 'self' },
-    effects: [{ type: 'restoreOverTime', resource: 'mana', amount: 13, amountPerLevel: 3, duration: 3 }],
+    effects: [
+      { type: 'restoreOverTime', resource: 'mana', amount: 13, amountPerLevel: 3, duration: 3 },
+      { type: 'buff', id: 'quaffing', duration: 3, mods: [] },
+    ],
     thresholds: [
       { level: 12, label: 'Deeper draught', mods: [mod('chargeCap', 'flat', 1)] },
     ],
@@ -6619,9 +6641,9 @@ export const SKILLS: Record<string, SkillDef> = {
 
   catalyst_flask: {
     id: 'catalyst_flask', name: 'Catalyst Flask',
-    description: 'The alchemist\'s vice: EVERY orb kind feeds the catalyst, and drinking it GULPS the whole bank — a fuller catalyst trickles life and mana longer, and the reaction leaves you burning brighter for a spell.',
+    description: 'The alchemist\'s vice: EVERY orb kind feeds the catalyst, and drinking it GULPS the whole bank — a fuller catalyst trickles life and mana longer, and the reaction leaves you burning brighter for a spell. A REFLEX: drinkable even mid-cast — and at ANY fullness, because the high is never moot (no thirst gate; the gulp is yours to judge).',
     tags: ['instant', 'buff', 'duration', 'flask'], color: '#c8a848',
-    manaCost: 0, cooldown: 5, useTime: 0,
+    manaCost: 0, cooldown: 5, useTime: 0, reflex: true,
     chargeGain: [{ charge: 'flask_catalyst', amount: 1, max: 6, on: 'orbPickup' }],
     chargeCost: { charge: 'flask_catalyst', amount: 'all', minimum: 2 },
     equipMods: [mod('orbOnHit_life', 'flat', 0.025), mod('orbOnHit_mana', 'flat', 0.025)],
@@ -6629,6 +6651,7 @@ export const SKILLS: Record<string, SkillDef> = {
     effects: [
       { type: 'restoreOverTime', resource: 'life', amount: 7, duration: 3.5, perCharge: true },
       { type: 'restoreOverTime', resource: 'mana', amount: 6, duration: 3.5, perCharge: true },
+      { type: 'buff', id: 'quaffing', duration: 3.5, mods: [] },
       {
         type: 'buff', id: 'catalyst_high', duration: 6,
         mods: [mod('damage', 'increased', 0.15), mod('moveSpeed', 'increased', 0.1)],
@@ -6638,6 +6661,127 @@ export const SKILLS: Record<string, SkillDef> = {
       { level: 12, label: 'Volatile mixture', mods: [mod('chargeCap', 'flat', 3)] },
     ],
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  // --- Utility founts (the buff-flask wing) ---------------------------------
+  // Same fount economy, different cargo: ANY orb kind banks the sip (the
+  // catalyst's open mouth), and the drink pours a STANCE instead of a pool.
+  // No thirst gates on purpose — a stance is never moot, so the judgment
+  // call stays with the drinker (the same reasoning as the catalyst). All
+  // REFLEXES: the whole family answers mid-anything, by contract.
+
+  quicksilver_flask: {
+    id: 'quicksilver_flask', name: 'Quicksilver Flask',
+    description: 'A fount of THREE sips — any orb you scoop banks one. Drinking pours QUICKNESS: a hard burst of move speed while it lasts. A REFLEX: drinkable mid-cast, mid-dash, mid-anything — the heels answer even when the hands are full.',
+    tags: ['instant', 'buff', 'duration', 'flask'], color: '#b8d8e8',
+    manaCost: 0, cooldown: 6, useTime: 0, reflex: true,
+    chargeGain: [{ charge: 'flask_quicksilver', amount: 1, max: 3, on: 'orbPickup' }],
+    chargeCost: { charge: 'flask_quicksilver', amount: 1 },
+    equipMods: [mod('orbOnHit_life', 'flat', 0.02), mod('orbOnHit_mana', 'flat', 0.02)],
+    delivery: { type: 'self' },
+    effects: [
+      {
+        type: 'buff', id: 'quicksilver', duration: 4,
+        mods: [mod('moveSpeed', 'increased', 0.3)],
+      },
+      { type: 'buff', id: 'quaffing', duration: 4, mods: [] },
+    ],
+    thresholds: [
+      { level: 12, label: 'Fleet', mods: [mod('chargeCap', 'flat', 1)] },
+    ],
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  stoneskin_flask: {
+    id: 'stoneskin_flask', name: 'Stoneskin Flask',
+    description: 'A fount of THREE sips — any orb you scoop banks one. Drinking pours HIDE: your armor hardens sharply while it lasts. A REFLEX: the classic mid-slam answer — drink through the wind-up and take the hit on stone.',
+    tags: ['instant', 'buff', 'duration', 'flask'], color: '#a89878',
+    manaCost: 0, cooldown: 8, useTime: 0, reflex: true,
+    chargeGain: [{ charge: 'flask_stoneskin', amount: 1, max: 3, on: 'orbPickup' }],
+    chargeCost: { charge: 'flask_stoneskin', amount: 1 },
+    equipMods: [mod('orbOnHit_life', 'flat', 0.02), mod('orbOnHit_mana', 'flat', 0.02)],
+    delivery: { type: 'self' },
+    effects: [
+      {
+        type: 'buff', id: 'stoneskin', duration: 4.5,
+        mods: [mod('armor', 'increased', 0.45)],
+      },
+      { type: 'buff', id: 'quaffing', duration: 4.5, mods: [] },
+    ],
+    thresholds: [
+      { level: 12, label: 'Bedrock', mods: [mod('chargeCap', 'flat', 1)] },
+    ],
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  antidote_flask: {
+    id: 'antidote_flask', name: 'Antidote Flask',
+    description: 'A fount of TWO sips — any orb you scoop banks one. Drinking SCOURS: harmful ailments are cleansed on the spot and your blood runs clean against new ones for a while. A REFLEX: the cure that never waits for the cast to finish.',
+    tags: ['instant', 'buff', 'duration', 'flask'], color: '#88c878',
+    manaCost: 0, cooldown: 10, useTime: 0, reflex: true,
+    chargeGain: [{ charge: 'flask_antidote', amount: 1, max: 2, on: 'orbPickup' }],
+    chargeCost: { charge: 'flask_antidote', amount: 1 },
+    equipMods: [mod('orbOnHit_life', 'flat', 0.02), mod('orbOnHit_mana', 'flat', 0.02)],
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'cleanse', count: 3 },
+      {
+        type: 'buff', id: 'antidote', duration: 5,
+        mods: [mod('ailmentResist', 'flat', 0.5)],
+      },
+      { type: 'buff', id: 'quaffing', duration: 5, mods: [] },
+    ],
+    thresholds: [
+      { level: 12, label: 'Panacea', mods: [mod('chargeCap', 'flat', 1)] },
+    ],
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.06)] },
+  },
+
+  // --- The drinking lane's payloads & the pocket brew ------------------------
+  // Payload skills (followUp cargo for the drinking gems — never bar
+  // entries themselves) and the monsters' own drink. All instant: a
+  // payload must land clean even when the drink that fired it pierced a
+  // running cast.
+
+  acrid_splash: {
+    id: 'acrid_splash', name: 'Acrid Splash', noDrop: true,
+    description: 'The dregs bite: a corrosive ring flung off the drink, searing whoever crowds the drinker.',
+    tags: ['spell', 'chaos', 'aoe'], color: '#9ac838',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { chaos: [8, 14] },
+    delivery: { type: 'nova', radius: 130 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.6, magnitude: 1.2 },
+    ],
+  },
+
+  chaser_edge: {
+    id: 'chaser_edge', name: 'Chaser', noDrop: true,
+    description: 'The drink kicks: a short surge of tempo behind whatever you were doing.',
+    tags: ['buff', 'duration'], color: '#e8c878',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'chaser_edge', duration: 3,
+      mods: [mod('attackSpeed', 'increased', 0.18), mod('castSpeed', 'increased', 0.18)],
+    }],
+  },
+
+  swig: {
+    id: 'swig', name: 'Swig', noDrop: true,
+    description: 'A pull from a pocket brew — the enemy\'s own flask rule: a REFLEX even mid-swing, and never wasted on a full heart.',
+    tags: ['instant', 'buff', 'duration', 'flask'], color: '#c87848',
+    manaCost: 0, cooldown: 9, useTime: 0, reflex: true,
+    // The pct floor scales the thirst across every body that carries this:
+    // a rat and a warlord both wait for a REAL dent before drinking.
+    gate: { missing: { kind: 'life', pct: 0.2 }, note: 'brimming' },
+    delivery: { type: 'self' },
+    effects: [
+      { type: 'restoreOverTime', resource: 'life', amount: 4, amountPctMax: 0.22, duration: 2.5 },
+      { type: 'buff', id: 'quaffing', duration: 2.5, mods: [] },
+    ],
+    ai: { range: 360, weight: 3 },
   },
 
   // ======================= The Wakeflame votive economy ====================

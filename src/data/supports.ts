@@ -1426,6 +1426,61 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The drinking gems (flask lane) ----------------------------------------
+  // The flask family's socket wing, all riding existing seams: the `reflex`
+  // and `thirstless` stats (skill-scoped like any mod), and followUp
+  // payloads (the Reaper's Encore shape) so a drink can carry cargo —
+  // outward at enemies, sideways at allies, inward as tempo. Nothing here
+  // is flask-only machinery; every lever composes anywhere its tags admit.
+
+  muscle_memory: {
+    id: 'muscle_memory', name: 'Muscle Memory',
+    description: 'Supported instant skill becomes a REFLEX: pressable straight through your own casts, dashes and recovery, resolving alongside them — the hand learns to move without asking the spine. (Flasks are born knowing this.)',
+    color: '#c8c8d8', requiresTags: ['instant'], excludeTags: ['flask'],
+    mods: [mod('reflex', 'flat', 1)],
+    perLevel: [mod('cooldownRecovery', 'increased', 0.04)],
+    weight: 5,
+  },
+
+  libation: {
+    id: 'libation', name: 'Libation',
+    description: 'The drink is the point: this flask ignores its thirst gate — drinkable at a full pool, pour spilled or not — and every pour runs 15% richer. For builds that drink for what RIDES the drink.',
+    color: '#d8b86a', requiresTags: ['flask'],
+    mods: [mod('thirstless', 'flat', 1), mod('restorePower', 'increased', 0.15)],
+    perLevel: [mod('restorePower', 'increased', 0.05)],
+    weight: 5,
+  },
+
+  acrid_draught: {
+    id: 'acrid_draught', name: 'Acrid Draught',
+    description: 'The dregs go OUTWARD: every drink from this flask flings an Acrid Splash — a corrosive, poisoning ring — at whoever crowds you. The drink itself pours 15% thinner; teeth cost.',
+    color: '#9ac838', requiresTags: ['flask'],
+    followUp: { skillId: 'acrid_splash', delay: 0.2 },
+    mods: [mod('restorePower', 'more', -0.15)],
+    perLevel: [mod('damage', 'increased', 0.06)],
+    weight: 5,
+  },
+
+  shared_draught: {
+    id: 'shared_draught', name: 'Shared Draught',
+    description: 'A toast: every drink from this flask speaks a Benediction a beat later — everyone on your side around you is mended at once. The mending scales with your healing power, not the pour.',
+    color: '#9ae0b0', requiresTags: ['flask'],
+    followUp: { skillId: 'benediction', delay: 0.3 },
+    mods: [],
+    perLevel: [mod('healPower', 'increased', 0.06)],
+    weight: 5,
+  },
+
+  chaser: {
+    id: 'chaser', name: 'Chaser',
+    description: 'The drink KICKS: every drink from this flask is chased by a short surge of attack and cast tempo. Drink into the fight, not out of it.',
+    color: '#e8c878', requiresTags: ['flask'],
+    followUp: { skillId: 'chaser_edge', delay: 0.15 },
+    mods: [],
+    perLevel: [mod('effectDuration', 'increased', 0.05)],
+    weight: 5,
+  },
+
   splitting: {
     id: 'splitting', name: 'Splitting',
     description: 'Fires +1 projectile, but each deals less damage. Costs more mana.',

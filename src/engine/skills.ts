@@ -2553,6 +2553,39 @@ export interface ChargeSpec {
   speedAtFull?: number;
 }
 
+// --- THE REFLEX FABRIC: presses that pierce commitment -----------------------
+// A REFLEX is a muscle-memory action — the flask at the lips mid-incantation.
+// Its instant press goes THROUGH the caster's own commitment (a running cast
+// bar, a held channel, a dash, swing recovery) and resolves ALONGSIDE it:
+// the cast keeps casting, the feet keep dashing, the drink still lands.
+// Sources compose like everything else: SkillDef.reflex declares it innately
+// (flasks), and the `reflex` STAT grants it from outside — a support gem's
+// mods, a passive scoped to a tag, a status. One gate reads both
+// (Actor.isReflex); canUse opens the pierced lane; useSkill keeps a pierced
+// press from disturbing the body (no facing jerk, no aim restamp, no bar
+// conversions, no recovery stamp).
+
+export const REFLEX_CFG = {
+  /** Which commitment states stay OPEN to a reflex press. Casting states
+   *  are keyed by CastMode; the rest are actor conditions. CHOSEN
+   *  commitments default OPEN (an unlisted future cast mode admits the
+   *  wrist — set `false` to close one); SUFFERED states (stun) default
+   *  CLOSED and must be opened deliberately. Dead is never open. */
+  during: {
+    cast: true,          // a running one-shot bar — the flagship case
+    perfect: true, timed: true, multitude: true,
+    channel: true, guard: true, charge: true, overcharge: true,
+    concentration: true,
+    dash: true,          // mid-dodge sips: the hand knows the way
+    useLock: true,       // swing recovery never outranks the wrist
+    stun: false,         // a rattled skull fumbles the cap (the one closed door)
+  } as Record<string, boolean>,
+  /** Seconds between PIERCED reflex presses — the pacing that stands in for
+   *  the instant-use recovery a reflex refuses to stamp (a held key drinks
+   *  at this cadence, never per-frame). Idle presses pace as before. */
+  lock: 0.15,
+};
+
 // --- Gating: prerequisites a use must satisfy --------------------------------
 
 /**
@@ -2570,6 +2603,14 @@ export interface GateSpec {
   buff?: string;
   /** A resource floor: current value ≥ amount. */
   resource?: { kind: 'mana' | 'life' | 'es' | 'ward'; amount: number };
+  /** A THIRST gate: the pool must be MISSING at least `amount` (default 1)
+   *  — or `pct` of its maximum, whichever is LARGER — before the use will
+   *  fire: the moot-drink refusal ("a use is a use": a brimming pool never
+   *  eats a sip; a pct floor also refuses micro-sips). 'any' is met when
+   *  life OR mana is short (the catalyst's either-pool drink). Waived
+   *  per-skill by the `thirstless` stat (>0) — the override lane for
+   *  builds that drink FOR the on-drink riders and waste the pour. */
+  missing?: { kind: 'life' | 'mana' | 'es' | 'any'; amount?: number; pct?: number };
   /** A HELD guard stance — any guard (true), mirroring requiresGuard. */
   guard?: true;
   /** A running TOGGLE (aura or summon contract) by skill id. */
@@ -2577,6 +2618,9 @@ export interface GateSpec {
   /** A RECENT WOUND: usable only within `within` seconds of the caster
    *  last TAKING damage (Reprisal — the counter-blow's license). */
   recentDamage?: { within: number };
+  /** Refusal/HUD note when THIS gate is the unmet one (default 'not ready'
+   *  — a flask's thirst gate says 'brimming'). */
+  note?: string;
 }
 
 /** Every gate a use must clear: the skill's own plus each socketed levy's. */
@@ -3541,6 +3585,14 @@ export interface SkillDef {
    *  during a hold fires the held skill's meta (Phalanx while Shield Up:
    *  you can't re-press a button you're already holding). */
   usableWhileGuarding?: boolean;
+  /** A REFLEX (the flask rule): this instant press pierces the caster's
+   *  OWN commitment — cast bars, channels, dashes, swing recovery — and
+   *  resolves alongside it without disturbing what the body is doing.
+   *  REFLEX_CFG.during says which states stay open; the `reflex` STAT is
+   *  the from-outside grant (supports/passives/statuses, tag-scopable).
+   *  Instant plain casts only — a skill that needs a bar or a hold of its
+   *  own can never be a reflex (two bodies of intent don't fit one spine). */
+  reflex?: true;
 
   /** RETALIATION (Pain Hounds): while equipped, every landed hit the
    *  owner SUFFERS breaks one banked `charge` and spawns this minion for

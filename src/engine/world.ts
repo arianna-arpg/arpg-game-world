@@ -24,7 +24,7 @@ import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './br
 import { runAIActions } from './aiActions';
 import {
   convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, UNLEASH_CFG,
-  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
+  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardSpec,
@@ -15089,11 +15089,22 @@ export class World {
     }
     // PREREQUISITE GATES: an unmet gate is the ONE canUse refusal worth a
     // note — the player should learn "not ready", not wonder about mana.
-    if (!caster.gatesMet(inst)) {
-      this.failNote(caster, inst.def.id + ':gate', 'not ready');
-      return false;
+    // The gate speaks its own note where it carries one (a flask's thirst
+    // gate says 'brimming') — and refusing HERE is what keeps a moot press
+    // from eating its cost: a use is a use, or it is nothing.
+    {
+      const unmet = caster.unmetGate(inst);
+      if (unmet) {
+        this.failNote(caster, inst.def.id + ':gate', unmet.note ?? 'not ready');
+        return false;
+      }
     }
     if (!caster.canUse(inst)) return false;
+    // A PIERCED press: canUse admitted it THROUGH a live commitment (the
+    // reflex lane / a hold combo). Resolve it AROUND the running action —
+    // no facing jerk, no aim restamp, no bar-growing conversions, and no
+    // recovery stamp (reflexes pace on their own reflexLock instead).
+    const pierced = !caster.canAct();
     // COMBO CHAIN (Unisect → Bisect → Trisect): consecutive presses within
     // the window WALK the chain — this press redirects to the queued step,
     // an ordinary catalog skill at the host's effective level. The cursor
@@ -15126,7 +15137,9 @@ export class World {
     // CONSTRUCTS deliberately DON'T stamp: guidePointOf falls through to the
     // OWNER's live cursor, so a rift's (or a mirage's) guided missiles are
     // the player's marionettes — the documented Hell Rift behavior.
-    if (!caster.construct) caster.aimPos = vec(aim.x, aim.y);
+    // PIERCED presses don't stamp either: a mid-cast sip must never steer
+    // the missiles the RUNNING cast is guiding.
+    if (!caster.construct && !pierced) caster.aimPos = vec(aim.x, aim.y);
     const def = inst.def;
 
     // Befuddlement: cursed actors may fumble the attempt entirely, stunning
@@ -15241,7 +15254,9 @@ export class World {
       const dt0 = def.delivery.type;
       const totemable = !['construct', 'aura', 'detonate', 'summon', 'mark', 'dash', 'blink', 'leap'].includes(dt0)
         && !(dt0 === 'self' && def.castMode !== 'guard');
-      if (!caster.construct && totemable
+      // Pierced presses refuse the conversion: the plant needs a bar of its
+      // own, and a reflex must never clobber the cast already on the spine.
+      if (!caster.construct && totemable && !pierced
         && caster.sheet.get('castAsTotem', skillContextTags(def), instanceMods(inst)) > 0) {
         caster.payCost(caster.skillCost(inst));
         caster.facing = angleTo(caster.pos, aim);
@@ -15276,7 +15291,9 @@ export class World {
       }
     }
 
-    caster.facing = angleTo(caster.pos, aim);
+    // A pierced press leaves the body alone: the shoulders stay square to
+    // the cast/dash they belong to — only the wrist moves.
+    if (!pierced) caster.facing = angleTo(caster.pos, aim);
     const mode = def.castMode ?? 'cast';
 
     // USE-CHARGES: the press spends one round off the bank (canUse already
@@ -15466,7 +15483,9 @@ export class World {
     // refilling bar (hold for stages, let go on the gold).
     {
       const ocSpec = instanceOvercharge(inst);
-      if (ocSpec && (mode === 'cast' || mode === 'perfect' || mode === 'timed'
+      // (Pierced presses skip the conversion — the refilling bar it grows
+      // would clobber the commitment the press just pierced.)
+      if (ocSpec && !pierced && (mode === 'cast' || mode === 'perfect' || mode === 'timed'
         || mode === 'overcharge')) {
         const tags = skillContextTags(def);
         const extra = instanceMods(inst);
@@ -15492,9 +15511,10 @@ export class World {
     }
 
     // A grafted strike-timing discipline promotes a plain bar cast into
-    // the perfect/timed machinery (Snipe's golden window on anything).
+    // the perfect/timed machinery (Snipe's golden window on anything) —
+    // except on a pierced press, which owns no bar to hang a window on.
     const timing = instanceStrikeTiming(inst);
-    const effMode = mode === 'cast' && timing ? timing.kind : mode;
+    const effMode = mode === 'cast' && timing && !pierced ? timing.kind : mode;
 
     const castTime = caster.skillUseTime(inst);
     if (effMode === 'cast' && castTime <= 0.001) {
@@ -15505,7 +15525,11 @@ export class World {
         chargesSpent: cc.consumed,
         repeat: bankSteps,
       });
-      caster.useLock = 0.12;
+      // A REFLEX that pierced paces on its own clock and stamps NO recovery
+      // — it must never lengthen the action it slipped through. Hold combos
+      // and idle presses keep the classic instant-use lock.
+      if (pierced && caster.isReflex(inst)) caster.reflexLock = REFLEX_CFG.lock;
+      else caster.useLock = 0.12;
       return true;
     }
 
