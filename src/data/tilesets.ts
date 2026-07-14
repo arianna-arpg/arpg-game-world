@@ -758,37 +758,47 @@ export const TILESETS: Record<string, TilesetDef> = {
       dayLight: 1.6,
       heat: 1,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }, { kind: 'sandDrift', intensity: 0.5 }],
-      ground: { scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45 },
+      // Sun-bleached scrub floor: a sand-to-dust gradient with a light bias —
+      // the waste must READ as sand at a glance, never night-bog (live QA).
+      ground: {
+        scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45,
+        palette: ['#201a0e', '#362a16', '#4c3c20', '#63512a', '#7a6434'], bias: 0.56, alpha: 0.55,
+      },
       floor: '#1a160d', grid: '#2a2418', border: '#7a6438',
       obstacle: '#5c4a2c', obstacleEdge: '#8a6e40', accent: '#e8c060',
       mud: '#6a5630', water: '#2a6a7a', sand: '#c9a86a',
     },
-    sizeW: [2600, 3600], sizeH: [1700, 2400], ellipseChance: 0.2, biome: 'desert',
+    sizeW: [3200, 4200], sizeH: [2200, 3000], ellipseChance: 0.15, biome: 'desert',
     layout: [
       { kind: 'cactus', count: [5, 9] },
-      { kind: 'sand', count: [4, 7] },
+      { kind: 'sand', count: [3, 5] },
       { kind: 'rocks', count: [6, 10], radius: [22, 52] },
       { kind: 'rock_spire', count: [1, 3] }, { kind: 'scree', count: [1, 2] },
       { kind: 'cliff', count: [1, 2] },
-      { kind: 'ruin', count: [0, 2] },
-      { kind: 'heat_shimmer', count: [2, 5] },
+      { kind: 'ruin', count: [0, 1] },
+      { kind: 'heat_shimmer', count: [2, 4] },
       { kind: 'camp', count: [0, 1] },
       { kind: 'cave', count: [0, 2] },
       { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
     ],
-    // Every desert face is combed by wind and slides — COMMON runs for both
-    // variants (a rolled variant REPLACES the base layout above).
+    // What every waste face IS: wind-combed ridges, lightning glass, old bones.
     common: [
       { kind: 'formation', count: [1, 2], formation: 'dune_ridges' },
       { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
       // Where lightning kept an appointment with the sand.
       { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
       { kind: 'fulgurite', count: [0, 2] },
+      { kind: 'bone_pile', count: [1, 3] },
       // Shimmer thickens where the WORLD bakes hottest (climate strata).
       { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
     ],
     packs: {
       count: [6, 8], size: [3, 5],
+      // The waste mixes warbands with lone hunters: most packs standard, the
+      // odd swarm-muster, the odd solitary stalker pair (archetype rolls).
+      archetypes: [
+        { weight: 2, size: [6, 9] }, { weight: 5, size: [3, 5] }, { weight: 3, size: [1, 2] },
+      ],
       table: [
         { id: 'gnoll_prowler', weight: 4 },
         { id: 'gnoll_longshot', weight: 2, presence: { from: 4, fadeIn: 3 } },

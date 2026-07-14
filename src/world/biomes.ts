@@ -513,7 +513,10 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
 
   { biome: 'field', weight: 1.1 },
   { biome: 'grave', weight: 1.0 },
-  { biome: 'desert', weight: 2.0 },
+  // 2.3: the desert COUNTRY reads as broad coherent regions worth committing
+  // to (three staged faces need the acreage) — its warm∧dry gate still keeps
+  // it out of everyone else's belts.
+  { biome: 'desert', weight: 2.3 },
   { biome: 'beach', weight: 1.6 },
   { biome: 'rift', weight: 1.2 },
   { biome: 'isle', weight: 1.2 },
