@@ -727,7 +727,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     depthAffinity: { to: 0.5, fadeOut: 0.3 },
     layoutParams: {
       duneGap: [360, 520], duneCrestW: [20, 32], dunePans: [1, 2],
-      duneCombEvery: 130,
+      duneCombEvery: 100,
     },
     variants: [
       { name: 'stony scrub', layout: [
@@ -827,7 +827,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     depthAffinity: { from: 0.3, fadeIn: 0.3 },
     layoutParams: {
       duneGap: [260, 380], duneCrestW: [26, 42], duneLee: 56,
-      dunePans: [1, 2], duneCombEvery: 110, duneBow: 0.26,
+      dunePans: [1, 2], duneCombEvery: 84, duneBow: 0.26,
     },
     variants: [
       // Broad, slow swells — the ground itself stretches longer.
@@ -835,13 +835,19 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'sand', count: [3, 5] }, { kind: 'rocks', count: [2, 4], radius: [20, 40] },
         { kind: 'cactus', count: [0, 2] }, { kind: 'ruin', count: [0, 1] },
         { kind: 'heat_shimmer', count: [3, 5] }, { kind: 'cave', count: [0, 1] },
-      ], theme: { ground: { scale: 3.4, stretchX: 2.6, strength: 1.2, speckles: 0.3 } } },
+      ], theme: { ground: {
+        scale: 3.4, stretchX: 2.6, strength: 1.2, speckles: 0.3,
+        palette: ['#3a2d16', '#4c3c1e', '#63512a', '#7a6434', '#8f7840'], bias: 0.68, alpha: 0.66, evenness: 0.5,
+      } } },
       // Knife-crests: sharp combed lines, the wind's teeth showing.
       { name: 'knife-crested', layout: [
         { kind: 'sand', count: [2, 4] }, { kind: 'rocks', count: [1, 3], radius: [18, 36] },
         { kind: 'formation', count: [1, 2], formation: 'dune_ridges' },
         { kind: 'heat_shimmer', count: [4, 6] }, { kind: 'ruin', count: [0, 1] },
-      ], theme: { ground: { scale: 2.2, stretchX: 3, strength: 1.35, speckles: 0.25 } } },
+      ], theme: { ground: {
+        scale: 2.2, stretchX: 3, strength: 1.35, speckles: 0.25,
+        palette: ['#3a2d16', '#4c3c1e', '#63512a', '#7a6434', '#8f7840'], bias: 0.68, alpha: 0.66, evenness: 0.5,
+      } } },
       // Storm-combed: the drift never settles here.
       { name: 'storm-combed', layout: [
         { kind: 'sand', count: [4, 7] }, { kind: 'rocks', count: [1, 3], radius: [18, 38] },
@@ -854,7 +860,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       dayLight: 1.65,
       heat: 1.05,
       ambientFx: [{ kind: 'heatHaze', intensity: 0.9 }, { kind: 'sandDrift', intensity: 0.8 }],
-      ground: { scale: 2.8, stretchX: 2.3, strength: 1.3, speckles: 0.3 },
+      // The open erg is SAND ALL THE WAY DOWN: a pure light-biased dune
+      // gradient (evenness ~0.5 lays it on solid — no dark floor bleed).
+      ground: {
+        scale: 2.8, stretchX: 2.3, strength: 1.3, speckles: 0.3,
+        palette: ['#3a2d16', '#4c3c1e', '#63512a', '#7a6434', '#8f7840'], bias: 0.68, alpha: 0.66, evenness: 0.5,
+      },
       floor: '#1c170d', grid: '#2c2517', border: '#8a7040',
       obstacle: '#604c2c', obstacleEdge: '#927448', accent: '#f0c870',
       mud: '#6a5630', water: '#2a6a7a', sand: '#d4b070',
@@ -956,7 +967,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       // a bright-biased palette so the flat reads bleached under the sun.
       ground: {
         scale: 3.2, stretchX: 1.15, strength: 1.1, speckles: 0.2,
-        palette: ['#2e2818', '#4a4028', '#6a5c3a', '#8a7a4e'], bias: 0.62, evenness: 0.35,
+        palette: ['#2e2818', '#4a4028', '#6a5c3a', '#8a7a4e'], bias: 0.62, alpha: 0.6, evenness: 0.35,
       },
       floor: '#282217', grid: '#3a3222', border: '#8a7a4e',
       obstacle: '#6a5c3e', obstacleEdge: '#9a8a5c', accent: '#f0e0a0',

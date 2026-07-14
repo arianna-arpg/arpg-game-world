@@ -1112,7 +1112,7 @@ function dunefieldLayout(ctx: GenCtx, def: ZoneDef): void {
   const breachR = layoutParam(def, 'duneBreachR', [46, 68]) as [number, number];
   const leeReach = layoutParam(def, 'duneLee', 46);
   const panBand = layoutParam(def, 'dunePans', [1, 2]) as [number, number];
-  const combEvery = layoutParam(def, 'duneCombEvery', 120);
+  const combEvery = layoutParam(def, 'duneCombEvery', 72);
 
   const crests = Mask.forRect(0, 0, arena.w, arena.h);
   const lee = crests.like();
@@ -1201,7 +1201,7 @@ function dunefieldLayout(ctx: GenCtx, def: ZoneDef): void {
           if (px < 60 || py < 60 || px > arena.w - 60 || py > arena.h - 60) continue;
           if (openings.has(px, py) || pans.has(px, py)) continue;
           ctx.doodads.push({
-            pos: vec(px, py), radius: rng.range(30, 46),
+            pos: vec(px, py), radius: rng.range(38, 56),
             kind: 'dune_crest', rot: rot + rng.range(-0.12, 0.12),
           });
         }
