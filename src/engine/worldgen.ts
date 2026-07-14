@@ -447,7 +447,10 @@ export function placeZoneAt(
         ? pickTilesetForBiome(MARINE_MINT.deepBiome, rng)
         : pickTilesetForBiome(BIOMES[fb]?.marine === 'coast' ? fb : MARINE_MINT.openShallowBiome, rng);
     }
-    picked = picked ?? pickTilesetForBiome(fb, rng);
+    // SUB-BIOME STAGING: land biomes with depth-affine faces (the desert's
+    // waste/erg/glasspan) weigh the pick by how deep into the region this
+    // mint sits — same lever the marine split reads, generalized as data.
+    picked = picked ?? pickTilesetForBiome(fb, rng, spec.biomeDepthFor?.(target));
     if (picked) tilesetId = picked;
   }
   // Same guard mintCave carries: a directed mint naming an unregistered

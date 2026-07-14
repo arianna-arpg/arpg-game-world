@@ -243,6 +243,21 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'duneCrest', order: 36, bakeWhole: 'static',
     params: { sand: 'theme:sand|#c9a86a' },
   },
+  // --- THE GLASSPAN KIT (saltflat furniture) --------------------------------
+  salt_pillar: {
+    painter: 'saltPillar', order: 52, shadow: 0.5, longShadow: 0.9,
+    params: { salt: 'theme:sand|#e0d4a8' },
+  },
+  // Lightning-fused pan glass: the fulgurite's shard painter in sea-glass
+  // tones, a cold gleam in all that heat (brittle — it sings apart).
+  glass_shard: {
+    painter: 'shard', order: 51, shadow: 0.4,
+    params: { points: 4, color: '#bcd8d4', material: 'crystal', coreGlow: { color: '#e8fff8' } },
+  },
+  bone_arch: {
+    painter: 'boneArch', order: 54, shadow: 0.55, longShadow: 1.1,
+    params: { bone: '#d8ccb0' },
+  },
   dead_tree: {
     painter: 'deadTree', order: 54, shadow: 0.55, longShadow: 1.0,
     params: { color: '#4a4038' },

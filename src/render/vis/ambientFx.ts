@@ -12,7 +12,7 @@ import { dayCycle } from '../../world/daynight';
 import { hash01, withAlpha } from './color';
 
 export interface AmbientFxSpec {
-  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores';
+  kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift';
   /** 0..1 strength (default 1). */
   intensity?: number;
   color?: string;
@@ -28,7 +28,57 @@ export function drawAmbientFx(ctx: CanvasRenderingContext2D, spec: AmbientFxSpec
     case 'motes': return motes(ctx, w, h, t, k, spec.color ?? '#e8f0d8');
     case 'aurora': return aurora(ctx, w, h, t, k, spec.color ?? '#7fe8b8');
     case 'spores': return spores(ctx, w, h, t, k, spec.color ?? '#b8e88f');
+    case 'sandDrift': return sandDrift(ctx, w, h, t, k, spec.color ?? '#d8c090');
   }
+}
+
+/** DRIFTING SAND — grains streaking low on one shared slant (the ground wind
+ *  the heat haze floats above), and every so often a DUST DEVIL window: a
+ *  little rotating fan of grit crossing the pan. Deterministic from (i, t)
+ *  like every ambient — zero particle state. */
+function sandDrift(ctx: CanvasRenderingContext2D, w: number, h: number,
+  t: number, k: number, color: string): void {
+  ctx.save();
+  // The grains: short slanted streaks, faster low in the frame (parallax).
+  const n = Math.round(30 * k);
+  for (let i = 0; i < n; i++) {
+    const lane = hash01(i, 3);
+    const y = (lane * h + Math.sin(t * 0.7 + i * 1.9) * 6) % h;
+    const speed = 90 + lane * 150 + hash01(i, 5) * 60;
+    const x = (hash01(i, 7) * w + t * speed) % w;
+    const len = 7 + lane * 13 + hash01(i, 11) * 6;
+    const slant = 2.2 + lane * 2.4;
+    ctx.globalAlpha = (0.05 + 0.07 * lane) * k * (0.6 + 0.4 * Math.sin(t * 1.3 + i * 2.3));
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1 + lane * 0.8;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x - len, y + len / slant);
+    ctx.stroke();
+  }
+  // The dust devil window (the spores-puff idiom): one twist at a time,
+  // sweeping its fan as it ages, then gone until the next appointment.
+  const PERIOD = 9;
+  const win = Math.floor(t / PERIOD);
+  const age = (t - win * PERIOD) / PERIOD;
+  if (age < 0.34 && hash01(win, 17) < 0.6) {
+    const a = age / 0.34;
+    const dx = hash01(win, 19) * w * 0.8 + w * 0.1 + a * 120;
+    const dy = hash01(win, 23) * h * 0.6 + h * 0.2;
+    const grow = Math.sin(a * Math.PI);
+    ctx.globalAlpha = 0.1 * k * grow;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.4;
+    for (let s = 0; s < 5; s++) {
+      const rr = 6 + s * 7 + grow * 4;
+      const spin = t * 5 + s * 1.3;
+      ctx.beginPath();
+      ctx.arc(dx + Math.sin(spin) * 3, dy - s * 9, rr, spin % (Math.PI * 2), (spin % (Math.PI * 2)) + Math.PI * 1.3);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }
 
 /** FUNGAL SPORES — luminous motes on their own slow convection: bigger and

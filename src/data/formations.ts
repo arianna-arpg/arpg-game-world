@@ -206,6 +206,28 @@ registerFormation({
   ],
 });
 
+// A SALT PROCESSION: eroded pillars filing across the pan — the dead lake's
+// congregation, still standing where the water left them.
+registerFormation({
+  id: 'salt_procession', arrange: 'line', span: [280, 520], step: 54,
+  pieces: [
+    { kind: 'salt_pillar', radius: [10, 15], jitter: 8, rot: true },
+    { kind: 'bone_pile', radius: [10, 16], every: 3, jitter: 20 },
+  ],
+});
+
+// A RIBCAGE RUN: something the size of weather died here — its ribs arch out
+// of the pan in file, knuckle bones scattered between (rot:'chain' keeps
+// each arch square to the spine it once hung from).
+registerFormation({
+  id: 'ribcage_run', arrange: 'meander', span: [300, 540], step: 64,
+  params: { wobble: 18 },
+  pieces: [
+    { kind: 'bone_arch', radius: [18, 28], jitter: 8, rot: 'chain' },
+    { kind: 'bone_pile', radius: [10, 16], every: 2, jitter: 22 },
+  ],
+});
+
 // A BONE TRAIL: something dragged its kills the same way for years.
 registerFormation({
   id: 'bone_trail', arrange: 'meander', span: [260, 460], step: 46,

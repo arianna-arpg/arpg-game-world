@@ -4456,6 +4456,126 @@ const duneCrest: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A SALT PILLAR: the dead lake's congregation — a squat wind-eroded column,
+ *  waisted where the grit works hardest, its crown still bright. Time-free. */
+const saltPillar: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { salt?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.salt, theme, '#e0d4a8');
+  const lit = mix(base, '#ffffff', 0.4);
+  const dark = shade(base, -0.42);
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 11 + o.pos.y * 23) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // Skirt: the spread of salt the pillar sheds around its foot.
+    ctx.fillStyle = withAlpha(dark, 0.35);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.16, r * 1.15, r * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The column body (seen from above: a rough disc), sun-keyed.
+    ctx.fillStyle = shade(base, -0.1);
+    roughDisc(ctx, 0, 0, r * 0.72, seed, 0.16);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(dark, 0.8);
+    ctx.lineWidth = 1.3;
+    ctx.stroke();
+    // Erosion waist-lines: the wind's ledger.
+    ctx.strokeStyle = withAlpha(dark, 0.5);
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const rr = r * (0.3 + i * 0.14 + hash01(i, seed) * 0.05);
+      ctx.beginPath();
+      ctx.arc(0, 0, rr, hash01(i, seed + 3) * Math.PI * 2, hash01(i, seed + 3) * Math.PI * 2 + Math.PI * (0.7 + hash01(i, seed + 5) * 0.8));
+      ctx.stroke();
+    }
+    // The crown: a bright cap the sun bleaches.
+    ctx.fillStyle = withAlpha(lit, 0.9);
+    roughDisc(ctx, -r * 0.08, -r * 0.1, r * 0.34, seed + 7, 0.2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** An irregular closed disc: eight jittered spokes — the hand-cut circle
+ *  every eroded thing wants (local helper; blobPath is the GROUP union). */
+function roughDisc(ctx: CanvasRenderingContext2D, x: number, y: number,
+  r: number, seed: number, wob: number): void {
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const rr = r * (1 + (hash01(i, seed) - 0.5) * 2 * wob);
+    const px = x + Math.cos(a) * rr, py = y + Math.sin(a) * rr;
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+}
+
+/** A COLOSSUS RIB breaking the pan: two long bone shafts arched side by side,
+ *  joint-knobbed at both ends — laid along o.rot (the ribcage_run formation
+ *  chains them square to its spine). Time-free. */
+const boneArch: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { bone?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.bone, theme, '#d8ccb0');
+  const lit = mix(base, '#fffdf0', 0.35);
+  const dark = shade(base, -0.5);
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 17 + o.pos.y * 31) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? hash01(seed, 1) * Math.PI * 2);
+    // Ground shadow through the arch's gap.
+    ctx.fillStyle = withAlpha('#000000', 0.18);
+    ctx.beginPath();
+    ctx.ellipse(0, r * 0.1, r * 1.5, r * 0.42, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Two rib shafts, gently bowed, the far one a shade darker.
+    for (let s = 0; s < 2; s++) {
+      const oy = (s === 0 ? -1 : 1) * r * 0.2;
+      const tone = s === 0 ? base : shade(base, -0.14);
+      ctx.strokeStyle = tone;
+      ctx.lineWidth = r * (0.24 - s * 0.03);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.45, oy + r * 0.1);
+      ctx.quadraticCurveTo(0, oy - r * (0.24 + hash01(s, seed) * 0.1), r * 1.45, oy + r * 0.1);
+      ctx.stroke();
+      // The sun-side ridge line.
+      ctx.strokeStyle = withAlpha(lit, 0.7);
+      ctx.lineWidth = r * 0.06;
+      ctx.beginPath();
+      ctx.moveTo(-r * 1.3, oy + r * 0.02);
+      ctx.quadraticCurveTo(0, oy - r * (0.3 + hash01(s, seed) * 0.1), r * 1.3, oy + r * 0.02);
+      ctx.stroke();
+    }
+    // Joint knobs at the buried ends.
+    ctx.fillStyle = shade(base, -0.06);
+    for (const sx of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(sx * r * 1.42, r * 0.08, r * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(dark, 0.7);
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+    // Weather cracks.
+    ctx.strokeStyle = withAlpha(dark, 0.55);
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 3; i++) {
+      const x = (hash01(i, seed + 9) - 0.5) * r * 2.2;
+      const oy = (hash01(i, seed + 13) < 0.5 ? -1 : 1) * r * 0.2;
+      ctx.beginPath();
+      ctx.moveTo(x, oy - r * 0.08);
+      ctx.lineTo(x + (hash01(i, seed + 17) - 0.5) * r * 0.2, oy + r * 0.08);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
 /** A SPIDER WEB sheet: radial spokes + sagging rings, pale and sticky. */
 const web: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { color?: ColorSpec };
@@ -6916,7 +7036,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   membrane, veins, eyeStalk, ribArch, teethRow,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
-  cactus, duneCrest, web, deadTree, stump, log, snowman, signpost, firewoodPile,
+  cactus, duneCrest, saltPillar, boneArch, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,

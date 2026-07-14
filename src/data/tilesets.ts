@@ -11,6 +11,7 @@
 
 import type { CompositionRoll, LandmarkRoll, PackSpec, StampSpec, StructureRoll, ZoneTheme } from './zones';
 import type { Rng } from '../core/rng';
+import { presenceMul, type LevelEnvelope } from '../engine/presence';
 
 export interface ObjectiveWeight {
   kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon' | 'circuit' | 'procession' | 'bounty' | 'offering';
@@ -81,6 +82,12 @@ export interface TilesetDef {
    *  generator ('plains' = the classic convex crawl). Absent = the legacy
    *  default (rooms 35% / plains 65%). forceLayout outranks this. */
   caveLayouts?: Record<string, number>;
+  /** SUB-BIOME STAGING: a presence envelope over the mint coord's biomeDepth
+   *  (0 = the biome region's rim, 1 = its deep interior) weighting THIS face
+   *  in pickTilesetForBiome. The desert's whole gradient is three of these —
+   *  the waste holds the rim, the erg claims the heart. Omitted = weight 1
+   *  everywhere, so single-face biomes behave exactly as before. */
+  depthAffinity?: LevelEnvelope;
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
@@ -700,20 +707,39 @@ export const TILESETS: Record<string, TilesetDef> = {
   // whose patrons (gnoll/wild) roam, so war-origin doesn't depend on them.
   // Packs are patron-weighted, so faction.tableNative infers the right power.
 
-  // DESERT — sun-scoured gnoll country: dunes of slowing sand, sparse stone.
+  // --- THE DESERT COUNTRY (three faces, one biome tag) ----------------------
+  // The desert is a COUNTRY, not a tileset: three frontier faces share the
+  // 'desert' biome tag and the ONE 'dunefield' recipe (BIOMES.desert
+  // allowedLayouts), each tuning it with its own layoutParams. depthAffinity
+  // envelopes stage them across the region — the SCOURED WASTE holds the rim
+  // where sand still argues with stone, the SAND-SEA erg owns the deep heart,
+  // the GLASSPAN salt flat blisters through anywhere past the fringe — so
+  // walking inward reads as one land drying out by degrees. Relief (shade,
+  // water, stone) is the currency; everything green outside an oasis's reach
+  // is deliberately absent. Gnolls keep the patronage and the rim; the deep
+  // faces belong to whatever the heat left standing.
+
+  // DESERT — the SCOURED WASTE: the outskirt face. Scrub cactus, split rock,
+  // the first marching ridges — the last country a caravan could still argue
+  // with. Gnoll war-camps hold the edges of it.
   desert: {
     id: 'desert',
+    depthAffinity: { to: 0.5, fadeOut: 0.3 },
+    layoutParams: {
+      duneGap: [360, 520], duneCrestW: [20, 32], dunePans: [1, 2],
+      duneCombEvery: 130,
+    },
     variants: [
-      { name: 'dunes', layout: [
-        { kind: 'sand', count: [8, 12] }, { kind: 'rocks', count: [3, 5], radius: [22, 52] },
-        // Wind-combed ridge crescents (the arcs fuse into dune lines).
-        { kind: 'formation', count: [2, 4], formation: 'dune_ridges' },
-        { kind: 'cliff', count: [0, 1] }, { kind: 'ruin', count: [0, 1] },
-        { kind: 'heat_shimmer', count: [3, 6] },
-        { kind: 'cave', count: [0, 1] },
+      { name: 'stony scrub', layout: [
+        { kind: 'cactus', count: [7, 12] }, { kind: 'rocks', count: [8, 13], radius: [22, 52] },
+        { kind: 'rock_spire', count: [2, 4] }, { kind: 'scree', count: [2, 4] },
+        { kind: 'cliff', count: [1, 2] }, { kind: 'sand', count: [3, 5] },
+        { kind: 'formation', count: [1, 2], formation: 'boulder_train' },
+        { kind: 'heat_shimmer', count: [2, 4] },
+        { kind: 'camp', count: [0, 1] }, { kind: 'cave', count: [0, 2] },
         { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
       ] },
-      { name: 'oasis', layout: [
+      { name: 'oasis rim', layout: [
         { kind: 'water', count: [2, 3], radius: [40, 70] }, { kind: 'shallows', count: [2, 3] },
         { kind: 'palm', count: [8, 12] }, { kind: 'sand', count: [4, 6] },
         { kind: 'rocks', count: [2, 4], radius: [20, 44] }, { kind: 'grass', count: [1, 2] },
@@ -726,12 +752,12 @@ export const TILESETS: Record<string, TilesetDef> = {
           where: { field: 'shore', max: 0.4, params: { kinds: ['water'], reach: 220 } } },
       ] },
     ],
-    nameFirst: ['Sunscoured', 'Bone-Dry', 'Wind-Carved', 'Mirage', 'Scorchsand', 'Glasswaste', 'Sunbaked', 'Duneshift', 'Saltcrack', 'Heat-Hazed', 'Witherglass', 'Sandlorn', 'Blistering', 'Dustchoke', 'Goldwaste', 'Suncracked', 'Parched', 'Burnglass'],
-    nameSecond: ['Dunes', 'Reach', 'Flats', 'Wastes', 'Hollow', 'Expanse', 'Barrens', 'Drift', 'Sands', 'Erg', 'Scour', 'Pan', 'Basin', 'Sprawl', 'Span', 'Verge'],
+    nameFirst: ['Sunscoured', 'Bone-Dry', 'Wind-Carved', 'Scorchsand', 'Sunbaked', 'Duneshift', 'Heat-Hazed', 'Sandlorn', 'Blistering', 'Dustchoke', 'Goldwaste', 'Suncracked', 'Parched', 'Vulture-Watched', 'Cracked-Earth', 'Longshadow'],
+    nameSecond: ['Reach', 'Flats', 'Wastes', 'Hollow', 'Barrens', 'Drift', 'Scour', 'Basin', 'Sprawl', 'Span', 'Verge', 'Fringe', 'Steppe', 'Scrub'],
     theme: {
       dayLight: 1.6,
       heat: 1,
-      ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }],
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.8 }, { kind: 'sandDrift', intensity: 0.5 }],
       ground: { scale: 2.6, stretchX: 2.1, strength: 1.25, speckles: 0.45 },
       floor: '#1a160d', grid: '#2a2418', border: '#7a6438',
       obstacle: '#5c4a2c', obstacleEdge: '#8a6e40', accent: '#e8c060',
@@ -789,6 +815,198 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
       { kind: 'waves', weight: 1 },
+    ],
+  },
+
+  // SANDSEA — the GREAT ERG: the desert's deep heart, a sea with a grain.
+  // Ridge rails pack close, vegetation forgets itself, and everything alive
+  // is either crossing or waiting. The biggest surface zones in the game —
+  // the trek IS the content, and the oasis roll is the mercy.
+  sandsea: {
+    id: 'sandsea',
+    depthAffinity: { from: 0.3, fadeIn: 0.3 },
+    layoutParams: {
+      duneGap: [260, 380], duneCrestW: [26, 42], duneLee: 56,
+      dunePans: [1, 2], duneCombEvery: 110, duneBow: 0.26,
+    },
+    variants: [
+      // Broad, slow swells — the ground itself stretches longer.
+      { name: 'whaleback swell', layout: [
+        { kind: 'sand', count: [3, 5] }, { kind: 'rocks', count: [2, 4], radius: [20, 40] },
+        { kind: 'cactus', count: [0, 2] }, { kind: 'ruin', count: [0, 1] },
+        { kind: 'heat_shimmer', count: [3, 5] }, { kind: 'cave', count: [0, 1] },
+      ], theme: { ground: { scale: 3.4, stretchX: 2.6, strength: 1.2, speckles: 0.3 } } },
+      // Knife-crests: sharp combed lines, the wind's teeth showing.
+      { name: 'knife-crested', layout: [
+        { kind: 'sand', count: [2, 4] }, { kind: 'rocks', count: [1, 3], radius: [18, 36] },
+        { kind: 'formation', count: [1, 2], formation: 'dune_ridges' },
+        { kind: 'heat_shimmer', count: [4, 6] }, { kind: 'ruin', count: [0, 1] },
+      ], theme: { ground: { scale: 2.2, stretchX: 3, strength: 1.35, speckles: 0.25 } } },
+      // Storm-combed: the drift never settles here.
+      { name: 'storm-combed', layout: [
+        { kind: 'sand', count: [4, 7] }, { kind: 'rocks', count: [1, 3], radius: [18, 38] },
+        { kind: 'heat_shimmer', count: [2, 4] }, { kind: 'cave', count: [0, 1] },
+      ], theme: { ambientFx: [{ kind: 'heatHaze', intensity: 0.7 }, { kind: 'sandDrift', intensity: 1.1 }] } },
+    ],
+    nameFirst: ['Mirage', 'Glasswaste', 'Witherglass', 'Burnglass', 'Saltcrack', 'Endless', 'Shifting', 'Trackless', 'Sun-Drowned', 'Golden', 'Wandering', 'Thirstlong', 'Duneheart', 'Sandveil', 'Farshimmer', 'Wind-Written'],
+    nameSecond: ['Erg', 'Sands', 'Dunes', 'Expanse', 'Sea', 'Swells', 'Leagues', 'Crossing', 'Immensity', 'Deep', 'Waves', 'Horizon'],
+    theme: {
+      dayLight: 1.65,
+      heat: 1.05,
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.9 }, { kind: 'sandDrift', intensity: 0.8 }],
+      ground: { scale: 2.8, stretchX: 2.3, strength: 1.3, speckles: 0.3 },
+      floor: '#1c170d', grid: '#2c2517', border: '#8a7040',
+      obstacle: '#604c2c', obstacleEdge: '#927448', accent: '#f0c870',
+      mud: '#6a5630', water: '#2a6a7a', sand: '#d4b070',
+    },
+    sizeW: [4400, 5600], sizeH: [3000, 4200], ellipseChance: 0, biome: 'desert',
+    layout: [
+      { kind: 'cactus', count: [1, 3] },
+      { kind: 'sand', count: [3, 6] },
+      { kind: 'rocks', count: [2, 5], radius: [20, 42] },
+      { kind: 'ruin', count: [0, 1] },
+      { kind: 'heat_shimmer', count: [3, 6] },
+      { kind: 'camp', count: [0, 1] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    common: [
+      { kind: 'formation', count: [2, 3], formation: 'dune_ridges' },
+      { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
+      { kind: 'fulgurite', count: [0, 2] },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'heat_shimmer', count: [1, 3], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
+    ],
+    landmarks: [
+      // The erg's mercy — and its one lie worth believing.
+      { landmark: 'oasis', chance: 0.5 },
+      { landmark: 'canyon', chance: 0.2 },
+      { landmark: 'sinkhole', chance: 0.1 },
+      { landmark: 'maggot_burrow', chance: 0.12 },
+    ],
+    packs: {
+      count: [7, 9], size: [3, 5],
+      // A sea reads EMPTY between events: lone shapes on the horizon most of
+      // the time, then a warband all at once (grazing-heavy archetypes).
+      archetypes: [
+        { weight: 2, size: [7, 11] }, { weight: 4, size: [3, 5] }, { weight: 6, size: [1, 2] },
+      ],
+      table: [
+        { id: 'gnoll_prowler', weight: 3 },
+        { id: 'gnoll_longshot', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'gnoll_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'dune_stalker', weight: 3 },
+        { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'bronze_scarab', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'sand_wyrm', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'bombardier_beetle', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'maggot_queen', weight: 1, presence: { from: 12, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'escape', weight: 2 },
+      { kind: 'beacon', weight: 2 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'circuit', weight: 1 },
+      { kind: 'clear', weight: 2 },
+      { kind: 'procession', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
+  // SALTFLAT — the GLASSPAN: a dead lake remembered as a floor. Hardpan
+  // country (the dunefield dials all but retire the ridges), lightning glass
+  // and salt pillars for a forest, and the heat's honest anvil — nothing
+  // here ever offers shade. Fast to cross, expensive to linger.
+  saltflat: {
+    id: 'saltflat',
+    depthAffinity: { from: 0.15, fadeIn: 0.25, mul: 0.7 },
+    layoutParams: {
+      duneGap: [560, 800], duneCrestW: [16, 24], duneLee: 30,
+      dunePans: [3, 5], duneCombEvery: 150,
+    },
+    variants: [
+      { name: 'shattered pan', layout: [
+        { kind: 'glass_shard', count: [5, 9] }, { kind: 'fulgurite', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'fulgurite_scar' },
+        { kind: 'rocks', count: [1, 3], radius: [18, 36] },
+        { kind: 'heat_shimmer', count: [4, 7] },
+      ] },
+      { name: 'bonepan', layout: [
+        { kind: 'bone_arch', count: [2, 4] }, { kind: 'bone_pile', count: [4, 7] },
+        { kind: 'formation', count: [1, 2], formation: 'ribcage_run' },
+        { kind: 'salt_pillar', count: [2, 4] },
+        { kind: 'heat_shimmer', count: [3, 5] }, { kind: 'cave', count: [0, 1] },
+      ] },
+      { name: 'white blind', layout: [
+        { kind: 'salt_pillar', count: [5, 9] },
+        { kind: 'formation', count: [1, 2], formation: 'salt_procession' },
+        { kind: 'glass_shard', count: [1, 3] },
+        { kind: 'heat_shimmer', count: [6, 9] },
+      ], theme: { dayLight: 1.9 } },
+    ],
+    nameFirst: ['Saltcrack', 'Glasswaste', 'Suncracked', 'Burnglass', 'Witherglass', 'Bleachbone', 'Blinding', 'Dead-Lake', 'Shatterpan', 'Whitefire', 'Cracklace', 'Stillheat'],
+    nameSecond: ['Pan', 'Flats', 'Glass', 'Mirror', 'Bed', 'Blind', 'Table', 'Waste', 'Floor', 'Shimmer'],
+    theme: {
+      dayLight: 1.75,
+      heat: 1.1,
+      ambientFx: [{ kind: 'heatHaze', intensity: 1 }, { kind: 'sandDrift', intensity: 0.6 }],
+      // A pale cracked floor — pan polygons, not dunes: near-isotropic scale,
+      // a bright-biased palette so the flat reads bleached under the sun.
+      ground: {
+        scale: 3.2, stretchX: 1.15, strength: 1.1, speckles: 0.2,
+        palette: ['#2e2818', '#4a4028', '#6a5c3a', '#8a7a4e'], bias: 0.62, evenness: 0.35,
+      },
+      floor: '#282217', grid: '#3a3222', border: '#8a7a4e',
+      obstacle: '#6a5c3e', obstacleEdge: '#9a8a5c', accent: '#f0e0a0',
+      mud: '#7a6a44', water: '#3a7a8a', sand: '#e0cf9a',
+    },
+    sizeW: [3600, 4800], sizeH: [2400, 3200], ellipseChance: 0.1, biome: 'desert',
+    layout: [
+      { kind: 'salt_pillar', count: [3, 6] },
+      { kind: 'glass_shard', count: [2, 5] },
+      { kind: 'fulgurite', count: [1, 3] },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'rocks', count: [1, 3], radius: [18, 38] },
+      { kind: 'cactus', count: [0, 2] },
+      { kind: 'heat_shimmer', count: [4, 7] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    common: [
+      { kind: 'formation', count: [0, 2], formation: 'salt_procession' },
+      { kind: 'formation', count: [0, 1], formation: 'fulgurite_scar' },
+      { kind: 'heat_shimmer', count: [1, 3], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.5 } },
+    ],
+    landmarks: [
+      { landmark: 'sinkhole', chance: 0.15 },
+      { landmark: 'canyon', chance: 0.15 },
+      // Bitumen weeps up through the dead lake's bed.
+      { landmark: 'tar_pool', chance: 0.12 },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      archetypes: [
+        { weight: 3, size: [5, 8] }, { weight: 4, size: [3, 5] }, { weight: 4, size: [1, 2] },
+      ],
+      table: [
+        { id: 'bronze_scarab', weight: 3 },
+        { id: 'sand_skitterer', weight: 3 },
+        { id: 'bombardier_beetle', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'dune_stalker', weight: 2 },
+        { id: 'gnoll_longshot', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'sand_wyrm', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'broodmother', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'waves', weight: 2 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'escape', weight: 1 },
     ],
   },
 
@@ -3430,10 +3648,30 @@ export const TILESETS_BY_BIOME: Record<string, string[]> = (() => {
 
 /** A seeded tileset choice for a field biome (so deepwood/jungle/meadow all stay
  *  reachable for 'grove', and the pick is deterministic per the zone's rng).
- *  Undefined when the biome has no frontier tileset (caller falls back). */
-export function pickTilesetForBiome(biome: string, rng: Rng): string | undefined {
+ *  Undefined when the biome has no frontier tileset (caller falls back).
+ *
+ *  When the caller knows the mint's biomeDepth AND any candidate declares a
+ *  depthAffinity, faces weigh themselves by their envelope at that depth —
+ *  the sub-biome staging pick (desert: waste rim → erg heart). Biomes whose
+ *  faces declare no envelopes keep the plain uniform pick, byte-identical. */
+export function pickTilesetForBiome(biome: string, rng: Rng, depth?: number): string | undefined {
   const c = TILESETS_BY_BIOME[biome];
-  return c && c.length ? rng.pick(c) : undefined;
+  if (!c || !c.length) return undefined;
+  if (depth === undefined || !c.some(id => TILESETS[id].depthAffinity)) return rng.pick(c);
+  const weights = c.map(id => {
+    const aff = TILESETS[id].depthAffinity;
+    return aff ? presenceMul(aff, depth) : 1;
+  });
+  let total = 0;
+  for (const w of weights) total += w;
+  // Degenerate staging (every envelope zero here) never starves the biome.
+  if (total <= 0) return rng.pick(c);
+  let roll = rng.range(0, total);
+  for (let i = 0; i < c.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return c[i];
+  }
+  return c[c.length - 1];
 }
 
 /** Boot check: which BIOME_FIELD biomes have NO frontier tileset (would fall back
@@ -3463,7 +3701,9 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   taiga:          { title: 'Taiga',             blurb: 'Close, hushed conifer dark — deep drifts, frozen pools, and the firewood caches of travelers who never came back, the aurora breathing overhead.' },
   tundra:         { title: 'Tundra',            blurb: 'A frozen expanse under a permanent floor of snow, where every storm deepens the drifts and the cover never fully melts away.' },
   cinderlands:    { title: 'Cinderlands',       blurb: 'Scorched black flats where fire has already passed — ash, ember and the heat-shimmer of a land still cooling from the burn.' },
-  desert:         { title: 'Desert',            blurb: 'Rolling dunes under a swelter sun, genuine war-origin ground prowled by gnoll and wild patrons far from any scrap of shade.' },
+  desert:         { title: 'Scoured Waste',     blurb: 'The desert country\'s outskirts, where sand still argues with stone — scrub cactus, split rock, gnoll war-camps, and the first ridge lines marching in from the deep erg.' },
+  sandsea:        { title: 'Sand-Sea',          blurb: 'The Great Erg: a sea with a grain. Ridge after wind-combed ridge to the horizon, soft lees that swallow your stride, and an oasis exactly often enough to keep you believing the next shimmer.' },
+  saltflat:       { title: 'Glasspan',          blurb: 'A dead lake remembered as a floor — cracked white hardpan, lightning fused to glass, salt pillars for a forest, and no shade anywhere the sun can reach.' },
   jungle:         { title: 'Jungle',            blurb: 'Choked living thicket — walls of growth that block step, shot AND sight, cuttable throats plugged with brush and dens waiting behind them.' },
   sunken_ruin:    { title: 'Sunken Ruins',      blurb: 'A drowned city that followed you down through a ruin-gate — flooded halls where something old still keeps to its rooms.' },
   mire:           { title: 'The Mire',          blurb: 'A drowned graveland of standing swamp, poison bog and rotted timber — footing that pulls at you and water that hides its teeth.' },

@@ -258,9 +258,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // Warm∧dry (not strictly hot∧arid — the conjunction starved deserts to
   // <1% of land in sweep tests; the true hot/arid hearts still run
   // desert-dominant because every competitor thins there too).
-  desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 104,
+  // THE DESERT COUNTRY: three faces share this tag (tilesets desert/sandsea/
+  // saltflat, staged by depthAffinity — waste rim, erg heart, glasspan
+  // blisters), all running the 'dunefield' recipe. The WIDEST spacing in the
+  // game: its zones are the biggest surface arenas, and committing to the
+  // crossing is the point — the map itself asks whether you want the heat.
+  desert: { patronFaction: 'gnoll',  mapColor: '#c9a86a', label: 'Desert', spacing: 124,
     climate: { temperature: 'warm', moisture: 'dry' },
     meld: 'desert_meld',
+    allowedLayouts: { dunefield: 4, plains: 1 },
     structures: [{ structure: 'grand_castle', chance: 0.1 }, { structure: 'watchtower', chance: 0.3, count: [1, 2] }],
     landmarks: [{ landmark: 'oasis', chance: 0.3 }, { landmark: 'canyon', chance: 0.25 }, { landmark: 'sinkhole', chance: 0.12 },
       { landmark: 'maggot_burrow', chance: 0.14 }] },

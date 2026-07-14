@@ -64,6 +64,9 @@ export type KnownDoodadKind =
   | 'reeds'     // water-edge blades — CONCEALS like brush (ambush margins)
   | 'cactus'    // desert solid — swollen lobes and spines
   | 'dune_crest' // the marching ridge's comb — pure terrain art laid along dunefield rails
+  | 'salt_pillar' // the glasspan's forest: a squat wind-eroded salt column
+  | 'glass_shard' // lightning-fused pane heaved from the pan — brittle, sings apart
+  | 'bone_arch'  // a colossus rib breaking the sand — the bonepan's architecture
   | 'web'       // sticky sheet — slows like mire (spider country)
   | 'geyser'    // scalding vent mouth — steams and glows (marsh/tundra)
   | 'snowdrift' // wind-piled powder — decoration (tundra)
@@ -818,6 +821,16 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // duneface region cells — the REGION is the collision truth, so the comb
   // is inert and sits happily on non-walkable sand (no walk gate to fight).
   dune_crest: { overlap: 'inert', spacing: 0 },
+  // THE GLASSPAN KIT — the salt flat's standing furniture. Pillars and ribs
+  // block feet only (the pan keeps its long sightlines); the glass is
+  // brittle both ways — walk through it and it goes.
+  salt_pillar: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 56, bodyScale: 0.7,
+    forbidOn: ['water', 'lava', 'chasm'] },
+  glass_shard: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 34, bodyScale: 0.8,
+    brittle: { on: ['hit', 'touch'], orbChance: 0.15, text: 'the glass sings apart!', color: '#d8ecf0' } },
+  bone_arch: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 120, bodyScale: 0.85,
+    forbidOn: ['water', 'lava', 'chasm'],
+    surface: { hw: 1.6, hh: 0.35, orient: 'rot' } },
   // The maw is GROUND (nothing to trip on — the reel is the obstacle):
   // hazardGround keeps ambient spawns off the lip, the auto-attached effect
   // reels the nearest intruder each beat and bites whatever reaches the lip.
@@ -3447,6 +3460,9 @@ registerStamp('stump', stampSingle('stump', [9, 15]));
 registerStamp('log', stampSingle('log', [12, 20]));
 registerStamp('cactus', stampSingle('cactus', [10, 18]));
 registerStamp('dune_crest', stampSingle('dune_crest', [24, 40]));
+registerStamp('salt_pillar', stampSingle('salt_pillar', [10, 16]));
+registerStamp('glass_shard', stampSingle('glass_shard', [8, 14]));
+registerStamp('bone_arch', stampSingle('bone_arch', [22, 34]));
 registerStamp('geyser', stampSingle('geyser', [12, 17]));
 registerStamp('brazier', stampSingle('brazier', [8, 11]));
 registerStamp('standing_stone', stampSingle('standing_stone', [12, 20]));
@@ -3934,7 +3950,12 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   if (def.clearSite) {
     for (let i = ctx.doodads.length - 1; i >= 0; i--) {
       const d = ctx.doodads[i];
-      if (dist(d.pos, center) < r + d.radius * 0.4) {
+      // The FULL square footprint, not the inner disc: a lake builder's lobes
+      // can reach the rect's corners, and a survivor there ends up standing
+      // in the poured liquid (the dune-country fulgurite lesson).
+      const pad = d.radius * 0.4;
+      if (d.pos.x > center.x - r - pad && d.pos.x < center.x + r + pad
+        && d.pos.y > center.y - r - pad && d.pos.y < center.y + r + pad) {
         if (doodadRule(d.kind).seedPaired) {
           let ordinal = 0;
           for (let k = 0; k < i; k++) if (ctx.doodads[k].kind === d.kind) ordinal++;
@@ -3967,11 +3988,30 @@ function placeLandmark(ctx: GenCtx, def: LandmarkDef, at?: Vec2): void {
   // kinds keep their parallel seed list zipped. Draw-free.
   // (A builder that POURS engulfing terrain can splice pre-build doodads and
   // shrink the array below preBuild — clamp, or the sweep reads past the end.)
+  const poured = ctx.doodads.slice(Math.min(preBuild, ctx.doodads.length));
   for (let i = Math.min(preBuild, ctx.doodads.length) - 1; i >= 0; i--) {
     const d = ctx.doodads[i];
     if (d.keep) continue;
-    if (Math.abs(d.pos.x - center.x) > r + d.radius || Math.abs(d.pos.y - center.y) > r + d.radius) continue;
-    if (grid.isWalkable(d.pos.x, d.pos.y)) continue;
+    // Reach covers rim-poured ground lapping a solid just OUTSIDE the rect
+    // (overlap radii, the forbidOn check's own geometry — genqa's contract).
+    if (Math.abs(d.pos.x - center.x) > r + d.radius + 80 || Math.abs(d.pos.y - center.y) > r + d.radius + 80) continue;
+    let cull = !grid.isWalkable(d.pos.x, d.pos.y);
+    // FORBIDON WINS TOO: a builder that POURS ground (a lake's water discs)
+    // under an earlier solid that forbids standing on it — the stamp gate's
+    // inverse, applied to terrain that arrived after the stamp (the dune
+    // country's shore fulgurites).
+    if (!cull) {
+      const forbid = doodadRule(d.kind).forbidOn;
+      if (forbid) {
+        for (const g of poured) {
+          if (!forbid.includes(g.kind)) continue;
+          const dx = d.pos.x - g.pos.x, dy = d.pos.y - g.pos.y;
+          const reach = d.radius + g.radius;
+          if (dx * dx + dy * dy < reach * reach) { cull = true; break; }
+        }
+      }
+    }
+    if (!cull) continue;
     if (doodadRule(d.kind).seedPaired) {
       let ordinal = 0;
       for (let k = 0; k < i; k++) if (ctx.doodads[k].kind === d.kind) ordinal++;

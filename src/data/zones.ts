@@ -361,7 +361,7 @@ export interface ZoneTheme {
    *  underwater caustics + bubble splays, desert heat haze, drifting motes,
    *  the winter AURORA, drifting fungal SPORES. Screen-space, stateless,
    *  data-extensible. */
-  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores'; intensity?: number; color?: string }[];
+  ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift'; intensity?: number; color?: string }[];
   /** LIVING FOG (the fog fabric, engine/fog.ts): which fog KINDS this zone
    *  breathes and how many banks roll per visit. Banks drift, coil, breathe
    *  and dissipate; standing in live fog grants the kind's statuses — the

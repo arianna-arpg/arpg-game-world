@@ -132,11 +132,14 @@ registerLandmark({
   id: 'frozen_lake', builder: 'lake', size: [560, 920], liquid: 'ice',
 });
 registerLandmark({
-  id: 'oasis', builder: 'lake', size: [420, 640], liquid: 'water',
+  // clearSite: the water table clears its own ground — desert scatter runs
+  // dense enough (fulgurites, shimmer, glass) that a poured pool otherwise
+  // drowns earlier solids on their own forbidOn ground (genqa's catch).
+  id: 'oasis', builder: 'lake', size: [420, 640], liquid: 'water', clearSite: true,
   params: { rim: { kind: 'palm', count: [4, 7], radius: [14, 24] } }, poi: true,
 });
 registerLandmark({
-  id: 'tar_pool', builder: 'lake', size: [420, 680], liquid: 'bog',
+  id: 'tar_pool', builder: 'lake', size: [420, 680], liquid: 'bog', clearSite: true,
 });
 
 // --- POCKETS & PITS --------------------------------------------------------------
