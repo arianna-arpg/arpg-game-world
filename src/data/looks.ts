@@ -2236,6 +2236,90 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'oozeLobes', scale: 0.8, params: { n: 5 } }],
     shadowScale: 0.7,
   },
+  // --- The flesh country's face kin (Sanguine / Gutworks / Ocular) ----------
+  /** The leech: a lean sac all mouth, fangs first, trailing what it took. */
+  hemophage: {
+    parts: [
+      { kind: 'blob', alpha: 0.94, params: { irr: 0.3, seed: 131 } },
+      { kind: 'veinweb', params: { n: 5 } },
+      { kind: 'maw', x: 0.46, scale: 0.5, params: { arc: 0.6 } },
+      { kind: 'fangs', x: 0.44, scale: 0.5 },
+      { kind: 'eyes', color: '#ffd0c0', params: { n: 2, spread: 0.5, dist: 0.4, size: 0.09 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#7a1622', params: { n: 4 } }],
+  },
+  /** The shambler: a walking clot — crusted, webbed, and wet at the seams. */
+  clot_shambler: {
+    parts: [
+      { kind: 'blob', scale: 1.05, params: { irr: 0.26, seed: 137 } },
+      { kind: 'fleshFolds', params: { n: 4 } },
+      { kind: 'veinweb', params: { n: 6 } },
+      { kind: 'stitchSeams', params: { n: 3 } },
+      { kind: 'eyes', color: '#e88a92', params: { n: 1, spread: 0, dist: 0.3, size: 0.1 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#4a0a12', params: { n: 5 } }],
+  },
+  /** The tract worm: a soft sour head all rings and appetite (its body is
+   *  the worm spec's segments — this is only the face it surfaces with). */
+  tract_worm: {
+    parts: [
+      { kind: 'serpentHead', scale: 1.0 },
+      { kind: 'segmentRings', params: { n: 4 } },
+      { kind: 'mawRing', scale: 0.62 },
+      { kind: 'haustraFolds', params: { n: 3 } },
+    ],
+  },
+  /** The retcher: a gullet on legs, sacs at the jaw, always mid-swallow. */
+  bile_retcher: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.24, seed: 139 } },
+      { kind: 'bloatSacs', scale: 0.95, params: { n: 4 } },
+      { kind: 'haustraFolds', params: { n: 3 } },
+      { kind: 'maw', x: 0.44, scale: 0.5, params: { arc: 0.7 } },
+      { kind: 'eyes', color: '#d8e08a', params: { spread: 0.45, dist: 0.55, size: 0.08 } },
+    ],
+  },
+  /** The warden: the door made flesh made angry — a fist of haustral folds
+   *  wearing the sphincter as its face. */
+  pyloric_warden: {
+    parts: [
+      { kind: 'blob', scale: 1.08, params: { irr: 0.2, seed: 149 } },
+      { kind: 'haustraFolds', params: { n: 5 } },
+      { kind: 'sphincterMaw', x: 0.4, scale: 0.6, params: { n: 11, gape: 0.12 } },
+      { kind: 'armorPlates', alpha: 0.5, params: { n: 3 } },
+      { kind: 'eyeCluster', color: '#ffc8b0', params: { n: 4, spread: 0.6, dist: 0.62 } },
+    ],
+  },
+  /** The watcher: one great lidless eye fringed in lash, hung in slow air. */
+  lidless_watcher: {
+    parts: [
+      { kind: 'blob', alpha: 0.9, params: { irr: 0.14, seed: 151 } },
+      { kind: 'lashFringe', params: { n: 14, len: 0.36 } },
+      { kind: 'irisEye', scale: 1.0, color: '#d8b04a' },
+    ],
+    live: [{ kind: 'wisps', alpha: 0.5, params: { n: 3 } }],
+    shadowScale: 0.6,
+  },
+  /** The orb that grieves: a slit-pupiled eye forever welling over. */
+  weeping_orb: {
+    parts: [
+      { kind: 'blob', alpha: 0.88, params: { irr: 0.1, seed: 157 } },
+      { kind: 'irisEye', scale: 0.95, color: '#7ab0c0', params: { slit: true } },
+      { kind: 'lashFringe', color: '#2a3438', params: { n: 8, len: 0.24 } },
+    ],
+    live: [{ kind: 'slimeTrail', color: '#9fc4cc', params: { n: 3 } }],
+    shadowScale: 0.6,
+  },
+  /** The shepherd: a crook of meat crowned in stalks, its flock inside it. */
+  stalk_shepherd: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.22, seed: 163 } },
+      { kind: 'fleshFolds', params: { n: 3 } },
+      { kind: 'eyestalks', scale: 0.9, params: { n: 3 } },
+      { kind: 'eyeCluster', color: '#ffd8c8', params: { n: 5, spread: 0.7, dist: 0.45 } },
+      { kind: 'polyps', scale: 0.8, params: { n: 4 } },
+    ],
+  },
 
   // --- The Caulborn (black chitin over pale meat; the Giger key) -------------
   // Family read: HARD dark carapace + WET pale undersides + one dim violet

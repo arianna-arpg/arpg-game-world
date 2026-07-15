@@ -4928,6 +4928,53 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
+  // --- The flesh country's own verbs (the Ocular / Gutworks kin) -----------
+  gaze_beam: {
+    id: 'gaze_beam', name: 'Transfixing Gaze', noDrop: true,
+    description: 'A held, lidless stare — a thin ray that BUILDS the weight of being watched (beheld, stack by stack).',
+    tags: ['spell', 'chaos', 'duration'], color: '#d8b04a',
+    manaCost: 8, cooldown: 3.2, useTime: 1.0,
+    baseDamage: { chaos: [4, 7] },
+    delivery: { type: 'cone', range: 300, arcDeg: 6, beamFx: true },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'beheld', chance: 1 },
+    ],
+    requirements: { willpower: 22 },
+    ai: { range: 280, weight: 3, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  tear_burst: {
+    id: 'tear_burst', name: 'Weeping Burst', noDrop: true,
+    description: 'A shivering nova of stinging tears — heads go LIGHT where the salt mist settles (faintness).',
+    tags: ['spell', 'chaos', 'aoe'], color: '#cfe6ea',
+    manaCost: 9, cooldown: 3.8, useTime: 0.8,
+    baseDamage: { chaos: [6, 10] },
+    delivery: { type: 'nova', radius: 125 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'faintness', chance: 0.65 },
+    ],
+    requirements: { willpower: 20 },
+    ai: { range: 110, weight: 3 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+  emetic_lob: {
+    id: 'emetic_lob', name: 'Emetic Lob', noDrop: true,
+    description: 'A lobbed gob of half-digested matter that bursts SOUR — the splash turns stomachs (queasy).',
+    tags: ['spell', 'chaos', 'projectile'], color: '#a8b86a',
+    manaCost: 8, cooldown: 2.8, useTime: 0.7,
+    baseDamage: { chaos: [8, 13] },
+    delivery: { type: 'projectile', speed: 240, radius: 11, range: 420 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'queasy', chance: 0.8 },
+    ],
+    requirements: { willpower: 18 },
+    ai: { range: 240, weight: 3, keepDistance: 150 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   gut_hurl: {
     id: 'gut_hurl', name: 'Gut Hurl',
     description: 'Heave a wet knot of viscera. It hits like a sack of rot and leaves the victim VULNERABLE — opened a little wider for everything after.',

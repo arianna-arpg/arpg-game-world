@@ -5302,6 +5302,98 @@ export const MONSTERS: Record<string, MonsterDef> = {
     spawner: true, noNemesis: true, drops: 0,
   },
 
+  // THE FLESH COUNTRY's face kin (still the Glut — the country's one hunger
+  // wearing three moods). Sanguine: things that live IN the blood. Gutworks:
+  // things the tract grew to keep itself moving. Ocular: the parts that
+  // watch. Each face's packs season these over the shared Glut base.
+  // The leech that lunges: fast, thin, and every wound it gives comes home.
+  hemophage: {
+    id: 'hemophage', name: 'Hemophage',
+    color: '#c04050', shape: 'oval', radius: 12, material: 'slime', look: 'hemophage',
+    base: { life: 55, moveSpeed: 135, accuracy: 105, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.3), mod('lifeLeech', 'flat', 0.25)],
+    skills: ['claw'], xp: 26, faction: 'flesh',
+    detection: 1.5, // it smells blood, same as the mite
+    brain: { type: 'swarm' },
+  },
+  // The walking clot: slow, dense, and it goes off WET when it finally stops.
+  clot_shambler: {
+    id: 'clot_shambler', name: 'Clot Shambler',
+    color: '#5a1220', shape: 'octagon', radius: 17, material: 'slime', look: 'clot_shambler',
+    base: { life: 240, moveSpeed: 55, accuracy: 100, armor: 30, poise: 45, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('physRes', 'flat', 0.2)],
+    skills: ['claw'], xp: 40, faction: 'flesh',
+    deathBurst: { mode: 'implode', damageFrac: 0.55, coalesce: 0.6, damageType: 'physical' },
+    detection: 0.9, brain: { type: 'juggernaut' },
+  },
+  // The tract's own tenant: a worm that knows every bend (the sandmaw's
+  // spec, gone soft and sour).
+  tract_worm: {
+    id: 'tract_worm', name: 'Tract Worm',
+    color: '#a86a5a', shape: 'oval', radius: 15, material: 'slime', look: 'tract_worm',
+    base: { life: 160, moveSpeed: 120, accuracy: 105, armor: 15, mana: 60, manaRegen: 6 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw', 'emetic_lob'], xp: 44, faction: 'flesh',
+    worm: { length: 5, spacing: 0.6 },
+    ambush: { radius: 140 },
+    detection: 1.1, brain: { type: 'basic' },
+  },
+  // The gut's artillery: it keeps its distance and shares its lunch.
+  bile_retcher: {
+    id: 'bile_retcher', name: 'Bile Retcher',
+    color: '#9aa84a', shape: 'octagon', radius: 14, material: 'slime', look: 'bile_retcher',
+    base: { life: 70, moveSpeed: 105, mana: 130, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['emetic_lob', 'bile_spray'], xp: 34, faction: 'flesh',
+    gemBias: ['chaos', 'projectile'],
+    detection: 1.2, brain: { type: 'artillery' },
+  },
+  // The door's keeper: a clenched fist of the wall that stays BY its post
+  // (duty-post fabric) — the sphincter opens easier than the warden does.
+  pyloric_warden: {
+    id: 'pyloric_warden', name: 'Pyloric Warden',
+    color: '#8a3a34', shape: 'octagon', radius: 22, look: 'pyloric_warden',
+    base: { life: 380, moveSpeed: 80, accuracy: 112, armor: 40, poise: 80, mana: 40, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['ground_slam', 'gore_rend'], xp: 85, faction: 'flesh',
+    turnSpeed: 2.6, post: true,
+    scaling: { life: { incPerLevel: 0.05 } },
+    detection: 1.0, brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+  // The stare with a body: it hangs back and makes being SEEN cost you.
+  lidless_watcher: {
+    id: 'lidless_watcher', name: 'Lidless Watcher',
+    color: '#d8b04a', shape: 'oval', radius: 13, look: 'lidless_watcher',
+    base: { life: 90, moveSpeed: 70, accuracy: 120, evasion: 30, mana: 140, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['gaze_beam'], xp: 34, faction: 'flesh',
+    vision: { arcDeg: 360, rearMul: 1 }, detection: 1.6,
+    gemBias: ['chaos', 'duration'],
+    brain: { type: 'artillery' },
+  },
+  // The orb that grieves: drifting, streaming, and its sorrow settles on
+  // whoever stands close enough to share it.
+  weeping_orb: {
+    id: 'weeping_orb', name: 'Weeping Orb',
+    color: '#cfe6ea', shape: 'oval', radius: 12, look: 'weeping_orb',
+    base: { life: 70, moveSpeed: 60, accuracy: 100, mana: 120, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['tear_burst'], xp: 28, faction: 'flesh',
+    vision: { arcDeg: 360, rearMul: 1 },
+    detection: 1.2, brain: { type: 'artillery' },
+  },
+  // The shepherd of stalks: it calls the country's small hungers to heel
+  // (the bloom's slough, walking) and weeps when pressed.
+  stalk_shepherd: {
+    id: 'stalk_shepherd', name: 'Stalk Shepherd',
+    color: '#b87868', shape: 'oval', radius: 15, look: 'stalk_shepherd',
+    base: { life: 110, moveSpeed: 85, accuracy: 105, mana: 160, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['spew_flesh', 'tear_burst'], xp: 46, faction: 'flesh',
+    gemBias: ['chaos', 'minion'],
+    detection: 1.2, brain: { type: 'artillery' },
+  },
+
   // --- THE CAULBORN (faction 'caulborn' — the Caul's cold biomechanics) -----
   // NOT the Glut. The Glut is hunger; the Caulborn are PURPOSE — an invading
   // organism remaking hell inside its own membrane, black chitin over pale
@@ -8350,6 +8442,16 @@ export const FACTIONS: Record<string, {
       { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
       { id: 'corpse_bloom', weight: 1 },
       { id: 'spire_of_eyes', weight: 1, presence: { from: 12, fadeIn: 5 } },
+      // The country's face kin (Sanguine / Gutworks / Ocular) ride the same
+      // hunger — the faces' own packs weight them harder on home ground.
+      { id: 'hemophage', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'clot_shambler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'tract_worm', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      { id: 'bile_retcher', weight: 1, presence: { from: 7, fadeIn: 3 } },
+      { id: 'pyloric_warden', weight: 1, presence: { from: 13, fadeIn: 5, mul: 2 } },
+      { id: 'lidless_watcher', weight: 1, presence: { from: 10, fadeIn: 4 } },
+      { id: 'weeping_orb', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      { id: 'stalk_shepherd', weight: 1, presence: { from: 11, fadeIn: 5 } },
     ],
   },
   caulborn: {
