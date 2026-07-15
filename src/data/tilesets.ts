@@ -3069,12 +3069,24 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'waves', weight: 1 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 }],
   },
 
-  // FLESH — a writhing pulsing-flesh warren (biome:'flesh', → the circular flesh
-  // layout). The chambers throb; sparse organic clutter; aberrant swarm.
+  // --- THE FLESH COUNTRY (four faces, one biome tag) -------------------------
+  // The flesh is a BODY, not a tileset: four frontier faces share the 'flesh'
+  // biome tag and the ONE circular flesh recipe (fleshLayout), each dialing it
+  // through its own layoutParams. depthAffinity envelopes stage them across
+  // the region — the WARRENS hold the wound-rim where you enter the meat, the
+  // SANGUINE pools through the middle depths, the GUTWORKS coils past it, and
+  // the OCULAR waits at the deep heart, already watching — so walking inward
+  // reads as one body understood organ by organ. Shared spine: the heartbeat
+  // clock, the Glut, corpse-bloom spawners, and the vasovagal/queasy/beheld
+  // ladders each face weaponizes its own way.
+
+  // FLESH — the WARRENS: the wound-rim warren (the classic face, staged).
+  // The chambers throb; sparse organic clutter; aberrant swarm.
   flesh: {
     id: 'flesh', biome: 'flesh',
+    depthAffinity: { to: 0.55, fadeOut: 0.3 },
     nameFirst: ['Pulsing', 'Writhing', 'Fleshborn', 'Gorged', 'Throbbing', 'Visceral', 'Sinewed', 'Bilegorged', 'Tumorous', 'Marrow-Deep', 'Quivering', 'Membranous', 'Engorged', 'Pus-Slick', 'Heartbound', 'Glistening', 'Distended', 'Wet-Walled'],
-    nameSecond: ['Hollow', 'Womb', 'Gut', 'Maw', 'Warren', 'Tract', 'Gullet', 'Cavity', 'Innards', 'Bowel', 'Chamber', 'Sac', 'Viscera', 'Atrium', 'Sinew', 'Antrum'],
+    nameSecond: ['Hollow', 'Womb', 'Maw', 'Warren', 'Gullet', 'Cavity', 'Innards', 'Chamber', 'Sac', 'Viscera', 'Atrium', 'Sinew', 'Antrum'],
     theme: {
       ambientDark: 0.35,
       nightDark: 0.6,
@@ -3122,6 +3134,287 @@ export const TILESETS: Record<string, TilesetDef> = {
     // The Glut's own spawners-objective destructible: burst the blooms.
     spawnerId: 'corpse_bloom',
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'spawners', weight: 2 }, { kind: 'beacon', weight: 1 }, { kind: 'bounty', weight: 1 }, { kind: 'offering', weight: 1 }],
+  },
+
+  // SANGUINE — the body's open rivers: blood pooled into galleries and red
+  // mirrors, mists that lighten the head (the vasovagal ladder: faintness →
+  // swoon, a white-out drag, never a stun), arteries that spurt on the shared
+  // beat, and things that live IN the spill. The middle depths of the country.
+  sanguine: {
+    id: 'sanguine', biome: 'flesh',
+    depthAffinity: { from: 0.25, fadeIn: 0.3 },
+    nameFirst: ['Bleeding', 'Sanguine', 'Arterial', 'Haemal', 'Weeping', 'Splattered', 'Openveined', 'Clotted', 'Exsanguine', 'Red-Running', 'Spilt', 'Wound-Deep', 'Pooling', 'Gushing', 'Crimson-Slick', 'Salt-Sweet'],
+    nameSecond: ['Fields', 'Shallows', 'Lakes', 'Banks', 'Basin', 'Fountains', 'Tide', 'Reservoir', 'Spill', 'Font', 'Flow', 'Gallery', 'Wading', 'Redness'],
+    layoutParams: {
+      // Bigger, opener galleries — the blood needs room to pool.
+      fleshChambers: [6, 9], fleshChamberR: [170, 300],
+      fleshTubeW: [52, 84], fleshLoops: [3, 5],
+    },
+    theme: {
+      ambientDark: 0.32,
+      nightDark: 0.58,
+      floor: '#1c060e', grid: '#2e0c18', border: '#8a3644',
+      obstacle: '#5e1e2e', obstacleEdge: '#96404e', accent: '#f06a7a', wall: '#5e1e2e',
+      // Pooled and re-pooled: a wetter, redder meat with droplet speckle.
+      ground: {
+        scale: 1.1, stretchX: 1.2, strength: 1.25, bias: 0.5, evenness: 0.55, speckles: 0.65,
+        palette: ['#1a060c', '#2c0a14', '#44101e', '#5c1628', '#761c32'],
+      },
+      ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#f06a7a' }],
+      // The red haze: faintness climbs on the grant's own cadence inside it.
+      fog: { banks: [1, 3], kinds: [{ id: 'blood_mist' }] },
+    },
+    sizeW: [2600, 3600], sizeH: [1900, 2600], ellipseChance: 0,
+    layout: [
+      { kind: 'blood_pool', count: [4, 7] }, { kind: 'gore', count: [3, 5] },
+      { kind: 'clot_mound', count: [3, 5] }, { kind: 'artery_stalk', count: [2, 4] },
+      { kind: 'flesh_pod', count: [2, 4] }, { kind: 'bone', count: [1, 3] },
+      { kind: 'flesh_membrane', count: [1, 3] }, { kind: 'vein_cluster', count: [3, 5] },
+    ],
+    common: [
+      { kind: 'blood_pool', count: [2, 3] },
+      { kind: 'vein_cluster', count: [1, 2] },
+    ],
+    variants: [
+      // Severed mains: the walls themselves are still paying out.
+      { name: 'open veins', layout: [
+        { kind: 'artery_stalk', count: [4, 6] }, { kind: 'blood_pool', count: [5, 8] },
+        { kind: 'vein_cluster', count: [5, 7] }, { kind: 'clot_mound', count: [2, 3] },
+        { kind: 'gore', count: [2, 4] },
+      ] },
+      // The spill gone old: crusted banks, standing red, slow flies.
+      { name: 'clotted shallows', layout: [
+        { kind: 'clot_mound', count: [5, 8] }, { kind: 'blood_pool', count: [6, 9] },
+        { kind: 'gore', count: [4, 6] }, { kind: 'bone', count: [2, 4] },
+      ], theme: { ground: {
+        scale: 1.0, stretchX: 1.1, strength: 1.15, bias: 0.44, evenness: 0.6, speckles: 0.5,
+        palette: ['#160509', '#260a10', '#380e18', '#4a1420', '#5a1a28'],
+      } } },
+      // Still enough to see yourself in — light dances off the standing red.
+      { name: 'red mirror', layout: [
+        { kind: 'blood_pool', count: [8, 12], radius: [38, 66] },
+        { kind: 'artery_stalk', count: [1, 3] }, { kind: 'clot_mound', count: [2, 4] },
+      ], theme: { ambientFx: [
+        { kind: 'motes', intensity: 0.4, color: '#f06a7a' },
+        { kind: 'caustics', intensity: 0.5, color: '#c2404e' },
+      ] } },
+    ],
+    packs: {
+      count: [6, 9], size: [3, 5],
+      // The spill reads as SWARM country: mites and leeches in numbers, the
+      // heavy things arriving alone.
+      archetypes: [
+        { weight: 3, size: [6, 9] }, { weight: 5, size: [3, 5] }, { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'blood_mite', weight: 4, presence: { to: 16, fadeOut: 8 } },
+        { id: 'hemophage', weight: 3, presence: { from: 4, fadeIn: 2 } },
+        { id: 'clot_shambler', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        { id: 'lesser_ooze', weight: 2, presence: { to: 10, fadeOut: 5 } },
+        { id: 'viscous_ooze', weight: 2 },
+        { id: 'gutspray_hurler', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'membrane', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'weeping_orb', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'flesh_amalgam', weight: 1, presence: { from: 13, fadeIn: 5, mul: 2 } },
+        { id: 'corpse_bloom', weight: 1 },
+        // Blood draws demons — the Glut disagrees. Their brawl is the decor.
+        { id: 'bloodgorger', weight: 1, presence: { from: 12, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'corpse_bloom',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'offering', weight: 2 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'escape', weight: 1 },
+    ],
+  },
+
+  // GUTWORKS — the tract: ONE serpentine gut runs entry → exit (the fleshTract
+  // dial), bulb chambers strung on a swallowing corridor, SPHINCTER doors that
+  // dilate when you dwell at them — the flesh admits you chamber by chamber.
+  // Bile pools digest (the lava doctrine in acid), polyps belch sour, miasma
+  // turns the stomach (queasy → retching). Deep-mid country: the way DOWN.
+  gutworks: {
+    id: 'gutworks', biome: 'flesh',
+    depthAffinity: { from: 0.4, fadeIn: 0.3 },
+    nameFirst: ['Churning', 'Peristaltic', 'Bile-Wet', 'Swallowing', 'Puckered', 'Knotted', 'Coiled', 'Digesting', 'Gurgling', 'Half-Digested', 'Airless', 'Sour', 'Rumbling', 'Clenched', 'Acid-Bright', 'Colicky'],
+    nameSecond: ['Tract', 'Coil', 'Passage', 'Winding', 'Churn', 'Gorge', 'Bowels', 'Loop', 'Descent', 'Throat', 'Swallow', 'Gutworks', 'Strait', 'Gullet'],
+    layoutParams: {
+      fleshTract: { segments: [4, 6], bulbR: [110, 170], tubeW: [44, 62], doorChance: 0.85, doorDwell: 0.45 },
+    },
+    theme: {
+      ambientDark: 0.4,
+      nightDark: 0.65,
+      floor: '#120d06', grid: '#241a0c', border: '#8a7a34',
+      obstacle: '#4e3e1a', obstacleEdge: '#7a6a2e', accent: '#c2cc74', wall: '#4e3e1a',
+      mud: '#3a2e10',
+      // Bile over meat, grained ALONG the tract (stretchX rides the snake).
+      ground: {
+        scale: 1.3, stretchX: 2.0, strength: 1.2, bias: 0.44, evenness: 0.62, speckles: 0.4,
+        palette: ['#120c06', '#201408', '#2e1e0c', '#3e2c12', '#4e3a18'],
+      },
+      ambientFx: [
+        { kind: 'bubbles', intensity: 0.5, color: '#c2cc74' },
+        { kind: 'spores', intensity: 0.35, color: '#a8b86a' },
+      ],
+      // The sour breath hanging in the tract's low places.
+      fog: { banks: [1, 2], kinds: [{ id: 'gut_miasma' }] },
+    },
+    sizeW: [3200, 4400], sizeH: [1700, 2300], ellipseChance: 0,
+    layout: [
+      { kind: 'chyme_pool', count: [3, 6] }, { kind: 'villus_bed', count: [3, 6] },
+      { kind: 'gas_polyp', count: [3, 5] }, { kind: 'gut_knuckle', count: [2, 4] },
+      { kind: 'tooth_row', count: [1, 3] }, { kind: 'rib_arch', count: [1, 2] },
+      { kind: 'flesh_pod', count: [1, 3] }, { kind: 'gore', count: [1, 3] },
+    ],
+    common: [
+      { kind: 'villus_bed', count: [1, 2] },
+      { kind: 'chyme_pool', count: [1, 2] },
+    ],
+    variants: [
+      // The tract in flood: standing acid, everything half-broken-down.
+      { name: 'acid shallows', layout: [
+        { kind: 'chyme_pool', count: [6, 9] }, { kind: 'villus_bed', count: [2, 4] },
+        { kind: 'gas_polyp', count: [2, 4] }, { kind: 'bone', count: [2, 4] },
+      ], theme: { ambientFx: [
+        { kind: 'bubbles', intensity: 0.8, color: '#c2cc74' },
+      ] } },
+      // Clenched: the walls fold in until the way is knuckle after knuckle.
+      { name: 'knotted strait', layout: [
+        { kind: 'gut_knuckle', count: [4, 7] }, { kind: 'chyme_pool', count: [2, 4] },
+        { kind: 'villus_bed', count: [3, 5] }, { kind: 'tooth_row', count: [1, 2] },
+      ] },
+      // Something laid its clutch here: polyps in rows, air you can chew.
+      { name: 'wormworks', layout: [
+        { kind: 'gas_polyp', count: [5, 8] }, { kind: 'villus_bed', count: [5, 8] },
+        { kind: 'chyme_pool', count: [2, 4] }, { kind: 'gore', count: [2, 4] },
+      ], theme: { ambientFx: [
+        { kind: 'bubbles', intensity: 0.4, color: '#c2cc74' },
+        { kind: 'spores', intensity: 0.7, color: '#a8b86a' },
+      ] } },
+    ],
+    packs: {
+      // A tract is LINEAR: fewer, denser stands — every bulb a decision.
+      count: [5, 8], size: [3, 5],
+      archetypes: [
+        { weight: 4, size: [4, 6] }, { weight: 4, size: [2, 3] }, { weight: 2, size: [7, 10] },
+      ],
+      table: [
+        { id: 'bile_retcher', weight: 3, presence: { from: 5, fadeIn: 2 } },
+        { id: 'tract_worm', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        { id: 'gutspray_hurler', weight: 3 },
+        { id: 'membrane', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'lesser_ooze', weight: 2, presence: { to: 12, fadeOut: 6 } },
+        { id: 'viscous_ooze', weight: 2 },
+        { id: 'zombie', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        { id: 'pyloric_warden', weight: 1, presence: { from: 11, fadeIn: 4, mul: 2 } },
+        { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
+        { id: 'corpse_bloom', weight: 1 },
+      ],
+    },
+    spawnerId: 'corpse_bloom',
+    objectives: [
+      { kind: 'escape', weight: 3 },
+      { kind: 'clear', weight: 2 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+    ],
+  },
+
+  // OCULAR — the watching place: a socketed amphitheater (the fleshRing dial —
+  // hub, socket ring, rims studded with eye-knots), stalks that sway as you
+  // brush past and flinch shut when pressed, walls whose pupils drearily
+  // follow, and THE GAZE lane: linger in an open eye's regard and 'beheld'
+  // climbs; tip the ladder and the country tells its own where you are.
+  // Counterplay is spatial — press close to shut them, burst the knots, or
+  // keep moving. The deep heart: it knew you were coming.
+  ocular: {
+    id: 'ocular', biome: 'flesh',
+    depthAffinity: { from: 0.6, fadeIn: 0.25 },
+    nameFirst: ['Lidless', 'Unblinking', 'Staring', 'Watching', 'Weeping', 'Bloodshot', 'Vitreous', 'Wide-Awake', 'Sleepless', 'Glassy', 'Thousand-Eyed', 'Dilated', 'Rheumy', 'Tear-Bright', 'Transfixed', 'Scrying'],
+    nameSecond: ['Vigil', 'Gaze', 'Orbit', 'Socket', 'Iris', 'Regard', 'Witness', 'Stare', 'Audience', 'Beholding', 'Scrutiny', 'Panopticon', 'Watch', 'Observatory'],
+    layoutParams: {
+      fleshRing: { satellites: [5, 7], hubR: [220, 280], satR: [110, 160], knots: [2, 4] },
+    },
+    theme: {
+      ambientDark: 0.38,
+      nightDark: 0.62,
+      floor: '#141016', grid: '#241c26', border: '#8a7a4a',
+      obstacle: '#4a3a44', obstacleEdge: '#7a6a62', accent: '#d8b04a', wall: '#4a3a44',
+      // Vitreous underfoot: pale humors, heavy floater speckle, no grain
+      // direction — the place is radial, so the floor refuses a current.
+      ground: {
+        scale: 1.0, stretchX: 1.0, strength: 1.1, bias: 0.48, evenness: 0.66, speckles: 0.7,
+        palette: ['#0e0a10', '#1a1218', '#281c22', '#38282c', '#463438'],
+      },
+      ambientFx: [{ kind: 'motes', intensity: 0.7, color: '#d8b04a' }],
+      // THE GAZE: stalks and knots are the zone's own eyes (World.updateGaze).
+      gaze: { kinds: ['eye_stalk', 'ocular_knot'], reach: 180, closeReach: 64, lureRadius: 640 },
+    },
+    sizeW: [2400, 3200], sizeH: [1800, 2400], ellipseChance: 0,
+    layout: [
+      { kind: 'eye_stalk', count: [5, 8] }, { kind: 'lash_bed', count: [3, 5] },
+      { kind: 'weep_spring', count: [2, 4] }, { kind: 'ocular_knot', count: [2, 4] },
+      { kind: 'flesh_pod', count: [1, 3] }, { kind: 'vein_cluster', count: [2, 4] },
+      { kind: 'flesh_membrane', count: [1, 2] }, { kind: 'gore', count: [0, 2] },
+    ],
+    common: [
+      { kind: 'eye_stalk', count: [2, 3] },
+      { kind: 'lash_bed', count: [1, 2] },
+    ],
+    variants: [
+      // The galleries run wet: tears standing in every socket.
+      { name: 'weeping gallery', layout: [
+        { kind: 'weep_spring', count: [4, 6] }, { kind: 'lash_bed', count: [4, 6] },
+        { kind: 'eye_stalk', count: [3, 5] }, { kind: 'vein_cluster', count: [2, 3] },
+      ], theme: { ambientFx: [
+        { kind: 'motes', intensity: 0.5, color: '#d8b04a' },
+        { kind: 'caustics', intensity: 0.45, color: '#7ab0c0' },
+      ] } },
+      // No two the same size, and none of them asleep.
+      { name: 'a thousand eyes', layout: [
+        { kind: 'eye_stalk', count: [8, 12] }, { kind: 'ocular_knot', count: [4, 6] },
+        { kind: 'lash_bed', count: [2, 4] },
+      ] },
+      // A few GREAT eyes instead of many — the long stare.
+      { name: 'the long stare', layout: [
+        { kind: 'eye_stalk', count: [3, 5], radius: [16, 24] },
+        { kind: 'ocular_knot', count: [2, 3] }, { kind: 'weep_spring', count: [2, 3] },
+        { kind: 'lash_bed', count: [2, 4] },
+      ] },
+    ],
+    packs: {
+      count: [5, 8], size: [3, 5],
+      // Lone watchers hanging in the sockets; the retinue arrives together.
+      archetypes: [
+        { weight: 3, size: [1, 2] }, { weight: 5, size: [3, 5] }, { weight: 2, size: [6, 8] },
+      ],
+      table: [
+        { id: 'lidless_watcher', weight: 3, presence: { from: 6, fadeIn: 3 } },
+        { id: 'weeping_orb', weight: 2, presence: { from: 5, fadeIn: 2 } },
+        { id: 'stalk_shepherd', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'spire_of_eyes', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'blood_mite', weight: 2, presence: { to: 12, fadeOut: 6 } },
+        { id: 'hemophage', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'lesser_ooze', weight: 1, presence: { to: 10, fadeOut: 5 } },
+        { id: 'membrane', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'flesh_amalgam', weight: 1, presence: { from: 15, fadeIn: 6, mul: 2 } },
+        { id: 'corpse_bloom', weight: 1 },
+      ],
+    },
+    spawnerId: 'corpse_bloom',
+    objectives: [
+      { kind: 'beacon', weight: 2 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'clear', weight: 2 },
+      { kind: 'offering', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+    ],
   },
 
   // CRYSTAL — prismatic shard fields (biome:'crystal'). Crystal doodads fire random
@@ -4031,7 +4324,10 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   deepsea:        { title: 'The Deep Sea',      blurb: 'Open ocean that drowns you — mostly deep water dotted with air-pockets and void trenches; reach the next breath before your own runs out.' },
   highland:       { title: 'Highlands',         blurb: 'Windswept crags carved into a mountain-pass maze of corridors and chambers threaded between the standing rock.' },
   marsh:          { title: 'Marsh',             blurb: 'Fetid wetland of boggy islets strung between sluggish water and sucking mire, every step a negotiation with the ground.' },
-  flesh:          { title: 'Flesh Warrens',     blurb: 'A writhing, pulsing-flesh warren — chambers that throb around you, sparse organic clutter, and an aberrant swarm that belongs to the walls.' },
+  flesh:          { title: 'Flesh Warrens',     blurb: 'The flesh country\'s wound-rim: a writhing, pulsing warren — chambers that throb around you, sparse organic clutter, and an aberrant swarm that belongs to the walls.' },
+  sanguine:       { title: 'The Sanguine',      blurb: 'The body\'s open rivers — blood pooled into galleries and red mirrors, arteries paying out on the heartbeat, and a mist that turns heads light. Keep moving or go pale.' },
+  gutworks:       { title: 'The Gutworks',      blurb: 'A serpentine tract of bile, villi and puckering sphincter-doors that admit you chamber by chamber — the country digesting its way down, with you inside it.' },
+  ocular:         { title: 'The Ocular',        blurb: 'The watching place: a socketed amphitheater of swaying stalks and eye-studded walls, every iris drearily on you. Press close and they flinch shut; linger seen and the country answers.' },
   crystal:        { title: 'Crystal Fields',    blurb: 'Prismatic shard-fields where the crystals themselves fire off random laser beams — a place that keeps you moving or gets you cut.' },
   volcanic:       { title: 'Volcanic Caldera',  blurb: 'An erupting caldera whose vents periodically lob arcing lava-orbs that splatter down into spreading pools of fire.' },
   mycelia:        { title: 'Mycelia',           blurb: 'A bioluminescent fungal warren — towering caps, puffing spore-pods and a glowing hyphal carpet where the slow Bloom makes its home.' },

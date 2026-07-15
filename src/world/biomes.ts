@@ -366,7 +366,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   //  volcanic— plains with lava vents that launch arcing lava orbs.
   // The Flesh gains its true natives: the Glut patronizes its own ground
   // (the undead keep the gravelands).
-  flesh:    { patronFaction: 'flesh',   mapColor: '#7a2a38', label: 'Flesh', spacing: 64,
+  // Now a COUNTRY (four depth-staged faces share the tag — warrens rim,
+  // sanguine middle, gutworks deep-mid, ocular heart) → a touch more room.
+  flesh:    { patronFaction: 'flesh',   mapColor: '#7a2a38', label: 'Flesh', spacing: 76,
     climate: { wildness: 'deepwild' },
     allowedLayouts: { flesh: 1 } },
   // THE CAUL — hell-only (absent from BIOME_FIELD, present only in the
@@ -546,7 +548,8 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'taiga', weight: 1.6 },
   { biome: 'highland', weight: 1.5 },
   { biome: 'marsh', weight: 1.5 },
-  { biome: 'flesh', weight: 1.1 },
+  { biome: 'flesh', weight: 1.25 }, // a four-faced country deserves the acreage
+
   { biome: 'crystal', weight: 1.2 },
   { biome: 'volcanic', weight: 1.3 },
   { biome: 'mycelia', weight: 1.2 }, // rare fungal regions — the dormant homes the bloom collapses to
