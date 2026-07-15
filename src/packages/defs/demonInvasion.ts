@@ -102,7 +102,7 @@ const BALOR_SURGE: DemonSurge = {
   // bias -0.4 ⇒ leans AWAY from the player's current zone (a short trek to the
   // rift); raise toward +1 for "on top of you", lower toward -1 for "far frontier".
   epicenter: { spread: 85, bias: -0.4 },
-  epicenterTileset: 'cinderlands', // a molten rift biome — the demons' beachhead
+  epicenterTileset: 'wasteland', // the war-wound — the demons' beachhead (rift biome; cinderlands re-tagged volcanic in the wound-pass)
   startRadius: 120,
   maxRadius: 460,
   radiusGrowthPerSec: 7,

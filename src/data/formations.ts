@@ -224,6 +224,41 @@ registerFormation({
   ],
 });
 
+// --- THE WAR-WOUND GRAMMAR (the surface rift) ----------------------------------
+
+// A GIBBET ROAD: the toll the Legion posted on its way through — cages and
+// stakes pacing a wandering war-road, bones where the toll was paid.
+registerFormation({
+  id: 'gibbet_road', arrange: 'meander', span: [360, 640], step: 78,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'soul_cage', radius: [11, 15], jitter: 10, rot: true },
+    { kind: 'impaler_stake', radius: [10, 14], every: 2, jitter: 14, rot: true },
+    { kind: 'bone_pile', radius: [12, 18], every: 3, jitter: 22 },
+  ],
+});
+
+// HATE-LIGHTS: braziers burning cold green down a dead-straight march —
+// somebody keeps these lit, and it is nobody you want to meet.
+registerFormation({
+  id: 'hate_lights', arrange: 'line', span: [320, 560], step: 96,
+  pieces: [
+    { kind: 'hate_brazier', radius: [8, 11], jitter: 6 },
+    { kind: 'demon_banner', radius: [11, 15], every: 3, jitter: 16, rot: true },
+  ],
+});
+
+// A RENT RUN: the wound showing through — hate-lit ground tears chained into
+// a wandering scar, the vitrified glass jutting where the crust let go.
+registerFormation({
+  id: 'rent_run', arrange: 'meander', span: [360, 620], step: 54,
+  params: { wobble: 34 },
+  pieces: [
+    { kind: 'hate_rent', radius: [16, 26], jitter: 6, rot: 'chain' },
+    { kind: 'hate_glass', radius: [14, 24], every: 3, jitter: 20, rot: true },
+  ],
+});
+
 // DUNE RIDGES: a crescent of wind-combed sand (the discs fuse into a ridge).
 registerFormation({
   id: 'dune_ridges', arrange: 'arc', span: [130, 240], step: 38,

@@ -168,6 +168,19 @@ export type KnownDoodadKind =
   | 'eye_stalk'      // blocks feet not shots — a fleshy nub whose iris TRACKS the hero
   | 'rib_arch'       // blocks feet not shots — the last tenant's cage
   | 'tooth_row'      // blocks feet not shots — enamel cones on an arc of gum
+  // The flesh country kit (the Sanguine / Gutworks / Ocular faces)
+  | 'blood_pool'     // ground liquid: pooled open blood — stand in it and the head goes light
+  | 'clot_mound'     // blocks feet not shots — a dark coagulate bank, still warm
+  | 'artery_stalk'   // blocks feet not shots — a severed standing vessel spurting on the heartbeat
+  | 'sphincter'      // a PUCKERING DOOR: carries DoodadDoor state; dwell near and it dilates open
+  | 'chyme_pool'     // ground liquid: digestive bile — it wants you broken down
+  | 'gas_polyp'      // blocks feet not shots — a swollen bladder that belches sour fume
+  | 'villus_bed'     // ground overlay: a carpet of swaying absorptive fronds
+  | 'gut_knuckle'    // blocks both — a clenched haustral fold of the tract wall
+  | 'ocular_knot'    // blocks feet not shots — a wall-knot of mismatched eyes, all of them watching
+  | 'lash_bed'       // ground overlay: a fringe of ground-lashes that shy apart around a walker
+  | 'weep_spring'    // ground liquid: a welling tear-pool, clear and salt
+  | 'colossal_heart' // blocks both — the country's own heart, a chamber-scale living centerpiece
   // The brittle kit (lifeless breakables — DoodadRule.brittle)
   | 'clay_pots'      // a huddle of pots: pops on a hit or a body brushing through
   | 'crumbling_wall' // a fissured plug that collapses (and carves open) when neared
@@ -241,6 +254,9 @@ export type KnownDoodadKind =
   | 'hate_brazier'     // an iron bowl burning cold green — the citadel lights its own
   | 'torture_rack'     // the frame, the rollers, the stain — a hall that confesses what it is
   | 'hate_idol'        // a hooded effigy the halls are kept for — its gaze is the decor
+  // The war-wound kit (the surface rift — where the demon war tore through)
+  | 'hate_rent'        // a rent in the ground burning cold green — hate showing through the crust
+  | 'hate_glass'       // ground vitrified by the tearing — black glass with a hate-lit edge
   // The Aetherial kit (the cloud shelves above the world — the Ascent)
   | 'cloud_billow'     // a heaped sunlit cloud-mound: the shelf's boulder
   | 'aether_crystal'   // a splay of luminous shards leaning out of the cloud (lit)
@@ -1241,6 +1257,22 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The tooth arc is an OFFSET C (gum ring 0.66r, outer stroke 0.82r) — a
   // centered rect can't hug it, so it keeps a disc snugged to the drawn arc.
   tooth_row: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85, forbidOn: ['water', 'lava', 'chasm'] },
+  // The flesh country kit: blood/bile/tears pour like gore; clots, arteries,
+  // polyps and eye-knots are LOW solids (shoot over the meat); knuckles and
+  // the heart are full blocks. The sphincter's rule blocks everything — its
+  // Doodad.door state is what opens the way (the derivations consult it).
+  blood_pool:   { overlap: 'ground', walkOnly: true, pour: {} },
+  clot_mound:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40, forbidOn: ['water', 'lava', 'chasm'] },
+  artery_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 56, forbidOn: ['water', 'lava', 'chasm'] },
+  sphincter:    { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true },
+  chyme_pool:   { overlap: 'ground', walkOnly: true, pour: {} },
+  gas_polyp:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 44, forbidOn: ['water', 'lava', 'chasm'] },
+  villus_bed:   { overlap: 'ground', walkOnly: true },
+  gut_knuckle:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 52, forbidOn: ['water', 'lava', 'chasm'] },
+  ocular_knot:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'] },
+  lash_bed:     { overlap: 'ground', walkOnly: true },
+  weep_spring:  { overlap: 'ground', walkOnly: true, pour: {} },
+  colossal_heart: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80 },
   // The hell-steppes kit: fins are standing wall-pieces (full blocks — the
   // steppes' navigate-around skyline at doodad scale); stakes are thin (step
   // behind one, shoot past it); chains are floor dressing; fissures are small
@@ -1314,6 +1346,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     surface: { hw: 0.85, hh: 0.5 } }, // the rack bed + rollers — low dark furniture, not a pillar
   hate_idol:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 110, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     surface: { hw: 1.0, hh: 1.0 } }, // the statue plinth square (weathered_statue's twin)
+  // The war-wound kit — the surface rift's ground scars: the rent is the
+  // ember_fissure's hate-lit twin (a cut you walk AROUND, shots pass); the
+  // glass is obsidian's (a solid you shelter behind).
+  hate_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'gore'] },
+  hate_glass: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 34, forbidOn: ['water', 'lava', 'chasm', 'gore'] },
   // The Aetherial kit — cloud furniture never blocks SHOTS (there is nothing
   // up here an arrow would argue with except marble), and the built things
   // refuse liquid ground out of habit even though the shelves carry none.
@@ -1984,10 +2021,158 @@ function unmadeVaultLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('unmade_vault', unmadeVaultLayout);
 
+/** The flesh recipe's TRACT dial (layoutParams.fleshTract): instead of scattered
+ *  chambers, ONE serpentine gut runs entry → exit — bulb chambers strung on a
+ *  swallowing corridor, with SPHINCTER doors seated in the straight throat cut
+ *  at each bulb's mouth (dwell near one and it dilates open; the flesh admits
+ *  you chamber by chamber). All bands are [lo, hi] rolls per zone. */
+interface FleshTractSpec {
+  /** Interior bulb chambers strung between the portal ends (default [4, 6]). */
+  segments?: [number, number];
+  /** Bulb chamber radius band (default [110, 170]). */
+  bulbR?: [number, number];
+  /** Tract tube carve HALF-width band (default [40, 60]). */
+  tubeW?: [number, number];
+  /** Chance each bulb mouth grows a sphincter door (default 0.85; 0 = none). */
+  doorChance?: number;
+  /** Dwell-to-dilate seconds for the sphincters (default 0.45). */
+  doorDwell?: number;
+  /** Straight throat length cut at each bulb mouth so the door sits in a true
+   *  corridor, not a wander's elbow (default 44). */
+  stub?: number;
+}
+
+/** The flesh recipe's RING dial (layoutParams.fleshRing): a socketed AMPHITHEATER —
+ *  one hub chamber ringed by satellite sockets, radial tubes + a circumferential
+ *  loop, and `knots` ocular_knot doodads hugging each chamber's carved rim (the
+ *  walls themselves watching). */
+interface FleshRingSpec {
+  /** Satellite chamber count band (default [5, 7]). */
+  satellites?: [number, number];
+  /** Hub chamber radius band (default [220, 280]). */
+  hubR?: [number, number];
+  /** Satellite chamber radius band (default [110, 160]). */
+  satR?: [number, number];
+  /** Wall-hugging ocular_knot count per chamber (default [2, 4]; 0,0 = none). */
+  knots?: [number, number];
+}
+
+/** Serpentine spine: bulbs strung entry → exit with alternating lateral throw,
+ *  joined by straight throat stubs (door seats) + winding tube runs between. */
+function carveFleshTract(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spec: FleshTractSpec, M: number): void {
+  const { rng, arena } = ctx;
+  const segBand = spec.segments ?? [4, 6];
+  const bulbBand = spec.bulbR ?? [110, 170];
+  const tubeBand = spec.tubeW ?? [40, 60];
+  const doorChance = spec.doorChance ?? 0.85;
+  const doorDwell = spec.doorDwell ?? 0.45;
+  const stub = spec.stub ?? 44;
+  const clampPt = (p: Vec2, r: number): Vec2 => vec(
+    Math.min(Math.max(p.x, M + r), arena.w - M - r),
+    Math.min(Math.max(p.y, M + r), arena.h - M - r));
+  const a = clampPt(ctx.entry, 130);
+  const b = clampPt(ctx.exits[0] ?? vec(arena.w - M - 130, arena.h / 2), 130);
+  const perp = Math.atan2(b.y - a.y, b.x - a.x) + Math.PI / 2;
+  const throwAmp = Math.min(arena.w, arena.h) * 0.24;
+  const segs = rng.int(segBand[0], segBand[1]);
+  const pts: Vec2[] = [a];
+  const radii: number[] = [130];
+  for (let i = 1; i <= segs; i++) {
+    const t = i / (segs + 1);
+    const r = rng.range(bulbBand[0], bulbBand[1]);
+    const amp = throwAmp * rng.range(0.55, 1) * (i % 2 === 0 ? 1 : -1);
+    pts.push(clampPt(vec(
+      a.x + (b.x - a.x) * t + Math.cos(perp) * amp,
+      a.y + (b.y - a.y) * t + Math.sin(perp) * amp), r));
+    radii.push(r);
+  }
+  pts.push(b); radii.push(130);
+  let doorN = 0;
+  for (let i = 0; i < pts.length; i++) grid.fillDisc(pts[i].x, pts[i].y, radii[i], 'flesh');
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const p = pts[i], q = pts[i + 1];
+    const dir = Math.atan2(q.y - p.y, q.x - p.x);
+    const dx = Math.cos(dir), dy = Math.sin(dir);
+    const halfW = rng.range(tubeBand[0], tubeBand[1]);
+    // Bulbs carved too close for honest throats: one wander, no door.
+    if (Math.hypot(q.x - p.x, q.y - p.y) < radii[i] + radii[i + 1] + stub * 2 + 40) {
+      carveWander(grid, p, q, halfW, rng);
+      continue;
+    }
+    // Straight throats out of each bulb (the door seats), wander between them.
+    const mouthP = vec(p.x + dx * (radii[i] + stub), p.y + dy * (radii[i] + stub));
+    const mouthQ = vec(q.x - dx * (radii[i + 1] + stub), q.y - dy * (radii[i + 1] + stub));
+    grid.carveCorridor(p.x, p.y, mouthP.x, mouthP.y, halfW);
+    carveWander(grid, mouthP, mouthQ, halfW, rng);
+    grid.carveCorridor(mouthQ.x, mouthQ.y, q.x, q.y, halfW);
+    // The sphincter waits in the straight throat entering the NEXT bulb.
+    if (rng.chance(doorChance)) {
+      const seat = vec(q.x - dx * (radii[i + 1] + stub * 0.5), q.y - dy * (radii[i + 1] + stub * 0.5));
+      ctx.doodads.push({
+        pos: seat, radius: halfW + 8, kind: 'sphincter', dir,
+        door: { id: `flesh-tract/d${doorN++}`, mode: 'dwell', dwell: doorDwell },
+      });
+    }
+  }
+  chambers.push(...pts);
+}
+
+/** Socketed amphitheater: hub + satellite ring + radial and circumferential
+ *  tubes, rims studded with watching ocular_knot doodads. */
+function carveFleshRing(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spec: FleshRingSpec, M: number): void {
+  const { rng, arena } = ctx;
+  const hubR = rng.range((spec.hubR ?? [220, 280])[0], (spec.hubR ?? [220, 280])[1]);
+  const satBand = spec.satellites ?? [5, 7];
+  const satRBand = spec.satR ?? [110, 160];
+  const knotBand = spec.knots ?? [2, 4];
+  const cx = arena.w / 2, cy = arena.h / 2;
+  const hub = vec(cx, cy);
+  grid.fillDisc(cx, cy, hubR, 'flesh');
+  chambers.push(hub);
+  const rimKnots = (center: Vec2, r: number): void => {
+    const k = rng.int(knotBand[0], knotBand[1]);
+    if (k <= 0) return;
+    const a0 = rng.range(0, Math.PI * 2);
+    for (let i = 0; i < k; i++) {
+      const a = a0 + (i / k) * Math.PI * 2 + rng.range(-0.3, 0.3);
+      ctx.doodads.push({
+        pos: vec(center.x + Math.cos(a) * (r - 28), center.y + Math.sin(a) * (r - 28)),
+        radius: rng.range(13, 20), kind: 'ocular_knot', dir: a + Math.PI,
+      });
+    }
+  };
+  rimKnots(hub, hubR);
+  const n = rng.int(satBand[0], satBand[1]);
+  // Sockets orbit between the hub's rim and the arena edge (never inside either).
+  const minOrbit = hubR + satRBand[1] + 60;
+  const orbitX = Math.max(minOrbit, arena.w / 2 - M - satRBand[1] - 20);
+  const orbitY = Math.max(minOrbit, arena.h / 2 - M - satRBand[1] - 20);
+  const sats: Vec2[] = [];
+  const b0 = rng.range(0, Math.PI * 2);
+  for (let i = 0; i < n; i++) {
+    const a = b0 + (i / n) * Math.PI * 2 + rng.range(-0.18, 0.18);
+    const r = rng.range(satRBand[0], satRBand[1]);
+    const p = vec(
+      Math.min(Math.max(cx + Math.cos(a) * orbitX, M + r), arena.w - M - r),
+      Math.min(Math.max(cy + Math.sin(a) * orbitY, M + r), arena.h - M - r));
+    grid.fillDisc(p.x, p.y, r, 'flesh');
+    carveWander(grid, hub, p, rng.range(34, 48), rng); // radial socket tube
+    rimKnots(p, r);
+    sats.push(p);
+    chambers.push(p);
+  }
+  // The circumferential gallery: every socket sees its neighbors.
+  for (let i = 0; i < sats.length; i++) carveWander(grid, sats[i], sats[(i + 1) % sats.length], rng.range(30, 42), rng);
+}
+
 /** FLESH (the "writhing pulsing flesh" biome) — a CIRCLE-based, organic topology:
  *  rounded chambers (fillDisc) joined by tubes, vs the rooms generator's rectangles.
  *  The chambers are a pulsing 'flesh' region (visual throb); tubes are plain floor.
- *  Entry + every exit get a chamber + a tube so portals sit on connected ground. */
+ *  Entry + every exit get a chamber + a tube so portals sit on connected ground.
+ *  ONE recipe, dialed per face (the dunefield pattern): the scattered-warren
+ *  default reads its bands from layoutParams (absent = the classic literals,
+ *  draw-for-draw identical), `fleshTract` swaps in the serpentine gut, and
+ *  `fleshRing` swaps in the socketed amphitheater. */
 function fleshLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
   const grid = new GridWalkField(arena.w, arena.h, 30);
@@ -1997,14 +2182,23 @@ function fleshLayout(ctx: GenCtx, def: ZoneDef): void {
   grid.fillRegion(0, 0, arena.w, arena.h, 'flesh_wall');
   const M = 90;
   const chambers: Vec2[] = [];
-  const n = rng.int(5, 8);
-  for (let i = 0; i < n; i++) {
-    const r = rng.range(120, 220);
-    const cx = rng.range(M + r, Math.max(M + r, arena.w - M - r));
-    const cy = rng.range(M + r, Math.max(M + r, arena.h - M - r));
-    grid.fillDisc(cx, cy, r, 'flesh');
-    chambers.push(vec(cx, cy));
+  const tract = layoutParam<FleshTractSpec | undefined>(def, 'fleshTract', undefined);
+  const ring = layoutParam<FleshRingSpec | undefined>(def, 'fleshRing', undefined);
+  if (tract) carveFleshTract(ctx, grid, chambers, tract, M);
+  else if (ring) carveFleshRing(ctx, grid, chambers, ring, M);
+  else {
+    const nBand = layoutParam<[number, number]>(def, 'fleshChambers', [5, 8]);
+    const rBand = layoutParam<[number, number]>(def, 'fleshChamberR', [120, 220]);
+    const n = rng.int(nBand[0], nBand[1]);
+    for (let i = 0; i < n; i++) {
+      const r = rng.range(rBand[0], rBand[1]);
+      const cx = rng.range(M + r, Math.max(M + r, arena.w - M - r));
+      const cy = rng.range(M + r, Math.max(M + r, arena.h - M - r));
+      grid.fillDisc(cx, cy, r, 'flesh');
+      chambers.push(vec(cx, cy));
+    }
   }
+  const beforePortals = chambers.length;
   for (const pt of [ctx.entry, ...ctx.exits]) {
     const cx = Math.min(Math.max(pt.x, M + 130), arena.w - M - 130);
     const cy = Math.min(Math.max(pt.y, M + 130), arena.h - M - 130);
@@ -2012,10 +2206,25 @@ function fleshLayout(ctx: GenCtx, def: ZoneDef): void {
     carveWander(grid, vec(pt.x, pt.y), vec(cx, cy), 46, rng); // winding tube to the portal
     chambers.push(vec(cx, cy));
   }
-  // Join chambers with WINDING tubes (one connected component) + a few extra loops.
-  for (let i = 1; i < chambers.length; i++) carveWander(grid, chambers[i - 1], chambers[i], rng.range(34, 50), rng);
-  const extra = rng.int(2, 4);
-  for (let i = 0; i < extra; i++) carveWander(grid, rng.pick(chambers), rng.pick(chambers), rng.range(32, 44), rng);
+  if (tract || ring) {
+    // Structured modes join themselves; only lash each portal chamber onto the
+    // nearest structural chamber so side exits still reach the body proper.
+    for (let i = beforePortals; i < chambers.length; i++) {
+      let best = chambers[0], bd = Infinity;
+      for (let j = 0; j < beforePortals; j++) {
+        const d = Math.hypot(chambers[j].x - chambers[i].x, chambers[j].y - chambers[i].y);
+        if (d < bd) { bd = d; best = chambers[j]; }
+      }
+      if (bd > 1) carveWander(grid, chambers[i], best, rng.range(34, 48), rng);
+    }
+  } else {
+    // Join chambers with WINDING tubes (one connected component) + a few extra loops.
+    const tubeBand = layoutParam<[number, number]>(def, 'fleshTubeW', [34, 50]);
+    const loopBand = layoutParam<[number, number]>(def, 'fleshLoops', [2, 4]);
+    for (let i = 1; i < chambers.length; i++) carveWander(grid, chambers[i - 1], chambers[i], rng.range(tubeBand[0], tubeBand[1]), rng);
+    const extra = rng.int(loopBand[0], loopBand[1]);
+    for (let i = 0; i < extra; i++) carveWander(grid, rng.pick(chambers), rng.pick(chambers), rng.range(Math.max(24, tubeBand[0] - 2), Math.max(26, tubeBand[1] - 6)), rng);
+  }
   ctx.walk = grid;
   // Themed organic clutter scatters INSIDE the carved chambers — findSpot walk-gates
   // flesh_pod/bone/gore onto walkable cells, so nothing embeds in the flesh walls.
@@ -3976,6 +4185,9 @@ registerStamp('gate_pylon', (ctx, spec) => stampSolid(ctx, 'gate_pylon', spec.ra
 registerStamp('hate_brazier', stampSingle('hate_brazier', [8, 11]));
 registerStamp('torture_rack', stampSingle('torture_rack', [16, 22]));
 registerStamp('hate_idol', stampSingle('hate_idol', [14, 20]));
+// The war-wound kit (the surface rift): the ground-scar pair.
+registerStamp('hate_rent', stampSingle('hate_rent', [16, 26]));
+registerStamp('hate_glass', (ctx, spec) => stampSolid(ctx, 'hate_glass', spec.radius ?? [18, 36]));
 // The thorn kin: a lone gnarled briar tree (walk-under bramble crown).
 registerStamp('briarwood', stampSingle('briarwood', [18, 30]));
 // The undergrowth kit: the jungle's own scatter — cuttable plugs, sight-only
@@ -4023,6 +4235,20 @@ registerStamp('vein_cluster', (ctx, spec) => stampBlob(ctx, 'vein_cluster', spec
 registerStamp('eye_stalk', (ctx, spec) => stampSolid(ctx, 'eye_stalk', spec.radius ?? [11, 18]));
 registerStamp('rib_arch', (ctx, spec) => stampSolid(ctx, 'rib_arch', spec.radius ?? [16, 28]));
 registerStamp('tooth_row', (ctx, spec) => stampSolid(ctx, 'tooth_row', spec.radius ?? [18, 30]));
+// The flesh country kit: blood/bile/tear pools pour; clots, arteries, polyps,
+// knuckles and eye-knots are chamber clutter. (Sphincters are never scattered —
+// the tract generator seats them in the throats it carves, door state and all.)
+registerStamp('blood_pool', (ctx, spec) => stampBlob(ctx, 'blood_pool', spec.radius ?? [28, 54], [3, 6], false));
+registerStamp('clot_mound', (ctx, spec) => stampSolid(ctx, 'clot_mound', spec.radius ?? [16, 28]));
+registerStamp('artery_stalk', (ctx, spec) => stampSolid(ctx, 'artery_stalk', spec.radius ?? [10, 16]));
+registerStamp('chyme_pool', (ctx, spec) => stampBlob(ctx, 'chyme_pool', spec.radius ?? [24, 48], [3, 5], false));
+registerStamp('gas_polyp', (ctx, spec) => stampSolid(ctx, 'gas_polyp', spec.radius ?? [10, 15]));
+registerStamp('villus_bed', (ctx, spec) => stampBlob(ctx, 'villus_bed', spec.radius ?? [22, 44], [3, 5], false));
+registerStamp('gut_knuckle', (ctx, spec) => stampSolid(ctx, 'gut_knuckle', spec.radius ?? [18, 32]));
+registerStamp('ocular_knot', (ctx, spec) => stampSolid(ctx, 'ocular_knot', spec.radius ?? [13, 20]));
+registerStamp('lash_bed', (ctx, spec) => stampBlob(ctx, 'lash_bed', spec.radius ?? [20, 40], [2, 4], false));
+registerStamp('weep_spring', (ctx, spec) => stampBlob(ctx, 'weep_spring', spec.radius ?? [14, 26], [2, 3], false));
+registerStamp('colossal_heart', (ctx, spec) => stampSolid(ctx, 'colossal_heart', spec.radius ?? [40, 56]));
 registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
 registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
 registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));

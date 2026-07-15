@@ -668,8 +668,14 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // CINDERLANDS — the volcanic country's RIM face (biome re-tagged rift →
+  // volcanic in the wound-pass: fire cultists and ember elementals are the
+  // cinder country's own, not the Legion's). depthAffinity stages the two
+  // faces the desert way: cooled flats at the region's edge, the erupting
+  // caldera past the heart — walking inward reads as the burn getting worse.
   cinderlands: {
     id: 'cinderlands',
+    depthAffinity: { to: 0.55, fadeOut: 0.3 },
     nameFirst: ['Cinder', 'Ashen', 'Smoldering', 'Charred', 'Molten', 'Sootveil', 'Emberfall', 'Ashfall', 'Scorchwind', 'Cindergrey', 'Smokeveil', 'Ashmoor', 'Pyreborn', 'Charwood', 'Embergloom', 'Slagborn', 'Sootfall', 'Burning'],
     nameSecond: ['Barrens', 'Flats', 'Scar', 'Caldera', 'Expanse', 'Fields', 'Wastes', 'Ashlands', 'Cinders', 'Smolder', 'Drift', 'Scorch', 'Pyre', 'Hollow', 'Reach', 'Char'],
     theme: {
@@ -680,7 +686,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       obstacle: '#47291c', obstacleEdge: '#7a452c', accent: '#ff9650',
       mud: '#2b1d12', chasm: '#1b0703', wall: '#54382a',
     },
-    sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.35, biome: 'rift',
+    sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.35, biome: 'volcanic',
     layout: [
       { kind: 'ravine', count: [1, 1] },
       { kind: 'rocks', count: [10, 18], radius: [22, 50] },
@@ -1510,35 +1516,113 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
-  // WASTELAND — the demon rift's scorched fringe: lava flows and broken stone.
+  // WASTELAND — THE WAR-WOUND: the ground the demon war tore through and
+  // never gave back. No lava and no cinder here (fire country belongs to the
+  // volcanic biome) — the wound burns the Durance's COLD GREEN: hate-lit
+  // rents, vitrified glass, gore where the land still bleeds, and the
+  // Legion's road furniture (gibbets, stakes, chains, banners) marking who
+  // marched through. The dread pall seeps from the rents and feeds them.
   wasteland: {
     id: 'wasteland',
     // War-land keeps its ordnance: abandoned powder dumps that answer stray
     // fire — and the muster grounds the war was drilled in.
     compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }, { composition: 'fallen_colossus', chance: 0.12 }, { composition: 'cistern_court', chance: 0.12 }],
-    nameFirst: ['Blasted', 'Cindertorn', 'Hellcracked', 'Ruinous', 'Emberblight', 'Scorched', 'Riftburnt', 'Ashbroken', 'Brimstone', 'Sulfurous', 'Cracked', 'Desolate', 'Smouldering', 'Wretched', 'Hateforged', 'Slagheap', 'Damnedmarch', 'Charbroken'],
-    nameSecond: ['Waste', 'Barrens', 'Scar', 'Reach', 'Expanse', 'Flats', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Cinders', 'Drift', 'Span', 'Wilds'],
+    nameFirst: ['Blasted', 'Hellcracked', 'Ruinous', 'Riftburnt', 'Hateforged', 'Sundered', 'Warshorn', 'Chainscored', 'Godpierced', 'Wretched', 'Desolate', 'Damnedmarch', 'Hatelit', 'Ashbroken', 'Brimstone', 'Cracked', 'Flayed', 'Unhealed'],
+    nameSecond: ['Waste', 'Scar', 'Reach', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Span', 'Wound', 'March', 'Rent', 'Verge', 'Fields', 'Toll'],
     theme: {
-      floor: '#15130f', grid: '#231d16', border: '#5c3a28',
-      obstacle: '#47291c', obstacleEdge: '#7a452c', accent: '#ff7a40',
-      chasm: '#1b0703', mud: '#2b1d12', lava: '#7a1a08', sand: '#6a5638',
+      // A DIMMER land than the volcanic country's bright eruption light —
+      // the wound leeches the day (volcanic runs dayLight 1.15; this is the
+      // opposite pole of the same dial).
+      dayLight: 0.95, nightDark: 0.85, ambientDark: 0.1,
+      // Pale hate-glow adrift in dead air — cold light where fire country
+      // wears warm heat-shimmer.
+      ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#8fe8b0' }],
+      ground: {
+        palette: ['#120b0e', '#1a1114', '#24171a', '#2e1d21', '#382329'],
+        bias: 0.45, alpha: 0.5, stretchX: 1.35, speckles: 0.7, strength: 1.1,
+      },
+      floor: '#140d10', grid: '#1f1418', border: '#5c2a34',
+      obstacle: '#3a1f26', obstacleEdge: '#6e3a46', accent: '#7de84a',
+      // Wall = the hellworks' wine-dark obsidian masonry (the hell-steppes
+      // stone — the same war built both). Full luminance step above floor.
+      wall: '#452330', chasm: '#0d0408', mud: '#241318',
+      // The wound's breath: dread pall seeping from the rents (data/fog.ts).
+      fog: { banks: [1, 2], kinds: [{ id: 'dread_pall' }] },
     },
     sizeW: [2500, 3500], sizeH: [1600, 2400], ellipseChance: 0.3, biome: 'rift',
+    // What the wound ALWAYS is, whichever face rolls: the ground bleeds, the
+    // hate shows through, and the titan chains run toward something below.
+    // (Ground scars ride `common` so they stamp FIRST — later solids honour
+    // their forbidOn against them.)
+    common: [
+      { kind: 'gore', count: [1, 2] },
+      { kind: 'hate_rent', count: [1, 3] },
+      { kind: 'hell_chain', count: [1, 3] },
+    ],
     layout: [
-      { kind: 'dead_tree', count: [3, 6] }, { kind: 'bone_pile', count: [1, 3] },
-      { kind: 'gallows', count: [0, 1] },
-      { kind: 'lava', count: [2, 3] },
-      { kind: 'chasm', count: [0, 1] },
+      // THE SCAR FIELDS (base face): open war-ground — rents, glass, relics.
+      { kind: 'abyssal_rent', count: [0, 1] },
       { kind: 'ravine', count: [1, 1] },
-      { kind: 'rocks', count: [10, 16], radius: [24, 52] },
-      { kind: 'rock_spire', count: [1, 2] }, { kind: 'scree', count: [1, 3] },
-      { kind: 'cliff', count: [2, 3] },
-      { kind: 'sand', count: [1, 2] },
+      { kind: 'chasm', count: [0, 1] },
+      { kind: 'rocks', count: [8, 14], radius: [24, 50] },
+      { kind: 'hate_glass', count: [2, 4] },
+      { kind: 'hell_fin', count: [2, 4] },
+      { kind: 'impaler_stake', count: [1, 3] },
+      { kind: 'rib_arch', count: [0, 1] },
+      { kind: 'black_obelisk', count: [0, 1] },
+      { kind: 'bone_pile', count: [2, 4] },
+      { kind: 'dead_tree', count: [2, 4] },
+      { kind: 'gallows', count: [0, 1] },
+      { kind: 'cliff', count: [1, 2] },
+      { kind: 'rock_spire', count: [1, 2] }, { kind: 'scree', count: [1, 2] },
       { kind: 'ruin', count: [0, 2] },
       { kind: 'camp', count: [1, 2] },
       // The war's little teeth outlived the war.
       { kind: 'rusted_snare', count: [0, 3] },
+      { kind: 'formation', count: [1, 2], formation: 'gibbet_road' },
       { kind: 'structure', count: [0, 1], structure: 'fortress_gate' },
+    ],
+    variants: [
+      // BRANDMARCH: the Legion's lit war-road — somebody keeps the braziers
+      // burning, and the toll cages along it are not all empty.
+      {
+        name: 'Brandmarch',
+        layout: [
+          { kind: 'hate_brazier', count: [3, 6] },
+          { kind: 'demon_banner', count: [2, 4] },
+          { kind: 'soul_cage', count: [2, 4] },
+          { kind: 'impaler_stake', count: [3, 6] },
+          { kind: 'torture_rack', count: [1, 2] },
+          { kind: 'hate_idol', count: [0, 1] },
+          { kind: 'hell_fin', count: [1, 3] },
+          { kind: 'rocks', count: [6, 10], radius: [22, 44] },
+          { kind: 'dead_tree', count: [1, 3] },
+          { kind: 'bone_pile', count: [2, 4] },
+          { kind: 'camp', count: [1, 2] },
+          { kind: 'formation', count: [1, 2], formation: 'hate_lights' },
+          { kind: 'formation', count: [0, 1], formation: 'stake_line' },
+          { kind: 'structure', count: [0, 1], structure: 'fortress_gate' },
+        ],
+      },
+      // SUNDERED: the wound laid open — more tear than field, the glass
+      // still standing where the crust let go.
+      {
+        name: 'Sundered',
+        layout: [
+          { kind: 'gore', count: [1, 2] },
+          { kind: 'hate_rent', count: [2, 4] },
+          { kind: 'abyssal_rent', count: [1, 3] },
+          { kind: 'chasm', count: [1, 2] },
+          { kind: 'rocks', count: [6, 10], radius: [22, 44] },
+          { kind: 'hate_glass', count: [3, 6] },
+          { kind: 'hell_fin', count: [2, 4] },
+          { kind: 'rib_arch', count: [0, 2] },
+          { kind: 'bone_pile', count: [1, 3] },
+          { kind: 'dead_tree', count: [1, 3] },
+          { kind: 'ruin', count: [0, 1] },
+          { kind: 'formation', count: [1, 2], formation: 'rent_run' },
+        ],
+      },
     ],
     packs: {
       count: [6, 8], size: [3, 5],
@@ -1548,19 +1632,20 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'hellhound', weight: 3 },
         { id: 'cinder_fiend', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'searing_spawn', weight: 2, presence: { from: 8, fadeIn: 4 } },
-        { id: 'dread_fiend', weight: 1, presence: { from: 12, fadeIn: 5 } },
-        { id: 'brute', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'dread_fiend', weight: 2, presence: { from: 10, fadeIn: 5 } },
+        { id: 'brute', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        // The gate-tender: its summons drip whelps until the maw is closed.
+        { id: 'hellgate_caller', weight: 1, presence: { from: 12, fadeIn: 5 } },
         // The deep-war Legion walks its own wastes.
         { id: 'bloodgorger', weight: 1, presence: { from: 18, fadeIn: 5 } },
-        { id: 'chained_tormentor', weight: 1, presence: { from: 20, fadeIn: 6 } },
-        // The gather elite and the lava-lane burrower.
+        { id: 'chained_tormentor', weight: 1, presence: { from: 16, fadeIn: 6 } },
         { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
-        { id: 'magma_swimmer', weight: 1, presence: { from: 6, fadeIn: 3 } },
-        { id: 'magma_lurker', weight: 1, presence: { from: 7, fadeIn: 3 } },
-        { id: 'void_angler', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        // The pit country's angler hunts the rents (the magma fauna stayed
+        // in the volcanic country where the lava lanes are).
+        { id: 'void_angler', weight: 2, presence: { from: 8, fadeIn: 3 } },
       ],
     },
-    spawnerId: 'ember_rift',
+    spawnerId: 'breach_scar',
     objectives: [
       { kind: 'offering', weight: 1 },
       { kind: 'bounty', weight: 1 },
@@ -3083,8 +3168,12 @@ export const TILESETS: Record<string, TilesetDef> = {
 
   // VOLCANIC — an erupting caldera (biome:'volcanic'). Lava vents periodically
   // launch arcing lava orbs (the lava_orb effect) that splatter as fire AoE.
+  // The country's HEART face (cinderlands keeps the cooled rim — see its
+  // depthAffinity note): the deeper into the region, the more the ground is
+  // still deciding to be liquid.
   volcanic: {
     id: 'volcanic', biome: 'volcanic',
+    depthAffinity: { from: 0.35, fadeIn: 0.3 },
     nameFirst: ['Erupting', 'Molten', 'Scorched', 'Cinderborn', 'Magmatic', 'Searing', 'Smokebelching', 'Fumarole', 'Ashveiled', 'Pyroclastic', 'Sulfur-Reeked', 'Lavaborn', 'Glowembered', 'Boiling', 'Cracked-Earth', 'Emberspewn', 'Furnace-Hot', 'Blistering'],
     nameSecond: ['Caldera', 'Vents', 'Crucible', 'Flows', 'Furnace', 'Maw', 'Fissure', 'Cinderfield', 'Lavaflats', 'Smokes', 'Pyre', 'Cone', 'Scoria', 'Hollow', 'Burn', 'Vent-Field'],
     theme: {
@@ -3920,7 +4009,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   buried_vault:   { title: 'Buried Vault',      blurb: 'A dead village’s underworks below the erg — dressed sandstone halls the dunes preserved, garrisoned by vermin, the risen, and whatever the urns were keeping.' },
   sunken_ruin:    { title: 'Sunken Ruins',      blurb: 'A drowned city that followed you down through a ruin-gate — flooded halls where something old still keeps to its rooms.' },
   mire:           { title: 'The Mire',          blurb: 'A drowned graveland of standing swamp, poison bog and rotted timber — footing that pulls at you and water that hides its teeth.' },
-  wasteland:      { title: 'Wasteland',         blurb: "The demon rift's scorched fringe: lava flows over broken stone, the border where the world itself begins to burn." },
+  wasteland:      { title: 'Wasteland',         blurb: "The war-wound: ground the demon war tore through and never gave back — hate-lit rents, vitrified glass, and the Legion's toll-road furniture under a dread pall." },
   hell_steppes:   { title: 'Hell Steppes',      blurb: "The underworld's fortress plateau — impaled warnings staked between the towers, one switchback stair the only way down onto the steppe." },
   caul:           { title: 'The Caul',          blurb: 'A hell-born warren of bruise-violet flesh — sacs, roots and umbilics glowing their own diegetic light while the living ground tries to take you back.' },
   river_of_flame: { title: 'River of Flame',    blurb: 'A continuous river of fire winding past gibbet galleries, banner roads and pale pyres to the Hellforge waiting where the flow finally ends.' },

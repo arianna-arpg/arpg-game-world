@@ -207,17 +207,19 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // these halls; what the green sends down keeps them company.
   ruin: { patronFaction: 'undead', mapColor: '#5c6a4e', label: 'Sunken Ruin', spacing: 64,
     allowedLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 } },
-  // RIFT: siege castles + the RIVER OF FLAME (riverland pouring lava, stone
-  // causeways spanning it — the D2 Act 4 artery).
-  rift:   { patronFaction: 'demon',  mapColor: '#a83a2a', label: 'Rift', spacing: 64,
+  // RIFT: the demon war's WOUND — war-scar fields under hate-green light,
+  // siege castles, and GORE-veined riverland (the land bleeds where it was
+  // cut). Deliberately NO lava and NO caldera/lava_coast rolls: fire country
+  // is the volcanic biome's; hell's own lava artery is the 'flame' course.
+  rift:   { patronFaction: 'demon',  mapColor: '#7e2740', label: 'Rift', spacing: 64,
     // DEEP-wilds only (from 0.45): the surface rift is a rare far-frontier
     // scar — near the settled lands the war never reached this far through.
     climate: { wildness: { from: 0.45, fadeIn: 0.15 } },
-    allowedLayouts: { plains: 6, bastion: 1, riverland: 1 },
-    layoutParams: { riverLiquid: 'lava', causeways: [2, 3] },
+    allowedLayouts: { plains: 5, bastion: 1, riverland: 1 },
+    layoutParams: { riverLiquid: 'gore', causeways: [2, 3] },
     structures: [{ structure: 'siege_castle', chance: 0 }, { structure: 'watchtower', chance: 0.15 }],
-    landmarks: [{ landmark: 'lava_coast', chance: 0.18 }, { landmark: 'caldera', chance: 0.12 },
-      { landmark: 'demon_pit', chance: 0.2 }, { landmark: 'void_pillars', chance: 0.1 }] },
+    landmarks: [{ landmark: 'demon_pit', chance: 0.22 }, { landmark: 'void_pillars', chance: 0.15 },
+      { landmark: 'abyssal_gulf', chance: 0.12 }] },
   // THE RIVER OF FLAME — hell's ARTERY, the first COURSE-ONLY biome: seeded
   // into NO palette (surface or underworld), it exists exclusively where the
   // Underworld's declared course paints it (world/courses.ts, dimensions.ts).

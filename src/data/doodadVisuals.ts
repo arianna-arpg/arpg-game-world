@@ -1286,6 +1286,28 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { stone: 'theme:obstacle|#2a2433', moss: '#4a7a42' },
     light: { radius: -2.0, color: '#7de84a', intensity: 0.18, flicker: 1.2 },
   },
+  // --- The war-wound kit (the surface rift) ---------------------------------
+  // HATE RENTS: ember_fissure's twin burning the Durance's cold green — what
+  // leaks up through the crust out here isn't fire.
+  hate_rent: {
+    painter: 'chasmPit', order: 39,
+    params: {
+      rim: { color: '#1c2e22', alpha: 0.5, grow: 4 },
+      core: { color: '#04080a' },
+      bands: 0,
+      cracks: { chance: 0.9, color: '#2f8a4e' },
+      glow: { color: '#5ee88a', alpha: 0.26 },
+    },
+    light: { radius: -2.2, color: '#5ee88a', intensity: 0.28, flicker: 2.2 },
+  },
+  // HATE GLASS: ground vitrified by the tearing — obsidian's twin, its edge
+  // lit from the wrong side of the world.
+  hate_glass: {
+    longShadow: 0.7,
+    painter: 'shard', order: 50, shadow: 0.55,
+    params: { points: 5, color: '#0f1411', material: 'stone', edgeGlow: { color: '#7de84a', alpha: 0.45 } },
+    light: { radius: -1.6, color: '#7de84a', intensity: 0.12, flicker: 1.1 },
+  },
   tooth_row: {
     painter: 'teethRow', order: 52, shadow: 0.45,
     params: { gum: '#6a1a28', enamel: '#e8e0d0' },

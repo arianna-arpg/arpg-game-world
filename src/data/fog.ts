@@ -140,6 +140,32 @@ registerFogBank({
   grants: [{ status: 'fogveiled' }],
 });
 
+/** DREAD PALL — the war-wound's exhalation (the surface rift): a thin
+ *  hate-green smoulder that seeps from the rents and hangs low over what
+ *  the war left standing. The ordinary veil inside; the Legion DRINKS it
+ *  (their ground, their breath — bait them off it, or share the veil and
+ *  take the fight in). Grave mist's grammar on demon ground. */
+registerFogBank({
+  id: 'dread_pall',
+  color: '#22342a',
+  alpha: 0.38,
+  radius: [110, 200],
+  lobes: [5, 9],
+  drift: [5, 10],
+  meander: 0.2,
+  swirl: 0.05,
+  breathe: 0.16,
+  churn: 0.26,
+  life: [50, 100],
+  rampFrac: 0.3,
+  overFrac: 0.2,
+  haunt: { kinds: ['hate_rent', 'soul_cage', 'impaler_stake', 'bone_pile'], pull: 0.7 },
+  grants: [
+    { status: 'fogveiled' },
+    { status: 'mistfed', factions: ['demon'] },
+  ],
+});
+
 // --- FOG-RIDING CHOREOGRAPHY -------------------------------------------------
 // x_seek_fog: a gloaming BLINK toward the nearest living bank — not a march,
 // a fade-and-reappear (the gloomling idiom, mechanically a clamped

@@ -2391,6 +2391,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
     spawner: true,
   },
 
+  // THE BREACH SCAR — the war-wound's own spawner (the wasteland's
+  // spawners-objective destructible): a standing tear burning the Durance's
+  // cold green, defending itself the Legion's way — it tears the ground
+  // under whoever comes to close it.
+  breach_scar: {
+    id: 'breach_scar', name: 'Breach Scar',
+    color: '#7de84a', shape: 'diamond', radius: 19, material: 'void', look: 'elemental_rift',
+    base: { life: 130, moveSpeed: 0, armor: 12, evasion: 0, mana: 999, manaRegen: 50 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['infernal_rift'],
+    xp: 50,
+    spawner: true,
+  },
+
   rime_stone: {
     id: 'rime_stone', name: 'Rime Stone',
     color: '#9accdf', shape: 'square', radius: 20, material: 'ice', look: 'elemental_rift',
