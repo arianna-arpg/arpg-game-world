@@ -182,7 +182,7 @@ import { ActiveZoneEvent } from './zoneEvent';
 import {
   featureEnabled, isSkillUnlockedForDrop, isSupportUnlockedForDrop, FEATURE,
   STARTER_SKILLS, applyCredits, creditsForDeath, META_CURRENCY_LABEL,
-  LEDGER_ACCOUNT_DEATHS, type Account,
+  LEDGER_ACCOUNT_DEATHS, LEDGER_FLASK_LESSON, type Account,
 } from '../meta/account';
 import {
   modeById, stageOf, DEFAULT_MODE_ID, FADE_DEFAULTS,
@@ -1246,8 +1246,13 @@ const MIREILLE_GIFT_LEDGER = 'mireille_flasks_given';
 /** THE LESSON'S REWARD: the first time her flasks sit LEARNED and ON THE
  *  BAR, Mireille tops both founts to the brim — once per character (run
  *  ledger), free of any unlock. The tutorial ends on a full drink, not an
- *  empty cup: the player's first sip teaches what the pips are FOR. */
-const MIREILLE_FILL_LEDGER = 'mireille_flasks_filled';
+ *  empty cup: the player's first sip teaches what the pips are FOR.
+ *  ONE string with the ACCOUNT ledger's LEDGER_FLASK_LESSON, by design: a
+ *  metaProgression death merges the run key up naturally, and updateMireille
+ *  stamps the account LIVE the moment the lesson is lived — either way the
+ *  account graduates, and every later character spawns with the flasks dealt
+ *  outright (dealVeteranFlasks) instead of re-walking the tutorial. */
+const MIREILLE_FILL_LEDGER = LEDGER_FLASK_LESSON;
 const MIREILLE_XP_BUFF_SEC = 300;   // a 5-minute blessing
 const MIREILLE_XP_BUFF_MULT = 0.05; // +5% experience while it lasts
 const MIREILLE_XP_REFRESH = 240;    // only (re)grant when below this (no spam)
@@ -11834,8 +11839,13 @@ export class World {
 
   /** The gift-taught LOOP, read back for her directions: any gift gem still
    *  CARRIED unlearned (the inventory step), else any LEARNED gift flask not
-   *  yet on the action bar (the bar step). Null once the lesson is lived. */
-  private mireilleGiftLesson(): 'learn' | 'bar' | null {
+   *  yet on the action bar (the bar step). Null once the lesson is lived.
+   *  PUBLIC — the lesson state is the one source of truth every teaching
+   *  surface reads: her talk line (innkeepPrompt), the inventory's
+   *  open-on-Skill-Gems default and the BUILD flap's glow (ui/panels.ts).
+   *  A graduated account's characters spawn dealt (dealVeteranFlasks), so
+   *  for them this is null from first breath and every surface stays quiet. */
+  mireilleGiftLesson(): 'learn' | 'bar' | null {
     const carried = MIREILLE_GIFT_SKILLS.some(id => !this.meta.knownSkills.has(id)
       && this.meta.skillInv.some(i => i.def.id === id));
     if (carried) return 'learn';
@@ -11860,8 +11870,8 @@ export class World {
     // keyboard/controller binds — resolveBindTokens, meta/settings.ts — so
     // her directions can never name a key the player rebound away.)
     const lesson = this.mireilleGiftLesson();
-    if (lesson === 'learn') return 'Open your inventory ({bind:panelInv}), love — press those flasks to memory.';
-    if (lesson === 'bar') return 'Now set them to your bar, dear — a flask out of reach is no flask at all.';
+    if (lesson === 'learn') return 'Open your inventory ({bind:panelInv}), love — find your flasks under Skill Gems. Press them to memory.';
+    if (lesson === 'bar') return 'Now set them to your bar, dear — the BUILD flap on your inventory\'s edge. A flask out of reach is no flask at all.';
     if (!this.mireilleUnlocked()) return 'No free innstay — unlock my care in the Vault.';
     return null;
   }
@@ -11936,6 +11946,17 @@ export class World {
    *  then a cooldown. No keypress — walk into her or stay near. */
   private updateMireille(dt: number): void {
     if (this.mireilleCd > 0) this.mireilleCd -= dt;
+    // THE GRADUATION (account-wide, self-healing): the moment this run's
+    // ledger shows the lesson lived — bumped fresh below, or carried in by
+    // a resumed save that finished the loop before graduation existed — the
+    // ACCOUNT learns it forever. Stamped live (not death-deferred) so even
+    // a vessel started five minutes later skips the re-walk; accountDirty
+    // has main.ts persist it before any quit can lose it.
+    if ((this.ledger[MIREILLE_FILL_LEDGER] ?? 0) >= 1
+      && !(this.account.ledger[LEDGER_FLASK_LESSON] ?? 0)) {
+      this.account.ledger[LEDGER_FLASK_LESSON] = 1;
+      this.accountDirty = true;
+    }
     // THE LESSON'S REWARD (once, ledger-remembered): the first time she sees
     // her flasks LEARNED and ON THE BAR, she fills both founts to the brim.
     // No dwell, no unlock, no cooldown — the payoff lands the moment you
@@ -11968,6 +11989,45 @@ export class World {
       this.mireilleDwell = 0;
       this.mireilleCd = MIREILLE_COOLDOWN;
     }
+  }
+
+  /** THE VETERAN'S DEAL: once ANY character has lived Mireille's flask
+   *  lesson (LEDGER_FLASK_LESSON on the account), later characters skip the
+   *  re-walk — at first breath the gift flasks arrive already LEARNED,
+   *  bound to the first OPEN bar slots (never displacing a class skill;
+   *  each slot's own keybind applies exactly as if the player had set it),
+   *  and their founts brimming. Everything rides the REAL paths — the same
+   *  magic-rarity gems her hands mint, learnSkill's cap/requirement gates,
+   *  bindSkill's dedupe, gainCharge's cap fold — so a refused step degrades
+   *  to a carried gem and her standing directions, never a bespoke state.
+   *  Both run-ledger keys are bumped so her gift arc reads LIVED for this
+   *  character (no re-offer, no double fill). Called by main.ts startGame
+   *  on a FRESH spawn only: a resumed character keeps what it saved, and an
+   *  ungraduated account no-ops straight into the tutorial as ever. */
+  dealVeteranFlasks(): void {
+    if (!(this.account.ledger[LEDGER_FLASK_LESSON] ?? 0)) return;
+    if (this.ledger[MIREILLE_GIFT_LEDGER]) return; // dealt already (belt)
+    const p = this.player;
+    for (const sid of MIREILLE_GIFT_SKILLS) {
+      if (!SKILLS[sid] || this.meta.knownSkills.has(sid)
+        || this.meta.skillInv.some(i => i.def.id === sid)) continue;
+      const inst = makeSkillInstance(SKILLS[sid], 1, SKILL_RARITIES.magic.sockets);
+      inst.rarity = 'magic';
+      this.meta.skillInv.push(inst);
+      // The real learn gate (cap, requirements). A refusal leaves the gem
+      // carried — Mireille's talk line picks the lesson up, nothing is lost.
+      if (!this.learnSkill(this.meta.skillInv.length - 1)) continue;
+      const slot = p.skills.findIndex(s => s === null);
+      if (slot >= 0) this.bindSkill(slot, sid);
+      // Brimming from the first breath — the same top-up her reward pours.
+      const known = this.meta.knownSkills.get(sid);
+      for (const cg of known?.def.chargeGain ?? []) {
+        if (cg.on !== 'orbPickup') continue;
+        p.gainCharge(cg.charge, 999, cg.max, known!);
+      }
+    }
+    bumpLedger(this.ledger, MIREILLE_GIFT_LEDGER);
+    bumpLedger(this.ledger, MIREILLE_FILL_LEDGER);
   }
 
   /** Is the player resting by the town campfire? (Feature owned + in town + near

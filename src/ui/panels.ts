@@ -194,6 +194,10 @@ export class UI {
    *  left edge of the inventory — the whole build in one glance. Remembers
    *  its state across panel closes, satchel-style. */
   private buildFlapOpen = false;
+  /** One-shot for the flap's TUTORIAL GLOW: set the first time the flap is
+   *  opened this run — "glow until opened", then trust the player. Re-armed
+   *  per run (resetRunView) so the next hero's lesson can teach again. */
+  private buildFlapTaught = false;
   /** THE UNIFIED INVENTORY's tab: gear grid, carried skill gems, or loose
    *  support gems — one panel, one key, zero overlapping windows. */
   invTab: 'gear' | 'skills' | 'gems' = 'gear';
@@ -747,6 +751,7 @@ export class UI {
     this.oceanCache = null;
     this.invTab = 'gear';
     this.lastInvTab = null;
+    this.buildFlapTaught = false; // re-arm the flap's lesson glow for the new hero
   }
 
   showClassSelect(onPick: (def: ClassDef, modeId?: string, name?: string) => void): void {
@@ -1210,6 +1215,12 @@ export class UI {
 
   toggleInventory(): void {
     this.inventoryOpen = !this.inventoryOpen;
+    // THE LESSON'S HAND ON THE TAB: while Mireille's gift sits carried and
+    // unlearned, the inventory OPENS on the Skill Gems tab — the very step
+    // her directions name — instead of wherever the player last browsed.
+    // Lesson-scoped only: a graduated account (flasks dealt at spawn) and
+    // any hero past the learn step get the panel exactly as they left it.
+    if (this.inventoryOpen && this.getWorld().mireilleGiftLesson() === 'learn') this.invTab = 'skills';
     this.inventory.classList.toggle('hidden', !this.inventoryOpen);
     if (this.inventoryOpen) this.refreshInventory();
     else { dndCancel(); hideTooltip(); } // a ghost never outlives its surface
@@ -1438,8 +1449,16 @@ export class UI {
     // the gear layout never shifts an inch) with the full learned-skills
     // management view. State persists like the satchel's.
     const wf = this.getWorld().nearFont();
+    // MIREILLE'S LESSON, read from its one source of truth (the world): at
+    // the 'bar' step the flap handle GLOWS until first opened (the one-shot
+    // above); at the 'learn' step the Skill Gems TAB glows from any other
+    // tab. The glow always marks the lesson's next click — and a graduated
+    // account never rolls a lesson, so these stay quiet forever after.
+    const lesson = this.getWorld().mireilleGiftLesson();
+    const flapGlow = lesson === 'bar' && !this.buildFlapOpen && !this.buildFlapTaught;
     const drawerHandle = `
-      <button data-buildflap title="Your learned skills — the whole build, full management"
+      <button data-buildflap class="${flapGlow ? 'tut-glow' : ''}"
+        title="Your learned skills — the whole build, full management"
         style="position:absolute;left:-27px;top:56px;writing-mode:vertical-rl;text-orientation:mixed;
         padding:12px 4px;font-size:11px;letter-spacing:1px;background:#241d2e;color:#c8a8ff;
         border:1px solid #4a3a5a;border-right:none;border-radius:6px 0 0 6px;cursor:pointer;z-index:4">
@@ -1479,7 +1498,9 @@ export class UI {
     // ONE inventory, tabbed: the gear grid and the carried gem bags share the
     // panel (and the key) instead of overlapping as separate windows.
     const tabBtn = (id: 'gear' | 'skills' | 'gems', label: string): string =>
-      `<button class="book-tab ${this.invTab === id ? 'active' : ''}" data-invtab="${id}">${label}</button>`;
+      `<button class="book-tab ${this.invTab === id ? 'active' : ''}${
+        lesson === 'learn' && id === 'skills' && this.invTab !== 'skills' ? ' tut-glow' : ''
+      }" data-invtab="${id}">${label}</button>`;
     const tabs = `<div class="book-tabs" style="margin-bottom:8px">
       ${tabBtn('gear', `Gear (${m.items.length})`)}
       ${tabBtn('skills', `Skill Gems (${m.skillInv.length})`)}
@@ -1526,6 +1547,9 @@ export class UI {
     // toggle + — when open — the learned list's full management wiring.
     this.inventory.querySelector<HTMLButtonElement>('[data-buildflap]')?.addEventListener('click', () => {
       this.buildFlapOpen = !this.buildFlapOpen;
+      // The tutorial glow's one-shot: any click that lands the flap OPEN
+      // proves the surface is found — the glow never nags again this run.
+      if (this.buildFlapOpen) this.buildFlapTaught = true;
       this.refreshInventory();
     });
     if (this.buildFlapOpen) {

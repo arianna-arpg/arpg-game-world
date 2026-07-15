@@ -96,6 +96,18 @@
       background: #2a2a3e; color: var(--gold); border-bottom-color: var(--gold);
     }
 
+    /* TUTORIAL GLOW — the class a live lesson pins on its NEXT CLICK (today:
+       the Skill Gems tab while Mireille's gift waits unlearned, the BUILD
+       flap while her flasks wait off the bar — ui/panels.ts reads the lesson
+       from World.mireilleGiftLesson). Reusable by any future lesson surface.
+       The animation origin outranks inline styles, so the pulse rides even
+       inline-styled buttons untouched. */
+    .tut-glow { animation: tut-glow 1.05s ease-in-out infinite alternate; }
+    @keyframes tut-glow {
+      from { box-shadow: 0 0 4px 1px rgba(200, 168, 255, 0.30); border-color: #7a5aa0; }
+      to   { box-shadow: 0 0 15px 4px rgba(200, 168, 255, 0.85); border-color: #e0c8ff; color: #f0e4ff; }
+    }
+
     /* Support gem sockets */
     .sockets { margin-top: 6px; display: flex; gap: 5px; flex-wrap: wrap; }
     .gem-chip {

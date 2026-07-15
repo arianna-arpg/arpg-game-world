@@ -277,6 +277,11 @@ function startGame(classDef: ClassDef, manifest?: ExpeditionManifest, modeId?: s
   const m = manifest ?? buildManifest(account, rollSeed());
   world = adoptWorld(new World(account, Object.freeze(m)));
   world.createPlayer(classDef, { modeId: mode.id, charId, name: charName });
+  // A GRADUATED account (Mireille's flask lesson lived once, any character)
+  // skips the re-walk: the flasks arrive learned, barred, and brimming at
+  // first breath. No-op until that first graduation — and placed BEFORE
+  // persistRun so the baseline snapshot already carries them.
+  world.dealVeteranFlasks();
   lastSentZone = '';        // force a fresh terrain broadcast for (re)joining clients
   if (COOP_ALLY) spawnCoopAlly();
   persistRun(account, world); // baseline snapshot so a fresh run is resumable
