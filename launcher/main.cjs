@@ -35,7 +35,7 @@
 // @ts-check
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, powerSaveBlocker, session, shell } = require('electron');
 const { spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -150,6 +150,17 @@ const flagValue = (flag) => {
 const SMOKE = flagValue('--smoke-test') !== null ? (flagValue('--smoke-test') || 'game') : null;
 const PERF = flagValue('--perf-test') !== null;
 const PLAY_DIRECT = flagValue('--play') !== null;
+
+if (PERF) {
+  // Windows' native occlusion tracker can STICK a visible window at
+  // 'occluded' (a long-standing Chromium bug class) — Chromium then
+  // throttles rAF to 1Hz and a gate run flatlines at ~1000ms gaps while the
+  // window sits plainly on screen (measured 2026-07-15: town control 8.3 one
+  // run, 1000.2 the next, same build; alwaysOnTop + display-wake + power
+  // blocker all powerless). The measurement window must never trust that
+  // tracker; the real game keeps it (it SHOULD throttle when covered).
+  app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+}
 
 /** A Steam Deck / gamescope session (Game Mode, or any gamescope nest) —
  *  drives fullscreen 'auto' AND the straight-into-the-game launch policy. */
@@ -713,16 +724,39 @@ async function perfMode() {
   /** @type {string[]} */
   const errors = [];
   try {
+    // A sweep runs 10+ minutes unattended — half a typical display idle
+    // timeout. When the display sleeps, DWM stops compositing, every window
+    // reads occluded, rAF drops to 1Hz, and the whole run flatlines at
+    // ~1000ms gaps (measured 2026-07-15, town control included — the
+    // controlSickMs guard below catches it, this PREVENTS it). Released by
+    // process exit.
+    powerSaveBlocker.start('prevent-display-sleep');
     const built = await ensureBuilt(); // a stale dist would measure old code
     if (!built.ok) throw new Error('build failed');
     const url = await ensureServer();
     gameWin = createGameWindow({ show: true });
     gameWin.webContents.setBackgroundThrottling(false);
+    // WINDOW POLICY: the gate needs a compositing surface, not the user's
+    // attention. CalculateNativeWinOcclusion is disabled for perf runs (see
+    // boot), so a COVERED window still composites at full rate — the user
+    // may stack their own windows over it freely. Only MINIMIZED is fatal
+    // (no surface exists; rAF flatlines at 1Hz/1000ms). Someone minimizing
+    // the window mid-sweep is a person asking for their screen back: restore
+    // ONCE here at boot (e.g. inherited shell state), never mid-run — the
+    // controlSickMs verdict names what happened instead. Never alwaysOnTop:
+    // a measurement must not fight the machine's owner.
+    if (gameWin.isMinimized()) gameWin.restore();
     gameWin.webContents.on('render-process-gone', (_e, d) => errors.push('renderer gone: ' + d.reason));
     await gameWin.loadURL(url);
     await wait(2500); // async boot: account load, world init, start menu
     const ready = await gameWin.webContents.executeJavaScript(`typeof window.__game`);
     if (ready !== 'object') throw new Error('window.__game is ' + ready + ' — game did not boot');
+    // Occlusion forensics: when a run comes back INVALID (controlSickMs),
+    // this line says what the page believed — 'hidden' here = the rAF
+    // throttle, not the zones. (visibilityState is the page-side symptom of
+    // the native occlusion tracker verdict.)
+    const visState = await gameWin.webContents.executeJavaScript(`document.visibilityState`);
+    console.log(`PERF: window visible=${gameWin.isVisible()} minimized=${gameWin.isMinimized()} page=${visState}`);
     /** @type {any} */
     const opts = {
       seconds: Number(flagValue('--seconds') || budgets.sampleSeconds || 6),
@@ -842,6 +876,23 @@ async function perfMode() {
     console.log('report -> ' + dir);
 
     if (errors.length) throw new Error(errors.join('; '));
+    // CONTROL SANITY: the town is the run's meter stick — when IT hitches
+    // (an occluded window throttled to 1Hz reads exactly ~1000ms gaps; a
+    // loaded machine drags it to 30+), every relative cap it feeds is
+    // garbage and any breach would blame zones for the environment. Such a
+    // run is INVALID, not a regression: exit 1 (never 2) so scripts can
+    // tell "fix your machine/window" from "fix your code". (Measured
+    // 2026-07-15: a covered gate window read town 1000.2 and 'breached'
+    // jungle's absolute caps — the environment, wearing a zone's name.)
+    const sickMs = Number(budgets.controlSickMs ?? 40);
+    if (ctl.gapP50 > sickMs) {
+      console.log(`PERF RUN INVALID: town control gapP50 ${ctl.gapP50}ms > controlSickMs ${sickMs} — ` +
+        `the control cannot judge anything. Likely an occluded/covered game window ` +
+        `(1Hz rAF throttle reads ~1000ms gaps) or a loaded machine; report kept for forensics.`);
+      gameServer?.close();
+      app.exit(1);
+      return;
+    }
     if (breaches.length) {
       console.log(forensics ? 'PERF (forensics — informative only):' : 'PERF BREACHED:');
       for (const b of breaches) console.log('  - ' + b);

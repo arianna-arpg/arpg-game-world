@@ -7872,6 +7872,10 @@ export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
  *  cached blit expresses. */
 export const CANOPY_STATIC: Record<string, boolean> = {
   bramble: true, discCrown: true, leafCrown: true, pineCrown: true,
+  // palmCrown is pure (theme + radius + rot, no time, no seed) — it simply
+  // never joined the list, so every palm in a sealed jungle live-stroked six
+  // quadratic fronds per frame while its neighbors blitted sprites.
+  palmCrown: true,
 };
 
 /** Stable small integer for a params object (registry defs are singletons) —

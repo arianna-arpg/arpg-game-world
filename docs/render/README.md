@@ -171,6 +171,26 @@ The FOREST biome is built on this — its layout recipe plants crowns closer
 than they span so whole stands read as single sealed roofs, coverage scaling
 with `geo.biomeDepth` (see `docs/worldgen/climate.md`).
 
+THE CANOPY COMPOSITE (`vis/canopy.ts`, `VIS_CFG.canopy.composite`): a patch
+fades as ONE BODY, so in steady state a sealed roof was hundreds of per-crown
+sprite blits a frame expressing one number. The STATIC (`CANOPY_STATIC`,
+non-`live`) crowns of each veil patch now flatten into world-space chunk
+SLICES — one baked canvas per chunk per patch alpha-group — and the roof
+draws as a dozen `drawImage` calls at the patch's smoothed alpha (same-mint
+A/B: forest 20.8 → 12.6ms gapP50, jungle tail 25 → 20.9 gapP99; the palm
+crown joining `CANOPY_STATIC` had already halved the jungle's p50). The
+per-crown near-fade still dissents: a crown pulled away from its patch's
+alpha (peeking under a covered eave) LEAVES the composite (hysteresis-
+guarded) and draws itself until it converges back; live crowns (the cut
+contract), non-veil occluders, dynamic painters, and patches under
+`minPatchMembers` never enter. Slices bake under a frame budget with the
+per-crown path as a pixel-identical stand-in, recycle through a canvas pool
+(GPU alloc churn is the faad384 hitch class), release eagerly on zone swap,
+and LRU-cap globally. Invalidation is free: patch identity is the object and
+the veil index rebuilds off doodad revs, so pops/pushes/zone swaps mint new
+patches and the WeakMap-keyed cache follows. Forensics: `npm run perf --
+--ablate=canopyslices` measures the old per-crown path.
+
 SUN SHADOWS: `sunCast(time)` gives a direction that spins through daylight
 and a reach that stretches at low sun; kinds opt in via
 `DoodadVisualDef.longShadow` (a radius multiplier).

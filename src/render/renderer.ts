@@ -47,7 +47,8 @@ import { materialOf, rampOf } from './vis/materials';
 import { adornFlashSprite, adornSprite, bodyFlashSprite, bodySprite, drawLiveParts, lookOf, shapeIsOriented, spriteHalf, type BodyLook } from './vis/body';
 import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './vis/sprites';
 import { GroundRenderer } from './vis/ground';
-import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, crownSprite, crownVariantOf, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
+import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
+import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
@@ -101,10 +102,6 @@ function blendRgb(from: string, to: string, k: number): string {
   const a = hexToRgb(from), b = hexToRgb(to);
   return `${Math.round(a[0] + (b[0] - a[0]) * k)},${Math.round(a[1] + (b[1] - a[1]) * k)},${Math.round(a[2] + (b[2] - a[2]) * k)}`;
 }
-
-/** Shared empty params for canopy defs that declare none — identity-stable
- *  so sprite-bake keys are too (see the drawCanopies bake path). */
-const EMPTY_PARAMS: Record<string, unknown> = {};
 
 export class Renderer {
   ctx: CanvasRenderingContext2D;
@@ -1888,6 +1885,9 @@ export class Renderer {
   /** This frame's occluders with their smoothed fades — collected by
    *  drawCanopies for the label pass (one loop, two customers). */
   private frameOccluders: { o: Doodad; fade: number }[] = [];
+  /** The sealed-roof composite (vis/canopy.ts): static veil crowns flatten
+   *  into chunk slices drawn at the patch's shared alpha. */
+  private canopySlices = new CanopySlices();
 
   private drawCanopies(world: World): void {
     const hero = world.player;
@@ -1896,6 +1896,9 @@ export class Renderer {
     this.frameOccluders.length = 0;
     const veils = world.veilIndex();
     const heroPatch = veils.patches.length ? veils.patchAt(hero.pos.x, hero.pos.y) : null;
+    const composite = VIS_CFG.canopy.composite && VIS_CFG.canopy.bakeCrowns
+      && !VIS_ABLATE.has('canopyslices');
+    this.canopySlices.begin(dt, world);
     for (const o of this.culledAll) {
       const rule = doodadRuleOf(o.kind);
       const occ = rule.occlude;
@@ -1903,51 +1906,49 @@ export class Renderer {
       if (!occ && !veil) continue;
       const near = dist(hero.pos, o.pos) < o.radius + hero.radius + (occ?.pad ?? 10);
       let target = near ? (occ?.alpha ?? 0.32) : 1;
-      if (veil) {
-        const patch = veils.patchOf(o);
-        if (patch) {
-          const patchTarget = patch === heroPatch
-            ? (veil.reveal ?? VEIL_DEFAULTS.reveal)
-            : (veil.cover ?? VEIL_DEFAULTS.cover);
-          target = Math.min(target, patchTarget);
-        }
+      const patch = veil ? veils.patchOf(o) : null;
+      let patchTarget = 1;
+      if (veil && patch) {
+        patchTarget = patch === heroPatch
+          ? (veil.reveal ?? VEIL_DEFAULTS.reveal)
+          : (veil.cover ?? VEIL_DEFAULTS.cover);
+        target = Math.min(target, patchTarget);
       }
       const cur = this.canopyFade.get(o) ?? 1;
-      const fade = cur + (target - cur) * Math.min(1, dt * VIS_CFG.canopy.fadeRate);
-      this.canopyFade.set(o, fade);
-      this.frameOccluders.push({ o, fade });
+      let fade = cur + (target - cur) * Math.min(1, dt * VIS_CFG.canopy.fadeRate);
       // Crown looks come from the SAME registry entry as the ground pass —
-      // a kind with no canopy def gets the translucent disc. STATIC crown
-      // painters (CANOPY_STATIC) blit a variant-baked sprite at the fade
-      // alpha — a sealed deep-forest viewport holds hundreds of crowns and
-      // repainting their lobed silhouettes live was the forest frame drop.
+      // a kind with no canopy def gets the translucent disc. A kind may opt
+      // its crowns OUT of the bake (canopy.live — the cut contract: growth
+      // that yields to the blade BREATHES). Sparse kinds only by doctrine;
+      // the bake stays the rule for sealed forests.
       const cdef = DOODAD_VISUALS[o.kind]?.canopy;
       const name = cdef?.painter ?? 'discCrown';
-      const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
-      // A kind may opt its crowns OUT of the bake (canopy.live — the cut
-      // contract: growth that yields to the blade BREATHES). Sparse kinds
-      // only by doctrine; the bake stays the rule for sealed forests.
-      if (VIS_CFG.canopy.bakeCrowns && CANOPY_STATIC[name] && !cdef?.live) {
+      const bakeable = VIS_CFG.canopy.bakeCrowns && !!CANOPY_STATIC[name] && !cdef?.live;
+      let handled = false;
+      // THE COMPOSITE CLAIM: a static veil crown joins its patch's slices and
+      // adopts the group's shared alpha (drawn in one blit below) unless the
+      // hero's near-fade legitimately pulls it away — then it draws itself.
+      if (composite && bakeable && veil && patch) {
+        const adopted = this.canopySlices.claim(patch, veil, o, fade, patchTarget, near);
+        if (adopted !== null) { fade = adopted; handled = true; }
+      }
+      this.canopyFade.set(o, fade);
+      this.frameOccluders.push({ o, fade });
+      if (handled) continue;
+      if (bakeable) {
         // params must be the REGISTRY object (or the shared empty) — a fresh
         // `{}` per frame would mint a fresh bake key per frame and re-bake
         // every crown every frame (it did: 250ms forests).
-        const spr = crownSprite(name, painter, world.zone.theme, cdef?.params ?? EMPTY_PARAMS,
-          o.radius, crownVariantOf(o));
-        const rq = Math.max(8, Math.round(o.radius / 5) * 5);
-        const scale = o.radius / rq;
-        const half = (spr.width / 2) * scale;
-        const ctx = this.ctx;
-        ctx.save();
-        ctx.translate(o.pos.x, o.pos.y);
-        if (o.rot !== undefined) ctx.rotate(o.rot);
-        ctx.globalAlpha = fade;
-        ctx.drawImage(spr, -half, -half, spr.width * scale, spr.height * scale);
-        ctx.restore();
-        ctx.globalAlpha = 1;
+        blitCrown(this.ctx, world.zone.theme, o, name, cdef?.params ?? EMPTY_PARAMS, fade);
       } else {
+        const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
         painter(env, o, fade, cdef?.params ?? {});
       }
     }
+    // The flattened roofs: every active group's visible slices at its shared
+    // alpha (missing slices bake under budget, standing in per-crown).
+    this.canopySlices.draw(this.ctx, world.zone.theme, this.cam.x, this.cam.y,
+      this.canvas.width / this.zoom, this.canvas.height / this.zoom);
   }
 
   // --- ROOF REVEAL: interiors as pseudo fog of war ----------------------------

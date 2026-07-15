@@ -82,6 +82,36 @@ export const VIS_CFG = {
      *  the fade alpha instead of repainting lobed silhouettes live — the
      *  sealed deep-forest fix. Off = every crown paints procedurally. */
     bakeCrowns: true,
+    /** COMPOSITE static veil crowns into world-space chunk slices
+     *  (vis/canopy.ts): a sealed roof draws as ~a dozen chunk blits at the
+     *  patch's shared alpha instead of hundreds of per-crown sprites — the
+     *  forest/jungle steady-state fix. Off = the per-crown bake path above. */
+    composite: true,
+    /** Slice edge in world units (one baked canvas per chunk per group). */
+    compositeChunk: 448,
+    /** Per-frame slice bake budget: missing slices bake under this ms cap
+     *  and count cap; pending chunks stand in with per-crown draws (clipped),
+     *  so entering a sealed forest converges over a few frames, burst-free. */
+    bakeBudgetMs: 2.5,
+    maxBakesPerFrame: 4,
+    /** Global LRU cap on live slices (~0.8 MB each at 448²) — MUST exceed
+     *  the worst-case visible chunk count (~24 at 1440p zoom 1.3) times the
+     *  groups in view, or walking evicts and rebakes every frame (the
+     *  snow-tile cap lesson). Bounds boundless-zone walks near 75 MB. */
+    maxSlices: 96,
+    /** Patches with fewer composite-eligible crowns than this stay on the
+     *  per-crown path: a lone tree is cheap to blit but costs a whole slice
+     *  per chunk its crown touches — strangler court's 28 singleton patches
+     *  alone pushed slice demand past the LRU cap (walk-evict-rebake churn,
+     *  the 1000ms-frame GPU stall). The composite is for ROOFS. */
+    minPatchMembers: 8,
+    /** Divergence hysteresis (fractions of alpha): a crown leaves the
+     *  composite when its own fade strays past divergeIn from the group's
+     *  (the eave peek — near-fade under a covered patch edge) and rejoins
+     *  under divergeOut. The gap keeps boundary grazes from flapping
+     *  bake-drop-bake (the snow-bucket lesson). */
+    divergeIn: 0.05,
+    divergeOut: 0.015,
   },
 
   /** The player's POISE/INSIGHT pool arcs (Settings.poolBars gates how). */
