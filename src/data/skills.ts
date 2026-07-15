@@ -5028,6 +5028,76 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
 
+  // --- THE FLESH COUNTRY's arts, learned back off the walls (droppable
+  // gems). The identity: WEAPONIZED body-ladders — faintness, queasy, the
+  // gaze-mark, blind — every one a status the country itself taught you. ---
+  transfixing_gaze: {
+    id: 'transfixing_gaze', name: 'Transfixing Gaze',
+    description: 'FOCUS on an enemy and HOLD — the stare fills only while your cursor rides the target (the concentration art; the Ocular\'s own trick, learned back off its walls). Hold it to the end and they are SEEN: marked meat, taking increased damage while the mark rides. Break early and the focus drains, not drops.',
+    tags: ['spell', 'chaos', 'duration', 'targeted'], color: '#d8b04a',
+    manaCost: 18, cooldown: 8, useTime: 0,
+    targeting: { target: 'enemy', castRange: 340 },
+    concentration: { time: 1.6, onBreak: 'drain', drainRate: 1.4 },
+    delivery: { type: 'target' },
+    baseDamage: { chaos: [14, 22] },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'seen', chance: 1 },
+    ],
+    requirements: { willpower: 18, wisdom: 10 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+  syncope: {
+    id: 'syncope', name: 'Syncope',
+    description: 'A snap of falling pressure — a nova that turns every head in reach LIGHT (faintness, stack on stack), and lands harder on the already-pale. Pale the room, then collapse it: at the cap the ladder does the rest (swoon).',
+    tags: ['spell', 'chaos', 'aoe'], color: '#d8ccd8',
+    manaCost: 16, cooldown: 4, useTime: 0.7,
+    baseDamage: { chaos: [12, 19] },
+    delivery: { type: 'nova', radius: 150 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'faintness', chance: 1 },
+    ],
+    requirements: { willpower: 20 },
+    // The self-synergy IS the build: the gem's own kit grows the payoff lane.
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('damageVs_faintness', 'flat', 0.03)] },
+  },
+  digest: {
+    id: 'digest', name: 'Digest',
+    description: 'Condemn ground to the stomach\'s arithmetic: a bile pool that SPREADS as it works (the Gutworks\' patience, bottled), souring stomachs and dissolving what stands its ground. Leave before the mathematics finish, or make sure they finish first.',
+    tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#a8b86a',
+    manaCost: 22, cooldown: 6, useTime: 0.8,
+    baseDamage: { chaos: [7, 11] },
+    delivery: {
+      type: 'ground', radius: 72, castRange: 380,
+      lingerDuration: 6, tickInterval: 0.8,
+      // The spread: born tight, worked wide — the pool grows INTO its meal.
+      sizeOver: { from: 0.55, to: 1.5 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'queasy', chance: 0.5 },
+    ],
+    requirements: { willpower: 24 },
+    ai: { range: 340, weight: 2, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+  blinding_ichor: {
+    id: 'blinding_ichor', name: 'Blinding Ichor',
+    description: 'A flung gout of the country\'s own humor that BLINDS what it coats — aim crushed, perception halved. The eye country hates nothing more than its own trick; everything else just hates being blind.',
+    tags: ['spell', 'chaos', 'projectile'], color: '#3a3444',
+    manaCost: 10, cooldown: 5, useTime: 0.6,
+    baseDamage: { chaos: [10, 16] },
+    delivery: { type: 'projectile', speed: 300, radius: 10, range: 440 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'blind', chance: 1 },
+    ],
+    requirements: { willpower: 14, dexterity: 8 },
+    ai: { range: 400, weight: 2, keepDistance: 240 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+
   gut_hurl: {
     id: 'gut_hurl', name: 'Gut Hurl',
     description: 'Heave a wet knot of viscera. It hits like a sack of rot and leaves the victim VULNERABLE — opened a little wider for everything after.',

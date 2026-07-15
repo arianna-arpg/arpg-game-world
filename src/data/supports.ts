@@ -4135,6 +4135,34 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('convert_physical_cold', 'flat', 0.125)],
     weight: 7, minDropLevel: 9,
   },
+
+  // --- The flesh country's lanes (the SUN & SAND shape: universal apply_/
+  // damageVs_ gems weaponizing the country's own ladders — expect the same
+  // non-hitting-host INERT tails in the no-op matrix). ----------------------
+  pallid_touch: {
+    id: 'pallid_touch', name: 'Pallid Touch',
+    description: 'Supported skills turn heads LIGHT: 35% of hits build faintness. Pale the room and let the ladder work — at the cap they SWOON (a white-out drag, never a stun), and Syncope lands harder the paler they get.',
+    color: '#d8ccd8', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_faintness', 'flat', 0.35)],
+    perLevel: [mod('apply_faintness', 'flat', 0.03)],
+    weight: 5, minDropLevel: 8,
+  },
+  sickening: {
+    id: 'sickening', name: 'Sickening',
+    description: 'Supported skills turn STOMACHS: 35% of hits build queasy. Five deep and the target is RETCHING — begun attacks and spells keep fizzling. The channel-breaker you apply instead of time.',
+    color: '#a8b86a', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_queasy', 'flat', 0.35)],
+    perLevel: [mod('apply_queasy', 'flat', 0.03)],
+    weight: 5, minDropLevel: 8,
+  },
+  unblinking: {
+    id: 'unblinking', name: 'Unblinking',
+    description: 'Supported skills WATCH: 30% of hits build beheld, and damage against the SEEN (the ladder\'s cap — marked meat) is amplified. The Ocular\'s regard, socketed: keep looking and the mark writes itself.',
+    color: '#d8b04a', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_beheld', 'flat', 0.3), mod('damageVs_seen', 'flat', 0.12)],
+    perLevel: [mod('apply_beheld', 'flat', 0.025), mod('damageVs_seen', 'flat', 0.015)],
+    weight: 5, minDropLevel: 10,
+  },
 };
 
 export const SUPPORT_LIST: SupportDef[] = Object.values(SUPPORTS);

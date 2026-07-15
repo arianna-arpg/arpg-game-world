@@ -56,6 +56,16 @@ export const VESTIGE_LIST: VestigeDef[] = [
     },
   },
   {
+    // The flesh country's socketable: the iris that never closes.
+    id: 'orra', name: 'Orra, Vestige of the Iris', glyph: 'ᛟ', color: '#d8b04a', weight: 70,
+    effects: {
+      helmet: [{ stat: 'detectionRange', kind: 'increased', value: 0.15 }],
+      gloves: [{ stat: 'apply_beheld', kind: 'flat', value: 0.12 }],
+      amulet: [{ stat: 'damageVs_seen', kind: 'flat', value: 0.08 }],
+      default: [{ stat: 'accuracy', kind: 'increased', value: 0.08 }],
+    },
+  },
+  {
     id: 'dur', name: 'Dur, Vestige of the Bulwark', glyph: 'ᛞ', color: '#c8b088', weight: 100,
     effects: {
       chest: [{ stat: 'armor', kind: 'flat', value: 60 }],
