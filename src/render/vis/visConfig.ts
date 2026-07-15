@@ -433,6 +433,35 @@ export const VIS_CFG = {
     puffAlpha: 0.5,
     puffBob: 2.5,
   },
+
+  /** THE VOID FRAME (vis/voidFrame.ts) — what the world ends into. The
+   *  hero-locked camera (render/camera.ts) shows the beyond-edge dark
+   *  whenever the hero presses the rim; the classic frame sees it at the
+   *  ±overshoot and around letterboxed interiors. Ablate pass name:
+   *  'voidframe' (restores flat black + the plain border line). */
+  voidFrame: {
+    /** The abyss's base ink — the screen clear and everything past the rim.
+     *  tintMix leans it toward the zone's floor color so each biome owns its
+     *  own dark (0 = every zone ends in the same flat night). */
+    color: '#0a0a0e',
+    tintMix: 0.1,
+    /** The falling-away skirt just past the rim: the zone's earth catching
+     *  the last light as it drops. width in world px; floorMix blends the
+     *  earth tone floor→border. */
+    skirt: { width: 150, alpha: 0.45, floorMix: 0.45 },
+    /** The rim lip at the boundary: a dark seat stroked UNDER the classic
+     *  border line, the line itself, and a lit crest hairline over it —
+     *  ground ending, not a drawn rectangle. Widths in world px. */
+    rim: { seatWidth: 9, seatAlpha: 0.55, lineWidth: 4, crestWidth: 1.5, crestAlpha: 0.35 },
+    /** Drifting void motes — sparse parallax dust that gives the dark its
+     *  depth. One mote per `cell` px of parallax space; sway is the slow
+     *  in-place drift as a fraction of the cell (never a net motion, so
+     *  nothing pops at cell seams); parallax < 1 reads as far below. */
+    motes: {
+      cell: 210, alpha: 0.38, parallax: 0.55, sway: 0.15,
+      color: '#cfd6ff', colorMix: 0.6, rMin: 0.8, rMax: 2.1,
+    },
+  },
 } as const;
 
 // --- DEV FORENSICS (perf-harness levers — src/dev/perf.ts) ------------------

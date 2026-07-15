@@ -37,6 +37,7 @@ import {
 } from '../data/bestiary';
 import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
 import { applyUiScale, UI_SCALE_CFG } from './uiScale';
+import { CAMERA_MODES, cameraModeOf } from '../render/camera';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
@@ -3887,6 +3888,10 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
           title="Grows the whole interface together — panels, tooltips, popups, and the on-screen HUD — so text stays readable at any eyesight. World text (damage numbers, nameplates) keeps battlefield scale."> <b id="val-uiscale">${Math.round(s.uiScale * 100)}%</b></span>
       </div>
       <div class="rebind-row">
+        <span>Camera</span>
+        <button id="opt-cameramode" title="${CAMERA_MODES.map(m => `${m.name} — ${m.blurb}`).join('\n')}">${cameraModeOf(s.cameraMode).name}</button>
+      </div>
+      <div class="rebind-row">
         <span>Low-Life Screen Pulse</span>
         <button id="opt-lowlife" title="Blood seeps in at the screen edge while life is low, pressing inward on a slow heartbeat at the last sliver. OFF: only the struck-while-low surge shows (the sane pick for 1/1-life or heavy-reservation builds).">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
       </div>
@@ -4054,6 +4059,16 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
       this.getSettings().uiScale = v / 100;
       applyUiScale(v / 100);
     }, v => `${v}%`);
+    // CAMERA MODE: cycle the frame registry (render/camera.ts) — hero-locked
+    // vs the classic zone frame. The renderer reads Settings live, so the
+    // battlefield behind the menu re-frames next frame (the honest preview).
+    root.querySelector<HTMLElement>('#opt-cameramode')?.addEventListener('click', () => {
+      const st = this.getSettings();
+      const i = CAMERA_MODES.findIndex(m => m.id === st.cameraMode);
+      st.cameraMode = CAMERA_MODES[(i + 1) % CAMERA_MODES.length].id;
+      this.saveSettings();
+      this.renderKeybinds(root, onBack);
+    });
     // AIM TICK style: one button per registry entry (line / dot / mods').
     root.querySelectorAll<HTMLElement>('[data-aimtick-style]').forEach(btn => {
       btn.addEventListener('click', () => {

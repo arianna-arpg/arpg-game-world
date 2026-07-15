@@ -57,6 +57,8 @@ import { drawFogLayer } from './vis/fogLayer';
 import { drawCreepLayer } from './vis/creepLayer';
 import { drawFluxLayer } from './vis/fluxLayer';
 import { UnderstoryLayer } from './vis/understory';
+import { cameraModeOf, placeCamera } from './camera';
+import { drawVoidFrame, voidBaseOf } from './vis/voidFrame';
 import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
 import './vis/paintersAether'; // side-effect: the Aetherial kit's painters register
@@ -222,22 +224,20 @@ export class Renderer {
     this.frameDt = clamp(world.time - this.lastRenderTime, 0, 0.1);
     this.lastRenderTime = world.time;
 
-    // Camera follows the player, clamped to the zone (centered when the
-    // zone is smaller than the window). Zoom shrinks the visible world window.
+    // THE CAMERA (render/camera.ts): the mode registry decides how the view
+    // frames the hero — a ZoneDef.camera pin wins, then the player's Options
+    // pick, then the fabric default. Boundless zones (the Descent abyss)
+    // free-follow inside placeCamera regardless of mode: no frame to clamp to.
     const z = this.zoom, vw = w / z, vh = h / z;
     const az = world.arena;
-    if (az.boundless) {
-      // The Descent abyss has no edges — the camera follows the player freely.
-      this.cam.x = world.player.pos.x - vw / 2;
-      this.cam.y = world.player.pos.y - vh / 2;
-    } else {
-      this.cam.x = az.w + 160 <= vw ? (az.w - vw) / 2
-        : clamp(world.player.pos.x - vw / 2, -80, az.w - vw + 80);
-      this.cam.y = az.h + 160 <= vh ? (az.h - vh) / 2
-        : clamp(world.player.pos.y - vh / 2, -80, az.h - vh + 80);
-    }
+    const camMode = cameraModeOf(world.zone.camera ?? this.getSettings?.().cameraMode);
+    const camAt = placeCamera(camMode, world.player.pos, vw, vh, az);
+    this.cam.x = camAt.x;
+    this.cam.y = camAt.y;
 
-    ctx.fillStyle = '#0a0a0e';
+    // The clear IS the void: theme-tinted abyss ink (vis/voidFrame.ts), so
+    // whatever the frame exposes past the rim already wears the zone's dark.
+    ctx.fillStyle = voidBaseOf(world.zone.theme);
     ctx.fillRect(0, 0, w, h);
 
     // A LAUNCH in progress asks for its understory: capture the DEPARTURE
@@ -1329,17 +1329,19 @@ export class Renderer {
     // ELLIPSE zones: mask everything outside the oval back to the void
     // color — one even-odd fill instead of a whole-pass curved clip.
     if (ell) {
-      ctx.fillStyle = '#0a0a0e';
+      ctx.fillStyle = voidBaseOf(theme);
       ctx.beginPath();
       ctx.rect(-8, -8, w + 16, h + 16);
       ctx.ellipse(w / 2, h / 2, w / 2, h / 2, 0, 0, Math.PI * 2);
       ctx.fill('evenodd');
     }
     ctx.restore();
-    ctx.strokeStyle = theme.border;
-    ctx.lineWidth = 4;
-    if (ell) { ctx.beginPath(); ctx.ellipse(w / 2, h / 2, w / 2 - 2, h / 2 - 2, 0, 0, Math.PI * 2); ctx.stroke(); }
-    else ctx.strokeRect(0, 0, w, h);
+    // THE VOID FRAME (vis/voidFrame.ts): everything past the rim — the
+    // falling-away skirt, the lip strokes, the drifting motes in the dark.
+    // Under the hero-locked camera the abyss is on screen whenever the hero
+    // presses the world's edge; the classic frame meets it at the ±overshoot
+    // and around letterboxed interiors.
+    drawVoidFrame(ctx, world, this.cam.x, this.cam.y, vw, vh, world.time);
   }
 
   /** SNOW COVER wash (World.snowCover): drifted white laid over the floor,

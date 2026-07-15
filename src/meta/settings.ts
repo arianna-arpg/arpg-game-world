@@ -20,6 +20,7 @@ import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../co
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode } from '../ui/mapConfig';
 import { UI_SCALE_CFG } from '../ui/uiScale';
+import { CAMERA_CFG, CAMERA_MODES, type CameraModeId } from '../render/camera';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
@@ -122,6 +123,11 @@ export interface Settings {
    *  one should need a magnifier to read their own life orb. Rails live in
    *  UI_SCALE_CFG; world-anchored text deliberately does not ride it. */
   uiScale: number;
+  /** THE CAMERA MODE (render/camera.ts registry): 'hero' locks the view to
+   *  your hero everywhere — zone edges simply reveal the void frame — while
+   *  'zone' is the classic frame that never leaves the zone. A ZoneDef.camera
+   *  pin overrides this per-zone; boundless zones always free-follow. */
+  cameraMode: CameraModeId;
 }
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
@@ -141,6 +147,7 @@ export interface SettingsSave {
   improvisedStrike?: boolean;
   mapLabels?: MapLabelMode;
   uiScale?: number;
+  cameraMode?: CameraModeId;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -249,6 +256,7 @@ export const makeSettings = (): Settings => ({
   improvisedStrike: true,
   mapLabels: MAP_CFG.labelMode,
   uiScale: UI_SCALE_CFG.default,
+  cameraMode: CAMERA_CFG.default,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -266,6 +274,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   improvisedStrike: s.improvisedStrike,
   mapLabels: s.mapLabels,
   uiScale: s.uiScale,
+  cameraMode: s.cameraMode,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -320,5 +329,8 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     mapLabels: MAP_LABEL_MODES.some(m => m.id === s.mapLabels) ? s.mapLabels! : MAP_CFG.labelMode,
     // Re-clamped into the fabric's rails, like every numeric option.
     uiScale: clamp(s.uiScale ?? UI_SCALE_CFG.default, UI_SCALE_CFG.min, UI_SCALE_CFG.max),
+    // Unknown values (a renamed mode, a pre-dial save) fall back to the
+    // registry default — currently the hero-locked frame.
+    cameraMode: CAMERA_MODES.some(m => m.id === s.cameraMode) ? s.cameraMode! : CAMERA_CFG.default,
   };
 }

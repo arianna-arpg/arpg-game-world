@@ -606,6 +606,12 @@ export interface ZoneDef {
    *  clampToBounds skips the perimeter; only doodad collision stops movement, and
    *  the engine streams terrain/enemies around the player. Absent = a normal arena. */
   boundless?: boolean;
+  /** CAMERA PIN — force one camera mode here regardless of the player's Options
+   *  pick (render/camera.ts registry: 'hero' locked-follow / 'zone' classic
+   *  frame): a fixed-frame boss arena or a cinematic shelf declares itself.
+   *  Omitted = the player's choice rules. A stale id degrades to the fabric
+   *  default. (Type-only import — the registry stays a render concern.) */
+  camera?: import('../render/camera').CameraModeId;
   /** Biome tag for faction-traits home matching ('grave' | 'grove' | 'rift'). */
   biome?: string;
   /** Sub-biome variant rolled at generation — a flavour within the biome
