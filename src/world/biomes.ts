@@ -210,7 +210,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // RIFT: siege castles + the RIVER OF FLAME (riverland pouring lava, stone
   // causeways spanning it — the D2 Act 4 artery).
   rift:   { patronFaction: 'demon',  mapColor: '#a83a2a', label: 'Rift', spacing: 64,
-    climate: { wildness: { from: 0.3, fadeIn: 0.2 } },
+    // DEEP-wilds only (from 0.45): the surface rift is a rare far-frontier
+    // scar — near the settled lands the war never reached this far through.
+    climate: { wildness: { from: 0.45, fadeIn: 0.15 } },
     allowedLayouts: { plains: 6, bastion: 1, riverland: 1 },
     layoutParams: { riverLiquid: 'lava', causeways: [2, 3] },
     structures: [{ structure: 'siege_castle', chance: 0 }, { structure: 'watchtower', chance: 0.15 }],
@@ -529,7 +531,13 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   // it out of everyone else's belts.
   { biome: 'desert', weight: 2.3 },
   { biome: 'beach', weight: 1.6 },
-  { biome: 'rift', weight: 1.2 },
+  // 0.2: the rift is a WOUND, not a country — the demon war tore through in
+  // PLACES, and finding one on the surface should read as an event. Probe
+  // (balance/probe_biome_share.ts): at 1.2 it was the #1 far-wilds biome
+  // (10.4% of land — commoner than forest); 0.2 + the deeper wildness gate
+  // lands it ~2%, rarer than volcanic. Hell is untouched — the underworld
+  // palette weights rift 4 on its own row (world/dimensions.ts).
+  { biome: 'rift', weight: 0.2 },
   { biome: 'isle', weight: 1.2 },
   { biome: 'deepsea', weight: 0.9 },
   { biome: 'tundra', weight: 1.8 },
