@@ -24,7 +24,7 @@ import { mod } from './stats';
 import type { Actor } from './actor';
 import {
   alertScale, ARCHETYPES, BEHAVIOR_CFG, BEHAVIOR_STATS, evalCondition, mergeTuning,
-  normalizeBrain, tuningOf,
+  normalizeBrain, POST_CFG, tuningOf,
   type AICtx, type BehaviorSpec, type BrainDef, type BrainTuning, type CommandState,
   type MoveSpec, type NormalizedBrain, type PhaseCadence, type SkillPolicy,
 } from './brain';
@@ -123,6 +123,63 @@ export const NEUTRAL_RESET: Record<string, NeutralResetRule> = {
 export function registerDormantTag(tag: string, reset?: NeutralResetRule): void {
   DORMANT_TAGS.add(tag);
   if (reset) NEUTRAL_RESET[tag] = reset;
+}
+
+/** DORMANT = tag-gated neutral that hasn't been roused. THE predicate every
+ *  fabric reads (one definition, never re-derived): the AI gate holds the
+ *  brain, and the world's displacement physics — wind drift, knockback/pull
+ *  shoves, the sky's own strikes (Zone.spareDormant) — treat the body as
+ *  PLANTED: nothing environmental may scatter or provoke a sentry the player
+ *  hasn't brought into play. Rousing (aiAwakened) lifts all of it at once. */
+export function isDormant(a: Actor): boolean {
+  return a.tag !== undefined && DORMANT_TAGS.has(a.tag) && !a.aiAwakened;
+}
+
+// === THE DUTY POST =============================================================
+// PostSpec (brain.ts): a posted body belongs at a spot — a spawner's exact
+// stamp (Actor.aiPost) or its first-tick anchor — and walks back whenever it
+// strays, whether it was shoved, gale-blown, or roused and then reset. Pure
+// conduct: no engine system needs to know WHY it moved.
+
+/** The post itself: a spawner's exact stamp wins; else the first-tick anchor. */
+function postOf(actor: Actor): Vec2 | undefined {
+  return actor.postSpec ? (actor.aiPost ?? actor.aiAnchor) : undefined;
+}
+
+/** Walk a strayed posted body home. Hysteresis: the walk STARTS past the
+ *  spec's slack and ENDS at POST_CFG.arrive (never jitters at the line);
+ *  arriving re-plants the posted facing. Returns true while the walk owns
+ *  the tick. Runs for dormant AND awake bodies — anchored ones never walk. */
+function updatePostReturn(actor: Actor, world: World, dt: number): boolean {
+  const home = postOf(actor);
+  if (!home || actor.anchored) return false;
+  const spec = actor.postSpec!;
+  const d = dist(actor.pos, home);
+  if (actor.postHoming ? d <= POST_CFG.arrive : d <= (spec.slack ?? POST_CFG.slack)) {
+    if (actor.postHoming) {
+      actor.postHoming = false;
+      // Re-plant: the watch bearing is part of the post.
+      if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+    }
+    return false;
+  }
+  actor.postHoming = true;
+  actor.facing = angleTo(actor.pos, home);
+  moveToward(actor, world, home, dt * (spec.pace ?? POST_CFG.pace));
+  return true;
+}
+
+/** The idle-life step: the walk home when strayed; at the post, a `hold`
+ *  spec (the default) consumes the tick standing the watch — posted facing
+ *  held, no wander, no squad drill — while hold:false falls through (the
+ *  body merely ORBITS home, milling like anyone else until it strays). */
+function updatePost(actor: Actor, world: World, dt: number): boolean {
+  if (!actor.postSpec) return false;
+  if (updatePostReturn(actor, world, dt)) return true;
+  if (actor.postSpec.hold === false) return false;
+  if (postOf(actor) === undefined) return false;
+  if (actor.aiPostFacing !== undefined) actor.facing = actor.aiPostFacing;
+  return true; // stands the watch — the idle tick is consumed
 }
 
 // === THE COMMAND FABRIC ========================================================
@@ -266,6 +323,15 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // A stalk-creep stamp lives one combat tick only — cleared here so idle
   // wander, orders and heel moves never pay a stale watched-freeze.
   actor.aiStalkCreep = undefined;
+  // The spawn ANCHOR: stamped on the FIRST tick (the PLACED position), so
+  // arena-relative choreography (teleport-to-anchor, anchored rings) has a
+  // home. Stamped ABOVE every hold-still early-out below (ambush, burrow,
+  // passive, dormant) — a dormant sentry shoved off its mark must remember
+  // where the mark WAS, not where it happened to stand when it woke.
+  actor.aiAnchor ??= vec(actor.pos.x, actor.pos.y);
+  // A posted body's watch bearing is part of the post (updatePostReturn
+  // re-wears it on every re-plant).
+  if (actor.postSpec) actor.aiPostFacing ??= actor.facing;
   // An ARMED ambusher IS scenery — no scheming until the world springs it.
   if (actor.ambushArmed) return;
   // A BURROWED body is underground — stepBurrow owns it until the eruption.
@@ -279,7 +345,14 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
   // the gate): dormant until a wounding hit sets aiAwakened (World.resolveHit). Per-
   // actor + tag-keyed (DORMANT_TAGS), so only the provoked one wakes and its kin hold,
   // and it's inert to every other actor. Once roused it falls through to its own brain.
-  if (actor.tag && DORMANT_TAGS.has(actor.tag) && !actor.aiAwakened) return;
+  // A POSTED dormant body (a toll warden) that finds itself off its mark —
+  // gale-drift from before it was planted, a shove, a rouse-and-retreat —
+  // walks back and re-plants WITHOUT waking: the parley the player finds is
+  // the one that was authored, wherever the sky has been in the meantime.
+  if (isDormant(actor)) {
+    updatePostReturn(actor, world, dt);
+    return;
+  }
 
   // An armed fuse burns down no matter what else is happening.
   if (actor.fuse !== undefined) {
@@ -291,10 +364,6 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
     return;
   }
   if (actor.leap) return; // airborne
-
-  // The spawn ANCHOR: stamped on the first tick (the PLACED position), so
-  // arena-relative choreography (teleport-to-anchor, anchored rings) has a home.
-  actor.aiAnchor ??= vec(actor.pos.x, actor.pos.y);
 
   // WARD WATCHER (the add-gate): the moment no live actor carries the ward
   // tag, the ward SHATTERS — targetable again, with the promised announce.
@@ -536,6 +605,13 @@ export function updateAI(actor: Actor, world: World, dt: number): void {
         }
         return;
       }
+      // THE DUTY POST (PostSpec): a posted body strayed past its slack walks
+      // home; standing ON it, a `hold` post consumes the idle tick (the
+      // sentry at attention, watch bearing held) while hold:false merely
+      // orbits (folk mill about the hearth, walked back when they stray).
+      // Deliberately BELOW patrol routes and ABOVE lure/drives/wander: a
+      // route or an order outranks the post; duty outranks curiosity.
+      if (!actor.isMinion() && updatePost(actor, world, dt)) return;
       // LURE FABRIC (World.setLure/lureFor): a live lure — a charging survey
       // spire, a future bait or noise — DRAWS the unaware toward its point.
       // Idle-only by construction (this branch is targetless), so combat,

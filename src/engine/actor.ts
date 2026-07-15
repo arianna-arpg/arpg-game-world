@@ -306,8 +306,8 @@ export interface MonsterPartDef {
 // The AI vocabulary (BrainDef, archetypes, phases, rules, scripts, actions)
 // lives in brain.ts — re-exported here so the bestiary and the world keep
 // their historical import path.
-export type { BrainDef, BrainType, BrainPhase, BrainImpulse } from './brain';
-import type { BrainDef, BrainType, BrainTuning, CommandState } from './brain';
+export type { BrainDef, BrainType, BrainPhase, BrainImpulse, PostSpec } from './brain';
+import type { BrainDef, BrainType, BrainTuning, CommandState, PostSpec } from './brain';
 
 /** A worm/snake body: trailing segments that follow the head. */
 export interface WormBody {
@@ -651,6 +651,18 @@ export class Actor {
   patrolIdx?: number;
   /** Actor id of the patrol leader a follower heels to. */
   patrolFollow?: number;
+  /** DUTY POST conduct (brain.ts PostSpec): stamped from MonsterDef.post at
+   *  creation or by a spawner (a holdfast's gate crew). The post itself is
+   *  aiPost when a spawner wrote one, else the first-tick aiAnchor. */
+  postSpec?: PostSpec;
+  /** A spawner's site-exact post (wins over the aiAnchor default). */
+  aiPost?: Vec2;
+  /** The watch bearing re-worn on re-planting (stamped on the first AI tick
+   *  from the placed facing, or site-exact by a spawner). */
+  aiPostFacing?: number;
+  /** Walking home right now — the hysteresis latch between a post's slack
+   *  (walk starts) and POST_CFG.arrive (walk ends). */
+  postHoming = false;
   /** Event/role marker: 'patrol' | 'caravan' | 'ambush' | 'siege_atk' | 'siege_def' | 'warlord'. */
   tag?: string;
   /** The event INSTANCE this actor belongs to (a writ id, a rift id, …) — the

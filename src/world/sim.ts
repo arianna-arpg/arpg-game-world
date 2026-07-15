@@ -49,7 +49,7 @@ import { setClimateOrigin } from './climate';
 import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
 import { validateCourses } from './courses';
 import { LevelField, validateLevelField } from './levelField';
-import { START_ZONE, ZONES } from '../data/zones';
+import { skyOf, START_ZONE, ZONES } from '../data/zones';
 import { biomesWithoutTileset } from '../data/tilesets';
 import { hasLayout } from '../engine/levelgen';
 import { FACTION_COLORS, FALLBACK_FACTION_COLOR } from './palette';
@@ -639,7 +639,9 @@ export class WorldSim {
     // drizzle nor a gnoll warlord (the day phase is the world's one shared
     // clock, so it stays). Formalize per-overlay when a hell field arrives.
     if ((zone.dimension ?? 'surface') !== 'surface') return out;
-    const w = this.weather.sample(zone);
+    // ...and a SHELTERED surface zone (skyOf: a roofed tileset) reports no
+    // weather either — its chip must match what the ground actually feels.
+    const w = skyOf(zone) === 'sheltered' ? null : this.weather.sample(zone);
     if (w) out.push({ kind: 'condition', icon: '☁', label: WEATHER_DEFS[w.kind].label });
     const host = this.invasion.activeHostOn(zone.id);
     const o = this.faction.owner(zone.id);

@@ -1661,7 +1661,10 @@ export class Renderer {
   private zw: { color: string; alpha: number } = { color: '#b8c8e8', alpha: 0 };
 
   private smoothWeather(world: World): { kind: WeatherKind; intensity: number } | null {
-    const target = world.sim.weather.sample(world.zone);
+    // skyFront (not the raw node sample): a SHELTERED zone shows no rain,
+    // grit or storm-wash — step into the cellar and the sky's business
+    // crossfades away at the kind's own ramp.
+    const target = world.skyFront();
     const dt = this.frameDt;
     const rampOf = (k: WeatherKind | null): number =>
       Math.max(0.05, (k ? WEATHER_FX[k]?.fadeIn : undefined) ?? VIS_CFG.weather.fadeSec);

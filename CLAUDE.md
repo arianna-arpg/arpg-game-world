@@ -104,6 +104,16 @@ changes.
   user's own casts/dashes/recovery without disturbing them; the THIRST
   gate (`GateSpec.missing`, waived by `thirstless`) refuses moot drinks
   before any cost — docs in `docs/engine/reflex.md`.
+  THE SENTRY FABRIC (inactive NPCs stay where authored): dormant
+  un-roused neutrals (ai.ts `isDormant`) are PLANTED — wind drift,
+  knockback/pull and environmental strikes (`Zone.spareDormant`) pass
+  them by — and DUTY POSTS (`PostSpec`/`POST_CFG` in brain.ts;
+  `MonsterDef.post`, `GuardianSpec.post`, or spawner stamps via
+  `Actor.aiPost`) walk a displaced body back to its station, dormant or
+  awake. SKY EXPOSURE (`skyOf` in data/zones.ts: `ZoneDef.sky` baked
+  from `TilesetDef.sky`/`ZoneSpec.sky`, caves + off-surface dimensions
+  sheltered by derivation) gates ALL in-zone weather through
+  `World.skyFront()` — no storms inside cellars, caves, or interiors.
   `levelgen.ts`, `worldgen.ts`.
   ZONE OBJECTIVES are a data vocabulary (ObjectiveSpec + per-kind
   `OBJECTIVE_SEALS` exit policy + `data/beacons.ts` survey spires and the

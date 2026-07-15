@@ -19,7 +19,7 @@ import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
 import { applyConversion, applyDot, applyHit, mitigateTyped, resistValue, rollSkillDamage, type DamagePacket } from './damage';
 import { DEFENSE_CFG } from './defense';
-import { COMMAND_CFG, hasCommandKind, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
+import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, obedienceOf } from './ai';
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
@@ -61,7 +61,7 @@ import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraform
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
 import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
-import { START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
+import { skyOf, START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
 import { PROCESSION_CFG } from '../data/processions';
 import { BOUNTY_CFG } from '../data/bounties';
@@ -167,7 +167,7 @@ import { edgeBlockAt } from '../world/edgeBlocks';
 import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldboss';
 import { eventTargetable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
-import { WEATHER_DEFS, type WeatherStrike } from '../world/weather';
+import { WEATHER_DEFS, type WeatherFront, type WeatherStrike } from '../world/weather';
 import { dayCycle } from '../world/daynight';
 import { clampToBounds, exitInside, samplePoint, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
@@ -691,6 +691,12 @@ interface Zone {
   /** Indiscriminate hazard (storm lightning): strike the player AND enemies,
    *  not just the caster's foes. */
   hitAll?: boolean;
+  /** ENVIRONMENTAL placements (the sky's own hazards — storm bolts, demon
+   *  meteors, altar strikes riding fireStrikeAt): pass over DORMANT un-roused
+   *  neutrals. The sky must neither slaughter a sleeping toll band the player
+   *  never met (a sealed gate nobody earned) nor ROUSE it against whoever
+   *  happens to stand nearest. Combat placements leave this unset. */
+  spareDormant?: boolean;
   /** Curse zones under Hedonism also afflict the caster's allies. */
   curseAllies?: boolean;
   /** Drag victims toward the zone center at this speed (Cold Vortex). */
@@ -7909,6 +7915,23 @@ export class World {
     const standC = this.clampPos(vec(
       throat.inner.x + inward.x * 64, throat.inner.y + inward.y * 64), 30);
     const g = gdef.guardian;
+    // THE POST (GuardianSpec.post): wardens are bodies ON DUTY — each keeps
+    // the exact stand it was housed at, so storm-drift, a stray shove, or a
+    // rouse-and-retreat all end with the crew RE-FORMED at the gate (and the
+    // parley re-opened) instead of scattered across the zone. `false` = a
+    // drifter crew; a PostSpec tunes slack/pace per guardian def.
+    const postSpec = g.post === false ? undefined
+      : (g.post === undefined || g.post === true ? {} : g.post);
+    // Eyes on the road: the stand watches the way travelers arrive (inward
+    // off the gate throat, where the toll's customers come walking).
+    const watchFacing = Math.atan2(inward.y, inward.x);
+    const stampPost = (w: Actor): void => {
+      if (!postSpec) return;
+      w.postSpec = postSpec;
+      w.aiPost = vec(w.pos.x, w.pos.y);
+      w.aiPostFacing = watchFacing;
+      w.facing = watchFacing;
+    };
     const banditIds: number[] = [];
     const keeper = this.createMonster(g.keeperId, lvl, 'enemy');
     keeper.tag = g.neutralTag;
@@ -7919,6 +7942,7 @@ export class World {
     keeper.faction = g.factionId;
     keeper.pos = this.clampPos(vec(standC.x + tx * rand(-20, 20) + inward.x * rand(0, 24),
       standC.y + ty * rand(-20, 20) + inward.y * rand(0, 24)), keeper.radius);
+    stampPost(keeper);
     this.actors.push(keeper); banditIds.push(keeper.id);
     const pool = g.rosterIds?.length ? g.rosterIds : [g.keeperId];
     const guards = randInt(g.count[0], g.count[1]);
@@ -7930,6 +7954,7 @@ export class World {
       c.pos = this.clampPos(vec(
         standC.x + tx * flank * (throat.mouthWidth / 2 + rand(10, 62)) + inward.x * rand(-16, 44),
         standC.y + ty * flank * (throat.mouthWidth / 2 + rand(10, 62)) + inward.y * rand(-16, 44)), c.radius);
+      stampPost(c);
       this.actors.push(c); banditIds.push(c.id);
     }
     this.holdfastSite = { zoneId: def.id, lockId: info.lockId, defId: gdef.id, keeperId: keeper.id, banditIds, gateDoodads };
@@ -9717,7 +9742,9 @@ export class World {
    *  spared. */
   private updateStorm(dt: number): void {
     if (this.zone.objective.kind === 'safe') { this.lightningTimer = 0; return; }
-    const front = this.sim.weather.sample(this.zone);
+    // skyFront: a sheltered zone (a cave, the cellar) never takes a bolt —
+    // the sky cannot see its floor.
+    const front = this.skyFront();
     const strike = front ? WEATHER_DEFS[front.kind].strike : undefined;
     if (!front || !strike) { this.lightningTimer = 0; return; }
     const rate = strike.ratePerSec * front.intensity; // strikes per second
@@ -9756,7 +9783,7 @@ export class World {
       pos: vec(at.x, at.y), radius: strike.radius, caster, inst, color: skill.color,
       delay: strike.telegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
-      dmgMult: 1, depth: 1, hitAll: true,
+      dmgMult: 1, depth: 1, hitAll: true, spareDormant: true,
     });
   }
 
@@ -9801,7 +9828,7 @@ export class World {
       pos: at, radius: surge.meteorRadius, caster, inst, color: skill.color,
       delay: surge.meteorTelegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
-      dmgMult: 1, depth: 1, hitAll: true, meteor: true,
+      dmgMult: 1, depth: 1, hitAll: true, meteor: true, spareDormant: true,
       onImpact: () => this.onMeteorImpact(info, vec(at.x, at.y)),
     });
   }
@@ -14364,6 +14391,11 @@ export class World {
     // Def-level role tag (ambient wildlife etc.) — spawners may still
     // overwrite it for event roles (patrols, sieges).
     if (def.tag) a.tag = def.tag;
+    // DUTY POST (brain.ts PostSpec), the def-level lane: every spawn of this
+    // def keeps a station — its first-tick anchor — walking back whenever
+    // idle drift, a shove or a gale strays it. Spawners stamp Actor.aiPost /
+    // postSpec directly for site-exact posts (a holdfast's gate crew).
+    if (def.post) a.postSpec = def.post === true ? {} : def.post;
     a.passive = !!def.passive;
     // aims:false — facing-is-noise bodies (data lever): no aim tick.
     if (def.aims === false) a.aims = false;
@@ -20127,7 +20159,10 @@ export class World {
    * reach — it just moves like physics now.
    */
   pushActor(target: Actor, dir: number, strength: number, caster?: Actor, inst?: SkillInstance): void {
-    if (target.construct || target.anchored || target.leap) return;
+    // Planted things stay put — and a DORMANT un-roused neutral is planted:
+    // stray splash knockback must not scatter a sleeping band (the hit that
+    // ROUSES it restores physics the same tick aiAwakened latches).
+    if (target.construct || target.anchored || target.leap || isDormant(target)) return;
     // WEIGHT: mass divides the shove — a knockback that sends a goblin
     // flying nudges an ogre. effectiveWeight folds in CURRENT unbroken
     // poise (a poised colossus is an anchor; break the bar to move it) on
@@ -21514,7 +21549,9 @@ export class World {
         // GET OVER HERE: one impulse sized to the gap yanks the target to
         // the caster's feet, riding the push physics — walls interrupt the
         // trip and collisions en route roll the caster's collision procs.
-        if (!target.construct && !target.anchored && !target.leap) {
+        // isDormant joins the planted set: a gravity well must not reel in a
+        // sleeping sentry any more than a shove may scatter one.
+        if (!target.construct && !target.anchored && !target.leap && !isDormant(target)) {
           const gap = Math.max(0,
             dist(caster.pos, target.pos) - caster.radius - target.radius - 12);
           if (gap > 0) this.pushActor(target, angleTo(target.pos, caster.pos), gap, caster, inst);
@@ -26661,7 +26698,10 @@ export class World {
    *  weather system end to end. */
   private updateFog(dt: number): void {
     if (!this.fog) return;
-    const f = this.sim.weather.sample(this.zone);
+    // skyFront: weather-driven fog stays outside sheltered zones; a zone's
+    // own AUTHORED banks (ZoneTheme.fog — a haunted cave's mist) are its
+    // fabric regardless and keep breathing below.
+    const f = this.skyFront();
     const k = f?.kind === 'fog' ? f.intensity : 0;
     this.fog.update(dt, this.time, k, this.actors);
   }
@@ -26675,7 +26715,9 @@ export class World {
 
   private updateSnow(dt: number): void {
     const heat = this.zone.theme.heat ?? 0.5;
-    const f = this.sim.weather.sample(this.zone);
+    // skyFront: no drifts pile up under a roof (the melt below still runs —
+    // tracked-in cover fades at the biome's own heat).
+    const f = this.skyFront();
     if (f?.kind === 'snow') {
       this.snowCover += dt * f.intensity / SNOW_CFG.accumulateSec;
     }
@@ -26690,10 +26732,20 @@ export class World {
    *  drift, strength from its WeatherDef.wind × intensity × the gust wave.
    *  Cached per sim frame (every mover asks). Null in calm skies. */
   private windCache: { at: number; w: { nx: number; ny: number; strength: number } | null } = { at: -1, w: null };
+  /** The weather FELT inside this zone: the strongest front over its node —
+   *  unless the zone is SHELTERED (skyOf: a cave, the cellar, a roofed
+   *  tileset, an off-surface dimension), where the sky simply does not
+   *  reach. THE gate every in-zone weather consumer reads (sky strikes,
+   *  directional wind, weather-fog, snowfall, the renderer's particles and
+   *  wash) — the node map and its spawn bias stay node-space concerns. */
+  skyFront(): WeatherFront | null {
+    return skyOf(this.zone) === 'sheltered' ? null : this.sim.weather.sample(this.zone);
+  }
+
   zoneWind(): { nx: number; ny: number; strength: number } | null {
     if (this.windCache.at === this.time) return this.windCache.w;
     let w: { nx: number; ny: number; strength: number } | null = null;
-    const f = this.sim.weather.sample(this.zone);
+    const f = this.skyFront();
     const windDef = f ? WEATHER_DEFS[f.kind].wind : undefined;
     if (f && windDef) {
       const len = Math.hypot(f.vel.x, f.vel.y);
@@ -29758,6 +29810,8 @@ export class World {
           if (z.pulse) z.pulse.next = this.time + z.pulse.delay;
           for (const victim of this.zoneVictims(z)) {
             if (!inAoe(z.pos, z.radius, z.shape, z.facing, victim.pos, victim.radius, z.arcRad)) continue;
+            // The sky's wrath passes over the unroused (Zone.spareDormant).
+            if (z.spareDormant && isDormant(victim)) continue;
             // Fill-in zones: the hollow center is (briefly) safe.
             if (z.edge && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edge) continue;
             // Walls shield (occlusion): a victim walled off from the
@@ -30271,7 +30325,10 @@ export class World {
   private updateWindPush(dt: number): void {
     if (!this.zoneWind()) return; // calm skies — skip the whole walk
     for (const a of this.actors) {
-      if (a.dead || a.downed || a.anchored || a.construct || a.leap || a.passive) continue;
+      // isDormant: an un-roused sentry (a toll warden, huddled folk) is
+      // PLANTED — the gale must not walk a sleeping garrison across the
+      // map before the player ever finds it. Rousing restores physics.
+      if (a.dead || a.downed || a.anchored || a.construct || a.leap || a.passive || isDormant(a)) continue;
       const gale = this.windAt(a.pos);
       if (!gale) continue; // sheltered or becalmed
       const push = WIND_CFG.pushPerSec * dt / Math.max(0.4, a.effectiveWeight());

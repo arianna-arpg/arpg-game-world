@@ -14,7 +14,7 @@ import { WAR_PAIRS } from '../data/monsters';
 import { TILESETS, pickTilesetForBiome, type TilesetDef } from '../data/tilesets';
 import { hasLayout } from './levelgen';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
-import type { ObjectiveSpec, ZoneDef, ZoneExitDef } from '../data/zones';
+import type { ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, biomeSpacing } from '../world/biomes';
@@ -143,6 +143,11 @@ export interface ZoneSpec {
   /** Mint HIDDEN from the world map (world.visible / auto-fit) — an Incursion
    *  landing obscured until approached. Cleared on approach/entry. */
   concealed?: boolean;
+  /** SKY EXPOSURE override for this mint (ZoneDef.sky): wins over the
+   *  tileset's own `sky`. Directed mints of interiors (a package's roofed
+   *  set piece) shelter themselves here; absent = tileset word, then the
+   *  skyOf() derivations. */
+  sky?: SkyExposure;
   seed?: number;
   /** Heat-map sampler (sim.biomeField.sampleBiome). When given, the field resolves
    *  marine adjacency + the layout generator. */
@@ -690,6 +695,10 @@ export function placeZoneAt(
     && dimensionDef(spec.dimension).waypoints !== false;
   const wpBlocked = Object.values(zoneMap).some(z =>
     z.wpExclusionRadius !== undefined && z.id !== id && coordDist(target, z.map) < z.wpExclusionRadius);
+  // SKY EXPOSURE bake (spec ▷ tileset, most-specific wins): a sheltered
+  // interior carries its roof on the def, so skyOf() answers from pure
+  // zone data everywhere (engine, sim, renderer, both co-op sides).
+  const sky = spec.sky ?? tileset.sky;
   const def: ZoneDef = {
     id, name, level,
     size,
@@ -719,6 +728,7 @@ export function placeZoneAt(
     ...(spec.port ? { port: true } : {}),
     ...(spec.dimension ? { dimension: spec.dimension } : {}),
     ...(spec.pocket ? { pocket: true } : {}),
+    ...(sky ? { sky } : {}),
   };
   // Directed placements (quests) link the reciprocal road on the anchor here;
   // the frontier path leaves linkBack false (travelThrough mutates its '?' exit).

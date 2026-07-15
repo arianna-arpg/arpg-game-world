@@ -620,6 +620,34 @@ export interface ZoneDef {
    *  cul-de-sac — never weave-linked, never an eager-web link target, never an
    *  anchor for other mints (worldgen honors this flag everywhere roads form). */
   pocket?: boolean;
+  /** SKY EXPOSURE — does the world's weather reach the ground here? Baked at
+   *  mint from TilesetDef.sky / ZoneSpec.sky, or authored on a def directly.
+   *  Omitted, skyOf() DERIVES it (off-surface dimensions and cave-ladder
+   *  pockets are sheltered); an explicit value OVERRIDES the derivations in
+   *  either direction (a roofless crater-cave may declare 'open'). */
+  sky?: SkyExposure;
+}
+
+/** Sky-exposure vocabulary: 'open' feels the weather fabric end to end —
+ *  fronts, directional wind, sky strikes, spawn bias, particles and wash —
+ *  while 'sheltered' feels NONE of it. A zone's own authored fabrics
+ *  (ZoneTheme.fog banks, creep, ambient FX) are untouched either way: the
+ *  cellar keeps its stillness, a haunted cave keeps its mist. */
+export type SkyExposure = 'open' | 'sheltered';
+
+/** THE sky predicate — every weather consumer asks this ONE question (the
+ *  world's strike/wind/fog/snow ticks via World.skyFront, the spawn bias,
+ *  the zone-info chip, the renderer's particles). Priority: the def's own
+ *  word > off-surface dimension (the underworld has its own sky) > the
+ *  cave-ladder discriminator (caveDepth — every sidezone pocket: cellars,
+ *  caves, sunken ruins, buried vaults) > open ground. Pure ZoneDef data —
+ *  the tileset's say is BAKED at mint — so engine, sim, overlays and both
+ *  co-op sides agree from a fresh mint, a save, or a snapshot alike. */
+export function skyOf(zone: ZoneDef): SkyExposure {
+  if (zone.sky) return zone.sky;
+  if ((zone.dimension ?? 'surface') !== 'surface') return 'sheltered';
+  if (zone.caveDepth != null) return 'sheltered';
+  return 'open';
 }
 
 /** Describes a FIELD mega-zone's mapping from in-zone PIXELS back to world NODE space,

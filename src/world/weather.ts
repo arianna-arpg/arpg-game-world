@@ -13,7 +13,7 @@
 
 import { clamp, type Vec2 } from '../core/math';
 import { Rng } from '../core/rng';
-import type { ZoneDef } from '../data/zones';
+import { skyOf, type ZoneDef } from '../data/zones';
 import { dayCycle, type DayPhase } from './daynight';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from './overlay';
 import { scaledCap } from '../packages/frequency';
@@ -251,6 +251,10 @@ export class WeatherField implements WorldOverlay {
   }
 
   affectSpawns(zone: ZoneDef): SpawnBias {
+    // A SHELTERED zone (skyOf: caves, cellars, roofed tilesets, off-surface
+    // dimensions) spawns as under a clear sky — the storm is not IN here,
+    // whatever its front covers on the node map above.
+    if (skyOf(zone) === 'sheltered') return NO_BIAS;
     const f = this.sample(zone);
     if (!f) return NO_BIAS;
     const def = WEATHER_DEFS[f.kind];

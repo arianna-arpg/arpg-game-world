@@ -22,6 +22,7 @@
 // ---------------------------------------------------------------------------
 
 import type { ExitRoadSpec } from '../data/zones';
+import type { PostSpec } from '../engine/brain';
 
 /** HOW a holdfast opens. Implemented: 'pay-currency' (currency 'mortal') and
  *  'pay-gem' (random-take); the rest are typed for the data model (a future
@@ -111,6 +112,12 @@ export interface GuardianSpec {
   neutralTag: string;
   rouseRadius: number;
   woundFrac: number;
+  /** DUTY POSTS (brain.ts PostSpec): omitted/true — the default — each warden
+   *  keeps the exact stand it was housed at (a gate crew is ON DUTY: shoved,
+   *  gale-blown or roused-and-reset, it walks back and re-plants, so the
+   *  band — and the parley — is always found AT its gate). `false` = a
+   *  drifter crew; a spec tunes slack/pace/hold per guardian. */
+  post?: PostSpec | boolean;
 }
 
 /** One guardian-at-a-gate definition — the extensible unit. */

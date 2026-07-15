@@ -8,7 +8,7 @@
 // ---------------------------------------------------------------------------
 
 import { mod, type Modifier, type DamageType, type SkillTag } from '../engine/stats';
-import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef } from '../engine/actor';
+import type { ActorAdorn, ActorShape, BrainDef, MonsterPartDef, PostSpec } from '../engine/actor';
 import type { CurveKind } from '../engine/curves';
 import { registerPresenceBand, type PresenceSpec } from '../engine/presence';
 import { registerAIAction } from '../engine/aiActions';
@@ -237,6 +237,12 @@ export interface MonsterDef {
   /** Opt OUT of the minion leash-recall (ai.ts: stuck/far minions teleport
    *  home) — for bodies that are SUPPOSED to be left behind. */
   noRecall?: boolean;
+  /** DUTY POST (brain.ts PostSpec): every spawn of this def keeps a STATION —
+   *  its placed spot — walking back whenever idle drift, a shove or a gale
+   *  strays it past the slack, dormant or awake (true = all defaults: the
+   *  standing sentry; hold:false = a body that merely orbits home). Spawners
+   *  may stamp site-exact posts on top (Actor.aiPost — the holdfast crew). */
+  post?: PostSpec | true;
   /** How worth guarding this monster is to protector brains (higher = posted
    *  first). Omitted: commanders rank 2, casters 1, everyone else 0. */
   wardPriority?: number;
@@ -3580,6 +3586,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 55, moveSpeed: 120, accuracy: 100, mana: 20, manaRegen: 4 },
     skills: ['cleave'], // a farmhand's hatchet — the gifts do the rest
     xp: 0,
+    // Home is the huddle spot: scattered by a shove, a gale or a fight, folk
+    // drift back to the hearth between waves instead of wandering off the
+    // event (hold:false — they mill about it, not stand at attention).
+    post: { hold: false },
     noNemesis: true, // a rescued villager promoted to nemesis would read as nonsense
   },
   borough_warden: {
@@ -3589,6 +3599,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['heavy_strike', 'war_cry'],
     xp: 0,
     brain: { type: 'juggernaut', enrage: 0.5 }, // the one professional in the hamlet
+    post: true, // the professional STANDS his watch at the muster stone
     wardPriority: 1,
     noNemesis: true,
   },

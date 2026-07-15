@@ -347,6 +347,41 @@ export const BEHAVIOR_CFG = {
  *  an enemy's mind the way they bend its body. Registered in stats.ts. */
 export const BEHAVIOR_STATS = { aimLead: 'aiAimLead', aimJitter: 'aiAimJitter' } as const;
 
+// --- THE DUTY POST -------------------------------------------------------------
+
+/** A DUTY POST: this body BELONGS somewhere — its placed spot by default, or a
+ *  site-exact stamp its spawner writes (Actor.aiPost). Strayed past `slack`
+ *  with no foe in sight it walks back and re-plants (posted facing re-worn),
+ *  and a DORMANT sentry does the same without waking — so storm-drift, stray
+ *  shoves and a rouse-and-retreat can never scatter a garrison for good.
+ *  Composable wherever conduct is data: MonsterDef.post (every spawn of the
+ *  def), a guardian spec's `post` (a holdfast's crew), or a spawner's direct
+ *  stamp. In the idle ladder it sits BELOW orders and patrol routes and ABOVE
+ *  lures, drives and the wander — duty outranks curiosity, never a command. */
+export interface PostSpec {
+  /** Drift allowance (px) past the post before the walk home starts
+   *  (default POST_CFG.slack). */
+  slack?: number;
+  /** Walk-home pace as a fraction of full stride (default POST_CFG.pace). */
+  pace?: number;
+  /** true (default): AT the post the body STANDS ITS WATCH — the idle tick is
+   *  consumed and the posted facing held (the sentry at attention). false:
+   *  the body merely ORBITS home — free to idle-wander, walked back whenever
+   *  it strays past slack (village folk milling about the hearth). */
+  hold?: boolean;
+}
+
+/** Duty-post tunables — the modular thresholds PostSpec fields override. */
+export const POST_CFG = {
+  /** Default drift allowance (px) before the walk home starts. */
+  slack: 56,
+  /** Arrived when within this (px) of the post — hysteresis below slack so a
+   *  body never jitters at the line. */
+  arrive: 12,
+  /** Default walk-home pace (fraction of full stride) — a duty stroll. */
+  pace: 0.6,
+};
+
 // --- TARGETING & THE THREAT CHART ---------------------------------------------
 
 /** Target selection + the aggro ledger. Damage dealt to an actor books threat

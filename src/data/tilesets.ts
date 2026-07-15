@@ -9,7 +9,7 @@
 // cinderlands past the Ember Wastes — each line leveling up as it goes.
 // ---------------------------------------------------------------------------
 
-import type { CompositionRoll, LandmarkRoll, PackSpec, StampSpec, StructureRoll, ZoneTheme } from './zones';
+import type { CompositionRoll, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
 import type { Rng } from '../core/rng';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 
@@ -49,6 +49,12 @@ export interface TilesetDef {
   ellipseChance?: number;
   /** Biome tag stamped on generated zones — faction-traits home matching. */
   biome?: string;
+  /** SKY EXPOSURE baked onto minted zones (ZoneDef.sky → skyOf): 'sheltered'
+   *  = an INTERIOR the world's weather must never reach — no fronts, wind,
+   *  sky strikes, storm spawn-bias or particles inside. Cave-ladder mints are
+   *  sheltered by construction (caveDepth); declare it anyway wherever the
+   *  place IS an interior, so a graph-minted use of the tileset stays honest. */
+  sky?: SkyExposure;
   /** COMMON rows folded into EVERY rolled layout — base or variant. Variants
    *  say what CHANGES about a zone; common says what the biome always IS
    *  (the brittle-kit lesson: rows wired only into the base layout go dead
@@ -1084,6 +1090,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   buried_vault: {
     id: 'buried_vault',
     frontier: false,
+    sky: 'sheltered', // an underworks preserved BY its roof of sand — no sky reaches it
+
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1 },
     layoutParams: {
       interiorWall: 'sunkstone_wall', floorStyle: 'flagstone',
@@ -1313,6 +1321,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   sunken_ruin: {
     id: 'sunken_ruin',
     frontier: false,
+    sky: 'sheltered', // swallowed halls under the jungle floor — weather stays above
+
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 },
     layoutParams: {
       interiorWall: 'ruin_wall', floorStyle: 'flagstone',
@@ -1888,6 +1898,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // gaze carry the light, and the gore underfoot carries the story.
   durance: {
     id: 'durance', biome: 'durance',
+    sky: 'sheltered', // the first fully INDOOR biome — the citadel owns its own sky
+
     nameFirst: ['Durance', 'Halls', 'Oubliettes', 'Galleries', 'Vaults', 'Cloisters', 'Cells', 'Depths', 'Courts', 'Chambers', 'Warrens', 'Reliquaries'],
     nameSecond: ['of Hate', 'of Anguish', 'of the Flayed', 'of Chains', 'of the Silent', 'of Sorrow', 'of the Council', 'of Penance', 'of the Hooded', 'of Wailing', 'of the Kept', 'of Spite'],
     theme: {
@@ -2094,6 +2106,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // the two variants keep distinct silhouettes (rolling dunes vs ruled rows).
   ossuary: {
     id: 'ossuary', frontier: false,
+    sky: 'sheltered', // the Necropolis' interior sanctum — bone vaults under stone
+
     nameFirst: ['Ossuary', 'Charnel', 'Bonewrought', 'Marrow', 'Reliquary', 'Skullbound', 'Palebone', 'Sepulchral', 'Hollowbone', 'Gravemarrow', 'Ivory', 'Femur-Laid', 'Knucklebone', 'Sanctified', 'Vaultbone', 'Litany', 'Requiem', 'Cist-Cold'],
     nameSecond: ['Sanctum', 'Vaults', 'Galleries', 'Reliquary', 'Bonefields', 'Cloister', 'Undercroft', 'Chambers', 'Tiers', 'Repository', 'Rotunda', 'Stacks', 'Cists', 'Wells', 'Procession', 'Charnel'],
     theme: {
@@ -2367,6 +2381,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   // biome tag (caves don't tint the map — they aren't on it). Tight and rocky.
   cavern: {
     id: 'cavern', frontier: false,
+    sky: 'sheltered', // underground by definition (mintCave also stamps caveDepth)
+
     // What a cave BECOMES underground: the classic convex crawl, the maggot-
     // lair warren, a catacomb dungeon, or a full maze — one seeded roll at
     // mint (mintCave), pure data.
