@@ -827,7 +827,7 @@ export function rebuildItem(saved: ItemInstance): ItemInstance | null {
 
 /** Stats minted at runtime by other registries (status families, conversion
  *  lanes) — absent from STAT_DEFS at module load yet perfectly valid. */
-const GENERATED_STAT = /^(apply|damageVs|minionApply|popPower|dotLeech|convert|addedMin|addedMax|proc|classSkill)_/;
+const GENERATED_STAT = /^(apply|damageVs|minionApply|popPower|dotLeech|convert|addedMin|addedMax|proc|classSkill|sympathy)_/;
 
 let validated = false;
 

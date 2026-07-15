@@ -60,6 +60,11 @@ import { validateCreep } from '../engine/creep';
 import './creeps'; // side-effect: the creep kind defs register before validation
 import { validateConjury } from './conjury';
 import { VOYAGE_ISLANDS } from './voyageIslands';
+import {
+  SYMPATHY_LINKS, SYMPATHY_LISTENABLE, SYMPATHY_RADIUS_REQUIRED, SYMPATHY_RELATIONS,
+} from '../engine/sympathy';
+import './sympathies'; // side-effect: the sympathy link defs register before validation
+import { ITEM_AFFIX_LIST } from './itemaffixes';
 import { Rng } from '../core/rng';
 
 export function validateContent(): void {
@@ -95,6 +100,64 @@ export function validateContent(): void {
   }
   for (const m of Object.values(MELDS)) {
     if (m.band !== undefined && !(m.band > 0)) warn(`meld ${m.id}: band ${m.band} must be > 0`);
+  }
+
+  // THE SYMPATHY FABRIC (engine/sympathy.ts): link defs must speak the
+  // registered relation vocabulary, broad recipients must be radius-bounded,
+  // only per-event-reachable relations may LISTEN — and every sympathy_<id>
+  // stat granted ANYWHERE must name a registered link (a typo'd grant would
+  // otherwise be a silent no-op forever).
+  {
+    for (const link of Object.values(SYMPATHY_LINKS)) {
+      if (!link.channels.length) warn(`sympathy ${link.id}: no channels`);
+      if (!link.to.length) warn(`sympathy ${link.id}: no recipients`);
+      const from = link.from ?? 'self';
+      if (!(from in SYMPATHY_RELATIONS)) {
+        warn(`sympathy ${link.id}: unknown 'from' relation '${from}'`);
+      } else if (!SYMPATHY_LISTENABLE.includes(from)) {
+        warn(`sympathy ${link.id}: 'from' ${from} is not listenable `
+          + `(the per-event holder set is gainer/owner/seats)`);
+      }
+      for (const to of link.to) {
+        if (!(to in SYMPATHY_RELATIONS)) {
+          warn(`sympathy ${link.id}: unknown 'to' relation '${to}'`);
+        } else if (SYMPATHY_RADIUS_REQUIRED.includes(to) && link.radius === undefined) {
+          warn(`sympathy ${link.id}: 'to' ${to} requires a radius (unbounded broadcast)`);
+        }
+      }
+      if (link.scale !== undefined && !(link.scale > 0)) {
+        warn(`sympathy ${link.id}: scale ${link.scale} must be > 0`);
+      }
+    }
+    const checkSympathyStat = (source: string, stat: string): void => {
+      if (!stat.startsWith('sympathy_')) return;
+      const id = stat.slice('sympathy_'.length);
+      if (!SYMPATHY_LINKS[id]) warn(`${source}: sympathy stat '${stat}' names no registered link`);
+    };
+    for (const def of Object.values(SKILLS)) {
+      for (const m of def.equipMods ?? []) checkSympathyStat(`skill ${def.id} equipMods`, m.stat);
+      for (const m of def.innateMods ?? []) checkSympathyStat(`skill ${def.id} innateMods`, m.stat);
+      for (const t of def.thresholds ?? []) {
+        for (const m of t.mods) checkSympathyStat(`skill ${def.id} threshold`, m.stat);
+      }
+      for (const m of def.leveling?.perLevel ?? []) checkSympathyStat(`skill ${def.id} leveling`, m.stat);
+    }
+    for (const sup of Object.values(SUPPORTS)) {
+      for (const m of sup.mods) checkSympathyStat(`support ${sup.id}`, m.stat);
+      for (const m of sup.perLevel ?? []) checkSympathyStat(`support ${sup.id} perLevel`, m.stat);
+    }
+    for (const n of Object.values(PASSIVE_NODES)) {
+      for (const m of n.mods ?? []) checkSympathyStat(`passive ${n.id}`, m.stat);
+    }
+    for (const a of ITEM_AFFIX_LIST) {
+      for (const l of a.lines) checkSympathyStat(`affix ${a.id}`, l.stat);
+    }
+    for (const [id, m] of Object.entries(MONSTERS)) {
+      for (const link of m.sympathy ?? []) {
+        if (!SYMPATHY_LINKS[link]) warn(`monster ${id}: sympathy link '${link}' is not registered`);
+      }
+      for (const mm of m.mods ?? []) checkSympathyStat(`monster ${id}`, mm.stat);
+    }
   }
 
   // COMPOSITIONS: local invariants (at→site refs, when-gate keys against the

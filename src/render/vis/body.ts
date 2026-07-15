@@ -14,7 +14,7 @@ import type { ActorAdorn, ActorShape } from '../../engine/actor';
 import { LOOKS } from '../../data/looks';
 import { hash01, withAlpha } from './color';
 import { materialOf, rampOf, type MaterialDef, type Ramp } from './materials';
-import { lookPalette, paintLiveParts, paintLook, type LookDef } from './parts';
+import { lookPalette, paintLiveParts, paintLook, PART_PAINTERS, type LookDef, type PartSpec } from './parts';
 import { baked } from './sprites';
 import { VIS_CFG } from './visConfig';
 
@@ -33,6 +33,10 @@ export interface BodyLook {
   outline?: string;
   /** Demon-style nub horns instead of swept horns. */
   demonHorns?: boolean;
+  /** RUNTIME TACK (Actor.extraParts): extra look parts worn OVER the body —
+   *  the tamed collar, brands, harnesses. Draws on part-grammar AND legacy
+   *  bodies alike; part of the bake key, so a stamped actor re-bakes. */
+  extraParts?: PartSpec[] | undefined;
 }
 
 /** Resolve a look id to its def (undefined = legacy body path). */
@@ -307,7 +311,18 @@ function strSeed(s: string): number {
 }
 
 function bodyKey(look: BodyLook): string {
-  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}`;
+  const tack = look.extraParts?.length ? JSON.stringify(look.extraParts) : '';
+  return `${look.shape}|${look.radius.toFixed(1)}|${look.color}|${look.material ?? ''}|${look.outline ?? ''}|${look.look ?? ''}|${tack}`;
+}
+
+/** Paint the runtime TACK overlay (extraParts) — collars, brands, harnesses
+ *  stamped onto a live actor by any system (data-only; unknown kinds skip). */
+function paintTack(ctx: CanvasRenderingContext2D, r: number, look: BodyLook): void {
+  if (!look.extraParts?.length) return;
+  const pal = lookPalette(look.color, look.material);
+  for (const spec of look.extraParts) {
+    PART_PAINTERS[spec.kind]?.(ctx, r, spec, pal);
+  }
 }
 
 /** The baked, shaded body sprite for a look (facing-0 pose, center origin). */
@@ -320,6 +335,7 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
     const lookDef = lookOf(look.look);
     if (lookDef) {
       paintLook(ctx, r, lookDef, lookPalette(look.color, look.material));
+      paintTack(ctx, r, look);
       if (look.outline) {
         // Minion binding: a thin ring, since a part stack has no one path.
         ctx.strokeStyle = look.outline;
@@ -362,6 +378,8 @@ export function bodySprite(look: BodyLook): HTMLCanvasElement {
     ctx.strokeStyle = look.outline ?? withAlpha(ramp.outline, VIS_CFG.body.outlineAlpha);
     ctx.lineWidth = look.outline ? 2 : VIS_CFG.body.outlineWidth;
     ctx.stroke();
+    // The tack rides legacy bodies too (a collared legacy-shape hound).
+    paintTack(ctx, r, look);
   });
 }
 

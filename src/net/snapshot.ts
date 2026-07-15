@@ -20,6 +20,7 @@ import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
 import type { Doodad, DoodadDoor, PlacedStructure } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
+import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
 import type { ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
@@ -59,6 +60,9 @@ export interface ActorW {
   mat?: string;
   /** Part-grammar look id — same reason. */
   lk?: string;
+  /** Runtime tack (Actor.extraParts — the tamed collar): render-only parts
+   *  worn over the body; the client bakes them identically. */
+  ep?: PartSpec[];
   rarity?: string;
   defId?: string;
   faction?: string;
@@ -317,6 +321,7 @@ function actorToW(a: Actor): ActorW {
   if (a.adorn) w.adorn = a.adorn;
   if (a.material) w.mat = a.material;
   if (a.look) w.lk = a.look;
+  if (a.extraParts?.length) w.ep = a.extraParts;
   if (a.rarity) w.rarity = a.rarity;
   if (a.defId) w.defId = a.defId;
   if (a.faction) w.faction = a.faction;
@@ -491,6 +496,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.adorn = aw.adorn;
     a.material = aw.mat;
     a.look = aw.lk;
+    a.extraParts = aw.ep;
     a.rarity = aw.rarity as Actor['rarity'];
     a.defId = aw.defId;
     a.faction = aw.faction;

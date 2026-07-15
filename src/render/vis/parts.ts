@@ -3580,6 +3580,131 @@ const bell: PartPainter = (ctx, r, spec, pal, t = 0) => {
   });
 };
 
+// ===================================================== THE KEEPER'S TACK
+// Adornment parts for kept, worked, and bonded beasts — collars, straps,
+// bags, cages. They read at a glance ON TOP of any body (the entity
+// creator's dress-up drawer), and the tamed-claim stamps 'collar' onto
+// claimed companions at runtime (TAME_CFG.claimParts).
+
+/** Neck band worn forward of center: strap ring + studs + a hanging tag.
+ *  params: studs (n, default 4), tag (bool, default true). */
+const collar: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'cloth');
+  const metal = pal.metal;
+  const studs = Math.round(P(spec, 'studs', 4));
+  place(ctx, r, spec, (c, R) => {
+    // The band: an open ellipse ring sitting where neck meets shoulders.
+    const nx = R * 0.34;                    // band center, forward of body center
+    const bw = R * 0.5, bh = R * 0.62;      // band footprint
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(2, R * 0.16);
+    c.beginPath(); c.ellipse(nx, 0, bw * 0.6, bh, 0, 0, Math.PI * 2); c.stroke();
+    c.strokeStyle = withAlpha(ramp.highlight, 0.5);
+    c.lineWidth = Math.max(1, R * 0.05);
+    c.beginPath(); c.ellipse(nx, 0, bw * 0.6, bh, 0, -2.2, -0.9); c.stroke();
+    // Studs ride the band.
+    c.fillStyle = metal.base;
+    for (let i = 0; i < studs; i++) {
+      const a = (i / studs) * Math.PI * 2 + 0.4;
+      c.beginPath();
+      c.arc(nx + Math.cos(a) * bw * 0.6, Math.sin(a) * bh, Math.max(1, R * 0.06), 0, Math.PI * 2);
+      c.fill();
+    }
+    // The tag hangs toward the muzzle.
+    if (PB(spec, 'tag', true)) {
+      c.fillStyle = metal.base;
+      c.beginPath(); c.arc(nx + bw * 0.72, 0, R * 0.11, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(metal.outline, 0.7); c.lineWidth = 1; c.stroke();
+      c.fillStyle = withAlpha(metal.highlight, 0.8);
+      c.beginPath(); c.arc(nx + bw * 0.72 - R * 0.03, -R * 0.03, R * 0.04, 0, Math.PI * 2); c.fill();
+    }
+  });
+};
+
+/** Working straps crossed over the torso, cinched by a center ring —
+ *  the draft-beast X. params: ring (bool, default true). */
+const harness: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'cloth');
+  const metal = pal.metal;
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(2, R * 0.13);
+    c.lineCap = 'round';
+    for (const s of [1, -1]) {
+      c.beginPath();
+      c.moveTo(-R * 0.62, -R * 0.5 * s);
+      c.quadraticCurveTo(0, R * 0.1 * s * -0.2, R * 0.62, R * 0.5 * s);
+      c.stroke();
+    }
+    c.strokeStyle = withAlpha(ramp.highlight, 0.4);
+    c.lineWidth = Math.max(1, R * 0.04);
+    c.beginPath(); c.moveTo(-R * 0.58, -R * 0.46); c.quadraticCurveTo(0, 0, R * 0.58, R * 0.46); c.stroke();
+    if (PB(spec, 'ring', true)) {
+      c.strokeStyle = metal.base;
+      c.lineWidth = Math.max(1.6, R * 0.07);
+      c.beginPath(); c.arc(0, 0, R * 0.16, 0, Math.PI * 2); c.stroke();
+    }
+  });
+};
+
+/** Flank panniers on a spine strap — the pack-beast's luggage (mirrored
+ *  pair). params: flap (bool, default true). */
+const saddlebags: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'cloth');
+  const wood = pal.wood;
+  place(ctx, r, spec, (c, R) => {
+    // The spanning strap.
+    c.strokeStyle = wood.base;
+    c.lineWidth = Math.max(1.6, R * 0.09);
+    c.beginPath(); c.moveTo(-R * 0.1, -R * 0.72); c.lineTo(-R * 0.1, R * 0.72); c.stroke();
+    // A pannier per flank.
+    for (const s of [1, -1]) {
+      const py = R * 0.74 * s;
+      const trace = (): void => {
+        c.beginPath();
+        c.moveTo(-R * 0.42, py - R * 0.26 * s);
+        c.quadraticCurveTo(-R * 0.5, py + R * 0.3 * s, -R * 0.1, py + R * 0.34 * s);
+        c.quadraticCurveTo(R * 0.28, py + R * 0.3 * s, R * 0.22, py - R * 0.26 * s);
+        c.closePath();
+      };
+      trace(); c.fillStyle = ramp.base; c.fill();
+      volume(c, R * 0.5, ramp, trace);
+      trace(); outlined(c, ramp, 1.2);
+      if (PB(spec, 'flap', true)) {
+        c.fillStyle = shade(ramp.base, -0.18);
+        c.beginPath();
+        c.moveTo(-R * 0.4, py - R * 0.24 * s);
+        c.lineTo(R * 0.2, py - R * 0.24 * s);
+        c.lineTo(R * 0.16, py + R * 0.02 * s);
+        c.lineTo(-R * 0.36, py + R * 0.02 * s);
+        c.closePath(); c.fill();
+      }
+    }
+  });
+};
+
+/** Muzzle cage over the snout tip: hoops + a jaw strap — the kept jaw.
+ *  params: hoops (n, default 3). */
+const muzzle: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'metal');
+  const hoops = Math.round(P(spec, 'hoops', 3));
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(1.4, R * 0.07);
+    // Cage hoops shrink toward the nose (+X).
+    for (let i = 0; i < hoops; i++) {
+      const fx = R * (0.66 + 0.18 * i);
+      const hh = R * (0.34 - 0.07 * i);
+      c.beginPath(); c.ellipse(fx, 0, hh * 0.4, hh, 0, 0, Math.PI * 2); c.stroke();
+    }
+    // The spine bar + jaw strap back to the head.
+    c.beginPath(); c.moveTo(R * 0.6, 0); c.lineTo(R * (0.66 + 0.18 * (hoops - 1)) + R * 0.05, 0); c.stroke();
+    c.strokeStyle = shade(ramp.base, -0.2);
+    c.beginPath(); c.moveTo(R * 0.62, -R * 0.3); c.lineTo(R * 0.4, -R * 0.5); c.stroke();
+    c.beginPath(); c.moveTo(R * 0.62, R * 0.3); c.lineTo(R * 0.4, R * 0.5); c.stroke();
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -3604,6 +3729,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   sailfin, warhorn, drape,
   stakeRow, totemPost,
   crystalGrowths, roots, stitchSeams, bell, chest,
+  collar, harness, saddlebags, muzzle,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

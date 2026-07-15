@@ -46,6 +46,9 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
   fury: {
     label: 'Fury', color: '#e87838',
     // Mute fuel by design — Reckoning's damagePerCharge is the payoff.
+    // baseCap: the skill-less banking lane (orb pours, sympathy echoes)
+    // may hold a modest bank even on a bearer with no fury tap of its own.
+    baseCap: 3,
   },
   static: {
     label: 'Static', color: '#ffe94a',
@@ -83,6 +86,7 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
       mod('addedPhysical', 'flat', 0.5, ['attack']),
     ],
     decay: { perSec: 1, delay: 3 },
+    baseCap: 3, // skill-less banking lane (sympathy echoes, future orb kinds)
   },
 
   // BLOODLUST: builds on its own clock, holds indefinitely as MUTE
@@ -136,6 +140,7 @@ export const CHARGE_DEFS: Record<string, ChargeDef> = {
       mod('moveSpeed', 'increased', 0.02),
     ],
     decay: { perSec: 0.5, delay: 8 },
+    baseCap: 3, // skill-less banking lane (sympathy echoes, future orb kinds)
   },
 
   // BREW (Slow Brew): time itself banks the next big swing — mute fuel on

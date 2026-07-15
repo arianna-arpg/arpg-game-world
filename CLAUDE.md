@@ -104,6 +104,14 @@ changes.
   user's own casts/dashes/recovery without disturbing them; the THIRST
   gate (`GateSpec.missing`, waived by `thirstless`) refuses moot drinks
   before any cost — docs in `docs/engine/reflex.md`.
+  THE SYMPATHY FABRIC (gains echo to kin): flask pours, orbs, charges,
+  buffs and heals REPLAY on related actors as data (`engine/sympathy.ts`
+  link registry + `data/sympathies.ts`, the `sympathy_<id>` stat family,
+  `MonsterDef.sympathy`, `SupportDef.tameMod` claim grafts, the
+  'companion' tag) — the tamed bond drinks when the keeper drinks, the
+  den matron's swig waters her pack, one depth-disciplined echo per
+  gain-event sweep; probe `balance/probe_sympathy.ts`, docs in
+  `docs/engine/sympathy.md`.
   THE SENTRY FABRIC (inactive NPCs stay where authored): dormant
   un-roused neutrals (ai.ts `isDormant`) are PLANTED — wind drift,
   knockback/pull and environmental strikes (`Zone.spareDormant`) pass

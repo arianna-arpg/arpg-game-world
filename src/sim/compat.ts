@@ -465,6 +465,24 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: 'resource pump (conduit): needs a HELD stance / burning toggle and a defense-pool fingerprint the standard probes lack',
     when: (_def, sup) => sup.conduit !== undefined,
   },
+  {
+    // THE SYMPATHY FAMILY (sympathy_<link> potency stats): echoes replay
+    // gains onto KIN — bonded companions, other seats, nearby allies — and
+    // the solo probe rigs field none, so every pairing reads byte-identical.
+    // The fabric is deterministically verified in balance/probe_sympathy.ts;
+    // when a companion-fielding probe rig ships, delete this row and the
+    // family re-enters measurement automatically.
+    note: 'sympathy link (kin echo): needs bonded kin the solo probes never field',
+    when: (_def, sup) =>
+      [...sup.mods, ...(sup.perLevel ?? [])].some(m => m.stat.startsWith('sympathy_')),
+  },
+  {
+    // THE CLAIM GRAFTS (SupportDef.tameMod): they reshape tryTame's terms,
+    // and no pilot performs the claim verb (a concentration hold on a live
+    // tameable beast). Same probe file covers them; same self-deleting rule.
+    note: 'tame-claim graft (tameMod): no pilot performs the CLAIM verb',
+    when: (_def, sup) => sup.tameMod !== undefined,
+  },
   // ---- DRINK-RIDER classes (2026-07-15 flask-lane triage): the fount
   // seeding + wounding pack made DRINKS fire (followUp/tempo/splash gems
   // measure clean) — but potency/duration riders read only through the

@@ -2247,7 +2247,7 @@ export const SKILLS: Record<string, SkillDef> = {
   tame_beast: {
     id: 'tame_beast', name: 'Tame Beast',
     description: 'FOCUS on a living beast and HOLD — the claim fills only while your cursor stays on it. A weakened beast (below half) is a CERTAIN claim; a hale one may resist. Hold the gaze to the end and it is YOURS: a companion that falls DOWNED, never dead. With the bond held, this button IS the Whistle (call it back, revived); shift commands it to ATTACK. Unlearning kills the bond — relearn and it returns downed, owed a revival. Release it at the Tracker.',
-    tags: ['spell', 'minion', 'duration'], color: '#a8c87a',
+    tags: ['spell', 'minion', 'duration', 'companion'], color: '#a8c87a',
     manaCost: 30, cooldown: 6, useTime: 0,
     targeting: { target: 'enemy', castRange: 320, requiresMonsterTags: ['beast'] },
     concentration: { time: 2.4, onBreak: 'drain', drainRate: 1.25 },
@@ -2256,6 +2256,12 @@ export const SKILLS: Record<string, SkillDef> = {
     // to certainty at the threshold — the sneak-tame opener (Cloak in, gaze,
     // claim) is real but never free.
     effects: [{ type: 'tame', tags: ['beast'], sureBelow: 0.5, wildChance: 0.35 }],
+    // THE TAMED BOND (sympathy links, worn while Tame sits on the bar):
+    // what the keeper drinks, the beasts drink — flask pours and flask
+    // buffs replay on every bonded companion, and scooped resource orbs
+    // pour into them too. docs/engine/sympathy.md; potency stacks with
+    // keeper supports (Alpha's Bond).
+    equipMods: [mod('sympathy_bond_flask', 'flat', 1), mod('sympathy_bond_orb', 'flat', 1)],
     requirements: { wisdom: 14, charisma: 8 },
     // The exhausted-skill two-for-one: bond held → the base press IS the
     // Whistle (SkillDef.convert); the meta slot commands the companion.
@@ -2269,7 +2275,7 @@ export const SKILLS: Record<string, SkillDef> = {
   companion_whistle: {
     id: 'companion_whistle', name: 'Whistle', noDrop: true,
     description: 'The bond answers: your companion is pulled to your side, revived if downed, healed whole.',
-    tags: ['spell', 'instant'], color: '#a8c87a',
+    tags: ['spell', 'instant', 'companion'], color: '#a8c87a',
     manaCost: 0, cooldown: 45, useTime: 0,
     delivery: { type: 'self' },
     effects: [{ type: 'whistleCompanion' }],

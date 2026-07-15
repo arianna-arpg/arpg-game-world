@@ -89,6 +89,53 @@ registerFormation({
   ],
 });
 
+// --- THE BEASTWARDENS' STEADING (the keeper kit) ------------------------------
+// Doodad semantics registered beside their arrangement (the open
+// registerDoodadRule seam): huts are honest low cover, troughs and racks
+// are waist-high work furniture (oblong hit surfaces — collide as drawn),
+// tether posts are walkable clutter you kick through. The yard reads as a
+// working kennel — or what the wild left of one (den_matron packs roam the
+// same biomes; see beastwardens_steading in compositions.ts).
+registerDoodadRule('kennel_hut', {
+  overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 64,
+  surface: { hw: 0.95, hh: 0.85 },
+  forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+});
+registerDoodadRule('feeding_trough', {
+  overlap: 'solid', blocksMove: true, spacing: 42,
+  surface: { hw: 1.0, hh: 0.42 },
+});
+registerDoodadRule('tether_post', { overlap: 'inert', spacing: 26 });
+registerDoodadRule('pelt_rack', {
+  overlap: 'solid', blocksMove: true, spacing: 42,
+  surface: { hw: 1.0, hh: 0.3 },
+});
+registerDoodadRule('whelping_den', {
+  overlap: 'solid', blocksMove: true, spacing: 52,
+  forbidOn: ['water', 'lava', 'chasm'],
+});
+
+// The kennel yard proper: huts ringing the feed, posts and racks between.
+registerFormation({
+  id: 'wardens_kennels', arrange: 'ring', span: [130, 210], step: 52,
+  pieces: [
+    { kind: 'kennel_hut', radius: [16, 22], jitter: 8, rot: true },
+    { kind: 'tether_post', radius: [7, 9], every: 2, jitter: 16 },
+    { kind: 'feeding_trough', radius: [12, 16], every: 3, jitter: 10, rot: true },
+    { kind: 'hay_bale', radius: [12, 16], every: 4, jitter: 18 },
+    { kind: 'pelt_rack', radius: [12, 15], every: 5, jitter: 12, rot: true },
+  ],
+});
+
+// The dens out back: strawed mounds and old gnawed bones in a loose arc.
+registerFormation({
+  id: 'whelping_hollow', arrange: 'arc', span: [90, 150], step: 40,
+  pieces: [
+    { kind: 'whelping_den', radius: [14, 20], jitter: 12 },
+    { kind: 'bone_pile', radius: [10, 14], every: 2, jitter: 20 },
+  ],
+});
+
 // A PROCESSIONAL AVENUE: standing stones pacing a dead-straight old road.
 registerFormation({
   id: 'standing_avenue', arrange: 'line', span: [360, 640], step: 88,

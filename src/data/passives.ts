@@ -398,6 +398,9 @@ const nodes: PassiveNode[] = [
   // --- THE COMMUNION REACH (east): shared-life sustain, crit dice, minion
   // rites, and the silence brand — the paladin/shepherd neighbourhood.
   { id: "transfusion", name: "Transfusion", description: "5% of your damage dealt heals allies near you (Vampiric Share)", kind: "notable", x: 5460, y: 2520, mods: [mod("vampiricShare", "flat", 0.05)], links: ["cl_acc_p0"] },
+  // SYMPATHY exemplar (engine/sympathy.ts): the tree's grant surface for a
+  // link is one ordinary stat mod — here the menders_ripple heal echo.
+  { id: "fellowship_of_the_wake", name: "Fellowship of the Wake", description: "Heals that land on you RIPPLE: 35% echoes to up to 3 nearby allies — hirelings, wanderers and townsfolk included (sympathy)", kind: "notable", x: 5340, y: 2640, mods: [mod("sympathy_menders_ripple", "flat", 1)], links: ["transfusion"] },
   { id: "oathbound_insight", name: "Oathbound Insight", description: "Critical hits have a 35% chance to grant a Fury charge (independent of any gem's crit dice)", kind: "notable", x: 5640, y: 2640, mods: [mod("proc_battle_insight", "flat", 0.35)], links: ["transfusion"] },
   { id: "shepherds_rites", name: "Shepherd's Rites", description: "Minions heal 8% of a dying kin's life; summons mend nearby allies 4 on arrival", kind: "notable", x: 5520, y: 2760, mods: [mod("minionDeathHeal", "flat", 0.08), mod("summonMend", "flat", 4)], links: ["transfusion"] },
   { id: "silencing_brand", name: "Silencing Brand", description: "Your spells have an 8% chance to Silence (no spells for the afflicted)", kind: "notable", x: 5700, y: 2460, mods: [mod("apply_silence", "flat", 0.08, ["spell"])], links: ["oathbound_insight"] },

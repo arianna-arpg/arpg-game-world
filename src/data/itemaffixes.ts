@@ -696,6 +696,17 @@ const SUFFIXES: AffixDef[] = [
     top: 0.3, floor: 0.25, count: 3,
     baseTags: ['amulet', 'ring', 'boots'], weight: 45,
   }),
+  // The SYMPATHY fabric's gear roll (engine/sympathy.ts): charges you gain
+  // echo to the other seats — co-op partners and hired mercenaries alike.
+  // A single potency-1 bracket: charge echoes copy counts verbatim, so a
+  // rolled magnitude would be a lie on this link.
+  fam({
+    id: 'sympathy_fellowship', kind: 'suffix',
+    names: ['of Fellowship'],
+    stat: 'sympathy_shared_surge', modKind: 'flat',
+    top: 1, floor: 1, count: 1,
+    baseTags: ['amulet', 'ring'], weight: 20,
+  }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
   ...APPLY_AFFIXES,

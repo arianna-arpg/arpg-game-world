@@ -757,6 +757,33 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     // The rail hangs bossed steel, not the day's catch.
     params: { wood: '#5e4a32', fish: '#8a8ea0' },
   },
+
+  // --- The beastwardens' steading (the keeper kit — wardens_kennels /
+  // beastwardens_steading): a working kennel yard, or what the wild left
+  // of one. New painters kennelHut/feedTrough/tetherPost; the pelt rack is
+  // the fishing-rack rail re-dressed with hides, the whelping den a strawed
+  // mound (the re-dress idiom).
+  kennel_hut: {
+    painter: 'kennelHut', order: 55, shadow: 0.5, longShadow: 1.0,
+    params: { wood: '#5e4a34', roof: '#4a3a28' },
+  },
+  feeding_trough: {
+    painter: 'feedTrough', order: 53, shadow: 0.4, longShadow: 0.5,
+    params: { wood: '#6a5238', feed: '#b09a5a' },
+  },
+  tether_post: {
+    painter: 'tetherPost', order: 53, shadow: 0.3, longShadow: 1.3,
+    params: { wood: '#5a4630', rope: '#a89468' },
+  },
+  pelt_rack: {
+    painter: 'fishingRack', order: 53, shadow: 0.35, longShadow: 0.8,
+    // The rail hangs stretched hides, tawny and uneven.
+    params: { wood: '#5e4a32', fish: '#9a7a58' },
+  },
+  whelping_den: {
+    painter: 'mound', order: 50, shadow: 0.5,
+    params: { color: '#4a3c2c', edge: '#6a5a40', hatch: true },
+  },
   sparring_dummy: {
     painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.4,
     params: { coat: '#a89058' },

@@ -6537,6 +6537,143 @@ const fishingRack: GroupPainter = (env, group, def) => {
   }
 };
 
+/** A KENNEL HUT: a gabled plank box with a dark mouth at the gable end —
+ *  where kept beasts sleep. Reads from above as two roof slopes off a
+ *  ridge, the doorway a worn hollow at +X. */
+const kennelHut: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; roof?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#5e4a34');
+  const roof = resolveColor(p.roof, theme, '#4a3a28');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The worn threshold patch in front of the mouth (drawn first, under all).
+    ctx.fillStyle = withAlpha(shade(wood, -0.35), 0.35);
+    ctx.beginPath(); ctx.ellipse(r * 1.05, 0, r * 0.38, r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    // Footprint walls.
+    ctx.fillStyle = shade(wood, -0.2);
+    ctx.fillRect(-r * 0.95, -r * 0.82, r * 1.9, r * 1.64);
+    // Roof: two slopes off a ridge running the hut's length.
+    ctx.fillStyle = shade(roof, 0.14);
+    ctx.fillRect(-r * 0.95, -r * 0.82, r * 1.9, r * 0.82);
+    ctx.fillStyle = shade(roof, -0.2);
+    ctx.fillRect(-r * 0.95, 0, r * 1.9, r * 0.82);
+    ctx.strokeStyle = shade(roof, 0.34);
+    ctx.lineWidth = Math.max(1.4, r * 0.07);
+    ctx.beginPath(); ctx.moveTo(-r * 0.95, 0); ctx.lineTo(r * 0.95, 0); ctx.stroke();
+    // Plank seams across the slopes.
+    ctx.strokeStyle = withAlpha('#000000', 0.15);
+    ctx.lineWidth = 1;
+    for (let i = -2; i <= 2; i++) {
+      const x = i * r * 0.38;
+      ctx.beginPath(); ctx.moveTo(x, -r * 0.82); ctx.lineTo(x, r * 0.82); ctx.stroke();
+    }
+    // The dark mouth at the gable end.
+    ctx.fillStyle = withAlpha('#140d08', 0.92);
+    ctx.beginPath(); ctx.ellipse(r * 0.8, 0, r * 0.18, r * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+    // Silhouette outline.
+    ctx.strokeStyle = withAlpha(shade(wood, -0.5), 0.85);
+    ctx.lineWidth = 2;
+    ctx.strokeRect(-r * 0.95, -r * 0.82, r * 1.9, r * 1.64);
+    ctx.restore();
+  }
+};
+
+/** A FEEDING TROUGH: a hollowed long box on stub feet, feed heaped along
+ *  it and spilling at one end — the working smell of a kept yard. */
+const feedTrough: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; feed?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#6a5238');
+  const feed = resolveColor(p.feed, theme, '#b09a5a');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 13 + o.pos.y * 29) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // Outer box.
+    ctx.fillStyle = shade(wood, -0.12);
+    ctx.fillRect(-r, -r * 0.4, r * 2, r * 0.8);
+    // Hollow.
+    ctx.fillStyle = shade(wood, -0.5);
+    ctx.fillRect(-r * 0.86, -r * 0.26, r * 1.72, r * 0.52);
+    // The feed: overlapping soft heaps, no two alike.
+    const heaps = 5 + (seed % 3);
+    for (let i = 0; i < heaps; i++) {
+      const x = -r * 0.72 + (i / (heaps - 1)) * r * 1.44;
+      ctx.fillStyle = shade(feed, (hash01(i, seed) - 0.5) * 0.24);
+      ctx.beginPath();
+      ctx.ellipse(x, (hash01(i + 9, seed) - 0.5) * r * 0.16, r * 0.19, r * 0.14, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Spill at the +X end.
+    for (let i = 0; i < 3; i++) {
+      ctx.fillStyle = withAlpha(shade(feed, -0.1), 0.8);
+      ctx.beginPath();
+      ctx.arc(r * (1.06 + hash01(i + 3, seed) * 0.2), (hash01(i + 7, seed) - 0.5) * r * 0.5, r * 0.06, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Rim + outline.
+    ctx.strokeStyle = withAlpha(shade(wood, -0.55), 0.85);
+    ctx.lineWidth = 1.8;
+    ctx.strokeRect(-r, -r * 0.4, r * 2, r * 0.8);
+    ctx.restore();
+  }
+};
+
+/** A TETHER POST: a driven stake with an iron ring and the slack line
+ *  coiled at its foot — something is meant to be tied here (or was). */
+const tetherPost: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; rope?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#5a4630');
+  const rope = resolveColor(p.rope, theme, '#a89468');
+  for (const o of group) {
+    const r = o.radius;
+    const seed = ((o.pos.x * 31 + o.pos.y * 17) | 0) >>> 0;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The coiled slack: a lazy spiral around the foot.
+    ctx.strokeStyle = withAlpha(rope, 0.85);
+    ctx.lineWidth = Math.max(1.6, r * 0.14);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    const turns = 2.4;
+    for (let t = 0; t <= 1; t += 0.05) {
+      const a = t * turns * Math.PI * 2 + hash01(1, seed) * 6.28;
+      const rr = r * (0.3 + t * 0.42);
+      const x = Math.cos(a) * rr, y = Math.sin(a) * rr;
+      if (t === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // The loose end wanders off.
+    const ea = hash01(2, seed) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(ea) * r * 0.7, Math.sin(ea) * r * 0.7);
+    ctx.quadraticCurveTo(
+      Math.cos(ea + 0.5) * r * 1.1, Math.sin(ea + 0.5) * r * 1.1,
+      Math.cos(ea + 0.3) * r * 1.5, Math.sin(ea + 0.3) * r * 1.5);
+    ctx.stroke();
+    // The post itself: a stout stake head with a lit rim.
+    ctx.fillStyle = shade(wood, -0.1);
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = shade(wood, 0.18);
+    ctx.beginPath(); ctx.arc(-r * 0.05, -r * 0.05, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(wood, -0.5), 0.9);
+    ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.24, 0, Math.PI * 2); ctx.stroke();
+    // The iron ring, hung to one side.
+    ctx.strokeStyle = '#7a7e88';
+    ctx.lineWidth = Math.max(1.4, r * 0.08);
+    ctx.beginPath(); ctx.arc(r * 0.3, r * 0.08, r * 0.14, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+  }
+};
+
 /** A CHARCOAL MOUND: the burner's turf-clad kiln — a dark dome seamed with
  *  ember cracks that breathe while the burn holds (glow rides the LightSpec). */
 const kilnMound: GroupPainter = (env, group, def) => {
@@ -7266,6 +7403,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, crowdRow, door, breach, landmass, beacon, surveySpire, fallback,
   pyre, hangingCage, warBanner, hellforge,
   gateArch, tortureRack, buttressRoot, wallFronds, vineCoil,
+  kennelHut, feedTrough, tetherPost,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------

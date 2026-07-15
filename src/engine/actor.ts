@@ -24,6 +24,26 @@ import { CHARGE_DEFS } from './charges';
 import type { MonsterRarity } from './rarity';
 import type { ItemInstance } from './items';
 import type { DeathBurstDef } from '../data/monsters';
+import type { PartSpec } from '../render/vis/parts';
+
+/** One entry of Actor.gainEvents — a gain that landed this frame. The proc
+ *  triggers read kind/id/depth; the SYMPATHY FABRIC reads the payload tail
+ *  to replay the gain on kin (docs/engine/sympathy.md). */
+export interface GainEvent {
+  kind: 'charge' | 'buff' | 'orb' | 'restore' | 'heal';
+  /** charge id / buff id / orb kind / restored resource / 'life' for heals. */
+  id: string;
+  depth: number;
+  /** Amount payload: charges actually banked, restore-stream total, heal
+   *  landed, orb amount poured. */
+  n?: number;
+  /** 'buff': the applied effect, so an echo can wear the same one. */
+  buff?: BuffEffect;
+  /** 'restore': the pour window in seconds (echoes pour over the same). */
+  dur?: number;
+  /** Tags of the source skill, when one drove the gain (flask filters). */
+  tags?: SkillTag[];
+}
 
 /** A cast in progress (also drives the cast bar above the actor's head). */
 export interface CastingState {
@@ -362,6 +382,12 @@ export class Actor {
   /** Part-grammar portrait (data/looks.ts registry key) — the composed
    *  top-down body (skull + ribs + scythe…). Omitted = legacy shape body. */
   look?: string;
+  /** RUNTIME TACK: extra look parts worn OVER the body/look — the tamed
+   *  collar (TAME_CFG.claimParts), future brands and harnesses. Pure data:
+   *  ANY system may stamp it; the renderer bakes it into the body sprite
+   *  (part of the bake key) and co-op replicates it (snapshot `ep`). Draws
+   *  on part-grammar and legacy bodies alike. */
+  extraParts?: PartSpec[];
 
   sheet = new StatSheet();
   level = 1;
@@ -584,14 +610,16 @@ export class Actor {
    *  per-attempt chance scales with the gap, so fast and slow skills
    *  converge on the same procs-per-minute (ProcDef.ppm). */
   procAttemptAt = new Map<string, number>();
-  /** GAIN EVENTS (the chargeGain/buffGain/orbPickup proc triggers): every
-   *  charge, buff, or orb actually gained this frame, with its CHAIN DEPTH
-   *  — 0 for gains from real play, +1 per proc-payload link, so
+  /** GAIN EVENTS (the chargeGain/buffGain/orbPickup proc triggers AND the
+   *  sympathy fabric's spine): every charge, buff, orb, restore stream, or
+   *  direct heal actually gained this frame, with its CHAIN DEPTH — 0 for
+   *  gains from real play, +1 per proc-payload/sympathy-echo link, so
    *  Frenzy→Rage→Bloodlust chains are governed by the same procDepth/
    *  falloff rules as hit chains and a loop back into Frenzy dies at the
    *  lid. Swept by the world each frame (the expiredStatuses pattern);
-   *  capped so nothing can flood it. */
-  gainEvents: { kind: 'charge' | 'buff' | 'orb'; id: string; depth: number }[] = [];
+   *  capped so nothing can flood it. Payload fields carry what an echo
+   *  needs to REPLAY the gain (docs/engine/sympathy.md). */
+  gainEvents: GainEvent[] = [];
   /** LIFE BOND (BuffEffect.bond): the ally this actor's damage feeds as
    *  healing (bondShare × the skill's bondFeed) — held while the named
    *  buff still rides the target; one bond per caster, newest wins. */
@@ -1340,12 +1368,14 @@ export class Actor {
   }
 
   /** `chainDepth`: proc links behind this application (0 = real play) —
-   *  the buffGain event carries it so buff→buff chains obey depth rules. */
-  addBuff(def: BuffEffect, durationScale = 1, chainDepth = 0): void {
+   *  the buffGain event carries it so buff→buff chains obey depth rules.
+   *  `tags`: the granting skill's tags, when one drove the grant — the
+   *  sympathy fabric's flask/tag filters read them off the event. */
+  addBuff(def: BuffEffect, durationScale = 1, chainDepth = 0, tags?: SkillTag[]): void {
     // Every application — fresh, stacking, or refresh — counts as GAINING
     // the buff (the buffGain trigger's event).
     if (this.gainEvents.length < 64) {
-      this.gainEvents.push({ kind: 'buff', id: def.id, depth: chainDepth });
+      this.gainEvents.push({ kind: 'buff', id: def.id, depth: chainDepth, buff: def, tags });
     }
     const existing = this.buffs.get(def.id);
     const duration = def.duration * durationScale;
@@ -1416,7 +1446,10 @@ export class Actor {
     this.charges.set(charge, next);
     // An ACTUAL increase is a gain event (a full bank refreshing isn't).
     if (next > cur && this.gainEvents.length < 64) {
-      this.gainEvents.push({ kind: 'charge', id: charge, depth: chainDepth });
+      this.gainEvents.push({
+        kind: 'charge', id: charge, depth: chainDepth,
+        n: next - cur, tags: inst?.def.tags,
+      });
     }
     // A fresh gain resets the decay clock.
     const state = st ?? { idle: 0, acc: 0, tick: 0 };

@@ -2321,6 +2321,66 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The Keeper's hall (companion-bond gems — the Tamer's lane) -------------
+  // These gate on 'companion' (the TAMED-BOND family), so they distinguish
+  // the keeper's few named beasts from a summoner's swarms: bond sympathy
+  // (what stirs you stirs the pack — engine/sympathy.ts), claim terms
+  // (SupportDef.tameMod), and the kennel's size. None of them read swarm
+  // counts or corpse economies — that's the necromancer's hall.
+
+  alphas_bond: {
+    id: 'alphas_bond', name: "Alpha's Bond",
+    description: "The bond runs DEEPER: your flasks and scooped orbs pour into your beasts at half again the strength (sympathy potency +50% — stacks with the bond Tame Beast already wears).",
+    color: '#a8c87a', requiresTags: ['companion'],
+    mods: [
+      mod('sympathy_bond_flask', 'flat', 0.5),
+      mod('sympathy_bond_orb', 'flat', 0.5),
+    ],
+    perLevel: [
+      mod('sympathy_bond_flask', 'flat', 0.1),
+      mod('sympathy_bond_orb', 'flat', 0.1),
+    ],
+    weight: 5, minDropLevel: 6,
+  },
+
+  pack_instinct: {
+    id: 'pack_instinct', name: 'Pack Instinct',
+    description: 'What quickens you quickens THEM: charges you gain echo to your bonded beasts (their own caps bind what sticks — the classic charges bank to 3 on an untapped bearer).',
+    color: '#c8a06a', requiresTags: ['companion'],
+    mods: [mod('sympathy_pack_charges', 'flat', 1)],
+    maxLevel: 1, // a toggle: charge echoes copy counts verbatim, potency gates
+    weight: 5, minDropLevel: 8,
+  },
+
+  reciprocal_bond: {
+    id: 'reciprocal_bond', name: 'Reciprocal Bond',
+    description: 'The bond flows BOTH ways: when a bonded beast is mended, 40% of it reaches you too (potency scales the share).',
+    color: '#7ec88a', requiresTags: ['companion'],
+    mods: [mod('sympathy_feral_reciprocity', 'flat', 1)],
+    perLevel: [mod('sympathy_feral_reciprocity', 'flat', 0.125)],
+    weight: 5, minDropLevel: 8,
+  },
+
+  gentling_hand: {
+    id: 'gentling_hand', name: 'Gentling Hand',
+    description: 'The claim asks GENTLER terms: certain at 15% more life, +20% chance against the hale — and even RARE-marked beasts may kneel (bosses never).',
+    color: '#d8c088', requiresTags: ['companion'],
+    mods: [],
+    tameMod: { sureBelowAdd: 0.15, wildChanceAdd: 0.2, allowRares: true },
+    maxLevel: 1, // the terms are the terms — a claim graft, not a ramp
+    weight: 4, minDropLevel: 10,
+  },
+
+  beast_master: {
+    id: 'beast_master', name: 'Beast Master',
+    description: 'The kennel GROWS: this skill holds one more bond — and each voice comes a little quieter (beasts deal 15% less damage).',
+    color: '#b08868', requiresTags: ['companion'],
+    tameMod: { slotsAdd: 1 },
+    mods: [mod('minionDamage', 'more', -0.15)],
+    maxLevel: 1, // one more bond is the whole gem
+    weight: 3, minDropLevel: 14,
+  },
+
   // --- Tether gems ---------------------------------------------------------------
   // A tether is a LIVE LINE between two anchors (see TetherSpec): spawned
   // object ↔ caster, object ↔ sibling objects, or caster ↔ resolved target.

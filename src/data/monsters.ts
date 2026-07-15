@@ -182,6 +182,11 @@ export interface MonsterDef {
   base: Record<string, number>;
   /** Innate modifiers (resistances, speed quirks...). */
   mods?: Modifier[];
+  /** SYMPATHY LINKS worn from birth (engine/sympathy.ts registry ids) —
+   *  folded as sympathy_<id> potency-1 innate mods at creation: the den
+   *  matron whose swig waters her whole pack. Same fabric as the player's
+   *  tame-bond links; docs/engine/sympathy.md. */
+  sympathy?: string[];
   /** Skill ids from the shared catalog. */
   skills: string[];
   xp: number;
@@ -6433,6 +6438,43 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
+
+  // THE DEN MATRON: the she-wolf the whelps answer to. She carries a pocket
+  // brew (swig — the monster flask) and a BORN SYMPATHY LINK: her draught
+  // waters the whole pack (matrons_draught replays her flask restore + buffs
+  // on same-faction kin within 300 — engine/sympathy.ts). Kill her first, or
+  // fight a pack that drinks as one. Tame her, and the SAME fabric points
+  // the other way: she drinks from YOUR flasks through the tamed bond.
+  den_matron: {
+    id: 'den_matron', name: 'Den Matron',
+    color: '#8a7460', shape: 'rhombus', radius: 16, material: 'fur', look: 'den_matron',
+    base: { life: 110, moveSpeed: 182, accuracy: 105, evasion: 40, mana: 30, manaRegen: 4 },
+    skills: ['claw', 'swig'], xp: 30, tag: 'predator', faction: 'beast', tags: ['beast'],
+    detection: 1.5,
+    sympathy: ['matrons_draught'],
+    scaleVariance: [0.95, 1.15],
+    brain: {
+      type: 'pack',
+      squad: { muster: { count: 2, radius: 340, patience: 5 }, tokens: 2, surround: true, onLeaderDeath: 'scatter' },
+    },
+  },
+
+  // Her whelps: quick, soft-bodied, brave only in her shadow — the matron
+  // falls and the den scatters. They drink whatever she drinks (the pack
+  // link is HERS; the whelps just live inside its radius).
+  den_whelp: {
+    id: 'den_whelp', name: 'Den Whelp',
+    color: '#a89684', shape: 'kite', radius: 9, material: 'fur', look: 'den_whelp',
+    base: { life: 16, moveSpeed: 196, accuracy: 85, evasion: 50, mana: 0 },
+    skills: ['claw'], xp: 6, faction: 'beast', tags: ['beast'],
+    detection: 1.3,
+    scaleVariance: [0.8, 1.1],
+    brain: {
+      type: 'pack',
+      squad: { muster: { count: 2, radius: 300, patience: 4 }, tokens: 2, onLeaderDeath: 'scatter' },
+    },
+  },
+
   dire_wolf: {
     id: 'dire_wolf', name: 'Dire Wolf',
     color: '#6a5a4a', shape: 'rhombus', radius: 15, material: 'fur', look: 'dire_wolf',

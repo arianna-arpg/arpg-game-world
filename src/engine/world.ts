@@ -13,7 +13,7 @@ import { DiscIndex } from './spatial';
 import { ActorGrid } from './actorGrid';
 import { mod, type Attributes, type DamageType, type Modifier, type SkillTag } from './stats';
 import { baselineStatusDps, STATUS_DEFS, tuneAilmentChance, type ActiveStatus } from './status';
-import { Actor, shellArcFactor, type BrainPhase, type CastingState, type Team } from './actor';
+import { Actor, shellArcFactor, type BrainPhase, type CastingState, type GainEvent, type Team } from './actor';
 import { EventBus } from './eventbus';
 import { Party } from './party';
 import { NullInput, type PlayerInput, type PlayerInputSource, type MetaAction } from '../net/intent';
@@ -23,8 +23,8 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, UNLEASH_CFG,
-  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, UNLEASH_CFG,
+  CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
   type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardSpec,
@@ -74,6 +74,11 @@ import {
 } from './levelgen';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
+import {
+  gatherSympathyRecipients, SYMPATHY_CFG, SYMPATHY_HOOKS, SYMPATHY_LINKS,
+  sympathyRelationOf, sympathyStat,
+} from './sympathy';
+import { CHARGE_DEFS } from './charges';
 import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './shapes';
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
@@ -82,6 +87,7 @@ import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } f
 import type { DwellReach } from '../data/transit';
 import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
 import '../data/arenas'; // side-effect: the ward-seal doodad rules register
+import '../data/sympathies'; // side-effect: the sympathy link registry fills
 import { WAVE_CFG, type WaveFrenzySpec } from '../data/waves';
 import { connectFloatingZone, generateZone, mintCave, placeZoneAt, projectCoord, nearestNode, randomizeStarterWeb, setRouteGuard, spacedExitAt, MIN_PORTAL_SEP, PORTAL_RADIUS, PORTAL_EDGE_INSET } from './worldgen';
 import { VOYAGE_CFG, VOYAGE_ZONE_ID, ISLAND_FIELD, islandsNear, islandAtCell, type IslandSpot } from '../world/voyage';
@@ -1263,6 +1269,11 @@ registerConvertRule('companionsFull', (caster, inst, world) =>
 // way. Registered beside its sibling; the registry stays the open seam.
 registerConvertRule('chargesEmpty', (caster, inst) =>
   !!instanceUseCharges(inst) && caster.skillChargeBank(inst).count <= 0);
+
+// THE SYMPATHY FABRIC's npc read (engine/sympathy.ts stays data-registry-free
+// — the registerConvertRule pattern): a friendly body with an authored
+// npcRole counts as kin for the 'npcs' relation.
+SYMPATHY_HOOKS.isNpc = a => !!a.defId && !!MONSTERS[a.defId]?.npcRole;
 
 const MIREILLE_RADIUS = 150;     // how close you must stand to Mireille
 const MIREILLE_DWELL = 0.8;      // seconds lingering in radius before she heals
@@ -14667,6 +14678,11 @@ export class World {
     if (def.detection !== undefined && def.detection !== 1) {
       innate.push(mod('detectionRange', 'more', def.detection - 1));
     }
+    // Born-with SYMPATHY LINKS fold as potency-1 stats through the same
+    // innate source — the fabric reads monsters and players identically.
+    if (def.sympathy) {
+      for (const link of def.sympathy) innate.push(mod(sympathyStat(link), 'flat', 1));
+    }
     if (innate.length) a.sheet.setSource('innate', innate);
     // Monsters grow with wave level through the same modifier system. The
     // baseline (life/damage/accuracy/evasion) is a global lever; per-stat scaling
@@ -15146,10 +15162,11 @@ export class World {
     return groups.size;
   }
 
-  /** Bond slots one companion skill may hold (TameEffect.slots, default 1). */
+  /** Bond slots one companion skill may hold (TameEffect.slots, default 1,
+   *  plus any tameMod grafts — Beast Master's grown kennel). */
   companionCapOf(inst: SkillInstance): number {
     const fx = inst.def.effects.find((f): f is Extract<SkillEffect, { type: 'tame' }> => f.type === 'tame');
-    return Math.max(1, fx?.slots ?? 1);
+    return Math.max(1, (fx?.slots ?? 1) + instanceTameMod(inst).slotsAdd);
   }
 
   /** Does a minion SERVE the named skill? True for its direct summons AND
@@ -15234,13 +15251,16 @@ export class World {
     fx: Extract<SkillEffect, { type: 'tame' }>): void {
     const def = inst.def;
     const mdef = target.defId ? MONSTERS[target.defId] : undefined;
+    // Socketed CLAIM grafts (tameMod): every term below reads the authored
+    // effect PLUS the summed adjustments — the gem reshapes the bond's terms.
+    const tm = instanceTameMod(inst);
     if (this.companionBondsOfSkill(caster, def.id) >= this.companionCapOf(inst)) {
       this.failNote(caster, def.id + ':bonded',
         this.companionCapOf(inst) > 1 ? 'every bond is held' : 'the bond holds one already');
       return;
     }
     if (!mdef || target.owner || target.companion || target.team === caster.team
-      || mdef.boss || (target.rarity && target.rarity !== 'normal' && !fx.allowRares)
+      || mdef.boss || (target.rarity && target.rarity !== 'normal' && !(fx.allowRares || tm.allowRares))
       // Belt to targeting's taxonomy gate — future callers may not route
       // through resolveTargeting.
       || !(mdef.tags ?? []).some(tg => fx.tags.includes(tg))) {
@@ -15254,9 +15274,11 @@ export class World {
     // that clock IS the retry economy. wildChance 0/absent restores the
     // old hard weaken-it-first gate.
     const frac = target.life / Math.max(1, target.maxLife());
-    const sure = fx.sureBelow ?? fx.maxLifeFrac;
+    const sureBase = fx.sureBelow ?? fx.maxLifeFrac;
+    const sure = sureBase === undefined ? undefined
+      : clamp(sureBase + tm.sureBelowAdd, 0, 1);
     if (sure !== undefined && frac > sure) {
-      const wild = fx.wildChance ?? 0;
+      const wild = clamp((fx.wildChance ?? 0) + tm.wildChanceAdd, 0, 1);
       if (wild <= 0) {
         this.failNote(caster, def.id + ':unbroken', 'weaken it first');
         return;
@@ -15292,6 +15314,16 @@ export class World {
     beast.aggroed = false;
     beast.aiFleeing = false;
     beast.life = beast.maxLife();
+    // THE KEPT MARK: runtime tack (TAME_CFG.claimParts — a collar by
+    // default) stamps the claim visibly onto any body. Un-tame paths kill
+    // or stash the body outright, so the mark never needs unstamping.
+    if (TAME_CFG.claimParts.length) {
+      const worn = beast.extraParts ?? [];
+      beast.extraParts = [
+        ...worn,
+        ...TAME_CFG.claimParts.filter(p => !worn.some(w => w.kind === p.kind)),
+      ];
+    }
     this.text(vec(beast.pos.x, beast.pos.y - 26), `TAMED: ${beast.name}`, '#a8d8a0', 16);
     this.flashes.push({
       pos: vec(beast.pos.x, beast.pos.y), radius: beast.radius + 20,
@@ -20656,6 +20688,15 @@ export class World {
     target.restoreStreams.push({
       resource: fx.resource, perSec: total / dur, remaining: total,
     });
+    // The pour is a GAIN EVENT (depth 0 — a drink is real play): sympathy
+    // links replay it on kin (the tamed-beast flask bond). Echo streams are
+    // granted directly and never re-event, so pours can't chain.
+    if (target.gainEvents.length < 64) {
+      target.gainEvents.push({
+        kind: 'restore', id: fx.resource, depth: 0,
+        n: total, dur, tags: inst.def.tags,
+      });
+    }
     this.text(target.pos, fx.resource === 'life' ? 'drinking...' :
       fx.resource === 'mana' ? 'sipping...' : 'charging...', inst.def.color, 11);
   }
@@ -20689,6 +20730,14 @@ export class World {
       return 0;
     }
     const landed = target.healBy(raw);
+    // A landed mend is a GAIN EVENT (sympathy 'heal' channel — tick-rate
+    // sources call healBy directly and stay quiet here). Echoes heal via
+    // healBy alone and never re-event: heal chains are structurally dead.
+    if (landed > 0 && target.gainEvents.length < 64) {
+      target.gainEvents.push({
+        kind: 'heal', id: 'life', depth: 0, n: landed, tags: inst.def.tags,
+      });
+    }
     // OVERMEND: spilled healing becomes a ward (grantAbsorb keeps the max).
     const spill = raw * target.sheet.get('healTaken') - landed;
     if (spill > 0.5) {
@@ -21055,10 +21104,13 @@ export class World {
     const scaled = fx.powerScaled && useMult !== 1
       ? { ...fx, mods: fx.mods.map(m => ({ ...m, value: m.value * useMult })) }
       : fx;
+    // The granting skill's tags ride the gain EVENT (addBuff's 4th arg) so
+    // tag-filtered sympathy links can hear it — the flask bond drinks only
+    // what carries 'flask'.
     if (fx.affects === 'minions') {
       for (const m of this.actors) {
         if (m.owner === caster && !m.dead && m.isMinion() && !m.construct) {
-          m.addBuff(scaled, durScale);
+          m.addBuff(scaled, durScale, 0, inst.def.tags);
         }
       }
       // OFFERING SHARE (Communal Rites): a fraction of the minions'
@@ -21069,10 +21121,10 @@ export class World {
         caster.addBuff({
           ...scaled, id: scaled.id + '_shared', affects: 'caster',
           mods: scaled.mods.map(m => ({ ...m, value: m.value * share })),
-        }, durScale);
+        }, durScale, 0, inst.def.tags);
       }
     } else {
-      caster.addBuff(scaled, durScale);
+      caster.addBuff(scaled, durScale, 0, inst.def.tags);
     }
   }
 
@@ -21805,7 +21857,7 @@ export class World {
         // delivery lands the buff on the RESOLVED ally — next-hit riders
         // arm a minion's blow, and a bond-marked buff TIES the caster to
         // this one ally (one bond per caster; newest wins).
-        target.addBuff(fx, durScale);
+        target.addBuff(fx, durScale, 0, inst.def.tags);
         if (fx.bond) caster.bond = { targetId: target.id, buffId: fx.id };
       } else if (fx.type === 'status') {
         // AILMENT RESISTANCE (victim-side, element-tagged): Purity of Fire
@@ -22454,8 +22506,11 @@ export class World {
    *  and Bloodlust→Fury can never close the loop past the lid. Payload
    *  grants land as NEW events swept next frame (one link per frame —
    *  chains propagate visibly, never recurse). */
-  private rollGainProcs(owner: Actor, ev: { kind: 'charge' | 'buff' | 'orb'; id: string; depth: number }): void {
+  private rollGainProcs(owner: Actor, ev: GainEvent): void {
     if (owner.dead || ev.depth >= this.procDepthAllowed(owner)) return;
+    // restore/heal gains feed the sympathy fabric only — no proc trigger
+    // listens to them (yet; a 'healGain' trigger would slot in here).
+    if (ev.kind !== 'charge' && ev.kind !== 'buff' && ev.kind !== 'orb') return;
     const want = ev.kind === 'charge' ? 'chargeGain'
       : ev.kind === 'buff' ? 'buffGain' : 'orbPickup';
     for (const proc of PROC_LIST) {
@@ -22471,6 +22526,130 @@ export class World {
       if (c <= 0 || !chance(c)) continue;
       if (!this.procReady(owner, proc)) continue;
       this.executeProc(proc, owner, null, null, ev.depth);
+    }
+  }
+
+  /** THE SYMPATHY FABRIC (docs/engine/sympathy.md): replay one gain event
+   *  onto kin. Holders consulted per event — the gainer ('self' links), its
+   *  owner (the 'companions'/'minions' listeners), and the seats ('party'
+   *  listeners): exactly the LISTENABLE set, so no per-gain scan of the
+   *  whole actor list ever happens. Depth-disciplined like every chain:
+   *  echoes land one link DEEPER, and a deep source only echoes when the
+   *  holder's sympathyDepth stat buys the rung. Every application rides the
+   *  canonical gates (healBy / restore streams / gainCharge / addBuff), so
+   *  heal reduction, charge caps, and stacking rules bind the copy too. */
+  private echoSympathy(gainer: Actor, ev: GainEvent): void {
+    if (gainer.dead) return;
+    const holders: Actor[] = [gainer];
+    if (gainer.owner && !gainer.owner.dead) holders.push(gainer.owner);
+    for (const s of this.seats) {
+      if (s.actor !== gainer && !s.actor.dead && !holders.includes(s.actor)) {
+        holders.push(s.actor);
+      }
+    }
+    for (const holder of holders) {
+      const rel = sympathyRelationOf(holder, gainer, this);
+      if (!rel) continue;
+      for (const id in SYMPATHY_LINKS) {
+        const link = SYMPATHY_LINKS[id]!;
+        if ((link.from ?? 'self') !== rel) continue;
+        if (!link.channels.includes(ev.kind)) continue;
+        if (link.tags && !(ev.tags && link.tags.every(t => ev.tags!.includes(t)))) continue;
+        if (link.chargeIds && !(ev.kind === 'charge' && link.chargeIds.includes(ev.id))) continue;
+        if (link.buffIds && !(ev.kind === 'buff' && link.buffIds.includes(ev.id))) continue;
+        if (link.orbKinds && !(ev.kind === 'orb' && link.orbKinds.includes(ev.id))) continue;
+        if (ev.depth > SYMPATHY_CFG.maxSourceDepth
+          + Math.floor(holder.sheet.get('sympathyDepth'))) continue;
+        const potency = this.sympathyPotency(holder, link.id);
+        if (potency <= 0) continue;
+        const scale = (link.scale ?? SYMPATHY_CFG.scale) * potency;
+        if (scale <= 0) continue;
+        for (const r of gatherSympathyRecipients(this, holder, link, gainer)) {
+          const landed = this.applySympathyEcho(r, ev, scale);
+          // Charge pips and buff bars already show their echoes — float
+          // text only where the gain itself is otherwise invisible.
+          if (landed && SYMPATHY_CFG.text && ev.kind !== 'charge' && ev.kind !== 'buff') {
+            this.text(r.pos, link.label, link.color ?? '#9ab8e8', 10);
+          }
+        }
+      }
+    }
+  }
+
+  /** A holder's POTENCY for one link: the sympathy_<id> stat from the
+   *  GLOBAL sheet (passives, affixes, statuses, equipMods, MonsterDef
+   *  .sympathy) or from any bar skill's own context (a support gem
+   *  subscribes its host — hostSockets discipline rides inside
+   *  instanceMods). Highest wins: link grants are toggles-with-potency,
+   *  never stacking banks. */
+  private sympathyPotency(holder: Actor, linkId: string): number {
+    const stat = sympathyStat(linkId);
+    let p = holder.sheet.get(stat);
+    for (const inst of holder.skills) {
+      if (!inst || (inst.sockets.length === 0 && !inst.def.innateMods)) continue;
+      p = Math.max(p, holder.sheet.get(stat,
+        skillContextTags(inst.def, grantedTags(inst)), instanceMods(inst)));
+    }
+    return p;
+  }
+
+  /** Replay one gain on one recipient through its channel's CANONICAL gate.
+   *  Returns whether anything actually landed (honest float text). Charges
+   *  copy their COUNT verbatim (quanta never fraction — scale gates, the
+   *  registry baseCap + the recipient's own taps and chargeCap_<id> cap);
+   *  everything else scales. Echoed charge/buff applications carry
+   *  depth + 1, so their own gain events exist (a pet's buffGain procs may
+   *  fire) but never re-echo past the depth lid. */
+  private applySympathyEcho(r: Actor, ev: GainEvent, scale: number): boolean {
+    switch (ev.kind) {
+      case 'restore': {
+        const total = (ev.n ?? 0) * scale;
+        if (total <= 0) return false;
+        const dur = Math.max(0.2, ev.dur ?? 1);
+        r.restoreStreams.push({
+          resource: ev.id as 'life' | 'mana' | 'es',
+          perSec: total / dur, remaining: total,
+        });
+        return true;
+      }
+      case 'heal':
+        return r.healBy((ev.n ?? 0) * scale) > 0;
+      case 'charge': {
+        let cap = CHARGE_DEFS[ev.id]?.baseCap ?? 0;
+        for (const inst of r.skills) {
+          if (!inst) continue;
+          for (const cg of instanceChargeGain(inst)) {
+            if (cg.charge === ev.id) cap = Math.max(cap, cg.max);
+          }
+        }
+        const before = r.charges.get(ev.id) ?? 0;
+        r.gainCharge(ev.id, ev.n ?? 1, cap, undefined, ev.depth + 1);
+        return (r.charges.get(ev.id) ?? 0) > before;
+      }
+      case 'buff': {
+        if (!ev.buff) return false;
+        r.addBuff(ev.buff, scale, ev.depth + 1);
+        return true;
+      }
+      case 'orb': {
+        const def = ORB_DEFS[ev.id];
+        if (!def) return false;
+        let landed = false;
+        if (def.restore && (ev.n ?? 0) > 0) {
+          this.applyRestore(r, {
+            resource: def.restore, amount: (ev.n ?? 0) * scale,
+            resetEsDelay: def.restore === 'es',
+          });
+          landed = true;
+        }
+        if (def.charge) {
+          const before = r.charges.get(def.charge.charge) ?? 0;
+          r.gainCharge(def.charge.charge, def.charge.amount, def.charge.max,
+            undefined, ev.depth + 1);
+          landed = landed || (r.charges.get(def.charge.charge) ?? 0) > before;
+        }
+        return landed;
+      }
     }
   }
 
@@ -24473,7 +24652,13 @@ export class World {
       if (a.gainEvents.length) {
         const evs = a.gainEvents;
         a.gainEvents = [];
-        for (const ev of evs) this.rollGainProcs(a, ev);
+        for (const ev of evs) {
+          this.rollGainProcs(a, ev);
+          // THE SYMPATHY FABRIC: the same events, replayed on kin (echoes
+          // land one link deeper and deep sources don't re-echo — loop-free
+          // by the same depth discipline the proc chains obey).
+          this.echoSympathy(a, ev);
+        }
       }
       // BROOD clauses (BroodSpec): banked tick-damage rolls to HATCH a
       // short-lived creature serving the APPLIER. Chance scales with the
@@ -28705,7 +28890,7 @@ export class World {
     this.tapCharges(a, 'orbPickup', undefined, orb.kind);
     this.refundOnOrb(a, orb.kind);
     if (a.gainEvents.length < 64) {
-      a.gainEvents.push({ kind: 'orb', id: orb.kind, depth: 0 });
+      a.gainEvents.push({ kind: 'orb', id: orb.kind, depth: 0, n: orb.amount });
     }
     if (gained.length) this.text(a.pos, gained.join('  '), def.color, 12);
     SIM_TAP.current?.onOrbPickup?.(orb.kind, a);

@@ -68,6 +68,11 @@ export type SkillTag =
   // their crescendo spenders) so song-scoped supports and tag-filtered
   // investment can find the whole hymnal, never one note.
   | 'song'
+  // 'companion' marks the TAMED-BOND family (taming claims, whistles, kennel
+  // verbs) — the gate for keeper supports (bond sympathy, claim grafts), so
+  // they distinguish the Tamer's few named beasts from a summoner's swarms
+  // and never socket into a skill with no bond to deepen.
+  | 'companion'
   | 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';
 
 export type DamageType = 'physical' | 'fire' | 'cold' | 'lightning' | 'chaos';

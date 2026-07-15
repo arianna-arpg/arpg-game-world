@@ -18,6 +18,7 @@ import type { AttributeId, DamageType, Modifier, SkillTag } from './stats';
 import type { CurveKind } from './curves';
 import type { ConjureGrant } from './flux';
 import type { ChronoSpec } from './timeflow';
+import type { PartSpec } from '../render/vis/parts';
 
 // --- Deliveries: how the skill reaches its targets -------------------------
 
@@ -369,6 +370,21 @@ export function instanceConduits(inst: SkillInstance): ConduitSpec[] {
   const out = [...(inst.def.conduits ?? [])];
   for (const s of hostSockets(inst)) if (s.def.conduit) out.push(s.def.conduit);
   return out;
+}
+
+/** The summed TAME-CLAIM adjustments riding an instance (tameMod grafts):
+ *  additive across sockets, so two gentling gems genuinely stack. */
+export function instanceTameMod(inst: SkillInstance): Required<TameModSpec> {
+  let sureBelowAdd = 0, wildChanceAdd = 0, slotsAdd = 0, allowRares = false;
+  for (const s of hostSockets(inst)) {
+    const tm = s.def.tameMod;
+    if (!tm) continue;
+    sureBelowAdd += tm.sureBelowAdd ?? 0;
+    wildChanceAdd += tm.wildChanceAdd ?? 0;
+    slotsAdd += tm.slotsAdd ?? 0;
+    allowRares = allowRares || !!tm.allowRares;
+  }
+  return { sureBelowAdd, wildChanceAdd, slotsAdd, allowRares };
 }
 
 /** The brood clause riding an instance (first socket graft wins). */
@@ -2883,6 +2899,29 @@ export interface TameEffect {
   slots?: number;
 }
 
+/** Fabric-wide TAME dials. `claimParts`: runtime TACK stamped onto a freshly
+ *  claimed companion (Actor.extraParts — the collar that says KEPT, visible
+ *  on any body, replicated to co-op clients). Data: swap the parts, restyle
+ *  every claim in the game. */
+export const TAME_CFG = {
+  claimParts: [{ kind: 'collar' }] as PartSpec[],
+};
+
+/** TAME-CLAIM adjustments a support grafts onto a taming skill (see
+ *  SupportDef.tameMod — Gentling Hand widens the claim, Beast Master adds a
+ *  bond slot). ADDITIVE across sockets; every term lands on the authored
+ *  TameEffect at read time, so the skill's own data stays the identity. */
+export interface TameModSpec {
+  /** Raises the certain-claim life threshold (0.5 → 0.65 tames earlier). */
+  sureBelowAdd?: number;
+  /** Raises the full-life sneak-tame chance. */
+  wildChanceAdd?: number;
+  /** Extra bond UNITS the host may hold (the kennel grows). */
+  slotsAdd?: number;
+  /** Opens RARE-rarity bodies to the claim (bosses stay refused). */
+  allowRares?: boolean;
+}
+
 /** THE WHISTLE (the tame skill's meta payload): the keeper's recall — the
  *  bonded companion is pulled to the caster's side, revived if downed, and
  *  healed to full. Scoped by hostSkillId to the whistling skill's own bond.
@@ -3857,6 +3896,11 @@ export interface SupportDef {
    *  where an engagement exists to run it. COMPOSES: every socketed pump
    *  ticks beside the skill's own — deliberately no first-wins. */
   conduit?: ConduitSpec;
+  /** A TAME-CLAIM graft (Gentling Hand, Beast Master): reshapes the hosting
+   *  skill's TameEffect terms — the certain-claim threshold, the sneak-tame
+   *  chance, rare bodies, extra bond slots. ADDITIVE across sockets; read
+   *  at the claim (tryTame) and at the bond cap (companionCapOf). */
+  tameMod?: TameModSpec;
   /** A PROJECTILE TRAIL this support grafts onto the skill (Detonating
    *  Passage's path blasts, Scorched Wake's burning ground). See ProjTrailSpec. */
   trail?: ProjTrailSpec;
@@ -4129,6 +4173,9 @@ const MINION_SEAT_BOUND_FIELD_LIST = [
   // read its hold-combo gate — the automated guardBeat lane is already
   // seat-bound through 'trigger').
   'guardCast',
+  // The CLAIM is the keeper's verb: tryTame and the bond cap read it on
+  // the casting seat — a forwarded copy aboard a beast would be dead weight.
+  'tameMod',
 ] as const satisfies readonly (keyof SupportDef)[];
 export const MINION_SEAT_BOUND_SUPPORT_FIELDS: ReadonlySet<string> =
   new Set(MINION_SEAT_BOUND_FIELD_LIST);

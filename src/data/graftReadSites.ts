@@ -69,6 +69,12 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   { kind: 'graft', key: 'cadence', deliveries: ['ground'], site: 'the ground placement beat mints (pulse gaps, cascade skips, emitter salvos)' },
   { kind: 'graft', key: 'trail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
   { kind: 'graft', key: 'fissureTrail', deliveries: ['projectile'], site: 'spawnProjectile (flights only)' },
+  {
+    kind: 'graft', key: 'tameMod',
+    deliveries: ['target'],
+    defReads: def => def.effects.some(e => e.type === 'tame'),
+    site: 'tryTame + companionCapOf (the claim roll and the bond cap — tame effects only)',
+  },
   // exposure / zoneGrow / zoneSizeOver stay unrowed on purpose: their gems
   // gate on 'duration' the way madden/zoneEmit do — broad by design, and a
   // row here would cry wolf at every boot for legitimately broad gates.

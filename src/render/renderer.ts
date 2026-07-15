@@ -2835,6 +2835,7 @@ export class Renderer {
       material: a.material, adorn: a.adorn, look: a.look,
       outline: a.isMinion() ? '#b06bd4' : undefined,
       demonHorns: !!FACTIONS[a.faction ?? '']?.nubHorns,
+      extraParts: a.extraParts,
     };
     const half = spriteHalf(a.radius);
     const flash = a.hitFlash > 0;

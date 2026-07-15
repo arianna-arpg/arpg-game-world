@@ -2619,6 +2619,31 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'tail', params: { len: 0.8, tuft: 1 } },
     ],
   },
+  /** The den matron: the she-wolf the whelps answer to — heavy teated
+   *  torso, storm-grey mane, a torn ear. Her swig waters the pack
+   *  (MonsterDef.sympathy) — she reads MATERNAL, not merely big. */
+  den_matron: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'furRuff', scale: 1.12 },
+      { kind: 'mane', scale: 0.9, role: 'dark' },
+      { kind: 'snout', scale: 1.0 },
+      { kind: 'fangs', scale: 0.7 },
+      { kind: 'tuftEars', scale: 0.9, params: { torn: 1 } },
+      { kind: 'spots', scale: 0.8, alpha: 0.35, role: 'dark' },
+      { kind: 'tail', params: { len: 0.85, tuft: 1 } },
+    ],
+  },
+  /** Her whelp: all ears and paws, ruff still growing in. */
+  den_whelp: {
+    parts: [
+      { kind: 'torso', scale: 0.85 },
+      { kind: 'furRuff', scale: 0.8, alpha: 0.8 },
+      { kind: 'snout', scale: 0.85 },
+      { kind: 'tuftEars', scale: 1.25 },
+      { kind: 'tail', params: { len: 0.7, tuft: 1 } },
+    ],
+  },
   /** The moon howler: the pack's voice — thrown-back head, pale blaze. */
   moon_howler: {
     parts: [

@@ -228,7 +228,10 @@ export const TILESETS: Record<string, TilesetDef> = {
   // own layout rows are only the FURNITURE — the recipe grows the trees.
   forest: {
     id: 'forest',
-    compositions: [{ composition: 'orchard_rows', chance: 0.22 }],
+    compositions: [
+      { composition: 'orchard_rows', chance: 0.22 },
+      { composition: 'beastwardens_steading', chance: 0.14 },
+    ],
     nameFirst: ['Heartwood', 'Oldgrowth', 'Deepbough', 'Greenholt', 'Oakenshade', 'Wildewood', 'Timberdark', 'Highcanopy', 'Fernbrake', 'Mossmantle', 'Broadleaf', 'Elderbough', 'Longshade', 'Hartswood', 'Boughlock', 'Greenvault'],
     nameSecond: ['Forest', 'Canopy', 'Wilds', 'Fastness', 'Timberland', 'Understory', 'Greenwood', 'Woodland', 'Heart', 'Vaults', 'Eaves', 'Roof'],
     theme: {
@@ -320,6 +323,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'grove_singer', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'gloom_stalker', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'dire_wolf', weight: 3, presence: { from: 6, fadeIn: 3 } },
+        // The den: a matron who drinks for the whole pack (sympathy), and
+        // the whelps who live inside her draught's reach.
+        { id: 'den_matron', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        { id: 'den_whelp', weight: 2, presence: { to: 14, fadeOut: 6 } },
         { id: 'moon_howler', weight: 1, presence: { from: 9, fadeIn: 5 } },
         { id: 'orb_weaver', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
@@ -3201,7 +3208,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // bbox. A wide-open, exploration-leaning hub (objectives favour clear/escape).
   grassland: {
     id: 'grassland', biome: 'field',
-    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }, { composition: 'powder_cache', chance: 0.15 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.1 }],
+    compositions: [{ composition: 'stone_sanctum', chance: 0.35 }, { composition: 'orchard_rows', chance: 0.25 }, { composition: 'powder_cache', chance: 0.15 }, { composition: 'war_camp', chance: 0.14 }, { composition: 'fallen_colossus', chance: 0.1 }, { composition: 'beastwardens_steading', chance: 0.16 }],
     nameFirst: ['Sunlit', 'Windswept', 'Verdant', 'Rolling', 'Emerald', 'Goldengrass', 'Wildflower', 'Open', 'Boundless', 'Whispergrass', 'Far-Reaching', 'Sunwashed', 'Breezy', 'Tallgrass', 'Endless', 'Sweeping', 'Lark-Sung', 'Greenswept'],
     nameSecond: ['Fields', 'Meadows', 'Expanse', 'Greens', 'Pastures', 'Lowlands', 'Reach', 'Plains', 'Prairie', 'Steppe', 'Sprawl', 'Veldt', 'Downs', 'Grasslands', 'Range', 'Heath'],
     theme: {
@@ -3244,6 +3251,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'feral_hen', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'shepherds_hound', weight: 2 },
         { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The field country's wolf den — matron and whelps (her swig waters
+        // the pack through the sympathy fabric).
+        { id: 'den_matron', weight: 1, presence: { from: 4, fadeIn: 3 } },
+        { id: 'den_whelp', weight: 2, presence: { to: 12, fadeOut: 6 } },
         { id: 'gnoll_prowler', weight: 3, presence: { to: 18, fadeOut: 9 } },
         { id: 'fen_hound', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'thorn_sprite', weight: 2, presence: { to: 18, fadeOut: 9 } },

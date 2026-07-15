@@ -204,6 +204,25 @@ registerComposition({
   ],
 });
 
+// THE BEASTWARDENS' STEADING: a working kennel yard out in wolf country —
+// huts ringing the feed troughs, tether posts and pelt racks between, the
+// whelping dens dug in out back. Nobody said the wardens still hold it:
+// den_matron packs roam these same biomes (the tileset tables), and a
+// matron denned in a steading is exactly the fight the fiction promises —
+// she drinks, the pack drinks (MonsterDef.sympathy).
+registerComposition({
+  id: 'beastwardens_steading',
+  sites: [
+    { id: 'yard', radius: [110, 150] },
+    { id: 'dens', radius: [70, 100] },
+  ],
+  pre: [{ kind: 'clearing', at: 'yard', count: [1, 1], radius: [70, 95] }],
+  post: [
+    { kind: 'formation', formation: 'wardens_kennels', at: 'yard', count: [1, 1] },
+    { kind: 'formation', formation: 'whelping_hollow', at: 'dens', count: [1, 1] },
+  ],
+});
+
 // THE HELLFORGE LANDING: where the River of Flame ends, the demons' great
 // forge stands on its swept court — the terminus reward the underworld's
 // course GUARANTEES (dimensions.ts rolls it at chance 1 on terminus zones;
