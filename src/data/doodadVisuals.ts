@@ -1021,6 +1021,20 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { color: '#b8b09a', edge: '#8f8872' },
   },
   spelunker_pack: { painter: 'potCluster', order: 52, shadow: 0.35 },
+  // The HOLLOWS fabric: the seam wears the WALL's own tones (a crack in the
+  // face, not a boulder in the room) — the tell is texture, not color; the
+  // crevice reuses the cave-mouth painter (the pit_entrance precedent).
+  hollow_seam: {
+    painter: 'boulder', order: 55, shadow: 0.3,
+    params: {
+      color: 'theme:wall|#26263a', edge: 'theme:obstacleEdge', material: 'stone',
+      cracks: 2, grain: true, contrast: 1.05, cluster: 0,
+    },
+  },
+  crevice_shaft: {
+    painter: 'caveMouth', order: 30,
+    params: { label: 'Crevice', tumble: 1 },
+  },
   // --- The bog set: mire dressing + the contracting-fume hazard -------------
   // A waterlogged trunk gone half to moss — the log painter saying 'drowned'.
   sunken_log: {

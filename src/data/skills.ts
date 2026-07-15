@@ -4948,6 +4948,26 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 400, weight: 3, keepDistance: 280 },
   },
 
+  // The spelunker's answer to open sky: there isn't any. A ceiling volley in
+  // the arrowfall/sporefall storm grammar — stone-and-ice teeth shaken loose
+  // over the marked ground, each impact a stagger looking for a skull.
+  stalactite_fall: {
+    id: 'stalactite_fall', name: 'Stalactite Fall',
+    description: 'Shake the ceiling loose over the marked ground — stone teeth rain in a drumming sequence, and what they strike they STAGGER.',
+    tags: ['spell', 'physical', 'cold', 'aoe', 'storm'], color: '#9aa8c0',
+    manaCost: 12, cooldown: 5, useTime: 0.85,
+    baseDamage: { physical: [9, 14], cold: [4, 7] },
+    delivery: { type: 'storm', count: [5, 7], interval: 0.12, areaRadius: 120, hitRadius: 48, castRange: 420 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'stun', chance: 0.15 },
+    ],
+    requirements: { strength: 18 },
+    minDropLevel: 4,
+    ai: { range: 380, weight: 2, keepDistance: 260 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('aoeRadius', 'increased', 0.02)] },
+  },
+
   spore_burst: {
     id: 'spore_burst', name: 'Spore Burst',
     description: 'Vent a choking ring of spores from the body — poison in the blood, static in the mind (a chance to befuddle).',

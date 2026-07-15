@@ -83,6 +83,8 @@ import { pushOutOfShape, shapeAabbHalf, shapeContains, shapeDistance } from './s
 import { projFormNose, projFormTouches } from './projForms';
 import { STRUCTURES } from '../data/structures';
 import { dwellOf, sidezoneOf } from '../data/sidezones';
+import { hollowDef } from '../data/hollows';
+import type { HollowSpec } from './levelgen';
 import { DWELL_CFG, npcDwellReach, transitDwell, transitRadius, transitReach } from '../data/transit';
 import type { DwellReach } from '../data/transit';
 import type { ArenaCrowdSpec, ArenaSpec, ArenaWardSpec } from '../data/arenas';
@@ -1526,6 +1528,10 @@ interface ZoneMemory {
    *  a splintered door stays splintered, for as long as the memory lives.
    *  Follows the memory's scope + TTL — never gate progression on it. */
   doorState?: Record<string, 'open' | 'broken'>;
+  /** Opened SECRET HOLLOWS at capture (the hollows fabric): a revealed
+   *  secret stays revealed — the re-entry re-carves each id through the
+   *  shared openHollow path in revive mode. */
+  hollows?: string[];
   /** WAVES zones: the assault's progress at capture — the wave counter plus
    *  whether a wave was mid-fight (its survivors ride `enemies` like any other
    *  population). Exits no longer seal on waves, so a boundary cross must
@@ -1724,6 +1730,14 @@ export class World {
    *  `roof` is the indoorsOnly gate's precomputed home structure (a mouth
    *  never moves, so its roof is resolved once, not rescanned per frame). */
   private caveEntrances: { pos: Vec2; seed: number; kind: string; roof?: PlacedStructure | null }[] = [];
+  /** SECRET HOLLOWS in the current zone (layout.hollows — the hollows
+   *  fabric) and which have been opened. Opened ids persist through zone
+   *  memory (a revealed secret stays revealed) and ride the co-op snapshot
+   *  the way door states do. PUBLIC for the net layer (net/snapshot.ts ships
+   *  specs in the zone message and opened ids per frame — the structures
+   *  pattern); everyone else goes through openHollow. */
+  zoneHollows: HollowSpec[] = [];
+  openedHollows = new Set<string>();
   /** Set while underground: where to drop the player when they climb back out. */
   private caveReturn: { zoneId: string; pos: Vec2; entryFrom: string | null; kind?: string } | null = null;
   /** The CAVE LADDER's outer levels (cave-within-cave): entering a deeper cave
@@ -3321,6 +3335,11 @@ export class World {
         roof: sz.indoorsOnly ? this.roofedStructureAt(pos) : null,
       });
     }
+    // SECRET HOLLOWS (the hollows fabric): the layout's sealed pockets. Fresh
+    // per visit; the remembered opens re-carve just below (after door states),
+    // once the doodads and the walk grid are both live.
+    this.zoneHollows = layout.hollows ?? [];
+    this.openedHollows = new Set();
     this.caveExitGrace = false; // re-armed by the cave-return path after this returns
 
     this.zoneEntry = vec(entry.x, entry.y);
@@ -3356,6 +3375,13 @@ export class World {
       if (lesson && (this.account?.ledger[lesson] ?? 0)) {
         this.setDoorState(d.door!.id, 'open', { silent: true });
       }
+    }
+    // Remembered HOLLOWS re-open (the hollows fabric): the layout regenerated
+    // them sealed above; re-carve each remembered id through the shared
+    // openHollow path — revive mode furnishes STRUCTURE (the crevice shaft,
+    // the vein, the camp) but never re-pays loot or re-wakes ambushes.
+    for (const id of memory?.hollows ?? []) {
+      this.openHollow(id, null, { silent: true, revive: true });
     }
     // BREAKABLE door-actors: every still-closed breakable door gets a passive
     // guard-actor at the exact door pos (RAW — no clampPos snap off the sealed
@@ -9549,6 +9575,7 @@ export class World {
     }
     return {
       seed: this.currentZoneSeed, enemies, savedAt: this.time, doorState,
+      ...(this.openedHollows.size ? { hollows: [...this.openedHollows] } : {}),
       // Objective-progress riders, per kind: the wave gauntlet's position, the
       // stones' banked charges, the escort's stand. Done-ness itself lives in
       // completedObjectives; a LOSS rides the procession rider.
@@ -9660,6 +9687,7 @@ export class World {
       zoneId, seed: m.seed, savedAt: m.savedAt,
       enemies: m.enemies.map(e => ({ ...e })),
       ...(m.doorState ? { doorState: { ...m.doorState } } : {}),
+      ...(m.hollows ? { hollows: [...m.hollows] } : {}),
       ...(m.wave !== undefined ? { wave: m.wave, waveActive: !!m.waveActive } : {}),
       ...(m.spireCharges ? { spireCharges: [...m.spireCharges] } : {}),
       ...(m.procession ? { procession: { ...m.procession } } : {}),
@@ -9776,10 +9804,13 @@ export class World {
       for (const [id, st] of Object.entries(m.doorState ?? {})) {
         if (st === 'open' || st === 'broken') { doorState[id] = st; doors++; }
       }
+      const hollows = Array.isArray(m.hollows)
+        ? m.hollows.filter((x): x is string => typeof x === 'string') : [];
       const procMemo = sanitizeProcessionMemo(m.procession);
       this.zoneMemory.set(m.zoneId, {
         seed: m.seed, savedAt: m.savedAt, enemies,
         ...(doors ? { doorState } : {}),
+        ...(hollows.length ? { hollows } : {}),
         // Objective-progress riders (waves counter, stone charges, the
         // escort): finite, clamped-at-use numbers; malformed rows drop.
         ...(typeof m.wave === 'number' && Number.isFinite(m.wave)
@@ -31078,6 +31109,10 @@ export class World {
     // SHEET alone (passives, affixes, sheet-granted proc stats) — a
     // skill-local gem grant can't reach here by design; the affix lane can.
     if (striker && !striker.dead) this.rollSurfaceProcs(striker);
+    // A HOLLOW SEAM routes through the hollows fabric: the carve and the
+    // reveal belong to the hollow record, not the brittle spec (openHollow
+    // is idempotent — a passage's twin seam popping later is a no-op).
+    if (d.hollow) this.openHollow(d.hollow, striker ?? null);
     const br = doodadRuleOf(d.kind).brittle;
     if (!br) return;
     const color = br.color ?? '#c8b89a';
@@ -31136,6 +31171,86 @@ export class World {
         this.actors.push(m);
       }
       if (n > 0 && br.spawn.text) this.text(vec(d.pos.x, d.pos.y - 28), br.spawn.text, color, 12);
+    }
+  }
+
+  /** A SECRET HOLLOW gives way (the hollows fabric): carve the recorded rect
+   *  — plus a doorway cell at every seam — to ground (chunk re-bake, LoS,
+   *  and pathing all ride the grid's own dirty/version machinery), splice
+   *  every seam doodad sharing the id, then run the hollow's REVEAL
+   *  (data/hollows.ts) from the hollow's own seed, so a remembered reveal
+   *  re-furnishes identically. Idempotent per id. Modes: silent (no FX —
+   *  memory revive + co-op), revive (structure only — never loot/ambush),
+   *  bare (carve + seam splice only: a co-op client converging on the host;
+   *  contents arrive with the host's own doodad stream). */
+  openHollow(id: string, _opener?: Actor | null, opts?: { silent?: boolean; revive?: boolean; bare?: boolean }): void {
+    if (this.openedHollows.has(id)) return;
+    const h = this.zoneHollows.find(s => s.id === id);
+    if (!h) return;
+    this.openedHollows.add(id);
+    const walk = this.walk instanceof GridWalkField ? this.walk : null;
+    if (walk) {
+      const cs = walk.cell;
+      // Inset a hair so the carve claims exactly the recorded cells (rect
+      // edges sit on cell boundaries; fillRegion is inclusive of both ends).
+      walk.fillRegion(h.rect.x + 1, h.rect.y + 1, h.rect.x + h.rect.w - 1, h.rect.y + h.rect.h - 1, 'ground');
+      for (const s of h.seams) {
+        walk.fillRegion(s.x - cs * 0.45, s.y - cs * 0.45, s.x + cs * 0.45, s.y + cs * 0.45, 'ground');
+      }
+    }
+    for (let i = this.doodads.length - 1; i >= 0; i--) {
+      const d = this.doodads[i];
+      if (d.hollow === id) { d.gone = true; this.doodads.splice(i, 1); }
+    }
+    this.markDoodadsChanged();
+    if (!opts?.silent) {
+      this.flashes.push({
+        pos: vec(h.rect.x + h.rect.w / 2, h.rect.y + h.rect.h / 2),
+        radius: Math.max(h.rect.w, h.rect.h) * 0.7, color: '#d8c890', life: 0.35, maxLife: 0.35,
+      });
+    }
+    if (opts?.bare) return;
+    const def = hollowDef(h.kind);
+    if (!def) return;
+    const rng = new Rng(h.seed);
+    const center = vec(h.rect.x + h.rect.w / 2, h.rect.y + h.rect.h / 2);
+    const added: Doodad[] = [];
+    def.reveal({
+      center, rect: h.rect, rng, level: Math.max(1, this.zone.level), revive: !!opts?.revive,
+      addDoodad: (d) => {
+        const dd: Doodad = {
+          pos: vec(d.pos.x, d.pos.y), radius: d.radius, kind: d.kind,
+          ...(d.rot !== undefined ? { rot: d.rot } : {}),
+        };
+        this.doodads.push(dd);
+        added.push(dd);
+      },
+      spawnEnemy: (mid, pos) => {
+        const m = this.createMonster(mid, Math.max(1, this.zone.level), 'enemy');
+        m.pos = this.clampPos(vec(pos.x, pos.y), m.radius);
+        m.fromZoneGen = true; // zone memory captures the pocket's survivors
+        this.actors.push(m);
+      },
+      packPick: () => this.zone.packs?.table?.length
+        ? this.weightedPick(this.zone.packs.table, Math.max(1, this.zone.level)) : null,
+      dropGem: (pos) => this.dropGemAt(vec(pos.x, pos.y)),
+      shedOrb: (kind, pos) => this.shedOrb(kind, vec(pos.x, pos.y)),
+      text: (pos, msg, color) => this.text(vec(pos.x, pos.y), msg, color ?? '#d8c890', 12),
+    });
+    if (added.length) this.markDoodadsChanged();
+    // A revealed SIDEZONE MOUTH (the crevice shaft) joins the dwell registry
+    // live, with the same position-hash seed loadZone derives — the reveal's
+    // own seeded stream fixes the shaft's position, so the reopened hollow
+    // descends into the SAME deeper cave on every visit.
+    for (const d of added) {
+      if (d.kind === 'cave_entrance' || !sidezoneOf(d.kind)) continue;
+      const pos = this.clampPos(vec(d.pos.x, d.pos.y), 28);
+      this.caveEntrances.push({
+        pos,
+        seed: hashStr(`${this.zone.id}:${d.kind}:${Math.round(d.pos.x)},${Math.round(d.pos.y)}`),
+        kind: d.kind,
+        roof: null,
+      });
     }
   }
 

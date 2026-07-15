@@ -283,6 +283,15 @@ export interface CompositionRoll {
   chance: number;
 }
 
+/** A zone's SECRET-HOLLOWS budget (the hollows fabric — engine/levelgen
+ *  stampHollows): how many secrets a GRID layout tries to wall up, and the
+ *  weighted table of registered reveal kinds (data/hollows.ts) each rolls.
+ *  Best-effort: a cramped grid places fewer than rolled, never breaks. */
+export interface HollowRollSpec {
+  count: [number, number];
+  table: Record<string, number>;
+}
+
 /** A TRAVELED-WAY annotation (ZoneDef.exitRoads): carve a worn road from a
  *  source portal to the annotated exit at generation time — the forest
  *  game-trail fabric lifted into a per-exit, any-system seam (layoutRecipes.
@@ -538,6 +547,11 @@ export interface ZoneDef {
    *  biome at mint) — coordinated clearing/formation/strata bundles around
    *  shared sites (engine/levelgen registerComposition). */
   compositions?: CompositionRoll[];
+  /** SECRET HOLLOWS budget (the hollows fabric, engine/levelgen
+   *  stampHollows): how many secrets a GRID layout tries to wall up, and the
+   *  weighted table of registered reveal kinds (data/hollows.ts) they roll.
+   *  Grid zones only — convex layouts keep the classic secret_wall beat. */
+  hollows?: HollowRollSpec;
   /** GEOGRAPHIC context baked at mint — how the zone sits in the WORLD's
    *  fields. biomeDepth: 0 = at its biome blob's edge, 1 = deep interior
    *  (a deep-sea zone far inside the deepsea region rolls more void trenches

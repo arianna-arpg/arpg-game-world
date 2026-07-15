@@ -992,6 +992,9 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     exits: [{ to: parent.id, side: 's' }],  // the sole exit — back to the surface
     map: { x: parent.map.x, y: parent.map.y }, // unused off-graph, but type-required
     seed: entranceSeed,                     // fixed layout, persists across revisits
+    // SECRET HOLLOWS (the hollows fabric): the face's budget rides onto the
+    // minted def — grid layouts wall up their secrets, convex ones ignore it.
+    ...(ts.hollows ? { hollows: ts.hollows } : {}),
     caveDepth: depth,
     ...(anchor ? { anchor } : {}),
     ...(breach ? { breach: true } : {}),

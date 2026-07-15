@@ -24,6 +24,7 @@ import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
+import { hollowShapeOf } from '../data/hollows';
 import { MONSTERS } from '../data/monsters';
 import { presenceTable } from './presence';
 import { runStructureGen } from './structureGen';
@@ -208,6 +209,9 @@ export type KnownDoodadKind =
   | 'guano_heap'       // what the roosts rain down (decoration, pungent)
   | 'spelunker_pack'   // a lost delver's kit: knock it open, keep what spills
   | 'basalt_column'    // hex-jointed cooled stone — the magma gallery's colonnade
+  // The HOLLOWS fabric (secrets carved inside the wall mass — stampHollows)
+  | 'hollow_seam'      // cracked stone flush with a wall face: break it and the wall confesses
+  | 'crevice_shaft'    // a revealed way DOWN — a sidezone mouth one stratum deeper
   // The melt (lava is a crossable LIQUID; this is the wall)
   | 'magma_core'      // impassable molten mass — the caldera's spiral walls
   // The wayfarer kit (roadside & village-story furniture)
@@ -443,6 +447,10 @@ export interface Doodad {
    *  derivations (blocksMovement/-Projectiles/-SightOf) consult `open`, so one
    *  state flip opens the way for movement, shots, and AI vision at once. */
   door?: DoodadDoor;
+  /** THE HOLLOW this seam seals (HollowSpec.id): popping the doodad routes
+   *  through World.openHollow — carve, reveal, persistence. A passage's two
+   *  seams share one id and give together. */
+  hollow?: string;
   /** THE TRUE COLLISION SURFACE (engine/shapes.ts), when it isn't a disc —
    *  a door's slab rect, authored at gen time in world orientation. Absent =
    *  the classic disc (radius / bodyRadiusOf per channel). Consumers never
@@ -589,6 +597,28 @@ export interface GeneratedLayout {
   /** Landmark-seeded entities (pit dwellers) — loadZone spawns them with the
    *  base population (memory-captured like every other resident). */
   landmarkSpawns?: { id: string; pos: Vec2 }[];
+  /** SECRET HOLLOWS (the hollows fabric, stampHollows): sealed pockets and
+   *  through-wall passages hiding inside the wall mass behind brittle seams.
+   *  The world consumes these (World.openHollow) — carve, reveal, memory. */
+  hollows?: HollowSpec[];
+}
+
+/** One secret carved inside the wall mass (the HOLLOWS fabric). The pocket's
+ *  cells keep their native wall kind — identity is the disguise; this record
+ *  is the only thing that knows the wall is lying. */
+export interface HollowSpec {
+  /** Stable per-layout id ('hollow_0'…) — persistence + co-op key on it. */
+  id: string;
+  /** The reveal registry entry (data/hollows.ts) that furnishes the pocket. */
+  kind: string;
+  /** World-space carve rect (pocket + doorway face): repainted to ground by
+   *  World.openHollow when the seam gives. */
+  rect: { x: number; y: number; w: number; h: number };
+  /** Seam positions (a pocket has one; a passage one at each end). */
+  seams: Vec2[];
+  /** Per-hollow seed — reveal contents draw from their own stream, so a
+   *  remembered reveal re-furnishes identically. */
+  seed: number;
 }
 
 // PLACEMENT RULES — the single per-kind registry that decides everything about how
@@ -946,6 +976,15 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['hit', 'near'], reach: 30, gemChance: 0.85, orbChance: 0.5, text: 'someone\'s kit spills open…', color: '#c8a86a' } },
   basalt_column: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 44,
     forbidOn: ['water', 'chasm'], rockForm: { cluster: 0.5 } },
+  // THE HOLLOWS FABRIC: the seam is the pocket's one honest tell — cracked
+  // stone flush with a wall face; its pop routes through World.openHollow
+  // (Doodad.hollow), which carves the recorded rect and runs the reveal. No
+  // carve on the spec: the HOLLOW knows its own shape.
+  hollow_seam: { overlap: 'solid', blocksMove: true, blocksShot: true,
+    brittle: { on: ['hit', 'near'], reach: 34, dwell: 1.1, warn: 'the wall rings hollow…', text: 'the seam gives way!', color: '#d8c890' } },
+  // A revealed way DOWN (data/sidezones.ts 'crevice_shaft'): the wall was
+  // hiding a whole further cave — one stratum deeper, face-rolled fresh.
+  crevice_shaft: { overlap: 'trigger', spacing: 20 },
   // The bog set: mire dressing + the contracting-fume hazard flower. The
   // bloom's pop is pure BrittleSpec data — its fume names venom_seep, so the
   // cloud inherits the skill's own closing SIZE ENVELOPE (it shrinks away).
@@ -1669,6 +1708,8 @@ export interface GenCtx {
   walk?: WalkField;
   /** Air-pocket discs an underwater generator records, for the renderer's bubbles. */
   airPockets?: { x: number; y: number; r: number }[];
+  /** SECRET HOLLOWS carved by stampHollows (the hollows fabric). */
+  hollows?: HollowSpec[];
 }
 
 /** A whole-zone LAYOUT GENERATOR: given the prepared context (rng/arena/portals,
@@ -2800,6 +2841,139 @@ type MeldBuilder = (ctx: GenCtx, def: ZoneDef, exitIndex: number, meldId: string
 let meldBuilder: MeldBuilder | null = null;
 export function setMeldBuilder(b: MeldBuilder): void { meldBuilder = b; }
 
+/** THE HOLLOWS FABRIC — intelligent secrets carved INSIDE the wall mass.
+ *  A hollow is a sealed void the layout knows about and the walls don't show:
+ *  a POCKET (a small room swallowed whole by solid mass, ringed by more solid
+ *  on every side but its doorway) or a PASSAGE (a through-wall corridor
+ *  pierced between two open floors, sealed at both ends). The only tell is a
+ *  HOLLOW SEAM doodad flush with the wall face — cracked stone that rings
+ *  hollow when neared and gives to a blow (BrittleSpec); its pop routes
+ *  through World.openHollow, which repaints the recorded rect to ground
+ *  (chunk re-bake, LoS, and pathing all ride the grid's own dirty/version
+ *  machinery) and runs the hollow's REVEAL (data/hollows.ts — an open
+ *  registry: caches, ambushes, mineral veins, a hermit's cold camp, or a
+ *  crevice shaft descending one stratum deeper).
+ *
+ *  Runs LAST — after ensureReachability and ensureDoodadNavigability — so a
+ *  pocket can never be carved open by a rescue and its cells can never host
+ *  scatter. Grid zones only (a convex cave's walls are its arena border; the
+ *  classic secret_wall keeps that beat). The pocket's cells KEEP their native
+ *  wall kind — identity is the disguise, whatever the zone builds its walls
+ *  from. Deterministic: a fixed-order face scan collects candidates; every
+ *  pick, size, and content seed draws from the zone rng. */
+function stampHollows(ctx: GenCtx, def: ZoneDef): void {
+  const spec = def.hollows;
+  const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  if (!spec || !grid || ctx.lite) return;
+  const entries = Object.entries(spec.table).filter(([, w]) => w > 0);
+  const want = ctx.rng.int(spec.count[0], spec.count[1]);
+  if (want <= 0 || !entries.length) return;
+  const cs = grid.cell;
+  const cols = Math.floor(ctx.arena.w / cs), rows = Math.floor(ctx.arena.h / cs);
+  const open = (gx: number, gy: number): boolean =>
+    gx >= 0 && gy >= 0 && gx < cols && gy < rows
+    && grid.isWalkable((gx + 0.5) * cs, (gy + 0.5) * cs);
+  const solid = (gx: number, gy: number): boolean =>
+    gx >= 2 && gy >= 2 && gx < cols - 2 && gy < rows - 2 && !open(gx, gy);
+  const cellCenter = (gx: number, gy: number): Vec2 => vec((gx + 0.5) * cs, (gy + 0.5) * cs);
+  // Candidate FACES: an open cell beside solid mass, scanned in fixed order
+  // (determinism), kept off the entry's doorstep.
+  const faces: { gx: number; gy: number; dx: number; dy: number }[] = [];
+  for (let gy = 2; gy < rows - 2; gy++) {
+    for (let gx = 2; gx < cols - 2; gx++) {
+      if (!open(gx, gy)) continue;
+      if (dist(cellCenter(gx, gy), ctx.entry) < 300) continue;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+        if (solid(gx + dx, gy + dy)) faces.push({ gx, gy, dx, dy });
+      }
+    }
+  }
+  if (!faces.length) return;
+  const placedRects: { x0: number; y0: number; x1: number; y1: number }[] = [];
+  const overlapsPlaced = (x0: number, y0: number, x1: number, y1: number): boolean =>
+    placedRects.some(r => x0 <= r.x1 + cs && x1 >= r.x0 - cs && y0 <= r.y1 + cs && y1 >= r.y0 - cs);
+  const reservedAt = (gx: number, gy: number): boolean =>
+    inReserved(ctx, cellCenter(gx, gy), cs * 0.6);
+  let made = 0;
+  for (let n = 0; n < want; n++) {
+    // Kind first (one weighted draw), geometry second — a passage hunts a
+    // pierceable run, a pocket hunts swallowing mass. Best-effort: cramped
+    // grids may place fewer than rolled (genqa asserts only what placed).
+    const total = entries.reduce((a, [, w]) => a + w, 0);
+    let roll = ctx.rng.range(0, total);
+    let kind = entries[entries.length - 1][0];
+    for (const [id, w] of entries) { roll -= w; if (roll <= 0) { kind = id; break; } }
+    const passage = hollowShapeOf(kind) === 'passage';
+    for (let attempt = 0; attempt < 28; attempt++) {
+      const f = faces[ctx.rng.int(0, faces.length - 1)];
+      const fx = f.gx + f.dx, fy = f.gy + f.dy; // the face (seam) cell
+      if (passage) {
+        // Pierce the wall run: face onward through solid to open floor.
+        let k = 0;
+        while (k < 9 && solid(fx + f.dx * k, fy + f.dy * k)) k++;
+        if (k < 3 || k >= 9) continue;
+        if (!open(fx + f.dx * k, fy + f.dy * k)) continue;
+        let ok = true;
+        for (let i = 0; i < k && ok; i++) if (reservedAt(fx + f.dx * i, fy + f.dy * i)) ok = false;
+        if (!ok) continue;
+        const bx = fx + f.dx * (k - 1), by = fy + f.dy * (k - 1);
+        const x0 = Math.min(fx, bx) * cs, y0 = Math.min(fy, by) * cs;
+        const x1 = (Math.max(fx, bx) + 1) * cs, y1 = (Math.max(fy, by) + 1) * cs;
+        if (overlapsPlaced(x0, y0, x1, y1)) continue;
+        const id = `hollow_${made}`;
+        const seamA = cellCenter(fx, fy), seamB = cellCenter(bx, by);
+        ctx.doodads.push({ pos: seamA, radius: cs * 0.55, kind: 'hollow_seam', hollow: id, rot: ctx.rng.range(0, Math.PI * 2) });
+        ctx.doodads.push({ pos: seamB, radius: cs * 0.55, kind: 'hollow_seam', hollow: id, rot: ctx.rng.range(0, Math.PI * 2) });
+        (ctx.hollows ??= []).push({
+          id, kind, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
+          seams: [seamA, seamB],
+          seed: (ctx.rng.int(0, 0x7fffffff) ^ 0x6011) >>> 0,
+        });
+        placedRects.push({ x0, y0, x1, y1 }); made++; break;
+      } else {
+        // A pocket room swallowed whole: width ACROSS the doorway's axis,
+        // depth INTO the mass, every rim cell (but the doorway) still solid.
+        const w = ctx.rng.int(3, 5), dpt = ctx.rng.int(3, 5);
+        const half = Math.floor(w / 2);
+        const px = (i: number, j: number): number => fx + f.dx * (1 + i) + (f.dy !== 0 ? j : 0);
+        const py = (i: number, j: number): number => fy + f.dy * (1 + i) + (f.dx !== 0 ? j : 0);
+        let ok = true;
+        for (let i = 0; i < dpt && ok; i++) for (let j = -half; j <= half && ok; j++) {
+          if (!solid(px(i, j), py(i, j)) || reservedAt(px(i, j), py(i, j))) ok = false;
+        }
+        // The RING: everything bordering the pocket stays solid except the
+        // one doorway cell — the reveal opens ONLY through the seam.
+        for (let i = -1; i <= dpt && ok; i++) for (let j = -half - 1; j <= half + 1 && ok; j++) {
+          const inPocket = i >= 0 && i < dpt && j >= -half && j <= half;
+          if (inPocket) continue;
+          if (i === -1 && j === 0) continue; // the doorway (the face cell itself)
+          if (open(px(i, j), py(i, j))) ok = false;
+        }
+        if (!ok) continue;
+        let minX = fx, maxX = fx, minY = fy, maxY = fy;
+        for (let i = 0; i < dpt; i++) for (let j = -half; j <= half; j++) {
+          minX = Math.min(minX, px(i, j)); maxX = Math.max(maxX, px(i, j));
+          minY = Math.min(minY, py(i, j)); maxY = Math.max(maxY, py(i, j));
+        }
+        // The carve rect is the POCKET's exact block; the doorway cell rides
+        // the seam list (openHollow carves a cell square at every seam).
+        const x0 = (minX + (f.dx === 1 ? 1 : 0)) * cs, y0 = (minY + (f.dy === 1 ? 1 : 0)) * cs;
+        const x1 = (maxX + (f.dx === -1 ? 0 : 1)) * cs, y1 = (maxY + (f.dy === -1 ? 0 : 1)) * cs;
+        if (overlapsPlaced(x0, y0, x1, y1)) continue;
+        const id = `hollow_${made}`;
+        const seam = cellCenter(fx, fy);
+        ctx.doodads.push({ pos: seam, radius: cs * 0.55, kind: 'hollow_seam', hollow: id, rot: ctx.rng.range(0, Math.PI * 2) });
+        (ctx.hollows ??= []).push({
+          id, kind, rect: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 },
+          seams: [seam],
+          seed: (ctx.rng.int(0, 0x7fffffff) ^ 0x6011) >>> 0,
+        });
+        placedRects.push({ x0, y0, x1, y1 }); made++; break;
+      }
+    }
+  }
+}
+
 /** Generate a zone's terrain from its layout spec. */
 export function generateLayout(
   def: ZoneDef, arena: { w: number; h: number },
@@ -3013,6 +3187,9 @@ export function generateLayout(
   }
   ensureReachability(ctx);
   ensureDoodadNavigability(ctx);
+  // SECRET HOLLOWS last of all (the hollows fabric): carved after every
+  // rescue and navigability pass, so a pocket stays sealed and unscattered.
+  stampHollows(ctx, def);
   return {
     doodads: ctx.doodads, pois: ctx.pois, camps: ctx.camps,
     breakables: ctx.breakables, npcs: ctx.npcs,
@@ -3022,6 +3199,7 @@ export function generateLayout(
     spawnAt: ctx.spawnAt,
     pockets: ctx.pockets,
     landmarkSpawns: ctx.landmarkSpawns,
+    hollows: ctx.hollows,
   };
 }
 

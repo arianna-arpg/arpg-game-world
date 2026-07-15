@@ -54,6 +54,7 @@ import { regionKind } from '../src/world/regions';
 import { TILESETS } from '../src/data/tilesets';
 import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { MELDS } from '../src/data/melds';
+import { hollowDef, hollowShapeOf } from '../src/data/hollows';
 import { BIOMES } from '../src/world/biomes';
 import { CLIMATE_AXES } from '../src/world/climate';
 import { interiorRoleDefs } from '../src/engine/interiorGen';
@@ -143,6 +144,38 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
   const mouths = doodads.filter(d => d.kind === 'cave_entrance').length;
   if (mouths !== layout.caveSeeds.length) {
     fails.push(`${name}: caveSeeds zip sheared (${mouths} mouths vs ${layout.caveSeeds.length} seeds)`);
+  }
+  // HOLLOWS (the hollows fabric): every recorded secret must be SEALED — its
+  // carve rect entirely non-walkable (identity is the disguise), its seams
+  // present and sharing its id (a pocket one, a passage two), and its reveal
+  // kind registered. The seam is the only door.
+  if (layout.hollows?.length) {
+    const wf = layout.walk instanceof GridWalkField ? layout.walk : null;
+    if (!wf) fails.push(`${name}: hollows recorded on a convex layout`);
+    const ids = new Set<string>();
+    for (const h of layout.hollows) {
+      if (ids.has(h.id)) fails.push(`${name}: duplicate hollow id '${h.id}'`);
+      ids.add(h.id);
+      if (!hollowDef(h.kind)) fails.push(`${name}: hollow '${h.id}' names unregistered kind '${h.kind}'`);
+      const seams = doodads.filter(d => d.hollow === h.id);
+      const wantSeams = hollowShapeOf(h.kind) === 'passage' ? 2 : 1;
+      if (seams.length !== wantSeams) {
+        fails.push(`${name}: hollow '${h.id}' (${h.kind}) has ${seams.length} seam(s), wants ${wantSeams}`);
+      }
+      if (wf) {
+        let leak = false;
+        for (let y = h.rect.y + wf.cell / 2; y < h.rect.y + h.rect.h && !leak; y += wf.cell) {
+          for (let x = h.rect.x + wf.cell / 2; x < h.rect.x + h.rect.w && !leak; x += wf.cell) {
+            if (wf.isWalkable(x, y)) leak = true;
+          }
+        }
+        if (leak) fails.push(`${name}: hollow '${h.id}' rect holds walkable ground — the secret leaks`);
+      }
+    }
+    // Every seam doodad must point at a recorded hollow (no orphans).
+    for (const d of doodads) {
+      if (d.hollow && !ids.has(d.hollow)) fails.push(`${name}: seam doodad points at unknown hollow '${d.hollow}'`);
+    }
   }
   // HIT-SURFACE fabric invariants (engine/shapes.ts):
   //  - every door doodad carries an authored slab rect that stays INSIDE its
@@ -360,6 +393,26 @@ for (const id of ['dungeon', 'labyrinth', 'edifice']) {
       { kind: 'rocks', count: [2, 4] }, { kind: 'grass', count: [2, 4] },
     ],
     layoutType: id,
+    objective: { kind: 'clear' },
+    exits: [], map: { x: 0, y: 0 },
+  });
+}
+
+// --- 3b². HOLLOWS forced on every face that budgets them ----------------------
+// The hollows fabric only fires on GRID layouts, and the tileset cases above
+// run their default (usually convex) generator — so force each hollow-
+// budgeted tileset through 'rooms' at cave scale with a fat budget, and let
+// checkLayout's hollow invariants (sealed rect, seam zip, registered kinds)
+// bite on real placements.
+for (const ts of Object.values(TILESETS)) {
+  if (!ts.hollows) continue;
+  runCase(`hollows:${ts.id}`, {
+    id: `qa_hollows_${ts.id}`, name: `QA hollows ${ts.id}`, level: 8,
+    size: { w: 1300, h: 1000 },
+    theme: ts.theme,
+    layout: [...(ts.common ?? []), ...ts.layout],
+    layoutType: 'rooms',
+    hollows: { count: [2, 3], table: ts.hollows.table },
     objective: { kind: 'clear' },
     exits: [], map: { x: 0, y: 0 },
   });

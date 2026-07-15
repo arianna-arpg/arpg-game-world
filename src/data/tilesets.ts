@@ -9,7 +9,7 @@
 // cinderlands past the Ember Wastes — each line leveling up as it goes.
 // ---------------------------------------------------------------------------
 
-import type { CompositionRoll, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
+import type { CompositionRoll, HollowRollSpec, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
 import type { Rng } from '../core/rng';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
 
@@ -119,6 +119,10 @@ export interface TilesetDef {
   /** THE UNDERGROUND'S claim: carrying this joins the cave-face pool the
    *  strata fabric picks unforced cave mints from (see CaveFaceSpec). */
   caveFace?: CaveFaceSpec;
+  /** SECRET-HOLLOWS budget stamped onto minted zones (the hollows fabric —
+   *  ZoneDef.hollows): sealed pockets and through-wall passages behind
+   *  brittle seams, GRID layouts only. */
+  hollows?: HollowRollSpec;
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
@@ -1131,6 +1135,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     sky: 'sheltered', // an underworks preserved BY its roof of sand — no sky reaches it
 
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1 },
+    // A buried town keeps buried things (the hollows fabric): walled-up
+    // stores and the passages its cellars never admitted to.
+    hollows: {
+      count: [1, 2],
+      table: { cache_hollow: 3, ambush_hollow: 1.5, vein_hollow: 1, passage_hollow: 2 },
+    },
     layoutParams: {
       interiorWall: 'sunkstone_wall', floorStyle: 'flagstone',
       rooms: [6, 10], doorChance: 0.6, corridorCells: 2,
@@ -1362,6 +1372,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     sky: 'sheltered', // swallowed halls under the jungle floor — weather stays above
 
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 },
+    // Swallowed halls remember their doors (the hollows fabric) — the walls
+    // here were rooms once, and some still are.
+    hollows: {
+      count: [1, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2, passage_hollow: 2, hermit_hollow: 1 },
+    },
     layoutParams: {
       interiorWall: 'ruin_wall', floorStyle: 'flagstone',
       rooms: [7, 11], doorChance: 0.6, corridorCells: 2,
@@ -2525,8 +2541,19 @@ export const TILESETS: Record<string, TilesetDef> = {
     caveFace: { strata: { to: 2, fadeOut: 2, mul: 1.6 }, variantChance: 0.55 },
     // What a cave BECOMES underground: the classic convex crawl, the maggot-
     // lair warren, a catacomb dungeon, or a full maze — one seeded roll at
-    // mint (mintCave), pure data.
-    caveLayouts: { plains: 5.5, rooms: 2, dungeon: 1.5, labyrinth: 1 },
+    // mint (mintCave), pure data. The grid layouts carry the SECRETS (the
+    // hollows fabric hunts wall mass), so they weigh a little heavier now.
+    caveLayouts: { plains: 4.5, rooms: 2.5, dungeon: 2, labyrinth: 1 },
+    // What the walls are hiding (grid layouts): mostly honest treasure and
+    // trouble; sometimes a passage the map never admitted to; rarely, the
+    // lid on a whole further cave.
+    hollows: {
+      count: [1, 2],
+      table: {
+        cache_hollow: 3, ambush_hollow: 2, vein_hollow: 2,
+        hermit_hollow: 1, passage_hollow: 1.5, crevice_hollow: 1.2,
+      },
+    },
     nameFirst: ['Dripstone', 'Gloom', 'Hollow', 'Sunless', 'Blackrock', 'Echoing', 'Lightless', 'Dampstone', 'Crawlway', 'Stalactite', 'Deepdark', 'Mossgrot', 'Whispering', 'Coldstone', 'Slickrock', 'Veiled', 'Mirefoot', 'Lampless'],
     nameSecond: ['Cave', 'Grotto', 'Burrow', 'Den', 'Tunnels', 'Deep', 'Cavern', 'Warren', 'Crawl', 'Pocket', 'Undercroft', 'Gallery', 'Shaft', 'Vault', 'Maw', 'Reaches'],
     theme: {
@@ -2675,7 +2702,16 @@ export const TILESETS: Record<string, TilesetDef> = {
     // The band's OWN face leads its band (the mul): the specialists flavor
     // the Depths; the Depths are still, first, the Depths.
     caveFace: { strata: { from: 3, fadeIn: 1, mul: 1.5 }, variantChance: 0.45 },
-    caveLayouts: { plains: 4, rooms: 2, dungeon: 2, labyrinth: 1.5 },
+    caveLayouts: { plains: 3, rooms: 2.5, dungeon: 2, labyrinth: 1.5 },
+    // The Depths keep more secrets, and meaner ones — and the deep's hollows
+    // lean toward the way DOWN.
+    hollows: {
+      count: [1, 3],
+      table: {
+        cache_hollow: 2.5, ambush_hollow: 2.5, vein_hollow: 2,
+        hermit_hollow: 1, passage_hollow: 1.5, crevice_hollow: 1.8,
+      },
+    },
     nameFirst: ['Sunless', 'Echoless', 'Hushed', 'Chasmveiled', 'Blindstone', 'Yawning', 'Sightless', 'Aphotic', 'Stonelocked', 'Soundless', 'Unlit', 'Gulfborn', 'Everdark', 'Starving', 'Forgotten', 'Depthbound'],
     nameSecond: ['Depths', 'Gulf', 'Hollows', 'Reaches', 'Galleries', 'Abysm', 'Fathoms', 'Silence', 'Vault', 'Warrens', 'Dark', 'Under'],
     theme: {
@@ -2784,7 +2820,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       biomes: { volcanic: 8, flame: 6, steppes: 2.5, rift: 2.5, desert: 1.5, '*': 1 },
       variantChance: 0.35,
     },
-    caveLayouts: { plains: 5, winding: 2, rooms: 1 },
+    caveLayouts: { plains: 4, winding: 2, rooms: 2 },
+    hollows: {
+      count: [1, 2],
+      table: {
+        cache_hollow: 2, ambush_hollow: 2, vein_hollow: 3,
+        passage_hollow: 1.5, crevice_hollow: 1.2,
+      },
+    },
     nameFirst: ['Smoldering', 'Emberlit', 'Slagbound', 'Moltenveined', 'Cindershot', 'Basaltbound', 'Scorchhollow', 'Ashchoked', 'Magmascarred', 'Furnacedeep', 'Firegut', 'Glowering'],
     nameSecond: ['Gallery', 'Forgeways', 'Flowcaves', 'Undercroft', 'Slagworks', 'Emberdeep', 'Crucible', 'Ventworks', 'Firehollow', 'Scoria'],
     theme: {
@@ -2881,7 +2924,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       biomes: { tundra: 8, taiga: 5, highland: 2, '*': 0.22 },
       variantChance: 0.35,
     },
-    caveLayouts: { plains: 5, rooms: 1.5, labyrinth: 0.8 },
+    caveLayouts: { plains: 4, rooms: 2.5, labyrinth: 0.8 },
+    hollows: {
+      count: [1, 2],
+      table: {
+        cache_hollow: 3, ambush_hollow: 1.5, vein_hollow: 2.5,
+        hermit_hollow: 1.5, passage_hollow: 1.2, crevice_hollow: 1,
+      },
+    },
     nameFirst: ['Hoarbound', 'Rimelocked', 'Glacierheart', 'Frostveined', 'Icefanged', 'Winterdeep', 'Shiverstone', 'Coldvault', 'Hailborn', 'Glassbound', 'Frozen', 'Snowblind'],
     nameSecond: ['Gallery', 'Icecaves', 'Rimeworks', 'Hollow', 'Frostdeep', 'Undercroft', 'Coldreach', 'Icevault', 'Glacier', 'Hibernal'],
     theme: {
@@ -2976,7 +3026,14 @@ export const TILESETS: Record<string, TilesetDef> = {
       biomes: { mycelia: 8, grove: 1.6, forest: 1.6, jungle: 2, marsh: 2.5, '*': 0.65 },
       variantChance: 0.4,
     },
-    caveLayouts: { mycelia: 3.5, plains: 3, rooms: 1.5 },
+    caveLayouts: { mycelia: 3.5, plains: 2.5, rooms: 2 },
+    hollows: {
+      count: [1, 2],
+      table: {
+        cache_hollow: 2, ambush_hollow: 3, vein_hollow: 1,
+        hermit_hollow: 1.5, passage_hollow: 1.5, crevice_hollow: 1,
+      },
+    },
     nameFirst: ['Sporelit', 'Mycelial', 'Rotveined', 'Capshadowed', 'Glowfringe', 'Moulddeep', 'Hyphal', 'Damprot', 'Fruiting', 'Veilspore', 'Softglow', 'Puffcap'],
     nameSecond: ['Hollow', 'Undergrove', 'Sporeways', 'Rotcellar', 'Warrens', 'Beds', 'Grotto', 'Bloomdeep', 'Tangle', 'Cellars'],
     theme: {
@@ -3623,6 +3680,25 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'eye_stalk', count: [2, 4] }, { kind: 'rib_arch', count: [1, 3] },
       { kind: 'tooth_row', count: [0, 2] },
     ],
+    // What the warren ALWAYS is, whichever face of it a variant shows.
+    common: [
+      { kind: 'flesh_membrane', count: [1, 2] },
+      { kind: 'vein_cluster', count: [1, 2] },
+    ],
+    variants: [
+      // Skin-deep: stretched membranes and vessels choke the chambers.
+      { name: 'membrane-choked', layout: [
+        { kind: 'flesh_pod', count: [4, 7] }, { kind: 'flesh_membrane', count: [4, 6] },
+        { kind: 'vein_cluster', count: [4, 6] }, { kind: 'eye_stalk', count: [1, 3] },
+        { kind: 'gore', count: [2, 4] },
+      ] },
+      // The body remembers its dead: struts, cages and one long smile.
+      { name: 'boneworks gullet', layout: [
+        { kind: 'bone', count: [4, 7] }, { kind: 'rib_arch', count: [2, 4] },
+        { kind: 'tooth_row', count: [1, 3] }, { kind: 'flesh_pod', count: [2, 4] },
+        { kind: 'gore', count: [2, 3] },
+      ] },
+    ],
     packs: {
       count: [6, 9], size: [3, 5],
       table: [
@@ -3639,6 +3715,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'flesh_amalgam', weight: 1, presence: { from: 14, fadeIn: 6, mul: 2 } },
         { id: 'corpse_bloom', weight: 1 },
         { id: 'spire_of_eyes', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        // The rim tastes the deeper faces before you reach them.
+        { id: 'hemophage', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'bile_retcher', weight: 1, presence: { from: 9, fadeIn: 4 } },
       ],
     },
     // The Glut's own spawners-objective destructible: burst the blooms.

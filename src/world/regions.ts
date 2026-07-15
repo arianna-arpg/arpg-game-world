@@ -261,6 +261,11 @@ registerRegion({ id: 'ground', walkable: true, blocks: false });
 // 'void'/'chasm', which bodies cannot cross but shots sail over). Flipped in
 // the primitives pass now that AI reposition (implicit losSeek) exists.
 registerRegion({ id: 'wall', walkable: false, blocks: true, blocksShot: true, blocksSight: true });
+// (The HOLLOWS fabric — engine/levelgen stampHollows — deliberately adds NO
+//  region kind: a sealed pocket's cells KEEP their native wall kind, whatever
+//  the zone builds from (wall, fungal_wall, sunkstone_wall…). Identity is the
+//  disguise — pixel-for-pixel, physics-for-physics — until the seam gives and
+//  World.openHollow repaints the recorded rect to ground.)
 
 // Existing DOODAD grounds, migrated VERBATIM from the updateTerrainEffects switch
 // (same statuses, sources, durations, and zone-level-scaled bog poison).

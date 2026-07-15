@@ -124,6 +124,21 @@ registerSidezone({
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'buried_vault', { rollVariant: true }),
 });
 
+// --- THE CREVICE (the hollows fabric's way down) -------------------------------
+// A hollow seam gives way and the wall confesses a SHAFT (the crevice_hollow
+// reveal, data/hollows.ts): a registered mouth descending ONE STRATUM deeper —
+// mintCave with no forced tileset, so the strata fabric face-rolls the deeper
+// cave from the ladder's band and the ladder's anchor. Position-hash seeds
+// (the non-classic-cave rule) make the revealed shaft deterministic: revisit
+// the reopened hollow and the same deeper cave waits below. The ledger key is
+// the fabric's GATEWAY SEAM (the ruin_entered pattern) for future unlocks.
+registerSidezone({
+  kind: 'crevice_shaft',
+  dwell: 0.7,
+  ledgerOnEnter: 'crevice_descended',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id),
+});
+
 // --- THE LASTLIGHT CELLAR ----------------------------------------------------
 // Under the spare house's floorboards: a small, barren stone room — the
 // blacksmith's flagstone underfoot (the cellar_room slab structure), a crate

@@ -224,6 +224,17 @@ export const PROCS: Record<string, ProcDef> = {
     },
   },
 
+  // CAVE-IN: the ceiling answers. Popping a brittle surface (a plug, a
+  // lattice, a hollow seam) shakes a burst of stone loose around you — the
+  // earth family's first 'surface' proc: spelunking as a weapon. Sheet-
+  // granted only (the 'of the Cave-In' affix line), like every surface
+  // trigger — a pop carries no skill context.
+  cave_in: {
+    id: 'cave_in', name: 'Cave-In',
+    color: '#9aa8c0', trigger: 'surface', icd: 2,
+    effect: { type: 'burst', damage: 'physical', base: 14, perLevel: 3, radius: 110 },
+  },
+
   thunderstruck: {
     id: 'thunderstruck', name: 'Thunderstruck',
     color: '#ffe14a', trigger: 'hit',

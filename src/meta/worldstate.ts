@@ -83,6 +83,8 @@ export interface SavedZoneMemory {
   savedAt: number;
   enemies: SavedEnemyMemo[];
   doorState?: Record<string, 'open' | 'broken'>;
+  /** Opened SECRET HOLLOWS (the hollows fabric) — revealed stays revealed. */
+  hollows?: string[];
   /** WAVES zones: the assault's progress at capture (see the engine's
    *  ZoneMemory) — a resume mid-gauntlet faces wave N, not wave 1. */
   wave?: number;

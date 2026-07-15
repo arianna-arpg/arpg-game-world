@@ -18,7 +18,7 @@
 
 import { Actor, type ActorAdorn, type ActorShape, type Team,
   type CastingState, type ActiveAura, type ConstructState, type LeapState, type WormBody } from '../engine/actor';
-import type { Doodad, DoodadDoor, PlacedStructure } from '../engine/levelgen';
+import type { Doodad, DoodadDoor, HollowSpec, PlacedStructure } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
 import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
@@ -299,6 +299,11 @@ export interface StateSnapshot {
    *  desync when the channel hiccups). Clients apply via the shared
    *  setDoorState path (their own grid repaint included). */
   doors?: Record<string, 'open' | 'broken'>;
+  /** Opened SECRET HOLLOWS (the hollows fabric) — the same meta-delta lesson
+   *  as doors: the 20 Hz repeat converges a client that missed the reveal
+   *  (openHollow is idempotent, applied in bare mode: carve + seam splice;
+   *  the contents ride the host's own streams). */
+  hollows?: string[];
 }
 
 const v2 = (p: { x: number; y: number }): Vec2W => [Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100];
@@ -402,6 +407,7 @@ export function serializeSnapshot(world: World, tick: number): StateSnapshot {
       arm: (b.arming ? 1 : 0) as 0 | 1, t: Math.round(b.t * 100) / 100, co: b.coalesce, trail: b.trail.map(v2),
     })),
     doors: doorStatesOf(world),
+    hollows: world.openedHollows.size ? [...world.openedHollows] : undefined,
   };
 }
 
@@ -462,6 +468,14 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
   if (snap.doors && (!world.appliedZoneId || snap.zoneId === world.appliedZoneId)) {
     for (const [id, st] of Object.entries(snap.doors)) {
       world.setDoorState(id, st, { silent: true });
+    }
+  }
+  // Secret hollows converge the same way (same zone-identity guard): the
+  // client re-carves through the shared openHollow path in bare mode —
+  // idempotent, so the 20 Hz repeat is free and a missed packet self-heals.
+  if (snap.hollows && (!world.appliedZoneId || snap.zoneId === world.appliedZoneId)) {
+    for (const id of snap.hollows) {
+      world.openHollow(id, null, { silent: true, bare: true });
     }
   }
 
@@ -628,6 +642,8 @@ export interface DoodadW {
   /** Door state (kind 'door'): id + open/broken + cell rect, so the client's
    *  predicted collision + render + grid repaint mirror the host's doors. */
   door?: DoodadDoor;
+  /** The hollow this seam seals (hollows fabric) — ids match ZoneMsg.hollows. */
+  hollow?: string;
   /** The true collision surface (hit-surface fabric) — shipped so the
    *  client's predicted clampPos squeezes a doorway exactly as the host's
    *  does (boundR is re-derived client-side at index rebuild). */
@@ -657,6 +673,11 @@ export interface ZoneMsg {
   /** Plan structures (rects/roofs/doors/slots) — the client's roof-reveal pass
    *  and door rendering read the same record the host does. */
   structures?: PlacedStructure[];
+  /** SECRET HOLLOWS (the hollows fabric): the zone's specs, so a client can
+   *  carve a mid-play reveal (StateSnapshot.hollows) exactly where the host
+   *  did. The shipped walk grid already arrives pre-carved for anything
+   *  opened before the client stepped in. */
+  hollows?: HollowSpec[];
 }
 
 export function serializeZone(world: World): ZoneMsg {
@@ -665,11 +686,12 @@ export function serializeZone(world: World): ZoneMsg {
     dimension: world.zone.dimension,
     arena: { w: world.arena.w, h: world.arena.h, shape: world.arena.shape },
     theme: world.zone.theme,
-    doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox })),
+    doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow })),
     exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label, b: e.boundary })),
     waypoint: world.waypointPos ? v2(world.waypointPos) : null,
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,
     structures: world.structures.length ? world.structures : undefined,
+    hollows: world.zoneHollows.length ? world.zoneHollows : undefined,
   };
 }
 
@@ -682,9 +704,14 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   world.zone.dimension = msg.dimension;
   world.doodads = msg.doodads.map(d => ({
-    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox,
+    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow,
   })) as Doodad[];
   world.structures = msg.structures ?? [];
+  // SECRET HOLLOWS: adopt the host's specs fresh (the shipped walk grid is
+  // already carved for anything opened before this message); the per-frame
+  // snapshot converges any reveal that lands mid-play.
+  world.zoneHollows = msg.hollows ?? [];
+  world.openedHollows = new Set();
   // The zone the CLIENT's terrain currently mirrors — the guard that keeps a
   // stale old-zone snapshot from ratcheting same-id doors open in the new zone
   // (do NOT write msg.zoneId into world.zone.id: world.zone aliases a node in

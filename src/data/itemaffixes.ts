@@ -457,6 +457,15 @@ const PREFIXES: AffixDef[] = [
     top: 0.5, floor: 0.3, count: 3,
     baseTags: ['boots', 'gloves', 'belt'], weight: 60,
   }),
+  // Its violent sibling: the pop shakes the ceiling loose (the cave_in
+  // burst). Same 'surface' doctrine — untagged, sheet-lane only.
+  fam({
+    id: 'proc_cave_in', kind: 'suffix',
+    names: ['of the Cave-In', 'of the Rockfall'],
+    stat: 'proc_cave_in',
+    top: 0.45, floor: 0.25, count: 3,
+    baseTags: ['gloves', 'weapon', 'belt'], weight: 55,
+  }),
   // Hybrid demos — multi-line families with per-line tops.
   fam({
     id: 'hybrid_life_mana', kind: 'prefix',

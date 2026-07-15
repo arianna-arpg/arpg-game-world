@@ -66,6 +66,7 @@ import {
 import './sympathies'; // side-effect: the sympathy link defs register before validation
 import { ITEM_AFFIX_LIST } from './itemaffixes';
 import { strataDefs } from '../world/strata';
+import { hollowDef } from './hollows';
 import { Rng } from '../core/rng';
 
 export function validateContent(): void {
@@ -109,6 +110,18 @@ export function validateContent(): void {
       if (!f?.biomes) continue;
       for (const b of Object.keys(f.biomes)) {
         if (b !== '*' && !knownBiomes.has(b)) warn(`tileset '${t.id}' caveFace.biomes: unknown biome '${b}'`);
+      }
+    }
+    // HOLLOWS budgets (the hollows fabric): every weighted kind must be a
+    // registered reveal, and the count range must be a real range.
+    for (const t of Object.values(TILESETS)) {
+      const hs = t.hollows;
+      if (!hs) continue;
+      if (hs.count[0] < 0 || hs.count[1] < hs.count[0]) {
+        warn(`tileset '${t.id}' hollows.count [${hs.count}] is not a range`);
+      }
+      for (const k of Object.keys(hs.table)) {
+        if (!hollowDef(k)) warn(`tileset '${t.id}' hollows: unregistered kind '${k}'`);
       }
     }
   }
