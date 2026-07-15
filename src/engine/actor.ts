@@ -22,6 +22,7 @@ import {
 import { evalCurve, type CurveKind } from './curves';
 import { CHARGE_DEFS } from './charges';
 import type { MonsterRarity } from './rarity';
+import type { ItemInstance } from './items';
 import type { DeathBurstDef } from '../data/monsters';
 
 /** A cast in progress (also drives the cast bar above the actor's head). */
@@ -940,6 +941,10 @@ export class Actor {
   onHitTypeIcd?: number;
   /** Response payload instances, minted lazily per skill id. */
   onHitTypeInsts?: Map<string, SkillInstance>;
+  /** CARRIED GEAR (MonsterDef.carry — the Hollowborn): a REAL rolled item the
+   *  body walked in wearing. The kill path drops exactly this piece INSTEAD
+   *  of a table roll — the walking loot beacon's whole contract. */
+  carriedGear?: ItemInstance;
   /** TERRAIN CONFINEMENT (derived from habitat): a disc this body can never
    *  leave — clamped every frame, whatever moved it (walk, dash, knockback).
    *  The lake horror's pond; the root wraith's trunk. */

@@ -45,6 +45,8 @@ export const WARLORD_OF: Record<string, string> = {
   emberkin: 'emberkin_matriarch',
   junglekin: 'verdant_tyrant',
   sirocco: 'mirage_khagan',
+  hollowborn: 'the_unworn',
+  chattel: 'the_bellwether',
 };
 
 const RISE_ZONES = 2;   // owned zones a faction needs to crown a warlord

@@ -82,6 +82,12 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Horned Tribes — highland raiders: they march far and gladly (the
   // gnolls' allies on the winter roads), throne wherever the strongest holds.
   beastkin: { roaming: 0.95, aggression: 1.1, warlordHome: 'capital', contexts: ['baseline', 'crusade'], temper: 'territorial' },
+  // The Hollowborn — interred iron: it barely marches (armor stands its
+  // ground), throning wherever it was buried.
+  hollowborn: { roaming: 0.35, aggression: 1.0, warlordHome: 'origin', temper: 'territorial' },
+  // The Chattel — the field country's own trouble: herds range, but home
+  // is the open grass.
+  chattel: { roaming: 0.9, aggression: 0.9, warlordHome: 'origin', homeBiome: 'field', temper: 'territorial' },
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },

@@ -1387,6 +1387,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // wardens the city left, then what crawled in after all of them.
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 2 },
+        // The Hollowborn — what the flood interred, the halls still field.
+        { id: 'blade_swarm', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'shield_anima', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'ruin_sentinel', weight: 2, presence: { from: 8, fadeIn: 3 } },
         { id: 'blowgun_wretch', weight: 2, presence: { to: 16, fadeOut: 7 } },
         { id: 'strangler_maw', weight: 1, presence: { from: 8, fadeIn: 4 } },
@@ -1981,6 +1984,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       count: [5, 7], size: [3, 5],
       table: [
         { id: 'blood_mite', weight: 3, presence: { to: 18, fadeOut: 8 } },
+        // The Hollowborn — the citadel's armory never agreed to the surrender.
+        { id: 'hollow_vanguard', weight: 2, presence: { from: 8, fadeIn: 4 } },
+        { id: 'shield_anima', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'the_unworn', weight: 1, presence: { from: 14, fadeIn: 6 } },
         // The citadel's toys: stitched marionettes that die loudly.
         { id: 'stygian_doll', weight: 3, presence: { from: 8, fadeIn: 3 } },
         { id: 'ruin_chanter', weight: 2, presence: { from: 8, fadeIn: 4 } },
@@ -2175,6 +2182,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       table: [
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 3 },
+        // The Hollowborn — the galleries' interred iron walks its own rounds.
+        { id: 'hollow_vanguard', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'blade_swarm', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'bone_serpent', weight: 2, presence: { from: 8, fadeIn: 4 } },
         { id: 'barrow_wight', weight: 2, presence: { from: 10, fadeIn: 5 } },
@@ -3228,6 +3238,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       ],
       table: [
         { id: 'dune_stalker', weight: 3 },
+        // The Chattel — the field country's own trouble: herds that gore
+        // back, hens with opinions, and somewhere a bell.
+        { id: 'feral_aurochs', weight: 2 },
+        { id: 'feral_hen', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'shepherds_hound', weight: 2 },
+        { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'gnoll_prowler', weight: 3, presence: { to: 18, fadeOut: 9 } },
         { id: 'fen_hound', weight: 2, presence: { to: 16, fadeOut: 8 } },
         { id: 'thorn_sprite', weight: 2, presence: { to: 18, fadeOut: 9 } },

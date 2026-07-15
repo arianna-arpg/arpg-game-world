@@ -14659,6 +14659,16 @@ export class World {
     if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
     if (def.volatile) a.volatile = def.volatile; // the poked nest arms
     if (def.onHitByType) { a.onHitByType = def.onHitByType; a.onHitTypeIcd = def.onHitTypeIcd; } // the body's element grammar
+    // CARRIED GEAR (MonsterDef.carry — the Hollowborn): mint the real piece
+    // the body walks in wearing; its credited kill drops exactly this.
+    if (def.carry && (def.carry.chance === undefined || chance(def.carry.chance))) {
+      const worn = rollItem({
+        ilvl: Math.max(1, level),
+        ...(def.carry.rarity !== undefined ? { rarity: def.carry.rarity } : {}),
+        ...(def.carry.category !== undefined ? { category: def.carry.category } : {}),
+      });
+      if (worn) a.carriedGear = worn;
+    }
     if (def.immuneGround) a.immuneGround = def.immuneGround; // the insured (lava natives)
     // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
     // update sweep springs it when an enemy strays inside the wake radius.
@@ -23877,8 +23887,13 @@ export class World {
     for (let i = 0; i < count; i++) this.dropGemAt(actor.pos, def?.gemBias);
     // GEAR: loot tables. Per-monster hoard > boss table > chance-gated world
     // table; elite leaders add bonus rolls (crowned promote to the apex table).
+    // CARRIED GEAR (the Hollowborn) REPLACES the base branch outright: the
+    // body drops exactly what it walked in wearing — what you saw is what
+    // you get, never a second roll on top. Elite bonus rolls stay (that
+    // layer rewards the TIER, not the body).
     const tables: string[] = [];
-    if (def?.loot) tables.push(def.loot);
+    if (actor.carriedGear) this.dropGearAt(actor.pos, actor.carriedGear);
+    else if (def?.loot) tables.push(def.loot);
     else if (def?.boss) tables.push(DROP_CFG.bossTable);
     else if (chance(DROP_CFG.killItemChance * bounty)) tables.push(DROP_CFG.killTable);
     const tier = actor.rarity ?? 'normal';

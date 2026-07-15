@@ -438,6 +438,16 @@ export interface MonsterDef {
   }>>;
   /** Seconds between element-response firings (default 0.8). */
   onHitTypeIcd?: number;
+  /** CARRIED GEAR — the Hollowborn's contract: the body spawns WEARING one
+   *  real rolled item (createMonster mints it at the body's level) and its
+   *  credited kill drops EXACTLY that piece instead of a gear-table roll.
+   *  What you see walking is what you get. `chance` gates the roll per spawn;
+   *  `rarity`/`category` constrain the mint (an armory fields armor). */
+  carry?: {
+    chance?: number;
+    rarity?: import('../engine/items').ItemRarity;
+    category?: import('../engine/items').ItemCategory;
+  };
   /** AMBUSH SPAWN: the body is HIDDEN and untargetable — indistinguishable
    *  from scenery — until an enemy strays within `radius`, then it ERUPTS
    *  (reveal flash + announce) and fights normally. The root that was only
@@ -6085,6 +6095,152 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: { type: 'commander', perception: { alertShout: 500 } },
   },
 
+  // --- THE HOLLOWBORN (the armory that walks) --------------------------------
+  // Animate war-gear: every body spawns WEARING a real rolled item
+  // (MonsterDef.carry) and its credited kill drops EXACTLY that piece — a
+  // named Hollowborn is a loot beacon you can see walking. Fielded in the
+  // world's interred iron: ossuary galleries, the Durance, sunken ruins —
+  // the pre-emptive family for the metropolis/industrial grounds to come.
+
+  hollow_vanguard: {
+    id: 'hollow_vanguard', name: 'Hollow Vanguard',
+    color: '#9aa4b2', shape: 'pentagon', radius: 14, material: 'metal', look: 'hollow_vanguard',
+    base: { life: 95, moveSpeed: 105, accuracy: 100, armor: 55, poise: 90, mana: 12, manaRegen: 2 },
+    skills: ['heavy_strike'],
+    xp: 30,
+    faction: 'hollowborn', tags: ['construct'],
+    detection: 0.9,
+    temper: 'territorial',
+    turnSpeed: 3.2, // empty armor LUMBERS — circle it
+    carry: {},
+    brain: { type: 'juggernaut' },
+  },
+  // Living blades: a worm-chain of linked swords, nothing holding them.
+  blade_swarm: {
+    id: 'blade_swarm', name: 'Living Blades',
+    color: '#b6bec8', shape: 'kite', radius: 10, material: 'metal', look: 'blade_swarm',
+    base: { life: 44, moveSpeed: 195, accuracy: 105, evasion: 60, mana: 10, manaRegen: 2 },
+    skills: ['claw'],
+    xp: 24,
+    faction: 'hollowborn', tags: ['construct'],
+    detection: 1.1,
+    worm: { length: 4, spacing: 12, taper: 0.8 },
+    carry: { chance: 0.5, category: 'weapon' },
+    brain: {
+      type: 'skirmish', withdraw: 1.05,
+      move: { style: 'skitter', dart: [0.25, 0.45], pause: [0.08, 0.2] },
+    },
+  },
+  // The shield-anima: a wall that walks — the SHELL is the whole structure
+  // (shell-instead-of-poise texture: crack it, then everything staggers it).
+  shield_anima: {
+    id: 'shield_anima', name: 'Shield-Anima',
+    color: '#8e9aa8', shape: 'octagon', radius: 14, material: 'metal', look: 'shield_anima',
+    base: { life: 60, moveSpeed: 95, accuracy: 92, armor: 40, poise: 0, mana: 10, manaRegen: 2 },
+    skills: ['heavy_strike'],
+    xp: 26,
+    faction: 'hollowborn', tags: ['construct'],
+    detection: 0.9,
+    turnSpeed: 2.6,
+    shellGuard: { side: 'front', max: 70, arcDeg: 200 },
+    carry: { chance: 0.6, category: 'offhand' },
+    presence: { from: 4, fadeIn: 3 },
+    brain: { type: 'juggernaut', move: { style: 'turtle' } },
+  },
+  // THE UNWORN: the armory's will, crowned in nobody. Always carries
+  // something worth the fight — a RARE at minimum, walking.
+  the_unworn: {
+    id: 'the_unworn', name: 'The Unworn',
+    color: '#aab6c6', shape: 'hexagon', radius: 17, material: 'metal', look: 'the_unworn',
+    base: { life: 250, moveSpeed: 120, accuracy: 112, armor: 60, poise: 80, mana: 40, manaRegen: 4 },
+    skills: ['heavy_strike'],
+    xp: 100,
+    faction: 'hollowborn', tags: ['construct'],
+    detection: 1.0,
+    turnSpeed: 4,
+    scaling: { life: { incPerLevel: 0.07 } },
+    grants: [{ atLevel: 12, support: 'multistrike', on: 'heavy_strike', chance: 0.6 }],
+    carry: { rarity: 'rare' },
+    presence: { from: 9, fadeIn: 4 },
+    brain: { type: 'commander', perception: { alertShout: 500 } },
+  },
+
+  // --- THE CHATTEL (livestock gone wrong) ------------------------------------
+  // Migration's domestic cousin, homed on the FIELD country: aurochs that
+  // remember the goad, hens with opinions, hounds that were never wild, and
+  // the Bellwether — a sheep. The most dangerous sheep. Low-level play's own
+  // living-world loop, and the farmland biome's precedent-setter.
+
+  feral_aurochs: {
+    id: 'feral_aurochs', name: 'Feral Aurochs',
+    color: '#8a6a4a', shape: 'rhombus', radius: 16, material: 'fur', look: 'feral_aurochs',
+    base: { life: 110, moveSpeed: 150, accuracy: 95, armor: 20, poise: 70, mana: 25, manaRegen: 4 },
+    skills: ['gore_rend'],
+    xp: 26,
+    faction: 'chattel', tags: ['beast'],
+    detection: 0.9,
+    temper: 'territorial',
+    turnSpeed: 3.4,
+    scaleVariance: [0.9, 1.35], scaleStats: true,
+    juvenileBelow: 0.98, juvenileBrain: { type: 'flee' }, // the calves bolt
+    brain: {
+      type: 'juggernaut',
+      move: { style: 'charge', commitRange: 360, chargeSpeed: 2.6 },
+    },
+  },
+  feral_hen: {
+    id: 'feral_hen', name: 'Feral Hen',
+    color: '#c8a878', shape: 'circle', radius: 7, material: 'fur', look: 'feral_hen',
+    base: { life: 10, moveSpeed: 190, accuracy: 88, evasion: 65, mana: 0 },
+    skills: ['claw'],
+    xp: 3,
+    faction: 'chattel', tags: ['beast'],
+    detection: 1.1,
+    scaleVariance: [0.8, 1.15],
+    presence: { to: 16, fadeOut: 8 },
+    brain: { type: 'swarm', squad: { muster: { count: 4, radius: 260 }, surround: true } },
+  },
+  // The hound that was never wild: it still works the flock — and you are
+  // what the flock needs working away.
+  shepherds_hound: {
+    id: 'shepherds_hound', name: 'Hound That Was Never Wild',
+    color: '#7a6a55', shape: 'kite', radius: 12, material: 'fur', look: 'hound',
+    base: { life: 45, moveSpeed: 195, accuracy: 100, evasion: 45, mana: 0 },
+    skills: ['claw'],
+    xp: 18,
+    faction: 'chattel', tags: ['beast'],
+    detection: 1.5,
+    adorn: 'ears',
+    // It fights for the flock: harder and faster while the herd stands near.
+    bond: { mods: [mod('damage', 'increased', 0.2), mod('moveSpeed', 'increased', 0.1)], radius: 460 },
+    brain: {
+      type: 'pack',
+      squad: { muster: { count: 2, radius: 320, patience: 5 }, tokens: 2, surround: true },
+      behavior: { encircle: { front: 2 } },
+    },
+  },
+  // THE BELLWETHER: a sheep. The most dangerous sheep. The bleat carries.
+  the_bellwether: {
+    id: 'the_bellwether', name: 'The Bellwether',
+    color: '#e8e0cc', shape: 'hexagon', radius: 15, material: 'fur', look: 'the_bellwether',
+    base: { life: 220, moveSpeed: 165, accuracy: 105, armor: 25, poise: 80, mana: 80, manaRegen: 7 },
+    skills: ['heavy_strike', 'keening_shriek'],
+    xp: 90,
+    faction: 'chattel', tags: ['beast'],
+    detection: 1.1,
+    turnSpeed: 6,
+    scaling: { life: { incPerLevel: 0.07 } },
+    presence: { from: 8, fadeIn: 4 },
+    brain: {
+      type: 'commander', perception: { alertShout: 520 },
+      rules: [
+        { when: { lifeBelow: 0.6 }, every: [9, 13], hold: [0.3, 0.5],
+          announce: 'The flock ANSWERS the bell!',
+          actions: [{ do: 'summon', monster: 'feral_hen', count: 3, ring: 70 }] },
+      ],
+    },
+  },
+
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
   dire_wolf: {
     id: 'dire_wolf', name: 'Dire Wolf',
@@ -7637,6 +7793,14 @@ const RELATIONS: Record<string, FactionStance> = {
   'caulborn|demon': 'hostile',
   'caulborn|flesh': 'hostile',
   'caulborn|eldritch': 'ally',
+  // The Hollowborn guard interred iron against every looter's hand —
+  // warbands pry, vermin nest in the greaves. Both learn.
+  'hollowborn|goblin': 'hostile',
+  'hollowborn|vermin': 'hostile',
+  // The Chattel remember the wild things that culled the herd — and the
+  // packs that ran them. Wolves take note: the herd gores back now.
+  'chattel|beast': 'hostile',
+  'chattel|gnoll': 'hostile',
 };
 
 /** Diplomatic stance between two factions (order-insensitive). */
@@ -7719,6 +7883,27 @@ export const FACTIONS: Record<string, {
       { id: 'transfusion_acolyte', weight: 1, presence: { from: 9, fadeIn: 4 } },
       // The duel the grave never finished — the Blademaster's tempo, risen.
       { id: 'barrow_swordsaint', weight: 1, presence: { from: 9, fadeIn: 5 } },
+    ],
+  },
+  // The armory that walks — every roster body CARRIES its drop (the
+  // Hollowborn carry contract), so a pack of them is a shelf on legs.
+  hollowborn: {
+    name: 'the Hollowborn',
+    table: [
+      { id: 'hollow_vanguard', weight: 3 },
+      { id: 'blade_swarm', weight: 3 },
+      { id: 'shield_anima', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'the_unworn', weight: 1, presence: { from: 9, fadeIn: 4 } },
+    ],
+  },
+  // Livestock gone wrong — the field country's own trouble.
+  chattel: {
+    name: 'the Chattel',
+    table: [
+      { id: 'feral_hen', weight: 3, presence: { to: 16, fadeOut: 8 } },
+      { id: 'feral_aurochs', weight: 3 },
+      { id: 'shepherds_hound', weight: 2 },
+      { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   nightkin: {

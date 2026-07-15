@@ -763,6 +763,75 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.4, scale: 0.9, params: { n: 3 } }],
   },
 
+  // ========================================================= THE HOLLOWBORN
+  /** The hollow vanguard: plate with nobody home — the visor glows anyway. */
+  hollow_vanguard: {
+    parts: [
+      { kind: 'torso', scale: 0.9, role: 'dark' },
+      { kind: 'pauldrons', scale: 1.0 },
+      { kind: 'sword', y: 0.06, params: { len: 0.85 } },
+      { kind: 'eyes', color: '#9ad4e8', params: { spread: 0.3, dist: 0.42, size: 0.08 } },
+    ],
+  },
+  /** Living blades: the sheath rusted away first. */
+  blade_swarm: {
+    parts: [
+      { kind: 'daggers', params: { len: 0.6 } },
+      { kind: 'sword', y: -0.05, scale: 0.8, params: { len: 0.7 } },
+      { kind: 'eyes', color: '#9ad4e8', params: { n: 1, spread: 0, dist: 0.3, size: 0.09 } },
+    ],
+  },
+  /** The shield-anima: a wall that decided to walk. */
+  shield_anima: {
+    parts: [
+      { kind: 'carapace', scale: 0.95, params: { segs: 1 } },
+      { kind: 'pauldrons', scale: 0.85 },
+      { kind: 'eyes', color: '#9ad4e8', params: { spread: 0.35, dist: 0.4, size: 0.07 } },
+    ],
+  },
+  /** The Unworn: crowned in nobody, carrying something worth the fight. */
+  the_unworn: {
+    parts: [
+      { kind: 'cape', scale: 1.0, role: 'dark' },
+      { kind: 'torso', scale: 0.95, role: 'dark' },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'crown', x: 0.28, scale: 0.7 },
+      { kind: 'sword', y: 0.06, params: { len: 0.95 } },
+      { kind: 'eyes', color: '#bfe4f0', params: { spread: 0.3, dist: 0.42, size: 0.08 } },
+    ],
+  },
+
+  // ============================================================ THE CHATTEL
+  /** The feral aurochs: the goad is remembered. */
+  feral_aurochs: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'furRuff', scale: 1.05 },
+      { kind: 'tusks', x: 0.5, scale: 1.2 },
+      { kind: 'tail', params: { len: 0.6, tuft: true } },
+    ],
+  },
+  /** The feral hen: opinions, at speed. */
+  feral_hen: {
+    parts: [
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'featherWings', scale: 0.7 },
+      { kind: 'beak', x: 0.45, scale: 0.7 },
+      { kind: 'tailFeathers', x: -0.4, scale: 0.6 },
+      { kind: 'eyes', color: '#2a2018', params: { spread: 0.4, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** The Bellwether: a sheep. Look closer. Now look at its eyes. */
+  the_bellwether: {
+    parts: [
+      { kind: 'furRuff', scale: 1.15 },
+      { kind: 'disc', scale: 0.8, role: 'bone' },
+      { kind: 'snout', scale: 0.7 },
+      { kind: 'spots', role: 'dark', params: { n: 1 } },
+      { kind: 'eyes', color: '#1a1610', params: { spread: 0.42, dist: 0.5, size: 0.1 } },
+    ],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [
