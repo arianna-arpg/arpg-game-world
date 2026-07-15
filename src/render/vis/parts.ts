@@ -3705,6 +3705,128 @@ const muzzle: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** SPHINCTER MAW — a puckered radial mouth: fold creases converging on a
+ *  clenched dark seam (the flesh country's door, worn as a face).
+ *  params: n (folds), gape (0..1 aperture; default clenched). */
+const sphincterMaw: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 9));
+  const gape = P(spec, 'gape', 0.16);
+  place(ctx, r, spec, (c, R) => {
+    const S = R * 0.5;
+    c.fillStyle = shade(ramp.base, -0.08);
+    c.beginPath(); c.arc(0, 0, S, 0, Math.PI * 2); c.fill();
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, 311) * 0.2;
+      c.strokeStyle = withAlpha(shade(ramp.base, i % 2 ? -0.34 : 0.14), 0.8);
+      c.lineWidth = Math.max(1, S * 0.16);
+      c.beginPath();
+      c.moveTo(Math.cos(a) * S * 0.95, Math.sin(a) * S * 0.95);
+      c.quadraticCurveTo(Math.cos(a + 0.3) * S * 0.55, Math.sin(a + 0.3) * S * 0.55,
+        Math.cos(a + 0.5) * S * gape * 1.3, Math.sin(a + 0.5) * S * gape * 1.3);
+      c.stroke();
+    }
+    c.fillStyle = pal.dark;
+    c.beginPath(); c.arc(0, 0, S * Math.max(0.06, gape), 0, Math.PI * 2); c.fill();
+    c.strokeStyle = withAlpha(shade(ramp.base, 0.2), 0.7);
+    c.lineWidth = Math.max(1, S * 0.08);
+    c.stroke();
+  });
+};
+
+/** HAUSTRA FOLDS — segmented gut-ridge bands clenching across the body:
+ *  the tract wall worn as anatomy. params: n (bands). */
+const haustraFolds: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const n = Math.round(P(spec, 'n', 4));
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const x = -R * 0.62 + (i + 0.5) * (R * 1.24 / n);
+      const hw = (R * 1.24 / n) * 0.44;
+      const hh = R * Math.sqrt(Math.max(0.08, 1 - (x / R) * (x / R))) * 0.82;
+      c.fillStyle = shade(ramp.base, i % 2 ? -0.06 : 0.04);
+      c.beginPath();
+      c.ellipse(x, 0, hw, hh, 0, 0, Math.PI * 2);
+      c.fill();
+      c.strokeStyle = withAlpha(ramp.shadow, 0.65);
+      c.lineWidth = Math.max(1, R * 0.05);
+      c.beginPath();
+      c.moveTo(x + hw * 0.9, -hh * 0.85);
+      c.quadraticCurveTo(x + hw * 1.15, 0, x + hw * 0.9, hh * 0.85);
+      c.stroke();
+    }
+  });
+};
+
+/** LASH FRINGE — a ring of curved lashes around the body rim (the eye
+ *  country's eyelash, worn as trim). params: n, len (× body radius). */
+const lashFringe: PartPainter = (ctx, r, spec, pal) => {
+  const col = spec.color ?? pal.dark;
+  const n = Math.round(P(spec, 'n', 12));
+  const len = P(spec, 'len', 0.34);
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = col;
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, 421) * 0.18;
+      const L = R * len * (0.75 + hash01(i, 431) * 0.5);
+      const bx = Math.cos(a) * R * 0.98, by = Math.sin(a) * R * 0.98;
+      const curl = 0.55 * (i % 2 ? 1 : -1);
+      c.lineWidth = Math.max(1, R * 0.05);
+      c.beginPath();
+      c.moveTo(bx, by);
+      c.quadraticCurveTo(
+        Math.cos(a) * (R + L * 0.6), Math.sin(a) * (R + L * 0.6),
+        Math.cos(a + curl * L / R) * (R + L), Math.sin(a + curl * L / R) * (R + L));
+      c.stroke();
+    }
+    c.lineCap = 'butt';
+  });
+};
+
+/** IRIS EYE — ONE great eye worn as the face: sclera, banded iris, a pupil
+ *  (round or slit), a wet catchlight. The flesh country's stare at monster
+ *  scale — pair with eyeCluster for the retinue. params: slit (bool),
+ *  iris (color key: default palette glow). */
+const irisEye: PartPainter = (ctx, r, spec, pal) => {
+  const irisCol = spec.color ?? pal.glow;
+  const slit = PB(spec, 'slit', false);
+  place(ctx, r, spec, (c, R) => {
+    const S = R * 0.56;
+    c.fillStyle = '#e6dacc';
+    c.beginPath(); c.ellipse(0, 0, S, S * 0.82, 0, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = withAlpha('#8a3040', 0.5);
+    c.lineWidth = Math.max(1, S * 0.05);
+    c.stroke();
+    // Bloodshot creep from the corners.
+    c.strokeStyle = withAlpha('#b83a42', 0.5);
+    c.lineWidth = Math.max(0.8, S * 0.03);
+    for (let i = 0; i < 4; i++) {
+      const a = (i < 2 ? 0 : Math.PI) + (hash01(i, 611) - 0.5) * 0.7;
+      c.beginPath();
+      c.moveTo(Math.cos(a) * S * 0.95, Math.sin(a) * S * 0.7);
+      c.quadraticCurveTo(Math.cos(a) * S * 0.6, Math.sin(a) * S * 0.5,
+        Math.cos(a) * S * 0.42, Math.sin(a) * S * 0.3);
+      c.stroke();
+    }
+    // Banded iris + the pupil.
+    c.fillStyle = irisCol;
+    c.beginPath(); c.arc(S * 0.1, 0, S * 0.44, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = withAlpha('#120a0c', 0.45);
+    c.lineWidth = Math.max(0.8, S * 0.03);
+    for (const f of [0.36, 0.28]) {
+      c.beginPath(); c.arc(S * 0.1, 0, S * f, 0, Math.PI * 2); c.stroke();
+    }
+    c.fillStyle = '#120a0c';
+    c.beginPath();
+    if (slit) c.ellipse(S * 0.1, 0, S * 0.08, S * 0.34, 0, 0, Math.PI * 2);
+    else c.arc(S * 0.1, 0, S * 0.2, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = withAlpha('#ffffff', 0.85);
+    c.beginPath(); c.arc(S * 0.02, -S * 0.12, S * 0.07, 0, Math.PI * 2); c.fill();
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -3715,6 +3837,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   shell, caps, capDome, gillFrill, fronds, tail, stinger, fins,
   barkPlates, branchArms, stalactites, nestTwigs,
   oozeLobes, fleshFolds, eyeCluster, raptorArms, segmentRings,
+  sphincterMaw, haustraFolds, lashFringe, irisEye,
   apron, pack, lantern, helm,
   tentacleRing, orb, pincers, antennae, legs, banner, hammer, book, gem,
   armorPlates, bloatSacs, chains, barbs, whip, keg, crateBox,

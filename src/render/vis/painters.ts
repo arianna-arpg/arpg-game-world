@@ -4039,17 +4039,26 @@ const veins: GroupPainter = (env, group, def) => {
  *  hero live, blinking on its own clock, bloodshot at the edges. The flesh
  *  biome's signature "this place is one creature" tell. */
 const eyeStalk: GroupPainter = (env, group, def) => {
-  const p = (def.params ?? {}) as { flesh?: ColorSpec; sclera?: ColorSpec; iris?: ColorSpec };
+  const p = (def.params ?? {}) as { flesh?: ColorSpec; sclera?: ColorSpec; iris?: ColorSpec;
+    swayReach?: number; closeReach?: number };
   const { ctx, theme, time, world } = env;
   const flesh = resolveColor(p.flesh, theme, '#8a3848');
   const sclera = resolveColor(p.sclera, theme, '#e8dcd0');
   const iris = resolveColor(p.iris, theme, '#d8b04a');
   const hero = world.player;
+  // AWARE of the walker: brushing past agitates the sway; pressing close
+  // makes the eye FLINCH SHUT (mirrors the gaze lane's closeReach — a shut
+  // eye builds nothing, and the render tells you so).
+  const swayReach = p.swayReach ?? 150;
+  const closeT = p.closeReach ?? 64;
   for (const o of group) {
     const seed = ((o.pos.x * 9 + o.pos.y * 23) | 0) >>> 0;
     const r = o.radius;
+    const hd = Math.hypot(hero.pos.x - o.pos.x, hero.pos.y - o.pos.y);
+    const agitate = Math.max(0, 1 - hd / swayReach);
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(Math.sin(time * (1.1 + agitate * 2.4) + seed * 0.7) * (0.035 + 0.15 * agitate));
     // The stalk nub: stacked flesh rolls with wrinkle rings.
     ctx.fillStyle = shade(flesh, -0.12);
     ctx.beginPath();
@@ -4069,9 +4078,12 @@ const eyeStalk: GroupPainter = (env, group, def) => {
       ctx.arc(0, 0, r * f, 0.4, 2.4);
       ctx.stroke();
     }
-    // The eye. Blink rides its own clock; the iris rides the hero.
+    // The eye. Blink rides its own clock; the iris rides the hero; the
+    // NEAR-LID rides your feet — walk right up and it squeezes shut.
     const blinkCyc = (time * 0.32 + hash01(seed, 5)) % 1;
-    const lid = blinkCyc > 0.92 ? Math.sin(((blinkCyc - 0.92) / 0.08) * Math.PI) : 0;
+    const blinkLid = blinkCyc > 0.92 ? Math.sin(((blinkCyc - 0.92) / 0.08) * Math.PI) : 0;
+    const nearLid = Math.min(1, Math.max(0, (closeT * 1.8 - hd) / (closeT * 0.8)));
+    const lid = Math.max(blinkLid, nearLid);
     ctx.fillStyle = sclera;
     ctx.beginPath();
     ctx.arc(0, 0, r * 0.5, 0, Math.PI * 2);
@@ -4109,6 +4121,408 @@ const eyeStalk: GroupPainter = (env, group, def) => {
       ctx.ellipse(0, -r * 0.5 * (1 - lid), r * 0.52, r * 0.52 * lid, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
+  }
+};
+
+// --- THE FLESH COUNTRY KIT (Sanguine / Gutworks / Ocular faces) -------------
+// One vocabulary, three moods. Everything soft rides the shared heartbeat or
+// the hero's own proximity — the country is AWARE of who walks it.
+
+/** CLOT MOUND — a coagulate bank, dark and dense, glistening where it is
+ *  still wet. Dead-still ON PURPOSE: the one flesh thing that doesn't move. */
+const clotMound: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { body?: ColorSpec; sheen?: ColorSpec };
+  const { ctx, theme } = env;
+  const body = resolveColor(p.body, theme, '#4a0e16');
+  const sheen = resolveColor(p.sheen, theme, '#a03844');
+  for (const o of group) {
+    const seed = ((o.pos.x * 7 + o.pos.y * 19) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    for (let i = 0; i < 3; i++) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const rr = r * (0.55 + 0.25 * hash01(i, seed + 3));
+      ctx.fillStyle = shade(body, -0.08 * i);
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * r * 0.28, Math.sin(a) * r * 0.22, rr, rr * 0.78, a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Fibrin strands webbing the crust.
+    ctx.strokeStyle = withAlpha(shade(body, 0.25), 0.5);
+    ctx.lineWidth = 0.9;
+    for (let i = 0; i < 4; i++) {
+      const a = hash01(i, seed + 7) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * r * 0.7, Math.sin(a) * r * 0.55);
+      ctx.quadraticCurveTo(0, 0, Math.cos(a + 2.4) * r * 0.6, Math.sin(a + 2.4) * r * 0.5);
+      ctx.stroke();
+    }
+    // The wet gleam.
+    ctx.fillStyle = withAlpha(sheen, 0.35);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.2, -r * 0.24, r * 0.3, r * 0.16, -0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** ARTERY STALK — a severed standing vessel that SPURTS on the shared
+ *  heartbeat: wrap-ringed tube, open mouth, droplets thrown on the beat
+ *  (deterministic from time — no particle state). */
+const arteryStalk: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { vessel?: ColorSpec; blood?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const vessel = resolveColor(p.vessel, theme, '#6a1a26');
+  const blood = resolveColor(p.blood, theme, '#c62e3e');
+  const hb = heartbeat(time);
+  for (const o of group) {
+    const seed = ((o.pos.x * 11 + o.pos.y * 3) | 0) >>> 0;
+    const r = o.radius;
+    const h = r * 2.6;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((hash01(seed, 2) - 0.5) * 0.5 + Math.sin(time * 0.9 + seed) * 0.02 + hb * 0.05);
+    ctx.fillStyle = vessel;
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.5, 0);
+    ctx.quadraticCurveTo(-r * 0.62, -h * 0.55, -r * 0.3, -h);
+    ctx.lineTo(r * 0.3, -h);
+    ctx.quadraticCurveTo(r * 0.62, -h * 0.55, r * 0.5, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(vessel, -0.4), 0.8);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // Wrap rings up the tube.
+    ctx.strokeStyle = withAlpha(shade(vessel, -0.3), 0.6);
+    ctx.lineWidth = 1;
+    for (const f of [0.3, 0.55, 0.8]) {
+      ctx.beginPath();
+      ctx.ellipse(0, -h * f, r * (0.52 - f * 0.2), r * 0.12, 0, 0, Math.PI);
+      ctx.stroke();
+    }
+    // The open mouth, welling.
+    ctx.fillStyle = blood;
+    ctx.beginPath();
+    ctx.ellipse(0, -h, r * 0.34, r * 0.14, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // The spurt: a few droplets arcing off the beat.
+    if (hb > 0.25) {
+      for (let i = 0; i < 3; i++) {
+        const ph = hash01(i, seed + 5);
+        const t2 = hb * (0.6 + ph * 0.4);
+        const dx = (ph - 0.5) * r * 1.6 * t2;
+        const dy = -h - t2 * r * (1.4 + ph) + t2 * t2 * r * 1.3;
+        ctx.globalAlpha = Math.max(0, 1 - t2) * 0.9;
+        ctx.beginPath();
+        ctx.arc(dx, dy, r * (0.09 + 0.05 * ph), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+  }
+};
+
+/** SPHINCTER — the puckering door. The rule blocks everything; the DOOR
+ *  state opens it. Drawn as radial flesh folds around an aperture that
+ *  CLENCHES on the heartbeat, teases a crack wider as you approach, and
+ *  DILATES fully once the dwell-open flips — the flesh admits you. */
+const sphincterDoor: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { flesh?: ColorSpec; rim?: ColorSpec; throat?: ColorSpec };
+  const { ctx, theme, time, world } = env;
+  const flesh = resolveColor(p.flesh, theme, '#7a2a34');
+  const rim = resolveColor(p.rim, theme, '#a84850');
+  const throat = resolveColor(p.throat, theme, '#160608');
+  const hero = world.player;
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const r = o.radius;
+    const open = !!(o.door?.open || o.door?.broken);
+    const hd = Math.hypot(hero.pos.x - o.pos.x, hero.pos.y - o.pos.y);
+    const tease = Math.max(0, 1 - hd / (r * 3)) * 0.16;
+    const clench = heartbeat(time, 0.6) * 0.05;
+    const ap = open ? 0.78 : Math.min(0.34, 0.12 + tease + clench);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.dir) ctx.rotate(o.dir);
+    // The muscle ring filling the throat.
+    ctx.fillStyle = shade(flesh, -0.1);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Radial pucker folds, alternating shade, converging on the aperture.
+    const folds = 11;
+    for (let i = 0; i < folds; i++) {
+      const a0 = (i / folds) * Math.PI * 2 + hash01(i, seed) * 0.2;
+      const wobble = Math.sin(time * 0.8 + i * 1.7 + seed) * 0.03;
+      ctx.strokeStyle = withAlpha(shade(flesh, i % 2 ? -0.35 : 0.14), 0.75);
+      ctx.lineWidth = Math.max(1.2, r * 0.09);
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a0) * r * 0.94, Math.sin(a0) * r * 0.85);
+      ctx.quadraticCurveTo(
+        Math.cos(a0 + 0.24 + wobble) * r * 0.55, Math.sin(a0 + 0.24 + wobble) * r * 0.5,
+        Math.cos(a0 + 0.4) * r * ap * 1.12, Math.sin(a0 + 0.4) * r * ap * 1.02);
+      ctx.stroke();
+    }
+    // The aperture: shut = a pucker seam; open = the way through.
+    ctx.fillStyle = open ? withAlpha(throat, 0.92) : throat;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * ap, r * ap * 0.9, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(rim, 0.85);
+    ctx.lineWidth = Math.max(1.2, r * 0.07);
+    ctx.stroke();
+    ctx.restore();
+  }
+};
+
+/** VILLUS BED — a mucosa patch of fat absorptive fronds. PURE painter (no
+ *  time, no world) so the sway BAKE can shear the whole sprite. */
+const villusBed: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { skin?: ColorSpec; frond?: ColorSpec; tip?: ColorSpec };
+  const { ctx, theme } = env;
+  const skin = resolveColor(p.skin, theme, '#5a2430');
+  const frond = resolveColor(p.frond, theme, '#8a4444');
+  const tip = resolveColor(p.tip, theme, '#c47a6a');
+  for (const o of group) {
+    const seed = ((o.pos.x * 17 + o.pos.y * 5) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.fillStyle = withAlpha(skin, 0.3);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const n = Math.max(6, Math.round(r / 4));
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, seed) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, seed + 3)) * r * 0.8;
+      const x = Math.cos(a) * d, y = Math.sin(a) * d * 0.8;
+      const fh = r * (0.16 + hash01(i, seed + 9) * 0.16);
+      const lean = (hash01(i, seed + 13) - 0.5) * 0.8;
+      ctx.strokeStyle = frond;
+      ctx.lineCap = 'round';
+      ctx.lineWidth = Math.max(2, fh * 0.42);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x + lean * fh, y - fh);
+      ctx.stroke();
+      ctx.fillStyle = tip;
+      ctx.beginPath();
+      ctx.arc(x + lean * fh, y - fh, Math.max(1.2, fh * 0.24), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.lineCap = 'butt';
+    ctx.restore();
+  }
+};
+
+/** LASH BED — a fringe of ground-lashes that SHY APART around a walker:
+ *  each lash sways on its own, and tips within reach bend away from the
+ *  hero (the ground itself declining to be stepped on). */
+const lashBed: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { skin?: ColorSpec; lash?: ColorSpec };
+  const { ctx, theme, time, world } = env;
+  const skin = resolveColor(p.skin, theme, '#3c1a26');
+  const lash = resolveColor(p.lash, theme, '#1e0c14');
+  const hero = world.player;
+  for (const o of group) {
+    const seed = ((o.pos.x * 3 + o.pos.y * 29) | 0) >>> 0;
+    const r = o.radius;
+    const hd = Math.hypot(hero.pos.x - o.pos.x, hero.pos.y - o.pos.y);
+    const push = Math.max(0, 1 - hd / (r * 2.2));
+    const ha = Math.atan2(hero.pos.y - o.pos.y, hero.pos.x - o.pos.x);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.fillStyle = withAlpha(skin, 0.28);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.78, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const n = 12;
+    ctx.strokeStyle = lash;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + hash01(i, seed) * 0.4;
+      const bx = Math.cos(a) * r * 0.35, by = Math.sin(a) * r * 0.28;
+      const len = r * (0.5 + hash01(i, seed + 5) * 0.3);
+      const sway = Math.sin(time * 1.4 + seed + i * 1.9) * 0.14;
+      // The flinch: lashes on the hero's side curl away from the boot.
+      const away = push * Math.max(0, Math.cos(a - ha)) * 0.9;
+      const ta = a + sway + away * Math.sign(Math.sin(a - ha) || 1) * 0.7;
+      const tx = bx + Math.cos(ta) * len * (1 - away * 0.35);
+      const ty = by + Math.sin(ta) * len * 0.8 * (1 - away * 0.35);
+      ctx.lineWidth = Math.max(1.4, r * 0.06);
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(bx + Math.cos(a) * len * 0.5, by + Math.sin(a) * len * 0.4, tx, ty);
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+    ctx.restore();
+  }
+};
+
+/** GUT KNUCKLE — a clenched haustral fold of the tract wall: stacked
+ *  half-tori ridges with crease shadows. Big, mute, load-bearing. */
+const gutKnuckle: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { body?: ColorSpec };
+  const { ctx, theme } = env;
+  const body = resolveColor(p.body, theme, '#6e2a30');
+  for (const o of group) {
+    const seed = ((o.pos.x * 23 + o.pos.y * 11) | 0) >>> 0;
+    const r = o.radius;
+    const rot = hash01(seed, 1) * Math.PI;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(rot);
+    for (let i = 2; i >= 0; i--) {
+      const rr = r * (0.5 + i * 0.25);
+      ctx.fillStyle = shade(body, -0.06 + i * -0.07);
+      ctx.beginPath();
+      ctx.ellipse(0, (i - 1) * r * 0.16, rr, rr * 0.62, 0, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = withAlpha(shade(body, -0.45), 0.7);
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.ellipse(0, (i - 1) * r * 0.16 + rr * 0.5, rr * 0.9, rr * 0.16, 0, 0, Math.PI);
+      ctx.stroke();
+    }
+    ctx.fillStyle = withAlpha(shade(body, 0.22), 0.4);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.22, -r * 0.4, r * 0.34, r * 0.14, -0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
+/** OCULAR KNOT — a wall-knot of mismatched eyes, all of them watching:
+ *  pupils meander DREARILY around the hero's true bearing (stateless lag),
+ *  each eye blinks on its own clock, and the whole knot squeezes shut when
+ *  you press close (the gaze lane's closeReach, mirrored in paint). */
+const ocularKnot: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { flesh?: ColorSpec; sclera?: ColorSpec; iris?: ColorSpec;
+    closeReach?: number };
+  const { ctx, theme, time, world } = env;
+  const flesh = resolveColor(p.flesh, theme, '#5e2030');
+  const sclera = resolveColor(p.sclera, theme, '#e4d6c8');
+  const iris = resolveColor(p.iris, theme, '#b8863a');
+  const hero = world.player;
+  const closeT = p.closeReach ?? 64;
+  for (const o of group) {
+    const seed = ((o.pos.x * 19 + o.pos.y * 13) | 0) >>> 0;
+    const r = o.radius;
+    const hd = Math.hypot(hero.pos.x - o.pos.x, hero.pos.y - o.pos.y);
+    const nearLid = Math.min(1, Math.max(0, (closeT * 1.8 - hd) / (closeT * 0.8)));
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    // The meat knot.
+    for (let i = 0; i < 3; i++) {
+      const a = hash01(i, seed + 21) * Math.PI * 2;
+      ctx.fillStyle = shade(flesh, -0.05 * i);
+      ctx.beginPath();
+      ctx.ellipse(Math.cos(a) * r * 0.24, Math.sin(a) * r * 0.2,
+        r * (0.6 + 0.2 * hash01(i, seed + 27)), r * (0.5 + 0.18 * hash01(i, seed + 31)), a, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // The eyes: odd sizes, packed, every one of them on you.
+    const n = 5 + (seed % 4);
+    for (let i = 0; i < n; i++) {
+      const a = hash01(i, seed + 41) * Math.PI * 2;
+      const d = Math.sqrt(hash01(i, seed + 43)) * r * 0.62;
+      const ex = Math.cos(a) * d, ey = Math.sin(a) * d * 0.85;
+      const er = r * (0.1 + hash01(i, seed + 47) * 0.14);
+      const la = Math.atan2(hero.pos.y - (o.pos.y + ey), hero.pos.x - (o.pos.x + ex));
+      // Dreary pursuit: the pupil wanders around the true bearing.
+      const aim = la + Math.sin(time * 0.35 + i * 2.1 + seed * 0.3) * 0.22;
+      const blinkCyc = (time * 0.26 + hash01(i, seed + 53)) % 1;
+      const lid = Math.max(blinkCyc > 0.9 ? Math.sin(((blinkCyc - 0.9) / 0.1) * Math.PI) : 0, nearLid);
+      ctx.fillStyle = withAlpha(shade(flesh, -0.4), 0.9);
+      ctx.beginPath();
+      ctx.arc(ex, ey, er * 1.22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = sclera;
+      ctx.beginPath();
+      ctx.arc(ex, ey, er, 0, Math.PI * 2);
+      ctx.fill();
+      if (lid < 0.92) {
+        const px = ex + Math.cos(aim) * er * 0.34, py = ey + Math.sin(aim) * er * 0.34;
+        ctx.fillStyle = iris;
+        ctx.beginPath();
+        ctx.arc(px, py, er * 0.52, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#120a0c';
+        ctx.beginPath();
+        ctx.arc(px, py, er * 0.26, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      if (lid > 0.02) {
+        ctx.fillStyle = shade(flesh, 0.06);
+        ctx.beginPath();
+        ctx.ellipse(ex, ey - er * (1 - lid), er * 1.05, er * 1.05 * lid, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+};
+
+/** COLOSSAL HEART — the country's own heart at chamber scale: a two-lobed
+ *  mass swelling on the shared beat, aorta stub, rooted surface vessels.
+ *  Compositions seat ONE — the room arranges itself around it. */
+const colossalHeart: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { body?: ColorSpec; vein?: ColorSpec; glow?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const body = resolveColor(p.body, theme, '#8a2434');
+  const vein = resolveColor(p.vein, theme, '#5a1220');
+  const glow = resolveColor(p.glow, theme, '#f08a96');
+  const hb = heartbeat(time, 0.7);
+  for (const o of group) {
+    const seed = ((o.pos.x * 31 + o.pos.y * 7) | 0) >>> 0;
+    const r = o.radius * (1 + hb * 0.055);
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((hash01(seed, 3) - 0.5) * 0.4);
+    // The two lobes + the taper.
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.moveTo(0, r * 0.95);
+    ctx.quadraticCurveTo(-r * 1.05, r * 0.25, -r * 0.62, -r * 0.55);
+    ctx.quadraticCurveTo(-r * 0.34, -r * 0.95, -r * 0.04, -r * 0.6);
+    ctx.quadraticCurveTo(r * 0.3, -r * 1.0, r * 0.64, -r * 0.52);
+    ctx.quadraticCurveTo(r * 1.05, r * 0.28, 0, r * 0.95);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(body, -0.45), 0.85);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // The aorta stub, cut and tied.
+    ctx.fillStyle = shade(body, -0.18);
+    ctx.beginPath();
+    ctx.ellipse(r * 0.18, -r * 0.78, r * 0.22, r * 0.3, 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(body, -0.5), 0.8);
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(r * 0.22, -r * 0.92, r * 0.16, r * 0.06, 0.3, 0, Math.PI * 2);
+    ctx.stroke();
+    // Rooted surface vessels, branching down the lobes.
+    ctx.strokeStyle = withAlpha(vein, 0.8);
+    for (let i = 0; i < 5; i++) {
+      const a = -0.9 + i * 0.45 + hash01(i, seed + 9) * 0.2;
+      ctx.lineWidth = Math.max(1.2, r * 0.05 * (1 - i * 0.1));
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a - 1.2) * r * 0.2, -r * 0.5);
+      ctx.quadraticCurveTo(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.2,
+        Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.6 + r * 0.2);
+      ctx.stroke();
+    }
+    // The living sheen, brightest at the peak of the beat.
+    ctx.fillStyle = withAlpha(glow, 0.16 + hb * 0.22);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.26, -r * 0.3, r * 0.34, r * 0.2, -0.5, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 };
@@ -7394,6 +7808,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   campfire, groundShadow, trunk, brush, fern, vineMat, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
+  clotMound, arteryStalk, sphincterDoor, villusBed, lashBed, gutKnuckle, ocularKnot, colossalHeart,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
   cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, firewoodPile,

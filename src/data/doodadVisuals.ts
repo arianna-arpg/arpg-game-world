@@ -1088,6 +1088,74 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'ribArch', order: 53, shadow: 0.5, longShadow: 0.8,
     params: { bone: '#d8cdb8' },
   },
+  // --- THE FLESH COUNTRY KIT (Sanguine / Gutworks / Ocular faces) ----------
+  // Pools ride the shared 'liquid' painter (the gore idiom, recolored);
+  // everything aware (sphincter, ocular_knot, lash_bed) is LIVE by nature.
+  blood_pool: {
+    painter: 'liquid', order: 26,
+    params: {
+      rim: { color: '#4a0a12', alpha: 0.62, grow: 3 },
+      core: { color: '#7a1622', alpha: 0.84 },
+      glisten: { color: '#f08a96' },
+    },
+  },
+  chyme_pool: {
+    painter: 'liquid', order: 26,
+    params: {
+      rim: { color: '#3a3a12', alpha: 0.6, grow: 3 },
+      core: { color: '#5a5c1e', alpha: 0.8 },
+      glisten: { color: '#c8cc6a' },
+    },
+  },
+  weep_spring: {
+    painter: 'liquid', order: 26,
+    params: {
+      rim: { color: '#2a3438', alpha: 0.55, grow: 2 },
+      core: { color: '#3e5258', alpha: 0.72 },
+      glisten: { color: '#cfe6ea' },
+    },
+  },
+  clot_mound: {
+    painter: 'clotMound', order: 51, shadow: 0.4,
+    params: { body: '#4a0e16', sheen: '#a03844' },
+  },
+  artery_stalk: {
+    painter: 'arteryStalk', order: 53, shadow: 0.5,
+    params: { vessel: '#6a1a26', blood: '#c62e3e' },
+    light: { radius: -1.8, color: '#c62e3e', intensity: 0.1, flicker: 1.4 },
+  },
+  sphincter: {
+    painter: 'sphincterDoor', order: 54, shadow: 0.4,
+    params: { flesh: '#7a2a34', rim: '#a84850', throat: '#160608' },
+  },
+  // The polyp wears the pod painter in bile (the gas_pod recolor — one row,
+  // zero code; the brittle rule carries its belch).
+  gas_polyp: {
+    painter: 'pod', order: 52, shadow: 0.45,
+    params: { body: '#6a6e2e', glow: '#c2cc74', aspectY: 1.05, glowY: -0.18, glowR: 0.48, pulseRate: 1.5 },
+    light: { radius: -1.6, color: '#c2cc74', intensity: 0.1, flicker: 1.2 },
+  },
+  villus_bed: {
+    painter: 'villusBed', order: 28, bakeWhole: 'sway',
+    params: { skin: '#5a2430', frond: '#8a4444', tip: '#c47a6a' },
+  },
+  gut_knuckle: {
+    painter: 'gutKnuckle', order: 52, shadow: 0.5,
+    params: { body: '#6e2a30' },
+  },
+  ocular_knot: {
+    painter: 'ocularKnot', order: 53, shadow: 0.5,
+    params: { flesh: '#5e2030', sclera: '#e4d6c8', iris: '#b8863a' },
+  },
+  lash_bed: {
+    painter: 'lashBed', order: 28,
+    params: { skin: '#3c1a26', lash: '#1e0c14' },
+  },
+  colossal_heart: {
+    painter: 'colossalHeart', order: 55, shadow: 0.6,
+    params: { body: '#8a2434', vein: '#5a1220', glow: '#f08a96' },
+    light: { radius: -2.2, color: '#e86a7a', intensity: 0.28, flicker: 0.8 },
+  },
   // THE CAUL KIT (the Giger key): black chitin over pale meat, cold violet
   // light. Same shared heartbeat as the flesh kit — one organism, two moods.
   chitin_fin: {
