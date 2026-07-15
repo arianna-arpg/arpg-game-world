@@ -357,6 +357,25 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 3, keepDistance: 280 },
   },
 
+  // The war-wound's own verb (the hate_rent cadence payload + the hellsear
+  // front's strike): infernal_rift's cold-green chaos twin. The volcanic
+  // country lobs fire OUT of its vents; the rift tears the ground open
+  // UNDER you — and what comes through lingers.
+  hate_eruption: {
+    id: 'hate_eruption', name: 'Hate Eruption',
+    description: 'The ground tears open and what the war left beneath it comes through. The torment lingers.',
+    tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#7de84a',
+    manaCost: 14, cooldown: 5, useTime: 0.85,
+    baseDamage: { chaos: [20, 32] },
+    delivery: { type: 'ground', radius: 80, castRange: 450, delay: 0.85 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'torment', chance: 0.5, magnitude: 0.35 },
+    ],
+    requirements: { intelligence: 26 },
+    ai: { range: 420, weight: 3, keepDistance: 280 },
+  },
+
   // --- The Legion's arsenal: demon-kit skills (dropped as gems like any) ----
 
   hellfire_lash: {

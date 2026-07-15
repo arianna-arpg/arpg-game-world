@@ -1357,7 +1357,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The war-wound kit — the surface rift's ground scars: the rent is the
   // ember_fissure's hate-lit twin (a cut you walk AROUND, shots pass); the
   // glass is obsidian's (a solid you shelter behind).
-  hate_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'gore'] },
+  hate_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'gore'],
+    // THE TEAR CADENCE — the wound's answer to the lava vent, inverted: the
+    // volcano lobs fire OUT in arcs; the rent tears the ground open UNDER
+    // the nearby world (the vent-volley seam — payload skill + telegraph
+    // tint are the effect's own data).
+    effect: { id: 'lava_orb', skillId: 'hate_eruption', color: '#7de84a', interval: 6.5, radius: 170, count: 1, ringRadius: 95, jitter: 55, blast: 80, chance: 0.55, power: 0 } },
   hate_glass: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 34, forbidOn: ['water', 'lava', 'chasm', 'gore'] },
   // The standing breach is a dimension gate (DimensionEntry.gateDoodad scans
   // it at load) — a trigger like every gate mouth, and only ever ONE (the

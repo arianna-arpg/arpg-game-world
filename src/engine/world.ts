@@ -9303,7 +9303,7 @@ export class World {
       const rr = ring + (jitter ? rand(-jitter, jitter) : 0);
       const at = this.clampPos(vec(d.pos.x + Math.cos(ang) * rr, d.pos.y + Math.sin(ang) * rr), 12);
       this.zones.push({
-        pos: at, radius: blast, caster, inst, color: '#ff6a2a',
+        pos: at, radius: blast, caster, inst, color: eff.color ?? '#ff6a2a',
         delay: 0.9 + i * (eff.stagger ?? 0), exploded: false, linger: 0,
         tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
         dmgMult: 1, depth: 1, hitAll: true, meteor: true,

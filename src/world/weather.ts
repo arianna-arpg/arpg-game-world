@@ -164,6 +164,19 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     rampFrac: 0.35, wind: 0.15,
     skyWeight: { night: 1.1, dusk: 0.3 },
   },
+  /** HELLSEAR — the wound's weather: a front born only over the deep wilds
+   *  (the surface rift's home band) that tears the ground under whoever it
+   *  crosses. Its teeth are the STRIKE (hate_eruption through the shared
+   *  strike machinery — cold-green chaos tears, the torment lingering) and
+   *  the Legion stirring beneath it. Starfall's grammar on demon ground. */
+  hellsear: {
+    label: 'Hellsear', color: '#7de84a', countMul: 1.2,
+    factionMul: { demon: 1.35 },
+    strike: { skillId: 'hate_eruption', radius: 72, telegraph: 0.85, ratePerSec: 0.45 },
+    rampFrac: 0.3, wind: 0.3,
+    skyWeight: { night: 0.8, dusk: 0.45 },
+    birthGeo: { wildness: { min: 0.5 } },
+  },
 };
 
 /** Register a weather kind under an open-string id (see WeatherKind) — one
