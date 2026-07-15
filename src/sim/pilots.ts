@@ -36,6 +36,11 @@ export const PILOT_CFG = {
   /** pair: seconds between host taps (buff/curse upkeep without starving
    *  the escort's filler). */
   pairHostPeriod: 3,
+  /** pair: extra reach beyond the engage stop at which the fight counts as
+   *  JOINED — the host metronome sleeps until then, so upkeep verbs land
+   *  IN combat like real play (a t=0 gulp at full pools spills into
+   *  nothing and reads as a false no-op). */
+  pairWakeSlack: 40,
 };
 
 /** Nearest living foe; real (non-passive) threats win over scenery/dummies. */
@@ -167,11 +172,16 @@ function hostIsLatch(inst: SkillInstance): boolean {
 
 /** THE ESCORT RIG — see PilotSpec 'pair'. Movement is the brawler's close;
  *  buttons are a metronome: host tapped on its period (or latched once),
- *  the reference filler held every other tick. */
+ *  the reference filler held every other tick. The host metronome WAKES on
+ *  first contact (pairWakeSlack past the engage stop) — upkeep verbs land
+ *  IN the fight, never on the walk in: a full-pool t=0 drink spills into
+ *  nothing, and a one-shot bank (the catalyst's gulp) that spends itself
+ *  pre-contact makes every gem riding it read as a false no-op. */
 class PairPilot implements PlayerInputSource {
   private t = 0;
   private nextHostAt = 0;
   private latched = false;
+  private joined = false;
   private heldLast: boolean[] = [];
 
   constructor(private spec: Extract<PilotSpec, { kind: 'pair' }>) {}
@@ -189,12 +199,13 @@ class PairPilot implements PlayerInputSource {
     if (foe) {
       const want = actor.radius + foe.radius + (this.spec.engage ?? PILOT_CFG.meleeGap);
       if (dist(actor.pos, foe.pos) > want) { dx = foe.pos.x - actor.pos.x; dy = foe.pos.y - actor.pos.y; }
+      if (dist(actor.pos, foe.pos) <= want + PILOT_CFG.pairWakeSlack) this.joined = true;
     }
 
     const host = actor.skills[this.spec.hostSlot];
     const ref = actor.skills[this.spec.refSlot];
     let pressedHost = false;
-    if (foe && host) {
+    if (foe && host && this.joined) {
       const latch = hostIsLatch(host);
       if (latch ? !this.latched : this.t >= this.nextHostAt) {
         if (actor.canUse(host) || instanceTrigger(host)) {

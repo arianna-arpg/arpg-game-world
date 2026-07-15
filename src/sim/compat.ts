@@ -63,10 +63,18 @@ export const COMPAT_CFG = {
   dummyDuration: 10,
   /** Live probe: sim-seconds against the respawning pack. */
   liveDuration: 20,
-  /** Live probe pack: id × count, re-spawned every `everySec`. */
-  livePack: { id: 'zombie', count: 2, everySec: 8 },
+  /** Live probe pack: id × count, re-spawned every `everySec`. `levelBonus`
+   *  lifts the pack ABOVE the rig's parity level so its hits still WOUND
+   *  through the pinned-40s mitigation (measured 2026-07-15: parity zombies
+   *  landed 9 hits for dmg_in 0 — a woundless "under damage" probe blinds
+   *  every wound-conditioned host: thirst-gated drinks, guard value, heals). */
+  livePack: { id: 'zombie', count: 2, everySec: 8, levelBonus: 6 },
   /** Probe target stand-off (px) for the dummy. */
   dummyDistance: 70,
+  /** Live-pack spawn distance (px): CLOSE, so the fight is joined within
+   *  the first beat — wound-conditioned hosts (thirst-gated drinks, guard
+   *  value, heal value) need incoming hits EARLY, not after a stroll. */
+  liveDistance: 120,
   /** A channel "moved" when |Δ| > noiseAbs AND |Δ|/max(|bare|,1) > noiseRel. */
   noiseRel: 0.02,
   noiseAbs: 0.5,
@@ -302,6 +310,19 @@ export function probeBuild(
   ];
   const ref = referenceAttackId();
   if (mode === 'escort' && skillId !== ref) skills.push({ id: ref, level: gemLevel });
+  // FOUNT SEEDING (BuildSpec.charges): orbPickup-banked economies never fill
+  // in a probe — no orb ever falls in the arena — so a drink-shaped host
+  // read byte-identical with EVERY gem it carried (the 2026-07-14 flask-lane
+  // false-INERT triage). Seed each such bank to its own spec'd cap, in the
+  // BARE and the SOCKETED run alike: the probe asks "does the drink DO
+  // anything", never "does the economy fill". Kill/hit/channel-fed banks
+  // stay unseeded — the live probe's bodies feed those honestly.
+  const charges: Record<string, number> = {};
+  for (const cg of def.chargeGain ?? []) {
+    if (cg.on === 'orbPickup') {
+      charges[cg.charge] = Math.max(charges[cg.charge] ?? 0, cg.max ?? 1);
+    }
+  }
   return {
     id: `compat_${skillId}__${label}`,
     label: `compat probe — ${skillId} (${label})`,
@@ -310,6 +331,7 @@ export function probeBuild(
     attributes: PROBE_ATTRIBUTES,
     skills,
     bar: skills.map(s => s.id),
+    ...(Object.keys(charges).length ? { charges } : {}),
   };
 }
 
@@ -342,7 +364,13 @@ export function probeScenario(
     pilot: escorted ? { kind: 'pair', hostSlot: 0, refSlot: 1 } : soloPilotFor(def),
     parityLevel: opts.level ?? COMPAT_CFG.level,
     waves: live
-      ? [{ monsters: [{ id: COMPAT_CFG.livePack.id, count: COMPAT_CFG.livePack.count }], repeatEvery: COMPAT_CFG.livePack.everySec }]
+      ? [{
+        monsters: [{
+          id: COMPAT_CFG.livePack.id, count: COMPAT_CFG.livePack.count,
+          level: (opts.level ?? COMPAT_CFG.level) + COMPAT_CFG.livePack.levelBonus,
+        }],
+        repeatEvery: COMPAT_CFG.livePack.everySec, distance: COMPAT_CFG.liveDistance,
+      }]
       : [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: COMPAT_CFG.dummyDistance }],
     duration: opts.duration ?? (live ? COMPAT_CFG.liveDuration : COMPAT_CFG.dummyDuration),
     stop: 'duration',
@@ -436,6 +464,32 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     // automatically.
     note: 'resource pump (conduit): needs a HELD stance / burning toggle and a defense-pool fingerprint the standard probes lack',
     when: (_def, sup) => sup.conduit !== undefined,
+  },
+  // ---- DRINK-RIDER classes (2026-07-15 flask-lane triage): the fount
+  // seeding + wounding pack made DRINKS fire (followUp/tempo/splash gems
+  // measure clean) — but potency/duration riders read only through the
+  // drink's own channels, and two shapes still fall outside what this
+  // probe exercises. When an ailment-applying, stance-pressing pack (or a
+  // roaming pilot) ships, delete these rows and the pairs re-enter
+  // measurement automatically.
+  {
+    // The catalyst shape: chargeCost 'all' spends the whole seeded bank on
+    // the first engaged tap — at pools the fight hasn't dented yet — and
+    // nothing in-arena ever refills it, so a pour-potency gem never meets
+    // a wounded drink.
+    note: 'pour-potency rider on a gulp-the-bank host: the one seeded gulp lands before wounds and the bank never refills in-arena',
+    when: (def, sup) => supModsStat(sup, ['restorePower', 'restorePctMax'])
+      && def.chargeCost?.amount === 'all',
+  },
+  {
+    // The stance-flask wing (pour-less drinks): potency/duration/thirst
+    // riders read through movement the parked escort never makes and
+    // ailments the probe pack never applies.
+    note: 'stance-flask rider (potency/duration/thirst mods): the parked pilot and ailment-less pack never press the lengthened stance\'s channels',
+    when: (def, sup) => def.tags.includes('flask')
+      && !(def.effects ?? []).some(e => e.type === 'restoreOverTime')
+      && supModsStat(sup, ['thirstless', 'restorePower', 'restorePctMax', 'effectDuration'])
+      && sup.followUp === undefined && sup.chargeGain === undefined,
   },
 ];
 

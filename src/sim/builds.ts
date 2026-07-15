@@ -248,6 +248,14 @@ export function applyBuild(world: World, spec: BuildSpec, fallbackGearSeed: numb
     charId: `sim_${spec.id}`,
   };
   world.adoptSavedMeta(meta, bar, spec.level);
+  // PRE-BANKED charges (BuildSpec.charges): granted AFTER adoption so the
+  // recalc'd sheet is live (chargeCap mods fold inside gainCharge — THE one
+  // gain gate), letting orbPickup-fed banks (fount sips) be drinkable in
+  // arenas where no orb ever falls. Deterministic and identical across a
+  // probe pair's bare/socketed runs, so the seed itself always cancels.
+  for (const [id, n] of Object.entries(spec.charges ?? {})) {
+    if (n > 0) world.player.gainCharge(id, n, n);
+  }
   return warnings;
 }
 

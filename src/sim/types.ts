@@ -78,6 +78,13 @@ export interface BuildSpec {
   gear?: GearSpec[];
   /** Seed for the gear rolls (default: derived from the episode seed). */
   gearSeed?: number;
+  /** PRE-BANKED charge counters (charge id → count), granted right after
+   *  adoption through the ordinary gainCharge gate. The probe lever for
+   *  banks the arena can't feed (fount sips bank only on orbPickup, and no
+   *  orb ever falls in a probe): a probe asks "does the DRINK function",
+   *  never "does the economy fill" — the attribute-pinning stance, applied
+   *  to charges. Suite/reference builds omit it and are untouched. */
+  charges?: Record<string, number>;
 }
 
 /** An ACTUAL player character, verbatim: the CharacterSave a real save slot

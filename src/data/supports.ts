@@ -1444,9 +1444,13 @@ export const SUPPORTS: Record<string, SupportDef> = {
 
   libation: {
     id: 'libation', name: 'Libation',
-    description: 'The drink is the point: this flask ignores its thirst gate — drinkable at a full pool, pour spilled or not — and every pour runs 15% richer. For builds that drink for what RIDES the drink.',
+    description: 'The drink is the point: this flask ignores its thirst gate — drinkable at a full pool, pour spilled or not — every pour runs 15% richer, and everything the drink grants lingers 10% longer. For builds that drink for what RIDES the drink.',
     color: '#d8b86a', requiresTags: ['flask'],
-    mods: [mod('thirstless', 'flat', 1), mod('restorePower', 'increased', 0.15)],
+    // effectDuration is what makes the gem FUNCTION on the buff-flask wing
+    // too (quicksilver/stoneskin/antidote carry no pour to enrich): richer
+    // where there's a pour, longer everywhere — one devotional identity.
+    mods: [mod('thirstless', 'flat', 1), mod('restorePower', 'increased', 0.15),
+      mod('effectDuration', 'increased', 0.1)],
     perLevel: [mod('restorePower', 'increased', 0.05)],
     weight: 5,
   },
