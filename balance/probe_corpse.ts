@@ -10,8 +10,11 @@
 
 import { bootSimEngine, makeSimWorld } from '../src/sim/arena';
 import { applyBuild } from '../src/sim/builds';
+import { seedGlobalRandom } from '../src/sim/rng';
 import { CORPSE_CFG } from '../src/engine/world';
 import type { World } from '../src/engine/world';
+import { makeSkillInstance } from '../src/engine/skills';
+import { SKILLS } from '../src/data/skills';
 import type { BuildSpec } from '../src/sim/types';
 
 let failed = 0;
@@ -21,6 +24,7 @@ const check = (name: string, ok: boolean, detail = ''): void => {
 };
 
 bootSimEngine();
+seedGlobalRandom(20260715); // every chance() roll below replays exactly
 
 const mkWorld = (skills: BuildSpec['skills']): World => {
   const world = makeSimWorld('tamer', 7411);
@@ -250,6 +254,42 @@ const minions = (world: World): number =>
   };
   check('cinders: one body, one cinder', flights(false) === 1);
   check('cinders: the wagon looses a flight of three', flights(true) === 3);
+}
+
+// --- 12) the plague cart spills its load (BrittleSpec.corpses) ---------------
+// (The cart's spill is unconditional — the shallow grave shares the same
+//  handler behind a 0.9 gameplay roll, so the cart is the deterministic probe.)
+{
+  const world = mkWorld([{ id: 'cleave', level: 3 }]);
+  const p = world.player;
+  const spot = { x: p.pos.x + 34, y: p.pos.y };
+  world.doodads.push({ pos: { x: spot.x, y: spot.y }, radius: 16, kind: 'plague_cart' });
+  const before = world.corpses.length;
+  press(world, 'cleave', spot);
+  step(world, 1.2);
+  check('plague cart: the load spills as raisable bodies', world.corpses.length >= before + 2,
+    `+${world.corpses.length - before} bodies`);
+}
+
+// --- 13) the ghoul's table manners: gorge heals off YOUR fuel -----------------
+{
+  const world = mkWorld([{ id: 'corpse_explosion', level: 3 }]);
+  const p = world.player;
+  const ghoul = world.createMonster('charnel_ghoul', 8, 'enemy');
+  ghoul.pos = { x: p.pos.x + 300, y: p.pos.y };
+  world.actors.push(ghoul);
+  ghoul.life = ghoul.maxLife() * 0.4;
+  const hurt = ghoul.life;
+  lay(world, { x: ghoul.pos.x + 40, y: ghoul.pos.y }, 2, 120);
+  const fuel = world.corpses.length;
+  const inst = makeSkillInstance(SKILLS.gorge_carrion, 1);
+  world.useSkill(ghoul, inst, { x: ghoul.pos.x + 40, y: ghoul.pos.y });
+  step(world, 1.2);
+  check('gorge: the ghoul ate the fuel', world.corpses.length < fuel,
+    `${world.corpses.length}/${fuel} left`);
+  check('gorge: the meal knit its flesh', ghoul.life > hurt + 20,
+    `${Math.round(hurt)} → ${Math.round(ghoul.life)}`);
+  check('gorge: the frenzy took', ghoul.buffs.has('gorged'));
 }
 
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');

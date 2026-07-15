@@ -1285,6 +1285,18 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       glow: { color: '#d8cdb0', alpha: 0.1 },
     },
   },
+  // THE CHARNEL KIT's street furniture (rules + waystop formation in
+  // data/formations.ts): the stalled dead-cart and the mounds it never
+  // finished filling. Struck, both spill raisable bodies — the corpse
+  // economy's harvest nodes (BrittleSpec.corpses; docs/engine/corpses.md).
+  plague_cart: {
+    painter: 'plagueCart', order: 54, shadow: 0.55, longShadow: 1.0,
+    params: { wood: '#54422c', cloth: '#6e6650', flesh: '#9a8a72' },
+  },
+  shallow_grave: {
+    painter: 'shallowGrave', order: 22,
+    params: { soil: '#4c4030', plank: '#6a5638', bone: '#cfc4a8' },
+  },
   // THE EXTRACTION WELL (the seam's ground fixture — the node BODY stands on
   // it). Living face breathes marrow-light + motes; the spent face is the
   // same pan, drained and cracked (the kind-swap fires when a seam settles).

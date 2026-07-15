@@ -780,6 +780,10 @@ export interface BrittleSpec {
   orbChance?: number;
   /** Chance to drop a gem (secret pockets pay for the finding). */
   gemChance?: number;
+  /** Spill raisable CORPSES (the shallow grave / the plague cart): fuel for
+   *  the corpse economy, minted like Exhume's (CORPSE_CFG stand-in life).
+   *  `monster` is the defId the bodies claim to be. */
+  corpses?: { monster: string; count: [number, number]; chance?: number; text?: string };
   /** Carve the walk grid open in this radius on break — a crumbling plug
    *  unblocks itself; a secret wall carves INTO the wall face behind it. */
   carve?: number;
@@ -4237,7 +4241,9 @@ registerStamp('sand', (ctx) => stampBlob(ctx, 'sand', [24, 72], [5, 9], false));
 // Desert heat: shimmering-air patches (sunscorch fields — World.updateHeat).
 registerStamp('heat_shimmer', (ctx, spec) => stampBlob(ctx, 'heat_shimmer', spec.radius ?? [40, 85], [2, 4], false));
 // The doodad kingdom (round 4): singles place like trees; patches blob.
-const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
+// Exported: data-side kits (formations.ts, packages) register their own
+// simple scatters through the same helper the base kinds use.
+export const stampSingle = (kind: DoodadKind, dflt: [number, number]) =>
   (ctx: GenCtx, spec: StampSpec): void => {
     const r = ctx.rng.range((spec.radius ?? dflt)[0], (spec.radius ?? dflt)[1]);
     const p = findSpot(ctx, r, true, doodadRule(kind).spacing ?? 0, true, kind);

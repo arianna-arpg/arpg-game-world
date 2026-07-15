@@ -6563,6 +6563,119 @@ const brokenCart: GroupPainter = (env, group) => {
   }
 };
 
+/** THE PLAGUE CART: the dead-cart stalled mid-round — a heaped dray under
+ *  sagging canvas, rope-lashed, one limp arm past the sideboard and flies
+ *  for a halo. The Corpse Wagon made scenery; struck, its load spills
+ *  (BrittleSpec.corpses in data/formations.ts). */
+const plagueCart: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { wood?: ColorSpec; cloth?: ColorSpec; flesh?: ColorSpec };
+  const { ctx, theme } = env;
+  const wood = resolveColor(p.wood, theme, '#54422c');
+  const cloth = resolveColor(p.cloth, theme, '#6e6650');
+  const flesh = resolveColor(p.flesh, theme, '#9a8a72');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((o.rot ?? 0) + 0.1); // settled a hair off-true, axle-deep
+    // The bed — longer and heavier than a market dray.
+    ctx.fillStyle = wood;
+    ctx.fillRect(-r * 0.95, -r * 0.52, r * 1.9, r * 1.04);
+    ctx.strokeStyle = '#2a2012';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(-r * 0.95, -r * 0.52, r * 1.9, r * 1.04);
+    // Both wheels still on — it was working right up until it wasn't.
+    ctx.strokeStyle = '#382a1a';
+    ctx.lineWidth = Math.max(2, r * 0.13);
+    ctx.beginPath(); ctx.arc(-r * 0.55, r * 0.62, r * 0.3, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(r * 0.55, r * 0.62, r * 0.3, 0, Math.PI * 2); ctx.stroke();
+    // Yoke poles, dropped and waiting for a horse that bolted.
+    ctx.lineWidth = Math.max(1.5, r * 0.08);
+    ctx.beginPath(); ctx.moveTo(r * 0.95, -r * 0.3); ctx.lineTo(r * 1.55, -r * 0.12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(r * 0.95, r * 0.3); ctx.lineTo(r * 1.55, r * 0.42); ctx.stroke();
+    // The LOAD: canvas humped in two swells over whatever it keeps.
+    ctx.fillStyle = cloth;
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.3, -r * 0.05, r * 0.52, r * 0.42, 0.15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(r * 0.32, 0, r * 0.46, r * 0.38, -0.1, 0, Math.PI * 2);
+    ctx.fill();
+    // Rope lashings biting into the canvas.
+    ctx.strokeStyle = withAlpha('#c8b488', 0.55);
+    ctx.lineWidth = Math.max(1, r * 0.05);
+    for (const x of [-r * 0.55, -r * 0.05, r * 0.45]) {
+      ctx.beginPath(); ctx.moveTo(x, -r * 0.48); ctx.lineTo(x + r * 0.1, r * 0.48); ctx.stroke();
+    }
+    // One limp arm past the sideboard — the load is what you think it is.
+    ctx.strokeStyle = flesh;
+    ctx.lineWidth = Math.max(2, r * 0.11);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.62, r * 0.3);
+    ctx.quadraticCurveTo(-r * 0.85, r * 0.55, -r * 0.8, r * 0.82);
+    ctx.stroke();
+    ctx.lineCap = 'butt';
+    // Flies — a sparse standing halo (deterministic; bakes stay stable).
+    ctx.fillStyle = withAlpha('#1a1610', 0.7);
+    for (let i = 0; i < 5; i++) {
+      const a = i * 2.4 + 0.6;
+      ctx.beginPath();
+      ctx.arc(Math.cos(a) * r * 0.8, -r * 0.35 + Math.sin(a) * r * 0.3, Math.max(1, r * 0.045), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
+/** THE SHALLOW GRAVE: a fresh-turned mound, a half-sunk marker plank, one
+ *  bone breaking the soil — brittle; the earth gives up its dead. */
+const shallowGrave: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { soil?: ColorSpec; plank?: ColorSpec; bone?: ColorSpec };
+  const { ctx, theme } = env;
+  const soil = resolveColor(p.soil, theme, '#4c4030');
+  const plank = resolveColor(p.plank, theme, '#6a5638');
+  const bone = resolveColor(p.bone, theme, '#cfc4a8');
+  for (const o of group) {
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0);
+    // The mound — turned earth, darker than the ground it interrupts.
+    ctx.fillStyle = soil;
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 1.05, r * 0.6, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = withAlpha('#241c10', 0.5);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    // Spade furrows — someone dug in a hurry.
+    ctx.strokeStyle = withAlpha('#2e2618', 0.6);
+    ctx.lineWidth = Math.max(1, r * 0.06);
+    for (const t of [-0.35, 0, 0.35]) {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.7, t * r * 0.5);
+      ctx.quadraticCurveTo(0, t * r * 0.5 + r * 0.1, r * 0.7, t * r * 0.5);
+      ctx.stroke();
+    }
+    // The marker plank, already leaning.
+    ctx.fillStyle = plank;
+    ctx.save();
+    ctx.translate(-r * 0.75, -r * 0.25);
+    ctx.rotate(-0.25);
+    ctx.fillRect(-r * 0.08, -r * 0.5, r * 0.16, r * 0.55);
+    ctx.fillRect(-r * 0.22, -r * 0.42, r * 0.44, r * 0.12);
+    ctx.restore();
+    // One bone the soil failed to keep.
+    ctx.strokeStyle = bone;
+    ctx.lineWidth = Math.max(1.5, r * 0.09);
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(r * 0.25, -r * 0.12); ctx.lineTo(r * 0.55, r * 0.08); ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.fillStyle = bone;
+    ctx.beginPath(); ctx.arc(r * 0.25, -r * 0.14, Math.max(1.2, r * 0.07), 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+};
+
 /** The SCARECROW: cross-frame, straw head, a coat the wind never fills. */
 const scarecrow: GroupPainter = (env, group, def) => {
   const p = (def.params ?? {}) as { coat?: ColorSpec };
@@ -7832,6 +7945,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   finBlade, impaler, groundChain, stairFlight,
   cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, firewoodPile,
   fountain, well, lanternPost, bench, marketStall, brokenCart,
+  plagueCart, shallowGrave,
   scarecrow, hayBale, potCluster, rubble, bannerPost,
   statue, wayshrine, gallows, fishingRack, kilnMound,
   tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, crowdRow, door, breach, landmass, beacon, surveySpire, fallback,

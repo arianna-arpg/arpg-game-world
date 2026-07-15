@@ -1626,6 +1626,24 @@ export const MONSTERS: Record<string, MonsterDef> = {
   },
 
   // A fast, lunging cannibal — orbits then bites, whipping itself into a frenzy.
+  // THE CHARNEL GHOUL — the corpse economy's rival customer: it noses to
+  // bodies for its supper out of combat (the carrion lever) and BOLTS one
+  // down mid-fight (gorge_carrion — same corpse fabric as the player's
+  // Feast), healing and frenzying. Every body it eats is a body your
+  // detonations, offerings and raisings don't get. Kill it hungry.
+  charnel_ghoul: {
+    id: 'charnel_ghoul', name: 'Charnel Ghoul',
+    color: '#8a9060', shape: 'star', radius: 12, look: 'ghoul',
+    base: { life: 52, moveSpeed: 150, accuracy: 90, evasion: 35, mana: 40, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw', 'gorge_carrion'],
+    xp: 14,
+    brain: { type: 'flanker' },
+    faction: 'undead',
+    carrion: { radius: 240 },
+    detection: 1.1,
+  },
+
   deadwake_ghoul: {
     id: 'deadwake_ghoul', name: 'Ravenous Ghoul',
     color: '#9a7a5a', shape: 'star', radius: 13, look: 'ghoul',

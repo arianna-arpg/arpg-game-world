@@ -66,6 +66,23 @@ consumed-mid-gesture primary re-seeks the same way. A bare field REFUSES the
 beat exactly as it refuses the press: no free unfueled novas from a skill
 whose whole grammar is the fuel.
 
+## The charnel kit (world-side)
+
+- **`BrittleSpec.corpses`** (levelgen.ts type; `World.popBrittle` handler):
+  a struck breakable spills RAISABLE BODIES — minted like Exhume's stand-ins,
+  level-scaled. Borne by `shallow_grave` and `plague_cart`
+  (data/formations.ts rules; visuals in doodadVisuals.ts + painters), scattered
+  through the crypt tileset and the `charnel_waystop` formation (the dead-cart
+  stalled among the graves it was filling).
+- **`charnel_ghoul`** (monsters.ts) — the economy's rival customer: the
+  existing `carrion` lever noses it to bodies out of combat, and
+  `gorge_carrion` (skills.ts, noDrop) BOLTS one down mid-fight through the
+  same targeting resolve + `corpseLifeRestore` path as the player's Feast —
+  healing, frenzying, and denying your detonations their fuel.
+- Kit-parts for the entity creator: `shroudWrap`, `carrionFlies`
+  (render/vis/parts.ts). Corpses render as sinking REMAINS tinted by the
+  fallen kind (renderer.drawCorpses).
+
 ## Sim & verification
 
 - **Corpse feeder** (`ScenarioDef.corpseFeed`, runner.ts): corpse-consuming

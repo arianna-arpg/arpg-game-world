@@ -31305,6 +31305,24 @@ export class World {
       }
       if (n > 0 && br.spawn.text) this.text(vec(d.pos.x, d.pos.y - 28), br.spawn.text, color, 12);
     }
+    // THE SHALLOW GRAVE: the wreck spills BODIES, not the living — raisable
+    // fuel for the corpse economy (the charnel kit's necromancer bait; a
+    // ghoul's larder). Minted like Exhume's stand-ins, level-scaled.
+    if (br.corpses && chance(br.corpses.chance ?? 1)) {
+      const lvl = Math.max(1, this.zone.level);
+      const [lo, hi] = br.corpses.count;
+      const n = lo + Math.floor(rand(0, hi - lo + 1));
+      for (let i = 0; i < n; i++) {
+        if (this.corpses.length >= CORPSE_CFG.max) this.corpses.shift();
+        this.corpses.push({
+          pos: this.clampPos(vec(d.pos.x + rand(-18, 18), d.pos.y + rand(-18, 18)), 8),
+          defId: br.corpses.monster, level: lvl,
+          maxLife: CORPSE_CFG.mint.life + lvl * CORPSE_CFG.mint.lifePerLevel,
+          remaining: CORPSE_CFG.duration,
+        });
+      }
+      if (n > 0 && br.corpses.text) this.text(vec(d.pos.x, d.pos.y - 28), br.corpses.text, color, 12);
+    }
   }
 
   /** A SECRET HOLLOW gives way (the hollows fabric): carve the recorded rect

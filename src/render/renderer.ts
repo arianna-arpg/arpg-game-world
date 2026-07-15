@@ -15,7 +15,7 @@ import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
-import { BOSS_BAR_XP_MIN, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
+import { BOSS_BAR_XP_MIN, CORPSE_CFG, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import { dayCycle } from '../world/daynight';
@@ -3588,18 +3588,57 @@ export class Renderer {
     }
   }
 
-  /** Corpse remnants: small fading crosses, briefly usable. */
+  /** Corpse remnants — the corpse economy's fuel, drawn as REMAINS: a dark
+   *  settle-stain, a rib sweep, a long bone and the skull knuckle, sized by
+   *  the fallen kind and sinking as the clock runs out. Cheap vector marks
+   *  (≤ CORPSE_CFG.max alive), tinted faintly by the monster's own color so
+   *  a field of mixed dead still reads. */
   private drawCorpses(world: World): void {
     const { ctx } = this;
     for (const c of world.corpses) {
-      const alpha = Math.min(1, c.remaining / 2) * 0.65;
-      ctx.globalAlpha = alpha;
-      ctx.strokeStyle = '#8a4040';
-      ctx.lineWidth = 3;
+      const def = MONSTERS[c.defId];
+      const size = Math.min(15, 6 + (def?.radius ?? 10) * 0.4);
+      const frac = Math.min(1, c.remaining / CORPSE_CFG.duration); // 1 = fresh
+      const alpha = Math.min(1, c.remaining / 2) * 0.8;
+      const sink = 0.72 + 0.28 * frac; // the ground slowly takes it back
+      // The settle-stain beneath.
+      ctx.globalAlpha = alpha * 0.4;
+      ctx.fillStyle = '#2c1a1e';
       ctx.beginPath();
-      ctx.moveTo(c.pos.x - 6, c.pos.y - 6); ctx.lineTo(c.pos.x + 6, c.pos.y + 6);
-      ctx.moveTo(c.pos.x + 6, c.pos.y - 6); ctx.lineTo(c.pos.x - 6, c.pos.y + 6);
+      ctx.ellipse(c.pos.x, c.pos.y + 2, size * 1.25, size * 0.62 * sink, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // The remains: ribs, one long bone, the skull.
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#cfc0a4';
+      ctx.lineWidth = Math.max(1.4, size * 0.14);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let i = 0; i < 3; i++) {
+        const x = c.pos.x - size * 0.15 + i * size * 0.3;
+        ctx.moveTo(x, c.pos.y - size * 0.38 * sink);
+        ctx.quadraticCurveTo(x + size * 0.22, c.pos.y, x, c.pos.y + size * 0.38 * sink);
+      }
+      ctx.moveTo(c.pos.x - size * 0.9, c.pos.y + size * 0.3 * sink);
+      ctx.lineTo(c.pos.x - size * 0.25, c.pos.y + size * 0.42 * sink);
       ctx.stroke();
+      ctx.lineCap = 'butt';
+      ctx.fillStyle = '#d8cbb0';
+      ctx.beginPath();
+      ctx.arc(c.pos.x - size * 0.72, c.pos.y - size * 0.18 * sink, size * 0.3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#1c1410';
+      ctx.beginPath();
+      ctx.arc(c.pos.x - size * 0.8, c.pos.y - size * 0.22 * sink, size * 0.09, 0, Math.PI * 2);
+      ctx.arc(c.pos.x - size * 0.6, c.pos.y - size * 0.2 * sink, size * 0.09, 0, Math.PI * 2);
+      ctx.fill();
+      // The kind's tint, worn faintly — a wolf's ruin differs from a wight's.
+      if (def?.color) {
+        ctx.globalAlpha = alpha * 0.3;
+        ctx.fillStyle = def.color;
+        ctx.beginPath();
+        ctx.ellipse(c.pos.x + size * 0.3, c.pos.y, size * 0.5, size * 0.3 * sink, 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
       ctx.globalAlpha = 1;
     }
   }

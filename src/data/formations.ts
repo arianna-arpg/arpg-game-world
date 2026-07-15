@@ -13,7 +13,7 @@
 // pack freely among themselves — a windrow's crowns are supposed to knit.
 // ---------------------------------------------------------------------------
 
-import { registerDoodadRule, registerFormation } from '../engine/levelgen';
+import { registerDoodadRule, registerFormation, registerStamp, stampSingle } from '../engine/levelgen';
 
 // A WINDBREAK: conifers marching in a line, brush huddled at their feet.
 registerFormation({
@@ -585,6 +585,51 @@ registerFormation({
     { kind: 'powder_keg', radius: [11, 15], jitter: 8, rot: true },
     { kind: 'shot_stack', radius: [12, 16], every: 3, jitter: 10, rot: true },
     { kind: 'munition_cache', radius: [12, 16], every: 4, jitter: 12, rot: true },
+  ],
+});
+
+// --- THE CHARNEL KIT (the corpse economy's scenery — docs/engine/corpses.md) --
+// The plague cart is the Corpse Wagon made scenery: a heaped dray abandoned
+// mid-haul — low honest cover until struck, then its LOAD spills as raisable
+// bodies (BrittleSpec.corpses). The shallow grave is the quiet sibling: a
+// mound that breaks open under a stray blow. Necromancers harvest, ghouls
+// dine, everyone else just smells it.
+registerDoodadRule('plague_cart', {
+  overlap: 'solid', blocksMove: true, spacing: 46,
+  forbidOn: ['water', 'lava', 'chasm'],
+  brittle: {
+    on: ['hit'], orbChance: 0.1, gemChance: 0.06,
+    text: 'the cart breaks apart!', color: '#8a7a58',
+    corpses: { monster: 'zombie', count: [2, 3], text: 'the load spills out!' },
+  },
+});
+registerDoodadRule('shallow_grave', {
+  overlap: 'ground', spacing: 32,
+  brittle: {
+    on: ['hit'], orbChance: 0.08,
+    text: 'the grave breaks open!', color: '#8a7a5e',
+    corpses: { monster: 'zombie', count: [1, 2], chance: 0.9, text: 'the earth gives up its dead!' },
+  },
+});
+// Tileset layouts speak in STAMPS — the kit's kinds join the vocabulary.
+registerStamp('shallow_grave', stampSingle('shallow_grave', [11, 15]));
+registerStamp('plague_cart', stampSingle('plague_cart', [15, 19]));
+// The gibbet has always hung over walkable ground (structure dressing, no
+// rule) — registering it 'ground' keeps that true while formations may
+// now count it as a legal piece.
+registerDoodadRule('gibbet', { overlap: 'ground', spacing: 44 });
+
+// A CHARNEL WAYSTOP: the dead-cart never finished its round — the dray
+// stalled among the graves it was filling, bone heaped where the digging
+// stopped, a gibbet keeping the tally. Fuel depot and ambush larder both.
+registerFormation({
+  id: 'charnel_waystop', arrange: 'orbit', span: [90, 140], step: 44,
+  params: { rings: [1, 1], innerFrac: 0.35 },
+  pieces: [
+    { kind: 'plague_cart', radius: [16, 20], jitter: 6, rot: true },
+    { kind: 'shallow_grave', radius: [12, 16], jitter: 14, rot: true },
+    { kind: 'bone_pile', radius: [10, 14], every: 3, jitter: 16, rot: true },
+    { kind: 'gibbet', radius: [11, 14], every: 4, jitter: 10, rot: true },
   ],
 });
 

@@ -2400,6 +2400,23 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('aoeRadius', 'increased', 0.06)] },
   },
 
+  // The charnel ghoul's table manners (monster verb — rides the SAME corpse
+  // fabric as the player's Feast: one targeting resolve, one restore path,
+  // and it EATS the fuel your detonations wanted. Denial with teeth.)
+  gorge_carrion: {
+    id: 'gorge_carrion', name: 'Gorge on Carrion', noDrop: true,
+    description: 'Bolt down a corpse mid-fight: flesh knits, and the meal drives the eater into a brief loping frenzy.',
+    tags: ['spell', 'corpse', 'duration'], color: '#8a9060',
+    manaCost: 5, cooldown: 8, useTime: 0.6,
+    targeting: { target: 'corpse', castRange: 240, plural: true, corpseLifeRestore: { life: 0.6 } },
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'gorged', duration: 4,
+      mods: [mod('attackSpeed', 'increased', 0.25), mod('moveSpeed', 'increased', 0.2)],
+    }],
+    ai: { range: 240, weight: 3 },
+  },
+
   volatile_cinders: {
     id: 'volatile_cinders', name: 'Volatile Cinders',
     description: 'Consume a corpse: its unspent heat rises from the body as a CINDER that hunts living flesh and bursts. A fed pile looses a whole flight — one cinder more for every extra body eaten.',

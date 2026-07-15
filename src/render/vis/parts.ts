@@ -3619,6 +3619,68 @@ const bell: PartPainter = (ctx, r, spec, pal, t = 0) => {
 
 /** Neck band worn forward of center: strap ring + studs + a hanging tag.
  *  params: studs (n, default 4), tag (bool, default true). */
+/** THE SHROUD WRAP: burial cloth wound across the body in sagging bands,
+ *  loose tails trailing off the hip — the charnel kit's dress for anything
+ *  that should read as "buried once already". (params: bands) */
+const shroudWrap: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'cloth');
+  const bands = Math.round(P(spec, 'bands', 3));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    c.strokeStyle = ramp.base;
+    for (let i = 0; i < bands; i++) {
+      const t = (i + 0.5) / bands;
+      const x = R * (0.55 - t * 1.05);
+      const sag = R * (0.08 + 0.05 * ((i * 7) % 3));
+      c.lineWidth = Math.max(2, R * (0.17 - 0.02 * i));
+      c.beginPath();
+      c.moveTo(x, -R * 0.6);
+      c.quadraticCurveTo(x - sag, 0, x, R * 0.6);
+      c.stroke();
+    }
+    // The dark seams between windings.
+    c.strokeStyle = withAlpha('#14100c', 0.4);
+    c.lineWidth = Math.max(1, R * 0.04);
+    for (let i = 1; i < bands; i++) {
+      const x = R * (0.55 - (i / bands) * 1.05) + R * 0.08;
+      c.beginPath(); c.moveTo(x, -R * 0.46); c.lineTo(x, R * 0.46); c.stroke();
+    }
+    // Loose tails — the wrapping stopped caring near the end.
+    c.strokeStyle = ramp.highlight;
+    c.lineWidth = Math.max(1.5, R * 0.07);
+    c.beginPath();
+    c.moveTo(-R * 0.5, R * 0.2);
+    c.quadraticCurveTo(-R * 0.85, R * 0.42, -R * 0.78, R * 0.64);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(-R * 0.52, -R * 0.16);
+    c.quadraticCurveTo(-R * 0.92, -R * 0.22, -R * 1.0, -R * 0.02);
+    c.stroke();
+    c.lineCap = 'butt';
+  });
+};
+
+/** CARRION FLIES: a sparse standing orbit of specks with a faint shimmer
+ *  ring — the charnel halo. Deterministic placement, no clock: bakes stay
+ *  stable. (params: flies) */
+const carrionFlies: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'dark');
+  const n = Math.round(P(spec, 'flies', 5));
+  place(ctx, r, spec, (c, R) => {
+    c.strokeStyle = withAlpha(ramp.highlight, 0.2);
+    c.lineWidth = Math.max(0.8, R * 0.03);
+    c.beginPath(); c.ellipse(0, -R * 0.15, R * 0.8, R * 0.5, 0.3, 0, Math.PI * 2); c.stroke();
+    c.fillStyle = withAlpha(ramp.base, 0.9);
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.4 + 1.7;
+      const rr = R * (0.55 + 0.1 * (i % 3));
+      c.beginPath();
+      c.arc(Math.cos(a) * rr, -R * 0.15 + Math.sin(a) * rr * 0.55, Math.max(1, R * 0.045), 0, Math.PI * 2);
+      c.fill();
+    }
+  });
+};
+
 const collar: PartPainter = (ctx, r, spec, pal) => {
   const ramp = rampFor(spec, pal, 'cloth');
   const metal = pal.metal;
@@ -3885,6 +3947,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   crystalGrowths, roots, stitchSeams, bell, chest,
   collar, harness, saddlebags, muzzle,
   floatingShards,
+  shroudWrap, carrionFlies,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

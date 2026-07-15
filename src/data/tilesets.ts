@@ -2166,6 +2166,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // layout; barrows stacks its own extra rows on top).
       { kind: 'formation', count: [2, 3], formation: 'gravestone_rows' },
       { kind: 'formation', count: [0, 1], formation: 'bone_trail' },
+      // The dead-cart's round never finished: fresh mounds, and sometimes the
+      // stalled cart itself — strike either and the corpse economy pays out.
+      { kind: 'shallow_grave', count: [1, 3] },
+      { kind: 'formation', count: [0, 1], formation: 'charnel_waystop' },
     ],
     variants: [
       { name: 'barrows', layout: [
@@ -2216,6 +2220,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 3 },
         { id: 'zombie', weight: 2, presence: { to: 22, fadeOut: 12 } },
+        // The rival customer: it eats the bodies your detonations wanted.
+        { id: 'charnel_ghoul', weight: 2 },
         { id: 'crypt_warden', weight: 3, presence: { from: 6, fadeIn: 3 } },
         { id: 'bone_serpent', weight: 2, presence: { from: 10, fadeIn: 4 } },
         { id: 'lich_marshal', weight: 1, presence: { from: 14, fadeIn: 6 } },
