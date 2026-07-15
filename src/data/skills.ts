@@ -376,6 +376,59 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 420, weight: 3, keepDistance: 280 },
   },
 
+  // ======================= The Unmaking (void) =============================
+  // The war-wound's arts, bottled (dropped as gems like any): chaos that
+  // neither burns nor poisons but LOOSENS. The UNRAVELLING ladder is the
+  // family spine — a compounding chaos rot (status.ts) that erodes chaos
+  // resistance stack by stack, collapses into UNMADE at cap, and spreads
+  // from the dead: the volcanic country pops when it dies; the unmaking
+  // TRAVELS. Every piece here feeds the ladder a different way.
+
+  unmaking_bolt: {
+    id: 'unmaking_bolt', name: 'Unmaking Bolt',
+    description: 'Hurl a mote of undoing. It does not burn; it LOOSENS — the victim begins to unravel.',
+    tags: ['spell', 'projectile', 'chaos'], color: '#7de84a',
+    manaCost: 7, cooldown: 0, useTime: 0.75,
+    baseDamage: { chaos: [9, 14] },
+    delivery: { type: 'projectile', speed: 360, radius: 9, range: 500 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'unravelling', chance: 0.45, magnitude: 0.6 },
+    ],
+    requirements: { intelligence: 14 },
+    ai: { range: 460, weight: 2, keepDistance: 260 },
+  },
+
+  null_verge: {
+    id: 'null_verge', name: 'Null Verge',
+    description: 'Open a slow seam of un-place. It does not strike; it SEEPS — those who stand in it come apart thread by thread.',
+    tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#5ee88a',
+    manaCost: 14, cooldown: 6, useTime: 0.85,
+    baseDamage: { chaos: [4, 7] },
+    delivery: { type: 'ground', radius: 85, castRange: 430, lingerDuration: 4.5, tickInterval: 0.5, noImpact: true, exposure: 0.3 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'unravelling', chance: 0.35, magnitude: 0.45 },
+    ],
+    requirements: { intelligence: 20 },
+    ai: { range: 400, weight: 3, keepDistance: 240 },
+  },
+
+  word_of_unmaking: {
+    id: 'word_of_unmaking', name: 'Word of Unmaking',
+    description: 'Speak the syllable the world was never meant to keep: a ring of undoing, and everything it touches starts to unravel.',
+    tags: ['spell', 'projectile', 'chaos', 'aoe'], color: '#b8ffd0',
+    manaCost: 24, cooldown: 4, useTime: 0.8,
+    baseDamage: { chaos: [3, 5] },
+    delivery: { type: 'projectile', speed: 250, radius: 9, range: 360, count: 20, ring: {} },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'unravelling', chance: 1, magnitude: 0.8 },
+    ],
+    requirements: { intelligence: 24, willpower: 10 },
+    ai: { range: 300, weight: 3 },
+  },
+
   // --- The Legion's arsenal: demon-kit skills (dropped as gems like any) ----
 
   hellfire_lash: {

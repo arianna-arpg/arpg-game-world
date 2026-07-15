@@ -54,6 +54,26 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 5,
   },
 
+  // --- The Unmaking graft pair (the war-wound's arts) -----------------------
+  loose_thread: {
+    id: 'loose_thread', name: 'Loose Thread',
+    description: 'Hits with this skill find the LOOSE THREAD: a 25% chance to set the victim unravelling — a compounding rot that spreads from the dead.',
+    // attack|spell: the hit-capable gate (tag hygiene — the census flags a
+    // universal applier as inert on every flask/banner/ward it would fit).
+    color: '#7de84a', requiresTags: ['attack', 'spell'],
+    mods: [mod('apply_unravelling', 'flat', 0.25)],
+    perLevel: [mod('apply_unravelling', 'flat', 0.04)],
+    weight: 5,
+  },
+  entropic_bloom: {
+    id: 'entropic_bloom', name: 'Entropic Bloom',
+    description: 'This skill\'s lingering work comes apart at the seams: wider, longer, and everything inside it unravels a little.',
+    color: '#5ee88a', requiresTags: ['duration'],
+    mods: [mod('aoeRadius', 'increased', 0.12), mod('effectDuration', 'increased', 0.18), mod('apply_unravelling', 'flat', 0.15)],
+    perLevel: [mod('effectDuration', 'increased', 0.03)],
+    weight: 5,
+  },
+
   // --- The Symbiote grafts (the Caul arts' support pair) --------------------
   grasping_tendrils: {
     id: 'grasping_tendrils', name: 'Grasping Tendrils',

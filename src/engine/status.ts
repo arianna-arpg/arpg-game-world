@@ -460,6 +460,33 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     dpsCurve: 'ramp',
     hitMagnitude: 0.45, baseline: { dps: 3.5, perLevel: 1.3 },
   },
+  // UNRAVELLING (the Unmaking's signature): a compounding chaos rot — each
+  // stack loosens the victim's grip on itself (chaos-res erosion per stack),
+  // the ticks open weak and finish hard (ramp), and THE DEAD PASS IT ON
+  // (propagateOnDeath): the volcanic country pops when it dies; the
+  // unmaking TRAVELS. Caps into UNMADE.
+  unravelling: {
+    label: 'Unravelling', color: '#7de84a', duration: 6,
+    element: 'chaos', dotType: 'chaos',
+    stacking: true, maxStacks: 5, buildup: { into: 'unmade' },
+    dpsCurve: 'ramp',
+    hitMagnitude: 0.4, baseline: { dps: 3, perLevel: 1.1 },
+    mods: [mod('chaosRes', 'flat', -0.04)],
+    modsPerStack: true,
+    propagateOnDeath: true,
+  },
+  // What unravelling collapses into at cap: for a breath the victim is
+  // partly ELSEWHERE — the legs drag, the hands slur, the outline argues
+  // with the world. A hard drag, never a lockout (the heatstroke/swoon
+  // doctrine).
+  unmade: {
+    label: 'Unmade', color: '#b8ffd0', duration: 2.2,
+    mods: [
+      mod('moveSpeed', 'more', -0.24),
+      mod('attackSpeed', 'more', -0.15),
+      mod('castSpeed', 'more', -0.15),
+    ],
+  },
   // JINXED (the unlucky mark): the afflicted's own damage rolls twice and
   // keeps the LOWER — misfortune as a debuff (the dark twin of Lucky).
   jinxed: {
