@@ -4416,6 +4416,52 @@ export class World {
     bumpLedger(this.ledger, e.def.ledger.onEncounter); // DISCOVERY — now you know it exists
     this.text(vec(e.pos.x, e.pos.y - 30), `${e.scale.label} opens!`, e.def.trigger.color, 20);
     this.flashes.push({ pos: vec(e.pos.x, e.pos.y), radius: e.scale.startRadius, color: e.def.trigger.color, life: 0.6, maxLife: 0.6 });
+    // THE ECHO RITE (EncounterDef.echoParty — the Mirrorkin): the field's
+    // opening breath forms one reflection per living hero.
+    if (e.def.echoParty) this.spawnPartyEchoes(e);
+  }
+
+  /** THE PARTY ECHO (EncounterDef.echoParty — the Mirrorkin's rite, and the
+   *  seam a future revenant event reuses with a SNAPSHOT instead of a live
+   *  seat): one hostile reflection per living seat. The vessel def supplies
+   *  body, brain and resources; the SEAT supplies the silhouette (the
+   *  mimicOwnerForm copy, hostile-side) and up to maxSkills of its own bar —
+   *  filtered to skills carrying an `.ai` hint, because a monster must know
+   *  how to WANT a skill. An empty mirror keeps the vessel's own def kit. */
+  private spawnPartyEchoes(e: ActiveEncounter): void {
+    const spec = e.def.echoParty!;
+    if (!MONSTERS[spec.bodyDefId]) return;
+    const lvl = Math.max(1, this.zone.level + (spec.levelBonus ?? 0));
+    for (const seat of this.seats) {
+      const hero = seat.actor;
+      if (hero.dead) continue;
+      const m = this.createMonster(spec.bodyDefId, lvl, 'enemy');
+      // The silhouette: the hero's look, shape and size — worn in the vessel's
+      // own pale glass (colour/material stay the def's): a mirror, not a twin.
+      m.look = hero.look;
+      m.shape = hero.shape;
+      m.radius = hero.radius;
+      m.facing = hero.facing;
+      m.name = `Reflection of ${hero.name}`;
+      // The bar, mirrored: monster-castable skills only, at a level that
+      // tracks the body (the same quarter-pace grants use).
+      const mirrored = hero.skills
+        .filter((s): s is SkillInstance => !!s && !!s.def.ai)
+        .slice(0, spec.maxSkills ?? 4);
+      if (mirrored.length) {
+        const skillLvl = Math.max(1, Math.ceil(lvl / 4));
+        m.skills = mirrored.map(s =>
+          makeSkillInstance(s.def, Math.min(skillMaxLevel(s.def), skillLvl)));
+      }
+      if (spec.powerMods?.length) m.sheet.setSource('echo_power', spec.powerMods);
+      m.fillResources();
+      const ang = this.encRng.range(0, Math.PI * 2);
+      const rr = Math.max(60, e.radius * 0.6);
+      m.pos = this.clampPos(vec(e.pos.x + Math.cos(ang) * rr, e.pos.y + Math.sin(ang) * rr), m.radius);
+      e.spawned.add(m.id);
+      this.actors.push(m);
+      if (spec.announce) this.text(vec(m.pos.x, m.pos.y - 30), spec.announce, e.def.trigger.color, 14);
+    }
   }
 
   /** Grow each open field, pulse spawns inside it, drain the kill-fed timer.

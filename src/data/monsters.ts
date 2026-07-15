@@ -5853,6 +5853,57 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE MIRRORKIN (reflections given appetite) ----------------------------
+  // A contexts-gated faction: they exist NOWHERE in ordinary generation — only
+  // the MIRROR RIFT encounter fields them. The husk is the scenery-mimic
+  // generalized (the chest's trick, worn by a body); the reflection is the
+  // VESSEL the rift's echo rite pours a hero into (EncounterDef.echoParty
+  // copies a seat's silhouette + castable bar onto it at spawn — a wild-rolled
+  // one fights with its own glass instead).
+
+  // THE MIRROR HUSK: a reflection that found no face. Furniture until you're
+  // close enough to see yourself in it.
+  mirror_husk: {
+    id: 'mirror_husk', name: 'Mirror Husk',
+    color: '#b8c4d8', shape: 'circle', radius: 11, material: 'ethereal', look: 'mirror_husk',
+    base: { life: 44, moveSpeed: 175, accuracy: 95, evasion: 85, mana: 20, manaRegen: 3 },
+    mods: [mod('coldRes', 'flat', 0.4)],
+    skills: ['claw'],
+    xp: 16,
+    faction: 'mirrorkin', tags: ['construct'],
+    detection: 1.2,
+    ambush: { radius: 120, announce: 'the glass wakes!' },
+    // A mirror is hard to hit and reads your wind-ups — it was WATCHING.
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      behavior: { dodge: { chance: 0.55, reaction: [0.1, 0.3], exit: 'lateral' } },
+    },
+  },
+  // THE REFLECTION: the echo rite's vessel. Fielded by the rite it wears a
+  // hero's face and bar; rolled wild it fights with its own glass.
+  mirrorkin_reflection: {
+    id: 'mirrorkin_reflection', name: 'Reflection',
+    color: '#cdd6e4', shape: 'circle', radius: 12, material: 'ethereal', look: 'mirror_husk',
+    base: { life: 95, moveSpeed: 185, accuracy: 100, evasion: 70, mana: 170, manaRegen: 12 },
+    mods: [mod('coldRes', 'flat', 0.4), mod('chaosRes', 'flat', 0.2)],
+    skills: ['shadow_shuriken', 'shadow_slash'],
+    xp: 42,
+    faction: 'mirrorkin', tags: ['construct'],
+    detection: 1.3,
+    noRecall: true,
+    scaling: { life: { incPerLevel: 0.05 } },
+    // It knows your moves — it IS your moves: high dodge, reads casts.
+    brain: {
+      type: 'skirmish', withdraw: 1.05,
+      behavior: { dodge: { chance: 0.6, reaction: [0.1, 0.28], exit: 'lateral' } },
+      rules: [
+        { when: { targetCasting: 0.3, distUnder: 380, chance: 0.5 },
+          hold: [0.6, 0.9], cooldown: 3,
+          use: { move: { style: 'direct', pace: 1.25 } } },
+      ],
+    },
+  },
+
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
   dire_wolf: {
     id: 'dire_wolf', name: 'Dire Wolf',

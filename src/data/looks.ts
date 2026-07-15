@@ -671,6 +671,17 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ========================================================== THE MIRRORKIN
+  /** The mirror husk: a blank where a face should be, lit from nowhere. */
+  mirror_husk: {
+    parts: [
+      { kind: 'disc', scale: 0.85 },
+      { kind: 'mask', scale: 0.6, role: 'glow' },
+      { kind: 'halo', scale: 0.95, alpha: 0.4, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, params: { n: 2 } }],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [

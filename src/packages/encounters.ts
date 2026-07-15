@@ -494,4 +494,30 @@ export interface EncounterDef {
    *  Lastlight). Undefined = a plain encounter, byte-identical. Mutually
    *  exclusive with `surge` and `extract`. */
   borough?: BoroughSpec;
+  /** ECHO THE PARTY (the Mirrorkin's rite — and the seam a future revenant
+   *  event reuses): the moment this encounter OPENS, one REFLECTION spawns per
+   *  living seat — the vessel def's body wearing that hero's silhouette and
+   *  casting the hero's own castable bar skills at monster stats. ADDITIVE
+   *  (composes with the ordinary scales; the reflections join the field's
+   *  spawned set, so their falls feed the timer like any kill). */
+  echoParty?: EchoPartySpec;
+}
+
+/** The echo-party rite as data — every number a knob. */
+export interface EchoPartySpec {
+  /** The vessel MonsterDef the reflections are built on (its stats, brain,
+   *  resources; the silhouette + bar are copied from each seat at spawn). */
+  bodyDefId: string;
+  /** Monster levels above the zone the reflections spawn at. */
+  levelBonus?: number;
+  /** Folded onto each reflection's sheet (source 'echo_power') — the power
+   *  factor: a mirror at full skill power with monster stats would flatter
+   *  no one, so the default def carries a MORE-damage haircut here. */
+  powerMods?: Modifier[];
+  /** Max bar skills mirrored per reflection (default 4). Skills with no `.ai`
+   *  hint are skipped — a monster must know how to WANT a skill — and a bar
+   *  that mirrors nothing leaves the vessel fighting with its own def kit. */
+  maxSkills?: number;
+  /** Floated over each reflection as it forms. */
+  announce?: string;
 }
