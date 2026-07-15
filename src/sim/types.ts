@@ -155,6 +155,24 @@ export type StopRule =
   | 'waves_dead'    // stop early once every spawned (non-repeating) wave is dead
   | 'player_dead';  // only the hero's death ends it early (survival probes)
 
+/** A steady supply of raisable corpses, minted OUTSIDE the kill flow — the
+ *  fuel line for corpse-skill probes and scenarios. A corpse-consuming host
+ *  can't bootstrap its own fuel (nothing dies until something casts), so
+ *  the feeder lays bodies at the hero's nearest living enemy (the battle
+ *  line — where a pilot's aim already points), falling back to `distance`
+ *  px from the hero on an empty field. Deterministic: fixed ring offsets,
+ *  no rng draw. */
+export interface CorpseFeedSpec {
+  /** Mint a beat of corpses every N sim-seconds. */
+  everySec: number;
+  /** Bodies per beat (default 1). */
+  count?: number;
+  /** MonsterDef id the bodies claim to be (default 'zombie'). */
+  monsterId?: string;
+  /** Fallback drop distance from the hero when no enemy stands (px, default 160). */
+  distance?: number;
+}
+
 /** The unit of measurement: one build in one arena against one script. */
 export interface ScenarioDef {
   id: string;
@@ -165,6 +183,8 @@ export interface ScenarioDef {
   /** Default monster level for waves that don't pin one (default: build level). */
   parityLevel?: number;
   waves: WaveSpec[];
+  /** Lay corpses on a clock (see CorpseFeedSpec) — the corpse family's fuel. */
+  corpseFeed?: CorpseFeedSpec;
   /** Sim-seconds cap. */
   duration: number;
   stop?: StopRule;

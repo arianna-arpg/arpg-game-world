@@ -1023,11 +1023,28 @@ export interface ResolvedTarget {
   pos: Vec2;
   actor?: Actor;
   corpse?: Corpse;
+  /** THE WAGON's haul: every body a plural corpse find gathered (primary
+   *  included, nearest-the-mark first). Absent on single finds — readers
+   *  treat absence as [corpse]. */
+  corpses?: Corpse[];
   self?: boolean;
 }
 
-const CORPSE_DURATION = 6;
-const MAX_CORPSES = 40;
+/** THE CORPSE ECONOMY's dials — minting (kills, craters, Exhume), shelf life,
+ *  the world cap, and the WAGON fabric (multi-corpse casts): one registry, no
+ *  scattered literals. `batch` tunes how a plural feast grows its footprint —
+ *  per body past the first, the blast widens and effect durations stretch. */
+export const CORPSE_CFG = {
+  /** Seconds a fresh corpse stays raisable/detonable. */
+  duration: 6,
+  /** World cap — the oldest remnant fades first. */
+  max: 40,
+  /** Producer mints (Exhume's spawnCorpse effect): scatter around the mark,
+   *  and the stand-in body's life when no real death backs the corpse. */
+  mint: { spread: 42, life: 30, lifePerLevel: 8 },
+  /** Multi-corpse feasts (TargetingSpec.plural × the corpseBatch stat). */
+  batch: { aoePerExtra: 0.12, durationPerExtra: 0.15 },
+};
 
 /** Seconds a player-DROPPED gem stays un-grabbable so the dropper (standing on
  *  it) doesn't instantly re-pick it up — long enough to step off / hand it over.
@@ -10068,8 +10085,8 @@ export class World {
     if (surge && this.demonHeadcount(facId) >= surge.meteorHeadcountCap && m.defId) {
       // Zone already swarming → the crater leaves a raisable corpse instead of
       // another live demon (caps density; feeds necromancers — corpse compounding).
-      this.corpses.push({ pos: vec(at.x, at.y), defId: m.defId, level: m.level, maxLife: m.maxLife(), remaining: CORPSE_DURATION });
-      if (this.corpses.length > MAX_CORPSES) this.corpses.shift();
+      this.corpses.push({ pos: vec(at.x, at.y), defId: m.defId, level: m.level, maxLife: m.maxLife(), remaining: CORPSE_CFG.duration });
+      if (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
     } else {
       this.actors.push(m);
     }
@@ -14974,18 +14991,21 @@ export class World {
       // corpse sought, no corpse needed; the cast targets the aim point
       // like any plain summon (the summon branch reads the form).
       if (grimoireForm(inst)) return { pos: vec(aim.x, aim.y) };
-      let best: Corpse | null = null, bd = search;
-      for (const c of this.corpses) {
-        if (dist(caster.pos, c.pos) > t.castRange) continue;
-        const dd = dist(aim, c.pos);
-        if (dd < bd) { bd = dd; best = c; }
-      }
-      if (best) return { pos: vec(best.pos.x, best.pos.y), corpse: best };
       const tags = skillContextTags(inst.def);
       const extra = instanceMods(inst);
-      // Soulwalk-style fallback: no corpse? Target a minion WITHOUT harming
-      // it (Corpse Shift teleports to it; nothing is consumed).
-      if (caster.sheet.get('targetMinionFallback', tags, extra) > 0) {
+      // THE WAGON: a plural spec loads up to 1 + corpseBatch bodies nearest
+      // the mark in one find. Single-appetite skills keep the classic one.
+      const want = t.plural
+        ? 1 + Math.max(0, Math.round(caster.sheet.get('corpseBatch', tags, extra)))
+        : 1;
+      const haul = this.corpses
+        .filter(c => dist(caster.pos, c.pos) <= t.castRange && dist(aim, c.pos) < search)
+        .sort((a, b) => dist(aim, a.pos) - dist(aim, b.pos))
+        .slice(0, want);
+      // Soulwalk-style fallback keeps FIRST CLAIM on a bare field: no corpse
+      // at all? Target a minion WITHOUT harming it (Corpse Shift teleports
+      // to it; nothing is consumed).
+      if (!haul.length && caster.sheet.get('targetMinionFallback', tags, extra) > 0) {
         let pick2: Actor | null = null; let pd = Math.max(search, 160);
         for (const a of this.actors) {
           if (a.owner !== caster || a.dead || a.construct) continue;
@@ -14995,25 +15015,31 @@ export class World {
         }
         if (pick2) return { pos: vec(pick2.pos.x, pick2.pos.y), actor: pick2 };
       }
-      // Sacrificial Rites: no corpse? Your nearest minion will do.
-      if (caster.sheet.get('sacrificeMinions', tags, extra) > 0) {
-        let victim: Actor | null = null; let vd = Math.max(search, 160);
-        for (const a of this.actors) {
-          if (a.owner !== caster || a.dead || a.construct || !a.defId) continue;
-          if (dist(caster.pos, a.pos) > t.castRange) continue;
-          const dd = dist(aim, a.pos) - a.radius;
-          if (dd < vd) { vd = dd; victim = a; }
-        }
-        if (victim) {
+      // Sacrificial Rites: short of the load? Your nearest minions fill the
+      // wagon, nearest first (with no wagon the load is 1 — the classic
+      // none-available fallback, unchanged).
+      if (haul.length < want && caster.sheet.get('sacrificeMinions', tags, extra) > 0) {
+        const victims = this.actors
+          .filter(a => a.owner === caster && !a.dead && !a.construct && !!a.defId
+            && dist(caster.pos, a.pos) <= t.castRange
+            && dist(aim, a.pos) - a.radius < Math.max(search, 160))
+          .sort((a, b) => (dist(aim, a.pos) - a.radius) - (dist(aim, b.pos) - b.radius));
+        for (const victim of victims) {
+          if (haul.length >= want) break;
           const corpse: Corpse = {
             pos: vec(victim.pos.x, victim.pos.y),
             defId: victim.defId!, level: victim.level,
-            maxLife: victim.maxLife(), remaining: CORPSE_DURATION,
+            maxLife: victim.maxLife(), remaining: CORPSE_CFG.duration,
           };
           this.kill(victim); // a real death — Martyrdom and friends apply
           this.corpses.push(corpse);
-          return { pos: vec(corpse.pos.x, corpse.pos.y), corpse };
+          haul.push(corpse);
         }
+      }
+      if (haul.length) {
+        const found: ResolvedTarget = { pos: vec(haul[0].pos.x, haul[0].pos.y), corpse: haul[0] };
+        if (haul.length > 1) found.corpses = haul;
+        return found;
       }
       return null;
     }
@@ -16202,7 +16228,7 @@ export class World {
     // dash IS an aoe skill for every stat query this use makes.
     const tags = skillContextTags(def, grantedTags(inst));
     let useMult = opts.dmgMult ?? 1;
-    const targetInfo = opts.targetInfo ?? null;
+    let targetInfo = opts.targetInfo ?? null;
     // CROWD EMPOWERMENT (SkillDef.empower — the warcry-power shape): tally
     // the weighted enemies in reach (a boss counts for six men) and let
     // the POWER score feed the use's damage and/or a stacked buff.
@@ -16276,8 +16302,29 @@ export class World {
       return false;
     }
     if (targetInfo?.corpse && !this.corpses.includes(targetInfo.corpse)) {
-      this.failNote(caster, def.id + ':lost', 'corpse lost');
-      return false;
+      // The body is gone — rotted mid-gesture, or eaten by an earlier beat
+      // of an echo train. Corpse casts RE-SEEK at the mark (so each echo
+      // eats its own wagon-load); only a truly bare field refuses the cast.
+      const fresh = this.resolveTargeting(caster, inst, aim);
+      if (fresh?.corpse) {
+        targetInfo = fresh;
+      } else {
+        this.failNote(caster, def.id + ':lost', 'corpse lost');
+        return false;
+      }
+    }
+    // A SECONDARY execution (echo beat, figure step, hatched payload) arrives
+    // with no find of its own — a corpse skill's beat SEEKS fresh at its own
+    // aim, so each echo eats (and is fueled by) its own load off the pile. A
+    // bare field refuses the beat, exactly as it would refuse the press —
+    // no free unfueled novas from a skill whose whole grammar is the fuel.
+    if (!targetInfo && !instanceCurseField(inst)
+      && instanceTargeting(inst)?.target === 'corpse') {
+      targetInfo = this.resolveTargeting(caster, inst, aim);
+      if (!targetInfo) {
+        this.failNote(caster, def.id + ':lost', 'corpse lost');
+        return false;
+      }
     }
 
     // DAMAGE-POOL release (DamagePoolSpec): 'vent' toggles the leaking aura,
@@ -16412,18 +16459,29 @@ export class World {
 
     // Resolve target-derived payloads, then consume what should be consumed.
     let flatBonus: Partial<Record<DamageType, number>> | undefined;
+    /** Bodies past the first this use consumed (THE WAGON) — widens the
+     *  footprint (aoeScale below) and stretches effect durations (durScale),
+     *  both dialed by CORPSE_CFG.batch. */
+    let corpseFeast = 0;
     const targetSpec = instanceTargeting(inst);
     if (targetInfo && targetSpec) {
       const t = targetSpec;
       if (targetInfo.corpse) {
+        // The whole gathered haul — survivors only (a body can rot, or be
+        // eaten by an earlier echo beat, between the press and the landing).
+        const feast = (targetInfo.corpses ?? [targetInfo.corpse])
+          .filter(c => this.corpses.includes(c));
         if (t.corpseLifeDamage) {
-          flatBonus = { fire: targetInfo.corpse.maxLife * t.corpseLifeDamage };
+          let fuel = 0;
+          for (const c of feast) fuel += c.maxLife * t.corpseLifeDamage;
+          flatBonus = { fire: fuel };
         }
         if (t.consumesCorpse !== false && def.delivery.type !== 'summon') {
-          this.removeCorpse(targetInfo.corpse);
-          // HIVEBORN (corpseSpawn graft): the body eaten by this offering
-          // crawls back out changed — one crawler per corpse consumed.
-          this.corpseSpawn(caster, inst, targetInfo.corpse.pos, 1);
+          for (const c of feast) this.removeCorpse(c);
+          corpseFeast = Math.max(0, feast.length - 1);
+          // HIVEBORN (corpseSpawn graft): the bodies eaten by this offering
+          // crawl back out changed — one crawler per corpse consumed.
+          this.corpseSpawn(caster, inst, targetInfo.corpse.pos, feast.length);
         }
       }
       if (targetInfo.actor && t.requiresStatus && t.consumesStatus) {
@@ -16500,6 +16558,10 @@ export class World {
     // ONCE per cast — impact, linger, envelope anchors and cascades all
     // breathe together — and channel beats pass through here per pulse,
     // so each detonation wears its own size.
+    // A multi-corpse feast casts a WIDER shadow: each body past the first
+    // grows the footprint — the wagon's "larger explosion", data-dialed in
+    // CORPSE_CFG.batch (durations stretch the same way, below).
+    if (corpseFeast > 0) aoeScale *= 1 + CORPSE_CFG.batch.aoePerExtra * corpseFeast;
     {
       const vAoe = instanceVariance(inst)?.aoe;
       if (vAoe) aoeScale *= rand(vAoe[0], vAoe[1]);
@@ -17511,10 +17573,25 @@ export class World {
             break;
           }
           if (!targetInfo?.corpse) break;
-          const corpse = targetInfo.corpse;
-          this.removeCorpse(corpse);
-          this.corpseSpawn(caster, inst, corpse.pos, 1);
-          this.spawnMinion(caster, inst, { monsterId: corpse.defId, pos: corpse.pos });
+          // THE WAGON: a plural find hands the rite its whole haul — raise
+          // as many as the roster has ROOM for (free slots only; a full
+          // roster keeps the classic single-raise rotate), and eat ONLY
+          // what stands back up. Cap math mirrors spawnMinion's own.
+          const haul = (targetInfo.corpses ?? [targetInfo.corpse])
+            .filter(c => this.corpses.includes(c));
+          if (!haul.length) break;
+          const rosterCap = Math.max(1, Math.round(
+            caster.sheet.get('minionMaxCount', tags, extra, d.maxActive)));
+          const standing = (d.poolGroup
+            ? this.minionsOfGroup(caster, d.poolGroup)
+            : this.minionsOfSkill(caster, inst.def.id)).length;
+          const raise = Math.max(1, Math.min(haul.length, rosterCap - standing));
+          for (let ri = 0; ri < raise; ri++) {
+            const corpse = haul[ri];
+            this.removeCorpse(corpse);
+            this.spawnMinion(caster, inst, { monsterId: corpse.defId, pos: corpse.pos });
+          }
+          this.corpseSpawn(caster, inst, haul[0].pos, raise);
           break;
         }
         // TOGGLED CONTRACT (PoE2 Spirit style): the SKILL owns the money —
@@ -17958,7 +18035,10 @@ export class World {
     if (fieldAt) this.dropLingerField(caster, inst, fieldAt, useMult);
 
     // Caster-side effects (buffs, charges, zones) apply once per use.
-    const durScale = caster.sheet.get('effectDuration', tags, extra);
+    // A wagon-fed use burns LONGER too: offerings and rites stretch per
+    // extra body consumed (CORPSE_CFG.batch.durationPerExtra).
+    const durScale = caster.sheet.get('effectDuration', tags, extra)
+      * (corpseFeast > 0 ? 1 + CORPSE_CFG.batch.durationPerExtra * corpseFeast : 1);
     for (const fx of def.effects) {
       if (fx.type === 'buff') {
         // THE FUSE defers the worn payload too — the blessing that lands
@@ -18359,15 +18439,21 @@ export class World {
         }
         if (!spent) this.failNote(caster, def.id + ':nobodies', 'no minions to spend');
       }
-      // EXHUME (spawnCorpse): fresh fuel for the corpse economy.
+      // EXHUME (spawnCorpse): fresh fuel for the corpse economy. THE WAGON,
+      // INVERTED: on a producer the corpseBatch stat digs MORE bodies per
+      // cast — the same stat that widens a consumer's appetite trades cast
+      // cadence for quantity here.
       if (fx.type === 'spawnCorpse' && MONSTERS[fx.monsterId]) {
-        for (let ci = 0; ci < fx.count; ci++) {
-          if (this.corpses.length >= MAX_CORPSES) this.corpses.shift();
+        const spread = CORPSE_CFG.mint.spread;
+        const dug = fx.count
+          + Math.max(0, Math.round(caster.sheet.get('corpseBatch', tags, extra)));
+        for (let ci = 0; ci < dug; ci++) {
+          if (this.corpses.length >= CORPSE_CFG.max) this.corpses.shift();
           this.corpses.push({
-            pos: this.clampPos(vec(aim.x + rand(-42, 42), aim.y + rand(-42, 42)), 10),
+            pos: this.clampPos(vec(aim.x + rand(-spread, spread), aim.y + rand(-spread, spread)), 10),
             defId: fx.monsterId, level: this.zone.level,
-            maxLife: 30 + this.zone.level * 8,
-            remaining: CORPSE_DURATION,
+            maxLife: CORPSE_CFG.mint.life + this.zone.level * CORPSE_CFG.mint.lifePerLevel,
+            remaining: CORPSE_CFG.duration,
           });
         }
         this.flashes.push({ pos: vec(aim.x, aim.y), radius: 44, color: def.color, life: 0.3, maxLife: 0.3 });
@@ -23721,9 +23807,9 @@ export class World {
         this.corpses.push({
           pos: vec(actor.pos.x, actor.pos.y),
           defId: actor.defId, level: actor.level,
-          maxLife: actor.maxLife(), remaining: CORPSE_DURATION,
+          maxLife: actor.maxLife(), remaining: CORPSE_CFG.duration,
         });
-        if (this.corpses.length > MAX_CORPSES) this.corpses.shift();
+        if (this.corpses.length > CORPSE_CFG.max) this.corpses.shift();
       }
     }
     this.flashes.push({

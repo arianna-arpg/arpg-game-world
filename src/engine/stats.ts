@@ -1062,6 +1062,11 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** > 0: corpse-targeting skills may target a minion when no corpse exists
    *  (without harming it) — e.g. Corpse Shift teleporting to a minion. */
   targetMinionFallback: { label: 'Target Minions as Fallback', base: 0 },
+  /** ADDITIONAL corpses a corpse-handling cast reaches for (the wagon
+   *  fabric): plural corpse skills (TargetingSpec.plural) consume or raise
+   *  up to 1+N bodies per cast, and producer skills (Exhume's spawnCorpse)
+   *  mint N MORE per dig — one stat, both directions of the economy. */
+  corpseBatch:    { label: 'Corpse Batch', base: 0 },
 
   // Stealth & perception
   /** Multiplier on the range at which enemies detect this actor. */

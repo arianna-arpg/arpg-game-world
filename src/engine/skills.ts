@@ -2731,6 +2731,16 @@ export interface TargetingSpec {
   consumesStatus?: boolean;
   /** Corpse targets are consumed by default; set false to leave them. */
   consumesCorpse?: boolean;
+  /** PLURAL APPETITE (the wagon fabric): a corpse find gathers up to
+   *  1 + the caster's `corpseBatch` stat bodies per cast. Consumers eat the
+   *  pile — corpseLifeDamage fuel SUMS, the footprint widens and effect
+   *  durations stretch per extra body (CORPSE_CFG.batch) — corpse summons
+   *  raise one minion per body (free roster slots only), and Sacrificial
+   *  Rites tops up a short load from your minions. Leave unset on skills
+   *  whose effect cannot scale with the haul (Corpse Shift: one destination
+   *  regardless of load — extra bodies would be waste, so it never takes
+   *  them). */
+  plural?: boolean;
   /** Max distance from the caster to the target. */
   castRange: number;
   /** Search radius around the aim point (default 70). */

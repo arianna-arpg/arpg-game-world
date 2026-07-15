@@ -3100,6 +3100,22 @@ export const SUPPORTS: Record<string, SupportDef> = {
     weight: 6,
   },
 
+  corpse_wagon: {
+    id: 'corpse_wagon', name: 'Corpse Wagon',
+    description: 'The dead travel in COMPANY: this skill handles up to 2 additional corpses per cast — detonations eat the whole pile into one greater blast, raisings stand the row up together, offerings burn wider and longer, and Exhume digs its full load in one turn of the spade. The wagon is heavy: 15% less cast speed.',
+    color: '#8a7a58', requiresTags: ['corpse'],
+    // One destination whatever the load — Corpse Shift can't spend a pile,
+    // so the wagon refuses the hitch rather than ride along inert.
+    excludeTags: ['movement'],
+    mods: [
+      mod('corpseBatch', 'flat', 2),
+      mod('castSpeed', 'more', -0.15),
+    ],
+    // The load grows with the driver: +1 body every 4 levels.
+    perLevel: [mod('corpseBatch', 'flat', 0.25)],
+    weight: 6,
+  },
+
   spirit_totem: {
     id: 'spirit_totem', name: 'Spirit Totem',
     description: 'The supported skill is cast by a planted totem instead of you, but deals 25% less damage — and PLANTING takes twice the skill\'s cast time. Leveling quickens the totem\'s own casting.',

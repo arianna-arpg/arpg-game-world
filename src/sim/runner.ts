@@ -15,6 +15,7 @@ import { vec } from '../core/math';
 import { updateAI } from '../engine/ai';
 import type { Actor } from '../engine/actor';
 import { setSimTap } from '../engine/tap';
+import { CORPSE_CFG } from '../engine/world';
 import type { World } from '../engine/world';
 import { MONSTERS } from '../data/monsters';
 import type { PlayerInput } from '../net/intent';
@@ -103,6 +104,17 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
       stop = 'duration';
     }
 
+    // CORPSE FEEDER (ScenarioDef.corpseFeed): the corpse family's fuel line.
+    // Bodies land at the hero's nearest living enemy (the battle line — a
+    // pilot's aim already points there), or `distance` px out on an empty
+    // field. Deterministic: fixed ring offsets, no rng draw.
+    const feed = scenario.corpseFeed;
+    const feedId = feed?.monsterId ?? 'zombie';
+    if (feed && !MONSTERS[feedId]) {
+      warnings.push(`corpseFeed monster '${feedId}' unknown — feeder disarmed`);
+    }
+    let nextFeedAt = 0;
+
     const sampleEvery = Math.max(1, Math.round(1 / ((scenario.sampleHz ?? SIM_CFG.sampleHz) * dt)));
     const maxTicks = Math.min(Math.ceil(scenario.duration / dt), SIM_CFG.maxTicksHardCap);
     const clearTimes: number[] = [];
@@ -128,6 +140,30 @@ export function runEpisode(scenario: ScenarioDef, seed: number): EpisodeResult {
           w.clearedAt = null;
           w.spawned++;
           w.nextAt = w.spec.repeatEvery !== undefined ? t + w.spec.repeatEvery : Infinity;
+        }
+      }
+
+      // Corpse-feed beats due this tick (before the host frame, so a body
+      // laid this beat is targetable by this beat's press).
+      if (feed && MONSTERS[feedId] && t >= nextFeedAt) {
+        nextFeedAt = t + feed.everySec;
+        let at: { x: number; y: number } | null = null; let bd = Infinity;
+        for (const a of world.actors) {
+          if (a.team !== 'enemy' || a.dead) continue;
+          const dx = a.pos.x - world.player.pos.x, dy = a.pos.y - world.player.pos.y;
+          const dd = dx * dx + dy * dy;
+          if (dd < bd) { bd = dd; at = a.pos; }
+        }
+        const base = at ?? vec(world.player.pos.x + (feed.distance ?? 160), world.player.pos.y);
+        for (let i = 0; i < (feed.count ?? 1); i++) {
+          const r = i === 0 ? 0 : 20;
+          world.corpses.push({
+            pos: vec(base.x + Math.cos(i * 2.4) * r, base.y + Math.sin(i * 2.4) * r),
+            defId: feedId, level: parity,
+            maxLife: CORPSE_CFG.mint.life + parity * CORPSE_CFG.mint.lifePerLevel,
+            remaining: CORPSE_CFG.duration,
+          });
+          if (world.corpses.length > CORPSE_CFG.max) world.corpses.shift();
         }
       }
 

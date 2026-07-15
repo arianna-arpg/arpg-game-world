@@ -75,6 +75,13 @@ export const COMPAT_CFG = {
    *  the first beat — wound-conditioned hosts (thirst-gated drinks, guard
    *  value, heal value) need incoming hits EARLY, not after a stroll. */
   liveDistance: 120,
+  /** CORPSE FEEDER for corpse-consuming hosts: they cannot bootstrap their
+   *  own fuel (nothing dies until something casts — measured 2026-07-15:
+   *  every corpse pair incl. long-shipped sacrificial_rites read INERT with
+   *  zero casts). Bodies laid along the battle line every beat, dense
+   *  enough that a multi-corpse appetite (corpseBatch) has a pile to
+   *  distinguish itself on. */
+  corpseFeed: { everySec: 1.5, count: 2 },
   /** A channel "moved" when |Δ| > noiseAbs AND |Δ|/max(|bare|,1) > noiseRel. */
   noiseRel: 0.02,
   noiseAbs: 0.5,
@@ -372,6 +379,9 @@ export function probeScenario(
         repeatEvery: COMPAT_CFG.livePack.everySec, distance: COMPAT_CFG.liveDistance,
       }]
       : [{ monsters: [{ id: 'target_dummy', level: 1 }], distance: COMPAT_CFG.dummyDistance }],
+    // Corpse-consuming hosts get the feeder — without it the host never
+    // casts, every pairing reads byte-identical, and the column is blind.
+    ...(def.tags.includes('corpse') ? { corpseFeed: COMPAT_CFG.corpseFeed } : {}),
     duration: opts.duration ?? (live ? COMPAT_CFG.liveDuration : COMPAT_CFG.dummyDuration),
     stop: 'duration',
     notes: [probe.why, rig.why].filter(Boolean).join('; ') || undefined,
@@ -451,6 +461,17 @@ export const BLINDNESS_RULES: { note: string; when: (def: SkillDef, sup: Support
     note: 'sacrifice needs a STANDING MINION beside the caster — solo rigs field none',
     when: (def, sup) => sup.sacrifice !== undefined
       && def.delivery.type !== 'summon' && !def.tags.includes('minion'),
+  },
+  {
+    // The corpse-FALLBACK levers (Sacrificial Rites / Soulwalk) fire only
+    // when the find runs SHORT of corpses AND a living minion stands to
+    // serve — the corpse feeder keeps probe fields plentiful, and the solo
+    // rig fields no minions either way. The fill/precedence behavior is
+    // deterministically verified in balance/probe_corpse.ts; when a
+    // minion-crewed scarcity probe ships, delete this row.
+    note: 'corpse-fallback lever (sacrificeMinions/targetMinionFallback) needs corpse SCARCITY plus a standing minion — the fed, minionless rig supplies neither',
+    when: (def, sup) => supModsStat(sup, ['sacrificeMinions', 'targetMinionFallback'])
+      && def.tags.includes('corpse'),
   },
   {
     // THE CONDUIT FAMILY (SupportDef.conduit): resource pumps that run
