@@ -689,6 +689,32 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   scarecrow: { painter: 'scarecrow', order: 55, shadow: 0.35, longShadow: 1.6 },
   hay_bale: { painter: 'hayBale', order: 53, shadow: 0.55, longShadow: 0.8 },
   pot_cluster: { painter: 'potCluster', order: 53, shadow: 0.5 },
+  // --- Home furnishings (vis/paintersHome.ts): the hearth-and-bed kit -------
+  // Where a run wakes: timber frame, straw mattress, someone's wool blanket.
+  bed: {
+    painter: 'bed', order: 53, shadow: 0.45, bakeWhole: 'static',
+    params: { frame: '#5c4630', straw: '#a89058', wool: '#7a4a3a', pillow: '#cabb9a' },
+  },
+  // The home fire: fieldstone arch over standing embers — always lit, the
+  // room's own lamp (the light row IS the brazier recipe, homelier tones).
+  hearth: {
+    painter: 'hearth', order: 53, shadow: 0.5,
+    params: { stone: '#6a6258', mouth: '#241a12', ember: '#ff9a48', flame: '#ffc878' },
+    light: { radius: -6.5, color: '#ffbe6e', intensity: 0.5, flicker: 4.5 },
+  },
+  stool: {
+    painter: 'stool', order: 53, shadow: 0.4, bakeWhole: 'static',
+    params: { wood: '#6a5438' },
+  },
+  shelf: {
+    painter: 'shelf', order: 54, shadow: 0.4, bakeWhole: 'static',
+    params: { wood: '#5c4630', jars: '#8a9a74', keepsake: '#caa85e' },
+  },
+  // A woven rug: pure walkable floor decal (order under everything standing).
+  rug: {
+    painter: 'rug', order: 45, bakeWhole: 'static',
+    params: { weave: '#7a4a3a', border: '#caa85e', motif: '#3e4e5e' },
+  },
   // --- The apothecary kit (brew-yards): existing painters, new clothes ------
   // A glass still on its burner: the pot painter under a low warm flame —
   // the light is the burner; the brittle rule is the glass.

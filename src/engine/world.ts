@@ -718,6 +718,13 @@ interface Zone {
    *  never met (a sealed gate nobody earned) nor ROUSE it against whoever
    *  happens to stand nearest. Combat placements leave this unset. */
   spareDormant?: boolean;
+  /** SKY-BORNE placements: pass over anyone standing under a ROOF
+   *  (World.underRoofAt — the same per-position shelter windAt honors). A
+   *  bolt may telegraph onto the thatch; the thatch takes it. Set by
+   *  fireStrikeAt/fireMeteor unless the strike's data says it reaches
+   *  through (WeatherStrike.throughRoofs). Combat placements leave this
+   *  unset — a mage's nova was never weather. */
+  spareRoofed?: boolean;
   /** Curse zones under Hedonism also afflict the caster's allies. */
   curseAllies?: boolean;
   /** Drag victims toward the zone center at this speed (Cold Vortex). */
@@ -3283,12 +3290,20 @@ export class World {
     this.caveExitGrace = false; // re-armed by the cave-return path after this returns
 
     this.zoneEntry = vec(entry.x, entry.y);
-    p.pos = this.clampPos(vec(entry.x, entry.y), p.radius);
+    // WAKE HERE (GeneratedLayout.spawnAt): arriving WITHOUT a back-portal — a
+    // fresh run, a respawn — lands the party at the plan's declared spawn
+    // cell (the town's bedside) instead of the geometric entry. zoneEntry
+    // itself stays the entry ON PURPOSE: ambient-spawn reachability, hazard
+    // clears and the perf walk all measure from the zone's own ground, and a
+    // sealed teaching-room must never become their seed (a rat waking IN the
+    // player's bedroom would be the wrong kind of tutorial).
+    const landing = !back && layout.spawnAt ? layout.spawnAt : entry;
+    p.pos = this.clampPos(vec(landing.x, landing.y), p.radius);
     for (const a of this.actors) {
       if (a === p) continue;
       a.dash = null;
       a.casting = null;
-      a.pos = this.clampPos(vec(entry.x + rand(-80, 80), entry.y + rand(-80, 80)), a.radius);
+      a.pos = this.clampPos(vec(landing.x + rand(-80, 80), landing.y + rand(-80, 80)), a.radius);
     }
 
     // Remembered DOOR STATES re-apply first (an opened gate stays open across the
@@ -3296,6 +3311,17 @@ export class World {
     // setDoorState path flips + repaints them silently.
     for (const [doorId, st] of Object.entries(memory?.doorState ?? {})) {
       this.setDoorState(doorId, st, { silent: true });
+    }
+    // LESSON DOORS mint open for GRADUATED accounts (DoodadDoor.lesson names
+    // an account-ledger key; the first dwell-open stamped it). Applied before
+    // the breakable door-actor spawn below so a graduated 'both'-mode door
+    // never posts a guard on an already-open frame. Zone memory above stays
+    // authoritative for this run's own openings; this is the veteran's key.
+    for (const d of this.doodads) {
+      const lesson = d.door && !d.door.open && !d.door.broken ? d.door.lesson : undefined;
+      if (lesson && (this.account?.ledger[lesson] ?? 0)) {
+        this.setDoorState(d.door!.id, 'open', { silent: true });
+      }
     }
     // BREAKABLE door-actors: every still-closed breakable door gets a passive
     // guard-actor at the exact door pos (RAW — no clampPos snap off the sealed
@@ -9882,8 +9908,11 @@ export class World {
 
   /** Telegraph one strike AT a point — the shared sky-hazard verb (weather
    *  lightning fires arena-wide; a storm ALTAR fires inside its own field).
-   *  Rides the zone pipeline: telegraphed, hit-everyone, AI-dodgeable. */
-  private fireStrikeAt(strike: { skillId: string; radius: number; telegraph: number }, at: Vec2): void {
+   *  Rides the zone pipeline: telegraphed, hit-everyone, AI-dodgeable.
+   *  Roofs shelter from it (Zone.spareRoofed) unless the strike's own data
+   *  reaches through (WeatherStrike.throughRoofs — a future ghost-storm's
+   *  lever, not a code branch). */
+  private fireStrikeAt(strike: { skillId: string; radius: number; telegraph: number; throughRoofs?: boolean }, at: Vec2): void {
     const skill = SKILLS[strike.skillId];
     if (!skill) return;
     if (!this.stormCaster) {
@@ -9902,6 +9931,7 @@ export class World {
       delay: strike.telegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
       dmgMult: 1, depth: 1, hitAll: true, spareDormant: true,
+      spareRoofed: !strike.throughRoofs,
     });
   }
 
@@ -9947,6 +9977,7 @@ export class World {
       delay: surge.meteorTelegraph, exploded: false, linger: 0,
       tickInterval: 0, tickTimer: 0, shape: 0, facing: 0,
       dmgMult: 1, depth: 1, hitAll: true, meteor: true, spareDormant: true,
+      spareRoofed: true, // sky-borne: the roof takes the fire, not the family under it
       onImpact: () => this.onMeteorImpact(info, vec(at.x, at.y)),
     });
   }
@@ -25026,7 +25057,16 @@ export class World {
           }
           if (this.time - this.doorDwellStart >= (onDoor.door.dwell ?? transitDwell('door'))) {
             this.doorDwellId = '';
+            const lesson = onDoor.door.lesson;
             this.setDoorState(onDoor.door.id, 'open');
+            // A TEACHING door (DoodadDoor.lesson) graduates the ACCOUNT on its
+            // first dwell-open — the flask-lesson pattern: any future copy of
+            // a door carrying this key mints already open (loadZone). The push
+            // was the tutorial; nobody is taught to open a door twice.
+            if (lesson && this.account && !(this.account.ledger[lesson] ?? 0)) {
+              this.account.ledger[lesson] = 1;
+              this.accountDirty = true;
+            }
           }
         } else {
           this.doorDwellId = '';
@@ -30149,6 +30189,9 @@ export class World {
             if (!inAoe(z.pos, z.radius, z.shape, z.facing, victim.pos, victim.radius, z.arcRad)) continue;
             // The sky's wrath passes over the unroused (Zone.spareDormant).
             if (z.spareDormant && isDormant(victim)) continue;
+            // — and over the ROOFED (Zone.spareRoofed): the same shelter the
+            // wind honors (underRoofAt). The thatch takes the bolt.
+            if (z.spareRoofed && this.underRoofAt(victim.pos)) continue;
             // Fill-in zones: the hollow center is (briefly) safe.
             if (z.edge && dist(z.pos, victim.pos) + victim.radius < z.radius * z.edge) continue;
             // Walls shield (occlusion): a victim walled off from the

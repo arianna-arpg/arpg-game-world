@@ -726,6 +726,11 @@ export const ZONES: Record<string, ZoneDef> = {
       // dwell the hatch INSIDE to descend. Packages may dig deeper from there.
       { structure: 'cellar_house', x: 640, y: 760 },
       { structure: 'wayside_camp', x: 960, y: 660 },
+      // THE WAKING HOUSE (data/structures.ts): where every run opens its
+      // eyes — bedside spawn cell, confined vision, one teaching door. The
+      // quiet north-west, clear of the square (the perf walk arcs the
+      // center; the house must never lean on the town control's meter).
+      { structure: 'waking_house', x: 210, y: 180 },
     ],
     objective: { kind: 'safe' },
     // THE TOWN'S SMALL LIVES (the Verminfall) — authored fauna spawns even on

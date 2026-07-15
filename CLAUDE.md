@@ -114,6 +114,16 @@ changes.
   from `TilesetDef.sky`/`ZoneSpec.sky`, caves + off-surface dimensions
   sheltered by derivation) gates ALL in-zone weather through
   `World.skyFront()` — no storms inside cellars, caves, or interiors.
+  THE INTERIOR FABRIC (rooms as data — docs in `docs/engine/interiors.md`):
+  `StructureDef.confineVision` veils the world beyond the room while the
+  local hero is under its roof (`render/vis/roomVeil.ts` VISION VOLUMES,
+  `VIS_CFG.roomVeil` — render-only; LoS keeps its own occlusion); roofs
+  shelter per POSITION (windAt already; sky strikes via `Zone.spareRoofed`
+  ← `WeatherStrike.throughRoofs` lever); LESSON DOORS
+  (`CellSpec.door.lesson` = account-ledger key: first dwell-open stamps,
+  graduated accounts mint it open); SPAWN CELLS (`CellSpec.spawn`, legend
+  `S` → `GeneratedLayout.spawnAt`: no-back-portal arrivals wake there).
+  The Waking House in Lastlight composes all four (bedside run start).
   `levelgen.ts`, `worldgen.ts`.
   ZONE OBJECTIVES are a data vocabulary (ObjectiveSpec + per-kind
   `OBJECTIVE_SEALS` exit policy + `data/beacons.ts` survey spires and the

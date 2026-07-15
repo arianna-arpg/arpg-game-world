@@ -108,6 +108,11 @@ export type KnownDoodadKind =
   | 'rubble'    // walkable ruin-scatter (broken masonry underfoot)
   | 'banner_post' // a faction's cloth on a pole (camps, war roads)
   | 'beehive'   // a humming skep (grove flavor; future bee grudges)
+  | 'bed'       // frame, mattress, someone's blanket — where a run wakes
+  | 'hearth'    // a home's stone fire (standing warm light; always lit)
+  | 'stool'     // a three-legged seat by the fire
+  | 'shelf'     // wall boards holding jars and small keepings
+  | 'rug'       // a woven floor decal — walkable comfort underfoot
   | 'lava'      // blocks movement but NOT shots — molten, like a chasm
   | 'cave_entrance' // blocks nothing — a transition trigger into a cave sub-zone
   | 'ritual_pentagram' // blocks nothing — a Conclave ritual circle (walkable; cultists ring it)
@@ -436,6 +441,11 @@ export interface DoodadDoor {
   life?: number;
   /** Dwell-to-open seconds override (else the DOORS config default). */
   dwell?: number;
+  /** A TEACHING latch (CellSpec.door.lesson): the ACCOUNT ledger key this
+   *  door stamps on its first dwell-open. Graduated accounts find later
+   *  copies minted open at loadZone — tutorial-by-doing, retired for good
+   *  once done (the flask-lesson pattern, worn by a door). */
+  lesson?: string;
 }
 
 /** The door SLAB's collision tuning (the hit-surface fabric): how deep the
@@ -507,6 +517,12 @@ export interface PlacedStructure {
   courtyardFloorStyle?: string;
   doors: PlacedDoor[];
   slots: PlacedSlot[];
+  /** WAKE HERE (CellSpec.spawn): the plan's declared arrival point, world
+   *  coords. Surfaced on GeneratedLayout.spawnAt for World.loadZone. */
+  spawn?: Vec2;
+  /** INTERIOR CONFINEMENT (StructureDef.confineVision): while the local hero
+   *  is under this roof, the room-veil pass closes vision to the room. */
+  confineVision?: boolean;
 }
 
 export interface GeneratedLayout {
@@ -535,6 +551,11 @@ export interface GeneratedLayout {
   /** Plan structures raised in this zone (rects/roofs/doors/slots) — see
    *  PlacedStructure. Absent when the zone rolled none. */
   structures?: PlacedStructure[];
+  /** WAKE HERE: a plan structure's declared arrival point (CellSpec.spawn).
+   *  loadZone places parties here when they arrive WITHOUT a back-portal
+   *  (fresh run, respawn) — zoneEntry itself stays the geometric entry so
+   *  spawn reachability, hazard clears and the perf walk keep their ground. */
+  spawnAt?: Vec2;
   /** Deliberately foot-unreachable areas (jump/blink pockets) — spawn policy +
    *  the reachability invariant read these; the renderer may hint them. */
   pockets?: { x: number; y: number; r: number }[];
@@ -1040,6 +1061,17 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     surface: { hw: 1.0, hh: 0.72 } }, // the rolled bale's drawn ellipse (r × 0.75r)
   pot_cluster: { overlap: 'solid', blocksMove: true, spacing: 45 },
   rubble:    { overlap: 'ground', walkOnly: true },
+  // Home furnishings (blueprint rooms; plan cells pin them, so spacing only
+  // matters if a recipe ever scatters them loose). Drawn axis-aligned in a
+  // room — surfaces pin 'fixed' so the slab never spins with a stray rot.
+  bed:       { overlap: 'solid', blocksMove: true, spacing: 40,
+    surface: { hw: 0.72, hh: 1.05, orient: 'fixed' } }, // headboard-north frame (taller than wide)
+  hearth:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60,
+    surface: { hw: 0.85, hh: 0.6, orient: 'fixed' } },  // chest-high stone: stops arrows, not eyes
+  stool:     { overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.7 },
+  shelf:     { overlap: 'solid', blocksMove: true, spacing: 40,
+    surface: { hw: 0.95, hh: 0.34, orient: 'fixed' } }, // a wall-hugging board (wide, shallow)
+  rug:       { overlap: 'ground', walkOnly: true },
   banner_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true },
@@ -1530,6 +1562,9 @@ export interface GenCtx {
   siteAt?: Vec2;
   /** Plan structures raised so far (placeStructurePlan appends). */
   structures?: PlacedStructure[];
+  /** WAKE HERE: the last spawn cell a plan structure declared (CellSpec.spawn)
+   *  — passed through to GeneratedLayout.spawnAt. */
+  spawnAt?: Vec2;
   /** The walk grid was LAZILY created by a plan structure in an otherwise-convex
    *  zone (ensureGrid) — the convex portal-clear splice must still run, because
    *  the scatter stamps that ran before the grid existed were never exit-aware. */
@@ -2729,6 +2764,7 @@ export function generateLayout(
     garrisons: ctx.garrisons, caveSeeds: ctx.caveSeeds,
     walk: ctx.walk, airPockets: ctx.airPockets,
     structures: ctx.structures,
+    spawnAt: ctx.spawnAt,
     pockets: ctx.pockets,
     landmarkSpawns: ctx.landmarkSpawns,
   };
@@ -3331,6 +3367,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     floors: [], floorStyle: def.floorStyle,
     courtyards: [], courtyardFloorStyle: def.courtyardFloorStyle,
     doors: [], slots: [],
+    ...(def.confineVision ? { confineVision: true } : {}),
   };
 
   // Doodads / breakables / npcs / slots from cells.
@@ -3355,6 +3392,9 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     }
     if (c.spec.breakable) ctx.breakables.push({ id: c.spec.breakable, pos: p });
     if (c.spec.npc) ctx.npcs.push({ id: c.spec.npc, pos: p });
+    // WAKE HERE: the plan claims the layout's arrival point (fresh copies —
+    // the cell center is also a doodad pos when a plan co-authors both).
+    if (c.spec.spawn) { placed.spawn = vec(p.x, p.y); ctx.spawnAt = vec(p.x, p.y); }
     if (c.spec.slot) {
       placed.slots.push({
         id: `${sid}/s${placed.slots.length}`, pos: p, kind: c.spec.slot.kind,
@@ -3393,6 +3433,7 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     const door: DoodadDoor = {
       id: `${sid}/d${gi}`, mode: g.mode.mode,
       cells: cellsRect, life: g.mode.life, dwell: g.mode.dwell,
+      lesson: g.mode.lesson,
     };
     ctx.doodads.push({
       pos, radius: Math.max(cellsRect.w, cellsRect.h) / 2,

@@ -49,6 +49,7 @@ import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
+import { RoomVeil } from './vis/roomVeil';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
@@ -59,6 +60,7 @@ import { UnderstoryLayer } from './vis/understory';
 import { traversalPose, traversalVeil } from '../engine/traversal';
 import './vis/paintersGloam'; // side-effect: the Gloamwood kit's painters register
 import './vis/paintersAether'; // side-effect: the Aetherial kit's painters register
+import './vis/paintersHome'; // side-effect: the hearth-and-bed kit's painters register
 import { drawAmbientFx } from './vis/ambientFx';
 import { WEATHER_DEFS, type WeatherKind } from '../world/weather';
 import { foldZoneWash } from '../world/zoneWash';
@@ -328,6 +330,12 @@ export class Renderer {
     this.drawPadReticle(world);    // the pad's visible cursor — LAST, above canopy and roof
 
     ctx.restore();
+
+    // THE ROOM VEIL: interior confinement — inside a confining structure the
+    // world beyond the room is unseen (labels gate through veiledAt; the
+    // atmosphere pass damps its weather against frac). Free when outside.
+    this.roomVeil.update(world, this.frameDt);
+    this.roomVeil.draw(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
 
     // THE LIGHT LAYER: day/night darkness punched by every light in view +
     // emissive bloom — world-lit, drawn before the screen-space washes. The
@@ -1156,13 +1164,18 @@ export class Renderer {
     // where two fronts overlap) — the smoother eases the DISPLAYED wash and
     // particles toward it at each kind's own configured ramp, so a fog bank
     // seeps in over seconds while a storm may still SLAM by design.
+    // THE ROOM VEIL DAMPS THE SKY: confinement scales the wash, particles
+    // and wind streaks toward still air — a roof owns its sky in the FEEL,
+    // not just the sim (openAir is exactly 1 anywhere but inside).
+    const openAir = 1 - this.roomVeil.frac() * VIS_CFG.roomVeil.dampAtmosphere;
     const f = this.smoothWeather(world);
     if (f) {
+      const wi = f.intensity * openAir;
       const [r, g, b] = hexToRgb(WEATHER_DEFS[f.kind].color);
-      ctx.fillStyle = `rgba(${r},${g},${b},${(0.05 + 0.12 * f.intensity).toFixed(3)})`;
+      ctx.fillStyle = `rgba(${r},${g},${b},${((0.05 + 0.12 * wi) * openAir).toFixed(3)})`;
       ctx.fillRect(0, 0, w, h);
       // The front's PARTICLES — rain streaks, ash, fog banks (vis/weatherFx.ts).
-      if (!VIS_ABLATE.has('weatherfx')) drawWeatherFx(ctx, f.kind, f.intensity, w, h, world.time);
+      if (!VIS_ABLATE.has('weatherfx')) drawWeatherFx(ctx, f.kind, wi, w, h, world.time);
     }
     // EVENT ZONE WASH (world/zoneWash.ts): ground HELD by something — a
     // haunting's pale cold — colours the whole air of the zone. Smoothed
@@ -1180,7 +1193,10 @@ export class Renderer {
     }
     // WIND STREAMLINES: thin wisps riding the gale across the screen — the
     // flow made faintly visible (direction + strength read at a glance).
-    const gale = world.zoneWind();
+    // Confinement stills them with the rest of the sky (openAir above).
+    const rawGale = world.zoneWind();
+    const gale = rawGale && openAir < 1
+      ? { ...rawGale, strength: rawGale.strength * openAir } : rawGale;
     if (gale && gale.strength > 0.08) {
       const t = world.time;
       const ang = Math.atan2(gale.ny, gale.nx);
@@ -1837,6 +1853,10 @@ export class Renderer {
       reveal = Math.min(reveal, clamp((L.hideAt - fade) / (L.hideAt - L.showAt), 0, 1));
       if (reveal <= 0) return 0;
     }
+    // THE ROOM VEIL: a confined hero's world ends at the room — text beyond
+    // it hides with the ground it stands on (same contract as the fades).
+    const veiled = this.roomVeil.veiledAt(pos);
+    if (veiled > 0) reveal = Math.min(reveal, 1 - veiled);
     return reveal;
   }
 
@@ -1888,6 +1908,10 @@ export class Renderer {
   /** The sealed-roof composite (vis/canopy.ts): static veil crowns flatten
    *  into chunk slices drawn at the patch's shared alpha. */
   private canopySlices = new CanopySlices();
+
+  /** THE ROOM VEIL (vis/roomVeil.ts): interior vision confinement — inside a
+   *  confining structure, the world beyond the room veils dark. */
+  private roomVeil = new RoomVeil();
 
   private drawCanopies(world: World): void {
     const hero = world.player;

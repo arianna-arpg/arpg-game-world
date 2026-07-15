@@ -48,6 +48,11 @@ export interface WeatherStrike {
   telegraph: number;
   /** Strikes per second at FULL intensity (scaled down by the front's ramp). */
   ratePerSec: number;
+  /** Reaches THROUGH roofs (default false: a roof shelters — World's
+   *  Zone.spareRoofed gate, the strike-side twin of windAt's underRoofAt).
+   *  The lever for a future kind whose wrath ignores shelter (a haunting
+   *  rain, a curse that falls indoors) — data, never a code branch. */
+  throughRoofs?: boolean;
 }
 
 export interface WeatherDef {

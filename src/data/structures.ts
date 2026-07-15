@@ -43,8 +43,16 @@ export interface CellSpec {
   doodad?: { kind: DoodadKind; radius?: number; effect?: DoodadEffect };
   /** A DOOR cell: emits a door doodad + a PlacedDoor record. Dwell-openable,
    *  breakable (spawns a passive door-actor), or both; sealed = neither (a
-   *  future lock/lever opens it via setDoorState). */
-  door?: { mode: 'dwell' | 'breakable' | 'both' | 'sealed'; life?: number; dwell?: number };
+   *  future lock/lever opens it via setDoorState). `lesson` names an ACCOUNT
+   *  ledger key: the first dwell-open stamps it (tutorial-by-doing), and a
+   *  graduated account's copy of the door mints already open — the teaching
+   *  latch retires itself account-wide, the flask-lesson pattern. */
+  door?: { mode: 'dwell' | 'breakable' | 'both' | 'sealed'; life?: number; dwell?: number; lesson?: string };
+  /** WAKE HERE: exports the cell center as the layout's spawn point
+   *  (GeneratedLayout.spawnAt). A zone whose plan marks one places arriving
+   *  parties there when they enter WITHOUT a back-portal (a fresh run, a
+   *  respawn) — the town's bedside wake. Last structure placed wins. */
+  spawn?: boolean;
   /** A garrison SLOT at the cell center (towers): AI may claim it, gaining the
    *  slot's mods while holding it (see PlacedSlot / the garrison verb). */
   slot?: { kind: string; capacity?: number; mods?: Modifier[]; entry?: 'teleport' | 'walk'; leash?: number };
@@ -102,6 +110,13 @@ export interface StructureDef {
   roofs?: 'auto';
   /** ROOF_STYLES id (default 'timber'). */
   roofStyle?: string;
+  /** INTERIOR CONFINEMENT: while the local hero stands under this structure's
+   *  roof, their rendered vision is confined to the room — everything beyond
+   *  the roof rects veils dark (render/vis/roomVeil.ts, VIS_CFG.roomVeil).
+   *  The Cellar's smallness made LOCAL: a data flag, so a gazebo stays open
+   *  and a windowless cottage closes in. Gameplay LoS is untouched — walls
+   *  already occlude honestly; this is the drawn horizon of attention. */
+  confineVision?: boolean;
   /** FLOOR_STYLES id — bakes a real floor (boards, cobble…) under the
    *  plan's interior cells, doorways included. Omitted = bare ground. */
   floorStyle?: string;
@@ -162,6 +177,15 @@ registerLegendChar('L', { doodad: { kind: 'lantern_post', radius: 10 }, courtyar
 registerLegendChar('H', { doodad: { kind: 'hay_bale', radius: 14 }, courtyard: true });
 registerLegendChar('M', { doodad: { kind: 'market_stall', radius: 24 }, courtyard: true });
 registerLegendChar('G', { doodad: { kind: 'banner_post', radius: 10 }, courtyard: true });
+// HOME FURNISHINGS — the hearth-and-bed wave: a lived-in room in five chars.
+registerLegendChar('Z', { doodad: { kind: 'bed', radius: 15 }, interior: true });      // a bed (zzz)
+registerLegendChar('h', { doodad: { kind: 'hearth', radius: 13 }, interior: true });   // the warm heart
+registerLegendChar('s', { doodad: { kind: 'stool', radius: 9 }, interior: true });
+registerLegendChar('k', { doodad: { kind: 'shelf', radius: 13 }, interior: true });    // booKshelf
+registerLegendChar('r', { doodad: { kind: 'rug', radius: 16 }, interior: true });      // walkable decal
+// WAKE HERE — the spawn cell (CellSpec.spawn): plain floor that exports the
+// layout's spawn point. Any plan anywhere may claim where newcomers wake.
+registerLegendChar('S', { spawn: true, interior: true });
 
 // --- ROOF STYLES (registry) ----------------------------------------------------
 // How a roof rect renders (Batch D drawRoofs consumes): fill + edge + rest alpha.
@@ -193,6 +217,10 @@ export function hasRoofStyle(id: string): boolean { return id in ROOF_STYLES; }
 registerRoofStyle({ id: 'timber', fill: '#4a3a28', edge: '#2e2418', alpha: 0.96, pattern: 'planks' });
 registerRoofStyle({ id: 'slate', fill: '#39404e', edge: '#232833', alpha: 0.96, pattern: 'shingles' });
 registerRoofStyle({ id: 'stone', fill: '#474b52', edge: '#2c2f35', alpha: 0.96, pattern: 'stone' });
+// Straw over a home: the same plank painter in cut-hay tones — a roof that
+// reads warm from the square (a new pattern would be a renderer verb; a new
+// palette is one data row — the cheaper lever wins until thatch needs more).
+registerRoofStyle({ id: 'thatch', fill: '#6e5a30', edge: '#463a1e', alpha: 0.96, pattern: 'planks' });
 
 // --- FLOOR STYLES (registry) ---------------------------------------------------
 // How a structure's INTERIOR ground renders — townsfolk don't live in the mud.
@@ -262,6 +290,33 @@ export const STRUCTURES: Record<string, StructureDef> = {
     ],
     legend: { V: { doodad: { kind: 'cellar_hatch', radius: 13 }, interior: true } },
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
+  },
+
+  // THE WAKING HOUSE — where every run opens its eyes. The player wakes at
+  // the bedside ('S' beside the bed), inside a room that teaches by BEING a
+  // room: vision confined to these four walls (confineVision — navigate
+  // before the world exists), a hearth for light, furniture to steer
+  // around, and one latched door whose deliberate dwell IS the dwelling
+  // lesson (door.lesson graduates the account: veterans wake to it open).
+  // Weather never reaches inside — the roof owns its sky.
+  waking_house: {
+    id: 'waking_house', halfW: 91, halfH: 78, cellSize: 26,
+    plan: [
+      '#######',
+      '#Zk..p#',
+      '#S....#',
+      '#r..s.#',
+      '#h....#',
+      '###D###',
+    ],
+    legend: {
+      // The teaching door: a full-second push (default doors swing at 0.45)
+      // — long enough that the ring is READ, short enough to never gate a
+      // veteran twice (the lesson key mints later copies open).
+      D: { door: { mode: 'dwell', dwell: 1.0, lesson: 'waking_door_unlatched' }, interior: true },
+    },
+    confineVision: true,
+    roofs: 'auto', roofStyle: 'thatch', floorStyle: 'boards',
   },
 
   // The cellar itself: one broad flagstone slab (the blacksmith's stone,

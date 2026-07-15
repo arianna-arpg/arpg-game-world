@@ -73,6 +73,39 @@ export const VIS_CFG = {
     showAt: 0.35,
   },
 
+  /** THE ROOM VEIL (vis/roomVeil.ts) — interior vision confinement. While
+   *  the local hero stands under a confining structure's roof (StructureDef.
+   *  confineVision → PlacedStructure), everything beyond the room veils dark:
+   *  the Cellar's smallness made local. Render-only — gameplay LoS keeps its
+   *  own honest occlusion. Extensible: the pass draws VISION VOLUMES (rects +
+   *  spill discs); today's one source is the roofed room, tomorrow's may be
+   *  a cave throat or a curse's closing walls. */
+  roomVeil: {
+    enabled: true,
+    /** Peak darkness of the veil sheet (1 = pitch). */
+    alpha: 0.88,
+    /** The dark's color — night-family, a shade deeper (it must read as
+     *  "unseen", not "unlit": the light layer owns unlit). */
+    tint: { r: 5, g: 6, b: 12 },
+    /** Veil buffer resolution as a fraction of the screen (soft edges for
+     *  free; the lights buffer idiom). */
+    scale: 0.33,
+    /** How fast the veil chases confinement per second (enter/leave fades). */
+    fadeRate: 6,
+    /** World-unit pad past the room rects before the dark begins — the walls
+     *  themselves stay readable inside the punch. */
+    pad: 10,
+    /** Blur radius (px, buffer space) feathering every punched edge. 0 = off. */
+    featherPx: 7,
+    /** OPEN doorways spill a disc of sight this far past the aperture —
+     *  the world glimpsed through the frame you must dwell in. */
+    doorSpill: 46,
+    /** How strongly full confinement damps the atmosphere pass's weather
+     *  wash, particles and wind streaks (0 = storms rage over the veil,
+     *  1 = a roof fully owns its sky). The psychological shelter lever. */
+    dampAtmosphere: 0.9,
+  },
+
   /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's
    *  alpha chases its target per second (patch reveals and the per-tree
    *  near-fade share it — one speed, coherent motion). */
