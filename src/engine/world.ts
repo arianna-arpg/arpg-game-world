@@ -28084,11 +28084,12 @@ export class World {
     }
   }
 
-  /** Unstable Flesh: minions detonate themselves upon reaching low life. */
+  /** Unstable Flesh: minions detonate themselves upon reaching low life —
+   *  the same LOW_LIFE_FRAC line every other lowLife test reads. */
   private checkMinionDetonations(): void {
     for (const a of this.actors) {
       if (a.dead || !a.isMinion() || a.explodeOnLowLife <= 0) continue;
-      if (a.life < a.maxLife() * 0.35) {
+      if (a.life < a.maxLife() * LOW_LIFE_FRAC) {
         this.explodeActor(a, a.explodeOnLowLife);
         this.kill(a, true);
       }

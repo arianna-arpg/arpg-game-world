@@ -7,7 +7,8 @@
 
 import { chance, vec, type Vec2 } from '../core/math';
 import {
-  LOW_LIFE_FRAC, StatSheet, attributeModifiers,
+  FULL_ES_FRAC, FULL_LIFE_FRAC, FULL_MANA_FRAC,
+  LOW_ES_FRAC, LOW_LIFE_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers,
   type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
 import { DEFENSE_CFG } from './defense';
@@ -1769,12 +1770,12 @@ export class Actor {
     const maxEs = this.maxEs();
     let mask = 0;
     if (this.life < maxLife * LOW_LIFE_FRAC) mask |= 1;                // lowLife
-    if (this.life >= maxLife * 0.95) mask |= 2;                        // fullLife
-    if (maxMana > 0 && this.mana < maxMana * 0.25) mask |= 4;          // lowMana
-    if (maxMana > 0 && this.mana >= maxMana * 0.95) mask |= 8;         // fullMana
+    if (this.life >= maxLife * FULL_LIFE_FRAC) mask |= 2;              // fullLife
+    if (maxMana > 0 && this.mana < maxMana * LOW_MANA_FRAC) mask |= 4; // lowMana
+    if (maxMana > 0 && this.mana >= maxMana * FULL_MANA_FRAC) mask |= 8; // fullMana
     if (this.es > 0.5) mask |= 16;                                     // hasEs
-    if (maxEs > 0 && this.es >= maxEs * 0.99) mask |= 32;              // fullEs
-    if (maxEs > 0 && this.es < maxEs * 0.35) mask |= 64;               // lowEs
+    if (maxEs > 0 && this.es >= maxEs * FULL_ES_FRAC) mask |= 32;      // fullEs
+    if (maxEs > 0 && this.es < maxEs * LOW_ES_FRAC) mask |= 64;        // lowEs
     if (this.casting?.mode === 'guard') mask |= 128;                   // guarding
     // The break-bar stands: "while poised" mods hold (lapse on the break).
     if (this.poise > 0.5 && !this.poiseBroken) mask |= 256;            // poised

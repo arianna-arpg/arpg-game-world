@@ -125,12 +125,31 @@ export const STAT_TRADES: StatTrade[] = [
   { from: 'energyShield', to: 'poise', rateStat: 'esToPoise', forgoStat: 'esForgone' },
 ];
 
-/** THE 'lowLife' LINE: life below this fraction of max counts as low. One
- *  constant, three systems in agreement — the actor's condition mask (so
- *  "on low life" gear/passives wake here), the world's hit-while-low screen
- *  surge gate, and the renderer's blood vignette (VIS_CFG.lowLife.startFrac
+// --- THE CONDITION LINES — the fractions of max at which the pool-state
+// conditions below flip. One constant per line, shared by every system that
+// tests it, so "low" and "full" can never drift apart between the character
+// sheet, the engine, and the screen.
+
+/** THE 'lowLife' LINE: life below this fraction of max counts as low —
+ *  the actor's condition mask (so "on low life" gear/passives wake here),
+ *  the world's hit-while-low screen surge gate, Unstable Flesh's minion
+ *  detonation, and the renderer's blood vignette (VIS_CFG.lowLife.startFrac
  *  defaults to it) all begin at the same breath. */
 export const LOW_LIFE_FRAC = 0.35;
+/** 'fullLife' tolerates a scratch: chip damage must not flicker full-life
+ *  mods off every incidental tick. */
+export const FULL_LIFE_FRAC = 0.95;
+/** 'lowMana' sits deeper than the life line — spenders LIVE near the bottom
+ *  of the bar, so "low" only speaks when the tank is truly running dry. */
+export const LOW_MANA_FRAC = 0.25;
+/** 'fullMana' mirrors fullLife's tolerance (a single cast's tithe shouldn't
+ *  strip the state). */
+export const FULL_MANA_FRAC = 0.95;
+/** 'fullEs' is strict: the shield trickles while recharging, so anything
+ *  short of truly topped is still "filling", not full. */
+export const FULL_ES_FRAC = 0.99;
+/** 'lowEs' mirrors the life line. */
+export const LOW_ES_FRAC = 0.35;
 
 /**
  * Actor-state conditions a modifier can demand ("40% more damage while on
