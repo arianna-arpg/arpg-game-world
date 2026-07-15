@@ -518,6 +518,7 @@ registerDoodadRule('charge_cell', {
 registerDoodadRule('rune_capacitor', {
   overlap: 'solid', blocksMove: true, spacing: 30,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  surface: { hw: 0.7, hh: 0.42 }, // the slab painter's monolith base
 });
 registerDoodadRule('spent_cell', { overlap: 'ground', spacing: 22 });
 
@@ -539,17 +540,19 @@ registerFormation({
 // painters via params (warBanner / fishingRack / scarecrow / potCluster /
 // palisade) — zero renderer edits, the visual-fabric contract.
 registerDoodadRule('battle_standard', {
-  overlap: 'solid', blocksMove: true, spacing: 30,
+  overlap: 'solid', blocksMove: true, spacing: 30, bodyScale: 0.35, // the banner POLE (demon_banner's parity)
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
 });
 registerDoodadRule('shield_rack', {
-  overlap: 'solid', blocksMove: true, spacing: 26,
+  overlap: 'solid', blocksMove: true, spacing: 26, bodyScale: 0.5,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  surface: { hw: 2.1, hh: 0.35 }, // the fishing rack's rail line (fracs ride the 0.5 body radius)
   brittle: { on: ['hit'], orbChance: 0.12, text: 'the rack clatters apart!', color: '#c8b088' },
 });
 registerDoodadRule('sparring_dummy', {
   overlap: 'solid', blocksMove: true, spacing: 24,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  surface: { hw: 0.85, hh: 0.35 }, // the scarecrow coat band; the cross-arms stay thin air
   brittle: { on: ['hit'], orbChance: 0.05, text: 'straw flies!', color: '#d8c890' },
 });
 registerDoodadRule('war_drum', {
@@ -560,6 +563,9 @@ registerDoodadRule('war_drum', {
 registerDoodadRule('palisade_spikes', {
   overlap: 'solid', blocksMove: true, spacing: 20,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  // The palisade painter draws an UNSPUN ±0.85r square — pin the surface to
+  // match ('fixed'); pieces sit apart (the gaps ARE the gates), no run joints.
+  surface: { hw: 0.85, hh: 0.85, orient: 'fixed' },
 });
 
 // The fence: spiked stakes pacing a wide ring, a standard every few posts.
@@ -644,6 +650,7 @@ registerFormation({
 registerDoodadRule('colossus_head', {
   overlap: 'solid', blocksMove: true, spacing: 34,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  surface: { hw: 1.0, hh: 1.0 }, // the statue painter's full ±r plinth square
 });
 registerDoodadRule('colossus_fist', {
   overlap: 'solid', blocksMove: true, spacing: 28,
@@ -652,10 +659,12 @@ registerDoodadRule('colossus_fist', {
 registerDoodadRule('broken_column', {
   overlap: 'solid', blocksMove: true, spacing: 24,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  surface: { hw: 1.7, hh: 0.62 }, // the log painter's trunk — a fallen drum lies long
 });
 registerDoodadRule('ruin_plinth', {
   overlap: 'solid', blocksMove: true, spacing: 26,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  surface: { hw: 0.7, hh: 0.42 }, // the slab painter's monolith base
   brittle: { on: ['hit'], orbChance: 0.1, text: 'the plinth crumbles!', color: '#a8a08e' },
 });
 

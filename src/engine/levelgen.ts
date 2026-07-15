@@ -635,10 +635,14 @@ export interface DoodadRule {
    *  radius (bodyRadiusOf for feet/shots, full radius for sight), oriented by
    *  the instance's spin (`rot`, the default) or facing (`dir`) plus a fixed
    *  `angle` offset — so a bench blocks as the plank you see, not as an
-   *  invisible circle swallowing the path beside it. One row per kind; a
-   *  per-instance Doodad.hitbox (doors) overrides entirely. Keep the painter
-   *  and the fractions in agreement — the drawn footprint IS the contract. */
-  surface?: { hw: number; hh: number; orient?: 'rot' | 'dir'; angle?: number };
+   *  invisible circle swallowing the path beside it. `orient: 'fixed'` pins
+   *  the rect to the world axes (+ `angle` alone) for painters that draw
+   *  UNSPUN (the palisade square) or only LEAN by sin(rot)·ε (fin blades,
+   *  the hellforge) — spinning those surfaces by raw rot would break the
+   *  pixels-are-the-contract identity. One row per kind; a per-instance
+   *  Doodad.hitbox (doors) overrides entirely. Keep the painter and the
+   *  fractions in agreement — the drawn footprint IS the contract. */
+  surface?: { hw: number; hh: number; orient?: 'rot' | 'dir' | 'fixed'; angle?: number };
   /** BRITTLE: a lifeless breakable — no life bar, no kill ladder; it POPS.
    *  Pure data: any kind (or a package/legend kind via registerDoodadRule)
    *  becomes a pot, a crumbling plug, or a secret door with one row. */
@@ -801,7 +805,8 @@ export function hitSurfaceOf(d: Doodad, channel: SurfaceChannel): HitShape {
   const r = channel === 'sight' ? d.radius : bodyRadiusOf(d);
   const sf = rule.surface;
   if (sf) {
-    const spin = sf.orient === 'dir' ? (d.dir ?? d.rot ?? 0) : (d.rot ?? d.dir ?? 0);
+    const spin = sf.orient === 'fixed' ? 0
+      : sf.orient === 'dir' ? (d.dir ?? d.rot ?? 0) : (d.rot ?? d.dir ?? 0);
     return { kind: 'rect', hw: r * sf.hw, hh: r * sf.hh, rot: spin + (sf.angle ?? 0) };
   }
   return { kind: 'circle', r };
@@ -942,7 +947,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // scoop: pours, flask sips and orbPickup procs all ride the same orb.
   alembic: { overlap: 'inert', spacing: 40,
     brittle: { on: ['hit', 'touch'], orbChance: 0.65, text: 'the still shatters!', color: '#b8d8e8' } },
-  herb_rack: { overlap: 'solid', blocksMove: true, spacing: 55 },
+  herb_rack: { overlap: 'solid', blocksMove: true, spacing: 55, bodyScale: 0.5,
+    surface: { hw: 2.1, hh: 0.35 } }, // the fishing rack's rail line, hung with greens
   cauldron: { overlap: 'solid', blocksMove: true, spacing: 70 },
   spring_pool: { overlap: 'ground', walkOnly: true, spacing: 460,
     forbidOn: ['water', 'lava', 'chasm', 'gore'],
@@ -989,14 +995,18 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   signpost:  { overlap: 'solid', blocksMove: true, spacing: 70, bodyScale: 0.35 },
   // OBLONG FURNITURE (DoodadRule.surface, the hit-surface fabric): kinds whose
   // painter draws an oriented oblong collide as that oblong — half-extents as
-  // fractions of the channel radius, spun by the SAME `rot` the painter reads,
+  // fractions of the channel radius, spun by the SAME `rot` the painter reads
+  // (or PINNED via orient:'fixed' when the painter draws unspun / only leans),
   // so hitbox and pixels agree in every placement mode (scatter, formation
   // rot:'chain', structure sills). Fractions mirror the painter's drawn
   // proportions — keep the two in sync when retuning either. Kinds left as
   // discs on purpose: rib_arch (multi-hoop arch — needs multi-part surfaces),
   // gallows/soul_cage (walk-on platform / hanging cage: the small bodyScale
-  // disc IS the intent), wall/cliff (stamped as overlapping runs — rect
-  // joints would open pinholes).
+  // disc IS the intent), wall/cliff/wyrm_coil (stamped as overlapping runs —
+  // rect joints would open pinholes), tooth_row (an offset C-arc no centered
+  // rect can hug — it wears a snugged bodyScale disc instead), and the true
+  // circles the sweep verified honest as drawn: mounds, kiln/salt/umbilic
+  // columns, wells, pot clusters, vents, domes, shard clusters.
   firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50, surface: { hw: 1.05, hh: 0.55 } },
   // Settlement + wayside clutter (towns, roads, farms, ruins).
   fountain:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 140 },
@@ -1006,13 +1016,15 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   market_stall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, surface: { hw: 0.9, hh: 0.85 } },
   broken_cart:  { overlap: 'solid', blocksMove: true, spacing: 80, surface: { hw: 0.85, hh: 0.55, angle: 0.22 } },
   scarecrow: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
-  hay_bale:  { overlap: 'solid', blocksMove: true, spacing: 55 },
+  hay_bale:  { overlap: 'solid', blocksMove: true, spacing: 55,
+    surface: { hw: 1.0, hh: 0.72 } }, // the rolled bale's drawn ellipse (r × 0.75r)
   pot_cluster: { overlap: 'solid', blocksMove: true, spacing: 45 },
   rubble:    { overlap: 'ground', walkOnly: true },
   banner_post: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
   beehive:   { overlap: 'solid', blocksMove: true, spacing: 75 },
   thicket:   { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 28, occlude: { pad: 12, alpha: 0.35 }, mutable: true },
-  tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true },
+  tombstone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 22, mutable: true,
+    surface: { hw: 0.65, hh: 0.34 } }, // the headstone slab (arch face 1.3r wide; thin depth)
   // Hazard solids — now also kept OUT of pools/pits (the QA fix) and apart enough to
   // read as distinct shards/vents (crystal bumped 30→60 so two never near-touch).
   crystal:   { overlap: 'solid', blocksMove: true, blocksShot: true,  spacing: 60, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -1041,8 +1053,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   magma_core: { overlap: 'inert', blocksMove: true, blocksShot: false, pour: { fuseGap: 0 },
     effect: { id: 'heat_wash', interval: 1.1, radius: 64, chance: 0.55, power: 3 } },
   // The wayfarer kit: story furniture for roads, coasts and working woods.
-  weathered_statue: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
-  wayshrine:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 160, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  weathered_statue: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    // The statue painter's plinth is a FULL ±r SQUARE — the drawn corners
+    // used to phase through the old disc; now they block like they look.
+    surface: { hw: 1.0, hh: 1.0 } },
+  wayshrine:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 160, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 0.72, hh: 0.78 } }, // the niche hut's body + roof overhang
   gallows:        { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 200, bodyScale: 0.45, forbidOn: ['water', 'lava', 'chasm'] },
   fishing_rack:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70, bodyScale: 0.5, forbidOn: ['lava', 'chasm'],
     // Post-to-post rail line (fracs ride the 0.5 body radius → 1.05r × 0.175r).
@@ -1052,11 +1068,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // POURED ground liquid (contiguous organic bodies, fuse-welded) — the
   // quag gels' habitat ground; the rest are solids on the wayfarer pattern.
   gel_pool:      { overlap: 'ground', pour: {} },
-  sunken_stone:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80, forbidOn: ['lava', 'chasm'] },
+  sunken_stone:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80, forbidOn: ['lava', 'chasm'],
+    surface: { hw: 0.7, hh: 0.42 } }, // the drowned stele: same monolith base as its dry kin
   black_obelisk: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 200, bodyScale: 0.55, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   tallow_stump:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   barrow_mound:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 220, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
-  hollow_log:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 140, bodyScale: 0.6, forbidOn: ['water', 'lava', 'chasm'] },
+  hollow_log:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 140, bodyScale: 0.6, forbidOn: ['water', 'lava', 'chasm'],
+    // The log painter's trunk (1.7r × 0.62r) — fracs ride the 0.6 body radius.
+    surface: { hw: 2.85, hh: 1.05 } },
   bone_cairn:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 110, bodyScale: 0.7, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   // The storm-scar kit: where lightning kept an appointment. All INERT —
   // the formations doctrine's look-alikes; the live hazards live elsewhere.
@@ -1085,7 +1104,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   snowdrift: { overlap: 'ground', pour: {} },
   bone_pile: { overlap: 'ground', walkOnly: true },
   brazier:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
-  standing_stone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46 },
+  standing_stone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46,
+    surface: { hw: 0.7, hh: 0.42 } }, // the slab monolith's base (widest ±0.7r)
   road:      { overlap: 'ground', walkOnly: true }, // a walkable gravel path (stays on walkable ground in grid zones)
   grass:     { overlap: 'ground' },
   /** The Field's boundary fringe: pure visual, deliberately NOT walk-gated —
@@ -1109,7 +1129,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // ruin_obelisk is a solid that carries a lashing trap DoodadEffect.
   light_spot:       { overlap: 'trigger', spacing: 60 },
   void_chasm:       { overlap: 'inert', blocksMove: true, blocksShot: false, swallowsSolids: true, hazardGround: true },
-  ruin_obelisk:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46 },
+  ruin_obelisk:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46,
+    surface: { hw: 0.7, hh: 0.42 } }, // the gem-set monolith's base
   descent_platform: { overlap: 'trigger', spacing: 40 },
   // Marine: kelp is walkable cover (decorative); coral + sea rocks are solids.
   kelp:     { overlap: 'ground', walkOnly: true },
@@ -1164,14 +1185,19 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   vein_cluster:   { overlap: 'ground', walkOnly: true },
   eye_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'] },
   rib_arch:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 50, forbidOn: ['water', 'lava', 'chasm'] },
-  tooth_row: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, forbidOn: ['water', 'lava', 'chasm'] },
+  // The tooth arc is an OFFSET C (gum ring 0.66r, outer stroke 0.82r) — a
+  // centered rect can't hug it, so it keeps a disc snugged to the drawn arc.
+  tooth_row: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 64, bodyScale: 0.85, forbidOn: ['water', 'lava', 'chasm'] },
   // The hell-steppes kit: fins are standing wall-pieces (full blocks — the
   // steppes' navigate-around skyline at doodad scale); stakes are thin (step
   // behind one, shoot past it); chains are floor dressing; fissures are small
   // blocking rents; the abyssal rent is the steppes' FALL pit — void_chasm's
   // hell twin (its stamp marks fall:true; the fall physics ride the recovery
   // machinery, not the kind).
-  hell_fin:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 64, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The fin's rot only LEANS the drawn blade (sin·0.16), so its surface is
+  // PINNED ('fixed'): the root ellipse it erupted through, not a spun slab.
+  hell_fin:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 64, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 0.9, hh: 0.42, orient: 'fixed' } },
   impaler_stake: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   hell_chain:    { overlap: 'ground', walkOnly: true },
   ember_fissure: { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 70, forbidOn: ['water', 'lava', 'chasm'] },
@@ -1212,7 +1238,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // strike-surface seam), banner poles you duck behind but shoot past, and
   // low bone-pyres. Every solid lists the full liquid forbidOn (the inverse
   // invariant genqa asserts).
-  hellforge_anvil: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 200, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  hellforge_anvil: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 200, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    // The forge painter draws UNSPUN (no rot read): slag plinth + iron block.
+    surface: { hw: 1.05, hh: 0.6, orient: 'fixed' } },
   soul_cage:     { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, bodyScale: 0.4, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     brittle: { on: ['hit'], text: 'the cage splits — a soul slips free', color: '#9fd4ff', orbChance: 0.12 } },
   demon_banner:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 88, bodyScale: 0.35, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
@@ -1221,21 +1249,25 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // flies overhead — nothing on the ground blocks); pylons and idols are true
   // monuments; the rack is low furniture you shoot over.
   gate_arch:     { overlap: 'ground', walkOnly: true },
-  gate_pylon:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  gate_pylon:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 0.7, hh: 0.42 } }, // coursed monolith (the slab painter's base)
   // The toll-gate's timber kit (the Holdfast waypost — same policies as the
   // stone kit above: the arch is a walk-under span, the post a true solid).
   toll_arch:     { overlap: 'ground', walkOnly: true },
-  toll_post:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  toll_post:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 0.7, hh: 0.42 } }, // squared timber post (the slab painter's base)
   hate_brazier:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
   torture_rack:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 84, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
     surface: { hw: 0.85, hh: 0.5 } }, // the rack bed + rollers — low dark furniture, not a pillar
-  hate_idol:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 110, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  hate_idol:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 110, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 1.0, hh: 1.0 } }, // the statue plinth square (weathered_statue's twin)
   // The Aetherial kit — cloud furniture never blocks SHOTS (there is nothing
   // up here an arrow would argue with except marble), and the built things
   // refuse liquid ground out of habit even though the shelves carry none.
   cloud_billow:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26, bodyScale: 0.85 },
   aether_crystal: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 60 },
-  seraph_statue:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  seraph_statue:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 120, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 0.65, hh: 0.65 } }, // the marble plinth square (±0.62r); wing tips stay walk-through
   harp_pillar:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, bodyScale: 0.9 },
   prayer_bell:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 70 },
   // The gate is a TRIGGER (the realm-gate dwell loop owns the interaction) —

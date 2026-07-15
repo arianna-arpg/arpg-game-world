@@ -15,8 +15,13 @@ Resolution is **one function**, `levelgen.hitSurfaceOf(d, channel)`:
    orientation. Structure doors author their slab here (`doorSurfaceOf`:
    breadth flush with the breach cells, depth `DOOR_SURFACE_CFG.slabHalfDepth`).
 2. `DoodadRule.surface` — the kind's oblong body: `{ hw, hh, orient?, angle? }`
-   as **fractions of the channel radius**, spun by the instance's `rot` (or
-   `dir`). Benches, logs, racks, sills, reliquary shelves.
+   as **fractions of the channel radius**, spun by the instance's `rot` (the
+   default), its facing (`orient: 'dir'`), or **pinned to the world axes**
+   (`orient: 'fixed'` — for painters that draw unspun, like the palisade
+   square and the hellforge, or only LEAN by `sin(rot)·ε`, like fin blades;
+   spinning those by raw rot would break the pixels-are-the-contract
+   identity). Benches, logs, racks, sills, reliquary shelves, headstones,
+   monoliths, statue plinths, hay bales, drying racks.
 3. Otherwise the classic disc.
 
 Channels mirror the trunk/crown split: `'move'`/`'shot'` resolve at
@@ -38,9 +43,19 @@ Authoring a new oblong kind: draw the painter, then set `surface` to the
 painter's drawn proportions **oriented by the same `rot` the painter
 reads** — that identity is what keeps every placement mode (scatter,
 formation `rot:'chain'`, structure cells) honest with zero further wiring.
-Deliberate disc holdouts: multi-part silhouettes (rib_arch), walk-on
-platforms (gallows), and kinds stamped as overlapping runs (wall/cliff —
-rect joints would open pinholes).
+Model the GROUND FOOTPRINT (the base band where the body meets the floor);
+up-screen sprite height is fake-2D height, not depth — a fin's horn and a
+banner's cloth rise over the fight, they don't widen it. When the kind
+wears a `bodyScale`, remember the fractions ride the BODY radius
+(fishing_rack: `{hw: 2.1} × 0.5 = 1.05r`). Brittle pop probes ('hit' /
+'touch' / 'near') deliberately stay generous discs — surfaces change what
+BLOCKS, never what pays.
+Deliberate disc holdouts: multi-part silhouettes (rib_arch), offset arcs no
+centered rect can hug (tooth_row — snugged with `bodyScale` instead),
+walk-on platforms (gallows), kinds stamped as overlapping runs (wall/
+cliff/wyrm_coil — rect joints would open pinholes), and every kind whose
+painter truly draws a circle (mounds, wells, columns, pot clusters, vents,
+shard clusters) — for those the disc already IS the pixels.
 
 ## Projectile forms (`engine/projForms.ts`)
 
