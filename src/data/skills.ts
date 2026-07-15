@@ -6535,6 +6535,42 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 720, weight: 1 },
   },
 
+  // --- THE VERMINFALL's verbs -----------------------------------------------
+  // The warren's spew (nests + broodpriests + the King all share it) and the
+  // fester rat's rotting bite — noDrop monster verbs on the shared catalog.
+
+  spew_rats: {
+    id: 'spew_rats', name: 'Seething Warren', noDrop: true,
+    description: 'The ground splits and the warren answers.',
+    tags: ['spell', 'summon', 'minion'], color: '#8a7a5a',
+    manaCost: 0, cooldown: 3.2, useTime: 1.1,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'warren_rat', weight: 3 },
+        { id: 'fester_rat', weight: 1 },
+      ],
+      count: 1, maxActive: 6,
+    },
+    effects: [],
+    requirements: { willpower: 30 },
+    ai: { range: 720, weight: 1 },
+  },
+
+  festering_bite: {
+    id: 'festering_bite', name: 'Festering Bite', noDrop: true,
+    description: 'A filthy bite that leaves the wound ROTTING.',
+    tags: ['attack', 'melee', 'physical', 'chaos'], color: '#8aa050',
+    manaCost: 2, cooldown: 0.5, useTime: 0.8,
+    baseDamage: { physical: [4, 7], chaos: [2, 4] },
+    delivery: { type: 'melee', range: 46, arcDeg: 90 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'decay', chance: 0.5, magnitude: 0.35 },
+    ],
+    ai: { range: 50, weight: 2 },
+  },
+
   // ======================= Resource economies ==============================
   // Charges, founts & ward: the §1 batch. Use-charges pace the cadence
   // family; orb/move taps feed founts and reserves; ward is the decaying

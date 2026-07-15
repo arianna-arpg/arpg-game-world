@@ -618,6 +618,59 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ========================================================== THE VERMINFALL
+  /** The gutter roach: a low lacquered oval, too many legs, gone already. */
+  roach: {
+    parts: [
+      { kind: 'carapace', scale: 0.8, params: { segs: 2 } },
+      { kind: 'legs', params: { pairs: 3 } },
+      { kind: 'eyes', params: { n: 2, spread: 0.45, dist: 0.6, size: 0.07 } },
+    ],
+  },
+  /** The verminkin: a hunched rat walking like an apology — snout, knives,
+   *  and a tail it never learned to hide. */
+  verminkin: {
+    parts: [
+      { kind: 'torso', scale: 0.8 },
+      { kind: 'snout', scale: 0.95 },
+      { kind: 'ears', scale: 0.75 },
+      { kind: 'tail', params: { len: 1.1 } },
+      { kind: 'daggers', params: { len: 0.45 } },
+      { kind: 'eyes', color: '#e88a8a', params: { spread: 0.38, dist: 0.5, size: 0.08 } },
+    ],
+  },
+  /** The broodpriest: robed rot-clergy — a snout under a bent staff. */
+  broodpriest: {
+    parts: [
+      { kind: 'robe', scale: 0.9, role: 'dark' },
+      { kind: 'snout', scale: 0.9 },
+      { kind: 'ears', scale: 0.7 },
+      { kind: 'tail', params: { len: 1.0 } },
+      { kind: 'staff', y: -0.08, params: { skullTip: true } },
+    ],
+  },
+  /** The Rat King: the warren's one idea, crowned — ruff, fangs, and a tail
+   *  the length of his reign. */
+  rat_king: {
+    parts: [
+      { kind: 'furRuff', scale: 1.05 },
+      { kind: 'torso', scale: 0.9 },
+      { kind: 'snout', scale: 1.0 },
+      { kind: 'fangs', scale: 0.85 },
+      { kind: 'tail', params: { len: 1.35, tuft: true } },
+      { kind: 'crown', x: 0.28, scale: 0.7, role: 'glow' },
+      { kind: 'eyes', color: '#ffb04a', params: { spread: 0.4, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  /** The warren nest: a chewed mound of twigs and worse, eyes in the holes. */
+  warren_nest: {
+    parts: [
+      { kind: 'nestTwigs', params: { n: 16 } },
+      { kind: 'spots', role: 'dark', params: { n: 5 } },
+      { kind: 'eyes', color: '#e88a8a', params: { n: 3, spread: 0.7, dist: 0.45, size: 0.07 } },
+    ],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [

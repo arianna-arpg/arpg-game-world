@@ -895,6 +895,21 @@ export function validateContent(): void {
   for (const [biome, rows] of Object.entries(WILDLIFE)) {
     checkTable(`wildlife ${biome}`, rows.map(r => r.id));
   }
+  // AUTHORED ZONE FAUNA (ZoneDef.fauna — the Verminfall's town-vermin seam):
+  // ids must resolve, and SAFE ground may host only 'critter'-tagged texture —
+  // a safe-zone fauna row naming a fighter would arm a sanctuary.
+  for (const z of Object.values(ZONES)) {
+    if (!z.fauna?.length) continue;
+    checkTable(`zone ${z.id} fauna`, z.fauna.map(r => r.id));
+    if (z.objective.kind === 'safe') {
+      for (const r of z.fauna) {
+        const d = MONSTERS[r.id];
+        if (d && d.tag !== 'critter') {
+          warn(`zone ${z.id}: safe-ground fauna '${r.id}' is not 'critter'-tagged — sanctuaries host only texture`);
+        }
+      }
+    }
+  }
 
   // PRESENCE envelopes (engine/presence.ts): every spec well-formed, every
   // named band registered, and no weighted table left ENTIRELY empty by its

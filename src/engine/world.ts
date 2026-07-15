@@ -480,6 +480,9 @@ export const AMBIENT_TAGS = new Set([
   'mycelia',       // the fungal horde is ambient spore-spread
   'mycelia_heart', // the Heartbloom is an OPTIONAL collapse-the-bloom strike
   'critter',       // ambient WILDLIFE prey (hares) — texture, never an objective
+  'vermin',        // Verminfall packs are ambient infestation (the warren, not the zone)
+  'warren_nest',   // warren nests are the Verminfall's OWN ledger, never the zone's
+  'rat_king_manifest', // the manifested King is an OPTIONAL strike (his fall clears the claim)
   'predator',      // ambient wildlife hunters (wolf packs) — optional trouble
   'wayfarer',      // neutral human travelers — minding their own way
 ]);
@@ -1863,6 +1866,10 @@ export class World {
    *  materialized this zone visit — one muster per visit; cleared per loadZone. The
    *  contagion spread/reveal/cure is owned by the pure ContagionField overlay. */
   private materializedContagion = new Set<string>();
+  /** Warren-claimed zones whose nests/packs (+ the armed King) were already
+   *  fielded this visit — one muster per visit; cleared per loadZone. The claim
+   *  + nest ledger is owned by the pure VerminfallField overlay. */
+  private materializedInfestation = new Set<string>();
   /** Spore-laced zones whose fungal horde (+ Heartbloom at the core) was already fielded
    *  this visit — one muster per visit; cleared per loadZone. The bloom's mobile spread is
    *  owned by the pure MyceliaField overlay. */
@@ -4001,6 +4008,11 @@ export class World {
         id: 'contagion',
         reset: () => { this.materializedContagion.clear(); },
         enter: (def) => this.materializeContagion(def),
+      },
+      {
+        id: 'verminfall',
+        reset: () => { this.materializedInfestation.clear(); },
+        enter: (def) => this.materializeInfestation(def),
       },
       {
         // MYCELIA: a spore-laced zone fields its fungal horde (+ the
@@ -6316,20 +6328,33 @@ export class World {
    *  packs hunt with discipline) away from the entrance. Safe zones and
    *  biomes without a table stay fauna-free. */
   private spawnWildlife(def: ZoneDef): void {
+    // AUTHORED FAUNA (ZoneDef.fauna) REPLACES the biome table outright — and it
+    // alone passes the sanctuary gate below (the town's gutter rats, the
+    // cellar's roaches): explicit authorship is the opt-in. The validator
+    // holds safe-zone fauna to 'critter'-tagged texture.
+    const authored = def.fauna;
     // SPECIAL zones host no ambient life (the open sea, boss arenas) — the same
     // gate spawnPacks/spawnContest already honor. Without it, the sea's
     // undefined biome fell through to the plains fallback below and hares,
     // wolves and lash-maidens spawned ON OPEN WATER during a voyage.
     // WAVES arenas are sealed stages too: nothing wanders into The Pit —
     // no grazing hares, no passing hunters, only what the wave brings.
-    if (def.objective.kind === 'safe' || def.objective.kind === 'waves' || def.special) return;
-    const table = WILDLIFE[def.biome ?? 'plains'];
+    if (!authored && (def.objective.kind === 'safe' || def.objective.kind === 'waves' || def.special)) return;
+    const table = authored ?? WILDLIFE[def.biome ?? 'plains'];
     if (!table?.length) return;
+    // TOWN PRESSURE (the Verminfall's threat-as-texture): while warrens fester
+    // in the near ring, authored VERMIN-tagged rows swell their chance — home
+    // reads the siege in its gutters before the map says a word.
+    const vermMul = this.sim.verminfallField?.townPressure() ?? 1;
     for (const w of table) {
       // Presence gates fauna too: row envelope × def envelope scale the CHANCE
       // (rows aren't a weighted pick against each other, so chance is the dial).
       const lvl = Math.max(1, def.level);
-      const chance = w.chance * presenceMul(w.presence, lvl)
+      // A row naming an unknown monster is a DATA bug (the validator warns) —
+      // but it must never crash a zone's gen. Skip it; the warning is the fix.
+      if (!MONSTERS[w.id]) continue;
+      const pressed = authored && MONSTERS[w.id]?.tags?.includes('vermin') ? vermMul : 1;
+      const chance = w.chance * pressed * presenceMul(w.presence, lvl)
         * presenceMul(MONSTERS[w.id]?.presence, lvl);
       if (Math.random() >= chance) continue;
       const n = randInt(w.count[0], w.count[1]);
@@ -10373,6 +10398,74 @@ export class World {
     } else if (roster?.table?.length) {
       this.text(vec(this.player.pos.x, this.player.pos.y - 80),
         'The air here is thick with rot…', cfg.color, 15);
+    }
+  }
+
+  // ------------------------------------------------------- verminfall materialize
+  //
+  // An INFESTATION is a warren claiming the town's near ring, owned by the pure
+  // VerminfallField overlay (the claim + the nest ledger + the King's arming).
+  // The engine reads infestOn() to field the STANDING nests — exactly
+  // nestsRemaining, so a broken warren stays broken across visits — plus vermin
+  // packs scaled by how much of the warren still seethes, and re-fields the
+  // manifested KING if he was left walking. Despawn-on-leave (post-tagging-
+  // window); re-materialized from the accessors on re-entry while the claim holds.
+
+  /** Field the warren in a claimed zone: standing nests (tag 'warren_nest' — the
+   *  Verminfall kill row keeps the ledger), vermin packs (tag 'vermin', ambient),
+   *  and the KING (tag 'rat_king_manifest') when every nest is broken but the
+   *  ground unclaimed. One muster per zone visit (guarded by materializedInfestation). */
+  private materializeInfestation(def: ZoneDef): void {
+    const vf = this.sim.verminfallField;
+    if (!vf) return;
+    const info = vf.infestOn(def.id);
+    if (!info) return;
+    if (this.materializedInfestation.has(def.id)) return;
+    this.materializedInfestation.add(def.id);
+    // DISCOVERY — walking a claimed zone surfaces the Vault tuning (one-shot per
+    // infestation), exactly like the Contagion "you've stumbled in" bump.
+    if (vf.markDiscovered(def.id)) bumpLedger(this.ledger, 'infestation_seen');
+    const cfg = vf.surge();
+    const lvl = Math.max(1, def.level);
+    // THE NESTS: exactly the standing count — a broken warren stays broken.
+    for (let i = 0; i < info.nestsRemaining; i++) {
+      const nest = this.createMonster('warren_nest', lvl, 'enemy');
+      nest.faction = cfg.faction;
+      nest.tag = 'warren_nest';
+      nest.pos = this.clampPos(this.farPoint(430), nest.radius);
+      this.actors.push(nest);
+    }
+    // THE TIDE: pack count lerps with how much of the warren still stands.
+    const roster = FACTIONS[cfg.faction];
+    if (roster?.table?.length) {
+      const seethe = info.nestsTotal > 0 ? info.nestsRemaining / info.nestsTotal : 0;
+      const packs = Math.max(1, Math.round(
+        cfg.packCount[0] + (cfg.packCount[1] - cfg.packCount[0]) * seethe));
+      for (let pk = 0; pk < packs; pk++) {
+        const at = this.farPoint(460);
+        const type = this.weightedPick(roster.table, lvl);
+        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
+        for (let k = 0; k < n; k++) {
+          const m = this.createMonster(type, lvl, 'enemy');
+          m.faction = cfg.faction;
+          m.tag = 'vermin';
+          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
+          this.actors.push(m);
+        }
+      }
+    }
+    // THE KING, if he was left walking (all nests broken, the ground unclaimed).
+    if (info.kingArmed && MONSTERS[cfg.kingDefId]) {
+      const king = this.createMonster(cfg.kingDefId, Math.max(1, lvl + cfg.kingLevelBonus), 'enemy');
+      king.faction = cfg.faction;
+      king.tag = 'rat_king_manifest';
+      king.pos = this.clampPos(this.farPoint(520, true), king.radius);
+      this.actors.push(king);
+      this.text(vec(king.pos.x, king.pos.y - 60),
+        `${king.name} still walks the broken warren!`, cfg.color, 18);
+    } else if (info.nestsRemaining > 0) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
+        'The ground here is riddled with warrens…', cfg.color, 15);
     }
   }
 

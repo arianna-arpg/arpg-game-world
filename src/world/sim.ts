@@ -25,6 +25,7 @@ import type { DeadwakeField } from '../packages/overlays/deadwake';
 import type { MigrationField } from '../packages/overlays/migration';
 import type { BrigandField } from '../packages/overlays/brigands';
 import type { HauntField } from '../packages/overlays/haunting';
+import type { VerminfallField } from '../packages/overlays/verminfall';
 import type { DemonInvasionField } from '../packages/overlays/demonInvasion';
 import type { FractureField } from '../packages/overlays/fractures';
 import type { HuntField } from '../packages/overlays/hunt';
@@ -158,6 +159,12 @@ export class WorldSim {
    *  the kill-handler rows call onAnchorBroken()/resolveHaunt() back. It owns the
    *  settle/lapse lifecycle. */
   readonly hauntField: HauntField | null;
+  /** The verminfall overlay if its package is in the manifest, else null — the engine
+   *  reads infestOn() to field the warren (standing nests + vermin packs + the armed
+   *  King) in a claimed zone and townPressure() to swell the town's authored vermin
+   *  fauna; the kill rows call onNestBroken()/onKingSlain() back. It owns the claim
+   *  + the nest ledger. */
+  readonly verminfallField: VerminfallField | null;
   /** The holdfast overlay if its package is in the manifest, else null — the engine
    *  reads infoFor()/isLocked() to raise the locked bonus exit + its guardian and to
    *  resolve the toll. It owns the durable per-zone lock state. */
@@ -334,6 +341,7 @@ export class WorldSim {
     this.brigandField = surface<BrigandField>('brigands') ?? null;
     this.hauntField = surface<HauntField>('haunting') ?? null;
     this.contagionField = surface<ContagionField>('contagion') ?? null;
+    this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     this.breachField = surface<BreachField>('breach') ?? null;

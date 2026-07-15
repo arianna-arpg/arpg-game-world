@@ -161,6 +161,12 @@ registerSidezone({
     layout: [],                  // barren by design: the room IS the slab
     fixtures: [{ structure: 'cellar_room', x: 320, y: 250 }],
     objective: { kind: 'safe' }, // the town's underside asks nothing
+    // …except the roaches (the Verminfall): authored fauna past the sanctuary
+    // gate — every cellar the world over knows this exact population.
+    fauna: [
+      { id: 'gutter_roach', chance: 0.8, count: [2, 5] },
+      { id: 'gutter_rat', chance: 0.5, count: [1, 3] },
+    ],
     exits: [{ to: parent.id, side: 's' }],
     map: { x: parent.map.x, y: parent.map.y }, // off-graph; type-required
     caveDepth: (parent.caveDepth ?? 0) + 1,

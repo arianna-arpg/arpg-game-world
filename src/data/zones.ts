@@ -20,6 +20,7 @@ import type { ZoneFogSpec } from '../engine/fog';
 import type { ZoneCreepSpec } from '../engine/creep';
 import type { CollapseSpec } from '../engine/collapse';
 import type { FluxSpec } from '../engine/flux';
+import type { WildlifeRow } from './monsters';
 
 /** One roster row. `presence` is the LEVELED-LIST lever (engine/presence.ts):
  *  a weight-vs-level envelope — or a named band — deciding how present this
@@ -472,6 +473,12 @@ export interface ZoneDef {
   layoutType?: string;
   objective: ObjectiveSpec;
   packs?: PackSpec;
+  /** AUTHORED AMBIENT FAUNA — this zone's own WildlifeRow list, REPLACING the
+   *  biome's WILDLIFE table outright. The one lane past the sanctuary gate:
+   *  authored fauna spawns even on SAFE ground (the town's gutter rats, the
+   *  cellar's roaches — texture the zone asked for by name), so the validator
+   *  requires safe-zone rows to be 'critter'-tagged. Absent = the biome list. */
+  fauna?: WildlifeRow[];
   exits: ZoneExitDef[];
   /** Layout position on the world map panel (M). */
   map: { x: number; y: number };
@@ -721,6 +728,16 @@ export const ZONES: Record<string, ZoneDef> = {
       { structure: 'wayside_camp', x: 960, y: 660 },
     ],
     objective: { kind: 'safe' },
+    // THE TOWN'S SMALL LIVES (the Verminfall) — authored fauna spawns even on
+    // safe ground: rats in the gutters, roaches at the cellar door, a squirrel
+    // working the benches. Pure texture ('critter'-tagged, validator-enforced)
+    // — and a LIVING GAUGE: while warrens fester in the near ring, the
+    // VerminfallField's townPressure swells these rows. Home tells you.
+    fauna: [
+      { id: 'gutter_rat', chance: 0.85, count: [2, 4] },
+      { id: 'gutter_roach', chance: 0.6, count: [2, 4] },
+      { id: 'squirrel', chance: 0.5, count: [1, 2] },
+    ],
     waypoint: true,
     exits: [
       // The town's ONLY road — to the hub. Its true side is rolled per run

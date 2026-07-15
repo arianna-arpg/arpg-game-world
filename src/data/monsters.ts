@@ -529,6 +529,8 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // covers deepwood, jungle, meadow and the Verdant Hollow in one stroke.
   grove: [
     { id: 'meadow_hare', chance: 0.6, count: [2, 4] },
+    { id: 'gutter_rat', chance: 0.3, count: [2, 4] }, // the Verminfall — undergrowth rats
+
     { id: 'plains_wolf', chance: 0.5, count: [2, 4] },
     { id: 'thicket_stalker', chance: 0.35, count: [1, 2] },
     { id: 'broodmother', chance: 0.25, count: [1, 1] },
@@ -585,6 +587,8 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // The wet country: toads in the reeds, herons fishing for them.
   marsh: [
     { id: 'marsh_toad', chance: 0.7, count: [3, 5] },
+    { id: 'gutter_roach', chance: 0.35, count: [2, 4] }, // the Verminfall — reed-bank roaches
+
     { id: 'bog_heron', chance: 0.5, count: [1, 2] },
     { id: 'broodmother', chance: 0.2, count: [1, 1] },
     { id: 'reed_frog', chance: 0.6, count: [2, 4], near: 'water' },
@@ -596,6 +600,10 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   ],
   grave: [
     { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
+    // the Verminfall — the graves keep their own small tenants, and the crows
+    // that strip what the graves give up.
+    { id: 'gutter_rat', chance: 0.5, count: [2, 4] },
+    { id: 'carrion_crow', chance: 0.3, count: [2, 3] },
     { id: 'bog_heron', chance: 0.25, count: [1, 1] },
     { id: 'will_o_wisp', chance: 0.45, count: [1, 3] },
     { id: 'gravemaw_hound', chance: 0.5, count: [2, 3] },
@@ -617,6 +625,9 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   ],
   field: [
     { id: 'meadow_hare', chance: 0.7, count: [3, 5] },
+    // the Verminfall — grain draws rats; the dead of the open field draw crows.
+    { id: 'gutter_rat', chance: 0.4, count: [2, 4] },
+    { id: 'carrion_crow', chance: 0.25, count: [2, 3] },
     { id: 'plains_wolf', chance: 0.4, count: [2, 3] },
     { id: 'taiga_elk', chance: 0.3, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.2, count: [1, 1] },
@@ -627,10 +638,15 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
   // through the roost's summon rule, which stamps them 'predator'/exempt.)
   cavern: [
     { id: 'glow_moth', chance: 0.65, count: [3, 6] },
+    // the Verminfall — the dark's small tenants.
+    { id: 'gutter_rat', chance: 0.4, count: [2, 3] },
+    { id: 'gutter_roach', chance: 0.55, count: [3, 6] },
     { id: 'bat_roost', chance: 0.45, count: [1, 2] },
   ],
   mycelia: [
     { id: 'glow_moth', chance: 0.5, count: [2, 5] },
+    { id: 'gutter_roach', chance: 0.4, count: [2, 4] }, // the Verminfall — rot draws roaches
+
     { id: 'marsh_toad', chance: 0.35, count: [2, 3] },
   ],
   // The cinder country breathes: wisps rising off the vents (they flee — the
@@ -5619,6 +5635,9 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['talon_rake'], xp: 6, faction: 'wild', tags: ['beast'],
     flier: true, levitates: true,
     detection: 1.6, // the watchers see FAR — the wood knows you came in
+    // A carrion crow EATS carrion (the Verminfall ecology pass): it strips
+    // the field's corpses — racing every raise-skill for the same larder.
+    carrion: { radius: 400, rate: 0.08, time: 2 },
     brain: {
       type: 'swarm',
       morale: { skittish: { radius: 90, duration: [0.6, 1.2] } },
@@ -5667,6 +5686,171 @@ export const MONSTERS: Record<string, MonsterDef> = {
     grants: [{ atLevel: 20, support: 'multistrike', on: 'heavy_strike', chance: 0.5 }],
     detection: 1.3, wardPriority: 2,
     brain: { type: 'juggernaut', enrage: 0.5, move: { style: 'charge', commitRange: 420, chargeSpeed: 2.8 } },
+  },
+
+  // --- THE VERMINFALL (rats, roaches, the warren-folk — the faction whose
+  //     target is your HOME GROUND) ------------------------------------------
+  // Two tiers, one family. The PREY tier (gutter rat, gutter roach) rides the
+  // WILDLIFE rows and the towns' own fauna lists: 'critter'-tagged, so every
+  // prey-hunting brain (wolves, vultures, shrikes) consumes them with zero new
+  // code — the meadow's food web simply gains a bottom rung, and the town
+  // gains movement in its gutters. The FIGHTING tier (warren rats, verminkin,
+  // the nests, the King) is the 'vermin' faction the Verminfall package
+  // fields: infestations claiming the town's near ring, and — because their
+  // grudges are baseline RELATIONS — real war zones against the warband.
+
+  // THE GUTTER RAT: the town's smallest tenant. Hare-pattern prey (skittish,
+  // juking, tires) that squeezes away under the brush when truly pressed.
+  gutter_rat: {
+    id: 'gutter_rat', name: 'Gutter Rat',
+    color: '#8a7f72', shape: 'oval', radius: 6, material: 'fur', look: 'rat',
+    base: { life: 6, moveSpeed: 205, evasion: 70, mana: 0 },
+    mods: [mod('detectability', 'more', -0.7)],
+    skills: [],
+    xp: 1,
+    tag: 'critter',
+    faction: 'vermin', tags: ['beast', 'vermin'],
+    detection: 0.08,
+    drops: 0,
+    scaleVariance: [0.7, 1.1],
+    refuge: { kind: 'brush', text: 'squeezes away under the brush!' },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 130, duration: [1.2, 2.2] } },
+      perception: { arcDeg: 320, rearMul: 0.9 },
+      move: { style: 'juke', hookEvery: [0.25, 0.6], hookArc: 1.3, freezeChance: 0.25, freeze: [0.15, 0.4] },
+      tempo: { kite: 2.8, windedFor: [0.7, 1.2] },
+    },
+  },
+  // THE GUTTER ROACH: what the rats leave, the roaches keep. Cellar-and-cavern
+  // prey — near-blind, armored in the smallest way, gone the moment you move.
+  gutter_roach: {
+    id: 'gutter_roach', name: 'Gutter Roach',
+    color: '#5e4a38', shape: 'oval', radius: 5, material: 'chitin', look: 'roach',
+    base: { life: 4, moveSpeed: 185, evasion: 85, mana: 0 },
+    mods: [mod('detectability', 'more', -0.75)],
+    skills: [],
+    xp: 1,
+    tag: 'critter',
+    faction: 'vermin', tags: ['beast', 'vermin'],
+    detection: 0.06,
+    drops: 0,
+    scaleVariance: [0.65, 1.05],
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 110, duration: [1.0, 1.8] } },
+      perception: { arcDeg: 340, rearMul: 0.95 },
+      move: { style: 'skitter' },
+      tempo: { kite: 2.2, windedFor: [0.5, 0.9] },
+    },
+  },
+  // THE WARREN RAT: the tide. Alone it is nothing; the warren never sends one.
+  warren_rat: {
+    id: 'warren_rat', name: 'Warren Rat',
+    color: '#7a6a58', shape: 'oval', radius: 9, material: 'fur', look: 'rat',
+    base: { life: 18, moveSpeed: 178, accuracy: 88, evasion: 45, mana: 0 },
+    skills: ['claw'],
+    xp: 5,
+    faction: 'vermin', tags: ['beast', 'vermin'],
+    detection: 1.1,
+    temper: 'skittish',
+    scaleVariance: [0.85, 1.2],
+    brain: {
+      type: 'swarm',
+      squad: { muster: { count: 3, radius: 300, patience: 4 }, surround: true },
+    },
+  },
+  // THE FESTER RAT: the warren's stomach — it EATS THE DEAD (carrion), racing
+  // every corpse-raising art for the same bodies, and its bite leaves rot.
+  fester_rat: {
+    id: 'fester_rat', name: 'Fester Rat',
+    color: '#8aa050', shape: 'oval', radius: 10, material: 'fur', look: 'rat',
+    base: { life: 26, moveSpeed: 168, accuracy: 92, mana: 15, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['festering_bite'],
+    xp: 9,
+    faction: 'vermin', tags: ['beast', 'vermin'],
+    detection: 1.2,
+    carrion: { radius: 380, rate: 0.08, time: 2 },
+    presence: { from: 3, fadeIn: 2 },
+    brain: {
+      type: 'pack',
+      squad: { muster: { count: 2, radius: 320, patience: 5 }, tokens: 2, surround: true },
+    },
+  },
+  // THE VERMINKIN SKULKER: the warren's thinking tier — a hunched knife in
+  // the hedgerow that flanks by instinct and dives the moment your hands
+  // commit to a cast.
+  verminkin_skulker: {
+    id: 'verminkin_skulker', name: 'Verminkin Skulker',
+    color: '#6e6252', shape: 'kite', radius: 11, material: 'fur', look: 'verminkin',
+    base: { life: 36, moveSpeed: 182, accuracy: 96, evasion: 60, mana: 12, manaRegen: 2 },
+    skills: ['claw'],
+    xp: 15,
+    faction: 'vermin', tags: ['vermin'],
+    detection: 1.15,
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      move: { style: 'skitter', dart: [0.3, 0.5], pause: [0.1, 0.25] },
+      behavior: { encircle: { front: 2 } },
+      rules: [
+        { when: { targetCasting: 0.35, distUnder: 360, chance: 0.5 },
+          hold: [0.6, 1.0], cooldown: 3,
+          use: { move: { style: 'direct', pace: 1.3 } } },
+      ],
+    },
+  },
+  // THE VERMINKIN BROODPRIEST: bile and blessings of the warren — he retches
+  // the sheet that rots you and calls the tide up out of the ground.
+  verminkin_broodpriest: {
+    id: 'verminkin_broodpriest', name: 'Verminkin Broodpriest',
+    color: '#7a8a4a', shape: 'star', radius: 12, material: 'cloth', look: 'broodpriest',
+    base: { life: 44, moveSpeed: 120, mana: 140, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['bile_spray', 'spew_rats'],
+    xp: 24,
+    faction: 'vermin', tags: ['vermin'],
+    gemBias: ['chaos', 'summon'], wardPriority: 1,
+    detection: 1.0,
+    presence: { from: 5, fadeIn: 3 },
+    brain: { type: 'strafer' },
+  },
+  // THE WARREN NEST: the infestation's clear condition — an anchored mound
+  // that drips rats until split (rift_maw-shaped: NOT spawner-flagged, so it
+  // never joins a zone's 'spawners' objective; the Verminfall's own kill row
+  // keeps the ledger).
+  warren_nest: {
+    id: 'warren_nest', name: 'Warren Nest',
+    color: '#6a5a44', shape: 'oval', radius: 15, material: 'fur', look: 'warren_nest',
+    base: { life: 85, moveSpeed: 0, armor: 18, mana: 999, manaRegen: 50 },
+    skills: ['spew_rats'], xp: 10, faction: 'vermin',
+    vision: { arcDeg: 360, rearMul: 1 }, // a mound has no back
+    noNemesis: true, drops: 0,
+  },
+  // THE RAT KING: the warren's one idea, crowned. Manifested over the last
+  // split nest (the Verminfall kill row); also the faction's WARLORD, so a
+  // deep vermin capital crowns him the ordinary way.
+  rat_king: {
+    id: 'rat_king', name: 'Rat King',
+    color: '#9a8a6a', shape: 'hexagon', radius: 17, material: 'fur', look: 'rat_king',
+    base: { life: 210, moveSpeed: 150, accuracy: 105, armor: 25, mana: 120, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.35)],
+    skills: ['claw', 'spew_rats', 'keening_shriek'],
+    xp: 85,
+    faction: 'vermin', tags: ['beast', 'vermin'],
+    detection: 1.2,
+    turnSpeed: 6,
+    scaling: { life: { incPerLevel: 0.07 } },
+    grants: [{ atLevel: 14, support: 'brood_tender', on: 'spew_rats', chance: 0.6 }],
+    presence: { from: 8, fadeIn: 4 },
+    brain: {
+      type: 'commander', perception: { alertShout: 520 },
+      rules: [
+        { when: { lifeBelow: 0.5 }, every: [8, 12], hold: [0.3, 0.5],
+          announce: 'The King calls the warren!',
+          actions: [{ do: 'summon', monster: 'warren_rat', count: 3, ring: 60 }] },
+      ],
+    },
   },
 
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----

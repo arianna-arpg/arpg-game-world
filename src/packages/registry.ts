@@ -29,6 +29,7 @@ import { MYCELIA } from './defs/mycelia';
 import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
 import { VENDETTA } from './defs/vendetta';
+import { VERMINFALL } from './defs/verminfall';
 import { WARBANDS } from './defs/warbands';
 import { WORLDBOSS } from './defs/worldboss';
 import type { EncounterDef } from './encounters';
@@ -56,6 +57,7 @@ export const PACKAGES: ContentPackage[] = [
   BRIGANDS,
   MYCELIA,
   HAUNTING,
+  VERMINFALL,
   VENDETTA,
   WORLDBOSS,
   PIT,
@@ -89,6 +91,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   brigands: 0xb21a,
   mycelia: 0x14ce,
   vendetta: 0x0e4d,
+  verminfall: 0x2a75,
   pit: 0x9147,
   worldboss: 0xb055,
 };
