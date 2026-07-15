@@ -397,6 +397,28 @@ export const BOSS_BAR_XP_MIN = 100;
  *  smooth decaying bloom over the low-life vignette). */
 export const LOW_LIFE_FLASH_SEC = 0.45;
 
+/** THE GAZE tunables (World.updateGaze; ZoneTheme.gaze names the eye kinds).
+ *  The stack cap and the cost of being SEEN live on the STATUS DEFS (beheld →
+ *  seen buildup ladder) — this is only the cadence and the zone's answer. */
+export const GAZE_CFG = {
+  /** Seconds per stack gained while an OPEN eye has you in its reach. */
+  stackEvery: 1.1,
+  /** Seconds per stack shed once nothing is watching. */
+  dwindleEvery: 1.4,
+  /** Default eye reach (ZoneTheme.gaze.reach overrides). */
+  reach: 175,
+  /** Inside this range an eye flinches SHUT and builds nothing — pressing
+   *  close is the fabric's own counterplay (the render lid mirrors it). */
+  closeReach: 64,
+  /** Default status the eyes build; its buildup ladder is the point. */
+  status: 'beheld',
+  /** The answer to a fresh conversion: a lure ping drawing the idle zone. */
+  lureRadius: 620,
+  lurePace: 1.15,
+  lureStandoff: 56,
+  lureLinger: 4,
+};
+
 /** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
  *  cap and per-stack fire-res erosion live on the STATUS DEF (sunscorched);
  *  the cap's consequence lives on its buildup ladder (heatstroke). */
@@ -25093,6 +25115,7 @@ export class World {
     this.updatePendingContagions();
     this.updateTerrainEffects(dt);
     this.updateHeat(dt);
+    this.updateGaze(dt);
     this.updateFog(dt);
     this.updateCreep(dt);
     this.updateCollapse(dt);
@@ -27218,6 +27241,72 @@ export class World {
       // is only a safety TTL for stacks earned some other way).
       if (scorch && scorch.stacks > 0) scorch.remaining = Math.max(scorch.remaining, 2.5);
       this.heatTimers.set(a.id, t);
+    }
+  }
+
+  /** THE GAZE — the flesh country's regard (ZoneTheme.gaze; swelter's sibling
+   *  lane, in eyes). Doodads of the spec'd kinds are EYES: any OPEN eye with a
+   *  player seat in reach (beyond closeReach — press close and it flinches
+   *  shut) builds the spec'd status on GAZE_CFG cadence; out of regard the
+   *  stacks dwindle. The status's own buildup ladder decides the cost of
+   *  being SEEN, and a fresh conversion is answered with a LURE ping — the
+   *  zone turns toward you. Proximity-honest by design (no ray: the eyes
+   *  that matter share your chamber); brittle pops remove doodads, so the
+   *  eye list is filtered live, never cached. Player seats only. */
+  private gazeTimers = new Map<number, number>();
+  private updateGaze(dt: number): void {
+    const spec = this.zone.theme.gaze;
+    if (!spec?.kinds.length) return;
+    const reach = spec.reach ?? GAZE_CFG.reach;
+    const closeReach = spec.closeReach ?? GAZE_CFG.closeReach;
+    const statusId = spec.status ?? GAZE_CFG.status;
+    const markId = STATUS_DEFS[statusId]?.buildup?.into;
+    let eyes: Doodad[] | null = null;
+    for (const s of this.seats) {
+      const a = s.actor;
+      if (a.dead || a.downed) continue;
+      const held = a.statuses.find(x => x.id === statusId);
+      let t = (this.gazeTimers.get(a.id) ?? 0) + dt;
+      eyes ??= this.doodads.filter(d => spec.kinds.includes(d.kind));
+      let watched = false;
+      for (const d of eyes) {
+        const dd = dist(a.pos, d.pos);
+        if (dd <= reach + a.radius && dd > closeReach + a.radius) { watched = true; break; }
+      }
+      if (watched) {
+        if (t >= GAZE_CFG.stackEvery) {
+          t = 0;
+          const wasMarked = !!markId && a.statuses.some(x => x.id === markId);
+          a.applyStatus(statusId, 0, 1, 'the watching walls');
+          if ((a.statuses.find(x => x.id === statusId)?.stacks ?? 0) === 1 && !wasMarked) {
+            this.text(vec(a.pos.x, a.pos.y - a.radius - 6), 'beheld…', '#d8b04a', 12);
+          }
+          // The ladder tipped — the country KNOWS. Tell its own.
+          if (markId && !wasMarked && a.statuses.some(x => x.id === markId)) {
+            this.text(vec(a.pos.x, a.pos.y - a.radius - 10), 'SEEN!', '#f0c860', 15);
+            this.setLure(`gaze#${a.id}`, a.pos, spec.lureRadius ?? GAZE_CFG.lureRadius,
+              GAZE_CFG.lurePace, GAZE_CFG.lureStandoff, GAZE_CFG.lureLinger);
+          }
+        }
+      } else if (held) {
+        if (t >= GAZE_CFG.dwindleEvery) {
+          t = 0;
+          held.stacks--;
+          // Mirror the heat lane's shed hygiene (beheld carries no mods, but
+          // a themed override status might): re-sync or lift the source.
+          const def = STATUS_DEFS[statusId];
+          if (held.stacks <= 0) {
+            a.statuses.splice(a.statuses.indexOf(held), 1);
+            a.sheet.removeSource(`status:${statusId}`);
+          } else if (def?.mods && def.modsPerStack) {
+            a.sheet.setSource(`status:${statusId}`,
+              def.mods.map(m => ({ ...m, value: m.value * held.stacks })));
+          }
+        }
+      } else {
+        t = Math.min(t, Math.max(GAZE_CFG.stackEvery, GAZE_CFG.dwindleEvery));
+      }
+      this.gazeTimers.set(a.id, t);
     }
   }
 

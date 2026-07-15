@@ -256,6 +256,67 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
       mod('castSpeed', 'more', -0.12),
     ],
   },
+  /** THE FLESH COUNTRY's vasovagal ladder (blood grounds, blood-mist fog,
+   *  apply_faintness investment): open blood turns the head LIGHT, stack by
+   *  stack, and at the cap the buildup consumes into a SWOON. Deliberately
+   *  never a stun — the world greys out (VIS_CFG.swoon pall) and the aim
+   *  drifts, but you keep your feet. Shed by getting clear of the red. */
+  faintness: {
+    label: 'Faintness', color: '#d8ccd8', duration: 6,
+    stacking: true, maxStacks: 6, buildup: { into: 'swoon' },
+    mods: [mod('accuracy', 'more', -0.02)],
+    modsPerStack: true,
+  },
+  /** What faintness collapses into at cap (heatstroke's pale cousin): the
+   *  legs go, the hands slur, the vision pales to a white-out — a hard drag,
+   *  never a lockout. The swoon pall (renderer) keys on this. */
+  swoon: {
+    label: 'Swooning', color: '#e8e0ec', duration: 2.2,
+    mods: [
+      mod('moveSpeed', 'more', -0.26),
+      mod('attackSpeed', 'more', -0.18),
+      mod('castSpeed', 'more', -0.18),
+    ],
+  },
+  /** The GUTWORKS' sour ladder (bile grounds, gut-miasma fog, apply_queasy):
+   *  the stomach argues, then it WINS — at cap the stacks convert into
+   *  RETCHING. Casts slur while it climbs. */
+  queasy: {
+    label: 'Queasy', color: '#a8b86a', duration: 5,
+    stacking: true, maxStacks: 5, buildup: { into: 'retching' },
+    mods: [mod('castSpeed', 'more', -0.03)],
+    modsPerStack: true,
+  },
+  /** Queasy's cap: doubled over and heaving — begun attacks and spells keep
+   *  fizzling (the befuddlement interrupt machinery), everything slows. A
+   *  channel-breaker, never a stun. */
+  retching: {
+    label: 'Retching', color: '#c2cc74', duration: 1.6,
+    interruptChance: 0.6,
+    mods: [mod('castSpeed', 'more', -0.22), mod('attackSpeed', 'more', -0.14)],
+  },
+  /** THE OCULAR's regard (World.updateGaze, ZoneTheme.gaze): standing in
+   *  reach of OPEN eyes builds BEHELD. Walk right up and an eye flinches
+   *  shut (builds nothing); put it out and it never watches again. At cap
+   *  the stacks consume into SEEN. Pure pressure — the ladder is the cost. */
+  beheld: {
+    label: 'Beheld', color: '#d8b04a', duration: 8,
+    stacking: true, maxStacks: 8, buildup: { into: 'seen' },
+  },
+  /** Marked by the flesh: it knows exactly where you are, and it TELLS its
+   *  own — the gaze lane answers a fresh conversion with a lure ping (the
+   *  zone turns toward you). The mark itself is the classic hunted debuff. */
+  seen: {
+    label: 'Seen', color: '#f0c860', duration: 6,
+    mods: [mod('damageTaken', 'more', 0.12)],
+  },
+  /** BLIND — the eye country's own verb, usable by and against anything
+   *  with aim: accuracy crushed, perception halved. A blinded monster loses
+   *  its reach of sight; a blinded hero shoots wide. */
+  blind: {
+    label: 'Blinded', color: '#3a3444', duration: 4,
+    mods: [mod('accuracy', 'more', -0.45), mod('detectionRange', 'more', -0.5)],
+  },
   // Chill BUILDS UP: each application stacks intensity, and at max stacks
   // the chill is consumed into a FREEZE — a long, hard stun.
   chill: {

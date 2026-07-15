@@ -410,6 +410,22 @@ export interface ZoneTheme {
    *  (every non-desert biome, byte-identical). ~0.85 waste, 1 erg,
    *  1.2 glasspan. All cadence math in HEAT_CFG. */
   swelter?: number;
+  /** THE GAZE (World.updateGaze): the zone's own eyes regard whoever walks
+   *  it. Doodads of `kinds` are EYES: any OPEN eye with a player seat in its
+   *  `reach` (beyond `closeReach` — walk right up and it flinches shut, the
+   *  fabric's built-in counterplay) builds `status` stacks; out of regard
+   *  they dwindle. The status's own buildup ladder decides what being seen
+   *  costs, and the lane answers a fresh conversion with a lure ping
+   *  (`lureRadius` — the zone turning toward you). Cadence in GAZE_CFG;
+   *  swelter's sibling lane, in eyes. */
+  gaze?: {
+    kinds: string[];
+    reach?: number;
+    closeReach?: number;
+    /** Default 'beheld' (GAZE_CFG.status). */
+    status?: string;
+    lureRadius?: number;
+  };
   /** DAYTIME BRIGHTNESS multiplier on the noon sun-lift (default 1): a
    *  desert swelters at 1.6, a canopied wood barely brightens at 0.7. */
   dayLight?: number;

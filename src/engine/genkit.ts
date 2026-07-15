@@ -432,6 +432,8 @@ registerLiquid('chasm', { doodad: 'chasm' });                     // blocking ga
 registerLiquid('cinder', { doodad: 'cinder' });                   // ember-strewn ash
 registerLiquid('gore', { doodad: 'gore' });                       // viscera pools
 registerLiquid('mud', { doodad: 'mud' });
+registerLiquid('blood', { doodad: 'blood_pool' });                // the flesh country's open rivers (faintness on entry)
+registerLiquid('chyme', { doodad: 'chyme_pool' });                // digesting bile (typed chaos + queasy)
 
 /** Pour a liquid over a mask: region liquids paint the grid; doodad liquids
  *  scatter merged blobs (one disc per Nth cell, radius > spacing so the fill

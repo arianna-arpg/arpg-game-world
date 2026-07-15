@@ -174,10 +174,10 @@ export type KnownDoodadKind =
   | 'artery_stalk'   // blocks feet not shots — a severed standing vessel spurting on the heartbeat
   | 'sphincter'      // a PUCKERING DOOR: carries DoodadDoor state; dwell near and it dilates open
   | 'chyme_pool'     // ground liquid: digestive bile — it wants you broken down
-  | 'gas_polyp'      // blocks feet not shots — a swollen bladder that belches sour fume
+  | 'gas_polyp'      // a swollen bladder (brittle): pops into a sour lingering fume
   | 'villus_bed'     // ground overlay: a carpet of swaying absorptive fronds
   | 'gut_knuckle'    // blocks both — a clenched haustral fold of the tract wall
-  | 'ocular_knot'    // blocks feet not shots — a wall-knot of mismatched eyes, all of them watching
+  | 'ocular_knot'    // blocks feet not shots — a wall-knot of watching eyes; burst it blind (brittle)
   | 'lash_bed'       // ground overlay: a fringe of ground-lashes that shy apart around a walker
   | 'weep_spring'    // ground liquid: a welling tear-pool, clear and salt
   | 'colossal_heart' // blocks both — the country's own heart, a chamber-scale living centerpiece
@@ -1267,10 +1267,17 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   artery_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 56, forbidOn: ['water', 'lava', 'chasm'] },
   sphincter:    { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true },
   chyme_pool:   { overlap: 'ground', walkOnly: true, pour: {} },
-  gas_polyp:    { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 44, forbidOn: ['water', 'lava', 'chasm'] },
+  // The polyp rides the hazard-breakable grammar (gas_pod's sour cousin) —
+  // pop it at range or wear the belch.
+  gas_polyp:    { overlap: 'inert', spacing: 44,
+    brittle: { on: ['hit', 'near'], reach: 34, text: 'the polyp belches!', color: '#a8b86a',
+      fume: { radius: 72, linger: 3.0, dmgMult: 0.7, color: '#a8b86a' } } },
   villus_bed:   { overlap: 'ground', walkOnly: true },
   gut_knuckle:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 52, forbidOn: ['water', 'lava', 'chasm'] },
-  ocular_knot:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'] },
+  // Burst the eyes and the wall stops watching: a SOLID brittle (the
+  // crumbling_wall idiom) — the gaze lane's live filter drops it on pop.
+  ocular_knot:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46, forbidOn: ['water', 'lava', 'chasm'],
+    brittle: { on: ['hit'], text: 'the eyes burst!', color: '#d8b04a' } },
   lash_bed:     { overlap: 'ground', walkOnly: true },
   weep_spring:  { overlap: 'ground', walkOnly: true, pour: {} },
   colossal_heart: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80 },

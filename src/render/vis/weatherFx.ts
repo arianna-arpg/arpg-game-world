@@ -40,6 +40,8 @@ export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
   ashfall:   { form: 'flake', count: 60, vel: [-24, 46], size: 2.2, alpha: 0.5, color: '#c8a88a', fadeIn: 6 },
   bloodmoon: { form: 'mote', count: 34, vel: [6, -14], size: 1.8, alpha: 0.45, color: '#e86a72', fadeIn: 12 },
   snow:      { form: 'flake', count: 85, vel: [-26, 58], size: 2.5, alpha: 0.6, color: '#eef6ff', fadeIn: 7 },
+  // Blood rain falls HEAVY and a little slow — fat red streaks, not a drizzle.
+  hemorrhage: { form: 'streak', count: 70, vel: [-40, 430], len: 12, alpha: 0.4, color: '#c2404e', fadeIn: 6 },
   // Near-horizontal grit — the sky moving sideways. The wind fabric supplies
   // the shove; this supplies the reason you believe it.
   sandstorm: { form: 'streak', count: 110, vel: [-380, 90], len: 16, alpha: 0.4, color: '#d8b878', fadeIn: 2.5 },

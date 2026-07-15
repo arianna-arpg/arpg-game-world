@@ -71,6 +71,53 @@ registerFogBank({
   ],
 });
 
+/** BLOOD MIST — the Sanguine face's red haze: a low, clinging aerosol that
+ *  pools over open blood (haunt hugs the pools and the gore) and turns heads
+ *  LIGHT — faintness climbs its vasovagal ladder on the grant's own cadence
+ *  (FogGrant.every — never the 4Hz sweep), sparing the country's own kin.
+ *  You are veiled inside it, for whatever comfort that is. */
+registerFogBank({
+  id: 'blood_mist',
+  color: '#b0424e',
+  alpha: 0.3,
+  radius: [95, 165],
+  lobes: [5, 8],
+  drift: [3, 8],
+  meander: 0.26,
+  breathe: 0.14,
+  churn: 0.3,
+  life: [48, 96],
+  rampFrac: 0.3,
+  overFrac: 0.24,
+  haunt: { kinds: ['blood_pool', 'gore', 'clot_mound'], pull: 0.9 },
+  grants: [
+    { status: 'fogveiled' },
+    { status: 'faintness', every: 1.6, notFactions: ['flesh'] },
+  ],
+});
+
+/** GUT MIASMA — the Gutworks' sour breath: a green-brown vapor that hangs in
+ *  the tract's low places and turns the stomach (queasy on its own cadence;
+ *  the ladder ends in retching). The Glut digests comfortably inside it. */
+registerFogBank({
+  id: 'gut_miasma',
+  color: '#8a9a52',
+  alpha: 0.32,
+  radius: [90, 160],
+  lobes: [5, 8],
+  drift: [2, 6],
+  meander: 0.34,
+  breathe: 0.22,
+  churn: 0.36,
+  life: [44, 88],
+  rampFrac: 0.32,
+  overFrac: 0.3,
+  haunt: { kinds: ['chyme_pool', 'gas_polyp', 'villus_bed'], pull: 0.85 },
+  grants: [
+    { status: 'queasy', every: 1.8, notFactions: ['flesh'] },
+  ],
+});
+
 /** GLOAM SHROUD — the Gloamwood's own weather: a big, tall, coiling mass
  *  that swallows whole clearings. Everyone inside is veiled; the wood's dead
  *  drink it. Taller over-layer share than common mist (it wraps you, not

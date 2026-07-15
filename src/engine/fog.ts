@@ -69,6 +69,15 @@ export interface FogGrant {
   teams?: readonly string[];
   /** Limit to these monster factions (undead mist that feeds the dead). */
   factions?: readonly string[];
+  /** EXCLUDE these factions (the creep grant's mirror — blood-mist that
+   *  spares the country's own kin). */
+  notFactions?: readonly string[];
+  /** Seconds between applications PER OCCUPANT (default 0 = every sweep,
+   *  the classic refresh idiom). THE STACKING-GRANT LEVER: a bank granting
+   *  a stacking/buildup status (faintness, queasy) climbs its ladder on
+   *  this cadence instead of the 4Hz sweep. Same-kind banks share the
+   *  clock, so overlapping mists never double-rate. */
+  every?: number;
 }
 
 /** What ground a fog kind clings to. Anchors score toward the named doodad
@@ -351,6 +360,7 @@ export class FogField {
    *  no rng draws outside (re)gathering, no allocation in the hot path. */
   update(dt: number, time: number, weatherK: number, actors: readonly FogActorLike[]): void {
     this.weatherK = weatherK;
+    this.now = time;
     const d = FOG_CFG.def;
 
     // Sky-born banks breathe with the front: breed up to the cap while it
@@ -474,6 +484,12 @@ export class FogField {
     return false;
   }
 
+  /** Sweep clock (set each update) — cadenced grants read it. */
+  private now = 0;
+  /** Per-occupant last-application times for cadenced grants (FogGrant.every),
+   *  keyed `kind|status` so same-kind banks share one clock. WeakMap: gone
+   *  when the actor is. */
+  private grantAt = new WeakMap<FogActorLike, Map<string, number>>();
   private dressOccupants(actors: readonly FogActorLike[]): void {
     for (const a of actors) {
       if (a.dead || a.untargetable || a.construct) continue;
@@ -486,6 +502,14 @@ export class FogField {
         for (const g of b.def.grants) {
           if (g.teams && !g.teams.includes(a.team)) continue;
           if (g.factions && (!a.faction || !g.factions.includes(a.faction))) continue;
+          if (g.notFactions && a.faction && g.notFactions.includes(a.faction)) continue;
+          if (g.every) {
+            let m = this.grantAt.get(a);
+            if (!m) { m = new Map(); this.grantAt.set(a, m); }
+            const key = `${b.def.id}|${g.status}`;
+            if (this.now - (m.get(key) ?? -Infinity) < g.every) continue;
+            m.set(key, this.now);
+          }
           a.applyStatus(g.status, 0, 1, FOG_CFG.sourceLabel);
         }
       }

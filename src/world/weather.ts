@@ -139,6 +139,18 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     skyWeight: { day: 1.6, dusk: 1.2 },
     birthGeo: { temperature: { min: 0.55 }, moisture: { max: 0.4 } },
   },
+  /** HEMORRHAGE — the flesh country bleeding into its own sky: a slow red
+   *  rain born only over deep wild ground (the country's wildness band),
+   *  drifting at a wounded crawl. Its teeth are what it FEEDS — the Glut
+   *  hunts fatter beneath it — and the red streak wash (WEATHER_FX) is the
+   *  tell that you are inside the meat's own climate. */
+  hemorrhage: {
+    label: 'Blood Rain', color: '#a83a48', countMul: 1.25,
+    factionMul: { flesh: 1.5 },
+    rampFrac: 0.4, wind: 0.15,
+    skyWeight: { dusk: 1.2, night: 1.4 },
+    birthGeo: { wildness: { min: 0.62 } },
+  },
   /** STARFALL — the rare night the sky comes down in crystal. Its teeth are
    *  the STRIKE (falling shards through the shared strike machinery), and
    *  what the shards SEED: zones under the shower field the STARFALL COURT

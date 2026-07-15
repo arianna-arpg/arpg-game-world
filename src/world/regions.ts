@@ -283,6 +283,22 @@ registerRegion({ id: 'lava', walkable: true, blocks: false, label: 'the lava',
   standDamage: { dps: 14, dpsPerLevel: 2.2, type: 'fire' },
   enterStatus: { id: 'burn', amount: 1.2, amountPerLevel: 0.5, duration: 2 },
   enterText: { text: 'scalded!', color: '#ff8a3a' } });
+// THE FLESH COUNTRY's grounds. Pooled BLOOD: entry turns the head light (one
+// faintness stack — the vasovagal ladder does the rest; blood-mist fog is the
+// sustained lane). The drag is moveScale-mild ON PURPOSE: no icon for wading
+// through shallows of what used to be somebody.
+registerRegion({ id: 'blood_pool', walkable: true, blocks: false, label: 'the blood',
+  moveScale: 0.94,
+  enterStatus: { id: 'faintness', duration: 6 },
+  enterText: { text: 'light-headed…', color: '#d8ccd8' } });
+// CHYME — the Gutworks' digesting bile: the lava doctrine in acid. Typed
+// chaos per second through resistance only, a mired slog, queasy on entry —
+// capping chaos res is the build answer, wading anyway the desperate one.
+registerRegion({ id: 'chyme_pool', walkable: true, blocks: false, label: 'the bile',
+  standStatus: 'mired',
+  standDamage: { dps: 9, dpsPerLevel: 1.8, type: 'chaos' },
+  enterStatus: { id: 'queasy', duration: 5 },
+  enterText: { text: 'stomach turns!', color: '#a8b86a' } });
 registerRegion({ id: 'tentacle_field', walkable: true, blocks: false, label: 'the tentacles', standStatus: 'ensnared',
   enterStatus: { id: 'stun', duration: 0.6 }, enterText: { text: 'ensnared!', color: '#7fce6a' } });
 // ROAD: a packed gravel path — a VERY mild move-speed boost (moveScale, NOT a status, so
