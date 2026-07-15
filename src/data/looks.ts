@@ -682,6 +682,87 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', scale: 0.6, params: { n: 2 } }],
   },
 
+  // ============================================== THE WAX COURT & THE UMBRAL
+  /** The wax footman: a soldier poured, not born — a wick where thought goes. */
+  wax_footman: {
+    parts: [
+      { kind: 'torso', scale: 0.85, role: 'bone' },
+      { kind: 'spots', role: 'glow', params: { n: 3 } },
+      { kind: 'eyes', color: '#ffb45e', params: { spread: 0.35, dist: 0.5, size: 0.08 } },
+    ],
+    live: [{ kind: 'flames', scale: 0.4, role: 'glow' }],
+  },
+  /** The wickling: a candle that got ambitions. */
+  wickling: {
+    parts: [
+      { kind: 'disc', scale: 0.55, role: 'bone' },
+      { kind: 'eyes', color: '#ffcf7a', params: { spread: 0.4, dist: 0.5, size: 0.1 } },
+    ],
+    live: [{ kind: 'flames', scale: 0.6, role: 'glow' }],
+  },
+  /** The chandler: robed wax-clergy under a working flame. */
+  wax_chandler: {
+    parts: [
+      { kind: 'robe', scale: 0.9, role: 'bone' },
+      { kind: 'staff', y: -0.08 },
+      { kind: 'halo', scale: 0.55, alpha: 0.5, role: 'glow' },
+    ],
+    live: [{ kind: 'flames', scale: 0.45, role: 'glow' }],
+  },
+  /** The Chandler-Queen: crowned in her own melt. */
+  chandler_queen: {
+    parts: [
+      { kind: 'robe', scale: 0.95, role: 'bone' },
+      { kind: 'crown', x: 0.28, scale: 0.7, role: 'glow' },
+      { kind: 'halo', scale: 0.9, alpha: 0.5, role: 'glow' },
+    ],
+    live: [{ kind: 'flames', scale: 0.6, role: 'glow' }],
+  },
+  /** The candle-shrine: a pillar of set wax under one patient flame. */
+  candle_shrine: {
+    parts: [
+      { kind: 'disc', scale: 0.7, role: 'bone' },
+      { kind: 'halo', scale: 1.1, alpha: 0.5, role: 'glow' },
+    ],
+    live: [
+      { kind: 'flames', scale: 0.8, role: 'glow' },
+      { kind: 'wisps', scale: 0.5, params: { n: 2 } },
+    ],
+  },
+  /** The wax pool: what a courtier leaves. Do not bring fire. */
+  wax_pool: {
+    parts: [
+      { kind: 'blob', scale: 1.0, params: { irr: 0.2, seed: 77 } },
+      { kind: 'spots', role: 'glow', params: { n: 2 } },
+    ],
+  },
+  /** The umbral footpad: your outline, out from underfoot, holding knives. */
+  umbral_footpad: {
+    parts: [
+      { kind: 'cape', scale: 0.95, role: 'dark' },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+      { kind: 'daggers', params: { len: 0.5 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.6, params: { n: 2 } }],
+  },
+  /** The umbral whisper: a rumor in a robe. */
+  umbral_whisper: {
+    parts: [
+      { kind: 'robe', scale: 0.9, role: 'dark' },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, params: { n: 3 } }],
+  },
+  /** The Speaker of the House of Dusk: the gavel is implied. */
+  speaker_of_dusk: {
+    parts: [
+      { kind: 'cape', scale: 1.1, role: 'dark' },
+      { kind: 'hood', x: 0.28, params: { eyes: true } },
+      { kind: 'crown', x: 0.26, scale: 0.65, role: 'dark' },
+    ],
+    live: [{ kind: 'wisps', x: -0.4, scale: 0.9, params: { n: 3 } }],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [

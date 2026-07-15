@@ -483,6 +483,9 @@ export const AMBIENT_TAGS = new Set([
   'vermin',        // Verminfall packs are ambient infestation (the warren, not the zone)
   'warren_nest',   // warren nests are the Verminfall's OWN ledger, never the zone's
   'rat_king_manifest', // the manifested King is an OPTIONAL strike (his fall clears the claim)
+  'wax_vigil',     // the Wax Court's night procession passes through
+  'umbral_parliament', // the Parliament's shadows hold no zone hostage
+  'candle_shrine', // a shrine is an OPTIONAL snuff (the stealth counterplay)
   'predator',      // ambient wildlife hunters (wolf packs) — optional trouble
   'wayfarer',      // neutral human travelers — minding their own way
 ]);
@@ -1870,6 +1873,10 @@ export class World {
    *  fielded this visit — one muster per visit; cleared per loadZone. The claim
    *  + nest ledger is owned by the pure VerminfallField overlay. */
   private materializedInfestation = new Set<string>();
+  /** Court-claimed zones whose shrines/packs were already fielded this visit —
+   *  one muster per visit; cleared per loadZone. The night claims are owned by
+   *  the pure LongCandleField overlay (dawn clears them). */
+  private materializedCandle = new Set<string>();
   /** Spore-laced zones whose fungal horde (+ Heartbloom at the core) was already fielded
    *  this visit — one muster per visit; cleared per loadZone. The bloom's mobile spread is
    *  owned by the pure MyceliaField overlay. */
@@ -4013,6 +4020,11 @@ export class World {
         id: 'verminfall',
         reset: () => { this.materializedInfestation.clear(); },
         enter: (def) => this.materializeInfestation(def),
+      },
+      {
+        id: 'longcandle',
+        reset: () => { this.materializedCandle.clear(); },
+        enter: (def) => this.materializeCandle(def),
       },
       {
         // MYCELIA: a spore-laced zone fields its fungal horde (+ the
@@ -10515,6 +10527,65 @@ export class World {
     }
   }
 
+  // ------------------------------------------------------- long-candle materialize
+  //
+  // A court-claimed NIGHT ground, owned by the pure LongCandleField overlay.
+  // The engine reads candleOn() to field the Wax Court's candle-shrines + wax
+  // packs (vigil), the Umbral Parliament's shadows (convene), or BOTH — the
+  // war: the courts are mutually hostile, so a doubly-claimed field stages
+  // wax against shadow with the player as the third side.
+
+  /** Field the courts on a claimed ground. Shrines tag 'candle_shrine' (the
+   *  snuff kill row); packs tag 'wax_vigil' / 'umbral_parliament' (ambient —
+   *  a passing court never gates a zone). One muster per visit. */
+  private materializeCandle(def: ZoneDef): void {
+    const lc = this.sim.longCandleField;
+    if (!lc) return;
+    const info = lc.candleOn(def.id);
+    if (!info) return;
+    if (this.materializedCandle.has(def.id)) return;
+    this.materializedCandle.add(def.id);
+    bumpLedger(this.ledger, 'vigil_seen');
+    const cfg = lc.surge();
+    const lvl = Math.max(1, def.level);
+    const muster = (facId: string, tag: string): void => {
+      const roster = FACTIONS[facId];
+      if (!roster?.table?.length) return;
+      const packs = randInt(cfg.packCount[0], cfg.packCount[1]);
+      for (let pk = 0; pk < packs; pk++) {
+        const at = this.farPoint(460);
+        const type = this.weightedPick(roster.table, lvl);
+        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
+        for (let k = 0; k < n; k++) {
+          const m = this.createMonster(type, lvl, 'enemy');
+          m.faction = facId;
+          m.tag = tag;
+          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
+          this.actors.push(m);
+        }
+      }
+    };
+    if (info.vigil) {
+      const n = randInt(cfg.shrines[0], cfg.shrines[1]);
+      for (let i = 0; i < n; i++) {
+        const shrine = this.createMonster('candle_shrine', lvl, 'enemy');
+        shrine.faction = cfg.waxFaction;
+        shrine.tag = 'candle_shrine';
+        shrine.pos = this.clampPos(this.farPoint(430), shrine.radius);
+        this.actors.push(shrine);
+      }
+      muster(cfg.waxFaction, 'wax_vigil');
+    }
+    if (info.convene) muster(cfg.umbralFaction, 'umbral_parliament');
+    const line = info.vigil && info.convene
+      ? 'Wax and shadow war over this ground — the candles say whose night it is.'
+      : info.vigil
+        ? 'The Wax Court processes here — candle-shrines hold the dark open.'
+        : 'The Parliament convenes — the dark here is a chamber in session.';
+    this.text(vec(this.player.pos.x, this.player.pos.y - 80), line,
+      info.vigil ? cfg.waxColor : cfg.umbralColor, 15);
+  }
+
   /** The composed EVENT-density multiplier for a zone: the per-zone (encounterDensity)
    *  + per-biome (eventDensityMul) levers × the live MYCELIA spore SUPPRESSION (1 = clear,
    *  →floor = smothered). The one chokepoint every event-ignition gate reads. */
@@ -14587,6 +14658,7 @@ export class World {
     if (def.habitat) a.habitat = def.habitat; // confine derives lazily (update sweep)
     if (def.wake) a.wake = def.wake; // the body-wake odometer arms on first move
     if (def.volatile) a.volatile = def.volatile; // the poked nest arms
+    if (def.onHitByType) { a.onHitByType = def.onHitByType; a.onHitTypeIcd = def.onHitTypeIcd; } // the body's element grammar
     if (def.immuneGround) a.immuneGround = def.immuneGround; // the insured (lava natives)
     // ARMED AMBUSH: born as scenery — hidden, untouchable, waiting. The
     // update sweep springs it when an enemy strays inside the wake radius.
@@ -21262,6 +21334,34 @@ export class World {
             dmgMult: target.volatile.dmgMult ?? 1,
             noCooldown: true, noRepeat: true, keepFacing: true,
           });
+        }
+      }
+      // BODY ELEMENT RESPONSES (MonsterDef.onHitByType — the reaction matrix
+      // worn as anatomy): a landed hit CARRYING a type may coat the struck
+      // body — a status on itself (wax runs; wax hardens; shadow lights up)
+      // and/or a payload free-cast at its own feet (the drip, the re-light).
+      // ROLLED amounts decide, so mitigation can't scrub what struck it; one
+      // shared icd paces all rows; the corpse answers nothing.
+      if (dealt > 0 && target.onHitByType && target.life > 0 && !target.dead
+        && !target.untargetable && this.time >= target.onHitTypeReadyAt) {
+        for (const [dtype, row] of Object.entries(target.onHitByType)) {
+          if (!row || !((packet.amounts as Record<string, number>)[dtype] > 0)) continue;
+          if (row.chance !== undefined && !chance(row.chance)) continue;
+          target.onHitTypeReadyAt = this.time + (target.onHitTypeIcd ?? 0.8);
+          if (row.status) target.applyStatus(row.status, 0, 1, 'element response');
+          if (row.skillId && SKILLS[row.skillId]) {
+            target.onHitTypeInsts ??= new Map();
+            let oi = target.onHitTypeInsts.get(row.skillId);
+            if (!oi) {
+              oi = makeSkillInstance(SKILLS[row.skillId], Math.max(1, Math.round(target.level)));
+              target.onHitTypeInsts.set(row.skillId, oi);
+            }
+            this.executeSkill(target, oi, vec(target.pos.x, target.pos.y), {
+              dmgMult: row.dmgMult ?? 1,
+              noCooldown: true, noRepeat: true, keepFacing: true,
+            });
+          }
+          break; // one row per landed hit — the icd's clean unit
         }
       }
       // CONTAGION (SkillDef/SupportDef.contagion): the struck victim may

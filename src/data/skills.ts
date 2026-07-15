@@ -6571,6 +6571,41 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 50, weight: 2 },
   },
 
+  // --- THE LONG CANDLE's verbs (the Wax Court & the Umbral Parliament) ------
+  // The drip and the re-light are RESPONSE payloads (MonsterDef.onHitByType
+  // free-casts them — no ai hint needed, no def.skills listing); the pulse is
+  // the candle-shrine's working verb.
+
+  wax_drip: {
+    id: 'wax_drip', name: 'Dripping Wax', noDrop: true,
+    description: 'The melt runs off in a burning pool.',
+    tags: ['spell', 'fire', 'aoe', 'duration'], color: '#f0c26a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { fire: [3, 5] },
+    delivery: { type: 'ground', radius: 38, castRange: 60, lingerDuration: 2.5, tickInterval: 0.5, noImpact: true },
+    effects: [{ type: 'damage' }],
+  },
+
+  wax_flare: {
+    id: 'wax_flare', name: 'Wax Flare', noDrop: true,
+    description: 'The pool takes the flame and ANSWERS.',
+    tags: ['spell', 'fire', 'aoe'], color: '#ffb45e',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    baseDamage: { fire: [8, 13] },
+    delivery: { type: 'nova', radius: 70 },
+    effects: [{ type: 'damage' }],
+  },
+
+  waxlight_pulse: {
+    id: 'waxlight_pulse', name: 'Waxlight', noDrop: true,
+    description: 'The candle sees you. Everything the candle sees, the Court sees — and shadows most of all.',
+    tags: ['spell', 'aoe', 'duration'], color: '#ffe9a8',
+    manaCost: 6, cooldown: 6, useTime: 0.8,
+    delivery: { type: 'nova', radius: 190 },
+    effects: [{ type: 'status', status: 'waxlight', chance: 1 }],
+    ai: { range: 520, weight: 2 },
+  },
+
   // ======================= Resource economies ==============================
   // Charges, founts & ward: the §1 batch. Use-charges pace the cadence
   // family; orb/move taps feed founts and reserves; ward is the decaying

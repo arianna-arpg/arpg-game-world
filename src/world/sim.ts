@@ -26,6 +26,7 @@ import type { MigrationField } from '../packages/overlays/migration';
 import type { BrigandField } from '../packages/overlays/brigands';
 import type { HauntField } from '../packages/overlays/haunting';
 import type { VerminfallField } from '../packages/overlays/verminfall';
+import type { LongCandleField } from '../packages/overlays/longcandle';
 import type { DemonInvasionField } from '../packages/overlays/demonInvasion';
 import type { FractureField } from '../packages/overlays/fractures';
 import type { HuntField } from '../packages/overlays/hunt';
@@ -165,6 +166,11 @@ export class WorldSim {
    *  fauna; the kill rows call onNestBroken()/onKingSlain() back. It owns the claim
    *  + the nest ledger. */
   readonly verminfallField: VerminfallField | null;
+  /** The long-candle overlay if its package is in the manifest, else null — the
+   *  engine reads candleOn() to field the Wax Court's shrines/packs and the
+   *  Umbral Parliament's shadows on a night-claimed ground (both when both
+   *  courts claim it — the war). It owns the night claims; dawn clears them. */
+  readonly longCandleField: LongCandleField | null;
   /** The holdfast overlay if its package is in the manifest, else null — the engine
    *  reads infoFor()/isLocked() to raise the locked bonus exit + its guardian and to
    *  resolve the toll. It owns the durable per-zone lock state. */
@@ -342,6 +348,7 @@ export class WorldSim {
     this.hauntField = surface<HauntField>('haunting') ?? null;
     this.contagionField = surface<ContagionField>('contagion') ?? null;
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
+    this.longCandleField = surface<LongCandleField>('longcandle') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     this.breachField = surface<BreachField>('breach') ?? null;

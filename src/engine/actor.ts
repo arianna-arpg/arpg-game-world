@@ -930,6 +930,16 @@ export class Actor {
   contagionReadyAt = 0;
   /** The volatile payload instance, minted lazily at the first answer. */
   volatileInst?: SkillInstance;
+  /** BODY ELEMENT RESPONSES (MonsterDef.onHitByType): what this body DOES
+   *  when a landed hit carries a damage type — the reaction matrix worn as
+   *  anatomy (wax runs from fire, sets brittle under cold; shadow lights up). */
+  onHitByType?: Partial<Record<string, { status?: string; chance?: number; skillId?: string; dmgMult?: number }>>;
+  /** Shared next-ready clock for the element responses (world seconds). */
+  onHitTypeReadyAt = 0;
+  /** Seconds between response firings (from the def; default 0.8). */
+  onHitTypeIcd?: number;
+  /** Response payload instances, minted lazily per skill id. */
+  onHitTypeInsts?: Map<string, SkillInstance>;
   /** TERRAIN CONFINEMENT (derived from habitat): a disc this body can never
    *  leave — clamped every frame, whatever moved it (walk, dash, knockback).
    *  The lake horror's pond; the root wraith's trunk. */

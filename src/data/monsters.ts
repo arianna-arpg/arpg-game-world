@@ -417,6 +417,27 @@ export interface MonsterDef {
    *  shells (the answer fires even while the shell soaks), and everything
    *  the payload skill itself composes with. */
   volatile?: { skillId: string; chance: number; icd?: number; dmgMult?: number };
+  /** BODY ELEMENT RESPONSES — the reaction matrix worn as ANATOMY: what this
+   *  body DOES when a landed hit CARRIES a damage type. Each row may coat the
+   *  struck body with a status (fire makes wax run; cold sets it brittle;
+   *  fire lights a shadow up) and/or free-cast a payload from the body at its
+   *  own feet (the drip, the re-light) — volatile's grammar, keyed by
+   *  element. ROLLED amounts decide (mitigation can't scrub what struck it);
+   *  one shared icd paces all rows; the corpse answers nothing. Pure data —
+   *  any body may wear rows, and a future terrain reaction pass speaks the
+   *  same vocabulary. */
+  onHitByType?: Partial<Record<DamageType, {
+    /** Status applied to the struck body ITSELF. */
+    status?: string;
+    /** Chance this row fires per qualifying landed hit (default 1). */
+    chance?: number;
+    /** Payload free-cast from the body at its own position. */
+    skillId?: string;
+    /** Scales the payload's rolls (default 1). */
+    dmgMult?: number;
+  }>>;
+  /** Seconds between element-response firings (default 0.8). */
+  onHitTypeIcd?: number;
   /** AMBUSH SPAWN: the body is HIDDEN and untargetable — indistinguishable
    *  from scenery — until an enemy strays within `radius`, then it ERUPTS
    *  (reveal flash + announce) and fights normally. The root that was only
@@ -5902,6 +5923,166 @@ export const MONSTERS: Record<string, MonsterDef> = {
           use: { move: { style: 'direct', pace: 1.25 } } },
       ],
     },
+  },
+
+  // --- THE WAX COURT (candleflesh nobility) & THE UMBRAL PARLIAMENT ---------
+  // Two contexts-gated courts at war over LIGHT, fielded only by the Long
+  // Candle package's night claims. The wax bodies are the first wearers of
+  // MonsterDef.onHitByType — the reaction matrix as ANATOMY: fire makes them
+  // FASTER and drippier (melting + the burning runoff), cold sets them
+  // BRITTLE (the freeze-then-crack setup); their corpses stand as wax pools
+  // that RE-LIGHT if fire finds them. The umbral kind are the inverse: hard
+  // to see by nature, and fire (or a candle-shrine's pulse) LIGHTS THEM UP.
+
+  wax_footman: {
+    id: 'wax_footman', name: 'Wax Footman',
+    color: '#e8d9a8', shape: 'pentagon', radius: 13, material: 'bone', look: 'wax_footman',
+    base: { life: 62, moveSpeed: 128, accuracy: 95, armor: 32, mana: 12, manaRegen: 2 },
+    mods: [mod('fireRes', 'flat', 0.35), mod('coldRes', 'flat', -0.25)],
+    skills: ['heavy_strike'],
+    xp: 20,
+    faction: 'wax', tags: ['construct'],
+    detection: 1.0,
+    onHitByType: {
+      fire: { status: 'melting', skillId: 'wax_drip', chance: 0.8 },
+      cold: { status: 'brittle' },
+    },
+    brain: {
+      type: 'basic',
+      onDeath: [{ do: 'summon', monster: 'wax_pool', count: 1 }],
+    },
+  },
+  // The wickling: a candle that got ambitions. Pops as a drifting flame.
+  wickling: {
+    id: 'wickling', name: 'Wickling',
+    color: '#f0e0b0', shape: 'circle', radius: 8, material: 'bone', look: 'wickling',
+    base: { life: 15, moveSpeed: 198, accuracy: 85, evasion: 55, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('coldRes', 'flat', -0.25)],
+    skills: ['claw'],
+    xp: 7,
+    faction: 'wax', tags: ['construct'],
+    detection: 1.2,
+    deathBurst: { mode: 'orb', damageFrac: 0.6, damageType: 'fire', orbSpeed: 100, orbDuration: 2.2 },
+    onHitByType: { cold: { status: 'brittle' } },
+    brain: { type: 'swarm', squad: { muster: { count: 3, radius: 280 }, surround: true } },
+  },
+  wax_chandler: {
+    id: 'wax_chandler', name: 'Court Chandler',
+    color: '#e0cf98', shape: 'star', radius: 12, material: 'cloth', look: 'wax_chandler',
+    base: { life: 48, moveSpeed: 118, mana: 150, manaRegen: 11 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: ['firebolt', 'waxlight_pulse'],
+    xp: 26,
+    faction: 'wax', tags: ['construct'],
+    gemBias: ['fire', 'spell'], wardPriority: 1,
+    detection: 1.1,
+    presence: { from: 4, fadeIn: 3 },
+    onHitByType: {
+      fire: { status: 'melting', skillId: 'wax_drip', chance: 0.8 },
+      cold: { status: 'brittle' },
+    },
+    brain: {
+      type: 'strafer',
+      onDeath: [{ do: 'summon', monster: 'wax_pool', count: 1 }],
+    },
+  },
+  // THE CHANDLER-QUEEN: the Court's one flame that must not gutter.
+  chandler_queen: {
+    id: 'chandler_queen', name: 'The Chandler-Queen',
+    color: '#f0dfa8', shape: 'hexagon', radius: 17, material: 'cloth', look: 'chandler_queen',
+    base: { life: 230, moveSpeed: 138, accuracy: 108, armor: 30, mana: 180, manaRegen: 12 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('coldRes', 'flat', -0.2)],
+    skills: ['flame_wave', 'heavy_strike', 'waxlight_pulse'],
+    xp: 95,
+    faction: 'wax', tags: ['construct'],
+    detection: 1.2,
+    turnSpeed: 6,
+    scaling: { life: { incPerLevel: 0.07 } },
+    presence: { from: 10, fadeIn: 4 },
+    onHitByType: {
+      fire: { status: 'melting', skillId: 'wax_drip', chance: 0.9 },
+      cold: { status: 'brittle' },
+    },
+    brain: {
+      type: 'commander', perception: { alertShout: 520 },
+      onDeath: [{ do: 'summon', monster: 'wax_pool', count: 2, ring: 30 }],
+    },
+  },
+  // THE CANDLE-SHRINE: the vigil's working lamp — an anchored pillar whose
+  // pulse picks EVERYTHING out of the dark (waxlight): your stealth, and the
+  // Parliament's whole anatomy. Snuff it or fight lit.
+  candle_shrine: {
+    id: 'candle_shrine', name: 'Candle-Shrine',
+    color: '#f0e2b0', shape: 'octagon', radius: 14, material: 'bone', look: 'candle_shrine',
+    base: { life: 90, moveSpeed: 0, armor: 20, mana: 999, manaRegen: 50 },
+    skills: ['waxlight_pulse'],
+    xp: 12,
+    faction: 'wax', tags: ['construct'],
+    vision: { arcDeg: 360, rearMul: 1 }, // a lamp has no back
+    noNemesis: true, drops: 0,
+    onHitByType: { cold: { status: 'brittle' } },
+  },
+  // THE WAX POOL: what a courtier leaves. Scenery with a grudge — fire
+  // finds it and it ANSWERS (the re-light).
+  wax_pool: {
+    id: 'wax_pool', name: 'Wax Pool',
+    color: '#e5d49e', shape: 'circle', radius: 12, material: 'bone', look: 'wax_pool',
+    base: { life: 40, moveSpeed: 0, mana: 0 },
+    skills: [],
+    xp: 2,
+    faction: 'wax', tags: ['construct'],
+    passive: true, noNemesis: true, noBestiary: true, drops: 0,
+    onHitByType: { fire: { skillId: 'wax_flare' } },
+  },
+
+  // THE UMBRAL PARLIAMENT: your shadow, seceded. Near-invisible by nature —
+  // and LIGHT is the counterplay: fire (or a shrine's pulse) candle-lights
+  // them, and a lit shadow is just a target.
+  umbral_footpad: {
+    id: 'umbral_footpad', name: 'Umbral Footpad',
+    color: '#3a3648', shape: 'kite', radius: 11, material: 'ethereal', look: 'umbral_footpad',
+    base: { life: 42, moveSpeed: 196, accuracy: 100, evasion: 85, mana: 20, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('fireRes', 'flat', -0.3), mod('detectability', 'more', -0.5)],
+    skills: ['shadow_slash'],
+    xp: 22,
+    faction: 'umbral', tags: ['umbral'],
+    detection: 1.3,
+    onHitByType: { fire: { status: 'waxlight', chance: 0.7 } },
+    brain: {
+      type: 'skirmish', withdraw: 1.15,
+      move: { style: 'skitter', dart: [0.3, 0.5], pause: [0.1, 0.25] },
+      behavior: { encircle: { front: 2 }, dodge: { chance: 0.5, reaction: [0.12, 0.3], exit: 'lateral' } },
+    },
+  },
+  umbral_whisper: {
+    id: 'umbral_whisper', name: 'Umbral Whisper',
+    color: '#443e58', shape: 'star', radius: 12, material: 'ethereal', look: 'umbral_whisper',
+    base: { life: 46, moveSpeed: 128, evasion: 60, mana: 160, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('fireRes', 'flat', -0.3), mod('detectability', 'more', -0.4)],
+    skills: ['shadow_shuriken', 'despair'],
+    xp: 28,
+    faction: 'umbral', tags: ['umbral'],
+    gemBias: ['chaos', 'curse'], wardPriority: 1,
+    detection: 1.2,
+    presence: { from: 5, fadeIn: 3 },
+    onHitByType: { fire: { status: 'waxlight', chance: 0.7 } },
+    brain: { type: 'strafer' },
+  },
+  // THE SPEAKER OF THE HOUSE OF DUSK: the Parliament's voice, and its whip.
+  speaker_of_dusk: {
+    id: 'speaker_of_dusk', name: 'Speaker of the House of Dusk',
+    color: '#4a4260', shape: 'hexagon', radius: 16, material: 'ethereal', look: 'speaker_of_dusk',
+    base: { life: 205, moveSpeed: 150, accuracy: 110, evasion: 60, mana: 190, manaRegen: 13 },
+    mods: [mod('chaosRes', 'flat', 0.6), mod('fireRes', 'flat', -0.25), mod('detectability', 'more', -0.4)],
+    skills: ['shadow_slash', 'despair', 'shadow_shuriken'],
+    xp: 92,
+    faction: 'umbral', tags: ['umbral'],
+    detection: 1.3,
+    turnSpeed: 7,
+    scaling: { life: { incPerLevel: 0.07 } },
+    presence: { from: 10, fadeIn: 4 },
+    onHitByType: { fire: { status: 'waxlight', chance: 0.6 } },
+    brain: { type: 'commander', perception: { alertShout: 500 } },
   },
 
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----

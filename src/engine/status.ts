@@ -344,6 +344,32 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     stacking: true, maxStacks: 5, modsPerStack: true,
     mods: [mod('damageTaken', 'more', 0.08)],
   },
+  // --- THE WAX COURT's body-grammar (worn via MonsterDef.onHitByType) --------
+  /** Cold-set: the wax hardens BRITTLE — slower, and easier to CRACK. The
+   *  freeze-then-break half of the candleflesh puzzle. */
+  brittle: {
+    label: 'Brittle', color: '#bfe4f0', duration: 4,
+    element: 'cold',
+    stacking: true, maxStacks: 3, modsPerStack: true,
+    mods: [mod('damageTaken', 'more', 0.07), mod('moveSpeed', 'more', -0.08)],
+  },
+  /** Fire-run: the wax MELTS — faster and looser, dripping as it comes. The
+   *  burn-and-outrun half of the puzzle. */
+  melting: {
+    label: 'Melting', color: '#f0c26a', duration: 5,
+    element: 'fire',
+    mods: [
+      mod('moveSpeed', 'increased', 0.22),
+      mod('attackSpeed', 'increased', 0.15),
+      mod('damageTaken', 'more', 0.08),
+    ],
+  },
+  /** CANDLELIT: picked out by vigil-light — seen from much further. The
+   *  shrine's anti-stealth lantern, and what fire does to a living shadow. */
+  waxlight: {
+    label: 'Candlelit', color: '#ffe9a8', duration: 4,
+    mods: [mod('detectability', 'more', 0.6)],
+  },
   // DOOM (#25): a swelling counter with a fixed fuse. Every application
   // PUMPS the keg (armed payloads add); if the bank ever covers what life
   // remains, it goes off EARLY — the cull. Otherwise the fuse decides.
