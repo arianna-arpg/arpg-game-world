@@ -32,6 +32,8 @@ export const FACTION_COLORS: Record<string, string> = {
   hollowborn: '#9aa4b2',
   chattel: '#d8b86a',
   starfall: '#9ad4e8',
+  smoulder: '#e8763a',
+  magpie: '#3a4a5c',
 };
 
 /** The Contagion overlay's sickly palette — a necrotic green that brightens toward

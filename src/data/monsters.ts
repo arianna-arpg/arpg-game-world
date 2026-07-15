@@ -6305,6 +6305,133 @@ export const MONSTERS: Record<string, MonsterDef> = {
     noNemesis: true, drops: 1, // the sky pays: a guaranteed gem in the wreck
   },
 
+  // --- THE SMOULDERKIN (born from fire — RESERVED: see RESERVED_KIN) --------
+  // Authored in full, fielded by NOTHING: their door is the burn-ledger
+  // mechanic (the Kindling — ground remembers what burned, and enough of it
+  // kindles them). Un-barred naively they'd inundate every fire spec's own
+  // farm, so the family waits, complete, behind RESERVED_KIN['smoulder'].
+  // Their grammar is already honest: feeding them fire SPEEDS them (furor),
+  // cold cracks them — the fire build's monster, by design.
+
+  smoulderling: {
+    id: 'smoulderling', name: 'Smoulderling',
+    color: '#e8763a', shape: 'circle', radius: 9, material: 'ethereal', look: 'smoulderling',
+    base: { life: 22, moveSpeed: 195, accuracy: 90, evasion: 55, mana: 0 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    skills: ['claw'],
+    xp: 10,
+    faction: 'smoulder', tags: ['elemental'],
+    detection: 1.2,
+    deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'fire', coalesce: 0.45 },
+    onHitByType: { fire: { status: 'furor', chance: 0.5 } },
+    brain: { type: 'swarm', squad: { muster: { count: 3, radius: 280 }, surround: true } },
+  },
+  ash_wretch: {
+    id: 'ash_wretch', name: 'Ash Wretch',
+    color: '#c86a3a', shape: 'star', radius: 12, material: 'ethereal', look: 'ash_wretch',
+    base: { life: 42, moveSpeed: 125, mana: 140, manaRegen: 10 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    skills: ['firebolt'],
+    xp: 20,
+    faction: 'smoulder', tags: ['elemental'],
+    gemBias: ['fire', 'spell'], wardPriority: 1,
+    detection: 1.1,
+    onHitByType: { fire: { status: 'furor', chance: 0.5 } },
+    brain: { type: 'strafer' },
+  },
+  ember_shrike: {
+    id: 'ember_shrike', name: 'Ember Shrike',
+    color: '#f08a4a', shape: 'triangle', radius: 9, material: 'ethereal', look: 'ember_shrike',
+    base: { life: 26, moveSpeed: 215, accuracy: 95, evasion: 75, mana: 10, manaRegen: 2 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    skills: ['talon_rake'],
+    xp: 14,
+    faction: 'smoulder', tags: ['elemental'],
+    flier: true, levitates: true,
+    detection: 1.3,
+    deathBurst: { mode: 'orb', damageFrac: 0.5, damageType: 'fire', orbSpeed: 105, orbDuration: 2.2 },
+    onHitByType: { fire: { status: 'furor', chance: 0.5 } },
+    brain: { type: 'skirmish', withdraw: 1.2 },
+  },
+  // THE ASHMOTHER: what a whole season of burning adds up to.
+  the_ashmother: {
+    id: 'the_ashmother', name: 'The Ashmother',
+    color: '#e05a2a', shape: 'hexagon', radius: 18, material: 'ethereal', look: 'the_ashmother',
+    base: { life: 260, moveSpeed: 115, accuracy: 108, armor: 40, poise: 85, mana: 170, manaRegen: 11 },
+    mods: [mod('fireRes', 'flat', 0.9), mod('coldRes', 'flat', -0.25)],
+    skills: ['flame_wave', 'heavy_strike'],
+    xp: 105,
+    faction: 'smoulder', tags: ['elemental'],
+    detection: 1.1,
+    turnSpeed: 3.4,
+    scaling: { life: { incPerLevel: 0.07 } },
+    onHitByType: { fire: { status: 'furor', chance: 0.7 } },
+    brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+
+  // --- THE MAGPIE KIN (thieves of the floor — RESERVED: see RESERVED_KIN) ---
+  // Corvid-folk who SWALLOW ground drops and flee (the looter fabric, worn
+  // whole — the Gilded Scamp's grief-proof contract: player-placed drops
+  // never touched, a solid blow shakes a piece loose, death spills all).
+  // Authored in full, fielded by NOTHING: their door is the Magpie Court —
+  // the heist ground that doesn't exist yet. Stricter than most reserves:
+  // loot-eaters loose in ordinary gen would tax every build, not one.
+
+  magpie_snatch: {
+    id: 'magpie_snatch', name: 'Magpie Snatch',
+    color: '#3a4a5c', shape: 'kite', radius: 10, material: 'fur', look: 'magpie_snatch',
+    base: { life: 36, moveSpeed: 205, accuracy: 98, evasion: 80, mana: 12, manaRegen: 2 },
+    skills: ['talon_rake'],
+    xp: 18,
+    faction: 'magpie', tags: ['beast'],
+    detection: 1.4,
+    looter: { reach: 80 },
+    brain: {
+      type: 'skirmish', withdraw: 1.25,
+      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.2 },
+      behavior: { seek: { what: 'loot', pace: 0.6 }, dodge: { chance: 0.6, reaction: [0.1, 0.28], exit: 'away' } },
+    },
+  },
+  magpie_shrikeblade: {
+    id: 'magpie_shrikeblade', name: 'Magpie Shrikeblade',
+    color: '#2e3c4c', shape: 'kite', radius: 11, material: 'fur', look: 'magpie_shrikeblade',
+    base: { life: 44, moveSpeed: 198, accuracy: 105, evasion: 85, mana: 20, manaRegen: 3 },
+    skills: ['shadow_slash'],
+    xp: 26,
+    faction: 'magpie', tags: ['beast'],
+    detection: 1.3,
+    presence: { from: 5, fadeIn: 3 },
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      behavior: { encircle: { front: 2 }, dodge: { chance: 0.55, reaction: [0.1, 0.3], exit: 'lateral' } },
+      rules: [
+        { when: { targetCasting: 0.3, distUnder: 360, chance: 0.55 },
+          hold: [0.6, 0.9], cooldown: 3,
+          use: { move: { style: 'direct', pace: 1.3 } } },
+      ],
+    },
+  },
+  // THE MAGPIE KING: everything shiny ends up in his vault — starting with
+  // whatever you were about to pick up.
+  the_magpie_king: {
+    id: 'the_magpie_king', name: 'The Magpie King',
+    color: '#42566c', shape: 'hexagon', radius: 15, material: 'fur', look: 'the_magpie_king',
+    base: { life: 230, moveSpeed: 185, accuracy: 112, evasion: 70, armor: 25, mana: 90, manaRegen: 8 },
+    skills: ['shadow_slash', 'talon_rake'],
+    xp: 110,
+    faction: 'magpie', tags: ['beast'],
+    detection: 1.4,
+    turnSpeed: 7,
+    drops: 2, // a king's hoard pays double
+    looter: { reach: 100 },
+    scaling: { life: { incPerLevel: 0.07 } },
+    presence: { from: 10, fadeIn: 5 },
+    brain: {
+      type: 'commander', perception: { alertShout: 500 },
+      behavior: { seek: { what: 'loot', pace: 0.7 }, dodge: { chance: 0.5, reaction: [0.1, 0.3], exit: 'lateral' } },
+    },
+  },
+
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
   dire_wolf: {
     id: 'dire_wolf', name: 'Dire Wolf',
@@ -7867,6 +7994,25 @@ const RELATIONS: Record<string, FactionStance> = {
   'chattel|gnoll': 'hostile',
   // Raw force recognizes raw lattice — the Unbound treat the fallen sky as kin.
   'starfall|elemental': 'ally',
+  // DECLARATIVE diplomacy for the RESERVED kin (inert until their doors ship;
+  // recorded now so the day they field, the world already has opinions):
+  // the Smoulderkin burn the green; the Magpie Kin and the warrens want the
+  // same floor.
+  'smoulder|sylvan': 'hostile',
+  'magpie|vermin': 'hostile',
+};
+
+/** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families
+ *  whose rosters are complete and validated but whose fielding mechanic does
+ *  not exist yet. The bar is an enforced CONTRACT (validateContent): a
+ *  reserved faction must be contexts-gated off 'baseline', and its roster ids
+ *  must appear on NO spawn surface — WILDLIFE, tileset/zone pack tables, zone
+ *  fauna, the wave table, other factions' tables, landmark spawns, droppable
+ *  summon pools. Shipping a family's door is then a deliberate two-line diff:
+ *  build the mechanic, strike the entry here. */
+export const RESERVED_KIN: Record<string, string> = {
+  smoulder: 'the burn-ledger mechanic (the Kindling) — un-barred early they would inundate every fire spec',
+  magpie: 'the Magpie Court event/biome — loot-eaters loose in ordinary gen would tax every build',
 };
 
 /** Diplomatic stance between two factions (order-insensitive). */
@@ -7970,6 +8116,27 @@ export const FACTIONS: Record<string, {
       { id: 'feral_aurochs', weight: 3 },
       { id: 'shepherds_hound', weight: 2 },
       { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    ],
+  },
+  // Born from fire — RESERVED (see RESERVED_KIN): the roster is complete and
+  // validated, and NOTHING fields it until the burn-ledger door ships.
+  smoulder: {
+    name: 'the Smoulderkin',
+    table: [
+      { id: 'smoulderling', weight: 4 },
+      { id: 'ember_shrike', weight: 2 },
+      { id: 'ash_wretch', weight: 2, presence: { from: 4, fadeIn: 3 } },
+      { id: 'the_ashmother', weight: 1, presence: { from: 10, fadeIn: 5 } },
+    ],
+  },
+  // Thieves of the floor — RESERVED (see RESERVED_KIN): complete, validated,
+  // and doorless until the Magpie Court exists.
+  magpie: {
+    name: 'the Magpie Kin',
+    table: [
+      { id: 'magpie_snatch', weight: 4 },
+      { id: 'magpie_shrikeblade', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'the_magpie_king', weight: 1, presence: { from: 10, fadeIn: 5 } },
     ],
   },
   // What rides the meteors — fielded ONLY under an active starfall front

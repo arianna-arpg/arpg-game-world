@@ -47,6 +47,11 @@ export const WARLORD_OF: Record<string, string> = {
   sirocco: 'mirage_khagan',
   hollowborn: 'the_unworn',
   chattel: 'the_bellwether',
+  // RESERVED kin (doorless — see data/monsters.ts RESERVED_KIN): crowns
+  // recorded now, inert until their contexts field anything (a barred
+  // faction owns no ground, so no rise can trigger).
+  smoulder: 'the_ashmother',
+  magpie: 'the_magpie_king',
 };
 
 const RISE_ZONES = 2;   // owned zones a faction needs to crown a warlord

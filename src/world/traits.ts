@@ -91,6 +91,11 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Starfall Court — event-native (contexts:['starfall']): it exists only
   // under the shower; it marches nowhere and seeds no wars.
   starfall: { roaming: 0.2, aggression: 1.1, warlordHome: 'origin', contexts: ['starfall'], temper: 'skittish' },
+  // RESERVED KIN (data/monsters.ts RESERVED_KIN — authored, doorless): each
+  // context names the mechanic that will one day field it; nothing registers
+  // these contexts yet, and the validator holds the bar.
+  smoulder: { roaming: 0.6, aggression: 1.3, warlordHome: 'origin', contexts: ['burnfields'], temper: 'territorial' },
+  magpie: { roaming: 1.1, aggression: 1.0, warlordHome: 'capital', contexts: ['magpie_court'], temper: 'skittish' },
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },

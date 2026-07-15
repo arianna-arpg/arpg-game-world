@@ -860,6 +860,75 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 3 } }],
   },
 
+  // ================================= THE SMOULDERKIN (reserved — doorless)
+  /** The smoulderling: a coal with somewhere to be. */
+  smoulderling: {
+    parts: [
+      { kind: 'disc', scale: 0.75, role: 'dark' },
+      { kind: 'spots', role: 'glow', params: { n: 3 } },
+    ],
+    live: [{ kind: 'flames', scale: 0.5, role: 'glow' }],
+  },
+  /** The ash wretch: what didn't finish burning, still deciding. */
+  ash_wretch: {
+    parts: [
+      { kind: 'tatters', params: { n: 4 } },
+      { kind: 'blob', scale: 0.8, role: 'dark', params: { irr: 0.18, seed: 41 } },
+      { kind: 'eyes', color: '#ffb45e', params: { spread: 0.35, dist: 0.45, size: 0.09 } },
+    ],
+    live: [{ kind: 'flames', scale: 0.45, role: 'glow' }],
+  },
+  /** The ember shrike: a spark on the wing. */
+  ember_shrike: {
+    parts: [
+      { kind: 'featherWings', scale: 1.1, role: 'dark' },
+      { kind: 'disc', scale: 0.45, role: 'dark' },
+      { kind: 'beak', x: 0.45, scale: 0.8 },
+    ],
+    live: [{ kind: 'flames', scale: 0.5, role: 'glow' }],
+  },
+  /** The Ashmother: a whole season of burning, standing up. */
+  the_ashmother: {
+    parts: [
+      { kind: 'torso', scale: 1.0, role: 'dark' },
+      { kind: 'lavaCracks', scale: 0.95 },
+      { kind: 'halo', scale: 1.0, alpha: 0.5, role: 'glow' },
+      { kind: 'crown', x: 0.28, scale: 0.7, role: 'glow' },
+    ],
+    live: [{ kind: 'flames', scale: 0.7, role: 'glow' }],
+  },
+
+  // ================================= THE MAGPIE KIN (reserved — doorless)
+  /** The magpie snatch: half bird, half pocket. */
+  magpie_snatch: {
+    parts: [
+      { kind: 'featherWings', scale: 1.0, role: 'dark' },
+      { kind: 'torso', scale: 0.7, role: 'dark' },
+      { kind: 'beak', x: 0.45, scale: 0.9 },
+      { kind: 'tailFeathers', x: -0.45, scale: 0.75, role: 'dark' },
+      { kind: 'eyes', color: '#e8f4ff', params: { spread: 0.35, dist: 0.45, size: 0.08 } },
+    ],
+  },
+  /** The shrikeblade: a duelist who bows first and steals second. */
+  magpie_shrikeblade: {
+    parts: [
+      { kind: 'featherWings', scale: 0.95, role: 'dark' },
+      { kind: 'torso', scale: 0.75, role: 'dark' },
+      { kind: 'beak', x: 0.45, scale: 0.8 },
+      { kind: 'daggers', params: { len: 0.55 } },
+    ],
+  },
+  /** The Magpie King: everything shiny, eventually. */
+  the_magpie_king: {
+    parts: [
+      { kind: 'featherWings', scale: 1.15, role: 'dark' },
+      { kind: 'cape', scale: 0.9, role: 'dark' },
+      { kind: 'beak', x: 0.48, scale: 0.95 },
+      { kind: 'crown', x: 0.26, scale: 0.7, role: 'glow' },
+      { kind: 'tailFeathers', x: -0.48, scale: 0.9, role: 'dark' },
+    ],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [

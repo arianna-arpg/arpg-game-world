@@ -5,7 +5,8 @@
 // skill and just stands there) get a loud console line instead.
 // ---------------------------------------------------------------------------
 
-import { FACTIONS, MONSTERS, WAVE_TABLE, WILDLIFE } from './monsters';
+import { FACTIONS, MONSTERS, RESERVED_KIN, WAVE_TABLE, WILDLIFE } from './monsters';
+import { FACTION_TRAITS } from '../world/traits';
 import { PRESENCE_BANDS, presenceMul, type PresenceSpec } from '../engine/presence';
 import { SKILLS } from './skills';
 import { SUPPORTS } from './supports';
@@ -908,6 +909,49 @@ export function validateContent(): void {
           warn(`zone ${z.id}: safe-ground fauna '${r.id}' is not 'critter'-tagged — sanctuaries host only texture`);
         }
       }
+    }
+  }
+  // MECHANIC-BARRED KIN (RESERVED_KIN): authored families whose fielding DOOR
+  // doesn't exist yet. The bar is a CONTRACT, enforced here: a reserved
+  // faction must be contexts-gated off 'baseline', and its roster ids must
+  // appear on NO spawn surface — wiring one in without striking its reserve
+  // entry is a validation hit, so shipping the door is a deliberate diff.
+  {
+    const reservedIds = new Map<string, string>(); // monster id → reserved faction id
+    for (const fid of Object.keys(RESERVED_KIN)) {
+      const traits = FACTION_TRAITS[fid];
+      if (!traits?.contexts?.length || traits.contexts.includes('baseline')) {
+        warn(`reserved kin '${fid}': faction must be contexts-gated off 'baseline' (the bar's first lock)`);
+      }
+      for (const e of FACTIONS[fid]?.table ?? []) reservedIds.set(e.id, fid);
+    }
+    const hit = (where: string, id: string): void => {
+      const fid = reservedIds.get(id);
+      if (fid) {
+        warn(`reserved kin '${fid}': '${id}' is fielded by ${where} — its door (${RESERVED_KIN[fid]}) hasn't shipped; strike the RESERVED_KIN entry with the door's diff`);
+      }
+    };
+    for (const [biome, rows] of Object.entries(WILDLIFE)) for (const r of rows) hit(`wildlife ${biome}`, r.id);
+    for (const z of Object.values(ZONES)) {
+      for (const e of z.packs?.table ?? []) hit(`zone ${z.id}`, e.id);
+      for (const r of z.fauna ?? []) hit(`zone ${z.id} fauna`, r.id);
+    }
+    for (const t of Object.values(TILESETS)) for (const e of t.packs.table) hit(`tileset ${t.id}`, e.id);
+    for (const tier of WAVE_TABLE) for (const id of tier.ids) hit('the wave table', id);
+    for (const [fid, f] of Object.entries(FACTIONS)) {
+      if (RESERVED_KIN[fid]) continue; // its own barred roster IS the reservation
+      for (const e of f.table) hit(`faction ${fid}`, e.id);
+    }
+    for (const lm of landmarkDefs()) {
+      for (const e of lm.spawns?.table ?? []) hit(`landmark ${lm.id}`, e.id);
+    }
+    // Droppable summon pools are a spawn surface too — a gem naming a barred
+    // kin would hand players the door. noDrop monster verbs stay free (a
+    // reserved body summoning its own kin can't spawn to cast it).
+    for (const s of Object.values(SKILLS)) {
+      const pool = (s.delivery as { pool?: { id: string }[] }).pool;
+      if (!pool || s.noDrop) continue;
+      for (const e of pool) hit(`droppable skill '${s.id}' summon pool`, e.id);
     }
   }
 
