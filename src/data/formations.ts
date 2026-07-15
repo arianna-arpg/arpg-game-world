@@ -655,6 +655,7 @@ registerDoodadRule('colossus_head', {
 registerDoodadRule('colossus_fist', {
   overlap: 'solid', blocksMove: true, spacing: 28,
   forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+  rockForm: { cluster: 0.45 }, // boulder painter's default roll — knuckles block as rolled
 });
 registerDoodadRule('broken_column', {
   overlap: 'solid', blocksMove: true, spacing: 24,

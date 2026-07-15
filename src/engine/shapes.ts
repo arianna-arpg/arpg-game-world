@@ -28,10 +28,15 @@
 // ---------------------------------------------------------------------------
 
 /** A collision surface anchored at some world position. `rot` is radians,
- *  counter-clockwise, 0 = the rect's local +x axis lies along world +x. */
+ *  counter-clockwise, 0 = the rect's local +x axis lies along world +x.
+ *  'multi' is a UNION of circles offset from the anchor (dx/dy already in
+ *  world frame) — the seed-rolled rock forms (engine/rockForms.ts): every
+ *  branch below treats each part with the exact-parity circle math, so a
+ *  split boulder is just two honest discs wearing one broad phase. */
 export type HitShape =
   | { kind: 'circle'; r: number }
-  | { kind: 'rect'; hw: number; hh: number; rot?: number };
+  | { kind: 'rect'; hw: number; hh: number; rot?: number }
+  | { kind: 'multi'; parts: { dx: number; dy: number; r: number }[] };
 
 /** The push-out result clampPos consumes: the resolved point + the surface
  *  normal at the contact (what the collision-proc seam classifies against). */
@@ -40,22 +45,42 @@ export interface ShapePush { x: number; y: number; nx: number; ny: number }
 /** Radius of the smallest disc centered on the anchor that contains the
  *  shape — the broad-phase bound the spatial index must honor. */
 export function shapeBoundR(s: HitShape): number {
-  return s.kind === 'circle' ? s.r : Math.hypot(s.hw, s.hh);
+  if (s.kind === 'circle') return s.r;
+  if (s.kind === 'multi') {
+    let b = 0;
+    for (const q of s.parts) b = Math.max(b, Math.hypot(q.dx, q.dy) + q.r);
+    return b;
+  }
+  return Math.hypot(s.hw, s.hh);
 }
 
 /** Axis-aligned half-extents of the shape's bounding box (world frame) —
  *  nav stamping iterates this window. */
 export function shapeAabbHalf(s: HitShape): { ex: number; ey: number } {
   if (s.kind === 'circle') return { ex: s.r, ey: s.r };
+  if (s.kind === 'multi') {
+    let ex = 0, ey = 0;
+    for (const q of s.parts) {
+      ex = Math.max(ex, Math.abs(q.dx) + q.r);
+      ey = Math.max(ey, Math.abs(q.dy) + q.r);
+    }
+    return { ex, ey };
+  }
   const c = Math.abs(Math.cos(s.rot ?? 0)), n = Math.abs(Math.sin(s.rot ?? 0));
   return { ex: c * s.hw + n * s.hh, ey: n * s.hw + c * s.hh };
 }
 
 /** Signed distance from a point to the shape's surface (negative = inside).
- *  Circle: dist − r. Rect: the standard box SDF in the local frame. */
+ *  Circle: dist − r. Rect: the standard box SDF in the local frame.
+ *  Multi: the union — the nearest (deepest) part speaks. */
 export function shapeDistance(s: HitShape, ax: number, ay: number, px: number, py: number): number {
   if (s.kind === 'circle') {
     return Math.hypot(px - ax, py - ay) - s.r;
+  }
+  if (s.kind === 'multi') {
+    let d = Infinity;
+    for (const q of s.parts) d = Math.min(d, Math.hypot(px - ax - q.dx, py - ay - q.dy) - q.r);
+    return d;
   }
   const rot = s.rot ?? 0;
   const cos = Math.cos(rot), sin = Math.sin(rot);
@@ -84,14 +109,21 @@ export function shapeContains(s: HitShape, ax: number, ay: number, px: number, p
  */
 export function pushOutOfShape(s: HitShape, ax: number, ay: number, px: number, py: number, bodyR: number): ShapePush | null {
   if (s.kind === 'circle') {
-    const d = Math.hypot(px - ax, py - ay);
-    const minD = s.r + bodyR;
-    if (d >= minD) return null;
-    if (d < 0.01) return { x: ax + minD, y: py, nx: 1, ny: 0 };
-    const f = minD / d;
-    const x = ax + (px - ax) * f, y = ay + (py - ay) * f;
-    const n = Math.hypot(x - ax, y - ay) || 1;
-    return { x, y, nx: (x - ax) / n, ny: (y - ay) / n };
+    return pushOutOfCircle(s.r, ax, ay, px, py, bodyR);
+  }
+  if (s.kind === 'multi') {
+    // Union: escape the DEEPEST-penetrating lobe. One lobe per call — the
+    // movement clamp already iterates passes for exactly this blob shape
+    // ("escaping one circle can land inside its neighbor"), so a body
+    // wedged between lobes walks out the same way it always has.
+    let best: { q: { dx: number; dy: number; r: number }; depth: number } | null = null;
+    for (const q of s.parts) {
+      const depth = Math.hypot(px - ax - q.dx, py - ay - q.dy) - (q.r + bodyR);
+      if (depth >= 0) continue;
+      if (!best || depth < best.depth) best = { q, depth };
+    }
+    if (!best) return null;
+    return pushOutOfCircle(best.q.r, ax + best.q.dx, ay + best.q.dy, px, py, bodyR);
   }
   const rot = s.rot ?? 0;
   const cos = Math.cos(rot), sin = Math.sin(rot);
@@ -129,6 +161,20 @@ export function pushOutOfShape(s: HitShape, ax: number, ay: number, px: number, 
   };
 }
 
+/** The classic radial slide out of one disc — World.clampPos's historical
+ *  math byte-for-byte (including the degenerate dead-center +x case). Both
+ *  the circle branch and each 'multi' lobe resolve through here. */
+function pushOutOfCircle(cr: number, ax: number, ay: number, px: number, py: number, bodyR: number): ShapePush | null {
+  const d = Math.hypot(px - ax, py - ay);
+  const minD = cr + bodyR;
+  if (d >= minD) return null;
+  if (d < 0.01) return { x: ax + minD, y: py, nx: 1, ny: 0 };
+  const f = minD / d;
+  const x = ax + (px - ax) * f, y = ay + (py - ay) * f;
+  const n = Math.hypot(x - ax, y - ay) || 1;
+  return { x, y, nx: (x - ax) / n, ny: (y - ay) / n };
+}
+
 /**
  * First intersection of the segment from (fx,fy) along (dx,dy) with the
  * shape, as a t in [0,1] — or null when the segment never touches it.
@@ -137,19 +183,17 @@ export function pushOutOfShape(s: HitShape, ax: number, ay: number, px: number, 
  */
 export function rayShapeT(s: HitShape, ax: number, ay: number, fx: number, fy: number, dx: number, dy: number): number | null {
   if (s.kind === 'circle') {
-    // Exact parity with the los.ts ray/circle entry math.
-    const lenSq = dx * dx + dy * dy;
-    if (lenSq <= 1e-12 || s.r <= 0) return null;
-    const ox = fx - ax, oy = fy - ay;
-    const b = 2 * (ox * dx + oy * dy);
-    const c = ox * ox + oy * oy - s.r * s.r;
-    const disc = b * b - 4 * lenSq * c;
-    if (disc <= 0) return null;
-    const sq = Math.sqrt(disc);
-    const t0 = (-b - sq) / (2 * lenSq);
-    const t1 = (-b + sq) / (2 * lenSq);
-    if (t1 <= 0 || t0 >= 1) return null;   // wholly behind / beyond the segment
-    return Math.max(0, t0);
+    return rayCircleT(s.r, ax, ay, fx, fy, dx, dy);
+  }
+  if (s.kind === 'multi') {
+    // Union: the earliest lobe entry wins (a start inside any lobe is t=0
+    // through that lobe's own clamp — the veil rule holds per part).
+    let tMin: number | null = null;
+    for (const q of s.parts) {
+      const t = rayCircleT(q.r, ax + q.dx, ay + q.dy, fx, fy, dx, dy);
+      if (t !== null && (tMin === null || t < tMin)) tMin = t;
+    }
+    return tMin;
   }
   // Slab method in the rect's local frame.
   const rot = s.rot ?? 0;
@@ -173,4 +217,21 @@ export function rayShapeT(s: HitShape, ax: number, ay: number, fx: number, fy: n
   // Reject a touch wholly behind the segment start (tMax ≤ 0 handled by the
   // clamp: tMin=0 with tMax<0 fails the tMin>tMax check already).
   return tMin;
+}
+
+/** The exact los.ts ray/circle entry math — the circle branch and every
+ *  'multi' lobe resolve through here (start-inside = t0 veil rule). */
+function rayCircleT(cr: number, ax: number, ay: number, fx: number, fy: number, dx: number, dy: number): number | null {
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq <= 1e-12 || cr <= 0) return null;
+  const ox = fx - ax, oy = fy - ay;
+  const b = 2 * (ox * dx + oy * dy);
+  const c = ox * ox + oy * oy - cr * cr;
+  const disc = b * b - 4 * lenSq * c;
+  if (disc <= 0) return null;
+  const sq = Math.sqrt(disc);
+  const t0 = (-b - sq) / (2 * lenSq);
+  const t1 = (-b + sq) / (2 * lenSq);
+  if (t1 <= 0 || t0 >= 1) return null;     // wholly behind / beyond the segment
+  return Math.max(0, t0);
 }

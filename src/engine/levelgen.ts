@@ -20,6 +20,7 @@
 
 import { dist, vec, type Vec2 } from '../core/math';
 import { shapeBoundR, type HitShape } from './shapes';
+import { rockSurfaceOf, type RockFormSpec } from './rockForms';
 import type { Rng } from '../core/rng';
 import type { ExitRoadSpec, PackTableEntry, StampIgnoreRule, StampRuleOverride, StampSpec, WhereSpec, ZoneDef } from '../data/zones';
 import { STRUCTURES, legendCell, type CellSpec, type StructureDef } from '../data/structures';
@@ -643,6 +644,13 @@ export interface DoodadRule {
    *  Doodad.hitbox (doors) overrides entirely. Keep the painter and the
    *  fractions in agreement — the drawn footprint IS the contract. */
   surface?: { hw: number; hh: number; orient?: 'rot' | 'dir' | 'fixed'; angle?: number };
+  /** SEED-ROLLED ROCK FORM (engine/rockForms.ts): this kind's surface derives
+   *  PER INSTANCE from the same mono/split/outcrop roll the boulder painter
+   *  draws — a split stone blocks as two lobes, an outcrop's satellites block
+   *  where they sit. Cluster chance + spire flag live HERE and the painter
+   *  prefers them over its visual params, so look and collision cannot
+   *  drift. Wins over `surface`; a per-instance hitbox still overrides. */
+  rockForm?: RockFormSpec;
   /** BRITTLE: a lifeless breakable — no life bar, no kill ladder; it POPS.
    *  Pure data: any kind (or a package/legend kind via registerDoodadRule)
    *  becomes a pot, a crumbling plug, or a secret door with one row. */
@@ -796,13 +804,17 @@ export type SurfaceChannel = 'move' | 'shot' | 'sight';
  *  never invents geometry from a kind. Resolution order:
  *    1. Doodad.hitbox — a per-instance authored surface (doors), already in
  *       world orientation; identical across channels.
- *    2. DoodadRule.surface — the kind's oblong body, scaled by the channel
- *       radius and spun by the instance's rot/dir.
- *    3. The classic disc at the channel radius (all existing kinds). */
+ *    2. DoodadRule.rockForm — the seed-rolled stone grammar: the SAME
+ *       mono/split/outcrop bodies the boulder painter draws, as lobe
+ *       circles (engine/rockForms.ts, memoized per instance).
+ *    3. DoodadRule.surface — the kind's oblong body, scaled by the channel
+ *       radius and spun by the instance's rot/dir (or pinned, 'fixed').
+ *    4. The classic disc at the channel radius (all existing kinds). */
 export function hitSurfaceOf(d: Doodad, channel: SurfaceChannel): HitShape {
   if (d.hitbox) return d.hitbox;
   const rule = doodadRule(d.kind);
   const r = channel === 'sight' ? d.radius : bodyRadiusOf(d);
+  if (rule.rockForm) return rockSurfaceOf(d, r, rule.rockForm);
   const sf = rule.surface;
   if (sf) {
     const spin = sf.orient === 'fixed' ? 0
@@ -827,7 +839,11 @@ export function normalizeDoodadBound(d: Doodad): void {
 const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // Solids (must not pile on each other; walk-gated in grid zones). Spacings are
   // migrated verbatim from the old per-stamp literals so existing zones don't shift.
-  rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, mutable: true },
+  // ROCKS collide as ROLLED (DoodadRule.rockForm, engine/rockForms.ts): the
+  // same seed roll the boulder painter draws — mono stands honest at its
+  // wobbled mass, splits block as two lobes, outcrops as shoulder+satellites.
+  // Cluster chances mirror what the painter always rolled for these kinds.
+  rock:      { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30, mutable: true, rockForm: { cluster: 0.45 } },
   cliff:     { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, mutable: true },
   wall:      { overlap: 'solid', blocksMove: true, blocksShot: true, mutable: true },
   // THE BRITTLE KIT — lifeless breakables (DoodadRule.brittle; World.popBrittle).
@@ -1004,9 +1020,13 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // gallows/soul_cage (walk-on platform / hanging cage: the small bodyScale
   // disc IS the intent), wall/cliff/wyrm_coil (stamped as overlapping runs —
   // rect joints would open pinholes), tooth_row (an offset C-arc no centered
-  // rect can hug — it wears a snugged bodyScale disc instead), and the true
-  // circles the sweep verified honest as drawn: mounds, kiln/salt/umbilic
-  // columns, wells, pot clusters, vents, domes, shard clusters.
+  // rect can hug — it wears a snugged bodyScale disc instead),
+  // crumbling_wall/secret_wall (FUNCTIONAL PLUGS: the full disc IS the door —
+  // it must seal its gap until popped, so their VISUAL rolls mono
+  // [doodadVisuals cluster: 0] to match the sealing mass, never the other way
+  // around), and the true circles the sweep verified honest as drawn:
+  // mounds, kiln/salt/umbilic columns, wells, pot clusters, vents, domes,
+  // shard clusters.
   firewood_pile: { overlap: 'solid', blocksMove: true, spacing: 50, surface: { hw: 1.05, hh: 0.55 } },
   // Settlement + wayside clutter (towns, roads, farms, ruins).
   fountain:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 140 },
@@ -1141,7 +1161,7 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   giant_kelp: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: true,
     spacing: 26, occlude: { pad: 12, alpha: 0.28 }, bodyScale: 0.16, veil: {} },
   coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
-  sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40 },
+  sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, rockForm: { cluster: 0.3 } },
   // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
   // is an active puffer (blocks move not shots, like lava_vent); glow_cap/mycelial_mat are
   // walkable ground overlays (decoration + the spore carpet).
@@ -1169,7 +1189,8 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // scree is decoration underfoot, a spire is a full standing block.
   cairn:      { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 80, forbidOn: ['water', 'lava', 'chasm'] },
   scree:      { overlap: 'ground', walkOnly: true },
-  rock_spire: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm'] },
+  rock_spire: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60, forbidOn: ['water', 'lava', 'chasm'],
+    rockForm: { spire: true } }, // spires always roll MONO — one snug honest column
   // Flora clarity: a berry bush is walkable cover exactly like brush; ferns
   // are pure understory decoration.
   berry_bush: { overlap: 'ground', spin: true },

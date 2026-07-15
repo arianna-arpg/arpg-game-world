@@ -11,7 +11,8 @@
 // zone theme — so one data entry skins itself per biome.
 // ---------------------------------------------------------------------------
 
-import type { Doodad } from '../../engine/levelgen';
+import { doodadRuleOf, type Doodad } from '../../engine/levelgen';
+import { rockFormBodies, rockSeedOf } from '../../engine/rockForms';
 import type { World } from '../../engine/world';
 import type { ZoneTheme } from '../../data/zones';
 import { BIOMES } from '../../world/biomes';
@@ -1044,7 +1045,7 @@ const boulder: GroupPainter = (env, group, def) => {
   const edgeCol = p.edge ? resolveColor(p.edge, theme) : withAlpha(ramp.outline, 0.9);
   const contrast = p.contrast ?? 1;
   for (const o of group) {
-    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const seed = rockSeedOf(o.pos.x, o.pos.y);
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     if (o.rot !== undefined) ctx.rotate(o.rot);
@@ -1058,29 +1059,17 @@ const boulder: GroupPainter = (env, group, def) => {
       ctx.fill();
       ctx.globalAlpha = 1;
     }
-    // FORM ROLL: mono boulder / split pair / shoulder outcrop.
-    const roll = hash01(seed, 91);
-    const clusterChance = p.spire ? 0 : (p.cluster ?? 0.45);
-    const bodies: RockBody[] = [];
-    if (roll < clusterChance * 0.4 && o.radius > 12) {
-      const a = hash01(seed, 27) * Math.PI * 2;
-      const g = o.radius * 0.34;
-      bodies.push({ cx: Math.cos(a) * g, cy: Math.sin(a) * g, r: o.radius * 0.64, seed, squash });
-      bodies.push({ cx: -Math.cos(a) * g, cy: -Math.sin(a) * g, r: o.radius * 0.52, seed: seed + 13, squash });
-    } else if (roll < clusterChance && o.radius > 14) {
-      bodies.push({ cx: -o.radius * 0.12, cy: -o.radius * 0.08, r: o.radius * 0.72, seed, squash });
-      const sats = 2 + (seed % 2);
-      for (let i = 0; i < sats; i++) {
-        const a = hash01(i, seed + 41) * Math.PI * 2;
-        const d = o.radius * (0.62 + hash01(i, seed + 47) * 0.16);
-        bodies.push({
-          cx: Math.cos(a) * d, cy: Math.sin(a) * d,
-          r: o.radius * (0.24 + hash01(i, seed + 53) * 0.14), seed: seed + i * 7 + 3, squash,
-        });
-      }
-    } else {
-      bodies.push({ cx: 0, cy: 0, r: o.radius * (p.spire ? 0.9 : 0.94), seed, squash });
-    }
+    // FORM ROLL: mono boulder / split pair / shoulder outcrop — the SHARED
+    // painter/sim derivation (engine/rockForms.ts): these bodies are also
+    // the stone's hit surface, so look and collision cannot drift. The
+    // RULE's rockForm speaks first (collision kinds); visual params serve
+    // boulder-dressed kinds without one (plugs, coil runs).
+    const rf = doodadRuleOf(o.kind).rockForm;
+    const spec = rf ?? {
+      ...(p.cluster !== undefined ? { cluster: p.cluster } : {}),
+      ...(p.spire ? { spire: true } : {}),
+    };
+    const bodies: RockBody[] = rockFormBodies(seed, o.radius, spec).map(b => ({ ...b, squash }));
     let mainPts: { x: number; y: number }[] = [];
     bodies.forEach((b, bi) => {
       const pts = drawRockBody(ctx, b, ramp, edgeCol, contrast * (bi === 0 ? 1 : 0.85), !!p.spire);

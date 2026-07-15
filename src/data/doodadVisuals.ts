@@ -799,16 +799,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // --- The brittle kit (DoodadRule.brittle): lifeless breakables ------------
   clay_pots: { painter: 'potCluster', order: 52, shadow: 0.35 },
   // A fissured plug: the boulder painter with cracks turned all the way up —
-  // it LOOKS ready to fall, and it is.
+  // it LOOKS ready to fall, and it is. cluster: 0 pins the roll to MONO: a
+  // plug must SEAL its gap (the disc is the door), so the look matches the
+  // one sealing mass instead of the mass shrinking to match a split look.
   crumbling_wall: {
     longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
-    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', cracks: 1, grain: true, contrast: 1.15 },
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', cracks: 1, grain: true, contrast: 1.15, cluster: 0 },
   },
   // The hidden face: SAME stone vocabulary as the biome's own rock — the
   // camouflage IS the design; only the suspiciously clean strata whisper.
+  // cluster: 0 for the same sealing reason as the crumbling plug above.
   secret_wall: {
     longShadow: 0.8, painter: 'boulder', order: 55, shadow: 0.6,
-    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', strata: {}, contrast: 0.95 },
+    params: { color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone', strata: {}, contrast: 0.95, cluster: 0 },
   },
   // --- Brittle wave 2: hazard breakables ------------------------------------
   // A decayed crossing: the plank painter saying 'rot' — missing boards over

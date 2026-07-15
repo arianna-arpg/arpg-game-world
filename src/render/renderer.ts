@@ -3948,6 +3948,12 @@ export class Renderer {
       ctx.beginPath();
       if (s.kind === 'circle') {
         ctx.arc(ax, ay, s.r, 0, Math.PI * 2);
+      } else if (s.kind === 'multi') {
+        // Rolled rock forms: one ring per lobe.
+        for (const q of s.parts) {
+          ctx.moveTo(ax + q.dx + q.r, ay + q.dy);
+          ctx.arc(ax + q.dx, ay + q.dy, q.r, 0, Math.PI * 2);
+        }
       } else {
         ctx.save();
         ctx.translate(ax, ay);

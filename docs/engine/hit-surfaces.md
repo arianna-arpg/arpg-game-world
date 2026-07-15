@@ -14,7 +14,15 @@ Resolution is **one function**, `levelgen.hitSurfaceOf(d, channel)`:
 1. `Doodad.hitbox` — a per-instance authored surface, already in world
    orientation. Structure doors author their slab here (`doorSurfaceOf`:
    breadth flush with the breach cells, depth `DOOR_SURFACE_CFG.slabHalfDepth`).
-2. `DoodadRule.surface` — the kind's oblong body: `{ hw, hh, orient?, angle? }`
+2. `DoodadRule.rockForm` — the SEED-ROLLED stone grammar
+   (`engine/rockForms.ts`): rock, sea_rock, rock_spire and colossus_fist
+   derive their surface per instance from the same mono / split-pair /
+   shoulder-outcrop roll the boulder painter draws. One rolled lobe is the
+   exact-parity circle; several resolve as a `multi` union of lobe circles
+   (memoized per doodad — clampPos and castRay ask in their hottest loops).
+   The painter PREFERS the rule's cluster/spire values over its visual
+   params, so look and collision cannot drift.
+3. `DoodadRule.surface` — the kind's oblong body: `{ hw, hh, orient?, angle? }`
    as **fractions of the channel radius**, spun by the instance's `rot` (the
    default), its facing (`orient: 'dir'`), or **pinned to the world axes**
    (`orient: 'fixed'` — for painters that draw unspun, like the palisade
@@ -53,9 +61,12 @@ BLOCKS, never what pays.
 Deliberate disc holdouts: multi-part silhouettes (rib_arch), offset arcs no
 centered rect can hug (tooth_row — snugged with `bodyScale` instead),
 walk-on platforms (gallows), kinds stamped as overlapping runs (wall/
-cliff/wyrm_coil — rect joints would open pinholes), and every kind whose
-painter truly draws a circle (mounds, wells, columns, pot clusters, vents,
-shard clusters) — for those the disc already IS the pixels.
+cliff/wyrm_coil — rect joints would open pinholes), FUNCTIONAL PLUGS whose
+full disc is the door (crumbling_wall/secret_wall — they must seal their
+gap until popped, so their VISUAL pins `cluster: 0` to draw the one sealing
+mass rather than the collision shrinking to a rolled look), and every kind
+whose painter truly draws a circle (mounds, wells, columns, pot clusters,
+vents, domes, shard clusters) — for those the disc already IS the pixels.
 
 ## Projectile forms (`engine/projForms.ts`)
 
