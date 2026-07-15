@@ -149,6 +149,11 @@ export interface ZoneSpec {
    *  skyOf() derivations. */
   sky?: SkyExposure;
   seed?: number;
+  /** Force a NAMED tileset variant (mintCave's opts.variant, for graph
+   *  mints): the perf gate pins known-heavy faces so the sweep measures the
+   *  worst case instead of dice; dev tools mint a face by name. Absent =
+   *  today's roll, byte-identical. Unknown name warns and rolls. */
+  variant?: string;
   /** Heat-map sampler (sim.biomeField.sampleBiome). When given, the field resolves
    *  marine adjacency + the layout generator. */
   biomeFor?: (c: MapCoord) => string;
@@ -426,6 +431,15 @@ export function placeZoneAt(
   const src = anchor ?? nearestNode(zoneMap, target, undefined, spec.dimension); // town always exists ⇒ non-null in practice
   const srcMap = src?.map ?? target;
   const rng = new Rng(spec.seed ?? rollSeed());
+  // THE IDENTITY SUB-STREAM: an EXPLICITLY seeded mint resolves the zone's
+  // IDENTITY rolls (variant, objective, footprint, layout, war roll) on a
+  // stream of their own. The shared `rng` also feeds name-dedupe retries and
+  // frontier/exit picks — draws whose COUNT depends on what already exists
+  // in this world — so identical seeds minted into two different worlds
+  // diverged by the time the layout picked (the perf gate's pinned zones
+  // re-rolled layouts per run). Seedless mints keep every draw on the one
+  // shared stream, byte-identical to every zone ever rolled.
+  const genRng = spec.seed !== undefined ? new Rng((spec.seed ^ 0x51ed2ab9) >>> 0) : rng;
   // HEAT-MAP AUTHORITATIVE (random frontier only): re-select the WHOLE tileset from
   // the biome field at this coord, so theme/packs/layout/decoration/biome all match
   // the region you explored INTO — not the inherited corridor tileset. Authored
@@ -480,7 +494,13 @@ export function placeZoneAt(
   let variantName: string | undefined;
   let variantTheme: Partial<ZoneDef['theme']> | undefined;
   if (tileset.variants && tileset.variants.length) {
-    const v = rng.pick(tileset.variants);
+    // A NAMED face (spec.variant — perf-gate pins, dev mints) skips the roll;
+    // the spec-less stream stays byte-identical. Unknown names warn and roll.
+    const forced = spec.variant ? tileset.variants.find(x => x.name === spec.variant) : undefined;
+    if (spec.variant && !forced) {
+      console.warn(`[worldgen] mint '${spec.id ?? `gen_${genIndex}`}': tileset '${tileset.id}' has no variant '${spec.variant}' — rolling`);
+    }
+    const v = forced ?? genRng.pick(tileset.variants);
     variantName = v.name;
     layout = v.layout;
     variantTheme = v.theme; // a face may RECOLOR itself (merged over base below)
@@ -500,7 +520,7 @@ export function placeZoneAt(
     if (taken.has(name)) name += ' II';
   }
 
-  const objective = spec.objective ?? rollObjective(rng, tileset.objectives, tileset.spawnerId);
+  const objective = spec.objective ?? rollObjective(genRng, tileset.objectives, tileset.spawnerId);
 
   // The zone's biome (authored tileset tag, else the heat-map field) — drives BOTH
   // the layout generator (below) AND the map SPACING (the per-biome density lever:
@@ -606,9 +626,9 @@ export function placeZoneAt(
   }
 
   // Roll a varied footprint: an independent width and an ASPECT class.
-  const shape = rng.chance(tileset.ellipseChance ?? 0) ? 'ellipse' as const : 'rect' as const;
-  const aspect = rng.pick([1, 1, 0.64, 1.55, 0.78, 1.32]);
-  const baseW = rng.range(tileset.sizeW[0], tileset.sizeW[1]);
+  const shape = genRng.chance(tileset.ellipseChance ?? 0) ? 'ellipse' as const : 'rect' as const;
+  const aspect = genRng.pick([1, 1, 0.64, 1.55, 0.78, 1.32]);
+  const baseW = genRng.range(tileset.sizeW[0], tileset.sizeW[1]);
   const size = {
     w: Math.round(baseW),
     h: Math.round(clamp(baseW * aspect, tileset.sizeH[0], tileset.sizeH[1] * 1.4)),
@@ -631,7 +651,7 @@ export function placeZoneAt(
   // zone (default 'plains'), stored on the def so revisits replay the topology.
   const biome = zoneBiome;
   // An authored set-piece arena forces its layout; otherwise the biome picks it.
-  const layoutType = spec.layoutType ?? pickLayout(biome, target, rng, spec.biomeFor);
+  const layoutType = spec.layoutType ?? pickLayout(biome, target, genRng, spec.biomeFor);
   // generateLayout degrades an unregistered layout id to 'plains' silently —
   // say so at mint, where the authoring slip (a quest def's layoutType typo)
   // is one hop away. Biome allowedLayouts are boot-validated; this covers the
@@ -715,7 +735,7 @@ export function placeZoneAt(
     ...(spec.wpExclusionRadius ? { wpExclusionRadius: spec.wpExclusionRadius } : {}),
     // A SPECIAL arena ignores the biome and locks out overlay events (eventOwned).
     ...(spec.special ? { special: true, eventOwned: true } : {}),
-    factionWar: spec.noFactionWar ? undefined : (rng.chance(0.18) ? rng.pick(WAR_PAIRS) : undefined),
+    factionWar: spec.noFactionWar ? undefined : (genRng.chance(0.18) ? genRng.pick(WAR_PAIRS) : undefined),
     seed: spec.seed ?? rollSeed(), // fixed: this zone keeps its layout across revisits
     ...(variantName ? { variantName } : {}),
     ...(spec.floating ? { floating: true } : {}),

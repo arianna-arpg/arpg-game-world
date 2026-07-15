@@ -46,6 +46,15 @@ export interface PerfSweepOpts {
   /** Render passes to SKIP (vis forensics — setVisAblate): attribute a
    *  GPU-side cost by turning one pass off per run at real resolution. */
   ablate?: string[];
+  /** DETERMINISTIC MINTS: zone i mints from Rng(mintSeed + i) — variant,
+   *  name, size and layout stop re-rolling per run/world seed, so two gate
+   *  runs measure the SAME zones. Undefined = today's world-seeded rolls. */
+  mintSeed?: number;
+  /** Force a tileset's FACE and/or LAYOUT GENERATOR (key '*' = every swept
+   *  tileset): the gate measures a committed worst case instead of whatever
+   *  the dice serve — a tileset's heavy scene is often a LAYOUT roll
+   *  (jungle × the sealed-forest roof), not just a variant. */
+  mintPins?: Record<string, { variant?: string; layout?: string }>;
 }
 
 export interface PerfZoneStats {
@@ -188,6 +197,12 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   // THE MATRIX: frontier-eligible tilesets (boundless/streamed zones need
   // package context a bare mint cannot supply), or the explicit override.
   const wants = (opts.filter ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  // The default matrix = frontier-eligible tilesets. Realm tilesets
+  // (frontier: false — the aether shelves) are out BY THE REGISTRY's own
+  // word: a launch-gated melting shelf has no steady state for a blind
+  // probe walk (the floor dissolves, the walker falls into a random zone,
+  // and the row measures the stitch). An explicit opts.tilesets override
+  // can still name anything for choreographed forensics.
   const matrix = (opts.tilesets ?? Object.values(TILESETS)
     .filter(t => t.frontier !== false && !t.boundless)
     .map(t => t.id))
@@ -197,7 +212,12 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   const skipped: string[] = [];
   for (let i = 0; i < matrix.length; i++) {
     const id = matrix[i];
-    const zid = g.world().devMintTileset(id, PERF_SPREAD_BASE + i);
+    const pin = opts.mintPins?.[id] ?? opts.mintPins?.['*'];
+    const zid = g.world().devMintTileset(id, PERF_SPREAD_BASE + i, 8, {
+      ...(opts.mintSeed !== undefined ? { seed: opts.mintSeed + i } : {}),
+      ...(pin?.variant ? { variant: pin.variant } : {}),
+      ...(pin?.layout ? { layoutType: pin.layout } : {}),
+    });
     if (!zid) { skipped.push(id); continue; }
     pinWeather(); // re-pin on the fresh zone's own node
     zones.push(await sampleCurrentZone(id));

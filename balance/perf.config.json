@@ -1,8 +1,12 @@
 {
   "_doc": "Budgets for `npm run perf` (the frame-cost gate). The gate is DATA: relative.* caps judge each zone against the SAME run's town control (machine-independent — a slow laptop slows both sides); absolute.* are generous backstops for outright hitching. gapP50Mul/gapP99Mul multiply the town control's percentile, slackMs adds flat headroom so a tiny control (fast machine, vsync floor) never divides into an impossible cap. Hitch rates are per minute of steady-state walking; hitchGraceCount is the quantization guard — a rate breach additionally needs MORE than this many offending frames in the window, because an 8s window can only express 0 or ≥7.5/min and a single stray OS/driver frame is not 'outright hitching' (a pattern still is: two 70ms frames in 8s = 15/min breaches). entryWorstGapMs caps the zone-load burst.",
+  "_docDeterminism": "The gate rolls NO dice: `weather` pins the sky (a CLI --weather overrides it and flips the run to non-gating forensics), `mintSeed` makes zone i mint from Rng(mintSeed+i) so variants/names/sizes stop re-rolling per run, and `mintPins` forces a tileset's variant and/or layout generator so multi-modal tilesets are judged on their committed WORST CASE instead of whatever the dice serve — heavy scenes are usually a LAYOUT roll (jungle × the sealed-forest roof), not a variant. `relative.controlFloorMs` stops a fast town roll (vsync-off 4.2ms pacing) from halving every cap — the control normalizes the machine, never gambles the headroom.",
   "sampleSeconds": 8,
   "settleSeconds": 1.5,
-  "relative": { "gapP50Mul": 2.5, "gapP99Mul": 3.5, "slackMs": 8 },
+  "weather": "clear",
+  "mintSeed": 1113,
+  "mintPins": { "jungle": { "variant": "strangler court", "layout": "forest" } },
+  "relative": { "gapP50Mul": 2.5, "gapP99Mul": 3.5, "slackMs": 8, "controlFloorMs": 8 },
   "absolute": {
     "gapMaxMs": 150,
     "hitchGraceCount": 1,
@@ -12,12 +16,19 @@
   },
   "overrides": {
     "forest": {
-      "_todo": "The sealed deep-forest canopy is the known heaviest steady-state scene (veil fades + understory density). Budgeted here explicitly pending its own optimization pass — do NOT widen the shared caps to hide it.",
-      "relative": { "gapP50Mul": 6, "gapP99Mul": 5 }
+      "_todo": "The sealed deep-forest canopy is the known heaviest steady-state scene (veil fades + understory density). Budgeted here explicitly pending its own optimization pass — do NOT widen the shared caps to hide it. Calibrated 2026-07-15 under pinned mints: p50 holds 20.8-20.9 across runs, so gapP50Mul 3 restores this row's original ~33ms intent (the old 6x was authored against 4.2ms un-floored controls; under relative.controlFloorMs it would read as a 56ms cap). The tail is burst-dominated on the budgeted ~21ms base: the walker is targetable BY DESIGN, and a combat cluster in one 8s window tips frames over the 40ms line (observed 1 -> 9 such frames between identical-mint runs while p50 held; sim99 7.8 -> 27.2) — so hitch40 carries the same 120/min headroom as jungle. True pathology still gates via the SHARED hitch70/gapMax/entry caps.",
+      "relative": { "gapP50Mul": 3, "gapP99Mul": 5 },
+      "absolute": { "maxHitch40PerMin": 120 }
+    },
+    "jungle": {
+      "_todo": "The PINNED worst case (mintPins: forest layout × strangler court) is the jungle's sealed roof — the same viewport-repainted-in-overlapping-crown-sprites cost the forest override documents (ablate=doodads drops it 29ms -> 4ms, town-flat), owed to the same future canopy-compositing pass. THE REGRESSION NET IS gapP50Mul, deliberately tight: p50 held 29.2/29.2/29.7 across three pinned runs while the mass-planted-emergents bug this row was born from (canopy_colossus weight 2 -> 0.25 in biomes.ts jungle forestTrees) sat at 33.3 — over the ~32 cap. The TAIL metrics are machine-dominated on a permitted-30ms base (a 10ms GPU stall crosses the 40ms line; identical runs logged 0 -> 11 such frames while p50 moved 0.5ms), so p99 (x5) and hitch40 (120/min) carry wide headroom — true pathology still gates via the SHARED hitch70/gapMax/entry caps.",
+      "relative": { "gapP50Mul": 3, "gapP99Mul": 5 },
+      "absolute": { "maxHitch40PerMin": 120 }
     },
     "marsh": {
-      "_todo": "Worst-roll bog variants (dense pod/reed dressing) legitimately land 21-25ms p50 with 12-15ms of REAL JS (sim99+ren99) — over the shared cap whenever the town control runs fast (4.2ms control ⇒ 18.5 cap). Budgeted pending a marsh-dressing pass of its own; the cap still catches a 29ms+ regression.",
-      "relative": { "gapP50Mul": 4.5 }
+      "_todo": "Worst-roll bog variants (dense pod/reed dressing) land ~29ms p50 / ~43ms p99 with ~12ms of REAL JS (sim99+ren99) — and the gate's pinned mintSeed now mints that heavy roll EVERY run instead of averaging over dice (measured perf_20260715064710: 29.1/42.6, 7 frames >40ms). Budgeted pending a marsh-dressing pass of its own; the caps still catch a further regression (p50 44+, p99 46+, 9+ hitch frames).",
+      "relative": { "gapP50Mul": 4.5, "gapP99Mul": 4.5 },
+      "absolute": { "maxHitch40PerMin": 60 }
     },
     "mycelia": {
       "_todo": "Worst-roll spore-dense blooms land ~21ms p50 with ~12ms of real JS on a fast-control run — same class as marsh (heavy live dressing on the worst variant roll). Budgeted pending a mycelia-dressing pass; the cap still catches 27ms+.",

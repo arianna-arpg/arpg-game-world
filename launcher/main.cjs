@@ -369,7 +369,18 @@ async function buildStamp() {
   const head = (await git(['rev-parse', 'HEAD'])).out.trim();
   if (!head) return null; // not a git repo — fall back to dist-exists checks
   const porcelain = (await git(['status', '--porcelain'])).out;
-  return `${head}|${crypto.createHash('sha1').update(porcelain).digest('hex')}`;
+  // CONTENT, not just status: porcelain alone lists paths + letters, so a
+  // second edit to an ALREADY-dirty file left the stamp unchanged and the
+  // perf gate silently measured a stale dist. Fold in the tracked diff's
+  // content and each untracked file's (size, mtime) so any change re-builds.
+  const diff = (await git(['diff', 'HEAD'])).out;
+  const h = crypto.createHash('sha1').update(porcelain).update(diff);
+  for (const line of porcelain.split('\n')) {
+    if (!line.startsWith('??')) continue;
+    const p = path.join(BASE, line.slice(3).trim());
+    try { const st = fs.statSync(p); h.update(`${p}:${st.size}:${st.mtimeMs};`); } catch { /* raced away */ }
+  }
+  return `${head}|${h.digest('hex')}`;
 }
 
 /** @param {boolean} [force] @returns {Promise<{ ok: boolean, error?: string }>} */
@@ -718,16 +729,39 @@ async function perfMode() {
       settleSeconds: Number(budgets.settleSeconds || 1.5),
       filter: flagValue('--filter') || '',
     };
-    // FORENSICS FLAGS: `--weather=snow|clear|…` pins a deterministic sky,
-    // `--ablate=snowwash,lights,…` skips render passes (src/dev/perf.ts).
-    // Either one makes this a diagnostic run: the gate still PRINTS its
-    // verdict, but never exits 2 — an ablated zone being fast (or a pinned
-    // storm being slow) is the experiment, not a regression.
+    // GATE DETERMINISM (committed in perf.config.json, all optional — these
+    // are the GATE's own settings, so the run still exits 2 on breach):
+    //   weather      — the gate's pinned sky (silence the random front roll).
+    //   mintSeed     — zone i mints from Rng(mintSeed + i): variant, name,
+    //                  size and layout stop re-rolling per run/world seed.
+    //   mintPins     — force a tileset's face and/or layout generator
+    //                  ({ "jungle": { "variant": "strangler court",
+    //                  "layout": "forest" } }): the gate measures the
+    //                  committed WORST CASE, not dice — heavy scenes are
+    //                  often a LAYOUT roll, not a variant.
+    if (budgets.weather !== undefined) opts.weather = budgets.weather;
+    if (budgets.mintSeed !== undefined) opts.mintSeed = budgets.mintSeed;
+    if (budgets.mintPins) opts.mintPins = budgets.mintPins;
+    // FORENSICS FLAGS: `--weather=snow|clear|…` pins a DIFFERENT sky,
+    // `--ablate=snowwash,lights,…` skips render passes, `--variant=<name>` /
+    // `--layout=<gen>` force every swept tileset's face/layout — pair with
+    // --filter for one zone (src/dev/perf.ts). Any of them makes this a
+    // diagnostic run: the gate still PRINTS its verdict, but never exits 2 —
+    // an ablated zone being fast (or a pinned storm being slow) is the
+    // experiment, not a regression.
     const weatherFlag = flagValue('--weather');
     if (weatherFlag !== null) opts.weather = weatherFlag;
     const ablateFlag = flagValue('--ablate');
     if (ablateFlag) opts.ablate = ablateFlag.split(',').map(s => s.trim()).filter(Boolean);
-    const forensics = weatherFlag !== null || !!ablateFlag;
+    const variantFlag = flagValue('--variant');
+    const layoutFlag = flagValue('--layout');
+    if (variantFlag || layoutFlag) {
+      const star = { ...((opts.mintPins ?? {})['*'] ?? {}) };
+      if (variantFlag) star.variant = variantFlag;
+      if (layoutFlag) star.layout = layoutFlag;
+      opts.mintPins = { ...(opts.mintPins ?? {}), '*': star };
+    }
+    const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag;
     console.log(`PERF: sweeping tilesets (${opts.seconds}s steady + ${opts.settleSeconds}s entry per zone` +
       (opts.filter ? `, filter '${opts.filter}'` : '') +
       (opts.weather !== undefined ? `, weather pinned '${opts.weather || 'clear'}'` : '') +
@@ -762,10 +796,18 @@ async function perfMode() {
       const ov = (budgets.overrides ?? {})[z.tileset] ?? {};
       const relZ = { ...rel, ...(ov.relative ?? {}) };
       const absZ = { ...abs, ...(ov.absolute ?? {}) };
-      const capP50 = ctl.gapP50 * (relZ.gapP50Mul ?? 99) + (relZ.slackMs ?? 0);
-      const capP99 = ctl.gapP99 * (relZ.gapP99Mul ?? 99) + (relZ.slackMs ?? 0);
-      if (z.gapP50 > capP50) breaches.push(`${z.tileset}: gapP50 ${z.gapP50}ms > cap ${capP50.toFixed(1)} (town ${ctl.gapP50} x${relZ.gapP50Mul} +${relZ.slackMs})`);
-      if (z.gapP99 > capP99) breaches.push(`${z.tileset}: gapP99 ${z.gapP99}ms > cap ${capP99.toFixed(1)} (town ${ctl.gapP99} x${relZ.gapP99Mul} +${relZ.slackMs})`);
+      // CONTROL FLOOR (relative.controlFloorMs): a fast town roll (4.2ms
+      // vsync-off pacing vs the usual 8.3) used to HALVE every cap — the
+      // control normalizes the MACHINE; it must not gamble the headroom.
+      // Control percentiles below the floor read as the floor.
+      const floorMs = relZ.controlFloorMs ?? 0;
+      const ctl50 = Math.max(ctl.gapP50, floorMs), ctl99 = Math.max(ctl.gapP99, floorMs);
+      const town50 = ctl50 === ctl.gapP50 ? `${ctl.gapP50}` : `${ctl50} floored from ${ctl.gapP50}`;
+      const town99 = ctl99 === ctl.gapP99 ? `${ctl.gapP99}` : `${ctl99} floored from ${ctl.gapP99}`;
+      const capP50 = ctl50 * (relZ.gapP50Mul ?? 99) + (relZ.slackMs ?? 0);
+      const capP99 = ctl99 * (relZ.gapP99Mul ?? 99) + (relZ.slackMs ?? 0);
+      if (z.gapP50 > capP50) breaches.push(`${z.tileset}: gapP50 ${z.gapP50}ms > cap ${capP50.toFixed(1)} (town ${town50} x${relZ.gapP50Mul} +${relZ.slackMs})`);
+      if (z.gapP99 > capP99) breaches.push(`${z.tileset}: gapP99 ${z.gapP99}ms > cap ${capP99.toFixed(1)} (town ${town99} x${relZ.gapP99Mul} +${relZ.slackMs})`);
       if (absZ.gapMaxMs != null && z.gapMax > absZ.gapMaxMs) breaches.push(`${z.tileset}: gapMax ${z.gapMax}ms > ${absZ.gapMaxMs}`);
       // Hitch rates carry a GRACE COUNT (absolute.hitchGraceCount): a short
       // window quantizes rate brutally (8s can only express 0 or ≥7.5/min),

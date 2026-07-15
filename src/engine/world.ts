@@ -6800,14 +6800,25 @@ export class World {
    *  tileset probed through the REAL mint path: placeZoneAt → loadZone, no
    *  frontier walking). A fixed spec.level keeps zones comparable across a
    *  sweep; `spread` staggers mint coordinates so repeated mints never stack
-   *  on one node. Returns the minted zone id, or null for an unknown tileset. */
-  devMintTileset(tilesetId: string, spread = 0, level = 8): string | null {
+   *  on one node. `opts.seed` pins the WHOLE mint (variant roll, name, size,
+   *  layout) so gate runs stop re-rolling the dice per world seed;
+   *  `opts.variant` forces a named face and `opts.layoutType` a specific
+   *  layout generator (the perf gate's worst-case pins — a tileset's heavy
+   *  scene is often a LAYOUT roll, e.g. jungle × the sealed-forest roof).
+   *  Returns the minted zone id, or null for an unknown tileset. */
+  devMintTileset(tilesetId: string, spread = 0, level = 8,
+    opts?: { seed?: number; variant?: string; layoutType?: string }): string | null {
     if (!TILESETS[tilesetId]) return null;
     const anchor = this.zoneMap[this.zone.id] ?? this.zone;
     const def = placeZoneAt(
       { x: anchor.map.x + 3 + (spread % 7), y: anchor.map.y + (spread % 5) - 2 },
       anchor, this.zoneMap, this.nextGenId++,
-      { tileset: tilesetId, level });
+      {
+        tileset: tilesetId, level,
+        ...(opts?.seed !== undefined ? { seed: opts.seed } : {}),
+        ...(opts?.variant ? { variant: opts.variant } : {}),
+        ...(opts?.layoutType ? { layoutType: opts.layoutType } : {}),
+      });
     this.zoneMap[def.id] = def;
     this.loadZone(def.id);
     this.player.pos = this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), this.player.radius);

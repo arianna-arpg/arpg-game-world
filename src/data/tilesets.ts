@@ -3273,6 +3273,13 @@ export const TILESETS: Record<string, TilesetDef> = {
   // =========================================================================
   aether: {
     id: 'aether',
+    // REALM tileset (the Ascent's dimension — reached by launch gates and
+    // geysers, never by surface frontier rolls): frontier:false keeps it out
+    // of the field pools AND the perf gate's default matrix. A blind probe
+    // walk has no steady state here anyway — the shelf MELTS under the
+    // walker, who falls through to a random surface zone mid-sample (the
+    // old sweeps' phantom "aether" rows measured whatever zone caught them).
+    frontier: false,
     biome: 'aether',
     nameFirst: ['Aether', 'Empyrean', 'Dawnfield', 'Cloudreach', 'Heavenspan', 'Skyshoal', 'Zenith'],
     // 'Crossing' is RESERVED for launch shelves (defs/ascent.ts renames its
@@ -3469,6 +3476,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // frail span drops the span. What the Host built does not fall.
   aether_spires: {
     id: 'aether_spires',
+    frontier: false, // realm tileset (see aether) — launch-gated, melts underfoot
     biome: 'aether_spires',
     nameFirst: ['Aurelian', 'Empyrean', 'Zenith', 'Highspire', 'Dawnhold', 'Vesperal'],
     nameSecond: ['Courts', 'Spans', 'Gallery', 'Approach', 'Terraces', 'Processional'],
@@ -3598,6 +3606,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // taught. Croc and the plumber both walked so this biome could drift.
   aether_drift: {
     id: 'aether_drift',
+    frontier: false, // realm tileset (see aether) — the torn lattice ejects a blind walker
     biome: 'aether_drift',
     nameFirst: ['Drift', 'Zephyr', 'Windward', 'Skysworn', 'Cirrus', 'Gale', 'Aeolian'],
     // 'Crossing' stays RESERVED for launch shelves (defs/ascent.ts).
@@ -3768,6 +3777,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // ground holds. The waypoint home the shelves are crossed to reach.
   aether_sanctum: {
     id: 'aether_sanctum',
+    frontier: false, // realm tileset (see aether) — reached by the Ascent, not frontiers
     biome: 'aether_sanctum',
     nameFirst: ['Firmament', 'Empyrean', 'Zenith', 'Aurelian'],
     nameSecond: ['Landing', 'Vault', 'Court', 'Rest'],

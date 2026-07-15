@@ -161,9 +161,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
       thicketDens: [2, 4], thicketFaceCuts: [1, 3],
       // The forest face in jungle wood: emergent giants over palms, briars
       // in the snarl — and the roof runs nearly SEALED at the deep heart.
+      // The colossus is an EMERGENT (its whole doctrine: "half a glade under
+      // one crown") — weight 0.25 keeps it a punctuation mark, ~3% of the
+      // roof. At its old weight 2 the sealed heart mass-planted ~700 giant
+      // crowns per zone (25% of ~2900 trees at radius 56-84) and the canopy
+      // pass drowned: gapP50 33ms — the perf gate's worst committed scene
+      // (pinned in balance/perf.config.json mintPins).
       forestTrees: [
-        { kind: 'canopy_colossus', weight: 2, radius: [56, 84] },
-        { kind: 'palm', weight: 3, radius: [22, 34] },
+        { kind: 'canopy_colossus', weight: 0.25, radius: [56, 84] },
+        { kind: 'palm', weight: 3.75, radius: [22, 34] },
         { kind: 'tree', weight: 2, radius: [20, 30] },
         { kind: 'briarwood', weight: 1, radius: [18, 26] },
       ],
