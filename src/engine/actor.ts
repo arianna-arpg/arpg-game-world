@@ -8,7 +8,7 @@
 import { chance, vec, type Vec2 } from '../core/math';
 import {
   FULL_ES_FRAC, FULL_LIFE_FRAC, FULL_MANA_FRAC,
-  LOW_ES_FRAC, LOW_LIFE_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers,
+  LOW_ES_FRAC, LOW_MANA_FRAC, StatSheet, attributeModifiers,
   type Attributes, type ConditionId, type DamageType, type Modifier, type SkillTag,
 } from './stats';
 import { DEFENSE_CFG } from './defense';
@@ -1763,13 +1763,21 @@ export class Actor {
   private gaugeHashB = -1;
   private condSheet: StatSheet | null = null;
 
+  /** THE ACTOR'S OWN lowLife line — where "on low life" begins for THIS
+   *  body (the lowLifeLine stat: base stats.LOW_LIFE_FRAC, so a pact belt
+   *  moves the wearer's line and minion-lane mods move a minion's). Every
+   *  lowLife test asks the actor it concerns — the condition mask below,
+   *  Unstable Flesh detonation, the hit-while-low surge, the blood
+   *  vignette — so lines may diverge per ACTOR, never per SYSTEM. */
+  lowLifeLine(): number { return this.sheet.get('lowLifeLine'); }
+
   /** Recompute the actor-state conditions conditional modifiers test. */
   private refreshConditions(): void {
     const maxLife = this.maxLife();
     const maxMana = this.maxMana();
     const maxEs = this.maxEs();
     let mask = 0;
-    if (this.life < maxLife * LOW_LIFE_FRAC) mask |= 1;                // lowLife
+    if (this.life < maxLife * this.lowLifeLine()) mask |= 1;          // lowLife
     if (this.life >= maxLife * FULL_LIFE_FRAC) mask |= 2;              // fullLife
     if (maxMana > 0 && this.mana < maxMana * LOW_MANA_FRAC) mask |= 4; // lowMana
     if (maxMana > 0 && this.mana >= maxMana * FULL_MANA_FRAC) mask |= 8; // fullMana

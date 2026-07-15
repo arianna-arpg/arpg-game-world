@@ -5,8 +5,6 @@
 // draw code.
 // ---------------------------------------------------------------------------
 
-import { LOW_LIFE_FRAC } from '../../engine/stats';
-
 export const VIS_CFG = {
   /** Where the key light sits (radians, screen space). Volume shading, gloss
    *  bands and long doodad shadows all agree on this one sun. */
@@ -203,11 +201,14 @@ export const VIS_CFG = {
    *  Settings.lowLifePulse gates the continuous part; the hit-while-low
    *  surge (world.lowLifeHitFlash) always draws. */
   lowLife: {
-    /** Life fraction where the seep begins — the gameplay 'lowLife' line
-     *  (stats.LOW_LIFE_FRAC), so the screen and "on low life" gear agree
-     *  about when low starts. */
-    startFrac: LOW_LIFE_FRAC,
-    /** Below this life fraction the heartbeat joins the steady seep. */
+    // (No start threshold here on purpose: the seep begins at the PLAYER'S
+    // OWN lowLife line — Actor.lowLifeLine(), the per-actor stat with base
+    // stats.LOW_LIFE_FRAC — so the screen always agrees with the sheet,
+    // pact belts included.)
+    /** Below this life fraction the heartbeat joins the steady seep.
+     *  ABSOLUTE, unlike the seep's start: the heartbeat marks nearness to
+     *  DEATH itself, not the (shiftable) condition line — a build that
+     *  counts as low at 55% is wounded there, not dying there. */
     beatFrac: 0.15,
     /** Steady vignette alpha: a whisper at startFrac → this deep at 0 life. */
     alphaFloor: 0.05,

@@ -1010,6 +1010,9 @@ export class Renderer {
     const C = VIS_CFG.lowLife;
     const p = world.player;
     const frac = p.maxLife() > 0 ? Math.max(0, p.life) / p.maxLife() : 1;
+    // The seep begins at the player's OWN line (the lowLifeLine stat) —
+    // the screen agrees with the character sheet, pact belts included.
+    const start = p.lowLifeLine();
     // The heart rides the RENDERER's clock, like the other screen FX — a
     // chronomancer stops the world, not your own pulse.
     const now = performance.now() / 1000;
@@ -1017,8 +1020,8 @@ export class Renderer {
     this.beatPrevT = now;
     const pulseOn = this.getSettings?.().lowLifePulse ?? true;
     let steady = 0, beat = 0;
-    if (pulseOn && !p.dead && frac < C.startFrac) {
-      const sev = 1 - frac / C.startFrac;              // 0 at the line … 1 at empty
+    if (pulseOn && !p.dead && frac < start) {
+      const sev = 1 - frac / start;                    // 0 at the line … 1 at empty
       steady = C.alphaFloor + (C.alphaCeil - C.alphaFloor) * sev;
       if (frac < C.beatFrac) {
         const depth = 1 - frac / C.beatFrac;           // how far under the beat line
@@ -1040,7 +1043,7 @@ export class Renderer {
     const w = canvas.width, h = canvas.height;
     // The seep: the clear centre tightens as life ebbs; each systole (and
     // each fresh wound) presses it further inward for a breath.
-    const sev = 1 - Math.min(frac / C.startFrac, 1);
+    const sev = start > 0 ? 1 - Math.min(frac / start, 1) : 1;
     const inner = Math.max(0, C.innerFrom + (C.innerTo - C.innerFrom) * sev
       - C.beat.reach * beat - C.hit.reach * surge) * Math.min(w, h);
     const flush = Math.min(1, C.beat.flushMix * beat + C.hit.flushMix * surge);

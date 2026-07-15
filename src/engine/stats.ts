@@ -130,11 +130,13 @@ export const STAT_TRADES: StatTrade[] = [
 // tests it, so "low" and "full" can never drift apart between the character
 // sheet, the engine, and the screen.
 
-/** THE 'lowLife' LINE: life below this fraction of max counts as low —
- *  the actor's condition mask (so "on low life" gear/passives wake here),
- *  the world's hit-while-low screen surge gate, Unstable Flesh's minion
- *  detonation, and the renderer's blood vignette (VIS_CFG.lowLife.startFrac
- *  defaults to it) all begin at the same breath. */
+/** THE 'lowLife' LINE — the BASE of the per-actor `lowLifeLine` STAT
+ *  (STAT_DEFS below). Every lowLife test asks the actor it concerns
+ *  (Actor.lowLifeLine()): the condition mask, the world's hit-while-low
+ *  surge gate, Unstable Flesh's minion detonation, and the renderer's
+ *  blood vignette all read the same per-body line — so gear can move YOUR
+ *  line, minion-lane mods can move a MINION's, and no system ever drifts
+ *  from another on the same actor. */
 export const LOW_LIFE_FRAC = 0.35;
 /** 'fullLife' tolerates a scratch: chip damage must not flicker full-life
  *  mods off every incidental tick. */
@@ -240,6 +242,13 @@ export const STAT_DEFS: Record<string, StatDef> = {
   manaRegen:      { label: 'Mana Regeneration /s', base: 2 },
   /** Fraction of MAXIMUM mana regenerated per second (adds to flat manaRegen). */
   manaRegenPct:   { label: 'Mana Regeneration %', base: 0, min: 0, percent: true },
+  /** THE ACTOR'S OWN 'lowLife' line as a stat (base LOW_LIFE_FRAC): where
+   *  "on low life" begins for THIS body. Flat mods shift the wearer's line
+   *  (a pact belt that counts you low at half); minion-lane mods shift a
+   *  minion's (Unstable Flesh reads the minion's own line). Read
+   *  UNCONDITIONED by the condition mask — it IS the mask's input — so
+   *  keep line mods unconditional. */
+  lowLifeLine:    { label: 'Low-Life Threshold', base: LOW_LIFE_FRAC, min: 0, max: 0.9, percent: true },
 
   // Mobility & action speed
   moveSpeed:      { label: 'Movement Speed', base: 200, min: 30 },
@@ -1372,6 +1381,7 @@ const STAT_BLURBS: Record<string, string> = {
   mana: 'The casting pool skills spend.',
   manaRegen: 'Flat mana restored every second.',
   manaRegenPct: 'A fraction of your MAXIMUM mana restored every second, on top of flat regeneration.',
+  lowLifeLine: 'The life fraction below which you count as on low life — raising it wakes low-life gear, passives, and the blood vignette sooner.',
   moveSpeed: 'How fast you travel.',
   traction: 'Grip on the ground — below full, movement becomes momentum that slides (ice).',
   attackSpeed: 'Multiplies how quickly attack skills swing.',

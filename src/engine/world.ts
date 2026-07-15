@@ -60,7 +60,7 @@ import { VOCATIONS, VOCATION_CFG, vocationDiscoveryKey, vocationLedgerKey, vocat
 import { ATTUNEMENT_LIST, TERRAFORM_LIST, attuneStat, terraformFxStat, terraformStat } from '../data/attunements';
 import { PROC_LIST, PROCS, procStat, PROC_RIDER_LIST, procRiderStat, type ProcDef } from '../data/procs';
 import { resolveInvocation, RUNE_INFO, RUNE_OF_ELEMENT, type RuneId } from '../data/invocations';
-import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, LOW_LIFE_FRAC, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
+import { ATTRIBUTE_IDS, ELEMENTAL_TYPES, STAT_DEFS, DAMAGE_COLOR, conversionStat, isAttributeId } from './stats';
 import { START_ZONE, ZONES, objectiveEarnsChest, objectiveSeals, type ExitRoadSpec, type PackArchetype, type PackTableEntry, type ZoneDef, type ZoneExitDef, type ObjectiveSpec } from '../data/zones';
 import { BEACON_CFG } from '../data/beacons';
 import { PROCESSION_CFG } from '../data/processions';
@@ -20960,8 +20960,9 @@ export class World {
       }
       // A hit landed on the player while at low life — kick the renderer's
       // hit-while-low surge (one smooth bloom over the low-life vignette).
+      // The PLAYER's own line: a shifted lowLifeLine moves this gate too.
       if (target === this.player && this.player.life > 0
-        && this.player.life < this.player.maxLife() * LOW_LIFE_FRAC) {
+        && this.player.life < this.player.maxLife() * this.player.lowLifeLine()) {
         this.lowLifeHitFlash = LOW_LIFE_FLASH_SEC;
       }
       this.text(target.pos, Math.round(dealt).toString(),
@@ -28085,11 +28086,13 @@ export class World {
   }
 
   /** Unstable Flesh: minions detonate themselves upon reaching low life —
-   *  the same LOW_LIFE_FRAC line every other lowLife test reads. */
+   *  each minion's OWN line (Actor.lowLifeLine), so minion-lane mods can
+   *  move a construct's fuse without the summoner's pact belt moving it,
+   *  and vice versa. */
   private checkMinionDetonations(): void {
     for (const a of this.actors) {
       if (a.dead || !a.isMinion() || a.explodeOnLowLife <= 0) continue;
-      if (a.life < a.maxLife() * LOW_LIFE_FRAC) {
+      if (a.life < a.maxLife() * a.lowLifeLine()) {
         this.explodeActor(a, a.explodeOnLowLife);
         this.kill(a, true);
       }

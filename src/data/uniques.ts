@@ -56,6 +56,23 @@ export const UNIQUE_LIST: UniqueDef[] = [
       { stat: 'castSpeed', kind: 'increased', range: [-0.08, -0.05] },
     ],
   },
+  // THE LOW-LIFE LINE's anchor (the lowLifeLine stat): you count as wounded
+  // from half — Painfuel, Red Rapture, low-life supports, the hit surge and
+  // the blood vignette all wake there with you. The pact's price is a
+  // thinner bar to be low WITH: the conditional damage rides the belt's own
+  // raised line, so the item is its own uptime.
+  {
+    id: 'pale_bargain', name: 'The Pale Bargain', baseId: 'belt_endurance', weight: 70,
+    minIlvl: 6,
+    flavor: 'Half a life, she reasoned, is a thing you can spend twice.',
+    lines: [
+      { stat: 'lowLifeLine', kind: 'flat', range: [0.15, 0.25] },
+      { stat: 'damage', kind: 'increased', range: [0.1, 0.16], when: 'lowLife' },
+      { stat: 'lifeRegen', kind: 'flat', range: [2, 4] },
+      // The bargain's price — a real downside line.
+      { stat: 'life', kind: 'increased', range: [-0.12, -0.08] },
+    ],
+  },
   {
     id: 'gravebloom', name: 'Gravebloom', baseId: 'helmet_es', weight: 100,
     flavor: 'What you plant in sorrow you may harvest in service.',
