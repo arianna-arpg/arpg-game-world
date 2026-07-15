@@ -50,6 +50,7 @@ import { drawGlow, drawLongShadow, drawShadow, releaseCanvas, sunCast } from './
 import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
+import { CanopyEyes, type EyedGroup } from './vis/canopyEyes';
 import { RoomVeil } from './vis/roomVeil';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
@@ -318,6 +319,7 @@ export class Renderer {
     }
     this.drawProjectiles(world);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
+    if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
     // THE LIVING FOG, tall pass: the lifted share of each bank wraps bodies
     // walking deep inside — over crowns, still under roofs and labels.
     if (world.fog && !VIS_ABLATE.has('fog')) {
@@ -1001,6 +1003,41 @@ export class Renderer {
     }
     if (fx.some(f => f.def.kind === 'frost')) this.drawFrost(w, h, t);
     if (fx.some(f => f.def.kind === 'stars')) this.drawStunStars(w, h, t);
+    const pall = fx.filter(f => f.def.kind === 'pall');
+    if (pall.length) this.drawPall(w, h, Math.min(1, Math.max(...pall.map(f => (f.def.intensity ?? 1) * f.k))));
+    const dark = fx.filter(f => f.def.kind === 'darken');
+    if (dark.length) this.drawDarken(w, h, Math.min(1, Math.max(...dark.map(f => (f.def.intensity ?? 1) * f.k))));
+  }
+
+  /** THE PALL (faintness/swoon — the vasovagal read): the world DESATURATES
+   *  (the understory 'saturation'-composite recipe, applied to the frame) and
+   *  a pale wash creeps in from the edges. Deliberately beatless: the
+   *  low-life vignette owns the heartbeat; a faint is stillness. Levers in
+   *  VIS_CFG.statusFx. */
+  private drawPall(w: number, h: number, k: number): void {
+    const { ctx } = this;
+    const C = VIS_CFG.statusFx;
+    ctx.globalCompositeOperation = 'saturation';
+    ctx.fillStyle = `rgba(128,128,128,${(C.pallDesat * k).toFixed(3)})`;
+    ctx.fillRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * (0.42 - 0.18 * k), w / 2, h / 2, Math.hypot(w, h) / 2);
+    grd.addColorStop(0, 'rgba(232,224,236,0)');
+    grd.addColorStop(1, withAlpha(C.pallWash, C.pallAlpha * k));
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  /** THE DARKEN (blind): the room closes in — a near-black iris tightening
+   *  toward the center. What's left of the screen is what's left of you. */
+  private drawDarken(w: number, h: number, k: number): void {
+    const { ctx } = this;
+    const C = VIS_CFG.statusFx;
+    const grd = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * (0.5 - 0.3 * k), w / 2, h / 2, Math.hypot(w, h) * (0.62 - 0.1 * k));
+    grd.addColorStop(0, 'rgba(6,4,10,0)');
+    grd.addColorStop(1, `rgba(6,4,10,${(C.darkenFloor * k).toFixed(3)})`);
+    ctx.fillStyle = grd;
+    ctx.fillRect(0, 0, w, h);
   }
 
   /** Icy edge wash + drifting snowflakes (chill / frozen). */
@@ -1915,6 +1952,19 @@ export class Renderer {
   /** THE ROOM VEIL (vis/roomVeil.ts): interior vision confinement — inside a
    *  confining structure, the world beyond the room veils dark. */
   private roomVeil = new RoomVeil();
+
+  /** CANOPY EYES (vis/canopyEyes.ts): the sealed roof's blinking regard —
+   *  present only where nobody is near enough to check. Kinds opt in via
+   *  DoodadVisualDef.canopy.eyes (the Gloamwood's oak wears it first). */
+  private canopyEyesPass = new CanopyEyes();
+  private drawCanopyEyes(world: World): void {
+    const groups: EyedGroup[] = [];
+    for (const [kind, list] of this.culled) {
+      const eyes = DOODAD_VISUALS[kind]?.canopy?.eyes;
+      if (eyes && list.length) groups.push({ spec: eyes, list });
+    }
+    if (groups.length) this.canopyEyesPass.draw(this.ctx, world, this.frameDt, groups);
+  }
 
   private drawCanopies(world: World): void {
     const hero = world.player;

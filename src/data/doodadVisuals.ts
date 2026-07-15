@@ -554,7 +554,11 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   gloam_oak: {
     longShadow: 0.95,
     painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.24, roots: 6, color: '#241f1a' },
-    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2b3b33' } },
+    // The haunted roof WATCHES — pinprick pairs blinking in the sealed
+    // crowns that are never there when you walk over to check
+    // (vis/canopyEyes.ts; the crown itself keeps its bake + slices).
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2b3b33' },
+      eyes: { count: 2, color: '#c8d8a8' } },
   },
   // The croft kit (paintersGloam.ts): gourd tangles, the lit lone lantern
   // (light spec = the candle), the hanged road's swaying gibbets.

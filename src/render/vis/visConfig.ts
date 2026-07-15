@@ -434,6 +434,30 @@ export const VIS_CFG = {
     puffBob: 2.5,
   },
 
+  /** CANOPY EYES (vis/canopyEyes.ts): pinprick regard blinking in sealed
+   *  crowns — present only where nobody is near enough to check. Kinds opt
+   *  in via DoodadVisualDef.canopy.eyes; these are the spec defaults. */
+  canopyEyes: {
+    /** Hero distance inside which the eyes are NEVER there. */
+    reach: 240,
+    /** Presence fade toward shown/denied (per second). */
+    fadeRate: 3.2,
+    /** Eye-pairs per crown / pupil radius / overlay alpha ceiling. */
+    count: 2, size: 1.6, alpha: 0.5,
+    /** Blink cycles per second-ish (pairs phase-offset). */
+    blinkRate: 0.11,
+    color: '#c8d8a8',
+  },
+
+  /** STATUS SCREEN-FX tunables (render/screenFx.ts registry + the renderer's
+   *  drawStatusFx branches): the PALL (the flesh country's vasovagal read —
+   *  desaturation + a pale edge wash, beatless on purpose) and the DARKEN
+   *  (blind — the room closing in). */
+  statusFx: {
+    pallDesat: 0.5, pallWash: '#e8e0ec', pallAlpha: 0.34,
+    darkenFloor: 0.78,
+  },
+
   /** THE VOID FRAME (vis/voidFrame.ts) — what the world ends into. The
    *  hero-locked camera (render/camera.ts) shows the beyond-edge dark
    *  whenever the hero presses the rim; the classic frame sees it at the

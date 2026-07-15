@@ -30,6 +30,21 @@ export interface PaintEnv {
   world: World;
 }
 
+/** CANOPY EYES spec (DoodadVisualDef.canopy.eyes → vis/canopyEyes.ts): the
+ *  regard a sealed crown wears when nobody is looking. All fields default
+ *  from VIS_CFG.canopyEyes. */
+export interface CrownEyesSpec {
+  /** Eye-pairs per crown. */
+  count?: number;
+  /** Pupil radius (px-ish; each pair jitters around it). */
+  size?: number;
+  color?: string;
+  /** Blink cycles per second-ish (each pair phase-offset). */
+  blinkRate?: number;
+  /** Hero distance inside which the eyes are NEVER there (fade out). */
+  reach?: number;
+}
+
 /** '#hex' literal or 'theme:key' / 'theme:key|#fallback'. */
 export type ColorSpec = string;
 
@@ -106,8 +121,12 @@ export interface DoodadVisualDef {
    *  opts THIS KIND's crowns out of the variant-sprite bake so the painter
    *  runs per frame (time-driven motion — THE CUT CONTRACT: what yields to
    *  the blade breathes). Reserve it for sparse kinds: a sealed forest
-   *  holds hundreds of crowns and live-painting them was the frame drop. */
-  canopy?: { painter: string; params?: Record<string, unknown>; live?: true };
+   *  holds hundreds of crowns and live-painting them was the frame drop.
+   *  `eyes` opts the kind into the CANOPY EYES overlay (vis/canopyEyes.ts):
+   *  pinprick regard blinking in the sealed roof that exists only where
+   *  nobody is near enough to check — a LIVE overlay pass, so the crown
+   *  itself keeps its bake and its composite slices. */
+  canopy?: { painter: string; params?: Record<string, unknown>; live?: true; eyes?: CrownEyesSpec };
   /** Whole-doodad sprite baking for GROUND kinds whose painter is time-free
    *  ('static': brush clumps) or whose only time input is sway ('sway':
    *  ferns — baked at rest, swayed by a whole-sprite shear at blit). The
