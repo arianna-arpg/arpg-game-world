@@ -2405,6 +2405,42 @@ export const MONSTERS: Record<string, MonsterDef> = {
     spawner: true,
   },
 
+  // --- The war-wound's own (the surface rift's natives) ---------------------
+  // The UNMAKER ACOLYTE: the war's quiet clerisy — robed adepts who tend the
+  // rents and speak what the wound taught them (the Unmaking family, in
+  // enemy hands first: you meet the skill before you loot it).
+  unmaker_acolyte: {
+    id: 'unmaker_acolyte', name: 'Unmaker Acolyte',
+    color: '#7de84a', shape: 'diamond', radius: 13, material: 'void', look: 'unmaker_acolyte',
+    base: { life: 34, moveSpeed: 120, mana: 110, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['unmaking_bolt', 'null_verge'],
+    xp: 16,
+    faction: 'demon',
+    // The rite in progress (the fire-cult vigil grammar): acolytes circle
+    // their eldest, eyes inward, until interrupted.
+    brain: {
+      type: 'caster',
+      squad: { idle: { style: 'circle', ring: 96 } },
+    },
+  },
+  // The HATEBOUND HULK: the Legion's plunder-mule — a branded bulk hauling
+  // the war's take. What you see strapped to it is what it DROPS
+  // (MonsterDef.carry: the walking-armory contract on demon ground).
+  hatebound_hulk: {
+    id: 'hatebound_hulk', name: 'Hatebound Hulk',
+    color: '#9a4a5a', shape: 'hexagon', radius: 18, material: 'stone', look: 'hatebound_hulk',
+    base: { life: 150, moveSpeed: 78, accuracy: 85, armor: 26, mana: 0 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['claw'], xp: 28,
+    faction: 'demon',
+    carry: { chance: 0.5 },
+    turnSpeed: 3.4,
+    // A beast of burden does not startle; it finishes what it started.
+    aggro: { fixation: 1.4, fury: 0.9, waver: 0.8 },
+    brain: { type: 'juggernaut' },
+  },
+
   rime_stone: {
     id: 'rime_stone', name: 'Rime Stone',
     color: '#9accdf', shape: 'square', radius: 20, material: 'ice', look: 'elemental_rift',

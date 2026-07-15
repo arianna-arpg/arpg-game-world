@@ -1862,6 +1862,32 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.5,
   },
+  /** THE UNMAKER ACOLYTE: the war's quiet clerisy — a robed adept under a
+   *  deep hood, a rune-brand burning where a holy symbol would hang, and
+   *  the fragments of whatever it last unmade still orbiting it (the
+   *  floatingShards live painter's debut). */
+  unmaker_acolyte: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'hood', x: 0.3, params: { eyes: true, eyeColor: '#9fffc0' } },
+      { kind: 'brand', y: 0.15, scale: 0.5, role: 'glow' },
+    ],
+    live: [{ kind: 'floatingShards', params: { n: 5 } }],
+  },
+  /** THE HATEBOUND HULK: the Legion's plunder-mule — a chained bulk under
+   *  harness and pack, branded with its owner's mark. What it hauls, it
+   *  drops (MonsterDef.carry — the armory contract on demon ground). */
+  hatebound_hulk: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'pauldrons', scale: 1.05 },
+      { kind: 'chains', scale: 1.1 },
+      { kind: 'harness' },
+      { kind: 'pack', x: -0.45, scale: 0.9 },
+      { kind: 'brand', x: 0.3, scale: 0.45, role: 'glow' },
+      { kind: 'eyes', params: { spread: 0.3, dist: 0.7, size: 0.09 } },
+    ],
+  },
   /** The TREE of the grove: a full crown over root-heave (two root fans =
    *  all-around heave; the crown is the whole silhouette from above). */
   construct_tree: {

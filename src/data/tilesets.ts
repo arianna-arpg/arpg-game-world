@@ -1667,6 +1667,11 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'bloodgorger', weight: 1, presence: { from: 18, fadeIn: 5 } },
         { id: 'chained_tormentor', weight: 1, presence: { from: 16, fadeIn: 6 } },
         { id: 'ruin_chanter', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The wound's own: the clerisy that tends the rents, and the
+        // branded mule that hauls the war's take (carry — what you see
+        // strapped to it is what it drops).
+        { id: 'unmaker_acolyte', weight: 2, presence: { from: 9, fadeIn: 4 } },
+        { id: 'hatebound_hulk', weight: 1, presence: { from: 11, fadeIn: 5 } },
         // The pit country's angler hunts the rents (the magma fauna stayed
         // in the volcanic country where the lava lanes are).
         { id: 'void_angler', weight: 2, presence: { from: 8, fadeIn: 3 } },

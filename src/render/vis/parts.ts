@@ -3376,6 +3376,37 @@ const crystalGrowths: PartPainter = (ctx, r, spec, pal, t = 0) => {
   });
 };
 
+/** FLOATING SHARDS — detached fragments orbiting the body on their own slow
+ *  clocks (LIVE — feed it t): the unmade, the warded, anything reality has
+ *  only a loose grip on. The one crystal painter that is NOT attached —
+ *  crystalGrowths roots on the hide; these never touch it.
+ *  params: n, orbit (ring radius in body-r units), spin (rad/s). */
+const floatingShards: PartPainter = (ctx, r, spec, pal, t = 0) => {
+  const ramp = rampFor(spec, pal, 'accent');
+  const n = Math.round(P(spec, 'n', 5));
+  const orbit = P(spec, 'orbit', 1.05);
+  const spin = P(spec, 'spin', 0.5);
+  place(ctx, r, spec, (c, R) => {
+    for (let i = 0; i < n; i++) {
+      const a0 = hash01(i, 97) * Math.PI * 2;
+      const a = a0 + t * spin * (0.7 + hash01(i, 101) * 0.6);
+      const bob = Math.sin(t * (0.8 + hash01(i, 103) * 0.7) + a0 * 7) * R * 0.07;
+      const d = R * orbit * (0.88 + hash01(i, 107) * 0.24) + bob;
+      const x = Math.cos(a) * d, y = Math.sin(a) * d;
+      const s = R * (0.1 + hash01(i, 109) * 0.08);
+      const ra = a + hash01(i, 113) * Math.PI;
+      c.save(); c.translate(x, y); c.rotate(ra);
+      c.fillStyle = shade(ramp.base, -0.15);
+      c.beginPath(); c.moveTo(s, 0); c.lineTo(-s * 0.5, s * 0.6); c.lineTo(-s * 0.5, -s * 0.6); c.closePath(); c.fill();
+      c.fillStyle = shade(ramp.base, 0.25);
+      c.beginPath(); c.moveTo(s, 0); c.lineTo(-s * 0.5, -s * 0.6); c.lineTo(-s * 0.15, 0); c.closePath(); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.6); c.lineWidth = 1;
+      c.beginPath(); c.moveTo(s, 0); c.lineTo(-s * 0.5, s * 0.6); c.lineTo(-s * 0.5, -s * 0.6); c.closePath(); c.stroke();
+      c.restore();
+    }
+  });
+};
+
 /** ROOTS — kinked, tapering root tendrils trailing off the rear arc (treants,
  *  shamblers, anything recently uprooted). params: n. */
 const roots: PartPainter = (ctx, r, spec, pal) => {
@@ -3853,6 +3884,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   stakeRow, totemPost,
   crystalGrowths, roots, stitchSeams, bell, chest,
   collar, harness, saddlebags, muzzle,
+  floatingShards,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */
