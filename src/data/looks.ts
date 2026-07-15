@@ -832,6 +832,34 @@ export const LOOKS: Record<string, LookDef> = {
     ],
   },
 
+  // ===================================================== THE STARFALL COURT
+  /** The shardling: a splinter of sky that learned to skitter. */
+  starfall_shardling: {
+    parts: [
+      { kind: 'carapace', scale: 0.85, role: 'glow', params: { segs: 2 } },
+      { kind: 'legs', params: { pairs: 2 } },
+      { kind: 'eyes', color: '#e8f4ff', params: { n: 1, spread: 0, dist: 0.35, size: 0.1 } },
+    ],
+  },
+  /** The prism: it bends what little light the night spares. */
+  starfall_prism: {
+    parts: [
+      { kind: 'disc', scale: 0.7, role: 'glow' },
+      { kind: 'halo', scale: 0.95, alpha: 0.5, role: 'glow' },
+      { kind: 'mask', scale: 0.5, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, params: { n: 2 } }],
+  },
+  /** The gravity warden: the crater's keeper — weight goes wrong near it. */
+  gravity_warden: {
+    parts: [
+      { kind: 'torso', scale: 0.95, role: 'dark' },
+      { kind: 'halo', scale: 1.05, alpha: 0.45, role: 'glow' },
+      { kind: 'crown', x: 0.28, scale: 0.65, role: 'glow' },
+    ],
+    live: [{ kind: 'wisps', x: -0.35, scale: 0.8, params: { n: 3 } }],
+  },
+
   // ================================================================ CHITIN
   mite: {
     parts: [

@@ -211,3 +211,17 @@ registerKillHandler({
     }
   },
 });
+
+// THE FALLEN STAR BREAKS: the Starfall Court's standing heart pays out —
+// the sky's own bounty, and the account remembers the night it fell.
+registerKillHandler({
+  id: 'fallen_star_broken',
+  tag: 'fallen_star',
+  run: ctx => {
+    ctx.bumpLedger('fallen_stars_broken');
+    ctx.grantXp(60 + ctx.zone.level * 14);
+    ctx.dropGemAt(ctx.actor.pos);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 36),
+      'The lattice shatters — starlight spills out of it.', '#9ad4e8', 15);
+  },
+});

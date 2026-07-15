@@ -134,6 +134,19 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
     skyWeight: { day: 1.6, dusk: 1.2 },
     birthGeo: { temperature: { min: 0.55 }, moisture: { max: 0.4 } },
   },
+  /** STARFALL — the rare night the sky comes down in crystal. Its teeth are
+   *  the STRIKE (falling shards through the shared strike machinery), and
+   *  what the shards SEED: zones under the shower field the STARFALL COURT
+   *  (World.materializeStarfall — crystal-forms grown from the impacts,
+   *  sometimes around a standing FALLEN STAR heart). Two other systems'
+   *  night — the shower and the court — from one registry row. */
+  starfall: {
+    label: 'Starfall', color: '#9ad4e8', countMul: 1.15,
+    factionMul: { elemental: 1.4 },
+    strike: { skillId: 'starfall_shard', radius: 70, telegraph: 0.9, ratePerSec: 0.5 },
+    rampFrac: 0.35, wind: 0.15,
+    skyWeight: { night: 1.1, dusk: 0.3 },
+  },
 };
 
 /** Register a weather kind under an open-string id (see WeatherKind) — one

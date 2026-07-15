@@ -579,6 +579,21 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 430, weight: 3, keepDistance: 280 },
   },
 
+  starfall_shard: {
+    id: 'starfall_shard', name: 'Starfall Shard',
+    description: 'Call a crystal down out of the high dark. It arrives with the cold of the space it crossed.',
+    tags: ['spell', 'cold', 'physical', 'aoe'], color: '#9ad4e8',
+    manaCost: 14, cooldown: 5, useTime: 0.8,
+    baseDamage: { physical: [10, 16], cold: [8, 14] },
+    delivery: { type: 'ground', radius: 70, castRange: 460, delay: 0.7 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.45 },
+    ],
+    requirements: { intelligence: 24 },
+    ai: { range: 430, weight: 3, keepDistance: 280 },
+  },
+
   // ======================= Fire (environmental) ============================
 
   // PYRE NOVA — the CONTAGION showcase: a fire burst whose victims may

@@ -88,6 +88,9 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Chattel — the field country's own trouble: herds range, but home
   // is the open grass.
   chattel: { roaming: 0.9, aggression: 0.9, warlordHome: 'origin', homeBiome: 'field', temper: 'territorial' },
+  // The Starfall Court — event-native (contexts:['starfall']): it exists only
+  // under the shower; it marches nowhere and seeds no wars.
+  starfall: { roaming: 0.2, aggression: 1.1, warlordHome: 'origin', contexts: ['starfall'], temper: 'skittish' },
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },

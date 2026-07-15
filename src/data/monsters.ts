@@ -6241,6 +6241,70 @@ export const MONSTERS: Record<string, MonsterDef> = {
     },
   },
 
+  // --- THE STARFALL COURT (what rides the meteors) ----------------------------
+  // Event-NATIVE crystal-forms: they hold no ground and march no wars —
+  // zones under an active STARFALL front (the weather registry's rare night
+  // shower) grow them from the impacts, sometimes around a standing FALLEN
+  // STAR heart. The purest "one system's side effect is another's front
+  // door": the sky writes them in, the front passing writes them out.
+
+  starfall_shardling: {
+    id: 'starfall_shardling', name: 'Starfall Shardling',
+    color: '#9ad4e8', shape: 'triangle', radius: 10, material: 'ethereal', look: 'starfall_shardling',
+    base: { life: 34, moveSpeed: 188, accuracy: 96, evasion: 65, mana: 15, manaRegen: 3 },
+    mods: [mod('coldRes', 'flat', 0.5)],
+    skills: ['claw'],
+    xp: 16,
+    faction: 'starfall', tags: ['construct', 'elemental'],
+    detection: 1.1,
+    brain: {
+      type: 'skirmish', withdraw: 1.1,
+      move: { style: 'skitter', dart: [0.25, 0.5], pause: [0.1, 0.2] },
+      behavior: { dodge: { chance: 0.5, reaction: [0.12, 0.3], exit: 'lateral' } },
+    },
+  },
+  starfall_prism: {
+    id: 'starfall_prism', name: 'Starfall Prism',
+    color: '#bfe4f0', shape: 'star', radius: 12, material: 'ethereal', look: 'starfall_prism',
+    base: { life: 46, moveSpeed: 120, mana: 160, manaRegen: 11 },
+    mods: [mod('coldRes', 'flat', 0.5)],
+    skills: ['splinter_volley', 'starfall_shard'],
+    xp: 26,
+    faction: 'starfall', tags: ['construct', 'elemental'],
+    gemBias: ['cold', 'spell'], wardPriority: 1,
+    detection: 1.1,
+    presence: { from: 5, fadeIn: 3 },
+    brain: { type: 'strafer' },
+  },
+  // The gravity warden: the crater's keeper — the ground remembers weight
+  // wrong around it, and its snares are the proof.
+  gravity_warden: {
+    id: 'gravity_warden', name: 'Gravity Warden',
+    color: '#7ab8d8', shape: 'hexagon', radius: 15, material: 'ethereal', look: 'gravity_warden',
+    base: { life: 190, moveSpeed: 118, accuracy: 108, armor: 40, poise: 60, mana: 150, manaRegen: 10 },
+    mods: [mod('coldRes', 'flat', 0.5)],
+    skills: ['root_grasp', 'heavy_strike'],
+    xp: 80,
+    faction: 'starfall', tags: ['construct', 'elemental'],
+    detection: 1.1,
+    turnSpeed: 4,
+    scaling: { life: { incPerLevel: 0.06 } },
+    presence: { from: 8, fadeIn: 4 },
+    brain: { type: 'commander', perception: { alertShout: 480 } },
+  },
+  // THE FALLEN STAR: the impact's standing heart — an anchored lattice that
+  // sprays until broken (rift_maw pattern; the materializer plants it).
+  fallen_star: {
+    id: 'fallen_star', name: 'Fallen Star',
+    color: '#bfe8f8', shape: 'octagon', radius: 15, material: 'ethereal', look: 'shard_spire',
+    base: { life: 100, moveSpeed: 0, armor: 25, mana: 999, manaRegen: 50 },
+    skills: ['splinter_volley'],
+    xp: 18,
+    faction: 'starfall', tags: ['construct', 'elemental'],
+    vision: { arcDeg: 360, rearMul: 1 }, // a lattice has no back
+    noNemesis: true, drops: 1, // the sky pays: a guaranteed gem in the wreck
+  },
+
   // --- THE WOLF FAMILY (beasts — the bloodier packs the weres run with) -----
   dire_wolf: {
     id: 'dire_wolf', name: 'Dire Wolf',
@@ -7801,6 +7865,8 @@ const RELATIONS: Record<string, FactionStance> = {
   // packs that ran them. Wolves take note: the herd gores back now.
   'chattel|beast': 'hostile',
   'chattel|gnoll': 'hostile',
+  // Raw force recognizes raw lattice — the Unbound treat the fallen sky as kin.
+  'starfall|elemental': 'ally',
 };
 
 /** Diplomatic stance between two factions (order-insensitive). */
@@ -7904,6 +7970,16 @@ export const FACTIONS: Record<string, {
       { id: 'feral_aurochs', weight: 3 },
       { id: 'shepherds_hound', weight: 2 },
       { id: 'the_bellwether', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    ],
+  },
+  // What rides the meteors — fielded ONLY under an active starfall front
+  // (contexts-gated; the materializer is their whole door).
+  starfall: {
+    name: 'the Starfall Court',
+    table: [
+      { id: 'starfall_shardling', weight: 4 },
+      { id: 'starfall_prism', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'gravity_warden', weight: 1, presence: { from: 8, fadeIn: 4 } },
     ],
   },
   nightkin: {

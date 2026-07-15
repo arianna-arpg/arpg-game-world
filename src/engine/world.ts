@@ -471,6 +471,19 @@ export const NAV_CFG = {
  *  by overlay packages — NEVER part of the zone objective, so a waves/clear
  *  zone can't soft-lock behind them. Materializers tag their spawns; a new
  *  ambient package adds its tag here. */
+/** THE STARFALL COURT's fielding knobs (materializeStarfall). The front
+ *  itself is the whole gate — its strike/cadence knobs live on the weather
+ *  registry row ('starfall'); these shape only what GROWS beneath it. */
+const STARFALL_CFG = {
+  faction: 'starfall',
+  heartDefId: 'fallen_star',
+  /** Chance the shower left a standing heart worth breaking. */
+  heartChance: 0.6,
+  packCount: [2, 3] as [number, number],
+  packSize: [2, 4] as [number, number],
+  color: '#9ad4e8',
+};
+
 export const AMBIENT_TAGS = new Set([
   'migrant',       // a passing herd is wildlife
   'brigand',       // a roving band passes through
@@ -486,6 +499,8 @@ export const AMBIENT_TAGS = new Set([
   'wax_vigil',     // the Wax Court's night procession passes through
   'umbral_parliament', // the Parliament's shadows hold no zone hostage
   'candle_shrine', // a shrine is an OPTIONAL snuff (the stealth counterplay)
+  'starfall',      // the Court rides the shower — the sky owes no objective
+  'fallen_star',   // the impact heart is an OPTIONAL break (it pays a gem)
   'predator',      // ambient wildlife hunters (wolf packs) — optional trouble
   'wayfarer',      // neutral human travelers — minding their own way
 ]);
@@ -1877,6 +1892,10 @@ export class World {
    *  one muster per visit; cleared per loadZone. The night claims are owned by
    *  the pure LongCandleField overlay (dawn clears them). */
   private materializedCandle = new Set<string>();
+  /** Shower-covered zones whose Starfall Court was already fielded this visit —
+   *  one muster per visit; cleared per loadZone. The FRONT is the whole gate
+   *  (weather registry 'starfall'): no shower, no Court. */
+  private materializedStarfall = new Set<string>();
   /** Spore-laced zones whose fungal horde (+ Heartbloom at the core) was already fielded
    *  this visit — one muster per visit; cleared per loadZone. The bloom's mobile spread is
    *  owned by the pure MyceliaField overlay. */
@@ -4025,6 +4044,11 @@ export class World {
         id: 'longcandle',
         reset: () => { this.materializedCandle.clear(); },
         enter: (def) => this.materializeCandle(def),
+      },
+      {
+        id: 'starfall',
+        reset: () => { this.materializedStarfall.clear(); },
+        enter: (def) => this.materializeStarfall(def),
       },
       {
         // MYCELIA: a spore-laced zone fields its fungal horde (+ the
@@ -10584,6 +10608,54 @@ export class World {
         : 'The Parliament convenes — the dark here is a chamber in session.';
     this.text(vec(this.player.pos.x, this.player.pos.y - 80), line,
       info.vigil ? cfg.waxColor : cfg.umbralColor, 15);
+  }
+
+  // ------------------------------------------------------- starfall materialize
+  //
+  // THE STARFALL COURT rides the weather registry's rare night shower: a zone
+  // under an active 'starfall' front (sheltered sky excluded — no meteors
+  // indoors) grows crystal-forms from the impacts, sometimes around a
+  // standing FALLEN STAR heart. The front IS the whole gate and the whole
+  // lifecycle: it drifts on, and the next visit finds ordinary ground.
+
+  /** Field the Court under an active starfall front. Packs tag 'starfall'
+   *  (ambient — the sky owes no objective); the heart tags 'fallen_star'
+   *  (the core kill row pays its bounty). One muster per zone visit. */
+  private materializeStarfall(def: ZoneDef): void {
+    if (skyOf(def) === 'sheltered') return; // no meteors indoors
+    const front = this.sim.weather.sample(def);
+    if (front?.kind !== 'starfall') return;
+    if (this.materializedStarfall.has(def.id)) return;
+    this.materializedStarfall.add(def.id);
+    bumpLedger(this.ledger, 'starfall_seen');
+    const cfg = STARFALL_CFG;
+    const lvl = Math.max(1, def.level);
+    const roster = FACTIONS[cfg.faction];
+    if (roster?.table?.length) {
+      const packs = randInt(cfg.packCount[0], cfg.packCount[1]);
+      for (let pk = 0; pk < packs; pk++) {
+        const at = this.farPoint(460);
+        const type = this.weightedPick(roster.table, lvl);
+        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
+        for (let k = 0; k < n; k++) {
+          const m = this.createMonster(type, lvl, 'enemy');
+          m.faction = cfg.faction;
+          m.tag = 'starfall';
+          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
+          this.actors.push(m);
+        }
+      }
+    }
+    // THE HEART: sometimes an impact STOOD — an anchored lattice worth breaking.
+    if (chance(cfg.heartChance) && MONSTERS[cfg.heartDefId]) {
+      const heart = this.createMonster(cfg.heartDefId, lvl, 'enemy');
+      heart.faction = cfg.faction;
+      heart.tag = 'fallen_star';
+      heart.pos = this.clampPos(this.farPoint(500, true), heart.radius);
+      this.actors.push(heart);
+    }
+    this.text(vec(this.player.pos.x, this.player.pos.y - 80),
+      'The sky is coming down in crystal — and something grew where it landed…', cfg.color, 15);
   }
 
   /** The composed EVENT-density multiplier for a zone: the per-zone (encounterDensity)
