@@ -5050,7 +5050,11 @@ export const SKILLS: Record<string, SkillDef> = {
       placeRange: 340,
       hatch: { skillId: 'vine_bloom', onBreak: 'hatch' },
     },
-    effects: [],
+    // The pod itself never swings — the bloom carries the ring's dice — but
+    // the seed's OWN roll must resolve for grafted construct-fx hits (pulse/
+    // spray gems), or those supports read as live and deal ZERO (the
+    // bramble_hedge family pattern; the content validator's catch).
+    effects: [{ type: 'damage' }],
     requirements: { willpower: 16 },
     ai: { range: 300, weight: 2, keepDistance: 220 },
     leveling: { perLevel: [mod('damage', 'increased', 0.08)] },
