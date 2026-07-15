@@ -21,6 +21,7 @@
 // ---------------------------------------------------------------------------
 
 import { CRAFT_CFG } from '../engine/crafting';
+import { UI_SCALE_CFG } from './uiScale';
 
 export interface MinigameResult { score: number; }
 
@@ -28,6 +29,7 @@ export interface MinigameResult { score: number; }
  *  events; returns a close() that tears everything down exactly once. */
 function overlay(title: string, hint: string): { box: HTMLElement; close: () => void } {
   const root = document.createElement('div');
+  root.className = UI_SCALE_CFG.markerClass; // dynamically-built root — opts into the UI-scale dial
   root.style.cssText = 'position:fixed;inset:0;z-index:900;background:rgba(6,4,10,0.72);display:flex;align-items:center;justify-content:center';
   for (const ev of ['mousedown', 'mouseup', 'click', 'contextmenu', 'wheel']) {
     root.addEventListener(ev, e => e.stopPropagation());
@@ -149,8 +151,13 @@ export function runRuneMinigame(onDone: (r: MinigameResult) => void): void {
   field.addEventListener('mousemove', (e) => {
     if (!runeEl) return;
     const r = field.getBoundingClientRect();
-    const dx = e.clientX - r.left - runePos.x;
-    const dy = e.clientY - r.top - runePos.y;
+    // rect ÷ layout = the field's effective on-screen scale (the UI-scale
+    // dial, or any future ancestor zoom) — folding it out keeps the cursor,
+    // the rune coords, and cfg.hitRadius all in the layout px the runes were
+    // placed in. Self-calibrating: no fabric import to drift from.
+    const fs = r.width / Math.max(1, field.clientWidth);
+    const dx = (e.clientX - r.left) / fs - runePos.x;
+    const dy = (e.clientY - r.top) / fs - runePos.y;
     if (dx * dx + dy * dy <= cfg.hitRadius * cfg.hitRadius) {
       const remaining = Math.max(0, deadline - performance.now()) / (cfg.perRuneTime * 1000);
       credit += (1 - cfg.speedWeight) + cfg.speedWeight * remaining;

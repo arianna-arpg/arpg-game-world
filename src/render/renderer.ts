@@ -37,6 +37,7 @@ import { QUEST_GIVER_IDS } from '../quests/defs';
 const RENDER_CULL_PAD = 150;
 import { roofStyle } from '../data/structures';
 import { DEFAULT_KEYBINDS, keyDisplay, resolveBindTokens, type ActionId, type Settings } from '../meta/settings';
+import { UI_SCALE_CFG } from '../ui/uiScale';
 import { padDisplay } from '../core/gamepad';
 import { collectActiveFx } from './screenFx';
 import { RARITY_DEFS } from '../engine/rarity';
@@ -111,6 +112,14 @@ export class Renderer {
   /** Screen-space mouse, fed by main each frame — HUD hover affordances
    *  (buff-pip names) read it; (-1,-1) = no pointer. */
   hudMouse = { x: -1, y: -1 };
+  /** THE UI-SCALE SUB-PASS state (Settings.uiScale — ui/uiScale.ts): the
+   *  VIRTUAL canvas dims + mouse, physical ÷ scale, refreshed each frame in
+   *  render(). Every pure screen-space widget pass draws against uiW/uiH
+   *  under one ctx.scale so the whole HUD grows together; hover math inside
+   *  those passes must compare uiMouse, never hudMouse. */
+  private uiW = 0;
+  private uiH = 0;
+  private uiMouse = { x: -1, y: -1 };
   /** The PAD's assisted aim (world point + soft-lock target id), fed by main
    *  each frame while the pad owns the reticle; null = mouse aim, no reticle.
    *  Doubles as "where is the cursor, really" for aim-anchored affordances
@@ -184,6 +193,26 @@ export class Renderer {
    *  rendered camera, which is at most one frame stale. */
   toScreen(p: { x: number; y: number }): Vec2 {
     return { x: (p.x - this.cam.x) * this.zoom, y: (p.y - this.cam.y) * this.zoom };
+  }
+
+  /** The live UI-scale dial (Settings.uiScale), re-clamped to the fabric's
+   *  rails so a hand-edited save can't fold the HUD inside-out mid-frame. */
+  private uiScaleLive(): number {
+    const v = this.getSettings?.().uiScale ?? UI_SCALE_CFG.default;
+    return clamp(v, UI_SCALE_CFG.min, UI_SCALE_CFG.max);
+  }
+
+  /** One scaled screen-space widget pass: everything `draw` paints in
+   *  virtual (uiW×uiH) coordinates lands physically ×scale. Only for passes
+   *  that never project world coords — a projected point under a scaled ctx
+   *  lands off-target (the attention chevrons and descent shaft pip stay
+   *  physical for exactly that reason). */
+  private uiPass(scale: number, draw: () => void): void {
+    const { ctx } = this;
+    ctx.save();
+    ctx.scale(scale, scale);
+    draw();
+    ctx.restore();
   }
 
   render(world: World): void {
@@ -314,13 +343,26 @@ export class Renderer {
     this.drawAtmosphere(world);
     this.drawStatusFx(world);     // status ailment overlays (edge vignettes/frost/stars)
     this.drawLowLifeGlow(world);  // low-life blood vignette + heartbeat + hit surge
-    this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
-    this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
-    this.drawEncounterHud(world); // breach timer bar (screen-space)
-    this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
+    // THE UI-SCALE SUB-PASS: pure screen-space widgets draw in virtual
+    // (uiW×uiH) coords under one ctx.scale, so the player's UI Scale dial
+    // grows the whole HUD together (ui/uiScale.ts — the DOM surfaces ride
+    // the same Settings value). World-projecting passes (attention chevrons,
+    // the descent vignette/shaft pip) stay physical, interleaved in their
+    // original draw order.
+    const us = this.uiScaleLive();
+    this.uiW = w / us; this.uiH = h / us;
+    this.uiMouse.x = this.hudMouse.x / us; this.uiMouse.y = this.hudMouse.y / us;
+    this.uiPass(us, () => {
+      this.drawTimeflow(world);     // held-time wash + banner (engine/timeflow.ts hud specs)
+      this.drawHud(world);          // orbs + bar + boss bar — last, so it stays readable
+      this.drawEncounterHud(world); // breach timer bar (screen-space)
+      this.drawFractureHud(world);  // fracture nested-timer bar (screen-space)
+    });
     this.drawAttentionPointers(world); // edge chevrons toward off-screen must-finds (world/attention.ts)
     this.drawDescentHud(world);   // the abyss: encroaching-dark vignette + depth/echoes + shaft pip
-    this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
+    this.uiPass(us, () => {
+      this.drawParty(world);        // co-op party strip (screen-space, top; ≤1 = nothing)
+    });
     this.drawTraversalFx(world);  // a vertical crossing's wind streaks + whiteout veil (covers the HUD)
     this.drawModeFade(world);     // a survived death's crossing — DEAD LAST (covers the HUD too)
   }
@@ -475,8 +517,8 @@ export class Renderer {
   private drawParty(world: World): void {
     const strip = world.party.strip;
     if (strip.length <= 1) return;
-    const { ctx, canvas } = this;
-    const w = canvas.width;
+    const { ctx } = this;
+    const w = this.uiW; // virtual — this pass runs inside the UI-scale sub-pass
     const pillW = 150, gap = 10, barW = 140, barH = 7;
     const total = strip.length * pillW + (strip.length - 1) * gap;
     let x = (w - total) / 2;
@@ -738,8 +780,8 @@ export class Renderer {
   private drawEncounterHud(world: World): void {
     const open = world.encountersView().find(e => e.phase === 'open');
     if (!open) return;
-    const { ctx, canvas } = this;
-    const w = canvas.width;
+    const { ctx } = this;
+    const w = this.uiW; // virtual — this pass runs inside the UI-scale sub-pass
     // Sits under the boss bar; both slide down when the co-op party strip shows.
     const oy = world.party.strip.length > 1 ? 20 : 0;
     const bw = 320, bh = 14, bx = w / 2 - bw / 2, by = 74 + oy;
@@ -846,8 +888,8 @@ export class Renderer {
   private drawFractureHud(world: World): void {
     const run = world.fractureView();
     if (!run || (run.phase !== 'fissure' && run.phase !== 'chasm')) return;
-    const { ctx, canvas } = this;
-    const w = canvas.width;
+    const { ctx } = this;
+    const w = this.uiW; // virtual — this pass runs inside the UI-scale sub-pass
     const oy = world.party.strip.length > 1 ? 20 : 0;
     const bw = 320, bh = 14, bx = w / 2 - bw / 2, by = 96 + oy;
     const frac = run.maxTimer > 0 ? clamp(run.timer / run.maxTimer, 0, 1) : 0;
@@ -1067,10 +1109,12 @@ export class Renderer {
   private drawTimeflow(world: World): void {
     const hud = world.timeflow.overlay();
     if (!hud) return;
-    const { ctx, canvas } = this;
+    const { ctx } = this;
     if (hud.tint) {
       ctx.fillStyle = hud.tint;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      // Virtual dims under the UI-scale pass: at scale ≥1 this covers the
+      // canvas exactly; below 1 it overdraws past the edge — clipped, harmless.
+      ctx.fillRect(0, 0, this.uiW, this.uiH);
     }
     if (hud.label) {
       const t = performance.now() / 1000;
@@ -1079,7 +1123,7 @@ export class Renderer {
       ctx.textAlign = 'center';
       ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 2.2);
       ctx.fillStyle = '#a8ecf0';
-      ctx.fillText(`· ${hud.label.toUpperCase()} ·`, canvas.width / 2, 54);
+      ctx.fillText(`· ${hud.label.toUpperCase()} ·`, this.uiW / 2, 54);
       ctx.restore();
     }
   }
@@ -4041,8 +4085,10 @@ export class Renderer {
   }
 
   private drawHud(world: World): void {
-    const { ctx, canvas } = this;
-    const w = canvas.width, h = canvas.height;
+    const { ctx } = this;
+    // Virtual dims — the whole method runs inside the UI-scale sub-pass, so
+    // every widget below grows with the player's dial for free.
+    const w = this.uiW, h = this.uiH;
     const p = world.player;
     const m = world.meta;
 
@@ -4461,7 +4507,7 @@ export class Renderer {
         ctx.font = 'bold 9px Verdana';
         ctx.fillText(String(buff.stacks), bpx + 5, buffY - 2);
       }
-      const mx = this.hudMouse.x, myv = this.hudMouse.y;
+      const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
       if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
         const rem = Math.max(...buff.expiries ?? [buff.remaining ?? 0]);
         hoverLabel = { x: bpx + 5, text: `${id.replace(/_/g, ' ')} ${rem > 0 && rem < 900 ? Math.ceil(rem) + 's' : ''}`.trim() };
@@ -4483,7 +4529,7 @@ export class Renderer {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 9px Verdana';
       ctx.fillText(`${count}`, bpx + 5, buffY - 2);
-      const mx = this.hudMouse.x, myv = this.hudMouse.y;
+      const mx = this.uiMouse.x, myv = this.uiMouse.y; // virtual-space, matching the scaled pip rects
       if (mx >= bpx - 2 && mx <= bpx + 12 && myv >= buffY - 2 && myv <= buffY + 12) {
         hoverLabel = { x: bpx + 5, text: chargeLabel(name) };
       }

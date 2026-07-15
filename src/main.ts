@@ -8,6 +8,7 @@ import { PAD_CFG, PadState, synthEscape, type FakePad, type PadTuning } from './
 import { applyCursor } from './core/cursor';
 import { assistAim, AIM_ASSIST } from './engine/aimassist';
 import { PadPointer } from './ui/padpointer';
+import { applyUiScale, installUiScaleStyles } from './ui/uiScale';
 import { rollSeed } from './core/rng';
 import { validateContent } from './data/validate';
 import './data/clusters'; // side-effect: registers the data-driven cluster stamps
@@ -63,6 +64,12 @@ const input = new Input(canvas);
 // and the renderer hold the SAME references; they are never re-loaded mid-run.
 const account: Account = loadAccount();
 const settings: Settings = loadSettings();
+
+// THE UI SCALE DIAL (ui/uiScale.ts): install the fabric stylesheet once, then
+// stamp the saved scale — panels, tooltips, and the canvas HUD all wake at the
+// player's size, not at 100% until they visit Options.
+installUiScaleStyles();
+applyUiScale(settings.uiScale);
 
 const renderer = new Renderer(canvas, () => settings);
 // The thematic cursor identity (style + tint) — applied at boot; the options
@@ -475,6 +482,7 @@ void (async (): Promise<void> => {
   const [a, s, c] = await Promise.all([loadAccountAsync(), loadSettingsAsync(), loadCharacterAsync()]);
   Object.assign(account, a);                  // mutate-in-place: shared refs stay valid
   Object.assign(settings, s);
+  applyUiScale(settings.uiScale);             // the disk save may carry a different dial
   ui.setContinueSave(c);                       // disk save wins (re-renders the menu)
   // SELF-HEAL: release merc engagements whose patron no longer exists anywhere
   // (a run save wiped without its death flow ever running).

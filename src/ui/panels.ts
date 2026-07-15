@@ -36,6 +36,7 @@ import {
   bestiaryThreshold, bestiaryTotals, spectreAttunable,
 } from '../data/bestiary';
 import { dndCancel, registerDragSource, registerDropTarget } from './dnd';
+import { applyUiScale, UI_SCALE_CFG } from './uiScale';
 import { MONSTERS, type MonsterDef } from '../data/monsters';
 import { CLASSES, type ClassDef } from '../data/classes';
 import { classStartNode, PASSIVE_ADJACENCY, PASSIVE_NODES, vocationGateNodeId, vocationGateOpen, type PassiveNode } from '../data/passives';
@@ -2772,8 +2773,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       }).join('')}`;
     document.body.appendChild(pop);
     // Fixed-position above the node's screen rect, clamped to the viewport.
+    // Measured via rects, not offsetWidth: the popup rides the UI-scale dial
+    // ('scale' mode — ui/uiScale.ts) and offset* is blind to transforms; the
+    // rect is the box the player actually sees.
     const r = el.getBoundingClientRect();
-    const pw = pop.offsetWidth, ph = pop.offsetHeight;
+    const pRect = pop.getBoundingClientRect();
+    const pw = pRect.width, ph = pRect.height;
     pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pw - 8, r.left + r.width / 2 - pw / 2))}px`;
     pop.style.top = `${Math.max(8, r.top - ph - 10)}px`;
 
@@ -3876,6 +3881,12 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
       </div>
       <h1>Options</h1>
       <div class="rebind-row">
+        <span>UI Scale</span>
+        <span class="pad-opt"><input type="range" id="opt-uiscale" min="${Math.round(UI_SCALE_CFG.min * 100)}" max="${Math.round(UI_SCALE_CFG.max * 100)}" step="${Math.round(UI_SCALE_CFG.step * 100)}"
+          value="${Math.round(s.uiScale * 100)}"
+          title="Grows the whole interface together — panels, tooltips, popups, and the on-screen HUD — so text stays readable at any eyesight. World text (damage numbers, nameplates) keeps battlefield scale."> <b id="val-uiscale">${Math.round(s.uiScale * 100)}%</b></span>
+      </div>
+      <div class="rebind-row">
         <span>Low-Life Screen Pulse</span>
         <button id="opt-lowlife" title="Blood seeps in at the screen edge while life is low, pressing inward on a slow heartbeat at the last sliver. OFF: only the struck-while-low surge shows (the sane pick for 1/1-life or heavy-reservation builds).">${this.getSettings().lowLifePulse ? 'ON' : 'OFF'}</button>
       </div>
@@ -4036,6 +4047,13 @@ ALWAYS — pinned on (the min-maxer's steady readout)">${{
     // drag shows on the battlefield behind the menu, next frame.
     slider('aimtick', v => { this.getSettings().aimTick.alpha = v / 100; },
       v => v <= 0 ? 'HIDDEN' : `${v}%`);
+    // UI SCALE: the accessibility dial (ui/uiScale.ts). Drag applies INSTANTLY —
+    // the very panel under your hand grows (the honest preview) and the canvas
+    // HUD follows next frame (the renderer reads Settings live); release persists.
+    slider('uiscale', v => {
+      this.getSettings().uiScale = v / 100;
+      applyUiScale(v / 100);
+    }, v => `${v}%`);
     // AIM TICK style: one button per registry entry (line / dot / mods').
     root.querySelectorAll<HTMLElement>('[data-aimtick-style]').forEach(btn => {
       btn.addEventListener('click', () => {

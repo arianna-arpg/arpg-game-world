@@ -11,6 +11,12 @@
       --gold: #c8a84b;
       --text: #d8d4c8;
       --text-dim: #8a8678;
+      /* THE UI SCALE DIAL (ui/uiScale.ts stamps this live; 1 = 100%). Zoomed
+         surfaces resolve vw/vh caps in layout px and then multiply, so a cap
+         that means "of the SCREEN" must fold the dial back out: write
+         `calc(94vw / var(--ui-scale))`, never a bare `94vw`, on any
+         panel/popup max-width/max-height. */
+      --ui-scale: 1;
     }
     * { box-sizing: border-box; }
     html, body {
@@ -44,7 +50,7 @@
 
     /* Character sheet */
     #char-sheet {
-      top: 60px; left: 16px; width: 320px; max-height: calc(100vh - 220px);
+      top: 60px; left: 16px; width: 320px; max-height: calc((100vh - 220px) / var(--ui-scale));
       overflow-y: auto; font-size: 12px;
     }
     .stat-row { display: flex; justify-content: space-between; padding: 1px 0; }
@@ -62,7 +68,7 @@
        the drawer hangs OUTSIDE the panel, so the panel itself must not clip:
        scrolling lives on the inner .inv-scroll wrapper instead). */
     #inventory {
-      top: 56px; right: 16px; width: 660px; max-width: 94vw; font-size: 12px;
+      top: 56px; right: 16px; width: 660px; max-width: calc(94vw / var(--ui-scale)); font-size: 12px;
     }
     .skill-entry {
       border: 1px solid var(--panel-border); border-radius: 4px;
@@ -126,7 +132,7 @@
     /* Passive tree */
     #passive-tree {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: min(92vh, 760px); max-width: 95vw;
+      width: min(calc(92vh / var(--ui-scale)), 760px); max-width: calc(95vw / var(--ui-scale));
     }
     #passive-tree svg { width: 100%; height: auto; display: block; }
     .tree-node.available { cursor: pointer; }
@@ -157,7 +163,7 @@
 
     /* Choice-node popup (data/passiveChoices.ts deals, panels.openChoicePopup) */
     .choice-popup {
-      position: fixed; z-index: 60; width: 300px; max-height: 62vh; overflow-y: auto;
+      position: fixed; z-index: 60; width: 300px; max-height: calc(62vh / var(--ui-scale)); overflow-y: auto;
       background: #17151f; border: 1px solid #6a54a0; border-radius: 6px;
       padding: 8px; box-shadow: 0 6px 24px rgba(0,0,0,0.6);
       font-size: 12px; color: #d8d4c8;
@@ -183,7 +189,7 @@
     /* World map */
     #world-map {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: min(94vh, 860px); max-width: 96vw;
+      width: min(calc(94vh / var(--ui-scale)), 860px); max-width: calc(96vw / var(--ui-scale));
     }
     #world-map .map-body { display: flex; gap: 10px; align-items: flex-start; }
     /* FIXED-SIZE map box: a square aspect-ratio (not height:auto) so the SVG never
@@ -194,7 +200,7 @@
        stretching and shoving the Map|Quests tabs off-screen. */
     #world-map .map-body svg { flex: 1 1 auto; min-width: 0; width: 100%; aspect-ratio: 1 / 1; height: auto; display: block; }
     #map-aside {
-      flex: 0 0 196px; width: 196px; align-self: stretch; max-height: 62vh; overflow-y: auto;
+      flex: 0 0 196px; width: 196px; align-self: stretch; max-height: calc(62vh / var(--ui-scale)); overflow-y: auto;
       border-left: 1px solid var(--panel-border); padding-left: 10px;
       font: 11px Verdana; color: var(--text);
     }
@@ -222,7 +228,7 @@
     /* Class select */
     #class-select {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 860px; max-width: 95vw; max-height: 90vh; overflow-y: auto;
+      width: 860px; max-width: calc(95vw / var(--ui-scale)); max-height: calc(90vh / var(--ui-scale)); overflow-y: auto;
       text-align: center;
     }
     #class-select h1 { color: var(--gold); font-size: 26px; letter-spacing: 3px; margin: 8px 0 2px 0; }
@@ -242,17 +248,17 @@
     /* Account / unlock screen */
     #caravan-menu, #sail-menu, #vocation-menu, #salvage-menu, #oracle-menu, #vendor-menu, #merc-menu, #bestiary-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 420px; max-width: 92vw; max-height: 80vh;
+      width: 420px; max-width: calc(92vw / var(--ui-scale)); max-height: calc(80vh / var(--ui-scale));
       overflow-y: auto; font-size: 12px;
     }
     #vocation-menu { width: 500px; }
     #merc-menu { width: 520px; }
     /* The station menus list whole bags — wider, taller. */
-    #salvage-menu { width: 540px; max-height: 84vh; }
-    #oracle-menu { width: 520px; max-height: 84vh; }
-    #vendor-menu { width: 540px; max-height: 84vh; }
+    #salvage-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
+    #oracle-menu { width: 520px; max-height: calc(84vh / var(--ui-scale)); }
+    #vendor-menu { width: 540px; max-height: calc(84vh / var(--ui-scale)); }
     /* The Tracker's book spreads two facing columns. */
-    #bestiary-menu { width: 640px; max-height: 86vh; }
+    #bestiary-menu { width: 640px; max-height: calc(86vh / var(--ui-scale)); }
     #bestiary-menu .b-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 10px; margin: 8px 0; }
     #bestiary-menu .b-row { display: flex; align-items: center; gap: 7px; padding: 3px 6px; border: 1px solid #2a2a3a; border-radius: 3px; cursor: pointer; background: rgba(16,16,24,0.6); }
     #bestiary-menu .b-row:hover { border-color: #8a86b8; }
@@ -291,7 +297,7 @@
     body.dnd-active, body.dnd-active * { cursor: grabbing !important; }
     #account-screen {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 820px; max-width: 95vw; max-height: 90vh;
+      width: 820px; max-width: calc(95vw / var(--ui-scale)); max-height: calc(90vh / var(--ui-scale));
       overflow: hidden; display: flex; flex-direction: column;
       text-align: center;
     }
@@ -331,7 +337,7 @@
     /* Escape menu + keybinds */
     #escape-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 460px; max-width: 92vw; max-height: 88vh; overflow-y: auto; text-align: center;
+      width: 460px; max-width: calc(92vw / var(--ui-scale)); max-height: calc(88vh / var(--ui-scale)); overflow-y: auto; text-align: center;
     }
     #escape-menu h1 { color: var(--gold); font-size: 22px; letter-spacing: 2px; margin: 4px 0 10px 0; }
     #escape-menu .esc-btns { display: flex; flex-direction: column; gap: 8px; align-items: center; margin-top: 10px; }
@@ -355,7 +361,7 @@
     /* Start menu (launch) — reuses the escape-menu button styling */
     #start-menu {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 460px; max-width: 92vw; text-align: center; padding: 34px;
+      width: 460px; max-width: calc(92vw / var(--ui-scale)); text-align: center; padding: 34px;
     }
     #start-menu h1 { color: var(--gold); font-size: 26px; letter-spacing: 3px; margin: 0 0 8px 0; }
     #start-menu .acct-head { color: var(--text); font-size: 13px; margin-bottom: 14px; }
@@ -385,7 +391,7 @@
     /* Expedition Setup (per-run package configuration) */
     #expedition-setup {
       top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 720px; max-width: 95vw; max-height: 92vh; overflow-y: auto; text-align: center;
+      width: 720px; max-width: calc(95vw / var(--ui-scale)); max-height: calc(92vh / var(--ui-scale)); overflow-y: auto; text-align: center;
     }
     #expedition-setup h1 { color: var(--gold); font-size: 24px; letter-spacing: 2px; margin: 4px 0 8px 0; }
     #expedition-setup .acct-head { color: var(--text); font-size: 13px; margin-bottom: 12px; }

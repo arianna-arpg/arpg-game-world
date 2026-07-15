@@ -19,6 +19,7 @@ import { PAD_CFG, AIM_ASSIST_MODES, padDisplay, type AimAssistMode } from '../co
 import { CURSOR_STYLES, DEFAULT_CURSOR_OPTIONS, type CursorOptions } from '../core/cursor';
 import { AIM_TICK_STYLES, DEFAULT_AIM_TICK, type AimTickOptions } from '../render/vis/aimtick';
 import { MAP_CFG, MAP_LABEL_MODES, type MapLabelMode } from '../ui/mapConfig';
+import { UI_SCALE_CFG } from '../ui/uiScale';
 import { WORLDSTATE_CFG, type ResumeSpawn } from './worldstate';
 
 export const SETTINGS_SCHEMA_VERSION = 1;
@@ -114,6 +115,13 @@ export interface Settings {
    *  charted name, classic-map style. Cards never intercept the cursor in ANY
    *  mode — map hit-testing belongs to zone geometry alone. */
   mapLabels: MapLabelMode;
+  /** THE UI SCALE DIAL (ui/uiScale.ts): one multiplier that grows every
+   *  reading surface together — DOM panels/tooltips/popups via the fabric
+   *  stylesheet, the canvas HUD via the renderer's scaled sub-pass. The
+   *  accessibility dial: 11px Verdana is a wall for plenty of eyes, and no
+   *  one should need a magnifier to read their own life orb. Rails live in
+   *  UI_SCALE_CFG; world-anchored text deliberately does not ride it. */
+  uiScale: number;
 }
 
 export type PoolBarsMode = 'smart' | 'recent' | 'always';
@@ -132,6 +140,7 @@ export interface SettingsSave {
   resumeSpawn?: ResumeSpawn;
   improvisedStrike?: boolean;
   mapLabels?: MapLabelMode;
+  uiScale?: number;
 }
 
 export const DEFAULT_KEYBINDS: Record<ActionId, string> = {
@@ -239,6 +248,7 @@ export const makeSettings = (): Settings => ({
   resumeSpawn: WORLDSTATE_CFG.resume,
   improvisedStrike: true,
   mapLabels: MAP_CFG.labelMode,
+  uiScale: UI_SCALE_CFG.default,
 });
 
 export const serializeSettings = (s: Settings): SettingsSave => ({
@@ -255,6 +265,7 @@ export const serializeSettings = (s: Settings): SettingsSave => ({
   resumeSpawn: s.resumeSpawn,
   improvisedStrike: s.improvisedStrike,
   mapLabels: s.mapLabels,
+  uiScale: s.uiScale,
 });
 
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
@@ -307,5 +318,7 @@ export function deserializeSettings(s: SettingsSave): Settings | null {
     improvisedStrike: s.improvisedStrike ?? true,
     // Unknown values (a renamed mode) fall back to the registry default.
     mapLabels: MAP_LABEL_MODES.some(m => m.id === s.mapLabels) ? s.mapLabels! : MAP_CFG.labelMode,
+    // Re-clamped into the fabric's rails, like every numeric option.
+    uiScale: clamp(s.uiScale ?? UI_SCALE_CFG.default, UI_SCALE_CFG.min, UI_SCALE_CFG.max),
   };
 }

@@ -45,6 +45,7 @@
 // ---------------------------------------------------------------------------
 
 import { hideTooltip } from './tooltip';
+import { uiScaleNow } from './uiScale';
 
 /** The fabric's modular thresholds (avoid-hardcoding: tune here). */
 export const DND_CFG = {
@@ -177,7 +178,11 @@ function lift(payload: DragPayload, m: 'drag' | 'lift', x: number, y: number): v
 
 function moveGhost(x: number, y: number): void {
   if (!ghost) return;
-  ghost.style.transform = `translate(${x + DND_CFG.ghostOffset.x}px, ${y + DND_CFG.ghostOffset.y}px)`;
+  // The ghost owns its inline transform (a translate every move), which would
+  // override any stylesheet transform — so the UI-scale dial composes HERE
+  // ('self' mode; ui/uiScale.ts pins the origin so growth hangs off the cursor).
+  ghost.style.transform =
+    `translate(${x + DND_CFG.ghostOffset.x}px, ${y + DND_CFG.ghostOffset.y}px) scale(${uiScaleNow()})`;
 }
 
 /** Sweep every visible target: accepting ones wear `.dnd-can`, and the

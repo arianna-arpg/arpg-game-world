@@ -7,6 +7,8 @@
 // screen, not a polished menu.
 // ---------------------------------------------------------------------------
 
+import { UI_SCALE_CFG } from './uiScale';
+
 export interface LobbyClass { id: string; name: string; color: string; description: string; }
 
 export interface LobbyCallbacks {
@@ -25,6 +27,7 @@ export function openCoopLobby(cb: LobbyCallbacks): void {
   const css = (el: HTMLElement, s: Partial<CSSStyleDeclaration>): void => { Object.assign(el.style, s); };
 
   const overlay = document.createElement('div');
+  overlay.className = UI_SCALE_CFG.markerClass; // dynamically-built root — opts into the UI-scale dial
   css(overlay, {
     position: 'fixed', inset: '0', zIndex: '9000', display: 'flex',
     alignItems: 'center', justifyContent: 'center', background: 'rgba(6,5,10,0.86)', font: '13px Verdana',
