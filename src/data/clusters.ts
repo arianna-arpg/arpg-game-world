@@ -156,3 +156,24 @@ registerCluster({
   ],
   poi: true,
 });
+
+// THE BREACH COURT: the Sundering's mouth — the standing tear into the
+// Underworld at dead center (hell_breach = the dimension gate the underworld
+// entry's gateDoodad scan turns live), the Legion's tending-lights ringing
+// it close, and the war's toll furniture starting where the clearing ends.
+// Geometry contract with the_sundering's clearing (60-80): centerpiece
+// rings ≤ 52; litter rings ≥ 104 (80 + piece ~22).
+registerCluster({
+  id: 'breach_court',
+  anchor: { radius: 30, kind: 'hell_breach' },
+  pieces: [
+    { kind: 'hell_breach', radius: [28, 32], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'hate_brazier', radius: [8, 10], count: [3, 4], ring: [38, 50], centerpiece: true },
+    { kind: 'impaler_stake', radius: [10, 14], count: [3, 5], ring: [108, 170], rot: true },
+    { kind: 'soul_cage', radius: [11, 15], count: [1, 3], ring: [112, 176], rot: true },
+    { kind: 'bone_pile', radius: [12, 18], count: [2, 4], ring: [108, 178] },
+    { kind: 'hate_glass', radius: [14, 22], count: [1, 3], ring: [116, 182], rot: true },
+    { kind: 'demon_banner', radius: [11, 15], count: [0, 2], ring: [120, 180], rot: true },
+  ],
+  poi: true,
+});

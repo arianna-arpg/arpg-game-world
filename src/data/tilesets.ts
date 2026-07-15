@@ -1525,8 +1525,10 @@ export const TILESETS: Record<string, TilesetDef> = {
   wasteland: {
     id: 'wasteland',
     // War-land keeps its ordnance: abandoned powder dumps that answer stray
-    // fire — and the muster grounds the war was drilled in.
-    compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }, { composition: 'fallen_colossus', chance: 0.12 }, { composition: 'cistern_court', chance: 0.12 }],
+    // fire — and the muster grounds the war was drilled in. And rarest of
+    // all, THE SUNDERING: a torn way into the Underworld standing open
+    // (0.1 on an already-rare biome — a once-a-run story, not a route).
+    compositions: [{ composition: 'powder_cache', chance: 0.28 }, { composition: 'war_camp', chance: 0.16 }, { composition: 'fallen_colossus', chance: 0.12 }, { composition: 'cistern_court', chance: 0.12 }, { composition: 'the_sundering', chance: 0.1 }],
     nameFirst: ['Blasted', 'Hellcracked', 'Ruinous', 'Riftburnt', 'Hateforged', 'Sundered', 'Warshorn', 'Chainscored', 'Godpierced', 'Wretched', 'Desolate', 'Damnedmarch', 'Hatelit', 'Ashbroken', 'Brimstone', 'Cracked', 'Flayed', 'Unhealed'],
     nameSecond: ['Waste', 'Scar', 'Reach', 'Ruin', 'Sprawl', 'Crackland', 'Wreckage', 'Hollow', 'Desolation', 'Span', 'Wound', 'March', 'Rent', 'Verge', 'Fields', 'Toll'],
     theme: {

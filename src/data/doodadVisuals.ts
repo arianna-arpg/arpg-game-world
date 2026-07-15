@@ -1308,6 +1308,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 5, color: '#0f1411', material: 'stone', edgeGlow: { color: '#7de84a', alpha: 0.45 } },
     light: { radius: -1.6, color: '#7de84a', intensity: 0.12, flicker: 1.1 },
   },
+  // THE STANDING BREACH: the cave-ladder breach's surface twin (same wound
+  // painter, same underworld red — the player who has delved knows this door
+  // on sight), standing open at the Sundering's heart.
+  hell_breach: {
+    painter: 'breach', order: 58,
+    params: { edge: '#d84a2a', label: 'the Sundering' },
+    light: { radius: -2.6, color: '#d84a2a', intensity: 0.4, flicker: 2.8 },
+  },
   tooth_row: {
     painter: 'teethRow', order: 52, shadow: 0.45,
     params: { gum: '#6a1a28', enamel: '#e8e0d0' },

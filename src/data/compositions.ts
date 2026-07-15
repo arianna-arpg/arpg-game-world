@@ -133,6 +133,24 @@ registerComposition({
   ],
 });
 
+// THE SUNDERING: the rare place the war never closed — a torn way STANDING
+// OPEN into the Underworld. The breach court holds the tear (dwell it to
+// cross; the underworld entry's gateDoodad scan makes it a true dimension
+// gate), the Legion keeps the mouth lit and posted, and the titan chains
+// crawl toward it out of the scorch. Deep-wound country only (biomeDepth) —
+// and rare even there (the wasteland rolls it at 0.1): the surface rift is
+// already a rare find, so the stacked odds make this a once-a-run story.
+registerComposition({
+  id: 'the_sundering',
+  when: { biomeDepth: { min: 0.15 } },
+  sites: [{ id: 'mouth', radius: [160, 200] }],
+  pre: [{ kind: 'clearing', at: 'mouth', count: [1, 1], radius: [60, 80] }],
+  post: [
+    { kind: 'cluster', cluster: 'breach_court', at: 'mouth', count: [1, 1] },
+    { kind: 'hell_chain', count: [2, 4], where: { field: 'noise', max: 0.45, params: { scale: 420, seed: 31 } } },
+  ],
+});
+
 // A CHARNEL ROTUNDA: the ossuary's swept ceremonial round — ribcage arches
 // ringing a bare court (the boss ground the Necropolis keeps clear), bone
 // drifts feathering off wherever the noise runs shallow. Geometry contract

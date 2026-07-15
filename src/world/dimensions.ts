@@ -184,9 +184,14 @@ registerDimension({
   }],
   // Entered by delving: a surface cave ladder three deep tears a breach whose
   // realm gate mints The Hellgate (the one marked cross-dimension road).
+  // AND — vanishingly rarely — by walking through: the SUNDERING (a rift-
+  // biome composition) plants a standing 'hell_breach' doodad on the
+  // surface, and the gateDoodad scan below turns it into the same crossing
+  // (same Hellgate, same road home — a second door, never a second hell).
   entry: {
     kind: 'cave_breach', minDepth: 3,
     gate: { id: 'uw_gate', name: 'The Hellgate', biome: 'rift', seedSalt: 0x4e11 },
+    gateDoodad: 'hell_breach',
   },
 });
 registerDimension({

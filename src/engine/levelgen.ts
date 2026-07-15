@@ -257,6 +257,7 @@ export type KnownDoodadKind =
   // The war-wound kit (the surface rift — where the demon war tore through)
   | 'hate_rent'        // a rent in the ground burning cold green — hate showing through the crust
   | 'hate_glass'       // ground vitrified by the tearing — black glass with a hate-lit edge
+  | 'hell_breach'      // the torn way into the Underworld STANDING OPEN on the surface (dimension gate)
   // The Aetherial kit (the cloud shelves above the world — the Ascent)
   | 'cloud_billow'     // a heaped sunlit cloud-mound: the shelf's boulder
   | 'aether_crystal'   // a splay of luminous shards leaning out of the cloud (lit)
@@ -1351,6 +1352,10 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // glass is obsidian's (a solid you shelter behind).
   hate_rent:  { overlap: 'inert', blocksMove: true, blocksShot: false, spacing: 90, forbidOn: ['water', 'lava', 'chasm', 'gore'] },
   hate_glass: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 34, forbidOn: ['water', 'lava', 'chasm', 'gore'] },
+  // The standing breach is a dimension gate (DimensionEntry.gateDoodad scans
+  // it at load) — a trigger like every gate mouth, and only ever ONE (the
+  // Sundering composition's centerpiece; the spacing makes two a non-event).
+  hell_breach: { overlap: 'trigger', spacing: 500 },
   // The Aetherial kit — cloud furniture never blocks SHOTS (there is nothing
   // up here an arrow would argue with except marble), and the built things
   // refuse liquid ground out of habit even though the shelves carry none.

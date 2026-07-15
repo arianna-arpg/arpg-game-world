@@ -179,6 +179,11 @@ registerTransit({ kind: 'sidezone:sky_geyser', dwell: 0.9, radius: 34, ring: { r
 // ground you're standing on may not wait for a slow one.
 registerTransit({ kind: 'realm_gate:dim_aetherial', dwell: 0.45, radius: 36, ring: { radius: 46, color: '#ffe9a8' } });
 
+// THE STANDING BREACH (the Sundering's hell_breach, DimensionEntry.gateDoodad):
+// stepping into hell on purpose deserves a deliberate linger — the dwell runs
+// long for a gate, and the ring burns the Underworld's own red.
+registerTransit({ kind: 'realm_gate:dim_underworld', dwell: 0.95, radius: 34, ring: { radius: 46, color: '#d84a2a' } });
+
 // Ward seals: the ritual anchors that ward an arena's boss (data/arenas.ts).
 // Dwell one to shatter it; the ring burns infernal.
 registerTransit({ kind: 'ward_seal', dwell: 0.9, radius: 30, ring: { radius: 34, color: '#ff9a50' } });
