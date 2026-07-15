@@ -1043,7 +1043,7 @@ export const CORPSE_CFG = {
    *  and the stand-in body's life when no real death backs the corpse. */
   mint: { spread: 42, life: 30, lifePerLevel: 8 },
   /** Multi-corpse feasts (TargetingSpec.plural × the corpseBatch stat). */
-  batch: { aoePerExtra: 0.12, durationPerExtra: 0.15 },
+  batch: { aoePerExtra: 0.12, durationPerExtra: 0.15, projectilesPerExtra: 1 },
 };
 
 /** Seconds a player-DROPPED gem stays un-grabbable so the dropper (standing on
@@ -16479,6 +16479,15 @@ export class World {
         if (t.consumesCorpse !== false && def.delivery.type !== 'summon') {
           for (const c of feast) this.removeCorpse(c);
           corpseFeast = Math.max(0, feast.length - 1);
+          // DEVOUR (corpseLifeRestore — Corpse Feast): each body eaten
+          // returns a share of its life force, through the one restore path.
+          if (t.corpseLifeRestore) {
+            const rr = t.corpseLifeRestore;
+            let meat = 0;
+            for (const c of feast) meat += c.maxLife;
+            if (rr.life) this.applyRestore(caster, { resource: 'life', amount: meat * rr.life });
+            if (rr.mana) this.applyRestore(caster, { resource: 'mana', amount: meat * rr.mana });
+          }
           // HIVEBORN (corpseSpawn graft): the bodies eaten by this offering
           // crawl back out changed — one crawler per corpse consumed.
           this.corpseSpawn(caster, inst, targetInfo.corpse.pos, feast.length);
@@ -16664,7 +16673,10 @@ export class World {
         let count = rollCount(d.count, Math.round(caster.sheet.get('projectileCount', tags, extra)))
           + (opts.bonusProjectiles ?? 0)
           // Charge-fed volleys (Gyre Hurl): every charge burned is a blade.
-          + Math.round((instanceChargeCost(inst)?.projectilesPerCharge ?? 0) * (opts.chargesSpent ?? 0));
+          + Math.round((instanceChargeCost(inst)?.projectilesPerCharge ?? 0) * (opts.chargesSpent ?? 0))
+          // A wagon-fed corpse volley (Volatile Cinders): every extra body
+          // eaten is one more flight — the pile rises together.
+          + corpseFeast * CORPSE_CFG.batch.projectilesPerExtra;
         // A rolled chance to fire ONE more — the random counterpart to the
         // flat projectileCount. Flows through both the nova and spread paths.
         const projChance = caster.sheet.get('projectileCountChance', tags, extra);
@@ -18457,6 +18469,27 @@ export class World {
           });
         }
         this.flashes.push({ pos: vec(aim.x, aim.y), radius: 44, color: def.color, life: 0.3, maxLife: 0.3 });
+      }
+      // GATHER THE DEAD (dragCorpses): the graveyard walks — every corpse in
+      // reach steps to the mark and piles TIGHT (inside one corpse-find's
+      // default search), fuel arranged for whatever comes next. The wagon
+      // hauls from farther afield: corpseBatch widens the sweep the same way
+      // it widens a feast's footprint.
+      if (fx.type === 'dragCorpses') {
+        const reach = fx.radius * aoeScale * (1 + CORPSE_CFG.batch.aoePerExtra
+          * Math.max(0, Math.round(caster.sheet.get('corpseBatch', tags, extra))));
+        let gathered = 0;
+        for (const c of this.corpses) {
+          if (dist(aim, c.pos) > reach) continue;
+          const k = gathered++;
+          const r = k === 0 ? 0 : 22 + 8 * Math.floor(k / 3);
+          c.pos = this.clampPos(vec(aim.x + Math.cos(k * 2.1) * r, aim.y + Math.sin(k * 2.1) * r), 8);
+        }
+        if (gathered) {
+          this.flashes.push({ pos: vec(aim.x, aim.y), radius: 40, color: def.color, life: 0.3, maxLife: 0.3 });
+        } else {
+          this.failNote(caster, def.id + ':nobodies', 'no dead to gather');
+        }
       }
       // SHATTERRITE (shatterConstructs): the totem-into-mine conversion —
       // your own standing family, spent as ordnance.

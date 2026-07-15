@@ -32,6 +32,11 @@ corpse branch of `World.resolveTargeting`:
 
 - **Consumers** (plural finds): eat/raise up to `1 + N` bodies per cast.
   - `corpseLifeDamage` fuel **sums** over the feast (Corpse Explosion).
+  - `corpseLifeRestore` life/mana **sums** the same way (Corpse Feast — the
+    banquet), paid through `applyRestore` (healBy / capped mana).
+  - Projectile deliveries gain **one flight per extra body**
+    (`batch.projectilesPerExtra` — Volatile Cinders: cinders rise from the
+    pile via `origin: 'cursor'` + homing trajectory).
   - The footprint **widens** (`aoeScale`) and effect durations **stretch**
     (`durScale`) per extra body — `CORPSE_CFG.batch.aoePerExtra` /
     `.durationPerExtra`. Offerings burn wider and longer.
@@ -46,6 +51,10 @@ corpse branch of `World.resolveTargeting`:
 levels), 15% less cast speed, `requiresTags: ['corpse']`,
 `excludeTags: ['movement']` (the shift can't spend a pile, so the wagon
 refuses the hitch rather than ride inert).
+
+The utility side: **Gather the Dead** (`dragCorpses` effect) piles every
+corpse within its sweep at the mark — nothing consumed; corpseBatch widens
+the sweep (the wagon hauls from farther afield), so the pair is never inert.
 
 ## Echo composition: every beat seeks its own load
 

@@ -196,5 +196,61 @@ const minions = (world: World): number =>
   check('wagon Exhume digs the full load of four', dug(true) === 4);
 }
 
+// --- 9) Corpse Feast: the banquet feeds by the body --------------------------
+{
+  const gain = (wagon: boolean): number => {
+    const world = mkWorld([{
+      id: 'corpse_feast', level: 3,
+      ...(wagon ? { supports: [{ id: 'corpse_wagon', level: 1 }] } : {}),
+    }]);
+    const p = world.player;
+    const spot = { x: p.pos.x + 200, y: p.pos.y };
+    lay(world, spot, 3, 100);
+    p.life = Math.max(1, p.maxLife() * 0.2);
+    const before = p.life;
+    press(world, 'corpse_feast', spot);
+    step(world, 1.0);
+    return p.life - before;
+  };
+  const bare = gain(false), banquet = gain(true);
+  check('feast: the wagon banquet feeds harder', banquet > bare * 2,
+    `bare +${Math.round(bare)} vs banquet +${Math.round(banquet)}`);
+}
+
+// --- 10) Gather the Dead piles the field -------------------------------------
+{
+  const world = mkWorld([{ id: 'gather_the_dead', level: 3 }]);
+  const p = world.player;
+  const mark = { x: p.pos.x + 220, y: p.pos.y };
+  for (const [dx, dy] of [[150, 60], [-140, 80], [90, -120], [-60, -150]]) {
+    world.corpses.push({
+      pos: { x: mark.x + dx, y: mark.y + dy },
+      defId: 'zombie', level: 8, maxLife: 80, remaining: CORPSE_CFG.duration,
+    });
+  }
+  press(world, 'gather_the_dead', mark);
+  step(world, 0.8);
+  const near = world.corpses.filter(c =>
+    Math.hypot(c.pos.x - mark.x, c.pos.y - mark.y) <= 60).length;
+  check('gather: the graveyard walks to the mark', near === 4, `${near}/4 piled`);
+}
+
+// --- 11) Volatile Cinders: the pile rises together ----------------------------
+{
+  const flights = (wagon: boolean): number => {
+    const world = mkWorld([{
+      id: 'volatile_cinders', level: 3,
+      ...(wagon ? { supports: [{ id: 'corpse_wagon', level: 1 }] } : {}),
+    }]);
+    const spot = { x: world.player.pos.x + 200, y: world.player.pos.y };
+    lay(world, spot, 3);
+    press(world, 'volatile_cinders', spot);
+    step(world, 0.9);
+    return world.projectiles.length;
+  };
+  check('cinders: one body, one cinder', flights(false) === 1);
+  check('cinders: the wagon looses a flight of three', flights(true) === 3);
+}
+
 console.log(failed ? `\n${failed} CHECK(S) FAILED` : '\nALL CHECKS PASSED');
 process.exit(failed ? 1 : 0);

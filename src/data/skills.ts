@@ -2365,6 +2365,65 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('effectDuration', 'increased', 0.1), mod('minionDamage', 'increased', 0.12)] },
   },
 
+  corpse_feast: {
+    id: 'corpse_feast', name: 'Corpse Feast',
+    description: 'DEVOUR a corpse where it lies: a share of its life force returns to you as flesh and focus (life and mana), and the meal leaves you briefly WELL FED — mending while it settles. A wagon makes it a banquet: every body eaten feeds the same mouth.',
+    tags: ['spell', 'corpse', 'duration'], color: '#9ab868',
+    manaCost: 0, cooldown: 5, useTime: 0.5,
+    targeting: {
+      target: 'corpse', castRange: 420, plural: true,
+      corpseLifeRestore: { life: 0.25, mana: 0.12 },
+    },
+    delivery: { type: 'self' },
+    effects: [{
+      type: 'buff', id: 'well_fed', duration: 4,
+      mods: [mod('lifeRegen', 'flat', 3)],
+    }],
+    requirements: { willpower: 12 },
+    thresholds: [
+      { level: 12, label: 'Bottomless', mods: [mod('cooldownRecovery', 'increased', 0.3)] },
+    ],
+    leveling: { perLevel: [mod('effectDuration', 'increased', 0.08)] },
+  },
+
+  gather_the_dead: {
+    id: 'gather_the_dead', name: 'Gather the Dead',
+    description: 'Beckon every corpse near your mark into one tight pile — fuel arranged for the detonation, the offering, or the wagon to come. Nothing is consumed; the dead only walk a little.',
+    tags: ['spell', 'corpse'], color: '#8a90a8',
+    manaCost: 6, cooldown: 3, useTime: 0.35,
+    delivery: { type: 'self' },
+    effects: [{ type: 'dragCorpses', radius: 240 }],
+    requirements: { willpower: 10 },
+    thresholds: [
+      { level: 12, label: 'The long walk', mods: [mod('aoeRadius', 'increased', 0.35)] },
+    ],
+    leveling: { perLevel: [mod('aoeRadius', 'increased', 0.06)] },
+  },
+
+  volatile_cinders: {
+    id: 'volatile_cinders', name: 'Volatile Cinders',
+    description: 'Consume a corpse: its unspent heat rises from the body as a CINDER that hunts living flesh and bursts. A fed pile looses a whole flight — one cinder more for every extra body eaten.',
+    tags: ['spell', 'corpse', 'fire', 'projectile'], color: '#e07848',
+    manaCost: 10, cooldown: 1.2, useTime: 0.55,
+    baseDamage: { fire: [13, 19] },
+    targeting: { target: 'corpse', castRange: 420, plural: true },
+    delivery: {
+      // Rises AT the pile it was eaten from (origin 'cursor' — never
+      // streaming out of the far-away caster), drifts, then latches on.
+      type: 'projectile', speed: 210, radius: 10, range: 520,
+      duration: 3.5,
+      origin: 'cursor', originRange: 9999,
+      explode: { radius: 60, damageScale: 0.8 },
+      trajectory: { homing: 3.0, erratic: 1.4 },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'burn', chance: 0.25, magnitude: 0.3 },
+    ],
+    requirements: { willpower: 15, intelligence: 12 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.12)] },
+  },
+
   // --- Golems: three skills, ONE shared cap ('golem' pool group) -----------
 
   summon_fire_golem: {

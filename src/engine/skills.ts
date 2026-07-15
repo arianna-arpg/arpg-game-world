@@ -2752,6 +2752,10 @@ export interface TargetingSpec {
   fallback?: 'fail' | 'self' | 'aim';
   /** Fraction of a corpse's max life added as flat fire damage. */
   corpseLifeDamage?: number;
+  /** DEVOUR (Corpse Feast): fractions of each CONSUMED corpse's max life
+   *  returned to the caster as life and/or mana — summed over a plural
+   *  feast, paid through the one restore path (healBy / capped mana). */
+  corpseLifeRestore?: { life?: number; mana?: number };
   /** Drains this fraction of the target's current life on use (Dark Pact). */
   drainsTargetLife?: number;
 }
@@ -3215,6 +3219,16 @@ export interface SpawnCorpseEffect {
   count: number;
 }
 
+/** GATHER THE DEAD: every corpse within `radius` of the aim (× area
+ *  modifiers; the corpseBatch stat widens the sweep — the wagon hauls from
+ *  farther afield) steps to the mark and piles TIGHT, inside a single
+ *  corpse-find's reach. Nothing is consumed; the dead only walk a little.
+ *  The pile-maker for detonations, offerings, and the wagon itself. */
+export interface DragCorpsesEffect {
+  type: 'dragCorpses';
+  radius: number;
+}
+
 /** SHATTERRITE: destroy the caster's own TOTEM-FAMILY constructs — each
  *  bursts for `fraction` of its max life as physical around itself. The
  *  totem-into-mine conversion, as a meta-payload. */
@@ -3296,7 +3310,7 @@ export type SkillEffect =
   | HealEffect | CleanseEffect | CommandMinionsEffect
   | IronWardEffect | GuardSurgeEffect | ReduceCooldownsEffect
   | RestoreOverTimeEffect | WardEffect | SiphonOrbEffect
-  | DetonateMinionsEffect | SpawnCorpseEffect | ShatterConstructsEffect
+  | DetonateMinionsEffect | SpawnCorpseEffect | DragCorpsesEffect | ShatterConstructsEffect
   | MinionCastEffect | PayLedgerEffect
   | SpreadStatusEffect | SiphonStatusEffect | TransfuseStatusEffect
   | RecallImpalesEffect | TameEffect | WhistleCompanionEffect
