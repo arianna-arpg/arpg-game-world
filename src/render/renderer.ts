@@ -21,6 +21,7 @@ import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import { dayCycle } from '../world/daynight';
 import { GridWalkField } from '../world/gridWalk';
 import { regionKind, SURVIVAL_RESOURCES } from '../world/regions';
+import { stratumOf } from '../world/strata';
 import { blocksMovement, blocksProjectiles, doodadRuleOf, hitSurfaceOf, type Doodad } from '../engine/levelgen';
 import type { HitShape } from '../engine/shapes';
 import { PROJ_FORM_GEO } from '../engine/projForms';
@@ -4642,7 +4643,11 @@ export class Renderer {
     ctx.font = '12px Verdana';
     ctx.fillStyle = world.zone.theme.accent;
     const lvText = world.zone.level > 0 ? ` — Monster Lv ${world.zone.level}` : '';
-    ctx.fillText(`${world.zone.name}${lvText}`, 16, 46);
+    // Underground, the banner names the BAND (the strata fabric): where you
+    // are on the world's vertical ladder, read from caveDepth.
+    const stratText = world.zone.caveDepth != null
+      ? ` · ${stratumOf(world.zone.caveDepth).name}` : '';
+    ctx.fillText(`${world.zone.name}${lvText}${stratText}`, 16, 46);
     // Living-world status: time of day · weather · who holds this ground.
     ctx.font = '11px Verdana';
     ctx.fillStyle = '#9ab0c8';

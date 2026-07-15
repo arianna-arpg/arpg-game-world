@@ -281,6 +281,78 @@ registerFormation({
   ],
 });
 
+// --- The spelunker kit's set-pieces (strata fabric) -------------------------
+// A STALAGMITE RUN: a drip-line of stone teeth marching where the ceiling
+// weeps — the cave's own fence, gaps a body can thread.
+registerFormation({
+  id: 'stalagmite_run', arrange: 'meander', span: [260, 480], step: 46,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'stalagmite', radius: [13, 22], jitter: 12 },
+    { kind: 'flowstone', radius: [16, 26], every: 3, jitter: 18 },
+  ],
+});
+// A DRIPSTONE COLONNADE: columns where floor met ceiling and fused — a
+// gallery's nave, sightlines broken into aisles.
+registerFormation({
+  id: 'dripstone_colonnade', arrange: 'line', span: [300, 520], step: 88,
+  pieces: [
+    { kind: 'dripstone_column', radius: [16, 24], jitter: 10 },
+    { kind: 'stalagmite', radius: [12, 18], every: 2, jitter: 20 },
+  ],
+});
+// A CRYSTAL GARDEN: lattice rings grown around a seep — the geode the cave
+// keeps for itself (orbit numbers follow the menhir contract vs its clearing;
+// see data/compositions.ts dripstone_cathedral's note).
+registerFormation({
+  id: 'crystal_garden', arrange: 'orbit', span: [120, 170], step: 52,
+  params: { rings: [1, 2], innerFrac: 0.94 },
+  pieces: [
+    { kind: 'crystal_cluster', radius: [12, 18], jitter: 8 },
+    { kind: 'crystal', radius: [14, 20], every: 3, jitter: 10 },
+  ],
+});
+// A GLOWWORM COURT: lure-light colonies rimming a mineral pool terrace — the
+// dark's own commons, lit by the things that fish it.
+registerFormation({
+  id: 'glowworm_court', arrange: 'ring', span: [110, 160], step: 46,
+  pieces: [
+    { kind: 'glowworm_veil', radius: [16, 24], jitter: 10 },
+    { kind: 'rimstone_pool', radius: [14, 22], every: 2, jitter: 14 },
+  ],
+});
+// A COLUMN RING: dripstone columns ringing a cleared nave — the cathedral's
+// bones (orbit vs clearing: 125·0.92−6 = 109 ≥ 72+22 = 94, the menhir contract).
+registerFormation({
+  id: 'column_ring', arrange: 'orbit', span: [125, 180], step: 58,
+  params: { rings: [1, 1], innerFrac: 0.92 },
+  pieces: [
+    { kind: 'dripstone_column', radius: [15, 22], jitter: 6, rot: true },
+    { kind: 'stalagmite', radius: [11, 16], every: 2, jitter: 14 },
+  ],
+});
+// A BASALT PROCESSION: cooled hex columns strung along an old flow line —
+// the magma gallery's colonnade (cinder_vein's stone sibling).
+registerFormation({
+  id: 'basalt_procession', arrange: 'meander', span: [280, 460], step: 64,
+  params: { wobble: 20 },
+  pieces: [
+    { kind: 'basalt_column', radius: [14, 22], jitter: 10 },
+    { kind: 'cinder', radius: [18, 28], every: 2, jitter: 16 },
+  ],
+});
+// A HERMIT'S REST: some delver's camp, long quiet — fire ring, stores, and
+// the kit nobody came back for (ring pieces double as the loot).
+registerFormation({
+  id: 'hermits_rest', arrange: 'ring', span: [60, 80], step: 34,
+  pieces: [
+    { kind: 'campfire', radius: [12, 14], count: [1, 1] },
+    { kind: 'spelunker_pack', radius: [10, 13], jitter: 8 },
+    { kind: 'clay_pots', radius: [10, 13], every: 2, jitter: 8 },
+    { kind: 'firewood_pile', radius: [10, 14], every: 3, jitter: 8 },
+  ],
+});
+
 // A FUNGAL PROCESSION: glow-caps filing through the dark, toadstools between.
 registerFormation({
   id: 'fungal_procession', arrange: 'meander', span: [260, 480], step: 42,

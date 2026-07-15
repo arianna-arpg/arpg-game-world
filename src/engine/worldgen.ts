@@ -11,8 +11,9 @@
 import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
-import { TILESETS, pickTilesetForBiome, type TilesetDef } from '../data/tilesets';
+import { TILESETS, pickCaveFace, pickTilesetForBiome, type TilesetDef } from '../data/tilesets';
 import { hasLayout } from './levelgen';
+import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
 import type { ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
@@ -826,16 +827,12 @@ export function generateZone(
  * revisit. The id encodes parent + seed, so re-entering the same mouth reuses
  * the same cave def.
  */
-/** The CAVE LADDER's levers — all data, not destiny. A deeper mouth is a
- *  seeded ROLL per cave (the ladder is a rare discovery, not a guarantee).
- *  The BREACH DEPTH is no longer a lever here: it comes from whichever
- *  registered dimension declares a 'cave_breach' entry (DimensionDef.entry
- *  .minDepth) — the ladder bottoms out wherever a dimension says it does. */
-export const CAVE_LADDER = {
-  /** Chance a cave at depth 1, 2, … conceals a deeper mouth (last entry
-   *  repeats for greater depths). */
-  deeperChance: [0.3, 0.3],
-};
+// The CAVE LADDER's levers live in the STRATA registry (world/strata.ts):
+// per-band deeper-mouth chances, level steps, dark floors, name prefixes —
+// all data, not destiny. The BREACH DEPTH stays dimension-owned: it comes
+// from whichever registered dimension declares a 'cave_breach' entry
+// (DimensionDef.entry.minDepth) — the ladder bottoms out wherever a
+// dimension says it does.
 
 /** The shallowest cave depth at which ANY registered dimension breaches —
  *  Infinity when none does (the ladder just ends in caves). */
@@ -884,8 +881,31 @@ export interface CaveMintOpts {
   rollVariant?: boolean;
 }
 
-export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId = 'cavern', opts?: CaveMintOpts): ZoneDef {
-  const ts = TILESETS[tilesetId] ?? TILESETS['cavern'];
+/** The face roll's IDENTITY SUB-STREAM salt: strata decisions (face + face
+ *  variant) draw from their own seeded Rng so the MAIN stream's draw order per
+ *  resolved tileset keeps the classic contract exactly. */
+const CAVE_FACE_SALT = 0x57a7a;
+
+export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tilesetId?: string, opts?: CaveMintOpts): ZoneDef {
+  // THE CAVE LADDER: depth counts caves-within-caves — resolved FIRST because
+  // the strata fabric keys everything below (face, level, darkness, naming,
+  // the deeper-mouth appetite) on which BAND this rung falls in.
+  const depth = (parent.caveDepth ?? 0) + 1;
+  // PROVENANCE: the surface biome the whole ladder hangs beneath, inherited
+  // rung to rung — a depth-3 gallery still knows it lives under volcanic
+  // country, so "why is the lava here?" always has an answer (neighbourhood
+  // or depth; the face envelopes weigh both).
+  const anchor = parent.anchor ?? parent.biome;
+  // THE FACE ROLL (strata fabric): an UNFORCED mint — the classic
+  // cave_entrance — picks its tileset from the registered CAVE FACES,
+  // weighted by each face's strata envelope at this depth × its affinity for
+  // the anchor biome. Authored gates (ruin/vault/descent/realms) pass an
+  // explicit tileset and skip the pool entirely. The roll (and the face-
+  // variant roll below it) rides an identity sub-stream so the main stream
+  // stays draw-for-draw the classic cave.
+  const faceRng = new Rng((entranceSeed ^ CAVE_FACE_SALT) >>> 0);
+  const faceRolled = tilesetId === undefined;
+  const ts = TILESETS[faceRolled ? pickCaveFace(depth, anchor, faceRng) : tilesetId] ?? TILESETS['cavern'];
   const rng = new Rng(entranceSeed);
   const w = Math.round(rng.range(ts.sizeW[0], ts.sizeW[1]));
   const h = Math.round(rng.range(ts.sizeH[0], ts.sizeH[1]));
@@ -899,22 +919,22 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   // rng value, and forceLayout branches BEFORE the roll, exactly as the old id
   // check did — the seeded draw order is a compatibility contract.
   const layoutType = opts?.layoutType ?? ts.forceLayout ?? rollCaveLayout(ts, rng);
-  // THE CAVE LADDER: depth counts caves-within-caves. A cave shy of the bottom
-  // MAY conceal a deeper mouth — a seeded ROLL (CAVE_LADDER.deeperChance), so
-  // nesting stays a discovery, not a guarantee; a rolled mouth's placement IS
-  // guaranteed (generateLayout forces it if the grid was too cramped). The
-  // bottom of a deep enough surface ladder holds a BREACH into the Underworld.
-  const depth = (parent.caveDepth ?? 0) + 1;
-  // Only SURFACE ladders bottom out in a breach — hell's caves are just caves
-  // (a breach FROM the Underworld INTO the Underworld would be a teleport to
-  // the hellgate dressed as revelation).
+  // A cave shy of the bottom MAY conceal a deeper mouth — a seeded ROLL (the
+  // band's deeperChance: the deep invites deeper), so nesting stays a
+  // discovery, not a guarantee; a rolled mouth's placement IS guaranteed
+  // (generateLayout forces it if the grid was too cramped). A deep enough
+  // SURFACE ladder bottoms out in a BREACH into whatever dimension claims it.
+  // Only SURFACE ladders breach — hell's caves are just caves (a breach FROM
+  // the Underworld INTO the Underworld would be a teleport to the hellgate
+  // dressed as revelation).
   const breach = depth >= caveBreachDepth() && !parent.dimension;
-  const chances = CAVE_LADDER.deeperChance;
-  const deeper = !breach && rng.chance(chances[Math.min(depth - 1, chances.length - 1)] ?? 0);
-  // VARIANT (opts callers only — the no-opts stream stays byte-identical): a
-  // named or seeded-rolled TilesetVariant replaces the base stamps, exactly
-  // as a generated zone's roll would. The tag joins the name so the face is
-  // legible at the door ("The Necropolis (bonefields)").
+  const deeper = !breach && rng.chance(deeperChanceAt(depth));
+  // VARIANT: a named or seeded-rolled TilesetVariant replaces the base stamps,
+  // exactly as a generated zone's roll would. Opts callers (gates, realms)
+  // draw on the MAIN stream as they always have; a FACE-ROLLED mint instead
+  // consults its face's variantChance on the face sub-stream — so the base
+  // mixed crawl stays common and a dressed gallery stays a real find. The
+  // tag joins the name so the face is legible at the door.
   let rows = ts.layout;
   let variantName: string | undefined;
   let variantTheme: Partial<ZoneDef['theme']> | undefined;
@@ -925,6 +945,10 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   } else if (opts?.rollVariant && ts.variants?.length) {
     const v = rng.pick(ts.variants);
     rows = v.layout; variantName = v.name; variantTheme = v.theme;
+  } else if (faceRolled && ts.variants?.length
+    && faceRng.chance(ts.caveFace?.variantChance ?? 0)) {
+    const v = faceRng.pick(ts.variants);
+    rows = v.layout; variantName = v.name; variantTheme = v.theme;
   }
   // COMMON rows ride along whichever face rolled — the brittle-kit doctrine
   // (what the biome always IS must not vanish when a face is chosen) now
@@ -933,17 +957,28 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     ...(ts.common ?? []), ...rows,
     ...(deeper ? [{ kind: 'cave' as const, count: [1, 1] as [number, number] }] : []),
   ];
-  const baseName = opts?.name ?? (depth >= 2 && !breach ? `Deep ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
-    : breach ? `${rng.pick(ts.nameFirst)} Breach`
+  // NAMING wears the band: the Galleries' depth-2 "Deep …", the Depths'
+  // "Sunless …" — the prefix is stratum data, the breach naming stays its own.
+  const prefix = namePrefixAt(depth);
+  const baseName = opts?.name ?? (breach ? `${rng.pick(ts.nameFirst)} Breach`
+    : prefix ? `${prefix} ${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`
       : `${rng.pick(ts.nameFirst)} ${rng.pick(ts.nameSecond)}`);
+  // THE DARK DEEPENS: the band's darkFloor lifts theme.ambientDark (never
+  // lowers it) — whatever face rolled, the Depths run darker than a cellar.
+  const baseTheme = variantTheme ? { ...ts.theme, ...variantTheme } : ts.theme;
+  const darkFloor = darkFloorAt(depth);
+  const theme = darkFloor !== undefined && (baseTheme.ambientDark ?? 0) < darkFloor
+    ? { ...baseTheme, ambientDark: darkFloor } : baseTheme;
   return {
     id,
     name: variantName ? `${baseName} (${variantName})` : baseName,
-    level: parent.level + (depth >= 2 ? 1 : 0),
+    // The band's level STEP over the parent (strata data): the classic curve
+    // at the Galleries (+0 then +1), a full rung per descent below them.
+    level: parent.level + levelStepAt(depth),
     size: { w, h },
     shape: 'rect',                          // caves stay rect — no ellipse rim math
     ...(ts.boundless ? { boundless: true } : {}),
-    theme: variantTheme ? { ...ts.theme, ...variantTheme } : ts.theme,
+    theme,
     layout,
     ...(layoutType ? { layoutType } : {}),
     // The spec ▷ tileset merge the surface mint honors: a cave tileset's own
@@ -958,6 +993,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     map: { x: parent.map.x, y: parent.map.y }, // unused off-graph, but type-required
     seed: entranceSeed,                     // fixed layout, persists across revisits
     caveDepth: depth,
+    ...(anchor ? { anchor } : {}),
     ...(breach ? { breach: true } : {}),
     ...(parent.dimension ? { dimension: parent.dimension } : {}),
   };

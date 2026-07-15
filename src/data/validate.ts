@@ -65,11 +65,53 @@ import {
 } from '../engine/sympathy';
 import './sympathies'; // side-effect: the sympathy link defs register before validation
 import { ITEM_AFFIX_LIST } from './itemaffixes';
+import { strataDefs } from '../world/strata';
 import { Rng } from '../core/rng';
 
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
   validatePassiveLayout(warn);
+
+  // STRATA (world/strata.ts): the vertical ladder must TILE — contiguous
+  // bands from depth 1 (a gap would drop a cave depth into the wrong band
+  // silently), only the deepest band open-ended, sane rolls — and every
+  // cave-face provenance claim must name a real biome ('*' = any).
+  {
+    const bands = strataDefs();
+    if (!bands.length) warn('strata: no bands registered — the cave ladder has no shape');
+    let expect = 1;
+    for (let i = 0; i < bands.length; i++) {
+      const s = bands[i];
+      if (s.from !== expect) warn(`strata '${s.id}': from ${s.from} ≠ expected ${expect} — bands must tile the ladder`);
+      if (s.to !== undefined && s.to < s.from) warn(`strata '${s.id}': to ${s.to} < from ${s.from}`);
+      if (s.to === undefined && i < bands.length - 1) warn(`strata '${s.id}': open-ended band shadows the bands below it`);
+      if (!s.levelStep.length) warn(`strata '${s.id}': empty levelStep`);
+      if (s.deeperChance < 0 || s.deeperChance > 1) warn(`strata '${s.id}': deeperChance ${s.deeperChance} outside [0,1]`);
+      if (s.darkFloor !== undefined && (s.darkFloor < 0 || s.darkFloor > 1)) warn(`strata '${s.id}': darkFloor ${s.darkFloor} outside [0,1]`);
+      expect = (s.to ?? Infinity) + 1;
+      if (!Number.isFinite(expect)) break;
+    }
+    if (bands.length && bands[bands.length - 1].to !== undefined) {
+      warn(`strata '${bands[bands.length - 1].id}': the deepest band must be open-ended (no 'to')`);
+    }
+    const knownBiomes = new Set<string>([
+      ...Object.keys(BIOMES),
+      ...Object.values(TILESETS).map(t => t.biome).filter((b): b is string => !!b),
+    ]);
+    for (const t of Object.values(TILESETS)) {
+      const f = t.caveFace;
+      if (f?.variantChance !== undefined && (f.variantChance < 0 || f.variantChance > 1)) {
+        warn(`tileset '${t.id}' caveFace.variantChance ${f.variantChance} outside [0,1]`);
+      }
+      if (f?.variantChance && !t.variants?.length) {
+        warn(`tileset '${t.id}' caveFace.variantChance set but the tileset has no variants`);
+      }
+      if (!f?.biomes) continue;
+      for (const b of Object.keys(f.biomes)) {
+        if (b !== '*' && !knownBiomes.has(b)) warn(`tileset '${t.id}' caveFace.biomes: unknown biome '${b}'`);
+      }
+    }
+  }
 
   // Every authored layout entry must resolve against the live stamp/cluster/
   // structure registries — the open StampKind's safety net (variants included).

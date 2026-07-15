@@ -963,6 +963,60 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { points: 5, color: '#b6d4e6', material: 'ice', coreGlow: { color: '#eef8ff' } },
     light: { radius: -1.6, color: '#cfe8f4', intensity: 0.1 },
   },
+  // --- The spelunker kit: the strata fabric's cavern dressing ---------------
+  // Stone reads through 'theme:' tokens so the SAME kinds self-tint per face:
+  // grey teeth in the galleries, rust in a magma gallery, blued ice in a rime
+  // one — one entry each, every underground palette served.
+  stalagmite: {
+    longShadow: 1.3, painter: 'boulder', order: 55, shadow: 0.55,
+    params: {
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      spire: true, contrast: 1.2, wet: true, quartz: {}, strata: {},
+    },
+  },
+  dripstone_column: {
+    longShadow: 1.8, painter: 'boulder', order: 55, shadow: 0.65,
+    params: {
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      spire: true, contrast: 1.3, wet: true, strata: {}, skirt: {},
+    },
+  },
+  basalt_column: {
+    longShadow: 1.5, painter: 'boulder', order: 55, shadow: 0.6,
+    params: {
+      color: 'theme:obstacle', edge: 'theme:obstacleEdge', material: 'stone',
+      spire: true, contrast: 1.4, cracks: 2, grain: true, strata: {},
+    },
+  },
+  flowstone: {
+    painter: 'mound', order: 30,
+    params: { color: 'theme:wall|#7a7f92', edge: 'theme:obstacleEdge|#9aa0b4' },
+    blend: { strength: 0.3, feather: 16, color: 'theme:wall|#7a7f92' },
+  },
+  rimstone_pool: {
+    painter: 'liquid', order: 28,
+    params: {
+      rim: { color: '#8fa8b8', alpha: 0.6, grow: 3 },
+      core: { color: '#16303c', alpha: 0.65 },
+      sheen: { color: '#cfe8f0' },
+    },
+  },
+  glowworm_veil: {
+    painter: 'shard', order: 54, shadow: 0.25,
+    params: { points: 3, color: '#274040', material: 'crystal',
+      coreGlow: { color: '#8fe8c8' }, motes: { color: '#a8f0d8' } },
+    light: { radius: -3, color: '#8fe8c8', intensity: 0.3, flicker: 1.2 },
+  },
+  crystal_vein: {
+    painter: 'shard', order: 40, shadow: 0.2,
+    params: { points: 3, color: '#31527a', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
+    light: { radius: -1.4, color: '#7fc0f0', intensity: 0.12 },
+  },
+  guano_heap: {
+    painter: 'mound', order: 49, shadow: 0.3,
+    params: { color: '#b8b09a', edge: '#8f8872' },
+  },
+  spelunker_pack: { painter: 'potCluster', order: 52, shadow: 0.35 },
   // --- The bog set: mire dressing + the contracting-fume hazard -------------
   // A waterlogged trunk gone half to moss — the log painter saying 'drowned'.
   sunken_log: {

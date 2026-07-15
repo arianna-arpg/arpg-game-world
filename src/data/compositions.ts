@@ -51,6 +51,36 @@ registerComposition({
   ],
 });
 
+// --- The spelunker set-pieces (strata fabric — cave-face bundles) -----------
+// A DRIPSTONE CATHEDRAL: a cleared nave under columns where floor met ceiling
+// and fused — the cave granting itself one grand room (clearing 55–72 vs the
+// column_ring orbit: 125·0.92−6 = 109 ≥ 72+22 — the menhir numeric contract).
+registerComposition({
+  id: 'dripstone_cathedral',
+  sites: [{ id: 'nave', radius: [150, 195] }],
+  pre: [{ kind: 'clearing', at: 'nave', count: [1, 1], radius: [55, 72] }],
+  post: [{ kind: 'formation', formation: 'column_ring', at: 'nave', count: [1, 1] }],
+});
+// A GLOWWORM GROTTO: a still mere ringed by lure-light colonies — the dark's
+// one lit commons, and everything in the cave knows the way to it.
+registerComposition({
+  id: 'glowworm_grotto',
+  sites: [{ id: 'mere', radius: [130, 165] }],
+  pre: [{ kind: 'clearing', at: 'mere', count: [1, 1], radius: [48, 62] }],
+  post: [
+    { kind: 'formation', formation: 'glowworm_court', at: 'mere', count: [1, 1] },
+    { kind: 'glowworm_veil', count: [1, 3], where: { field: 'noise', max: 0.38, params: { scale: 420, seed: 11 } } },
+  ],
+});
+// A HERMIT'S CAMP: some delver made a life down here, briefly — a fire ring
+// and stores in a scraped-flat pocket, the kit still waiting.
+registerComposition({
+  id: 'hermits_camp',
+  sites: [{ id: 'camp', radius: [95, 125] }],
+  pre: [{ kind: 'clearing', at: 'camp', count: [1, 1], radius: [28, 36] }],
+  post: [{ kind: 'formation', formation: 'hermits_rest', at: 'camp', count: [1, 1] }],
+});
+
 // ORCHARD ROWS: tended ground — planted ranks, a hedgerow windbreak, and a
 // working lane kept clear of the wild scatter.
 registerComposition({

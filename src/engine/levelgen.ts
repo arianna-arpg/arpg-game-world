@@ -198,6 +198,16 @@ export type KnownDoodadKind =
   | 'marsh_wisp'      // a hovering bog-light: glow and omen, no body to bar the way
   | 'peat_mound'      // a low cut-peat hummock: dark cover that smells of tar
   | 'venom_bloom'     // a swollen mire-flower: pops into a CONTRACTING venom fume
+  // The spelunker kit (cavern identity round — the strata fabric's dressing)
+  | 'stalagmite'       // floor teeth in seed-rolled clusters — solid, blocks shots
+  | 'dripstone_column' // a floor-to-ceiling flowstone pillar — the cave's colonnade
+  | 'flowstone'        // pale mineral sheeting poured over the floor (decoration)
+  | 'rimstone_pool'    // terraced mineral pools, mirror-still (decoration)
+  | 'glowworm_veil'    // a colony's hanging lure-lights — the dark's own lamp
+  | 'crystal_vein'     // a mineral seam surfacing at a wall's foot: strike it loose
+  | 'guano_heap'       // what the roosts rain down (decoration, pungent)
+  | 'spelunker_pack'   // a lost delver's kit: knock it open, keep what spills
+  | 'basalt_column'    // hex-jointed cooled stone — the magma gallery's colonnade
   // The melt (lava is a crossable LIQUID; this is the wall)
   | 'magma_core'      // impassable molten mass — the caldera's spiral walls
   // The wayfarer kit (roadside & village-story furniture)
@@ -917,6 +927,25 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     brittle: { on: ['hit'], gemChance: 0.3, orbChance: 0.35, text: 'the lattice shatters!', color: '#7fc0f0' } },
   icicle_cluster: { overlap: 'solid', blocksMove: true, spacing: 26, forbidOn: ['water', 'lava'],
     brittle: { on: ['hit', 'near'], reach: 30, orbChance: 0.25, text: 'shatter!', color: '#bfe0f0' } },
+  // The spelunker kit: the strata fabric's cavern dressing. Stone teeth roll
+  // seed-formed cluster bodies (the rock grammar — look and collision married);
+  // the column is a mono pinnacle that fades when the hero steps behind it;
+  // the vein and the lost pack are brittle finds that PAY the striker.
+  stalagmite: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 34,
+    forbidOn: ['water', 'lava', 'chasm'], rockForm: { cluster: 0.7 } },
+  dripstone_column: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 56,
+    forbidOn: ['water', 'lava', 'chasm'], rockForm: { spire: true },
+    occlude: { pad: 26, alpha: 0.55 } },
+  flowstone: { overlap: 'ground', forbidOn: ['lava', 'chasm'] },
+  rimstone_pool: { overlap: 'ground', forbidOn: ['lava', 'chasm'] },
+  glowworm_veil: { overlap: 'inert', spacing: 40 },
+  crystal_vein: { overlap: 'ground', spacing: 30, forbidOn: ['water', 'lava', 'chasm'],
+    brittle: { on: ['hit'], gemChance: 0.5, orbChance: 0.2, text: 'the vein cracks loose!', color: '#7fc0f0' } },
+  guano_heap: { overlap: 'ground', forbidOn: ['water', 'lava'] },
+  spelunker_pack: { overlap: 'inert', spacing: 30,
+    brittle: { on: ['hit', 'near'], reach: 30, gemChance: 0.85, orbChance: 0.5, text: 'someone\'s kit spills open…', color: '#c8a86a' } },
+  basalt_column: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 44,
+    forbidOn: ['water', 'chasm'], rockForm: { cluster: 0.5 } },
   // The bog set: mire dressing + the contracting-fume hazard flower. The
   // bloom's pop is pure BrittleSpec data — its fume names venom_seep, so the
   // cloud inherits the skill's own closing SIZE ENVELOPE (it shrinks away).
@@ -4124,6 +4153,51 @@ registerStamp('puffcap_cluster', stampSingle('puffcap_cluster', [12, 17]));
 registerStamp('burial_urn', stampSingle('burial_urn', [12, 16]));
 registerStamp('crystal_cluster', stampSingle('crystal_cluster', [14, 20]));
 registerStamp('icicle_cluster', stampSingle('icicle_cluster', [13, 19]));
+// The spelunker kit: cavern furniture (strata fabric). Solids ride the rock
+// grammar; sheets and pools merge as ground; the vein hunts a wall's foot
+// (grid zones) or a standing stone's flank (convex) — the secret_wall
+// discipline: one pick when candidates exist, none otherwise.
+registerStamp('stalagmite', (ctx, spec) => stampSolid(ctx, 'stalagmite', spec.radius ?? [14, 26]));
+registerStamp('dripstone_column', (ctx, spec) => stampSolid(ctx, 'dripstone_column', spec.radius ?? [16, 26]));
+registerStamp('flowstone', (ctx, spec) => stampBlob(ctx, 'flowstone', spec.radius ?? [22, 44], [2, 4], false));
+registerStamp('rimstone_pool', (ctx, spec) => stampBlob(ctx, 'rimstone_pool', spec.radius ?? [16, 30], [2, 3], false));
+registerStamp('glowworm_veil', stampSingle('glowworm_veil', [18, 30]));
+registerStamp('guano_heap', (ctx, spec) => stampBlob(ctx, 'guano_heap', spec.radius ?? [14, 26], [1, 3], false));
+registerStamp('spelunker_pack', stampSingle('spelunker_pack', [10, 14]));
+registerStamp('basalt_column', (ctx, spec) => stampSolid(ctx, 'basalt_column', spec.radius ?? [15, 26]));
+registerStamp('crystal_vein', (ctx) => {
+  const grid = ctx.walk instanceof GridWalkField ? ctx.walk : null;
+  if (grid) {
+    const cs = grid.cell;
+    const spots: Vec2[] = [];
+    for (let y = cs * 2; y < ctx.arena.h - cs * 2; y += cs) {
+      for (let x = cs * 2; x < ctx.arena.w - cs * 2; x += cs) {
+        if (!grid.isWalkable(x, y)) continue;
+        if (dist(vec(x, y), ctx.entry) < 140) continue;
+        if (inReserved(ctx, vec(x, y), 20)) continue;
+        if (!grid.isWalkable(x + cs, y) || !grid.isWalkable(x - cs, y)
+          || !grid.isWalkable(x, y + cs) || !grid.isWalkable(x, y - cs)) {
+          spots.push(vec(x, y));
+        }
+      }
+    }
+    if (!spots.length) return;
+    const p = spots[ctx.rng.int(0, spots.length - 1)];
+    ctx.doodads.push({ pos: p, radius: 13, kind: 'crystal_vein', rot: ctx.rng.range(0, Math.PI * 2) });
+    return;
+  }
+  const hosts = ctx.doodads.filter(d =>
+    (d.kind === 'cliff' || d.kind === 'rock' || d.kind === 'rock_spire') && d.radius >= 24
+    && !inReserved(ctx, d.pos, d.radius));
+  if (!hosts.length) return;
+  const host = hosts[ctx.rng.int(0, hosts.length - 1)];
+  const ang = ctx.rng.range(0, Math.PI * 2);
+  ctx.doodads.push({
+    pos: vec(host.pos.x + Math.cos(ang) * (host.radius + 10),
+      host.pos.y + Math.sin(ang) * (host.radius + 10)),
+    radius: 13, kind: 'crystal_vein', rot: ctx.rng.range(0, Math.PI * 2),
+  });
+});
 // The bog set: mire dressing + the contracting-fume bloom.
 registerStamp('sunken_log', stampSingle('sunken_log', [16, 24]));
 registerStamp('marsh_wisp', stampSingle('marsh_wisp', [7, 10]));

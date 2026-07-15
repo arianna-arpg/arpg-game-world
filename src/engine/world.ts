@@ -134,6 +134,7 @@ import { traversalDef, type TraversalCapture, type TraversalState } from './trav
 import { castRay, LOS_CFG } from './los';
 import { coordDist } from '../world/coords';
 import { dimensionDef, dimensionBiomeAt, dimensionIds, dimensionsEnteredBy } from '../world/dimensions';
+import { delverMulAt } from '../world/strata';
 import { courseBiomeAt, courseMintHints, type CourseMintHints, type CourseSpec } from '../world/courses';
 import type { DisplacementPolicy, CollisionResult, RecoveryPolicy, DamageSpec } from '../world/regions';
 
@@ -8671,9 +8672,11 @@ export class World {
     if (!df.delverAllowed(this.player.level)) return;
     const roll = new Rng(((def.seed ?? 0) ^ 0xde17e2) >>> 0); // stable per mouth
     // The draw stays seeded per mouth; the THRESHOLD folds in the package's
-    // live ignition lever (pressure × frequency.rate), so the Vault weight and
-    // the rate crank reach the abyss like every other event's ignition roll.
-    if (!roll.chance(df.delverChanceNow())) return;
+    // live ignition lever (pressure × frequency.rate) AND the stratum's
+    // delver weighting (world/strata.ts — the shaft-keepers haunt the Depths
+    // more than the near-dark), so the Vault weight, the rate crank, and the
+    // world's vertical ladder all reach the abyss like any ignition roll.
+    if (!roll.chance(df.delverChanceNow() * delverMulAt(def.caveDepth ?? 0))) return;
     const center = this.clampPos(this.farPoint(360, true), 30);
     const delver = this.createMonster('descent_delver', Math.max(1, def.level), 'enemy');
     delver.tag = 'descent_delver';

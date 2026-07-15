@@ -560,13 +560,20 @@ export interface ZoneDef {
    *  the anchor both the fall mapping and the understory capture share.
    *  Pure data (serializes verbatim); set by whatever mints the shelf. */
   below?: { zoneId: string; ax: number; ay: number };
-  /** CAVE LADDER depth (caves only): 1 = a surface cave, 2 = a cave within a
-   *  cave (the Depths flavor), 3 = the bottom — it holds a BREACH.
+  /** CAVE LADDER depth (caves only): 1 = a surface cave, each cave-within-a-
+   *  cave one deeper. WHAT a depth means (its display band, level climb,
+   *  deeper-mouth chance, dark floor, breach point) is the STRATA registry's
+   *  business (world/strata.ts) — never hardcode the ladder's shape here.
    *  Presence IS the cave/off-graph discriminator (mintCave is the sole writer):
    *  categorize on `caveDepth != null`, never by sniffing the 'cave_' id prefix —
    *  the prefix survives only as a churn-id namespace for string-only classifiers
    *  over zones that may no longer exist (corpse records, save strips). */
   caveDepth?: number;
+  /** The SURFACE biome this underground ladder hangs beneath (caves only) —
+   *  provenance for the strata fabric's cave-face pick, inherited rung to
+   *  rung so a depth-3 gallery still knows it lives under volcanic country.
+   *  mintCave stamps it from the parent's anchor ?? biome. */
+  anchor?: string;
   /** This cave holds a BREACH into the Underworld (dwell it to cross). */
   breach?: boolean;
   /** Sea routes sailed FROM this port (port zone ids) — map styling + the

@@ -18,6 +18,28 @@ export interface ObjectiveWeight {
   weight: number;
 }
 
+/** A CAVE FACE — this tileset's claim on the underground (the strata fabric,
+ *  world/strata.ts). Any tileset carrying one joins the pool an UNFORCED cave
+ *  mint (the classic cave_entrance) picks from; weight = the strata envelope
+ *  evaluated at the mint's caveDepth × the surface ANCHOR biome's affinity.
+ *  Both axes answer "why is this cave THIS?": a magma gallery under volcanic
+ *  country is the neighbourhood; the same gallery under a meadow means the
+ *  ladder has gone deep enough for the world's own heat. Authored gates
+ *  (ruin_gate, vault_gate, realm mints) pass explicit tilesets and never
+ *  consult the pool. */
+export interface CaveFaceSpec {
+  /** Presence envelope over CAVE DEPTH (1 = a surface cave; see strata.ts).
+   *  Omitted = weight 1 at every depth. */
+  strata?: LevelEnvelope;
+  /** Anchor-biome affinity multipliers; '*' is the any-biome base (default 1).
+   *  The anchor is the SURFACE biome the whole ladder hangs beneath (ZoneDef
+   *  .anchor — nested caves inherit it), so provenance survives nesting. */
+  biomes?: Record<string, number>;
+  /** Chance a face-rolled mint also wears one of the tileset's variants
+   *  (default 0 — gates that always roll pass opts.rollVariant instead). */
+  variantChance?: number;
+}
+
 /** A sub-biome flavour within a tileset: a name tag + a full layout override,
  *  rolled per generated zone so two jungles can feel distinct (a "clearing" of
  *  sparse pockets vs a "dense floor" choked with growth). */
@@ -94,6 +116,9 @@ export interface TilesetDef {
    *  the waste holds the rim, the erg claims the heart. Omitted = weight 1
    *  everywhere, so single-face biomes behave exactly as before. */
   depthAffinity?: LevelEnvelope;
+  /** THE UNDERGROUND'S claim: carrying this joins the cave-face pool the
+   *  strata fabric picks unforced cave mints from (see CaveFaceSpec). */
+  caveFace?: CaveFaceSpec;
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
@@ -2487,6 +2512,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     id: 'cavern', frontier: false,
     sky: 'sheltered', // underground by definition (mintCave also stamps caveDepth)
 
+    // THE GENERALIST FACE: every biome's near-dark default (the mul keeps the
+    // classic crawl dominant in the Galleries), fading as the ladder leaves
+    // them — by the Depths the specialist faces (depths/magma/rime/fungal)
+    // own the pool. variantChance keeps the base mixed crawl common while
+    // the dressed variants stay a real find.
+    caveFace: { strata: { to: 2, fadeOut: 2, mul: 1.6 }, variantChance: 0.55 },
     // What a cave BECOMES underground: the classic convex crawl, the maggot-
     // lair warren, a catacomb dungeon, or a full maze — one seeded roll at
     // mint (mintCave), pure data.
@@ -2500,23 +2531,98 @@ export const TILESETS: Record<string, TilesetDef> = {
       chasm: '#040406', mud: '#16161e', water: '#12202c', lava: '#5a1606',
     },
     sizeW: [1200, 1700], sizeH: [900, 1300],
-    layout: [
-      { kind: 'web', count: [1, 3] }, { kind: 'bone_pile', count: [1, 3] }, { kind: 'brazier', count: [0, 2] },
-      { kind: 'rocks', count: [14, 22], radius: [20, 46] },
-      { kind: 'scree', count: [2, 4] }, { kind: 'rock_spire', count: [0, 2] },
-      { kind: 'cliff', count: [3, 5] },
-      { kind: 'chasm', count: [0, 2] },
-      { kind: 'water', count: [0, 1] },
-      { kind: 'lava', count: [0, 1] },
-      // The brittle kit: old storage pots, plugs poised to fall, and a wall
-      // that isn't one — EVERY cave hides at least one now (rooms-rolled
-      // mazes hunt wall-adjacent cells; convex caves tuck it against a
-      // cliff flank). Wave 2: gem lattices and seeping gas bladders.
+    // What a cave ALWAYS is, whichever face or variant rolls (the brittle-kit
+    // doctrine): webs and old bones, storage pots, plugs poised to fall, a
+    // wall that isn't one — EVERY cave hides at least one (rooms-rolled mazes
+    // hunt wall-adjacent cells; convex caves tuck it against a cliff flank) —
+    // gem lattices, gas bladders, a mineral vein to strike and, sometimes,
+    // the kit of whoever came spelunking before you.
+    common: [
+      { kind: 'web', count: [1, 3] }, { kind: 'bone_pile', count: [1, 3] },
       { kind: 'clay_pots', count: [1, 2] },
       { kind: 'crumbling_wall', count: [1, 3] },
       { kind: 'secret_wall', count: [1, 2] },
       { kind: 'crystal_cluster', count: [1, 3] },
       { kind: 'gas_pod', count: [0, 2] },
+      { kind: 'crystal_vein', count: [0, 2] },
+      { kind: 'spelunker_pack', count: [0, 1] },
+    ],
+    layout: [
+      { kind: 'brazier', count: [0, 2] },
+      { kind: 'rocks', count: [14, 22], radius: [20, 46] },
+      { kind: 'scree', count: [2, 4] }, { kind: 'rock_spire', count: [0, 2] },
+      { kind: 'stalagmite', count: [2, 5] },
+      { kind: 'flowstone', count: [1, 3] },
+      { kind: 'cliff', count: [3, 5] },
+      { kind: 'chasm', count: [0, 2] },
+      { kind: 'water', count: [0, 1] },
+      { kind: 'lava', count: [0, 1] },
+      { kind: 'guano_heap', count: [0, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'stalagmite_run' },
+    ],
+    // The cave's FACES within the face: what the water was doing down here.
+    // Rolled per mint by the strata fabric (caveFace.variantChance) — the
+    // base mixed crawl stays common; a dressed gallery is a find.
+    variants: [
+      {
+        name: 'dripstone gallery',
+        layout: [
+          { kind: 'rocks', count: [8, 14], radius: [20, 42] },
+          { kind: 'stalagmite', count: [5, 9] },
+          { kind: 'dripstone_column', count: [2, 4] },
+          { kind: 'flowstone', count: [2, 4] },
+          { kind: 'rimstone_pool', count: [1, 3] },
+          { kind: 'cliff', count: [2, 4] },
+          { kind: 'water', count: [0, 1] },
+          { kind: 'formation', count: [1, 2], formation: 'stalagmite_run' },
+          { kind: 'formation', count: [0, 1], formation: 'dripstone_colonnade' },
+        ],
+      },
+      {
+        name: 'crystal grotto',
+        layout: [
+          { kind: 'rocks', count: [8, 14], radius: [18, 40] },
+          { kind: 'crystal', count: [3, 6] },
+          { kind: 'crystal_cluster', count: [2, 4] },
+          { kind: 'crystal_vein', count: [1, 3] },
+          { kind: 'scree', count: [1, 3] },
+          { kind: 'cliff', count: [2, 4] },
+          { kind: 'chasm', count: [0, 1] },
+          { kind: 'formation', count: [1, 1], formation: 'crystal_garden' },
+        ],
+        theme: { accent: '#9fd8ff', obstacleEdge: '#5a6a9a' },
+      },
+      {
+        name: 'flooded gallery',
+        layout: [
+          { kind: 'water', count: [3, 5] },
+          { kind: 'mud', count: [2, 4] },
+          { kind: 'rimstone_pool', count: [2, 4] },
+          { kind: 'flowstone', count: [1, 3] },
+          { kind: 'rocks', count: [10, 16], radius: [18, 40] },
+          { kind: 'glowworm_veil', count: [1, 3] },
+          { kind: 'cliff', count: [2, 4] },
+          { kind: 'stalagmite', count: [1, 3] },
+        ],
+        theme: { water: '#164050', accent: '#7fc8d8' },
+      },
+      {
+        name: 'bat hollow',
+        layout: [
+          { kind: 'guano_heap', count: [3, 6] },
+          { kind: 'web', count: [2, 4] },
+          { kind: 'bone_pile', count: [2, 4] },
+          { kind: 'rocks', count: [10, 16], radius: [18, 42] },
+          { kind: 'stalagmite', count: [2, 4] },
+          { kind: 'cliff', count: [3, 5] },
+          { kind: 'chasm', count: [1, 2] },
+        ],
+      },
+    ],
+    compositions: [
+      { composition: 'dripstone_cathedral', chance: 0.16 },
+      { composition: 'glowworm_grotto', chance: 0.14 },
+      { composition: 'hermits_camp', chance: 0.12 },
     ],
     packs: {
       count: [3, 5], size: [3, 5],
@@ -2551,6 +2657,405 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     structures: [
       { structure: 'dungeon_block', chance: 0.22 },
+    ],
+  },
+
+  // THE DEPTHS — the sunless band's own face (strata band 3–4, world/strata
+  // .ts): Depthkin country, glowworm light, water that has never seen rain.
+  // The same country the Delver's boundless abyss belongs to — reached the
+  // slow way, by delving cave through cave through cave.
+  depths: {
+    id: 'depths', frontier: false,
+    sky: 'sheltered',
+    // The band's OWN face leads its band (the mul): the specialists flavor
+    // the Depths; the Depths are still, first, the Depths.
+    caveFace: { strata: { from: 3, fadeIn: 1, mul: 1.5 }, variantChance: 0.45 },
+    caveLayouts: { plains: 4, rooms: 2, dungeon: 2, labyrinth: 1.5 },
+    nameFirst: ['Sunless', 'Echoless', 'Hushed', 'Chasmveiled', 'Blindstone', 'Yawning', 'Sightless', 'Aphotic', 'Stonelocked', 'Soundless', 'Unlit', 'Gulfborn', 'Everdark', 'Starving', 'Forgotten', 'Depthbound'],
+    nameSecond: ['Depths', 'Gulf', 'Hollows', 'Reaches', 'Galleries', 'Abysm', 'Fathoms', 'Silence', 'Vault', 'Warrens', 'Dark', 'Under'],
+    theme: {
+      ambientDark: 0.6,
+      floor: '#08060e', grid: '#110d1c', border: '#3a3452',
+      obstacle: '#221d38', obstacleEdge: '#453e66', accent: '#7fe0d8',
+      chasm: '#020204', water: '#0e1e2c', mud: '#120f1c', wall: '#241f3c',
+      ground: {
+        scale: 1.1, strength: 1.1, bias: 0.4,
+        palette: ['#060410', '#0c0918', '#141024', '#1c1730', '#26203e'],
+      },
+      ambientFx: [{ kind: 'motes', color: '#7fe0d8', intensity: 0.25 }],
+    },
+    sizeW: [1400, 2000], sizeH: [1050, 1500],
+    common: [
+      { kind: 'web', count: [1, 3] }, { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'crumbling_wall', count: [1, 2] },
+      { kind: 'secret_wall', count: [1, 2] },
+      { kind: 'crystal_vein', count: [1, 3] },
+      { kind: 'gas_pod', count: [0, 2] },
+      { kind: 'spelunker_pack', count: [0, 1] },
+    ],
+    layout: [
+      { kind: 'rocks', count: [12, 20], radius: [22, 48] },
+      { kind: 'stalagmite', count: [4, 8] },
+      { kind: 'dripstone_column', count: [1, 3] },
+      { kind: 'glowworm_veil', count: [3, 6] },
+      { kind: 'rimstone_pool', count: [1, 3] },
+      { kind: 'flowstone', count: [1, 3] },
+      { kind: 'cliff', count: [3, 5] },
+      { kind: 'chasm', count: [1, 3] },
+      { kind: 'water', count: [0, 2] },
+      { kind: 'formation', count: [0, 1], formation: 'stalagmite_run' },
+    ],
+    variants: [
+      {
+        name: 'glowworm deeps',
+        layout: [
+          { kind: 'glowworm_veil', count: [6, 10] },
+          { kind: 'rimstone_pool', count: [2, 4] },
+          { kind: 'water', count: [1, 3] },
+          { kind: 'rocks', count: [10, 16], radius: [20, 44] },
+          { kind: 'stalagmite', count: [2, 5] },
+          { kind: 'cliff', count: [2, 4] },
+          { kind: 'formation', count: [1, 1], formation: 'glowworm_court' },
+        ],
+        theme: { accent: '#8fe8c8' },
+      },
+      {
+        name: 'riven dark',
+        layout: [
+          { kind: 'chasm', count: [3, 5] },
+          { kind: 'rock_spire', count: [2, 4] },
+          { kind: 'scree', count: [2, 4] },
+          { kind: 'rocks', count: [12, 18], radius: [22, 48] },
+          { kind: 'stalagmite', count: [3, 6] },
+          { kind: 'cliff', count: [3, 5] },
+          { kind: 'glowworm_veil', count: [1, 3] },
+        ],
+      },
+    ],
+    compositions: [
+      { composition: 'glowworm_grotto', chance: 0.35 },
+      { composition: 'dripstone_cathedral', chance: 0.22 },
+      { composition: 'hermits_camp', chance: 0.12 },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        // The Depthkin: born down here, no idea of the sky (the Descent's
+        // overlay faction — the ladder's Depths band is their home ground).
+        { id: 'depthkin_crawler', weight: 3 },
+        { id: 'depthkin_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'depthkin_seer', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'depthkin_brute', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // The dark's own anglers and alarms, denser than the galleries above.
+        { id: 'gloom_fisher', weight: 2 },
+        { id: 'stalagmite_lurker', weight: 2 },
+        { id: 'cavern_shrieker', weight: 1 },
+        { id: 'gloomling', weight: 2 },
+        { id: 'gloom_stalker', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        { id: 'widow_matron', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'bulwark_scuttler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'grub_clutch',
+    biome: 'cavern',
+    objectives: [
+      { kind: 'clear', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+    ],
+    structures: [
+      { structure: 'dungeon_block', chance: 0.18 },
+    ],
+  },
+
+  // MAGMA GALLERY — the underground remembering it is a volcano. Under
+  // volcanic country it's the neighbourhood (caveFace.biomes); anywhere else
+  // you have simply delved deep enough for the world's own heat — the strata
+  // envelope answers "why is the lava pit HERE?" both ways.
+  magma_gallery: {
+    id: 'magma_gallery', frontier: false,
+    sky: 'sheltered',
+    caveFace: {
+      strata: { stops: [[1, 0.1], [2, 0.22], [3, 0.55], [4, 1]] },
+      biomes: { volcanic: 8, flame: 6, steppes: 2.5, rift: 2.5, desert: 1.5, '*': 1 },
+      variantChance: 0.35,
+    },
+    caveLayouts: { plains: 5, winding: 2, rooms: 1 },
+    nameFirst: ['Smoldering', 'Emberlit', 'Slagbound', 'Moltenveined', 'Cindershot', 'Basaltbound', 'Scorchhollow', 'Ashchoked', 'Magmascarred', 'Furnacedeep', 'Firegut', 'Glowering'],
+    nameSecond: ['Gallery', 'Forgeways', 'Flowcaves', 'Undercroft', 'Slagworks', 'Emberdeep', 'Crucible', 'Ventworks', 'Firehollow', 'Scoria'],
+    theme: {
+      ambientDark: 0.42,
+      heat: 0.85,
+      floor: '#140b08', grid: '#1f1009', border: '#5a3018',
+      obstacle: '#3a2014', obstacleEdge: '#7a4222', accent: '#ff8a3a',
+      lava: '#7a1a08', chasm: '#160502', wall: '#2e1a10',
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.35, color: '#ffb070' }],
+    },
+    sizeW: [1150, 1600], sizeH: [880, 1250],
+    common: [
+      { kind: 'crumbling_wall', count: [1, 2] },
+      { kind: 'secret_wall', count: [1, 1] },
+      { kind: 'cinder', count: [1, 3] },
+      { kind: 'crystal_vein', count: [0, 2] },
+      { kind: 'spelunker_pack', count: [0, 1] },
+    ],
+    // The volcanic doctrine: ground hazards (lava, ravine) stamp FIRST so the
+    // solids placed after honour their forbidOn.
+    layout: [
+      { kind: 'lava', count: [1, 3] },
+      { kind: 'ravine', count: [0, 1] },
+      { kind: 'ember_vent', count: [1, 3] },
+      { kind: 'obsidian', count: [3, 6] },
+      { kind: 'basalt_column', count: [2, 5] },
+      { kind: 'rocks', count: [10, 16], radius: [20, 44] },
+      { kind: 'scree', count: [1, 3] },
+      { kind: 'magma_core', count: [0, 1] },
+      { kind: 'chasm', count: [0, 1] },
+      { kind: 'formation', count: [0, 1], formation: 'basalt_procession' },
+    ],
+    variants: [
+      {
+        name: 'cooled flows',
+        layout: [
+          { kind: 'basalt_column', count: [4, 8] },
+          { kind: 'obsidian', count: [4, 7] },
+          { kind: 'cinder', count: [2, 4] },
+          { kind: 'rocks', count: [10, 16], radius: [20, 44] },
+          { kind: 'lava', count: [0, 1] },
+          { kind: 'chasm', count: [0, 1] },
+          { kind: 'formation', count: [1, 2], formation: 'basalt_procession' },
+        ],
+        theme: { accent: '#d8905a', heat: 0.6 },
+      },
+      {
+        name: 'living forge',
+        layout: [
+          { kind: 'lava', count: [2, 4] },
+          { kind: 'lava_vent', count: [1, 2] },
+          { kind: 'ember_vent', count: [2, 4] },
+          { kind: 'magma_core', count: [1, 2] },
+          { kind: 'obsidian', count: [3, 5] },
+          { kind: 'rocks', count: [8, 12], radius: [18, 40] },
+          { kind: 'basalt_column', count: [1, 3] },
+        ],
+        theme: { heat: 1, ambientDark: 0.36 },
+      },
+    ],
+    compositions: [
+      { composition: 'hermits_camp', chance: 0.1 },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'magma_worm', weight: 3 },
+        { id: 'magma_lurker', weight: 2, presence: { from: 6, fadeIn: 3 } },
+        { id: 'fire_golem', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'cinder_hound', weight: 2 },
+        { id: 'ashling', weight: 2 },
+        { id: 'slag_brute', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'rockgrub', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'spitting_horror', weight: 1, presence: { to: 14, fadeOut: 7 } },
+        { id: 'cave_bat', weight: 1 },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    biome: 'cavern',
+    objectives: [
+      { kind: 'clear', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+    ],
+  },
+
+  // RIME GALLERY — the underground under winter: blue ice, brittle fangs,
+  // breath you can see. The neighbourhood under tundra and taiga; a rare
+  // cold pocket anywhere else (caveFace.biomes '*' runs low on purpose).
+  rime_gallery: {
+    id: 'rime_gallery', frontier: false,
+    sky: 'sheltered',
+    caveFace: {
+      strata: { stops: [[1, 0.35], [2, 0.6], [3, 0.8]] },
+      biomes: { tundra: 8, taiga: 5, highland: 2, '*': 0.22 },
+      variantChance: 0.35,
+    },
+    caveLayouts: { plains: 5, rooms: 1.5, labyrinth: 0.8 },
+    nameFirst: ['Hoarbound', 'Rimelocked', 'Glacierheart', 'Frostveined', 'Icefanged', 'Winterdeep', 'Shiverstone', 'Coldvault', 'Hailborn', 'Glassbound', 'Frozen', 'Snowblind'],
+    nameSecond: ['Gallery', 'Icecaves', 'Rimeworks', 'Hollow', 'Frostdeep', 'Undercroft', 'Coldreach', 'Icevault', 'Glacier', 'Hibernal'],
+    theme: {
+      ambientDark: 0.46,
+      floor: '#0d1218', grid: '#141c26', border: '#3c5468',
+      obstacle: '#26384a', obstacleEdge: '#4a6a84', accent: '#9fd8f0',
+      water: '#123246', chasm: '#04070c', wall: '#22344a',
+      ground: {
+        scale: 1.3, strength: 1.05, bias: 0.46,
+        palette: ['#0a0f16', '#101823', '#182432', '#223243', '#2e4258'],
+      },
+    },
+    sizeW: [1150, 1600], sizeH: [880, 1250],
+    common: [
+      { kind: 'icicle_cluster', count: [1, 3] },
+      { kind: 'crumbling_wall', count: [1, 2] },
+      { kind: 'secret_wall', count: [1, 1] },
+      { kind: 'crystal_vein', count: [0, 2] },
+      { kind: 'spelunker_pack', count: [0, 1] },
+    ],
+    layout: [
+      { kind: 'ice', count: [3, 5] },
+      { kind: 'ice_spike', count: [2, 5] },
+      { kind: 'snowdrift', count: [2, 4] },
+      { kind: 'rocks', count: [10, 16], radius: [20, 44] },
+      { kind: 'dripstone_column', count: [1, 3] },
+      { kind: 'stalagmite', count: [2, 4] },
+      { kind: 'cliff', count: [2, 4] },
+      { kind: 'water', count: [0, 1] },
+      { kind: 'chasm', count: [0, 1] },
+      { kind: 'formation', count: [0, 1], formation: 'ice_teeth' },
+    ],
+    variants: [
+      {
+        name: 'crevasse',
+        layout: [
+          { kind: 'chasm', count: [2, 4] },
+          { kind: 'ice', count: [3, 5] },
+          { kind: 'ice_spike', count: [3, 6] },
+          { kind: 'rocks', count: [8, 14], radius: [20, 44] },
+          { kind: 'scree', count: [2, 4] },
+          { kind: 'cliff', count: [3, 5] },
+          { kind: 'formation', count: [1, 2], formation: 'ice_teeth' },
+        ],
+      },
+      {
+        name: 'frozen mere',
+        layout: [
+          { kind: 'water', count: [2, 3] },
+          { kind: 'ice', count: [4, 6] },
+          { kind: 'rimstone_pool', count: [1, 3] },
+          { kind: 'ice_spike', count: [2, 4] },
+          { kind: 'rocks', count: [8, 14], radius: [18, 40] },
+          { kind: 'dripstone_column', count: [1, 3] },
+          { kind: 'cliff', count: [2, 4] },
+        ],
+        theme: { water: '#0e3c56', accent: '#bfe8f8' },
+      },
+    ],
+    compositions: [
+      { composition: 'hermits_camp', chance: 0.12 },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'rime_stone', weight: 2 },
+        { id: 'ice_golem', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'frost_witch', weight: 2 },
+        { id: 'husk_swarmer', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'prism_creeper', weight: 1, presence: { from: 7, fadeIn: 3 } },
+        { id: 'cave_bat', weight: 2 },
+        { id: 'rockgrub', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'gloom_fisher', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    biome: 'cavern',
+    objectives: [
+      { kind: 'clear', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+    ],
+  },
+
+  // FUNGAL HOLLOW — the mycelium in the dark: the Bloom's underground root,
+  // glowcap lanterns, spore-choked air. The neighbourhood under mycelia
+  // country; common enough anywhere damp (the '*' base) — rot needs no map.
+  fungal_hollow: {
+    id: 'fungal_hollow', frontier: false,
+    sky: 'sheltered',
+    caveFace: {
+      strata: { stops: [[1, 0.35], [2, 0.8], [3, 1], [5, 0.7]] },
+      biomes: { mycelia: 8, grove: 1.6, forest: 1.6, jungle: 2, marsh: 2.5, '*': 0.65 },
+      variantChance: 0.4,
+    },
+    caveLayouts: { mycelia: 3.5, plains: 3, rooms: 1.5 },
+    nameFirst: ['Sporelit', 'Mycelial', 'Rotveined', 'Capshadowed', 'Glowfringe', 'Moulddeep', 'Hyphal', 'Damprot', 'Fruiting', 'Veilspore', 'Softglow', 'Puffcap'],
+    nameSecond: ['Hollow', 'Undergrove', 'Sporeways', 'Rotcellar', 'Warrens', 'Beds', 'Grotto', 'Bloomdeep', 'Tangle', 'Cellars'],
+    theme: {
+      ambientDark: 0.5,
+      floor: '#100a18', grid: '#1a1228', border: '#5a4a7a',
+      obstacle: '#32284e', obstacleEdge: '#66548e', accent: '#8fd06f',
+      wall: '#32284e', water: '#12283c', mud: '#181226',
+      ground: {
+        scale: 1.2, strength: 1.1, bias: 0.42, speckles: 1.2,
+        palette: ['#0b0714', '#150e20', '#1f152e', '#2b1e3e', '#38294e'],
+      },
+      ambientFx: [{ kind: 'spores', intensity: 0.7, color: '#b8e88f' }],
+    },
+    sizeW: [1200, 1700], sizeH: [900, 1300],
+    common: [
+      { kind: 'burst_sac', count: [1, 3] },
+      { kind: 'puffcap_cluster', count: [1, 2] },
+      { kind: 'secret_wall', count: [1, 1] },
+      { kind: 'glow_cap', count: [2, 4] },
+      { kind: 'spelunker_pack', count: [0, 1] },
+    ],
+    layout: [
+      { kind: 'giant_mushroom', count: [2, 5] },
+      { kind: 'spore_pod', count: [1, 3] },
+      { kind: 'mycelial_mat', count: [2, 4] },
+      { kind: 'shelf_fungus', count: [2, 4] },
+      { kind: 'toadstool', count: [2, 5] },
+      { kind: 'rocks', count: [8, 14], radius: [18, 40] },
+      { kind: 'fern', count: [1, 3] },
+      { kind: 'mushroom_ring', count: [0, 1] },
+      { kind: 'formation', count: [0, 1], formation: 'fungal_procession' },
+    ],
+    variants: [
+      {
+        name: 'glowcap cellars',
+        layout: [
+          { kind: 'glow_cap', count: [5, 9] },
+          { kind: 'giant_mushroom', count: [2, 4] },
+          { kind: 'mycelial_mat', count: [3, 5] },
+          { kind: 'toadstool', count: [3, 6] },
+          { kind: 'rocks', count: [6, 12], radius: [18, 38] },
+          { kind: 'formation', count: [1, 2], formation: 'fungal_procession' },
+        ],
+        theme: { ambientDark: 0.44 },
+      },
+      {
+        name: 'sporefall',
+        layout: [
+          { kind: 'spore_pod', count: [3, 5] },
+          { kind: 'burst_sac', count: [2, 4] },
+          { kind: 'puffcap_cluster', count: [2, 4] },
+          { kind: 'giant_mushroom', count: [2, 4] },
+          { kind: 'mycelial_mat', count: [2, 4] },
+          { kind: 'rocks', count: [6, 12], radius: [18, 38] },
+          { kind: 'shelf_fungus', count: [1, 3] },
+        ],
+        theme: { ambientFx: [{ kind: 'spores', intensity: 1.1, color: '#cff09f' }] },
+      },
+    ],
+    compositions: [
+      { composition: 'fairy_court', chance: 0.3 },
+      { composition: 'glowworm_grotto', chance: 0.15 },
+      { composition: 'hermits_camp', chance: 0.1 },
+    ],
+    packs: {
+      count: [4, 6], size: [3, 5],
+      table: [
+        { id: 'fungal_sporeling', weight: 3 },
+        { id: 'fungal_spitter', weight: 2 },
+        { id: 'fungal_puffball', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'fungal_brute', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'fungal_tender', weight: 1, presence: { from: 10, fadeIn: 5 } },
+        { id: 'mushroomling', weight: 2, presence: { to: 14, fadeOut: 5 } },
+        { id: 'myconid_warrior', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'myconid_capcaller', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'spore_drifter', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'giant_maggot', weight: 2, presence: { to: 18, fadeOut: 8 } },
+      ],
+    },
+    spawnerId: 'spore_sac',
+    biome: 'cavern',
+    objectives: [
+      { kind: 'clear', weight: 1 },
+      { kind: 'spawners', weight: 1 },
     ],
   },
 
@@ -4276,6 +4781,40 @@ export function biomesWithoutTileset(fieldBiomes: string[]): string[] {
   return fieldBiomes.filter(b => !(TILESETS_BY_BIOME[b]?.length));
 }
 
+// --- CAVE-FACE resolver (the strata fabric's underground mint) ----------------
+/** Tileset ids carrying a caveFace claim — built once, so a new underground
+ *  tileset joins the pool with one field (the TILESETS_BY_BIOME doctrine). */
+export const CAVE_FACE_IDS: string[] =
+  Object.values(TILESETS).filter(t => t.caveFace).map(t => t.id);
+
+/** The face an UNFORCED cave mint wears: every caveFace tileset weighted by
+ *  its strata envelope at the mint's caveDepth × its affinity for the surface
+ *  ANCHOR biome the ladder hangs beneath. One seeded draw; a degenerate pool
+ *  (every weight zero) falls back to the classic cavern so a mouth never
+ *  starves. Mirrors pickTilesetForBiome — same envelope algebra, the OTHER
+ *  axis (down instead of inward). */
+export function pickCaveFace(depth: number, anchorBiome: string | undefined, rng: Rng): string {
+  const c = CAVE_FACE_IDS;
+  if (!c.length) return 'cavern';
+  const weights = c.map(id => {
+    const f = TILESETS[id].caveFace!;
+    const bio = f.biomes
+      ? (anchorBiome !== undefined && f.biomes[anchorBiome] !== undefined
+        ? f.biomes[anchorBiome] : f.biomes['*'] ?? 1)
+      : 1;
+    return presenceMul(f.strata, depth) * bio;
+  });
+  let total = 0;
+  for (const w of weights) total += w;
+  if (total <= 0) return TILESETS['cavern'] ? 'cavern' : c[0];
+  let roll = rng.range(0, total); // the one contractual draw
+  for (let i = 0; i < c.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return c[i];
+  }
+  return c[c.length - 1];
+}
+
 // ---------------------------------------------------------------------------
 // BIOME LORE — one display title + one-line blurb per TILESETS entry.
 //
@@ -4315,6 +4854,10 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   meadow:         { title: 'Meadow',            blurb: 'A gentle grove breather — grass, scattered trees and low-threat wilds, a stretch where the world catches its breath.' },
   peninsula:      { title: 'Peninsula',         blurb: 'A near-round isle ringed entirely by water — all shore, nowhere to fall back to but the sea itself.' },
   cavern:         { title: 'Caverns',           blurb: 'The tight, rocky underground a cave mouth descends into — off the world graph, reached only ever by going down.' },
+  depths:         { title: 'The Depths',        blurb: 'The sunless band beneath the galleries — Depthkin country lit only by glowworm colonies, where the ladder starts meaning it. The Brink, and the breach, wait below.' },
+  magma_gallery:  { title: 'Magma Gallery',     blurb: 'The underground remembering it is a volcano: basalt colonnades, ember vents, floors still deciding to be liquid. Near volcanic country it is the neighbourhood; elsewhere, you have simply gone deep enough.' },
+  rime_gallery:   { title: 'Rime Gallery',      blurb: 'Winter under the world: blue ice, brittle fangs, meres frozen mid-ripple. The cold pockets under tundra and taiga — and a rare deep chill anywhere else.' },
+  fungal_hollow:  { title: 'Fungal Hollow',     blurb: 'The mycelium in the dark — glowcap lanterns, spore-choked air, the Bloom’s patient underground root. Rot needs no map; anywhere damp will do.' },
   descent:        { title: 'The Descent',       blurb: "A boundless lightless abyss the Delver's mineshaft drops into — push back the dark, harvest Echoes, and resurface before the deep keeps you." },
   grand_arena:    { title: 'Grand Arena',       blurb: 'A sand pit under open sky ringed with roaring crowd-rows and braziered rails — the colosseum where the ways in breach the very seats.' },
   abyssal_rift:   { title: 'The Abyssal',       blurb: "A winding cave-gut of narrow ways over bottomless rents, everything lit violet by the Abyssal faction's own cold light." },

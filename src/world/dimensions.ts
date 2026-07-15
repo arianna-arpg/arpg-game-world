@@ -182,14 +182,17 @@ registerDimension({
     label: 'The River of Flame',
     terminus: { radius: 260, compositions: [{ composition: 'hellforge_landing', chance: 1 }] },
   }],
-  // Entered by delving: a surface cave ladder three deep tears a breach whose
-  // realm gate mints The Hellgate (the one marked cross-dimension road).
+  // Entered by delving: a surface cave ladder FIVE deep — down through the
+  // Galleries and the whole sunless Depths band (world/strata.ts) to the
+  // Brink — tears a breach whose realm gate mints The Hellgate (the one
+  // marked cross-dimension road). The stack reads top to bottom: surface,
+  // caverns, the Depths, the Underworld.
   // AND — vanishingly rarely — by walking through: the SUNDERING (a rift-
   // biome composition) plants a standing 'hell_breach' doodad on the
   // surface, and the gateDoodad scan below turns it into the same crossing
   // (same Hellgate, same road home — a second door, never a second hell).
   entry: {
-    kind: 'cave_breach', minDepth: 3,
+    kind: 'cave_breach', minDepth: 5,
     gate: { id: 'uw_gate', name: 'The Hellgate', biome: 'rift', seedSalt: 0x4e11 },
     gateDoodad: 'hell_breach',
   },
