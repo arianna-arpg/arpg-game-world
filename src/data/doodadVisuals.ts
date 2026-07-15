@@ -444,22 +444,47 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
   },
   // --- THE UNDERGROWTH KIT (the jungle's cut-your-own-path fabric) ----------
+  // THE CUT CONTRACT — the player's teaching language, held everywhere the
+  // jungle grows: growth that YIELDS TO THE BLADE **breathes** (live swaying
+  // crowns via canopy.live — sparse kinds only, the bake stays the rule) and
+  // wears the PALE-TIPPED brighter greens; the standing verdure wall is
+  // still and deep (its foliage is BAKED texture that never moves). If it
+  // sways, cut it. If it's still, walk the lane.
   // The PLUG: a wall of living growth choking a trail — dense true-bush body
-  // under a bramble crown, one good cut from opening. Reads DARKER than the
-  // walkable brush so "that way is work" lands at a glance.
+  // under a BREATHING bramble crown, one good cut from opening.
   jungle_brush: {
     longShadow: 0.5,
     painter: 'brush', order: 51, bakeWhole: 'static',
     params: { color: '#12300f', leaves: 1.35, sprigs: true },
-    canopy: { painter: 'bramble', params: { fill: '#1a4416', edge: '#0a2408', spine: '#3f7a26', berries: { chance: 0.15 } } },
+    canopy: {
+      painter: 'bramble', live: true,
+      params: { fill: '#245818', edge: '#0a2408', spine: '#5a9a34', berries: { color: '#c8e08a', chance: 0.3 }, sway: 0.045 },
+    },
     blend: { strength: 0.4, feather: 22, color: '#13260c' },
   },
-  // The FACE-CUT: the same growth KNOTTED over the verdure wall — the brighter
-  // spine is the tell that this knot pays whoever carves in.
+  // The FACE-CUT: the same growth KNOTTED over the verdure wall — brighter
+  // spine, breathing crown: the knot on the still wall that begs the blade.
   verdure_face: {
     painter: 'brush', order: 51, bakeWhole: 'static',
     params: { color: '#173a12', leaves: 1.3, sprigs: true },
-    canopy: { painter: 'bramble', params: { fill: '#1e4c18', edge: '#0a2408', spine: '#66a238' } },
+    canopy: {
+      painter: 'bramble', live: true,
+      params: { fill: '#2a5c1e', edge: '#0a2408', spine: '#7ac244', sway: 0.05 },
+    },
+  },
+  // The FRINGE: the wall's own overhang — broad fronds arching out of the
+  // verdure face into the lane (rot = the outward normal the recipe stamps).
+  // Pure dressing: still, deep, walk-through — the contract's OTHER half.
+  verdure_fringe: {
+    painter: 'wallFronds', order: 46, bakeWhole: 'static',
+    params: { color: 'theme:tree|#2c4424' },
+  },
+  // The COIL: one segment of the vine mass — it yields, so it sways (whole-
+  // sprite shear) and wears the pale tips. Cut a segment; the organism
+  // keeps its shape either side of the gap.
+  vine_coil: {
+    painter: 'vineCoil', order: 51, bakeWhole: 'sway', shadow: 0.35,
+    params: { vine: '#3f6a2c', deep: '#2c4a1e', leaf: '#5f9a34', tip: '#8ac860' },
   },
   // The CURTAIN: a vine mat underfoot, the draped strands riding the canopy
   // pass ABOVE actors — the occlude fade parts them for whoever walks through.

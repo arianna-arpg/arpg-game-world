@@ -148,7 +148,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   jungle: { patronFaction: 'junglekin', mapColor: '#1f7a42', label: 'Jungle', spacing: 54,
     climate: { temperature: 'warm', moisture: 'wet' },
     meld: 'jungle_meld',
-    allowedLayouts: { thicket: 4, forest: 1 },
+    // Four moods, one country: the THROAT (thicket), the CATHEDRAL
+    // (gallery — the thicket family's open face), the ROOF (forest in
+    // jungle wood), and the RIVER (a fordable jungle waterway).
+    allowedLayouts: { thicket: 4, gallery: 1.5, forest: 1, riverland: 1 },
     layoutParams: {
       // The thicket dials — the claustrophobia gradient in one place: lanes
       // tighten toward the heart, plugs and dens thicken with them.
@@ -166,6 +169,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
       ],
       forestCoverEdge: 0.5, forestCoverDeep: 0.9,
       forestClearings: [2, 4],
+      // The river face: a warm jungle waterway, forded not frozen.
+      riverLiquid: 'water', causeways: [1, 2],
     },
     landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.1 }] },
   // Gravelands raise mausoleum labyrinths (a rare whole-zone hedge-maze bastion)

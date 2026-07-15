@@ -3905,8 +3905,10 @@ export const MONSTERS: Record<string, MonsterDef> = {
     brain: {
       type: 'caster',
       rules: [{
-        // The caller seeds its kin: nearby junglekin fight wreathed in spores.
-        when: { alliesWithin: { count: 2, radius: 280 } }, every: [11, 16], hold: [0.3, 0.5],
+        // The caller seeds its kin: nearby junglekin fight wreathed in
+        // spores. distUnder keeps the litany ON-SCREEN — a dense mint's
+        // dozen callers chanting from across the zone was a wall of text.
+        when: { alliesWithin: { count: 2, radius: 280 }, distUnder: 700 }, every: [11, 18], hold: [0.3, 0.5],
         announce: 'the caller seeds the air…',
         actions: [{ do: 'buff', buff: { type: 'buff', id: 'spore_ward', duration: 6, mods: [mod('evasion', 'flat', 25), mod('lifeRegen', 'flat', 3)] } }],
       }],

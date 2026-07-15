@@ -1220,6 +1220,20 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'palm', count: [4, 7] }, { kind: 'fern', count: [2, 4] },
         { kind: 'cave', count: [0, 1] },
       ] },
+      // The vine face: the mass in charge — coiled organisms slung across
+      // the lanes (cut a segment; the body keeps its shape), curtains
+      // everywhere, wisp-light where the strands hang thickest.
+      { name: 'weeping tangle', layout: [
+        // The mass drapes OVER the verdure (walk-gate ignored — see the
+        // thicket recipe's vine phase for the doctrine).
+        { kind: 'formation', count: [2, 3], formation: 'vine_mass', rules: { ignore: ['walk'] } },
+        { kind: 'liana_veil', count: [3, 5] },
+        { kind: 'vines', count: [2, 4] },
+        { kind: 'jungle_bloom', count: [2, 3] },
+        { kind: 'marsh_wisp', count: [1, 2] },
+        { kind: 'palm', count: [3, 6] }, { kind: 'fern', count: [2, 4] },
+        { kind: 'cave', count: [0, 1] },
+      ] },
     ],
     nameFirst: ['Verdant', 'Tangleroot', 'Emerald', 'Fevered', 'Greenmaw', 'Vinewrought', 'Overgrown', 'Mistleaf', 'Rotbloom', 'Canopied', 'Thornvine', 'Sapheart', 'Fernshade', 'Leafshroud', 'Jadewild', 'Snarlgreen', 'Humid', 'Tanglevein'],
     nameSecond: ['Canopy', 'Snarl', 'Depths', 'Hollow', 'Thicket', 'Wilds', 'Tangle', 'Overgrowth', 'Verge', 'Hush', 'Reach', 'Mire', 'Bower', 'Greens', 'Vinework', 'Floor'],
@@ -1323,6 +1337,7 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'liana_veil', count: [2, 4] },
         { kind: 'fern', count: [2, 4] },
         { kind: 'vines', count: [1, 3] },
+        { kind: 'formation', count: [0, 1], formation: 'vine_mass', rules: { ignore: ['walk'] } },
         { kind: 'formation', count: [0, 1], formation: 'colossus_wreck' },
       ] },
       // The water table won: standing pools over the flagstone, drowned

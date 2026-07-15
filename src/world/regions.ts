@@ -94,6 +94,11 @@ export interface RegionVisualSpec {
    *  the built-structure read. A flag, not an id compare: any future
    *  fortification region opts in with one word. */
   masonry?: boolean;
+  /** ORGANIC FOLIAGE over the wall fill — seeded leaf clumps + sprig curls
+   *  in the wall's own shade ramp, so a LIVING wall (the jungle's verdure)
+   *  reads as packed vegetation instead of flat paint. Masonry's green
+   *  sibling: a flag, not an id compare. */
+  foliage?: boolean;
   /** A WINDOW to whatever renders BENEATH the ground layer: the baker CLEARS
    *  these cells instead of filling them, so the understory (the zone far
    *  below a cloud shelf, a starfield, the frame backdrop) shows through the
@@ -455,7 +460,7 @@ registerRegion({ id: 'fungal_wall', walkable: false, blocks: true, label: 'the m
 // green (fill lum ≈ .20 vs the jungle floor's ≈ .06 — CONTRAST GUARD clear).
 registerRegion({ id: 'verdure', walkable: false, blocks: true, label: 'the verdure',
   blocksShot: true, blocksSight: true,
-  visual: { fill: '#22421a', alpha: 1, edge: { color: '#4f7a2c', width: 5 } } });
+  visual: { fill: '#22421a', alpha: 1, foliage: true, edge: { color: '#4f7a2c', width: 5 } } });
 // RUIN WALL: root-riven masonry — the sunken ruin interiors' negative space
 // (the jungle swallowed a civilization; its halls are what's left). A TRUE
 // WALL like rampart, coursed so the halls read BUILT — the pale moss-grey rim

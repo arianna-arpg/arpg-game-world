@@ -101,8 +101,12 @@ export interface DoodadVisualDef {
   longShadow?: number;
   /** Emissive light contributed to the light layer. */
   light?: LightSpec;
-  /** Canopy crown painter (occluding kinds draw this ABOVE actors). */
-  canopy?: { painter: string; params?: Record<string, unknown> };
+  /** Canopy crown painter (occluding kinds draw this ABOVE actors). `live`
+   *  opts THIS KIND's crowns out of the variant-sprite bake so the painter
+   *  runs per frame (time-driven motion — THE CUT CONTRACT: what yields to
+   *  the blade breathes). Reserve it for sparse kinds: a sealed forest
+   *  holds hundreds of crowns and live-painting them was the frame drop. */
+  canopy?: { painter: string; params?: Record<string, unknown>; live?: true };
   /** Whole-doodad sprite baking for GROUND kinds whose painter is time-free
    *  ('static': brush clumps) or whose only time input is sway ('sway':
    *  ferns — baked at rest, swayed by a whole-sprite shear at blit). The
@@ -3565,6 +3569,136 @@ const buttressRoot: GroupPainter = (env, group, def) => {
         ctx.globalAlpha = 1;
       }
     }
+    ctx.restore();
+  }
+};
+
+/** WALL FRONDS — the verdure wall's overhang: a fan of broad leaf blades
+ *  arching OUT of the wall face into the lane (rot = the outward normal),
+ *  a dark base clump where they root against the mass. The fringe that
+ *  turns a carved corridor edge into a treeline — placed by the thicket
+ *  recipes along lane-facing wall cells; any carved biome can wear it in
+ *  its own tones. Time-free (bakeWhole 'static'). */
+const wallFronds: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec; deep?: ColorSpec };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.color, theme, theme.tree ?? '#2c4424');
+  const deep = resolveColor(p.deep, theme, shade(base, -0.35));
+  ctx.lineCap = 'round';
+  for (const o of group) {
+    const seed = ((o.pos.x * 17 + o.pos.y * 9) | 0) >>> 0;
+    const out = o.rot ?? 0; // the outward normal: fronds reach INTO the lane
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(out);
+    // The root clump: dark mass hugging the wall side (-x).
+    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = deep;
+    ctx.beginPath();
+    ctx.ellipse(-o.radius * 0.35, 0, o.radius * 0.55, o.radius * 0.8, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Broad blades fanning outward, each a tapered bowed stroke + midrib.
+    const blades = 3 + (seed % 3);
+    for (let i = 0; i < blades; i++) {
+      const t = blades === 1 ? 0.5 : i / (blades - 1);
+      const a = (t - 0.5) * 1.5 + (hash01(i, seed + 3) - 0.5) * 0.24;
+      const len = o.radius * (1.0 + hash01(i, seed + 7) * 0.55);
+      const tone = i % 2 ? base : shade(base, 0.14);
+      const tipX = Math.cos(a) * len, tipY = Math.sin(a) * len;
+      const bowX = Math.cos(a + 0.35) * len * 0.5, bowY = Math.sin(a + 0.35) * len * 0.5;
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = tone;
+      ctx.lineWidth = Math.max(2.2, o.radius * 0.3 * (1 - t * 0.25));
+      ctx.beginPath();
+      ctx.moveTo(-o.radius * 0.2, 0);
+      ctx.quadraticCurveTo(bowX, bowY, tipX, tipY);
+      ctx.stroke();
+      // The midrib: a darker vein down the blade.
+      ctx.strokeStyle = shade(tone, -0.3);
+      ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.6;
+      ctx.beginPath();
+      ctx.moveTo(-o.radius * 0.1, 0);
+      ctx.quadraticCurveTo(bowX, bowY, tipX * 0.96, tipY * 0.96);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+};
+
+/** THE VINE COIL — one segment of a larger organism: a woven bundle of
+ *  strands drawn ELONGATED along the doodad's rot (length ≈ 2.3r), so a
+ *  chain of coils laid by the vine_mass formation reads as ONE continuous
+ *  body. Each coil is individually cuttable (the brittle rule) — the mass
+ *  yields a path where it's cut and keeps its form everywhere else. Pale
+ *  leaf-tips ride the cut contract: it yields, so it wears the bright. */
+const vineCoil: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as {
+    vine?: ColorSpec; deep?: ColorSpec; leaf?: ColorSpec; tip?: ColorSpec;
+  };
+  const { ctx, theme } = env;
+  const vine = resolveColor(p.vine, theme, '#3f6a2c');
+  const deep = resolveColor(p.deep, theme, shade(vine, -0.32));
+  const leaf = resolveColor(p.leaf, theme, shade(vine, 0.22));
+  const tip = resolveColor(p.tip, theme, shade(vine, 0.5));
+  ctx.lineCap = 'round';
+  for (const o of group) {
+    const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
+    const half = o.radius * 1.15; // half-LENGTH along the chain
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate(o.rot ?? 0); // +x runs along the mass
+    // Underside shadow so the bundle sits ON the ground.
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.ellipse(0, o.radius * 0.28, half * 0.95, o.radius * 0.5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // Three woven strands, phase-shifted sines braided down the length.
+    const strands = 3;
+    for (let s = 0; s < strands; s++) {
+      const phase = (s / strands) * Math.PI * 2 + hash01(s, seed) * 0.6;
+      const amp = o.radius * (0.3 + s * 0.08);
+      const tone = s === 0 ? deep : s === 1 ? vine : shade(vine, 0.12);
+      ctx.strokeStyle = tone;
+      ctx.lineWidth = Math.max(3, o.radius * (0.42 - s * 0.06));
+      ctx.beginPath();
+      const steps = 8;
+      for (let k = 0; k <= steps; k++) {
+        const t = k / steps;
+        const x = -half + t * half * 2;
+        const y = Math.sin(t * Math.PI * 2.2 + phase) * amp;
+        if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    // The knuckle: a pale joint ring mid-segment (the coil's own anatomy —
+    // and the natural place a blade reads "here").
+    ctx.strokeStyle = shade(vine, 0.34);
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, o.radius * 0.34, o.radius * 0.62, 0, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    // Leaf bursts at both ends + pale tips (the cut-contract palette).
+    for (const end of [-1, 1]) {
+      const ex = end * half * 0.92;
+      const n = 2 + ((seed >> (end + 2)) % 2);
+      for (let i = 0; i < n; i++) {
+        const a = (hash01(i, seed + end * 5 + 9) - 0.5) * 1.6 + (end < 0 ? Math.PI : 0);
+        const lx = ex + Math.cos(a) * o.radius * 0.5;
+        const ly = Math.sin(a) * o.radius * 0.5;
+        ctx.fillStyle = i === 0 ? tip : leaf;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.ellipse(lx, ly, o.radius * 0.3, o.radius * 0.15, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 };
@@ -7142,7 +7276,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   statue, wayshrine, gallows, fishingRack, kilnMound,
   tentacleField, pentagram, wardSeal, bonePile, boneShelf, leyLine, crowdRow, door, breach, landmass, beacon, surveySpire, fallback,
   pyre, hangingCage, warBanner, hellforge,
-  gateArch, tortureRack, buttressRoot,
+  gateArch, tortureRack, buttressRoot, wallFronds, vineCoil,
 };
 
 // --- CANOPY CROWN PAINTERS (drawn ABOVE actors, proximity-faded) -------------
@@ -7158,8 +7292,11 @@ const bramble: CanopyPainter = (env, o, alpha, params) => {
   const p = params as {
     fill?: ColorSpec; edge?: ColorSpec; spine?: ColorSpec;
     thorns?: boolean; berries?: { color?: ColorSpec; chance?: number };
+    /** Whole-crown breath in radians — REQUIRES the kind's canopy `live`
+     *  flag (a baked crown never moves). The cut contract's tell. */
+    sway?: number;
   };
-  const { ctx, theme } = env;
+  const { ctx, theme, time } = env;
   const fill = resolveColor(p.fill, theme, '#2c4424');
   const edge = resolveColor(p.edge, theme, 'rgba(0,0,0,0.4)');
   const spine = resolveColor(p.spine, theme, shade(fill, 0.28));
@@ -7167,6 +7304,7 @@ const bramble: CanopyPainter = (env, o, alpha, params) => {
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
   if (o.rot !== undefined) ctx.rotate(o.rot);
+  if (p.sway) ctx.rotate(Math.sin(time * 1.15 + seed * 0.7) * p.sway);
   ctx.globalAlpha = alpha;
   // Under-heart: the tangle's own dark depth.
   ctx.fillStyle = shade(fill, -0.42);

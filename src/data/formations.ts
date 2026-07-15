@@ -751,3 +751,25 @@ registerFormation({
     { kind: 'sky_lantern', radius: [8, 11], every: 3, jitter: 12 },
   ],
 });
+
+// THE VINE MASS (the jungle): ONE organism lying across the ground — a
+// serpentine chain of woven coils, every segment individually cuttable
+// (vine_coil's brittle rule; bodies stop, arrows snip in passing, EYES
+// cross freely). Cut anywhere and the mass yields a path while keeping its
+// form everywhere else. rot:'chain' turns the pieces along the meander so
+// the elongated coil painter reads as one continuous body; the tight step
+// overlaps the segments. Pale blooms ride the length — the gloom's own
+// marker lights.
+registerFormation({
+  id: 'vine_mass', arrange: 'meander', span: [200, 380], step: 30,
+  // Site on a LANE-sized clearance, not the span-derived disc: a carved
+  // thicket holds no open ground that big, and the pieces walk-gate anyway
+  // — the chain drapes through lanes and glades, rejecting into the wall,
+  // which is exactly how a draped organism should read.
+  siteRadius: 46,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'vine_coil', radius: [15, 20], jitter: 3, rot: 'chain' },
+    { kind: 'jungle_bloom', radius: [9, 12], every: 6, jitter: 16 },
+  ],
+});

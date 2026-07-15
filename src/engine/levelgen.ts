@@ -273,6 +273,9 @@ export type KnownDoodadKind =
   // reuses the fallen-colossus vocabulary: colossus_head/broken_column/
   // ruin_plinth, data/formations.ts)
   | 'ruin_gate'        // a root-split descent into the old halls (sidezone mouth)
+  // The undergrowth kit, wave 2 (the wall learns to LOOK alive)
+  | 'verdure_fringe'   // broad fronds overhanging a lane from the wall face — pure dressing
+  | 'vine_coil'        // one cuttable segment of a greater vine mass (formation-laid)
   // The parity-pass wayside kit (the class expansion's world furniture)
   | 'chronolith'       // a time-eaten monolith, teal-veined and faintly WRONG (ley country)
   | 'meditation_cairn' // a balanced stone stack wearing a stillness of its own (high places)
@@ -1308,6 +1311,17 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // dwell + mint). The rest of the swallowed court dresses in the existing
   // fallen-colossus kit (colossus_head / broken_column / ruin_plinth).
   ruin_gate:     { overlap: 'trigger', spacing: 500 },
+  // The undergrowth kit, wave 2. The fringe is pure walk-through dressing
+  // (the wall's overhang — it OWNS no cells). The vine coil is one segment
+  // of a larger organism (the vine_mass formation): bodies stop at it,
+  // arrows snip it in passing, EYES cross it freely — you can see the way
+  // through the mass; you just have to cut it. Elongated hit surface along
+  // the chain so the blocked band matches the drawn bundle.
+  verdure_fringe: { overlap: 'ground', walkOnly: true, spin: true },
+  vine_coil: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: false,
+    forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'],
+    surface: { hw: 1.3, hh: 0.6, orient: 'rot' },
+    brittle: { on: ['hit'], orbChance: 0.12, text: 'the coil parts!', color: '#5f8a34' } },
 };
 
 /** Rules registered at runtime for NEW kinds (packages, structure legends, fx
@@ -1954,18 +1968,56 @@ function myceliaLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('mycelia', myceliaLayout);
 
-/** THE THICKET (the jungle) — claustrophobia as terrain. The whole zone is one
- *  living VERDURE mass (a step/shot/SIGHT-blocking wall region) carved into a
- *  web of narrow game trails and small glades; the deeper toward the heart,
- *  the tighter the lanes and the denser the growth (every lever keys off the
- *  same rect-normalized radial the WHERE field uses). What makes it a JUNGLE
- *  and not a maze: the walls are CUTTABLE — brush PLUGS choke trail throats
- *  (doors made of vegetation: the cells stay ground, so reachability, AI
- *  topology and ambient spawns read open trail while bodies/arrows/eyes stop
- *  until somebody cuts), pocket DENS hide behind plugged throats carved off
- *  the lanes, and verdure FACE-CUTS pay whoever hacks into the mass itself.
- *  All knobs are layoutParams (biome/tileset/spec-mergeable). */
-function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
+/** The thicket family's DIALS — one bag of defaults per registered FACE.
+ *  Every dial stays layoutParams-overridable per zone/tileset/biome (the
+ *  layoutParam calls below pass these as the fallback); the two faces
+ *  registered underneath differ ONLY in this bag:
+ *    'thicket' — the THROAT: narrow tightening lanes, plugs everywhere,
+ *                dens behind them (claustrophobia as terrain).
+ *    'gallery' — the CATHEDRAL: wide lanes and tall light, colossus
+ *                pillars, vine masses slung across the way, few plugs —
+ *                the awe face that makes the dense face feel denser. */
+interface ThicketDials {
+  heart: [number, number]; glades: [number, number]; gladeR: [number, number];
+  trailW: [number, number]; coreTighten: number;
+  plugChance: number; plugCoreBonus: number; plugSpacing: number;
+  dens: [number, number]; faceCuts: [number, number];
+  fringeChance: number; fringeSpacing: number;
+  vineMasses: [number, number]; pillars: [number, number];
+}
+const THICKET_DIALS: ThicketDials = {
+  heart: [110, 150], glades: [6, 9], gladeR: [70, 130],
+  trailW: [26, 40], coreTighten: 0.6,
+  plugChance: 0.42, plugCoreBonus: 0.34, plugSpacing: 150,
+  dens: [2, 4], faceCuts: [1, 3],
+  fringeChance: 0.14, fringeSpacing: 58,
+  vineMasses: [0, 1], pillars: [0, 0],
+};
+const GALLERY_DIALS: ThicketDials = {
+  heart: [150, 190], glades: [4, 6], gladeR: [110, 170],
+  trailW: [48, 66], coreTighten: 0.85,
+  plugChance: 0.2, plugCoreBonus: 0.12, plugSpacing: 200,
+  dens: [1, 2], faceCuts: [1, 2],
+  fringeChance: 0.1, fringeSpacing: 66,
+  vineMasses: [2, 3], pillars: [2, 4],
+};
+
+/** THE THICKET FAMILY (the jungle) — claustrophobia as terrain. The whole
+ *  zone is one living VERDURE mass (a step/shot/SIGHT-blocking wall region,
+ *  foliage-baked so it reads as packed vegetation) carved into a web of game
+ *  trails and glades; the deeper toward the heart, the tighter the lanes and
+ *  the denser the growth (every lever keys off the same rect-normalized
+ *  radial the WHERE field uses). What makes it a JUNGLE and not a maze: the
+ *  walls are CUTTABLE — brush PLUGS choke trail throats (doors made of
+ *  vegetation: the cells stay ground, so reachability, AI topology and
+ *  ambient spawns read open trail while bodies/arrows/eyes stop until
+ *  somebody cuts), pocket DENS hide behind plugged throats carved off the
+ *  lanes, verdure FACE-CUTS pay whoever hacks into the mass itself, VINE
+ *  MASSES lie across the way (cut any segment; the organism keeps its form),
+ *  and a frond FRINGE overhangs every lane so the wall's silhouette is
+ *  growth, not geometry. All knobs are layoutParams; the dial bag picks the
+ *  registered face's defaults. */
+function thicketCore(ctx: GenCtx, def: ZoneDef, d: ThicketDials): void {
   const { rng, arena } = ctx;
   const grid = new GridWalkField(arena.w, arena.h, 30);
   const wallKind = layoutParam<string>(def, 'thicketWall', 'verdure');
@@ -1974,21 +2026,21 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
   // 0 at the heart → 1 on the border (matches the 'radial' gen field).
   const rad = (x: number, y: number): number =>
     Math.max(Math.abs(x - cx) / Math.max(1, cx), Math.abs(y - cy) / Math.max(1, cy));
-  const tightenAt = layoutParam<number>(def, 'thicketCoreTighten', 0.6);
+  const tightenAt = layoutParam<number>(def, 'thicketCoreTighten', d.coreTighten);
   const tighten = (x: number, y: number): number => tightenAt + (1 - tightenAt) * rad(x, y);
   const M = 90;
 
   // 1. THE HEART — the deepest glade, dead center: the zone's one wide room
   // (ruin courts, POIs and the worst of the packs pool here by walk-gating).
-  const heartBand = layoutParam<[number, number]>(def, 'thicketHeart', [110, 150]);
+  const heartBand = layoutParam<[number, number]>(def, 'thicketHeart', d.heart);
   const heartR = rng.range(heartBand[0], heartBand[1]);
   grid.fillDisc(cx, cy, heartR, 'ground');
   const chambers: Vec2[] = [vec(cx, cy)];
 
   // 2. GLADES — pocket clearings scattered through the mass, SMALLER the
   // deeper they sit (the rim breathes; the interior presses in).
-  const gladeBand = layoutParam<[number, number]>(def, 'thicketGlades', [6, 9]);
-  const gladeR = layoutParam<[number, number]>(def, 'thicketGladeR', [70, 130]);
+  const gladeBand = layoutParam<[number, number]>(def, 'thicketGlades', d.glades);
+  const gladeR = layoutParam<[number, number]>(def, 'thicketGladeR', d.gladeR);
   const glades = rng.int(gladeBand[0], gladeBand[1]);
   for (let i = 0; i < glades; i++) {
     const r0 = rng.range(gladeR[0], gladeR[1]);
@@ -2014,7 +2066,7 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
   // 3. PORTAL MOUTHS + THE TRAIL WEB — every portal gets a small clearing and
   // a winding tube in; the chamber chain + loops make the lane web. Trail
   // width TIGHTENS toward the heart (the claustrophobia gradient).
-  const trailBand = layoutParam<[number, number]>(def, 'thicketTrailW', [26, 40]);
+  const trailBand = layoutParam<[number, number]>(def, 'thicketTrailW', d.trailW);
   const wander = (a: Vec2, b: Vec2): void => {
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
     const halfW = Math.max(20, rng.range(trailBand[0], trailBand[1]) * tighten(mx, my));
@@ -2039,9 +2091,9 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
   // (walkable corridor cells walled across one axis). Denser toward the
   // heart; never near a portal; spaced so lanes breathe between cuts.
   const cs = 30;
-  const plugChance = layoutParam<number>(def, 'thicketPlugChance', 0.42);
-  const plugCore = layoutParam<number>(def, 'thicketPlugCoreBonus', 0.34);
-  const plugSpacing = layoutParam<number>(def, 'thicketPlugSpacing', 150);
+  const plugChance = layoutParam<number>(def, 'thicketPlugChance', d.plugChance);
+  const plugCore = layoutParam<number>(def, 'thicketPlugCoreBonus', d.plugCoreBonus);
+  const plugSpacing = layoutParam<number>(def, 'thicketPlugSpacing', d.plugSpacing);
   const walk = (x: number, y: number): boolean => grid.isWalkable(x, y);
   const plugs: Vec2[] = [];
   const trailCells: Vec2[] = [];
@@ -2069,7 +2121,7 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
 
   // 5. POCKET DENS — small chambers carved INTO the mass off a trail, joined
   // by one plugged throat: the packs that wait, the caches that pay.
-  const denBand = layoutParam<[number, number]>(def, 'thicketDens', [2, 4]);
+  const denBand = layoutParam<[number, number]>(def, 'thicketDens', d.dens);
   const denR = layoutParam<[number, number]>(def, 'thicketDenR', [55, 85]);
   const dens = rng.int(denBand[0], denBand[1]);
   let made = 0;
@@ -2095,11 +2147,57 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
 
   // 6. FACE-CUTS — brush-knotted spots on the verdure itself that pay whoever
   // carves in (the secret wall's jungle twin, hidden in plain sight).
-  const cutBand = layoutParam<[number, number]>(def, 'thicketFaceCuts', [1, 3]);
+  const cutBand = layoutParam<[number, number]>(def, 'thicketFaceCuts', d.faceCuts);
   const cuts = rng.int(cutBand[0], cutBand[1]);
   for (let i = 0; i < cuts; i++) stamp(ctx, { kind: 'verdure_face', count: [1, 1] });
 
-  // 7. THE GAME TRAIL — beaten earth traced along the entry→heart lane (pure
+  // 7. THE FRINGE — broad fronds overhanging the lanes from the wall faces,
+  // so the carved corridor's silhouette is GROWTH, not geometry. Each sits
+  // on a lane cell hugging its wall, rot = the outward normal (the average
+  // of every open direction away from adjacent wall). Pure dressing: the
+  // kind owns no cells and blocks nothing.
+  const fringeChance = layoutParam<number>(def, 'thicketFringeChance', d.fringeChance);
+  const fringeSpacing = layoutParam<number>(def, 'thicketFringeSpacing', d.fringeSpacing);
+  const fringes: Vec2[] = [];
+  for (let y = cs * 2; y < arena.h - cs * 2; y += cs) {
+    for (let x = cs * 2; x < arena.w - cs * 2; x += cs) {
+      if (!walk(x, y)) continue;
+      let nx = 0, ny = 0;
+      if (!walk(x - cs, y)) nx += 1;
+      if (!walk(x + cs, y)) nx -= 1;
+      if (!walk(x, y - cs)) ny += 1;
+      if (!walk(x, y + cs)) ny -= 1;
+      if (nx === 0 && ny === 0) continue; // no wall touches this cell
+      if (!rng.chance(fringeChance)) continue;
+      const p = vec(x - nx * 9, y - ny * 9); // hug the wall it grows from
+      if (dist(p, ctx.entry) < 160 || ctx.exits.some(e => dist(p, e) < 140)) continue;
+      if (fringes.some(q => dist(p, q) < fringeSpacing)) continue;
+      fringes.push(p);
+      ctx.doodads.push({
+        pos: p, radius: rng.range(13, 19), kind: 'verdure_fringe',
+        rot: Math.atan2(ny, nx),
+      });
+    }
+  }
+
+  // 8. VINE MASSES + PILLARS — the gallery's slung organisms and colossus
+  // columns (the throat rolls few of either; the dial bag decides, the
+  // params can override). Solids land before the tileset scatter so
+  // everything later routes around them. The mass IGNORES the walk gate on
+  // purpose: it drapes OVER the verdure and across the lanes in one body —
+  // the wall-riding segments are the form it keeps, the lane-crossing
+  // segments are the cuts you make (brittle-on-hit counts OPEN to the
+  // navigability belt, so nothing seals).
+  const vmBand = layoutParam<[number, number]>(def, 'thicketVineMasses', d.vineMasses);
+  const vms = rng.int(vmBand[0], vmBand[1]);
+  for (let i = 0; i < vms; i++) {
+    stamp(ctx, { kind: 'formation', formation: 'vine_mass', count: [1, 1], rules: { ignore: ['walk'] } });
+  }
+  const pillarBand = layoutParam<[number, number]>(def, 'thicketPillars', d.pillars);
+  const pillars = rng.int(pillarBand[0], pillarBand[1]);
+  for (let i = 0; i < pillars; i++) stamp(ctx, { kind: 'canopy_colossus', count: [1, 1] });
+
+  // 9. THE GAME TRAIL — beaten earth traced along the entry→heart lane (pure
   // pathStep follow: draw-free, deterministic), so the way IN reads walked.
   let cur = vec(ctx.entry.x, ctx.entry.y);
   for (let step = 0; step < 320; step++) {
@@ -2113,7 +2211,8 @@ function thicketLayout(ctx: GenCtx, def: ZoneDef): void {
   // The tileset's own scatter walk-gates into the lanes/glades/dens.
   plainsLayout(ctx, def);
 }
-registerLayout('thicket', thicketLayout);
+registerLayout('thicket', (ctx, def) => thicketCore(ctx, def, THICKET_DIALS));
+registerLayout('gallery', (ctx, def) => thicketCore(ctx, def, GALLERY_DIALS));
 
 /** Integer clamp helper for area-scaled flora counts. */
 function clampInt(v: number, lo: number, hi: number): number {
@@ -3795,6 +3894,11 @@ registerStamp('jungle_bloom', stampSingle('jungle_bloom', [10, 14]));
 // The sunken-ruin gate (usually composition-cluster-placed — this row exists
 // for layouts that want a stray descent).
 registerStamp('ruin_gate', stampSingle('ruin_gate', [26, 32]));
+// The undergrowth kit, wave 2: the fringe is recipe-placed along wall faces
+// (these rows serve layouts that want strays); coils usually arrive as the
+// vine_mass formation.
+registerStamp('verdure_fringe', stampSingle('verdure_fringe', [13, 19]));
+registerStamp('vine_coil', stampSingle('vine_coil', [15, 20]));
 // The Aetherial kit: cloud furniture + the choir's marble.
 registerStamp('cloud_billow', stampSingle('cloud_billow', [22, 44]));
 registerStamp('aether_crystal', stampSingle('aether_crystal', [13, 22]));

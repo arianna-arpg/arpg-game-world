@@ -1877,7 +1877,10 @@ export class Renderer {
       const cdef = DOODAD_VISUALS[o.kind]?.canopy;
       const name = cdef?.painter ?? 'discCrown';
       const painter = CANOPY_PAINTERS[name] ?? CANOPY_PAINTERS.discCrown;
-      if (VIS_CFG.canopy.bakeCrowns && CANOPY_STATIC[name]) {
+      // A kind may opt its crowns OUT of the bake (canopy.live — the cut
+      // contract: growth that yields to the blade BREATHES). Sparse kinds
+      // only by doctrine; the bake stays the rule for sealed forests.
+      if (VIS_CFG.canopy.bakeCrowns && CANOPY_STATIC[name] && !cdef?.live) {
         // params must be the REGISTRY object (or the shared empty) — a fresh
         // `{}` per frame would mint a fresh bake key per frame and re-bake
         // every crown every frame (it did: 250ms forests).
