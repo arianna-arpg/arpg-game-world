@@ -27307,6 +27307,20 @@ export class World {
         const dd = dist(a.pos, d.pos);
         if (dd <= reach + a.radius && dd > closeReach + a.radius) { watched = true; break; }
       }
+      // THE WATCHING SHELL (gaze.wallKinds): eyes grown into wall regions
+      // watch too. A coarse ring sample around the seat — proximity-honest,
+      // like the doodad eyes; walls never flinch shut (they cannot be
+      // pressed closed or burst — the counterplay is not lingering).
+      if (!watched && spec.wallKinds?.length && this.walk instanceof GridWalkField) {
+        const wk = spec.wallKinds;
+        const step = Math.PI / 6;
+        outer: for (const rr of [reach * 0.5, reach]) {
+          for (let a2 = 0; a2 < Math.PI * 2; a2 += step) {
+            const kind = this.walk.regionAt(a.pos.x + Math.cos(a2) * rr, a.pos.y + Math.sin(a2) * rr);
+            if (wk.includes(kind)) { watched = true; break outer; }
+          }
+        }
+      }
       if (watched) {
         if (t >= GAZE_CFG.stackEvery) {
           t = 0;

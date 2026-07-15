@@ -3928,7 +3928,12 @@ export const TILESETS: Record<string, TilesetDef> = {
     nameFirst: ['Lidless', 'Unblinking', 'Staring', 'Watching', 'Weeping', 'Bloodshot', 'Vitreous', 'Wide-Awake', 'Sleepless', 'Glassy', 'Thousand-Eyed', 'Dilated', 'Rheumy', 'Tear-Bright', 'Transfixed', 'Scrying'],
     nameSecond: ['Vigil', 'Gaze', 'Orbit', 'Socket', 'Iris', 'Regard', 'Witness', 'Stare', 'Audience', 'Beholding', 'Scrutiny', 'Panopticon', 'Watch', 'Observatory'],
     layoutParams: {
-      fleshRing: { satellites: [5, 7], hubR: [220, 280], satR: [110, 160], knots: [2, 4] },
+      fleshRing: {
+        satellites: [5, 7], hubR: [220, 280], satR: [110, 160], knots: [2, 4],
+        // The watching shell: ocular_wall blotches laid into the chamber
+        // rims before the carve — eyes growing within the very walls.
+        eyeWalls: { blotches: [2, 4], chance: 0.85 },
+      },
     },
     theme: {
       ambientDark: 0.38,
@@ -3942,8 +3947,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         palette: ['#0e0a10', '#1a1218', '#281c22', '#38282c', '#463438'],
       },
       ambientFx: [{ kind: 'motes', intensity: 0.7, color: '#d8b04a' }],
-      // THE GAZE: stalks and knots are the zone's own eyes (World.updateGaze).
-      gaze: { kinds: ['eye_stalk', 'ocular_knot'], reach: 180, closeReach: 64, lureRadius: 640 },
+      // THE GAZE: stalks and knots are the zone's own eyes (World.updateGaze) —
+      // and the watching shell counts too (wall eyes never flinch shut).
+      gaze: { kinds: ['eye_stalk', 'ocular_knot'], wallKinds: ['ocular_wall'], reach: 180, closeReach: 64, lureRadius: 640 },
     },
     sizeW: [2400, 3200], sizeH: [1800, 2400], ellipseChance: 0,
     layout: [

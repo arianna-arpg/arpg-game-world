@@ -15,13 +15,19 @@
 import type { Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
 import type { CrownEyesSpec } from './painters';
-import { withAlpha } from './color';
+import { valueNoise, withAlpha } from './color';
 import { VIS_CFG } from './visConfig';
 
 const hash01 = (a: number, b: number): number => {
   let h = (a * 374761393 + b * 668265263) | 0;
   h = (h ^ (h >> 13)) * 1274126177;
   return ((h ^ (h >> 16)) >>> 0) / 4294967296;
+};
+
+const strHash = (s: string): number => {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
 };
 
 export interface EyedGroup {
@@ -39,6 +45,18 @@ export class CanopyEyes {
     const C = VIS_CFG.canopyEyes;
     const hero = world.player;
     const t = world.time;
+    // HOW MUCH OF THE ROOF IS AWAKE: the share of crowns wearing eyes scales
+    // with the zone's depth into its biome (the forest-cover idiom — the
+    // fringe barely watches, the sealed heart is thick with regard), and
+    // each ZONE rolls a MOOD off its own id: most cluster the watchers into
+    // PATCHES (value-noise gate — you walk out of one thicket of eyes into
+    // honest dark and then into another), some spread them thin and even.
+    // The RNG is the ambience.
+    const depth = world.zone.geo?.biomeDepth ?? 0.5;
+    const sd = depth * depth * (3 - 2 * depth);
+    const share = C.shareEdge + (C.shareDeep - C.shareEdge) * sd;
+    const zoneSeed = strHash(world.zone.id);
+    const patchy = hash01(zoneSeed, 3) < C.patchyChance;
     for (const g of groups) {
       const reach = g.spec.reach ?? C.reach;
       const n = g.spec.count ?? C.count;
@@ -46,6 +64,13 @@ export class CanopyEyes {
       const size = g.spec.size ?? C.size;
       const color = g.spec.color ?? C.color;
       for (const o of g.list) {
+        const seed = ((o.pos.x * 13 + o.pos.y * 31) | 0) >>> 0;
+        // Eligibility: same expected share either way — the patchy mood just
+        // spends it in spatially-correlated clumps instead of a thin sift.
+        const eligible = patchy
+          ? valueNoise(o.pos.x / C.patchScale, o.pos.y / C.patchScale, zoneSeed) < share
+          : hash01(seed, zoneSeed) < share;
+        if (!eligible) continue;
         const d = Math.hypot(hero.pos.x - o.pos.x, hero.pos.y - o.pos.y);
         // The rule of the wood: never show when a walker is near. The fade
         // eases the denial so the eyes withdraw rather than pop.
@@ -54,8 +79,10 @@ export class CanopyEyes {
         const f = f0 + (target - f0) * Math.min(1, dt * C.fadeRate);
         this.fade.set(o, f);
         if (f < 0.05) continue;
-        const seed = ((o.pos.x * 13 + o.pos.y * 31) | 0) >>> 0;
-        for (let i = 0; i < n; i++) {
+        // The deep heart doesn't just wake more crowns — each awake crown
+        // carries a little more of the swarm.
+        const nEff = Math.max(1, Math.round(n * (0.7 + sd * 0.9)));
+        for (let i = 0; i < nEff; i++) {
           const a = hash01(i, seed) * Math.PI * 2;
           const rr = o.radius * (0.25 + hash01(i, seed + 7) * 0.55);
           const ex = o.pos.x + Math.cos(a) * rr;

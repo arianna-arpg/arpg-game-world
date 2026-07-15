@@ -2142,6 +2142,11 @@ interface FleshRingSpec {
   satR?: [number, number];
   /** Wall-hugging ocular_knot count per chamber (default [2, 4]; 0,0 = none). */
   knots?: [number, number];
+  /** THE WATCHING SHELL: ocular_wall blotches laid into the wall mass around
+   *  each chamber's rim before the carve — eyes growing within the very
+   *  walls. `blotches` per chamber (default [2, 4]); `chance` per chamber
+   *  (default 0.85; 0 = a blind ring). */
+  eyeWalls?: { blotches?: [number, number]; chance?: number };
 }
 
 /** Serpentine spine: bulbs strung entry → exit with alternating lateral throw,
@@ -2193,11 +2198,29 @@ function carveFleshTract(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spe
     carveWander(grid, mouthP, mouthQ, halfW, rng);
     grid.carveCorridor(mouthQ.x, mouthQ.y, q.x, q.y, halfW);
     // The sphincter waits in the straight throat entering the NEXT bulb.
+    // A DOOR MUST SEAL: cell quantization carves the throat wider than the
+    // nominal 2×halfW, so the seat MEASURES its true breadth (probe the walk
+    // grid wall-to-wall across the tube), recenters into the real gap, spans
+    // it visually (radius = half-breadth), and carries a rotated slab
+    // hitbox (the hit-surface fabric) — flush past each jamb, thin as the
+    // drawn muscle, no flank a body could slip.
     if (rng.chance(doorChance)) {
       const seat = vec(q.x - dx * (radii[i + 1] + stub * 0.5), q.y - dy * (radii[i + 1] + stub * 0.5));
+      const perp = dir + Math.PI / 2;
+      const probe = (sgn: number): number => {
+        let s = 0;
+        while (s < halfW * 2 + 96
+          && grid.isWalkable(seat.x + Math.cos(perp) * sgn * (s + 6), seat.y + Math.sin(perp) * sgn * (s + 6))) s += 6;
+        return s;
+      };
+      const spanL = probe(-1), spanR = probe(1);
+      const mid = (spanR - spanL) / 2;
+      const center = vec(seat.x + Math.cos(perp) * mid, seat.y + Math.sin(perp) * mid);
+      const halfBreadth = (spanL + spanR) / 2 + 4;
       ctx.doodads.push({
-        pos: seat, radius: halfW + 8, kind: 'sphincter', dir,
+        pos: center, radius: halfBreadth, kind: 'sphincter', dir,
         door: { id: `flesh-tract/d${doorN++}`, mode: 'dwell', dwell: doorDwell },
+        hitbox: { kind: 'rect', hw: halfBreadth + 6, hh: 14, rot: perp },
       });
     }
   }
@@ -2212,10 +2235,49 @@ function carveFleshRing(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spec
   const satBand = spec.satellites ?? [5, 7];
   const satRBand = spec.satR ?? [110, 160];
   const knotBand = spec.knots ?? [2, 4];
+  const eyeWalls = spec.eyeWalls ?? { blotches: [2, 4], chance: 0.85 };
   const cx = arena.w / 2, cy = arena.h / 2;
   const hub = vec(cx, cy);
-  grid.fillDisc(cx, cy, hubR, 'flesh');
   chambers.push(hub);
+  // THE PLAN FIRST (positions + radii), carving after — so the WATCHING
+  // SHELL can be laid into the wall mass before the rooms are cut from it.
+  const n = rng.int(satBand[0], satBand[1]);
+  // Sockets orbit between the hub's rim and the arena edge (never inside either).
+  const minOrbit = hubR + satRBand[1] + 60;
+  const orbitX = Math.max(minOrbit, arena.w / 2 - M - satRBand[1] - 20);
+  const orbitY = Math.max(minOrbit, arena.h / 2 - M - satRBand[1] - 20);
+  const sats: { p: Vec2; r: number }[] = [];
+  const b0 = rng.range(0, Math.PI * 2);
+  for (let i = 0; i < n; i++) {
+    const a = b0 + (i / n) * Math.PI * 2 + rng.range(-0.18, 0.18);
+    const r = rng.range(satRBand[0], satRBand[1]);
+    sats.push({
+      p: vec(
+        Math.min(Math.max(cx + Math.cos(a) * orbitX, M + r), arena.w - M - r),
+        Math.min(Math.max(cy + Math.sin(a) * orbitY, M + r), arena.h - M - r)),
+      r,
+    });
+  }
+  // THE WATCHING SHELL: ocular_wall blotches painted around every chamber's
+  // rim BEFORE the carve — the carve eats whatever pokes into the room, so
+  // what survives sits exactly at the wall surface: eyes growing within the
+  // very walls (RegionVisualSpec.eyes bakes the sockets; the wallEyes pass
+  // gives them their seeking pupils; GazeSpec.wallKinds makes them COUNT).
+  const paintEyeShell = (center: Vec2, r: number): void => {
+    if (!rng.chance(eyeWalls.chance ?? 0.85)) return;
+    const band = eyeWalls.blotches ?? [2, 4];
+    const k = rng.int(band[0], band[1]);
+    for (let i = 0; i < k; i++) {
+      const a = rng.range(0, Math.PI * 2);
+      const br = rng.range(36, 66);
+      const d = r + rng.range(4, 36);
+      grid.fillDisc(center.x + Math.cos(a) * d, center.y + Math.sin(a) * d, br, 'ocular_wall');
+    }
+  };
+  paintEyeShell(hub, hubR);
+  for (const s of sats) paintEyeShell(s.p, s.r);
+  // NOW carve the amphitheater out of the (watching) wall mass.
+  grid.fillDisc(cx, cy, hubR, 'flesh');
   const rimKnots = (center: Vec2, r: number): void => {
     const k = rng.int(knotBand[0], knotBand[1]);
     if (k <= 0) return;
@@ -2229,27 +2291,14 @@ function carveFleshRing(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spec
     }
   };
   rimKnots(hub, hubR);
-  const n = rng.int(satBand[0], satBand[1]);
-  // Sockets orbit between the hub's rim and the arena edge (never inside either).
-  const minOrbit = hubR + satRBand[1] + 60;
-  const orbitX = Math.max(minOrbit, arena.w / 2 - M - satRBand[1] - 20);
-  const orbitY = Math.max(minOrbit, arena.h / 2 - M - satRBand[1] - 20);
-  const sats: Vec2[] = [];
-  const b0 = rng.range(0, Math.PI * 2);
-  for (let i = 0; i < n; i++) {
-    const a = b0 + (i / n) * Math.PI * 2 + rng.range(-0.18, 0.18);
-    const r = rng.range(satRBand[0], satRBand[1]);
-    const p = vec(
-      Math.min(Math.max(cx + Math.cos(a) * orbitX, M + r), arena.w - M - r),
-      Math.min(Math.max(cy + Math.sin(a) * orbitY, M + r), arena.h - M - r));
-    grid.fillDisc(p.x, p.y, r, 'flesh');
-    carveWander(grid, hub, p, rng.range(34, 48), rng); // radial socket tube
-    rimKnots(p, r);
-    sats.push(p);
-    chambers.push(p);
+  for (const s of sats) {
+    grid.fillDisc(s.p.x, s.p.y, s.r, 'flesh');
+    carveWander(grid, hub, s.p, rng.range(34, 48), rng); // radial socket tube
+    rimKnots(s.p, s.r);
+    chambers.push(s.p);
   }
   // The circumferential gallery: every socket sees its neighbors.
-  for (let i = 0; i < sats.length; i++) carveWander(grid, sats[i], sats[(i + 1) % sats.length], rng.range(30, 42), rng);
+  for (let i = 0; i < sats.length; i++) carveWander(grid, sats[i].p, sats[(i + 1) % sats.length].p, rng.range(30, 42), rng);
 }
 
 /** FLESH (the "writhing pulsing flesh" biome) — a CIRCLE-based, organic topology:

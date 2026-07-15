@@ -276,6 +276,15 @@ function riverlandLayout(ctx: GenCtx, def: ZoneDef): void {
       ctx.pois.push(vec(c.x, c.y));
     }
   }
+  // A forest biome's river still wears its ROOF (data-gated on forestTrees —
+  // the fix for treeless gloamwood riverlands; hell's flame course declares
+  // no trees and stays bare). Planted before the furniture so decoration
+  // pools into what the crowns leave open, same as the forest recipe.
+  const roofDodge = new Set([
+    liquidOf(liquidId).doodad,
+    ...(freezeAt !== undefined ? [liquidOf(layoutParam(def, 'frozenLiquid', 'ice')).doodad] : []),
+  ].filter((k): k is NonNullable<typeof k> => !!k));
+  plantRiverbankRoof(ctx, def, roofDodge);
   scatterDecoration(ctx, def);
 }
 registerLayout('riverland', riverlandLayout);
@@ -479,6 +488,72 @@ function forestLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('forest', forestLayout);
+
+/** THE BANK ROOF — a riverland crossing a FOREST biome keeps its canopy.
+ *  Data-gated on the biome declaring layoutParams.forestTrees (the
+ *  gloamwood's crooked roof follows its rivers; the River of Flame, which
+ *  declares none, stays bare — no biome names in code). A compact sibling
+ *  of forestLayout's sweep: own noise seed, same mix/cover/spacing params,
+ *  portals + reservations (causeways, trails) respected — and the poured
+ *  flow dodged EXPLICITLY (bucketed liquid occupancy: tree rules carry no
+ *  forbidOn water, so the planting must keep the river's daylight itself). */
+function plantRiverbankRoof(ctx: GenCtx, def: ZoneDef, liquidKinds: ReadonlySet<string>): void {
+  const mix = layoutParam<ForestTreeMix[] | undefined>(def, 'forestTrees', undefined);
+  if (!mix?.length) return;
+  const { rng, arena } = ctx;
+  const depth = def.geo?.biomeDepth ?? 0.5;
+  const coverEdge = layoutParam(def, 'forestCoverEdge', 0.44);
+  const coverDeep = layoutParam(def, 'forestCoverDeep', 0.86);
+  const sd = depth * depth * (3 - 2 * depth);
+  // Banks read a touch opener than the sealed wood — the river IS the clearing.
+  const cover = (coverEdge + (coverDeep - coverEdge) * sd) * layoutParam(def, 'riverBankCover', 0.9);
+  const spacing = layoutParam(def, 'forestSpacing', 46);
+  const noiseSeed = rng.int(0, 0x7fffffff);
+  const B = 60;
+  const wet = new Set<number>();
+  for (const d of ctx.doodads) {
+    if (!liquidKinds.has(d.kind)) continue;
+    for (let ox = -1; ox <= 1; ox++) {
+      for (let oy = -1; oy <= 1; oy++) {
+        wet.add(Math.floor((d.pos.x + ox * d.radius) / B) * 8192 + Math.floor((d.pos.y + oy * d.radius) / B));
+      }
+    }
+  }
+  const isWet = (x: number, y: number): boolean => wet.has(Math.floor(x / B) * 8192 + Math.floor(y / B));
+  const totalW = mix.reduce((a, m) => a + m.weight, 0);
+  const portals = [ctx.entry, ...ctx.exits];
+  const portalClear = layoutParam(def, 'forestPortalClear', 140);
+  const margin = 40;
+  for (let y = margin; y < arena.h - margin; y += spacing) {
+    for (let x = margin; x < arena.w - margin; x += spacing) {
+      if (forestNoise(x, y, noiseSeed) > cover) continue;
+      const px = x + (forestHash(x, y, (noiseSeed ^ 0x77) >>> 0) - 0.5) * spacing * 0.9;
+      const py = y + (forestHash(x, y, (noiseSeed ^ 0xa1) >>> 0) - 0.5) * spacing * 0.9;
+      if (isWet(px, py)) continue;
+      if (portals.some(p => (px - p.x) ** 2 + (py - p.y) ** 2 < portalClear * portalClear)) continue;
+      if (hitsReservation(ctx, px, py, 14)) continue;
+      let roll = rng.range(0, totalW);
+      let m = mix[mix.length - 1];
+      for (const cand of mix) { roll -= cand.weight; if (roll <= 0) { m = cand; break; } }
+      ctx.doodads.push({
+        pos: vec(px, py), radius: rng.range(m.radius[0], m.radius[1]),
+        kind: m.kind, rot: rng.range(0, Math.PI * 2),
+      });
+    }
+  }
+  // A thin understory so the banks read lived-in, not decorated.
+  const underN = Math.round((arena.w * arena.h / 260000) * (3 + cover * 5));
+  for (let i = 0; i < underN; i++) {
+    const px = rng.range(margin, arena.w - margin);
+    const py = rng.range(margin, arena.h - margin);
+    if (forestNoise(px, py, noiseSeed) > cover || isWet(px, py)) continue;
+    if (portals.some(p => (px - p.x) ** 2 + (py - p.y) ** 2 < 120 * 120)) continue;
+    if (hitsReservation(ctx, px, py, 10)) continue;
+    const roll = rng.range(0, 1);
+    const kind = roll < 0.5 ? 'brush' : roll < 0.85 ? 'fern' : 'berry_bush';
+    ctx.doodads.push({ pos: vec(px, py), radius: rng.range(12, 22), kind, rot: rng.range(0, Math.PI * 2) });
+  }
+}
 
 // --- OPEN SEA (the VOYAGE's boundless pseudo-zone) ---------------------------------
 // Deliberately EMPTY: the sea's terrain is the continent field, STREAMED in

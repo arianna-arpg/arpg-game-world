@@ -442,11 +442,27 @@ export const VIS_CFG = {
     reach: 240,
     /** Presence fade toward shown/denied (per second). */
     fadeRate: 3.2,
-    /** Eye-pairs per crown / pupil radius / overlay alpha ceiling. */
+    /** Eye-pairs per AWAKE crown / pupil radius / overlay alpha ceiling. */
     count: 2, size: 1.6, alpha: 0.5,
     /** Blink cycles per second-ish (pairs phase-offset). */
     blinkRate: 0.11,
     color: '#c8d8a8',
+    /** Share of crowns AWAKE, scaled by the zone's biomeDepth (fringe →
+     *  sealed heart): the deeper in, the more of the roof is watching. */
+    shareEdge: 0.12, shareDeep: 0.5,
+    /** Per-zone MOOD roll: this fraction of zones cluster their watchers
+     *  into noise PATCHES (world units per noise cell below); the rest
+     *  sift them thin and even. */
+    patchyChance: 0.65, patchScale: 380,
+  },
+
+  /** WALL EYES (vis/wallEyes.ts + ground.ts bakeWallEyes): the flesh
+   *  country's watching shell — baked sockets, live seeking pupils. */
+  wallEyes: {
+    /** Pupil/iris inks + overlay alpha ceiling. */
+    iris: '#b8863a', pupil: '#140a0c', alpha: 0.85,
+    /** Blink cycles per second-ish (cells phase-offset). */
+    blinkRate: 0.14,
   },
 
   /** STATUS SCREEN-FX tunables (render/screenFx.ts registry + the renderer's

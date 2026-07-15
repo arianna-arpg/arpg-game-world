@@ -20,6 +20,7 @@ import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
 import { regionKind } from '../../world/regions';
 import { adjust, hash01, mix, shade, valueNoise, withAlpha } from './color';
+import { wallEyeSockets } from './wallEyes';
 import { liquidBodyIsLive, paintBlendUnderlay, paintLiquidStatics, type DoodadVisualDef } from './painters';
 import { paintStructureFloors } from './floors';
 import { releaseCanvas } from './sprites';
@@ -710,6 +711,13 @@ export class GroundRenderer {
         if (regionKind(id)?.visual?.foliage) {
           this.bakeFoliage(ctx, x, y, cell, ox, oy, wallFill, wallDark, wallLit);
         }
+        // EYES IN THE WALL (RegionVisualSpec.eyes): the sockets bake here —
+        // rim, sclera, lid crease in the wall's own ramp — and the live
+        // wallEyes pass paints the seeking pupils over them (one geometry:
+        // both halves derive from wallEyeSockets on grid indices alone).
+        if (regionKind(id)?.visual?.eyes) {
+          this.bakeWallEyes(ctx, x, y, cell, ox, oy, wallFill, wallDark, wallLit);
+        }
       }
     }
     // Bevel + AO in a second pass so fills never overpaint them.
@@ -841,6 +849,57 @@ export class GroundRenderer {
       ctx.moveTo(sx, sy);
       ctx.quadraticCurveTo(sx + Math.cos(sa) * sl * 0.7, sy + Math.sin(sa) * sl * 0.7,
         sx + Math.cos(sa + 0.9) * sl, sy + Math.sin(sa + 0.9) * sl);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
+  /** EYES IN THE WALL (RegionVisualSpec.eyes — the flesh country's watching
+   *  shell): bake each cell's SOCKETS — a sunken rim, a rheumy sclera, a
+   *  heavy lid crease — in the wall's own ramp. The pupils are NOT baked:
+   *  the live wallEyes pass draws those seeking the hero, on the same
+   *  wallEyeSockets geometry (grid-index seeded — never this.seed, or the
+   *  live half could not agree). */
+  private bakeWallEyes(ctx: CanvasRenderingContext2D, x: number, y: number,
+    cell: number, ox: number, oy: number,
+    fill: string, dark: string, lit: string): void {
+    const wx = ox + x, wy = oy + y;
+    const gx = Math.round(wx / cell), gy = Math.round(wy / cell);
+    const sockets = wallEyeSockets(gx, gy, cell);
+    if (!sockets.length) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, cell + 0.6, cell + 0.6);
+    ctx.clip();
+    for (const s of sockets) {
+      const lx = s.x - ox, ly = s.y - oy;
+      // The sunken rim: flesh folded back around the opening.
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = shade(dark, -0.22);
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, s.r * 1.3, s.r * 1.12, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // The rheumy white, dimmer than a body's eye — it lives in a wall.
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#c9bcae';
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, s.r, s.r * 0.86, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // The heavy lid crease over the top, in the wall's lit tone.
+      ctx.globalAlpha = 0.7;
+      ctx.strokeStyle = shade(lit, -0.05);
+      ctx.lineWidth = Math.max(1, s.r * 0.22);
+      ctx.beginPath();
+      ctx.arc(lx, ly - s.r * 0.1, s.r * 1.05, Math.PI + 0.4, -0.4);
+      ctx.stroke();
+      // A vein or two feeding the socket from the mass.
+      ctx.globalAlpha = 0.5;
+      ctx.strokeStyle = shade(fill, 0.18);
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(lx - s.r * 1.6, ly + s.r * 0.5);
+      ctx.quadraticCurveTo(lx - s.r * 1.1, ly + s.r * 0.2, lx - s.r * 0.9, ly);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;

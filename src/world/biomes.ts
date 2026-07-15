@@ -124,7 +124,12 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // starves). Its weather is the living fog; its dead drink it.
   gloamwood: { patronFaction: 'undead', mapColor: '#3a4a40', label: 'Gloamwood', spacing: 62,
     climate: { temperature: { to: 0.55, fadeOut: 0.15 }, moisture: { from: 0.42, fadeIn: 0.12 } },
-    allowedLayouts: { forest: 3, riverland: 1.5, winding: 1 },
+    // Forest + riverland ONLY: riverlands now keep the crooked roof
+    // (plantRiverbankRoof reads forestTrees below), but 'winding' carves a
+    // treeless rock maze no wood should wake up as — retired until a
+    // thicket-lane treatment exists (foliage-walled winding, the verdure
+    // idiom in gloam tones).
+    allowedLayouts: { forest: 3, riverland: 1.5 },
     layoutParams: {
       // The crooked roof: gloam oaks knit the same sealed masses, bare snags
       // break the canopy line, briars snarl the understory edge.

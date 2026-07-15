@@ -99,6 +99,12 @@ export interface RegionVisualSpec {
    *  reads as packed vegetation instead of flat paint. Masonry's green
    *  sibling: a flag, not an id compare. */
   foliage?: boolean;
+  /** EYES grown into the wall mass — the baker lays seeded SOCKETS (rims,
+   *  sclera, lid creases) in the wall's own ramp, and the live wallEyes
+   *  pass gives them drearily SEEKING pupils (render/vis/wallEyes.ts; one
+   *  geometry, two halves). Foliage's watching sibling: a flag, not an id
+   *  compare — any wall that should look back opts in with one word. */
+  eyes?: boolean;
   /** A WINDOW to whatever renders BENEATH the ground layer: the baker CLEARS
    *  these cells instead of filling them, so the understory (the zone far
    *  below a cloud shelf, a starfield, the frame backdrop) shows through the
@@ -458,6 +464,15 @@ registerRegion({ id: 'flesh_wall', walkable: false, blocks: true, label: 'the fl
   // The pale strained-membrane rim: the floor throbs in the same reds, so the
   // WALL announces itself at its boundary or you run face-first into meat.
   visual: { fill: '#3a0e16', alpha: 1, edge: { color: '#8a3a46', width: 5 } } });
+// THE WATCHING SHELL: flesh wall that has OPENED — the Ocular's ring
+// generator lays patches of it into the wall mass around chamber rims
+// (fleshRing.eyeWalls), the baker grows the sockets (visual.eyes), the
+// wallEyes pass gives them seeking pupils, and GazeSpec.wallKinds makes
+// standing in their regard COUNT. Same collision truth as flesh_wall —
+// the difference is entirely that it looks back.
+registerRegion({ id: 'ocular_wall', walkable: false, blocks: true, label: 'the watching wall',
+  blocksShot: true, blocksSight: true,
+  visual: { fill: '#3e1018', alpha: 1, eyes: true, edge: { color: '#96424e', width: 5 } } });
 // DURANCE WALL: the hate-citadel's dressed black masonry (the durance biome's
 // interior negative space + its boundary-gate façades). A TRUE WALL, coursed
 // like rampart so the halls read BUILT, not cave-carved; the sickly-green rim

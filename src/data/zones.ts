@@ -429,6 +429,11 @@ export interface ZoneTheme {
    *  swelter's sibling lane, in eyes. */
   gaze?: {
     kinds: string[];
+    /** REGION kinds that watch too (the watching shell — ocular_wall):
+     *  standing near an eyes-grown wall builds the same ladder. Wall eyes
+     *  never flinch shut and cannot be burst — the counterplay is the
+     *  oldest one: don't linger where the wall can see you. */
+    wallKinds?: string[];
     reach?: number;
     closeReach?: number;
     /** Default 'beheld' (GAZE_CFG.status). */

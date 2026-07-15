@@ -51,6 +51,7 @@ import { GroundRenderer } from './vis/ground';
 import { CANOPY_PAINTERS, CANOPY_STATIC, PAINTERS, paintBakedWhole, paintBlendUnderlay, paintGroupShadows, type DoodadVisualDef, type PaintEnv } from './vis/painters';
 import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
 import { CanopyEyes, type EyedGroup } from './vis/canopyEyes';
+import { WallEyes } from './vis/wallEyes';
 import { RoomVeil } from './vis/roomVeil';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
@@ -280,6 +281,9 @@ export class Renderer {
     if (world.creep && !VIS_ABLATE.has('creep')) {
       drawCreepLayer(this.ctx, world.creep, world.time, this.cam.x, this.cam.y, vw, vh);
     }
+    // WALL EYES (vis/wallEyes.ts): seeking pupils over the baked sockets of
+    // any eyes-flagged wall region — wall-surface detail, so under doodads.
+    if (!VIS_ABLATE.has('doodads')) this.wallEyesPass.draw(this.ctx, world, this.cam.x, this.cam.y, vw, vh);
     if (!VIS_ABLATE.has('doodads')) this.drawDoodads(world);
     if (!VIS_ABLATE.has('motionfx')) {
       this.updateMotionFx(world);
@@ -1957,6 +1961,10 @@ export class Renderer {
    *  present only where nobody is near enough to check. Kinds opt in via
    *  DoodadVisualDef.canopy.eyes (the Gloamwood's oak wears it first). */
   private canopyEyesPass = new CanopyEyes();
+
+  /** WALL EYES (vis/wallEyes.ts): live pupils for the watching shell —
+   *  eyes-flagged wall regions (the Ocular's ocular_wall) seek the hero. */
+  private wallEyesPass = new WallEyes();
   private drawCanopyEyes(world: World): void {
     const groups: EyedGroup[] = [];
     for (const [kind, list] of this.culled) {
