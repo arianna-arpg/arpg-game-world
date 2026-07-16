@@ -4821,6 +4821,221 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
   },
 
+  // ======================= THE KARST COUNTRY ================================
+  // ONE rock biome, TWO faces staged by depthAffinity (the desert model),
+  // each face PINNING its own recipe via forceLayout — the one country whose
+  // identities need different generators (chasm maze vs stone forest).
+  //
+  // THE KARST REACH (rim, forceLayout 'karst'): an above-ground cavern
+  // country whose NEGATIVE SPACE is the maze — branching chasm gulfs (the
+  // 'chasm' fall region: bodies walk around, shots and sight sail over, a
+  // shove is a kill) between pockets of ground, NO BRIDGES ever. Artillery
+  // kin duel you across gaps you must walk around; melee kin hold the
+  // pinches. The cave-richest surface face by design — the Reach is where
+  // you go hunting ways down (cave counts + crevice hollows in the crag rim).
+  karst_reach: {
+    id: 'karst_reach',
+    depthAffinity: { to: 0.55, fadeOut: 0.3 },
+    forceLayout: 'karst',
+    compositions: [
+      { composition: 'stone_sanctum', chance: 0.16 },
+    ],
+    nameFirst: ['Riven', 'Sunken', 'Pale', 'Windworn', 'Echoing', 'Yawning', 'Cracked', 'Hollowfoot', 'Stonemazed', 'Gulf-Cut', 'Weathered', 'Karstborn'],
+    nameSecond: ['Reach', 'Karst', 'Clefts', 'Gulfs', 'Maze', 'Scars', 'Pavement', 'Rents', 'Crossing', 'Steps'],
+    theme: {
+      dayLight: 1.25,
+      ambientFx: [{ kind: 'motes', intensity: 0.35, color: '#c8c0a8' }],
+      ground: {
+        scale: 1.9, stretchX: 1.3, strength: 1.15, speckles: 0.55,
+        palette: ['#23201a', '#38342a', '#4c473a', '#5e594a', '#6e6858'], bias: 0.52, alpha: 0.5,
+      },
+      floor: '#1a1812', grid: '#282418', border: '#8d8672',
+      obstacle: '#6e685a', obstacleEdge: '#9a9280', accent: '#d8c88a',
+      tree: '#8a857a',
+    },
+    sizeW: [3400, 4400], sizeH: [2400, 3200], ellipseChance: 0, biome: 'karst', sky: 'open',
+    layout: [
+      { kind: 'rocks', count: [6, 10], radius: [20, 44] },
+      { kind: 'rock_spire', count: [3, 6] },
+      { kind: 'scree', count: [3, 5] },
+      { kind: 'standing_stone', count: [0, 2] },
+      { kind: 'petrified_tree', count: [2, 5] },
+      { kind: 'cave', count: [1, 3] },
+      { kind: 'formation', count: [1, 2], formation: 'pinnacle_train' },
+      // NO camp here: a palisade rect can't seat honestly on pocket-maze
+      // ground (its wall ring overhangs the gulfs) — the Reach's garrisons
+      // are its packs and its sanctums, not tents.
+    ],
+    common: [
+      { kind: 'formation', count: [0, 1], formation: 'boulder_train' },
+      { kind: 'bone_pile', count: [1, 2] },
+      { kind: 'watcher_stone', count: [0, 2] },
+    ],
+    variants: [
+      // The side-zone hunter's roll: every pocket seems to hold a mouth.
+      { name: 'cave-riddled', layout: [
+        { kind: 'rocks', count: [5, 8], radius: [20, 40] },
+        { kind: 'rock_spire', count: [2, 4] },
+        { kind: 'scree', count: [3, 5] },
+        { kind: 'cave', count: [2, 4] },
+        { kind: 'formation', count: [1, 2], formation: 'pinnacle_train' },
+      ] },
+      // The weald bleeding over the rim: stone trees among the gulfs.
+      { name: 'petrified fringe', layout: [
+        { kind: 'petrified_tree', count: [6, 10] },
+        { kind: 'petrified_trunk', count: [2, 4] },
+        { kind: 'rocks', count: [4, 7], radius: [18, 38] },
+        { kind: 'rock_spire', count: [1, 3] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'cave', count: [1, 3] },
+        { kind: 'formation', count: [0, 1], formation: 'petrified_grove' },
+      ] },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      archetypes: [
+        { weight: 2, size: [5, 8] },
+        { weight: 5, size: [3, 5] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'karst_slinger', weight: 4 },
+        { id: 'basilisk', weight: 3 },
+        { id: 'scree_skitter', weight: 3 },
+        { id: 'scree_shambler', weight: 2, presence: { from: 4 } },
+        { id: 'rockgrub', weight: 2 },
+        { id: 'stalagmite_lurker', weight: 1, presence: { from: 5 } },
+        { id: 'petrified_warden', weight: 1, presence: { from: 8 } },
+        { id: 'shard_spire', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'stone_sentinel', weight: 1, presence: { from: 10 } },
+      ],
+    },
+    spawnerId: 'grub_clutch',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'bounty', weight: 2 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+    ],
+    // Rooms-heavy under the Reach: hollow wall mass for secret doors, and
+    // the crag rim carries hollows of its own (crevice shafts = deeper yet).
+    caveLayouts: { plains: 3, rooms: 3, dungeon: 1.5, labyrinth: 1 },
+    hollows: {
+      count: [1, 2],
+      table: { cache_hollow: 3, ambush_hollow: 2, vein_hollow: 2, crevice_hollow: 1.5, passage_hollow: 1 },
+    },
+  },
+
+  // THE PETRIFIED WEALD (heart, forceLayout 'forest'): the forest recipe
+  // planted in STONE — a canopy that never burns and never sways, brittle
+  // trees that SHATTER into shard squalls when struck (cover is permanent
+  // except where YOU break it), watcher stones building the petrify ladder
+  // through the gaze fabric, and every stone TOLLING when hit (resonance):
+  // fighting quietly is a build consideration here.
+  petrified_weald: {
+    id: 'petrified_weald',
+    depthAffinity: { from: 0.35, fadeIn: 0.3 },
+    forceLayout: 'forest',
+    layoutParams: {
+      forestTrees: [
+        { kind: 'petrified_tree', weight: 6, radius: [30, 48] },
+        { kind: 'petrified_elder', weight: 1, radius: [44, 60] },
+        { kind: 'rock_spire', weight: 1, radius: [14, 22] },
+      ],
+      forestCoverEdge: 0.42, forestCoverDeep: 0.8,
+      forestClearings: [2, 4],
+    },
+    compositions: [
+      { composition: 'weald_court', chance: 0.35 },
+      { composition: 'stone_sanctum', chance: 0.12 },
+    ],
+    nameFirst: ['Petrified', 'Silent', 'Grey', 'Unfalling', 'Stone-Crowned', 'Lichened', 'Watchful', 'Fossil', 'Breathless', 'Elder', 'Ashen', 'Ringing'],
+    nameSecond: ['Weald', 'Wood', 'Stand', 'Grove', 'Forest', 'Boles', 'Crowns', 'Thicket', 'Copse', 'Hall'],
+    theme: {
+      dayLight: 1.05, nightDark: 0.7,
+      ambientFx: [{ kind: 'motes', intensity: 0.4, color: '#b8b0a0' }],
+      // THE GAZE, pointed at the Karst ladder: watcher stones build
+      // petrifying (slow, stack by stack) toward the brief stone statue.
+      // Counterplay is the fabric's own: break line of sight, press inside
+      // closeReach (the eye lids shut), or burst the watcher — which TOLLS.
+      gaze: { kinds: ['watcher_stone'], reach: 190, closeReach: 70, status: 'petrifying', lureRadius: 600 },
+      ground: {
+        scale: 1.2, stretchX: 1.0, strength: 1.1, speckles: 0.6, evenness: 0.5,
+        palette: ['#1e1c16', '#2e2b22', '#403c30', '#514c3c', '#5f5a48'], bias: 0.5, alpha: 0.5,
+        clearing: { reach: 140, lift: 0.3 },
+      },
+      floor: '#181610', grid: '#262214', border: '#8a8272',
+      obstacle: '#68624f', obstacleEdge: '#948c76', accent: '#c8b878',
+      tree: '#8a857a',
+    },
+    sizeW: [3000, 4000], sizeH: [2200, 3000], ellipseChance: 0, biome: 'karst', sky: 'open',
+    // FURNITURE ONLY — the forest recipe plants the stone roof itself.
+    layout: [
+      { kind: 'petrified_trunk', count: [4, 8] },
+      { kind: 'watcher_stone', count: [2, 4] },
+      { kind: 'rocks', count: [3, 6], radius: [18, 38] },
+      { kind: 'scree', count: [2, 4] },
+      { kind: 'cave', count: [0, 2] },
+      { kind: 'formation', count: [1, 2], formation: 'petrified_grove' },
+      { kind: 'camp', count: [0, 1] },
+    ],
+    common: [
+      // Glades reserve FIRST (the forest idiom) — the weald's courts and
+      // set-pieces breathe inside them.
+      { kind: 'clearing', count: [1, 2], radius: [110, 170] },
+      { kind: 'bone_pile', count: [0, 2] },
+    ],
+    variants: [
+      // The court-dense roll: the wood is WATCHING.
+      { name: 'watchers', layout: [
+        { kind: 'watcher_stone', count: [4, 7] },
+        { kind: 'petrified_trunk', count: [3, 6] },
+        { kind: 'rocks', count: [2, 4], radius: [16, 34] },
+        { kind: 'scree', count: [2, 4] },
+        { kind: 'cave', count: [0, 1] },
+        { kind: 'formation', count: [1, 2], formation: 'petrified_grove' },
+      ] },
+      // The storm-toppled roll: half the stand is already down — low cover
+      // country, shoot-overs everywhere, shard squalls waiting in the rest.
+      { name: 'shattered brake', layout: [
+        { kind: 'petrified_trunk', count: [8, 14] },
+        { kind: 'watcher_stone', count: [1, 3] },
+        { kind: 'scree', count: [4, 6] },
+        { kind: 'rocks', count: [3, 5], radius: [16, 34] },
+        { kind: 'cave', count: [0, 2] },
+      ] },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      archetypes: [
+        { weight: 2, size: [6, 9] },
+        { weight: 5, size: [3, 5] },
+        { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'basilisk', weight: 4 },
+        { id: 'petrified_warden', weight: 2, presence: { from: 6 } },
+        { id: 'scree_shambler', weight: 2, presence: { from: 4 } },
+        { id: 'scree_skitter', weight: 2 },
+        { id: 'karst_slinger', weight: 2 },
+        { id: 'lumen_wisp', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        { id: 'stone_sentinel', weight: 1, presence: { from: 10 } },
+      ],
+    },
+    spawnerId: 'grub_clutch',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'beacon', weight: 2 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'spawners', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+    ],
+    caveLayouts: { plains: 4, rooms: 2.5, dungeon: 1.5 },
+  },
+
   // CRYSTAL — prismatic shard fields (biome:'crystal'). Crystal doodads fire random
   // laser beams (the crystal_beam effect) → a constant-movement dance.
   crystal: {
@@ -5765,6 +5980,8 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   sandsea:        { title: 'Sand-Sea',          blurb: 'The Great Erg: a sea with a grain. Ridge after wind-combed ridge to the horizon, soft lees that swallow your stride, and an oasis exactly often enough to keep you believing the next shimmer.' },
   saltflat:       { title: 'Glasspan',          blurb: 'A dead lake remembered as a floor — cracked white hardpan, lightning fused to glass, salt pillars for a forest, and no shade anywhere the sun can reach.' },
   jungle:         { title: 'Jungle',            blurb: 'Choked living thicket — walls of growth that block step, shot AND sight, cuttable throats plugged with brush and dens waiting behind them.' },
+  karst_reach:    { title: 'The Karst Reach',   blurb: 'An above-ground cavern country: the maze is the NEGATIVE space — branching chasms shots sail over and bodies walk around, no bridge anywhere, and more ways down than any land above ground.' },
+  petrified_weald: { title: 'The Petrified Weald', blurb: 'A forest that died standing and kept its posture — stone crowns that never burn and never sway, cover that shatters only where YOU break it, and watcher-stones whose stare settles into your limbs like mortar.' },
   buried_vault:   { title: 'Buried Vault',      blurb: 'A dead village’s underworks below the erg — dressed sandstone halls the dunes preserved, garrisoned by vermin, the risen, and whatever the urns were keeping.' },
   sepulcher_sands: { title: 'Sepulcher Sands',  blurb: 'The tomb-dynasty’s country under the deep desert: dune-drift washing into bone-country hall by hall, and the Sand Sarcophate standing its eternal watch between them.' },
   sunken_ruin:    { title: 'Sunken Ruins',      blurb: 'A drowned city that followed you down through a ruin-gate — flooded halls where something old still keeps to its rooms.' },

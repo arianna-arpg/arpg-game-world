@@ -395,6 +395,19 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'canyon', chance: 0.25 }, { landmark: 'valley', chance: 0.25 },
       { landmark: 'lone_mountain', chance: 0.18 }, { landmark: 'cirque', chance: 0.12 },
     ] },
+  // THE KARST COUNTRY: wind-cut limestone in the wild dry midlands — TWO
+  // depth-staged faces share the tag (the desert model): the KARST REACH at
+  // the rim (an above-ground cavern country whose chasm gulfs ARE the maze —
+  // the 'karst' recipe; no bridges, ever) and the PETRIFIED WEALD in the
+  // heart (the forest recipe planted in stone — brittle cover, watcher
+  // stones, the petrify gaze). Each face PINS its recipe via forceLayout;
+  // allowedLayouts documents the family's two generators for the boot
+  // validator (and any future unpinned face). The Unbound Elements patronize
+  // the stone — stone_sentinel's crowned family garrisons both faces.
+  karst:    { patronFaction: 'elemental', mapColor: '#a8a290', label: 'Karst', spacing: 96,
+    climate: { temperature: 'mild', moisture: 'dry', wildness: { from: 0.3, fadeIn: 0.25 } },
+    allowedLayouts: { karst: 3, forest: 1 },
+    landmarks: [{ landmark: 'sinkhole', chance: 0.18 }, { landmark: 'canyon', chance: 0.14 }] },
   marsh:    { patronFaction: 'undead', mapColor: '#4a6a52', label: 'Marsh', spacing: 58,
     climate: { moisture: 'wet' },
     allowedLayouts: { islands: 2, plains: 1 },
@@ -590,6 +603,10 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   { biome: 'tundra', weight: 1.8 },
   { biome: 'taiga', weight: 1.6 },
   { biome: 'highland', weight: 1.5 },
+  // 1.9: the karst COUNTRY (two staged faces need the acreage) — its
+  // mild∧dry∧wild gate is narrow, so where it holds it should read as one
+  // coherent stone country, and it simply doesn't exist elsewhere.
+  { biome: 'karst', weight: 1.9 },
   { biome: 'marsh', weight: 1.5 },
   { biome: 'flesh', weight: 1.25 }, // a four-faced country deserves the acreage
 
