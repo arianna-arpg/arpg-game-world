@@ -203,6 +203,13 @@ export interface MonsterDef {
   gemBias?: SkillTag[];
   /** Marks wave bosses: bigger, tougher, flagged in the UI. */
   boss?: boolean;
+  /** TOP-CENTER BOSS BAR override (World.bossBarInfo): the marquee health
+   *  bar normally belongs to `boss: true` defs — set false to keep a
+   *  technical boss off the marquee, true to give a spectacle elite the
+   *  full bar WITHOUT the boss classification (loot, bestiary and
+   *  domination reads untouched). The bar still waits for the fight to be
+   *  live (BOSS_BAR_CFG), and its phase pips derive from the brain. */
+  bossBar?: boolean;
   /** Cannot take damage (hits report immune). */
   invulnerable?: boolean;
   /** Cannot be hit or targeted — enemies ignore it entirely. */

@@ -15,7 +15,7 @@ import { CHARGE_DEFS, chargeColor, chargeLabel } from '../engine/charges';
 import { REMNANT_KINDS } from '../data/remnants';
 import { ORB_DEFS } from '../data/orbs';
 import { RUNE_INFO } from '../data/invocations';
-import { BOSS_BAR_XP_MIN, CORPSE_CFG, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
+import { CORPSE_CFG, LOW_LIFE_FLASH_SEC, OFFERINGS_PER_POINT, SNOW_CFG } from '../engine/world';
 import type { World } from '../engine/world';
 import { ATTENTION_CFG, collectAttention } from '../world/attention';
 import { dayCycle } from '../world/daynight';
@@ -3422,6 +3422,23 @@ export class Renderer {
       } else if (cs.mode === 'timed' && cs.indicatorAt !== undefined) {
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(bx2 + bw * cs.indicatorAt - 1, by2 - 2, 2, bh + 4);
+      } else if (cs.mode === 'guard' && cs.bashAt !== undefined) {
+        // THE BASH TIC: the live arming line — release on the ARMED side
+        // of it and the stance converts into the blow. The value is
+        // refreshGuardBash's (one resolver: supports, buffs and the
+        // inverted contract all move it), shipped over the co-op wire, so
+        // what this draws is exactly what the release check will decide.
+        // The faint underline marks the armed side: right of the tic
+        // normally, LEFT of it inverted (Hollow Answer — the bar reads
+        // "cash what the wall has lost"). No tic = no bash on this stance.
+        const tx = bx2 + bw * cs.bashAt;
+        const x0 = cs.bashLow ? bx2 : tx;
+        const x1 = cs.bashLow ? tx : bx2 + bw;
+        ctx.fillStyle = '#ffffff';
+        ctx.globalAlpha = 0.5;
+        ctx.fillRect(x0, by2 + bh + 1, Math.max(0, x1 - x0), 1);
+        ctx.globalAlpha = 1;
+        ctx.fillRect(tx - 1, by2 - 2, 2, bh + 4);
       } else if (cs.mode === 'multitude') {
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
@@ -4812,8 +4829,15 @@ export class Renderer {
 
     // Boss bar — pushed down below the co-op party strip when it's showing, so the
     // two top-center stacks never collide (gated on party size = SP pixel-parity).
-    const boss = world.actors.find(a => !a.dead && a.team === 'enemy' && a.defId && a.xpValue >= BOSS_BAR_XP_MIN);
-    if (boss) {
+    // WHO owns the bar is pure policy and lives in ONE place: World.bossBarInfo
+    // (authored boss fights, live-latched) — hosts derive it, co-op clients read
+    // the same row shipped per snapshot (Actor.netBossBar). The renderer only draws.
+    const barOf = (a: Actor): { pips: number; lit: number; hl: boolean } | null =>
+      a.netBossBar ?? world.bossBarInfo(a);
+    let bar: { pips: number; lit: number; hl: boolean } | null = null;
+    const boss = world.actors.find(a => { bar = barOf(a); return bar !== null; });
+    if (boss && bar) {
+      const info: { pips: number; lit: number; hl: boolean } = bar;
       const oy = world.party.strip.length > 1 ? 20 : 0;
       const bw2 = Math.min(520, w - 200);
       const bx = w / 2 - bw2 / 2;
@@ -4827,23 +4851,13 @@ export class Renderer {
       ctx.fillRect(bx, 24 + oy, bw2 * (warded ? 1 : clamp(boss.life / boss.maxLife(), 0, 1)), 14);
       ctx.strokeStyle = '#3a3a52';
       ctx.strokeRect(bx, 24 + oy, bw2, 14);
-      // Phase pips for a multi-phase boss. HP-ladder bosses FILL pips as
-      // phases are entered (one-way, via aiPhaseIdx); script-FSM bosses
-      // HIGHLIGHT the current phase instead (scripts loop, so "progress"
-      // is a position, not a count).
-      if (boss.brain?.script?.length) {
-        const pips = boss.brain.script.length;
-        for (let i = 0; i < pips; i++) {
-          ctx.fillStyle = i === boss.aiScriptIdx ? '#d060e0' : '#2a2a3a';
-          ctx.fillRect(bx + bw2 - (pips - i) * 12, 40 + oy, 9, 4);
-        }
-      } else if (boss.brain?.phases?.length) {
-        const pips = boss.brain.phases.length + 1; // base + each HP phase
-        const done = clamp(boss.aiPhaseIdx + 2, 1, pips);
-        for (let i = 0; i < pips; i++) {
-          ctx.fillStyle = i < done ? '#d060e0' : '#2a2a3a';
-          ctx.fillRect(bx + bw2 - (pips - i) * 12, 40 + oy, 9, 4);
-        }
+      // Phase pips for a multi-phase boss (info.pips = 0 draws bare). The
+      // HP-ladder FILLS pips as phases are entered (one-way); a script FSM
+      // HIGHLIGHTS the current phase instead (scripts loop, so "progress"
+      // is a position, not a count). Both derived in bossBarInfo.
+      for (let i = 0; i < info.pips; i++) {
+        ctx.fillStyle = (info.hl ? i === info.lit : i < info.lit) ? '#d060e0' : '#2a2a3a';
+        ctx.fillRect(bx + bw2 - (info.pips - i) * 12, 40 + oy, 9, 4);
       }
       ctx.textAlign = 'center';
       ctx.font = 'bold 12px Verdana';

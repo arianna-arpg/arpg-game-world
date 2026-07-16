@@ -80,6 +80,15 @@ export interface CastingState {
   /** GuardSpec.pulse clock — seconds until the held stance next tolls its
    *  component skill (Defiant Bulwark's rolling challenge). */
   guardPulseT?: number;
+  /** THE BASH TIC: live arming line as a bar fraction — where the guard
+   *  bar's release-blow indicator sits. Written ONLY by refreshGuardBash
+   *  (every held tick, so stat changes move it live), read by the release
+   *  check, the renderer's tic and the co-op wire. Undefined = no bash
+   *  rides this stance (innate or grafted) and the tic hides. */
+  bashAt?: number;
+  /** Inverted contract (bashInvert stat): armed at-or-BELOW bashAt, and
+   *  the payload is the shield health LOST. Same single writer. */
+  bashLow?: boolean;
   // charge state — uses elapsed/total as the charge fraction
   // perfect / timed / multitude state
   empowered?: number;
@@ -725,6 +734,15 @@ export class Actor {
   /** The world noticed this foe trade blows with a named hero — the survivor
    *  trigger's eligibility stamp (transient; set by resolveHit both ways). */
   grudgeMark?: boolean;
+  /** THE BOSS BAR LATCH: this authored boss fight went LIVE (first blood or
+   *  a hero inside BOSS_BAR_CFG.senseRange) — the top-center bar shows and
+   *  never flickers back off while the body stands. Set lazily by
+   *  World.bossBarInfo, the one read the renderer and the wire share. */
+  bossBarLive?: boolean;
+  /** CO-OP CLIENT stand-in: the host-computed boss-bar row (pips/lit/
+   *  highlight) shipped per snapshot — clients have no brain to derive
+   *  from. Set only by net/snapshot.ts applies; wins over local derivation. */
+  netBossBar?: { pips: number; lit: number; hl: boolean };
 
   /** Momentum (units/s) — meaningful when traction < 1 (ice). */
   vel: Vec2 = vec(0, 0);

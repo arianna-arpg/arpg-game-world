@@ -355,6 +355,17 @@ export function socketSpec<K extends keyof SupportDef>(
   return undefined;
 }
 
+/** THE EFFECTIVE BASH riding a guard instance: the spec's own, else the
+ *  first socketed graft (SupportDef.guardBash — Answering Wall teaches a
+ *  mute wall the release-blow). First-wins mirrors socketSpec; the
+ *  bashPower/bashFloor/bashInvert stat levers scale EITHER source, which
+ *  is what makes the graft gem dual-use by construction: on a bash-less
+ *  guard its spec is the whole answer, on an innate one only its stat
+ *  mods land — one gem, no duplicate. */
+export function guardBashSpec(inst: SkillInstance): GuardBashSpec | undefined {
+  return inst.def.guard?.bash ?? socketSpec(inst, 'guardBash');
+}
+
 /** Every charge tap riding an instance: the skill's own + socket grafts. */
 export function instanceChargeGain(inst: SkillInstance): ChargeGainSpec[] {
   const out = [...(inst.def.chargeGain ?? [])];
@@ -2284,6 +2295,38 @@ export interface SelfStackSpec {
 }
 
 /**
+ * THE SHIELD BASH — a guard stance's release-blow, as data. The payload is
+ * shield health become damage: released at or past the ARMING LINE, the
+ * stance converts into a blow in the arc worth `payload × mult × bashPower`
+ * of the skill's element (tag-derived: an ice guard bursts COLD), rolled
+ * through the ORDINARY damage pipeline — elemental/spell/tag damage
+ * modifiers, crits and conversions all apply; nothing about the blow is
+ * bespoke. The arming line itself is layered data, never a literal:
+ * `threshold` (per-skill) falls back to BASH_CFG.releaseFloor, scaled by
+ * the caster's bashFloor stat — and the bashInvert stat (>0) MIRRORS the
+ * whole contract: armed at-or-below the line, payload = what the wall has
+ * LOST (see World.refreshGuardBash — the HUD tic and the release check
+ * share that one resolver). A guard without an innate bash can be taught
+ * one by a socketed graft (SupportDef.guardBash, read via guardBashSpec).
+ */
+export interface GuardBashSpec {
+  /** Payload multiplier on the qualifying shield health. */
+  mult: number;
+  /** Blow reach beyond the guardian's radius. */
+  range: number;
+  /** Blow arc, degrees (≥ ~342° reads as a full circle — Ice Shield). */
+  arcDeg: number;
+  /** Chance to stun each victim. */
+  stunChance?: number;
+  /** Knockback impulse on each victim. */
+  knockback?: number;
+  /** ARMING LINE override: the bar fraction at which the release converts
+   *  (default BASH_CFG.releaseFloor). Always × the caster's bashFloor stat,
+   *  mirrored by bashInvert — a support that moves EITHER moves the tic. */
+  threshold?: number;
+}
+
+/**
  * A held frontal block (castMode 'guard'). While the button is down, hits
  * and projectiles arriving inside the facing arc drain the SHIELD's health
  * instead of yours; movement slows and turning is rate-limited. Releasing
@@ -2311,15 +2354,16 @@ export interface GuardSpec {
   /** A successful parry ends the stance and starts the cooldown (Riposte). */
   endOnParry?: boolean;
   /** The bash ALSO fires when the shield breaks, with the full absorbed
-   *  capacity as its payload (Ice Shield's dying burst). */
+   *  capacity as its payload (Ice Shield's dying burst). Fires with the
+   *  stance's EFFECTIVE bash — innate or socket-grafted (guardBashSpec). */
   bashOnBreak?: boolean;
   /**
-   * SHIELD BASH: releasing the guard with at least 25% shield remaining
-   * converts the stance into a frontal blow — the remaining shield health
-   * × mult lands as physical damage in the arc. A broken shield never
-   * bashes; a full-shield release hits hardest.
+   * SHIELD BASH: releasing the guard at/past the arming line converts the
+   * stance into a blow in the arc (see GuardBashSpec — the payload, the
+   * line and the inversion are all data). Omit to leave the stance mute;
+   * a socketed SupportDef.guardBash can still teach it the answer.
    */
-  bash?: { mult: number; range: number; arcDeg: number; stunChance?: number; knockback?: number };
+  bash?: GuardBashSpec;
   /**
    * GUARD PULSE: the held stance tolls a component skill on its own clock
    * — every `interval` held seconds the component fires from the guardian,
@@ -2697,6 +2741,19 @@ export function instanceConvert(inst: SkillInstance): ConvertSpec | undefined {
  *  `interval` seconds the skill rests, capped by the unleashMax stat. The
  *  executeSkill read and the HUD tics share this one clock. */
 export const UNLEASH_CFG = { interval: 1.4 };
+
+/** SHIELD-BASH tuning (GuardBashSpec — the guard stance's release-blow).
+ *  One tune point for the whole discipline: the default ARMING LINE every
+ *  bash-bearing guard shares unless its spec overrides `threshold`. The
+ *  live line is always this (or the override) × the caster's bashFloor
+ *  stat, mirrored across the bar by bashInvert — so gems, passives and
+ *  affixes move the line without touching any release code, and the HUD
+ *  tic follows for free (World.refreshGuardBash is the one resolver). */
+export const BASH_CFG = {
+  /** Bar fraction at/above which a release converts into the bash
+   *  (inverted stances arm at/below the mirrored line, 1 − floor). */
+  releaseFloor: 0.25,
+};
 
 /** GUARDED CASTING tuning (the DELIBERATE cast-while-guarding lane —
  *  SupportDef.guardCast). The gem data references these so the whole
@@ -3789,6 +3846,14 @@ export interface SupportDef {
    *  (GUARD_CAST_CFG carries the canonical numbers). Kept separate on
    *  purpose: each piece composes alone. */
   guardCast?: true;
+  /** TEACH THE WALL TO ANSWER (Answering Wall): a full GuardBashSpec the
+   *  host guard adopts when it has NO innate bash — read at release/break
+   *  through guardBashSpec (innate wins, so on a bash-bearing host only
+   *  this gem's stat mods land: the dual-use contract). Rides minions
+   *  (a summoned shieldbearer's stance answers the same way); gems gate
+   *  themselves with requiresTags ['guard'] — the tag fit is the no-op
+   *  audit, same as shellGraft. */
+  guardBash?: GuardBashSpec;
   /** CARRIER STRAIN: top-level hits with this skill have `chance` to hand
    *  ONE random status from the struck victim to its nearest neighbor —
    *  the hit-borne contagion, with the transplant knobs inline. */
@@ -4234,6 +4299,10 @@ const MINION_RIDABLE_FIELD_LIST = [
   // A pump RIDES: the forwarded minion runs it in its OWN updateConduits
   // against its OWN pools — a guarding thrall genuinely feeds its wall.
   'conduit',
+  // The taught bash RIDES: guardBashSpec reads it off whatever instance the
+  // stance-holder is casting — a forwarded shieldbearer's wall answers on
+  // release exactly like the keeper's (same resolver, same stat levers).
+  'guardBash',
 ] as const satisfies readonly (keyof SupportDef)[];
 
 /** COMPILE-TIME PARTITION: identity ∪ seat-bound ∪ ridable must cover every

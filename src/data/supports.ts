@@ -696,6 +696,28 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('bashPower', 'increased', 0.1)],
     weight: 5,
   },
+  answering_wall: {
+    id: 'answering_wall', name: 'Answering Wall',
+    description: 'TEACH THE WALL TO ANSWER — one gem, two reads. A guard with no bash of its own GAINS one (the release-blow, 55% of remaining shield); a guard that already answers swings 40% HARDER instead. Either way the arming line drops a fifth, so the answer comes easier — watch the tic on the guard bar move.',
+    color: '#c8b088', requiresTags: ['guard'],
+    // The graft is read ONLY when the host guard lacks an innate bash
+    // (guardBashSpec: innate wins) — the stat mods land either way, which
+    // is the whole dual-use contract: no second gem, no duplicate.
+    guardBash: { mult: 0.55, range: 70, arcDeg: 110, stunChance: 0.25, knockback: 50 },
+    mods: [mod('bashPower', 'increased', 0.4), mod('bashFloor', 'increased', -0.2)],
+    perLevel: [mod('bashPower', 'increased', 0.06)],
+    weight: 5,
+  },
+  hollow_answer: {
+    id: 'hollow_answer', name: 'Hollow Answer',
+    description: 'INVERT the answer: the bash measures what the wall has LOST — release a battered guard and the MISSING shield lands as the blow; a pristine wall says nothing. The arming line mirrors to the top of the bar (the tic shows it): ride the wall low, then cash everything it took. +25% bash power for daring the math.',
+    color: '#9a8ab8', requiresTags: ['guard'],
+    // bashInvert is a STAT on purpose — a passive node or an affix can
+    // grant the same inversion later without new machinery.
+    mods: [mod('bashInvert', 'flat', 1), mod('bashPower', 'increased', 0.25)],
+    perLevel: [mod('bashPower', 'increased', 0.05)],
+    weight: 5,
+  },
   stalwart_rhythm: {
     id: 'stalwart_rhythm', name: 'Stalwart Rhythm',
     description: 'The wall keeps TIME: every made block winds every OTHER cooldown forward a second — the patient style\'s tempo, earned one answer at a time.',

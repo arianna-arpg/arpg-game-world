@@ -23,11 +23,11 @@ import { COMMAND_CFG, hasCommandKind, isDormant, issueCommand, NEUTRAL_RESET, ob
 import { alertScale, BEHAVIOR_CFG, normalizeBrain, type ArenaRadius } from './brain';
 import { runAIActions } from './aiActions';
 import {
-  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, UNLEASH_CFG,
+  convertRuleHolds, crewBoardingOpen, effectiveSkillLevel, grantedTags, grimoireForm, guardBashSpec, hostSockets, instanceAim, instanceBrood, instanceCascade, instanceChargeCost, instanceChargeGain, instanceConvert, instanceEchoes, instanceFollowUps, instanceFuse, instanceMeta, instanceMetas, instanceMods, instanceOvercharge, instancePulse, instanceSelfStack, instanceSizeOver, instanceStrikeTiming, instanceSummon, instanceTameMod, instanceTargeting, instanceTethers, instanceTrail, instanceTurret, instanceUseCharges, instanceVariance, instanceSequel, instanceContagion, instanceFissureTrail, instanceCurseField, instanceTrigger, instanceTriggerPermit, makeSkillInstance, rampValue, registerConvertRule, resolveSizeOver, rollCount, rollSkillRarity, socketSpec, BASH_CFG, UNLEASH_CFG,
   CONCENTRATION_CFG, CONSTRUCT_KIND_AIMS, ECHO_STRIKE_LIFE_MAX, META_CHAIN_INTERVAL, TRIGGER_CFG, SEQUEL_CFG, CONTAGION_CFG, REFLEX_CFG, TAME_CFG, type TriggerKind, type EchoRiderSpec, AOE_SHAPE,
   skillContextTags, skillMaxLevel, SKILL_RARITIES, summonCrewOf, supportFitsInst,
   supportFitsInstOrCrew, supportMaxLevel, supportRidesMinions, type SummonCrew,
-  type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardSpec,
+  type AuraDelivery, type BuffEffect, type ChannelSpec, type ConstructDelivery, type GroundDelivery, type GuardBashSpec,
   type ProjectileDelivery, type ProjectileShape, type SkillDef, type SkillEffect,
   type ProjTrailSpec, type FissureTrailSpec, type DropZoneSpec, type LedgerSpec, type SkillInstance, type SkillRarity, type SummonDelivery, type SupportDef, type SupportInstance,
   type TetherSpec, type ConduitSpec,
@@ -393,10 +393,19 @@ function isStealthed(a: Actor): boolean {
   return (a.charges.get(STEALTH_CHARGE) ?? 0) > 0 || a.sheet.get('invisible') > 0;
 }
 
-/** An enemy at or above this xpValue is a BOSS to the UI (health bar at the top
- *  of the screen; shipped over the wire for co-op clients). One threshold, one
- *  place — the renderer and the snapshot both read it. */
-export const BOSS_BAR_XP_MIN = 100;
+/** THE BOSS BAR CONTRACT — who owns the top-center health bar, one policy in
+ *  one place (World.bossBarInfo is the single read; the renderer and the
+ *  co-op wire both go through it). The bar belongs to AUTHORED boss fights:
+ *  defs carrying `boss: true`, overridable per def in either direction via
+ *  `MonsterDef.bossBar` (a spectacle elite can opt IN without the boss
+ *  classification; a technical boss can stay off the marquee). Raw xpValue
+ *  no longer lights it — a fat bounty is a reward, not a marquee. And the
+ *  bar waits for the fight to be LIVE: first blood (the grudge stamp) or a
+ *  hero inside senseRange, latched per body so it never flickers. */
+export const BOSS_BAR_CFG = {
+  /** A hero this close wakes the bar before first blood (world units). */
+  senseRange: 800,
+};
 
 /** Seconds the hit-while-low screen surge lasts (World.lowLifeHitFlash is set
  *  to this and counts down; the renderer normalizes against it to draw one
@@ -2775,6 +2784,37 @@ export class World {
     return Math.max(1, this.seats.reduce((n, s) => n + (s.actor.dead ? 0 : 1), 0));
   }
 
+  /** THE BOSS BAR read (see BOSS_BAR_CFG): non-null iff this body owns the
+   *  top-center bar RIGHT NOW — an authored boss fight (def.bossBar ??
+   *  def.boss), live (first blood latched via the grudge stamp, or a hero
+   *  inside senseRange; the latch sticks so the bar never flickers). The
+   *  pip row rides along: HP-ladder brains FILL pips as phases are entered
+   *  (one-way, aiPhaseIdx), script-FSM brains HIGHLIGHT the current phase
+   *  (scripts loop — "progress" is a position, not a count); pips = 0 for
+   *  single-phase fights (the bar shows bare). One read, three consumers:
+   *  the host renderer, the co-op snapshot (clients get exactly this via
+   *  Actor.netBossBar), and anything future that wants "is this a marquee
+   *  fight" — never re-derive the policy elsewhere. */
+  bossBarInfo(a: Actor): { pips: number; lit: number; hl: boolean } | null {
+    if (a.dead || a.team !== 'enemy' || !a.defId) return null;
+    const def = MONSTERS[a.defId];
+    if (!(def?.bossBar ?? def?.boss)) return null;
+    if (!a.bossBarLive) {
+      const live = a.grudgeMark || this.seats.some(s =>
+        !s.actor.dead && dist(a.pos, s.actor.pos) <= BOSS_BAR_CFG.senseRange);
+      if (!live) return null;
+      a.bossBarLive = true;
+    }
+    if (a.brain?.script?.length) {
+      return { pips: a.brain.script.length, lit: a.aiScriptIdx, hl: true };
+    }
+    if (a.brain?.phases?.length) {
+      const pips = a.brain.phases.length + 1; // base + each HP phase
+      return { pips, lit: clamp(a.aiPhaseIdx + 2, 1, pips), hl: false };
+    }
+    return { pips: 0, lit: 0, hl: false };
+  }
+
   /** Has this seat been idle long enough for a dwell to build? Per-seat so an
    *  ally's reviving dwell and the local player's NPC dwell are independent. */
   seatIdle(seat: Seat): boolean {
@@ -3964,7 +4004,8 @@ export class World {
       if (bossId && MONSTERS[bossId]) {
         const wl = this.createMonster(bossId, def.level + 2, 'enemy');
         wl.faction = lord.faction;
-        wl.xpValue = Math.max(wl.xpValue, 120); // light the boss bar
+        wl.xpValue = Math.max(wl.xpValue, 120); // a warlord's bounty (the top
+        // bar itself is the authored-boss contract — World.bossBarInfo)
         wl.tag = 'warlord';
         wl.pos = this.clampPos(this.farPoint(700), wl.radius);
         this.actors.push(wl);
@@ -10574,7 +10615,9 @@ export class World {
     marshal.faction = lord.faction;
     marshal.tag = 'hell_marshal';
     marshal.eventKey = `hellwar:${lord.id}`;
-    marshal.xpValue = Math.max(marshal.xpValue, 120); // light the boss bar
+    marshal.xpValue = Math.max(marshal.xpValue, 120); // a marshal's bounty — the
+    // top bar stays with the LORDS (authored bosses; World.bossBarInfo): a
+    // field commander wears the champion ring, not the marquee.
     this.promoteRarity(marshal, 'champion');
     marshal.pos = this.clampPos(vec(at.x, at.y), marshal.radius);
     this.actors.push(marshal);
@@ -17079,6 +17122,8 @@ export class World {
         shield: maxShield, maxShield,
         channelTime: 0,
       };
+      // The bash tic is live from the first frame the wall is up.
+      this.refreshGuardBash(caster, caster.casting);
       // GRAFTED CARAPACE (SupportDef.shellGraft): the raised stance ALSO
       // wears a directional shell — the shield's blind side, armored.
       // Priced by guardStrength like the shield itself; stripped when the
@@ -21735,27 +21780,58 @@ export class World {
       if (cs.inst.def.cooldown > 0) guardian.cooldowns.set(cs.inst.def.id, cs.inst.def.cooldown);
       this.text(guardian.pos, 'guard broken!', '#d05050', 14);
       // Ice Shield's dying burst: a broken shield spends its FULL absorbed
-      // capacity as the payload.
+      // capacity as the payload — with the stance's EFFECTIVE bash, innate
+      // or socket-grafted (and the inverted contract agrees: a broken wall
+      // has lost everything, so the numbers meet at the same place).
       if (spec.bashOnBreak) {
-        this.guardBash(guardian, cs.inst, spec, cs.maxShield ?? 0);
+        const bash = guardBashSpec(cs.inst);
+        if (bash) this.guardBash(guardian, cs.inst, bash, cs.maxShield ?? 0);
       }
     }
     return true;
   }
 
   /**
+   * THE ONE ARMING-LINE RESOLVER: recompute the held guard's live bash tic
+   * (CastingState.bashAt/bashLow) from the stance's EFFECTIVE bash (innate
+   * or socket-grafted — guardBashSpec) and the caster's LIVE stats:
+   * threshold (per-skill, else BASH_CFG.releaseFloor) × the bashFloor
+   * stat, mirrored across the bar when bashInvert reads (armed at-or-below
+   * 1 − line, payload = what the wall LOST). Runs at mint and every held
+   * tick, so a buff landing or lapsing mid-stance moves the tic the same
+   * frame; the release check, the renderer's tic and the co-op wire all
+   * read what this writes and can never disagree.
+   */
+  private refreshGuardBash(a: Actor, cs: CastingState): void {
+    const bash = guardBashSpec(cs.inst);
+    if (!bash) { cs.bashAt = undefined; cs.bashLow = undefined; return; }
+    const tags = skillContextTags(cs.inst.def, grantedTags(cs.inst));
+    const extra = instanceMods(cs.inst);
+    const floor = clamp(
+      (bash.threshold ?? BASH_CFG.releaseFloor) * a.sheet.get('bashFloor', tags, extra),
+      0, 1);
+    const inverted = a.sheet.get('bashInvert', tags, extra) > 0;
+    cs.bashAt = inverted ? 1 - floor : floor;
+    cs.bashLow = inverted || undefined;
+  }
+
+  /**
    * The shield-bash payload: `payloadShield` health becomes damage in the
    * bash arc (360° arcs hit all around — Ice Shield's burst). The payload
-   * takes the skill's element, so an ice shield bursts COLD.
+   * takes the skill's element (granted tags count — a gem that teaches the
+   * wall FIRE burns), so an ice shield bursts COLD — and it rides the
+   * ORDINARY damage roll (rollSkillDamage folds the flat payload in), so
+   * elemental/spell/tag damage modifiers, crits and conversions all scale
+   * it. Nothing about the blow is bespoke: payload × spec.mult × the
+   * bashPower stat, then the pipeline.
    */
-  private guardBash(a: Actor, inst: SkillInstance, spec: GuardSpec, payloadShield: number): void {
-    const bash = spec.bash;
-    if (!bash || a.dead || payloadShield <= 0) return;
+  private guardBash(a: Actor, inst: SkillInstance, bash: GuardBashSpec, payloadShield: number): void {
+    if (a.dead || payloadShield <= 0) return;
     const reach = a.radius + bash.range;
     const arcRad = bash.arcDeg * Math.PI / 180;
     const fullCircle = arcRad >= Math.PI * 1.9;
     const elem = (['fire', 'cold', 'lightning'] as const)
-      .find(e => inst.def.tags.includes(e));
+      .find(e => inst.def.tags.includes(e) || grantedTags(inst).includes(e));
     // The bashPower stat is the investable lever on the payload — Reckless
     // Rampart cranks it in trade against the guard itself.
     const power = a.sheet.get('bashPower',
@@ -29314,6 +29390,10 @@ export class World {
         const diff = angleDiff(a.facing, want);
         const turn = Math.min(Math.abs(diff), (spec.turnRate ?? 2.5) * dt);
         a.facing += Math.sign(diff) * turn;
+        // The bash tic tracks LIVE stats (a buff landing mid-stance moves
+        // the arming line the same frame — and the release check below
+        // reads exactly what the bar showed).
+        this.refreshGuardBash(a, cs);
         this.tickChannelSupports(a, cs, dt);
         // CAST-WHILE-GUARDING metronome: the held stance raises a guardBeat
         // trigger event on its own slow clock — the shield-hand sibling of
@@ -29343,17 +29423,24 @@ export class World {
           cs.held = false;
         }
         if (!cs.held || a.dead) {
-          // SHIELD BASH: releasing with a healthy shield converts the
-          // stance into a frontal blow — remaining shield becomes damage.
-          const bash = spec.bash;
-          const shieldLeft = cs.shield ?? 0;
+          // SHIELD BASH: releasing at/past the arming line converts the
+          // stance into a blow. Everything here is the data the tic
+          // showed: cs.bashAt/bashLow are refreshGuardBash's (the one
+          // resolver), the payload is what the bar held — or, inverted,
+          // what it LOST — and guardBashSpec covers grafted answers too.
+          const bash = guardBashSpec(cs.inst);
+          const maxShield = cs.maxShield || 1;
+          const shieldLeft = Math.max(0, cs.shield ?? 0);
           a.casting = null;
           a.useLock = 0.2;
           // The grafted carapace drops with the stance (fromAura rule).
           if (a.shellGuard?.fromAura === def.id) a.shellGuard = undefined;
           if (def.cooldown > 0) a.cooldowns.set(def.id, def.cooldown);
-          if (bash && !a.dead && shieldLeft >= (cs.maxShield ?? 1) * 0.25) {
-            this.guardBash(a, cs.inst, spec, shieldLeft);
+          if (bash && !a.dead && cs.bashAt !== undefined) {
+            const frac = shieldLeft / maxShield;
+            const armed = cs.bashLow ? frac <= cs.bashAt : frac >= cs.bashAt;
+            const payload = cs.bashLow ? maxShield - shieldLeft : shieldLeft;
+            if (armed) this.guardBash(a, cs.inst, bash, payload);
           }
         }
         return;

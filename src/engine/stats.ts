@@ -905,6 +905,16 @@ export const STAT_DEFS: Record<string, StatDef> = {
   /** SHIELD-BASH payload multiplier (base 1) — Reckless Rampart's crank,
    *  investable by anything that can grant a modifier. */
   bashPower:      { label: 'Shield Bash Power', base: 1, min: 0 },
+  /** SHIELD-BASH arming line scalar (base 1): × the spec's threshold
+   *  (default BASH_CFG.releaseFloor) = the live bar fraction at which a
+   *  release converts. Lower = the answer comes easier; the guard bar's
+   *  tic follows this stat the frame it changes (refreshGuardBash). */
+  bashFloor:      { label: 'Shield Bash Arming Line', base: 1, min: 0 },
+  /** >0: the bash contract MIRRORS (Hollow Answer) — armed at-or-below
+   *  1 − the arming line, payload = the shield health the wall has LOST
+   *  rather than what it kept. A full wall says nothing; ride it low and
+   *  cash the damage taken. Binary read; any modifier source can set it. */
+  bashInvert:     { label: 'Inverted Shield Bash', base: 0, min: 0 },
   /** IMPALE: fraction of a hit's PHYSICAL damage DRIVEN IN as the lodged
    *  spear's bank (the impaled status) — discharged by the next hit. */
   impalePower:    { label: 'Impale Effect', base: 0, min: 0, percent: true },

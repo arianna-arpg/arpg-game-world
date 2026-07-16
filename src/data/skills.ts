@@ -2954,7 +2954,9 @@ export const SKILLS: Record<string, SkillDef> = {
     guard: {
       arcDeg: 120, shieldLife: 60, moveFactor: 0.4, turnRate: 2.4,
       // (Parry comes from the Perfect Timing support now — socket it in.)
-      // Release with ≥25% shield: the stance converts into a bash.
+      // Release at/past the arming line (BASH_CFG.releaseFloor × the
+      // bashFloor stat — the guard bar's tic) and the stance converts
+      // into the bash. THE teaching guard: wall first, answer second.
       bash: { mult: 0.7, range: 60, arcDeg: 110, stunChance: 0.4, knockback: 70 },
     },
     delivery: { type: 'self' },
@@ -2966,20 +2968,22 @@ export const SKILLS: Record<string, SkillDef> = {
 
   spiked_bulwark: {
     id: 'spiked_bulwark', name: 'Spiked Bulwark',
-    description: 'Raise a WALL OF POINTS: a heavy guard whose face bites back — every blow you block bleeds the striker on the spikes, and the release still bashes. The greatshield made spiteful: stand, take, answer.',
+    description: 'Raise a WALL OF POINTS: a heavy guard whose face bites back — every blow you block bleeds the striker on the spikes. The wall itself never swings: its answer is PASSIVE, paid out per blow taken, and the longer you stand the more it collects. (An Answering Wall gem can still teach it the release-blow.) The greatshield made spiteful: stand, take, let them cut themselves.',
     tags: ['guard', 'channel', 'duration', 'physical'], color: '#a8988a',
     manaCost: 9, cooldown: 5, useTime: 0,
     castMode: 'guard',
+    // No innate bash ON PURPOSE (the guard-hall differentiation): this
+    // stance's damage is the thorns fabric — attrition, not a burst. The
+    // spikes run deeper in trade.
     guard: {
       arcDeg: 150, shieldLife: 85, moveFactor: 0.35, turnRate: 2.2,
-      bash: { mult: 1.15, range: 95, arcDeg: 120, stunChance: 0.3, knockback: 30 },
     },
-    innateMods: [mod('thorns', 'flat', 8, undefined, 'guarding')],
+    innateMods: [mod('thorns', 'flat', 12, undefined, 'guarding')],
     delivery: { type: 'self' },
     effects: [],
     requirements: { strength: 12, fortitude: 12 },
     ai: { range: 220, weight: 2 },
-    leveling: { perLevel: [mod('guardStrength', 'increased', 0.14), mod('thorns', 'flat', 2, undefined, 'guarding')] },
+    leveling: { perLevel: [mod('guardStrength', 'increased', 0.14), mod('thorns', 'flat', 3, undefined, 'guarding')] },
   },
 
   reprisal: {
@@ -3063,14 +3067,16 @@ export const SKILLS: Record<string, SkillDef> = {
 
   defiant_bulwark: {
     id: 'defiant_bulwark', name: 'Defiant Bulwark',
-    description: 'Raise a JEERING WALL: a broad guard that DARES the field — while it holds, a rolling challenge TAUNTS everything near you every couple of seconds. The tank\'s stance: the fight comes to the shield because the shield insists.',
+    description: 'Raise a JEERING WALL: a broad guard that DARES the field — while it holds, a rolling challenge TAUNTS everything near you every couple of seconds. The tank\'s stance: the fight comes to the shield because the shield insists. The dare is the whole verb — this wall holds court, it doesn\'t swing (Answering Wall can change its mind).',
     tags: ['guard', 'channel', 'duration', 'warcry'], color: '#d88a4a',
     manaCost: 11, cooldown: 6, useTime: 0,
     castMode: 'guard',
+    // No innate bash ON PURPOSE: the pulse is this stance's payoff — the
+    // room hits the wall, not the other way around. The dare rolls a
+    // touch faster in trade.
     guard: {
       arcDeg: 130, shieldLife: 70, moveFactor: 0.35, turnRate: 2.2,
-      pulse: { skillId: 'taunt_pulse', interval: 2 },
-      bash: { mult: 0.6, range: 70, arcDeg: 110, stunChance: 0.25, knockback: 50 },
+      pulse: { skillId: 'taunt_pulse', interval: 1.75 },
     },
     delivery: { type: 'self' },
     effects: [],
@@ -3180,11 +3186,14 @@ export const SKILLS: Record<string, SkillDef> = {
     tags: ['guard', 'channel', 'duration'], color: '#a89878',
     manaCost: 10, cooldown: 6, useTime: 0,
     castMode: 'guard',
+    // No innate bash ON PURPOSE: this wall's identity is the PUMP — poise
+    // becomes stone, the stance outlasts. Lowering a communing wall is a
+    // rite ending, not a blow (the pump drinks deeper in trade; Answering
+    // Wall can still teach it violence).
     guard: {
       arcDeg: 140, shieldLife: 55, moveFactor: 0.35, turnRate: 2.2,
-      bash: { mult: 0.7, range: 70, arcDeg: 110, stunChance: 0.3, knockback: 45 },
     },
-    conduits: [{ from: 'poise', to: 'guard', drainPct: 0.09, ratio: 2.0, floor: 0.25 }],
+    conduits: [{ from: 'poise', to: 'guard', drainPct: 0.09, ratio: 2.2, floor: 0.25 }],
     delivery: { type: 'self' },
     effects: [],
     requirements: { strength: 18, willpower: 10 },
@@ -6787,13 +6796,17 @@ export const SKILLS: Record<string, SkillDef> = {
 
   ice_shield: {
     id: 'ice_shield', name: 'Ice Shield',
-    description: 'GUARD: encase yourself in a 360° shell of ice. You cannot move — but nothing gets through until the shell breaks or you release it, and either way it EXPLODES in cold.',
+    description: 'GUARD: encase yourself in a 360° shell of ice. You cannot move — but nothing gets through until the shell breaks or you release it, and either way it EXPLODES in cold. The burst is a true COLD hit: your cold and spell power grow it, it can crit, it can chill the room — the caster\'s bash, weaker per point of shell but built to scale.',
     tags: ['spell', 'cold', 'guard', 'channel', 'aoe', 'duration'], color: '#bce8f8',
     manaCost: 14, cooldown: 7, useTime: 0,
     castMode: 'guard',
+    // The bash payload takes the skill's element from its tags (COLD) and
+    // rides the ordinary damage roll — cold/spell modifiers scale it, so
+    // the raw mult sits LOWER than the warrior walls on purpose: this one
+    // is bought back with investment, not shield mass.
     guard: {
       arcDeg: 360, shieldLife: 90, moveFactor: 0, turnRate: 10,
-      bash: { mult: 0.6, range: 95, arcDeg: 360, stunChance: 0.3, knockback: 55 },
+      bash: { mult: 0.5, range: 95, arcDeg: 360, stunChance: 0.3, knockback: 55 },
       bashOnBreak: true,
     },
     delivery: { type: 'self' },

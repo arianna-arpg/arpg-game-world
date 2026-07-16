@@ -24,7 +24,7 @@ import type { PartSpec } from '../render/vis/parts';
 import type { ZoneTheme } from '../data/zones';
 import type { ZoneShape } from '../world/shape';
 import { GridWalkField, type PackedWalk } from '../world/gridWalk';
-import { BOSS_BAR_XP_MIN, emptyEssences } from '../engine/world';
+import { emptyEssences } from '../engine/world';
 import type { World, Seat, VendorEntry } from '../engine/world';
 import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
@@ -66,7 +66,10 @@ export interface ActorW {
   rarity?: string;
   defId?: string;
   faction?: string;
-  xp?: number;                 // xpValue — only shipped when >= 100 (the boss-bar gate)
+  /** THE BOSS BAR row, host-computed (World.bossBarInfo — clients have no
+   *  brain to derive pips from): [pips, lit, highlight]. Present only while
+   *  this body owns the top-center bar. */
+  bb?: [number, number, number];
   // --- FX (all omitted when absent → renderer skips them gracefully) ---
   ab?: number;                 // absorb pool (white bar)
   st?: StatusW[];              // active statuses (pips + screen ailment FX)
@@ -86,6 +89,8 @@ export interface CastW {
   pulseTimer?: number; shield?: number; maxShield?: number;
   indicatorAt?: number; presses?: number; channelTime?: number;
   guardArc?: number;           // guard spec arcDeg (mode === 'guard')
+  /** Guard bash tic: live arming line + inverted contract (mode 'guard'). */
+  bashAt?: number; bashLow?: boolean;
 }
 
 /** `a` = flight age (sim seconds): the deterministic phase clock the form
@@ -330,7 +335,10 @@ function actorToW(a: Actor): ActorW {
   if (a.rarity) w.rarity = a.rarity;
   if (a.defId) w.defId = a.defId;
   if (a.faction) w.faction = a.faction;
-  if (a.xpValue >= BOSS_BAR_XP_MIN) w.xp = a.xpValue;   // lets the client draw the boss bar
+  // THE BOSS BAR row rides the wire host-computed (clients have no brain
+  // to derive pips from, and the policy must not fork): see BOSS_BAR_OF.
+  const bb = BOSS_BAR_OF(a);
+  if (bb) w.bb = [bb.pips, bb.lit, bb.hl ? 1 : 0];
   if (a.absorb > 0) w.ab = Math.round(a.absorb);
   if (a.statuses.length) w.st = a.statuses.map(s => ({ id: s.id, stacks: s.stacks }));
   if (a.casting) {
@@ -343,6 +351,8 @@ function actorToW(a: Actor): ActorW {
     if (cs.presses !== undefined) cw.presses = cs.presses;
     if (cs.channelTime !== undefined) cw.channelTime = cs.channelTime;
     if (cs.mode === 'guard' && cs.inst.def.guard) cw.guardArc = cs.inst.def.guard.arcDeg;
+    if (cs.bashAt !== undefined) cw.bashAt = cs.bashAt;
+    if (cs.bashLow) cw.bashLow = true;
     w.cast = cw;
   }
   if (a.activeAuras.size) {
@@ -357,11 +367,15 @@ function actorToW(a: Actor): ActorW {
 
 // Set per-serialize so actorToW can tag player actors with their seat id.
 let SEAT_OF: (a: Actor) => string | undefined = () => undefined;
+// Set per-serialize so actorToW ships the host's boss-bar read (one policy —
+// World.bossBarInfo — for the local renderer and every client alike).
+let BOSS_BAR_OF: (a: Actor) => { pips: number; lit: number; hl: boolean } | null = () => null;
 
 export function serializeSnapshot(world: World, tick: number): StateSnapshot {
   const seatById = new Map<Actor, string>();
   for (const s of world.seats) seatById.set(s.actor, s.id);
   SEAT_OF = (a) => seatById.get(a);
+  BOSS_BAR_OF = (a) => world.bossBarInfo(a);
 
   const seats: Record<string, SeatW> = {};
   for (const s of world.seats) seats[s.id] = seatW(s, world);
@@ -514,7 +528,9 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
     a.rarity = aw.rarity as Actor['rarity'];
     a.defId = aw.defId;
     a.faction = aw.faction;
-    a.xpValue = aw.xp ?? 0;   // reset to 0 (pooled actors) so no stale boss bar
+    // Host-computed boss-bar row (cleared when absent — pooled actors never
+    // wear a stale marquee).
+    a.netBossBar = aw.bb ? { pips: aw.bb[0], lit: aw.bb[1], hl: !!aw.bb[2] } : undefined;
     // The renderer reads maxLife()/maxEs() + invisible/detectability off the sheet.
     // EXCEPT the OWN hero's life/es maxes — those are owned by recalcSeat (from the
     // replicated meta), so setBase-ing the host's final value here would double it.
@@ -533,6 +549,7 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
       mode: aw.cast.mode, total: aw.cast.total, elapsed: aw.cast.elapsed,
       pulseTimer: aw.cast.pulseTimer, shield: aw.cast.shield, maxShield: aw.cast.maxShield,
       indicatorAt: aw.cast.indicatorAt, presses: aw.cast.presses, channelTime: aw.cast.channelTime,
+      bashAt: aw.cast.bashAt, bashLow: aw.cast.bashLow,
       aim: { x: a.pos.x, y: a.pos.y }, held: false, baseMult: 1,
     } as unknown as CastingState) : null;
     a.activeAuras.clear();

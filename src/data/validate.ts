@@ -815,6 +815,22 @@ export function validateContent(): void {
     }
   }
 
+  // TAUGHT BASHES (SupportDef.guardBash): the graft is read only where a
+  // guard stance releases/breaks (guardBashSpec), so the gem must gate on
+  // the 'guard' tag — anywhere else it sockets is a silent no-op (the
+  // shellGraft rule: the tag fit IS the audit). Same arming-line sanity as
+  // the innate spec.
+  for (const sup of Object.values(SUPPORTS)) {
+    if (!sup.guardBash) continue;
+    if (!sup.requiresTags?.includes('guard')) {
+      warn(`support ${sup.id}: guardBash without a 'guard' requiresTags gate — it can socket where no stance ever releases`);
+    }
+    const t = sup.guardBash.threshold;
+    if (t !== undefined && (t < 0 || t > 1)) {
+      warn(`support ${sup.id}: guardBash.threshold ${t} is outside the bar (0..1)`);
+    }
+  }
+
   // THE CONDUIT FABRIC (SkillDef.conduits / SupportDef.conduit): a pump only
   // runs while its host is ENGAGED — a held bar (guard/channel/charge-up/
   // overcharge) or a burning toggle. Both seats get the same spec sanity;
@@ -933,6 +949,17 @@ export function validateContent(): void {
       if (s.guard.pulse.interval <= 0) {
         warn(`skill ${s.id}: guard pulse interval must be positive`);
       }
+    }
+    // SHIELD BASH sanity: an arming line outside the bar can never arm
+    // (>1) or always arms (<0 clamps to a free bash — say so if meant);
+    // an on-break burst with NO bash anywhere (innate or graftable) is a
+    // dead flag on a stance that can never speak.
+    if (s.guard?.bash?.threshold !== undefined
+      && (s.guard.bash.threshold < 0 || s.guard.bash.threshold > 1)) {
+      warn(`skill ${s.id}: guard.bash.threshold ${s.guard.bash.threshold} is outside the bar (0..1)`);
+    }
+    if (s.guard?.bashOnBreak && !s.guard.bash) {
+      warn(`skill ${s.id}: guard.bashOnBreak without an innate bash — only fires if a graft gem (guardBash) is socketed`);
     }
     // THE GATHER FAMILY sanity: a completion-gated release needs a
     // completion to reach (maxHold's ceiling or a fillable brim), and an

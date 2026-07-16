@@ -75,6 +75,14 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
     defReads: def => def.effects.some(e => e.type === 'tame'),
     site: 'tryTame + companionCapOf (the claim roll and the bond cap — tame effects only)',
   },
+  {
+    kind: 'graft', key: 'guardBash',
+    // Guard STANCES are a castMode, not a delivery — the 'guard' TAG also
+    // rides charges, auras and wards whose release never consults a bash.
+    deliveries: [],
+    defReads: def => def.castMode === 'guard',
+    site: 'guardBashSpec (guard stance release/break — castMode guard only)',
+  },
   // exposure / zoneGrow / zoneSizeOver stay unrowed on purpose: their gems
   // gate on 'duration' the way madden/zoneEmit do — broad by design, and a
   // row here would cry wolf at every boot for legitimately broad gates.
@@ -86,6 +94,12 @@ export const GRAFT_READ_SITES: GraftReadRow[] = [
   // its own requiresTags ['guard'] — the tag fit IS the audit). And
   // 'guardCast' (read at every press — canUse's hold-combo lift and
   // skillUseTime's instant force are delivery-agnostic by design).
+  // The bashPower/bashFloor/bashInvert stat FAMILY stays unrowed like the
+  // rest of the guard-stat kin (guardStrength, guardParry): stat mods are
+  // cheap riders beside a gem's live payload, and rowing them would flag
+  // every bash gem twice for one hole. The guardBash GRAFT itself IS
+  // rowed above (castMode-scoped, not delivery-scoped) — the sim matrix
+  // proved the 'guard' tag alone overreaches (charges/auras/wards).
   // Likewise 'conduit' — engagement-gated per-frame in Actor.updateConduits
   // (any held bar or burning toggle), delivery-agnostic by design; its
   // gems gate themselves with guard/channel/aura requiresTags and
