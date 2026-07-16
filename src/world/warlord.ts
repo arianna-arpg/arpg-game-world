@@ -45,7 +45,10 @@ export const WARLORD_OF: Record<string, string> = {
   emberkin: 'emberkin_matriarch',
   junglekin: 'verdant_tyrant',
   sirocco: 'mirage_khagan',
-  chitin: 'brood_sovereign',
+  // QUEENLESS BY DOCTRINE (deliberately absent, like deep/caulborn/starfall):
+  // the Chitin never crown — no crown means the invasion gate never opens
+  // (no warbands), and their only map-scale march is the Swarming. The
+  // Brood Sovereign remains a deep war-muster elite, not a throne.
   hollowborn: 'the_unworn',
   chattel: 'the_bellwether',
   // RESERVED kin (doorless — see data/monsters.ts RESERVED_KIN): crowns

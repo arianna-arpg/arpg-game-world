@@ -109,8 +109,10 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // its country), territorial about every yard of it.
   sirocco: { roaming: 0.45, aggression: 0.95, warlordHome: 'origin', homeBiome: 'desert', eventRange: 150, contexts: ['baseline'], temper: 'territorial' },
   // The Chitin — the Seethe under the deep sand: broods rooted in their
-  // warren-country, foragers ranging far past it (high roaming, home throne).
-  // Their fight is SOURCE WARFARE — kill the wells or drown in the pour.
+  // warren-country, foragers ranging far past it. QUEENLESS: no WARLORD_OF
+  // crown (the invasion gate never opens — no warbands) and no 'crusade'
+  // context; the roost defends its ground, and its only map-scale march is
+  // the Swarming. Their fight is SOURCE WARFARE — kill the wells or drown.
   chitin: { roaming: 0.85, aggression: 1.05, warlordHome: 'origin', homeBiome: 'desert', eventRange: 170, contexts: ['baseline'], temper: 'territorial' },
   // The Emberkin — the cinder country's tribe: rooted vent-tenders who barely
   // march but never, ever cede the calderas (the volcanic biome finally has a
