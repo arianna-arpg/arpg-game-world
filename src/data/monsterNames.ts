@@ -84,6 +84,17 @@ export const MONSTER_NAMES = {
         'of the Older Dynasty', 'Who Kept the Lid', 'the Well-Preserved', 'Lord of the Fourth Hall',
       ],
     },
+    // The Coilborn speak in wet sibilants — river-hiss syllables, titles
+    // measured in coils and tides.
+    coilborn: {
+      prefixes: ['Ssa', 'Zsir', 'Hess', 'Viss', 'Seth', 'Ophi', 'Nagh', 'Szol', 'Yss', 'Thress'],
+      suffixes: ['vezh', 'ath', 'ala', 'arion', 'liss', 'issa', 'essa', 'vane', 'irel', 'ek'],
+      epithets: [
+        'the Slack-Tide', 'of the Seventh Coil', 'Brine-Tongued', 'the Slow Squeeze',
+        'Who Swallows the Ford', 'Fang-Tithed', 'the Patient Current', 'the Molt-Crowned',
+        'of the Drowned Root', 'Who Sings the Shallows', 'the Unblinking Below', 'of the Old Meander',
+      ],
+    },
   } as Record<string, { prefixes?: string[]; suffixes?: string[]; epithets?: string[] }>,
 };
 

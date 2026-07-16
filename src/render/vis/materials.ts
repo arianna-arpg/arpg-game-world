@@ -32,7 +32,7 @@ export interface MaterialDef {
   /** Body translucency (ethereal things never read fully solid). */
   alpha?: number;
   /** Texture stipple painted inside the silhouette at bake time. */
-  texture?: 'cracks' | 'plates' | 'facets' | 'grain' | 'fur' | 'drips' | 'weave' | 'pit';
+  texture?: 'cracks' | 'plates' | 'facets' | 'grain' | 'fur' | 'drips' | 'weave' | 'pit' | 'scales';
   textureAlpha?: number;
 }
 
@@ -69,6 +69,10 @@ export const MATERIALS: Record<string, MaterialDef> = {
   verdant:  { shadow: 0.40, highlight: 0.24, coolShadow: 10, texture: 'fur', textureAlpha: 0.2 },
   /** Bristled hide — directional fur strokes. */
   fur:      { shadow: 0.40, highlight: 0.20, coolShadow: 8, texture: 'fur', textureAlpha: 0.26 },
+  /** Wet serpent hide — imbricated scale crescents under a hard gloss. The
+   *  sheen rides worm-tail segments too (they bake from the same material),
+   *  so a naga's coils glisten without any per-segment geometry. */
+  scale:    { shadow: 0.46, highlight: 0.28, coolShadow: 12, glossAlpha: 0.24, specSize: 0.26, specAlpha: 0.18, texture: 'scales', textureAlpha: 0.24 },
 };
 
 const FALLBACK: MaterialDef = MATERIALS.flesh;

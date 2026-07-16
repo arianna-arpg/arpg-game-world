@@ -107,6 +107,131 @@ function windingLayout(ctx: GenCtx, def: ZoneDef): void {
 }
 registerLayout('winding', windingLayout);
 
+// --- KARST (the chasm maze) -----------------------------------------------------
+// THE KARST REACH: above-ground cavern country whose NEGATIVE SPACE is the
+// maze — branching chasm gulfs (the 'chasm' fall region: bodies can't cross,
+// shots and sight sail over) between pockets of solid ground, the whole reach
+// ringed by a crag rim. NO BRIDGES by design: you walk the pocket-graph around
+// every gap while artillery kin duel you across it and melee kin hold the
+// pinches. Connectivity is guaranteed BY CONSTRUCTION — a spanning tree over
+// the pocket graph plus rolled loop edges — so the universal reachability net
+// never has to rescue-carve a causeway through the gulf.
+function karstLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+
+  // Dials (spec ▷ tileset ▷ biome — the recipe discipline; defaults are the
+  // committed reference maze).
+  const rimW = layoutParam(def, 'karstRim', [80, 130]) as [number, number];
+  const pocketR = layoutParam(def, 'karstPocketR', [85, 140]) as [number, number];
+  const gap = layoutParam(def, 'karstGap', [300, 380]) as [number, number];
+  const corW = layoutParam(def, 'karstCorridorW', [52, 72]) as [number, number];
+  const loopChance = layoutParam(def, 'karstLoops', 0.22);
+  const cragN = layoutParam(def, 'karstCrags', [1, 3]) as [number, number];
+  const wobble = layoutParam(def, 'karstWobble', 46);
+  // The gulf region is a dial too — another country may pour 'abyss' or 'void'
+  // between its pockets without touching the recipe.
+  const gulf = layoutParam(def, 'karstGulf', 'chasm');
+
+  // 1) Negatives: crag wall out to the frame, the chasm sea inside the rim.
+  const rim = rng.range(rimW[0], rimW[1]);
+  grid.fillRegion(0, 0, arena.w, arena.h, 'wall');
+  grid.fillRegion(rim, rim, arena.w - rim, arena.h - rim, gulf);
+
+  // 2) Pocket nodes: portals first (a portal mouth IS a maze room), then a
+  // jittered lattice across the interior — the ground the gulfs run between.
+  const anchors = [ctx.entry, ...ctx.exits];
+  const nodes: { pos: Vec2; r: number }[] = [];
+  for (const a of anchors) nodes.push({ pos: vec(a.x, a.y), r: rng.range(88, 116) });
+  const step = rng.range(gap[0], gap[1]);
+  const inset = rim + pocketR[1] * 0.7;
+  for (let y = inset; y <= arena.h - inset; y += step) {
+    for (let x = inset; x <= arena.w - inset; x += step) {
+      const px = x + rng.range(-0.28, 0.28) * step;
+      const py = y + rng.range(-0.28, 0.28) * step;
+      if (anchors.some(a => Math.hypot(a.x - px, a.y - py) < step * 0.55)) continue;
+      nodes.push({ pos: vec(px, py), r: rng.range(pocketR[0], pocketR[1]) });
+    }
+  }
+
+  // 3) The maze graph: Prim's spanning tree from the entry guarantees ONE
+  // connected pocket-maze (dead-end leaves are the maze's prize corners);
+  // rolled near-neighbor extras braid loops in so it offers routes, not
+  // only backtracks.
+  const n = nodes.length;
+  const edges: [number, number][] = [];
+  const deg = new Uint32Array(n);
+  const dAt = (i: number, j: number) =>
+    Math.hypot(nodes[i].pos.x - nodes[j].pos.x, nodes[i].pos.y - nodes[j].pos.y);
+  {
+    const inTree = new Uint8Array(n);
+    const best = new Float64Array(n).fill(Infinity);
+    const bestFrom = new Int32Array(n).fill(-1);
+    inTree[0] = 1;
+    for (let j = 1; j < n; j++) { best[j] = dAt(0, j); bestFrom[j] = 0; }
+    for (let added = 1; added < n; added++) {
+      let bj = -1, bd = Infinity;
+      for (let j = 0; j < n; j++) if (!inTree[j] && best[j] < bd) { bd = best[j]; bj = j; }
+      if (bj < 0) break;
+      inTree[bj] = 1;
+      edges.push([bestFrom[bj], bj]); deg[bestFrom[bj]]++; deg[bj]++;
+      for (let j = 0; j < n; j++) {
+        if (inTree[j]) continue;
+        const dd = dAt(bj, j);
+        if (dd < best[j]) { best[j] = dd; bestFrom[j] = bj; }
+      }
+    }
+  }
+  const joined = new Set(edges.map(([a, b]) => (a < b ? a * 4096 + b : b * 4096 + a)));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      if (joined.has(i * 4096 + j) || dAt(i, j) > step * 1.45) continue;
+      if (!rng.chance(loopChance)) continue;
+      joined.add(i * 4096 + j); edges.push([i, j]); deg[i]++; deg[j]++;
+    }
+  }
+
+  // 4) Ground: pocket discs + wobbled corridor bands (RESERVED so the scatter
+  // that follows can never plug a pinch); portal mouths breathe through the
+  // rim to their first pocket.
+  const ground = Mask.forRect(0, 0, arena.w, arena.h);
+  for (const nd of nodes) disc(ground, nd.pos.x, nd.pos.y, nd.r);
+  for (const [i, j] of edges) {
+    const halfW = rng.range(corW[0], corW[1]) / 2;
+    const pts = wanderPath(rng, nodes[i].pos, nodes[j].pos, { step: 110, wobble, bowFrac: 0.16 });
+    band(ground, pts, halfW);
+    reserveArtery(ctx, pts, halfW);
+  }
+  for (const a of anchors) disc(ground, a.x, a.y, 104);
+  paintRegion(grid, ground, 'ground');
+
+  // 5) Crag towers: wall islets standing in the gulf — the LOS breakers the
+  // chasm itself deliberately isn't (shots sail every gap; a crag is cover).
+  const groundGrown = ground.clone().grow(2);
+  const cragMask = ground.like();
+  let cragWant = rng.int(cragN[0], cragN[1]);
+  for (let tries = 0; cragWant > 0 && tries < 30; tries++) {
+    const cx = rng.range(inset, arena.w - inset), cy = rng.range(inset, arena.h - inset);
+    if (groundGrown.has(cx, cy)) continue;
+    disc(cragMask, cx, cy, rng.range(56, 104));
+    cragWant--;
+  }
+  cragMask.subtract(groundGrown);
+  paintRegion(grid, cragMask, 'wall');
+
+  // 6) A few dead-end pockets are marked as the maze's prize corners.
+  const leaves: number[] = [];
+  for (let i = anchors.length; i < n; i++) if (deg[i] === 1) leaves.push(i);
+  for (let i = 0; i < Math.min(3, leaves.length); i++) {
+    ctx.pois.push(vec(nodes[leaves[i]].pos.x, nodes[leaves[i]].pos.y));
+  }
+
+  // 7) Tileset furniture lands walk-gated on the pockets (cave mouths, rocks,
+  // spires); the void-float sweep keeps solids off the gulf.
+  scatterDecoration(ctx, def);
+}
+registerLayout('karst', karstLayout);
+
 // --- SPIRAL (the cauldron) ------------------------------------------------------
 function spiralLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;

@@ -147,6 +147,14 @@ export type KnownDoodadKind =
   | 'giant_kelp'   // a kelp TREE: thin stipe underfoot, swaying frond crown above (walk-under, sight-breaking)
   | 'coral'        // blocks both — a vibrant branching coral head
   | 'sea_rock'     // blocks both — a barnacled rocky outcropping
+  // The littoral country's kit (strand / brine flats / mangrove tangle / drowned margin)
+  | 'mangrove'       // a stilt-rooted tide tree — walk-under crown over a many-rooted bole
+  | 'kelp_wrack'     // desiccated kelp heaped where the tide left it (walkable wrack)
+  | 'bleached_coral' // a dead reef head dried to bone tones — the exposed seabed's fossil furniture
+  | 'tide_pool'      // a clear pool the tide forgot — wadeable, mirror-bright
+  | 'brine_sink'     // a hypersaline sink in the pan crust — water that BURNS on entry
+  | 'hull_wreck'     // a beached hull rotting above its own tideline
+  | 'coil_idol'      // the Coilborn's ringed serpent-column shrine
   // Mycelia ("The Bloom") fungal biome doodads
   | 'giant_mushroom' // blocks both — a towering capped stalk (a tree of fungus)
   | 'spore_pod'      // blocks movement not shots — a bulbous sac that PUFFS a spore cloud
@@ -164,6 +172,11 @@ export type KnownDoodadKind =
   | 'cairn'       // stacked waymark stones — solid, blocks feet not shots
   | 'scree'       // walkable gravel spill (pure decoration)
   | 'rock_spire'  // a standing pinnacle — solid, blocks shots, casts long
+  // The Karst Country's kit (the petrified weald + the chasm reach)
+  | 'petrified_tree'   // BRITTLE stone tree — walk-under cover that SHATTERS when struck
+  | 'petrified_elder'  // the weald's permanent anchor crown — never shatters, always tolls
+  | 'petrified_trunk'  // a downed stone bole — low cover you shoot over
+  | 'watcher_stone'    // a basilisk-carved gaze stone — it WATCHES (theme.gaze)
   // Flora clarity (bush-vs-canopy round)
   | 'berry_bush'  // a fruiting shrub — CONCEALS like brush, wears berries
   | 'fern'        // feathery understory fronds (pure decoration)
@@ -748,6 +761,13 @@ export interface DoodadRule {
    *  Pure data: any kind (or a package/legend kind via registerDoodadRule)
    *  becomes a pot, a crumbling plug, or a secret door with one row. */
   brittle?: BrittleSpec;
+  /** RESONANCE: struck stone RINGS (the Karst Country's noise fabric). Any
+   *  strike that plays the surfaces — and any brittle pop — TOLLS this kind:
+   *  a lure ping at the doodad draws the idle zone toward the sound and
+   *  already-roused kin go on alert toward it. Fighting quietly (single-
+   *  target discipline, skirting the stones) becomes a build consideration.
+   *  Pure data per kind; engine cadence in RESONANCE_CFG (world.ts). */
+  resonance?: ResonanceSpec;
   /** SPANS hazards: this kind negates chasm blocking where it lies — the
    *  bridge contract. World.bridges collects spanning doodads by THIS flag,
    *  never by kind literal, so a package's rope crossing or a brittle rotten
@@ -825,6 +845,20 @@ export interface BrittleSpec {
    *  holds are spared by the physics itself, not by a special case. */
   collapse?: { to?: 'edge' | 'lastNode';
     damage?: { amount?: number; pctMaxLife?: number; type?: string; canKill?: boolean } };
+}
+
+/** A struck-stone RING (DoodadRule.resonance): how far the toll carries and
+ *  how often one stone may sound. All fields optional — the engine defaults
+ *  live in RESONANCE_CFG (world.ts), so a kind opts in with `resonance: {}`. */
+export interface ResonanceSpec {
+  /** Lure + alert radius the toll carries (default RESONANCE_CFG.radius). */
+  radius?: number;
+  /** Seconds this one stone won't ring again (default RESONANCE_CFG.cooldown). */
+  cooldown?: number;
+  /** Flavor spoken at the stone on each toll. */
+  text?: string;
+  /** Toll tint — the ring flash + text color (default limestone grey). */
+  color?: string;
 }
 
 /** FORBIDON WINS, GLOBALLY (see generateLayout): the stamp gate's inverse as
@@ -1140,6 +1174,34 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   /** The thicket grown into a TREE: a gnarled thorn bole under a walk-under
    *  bramble crown — the tangle you can stand beneath (and regret). */
   briarwood: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {} },
+  // THE PETRIFIED WEALD (the Karst Country's stone forest): the walk-under
+  // tree family in STONE. Nothing here burns — there is nothing left to burn;
+  // the fire counterlevers live on the KIN, not the wood. The common tree is
+  // BRITTLE: struck cover SHATTERS into a stone-shard squall (fume) and every
+  // broken or struck stone TOLLS (resonance — the noise draws the zone), so
+  // the weald erodes exactly where you fight while the never-breaking elders
+  // keep its skeleton standing. Cover that is permanent — except where YOU
+  // break it — is the face's whole bargain.
+  petrified_tree: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 18,
+    occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {},
+    forbidOn: ['water', 'lava', 'chasm'],
+    brittle: { on: ['hit'], text: 'the stone tree shatters!', color: '#b8b2a4', orbChance: 0.06,
+      fume: { skillId: 'stone_shards', radius: 54, linger: 2.2, tickInterval: 0.4, dmgMult: 0.55, color: '#9a948a' } },
+    resonance: {} },
+  petrified_elder: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 80,
+    occlude: { pad: 14, alpha: 0.25 }, bodyScale: 0.22, veil: {},
+    forbidOn: ['water', 'lava', 'chasm'],
+    resonance: { radius: 560, text: 'the elder tolls…' } },
+  petrified_trunk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 26,
+    forbidOn: ['water', 'lava', 'chasm'], surface: { hw: 1.9, hh: 0.55 },
+    resonance: { radius: 420 } },
+  /** The gaze fabric's stone: solid, brittle (bursting it is the counterplay —
+   *  and the break TOLLS, so silencing a watcher rings the zone: the
+   *  tradeoff is the mechanic), listed in the weald's theme.gaze kinds. */
+  watcher_stone: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 46,
+    forbidOn: ['water', 'lava', 'chasm'],
+    brittle: { on: ['hit'], text: 'the watcher cracks!', color: '#9a948a', orbChance: 0.2 },
+    resonance: { radius: 520, text: 'the watcher rings…' } },
   // Winter clutter (the taiga's furniture).
   ice_spike: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 24 },
   snowman:   { overlap: 'solid', blocksMove: true, spacing: 60 },
@@ -1319,6 +1381,17 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     spacing: 26, occlude: { pad: 12, alpha: 0.28 }, bodyScale: 0.16, veil: {} },
   coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
   sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, rockForm: { cluster: 0.3 } },
+  // The littoral kit. The mangrove is a TREE (canopy, veil, walk-under);
+  // pools are ground overlays sensed by kind (world/regions.ts rows); the
+  // brine sink POURS like water so neighbouring sinks weld into one body
+  // with a true deep heart — swimming in the water that burns is on you.
+  mangrove:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 20, occlude: { pad: 10, alpha: 0.3 }, bodyScale: 0.3, veil: {}, mutable: true },
+  kelp_wrack: { overlap: 'ground', walkOnly: true },
+  bleached_coral: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
+  tide_pool: { overlap: 'ground', hazardGround: true },
+  brine_sink: { overlap: 'ground', pour: { depthCore: true }, hazardGround: true },
+  hull_wreck: { overlap: 'solid', blocksMove: true, spacing: 110, surface: { hw: 1.6, hh: 0.55, angle: 0.1 }, forbidOn: ['lava', 'chasm'] },
+  coil_idol: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 70, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
   // is an active puffer (blocks move not shots, like lava_vent); glow_cap/mycelial_mat are
   // walkable ground overlays (decoration + the spore carpet).
@@ -4474,6 +4547,12 @@ registerStamp('fishing_rack', stampSingle('fishing_rack', [16, 24]));
 registerStamp('charcoal_mound', stampSingle('charcoal_mound', [18, 28]));
 registerStamp('scree', (ctx, spec) => stampBlob(ctx, 'scree', spec.radius ?? [18, 46], [3, 6], false));
 registerStamp('rock_spire', (ctx, spec) => stampSolid(ctx, 'rock_spire', spec.radius ?? [14, 26]));
+// The Karst Country's kit: stone trees ride the tree stamp (walk-under
+// contract intact), the fallen bole and the watcher are singles/solids.
+registerStamp('petrified_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [30, 48], 'petrified_tree'));
+registerStamp('petrified_elder', stampSingle('petrified_elder', [44, 62]));
+registerStamp('petrified_trunk', stampSingle('petrified_trunk', [16, 24]));
+registerStamp('watcher_stone', (ctx, spec) => stampSolid(ctx, 'watcher_stone', spec.radius ?? [14, 20]));
 registerStamp('boulder_field', (ctx) => stampBoulderField(ctx));
 // Flora clarity: fruiting bush clumps + feathery fern understory.
 registerStamp('berry_bush', (ctx, spec) => stampBlob(ctx, 'berry_bush', spec.radius ?? [16, 34], [2, 4], false));
@@ -4842,6 +4921,15 @@ registerStamp('cinder', (ctx, spec) => stampBlob(ctx, 'cinder', spec.radius ?? [
 registerStamp('ember_vent', (ctx) => stampEmberVent(ctx));
 // Marine clutter: kelp fields (walkable beds), coral heads + rocky outcrops (solids).
 registerStamp('kelp', (ctx, spec) => stampBlob(ctx, 'kelp', spec.radius ?? [22, 40], [3, 6], false));
+// The littoral kit: tide trees place like palms; wrack and pools blob; the
+// wreck and the idol stand alone.
+registerStamp('mangrove', (ctx, spec) => stampTree(ctx, spec.radius ?? [18, 30], 'mangrove'));
+registerStamp('kelp_wrack', (ctx, spec) => stampBlob(ctx, 'kelp_wrack', spec.radius ?? [16, 34], [3, 6], false));
+registerStamp('bleached_coral', (ctx, spec) => stampSolid(ctx, 'bleached_coral', spec.radius ?? [14, 26]));
+registerStamp('tide_pool', (ctx, spec) => stampBlob(ctx, 'tide_pool', spec.radius ?? [12, 24], [2, 4], false));
+registerStamp('brine_sink', (ctx, spec) => stampBlob(ctx, 'brine_sink', spec.radius ?? [20, 44], [3, 6], false));
+registerStamp('hull_wreck', stampSingle('hull_wreck', [22, 30]));
+registerStamp('coil_idol', stampSingle('coil_idol', [12, 16]));
 // The kelp TREE — a lone stipe; forests come from the 'kelp_forest' cluster.
 registerStamp('giant_kelp', (ctx, spec) => stampSolid(ctx, 'giant_kelp', spec.radius ?? [26, 42]));
 registerStamp('coral', (ctx, spec) => stampSolid(ctx, 'coral', spec.radius ?? [16, 28]));

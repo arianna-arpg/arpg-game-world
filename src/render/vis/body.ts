@@ -265,6 +265,22 @@ function paintTexture(ctx: CanvasRenderingContext2D, r: number, ramp: Ramp, mat:
       }
       break;
     }
+    case 'scales': {
+      // Imbricated crescents in offset rows — snakeskin at any radius.
+      ctx.strokeStyle = withAlpha(ramp.shadow, a);
+      ctx.lineWidth = Math.max(1, r * 0.05);
+      const step = Math.max(3, r * 0.3);
+      let row = 0;
+      for (let y = -r; y <= r; y += step * 0.68, row++) {
+        const off = (row % 2) * step * 0.5 + (hash01(seed, row) - 0.5) * r * 0.05;
+        for (let x = -r - step; x <= r + step; x += step) {
+          ctx.beginPath();
+          ctx.arc(x + off, y, step * 0.52, Math.PI * 0.2, Math.PI * 0.8);
+          ctx.stroke();
+        }
+      }
+      break;
+    }
   }
 }
 

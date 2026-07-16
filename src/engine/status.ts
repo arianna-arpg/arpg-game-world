@@ -363,6 +363,32 @@ export const STATUS_DEFS: Record<string, StatusDef> = {
     label: 'Temporal Drag', color: '#7ea8c8', duration: 3,
     timeScale: 0.5,
   },
+  // THE PETRIFY LADDER (the Karst Country's gaze): stone creeps up the body —
+  // every stack is WEIGHT (a per-stack whole-kit slow, chill's grammar at a
+  // heavier grain), and at max stacks the flesh is consumed into PETRIFIED: a
+  // brief stone stasis riding the chrono fabric (timeScale 0 — a targetable
+  // statue, outside time; frozen's damageTaken so the shattering blow lands
+  // wider). Ordinary statuses end to end: hard-cast them, proc them
+  // (apply_petrifying / damageVs_petrified exist like every lane), point the
+  // gaze fabric at them (ZoneTheme.gaze.status — the watcher stones build
+  // the climb), shrug them with ailmentResist. The counterplay ladder: break
+  // line of sight, press inside closeReach (the eye flinches shut), or burst
+  // the watcher itself.
+  petrifying: {
+    label: 'Petrifying', color: '#9a948a', duration: 4,
+    stacking: true, maxStacks: 6, buildup: { into: 'petrified' },
+    modsPerStack: true,
+    mods: [
+      mod('moveSpeed', 'more', -0.055),
+      mod('attackSpeed', 'more', -0.045),
+      mod('castSpeed', 'more', -0.045),
+    ],
+  },
+  petrified: {
+    label: 'Petrified', color: '#b8b2a4', duration: 1.4,
+    timeScale: 0, hardCC: true,
+    mods: [mod('damageTaken', 'more', 0.1)],
+  },
   // SELECTIVE CC — the forbidsTags family: each locks ONE verb and leaves
   // the rest of the kit alive (the counterplay IS switching verbs).
   // All three are ordinary statuses: hard-cast them, proc them

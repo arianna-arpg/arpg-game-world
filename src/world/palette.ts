@@ -37,6 +37,7 @@ export const FACTION_COLORS: Record<string, string> = {
   magpie: '#3a4a5c',
   rimebound: '#9fd4ec',
   sarcophate: '#c9a24a',
+  coilborn: '#3f9a7e',
 };
 
 /** The Contagion overlay's sickly palette — a necrotic green that brightens toward

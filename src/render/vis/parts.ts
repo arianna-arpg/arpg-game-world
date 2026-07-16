@@ -3772,6 +3772,140 @@ const sarcophagusLid: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+// ============================================================= SERPENT KIT
+
+/** COBRA HOOD: the flared neck-shield behind a serpent's head — a broad
+ *  spade widest just behind the skull, ribbed like stretched skin, with an
+ *  optional pair of "spectacle" eyespots (the classic warning). THE naga
+ *  tell: scale it slight for a skirmisher's half-flare, huge for a spitter
+ *  in full threat. (params: flare width mul, ribs, spectacle 0|1) */
+const cobraHood: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const flare = P(spec, 'flare', 1);
+  const ribs = Math.round(P(spec, 'ribs', 4));
+  const spectacle = P(spec, 'spectacle', 1);
+  place(ctx, r, spec, (c, R) => {
+    const w = R * 0.92 * flare;
+    const trace = (): void => {
+      c.beginPath();
+      c.moveTo(R * 0.42, 0);
+      c.quadraticCurveTo(R * 0.34, -w * 0.85, -R * 0.28, -w);
+      c.quadraticCurveTo(-R * 0.95, -w * 0.5, -R * 1.05, 0);
+      c.quadraticCurveTo(-R * 0.95, w * 0.5, -R * 0.28, w);
+      c.quadraticCurveTo(R * 0.34, w * 0.85, R * 0.42, 0);
+      c.closePath();
+    };
+    trace(); c.fillStyle = ramp.base; c.fill();
+    volume(c, R, ramp, trace);
+    // Stretched-skin ribs fanning back from the throat.
+    c.strokeStyle = withAlpha(ramp.shadow, 0.55);
+    c.lineWidth = Math.max(1, R * 0.05);
+    for (let i = 1; i <= ribs; i++) {
+      const t = i / (ribs + 1);
+      for (const s of [-1, 1]) {
+        c.beginPath();
+        c.moveTo(R * 0.34, 0);
+        c.quadraticCurveTo(-R * 0.1, s * w * t * 0.9, -R * (0.5 + 0.4 * t), s * w * t * 0.55);
+        c.stroke();
+      }
+    }
+    if (spectacle > 0) {
+      // The warning eyespots, one per wing of the hood.
+      const eye = pal.accent;
+      c.lineWidth = Math.max(1, R * 0.06);
+      for (const s of [-1, 1]) {
+        c.strokeStyle = withAlpha(eye.highlight, 0.8);
+        c.beginPath(); c.arc(-R * 0.38, s * w * 0.52, R * 0.15, 0, Math.PI * 2); c.stroke();
+        c.fillStyle = withAlpha(eye.shadow, 0.75);
+        c.beginPath(); c.arc(-R * 0.38, s * w * 0.52, R * 0.065, 0, Math.PI * 2); c.fill();
+      }
+    }
+    trace(); outlined(c, ramp, 1.2);
+  });
+};
+
+/** FANG JAW: the unhinged strike-gape — a dark open throat notched into the
+ *  muzzle with paired recurved fangs hooking inward. The fang-priest's icon;
+ *  every venom-kin's threat display. (params: gape half-width frac, venom
+ *  0..1 beads the tips from the glow tone) */
+const fangJaw: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const bone = pal.bone;
+  const gape = P(spec, 'gape', 0.5);
+  const venom = P(spec, 'venom', 0);
+  place(ctx, r, spec, (c, R) => {
+    // The open throat: a dark wedge swallowing the muzzle line.
+    c.fillStyle = pal.dark;
+    c.beginPath();
+    c.moveTo(R * 0.15, 0);
+    c.lineTo(R * 1.02, -R * gape);
+    c.quadraticCurveTo(R * 1.18, 0, R * 1.02, R * gape);
+    c.closePath();
+    c.fill();
+    c.strokeStyle = withAlpha(ramp.outline, 0.8);
+    c.lineWidth = 1.2;
+    c.stroke();
+    // Recurved fangs off each jaw tip, curving back toward the throat.
+    for (const s of [-1, 1]) {
+      c.fillStyle = bone.highlight;
+      c.beginPath();
+      c.moveTo(R * 0.94, s * R * gape * 0.92);
+      c.quadraticCurveTo(R * 1.1, s * R * gape * 0.42, R * 0.8, s * R * gape * 0.14);
+      c.lineTo(R * 0.78, s * R * gape * 0.5);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = withAlpha(bone.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+    if (venom > 0) {
+      // Venom beading where the fangs bite down.
+      c.fillStyle = withAlpha(pal.glow, 0.5 + 0.4 * venom);
+      for (const s of [-1, 1]) {
+        c.beginPath(); c.arc(R * 0.84, s * R * gape * 0.3, R * 0.06, 0, Math.PI * 2); c.fill();
+      }
+    }
+  });
+};
+
+/** COIL: the gathered serpent underbody — nested tube arcs sweeping behind
+ *  the torso, opening toward the facing so the body reads as RISEN from its
+ *  own resting coil. Stationary naga (priests, charmers, matriarchs) wear it
+ *  under the torso stack. (params: loops) */
+const coil: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'base');
+  const loops = Math.round(P(spec, 'loops', 3));
+  place(ctx, r, spec, (c, R) => {
+    c.lineCap = 'round';
+    for (let i = loops; i >= 1; i--) {
+      const t = i / loops;
+      const rr = R * (0.34 + 0.52 * t);
+      const lw = Math.max(2, R * (0.34 - 0.05 * i));
+      const gap = 0.5 + 0.24 * (loops - i); // inner loops open wider toward the rise
+      // Tube edge first, body tone over it — each loop reads as its own coil.
+      c.strokeStyle = withAlpha(ramp.outline, 0.8);
+      c.lineWidth = lw + Math.max(1.5, R * 0.05) * 2;
+      c.beginPath(); c.arc(-R * 0.16 * t, 0, rr, gap, Math.PI * 2 - gap); c.stroke();
+      c.strokeStyle = i % 2 ? ramp.shadow : ramp.base;
+      c.lineWidth = lw;
+      c.beginPath(); c.arc(-R * 0.16 * t, 0, rr, gap, Math.PI * 2 - gap); c.stroke();
+    }
+    // The tail tip slipping free of the stack.
+    c.strokeStyle = withAlpha(ramp.outline, 0.8);
+    c.lineWidth = Math.max(1.5, R * 0.12) + 2;
+    c.beginPath();
+    c.moveTo(-R * 0.82, R * 0.4);
+    c.quadraticCurveTo(-R * 1.22, R * 0.18, -R * 1.08, -R * 0.1);
+    c.stroke();
+    c.strokeStyle = ramp.base;
+    c.lineWidth = Math.max(1.5, R * 0.12);
+    c.beginPath();
+    c.moveTo(-R * 0.82, R * 0.4);
+    c.quadraticCurveTo(-R * 1.22, R * 0.18, -R * 1.08, -R * 0.1);
+    c.stroke();
+  });
+};
+
 /** CARRION FLIES: a sparse standing orbit of specks with a faint shimmer
  *  ring — the charnel halo. Deterministic placement, no clock: bakes stay
  *  stable. (params: flies) */
@@ -4141,6 +4275,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   shroudWrap, carrionFlies,
   wheels,
   canopicJar, sarcophagusLid,
+  cobraHood, fangJaw, coil,
   anchor,
 };
 

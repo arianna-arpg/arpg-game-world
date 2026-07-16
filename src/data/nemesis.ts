@@ -73,6 +73,19 @@ export const NEMESIS_NAMES = {
         'the Provisioned', 'Who Kept the Lid', 'the Embalmer\'s Regret', 'of the Older Dynasty',
       ],
     },
+    // The Coilborn hiss their great ones in long wet sibilants — names like
+    // water moving under roots, titled by coil, tide and venom.
+    coilborn: {
+      first: [
+        'Ssavezh', 'Zsirath', 'Hessala', 'Vissarion', 'Sethliss', 'Ophissa',
+        'Naghessa', 'Szolvane', 'Yssirel', 'Cazsissa', 'Thressek', 'Ilssavane',
+      ],
+      epithets: [
+        'the Slack-Tide', 'of the Seventh Coil', 'Brine-Tongued', 'the Unblinking Below',
+        'Who Swallows the Ford', 'the Slow Squeeze', 'of the Drowned Root', 'Fang-Tithed',
+        'the Patient Current', 'Who Sings the Shallows', 'the Molt-Crowned', 'of the Old Meander',
+      ],
+    },
   } as Record<string, { first?: string[]; epithets?: string[] }>,
 };
 

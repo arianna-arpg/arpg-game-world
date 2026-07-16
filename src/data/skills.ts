@@ -10872,6 +10872,44 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 58, weight: 2 },
   },
 
+  // The Coilborn's melee verb (the rime_fang pattern — one kit skill, the
+  // whole scaled tier shares it): the strike is a BITE, and the venom is
+  // the point — poison STACKS, so a pack of serpents closing in the water
+  // you can barely wade is the family thesis in one fight. Cold-lane =
+  // chill; tomb-lane = torment; wet-lane = poison; the ladders never collide.
+  fang_strike: {
+    id: 'fang_strike', name: 'Fang Strike', noDrop: true,
+    description: 'A lunging bite over recurved fangs — the wound is small; what it leaves behind is not.',
+    tags: ['attack', 'melee', 'physical', 'chaos'], color: '#7ec850',
+    manaCost: 0, cooldown: 0, useTime: 0.85,
+    baseDamage: { physical: [4, 6], chaos: [1, 3] },
+    delivery: { type: 'melee', range: 46, arcDeg: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'poison', chance: 0.6, magnitude: 0.35 },
+    ],
+    ai: { range: 52, weight: 2 },
+  },
+
+  // The siren-adder's verb: the SONG is a slow, wide, visible pull — dodge
+  // it or be dragged back through the water the family never feels. Reuses
+  // the ensnared clutch (the terrain vocabulary) so the drag reads in the
+  // same language as the ground it drags you into.
+  siren_song: {
+    id: 'siren_song', name: 'Siren Song', noDrop: true,
+    description: 'A rolling note you feel in your knees — it pulls you to the singer, and the water does the rest.',
+    tags: ['spell', 'projectile', 'chaos', 'duration'], color: '#8ae8d8',
+    manaCost: 12, cooldown: 8, useTime: 0.9,
+    baseDamage: { chaos: [3, 5] },
+    delivery: { type: 'projectile', speed: 190, radius: 16, range: 420 },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.25 },
+      { type: 'status', status: 'ensnared', chance: 1, durationOverride: 1.4 },
+    ],
+    ai: { range: 400, weight: 3, keepDistance: 260 },
+  },
+
   // ======================= The EMPYREAN kata ================================
   // The Aetherial's own arts — verticality, radiance, judgement — brought
   // down by whoever survives the crossing. Five distinct rhythms (the samurai

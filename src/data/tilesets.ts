@@ -110,8 +110,10 @@ export interface TilesetDef {
   /** BOUNDLESS arena: the engine streams terrain around the player — no walls,
    *  no perimeter cull (the Descent abyss). */
   boundless?: true;
-  /** Force this layout generator id instead of the cave roll (Descent's convex
-   *  streamer). */
+  /** PIN the layout generator id: caves skip the caveLayouts roll (Descent's
+   *  convex streamer), surface mints skip the biome's allowedLayouts roll —
+   *  how a multi-face country couples each FACE to its own recipe (the Karst
+   *  Reach's chasm maze vs the Petrified Weald's forest). */
   forceLayout?: string;
   /** Structure CHANCES zones from this tileset roll (merged with the biome's
    *  at mint; also feeds the bastion-layout candidate pool). */
@@ -2718,6 +2720,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The tideline's own: skitter swarms in the wrack, lurchers in the reef.
         { id: 'tide_skitter', weight: 3, presence: { to: 18, fadeOut: 9 } },
         { id: 'reef_lurcher', weight: 1, presence: { from: 5, fadeIn: 3 } },
+        // Coilborn raiders beach their coracles where the sand runs quiet.
+        { id: 'bog_strider', weight: 1, presence: { from: 5 } },
+        { id: 'hooded_spitter', weight: 1, presence: { from: 7 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -3957,6 +3962,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'mire_burrower', weight: 2, presence: { from: 7, fadeIn: 3 } },
         { id: 'bog_dweller', weight: 2, presence: { from: 6, fadeIn: 3 } },
         { id: 'tide_whelk', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        // Coilborn hunting parties range up the inland fens from the coast
+        // (light presence — the marsh is their border country, not home).
+        { id: 'marsh_adder', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'bog_strider', weight: 1, presence: { from: 5 } },
       ],
     },
     spawnerId: 'bone_altar',

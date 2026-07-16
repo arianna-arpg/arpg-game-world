@@ -71,6 +71,7 @@ import {
   blocksMovement, blocksProjectiles, bodyRadiusOf, doodadRuleOf, generateLayout,
   hitSurfaceOf, normalizeDoodadBound,
   type BrittleSpec, type Doodad, type DoodadEffect, type PlacedStructure, type PlacedSlot,
+  type ResonanceSpec,
 } from './levelgen';
 import { gateThroatAt } from './layoutRecipes';
 import { Timeflow, type ActorTimeFilter, type ChronoSpec } from './timeflow';
@@ -421,6 +422,25 @@ export const GAZE_CFG = {
   lurePace: 1.15,
   lureStandoff: 56,
   lureLinger: 4,
+};
+
+/** THE RESONANCE tunables (World.resonate; DoodadRule.resonance names the
+ *  ringing kinds). Struck stone TOLLS: a lure ping at the stone draws the
+ *  idle zone toward the sound (setLure's own idle-only contract — a lure
+ *  never overrides combat), and already-roused kin go on ALERT toward it
+ *  (the sentry-callout fields). Nothing spawns and nothing aggros by fiat:
+ *  the zone simply turns toward the noise. Per-stone cooldown so a flurry
+ *  reads as one toll, not a drumroll. */
+export const RESONANCE_CFG = {
+  /** How far a toll carries (DoodadRule.resonance.radius overrides). */
+  radius: 480,
+  /** Seconds one stone stays quiet between tolls. */
+  cooldown: 2.2,
+  /** Seconds of alert (stalk toward the stone) a toll grants roused kin. */
+  alertFor: 4,
+  lurePace: 1.1,
+  lureStandoff: 52,
+  lureLinger: 3.5,
 };
 
 /** DESERT HEAT tunables (World.updateHeat): the sunscorch cadence. The stack
@@ -21101,11 +21121,41 @@ export class World {
       }
     }
     for (const o of this.doodadsNear(at.x, at.y, reach)) {
-      const br = doodadRuleOf(o.kind).brittle;
-      if (!br || o.gone || !br.on.includes('hit')) continue;
-      if (!within(o.pos, o.radius)) continue;
+      if (o.gone || !within(o.pos, o.radius)) continue;
+      const rule = doodadRuleOf(o.kind);
+      // RESONANT kinds toll on ANY strike that plays the surfaces — the ring
+      // sounds whether or not the stone also breaks (a pop tolls loudest via
+      // popBrittle's own call; the per-stone cooldown folds the two into one).
+      if (rule.resonance) this.resonate(o, rule.resonance);
+      const br = rule.brittle;
+      if (!br || !br.on.includes('hit')) continue;
       this.popBrittle(o, striker);
     }
+  }
+
+  /** A resonant stone TOLLS (DoodadRule.resonance): lure ping at the stone +
+   *  alert toward it for kin already roused. The lure only redirects the idle
+   *  (setLure's contract); the alert only sharpens the awake — struck stone
+   *  turns the zone's head, it never mind-controls it. */
+  private resonate(o: Doodad, spec: ResonanceSpec): void {
+    const last = this.resonanceRang.get(o);
+    if (last !== undefined && this.time - last < (spec.cooldown ?? RESONANCE_CFG.cooldown)) return;
+    this.resonanceRang.set(o, this.time);
+    const radius = spec.radius ?? RESONANCE_CFG.radius;
+    const tint = spec.color ?? '#b8b2a4';
+    this.setLure(`resonance#${o.pos.x | 0}_${o.pos.y | 0}`, o.pos, radius,
+      RESONANCE_CFG.lurePace, RESONANCE_CFG.lureStandoff, RESONANCE_CFG.lureLinger);
+    for (const a of this.actors) {
+      if (a.dead || a.team !== 'enemy' || a.passive) continue;
+      if (dist(a.pos, o.pos) > radius) continue;
+      a.alertUntil = Math.max(a.alertUntil, this.time + RESONANCE_CFG.alertFor * alertScale(a));
+      a.alertFrom ??= vec(o.pos.x, o.pos.y);
+    }
+    this.text(o.pos, spec.text ?? 'the stone rings…', tint, 12);
+    this.flashes.push({
+      pos: vec(o.pos.x, o.pos.y), radius: Math.min(90, o.radius + 26),
+      color: tint, life: 0.3, maxLife: 0.3,
+    });
   }
 
   /** The zone-side mallet: offer a zone's strike moment to the surfaces
@@ -31902,6 +31952,8 @@ export class World {
   /** Dwell clocks for dwell-gated brittle nears (secret walls give to a
    *  lingering press). WeakMap: popped/regenerated doodads just fall out. */
   private brittleDwell = new WeakMap<Doodad, number>();
+  /** Last toll time per resonant stone (World.resonate's cooldown ledger). */
+  private resonanceRang = new WeakMap<Doodad, number>();
 
   /** SURFACE procs — rolled when this actor pops a brittle surface (the
    *  jungle's brush plugs, a crystal lattice, a hidden face). Mirrors the
@@ -31966,6 +32018,10 @@ export class World {
    *  its own rewards; a timer-pop names nobody and rolls nothing). */
   private popBrittle(d: Doodad, striker?: Actor | null): void {
     if (d.gone) return;
+    // A breaking resonant stone TOLLS as it goes (near/touch/dwell pops reach
+    // here without passing strikeSurfaces; the cooldown dedupes hit-pops).
+    const res = doodadRuleOf(d.kind).resonance;
+    if (res) this.resonate(d, res);
     d.gone = true;
     const i = this.doodads.indexOf(d);
     if (i >= 0) this.doodads.splice(i, 1);

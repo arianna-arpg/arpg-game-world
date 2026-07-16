@@ -47,6 +47,12 @@ export const STATUS_FX_REGISTRY: Record<string, ScreenFxDef> = {
   retching:  { kind: 'vignette', intensity: 0.7 },
   blind:     { kind: 'darken', intensity: 0.9 },
   seen:      { kind: 'vignette', intensity: 0.4 },
+  // THE KARST ladder: stone climbing the body reads as the world draining
+  // toward limestone grey (the pall's desaturate, stack-scaled), and full
+  // petrification is stone-grey stillness — beatless like the swoon, because
+  // a statue does not have a pulse.
+  petrifying: { kind: 'pall', color: '#8f8a80', intensity: 0.5, stacksScale: true },
+  petrified:  { kind: 'pall', color: '#b8b2a4', intensity: 0.9 },
 };
 
 export interface ActiveFx { def: ScreenFxDef; color: string; k: number; }

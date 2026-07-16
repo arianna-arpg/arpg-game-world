@@ -50,6 +50,10 @@ export const WARLORD_OF: Record<string, string> = {
   // their cold ground — and Deepwinter raises the SAME crown at its glacial
   // heart as the front's cure (the two roles share one body, one id).
   rimebound: 'winter_king',
+  // The Coilborn crown for real (a baseline landholding banner marches):
+  // a living Matriarch opens the invasion gate, and serpent warbands ride
+  // the waterways off their littoral ground.
+  coilborn: 'coil_matriarch',
   // QUEENLESS BY DOCTRINE (deliberately absent, like deep/caulborn/starfall):
   // the Chitin never crown — no crown means the invasion gate never opens
   // (no warbands), and their only map-scale march is the Swarming. The

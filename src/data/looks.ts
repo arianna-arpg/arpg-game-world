@@ -1965,6 +1965,99 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 1.15,
   },
 
+  // ======================================================== THE COILBORN
+  // Serpentfolk of the wet margins. Family grammar, readable at a glance:
+  // every true-blood is a NAGA — humanoid torso over a worm-tail of coils
+  // (the def's `worm` draws the length; the `scale` material glosses it) —
+  // the COBRA HOOD flares wider with rank, the COIL base marks the court's
+  // stationary castes, and the trident-and-net are the wet-hunter's tools.
+  // The adder alone is beast, not blood: no torso, no hood — just the snake.
+  /** The marsh's own snake: wedge head, bared fangs, the tail is the body. */
+  marsh_adder: {
+    parts: [
+      { kind: 'serpentHead', scale: 1.05 },
+      { kind: 'fangs', scale: 0.9 },
+      { kind: 'eyes', color: '#ffd870', params: { n: 2, spread: 0.4, dist: 0.55, size: 0.09 } },
+      { kind: 'stripes', scale: 0.9, params: { n: 3 } },
+    ],
+    shadowScale: 1.2,
+  },
+  /** The skirmisher: lean torso, half-flared hood, net and fishing trident. */
+  bog_strider: {
+    parts: [
+      { kind: 'cobraHood', scale: 0.72, params: { flare: 0.8, ribs: 3, spectacle: 0 } },
+      { kind: 'torso', scale: 0.88 },
+      { kind: 'scutes', scale: 0.8 },
+      { kind: 'net', x: -0.3, y: 0.5, scale: 0.7 },
+      { kind: 'trident', params: { len: 1.0 } },
+      { kind: 'eyes', color: '#ffe090', params: { spread: 0.3, dist: 0.62, size: 0.09 } },
+    ],
+  },
+  /** The artillery: the hood at FULL threat — you read the spit coming. */
+  hooded_spitter: {
+    parts: [
+      { kind: 'cobraHood', scale: 1.0, params: { flare: 1.25, ribs: 5, spectacle: 1 } },
+      { kind: 'torso', scale: 0.9 },
+      { kind: 'scutes', scale: 0.82 },
+      { kind: 'fangJaw', x: 0.3, scale: 0.85, params: { gape: 0.55, venom: 1 } },
+      { kind: 'eyes', color: '#d8ff70', params: { spread: 0.34, dist: 0.58, size: 0.1 } },
+    ],
+  },
+  /** The venom-speaker: robed over the risen coil, jaw agape mid-litany. */
+  fang_priest: {
+    parts: [
+      { kind: 'coil', scale: 0.95, alpha: 0.9, params: { loops: 3 } },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'cobraHood', scale: 0.85, params: { flare: 1.05, ribs: 4, spectacle: 1 } },
+      { kind: 'fangJaw', x: 0.34, scale: 0.8, params: { gape: 0.5, venom: 1 } },
+      { kind: 'censer', scale: 0.85 },
+      { kind: 'staff', scale: 0.9 },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, color: '#9fe86a', alpha: 0.5 }],
+  },
+  /** The wall that wraps you: plated torso, mace, the long armored tail. */
+  constrictor_knight: {
+    parts: [
+      { kind: 'cobraHood', scale: 0.7, role: 'metal', params: { flare: 0.75, ribs: 3, spectacle: 0 } },
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'armorPlates', scale: 0.9 },
+      { kind: 'pauldrons', role: 'metal', scale: 0.9 },
+      { kind: 'dorsalRidge', scale: 0.9 },
+      { kind: 'mace', params: { len: 1.05 } },
+      { kind: 'eyes', color: '#ffd870', params: { spread: 0.28, dist: 0.6, size: 0.09 } },
+    ],
+    shadowScale: 1.15,
+  },
+  /** The song in the reeds: veils streaming off the hood, the lure-light
+   *  burning ahead of her — the pull you feel before you see her. */
+  siren_adder: {
+    parts: [
+      { kind: 'coil', scale: 0.9, alpha: 0.85, params: { loops: 2 } },
+      { kind: 'torso', scale: 0.85 },
+      { kind: 'cobraHood', scale: 0.78, params: { flare: 0.95, ribs: 4, spectacle: 1 } },
+      { kind: 'eyes', color: '#8ae8d8', params: { spread: 0.3, dist: 0.6, size: 0.1 } },
+    ],
+    live: [
+      { kind: 'veilSashes', scale: 0.95, alpha: 0.85, params: { sashes: 4 } },
+      { kind: 'lure', color: '#8ae8d8', params: { len: 1.05 } },
+    ],
+  },
+  /** THE COIL MATRIARCH: the crown of the wet margins — full hood, trident,
+   *  the court coil gathered beneath her. */
+  coil_matriarch: {
+    parts: [
+      { kind: 'coil', scale: 1.05, params: { loops: 4 } },
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'scutes', scale: 0.85 },
+      { kind: 'cobraHood', scale: 1.05, params: { flare: 1.3, ribs: 5, spectacle: 1 } },
+      { kind: 'fangJaw', x: 0.32, scale: 0.8, params: { gape: 0.5, venom: 1 } },
+      { kind: 'trident', params: { len: 1.2 } },
+      { kind: 'crown', x: 0.5, scale: 0.7, role: 'metal' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.7, color: '#9fe86a', alpha: 0.55 }],
+    shadowScale: 1.2,
+  },
+
   // ===================================================== DEPLOYED CONSTRUCTS
   // Skill-objects (ConstructDelivery) — the square-and-skill-color era ends.
   // spawnConstruct dresses by kind through CONSTRUCT_LOOKS below unless the
@@ -3894,6 +3987,16 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'wisps', color: '#7ad8c8', scale: 0.6, alpha: 0.4, params: { n: 2 } }],
     shadowScale: 1.15,
+  },
+  /** The wreck-hold coffer: banded oak swollen shut, barnacled, weed-hung —
+   *  a chest that reads 'break me' from across the deck. */
+  drowned_coffer: {
+    parts: [
+      { kind: 'chest', color: '#4a4034', scale: 1.05, params: { straps: 2 } },
+      { kind: 'polyps', color: '#6ab0a0', scale: 0.7 },
+      { kind: 'drape', color: '#3a6a52', scale: 0.7, alpha: 0.75 },
+    ],
+    shadowScale: 0.9,
   },
   /** THE TIDEBOUND REGENT: gilt crown gone green at the tines, kelp-rotted
    *  royal purple, the trident of a drowned admiralty — and a halo of cold

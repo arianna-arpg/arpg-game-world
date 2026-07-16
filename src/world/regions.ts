@@ -283,6 +283,17 @@ registerRegion({ id: 'ice', walkable: true, blocks: false, label: 'the ice', sta
 registerRegion({ id: 'brush', walkable: true, blocks: false, label: 'the brush', standStatus: 'concealed' });
 registerRegion({ id: 'bog', walkable: true, blocks: false, label: 'the bog', standStatus: 'bogged',
   enterStatus: { id: 'poison', amount: 1.5, amountPerLevel: 0.7, duration: 1 }, enterText: { text: 'bogged!', color: '#6a8a3a' } });
+// The littoral country's wet kit. The TIDE POOL is a wadeable jewel (mirror-
+// bright, harmless); the BRINE SINK is the exposed seabed's caustic heart —
+// a salt-burn on entry (the bog's level-scaled idiom, poison = the caustic
+// lane), a true swim where fused sinks pool deep, and the Coilborn wade
+// both without noticing (MonsterDef.immuneGround).
+registerRegion({ id: 'tide_pool', walkable: true, blocks: false, label: 'the tide pool',
+  standStatus: 'wading', surfaceWake: 'ripple', surfaceMirror: true });
+registerRegion({ id: 'brine_sink', walkable: true, blocks: false, label: 'the brine',
+  standStatus: 'wading', standStatusDeep: 'swimming', surfaceWake: 'ripple',
+  enterStatus: { id: 'poison', amount: 1.5, amountPerLevel: 0.7, duration: 1 },
+  enterText: { text: 'the brine burns!', color: '#9fd8c8' } });
 // LAVA — a real LIQUID: crossable, and it COOKS whoever isn't insured
 // (fliers, habitat-matched bodies, immuneGround bearers wade free). Heavy
 // typed fire per second through RESISTANCE only — capping fire res is the
@@ -349,6 +360,19 @@ registerRegion({
   boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'fire', canKill: true } },
   crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
   visual: { fill: '#0c0407', alpha: 1, edge: { color: '#a83a16', width: 5 } },
+});
+// CHASM: the karst country's gorge — the void's physics exactly (enter → fall
+// recovery at the rim, shots and sight sail across, jump/blink displacement
+// crosses) under LIMESTONE's palette: a warm rock-dark depth whose walkable-
+// facing lip is sun-bleached pale stone, so every gap reads as wind-cut karst
+// falling away, never cosmic void. A separate row (the abyss precedent) so
+// surface voids keep their cold violet and the gorge stays free to tune its
+// own fall without touching either.
+registerRegion({
+  id: 'chasm', walkable: false, blocks: false, label: 'the chasm',
+  boundaryPolicy: { kind: 'fall', to: 'edge', damage: { amount: 0, pctMaxLife: 0.18, type: 'physical', canKill: true } },
+  crossableBy: (d) => !!d.ignoreFall || !!d.ignoreConfine,
+  visual: { fill: '#0b0906', alpha: 1, edge: { color: '#8d8672', width: 5 } },
 });
 // CLOUD VOID: the gap where a cloud shelf has fallen away (the collapse
 // fabric's melt region) — and the Aetherial's authored sky-gaps. The void's

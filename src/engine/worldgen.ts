@@ -693,8 +693,13 @@ export function placeZoneAt(
   // heat-map FIELD fills it. The biome then dictates which LAYOUT GENERATOR shapes the
   // zone (default 'plains'), stored on the def so revisits replay the topology.
   const biome = zoneBiome;
-  // An authored set-piece arena forces its layout; otherwise the biome picks it.
-  const layoutType = spec.layoutType ?? pickLayout(biome, target, genRng, spec.biomeFor);
+  // An authored set-piece arena forces its layout; a tileset FACE may pin its
+  // recipe (forceLayout — how a multi-face country couples each face to its
+  // own generator: the chasm-maze reach vs the stone-forest weald); otherwise
+  // the biome rolls from allowedLayouts. The pin branches BEFORE the roll, so
+  // the rng stream shifts only for pinned tilesets — every existing mint's
+  // draw order is untouched (the cave-mint forceLayout contract, mirrored).
+  const layoutType = spec.layoutType ?? tileset.forceLayout ?? pickLayout(biome, target, genRng, spec.biomeFor);
   // generateLayout degrades an unregistered layout id to 'plains' silently —
   // say so at mint, where the authoring slip (a quest def's layoutType typo)
   // is one hop away. Biome allowedLayouts are boot-validated; this covers the

@@ -144,6 +144,12 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // interred kill feeds the Deadwake's corpse-tide exactly as the graveland
   // dead do. What little it wants of the surface it wants back.
   sarcophate: { roaming: 0.12, aggression: 0.7, warlordHome: 'origin', homeBiome: 'desert', eventRange: 150, contexts: ['baseline'], deathAligned: true, temper: 'territorial' },
+  // The Coilborn — serpentfolk of the wet margins: half-roaming (the coils
+  // keep their channels but raid the dry roads gladly — a living, marching
+  // banner, unlike the interred courts), throned on littoral ground. CROWNED:
+  // the Coil Matriarch opens the invasion gate, so serpent warbands ride the
+  // waterways out — the wet counterpart of the gnolls' desert patronage.
+  coilborn: { roaming: 0.5, aggression: 1.0, warlordHome: 'origin', homeBiome: 'littoral', eventRange: 170, contexts: ['baseline'], temper: 'territorial' },
 };
 
 /** Does this faction feed the corpse-tide loops (Deadwake accrual)? Reads the

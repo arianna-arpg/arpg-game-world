@@ -1527,7 +1527,21 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 150,
     faction: 'deep',
     detection: 1.2,
+    loot: 'tidebound_hoard',
     scaling: { life: { incPerLevel: 0.14 } },
+  },
+  // A breakable in the barrel's mold: the Wraithsail's below-decks coffer.
+  // Salt-swollen banded oak, barnacled shut — crack it for the DROWNED
+  // REGISTER (loot 'wraithsail_hold_cache' forces the family via withFamily,
+  // and holds run the richest vestige side-roll of any themed cache).
+  drowned_coffer: {
+    id: 'drowned_coffer', name: 'Drowned Coffer',
+    color: '#4a5a4e', shape: 'square', radius: 13, material: 'wood', look: 'drowned_coffer',
+    base: { life: 75, moveSpeed: 0, armor: 18, evasion: 0, mana: 0 },
+    skills: [], xp: 0,
+    passive: true,
+    orbDrops: 0.35,
+    loot: 'wraithsail_hold_cache',
   },
 
   spitting_horror: {
@@ -8784,6 +8798,150 @@ export const MONSTERS: Record<string, MonsterDef> = {
       ],
     },
   },
+
+  // --- THE COILBORN (serpentfolk of the wet margins) --------------------------
+  // The littoral country's own banner: true NAGA — humanoid torsos over
+  // worm-tail coils — plus the marsh adders they keep as the desert keeps
+  // dogs. Family doctrine, per the defense-texture ledger: COILED EVASION is
+  // the family signature (the first faction whose DOCTRINE is the dodge —
+  // no shells, no block, no ES), CONSTRICTION is its control (pulled, held,
+  // squeezed), and the WET GROUND is its armor — every member ignores the
+  // water/swamp/bog/mud footing that taxes everything else in its country
+  // (immuneGround: movement-as-enemy is the identity). Counterlevers hold
+  // the doctrine honest: venom-proof blood (poisonRes) but COLD-BLOODED —
+  // frost bites the serpent harder (the one family that fears the chill
+  // lanes, where the Rimebound fear fire). Poison STACKS are the offense.
+  // Hard presence floors on the court tiers (the sarcophate discipline).
+  // Warlord: the Coil Matriarch (WARLORD_OF) — the crown DOES march.
+  marsh_adder: {
+    id: 'marsh_adder', name: 'Marsh Adder',
+    color: '#6a9a4a', shape: 'circle', radius: 9, material: 'scale', look: 'marsh_adder',
+    base: { life: 26, moveSpeed: 190, accuracy: 100, evasion: 50, mana: 0 },
+    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    skills: ['fang_strike'], xp: 8,
+    faction: 'coilborn',
+    tags: ['beast'],
+    immuneGround: ['water', 'swamp', 'bog', 'mud'],
+    worm: { length: 6, spacing: 10, taper: 0.9 },
+    scaleVariance: [0.85, 1.2],
+    temper: 'skittish',
+    brain: { type: 'swarm' },
+  },
+  bog_strider: {
+    id: 'bog_strider', name: 'Bog Strider',
+    color: '#4a8a6a', shape: 'triangle', radius: 12, material: 'scale', look: 'bog_strider',
+    base: { life: 58, moveSpeed: 150, accuracy: 102, evasion: 55, mana: 20, manaRegen: 2 },
+    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    skills: ['fang_strike', 'dart_volley'], xp: 18,
+    faction: 'coilborn',
+    immuneGround: ['water', 'swamp', 'bog', 'mud'],
+    worm: { length: 5, spacing: 13, taper: 0.86 },
+    scaleVariance: [0.9, 1.1],
+    gemBias: ['projectile', 'physical'],
+    temper: 'territorial',
+    brain: { type: 'flanker', move: { style: 'lurk' } },
+  },
+  // The artillery: the hood flares FULL before the spray — you read the
+  // spit coming across the whole pool.
+  hooded_spitter: {
+    id: 'hooded_spitter', name: 'Hooded Spitter',
+    color: '#7ab04e', shape: 'oval', radius: 12, material: 'scale', look: 'hooded_spitter',
+    base: { life: 55, moveSpeed: 105, accuracy: 100, evasion: 30, mana: 60, manaRegen: 4 },
+    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    skills: ['acid_spray', 'venom_bolt'], xp: 22,
+    faction: 'coilborn',
+    immuneGround: ['water', 'swamp', 'bog', 'mud'],
+    worm: { length: 5, spacing: 13, taper: 0.86 },
+    presence: { from: 4 },
+    gemBias: ['chaos', 'aoe'],
+    temper: 'territorial',
+    brain: { type: 'strafer' },
+  },
+  // The venom-speaker: the chant is the threat — kin around a priest fight
+  // quicker and meaner, so the litany names your first target.
+  fang_priest: {
+    id: 'fang_priest', name: 'Fang Priest',
+    color: '#5aa07a', shape: 'pentagon', radius: 13, material: 'scale', look: 'fang_priest',
+    base: { life: 70, moveSpeed: 95, accuracy: 100, evasion: 25, mana: 140, manaRegen: 8 },
+    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    skills: ['venom_bolt', 'poison_nova'], xp: 26,
+    faction: 'coilborn',
+    immuneGround: ['water', 'swamp', 'bog', 'mud'],
+    worm: { length: 4, spacing: 14, taper: 0.85 },
+    presence: { from: 6 },
+    gemBias: ['chaos', 'duration'],
+    temper: 'territorial',
+    brain: {
+      type: 'caster',
+      rules: [{
+        // The venom chant: nearby kin quicken (the spore_caller litany
+        // pattern — distUnder keeps it on-screen).
+        when: { alliesWithin: { count: 2, radius: 280 }, distUnder: 700 }, every: [12, 18], hold: [0.3, 0.5],
+        announce: 'the priest hisses the venom chant…',
+        actions: [{ do: 'buff', buff: { type: 'buff', id: 'venom_chant', duration: 6, mods: [mod('damage', 'increased', 0.15), mod('moveSpeed', 'increased', 0.1)] } }],
+      }],
+    },
+  },
+  // The wall that wraps you: the family's one heavy — armor and poise over
+  // MODEST evasion (even the knight sways), and the coil drags you in.
+  constrictor_knight: {
+    id: 'constrictor_knight', name: 'Constrictor Knight',
+    color: '#3f7a68', shape: 'hexagon', radius: 16, material: 'scale', look: 'constrictor_knight',
+    base: { life: 210, moveSpeed: 85, accuracy: 104, armor: 40, poise: 70, evasion: 15, mana: 20, manaRegen: 2 },
+    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.3)],
+    skills: ['constrictor_coil', 'heavy_strike'], xp: 50,
+    faction: 'coilborn',
+    immuneGround: ['water', 'swamp', 'bog', 'mud'],
+    worm: { length: 7, spacing: 18, taper: 0.9 },
+    presence: { from: 9 },
+    turnSpeed: 2.8,
+    gemBias: ['melee', 'duration'],
+    temper: 'territorial',
+    brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+  // The song in the reeds: she pulls you to HER ground — the drag itself is
+  // survivable; the water it leaves you standing in is the fight.
+  siren_adder: {
+    id: 'siren_adder', name: 'Siren-Adder',
+    color: '#4a9a9a', shape: 'oval', radius: 12, material: 'scale', look: 'siren_adder',
+    base: { life: 85, moveSpeed: 110, accuracy: 102, evasion: 60, mana: 120, manaRegen: 7 },
+    mods: [mod('poisonRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25)],
+    skills: ['siren_song', 'venom_bolt'], xp: 30,
+    faction: 'coilborn',
+    immuneGround: ['water', 'swamp', 'bog', 'mud'],
+    worm: { length: 6, spacing: 13, taper: 0.85 },
+    presence: { from: 8 },
+    gemBias: ['duration', 'projectile'],
+    temper: 'wary',
+    brain: { type: 'strafer' },
+  },
+  // THE COIL MATRIARCH — the crown of the wet margins (WARLORD_OF seat).
+  // Warlord discipline (the balor/countess floor): a throne-tier body
+  // carries a def-level HARD gate, so no table or bias fields her early;
+  // her warlord seat spawns explicitly and ignores presence by design.
+  coil_matriarch: {
+    id: 'coil_matriarch', name: 'Coil Matriarch',
+    color: '#3f9a7e', shape: 'star', radius: 20, material: 'scale', look: 'coil_matriarch',
+    base: { life: 190, moveSpeed: 100, accuracy: 110, evasion: 45, armor: 20, mana: 180, manaRegen: 10 },
+    mods: [mod('poisonRes', 'flat', 1), mod('coldRes', 'flat', -0.25), mod('damage', 'increased', 0.12)],
+    skills: ['constrictor_coil', 'poison_nova', 'siren_song'], xp: 65,
+    faction: 'coilborn',
+    immuneGround: ['water', 'swamp', 'bog', 'mud'],
+    worm: { length: 8, spacing: 20, taper: 0.9 },
+    presence: { from: 13 },
+    gemBias: ['chaos', 'duration'],
+    wardPriority: 2,
+    detection: 1.2,
+    temper: 'territorial',
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 520 }, every: [14, 20], hold: [0.4, 0.6],
+        announce: 'the Matriarch\'s hiss carries across the water!',
+        actions: [{ do: 'summon', monster: 'marsh_adder', count: 3, ring: 52 }],
+      }],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -8902,6 +9060,13 @@ const RELATIONS: Record<string, FactionStance> = {
   'sarcophate|gnoll': 'hostile',
   'sarcophate|sirocco': 'hostile',
   'sarcophate|undead': 'ally',
+  // The Coilborn hold the wet margins, and the damp lands get a three-way:
+  // the tide is KIN (the Deep's bodies walk the drowned ground unmolested),
+  // the Sylvan call the mangroves a garden gone under (the coils answer
+  // from the water), and the Bloom's rot fouls channels the serpents own.
+  'coilborn|deep': 'ally',
+  'coilborn|sylvan': 'hostile',
+  'coilborn|fungal': 'hostile',
 };
 
 /** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families
@@ -9303,6 +9468,22 @@ export const FACTIONS: Record<string, {
       { id: 'sarcophate_legionary', weight: 3 },
       { id: 'canopic_bearer', weight: 2, presence: { from: 6 } },
       { id: 'sarcophagus_warden', weight: 1, presence: { from: 9 } },
+    ],
+  },
+  // The Coilborn muster from the water out: adders boil the early shallows
+  // and thin as the court wakes, striders hold the middle water, and every
+  // court tier — spitter, priest, siren, knight — arrives on a HARD floor
+  // (the sarcophate discipline: thresholds, never ramps). The Matriarch is
+  // deliberately ABSENT: the crown is the warlord machinery's to field.
+  coilborn: {
+    name: 'the Coilborn',
+    table: [
+      { id: 'marsh_adder', weight: 4, presence: { to: 18, fadeOut: 8 } },
+      { id: 'bog_strider', weight: 3 },
+      { id: 'hooded_spitter', weight: 2, presence: { from: 4 } },
+      { id: 'fang_priest', weight: 2, presence: { from: 6 } },
+      { id: 'siren_adder', weight: 1, presence: { from: 8 } },
+      { id: 'constrictor_knight', weight: 1, presence: { from: 9 } },
     ],
   },
 };
