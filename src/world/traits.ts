@@ -99,9 +99,12 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // The Glut — rooted meat: it barely marches, it ACCRETES. Wars stem only
   // from its own dripping halls.
   flesh: { roaming: 0.2, aggression: 0.7, warlordHome: 'origin', homeBiome: 'flesh', eventRange: 150, contexts: ['baseline'] },
-  // The Night Court — patient predators: they range at their own pace and
-  // throne wherever the feeding is richest.
-  nightkin: { roaming: 0.6, aggression: 1.2, warlordHome: 'capital', contexts: ['baseline', 'crusade'] },
+  // The Night Court — patient predators: they range at their own pace, but
+  // the throne never leaves the gloam — the Countess seats only under the
+  // haunted wood's crooked roof (its patron since the wood learned whose
+  // teeth run it), and her wars ride OUT from under it. Rich feeding
+  // elsewhere is an ESTATE (the Long Night's grounds), never a capital.
+  nightkin: { roaming: 0.6, aggression: 1.2, warlordHome: 'origin', homeBiome: 'gloamwood', eventRange: 170, contexts: ['baseline', 'crusade'] },
   // The Junglekin — the strangling green's tribes: they barely leave the
   // treeline (the walls ARE the argument) and never cede a lane of it.
   junglekin: { roaming: 0.25, aggression: 1.0, warlordHome: 'origin', homeBiome: 'jungle', eventRange: 160, contexts: ['baseline'], temper: 'territorial' },

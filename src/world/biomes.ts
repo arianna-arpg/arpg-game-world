@@ -121,8 +121,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // where the mist can roll its banks, winding wood-roads between. Claims
   // the COOL half of the damp woods (the forest keeps the mild half — the
   // taiga/tundra split, applied to woodland; two soft gates so neither belt
-  // starves). Its weather is the living fog; its dead drink it.
-  gloamwood: { patronFaction: 'undead', mapColor: '#3a4a40', label: 'Gloamwood', spacing: 62,
+  // starves). Its weather is the living fog; its dead drink it. PATRON: the
+  // NIGHT COURT — the wood is the Countess's seat (the dead still walk it,
+  // but they walk it as HER servants; the undead keep the graves proper).
+  gloamwood: { patronFaction: 'nightkin', mapColor: '#3a4a40', label: 'Gloamwood', spacing: 62,
     climate: { temperature: { to: 0.55, fadeOut: 0.15 }, moisture: { from: 0.42, fadeIn: 0.12 } },
     // Forest + riverland ONLY: riverlands now keep the crooked roof
     // (plantRiverbankRoof reads forestTrees below), but 'winding' carves a
