@@ -163,6 +163,7 @@ import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
 import type { IncursionArchetype } from '../packages/overlays/incursion';
 import { holdfastTollCost, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
+import { lordDef } from '../packages/lords';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
 import { ENCOUNTER_CFG } from '../packages/encounters';
 import type { BoroughSpec, ExtractDisperseSpec } from '../packages/encounters';
@@ -1937,6 +1938,9 @@ export class World {
   private meteorTimer = 0;
   /** Invasion epicenters already materialized this zone visit (one per visit). */
   private materializedEpicenters = new Set<string>();
+  /** War Below stagings (front marshals / thrones) this zone visit — keyed
+   *  `front_<zone>` / `seat_<zone>` (one spring per visit, materialized-set idiom). */
+  private materializedHellWar = new Set<string>();
   /** Open demon-realm portals placed in the current zone (cleared per loadZone). */
   private demonPortals: { pos: Vec2; invId: string }[] = [];
   /** The invasion + reward in play while inside a demon realm (off-graph). */
@@ -4186,6 +4190,20 @@ export class World {
         enter: (def, live) => {
           const cru = this.sim.crusadeField?.crusadeOn(def.id);
           if (cru && (!live || !this.materializedCrusades.has(def.id))) this.materializeCrusade(cru);
+        },
+      },
+      {
+        // THE WAR BELOW: a HOT front fields the attacker's MARSHAL (the armies
+        // themselves arrive through the owner/rival spawn injection); a lord's
+        // CITADEL seats the LORD over its court. Live re-invokes cover a front
+        // igniting under your feet as the lattice shifts.
+        id: 'underworld_war',
+        reset: () => this.materializedHellWar.clear(),
+        enter: (def) => {
+          const hw = this.sim.hellWarField;
+          if (!hw || def.dimension !== hw.dimension) return;
+          if (hw.seatOnZone(def.id)) this.spawnHellCourt(def);
+          else if (hw.frontStage(def.id)) this.spawnHellMarshal(def);
         },
       },
       {
@@ -7354,6 +7372,15 @@ export class World {
     if (cru?.suppressNatives && FACTIONS[cru.faction]) return FACTIONS[cru.faction].table;
     const conqueror = this.sim.faction.conquerorOf(def.id);
     if (conqueror && FACTIONS[conqueror]) return FACTIONS[conqueror].table;
+    // THE WAR BELOW: a lord's HEARTLAND (the ground around its citadel) is
+    // fully the lord's — the population IS the host (the crusade's suppress-
+    // natives grip, in hell's grammar). Ordinary owned ground keeps its native
+    // country and takes the host as an injected contingent (affectSpawns).
+    const hw = this.sim.hellWarField;
+    if (hw && def.dimension === hw.dimension) {
+      const st = hw.zoneWar(def.id);
+      if (st?.heartland && FACTIONS[st.lord.faction]) return FACTIONS[st.lord.faction].table;
+    }
     return def.packs?.table ?? [];
   }
 
@@ -10391,7 +10418,9 @@ export class World {
    *  (caps live density AND feeds a necromancer's army — the corpse compounding). */
   private onMeteorImpact(info: InvasionInfo, at: Vec2): void {
     if (!chance(info.meteorSpawnChance)) return;
-    const facId = info.type.factions?.[0] ?? 'demon';
+    // The strike's RESOLVED faction (an attributed strike fields its lord's
+    // host; legacy strikes keep the Legion) — one truth, resolved on the info.
+    const facId = info.faction;
     const roster = FACTIONS[facId];
     if (!roster?.table?.length) return;
     const surge = this.sim.demonFieldFor(this.zone.dimension)?.surge();
@@ -10428,7 +10457,9 @@ export class World {
   private spawnEpicenter(info: InvasionInfo, live = false): void {
     if (this.materializedEpicenters.has(info.id)) return;
     this.materializedEpicenters.add(info.id);
-    const facId = info.type.factions?.[0] ?? 'demon';
+    // The strike's RESOLVED faction: an attributed strike fields its sending
+    // LORD'S host (the War Below's banner made flesh); legacy keeps the Legion.
+    const facId = info.faction;
     const roster = FACTIONS[facId];
     if (!roster?.table?.length) return;
     const lvl = Math.max(1, this.zone.level + info.strengthBonus);
@@ -10438,8 +10469,11 @@ export class World {
     const at = this.clampPos(live ? this.farPoint(280, true) : this.farPoint(360, true), 28);
     // DIMENSION-CORRECT field (the surface-only shortcut spawned the surface
     // champion at a hell epicenter — every sibling read already went through
-    // demonFieldFor; this was the straggler).
-    const champId = this.sim.demonFieldFor(this.zone.dimension)?.surge()?.portal?.champion?.monsterId ?? 'balor_warlord';
+    // demonFieldFor; this was the straggler). An attributed strike is led by
+    // its lord's MARSHAL (the lord never leaves its throne); the Balor remains
+    // the unattributed default.
+    const champId = info.champion
+      ?? this.sim.demonFieldFor(this.zone.dimension)?.surge()?.portal?.champion?.monsterId ?? 'balor_warlord';
     const balor = this.createMonster(champId, lvl + 2, 'enemy');
     balor.faction = facId;
     if (this.sim.factionInvasionActive(facId, this.player.level)) this.promoteRarity(balor, 'crowned');
@@ -10456,9 +10490,13 @@ export class World {
     }
     bumpLedger(this.ledger, 'demon_invasion_seen'); // DISCOVERY — surfaces the Vault tiers
     this.flashes.push({ pos: vec(at.x, at.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+    // An attributed strike is announced under its LORD'S name — the tie-in the
+    // War Below exists for: the surface reads WHO reached up, not just what.
+    const lord = info.lordId ? lordDef(info.lordId) : undefined;
+    const champName = lord ? `${lord.short}'s marshal` : 'the Balor';
     if (live) {
       // A STORM OF FIRE heralds the descent — a burst of (cosmetic) meteor flashes
-      // around the Balor as it lands, the alert/warning the player gets when an
+      // around the champion as it lands, the alert/warning the player gets when an
       // invasion erupts ON the zone they're already in. (The real, damaging Demon
       // Storm then rains via updateDemonStorm, since this zone is now an epicenter.)
       for (let i = 0; i < 7; i++) {
@@ -10466,10 +10504,78 @@ export class World {
         this.flashes.push({ pos: mp, radius: 34 + rand(0, 30), color: info.color, life: 0.45 + rand(0, 0.5), maxLife: 1 });
       }
       this.text(vec(this.player.pos.x, this.player.pos.y - 84),
-        `${info.type.label} ERUPTS — the Balor descends in a storm of fire!`, info.color, 19);
+        `${info.type.label} ERUPTS — ${champName} descends in a storm of fire!`, info.color, 19);
     } else {
-      this.text(vec(at.x, at.y - 50), `${info.type.label} — the Balor holds court!`, info.color, 18);
+      this.text(vec(at.x, at.y - 50),
+        lord ? `${info.type.label} — ${lord.short}, ${lord.epithet}, sends his marshal!`
+          : `${info.type.label} — the Balor holds court!`, info.color, 18);
     }
+  }
+
+  /** THE WAR BELOW's front officer: the pressing lord's MARSHAL takes the
+   *  field at a HOT front, honor-guarded, wearing its lord on eventKey —
+   *  felling it collapses the local push (the hell_marshal kill row). The
+   *  armies themselves arrive through the ordinary owner/rival injection;
+   *  this is just the officer. One spring per zone visit. */
+  private spawnHellMarshal(def: ZoneDef): void {
+    const key = `front_${def.id}`;
+    if (this.materializedHellWar.has(key)) return;
+    const front = this.sim.hellWarField?.frontStage(def.id);
+    if (!front) return;
+    this.materializedHellWar.add(key);
+    const lord = front.attacker;
+    const roster = FACTIONS[lord.faction];
+    if (!MONSTERS[lord.marshal] || !roster?.table?.length) return;
+    const lvl = Math.max(1, def.level + 1);
+    const at = this.clampPos(this.farPoint(420, true), 24);
+    const marshal = this.createMonster(lord.marshal, lvl + 2, 'enemy');
+    marshal.faction = lord.faction;
+    marshal.tag = 'hell_marshal';
+    marshal.eventKey = `hellwar:${lord.id}`;
+    marshal.xpValue = Math.max(marshal.xpValue, 120); // light the boss bar
+    this.promoteRarity(marshal, 'champion');
+    marshal.pos = this.clampPos(vec(at.x, at.y), marshal.radius);
+    this.actors.push(marshal);
+    const n = randInt(3, 5);
+    for (let k = 0; k < n; k++) {
+      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
+      m.faction = lord.faction;
+      m.pos = this.clampPos(vec(at.x + rand(-90, 90), at.y + rand(-90, 90)), m.radius);
+      this.actors.push(m);
+    }
+    this.text(vec(at.x, at.y - 40), `${lord.short}'s marshal drives the front!`, lord.color, 15);
+  }
+
+  /** A LORD ON ITS THRONE: the citadel zone fields the lord itself — Crowned,
+   *  at full strength, over a court drawn from its own host (the heartland
+   *  baseTable already made the zone's whole population the host). Felling it
+   *  breaks the realm: the hell_lord kill row collapses its territory and
+   *  starts the succession clock — the war does not end because a chair does. */
+  private spawnHellCourt(def: ZoneDef): void {
+    const key = `seat_${def.id}`;
+    if (this.materializedHellWar.has(key)) return;
+    const lord = this.sim.hellWarField?.seatOnZone(def.id);
+    if (!lord) return;
+    this.materializedHellWar.add(key);
+    const roster = FACTIONS[lord.faction];
+    if (!MONSTERS[lord.lord] || !roster?.table?.length) return;
+    const lvl = Math.max(1, def.level + 2);
+    const at = this.clampPos(this.farPoint(520, true), 30);
+    const body = this.createMonster(lord.lord, lvl + 2, 'enemy');
+    body.faction = lord.faction;
+    body.tag = 'hell_lord';
+    body.eventKey = `hellwar:${lord.id}`;
+    this.promoteRarity(body, 'crowned');
+    body.pos = this.clampPos(vec(at.x, at.y), body.radius);
+    this.actors.push(body);
+    const n = randInt(6, 9);
+    for (let k = 0; k < n; k++) {
+      const m = this.createMonster(this.weightedPick(roster.table, lvl), lvl, 'enemy');
+      m.faction = lord.faction;
+      m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
+      this.actors.push(m);
+    }
+    this.text(vec(at.x, at.y - 48), `${lord.name} holds court. ${lord.creed}`, lord.color, 17);
   }
 
   /** Once an invasion festers past its portal threshold, a rift to the demons'
@@ -10506,7 +10612,11 @@ export class World {
     const info = dfz?.invasionOn(this.zone.id);
     if (!info || info.id !== invId) return; // invasion burned out / moved on — no stale realm
     const stageIdx = info.stageIdx;
-    const champId = surge.portal.champion.monsterId;
+    // An attributed strike's realm is its LORD'S demesne: the lord's marshal
+    // holds it at the head of the lord's own host (the War Below's banner all
+    // the way down); unattributed keeps the Balor and the Legion, byte-for-byte.
+    const champId = info.champion ?? surge.portal.champion.monsterId;
+    const realmFaction = info.faction;
     // The realm pays the OVERWORLD stage reward PLUS a per-stage portal premium —
     // strictly more than felling the overworld Balor, the payoff for the deep risk.
     this.realmContext = { invId, rewardMul: info.rewardMul * (1 + surge.portal.rewardMulPerStage * stageIdx) };
@@ -10515,18 +10625,19 @@ export class World {
       caveId: `cave_realm_${invId}`, // 'cave_' prefix ⇒ off-graph + cave-return travel
       tileset: surge.portal.tileset,
       arena: info.type.realm,
-      // The realm is the demons' OWN turf — a controlled ambient horde (minus
-      // the warlord, so the only Balor is the curated champion), not natives.
+      // The realm is the strike faction's OWN turf — a controlled ambient horde
+      // (minus the champion, so the curated one is the only officer), not natives.
       packs: { count: [2, 4], size: [2, 3] },
-      rosterTable: (FACTIONS['demon']?.table ?? []).filter(e => e.id !== champId),
+      rosterTable: (FACTIONS[realmFaction]?.table ?? FACTIONS['demon']?.table ?? []).filter(e => e.id !== champId),
       returnPos: portalPos,
       boss: {
-        monsterId: champId, faction: 'demon',
+        monsterId: champId, faction: realmFaction,
         levelBonus: surge.portal.champion.levelBonus + stageIdx,
         tag: 'balor_realm',
         garrison: { count: [6, 10], squad: true }, // the demesne guard fights as one warband
-        announce: 'The Balor awaits in its infernal demesne!',
-        announceColor: '#c81e3a',
+        announce: info.lordId ? 'The lord\'s marshal awaits in its master\'s demesne!'
+          : 'The Balor awaits in its infernal demesne!',
+        announceColor: info.color ?? '#c81e3a',
       },
     });
   }
@@ -25512,6 +25623,43 @@ export class World {
         }
       }
       dfi.mintRequests.length = 0;
+    }
+
+    // THE WAR BELOW: raise each seated lord's CITADEL at its rolled anchor —
+    // minted FLOATING in the underworld (the war's thrones exist on the map
+    // before any road reaches them; the floating drain wires one in as the
+    // player pushes toward it). The zone takes the lord's authored tileset,
+    // layout and name — its population is the host (heartland baseTable) and
+    // the lord itself holds court (the underworld_war zone-runtime row).
+    const hwf = this.sim.hellWarField;
+    if (hwf && hwf.mintRequests.length) {
+      const hwDim = hwf.dimension ?? 'underworld';
+      for (const req of hwf.mintRequests) {
+        if (this.zoneMap[req.zoneKey]) { hwf.bindSeat(req.lordId, req.zoneKey); continue; }
+        const anchor = nearestNode(this.zoneMap, req.coord, undefined, hwDim)
+          ?? this.zoneMap[dimensionDef(hwDim).entry?.gate.id ?? '']
+          ?? this.surfaceAnchor();
+        const def = placeZoneAt(req.coord, anchor, this.zoneMap, this.nextGenId++, {
+          id: req.zoneKey, tileset: req.tileset, name: req.name,
+          ...(req.layout ? { layoutType: req.layout } : {}),
+          level: this.eventLevel(req.coord) + (dimensionDef(hwDim).levelBonus ?? 0) + 2,
+          objective: { kind: 'clear' }, forceWaypoint: true, forceFrontiers: 1, floating: true,
+          seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
+          biomeFor: this.dimensionBiomeFor(hwDim),
+          climateFor: this.climateFor,
+          dimension: hwDim,
+        });
+        def.eventOwned = true; // the throne's ground — no other overlay squats here
+        this.zoneMap[req.zoneKey] = def;
+        hwf.bindSeat(req.lordId, req.zoneKey);
+        // The throne is news only in its own plane (the announce-in-plane rule).
+        if (hwDim === (this.zone.dimension ?? 'surface')) {
+          const l = lordDef(req.lordId);
+          this.text(vec(this.player.pos.x, this.player.pos.y - 90),
+            `${req.name} — ${l?.name ?? 'a lord'} rules from there.`, l?.color ?? '#e8a050', 15);
+        }
+      }
+      hwf.mintRequests.length = 0;
     }
 
     // CRUSADE: mint the stronghold + its SIMULATED frontier nodes at their

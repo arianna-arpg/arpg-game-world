@@ -17,6 +17,7 @@
 import { clamp } from '../../core/math';
 import { eventTargetable } from '../../world/zonePolicy';
 import { Rng } from '../../core/rng';
+import { lordDef } from '../lords';
 import type { ZoneDef } from '../../data/zones';
 import { coordDist, type MapCoord } from '../../world/coords';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -42,6 +43,9 @@ interface ActiveInvasion {
   age: number;
   radius: number;
   minted: boolean;        // Phase 3 mint guard
+  /** The Underworld lord whose strike this is (attribution — null when the
+   *  War Below isn't running, or the war had no live throne to send it). */
+  lordId: string | null;
 }
 
 /** What an invasion does to one zone, resolved for the engine to materialize. */
@@ -63,6 +67,17 @@ export interface InvasionInfo {
   /** Has this invasion festered long enough to tear a portal to the realm? */
   portalReady: boolean;
   color: string;
+  /** The sending Underworld lord (the War Below's attribution) — the engine
+   *  fields that lord's champion + texts; null keeps every legacy path. */
+  lordId: string | null;
+  /** The faction this strike FIELDS: the sending lord's host when attributed,
+   *  else the type's first faction, else the Legion — resolved HERE so every
+   *  engine consumer (epicenter, craters, storm bias) reads one truth. */
+  faction: string;
+  /** The strike's champion body: the sending lord's MARSHAL when attributed
+   *  (the lord itself never leaves its throne), else null → the surge's
+   *  legacy champion (the Balor). */
+  champion: string | null;
 }
 
 /** Engine-drained: mint a demon-blighted epicenter zone at an uncharted coord. */
@@ -89,6 +104,16 @@ export class DemonInvasionField implements WorldOverlay {
   /** Mint seam the engine drains (host-only): the epicenter zone at its target
    *  coordinate. The portal-to-realm is read directly off invasionOn().portalReady. */
   readonly mintRequests: MintRequest[] = [];
+
+  /** LORD ATTRIBUTION (wired by the sim's composition root when the War Below
+   *  runs): every ignition asks WHO sent this strike — and in what shape — and
+   *  every resolution reports the outcome home (repelled bleeds the sender's
+   *  fronts; a festered burnout feeds them). Null = the legacy self-rolled
+   *  flavor, byte-for-byte. */
+  attribution: {
+    pick(typeIds: string[]): { lordId: string; typeId: string } | null;
+    resolved(lordId: string, outcome: 'repelled' | 'spoils'): void;
+  } | null = null;
 
   private rng: Rng;
   private readonly gate: () => PackageGate;
@@ -130,9 +155,12 @@ export class DemonInvasionField implements WorldOverlay {
         inv.radius = Math.min(target, inv.radius + this.cfg.radiusGrowthPerSec * dt);
       }
     }
-    // Burn out invasions that festered past the lifetime cap (utterly ignored).
+    // Burn out invasions that festered past the lifetime cap (utterly ignored) —
+    // a festered strike SUCCEEDED: its lord's spoils flow home to the war below.
     for (let i = this.invasions.length - 1; i >= 0; i--) {
-      if (this.invasions[i].age >= this.cfg.maxLifeSec) this.invasions.splice(i, 1);
+      if (this.invasions[i].age < this.cfg.maxLifeSec) continue;
+      const [gone] = this.invasions.splice(i, 1);
+      if (gone.lordId) this.attribution?.resolved(gone.lordId, 'spoils');
     }
     this.acc += dt;
     while (this.acc >= STEP) { this.acc -= STEP; if (g.active) this.maybeIgnite(view); }
@@ -146,9 +174,13 @@ export class DemonInvasionField implements WorldOverlay {
     // pack + meteors are materialized by the engine; this is just ambient bias.
     const info = this.invasionOn(zone.id);
     if (!info) return NO_BIAS;
-    const factionMul: Record<string, number> = {};
-    for (const f of info.type.factions ?? ['demon']) factionMul[f] = this.cfg.stormFactionMul;
-    return { countMul: 1, factionMul, injectFactions: [] };
+    // The resolved strike faction (a lord's host when attributed) leads the
+    // bias; the type's own list still tilts for multi-faction flavors.
+    const factionMul: Record<string, number> = { [info.faction]: this.cfg.stormFactionMul };
+    for (const f of info.type.factions ?? []) factionMul[f] = this.cfg.stormFactionMul;
+    // An attributed strike also SEEDS its host among the walk-ins — the
+    // banner is readable in the monsters, not just on the map.
+    return { countMul: 1, factionMul, injectFactions: info.lordId ? [info.faction] : [] };
   }
 
   renderMap(nodes: ZoneDef[]): MapLayer {
@@ -157,7 +189,7 @@ export class DemonInvasionField implements WorldOverlay {
       const bound = inv.zoneId ? nodes.find(n => n.id === inv.zoneId) : null;
       const cx = bound ? bound.map.x : inv.coord.x;
       const cy = bound ? bound.map.y : inv.coord.y;
-      const col = inv.type.color ?? DEMON_RED;
+      const col = (inv.lordId ? lordDef(inv.lordId)?.color : undefined) ?? inv.type.color ?? DEMON_RED;
       // The growing storm reach — a dashed ring + a soft wash that swell with age.
       under += `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${inv.radius.toFixed(1)}" `
         + `fill="${col}" fill-opacity="0.07" stroke="${col}" stroke-opacity="0.5" `
@@ -195,6 +227,7 @@ export class DemonInvasionField implements WorldOverlay {
       if (!within) continue;
       const stageIdx = this.stageIdxFor(inv);
       const stage = this.cfg.stages[stageIdx];
+      const lord = inv.lordId ? lordDef(inv.lordId) : undefined;
       const info: InvasionInfo = {
         id: inv.id, type: inv.type, stageIdx, stage,
         strengthBonus: Math.round(stage.strengthBonus * inv.type.strengthMul),
@@ -205,7 +238,13 @@ export class DemonInvasionField implements WorldOverlay {
         // The current stage must explicitly allow a portal (data-driven: a late
         // stage could suppress it) AND the age must cross the portal threshold.
         portalReady: !!stage.opensPortal && inv.age >= this.cfg.portal.atSeconds,
-        color: inv.type.color ?? DEMON_RED,
+        // An attributed strike flies its LORD'S banner: color, host faction,
+        // and marshal (lords.ts is a pure data leaf — no coupling to the war
+        // overlay itself). Unattributed keeps every legacy value.
+        color: lord?.color ?? inv.type.color ?? DEMON_RED,
+        lordId: inv.lordId,
+        faction: lord?.faction ?? inv.type.factions?.[0] ?? 'demon',
+        champion: lord?.marshal ?? null,
       };
       // Prefer the epicenter, else the higher stage (the more dangerous one wins).
       if (!best || (info.isEpicenter && !best.isEpicenter) || info.stageIdx > best.stageIdx) best = info;
@@ -240,7 +279,10 @@ export class DemonInvasionField implements WorldOverlay {
   private dropInvasion(idx: number): number {
     if (idx < 0) return 1;
     const mul = this.cfg.stages[this.stageIdxFor(this.invasions[idx])].rewardMul;
-    this.invasions.splice(idx, 1);
+    const [gone] = this.invasions.splice(idx, 1);
+    // Every resolve path is a BROKEN strike (epicenter kill, realm kill, or a
+    // surface conquest swallowing the rift) — the sending lord pays for it.
+    if (gone.lordId) this.attribution?.resolved(gone.lordId, 'repelled');
     return mul;
   }
 
@@ -261,7 +303,7 @@ export class DemonInvasionField implements WorldOverlay {
       ownedZones: this.invasions.map(i => i.zoneId).filter((z): z is string => !!z),
       invasions: this.invasions.map(i => ({
         id: i.id, typeId: i.type.id, coord: { ...i.coord }, anchorZoneId: i.anchorZoneId,
-        zoneId: i.zoneId, age: i.age, radius: i.radius, minted: i.minted,
+        zoneId: i.zoneId, age: i.age, radius: i.radius, minted: i.minted, lordId: i.lordId,
       })),
       mintRequests: this.mintRequests.map(m => ({ ...m, coord: { ...m.coord } })),
       seq: this.seq,
@@ -286,6 +328,7 @@ export class DemonInvasionField implements WorldOverlay {
           id: i.id, type, coord: { x: i.coord.x, y: i.coord.y }, anchorZoneId: i.anchorZoneId,
           zoneId: typeof i.zoneId === 'string' ? i.zoneId : null,
           age: Math.max(0, i.age), radius: Math.max(0, i.radius), minted: !!i.minted,
+          lordId: typeof (i as { lordId?: unknown }).lordId === 'string' ? (i as { lordId: string }).lordId : null,
         });
       }
     }
@@ -345,12 +388,25 @@ export class DemonInvasionField implements WorldOverlay {
     // THE shared predicate (zonePolicy): never seize a safe town, a cave, a
     // floating node, a special arena, or biome-forbidden ground as an epicenter.
     if (!here || !eventTargetable(this.id, here)) return false;
+    const strike = this.rollStrike();
     this.invasions.push({
-      id: `inv_${this.idTag}${this.seq++}`, type: this.rng.weighted(this.cfg.types),
+      id: `inv_${this.idTag}${this.seq++}`, type: strike.type, lordId: strike.lordId,
       coord: { x: here.map.x, y: here.map.y }, anchorZoneId: zoneId, zoneId,
       age: 0, radius: this.cfg.startRadius, minted: true,
     });
     return true;
+  }
+
+  /** WHO strikes, in WHAT shape: the War Below's attribution when wired (the
+   *  lord's preferred flavor among this surge's types), else the legacy
+   *  self-rolled weighted flavor — byte-identical when the war is absent. */
+  private rollStrike(): { type: InvasionType; lordId: string | null } {
+    if (this.attribution) {
+      const pick = this.attribution.pick(this.cfg.types.map(t => t.id));
+      const type = pick ? this.cfg.types.find(t => t.id === pick.typeId) : undefined;
+      if (pick && type) return { type, lordId: pick.lordId };
+    }
+    return { type: this.rng.weighted(this.cfg.types), lordId: null };
   }
 
   private maybeIgnite(view: OverlayView): void {
@@ -400,10 +456,10 @@ export class DemonInvasionField implements WorldOverlay {
     const near = this.nearestChartedNode(coord, view, '');
     const zoneId = near && coordDist(near.map, coord) <= BIND_FLOOR ? near.id : null;
     const anchorZoneId = near?.id ?? view.currentZoneId;
-    const type = this.rng.weighted(this.cfg.types);
+    const strike = this.rollStrike();
     const id = `inv_${this.idTag}${this.seq++}`;
     this.invasions.push({
-      id, type, coord, anchorZoneId,
+      id, type: strike.type, lordId: strike.lordId, coord, anchorZoneId,
       zoneId, age: 0, radius: this.cfg.startRadius, minted: zoneId !== null,
     });
     // No node at the coordinate → mint a FLOATING demon-blighted zone there (the
@@ -442,12 +498,16 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   // hell's invasion, never the surface field's empty ledger).
   const inv = world.sim.demonFieldFor(world.zoneMap[zoneId]?.dimension)?.invasionOn(zoneId);
   if (!inv) return [];
+  // An attributed strike is announced under its LORD'S name — the surface
+  // reads WHO is reaching up from below, not just what shape the reach takes.
+  const lord = inv.lordId ? lordDef(inv.lordId) : undefined;
   return [{
     kind: 'event',
     icon: inv.isEpicenter ? '★' : '✸',
     color: inv.color,
     label: inv.isEpicenter ? `${inv.type.label} — epicenter` : inv.type.label,
-    detail: inv.isEpicenter && inv.portalReady ? `${inv.stage.label} · portal open` : inv.stage.label,
+    detail: [lord ? `sent by ${lord.short}` : '', inv.stage.label, inv.isEpicenter && inv.portalReady ? 'portal open' : '']
+      .filter(Boolean).join(' · '),
     z: inv.isEpicenter ? 19 : 12,
   }];
 });

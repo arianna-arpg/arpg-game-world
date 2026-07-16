@@ -95,6 +95,20 @@ export const MONSTER_NAMES = {
         'of the Drowned Root', 'Who Sings the Shallows', 'the Unblinking Below', 'of the Old Meander',
       ],
     },
+    // THE INFERNAL TONGUE — the Legion's own, harsh-voweled and rank-obsessed
+    // (hell is a hierarchy before it is anything else). The War Below's eight
+    // host factions ALIAS these pools at boot (packages/defs/underworldWar.ts)
+    // — one tongue, nine banners; the lords conscript demons, they don't
+    // invent a language.
+    demon: {
+      prefixes: ['Baal', 'Mal', 'Gor', 'Azh', 'Krev', 'Vex', 'Zar', 'Thal', 'Urgo', 'Skar'],
+      suffixes: ['goth', 'zebul', 'akh', 'ash', 'iel', 'ozar', 'uk', 'ath', 'or', 'ax'],
+      epithets: [
+        'of the Ninth Rank', 'the Twice-Damned', 'Pit-Tithed', 'the Unransomed',
+        'Who Broke the Gate', 'the Flame-Sworn', 'of the Long March', 'the Lash-Bearer',
+        'Who Counts the Fallen', 'the Throne-Hungry', 'of the Burning Column', 'the Oathless',
+      ],
+    },
   } as Record<string, { prefixes?: string[]; suffixes?: string[]; epithets?: string[] }>,
 };
 

@@ -86,6 +86,20 @@ export const NEMESIS_NAMES = {
         'the Patient Current', 'Who Sings the Shallows', 'the Molt-Crowned', 'of the Old Meander',
       ],
     },
+    // THE INFERNAL TONGUE — the Legion names its grudges in rank and debt
+    // (a nemesis in hell is a career). The War Below's eight host factions
+    // alias these pools at boot (one tongue, nine banners).
+    demon: {
+      first: [
+        'Baalgoth', 'Malzebul', 'Gorakh', 'Azhiel', 'Krevozar', 'Vexuk',
+        'Zarathor', 'Thalax', 'Urgoveth', 'Skarnozul', 'Mordraal', 'Ozgorath',
+      ],
+      epithets: [
+        'of the Ninth Rank', 'the Twice-Damned', 'Pit-Tithed', 'the Unransomed',
+        'Who Broke the Gate', 'the Flame-Sworn', 'of the Long March', 'the Lash-Bearer',
+        'Who Counts the Fallen', 'the Throne-Hungry', 'of the Burning Column', 'the Oathless',
+      ],
+    },
   } as Record<string, { first?: string[]; epithets?: string[] }>,
 };
 

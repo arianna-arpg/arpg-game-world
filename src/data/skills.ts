@@ -10964,6 +10964,64 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 400, weight: 3, keepDistance: 260 },
   },
 
+  // ================== The LORDS BELOW's war verbs ===========================
+  // The Underworld War's three new verbs (everything else the lords cast is
+  // the existing demon library, redistributed by banner). Each one reuses an
+  // established grammar — siren_song's pull, the selective-CC statuses, the
+  // exposed shred — so counterplay is learned once and read everywhere.
+
+  // Vormaul's verb (chain_warden / marshal / the Chainfather himself): the
+  // chain is a visible flight you dodge or are REELED by — the anvil doesn't
+  // come to you; you go to the anvil. Torment rides the links.
+  hellchain_volley: {
+    id: 'hellchain_volley', name: 'Hellchain Volley', noDrop: true,
+    description: 'A barbed chain hurled from the anvil-line — what it hooks, it hauls home.',
+    tags: ['attack', 'projectile', 'physical', 'chaos'], color: '#8a94b8',
+    manaCost: 10, cooldown: 7, useTime: 0.85,
+    baseDamage: { physical: [5, 9], chaos: [2, 4] },
+    delivery: { type: 'projectile', speed: 260, radius: 14, range: 380 },
+    effects: [
+      { type: 'damage' },
+      { type: 'pull', stun: 0.2 },
+      { type: 'status', status: 'torment', chance: 0.6, magnitude: 0.3 },
+    ],
+    ai: { range: 360, weight: 3, keepDistance: 200 },
+  },
+
+  // Nyxara's verb (hushmaiden / marshal / the Hollow Hush): the toll is a
+  // slow, visible bloom of QUIET — casters caught in it stand mute (the
+  // selective-CC family: switch verbs or leave the hush).
+  hush_toll: {
+    id: 'hush_toll', name: 'Hush-Toll', noDrop: true,
+    description: 'A soundless bell swung once — inside its bloom, no word of power leaves a throat.',
+    tags: ['spell', 'aoe', 'chaos', 'duration'], color: '#5aa0a0',
+    manaCost: 14, cooldown: 9, useTime: 0.95,
+    baseDamage: { chaos: [3, 6] },
+    delivery: { type: 'ground', radius: 84, castRange: 340, delay: 0.7 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'silence', chance: 1, durationOverride: 2.2 },
+    ],
+    ai: { range: 320, weight: 3, keepDistance: 220 },
+  },
+
+  // Molochai's verb (tithe_reaper / marshal / the Tithe-King): the rake TAKES
+  // — the shell is shredded off the debtor (exposed) and the wielder's leech
+  // mods carry the collection. What's owed is taken; nothing bespoke drains.
+  tithe_rake: {
+    id: 'tithe_rake', name: 'Tithe-Rake', noDrop: true,
+    description: 'A collector\'s hooked sweep — it peels the armor you owe and keeps what it draws.',
+    tags: ['attack', 'melee', 'physical', 'chaos'], color: '#8ab04a',
+    manaCost: 0, cooldown: 5, useTime: 0.8,
+    baseDamage: { physical: [6, 10], chaos: [3, 5] },
+    delivery: { type: 'melee', range: 56, arcDeg: 100 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'exposed', chance: 0.8, magnitude: 0.5 },
+    ],
+    ai: { range: 60, weight: 2 },
+  },
+
   // ======================= The EMPYREAN kata ================================
   // The Aetherial's own arts — verticality, radiance, judgement — brought
   // down by whoever survives the crossing. Five distinct rhythms (the samurai

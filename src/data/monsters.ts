@@ -9026,6 +9026,306 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
+
+  // --- THE LORDS BELOW (the Underworld War's officer tiers) -------------------
+  // The War Below (packages/lords.ts + overlays/hellWar.ts) fields the demon
+  // library under EIGHT banners; these are the bodies only the war spawns:
+  // four HOST ELITES (the textures the existing library lacked), eight
+  // MARSHALS (front officers — every one wears its lord's BANNER on its back,
+  // the one at-a-glance war read), and eight LORDS (throne bodies — citadel
+  // set-pieces, never tabled). Defense textures differ per banner, per the
+  // doctrine: ember glass, iron anvil, gorged regen, void ES, doom ward,
+  // hushed evasion, phalanx poise, gilded leech. Officer tiers carry HARD
+  // def-level presence floors (the balor discipline) as belt-and-braces —
+  // their tables already floor them, and no other table may field them low.
+  chain_warden: {
+    id: 'chain_warden', name: 'Chain Warden',
+    color: '#8a94b8', shape: 'hexagon', radius: 14, material: 'metal', look: 'chain_warden',
+    base: { life: 120, moveSpeed: 90, accuracy: 104, armor: 45, poise: 45, mana: 60, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.3), mod('chaosRes', 'flat', 0.3)],
+    skills: ['hellchain_volley', 'heavy_strike'], xp: 34,
+    faction: 'demon',
+    presence: { from: 10 },
+    gemBias: ['duration', 'physical'],
+    temper: 'territorial',
+    brain: { type: 'strafer' },
+  },
+  // The hush is the threat: her toll locks the CASTER'S verb — switch to
+  // steel or stand mute (the selective-CC counterplay, fielded by a family).
+  hushmaiden: {
+    id: 'hushmaiden', name: 'Hushmaiden',
+    color: '#5aa0a0', shape: 'oval', radius: 12, material: 'ethereal', look: 'hushmaiden',
+    base: { life: 78, moveSpeed: 115, accuracy: 102, evasion: 55, mana: 120, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['hush_toll', 'claw'], xp: 30,
+    faction: 'demon',
+    presence: { from: 6 },
+    gemBias: ['duration', 'aoe'],
+    temper: 'wary',
+    brain: { type: 'caster' },
+  },
+  veil_stalker: {
+    id: 'veil_stalker', name: 'Veil Stalker',
+    color: '#4a8a8a', shape: 'kite', radius: 12, material: 'ethereal', look: 'veil_stalker',
+    base: { life: 88, moveSpeed: 165, accuracy: 108, evasion: 70, mana: 30, manaRegen: 3 },
+    mods: [mod('critChance', 'flat', 0.12), mod('chaosRes', 'flat', 0.3)],
+    skills: ['claw'], xp: 32,
+    faction: 'demon',
+    presence: { from: 8 },
+    gemBias: ['melee', 'physical'],
+    temper: 'skittish',
+    brain: { type: 'flanker', move: { style: 'lurk' } },
+  },
+  // The collector: the rake TAKES — armor shredded off the debtor, life
+  // leeched back to the ledger (mods carry the theft; no bespoke drain).
+  tithe_reaper: {
+    id: 'tithe_reaper', name: 'Tithe Reaper',
+    color: '#8ab04a', shape: 'pentagon', radius: 13, material: 'metal', look: 'tithe_reaper',
+    base: { life: 105, moveSpeed: 120, accuracy: 104, armor: 25, mana: 40, manaRegen: 3 },
+    mods: [mod('lifeLeech', 'flat', 0.06), mod('chaosRes', 'flat', 0.3)],
+    skills: ['tithe_rake'], xp: 33,
+    faction: 'demon',
+    presence: { from: 6 },
+    gemBias: ['melee', 'chaos'],
+    temper: 'territorial',
+    brain: { type: 'flanker' },
+  },
+
+  // --- the eight MARSHALS (front officers; Actor.eventKey carries the lord) --
+  marshal_surtash: {
+    id: 'marshal_surtash', name: 'Brandmarshal of Surtash',
+    color: '#ff8c2e', shape: 'star', radius: 17, material: 'ember', look: 'marshal_surtash',
+    base: { life: 215, moveSpeed: 125, accuracy: 122, mana: 120, manaRegen: 8 },
+    mods: [mod('fireRes', 'flat', 0.6), mod('coldRes', 'flat', -0.2), mod('damage', 'increased', 0.2)],
+    skills: ['hellfire_lash', 'rain_of_ash', 'war_cry'], xp: 88, faction: 'demon', adorn: 'wings',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['fire', 'aoe'], wardPriority: 2,
+    detection: 1.3, temper: 'territorial',
+    brain: { type: 'commander' },
+  },
+  marshal_vormaul: {
+    id: 'marshal_vormaul', name: 'Warden-Marshal of Vormaul',
+    color: '#8a94b8', shape: 'hexagon', radius: 18, material: 'metal', look: 'marshal_vormaul',
+    base: { life: 260, moveSpeed: 85, accuracy: 115, armor: 70, poise: 90, mana: 60, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('chaosRes', 'flat', 0.4)],
+    skills: ['hellchain_volley', 'heavy_strike', 'ground_slam'], xp: 90, faction: 'demon',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['physical', 'duration'], wardPriority: 2,
+    detection: 1.3, temper: 'territorial', turnSpeed: 2.6,
+    brain: { type: 'juggernaut', enrage: 0.35 },
+  },
+  marshal_morgrath: {
+    id: 'marshal_morgrath', name: 'Gorge-Marshal of Morgrath',
+    color: '#b8405e', shape: 'octagon', radius: 18, material: 'flesh', look: 'marshal_morgrath',
+    base: { life: 300, moveSpeed: 110, accuracy: 112, lifeRegen: 6, mana: 40, manaRegen: 3 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('lifeLeech', 'flat', 0.05)],
+    skills: ['gore_rend', 'war_cry', 'claw'], xp: 88, faction: 'demon', adorn: 'spikes',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['physical', 'melee'], wardPriority: 2,
+    detection: 1.3, temper: 'territorial',
+    brain: { type: 'juggernaut', enrage: 0.5 },
+  },
+  marshal_vethriss: {
+    id: 'marshal_vethriss', name: 'Gate-Marshal of Vethriss',
+    color: '#9a5ae8', shape: 'pentagon', radius: 16, material: 'void', look: 'marshal_vethriss',
+    base: { life: 190, moveSpeed: 105, accuracy: 118, energyShield: 90, mana: 160, manaRegen: 10 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['infernal_rift', 'call_the_rift'], xp: 90, faction: 'demon',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['chaos', 'minion'], wardPriority: 2,
+    detection: 1.3, temper: 'wary',
+    brain: { type: 'caster' },
+  },
+  marshal_ozrimoth: {
+    id: 'marshal_ozrimoth', name: 'Sermon-Marshal of Ozrimoth',
+    color: '#d8b83a', shape: 'pentagon', radius: 16, material: 'bone', look: 'marshal_ozrimoth',
+    base: { life: 205, moveSpeed: 95, accuracy: 116, armor: 30, mana: 180, manaRegen: 11 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('fireRes', 'flat', 0.3)],
+    skills: ['doom_chant', 'word_of_unmaking'], xp: 92, faction: 'demon', adorn: 'wings',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['chaos', 'duration'], wardPriority: 2,
+    detection: 1.3, temper: 'territorial',
+    brain: { type: 'caster' },
+  },
+  marshal_nyxara: {
+    id: 'marshal_nyxara', name: 'Hush-Marshal of Nyxara',
+    color: '#5aa0a0', shape: 'oval', radius: 16, material: 'ethereal', look: 'marshal_nyxara',
+    base: { life: 195, moveSpeed: 140, accuracy: 120, evasion: 75, mana: 140, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.4), mod('critChance', 'flat', 0.1)],
+    skills: ['hush_toll', 'claw', 'gore_rend'], xp: 88, faction: 'demon',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['duration', 'melee'], wardPriority: 2,
+    detection: 1.4, temper: 'wary',
+    brain: { type: 'flanker', move: { style: 'lurk' } },
+  },
+  marshal_bhorog: {
+    id: 'marshal_bhorog', name: 'Siege-Marshal of Bhorog',
+    color: '#a8683a', shape: 'hexagon', radius: 18, material: 'metal', look: 'marshal_bhorog',
+    base: { life: 275, moveSpeed: 90, accuracy: 114, armor: 65, poise: 75, mana: 50, manaRegen: 4 },
+    mods: [mod('fireRes', 'flat', 0.4), mod('damage', 'increased', 0.15)],
+    skills: ['ground_slam', 'heavy_strike', 'war_cry'], xp: 90, faction: 'demon',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['physical', 'aoe'], wardPriority: 2,
+    detection: 1.3, temper: 'territorial', turnSpeed: 2.8,
+    brain: { type: 'commander' },
+  },
+  marshal_molochai: {
+    id: 'marshal_molochai', name: 'Tithe-Marshal of Molochai',
+    color: '#8ab04a', shape: 'star', radius: 17, material: 'metal', look: 'marshal_molochai',
+    base: { life: 220, moveSpeed: 115, accuracy: 118, armor: 35, mana: 100, manaRegen: 7 },
+    mods: [mod('lifeLeech', 'flat', 0.08), mod('chaosRes', 'flat', 0.4)],
+    skills: ['tithe_rake', 'fulminate', 'war_cry'], xp: 90, faction: 'demon',
+    presence: { from: 14, fadeIn: 4 },
+    gemBias: ['chaos', 'melee'], wardPriority: 2,
+    detection: 1.3, temper: 'territorial',
+    brain: { type: 'commander' },
+  },
+
+  // --- the eight LORDS (throne bodies — citadel set-pieces, never tabled) -----
+  lord_surtash: {
+    id: 'lord_surtash', name: 'Surtash, the Pyre Sovereign',
+    color: '#ff8c2e', shape: 'star', radius: 27, material: 'ember', look: 'lord_surtash',
+    base: { life: 500, moveSpeed: 120, accuracy: 132, mana: 260, manaRegen: 13 },
+    mods: [mod('fireRes', 'flat', 0.75), mod('coldRes', 'flat', -0.25), mod('damage', 'increased', 0.4)],
+    skills: ['meteor_storm', 'hellfire_lash', 'flame_wave', 'war_cry'],
+    xp: 165, boss: true, faction: 'demon', adorn: 'wings',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.4, temper: 'territorial',
+    brain: {
+      type: 'juggernaut', enrage: 0.45,
+      rules: [{
+        when: { distUnder: 620 }, every: [16, 22], hold: [0.4, 0.6],
+        announce: 'EVERYTHING BURNS.',
+        actions: [{ do: 'summon', monster: 'ash_whelp', count: 4, ring: 60 }],
+      }],
+    },
+  },
+  lord_vormaul: {
+    id: 'lord_vormaul', name: 'Vormaul, the Chainfather',
+    color: '#8a94b8', shape: 'hexagon', radius: 28, material: 'metal', look: 'lord_vormaul',
+    base: { life: 560, moveSpeed: 78, accuracy: 124, armor: 110, poise: 140, mana: 120, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.5)],
+    skills: ['hellchain_volley', 'ground_slam', 'heavy_strike'],
+    xp: 168, boss: true, faction: 'demon',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.3, temper: 'territorial', turnSpeed: 2.2,
+    brain: {
+      type: 'juggernaut', enrage: 0.3,
+      rules: [{
+        when: { distUnder: 520 }, every: [15, 21], hold: [0.5, 0.7],
+        announce: 'the Chainfather reels the debtors in…',
+        actions: [{ do: 'summon', monster: 'chained_tormentor', count: 2, ring: 64 }],
+      }],
+    },
+  },
+  lord_morgrath: {
+    id: 'lord_morgrath', name: 'Morgrath, the Carrion Duke',
+    color: '#b8405e', shape: 'octagon', radius: 27, material: 'flesh', look: 'lord_morgrath',
+    base: { life: 620, moveSpeed: 105, accuracy: 122, lifeRegen: 14, mana: 80, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('lifeLeech', 'flat', 0.08)],
+    skills: ['gore_rend', 'war_cry', 'claw'],
+    xp: 162, boss: true, faction: 'demon', adorn: 'spikes',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.4, temper: 'territorial',
+    brain: {
+      type: 'juggernaut', enrage: 0.55,
+      rules: [{
+        when: { lifeBelow: 0.6 }, every: [14, 20], hold: [0.4, 0.6],
+        announce: 'the Duke FEEDS — the wound closes…',
+        actions: [{ do: 'buff', buff: { type: 'buff', id: 'carrion_gorge', duration: 6, mods: [mod('lifeRegen', 'flat', 30), mod('damage', 'increased', 0.15)] } }],
+      }],
+    },
+  },
+  lord_vethriss: {
+    id: 'lord_vethriss', name: 'Vethriss, the Regent of Doors',
+    color: '#9a5ae8', shape: 'pentagon', radius: 25, material: 'void', look: 'lord_vethriss',
+    base: { life: 420, moveSpeed: 110, accuracy: 128, energyShield: 220, mana: 300, manaRegen: 16 },
+    mods: [mod('chaosRes', 'flat', 0.6)],
+    skills: ['infernal_rift', 'call_the_rift'],
+    xp: 170, boss: true, faction: 'demon',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.4, temper: 'wary',
+    brain: {
+      type: 'caster',
+      rules: [{
+        when: { distUnder: 700 }, every: [13, 18], hold: [0.4, 0.6],
+        announce: 'a door opens where Vethriss pleases…',
+        actions: [{ do: 'summon', monster: 'demonkin_darter', count: 2, ring: 90 }],
+      }],
+    },
+  },
+  lord_ozrimoth: {
+    id: 'lord_ozrimoth', name: 'Ozrimoth, the Last Word',
+    color: '#d8b83a', shape: 'pentagon', radius: 26, material: 'bone', look: 'lord_ozrimoth',
+    base: { life: 480, moveSpeed: 88, accuracy: 126, armor: 50, mana: 320, manaRegen: 17 },
+    mods: [mod('chaosRes', 'flat', 0.65), mod('fireRes', 'flat', 0.4)],
+    skills: ['word_of_unmaking', 'null_verge', 'doom_chant'],
+    xp: 172, boss: true, faction: 'demon', adorn: 'wings',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.4, temper: 'territorial',
+    brain: {
+      type: 'caster',
+      rules: [{
+        when: { distUnder: 640 }, every: [17, 24], hold: [0.6, 0.8],
+        announce: 'Ozrimoth pronounces your ending…',
+        actions: [{ do: 'summon', monster: 'doomherald', count: 1, ring: 70 }],
+      }],
+    },
+  },
+  lord_nyxara: {
+    id: 'lord_nyxara', name: 'Nyxara, the Hollow Hush',
+    color: '#5aa0a0', shape: 'oval', radius: 25, material: 'ethereal', look: 'lord_nyxara',
+    base: { life: 440, moveSpeed: 135, accuracy: 130, evasion: 95, mana: 240, manaRegen: 13 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('critChance', 'flat', 0.12)],
+    skills: ['hush_toll', 'gore_rend', 'claw'],
+    xp: 166, boss: true, faction: 'demon',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.5, temper: 'wary',
+    brain: {
+      type: 'flanker', move: { style: 'lurk' },
+      rules: [{
+        when: { distUnder: 560 }, every: [15, 21], hold: [0.3, 0.5],
+        announce: 'the Hush deepens — something moves in it…',
+        actions: [{ do: 'summon', monster: 'veil_stalker', count: 2, ring: 84 }],
+      }],
+    },
+  },
+  lord_bhorog: {
+    id: 'lord_bhorog', name: 'Bhorog, the Siegewright',
+    color: '#a8683a', shape: 'hexagon', radius: 28, material: 'metal', look: 'lord_bhorog',
+    base: { life: 540, moveSpeed: 85, accuracy: 124, armor: 95, poise: 110, mana: 100, manaRegen: 6 },
+    mods: [mod('fireRes', 'flat', 0.5), mod('damage', 'increased', 0.3)],
+    skills: ['ground_slam', 'cleave', 'heavy_strike', 'war_cry'],
+    xp: 164, boss: true, faction: 'demon',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.3, temper: 'territorial', turnSpeed: 2.4,
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 600 }, every: [18, 26], hold: [0.6, 0.9],
+        announce: 'Bhorog calls up the engines!',
+        actions: [{ do: 'summon', monster: 'siege_hulk', count: 1, ring: 76 }],
+      }],
+    },
+  },
+  lord_molochai: {
+    id: 'lord_molochai', name: 'Molochai, the Tithe-King',
+    color: '#8ab04a', shape: 'star', radius: 26, material: 'metal', look: 'lord_molochai',
+    base: { life: 470, moveSpeed: 112, accuracy: 128, armor: 55, mana: 220, manaRegen: 12 },
+    mods: [mod('lifeLeech', 'flat', 0.1), mod('chaosRes', 'flat', 0.5)],
+    skills: ['tithe_rake', 'fulminate', 'war_cry'],
+    xp: 168, boss: true, faction: 'demon',
+    presence: { from: 15, fadeIn: 5 },
+    detection: 1.4, temper: 'territorial',
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 600 }, every: [14, 19], hold: [0.4, 0.6],
+        announce: 'the Tithe-King sends his collectors!',
+        actions: [{ do: 'summon', monster: 'imp', count: 4, ring: 70 }],
+      }],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -9166,9 +9466,26 @@ export const RESERVED_KIN: Record<string, string> = {
   magpie: 'the Magpie Court event/biome — loot-eaters loose in ordinary gen would tax every build',
 };
 
-/** Diplomatic stance between two factions (order-insensitive). */
+/** RUN-SCOPED DIPLOMACY LAYERS — stances that hold for ONE RUN, over the
+ *  static RELATIONS table (which is boot-time and permanent). Namespaced per
+ *  writer so systems never clobber each other: the War Below publishes its
+ *  rolled lord truces here (and re-publishes when a pact shatters or a throne
+ *  changes hands). Order-insensitive keys, same as RELATIONS. A layer is
+ *  replaced wholesale by its owner each publish — no incremental drift. */
+const RUN_STANCE_LAYERS = new Map<string, Record<string, FactionStance>>();
+
+export function setRunStances(namespace: string, pairs: Record<string, FactionStance>): void {
+  RUN_STANCE_LAYERS.set(namespace, pairs);
+}
+
+/** Diplomatic stance between two factions (order-insensitive): run layers
+ *  first (this run's rolled pacts + wars), the static table beneath. */
 export function factionStance(a: string, b: string): FactionStance {
   if (a === b) return 'ally';
+  for (const layer of RUN_STANCE_LAYERS.values()) {
+    const hit = layer[`${a}|${b}`] ?? layer[`${b}|${a}`];
+    if (hit) return hit;
+  }
   return RELATIONS[`${a}|${b}`] ?? RELATIONS[`${b}|${a}`] ?? 'neutral';
 }
 

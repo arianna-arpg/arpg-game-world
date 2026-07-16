@@ -49,6 +49,7 @@ import type { BreachField } from '../packages/overlays/breach';
 import type { ExtractionField } from '../packages/overlays/extraction';
 import type { VendettaField } from '../packages/overlays/vendetta';
 import type { WorldBossField } from '../packages/overlays/worldboss';
+import type { HellWarField } from '../packages/overlays/hellWar';
 import type { WraithsailField } from '../packages/overlays/wraithsail';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
 import { boundaryGateIds } from '../data/boundaryGates';
@@ -246,6 +247,9 @@ export class WorldSim {
    *  field's fronts in each tick (setFronts) so she can RIDE the storm —
    *  overlays never see the weather themselves. */
   readonly wraithsailField: WraithsailField | null;
+  /** THE WAR BELOW — hell's territorial struggle. The one instance lives in
+   *  the underworld dimension (never surface), so it caches directly. */
+  readonly hellWarField: HellWarField | null;
   /** Per-faction favor earned from events and warlord kills. Persists per run. */
   readonly reputation = new Reputation();
   /** FACTION/WORLD WANTS (world/drives.ts): named slow meters — dread,
@@ -401,6 +405,7 @@ export class WorldSim {
     this.vendettaField = surface<VendettaField>('vendetta') ?? null;
     this.worldBossField = surface<WorldBossField>('worldboss') ?? null;
     this.wraithsailField = surface<WraithsailField>('wraithsail') ?? null;
+    this.hellWarField = (extra.find(o => o.id === 'underworld_war') as HellWarField | undefined) ?? null;
     this.invasion.gate = (f) => this.warlord.canInvade(f);
     // Per-faction invasion launch scale = the governing package's pressure (0 if
     // no package governs it, or its package is off / below its start level).
@@ -408,6 +413,22 @@ export class WorldSim {
       const pid = this.factionToPkg[f];
       return pid ? gateOf(this.gates, pid).ignitionMul : 0;
     };
+    // THE WAR BELOW ↔ DEMONIC INCURSIONS: every incursion is a LORD'S strike.
+    // Each demon instance (surface AND underworld) asks the war who sent it —
+    // and in what shape — at ignition, and reports the outcome home: a
+    // repelled strike bleeds the sender's fronts below, a festered one feeds
+    // them. Wired HERE (the composition root) so neither overlay imports the
+    // other; with the war package absent, the demon field keeps its legacy
+    // self-rolled flavor byte-for-byte.
+    if (this.hellWarField) {
+      const hw = this.hellWarField;
+      for (const df of this.demonFieldsAll()) {
+        df.attribution = {
+          pick: typeIds => hw.attributeStrike(typeIds),
+          resolved: (lordId, outcome) => hw.strikeResolved(lordId, outcome),
+        };
+      }
+    }
     this.gates = resolveGates(manifest, 1);
   }
 
@@ -708,8 +729,27 @@ export class WorldSim {
     out.push({ kind: 'condition', icon: day.phase === 'night' || day.phase === 'dusk' ? '☾' : '☀', label: day.label });
     // Weather/territory/invasions are SURFACE fields — hell reports neither a
     // drizzle nor a gnoll warlord (the day phase is the world's one shared
-    // clock, so it stays). Formalize per-overlay when a hell field arrives.
-    if ((zone.dimension ?? 'surface') !== 'surface') return out;
+    // clock, so it stays). The hell field that HAS arrived reports here: the
+    // War Below names the ground's holder and any front pressing it.
+    if ((zone.dimension ?? 'surface') !== 'surface') {
+      const hw = this.hellWarField;
+      const st = hw && zone.dimension === hw.dimension ? hw.zoneWar(zone.id) : null;
+      if (st) {
+        out.push({
+          kind: 'condition', icon: st.citadel ? st.lord.sigil : '⚑', color: st.lord.color,
+          label: st.citadel ? `${st.lord.name} — the throne` : `Held by ${st.lord.short}`,
+          detail: st.heartland ? `${st.lord.epithet} · heartland` : st.lord.epithet,
+        });
+        if (st.contested) {
+          out.push({
+            kind: 'condition', icon: '⚔', color: st.contested.by.color,
+            label: `${st.contested.by.short} presses the front`,
+            detail: `${Math.round(st.contested.level * 100)}% pressure`,
+          });
+        }
+      }
+      return out;
+    }
     // ...and a SHELTERED surface zone (skyOf: a roofed tileset) reports no
     // weather either — its chip must match what the ground actually feels.
     const w = skyOf(zone) === 'sheltered' ? null : this.weather.sample(zone);

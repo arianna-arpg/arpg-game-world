@@ -2107,6 +2107,250 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 1.2,
   },
 
+  // ================================================== THE LORDS BELOW
+  // The Underworld War's officer tiers, composed ENTIRELY from the existing
+  // painter library. The family grammar, readable at a glance: every MARSHAL
+  // wears its lord's WAR-BANNER on its back (the one silhouette element all
+  // eight share — "an officer of the war") while the motif parts name the
+  // banner (flame, chain, gore, door, doom, hush, siege, tithe); every LORD
+  // is the same motif at throne scale under a horn-crown. No new painters.
+  chain_warden: {
+    parts: [
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'armorPlates', scale: 0.85 },
+      { kind: 'chains', rot: 0.5, params: { n: 3 } },
+      { kind: 'mace', params: { len: 0.95 } },
+      { kind: 'horns', scale: 0.6 },
+      { kind: 'eyes', color: '#b8c8e8', params: { spread: 0.35, dist: 0.58, size: 0.09 } },
+    ],
+  },
+  /** The quiet made flesh: a veiled bell-bearer — the bell IS the threat. */
+  hushmaiden: {
+    parts: [
+      { kind: 'robe', scale: 0.9, alpha: 0.9 },
+      { kind: 'hood', x: 0.28, params: { eyes: true } },
+      { kind: 'bell', y: 0.5, scale: 0.8 },
+    ],
+    live: [{ kind: 'veilSashes', scale: 0.85, alpha: 0.7, params: { sashes: 3 } }],
+  },
+  veil_stalker: {
+    parts: [
+      { kind: 'disc', scale: 0.82, alpha: 0.85 },
+      { kind: 'daggers', params: { len: 0.65 } },
+      { kind: 'tail', params: { len: 0.85 } },
+      { kind: 'hood', x: 0.26, scale: 0.85, params: { eyes: true } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.5, color: '#5aa0a0', alpha: 0.4 }],
+  },
+  /** The collector: hooked scythe, the strongbox chained to its back. */
+  tithe_reaper: {
+    parts: [
+      { kind: 'torso', scale: 0.9 },
+      { kind: 'chest', x: -0.35, scale: 0.7, role: 'metal' },
+      { kind: 'chains', rot: 0.3, params: { n: 2 } },
+      { kind: 'scythe', params: { len: 0.95 } },
+      { kind: 'horns', scale: 0.55 },
+      { kind: 'eyes', color: '#d8e870', params: { spread: 0.38, dist: 0.56, size: 0.09 } },
+    ],
+  },
+
+  // --- the eight MARSHALS (banner + motif — the officer grammar) -------------
+  marshal_surtash: {
+    parts: [
+      { kind: 'banner', x: -0.2 },
+      { kind: 'torso' },
+      { kind: 'lavaCracks', params: { n: 3 } },
+      { kind: 'ramHorns', scale: 0.85 },
+      { kind: 'sword', params: { len: 1.1, w: 0.13 } },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.34, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'flames', x: -0.2, scale: 0.7, params: { n: 3 } }],
+  },
+  marshal_vormaul: {
+    parts: [
+      { kind: 'banner', x: -0.2 },
+      { kind: 'torso', scale: 1.02 },
+      { kind: 'armorPlates', scale: 0.95 },
+      { kind: 'pauldrons', role: 'metal', scale: 0.95 },
+      { kind: 'chains', rot: 0.4, params: { n: 3 } },
+      { kind: 'mace', params: { len: 1.1 } },
+      { kind: 'helm', scale: 0.8, role: 'metal' },
+    ],
+    shadowScale: 1.1,
+  },
+  marshal_morgrath: {
+    parts: [
+      { kind: 'banner', x: -0.22 },
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'bloatSacs', x: -0.15, scale: 0.9, params: { n: 3 } },
+      { kind: 'stitchSeams', rot: 0.5, params: { n: 2 } },
+      { kind: 'maw', x: 0.4, scale: 0.5, params: { arc: 0.5 } },
+      { kind: 'claws', params: { len: 0.55 } },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.9, params: { flies: 5 } }],
+    shadowScale: 1.1,
+  },
+  marshal_vethriss: {
+    parts: [
+      { kind: 'banner', x: -0.2 },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'tentacleRing', scale: 0.8, params: { n: 5 } },
+      { kind: 'staff', params: { orb: 'glow' } },
+      { kind: 'runes', params: { n: 4 } },
+      { kind: 'eyes', color: '#c8a8ff', params: { spread: 0.32, dist: 0.58, size: 0.1 } },
+    ],
+    live: [{ kind: 'floatingShards', scale: 0.8, params: { n: 4 } }],
+  },
+  marshal_ozrimoth: {
+    parts: [
+      { kind: 'banner', x: -0.2 },
+      { kind: 'robe' },
+      { kind: 'hood', x: 0.3, params: { eyes: true } },
+      { kind: 'censer', y: 0.55, scale: 0.9 },
+      { kind: 'brand', x: 0.3, scale: 0.85 },
+      { kind: 'wings', scale: 0.65, alpha: 0.8 },
+      { kind: 'runes', scale: 0.9, params: { n: 3 } },
+    ],
+  },
+  marshal_nyxara: {
+    parts: [
+      { kind: 'banner', x: -0.2, alpha: 0.85 },
+      { kind: 'torso', scale: 0.92, alpha: 0.9 },
+      { kind: 'hood', x: 0.28, params: { eyes: true } },
+      { kind: 'bell', y: 0.52, scale: 0.85 },
+      { kind: 'daggers', params: { len: 0.6 } },
+    ],
+    live: [{ kind: 'veilSashes', scale: 0.95, alpha: 0.75, params: { sashes: 4 } }],
+  },
+  marshal_bhorog: {
+    parts: [
+      { kind: 'banner', x: -0.2 },
+      { kind: 'torso', scale: 1.06 },
+      { kind: 'armorPlates', x: -0.05, scale: 1 },
+      { kind: 'pauldrons', role: 'metal', scale: 1 },
+      { kind: 'ramHorns', scale: 0.9 },
+      { kind: 'hammer', params: { len: 1.1 } },
+      { kind: 'warhorn', x: -0.3, scale: 0.7 },
+    ],
+    shadowScale: 1.15,
+  },
+  marshal_molochai: {
+    parts: [
+      { kind: 'banner', x: -0.2 },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'chest', x: -0.32, scale: 0.75, role: 'metal' },
+      { kind: 'scythe', params: { len: 1.05 } },
+      { kind: 'crown', x: 0.35, scale: 0.55, role: 'metal' },
+      { kind: 'gem', y: 0.45, scale: 0.5, role: 'glow' },
+      { kind: 'eyes', color: '#e8e870', params: { spread: 0.34, dist: 0.58, size: 0.09 } },
+    ],
+  },
+
+  // --- the eight LORDS (throne bodies — the motif at full scale) --------------
+  lord_surtash: {
+    parts: [
+      { kind: 'torso', scale: 1.1 },
+      { kind: 'lavaCracks', params: { n: 5 } },
+      { kind: 'wings' },
+      { kind: 'crownOfHorns', x: 0.28, scale: 0.9 },
+      { kind: 'sword', params: { len: 1.25, w: 0.15 } },
+      { kind: 'eyes', color: '#ffd24a', params: { spread: 0.3, dist: 0.62, size: 0.09 } },
+    ],
+    live: [
+      { kind: 'flames', x: -0.2, scale: 0.9, params: { n: 4 } },
+      { kind: 'emberSparks', params: { n: 6, drift: 1 } },
+    ],
+    shadowScale: 1.2,
+  },
+  lord_vormaul: {
+    parts: [
+      { kind: 'torso', scale: 1.12 },
+      { kind: 'armorPlates', scale: 1.05 },
+      { kind: 'pauldrons', role: 'metal', scale: 1.05 },
+      { kind: 'chains', rot: 0.35, params: { n: 4 } },
+      { kind: 'chains', rot: -0.5, params: { n: 3 } },
+      { kind: 'mace', params: { len: 1.25 } },
+      { kind: 'helm', scale: 0.9, role: 'metal' },
+      { kind: 'crownOfHorns', x: 0.3, scale: 0.7 },
+    ],
+    shadowScale: 1.25,
+  },
+  lord_morgrath: {
+    parts: [
+      { kind: 'torso', scale: 1.15 },
+      { kind: 'bloatSacs', x: -0.18, scale: 1.05, params: { n: 4 } },
+      { kind: 'stitchSeams', rot: 0.4, params: { n: 3 } },
+      { kind: 'maw', x: 0.42, scale: 0.6, params: { arc: 0.6 } },
+      { kind: 'crownOfHorns', x: 0.26, scale: 0.8 },
+      { kind: 'claws', params: { len: 0.6 } },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 1.1, params: { flies: 7 } }],
+    shadowScale: 1.25,
+  },
+  lord_vethriss: {
+    parts: [
+      { kind: 'tentacleRing', scale: 0.95, params: { n: 7 } },
+      { kind: 'robe', scale: 1.05, alpha: 0.95 },
+      { kind: 'staff', params: { orb: 'glow', len: 1.15 } },
+      { kind: 'runes', scale: 1.05, params: { n: 5 } },
+      { kind: 'crownOfHorns', x: 0.28, scale: 0.75 },
+      { kind: 'eyes', color: '#c8a8ff', params: { spread: 0.3, dist: 0.6, size: 0.1 } },
+    ],
+    live: [{ kind: 'floatingShards', scale: 1.05, params: { n: 6 } }],
+    shadowScale: 1.15,
+  },
+  lord_ozrimoth: {
+    parts: [
+      { kind: 'robe', scale: 1.08 },
+      { kind: 'hood', x: 0.3, scale: 1.05, params: { eyes: true } },
+      { kind: 'wings', scale: 0.9, alpha: 0.85 },
+      { kind: 'censer', y: 0.6, scale: 1 },
+      { kind: 'brand', x: 0.32, scale: 0.95 },
+      { kind: 'runes', scale: 1.1, params: { n: 5 } },
+      { kind: 'halo', scale: 0.9, alpha: 0.6 },
+    ],
+    shadowScale: 1.15,
+  },
+  lord_nyxara: {
+    parts: [
+      { kind: 'torso', scale: 1.02, alpha: 0.88 },
+      { kind: 'hood', x: 0.3, scale: 1, params: { eyes: true } },
+      { kind: 'bell', y: 0.55, scale: 1 },
+      { kind: 'daggers', params: { len: 0.7 } },
+      { kind: 'crown', x: 0.4, scale: 0.55, role: 'dark' },
+    ],
+    live: [
+      { kind: 'veilSashes', scale: 1.1, alpha: 0.8, params: { sashes: 5 } },
+      { kind: 'wisps', scale: 0.7, color: '#5aa0a0', alpha: 0.45 },
+    ],
+    shadowScale: 1.1,
+  },
+  lord_bhorog: {
+    parts: [
+      { kind: 'torso', scale: 1.15 },
+      { kind: 'armorPlates', x: -0.05, scale: 1.1 },
+      { kind: 'pauldrons', role: 'metal', scale: 1.1 },
+      { kind: 'ramHorns', scale: 1.05 },
+      { kind: 'hammer', params: { len: 1.25 } },
+      { kind: 'warhorn', x: -0.32, scale: 0.8 },
+      { kind: 'crownOfHorns', x: 0.3, scale: 0.75 },
+    ],
+    shadowScale: 1.3,
+  },
+  lord_molochai: {
+    parts: [
+      { kind: 'robe', scale: 1.05 },
+      { kind: 'chest', x: -0.35, scale: 0.9, role: 'metal' },
+      { kind: 'chains', rot: 0.4, params: { n: 2 } },
+      { kind: 'scythe', params: { len: 1.2 } },
+      { kind: 'crown', x: 0.38, scale: 0.65, role: 'metal' },
+      { kind: 'gem', y: 0.5, scale: 0.6, role: 'glow' },
+      { kind: 'eyes', color: '#e8e870', params: { spread: 0.32, dist: 0.6, size: 0.09 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, color: '#8ab04a', alpha: 0.5 }],
+    shadowScale: 1.15,
+  },
+
   // ===================================================== DEPLOYED CONSTRUCTS
   // Skill-objects (ConstructDelivery) — the square-and-skill-color era ends.
   // spawnConstruct dresses by kind through CONSTRUCT_LOOKS below unless the

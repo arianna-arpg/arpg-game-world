@@ -33,6 +33,7 @@ import { MYCELIA } from './defs/mycelia';
 import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
 import { SWARMING } from './defs/swarming';
+import { UNDERWORLD_WAR } from './defs/underworldWar';
 import { UNSEALING } from './defs/unsealing';
 import { VENDETTA } from './defs/vendetta';
 import { VERMINFALL } from './defs/verminfall';
@@ -74,6 +75,7 @@ export const PACKAGES: ContentPackage[] = [
   WORLDBOSS,
   PIT,
   UNSEALING,
+  UNDERWORLD_WAR,
   WRAITHSAIL,
   FACTION_POLITICS,
 ];
@@ -114,6 +116,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   pit: 0x9147,
   worldboss: 0xb055,
   unsealing: 0x5ea1,
+  underworld_war: 0xbe10,
   wraithsail: 0xb0a7,
 };
 
