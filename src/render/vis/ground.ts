@@ -15,6 +15,9 @@
 
 import { clamp } from '../../core/math';
 import { DOODAD_VISUALS } from '../../data/doodadVisuals';
+import { TILESETS } from '../../data/tilesets';
+import type { ZoneTheme } from '../../data/zones';
+import { compileBlendField, type BlendSampler } from '../../engine/blend';
 import type { Doodad } from '../../engine/levelgen';
 import type { World } from '../../engine/world';
 import { GridWalkField } from '../../world/gridWalk';
@@ -144,6 +147,22 @@ export class GroundRenderer {
   private bedsFloodRev = 0;
   /** Monotonic bake sequence, stamped per bake (see ChunkEntry.at). */
   private bakeSeq = 0;
+  /** THE BLEND (engine/blend.ts), memoized per zone: the compiled weight
+   *  field + the partner tileset's theme a blended zone's bakes mix toward.
+   *  null entry = the zone is unblended (the common case, zero cost). */
+  private blendMemo: { zoneId: string; info: { at: BlendSampler; theme: ZoneTheme } | null } | null = null;
+
+  /** Resolve (and memoize) the current zone's blend for the bake passes. */
+  private blendFor(world: World): { at: BlendSampler; theme: ZoneTheme } | null {
+    const z = world.zone;
+    if (this.blendMemo?.zoneId === z.id) return this.blendMemo.info;
+    const partner = z.blend ? TILESETS[z.blend.with]?.theme : undefined;
+    const info = z.blend && partner
+      ? { at: compileBlendField(z.blend.field, { w: z.size.w, h: z.size.h }, z.seed ?? 0), theme: partner }
+      : null;
+    this.blendMemo = { zoneId: z.id, info };
+    return info;
+  }
 
   /** Blit the visible floor. The caller owns any arena clip (rect/ellipse).
    *  Chunks carry the walk-grid version + beds rev they baked at; a repaint
@@ -171,6 +190,7 @@ export class GroundRenderer {
       this.prevBaked.clear();
       this.bedsDirty.length = 0;
       this.bedsPrimed = false;
+      this.blendMemo = null;
     }
     if (VIS_CFG.ground.bakeBlend || VIS_CFG.ground.bakeLiquidBody) this.syncStaticGroups(world);
     const C = VIS_CFG.ground.chunk;
@@ -440,11 +460,34 @@ export class GroundRenderer {
     // direction as data. Alpha rises toward the swatch ends so mid-noise
     // stays translucent and the base floor breathes through.
     const pal = gs.palette && gs.palette.length >= 2 ? gs.palette : null;
+    // THE BLEND (engine/blend.ts): a blended zone samples BOTH themes' mottle
+    // per cell and mixes by the weight field — the partner country's own
+    // ground style (palette, grain scale, bias) reads at its end, the run
+    // between them a true rasterized transition. Unblended zones (blend ==
+    // null, the common case) skip every branch below.
+    const blend = this.blendFor(world);
+    const bTheme = blend?.theme;
+    const bgs = bTheme?.ground ?? {};
+    const bStrength = bgs.strength ?? 1;
+    const bAlphaCap = bgs.alpha ?? CFG.mottleAlpha;
+    const bDark = bTheme ? mix(adjust(bTheme.floor, 8, 1.3, -0.075 * bStrength), bTheme.grid, 0.18) : '';
+    const bLight = bTheme ? adjust(bTheme.floor, -7, 1.22, 0.08 * bStrength) : '';
+    const bBias = clamp(bgs.bias ?? 0.5, 0.08, 0.92);
+    const bBiasExp = Math.log(1 - bBias) / Math.log(0.5);
+    const bPal = bgs.palette && bgs.palette.length >= 2 ? bgs.palette : null;
+    /** One palette gradient sample (shared by both sides). */
+    const palCol = (p: string[], t0: number): string => {
+      const t = t0 * (p.length - 1);
+      const i = Math.min(p.length - 2, Math.floor(t));
+      return mix(p[i], p[i + 1], t - i);
+    };
     ctx.fillStyle = theme.floor;
     ctx.fillRect(0, 0, C, C);
     const cell = CFG.cell;
     const ns = CFG.noiseScale / (gs.scale ?? 1);
     const nsx = ns / (gs.stretchX ?? 1);
+    const bNs = CFG.noiseScale / (bgs.scale ?? 1);
+    const bNsx = bNs / (bgs.stretchX ?? 1);
     // POSITIONAL PALETTE RULES (palette themes only): gather this chunk's
     // nearby feature discs ONCE, then slide each cell's gradient sample by
     // proximity — a wet fade hugging every waterline (`coast`), a sun-well
@@ -502,23 +545,55 @@ export class GroundRenderer {
           const glow = presence * (1 - cover);
           if (glow > 0) n = clamp(n + clearing.lift * glow, 0, 1);
         }
+        let col: string;
+        let a: number;
         if (pal) {
-          const t = n * (pal.length - 1);
-          const i = Math.min(pal.length - 2, Math.floor(t));
-          ctx.fillStyle = mix(pal[i], pal[i + 1], t - i);
+          col = palCol(pal, n);
           // Coverage shaping: by default the gradient's MIDDLE thins so the
           // base floor patches through (mottle); `evenness` flattens that
           // toward uniform strength — a pure color-to-color blend.
           const shaped = 0.4 + 0.6 * Math.abs(n - 0.5) * 2;
           const even = clamp(gs.evenness ?? 0, 0, 1);
-          ctx.globalAlpha = alphaCap * strength * (shaped + (1 - shaped) * even);
+          a = alphaCap * strength * (shaped + (1 - shaped) * even);
         } else if (n < 0.5) {
-          ctx.globalAlpha = Math.min(1, (0.5 - n) * 2) * alphaCap;
-          ctx.fillStyle = dark;
+          a = Math.min(1, (0.5 - n) * 2) * alphaCap;
+          col = dark;
         } else {
-          ctx.globalAlpha = Math.min(1, (n - 0.5) * 2) * alphaCap;
-          ctx.fillStyle = light;
+          a = Math.min(1, (n - 0.5) * 2) * alphaCap;
+          col = light;
         }
+        // BLEND MIX: where the partner's weight rises, its floor coats the
+        // cell (the base coat its mottle expects) and its own noise sample —
+        // its grain scale, bias, palette — mixes over the base side's.
+        if (blend && bTheme) {
+          const wb = blend.at(ox + gx, oy + gy);
+          if (wb > 0.004) {
+            ctx.globalAlpha = wb;
+            ctx.fillStyle = bTheme.floor;
+            ctx.fillRect(gx, gy, cell, cell);
+            const nn2 = valueNoise((ox + gx) * bNsx, (oy + gy) * bNs, this.seed + 47);
+            let n2 = clamp(0.5 + (nn2 - 0.5) * 2.6, 0, 1);
+            if (bBiasExp !== 1) n2 = 1 - Math.pow(1 - n2, bBiasExp);
+            let col2: string;
+            let a2: number;
+            if (bPal) {
+              col2 = palCol(bPal, n2);
+              const shaped2 = 0.4 + 0.6 * Math.abs(n2 - 0.5) * 2;
+              const even2 = clamp(bgs.evenness ?? 0, 0, 1);
+              a2 = bAlphaCap * bStrength * (shaped2 + (1 - shaped2) * even2);
+            } else if (n2 < 0.5) {
+              a2 = Math.min(1, (0.5 - n2) * 2) * bAlphaCap;
+              col2 = bDark;
+            } else {
+              a2 = Math.min(1, (n2 - 0.5) * 2) * bAlphaCap;
+              col2 = bLight;
+            }
+            col = wb >= 1 ? col2 : mix(col, col2, wb);
+            a = a + (a2 - a) * wb;
+          }
+        }
+        ctx.globalAlpha = a;
+        ctx.fillStyle = col;
         ctx.fillRect(gx, gy, cell, cell);
       }
     }
@@ -533,21 +608,27 @@ export class GroundRenderer {
       const sx = hash01(cx * 31 + i, cy * 17, this.seed) * C;
       const sy = hash01(cx * 13, cy * 41 + i, this.seed + 7) * C;
       const roll = hash01(i, cx * 7 + cy * 3, this.seed + 13);
+      // BLENDED SPECKLES speak the vocabulary of whichever country holds
+      // that spot (a dither vs the weight — bone chips on one side, grass
+      // tufts on the other; discrete details PICK a side, never tint-mix).
+      const th = blend && bTheme
+        && hash01(i * 53, cx * 19 + cy * 7, this.seed + 91) < blend.at(ox + sx, oy + sy)
+        ? bTheme : theme;
       ctx.globalAlpha = CFG.speckleAlpha;
-      if (theme.grass && roll < 0.4) {
-        ctx.strokeStyle = theme.grass;
+      if (th.grass && roll < 0.4) {
+        ctx.strokeStyle = th.grass;
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.moveTo(sx, sy + 2); ctx.lineTo(sx - 2, sy - 3);
         ctx.moveTo(sx, sy + 2); ctx.lineTo(sx + 2, sy - 4);
         ctx.stroke();
-      } else if (theme.lava && roll > 0.9) {
-        ctx.fillStyle = shade(theme.lava, 0.35);
+      } else if (th.lava && roll > 0.9) {
+        ctx.fillStyle = shade(th.lava, 0.35);
         ctx.beginPath();
         ctx.arc(sx, sy, 1.6, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        const tone = roll > 0.65 ? shade(theme.obstacle, 0.15) : mix(theme.floor, theme.obstacle, 0.5);
+        const tone = roll > 0.65 ? shade(th.obstacle, 0.15) : mix(th.floor, th.obstacle, 0.5);
         ctx.fillStyle = tone;
         ctx.beginPath();
         ctx.ellipse(sx, sy, 1.5 + roll * 2.2, 1.1 + roll * 1.6, roll * 3, 0, Math.PI * 2);
@@ -626,17 +707,37 @@ export class GroundRenderer {
     // floor (field greens on field greens) swallows the boundary — walls
     // must READ. If the luminance gap is too small, push the wall darker
     // (or lighter for near-black floors) until it clears the floor.
-    let wallFill = theme.wall ?? theme.obstacle ?? '#07070b';
     const lum = (hex: string): number => {
       const n = parseInt(hex.slice(1), 16);
       return (((n >> 16) & 255) * 0.299 + ((n >> 8) & 255) * 0.587 + (n & 255) * 0.114) / 255;
     };
-    const gap = lum(wallFill) - lum(theme.floor);
-    if (Math.abs(gap) < 0.09) {
-      wallFill = lum(theme.floor) > 0.24 ? shade(wallFill, -0.35) : shade(wallFill, 0.3);
-    }
+    const guard = (wall: string, floor: string): string => {
+      const gap = lum(wall) - lum(floor);
+      if (Math.abs(gap) >= 0.09) return wall;
+      return lum(floor) > 0.24 ? shade(wall, -0.35) : shade(wall, 0.3);
+    };
+    const wallFill = guard(theme.wall ?? theme.obstacle ?? '#07070b', theme.floor);
     const wallLit = shade(wallFill, 0.18);
     const wallDark = shade(wallFill, -0.3);
+    // THE BLEND: wall tones mix toward the partner theme's (each guarded
+    // against its OWN floor) by the weight at every wall cell — the tomb's
+    // pale bone masonry gives way to sandstone exactly where the ground does.
+    const blend = this.blendFor(world);
+    const bWallFill = blend ? guard(blend.theme.wall ?? blend.theme.obstacle ?? '#07070b', blend.theme.floor) : '';
+    const bWallLit = blend ? shade(bWallFill, 0.18) : '';
+    const bWallDark = blend ? shade(bWallFill, -0.3) : '';
+    /** The wall triple at a world position (mixed only when blended). */
+    const wallAt = (wx: number, wy: number): { fill: string; lit: string; dark: string } => {
+      if (!blend) return { fill: wallFill, lit: wallLit, dark: wallDark };
+      const wb = blend.at(wx, wy);
+      if (wb <= 0.004) return { fill: wallFill, lit: wallLit, dark: wallDark };
+      if (wb >= 0.996) return { fill: bWallFill, lit: bWallLit, dark: bWallDark };
+      return {
+        fill: mix(wallFill, bWallFill, wb),
+        lit: mix(wallLit, bWallLit, wb),
+        dark: mix(wallDark, bWallDark, wb),
+      };
+    };
     const cell = wf.cell;
     const c0 = Math.max(0, Math.floor(ox / cell) - 1);
     const c1 = Math.min(wf.cols - 1, Math.floor((ox + C) / cell) + 1);
@@ -691,8 +792,9 @@ export class GroundRenderer {
         }
         if (def?.walkable) continue;
         // Wall cell: themed fill + noise so long runs don't read as vinyl.
+        const wt = wallAt(ox + x, oy + y);
         const wn = valueNoise((ox + x) * CFG.noiseScale * 1.6, (oy + y) * CFG.noiseScale * 1.6, this.seed + 31);
-        ctx.fillStyle = wn > 0.5 ? wallFill : mix(wallFill, wallDark, 0.5);
+        ctx.fillStyle = wn > 0.5 ? wt.fill : mix(wt.fill, wt.dark, 0.5);
         ctx.fillRect(x, y, cell + 0.6, cell + 0.6);
         // STRUCTURE MASONRY (RegionVisualSpec.masonry): dressed-stone courses
         // in running bond — mortar seams, per-block tone, a chisel highlight
@@ -700,7 +802,7 @@ export class GroundRenderer {
         // rock as a cave face. World-coord aligned: the bond runs unbroken
         // across cells and chunk borders. A data flag, not an id compare.
         if (regionKind(id)?.visual?.masonry) {
-          this.bakeMasonry(ctx, x, y, cell, ox, oy, wallFill, wallDark, wallLit);
+          this.bakeMasonry(ctx, x, y, cell, ox, oy, wt.fill, wt.dark, wt.lit);
         }
         // ORGANIC FOLIAGE (RegionVisualSpec.foliage): a LIVING wall reads as
         // packed vegetation, never flat paint — seeded leaf clumps in the
@@ -709,14 +811,14 @@ export class GroundRenderer {
         // cells and chunk borders. A data flag, not an id compare — any
         // future organic wall (fungal, coral, flesh?) opts in with one word.
         if (regionKind(id)?.visual?.foliage) {
-          this.bakeFoliage(ctx, x, y, cell, ox, oy, wallFill, wallDark, wallLit);
+          this.bakeFoliage(ctx, x, y, cell, ox, oy, wt.fill, wt.dark, wt.lit);
         }
         // EYES IN THE WALL (RegionVisualSpec.eyes): the sockets bake here —
         // rim, sclera, lid crease in the wall's own ramp — and the live
         // wallEyes pass paints the seeking pupils over them (one geometry:
         // both halves derive from wallEyeSockets on grid indices alone).
         if (regionKind(id)?.visual?.eyes) {
-          this.bakeWallEyes(ctx, x, y, cell, ox, oy, wallFill, wallDark, wallLit);
+          this.bakeWallEyes(ctx, x, y, cell, ox, oy, wt.fill, wt.dark, wt.lit);
         }
       }
     }
@@ -730,11 +832,12 @@ export class GroundRenderer {
         const openN = !isWall(gx, gy - 1), openS = !isWall(gx, gy + 1);
         const openW = !isWall(gx - 1, gy), openE = !isWall(gx + 1, gy);
         // Lit top / shaded bottom edges of the wall block itself.
+        const bt = wallAt(ox + x, oy + y);
         ctx.globalAlpha = CFG.bevelAlpha;
-        if (openN) { ctx.fillStyle = wallLit; ctx.fillRect(x, y, cell, bevel); }
-        if (openW) { ctx.fillStyle = wallLit; ctx.fillRect(x, y, bevel, cell); }
-        if (openS) { ctx.fillStyle = wallDark; ctx.fillRect(x, y + cell - bevel, cell, bevel); }
-        if (openE) { ctx.fillStyle = wallDark; ctx.fillRect(x + cell - bevel, y, bevel, cell); }
+        if (openN) { ctx.fillStyle = bt.lit; ctx.fillRect(x, y, cell, bevel); }
+        if (openW) { ctx.fillStyle = bt.lit; ctx.fillRect(x, y, bevel, cell); }
+        if (openS) { ctx.fillStyle = bt.dark; ctx.fillRect(x, y + cell - bevel, cell, bevel); }
+        if (openE) { ctx.fillStyle = bt.dark; ctx.fillRect(x + cell - bevel, y, bevel, cell); }
         ctx.globalAlpha = 1;
         // Contact occlusion bleeding onto the neighboring FLOOR.
         const ao = (fx: number, fy: number, fw: number, fh: number,

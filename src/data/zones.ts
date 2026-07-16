@@ -234,6 +234,41 @@ export interface WhereSpec {
   params?: Record<string, unknown>;
 }
 
+/** A blend WEIGHT-FIELD shape (the blend fabric, engine/blend.ts): HOW the
+ *  partner tileset's share runs across the arena. `kind` names a registered
+ *  shape (axisX/axisY transition ramps, radial core/rim, pockets Voronoi
+ *  tessellation, noise patchwork — open registry); the post-ops compose on
+ *  any shape. Pure data — compiled per zone off (arena, seed). */
+export interface BlendFieldSpec {
+  kind: string;
+  /** Shape knobs forwarded to the field factory (from/to fractions, span,
+   *  coverage, scale…) — each shape documents its own. */
+  params?: Record<string, unknown>;
+  /** Domain WARP: organic boundary wobble (amp in world units, scale = noise
+   *  feature size). Absent = the modular default; amp 0 = ruler-straight. */
+  warp?: { amp?: number; scale?: number };
+  /** Remap the shape's 0..1 through [lo, hi] — harden a ramp into a front
+   *  line (band [0.45, 0.55]) or soften a tessellation. */
+  band?: [number, number];
+  /** Flip the field (the partner claims the other end). */
+  invert?: boolean;
+}
+
+/** A ZONE BLEND (the blend fabric): this zone interleaves a PARTNER tileset's
+ *  theme + kit + packs across its arena by the weight field — 0 reads fully
+ *  as the zone's own tileset, 1 fully as the partner. Durable on the def
+ *  (persists + replays like theme/layout); resolved at mint from
+ *  TilesetDef.blend or authored directly by a mint. No pair is hardcoded:
+ *  `with` is a structural tileset-id ref, validated at boot. */
+export interface BlendSpec {
+  /** The partner TILESET id whose theme/kit/packs interleave. */
+  with: string;
+  field: BlendFieldSpec;
+  /** Partner share of the merged pack table (0..1). Absent = the field
+   *  shape's nominal mean coverage. */
+  packs?: number;
+}
+
 export interface StampSpec {
   kind: StampKind;
   count: [number, number];
@@ -256,6 +291,12 @@ export interface StampSpec {
    *  formation/cluster). Meaningless on tileset/zone layout rows — boot
    *  validation flags it there. */
   at?: string;
+  /** BLEND SIDE (the blend fabric, engine/blend.ts): which end of a blended
+   *  zone's weight field this entry belongs to — 'base' sitings thin as the
+   *  partner takes over, 'with' sitings thin toward the base end, 'any' opts
+   *  out of the gate entirely. The mint's compose step tags untagged rows;
+   *  authored rows may pre-declare. Meaningless (ignored) in unblended zones. */
+  blend?: 'base' | 'with' | 'any';
 }
 
 /** A structure CHANCE a zone rolls at generation (merged from tileset + biome
@@ -565,6 +606,14 @@ export interface ZoneDef {
    *  temperature/moisture/wildness/…), so generators, UI, and future systems
    *  can read the zone's weather without re-deriving the field. */
   geo?: { biomeDepth?: number; climate?: Record<string, number> };
+  /** THE BLEND (engine/blend.ts): this zone interleaves a partner tileset's
+   *  theme + kit + packs by a weight field — resolved at mint (from
+   *  TilesetDef.blend or authored by the mint), DURABLE like theme/layout
+   *  (revisits, saves, and co-op replay the identical composition). The
+   *  layout rows and pack table on this def are ALREADY composed; the field
+   *  itself compiles on demand wherever it's sampled (ground bake, findSpot
+   *  gate, the 'blend' WHERE field). */
+  blend?: BlendSpec;
   /** A PORT: the land ends here — a harbor zone on a continent's shore. Its
    *  dock opens the Sail menu (naval travel to other discovered ports /
    *  chart-a-course landfalls). Frontiers never mint past a port into open

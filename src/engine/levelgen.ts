@@ -39,6 +39,7 @@ import { isFieldPixel } from '../world/fieldRegion';
 // Safe despite genkit importing our types: those are `import type` edges,
 // erased at runtime — no actual module cycle exists.
 import { Mask, GEN_CELL, disc, radial, bearingNoise, paintLiquid, valueNoise2, wanderPath } from './genkit';
+import { blendDither, compileBlendField } from './blend';
 
 export type KnownDoodadKind =
   | 'rock' | 'cliff' | 'chasm' | 'bridge' | 'wall'
@@ -1687,6 +1688,17 @@ export interface GenCtx {
    *  the strata lever, riding the exact ruleOver pattern: zero signature
    *  churn, zero rng impact on entries without a band. */
   fieldGate?: { sample: GenFieldSampler; min: number; max: number };
+  /** THE BLEND FIELD (engine/blend.ts, compiled once per generation from
+   *  def.blend): w(x,y) in 0..1 — 0 the zone's own tileset, 1 the partner.
+   *  Read by findSpot's dither gate and the 'blend' WHERE field. Absent on
+   *  unblended zones: zero cost, zero rng impact. */
+  blendField?: (x: number, y: number) => number;
+  /** TRANSIENT: the running stamp's blend SIDE (set by stamp() from
+   *  StampSpec.blend — 0 = 'base', 1 = 'with', undefined = ungated): findSpot
+   *  dither-accepts candidates against the blend field so each kit thins
+   *  where the other country takes over. Pure hash accept — never draws from
+   *  the layout rng. */
+  blendSide?: 0 | 1;
   /** The zone's layout seed (def.seed), for seed-stable gen FIELDS (noise
    *  bands must not drift between the try-loop's samples or across co-op). */
   seed?: number;
@@ -1808,6 +1820,13 @@ registerGenField('radial', (ctx) => {
 registerGenField('axisX', (ctx) => (x) => x / Math.max(1, ctx.arena.w));
 /** 0 at the north edge → 1 at the south edge. */
 registerGenField('axisY', (ctx) => (_x, y) => y / Math.max(1, ctx.arena.h));
+/** THE ZONE'S BLEND WEIGHT (the blend fabric, engine/blend.ts): 0 = the
+ *  zone's own tileset country, 1 = the partner's — so an authored set-piece
+ *  can claim one end of a blended zone (`where: { field: 'blend', min: 0.7 }`
+ *  = deep in the partner's ground). Reads the sampler generateLayout compiled
+ *  from def.blend; unblended zones read 0 everywhere (a min>0 band simply
+ *  never sites — the WHERE contract). */
+registerGenField('blend', (ctx) => ctx.blendField ?? (() => 0));
 /** Smooth seeded patch noise in 0..1 — drift stripes, moss patches. params:
  *  scale (world units per lattice cell, default 460), seed (mixed with the
  *  zone seed so two entries can carve DIFFERENT patchworks of one zone).
@@ -3178,6 +3197,11 @@ export function generateLayout(
     garrisons: [], caveSeeds: [], reserved: [],
     lite: opts?.lite,
   };
+  // THE BLEND FIELD (engine/blend.ts): compiled ONCE per generation from the
+  // def's resolved blend — findSpot's dither gate and the 'blend' WHERE field
+  // both sample it. Pure math off (arena, seed): zero rng, zero cost when
+  // absent, byte-identical replay on revisits and co-op clients.
+  if (def.blend) ctx.blendField = compileBlendField(def.blend.field, arena, def.seed ?? 0);
   const allFixtures = [...(def.fixtures ?? []), ...(extraFixtures ?? [])];
   // LEGACY FIXTURES first (common to EVERY layout): hand-placed structures at
   // exact zone coordinates (the town's smithy stands where the town says it
@@ -4306,6 +4330,7 @@ export function stamp(ctx: GenCtx, spec: StampSpec): void {
   // relaxations back, and a throwing field factory must not leak ruleOver.
   const prevRule = ctx.ruleOver;
   const prevGate = ctx.fieldGate;
+  const prevBlend = ctx.blendSide;
   try {
     ctx.ruleOver = spec.rules;
     // WHERE band: compile the spec's strata gate once for the handler's whole
@@ -4313,10 +4338,17 @@ export function stamp(ctx: GenCtx, spec: StampSpec): void {
     // UNBOUNDED (min ?? 0, max ?? Infinity): `{field:'radial', min:0.6}`
     // means "the rim, however far it runs", not "up to 1".
     ctx.fieldGate = compileFieldGate(ctx, spec.where);
+    // BLEND side (the blend fabric): which end of a blended zone this entry
+    // belongs to — findSpot dither-gates its sitings against the weight
+    // field. 'any'/untagged rows (and every row in unblended zones) pass
+    // ungated, byte-identical to today.
+    ctx.blendSide = ctx.blendField && (spec.blend === 'base' || spec.blend === 'with')
+      ? (spec.blend === 'with' ? 1 : 0) : undefined;
     h(ctx, spec);
   } finally {
     ctx.ruleOver = prevRule;
     ctx.fieldGate = prevGate;
+    ctx.blendSide = prevBlend;
   }
   if (spec.rules?.ignore?.includes('portalClear')) {
     for (let i = n0; i < ctx.doodads.length; i++) ctx.doodads[i].keep = true;
@@ -5868,6 +5900,16 @@ function findSpot(
     if (ctx.fieldGate) {
       const v = ctx.fieldGate.sample(p.x, p.y);
       if (v < ctx.fieldGate.min || v > ctx.fieldGate.max) continue;
+    }
+    // BLEND: dither-accept against the zone's weight field — a 'base' entry
+    // keeps (1-w) of its sitings, a 'with' entry keeps w, so the two kits
+    // interleave along the field. The roll is a pure position hash (never
+    // the layout rng): a gated entry can't shift any other entry's stream,
+    // and the try-loop stays deterministic across co-op clients.
+    if (ctx.blendField && ctx.blendSide !== undefined) {
+      const w = ctx.blendField(p.x, p.y);
+      const keep = ctx.blendSide === 1 ? w : 1 - w;
+      if (keep < 1 && blendDither(p.x, p.y, (ctx.seed ?? 0) ^ 0x3b1d) >= keep) continue;
     }
     return p;
   }

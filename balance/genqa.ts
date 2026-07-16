@@ -54,6 +54,7 @@ import { regionKind } from '../src/world/regions';
 import { TILESETS } from '../src/data/tilesets';
 import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { MELDS } from '../src/data/melds';
+import { blendFieldIds, composeBlendLayout, hasBlendField } from '../src/engine/blend';
 import { hollowDef, hollowShapeOf } from '../src/data/hollows';
 import { BIOMES } from '../src/world/biomes';
 import { CLIMATE_AXES } from '../src/world/climate';
@@ -330,6 +331,15 @@ const registryErrors = [
   // A biome naming an edge dressing must name a REGISTERED one.
   ...Object.entries(BIOMES).flatMap(([id, b]) =>
     b.meld && !MELDS[b.meld] ? [`biome ${id}: unregistered meld '${b.meld}'`] : []),
+  // THE BLEND FABRIC: every declared partner/field must resolve (a bad ref
+  // no-ops silently at mint — this is where it fails loudly instead).
+  ...Object.values(TILESETS).flatMap(t =>
+    [{ tag: '', roll: t.blend }, ...(t.variants ?? []).map(v => ({ tag: ` variant '${v.name}'`, roll: v.blend ?? undefined }))]
+      .flatMap(({ tag, roll }) => !roll ? [] : [
+        ...(!TILESETS[roll.with] ? [`tileset ${t.id}${tag}: unregistered blend partner '${roll.with}'`] : []),
+        ...(roll.with === t.id ? [`tileset ${t.id}${tag}: blend partner is itself`] : []),
+        ...(!hasBlendField(roll.field.kind) ? [`tileset ${t.id}${tag}: unregistered blend field '${roll.field.kind}'`] : []),
+      ])),
 ];
 
 // --- 2. Every tileset, base + variants --------------------------------------
@@ -502,6 +512,65 @@ for (const m of Object.values(MELDS)) {
       objective: { kind: 'clear' },
       exits: [], map: { x: 0, y: 0 },
     });
+  }
+}
+
+// --- 3f. THE BLEND FABRIC (engine/blend.ts) ------------------------------------
+// Two sweeps, both self-extending:
+//  (a) every registered FIELD SHAPE over a derived tileset pair (the first two
+//      frontier tilesets by id — no pair is special-cased), across an open and
+//      a carved-grid family: the compose (side-tagged rows), the findSpot
+//      dither gate, and the 'blend' WHERE field all run under every invariant
+//      (portals, reachability, inverse forbidOn, byte determinism);
+//  (b) every tileset that DECLARES a blend (tileset-level or variant override)
+//      generates with it forced on — the day a blended tileset registers, its
+//      real composition joins the sweep unedited.
+{
+  const frontierIds = Object.values(TILESETS)
+    .filter(t => t.frontier !== false && !t.boundless)
+    .map(t => t.id).sort();
+  const [qaBaseId, qaPartnerId] = frontierIds;
+  const qaBase = TILESETS[qaBaseId], qaPartner = TILESETS[qaPartnerId];
+  if (qaBase && qaPartner) {
+    for (const kind of blendFieldIds()) {
+      for (const layoutId of ['plains', 'dungeon']) {
+        runCase(`blend:${kind}@${layoutId}`, {
+          id: `qa_blend_${kind}_${layoutId}`, name: `QA blend ${kind}`, level: 8,
+          size: { w: 2000, h: 1500 },
+          theme: qaBase.theme,
+          layout: composeBlendLayout([...(qaBase.common ?? []), ...qaBase.layout], qaPartner),
+          layoutType: layoutId,
+          blend: { with: qaPartner.id, field: { kind } },
+          objective: { kind: 'clear' },
+          exits: [], map: { x: 0, y: 0 },
+        });
+      }
+    }
+  }
+  for (const ts of Object.values(TILESETS)) {
+    const rolls: { tag: string; roll: NonNullable<typeof ts.blend> }[] = [
+      ...(ts.blend ? [{ tag: 'base', roll: ts.blend }] : []),
+      ...(ts.variants ?? []).flatMap(v => v.blend ? [{ tag: v.name, roll: v.blend }] : []),
+    ];
+    for (const { tag, roll } of rolls) {
+      const partner = TILESETS[roll.with];
+      if (!partner) continue; // the registry sweep already flagged it
+      const variant = ts.variants?.find(v => v.name === tag);
+      const rows = variant ? variant.layout : ts.layout;
+      const layoutType = ts.forceLayout
+        ?? (ts.caveLayouts ? Object.entries(ts.caveLayouts).sort((a, b) => b[1] - a[1])[0][0] : undefined);
+      runCase(`blend:${ts.id}/${tag}`, {
+        id: `qa_blend_${ts.id}_${tag.replace(/\W+/g, '_')}`, name: `QA blend ${ts.id}`, level: 8,
+        size: { w: mid(ts.sizeW), h: mid(ts.sizeH) },
+        theme: ts.theme,
+        layout: composeBlendLayout([...(ts.common ?? []), ...rows], partner),
+        ...(layoutType ? { layoutType } : {}),
+        ...(ts.layoutParams ? { layoutParams: ts.layoutParams } : {}),
+        blend: { with: roll.with, field: roll.field, ...(roll.packs !== undefined ? { packs: roll.packs } : {}) },
+        objective: { kind: 'clear' },
+        exits: [], map: { x: 0, y: 0 },
+      });
+    }
   }
 }
 

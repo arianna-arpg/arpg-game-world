@@ -26,7 +26,8 @@ import { STAT_DEFS, STAT_TRADES } from '../engine/stats';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
 import { ZONES, type StampSpec, type StructureRoll } from './zones';
-import { TILESETS } from './tilesets';
+import { TILESETS, type BlendRoll } from './tilesets';
+import { hasBlendField } from '../engine/blend';
 import { validatePassiveLayout } from './validatePassiveLayout';
 import { allUnlockables, CLASS_BUNDLES } from '../meta/unlocks';
 import { STARTER_CLASSES } from '../meta/account';
@@ -155,6 +156,33 @@ export function validateContent(): void {
   }
   for (const m of Object.values(MELDS)) {
     if (m.band !== undefined && !(m.band > 0)) warn(`meld ${m.id}: band ${m.band} must be > 0`);
+  }
+
+  // THE BLEND FABRIC (engine/blend.ts): every declared blend — tileset-level
+  // or variant override — must name a registered PARTNER tileset (never
+  // itself), a registered FIELD shape, and sane chance/packs fractions. A
+  // bad ref would otherwise no-op silently at mint (applyBlend stays safe).
+  {
+    const checkBlend = (owner: string, roll: BlendRoll, selfId: string): void => {
+      if (!TILESETS[roll.with]) warn(`${owner}: blend partner '${roll.with}' is not a registered tileset`);
+      if (roll.with === selfId) warn(`${owner}: blend partner is the tileset itself`);
+      if (!hasBlendField(roll.field.kind)) warn(`${owner}: unregistered blend field '${roll.field.kind}'`);
+      if (roll.chance !== undefined && (roll.chance < 0 || roll.chance > 1)) {
+        warn(`${owner}: blend chance ${roll.chance} outside [0,1]`);
+      }
+      if (roll.packs !== undefined && (roll.packs < 0 || roll.packs > 1)) {
+        warn(`${owner}: blend packs share ${roll.packs} outside [0,1]`);
+      }
+      if (roll.field.band && !(roll.field.band[1] > roll.field.band[0])) {
+        warn(`${owner}: blend field band [${roll.field.band}] is not a rising range`);
+      }
+    };
+    for (const t of Object.values(TILESETS)) {
+      if (t.blend) checkBlend(`tileset '${t.id}'`, t.blend, t.id);
+      for (const v of t.variants ?? []) {
+        if (v.blend) checkBlend(`tileset '${t.id}' variant '${v.name}'`, v.blend, t.id);
+      }
+    }
   }
 
   // THE SYMPATHY FABRIC (engine/sympathy.ts): link defs must speak the

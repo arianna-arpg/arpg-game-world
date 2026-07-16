@@ -15,7 +15,8 @@ import { TILESETS, pickCaveFace, pickTilesetForBiome, type TilesetDef } from '..
 import { hasLayout } from './levelgen';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
-import type { ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
+import type { BlendSpec, ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from '../data/zones';
+import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
 import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, biomeSpacing } from '../world/biomes';
@@ -149,6 +150,11 @@ export interface ZoneSpec {
    *  set piece) shelter themselves here; absent = tileset word, then the
    *  skyOf() derivations. */
   sky?: SkyExposure;
+  /** BLEND override for this mint (the blend fabric): a spec wins over the
+   *  tileset's declared roll (an event mint dissolving a zone toward a
+   *  neighbor authors its own field); null SUPPRESSES the tileset's blend.
+   *  Absent = the tileset/variant declaration, rolled as data says. */
+  blend?: BlendSpec | null;
   seed?: number;
   /** Force a NAMED tileset variant (mintCave's opts.variant, for graph
    *  mints): the perf gate pins known-heavy faces so the sweep measures the
@@ -417,6 +423,42 @@ const SPECIAL_ARENA_THEME: ZoneDef['theme'] = {
   floor: '#0c0710', grid: '#1a1020', border: '#5a2c6a',
   obstacle: '#2a1838', obstacleEdge: '#4a2c5e', accent: '#d060e0', chasm: '#040208',
 };
+
+/** The blend roll's dedicated sub-stream salt (off the DEF seed, never the
+ *  mint's main stream — blendless tilesets stay draw-for-draw identical). */
+const BLEND_ROLL_SALT = 0x6b1e9d2f;
+
+/** Resolve + apply a BLEND onto a freshly-built def (the blend fabric,
+ *  engine/blend.ts). Ordering: spec override (null = suppress) ▷ variant
+ *  override (null = suppress) ▷ tileset roll. On a hit the def carries the
+ *  resolved BlendSpec and its layout/pack composition — everything downstream
+ *  (generateLayout, the ground bake, spawnPacks) reads pure def data.
+ *  `mergePacks` is false when a mint overrode packs deliberately (an event
+ *  roster must not be diluted). */
+function applyBlend(
+  def: ZoneDef, tileset: TilesetDef, variantName: string | undefined,
+  specBlend: BlendSpec | null | undefined, mergePacks: boolean,
+): void {
+  if (def.special) return;
+  const variant = variantName ? tileset.variants?.find(v => v.name === variantName) : undefined;
+  let resolved: BlendSpec | undefined;
+  if (specBlend !== undefined) {
+    resolved = specBlend ?? undefined; // explicit spec: null suppresses
+  } else {
+    const roll = variant && variant.blend !== undefined ? variant.blend : tileset.blend;
+    if (!roll) return;
+    const chance = roll.chance ?? 1;
+    if (chance < 1 && !new Rng(((def.seed ?? 0) ^ BLEND_ROLL_SALT) >>> 0).chance(chance)) return;
+    resolved = { with: roll.with, field: roll.field, ...(roll.packs !== undefined ? { packs: roll.packs } : {}) };
+  }
+  if (!resolved) return;
+  const partner = TILESETS[resolved.with];
+  // Boot validation flags bad refs; the mint stays safe (no partner, no blend).
+  if (!partner || resolved.with === tileset.id) return;
+  def.blend = resolved;
+  def.layout = composeBlendLayout(def.layout, partner);
+  if (mergePacks && def.packs) def.packs = mergeBlendPacks(def.packs, partner.packs, blendMean(resolved));
+}
 
 /**
  * THE reusable placement primitive. Mints a fully-specified zone at an
@@ -751,6 +793,10 @@ export function placeZoneAt(
     ...(spec.pocket ? { pocket: true } : {}),
     ...(sky ? { sky } : {}),
   };
+  // THE BLEND (engine/blend.ts): resolve a declared partner onto the def —
+  // layout rows tagged, pack tables merged — off the def seed's dedicated
+  // sub-stream (blendless mints keep every draw byte-identical).
+  applyBlend(def, tileset, variantName, spec.blend, !spec.packsOverride);
   // Directed placements (quests) link the reciprocal road on the anchor here;
   // the frontier path leaves linkBack false (travelThrough mutates its '?' exit).
   // A FLOATING zone forges NONE of this at mint — connectFloatingZone does it on
@@ -879,6 +925,9 @@ export interface CaveMintOpts {
   /** ROLL one of the tileset's variants (seeded — one extra draw, opts
    *  callers only): each minted seat/arena shows a different face. */
   rollVariant?: boolean;
+  /** BLEND override for this mint (the blend fabric): a spec wins over the
+   *  tileset/variant declaration; null suppresses it. Absent = data decides. */
+  blend?: BlendSpec | null;
 }
 
 /** The face roll's IDENTITY SUB-STREAM salt: strata decisions (face + face
@@ -969,7 +1018,7 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
   const darkFloor = darkFloorAt(depth);
   const theme = darkFloor !== undefined && (baseTheme.ambientDark ?? 0) < darkFloor
     ? { ...baseTheme, ambientDark: darkFloor } : baseTheme;
-  return {
+  const def: ZoneDef = {
     id,
     name: variantName ? `${baseName} (${variantName})` : baseName,
     // The band's level STEP over the parent (strata data): the classic curve
@@ -1000,6 +1049,11 @@ export function mintCave(parent: ZoneDef, entranceSeed: number, id: string, tile
     ...(breach ? { breach: true } : {}),
     ...(parent.dimension ? { dimension: parent.dimension } : {}),
   };
+  // THE BLEND (engine/blend.ts): a pocket tileset may declare a partner —
+  // the whole fold rides the def seed's dedicated sub-stream, so blendless
+  // pockets keep the classic draw order exactly.
+  applyBlend(def, ts, variantName, opts?.blend, true);
+  return def;
 }
 
 function rollObjective(

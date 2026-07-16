@@ -9,9 +9,16 @@
 // cinderlands past the Ember Wastes — each line leveling up as it goes.
 // ---------------------------------------------------------------------------
 
-import type { CompositionRoll, HollowRollSpec, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
+import type { BlendSpec, CompositionRoll, HollowRollSpec, LandmarkRoll, PackSpec, SkyExposure, StampSpec, StructureRoll, ZoneTheme } from './zones';
 import type { Rng } from '../core/rng';
 import { presenceMul, type LevelEnvelope } from '../engine/presence';
+
+/** A tileset-declared BLEND (the blend fabric, engine/blend.ts): zones minted
+ *  from this tileset interleave the named partner's theme + kit + packs by
+ *  the declared weight field. `chance` (default 1) rolls per mint on a
+ *  DEDICATED sub-stream (blendless tilesets stay byte-identical). A variant
+ *  may override (its own roll) or suppress (null) the tileset's declaration. */
+export type BlendRoll = BlendSpec & { chance?: number };
 
 export interface ObjectiveWeight {
   kind: 'clear' | 'escape' | 'spawners' | 'waves' | 'beacon' | 'circuit' | 'procession' | 'bounty' | 'offering';
@@ -53,6 +60,9 @@ export interface TilesetVariant {
    *  tundra) without a whole sibling tileset. Doodad visuals authored with
    *  'theme:' tokens tint along for free. Absent = the base theme, byte-identical. */
   theme?: Partial<ZoneTheme>;
+  /** BLEND override for this face: its own roll, or null to SUPPRESS the
+   *  tileset-level blend on this face. Absent = the tileset's declaration. */
+  blend?: BlendRoll | null;
 }
 
 export interface TilesetDef {
@@ -131,6 +141,14 @@ export interface TilesetDef {
    *  ZoneDef.hollows): sealed pockets and through-wall passages behind
    *  brittle seams, GRID layouts only. */
   hollows?: HollowRollSpec;
+  /** THE BLEND (engine/blend.ts): zones minted from this tileset interleave a
+   *  PARTNER tileset's theme + kit + packs by a weight field — transition
+   *  bands, tessellated pockets, patchwork (see BlendFieldSpec). Rolled per
+   *  mint (chance, dedicated sub-stream), resolved onto ZoneDef.blend, and
+   *  composed there once (layout rows tagged, pack tables merged). Variants
+   *  may override or suppress. No partner is special-cased anywhere: this is
+   *  a structural tileset-id ref, validated at boot + swept by genqa. */
+  blend?: BlendRoll;
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
