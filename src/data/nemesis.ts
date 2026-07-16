@@ -60,6 +60,19 @@ export const NEMESIS_NAMES = {
         'Grave-Sweet', 'the Uninvited', 'Dawn-Debtor', 'the Decanted',
       ],
     },
+    // The Sand Sarcophate remembers itself in dynastic regnal style — throne
+    // names and funerary titles, every epithet an entry from the tomb ledger.
+    sarcophate: {
+      first: [
+        'Neferkha', 'Sethamun', 'Ankhesir', 'Khamuret', 'Osorneb', 'Tiyanet',
+        'Rahotem', 'Meritseth', 'Sokharis', 'Udjahor', 'Nakhtmin', 'Baketra',
+      ],
+      epithets: [
+        'the Unentombed', 'of the Sealed Vault', 'Twice-Wrapped', 'the Sun-Denied',
+        'Keeper of the Fourth Jar', 'the Gilded', 'of the Long Interment', 'Dust-Crowned',
+        'the Provisioned', 'Who Kept the Lid', 'the Embalmer\'s Regret', 'of the Older Dynasty',
+      ],
+    },
   } as Record<string, { first?: string[]; epithets?: string[] }>,
 };
 

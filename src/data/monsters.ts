@@ -8492,6 +8492,90 @@ export const MONSTERS: Record<string, MonsterDef> = {
     orbDrops: 0.35,
     loot: 'royal_jelly_cache',
   },
+
+  // ======================================================= THE SAND SARCOPHATE
+  // The tomb-dynasty under the deep desert: an interred legion that never
+  // agreed it was done ruling. DEFENSE TEXTURE — LAYERS THAT STRIP: the linen
+  // is a slow-knitting all-round ablative (shellGuard low-max: soak it off,
+  // then the meat), the warden is the family's POISE WALL carrying its own
+  // sarcophagus, and what steps OUT of a cracked case is the second life —
+  // fast, bare, and past its armor (brain.onDeath, the one death-division
+  // seam). Family debts: dry linen BURNS (fireRes deficit family-wide), and
+  // nothing embalmed fears venom (poisonRes). Gold marks rank; the husk has
+  // none left. Kills feed the Deadwake — the faction row is deathAligned.
+  /** The gilded beetle-swarm of the vaults: numbers, not defenses. */
+  tomb_scarab: {
+    id: 'tomb_scarab', name: 'Tomb Scarab',
+    color: '#c9a24a', shape: 'circle', radius: 8, material: 'chitin', look: 'tomb_scarab',
+    base: { life: 22, moveSpeed: 175, accuracy: 100, armor: 30, evasion: 0, mana: 0 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.2)],
+    skills: ['claw'], xp: 7,
+    faction: 'sarcophate',
+    tags: ['beast'],
+    scaleVariance: [0.85, 1.15],
+    temper: 'territorial',
+    brain: { type: 'swarm' },
+  },
+  /** The line of the old legion: strip the wrappings, then the meat. */
+  sarcophate_legionary: {
+    id: 'sarcophate_legionary', name: 'Sarcophate Legionary',
+    color: '#d8cba8', shape: 'pentagon', radius: 12, material: 'cloth', look: 'sarcophate_legionary',
+    base: { life: 62, moveSpeed: 108, accuracy: 102, armor: 25, poise: 25, evasion: 0, mana: 0 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.25)],
+    skills: ['entombing_lash'], xp: 18,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    // The LINEN: a low-max all-round soak that knits back slowly — the layer
+    // you strip before anything else lands (never a wall; the poise below it
+    // is modest and the meat under both is thin).
+    shellGuard: { side: 'all', max: 45, regenDelay: 6, regenRate: 8, color: '#d8cba8' },
+    temper: 'territorial',
+  },
+  /** The embalmer-priest: jarred vitae for a shield, curses for a craft. */
+  canopic_bearer: {
+    id: 'canopic_bearer', name: 'Canopic Bearer',
+    color: '#b89858', shape: 'pentagon', radius: 12, material: 'cloth', look: 'canopic_bearer',
+    base: { life: 38, energyShield: 48, moveSpeed: 118, accuracy: 100, mana: 70, manaRegen: 6 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.2)],
+    skills: ['spectral_finger', 'despair'], xp: 24,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    gemBias: ['spell', 'chaos'],
+    presence: { from: 6 },
+    temper: 'territorial',
+    brain: { type: 'caster', withdraw: 1.2 },
+  },
+  /** The walking tomb: the family's poise wall — and a case that CRACKS. */
+  sarcophagus_warden: {
+    id: 'sarcophagus_warden', name: 'Sarcophagus Warden',
+    color: '#cfc4ac', shape: 'hexagon', radius: 22, material: 'stone', look: 'sarcophagus_warden',
+    base: { life: 240, moveSpeed: 72, accuracy: 98, armor: 45, poise: 80, evasion: 0, mana: 30, manaRegen: 3 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.3)],
+    skills: ['heavy_strike', 'ground_slam'], xp: 55,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    turnSpeed: 2.6,
+    presence: { from: 9 },
+    temper: 'territorial',
+    // THE SECOND LIFE: kill the case and the tenant steps out — the death-
+    // division seam (brain.onDeath), never a bespoke resurrect path.
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      onDeath: [{ do: 'summon', monster: 'risen_husk', count: 1, ring: 12, announce: 'the case cracks open!' }],
+    },
+  },
+  /** What the case held: fast, bare, and past every layer it owned. */
+  risen_husk: {
+    id: 'risen_husk', name: 'Risen Husk',
+    color: '#a89070', shape: 'triangle', radius: 11, material: 'cloth', look: 'risen_husk',
+    base: { life: 52, moveSpeed: 200, accuracy: 106, evasion: 30, armor: 5, mana: 0 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.35)],
+    skills: ['claw'], xp: 14,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    temper: 'territorial',
+    brain: { type: 'skirmish', withdraw: 0.4 },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -8603,6 +8687,13 @@ const RELATIONS: Record<string, FactionStance> = {
   'rimebound|elemental': 'ally',
   'rimebound|beastkin': 'hostile',
   'rimebound|wild': 'hostile',
+  // The Sand Sarcophate suffers nothing LIVING in its country: gnoll packs
+  // dig up the shallow graves for marrow, and the Sirocco Court squats in
+  // palaces the dynasty still holds title to. The graveland dead are distant
+  // cousins — different rites, same side of the soil.
+  'sarcophate|gnoll': 'hostile',
+  'sarcophate|sirocco': 'hostile',
+  'sarcophate|undead': 'ally',
 };
 
 /** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families
@@ -8980,6 +9071,21 @@ export const FACTIONS: Record<string, {
       { id: 'frost_witch', weight: 1, presence: { from: 6, fadeIn: 3 } },
       { id: 'winter_herald', weight: 2, presence: { from: 9, fadeIn: 4 } },
       { id: 'frost_giant', weight: 1, presence: { from: 12 } },
+    ],
+  },
+  // The tomb-dynasty musters in burial order: scarabs boil out first and
+  // never stop coming, the legion line holds the middle levels, and the
+  // deep court — embalmers, wardens — wakes on HARD floors only (the
+  // family discipline: every gate a threshold, never a ramp; nothing this
+  // old arrives gradually). The Regent is deliberately ABSENT: the throne
+  // wakes only behind the Unsealing's four-talisman door, never scatter.
+  sarcophate: {
+    name: 'the Sand Sarcophate',
+    table: [
+      { id: 'tomb_scarab', weight: 4, presence: { to: 18, fadeOut: 8 } },
+      { id: 'sarcophate_legionary', weight: 3 },
+      { id: 'canopic_bearer', weight: 2, presence: { from: 6 } },
+      { id: 'sarcophagus_warden', weight: 1, presence: { from: 9 } },
     ],
   },
 };

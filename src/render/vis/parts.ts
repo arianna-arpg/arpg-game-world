@@ -3660,6 +3660,118 @@ const shroudWrap: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** CANOPIC JAR: a lidded funerary urn — ovoid body, banded shoulder, and a
+ *  STOPPER whose shape names its ward at a glance (params.stopper: 0 plain
+ *  knob / 1 eared jackal / 2 beaked falcon / 3 domed ape / 4 human brow).
+ *  One jar per part instance — looks compose hip arcs with x/y/mirror. */
+const canopicJar: PartPainter = (ctx, r, spec, pal) => {
+  const body = rampFor(spec, pal, 'bone');
+  const lid = rampFor(spec, pal, 'metal');
+  const stopper = Math.round(P(spec, 'stopper', 0));
+  place(ctx, r, spec, (c, R) => {
+    // The vessel: a shouldered ovoid, foot narrower than the belly.
+    c.fillStyle = body.base;
+    c.beginPath();
+    c.moveTo(-R * 0.34, -R * 0.18);
+    c.quadraticCurveTo(-R * 0.46, R * 0.28, -R * 0.2, R * 0.52);
+    c.lineTo(R * 0.2, R * 0.52);
+    c.quadraticCurveTo(R * 0.46, R * 0.28, R * 0.34, -R * 0.18);
+    c.closePath();
+    c.fill();
+    outlined(c, body, 1.1);
+    // The shoulder band + a scored ward-line (the embalmer's script).
+    c.strokeStyle = withAlpha(lid.base, 0.85);
+    c.lineWidth = Math.max(1.2, R * 0.09);
+    c.beginPath(); c.moveTo(-R * 0.33, -R * 0.1); c.lineTo(R * 0.33, -R * 0.1); c.stroke();
+    c.strokeStyle = withAlpha(body.shadow, 0.6);
+    c.lineWidth = 1;
+    c.beginPath(); c.moveTo(-R * 0.26, R * 0.18); c.lineTo(R * 0.26, R * 0.18); c.stroke();
+    // The stopper: gilded, shaped to its ward.
+    c.fillStyle = lid.base;
+    c.beginPath(); c.ellipse(0, -R * 0.26, R * 0.24, R * 0.18, 0, 0, Math.PI * 2); c.fill();
+    outlined(c, lid, 1);
+    if (stopper === 1) { // jackal: two up-pricked ears
+      c.beginPath();
+      c.moveTo(-R * 0.18, -R * 0.3); c.lineTo(-R * 0.26, -R * 0.56); c.lineTo(-R * 0.04, -R * 0.38);
+      c.moveTo(R * 0.18, -R * 0.3); c.lineTo(R * 0.26, -R * 0.56); c.lineTo(R * 0.04, -R * 0.38);
+      c.fillStyle = lid.base; c.fill();
+    } else if (stopper === 2) { // falcon: a hooked beak forward
+      c.beginPath();
+      c.moveTo(R * 0.1, -R * 0.32); c.quadraticCurveTo(R * 0.4, -R * 0.34, R * 0.34, -R * 0.14);
+      c.lineTo(R * 0.12, -R * 0.2); c.closePath();
+      c.fillStyle = lid.base; c.fill();
+    } else if (stopper === 3) { // ape: a high dome
+      c.beginPath(); c.arc(0, -R * 0.34, R * 0.16, Math.PI, 0); c.fillStyle = lid.highlight; c.fill();
+    } else if (stopper === 4) { // human: a brow line over painted eyes
+      c.strokeStyle = pal.dark; c.lineWidth = Math.max(1, R * 0.05);
+      c.beginPath(); c.moveTo(-R * 0.14, -R * 0.28); c.lineTo(R * 0.14, -R * 0.28); c.stroke();
+    } else { // plain knob
+      c.beginPath(); c.arc(0, -R * 0.34, R * 0.08, 0, Math.PI * 2); c.fillStyle = lid.highlight; c.fill();
+    }
+  });
+};
+
+/** SARCOPHAGUS LID: the anthropoid case — a round-headed slab with a carved
+ *  gilt face and crossed-arm band lines. Worn on the back it makes a body a
+ *  walking tomb; scaled down it serves as a lid-shield. (params: face 0|1
+ *  carves the visage, cracks 0..1 scores battle damage.) */
+const sarcophagusLid: PartPainter = (ctx, r, spec, pal) => {
+  const stone = rampFor(spec, pal, 'bone');
+  const gilt = rampFor(spec, pal, 'metal');
+  const face = P(spec, 'face', 1);
+  const cracks = P(spec, 'cracks', 0);
+  place(ctx, r, spec, (c, R) => {
+    const hw = R * 0.46, hh = R * 0.78;
+    // The slab: head-end (facing +X) rounded wide, foot-end tapered.
+    c.fillStyle = stone.base;
+    c.beginPath();
+    c.moveTo(-hh, -hw * 0.72);
+    c.lineTo(hh * 0.28, -hw);
+    c.quadraticCurveTo(hh, -hw, hh, 0);
+    c.quadraticCurveTo(hh, hw, hh * 0.28, hw);
+    c.lineTo(-hh, hw * 0.72);
+    c.closePath();
+    c.fill();
+    outlined(c, stone, 1.3);
+    // The gilt rim inside the edge.
+    c.strokeStyle = withAlpha(gilt.base, 0.8);
+    c.lineWidth = Math.max(1.2, R * 0.06);
+    c.beginPath();
+    c.moveTo(-hh * 0.88, -hw * 0.6);
+    c.lineTo(hh * 0.26, -hw * 0.84);
+    c.quadraticCurveTo(hh * 0.84, -hw * 0.84, hh * 0.84, 0);
+    c.quadraticCurveTo(hh * 0.84, hw * 0.84, hh * 0.26, hw * 0.84);
+    c.lineTo(-hh * 0.88, hw * 0.6);
+    c.closePath();
+    c.stroke();
+    // Crossed-arm bands over the chest third.
+    c.strokeStyle = withAlpha(gilt.shadow, 0.75);
+    c.lineWidth = Math.max(1.2, R * 0.07);
+    c.beginPath(); c.moveTo(-hh * 0.1, -hw * 0.7); c.lineTo(hh * 0.3, hw * 0.55); c.stroke();
+    c.beginPath(); c.moveTo(-hh * 0.1, hw * 0.7); c.lineTo(hh * 0.3, -hw * 0.55); c.stroke();
+    if (face > 0) {
+      // The carved visage at the head end: gilt mask oval, painted eyes.
+      c.fillStyle = gilt.base;
+      c.beginPath(); c.ellipse(hh * 0.62, 0, R * 0.22, R * 0.17, 0, 0, Math.PI * 2); c.fill();
+      outlined(c, gilt, 1);
+      c.fillStyle = pal.dark;
+      for (const s of [-1, 1]) {
+        c.beginPath(); c.ellipse(hh * 0.66, s * R * 0.07, R * 0.045, R * 0.028, 0, 0, Math.PI * 2); c.fill();
+      }
+    }
+    if (cracks > 0) {
+      // Battle scoring: the case remembers being opened the hard way.
+      c.strokeStyle = withAlpha(stone.shadow, 0.55 + 0.35 * cracks);
+      c.lineWidth = Math.max(1, R * 0.045);
+      c.beginPath();
+      c.moveTo(-hh * 0.55, -hw * 0.3);
+      c.lineTo(-hh * 0.2, hw * 0.05);
+      c.lineTo(-hh * 0.34, hw * 0.5);
+      c.stroke();
+    }
+  });
+};
+
 /** CARRION FLIES: a sparse standing orbit of specks with a faint shimmer
  *  ring — the charnel halo. Deterministic placement, no clock: bakes stay
  *  stable. (params: flies) */
@@ -3989,6 +4101,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   floatingShards,
   shroudWrap, carrionFlies,
   wheels,
+  canopicJar, sarcophagusLid,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

@@ -1062,6 +1062,10 @@ export const TILESETS: Record<string, TilesetDef> = {
         // The Seethe's foragers range the open erg (the fourth face is near).
         { id: 'chitin_drone', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'chitin_lancer', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // A wrapped soldier far off its post: the erg is riddled with broken
+        // tombs, and the dynasty's patrols wander out of them (HARD floor —
+        // the family discipline: nothing this old arrives gradually).
+        { id: 'sarcophate_legionary', weight: 1, presence: { from: 7 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1170,6 +1174,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'glass_stalker', weight: 2, presence: { from: 7, fadeIn: 4 } },
         { id: 'mirage_dancer', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'sandmaw_burrower', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // Glass preserves what sand merely buries: a tomb patrol on the pan
+        // (HARD floor — the Sarcophate never arrives gradually).
+        { id: 'sarcophate_legionary', weight: 1, presence: { from: 8 } },
       ],
     },
     spawnerId: 'bone_altar',

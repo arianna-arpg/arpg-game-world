@@ -73,6 +73,17 @@ export const MONSTER_NAMES = {
         'the Patient Meat', 'the Latterborn', 'Who Remembers Hands', 'the Sutured',
       ],
     },
+    // The Sarcophate's elites wake with their throne names intact — dry
+    // dynastic syllables and titles straight off the tomb registers.
+    sarcophate: {
+      prefixes: ['Nefer', 'Seth', 'Ankh', 'Kham', 'Osor', 'Amen', 'Ra', 'Merit', 'Sokh', 'Udja'],
+      suffixes: ['kha', 'amun', 'esir', 'uret', 'neb', 'hotem', 'seth', 'aris', 'hor', 'min'],
+      epithets: [
+        'the Unentombed', 'of the Sealed Vault', 'Twice-Wrapped', 'the Sun-Denied',
+        'the Gilded', 'Dust-Crowned', 'Keeper of Jars', 'the Provisioned',
+        'of the Older Dynasty', 'Who Kept the Lid', 'the Well-Preserved', 'Lord of the Fourth Hall',
+      ],
+    },
   } as Record<string, { prefixes?: string[]; suffixes?: string[]; epithets?: string[] }>,
 };
 

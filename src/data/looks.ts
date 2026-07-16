@@ -1836,6 +1836,71 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 1.05,
   },
 
+  // ================================================== THE SAND SARCOPHATE
+  // The tomb-dynasty under the deep desert. Family grammar, readable at a
+  // glance: LINEN (shroudWrap) marks every wrapped body, GOLD (mask/gilt)
+  // marks rank — and gold is exactly what the risen husk has LOST. Jars mark
+  // the embalmers; the lid-on-the-back marks the walking tomb.
+  /** The gilded beetle: a scarab whose shell was leafed by the embalmers. */
+  tomb_scarab: {
+    parts: [
+      { kind: 'carapace', scale: 0.95 },
+      { kind: 'segmentRings', scale: 0.8, params: { n: 3 } },
+      { kind: 'legs', scale: 0.7, params: { n: 6 } },
+      { kind: 'mandibles', scale: 0.8 },
+      { kind: 'spots', role: 'metal', scale: 0.7, params: { n: 3 } },
+      { kind: 'eyes', color: '#ffd890', params: { spread: 0.4, dist: 0.6, size: 0.1 } },
+    ],
+  },
+  /** The line of the old legion: wrapped body, gold face, lid-shield. */
+  sarcophate_legionary: {
+    parts: [
+      { kind: 'torso', scale: 0.92 },
+      { kind: 'shroudWrap', scale: 1.0, params: { bands: 4 } },
+      { kind: 'pauldrons', role: 'metal', scale: 0.85 },
+      { kind: 'sarcophagusLid', y: -0.62, rot: 0.2, scale: 0.5, role: 'bone', params: { face: 0 } },
+      { kind: 'sword', params: { len: 0.95 } },
+      { kind: 'mask', x: 0.42, scale: 0.8, role: 'metal' },
+    ],
+    shadowScale: 0.95,
+  },
+  /** The embalmer-priest: robed, jarred, the censer still swinging. */
+  canopic_bearer: {
+    parts: [
+      { kind: 'robe', scale: 1.0 },
+      { kind: 'shroudWrap', scale: 0.85, alpha: 0.8, params: { bands: 3 } },
+      { kind: 'canopicJar', x: -0.35, y: 0.55, scale: 0.55, mirror: true },
+      { kind: 'canopicJar', x: -0.6, scale: 0.5, params: { stopper: 4 } },
+      { kind: 'censer', scale: 0.9 },
+      { kind: 'staff', scale: 0.95 },
+      { kind: 'mask', x: 0.42, scale: 0.78, role: 'metal' },
+    ],
+    live: [{ kind: 'wisps', scale: 0.6, color: '#d8c070', alpha: 0.5 }],
+  },
+  /** The walking tomb: the case worn as armor, the hammer that seals doors. */
+  sarcophagus_warden: {
+    parts: [
+      { kind: 'sarcophagusLid', x: -0.15, scale: 1.25, params: { face: 1 } },
+      { kind: 'torso', x: 0.25, scale: 0.7 },
+      { kind: 'shroudWrap', x: 0.25, scale: 0.8, params: { bands: 3 } },
+      { kind: 'pauldrons', role: 'metal', x: 0.2, scale: 0.8 },
+      { kind: 'hammer', scale: 1.05 },
+      { kind: 'mask', x: 0.52, scale: 0.85, role: 'metal' },
+    ],
+    shadowScale: 1.15,
+  },
+  /** What steps out when the case cracks: loose wrap, bare skull, no gold. */
+  risen_husk: {
+    parts: [
+      { kind: 'tatters', scale: 0.95, params: { n: 5 } },
+      { kind: 'shroudWrap', scale: 0.9, alpha: 0.75, params: { bands: 2 } },
+      { kind: 'claws', params: { len: 0.6, talons: 3 } },
+      { kind: 'skull', x: 0.42, scale: 0.85 },
+      { kind: 'eyes', color: '#e8b048', params: { spread: 0.34, dist: 0.5, size: 0.1 } },
+    ],
+    live: [{ kind: 'carrionFlies', scale: 0.8, params: { flies: 4 } }],
+  },
+
   // ===================================================== DEPLOYED CONSTRUCTS
   // Skill-objects (ConstructDelivery) — the square-and-skill-color era ends.
   // spawnConstruct dresses by kind through CONSTRUCT_LOOKS below unless the

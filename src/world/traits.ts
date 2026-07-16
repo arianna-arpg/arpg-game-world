@@ -132,6 +132,14 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // country and holds every yard of it; the map-scale march it dreams of
   // (Deepwinter's creeping front) is the overlay's, not the invasion gate's.
   rimebound: { roaming: 0.4, aggression: 0.9, warlordHome: 'origin', homeBiome: 'tundra', eventRange: 170, contexts: ['baseline'], temper: 'territorial' },
+  // The Sand Sarcophate — the tomb-dynasty UNDER the desert: the most rooted
+  // banner in the game (its country is downstairs — the Sepulcher Sands the
+  // deep dunes conceal), CROWNLESS by design (no WARLORD_OF seat: the Regent
+  // is the Unsealing's tomb boss, never a marching warlord — the chitin
+  // precedent, so the invasion gate never opens), and DEATH-ALIGNED: every
+  // interred kill feeds the Deadwake's corpse-tide exactly as the graveland
+  // dead do. What little it wants of the surface it wants back.
+  sarcophate: { roaming: 0.12, aggression: 0.7, warlordHome: 'origin', homeBiome: 'desert', eventRange: 150, contexts: ['baseline'], deathAligned: true, temper: 'territorial' },
 };
 
 /** Does this faction feed the corpse-tide loops (Deadwake accrual)? Reads the

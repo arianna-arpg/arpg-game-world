@@ -10795,6 +10795,25 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 470, weight: 2, keepDistance: 280 },
   },
 
+  // The Sand Sarcophate's melee verb (the rime_fang pattern — one kit skill,
+  // the whole wrapped tier shares it): the linen itself reaches. Slightly
+  // longer than a claw, and the grave's grip rides it — TORMENT drags the
+  // feet, so a tomb line that closes ranks is a tightening noose. Cold-lane
+  // = chill; tomb-lane = torment; the ladders never collide.
+  entombing_lash: {
+    id: 'entombing_lash', name: 'Entombing Lash', noDrop: true,
+    description: 'The wrappings uncoil and strike — and the grave\'s grip drags at whatever they touch.',
+    tags: ['attack', 'melee', 'physical', 'chaos'], color: '#c9a24a',
+    manaCost: 0, cooldown: 0, useTime: 0.95,
+    baseDamage: { physical: [4, 7], chaos: [2, 3] },
+    delivery: { type: 'melee', range: 52, arcDeg: 70 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'torment', chance: 0.45 },
+    ],
+    ai: { range: 58, weight: 2 },
+  },
+
   // ======================= The EMPYREAN kata ================================
   // The Aetherial's own arts — verticality, radiance, judgement — brought
   // down by whoever survives the crossing. Five distinct rhythms (the samurai
