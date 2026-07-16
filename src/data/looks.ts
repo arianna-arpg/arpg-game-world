@@ -2947,6 +2947,37 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     shadowScale: 0.8,
   },
+  // THE SWARMING WING — the flying castes. Silhouette doctrine: the ground
+  // Seethe is SHELL AND LEGS; the wing is WINGS FIRST, one glance and you know.
+  /** A chitin wingling: all wing, barely any bug — the swarm's coin in the air. */
+  chitin_wingling: {
+    parts: [
+      { kind: 'disc', scale: 0.45 },
+      { kind: 'wings', scale: 1.3, alpha: 0.8 },
+      { kind: 'legs', scale: 0.4, params: { n: 4 } },
+      { kind: 'eyes', color: '#ffd890', params: { spread: 0.45, dist: 0.5, size: 0.14 } },
+    ],
+  },
+  /** A winged alate: the hive's tomorrow on DOUBLE wings — egg-heavy, escorted. */
+  chitin_alate: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.12, seed: 171 } },
+      { kind: 'wings', scale: 1.35, alpha: 0.75 },
+      { kind: 'wings', scale: 0.85, rot: 0.55, alpha: 0.55 },
+      { kind: 'egg', x: -0.3, y: 0.12, scale: 0.36 },
+      { kind: 'antennae', scale: 1.0 },
+      { kind: 'eyeCluster', color: '#ffb060', params: { n: 4, spread: 0.45, dist: 0.5 } },
+    ],
+  },
+  /** A jelly replete: a living larder — the swollen amber abdomen IS the tell. */
+  chitin_replete: {
+    parts: [
+      { kind: 'disc', scale: 0.5 },
+      { kind: 'bloatSacs', x: -0.3, scale: 0.95, params: { n: 2 } },
+      { kind: 'wings', scale: 0.85, alpha: 0.7 },
+      { kind: 'legs', scale: 0.5, params: { n: 4 } },
+    ],
+  },
 
   // --- THE SMALL LIVES (ambience: prey with personality) -------------------
   /** A squirrel: all tail. */

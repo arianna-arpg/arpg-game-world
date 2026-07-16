@@ -8202,6 +8202,59 @@ export const MONSTERS: Record<string, MonsterDef> = {
     xp: 45,
     spawner: true,
   },
+
+  // --- THE SWARMING WING (the hive-cycle's flying castes) -------------------
+  // Bodies of the Swarming world event: referenced ONLY by the swarming
+  // package's flightRoster (never the baseline chitin table), like the
+  // Deadwake's exclusive dead — the sky fills ONLY when the cycle wings.
+  // SILHOUETTE DOCTRINE: the ground Seethe reads as SHELL AND LEGS; the wing
+  // reads as WINGS FIRST — one glance up and the player knows the cycle turned.
+  chitin_wingling: {
+    id: 'chitin_wingling', name: 'Chitin Wingling',
+    color: '#e0b054', shape: 'circle', radius: 8, material: 'chitin', look: 'chitin_wingling',
+    base: { life: 26, moveSpeed: 215, accuracy: 96, evasion: 80, mana: 0 },
+    skills: ['claw'], xp: 8,
+    faction: 'chitin',
+    detection: 1.3,
+    scaleVariance: [0.85, 1.15],
+    brain: { type: 'swarm', move: { style: 'skitter', dart: [0.25, 0.5], pause: [0.1, 0.25] } },
+  },
+  /** The hive's tomorrow on double wings: she seeds clutches mid-fight, and
+   *  the flight BREAKS if enough of her sisters fall — the Swarming's only
+   *  throat to cut (queenless by doctrine: there is no crown to take). */
+  chitin_alate: {
+    id: 'chitin_alate', name: 'Winged Alate',
+    color: '#e8c878', shape: 'oval', radius: 14, material: 'chitin', look: 'chitin_alate',
+    base: { life: 150, moveSpeed: 140, accuracy: 102, armor: 20, evasion: 40, mana: 120, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['lay_chitin_clutch', 'claw'], xp: 60,
+    faction: 'chitin',
+    gemBias: ['summon', 'minion'],
+    wardPriority: 2, // the wing GUARDS its tomorrow — escorts post on her
+    // The def-level floor (the balor discipline): a HARD gate — no fadeIn,
+    // so nothing fields a breeding wing below 8, wherever a table might try.
+    presence: { from: 8 },
+    brain: { type: 'skirmish', withdraw: 1.5 },
+  },
+  /** The living larder — swollen with the brood's royal jelly. It cannot
+   *  fight: it BOLTS, dripping the slick it is fat with (the wake fabric),
+   *  and pays out in jelly when it falls. The amber bulb IS the treasure
+   *  tell, in the air and (as the fallen cache) on the ground. */
+  chitin_replete: {
+    id: 'chitin_replete', name: 'Jelly Replete',
+    color: '#f0c060', shape: 'oval', radius: 13, material: 'chitin', look: 'chitin_replete',
+    base: { life: 90, moveSpeed: 165, accuracy: 90, evasion: 60, mana: 0 },
+    skills: [], xp: 22,
+    faction: 'chitin',
+    detection: 0.4,
+    scaleVariance: [0.9, 1.2],
+    wake: { skillId: 'jelly_trail', everyDist: 52 },
+    brain: {
+      type: 'basic',
+      morale: { skittish: { radius: 200, duration: [1.2, 2.0] } },
+      move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.2 },
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -8303,6 +8356,9 @@ const RELATIONS: Record<string, FactionStance> = {
   // the desert's turf war grows a third banner.
   'chitin|gnoll': 'hostile',
   'chitin|sirocco': 'hostile',
+  // The wing falls on the herds when the cycle turns: the Swarming strips
+  // migrations at map scale, and on shared ground the fliers do it in person.
+  'beast|chitin': 'hostile',
 };
 
 /** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families

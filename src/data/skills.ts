@@ -10113,6 +10113,29 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
   },
 
+  /** The Jelly Replete's dripped rope (MonsterDef.wake payload — sheds as it
+   *  bolts): a clinging amber slick that MIRES whoever wades it (the bog's
+   *  own terrain status, reused — any clinging goo speaks that word). Barely
+   *  a wound; the point is the drag while the swarm is overhead. */
+  jelly_trail: {
+    id: 'jelly_trail', name: 'Royal Slick',
+    description: 'A dropped rope of royal jelly — sweet, heavy, and clinging.',
+    tags: ['spell', 'chaos', 'aoe', 'duration'], color: '#f0c060',
+    noDrop: true,
+    manaCost: 0, cooldown: 0, useTime: 0.1,
+    baseDamage: { chaos: [1, 2] },
+    delivery: {
+      type: 'ground', radius: 30, castRange: 60,
+      lingerDuration: 3.0, tickInterval: 0.5,
+      noImpact: true,
+      sizeOver: { from: 1, to: 0.4, curve: 'quadIn' },
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'mired', chance: 0.6 },
+    ],
+  },
+
   // --- The GATHER family: capped holds, brimming bars, fuses -----------------
   // The completion-cast vocabulary in four shapes: ChannelSpec.brim banks
   // held time in a PERSISTENT gauge whose fill scales the payoff (its decay,
