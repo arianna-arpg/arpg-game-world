@@ -942,6 +942,23 @@ registerFormation({
   ],
 });
 
+// --- THE NIGHT FEAST (the Court's table, found cold) -------------------------
+// The kit's kinds are UNION members (engine/levelgen: rules + stamps live
+// beside broken_cart's), so the arrangement here is pure composition.
+// THE FEAST LANE: a halted procession — the coach where it burned, stakes
+// strung down the verge, the fed-on folded where they knelt. The Court's
+// story told in furniture: it stopped here, it ate, someone made it pay.
+registerFormation({
+  id: 'night_feast', arrange: 'meander', span: [260, 480], step: 46,
+  params: { wobble: 24 },
+  pieces: [
+    { kind: 'feeding_stake', radius: [9, 12], jitter: 10, rot: true },
+    { kind: 'drained_husk', radius: [12, 17], jitter: 22 },
+    { kind: 'coach_wreck', radius: [20, 26], every: 5, jitter: 8, rot: 'chain' },
+    { kind: 'bone_pile', radius: [12, 16], every: 4, jitter: 24 },
+  ],
+});
+
 // THE HARP ARCADE (the Aetherial): a paced line of strung pillars — the
 // colonnade the wind plays crossing the shelf. Straight and deliberate:
 // built things stand in ranks even where the ground beneath them doesn't last.

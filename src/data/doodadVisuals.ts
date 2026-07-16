@@ -596,6 +596,15 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'gibbet', order: 55, shadow: 0.45, longShadow: 1.6,
     params: { wood: '#4c3e2c', iron: '#3a3d44', bone: '#c9bda2' },
   },
+  feeding_stake: {
+    painter: 'feedingStake', order: 54, shadow: 0.35, longShadow: 1.3,
+    params: { wood: '#4c3a2c', iron: '#3a3d44', stain: '#4a1620' },
+  },
+  coach_wreck: {
+    painter: 'coachWreck', order: 53, shadow: 0.5, longShadow: 0.9,
+    params: { char: '#241f22', wood: '#3c3230', iron: '#3a3d44' },
+  },
+  drained_husk: { painter: 'drainedHusk', order: 51, params: { skin: '#cfc4bd', shade: '#8a7a80' } },
   // Giant fungus wears the WALK-UNDER TREE mechanism now: a real pale-ringed
   // STALK at ground level (the trunk painter, fungal-toned, sized to the
   // bodyScale trunk), the parametric cap riding the canopy pass above.

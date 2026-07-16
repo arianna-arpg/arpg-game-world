@@ -462,6 +462,10 @@ export const TILESETS: Record<string, TilesetDef> = {
       // Someone brews out here — a croft of racks and stills (the
       // apothecary kit; the alembics shatter into spilled orbs).
       { kind: 'formation', count: [0, 1], formation: 'herbalists_croft' },
+      // The Court's table, found cold: a halted feast down some verge —
+      // the coach where it burned, stakes, the fed-on where they knelt.
+      { kind: 'formation', count: [0, 1], formation: 'night_feast' },
+      { kind: 'drained_husk', count: [0, 2] },
     ],
     variants: [
       // The tended dead: rows under the crooked roof — the parish that

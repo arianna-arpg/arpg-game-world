@@ -93,6 +93,9 @@ export type KnownDoodadKind =
   | 'pumpkin_patch' // walkable gourd tangle (the croft rows; harvest that outlived its farmers)
   | 'jack_o_lantern' // a lone CARVED gourd, candle-lit — grins in the dark, pops when struck
   | 'hanging_cage' // a gibbet: post + chained cage, bone bundle inside (the hanged road)
+  | 'feeding_stake' // the Court's larder-post: shackle-ring on a stained stake (the feast lane)
+  | 'coach_wreck' // a burned gloom coach — the Court's carriage after somebody's noon
+  | 'drained_husk' // walkable pale remains, bled empty and folded where they knelt
   | 'ice_spike' // a rimed crystal fang jutting from frozen ground (taiga/tundra)
   | 'snowman'   // someone built it and left; it watches (winter clutter)
   | 'signpost'  // a fingerboard post naming ways travelers stopped taking
@@ -1151,6 +1154,11 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   bench:     { overlap: 'solid', blocksMove: true, spacing: 60, surface: { hw: 1.0, hh: 0.42 } },
   market_stall: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 90, surface: { hw: 0.9, hh: 0.85 } },
   broken_cart:  { overlap: 'solid', blocksMove: true, spacing: 80, surface: { hw: 0.85, hh: 0.55, angle: 0.22 } },
+  // The night-feast kit: stakes are thin honest posts, the wreck is a
+  // cart-class solid, husks are walk-over litter (the feast reads underfoot).
+  feeding_stake: { overlap: 'solid', blocksMove: true, spacing: 34, surface: { hw: 0.34, hh: 0.34 } },
+  coach_wreck:  { overlap: 'solid', blocksMove: true, spacing: 90, surface: { hw: 0.9, hh: 0.55, angle: 0.15 }, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  drained_husk: { overlap: 'ground', walkOnly: true },
   scarecrow: { overlap: 'solid', blocksMove: true, spacing: 90, bodyScale: 0.3 },
   hay_bale:  { overlap: 'solid', blocksMove: true, spacing: 55,
     surface: { hw: 1.0, hh: 0.72 } }, // the rolled bale's drawn ellipse (r × 0.75r)
@@ -4762,6 +4770,9 @@ registerStamp('lantern_post', stampSingle('lantern_post', [9, 11]));
 registerStamp('bench', stampSingle('bench', [12, 15]));
 registerStamp('market_stall', stampSingle('market_stall', [22, 28]));
 registerStamp('broken_cart', stampSingle('broken_cart', [18, 24]));
+registerStamp('feeding_stake', stampSingle('feeding_stake', [9, 12]));
+registerStamp('coach_wreck', stampSingle('coach_wreck', [20, 26]));
+registerStamp('drained_husk', stampSingle('drained_husk', [12, 17]));
 registerStamp('scarecrow', stampSingle('scarecrow', [10, 13]));
 registerStamp('hay_bale', stampSingle('hay_bale', [13, 17]));
 registerStamp('pot_cluster', stampSingle('pot_cluster', [11, 15]));
