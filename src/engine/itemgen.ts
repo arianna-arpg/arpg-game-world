@@ -228,6 +228,36 @@ function rollAffixSet(base: ItemBaseDef, ilvl: number, rarity: ItemRarity, rng: 
   return out;
 }
 
+/** Guarantee ONE affix from `family` on a magic/rare affix set — the
+ *  themed-drop lever behind RollItemOpts.withFamily. Respects everything the
+ *  organic roll respects: the base's tag gate (a family that cannot roll on
+ *  this base is skipped silently — never bent), family dedup (an item that
+ *  already carries the family is done), ilvl-eligible tiers, and the
+ *  rarity's prefix/suffix caps — when the set is full on that kind, the
+ *  forced line replaces one rolled sibling of the kind. */
+function forceFamilyAffix(
+  base: ItemBaseDef, affixes: AffixRollState[], family: string,
+  ilvl: number, rarity: ItemRarity, rng: RngFn,
+): void {
+  if (affixes.some(a => ITEM_AFFIXES[a.id]?.family === family)) return;
+  const pools = affixPoolsFor(base);
+  const def = pools.prefix.find(a => a.family === family)
+    ?? pools.suffix.find(a => a.family === family);
+  if (!def) return;
+  const tier = pickTier(def, ilvl, rarity, rng);
+  if (tier === null) return;
+  const caps = ITEM_CFG.affixSlots[rarity];
+  const cap = def.kind === 'prefix' ? caps.prefixes : caps.suffixes;
+  const sameKind = affixes.filter(a => ITEM_AFFIXES[a.id]?.kind === def.kind);
+  if (cap > 0 && sameKind.length >= cap) {
+    const evict = sameKind[Math.floor(rng() * sameKind.length)];
+    affixes.splice(affixes.indexOf(evict), 1);
+  }
+  const rolls = rollLineSet(def.lines.length, rng);
+  for (let i = 1; i < def.lines.length; i++) if (def.lines[i].sharedRoll) rolls[i] = rolls[0];
+  affixes.push({ id: def.id, tier, rolls });
+}
+
 // ---------------------------------------------------------------- naming ---
 
 function affixName(a: AffixRollState): string {
@@ -270,6 +300,13 @@ export interface RollItemOpts {
   uniqueId?: string;
   /** Per-call rarity weight overrides layered over ITEM_CFG.rarityWeights. */
   rarityWeights?: Partial<Record<ItemRarity, number>>;
+  /** Guarantee ONE affix from this FAMILY (AffixDef.family) on the minted
+   *  item — the THEMED-DROP lever (a royal-jelly cache forcing its register;
+   *  any future themed cache names any family, pure data). Commons promote
+   *  to magic so the line has a slot; uniques ignore it (legends are
+   *  authored). Silently skipped when the family cannot roll on the
+   *  resolved base — the tag gate is never bent. */
+  withFamily?: string;
 }
 
 function rollRarity(opts: RollItemOpts, rng: RngFn): ItemRarity {
@@ -300,6 +337,9 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
   let unique: UniqueDef | undefined = opts.uniqueId ? UNIQUES[opts.uniqueId] : undefined;
   if (opts.uniqueId && !unique) return null;
   let rarity: ItemRarity = unique ? 'unique' : opts.rarity ?? rollRarity(opts, rng);
+  // A forced-family pull needs an affix SLOT: commons promote to magic (the
+  // themed cache must always pay); an explicit/rolled magic+ stands as-is.
+  if (opts.withFamily && !unique && rarity === 'common') rarity = 'magic';
 
   if (rarity === 'unique' && !unique) {
     const pool = candidateUniques(ilvl, opts.category, opts.baseId);
@@ -319,6 +359,9 @@ export function rollItem(opts: RollItemOpts): ItemInstance | null {
   const affixes = rarity === 'magic' || rarity === 'rare'
     ? rollAffixSet(base, ilvl, rarity, rng)
     : [];
+  if (opts.withFamily && !unique && (rarity === 'magic' || rarity === 'rare')) {
+    forceFamilyAffix(base, affixes, opts.withFamily, ilvl, rarity, rng);
+  }
 
   const item: ItemInstance = {
     uid: nextItemUid(),

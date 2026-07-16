@@ -2978,6 +2978,17 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'legs', scale: 0.5, params: { n: 4 } },
     ],
   },
+  /** A royal jelly cache (pod portrait): a fallen replete's amber trove —
+   *  the same swollen-sac silhouette the player learned in the air, grounded
+   *  and wingless: bulb on the ground = the wake paid here. */
+  royal_cache: {
+    parts: [
+      { kind: 'blob', scale: 0.85, params: { irr: 0.1, seed: 177 } },
+      { kind: 'bloatSacs', scale: 0.8, params: { n: 3 } },
+      { kind: 'egg', x: 0.16, y: -0.14, scale: 0.35 },
+    ],
+    shadowScale: 0.7,
+  },
 
   // --- THE SMALL LIVES (ambience: prey with personality) -------------------
   /** A squirrel: all tail. */

@@ -426,6 +426,29 @@ const PREFIXES: AffixDef[] = [
     top: [0.35, 3], floor: 0.25, count: 4, baseTags: ['mi_undead'], weight: 90,
   }),
 
+  // THE ROYAL REGISTER — the Swarming's spoils. Royal-jelly caches FORCE one
+  // of these three via LootEntry.withFamily; the thin natural weight keeps
+  // the words rollable in the wild (never cache-locked, never common there).
+  // Hybrids of proven stats in the hive's own voice: the jelly FEEDS, the
+  // plate SHELLS, the wing HURRIES (suffix sibling among the suffixes).
+  fam({
+    id: 'royal_jelly', kind: 'prefix', themes: [SUSTAIN],
+    names: ['Queensmeal', 'Royal-Fed', 'Jelly-Fat'],
+    lines: [{ stat: 'life', kind: 'flat' }, { stat: 'lifeRegen', kind: 'flat' }],
+    top: [48, 3.5], floor: 0.2, count: 4,
+    baseTags: ['chest', 'belt', 'amulet'], weight: 12,
+  }),
+  fam({
+    id: 'chitin_plate', kind: 'prefix', themes: [DEFENSE],
+    names: ['Sovereign-Shelled', 'Chitin-Clad', 'Wax-Sealed'],
+    lines: [
+      { stat: DEFENSE_KINDS['armor'].stat, kind: 'flat', local: true },
+      { stat: DEFENSE_KINDS['poise'].stat, kind: 'flat', local: true },
+    ],
+    top: [95, 32], floor: 0.15, count: 4,
+    baseTags: ['chest', 'helmet'], weight: 12,
+  }),
+
   // PROC AFFIXES — chance stats from the PROC registry (proc_<id>; procs.ts
   // golden rules cap and depth-gate them). The two MAGIC-ONLY families are a
   // rarity identity, not a top tier: blues alone can carry them at all — the
@@ -715,6 +738,16 @@ const SUFFIXES: AffixDef[] = [
     stat: 'sympathy_shared_surge', modKind: 'flat',
     top: 1, floor: 1, count: 1,
     baseTags: ['amulet', 'ring'], weight: 20,
+  }),
+  // THE ROYAL REGISTER's suffix (the prefix pair lives beside the MI
+  // families): a hybrid tempo priced under the dedicated speed singles —
+  // both hands quicken, neither as far as a pure roll.
+  fam({
+    id: 'swarm_tempo', kind: 'suffix', themes: [MARTIAL, CASTER],
+    names: ['of Ten Thousand Wings', 'of the Swarming', 'of the Wingbeat'],
+    lines: [{ stat: 'attackSpeed', kind: 'increased' }, { stat: 'castSpeed', kind: 'increased' }],
+    top: [0.08, 0.08], floor: 0.25, count: 4,
+    baseTags: ['gloves', 'ring', 'amulet'], weight: 12,
   }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,

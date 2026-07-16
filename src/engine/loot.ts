@@ -32,6 +32,10 @@ export type LootEntry =
       rarity?: ItemRarity;
       rarityWeights?: Partial<Record<ItemRarity, number>>;
       ilvlBonus?: number;
+      /** Guarantee one affix from this FAMILY on the minted item (commons
+       *  promote to magic; skipped where the base can't carry it) — the
+       *  THEMED-CACHE lever. See RollItemOpts.withFamily. */
+      withFamily?: string;
     }
   | { weight: number; kind: 'unique'; uniqueId?: string; category?: ItemCategory; ilvlBonus?: number }
   /** A VESTIGE bundle (id omitted = weighted pick from the registry). */
@@ -154,6 +158,7 @@ function resolveEntry(entry: LootEntry, ctx: LootCtx, depth: number, out: LootRe
         ilvl: ctx.ilvl + (entry.ilvlBonus ?? 0), rng,
         category: entry.category, baseId,
         rarity: entry.rarity, rarityWeights: entry.rarityWeights,
+        ...(entry.withFamily !== undefined ? { withFamily: entry.withFamily } : {}),
       });
       if (item) out.push({ kind: 'item', item });
       return;

@@ -70,6 +70,52 @@ const TABLE_LIST: LootTableDef[] = [
       ],
     }],
   },
+
+  // THE ROYAL REGISTER's one distribution: a single item FORCED to carry one
+  // of the Swarming's three families (equal thirds), never common. Both the
+  // cache and the replete drink from this one table — the register stays in
+  // one place, retuned in one line.
+  {
+    id: 'royal_jelly_pick',
+    rolls: [{
+      count: 1,
+      entries: [
+        { weight: 34, kind: 'item', withFamily: 'royal_jelly', rarityWeights: { common: 0, magic: 60, rare: 40 } },
+        { weight: 33, kind: 'item', withFamily: 'chitin_plate', rarityWeights: { common: 0, magic: 60, rare: 40 } },
+        { weight: 33, kind: 'item', withFamily: 'swarm_tempo', rarityWeights: { common: 0, magic: 60, rare: 40 } },
+      ],
+    }],
+  },
+
+  // A ROYAL-JELLY CACHE (the Swarming's wake): 1-2 register pieces, plus a
+  // side taste of the wider economy — a find, not a piñata.
+  {
+    id: 'royal_jelly_cache',
+    rolls: [
+      { count: [1, 2], entries: [{ weight: 100, kind: 'table', table: 'royal_jelly_pick' }] },
+      {
+        count: 1,
+        entries: [
+          { weight: 22, kind: 'vestige' },
+          { weight: 16, kind: 'gem' },
+          { weight: 62, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
+
+  // A slain JELLY REPLETE sometimes spills a register piece mid-flight — the
+  // living larder pays a taste of what the wake pays in full.
+  {
+    id: 'royal_jelly_taste',
+    rolls: [{
+      count: 1,
+      entries: [
+        { weight: 22, kind: 'table', table: 'royal_jelly_pick' },
+        { weight: 78, kind: 'nothing' },
+      ],
+    }],
+  },
 ];
 
 export const LOOT_TABLES: Record<string, LootTableDef> =

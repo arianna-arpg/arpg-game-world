@@ -8246,6 +8246,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 90, moveSpeed: 165, accuracy: 90, evasion: 60, mana: 0 },
     skills: [], xp: 22,
     faction: 'chitin',
+    loot: 'royal_jelly_taste', // the living larder pays a taste of the register
     detection: 0.4,
     scaleVariance: [0.9, 1.2],
     wake: { skillId: 'jelly_trail', everyDist: 52 },
@@ -8254,6 +8255,20 @@ export const MONSTERS: Record<string, MonsterDef> = {
       morale: { skittish: { radius: 200, duration: [1.2, 2.0] } },
       move: { style: 'juke', hookEvery: [0.3, 0.6], hookArc: 1.2 },
     },
+  },
+  /** A fallen replete, wax-set where the Swarming passed — the WAKE'S PAYOUT
+   *  (the engine materializes these in swarmed ground; MonsterDef.loot pays
+   *  the royal register). A breakable in the barrel's mold: passive scenery
+   *  with a health bar — smash it, take what spills. Factionless on purpose:
+   *  nothing defends it and nothing else smashes it first. */
+  royal_cache: {
+    id: 'royal_cache', name: 'Royal Jelly Cache',
+    color: '#f0c060', shape: 'circle', radius: 14, material: 'chitin', look: 'royal_cache',
+    base: { life: 70, moveSpeed: 0, armor: 15, evasion: 0, mana: 0 },
+    skills: [], xp: 0,
+    passive: true,
+    orbDrops: 0.35,
+    loot: 'royal_jelly_cache',
   },
 };
 
