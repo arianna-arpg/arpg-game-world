@@ -5288,6 +5288,27 @@ export const SKILLS: Record<string, SkillDef> = {
     leveling: { perLevel: [mod('minionDamage', 'increased', 0.15), mod('minionLife', 'increased', 0.12)] },
   },
 
+  // THE COACH DOOR OPENS (the Gloom Coach's teeth, noDrop like every
+  // spawner-pour): the Court never travels without provisions — the kept
+  // come out hungry, and now and then a true servant steps down with them.
+  disgorge_thralls: {
+    id: 'disgorge_thralls', name: 'The Coach Door Opens', noDrop: true,
+    description: 'The lacquered door swings and the kept come out hungry.',
+    tags: ['spell', 'summon', 'minion'], color: '#b83a5a',
+    manaCost: 0, cooldown: 5.5, useTime: 0.9,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'feeding_thrall', weight: 3 },
+        { id: 'vampire_thrall', weight: 1 },
+      ],
+      count: 1, maxActive: 5,
+    },
+    effects: [],
+    requirements: { willpower: 26 },
+    ai: { range: 620, weight: 1 },
+  },
+
   // --- THE EGG CLUTCH (the pod-construct incubation, worn by broodmothers):
   //     the egg is DESTRUCTIBLE and hatches ONLY if it survives its timer —
   //     break the clutch and the brood never comes (no onBreak: a broken

@@ -45,7 +45,22 @@ export const NEMESIS_NAMES = {
     'Bone-Counter', 'the Unblinking', 'Ash-Eater', 'the Lantern', 'Grave-Polite',
     'the Stitched', 'Half-Smile', 'the Debtor', 'Winter-Born', 'the Locust',
   ],
-  byFaction: {} as Record<string, { first?: string[]; epithets?: string[] }>,
+  byFaction: {
+    // The Night Court remembers its own in the old courtly tongue — half a
+    // saint's calendar, half a wine list. First faction to speak for itself;
+    // every other kin still falls to the default pools at zero cost.
+    nightkin: {
+      first: [
+        'Veszara', 'Karmilla', 'Ostrov', 'Bathoria', 'Vlasco', 'Serezha',
+        'Malvolia', 'Draguta', 'Corvin', 'Lucziya', 'Stryga', 'Amaranthe',
+      ],
+      epithets: [
+        'the Unbled', 'of the Long Table', 'the Last Course', 'Moth-Kept',
+        'the Velvet', 'of the Ninth Toast', 'Candle-Eyed', 'the Thirst',
+        'Grave-Sweet', 'the Uninvited', 'Dawn-Debtor', 'the Decanted',
+      ],
+    },
+  } as Record<string, { first?: string[]; epithets?: string[] }>,
 };
 
 /** Deed marks a nemesis can carry (its history, worn as titles). The `{name}`

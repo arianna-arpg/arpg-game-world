@@ -499,24 +499,30 @@ export const TILESETS: Record<string, TilesetDef> = {
     ],
     packs: {
       count: [5, 8], size: [3, 5],
-      // Duskwood end to end: crows and shamblers on the fringe; wolves,
-      // thralls and hags in the middle depths; weres, wights, the banshee
-      // and the Rider where the roof seals.
+      // Duskwood end to end — and the NIGHT COURT carries the wood now
+      // (its patron): the Court's larder shambles the fringe, its hands
+      // and knives work the middle depths, its church and carriage roll
+      // where the roof seals. The old dead stay on as the kept staff —
+      // the Court keeps thralls, and the wood keeps its crows.
       table: [
         { id: 'carrion_crow', weight: 3, presence: { to: 20, fadeOut: 10 } },
         { id: 'gloomling', weight: 2, presence: { to: 16, fadeOut: 8 } },
-        { id: 'zombie', weight: 2, presence: { to: 18, fadeOut: 9 } },
-        { id: 'skeleton_warrior', weight: 1, presence: { to: 20, fadeOut: 10 } },
+        { id: 'zombie', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'hollow_lantern', weight: 2 },
-        { id: 'dire_wolf', weight: 3, presence: { from: 4, fadeIn: 2 } },
-        { id: 'moon_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
-        { id: 'grave_hag', weight: 2, presence: { from: 6, fadeIn: 3 } },
-        { id: 'vampire_thrall', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'feeding_thrall', weight: 3, presence: { to: 18, fadeOut: 9 } },
+        { id: 'vampire_thrall', weight: 2, presence: { from: 4, fadeIn: 2 } },
         { id: 'crimson_bat', weight: 2, presence: { to: 22, fadeOut: 10 } },
+        { id: 'night_hunter', weight: 2, presence: { from: 7, fadeIn: 3 } },
+        { id: 'pallbearer', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'blood_cardinal', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'werewolf', weight: 2, presence: { from: 11, fadeIn: 5 } },
+        { id: 'gloom_coach', weight: 1, presence: { from: 14 } },
+        { id: 'dire_wolf', weight: 2, presence: { from: 4, fadeIn: 2 } },
+        { id: 'moon_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'grave_hag', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'orb_weaver', weight: 1, presence: { from: 6, fadeIn: 3 } },
         { id: 'widow_matron', weight: 1, presence: { from: 12, fadeIn: 5 } },
         { id: 'poltergeist', weight: 1, presence: { from: 8, fadeIn: 4 } },
-        { id: 'werewolf', weight: 2, presence: { from: 11, fadeIn: 5 } },
         { id: 'barrow_wight', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'banshee', weight: 1, presence: { from: 13, fadeIn: 6 } },
         { id: 'dusk_rider', weight: 1, presence: { from: 12, fadeIn: 6 } },

@@ -88,6 +88,17 @@ registerSympathyLink({
   radius: 300,
 });
 
+// The Blood Cardinal's tithe: what the red vicar drinks, the Court around
+// it is fed — its leeched and channelled heals replay, diminished, on its
+// nearby kin. The counterplay is priority: burst the cardinal first, or
+// every sip you allow it waters the flock.
+registerSympathyLink({
+  id: 'courts_tithe', label: 'the Court’s tithe', color: '#b83a5a',
+  channels: ['heal', 'restore'],
+  to: ['pack'],
+  radius: 320, scale: 0.5, cap: 4,
+});
+
 // --- The tradeoff lane (registered vocabulary; future keystone/curse) --------
 
 // The inverse lever the fabric deliberately supports: generosity that leaks

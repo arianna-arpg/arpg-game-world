@@ -515,6 +515,15 @@ export interface MonsterDef {
    *  SQUADMATE. The counterplay is priority: burst the bond-holder first
    *  and the pack softens. */
   bond?: { mods: Modifier[]; kin?: string; radius?: number };
+  /** PHASE-WORN MODS — the bond's TEMPORAL twin: these mods are worn only
+   *  while the world clock stands in `phases` (world/daynight wheel). The
+   *  Night Court's whole rhythm is this one field — the hunter unpinnable
+   *  in the dark, the coach's gloom-ward that daylight burns off, the
+   *  pallbearer hardest at noon — and any future body joins with one row
+   *  (a troll that stiffens at sunrise, a moth-thing that wakes at dusk).
+   *  The counterplay is the CLOCK: fight it in its off-hours. Edge-
+   *  triggered at one world chokepoint, never re-folded per frame. */
+  nocturne?: { phases: ('dawn' | 'day' | 'dusk' | 'night')[]; mods: Modifier[] };
   /** CARRION FEEDER: hurt and out of combat, it noses to the nearest
    *  necromancy corpse within `radius` (default CARRION_CFG.radius) and
    *  EATS — `rate` × max life healed per second; after `time` seconds the
@@ -5789,6 +5798,11 @@ export const MONSTERS: Record<string, MonsterDef> = {
     base: { life: 170, moveSpeed: 135, accuracy: 120, evasion: 50, mana: 200, manaRegen: 12 },
     mods: [mod('chaosRes', 'flat', 0.4), mod('damage', 'increased', 0.15)],
     skills: ['essence_drain', 'summon_bats', 'despair'], xp: 70, faction: 'nightkin',
+    // Warlord discipline (the balor floor): a throne-tier body carries a
+    // def-level HARD gate — no fadeIn — so no table, envelope or bias can
+    // ever field the Countess on a shallow road. Explicit spawns (her
+    // warlord seat, the Long Night's court) ignore presence by design.
+    presence: { from: 14 },
     gemBias: ['chaos', 'minion'], wardPriority: 2,
     detection: 1.3, brain: { type: 'commander' },
   },
@@ -5818,6 +5832,113 @@ export const MONSTERS: Record<string, MonsterDef> = {
           actions: [{ do: 'cast', skill: 'take_wing', at: 'behindTarget', force: true }] },
       ],
     },
+  },
+
+  // The FED-ON: the Court keeps its meals walking — bled pale, collared,
+  // shackled at the wrist, and still fond of its keepers. They flock, they
+  // cling, and every wound they give comes home to the vein (lifeLeech):
+  // put them down fast or watch the drink add up. Fodder with a straw.
+  feeding_thrall: {
+    id: 'feeding_thrall', name: 'Feeding Thrall',
+    color: '#cfb8b0', shape: 'circle', radius: 11, look: 'feeding_thrall',
+    base: { life: 30, moveSpeed: 125, accuracy: 85, mana: 0 },
+    mods: [mod('lifeLeech', 'flat', 0.2)],
+    skills: ['claw'], xp: 6, faction: 'nightkin',
+    detection: 0.8, // drained dull — it notices late, then all at once
+    temper: 'skittish',
+    brain: {
+      type: 'swarm',
+      perception: { arcDeg: 120, rearMul: 0.25, attentionSpan: [5, 8] },
+      behavior: { reaction: [0.4, 0.9] },
+    },
+  },
+  // The Court's KNIFE: it hunts from the murk — a veil of gloom, a step you
+  // never saw, one opened vein. The dark itself is its armor (nocturne:
+  // evasion and pace worn dusk-to-night); catch the Court's knives by DAY
+  // and they are just pale things in sashes. Evasion-pole skirmisher —
+  // accuracy investment and AoE punish it; raw armor-stacking never will.
+  night_hunter: {
+    id: 'night_hunter', name: 'Night Hunter',
+    color: '#7a5a6a', shape: 'pentagon', radius: 12, material: 'cloth', look: 'night_hunter',
+    base: { life: 75, moveSpeed: 175, accuracy: 125, evasion: 85, mana: 45, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    nocturne: { phases: ['dusk', 'night'], mods: [mod('evasion', 'more', 0.6), mod('moveSpeed', 'increased', 0.15)] },
+    skills: ['gore_rend', 'claw'], xp: 30, faction: 'nightkin',
+    gemBias: ['attack', 'physical'],
+    detection: 1.5,
+    brain: {
+      type: 'flanker',
+      rules: [{
+        when: { distUnder: 240 }, every: [4, 7], hold: [0.1, 0.2],
+        actions: [
+          { do: 'buff', buff: { type: 'buff', id: 'gloom_fade', duration: 1.0, mods: [mod('invisible', 'flat', 1)] } },
+          { do: 'teleport', to: 'behindTarget', range: 300 },
+        ],
+      }],
+    },
+  },
+  // The Court's CHURCH: a red vicar that tithes the living — throats of
+  // hunger (sanguine_leech) torn out of whoever stands closest and drunk
+  // home as blood, and the drink is SHARED: what the cardinal takes, the
+  // Court around it is fed (sympathy 'courts_tithe'). It wears its stolen
+  // blood as armor — a slick shield over a paper body (ES-glass pole):
+  // burst it between sips, or every sip you allow it waters the flock.
+  blood_cardinal: {
+    id: 'blood_cardinal', name: 'Blood Cardinal',
+    color: '#a82a3a', shape: 'star', radius: 13, material: 'cloth', look: 'blood_cardinal',
+    base: { life: 55, energyShield: 140, moveSpeed: 115, mana: 180, manaRegen: 12 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    sympathy: ['courts_tithe'],
+    skills: ['sanguine_leech', 'despair'], xp: 48, faction: 'nightkin',
+    gemBias: ['chaos', 'duration'], wardPriority: 1,
+    detection: 1.2,
+    brain: { type: 'artillery' },
+  },
+  // THE GLOOM COACH: the Court travels — a windowless black carriage on
+  // man-high wheels, drawn by nothing anyone has seen, lamps burning a
+  // light that arrives cold. At night it ROLLS (a charge that does not
+  // slow for you) and its door keeps opening (disgorge_thralls); the gloom
+  // itself holds its boards together (nocturne damage-ward + pace). By day
+  // it stands parked wherever its rounds paused — creaking, armored, and
+  // finally BURNABLE: day is when you break the Court's carriage. Def-level
+  // HARD presence floor (from 12, the balor discipline): no coach ever
+  // rolls a shallow road, whatever table names it.
+  gloom_coach: {
+    id: 'gloom_coach', name: 'Gloom Coach',
+    color: '#241a20', shape: 'hexagon', radius: 19, material: 'wood', look: 'gloom_coach',
+    base: { life: 420, moveSpeed: 46, accuracy: 115, armor: 55, poise: 70, mana: 40, manaRegen: 5 },
+    mods: [mod('chaosRes', 'flat', 0.3), mod('coldRes', 'flat', 0.3)],
+    nocturne: { phases: ['dusk', 'night'], mods: [
+      mod('damageTaken', 'more', -0.55),
+      mod('moveSpeed', 'increased', 2.2),
+    ] },
+    skills: ['heavy_strike', 'disgorge_thralls'], xp: 90, faction: 'nightkin',
+    presence: { from: 12 },
+    tags: ['construct'],
+    aims: false, noNemesis: true, wardPriority: 2,
+    turnSpeed: 2.6, // a carriage corners like a carriage
+    detection: 1.0,
+    brain: {
+      type: 'juggernaut',
+      move: { style: 'charge', commitRange: 380, chargeSpeed: 2.4 },
+    },
+  },
+  // The PALLBEARER: the Court's daylight. When the masters sleep, these
+  // burdened wardens stand the parked hours — a coffin roped to the back,
+  // a maul in both hands — and NOON is their vigil's height (nocturne worn
+  // dawn-to-day: the same fabric as the hunter's dark, opposite pole).
+  // Poise-pole bruiser: zero evasion, zero tricks; you go THROUGH the
+  // break-bar, and by preference you go through it after dusk.
+  pallbearer: {
+    id: 'pallbearer', name: 'Pallbearer',
+    color: '#4a4048', shape: 'octagon', radius: 15, material: 'cloth', look: 'pallbearer',
+    base: { life: 200, moveSpeed: 95, accuracy: 110, armor: 45, poise: 60, mana: 30, manaRegen: 4 },
+    mods: [mod('chaosRes', 'flat', 0.3)],
+    nocturne: { phases: ['dawn', 'day'], mods: [mod('damageTaken', 'more', -0.18), mod('armor', 'increased', 0.6)] },
+    skills: ['heavy_strike'], xp: 38, faction: 'nightkin',
+    grants: [{ atLevel: 20, support: 'multistrike', on: 'heavy_strike', chance: 0.5 }],
+    detection: 0.9,
+    brain: { type: 'juggernaut', enrage: 0.5 },
   },
 
   // --- THE GLOAMWOOD (the haunted wood's own: carrion, crones, lanterns,
@@ -8525,11 +8646,22 @@ export const FACTIONS: Record<string, {
   },
   nightkin: {
     name: 'the Night Court',
+    // The Court musters as a HOUSEHOLD: the larder walks in front (thralls
+    // throng young ground and thin out), the staff hold the middle rank
+    // (hands, knives, bearers, the church), and the estate's heavy pieces —
+    // the coach, the Countess — roll only where the world has grown teeth.
+    // The coach's from:16 is HARD (no fadeIn — the war-muster seam), atop
+    // its def-level from:12 floor.
     table: [
+      { id: 'feeding_thrall', weight: 3, presence: { to: 16, fadeOut: 8 } },
       { id: 'vampire_thrall', weight: 3 },
       { id: 'crimson_bat', weight: 2 },
       { id: 'deadwake_ghoul', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'night_hunter', weight: 2, presence: { from: 6, fadeIn: 3 } },
+      { id: 'pallbearer', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      { id: 'blood_cardinal', weight: 1, presence: { from: 9, fadeIn: 4 } },
       { id: 'werewolf', weight: 2, presence: { from: 10, fadeIn: 5 } },
+      { id: 'gloom_coach', weight: 1, presence: { from: 16 } },
       { id: 'vampire_countess', weight: 1, presence: { from: 14, fadeIn: 6 } },
     ],
   },

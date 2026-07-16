@@ -177,7 +177,7 @@ import type { WorldBossField, WorldBossMint } from '../packages/overlays/worldbo
 import { eventTargetable } from '../world/zonePolicy';
 import type { InvasionHost } from '../world/invasion';
 import { WEATHER_DEFS, type WeatherFront, type WeatherStrike } from '../world/weather';
-import { dayCycle } from '../world/daynight';
+import { dayCycle, inPhases } from '../world/daynight';
 import { clampToBounds, exitInside, samplePoint, type Bounds } from '../world/shape';
 import { distFromHome, traitsOf, isDeathAligned, factionTemper } from '../world/traits';
 import { extractionLookFor } from '../data/extraction';
@@ -24930,6 +24930,20 @@ export class World {
             a.bondHeld = held;
             a.sheet.setSource('bond', held ? bond.mods : []);
             if (!held) this.text(vec(a.pos.x, a.pos.y - 18), 'bond broken!', '#d88a8a', 11);
+          }
+        }
+      }
+      // PHASE-WORN MODS (MonsterDef.nocturne): worn only while the world
+      // clock stands in the def's hours — the Court runs quick in the dark,
+      // its coach armors in gloom, its pallbearers stand hardest at noon.
+      // Edge-triggered like the pack bond; the WHEEL moves it, not the frame.
+      if (a.defId && !a.dead) {
+        const noct = MONSTERS[a.defId]?.nocturne;
+        if (noct) {
+          const held = inPhases(this.time, noct.phases);
+          if (held !== a.nocturneHeld) {
+            a.nocturneHeld = held;
+            a.sheet.setSource('nocturne', held ? noct.mods : []);
           }
         }
       }

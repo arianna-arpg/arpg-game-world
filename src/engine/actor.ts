@@ -1015,6 +1015,9 @@ export class Actor {
   /** PACK BOND transition tracker (MonsterDef.bond) — the sheet source only
    *  moves on held/dropped edges, never per frame. */
   bondHeld = false;
+  /** PHASE-WORN MODS transition tracker (MonsterDef.nocturne) — the sheet
+   *  source only moves when the day wheel crosses the def's hours. */
+  nocturneHeld = false;
   /** NO BOUNTY: this body was CONJURED mid-fight (an enemy's summon verb,
    *  summon delivery, brood hatch, split, spew) — killing it pays no xp, no
    *  drops, no orbs. The summoner is the prize; its spawn is just weather.

@@ -2719,6 +2719,75 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', color: '#ff5a5a', params: { spread: 0.4, dist: 0.55, size: 0.1 } },
     ],
   },
+  /** The feeding thrall: the Court's walking larder — a hunched pale sack
+   *  in rags, iron collar, the snapped leash still trailing. Dull eyes;
+   *  new fangs it hasn't grown into. */
+  feeding_thrall: {
+    parts: [
+      { kind: 'blob', params: { irr: 0.24, seed: 9 } },
+      { kind: 'tatters', x: -0.3, scale: 0.7, alpha: 0.8, params: { n: 4 } },
+      { kind: 'collar', scale: 0.9, role: 'metal' },
+      { kind: 'chains', x: -0.5, rot: 2.6, scale: 0.7, alpha: 0.85, params: { n: 1 } },
+      { kind: 'fangs', scale: 0.5 },
+      { kind: 'eyes', color: '#c8b8a8', params: { spread: 0.36, dist: 0.55, size: 0.07 } },
+    ],
+  },
+  /** The night hunter: the Court's knife — a low dark shape in grave-silk
+   *  sashes, twin edges out, a bone-pale mask where the face should be.
+   *  Reads assassin at a glance: mask + sashes, nothing upright about it. */
+  night_hunter: {
+    parts: [
+      { kind: 'veilSashes', scale: 1.05, role: 'dark' },
+      { kind: 'torso', scale: 0.78, role: 'dark' },
+      { kind: 'daggers', params: { len: 0.75 } },
+      { kind: 'mask', x: 0.3, scale: 0.55, role: 'bone' },
+      { kind: 'eyes', color: '#ff3a4a', params: { spread: 0.26, dist: 0.5, size: 0.07 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.4, scale: 0.6, params: { n: 2 } }],
+  },
+  /** The blood cardinal: the Court's church — vestments the colour of the
+   *  work, a censer that smokes red, the tall pale crown-mitre. The censer
+   *  IS the tell: no other body in the wood swings one. */
+  blood_cardinal: {
+    parts: [
+      { kind: 'tatters', scale: 0.9, role: 'dark', params: { n: 4 } },
+      { kind: 'robe', scale: 0.95 },
+      { kind: 'drape', scale: 0.9, role: 'dark' },
+      { kind: 'censer', y: 0.55, scale: 0.85, role: 'metal' },
+      { kind: 'crown', x: 0.3, scale: 0.62, role: 'accent' },
+      { kind: 'fangs', scale: 0.6 },
+      { kind: 'eyes', color: '#ff2a3a', params: { spread: 0.3, dist: 0.52, size: 0.08 } },
+    ],
+    live: [{ kind: 'wisps', x: -0.3, scale: 0.7, params: { n: 2 } }],
+  },
+  /** THE GLOOM COACH: a windowless black box on tall spoked wheels —
+   *  curtained, lacquered, twin lamps burning a cold blue — and nothing at
+   *  all in the traces (the wisps out front are what draws it). The wheels
+   *  are the one new limb; the rest is the kit re-hung. */
+  gloom_coach: {
+    shadowScale: 1.3,
+    parts: [
+      { kind: 'wheels', scale: 1.06, role: 'dark', params: { spokes: 5, span: 1.6 } },
+      { kind: 'chest', scale: 1.18, role: 'dark', params: { straps: 2 } },
+      { kind: 'drape', x: -0.1, scale: 0.95, role: 'dark' },
+      { kind: 'lantern', x: 0.5, y: -0.66, scale: 0.72, color: '#9ad0e8' },
+      { kind: 'lantern', x: 0.5, y: 0.66, scale: 0.72, color: '#9ad0e8' },
+      { kind: 'skull', x: 0.6, scale: 0.48, params: { glow: 'glow' } },
+    ],
+    live: [{ kind: 'wisps', x: 0.95, scale: 0.9, params: { n: 3 } }],
+  },
+  /** The pallbearer: the Court's daylight — hooded, harnessed, a full
+   *  coffin roped across the back, the maul carried like a verdict. */
+  pallbearer: {
+    parts: [
+      { kind: 'pack', x: -0.5, scale: 1.15, role: 'wood' },
+      { kind: 'torso', scale: 0.95, role: 'dark' },
+      { kind: 'harness', scale: 0.95, role: 'metal' },
+      { kind: 'mace', y: 0.05 },
+      { kind: 'hood', x: 0.28, scale: 0.95, params: { eyes: true } },
+      { kind: 'chains', x: -0.35, rot: 1.2, scale: 0.8, alpha: 0.7, params: { n: 2 } },
+    ],
+  },
   /** The dire wolf: the pack's anvil — heavy ruff, scarred hide. */
   dire_wolf: {
     parts: [

@@ -3920,6 +3920,46 @@ const irisEye: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** COACH WHEELS — a pair of tall spoked cartwheels flanking the body
+ *  (top-down: two long dark treads at ±Y, pale spoke ticks, a proud hub).
+ *  The carriage limb of the vocabulary — coaches, wagons, siege engines.
+ *  params: spokes (ticks per wheel), span (tread length ÷ body radius). */
+const wheels: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'wood');
+  const spokes = Math.max(3, Math.round(P(spec, 'spokes', 5)));
+  const span = P(spec, 'span', 1.5);
+  place(ctx, r, spec, (c, R) => {
+    for (const side of [-1, 1]) {
+      const wy = side * R * 0.95;
+      const half = R * span * 0.5;
+      const ww = R * 0.15; // half-width of the tread's footprint
+      c.fillStyle = shade(ramp.base, -0.12);
+      c.beginPath();
+      c.rect(-half, wy - ww, half * 2, ww * 2);
+      c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.8);
+      c.lineWidth = 1.2;
+      c.stroke();
+      // Spokes: pale ticks across the tread.
+      c.strokeStyle = withAlpha(ramp.light, 0.55);
+      c.lineWidth = Math.max(1, R * 0.05);
+      for (let i = 0; i < spokes; i++) {
+        const x = -half + ((i + 0.5) / spokes) * half * 2;
+        c.beginPath();
+        c.moveTo(x, wy - ww * 0.7);
+        c.lineTo(x, wy + ww * 0.7);
+        c.stroke();
+      }
+      // The hub, sitting proud at the axle.
+      c.fillStyle = shade(ramp.base, 0.14);
+      c.beginPath(); c.arc(0, wy, ww * 0.75, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = withAlpha(ramp.outline, 0.7);
+      c.lineWidth = 1;
+      c.stroke();
+    }
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -3948,6 +3988,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   collar, harness, saddlebags, muzzle,
   floatingShards,
   shroudWrap, carrionFlies,
+  wheels,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */
