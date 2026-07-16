@@ -254,6 +254,26 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.4,
     params: { points: 4, color: '#bcd8d4', material: 'crystal', coreGlow: { color: '#e8fff8' } },
   },
+  // --- The hive kit (the Seethe's warren-country) ---------------------------
+  // Waxed chitin heaved into a tower: the shard painter in carapace tones,
+  // resin light caught along the seams (baked whole — the pulse rides the
+  // light layer, never the sprite).
+  hive_spire: {
+    longShadow: 0.9,
+    painter: 'shard', order: 53, bakeWhole: 'static', shadow: 0.55,
+    params: { points: 5, color: 'theme:obstacle|#6a4526', material: 'chitin', edgeGlow: { color: '#e8a84a', alpha: 0.3 } },
+  },
+  resin_node: {
+    painter: 'pod', order: 52, shadow: 0.45,
+    params: { body: '#8a5e2a', glow: '#e8a84a', aspectY: 1.12, glowY: -0.18, glowR: 0.5, pulseRate: 0.8 },
+    light: { radius: -1.7, color: '#e8a84a', intensity: 0.12, flicker: 0.8 },
+  },
+  // A resin-set clutch: the pot-cluster painter reading as waxed eggs.
+  egg_clutch: {
+    painter: 'potCluster', order: 51, shadow: 0.35,
+    params: { clay: '#d8c9a2', lid: '#c2ae7e' },
+  },
+  brood_husk: { painter: 'bones', order: 51, params: { color: '#c9b088' } },
   bone_arch: {
     painter: 'boneArch', order: 54, shadow: 0.55, longShadow: 1.1,
     params: { bone: '#d8ccb0' },

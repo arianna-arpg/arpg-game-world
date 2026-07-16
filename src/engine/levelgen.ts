@@ -233,6 +233,11 @@ export type KnownDoodadKind =
   | 'charged_crystal'  // a crystal still holding somebody's storm
   | 'static_bloom'     // flowers that spark when the wind combs them
   | 'storm_glass'      // a sheet of vitrified ground — the strike's floor
+  // The hive kit (the Seethe's warren-country — the desert's fourth face)
+  | 'hive_spire'       // a waxed chitin tower heaved out of the sand — the warren's skyline
+  | 'resin_node'       // a swollen amber seep, hive-light caught inside
+  | 'egg_clutch'       // a resin-set clutch half-buried in the sand
+  | 'brood_husk'       // shed carapace litter — the seethe molts where it marches
   // The hell-steppes kit (the Underworld's scorched marches — the outer steppes)
   | 'hell_fin'         // a curved basalt horn-blade heaved out of the scorch — the steppes' skyline
   | 'impaler_stake'    // a leaning stake and what the legions left on it — the warning roads
@@ -1225,6 +1230,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   charged_crystal: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 130, bodyScale: 0.75, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
   static_bloom:    { overlap: 'ground' },
   storm_glass:     { overlap: 'ground', forbidOn: ['water', 'lava', 'chasm'] },
+  // The hive kit: the Seethe's warren furniture — spires block like towers,
+  // seeps stand solid, clutches and husks are walk-over litter.
+  hive_spire:  { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 140, bodyScale: 0.6, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  resin_node:  { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 90, bodyScale: 0.8, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  egg_clutch:  { overlap: 'ground', walkOnly: true },
+  brood_husk:  { overlap: 'ground', walkOnly: true },
   vines:     { overlap: 'inert',  blocksMove: true,  blocksShot: false, spin: true },
   bridge:    { overlap: 'ground', spans: true },
   mud:       { overlap: 'ground', pour: {} },
@@ -4564,6 +4575,11 @@ registerStamp('fulgurite', stampSingle('fulgurite', [11, 17]));
 registerStamp('charged_crystal', stampSingle('charged_crystal', [9, 14]));
 registerStamp('static_bloom', stampSingle('static_bloom', [10, 16]));
 registerStamp('storm_glass', stampSingle('storm_glass', [16, 28]));
+// The hive kit: the Seethe's spires through the solid path, litter as scatter.
+registerStamp('hive_spire', (ctx, spec) => stampSolid(ctx, 'hive_spire', spec.radius ?? [16, 30]));
+registerStamp('resin_node', stampSingle('resin_node', [10, 15]));
+registerStamp('egg_clutch', stampSingle('egg_clutch', [10, 16]));
+registerStamp('brood_husk', stampSingle('brood_husk', [11, 17]));
 // The hell-steppes kit: horn-blade fins, the legions' stakes, titan chains,
 // glowing crust-rents — and the abyssal rent, a FALL pit (the descent's
 // void_chasm idiom: the stamp marks fall:true, the recovery does the physics).

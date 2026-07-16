@@ -174,6 +174,21 @@ registerLandmark({
   },
   poi: true, mustReach: true,
 });
+// A hive sink: the warren's open throat — a stamped pit boiling with the
+// brood, the sand packed glossy where ten thousand feet turned.
+registerLandmark({
+  id: 'hive_sink', builder: 'pit', size: [500, 780],
+  params: { floorKind: 'mud', gapArc: 0.5 },
+  spawns: {
+    table: [
+      { id: 'chitin_drone', weight: 5 },
+      { id: 'chitin_lancer', weight: 2, presence: { from: 3, fadeIn: 2 } },
+      { id: 'chitin_broodtender', weight: 1, presence: { from: 9, fadeIn: 4 } },
+    ],
+    count: [5, 9], where: 'interior',
+  },
+  poi: true, mustReach: true,
+});
 // --- THE ABYSS (the Underworld's pits) -------------------------------------------
 // An abyssal maw: a tear in the steppes floor — the 'abyss' region does the
 // fall (ember-rimmed dark; shots and sight cross, bodies drop), dead stone

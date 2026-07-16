@@ -420,6 +420,29 @@ registerFormation({
   ],
 });
 
+// A HIVE RING: the warren shows its crown — waxed spires in a rough circle,
+// clutches and seeps set between (pair with hive_pocket's clearing: ring
+// inner 125·0.92−6 = 109 ≥ 72 + 22 — the menhir numeric contract).
+registerFormation({
+  id: 'hive_ring', arrange: 'ring', span: [125, 155], step: 46,
+  pieces: [
+    { kind: 'hive_spire', radius: [14, 22], jitter: 6, rot: true },
+    { kind: 'egg_clutch', radius: [10, 14], every: 2, jitter: 12 },
+    { kind: 'resin_node', radius: [10, 13], every: 3, jitter: 10 },
+  ],
+});
+
+// A RESIN SEEP: the warren weeps a trail — amber nodes filing toward the
+// brood ground, molt-husks scattered where the carriers turned.
+registerFormation({
+  id: 'resin_seep', arrange: 'meander', span: [240, 420], step: 48,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'resin_node', radius: [9, 13], jitter: 10 },
+    { kind: 'brood_husk', radius: [10, 15], every: 2, jitter: 18 },
+  ],
+});
+
 // --- GRID / ORBIT / BRAID (the second arranger wave) --------------------------
 
 // AN ORCHARD: planted rows — someone tends these trees, or someone did.

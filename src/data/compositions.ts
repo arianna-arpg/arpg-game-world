@@ -81,6 +81,16 @@ registerComposition({
   post: [{ kind: 'formation', formation: 'hermits_rest', at: 'camp', count: [1, 1] }],
 });
 
+// A HIVE POCKET: the Seethe's brood ground — a stamped-flat court ringed by
+// waxed spires, the insect country showing its crown. Clearing 58–72 vs the
+// hive_ring orbit: 125·0.92−6 = 109 ≥ 72+22 — the menhir numeric contract.
+registerComposition({
+  id: 'hive_pocket',
+  sites: [{ id: 'brood', radius: [170, 215] }],
+  pre: [{ kind: 'clearing', at: 'brood', count: [1, 1], radius: [58, 72] }],
+  post: [{ kind: 'formation', formation: 'hive_ring', at: 'brood', count: [1, 1] }],
+});
+
 // ORCHARD ROWS: tended ground — planted ranks, a hedgerow windbreak, and a
 // working lane kept clear of the wild scatter.
 registerComposition({

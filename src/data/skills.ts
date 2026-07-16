@@ -5314,6 +5314,28 @@ export const SKILLS: Record<string, SkillDef> = {
     delivery: { type: 'summon', monsterId: 'spiderling', count: 2, maxActive: 8 },
     effects: [],
   },
+  lay_chitin_clutch: {
+    id: 'lay_chitin_clutch', name: 'Lay Chitin Clutch',
+    description: 'Seal a clutch of eggs in resin. Left alone it SPLITS and the seethe boils out — unless someone stamps it first.',
+    tags: ['spell', 'summon', 'minion', 'duration'], color: '#d8b06a',
+    manaCost: 14, cooldown: 9, useTime: 0.8,
+    delivery: {
+      type: 'construct', kind: 'pod', look: 'chitin_clutch',
+      range: 0, duration: 7, maxActive: 3, life: 45, placeRange: 80,
+      hatch: { skillId: 'egg_hatch_chitin' },
+    },
+    effects: [],
+    requirements: { willpower: 16 },
+    ai: { range: 240, weight: 2, keepDistance: 200 },
+  },
+  egg_hatch_chitin: {
+    id: 'egg_hatch_chitin', name: 'The Clutch Splits', noDrop: true,
+    description: 'The resin cracks: drones boil out.',
+    tags: ['spell', 'summon', 'minion'], color: '#d8b06a',
+    manaCost: 0, cooldown: 0, useTime: 0,
+    delivery: { type: 'summon', monsterId: 'chitin_drone', count: 2, maxActive: 8 },
+    effects: [],
+  },
   lay_grub_clutch: {
     id: 'lay_grub_clutch', name: 'Lay Grub Clutch',
     description: 'Bury a clutch of pale eggs. Left alone they HATCH a wave of maggots; broken, they are only a smear.',
@@ -6739,6 +6761,24 @@ export const SKILLS: Record<string, SkillDef> = {
         { id: 'zombie', weight: 2 },
         { id: 'skeleton_warrior', weight: 2 },
         { id: 'skeleton_archer', weight: 1 },
+      ],
+      count: 1, maxActive: 6,
+    },
+    effects: [],
+    requirements: { willpower: 34 },
+    ai: { range: 720, weight: 1 },
+  },
+
+  spew_brood: {
+    id: 'spew_brood', name: 'The Seethe Boils', noDrop: true,
+    description: 'The hive node splits at the seams and the brood pours out.',
+    tags: ['spell', 'summon', 'minion'], color: '#d89a3a',
+    manaCost: 0, cooldown: 3.4, useTime: 1.2,
+    delivery: {
+      type: 'summon',
+      pool: [
+        { id: 'chitin_drone', weight: 3 },
+        { id: 'chitin_lancer', weight: 1 },
       ],
       count: 1, maxActive: 6,
     },

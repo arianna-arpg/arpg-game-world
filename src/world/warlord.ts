@@ -45,6 +45,7 @@ export const WARLORD_OF: Record<string, string> = {
   emberkin: 'emberkin_matriarch',
   junglekin: 'verdant_tyrant',
   sirocco: 'mirage_khagan',
+  chitin: 'brood_sovereign',
   hollowborn: 'the_unworn',
   chattel: 'the_bellwether',
   // RESERVED kin (doorless — see data/monsters.ts RESERVED_KIN): crowns

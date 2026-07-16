@@ -2868,6 +2868,86 @@ export const LOOKS: Record<string, LookDef> = {
     shadowScale: 0.6,
   },
 
+  // --- THE CHITIN (the Seethe: the deep desert's hive kin) ------------------
+  /** A chitin drone: the seethe's coin — carapace, feelers, nothing wasted. */
+  chitin_drone: {
+    parts: [
+      { kind: 'carapace', scale: 0.8 },
+      { kind: 'legs', scale: 0.75, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.8 },
+      { kind: 'mandibles', scale: 0.7 },
+    ],
+  },
+  /** A chitin lancer: wings over a needle — the sting arrives first. */
+  chitin_lancer: {
+    parts: [
+      { kind: 'disc', scale: 0.6 },
+      { kind: 'wings', scale: 0.95, alpha: 0.85 },
+      { kind: 'legs', scale: 0.6, params: { n: 6 } },
+      { kind: 'stinger', scale: 1.1 },
+      { kind: 'eyes', color: '#ffd890', params: { spread: 0.5, dist: 0.55, size: 0.11 } },
+    ],
+  },
+  /** A chitin spitter: a swollen retort walking on too-thin legs. */
+  chitin_spitter: {
+    parts: [
+      { kind: 'carapace', scale: 0.85 },
+      { kind: 'bloatSacs', x: -0.32, scale: 0.75, params: { n: 3 } },
+      { kind: 'legs', scale: 0.8, params: { n: 6 } },
+      { kind: 'mandibles', scale: 0.5 },
+    ],
+  },
+  /** A chitin burrower: shear-jaws behind a wedge of plate — the sand's own door. */
+  chitin_burrower: {
+    parts: [
+      { kind: 'shell', scale: 1.0 },
+      { kind: 'armorPlates', scale: 0.8 },
+      { kind: 'legs', scale: 0.9, params: { n: 6 } },
+      { kind: 'mandibles', scale: 1.25 },
+    ],
+  },
+  /** A brood tender: an egg-swollen matron fussing her clutches forward. */
+  chitin_broodtender: {
+    parts: [
+      { kind: 'blob', scale: 0.9, params: { irr: 0.14, seed: 157 } },
+      { kind: 'egg', x: -0.28, y: 0.18, scale: 0.4 },
+      { kind: 'egg', x: -0.34, y: -0.12, scale: 0.34 },
+      { kind: 'legs', scale: 0.85, params: { n: 6 } },
+      { kind: 'antennae', scale: 0.9 },
+      { kind: 'eyeCluster', color: '#ffd8a0', params: { n: 4, spread: 0.4, dist: 0.5 } },
+    ],
+  },
+  /** The Brood Sovereign (worm head): a crowned queen the sand carries. */
+  brood_sovereign: {
+    parts: [
+      { kind: 'shell', scale: 1.05 },
+      { kind: 'armorPlates', scale: 0.9 },
+      { kind: 'mandibles', scale: 1.35 },
+      { kind: 'antennae', scale: 1.1 },
+      { kind: 'eyeCluster', color: '#ffb060', params: { n: 6, spread: 0.5, dist: 0.55 } },
+    ],
+  },
+  /** A chitin clutch (pod portrait): resin-set eggs, wax-sealed. */
+  chitin_clutch: {
+    parts: [
+      { kind: 'egg', x: 0.14, y: 0.1, scale: 0.55 },
+      { kind: 'egg', x: -0.16, y: -0.06, scale: 0.46 },
+      { kind: 'egg', x: 0.0, y: -0.2, scale: 0.4 },
+      { kind: 'spots', params: { n: 3 } },
+    ],
+    shadowScale: 0.6,
+  },
+  /** A hive node (the spawner object): a breathing mound, egg-lit at the seams. */
+  hive_node: {
+    parts: [
+      { kind: 'blob', scale: 1.0, params: { irr: 0.18, seed: 163 } },
+      { kind: 'armorPlates', scale: 0.7 },
+      { kind: 'egg', x: 0.2, y: 0.16, scale: 0.4 },
+      { kind: 'egg', x: -0.24, y: -0.1, scale: 0.36 },
+    ],
+    shadowScale: 0.8,
+  },
+
   // --- THE SMALL LIVES (ambience: prey with personality) -------------------
   /** A squirrel: all tail. */
   squirrel: {

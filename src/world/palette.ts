@@ -29,6 +29,7 @@ export const FACTION_COLORS: Record<string, string> = {
   emberkin: '#e88a3a',
   junglekin: '#3fae5c',
   sirocco: '#f0c880',
+  chitin: '#a86018',
   hollowborn: '#9aa4b2',
   chattel: '#d8b86a',
   starfall: '#9ad4e8',

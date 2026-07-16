@@ -8106,6 +8106,102 @@ export const MONSTERS: Record<string, MonsterDef> = {
       ],
     },
   },
+
+  // --- THE CHITIN (the Seethe): the hive under the deep desert --------------
+  // The faction's texture is SOURCE WARFARE: the bodies are modest, the
+  // SOURCES are the fight — tenders laying clutches mid-brawl, hive nodes
+  // flooding the field, eggs hatching if nobody stamps them. Kill the wells
+  // or drown in the pour. (Shell/bond belong to the scarab and the formics;
+  // the Seethe's defense is reinforcement.)
+  chitin_drone: {
+    id: 'chitin_drone', name: 'Chitin Drone',
+    color: '#b8823a', shape: 'oval', radius: 10, material: 'chitin', look: 'chitin_drone',
+    base: { life: 34, moveSpeed: 155, accuracy: 92, armor: 20, mana: 0 },
+    skills: ['claw'], xp: 9,
+    faction: 'chitin',
+    detection: 1.0,
+    temper: 'territorial',
+    brain: { type: 'swarm', squad: { idle: { style: 'drill' }, formation: 'column' } },
+  },
+  chitin_lancer: {
+    id: 'chitin_lancer', name: 'Chitin Lancer',
+    color: '#d8a04a', shape: 'kite', radius: 11, material: 'chitin', look: 'chitin_lancer',
+    base: { life: 46, moveSpeed: 190, accuracy: 108, evasion: 65, mana: 0 },
+    skills: ['claw'], xp: 16,
+    faction: 'chitin',
+    detection: 1.2,
+    presence: { from: 3, fadeIn: 2 },
+    brain: { type: 'skirmish', withdraw: 1.2, move: { style: 'skitter', dart: [0.3, 0.55], pause: [0.15, 0.4] } },
+  },
+  chitin_spitter: {
+    id: 'chitin_spitter', name: 'Chitin Spitter',
+    color: '#c8944a', shape: 'oval', radius: 13, material: 'chitin', look: 'chitin_spitter',
+    base: { life: 66, moveSpeed: 120, accuracy: 105, armor: 30, mana: 90, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['bile_spray'], xp: 24,
+    faction: 'chitin',
+    detection: 1.0,
+    presence: { from: 5, fadeIn: 3 },
+    brain: { type: 'skirmish', withdraw: 1.5 },
+  },
+  chitin_burrower: {
+    id: 'chitin_burrower', name: 'Chitin Burrower',
+    color: '#a87838', shape: 'hexagon', radius: 16, material: 'chitin', look: 'chitin_burrower',
+    base: { life: 135, moveSpeed: 115, accuracy: 100, armor: 50, poise: 40, mana: 20, manaRegen: 3 },
+    skills: ['heavy_strike'], xp: 32,
+    faction: 'chitin',
+    // LOW SHELL + REAL POISE on a bigger frame (the formic soldier's pole,
+    // scaled up): crack the wedge fast, then commit through the brace.
+    shellGuard: { side: 'front', max: 70, regenDelay: 4.5, regenRate: 15, color: '#c8a05a' },
+    scaling: { armor: { flatPerLevel: 1.5 } },
+    detection: 0.9,
+    presence: { from: 7, fadeIn: 4 },
+    temper: 'territorial',
+    brain: { type: 'juggernaut', move: { style: 'charge', commitRange: 280, chargeSpeed: 2.0 } },
+  },
+  chitin_broodtender: {
+    id: 'chitin_broodtender', name: 'Brood Tender',
+    color: '#d8b06a', shape: 'circle', radius: 15, material: 'chitin', look: 'chitin_broodtender',
+    base: { life: 120, moveSpeed: 105, accuracy: 100, armor: 25, mana: 140, manaRegen: 9 },
+    mods: [mod('chaosRes', 'flat', 0.4)],
+    skills: ['lay_chitin_clutch', 'bile_spray'], xp: 55,
+    faction: 'chitin',
+    turnSpeed: 2.6,
+    gemBias: ['summon', 'minion'], wardPriority: 1,
+    scaling: { life: { incPerLevel: 0.05 } },
+    detection: 0.9,
+    presence: { from: 9, fadeIn: 4 },
+    brain: { type: 'juggernaut' },
+  },
+  brood_sovereign: {
+    id: 'brood_sovereign', name: 'Brood Sovereign',
+    color: '#e8a84a', shape: 'star', radius: 17, material: 'chitin', look: 'brood_sovereign',
+    base: { life: 310, moveSpeed: 122, accuracy: 106, armor: 45, poise: 50, mana: 160, manaRegen: 8 },
+    mods: [mod('chaosRes', 'flat', 0.5), mod('physRes', 'flat', 0.15)],
+    skills: ['heavy_strike', 'lay_chitin_clutch'], xp: 125,
+    faction: 'chitin',
+    gemBias: ['summon', 'minion'],
+    // The def-level floor (the balor discipline): a HARD gate — no fadeIn,
+    // so no spawn surface fields her below 14, wherever a table might try.
+    presence: { from: 14 },
+    worm: { length: 6, spacing: 19, taper: 0.88 },
+    brain: {
+      type: 'juggernaut',
+      phases: [
+        { atLifeFrac: 0.66, announce: 'The sand hums — the Seethe answers her.', onEnter: [{ do: 'summon', monster: 'chitin_lancer', count: 3, ring: 120 }] },
+        { atLifeFrac: 0.33, mods: [mod('attackSpeed', 'increased', 0.2)], announce: 'The Sovereign rattles — and every egg in the sand rattles back!', onEnter: [{ do: 'summon', monster: 'chitin_burrower', count: 2, ring: 130 }] },
+      ],
+    },
+  },
+  hive_node: {
+    id: 'hive_node', name: 'Hive Node',
+    color: '#c8944a', shape: 'square', radius: 21, material: 'chitin', look: 'hive_node',
+    base: { life: 150, moveSpeed: 0, armor: 25, evasion: 0, mana: 999, manaRegen: 50 },
+    mods: [mod('chaosRes', 'flat', 0.5)],
+    skills: ['spew_brood'],
+    xp: 45,
+    spawner: true,
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -8202,6 +8298,11 @@ const RELATIONS: Record<string, FactionStance> = {
   // same floor.
   'smoulder|sylvan': 'hostile',
   'magpie|vermin': 'hostile',
+  // The Seethe wants the deep sand to itself: the packs raid its warrens
+  // for grubs, and the Court remembers when the erg was ITS floor alone —
+  // the desert's turf war grows a third banner.
+  'chitin|gnoll': 'hostile',
+  'chitin|sirocco': 'hostile',
 };
 
 /** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families
@@ -8535,6 +8636,20 @@ export const FACTIONS: Record<string, {
       { id: 'dust_djinn', weight: 2, presence: { from: 9, fadeIn: 4 } },
       { id: 'sun_priest', weight: 1, presence: { from: 10, fadeIn: 4 } },
       { id: 'sandmaw_burrower', weight: 1, presence: { from: 8, fadeIn: 4 } },
+    ],
+  },
+  // The Seethe: drones are the coin, sources are the fight — the roster
+  // leans tender/burrower with depth while the chaff thins (never gone;
+  // a hive spends bodies the way weather spends rain).
+  chitin: {
+    name: 'the Chitin',
+    table: [
+      { id: 'chitin_drone', weight: 4, presence: { to: 20, fadeOut: 10 } },
+      { id: 'chitin_lancer', weight: 2, presence: { from: 3, fadeIn: 2 } },
+      { id: 'chitin_spitter', weight: 2, presence: { from: 5, fadeIn: 3 } },
+      { id: 'chitin_burrower', weight: 1, presence: { from: 7, fadeIn: 4 } },
+      { id: 'chitin_broodtender', weight: 1, presence: { from: 9, fadeIn: 4 } },
+      { id: 'brood_sovereign', weight: 1, presence: { from: 16, fadeIn: 6 } },
     ],
   },
 };

@@ -888,6 +888,8 @@ export const TILESETS: Record<string, TilesetDef> = {
         // Court outriders reach the rim where the world runs deep enough.
         { id: 'mirage_dancer', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'salt_husk', weight: 1, presence: { from: 7, fadeIn: 4 } },
+        // A hive forager strays this far out where the warrens run shallow.
+        { id: 'chitin_drone', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1012,6 +1014,9 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dust_djinn', weight: 1, presence: { from: 9, fadeIn: 4 } },
         { id: 'sun_priest', weight: 1, presence: { from: 10, fadeIn: 4 } },
         { id: 'sandmaw_burrower', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        // The Seethe's foragers range the open erg (the fourth face is near).
+        { id: 'chitin_drone', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'chitin_lancer', weight: 1, presence: { from: 8, fadeIn: 4 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -1130,6 +1135,124 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'bounty', weight: 1 },
       { kind: 'beacon', weight: 1 },
       { kind: 'escape', weight: 1 },
+    ],
+  },
+
+  // HIVESANDS — the SEETHE: the desert's fourth face, the warren-country
+  // under the deep sand. Waxed spires for a skyline, clutches for scrub,
+  // and the ground itself pocked with brood throats — the pockets are the
+  // point (hive_pocket courts, hive_sink pits, spawner-node floods). Smash
+  // the sources or wade the seethe forever.
+  hivesands: {
+    id: 'hivesands',
+    depthAffinity: { from: 0.35, fadeIn: 0.3, mul: 0.85 },
+    compositions: [
+      { composition: 'hive_pocket', chance: 0.5 },
+      { composition: 'caravan_graveyard', chance: 0.15 },
+    ],
+    layoutParams: {
+      duneGap: [440, 640], duneCrestW: [18, 28], dunePans: [2, 4],
+      duneCombEvery: 130,
+    },
+    variants: [
+      // The warren's crown country: spire clusters, the seeps between.
+      { name: 'seething warren', layout: [
+        { kind: 'hive_spire', count: [4, 7] }, { kind: 'egg_clutch', count: [4, 7] },
+        { kind: 'resin_node', count: [3, 5] }, { kind: 'rocks', count: [2, 4], radius: [20, 40] },
+        { kind: 'heat_shimmer', count: [2, 4] }, { kind: 'cave', count: [0, 2] },
+        { kind: 'formation', count: [1, 2], formation: 'resin_seep' },
+      ] },
+      // Brood ground: clutch fields under a few old towers.
+      { name: 'brood ground', layout: [
+        { kind: 'hive_spire', count: [2, 4] }, { kind: 'egg_clutch', count: [6, 10] },
+        { kind: 'brood_husk', count: [3, 6] }, { kind: 'bone_pile', count: [2, 4] },
+        { kind: 'heat_shimmer', count: [2, 4] },
+        { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
+      ] },
+      // Husk flats: the molt-fields — the seethe passed this way, and left.
+      { name: 'husk flats', layout: [
+        { kind: 'brood_husk', count: [6, 10] }, { kind: 'bone_pile', count: [3, 5] },
+        { kind: 'rocks', count: [2, 4], radius: [18, 38] }, { kind: 'cactus', count: [0, 2] },
+        { kind: 'heat_shimmer', count: [3, 5] }, { kind: 'fulgurite', count: [0, 2] },
+      ] },
+    ],
+    nameFirst: ['Seething', 'Burrowed', 'Thrumming', 'Chittering', 'Brood-Warm', 'Wax-Sealed', 'Resin-Weeping', 'Carapace', 'Hollow-Sung', 'Humming', 'Chitin-Choked', 'Ten-Thousand'],
+    nameSecond: ['Warrens', 'Seethe', 'Nests', 'Combs', 'Broodlands', 'Mounds', 'Cradle', 'Undersand', 'Hollows', 'Ground'],
+    theme: {
+      dayLight: 1.5,
+      heat: 0.95,
+      swelter: 0.8,
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.7 }, { kind: 'sandDrift', intensity: 0.4 }],
+      // Trodden rust-sand: darker and less wind-combed than the open erg —
+      // ten thousand feet pack a floor (short stretch, heavier grain).
+      ground: {
+        scale: 2.4, stretchX: 1.6, strength: 1.2, speckles: 0.5,
+        palette: ['#241a10', '#3a2a16', '#523a1e', '#6a4c26', '#7e5c30'], bias: 0.52, alpha: 0.55,
+      },
+      floor: '#1a140c', grid: '#2a2014', border: '#7a5c34',
+      obstacle: '#5c3e22', obstacleEdge: '#8a6238', accent: '#e8a84a',
+      mud: '#6a5630', water: '#2a6a7a', sand: '#c9a26a',
+    },
+    sizeW: [3400, 4400], sizeH: [2400, 3200], ellipseChance: 0.12, biome: 'desert',
+    layout: [
+      { kind: 'hive_spire', count: [3, 5] },
+      { kind: 'egg_clutch', count: [3, 6] },
+      { kind: 'resin_node', count: [2, 4] },
+      { kind: 'brood_husk', count: [2, 4] },
+      { kind: 'sand', count: [3, 5] },
+      { kind: 'rocks', count: [3, 6], radius: [20, 44] },
+      { kind: 'cactus', count: [0, 2] },
+      { kind: 'heat_shimmer', count: [2, 4] },
+      { kind: 'cave', count: [0, 2] },
+      { kind: 'structure', count: [0, 1], structure: 'faction_war_camp' },
+    ],
+    // What the warren-country always IS: desert bones under hive breath.
+    common: [
+      { kind: 'formation', count: [0, 1], formation: 'dune_ridges' },
+      { kind: 'formation', count: [0, 1], formation: 'resin_seep' },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'heat_shimmer', count: [0, 2], where: { field: 'climate', params: { axis: 'temperature' }, min: 0.55 } },
+    ],
+    landmarks: [
+      // The warren's open throats — and the desert's old holes beneath them.
+      { landmark: 'hive_sink', chance: 0.4 },
+      { landmark: 'maggot_burrow', chance: 0.1 },
+      { landmark: 'sinkhole', chance: 0.12 },
+      { landmark: 'canyon', chance: 0.1 },
+    ],
+    packs: {
+      count: [7, 9], size: [3, 6],
+      // The seethe travels as WEATHER: big swarm musters, the odd lone
+      // forager between them.
+      archetypes: [
+        { weight: 4, size: [6, 10] }, { weight: 4, size: [3, 5] }, { weight: 2, size: [1, 2] },
+      ],
+      table: [
+        { id: 'chitin_drone', weight: 4 },
+        { id: 'chitin_lancer', weight: 2, presence: { from: 3, fadeIn: 2 } },
+        { id: 'chitin_spitter', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'chitin_burrower', weight: 1, presence: { from: 7, fadeIn: 4 } },
+        { id: 'chitin_broodtender', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        // (No sovereign in the daily scatter: the queen holds her throne —
+        // meet her at the warlord capital or in the deep war musters.)
+        // The desert's other tenants dispute the ground (the turf war's
+        // texture): packs raid the rim, the Court walks in like it owns it.
+        { id: 'bronze_scarab', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'sand_wyrm', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'giant_maggot', weight: 1, presence: { to: 12, fadeOut: 6 } },
+        { id: 'gnoll_prowler', weight: 1, presence: { to: 10, fadeOut: 5 } },
+        { id: 'salt_husk', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      ],
+    },
+    spawnerId: 'hive_node',
+    objectives: [
+      { kind: 'spawners', weight: 4 },
+      { kind: 'clear', weight: 2 },
+      { kind: 'bounty', weight: 1 },
+      { kind: 'escape', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+      { kind: 'waves', weight: 1 },
     ],
   },
 
