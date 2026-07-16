@@ -109,6 +109,13 @@ export interface WorldOverlay {
   activityAt?(zid: string): number;
   /** Paint the field onto the minimap. */
   renderMap(nodes: ZoneDef[]): MapLayer;
+  /** MAP-FIT EXTENT (optional): coordinates the fitted world-map view should
+   *  additionally enclose — for a field whose painted state lives BEYOND the
+   *  charted nodes (Deepwinter's territory marching in from past the rim).
+   *  The map folds these into its bounds exactly like node coords, and the
+   *  layer's toggle chip silences the stretch along with the paint. Omit it
+   *  for node-anchored fields (their paint is inside the fit by construction). */
+  mapExtent?(): ReadonlyArray<{ x: number; y: number }>;
   /** WORLDSTATE PERSISTENCE (required for `persistence: 'durable'` fields) —
    *  the seam a saved run resumes its living world through (meta/worldstate.ts
    *  rides these in the character save). `snapshot` returns this field's

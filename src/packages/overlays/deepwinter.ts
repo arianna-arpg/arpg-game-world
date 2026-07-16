@@ -1,42 +1,48 @@
 // ---------------------------------------------------------------------------
-// DEEPWINTER FIELD — the creeping frost: a WINTER FRONT that ignites at the
-// COLDEST charted node and marches zone-to-zone along the road graph,
-// CONVERTING the land as it takes it (pure overlay).
+// DEEPWINTER FIELD — the creeping frost: a WINTER FRONT that is born in the
+// world's own climate FIELD and marches through COORDINATE SPACE, converting
+// whatever minted ground its territory swallows (pure overlay).
 //
-// The map's climate geography becomes gameplay. Worldgen bakes every node's
-// climate axes (ZoneDef.geo.climate — world/climate.ts); Deepwinter reads the
-// TEMPERATURE axis twice: ignition picks the coldest eligible charted node
-// (the glacial heart — its zone is guaranteed a frozen_lake landmark, grafted
-// by the engine off consumeHeartMark), and every march step takes the COLDEST
-// eligible frontier zone next. So the frost eats the cold end of the map
-// first and then pushes into warmer country exactly like an advancing army —
-// legible, predictable, and rooted in the world's own geography rather than a
-// random flood. It rides ONLY existing edges (never mints frontiers); new
-// ground minted INSIDE the front's biome warps inherits the winter at mint
-// through the ordinary warp→sampleBiome path (freezeAt rivers and all).
+// The map's climate geography becomes gameplay — and the map itself becomes a
+// SITUATIONAL-AWARENESS MAP. The EYE of winter opens at a cold COORDINATE
+// (climateAt/biomeAt sampled directly — winter country per the biome field),
+// deliberately clear of every charted node, of town, and of the player: the
+// event is NEVER retroactive (no backtracking to ground you already cleared)
+// and never spawns on top of anyone. From that eye the front claims the world
+// cell by cell on a march lattice, each step taking the COLDEST unclaimed
+// boundary cell — so the frost consolidates the cold country first and then
+// pushes down the temperature gradient toward the warm, charted world exactly
+// like an advancing army. The claimed territory IS the front: the map draws it
+// as one contiguous wash behind the node web with an animated frontline along
+// its boundary — a war map's shifting border, watchable from ignition day.
 //
-// A CONVERTED zone is dressed by the engine on entry (materializeDeepwinter):
-// standing snow held at the frozen floor (World.snowFloor), WHITEOUT banks
-// through the fogEnsure runtime seam, intensity-scaled Rimebound packs — and
-// the WINTER KING (Crowned) at the glacial heart. Clearing converted ground
-// changes nothing; only felling the King does — the front stops, and the
-// thaw RETREATS the winter outermost-ring-first back to the heart it lost
-// (the army going home to bury its crown). Conservative BY DESIGN: one front
-// at a time, a slow telegraphed early creep, and the map shows the front from
-// ignition day — the response window is the point, not the surprise.
+// Minted zones are DERIVED state: the moment the territory swallows a node,
+// that zone converts and everything downstream behaves exactly as before —
+// the engine dresses it on entry (snow at the frozen floor, WHITEOUT banks,
+// intensity-scaled Rimebound packs) and the biome warp makes frontier zones
+// minted inside the claim come out winter at mint. The glacial heart
+// CRYSTALLIZES: the first held zone within reach of the eye (usually one the
+// player mints pushing toward it) becomes the heart — its def is grafted a
+// frozen_lake landmark and the WINTER KING (Crowned) holds it. Clearing
+// converted ground changes nothing; only felling the King does — the march
+// stops and the thaw walks the territory home newest-ground-first, back to
+// the eye it was born from. Conservative BY DESIGN: one front at a time, a
+// rare ignition, a slow telegraphed creep, a hard province cap.
 //
-// PURE of the engine, exactly like ContagionField: it owns the node-space
-// march + the per-zone conversion + the thaw clock, with no runtime coupling
-// to World (the import-time marker/zone-info registrations only). The engine
-// reads frostOn()/kingIn()/convertedZones()/consumeHeartMark() and calls
-// onWinterKingSlain() back from the kill row.
+// PURE of the engine, exactly like ContagionField: it owns the lattice march
+// + the zone-conversion sync + the thaw clock, with no runtime coupling to
+// World (the import-time marker/zone-info registrations only). The engine
+// reads frostOn()/kingIn()/convertedZones()/eyeWarp()/consumeHeartMark() and
+// calls onWinterKingSlain() back from the kill row.
 // ---------------------------------------------------------------------------
 
 import { clamp, mixHex } from '../../core/math';
 import { Rng } from '../../core/rng';
 import { START_ZONE, type ZoneDef } from '../../data/zones';
 import type { World } from '../../engine/world';
-import { coordDist } from '../../world/coords';
+import { biomeAt } from '../../world/biomes';
+import { climateAt } from '../../world/climate';
+import { coordDist, type MapCoord } from '../../world/coords';
 import { registerMarkerSource, type MapMarker } from '../../world/mapMarkers';
 import { registerZoneInfoSource, type ZoneInfoEntry } from '../../world/zoneInfo';
 import { NO_BIAS, type MapLayer, type OverlayView, type SpawnBias, type WorldOverlay } from '../../world/overlay';
@@ -46,6 +52,16 @@ import type { OverlayBuildCtx, PackageGate } from '../types';
 
 const STEP = 0.5; // fixed ignition cadence (seconds)
 
+/** 4-neighbourhood of the march lattice. */
+const NEIGH4: ReadonlyArray<readonly [number, number]> = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+/** Compass octant for the ignition bulletin (screen-space: +y is south). */
+const OCTANTS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
+function octantOf(dx: number, dy: number): string {
+  const i = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+  return OCTANTS[((i % 8) + 8) % 8];
+}
+
 /** The whole Deepwinter mechanic as data — every number a knob (mirrors the
  *  other surges). Carried by the def, passed into the overlay constructor. */
 export interface DeepwinterSurge {
@@ -53,39 +69,64 @@ export interface DeepwinterSurge {
    *  time is a structural invariant of this overlay, not a knob — the state
    *  below holds a single nullable front by design. */
   igniteChance: number;
-  /** Seconds (÷severity) between the front taking ONE more zone — slow and
-   *  telegraphed (the generous response window is the design). */
-  spreadInterval: number;
-  /** Extra zones taken the moment it ignites (each via one coldest-first
-   *  march step): 1 = the heart plus ONE neighbour — present on the map,
-   *  not yet threatening. The most conservative possible birth. */
-  initialHops: number;
-  /** March cap: the winter never reaches further than this many hops from
-   *  the heart; intensity = clamp(1 − hops/maxHops, minIntensity, 1). */
-  maxHops: number;
-  minIntensity: number;
-  /** Seconds between the thaw retreating ONE outermost ring after the King
-   *  falls (the front walks home to bury its crown). */
-  thawInterval: number;
-  /** A node only IGNITES if its baked temperature sits at/below this (the
-   *  cold band's shoulder) — no winter is born out of warm country. Nodes
-   *  minted before climate baking carry no reading and never ignite. */
+  /** The EYE only opens where the climate field runs at/below this
+   *  temperature — no winter is born out of warm country. */
   igniteMaxTemp: number;
-  /** Min node-distance from town for the heart — the frost marches FROM the
-   *  cold end of the map, never out of the starting yard. */
+  /** Biomes the eye may open in (biomeAt sampled at the candidate coordinate
+   *  — a winter is born in winter country, charted or not). */
+  centerBiomes: string[];
+  /** Min distance from town for the eye — a campaign, never a siege of home. */
   seedMinDist: number;
+  /** The eye opens ONLY this clear of every charted surface node: the event
+   *  is never retroactive — no winter materializes over ground the player
+   *  already walked; the front must MARCH there in the open. */
+  minClearFromCharted: number;
+  /** …and this clear of the player's current zone (never an ambush-spawn). */
+  avoidPlayerDist: number;
+  /** How far past the charted envelope the ignition scan reaches — the same
+   *  "the world exists beyond the map's edge" idiom the biome wash paints
+   *  with; the eye usually opens just past the known cold rim. */
+  igniteSearchMargin: number;
+  /** The march lattice cell size (world/node units). The territory, the
+   *  frontline, and the map wash all live on this grid. */
+  cellSpan: number;
+  /** The province cap: the winter claims at most this many cells — a region,
+   *  never the world. At the cap the front HOLDS until broken. */
+  maxCells: number;
+  /** Diamond radius of cells claimed at birth (1 = the eye + 4 neighbours:
+   *  present on the map, not yet a crisis). */
+  initialRing: number;
+  /** Seconds (÷severity) per cell taken — slow and telegraphed (the generous
+   *  response window is the design). */
+  marchInterval: number;
+  /** The frost parts around sanctuaries: no cell is claimed within this of a
+   *  safe zone's node (town stays an island in the white). */
+  safeClear: number;
+  /** A held minted zone this near the eye CRYSTALLIZES as the glacial heart
+   *  (frozen_lake graft + the King). Sized past the coldest biomes' node
+   *  spacing so pushing toward the eye always finds the heart a body. */
+  heartRadius: number;
+  /** Floor on a held zone's intensity (the thin edge still fields a patrol). */
+  minIntensity: number;
+  /** Seconds per thaw step after the King falls… */
+  thawInterval: number;
+  /** …and cells ceded per step (the retreat visibly outpaces the advance). */
+  thawCells: number;
   /** The biome a converted zone's ground WARPS toward (the engine stamps a
    *  transient BiomeFieldModifier per converted zone — frontier zones minted
    *  inside the warp inherit the winter at mint), + the warp geometry. */
   warpBiome: string;
   warp: { radius: number; strength: number };
+  /** The standing warp around the EYE itself (minted or not) — ground minted
+   *  toward the heart comes out winter country, frozen lake and all. */
+  eyeWarpRadius: number;
   /** The winter-court faction the engine fields in a converted zone. */
   faction: string;
   /** The Winter King's monster id (raised at the glacial heart) + his tier. */
   bossDefId: string;
   bossPromote: 'none' | 'champion' | 'crowned';
   /** Court packs the engine materializes in a converted zone (lerped by
-   *  intensity — thicker near the heart) and the size of each pack. */
+   *  intensity — thicker near the eye) and the size of each pack. */
   packCount: [number, number];
   packSize: [number, number];
   /** The WHITEOUT the engine plants via fogEnsure: which registered fog kind,
@@ -105,10 +146,10 @@ export interface DeepwinterSurge {
 
 /** What the engine reads to dress/field a converted zone. */
 export interface FrostInfo {
-  /** 0..1, falls off with hops from the heart (pack-density driver). */
+  /** 0..1, falls off with distance from the eye (pack-density driver). */
   intensity: number;
-  /** This is the glacial heart (and the winter still stands) — the engine
-   *  raises the Winter King here. */
+  /** This is the crystallized glacial heart (and the winter still stands) —
+   *  the engine raises the Winter King here. */
   isHeart: boolean;
   /** The King has fallen; the front is retreating (entry text softens). */
   thawing: boolean;
@@ -120,32 +161,34 @@ export interface FrostInfo {
 /** THE front — at most one lives at a time (structural, not a knob). */
 interface FrostFront {
   id: string;
-  /** The glacial heart (hops === 0; the coldest charted node at ignition). */
-  heartZoneId: string;
+  /** The EYE of winter — a coordinate in the climate field. Unminted at
+   *  birth by design (never retroactive, never on top of anyone). */
+  center: MapCoord;
+  /** The minted zone the heart has CRYSTALLIZED onto — null until held
+   *  ground exists within heartRadius of the eye. */
+  heartZoneId: string | null;
+  /** The engine has grafted the bound heart's frozen_lake (re-arms if the
+   *  heart ever re-crystallizes onto a different body). */
+  heartMarked: boolean;
   spreadAcc: number;
   /** The player has walked converted ground (one-shot discovery ledger). */
   seen: boolean;
-  /** The engine has grafted the heart's frozen_lake landmark (one-shot). */
-  heartMarked: boolean;
   /** The King is dead → the winter retreats (no more marching). */
   thawing: boolean;
   thawAcc: number;
   dead: boolean;
 }
 
-/** Per-zone conversion state (keyed by zone id). */
+/** A held minted zone — DERIVED from the claimed cells each sync. */
 interface FrozenZone {
-  runId: string;
-  /** Graph hop-distance from the heart (0 = the heart itself). */
-  hops: number;
-  /** Cached intensity = clamp(1 − hops/maxHops, minIntensity, 1). */
+  /** Distance-from-the-eye intensity (1 at the eye → minIntensity at the rim). */
   intensity: number;
 }
 
 export class DeepwinterField implements WorldOverlay {
   readonly id = 'deepwinter';
-  /** Durable: a half-fought winter is a campaign — the converted ground, the
-   *  heart, and a running thaw all resume (no quit-to-thaw cheese). */
+  /** Durable: a half-fought winter is a campaign — the territory, the eye,
+   *  and a running thaw all resume (no quit-to-thaw cheese). */
   readonly persistence = 'durable' as const;
   readonly mapLabel = 'Deepwinter';
 
@@ -153,8 +196,18 @@ export class DeepwinterField implements WorldOverlay {
   private readonly gate: () => PackageGate;
   private readonly cfg: DeepwinterSurge;
   private readonly glowColors: { strong: string; weak: string; accent: string; edge: string };
+  /** The climate/biome FIELD seed (ctx.biomeSeed) — the eye and the march
+   *  sample the same substrate worldgen bakes nodes from. */
+  private readonly biomeSeed: number;
   private front: FrostFront | null = null;
+  /** The claimed territory: lattice cell key "gx,gy" → claim order. */
+  private cells = new Map<string, number>();
+  private claimSeq = 0;
+  /** Held minted zones (zoneId → derived state) — rebuilt by sync(). */
   private frozen = new Map<string, FrozenZone>();
+  /** The claim changed since the last sync (march/thaw/restore set this). */
+  private dirty = false;
+  private lastNodeCount = -1;
   private acc = 0;
   private seq = 0;
   /** One-shot ignition news the engine drains into the HUD (transient). */
@@ -166,6 +219,7 @@ export class DeepwinterField implements WorldOverlay {
     this.rng = new Rng(ctx.seed);
     this.gate = ctx.gate;
     this.cfg = surge;
+    this.biomeSeed = ctx.biomeSeed;
     this.glowColors = surge.glow ?? DEEPWINTER_COLORS;
   }
 
@@ -178,15 +232,26 @@ export class DeepwinterField implements WorldOverlay {
     if (f && !f.dead) {
       if (f.thawing) {
         f.thawAcc += dt;
-        while (f.thawAcc >= this.cfg.thawInterval) { f.thawAcc -= this.cfg.thawInterval; this.thawRing(f); }
+        while (f.thawAcc >= this.cfg.thawInterval) { f.thawAcc -= this.cfg.thawInterval; this.thawStep(f); }
       } else if (g.active) { // a closed gate FREEZES the march in place (it neither takes nor cedes)
         f.spreadAcc += dt * pressure;
-        while (f.spreadAcc >= this.cfg.spreadInterval) { f.spreadAcc -= this.cfg.spreadInterval; this.march(f, view); }
+        while (f.spreadAcc >= this.cfg.marchInterval) { f.spreadAcc -= this.cfg.marchInterval; this.march(view); }
       }
     }
     if (this.front?.dead) {
+      this.cells.clear();
       this.frozen.clear();
       this.front = null;
+      this.dirty = false;
+    }
+
+    // Zone conversion is DERIVED state: re-sync whenever the claim changed or
+    // the node web grew — a fresh frontier minted inside the territory
+    // converts the moment it exists, and ground the thaw ceded is released.
+    if (this.front && (this.dirty || view.nodes.length !== this.lastNodeCount)) {
+      this.sync(view);
+      this.dirty = false;
+      this.lastNodeCount = view.nodes.length;
     }
 
     // IGNITION — roll on the fixed step; ONE front at a time, structurally.
@@ -197,65 +262,98 @@ export class DeepwinterField implements WorldOverlay {
     }
   }
 
-  onNodeCharted(): void { /* the march rides existing edges; a fresh node bordering the front is caught next step */ }
+  onNodeCharted(): void { /* the sync above catches fresh nodes via the node count */ }
 
   affectSpawns(): SpawnBias { return NO_BIAS; } // the court is engine-MATERIALIZED (intensity-scaled), not a table bias
 
-  // --- the map: a FRONT, not a blob -----------------------------------------
+  /** MAP-FIT EXTENT (WorldOverlay.mapExtent): the territory's bounding corners
+   *  (+ one cell of air), so the fitted world map always shows the whole front
+   *  — the eye opens past the charted rim, and without this the war map's
+   *  border would be born off-screen. */
+  mapExtent(): ReadonlyArray<{ x: number; y: number }> {
+    const f = this.front;
+    if (!f || f.dead || !this.cells.size) return [];
+    const s = this.cfg.cellSpan;
+    let gx0 = Infinity, gx1 = -Infinity, gy0 = Infinity, gy1 = -Infinity;
+    for (const key of this.cells.keys()) {
+      const gx = this.gxOf(key), gy = this.gyOf(key);
+      if (gx < gx0) gx0 = gx;
+      if (gx > gx1) gx1 = gx;
+      if (gy < gy0) gy0 = gy;
+      if (gy > gy1) gy1 = gy;
+    }
+    return [
+      { x: (gx0 - 1) * s, y: (gy0 - 1) * s },
+      { x: (gx1 + 2) * s, y: (gy1 + 2) * s },
+    ];
+  }
 
-  /** Frosted washes on held ground, the glacial-heart glyph — and the RIME
-   *  EDGE: an animated tick across every road where held land meets free,
-   *  which chains along the graph into a visible FRONT LINE (deliberately
-   *  not Contagion's pulse rings or Mycelia's halos — this reads as a
-   *  border, an army's edge on the move). Painted off nodesById from
-   *  ignition day: Deepwinter is TELEGRAPHED, never a secret. */
+  // --- the map: a TERRITORY with a frontline ---------------------------------
+
+  /** The situational-awareness map: the claimed territory drawn as ONE
+   *  contiguous frost wash behind the node web (deeper winter toward the
+   *  older interior), an animated MARCHING frontline along the boundary
+   *  (dashes crawl outward on the advance, homeward on the thaw), rime rims
+   *  on held nodes, and the EYE glyph at the winter's center from ignition
+   *  day — minted or not. Deliberately a war map's border, not Contagion's
+   *  pulse rings or Mycelia's halos. Deepwinter is TELEGRAPHED, never a
+   *  secret. */
   renderMap(_nodes: ZoneDef[]): MapLayer {
     let under = '', over = '';
     const f = this.front;
     if (!f || f.dead) return { under, over };
+    const s = this.cfg.cellSpan;
+    const total = Math.max(1, this.claimSeq);
+    let edges = '';
+    for (const [key, order] of this.cells) {
+      const gx = this.gxOf(key), gy = this.gyOf(key);
+      const x = gx * s, y = gy * s;
+      // The territory wash: older ground (the interior) reads DEEPER winter.
+      const depth = 1 - clamp(order / total, 0, 1);
+      const col = mixHex(this.glowColors.weak, this.glowColors.strong, 0.35 + 0.65 * depth);
+      under += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(s + 0.6).toFixed(1)}" height="${(s + 0.6).toFixed(1)}" `
+        + `fill="${col}" fill-opacity="${(0.10 + 0.08 * depth).toFixed(3)}"/>`;
+      // THE FRONTLINE: every claimed→free cell edge joins one path.
+      if (!this.cells.has(`${gx + 1},${gy}`)) edges += `M${(x + s).toFixed(1)} ${y.toFixed(1)}V${(y + s).toFixed(1)}`;
+      if (!this.cells.has(`${gx - 1},${gy}`)) edges += `M${x.toFixed(1)} ${y.toFixed(1)}V${(y + s).toFixed(1)}`;
+      if (!this.cells.has(`${gx},${gy + 1}`)) edges += `M${x.toFixed(1)} ${(y + s).toFixed(1)}H${(x + s).toFixed(1)}`;
+      if (!this.cells.has(`${gx},${gy - 1}`)) edges += `M${x.toFixed(1)} ${y.toFixed(1)}H${(x + s).toFixed(1)}`;
+    }
+    if (edges) {
+      // Soft glow under, crisp MARCHING ANTS over. Dash period 12 and offset
+      // ±24 are an exact multiple, so the crawl loops seamlessly; the thaw
+      // reverses the direction (the border walking home) and dims it.
+      const op = f.thawing ? 0.5 : 0.85;
+      const dur = f.thawing ? '1.1s' : '1.7s';
+      const off = f.thawing ? 24 : -24;
+      under += `<path d="${edges}" fill="none" stroke="${this.glowColors.edge}" stroke-width="4.5" stroke-opacity="0.16" stroke-linecap="round"/>`;
+      over += `<path d="${edges}" fill="none" stroke="${this.glowColors.edge}" stroke-width="1.7" stroke-opacity="${op}" stroke-dasharray="7 5">`
+        + `<animate attributeName="stroke-dashoffset" values="0;${off}" dur="${dur}" repeatCount="indefinite"/>`
+        + `</path>`;
+    }
+    // Held nodes: a light frosted pane + rime rim (the territory carries the
+    // bulk of the read now; the node treatment just confirms "this zone").
     for (const [zid, z] of this.frozen) {
       const n = this.nodesById[zid];
       if (!n) continue;
-      const s = clamp(z.intensity, 0, 1);
-      const col = mixHex(this.glowColors.weak, this.glowColors.strong, s);
+      const t = clamp(z.intensity, 0, 1);
+      const col = mixHex(this.glowColors.weak, this.glowColors.strong, t);
       const cx = n.map.x.toFixed(1), cy = n.map.y.toFixed(1);
-      // The frosted treatment: a broad pale pane + a crisp rime rim — held
-      // ground reads FROZEN at a glance, denser toward the heart.
-      under += `<circle cx="${cx}" cy="${cy}" r="${(17 + 5 * s).toFixed(1)}" fill="${col}" fill-opacity="${(0.10 + 0.10 * s).toFixed(3)}"/>`
-        + `<circle cx="${cx}" cy="${cy}" r="${(11 + 3 * s).toFixed(1)}" fill="${col}" fill-opacity="${(0.08 + 0.08 * s).toFixed(3)}"/>`
-        + `<circle cx="${cx}" cy="${cy}" r="12.5" fill="none" stroke="${col}" stroke-width="1.1" stroke-opacity="${(0.35 + 0.3 * s).toFixed(2)}" stroke-dasharray="2.6 2.2"/>`;
-      // THE RIME EDGE — one animated double-tick across each road out of
-      // held ground into free (charted, surface) ground. The shimmer is the
-      // march; during the thaw the same edge dims (the border in retreat).
-      for (const e of n.exits) {
-        if (e.to === '?' || this.frozen.has(e.to)) continue;
-        const nb = this.nodesById[e.to];
-        if (!nb || nb.caveDepth != null) continue;
-        const dx = nb.map.x - n.map.x, dy = nb.map.y - n.map.y;
-        const len = Math.hypot(dx, dy) || 1;
-        const ux = dx / len, uy = dy / len;
-        const px = -uy, py = ux;
-        const mx = n.map.x + dx * 0.5, my = n.map.y + dy * 0.5;
-        const op = f.thawing ? 0.45 : 0.85;
-        const dur = f.thawing ? '1.6s' : '2.4s';
-        const tick = (ox: number, oy: number, half: number, w: number): string =>
-          `<line x1="${(mx + ox + px * half).toFixed(1)}" y1="${(my + oy + py * half).toFixed(1)}" `
-          + `x2="${(mx + ox - px * half).toFixed(1)}" y2="${(my + oy - py * half).toFixed(1)}" `
-          + `stroke="${this.glowColors.edge}" stroke-width="${w}" stroke-linecap="round" stroke-opacity="${op}">`
-          + `<animate attributeName="stroke-opacity" values="${op};${(op * 0.35).toFixed(2)};${op}" dur="${dur}" repeatCount="indefinite"/>`
-          + `</line>`;
-        over += tick(0, 0, 9, 2.2);
-        over += tick(ux * 4.5, uy * 4.5, 5.5, 1.3); // the comb: a second, thinner ridge toward free ground
-      }
-      // The glacial heart: the winter's crown-glyph + a slow pulse.
-      if (z.hops === 0) {
-        over += `<circle cx="${cx}" cy="${cy}" r="13" fill="none" stroke="${this.glowColors.accent}" stroke-width="1.6" stroke-opacity="0.8">`
-          + `<animate attributeName="r" values="13;17;13" dur="3.2s" repeatCount="indefinite"/>`
-          + `<animate attributeName="stroke-opacity" values="0.8;0.25;0.8" dur="3.2s" repeatCount="indefinite"/>`
-          + `</circle>`
-          + `<text x="${cx}" y="${(n.map.y - 15).toFixed(1)}" text-anchor="middle" font-size="13" fill="${this.glowColors.accent}">❄</text>`;
-      }
+      under += `<circle cx="${cx}" cy="${cy}" r="${(12 + 3 * t).toFixed(1)}" fill="${col}" fill-opacity="${(0.10 + 0.08 * t).toFixed(3)}"/>`;
+      over += `<circle cx="${cx}" cy="${cy}" r="12.5" fill="none" stroke="${col}" stroke-width="1.1" `
+        + `stroke-opacity="${(0.35 + 0.3 * t).toFixed(2)}" stroke-dasharray="2.6 2.2"/>`;
     }
+    // THE EYE: the winter's center, marked from ignition day. Once the heart
+    // crystallizes onto a minted zone the glyph rides that node instead (one
+    // eye, never two).
+    const heartNode = f.heartZoneId ? this.nodesById[f.heartZoneId] : undefined;
+    const ex = (heartNode ? heartNode.map.x : f.center.x).toFixed(1);
+    const ey = (heartNode ? heartNode.map.y : f.center.y).toFixed(1);
+    over += `<circle cx="${ex}" cy="${ey}" r="13" fill="none" stroke="${this.glowColors.accent}" stroke-width="1.6" stroke-opacity="0.8">`
+      + `<animate attributeName="r" values="13;17;13" dur="3.2s" repeatCount="indefinite"/>`
+      + `<animate attributeName="stroke-opacity" values="0.8;0.25;0.8" dur="3.2s" repeatCount="indefinite"/>`
+      + `</circle>`
+      + `<text x="${ex}" y="${(Number(ey) - 15).toFixed(1)}" text-anchor="middle" font-size="13" fill="${this.glowColors.accent}">❄</text>`;
     return { under, over };
   }
 
@@ -271,12 +369,11 @@ export class DeepwinterField implements WorldOverlay {
    *  free ground. The engine dresses + fields off this on entry. */
   frostOn(zoneId: string): FrostInfo | null {
     const z = this.frozen.get(zoneId);
-    if (!z) return null;
     const f = this.front;
-    if (!f || f.dead || z.runId !== f.id) return null;
+    if (!z || !f || f.dead) return null;
     return {
       intensity: z.intensity,
-      isHeart: z.hops === 0 && !f.thawing, // a slain King never re-crowns
+      isHeart: zoneId === f.heartZoneId && !f.thawing, // a slain King never re-crowns
       thawing: f.thawing,
       color: this.cfg.color,
       label: z.intensity > 0.66 ? 'deep winter' : z.intensity > 0.33 ? 'hard frost' : 'first frost',
@@ -298,12 +395,22 @@ export class DeepwinterField implements WorldOverlay {
     return [...this.frozen.keys()];
   }
 
-  /** ONE-SHOT: the heart zone whose def still needs its frozen_lake landmark
-   *  grafted (the glacial heart is a REAL place — the engine appends the
-   *  landmark roll to the persisted def; the next visit builds the lake). */
+  /** The standing biome warp around the EYE itself (minted or not) — ground
+   *  minted toward the heart comes out winter country. Null once the winter
+   *  is dead (the engine unwarps). */
+  eyeWarp(): { x: number; y: number; radius: number } | null {
+    const f = this.front;
+    if (!f || f.dead) return null;
+    return { x: f.center.x, y: f.center.y, radius: this.cfg.eyeWarpRadius };
+  }
+
+  /** ONE-SHOT per crystallization: the heart zone whose def still needs its
+   *  frozen_lake landmark grafted (the glacial heart is a REAL place — the
+   *  engine appends the landmark roll to the persisted def; the next visit
+   *  builds the lake). */
   consumeHeartMark(): string | null {
     const f = this.front;
-    if (!f || f.dead || f.heartMarked) return null;
+    if (!f || f.dead || f.heartMarked || !f.heartZoneId) return null;
     f.heartMarked = true;
     return f.heartZoneId;
   }
@@ -319,16 +426,15 @@ export class DeepwinterField implements WorldOverlay {
   /** The player walked converted ground — returns true ONCE per front (the
    *  engine bumps the deepwinter_seen discovery ledger). */
   markDiscovered(zoneId: string): boolean {
-    const z = this.frozen.get(zoneId);
     const f = this.front;
-    if (!z || !f || f.dead || z.runId !== f.id) return false;
+    if (!this.frozen.has(zoneId) || !f || f.dead) return false;
     if (f.seen) return false;
     f.seen = true;
     return true;
   }
 
   /** The Winter King fell at the heart — the march stops and the thaw begins
-   *  (outermost ring first: the front walks home). Returns true if this
+   *  (newest ground melts first: the front walks home). Returns true if this
    *  actually broke a standing winter (the cleanse ledger). */
   onWinterKingSlain(): boolean {
     const f = this.front;
@@ -341,190 +447,297 @@ export class DeepwinterField implements WorldOverlay {
   activeCount(): number { return this.front && !this.front.dead ? 1 : 0; }
 
   /** Read-only snapshot for tests / dev: held zones with coords + state. */
-  peek(): ReadonlyArray<{ zoneId: string; x: number; y: number; intensity: number; hops: number; thawing: boolean }> {
+  peek(): ReadonlyArray<{ zoneId: string; x: number; y: number; intensity: number; isHeart: boolean; thawing: boolean }> {
     const f = this.front;
     if (!f || f.dead) return [];
-    const out: { zoneId: string; x: number; y: number; intensity: number; hops: number; thawing: boolean }[] = [];
+    const out: { zoneId: string; x: number; y: number; intensity: number; isHeart: boolean; thawing: boolean }[] = [];
     for (const [zid, z] of this.frozen) {
       const n = this.nodesById[zid];
       if (!n) continue;
-      out.push({ zoneId: zid, x: n.map.x, y: n.map.y, intensity: z.intensity, hops: z.hops, thawing: f.thawing });
+      out.push({
+        zoneId: zid, x: n.map.x, y: n.map.y, intensity: z.intensity,
+        isHeart: zid === f.heartZoneId, thawing: f.thawing,
+      });
     }
     return out;
   }
 
   // --- worldstate (the persistence pledge) -----------------------------------
 
-  /** Pure JSON: the front + the conversion map + the id counter. Rides
-   *  existing edges only — no zones minted, nothing engine-side to save. */
+  /** Pure JSON: the front + the claimed lattice + the counters. Held ZONES
+   *  are derived state (re-synced from the cells on the first tick back) —
+   *  the territory is the truth, so nothing zone-shaped needs saving. */
   snapshot(): unknown {
+    const f = this.front;
     return {
-      front: this.front ? { ...this.front } : null,
-      frozen: [...this.frozen.entries()].map(([zid, z]) => ({ zid, ...z })),
+      front: f ? { ...f, center: { x: f.center.x, y: f.center.y } } : null,
+      cells: [...this.cells.entries()].map(([key, order]) => [this.gxOf(key), this.gyOf(key), order]),
+      claimSeq: this.claimSeq,
       seq: this.seq,
     };
   }
 
   restore(snap: unknown): void {
-    const s = snap as { front?: unknown; frozen?: unknown[]; seq?: unknown } | null;
+    const s = snap as { front?: unknown; cells?: unknown[]; claimSeq?: unknown; seq?: unknown } | null;
     if (!s || typeof s !== 'object') return;
     if (typeof s.seq === 'number' && Number.isFinite(s.seq)) this.seq = Math.max(this.seq, Math.floor(s.seq));
-    const f = s.front as Partial<FrostFront> | null;
+    if (typeof s.claimSeq === 'number' && Number.isFinite(s.claimSeq)) this.claimSeq = Math.max(this.claimSeq, Math.floor(s.claimSeq));
+    const f = s.front as (Partial<FrostFront> & { center?: { x?: unknown; y?: unknown } }) | null;
     this.front = null;
+    this.cells.clear();
+    this.frozen.clear();
+    // A pre-territory snapshot (the zone-hop era carried no center/cells) fails
+    // these checks and is simply dropped — the winter recycles and re-ignites
+    // on its own clock; never a crash, never a half-migrated ghost.
     if (f && typeof f === 'object' && !f.dead
-      && typeof f.id === 'string' && typeof f.heartZoneId === 'string'
+      && typeof f.id === 'string'
+      && f.center && typeof f.center.x === 'number' && Number.isFinite(f.center.x)
+      && typeof f.center.y === 'number' && Number.isFinite(f.center.y)
       && [f.spreadAcc, f.thawAcc].every(n => typeof n === 'number' && Number.isFinite(n))) {
       this.front = {
-        id: f.id, heartZoneId: f.heartZoneId,
-        spreadAcc: f.spreadAcc!, seen: !!f.seen, heartMarked: !!f.heartMarked,
+        id: f.id,
+        center: { x: f.center.x, y: f.center.y },
+        heartZoneId: typeof f.heartZoneId === 'string' ? f.heartZoneId : null,
+        heartMarked: !!f.heartMarked,
+        spreadAcc: f.spreadAcc!, seen: !!f.seen,
         thawing: !!f.thawing, thawAcc: f.thawAcc!, dead: false,
       };
     }
-    this.frozen.clear();
-    if (this.front && Array.isArray(s.frozen)) {
-      for (const raw of s.frozen) {
-        const z = raw as { zid?: unknown; runId?: unknown; hops?: unknown } | null;
-        if (!z || typeof z.zid !== 'string' || z.runId !== this.front.id) continue;
-        if (typeof z.hops !== 'number' || !Number.isFinite(z.hops) || z.hops < 0) continue;
-        // Intensity re-derives from hops against the LIVE config (a re-tuned
-        // falloff applies to a resumed winter — config wins over cache).
-        this.convert(z.zid, this.front.id, Math.floor(z.hops));
+    if (this.front && Array.isArray(s.cells)) {
+      for (const raw of s.cells) {
+        if (!Array.isArray(raw) || raw.length < 3) continue;
+        const [gx, gy, order] = raw;
+        if (![gx, gy, order].every(n => typeof n === 'number' && Number.isFinite(n))) continue;
+        this.cells.set(`${Math.floor(gx)},${Math.floor(gy)}`, Math.max(0, Math.floor(order)));
       }
-      if (!this.frozen.size) this.front = null; // a winter with no ground recycles
     }
+    if (this.front && !this.cells.size) this.front = null; // a winter with no ground recycles
+    this.dirty = true;
+    this.lastNodeCount = -1; // force a sync against the live web on the first tick back
   }
 
-  /** Culled ground sheds its frost; a front whose HEART was culled can never
-   *  field its King again, so it turns to thaw and retreats out — the
-   *  graceful end, never an immortal winter. */
+  /** Culled ground: held zones are derived (the next sync simply won't see
+   *  them); a culled HEART un-crystallizes so a marching winter may re-crown
+   *  on the next body near the eye — the territory itself never depends on
+   *  any zone existing, so the front outlives any cull gracefully. */
   pruneZones(has: (zoneId: string) => boolean): void {
     for (const zid of [...this.frozen.keys()]) if (!has(zid)) this.frozen.delete(zid);
     const f = this.front;
     if (!f || f.dead) return;
-    if (!this.frozen.size) { f.dead = true; return; }
-    if (!has(f.heartZoneId) && !f.thawing) { f.thawing = true; f.thawAcc = 0; }
+    if (f.heartZoneId && !has(f.heartZoneId) && !f.thawing) {
+      f.heartZoneId = null;
+      f.heartMarked = false;
+    }
   }
 
   // --- dev seam (the QA Event tab) -------------------------------------------
 
-  /** DEV: ignite a winter whose HEART is the given (current) zone, pre-marched
-   *  to a small ball so the front + the rime edge read immediately. */
+  /** DEV: open the EYE on the current zone's own coordinate (bypasses the
+   *  never-retroactive ignition rules — QA wants the winter HERE, now) and
+   *  sync immediately so the territory, the frontline, and the conversion
+   *  all read at once. */
   devIgnite(view: OverlayView, zoneId: string): boolean {
     if (this.front) return false; // one winter at a time (matches production)
     const here = view.byId[zoneId];
-    if (!here || !this.streamable(here) || this.frozen.has(here.id)) return false;
-    this.front = this.makeFront(here);
-    this.convert(here.id, this.front.id, 0);
-    for (let i = 0; i < Math.max(1, this.cfg.initialHops); i++) this.march(this.front, view);
+    if (!here || !this.streamable(here)) return false;
+    this.seed({ x: here.map.x, y: here.map.y }, view.terrain);
+    this.sync(view);
+    this.news.push('A deep winter stirs — the frost is claiming this very ground.');
     return true;
   }
 
   // --- internals -------------------------------------------------------------
 
-  /** May the winter TAKE a zone? THE shared predicate (zonePolicy) — safe
-   *  zones, caves, event-owned and special ground all refuse, so the frost
-   *  parts around town like a river around a stone. */
+  private gxOf(key: string): number { return Number(key.slice(0, key.indexOf(','))); }
+  private gyOf(key: string): number { return Number(key.slice(key.indexOf(',') + 1)); }
+
+  private cellCenter(gx: number, gy: number): MapCoord {
+    const s = this.cfg.cellSpan;
+    return { x: (gx + 0.5) * s, y: (gy + 0.5) * s };
+  }
+
+  /** The climate field's temperature at a coordinate — the same substrate
+   *  worldgen bakes node.geo.climate from (one truth, charted or not). */
+  private tempAt(c: MapCoord): number {
+    const t = climateAt(c, this.biomeSeed)['temperature'];
+    return typeof t === 'number' && Number.isFinite(t) ? t : 0.5;
+  }
+
+  /** May a held zone actually CONVERT? THE shared predicate (zonePolicy) —
+   *  safe zones, caves, event-owned and special ground all refuse, so the
+   *  frost parts around town like a river around a stone even when the
+   *  territory washes past it. */
   private streamable(z: ZoneDef): boolean {
     return eventTargetable(this.id, z);
   }
 
-  /** A node's baked temperature, or null where climate was never baked (old
-   *  nodes) — the tolerance doctrine: unbaked ground can be MARCHED onto
-   *  (neutral 0.5 ordering) but never ignites a winter (can't prove cold). */
-  private tempOf(z: ZoneDef): number | null {
-    const t = z.geo?.climate?.['temperature'];
-    return typeof t === 'number' && Number.isFinite(t) ? t : null;
-  }
-
-  private intensityFor(hops: number): number {
-    const t = this.cfg.maxHops > 0 ? hops / this.cfg.maxHops : 1;
-    return clamp(1 - t, this.cfg.minIntensity, 1);
-  }
-
-  private convert(zoneId: string, runId: string, hops: number): void {
-    this.frozen.set(zoneId, { runId, hops, intensity: this.intensityFor(hops) });
-  }
-
-  private makeFront(heart: ZoneDef): FrostFront {
+  private makeFront(center: MapCoord): FrostFront {
     return {
       id: `deepwinter_${this.seq++}`,
-      heartZoneId: heart.id,
-      spreadAcc: 0, seen: false, heartMarked: false,
-      thawing: false, thawAcc: 0, dead: false,
+      center: { x: center.x, y: center.y },
+      heartZoneId: null, heartMarked: false,
+      spreadAcc: 0, seen: false, thawing: false, thawAcc: 0, dead: false,
     };
   }
 
-  /** Ignite at the COLDEST eligible charted node — deterministic, not a
-   *  weighted draw: the winter is born where the world map is coldest (the
-   *  climate geography IS the gameplay), far enough from town to be a
-   *  campaign rather than an ambush. Pre-marches the initial ball. */
+  /** Open the eye at `center` and claim the birth ring (diamond of
+   *  initialRing) — present on the map, not yet a crisis. The frost is a
+   *  LAND-BOUND field (the OverlayView.terrain contract): ring cells on
+   *  open water are simply not taken. */
+  private seed(center: MapCoord, terrain: OverlayView['terrain']): void {
+    const f = this.makeFront(center);
+    this.front = f;
+    this.cells.clear();
+    this.claimSeq = 0;
+    const s = this.cfg.cellSpan;
+    const gx0 = Math.floor(center.x / s), gy0 = Math.floor(center.y / s);
+    const ring = Math.max(0, Math.floor(this.cfg.initialRing));
+    for (let r = 0; r <= ring; r++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const dy = r - Math.abs(dx);
+        for (const yy of dy === 0 ? [gy0] : [gy0 + dy, gy0 - dy]) {
+          if (terrain(this.cellCenter(gx0 + dx, yy)) === 'ocean') continue;
+          this.cells.set(`${gx0 + dx},${yy}`, this.claimSeq++);
+        }
+      }
+    }
+    this.dirty = true;
+  }
+
+  /** IGNITION: open the eye at the COLDEST eligible coordinate — sampled from
+   *  the climate/biome FIELD itself, not from any minted zone. Eligible means
+   *  winter country (centerBiomes + the cold band), a real trek from town,
+   *  clear of the player, and clear of EVERY charted node — the winter is
+   *  born out in the unknown and must march into view. Deterministic pick
+   *  (coldest; stable tie-break); rng spends only the ignition roll. */
   private maybeIgnite(view: OverlayView): void {
     if (!this.rng.chance(clamp(this.cfg.igniteChance * this.gate().ignitionMul, 0, 1))) return;
+    const surface = view.nodes.filter(z => z.caveDepth == null);
+    if (!surface.length) return;
     const town = view.byId[START_ZONE];
     const tc = town ? town.map : { x: 0, y: 0 };
-    let heart: ZoneDef | null = null;
-    let heartTemp = Infinity;
-    for (const z of view.nodes) {
-      if (!this.streamable(z) || this.frozen.has(z.id)) continue;
-      if (coordDist(z.map, tc) < this.cfg.seedMinDist) continue;
-      const t = this.tempOf(z);
-      if (t === null || t > this.cfg.igniteMaxTemp) continue;
-      // Strictly coldest wins; id breaks exact ties so the pick is stable.
-      if (t < heartTemp || (t === heartTemp && heart !== null && z.id < heart.id)) { heartTemp = t; heart = z; }
+    const here = view.byId[view.currentZoneId]?.map;
+    const s = this.cfg.cellSpan;
+    const M = this.cfg.igniteSearchMargin;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const n of surface) {
+      if (n.map.x < minX) minX = n.map.x;
+      if (n.map.x > maxX) maxX = n.map.x;
+      if (n.map.y < minY) minY = n.map.y;
+      if (n.map.y > maxY) maxY = n.map.y;
     }
-    if (!heart) return; // no genuinely cold charted ground → no winter (yet)
-    const f = this.makeFront(heart);
-    this.front = f;
-    this.convert(heart.id, f.id, 0);
-    for (let i = 0; i < this.cfg.initialHops; i++) this.march(f, view);
-    this.news.push(`A deep winter stirs — the frost is marching from ${heart.name}.`);
-  }
-
-  /** The march: take ONE more zone — the COLDEST eligible frontier neighbour
-   *  (ties → nearest the heart, then stable id order). The front eats the
-   *  cold end of the map first, then pushes into warmer country: watching
-   *  the map tells you where it will go next. */
-  private march(f: FrostFront, view: OverlayView): void {
-    const parentHop = new Map<string, number>();
-    for (const [zid, z] of this.frozen) {
-      if (z.runId !== f.id) continue;
-      const zn = view.byId[zid];
-      if (!zn) continue;
-      for (const e of zn.exits) {
-        if (e.to === '?') continue;
-        const nb = view.byId[e.to];
-        if (!nb || this.frozen.has(nb.id) || !this.streamable(nb)) continue;
-        parentHop.set(nb.id, Math.min(parentHop.get(nb.id) ?? Infinity, z.hops));
+    const gx0 = Math.floor((minX - M) / s), gx1 = Math.floor((maxX + M) / s);
+    const gy0 = Math.floor((minY - M) / s), gy1 = Math.floor((maxY + M) / s);
+    let best: MapCoord | null = null;
+    let bestTemp = Infinity;
+    let bestKey = '';
+    for (let gx = gx0; gx <= gx1; gx++) {
+      for (let gy = gy0; gy <= gy1; gy++) {
+        const c = this.cellCenter(gx, gy);
+        // Cheap gates first; the every-node clearance scan runs last and rare.
+        if (coordDist(c, tc) < this.cfg.seedMinDist) continue;
+        if (here && coordDist(c, here) < this.cfg.avoidPlayerDist) continue;
+        const t = this.tempAt(c);
+        if (t > this.cfg.igniteMaxTemp) continue;
+        if (t > bestTemp) continue; // can't beat the standing pick — skip the expensive checks
+        if (view.terrain(c) === 'ocean') continue; // land-bound: no eye at sea
+        if (!this.cfg.centerBiomes.includes(biomeAt(c, this.biomeSeed))) continue;
+        let clear = true;
+        for (const n of surface) {
+          if (coordDist(n.map, c) < this.cfg.minClearFromCharted) { clear = false; break; }
+        }
+        if (!clear) continue;
+        const key = `${gx},${gy}`;
+        if (t < bestTemp || (t === bestTemp && key < bestKey)) { bestTemp = t; best = c; bestKey = key; }
       }
     }
+    if (!best) return; // no eligible cold country in reach → no winter (yet)
+    this.seed(best, view.terrain);
+    this.news.push(`A deep winter stirs in the ${octantOf(best.x - tc.x, best.y - tc.y)} — the frost is on the march.`);
+  }
+
+  /** The march: claim ONE more cell — the COLDEST unclaimed boundary cell
+   *  (stable tie-break), skipping sanctuary ground. The front consolidates
+   *  the cold country first, then pushes down the temperature gradient
+   *  toward the warm charted world: watching the map tells you where it
+   *  will go next. At the province cap the front HOLDS. */
+  private march(view: OverlayView): void {
+    if (this.cells.size >= this.cfg.maxCells) return;
+    const safes = view.nodes.filter(z => z.caveDepth == null && z.objective.kind === 'safe');
+    const seen = new Set<string>();
     let pick: string | null = null;
     let pickTemp = Infinity;
-    let pickHop = Infinity;
-    for (const [zid, ph] of parentHop) {
-      if (ph + 1 > this.cfg.maxHops) continue;
-      const nb = view.byId[zid];
-      if (!nb) continue;
-      const t = this.tempOf(nb) ?? 0.5; // unbaked ground marches at neutral order
-      if (t < pickTemp
-        || (t === pickTemp && ph < pickHop)
-        || (t === pickTemp && ph === pickHop && (pick === null || zid < pick))) {
-        pick = zid; pickTemp = t; pickHop = ph;
+    for (const key of this.cells.keys()) {
+      const gx = this.gxOf(key), gy = this.gyOf(key);
+      for (const [dx, dy] of NEIGH4) {
+        const nk = `${gx + dx},${gy + dy}`;
+        if (this.cells.has(nk) || seen.has(nk)) continue;
+        seen.add(nk);
+        const c = this.cellCenter(gx + dx, gy + dy);
+        if (safes.some(z => coordDist(z.map, c) < this.cfg.safeClear)) continue;
+        // LAND-BOUND (the OverlayView.terrain contract, like every marching
+        // field): the frost stops at the sea — coastlines shape the front.
+        if (view.terrain(c) === 'ocean') continue;
+        const t = this.tempAt(c);
+        if (t < pickTemp || (t === pickTemp && (pick === null || nk < pick))) { pickTemp = t; pick = nk; }
       }
     }
-    if (!pick) return; // the front has met its cap (or the map) — it holds
-    this.convert(pick, f.id, (parentHop.get(pick) ?? 0) + 1);
+    if (!pick) return; // walled in by sanctuaries — the front holds
+    this.cells.set(pick, this.claimSeq++);
+    this.dirty = true;
   }
 
-  /** The thaw retreats ONE outermost ring (highest hops melts first) — the
-   *  beaten front walks home to its heart and dies there. */
-  private thawRing(f: FrostFront): void {
-    let maxHop = -1;
-    for (const z of this.frozen.values()) if (z.runId === f.id && z.hops > maxHop) maxHop = z.hops;
-    if (maxHop < 0) { f.dead = true; return; }
-    for (const [zid, z] of [...this.frozen]) {
-      if (z.runId === f.id && z.hops >= maxHop) this.frozen.delete(zid);
+  /** The thaw cedes the NEWEST ground first — the beaten front walks home
+   *  the way it came and dies at the eye. */
+  private thawStep(f: FrostFront): void {
+    const cede = [...this.cells.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, Math.max(1, Math.floor(this.cfg.thawCells)));
+    for (const [key] of cede) this.cells.delete(key);
+    this.dirty = true;
+    if (!this.cells.size) f.dead = true;
+  }
+
+  /** Derive the held-zone map from the claimed territory (+ crystallize the
+   *  heart). A minted zone converts exactly when its node sits in a claimed
+   *  cell and zone policy allows — so a frontier minted INTO the territory
+   *  converts on arrival, and the thaw releases ground cell by cell. */
+  private sync(view: OverlayView): void {
+    const f = this.front;
+    if (!f || f.dead) { this.frozen.clear(); return; }
+    // The territory's current reach (for the intensity gradient): the winter
+    // DEEPENS behind the front as the province grows.
+    let reach = this.cfg.cellSpan;
+    for (const key of this.cells.keys()) {
+      const d = coordDist(this.cellCenter(this.gxOf(key), this.gyOf(key)), f.center);
+      if (d > reach) reach = d;
     }
-    if (![...this.frozen.values()].some(z => z.runId === f.id)) f.dead = true;
+    const next = new Map<string, FrozenZone>();
+    const s = this.cfg.cellSpan;
+    for (const z of view.nodes) {
+      if (!this.streamable(z)) continue;
+      if (!this.cells.has(`${Math.floor(z.map.x / s)},${Math.floor(z.map.y / s)}`)) continue;
+      const d = coordDist(z.map, f.center);
+      next.set(z.id, {
+        intensity: clamp(1 - d / (reach + s), this.cfg.minIntensity, 1),
+      });
+    }
+    this.frozen = next;
+    // HEART CRYSTALLIZATION: the first held zone within heartRadius of the
+    // eye becomes the glacial heart (nearest wins; sticky once bound). The
+    // player usually MINTS it pushing toward the eye — the campaign's goal
+    // materializes exactly where the map has pointed all along.
+    if (!f.heartZoneId && !f.thawing) {
+      let best: string | null = null;
+      let bd = this.cfg.heartRadius;
+      for (const zid of this.frozen.keys()) {
+        const n = view.byId[zid];
+        if (!n) continue;
+        const d = coordDist(n.map, f.center);
+        if (d < bd || (d === bd && best !== null && zid < best)) { bd = d; best = zid; }
+      }
+      if (best) { f.heartZoneId = best; f.heartMarked = false; }
+    }
   }
 }
 
@@ -535,7 +748,7 @@ registerMarkerSource((world: World): MapMarker[] => {
   if (!df) return [];
   const out: MapMarker[] = [];
   for (const s of df.peek()) {
-    if (s.hops !== 0) continue;
+    if (!s.isHeart) continue;
     out.push({
       id: `deepwinter-heart-${s.zoneId}`, zoneId: s.zoneId,
       glyph: '❄', fill: '#101b26', stroke: DEEPWINTER_COLORS.strong, text: DEEPWINTER_COLORS.accent, r: 9,

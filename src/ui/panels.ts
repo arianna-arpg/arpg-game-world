@@ -3360,6 +3360,11 @@ ${carrier ? `Bound to ${carrier.name}. Click to lift and rebind.` : 'Unbound. Cl
     const shown = zones.filter(z => world.visible(z));
     const xs = (shown.length ? shown : zones).map(z => z.map.x);
     const ys = (shown.length ? shown : zones).map(z => z.map.y);
+    // Overlay MAP EXTENTS: a layer painting past the charted rim (Deepwinter's
+    // territory marching in from the unknown cold) stretches the fit so the
+    // front is on screen from ignition day — the situational-awareness read.
+    // Rides `layers`, so toggling the layer chip off un-stretches the view too.
+    for (const l of layers) for (const p of l.extent) { xs.push(p.x); ys.push(p.y); }
     const minX = Math.min(...xs) - 95, maxX = Math.max(...xs) + 95;
     const minY = Math.min(...ys) - 80, maxY = Math.max(...ys) + 85;
     // Store the fitted box; the live zoom/pan are applied ON TOP (the map grows

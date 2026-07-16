@@ -2001,6 +2001,10 @@ export class World {
    *  added as the front takes ground, removed as the thaw retreats it). NOT
    *  per-loadZone (the warp follows the front). */
   private deepwinterWarped = new Set<string>();
+  /** The EYE of winter's own standing warp is up (one disc at the front's
+   *  center coordinate — usually unminted ground; zones minted toward the
+   *  heart come out winter country). Reconciled beside the zone warps. */
+  private deepwinterEyeWarped = false;
   /** Converted LONG NIGHT estates currently warping the biome field toward
    *  the gloam (mirrors myceliaWarped — reconciled each tick against
    *  longNightField.convertedZones(); a reclaim lifts the warp). */
@@ -10863,14 +10867,15 @@ export class World {
 
   // ------------------------------------------------------- deepwinter materialize
   //
-  // Deepwinter is a frost FRONT marching the road graph, owned by the pure
-  // DeepwinterField overlay (the coldest-first march + the thaw). The engine
-  // reads frostOn() to CONVERT a held zone on entry — snow pinned at the
-  // frozen floor (snowFloor), WHITEOUT banks through the fogEnsure seam,
-  // intensity-scaled Rimebound packs — and kingIn() to raise the Winter King
-  // at the glacial heart. Dressing re-applies EVERY entry (cheap, transient);
-  // the muster is once per visit. Despawn-on-leave; re-fielded on re-entry
-  // while the ground stays held.
+  // Deepwinter is a frost TERRITORY marching coordinate space (the climate
+  // field itself), owned by the pure DeepwinterField overlay (the coldest-
+  // first cell march + the thaw); minted zones convert when the territory
+  // swallows their node. The engine reads frostOn() to CONVERT a held zone
+  // on entry — snow pinned at the frozen floor (snowFloor), WHITEOUT banks
+  // through the fogEnsure seam, intensity-scaled Rimebound packs — and
+  // kingIn() to raise the Winter King at the crystallized glacial heart.
+  // Dressing re-applies EVERY entry (cheap, transient); the muster is once
+  // per visit. Despawn-on-leave; re-fielded on re-entry while held.
 
   /** Convert + garrison a frost-held zone: the dressing (snow/whiteout), the
    *  court packs (tag 'deepwinter' — ambient, never the zone's objective),
@@ -11236,13 +11241,17 @@ export class World {
     }
   }
 
-  /** Reconcile the BiomeField warps the frost front owns against the zones it
+  /** Reconcile the BiomeField warps the frost front owns against the ground it
    *  holds (mycelia's exact pattern: warp as ground converts, unwarp as the
-   *  thaw retreats — frontier zones minted INSIDE the warp inherit the winter
-   *  at mint), drain the front's one-shot ignition news to the HUD, and graft
-   *  the glacial heart's frozen_lake landmark onto its zone def (once per
-   *  front; the persisted def rebuilds with the lake on the next visit —
-   *  the heart is a REAL place, and it keeps the scar after the thaw). */
+   *  thaw retreats — frontier zones minted INSIDE a warp inherit the winter
+   *  at mint): one disc per converted zone PLUS one standing disc at the EYE
+   *  itself — the front's center is usually unminted ground, and the eye warp
+   *  is what makes zones minted toward the heart come out winter country.
+   *  Also drains the front's one-shot ignition news to the HUD, and grafts
+   *  the crystallized heart's frozen_lake landmark onto its zone def (once
+   *  per crystallization; the persisted def rebuilds with the lake on the
+   *  next visit — the heart is a REAL place, and it keeps the scar after
+   *  the thaw). */
   private reconcileDeepwinter(): void {
     const bf = this.sim.biomeField;
     const df = this.sim.deepwinterField;
@@ -11267,6 +11276,20 @@ export class World {
       if (want.has(zid)) continue;
       bf.unwarp(`deepwinter:${zid}`);
       this.deepwinterWarped.delete(zid);
+    }
+    // THE EYE's own warp — setWarp is replace-by-id, so re-pushing the same
+    // disc is idempotent; the flag exists for the unwarp on the winter's end.
+    const eye = df.eyeWarp();
+    if (eye) {
+      bf.setWarp('deepwinter:eye', {
+        id: 'deepwinter:eye', center: { x: eye.x, y: eye.y },
+        radius: eye.radius, biome: wcfg.warpBiome, strength: wcfg.warp.strength,
+        label: 'Deepwinter — the eye of winter',
+      });
+      this.deepwinterEyeWarped = true;
+    } else if (this.deepwinterEyeWarped) {
+      bf.unwarp('deepwinter:eye');
+      this.deepwinterEyeWarped = false;
     }
     const heartId = df.consumeHeartMark();
     if (heartId) {

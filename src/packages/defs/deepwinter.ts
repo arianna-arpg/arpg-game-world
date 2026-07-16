@@ -1,27 +1,31 @@
 // ---------------------------------------------------------------------------
-// DEEPWINTER — the creeping frost: a winter FRONT that ignites at the coldest
-// charted node and marches zone-to-zone, converting the land as it takes it
-// (a net-new package).
+// DEEPWINTER — the creeping frost: a winter FRONT born in the climate FIELD
+// itself that marches through coordinate space as a contiguous TERRITORY,
+// converting whatever minted ground it swallows (a net-new package).
 //
-// The map's climate geography becomes gameplay: worldgen bakes every node's
-// temperature (geo.climate), the front is born where the world runs coldest,
-// and every march step takes the coldest frontier zone next — so the frost
-// visibly advances from the cold end of the map like an army, a hard RIME
-// EDGE crawling the road graph (the overlay draws the front line; converted
-// zones wear a frosted map treatment). Converted ground plays converted:
-// standing snow at the frozen floor, WHITEOUT banks, Rimebound court packs —
-// and the WINTER KING (Crowned) holding the glacial heart, whose zone is
-// guaranteed its frozen_lake landmark. Clearing zones changes nothing; only
-// felling the King does — the front stops and the thaw retreats it
-// outermost-ring-first back to the heart.
+// The map's climate geography becomes gameplay — and the map becomes a
+// SITUATIONAL-AWARENESS MAP. The EYE of winter opens at a cold coordinate
+// (winter country per the biome field), deliberately clear of every charted
+// node, of town, and of the player: never retroactive (no backtracking to
+// ground already cleared), never an ambush-spawn. The front then claims the
+// world cell by coldest cell; the claimed territory paints as one frost wash
+// with an animated MARCHING frontline along its boundary — a war map's
+// shifting border, watchable from ignition day. Minted zones convert the
+// moment the territory swallows their node: standing snow at the frozen
+// floor, WHITEOUT banks, Rimebound court packs — and the WINTER KING
+// (Crowned) at the glacial heart, which CRYSTALLIZES onto the first held
+// zone near the eye (usually one the player mints pushing toward it) and is
+// grafted its frozen_lake landmark. Clearing zones changes nothing; only
+// felling the King does — the march stops and the thaw walks the territory
+// home, newest ground first, back to the eye.
 //
 // It fields the BUILT-IN 'rimebound' faction (the Winter Court — tundra/taiga
 // patron, data/monsters.ts): the event swells a real people, it doesn't mint a
 // bespoke one. CONSERVATIVE BY DESIGN (the user's balance ask): one front at a
-// time, a rare ignition, a slow telegraphed early creep painted on the map
-// from day one — the response window is the point. Discovered in play (runs
-// at defaults; the Vault unlock gates TUNING), like Contagion / Migration.
-// Every number is a knob on the surge below.
+// time, a rare ignition, a slow telegraphed creep, a hard province cap — the
+// response window is the point. Discovered in play (runs at defaults; the
+// Vault unlock gates TUNING), like Contagion / Migration. Every number is a
+// knob on the surge below.
 // ---------------------------------------------------------------------------
 
 import { vec } from '../../core/math';
@@ -39,20 +43,29 @@ const FROST_COLOR = DEEPWINTER_COLORS.strong;
 
 /** The whole Deepwinter mechanic as data — every number is a knob. */
 const DEEPWINTER_SURGE: DeepwinterSurge = {
-  igniteChance: 0.006,   // per 0.5s step — a RARE season (rarer than Contagion's 0.012)
-  spreadInterval: 30,    // seconds (×severity) per zone taken — a slow, watchable march
-  initialHops: 1,        // born as the heart + ONE taken neighbour: present, not yet a crisis
-  maxHops: 7,            // the winter's reach from the heart — a region, never the world
-  minIntensity: 0.25,    // the front's thin edge still reads (and still fields a patrol)
-  thawInterval: 6,       // after the King falls, one ring melts every 6s — a visible retreat
-  igniteMaxTemp: 0.34,   // only genuinely COLD charted ground can birth a winter (cold band)
-  seedMinDist: 260,      // the heart seats a real trek out — the march is watched, not worn
-  warpBiome: 'tundra',   // converted ground warps cold: frontier zones minted inside the
+  igniteChance: 0.006,      // per 0.5s step — a RARE season (rarer than Contagion's 0.012)
+  igniteMaxTemp: 0.34,      // the eye opens only where the FIELD runs cold (the cold band)
+  centerBiomes: ['tundra', 'taiga'], // …and only in winter country (biomeAt at the candidate)
+  seedMinDist: 260,         // a real trek from town — the march is watched, not worn
+  minClearFromCharted: 150, // NEVER RETROACTIVE: the eye opens clear of every charted node
+  avoidPlayerDist: 420,     // …and never on top of the player (never an ambush-spawn)
+  igniteSearchMargin: 360,  // the scan reaches this far past the charted rim (the unknown cold)
+  cellSpan: 64,             // the march lattice — territory, frontline and wash share it
+  maxCells: 170,            // the PROVINCE CAP: a region (~9 zone-widths across), never the world
+  initialRing: 1,           // born as the eye + its ring: present on the map, not yet a crisis
+  marchInterval: 12,        // seconds (÷severity) per cell taken — a slow, watchable march
+  safeClear: 130,           // the frost parts around sanctuaries (town stays an island)
+  heartRadius: 130,         // held ground this near the eye crystallizes as the glacial heart
+  minIntensity: 0.25,       // the front's thin edge still reads (and still fields a patrol)
+  thawInterval: 3,          // after the King falls, cells melt on this beat…
+  thawCells: 2,             // …two at a time — the retreat visibly outpaces the advance
+  warpBiome: 'tundra',      // converted ground warps cold: frontier zones minted inside the
   warp: { radius: 70, strength: 0.9 }, // front mint AS winter country (freezeAt rivers and all)
+  eyeWarpRadius: 150,       // the eye's own standing warp — ground minted toward the heart is winter
   faction: 'rimebound',
   bossDefId: 'winter_king',
   bossPromote: 'crowned',
-  packCount: [1, 3],     // court packs per converted zone (lerped by intensity)
+  packCount: [1, 3],        // court packs per converted zone (lerped by intensity)
   packSize: [2, 4],
   whiteout: { kind: 'whiteout', banks: [2, 3] }, // planted via World.fogEnsure on entry
   snow: { cover: 0.9, floor: 0.55 },             // wakes blanketed; never melts below the frozen floor
@@ -64,7 +77,7 @@ export const DEEPWINTER: ContentPackage = {
   id: 'deepwinter',
   label: 'Deepwinter',
   color: FROST_COLOR,
-  blurb: 'Somewhere at the cold end of the map, a winter refuses to end. It crowns a King on a frozen lake and then it MARCHES — zone by zone along the roads, a hard rime edge you can watch crawl the world map, each land it takes waking blanketed, whited out, and garrisoned by the Winter Court. Clearing the ground does nothing; the frost holds until you walk the front back to its glacial heart and fell the Winter King on his own ice — and even then the winter does not vanish, but retreats the way it came, ring by ring, home to bury its crown.',
+  blurb: 'Somewhere out past the cold rim of the charted world, a winter refuses to end. Its eye opens on ground no map has reached, and then it MARCHES — a contiguous white territory creeping across the world map like a war front, its border a living line you can watch push toward everything you know. Each land it swallows wakes blanketed, whited out, and garrisoned by the Winter Court. Clearing the ground does nothing; the frost holds until you push through the front to its glacial heart, where a King crowns himself on a frozen lake as the ice claims a body for him — and even felled, the winter does not vanish, but retreats the way it came, newest ground first, home to bury its crown.',
   cost: 140,
   // DISCOVERED in play (runs at defaults); the Vault unlock gates TUNING,
   // surfacing once the player has walked frost-held ground.
@@ -100,13 +113,16 @@ export const DEEPWINTER: ContentPackage = {
   ],
   world: { overlay: (ctx) => new DeepwinterField(ctx, DEEPWINTER_SURGE) },
   // Private-surge id checks (rosters/relationships sweep generically):
-  // the court, the King, the whiteout bank, and the blizzard front must all
-  // resolve — a rename would otherwise fail silently at materialize time.
+  // the court, the King, the whiteout bank, the blizzard front, and every
+  // biome the surge names must all resolve — a rename would otherwise fail
+  // silently at ignition/materialize time.
   validate: (look) => [
     ...(look.faction(DEEPWINTER_SURGE.faction) ? [] : [`rimebound faction '${DEEPWINTER_SURGE.faction}' unknown`]),
     ...(look.monster(DEEPWINTER_SURGE.bossDefId) ? [] : [`Winter King '${DEEPWINTER_SURGE.bossDefId}' unknown`]),
     ...(FOG_BANKS[DEEPWINTER_SURGE.whiteout.kind] ? [] : [`whiteout fog bank '${DEEPWINTER_SURGE.whiteout.kind}' unregistered`]),
     ...(WEATHER_DEFS['blizzard'] ? [] : [`blizzard weather kind unregistered (world/weather.ts)`]),
+    ...(look.biome(DEEPWINTER_SURGE.warpBiome) ? [] : [`warp biome '${DEEPWINTER_SURGE.warpBiome}' unknown`]),
+    ...DEEPWINTER_SURGE.centerBiomes.filter(b => !look.biome(b)).map(b => `center biome '${b}' unknown`),
   ],
 };
 
