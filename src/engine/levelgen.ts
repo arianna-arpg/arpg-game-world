@@ -3413,12 +3413,24 @@ export function generateLayout(
   // ran before it existed was never exit-aware, so the splice still applies.)
   if (!ctx.walk || ctx.gridEnsured) {
     const pts = [ctx.entry, ...ctx.exits];
+    // Only clear GENERATED scatter — and the exemption set mirrors genqa's
+    // portal invariant EXACTLY (the splice is the mechanism, the harness
+    // asserts the promise): `keep` (the portalClear-waiver tag — THE opt-in
+    // for authored near-portal pieces), doors (openable, never a seal), and
+    // plan-structure rects (their walls are the point, and a fixture answers
+    // to its own siting probes). A bare Reservation is deliberately NOT
+    // exempt: it promises that LATER stamps route around the footprint, never
+    // that whatever already stood inside is authored — recipe scatter a
+    // site/clearing reservation lands on top of walls off a portal exactly as
+    // hard as bare scatter, so it is carved all the same
+    // (balance/probe_portal_contract.ts pins the alignment).
+    const inStructure = (d: Doodad): boolean =>
+      (ctx.structures ?? []).some(st =>
+        d.pos.x > st.rect.x - d.radius && d.pos.x < st.rect.x + st.rect.w + d.radius
+        && d.pos.y > st.rect.y - d.radius && d.pos.y < st.rect.y + st.rect.h + d.radius);
     for (let i = ctx.doodads.length - 1; i >= 0; i--) {
       const d = ctx.doodads[i];
-      // Only clear GENERATED scatter — never authored structure geometry (a fixture's
-      // walls/props sit in a reserved footprint the rest of the layout already flows
-      // around, exactly like every other solid-placement path here).
-      if (blocksMovement(d) && !d.keep && !inReserved(ctx, d.pos, d.radius)
+      if (blocksMovement(d) && !d.keep && d.kind !== 'door' && !inStructure(d)
         && pts.some(p => dist(p, d.pos) < EXIT_CLEAR_CARVE + d.radius)) {
         // seedPaired kinds ride an index-zip with a parallel gen list (the
         // cave_entrance ↔ caveSeeds contract every other splice site keeps).

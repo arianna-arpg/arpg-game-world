@@ -18,7 +18,9 @@
 //   determinism the same seed generates byte-identical doodads twice
 //   forbidOn   no solid intersects ground its rule forbids (inverse audit)
 //   portals    no movement-blocking scatter left within the portal clears
-//              (structure footprints exempt — their walls are the point)
+//              (exemptions mirror the splice EXACTLY: keep-tagged waiver
+//              pieces, doors, plan-structure rects — a bare reservation
+//              shields nothing from the carve)
 //   caveSeeds  the cave_entrance ↔ caveSeeds index zip holds
 //   reachable  on walk-grid layouts, every exit shares the entry's component
 //   doors      placed doors keep walkable floor on BOTH sides (warn)
@@ -127,7 +129,11 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
   }
   // Portal clears: CONVEX zones only — the splice contract. Grid layouts'
   // promise is reachability (asserted below); their blockers may legally
-  // neighbor a portal the flow-field routes around.
+  // neighbor a portal the flow-field routes around. The exemption set here
+  // (keep / door / structure rect) IS the splice's, one-for-one — reserved
+  // footprints deliberately absent on BOTH sides, so scatter a later
+  // reservation covers is carved like any other (probe_portal_contract.ts
+  // pins the alignment).
   if (!layout.walk) {
     const inStructure = (d: Doodad): boolean =>
       (layout.structures ?? []).some(st =>
