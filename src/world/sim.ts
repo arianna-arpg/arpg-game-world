@@ -27,6 +27,7 @@ import type { MigrationField } from '../packages/overlays/migration';
 import type { SwarmingField } from '../packages/overlays/swarming';
 import type { BrigandField } from '../packages/overlays/brigands';
 import type { HauntField } from '../packages/overlays/haunting';
+import type { LongNightField } from '../packages/overlays/longNight';
 import type { VerminfallField } from '../packages/overlays/verminfall';
 import type { LongCandleField } from '../packages/overlays/longcandle';
 import type { DemonInvasionField } from '../packages/overlays/demonInvasion';
@@ -175,6 +176,13 @@ export class WorldSim {
    *  the kill-handler rows call onAnchorBroken()/resolveHaunt() back. It owns the
    *  settle/lapse lifecycle. */
   readonly hauntField: HauntField | null;
+  /** The Long Night overlay if its package is in the manifest, else null — the
+   *  engine reads groundOn() to field a feeding ground (the parked gloom coach,
+   *  the night-poured Court party, a seated Countess), convertedZones() to ride
+   *  the biome warp, and markBloodmoon() to feed the sky in; the kill rows call
+   *  onCoachBurned()/onCoachReknits()/onCourtBroken() back. It owns the durable
+   *  establish/feed/convert ledger. */
+  readonly longNightField: LongNightField | null;
   /** The verminfall overlay if its package is in the manifest, else null — the engine
    *  reads infestOn() to field the warren (standing nests + vermin packs + the armed
    *  King) in a claimed zone and townPressure() to swell the town's authored vermin
@@ -362,6 +370,7 @@ export class WorldSim {
     this.swarmingField = surface<SwarmingField>('swarming') ?? null;
     this.brigandField = surface<BrigandField>('brigands') ?? null;
     this.hauntField = surface<HauntField>('haunting') ?? null;
+    this.longNightField = surface<LongNightField>('long_night') ?? null;
     this.contagionField = surface<ContagionField>('contagion') ?? null;
     this.deepwinterField = surface<DeepwinterField>('deepwinter') ?? null;
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;

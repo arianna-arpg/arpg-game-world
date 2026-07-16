@@ -1919,6 +1919,10 @@ export class World {
   /** Haunts whose grief-anchor already stood up this visit (per haunt id). */
   private materializedHaunts = new Set<string>();
   private hauntStreamTimer = 0;
+  /** Feeding grounds whose parked coach already stood up this visit (per
+   *  ground id) — the Long Night's twin of materializedHaunts. */
+  private materializedLongNights = new Set<string>();
+  private longNightStreamTimer = 0;
   /** Countdown to the next Deadwake stream-pour while a tide floods this zone. */
   private deadwakeStreamTimer = 0;
   /** Migration ids already announced in THIS zone (one bulletin + ledger bump per
@@ -1997,6 +2001,10 @@ export class World {
    *  added as the front takes ground, removed as the thaw retreats it). NOT
    *  per-loadZone (the warp follows the front). */
   private deepwinterWarped = new Set<string>();
+  /** Converted LONG NIGHT estates currently warping the biome field toward
+   *  the gloam (mirrors myceliaWarped — reconciled each tick against
+   *  longNightField.convertedZones(); a reclaim lifts the warp). */
+  private longNightWarped = new Set<string>();
   /** Zones whose Holdfast gate + wardens were already raised this visit (one per
    *  visit; cleared per loadZone). The durable lock STATE lives on HoldfastField. */
   private materializedHoldfasts = new Set<string>();
@@ -4132,6 +4140,13 @@ export class World {
         // reset a revisited haunt stood empty and unbreakable.
         id: 'haunting',
         reset: () => { this.materializedHaunts.clear(); this.hauntStreamTimer = 0; },
+      },
+      {
+        // Long Night grounds re-stand on re-entry (the parked coach — and a
+        // seated Countess — at their overlay-remembered wounds) via the
+        // per-frame updateLongNight; the haunting row's exact contract.
+        id: 'long_night',
+        reset: () => { this.materializedLongNights.clear(); this.longNightStreamTimer = 0; },
       },
       {
         // Extraction: the seam itself re-rolls with the zone (encounter
@@ -11217,6 +11232,156 @@ export class World {
     let n = 0;
     for (const a of this.actors) if (!a.dead && a.team === 'enemy' && a.tag === 'haunt_spawn') n++;
     return n;
+  }
+
+  // ------------------------------------------------------- the long night
+  //
+  // THE NIGHT COURT'S ESTATES, engine side: the pure LongNightField owns the
+  // establish/feed/convert ledger (fed nights are DURABLE — the snapshot bag);
+  // this runtime fields a held ground off groundOn() — the parked GLOOM COACH
+  // once per visit (preserved wounds, the Hunt pattern; its def-level duty
+  // post walks it back to its stand), a Court party poured ONLY in the dark
+  // hours, and the crowned Countess where her court is seated. Conversions
+  // ride the BiomeField warp (reconcileLongNightWarps, the Mycelia pattern);
+  // the coach-burn → reclaim → court-break chain lives in the kill rows
+  // (packages/defs/longNight.ts — burn it BY DAY; night kills only re-knit).
+
+  /** Per-frame: THE LONG NIGHT's presence where the player stands, plus the
+   *  cross-zone chores the overlay can't do itself (weather sight, warps,
+   *  announcement toasts). */
+  private updateLongNight(dt: number): void {
+    const lnf = this.sim.longNightField;
+    if (!lnf) { this.longNightStreamTimer = 0; return; }
+    // THE SKY FEED: grounds under a covering BLOOD MOON feed double tonight —
+    // engine-side because overlays can't see the weather field (and sheltered
+    // ground has no sky to bleed under: skyOf, the one exposure gate).
+    if (dayCycle(this.time).phase === 'night') {
+      const under: string[] = [];
+      for (const zid of lnf.groundZoneIds()) {
+        const z = this.zoneMap[zid];
+        if (!z || skyOf(z) === 'sheltered') continue;
+        const f = this.sim.weather.sample(z);
+        if (f && f.kind === 'bloodmoon') under.push(zid);
+      }
+      if (under.length) lnf.markBloodmoon(under);
+    }
+    // World-facing beats → toasts + ledgers (conversions announce wherever
+    // the player is — a zone quietly turning is the one thing this event
+    // must never do silently; the map pulse + warp label carry the rest).
+    for (const a of lnf.consumeAnnouncements()) {
+      const name = this.zoneMap[a.zoneId]?.name ?? 'charted ground';
+      if (a.kind === 'converted') {
+        bumpLedger(this.ledger, 'long_night_converted');
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          `Three nights fed — ${name} belongs to the Court now. Burn its coach by day.`,
+          lnf.surge().color, 17);
+      } else {
+        this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+          `The COUNTESS takes court at ${name} — the Long Night deepens.`,
+          lnf.surge().color, 18);
+      }
+    }
+    this.reconcileLongNightWarps();
+    if (this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
+      this.longNightStreamTimer = 0; return;
+    }
+    const info = lnf.groundOn(this.zone.id);
+    // THE WOUND LEDGER, every frame: the parked coach's and the seated
+    // Countess's hurts sync to the overlay, so a zone exit — or a relaunch —
+    // keeps every blow (the Hunt's preserved-health pattern).
+    if (info) {
+      for (const a of this.actors) {
+        if (a.dead || !a.tag) continue;
+        if (a.tag === 'long_night_coach') lnf.setCoachLife(info.id, a.life / a.maxLife());
+        else if (a.tag === 'long_night_court') lnf.setCountessLife(info.id, a.life / a.maxLife());
+      }
+    }
+    if (!info) { this.longNightStreamTimer = 0; return; }
+    const lvl = Math.max(1, this.zone.level + info.levelBonus);
+    if (!this.materializedLongNights.has(info.id)) {
+      this.materializedLongNights.add(info.id);
+      bumpLedger(this.ledger, 'long_night_seen'); // surfaces the Vault tuning
+      // The parked coach, wearing every prior blow. Its def carries the duty
+      // post (MonsterDef.post) — wherever it parks IS its stand.
+      const coach = this.createMonster(info.coachId, lvl, 'enemy');
+      coach.tag = 'long_night_coach';
+      if (info.coachLifeFrac < 1) {
+        coach.life = Math.max(1, coach.maxLife() * clamp(info.coachLifeFrac, 0.02, 1));
+      }
+      coach.pos = this.findFreeSpot(this.clampPos(this.farPoint(520), 24), coach.radius);
+      this.actors.push(coach);
+      this.flashes.push({ pos: vec(coach.pos.x, coach.pos.y), radius: 130, color: info.color, life: 0.7, maxLife: 0.7 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        info.converted
+          ? `The Court holds ${this.zone.name} — its coach stands gloom-warded. Burn it by day.`
+          : `A gloom coach is parked in ${this.zone.name} — the Court is feeding here (night ${Math.min(info.fedNights + 1, info.nightsToConvert)} of ${info.nightsToConvert}).`,
+        info.color, 17);
+      // A SEATED COURT: the Countess walks her most-fed estate, crowned.
+      if (info.countessHere && MONSTERS[info.countessId]) {
+        const boss = this.createMonster(info.countessId,
+          Math.max(1, this.zone.level + info.countessLevelBonus), 'enemy');
+        boss.tag = 'long_night_court';
+        if (info.countessLifeFrac < 1) {
+          boss.life = Math.max(1, boss.maxLife() * clamp(info.countessLifeFrac, 0.02, 1));
+        }
+        this.promoteRarity(boss, 'crowned');
+        boss.pos = this.findFreeSpot(this.clampPos(this.farPoint(420), 24), boss.radius);
+        this.actors.push(boss);
+        this.text(vec(this.player.pos.x, this.player.pos.y - 72),
+          `The COUNTESS holds court here${info.countessLifeFrac < 1 ? ', still wounded' : ''} — break it and the Long Night breaks.`,
+          info.color, 18);
+      }
+    }
+    // THE POUR: Court bodies stream in ONLY through the dark hours — by day
+    // the ground stands with whatever survived the night (and its bearers).
+    if (!inPhases(this.time, ['dusk', 'night'])) { this.longNightStreamTimer = 0; return; }
+    if (this.longNightHeadcount() >= info.maxAlive) {
+      this.longNightStreamTimer = rand(info.streamInterval[0], info.streamInterval[1]); return;
+    }
+    this.longNightStreamTimer -= dt;
+    if (this.longNightStreamTimer > 0) return;
+    this.longNightStreamTimer = rand(info.streamInterval[0], info.streamInterval[1]);
+    const id = this.weightedPick(info.roster, lvl);
+    if (!MONSTERS[id]) return;
+    const m = this.createMonster(id, lvl, 'enemy');
+    m.tag = 'long_night_spawn';
+    m.pos = this.findFreeSpot(this.farPoint(600), m.radius);
+    this.actors.push(m);
+  }
+
+  /** Live count of the poured Court party (the feeding ceiling). */
+  private longNightHeadcount(): number {
+    let n = 0;
+    for (const a of this.actors) if (!a.dead && a.team === 'enemy' && a.tag === 'long_night_spawn') n++;
+    return n;
+  }
+
+  /** Reconcile the BiomeField warps the Court owns against its converted
+   *  estates: a zone that converts warps toward the gloam (attributed on the
+   *  map — never a silent recolor), a reclaimed one lifts. Mirrors
+   *  reconcileMyceliaWarps — the transform FOLLOWS the ledger. */
+  private reconcileLongNightWarps(): void {
+    const lnf = this.sim.longNightField;
+    if (!lnf) return;
+    const bf = this.sim.biomeField;
+    const cfg = lnf.surge();
+    const want = new Set<string>(lnf.convertedZones());
+    for (const zid of want) {
+      if (this.longNightWarped.has(zid)) continue;
+      const z = this.zoneMap[zid];
+      if (!z) continue;
+      bf.setWarp(`long_night:${zid}`, {
+        id: `long_night:${zid}`, center: { x: z.map.x, y: z.map.y },
+        radius: cfg.warp.radius, biome: cfg.warp.biome, strength: cfg.warp.strength,
+        label: 'The Long Night — a feeding ground of the Court',
+      });
+      this.longNightWarped.add(zid);
+    }
+    for (const zid of [...this.longNightWarped]) {
+      if (want.has(zid)) continue;
+      bf.unwarp(`long_night:${zid}`);
+      this.longNightWarped.delete(zid);
+    }
   }
 
   /** Live count of the streamed Deadwake host (tagged stream undead) — the cap. */
@@ -24757,6 +24922,7 @@ export class World {
     this.updateDemonStorm(dt);
     this.updateDeadwakeStream(dt);
     this.updateHauntStream(dt);
+    this.updateLongNight(dt);
     this.updateNecropolis();
     this.updateMigrationStream(dt);
     this.updateSwarmStream(dt);

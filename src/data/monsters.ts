@@ -5915,6 +5915,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
     skills: ['heavy_strike', 'disgorge_thralls'], xp: 90, faction: 'nightkin',
     presence: { from: 12 },
     tags: ['construct'],
+    post: true, // its parked stand IS its station (SENTRY fabric: a displaced coach walks back)
     aims: false, noNemesis: true, wardPriority: 2,
     turnSpeed: 2.6, // a carriage corners like a carriage
     detection: 1.0,

@@ -26,6 +26,7 @@ import { HAUNTING } from './defs/haunting';
 import { HOLDFAST } from './defs/holdfast';
 import { HUNT } from './defs/hunt';
 import { LONGCANDLE } from './defs/longcandle';
+import { LONG_NIGHT } from './defs/longNight';
 import { MIGRATION } from './defs/migration';
 import { MIRRORKIN } from './defs/mirrorkin';
 import { MYCELIA } from './defs/mycelia';
@@ -63,6 +64,7 @@ export const PACKAGES: ContentPackage[] = [
   BRIGANDS,
   MYCELIA,
   HAUNTING,
+  LONG_NIGHT,
   VERMINFALL,
   MIRRORKIN,
   LONGCANDLE,
@@ -104,6 +106,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   verminfall: 0x2a75,
   mirrorkin: 0x312a,
   longcandle: 0xca4d,
+  long_night: 0x10c7,
   pit: 0x9147,
   worldboss: 0xb055,
 };
