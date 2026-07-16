@@ -38,6 +38,17 @@
 // a fully wrapped frame: this pass fades itself out as confinement wraps.
 // Ablate pass name: 'sightveil'.
 //
+// GEOMETRIC SMOOTHNESS (the no-pop contract): every cutoff a moving eye can
+// cross MELTS instead of snapping (SIGHT_VEIL_GEO). A caster's shadow reach
+// fades to nothing across the last few px before the eye enters its body —
+// ordinary movement never gets that close (collision holds the eye a body
+// radius off every surface), but displacement does: phasing walks, pulls and
+// knockbacks carry the eye THROUGH solids, and the old hard skips (eye-in-
+// disc, silhouette-span ≥ π) flipped a near-fullscreen wedge off/on in one
+// frame at that boundary — the abrupt-shift class the coast QA pass hunted.
+// Wall-edge facing flips need no feather: their quads are area-continuous
+// through the plane (the sliver degenerates to zero as the eye aligns).
+//
 // The vis-layer doctrine holds: no World import — the pass reads a structural
 // view (World satisfies it) plus the same pure terrain-data helpers the LoS
 // ray itself resolves through.
@@ -73,6 +84,22 @@ const GATHER_BUCKET = 96;
 /** Extra gather reach past the veil radius, so a bucket-crossing never has
  *  to re-gather for occluders that were just out of the last sweep. */
 const GATHER_PAD = 160;
+
+/** Geometric smoothness feathers (module defaults — the BLEND_CFG idiom:
+ *  the fabric's own dials live with the fabric). Both are ZERO-COST and
+ *  invisible in normal movement — collision keeps the eye outside every
+ *  caster — and exist so displacement (phasing, pulls, knockback-through)
+ *  melts a shadow instead of snapping it (see GEOMETRIC SMOOTHNESS above). */
+export const SIGHT_VEIL_GEO = {
+  /** World px from a disc caster's SURFACE across which its wedge's reach
+   *  melts to nothing as the eye presses in (melt = (d − r) / this). */
+  discFeather: 10,
+  /** Radians short of the π silhouette span across which a slab's quad
+   *  melts as the eye reaches its face (melt = (π − span) / this). At
+   *  0.24 rad the melt begins ~hw·tan(feather/2) ≈ 3 px off the face —
+   *  strictly inside the collision envelope. */
+  rectFeather: 0.24,
+} as const;
 
 /** blocksSight per region id, memoized (regionAt returns strings at cell
  *  cadence — a Map get beats a registry walk in the extraction loop). */
@@ -358,8 +385,15 @@ export class SightVeil {
       for (const c of this.discs) {
         const dx = c.x - px, dy = c.y - py;
         const d2 = dx * dx + dy * dy;
-        if (d2 <= c.r * c.r + 1) continue;   // the eye is never inside a solid
+        if (d2 <= c.r * c.r + 1) continue;   // the eye is inside the body
         const d = Math.sqrt(d2);
+        // MELT: reach fades out across the last few px before the surface,
+        // so a displaced eye entering the body never pops the wedge — as
+        // d → r the tangent mouth (L = d·cos → 0) and the reach both
+        // collapse, and the inside skip above is met at zero area.
+        const melt = Math.min(1, (d - c.r) / SIGHT_VEIL_GEO.discFeather);
+        if (melt <= 0) continue;
+        const reach = far * melt;
         const sin = c.r / d, cos = Math.sqrt(Math.max(0, 1 - sin * sin));
         const ux = dx / d, uy = dy / d;
         const t1x = ux * cos - uy * sin, t1y = ux * sin + uy * cos;
@@ -367,8 +401,8 @@ export class SightVeil {
         const L = d * cos;
         b.moveTo((px + t1x * L - ox) * k, (py + t1y * L - oy) * k);
         b.lineTo((px + t2x * L - ox) * k, (py + t2y * L - oy) * k);
-        b.lineTo((px + t2x * far - ox) * k, (py + t2y * far - oy) * k);
-        b.lineTo((px + t1x * far - ox) * k, (py + t1y * far - oy) * k);
+        b.lineTo((px + t2x * reach - ox) * k, (py + t2y * reach - oy) * k);
+        b.lineTo((px + t1x * reach - ox) * k, (py + t1y * reach - oy) * k);
         b.closePath();
         dquads++;
       }
@@ -428,8 +462,15 @@ function rectShadowPath(b: CanvasRenderingContext2D, r: OccRect,
     if (d < minD) { minD = d; minX = cx; minY = cy; }
     if (d > maxD) { maxD = d; maxX = cx; maxY = cy; }
   }
-  if (maxD - minD >= Math.PI) return 0;   // the eye is inside/against the slab
-  return quadPath(b, minX, minY, maxX, maxY, px, py, far, ox, oy, k);
+  const span = maxD - minD;
+  if (span >= Math.PI) return 0;   // the eye is inside the slab (convex: an
+  // external eye always spans < π, so ordinary movement never reaches this)
+  // MELT: the quad's reach fades as the silhouette span closes on π — a
+  // displaced eye pressing through the face sees the shadow shrink to
+  // nothing instead of a half-plane flipping off in one frame.
+  const melt = Math.min(1, (Math.PI - span) / SIGHT_VEIL_GEO.rectFeather);
+  if (melt <= 0) return 0;
+  return quadPath(b, minX, minY, maxX, maxY, px, py, far * melt, ox, oy, k);
 }
 
 /** Does the segment (P → P+Q, squared length len2) cross the circle? The
