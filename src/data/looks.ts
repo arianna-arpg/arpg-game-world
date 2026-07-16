@@ -557,6 +557,55 @@ export const LOOKS: Record<string, LookDef> = {
       { kind: 'eyes', params: { spread: 0.35, dist: 0.55, size: 0.1 } },
     ],
   },
+  // --- THE KARST STONEKIN: four silhouettes, four jobs, zero new painters —
+  // the serpent that STARES (dorsal crest + hooped stone coils), the warden
+  // that is petrified FOREST (bark plates + branch arms in grey), the
+  // slinger whose orbiting shards say ARTILLERY at a glance, and the rubble
+  // heap that spills into skittering chips when it breaks.
+  basilisk: {
+    parts: [
+      { kind: 'segmentRings', color: '#8f8a7c', scale: 1.05 },
+      { kind: 'serpentHead', color: '#9a948a', scale: 0.95 },
+      { kind: 'crest', x: 0.1, scale: 0.9, role: 'accent' },
+      { kind: 'eyes', color: '#b8a44a', params: { spread: 0.26, dist: 0.66, size: 0.11 } },
+    ],
+    banding: 'hoops',
+    shadowScale: 0.9,
+  },
+  petrified_warden: {
+    parts: [
+      { kind: 'torso', color: '#7d7868' },
+      { kind: 'barkPlates', color: '#6a665c' },
+      { kind: 'branchArms', color: '#8a8578', scale: 0.9 },
+      { kind: 'mossPatch', color: '#6a7a5a', scale: 0.7, alpha: 0.7 },
+      { kind: 'eyes', color: '#b8a44a', params: { spread: 0.3, dist: 0.5, size: 0.09 } },
+    ],
+  },
+  karst_slinger: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'stalactites', scale: 0.95, params: { n: 4 } },
+      { kind: 'claws', params: { len: 0.24, talons: 3 } },
+      { kind: 'eyes', color: '#d8cc9a', params: { spread: 0.34, dist: 0.52, size: 0.09 } },
+    ],
+    live: [{ kind: 'floatingShards', color: '#a89f8a', scale: 0.9, params: { n: 3 } }],
+  },
+  scree_shambler: {
+    parts: [
+      { kind: 'stalactites', scale: 1.12, params: { n: 5 } },
+      { kind: 'disc', scale: 0.62 },
+      { kind: 'claws', params: { len: 0.26, talons: 3 } },
+      { kind: 'eyes', color: '#c8b464', params: { spread: 0.3, dist: 0.42, size: 0.08 } },
+    ],
+  },
+  scree_skitter: {
+    parts: [
+      { kind: 'disc', scale: 0.9 },
+      { kind: 'spikes', scale: 0.85, params: { n: 5 } },
+      { kind: 'eyes', color: '#c8b464', params: { spread: 0.4, dist: 0.5, size: 0.1 } },
+    ],
+    shadowScale: 0.8,
+  },
   flame_elemental: {
     parts: [
       { kind: 'disc', scale: 0.8 },

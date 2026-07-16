@@ -299,6 +299,16 @@ export const SUPPORTS: Record<string, SupportDef> = {
     perLevel: [mod('apply_decay', 'flat', 0.03), mod('damageVs_decay', 'increased', 0.03)],
     weight: 5,
   },
+  // The Karst ladder's on-hit lever (putrefaction's grammar in stone): any
+  // physical skill can build toward the statue, and profit from one.
+  calcifying: {
+    id: 'calcifying', name: 'Calcifying',
+    description: 'Hits with this skill settle WEIGHT into the victim: 10% chance to build petrifying, and the skill deals 15% increased damage to the petrified — stone remembers every blow.',
+    color: '#9a948a', requiresTags: ['physical'],
+    mods: [mod('apply_petrifying', 'flat', 0.1), mod('damageVs_petrified', 'increased', 0.15)],
+    perLevel: [mod('apply_petrifying', 'flat', 0.015), mod('damageVs_petrified', 'increased', 0.025)],
+    weight: 5,
+  },
   barbed_snare: {
     id: 'barbed_snare', name: 'Barbed Snare',
     description: 'This skill\'s projectiles trail hooked lines: 8% chance to ROOT the victim outright (movement skills forbidden while held).',

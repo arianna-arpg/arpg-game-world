@@ -4571,6 +4571,94 @@ const ocularKnot: GroupPainter = (env, group, def) => {
   }
 };
 
+/** WATCHER STONE — the Karst Country's gaze fabric made visible: a worked
+ *  standing slab with ONE carved eye that TRACKS the hero (ocularKnot's
+ *  dreary-lag pursuit) and LIDS SHUT as you press inside closeReach — the
+ *  render half of the gaze counterplay: a shut eye builds nothing, and the
+ *  stone tells you so. Stone ramp body so it reads as karst, not flesh. */
+const watcherStone: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { color?: ColorSpec; edge?: ColorSpec; iris?: ColorSpec;
+    closeReach?: number };
+  const { ctx, theme, time, world } = env;
+  const stone = resolveColor(p.color, theme, '#8a8578');
+  const edge = resolveColor(p.edge, theme, '#45413a');
+  const iris = resolveColor(p.iris, theme, '#b8a44a');
+  const ramp = rampOf(stone, materialOf('stone'));
+  const hero = world.player;
+  const closeT = p.closeReach ?? 64;
+  for (const o of group) {
+    const seed = ((o.pos.x * 23 + o.pos.y * 11) | 0) >>> 0;
+    const r = o.radius;
+    const hd = Math.hypot(hero.pos.x - o.pos.x, hero.pos.y - o.pos.y);
+    const nearLid = Math.min(1, Math.max(0, (closeT * 1.8 - hd) / (closeT * 0.8)));
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    ctx.rotate((hash01(seed, 5) - 0.5) * 0.5);
+    // The slab: an upright worked stone — long oval body, chiseled rim.
+    ctx.fillStyle = ramp.shadow;
+    ctx.beginPath();
+    ctx.ellipse(r * 0.06, r * 0.08, r * 0.92, r * 0.68, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = ramp.base;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.88, r * 0.62, 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = edge;
+    ctx.lineWidth = Math.max(1.2, r * 0.07);
+    ctx.stroke();
+    // Chisel grooves ringing the eye — the carving that names the maker.
+    ctx.strokeStyle = withAlpha(ramp.outline, 0.55);
+    ctx.lineWidth = 1.1;
+    for (let i = 0; i < 3; i++) {
+      const gr = r * (0.44 + i * 0.14);
+      ctx.beginPath();
+      ctx.arc(0, 0, gr, 0.6 + hash01(i, seed + 7) * 0.8, Math.PI * (1.3 + hash01(i, seed + 9) * 0.4));
+      ctx.stroke();
+    }
+    // Sunward lit crest.
+    ctx.strokeStyle = withAlpha(ramp.highlight, 0.6);
+    ctx.lineWidth = Math.max(1.2, r * 0.05);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 0.82, r * 0.56, 0.2, -2.5, -1.2);
+    ctx.stroke();
+    // THE EYE: carved socket, tracking iris, and the lid that answers your
+    // approach (blink cycle for idle life; nearLid overrides — pressed
+    // close, the watcher cannot bear to look).
+    const er = r * 0.3;
+    const la = Math.atan2(hero.pos.y - o.pos.y, hero.pos.x - o.pos.x);
+    const aim = la + Math.sin(time * 0.3 + seed * 0.7) * 0.18;
+    const blinkCyc = (time * 0.22 + hash01(seed, 13)) % 1;
+    const lid = Math.max(blinkCyc > 0.92 ? Math.sin(((blinkCyc - 0.92) / 0.08) * Math.PI) : 0, nearLid);
+    ctx.fillStyle = ramp.outline;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, er * 1.28, er * 1.02, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ded8c8';
+    ctx.beginPath();
+    ctx.ellipse(0, 0, er * 1.06, er * 0.82, 0, 0, Math.PI * 2);
+    ctx.fill();
+    if (lid < 0.92) {
+      const px = Math.cos(aim) * er * 0.3, py = Math.sin(aim) * er * 0.3;
+      ctx.fillStyle = iris;
+      ctx.beginPath();
+      ctx.arc(px, py, er * 0.46, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#141210';
+      ctx.beginPath();
+      // A serpent's slit pupil — the basilisk signature, carved or not.
+      ctx.ellipse(px, py, er * 0.1, er * 0.3, aim, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (lid > 0.02) {
+      ctx.fillStyle = ramp.base;
+      ctx.beginPath();
+      ctx.ellipse(0, -er * (1 - lid) * 0.8, er * 1.1, er * 0.86 * lid, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+};
+
 /** COLOSSAL HEART — the country's own heart at chamber scale: a two-lobed
  *  mass swelling on the shared beat, aorta stub, rooted surface vessels.
  *  Compositions seat ONE — the room arranges itself around it. */
@@ -8024,6 +8112,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
   clotMound, arteryStalk, sphincterDoor, membraneSeal, villusBed, lashBed, gutKnuckle, ocularKnot, colossalHeart,
+  watcherStone,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
   cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, firewoodPile,
@@ -8362,6 +8451,107 @@ const leafCrown: CanopyPainter = (env, o, alpha, params) => {
   ctx.restore();
 };
 
+/** A PETRIFIED CROWN from above: the broadleaf mass turned to STONE — flat
+ *  fracture FACETS with straight edges where leafCrown scallops, fissure
+ *  cracks radiating between the plates, a dusting of lichen where weather
+ *  found purchase. Reads as dead mineral beside any living green at a
+ *  glance (the Karst clarity rule: you must know what shatters). Time-free
+ *  and world-free on purpose — CANOPY_STATIC bakes it, so a sealed weald
+ *  roof costs what any forest roof costs. `elder: true` runs paler and
+ *  carries a full ring-fissure (the never-breaking anchor's tell). */
+const stoneCrown: CanopyPainter = (env, o, alpha, params) => {
+  const p = params as { fill?: ColorSpec; elder?: boolean };
+  const { ctx, theme } = env;
+  const base = resolveColor(p.fill, theme, '#8a857a');
+  const seed = ((o.pos.x * 17 + o.pos.y * 3) | 0) >>> 0;
+  ctx.save();
+  ctx.translate(o.pos.x, o.pos.y);
+  if (o.rot !== undefined) ctx.rotate(o.rot);
+  ctx.globalAlpha = alpha;
+  // Under-heart: the crown's own shadowed mass.
+  ctx.fillStyle = shade(base, -0.42);
+  ctx.beginPath();
+  ctx.arc(0, 0, o.radius * 0.9, 0, Math.PI * 2);
+  ctx.fill();
+  // Fracture facets: an angular plate ring — STRAIGHT edges, no scallops.
+  // Each plate is a wedge polygon; alternating tones + a sunward bias give
+  // the crown its broken-mineral volume.
+  const plates = 5 + (seed % 3);
+  for (let i = 0; i < plates; i++) {
+    const a0 = (i / plates) * Math.PI * 2 + (seed % 7) * 0.31;
+    const a1 = ((i + 1) / plates) * Math.PI * 2 + (seed % 7) * 0.31;
+    const rOut = o.radius * (0.78 + hash01(i, seed + 11) * 0.18);
+    const rMid = o.radius * (0.34 + hash01(i, seed + 13) * 0.14);
+    const am = (a0 + a1) / 2 + (hash01(i, seed + 17) - 0.5) * 0.3;
+    const sun = Math.cos(am + 0.8) * 0.14; // sunward plates catch light
+    ctx.fillStyle = shade(base, (i % 2 ? -0.1 : 0.04) + sun);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a0) * rMid, Math.sin(a0) * rMid);
+    ctx.lineTo(Math.cos(a0 + 0.12) * rOut * 0.92, Math.sin(a0 + 0.12) * rOut * 0.92);
+    ctx.lineTo(Math.cos(am) * rOut, Math.sin(am) * rOut);
+    ctx.lineTo(Math.cos(a1 - 0.12) * rOut * 0.94, Math.sin(a1 - 0.12) * rOut * 0.94);
+    ctx.lineTo(Math.cos(a1) * rMid, Math.sin(a1) * rMid);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(base, -0.55), 0.55);
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+  }
+  // The crown cap: a smaller offset plate cluster (the mass's high point).
+  ctx.fillStyle = shade(base, 0.1);
+  ctx.beginPath();
+  const capN = 6;
+  for (let k = 0; k <= capN; k++) {
+    const a = (k / capN) * Math.PI * 2;
+    const rr = o.radius * (0.32 + 0.08 * hash01(k % capN, seed + 23));
+    const x = -o.radius * 0.08 + Math.cos(a) * rr, y = -o.radius * 0.08 + Math.sin(a) * rr;
+    if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // Fissures: dark cracks radiating between plates — the elder carries a
+  // full ring-fissure besides (its unbreakable tell).
+  ctx.strokeStyle = withAlpha(shade(base, -0.6), 0.7);
+  ctx.lineWidth = Math.max(1, o.radius * 0.03);
+  for (let i = 0; i < 3 + (seed % 3); i++) {
+    const a = hash01(i, seed + 31) * Math.PI * 2;
+    const r0 = o.radius * (0.18 + hash01(i, seed + 37) * 0.2);
+    const r1 = o.radius * (0.62 + hash01(i, seed + 41) * 0.24);
+    const kink = (hash01(i, seed + 43) - 0.5) * 0.5;
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(a) * r0, Math.sin(a) * r0);
+    ctx.lineTo(Math.cos(a + kink * 0.5) * (r0 + r1) * 0.5, Math.sin(a + kink * 0.5) * (r0 + r1) * 0.5);
+    ctx.lineTo(Math.cos(a + kink) * r1, Math.sin(a + kink) * r1);
+    ctx.stroke();
+  }
+  if (p.elder) {
+    ctx.strokeStyle = withAlpha(shade(base, -0.5), 0.5);
+    ctx.lineWidth = Math.max(1, o.radius * 0.035);
+    ctx.beginPath();
+    ctx.arc(0, 0, o.radius * 0.55, 0.4, Math.PI * 1.7);
+    ctx.stroke();
+  }
+  // Lichen: sparse sage flecks where weather sat — the one living note.
+  ctx.globalAlpha = alpha * 0.5;
+  ctx.fillStyle = '#6a7a5a';
+  for (let i = 0; i < 3 + (seed % 4); i++) {
+    const a = hash01(i, seed + 53) * Math.PI * 2;
+    const d = Math.sqrt(hash01(i, seed + 59)) * o.radius * 0.7;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * d, Math.sin(a) * d, o.radius * (0.03 + hash01(i, seed + 61) * 0.04), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // Sun-side lit rim, straight-segmented (mineral, not leaf).
+  ctx.globalAlpha = alpha * 0.45;
+  ctx.strokeStyle = shade(base, 0.32);
+  ctx.lineWidth = Math.max(1.5, o.radius * 0.06);
+  ctx.beginPath();
+  ctx.arc(-o.radius * 0.1, -o.radius * 0.1, o.radius * 0.68, -2.6, -1.05);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+};
+
 /** An EVERGREEN SPIRE from above: stacked pointed star-rings tightening to
  *  a pale tip — conifers read apart from broadleaf at any distance. */
 const pineCrown: CanopyPainter = (env, o, alpha, params) => {
@@ -8633,7 +8823,7 @@ const lianaCurtain: CanopyPainter = (env, o, alpha, params) => {
 
 export const CANOPY_PAINTERS: Record<string, CanopyPainter> = {
   bramble, palmCrown, mushroomCrown, discCrown, leafCrown, pineCrown, fogCloud,
-  kelpCrown, lianaCurtain, awningCloth,
+  kelpCrown, lianaCurtain, awningCloth, stoneCrown,
 };
 
 /** Canopy painters whose pixels are a pure function of (radius, position
@@ -8655,6 +8845,9 @@ export const CANOPY_STATIC: Record<string, boolean> = {
   // and specks — 2 radial gradients + up to ~20 stroked spokes per cap,
   // live-stroked per frame across every fungal grove until now — bake.
   mushroomCrown: true,
+  // stoneCrown is time-free by construction (fracture facets + fissures are
+  // pure position-seed) — a sealed petrified weald bakes like any forest.
+  stoneCrown: true,
 };
 
 /** Stable small integer for a params object (registry defs are singletons) —

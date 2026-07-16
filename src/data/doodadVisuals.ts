@@ -622,6 +622,38 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2b3b33' },
       eyes: { count: 2, color: '#c8d8a8' } },
   },
+  // THE PETRIFIED WEALD: the walk-under tree family turned to STONE. Same
+  // trunk painter (petrified wood keeps its growth rings — that's the tell),
+  // bark in limestone greys, and a FACETED stone crown (stoneCrown: flat
+  // fracture planes and fissures, never leaf scallops) so living wood and
+  // dead stone read apart at any distance. The common tree is the brittle
+  // one; the elder's crown runs paler and broader — the silhouette teaches
+  // which cover shatters and which stands.
+  petrified_tree: {
+    longShadow: 0.85,
+    painter: 'trunk', order: 50, bakeWhole: 'static',
+    params: { scale: 0.3, roots: 4, color: '#6a665c' },
+    canopy: { painter: 'stoneCrown', params: { fill: 'theme:tree|#8a857a' } },
+  },
+  petrified_elder: {
+    longShadow: 0.95,
+    painter: 'trunk', order: 50, bakeWhole: 'static',
+    params: { scale: 0.22, roots: 6, color: '#5e5a52' },
+    canopy: { painter: 'stoneCrown', params: { fill: 'theme:tree|#938e82', elder: true } },
+  },
+  // A downed stone bole: the log painter in limestone, lichen for moss —
+  // low cover you shoot over (blocksShot false rides the rule, not the art).
+  petrified_trunk: {
+    painter: 'log', order: 52, shadow: 0.5, longShadow: 0.7,
+    params: { color: '#7d7868', moss: '#6a7a5a' },
+  },
+  // The basilisk-carved gaze stone: a standing slab whose single eye TRACKS
+  // the hero and LIDS shut inside closeReach (the render half of the gaze
+  // fabric's counterplay — a shut eye builds nothing, and the stone says so).
+  watcher_stone: {
+    painter: 'watcherStone', order: 53, shadow: 0.5, longShadow: 1.3,
+    params: { color: 'theme:obstacle|#8a8578', edge: 'theme:obstacleEdge|#45413a', iris: '#b8a44a' },
+  },
   // The croft kit (paintersGloam.ts): gourd tangles, the lit lone lantern
   // (light spec = the candle), the hanged road's swaying gibbets.
   pumpkin_patch: {

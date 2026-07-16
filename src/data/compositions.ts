@@ -39,6 +39,18 @@ registerComposition({
   post: [{ kind: 'formation', formation: 'menhir_orbit', at: 'heart', count: [1, 1] }],
 });
 
+// A WEALD COURT: a clearing ringed by watcher stones — the gaze fabric's
+// set-piece in the petrified wood (stone_sanctum's grammar, but the stones
+// LOOK BACK: theme.gaze lists watcher_stone, so standing in this court is
+// the petrify pressure at its worst — and bursting a watcher TOLLS).
+// Numeric contract: watcher_ring 130·0.92−6 = 113 ≥ clearing 80 + piece 19.
+registerComposition({
+  id: 'weald_court',
+  sites: [{ id: 'court', radius: [150, 200] }],
+  pre: [{ kind: 'clearing', at: 'court', count: [1, 1], radius: [55, 80] }],
+  post: [{ kind: 'formation', formation: 'watcher_ring', at: 'court', count: [1, 1] }],
+});
+
 // A FAIRY COURT: a hushed glade ringed by toadstools, glow-caps drifting in
 // the dark patches beyond it.
 registerComposition({

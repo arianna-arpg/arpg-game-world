@@ -44,6 +44,43 @@ registerFormation({
   ],
 });
 
+// A PETRIFIED GROVE: the stone forest marching in a stand — brittle trees
+// with downed boles and scree between them (the Weald's composed read; every
+// piece TOLLS when struck, so a grove is also an alarm line).
+registerFormation({
+  id: 'petrified_grove', arrange: 'meander', span: [380, 680], step: 52,
+  params: { wobble: 30 },
+  pieces: [
+    { kind: 'petrified_tree', radius: [30, 46], jitter: 14, rot: true },
+    { kind: 'petrified_trunk', radius: [16, 22], every: 3, jitter: 30, rot: true },
+    { kind: 'scree', radius: [16, 26], every: 2, jitter: 26 },
+  ],
+});
+
+// A WATCHER RING: gaze stones orbiting a court — the basilisk shrine (paired
+// with the weald_court clearing; numeric contract at the composition).
+registerFormation({
+  id: 'watcher_ring', arrange: 'orbit', span: [130, 180], step: 60,
+  params: { rings: [1, 1], innerFrac: 0.92 },
+  pieces: [
+    { kind: 'watcher_stone', radius: [13, 19], jitter: 5, rot: true },
+    { kind: 'scree', radius: [14, 22], every: 2, jitter: 20 },
+  ],
+});
+
+// A PINNACLE TRAIN: karst towers strung along an old joint line — the
+// Reach's answer to the boulder train (spires cast long, break sightlines
+// between chasm pockets).
+registerFormation({
+  id: 'pinnacle_train', arrange: 'meander', span: [420, 760], step: 64,
+  params: { wobble: 40 },
+  pieces: [
+    { kind: 'rock_spire', radius: [15, 26], jitter: 16, rot: true },
+    { kind: 'rock', radius: [18, 30], every: 2, jitter: 24, rot: true },
+    { kind: 'scree', radius: [16, 28], every: 2, jitter: 28 },
+  ],
+});
+
 // A FIN RIDGE: chitin blade-plates marching in a dorsal line — the Caul's
 // spine showing through hell's skin — nerve roots webbing between them.
 registerFormation({

@@ -1417,6 +1417,21 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 390, weight: 3, keepDistance: 240 },
   },
 
+  // THE SHARD SQUALL (noDrop): the payload a shattering petrified tree
+  // exhales (DoodadRule.brittle.fume names it — the Karst Country's brittle
+  // kit). Unlike the breathed fumes this one CUTS the moment it exists: no
+  // exposure grace — flying stone doesn't wait for your lungs. Physical, so
+  // armor answers it; standing in a falling tree is its own mistake.
+  stone_shards: {
+    id: 'stone_shards', name: 'Stone Shards', noDrop: true,
+    description: 'A squall of fractured stone hangs where the tree stood — chips and splinters still falling. It cuts whatever lingers in it.',
+    tags: ['spell', 'physical', 'aoe', 'duration'], color: '#9a948a',
+    manaCost: 0, cooldown: 0, useTime: 0.3,
+    baseDamage: { physical: [6, 10] },
+    delivery: { type: 'ground', radius: 54, castRange: 200, lingerDuration: 2.2, tickInterval: 0.4, noImpact: true },
+    effects: [{ type: 'damage' }],
+  },
+
   // ======================= Summoning =======================================
 
   summon_skeleton: {
@@ -5149,6 +5164,45 @@ export const SKILLS: Record<string, SkillDef> = {
     ],
     requirements: { willpower: 22 },
     ai: { range: 280, weight: 3, keepDistance: 200 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
+  },
+  // THE PLAYER'S STARE: the Karst ladder as a build — a held thin cone that
+  // BUILDS petrifying (the climb is the slow), with the statue payoff wired
+  // as self-synergy (damageVs_petrified per level — syncope's grammar). The
+  // generated lanes (apply_petrifying / damageVs_petrified) exist for every
+  // passive and affix the moment the statuses do; this gem is just the
+  // first bearer.
+  stone_gaze: {
+    id: 'stone_gaze', name: 'Stone Gaze',
+    description: 'Meet them with the mountain\'s regard — a thin, held stare that settles WEIGHT into the victim, stack by stack, toward stone. Statues take the shattering blow a little wider.',
+    tags: ['spell', 'physical', 'duration'], color: '#9a948a',
+    manaCost: 11, cooldown: 4, useTime: 0.9,
+    baseDamage: { physical: [8, 13] },
+    delivery: { type: 'cone', range: 300, arcDeg: 8, beamFx: true },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'petrifying', chance: 1 },
+    ],
+    requirements: { willpower: 20 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('damageVs_petrified', 'flat', 0.04)] },
+  },
+  // THE BASILISK'S STARE (noDrop): gaze_beam's grammar pointed at the Karst
+  // ladder — the thin held ray BUILDS petrifying stack by stack (the climb
+  // is the slow; the cap is the statue). Break line of sight, close the
+  // distance, or kill the serpent: the same counterplay ladder the weald's
+  // watcher stones teach.
+  petrifying_gaze: {
+    id: 'petrifying_gaze', name: 'Petrifying Gaze', noDrop: true,
+    description: 'The lidless serpent stare — weight settles into your limbs, stack by stack, toward stone.',
+    tags: ['spell', 'physical', 'duration'], color: '#9a948a',
+    manaCost: 9, cooldown: 3.4, useTime: 1.0,
+    baseDamage: { physical: [3, 6] },
+    delivery: { type: 'cone', range: 320, arcDeg: 6, beamFx: true },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'petrifying', chance: 1 },
+    ],
+    ai: { range: 300, weight: 3, keepDistance: 220 },
     leveling: { perLevel: [mod('damage', 'increased', 0.1)] },
   },
   tear_burst: {

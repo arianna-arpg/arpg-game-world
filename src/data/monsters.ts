@@ -668,6 +668,13 @@ export const WILDLIFE: Record<string, WildlifeRow[]> = {
     { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
     { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
   ],
+  // The karst country: sparse dry-stone life — hares grazing the pockets,
+  // moths in the gulf-shade, bloodwings nesting the crag rims.
+  karst: [
+    { id: 'meadow_hare', chance: 0.4, count: [2, 3] },
+    { id: 'glow_moth', chance: 0.35, count: [2, 4] },
+    { id: 'bloodwing_nest', chance: 0.25, count: [1, 2] },
+  ],
   field: [
     { id: 'meadow_hare', chance: 0.7, count: [3, 5] },
     // the Verminfall — grain draws rats; the dead of the open field draw crows.
@@ -7506,6 +7513,83 @@ export const MONSTERS: Record<string, MonsterDef> = {
     vision: { arcDeg: 360, rearMul: 1 },
     detection: 1.1, brain: { type: 'basic' },
   },
+  // ======================= THE KARST STONEKIN ==============================
+  // The Karst Country's elemental garrison — stone that STARES, LOBS, HOLDS,
+  // and SPILLS. Four defense textures, none repeated from the shelled
+  // families: the basilisk is an evasive skirmisher whose STARE does the
+  // fighting (petrifying_gaze — the weald's watcher-stone pressure with
+  // feet); the warden wears a stone shell that NEVER KNITS (regenRate 0 —
+  // crack it once and it stays cracked, the anti-scarab: burst opens it
+  // early, sustain grinds the naked poise after); the slinger's armor is
+  // the CHASM between you (glass up close, artillery across a gap — the
+  // Reach's geometry IS its statline); the shambler is the poise wall that
+  // spills into skittering chaff when it breaks (the one death-division
+  // seam, no bespoke split). Family counterlevers: stone conducts nothing
+  // (lightningRes credit) but old stone SHATTERS under cold's wedge
+  // (coldRes debt — the freeze-thaw law). All four join stone_sentinel's
+  // crowned family (WARLORD_OF.elemental) rather than minting a faction.
+  basilisk: {
+    id: 'basilisk', name: 'Basilisk',
+    color: '#9a948a', shape: 'triangle', radius: 13, material: 'stone', look: 'basilisk',
+    base: { life: 70, moveSpeed: 122, accuracy: 108, armor: 10, evasion: 55, poise: 0, mana: 60, manaRegen: 6 },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: ['petrifying_gaze', 'talon_rake'], xp: 30,
+    faction: 'elemental',
+    tags: ['beast'],
+    temper: 'wary',
+    brain: { type: 'basic' },
+  },
+  petrified_warden: {
+    id: 'petrified_warden', name: 'Petrified Warden',
+    color: '#7d7868', shape: 'hexagon', radius: 17, material: 'stone', look: 'petrified_warden',
+    base: { life: 150, moveSpeed: 84, accuracy: 100, armor: 40, poise: 30, evasion: 0, mana: 30, manaRegen: 4 },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: ['heavy_strike', 'ground_slam'], xp: 44,
+    faction: 'elemental',
+    tags: ['construct'],
+    // The never-knitting shell: regenRate 0 is honored (?? keeps zeros) —
+    // the crack is PERMANENT. Distinct on purpose from the scarab's
+    // regrowing plate and the sarcophate's slow-knitting linen.
+    shellGuard: { side: 'all', max: 150, regenDelay: 9999, regenRate: 0, color: '#8a8578' },
+    turnSpeed: 2.6, post: true, temper: 'territorial',
+    brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+  karst_slinger: {
+    id: 'karst_slinger', name: 'Karst Slinger',
+    color: '#a89f8a', shape: 'pentagon', radius: 12, material: 'stone', look: 'karst_slinger',
+    base: { life: 55, moveSpeed: 100, accuracy: 112, armor: 15, evasion: 20, poise: 10, mana: 40, manaRegen: 5 },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: ['hurl_debris'], xp: 24,
+    grants: [{ atLevel: 8, chance: 0.5, skill: 'splinter_volley' }],
+    faction: 'elemental',
+    tags: ['construct'],
+    temper: 'wary',
+    brain: { type: 'basic' },
+  },
+  scree_shambler: {
+    id: 'scree_shambler', name: 'Scree Shambler',
+    color: '#8a8270', shape: 'octagon', radius: 20, material: 'stone', look: 'scree_shambler',
+    base: { life: 210, moveSpeed: 78, accuracy: 96, armor: 55, poise: 70, evasion: 0, mana: 30, manaRegen: 3 },
+    mods: [mod('lightningRes', 'flat', 0.4), mod('coldRes', 'flat', -0.25)],
+    skills: ['ground_slam', 'hurl_debris'], xp: 52,
+    faction: 'elemental',
+    tags: ['construct'],
+    turnSpeed: 2.4, temper: 'territorial',
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      onDeath: [{ do: 'summon', monster: 'scree_skitter', count: 2, ring: 26, announce: 'the shambler spills apart!' }],
+    },
+  },
+  scree_skitter: {
+    id: 'scree_skitter', name: 'Scree Skitter',
+    color: '#9a948a', shape: 'triangle', radius: 8, material: 'stone', look: 'scree_skitter',
+    base: { life: 26, moveSpeed: 150, accuracy: 100, armor: 8, evasion: 40, poise: 0, mana: 0 },
+    skills: ['claw'], xp: 8,
+    faction: 'elemental',
+    tags: ['construct'],
+    temper: 'territorial',
+    brain: { type: 'basic' },
+  },
   // --- THE HAUNTING's bodies (spawned by the package, never rostered) -------
   // THE GRIEF-ANCHOR: a standing knot of sorrow the haunting winds around.
   // Breaking it doesn't end the grief — it gives the grief a THROAT (the
@@ -9256,6 +9340,12 @@ export const FACTIONS: Record<string, {
       { id: 'frost_elemental', weight: 2, presence: { from: 5, fadeIn: 3 } },
       { id: 'stone_sentinel', weight: 1, presence: { from: 10, fadeIn: 5 } },
       { id: 'shard_spire', weight: 1, presence: { from: 8, fadeIn: 4 } },
+      // The Karst stonekin muster with their crowned family (HARD floors —
+      // old stone does not arrive gradually).
+      { id: 'basilisk', weight: 2, presence: { from: 6 } },
+      { id: 'karst_slinger', weight: 2, presence: { from: 5 } },
+      { id: 'petrified_warden', weight: 1, presence: { from: 8 } },
+      { id: 'scree_shambler', weight: 1, presence: { from: 9 } },
     ],
   },
   sylvan: {
