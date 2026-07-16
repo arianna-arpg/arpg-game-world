@@ -10297,6 +10297,11 @@ export class World {
         const type = this.weightedPick(roster.table, Math.max(1, def.level));
         for (let k = 0; k < randInt(3, 5); k++) {
           const m = this.createMonster(type, Math.max(1, def.level), 'enemy');
+          // Contest bodies fight under the CONTESTANT'S banner, not their def's
+          // — a conscript roster (a hell lord's host fielding Legion rabble)
+          // must brawl AS the host, or the two sides read as one census and
+          // never fight (every sibling spawner stamps the same way).
+          m.faction = fid;
           m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
           this.actors.push(m);
         }
@@ -25643,7 +25648,10 @@ export class World {
           id: req.zoneKey, tileset: req.tileset, name: req.name,
           ...(req.layout ? { layoutType: req.layout } : {}),
           level: this.eventLevel(req.coord) + (dimensionDef(hwDim).levelBonus ?? 0) + 2,
+          // noFactionWar: a THRONE never hosts a squatter war — the lord's own
+          // court (heartland population + the seat set-piece) is the fight.
           objective: { kind: 'clear' }, forceWaypoint: true, forceFrontiers: 1, floating: true,
+          noFactionWar: true,
           seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
           biomeFor: this.dimensionBiomeFor(hwDim),
           climateFor: this.climateFor,

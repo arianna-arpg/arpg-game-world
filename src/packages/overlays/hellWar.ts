@@ -54,8 +54,11 @@ export const WAR_CFG = {
   /** Citadel anchor distance from the Hellgate (min/max, seeded). */
   citadelRing: [235, 305] as [number, number],
   /** The Hellgate's shunned ground — no lord claims within (the one neutral
-   *  circle in hell; the landing is a door, not a warfront). */
-  neutralRadius: 70,
+   *  circle in hell; the landing is a door, not a warfront). Covers the
+   *  gate's OWN cell only: its neighbouring zones sit ~70 units out
+   *  (a diagonal map step) and belong IN the war — you walk out of the
+   *  Hellgate straight into somebody's country. */
+  neutralRadius: 40,
   /** Within this of its citadel a lord's ground is HEARTLAND: the zone's
    *  population is fully the lord's host (baseTable override). */
   heartland: 118,
@@ -354,9 +357,11 @@ export class HellWarField implements WorldOverlay {
       if (z.map.y + pad > maxY) { maxY = z.map.y + pad; dirty = true; }
     }
     // Remask cheaply when only the charted set changed (new nodes inside the
-    // current frame still need their cover painted).
+    // current frame still need their cover painted — and SEEDED: the war
+    // reaches wherever hell settles, so fresh cover leans to its nearest
+    // throne rather than sitting outside the struggle).
     if (!dirty) {
-      if (view.nodes.length !== this.maskedNodes) this.remask(view);
+      if (view.nodes.length !== this.maskedNodes) { this.remask(view); this.seedPower(); }
       return;
     }
     const ox = Math.floor(minX / c) * c, oy = Math.floor(minY / c) * c;
@@ -377,6 +382,7 @@ export class HellWarField implements WorldOverlay {
     }
     this.grid = next;
     this.remask(view);
+    this.seedPower();
   }
 
   private maskedNodes = -1;
@@ -405,8 +411,11 @@ export class HellWarField implements WorldOverlay {
     }
   }
 
-  /** First ground: each cell leans to its nearest citadel, strong at the
-   *  seat and thinning toward the midlines — a war already old when found. */
+  /** Ground the war stands on: every UNCLAIMED masked cell leans to its
+   *  nearest citadel, strong at the seat and thinning toward the midlines —
+   *  a war already old when found. Idempotent (owner<0 only), so it runs at
+   *  first anchor AND after every mask growth: freshly settled hell joins
+   *  the struggle the moment it exists, never as a neutral island. */
   private seedPower(): void {
     const g = this.grid;
     if (!g) return;
@@ -414,12 +423,12 @@ export class HellWarField implements WorldOverlay {
     for (let y = 0; y < g.h; y++) {
       for (let x = 0; x < g.w; x++) {
         const i = y * g.w + x;
-        if (!g.mask[i]) continue;
+        if (!g.mask[i] || g.owner[i] >= 0) continue;
         const px = g.ox + (x + 0.5) * c, py = g.oy + (y + 0.5) * c;
         let best = -1, bd = Infinity;
         for (let s = 0; s < this.seats.length; s++) {
           const ct = this.seats[s].citadel;
-          if (!ct) continue;
+          if (!ct || this.seats[s].fallen) continue;
           const d = (px - ct.x) ** 2 + (py - ct.y) ** 2;
           if (d < bd) { bd = d; best = s; }
         }
