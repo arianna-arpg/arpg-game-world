@@ -21,6 +21,15 @@
 //              (exemptions mirror the splice EXACTLY: keep-tagged waiver
 //              pieces, doors, plan-structure rects — a bare reservation
 //              shields nothing from the carve)
+//   clearway   traveled ways hold their right-of-way: no un-waived blocker
+//              body on a live (non-wild) way disc (exemptions mirror
+//              sweepClearways EXACTLY), decked soft ground never coexists
+//              with the way (fat bodies ford + wade shallow), yielded
+//              ground (lava, rents) never underlies it
+//   habitat    ground-affine kinds (live kelp/coral) sit near their ground
+//              — aquatic arenas ambient, 'habitat'-waived pieces authored;
+//              plus a dead-row LINT (warn) for authored rows whose habitat
+//              can never be met (kelp with no water poured before it)
 //   caveSeeds  the cave_entrance ↔ caveSeeds index zip holds
 //   reachable  on walk-grid layouts, every exit shares the entry's component
 //   doors      placed doors keep walkable floor on BOTH sides (warn)
@@ -47,7 +56,7 @@ import { vec } from '../src/core/math';
 import { generateZone, randomizeStarterWeb, spacedExitAt, MIN_PORTAL_SEP } from '../src/engine/worldgen';
 import {
   generateLayout, validateStamps, validateCompositions, compositionDefs,
-  doodadRuleOf, layoutIds, blocksMovement, normalizeDoodadBound,
+  doodadRuleOf, layoutIds, blocksMovement, normalizeDoodadBound, bodyRadiusOf,
   type Doodad, type GeneratedLayout,
 } from '../src/engine/levelgen';
 import { shapeBoundR } from '../src/engine/shapes';
@@ -58,7 +67,7 @@ import { ZONES, type StampSpec, type ZoneDef } from '../src/data/zones';
 import { MELDS } from '../src/data/melds';
 import { blendFieldIds, composeBlendLayout, hasBlendField } from '../src/engine/blend';
 import { hollowDef, hollowShapeOf } from '../src/data/hollows';
-import { BIOMES } from '../src/world/biomes';
+import { BIOMES, isAquaticBiome } from '../src/world/biomes';
 import { CLIMATE_AXES } from '../src/world/climate';
 import { interiorRoleDefs } from '../src/engine/interiorGen';
 
@@ -146,6 +155,78 @@ function checkLayout(name: string, layout: GeneratedLayout, def: ZoneDef,
     if (blockersNearPortals.length) {
       fails.push(`${name}: ${blockersNearPortals.length} blocker(s) inside a portal clear (${[...new Set(blockersNearPortals.map(d => d.kind))].join(',')})`);
     }
+  }
+  // THE CLEARWAY CONTRACT (the coherence fabric): traveled ways hold their
+  // right-of-way in the OUTCOME, whoever laid what, in whatever order. The
+  // exemption set mirrors sweepClearways EXACTLY (the aligned-contract
+  // lesson from the portal splice): keep-tagged pieces, doors, plan-
+  // structure rects, 'clearway'-waived pieces, spanning bridges — and
+  // OVERGROWN (wild) way discs claim nothing. Deck/yield assert the ground
+  // truth: decked soft ground never coexists with a live way disc (a FAT
+  // ford body may only lap a rim, and wades shallow), yielded ground (lava,
+  // rents) never underlies one. Thresholds sit 1px INSIDE the mechanism's
+  // so float edges never flap.
+  {
+    const ways = doodads.filter(d => doodadRuleOf(d.kind).clearway);
+    if (ways.length) {
+      const FORD_R = 56, FORD_FRAC = 0.4; // mirrored: COHERENCE_CFG.fordBodyR + the ford threshold
+      const inStructureRect = (d: Doodad): boolean =>
+        (layout.structures ?? []).some(st =>
+          d.pos.x > st.rect.x - d.radius && d.pos.x < st.rect.x + st.rect.w + d.radius
+          && d.pos.y > st.rect.y - d.radius && d.pos.y < st.rect.y + st.rect.h + d.radius);
+      const standing = new Set<string>();
+      for (const s of doodads) {
+        if (!blocksMovement(s) || doodadRuleOf(s.kind).clearway) continue;
+        if (s.keep || s.kind === 'door' || s.waive?.includes('clearway')) continue;
+        if (doodadRuleOf(s.kind).spans || inStructureRect(s)) continue;
+        const bodyR = bodyRadiusOf(s);
+        if (ways.some(c => !c.wild
+          && Math.hypot(s.pos.x - c.pos.x, s.pos.y - c.pos.y) < bodyR + c.radius - 1)) {
+          standing.add(s.kind);
+        }
+      }
+      if (standing.size) fails.push(`${name}: blocker(s) standing on a traveled way (${[...standing].join(', ')})`);
+      const badDeck = new Set<string>(), badYield = new Set<string>();
+      for (const c of ways) {
+        const cw = doodadRuleOf(c.kind).clearway!;
+        for (const g of doodads) {
+          if (g === c) continue;
+          const dd = Math.hypot(c.pos.x - g.pos.x, c.pos.y - g.pos.y);
+          if (cw.yieldsTo?.includes(g.kind) && dd < c.radius + g.radius - 1) {
+            badYield.add(`${c.kind}×${g.kind}`);
+          }
+          if (cw.decks?.includes(g.kind)) {
+            if (g.radius > FORD_R) {
+              if (dd < g.radius + c.radius * FORD_FRAC - 1) badDeck.add(`${c.kind}×${g.kind} (unforded body)`);
+            } else if (dd < c.radius + g.radius - 1) {
+              badDeck.add(`${c.kind}×${g.kind}`);
+            }
+          }
+        }
+      }
+      if (badDeck.size) fails.push(`${name}: soft ground under a traveled way (${[...badDeck].join(', ')})`);
+      if (badYield.size) fails.push(`${name}: traveled way over ground it yields to (${[...badYield].join(', ')})`);
+    }
+  }
+  // THE HABITAT CONTRACT (the coherence fabric): ground-affine kinds sit
+  // near their ground in the outcome. Aquatic arenas (def.aquatic, or the
+  // underwater recipe whose whole floor is sea by construction) satisfy
+  // ambiently; 'habitat'-waived pieces are the authored exception. The
+  // slack past the rule's reach covers blob-satellite/cluster stray beyond
+  // the siting gate — the invariant catches flora in the DRY MIDDLE of a
+  // meadow, never a frond a stride past its pool.
+  if (!def.aquatic && def.layoutType !== 'underwater') {
+    const HAB_SLACK = 90;
+    const stranded = new Set<string>();
+    for (const d of doodads) {
+      const hab = doodadRuleOf(d.kind).habitat;
+      if (!hab || d.waive?.includes('habitat')) continue;
+      const reach = (hab.reach ?? 140) + HAB_SLACK; // 140 mirrored: COHERENCE_CFG.habitatReach
+      const ok = doodads.some(g => hab.near.includes(g.kind)
+        && Math.hypot(d.pos.x - g.pos.x, d.pos.y - g.pos.y) - g.radius <= reach);
+      if (!ok) stranded.add(d.kind);
+    }
+    if (stranded.size) fails.push(`${name}: habitat-bearing kind(s) stranded from their ground (${[...stranded].join(', ')})`);
   }
   // caveSeeds zip.
   const mouths = doodads.filter(d => d.kind === 'cave_entrance').length;
@@ -285,6 +366,7 @@ function runCase(name: string, def: ZoneDef): void {
   const entry = vec(120, arena.h / 2);
   const exits = [vec(arena.w - 120, arena.h / 2), vec(arena.w / 2, 120)];
   let count = 0;
+  const placedKinds = new Set<string>();
   const t0 = performance.now();
   for (let s = 0; s < SEEDS; s++) {
     const seed = 1000003 * (s + 1) + 17;
@@ -296,9 +378,23 @@ function runCase(name: string, def: ZoneDef): void {
         fails.push(`${name} seed ${seed}: NON-DETERMINISTIC`);
       }
       count = layout.doodads.length;
+      for (const dd of layout.doodads) placedKinds.add(dd.kind);
       checkLayout(`${name} seed ${seed}`, layout, d, arena, entry, exits, fails, warns);
     } catch (e) {
       fails.push(`${name} seed ${seed}: THREW ${(e as Error).message}`);
+    }
+  }
+  // DEAD-ROW LINT (warn): an authored row naming a habitat-bearing kind that
+  // never placed across every seed — kelp authored with no water poured
+  // before it starves silently at the siting gate; the coherent fix is the
+  // ground-before convention (pour first), a `where: shore` band, or an
+  // explicit rules.ignore ['habitat'] waiver on a deliberately dry garden.
+  if (!def.aquatic && def.layoutType !== 'underwater') {
+    for (const row of def.layout) {
+      const hab = doodadRuleOf(row.kind).habitat;
+      if (!hab || row.count[1] <= 0 || placedKinds.has(row.kind)) continue;
+      if (row.rules?.ignore?.includes('habitat')) continue;
+      warns.push(`${name}: row '${row.kind}' never placed (habitat unmet — pour its ground first, band it, or waive)`);
     }
   }
   results.push({ name, seeds: SEEDS, doodads: count, ms: (performance.now() - t0) / SEEDS, fails, warns });
@@ -355,6 +451,9 @@ for (const ts of Object.values(TILESETS)) {
     size: { w: mid(ts.sizeW), h: mid(ts.sizeH) },
     theme: ts.theme,
     layout: [...(ts.common ?? []), ...ts.layout],
+    // AQUATIC mirrors worldgen's mint stamp (one classifier, both worlds):
+    // an open-seabed tileset's flora places ambiently here exactly as live.
+    ...(isAquaticBiome(ts.biome) ? { aquatic: true } : {}),
     ...(ts.forceLayout ? { layoutType: ts.forceLayout } : {}),
     ...(ts.layoutParams ? { layoutParams: ts.layoutParams } : {}),
     objective: { kind: 'clear' },

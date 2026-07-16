@@ -207,9 +207,14 @@ export type StampKind = KnownStampKind | (string & {});
  *    'solids'      — skips the solid-overlap spacing test entirely
  *    'spacing'     — keeps the test but with zero gap
  *    'walk'        — may land on non-walkable grid cells
- *    'forbid'      — ignores the kind's forbidOn ground list */
+ *    'forbid'      — ignores the kind's forbidOn ground list
+ *    'clearway'    — may stand ON a traveled way (the clearway carve spares the
+ *                    pieces, tagged `waive`: an authored blockade across a road)
+ *    'habitat'     — ignores the kind's ground affinity (a DELIBERATELY inundated
+ *                    biome beds kelp on dry land; pieces tagged, genqa honors) */
 export type StampIgnoreRule =
-  | 'border' | 'portalClear' | 'reserved' | 'solids' | 'spacing' | 'walk' | 'forbid';
+  | 'border' | 'portalClear' | 'reserved' | 'solids' | 'spacing' | 'walk' | 'forbid'
+  | 'clearway' | 'habitat';
 
 export interface StampRuleOverride {
   ignore?: StampIgnoreRule[];
@@ -353,6 +358,11 @@ export interface ExitRoadSpec {
   radius?: [number, number];
   /** wanderPath knobs (defaults mirror the forest trails). */
   step?: number; wobble?: number; bowFrac?: number;
+  /** OVERGROWTH override for this way alone (0..1 wild share, rolled in
+   *  runs — see levelgen wayRoller). Absent = the zone's own dial
+   *  (layoutParams.overgrowth). A Holdfast's KEPT road pins 0: kept means
+   *  kept. */
+  overgrowth?: number;
 }
 
 export interface ZoneExitDef {
@@ -698,6 +708,13 @@ export interface ZoneDef {
   camera?: import('../render/camera').CameraModeId;
   /** Biome tag for faction-traits home matching ('grave' | 'grove' | 'rift'). */
   biome?: string;
+  /** AQUATIC arena (stamped at mint from BiomeInfo.marine === 'deep', or
+   *  authored on underwater defs): the whole floor is seabed. Habitat-bearing
+   *  kinds (live kelp, coral) place freely — the water is ambient — and the
+   *  DEFAULT gravel exit-road stands down (an ExitRoadSpec that authors its
+   *  kind still lays). Durable on the def like `geo`, so revisits and co-op
+   *  regenerate identically. */
+  aquatic?: boolean;
   /** Sub-biome variant rolled at generation — a flavour within the biome
    *  (a jungle "clearing" vs "dense floor"). Cosmetic + layout, not faction. */
   variantName?: string;

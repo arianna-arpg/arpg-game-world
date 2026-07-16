@@ -194,8 +194,10 @@ export const BANDIT_TOLLGATE: HoldfastDef = {
   gate: 'toll_gate', guardian: BANDIT_GUARDIAN,
   // The wardens usually keep a road (the lived-in read); the odd toll on raw
   // ground reads as freshly raised. Sourced at the layout's entry anchor, so
-  // arriving travelers walk in ON the way that leads to the gate.
-  road: { chance: 0.8, from: 'entry' },
+  // arriving travelers walk in ON the way that leads to the gate. KEPT means
+  // kept: overgrowth pinned 0 — a warden road the wood is winning back would
+  // say nobody holds this gate.
+  road: { chance: 0.8, from: 'entry', overgrowth: 0 },
   unlock: { kind: 'pay-currency', currency: 'mortal', cost: 15, costPerLevel: 3 },
   reward: { kind: 'open-exit', destLevelDelta: 0 },
   // The earned ground: markedly richer kills, and the wardens always camp
@@ -223,7 +225,7 @@ export const DURANCE_TITHEGATE: HoldfastDef = {
   id: 'durance_tithegate', name: 'Durance Tithe-Gate',
   gate: 'durance_gate', guardian: DURANCE_GUARDIAN,
   dims: ['underworld'],
-  road: { chance: 0.6, from: 'entry' },
+  road: { chance: 0.6, from: 'entry', overgrowth: 0 },
   unlock: { kind: 'pay-currency', currency: 'mortal', cost: 30, costPerLevel: 4 },
   reward: { kind: 'open-exit', destLevelDelta: 1 },
   pocket: { bounty: 2.75, features: [{ kind: 'cave', min: 1 }] },

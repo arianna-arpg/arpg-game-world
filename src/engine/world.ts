@@ -33766,8 +33766,12 @@ export class World {
         soft = { kind: d.kind, deep: false };
       } else if (d.kind === 'brush' && !soft) {
         soft = { kind: 'brush', deep: false };
-      } else if (d.kind === 'road' && !soft) {
-        soft = { kind: 'road', deep: false }; // benign — only when no nastier ground covers the point
+      } else if (d.kind === 'road' && !d.wild && !soft) {
+        // Benign — only when no nastier ground covers the point. An OVERGROWN
+        // (wild) stretch has lost its worn surface: no pace boost there — the
+        // reclaiming flora on it reports instead, so a swallowed passage
+        // FEELS different underfoot, exactly as it looks.
+        soft = { kind: 'road', deep: false };
       } else if (!soft && regionKind(d.kind)) {
         // REGISTRY FALLBACK: any OTHER ground kind with a RegionKind row
         // (webbing's mire, the reeds' concealment — and every future

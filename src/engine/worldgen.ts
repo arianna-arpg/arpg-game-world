@@ -19,7 +19,7 @@ import type { BlendSpec, ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from
 import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
-import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing } from '../world/biomes';
+import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing, isAquaticBiome } from '../world/biomes';
 import { dimensionDef, dimensionsEnteredBy } from '../world/dimensions';
 import type { CourseMintHints } from '../world/courses';
 
@@ -799,6 +799,10 @@ export function placeZoneAt(
     ...(landmarkRolls.length ? { landmarks: landmarkRolls } : {}),
     ...(compositionRolls.length ? { compositions: compositionRolls } : {}),
     ...(geo ? { geo } : {}),
+    // AQUATIC (the coherence fabric): open-seabed biomes stamp the flag so
+    // habitat-bearing flora places freely and the default gravel exit-road
+    // stands down — durable on the def, one classifier (isAquaticBiome).
+    ...(isAquaticBiome(biome) ? { aquatic: true } : {}),
     ...(Object.keys(layoutParams).length ? { layoutParams } : {}),
     ...(spec.port ? { port: true } : {}),
     ...(spec.dimension ? { dimension: spec.dimension } : {}),

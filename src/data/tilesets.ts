@@ -2835,9 +2835,12 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'sand', count: [4, 7] },
       { kind: 'palm', count: [8, 14] },
       { kind: 'rocks', count: [4, 7], radius: [18, 38] },
+      // Water pours BEFORE the live flora (the ground-before convention):
+      // kelp and coral carry habitat now — they bed into the shallows and
+      // pools they can see, never the dry heart of the isle.
+      { kind: 'water', count: [1, 2] },
       { kind: 'kelp', count: [3, 6] },
       { kind: 'coral', count: [2, 5], radius: [14, 26] },
-      { kind: 'water', count: [1, 2] },
       { kind: 'trees', count: [3, 6] },
     ],
     packs: {
@@ -3245,15 +3248,17 @@ export const TILESETS: Record<string, TilesetDef> = {
         { kind: 'kelp', count: [2, 4] },
         { kind: 'coil_idol', count: [0, 1] },
       ] },
-      // The reef shallows: the garden the water kept for itself.
+      // The reef shallows: the garden the water kept for itself. The water
+      // pours FIRST (the ground-before convention) so the habitat-bearing
+      // garden beds into it instead of starving at the gate.
       { name: 'reef shallows', layout: [
+        { kind: 'water', count: [3, 5], radius: [36, 80] },
+        { kind: 'shallows', count: [5, 8] },
+        { kind: 'tide_pool', count: [2, 4] },
         { kind: 'coral', count: [4, 7] },
         { kind: 'kelp', count: [4, 6] },
         { kind: 'giant_kelp', count: [3, 5] },
-        { kind: 'water', count: [3, 5], radius: [36, 80] },
-        { kind: 'shallows', count: [5, 8] },
         { kind: 'sea_rock', count: [2, 4] },
-        { kind: 'tide_pool', count: [2, 4] },
       ] },
     ],
     packs: {

@@ -115,6 +115,11 @@ export const BIOMES: Record<string, BiomeInfo> = {
   forest: { patronFaction: 'sylvan', mapColor: '#2e7d32', label: 'Forest', spacing: 58,
     climate: { temperature: 'mild', moisture: 'damp' },
     allowedLayouts: { forest: 1 },
+    // OVERGROWTH (the clearway fabric): how much of a trail the wood wins
+    // back, [fringe, heart] lerped by biomeDepth — the deep forest's ways
+    // run low-rate overgrown ON PURPOSE (swallowed stretches, trees and
+    // all), the edges stay walked-clean.
+    layoutParams: { overgrowth: [0, 0.18] },
     landmarks: [{ landmark: 'lake', chance: 0.25 }, { landmark: 'secluded_valley', chance: 0.15 }] },
   // THE GLOAMWOOD: the HAUNTED forest — the same sealed-roof recipe under a
   // crooked grey-dark tree mix (layoutParams.forestTrees), riverland faces
@@ -143,6 +148,8 @@ export const BIOMES: Record<string, BiomeInfo> = {
       ],
       forestCoverEdge: 0.4, forestCoverDeep: 0.8,
       forestClearings: [2, 5],
+      // The haunted wood keeps its roads worse than the living one does.
+      overgrowth: [0.04, 0.26],
     },
     landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.12 }] },
   // THE JUNGLE: the strangling green — the WET half of the WARM belt (the
@@ -184,6 +191,9 @@ export const BIOMES: Record<string, BiomeInfo> = {
       forestClearings: [2, 4],
       // The river face: a warm jungle waterway, forded not frozen.
       riverLiquid: 'water', causeways: [1, 2],
+      // The green strangles its own trails: the strongest overgrowth in the
+      // game — a jungle path half-swallowed is the jungle READ.
+      overgrowth: [0.12, 0.4],
     },
     landmarks: [{ landmark: 'lake', chance: 0.2 }, { landmark: 'secluded_valley', chance: 0.1 }] },
   // Gravelands raise mausoleum labyrinths (a rare whole-zone hedge-maze bastion)
@@ -630,6 +640,16 @@ export const MARINE_MINT = { deepBiome: 'deepsea', openShallowBiome: 'isle' } as
  *  dock-weighted faces host a harbor when the LOCAL field biome fields no
  *  dockable face (TilesetDef.docks — see pickDockTileset). */
 export const PORT_MINT = { fallbackBiome: 'beach' } as const;
+
+/** AQUATIC: this biome's zones are open seabed — the whole arena is
+ *  underwater, water ambient rather than poured. THE one classifier both
+ *  worldgen (mint) and the QA harnesses stamp ZoneDef.aquatic from, so the
+ *  habitat fabric and the exit-road guard read one truth. marine 'deep'
+ *  today; a future drowned dimension joins by tagging its BiomeInfo, no
+ *  consumer churn. */
+export function isAquaticBiome(biome: string | undefined): boolean {
+  return !!biome && BIOMES[biome]?.marine === 'deep';
+}
 
 /** A local WARP of the field — the HEAT-SOURCE seam. Within `radius` of `center`,
  *  bias the biome toward `biome`. Pushed by quests/world-events in a future pass;

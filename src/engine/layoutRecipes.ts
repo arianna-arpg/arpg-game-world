@@ -30,6 +30,7 @@ import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
   placeLandmarkById, raiseStructure, setBoundaryGateBuilder, setExitRoadBuilder,
   setMeldBuilder, stamp, areaFreeOf, doodadRuleOf, type DoodadKind, type GenCtx,
+  layTraveledWay, onClearway, overgrowthOf,
 } from './levelgen';
 import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
@@ -653,24 +654,17 @@ function forestLayout(ctx: GenCtx, def: ZoneDef): void {
     ctx.pois.push(vec(c.x, c.y));
   }
 
-  // GAME TRAILS — worn ground wandering entry → exit, reserved like every
-  // artery so the planting sweep leaves the passage open. Chained road discs
-  // ride the existing 'road' kind: path-mode blend, moveScale, one impl.
+  // GAME TRAILS — worn ground wandering entry → exit, laid through THE
+  // way-layer (layTraveledWay): path-mode blend, moveScale, clearway
+  // right-of-way and the zone's overgrowth dial, one implementation. Live
+  // stretches reserve their ground so the planting sweep leaves the passage
+  // open; OVERGROWN stretches reserve nothing and stand aside from the
+  // clearway carve — the deep wood wins those back, trees and all.
   const trailN = Math.min(ctx.exits.length,
     rng.int(...(layoutParam(def, 'forestTrails', [1, 2]) as [number, number])));
   for (let i = 0; i < trailN; i++) {
     const pts = wanderPath(rng, ctx.entry, ctx.exits[i], { step: 120, wobble: 55, bowFrac: 0.3 });
-    reserveArtery(ctx, pts, 30);
-    for (let k = 0; k < pts.length - 1; k++) {
-      const a = pts[k], b = pts[k + 1];
-      const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 30));
-      for (let t = 0; t <= steps; t++) {
-        ctx.doodads.push({
-          pos: vec(a.x + (b.x - a.x) * (t / steps), a.y + (b.y - a.y) * (t / steps)),
-          radius: rng.range(16, 22), kind: 'road',
-        });
-      }
-    }
+    layTraveledWay(ctx, pts, { reserve: true });
   }
 
   // THE CANOPY — a jittered lattice sweep through the density mask. Crowns
@@ -697,10 +691,14 @@ function forestLayout(ctx: GenCtx, def: ZoneDef): void {
       let roll = rng.range(0, totalW);
       let m = mix[mix.length - 1];
       for (const cand of mix) { roll -= cand.weight; if (roll <= 0) { m = cand; break; } }
-      ctx.doodads.push({
-        pos: vec(px, py), radius: rng.range(m.radius[0], m.radius[1]),
-        kind: m.kind, rot: rng.range(0, Math.PI * 2),
-      });
+      const treeR = rng.range(m.radius[0], m.radius[1]);
+      const treeRot = rng.range(0, Math.PI * 2);
+      // CLEARWAY (the precise gate — reservations are lumpy sausages): the
+      // TRUNK stays off live trail ground while the crown may overhang it;
+      // overgrown (wild) stretches admit the wood back. Post-roll rejection,
+      // acceptance-only — the draw stream stays deterministic.
+      if (onClearway(ctx, vec(px, py), treeR * (doodadRuleOf(m.kind).bodyScale ?? 1))) continue;
+      ctx.doodads.push({ pos: vec(px, py), radius: treeR, kind: m.kind, rot: treeRot });
     }
   }
 
@@ -715,10 +713,10 @@ function forestLayout(ctx: GenCtx, def: ZoneDef): void {
       if (clearings.some(c => (px - c.x) ** 2 + (py - c.y) ** 2 < c.r * c.r)) continue;
       if (portals.some(p => (px - p.x) ** 2 + (py - p.y) ** 2 < 180 * 180)) continue;
       if (hitsReservation(ctx, px, py, 30)) continue;
-      ctx.doodads.push({
-        pos: vec(px, py), radius: rng.range(56, 80),
-        kind: 'ancient_tree', rot: rng.range(0, Math.PI * 2),
-      });
+      const elderR = rng.range(56, 80);
+      const elderRot = rng.range(0, Math.PI * 2);
+      if (onClearway(ctx, vec(px, py), elderR * (doodadRuleOf('ancient_tree').bodyScale ?? 1))) continue;
+      ctx.doodads.push({ pos: vec(px, py), radius: elderR, kind: 'ancient_tree', rot: elderRot });
       break;
     }
   }
@@ -790,10 +788,14 @@ function plantRiverbankRoof(ctx: GenCtx, def: ZoneDef, liquidKinds: ReadonlySet<
       let roll = rng.range(0, totalW);
       let m = mix[mix.length - 1];
       for (const cand of mix) { roll -= cand.weight; if (roll <= 0) { m = cand; break; } }
-      ctx.doodads.push({
-        pos: vec(px, py), radius: rng.range(m.radius[0], m.radius[1]),
-        kind: m.kind, rot: rng.range(0, Math.PI * 2),
-      });
+      const treeR = rng.range(m.radius[0], m.radius[1]);
+      const treeRot = rng.range(0, Math.PI * 2);
+      // CLEARWAY (the precise gate — reservations are lumpy sausages): the
+      // TRUNK stays off live trail ground while the crown may overhang it;
+      // overgrown (wild) stretches admit the wood back. Post-roll rejection,
+      // acceptance-only — the draw stream stays deterministic.
+      if (onClearway(ctx, vec(px, py), treeR * (doodadRuleOf(m.kind).bodyScale ?? 1))) continue;
+      ctx.doodads.push({ pos: vec(px, py), radius: treeR, kind: m.kind, rot: treeRot });
     }
   }
   // A thin understory so the banks read lived-in, not decorated.
@@ -1270,6 +1272,10 @@ export function carveApproachRoad(ctx: GenCtx, def: ZoneDef, exitIndex: number,
       : farthest();
   if (Math.hypot(from.x - end.x, from.y - end.y) < 260) from = farthest();
   if (Math.hypot(from.x - end.x, from.y - end.y) < 260) return; // nothing distinct spans — no road
+  // COHERENCE: no DEFAULT gravel way across an aquatic arena (the open
+  // seabed) — an annotation that AUTHORS its kind (a sunken flagstone way,
+  // a bone causeway) still passes, intent spelled out.
+  if (ctx.aquatic && !spec.kind) return;
   const pts = wanderPath(rng, from, end, {
     step: spec.step ?? 120, wobble: spec.wobble ?? 55, bowFrac: spec.bowFrac ?? 0.3,
   });
@@ -1280,19 +1286,17 @@ export function carveApproachRoad(ctx: GenCtx, def: ZoneDef, exitIndex: number,
       ctx.walk.carveCorridor(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, 54);
     }
   }
-  reserveArtery(ctx, pts, 30);
-  const band = spec.radius ?? [16, 22];
-  const kind = spec.kind ?? 'road';
-  for (let k = 0; k < pts.length - 1; k++) {
-    const a = pts[k], b = pts[k + 1];
-    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 30));
-    for (let t = 0; t <= steps; t++) {
-      ctx.doodads.push({
-        pos: vec(a.x + (b.x - a.x) * (t / steps), a.y + (b.y - a.y) * (t / steps)),
-        radius: rng.range(band[0], band[1]), kind,
-      });
-    }
-  }
+  // Laid through THE way-layer: live discs reserve the artery, the zone's
+  // overgrowth dial (or the spec's own override) may let the land swallow
+  // stretches, and sweepClearways collects the right-of-way from whatever
+  // scatter was already standing — the annotation may arrive AFTER the roof
+  // was planted and still reads as a kept road, not paint under a canopy.
+  layTraveledWay(ctx, pts, {
+    band: spec.radius ?? [16, 22],
+    kind: (spec.kind ?? 'road') as DoodadKind,
+    overgrowth: overgrowthOf(def, spec.overgrowth),
+    reserve: true,
+  });
 }
 // Register as THE exit-road builder (levelgen lays it per annotated exit).
 setExitRoadBuilder(carveApproachRoad);

@@ -72,8 +72,9 @@ export const PROCESSION_CFG = {
     { id: 'bandit_matchlock', weight: 1 },
   ] as PackTableEntry[],
   /** The carved TRAVELED WAY from your entry to the caravan's crossing (the
-   *  exitRoads seam — same fabric as the Holdfast's kept road). */
-  road: { from: 'entry' } as ExitRoadSpec,
+   *  exitRoads seam — same fabric as the Holdfast's kept road). Overgrowth
+   *  pinned 0: a way a caravan is rolling down THIS RUN is a way in use. */
+  road: { from: 'entry', overgrowth: 0 } as ExitRoadSpec,
   /** Palette: canvas-and-brass for texts/rings, smoke for the ambush puffs. */
   accent: '#d8b46a',
   smoke: '#8a8478',

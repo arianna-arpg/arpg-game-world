@@ -144,6 +144,16 @@ changes.
   `S` → `GeneratedLayout.spawnAt`: no-back-portal arrivals wake there).
   The Waking House in Lastlight composes all four (bedside run start).
   `levelgen.ts`, `worldgen.ts`.
+  THE COHERENCE FABRIC (generation composition stays intentional — docs in
+  `docs/engine/coherence.md`): traveled ways hold right-of-way as data
+  (`DoodadRule.clearway` + the one way-layer `layTraveledWay`/`wayRoller` —
+  scatter routes around live stretches, roads deck/ford liquids and yield
+  to molten ground, `layoutParams.overgrowth` lets deep country swallow
+  runs of its own paths), ground affinity as data (`DoodadRule.habitat` —
+  live kelp/coral keep to water; `ZoneDef.aquatic` arenas satisfy
+  ambiently), both waivable per stamp row (`rules.ignore` 'clearway' /
+  'habitat', pieces tagged) and both pinned by genqa invariants +
+  `balance/probe_coherence.ts`.
   ZONE OBJECTIVES are a data vocabulary (ObjectiveSpec + per-kind
   `OBJECTIVE_SEALS` exit policy + `data/beacons.ts` survey spires and the
   monster-LURE fabric — docs in `docs/engine/objectives.md`);

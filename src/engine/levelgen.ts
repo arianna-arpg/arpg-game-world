@@ -469,6 +469,20 @@ export interface Doodad {
   /** GEN-TIME ONLY: placed by a rule-breaker stamp that ignored 'portalClear' —
    *  the convex portal-clear splice spares it (deliberate portal furniture). */
   keep?: boolean;
+  /** CLEARWAY discs only (road & kin): this stretch of the way is OVERGROWN —
+   *  the land is winning it back. Scatter may stand here (the clearway carve
+   *  and placement gate both skip wild discs), the worn moveScale boost does
+   *  not apply, and the way-layer plants reclaiming flora along the run. Rolled
+   *  in RUNS by the overgrowth dial (layoutParams.overgrowth / ExitRoadSpec),
+   *  so a swallowed stretch reads as one deliberate passage, never salt-and-
+   *  pepper noise. Genqa's clearway invariant exempts wild ground exactly as
+   *  the carve does. */
+  wild?: boolean;
+  /** GEN-TIME ONLY: coherence gates this piece was DELIBERATELY placed against
+   *  (a rule-breaker stamp ignored 'clearway'/'habitat') — the matching sweep
+   *  and genqa invariant spare it, same discipline as `keep` for portal clears.
+   *  An authored blockade ACROSS a road, a sorcerer's dry-land reef garden. */
+  waive?: ('clearway' | 'habitat')[];
   /** LANDMASS (kind 'landmass', the Voyage's streamed coastline): which land
    *  this shore sample belongs to — the renderer tints it by biome, a bridge
    *  sample reads as a walkable sand isthmus, and an islandId marks a VOYAGE
@@ -724,6 +738,66 @@ export interface PourSpec {
   fuseGap?: number;
 }
 
+/** THE COHERENCE DIALS — modular defaults for the clearway/habitat fabric
+ *  (never inline literals): pad = extra daylight between a way and the bodies
+ *  beside it; fordBodyR = a decked liquid disc BIGGER than this is a real
+ *  body, so the way FORDS it (road yields, water marked shallow) instead of
+ *  splicing a pond-sized hole; habitatReach = default "near its ground"
+ *  distance; wildRun = how many discs one overgrown stretch swallows. */
+export const COHERENCE_CFG = {
+  clearwayPad: 6,
+  fordBodyR: 56,
+  habitatReach: 140,
+  wildRun: [3, 7] as [number, number],
+  /** Reclaiming flora planted along wild runs (chance per wild disc, and the
+   *  ground kinds it draws from — walkable cover only, never blockers). */
+  wildFlora: { chance: 0.45, kinds: ['fern', 'brush', 'grass'] as DoodadKind[] },
+  /** Reservation pad around a reserved way's LIVE discs (layTraveledWay
+   *  reserve) — matches the reach the old reserveArtery sausage gave a
+   *  30-half-width trail. Wild stretches reserve nothing: what the wood won
+   *  back, the landmark rolls may crowd too. */
+  wayReservePad: 38,
+};
+
+/** A TRAVELED WAY's right-of-way (the clearway fabric). A ground kind carrying
+ *  this claims the corridor its discs cover: body-blocking scatter placed later
+ *  routes around it (findSpot/roof-sweep gate), scatter placed EARLIER is
+ *  carved off it by sweepClearways (exemptions mirror the portal splice:
+ *  keep-tagged pieces, doors, plan-structure rects — plus 'clearway'-waived
+ *  pieces and spanning bridges). Overgrown (wild) discs opt out per stretch —
+ *  the deep wood wins some ground back. */
+export interface ClearwaySpec {
+  /** Extra clearance beyond disc-touch (default COHERENCE_CFG.clearwayPad). */
+  pad?: number;
+  /** Liquid/soft ground the way DECKS OVER (a causeway): ground discs of
+   *  these kinds under the way are spliced so the path is truly clean ground
+   *  — the riverland crossing discipline, generalized. A body disc fatter
+   *  than COHERENCE_CFG.fordBodyR fords instead (the WAY yields there and the
+   *  body is marked shallow — the path dips through a wade, never a swim). */
+  decks?: DoodadKind[];
+  /** Ground that CUTS the way (the way yields): a road stops at lava's edge
+   *  and resumes beyond — a floating gravel strip over a pit or a flow is a
+   *  draw error, not a crossing. Inert blockers (chasm) belong here too:
+   *  spanning them honestly is the bridge fabric's job (DoodadRule.spans). */
+  yieldsTo?: DoodadKind[];
+}
+
+/** GROUND AFFINITY (the habitat fabric): this kind belongs to a context —
+ *  live kelp wants water, not a dry meadow. Placement refuses candidates with
+ *  no qualifying ground within reach; AQUATIC zones (ZoneDef.aquatic — the
+ *  whole arena is seabed) satisfy trivially; a stamp may waive per row
+ *  (rules.ignore 'habitat') for a biome that is DELIBERATELY inundated, whose
+ *  pieces then carry the waive tag genqa honors. The dry-land vocabulary
+ *  (kelp_wrack, bleached_coral — where the tide LEFT things) declares no
+ *  habitat: it IS the coherent dry read. */
+export interface HabitatSpec {
+  /** Ground kinds that satisfy the affinity (any one within reach). */
+  near: DoodadKind[];
+  /** Max distance from the candidate to a qualifying disc's rim (default
+   *  COHERENCE_CFG.habitatReach). */
+  reach?: number;
+}
+
 export interface DoodadRule {
   overlap: OverlapClass;
   blocksMove?: boolean;
@@ -816,6 +890,14 @@ export interface DoodadRule {
    *  never by kind literal, so a package's rope crossing or a brittle rotten
    *  plank joins the same physics with one row. */
   spans?: boolean;
+  /** TRAVELED WAY (the clearway fabric): this ground kind claims right-of-way
+   *  — see ClearwaySpec. One row turns any package's flagstone way or bone
+   *  road into a corridor scatter respects and liquids yield to. */
+  clearway?: ClearwaySpec;
+  /** GROUND AFFINITY (the habitat fabric): this kind belongs near listed
+   *  ground — see HabitatSpec. One row keeps a package's new flora coherent
+   *  everywhere, no per-tileset gating required. */
+  habitat?: HabitatSpec;
   /** POURED BODY: blob stamps of this GROUND kind stop scattering big
    *  overlapping circles and instead rasterize ONE organic mask (wobbled
    *  radial core + lobes) emitted through the shared paintLiquid lattice —
@@ -902,6 +984,159 @@ export interface ResonanceSpec {
   text?: string;
   /** Toll tint — the ring flash + text color (default limestone grey). */
   color?: string;
+}
+
+/** Inside (or overlapping) a placed plan-structure's rect? THE structure
+ *  exemption every outcome-side splice shares (portal clears, clearways —
+ *  and genqa mirrors it): a fixture answers to its own siting probes, never
+ *  to a splice. */
+function inStructureRect(ctx: GenCtx, d: Doodad): boolean {
+  return (ctx.structures ?? []).some(st =>
+    d.pos.x > st.rect.x - d.radius && d.pos.x < st.rect.x + st.rect.w + d.radius
+    && d.pos.y > st.rect.y - d.radius && d.pos.y < st.rect.y + st.rect.h + d.radius);
+}
+
+/** THE CLEARWAY SWEEP (order-independent, the sweepForbiddenGround pattern):
+ *  the outcome half of the traveled-way contract — findSpot's clearway gate
+ *  catches what it can see; this catches every other path, whoever laid
+ *  what, whenever. Three passes:
+ *   1. the way YIELDS: way discs over ground that cuts them
+ *      (ClearwaySpec.yieldsTo) are removed — no gravel floating on lava, no
+ *      strip pretending across a rent (spanning honestly is the bridge
+ *      fabric's job).
+ *   2. the way DECKS: soft wet ground under the way (ClearwaySpec.decks) is
+ *      spliced causeway-style — the riverland crossing discipline,
+ *      generalized; the water laps a clean-parted bank. EXCEPT a true BODY
+ *      (disc fatter than COHERENCE_CFG.fordBodyR — a pour's depth heart):
+ *      there the way FORDS — its discs over the body drop and the body
+ *      marks `shallow`, so the path dips through a wade, never a swim, and
+ *      never a pond with a disc-shaped hole.
+ *   3. the way CLEARS: body-blocking solids standing on a live (non-wild)
+ *      way disc are spliced. Exemptions mirror the portal-clear splice
+ *      EXACTLY (`keep`, doors, plan-structure rects — the aligned-contract
+ *      lesson) plus the fabric's own: 'clearway'-waived pieces (an authored
+ *      blockade ACROSS the road is a story, not a bug) and spanning bridges.
+ *      OVERGROWN (wild) stretches clear nothing — the wood keeps what it
+ *      won back, and genqa exempts exactly the same set.
+ *  Coarse-bucketed so a mega-zone stays O(n); draw-free (no rng), so zones
+ *  without traveled ways stay byte-identical. */
+function sweepClearways(ctx: GenCtx): void {
+  const wayKinds = clearwayKinds();
+  if (!wayKinds.size) return;
+  const ways = ctx.doodads.filter(d => wayKinds.has(d.kind));
+  if (!ways.length) return;
+  const CELL = 96;
+  const keyOf = (x: number, y: number): number =>
+    Math.floor(x / CELL) * 100000 + Math.floor(y / CELL);
+  const doomed = new Set<Doodad>();
+
+  // Bucket the TERRAIN (ground + inert — decks/yieldsTo name terrain kinds)
+  // once; passes 1 and 2 query locally around each way disc.
+  const terrain = new Map<number, Doodad[]>();
+  let maxTerrainR = 0;
+  for (const g of ctx.doodads) {
+    if (wayKinds.has(g.kind)) continue;
+    const cls = doodadRule(g.kind).overlap;
+    if (cls !== 'ground' && cls !== 'inert') continue;
+    const k = keyOf(g.pos.x, g.pos.y);
+    const list = terrain.get(k);
+    if (list) list.push(g); else terrain.set(k, [g]);
+    if (g.radius > maxTerrainR) maxTerrainR = g.radius;
+  }
+  const eachTerrainNear = (c: Doodad, reach: number, fn: (g: Doodad) => void): void => {
+    const r = c.radius + maxTerrainR + reach;
+    const x0 = Math.floor((c.pos.x - r) / CELL), x1 = Math.floor((c.pos.x + r) / CELL);
+    const y0 = Math.floor((c.pos.y - r) / CELL), y1 = Math.floor((c.pos.y + r) / CELL);
+    for (let bx = x0; bx <= x1; bx++) {
+      for (let by = y0; by <= y1; by++) {
+        const list = terrain.get(bx * 100000 + by);
+        if (list) for (const g of list) fn(g);
+      }
+    }
+  };
+
+  for (const c of ways) {
+    const cw = doodadRule(c.kind).clearway!;
+    // PASS 1 — the way yields.
+    if (cw.yieldsTo?.length) {
+      eachTerrainNear(c, 0, (g) => {
+        if (doomed.has(c) || !cw.yieldsTo!.includes(g.kind)) return;
+        if (dist(c.pos, g.pos) < c.radius + g.radius) doomed.add(c);
+      });
+      if (doomed.has(c)) continue;
+    }
+    // PASS 2 — deck or ford.
+    if (cw.decks?.length) {
+      const pad = cw.pad ?? COHERENCE_CFG.clearwayPad;
+      eachTerrainNear(c, pad, (g) => {
+        if (doomed.has(c) || doomed.has(g) || !cw.decks!.includes(g.kind)) return;
+        if (dist(c.pos, g.pos) >= c.radius + g.radius + pad) return;
+        if (g.radius > COHERENCE_CFG.fordBodyR) {
+          // A true body: the way fords it where it substantially crosses —
+          // a mere rim-lap keeps both (the water leaking at the shoulder is
+          // the look, and the wade there is honest).
+          if (dist(c.pos, g.pos) < g.radius + c.radius * 0.4) {
+            doomed.add(c);
+            g.shallow = true;
+          }
+        } else {
+          doomed.add(g);
+        }
+      });
+    }
+  }
+
+  // PASS 3 — the way clears: bucket the LIVE way discs (surviving, awake —
+  // wild stretches don't claim), then test every blocker's BODY against them.
+  const live = new Map<number, Doodad[]>();
+  let maxWayR = 0;
+  for (const c of ways) {
+    if (doomed.has(c) || c.wild) continue;
+    const k = keyOf(c.pos.x, c.pos.y);
+    const list = live.get(k);
+    if (list) list.push(c); else live.set(k, [c]);
+    if (c.radius > maxWayR) maxWayR = c.radius;
+  }
+  if (live.size) {
+    for (const s of ctx.doodads) {
+      if (doomed.has(s) || wayKinds.has(s.kind)) continue;
+      if (!blocksMovement(s)) continue;
+      if (s.keep || s.kind === 'door' || s.waive?.includes('clearway')) continue;
+      if (doodadRule(s.kind).spans) continue;
+      if (inStructureRect(ctx, s)) continue;
+      const bodyR = bodyRadiusOf(s);
+      const reach = bodyR + maxWayR + COHERENCE_CFG.clearwayPad;
+      const x0 = Math.floor((s.pos.x - reach) / CELL), x1 = Math.floor((s.pos.x + reach) / CELL);
+      const y0 = Math.floor((s.pos.y - reach) / CELL), y1 = Math.floor((s.pos.y + reach) / CELL);
+      scan: for (let bx = x0; bx <= x1; bx++) {
+        for (let by = y0; by <= y1; by++) {
+          const list = live.get(bx * 100000 + by);
+          if (!list) continue;
+          for (const c of list) {
+            const pad = doodadRule(c.kind).clearway!.pad ?? COHERENCE_CFG.clearwayPad;
+            if (dist(s.pos, c.pos) < bodyR + c.radius + pad) { doomed.add(s); break scan; }
+          }
+        }
+      }
+    }
+  }
+
+  if (!doomed.size) return;
+  // seedPaired zip (defensive, the sibling splices' contract): splice the
+  // parallel seed entries of doomed seedPaired doodads, ordinals descending.
+  const ords: number[] = [];
+  let ord = 0;
+  for (const d of ctx.doodads) {
+    if (doodadRule(d.kind).seedPaired) {
+      if (doomed.has(d)) ords.push(ord);
+      ord++;
+    }
+  }
+  for (let i = ords.length - 1; i >= 0; i--) ctx.caveSeeds.splice(ords[i], 1);
+  // In-place compaction (the array reference is shared).
+  let w = 0;
+  for (const d of ctx.doodads) if (!doomed.has(d)) ctx.doodads[w++] = d;
+  ctx.doodads.length = w;
 }
 
 /** FORBIDON WINS, GLOBALLY (see generateLayout): the stamp gate's inverse as
@@ -1388,7 +1623,14 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   brazier:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40 },
   standing_stone: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 46,
     surface: { hw: 0.7, hh: 0.42 } }, // the slab monolith's base (widest ±0.7r)
-  road:      { overlap: 'ground', walkOnly: true }, // a walkable gravel path (stays on walkable ground in grid zones)
+  // A walkable gravel path (stays on walkable ground in grid zones). THE
+  // first traveled way of the clearway fabric: blocking scatter routes
+  // around it / is carved off it (overgrown stretches excepted), soft wet
+  // ground under it is decked causeway-style (big bodies ford instead), and
+  // molten/void ground cuts it — a road that meets lava stops at the shore.
+  road:      { overlap: 'ground', walkOnly: true,
+    clearway: { decks: ['water', 'tide_pool', 'mud', 'bog', 'swamp', 'ice'],
+      yieldsTo: ['lava', 'magma_core', 'cinder', 'gore', 'chasm'] } },
   grass:     { overlap: 'ground' },
   /** The Field's boundary fringe: pure visual, deliberately NOT walk-gated —
    *  it straddles the tallgrass rim to round the raster's right angles off. */
@@ -1415,14 +1657,22 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
     surface: { hw: 0.7, hh: 0.42 } }, // the gem-set monolith's base
   descent_platform: { overlap: 'trigger', spacing: 40 },
   // Marine: kelp is walkable cover (decorative); coral + sea rocks are solids.
-  kelp:     { overlap: 'ground', walkOnly: true },
+  // LIVE marine flora carries HABITAT (the coherence fabric): it belongs in
+  // or beside water — an aquatic zone (whole-arena seabed) satisfies
+  // trivially, a coastal zone's pieces keep to its shallows and pools, and a
+  // dry meadow simply refuses them. The DRY vocabulary (kelp_wrack,
+  // bleached_coral — what the tide LEFT) declares none on purpose.
+  kelp:     { overlap: 'ground', walkOnly: true,
+    habitat: { near: ['water', 'tide_pool', 'brine_sink'] } },
   /** The kelp TREE (the thresher-forest anchor): a thin stipe underfoot —
    *  bodies weave between the stalks, shots sail through — while the frond
    *  crown above BREAKS SIGHT and occlusion-fades near the hero: the forest
    *  hides what stands in it, both ways, without ever walling you in. */
   giant_kelp: { overlap: 'solid', blocksMove: true, blocksShot: false, blocksSight: true,
-    spacing: 26, occlude: { pad: 12, alpha: 0.28 }, bodyScale: 0.16, veil: {} },
-  coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30 },
+    spacing: 26, occlude: { pad: 12, alpha: 0.28 }, bodyScale: 0.16, veil: {},
+    habitat: { near: ['water', 'tide_pool', 'brine_sink'] } },
+  coral:    { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 30,
+    habitat: { near: ['water', 'tide_pool', 'brine_sink'] } },
   sea_rock: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 40, rockForm: { cluster: 0.3 } },
   // The littoral kit. The mangrove is a TREE (canopy, veil, walk-under);
   // pools are ground overlays sensed by kind (world/regions.ts rows); the
@@ -1717,6 +1967,7 @@ export function registerDoodadRule(kind: string, rule: DoodadRule): void {
   }
   RUNTIME_RULES[kind] = rule;
   hazardGroundsCache = null; // a late hazard row must join the siting rules
+  clearwayKindsCache = null; // a late traveled-way row must join the clearway gate
 }
 
 /** The placement rule for a kind (a safe non-blocking ground default if unlisted). */
@@ -1865,6 +2116,19 @@ export interface GenCtx {
    *  when-gates. Absent on authored/headless defs: consumers fall back to
    *  their neutral defaults, never draw rng from it. */
   geo?: ZoneDef['geo'];
+  /** AQUATIC arena (ZoneDef.aquatic, stamped at mint from the biome's marine
+   *  class): the whole floor is seabed — habitat affinities for water-loving
+   *  kinds are satisfied everywhere, and the default gravel exit-road never
+   *  runs here (an authored ExitRoadSpec.kind still may). */
+  aquatic?: boolean;
+  /** The zone's resolved OVERGROWTH dial (overgrowthOf(def), 0..1): the share
+   *  of any traveled way the land wins back — wayRoller reads it so every
+   *  emitter (worn-path stamp, trails, exit roads) breathes with one lung. */
+  overgrowth?: number;
+  /** TRANSIENT (onClearway's incremental index): doodads classified so far +
+   *  the way discs among them — the placement gate stays O(ways) per
+   *  candidate in a thousands-of-doodads zone. Never authored. */
+  cwSeen?: { upto: number; ways: Doodad[] };
   /** TRANSIENT: restrict findSpot's sample rect to a sub-area (a dungeon room
    *  being furnished, a composition site's surround). Draw COUNT is unchanged
    *  (2 range draws per try, same as the full arena) — unset = byte-identical
@@ -2242,6 +2506,11 @@ registerLayout('rooms', roomsLayout);
  *  recovery instances at once; it's all RegionKind DATA the engine already drives. */
 function underwaterLayout(ctx: GenCtx, def: ZoneDef): void {
   const { rng, arena } = ctx;
+  // The recipe IS the classifier here: the whole arena is open sea by
+  // construction, so habitat-bearing flora (live kelp, coral) places freely
+  // whatever def minted it — worldgen's biome stamp (ZoneDef.aquatic) and
+  // this layout-level truth agree by design.
+  ctx.aquatic = true;
   const grid = new GridWalkField(arena.w, arena.h, 30);
   grid.fillRegion(0, 0, arena.w, arena.h, 'deep_water'); // the open sea
   ctx.airPockets = [];
@@ -2938,12 +3207,15 @@ function thicketCore(ctx: GenCtx, def: ZoneDef, d: ThicketDials): void {
   for (let i = 0; i < pillars; i++) stamp(ctx, { kind: 'canopy_colossus', count: [1, 1] });
 
   // 9. THE GAME TRAIL — beaten earth traced along the entry→heart lane (pure
-  // pathStep follow: draw-free, deterministic), so the way IN reads walked.
+  // pathStep follow, deterministic), so the way IN reads walked. Discs ride
+  // the wayRoller: a jungle's overgrowth dial swallows stretches of its own
+  // trail (draw-free at dial 0, exactly the old stream).
+  const trailRoll = wayRoller(ctx);
   let cur = vec(ctx.entry.x, ctx.entry.y);
   for (let step = 0; step < 320; step++) {
     const nxt = grid.pathStep(cur, chambers[0]);
     if (!nxt) break;
-    if (step % 2 === 0) ctx.doodads.push({ pos: vec(nxt.x, nxt.y), radius: 20, kind: 'road' });
+    if (step % 2 === 0) trailRoll(vec(nxt.x, nxt.y), 20, 'road');
     if (dist(nxt, chambers[0]) < 40) break;
     cur = nxt;
   }
@@ -3347,6 +3619,8 @@ export function generateLayout(
     doodads: [], pois: [], camps: [], breakables: [], npcs: [],
     garrisons: [], caveSeeds: [], reserved: [],
     lite: opts?.lite,
+    aquatic: def.aquatic,
+    overgrowth: overgrowthOf(def),
   };
   // THE BLEND FIELD (engine/blend.ts): compiled ONCE per generation from the
   // def's resolved blend — findSpot's dither gate and the 'blend' WHERE field
@@ -3445,6 +3719,13 @@ export function generateLayout(
   // (stamps, landmarks, clusters, fx layers). Draw-free; runs before the
   // portal splice + reachability guards so they act on the final geometry.
   fuseGroundBodies(ctx);
+  // THE CLEARWAY CONTRACT, GLOBALLY: traveled ways collect their right-of-way
+  // after every placement system has spoken — ways yield to molten/void
+  // ground, deck the soft wet ground they cross (ford the true bodies), and
+  // clear un-waived blockers off their live stretches. Order-independent for
+  // the same reason as the forbidOn sweep below; runs FIRST so the forbidOn
+  // pass judges the final ground truth.
+  sweepClearways(ctx);
   // FORBIDON WINS, GLOBALLY: findSpot gates a solid against the ground that
   // EXISTS when it stamps — but landmarks, cluster pieces, melds and post
   // compositions keep pouring ground afterwards (an oasis under a scattered
@@ -3473,13 +3754,9 @@ export function generateLayout(
     // site/clearing reservation lands on top of walls off a portal exactly as
     // hard as bare scatter, so it is carved all the same
     // (balance/probe_portal_contract.ts pins the alignment).
-    const inStructure = (d: Doodad): boolean =>
-      (ctx.structures ?? []).some(st =>
-        d.pos.x > st.rect.x - d.radius && d.pos.x < st.rect.x + st.rect.w + d.radius
-        && d.pos.y > st.rect.y - d.radius && d.pos.y < st.rect.y + st.rect.h + d.radius);
     for (let i = ctx.doodads.length - 1; i >= 0; i--) {
       const d = ctx.doodads[i];
-      if (blocksMovement(d) && !d.keep && d.kind !== 'door' && !inStructure(d)
+      if (blocksMovement(d) && !d.keep && d.kind !== 'door' && !inStructureRect(ctx, d)
         && pts.some(p => dist(p, d.pos) < EXIT_CLEAR_CARVE + d.radius)) {
         // seedPaired kinds ride an index-zip with a parallel gen list (the
         // cave_entrance ↔ caveSeeds contract every other splice site keeps).
@@ -3937,6 +4214,59 @@ function hazardGrounds(): DoodadKind[] {
     ].filter(k => doodadRule(k).hazardGround);
   }
   return hazardGroundsCache;
+}
+
+/** Traveled-way kinds, DERIVED from DoodadRule.clearway exactly as
+ *  hazardGrounds derives (never a literal list: a package's flagstone way
+ *  joins the right-of-way with one row flag). */
+let clearwayKindsCache: Set<string> | null = null;
+function clearwayKinds(): Set<string> {
+  if (!clearwayKindsCache) {
+    clearwayKindsCache = new Set([
+      ...(Object.keys(DOODAD_RULES) as DoodadKind[]),
+      ...Object.keys(RUNTIME_RULES),
+    ].filter(k => doodadRule(k).clearway));
+  }
+  return clearwayKindsCache;
+}
+
+/** Would a body of radius `bodyR` at `p` stand ON a traveled way? The
+ *  placement half of the clearway contract (sweepClearways is the outcome
+ *  half): tested against the way's discs plus its pad; OVERGROWN (wild)
+ *  stretches don't claim — the wood may keep what it won back.
+ *
+ *  The scan rides an INCREMENTAL index (ctx.cwSeen): each doodad is
+ *  classified once as the array grows, so a dense zone's thousands of
+ *  candidate probes each cost O(way discs), never O(zone) — the jungle's
+ *  entry burst stays inside its budget. Mid-generation removals (a
+ *  fixture's footprint splice) can only over-RETAIN a dead way disc, which
+ *  over-refuses a candidate near it — the outcome sweep owns the truth. */
+export function onClearway(ctx: GenCtx, p: Vec2, bodyR: number): boolean {
+  const kinds = clearwayKinds();
+  if (!kinds.size) return false;
+  const seen = ctx.cwSeen ??= { upto: 0, ways: [] };
+  const all = ctx.doodads;
+  while (seen.upto < all.length) {
+    const d = all[seen.upto++];
+    if (kinds.has(d.kind)) seen.ways.push(d);
+  }
+  for (const d of seen.ways) {
+    if (d.wild) continue;
+    const cw = doodadRule(d.kind).clearway!;
+    if (dist(p, d.pos) < bodyR + d.radius + (cw.pad ?? COHERENCE_CFG.clearwayPad)) return true;
+  }
+  return false;
+}
+
+/** Does qualifying habitat ground lie within reach of `p`? (Rim distance —
+ *  standing beside the pool is as coherent as standing in it.) */
+function nearHabitatGround(ctx: GenCtx, p: Vec2, hab: HabitatSpec): boolean {
+  const reach = hab.reach ?? COHERENCE_CFG.habitatReach;
+  for (const d of ctx.doodads) {
+    if (!hab.near.includes(d.kind)) continue;
+    if (dist(p, d.pos) - d.radius <= reach) return true;
+  }
+  return false;
 }
 
 /** Is a point inside any doodad of the given kinds? (Point probe — the cheap
@@ -4591,6 +4921,17 @@ export function stamp(ctx: GenCtx, spec: StampSpec): void {
   if (spec.rules?.ignore?.includes('portalClear')) {
     for (let i = n0; i < ctx.doodads.length; i++) ctx.doodads[i].keep = true;
   }
+  // Coherence waivers ride the SAME discipline as `keep`: pieces born under a
+  // stamp that deliberately ignored 'clearway'/'habitat' carry the tag, so
+  // the matching sweep and genqa invariant spare exactly the authored set.
+  const waived = (['clearway', 'habitat'] as const)
+    .filter(t => spec.rules?.ignore?.includes(t));
+  if (waived.length) {
+    for (let i = n0; i < ctx.doodads.length; i++) {
+      const d = ctx.doodads[i];
+      d.waive = [...new Set([...(d.waive ?? []), ...waived])];
+    }
+  }
   // TERRAIN SWALLOWS SCATTER: a stamp that lays ENGULFING terrain (chasm
   // ravines/pools — DoodadRule.swallowsSolids) removes earlier solids and
   // triggers its discs now cover: a boulder hovering over a freshly-cut pit is
@@ -5018,9 +5359,104 @@ registerStamp('shallows', (ctx) => stampShallows(ctx));
 registerStamp('palm', (ctx, spec) => stampTree(ctx, spec.radius ?? [16, 28], 'palm'));
 registerStamp('conifers', (ctx, spec) => stampTree(ctx, spec.radius ?? [13, 26], 'conifer'));
 registerStamp('ancient_tree', (ctx, spec) => stampTree(ctx, spec.radius ?? [56, 88], 'ancient_tree'));
+/** Resolve a zone's OVERGROWTH dial (0..1): how much of a traveled way the
+ *  land wins back. `layoutParams.overgrowth` is a scalar, or a
+ *  [fringe, heart] pair lerped by geo.biomeDepth — the deep wood swallows
+ *  more of its paths than its edges do. A per-spec override (ExitRoadSpec)
+ *  beats both. Absent everywhere = 0: every way stays clean-kept. */
+export function overgrowthOf(def: ZoneDef, override?: number): number {
+  const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
+  if (override !== undefined) return clamp01(override);
+  const og = layoutParam<number | [number, number]>(def, 'overgrowth', 0);
+  if (Array.isArray(og)) {
+    const t = def.geo?.biomeDepth ?? 0.5;
+    return clamp01(og[0] + (og[1] - og[0]) * t);
+  }
+  return clamp01(og);
+}
+
+/** THE WAY-ROLLER: every traveled-way emitter (exit roads, game trails, the
+ *  worn-path stamp) pushes its discs through one of these, so overgrowth is
+ *  ONE implementation — wild stretches roll in RUNS (a swallowed passage,
+ *  never salt-and-pepper), reclaiming flora sprouts along them, and the
+ *  clearway carve/gate/genqa all read the same `wild` tag. Draw discipline:
+ *  overgrowth 0 draws NOTHING beyond the caller's own disc radius. */
+export function wayRoller(ctx: GenCtx, overgrowth = ctx.overgrowth ?? 0):
+(pos: Vec2, radius: number, kind: DoodadKind) => void {
+  const og = Math.max(0, Math.min(1, overgrowth));
+  const [runLo, runHi] = COHERENCE_CFG.wildRun;
+  // Run-start probability that makes the expected WILD SHARE equal the dial:
+  // share = L / (L + 1/q) for mean run L and per-disc start chance q.
+  const meanRun = (runLo + runHi) / 2;
+  const startQ = og >= 1 ? 1 : Math.min(1, og / (meanRun * (1 - og)));
+  let wildLeft = 0;
+  return (pos, radius, kind) => {
+    let wild = false;
+    if (og > 0) {
+      if (wildLeft > 0) { wild = true; wildLeft--; }
+      else if (ctx.rng.chance(startQ)) { wild = true; wildLeft = ctx.rng.int(runLo, runHi) - 1; }
+    }
+    ctx.doodads.push({ pos, radius, kind, ...(wild ? { wild: true } : {}) });
+    // The land reclaiming its ground: walkable flora sprouting through the
+    // gravel — the overgrown stretch READS distinct before a single tree
+    // stands on it.
+    if (wild && ctx.rng.chance(COHERENCE_CFG.wildFlora.chance)) {
+      const kinds = COHERENCE_CFG.wildFlora.kinds;
+      const fk = kinds[ctx.rng.int(0, kinds.length - 1)];
+      const fang = ctx.rng.range(0, Math.PI * 2);
+      const foff = ctx.rng.range(0, radius * 0.7);
+      ctx.doodads.push({
+        pos: vec(pos.x + Math.cos(fang) * foff, pos.y + Math.sin(fang) * foff),
+        radius: ctx.rng.range(9, 16), kind: fk,
+        ...(doodadRule(fk).spin ? { rot: ctx.rng.range(0, Math.PI * 2) } : {}),
+      });
+    }
+  };
+}
+
+/** Lay a TRAVELED WAY along a polyline: chained discs through the wayRoller
+ *  (path-mode blend, moveScale, clearway right-of-way and overgrowth all ride
+ *  the kind + tags). The disc gauge/spacing mirror the historical chains.
+ *  `reserve` marks the way an ARTERY: its LIVE (non-wild) discs reserve
+ *  ground so later landmark/structure rolls route around them — wild
+ *  stretches deliberately reserve nothing (what the wood won back, the world
+ *  may crowd). Returns the way's discs. */
+export function layTraveledWay(ctx: GenCtx, pts: Vec2[], opts?: {
+  band?: [number, number]; kind?: DoodadKind; overgrowth?: number; step?: number;
+  reserve?: boolean;
+}): Doodad[] {
+  const roll = wayRoller(ctx, opts?.overgrowth ?? ctx.overgrowth ?? 0);
+  const band = opts?.band ?? [16, 22];
+  const kind = opts?.kind ?? 'road';
+  const step = opts?.step ?? 30;
+  const n0 = ctx.doodads.length;
+  for (let k = 0; k < pts.length - 1; k++) {
+    const a = pts[k], b = pts[k + 1];
+    const steps = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / step));
+    for (let t = 0; t <= steps; t++) {
+      roll(vec(a.x + (b.x - a.x) * (t / steps), a.y + (b.y - a.y) * (t / steps)),
+        ctx.rng.range(band[0], band[1]), kind);
+    }
+  }
+  const laid = ctx.doodads.slice(n0).filter(d => d.kind === kind);
+  if (opts?.reserve) {
+    // Every third live disc — the same sausage coverage the old 100-step
+    // reserveArtery gave, without tripling the reservation list every
+    // placement gate scans. The counter resets at wild gaps so a swallowed
+    // stretch's shoulders still hold their ground.
+    let ri = 0;
+    for (const d of laid) {
+      if (d.wild) { ri = 0; continue; }
+      if (ri++ % 3 === 0) ctx.reserved.push({ pos: d.pos, radius: d.radius + COHERENCE_CFG.wayReservePad });
+    }
+  }
+  return laid;
+}
+
 /** A WORN PATH — road discs marching a jittered line clear across the zone:
  *  the desire path travelers cut when nobody builds them a road. Crosses the
- *  whole space so paths INTERSECT into worn crossings when stamped twice. */
+ *  whole space so paths INTERSECT into worn crossings when stamped twice.
+ *  Discs ride the wayRoller: the zone's overgrowth dial applies here too. */
 registerStamp('road', (ctx) => {
   const { w, h } = ctx.arena;
   const ang = ctx.rng.range(0, Math.PI);
@@ -5029,12 +5465,13 @@ registerStamp('road', (ctx) => {
   const reach = Math.hypot(w, h) * 0.6;
   const step = 34;
   const R: [number, number] = [20, 30];
+  const roll = wayRoller(ctx);
   for (let d = -reach; d <= reach; d += step) {
     const wob = Math.sin(d * 0.008 + ang * 7) * 46 + ctx.rng.range(-10, 10);
     const px = cx + Math.cos(ang) * d + Math.cos(ang + Math.PI / 2) * wob;
     const py = cy + Math.sin(ang) * d + Math.sin(ang + Math.PI / 2) * wob;
     if (px < 40 || py < 40 || px > w - 40 || py > h - 40) continue;
-    ctx.doodads.push({ pos: vec(px, py), radius: ctx.rng.range(R[0], R[1]), kind: 'road' });
+    roll(vec(px, py), ctx.rng.range(R[0], R[1]), 'road');
   }
 });
 registerStamp('ice_spike', stampSingle('ice_spike', [10, 20]));
@@ -5435,6 +5872,15 @@ function stampCluster(ctx: GenCtx, def: ClusterDef): void {
       // findSpot placements and formation pieces (a cluster's cairn must not
       // balance on lava any more than a scattered one).
       if (rule.forbidOn && !ruleIgnored(ctx, 'forbid') && !areaFreeOf(ctx, p, r, rule.forbidOn)) continue;
+      // The coherence gates hold here too: a huddle's blockers stay off
+      // traveled ways, its ground-affine kinds keep to their ground — the
+      // ARRANGEMENT conforms to the land (a kelp stand hugs its pool's rim
+      // and simply drops the pieces that strayed dry). Waivable per row
+      // (rules.ignore), like every other gate in this chain.
+      if (rule.blocksMove && !ruleIgnored(ctx, 'clearway')
+        && onClearway(ctx, p, r * (rule.bodyScale ?? 1))) continue;
+      if (rule.habitat && !ctx.aquatic && !ruleIgnored(ctx, 'habitat')
+        && !nearHabitatGround(ctx, p, rule.habitat)) continue;
       if (isSolid(piece.kind)
           && overlapsSolidBefore(ctx, p, r, piece.packed ? clusterStart : ctx.doodads.length)) continue;
       ctx.doodads.push({ pos: p, radius: r, kind: piece.kind, rot });
@@ -5710,6 +6156,15 @@ function stampFormation(ctx: GenCtx, def: FormationDef): void {
         if (inReserved(ctx, p, r)) continue;
         if (ctx.walk && walkGated(piece.kind) && !ruleIgnored(ctx, 'walk') && !ctx.walk.isWalkable(p.x, p.y)) continue;
         if (rule.forbidOn && !ruleIgnored(ctx, 'forbid') && !areaFreeOf(ctx, p, r, rule.forbidOn)) continue;
+        // The coherence gates: an arrangement CONFORMS to the land — a kelp
+        // curtain follows its water and drops the anchors that meandered
+        // dry; a boulder train breaks for the road it crosses (the way's
+        // sweep would carve them regardless — refusing here keeps the chain
+        // reading arranged, not carved). Waivable per row (rules.ignore).
+        if (rule.blocksMove && !ruleIgnored(ctx, 'clearway')
+          && onClearway(ctx, p, r * (rule.bodyScale ?? 1))) continue;
+        if (rule.habitat && !ctx.aquatic && !ruleIgnored(ctx, 'habitat')
+          && !nearHabitatGround(ctx, p, rule.habitat)) continue;
         if (isSolid(piece.kind) && overlapsSolidBefore(ctx, p, r, formationStart)) continue;
         ctx.doodads.push({ pos: p, radius: r, kind: piece.kind, rot });
       }
@@ -6151,6 +6606,17 @@ function findSpot(
       if (!ruleIgnored(ctx, 'walk') && !rule.voidOk && overVoid(ctx, p.x, p.y)) continue;
       const forbid = over?.forbidOn ?? rule.forbidOn;
       if (!ruleIgnored(ctx, 'forbid') && forbid && !areaFreeOf(ctx, p, r, forbid)) continue;
+      // CLEARWAY: body-blockers keep off traveled ways — tested at the BODY
+      // radius (a crown may overhang the path; the trunk stays beside it).
+      // Wild (overgrown) stretches don't claim. Acceptance-only, draw-free.
+      if (!ruleIgnored(ctx, 'clearway') && rule.blocksMove
+        && onClearway(ctx, p, r * (rule.bodyScale ?? 1))) continue;
+      // HABITAT: ground-affine kinds keep to their context — an aquatic
+      // arena satisfies everywhere; elsewhere qualifying ground must lie
+      // within reach (pour the water, then bed the kelp — the ground-before
+      // convention the shore field already documents).
+      if (!ruleIgnored(ctx, 'habitat') && rule.habitat && !ctx.aquatic
+        && !nearHabitatGround(ctx, p, rule.habitat)) continue;
     }
     // STRATA: the running entry's WHERE band (compiled by stamp()) — placed
     // LAST like the rule gates, so entries without a band keep their exact

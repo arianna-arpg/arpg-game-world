@@ -656,6 +656,10 @@ export function applySnapshot(world: World, snap: StateSnapshot, prev?: StateSna
 
 export interface DoodadW {
   p: Vec2W; r: number; kind: string; dir?: number; shallow?: boolean; rot?: number; adorn?: string;
+  /** OVERGROWN way disc (clearway fabric): the client's groundAt must skip the
+   *  worn-pace claim exactly as the host's does — a swallowed stretch may not
+   *  boost a guest it slows for the host. */
+  wild?: boolean;
   /** Door state (kind 'door'): id + open/broken + cell rect, so the client's
    *  predicted collision + render + grid repaint mirror the host's doors. */
   door?: DoodadDoor;
@@ -703,7 +707,7 @@ export function serializeZone(world: World): ZoneMsg {
     dimension: world.zone.dimension,
     arena: { w: world.arena.w, h: world.arena.h, shape: world.arena.shape },
     theme: world.zone.theme,
-    doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow })),
+    doodads: world.doodads.map(d => ({ p: v2(d.pos), r: d.radius, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, wild: d.wild })),
     exits: world.exits.map(e => ({ p: v2(e.pos), r: e.radius, to: e.to, label: e.label, b: e.boundary })),
     waypoint: world.waypointPos ? v2(world.waypointPos) : null,
     walk: world.walk instanceof GridWalkField ? world.walk.pack() : null,
@@ -721,7 +725,7 @@ export function applyZone(world: World, msg: ZoneMsg): void {
   world.zone.level = msg.level;
   world.zone.dimension = msg.dimension;
   world.doodads = msg.doodads.map(d => ({
-    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow,
+    pos: { x: d.p[0], y: d.p[1] }, radius: d.r, kind: d.kind, dir: d.dir, shallow: d.shallow, rot: d.rot, adorn: d.adorn, door: d.door, hitbox: d.hitbox, hollow: d.hollow, wild: d.wild,
   })) as Doodad[];
   world.structures = msg.structures ?? [];
   // SECRET HOLLOWS: adopt the host's specs fresh (the shipped walk grid is
