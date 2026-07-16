@@ -1900,6 +1900,70 @@ export const LOOKS: Record<string, LookDef> = {
     ],
     live: [{ kind: 'carrionFlies', scale: 0.8, params: { flies: 4 } }],
   },
+  // The four SEAL-BEARERS (the Unsealing): each carries its ward's jar big
+  // on the back — the stopper shape IS the talisman you're about to flare.
+  /** Jackal: lean courser — pricked ears, long claws, the hunting crouch. */
+  canopic_jackal: {
+    parts: [
+      { kind: 'torso', scale: 0.82 },
+      { kind: 'shroudWrap', scale: 0.92, params: { bands: 3 } },
+      { kind: 'canopicJar', x: -0.5, scale: 0.85, params: { stopper: 1 } },
+      { kind: 'ears', scale: 1.1, role: 'metal' },
+      { kind: 'claws', params: { len: 0.7, talons: 3 } },
+      { kind: 'mask', x: 0.44, scale: 0.72, role: 'metal' },
+    ],
+  },
+  /** Falcon: the far eye — spread pinions over the wrapped body. */
+  canopic_falcon: {
+    parts: [
+      { kind: 'robe', scale: 0.9 },
+      { kind: 'shroudWrap', scale: 0.85, alpha: 0.85, params: { bands: 3 } },
+      { kind: 'featherWings', scale: 0.9, alpha: 0.9 },
+      { kind: 'canopicJar', x: -0.52, scale: 0.85, params: { stopper: 2 } },
+      { kind: 'beak', x: 0.46, scale: 0.8, role: 'metal' },
+      { kind: 'eyes', color: '#ffe090', params: { spread: 0.36, dist: 0.55, size: 0.11 } },
+    ],
+    live: [{ kind: 'wisps', scale: 0.55, color: '#d8c070', alpha: 0.45 }],
+  },
+  /** Ape: the shoulders — humped bulk, fists, the domed jar riding high. */
+  canopic_ape: {
+    parts: [
+      { kind: 'torso', scale: 1.0 },
+      { kind: 'hump', scale: 1.05 },
+      { kind: 'shroudWrap', scale: 1.05, params: { bands: 4 } },
+      { kind: 'canopicJar', x: -0.42, y: 0.45, scale: 0.8, mirror: true, params: { stopper: 3 } },
+      { kind: 'claws', params: { len: 0.8, talons: 4 } },
+      { kind: 'mask', x: 0.5, scale: 0.9, role: 'metal' },
+    ],
+    shadowScale: 1.1,
+  },
+  /** Vizier: the tongue — robes, the open book, the human-browed jar. */
+  canopic_vizier: {
+    parts: [
+      { kind: 'robe', scale: 1.0 },
+      { kind: 'shroudWrap', scale: 0.8, alpha: 0.75, params: { bands: 2 } },
+      { kind: 'canopicJar', x: -0.5, scale: 0.8, params: { stopper: 4 } },
+      { kind: 'book', scale: 0.85 },
+      { kind: 'censer', scale: 0.85 },
+      { kind: 'mask', x: 0.42, scale: 0.78, role: 'metal' },
+    ],
+    live: [{ kind: 'runes', color: '#e8c060', scale: 0.9, alpha: 0.6, params: { n: 3 } }],
+  },
+  /** THE SAND REGENT: the whole dynasty on one body — the case worn whole,
+   *  the crown over the gold face, the court script burning around him. */
+  sand_regent: {
+    parts: [
+      { kind: 'sarcophagusLid', x: -0.18, scale: 1.3, params: { face: 1 } },
+      { kind: 'torso', x: 0.22, scale: 0.75 },
+      { kind: 'shroudWrap', x: 0.22, scale: 0.9, params: { bands: 4 } },
+      { kind: 'pauldrons', role: 'metal', x: 0.18, scale: 0.9 },
+      { kind: 'sword', params: { len: 1.2 } },
+      { kind: 'mask', x: 0.5, scale: 0.95, role: 'metal' },
+      { kind: 'crown', x: 0.62, scale: 0.8, role: 'metal' },
+    ],
+    live: [{ kind: 'runes', color: '#ffd890', scale: 1.05, alpha: 0.7, params: { n: 4 } }],
+    shadowScale: 1.15,
+  },
 
   // ===================================================== DEPLOYED CONSTRUCTS
   // Skill-objects (ConstructDelivery) — the square-and-skill-color era ends.

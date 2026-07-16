@@ -8576,6 +8576,91 @@ export const MONSTERS: Record<string, MonsterDef> = {
     temper: 'territorial',
     brain: { type: 'skirmish', withdraw: 0.4 },
   },
+
+  // --- THE UNSEALING's named bodies (event-spawned only — packages/defs/
+  // unsealing.ts; NEVER on a spawn table). The four seal-bearers split the
+  // family's defense textures four ways so every fight asks a different
+  // question; each wears its OWN jar (the canopicJar stopper vocabulary),
+  // so which talisman you are about to flare reads from the silhouette.
+  /** The Jackal ward: the tomb's courser — evasion, speed, the long lash. */
+  canopic_jackal: {
+    id: 'canopic_jackal', name: 'Sethuk the Jackal-Jarred',
+    color: '#c8a050', shape: 'triangle', radius: 13, material: 'cloth', look: 'canopic_jackal',
+    base: { life: 150, moveSpeed: 195, accuracy: 112, evasion: 70, armor: 10, mana: 0 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.25)],
+    skills: ['entombing_lash'], xp: 90,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    noNemesis: true,
+    drops: 1, orbDrops: 0.4,
+    brain: { type: 'skirmish', withdraw: 0.9, move: { style: 'juke', hookEvery: [0.4, 0.8], hookArc: 1.1 } },
+  },
+  /** The Falcon ward: the tomb's far eye — ES over thin life, patient bolts. */
+  canopic_falcon: {
+    id: 'canopic_falcon', name: 'Qeresh the Falcon-Jarred',
+    color: '#d8b868', shape: 'kite', radius: 12, material: 'cloth', look: 'canopic_falcon',
+    base: { life: 95, energyShield: 90, moveSpeed: 140, accuracy: 112, mana: 70, manaRegen: 7 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('fireRes', 'flat', -0.25)],
+    skills: ['spectral_finger', 'bone_arrow'], xp: 90,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    noNemesis: true,
+    drops: 1, orbDrops: 0.4,
+    brain: { type: 'caster', withdraw: 1.3 },
+  },
+  /** The Ape ward: the tomb's shoulders — the poise wall with hands. */
+  canopic_ape: {
+    id: 'canopic_ape', name: 'Hapura the Ape-Jarred',
+    color: '#b89858', shape: 'hexagon', radius: 19, material: 'cloth', look: 'canopic_ape',
+    base: { life: 280, moveSpeed: 92, accuracy: 104, armor: 40, poise: 95, evasion: 0, mana: 20, manaRegen: 3 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.3)],
+    skills: ['ground_slam', 'heavy_strike'], xp: 95,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    noNemesis: true,
+    turnSpeed: 3,
+    drops: 1, orbDrops: 0.4,
+    brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+  /** The Vizier ward: the tomb's tongue — curses first, mercy never. */
+  canopic_vizier: {
+    id: 'canopic_vizier', name: 'Imsah the Vizier-Jarred',
+    color: '#d8c078', shape: 'pentagon', radius: 13, material: 'cloth', look: 'canopic_vizier',
+    base: { life: 120, energyShield: 110, moveSpeed: 120, accuracy: 106, mana: 110, manaRegen: 9 },
+    mods: [mod('poisonRes', 'flat', 0.5), mod('chaosRes', 'flat', 0.25), mod('fireRes', 'flat', -0.25)],
+    skills: ['despair', 'doom_chant', 'lifedrain'], xp: 95,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    noNemesis: true,
+    gemBias: ['spell', 'chaos'],
+    drops: 1, orbDrops: 0.4,
+    brain: { type: 'caster', withdraw: 1.2 },
+  },
+  /** THE SAND REGENT — the Unsealing's tomb boss (never a warlord, never a
+   *  table row): full shell AND deep poise on one body — the apex exception,
+   *  earned by the four-talisman door it wakes behind. The dry-linen fire
+   *  debt stays honest even here. */
+  sand_regent: {
+    id: 'sand_regent', name: 'The Sand Regent',
+    color: '#e8c060', shape: 'hexagon', radius: 26, material: 'stone', look: 'sand_regent',
+    base: { life: 640, moveSpeed: 95, accuracy: 112, armor: 55, poise: 150, evasion: 0, mana: 90, manaRegen: 8 },
+    mods: [mod('poisonRes', 'flat', 0.75), mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', -0.25)],
+    skills: ['entombing_lash', 'ground_slam', 'doom_chant'], xp: 420,
+    faction: 'sarcophate',
+    tags: ['undead'],
+    boss: true,
+    noNemesis: true,
+    turnSpeed: 3.2,
+    shellGuard: { side: 'all', max: 130, regenDelay: 7, regenRate: 18, color: '#e8c060' },
+    loot: 'regent_hoard',
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      phases: [
+        { atLifeFrac: 0.65, onEnter: [{ do: 'summon', monster: 'risen_husk', count: 2, ring: 64, announce: 'the honor guard steps out of the walls!' }] },
+        { atLifeFrac: 0.3, onEnter: [{ do: 'summon', monster: 'risen_husk', count: 3, ring: 64 }] },
+      ],
+    },
+  },
 };
 
 // ---------------------------------------------------------------------------

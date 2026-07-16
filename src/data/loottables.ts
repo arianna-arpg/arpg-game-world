@@ -71,6 +71,33 @@ const TABLE_LIST: LootTableDef[] = [
     }],
   },
 
+  // THE REGENT'S HOARD (the Unsealing's payout): four talismans of work
+  // deserve a dynasty's grave goods — a fistful of elevated gear with real
+  // unique odds, and a gem-or-jewel side pour. Loot to match full strength.
+  {
+    id: 'regent_hoard',
+    rolls: [
+      {
+        count: [2, 3],
+        entries: [
+          {
+            weight: 72, kind: 'item', ilvlBonus: 2,
+            rarityWeights: { common: 0, magic: 20, rare: 60, unique: 20 },
+          },
+          { weight: 28, kind: 'unique', ilvlBonus: 2 },
+        ],
+      },
+      {
+        count: [1, 2],
+        entries: [
+          { weight: 45, kind: 'gem' },
+          { weight: 30, kind: 'table', table: 'jewelry_cache' },
+          { weight: 25, kind: 'vestige' },
+        ],
+      },
+    ],
+  },
+
   // THE ROYAL REGISTER's one distribution: a single item FORCED to carry one
   // of the Swarming's three families (equal thirds), never common. Both the
   // cache and the replete drink from this one table — the register stays in

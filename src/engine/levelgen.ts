@@ -73,6 +73,10 @@ export type KnownDoodadKind =
   | 'sun_awning' // a traveler's cloth fly on poles — walk-under SHADE (the heat's mercy)
   | 'vault_gate' // stairs under a half-swallowed lintel — DOWN into the buried vault (sidezone)
   | 'sepulcher_gate' // a gilt-doored tomb stair between flanking plinths — DOWN into the Sepulcher Sands (sidezone)
+  // THE UNSEALING's tomb-site furniture (runtime-placed by the engine bridge,
+  // never a layout row): the Regent's sealed/open door + its talisman braziers.
+  | 'regent_door' | 'regent_door_open'
+  | 'regent_brazier' | 'regent_brazier_lit'
   // THE MIRAGE KIT — the desert's lie: distant promises that scatter into
   // hot air when approached (brittle 'near' pops them; one sometimes objects)
   | 'mirage_oasis'   // water and palms that were never there
@@ -1062,6 +1066,13 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The tomb-dynasty's way DOWN (sidezones.ts mints the Sepulcher Sands) —
   // the same contract under a gilt lintel.
   sepulcher_gate: { overlap: 'trigger', spacing: 500 },
+  // THE UNSEALING's tomb site (runtime-placed): the door is a wall until it
+  // isn't (both faces solid — the OPEN door is a threshold you stand before,
+  // not a hole you walk through); the talisman braziers read as furniture.
+  regent_door: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 0 },
+  regent_door_open: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 0 },
+  regent_brazier: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 0 },
+  regent_brazier_lit: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 0 },
   // THE MIRAGE KIT: inert light, not matter — bodies and shots pass clean
   // through; walking close enough to KNOW pops the lie (brittle 'near', the
   // whole existing machinery: text, poof tint, and the caravan's ambush on

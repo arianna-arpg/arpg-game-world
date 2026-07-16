@@ -20,6 +20,7 @@ import type { DeepwinterField } from '../packages/overlays/deepwinter';
 import type { AscentField } from '../packages/overlays/ascent';
 import type { DescentField } from '../packages/overlays/descent';
 import type { HoldfastField } from '../packages/overlays/holdfast';
+import type { UnsealingField } from '../packages/overlays/unsealing';
 import type { MyceliaField } from '../packages/overlays/mycelia';
 import type { CrusadeField } from '../packages/overlays/crusade';
 import type { DeadwakeField } from '../packages/overlays/deadwake';
@@ -198,6 +199,13 @@ export class WorldSim {
    *  reads infoFor()/isLocked() to raise the locked bonus exit + its guardian and to
    *  resolve the toll. It owns the durable per-zone lock state. */
   readonly holdfastField: HoldfastField | null;
+  /** The Unsealing overlay if its package is in the manifest, else null — the
+   *  engine reads roleFor() to resolve what a Sepulcher Sands pocket hosts
+   *  (the Regent's sealed door / a canopic seal-bearer), flared()/allFlared()
+   *  to sync the talisman braziers + the door, and foundTomb() to latch the
+   *  overworld marker; the kill rows call flare()/onRegentSlain() back. It
+   *  owns the durable four-talisman ledger. */
+  readonly unsealingField: UnsealingField | null;
   /** The mycelia overlay if its package is in the manifest, else null — the engine reads
    *  sporeOn()/heartbloomIn()/suppressionAt()/transformedZones() to field the fungal
    *  hordes + the Heartbloom, suppress events, and warp the biome; it feeds the bloom
@@ -376,6 +384,7 @@ export class WorldSim {
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
     this.longCandleField = surface<LongCandleField>('longcandle') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
+    this.unsealingField = surface<UnsealingField>('unsealing') ?? null;
     this.myceliaField = surface<MyceliaField>('mycelia') ?? null;
     this.breachField = surface<BreachField>('breach') ?? null;
     this.extractionField = surface<ExtractionField>('extraction') ?? null;

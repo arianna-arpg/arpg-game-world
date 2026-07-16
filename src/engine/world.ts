@@ -2008,6 +2008,17 @@ export class World {
   /** Zones whose Holdfast gate + wardens were already raised this visit (one per
    *  visit; cleared per loadZone). The durable lock STATE lives on HoldfastField. */
   private materializedHoldfasts = new Set<string>();
+  /** Sepulcher pockets whose Unsealing role was already staged this visit —
+   *  one muster per visit; cleared per loadZone. The four-talisman ledger is
+   *  owned by the pure UnsealingField overlay. */
+  private materializedUnsealing = new Set<string>();
+  /** The live Regent's-tomb site in the current pocket: the door + talisman
+   *  braziers to LIVE-SYNC against the flare ledger each frame, and the
+   *  once-only wake latch. Cleared per loadZone. */
+  private unsealingSite: {
+    zoneId: string; doorPos: Vec2; door: Doodad;
+    braziers: (Doodad | null)[]; opened: boolean; woken: boolean;
+  } | null = null;
   /** The live Holdfast in the current zone: the keeper to dwell, the wardens to track
    *  for the slaughter outcome, and the gate doodads to splice away on unlock. */
   private holdfastSite: { zoneId: string; lockId: string; defId: string; keeperId: number; banditIds: number[]; gateDoodads: Doodad[] } | null = null;
@@ -4225,6 +4236,15 @@ export class World {
         id: 'holdfast',
         reset: () => { this.materializedHoldfasts.clear(); this.holdfastSite = null; this.holdfastDwellKey = ''; },
         enter: (def) => this.placeHoldfast(def),
+      },
+      {
+        // THE UNSEALING: a Sepulcher Sands pocket stages its rolled role —
+        // the Regent's sealed door behind its talisman braziers, or a
+        // canopic seal-bearer's court — and the tomb site LIVE-SYNCS its
+        // flares, door state, and the Regent's wake every frame.
+        id: 'unsealing',
+        reset: () => { this.materializedUnsealing.clear(); this.unsealingSite = null; },
+        enter: (def, live) => this.materializeUnsealing(def, live),
       },
       {
         // THE HUNT: place a footprint (while the beast is untracked) or spawn
@@ -8401,6 +8421,160 @@ export class World {
     const back = this.zone.exits.find(e => e.to !== '?' && !e.lock)?.to;
     this.loadZone(this.zone.id, back);
     return true;
+  }
+
+  // --- THE UNSEALING: the in-pocket tomb runtime ------------------------------
+  //
+  // The UnsealingField overlay owns ALL durable state (flared wards, the found
+  // tomb, the Regent's fate); each Sepulcher Sands pocket's SEED owns its role
+  // (roleFor — pure). THIS stages the rolled role per visit and live-syncs the
+  // tomb site: talisman braziers mirror the flare ledger, the door swaps open
+  // when the last one lights, and the Regent wakes when the player closes on
+  // the open threshold. Everything it places is runtime furniture — the
+  // pocket's minted terrain is untouched (Zone Memory replays clean).
+
+  /** The farthest CLEAR walkable stand from the pocket's entry — where a tomb
+   *  door or a seal-bearer holds court (deep end = the blend's bone country,
+   *  since the base field ramps away from the way home). Coarse grid scan,
+   *  best-effort: a cramped grid still yields the best spot it has. */
+  private findUnsealingSpot(r: number): Vec2 {
+    const step = 60, m = r + 14;
+    let best: Vec2 | null = null, bd = -1;
+    for (let y = m; y <= this.arena.h - m; y += step) {
+      for (let x = m; x <= this.arena.w - m; x += step) {
+        if (this.walk && !this.walk.isWalkable(x, y)) continue;
+        let clear = true;
+        for (const d of this.doodads) {
+          if (!blocksMovement(d)) continue;
+          if (dist(vec(x, y), d.pos) < d.radius + m) { clear = false; break; }
+        }
+        if (!clear) continue;
+        const de = dist(vec(x, y), this.zoneEntry);
+        if (de > bd) { bd = de; best = vec(x, y); }
+      }
+    }
+    return best ?? this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), r);
+  }
+
+  /** Stage + live-sync the Unsealing content in a Sepulcher Sands pocket. */
+  private materializeUnsealing(def: ZoneDef, _live: boolean): void {
+    const uf = this.sim.unsealingField;
+    if (!uf || def.biome !== 'sepulcher' || def.caveDepth == null) return;
+    const role = uf.roleFor(def.seed ?? 0);
+    if (role.kind === 'none') return;
+    const cfg = uf.surge();
+    const lvl = Math.max(1, def.level);
+    if (!this.materializedUnsealing.has(def.id)) {
+      this.materializedUnsealing.add(def.id);
+      if (role.kind === 'tomb') {
+        // FOUND: latch the overworld marker on the pocket's host zone (the
+        // sole exit home — pockets are off-graph, the parent carries the pin).
+        const parent = def.exits[0]?.to;
+        if (parent && uf.foundTomb(parent, def.id)) {
+          bumpLedger(this.ledger, 'unsealing_tomb_found');
+          this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+            'You have found the REGENT\'S TOMB — the map remembers it', cfg.gold, 17);
+        }
+        // The door at the deep end, its talisman arc facing the way in.
+        const at = this.findUnsealingSpot(cfg.door.radius + cfg.door.brazierRing);
+        const toEntry = Math.atan2(this.zoneEntry.y - at.y, this.zoneEntry.x - at.x);
+        const opened = uf.allFlared();
+        const door: Doodad = {
+          pos: at, radius: cfg.door.radius,
+          kind: opened ? 'regent_door_open' : 'regent_door', rot: toEntry,
+        };
+        this.doodads.push(door);
+        const braziers: (Doodad | null)[] = [];
+        for (let i = 0; i < cfg.wards.length; i++) {
+          const spread = (i - (cfg.wards.length - 1) / 2) * 0.55;
+          const a = toEntry + spread;
+          const b: Doodad = {
+            pos: this.clampPos(vec(
+              at.x + Math.cos(a) * cfg.door.brazierRing,
+              at.y + Math.sin(a) * cfg.door.brazierRing), cfg.door.brazierRadius),
+            radius: cfg.door.brazierRadius,
+            kind: uf.flared(cfg.wards[i].id) ? 'regent_brazier_lit' : 'regent_brazier',
+          };
+          this.doodads.push(b);
+          braziers.push(b);
+        }
+        // The threshold watch: wardens posted at the door until the Regent
+        // has no further need of them.
+        if (!uf.regentSlain()) {
+          const n = randInt(cfg.door.guards[0], cfg.door.guards[1]);
+          for (let i = 0; i < n; i++) {
+            const flank = i % 2 === 0 ? 1 : -1;
+            const g = this.createMonster(cfg.door.guardId, lvl, 'enemy');
+            g.pos = this.clampPos(vec(
+              at.x + Math.cos(toEntry + flank * 1.5) * (cfg.door.radius + 46),
+              at.y + Math.sin(toEntry + flank * 1.5) * (cfg.door.radius + 46)), g.radius);
+            g.postSpec = {};
+            g.aiPost = vec(g.pos.x, g.pos.y);
+            g.aiPostFacing = toEntry; g.facing = toEntry;
+            this.actors.push(g);
+          }
+        }
+        this.unsealingSite = { zoneId: def.id, doorPos: at, door, braziers, opened, woken: false };
+      } else {
+        // A CANOPIC HOST: the rolled ward — or, once that talisman burns, the
+        // next unflared one (progress converges; all lit = an emptied vault).
+        const wardId = uf.nextWard(role.ward);
+        if (wardId) {
+          const ward = cfg.wards.find(w => w.id === wardId);
+          if (ward) {
+            const at = this.findUnsealingSpot(30);
+            const m = this.createMonster(ward.monsterId, lvl, 'enemy');
+            m.pos = this.clampPos(vec(at.x, at.y), m.radius);
+            m.tag = 'canopic_seal';
+            m.eventKey = wardId; // the kill row resolves the WARD from this
+            this.promoteRarity(m, cfg.canopic.rarity, { distinctName: false });
+            this.actors.push(m);
+            const guards = randInt(cfg.canopic.guards[0], cfg.canopic.guards[1]);
+            for (let i = 0; i < guards; i++) {
+              const g = this.createMonster(cfg.canopic.guardId, lvl, 'enemy');
+              g.pos = this.clampPos(vec(at.x + rand(-70, 70), at.y + rand(-70, 70)), g.radius);
+              this.actors.push(g);
+            }
+            this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+              `${m.name} keeps this vault — its fall flares ${ward.label}`, cfg.gold, 15);
+          }
+        }
+      }
+    }
+    // LIVE SYNC (tomb sites only, cheap): braziers mirror the ledger, the
+    // door swaps once on the last flare, the Regent wakes on approach.
+    const site = this.unsealingSite;
+    if (!site || site.zoneId !== def.id) return;
+    for (let i = 0; i < site.braziers.length; i++) {
+      const b = site.braziers[i];
+      if (!b || !uf.flared(cfg.wards[i].id) || b.kind === 'regent_brazier_lit') continue;
+      b.kind = 'regent_brazier_lit';
+      this.flashes.push({ pos: vec(b.pos.x, b.pos.y), radius: 60, color: cfg.gold, life: 0.6, maxLife: 0.6 });
+      this.markDoodadsChanged();
+    }
+    if (!site.opened && uf.allFlared()) {
+      site.opened = true;
+      site.door.kind = 'regent_door_open';
+      this.markDoodadsChanged();
+      this.flashes.push({ pos: vec(site.doorPos.x, site.doorPos.y), radius: 160, color: cfg.gold, life: 0.9, maxLife: 0.9 });
+      this.text(vec(site.doorPos.x, site.doorPos.y - 60),
+        'The last talisman burns — the Regent\'s door stands OPEN', cfg.gold, 17);
+    }
+    if (site.opened && !site.woken && !uf.regentSlain()
+      && dist(this.player.pos, site.doorPos) <= cfg.door.wakeRadius) {
+      site.woken = true;
+      const r = this.createMonster(cfg.regent.monsterId, lvl, 'enemy');
+      const toEntry = Math.atan2(this.zoneEntry.y - site.doorPos.y, this.zoneEntry.x - site.doorPos.x);
+      r.pos = this.clampPos(vec(
+        site.doorPos.x + Math.cos(toEntry) * (cfg.door.radius + r.radius + 12),
+        site.doorPos.y + Math.sin(toEntry) * (cfg.door.radius + r.radius + 12)), r.radius);
+      r.tag = 'sand_regent';
+      this.promoteRarity(r, cfg.regent.rarity, { distinctName: false });
+      this.actors.push(r);
+      this.flashes.push({ pos: vec(r.pos.x, r.pos.y), radius: 200, color: cfg.gold, life: 1, maxLife: 1 });
+      this.text(vec(site.doorPos.x, site.doorPos.y - 70),
+        'THE SAND REGENT WAKES — at full strength, as promised', '#ffd890', 18);
+    }
   }
 
   // --- AMALGAMATION: the in-zone Bonewright runtime --------------------------

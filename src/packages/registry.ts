@@ -33,6 +33,7 @@ import { MYCELIA } from './defs/mycelia';
 import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
 import { SWARMING } from './defs/swarming';
+import { UNSEALING } from './defs/unsealing';
 import { VENDETTA } from './defs/vendetta';
 import { VERMINFALL } from './defs/verminfall';
 import { WARBANDS } from './defs/warbands';
@@ -71,6 +72,7 @@ export const PACKAGES: ContentPackage[] = [
   VENDETTA,
   WORLDBOSS,
   PIT,
+  UNSEALING,
   FACTION_POLITICS,
 ];
 
@@ -109,6 +111,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   long_night: 0x10c7,
   pit: 0x9147,
   worldboss: 0xb055,
+  unsealing: 0x5ea1,
 };
 
 function hashId(id: string): number {

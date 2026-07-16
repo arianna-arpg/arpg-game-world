@@ -3013,7 +3013,7 @@ const caveMouth: GroupPainter = (env, group, def) => {
  *  pools against a wall instead of melting into or through it. */
 const campfire: GroupPainter = (env, group, def) => {
   const { ctx, world, time, theme } = env;
-  const p = (def.params ?? {}) as { bowl?: boolean; flame?: ColorSpec };
+  const p = (def.params ?? {}) as { bowl?: boolean; flame?: ColorSpec; cold?: boolean };
   // FLAME family: one param retints the whole fire (halo, licks, core, embers)
   // — soulfire braziers, witch-lights. Unset = the classic warm hexes verbatim.
   const fl = p.flame ? resolveColor(p.flame, theme) : null;
@@ -3023,6 +3023,31 @@ const campfire: GroupPainter = (env, group, def) => {
     const seed = ((o.pos.x * 13 + o.pos.y * 7) | 0) >>> 0;
     const flick = 0.82 + 0.12 * Math.sin(time * 11 + o.pos.x * 0.7)
       + 0.06 * Math.sin(time * 23.7 + o.pos.y);
+    // COLD (params.cold): the vessel without its fire — bowl/ring and char
+    // bed only, a grey ash heap where the core would burn. An unlit talisman
+    // (the Unsealing), a doused camp: the same kind, one word.
+    if (p.cold) {
+      if (p.bowl) {
+        ctx.fillStyle = '#1c1a18';
+        ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 1.02, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#4a4440';
+        ctx.lineWidth = Math.max(2, R * 0.22);
+        ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.92, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#5c5650';
+        for (let i = 0; i < 6; i++) {
+          const a = (i / 6) * Math.PI * 2 + 0.3;
+          ctx.beginPath();
+          ctx.arc(o.pos.x + Math.cos(a) * R * 0.92, o.pos.y + Math.sin(a) * R * 0.92,
+            R * 0.09, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.fillStyle = '#2a2724';
+      ctx.beginPath(); ctx.arc(o.pos.x, o.pos.y, R * 0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#4a453e';
+      ctx.beginPath(); ctx.arc(o.pos.x - R * 0.12, o.pos.y - R * 0.08, R * 0.3, 0, Math.PI * 2); ctx.fill();
+      continue;
+    }
     // Warm ground halo, pooled at the walls.
     const haloR = R * 2.3;
     const poly = litPolygon(world, o.pos.x, o.pos.y, haloR);

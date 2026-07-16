@@ -312,6 +312,35 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2.2, color: '#f0cc70', intensity: 0.38, flicker: 0.9 },
   },
+  // THE UNSEALING's door (runtime kit): SEALED = a gilt-edged monolith slab
+  // (the slab painter's monolith, dressed in dynasty gold over pale stone);
+  // OPEN = the same threshold as a lit mouth — the interment dark behind it
+  // finally showing, a steady grave-gold glow where the seal used to be.
+  regent_door: {
+    painter: 'slab', order: 55, shadow: 0.65, longShadow: 1.3,
+    params: { shape: 'monolith', fill: '#cfc4ac', edge: '#e8c060', label: 'the Regent\'s Door' },
+  },
+  regent_door_open: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#cfc4ac', edge: '#e8c060', material: 'stone',
+      glow: '#ffd890', throat: '#060402',
+      label: 'the Regent\'s Door',
+    },
+    light: { radius: -2.4, color: '#ffd890', intensity: 0.5, flicker: 1.2 },
+  },
+  // The four talismans: cold iron bowls until their seal-bearers fall — the
+  // LIT face is the flare, burning grave-gold and steady (low flicker: this
+  // is a ledger, not a campfire).
+  regent_brazier: {
+    painter: 'campfire', order: 53, shadow: 0.5,
+    params: { bowl: true, cold: true },
+  },
+  regent_brazier_lit: {
+    painter: 'campfire', order: 53, shadow: 0.5, longShadow: 0.6,
+    params: { bowl: true },
+    light: { radius: -6, color: '#ffd890', intensity: 0.6, flicker: 1.4 },
+  },
   // THE MIRAGE KIT: light, not matter — no shadow on purpose (a shadow is
   // exactly what a mirage cannot afford), drawn late so the lie sits over
   // the terrain it's telling you about.
