@@ -41,7 +41,7 @@
 
 import type { Actor } from './actor';
 import type { World } from './world';
-import type { SkillTag } from './stats';
+import { STAT_DEFS, type SkillTag } from './stats';
 import { dist } from '../core/math';
 
 /** What KIND of gain a link can echo. Each channel replays through its
@@ -132,6 +132,12 @@ export const SYMPATHY_LINKS: Record<string, SympathyLinkDef> = {};
 
 export function registerSympathyLink(def: SympathyLinkDef): void {
   SYMPATHY_LINKS[def.id] = def;
+  // The grant surface SELF-REGISTERS like every runtime stat family
+  // (status.ts apply_<id>, procs.ts proc_<id>, charges.ts chargeCap_<id>):
+  // tooltips resolve a real label and dead-stat sweeps see a defined stat.
+  STAT_DEFS[sympathyStat(def.id)] = {
+    label: `Sympathy: ${def.label}`, base: 0, min: 0,
+  };
 }
 
 /** The stat that grants (and scales) a link: `sympathy_<linkId>`. */

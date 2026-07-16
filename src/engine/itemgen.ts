@@ -872,6 +872,14 @@ export function rebuildItem(saved: ItemInstance): ItemInstance | null {
  *  lanes) — absent from STAT_DEFS at module load yet perfectly valid. */
 const GENERATED_STAT = /^(apply|damageVs|minionApply|popPower|dotLeech|convert|addedMin|addedMax|proc|classSkill|sympathy)_/;
 
+/** THE acceptance contract for stat names in the item pipeline: real
+ *  STAT_DEFS entries, attribute ids, and the runtime-minted families above
+ *  all count. Shared by the mint-time validator below AND the balance
+ *  harness's dead-stat sweep (src/sim/economy.ts) — one rule, never two. */
+export function isKnownItemStat(stat: string): boolean {
+  return !!STAT_DEFS[stat] || isAttributeId(stat) || GENERATED_STAT.test(stat);
+}
+
 let validated = false;
 
 /** One-shot dev sweep: every data reference resolves, every tier's ranges
@@ -902,7 +910,7 @@ function ensureValidated(): void {
         if (line.kind !== 'flat' && line.kind !== 'increased') {
           warn(`affix '${a.id}': attribute '${line.stat}' supports flat/increased lines only (got '${line.kind}')`);
         }
-      } else if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
+      } else if (!isKnownItemStat(line.stat)) {
         warn(`affix '${a.id}' references unknown stat '${line.stat}'`);
       }
     }
@@ -920,7 +928,7 @@ function ensureValidated(): void {
         if (line.kind !== 'flat' && line.kind !== 'increased') {
           warn(`unique '${u.id}': attribute '${line.stat}' supports flat/increased lines only (got '${line.kind}')`);
         }
-      } else if (!STAT_DEFS[line.stat] && !GENERATED_STAT.test(line.stat)) {
+      } else if (!isKnownItemStat(line.stat)) {
         warn(`unique '${u.id}' references unknown stat '${line.stat}'`);
       }
     }

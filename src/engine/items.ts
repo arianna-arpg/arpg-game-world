@@ -358,22 +358,28 @@ export const ITEM_CFG = {
    *  further step's weight multiplied by stepDecay. Blues are therefore
    *  worth a look at EVERY depth — early ones can outroll their level, and
    *  at depth the EXQUISITE tier (its own gate; excluded from overroll
-   *  unless canReachExquisite flips) remains the rare-proof ceiling. */
+   *  unless canReachExquisite flips) remains the rare-proof ceiling.
+   *  bothChance sits LOW by doctrine: the affix-count curve leans on its
+   *  floor at every rarity — most blues carry ONE line, and the two-line
+   *  blue reads as a find of its own. */
   magic: {
-    bothChance: 0.55,
+    bothChance: 0.22,
     exquisiteWeightMult: 2.2,
     overroll: { chance: 0.25, maxSteps: 2, stepDecay: 0.45, canReachExquisite: false },
   },
 
   /** Rare rolls: total affix count distribution, and the ilvl-scaled tier
    *  bias — each step DOWN the eligible ladder multiplies weight by bias, and
-   *  bias shrinks with depth (high-ilvl rares lean hard toward top tiers). */
+   *  bias shrinks with depth (high-ilvl rares lean hard toward top tiers).
+   *  The count curve leans HARD on its floor (the same doctrine as
+   *  magic.bothChance): most rares land 3-4 lines, and the six-line rare
+   *  is a genuine event — worth calling out loud when it hits the floor. */
   rare: {
     countWeights: [
-      { count: 3, weight: 34 },
-      { count: 4, weight: 38 },
-      { count: 5, weight: 20 },
-      { count: 6, weight: 8 },
+      { count: 3, weight: 58 },
+      { count: 4, weight: 27 },
+      { count: 5, weight: 11 },
+      { count: 6, weight: 4 },
     ],
     tierBias: { low: 0.85, high: 0.5 },
   },
@@ -390,8 +396,12 @@ export const ITEM_CFG = {
    *  item") — the one glance-read that separates them from global lines. */
   localLineSuffix: ' on this item',
 
-  /** Drop-time item rarity weights (loot tables may override per entry). */
-  rarityWeights: { common: 52, magic: 33, rare: 13, unique: 2 } as Record<ItemRarity, number>,
+  /** Drop-time item rarity weights (loot tables may override per entry).
+   *  Tuned BOTTOM-HEAVY on purpose: rares run a clear step rarer than
+   *  blues (~1:4), and the world-path unique is a once-in-a-session shout —
+   *  the authored tables (bosses, crowned, hoards) are where unique odds
+   *  live, so chasing them means chasing FIGHTS, not floor time. */
+  rarityWeights: { common: 58, magic: 33.5, rare: 8, unique: 0.5 } as Record<ItemRarity, number>,
 
   /** SOCKETS: the low-weight bonus. Whites are the socket-bearers — the
    *  highest chance AND the fattest counts (their crafting-canvas identity;
@@ -413,6 +423,11 @@ export const ITEM_CFG = {
   inventory: { w: 12, h: 6 },
   /** Manual pickup reach (the pickup keybind), world units. */
   pickupRadius: 70,
+  /** Walk-over TOUCH radii (world units) — each ground drop's hitbox, by
+   *  family. Gear and gems sit TIGHT (deliberate finds, sized to their
+   *  shrunken sprites — see VIS_CFG.drops); currency (essence, vestiges)
+   *  keeps the fat vacuum ring — it exists to be hoovered mid-chase. */
+  pickupTouch: { gear: 16, gem: 16, currency: 22 },
 
   /** Rare-name mint tables ("Storm Song", "Grim Ward", …). */
   rareNames: {

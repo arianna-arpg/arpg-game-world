@@ -73,6 +73,41 @@ export const VIS_CFG = {
     showAt: 0.35,
   },
 
+  /** GROUND DROPS (renderer drawDrops) — gem/gear diamond half-sizes, glow
+   *  reach, and the gear name-label type. Sized SMALL on purpose: a kill
+   *  burst should read as pickings on the floor, not a curtain over it —
+   *  the rarity color and glow carry the across-the-room read, not bulk.
+   *  Touch hitboxes are the engine's ITEM_CFG.pickupTouch; keep the two
+   *  roughly in step so what looks grabbable is grabbable. */
+  drops: {
+    /** Gear diamond half-size (uniques run a step bigger — the shout). */
+    gearHalf: 6.5,
+    gearUniqueHalf: 8.5,
+    /** Skill/support gem diamond half-sizes. */
+    skillHalf: 6.5,
+    supportHalf: 5,
+    /** Skill-gem rarity ring: pad beyond the diamond + its stroke width. */
+    ringPad: 2.5,
+    ringWidth: 2,
+    /** Gem white inner edge + gear rarity outline strokes. */
+    edgeWidth: 1.2,
+    outlineWidth: 2,
+    /** Glow (shadowBlur) reach: gems/gear, and the unique flare. */
+    glow: 9,
+    glowUnique: 14,
+    /** Bob amplitude (px) of the idle float. */
+    bobAmp: 2.5,
+    /** The floating gear label: font px, pill pad/height, lift above the item. */
+    labelFont: 10,
+    labelPadX: 4,
+    labelPillH: 14,
+    labelLift: 30,
+    /** Currency glyph type sizes (vestige sigils, essence trail). */
+    vestigeFont: 13,
+    essenceFont: 11,
+    essenceCountFont: 8,
+  },
+
   /** THE ROOM VEIL (vis/roomVeil.ts) — interior vision confinement. While
    *  the local hero stands under a confining structure's roof (StructureDef.
    *  confineVision → PlacedStructure), everything beyond the room veils dark:

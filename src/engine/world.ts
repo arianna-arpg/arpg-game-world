@@ -24750,13 +24750,14 @@ export class World {
    *  helper serves skills and supports so the policy can never fork. */
   private pickGem<T>(
     pool: T[], tagsOf: (x: T) => readonly SkillTag[], weightOf: (x: T) => number,
-    bias?: SkillTag[],
+    bias?: SkillTag[], carried?: (x: T) => boolean,
   ): T | null {
     if (pool.length === 0) return null;
     const weights = pool.map(x => {
       let w = weightOf(x);
       for (const t of tagsOf(x)) w *= GEM_DROP_CFG.tagWeights[t] ?? 1;
       if (bias && tagsOf(x).some(t => bias.includes(t))) w *= GEM_DROP_CFG.biasMult;
+      if (carried?.(x)) w *= GEM_DROP_CFG.carriedMult;
       return Math.max(0, w);
     });
     const total = weights.reduce((s, w) => s + w, 0);
@@ -24778,10 +24779,13 @@ export class World {
     let pool = SKILL_LIST.filter(s => !s.noDrop && isSkillUnlockedForDrop(this.account, s.id)
       && (s.minDropLevel ?? 0) <= this.zone.level);
     if (pool.length === 0) pool = SKILL_LIST.filter(s => !s.noDrop && STARTER_SKILLS.includes(s.id));
-    const skillDef = this.pickGem(pool, s => s.tags, s => s.dropWeight ?? 100, bias) ?? pick(pool);
+    const owned = this.carriedGemIds().skills;
+    const skillDef = this.pickGem(pool, s => s.tags, s => s.dropWeight ?? 100, bias,
+      s => owned.has(s.id)) ?? pick(pool);
     const rarity = rollSkillRarity(Math.random());
-    const level = 1 + (this.zone.level >= 4 && chance(0.2)
-      ? randInt(1, Math.max(1, Math.floor(this.zone.level / 3)))
+    const pl = GEM_DROP_CFG.preLevel;
+    const level = 1 + (this.zone.level >= pl.minZone && chance(pl.chance)
+      ? randInt(1, Math.max(1, Math.floor(this.zone.level / pl.levelDiv)))
       : 0);
     const inst = makeSkillInstance(skillDef, level, SKILL_RARITIES[rarity].sockets);
     inst.rarity = rarity;
@@ -24793,7 +24797,28 @@ export class World {
   private rollSupportDropGated(bias?: SkillTag[]): SupportDef | null {
     const pool = SUPPORT_LIST.filter(d => isSupportUnlockedForDrop(this.account, d.id)
       && (d.minDropLevel ?? 0) <= this.zone.level);
-    return this.pickGem(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, bias);
+    const owned = this.carriedGemIds().supports;
+    return this.pickGem(pool, d => d.dropTags ?? d.requiresTags ?? [], d => d.weight, bias,
+      d => owned.has(d.id));
+  }
+
+  /** Every gem id the PARTY already carries — bags, bars, and sockets alike
+   *  (grafts stay out: they're derived, not owned stones). Feeds
+   *  GEM_DROP_CFG.carriedMult, the fresh-find lean that keeps a growing
+   *  catalog surfacing NEW gems instead of the fifth copy of one. */
+  private carriedGemIds(): { skills: Set<string>; supports: Set<string> } {
+    const skills = new Set<string>(), supports = new Set<string>();
+    const take = (inst: SkillInstance | null): void => {
+      if (!inst) return;
+      skills.add(inst.def.id);
+      for (const s of inst.sockets) if (s) supports.add(s.def.id);
+    };
+    for (const seat of this.seats) {
+      for (const inst of seat.actor.skills) take(inst);
+      for (const inst of seat.meta.skillInv) take(inst);
+      for (const gem of seat.meta.inventory) supports.add(gem.def.id);
+    }
+    return { skills, supports };
   }
 
   /** Drop one random gem (skill or support) at a point — gated by account
@@ -24805,7 +24830,7 @@ export class World {
       this.drops.push({ pos, item: { kind: 'skill', inst }, bob: rand(0, Math.PI * 2) });
       this.text(at, `${inst.def.name}!`, SKILL_RARITIES[inst.rarity ?? 'common'].color, 15);
     };
-    if (chance(0.4)) { dropSkill(); return; }
+    if (chance(GEM_DROP_CFG.skillShare)) { dropSkill(); return; }
     const gemDef = this.rollSupportDropGated(bias);
     if (!gemDef) { dropSkill(); return; } // no supports unlocked → a skill gem instead
     this.drops.push({ pos, item: { kind: 'support', gem: { def: gemDef, level: 1 } }, bob: rand(0, Math.PI * 2) });
@@ -30202,12 +30227,14 @@ export class World {
       // back into the dropper's hands while they stand on it.
       if (drop.droppedBy && !drop.dropperCleared) {
         const dropper = this.seats.find(s => s.id === drop.droppedBy);
-        if (!dropper || dist(dropper.actor.pos, drop.pos) > dropper.actor.radius + 22) drop.dropperCleared = true;
+        if (!dropper || dist(dropper.actor.pos, drop.pos) > dropper.actor.radius + ITEM_CFG.pickupTouch.gem) drop.dropperCleared = true;
       }
       const exclude = drop.droppedBy && !drop.dropperCleared ? drop.droppedBy : undefined;
+      // Touch hitboxes ride ITEM_CFG.pickupTouch — currency keeps the fat
+      // vacuum ring; gear and gems sit tight to their shrunken sprites.
       // VESTIGES always vacuum — stackable satchel material, zero bag cost.
       if (drop.item.kind === 'vestige') {
-        const seat = this.pickupSeat(drop.pos, 22, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
         if (!seat) continue;
         this.grantVestige(seat, drop.item.id, drop.item.count);
         this.drops.splice(i, 1);
@@ -30216,7 +30243,7 @@ export class World {
       // ESSENCE always vacuums — currency underfoot, straight to the wallet
       // (grantEssence floats the gain, banks discovery, replicates the seat).
       if (drop.item.kind === 'essence') {
-        const seat = this.pickupSeat(drop.pos, 22, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.currency, exclude);
         if (!seat) continue;
         this.grantEssence(seat, { essence: drop.item.essence, count: drop.item.count });
         this.drops.splice(i, 1);
@@ -30227,7 +30254,7 @@ export class World {
       // a deliberate press (pickupNearestGear); the key works in both modes.
       if (drop.item.kind === 'gear') {
         if (!this.gearVacuum) continue;
-        const seat = this.pickupSeat(drop.pos, 22, exclude);
+        const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gear, exclude);
         if (!seat) continue;
         if (!autoPlace(seat.meta.items, drop.item.item)) {
           this.failNote(seat.actor, 'bagfull', 'inventory full');
@@ -30238,7 +30265,7 @@ export class World {
         this.drops.splice(i, 1);
         continue;
       }
-      const seat = this.pickupSeat(drop.pos, 22, exclude);
+      const seat = this.pickupSeat(drop.pos, ITEM_CFG.pickupTouch.gem, exclude);
       if (!seat) continue;
       const item = drop.item;
       if (item.kind === 'support') {

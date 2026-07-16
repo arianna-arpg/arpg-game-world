@@ -72,15 +72,18 @@ export interface LootCtx {
  *  not as noise — rarity of the EVENT is the cheapest quality multiplier. */
 export const DROP_CFG = {
   /** Baseline chance a credited kill rolls the gear table at all. */
-  killItemChance: 0.05,
+  killItemChance: 0.035,
   killTable: 'world_gear',
   bossTable: 'boss_gear',
   /** Baseline chance a credited kill drops a GEM (skill/support), and the
-   *  guaranteed gem count on bosses — the old world.ts literals, now levers. */
-  killGemChance: 0.08,
+   *  guaranteed gem count on bosses — the old world.ts literals, now levers.
+   *  Runs LEAN by doctrine: the guaranteed paths (bosses, elite tiers,
+   *  event payouts, the vendor shelf) are where gems arrive ON PURPOSE —
+   *  the kill trickle just keeps the floor alive between them. */
+  killGemChance: 0.045,
   bossGemDrops: 2,
   /** Baseline chance a credited kill sheds a VESTIGE (socket material). */
-  vestigeChance: 0.05,
+  vestigeChance: 0.04,
   /** Bonus gear rolls by ELITE tier — the item-side mirror of RarityDef.drops. */
   eliteBonusItemRolls: { normal: 0, magic: 0, rare: 1, champion: 1, crowned: 2 } as Record<MonsterRarity, number>,
   /** Crowned leaders promote their bonus rolls onto the apex table. */
@@ -98,6 +101,21 @@ export const GEM_DROP_CFG = {
   /** Weight multiplier when a gem shares a tag with the killer's gemBias
    *  (MonsterDef.gemBias — the shaman drops caster gems rule). */
   biasMult: 2.5,
+  /** Skill-vs-support split of the generic gem droplet (world.dropGemAt):
+   *  this fraction lands as a SKILL gem, the rest as a support. */
+  skillShare: 0.4,
+  /** THE FRESH-FIND LEAN — the catalog-agency lever. A gem the party
+   *  already CARRIES (any seat: bag, bar, or socketed) rolls at this
+   *  fraction of its weight, so a growing catalog keeps surfacing gems
+   *  you DON'T own — new play over the fifth copy of the same stone.
+   *  Duplicates still drop (second copies have builds), just seldom.
+   *  Applies to every pickGem consumer: kill drops AND the vendor shelf
+   *  (Brandt leans fresh too — browsing him is deterministic catalog
+   *  access). 1 = off. */
+  carriedMult: 0.25,
+  /** Deep-zone PRE-LEVELED skill gems: past minZone, this chance rolls the
+   *  gem's level up to 1 + zoneLevel/levelDiv (the old world.ts literals). */
+  preLevel: { chance: 0.2, minZone: 4, levelDiv: 3 },
 };
 
 /** Weighted vestige pick from the registry — the kill path and every

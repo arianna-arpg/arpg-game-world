@@ -31,7 +31,9 @@ const TABLE_LIST: LootTableDef[] = [
   },
 
   // Bosses: an elevated-rarity item (a level over the zone), a shot at the
-  // world droplet, and a side chance of a gem or nothing.
+  // world droplet, and a side chance of a gem or nothing. Unique odds sit a
+  // step under the crowned tier's — REPEATABLE faucets run lean; only the
+  // one-shot capstone hoards (regent_hoard, tidebound_hoard) pour rich.
   {
     id: 'boss_gear',
     rolls: [
@@ -40,7 +42,7 @@ const TABLE_LIST: LootTableDef[] = [
         entries: [
           {
             weight: 70, kind: 'item', ilvlBonus: 1,
-            rarityWeights: { common: 20, magic: 40, rare: 32, unique: 8 },
+            rarityWeights: { common: 22, magic: 42, rare: 31, unique: 5 },
           },
           { weight: 30, kind: 'table', table: 'world_gear' },
         ],
@@ -63,10 +65,10 @@ const TABLE_LIST: LootTableDef[] = [
       count: 1,
       entries: [
         {
-          weight: 80, kind: 'item', ilvlBonus: 2,
-          rarityWeights: { common: 0, magic: 25, rare: 60, unique: 15 },
+          weight: 85, kind: 'item', ilvlBonus: 2,
+          rarityWeights: { common: 0, magic: 30, rare: 60, unique: 10 },
         },
-        { weight: 20, kind: 'unique', ilvlBonus: 2 },
+        { weight: 15, kind: 'unique', ilvlBonus: 2 },
       ],
     }],
   },

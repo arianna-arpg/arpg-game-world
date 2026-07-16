@@ -26,7 +26,7 @@ import { LOOT_TABLES } from '../data/loottables';
 import { affixPoolsFor, compileItemMods, rollItem } from '../engine/itemgen';
 import type { ItemCategory } from '../engine/items';
 import { DROP_CFG, resolveLootTable, type LootResult } from '../engine/loot';
-import { STAT_DEFS, isAttributeId } from '../engine/stats';
+import { isKnownItemStat } from '../engine/itemgen';
 import { RARITY_DEFS } from '../engine/rarity';
 import { deriveSeed, mulberry32 } from './rng';
 
@@ -103,8 +103,10 @@ export function auditAffixes(opts: {
         (tierCounts[a.id] ??= {})[a.tier] = (tierCounts[a.id]?.[a.tier] ?? 0) + 1;
       }
       // Dead-line sweep rides the same mint (compiled = what equip applies).
+      // Acceptance is THE engine's own contract (itemgen.isKnownItemStat):
+      // STAT_DEFS + attributes + the runtime-minted stat families.
       for (const m of compileItemMods(item)) {
-        if (!STAT_DEFS[m.stat] && !isAttributeId(m.stat)) {
+        if (!isKnownItemStat(m.stat)) {
           unknownStats.set(m.stat, `${item.baseId}${item.uniqueId ? ` / unique ${item.uniqueId}` : ''}`);
         }
       }

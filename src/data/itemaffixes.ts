@@ -8,9 +8,10 @@
 // highest roll in the game, unrollable on rares.
 //
 // Wherever a real registry exists we GENERATE from it rather than hand-list:
-// attributes from ATTRIBUTES, resistances/added-damage from DAMAGE_TYPES,
-// ailment chances from the apply_<status> stat family. A new attribute,
-// damage type, or status becomes rollable gear the moment it registers.
+// attributes from ATTRIBUTES, resistances/penetrations/added-damage from
+// DAMAGE_TYPES, ailment chances from the apply_<status> stat family. A new
+// attribute, damage type, or status becomes rollable gear the moment it
+// registers — both sides of its arms race included.
 //
 // Prefix/suffix split follows genre convention: prefixes are POOLS AND POWER
 // (life, defenses, damage), suffixes are RATES AND FACULTIES (attributes,
@@ -298,6 +299,24 @@ const RESIST_AFFIXES: AffixDef[] = DAMAGE_TYPES
     stat: `${t}Res`, top: 0.35, floor: 0.15, weight: 110,
   }));
 
+const PEN_NAMES: Record<string, string> = {
+  fire: 'of Flamerending', cold: 'of Frostrending',
+  lightning: 'of Stormrending', chaos: 'of Voidrending',
+};
+
+/** Elemental PENETRATION suffixes — the res-stack counter, generated per
+ *  damage type like the resists above (a new element ships both sides of
+ *  its arms race the day it registers). Physical runs its own lane below
+ *  (armor_pen — armor is a rating, not a resistance). */
+const PEN_AFFIXES: AffixDef[] = DAMAGE_TYPES
+  .filter(t => t !== 'physical')
+  .map(t => fam({
+    id: `pen_${t}`, kind: 'suffix', themes: [CASTER],
+    names: [PEN_NAMES[t] ?? `of ${cap(t)} Piercing`],
+    stat: `${t}Pen`, top: 0.1, floor: 0.25, count: 3,
+    baseTags: ['ring', 'amulet', 'quiver', 'weapon'], weight: 40,
+  }));
+
 const ADDED_NAMES: Record<string, string> = {
   physical: 'Jagged', fire: 'Flaming', cold: 'Chilling',
   lightning: 'Charged', chaos: 'Vile',
@@ -315,8 +334,9 @@ const ADDED_AFFIXES: AffixDef[] = DAMAGE_TYPES.map(t => fam({
 const LANE_THEME: Record<string, string[]> = {
   melee: [MARTIAL], spell: [CASTER], projectile: [RANGER], minion: [SUMMONER],
   physical: [MARTIAL], fire: [CASTER], cold: [CASTER], lightning: [CASTER], chaos: [CASTER],
+  channel: [CASTER], construct: [SUMMONER], conjure: [CASTER], javelin: [MARTIAL, RANGER],
 };
-const DAMAGE_LANES: { key: string; tag: SkillTag; name: string }[] = [
+const DAMAGE_LANES: { key: string; tag: SkillTag; name: string; weight?: number }[] = [
   { key: 'melee', tag: 'melee', name: 'Brutal' },
   { key: 'spell', tag: 'spell', name: 'Arcane' },
   { key: 'projectile', tag: 'projectile', name: 'Fletched' },
@@ -327,12 +347,19 @@ const DAMAGE_LANES: { key: string; tag: SkillTag; name: string }[] = [
   { key: 'cold', tag: 'cold', name: 'Rimed' },
   { key: 'lightning', tag: 'lightning', name: 'Voltaic' },
   { key: 'chaos', tag: 'chaos', name: 'Baleful' },
+  // The ARCHETYPE lanes — narrower tags, slightly leaner weights: every
+  // registered delivery archetype gets a build-lane amplifier of its own
+  // (channelers, construct engineers, storm-callers, javelineers).
+  { key: 'channel', tag: 'channel', name: 'Torrential', weight: 55 },
+  { key: 'construct', tag: 'construct', name: 'Artificed', weight: 55 },
+  { key: 'conjure', tag: 'conjure', name: 'Stormcalling', weight: 55 },
+  { key: 'javelin', tag: 'javelin', name: 'Impaling', weight: 55 },
 ];
 const DAMAGE_AFFIXES: AffixDef[] = DAMAGE_LANES.map(l => fam({
   id: `dmg_${l.key}`, kind: 'prefix', themes: LANE_THEME[l.key],
   names: [l.name],
   stat: 'damage', modKind: 'increased', tags: [l.tag],
-  top: 0.24, floor: 0.2, weight: 70,
+  top: 0.24, floor: 0.2, weight: l.weight ?? 70,
 }));
 
 const APPLY_NAMES: Record<string, string> = {
@@ -402,6 +429,14 @@ const PREFIXES: AffixDef[] = [
     names: ["Warden's", "Shepherd's", "Keeper's"],
     stat: 'minionLife', modKind: 'increased', top: 0.35, floor: 0.2,
     baseTags: ['helmet', 'amulet'], weight: 60,
+  }),
+  // The summoner's TEMPO lane — minion action speed, the third leg beside
+  // damage and life (attackSpeed/castSpeed never reach the horde).
+  fam({
+    id: 'minion_haste', kind: 'prefix', themes: [SUMMONER],
+    names: ["Drillmaster's", "Drover's"],
+    stat: 'minionHaste', modKind: 'increased', top: 0.2, floor: 0.25, count: 4,
+    baseTags: ['helmet', 'amulet', 'gloves'], weight: 50,
   }),
   // MONSTER-INFREQUENT lines — roll ONLY on mi_<theme> bases (the same tag
   // gate as everything else; see data/infrequents.ts). Each theme gets one
@@ -573,6 +608,14 @@ const SUFFIXES: AffixDef[] = [
     names: ['of the Hawk', 'of the Kestrel', 'of Marksmanship'],
     stat: 'accuracy', top: 120, floor: 0.15, weight: 80,
   }),
+  // The PHYSICAL pen lane (elemental pen is generated — PEN_AFFIXES):
+  // a fraction of the victim's armor ignored, the plate-cracker's suffix.
+  fam({
+    id: 'armor_pen', kind: 'suffix', themes: [MARTIAL],
+    names: ['of Sundering', 'of Cleaving'],
+    stat: 'armorPen', top: 0.15, floor: 0.25, count: 3,
+    baseTags: ['gloves', 'ring', 'quiver', 'weapon'], weight: 40,
+  }),
   fam({
     id: 'life_regen', kind: 'suffix', themes: [SUSTAIN],
     names: ['of Mending', 'of Knitting', 'of Scabbing'],
@@ -608,6 +651,31 @@ const SUFFIXES: AffixDef[] = [
     names: ['of Osmosis', 'of Sipping'],
     stat: 'manaOnKill', top: 8, floor: 0.2, count: 3, weight: 55,
   }),
+  // ES sustain — the pool's own leech/on-hit/on-kill trio, completing the
+  // family life and mana already roll (the CI-caster's wardrobe).
+  fam({
+    id: 'es_leech', kind: 'suffix', themes: [CASTER, SUSTAIN],
+    names: ['of the Pale Draught', 'of the Siphon'],
+    stat: 'esLeech', top: 0.025, floor: 0.3, count: 3, weight: 45,
+  }),
+  fam({
+    id: 'es_on_hit', kind: 'suffix', themes: [CASTER, SUSTAIN],
+    names: ['of Glinting', 'of Shimmering'],
+    stat: 'esOnHit', top: 3, floor: 0.25, count: 3, weight: 45,
+  }),
+  fam({
+    id: 'es_on_kill', kind: 'suffix', themes: [CASTER, SUSTAIN],
+    names: ['of Gleaning', 'of Lantern-Taking'],
+    stat: 'esOnKill', top: 10, floor: 0.2, count: 3, weight: 45,
+  }),
+  // The evasion texture's sustain: slipping a blow feeds the slipper —
+  // deterministic sips for the build that never means to be hit.
+  fam({
+    id: 'life_on_evade', kind: 'suffix', themes: [RANGER, SUSTAIN],
+    names: ['of Slipping Free', 'of the Sidestep'],
+    stat: 'lifeOnEvade', top: 5, floor: 0.25, count: 3,
+    baseTags: ['boots', 'chest', 'ring'], weight: 45,
+  }),
   // POISE cycle levers — the break-bar's recovery machine, investable on
   // gear: faster recovery climbs, fight-to-stay-armed on-hit refill, and
   // overcharge headroom for the crest-then-eat-the-haymaker play.
@@ -628,6 +696,43 @@ const SUFFIXES: AffixDef[] = [
     names: ['of the Bulwark Crest', 'of Bracing'],
     stat: 'poiseOvercharge', top: 0.25, floor: 0.3,
     baseTags: ['belt', 'amulet'], weight: 45,
+  }),
+  // GUARD-skill investment: sturdier shields for the stance-holder (the
+  // guard fabric's own gear lane, beside poise's recovery machine).
+  fam({
+    id: 'guard_strength', kind: 'suffix', themes: [DEFENSE],
+    names: ['of the Rampart', 'of the Palisade'],
+    stat: 'guardStrength', modKind: 'increased', top: 0.35, floor: 0.25, count: 4,
+    baseTags: ['chest', 'helmet', 'offhand'], weight: 40,
+  }),
+  // AVOIDANCE textures — shrug an ailment outright, or blunt the crit that
+  // found you: the victim-side answers to statusChance and critMulti.
+  fam({
+    id: 'ailment_resist', kind: 'suffix', themes: [DEFENSE],
+    names: ['of Inoculation', 'of Hardiness'],
+    stat: 'ailmentResist', top: 0.3, floor: 0.2, count: 4,
+    baseTags: ['belt', 'helmet', 'amulet'], weight: 50,
+  }),
+  fam({
+    id: 'crit_avoid', kind: 'suffix', themes: [DEFENSE],
+    names: ['of Blunting', 'of the Glancing Blow'],
+    stat: 'critAvoid', top: 0.25, floor: 0.2, count: 4,
+    baseTags: ['helmet', 'chest', 'belt'], weight: 45,
+  }),
+  // BODY texture rolls: mass against the shove (knockback and crowd press
+  // divide by weight), grip against the slick (traction refills toward its
+  // cap of 1 — worth exactly its ice, nothing on dry land).
+  fam({
+    id: 'mass', kind: 'suffix', themes: [DEFENSE],
+    names: ['of Ballast', 'of the Millstone'],
+    stat: 'weight', modKind: 'increased', top: 0.5, floor: 0.25, count: 3,
+    baseTags: ['belt', 'chest'], weight: 35,
+  }),
+  fam({
+    id: 'traction', kind: 'suffix', themes: [DEFENSE],
+    names: ['of Surefooting', 'of the Icewalker'],
+    stat: 'traction', top: 0.3, floor: 0.3, count: 3,
+    baseTags: ['boots'], weight: 30,
   }),
   // CONDUIT levers — the resource-pump fabric's two dials, investable on
   // gear: throughput (how hard every running pump draws) and the exchange
@@ -690,6 +795,15 @@ const SUFFIXES: AffixDef[] = [
     names: ['of Fortune', 'of Serendipity'],
     stat: 'luck', modKind: 'increased', top: 0.2, floor: 0.3,
     baseTags: ['jewelry'], weight: 45,
+  }),
+  // LUCKY HITS (the Fortune fabric's damage-dice twin): roll twice, keep
+  // the higher. MAGIC-ONLY identity like the proc pair above — a blues-
+  // only class of power that keeps every blue worth the glance.
+  fam({
+    id: 'lucky_hits', kind: 'suffix', magicOnly: true,
+    names: ['of Providence', 'of the Gambler'],
+    stat: 'luckyChance', top: 0.08, floor: 0.3, count: 3,
+    baseTags: ['jewelry'], weight: 30,
   }),
   fam({
     id: 'skill_charges', kind: 'suffix',
@@ -787,6 +901,7 @@ const SUFFIXES: AffixDef[] = [
   }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,
+  ...PEN_AFFIXES,
   ...APPLY_AFFIXES,
   ...CLASS_SKILL_AFFIXES,
 ];

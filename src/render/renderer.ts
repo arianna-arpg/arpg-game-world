@@ -3688,17 +3688,18 @@ export class Renderer {
    *  render-shell only carries {name, rarity}, so gear touches nothing else. */
   private drawDrops(world: World): void {
     const { ctx } = this;
+    const D = VIS_CFG.drops; // every size below is a lever, never a literal
     for (const d of world.drops) {
-      const y = d.pos.y + Math.sin(d.bob) * 3;
+      const y = d.pos.y + Math.sin(d.bob) * D.bobAmp;
       const item = d.item;
       if (item.kind === 'vestige') {
         // A glowing glyph — vestiges vacuum on touch, so no label pill.
         const v = VESTIGES[item.id];
         ctx.save();
-        ctx.font = 'bold 15px Verdana';
+        ctx.font = `bold ${D.vestigeFont}px Verdana`;
         ctx.textAlign = 'center';
         ctx.shadowColor = v?.color ?? '#b06bd4';
-        ctx.shadowBlur = 14;
+        ctx.shadowBlur = D.glow + 4;
         ctx.fillStyle = v?.color ?? '#b06bd4';
         ctx.fillText(v?.glyph ?? '؟', d.pos.x, y + 5);
         ctx.restore();
@@ -3709,53 +3710,54 @@ export class Renderer {
         // count tag when the packet is fat — reads as a trail mid-chase.
         const e = ESSENCES[item.essence];
         ctx.save();
-        ctx.font = 'bold 13px Verdana';
+        ctx.font = `bold ${D.essenceFont}px Verdana`;
         ctx.textAlign = 'center';
         ctx.shadowColor = e.color;
-        ctx.shadowBlur = 12;
+        ctx.shadowBlur = D.glow + 2;
         ctx.fillStyle = e.color;
         ctx.fillText(e.glyph, d.pos.x, y + 4);
         if (item.count > 1) {
           ctx.shadowBlur = 0;
-          ctx.font = 'bold 9px Verdana';
-          ctx.fillText(`×${item.count}`, d.pos.x + 11, y + 8);
+          ctx.font = `bold ${D.essenceCountFont}px Verdana`;
+          ctx.fillText(`×${item.count}`, d.pos.x + D.essenceFont - 2, y + 7);
         }
         ctx.restore();
         continue;
       }
       if (item.kind === 'gear') {
         const rc = ITEM_RARITIES[item.item.rarity] ?? ITEM_RARITIES.common;
-        const half = item.item.rarity === 'unique' ? 11 : 9;
+        const unique = item.item.rarity === 'unique';
+        const half = unique ? D.gearUniqueHalf : D.gearHalf;
         ctx.save();
         ctx.translate(d.pos.x, y);
         ctx.rotate(Math.PI / 4);
         ctx.shadowColor = rc.color;
-        ctx.shadowBlur = item.item.rarity === 'unique' ? 20 : 12;
+        ctx.shadowBlur = unique ? D.glowUnique : D.glow;
         ctx.fillStyle = '#23202a';
         ctx.fillRect(-half, -half, half * 2, half * 2);
         ctx.shadowBlur = 0;
         ctx.strokeStyle = rc.color;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = D.outlineWidth;
         ctx.strokeRect(-half, -half, half * 2, half * 2);
         ctx.restore();
         // The floating label — dark pill + rarity-colored name.
-        ctx.font = 'bold 11px Verdana';
+        ctx.font = `bold ${D.labelFont}px Verdana`;
         ctx.textAlign = 'center';
         const label = item.item.name;
         const w = ctx.measureText(label).width;
         ctx.fillStyle = 'rgba(10,8,14,0.78)';
-        ctx.fillRect(d.pos.x - w / 2 - 5, y - 34, w + 10, 16);
+        ctx.fillRect(d.pos.x - w / 2 - D.labelPadX, y - D.labelLift, w + D.labelPadX * 2, D.labelPillH);
         ctx.fillStyle = rc.color;
-        ctx.fillText(label, d.pos.x, y - 22);
+        ctx.fillText(label, d.pos.x, y - D.labelLift + D.labelPillH - 4);
         continue;
       }
       const fill = item.kind === 'support' ? item.gem.def.color : item.inst.def.color;
-      const half = item.kind === 'support' ? 7 : 9;
+      const half = item.kind === 'support' ? D.supportHalf : D.skillHalf;
       ctx.save();
       ctx.translate(d.pos.x, y);
       ctx.rotate(Math.PI / 4);
       ctx.shadowColor = fill;
-      ctx.shadowBlur = 12;
+      ctx.shadowBlur = D.glow;
       ctx.fillStyle = fill;
       ctx.fillRect(-half, -half, half * 2, half * 2);
       ctx.shadowBlur = 0;
@@ -3763,11 +3765,11 @@ export class Renderer {
         // The rarity ring is the tell from across the screen.
         const rc = SKILL_RARITIES[item.inst.rarity ?? 'common'].color;
         ctx.strokeStyle = rc;
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(-half - 3, -half - 3, half * 2 + 6, half * 2 + 6);
+        ctx.lineWidth = D.ringWidth;
+        ctx.strokeRect(-half - D.ringPad, -half - D.ringPad, (half + D.ringPad) * 2, (half + D.ringPad) * 2);
       }
       ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = D.edgeWidth;
       ctx.strokeRect(-half, -half, half * 2, half * 2);
       ctx.restore();
     }
