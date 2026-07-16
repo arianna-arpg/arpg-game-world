@@ -157,6 +157,7 @@ import type { InvasionInfo } from '../packages/overlays/demonInvasion';
 import type { CrusadeInfo } from '../packages/overlays/crusade';
 import type { DeadwakeInfo, DeadwakeSurge } from '../packages/overlays/deadwake';
 import type { MigrationInfo, MigrationSurge } from '../packages/overlays/migration';
+import type { SwarmInfo, SwarmingSurge } from '../packages/overlays/swarming';
 import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
 import type { IncursionArchetype } from '../packages/overlays/incursion';
@@ -1960,6 +1961,16 @@ export class World {
    *  fielded this visit — one muster per visit; cleared per loadZone. The claim
    *  + nest ledger is owned by the pure VerminfallField overlay. */
   private materializedInfestation = new Set<string>();
+  /** Brood-claimed zones whose hive throats were already fielded this visit,
+   *  and wake zones whose royal-jelly caches were — one muster per visit;
+   *  cleared per loadZone. The cycle + ledgers live on the pure SwarmingField. */
+  private materializedBroods = new Set<string>();
+  private materializedSwarmWake = new Set<string>();
+  /** Swarming flights whose stream has caught the player at least once (the
+   *  discovery bulletin + ledger fire once per flight) — run-long, like
+   *  materializedMigrations. */
+  private materializedSwarmings = new Set<string>();
+  private swarmStreamTimer = 0;
   /** Court-claimed zones whose shrines/packs were already fielded this visit —
    *  one muster per visit; cleared per loadZone. The night claims are owned by
    *  the pure LongCandleField overlay (dawn clears them). */
@@ -4142,6 +4153,18 @@ export class World {
         id: 'verminfall',
         reset: () => { this.materializedInfestation.clear(); },
         enter: (def) => this.materializeInfestation(def),
+      },
+      {
+        // THE SWARMING: a brood-claimed zone fields its standing hive
+        // throats (the visible clock); a wake zone fields its royal-jelly
+        // caches. The airborne stream itself pours via updateSwarmStream.
+        id: 'swarming',
+        reset: () => {
+          this.materializedBroods.clear();
+          this.materializedSwarmWake.clear();
+          this.swarmStreamTimer = 0;
+        },
+        enter: (def) => { this.materializeBrood(def); this.materializeSwarmWake(def); },
       },
       {
         id: 'longcandle',
@@ -11292,6 +11315,123 @@ export class World {
       entry: this.clampPos(vec(cx - dx * reach, cy - dy * reach), 16),
       dest: this.clampPos(vec(cx + dx * reach, cy + dy * reach), 16),
     };
+  }
+
+  // ------------------------------------------------------------ the swarming
+  //
+  // THE CHITIN'S HIVE-CYCLE, owned by the pure SwarmingField overlay (the
+  // brood ledger, the wing's band, the wake, the planted roosts). The engine:
+  //   · fields the standing HIVE THROATS in a brood-claimed zone (the visible
+  //     clock — tag 'swarm_brood_node', so the kill row thins the coming wing
+  //     without touching the ordinary warrens' own hive_node bodies),
+  //   · pours the HOSTILE flying stream through a wing-covered zone (the
+  //     migration band machinery made hostile: in from the side the wing
+  //     flows from, but they HUNT — no dormancy, no wheel),
+  //   · fields the ROYAL-JELLY CACHES in the wake (breakables; their own
+  //     MonsterDef.loot pays the royal register),
+  //   · bridges PREDATION (swarm × migration bands) and drains the planted
+  //     roosts into biome warps down in update() — overlays never touch
+  //     each other or worldgen.
+
+  /** Field the standing hive throats in a brood-claimed zone. Exactly
+   *  `standing` bodies — a stamped throat stays stamped across visits. */
+  private materializeBrood(def: ZoneDef): void {
+    const sf = this.sim.swarmingField;
+    if (!sf) return;
+    const info = sf.broodOn(def.id);
+    if (!info || this.materializedBroods.has(def.id)) return;
+    this.materializedBroods.add(def.id);
+    // DISCOVERY — walking a brood ground surfaces the Vault tuning (one-shot
+    // per ground), exactly like the herd's first catch.
+    if (sf.markBroodSeen(def.id)) bumpLedger(this.ledger, 'swarming_seen');
+    const cfg = sf.surge();
+    if (!MONSTERS[cfg.hiveNodeId]) return;
+    const lvl = Math.max(1, def.level);
+    for (let i = 0; i < info.standing; i++) {
+      const node = this.createMonster(cfg.hiveNodeId, lvl, 'enemy');
+      node.faction = cfg.faction;
+      node.tag = 'swarm_brood_node';
+      node.pos = this.clampPos(this.farPoint(420), node.radius);
+      this.actors.push(node);
+    }
+    if (info.standing > 0) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
+        `The sand hums — ${info.standing} hive throat${info.standing === 1 ? '' : 's'} stand here (${info.tally}/${info.threshold} and the swarm wings)`,
+        info.color, 15);
+    }
+  }
+
+  /** Field the royal-jelly caches where the wing passed. Exactly the claim's
+   *  standing count — a broken cache stays broken across visits. */
+  private materializeSwarmWake(def: ZoneDef): void {
+    const sf = this.sim.swarmingField;
+    if (!sf) return;
+    const n = sf.cachesIn(def.id);
+    if (n <= 0 || this.materializedSwarmWake.has(def.id)) return;
+    this.materializedSwarmWake.add(def.id);
+    const cfg = sf.surge();
+    if (!MONSTERS[cfg.cacheId]) return;
+    const lvl = Math.max(1, def.level);
+    for (let i = 0; i < n; i++) {
+      const cache = this.createMonster(cfg.cacheId, lvl, 'enemy');
+      cache.tag = 'royal_cache';
+      cache.pos = this.clampPos(this.farPoint(380), cache.radius);
+      this.actors.push(cache);
+    }
+    this.text(vec(this.player.pos.x, this.player.pos.y - 80),
+      'Amber glistens in the swarm\'s wake…', '#f0c060', 14);
+  }
+
+  /** Pour the wing through a covered zone: a HOSTILE directional stream —
+   *  in from the side the swarm flows from (bandFlow, the shared bander),
+   *  then they hunt. Mirrors updateDeadwakeStream's cap-and-trickle. */
+  private updateSwarmStream(dt: number): void {
+    const sf = this.sim.swarmingField;
+    if (!sf || this.inCave || this.zone.special || this.zone.objective.kind === 'safe') {
+      this.swarmStreamTimer = 0; return;
+    }
+    const info = sf.swarmOn(this.zone.id);
+    if (!info) { this.swarmStreamTimer = 0; return; }
+    // First time this flight catches the player: bulletin + discovery ledger.
+    if (!this.materializedSwarmings.has(info.id)) {
+      this.materializedSwarmings.add(info.id);
+      bumpLedger(this.ledger, 'swarming_seen');
+      this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: info.color, life: 0.8, maxLife: 0.8 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 92),
+        `The sky crawls — the Swarming pours over ${this.zone.name}!`, info.color, 17);
+    }
+    if (this.swarmHeadcount() >= info.streamCap) { this.swarmStreamTimer = sf.surge().streamInterval; return; }
+    this.swarmStreamTimer -= dt;
+    if (this.swarmStreamTimer > 0) return;
+    const cfg = sf.surge();
+    this.swarmStreamTimer = cfg.streamInterval;
+    const batch = randInt(cfg.streamBatch[0], cfg.streamBatch[1]);
+    for (let i = 0; i < batch && this.swarmHeadcount() < info.streamCap; i++) this.spawnSwarmFlier(info, cfg);
+  }
+
+  /** Live count of the streamed wing (both stream tags) — the band cap. */
+  private swarmHeadcount(): number {
+    let n = 0;
+    for (const a of this.actors) {
+      if (!a.dead && (a.tag === 'swarm_flier' || a.tag === 'swarm_alate')) n++;
+    }
+    return n;
+  }
+
+  /** One flier in from the wing's upstream side (presence folds at the pick:
+   *  the alate's def floor is a HARD gate). Alates carry their own tag —
+   *  the break-throat's kill row keys on it. */
+  private spawnSwarmFlier(info: SwarmInfo, cfg: SwarmingSurge): void {
+    if (!cfg.flightRoster.length) return;
+    const lvl = Math.max(1, this.zone.level + cfg.levelBonus);
+    const id = this.weightedPick(cfg.flightRoster, lvl);
+    if (!MONSTERS[id]) return;
+    const m = this.createMonster(id, lvl, 'enemy');
+    m.faction = info.faction;
+    m.tag = id === cfg.alateId ? 'swarm_alate' : 'swarm_flier';
+    const flow = this.bandFlow(info.dir);
+    m.pos = this.clampPos(vec(flow.entry.x + rand(-70, 70), flow.entry.y + rand(-70, 70)), m.radius);
+    this.actors.push(m);
   }
 
   // ----------------------------------------------------- brigands (nomadic band)
@@ -24475,6 +24615,7 @@ export class World {
     this.updateHauntStream(dt);
     this.updateNecropolis();
     this.updateMigrationStream(dt);
+    this.updateSwarmStream(dt);
     this.updateWorldBosses(dt);
     this.updateBrigandRaid(dt);
     this.updateNeutralCooldown(); // roused neutrals lose interest + re-dormant on disengage
@@ -24507,6 +24648,31 @@ export class World {
         if (con.crusade) this.sim.crusadeField?.resolveCrusadeZone(zid);
       }
       dwf.consumedZones.length = 0;
+    }
+
+    // THE SWARMING preys on the herds and plants its roosts. Predation: while
+    // a wing is out, every live migration band is offered to the swarm field
+    // — the roll, the once-latch and the gorging live on the OVERLAY (its own
+    // rng, deterministic); the engine only bridges the two pure fields
+    // (overlays can't reach each other) and pays the ledger. Planting: a
+    // completed wing's far pole takes root — drained here into KEYED biome
+    // warps (restore re-queues them, so a resumed save re-roots).
+    const swf = this.sim.swarmingField;
+    if (swf) {
+      const mf2 = this.sim.migrationField;
+      if (mf2) {
+        for (const herdId of swf.predate(mf2.herdBands())) {
+          if (mf2.consume(herdId)) bumpLedger(this.ledger, 'swarming_fed');
+        }
+      }
+      for (const p of swf.takeRoostWarps()) {
+        this.sim.biomeField.setWarp(`swarm_roost_${p.id}`, {
+          id: `swarm_roost_${p.id}`,
+          center: { x: p.x, y: p.y },
+          radius: p.radius, biome: p.biome, strength: p.strength,
+          label: 'A Swarming planted a brood ground — the sand takes root',
+        });
+      }
     }
 
     // WARBAND ARRIVALS: a host that just reached its target node, while YOU stand
@@ -24675,6 +24841,12 @@ export class World {
         } else if (wid.startsWith('crusade_')) {
           const cid = wid.slice('crusade_'.length);
           if (!cf || !cf.peek().some(c => c.id === cid)) bf.unwarp(wid);
+        } else if (wid.startsWith('swarm_roost_')) {
+          // A planted roost stands while its field remembers it (permanent
+          // ecology BY the snapshot, not by an unkeyed scar — a run without
+          // the package, or a culled roost, heals within a beat).
+          const rid = wid.slice('swarm_roost_'.length);
+          if (!this.sim.swarmingField?.hasRoost(rid)) bf.unwarp(wid);
         }
       }
     }

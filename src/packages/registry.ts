@@ -30,6 +30,7 @@ import { MIRRORKIN } from './defs/mirrorkin';
 import { MYCELIA } from './defs/mycelia';
 import { PIT } from './defs/pit';
 import { STORM_FRONTS } from './defs/stormFronts';
+import { SWARMING } from './defs/swarming';
 import { VENDETTA } from './defs/vendetta';
 import { VERMINFALL } from './defs/verminfall';
 import { WARBANDS } from './defs/warbands';
@@ -54,6 +55,7 @@ export const PACKAGES: ContentPackage[] = [
   EXTRACTION,
   BOROUGH,
   MIGRATION,
+  SWARMING,
   CONTAGION,
   HOLDFAST,
   BRIGANDS,
@@ -90,6 +92,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   extraction: 0xe57a,
   borough: 0xb0f0,
   migration: 0x819a,
+  swarming: 0x5a12,
   contagion: 0xc047,
   holdfast: 0x401d,
   brigands: 0xb21a,

@@ -284,6 +284,29 @@ export class MigrationField implements WorldOverlay {
 
   activeCount(): number { return this.migrations.length; }
 
+  /** Live coverage BANDS of every crossing herd — the generic PREDATOR seam.
+   *  A hunting event (the Swarming's wing today; any future event-eater)
+   *  reads these through the ENGINE bridge (overlays never reach each other)
+   *  and rolls its own predation; a won roll calls consume() back. */
+  herdBands(): { id: string; a: MapCoord; b: MapCoord; radius: number }[] {
+    return this.migrations.map(m => ({
+      id: m.id,
+      a: lerp(m.origin, m.dest, m.tailT),
+      b: lerp(m.origin, m.dest, Math.max(m.headT, m.tailT)),
+      radius: m.radius,
+    }));
+  }
+
+  /** A predator CONSUMES a herd outright (the Swarming strips a migration):
+   *  the crossing simply ends — no cull, no further stream (stragglers
+   *  already in a zone amble out on the engine's wheel). True if it stood. */
+  consume(id: string): boolean {
+    const i = this.migrations.findIndex(m => m.id === id);
+    if (i < 0) return false;
+    this.migrations.splice(i, 1);
+    return true;
+  }
+
   // --- dev seam (the QA Event tab) -------------------------------------------
 
   /** DEV: ignite a migration whose band PASSES THROUGH the player's current zone, so

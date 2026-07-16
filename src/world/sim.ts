@@ -23,6 +23,7 @@ import type { MyceliaField } from '../packages/overlays/mycelia';
 import type { CrusadeField } from '../packages/overlays/crusade';
 import type { DeadwakeField } from '../packages/overlays/deadwake';
 import type { MigrationField } from '../packages/overlays/migration';
+import type { SwarmingField } from '../packages/overlays/swarming';
 import type { BrigandField } from '../packages/overlays/brigands';
 import type { HauntField } from '../packages/overlays/haunting';
 import type { VerminfallField } from '../packages/overlays/verminfall';
@@ -146,6 +147,13 @@ export class WorldSim {
    *  reads migrationOn() to pour the neutral beast herd through a caught zone, and it
    *  owns the cross-map herd lifecycle (graze → march → cull). */
   readonly migrationField: MigrationField | null;
+  /** The swarming overlay if its package is in the manifest, else null — the engine
+   *  reads broodOn()/swarmOn()/cachesIn() to field the hive throats, the hostile
+   *  flying stream, and the royal-jelly wake; the kill rows call
+   *  onBroodNodeBroken()/onAlateDown()/onCacheBroken() back; the update bridges
+   *  predate() to the migration bands and drains takeRoostWarps() into the biome
+   *  field. It owns the whole hive-cycle (rest → brooding → winged). */
+  readonly swarmingField: SwarmingField | null;
   /** The brigands overlay if its package is in the manifest, else null — the engine
    *  reads brigandOn() to pour the nomadic bandit band through a caught zone (with the
    *  proximity rouse). It owns the cross-map column lifecycle (muster → march → disperse). */
@@ -344,6 +352,7 @@ export class WorldSim {
     this.ascentField = surface<AscentField>('ascent') ?? null;
     this.deadwakeField = surface<DeadwakeField>('deadwake') ?? null;
     this.migrationField = surface<MigrationField>('migration') ?? null;
+    this.swarmingField = surface<SwarmingField>('swarming') ?? null;
     this.brigandField = surface<BrigandField>('brigands') ?? null;
     this.hauntField = surface<HauntField>('haunting') ?? null;
     this.contagionField = surface<ContagionField>('contagion') ?? null;
