@@ -126,6 +126,12 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   // what it has skinned. Its long war is with the Legion — hell's landlord
   // versus the thing remaking hell's tissue.
   caulborn: { roaming: 0.15, aggression: 0.8, warlordHome: 'origin', homeBiome: 'caul', eventRange: 150, contexts: ['baseline'], temper: 'territorial' },
+  // The Rimebound — the Winter Court: patron of BOTH cold biomes (tundra +
+  // taiga, biomes.ts), throned on the open tundra (the court's high seat;
+  // the taiga is its wooded march). Half-rooted — the court keeps its cold
+  // country and holds every yard of it; the map-scale march it dreams of
+  // (Deepwinter's creeping front) is the overlay's, not the invasion gate's.
+  rimebound: { roaming: 0.4, aggression: 0.9, warlordHome: 'origin', homeBiome: 'tundra', eventRange: 170, contexts: ['baseline'], temper: 'territorial' },
 };
 
 /** Does this faction feed the corpse-tide loops (Deadwake accrual)? Reads the

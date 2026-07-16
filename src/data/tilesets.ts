@@ -624,6 +624,14 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'dire_wolf', weight: 2, presence: { from: 5, fadeIn: 3 } },
         { id: 'moon_howler', weight: 1, presence: { from: 8, fadeIn: 4 } },
         { id: 'werewolf', weight: 1, presence: { from: 12, fadeIn: 5 } },
+        // The Winter Court keeps its wooded march: hounds course the dark
+        // stands, the ES-glass dead walk between the trunks, the antlered
+        // shaman lays real ice. The giant is a HARD 13 gate (no fadeIn —
+        // the wall is never met early).
+        { id: 'rime_hound', weight: 2, presence: { to: 18, fadeOut: 8 } },
+        { id: 'hoarfrost_wight', weight: 1, presence: { from: 6, fadeIn: 3 } },
+        { id: 'glacier_shaman', weight: 1, presence: { from: 9, fadeIn: 4 } },
+        { id: 'frost_giant', weight: 1, presence: { from: 13 } },
       ],
     },
     spawnerId: 'rime_stone',
@@ -701,6 +709,15 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'fen_hound', weight: 2, presence: { to: 14, fadeOut: 7 } },
         { id: 'alpha_stalker', weight: 1, presence: { from: 10, fadeIn: 5 } },
         { id: 'troll_mauler', weight: 1, presence: { from: 9, fadeIn: 5 } },
+        // The Winter Court walks its high seat: hound outriders early, the
+        // court's true tiers on ramps, and the giant behind a HARD 12 gate
+        // (no fadeIn — the shield-wall is a mid-game fact, never a level-3
+        // ambush). The King himself NEVER scatters — crown machinery only.
+        { id: 'rime_hound', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'hoarfrost_wight', weight: 2, presence: { from: 5, fadeIn: 3 } },
+        { id: 'glacier_shaman', weight: 1, presence: { from: 8, fadeIn: 4 } },
+        { id: 'winter_herald', weight: 1, presence: { from: 10, fadeIn: 4 } },
+        { id: 'frost_giant', weight: 1, presence: { from: 12 } },
       ],
     },
     spawnerId: 'rime_stone',

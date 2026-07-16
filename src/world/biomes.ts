@@ -332,7 +332,10 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // mid-run (the D2 Act-5 frozen river — freezeAt flips water→ice).
   // The cold belt splits ecologically: TUNDRA claims the cold-and-dry steppe,
   // the taiga the cold-and-wet forest (frigid-only starved it in sweeps).
-  tundra:   { patronFaction: 'wild',   mapColor: '#bcd0d8', label: 'Tundra', spacing: 96,
+  // BOTH now breed the RIMEBOUND — the Winter Court is the cold belt's
+  // patron (tundra its high seat, taiga its wooded march); the wild keeps
+  // hunting here, it just answers to a crown now.
+  tundra:   { patronFaction: 'rimebound', mapColor: '#bcd0d8', label: 'Tundra', spacing: 96,
     climate: { temperature: 'cold', moisture: { to: 0.55, fadeOut: 0.2 } },
     allowedLayouts: { plains: 3, expanse: 1, riverland: 1 },
     layoutParams: { riverLiquid: 'water', freezeAt: 0.45 },
@@ -340,7 +343,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // Taiga: the WINTER FOREST — the tundra's dense-canopied sibling: tight
   // conifer stands to slip beneath, standing drifts, frozen pools, the
   // aurora overhead. Wolves and worse den here.
-  taiga:    { patronFaction: 'wild',   mapColor: '#9ec4b4', label: 'Taiga', spacing: 62,
+  taiga:    { patronFaction: 'rimebound', mapColor: '#9ec4b4', label: 'Taiga', spacing: 62,
     climate: { temperature: 'cold', moisture: { from: 0.32, fadeIn: 0.18 } },
     meld: 'taiga_meld',
     allowedLayouts: { plains: 3, riverland: 1 },

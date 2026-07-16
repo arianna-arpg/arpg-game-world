@@ -1752,6 +1752,90 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'breathPuff', scale: 0.8, color: '#dff4ff' }],
   },
 
+  // --- THE RIMEBOUND (the Winter Court) — six silhouettes, one glance each:
+  // glittering courser / frozen dead / antlered iceworker / bannered knight /
+  // tusked hammer-wall / the crown. Icicles are the family signature part
+  // (the court GLITTERS); breath pluming marks its living tiers.
+  /** A rime hound: lean courser under an icicle-hung ruff — a wolf that
+   *  glitters is the court's. */
+  rime_hound: {
+    parts: [
+      { kind: 'torso', scale: 0.88 },
+      { kind: 'furRuff', scale: 1.0, role: 'bone' },
+      { kind: 'icicles', scale: 0.8, params: { n: 4 } },
+      { kind: 'snout', scale: 1.0 },
+      { kind: 'fangs', scale: 0.75 },
+      { kind: 'tail', params: { len: 0.75, tuft: true } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.7 }],
+  },
+  /** A hoarfrost wight: the frozen dead — bared ribs under rime-hung rags,
+   *  reaching claws, the skull forward. NO breath: nothing in it is warm. */
+  hoarfrost_wight: {
+    parts: [
+      { kind: 'tatters', scale: 0.9, params: { n: 4 } },
+      { kind: 'ribs', params: { under: true } },
+      { kind: 'icicles', params: { n: 5 } },
+      { kind: 'claws', params: { len: 0.55, talons: 3 } },
+      { kind: 'skull', x: 0.45, scale: 0.9 },
+    ],
+  },
+  /** The glacier shaman: antler-crowned iceworker — robe, an ice-orb staff,
+   *  cold runes, breath pluming in the endless winter. */
+  glacier_shaman: {
+    parts: [
+      { kind: 'robe' },
+      { kind: 'staff', params: { orb: '#bfe8ff' } },
+      { kind: 'runes', color: '#9fd8ff', params: { n: 3 } },
+      { kind: 'hood', x: 0.28, scale: 0.9, params: { eyes: true, eyeColor: '#dff4ff' } },
+      { kind: 'antlers', scale: 1.1, role: 'bone' },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.8, color: '#dff4ff' }],
+  },
+  /** The winter herald: the court's bannered knight — helm, pauldrons, the
+   *  standard of the coming winter over one shoulder. */
+  winter_herald: {
+    parts: [
+      { kind: 'torso' },
+      { kind: 'pauldrons', role: 'metal' },
+      { kind: 'banner', x: -0.3, scale: 1.1 },
+      { kind: 'sword', params: { len: 0.8 } },
+      { kind: 'helm', x: 0.3, scale: 0.9 },
+      { kind: 'icicles', scale: 0.7, params: { n: 3 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.7 }],
+  },
+  /** The frost giant: a wall of blue ice — plate-slabbed, tusked, a great
+   *  hammer, glacier breath. Nothing else in the belt is this WIDE. */
+  frost_giant: {
+    parts: [
+      { kind: 'torso', scale: 1.05 },
+      { kind: 'armorPlates', scale: 0.95 },
+      { kind: 'pauldrons', scale: 1.1, role: 'bone' },
+      { kind: 'hammer', scale: 1.15 },
+      { kind: 'tusks', x: 0.45, scale: 1.0 },
+      { kind: 'icicles', params: { n: 6 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 1.1 }],
+    shadowScale: 1.1,
+  },
+  /** THE WINTER KING: crown over cold — caped, ice-plated, the greatblade
+   *  carried like a verdict, runes of the deep winter in orbit. */
+  winter_king: {
+    parts: [
+      { kind: 'cape', scale: 1.1 },
+      { kind: 'torso', scale: 0.95 },
+      { kind: 'armorPlates', scale: 0.85 },
+      { kind: 'pauldrons', role: 'bone' },
+      { kind: 'sword', params: { len: 1.15 } },
+      { kind: 'icicles', params: { n: 5 } },
+      { kind: 'crown', x: 0.3, scale: 0.85 },
+      { kind: 'runes', color: '#bfe8ff', scale: 1.05, params: { n: 4 } },
+    ],
+    live: [{ kind: 'breathPuff', scale: 0.9, color: '#dff4ff' }],
+    shadowScale: 1.05,
+  },
+
   // ===================================================== DEPLOYED CONSTRUCTS
   // Skill-objects (ConstructDelivery) — the square-and-skill-color era ends.
   // spawnConstruct dresses by kind through CONSTRUCT_LOOKS below unless the

@@ -35,6 +35,7 @@ export const FACTION_COLORS: Record<string, string> = {
   starfall: '#9ad4e8',
   smoulder: '#e8763a',
   magpie: '#3a4a5c',
+  rimebound: '#9fd4ec',
 };
 
 /** The Contagion overlay's sickly palette — a necrotic green that brightens toward
@@ -62,4 +63,20 @@ export const SPORE_COLORS = {
   weak: '#3f5a32',
   /** Luminous spore-light — the Heartbloom glyph + the densest haze. */
   accent: '#c8ffa0',
+};
+
+/** The Deepwinter frost-front palette — a glacial gradient for the converted
+ *  wash plus the ANIMATED RIME EDGE the overlay draws along the graph (the
+ *  advancing front line — deliberately NOT the Contagion pulse or the Mycelia
+ *  halo: this one reads as a border moving like weather with an army in it).
+ *  (FACTION_COLORS['rimebound'] above drives the court's territory wash.) */
+export const DEEPWINTER_COLORS = {
+  /** Bright pack-ice blue — a zone deep behind the front (high intensity). */
+  strong: '#bfe8ff',
+  /** Cold steel-blue — the front's thin far edge (low intensity). */
+  weak: '#5c7f96',
+  /** Sun-on-ice white — the glacial-heart glyph + the King's court. */
+  accent: '#eef8ff',
+  /** The RIME EDGE itself — the animated front line between held and free. */
+  edge: '#dff2ff',
 };

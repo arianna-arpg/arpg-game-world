@@ -7132,6 +7132,106 @@ export const MONSTERS: Record<string, MonsterDef> = {
       }],
     },
   },
+
+  // --- THE RIMEBOUND (the Winter Court: the cold belt claims a NAME) --------
+  // Patron of tundra AND taiga (biomes.ts) — the frost finally has natives,
+  // and Deepwinter's marching front fields them wherever it converts.
+  // DEFENSE TEXTURE (the enemy-feel doctrine): the SHIELD-WALL band — the
+  // court fights behind raised guards and rime plate (blockChance as the
+  // family signature, a pole no other family claims), with ES-glass on the
+  // wight tier (the brittle shell) and near-zero evasion everywhere. The
+  // counterlever is FIRE: every court body runs a fireRes debt — melt the
+  // wall or crack it, but you won't dodge-fish it. Their OFFENSE leans the
+  // chill→frozen buildup ladder (rime_fang), so a cornering pack is a
+  // countdown. Silhouettes read at a glance: icicle-ruffed hound, split-open
+  // frozen dead, antlered ice-orb shaman, bannered knight, tusked hammer
+  // giant, the crowned King. Warlord: the Winter King (WARLORD_OF).
+  rime_hound: {
+    id: 'rime_hound', name: 'Rime Hound',
+    color: '#bfe0ee', shape: 'triangle', radius: 11, material: 'fur', look: 'rime_hound',
+    base: { life: 30, moveSpeed: 185, accuracy: 92, evasion: 40, mana: 0 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('fireRes', 'flat', -0.2)],
+    skills: ['rime_fang'],
+    xp: 10,
+    // Court hounds run in coursing packs: dart in, chill, wheel away — the
+    // freeze ladder climbs across the PACK's bites, not any one dog's.
+    brain: { type: 'skirmish', withdraw: 1.1 },
+  },
+  hoarfrost_wight: {
+    id: 'hoarfrost_wight', name: 'Hoarfrost Wight',
+    color: '#cfe8f4', shape: 'pentagon', radius: 12, material: 'ice', look: 'hoarfrost_wight',
+    // ES-GLASS tier: the rime shell IS the body — burst deletes it between
+    // recharges; sustain grinds the recharge gate (doctrine pole).
+    base: { life: 26, energyShield: 60, moveSpeed: 135, accuracy: 96, mana: 60, manaRegen: 6 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
+    skills: ['rime_fang', 'frostbolt'],
+    xp: 22,
+    // The shell keeps its word: broken, it SHATTERS — a coalescing implosion
+    // of cold (stand off the corpse, or eat the chill it saved for you).
+    deathBurst: { mode: 'implode', damageFrac: 0.5, damageType: 'cold', coalesce: 0.7 },
+    brain: { type: 'skirmish', withdraw: 1.2 },
+  },
+  glacier_shaman: {
+    id: 'glacier_shaman', name: 'Glacier Shaman',
+    color: '#8ecce8', shape: 'diamond', radius: 13, material: 'cloth', look: 'glacier_shaman',
+    base: { life: 46, moveSpeed: 105, mana: 190, manaRegen: 11 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.25)],
+    // THE ICE-LAYER: the comet leaves a sheet of REAL slide-ice (the same
+    // leaveTerrain lever the player's Icy Comet pulls) — the shaman turns
+    // the arena's floor into court ground while the nova guards its skirts.
+    skills: ['icy_comet', 'frost_nova', 'frostbolt'],
+    xp: 30,
+    brain: {
+      type: 'caster',
+      skillUse: { mode: 'priority', order: ['icy_comet', 'frost_nova', 'frostbolt'] },
+    },
+  },
+  winter_herald: {
+    id: 'winter_herald', name: 'Winter Herald',
+    color: '#a8d4e8', shape: 'cross', radius: 15, material: 'metal', look: 'winter_herald',
+    base: { life: 120, moveSpeed: 115, accuracy: 100, armor: 25, mana: 80, manaRegen: 6 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.2), mod('blockChance', 'flat', 0.25)],
+    skills: ['rallying_howl', 'war_cry', 'heavy_strike'],
+    xp: 40,
+    brain: { type: 'commander' },
+  },
+  frost_giant: {
+    id: 'frost_giant', name: 'Frost Giant',
+    color: '#9cc8e0', shape: 'hexagon', radius: 26, material: 'ice', look: 'frost_giant',
+    // THE WALL: block + plate + poise on the same slow body — the court's
+    // heavy answer. Commit through the guard or bring the fire it fears.
+    base: { life: 320, moveSpeed: 78, accuracy: 95, armor: 50, poise: 60, mana: 60, manaRegen: 5 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('fireRes', 'flat', -0.3), mod('blockChance', 'flat', 0.3)],
+    // Shield Up is the player's own guard verb — the giant raises the same
+    // wall (readable at a glance) and answers from behind it.
+    skills: ['shield_up', 'ground_slam', 'heavy_strike'],
+    xp: 65,
+    brain: { type: 'juggernaut', enrage: 0.4 },
+  },
+  // THE WINTER KING — the court's crown and Deepwinter's cure: the warlord
+  // machinery seats him over Rimebound territory, and the frost front raises
+  // him (Crowned) at its glacial heart — fell him there and the winter
+  // breaks. Shield Up + Avalanche: the player's own catalog, worn as a kit.
+  winter_king: {
+    id: 'winter_king', name: 'the Winter King',
+    color: '#dcf2fc', shape: 'star', radius: 22, material: 'ice', look: 'winter_king',
+    base: { life: 260, moveSpeed: 92, accuracy: 105, armor: 40, poise: 80, mana: 160, manaRegen: 10 },
+    mods: [mod('coldRes', 'flat', 0.8), mod('fireRes', 'flat', -0.25), mod('blockChance', 'flat', 0.3)],
+    skills: ['shield_up', 'avalanche', 'frost_nova', 'heavy_strike'],
+    xp: 90,
+    faction: 'rimebound',
+    // The crown answers insult with the whole court.
+    aggro: { fury: 1.4, waver: 0.6 },
+    brain: {
+      type: 'juggernaut', enrage: 0.35,
+      rules: [{
+        when: { distUnder: 520 }, every: [14, 20], hold: [0.4, 0.6],
+        announce: 'the King calls the hunt!',
+        actions: [{ do: 'summon', monster: 'rime_hound', count: 3, ring: 52 }],
+      }],
+    },
+  },
+
   // THE BOG DWELLER — the mire maw's MOBILE cousin: a hunched sod-back that
   // slogs its bog and never leaves it, lobbing slow, hungry globs of mire
   // (mirespume: lightly seeking, shedding contracting venom pools in
@@ -8495,6 +8595,13 @@ const RELATIONS: Record<string, FactionStance> = {
   // The wing falls on the herds when the cycle turns: the Swarming strips
   // migrations at map scale, and on shared ground the fliers do it in person.
   'beast|chitin': 'hostile',
+  // The Rimebound keep the cold belt's old law: raw frost respects raw
+  // element, the Horned Tribes burn court timber for winter pasture (the
+  // passes' raiders vs the white court — the cold roads' long war), and
+  // the warm-blooded wild is the hunt the court was crowned to ride.
+  'rimebound|elemental': 'ally',
+  'rimebound|beastkin': 'hostile',
+  'rimebound|wild': 'hostile',
 };
 
 /** MECHANIC-BARRED KIN — authored in full, deliberately DOORLESS: families
@@ -8853,6 +8960,25 @@ export const FACTIONS: Record<string, {
       { id: 'chitin_burrower', weight: 1, presence: { from: 7, fadeIn: 4 } },
       { id: 'chitin_broodtender', weight: 1, presence: { from: 9, fadeIn: 4 } },
       { id: 'brood_sovereign', weight: 1, presence: { from: 16, fadeIn: 6 } },
+    ],
+  },
+  // The Winter Court: hounds carry the early roads and thin as the true
+  // court arrives; the wight/shaman/herald tiers ramp in; the giant is a
+  // HARD gate (from 12, NO fadeIn — a wall never met early, ever). The
+  // King is deliberately ABSENT: the crown is fielded only by the warlord
+  // machinery and Deepwinter's glacial heart, never faction scatter.
+  // Auxiliaries are REUSED bodies sworn to the banner — the drift-swimmer
+  // and the hedge-witch already native to the cold belt.
+  rimebound: {
+    name: 'the Rimebound',
+    table: [
+      { id: 'rime_hound', weight: 4, presence: { to: 20, fadeOut: 9 } },
+      { id: 'hoarfrost_wight', weight: 3, presence: { from: 4, fadeIn: 2 } },
+      { id: 'glacier_shaman', weight: 2, presence: { from: 7, fadeIn: 3 } },
+      { id: 'snow_swimmer', weight: 1, presence: { from: 5, fadeIn: 3 } },
+      { id: 'frost_witch', weight: 1, presence: { from: 6, fadeIn: 3 } },
+      { id: 'winter_herald', weight: 2, presence: { from: 9, fadeIn: 4 } },
+      { id: 'frost_giant', weight: 1, presence: { from: 12 } },
     ],
   },
 };

@@ -45,6 +45,11 @@ export const WARLORD_OF: Record<string, string> = {
   emberkin: 'emberkin_matriarch',
   junglekin: 'verdant_tyrant',
   sirocco: 'mirage_khagan',
+  // The Winter Court crowns for real (unlike the queenless Chitin): a living
+  // Winter King opens the invasion gate, so Rimebound warbands march off
+  // their cold ground — and Deepwinter raises the SAME crown at its glacial
+  // heart as the front's cure (the two roles share one body, one id).
+  rimebound: 'winter_king',
   // QUEENLESS BY DOCTRINE (deliberately absent, like deep/caulborn/starfall):
   // the Chitin never crown — no crown means the invasion gate never opens
   // (no warbands), and their only map-scale march is the Swarming. The

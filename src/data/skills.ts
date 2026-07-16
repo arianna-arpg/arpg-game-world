@@ -10766,6 +10766,24 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 48, weight: 2 },
   },
 
+  // The Rimebound's melee verb: every court fang carries the cold — bites
+  // BUILD CHILL (the stacking ladder toward the freeze), so a pack that
+  // corners you is a countdown, not just a mauling. One kit skill; the
+  // whole faction's melee tier shares it (claw's grammar, winter's teeth).
+  rime_fang: {
+    id: 'rime_fang', name: 'Rime Fang', noDrop: true,
+    description: 'A biting strike sheathed in hoarfrost — it chills what it tears.',
+    tags: ['attack', 'melee', 'physical', 'cold'], color: '#9fd8f0',
+    manaCost: 0, cooldown: 0, useTime: 0.9,
+    baseDamage: { physical: [4, 6], cold: [2, 4] },
+    delivery: { type: 'melee', range: 42, arcDeg: 80 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'chill', chance: 0.5 },
+    ],
+    ai: { range: 48, weight: 2 },
+  },
+
   bone_arrow: {
     id: 'bone_arrow', name: 'Bone Arrow', noDrop: true,
     description: 'A jagged arrow of sharpened bone.',
