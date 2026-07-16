@@ -46,6 +46,11 @@ import '../src/data/landmarks';
 import '../src/engine/layoutRecipes';
 import '../src/engine/interiorGen';
 import '../src/data/compositions';
+// The living-terrain registries main.ts loads (fog banks, creep kinds): a def
+// validate() that checks FOG_BANKS/CREEPS must see the same game the player
+// boots (deepwinter's whiteout was the first to read one here).
+import '../src/data/fog';
+import '../src/data/creeps';
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -307,6 +312,7 @@ function runSim(seed: number, steps: number): { sim: WorldSim; zoneMap: Record<s
       ['worldBossField.devLair', typeof s.worldBossField?.devLair === 'function'],
       ['extractionField.devIgnite', typeof s.extractionField?.devIgnite === 'function'],
       ['boroughField.devIgnite', typeof s.boroughField?.devIgnite === 'function'],
+      ['unsealingField.devIgnite', typeof s.unsealingField?.devIgnite === 'function'],
     ];
     for (const [name, present] of devSeams) assert(present, 'lifecycle', `dev seam ${name} present`);
   }
