@@ -1830,4 +1830,28 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     params: { marble: '#e6e5df', gold: '#d8b56a', streamer: '#bfe8f4' },
     light: { radius: -2.6, color: '#bfe8f4', intensity: 0.3 },
   },
+
+  // --- The ship-deck kit (vis/paintersSea.ts): the Wraithsail's boards ------
+  // Masts carry a cold masthead light (the ghost ship sails lit); rails and
+  // cargo are honest weathered timber. The ghost hull is the ship SIGHTED at
+  // open sea — translucent bones and tattered luminous canvas, glowing hard
+  // enough to read from a spyglass away.
+  ship_mast: {
+    painter: 'shipMast', order: 52, shadow: 0.45, longShadow: 1.1,
+    params: { wood: '#3a2c1e', canvas: '#8a9a94' },
+    light: { radius: -2.6, color: '#7ad8d8', intensity: 0.22, flicker: 2 },
+  },
+  ship_rail: {
+    painter: 'shipRail', order: 46,
+    params: { wood: '#4a3826' },
+  },
+  cargo_stack: {
+    painter: 'cargoStack', order: 50, shadow: 0.45,
+    params: { wood: '#4c3a26', rope: '#8a7a56' },
+  },
+  ghost_hull: {
+    painter: 'ghostHull', order: 46,
+    params: { hull: '#2c4a4e', sail: '#9adcd8', glow: '#7ad8d8' },
+    light: { radius: -2.4, color: '#7ad8d8', intensity: 0.45, flicker: 3 },
+  },
 };

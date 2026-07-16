@@ -3839,6 +3839,48 @@ export const TILESETS: Record<string, TilesetDef> = {
     objectives: [{ kind: 'clear', weight: 3 }, { kind: 'escape', weight: 1 }],
   },
 
+  // SHIP DECK — the Wraithsail's boards (realm-only: the boarding chain mints
+  // these, never the frontier). ONE tileset serves every deck; the mint stages
+  // each rung via layoutParams.deck ('weather' | 'hold' | 'cabin') and names
+  // it outright. Sheltered sky by doctrine — whatever storm the ship rides on
+  // the node map, no weather reaches inside the boarding. The crew is the
+  // DROWNED COURT at low floors: this is their own ship, and the whole court
+  // attends her decks long before it attends open water.
+  shipdeck: {
+    id: 'shipdeck', biome: 'deepsea', sky: 'sheltered',
+    frontier: false, perfProbe: true,
+    forceLayout: 'ship_deck',
+    nameFirst: ['Ghostlit', 'Wraithlit', 'Brinebound', 'Drowned', 'Pale-Rigged', 'Storm-Kept', 'Saltgrave', 'Lanternlit'],
+    nameSecond: ['Deck', 'Boards', 'Hold', 'Gundeck', 'Quarterdeck', 'Forecastle', 'Cabin', 'Berth'],
+    theme: {
+      ground: { scale: 2.2, stretchX: 0.5, strength: 0.75, speckles: 0.25 },
+      ambientDark: 0.28,
+      floor: '#241c14', grid: '#2e241a', border: '#3f6a60',
+      obstacle: '#3a2c1e', obstacleEdge: '#5a4a34', accent: '#7ad8d8',
+      water: '#0c2740', chasm: '#04080c',
+    },
+    sizeW: [1250, 1450], sizeH: [1750, 2050], ellipseChance: 0,
+    layout: [],
+    common: [
+      { kind: 'cargo_stack', count: [1, 3] },
+    ],
+    packs: {
+      count: [4, 6], size: [2, 4],
+      table: [
+        // The crew musters on its own boards at LOW floors (hard, per the
+        // court's discipline) — an early boarding meets oarsmen; a deep-water
+        // interception fields the whole court.
+        { id: 'drowned_oarsman', weight: 4 },
+        { id: 'barnacle_knight', weight: 2, presence: { from: 6 } },
+        { id: 'tide_vicar', weight: 1, presence: { from: 9 } },
+        { id: 'sunken_courtier', weight: 1, presence: { from: 9 } },
+        { id: 'anchor_wight', weight: 1, presence: { from: 12 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [{ kind: 'clear', weight: 1 }],
+  },
+
   // HIGHLAND — windswept crags (biome 'highland', → rooms layout = a mountain-pass
   // maze of corridors and chambers carved into the rock).
   highland: {

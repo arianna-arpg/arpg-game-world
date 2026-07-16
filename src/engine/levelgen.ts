@@ -155,6 +155,11 @@ export type KnownDoodadKind =
   | 'brine_sink'     // a hypersaline sink in the pan crust — water that BURNS on entry
   | 'hull_wreck'     // a beached hull rotting above its own tideline
   | 'coil_idol'      // the Coilborn's ringed serpent-column shrine
+  // The ship-deck kit (the Wraithsail's boarding decks) + the sighted ghost ship
+  | 'ship_mast'      // the great oak foot + furled yard — the deck's one solid vertical
+  | 'ship_rail'      // a bulwark segment: gunwale plank on stanchions (dressing, not the blocker)
+  | 'cargo_stack'    // lashed crates + a barrel — freight cover the crew never unloaded
+  | 'ghost_hull'     // the Wraithsail herself, sighted at open sea (non-blocking: sail into her shadow)
   // Mycelia ("The Bloom") fungal biome doodads
   | 'giant_mushroom' // blocks both — a towering capped stalk (a tree of fungus)
   | 'spore_pod'      // blocks movement not shots — a bulbous sac that PUFFS a spore cloud
@@ -1392,6 +1397,15 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   brine_sink: { overlap: 'ground', pour: { depthCore: true }, hazardGround: true },
   hull_wreck: { overlap: 'solid', blocksMove: true, spacing: 110, surface: { hw: 1.6, hh: 0.55, angle: 0.1 }, forbidOn: ['lava', 'chasm'] },
   coil_idol: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 70, forbidOn: ['water', 'lava', 'chasm', 'bog', 'swamp'] },
+  // The ship-deck kit: the mast is the deck's one true solid (a thin pole —
+  // shots and sight pass over the rigging); rails are pure dressing laid
+  // along the bulwark line (the hull wall behind them does the blocking);
+  // cargo is honest crate cover. The ghost hull at sea blocks NOTHING —
+  // the whole point is sailing into her shadow to board.
+  ship_mast: { overlap: 'solid', blocksMove: true, spacing: 120 },
+  ship_rail: { overlap: 'ground' },
+  cargo_stack: { overlap: 'solid', blocksMove: true, blocksShot: true, spacing: 60 },
+  ghost_hull: { overlap: 'ground' },
   // Mycelia fungal doodads. giant_mushroom/fruiting_tower are tree-like solids; spore_pod
   // is an active puffer (blocks move not shots, like lava_vent); glow_cap/mycelial_mat are
   // walkable ground overlays (decoration + the spore carpet).
@@ -4930,6 +4944,10 @@ registerStamp('tide_pool', (ctx, spec) => stampBlob(ctx, 'tide_pool', spec.radiu
 registerStamp('brine_sink', (ctx, spec) => stampBlob(ctx, 'brine_sink', spec.radius ?? [20, 44], [3, 6], false));
 registerStamp('hull_wreck', stampSingle('hull_wreck', [22, 30]));
 registerStamp('coil_idol', stampSingle('coil_idol', [12, 16]));
+// The ship-deck kit (the boarding decks scatter these walk-gated; the layout
+// itself plants the masts and rails deterministically along the hull).
+registerStamp('ship_mast', stampSingle('ship_mast', [16, 20]));
+registerStamp('cargo_stack', (ctx, spec) => stampSolid(ctx, 'cargo_stack', spec.radius ?? [14, 22]));
 // The kelp TREE — a lone stipe; forests come from the 'kelp_forest' cluster.
 registerStamp('giant_kelp', (ctx, spec) => stampSolid(ctx, 'giant_kelp', spec.radius ?? [26, 42]));
 registerStamp('coral', (ctx, spec) => stampSolid(ctx, 'coral', spec.radius ?? [16, 28]));

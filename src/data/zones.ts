@@ -180,6 +180,8 @@ export type KnownStampKind =
   | 'obsidian' | 'cinder' | 'ember_vent'
   // Marine/deep-sea clutter (kelp beds, coral heads, rocky outcroppings)
   | 'kelp' | 'coral' | 'sea_rock'
+  // The ship-deck kit (the Wraithsail's boarding decks)
+  | 'ship_mast' | 'cargo_stack'
   // Mycelia fungal clutter (towering caps, puffing spore-pods, glow-caps, hyphal mats, spires)
   | 'giant_mushroom' | 'spore_pod' | 'glow_cap' | 'mycelial_mat' | 'fruiting_tower'
   // Data-driven composite clusters (engine/levelgen registerCluster).

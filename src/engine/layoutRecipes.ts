@@ -2021,3 +2021,106 @@ function aetherDriftLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('aether_drift', aetherDriftLayout);
+
+// --- SHIP DECK (the Wraithsail's boards) -----------------------------------------
+// A HULL as a zone: one long pointed form — bow to the north portal, stern to
+// the south — walled by the dark beyond the bulwark. The SAME recipe serves
+// every deck of a boarding chain; `layoutParams.deck` stages the furniture:
+//   'weather'  masts down the centerline, rails along the gunwale, lashed cargo
+//   'hold'     support posts, coffer breakables (params.coffers), dense freight
+//   'cabin'    one mizzen aft + a brazier ring amidships — a court, not a deck
+// Deterministic furniture is planted here (masts/rails/coffers are the ship's
+// anatomy, not scatter); the tileset's dressing rows land walk-gated after.
+function shipDeckLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  const grid = ensureGrid(ctx);
+  const deck = layoutParam(def, 'deck', 'weather') as string;
+  const cofferBand = layoutParam(def, 'coffers', [2, 4]) as [number, number];
+
+  // 1) Negative space: everything beyond the hull is the dark past the rail.
+  grid.fillRegion(0, 0, arena.w, arena.h, negativeRegion(def));
+
+  // 2) The hull: discs along the vertical centerline, radius following a
+  //    beam profile — pointed bow, full midship, rounded stern.
+  const cx = arena.w / 2;
+  const rim = 70;
+  const y0 = rim, y1 = arena.h - rim;
+  const halfBeam = Math.min(arena.w * 0.3, 340);
+  const beamAt = (t: number): number => {
+    // t 0 = bow, 1 = stern: a sharp entry swelling to the full beam by ~0.3,
+    // holding through midship, easing to a squared stern counter.
+    const bow = Math.min(1, t / 0.3);
+    const stern = t > 0.85 ? 1 - (t - 0.85) / 0.15 * 0.25 : 1;
+    return halfBeam * (0.2 + 0.8 * bow * bow * (3 - 2 * bow)) * stern;
+  };
+  const ground = Mask.forRect(0, 0, arena.w, arena.h);
+  const steps = Math.ceil((y1 - y0) / 34);
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    disc(ground, cx, y0 + t * (y1 - y0), beamAt(t));
+  }
+  // Portal aprons + gangways: each mouth breathes through the bulwark and a
+  // boarding plank runs it to the spine — wherever the harness set the portal,
+  // the hull is guaranteed to meet it.
+  for (const a of [ctx.entry, ...ctx.exits]) {
+    disc(ground, a.x, a.y, 96);
+    const jy = Math.max(y0 + 40, Math.min(y1 - 40, a.y));
+    band(ground, [vec(a.x, a.y), vec(cx, jy)], 54);
+  }
+  paintRegion(grid, ground, 'ground');
+
+  // 3) The ship's anatomy, planted deterministically.
+  const mastYs = deck === 'weather' ? [0.3, 0.55, 0.78]
+    : deck === 'hold' ? [0.4, 0.68]
+    : [0.74]; // the cabin keeps one mizzen aft
+  for (const mt of mastYs) {
+    const my = y0 + mt * (y1 - y0);
+    const mr = deck === 'hold' ? rng.range(11, 13) : rng.range(16, 19);
+    ctx.doodads.push({ pos: vec(cx, my), radius: mr, kind: 'ship_mast' });
+    ctx.reserved.push({ pos: vec(cx, my), radius: mr + 46 });
+  }
+  // Rails trace the gunwale — dressing laid just inside the hull line, angled
+  // along it (pure read: the wall behind them is the actual blocker).
+  const railN = 9;
+  for (let i = 1; i < railN; i++) {
+    const t = i / railN;
+    const y = y0 + t * (y1 - y0);
+    const b = beamAt(t) - 26;
+    if (b < halfBeam * 0.35) continue; // no rails on the point of the bow
+    const dt = 0.02;
+    const slope = (beamAt(Math.min(1, t + dt)) - beamAt(Math.max(0, t - dt))) / (2 * dt * (y1 - y0));
+    for (const s of [-1, 1]) {
+      ctx.doodads.push({
+        pos: vec(cx + s * b, y), radius: rng.range(13, 16), kind: 'ship_rail',
+        rot: Math.PI / 2 + Math.atan(slope) * -s,
+      });
+    }
+  }
+  if (deck === 'hold') {
+    // The freight: coffer breakables between the posts — the holds PAY.
+    const n = rng.int(cofferBand[0], cofferBand[1]);
+    for (let i = 0; i < n; i++) {
+      const t = 0.25 + (i + rng.range(0.1, 0.9)) / (n + 1) * 0.55;
+      const y = y0 + t * (y1 - y0);
+      const x = cx + rng.range(-0.55, 0.55) * (beamAt(t) - 90);
+      ctx.breakables.push({ id: 'drowned_coffer', pos: vec(x, y) });
+    }
+  }
+  if (deck === 'cabin') {
+    // The court amidships: a ring of cold braziers around the audience floor.
+    const ay = y0 + 0.45 * (y1 - y0);
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+      ctx.doodads.push({
+        pos: vec(cx + Math.cos(a) * halfBeam * 0.52, ay + Math.sin(a) * halfBeam * 0.52),
+        radius: rng.range(10, 12), kind: 'brazier',
+      });
+    }
+    ctx.pois.push(vec(cx, ay));
+    ctx.reserved.push({ pos: vec(cx, ay), radius: 130 });
+  }
+
+  // 4) The tileset's dressing lands walk-gated on the boards.
+  scatterDecoration(ctx, def);
+}
+registerLayout('ship_deck', shipDeckLayout);
