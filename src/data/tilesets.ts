@@ -4937,23 +4937,37 @@ export const TILESETS: Record<string, TilesetDef> = {
   petrified_weald: {
     id: 'petrified_weald',
     depthAffinity: { from: 0.35, fadeIn: 0.3 },
-    forceLayout: 'forest',
+    // PARKLAND, not forest: the weald is a PATCHWORK — discrete stone STANDS
+    // (each a knitted veil pocket and a resonance alarm-unit: shatter your
+    // own clump and that stand's ground rings) on open karst pavement
+    // studded with lone spires. Deliberately unlike the Forest/Gloamwood
+    // sealed roofs — the open floor is the basilisk's dueling ground, the
+    // stands are the cover you SPEND.
+    forceLayout: 'parkland',
     layoutParams: {
-      // Trees ONLY in the planted mix: both kinds bake (trunk bakeWhole +
-      // stoneCrown in CANOPY_STATIC), so the whole roof costs what any
-      // forest roof costs. rock_spire stays a FURNITURE row below — its
-      // boulder painter draws live, and planting it forest-dense (~600/roll)
-      // was the perf-gate breach: 29.2ms p50 → the mass belongs to trees.
-      forestTrees: [
-        { kind: 'petrified_tree', weight: 6, radius: [30, 48] },
-        { kind: 'petrified_elder', weight: 1, radius: [44, 60] },
+      parklandGroves: [7, 11],
+      parklandGroveR: [130, 230],
+      // Stands: the BRITTLE trees clump (destructible cover, named by the
+      // cracked silhouette); hearts are the unbreakable elders; a watcher
+      // stone seeds ~a third of the hearts so deep stands carry the gaze.
+      // Both tree kinds BAKE (trunk bakeWhole + stoneCrown in
+      // CANOPY_STATIC) — the stands cost what any crowns cost.
+      parklandTrees: [{ kind: 'petrified_tree', weight: 1, radius: [30, 46] }],
+      parklandHearts: [{ kind: 'petrified_elder', weight: 1, radius: [46, 60] }],
+      parklandHeartExtra: { kind: 'watcher_stone', chance: 0.35, radius: [14, 19] },
+      // Pavement: the INDESTRUCTIBLE punctuation between the breakable
+      // clumps — stalagmite pinnacles (the Shilin stone-forest read), karst
+      // spires, old stones, downed boles. Count stays MODEST on purpose:
+      // the boulder spire family paints live (the 29.2ms lesson — never
+      // plant an unbaked kind at forest density).
+      parklandFloor: [
+        { kind: 'stalagmite', weight: 3, radius: [16, 30] },
+        { kind: 'rock_spire', weight: 2, radius: [14, 24] },
+        { kind: 'petrified_trunk', weight: 2, radius: [16, 24] },
+        { kind: 'standing_stone', weight: 1, radius: [12, 18] },
+        { kind: 'basalt_column', weight: 1, radius: [15, 24] },
       ],
-      forestCoverEdge: 0.42, forestCoverDeep: 0.8,
-      forestClearings: [2, 4],
-      // 140 default + elder max radius 60 + slack: the recipe's portal ring
-      // tests tree CENTERS, and an elder's EDGE must clear the splice ring
-      // even when a late court reservation exempts it from the splice.
-      forestPortalClear: 210,
+      parklandFloorN: [26, 44],
     },
     compositions: [
       { composition: 'weald_court', chance: 0.35 },
@@ -4991,9 +5005,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'camp', count: [0, 1] },
     ],
     common: [
-      // Glades reserve FIRST (the forest idiom) — the weald's courts and
-      // set-pieces breathe inside them.
-      { kind: 'clearing', count: [1, 2], radius: [110, 170] },
+      // No reserved glades: parkland ground is ALREADY the open — courts and
+      // set-pieces seat themselves between the stands.
       { kind: 'bone_pile', count: [0, 2] },
     ],
     variants: [
@@ -5990,7 +6003,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   saltflat:       { title: 'Glasspan',          blurb: 'A dead lake remembered as a floor — cracked white hardpan, lightning fused to glass, salt pillars for a forest, and no shade anywhere the sun can reach.' },
   jungle:         { title: 'Jungle',            blurb: 'Choked living thicket — walls of growth that block step, shot AND sight, cuttable throats plugged with brush and dens waiting behind them.' },
   karst_reach:    { title: 'The Karst Reach',   blurb: 'An above-ground cavern country: the maze is the NEGATIVE space — branching chasms shots sail over and bodies walk around, no bridge anywhere, and more ways down than any land above ground.' },
-  petrified_weald: { title: 'The Petrified Weald', blurb: 'A forest that died standing and kept its posture — stone crowns that never burn and never sway, cover that shatters only where YOU break it, and watcher-stones whose stare settles into your limbs like mortar.' },
+  petrified_weald: { title: 'The Petrified Weald', blurb: 'A wood that died standing, in STANDS — clumped stone copses on open karst pavement between lone pinnacles. The clumps are cover that shatters (and RINGS) where you break it; the elders and the spires never fall; the watcher-stones stare from the deep stands.' },
   buried_vault:   { title: 'Buried Vault',      blurb: 'A dead village’s underworks below the erg — dressed sandstone halls the dunes preserved, garrisoned by vermin, the risen, and whatever the urns were keeping.' },
   sepulcher_sands: { title: 'Sepulcher Sands',  blurb: 'The tomb-dynasty’s country under the deep desert: dune-drift washing into bone-country hall by hall, and the Sand Sarcophate standing its eternal watch between them.' },
   sunken_ruin:    { title: 'Sunken Ruins',      blurb: 'A drowned city that followed you down through a ruin-gate — flooded halls where something old still keeps to its rooms.' },

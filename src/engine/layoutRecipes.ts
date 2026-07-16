@@ -29,7 +29,7 @@ import { regionKind } from '../world/regions';
 import {
   registerLayout, layoutParam, ensureGrid, scatterDecoration,
   placeLandmarkById, raiseStructure, setBoundaryGateBuilder, setExitRoadBuilder,
-  setMeldBuilder, stamp, areaFreeOf, doodadRuleOf, type GenCtx,
+  setMeldBuilder, stamp, areaFreeOf, doodadRuleOf, type DoodadKind, type GenCtx,
 } from './levelgen';
 import {
   Mask, band, disc, ellipseDisc, wanderPath, spiralPath, paintRegion, paintLiquid, liquidOf,
@@ -231,6 +231,136 @@ function karstLayout(ctx: GenCtx, def: ZoneDef): void {
   scatterDecoration(ctx, def);
 }
 registerLayout('karst', karstLayout);
+
+// --- PARKLAND (scattered stands on open ground) ----------------------------------
+// The PATCHWORK shape: discrete tree STANDS — each a knitted-crown clump with
+// its own heart — on wide-open floor studded with lone solids, instead of the
+// forest recipe's sealed roof. Savanna parkland is the ecological term; the
+// Petrified Weald is the first wearer (stone copses on karst pavement — each
+// stand one veil-sealed cover pocket AND one resonance alarm-unit: shatter
+// your own clump and the whole stand's ground rings), but every mix is a dial,
+// so a living parkland (aspen groves, orchard rows gone wild) is one
+// layoutParams block away. Convex on purpose: the open floor IS the topology,
+// the portal-clear splice and doodad-navigability net do the policing.
+function parklandLayout(ctx: GenCtx, def: ZoneDef): void {
+  const { rng, arena } = ctx;
+  interface MixRow { kind: string; weight: number; radius: [number, number] }
+  const pickMix = (mix: MixRow[]): MixRow => {
+    const total = mix.reduce((a, m) => a + m.weight, 0);
+    let roll = rng.range(0, total);
+    for (const m of mix) { roll -= m.weight; if (roll <= 0) return m; }
+    return mix[mix.length - 1];
+  };
+
+  // Dials (spec ▷ tileset ▷ biome). Defaults sketch a LIVING parkland so the
+  // recipe stands alone (genqa's bare-layout case); the weald feeds stone.
+  const groveN = layoutParam(def, 'parklandGroves', [7, 11]) as [number, number];
+  const groveR = layoutParam(def, 'parklandGroveR', [130, 230]) as [number, number];
+  const groveGap = layoutParam(def, 'parklandGroveGap', [430, 620]) as [number, number];
+  const trees = layoutParam(def, 'parklandTrees',
+    [{ kind: 'tree', weight: 1, radius: [22, 34] }]) as MixRow[];
+  const hearts = layoutParam(def, 'parklandHearts',
+    [{ kind: 'ancient_tree', weight: 1, radius: [40, 54] }]) as MixRow[];
+  const heartExtra = layoutParam<{ kind: string; chance: number; radius: [number, number] } | undefined>(
+    def, 'parklandHeartExtra', undefined);
+  const floor = layoutParam(def, 'parklandFloor',
+    [{ kind: 'rock', weight: 2, radius: [16, 30] }, { kind: 'brush', weight: 3, radius: [14, 24] }]) as MixRow[];
+  const floorN = layoutParam(def, 'parklandFloorN', [26, 44]) as [number, number];
+  const portalClear = layoutParam(def, 'parklandPortalClear', 230);
+
+  const portals = [ctx.entry, ...ctx.exits];
+  const clearOfPortals = (x: number, y: number, pad: number): boolean =>
+    portals.every(p => Math.hypot(p.x - x, p.y - y) > portalClear + pad);
+
+  // 1) Stand sites: a jittered lattice thinned to the rolled count — spacing
+  // keeps stands DISCRETE (the patchwork read), the portal ring keeps every
+  // mouth in open country.
+  const gap = rng.range(groveGap[0], groveGap[1]);
+  const inset = 120 + groveR[1];
+  const sites: { x: number; y: number; r: number }[] = [];
+  for (let y = inset; y <= arena.h - inset; y += gap) {
+    for (let x = inset; x <= arena.w - inset; x += gap) {
+      const px = x + rng.range(-0.3, 0.3) * gap;
+      const py = y + rng.range(-0.3, 0.3) * gap;
+      const r = rng.range(groveR[0], groveR[1]);
+      if (!clearOfPortals(px, py, r)) continue;
+      sites.push({ x: px, y: py, r });
+    }
+  }
+  // Thin to the rolled stand count, dropping deterministically by rng index.
+  const want = rng.int(groveN[0], groveN[1]);
+  while (sites.length > want) sites.splice(rng.int(0, sites.length - 1), 1);
+
+  // 2) Each stand: hearts at the core, the clump ringed center-biased around
+  // them (trunks packed inside crown span so the veil knits the stand into
+  // ONE sealed patch), a scree skirt at the drip line.
+  for (const s of sites) {
+    const placed: { x: number; y: number }[] = [];
+    const plant = (m: MixRow, px: number, py: number): void => {
+      if (hitsReservation(ctx, px, py, 14) || !clearOfPortals(px, py, 0)) return;
+      ctx.doodads.push({
+        pos: vec(px, py), radius: rng.range(m.radius[0], m.radius[1]),
+        kind: m.kind as DoodadKind, rot: rng.range(0, Math.PI * 2),
+      });
+      placed.push({ x: px, y: py });
+    };
+    const heartN = rng.int(1, 2);
+    for (let i = 0; i < heartN; i++) {
+      plant(pickMix(hearts), s.x + rng.range(-0.2, 0.2) * s.r, s.y + rng.range(-0.2, 0.2) * s.r);
+    }
+    if (heartExtra && rng.chance(heartExtra.chance)) {
+      plant({ kind: heartExtra.kind, weight: 1, radius: heartExtra.radius },
+        s.x + rng.range(-0.3, 0.3) * s.r, s.y + rng.range(-0.3, 0.3) * s.r);
+    }
+    const treeN = Math.round(s.r / 14) + rng.int(-1, 2);
+    for (let i = 0; i < treeN; i++) {
+      // Center-biased ring fill, resampled off its own clump-mates so trunks
+      // spread while crowns still knit.
+      for (let tries = 0; tries < 8; tries++) {
+        const a = rng.range(0, Math.PI * 2);
+        const d = Math.pow(rng.range(0, 1), 0.7) * s.r * 0.9;
+        const px = s.x + Math.cos(a) * d, py = s.y + Math.sin(a) * d;
+        if (placed.some(q => Math.hypot(q.x - px, q.y - py) < 34)) continue;
+        plant(pickMix(trees), px, py);
+        break;
+      }
+    }
+    const skirtN = rng.int(2, 4);
+    for (let i = 0; i < skirtN; i++) {
+      const a = rng.range(0, Math.PI * 2);
+      const d = s.r * rng.range(0.9, 1.15);
+      const px = s.x + Math.cos(a) * d, py = s.y + Math.sin(a) * d;
+      if (hitsReservation(ctx, px, py, 10) || !clearOfPortals(px, py, 0)) continue;
+      ctx.doodads.push({ pos: vec(px, py), radius: rng.range(16, 26), kind: 'scree', rot: rng.range(0, Math.PI * 2) });
+    }
+  }
+
+  // 3) The open floor between stands: lone solids (spires, stones, downed
+  // boles — the indestructible punctuation between the breakable clumps).
+  // Density is a dial and deliberately MODEST: several of these kinds paint
+  // live (the boulder spire family never bakes — the weald's perf lesson).
+  const floorWant = rng.int(floorN[0], floorN[1]);
+  for (let i = 0, placed = 0; i < floorWant * 3 && placed < floorWant; i++) {
+    const px = rng.range(100, arena.w - 100), py = rng.range(100, arena.h - 100);
+    if (!clearOfPortals(px, py, 0)) continue;
+    if (sites.some(s => Math.hypot(s.x - px, s.y - py) < s.r + 40)) continue;
+    if (hitsReservation(ctx, px, py, 12)) continue;
+    const m = pickMix(floor);
+    ctx.doodads.push({
+      pos: vec(px, py), radius: rng.range(m.radius[0], m.radius[1]),
+      kind: m.kind as DoodadKind, rot: rng.range(0, Math.PI * 2),
+    });
+    placed++;
+  }
+
+  // 4) A few stand hearts are the zone's anchors (spawn/loot placement bias).
+  for (let i = 0; i < Math.min(3, sites.length); i++) ctx.pois.push(vec(sites[i].x, sites[i].y));
+
+  // 5) Tileset furniture (cave mouths, formations, watchers) lands in the
+  // open with the ordinary gates; the portal-clear splice polices the rest.
+  scatterDecoration(ctx, def);
+}
+registerLayout('parkland', parklandLayout);
 
 // --- SPIRAL (the cauldron) ------------------------------------------------------
 function spiralLayout(ctx: GenCtx, def: ZoneDef): void {

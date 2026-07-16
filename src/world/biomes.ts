@@ -406,7 +406,7 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // the stone — stone_sentinel's crowned family garrisons both faces.
   karst:    { patronFaction: 'elemental', mapColor: '#a8a290', label: 'Karst', spacing: 96,
     climate: { temperature: 'mild', moisture: 'dry', wildness: { from: 0.3, fadeIn: 0.25 } },
-    allowedLayouts: { karst: 3, forest: 1 },
+    allowedLayouts: { karst: 3, parkland: 1 },
     landmarks: [{ landmark: 'sinkhole', chance: 0.18 }, { landmark: 'canyon', chance: 0.14 }] },
   marsh:    { patronFaction: 'undead', mapColor: '#4a6a52', label: 'Marsh', spacing: 58,
     climate: { moisture: 'wet' },
