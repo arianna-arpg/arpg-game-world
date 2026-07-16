@@ -8,10 +8,30 @@ def fields — no engine edits.
 
 ## The room as a vision volume (`confineVision`)
 
-`StructureDef.confineVision: true` (stamped onto `PlacedStructure`) marks a
+`StructureDef.confineVision` (stamped onto `PlacedStructure`) marks a
 structure whose interior CONFINES the local hero's rendered vision: while
 `World.roofedStructureAt(hero)` resolves to it, everything beyond the room
-veils dark. The pass is `render/vis/roomVeil.ts` (tunables in
+veils dark. Two grains:
+
+- **`true`** — the whole roofed footprint is one volume (the windowless
+  one-room home; the Waking House keeps this exact treatment).
+- **`'rooms'`** — PER-ROOM: `placeStructurePlan` derives a ROOM LEDGER
+  (`PlacedRoom`: 4-connected interior components, merged rects, the doors on
+  each rim, see-through apertures, and an ENCLOSED verdict — one walkable
+  boundary gap unseals a room), and only the enclosed room the hero stands
+  in confines. An open-fronted lean-to (the blacksmith's forge) never
+  wraps — the sight veil's wall shadows (`render/vis/sightVeil.ts`,
+  `docs/engine/los-pathing.md`) carry that partial case — while a manor or
+  castle keep confines hall by hall, exactly the way the roof reveal already
+  walks. WINDOW/PARAPET cells on an enclosed rim stay sealed but SPILL a
+  disc of sight through themselves (`VIS_CFG.roomVeil.windowSpill` — the
+  street, glimpsed through the slit). `confineAlpha` softens one
+  structure's dark (a lantern-lit undercroft at 0.6, the cottage at full).
+
+The cottages, inn, chapel, longhouse, metro houses, manors, dungeon blocks
+and the castle generators all run `'rooms'`; the ledger derives for every
+plan structure regardless, so future consumers (AI room-holds, sound) read
+the same truth. The pass is `render/vis/roomVeil.ts` (tunables in
 `VIS_CFG.roomVeil`):
 
 - A downscaled screen buffer fills with "unseen" and punches the room clear —
@@ -29,9 +49,17 @@ veils dark. The pass is `render/vis/roomVeil.ts` (tunables in
   honest occlusion — rampart cells and closed door slabs already block sight
   and shots. The veil is the drawn horizon of attention.
 - **Extensible by shape**: the pass draws `VisionVolume`s (rects + spill
-  discs). Today's one source is the confining roofed room; a cave throat, a
-  curse's closing walls, a dream pocket can feed the same volume and inherit
-  the whole treatment — add a source, never a pass.
+  discs). Sources today: the confining roofed room (whole-structure) and the
+  enclosed PlacedRoom ('rooms' mode); a cave throat, a curse's closing
+  walls, a dream pocket can feed the same volume and inherit the whole
+  treatment — add a source, never a pass.
+- **The open-world sibling** is THE SIGHT VEIL (`render/vis/sightVeil.ts`):
+  positional occlusion shadows behind every sight-blocking wall cell and
+  solid body, from the hero's eye — the same "world ends at the wall"
+  feeling, propagated to structures seen from OUTSIDE, forests (trunks),
+  and warrens. The room veil supersedes it while confinement wraps (the
+  sight veil scales itself by `1 − frac()`), so the two darks never fight
+  over one doorway.
 
 ## Local shelter (the roof owns its sky)
 

@@ -36,10 +36,22 @@ export interface VisionVolume {
 
 /** The sliver of World this pass needs (structural — the vis layer never
  *  imports the engine's World; PlacedStructure satisfies ConfineStructure). */
+interface ConfineRoom {
+  rects: Rect[];
+  /** Indices into ConfineStructure.doors. */
+  doors: number[];
+  /** See-through boundary apertures (arrow-slits, parapet rims): cell rect
+   *  + outward normal — sealed to feet, spilled to sight. */
+  windows: { x: number; y: number; w: number; h: number; nx: number; ny: number }[];
+  enclosed: boolean;
+}
 interface ConfineStructure {
   id: string;
-  confineVision?: boolean;
+  confineVision?: boolean | 'rooms';
+  /** Per-structure darkness override (0..1 of the pass's own alpha). */
+  confineAlpha?: number;
   roofs: Rect[];
+  rooms?: ConfineRoom[];
   doors: { pos: Pt; normal: Pt; door: { open?: boolean; broken?: boolean; cells?: Rect } }[];
 }
 interface RoomView {
@@ -47,16 +59,21 @@ interface RoomView {
   roofedStructureAt(pos: Pt): ConfineStructure | null;
 }
 
-/** Build the confining room's volume: padded roof rects, every doorway's
- *  cells (the door is the room's one promise — it must stay seen, latched or
- *  not), and a spill disc past each OPEN aperture (the world, glimpsed
- *  through the frame you dwell in). */
-function roomVolume(st: ConfineStructure): VisionVolume {
+/** Build a confining volume: padded room rects (the whole roofed footprint
+ *  for confineVision:true; ONE enclosed room's rects in 'rooms' mode), every
+ *  doorway's cells (the door is the room's one promise — it must stay seen,
+ *  latched or not), a spill disc past each OPEN aperture (the world,
+ *  glimpsed through the frame you dwell in), and — rooms mode — each
+ *  see-through window/parapet cell with its own smaller spill (the street,
+ *  glimpsed through the slit). */
+function roomVolume(st: ConfineStructure, room?: ConfineRoom): VisionVolume {
   const cfg = VIS_CFG.roomVeil;
   const p = cfg.pad;
-  const rects: Rect[] = st.roofs.map(r => ({ x: r.x - p, y: r.y - p, w: r.w + p * 2, h: r.h + p * 2 }));
+  const base = room ? room.rects : st.roofs;
+  const rects: Rect[] = base.map(r => ({ x: r.x - p, y: r.y - p, w: r.w + p * 2, h: r.h + p * 2 }));
   const spills: { x: number; y: number; r: number }[] = [];
-  for (const d of st.doors) {
+  const doors = room ? room.doors.map(i => st.doors[i]).filter(d => !!d) : st.doors;
+  for (const d of doors) {
     const c = d.door.cells;
     if (c) rects.push({ x: c.x - p, y: c.y - p, w: c.w + p * 2, h: c.h + p * 2 });
     if (d.door.open || d.door.broken) {
@@ -67,7 +84,15 @@ function roomVolume(st: ConfineStructure): VisionVolume {
       });
     }
   }
-  return { rects, spills };
+  for (const w of room?.windows ?? []) {
+    rects.push({ x: w.x - p, y: w.y - p, w: w.w + p * 2, h: w.h + p * 2 });
+    spills.push({
+      x: w.x + w.w / 2 + w.nx * cfg.windowSpill * 0.45,
+      y: w.y + w.h / 2 + w.ny * cfg.windowSpill * 0.45,
+      r: cfg.windowSpill,
+    });
+  }
+  return { rects, spills, ...(st.confineAlpha !== undefined ? { alpha: st.confineAlpha } : {}) };
 }
 
 export class RoomVeil {
@@ -86,7 +111,18 @@ export class RoomVeil {
     let target = 0;
     if (cfg.enabled) {
       const st = world.roofedStructureAt(world.player.pos);
-      if (st?.confineVision) {
+      if (st?.confineVision === 'rooms') {
+        // PER-ROOM confinement: only the ENCLOSED room the hero stands in
+        // wraps (the PlacedRoom ledger) — an open-fronted lean-to never
+        // does; the sight veil's wall shadows carry the partial case.
+        const p = world.player.pos;
+        const room = st.rooms?.find(r => r.enclosed && r.rects.some(rc =>
+          p.x > rc.x && p.x < rc.x + rc.w && p.y > rc.y && p.y < rc.y + rc.h));
+        if (room) {
+          this.vol = roomVolume(st, room); // rebuilt live: doors spill at once
+          target = 1;
+        }
+      } else if (st?.confineVision) {
         this.vol = roomVolume(st); // rebuilt live: a door opened from inside spills at once
         target = 1;
       }

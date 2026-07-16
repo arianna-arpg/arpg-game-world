@@ -53,6 +53,7 @@ import { blitCrown, CanopySlices, EMPTY_PARAMS } from './vis/canopy';
 import { CanopyEyes, type EyedGroup } from './vis/canopyEyes';
 import { WallEyes } from './vis/wallEyes';
 import { RoomVeil } from './vis/roomVeil';
+import { SightVeil } from './vis/sightVeil';
 import { DOODAD_VISUALS } from '../data/doodadVisuals';
 import { LightLayer } from './vis/lights';
 import { drawWeatherFx, WEATHER_FX } from './vis/weatherFx';
@@ -259,6 +260,11 @@ export class Renderer {
     // projectiles, flashes, exits, the hero's lantern) for the light layer.
     this.lightLayer.collect(world, this.culled, this.cam.x, this.cam.y, vw, vh);
 
+    // THE ROOM VEIL resolves FIRST (state only — its sheet still composites
+    // after the world pass): the sight veil mid-pass yields to a wrapped
+    // frame, so the two darks never fight over one doorway.
+    this.roomVeil.update(world, this.frameDt);
+
     ctx.save();
     ctx.scale(z, z);
     // Shared SCREEN-SHAKE: jitter the world transform by world.shake (decays in the
@@ -323,6 +329,14 @@ export class Renderer {
       for (const a of world.actors) if (!a.dead && a.nemesis) this.drawNemesisMark(a);
     }
     this.drawProjectiles(world);
+    // THE SIGHT VEIL (vis/sightVeil.ts): positional occlusion — everything
+    // the hero's eye cannot reach past a sight-blocking body veils dark with
+    // the ground it stands on. OVER actors/projectiles (what a wall hides is
+    // hidden whole), UNDER canopies and roofs (a building's far side goes
+    // dark; the building — and the skyline — stays lit). Composites at
+    // identity through the same effective camera as the light layer.
+    this.sightVeil.update(world, this.roomVeil.frac(), vw, vh);
+    this.sightVeil.draw(this.ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
     if (!VIS_ABLATE.has('doodads')) this.drawCanopies(world); // fake-2D depth: crowns above actors, faded near the hero
     if (!VIS_ABLATE.has('doodads')) this.drawCanopyEyes(world); // the roof's regard — gone wherever you're near
     // THE LIVING FOG, tall pass: the lifted share of each bank wraps bodies
@@ -342,7 +356,7 @@ export class Renderer {
     // THE ROOM VEIL: interior confinement — inside a confining structure the
     // world beyond the room is unseen (labels gate through veiledAt; the
     // atmosphere pass damps its weather against frac). Free when outside.
-    this.roomVeil.update(world, this.frameDt);
+    // (Its update ran before the world pass — the sight veil reads frac().)
     this.roomVeil.draw(ctx, this.cam.x - shx, this.cam.y - shy, z, w, h);
 
     // THE LIGHT LAYER: day/night darkness punched by every light in view +
@@ -1902,6 +1916,10 @@ export class Renderer {
     // it hides with the ground it stands on (same contract as the fades).
     const veiled = this.roomVeil.veiledAt(pos);
     if (veiled > 0) reveal = Math.min(reveal, 1 - veiled);
+    // THE SIGHT VEIL: same contract — text never leaks what an occlusion
+    // shadow conceals (tested against the very occluders the sheet drew).
+    const shadowed = this.sightVeil.occludedAt(pos);
+    if (shadowed > 0) reveal = Math.min(reveal, 1 - shadowed);
     return reveal;
   }
 
@@ -1957,6 +1975,12 @@ export class Renderer {
   /** THE ROOM VEIL (vis/roomVeil.ts): interior vision confinement — inside a
    *  confining structure, the world beyond the room veils dark. */
   private roomVeil = new RoomVeil();
+
+  /** THE SIGHT VEIL (vis/sightVeil.ts): positional occlusion shadows — from
+   *  the hero's eye, every sight-blocking body (trunks, boulders, rampart
+   *  lines, cave walls) throws unseen-dark behind itself. Render-only; the
+   *  engine's LoS ray stays the gameplay truth. */
+  private sightVeil = new SightVeil();
 
   /** CANOPY EYES (vis/canopyEyes.ts): the sealed roof's blinking regard —
    *  present only where nobody is near enough to check. Kinds opt in via
@@ -2889,6 +2913,13 @@ export class Renderer {
     if (tpose) ctx.globalAlpha = 1; // a traversal's rise stays solid — cinema, not stealth
     if (a.sheet.get('invisible') > 0) ctx.globalAlpha = 0.3;
     else if (a.sheet.get('detectability') < 1) ctx.globalAlpha = 0.55;
+    // THE SIGHT VEIL hides bodies the hero's eye cannot reach (smoothed, so
+    // a cover-slip reads as slipping behind the bole, never a pop). The
+    // local hero IS the eye — never self-veiled.
+    if (a !== world.player) {
+      const shade = this.sightVeil.actorShade(a, this.frameDt);
+      if (shade > 0.01) ctx.globalAlpha *= 1 - shade;
+    }
     // Echo riders: a ghost-faded copy of their owner — the dashed seam ring
     // after the body keeps the lie legible (construct.kind ships on the wire).
     if (a.construct?.kind === 'echo') ctx.globalAlpha = 0.45;

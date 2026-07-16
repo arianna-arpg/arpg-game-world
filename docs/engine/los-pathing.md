@@ -26,6 +26,27 @@ The terrain promise, everywhere the ray is asked:
   through, never walk; `giant_kelp` = walk-through fronds that break sight
   only; `tallgrass` = a soft hedge (move-only).
 
+## The drawn veil (`render/vis/sightVeil.ts`)
+
+The ray's visible half — POSITIONAL OCCLUSION SHADOWS from the local hero's
+eye, so the screen finally states what the fabric always enforced. Two
+occluder families, both read from the data above (nothing names a kind):
+grid cells whose `RegionKind.blocksSight` is true throw dark from their
+FACING EDGES (closed doors seal into the grid as rampart and reopen with
+it), and solid doodads throw tangent wedges from their SHOT surface — the
+TRUNK, deliberately: crowns already own what's beneath them via the canopy
+veil, and the AI's sight channel stays blinded WIDER than the veil draws
+(crown radius), so the asymmetry always favors the player.
+
+Render-only by doctrine; `LOS_CFG` and the AI never read it. What stands in
+a shadow is unseen with its ground — actor sprites fade (smoothed), labels
+gate through the same test the sheet draws from, and the room veil
+(`docs/engine/interiors.md`) supersedes it inside a confining room. Levers:
+`VIS_CFG.sightVeil` (strengths, tint, resolution, feather),
+`ZoneTheme.sightVeil` multipliers (per-zone art direction),
+`DoodadRule.sightShadow` (per-kind override; default `blocksShot &&
+blocksSight`). Forensics: `npm run perf -- --ablate=sightveil`.
+
 ## The skill lever
 
 Relevant deliveries (`projectile`/`cone`/`nova`/`target`/`ground`/`storm`,

@@ -564,6 +564,26 @@ export interface PlacedDoor {
   normal: Vec2;
 }
 
+/** One ROOM inside a placed plan structure: a 4-connected component of
+ *  interior floor — its merged rects, which of the structure's doors open
+ *  into it, its see-through wall apertures (window/parapet cells, with the
+ *  outward normal), and whether its boundary is fully SEALED (every
+ *  neighboring cell a sight-blocking wall, a door, or a see-through
+ *  blocker; one walkable gap and the room is OPEN air — a lean-to, not a
+ *  chamber). Derived for EVERY plan structure, pure and draw-free, so any
+ *  consumer (the room veil today; AI room-holds or sound tomorrow) reads
+ *  one truth. confineVision:'rooms' confines the hero's drawn vision to
+ *  the enclosed room they stand in (render/vis/roomVeil.ts). */
+export interface PlacedRoom {
+  rects: { x: number; y: number; w: number; h: number }[];
+  /** Indices into PlacedStructure.doors — the doors on this room's rim. */
+  doors: number[];
+  /** See-through blocker cells on this room's boundary (arrow-slits,
+   *  parapet rims): cell rect + outward normal (away from the room). */
+  windows: { x: number; y: number; w: number; h: number; nx: number; ny: number }[];
+  enclosed: boolean;
+}
+
 /** A structure raised into a zone: its true rect footprint, roof rects (merged
  *  from the plan's interior cells), doors, and garrison slots. Persisted on the
  *  layout → World.structures → ZoneMsg, so renderers (roof reveal), AI
@@ -589,8 +609,18 @@ export interface PlacedStructure {
    *  coords. Surfaced on GeneratedLayout.spawnAt for World.loadZone. */
   spawn?: Vec2;
   /** INTERIOR CONFINEMENT (StructureDef.confineVision): while the local hero
-   *  is under this roof, the room-veil pass closes vision to the room. */
-  confineVision?: boolean;
+   *  is under this roof, the room-veil pass closes vision to the room. TRUE
+   *  = the whole roofed footprint is one volume; 'rooms' = only the ENCLOSED
+   *  room the hero stands in confines (open-fronted rooms — the blacksmith's
+   *  lean-to — stay open; the sight veil's wall shadows do their part). */
+  confineVision?: boolean | 'rooms';
+  /** Veil darkness override for this structure's confinement (0..1 of the
+   *  pass's own peak) — a lantern-lit undercroft may confine at 0.6 where a
+   *  windowless cottage closes at the full dark. */
+  confineAlpha?: number;
+  /** The plan's derived room ledger (see PlacedRoom). Absent on legacy
+   *  wall-strip structures. */
+  rooms?: PlacedRoom[];
 }
 
 export interface GeneratedLayout {
@@ -702,6 +732,14 @@ export interface DoodadRule {
    *  blocksShot, so every existing kind keeps today's behavior; a WINDOW frame
    *  sets blocksMove true + blocksSight false (see through, walk into). */
   blocksSight?: boolean;
+  /** CASTS A DRAWN VISION SHADOW (render/vis/sightVeil.ts): the sight veil
+   *  throws positional occlusion dark behind this kind from the local hero's
+   *  eye. Defaults to blocksShot && blocksSight — a body that stops both
+   *  arrows and eyes is solid to LOOK past (trunks, boulders, masonry piers);
+   *  see-through or walk-through kinds (window frames, kelp, the hearth)
+   *  never shadow. Purely visual — engine LoS keeps its own honest ray; this
+   *  row only shapes the drawn horizon. Override either way per kind. */
+  sightShadow?: boolean;
   spacing?: number;
   forbidOn?: DoodadKind[];
   walkOnly?: boolean;
@@ -1718,6 +1756,17 @@ export function blocksSightOf(d: Doodad): boolean {
   if (d.door?.open || d.door?.broken) return false;
   const r = doodadRule(d.kind);
   return r.blocksSight ?? !!r.blocksShot;
+}
+
+/** Casts a DRAWN vision shadow (the sight veil): solid to both arrows and
+ *  eyes unless the rule says otherwise (DoodadRule.sightShadow). Doors never
+ *  cast — a closed door's cells are sealed into the walk grid as rampart
+ *  (the GRID throws that shadow, and reopens it the moment the door does),
+ *  and an open breach must read exactly as open. */
+export function castsSightShadow(d: Doodad): boolean {
+  if (d.door) return false;
+  const r = doodadRule(d.kind);
+  return r.sightShadow ?? (!!r.blocksShot && (r.blocksSight ?? !!r.blocksShot));
 }
 
 /** A solid doodad rejects placement overlapping other solids (but not ground). */
@@ -4124,7 +4173,8 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
     floors: [], floorStyle: def.floorStyle,
     courtyards: [], courtyardFloorStyle: def.courtyardFloorStyle,
     doors: [], slots: [],
-    ...(def.confineVision ? { confineVision: true } : {}),
+    ...(def.confineVision ? { confineVision: def.confineVision } : {}),
+    ...(def.confineAlpha !== undefined ? { confineAlpha: def.confineAlpha } : {}),
   };
 
   // Doodads / breakables / npcs / slots from cells.
@@ -4238,6 +4288,80 @@ function placeStructurePlan(ctx: GenCtx, def: StructureDef, at?: Vec2): void {
   }
   if (def.courtyardFloorStyle) {
     placed.courtyards = mergeCells(c => !!c.spec.courtyard);
+  }
+
+  // THE ROOM LEDGER (PlacedRoom): flood the plan's interior floor into
+  // 4-connected components and audit each component's boundary — a door or a
+  // see-through blocker (window/parapet) is an APERTURE, a sight-blocking
+  // region is a sealed wall, and anything else (courtyard, open plan edge,
+  // unregistered char) is an OPEN GAP that unseals the room. Pure derivation,
+  // no draws, run for every plan structure — so confineVision:'rooms' (and
+  // any future consumer) reads one truth instead of re-deriving geometry.
+  {
+    const specAt = new Map<number, (typeof cells)[number]>();
+    for (const c of cells) specAt.set(c.cy * planW + c.cx, c);
+    const isMember = (c: (typeof cells)[number] | undefined): boolean =>
+      !!c && !!c.spec.interior && !c.spec.courtyard && !c.spec.door;
+    const doorGroupOf = new Map<number, number>();
+    for (let gi = 0; gi < doorGroups.length; gi++) {
+      for (const dc of doorGroups[gi].cells) doorGroupOf.set(dc.cy * planW + dc.cx, gi);
+    }
+    const STEPS = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+    const seen = new Set<number>();
+    for (const c of cells) {
+      const k0 = c.cy * planW + c.cx;
+      if (seen.has(k0) || !isMember(c)) continue;
+      const comp = new Set<number>();
+      const queue = [k0];
+      seen.add(k0);
+      while (queue.length) {
+        const k = queue.pop()!;
+        comp.add(k);
+        const cx = k % planW, cy = (k - cx) / planW;
+        for (const [dx, dy] of STEPS) {
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= planW || ny >= planH) continue;
+          const nk = ny * planW + nx;
+          if (!seen.has(nk) && isMember(specAt.get(nk))) { seen.add(nk); queue.push(nk); }
+        }
+      }
+      let enclosed = true;
+      const doorIdx = new Set<number>();
+      const windows: PlacedRoom['windows'] = [];
+      const winSeen = new Set<number>();
+      for (const k of comp) {
+        const cx = k % planW, cy = (k - cx) / planW;
+        for (const [dx, dy] of STEPS) {
+          const nx = cx + dx, ny = cy + dy;
+          const nk = ny * planW + nx;
+          if (comp.has(nk)) continue;
+          const inPlan = nx >= 0 && ny >= 0 && nx < planW && ny < planH;
+          const n = inPlan ? specAt.get(nk) : undefined;
+          if (n?.spec.door) {
+            const gi = doorGroupOf.get(nk);
+            if (gi !== undefined) doorIdx.add(gi);
+            continue;
+          }
+          const rk = n?.spec.region ? regionKind(n.spec.region) : undefined;
+          if (rk && !rk.walkable) {
+            // Sealed either way — a wall keeps the dark, a see-through
+            // blocker (window/parapet) is recorded as an aperture the veil
+            // spills sight through.
+            if (!rk.blocksSight && !winSeen.has(nk)) {
+              winSeen.add(nk);
+              const r = cellRect(nx, ny);
+              windows.push({ x: r.x0, y: r.y0, w: r.x1 - r.x0, h: r.y1 - r.y0, nx: dx, ny: dy });
+            }
+            continue;
+          }
+          enclosed = false;
+        }
+      }
+      (placed.rooms ??= []).push({
+        rects: mergeCells(cc => comp.has(cc.cy * planW + cc.cx)),
+        doors: [...doorIdx], windows, enclosed,
+      });
+    }
   }
 
   // FX LAYERS — the interwoven ground effects (a fire-laden siege: cinder floors

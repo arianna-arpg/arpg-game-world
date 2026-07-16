@@ -77,7 +77,10 @@ changes.
   `ai.ts` + `brain.ts` (composable enemy AI), `los.ts` (THE occlusion
   raycast: one shot/sight ray over doodads + grid regions, `LOS_CFG`
   delivery defaults, the `phasing` stat lever; AI pathing rides
-  `World.pathField()` — docs in `docs/engine/los-pathing.md`),
+  `World.pathField()`; its DRAWN half is THE SIGHT VEIL —
+  `render/vis/sightVeil.ts` positional occlusion shadows from wall cells
+  + solid trunks, `VIS_CFG.sightVeil` + `ZoneTheme.sightVeil` +
+  `DoodadRule.sightShadow` levers — docs in `docs/engine/los-pathing.md`),
   `shapes.ts` + `projForms.ts` (the HIT-SURFACE fabric: doodad collision
   shapes as data via `hitSurfaceOf`, projectile drawn-form hit tests via
   `PROJ_FORM_GEO` — docs in `docs/engine/hit-surfaces.md`),
@@ -130,7 +133,10 @@ changes.
   THE INTERIOR FABRIC (rooms as data — docs in `docs/engine/interiors.md`):
   `StructureDef.confineVision` veils the world beyond the room while the
   local hero is under its roof (`render/vis/roomVeil.ts` VISION VOLUMES,
-  `VIS_CFG.roomVeil` — render-only; LoS keeps its own occlusion); roofs
+  `VIS_CFG.roomVeil` — render-only; LoS keeps its own occlusion; `true` =
+  whole footprint, `'rooms'` = per-room via the derived `PlacedRoom`
+  ledger — enclosed rooms confine, open lean-tos stay sky, window cells
+  spill sight); roofs
   shelter per POSITION (windAt already; sky strikes via `Zone.spareRoofed`
   ← `WeatherStrike.throughRoofs` lever); LESSON DOORS
   (`CellSpec.door.lesson` = account-ledger key: first dwell-open stamps,

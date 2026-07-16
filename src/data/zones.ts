@@ -415,6 +415,13 @@ export interface ZoneTheme {
    *  the winter AURORA, drifting fungal SPORES. Screen-space, stateless,
    *  data-extensible. */
   ambientFx?: { kind: 'bubbles' | 'caustics' | 'heatHaze' | 'motes' | 'aurora' | 'spores' | 'sandDrift'; intensity?: number; color?: string }[];
+  /** SIGHT-VEIL tuning (render/vis/sightVeil.ts): per-zone multipliers over
+   *  the pass's global strengths (VIS_CFG.sightVeil) — `mul` scales both
+   *  shadow families, `regionMul` the true-wall shadows (rampart, verdure,
+   *  cave wall), `doodadMul` the solid-body shadows (trunks, boulders,
+   *  standing stones). 0 disables a family for the zone; omitted = 1. Art
+   *  direction only — the engine's LoS ray never reads this. */
+  sightVeil?: { mul?: number; regionMul?: number; doodadMul?: number };
   /** LIVING FOG (the fog fabric, engine/fog.ts): which fog KINDS this zone
    *  breathes and how many banks roll per visit. Banks drift, coil, breathe
    *  and dissipate; standing in live fog grants the kind's statuses — the

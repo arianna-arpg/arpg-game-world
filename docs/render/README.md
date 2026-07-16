@@ -191,6 +191,23 @@ the veil index rebuilds off doodad revs, so pops/pushes/zone swaps mint new
 patches and the WeakMap-keyed cache follows. Forensics: `npm run perf --
 --ablate=canopyslices` measures the old per-crown path.
 
+THE SIGHT VEIL (`vis/sightVeil.ts`, `VIS_CFG.sightVeil`): positional
+occlusion shadows — the LoS ray's drawn half. From the local hero's eye,
+sight-blocking GRID cells (rampart lines, cave walls, verdure; closed doors
+seal into the grid and reopen with it) throw dark from their merged facing
+edges, and solid doodads throw tangent wedges from their SHOT surface (the
+trunk — crowns stay the canopy veil's business). Composites after the actor
+pass and UNDER canopies/roofs, so a building's far side goes dark while the
+building and the skyline stay lit; actor sprites in shadow fade out
+(smoothed) and labels gate through the same occluder test the sheet draws
+from. Occluder gathering caches against hero-bucket × `doodadRev` ×
+`GridWalkField.version`; per frame it is a facing test per edge, a wedge per
+disc, two union fills into a downscaled sheet (overlap never stacks), one
+composite — and zones with nothing in reach skip the sheet entirely. The
+room veil supersedes it as confinement wraps. Levers: `ZoneTheme.sightVeil`
+multipliers, `DoodadRule.sightShadow` per-kind overrides. Forensics:
+`npm run perf -- --ablate=sightveil`. Docs: `docs/engine/los-pathing.md`.
+
 THE WHOLE-KIND BAKE (`bakeWhole` on a `DoodadVisualDef`, `wholeKindSprite` /
 `paintBakedWhole` in vis/painters.ts): ground kinds whose painter is a pure
 function of (radius, position seed, params, theme) blit variant-baked

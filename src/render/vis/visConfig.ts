@@ -139,6 +139,60 @@ export const VIS_CFG = {
      *  wash, particles and wind streaks (0 = storms rage over the veil,
      *  1 = a roof fully owns its sky). The psychological shelter lever. */
     dampAtmosphere: 0.9,
+    /** WINDOW SPILL: a see-through aperture on an enclosed room's rim (an
+     *  arrow-slit, a parapet line) spills a disc of sight this far past
+     *  itself — the street, glimpsed through the slit. Rooms-mode only. */
+    windowSpill: 34,
+  },
+
+  /** THE SIGHT VEIL (vis/sightVeil.ts) — positional occlusion shadows: the
+   *  drawn expression of the LoS fabric's honest ray. From the local hero's
+   *  eye, every sight-blocking body throws unseen-dark behind itself — grid
+   *  wall cells (rampart lines, cave walls, verdure; closed doors seal into
+   *  the grid and reopen with it) and solid doodads at their TRUNK surface
+   *  (hitSurfaceOf 'shot': you fight under the leaves, you hide behind the
+   *  bole). The waking house's beloved "world ends at the wall" feel,
+   *  propagated to every structure, forest and warren as ONE mechanism.
+   *  Render-only by doctrine — engine LoS keeps its own ray (crowns still
+   *  blind the AI wider than the veil draws; the asymmetry favors the
+   *  player). Composited AFTER the actor pass, BEFORE canopies and roofs:
+   *  what stands in shadow is unseen with its ground, while the building
+   *  itself (its roof, its crown-line) stays lit. Zone art direction rides
+   *  ZoneTheme.sightVeil multipliers; per-kind opt-outs ride
+   *  DoodadRule.sightShadow. Ablate pass name: 'sightveil'. */
+  sightVeil: {
+    enabled: true,
+    /** Peak darkness of a full occlusion shadow (the roomVeil's sibling —
+     *  slightly shy of it: a shadow is a horizon, not a wall of pitch). */
+    alpha: 0.8,
+    /** The dark's color — the roomVeil's unseen family, ONE dark everywhere
+     *  (it must read as "unseen", not "unlit": the light layer owns unlit). */
+    tint: { r: 5, g: 6, b: 12 },
+    /** Family strengths (× alpha): true-wall cells vs solid bodies. Trunks
+     *  sit a touch softer — gloom behind a bole, night behind masonry. */
+    regionStrength: 1.0,
+    doodadStrength: 0.85,
+    /** Shadow-sheet resolution as a fraction of the screen (the lights/
+     *  roomVeil buffer idiom — soft edges nearly free at low res). */
+    scale: 0.25,
+    /** Blur (px, buffer space) feathering every shadow edge. */
+    featherPx: 3,
+    /** How fast a body's hide-fade chases its occlusion state per second
+     *  (cover-slips read as slipping, never popping). */
+    fadeRate: 9,
+    /** How fully occlusion hides actor SPRITES over the sheet's own dark
+     *  (1 = a body behind a wall is gone; 0 = sheet dark only). Labels
+     *  always gate fully — text never leaks what pixels conceal. */
+    actorHide: 1,
+    /** Veil reach cap (world px) past which shadows aren't computed — the
+     *  view rect plus slack always fits at default zooms. */
+    maxRadius: 1600,
+    /** Shadow quad length as a fraction of the veil reach (past the screen
+     *  edge, so no shadow ever ends visibly short). */
+    farSlack: 1.35,
+    /** Occluder-count ceiling per family per frame (a pathological grove
+     *  degrades gracefully: nearest buckets win by construction). */
+    maxOccluders: 288,
   },
 
   /** Canopy crowns (the occlude/veil pass). fadeRate = how fast a crown's

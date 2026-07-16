@@ -115,8 +115,18 @@ export interface StructureDef {
    *  the roof rects veils dark (render/vis/roomVeil.ts, VIS_CFG.roomVeil).
    *  The Cellar's smallness made LOCAL: a data flag, so a gazebo stays open
    *  and a windowless cottage closes in. Gameplay LoS is untouched — walls
-   *  already occlude honestly; this is the drawn horizon of attention. */
-  confineVision?: boolean;
+   *  already occlude honestly; this is the drawn horizon of attention.
+   *  TRUE = the whole roofed footprint is one volume (the windowless
+   *  one-room home). 'rooms' = PER-ROOM: only the ENCLOSED room the hero
+   *  stands in confines (PlacedRoom ledger — flood-derived from the plan),
+   *  so an open-fronted lean-to (the blacksmith) never wraps, a manor
+   *  confines hall by hall, and a walled-but-open yard stays sky. Arrow-slit
+   *  windows and parapet rims stay sealed but SPILL sight through. */
+  confineVision?: boolean | 'rooms';
+  /** Confinement darkness override (0..1 of the veil pass's own peak) — a
+   *  lantern-lit undercroft may confine at 0.6 where a windowless cottage
+   *  closes at the full dark. */
+  confineAlpha?: number;
   /** FLOOR_STYLES id — bakes a real floor (boards, cobble…) under the
    *  plan's interior cells, doorways included. Omitted = bare ground. */
   floorStyle?: string;
@@ -271,6 +281,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '#b....#',
       '###D###',
     ],
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
   },
 
@@ -289,6 +300,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '###D###',
     ],
     legend: { V: { doodad: { kind: 'cellar_hatch', radius: 13 }, interior: true } },
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
   },
 
@@ -366,6 +378,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '#....b#',
       '###D###',
     ],
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
     npcs: [{ id: 'townsfolk_questgiver', x: 0, y: 10 }],
   },
@@ -402,6 +415,11 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '#B....._',
       '#_______',
     ],
+    // 'rooms', deliberately: the lean-to's east+south stand OPEN, so the
+    // room ledger derives it UNSEALED and the full veil never wraps the
+    // yard — only the L-wall's own sight shadows cordon the back. The day
+    // a storeroom is drawn onto this plan, it confines with zero edits.
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'slate',
     floorStyle: 'flagstone', courtyardFloorStyle: 'cobble',
     props: [{ kind: 'rock', x: 20, y: -10, radius: 12 }], // the anvil stone
@@ -421,6 +439,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '#.b....b.#',
       '#####D####',
     ],
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
     npcs: [{ id: 'townsfolk_innkeep', x: -30, y: -30 }],
   },
@@ -619,6 +638,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
   crusade_fortress: {
     id: 'crusade_fortress', halfW: 225, halfH: 195, cellSize: 30,
     generator: 'castle', genParams: { w: [13, 15], h: [11, 13], gates: [1, 1], gateChar: 'X' },
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'stone',
   },
 
@@ -628,6 +648,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
   crusade_bastion: {
     id: 'crusade_bastion', halfW: 240, halfH: 210, cellSize: 30,
     generator: 'castle', genParams: { w: [15, 17], h: [13, 15], concentric: true, gates: [1, 1], gateChar: 'X' },
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'stone',
   },
 
@@ -658,6 +679,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '#f...C#',
       '###D###',
     ],
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
   },
 
@@ -672,6 +694,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '#B..f...bC#',
       '#####D#####',
     ],
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber', floorStyle: 'boards',
   },
 
@@ -688,6 +711,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '#b...b#',
       '###D###',
     ],
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'slate', floorStyle: 'flagstone',
   },
 
@@ -719,6 +743,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
     id: 'grand_castle', halfW: 420, halfH: 340,
     generator: 'castle', cellSize: 30, // multiple of the walk cell = exact painting
     genParams: { w: [21, 29], h: [15, 21], gates: [1, 2] },
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'slate',
     bastion: { weight: 3 },
   },
@@ -729,6 +754,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
     id: 'fortress', halfW: 440, halfH: 360,
     generator: 'castle', cellSize: 30,
     genParams: { w: [23, 31], h: [17, 23], concentric: true, gates: [1, 1] },
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'stone',
     bastion: { weight: 2 },
   },
@@ -740,6 +766,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
     id: 'siege_castle', halfW: 420, halfH: 340,
     generator: 'castle', cellSize: 30,
     genParams: { w: [21, 27], h: [15, 21], gates: [2, 2], gateChar: 'X' },
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'stone',
     fx: [
       { where: 'interior', doodad: { kind: 'cinder', radius: [22, 40] }, countPer100Cells: [14, 22] },
@@ -784,6 +811,9 @@ export const STRUCTURES: Record<string, StructureDef> = {
       '###D####',
     ],
     cellSize: 30,
+    // Sealed by walls + slits: the room ledger keeps it enclosed and the
+    // veil SPILLS sight through each W — a metropolis of real interiors.
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber',
   },
 
@@ -795,6 +825,9 @@ export const STRUCTURES: Record<string, StructureDef> = {
     id: 'walled_manor', halfW: 300, halfH: 240,
     generator: 'compound', cellSize: 30,
     genParams: { w: [14, 19], h: [11, 15], courtyardChance: 0.3, windows: 5, clutterPer100: [3, 6] },
+    // Room-by-room confinement: the veil walks the manor with you exactly
+    // the way the roof reveal already does; courtyards stay open sky.
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'timber',
     bastion: { weight: 2 },
   },
@@ -809,6 +842,7 @@ export const STRUCTURES: Record<string, StructureDef> = {
       w: [16, 22], h: [13, 17], minRoom: 3, courtyardChance: 0.08,
       windows: 0, doorChar: 'X', gateChar: 'X', loops: [2, 4], clutterPer100: [4, 8],
     },
+    confineVision: 'rooms',
     roofs: 'auto', roofStyle: 'stone',
     garrison: 'undead', garrisonSize: [3, 5],
     bastion: { weight: 2 },
