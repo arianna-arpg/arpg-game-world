@@ -122,6 +122,9 @@ interface ShipState {
   dockZoneId: string | null;
   dockLeft: number;
   dockSeq: number;
+  /** Where she rode at anchor BEFORE nosing in (open water by construction) —
+   *  the undock fallback when no seaward bearing probes clear. */
+  preDock: { x: number; y: number } | null;
 }
 
 export class WraithsailField implements WorldOverlay {
@@ -172,6 +175,16 @@ export class WraithsailField implements WorldOverlay {
     s.becalmLeft = Math.max(0, s.becalmLeft - dt);
     s.sheerLeft = Math.max(0, s.sheerLeft - dt);
     s.holdLeft = Math.max(0, s.holdLeft - dt);
+
+    // SELF-HEAL A STRANDING: if any path ever leaves her hull on dry land
+    // (an old snapshot, a dev teleport, a continent reroll), put her back on
+    // the nearest open water rather than let her wedge — and if no water is
+    // in reach, she simply isn't (the sea reclaims its own).
+    if (s.mode !== 'docked' && view.terrain(s.coord) !== 'ocean') {
+      const at = this.oceanNear(s.coord, view);
+      if (at) { s.coord = at; s.sheerLeft = Math.max(s.sheerLeft, 2); }
+      else { this.ship = null; return; }
+    }
 
     // DOCKED: she lies alongside until the layover ends (or the party breaks).
     if (s.mode === 'docked') {
@@ -328,7 +341,11 @@ export class WraithsailField implements WorldOverlay {
   /** Pure JSON: the ship (wake included), the three cooldowns, the counter. */
   snapshot(): unknown {
     return {
-      ship: this.ship ? { ...this.ship, coord: { ...this.ship.coord }, wake: this.ship.wake.map(w => ({ ...w })) } : null,
+      ship: this.ship ? {
+        ...this.ship, coord: { ...this.ship.coord },
+        wake: this.ship.wake.map(w => ({ ...w })),
+        preDock: this.ship.preDock ? { ...this.ship.preDock } : null,
+      } : null,
       respawnLeft: this.respawnLeft,
       boardCooldownLeft: this.boardCooldownLeft,
       dockCooldownLeft: this.dockCooldownLeft,
@@ -376,6 +393,10 @@ export class WraithsailField implements WorldOverlay {
         dockZoneId: typeof raw.dockZoneId === 'string' ? raw.dockZoneId : null,
         dockLeft: Math.max(0, num(raw.dockLeft, 0)),
         dockSeq: Math.max(0, Math.floor(num(raw.dockSeq, 0))),
+        preDock: raw.preDock && typeof raw.preDock === 'object'
+          && [(raw.preDock as { x: unknown }).x, (raw.preDock as { y: unknown }).y]
+            .every(n => typeof n === 'number' && Number.isFinite(n))
+          ? { x: (raw.preDock as { x: number }).x, y: (raw.preDock as { y: number }).y } : null,
       };
       // A docked ship must still have a dock to be docked AT.
       if (this.ship.mode === 'docked' && !this.ship.dockZoneId) this.ship.mode = 'running';
@@ -458,7 +479,9 @@ export class WraithsailField implements WorldOverlay {
     s.dockLeft = this.rng.range(this.cfg.dockSeconds[0], this.cfg.dockSeconds[1]);
     s.dockSeq++;
     s.becalmLeft = 0;
-    // She noses in beside the node — the map shows her AT the port.
+    // She noses in beside the node — the map shows her AT the port — and
+    // remembers the water she left (the undock's guaranteed anchorage).
+    s.preDock = { x: s.coord.x, y: s.coord.y };
     s.coord = { x: z.map.x + this.rng.range(-6, 6), y: z.map.y + this.rng.range(-6, 6) };
   }
 
@@ -466,6 +489,8 @@ export class WraithsailField implements WorldOverlay {
     s.mode = 'running';
     s.dockZoneId = null;
     s.dockLeft = 0;
+    const anchorage = s.preDock;
+    s.preDock = null;
     this.dockCooldownLeft = this.rng.range(this.cfg.dockCooldownSeconds[0], this.cfg.dockCooldownSeconds[1]);
     // Seaward: probe eight bearings and take the first that reads ocean a
     // step out (jittered so she doesn't always leave the same way).
@@ -479,7 +504,13 @@ export class WraithsailField implements WorldOverlay {
         return;
       }
     }
-    s.heading = this.rng.range(0, Math.PI * 2); // landlocked oddity — drift free
+    // A hemmed-in cove: slip back to the water she rode at anchor.
+    if (anchorage && view.terrain(anchorage) === 'ocean') {
+      s.coord = { x: anchorage.x, y: anchorage.y };
+      s.heading = this.rng.range(0, Math.PI * 2);
+      return;
+    }
+    s.heading = this.rng.range(0, Math.PI * 2); // truly landlocked — the self-heal takes her
   }
 
   /** THE INVERTED DRIFT: the Deadwake reflects off the sea; the Wraithsail
@@ -504,10 +535,22 @@ export class WraithsailField implements WorldOverlay {
     s.coord.x = nx;
     s.coord.y = ny;
     if (!bounds) return;
-    if (s.coord.x < bounds.minX) { s.coord.x = bounds.minX; s.heading = Math.PI - s.heading; }
-    else if (s.coord.x > bounds.maxX) { s.coord.x = bounds.maxX; s.heading = Math.PI - s.heading; }
-    if (s.coord.y < bounds.minY) { s.coord.y = bounds.minY; s.heading = -s.heading; }
-    else if (s.coord.y > bounds.maxY) { s.coord.y = bounds.maxY; s.heading = -s.heading; }
+    // Charted-margin discipline WITHOUT the deadwake's position clamp: a land
+    // drifter can be snapped to its bbox edge (the box is land), but snapping
+    // a SHIP to a box drawn around land beaches her. Steer, never teleport —
+    // beyond the margin she simply comes about and sails back in, and the
+    // ocean test above stays the only authority on where her hull may be.
+    // A RIDDEN storm outranks the margins (it re-locks her heading anyway):
+    // the weather may carry her past the charted edge, and the steer-back
+    // brings her home once the front lets go.
+    if (s.mode !== 'riding') {
+      if ((s.coord.x < bounds.minX && Math.cos(s.heading) < 0)
+        || (s.coord.x > bounds.maxX && Math.cos(s.heading) > 0)) s.heading = Math.PI - s.heading;
+      if ((s.coord.y < bounds.minY && Math.sin(s.heading) < 0)
+        || (s.coord.y > bounds.maxY && Math.sin(s.heading) > 0)) s.heading = -s.heading;
+    }
+    // Keep the heading tidy for the snapshot bag (reflections accumulate).
+    s.heading = Math.atan2(Math.sin(s.heading), Math.cos(s.heading));
   }
 
   /** Charted-world bounding box, padded — she roams the known sea's margins
@@ -563,6 +606,7 @@ export class WraithsailField implements WorldOverlay {
       becalmLeft: 0, sheerLeft: 0, holdLeft: 0,
       wake: [], wakeAcc: 0,
       dockZoneId: null, dockLeft: 0, dockSeq: 0,
+      preDock: null,
     };
   }
 }
