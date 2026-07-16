@@ -4939,13 +4939,21 @@ export const TILESETS: Record<string, TilesetDef> = {
     depthAffinity: { from: 0.35, fadeIn: 0.3 },
     forceLayout: 'forest',
     layoutParams: {
+      // Trees ONLY in the planted mix: both kinds bake (trunk bakeWhole +
+      // stoneCrown in CANOPY_STATIC), so the whole roof costs what any
+      // forest roof costs. rock_spire stays a FURNITURE row below — its
+      // boulder painter draws live, and planting it forest-dense (~600/roll)
+      // was the perf-gate breach: 29.2ms p50 → the mass belongs to trees.
       forestTrees: [
         { kind: 'petrified_tree', weight: 6, radius: [30, 48] },
         { kind: 'petrified_elder', weight: 1, radius: [44, 60] },
-        { kind: 'rock_spire', weight: 1, radius: [14, 22] },
       ],
       forestCoverEdge: 0.42, forestCoverDeep: 0.8,
       forestClearings: [2, 4],
+      // 140 default + elder max radius 60 + slack: the recipe's portal ring
+      // tests tree CENTERS, and an elder's EDGE must clear the splice ring
+      // even when a late court reservation exempts it from the splice.
+      forestPortalClear: 210,
     },
     compositions: [
       { composition: 'weald_court', chance: 0.35 },
@@ -4975,6 +4983,7 @@ export const TILESETS: Record<string, TilesetDef> = {
     layout: [
       { kind: 'petrified_trunk', count: [4, 8] },
       { kind: 'watcher_stone', count: [2, 4] },
+      { kind: 'rock_spire', count: [2, 5] },
       { kind: 'rocks', count: [3, 6], radius: [18, 38] },
       { kind: 'scree', count: [2, 4] },
       { kind: 'cave', count: [0, 2] },
