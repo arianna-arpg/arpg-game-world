@@ -1454,8 +1454,10 @@ export class UI {
     // MIREILLE'S LESSON, read from its one source of truth (the world): at
     // the 'bar' step the flap handle GLOWS until first opened (the one-shot
     // above); at the 'learn' step the Skill Gems TAB glows from any other
-    // tab. The glow always marks the lesson's next click — and a graduated
-    // account never rolls a lesson, so these stay quiet forever after.
+    // tab. The glow always marks the lesson's next click — and the lesson
+    // LATCHES LIVED in the ledgers (World.mireilleGiftLesson), so once the
+    // loop has been walked — this run, a past character, or undone again by
+    // choice (unlearn, unbind) — these stay quiet forever after.
     const lesson = this.getWorld().mireilleGiftLesson();
     const flapGlow = lesson === 'bar' && !this.buildFlapOpen && !this.buildFlapTaught;
     const drawerHandle = `

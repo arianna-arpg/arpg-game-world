@@ -112,15 +112,19 @@ export const FEATURE = {
  *  Immortal unlock; any future "die N times" content reads the same counter. */
 export const LEDGER_ACCOUNT_DEATHS = 'account_deaths';
 
-/** Account-ledger key: characters who have LIVED Mireille's flask lesson —
- *  her gift gems learned, set to the bar, founts filled. ONE string serves
- *  both ledgers by design: it is the per-RUN fill marker (world.ts
- *  MIREILLE_FILL_LEDGER aliases this), so a metaProgression death merges it
- *  into the account naturally — and the fill moment ALSO stamps the account
- *  directly (accountDirty persistence) so graduation is immediate, not
+/** Account-ledger key: an account that has LIVED Mireille's flask lesson —
+ *  the gift loop closed once (gems learned and set to the bar, or traded
+ *  away, or deliberately unlearned — world.ts MIREILLE_LESSON_LEDGER), or
+ *  her brim reward paid. ONE string serves both ledgers by design: it is
+ *  the per-RUN fill marker (world.ts MIREILLE_FILL_LEDGER aliases this),
+ *  so a metaProgression death merges it into the account naturally — and
+ *  updateMireille ALSO stamps the account directly the moment the lesson is
+ *  lived (accountDirty persistence) so graduation is immediate, not
  *  death-deferred. Read it as a FLAG: any truthy count means this account
- *  has been taught, and every later character spawns with the flasks dealt
- *  outright (World.dealVeteranFlasks) instead of re-walking the tutorial. */
+ *  has been taught — every later character spawns with the flasks dealt
+ *  outright (World.dealVeteranFlasks) instead of re-walking the tutorial,
+ *  and the lesson LATCH (World.mireilleGiftLesson) keeps every teaching
+ *  surface quiet on this account forever: completed never re-opens. */
 export const LEDGER_FLASK_LESSON = 'mireille_flasks_filled';
 
 /** First disk save slot the character ROSTER may use (0/1/2 are account /
