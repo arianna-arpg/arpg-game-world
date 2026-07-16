@@ -4072,6 +4072,45 @@ const wheels: PartPainter = (ctx, r, spec, pal) => {
   });
 };
 
+/** SHIP'S ANCHOR — the drowned court's burden worn as a weapon: a straight
+ *  shank with a ring at the crown, a crossed stock, and two curved flukes at
+ *  the foot. Reads at a glance from any angle (the silhouette is the whole
+ *  argument). params: len (shank length ÷ body radius). */
+const anchor: PartPainter = (ctx, r, spec, pal) => {
+  const ramp = rampFor(spec, pal, 'metal');
+  const len = P(spec, 'len', 1.15);
+  place(ctx, r, spec, (c, R) => {
+    const L = R * len;         // half-length of the shank
+    const w = Math.max(1.6, R * 0.11);
+    c.strokeStyle = ramp.base;
+    c.lineCap = 'round';
+    c.lineWidth = w;
+    // The shank: crown (ring end) at -Y, flukes at +Y.
+    c.beginPath(); c.moveTo(0, -L); c.lineTo(0, L * 0.72); c.stroke();
+    // The stock: the crossbar just under the ring.
+    c.beginPath(); c.moveTo(-L * 0.42, -L * 0.66); c.lineTo(L * 0.42, -L * 0.66); c.stroke();
+    // The arms: two flukes curving up and out from the foot.
+    for (const s of [-1, 1]) {
+      c.beginPath();
+      c.moveTo(0, L * 0.72);
+      c.quadraticCurveTo(s * L * 0.52, L * 0.78, s * L * 0.5, L * 0.22);
+      c.stroke();
+      // Fluke tips: small triangular palms.
+      c.fillStyle = shade(ramp.base, 0.1);
+      c.beginPath();
+      c.moveTo(s * L * 0.5, L * 0.22);
+      c.lineTo(s * L * 0.66, L * 0.4);
+      c.lineTo(s * L * 0.36, L * 0.44);
+      c.closePath(); c.fill();
+    }
+    // The ring at the crown.
+    c.lineWidth = Math.max(1.2, w * 0.6);
+    c.strokeStyle = shade(ramp.base, 0.16);
+    c.beginPath(); c.arc(0, -L - R * 0.1, R * 0.14, 0, Math.PI * 2); c.stroke();
+    c.lineCap = 'butt';
+  });
+};
+
 export const PART_PAINTERS: Record<string, PartPainter> = {
   disc, blob, carapace, torso, robe, serpentHead,
   skull, ribs, spineTrail, crown,
@@ -4102,6 +4141,7 @@ export const PART_PAINTERS: Record<string, PartPainter> = {
   shroudWrap, carrionFlies,
   wheels,
   canopicJar, sarcophagusLid,
+  anchor,
 };
 
 /** Paint a look's baked stack (local space, +X = facing, r = body radius). */

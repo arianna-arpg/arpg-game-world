@@ -140,6 +140,64 @@ export const SKILLS: Record<string, SkillDef> = {
     ai: { range: 90, weight: 2 },
   },
 
+  // ============= The Drowned Court's verbs (sunken nobility) ===============
+  // The void_hook doctrine again: the court's arts DROP as gems — board the
+  // Wraithsail, break the court, learn what the sea taught them. The family
+  // signature rides two existing fabrics: `sodden` (the terrain soak status —
+  // the tide leaves you heavy) and WARD (the decaying shield — a swell that
+  // must ebb).
+
+  tide_lash: {
+    id: 'tide_lash', name: 'Tide Lash',
+    description: 'A blade brought down the way the SEA comes in — the cut is cold, and what it soaks it slows.',
+    tags: ['attack', 'melee', 'physical', 'cold'], color: '#6ac8d8',
+    manaCost: 0, cooldown: 0, useTime: 0.5,
+    baseDamage: { physical: [5, 8], cold: [3, 6] },
+    delivery: { type: 'melee', range: 58, arcDeg: 80 },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'sodden', chance: 0.45 },
+    ],
+    requirements: { dexterity: 12, strength: 10 },
+    minDropLevel: 8, dropWeight: 0.7,
+    ai: { range: 55, weight: 2 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.1), mod('attackSpeed', 'increased', 0.02)] },
+  },
+
+  drowning_grasp: {
+    id: 'drowning_grasp', name: 'Drowning Grasp',
+    description: 'Kelp-wrapped hands break the ground like a surface and SEIZE — everything near the reaching is dragged toward it, and what they catch they hold under.',
+    tags: ['spell', 'cold', 'aoe', 'duration'], color: '#3a8a7c',
+    manaCost: 11, cooldown: 7, useTime: 0.6,
+    baseDamage: { cold: [6, 10], physical: [4, 7] },
+    delivery: {
+      type: 'ground', radius: 85, castRange: 320,
+      lingerDuration: 0.7, tickInterval: 0.35,
+      pull: 180, pullRadius: 170,
+    },
+    effects: [
+      { type: 'damage' },
+      { type: 'status', status: 'rooted', chance: 0.3, durationOverride: 0.9 },
+    ],
+    requirements: { intelligence: 15, willpower: 10 },
+    minDropLevel: 10, dropWeight: 0.6,
+    ai: { range: 300, weight: 2, keepDistance: 120 },
+    leveling: { perLevel: [mod('damage', 'increased', 0.11)] },
+  },
+
+  // The Regent's rhythm: the tide comes IN (a ward swell you should not hit
+  // into) and the tide goes OUT (the decay window where he is honest meat).
+  // Self-delivery ward — the one pool that drains itself (engine WardEffect).
+  tideward_swell: {
+    id: 'tideward_swell', name: 'Tideward Swell', noDrop: true,
+    description: 'The sea rises to stand between its regent and the argument — a swell of cold light that only its own ebb can lower.',
+    tags: ['spell', 'cold', 'duration'], color: '#7ad8d8',
+    manaCost: 22, cooldown: 9, useTime: 0.45,
+    delivery: { type: 'self' },
+    effects: [{ type: 'ward', amount: 85 }],
+    ai: { range: 999, weight: 3 },
+  },
+
   // ============== The Sirocco Court's verbs (desert monsters) ==============
   // The void_hook doctrine: monster verbs DROP as gems on purpose — kill the
   // court, learn its arts. All lootable, all presence-humble.

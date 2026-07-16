@@ -78,6 +78,10 @@ export const FACTION_TRAITS: Record<string, FactionTraits> = {
   demon: { roaming: 0.85, aggression: 1.6, warlordHome: 'origin', homeBiome: 'rift', eventRange: 240, contexts: ['baseline', 'fractures'], temper: 'territorial' },
   // The Deep — marine-only (contexts:['marine'], NOT baseline), so it never seeds
   // ordinary war/territory; it appears purely via the marine tilesets' pack tables.
+  // Its DROWNED COURT wing (the sunken nobility) keeps the same door — and the
+  // faction stays CROWNLESS in WARLORD_OF (the chitin/sarcophate precedent):
+  // the Tidebound Regent is the Wraithsail's flagship boss, boarded at sea,
+  // never a marching warlord. The sea does not invade; it ARRIVES.
   deep: { roaming: 0.3, aggression: 1.0, warlordHome: 'origin', homeBiome: 'deepsea', contexts: ['marine'], temper: 'skittish' },
   // The Horned Tribes — highland raiders: they march far and gladly (the
   // gnolls' allies on the winter roads), throne wherever the strongest holds.

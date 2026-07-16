@@ -1407,6 +1407,129 @@ export const MONSTERS: Record<string, MonsterDef> = {
     scaling: { life: { incPerLevel: 0.14 } },
   },
 
+  // --- THE DROWNED COURT: the Deep's sunken nobility --------------------------
+  // The court of a kingdom the sea swallowed whole, still keeping state in the
+  // dark. They crew the WRAITHSAIL when the storm rides, walk ashore only where
+  // she docks, and hold the deepest fathoms of the open ocean (HARD presence
+  // floors — nobility does not attend shallow water). Family counterlevers:
+  // the drowned are cold-kin (coldRes high) but waterlogged flesh CONDUCTS
+  // (lightningRes in debt) — the texture doctrine's answer lever. Each body
+  // defends a DIFFERENT way (no one build beats the court): a spongy soak, a
+  // breathing tide-shield, ES-glass, an evasion duelist, a poise anchor. The
+  // ghost crew wear their strength by dusk and dark (the nocturne fabric —
+  // dawn finds them thinner). CROWNLESS in WARLORD_OF like the Chitin and the
+  // Sarcophate: the Tidebound Regent is the Wraithsail's flagship boss, never
+  // a marching warlord — the sea keeps its own borders.
+  drowned_oarsman: {
+    id: 'drowned_oarsman', name: 'Drowned Oarsman',
+    color: '#4a7a80', shape: 'square', radius: 12, material: 'cloth', look: 'drowned_oarsman',
+    base: { life: 36, moveSpeed: 118, accuracy: 96, mana: 0 },
+    // The soak: blows sink IN — muffled, not turned. Burst lands soft here;
+    // sustain wrings them out. (And the water remembers lightning.)
+    mods: [mod('coldRes', 'flat', 0.5), mod('lightningRes', 'flat', -0.25), mod('damageTaken', 'more', -0.12)],
+    nocturne: { phases: ['dusk', 'night'], mods: [mod('moveSpeed', 'increased', 0.15), mod('damage', 'more', 0.2)] },
+    skills: ['tide_lash', 'claw'],
+    brain: { type: 'swarm' },
+    xp: 15,
+    faction: 'deep',
+    detection: 1.2,
+    scaling: { life: { incPerLevel: 0.1 } },
+  },
+  barnacle_knight: {
+    id: 'barnacle_knight', name: 'Barnacle Knight',
+    color: '#3f6a60', shape: 'square', radius: 15, material: 'chitin', look: 'barnacle_knight',
+    base: { life: 92, moveSpeed: 92, accuracy: 102, armor: 20, poise: 35, mana: 20, manaRegen: 3 },
+    mods: [mod('coldRes', 'flat', 0.6), mod('lightningRes', 'flat', -0.25)],
+    // THE TIDE-SHIELD: a breathing front shell — full at the crest, a sliver
+    // at the ebb (the whelk's lever at soldier scale). Crack the line at low
+    // tide, then commit through real poise: the sustain-then-burst pole.
+    shellGuard: { side: 'front', max: 65, arcDeg: 150, regenDelay: 5, regenRate: 9, breathe: { period: 6, minFrac: 0.3 }, color: '#7ad8c8' },
+    turnSpeed: 2.6,
+    aggro: { fixation: 1.4, fury: 0.8, waver: 0.7 },
+    skills: ['heavy_strike', 'tide_lash'],
+    brain: { type: 'juggernaut' },
+    xp: 28,
+    faction: 'deep',
+    detection: 1.1,
+    scaling: { life: { incPerLevel: 0.1 }, armor: { flatPerLevel: 0.8 } },
+  },
+  tide_vicar: {
+    id: 'tide_vicar', name: 'Tide Vicar',
+    color: '#3a6a8a', shape: 'star', radius: 13, material: 'cloth', look: 'tide_vicar',
+    // ES-glass: the sea's benediction is a second life of cold light over
+    // very little meat — burst deletes him between recharges; sustain fights
+    // the gate. He drags the drowning pool with him and mends the court.
+    base: { life: 34, energyShield: 110, moveSpeed: 112, accuracy: 108, mana: 150, manaRegen: 9 },
+    mods: [mod('coldRes', 'flat', 0.6), mod('lightningRes', 'flat', -0.3)],
+    skills: ['undertow', 'frostbolt', 'mending_pulse'],
+    brain: { type: 'strafer' },
+    xp: 30,
+    faction: 'deep',
+    detection: 1.3,
+    scaling: { life: { incPerLevel: 0.1 } },
+  },
+  sunken_courtier: {
+    id: 'sunken_courtier', name: 'Sunken Courtier',
+    color: '#4a5a76', shape: 'triangle', radius: 12, material: 'cloth', look: 'sunken_courtier',
+    // The duelist: evasion over everything — rotted finery weighs nothing
+    // now. Accuracy investment and honest AoE punish the courtesies.
+    base: { life: 44, moveSpeed: 148, accuracy: 118, evasion: 85, mana: 20, manaRegen: 3 },
+    mods: [mod('coldRes', 'flat', 0.5), mod('lightningRes', 'flat', -0.25)],
+    nocturne: { phases: ['dusk', 'night'], mods: [mod('evasion', 'more', 0.45), mod('damage', 'more', 0.15)] },
+    skills: ['tide_lash', 'claw'],
+    brain: { type: 'flanker', move: { style: 'weave' } },
+    xp: 22,
+    faction: 'deep',
+    detection: 1.3,
+    scaling: { life: { incPerLevel: 0.1 } },
+  },
+  anchor_wight: {
+    id: 'anchor_wight', name: 'Anchor Wight',
+    color: '#38584e', shape: 'hexagon', radius: 17, material: 'chitin', look: 'anchor_wight',
+    // The poise pole: the anchor is the argument — no shell, no dodging,
+    // just a break-bar you commit through while the chain comes around.
+    base: { life: 135, moveSpeed: 78, accuracy: 98, armor: 16, poise: 80, mana: 30, manaRegen: 4 },
+    mods: [mod('coldRes', 'flat', 0.6), mod('lightningRes', 'flat', -0.3)],
+    turnSpeed: 2.4,
+    aggro: { fixation: 1.5, fury: 0.7, waver: 0.8 },
+    skills: ['ground_slam', 'drowning_grasp'],
+    brain: { type: 'juggernaut' },
+    xp: 34,
+    faction: 'deep',
+    detection: 1.0,
+    scaling: { life: { incPerLevel: 0.12 } },
+  },
+  // The Wraithsail's flagship boss — spawned by the boarding chain's great
+  // cabin (boss objective) and nowhere else: never in a pack table, never a
+  // warlord. His rhythm is the family signature at boss scale: the TIDE COMES
+  // IN (tideward_swell — a ward you should not hit into) and the tide goes
+  // OUT (the decay window where he is honest meat). Event spoils ride
+  // MonsterDef.loot (the tidebound hoard).
+  tidebound_regent: {
+    id: 'tidebound_regent', name: 'The Tidebound Regent',
+    color: '#2c5a6a', shape: 'star', radius: 21, material: 'cloth', look: 'tidebound_regent',
+    base: { life: 400, moveSpeed: 104, accuracy: 118, armor: 28, poise: 60, mana: 170, manaRegen: 10 },
+    mods: [mod('coldRes', 'flat', 0.75), mod('lightningRes', 'flat', -0.2), mod('damageTaken', 'more', -0.1)],
+    skills: ['tideward_swell', 'tide_lash', 'drowning_grasp', 'frost_nova'],
+    brain: {
+      type: 'commander',
+      rules: [{
+        when: { distUnder: 560 }, every: [15, 21], hold: [0.4, 0.6],
+        announce: 'The Regent calls the watch below!',
+        actions: [{ do: 'summon', monster: 'drowned_oarsman', count: 2, ring: 68 }],
+      }],
+      phases: [
+        { atLifeFrac: 0.55, mods: [mod('attackSpeed', 'increased', 0.2), mod('castSpeed', 'increased', 0.2)] },
+        { atLifeFrac: 0.25, mods: [mod('damage', 'more', 0.25), mod('moveSpeed', 'increased', 0.15)] },
+      ],
+    },
+    boss: true,
+    xp: 150,
+    faction: 'deep',
+    detection: 1.2,
+    scaling: { life: { incPerLevel: 0.14 } },
+  },
+
   spitting_horror: {
     id: 'spitting_horror', name: 'Spitting Horror',
     color: '#86a848', shape: 'triangle', radius: 15, material: 'chitin', look: 'spitting_horror',
@@ -9061,6 +9184,15 @@ export const FACTIONS: Record<string, {
       { id: 'deep_angler', weight: 3, presence: { from: 6, fadeIn: 3 } },
       { id: 'deep_tidecaller', weight: 2, presence: { from: 10, fadeIn: 4 } },
       { id: 'deep_leviathan', weight: 1, presence: { from: 16, fadeIn: 8 } },
+      // THE DROWNED COURT attends only the deepest fathoms — HARD floors, no
+      // fadeIn (nobility does not ramp; it arrives, or the water is beneath
+      // it). The Wraithsail's decks field the same bodies by name — one
+      // roster, two doors. The Regent is deliberately absent: flagship only.
+      { id: 'drowned_oarsman', weight: 2, presence: { from: 8 } },
+      { id: 'barnacle_knight', weight: 2, presence: { from: 12 } },
+      { id: 'tide_vicar', weight: 1, presence: { from: 14 } },
+      { id: 'sunken_courtier', weight: 1, presence: { from: 14 } },
+      { id: 'anchor_wight', weight: 1, presence: { from: 16 } },
     ],
   },
   beastkin: {

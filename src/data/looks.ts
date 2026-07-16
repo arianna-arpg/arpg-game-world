@@ -3819,6 +3819,100 @@ export const LOOKS: Record<string, LookDef> = {
     live: [{ kind: 'slimeTrail', color: '#4a6a58', scale: 0.8 }],
     shadowScale: 1.05,
   },
+
+  // ============================ THE DROWNED COURT (the Deep's nobility)
+  // One glance says WHICH courtesy is about to kill you: the oar, the kite
+  // shield, the censer, the rapier-and-circlet, the anchor, the trident-and-
+  // crown. Everything reads through the apparition kit (cool phosphor eyes,
+  // faded cloth, trailing wisps) laid over solid drowned bodies — ghost crew,
+  // not ghosts.
+  /** The crew: a sagging body in rotted slops, still pulling a broken oar. */
+  drowned_oarsman: {
+    parts: [
+      { kind: 'torso', color: '#3c5a5e', scale: 1.0 },
+      { kind: 'tatters', color: '#2f4a46', alpha: 0.9, params: { n: 5 } },
+      { kind: 'drape', color: '#3a6a52', scale: 0.9, alpha: 0.85 },
+      { kind: 'staff', color: '#5a4a34', rot: 0.55, scale: 1.15 },
+      { kind: 'eyes', color: '#9ad8e0', params: { spread: 0.3, dist: 0.55, size: 0.08 } },
+    ],
+    live: [{ kind: 'wisps', color: '#7ad8d8', scale: 0.6, alpha: 0.4, params: { n: 2 } }],
+    shadowScale: 1.0,
+  },
+  /** The wall of the court: kite shield gone to reef, coral-grown pauldrons —
+   *  the breathing shell glyph does the rest of the talking. */
+  barnacle_knight: {
+    parts: [
+      { kind: 'torso', color: '#3f625c', scale: 1.05 },
+      { kind: 'pauldrons', color: '#55806e', scale: 1.05 },
+      { kind: 'polyps', color: '#6ab0a0', scale: 0.8 },
+      { kind: 'sword', color: '#6a8a80', y: 0.05, params: { len: 1.1 } },
+      { kind: 'shield', color: '#4a6a5e', params: { kite: true } },
+      { kind: 'helm', color: '#5a7a6e', scale: 0.95 },
+      { kind: 'eyes', color: '#a8e0d8', params: { spread: 0.26, dist: 0.55, size: 0.07 } },
+    ],
+    live: [{ kind: 'wisps', color: '#7ad8c8', scale: 0.5, alpha: 0.35, params: { n: 2 } }],
+    shadowScale: 1.05,
+  },
+  /** The tide priest: drowned vestments, a censer that drips instead of
+   *  smokes, a verdigris circlet over the hood — the sea's own chaplain. */
+  tide_vicar: {
+    parts: [
+      { kind: 'robe', color: '#2e4658', scale: 1.05, alpha: 0.95 },
+      { kind: 'shroudWrap', color: '#43655e', scale: 0.9, alpha: 0.8, params: { bands: 3 } },
+      { kind: 'censer', color: '#7ad8c8', y: 0.55, scale: 0.9, role: 'metal' },
+      { kind: 'staff', color: '#4a6a62', scale: 0.95, params: { orb: 'glow' } },
+      { kind: 'hood', color: '#243a48', scale: 0.95, params: { eyes: true } },
+      { kind: 'crown', color: '#5a8a72', x: 0.28, scale: 0.55 },
+    ],
+    live: [{ kind: 'wisps', color: '#8ad8e0', scale: 0.7, alpha: 0.5, params: { n: 3 } }],
+    shadowScale: 1.0,
+  },
+  /** The nobility: soaked finery, a soggy plume still worn at the angle
+   *  fashion demanded, a rapier quicker than anything drowned should be. */
+  sunken_courtier: {
+    parts: [
+      { kind: 'cape', color: '#4a3244', scale: 0.95, alpha: 0.9 },
+      { kind: 'torso', color: '#3c5a66', scale: 0.95 },
+      { kind: 'drape', color: '#3a6a58', scale: 0.85, alpha: 0.8 },
+      { kind: 'sword', color: '#8ab0b8', y: 0.05, params: { len: 1.7, w: 0.045, guard: false } },
+      { kind: 'crown', color: '#5a8a72', x: 0.26, scale: 0.5 },
+      { kind: 'plume', color: '#44606a', x: 0.2, scale: 0.8, alpha: 0.85 },
+      { kind: 'eyes', color: '#b8e8f0', params: { spread: 0.3, dist: 0.56, size: 0.08 } },
+    ],
+    live: [{ kind: 'wisps', color: '#7ad8d8', scale: 0.6, alpha: 0.45, params: { n: 2 } }],
+    shadowScale: 0.95,
+  },
+  /** The anchor made a pallbearer: chained iron slung over one shoulder,
+   *  barnacle-crusted — the silhouette IS the weapon. */
+  anchor_wight: {
+    parts: [
+      { kind: 'torso', color: '#31504c', scale: 1.15 },
+      { kind: 'chains', color: '#5a7268', x: -0.3, rot: 1.1, scale: 0.9, alpha: 0.8, params: { n: 3 } },
+      { kind: 'anchor', color: '#5f8a7c', x: -0.35, y: -0.25, rot: -0.5, scale: 1.15 },
+      { kind: 'polyps', color: '#6ab0a0', scale: 0.7 },
+      { kind: 'skull', color: '#c8d8d0', x: 0.4, scale: 0.9, params: { glow: 'glow' } },
+    ],
+    live: [{ kind: 'wisps', color: '#7ad8c8', scale: 0.6, alpha: 0.4, params: { n: 2 } }],
+    shadowScale: 1.15,
+  },
+  /** THE TIDEBOUND REGENT: gilt crown gone green at the tines, kelp-rotted
+   *  royal purple, the trident of a drowned admiralty — and a halo of cold
+   *  light when the tide stands in for him. */
+  tidebound_regent: {
+    parts: [
+      { kind: 'halo', color: '#7ad8d8', scale: 1.05, alpha: 0.35 },
+      { kind: 'cape', color: '#462f42', scale: 1.05, alpha: 0.95 },
+      { kind: 'torso', color: '#2c4a56', scale: 1.1 },
+      { kind: 'drape', color: '#3a6a58', scale: 1.0, alpha: 0.85 },
+      { kind: 'pauldrons', color: '#557a86', scale: 1.05 },
+      { kind: 'trident', color: '#8ad0c0', params: { len: 1.2 } },
+      { kind: 'crown', color: '#c8b86a', x: 0.28, scale: 0.7, params: { tines: 5 } },
+      { kind: 'polyps', color: '#6ab0a0', x: 0.28, y: -0.55, scale: 0.45 },
+      { kind: 'eyes', color: '#bfe8f0', params: { spread: 0.32, dist: 0.55, size: 0.09 } },
+    ],
+    live: [{ kind: 'wisps', color: '#7ad8d8', scale: 0.8, alpha: 0.5, params: { n: 4 } }],
+    shadowScale: 1.2,
+  },
   /** The lattice-crawler: ring-segmented glass, light bending along it. */
   prism_creeper: {
     parts: [
