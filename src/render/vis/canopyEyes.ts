@@ -39,6 +39,11 @@ export class CanopyEyes {
   /** Per-crown presence fade (1 = eyes out, 0 = denied). WeakMap: state
    *  evaporates with the doodad — zone hops leak nothing. */
   private fade = new WeakMap<Doodad, number>();
+  /** Per-crown ELIGIBILITY, cached forever: it is a pure function of the
+   *  crown's (static) position and the zone's seed, and value-noise per
+   *  culled crown per FRAME was real money in a sealed wood. WeakMap keyed
+   *  on the doodad — a new zone mints new doodads, so it self-clears. */
+  private eligible = new WeakMap<Doodad, boolean>();
 
   /** Draw under the caller's world-space transform, AFTER the crowns. */
   draw(ctx: CanvasRenderingContext2D, world: World, dt: number, groups: readonly EyedGroup[]): void {
@@ -67,9 +72,14 @@ export class CanopyEyes {
         const seed = ((o.pos.x * 13 + o.pos.y * 31) | 0) >>> 0;
         // Eligibility: same expected share either way — the patchy mood just
         // spends it in spatially-correlated clumps instead of a thin sift.
-        const eligible = patchy
-          ? valueNoise(o.pos.x / C.patchScale, o.pos.y / C.patchScale, zoneSeed) < share
-          : hash01(seed, zoneSeed) < share;
+        // Computed ONCE per crown (cached): positions never move.
+        let eligible = this.eligible.get(o);
+        if (eligible === undefined) {
+          eligible = patchy
+            ? valueNoise(o.pos.x / C.patchScale, o.pos.y / C.patchScale, zoneSeed) < share
+            : hash01(seed, zoneSeed) < share;
+          this.eligible.set(o, eligible);
+        }
         if (!eligible) continue;
         const d = Math.hypot(hero.pos.x - o.pos.x, hero.pos.y - o.pos.y);
         // The rule of the wood: never show when a walker is near. The fade

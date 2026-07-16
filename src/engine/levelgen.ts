@@ -174,6 +174,7 @@ export type KnownDoodadKind =
   | 'clot_mound'     // blocks feet not shots — a dark coagulate bank, still warm
   | 'artery_stalk'   // blocks feet not shots — a severed standing vessel spurting on the heartbeat
   | 'sphincter'      // a PUCKERING DOOR: carries DoodadDoor state; dwell near and it dilates open
+  | 'membrane_seal'  // a drum of stretched skin over a narrow throat — bursts when pressed or shot (the gross little door)
   | 'chyme_pool'     // ground liquid: digestive bile — it wants you broken down
   | 'gas_polyp'      // a swollen bladder (brittle): pops into a sour lingering fume
   | 'villus_bed'     // ground overlay: a carpet of swaying absorptive fronds
@@ -1338,6 +1339,12 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   clot_mound:   { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 40, forbidOn: ['water', 'lava', 'chasm'] },
   artery_stalk: { overlap: 'solid', blocksMove: true, blocksShot: false, spacing: 56, forbidOn: ['water', 'lava', 'chasm'] },
   sphincter:    { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: true },
+  // The gross little door: a taut skin drum you can SEE through (dimly) but
+  // not walk or shoot through — until it pops (urn-grammar: press in or
+  // strike). Sometimes the pocket paid to be sealed.
+  membrane_seal: { overlap: 'solid', blocksMove: true, blocksShot: true, blocksSight: false,
+    brittle: { on: ['hit', 'near'], reach: 26, text: 'the seal bursts!', color: '#c86a72',
+      orbChance: 0.25, gemChance: 0.08 } },
   chyme_pool:   { overlap: 'ground', walkOnly: true, pour: {} },
   // The polyp rides the hazard-breakable grammar (gas_pod's sour cousin) —
   // pop it at range or wear the belch.
@@ -1681,6 +1688,9 @@ export interface GenCtx {
    *  (2 range draws per try, same as the full arena) — unset = byte-identical
    *  sampling for every existing caller. */
   sampleRect?: { x: number; y: number; w: number; h: number };
+  /** TRANSIENT (the flesh tract): door/seal seats recorded during the carve,
+   *  seated by seatFleshDoors only after EVERY corridor is cut. */
+  fleshSeats?: FleshSeat[];
   /** TRANSIENT: a pre-resolved anchor for the running stamp (composition
    *  SITES) — site-aware stamps (clearing/formation/cluster) use it as their
    *  center/origin instead of drawing a findSpot site, so several entries of
@@ -2131,6 +2141,31 @@ interface FleshTractSpec {
   /** Straight throat length cut at each bulb mouth so the door sits in a true
    *  corridor, not a wander's elbow (default 44). */
   stub?: number;
+  /** DOORWAY aperture half-width band (default [26, 34]): the flesh PINCHES
+   *  back in around every door seat — a muscular annulus narrowing the
+   *  throat to a true entryway the sphincter fills (the Durance discipline,
+   *  in meat: wall, breach, slab). */
+  aperture?: [number, number];
+  /** SIDE POCKETS sealed by burstable MEMBRANES (the gross little door):
+   *  `chance` per interior bulb (default 0.45), `r` pocket radius band
+   *  (default [56, 88]). A narrow throat, a drum of stretched skin over it
+   *  (brittle — walk into it or shoot it and it POPS, urn-grammar), and
+   *  whatever the pocket was keeping. */
+  pockets?: { chance?: number; r?: [number, number] };
+}
+
+/** A deferred door/seal seat recorded while the tract carves — SEATED ONLY
+ *  AFTER every corridor (portal lashes included) is cut, so no later carve
+ *  can widen a finished doorway. */
+interface FleshSeat {
+  pos: Vec2;
+  dir: number;
+  halfW: number;
+  kind: 'sphincter' | 'membrane_seal';
+  /** Membranes: the pocket throat's full line, RE-CARVED just before this
+   *  seat is built — heals any earlier seat's pinch that clipped it (seats
+   *  are seated in list order; membranes come last). */
+  carve?: [Vec2, Vec2];
 }
 
 /** The flesh recipe's RING dial (layoutParams.fleshRing): a socketed AMPHITHEATER —
@@ -2161,7 +2196,6 @@ function carveFleshTract(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spe
   const bulbBand = spec.bulbR ?? [110, 170];
   const tubeBand = spec.tubeW ?? [40, 60];
   const doorChance = spec.doorChance ?? 0.85;
-  const doorDwell = spec.doorDwell ?? 0.45;
   const stub = spec.stub ?? 44;
   const clampPt = (p: Vec2, r: number): Vec2 => vec(
     Math.min(Math.max(p.x, M + r), arena.w - M - r),
@@ -2183,7 +2217,7 @@ function carveFleshTract(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spe
     radii.push(r);
   }
   pts.push(b); radii.push(130);
-  let doorN = 0;
+  const seats: FleshSeat[] = [];
   for (let i = 0; i < pts.length; i++) grid.fillDisc(pts[i].x, pts[i].y, radii[i], 'flesh');
   for (let i = 0; i + 1 < pts.length; i++) {
     const p = pts[i], q = pts[i + 1];
@@ -2201,34 +2235,111 @@ function carveFleshTract(ctx: GenCtx, grid: GridWalkField, chambers: Vec2[], spe
     grid.carveCorridor(p.x, p.y, mouthP.x, mouthP.y, halfW);
     carveWander(grid, mouthP, mouthQ, halfW, rng);
     grid.carveCorridor(mouthQ.x, mouthQ.y, q.x, q.y, halfW);
-    // The sphincter waits in the straight throat entering the NEXT bulb.
-    // A DOOR MUST SEAL: cell quantization carves the throat wider than the
-    // nominal 2×halfW, so the seat MEASURES its true breadth (probe the walk
-    // grid wall-to-wall across the tube), recenters into the real gap, spans
-    // it visually (radius = half-breadth), and carries a rotated slab
-    // hitbox (the hit-surface fabric) — flush past each jamb, thin as the
-    // drawn muscle, no flank a body could slip.
+    // The sphincter's SEAT is recorded here and built LATER (seatFleshDoors,
+    // after every corridor incl. the portal lashes is cut — no later carve
+    // may widen a finished doorway).
     if (rng.chance(doorChance)) {
-      const seat = vec(q.x - dx * (radii[i + 1] + stub * 0.5), q.y - dy * (radii[i + 1] + stub * 0.5));
-      const perp = dir + Math.PI / 2;
-      const probe = (sgn: number): number => {
-        let s = 0;
-        while (s < halfW * 2 + 96
-          && grid.isWalkable(seat.x + Math.cos(perp) * sgn * (s + 6), seat.y + Math.sin(perp) * sgn * (s + 6))) s += 6;
-        return s;
-      };
-      const spanL = probe(-1), spanR = probe(1);
-      const mid = (spanR - spanL) / 2;
-      const center = vec(seat.x + Math.cos(perp) * mid, seat.y + Math.sin(perp) * mid);
-      const halfBreadth = (spanL + spanR) / 2 + 4;
-      ctx.doodads.push({
-        pos: center, radius: halfBreadth, kind: 'sphincter', dir,
-        door: { id: `flesh-tract/d${doorN++}`, mode: 'dwell', dwell: doorDwell },
-        hitbox: { kind: 'rect', hw: halfBreadth + 6, hh: 14, rot: perp },
+      seats.push({
+        pos: vec(q.x - dx * (radii[i + 1] + stub * 0.5), q.y - dy * (radii[i + 1] + stub * 0.5)),
+        dir, halfW, kind: 'sphincter',
       });
     }
   }
+  // SIDE POCKETS off the interior bulbs, each sealed by a MEMBRANE (the
+  // gross little door: a drum of stretched skin over a narrow throat —
+  // burst it to see what the pocket was keeping). Thrown perpendicular to
+  // the local tract run so they hang off the snake's flanks.
+  const pocketChance = spec.pockets?.chance ?? 0.45;
+  const pocketBand = spec.pockets?.r ?? [56, 88];
+  if (pocketChance > 0) {
+    for (let i = 1; i + 1 < pts.length; i++) {
+      if (!rng.chance(pocketChance)) continue;
+      const along = Math.atan2(pts[i + 1].y - pts[i - 1].y, pts[i + 1].x - pts[i - 1].x);
+      const side = rng.chance(0.5) ? 1 : -1;
+      const a2 = along + side * (Math.PI / 2) + rng.range(-0.35, 0.35);
+      const pr = rng.range(pocketBand[0], pocketBand[1]);
+      const throatLen = rng.range(34, 54);
+      const c = vec(
+        pts[i].x + Math.cos(a2) * (radii[i] + throatLen + pr),
+        pts[i].y + Math.sin(a2) * (radii[i] + throatLen + pr));
+      // Clamped pockets that would fold back into the bulb read wrong — skip.
+      if (c.x < M + pr || c.x > arena.w - M - pr || c.y < M + pr || c.y > arena.h - M - pr) continue;
+      grid.fillDisc(c.x, c.y, pr, 'flesh');
+      grid.carveCorridor(pts[i].x, pts[i].y, c.x, c.y, 20);
+      seats.push({
+        pos: vec(
+          pts[i].x + Math.cos(a2) * (radii[i] + throatLen * 0.55),
+          pts[i].y + Math.sin(a2) * (radii[i] + throatLen * 0.55)),
+        dir: a2, halfW: 20, kind: 'membrane_seal',
+        carve: [vec(pts[i].x, pts[i].y), vec(c.x, c.y)],
+      });
+      ctx.pois.push(vec(c.x, c.y));
+    }
+  }
   chambers.push(...pts);
+  ctx.fleshSeats = seats;
+}
+
+/** SEAT THE FLESH DOORS — runs after ALL carving. Every seat gets the
+ *  Durance discipline translated into meat: the flesh PINCHES back in
+ *  around the seat (two wall bulges — the muscular annulus), a true
+ *  APERTURE is re-carved through the pinch (guaranteed open, whatever the
+ *  cell quantization did), the finished gap is MEASURED wall-to-wall, and
+ *  the door fills it exactly — sphincters as dwell-doors spanning the
+ *  breach, membranes as burstable brittle drums (urn-grammar). */
+function seatFleshDoors(ctx: GenCtx, grid: GridWalkField, spec: FleshTractSpec): void {
+  const seats = ctx.fleshSeats;
+  if (!seats?.length) return;
+  const { rng } = ctx;
+  const doorDwell = spec.doorDwell ?? 0.45;
+  const apBand = spec.aperture ?? [26, 34];
+  let doorN = 0;
+  for (const seat of seats) {
+    const dx = Math.cos(seat.dir), dy = Math.sin(seat.dir);
+    const perp = seat.dir + Math.PI / 2;
+    const px = Math.cos(perp), py = Math.sin(perp);
+    // A membrane re-carves its whole pocket throat first: an earlier seat's
+    // pinch may have clipped it (membranes seat last, so this always heals).
+    if (seat.carve) grid.carveCorridor(seat.carve[0].x, seat.carve[0].y, seat.carve[1].x, seat.carve[1].y, seat.halfW);
+    const apHalf = seat.kind === 'membrane_seal'
+      ? Math.min(20, apBand[0])
+      : rng.range(apBand[0], apBand[1]);
+    // THE PINCH: wall bulges swelling in from both flanks. Radius generous
+    // enough to bury the quantized corridor edge; centered so their inner
+    // rims land at the aperture line.
+    const pinchR = seat.halfW + 44;
+    for (const sgn of [-1, 1]) {
+      grid.fillDisc(seat.pos.x + px * sgn * (apHalf + pinchR), seat.pos.y + py * sgn * (apHalf + pinchR),
+        pinchR, 'flesh_wall');
+    }
+    // THE BREACH: re-carve the doorway through the pinch — deterministic,
+    // never at the mercy of cell rounding.
+    grid.carveCorridor(seat.pos.x - dx * 26, seat.pos.y - dy * 26,
+      seat.pos.x + dx * 26, seat.pos.y + dy * 26, apHalf);
+    // MEASURE the finished gap and fill it exactly (the seal contract).
+    const probe = (sgn: number): number => {
+      let s = 0;
+      while (s < apHalf * 2 + 66
+        && grid.isWalkable(seat.pos.x + px * sgn * (s + 6), seat.pos.y + py * sgn * (s + 6))) s += 6;
+      return s;
+    };
+    const spanL = probe(-1), spanR = probe(1);
+    const mid = (spanR - spanL) / 2;
+    const center = vec(seat.pos.x + px * mid, seat.pos.y + py * mid);
+    const halfBreadth = (spanL + spanR) / 2 + 4;
+    if (seat.kind === 'sphincter') {
+      ctx.doodads.push({
+        pos: center, radius: halfBreadth + 10, kind: 'sphincter', dir: seat.dir,
+        door: { id: `flesh-tract/d${doorN++}`, mode: 'dwell', dwell: doorDwell },
+        hitbox: { kind: 'rect', hw: halfBreadth + 6, hh: 14, rot: perp },
+      });
+    } else {
+      ctx.doodads.push({
+        pos: center, radius: halfBreadth + 6, kind: 'membrane_seal', dir: seat.dir,
+        hitbox: { kind: 'rect', hw: halfBreadth + 5, hh: 12, rot: perp },
+      });
+    }
+  }
 }
 
 /** Socketed amphitheater: hub + satellite ring + radial and circumferential
@@ -2357,6 +2468,9 @@ function fleshLayout(ctx: GenCtx, def: ZoneDef): void {
       }
       if (bd > 1) carveWander(grid, chambers[i], best, rng.range(34, 48), rng);
     }
+    // EVERY corridor is cut — now the doorways: pinch, breach, measure, fill
+    // (sphincter dwell-doors + membrane seals; see seatFleshDoors).
+    if (tract) seatFleshDoors(ctx, grid, tract);
   } else {
     // Join chambers with WINDING tubes (one connected component) + a few extra loops.
     const tubeBand = layoutParam<[number, number]>(def, 'fleshTubeW', [34, 50]);
@@ -4573,6 +4687,7 @@ registerStamp('ocular_knot', (ctx, spec) => stampSolid(ctx, 'ocular_knot', spec.
 registerStamp('lash_bed', (ctx, spec) => stampBlob(ctx, 'lash_bed', spec.radius ?? [20, 40], [2, 4], false));
 registerStamp('weep_spring', (ctx, spec) => stampBlob(ctx, 'weep_spring', spec.radius ?? [14, 26], [2, 3], false));
 registerStamp('colossal_heart', (ctx, spec) => stampSolid(ctx, 'colossal_heart', spec.radius ?? [40, 56]));
+registerStamp('membrane_seal', (ctx, spec) => stampSolid(ctx, 'membrane_seal', spec.radius ?? [22, 34]));
 registerStamp('flowers', (ctx, spec) => stampBlob(ctx, 'flowers', spec.radius ?? [16, 44], [3, 6], false));
 registerStamp('reeds', (ctx, spec) => stampBlob(ctx, 'reeds', spec.radius ?? [16, 36], [3, 6], false));
 registerStamp('web', (ctx, spec) => stampBlob(ctx, 'web', spec.radius ?? [18, 40], [2, 4], false));

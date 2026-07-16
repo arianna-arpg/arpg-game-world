@@ -4298,6 +4298,60 @@ const sphincterDoor: GroupPainter = (env, group, def) => {
   }
 };
 
+/** MEMBRANE SEAL — the gross little door: a drum of stretched skin sealing
+ *  a narrow throat. Taut radial tension wrinkles off rim anchors, a wet
+ *  sheen, and the whole drum BULGES faintly on the heartbeat — something on
+ *  the far side is breathing. Translucent by rule (blocksSight false): you
+ *  can almost see what it's keeping. Bursts to a hit or a body pressing in
+ *  (the brittle rule carries that; this is only the skin). */
+const membraneSeal: GroupPainter = (env, group, def) => {
+  const p = (def.params ?? {}) as { skin?: ColorSpec; rim?: ColorSpec; sheen?: ColorSpec };
+  const { ctx, theme, time } = env;
+  const skin = resolveColor(p.skin, theme, '#b06a72');
+  const rim = resolveColor(p.rim, theme, '#7a2a34');
+  const sheen = resolveColor(p.sheen, theme, '#e8b8bc');
+  const hb = heartbeat(time, 0.6);
+  for (const o of group) {
+    const seed = ((o.pos.x * 17 + o.pos.y * 23) | 0) >>> 0;
+    const r = o.radius;
+    ctx.save();
+    ctx.translate(o.pos.x, o.pos.y);
+    if (o.dir) ctx.rotate(o.dir + Math.PI / 2); // drum spans ACROSS the throat
+    const bulge = 1 + hb * 0.05;
+    // The taut skin, dim enough to tease what's behind it.
+    ctx.fillStyle = withAlpha(skin, 0.82);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r, r * 0.5 * bulge, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = withAlpha(shade(rim, -0.25), 0.9);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Rim anchors: fold knuckles where the skin grips the jambs.
+    for (const sgn of [-1, 1]) {
+      ctx.fillStyle = rim;
+      ctx.beginPath();
+      ctx.ellipse(sgn * r * 0.92, 0, r * 0.18, r * 0.3, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Tension wrinkles fanning off the anchors toward the drum's heart.
+    ctx.strokeStyle = withAlpha(shade(skin, -0.35), 0.7);
+    ctx.lineWidth = 1.1;
+    for (let i = 0; i < 5; i++) {
+      const f = -0.7 + i * 0.35 + (hash01(i, seed) - 0.5) * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.88, f * r * 0.12);
+      ctx.quadraticCurveTo(0, f * r * 0.5 * bulge, r * 0.88, f * r * 0.12);
+      ctx.stroke();
+    }
+    // The wet catch of light, riding the bulge.
+    ctx.fillStyle = withAlpha(sheen, 0.2 + hb * 0.14);
+    ctx.beginPath();
+    ctx.ellipse(-r * 0.24, -r * 0.16 * bulge, r * 0.3, r * 0.1, -0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+};
+
 /** VILLUS BED — a mucosa patch of fat absorptive fronds. PURE painter (no
  *  time, no world) so the sway BAKE can shear the whole sprite. */
 const villusBed: GroupPainter = (env, group, def) => {
@@ -7940,7 +7994,7 @@ export const PAINTERS: Record<string, GroupPainter> = {
   campfire, groundShadow, trunk, brush, fern, vineMat, gravelPath, shimmer, fogFloor,
   hyphae, shelfFungus, toadstools,
   membrane, veins, eyeStalk, ribArch, teethRow,
-  clotMound, arteryStalk, sphincterDoor, villusBed, lashBed, gutKnuckle, ocularKnot, colossalHeart,
+  clotMound, arteryStalk, sphincterDoor, membraneSeal, villusBed, lashBed, gutKnuckle, ocularKnot, colossalHeart,
   chitinFin, umbilic, mawPit,
   finBlade, impaler, groundChain, stairFlight,
   cactus, duneCrest, saltPillar, boneArch, awningPoles, mirageGhost, web, deadTree, stump, log, snowman, signpost, firewoodPile,
@@ -8124,13 +8178,18 @@ const mushroomCrown: CanopyPainter = (env, o, alpha, params) => {
     caps?: number; cap?: ColorSpec; glow?: ColorSpec; stalk?: ColorSpec;
     speck?: ColorSpec; specks?: boolean; gills?: boolean;
   };
-  const { ctx, theme, time } = env;
+  const { ctx, theme } = env;
   const caps = p.caps ?? 1;
   const capCol = resolveColor(p.cap, theme, '#5a8a3a');
   const glowCol = resolveColor(p.glow, theme, '#8fd06f');
   const gillCol = shade(resolveColor(p.stalk, theme, '#3a2a5a'), 0.3);
   const seed = ((o.pos.x * 13 + o.pos.y * 11) | 0) >>> 0;
-  const breath = 0.55 + 0.35 * Math.sin(time * 1.6 + o.pos.x * 0.04);
+  // The breath lives in the LIGHT LAYER now (the kind's light.flicker — the
+  // glow_cap doctrine: ambient pulses ride the light pass at parity with
+  // every other emissive). The painted bloom bakes at mid-breath, which is
+  // what CANOPY_STATIC membership asserts: no time reads, pure
+  // (radius, position seed, params, theme).
+  const breath = 0.55;
   ctx.save();
   ctx.translate(o.pos.x, o.pos.y);
   // The CAP ITSELF is the canopy, seen from ABOVE: a shaded dome with its
@@ -8562,6 +8621,11 @@ export const CANOPY_STATIC: Record<string, boolean> = {
   // never joined the list, so every palm in a sealed jungle live-stroked six
   // quadratic fronds per frame while its neighbors blitted sprites.
   palmCrown: true,
+  // mushroomCrown's only time input was two breath-pulsed alphas; the pulse
+  // moved to the light layer (the kind's light.flicker), so the dome, gills
+  // and specks — 2 radial gradients + up to ~20 stroked spokes per cap,
+  // live-stroked per frame across every fungal grove until now — bake.
+  mushroomCrown: true,
 };
 
 /** Stable small integer for a params object (registry defs are singletons) —

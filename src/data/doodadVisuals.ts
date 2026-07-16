@@ -586,7 +586,10 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       painter: 'mushroomCrown',
       params: { caps: 1, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
     },
-    light: { radius: -1.6, color: '#8fd06f', intensity: 0.18 },
+    // flicker carries the crown's breath (the glow_cap doctrine): the cap
+    // bakes at mid-breath and the LIGHT breathes, at parity with every
+    // other emissive.
+    light: { radius: -1.6, color: '#8fd06f', intensity: 0.18, flicker: 1.2 },
   },
   fruiting_tower: {
     longShadow: 0.9,
@@ -595,7 +598,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
       painter: 'mushroomCrown',
       params: { caps: 3, cap: '#5a8a3a', glow: '#8fd06f', stalk: '#3a2a5a', specks: true },
     },
-    light: { radius: -1.8, color: '#8fd06f', intensity: 0.2 },
+    light: { radius: -1.8, color: '#8fd06f', intensity: 0.2, flicker: 1.2 },
   },
   shelf_fungus: {
     painter: 'shelfFungus', order: 52, shadow: 0.5,
@@ -1199,6 +1202,12 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   sphincter: {
     painter: 'sphincterDoor', order: 54, shadow: 0.4,
     params: { flesh: '#7a2a34', rim: '#a84850', throat: '#160608' },
+  },
+  // The gross little door: taut skin over a pocket throat — see through it
+  // dimly, then burst it (brittle carries the pop; this is only the skin).
+  membrane_seal: {
+    painter: 'membraneSeal', order: 54, shadow: 0.35,
+    params: { skin: '#b06a72', rim: '#7a2a34', sheen: '#e8b8bc' },
   },
   // The polyp wears the pod painter in bile (the gas_pod recolor — one row,
   // zero code; the brittle rule carries its belch).
