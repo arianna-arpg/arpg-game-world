@@ -1398,7 +1398,6 @@ const shard: GroupPainter = (env, group, def) => {
   for (const o of group) {
     const base = resolveColor(p.color, theme);
     const ramp = rampOf(base, materialOf(p.material ?? 'crystal'));
-    const pulse = 0.55 + 0.45 * Math.sin(time * 2.5 + o.pos.x * 0.05);
     ctx.save();
     ctx.translate(o.pos.x, o.pos.y);
     ctx.rotate(o.rot ?? 0);
@@ -1423,7 +1422,12 @@ const shard: GroupPainter = (env, group, def) => {
       ctx.stroke();
     }
     if (p.coreGlow) {
-      ctx.globalAlpha = pulse;
+      // The core sits at its mid glow — the LIVE pulse rides the kind's
+      // light.flicker (the glow_cap doctrine: ambient pulses belong to the
+      // light layer, at parity with every other emissive). This keeps the
+      // body time-free, so moteless shard kinds may bakeWhole; motes below
+      // are the one live element left, and mote-bearing kinds stay live.
+      ctx.globalAlpha = 0.75;
       ctx.fillStyle = resolveColor(p.coreGlow.color, theme);
       ctx.beginPath();
       ctx.arc(0, 0, o.radius * 0.4, 0, Math.PI * 2);

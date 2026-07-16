@@ -191,6 +191,25 @@ the veil index rebuilds off doodad revs, so pops/pushes/zone swaps mint new
 patches and the WeakMap-keyed cache follows. Forensics: `npm run perf --
 --ablate=canopyslices` measures the old per-crown path.
 
+THE WHOLE-KIND BAKE (`bakeWhole` on a `DoodadVisualDef`, `wholeKindSprite` /
+`paintBakedWhole` in vis/painters.ts): ground kinds whose painter is a pure
+function of (radius, position seed, params, theme) blit variant-baked
+sprites — 8 looks minted through the REAL painter with a fake position, so
+baked doodads are pixel-true to live ones — instead of re-stroking paths,
+gradients and clips per doodad per frame. `'sway'` adds the whole-sprite
+shear (reeds, kelp); `PAINTER_IGNORES_ROT` keeps upright/sun-anchored
+painters from spinning with `d.rot`. The TIME-FREE CONTRACT is the only
+entry fee, and the light layer is where a kind's pulse goes to live instead
+(the glow_cap doctrine: `light.flicker` breathes at parity with every other
+emissive, the painted body holds its mid glow). 2026-07-16: the shard
+family took this wholesale — 20 moteless kinds (ice spikes, icicles,
+crystals, obsidian, ley fonts, resonance nodes, …) bake; `glowworm_veil`
+and `light_spot` keep their live motes — and mushroomCrown joined
+`CANOPY_STATIC` the same way (breath → flicker). Measured on the first
+cave gate: rime_gallery (crevasse, shard-dense) 24.9 → 20.8ms gapP50 with
+the 44.5ms tail and 9-hitch cluster gone; fungal_hollow (mushroom-dense)
+12.4 → 8.3, town-flat.
+
 SUN SHADOWS: `sunCast(time)` gives a direction that spins through daylight
 and a reach that stretches at low sun; kinds opt in via
 `DoodadVisualDef.longShadow` (a radius multiplier).

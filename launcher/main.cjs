@@ -160,6 +160,16 @@ if (PERF) {
   // blocker all powerless). The measurement window must never trust that
   // tracker; the real game keeps it (it SHOULD throttle when covered).
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
+  // Expose window.gc to the sweep (perf runs ONLY — normal play never sees
+  // it): a 37-zone sweep hops zones at a rate no player ever will, and the
+  // discarded backing stores pile up until V8's collection storm lands on
+  // whoever holds the sample window when the threshold trips — the breach
+  // wears an innocent zone's name (tundra 2026-07-12, gutworks 2026-07-16:
+  // 2 frames >70ms at matrix seat 26, clean twice when run solo). The sweep
+  // drains the debt explicitly inside each zone's DISCARDED entry window
+  // (src/dev/perf.ts), so steady windows measure the zone, not the hop
+  // history.
+  app.commandLine.appendSwitch('js-flags', '--expose-gc');
 }
 
 /** A Steam Deck / gamescope session (Game Mode, or any gamescope nest) —
@@ -766,36 +776,44 @@ async function perfMode() {
     // GATE DETERMINISM (committed in perf.config.json, all optional — these
     // are the GATE's own settings, so the run still exits 2 on breach):
     //   weather      — the gate's pinned sky (silence the random front roll).
-    //   mintSeed     — zone i mints from Rng(mintSeed + i): variant, name,
-    //                  size and layout stop re-rolling per run/world seed.
+    //   mintSeed     — each tileset mints from Rng(mintSeed + its FULL-matrix
+    //                  index): variant, name, size and layout stop re-rolling
+    //                  per run/world seed, and --filter runs reproduce the
+    //                  full sweep's mints (the index never shifts).
     //   mintPins     — force a tileset's face and/or layout generator
     //                  ({ "jungle": { "variant": "strangler court",
     //                  "layout": "forest" } }): the gate measures the
     //                  committed WORST CASE, not dice — heavy scenes are
-    //                  often a LAYOUT roll, not a variant.
+    //                  often a LAYOUT roll, not a variant. A pin may also
+    //                  carry "seed": <n> — pin one tileset's WHOLE mint
+    //                  (outranks mintSeed + index) for tilesets whose heavy
+    //                  scene is a COUNT roll, not a face.
     if (budgets.weather !== undefined) opts.weather = budgets.weather;
     if (budgets.mintSeed !== undefined) opts.mintSeed = budgets.mintSeed;
     if (budgets.mintPins) opts.mintPins = budgets.mintPins;
     // FORENSICS FLAGS: `--weather=snow|clear|…` pins a DIFFERENT sky,
     // `--ablate=snowwash,lights,…` skips render passes, `--variant=<name>` /
-    // `--layout=<gen>` force every swept tileset's face/layout — pair with
-    // --filter for one zone (src/dev/perf.ts). Any of them makes this a
-    // diagnostic run: the gate still PRINTS its verdict, but never exits 2 —
-    // an ablated zone being fast (or a pinned storm being slow) is the
-    // experiment, not a regression.
+    // `--layout=<gen>` / `--seed=<n>` force every swept tileset's face,
+    // layout, or whole mint roll — pair with --filter for one zone
+    // (src/dev/perf.ts; --seed is the worst-roll HUNT lever for count-roll
+    // tilesets). Any of them makes this a diagnostic run: the gate still
+    // PRINTS its verdict, but never exits 2 — an ablated zone being fast
+    // (or a pinned storm being slow) is the experiment, not a regression.
     const weatherFlag = flagValue('--weather');
     if (weatherFlag !== null) opts.weather = weatherFlag;
     const ablateFlag = flagValue('--ablate');
     if (ablateFlag) opts.ablate = ablateFlag.split(',').map(s => s.trim()).filter(Boolean);
     const variantFlag = flagValue('--variant');
     const layoutFlag = flagValue('--layout');
-    if (variantFlag || layoutFlag) {
+    const seedFlag = flagValue('--seed');
+    if (variantFlag || layoutFlag || seedFlag) {
       const star = { ...((opts.mintPins ?? {})['*'] ?? {}) };
       if (variantFlag) star.variant = variantFlag;
       if (layoutFlag) star.layout = layoutFlag;
+      if (seedFlag) star.seed = Number(seedFlag);
       opts.mintPins = { ...(opts.mintPins ?? {}), '*': star };
     }
-    const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag;
+    const forensics = weatherFlag !== null || !!ablateFlag || !!variantFlag || !!layoutFlag || !!seedFlag;
     console.log(`PERF: sweeping tilesets (${opts.seconds}s steady + ${opts.settleSeconds}s entry per zone` +
       (opts.filter ? `, filter '${opts.filter}'` : '') +
       (opts.weather !== undefined ? `, weather pinned '${opts.weather || 'clear'}'` : '') +

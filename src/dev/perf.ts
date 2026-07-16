@@ -46,15 +46,19 @@ export interface PerfSweepOpts {
   /** Render passes to SKIP (vis forensics — setVisAblate): attribute a
    *  GPU-side cost by turning one pass off per run at real resolution. */
   ablate?: string[];
-  /** DETERMINISTIC MINTS: zone i mints from Rng(mintSeed + i) — variant,
-   *  name, size and layout stop re-rolling per run/world seed, so two gate
-   *  runs measure the SAME zones. Undefined = today's world-seeded rolls. */
+  /** DETERMINISTIC MINTS: each tileset mints from Rng(mintSeed + its index
+   *  in the FULL unfiltered matrix) — variant, name, size and layout stop
+   *  re-rolling per run/world seed, so two gate runs measure the SAME zones,
+   *  and a --filter run reproduces the full sweep's mints exactly (the seed
+   *  index never shifts with the filter). Undefined = today's rolls. */
   mintSeed?: number;
   /** Force a tileset's FACE and/or LAYOUT GENERATOR (key '*' = every swept
    *  tileset): the gate measures a committed worst case instead of whatever
    *  the dice serve — a tileset's heavy scene is often a LAYOUT roll
-   *  (jungle × the sealed-forest roof), not just a variant. */
-  mintPins?: Record<string, { variant?: string; layout?: string }>;
+   *  (jungle × the sealed-forest roof), not just a variant. `seed` pins the
+   *  WHOLE mint for one tileset (outranks mintSeed + index) — the worst-case
+   *  lever for tilesets whose heavy scene is a COUNT roll, not a face. */
+  mintPins?: Record<string, { variant?: string; layout?: string; seed?: number }>;
 }
 
 export interface PerfZoneStats {
@@ -171,6 +175,13 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
     const zw = g.world();
     zw.player.invulnerable = true; // unkillable but TARGETABLE: combat stays real
     const entryWorst = await walkPhase(settleMs);
+    // Drain the zone-hop garbage NOW, inside the discarded window: a sweep
+    // hops zones at a rate no player ever will, and V8's collection storm
+    // otherwise lands mid-sample on whichever zone holds the window when
+    // the threshold trips — the breach wears an innocent zone's name
+    // (tundra 2026-07-12; gutworks 2026-07-16, clean twice solo). The
+    // launcher exposes gc for --perf-test only; normal play never has it.
+    (window as unknown as { gc?: () => void }).gc?.();
     g.perfFrames(true); // discard the entry burst; the steady window begins
     VIS_TELEMETRY.snowBakes = 0;
     VIS_TELEMETRY.groundBakes = 0;
@@ -194,27 +205,35 @@ export async function perfSweep(opts: PerfSweepOpts = {}): Promise<PerfSweepRepo
   pinWeather();
   const control = await sampleCurrentZone('(town)');
 
-  // THE MATRIX: frontier-eligible tilesets (boundless/streamed zones need
-  // package context a bare mint cannot supply), or the explicit override.
+  // THE MATRIX: frontier-eligible tilesets first (registry order — their
+  // mint-seed indices are calibration state and must not shift), then the
+  // perfProbe OPT-INS appended (caves and minted interiors: walkable steady
+  // states the frontier:false proxy was hiding from the gate). Realm
+  // tilesets stay out BY THE REGISTRY's own word: a launch-gated melting
+  // shelf has no steady state for a blind probe walk (the floor dissolves,
+  // the walker falls into a random zone, and the row measures the stitch);
+  // boundless streamers need package context a bare mint cannot supply. An
+  // explicit opts.tilesets override can still name anything for forensics.
   const wants = (opts.filter ?? '').split(',').map(s => s.trim()).filter(Boolean);
-  // The default matrix = frontier-eligible tilesets. Realm tilesets
-  // (frontier: false — the aether shelves) are out BY THE REGISTRY's own
-  // word: a launch-gated melting shelf has no steady state for a blind
-  // probe walk (the floor dissolves, the walker falls into a random zone,
-  // and the row measures the stitch). An explicit opts.tilesets override
-  // can still name anything for choreographed forensics.
-  const matrix = (opts.tilesets ?? Object.values(TILESETS)
-    .filter(t => t.frontier !== false && !t.boundless)
-    .map(t => t.id))
-    .filter(id => !wants.length || wants.some(f => id.includes(f)));
+  const registry = Object.values(TILESETS);
+  const fullMatrix = opts.tilesets ?? [
+    ...registry.filter(t => t.frontier !== false && !t.boundless),
+    ...registry.filter(t => t.frontier === false && t.perfProbe && !t.boundless),
+  ].map(t => t.id);
+  // The filter selects WHICH rows run; seed and spread always derive from
+  // the FULL matrix position, so a filtered run mints the exact zones the
+  // full sweep gates (any subset reproduces, not just index-preserving
+  // prefixes).
+  const matrix = fullMatrix.filter(id => !wants.length || wants.some(f => id.includes(f)));
 
   const zones: PerfZoneStats[] = [];
   const skipped: string[] = [];
-  for (let i = 0; i < matrix.length; i++) {
-    const id = matrix[i];
+  for (const id of matrix) {
+    const idx = fullMatrix.indexOf(id);
     const pin = opts.mintPins?.[id] ?? opts.mintPins?.['*'];
-    const zid = g.world().devMintTileset(id, PERF_SPREAD_BASE + i, 8, {
-      ...(opts.mintSeed !== undefined ? { seed: opts.mintSeed + i } : {}),
+    const zid = g.world().devMintTileset(id, PERF_SPREAD_BASE + idx, 8, {
+      ...(pin?.seed !== undefined ? { seed: pin.seed }
+        : opts.mintSeed !== undefined ? { seed: opts.mintSeed + idx } : {}),
       ...(pin?.variant ? { variant: pin.variant } : {}),
       ...(pin?.layout ? { layoutType: pin.layout } : {}),
     });

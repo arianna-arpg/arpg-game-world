@@ -251,7 +251,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // Lightning-fused pan glass: the fulgurite's shard painter in sea-glass
   // tones, a cold gleam in all that heat (brittle — it sings apart).
   glass_shard: {
-    painter: 'shard', order: 51, shadow: 0.4,
+    painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.4,
     params: { points: 4, color: '#bcd8d4', material: 'crystal', coreGlow: { color: '#e8fff8' } },
   },
   bone_arch: {
@@ -661,14 +661,14 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   crystal: {
     longShadow: 0.8,
-    painter: 'shard', order: 50, shadow: 0.55,
+    painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.55,
     params: { points: 5, color: '#3a6a9a', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
-    light: { radius: -2.6, color: '#7fc0f0', intensity: 0.3 },
+    light: { radius: -2.6, color: '#7fc0f0', intensity: 0.3, flicker: 1.3 },
   },
   ice_spike: {
-    painter: 'shard', order: 50, shadow: 0.5, longShadow: 1.3,
+    painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.5, longShadow: 1.3,
     params: { points: 4, color: '#a8ccdf', material: 'ice', coreGlow: { color: '#e8f6ff' } },
-    light: { radius: -2, color: '#bfe0f0', intensity: 0.14 },
+    light: { radius: -2, color: '#bfe0f0', intensity: 0.14, flicker: 1.3 },
   },
   snowman: { painter: 'snowman', order: 54, shadow: 0.55, longShadow: 1.1 },
   signpost: { painter: 'signpost', order: 55, shadow: 0.4, longShadow: 1.4 },
@@ -801,7 +801,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   // --- The parity-pass wayside kit (existing painters, new clothes) ---------
   chronolith: {
-    painter: 'shard', order: 55, shadow: 0.6, longShadow: 1.5,
+    painter: 'shard', order: 55, bakeWhole: 'static', shadow: 0.6, longShadow: 1.5,
     params: { points: 4, color: '#3a5a5e', material: 'stone', coreGlow: { color: '#8ae0e0' } },
     light: { radius: -2.4, color: '#8ae0e0', intensity: 0.24, flicker: 9 },
   },
@@ -919,7 +919,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // their keeping (brittle orb tradition). The light breathes at parity
   // with every other small emissive.
   charge_cell: {
-    painter: 'shard', order: 52, shadow: 0.4,
+    painter: 'shard', order: 52, bakeWhole: 'static', shadow: 0.4,
     params: { points: 4, color: '#2e6a62', material: 'crystal', coreGlow: { color: '#8fe8d8' } },
     light: { radius: -2, color: '#7fd8c8', intensity: 0.22, flicker: 1.2 },
   },
@@ -932,21 +932,21 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   // Spent cells: the same vessel, dead — dark glass, no light, shed clutter.
   spent_cell: {
-    painter: 'shard', order: 50, shadow: 0.3,
+    painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.3,
     params: { points: 4, color: '#2c3236', material: 'crystal' },
   },
   crystal_cluster: {
-    longShadow: 0.6, painter: 'shard', order: 50, shadow: 0.5,
+    longShadow: 0.6, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.5,
     params: { points: 7, color: '#4a7aa8', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
-    light: { radius: -2.2, color: '#7fc0f0', intensity: 0.22 },
+    light: { radius: -2.2, color: '#7fc0f0', intensity: 0.22, flicker: 1.3 },
   },
   // The storm-scar kit: lightning's leavings, all inert.
   fulgurite: {
-    longShadow: 0.6, painter: 'shard', order: 51, shadow: 0.45,
+    longShadow: 0.6, painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.45,
     params: { points: 3, color: '#c8b088', material: 'crystal', coreGlow: { color: '#f0e4c0' } },
   },
   charged_crystal: {
-    longShadow: 0.55, painter: 'shard', order: 50, shadow: 0.5,
+    longShadow: 0.55, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.5,
     params: { points: 6, color: '#5a7ab0', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
     light: { radius: -3, color: '#8fd0ff', intensity: 0.35, flicker: 6 },
   },
@@ -966,9 +966,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
   },
   icicle_cluster: {
-    painter: 'shard', order: 50, shadow: 0.45, longShadow: 0.9,
+    painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.45, longShadow: 0.9,
     params: { points: 5, color: '#b6d4e6', material: 'ice', coreGlow: { color: '#eef8ff' } },
-    light: { radius: -1.6, color: '#cfe8f4', intensity: 0.1 },
+    light: { radius: -1.6, color: '#cfe8f4', intensity: 0.1, flicker: 1.3 },
   },
   // --- The spelunker kit: the strata fabric's cavern dressing ---------------
   // Stone reads through 'theme:' tokens so the SAME kinds self-tint per face:
@@ -1015,9 +1015,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -3, color: '#8fe8c8', intensity: 0.3, flicker: 1.2 },
   },
   crystal_vein: {
-    painter: 'shard', order: 40, shadow: 0.2,
+    painter: 'shard', order: 40, bakeWhole: 'static', shadow: 0.2,
     params: { points: 3, color: '#31527a', material: 'crystal', coreGlow: { color: '#9fd8ff' } },
-    light: { radius: -1.4, color: '#7fc0f0', intensity: 0.12 },
+    light: { radius: -1.4, color: '#7fc0f0', intensity: 0.12, flicker: 1.3 },
   },
   guano_heap: {
     painter: 'mound', order: 49, shadow: 0.3,
@@ -1078,9 +1078,9 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // A basalt needle over old graves; the cold violet at its heart is the
   // light layer's, at parity with every other emissive.
   black_obelisk: {
-    painter: 'shard', order: 54, shadow: 0.6, longShadow: 1.6,
+    painter: 'shard', order: 54, bakeWhole: 'static', shadow: 0.6, longShadow: 1.6,
     params: { points: 4, color: '#20242e', material: 'stone', coreGlow: { color: '#6a5a9a' } },
-    light: { radius: -2.2, color: '#8a74c8', intensity: 0.16 },
+    light: { radius: -2.2, color: '#8a74c8', intensity: 0.16, flicker: 1.2 },
   },
   // A stump drowned in decades of candle wax — someone still lights them.
   tallow_stump: {
@@ -1123,7 +1123,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   },
   obsidian: {
     longShadow: 0.7,
-    painter: 'shard', order: 50, shadow: 0.55,
+    painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.55,
     params: { points: 6, color: '#171015', material: 'stone', edgeGlow: { color: 'theme:accent|#ff7a2a', alpha: 0.5 } },
   },
   lava_vent: {
@@ -1330,29 +1330,29 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -2.2, color: 'theme:accent|#60d0ff', intensity: 0.14 },
   },
   ley_font: {
-    longShadow: 0.6, painter: 'shard', order: 50, shadow: 0.5,
+    longShadow: 0.6, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.5,
     params: { points: 6, color: 'theme:obstacle|#1a3a4a', material: 'crystal', coreGlow: { color: 'theme:accent|#9fd8ff' } },
-    light: { radius: -2.4, color: 'theme:accent|#7fc0f0', intensity: 0.24 },
+    light: { radius: -2.4, color: 'theme:accent|#7fc0f0', intensity: 0.24, flicker: 1.4 },
   },
   // The resonance nodes: one shard body each, tinted to its element (fixed
   // colors — the node IS its element even on a sibling face), pulsing light.
   pyre_node: {
-    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    longShadow: 0.7, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.55,
     params: { points: 5, color: '#3a1408', material: 'crystal', coreGlow: { color: '#ff8a3a' } },
     light: { radius: -3, color: '#ff8a3a', intensity: 0.34, flicker: 2.6 },
   },
   gale_node: {
-    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    longShadow: 0.7, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.55,
     params: { points: 5, color: '#12303a', material: 'crystal', coreGlow: { color: '#8fd8ff' } },
     light: { radius: -3, color: '#8fd8ff', intensity: 0.34, flicker: 3.2 },
   },
   rime_node: {
-    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    longShadow: 0.7, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.55,
     params: { points: 5, color: '#16283a', material: 'crystal', coreGlow: { color: '#b8e8ff' } },
     light: { radius: -3, color: '#b8e8ff', intensity: 0.3, flicker: 1.6 },
   },
   stone_node: {
-    longShadow: 0.7, painter: 'shard', order: 50, shadow: 0.55,
+    longShadow: 0.7, painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.55,
     params: { points: 5, color: '#2e2418', material: 'stone', coreGlow: { color: '#d8b06a' } },
     light: { radius: -2.4, color: '#d8b06a', intensity: 0.22, flicker: 1.2 },
   },
@@ -1370,7 +1370,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     light: { radius: -2.4, color: 'theme:accent|#b060e8', intensity: 0.26, flicker: 1.8 },
   },
   abyss_spine: {
-    longShadow: 1.1, painter: 'shard', order: 51, shadow: 0.55,
+    longShadow: 1.1, painter: 'shard', order: 51, bakeWhole: 'static', shadow: 0.55,
     params: { points: 4, color: '#140a20', material: 'stone', edgeGlow: { color: 'theme:accent|#b060e8', alpha: 0.45 } },
   },
   // THE GRAND ARENA's crowd: bench-rows of bobbing spectators on the stands
@@ -1465,7 +1465,7 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
   // lit from the wrong side of the world.
   hate_glass: {
     longShadow: 0.7,
-    painter: 'shard', order: 50, shadow: 0.55,
+    painter: 'shard', order: 50, bakeWhole: 'static', shadow: 0.55,
     params: { points: 5, color: '#0f1411', material: 'stone', edgeGlow: { color: '#7de84a', alpha: 0.45 } },
     light: { radius: -1.6, color: '#7de84a', intensity: 0.12, flicker: 1.1 },
   },

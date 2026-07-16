@@ -89,6 +89,14 @@ export interface TilesetDef {
   /** false = NEVER field-minted at a frontier (realm / cave / incursion-only
    *  tilesets: Fractures capstones, cave mouths, the Eldritch incursion). */
   frontier?: false;
+  /** PERF-GATE OPT-IN for non-frontier tilesets: true = this tileset has a
+   *  walkable steady state a blind probe can sample (caves, minted interiors),
+   *  so `npm run perf` appends it to the sweep matrix AFTER the frontier
+   *  rows (append keeps every frontier row's mint seed stable). Leave unset
+   *  on tilesets a bare graph-mint cannot honestly sample: melting realm
+   *  shelves, boundless streamers, incursion pockets that need package
+   *  context. Frontier tilesets are always swept and never need this. */
+  perfProbe?: true;
   /** BOUNDLESS arena: the engine streams terrain around the player — no walls,
    *  no perimeter cull (the Descent abyss). */
   boundless?: true;
@@ -1131,7 +1139,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // contract in sand tones, garrisoned by what the dark kept.
   buried_vault: {
     id: 'buried_vault',
-    frontier: false,
+    frontier: false, perfProbe: true,
     sky: 'sheltered', // an underworks preserved BY its roof of sand — no sky reaches it
 
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1 },
@@ -1368,7 +1376,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // SEAM a future content package can hang off wholesale.
   sunken_ruin: {
     id: 'sunken_ruin',
-    frontier: false,
+    frontier: false, perfProbe: true,
     sky: 'sheltered', // swallowed halls under the jungle floor — weather stays above
 
     caveLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 },
@@ -2258,7 +2266,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // reads at a glance; braziers + niche candle-glow anchor the sightlines;
   // the two variants keep distinct silhouettes (rolling dunes vs ruled rows).
   ossuary: {
-    id: 'ossuary', frontier: false,
+    id: 'ossuary', frontier: false, perfProbe: true,
     sky: 'sheltered', // the Necropolis' interior sanctum — bone vaults under stone
 
     nameFirst: ['Ossuary', 'Charnel', 'Bonewrought', 'Marrow', 'Reliquary', 'Skullbound', 'Palebone', 'Sepulchral', 'Hollowbone', 'Gravemarrow', 'Ivory', 'Femur-Laid', 'Knucklebone', 'Sanctified', 'Vaultbone', 'Litany', 'Requiem', 'Cist-Cold'],
@@ -2536,7 +2544,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // minted by worldgen.mintCave, never reached through a frontier portal. No
   // biome tag (caves don't tint the map — they aren't on it). Tight and rocky.
   cavern: {
-    id: 'cavern', frontier: false,
+    id: 'cavern', frontier: false, perfProbe: true,
     sky: 'sheltered', // underground by definition (mintCave also stamps caveDepth)
 
     // THE GENERALIST FACE: every biome's near-dark default (the mul keeps the
@@ -2703,7 +2711,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // The same country the Delver's boundless abyss belongs to — reached the
   // slow way, by delving cave through cave through cave.
   depths: {
-    id: 'depths', frontier: false,
+    id: 'depths', frontier: false, perfProbe: true,
     sky: 'sheltered',
     // The band's OWN face leads its band (the mul): the specialists flavor
     // the Depths; the Depths are still, first, the Depths.
@@ -2819,7 +2827,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // you have simply delved deep enough for the world's own heat — the strata
   // envelope answers "why is the lava pit HERE?" both ways.
   magma_gallery: {
-    id: 'magma_gallery', frontier: false,
+    id: 'magma_gallery', frontier: false, perfProbe: true,
     sky: 'sheltered',
     caveFace: {
       strata: { stops: [[1, 0.1], [2, 0.22], [3, 0.55], [4, 1]] },
@@ -2923,7 +2931,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // breath you can see. The neighbourhood under tundra and taiga; a rare
   // cold pocket anywhere else (caveFace.biomes '*' runs low on purpose).
   rime_gallery: {
-    id: 'rime_gallery', frontier: false,
+    id: 'rime_gallery', frontier: false, perfProbe: true,
     sky: 'sheltered',
     caveFace: {
       strata: { stops: [[1, 0.35], [2, 0.6], [3, 0.8]] },
@@ -3025,7 +3033,7 @@ export const TILESETS: Record<string, TilesetDef> = {
   // glowcap lanterns, spore-choked air. The neighbourhood under mycelia
   // country; common enough anywhere damp (the '*' base) — rot needs no map.
   fungal_hollow: {
-    id: 'fungal_hollow', frontier: false,
+    id: 'fungal_hollow', frontier: false, perfProbe: true,
     sky: 'sheltered',
     caveFace: {
       strata: { stops: [[1, 0.35], [2, 0.8], [3, 1], [5, 0.7]] },
