@@ -168,6 +168,9 @@ export interface RegistryLookups {
   /** A registered DIMENSION id (world/dimensions.ts; 'surface' included) —
    *  holdfast dims bands and future plane-scoped defs resolve here. */
   dimension(id: string): boolean;
+  /** A registered POCKET FORM id (data/pocketForms.ts) — the shapes purchased
+   *  ground can take; holdfast PocketSpec.forms rows resolve here. */
+  pocketForm(id: string): boolean;
 }
 
 // --- relationships (faction stance overrides + inter-package interaction) ----

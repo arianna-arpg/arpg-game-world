@@ -79,10 +79,31 @@ export interface RewardSpec {
   vendorStock?: { supportId?: string; skillId?: string }[];
 }
 
+/** One weighted SHAPE a guardian's pocket may roll (PocketSpec.forms): the
+ *  registry form id + this guardian's per-shape enrichment overrides. */
+export interface PocketFormRoll {
+  form: string;
+  weight: number;
+  /** Per-shape bounty floor (maxes with the form's own and the flat spec's). */
+  bounty?: number;
+  /** Per-shape feature floors (merged with the form's own and the flat spec's). */
+  features?: { kind: string; min: number; max?: number }[];
+}
+
 /** WHAT the earned ground is like — the pocket's mint-time enrichment, all
  *  data. Consumed by World.mintHoldfastPocket when the locked frontier
  *  resolves (eagerly or on travel). */
 export interface PocketSpec {
+  /** WHICH SHAPES the earned ground may take: weighted rows into the POCKET
+   *  FORM registry (data/pocketForms.ts — 'hoard' = the small loot-littered
+   *  hollow, 'delve' = the full hidden zone), rolled ONCE at mint (seeded on
+   *  the run + the lock) and baked onto the ZoneDef. The form carries the
+   *  footprint, objective policy, population scale, and treasure litter; a
+   *  ROW may layer this guardian's own enrichment for that shape on top
+   *  (bounty floors max together; feature floors merge), and the flat
+   *  bounty/features below apply to EVERY shape. Absent = the default
+   *  full-zone delve. */
+  forms?: PocketFormRoll[];
   /** LOOT RICHNESS stamped on the minted zone (ZoneDef.bounty): a multiplier
    *  on the kill-path drop-chance gates. 2 = twice the drop events. */
   bounty?: number;
@@ -200,9 +221,18 @@ export const BANDIT_TOLLGATE: HoldfastDef = {
   road: { chance: 0.8, from: 'entry', overgrowth: 0 },
   unlock: { kind: 'pay-currency', currency: 'mortal', cost: 15, costPerLevel: 3 },
   reward: { kind: 'open-exit', destLevelDelta: 0 },
-  // The earned ground: markedly richer kills, and the wardens always camp
-  // over something worth hiding — a cave mouth floors the feature roll.
-  pocket: { bounty: 2.25, features: [{ kind: 'cave', min: 1 }] },
+  // The earned ground rolls its SHAPE: usually the full hidden delve —
+  // markedly richer kills, and the wardens always camp over something worth
+  // hiding (a cave mouth floors the delve's feature roll) — but one gate in
+  // three sells a HOARD instead: a small hollow littered with plunder,
+  // lightly held. Both reads make the toll legible; neither is a death trap.
+  pocket: {
+    forms: [
+      { form: 'delve', weight: 2, features: [{ kind: 'cave', min: 1 }] },
+      { form: 'hoard', weight: 1 },
+    ],
+    bounty: 2.25,
+  },
   sealedHint: 'the toll-gate bars the way — pay the wardens, or find another road',
   weight: 2, minLevel: 1, slaughterOpensChance: 0.1, marker: BANDIT_MARKER,
 };
@@ -228,7 +258,15 @@ export const DURANCE_TITHEGATE: HoldfastDef = {
   road: { chance: 0.6, from: 'entry', overgrowth: 0 },
   unlock: { kind: 'pay-currency', currency: 'mortal', cost: 30, costPerLevel: 4 },
   reward: { kind: 'open-exit', destLevelDelta: 1 },
-  pocket: { bounty: 2.75, features: [{ kind: 'cave', min: 1 }] },
+  // Hell's ground splits the same way — the deeper delve, or a tithe-bought
+  // strongroom (the hoard row's own bounty cranks it past the surface take).
+  pocket: {
+    forms: [
+      { form: 'delve', weight: 2, features: [{ kind: 'cave', min: 1 }] },
+      { form: 'hoard', weight: 1, bounty: 3.5 },
+    ],
+    bounty: 2.75,
+  },
   sealedHint: 'the tithe-gate stands sealed — the cantor weighs your essence, or your corpse',
   weight: 1, minLevel: 8, slaughterOpensChance: 0.08,
   marker: { glyph: '⚑', color: '#7de84a' },

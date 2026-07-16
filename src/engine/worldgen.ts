@@ -142,6 +142,16 @@ export interface ZoneSpec {
    *  stamped `pocket: true`, which every road-forming path (weave, the eager
    *  web's link-to-near, anchor searches) honors as "never link into". */
   pocket?: boolean;
+  /** FOOTPRINT band override in px (TilesetDef.sizeW/sizeH convention): the
+   *  width and height rolls draw from these bands instead of the tileset's —
+   *  a pocket FORM mints its deliberately small hollow through the same
+   *  roller (same draw count, so spec-less mints stay byte-identical). */
+  sizeBand?: { w: [number, number]; h: [number, number] };
+  /** OBJECTIVE-ROLL filter: when `objective` is absent, only these kinds may
+   *  come up from the tileset's own weights (a dead-end pocket bans arena
+   *  modes that want room or a way onward). An emptied pool degrades to
+   *  'clear'. Absent = the tileset's full roll, byte-identical. */
+  objectivePool?: string[];
   /** Mint HIDDEN from the world map (world.visible / auto-fit) — an Incursion
    *  landing obscured until approached. Cleared on approach/entry. */
   concealed?: boolean;
@@ -570,7 +580,14 @@ export function placeZoneAt(
     if (taken.has(name)) name += ' II';
   }
 
-  const objective = spec.objective ?? rollObjective(genRng, tileset.objectives, tileset.spawnerId);
+  // An objectivePool spec (a pocket form) filters the tileset's weights before
+  // the roll — same single draw, so only the spec'd mint's stream shifts. An
+  // emptied pool degrades to 'clear' without drawing (nothing to weigh).
+  const objWeights = spec.objectivePool
+    ? tileset.objectives.filter(o => spec.objectivePool!.includes(o.kind))
+    : tileset.objectives;
+  const objective = spec.objective
+    ?? (objWeights.length ? rollObjective(genRng, objWeights, tileset.spawnerId) : { kind: 'clear' as const });
 
   // The zone's biome (authored tileset tag, else the heat-map field) — drives BOTH
   // the layout generator (below) AND the map SPACING (the per-biome density lever:
@@ -675,13 +692,17 @@ export function placeZoneAt(
     exits.push({ to: '?', side, at: rng.pick([0.35, 0.5, 0.65]), tileset: tileset.id });
   }
 
-  // Roll a varied footprint: an independent width and an ASPECT class.
+  // Roll a varied footprint: an independent width and an ASPECT class. A
+  // sizeBand spec (a pocket form's deliberate hollow) swaps the bands under
+  // the SAME two draws — spec-less mints keep every stream byte-identical.
   const shape = genRng.chance(tileset.ellipseChance ?? 0) ? 'ellipse' as const : 'rect' as const;
   const aspect = genRng.pick([1, 1, 0.64, 1.55, 0.78, 1.32]);
-  const baseW = genRng.range(tileset.sizeW[0], tileset.sizeW[1]);
+  const bandW = spec.sizeBand?.w ?? tileset.sizeW;
+  const bandH = spec.sizeBand?.h ?? tileset.sizeH;
+  const baseW = genRng.range(bandW[0], bandW[1]);
   const size = {
     w: Math.round(baseW),
-    h: Math.round(clamp(baseW * aspect, tileset.sizeH[0], tileset.sizeH[1] * 1.4)),
+    h: Math.round(clamp(baseW * aspect, bandH[0], bandH[1] * (spec.sizeBand ? 1 : 1.4))),
   };
   // COURSE CONTINUATION: a zone on a throughline GUARANTEES a way onward along
   // it (up- and downstream) — a 1-frontier roll on the wrong side must never

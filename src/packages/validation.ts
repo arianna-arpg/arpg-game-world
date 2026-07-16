@@ -177,14 +177,24 @@ function validateHoldfast(p: ContentPackage, h: HoldfastDef, look: RegistryLooku
     if (flat <= 0 && per <= 0) bad(`pay-currency unlock declares no cost (cost/costPerLevel both unset or ≤ 0)`);
     if (!h.unlock.currency) bad(`pay-currency unlock names no currency`);
   }
-  // The pocket's enrichment must be sane data: a real bounty multiplier and
-  // feature floors that guarantee at least one of a kind within a valid range.
+  // The pocket's enrichment must be sane data: a real bounty multiplier,
+  // feature floors that guarantee at least one of a kind within a valid
+  // range, and FORM rows that resolve in the registry with real weights (an
+  // unknown form would silently degrade every roll to the default delve).
   if (h.pocket) {
     if (h.pocket.bounty !== undefined && !(h.pocket.bounty > 0)) bad(`pocket.bounty ${h.pocket.bounty} must be > 0`);
     if (h.pocket.tileset && !look.tileset(h.pocket.tileset)) bad(`pocket names unknown tileset '${h.pocket.tileset}'`);
-    for (const f of h.pocket.features ?? []) {
-      if (!(f.min >= 1)) bad(`pocket feature '${f.kind}' min ${f.min} must be ≥ 1`);
-      if (f.max !== undefined && f.max < f.min) bad(`pocket feature '${f.kind}' max ${f.max} < min ${f.min}`);
+    const feat = (f: { kind: string; min: number; max?: number }, where: string): void => {
+      if (!(f.min >= 1)) bad(`${where} feature '${f.kind}' min ${f.min} must be ≥ 1`);
+      if (f.max !== undefined && f.max < f.min) bad(`${where} feature '${f.kind}' max ${f.max} < min ${f.min}`);
+    };
+    for (const f of h.pocket.features ?? []) feat(f, 'pocket');
+    if (h.pocket.forms !== undefined && !h.pocket.forms.length) bad(`pocket.forms is empty — omit it for the default delve`);
+    for (const r of h.pocket.forms ?? []) {
+      if (!look.pocketForm(r.form)) bad(`pocket names unknown form '${r.form}'`);
+      if (!(r.weight > 0)) bad(`pocket form '${r.form}' weight must be > 0`);
+      if (r.bounty !== undefined && !(r.bounty > 0)) bad(`pocket form '${r.form}' bounty must be > 0`);
+      for (const f of r.features ?? []) feat(f, `pocket form '${r.form}'`);
     }
   }
 }

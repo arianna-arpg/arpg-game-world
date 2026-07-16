@@ -275,13 +275,17 @@ registerZoneInfoSource((world: World, zoneId: string): ZoneInfoEntry[] => {
   if (!info || !info.locked || info.resolved === 'failed') return [];
   const def = world.sim.holdfastField?.def(info.defId);
   // Price the toll on the panel (an essence gate advertises its ask — the
-  // player weighs the purse against the pocket before walking back).
+  // player weighs the purse against the pocket before walking back), and
+  // PITCH the rolled form (World.holdfastPocketPitch — the same resolver the
+  // keeper prompt speaks through): what the ask actually buys.
   const level = world.zoneMap[zoneId]?.level ?? 1;
   const ask = def && def.unlock.kind === 'pay-currency' && def.unlock.currency === 'mortal'
     ? `the wardens ask ${holdfastTollCost(def, level)} ${META_CURRENCY_LABEL}`
     : 'deal with the guardians';
+  const pitch = world.holdfastPocketPitch(zoneId, info.lockId);
   return [{
     kind: 'event', icon: def?.marker?.glyph ?? '⚑', color: def?.marker?.color ?? '#c8a04a',
-    label: def?.name ?? 'Holdfast', detail: `a sealed side-pocket — ${ask}`, z: 12,
+    label: def?.name ?? 'Holdfast',
+    detail: `${pitch ?? 'a sealed side-pocket'} — ${ask}`, z: 12,
   }];
 });

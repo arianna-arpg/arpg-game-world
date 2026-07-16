@@ -30,6 +30,7 @@ export interface TargetableZone extends PolicyZone {
   special?: boolean;
   floating?: boolean;
   eventOwned?: boolean;
+  pocket?: boolean;
   objective?: { kind: string };
 }
 
@@ -71,7 +72,11 @@ export function eventAllowed(eventId: string, zone: PolicyZone): boolean {
  *  Site-specific extras (visited-only, needs-packs, level bands) stay at the
  *  call site — this is the floor, not the whole gate. */
 export function eventTargetable(eventId: string, zone: TargetableZone): boolean {
-  if (zone.caveDepth != null || zone.floating || zone.eventOwned || zone.special) return false;
+  // A purchased POCKET is bought ground with an authored promise (its FORM —
+  // data/pocketForms.ts): world events never land on it, both because the
+  // promise is the point and because a dead-end can't honor event traffic
+  // (marches, roving fronts, epicenter growth all assume roads onward).
+  if (zone.caveDepth != null || zone.floating || zone.eventOwned || zone.special || zone.pocket) return false;
   if (zone.objective && zone.objective.kind === 'safe') return false;
   return eventAllowed(eventId, zone);
 }

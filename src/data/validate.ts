@@ -25,7 +25,8 @@ import { validatePassiveRealms } from './passiveRealms';
 import { STAT_DEFS, STAT_TRADES } from '../engine/stats';
 import { CHARGE_DEFS } from '../engine/charges';
 import { STATUS_DEFS } from '../engine/status';
-import { ZONES, type StampSpec, type StructureRoll } from './zones';
+import { ZONES, OBJECTIVE_SEALS, type StampSpec, type StructureRoll } from './zones';
+import { POCKET_FORMS, DEFAULT_POCKET_FORM } from './pocketForms';
 import { TILESETS, type BlendRoll } from './tilesets';
 import { hasBlendField } from '../engine/blend';
 import { validatePassiveLayout } from './validatePassiveLayout';
@@ -73,6 +74,30 @@ import { Rng } from '../core/rng';
 export function validateContent(): void {
   const warn = (msg: string): void => console.warn(`[content] ${msg}`);
   validatePassiveLayout(warn);
+
+  // POCKET FORMS (data/pocketForms.ts): the shapes purchased ground can take.
+  // Every knob is data — so every knob gets a boot check: the default form
+  // must exist (pocketFormOf's floor), objective pools must name real kinds
+  // (a typo'd kind would silently thin the roll), and the numeric levers must
+  // be sane (a 0-width band or a ≤0 density would mint broken ground).
+  {
+    if (!POCKET_FORMS[DEFAULT_POCKET_FORM]) warn(`pocket forms: default '${DEFAULT_POCKET_FORM}' unregistered`);
+    const kinds = new Set(Object.keys(OBJECTIVE_SEALS));
+    kinds.add('circuit'); // the tileset-weights alias rollObjective maps onto 'beacon'
+    for (const f of Object.values(POCKET_FORMS)) {
+      if (!f.pitch) warn(`pocket form '${f.id}': no pitch — the parley would sell it blind`);
+      for (const k of f.objectivePool ?? []) {
+        if (!kinds.has(k)) warn(`pocket form '${f.id}': objectivePool names unknown kind '${k}'`);
+      }
+      if (f.objective && !kinds.has(f.objective.kind)) warn(`pocket form '${f.id}': objective kind '${f.objective.kind}' unknown`);
+      if (f.size && !(f.size.w[0] >= 600 && f.size.w[1] >= f.size.w[0] && f.size.h[0] >= 500 && f.size.h[1] >= f.size.h[0])) {
+        warn(`pocket form '${f.id}': size band ${JSON.stringify(f.size)} malformed or below the generator floor (600×500)`);
+      }
+      if (f.packDensity !== undefined && !(f.packDensity > 0)) warn(`pocket form '${f.id}': packDensity must be > 0`);
+      if (f.bounty !== undefined && !(f.bounty > 0)) warn(`pocket form '${f.id}': bounty must be > 0`);
+      if (f.caches && !(f.caches[0] >= 0 && f.caches[1] >= f.caches[0])) warn(`pocket form '${f.id}': caches band malformed`);
+    }
+  }
 
   // STRATA (world/strata.ts): the vertical ladder must TILE — contiguous
   // bands from depth 1 (a gap would drop a cave depth into the wrong band

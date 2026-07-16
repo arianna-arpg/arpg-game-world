@@ -748,8 +748,16 @@ export interface ZoneDef {
   /** A PURCHASED-POCKET dead-end (a Holdfast's earned ground): its only road
    *  leads back through the gate that sold it. The world web treats it as a
    *  cul-de-sac — never weave-linked, never an eager-web link target, never an
-   *  anchor for other mints (worldgen honors this flag everywhere roads form). */
+   *  anchor for other mints (worldgen honors this flag everywhere roads form),
+   *  and world events never target it (zonePolicy.eventTargetable): the
+   *  ground was bought for what the FORM promises, not for event roulette. */
   pocket?: boolean;
+  /** WHICH SHAPE the purchased ground took (data/pocketForms.ts id), rolled
+   *  once at mint and baked here: 'hoard' = the small loot-littered hollow,
+   *  'delve' = the full hidden zone. Read at load for the treasure litter +
+   *  ambient-event gate, and by the parley/zone-info pitch. Absent (an older
+   *  save, an unregistered id) degrades to the default delve. */
+  pocketForm?: string;
   /** SKY EXPOSURE — does the world's weather reach the ground here? Baked at
    *  mint from TilesetDef.sky / ZoneSpec.sky, or authored on a def directly.
    *  Omitted, skyOf() DERIVES it (off-surface dimensions and cave-ladder

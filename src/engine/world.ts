@@ -163,6 +163,7 @@ import type { BrigandInfo, BrigandSurge } from '../packages/overlays/brigands';
 import type { FractureCapstone, FractureSurge } from '../packages/overlays/fractures';
 import type { IncursionArchetype } from '../packages/overlays/incursion';
 import { holdfastTollCost, type GuardianSpec, type PocketSpec } from '../packages/holdfast';
+import { pocketFormOf, DEFAULT_POCKET_FORM, type PocketFormDef } from '../data/pocketForms';
 import { lordDef } from '../packages/lords';
 import { allEncounterSpecs, allFurnishSpecs, packageSeed } from '../packages/registry';
 import { ENCOUNTER_CFG } from '../packages/encounters';
@@ -1287,6 +1288,13 @@ const MONSTER_LEVEL_SCALE: Record<string, number> = {
 };
 const COUNT_SCALE = 1.25;        // ≈ 1/XP_SCALE: restores net XP at the reference area
 const REF_AREA = 1900 * 1300;    // the old deepwood footprint — the rebalance anchor
+/** PURCHASED-POCKET population knobs (the "never a death trap" contract —
+ *  docs/engine/pockets.md). packAreaFloor: the pack-budget area floor (vs the
+ *  0.8 every other zone keeps) — a deliberately small hollow holds a genuinely
+ *  small guard, and the floor exists so it still holds SOMETHING.
+ *  arrivalGrace: the hostile-free ring around the one portal at fresh gen —
+ *  the buyer always gets a fair landing. */
+const POCKET_CFG = { packAreaFloor: 0.3, arrivalGrace: 300 };
 const FIELD_PACK_AREA_CAP = 3.0; // Fields scale the enemy budget further with playable space
 const CONNECT_DIST = 48;         // node-units: a frontier within this of an existing node LINKS to it (the web).
                                  // MUST stay below the tightest biome spacing (grove 56) so the dedup only
@@ -3850,6 +3858,13 @@ export class World {
     // bearers all, so no objective ever waits on a rabbit. Spawned inside
     // the tagging window: the meadow you left is the meadow you return to.
     this.spawnWildlife(def);
+    // ARRIVAL GRACE (purchased pockets): the sold ground has exactly ONE
+    // portal and the buyer arrives through it — a fair landing is part of
+    // the promise. Fresh gens sweep hostiles off the entry ring (gen-time
+    // camps/garrisons can seat anywhere; the samplers already keep away);
+    // remembered re-entries are exempt on purpose — bodies the PLAYER led to
+    // the door are history, not generation.
+    if (def.pocket && !memory) this.enforceArrivalGrace();
     // Close the Zone Memory tagging window: the base population is placed. On a
     // remembered re-entry, swap the freshly-spawned base enemies for the ones we
     // left (cleared stays cleared; survivors keep their wounds + positions).
@@ -3918,6 +3933,10 @@ export class World {
         this.altars.push({ pos: this.clampPos(vec(at.x, at.y), 16), def: adef, affected: new Set() });
       }
     }
+    // The purchased ground's FORM (data/pocketForms.ts): a pocket wears the
+    // shape it was minted with — the treasure litter below and the ambient-
+    // event gate both read it. Null on ordinary ground.
+    const pform = def.pocket ? pocketFormOf(def.pocketForm) : null;
     // Reward chests: gated objectives earn a locked treasure; the wilds
     // sometimes hide a timed chest — and some chests bite back. (Not in a special
     // arena — its reward is the quest turn-in, not a zone chest.)
@@ -3941,6 +3960,34 @@ export class World {
           pos: this.clampPos(vec(at.x, at.y), 14),
           kind: 'timed', mimic: rng.chance(0.25), opened: false,
           lockTime: 3, maxLock: 3,
+        });
+      }
+    }
+
+    // PURCHASED-POCKET TREASURE (the form's litter): the hoard's whole point
+    // is walking in ON the plunder. Extra gem-caches seed the POIs, and a
+    // guaranteed chest stakes the centerpiece — kind 'objective' seals it on
+    // the zone's own ask (fell the guard, take the hoard), deliberately
+    // bypassing objectiveEarnsChest: the FORM stakes the treasure, that's
+    // what the toll bought. Same rng/POI discipline as the rolls above, so
+    // revisits replay the same litter.
+    if (pform && !def.special && o.kind !== 'safe') {
+      if (pform.caches) {
+        const n = rng.int(pform.caches[0], pform.caches[1]);
+        for (let i = 0; i < n; i++) {
+          const c = this.createMonster('gem_cache', def.level, 'enemy');
+          const at = this.interactSpot(pois, rng, 520, INTERACT_PLACE_CFG.portalClear);
+          c.pos = this.clampPos(vec(at.x, at.y), c.radius);
+          this.actors.push(c);
+        }
+      }
+      if (pform.chest && !this.completedObjectives.has(def.id)
+        && !this.chests.some(c => c.kind === pform.chest)) {
+        const at = this.interactSpot(pois, rng, 520, INTERACT_PLACE_CFG.portalClear);
+        this.chests.push({
+          pos: this.clampPos(vec(at.x, at.y), 14),
+          kind: pform.chest, mimic: false, opened: false,
+          lockTime: pform.chest === 'timed' ? 3 : 0, maxLock: pform.chest === 'timed' ? 3 : 0,
         });
       }
     }
@@ -4019,7 +4066,10 @@ export class World {
     // in town, the arenas, and hand-authored war zones.
     // Skip the ambient-event roll on a REMEMBERED re-entry (a fresh caravan every
     // time you cross back would itself be a "re-entry punish"); fresh gens roll it.
-    if (!memory && o.kind !== 'safe' && o.kind !== 'waves' && !def.factionWar) {
+    // A pocket FORM may decline them outright (ambientEvents: false — a
+    // bought strongroom hosts no patrols).
+    if (!memory && o.kind !== 'safe' && o.kind !== 'waves' && !def.factionWar
+      && pform?.ambientEvents !== false) {
       const fac = this.sim.faction, owner = fac.owner(def.id);
       const host = this.sim.invasion.activeHostOn(def.id);
       // Rooted factions only stage events near home (FACTION_TRAITS eventRange).
@@ -6069,6 +6119,12 @@ export class World {
     const hf = this.sim.holdfastField;
     const gdef = hf ? hf.def(hf.infoFor(source.id)?.defId ?? '') : undefined;
     const pocket = gdef?.pocket;
+    // THE FORM: which SHAPE the earned ground takes (data/pocketForms.ts) — a
+    // small loot-littered hollow or a full hidden zone — rolled ONCE from the
+    // guardian's weighted rows, seeded on the run + the lock (deterministic
+    // however the mint is re-asked), then BAKED on the def (`pocketForm`).
+    const roll = this.rollPocketForm(source, exitDef, pocket);
+    const form = pocketFormOf(roll.form);
     let target = projectCoord(source.map, exitDef.side);
     // The earned ground must be LAND — a pocket never mints a port (the ocean
     // gate belongs to the open frontier path alone).
@@ -6084,25 +6140,60 @@ export class World {
       fieldBiome: !pocket?.tileset,
       dimension: source.dimension,
       pocket: true,
+      // The form's word on the mint itself: footprint band, objective policy,
+      // and whether a war may brawl in the bought ground.
+      ...(form.size ? { sizeBand: form.size } : {}),
+      ...(form.objective ? { objective: form.objective } : {}),
+      ...(form.objectivePool ? { objectivePool: form.objectivePool } : {}),
+      ...(form.factionWar === false ? { noFactionWar: true } : {}),
     });
+    gen.pocketForm = form.id;
+    // The node reads as what it is ("Sunken Grove Hoard") — feel is part of
+    // the promise. Base names are already dedupe'd, so the suffix can't clash.
+    if (form.nameWord) gen.name = `${gen.name} ${form.nameWord}`;
     if (source.dimension) gen.level += dimensionDef(source.dimension).levelBonus ?? 0;
     if (gdef?.reward.destLevelDelta) gen.level = Math.max(1, gen.level + gdef.reward.destLevelDelta); // the base reward bias
-    if (pocket) this.applyPocketSpec(gen, pocket);
+    this.applyPocketSpec(gen, form, roll, pocket);
     this.zoneMap[gen.id] = gen;
     this.sim.onNodeCharted(gen, this.simView());
     return gen;
   }
 
-  /** Enrich a freshly-minted pocket from its guardian's PocketSpec: stamp the
-   *  loot BOUNTY lever (ZoneDef.bounty → rollDrops) and floor the promised
-   *  side-features — raising an existing layout row's count range to at least
-   *  [min, max], or appending the row when the tileset carries none. Fresh row
-   *  copies only: tileset layout arrays are shared literals, never mutated. */
-  private applyPocketSpec(gen: ZoneDef, pocket: PocketSpec): void {
-    if (pocket.bounty && pocket.bounty > 0) gen.bounty = pocket.bounty;
-    if (pocket.features?.length) {
+  /** Roll WHICH form the guardian's pocket takes: the weighted rows from its
+   *  PocketSpec (absent = the default delve, exactly the pre-form shape).
+   *  Seeded on the run + the lock id, so the same gate always sells the same
+   *  ground no matter when/where the frontier resolves. */
+  private rollPocketForm(
+    source: ZoneDef, exitDef: ZoneExitDef, pocket: PocketSpec | undefined,
+  ): { form: string; bounty?: number; features?: { kind: string; min: number; max?: number }[] } {
+    const rows = pocket?.forms?.length ? pocket.forms : [{ form: DEFAULT_POCKET_FORM, weight: 1 }];
+    const rng = new Rng((this.sim.biomeField.fieldSeed ^ hashStr(exitDef.lock ?? `pocket:${source.id}`)) >>> 0);
+    let total = 0;
+    for (const r of rows) total += Math.max(0, r.weight);
+    let x = rng.next() * total;
+    for (const r of rows) { x -= Math.max(0, r.weight); if (x <= 0) return r; }
+    return rows[rows.length - 1];
+  }
+
+  /** Enrich a freshly-minted pocket: the FORM's own enrichment, the rolled
+   *  row's per-shape overrides, and the guardian's flat PocketSpec all fold —
+   *  bounty floors MAX together (ZoneDef.bounty → rollDrops), feature floors
+   *  MERGE (raising an existing layout row's count range to at least
+   *  [min, max], or appending the row when the tileset carries none), and the
+   *  form's pack scale stamps ZoneDef.packDensity. Fresh row copies only:
+   *  tileset layout arrays are shared literals, never mutated. */
+  private applyPocketSpec(
+    gen: ZoneDef, form: PocketFormDef,
+    roll: { bounty?: number; features?: { kind: string; min: number; max?: number }[] },
+    pocket: PocketSpec | undefined,
+  ): void {
+    const bounty = Math.max(form.bounty ?? 0, roll.bounty ?? 0, pocket?.bounty ?? 0);
+    if (bounty > 0) gen.bounty = bounty;
+    if (form.packDensity !== undefined) gen.packDensity = form.packDensity;
+    const feats = [...(form.features ?? []), ...(roll.features ?? []), ...(pocket?.features ?? [])];
+    if (feats.length) {
       const rows = [...gen.layout];
-      for (const f of pocket.features) {
+      for (const f of feats) {
         const i = rows.findIndex(r => r.kind === f.kind);
         if (i >= 0) {
           const [lo, hi] = rows[i].count;
@@ -6625,16 +6716,26 @@ export class World {
     // density (and net xp/zone) stays roughly flat. A FIELD mega-zone is mostly walkable
     // BLOB inside a big bounding rect, so it scales on its WALKABLE cell area (not the
     // rect) with a larger cap — the enemy budget matches where you can actually fight.
-    // Non-Field zones keep the rect-area + 2.2 cap (byte-identical) to preserve balance.
+    // A purchased POCKET budgets on its walkable carve for the same reason,
+    // in the other direction: a carve layout (dungeon/mycelia faces walk
+    // 10-25% of their rect) minted what READ as a tiny hollow while still
+    // budgeting a full rect's population — crammed, in a dead-end, against
+    // the one portal the player arrives by. Pockets also shed the 0.8 area
+    // FLOOR (POCKET_PACK_FLOOR): a deliberately small hollow holds a
+    // deliberately small guard, never a full zone's minimum.
+    // Every other zone keeps the rect-area + 2.2 cap + 0.8 floor
+    // (byte-identical) to preserve shipped balance.
     let area: number, cap = 2.2;
     if (def.field && this.walk instanceof GridWalkField) {
       area = this.walk.walkableCount() * this.walk.cell * this.walk.cell;
       cap = FIELD_PACK_AREA_CAP;
+    } else if (def.pocket && this.walk instanceof GridWalkField) {
+      area = this.walk.walkableCount() * this.walk.cell * this.walk.cell;
     } else {
       const bbox = this.arena.w * this.arena.h;
       area = this.arena.shape === 'ellipse' ? bbox * (Math.PI / 4) : bbox;
     }
-    const areaFactor = clamp(Math.sqrt(area / REF_AREA), 0.8, cap);
+    const areaFactor = clamp(Math.sqrt(area / REF_AREA), def.pocket ? POCKET_CFG.packAreaFloor : 0.8, cap);
     const packs = Math.max(1,
       Math.round(randInt(spec.count[0], spec.count[1]) * factor * COUNT_SCALE * areaFactor * (def.packDensity ?? 1)));
     // Crowned champions are warband leaders — only eligible while the Warbands
@@ -6673,6 +6774,35 @@ export class World {
         }
         this.actors.push(m);
       }
+    }
+  }
+
+  /** Shove freshly-generated hostiles off a pocket's entry ring
+   *  (POCKET_CFG.arrivalGrace): outward along their own bearing when the
+   *  ground allows, else to the farthest stand. The samplers (spawnPoint /
+   *  farPoint) already keep their spawns away — this catches what generation
+   *  seats absolutely (camps, garrisons, POI-anchored bodies). Skips what
+   *  cannot chase or must not move: passives/breakables, NPC roles,
+   *  habitat/landmark-confined bodies, the untargetable. */
+  private enforceArrivalGrace(): void {
+    const grace = POCKET_CFG.arrivalGrace;
+    for (const a of this.actors) {
+      if (a.team !== 'enemy' || a.dead || a.confine || a.untargetable) continue;
+      const md = a.defId ? MONSTERS[a.defId] : undefined;
+      if (md?.passive || md?.npcRole) continue;
+      const d = dist(a.pos, this.zoneEntry);
+      if (d >= grace) continue;
+      const ang = d > 1
+        ? Math.atan2(a.pos.y - this.zoneEntry.y, a.pos.x - this.zoneEntry.x)
+        : rand(0, Math.PI * 2);
+      const out = vec(this.zoneEntry.x + Math.cos(ang) * (grace + 40),
+        this.zoneEntry.y + Math.sin(ang) * (grace + 40));
+      let to = this.clampPos(this.findFreeSpot(out, a.radius) ?? out, a.radius);
+      if (dist(to, this.zoneEntry) < grace) {
+        const far = this.farthestStand(a.radius, this.structures.length > 0);
+        if (far) to = this.clampPos(vec(far.x + rand(-60, 60), far.y + rand(-60, 60)), a.radius);
+      }
+      a.pos = vec(to.x, to.y);
     }
   }
 
@@ -7512,7 +7642,9 @@ export class World {
   private pickRovingDest(from: Vec2): string | null {
     const ok = (id: string): boolean => {
       const z = this.zoneMap[id];
-      return !!z && z.caveDepth == null && !z.floating && !z.eventOwned && z.objective.kind !== 'safe';
+      // (!pocket: a roving event never barges into purchased ground either.)
+      return !!z && z.caveDepth == null && !z.floating && !z.eventOwned && !z.pocket
+        && z.objective.kind !== 'safe';
     };
     const cands = this.exits.filter(e => e.to !== this.zone.id)
       .sort((a, b) => dist(from, a.pos) - dist(from, b.pos));
@@ -8580,17 +8712,35 @@ export class World {
   }
 
   /** The toll prompt to draw over the keeper when the player is near (renderer),
-   *  or null. An essence toll ADVERTISES its price — the player weighs the purse
-   *  before dwelling, no menu needed. */
+   *  or null. An essence toll ADVERTISES its price — and the pocket's rolled
+   *  FORM pitches what the price buys (a hoard, a whole delve) — so the
+   *  player weighs purse against promise before dwelling, no menu needed. */
   holdfastTollPrompt(): { pos: Vec2; text: string } | null {
     const k = this.holdfastKeeper();
     if (!k || dist(this.player.pos, k.pos) > transitRadius('holdfast', 78) + 30) return null;
-    const gdef = this.holdfastSite ? this.sim.holdfastField?.def(this.holdfastSite.defId) : null;
+    const site = this.holdfastSite;
+    const gdef = site ? this.sim.holdfastField?.def(site.defId) : null;
     const u = gdef?.unlock;
     const price = gdef && u?.kind === 'pay-currency' && u.currency === 'mortal'
       ? `${holdfastTollCost(gdef, this.zone.level)} ${META_CURRENCY_LABEL}`
       : 'a gem';
-    return { pos: vec(k.pos.x, k.pos.y - 34), text: `dwell to pay the toll (${price})` };
+    const pitch = site ? this.holdfastPocketPitch(site.zoneId, site.lockId) : null;
+    return {
+      pos: vec(k.pos.x, k.pos.y - 34),
+      text: `dwell to pay the toll (${price})${pitch ? ` — ${pitch}` : ''}`,
+    };
+  }
+
+  /** The rolled pocket FORM's parley pitch behind a holdfast lock (data/
+   *  pocketForms.ts), or null while the pocket is unminted/unknown. ONE
+   *  resolver — the keeper prompt and the zone-info panel both speak through
+   *  it, so the promise can never disagree with the minted ground. */
+  holdfastPocketPitch(zoneId: string, lockId: string | undefined): string | null {
+    if (!lockId) return null;
+    const to = this.zoneMap[zoneId]?.exits.find(e => e.lock === lockId)?.to;
+    const dest = to && to !== '?' ? this.zoneMap[to] : undefined;
+    if (!dest?.pocket) return null;
+    return pocketFormOf(dest.pocketForm).pitch;
   }
 
   /** DEV: force a sealed Holdfast in the CURRENT zone — append the locked bonus
@@ -8978,7 +9128,7 @@ export class World {
     const cfg = af.surge();
     const cands = Object.values(this.zoneMap).filter(z =>
       z.id !== site.zoneId
-      && z.caveDepth == null && !z.floating && !z.concealed && !z.eventOwned
+      && z.caveDepth == null && !z.floating && !z.concealed && !z.eventOwned && !z.pocket
       && z.objective.kind !== 'safe' && z.objective.kind !== 'waves');
     if (!cands.length) return null;
     const rng = new Rng((packageSeed(this.manifest.seed, 'amalgamation') ^ hashStr(`${site.id}:mb:${af.peek()?.stage ?? 0}`)) >>> 0);
@@ -12592,7 +12742,8 @@ export class World {
     const df = this.sim.deadwakeField;
     const n = df?.necropolisInfo();
     if (!df || !n || this.inCave || this.zone.special || this.zone.floating
-      || this.zone.eventOwned || this.zone.objective.kind === 'safe' || this.necropolisRealmContext) {
+      || this.zone.eventOwned || this.zone.pocket
+      || this.zone.objective.kind === 'safe' || this.necropolisRealmContext) {
       this.necropolisPortals.length = 0; return;
     }
     const near = Math.hypot(this.zone.map.x - n.coord.x, this.zone.map.y - n.coord.y)
@@ -12725,6 +12876,13 @@ export class World {
       // Track the best compromise: maximize whichever constraint is worst.
       const score = Math.min(dPlayer, spaceFromEvents ? dEvents : Infinity);
       if (score > bestScore) { bestScore = score; best = p; }
+    }
+    // Every sample missed the mesh (a mostly-solid carve): `best` would still
+    // be the raw arena center — inside rock, snapping wherever clampPos lands
+    // it. Degrade to the true farthest walkable stand instead.
+    if (bestScore === -Infinity) {
+      const far = this.farthestStand(16, false);
+      if (far) best = far;
     }
     if (spaceFromEvents) this.eventAnchors.push(best);
     return best;
@@ -33252,13 +33410,45 @@ export class World {
         && !this.walk.reachable(this.zoneEntry, p)) continue;
       if (dist(p, this.player.pos) > 450) return this.clampPos(p, radius);
     }
-    // Fallback honors the same reachability contract: in a structure zone the
-    // arena CENTER is often the sealed keep interior — a wave monster stranded
-    // there jams the objective. Near the entry is always reachable.
+    // Sampling failed — usually a CRAMPED zone where nothing clears the
+    // player-distance bar. The old fallback stacked everything at the entry
+    // (±140) — which is exactly where an arriving player STANDS: in a tiny
+    // carve the whole population teleported onto the portal (the pocket
+    // death-ball). Degrade honestly instead: the reachable stand FARTHEST
+    // from the player, jittered so repeated calls don't pile one spot.
+    const far = this.farthestStand(radius, this.structures.length > 0);
+    if (far) {
+      return this.clampPos(vec(far.x + rand(-70, 70), far.y + rand(-70, 70)), radius);
+    }
+    // No stand at all (degenerate ground): the old last resorts.
     if (this.structures.length) {
       return this.clampPos(vec(this.zoneEntry.x + rand(-140, 140), this.zoneEntry.y + rand(-140, 140)), radius);
     }
     return this.clampPos(vec(this.arena.w / 2, this.arena.h / 2), radius); // clampPos snaps to walkable
+  }
+
+  /** LAST-RESORT placement: the valid stand FARTHEST from the player, scanned
+   *  on a coarse grid — walkable, clear of solids, and (when asked) reachable
+   *  from the entry. The shared floor under spawnPoint/farPoint when random
+   *  sampling can't satisfy their distance contracts (cramped carves, tiny
+   *  pockets): placements degrade toward "as far away as the ground allows"
+   *  instead of collapsing onto the entry portal or the arena center.
+   *  Load/spawn-time only — never per-frame. */
+  private farthestStand(radius: number, needReachable: boolean): Vec2 | null {
+    const step = 60;
+    let best: Vec2 | null = null;
+    let bd = -1;
+    for (let y = 90; y < this.arena.h - 60; y += step) {
+      for (let x = 90; x < this.arena.w - 60; x += step) {
+        if (this.walk && !this.walk.isWalkable(x, y)) continue;
+        if (this.pointInSolid(x, y, radius * 0.5)) continue;
+        if (needReachable && this.walk?.reachable
+          && !this.walk.reachable(this.zoneEntry, vec(x, y))) continue;
+        const d = dist(vec(x, y), this.player.pos);
+        if (d > bd) { bd = d; best = vec(x, y); }
+      }
+    }
+    return best;
   }
 
   // ---------------------------------------------------------------- misc ----

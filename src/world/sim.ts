@@ -53,6 +53,7 @@ import type { HellWarField } from '../packages/overlays/hellWar';
 import type { WraithsailField } from '../packages/overlays/wraithsail';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
 import { boundaryGateIds } from '../data/boundaryGates';
+import { POCKET_FORMS } from '../data/pocketForms';
 import { setClimateOrigin } from './climate';
 import { dimensionPackageTempo, dimensionDef, dimensionIds } from './dimensions';
 import { validateCourses } from './courses';
@@ -96,6 +97,7 @@ export function packageLookups(): RegistryLookups {
     sidezone: id => !!SIDEZONES[id],
     biome: id => !!BIOMES[id],
     dimension: id => dimensionIds().includes(id),
+    pocketForm: id => !!POCKET_FORMS[id],
   };
 }
 
