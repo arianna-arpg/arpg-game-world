@@ -8641,7 +8641,7 @@ export const MONSTERS: Record<string, MonsterDef> = {
    *  earned by the four-talisman door it wakes behind. The dry-linen fire
    *  debt stays honest even here. */
   sand_regent: {
-    id: 'sand_regent', name: 'The Sand Regent',
+    id: 'sand_regent', name: 'Sand Regent',
     color: '#e8c060', shape: 'hexagon', radius: 26, material: 'stone', look: 'sand_regent',
     base: { life: 640, moveSpeed: 95, accuracy: 112, armor: 55, poise: 150, evasion: 0, mana: 90, manaRegen: 8 },
     mods: [mod('poisonRes', 'flat', 0.75), mod('chaosRes', 'flat', 0.4), mod('fireRes', 'flat', -0.25)],

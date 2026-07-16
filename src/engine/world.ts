@@ -4052,6 +4052,16 @@ export class World {
     if (!isCave && !def.special) {
       for (const r of this.zoneRuntimes) r.enter?.(def, false);
     } else {
+      // POCKET-NATIVE runtimes (rows flagged `inCaves`): a package whose
+      // whole mechanic LIVES in registered side-zones (the Unsealing's tomb
+      // pockets) still stages on cave ground — the one sanctioned, opt-in
+      // exception to the caves-are-invisible doctrine (the ownedGround
+      // idiom; every other row keeps the classic silence below).
+      if (isCave && !def.special) {
+        for (const r of this.zoneRuntimes) {
+          if (r.inCaves) r.enter?.(def, false);
+        }
+      }
       // DESCENT: a normal cave may host a Delver (rolled per mouth, gated). The
       // DESCENT abyss itself (cave_descent_*) never hosts one — it IS the dive.
       this.placeDescentDelver(def);
@@ -4073,7 +4083,7 @@ export class World {
    *             re-invoked each frame (live=true) so an overlay that BINDS or
    *             SPREADS to the standing zone materializes the moment it lands
    *             (each runtime's own guards make the re-invoke idempotent). */
-  private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean; ownedGround?: boolean }[] {
+  private buildZoneRuntimes(): { id: string; reset?: () => void; enter?: (def: ZoneDef, live: boolean) => void; noLive?: boolean; ownedGround?: boolean; inCaves?: boolean }[] {
     return [
       {
         // ASCENT: an eligible open-sky zone may vent a sky geyser (rolled
@@ -4241,8 +4251,10 @@ export class World {
         // THE UNSEALING: a Sepulcher Sands pocket stages its rolled role —
         // the Regent's sealed door behind its talisman braziers, or a
         // canopic seal-bearer's court — and the tomb site LIVE-SYNCS its
-        // flares, door state, and the Regent's wake every frame.
-        id: 'unsealing',
+        // flares, door state, and the Regent's wake every frame. POCKET-
+        // NATIVE (inCaves): the whole mechanic lives in side-zones, the
+        // one sanctioned exception to the caves-are-invisible doctrine.
+        id: 'unsealing', inCaves: true,
         reset: () => { this.materializedUnsealing.clear(); this.unsealingSite = null; },
         enter: (def, live) => this.materializeUnsealing(def, live),
       },
@@ -4421,7 +4433,14 @@ export class World {
    *  once, the moment the event lands. A live demon eruption gets a meteor-storm
    *  warning entrance (the `live` flag). */
   private materializeLiveZoneEvents(): void {
-    if (this.inCave) return;
+    if (this.inCave) {
+      // Pocket ground: ONLY pocket-native rows (inCaves) re-fire — the
+      // Unsealing's tomb site live-syncs its flares/door/wake down here.
+      for (const r of this.zoneRuntimes) {
+        if (r.inCaves && !r.noLive) r.enter?.(this.zone, true);
+      }
+      return;
+    }
     // Every zone runtime's enter() re-fires with live=true (unless it opted
     // out via noLive) — each is idempotent by its own guards, so an overlay
     // that binds/spreads onto the standing zone materializes the moment it
