@@ -134,6 +134,43 @@ registerCluster({
   poi: true,
 });
 
+// THE HEART COURT (the Sanguine's set-piece): the country's own heart at
+// chamber scale — ONE colossal heart dead center, the blood it still pumps
+// pooled at its foot (ONE broad lobe — the haven_court mud lesson), veins
+// lacing the ground toward it, standing arteries paying out around it, and
+// the pods that grew fat on the supply line.
+registerCluster({
+  id: 'heart_court',
+  anchor: { radius: 48 },
+  pieces: [
+    { kind: 'colossal_heart', radius: [44, 56], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'blood_pool', radius: [38, 52], count: [1, 1], ring: [58, 84], centerpiece: true },
+    { kind: 'vein_cluster', radius: [24, 36], count: [3, 5], ring: [78, 130] },
+    { kind: 'artery_stalk', radius: [11, 15], count: [2, 4], ring: [104, 156], rot: true },
+    { kind: 'flesh_pod', radius: [18, 26], count: [2, 3], ring: [118, 168], rot: true },
+    { kind: 'clot_mound', radius: [16, 24], count: [1, 3], ring: [122, 170], rot: true },
+  ],
+  poi: true,
+});
+
+// THE WEIR COURT (the Gutworks' set-piece): the tract's dam — a standing
+// pool of bile banked behind a line of teeth breaking the surface, villi
+// thick on the banks, polyps queued along the spill line, and the bones of
+// what didn't finish dissolving.
+registerCluster({
+  id: 'weir_court',
+  anchor: { radius: 40 },
+  pieces: [
+    { kind: 'chyme_pool', radius: [44, 60], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'tooth_row', radius: [20, 28], count: [2, 3], ring: [64, 92], rot: true, centerpiece: true },
+    { kind: 'villus_bed', radius: [24, 38], count: [2, 4], ring: [84, 140] },
+    { kind: 'gas_polyp', radius: [10, 14], count: [2, 4], ring: [96, 150], rot: true },
+    { kind: 'bone', radius: [12, 18], count: [1, 3], ring: [90, 148], rot: true },
+    { kind: 'gut_knuckle', radius: [18, 28], count: [0, 2], ring: [110, 168], rot: true },
+  ],
+  poi: true,
+});
+
 // THE RUIN COURT (the jungle's sunken-ruin doorstep): the root-split descent
 // at dead center — a SIDEZONE mouth (dwell to enter the halls below) — with
 // the swallowed court's furniture around it: a toppled head, urns that

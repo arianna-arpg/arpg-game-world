@@ -3738,6 +3738,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   sanguine: {
     id: 'sanguine', biome: 'flesh',
     depthAffinity: { from: 0.25, fadeIn: 0.3 },
+    // The Sanguine's lost place: the heart the whole country beats for.
+    compositions: [{ composition: 'heart_chamber', chance: 0.24 }],
     nameFirst: ['Bleeding', 'Sanguine', 'Arterial', 'Haemal', 'Weeping', 'Splattered', 'Openveined', 'Clotted', 'Exsanguine', 'Red-Running', 'Spilt', 'Wound-Deep', 'Pooling', 'Gushing', 'Crimson-Slick', 'Salt-Sweet'],
     nameSecond: ['Fields', 'Shallows', 'Lakes', 'Banks', 'Basin', 'Fountains', 'Tide', 'Reservoir', 'Spill', 'Font', 'Flow', 'Gallery', 'Wading', 'Redness'],
     layoutParams: {
@@ -3835,6 +3837,8 @@ export const TILESETS: Record<string, TilesetDef> = {
   gutworks: {
     id: 'gutworks', biome: 'flesh',
     depthAffinity: { from: 0.4, fadeIn: 0.3 },
+    // The Gutworks' lost place: the weir where the flow banks up.
+    compositions: [{ composition: 'chyme_weir', chance: 0.22 }],
     nameFirst: ['Churning', 'Peristaltic', 'Bile-Wet', 'Swallowing', 'Puckered', 'Knotted', 'Coiled', 'Digesting', 'Gurgling', 'Half-Digested', 'Airless', 'Sour', 'Rumbling', 'Clenched', 'Acid-Bright', 'Colicky'],
     nameSecond: ['Tract', 'Coil', 'Passage', 'Winding', 'Churn', 'Gorge', 'Bowels', 'Loop', 'Descent', 'Throat', 'Swallow', 'Gutworks', 'Strait', 'Gullet'],
     layoutParams: {

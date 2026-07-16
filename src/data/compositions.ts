@@ -478,3 +478,32 @@ registerComposition({
     { kind: 'bone_pile', count: [1, 3], where: { field: 'radial', max: 0.6 } },
   ],
 });
+
+// THE HEART CHAMBER (the Sanguine's lost place): somewhere in the middle
+// depths, the reason the whole country beats — the colossal heart in its
+// court, gore trailing off toward wherever the supply line ran. Stand and
+// listen, or kill your way through the court that grew fat beside it.
+registerComposition({
+  id: 'heart_chamber',
+  sites: [{ id: 'chamber', radius: [140, 180] }],
+  pre: [{ kind: 'clearing', at: 'chamber', count: [1, 1], radius: [70, 90] }],
+  post: [
+    { kind: 'cluster', cluster: 'heart_court', at: 'chamber', count: [1, 1] },
+    { kind: 'gore', count: [1, 3], where: { field: 'radial', max: 0.6 } },
+  ],
+});
+
+// THE CHYME WEIR (the Gutworks' lost place): where the tract's flow banks
+// up behind a dam of teeth — the waterline strewn with what didn't finish
+// dissolving (shore strata off the weir's own standing bile; a SECOND pool
+// on the band read as a fuse miss to genqa — the haven_court mud lesson,
+// relearned in bile: one body of standing liquid per court).
+registerComposition({
+  id: 'chyme_weir',
+  sites: [{ id: 'weir', radius: [130, 170] }],
+  pre: [{ kind: 'clearing', at: 'weir', count: [1, 1], radius: [64, 84] }],
+  post: [
+    { kind: 'cluster', cluster: 'weir_court', at: 'weir', count: [1, 1] },
+    { kind: 'bone', count: [1, 3], where: { field: 'shore', max: 0.5, params: { kinds: ['chyme_pool'], reach: 200 } } },
+  ],
+});
