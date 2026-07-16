@@ -2632,12 +2632,21 @@ export class Renderer {
     const { ctx } = this;
     const t = world.time, now = performance.now();
     for (const b of world.deathBurstsView()) {
+      // Refuse non-finite work (same contract as drawFlash): the gradient
+      // calls below are the ONE canvas surface that THROWS on a bad number
+      // (arcs merely no-op), and a single poisoned burst — baked from a dying
+      // actor, or snapshot-fed on a co-op client — must skip, not take the
+      // whole frame loop down with it.
+      if (!Number.isFinite(b.pos.x + b.pos.y + b.radius + b.t + b.coalesce)) continue;
       // The whole burst is drawn in ONE element colour (b.color = DAMAGE_COLOR[type]) so the
       // hue alone tells the player the damage type — and what resistance/armour to dress.
       // Kept deliberately sparse: a danger ring + a core, not a particle storm, so the read
       // stays clean even with several bursts on screen.
       if (b.phase === 'gather') {
-        const g = Math.min(1, b.t / b.coalesce); // 0→1 coalesce progress
+        // 0→1 coalesce progress; a zero-coalesce burst (possible only through
+        // poisoned data — the stat floor keeps real ones > 0) draws fully
+        // gathered rather than dividing 0/0.
+        const g = b.coalesce > 0 ? Math.min(1, b.t / b.coalesce) : 1;
         // PRIMARY CUE: the blast-radius danger ring — "leave this circle". Legible from the
         // first frame (when escape time is greatest) and still firms up (wider, brighter) as
         // the pop nears, so the avoidance read sharpens with the threat.
@@ -2691,8 +2700,14 @@ export class Renderer {
     // A big synchronous sim step (headless probes, background-tab catch-up)
     // can overshoot a flash's life below zero before the prune sweeps it —
     // clamp, or every arc/gradient call downstream throws on a negative
-    // radius and takes the whole rAF loop down with it.
-    const t = Math.max(0, Math.min(1, f.life / f.maxLife));
+    // radius and takes the whole rAF loop down with it. NON-FINITE numbers
+    // are the same failure through a different door: the ≤ guards below pass
+    // NaN (every comparison is false), and createRadialGradient is the one
+    // canvas call that THROWS on it — so one poisoned producer anywhere in
+    // the flash fabric would otherwise kill every frame for the effect's
+    // whole lifetime. Skip the effect, keep the frame.
+    if (!Number.isFinite(f.pos.x + f.pos.y + f.radius + f.life + f.maxLife)) return;
+    const t = f.maxLife > 0 ? Math.max(0, Math.min(1, f.life / f.maxLife)) : 0;
     if (t <= 0 || f.radius <= 0) return;
     // Crystal laser: a straight beam from pos along `facing` for `radius` length.
     if (f.beam) {
