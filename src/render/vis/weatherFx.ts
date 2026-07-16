@@ -45,6 +45,9 @@ export const WEATHER_FX: Partial<Record<WeatherKind, WeatherFxDef>> = {
   // Near-horizontal grit — the sky moving sideways. The wind fabric supplies
   // the shove; this supplies the reason you believe it.
   sandstorm: { form: 'streak', count: 110, vel: [-380, 90], len: 16, alpha: 0.4, color: '#d8b878', fadeIn: 2.5 },
+  // The white wind: snow moving SIDEWAYS — the sandstorm's streak grammar in
+  // pale ice (the flake row above is the gentle sibling; this one bites).
+  blizzard: { form: 'streak', count: 120, vel: [-400, 140], len: 15, alpha: 0.5, color: '#e8f4ff', fadeIn: 2 },
 };
 
 /** Draw a weather front's particles over the scene (screen space). Every

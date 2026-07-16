@@ -124,8 +124,23 @@ export const WEATHER_DEFS: Record<WeatherKind, WeatherDef> = {
    *  heat (ZoneTheme.heat — a taiga keeps it forever, a desert sheds it in
    *  moments). Gentle wind; drifts in slowly, day or night. */
   snow: {
-    label: 'Snowfall', color: '#cfe0f0', countMul: 1.0, factionMul: { wild: 1.2 },
+    label: 'Snowfall', color: '#cfe0f0', countMul: 1.0, factionMul: { wild: 1.2, rimebound: 1.25 },
     wind: 0.45, rampFrac: 0.5, skyWeight: { day: 0.8, dusk: 1, night: 1 },
+  },
+  /** BLIZZARD — snowfall's violent sibling, born only over COLD ground
+   *  (birthGeo reads the baked climate — the white wind rises off the
+   *  tundra/taiga belt, then drifts where it argues). Its teeth: the WIND
+   *  fabric at storm grade, comet-strikes that leave REAL slide-ice sheets
+   *  (Icy Comet through the shared strike machinery — the sky lays the
+   *  court's own ground), and the Rimebound hunting fat beneath it. Under a
+   *  Deepwinter run the swell is the front's army answering its weather. */
+  blizzard: {
+    label: 'Blizzard', color: '#9fc8e8', countMul: 1.15,
+    factionMul: { rimebound: 1.6, wild: 1.1 },
+    strike: { skillId: 'icy_comet', radius: 80, telegraph: 0.9, ratePerSec: 0.4 },
+    rampFrac: 0.25, wind: 0.95,
+    skyWeight: { day: 0.5, dusk: 0.8, night: 0.9 },
+    birthGeo: { temperature: { max: 0.35 } },
   },
   /** SANDSTORM — the desert country's own front, born only over hot dry
    *  ground (birthGeo) and then going where it pleases. Its teeth are the

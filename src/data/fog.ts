@@ -213,6 +213,34 @@ registerFogBank({
   ],
 });
 
+/** WHITEOUT — Deepwinter's signature murk: a vast, dense, fast-rolling wall
+ *  of wind-driven snow. Everyone inside is VEILED (fights materialize at
+ *  knife range — the court hunts by sound), and the cold GNAWS: a cadenced
+ *  chill build (FogGrant.every — the stacking-grant lever) that climbs the
+ *  freeze ladder if you stand in the white and argue with it. The court is
+ *  spared the cold (notFactions) — the whiteout is their hunting weather.
+ *  Not on any tileset's authored spec: the engine plants these in frost-
+ *  CONVERTED zones via World.fogEnsure (the runtime twin creepEnsure
+ *  pioneered), so the kind stays the event's own signature. */
+registerFogBank({
+  id: 'whiteout',
+  color: '#e8f2fa',
+  alpha: 0.5,
+  radius: [200, 320],
+  lobes: [7, 11],
+  drift: [10, 22],
+  meander: 0.18,
+  breathe: 0.2,
+  churn: 0.26,
+  life: [60, 120],
+  rampFrac: 0.3,
+  overFrac: 0.55,
+  grants: [
+    { status: 'fogveiled' },
+    { status: 'chill', every: 2.4, notFactions: ['rimebound'] },
+  ],
+});
+
 // --- FOG-RIDING CHOREOGRAPHY -------------------------------------------------
 // x_seek_fog: a gloaming BLINK toward the nearest living bank — not a march,
 // a fade-and-reappear (the gloomling idiom, mechanically a clamped
