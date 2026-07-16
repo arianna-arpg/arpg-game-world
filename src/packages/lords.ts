@@ -14,10 +14,11 @@
 // Pure data leaf (no engine imports) — the war overlay, the package def, the
 // map, and the announcements all read lords through lordDef()/LORDS_POOL. A
 // ninth lord is one registerLord() row: give it a temper and a host and every
-// fabric — territory, fronts, succession, strikes, bulletins — fields it with
-// zero engine edits. The pool being LARGER than the rolled seat count is the
-// point: succession (a slain throne refills from the unrolled) and run
-// variety both draw from the same surplus.
+// fabric — territory, fronts, manifestation, strikes, bulletins — fields it
+// with zero engine edits. The pool being LARGER than the rolled seat count is
+// the point: RUN VARIETY. The rolled lords are EVERLASTING within their run —
+// ephemeral, eternal, never eliminated, never replaced (cast one down and it
+// regathers); the unrolled simply wait for another world.
 // ---------------------------------------------------------------------------
 
 /** The war-personality dials the territory sim reads. All 0..1. The ETERNAL
@@ -58,16 +59,20 @@ export interface UnderworldLordDef {
   /** The grafted HOST faction id (FactionSpec registered by the package). */
   faction: string;
   temper: LordTemper;
-  /** Apex body def id — throned at the citadel, killable at great cost. */
+  /** Apex body def id — the lord's MANIFESTATION: it holds court in sanctum
+   *  ground the player walks into (never a minted set-piece zone), and being
+   *  cast down only collapses the lord's power for a while. */
   lord: string;
   /** Front-marshal def id — leads pushes at contested ground; killable to
-   *  collapse a local front. */
+   *  collapse a local front (which heals). */
   marshal: string;
   /** Preferred incursion flavors (InvasionType ids) when this lord strikes —
    *  weighted roll among these; unknown ids are skipped at attribution. */
   strikes: { type: string; weight: number }[];
-  /** The seat: what mints at this lord's citadel anchor. */
-  citadel: { tileset: string; layout?: string; name: string };
+  /** The seat of power: a FIELD ANCHOR the lord's influence wells around —
+   *  a name on the map, never a zone. The throne is wherever the lord
+   *  stands, and it stands where you walked in. */
+  throne: { name: string };
   /** Conquest-bulletin verbs, %z = zone name (data-driven flavor):
    *  take = this lord seizes ground; fall = this lord's ground is lost. */
   deeds: { take: string; fall: string };

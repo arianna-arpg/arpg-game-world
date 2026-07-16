@@ -1,11 +1,15 @@
 # The War Below — the Underworld's eternal territorial struggle
 
 The Underworld is not a dungeon; it is a **country at war**. A run seats a
-handful of **Underworld Lords** from an authored pool, drapes a live
-**disposition lattice** over hell's map space, and simulates an eternal
-struggle no side can win — the player is an interloper in something larger
-than they can affect permanently, and every surface **Demonic Incursion** is
-one of these lords reaching up.
+handful of **Underworld Lords** from an authored pool — and for that run they
+are **everlasting**: ephemeral, eternal, everywhere and nowhere (the
+Chaos-God texture). The disposition of ANY point in hell derives from a pure
+function, so the warfront exists at every coordinate the moment it is asked
+about, breathes on its own clock, and extends however far the player roams —
+the war is not simulated *near* the player; the player explores *into* a war
+that was always already there. Every surface **Demonic Incursion** is one of
+these lords reaching up. Nothing the player does to it is permanent: fronts
+beaten back heal, cast-down lords regather, and no throne ever changes hands.
 
 Three modules, all data-first:
 
@@ -20,63 +24,73 @@ Three modules, all data-first:
 `UnderworldLordDef`: id, name/short/epithet, **creed** (one line of doctrine),
 banner **color** + one-glyph **sigil**, the grafted **host faction**, a
 **temper** (the war-personality dials), **lord** + **marshal** body def ids,
-preferred **strikes** (InvasionType ids, weighted), and a **citadel** seat
-(tileset/layout/name). Eight ship; a run rolls `WAR_CFG.seats` (4) from the
-pool, manifest-seeded. A ninth lord is one `registerLord` row plus its two
-bodies — the roll, succession, territory, map, bulletins, strikes and
-spawning all field it with zero engine edits.
+preferred **strikes** (InvasionType ids, weighted), and a named **throne**
+(`{ name }` — a field anchor, never a zone). Eight ship; a run rolls
+`WAR_CFG.seats` (4) from the pool, manifest-seeded, and those four are the
+run's war from first breath to last — no elimination, no succession, no
+replacement. The unrolled simply wait for another world. A ninth lord is one
+`registerLord` row plus its two bodies.
 
-The **temper** dials are where the "eternal struggle" lives:
+The **temper** dials:
 
-- `push` — attack-flow rate at hostile borders.
-- `hold` — defense multiplier on owned cells.
-- `opportunism` — extra push against WEAK borders (the vacuum-feeder).
+- `push` — how fast this lord's fronts crawl (influence-drift speed).
+- `hold` — how quickly its ground shrugs off suppression (the field heals).
+- `opportunism` — reach grows against bled rivals (the vulture dial).
 - `wrath` — surface-strike appetite (attribution weight).
-- `tideAmp?` — war-tide swing size (Ozrimoth surges seldom but enormously).
-- `deepStrike?` — behind-the-lines enclave seeding (Vethriss' doors).
+- `tideAmp?` — the lord's power-breath amplitude (Ozrimoth surges slow and huge).
+- `deepStrike?` — doors opened behind rivals' lines (Vethriss).
 
-## The sim (the revolving door)
+## The eternal field
 
-Two phases. From run start the war is **abstract** — seats rolled, tempers
-live, incursion attribution works before hell is ever entered. The moment any
-underworld node exists in the overlay's view (the Hellgate minting is the
-first), the lattice **anchors**: citadels take seeded compass seats on a ring
-around the gate, ground seeds by nearest-citadel falloff, and the struggle
-becomes territory.
+`influence(lord, coord, t) = power × (noiseBase + amp·noise(coord + drift(t)))
+× throneWell(coord)`, where:
 
-Cells hold `owner` (seat index) + `power`. Per tick: citadels feed power in
-(the war's only mint — scaled down while a lord's strike is away, up while
-spoils flow), owned ground settles toward a garrison level, same-owner cells
-diffuse rear-to-front, and hostile borders exchange: `attack = basePush ×
-push × tide × (1 + opportunism × weakness)`, resisted by the defender's
-`hold`. **The attacker pays `drainFwd` of every blow** — strength is moved
-forward, never minted, so a hard push thins its own rear and the door
-revolves. Per-pair seeded sinusoid **tides** keep fronts breathing at
-equilibrium. The lattice is world-anchored (origins floored to cell
-multiples; growth only ADDS cells) and covers citadels + charted hell +
-margin; **freshly-settled hell seeds to its nearest throne** the moment it
-charts. The Hellgate keeps a one-cell neutral circle — the landing is a door,
-not a warfront; its ring neighbours are already somebody's country.
+- **noise** is seeded per-lord value noise (feature size `field.noiseScale`)
+  whose domain **drifts** at `field.driftVel × push` along a heading that
+  slowly wheels (`field.driftTurn`) — the fronts crawl forever, nobody
+  marches one way for good;
+- **throneWell** eases each lord's influence up around its throne anchor
+  (`field.wellAmp` / `wellRange`) — coherent countries, not salt-and-pepper;
+- **power** is the live scalar (below) — a bled lord's footprint recedes
+  *everywhere*, and rivals' fields flood the difference (the revolving door
+  at global scale);
+- decaying **local modifiers** multiply on top (the player's fleeting
+  fingerprints, and the rift-lords' opened doors).
 
-Everything is a `WAR_CFG` dial. Determinism: one `Rng(ctx.seed)`, the
-overlay's own accumulated clock, no wall time — two sims on one seed seat and
-fight the same war (eventqa's lifecycle/determinism groups gate this).
+Ownership at a coordinate = argmax; contest = second/first ratio, reported
+only above `contest.near` (a front is a place, not a percentage that follows
+you), HOT above `contest.hot`. The Hellgate keeps a one-cell neutral circle
+(`neutralRadius`) — the landing is a door; its ring neighbours are already
+somebody's country. **There is no ground outside the war**: the field
+answers at any distance, unexplored or not.
+
+POWER is per-lord homeostasis: it regathers toward `power.base` (slower with
+a strike away, faster on spoils), breathes on a seeded per-lord tide, and is
+floored at `power.floor` — a lord can be bled, never extinguished.
+Determinism: one seeded Rng at roll time; the field derives from the
+overlay's own clock, so a resumed save recomputes the same eternity (the
+snapshot is a handful of scalars — seats, powers, modifiers, the truce).
 
 ## What the player can do about it (levers, not victory)
 
-- **Kill a front-marshal** (`tag: 'hell_marshal'`, spawned at HOT fronts —
-  `frontStage(zoneId)`): the local push collapses (`onMarshalSlain` damps that
-  lord's power in a radius). The vacuum fills — with someone else.
-- **Kill a lord on its throne** (`tag: 'hell_lord'`, Crowned, at the citadel):
-  `onLordSlain` collapses the realm (`lordFall.powerMul`), rivals flood in,
-  and after `succession.delay` a NEW claimant from the **unrolled** pool takes
-  the empty seat (the citadel zone re-mints under the new banner). The war
-  does not end because a chair does. Ledger: `hell_marshals_slain`,
-  `hell_lords_slain`.
-- **Repel a lord's incursion** (surface or hell): the committed host is lost —
-  a global power haircut on the sender (`strike.repelledMul`). **Ignore one to
-  burnout** and the spoils flow home (citadel surge). Surface choices move the
-  hell map.
+- **Kill a front-marshal** (`tag: 'hell_marshal'`, fielded at HOT fronts via
+  `frontStage`): drops a decaying suppression disc (`modifier.marshal*`) —
+  the local push collapses, the vacuum fills, and the field HEALS (faster
+  for high-`hold` lords).
+- **Meet a lord**: deep in a lord's **sanctum** (within
+  `heartland × sanctumFrac` of its throne anchor, on its own ground, power
+  gathered, cooldown clear — `manifestHere`) the lord **manifests** in
+  whatever zone the player actually walked into: Crowned, at full strength,
+  over a court of its own host. Thrones are anchors — nothing mints; the
+  throne is wherever the lord stands, and it stands where you walked in.
+- **Cast a manifestation down** (`tag: 'hell_lord'`): the lord's power
+  collapses everywhere (`manifest.collapseMul`) — rivals flood its whole
+  footprint — and then it REGATHERS (`power.regen`, `manifest.cooldown`,
+  sigil dimmed on the map while gathering). The same lord returns. Ledger:
+  `hell_marshals_slain`, `hell_lords_slain`.
+- **Repel a lord's incursion** (surface or hell): the committed host is lost
+  (`strike.repelledMul`). **Ignore one to burnout** and the spoils flow home
+  (`strike.spoilsPower`, a regen surge). Surface choices move the hell map.
 
 Both bodies carry their lord on `Actor.eventKey` (`hellwar:<lordId>`) — the
 kill rows never guess from def ids.
@@ -86,11 +100,11 @@ kill rows never guess from def ids.
 `DemonInvasionField.attribution` is an optional hook the sim's composition
 root wires when the war package runs (`sim.ts` — neither overlay imports the
 other). At ignition the demon field asks `attributeStrike(typeIds)`: the war
-picks the sender by **wrath × strength-surplus** (a winning lord has hosts to
+picks the sender by **wrath × power-share** (a strong lord has hosts to
 spare — the strike is detached strength, not desperation) and the flavor from
 the lord's `strikes` preferences. The invasion then carries `lordId`, and
 `InvasionInfo` resolves `faction` (the lord's host), `champion` (the lord's
-**marshal** — the lord never leaves its throne), and `color` (the banner) —
+**marshal** — the lord never leaves its country), and `color` (the banner) —
 so the epicenter court, the meteor craters, the storm spawn bias, the realm
 behind the portal, the map ring, and every announcement fly the sending
 lord's banner. Resolution reports home: `resolveInvasion*` paths →
@@ -105,14 +119,13 @@ absent, `attribution` stays null and every legacy path is byte-identical.
   (`spawnContest` stamps `m.faction` with the contestant's banner — conscript
   rosters brawl AS the host.)
 - `baseTable` (world.ts): a lord's **heartland** (within `WAR_CFG.heartland`
-  of its citadel) flips the zone's whole population to the host — the
+  of its throne) flips the zone's whole population to the host — the
   crusade's suppress-natives grip, in hell's grammar.
 - The `underworld_war` **zone-runtime row** (buildZoneRuntimes): hot fronts
-  field the attacker's marshal + retinue; a citadel seats the Crowned lord
-  over its court. Live re-invokes cover a front igniting under your feet.
-- **Citadel zones** mint through the engine drain (floating, in-dimension,
-  `noFactionWar`, the lord's authored tileset/layout/name, `eventOwned`,
-  claimed by the overlay's `ownedZones` so they persist across saves).
+  field the attacker's marshal + retinue; sanctum ground manifests the LORD
+  over its court. Live re-invokes cover a front drifting onto the standing
+  zone. **Nothing mints, nothing is owned** — the war has no zones of its
+  own, only presence in everyone else's.
 
 ## Diplomacy
 
@@ -122,18 +135,21 @@ Legion rabble they conscript, at war with the Caul, `contexts:
 stances ride the **run-scoped diplomacy layer** (`setRunStances` in
 `data/monsters.ts` — namespaced, checked before the static RELATIONS table):
 at most one **truce** rolls per run, always shatters
-(`WAR_CFG.truce.breakAfter`), and every succession republishes.
+(`WAR_CFG.truce.breakAfter`).
 
 ## Surfaces
 
-- **Map** (underworld tab): owner wash on the world-anchored render ladder,
-  citadel sigils (`lord.sigil`, creed in the tooltip), ⚔ badges over hot
-  charted fronts, the top thrust arrows (`WAR_CFG.map.arrows`), a "The War
-  Below" layer chip. The map's 0.5 s auto-refresh animates the fronts live.
-- **HUD/zone box**: `conditionRows` (sim.ts) reports "Held by X" +
-  "Y presses the front" for underworld zones; a `zoneInfo` source adds the
-  creed + throne rows; both read `zoneWar(zoneId)`.
-- **Bulletins**: conquest/succession/pact lines through the bulletin registry
+- **Map** (underworld tab): the eternal field sampled over the viewed extent
+  on a world-anchored render ladder — the wash breathes and crawls because
+  the field does (the map's 0.5 s auto-refresh animates it); throne sigils
+  (`lord.sigil`, the throne's name + creed in the tooltip, dimmed while a
+  cast-down lord regathers); ⚔ badges over hot charted fronts; thrust arrows
+  along the strongest advances (influence-gradient sampled). A "The War
+  Below" layer chip.
+- **HUD/zone box**: `conditionRows` (sim.ts) reports "Held by X" /
+  "the sanctum" + "Y presses the front" for underworld zones; a `zoneInfo`
+  source adds the creed + front rows; both read `zoneWar(zoneId)`.
+- **Bulletins**: conquest/pact/collapse lines through the bulletin registry
   — heard only in the underworld (the drain-and-filter source); the surface
   learns of the war through its strikes.
 - The hosts speak the **infernal tongue** (`monsterNames`/`nemesis` `demon`
@@ -141,17 +157,22 @@ at most one **truce** rolls per run, always shatters
 
 ## Persistence
 
-`persistence: 'durable'` — snapshot carries seats (lord/citadel/zoneId/
-fallen/succession/strikes/spoils), the truce, the anchor, the full lattice
-(plain JSON arrays), per-zone owner memory, pending mints, and the
-`ownedZones` claim. Restore is registry-tolerant (a lord gone from the pool
-re-rolls deterministically; a cell-size drift rebuilds ground from the
-surviving seats). `pruneZones` re-queues culled citadel mints.
+`persistence: 'durable'` — the snapshot is a handful of scalars: seats
+(lord/throne anchor/power/strikes/spoils/manifest cooldown + the seeded
+field identity), the truce, the anchor, live modifiers, and the per-zone
+bulletin memory. The field itself is never saved — it derives from time, so
+it cannot be corrupted, only re-asked. Restore is registry-tolerant (a lord
+gone from the pool re-rolls deterministically). `pruneZones` only trims the
+bulletin memory.
 
 ## QA
 
 `npm run eventqa` gates the package (registry/pledge/gates/lifecycle/
 determinism/ledger). Live probe: `devStartRun()` →
-`w.enterDimension('underworld')` → `w.sim.hellWarField.peek()`; kill flows
-need `w.kill(body, false, killer)` (silent kills skip every bounty by
-design). `frontStage`/`zoneWar`/`strengths` are the readable state.
+`w.enterDimension('underworld')` → `w.sim.hellWarField.peek()`;
+`warAt({x,y})` answers ANYWHERE (the everywhere test); kill flows need
+`w.kill(body, false, killer)` (silent kills skip every bounty by design).
+`frontStage`/`zoneWar`/`manifestHere`/`strengths` are the readable state.
+Mind the interloper: a level-1 character left standing in hell during long
+probe waits dies (gameOver halts the world and stales the views) — keep
+`p.life` topped between steps.

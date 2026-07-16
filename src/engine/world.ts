@@ -4194,15 +4194,16 @@ export class World {
       },
       {
         // THE WAR BELOW: a HOT front fields the attacker's MARSHAL (the armies
-        // themselves arrive through the owner/rival spawn injection); a lord's
-        // CITADEL seats the LORD over its court. Live re-invokes cover a front
-        // igniting under your feet as the lattice shifts.
+        // themselves arrive through the owner/rival spawn injection); deep in
+        // a lord's SANCTUM the lord itself MANIFESTS — in whatever zone the
+        // player actually walked into (thrones are anchors, never zones).
+        // Live re-invokes cover a front drifting onto the standing ground.
         id: 'underworld_war',
         reset: () => this.materializedHellWar.clear(),
         enter: (def) => {
           const hw = this.sim.hellWarField;
           if (!hw || def.dimension !== hw.dimension) return;
-          if (hw.seatOnZone(def.id)) this.spawnHellCourt(def);
+          if (hw.manifestHere(def.id)) this.spawnHellCourt(def);
           else if (hw.frontStage(def.id)) this.spawnHellMarshal(def);
         },
       },
@@ -10551,15 +10552,16 @@ export class World {
     this.text(vec(at.x, at.y - 40), `${lord.short}'s marshal drives the front!`, lord.color, 15);
   }
 
-  /** A LORD ON ITS THRONE: the citadel zone fields the lord itself — Crowned,
-   *  at full strength, over a court drawn from its own host (the heartland
-   *  baseTable already made the zone's whole population the host). Felling it
-   *  breaks the realm: the hell_lord kill row collapses its territory and
-   *  starts the succession clock — the war does not end because a chair does. */
+  /** THE LORD MANIFESTS: deep sanctum ground fields the lord itself —
+   *  Crowned, at full strength, over a court drawn from its own host (the
+   *  heartland baseTable already made the zone's whole population the host).
+   *  The throne is wherever the lord stands, and it stands where YOU walked
+   *  in. Casting it down collapses the lord's power everywhere — and the
+   *  lord REGATHERS: no throne changes hands, nothing here can be ended. */
   private spawnHellCourt(def: ZoneDef): void {
     const key = `seat_${def.id}`;
     if (this.materializedHellWar.has(key)) return;
-    const lord = this.sim.hellWarField?.seatOnZone(def.id);
+    const lord = this.sim.hellWarField?.manifestHere(def.id);
     if (!lord) return;
     this.materializedHellWar.add(key);
     const roster = FACTIONS[lord.faction];
@@ -10580,7 +10582,8 @@ export class World {
       m.pos = this.clampPos(vec(at.x + rand(-110, 110), at.y + rand(-110, 110)), m.radius);
       this.actors.push(m);
     }
-    this.text(vec(at.x, at.y - 48), `${lord.name} holds court. ${lord.creed}`, lord.color, 17);
+    this.text(vec(at.x, at.y - 48),
+      `${lord.name} MANIFESTS — this ground is ${lord.throne.name} now. ${lord.creed}`, lord.color, 17);
   }
 
   /** Once an invasion festers past its portal threshold, a rift to the demons'
@@ -25630,45 +25633,9 @@ export class World {
       dfi.mintRequests.length = 0;
     }
 
-    // THE WAR BELOW: raise each seated lord's CITADEL at its rolled anchor —
-    // minted FLOATING in the underworld (the war's thrones exist on the map
-    // before any road reaches them; the floating drain wires one in as the
-    // player pushes toward it). The zone takes the lord's authored tileset,
-    // layout and name — its population is the host (heartland baseTable) and
-    // the lord itself holds court (the underworld_war zone-runtime row).
-    const hwf = this.sim.hellWarField;
-    if (hwf && hwf.mintRequests.length) {
-      const hwDim = hwf.dimension ?? 'underworld';
-      for (const req of hwf.mintRequests) {
-        if (this.zoneMap[req.zoneKey]) { hwf.bindSeat(req.lordId, req.zoneKey); continue; }
-        const anchor = nearestNode(this.zoneMap, req.coord, undefined, hwDim)
-          ?? this.zoneMap[dimensionDef(hwDim).entry?.gate.id ?? '']
-          ?? this.surfaceAnchor();
-        const def = placeZoneAt(req.coord, anchor, this.zoneMap, this.nextGenId++, {
-          id: req.zoneKey, tileset: req.tileset, name: req.name,
-          ...(req.layout ? { layoutType: req.layout } : {}),
-          level: this.eventLevel(req.coord) + (dimensionDef(hwDim).levelBonus ?? 0) + 2,
-          // noFactionWar: a THRONE never hosts a squatter war — the lord's own
-          // court (heartland population + the seat set-piece) is the fight.
-          objective: { kind: 'clear' }, forceWaypoint: true, forceFrontiers: 1, floating: true,
-          noFactionWar: true,
-          seed: (this.manifest.seed ^ hashStr(req.zoneKey)) >>> 0,
-          biomeFor: this.dimensionBiomeFor(hwDim),
-          climateFor: this.climateFor,
-          dimension: hwDim,
-        });
-        def.eventOwned = true; // the throne's ground — no other overlay squats here
-        this.zoneMap[req.zoneKey] = def;
-        hwf.bindSeat(req.lordId, req.zoneKey);
-        // The throne is news only in its own plane (the announce-in-plane rule).
-        if (hwDim === (this.zone.dimension ?? 'surface')) {
-          const l = lordDef(req.lordId);
-          this.text(vec(this.player.pos.x, this.player.pos.y - 90),
-            `${req.name} — ${l?.name ?? 'a lord'} rules from there.`, l?.color ?? '#e8a050', 15);
-        }
-      }
-      hwf.mintRequests.length = 0;
-    }
+    // (THE WAR BELOW mints NOTHING: thrones are field anchors, the lords
+    // manifest only in zones the player explores — the underworld_war
+    // zone-runtime row. The war's whole footprint is the field itself.)
 
     // CRUSADE: mint the stronghold + its SIMULATED frontier nodes at their
     // uncharted coordinates — minted FLOATING (a free point in the wilds, NOT

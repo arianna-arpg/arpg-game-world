@@ -736,8 +736,8 @@ export class WorldSim {
       const st = hw && zone.dimension === hw.dimension ? hw.zoneWar(zone.id) : null;
       if (st) {
         out.push({
-          kind: 'condition', icon: st.citadel ? st.lord.sigil : '⚑', color: st.lord.color,
-          label: st.citadel ? `${st.lord.name} — the throne` : `Held by ${st.lord.short}`,
+          kind: 'condition', icon: st.throne ? st.lord.sigil : '⚑', color: st.lord.color,
+          label: st.throne ? `${st.lord.name} — the sanctum` : `Held by ${st.lord.short}`,
           detail: st.heartland ? `${st.lord.epithet} · heartland` : st.lord.epithet,
         });
         if (st.contested) {

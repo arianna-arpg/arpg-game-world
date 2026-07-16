@@ -3,11 +3,13 @@
 //
 // This def seats the LORD POOL (packages/lords.ts) and hands the war field
 // (overlays/hellWar.ts) its one underworld instance. Eight lords are authored
-// here — a run ROLLS four — and each is a full banner: a creed, a war temper,
-// a grafted HOST faction whose roster is mostly the EXISTING demon library
-// redistributed by affinity (the Legion rabble fights under every banner; the
-// lords differ in their elites, their marshals, and their thrones), preferred
-// incursion flavors, and a citadel seat on an existing hell tileset.
+// here — a run ROLLS four, and those four are EVERLASTING for that world (no
+// elimination, no replacement: cast one down and it regathers) — each a full
+// banner: a creed, a war temper, a grafted HOST faction whose roster is
+// mostly the EXISTING demon library redistributed by affinity (the Legion
+// rabble fights under every banner; the lords differ in their elites, their
+// marshals, and their manifestations), preferred incursion flavors, and a
+// named seat of power (a field anchor, never a zone).
 //
 // PRESSURELESS: the war is a CONDITION of the dimension, not a surface event —
 // it never joins the weight budget or dilutes storm/warband shares. It ticks
@@ -46,7 +48,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.95, hold: 0.3, opportunism: 0.5, wrath: 0.8, tideAmp: 0.7 },
     lord: 'lord_surtash', marshal: 'marshal_surtash',
     strikes: [{ type: 'flame_tide', weight: 3 }, { type: 'hell_host', weight: 1 }],
-    citadel: { tileset: 'volcanic', name: 'The Pyre Eternal' },
+    throne: { name: 'The Pyre Eternal' },
     deeds: { take: "%z burns under Surtash's banner!", fall: 'The fires gutter — %z slips from Surtash.' },
     roster: [
       { id: 'imp', weight: 4, presence: { to: 22, fadeOut: 8 } },
@@ -66,7 +68,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.3, hold: 0.95, opportunism: 0.25, wrath: 0.45 },
     lord: 'lord_vormaul', marshal: 'marshal_vormaul',
     strikes: [{ type: 'hell_host', weight: 3 }, { type: 'balor_rite', weight: 1 }],
-    citadel: { tileset: 'durance', name: 'The Chainworks' },
+    throne: { name: 'The Chainworks' },
     deeds: { take: "%z is dragged into Vormaul's chains!", fall: "The chains break — %z is out of Vormaul's grip." },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
@@ -85,7 +87,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.65, hold: 0.4, opportunism: 1.0, wrath: 0.6 },
     lord: 'lord_morgrath', marshal: 'marshal_morgrath',
     strikes: [{ type: 'imp_incursion', weight: 2 }, { type: 'hell_host', weight: 2 }],
-    citadel: { tileset: 'flesh', name: 'The Middenthrone' },
+    throne: { name: 'The Middenthrone' },
     deeds: { take: "Morgrath's carrion host gorges on %z!", fall: 'Picked clean, %z is abandoned by the Carrion Duke.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
@@ -103,7 +105,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.55, hold: 0.35, opportunism: 0.6, wrath: 0.7, deepStrike: 1 },
     lord: 'lord_vethriss', marshal: 'marshal_vethriss',
     strikes: [{ type: 'balor_rite', weight: 3 }, { type: 'imp_incursion', weight: 1 }],
-    citadel: { tileset: 'hellion_rift', name: 'The Thousandth Door' },
+    throne: { name: 'The Thousandth Door' },
     deeds: { take: 'A thousand doors open — %z falls to Vethriss!', fall: 'The doors close on %z; Vethriss looks elsewhere.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
@@ -121,7 +123,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.5, hold: 0.6, opportunism: 0.35, wrath: 0.5, tideAmp: 1 },
     lord: 'lord_ozrimoth', marshal: 'marshal_ozrimoth',
     strikes: [{ type: 'balor_rite', weight: 2 }, { type: 'hell_host', weight: 1 }],
-    citadel: { tileset: 'wasteland', name: 'The Last Sermon' },
+    throne: { name: 'The Last Sermon' },
     deeds: { take: 'Ozrimoth pronounces the end of %z.', fall: 'The sentence lifts — %z outlives the Last Word, for now.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
@@ -139,7 +141,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.45, hold: 0.5, opportunism: 0.8, wrath: 0.35, deepStrike: 0.4 },
     lord: 'lord_nyxara', marshal: 'marshal_nyxara',
     strikes: [{ type: 'imp_incursion', weight: 3 }],
-    citadel: { tileset: 'crypt', name: 'The Hushed Court' },
+    throne: { name: 'The Hushed Court' },
     deeds: { take: '%z goes quiet. Nyxara holds it now.', fall: 'Sound returns to %z — the Hush recedes.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
@@ -157,7 +159,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.75, hold: 0.8, opportunism: 0.2, wrath: 0.55, tideAmp: 0.3 },
     lord: 'lord_bhorog', marshal: 'marshal_bhorog',
     strikes: [{ type: 'hell_host', weight: 4 }],
-    citadel: { tileset: 'hell_steppes', name: 'The Siegecamp Perpetual' },
+    throne: { name: 'The Siegecamp Perpetual' },
     deeds: { take: "Bhorog's engines grind %z flat!", fall: 'The engines stall — %z casts off the Siegewright.' },
     roster: [
       { id: 'imp', weight: 3, presence: { to: 20, fadeOut: 8 } },
@@ -176,7 +178,7 @@ const LORDS: LordRow[] = [
     temper: { push: 0.55, hold: 0.55, opportunism: 0.55, wrath: 0.9 },
     lord: 'lord_molochai', marshal: 'marshal_molochai',
     strikes: [{ type: 'imp_incursion', weight: 3 }, { type: 'flame_tide', weight: 1 }],
-    citadel: { tileset: 'abyssal_rift', name: 'The Counting Vault' },
+    throne: { name: 'The Counting Vault' },
     deeds: { take: "%z is added to Molochai's ledger!", fall: 'A debt unpaid — %z escapes the Tithe-King.' },
     roster: [
       { id: 'imp', weight: 5, presence: { to: 24, fadeOut: 10 } },
@@ -263,10 +265,9 @@ export const UNDERWORLD_WAR: ContentPackage = {
   validate: look => {
     const out: string[] = [];
     for (const l of LORDS) {
-      if (!look.monster(l.lord)) out.push(`lord '${l.id}': throne body '${l.lord}' is not a registered monster`);
+      if (!look.monster(l.lord)) out.push(`lord '${l.id}': manifestation body '${l.lord}' is not a registered monster`);
       if (!look.monster(l.marshal)) out.push(`lord '${l.id}': marshal '${l.marshal}' is not a registered monster`);
-      if (!look.tileset(l.citadel.tileset)) out.push(`lord '${l.id}': citadel tileset '${l.citadel.tileset}' is not registered`);
-      if (l.citadel.layout && !look.layout(l.citadel.layout)) out.push(`lord '${l.id}': citadel layout '${l.citadel.layout}' is not registered`);
+      if (!l.throne.name) out.push(`lord '${l.id}': the seat of power needs a name`);
       if (!l.strikes.length) out.push(`lord '${l.id}': no strike preferences`);
     }
     return out;
@@ -300,6 +301,6 @@ registerKillHandler({
     ctx.bumpAccountLedger('hell_lords_slain', 1, true);
     ctx.grantXp(Math.round(340 + ctx.zone.level * 56));
     for (let i = 0; i < 4; i++) ctx.dropGemAt(ctx.actor.pos);
-    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60), 'A THRONE FALLS. The war does not stop.', '#ffd700', 19);
+    ctx.text(vec(ctx.actor.pos.x, ctx.actor.pos.y - 60), 'CAST DOWN — and the war does not even pause.', '#ffd700', 19);
   },
 });
