@@ -449,6 +449,33 @@ const PREFIXES: AffixDef[] = [
     baseTags: ['chest', 'helmet'], weight: 12,
   }),
 
+  // THE DROWNED REGISTER — the Wraithsail's spoils (the Royal Register's
+  // grammar, the sea's voice). Wreck-hold coffers FORCE one of these three
+  // via LootEntry.withFamily; the same thin natural weight keeps the words
+  // rollable in the wild. The REGALIA gleams (a second life of cold light),
+  // the CRUST armors what the reef claimed, the TIDE hurries what it wore
+  // smooth (suffix sibling among the suffixes).
+  fam({
+    id: 'drowned_regalia', kind: 'prefix', themes: [DEFENSE, CASTER],
+    names: ['Sunken-Crowned', 'Pale-Vested', 'Court-Drowned'],
+    lines: [
+      { stat: DEFENSE_KINDS['energyShield'].stat, kind: 'flat', local: true },
+      { stat: 'mana', kind: 'flat' },
+    ],
+    top: [52, 36], floor: 0.2, count: 4,
+    baseTags: ['chest', 'helmet'], weight: 12,
+  }),
+  fam({
+    id: 'barnacle_crust', kind: 'prefix', themes: [DEFENSE, SUSTAIN],
+    names: ['Barnacled', 'Reef-Grown', 'Hull-Crusted'],
+    lines: [
+      { stat: DEFENSE_KINDS['armor'].stat, kind: 'flat', local: true },
+      { stat: 'life', kind: 'flat' },
+    ],
+    top: [78, 34], floor: 0.15, count: 4,
+    baseTags: ['gloves', 'boots', 'belt'], weight: 12,
+  }),
+
   // PROC AFFIXES — chance stats from the PROC registry (proc_<id>; procs.ts
   // golden rules cap and depth-gate them). The two MAGIC-ONLY families are a
   // rarity identity, not a top tier: blues alone can carry them at all — the
@@ -748,6 +775,15 @@ const SUFFIXES: AffixDef[] = [
     lines: [{ stat: 'attackSpeed', kind: 'increased' }, { stat: 'castSpeed', kind: 'increased' }],
     top: [0.08, 0.08], floor: 0.25, count: 4,
     baseTags: ['gloves', 'ring', 'amulet'], weight: 12,
+  }),
+  // THE DROWNED REGISTER's suffix (the prefix pair lives beside the plate
+  // families): the tide moves what it owns, and what it owns does not chill.
+  fam({
+    id: 'tideworn', kind: 'suffix', themes: [MARTIAL, DEFENSE],
+    names: ['of the Undertow', 'of the Tideworn', 'of the Long Ebb'],
+    lines: [{ stat: 'moveSpeed', kind: 'increased' }, { stat: 'coldRes', kind: 'flat' }],
+    top: [0.08, 0.3], floor: 0.25, count: 4,
+    baseTags: ['boots', 'ring', 'amulet'], weight: 12,
   }),
   ...ATTRIBUTE_AFFIXES,
   ...RESIST_AFFIXES,

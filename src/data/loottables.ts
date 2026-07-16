@@ -143,6 +143,67 @@ const TABLE_LIST: LootTableDef[] = [
       ],
     }],
   },
+
+  // THE DROWNED REGISTER's one distribution (the Royal Register's grammar at
+  // sea): a single item FORCED to carry one of the Wraithsail's three
+  // families, never common. Every drowned cache drinks from this one table.
+  {
+    id: 'drowned_register_pick',
+    rolls: [{
+      count: 1,
+      entries: [
+        { weight: 34, kind: 'item', withFamily: 'drowned_regalia', rarityWeights: { common: 0, magic: 60, rare: 40 } },
+        { weight: 33, kind: 'item', withFamily: 'barnacle_crust', rarityWeights: { common: 0, magic: 60, rare: 40 } },
+        { weight: 33, kind: 'item', withFamily: 'tideworn', rarityWeights: { common: 0, magic: 60, rare: 40 } },
+      ],
+    }],
+  },
+
+  // A WRECK-HOLD COFFER (the Wraithsail's below-decks): 1-2 register pieces,
+  // and the sea keeps its VESTIGES — drowned holds run the richest vestige
+  // side-roll of any themed cache (30 vs the royal wake's 22).
+  {
+    id: 'wraithsail_hold_cache',
+    rolls: [
+      { count: [1, 2], entries: [{ weight: 100, kind: 'table', table: 'drowned_register_pick' }] },
+      {
+        count: 1,
+        entries: [
+          { weight: 30, kind: 'vestige' },
+          { weight: 14, kind: 'gem' },
+          { weight: 56, kind: 'nothing' },
+        ],
+      },
+    ],
+  },
+
+  // THE TIDEBOUND HOARD — the Regent's great-cabin spoils (the regent_hoard
+  // mold, register-flavored): a dynasty's gear at heat, a third of it forced
+  // through the register, and the vestige share a hold deserves.
+  {
+    id: 'tidebound_hoard',
+    rolls: [
+      {
+        count: [2, 3],
+        entries: [
+          {
+            weight: 55, kind: 'item', ilvlBonus: 2,
+            rarityWeights: { common: 0, magic: 20, rare: 60, unique: 20 },
+          },
+          { weight: 25, kind: 'table', table: 'drowned_register_pick' },
+          { weight: 20, kind: 'unique', ilvlBonus: 2 },
+        ],
+      },
+      {
+        count: [1, 2],
+        entries: [
+          { weight: 40, kind: 'gem' },
+          { weight: 30, kind: 'vestige' },
+          { weight: 30, kind: 'table', table: 'jewelry_cache' },
+        ],
+      },
+    ],
+  },
 ];
 
 export const LOOT_TABLES: Record<string, LootTableDef> =
