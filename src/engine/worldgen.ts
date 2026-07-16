@@ -11,7 +11,7 @@
 import { clamp } from '../core/math';
 import { Rng, rollSeed } from '../core/rng';
 import { WAR_PAIRS } from '../data/monsters';
-import { TILESETS, pickCaveFace, pickTilesetForBiome, type TilesetDef } from '../data/tilesets';
+import { TILESETS, pickCaveFace, pickDockTileset, pickTilesetForBiome, type TilesetDef } from '../data/tilesets';
 import { hasLayout } from './levelgen';
 import { darkFloorAt, deeperChanceAt, levelStepAt, namePrefixAt } from '../world/strata';
 import { START_ZONE, HUB_ZONE } from '../data/zones';
@@ -19,7 +19,7 @@ import type { BlendSpec, ObjectiveSpec, SkyExposure, ZoneDef, ZoneExitDef } from
 import { blendMean, composeBlendLayout, mergeBlendPacks } from './blend';
 import { DIRS, OPP_DIR, projectCoord, coordDist } from '../world/coords';
 import type { Dir, MapCoord } from '../world/coords';
-import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, biomeSpacing } from '../world/biomes';
+import { BIOMES, BIOME_FIELD_CFG, MARINE_MINT, OCEAN_BIOME, PORT_MINT, biomeSpacing } from '../world/biomes';
 import { dimensionDef, dimensionsEnteredBy } from '../world/dimensions';
 import type { CourseMintHints } from '../world/courses';
 
@@ -495,8 +495,15 @@ export function placeZoneAt(
     console.warn(`[worldgen] mint '${spec.id ?? `gen_${genIndex}`}' from '${src?.id ?? '?'}' declares no tileset — falling back to 'deepwood'`);
   }
   if (spec.port) {
-    // A PORT is a shore: the coastal tileset regardless of the inland field.
-    tilesetId = pickTilesetForBiome('beach', rng) ?? tilesetId;
+    // A PORT is a shore — but WHICH shore is face-level data: the local
+    // biome's DOCK-WEIGHTED faces host it (TilesetDef.docks × depthAffinity,
+    // pickDockTileset — harbors grow on landward faces, never on brine pans
+    // or half-drowned ground), and a biome fielding no dockable face cedes
+    // the harbor to the classic coast (PORT_MINT.fallbackBiome).
+    const fb = spec.fieldBiome && spec.biomeFor ? spec.biomeFor(target) : undefined;
+    tilesetId = (fb ? pickDockTileset(fb, rng, spec.biomeDepthFor?.(target)) : undefined)
+      ?? pickDockTileset(PORT_MINT.fallbackBiome, rng)
+      ?? tilesetId;
   } else if (spec.fieldBiome && spec.biomeFor) {
     const fb = spec.biomeFor(target);
     let picked: string | undefined;

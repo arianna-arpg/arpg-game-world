@@ -151,6 +151,14 @@ export interface TilesetDef {
    *  may override or suppress. No partner is special-cased anywhere: this is
    *  a structural tileset-id ref, validated at boot + swept by genqa. */
   blend?: BlendRoll;
+  /** DOCKABILITY: this face's weight in a PORT mint's tileset pick (harbors
+   *  grow only where a hull can land). A port minting into a biome picks
+   *  among that biome's dock-weighted faces — weight × depthAffinity at the
+   *  mint's depth (pickDockTileset) — and a biome fielding NO dockable face
+   *  cedes the harbor to PORT_MINT.fallbackBiome (world/biomes.ts). Absent
+   *  = 0: never a harbor (brine pans and half-drowned ground take no
+   *  pilings). A general lever, never a face list. */
+  docks?: number;
 }
 
 export const TILESETS: Record<string, TilesetDef> = {
@@ -2685,6 +2693,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       sand: '#d8c890', water: '#1d6a8a', tree: '#3a6a2a', mud: '#5a5030',
     },
     sizeW: [2400, 3200], sizeH: [1600, 2200], ellipseChance: 0.3, biome: 'beach',
+    docks: 1, // the classic harbor coast (PORT_MINT.fallbackBiome's one face)
     layout: [
       { kind: 'log', count: [1, 3] }, { kind: 'reeds', count: [1, 3] },
       { kind: 'fishing_rack', count: [1, 2] },
@@ -2820,6 +2829,7 @@ export const TILESETS: Record<string, TilesetDef> = {
       sand: '#d4c084', water: '#14516e', tree: '#3a6a2a',
     },
     sizeW: [2000, 2800], sizeH: [1800, 2600], ellipseChance: 1, biome: 'isle',
+    docks: 1, // an isle-region harbor lands on its own shore, not a foreign beach
     layout: [
       { kind: 'shallows', count: [7, 11] },
       { kind: 'sand', count: [4, 7] },
@@ -2855,6 +2865,423 @@ export const TILESETS: Record<string, TilesetDef> = {
       { kind: 'clear', weight: 3 },
       { kind: 'escape', weight: 2 },
       { kind: 'spawners', weight: 2 },
+    ],
+  },
+
+  // --- THE LITTORAL COUNTRY (four faces, one biome tag) ----------------------
+  // The mainland's tiered coast: four frontier faces share the 'littoral'
+  // biome tag, staged by depthAffinity over biomeDepth — the STRAND holds
+  // the walkable rim, the BRINE FLATS blister through the mid-band (the
+  // drained seabed tying shore to Deep), the MANGROVE TANGLE floods the
+  // inner country (the Coilborn's home water), and the DROWNED MARGIN is
+  // the heart: ground already half inside the sea. TIGHT tiers by design
+  // (biome spacing 56): the descent must register across a short walk.
+  // The archipelago (beach/isle) keeps its own look untouched — this is
+  // the coast you WALK into, and the wet ground taxes everyone but its
+  // landlords (the Coilborn wade free; you don't).
+
+  // STRAND — the walkable rim: dune-grass beach country, tide pools, the
+  // wrack line, palms leaning over the surf. The gentlest face — and the
+  // last dry footing the country offers.
+  strand: {
+    id: 'strand',
+    depthAffinity: { to: 0.35, fadeOut: 0.25 },
+    nameFirst: ['Longshore', 'Greybeach', 'Tidemark', 'Saltgrass', 'Windshell', 'Dunegrass', 'Palegull', 'Wrackline', 'Foamwhite', 'Lowwater', 'Shellsand', 'Marramgrown', 'Driftwood', 'Slackwater', 'Herongrey', 'Tern-Called'],
+    nameSecond: ['Strand', 'Foreshore', 'Shore', 'Sands', 'Tideline', 'Reach', 'Spit', 'Beach', 'Flats', 'Margin', 'Bar', 'Shelf', 'Verge', 'Walk'],
+    theme: {
+      dayLight: 1.3,
+      ground: {
+        scale: 2.0, stretchX: 1.7, strength: 1.1, speckles: 0.55,
+        palette: ['#2a2416', '#453a22', '#5f5230', '#7a6a40', '#948152'], bias: 0.58, alpha: 0.55,
+        coast: { reach: 90, shift: -0.32, kinds: ['water', 'tide_pool'] },
+      },
+      floor: '#171408', grid: '#242012', border: '#7a7048',
+      obstacle: '#5c5432', obstacleEdge: '#8a7c4e', accent: '#e8d888',
+      sand: '#d8c890', water: '#1d6a8a', tree: '#3f6a3a', mud: '#5a5038',
+    },
+    sizeW: [2300, 3100], sizeH: [1550, 2150], ellipseChance: 0.25, biome: 'littoral',
+    docks: 1, // the country's harbor face: firm ground, open water
+    layout: [
+      { kind: 'sand', count: [5, 8] },
+      { kind: 'shallows', count: [2, 4] },
+      { kind: 'water', count: [1, 2] },
+      { kind: 'tide_pool', count: [2, 4] },
+      { kind: 'palm', count: [4, 7] },
+      { kind: 'reeds', count: [2, 4] },
+      { kind: 'log', count: [1, 3] },
+      { kind: 'kelp', count: [1, 3] },
+      { kind: 'rocks', count: [3, 6], radius: [16, 36] },
+      { kind: 'sea_rock', count: [1, 3] },
+      { kind: 'fishing_rack', count: [0, 1] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    // What every strand IS: the tide's ledger written along the shore.
+    common: [
+      { kind: 'kelp_wrack', count: [2, 4],
+        where: { field: 'shore', max: 0.5, params: { kinds: ['water', 'tide_pool'], reach: 170 } } },
+      { kind: 'formation', count: [1, 2], formation: 'wrack_line',
+        where: { field: 'shore', max: 0.5, params: { kinds: ['water'], reach: 190 } } },
+      { kind: 'formation', count: [0, 1], formation: 'palm_strand',
+        where: { field: 'shore', max: 0.5, params: { kinds: ['water'], reach: 180 } } },
+    ],
+    variants: [
+      // The dune-backed face: marram ridges marching inland from the surf.
+      { name: 'dune-backed', layout: [
+        { kind: 'sand', count: [6, 9] }, { kind: 'grass', count: [2, 4] },
+        { kind: 'tide_pool', count: [1, 3] }, { kind: 'palm', count: [3, 5] },
+        { kind: 'reeds', count: [2, 4] }, { kind: 'rocks', count: [3, 5], radius: [16, 34] },
+        { kind: 'formation', count: [1, 2], formation: 'dune_ridges',
+          where: { field: 'radial', min: 0.45 } },
+        { kind: 'cave', count: [0, 1] },
+      ] },
+      // The wrecker's coast: what the sea threw back, and what waits in it.
+      { name: 'wrecker\'s coast', layout: [
+        { kind: 'hull_wreck', count: [1, 2] },
+        { kind: 'sand', count: [4, 7] }, { kind: 'shallows', count: [3, 5] },
+        { kind: 'water', count: [1, 2] }, { kind: 'sea_rock', count: [2, 4] },
+        { kind: 'rocks', count: [3, 6], radius: [18, 40] },
+        { kind: 'kelp_wrack', count: [3, 5] }, { kind: 'log', count: [2, 4] },
+        { kind: 'formation', count: [0, 1], formation: 'kelp_curtain',
+          where: { field: 'shore', max: 0.35, params: { kinds: ['water'], reach: 160 } } },
+      ] },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      table: [
+        { id: 'tide_skitter', weight: 3, presence: { to: 18, fadeOut: 9 } },
+        { id: 'fen_hound', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'dune_stalker', weight: 2 },
+        { id: 'reef_lurcher', weight: 1, presence: { from: 5 } },
+        // The Coilborn raid the rim: skirmish parties up out of the tangle.
+        { id: 'marsh_adder', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'bog_strider', weight: 2 },
+        { id: 'hooded_spitter', weight: 1, presence: { from: 4 } },
+        // The Deep washes ashore in ones and twos this far up the shelf.
+        { id: 'deep_thresher', weight: 1 },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'bounty', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+      { kind: 'procession', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
+  // BRINE FLATS — the drained seabed: salt pans in cracked mud, bleached
+  // reef heads, desiccated kelp, caustic sinks — the Deep's exposed floor,
+  // tying the shore to the drowned heart. The pale face: everything here
+  // is what the sea forgot to take with it.
+  brine_flats: {
+    id: 'brine_flats',
+    depthAffinity: { from: 0.18, fadeIn: 0.18, to: 0.62, fadeOut: 0.2, mul: 0.9 },
+    nameFirst: ['Saltcrack', 'Palewhite', 'Bittern', 'Dryreef', 'Bonewater', 'Cracklepan', 'Glarewhite', 'Deadwrack', 'Brinemirror', 'Saltrimed', 'Whalefall', 'Lowdrained', 'Crustwalk', 'Stillbrine', 'Ebbforgot', 'Shimmerpan'],
+    nameSecond: ['Flats', 'Pans', 'Hardpan', 'Seabed', 'Shelf', 'Basin', 'Lows', 'Barrens', 'Expanse', 'Bed', 'Reach', 'Waste', 'Floor', 'Drain'],
+    theme: {
+      dayLight: 1.45,
+      ambientFx: [{ kind: 'heatHaze', intensity: 0.45 }],
+      // The pan must READ as bleached crust: a pale high-bias floor with
+      // brine-teal water and grey cracked-mud lows.
+      ground: {
+        scale: 2.4, stretchX: 1.9, strength: 1.2, speckles: 0.4,
+        palette: ['#3a382c', '#5a5644', '#7c775e', '#9c957a', '#bcb496'], bias: 0.62, alpha: 0.6,
+        coast: { reach: 80, shift: -0.3, kinds: ['brine_sink', 'water'] },
+      },
+      floor: '#1c1a12', grid: '#2a281c', border: '#8a8468',
+      obstacle: '#6a6450', obstacleEdge: '#9a9276', accent: '#d8f0e0',
+      sand: '#ddd2b4', water: '#5a9a8e', mud: '#6a6252', tree: '#7a7458',
+    },
+    sizeW: [2500, 3400], sizeH: [1700, 2300], ellipseChance: 0.15, biome: 'littoral',
+    // The tide reclaims its floor in patches: drowned-margin pockets welling
+    // up through the pans (the blend fabric — the country's own gradient).
+    blend: {
+      with: 'drowned_margin',
+      field: { kind: 'pockets', params: { span: 340, coverage: 0.3, feather: 60 } },
+      packs: 0.2,
+      chance: 0.35,
+    },
+    layout: [
+      { kind: 'mud', count: [4, 7] },
+      { kind: 'sand', count: [3, 5] },
+      { kind: 'brine_sink', count: [2, 4] },
+      { kind: 'salt_pillar', count: [3, 6] },
+      { kind: 'bleached_coral', count: [3, 6] },
+      { kind: 'kelp_wrack', count: [3, 5] },
+      { kind: 'bone_pile', count: [1, 3] },
+      { kind: 'sea_rock', count: [1, 2] },
+      { kind: 'heat_shimmer', count: [1, 2] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    // What every pan IS: the seabed's furniture, dried in place.
+    common: [
+      { kind: 'formation', count: [1, 2], formation: 'salt_terrace' },
+      { kind: 'bone_arch', count: [0, 2] },
+      { kind: 'hull_wreck', count: [0, 1] },
+    ],
+    variants: [
+      // The boneyard: where the great bodies settled when the water left.
+      { name: 'whalefall boneyard', layout: [
+        { kind: 'bone_arch', count: [2, 3] },
+        { kind: 'bone_pile', count: [3, 6] },
+        { kind: 'bleached_coral', count: [4, 7] },
+        { kind: 'mud', count: [3, 5] }, { kind: 'kelp_wrack', count: [3, 5] },
+        { kind: 'salt_pillar', count: [2, 4] },
+      ] },
+      // The glasswater: sinks fused into mirrors — beautiful, caustic.
+      { name: 'glasswater', layout: [
+        { kind: 'brine_sink', count: [4, 7], radius: [26, 52] },
+        { kind: 'tide_pool', count: [2, 4] },
+        { kind: 'mud', count: [3, 5] }, { kind: 'salt_pillar', count: [2, 4] },
+        { kind: 'kelp_wrack', count: [2, 4] },
+        { kind: 'heat_shimmer', count: [2, 3] },
+      ],
+      // The mirrors ARE the re-flooding: this face runs the blend as a
+      // hard tide-line instead of pockets (the processional-deep idiom).
+      blend: { with: 'drowned_margin', field: { kind: 'axisX', params: { from: 0.25, to: 0.75 }, band: [0.4, 0.6], warp: { amp: 60, scale: 300 } }, packs: 0.25 } },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      archetypes: [
+        { weight: 2, size: [6, 9] }, { weight: 5, size: [3, 5] }, { weight: 3, size: [1, 2] },
+      ],
+      table: [
+        { id: 'tide_skitter', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'salt_husk', weight: 2, presence: { from: 6 } },
+        { id: 'tidewrack_shambler', weight: 2, presence: { from: 6 } },
+        // Coilborn crossing-bands strung between the tangle and the shore.
+        { id: 'marsh_adder', weight: 2, presence: { to: 14, fadeOut: 7 } },
+        { id: 'bog_strider', weight: 2 },
+        { id: 'hooded_spitter', weight: 2, presence: { from: 4 } },
+        { id: 'fang_priest', weight: 1, presence: { from: 6 } },
+        { id: 'constrictor_knight', weight: 1, presence: { from: 9 } },
+        { id: 'deep_thresher', weight: 1 },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'bounty', weight: 1 },
+      { kind: 'circuit', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
+  // MANGROVE TANGLE — the flooded inner country: stilt-root galleries over
+  // brackish channels, wading everywhere, the Coilborn's home water. The
+  // wet face: the ground itself fights for the landlords.
+  mangrove_tangle: {
+    id: 'mangrove_tangle',
+    depthAffinity: { from: 0.38, fadeIn: 0.22 },
+    nameFirst: ['Rootbound', 'Blackwater', 'Stiltwood', 'Tanglebrack', 'Silttide', 'Snagroot', 'Greenveil', 'Lowbranch', 'Eelgrass', 'Mudwalk', 'Proproot', 'Hissreed', 'Slackbrack', 'Drownwood', 'Coilhome', 'Heronshade'],
+    nameSecond: ['Tangle', 'Mangrove', 'Backwater', 'Channels', 'Roots', 'Slough', 'Galleries', 'Brack', 'Maze', 'Shallows', 'Warren', 'Weave', 'Stilts', 'Bayou'],
+    theme: {
+      nightDark: 0.72,
+      fog: { banks: [1, 2], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] },
+      ground: {
+        scale: 1.6, strength: 1.15, speckles: 0.4,
+        palette: ['#101c14', '#182c1e', '#22402a', '#2e5236', '#3a6442'], bias: 0.52, alpha: 0.55,
+        coast: { reach: 95, shift: -0.38, kinds: ['water', 'swamp', 'mud'] },
+      },
+      floor: '#0d140e', grid: '#16211a', border: '#3f6a52',
+      obstacle: '#2a4a34', obstacleEdge: '#4a7a5a', accent: '#8ae8c8',
+      water: '#173f3a', mud: '#2c3020', sand: '#8a8058', tree: '#2e5a40',
+    },
+    sizeW: [2300, 3100], sizeH: [1600, 2200], ellipseChance: 0.2, biome: 'littoral',
+    // Pole-and-plank moorings do land among the roots — a lesser harbor
+    // weight than the strand's open ground. The flats and the margin carry
+    // NO docks on purpose: pans crack under pilings, and the margin is the
+    // on-foot way INTO the shallows — cast-off happens on real ground.
+    docks: 0.35,
+    // The tangle drowns at its deep edge — margin pockets welling up
+    // between the roots.
+    blend: {
+      with: 'drowned_margin',
+      field: { kind: 'noise', params: { scale: 460, coverage: 0.28, soft: 0.4 } },
+      packs: 0.2,
+      chance: 0.3,
+    },
+    layout: [
+      { kind: 'water', count: [3, 5] },
+      { kind: 'shallows', count: [2, 4] },
+      { kind: 'swamp', count: [2, 4] },
+      { kind: 'mud', count: [2, 3] },
+      { kind: 'mangrove', count: [10, 16] },
+      { kind: 'reeds', count: [4, 7] },
+      { kind: 'vines', count: [1, 3] },
+      { kind: 'sunken_log', count: [2, 4] },
+      { kind: 'strangler_root', count: [0, 2] },
+      { kind: 'marsh_wisp', count: [1, 3] },
+      { kind: 'gas_pod', count: [0, 2] },
+      { kind: 'tide_pool', count: [0, 2] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    // What the tangle always IS: galleries walling the channels, rushes
+    // tracing every waterline, the landlords' shrines where the water bends.
+    common: [
+      { kind: 'formation', count: [2, 3], formation: 'mangrove_gallery',
+        where: { field: 'shore', max: 0.55, params: { kinds: ['water', 'swamp'], reach: 160 } } },
+      { kind: 'formation', count: [1, 2], formation: 'reed_shoreline',
+        where: { field: 'shore', max: 0.6, params: { kinds: ['water', 'swamp'], reach: 140 } } },
+      { kind: 'coil_idol', count: [0, 2],
+        where: { field: 'shore', max: 0.5, params: { kinds: ['water', 'swamp'], reach: 150 } } },
+    ],
+    variants: [
+      // The flooded gallery: more channel than land — wade or go around.
+      { name: 'flooded gallery', layout: [
+        { kind: 'water', count: [5, 7], radius: [40, 90] },
+        { kind: 'shallows', count: [4, 6] },
+        { kind: 'mangrove', count: [12, 18] },
+        { kind: 'reeds', count: [4, 6] },
+        { kind: 'sunken_log', count: [2, 4] },
+        { kind: 'tide_pool', count: [1, 3] },
+      ] },
+      // The black lagoon: still water, wisp-light, and the song in the reeds.
+      { name: 'black lagoon', layout: [
+        { kind: 'swamp', count: [4, 6] },
+        { kind: 'water', count: [2, 4] },
+        { kind: 'mangrove', count: [8, 12] },
+        { kind: 'marsh_wisp', count: [3, 5] },
+        { kind: 'reeds', count: [5, 8] },
+        { kind: 'gas_pod', count: [1, 3] },
+        { kind: 'sunken_log', count: [2, 4] },
+      ], theme: { nightDark: 0.78, fog: { banks: [2, 3], kinds: [{ id: 'river_mist', weight: 2 }, { id: 'mist' }] } } },
+      // The idol shallows: the Coilborn's shrine-water — their court sits
+      // thickest where the ward-lights burn.
+      { name: 'idol shallows', layout: [
+        { kind: 'coil_idol', count: [2, 3] },
+        { kind: 'water', count: [3, 5] },
+        { kind: 'shallows', count: [3, 5] },
+        { kind: 'mangrove', count: [8, 13] },
+        { kind: 'reeds', count: [3, 6] },
+        { kind: 'tide_pool', count: [1, 2] },
+        { kind: 'sunken_log', count: [1, 3] },
+      ] },
+    ],
+    packs: {
+      count: [6, 8], size: [3, 5],
+      table: [
+        // HOME WATER: the fullest Coilborn garrison in the game.
+        { id: 'marsh_adder', weight: 3, presence: { to: 18, fadeOut: 8 } },
+        { id: 'bog_strider', weight: 3 },
+        { id: 'hooded_spitter', weight: 2, presence: { from: 4 } },
+        { id: 'fang_priest', weight: 2, presence: { from: 6 } },
+        { id: 'siren_adder', weight: 2, presence: { from: 8 } },
+        { id: 'constrictor_knight', weight: 1, presence: { from: 9 } },
+        // What else the brack keeps: water with arms, hounds at the rim.
+        { id: 'lake_horror', weight: 1, presence: { from: 10 } },
+        { id: 'mire_maw', weight: 1, presence: { from: 8 } },
+        { id: 'fen_hound', weight: 1, presence: { to: 12, fadeOut: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'bounty', weight: 1 },
+      { kind: 'procession', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+    ],
+  },
+
+  // DROWNED MARGIN — the country's heart: ground already half inside the
+  // sea. Wading bars, kelp forest in the surf, the drowned works of whoever
+  // built here before the water rose — and the Deep, ashore in force. The
+  // on-foot threshold: this is as far as the land goes.
+  drowned_margin: {
+    id: 'drowned_margin',
+    depthAffinity: { from: 0.66, fadeIn: 0.18 },
+    nameFirst: ['Halfsunk', 'Greyswell', 'Undertow', 'Coldwash', 'Deepreach', 'Sunkfield', 'Tidegrave', 'Drownstone', 'Farwade', 'Seaswallow', 'Duskwater', 'Lastland', 'Palebreak', 'Foamgrave', 'Downshelf', 'Brineheart'],
+    nameSecond: ['Margin', 'Shallows', 'Drowning', 'Wash', 'Swale', 'Threshold', 'Steps', 'Descent', 'Verge', 'Fathoms', 'Crossing', 'Shoals', 'Brink', 'Ebb'],
+    theme: {
+      dayLight: 1.15,
+      ground: {
+        scale: 1.9, stretchX: 1.5, strength: 1.15, speckles: 0.45,
+        palette: ['#141c1c', '#20302e', '#2c4442', '#3a5854', '#4a6c66'], bias: 0.5, alpha: 0.58,
+        coast: { reach: 110, shift: -0.34, kinds: ['water', 'tide_pool'] },
+      },
+      floor: '#0e1414', grid: '#1a2424', border: '#4a7a76',
+      obstacle: '#2f4a4a', obstacleEdge: '#4f7a76', accent: '#7ec8d8',
+      water: '#155a72', sand: '#9a9478', mud: '#3a4038', tree: '#2e5a4a',
+    },
+    sizeW: [2200, 3000], sizeH: [1550, 2100], ellipseChance: 0.2, biome: 'littoral',
+    layout: [
+      { kind: 'water', count: [4, 6], radius: [40, 100] },
+      { kind: 'shallows', count: [4, 7] },
+      { kind: 'sand', count: [2, 4] },
+      { kind: 'kelp', count: [3, 5] },
+      { kind: 'giant_kelp', count: [2, 4] },
+      { kind: 'coral', count: [2, 4] },
+      { kind: 'sea_rock', count: [2, 4] },
+      { kind: 'sunken_stone', count: [1, 3] },
+      { kind: 'tide_pool', count: [2, 4] },
+      { kind: 'rocks', count: [2, 4], radius: [16, 34] },
+      { kind: 'cave', count: [0, 1] },
+    ],
+    // What the margin always IS: the sea's furniture standing in the wade.
+    common: [
+      { kind: 'formation', count: [1, 2], formation: 'kelp_curtain',
+        where: { field: 'shore', max: 0.45, params: { kinds: ['water'], reach: 170 } } },
+      { kind: 'hull_wreck', count: [0, 1] },
+    ],
+    variants: [
+      // The drowned causey: a road that now leads into the water — broken
+      // columns and rubble where the older coast kept its works.
+      { name: 'drowned causey', layout: [
+        { kind: 'broken_column', count: [2, 4] },
+        { kind: 'rubble', count: [2, 4] },
+        { kind: 'sunken_stone', count: [2, 4] },
+        { kind: 'water', count: [4, 6], radius: [40, 90] },
+        { kind: 'shallows', count: [4, 6] },
+        { kind: 'kelp', count: [2, 4] },
+        { kind: 'coil_idol', count: [0, 1] },
+      ] },
+      // The reef shallows: the garden the water kept for itself.
+      { name: 'reef shallows', layout: [
+        { kind: 'coral', count: [4, 7] },
+        { kind: 'kelp', count: [4, 6] },
+        { kind: 'giant_kelp', count: [3, 5] },
+        { kind: 'water', count: [3, 5], radius: [36, 80] },
+        { kind: 'shallows', count: [5, 8] },
+        { kind: 'sea_rock', count: [2, 4] },
+        { kind: 'tide_pool', count: [2, 4] },
+      ] },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      table: [
+        // THE DEEP REACHES ASHORE: the margin belongs to the water's own.
+        { id: 'deep_thresher', weight: 3 },
+        { id: 'reef_lurcher', weight: 2, presence: { from: 5 } },
+        { id: 'deep_angler', weight: 2, presence: { from: 7 } },
+        { id: 'tidewrack_shambler', weight: 2, presence: { from: 8 } },
+        { id: 'deep_tidecaller', weight: 1, presence: { from: 10 } },
+        { id: 'tide_skitter', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        // The Coilborn wade out to meet their kin-tide.
+        { id: 'marsh_adder', weight: 2, presence: { to: 16, fadeOut: 8 } },
+        { id: 'bog_strider', weight: 1 },
+        { id: 'siren_adder', weight: 1, presence: { from: 8 } },
+        { id: 'fang_priest', weight: 1, presence: { from: 6 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'bounty', weight: 1 },
+      { kind: 'beacon', weight: 1 },
+      { kind: 'clear', weight: 3 },
+      { kind: 'escape', weight: 2 },
+      { kind: 'spawners', weight: 2 },
+      { kind: 'waves', weight: 1 },
+      { kind: 'offering', weight: 1 },
     ],
   },
 
@@ -5253,6 +5680,32 @@ export function biomesWithoutTileset(fieldBiomes: string[]): string[] {
   return fieldBiomes.filter(b => !(TILESETS_BY_BIOME[b]?.length));
 }
 
+/** The tileset a PORT mints as, inside `biome`: DOCK-WEIGHTED faces only
+ *  (TilesetDef.docks), each weighed docks × depthAffinity at `depth` — so
+ *  harbors grow on a country's landward faces and never on ground that
+ *  takes no pilings. Undefined when the biome fields no dockable face (the
+ *  caller falls back to PORT_MINT.fallbackBiome). Mirrors
+ *  pickTilesetForBiome's envelope algebra on the same seeded stream. */
+export function pickDockTileset(biome: string, rng: Rng, depth?: number): string | undefined {
+  const c = (TILESETS_BY_BIOME[biome] ?? []).filter(id => (TILESETS[id].docks ?? 0) > 0);
+  if (!c.length) return undefined;
+  const weights = c.map(id => {
+    const t = TILESETS[id];
+    const aff = t.depthAffinity && depth !== undefined ? presenceMul(t.depthAffinity, depth) : 1;
+    return (t.docks ?? 0) * aff;
+  });
+  let total = 0;
+  for (const w of weights) total += w;
+  // Degenerate weighting (every envelope zero here) still hosts the harbor.
+  if (total <= 0) return rng.pick(c);
+  let roll = rng.range(0, total);
+  for (let i = 0; i < c.length; i++) {
+    roll -= weights[i];
+    if (roll <= 0) return c[i];
+  }
+  return c[c.length - 1];
+}
+
 // --- CAVE-FACE resolver (the strata fabric's underground mint) ----------------
 /** Tileset ids carrying a caveFace claim — built once, so a new underground
  *  tileset joins the pool with one field (the TILESETS_BY_BIOME doctrine). */
@@ -5326,6 +5779,10 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   beach:          { title: 'Coastline',         blurb: 'A sun-bleached coast of sand and wading shallows, palms leaning over scattered wilds where the open sea meets the edge of the map.' },
   meadow:         { title: 'Meadow',            blurb: 'A gentle grove breather — grass, scattered trees and low-threat wilds, a stretch where the world catches its breath.' },
   peninsula:      { title: 'Peninsula',         blurb: 'A near-round isle ringed entirely by water — all shore, nowhere to fall back to but the sea itself.' },
+  strand:         { title: 'The Strand',        blurb: 'The littoral country\'s walkable rim: dune-grass, tide pools and the wrack line — the last dry footing before the land starts going under.' },
+  brine_flats:    { title: 'Brine Flats',       blurb: 'The drained seabed between shore and Deep: salt pans in cracked mud, bleached reef heads, whale-fall arches — and caustic sinks where the sea still seeps back in.' },
+  mangrove_tangle: { title: 'Mangrove Tangle',  blurb: 'The flooded inner coast: stilt-root galleries over brackish channels, wading at every turn — the Coilborn\'s home water, where the ground itself fights for its landlords.' },
+  drowned_margin: { title: 'Drowned Margin',    blurb: 'Ground already half inside the sea — wading bars, kelp forest in the surf, drowned works of an older coast, and the Deep ashore in force. As far as the land goes.' },
   cavern:         { title: 'Caverns',           blurb: 'The tight, rocky underground a cave mouth descends into — off the world graph, reached only ever by going down.' },
   depths:         { title: 'The Depths',        blurb: 'The sunless band beneath the galleries — Depthkin country lit only by glowworm colonies, where the ladder starts meaning it. The Brink, and the breach, wait below.' },
   magma_gallery:  { title: 'Magma Gallery',     blurb: 'The underground remembering it is a volcano: basalt colonnades, ember vents, floors still deciding to be liquid. Near volcanic country it is the neighbourhood; elsewhere, you have simply gone deep enough.' },

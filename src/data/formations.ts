@@ -167,6 +167,40 @@ registerFormation({
   ],
 });
 
+// A MANGROVE GALLERY: the tangle's channel wall — stilt trees shoulder to
+// shoulder, rush beds at their roots. Ride it with a `where:{field:'shore'}`
+// band so the gallery hugs the channels an earlier entry poured.
+registerFormation({
+  id: 'mangrove_gallery', arrange: 'meander', span: [320, 600], step: 48,
+  params: { wobble: 34 },
+  pieces: [
+    { kind: 'mangrove', radius: [20, 30], jitter: 14 },
+    { kind: 'reeds', radius: [14, 24], every: 2, jitter: 20, rot: true },
+  ],
+});
+
+// A WRACK LINE: the strand's high-tide signature — dried kelp heaped in a
+// long drift, driftwood among it (shore-banded like the reed shoreline).
+registerFormation({
+  id: 'wrack_line', arrange: 'meander', span: [300, 560], step: 44,
+  params: { wobble: 26 },
+  pieces: [
+    { kind: 'kelp_wrack', radius: [16, 28], jitter: 14, rot: true },
+    { kind: 'log', radius: [12, 18], every: 3, jitter: 20, rot: true },
+  ],
+});
+
+// A SALT TERRACE: the pan's eroded court — wind-cut pillars stepping an arc
+// over bleached reef heads (the drained seabed remembering itself).
+registerFormation({
+  id: 'salt_terrace', arrange: 'arc', span: [130, 240], step: 52,
+  params: { sweep: 0.5 },
+  pieces: [
+    { kind: 'salt_pillar', radius: [10, 16], jitter: 10, rot: true },
+    { kind: 'bleached_coral', radius: [13, 22], every: 2, jitter: 18, rot: true },
+  ],
+});
+
 // A CINDER VEIN: an ash-choked flow line, cooled glass jutting along it.
 // (Obsidian, not ember_vent: formation pieces are plain discs — a vent kind
 // placed here would LOOK live but never erupt, since the eruption effect is

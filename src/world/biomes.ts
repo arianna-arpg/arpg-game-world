@@ -310,6 +310,26 @@ export const BIOMES: Record<string, BiomeInfo> = {
       { landmark: 'coastal_island', chance: 0.18 }, { landmark: 'secluded_cove', chance: 0.1 },
       { landmark: 'tombolo', chance: 0.1 },
     ] },
+  // THE LITTORAL COUNTRY: the mainland's tiered coast — four faces share
+  // this tag (tilesets strand/brine_flats/mangrove_tangle/drowned_margin,
+  // staged by depthAffinity over biomeDepth: walkable rim → drained seabed
+  // → flooded tangle → the half-sunk margin where the Deep walks ashore).
+  // The TIGHTEST coastal web in the game: the tiers must register across a
+  // short walk (the desert asks commitment; the coast asks attention).
+  // Deliberately NOT marine-classed: the marine branch's shallow/deep mint
+  // split (worldgen.placeZoneAt) would pre-empt depthAffinity staging — the
+  // country stages ITSELF. The archipelago (beach/isle) keeps its own look;
+  // this is the coast you walk INTO the sea. Patron: the Coilborn — the
+  // serpentfolk the wet margins breed.
+  littoral: { patronFaction: 'coilborn', mapColor: '#4a9a86', label: 'Littoral', spacing: 56,
+    climate: { maritime: 'shorebound' },
+    allowedLayouts: { islands: 3, plains: 1.5, riverland: 1.5 },
+    layoutParams: { riverLiquid: 'water', causeways: [1, 2] },
+    landmarks: [
+      { landmark: 'cove', chance: 0.22 }, { landmark: 'coastal_island', chance: 0.15 },
+      { landmark: 'secluded_cove', chance: 0.1 }, { landmark: 'tombolo', chance: 0.1 },
+      { landmark: 'bog_shore', chance: 0.15 },
+    ] },
   isle:   { patronFaction: 'wild', mapColor: '#7ec8e8', label: 'Isle', spacing: 90,
     climate: { maritime: 'shorebound' },
     marine: 'coast', allowedLayouts: { islands: 3, plains: 1 },
@@ -554,6 +574,10 @@ export const BIOME_FIELD: BiomeSeedDef[] = [
   // it out of everyone else's belts.
   { biome: 'desert', weight: 2.3 },
   { biome: 'beach', weight: 1.6 },
+  // 1.7: the littoral COUNTRY needs coherent regions (four staged faces need
+  // the acreage), and its shorebound gate already confines it to the coast —
+  // inside that band it splits the shoreline with beach/isle roughly evenly.
+  { biome: 'littoral', weight: 1.7 },
   // 0.2: the rift is a WOUND, not a country — the demon war tore through in
   // PLACES, and finding one on the surface should read as an event. Probe
   // (balance/probe_biome_share.ts): at 1.2 it was the #1 far-wilds biome
@@ -584,6 +608,11 @@ export const BIOME_FIELD_CFG = { cellSpan: 260, jitter: 0.45, renderCell: 52, de
  *  marine frontier mints the deep biome; shallower, a coast biome keeps its own
  *  identity while open water mints as isles. */
 export const MARINE_MINT = { deepBiome: 'deepsea', openShallowBiome: 'isle' } as const;
+
+/** PORT-MINT fallback (data, not a worldgen literal): the biome whose
+ *  dock-weighted faces host a harbor when the LOCAL field biome fields no
+ *  dockable face (TilesetDef.docks — see pickDockTileset). */
+export const PORT_MINT = { fallbackBiome: 'beach' } as const;
 
 /** A local WARP of the field — the HEAT-SOURCE seam. Within `radius` of `center`,
  *  bias the biome toward `biome`. Pushed by quests/world-events in a future pass;

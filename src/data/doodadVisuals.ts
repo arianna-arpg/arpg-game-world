@@ -694,6 +694,56 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     painter: 'coral', order: 52, shadow: 0.5,
     params: { base: '#16323c', branch: '#e87aa0', branch2: '#e8b06a' },
   },
+  // --- The littoral kit (strand / brine flats / mangrove / drowned margin) --
+  // The tide tree: a many-stilted bole — the trunk painter's roots ARE the
+  // mangrove read — under a brackish crown riding the canopy pass.
+  mangrove: {
+    longShadow: 0.8,
+    painter: 'trunk', order: 50, bakeWhole: 'static', params: { scale: 0.3, roots: 6, color: '#4a3a28' },
+    canopy: { painter: 'leafCrown', params: { fill: 'theme:tree|#2e5a40' } },
+  },
+  // The tide's leavings: the kelp painter gone to straw.
+  kelp_wrack: { painter: 'kelp', order: 48, bakeWhole: 'sway', params: { color: '#8a7a4a' } },
+  // A reef head the sea forgot: the coral painter in sun-dried bone.
+  bleached_coral: {
+    painter: 'coral', order: 52, shadow: 0.5,
+    params: { base: '#3a3c36', branch: '#d8d2c0', branch2: '#c2b8a2' },
+  },
+  // A mirror the tide left behind: clear, sheened, harmless — the strand's
+  // jewel (surfaceMirror rides the region row, not the paint).
+  tide_pool: {
+    painter: 'liquid', order: 24,
+    blend: { strength: 0.3, feather: 16, color: '#2a6a72' },
+    params: {
+      rim: { color: '#bfe0d8', alpha: 0.55, grow: 3 },
+      core: { color: 'theme:water|#1d5a6a', alpha: 0.8 },
+      sheen: { color: '#eafff8' },
+    },
+  },
+  // The pan's caustic heart: milk-teal brine ringed in salt crust.
+  brine_sink: {
+    painter: 'liquid', order: 22,
+    blend: { strength: 0.4, feather: 22, color: '#7aa89a' },
+    params: {
+      rim: { color: '#e8e2c8', alpha: 0.7, grow: 5 },
+      core: { color: '#5a9a8e', alpha: 0.75 },
+      heart: { color: '#8fc8b8', alpha: 0.35 },
+      sheen: { color: '#f4fff4' },
+    },
+  },
+  // A hull the sea threw back: the wreck painter in ship-timber and rusted
+  // iron — the margin's history, beached above its own tideline.
+  hull_wreck: {
+    painter: 'coachWreck', order: 53, shadow: 0.5, longShadow: 0.9,
+    params: { char: '#2a2622', wood: '#4a3e30', iron: '#3f4a4e' },
+  },
+  // The Coilborn shrine: a verdigris monolith, tide-slick, its ward-light
+  // burning the family's lure-green.
+  coil_idol: {
+    painter: 'slab', order: 54, shadow: 0.6, longShadow: 1.3,
+    params: { shape: 'monolith', fill: '#2f5a50', edge: '#57a08a' },
+    light: { radius: -2.4, color: '#8ae8c8', intensity: 0.26, flicker: 1.6 },
+  },
 
   // --- Standing minerals + organics ---------------------------------------
   // THE ROCK GRAMMAR: every stone rolls its own form (mono/split/outcrop) and
