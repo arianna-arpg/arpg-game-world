@@ -46,6 +46,7 @@ export const eventsTab: DevTabDef = {
       forceEvent('Swarming (take wing)', (w, v) => w.sim.swarmingField?.devWing(v) ?? false),
       forceEvent('Brigands (band here)', (w, v, z) => w.sim.brigandField?.devIgnite(v, z) ?? false),
       forceEvent('Contagion (outbreak here)', (w, v, z) => w.sim.contagionField?.devIgnite(v, z) ?? false),
+      forceEvent('Deepwinter (winter here)', (w, v, z) => w.sim.deepwinterField?.devIgnite(v, z) ?? false),
       forceEvent('Holdfast (toll gate here)', (w) => w.devForceHoldfast()),
       forceEvent('Mycelia (bloom here)', (w, v, z) => w.sim.myceliaField?.devIgnite(v, z) ?? false),
       forceEvent('Haunting (grief here)', (w, v, z) => w.sim.hauntField?.devIgnite(v, z) ?? false),

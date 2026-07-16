@@ -16,6 +16,7 @@ import { CONTAGION } from './defs/contagion';
 import { ASCENT } from './defs/ascent';
 import { CRUSADE } from './defs/crusade';
 import { DEADWAKE } from './defs/deadwake';
+import { DEEPWINTER } from './defs/deepwinter';
 import { DESCENT } from './defs/descent';
 import { DEMON_INVASION } from './defs/demonInvasion';
 import { EXTRACTION } from './defs/extraction';
@@ -57,6 +58,7 @@ export const PACKAGES: ContentPackage[] = [
   MIGRATION,
   SWARMING,
   CONTAGION,
+  DEEPWINTER,
   HOLDFAST,
   BRIGANDS,
   MYCELIA,
@@ -94,6 +96,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   migration: 0x819a,
   swarming: 0x5a12,
   contagion: 0xc047,
+  deepwinter: 0x1ce0,
   holdfast: 0x401d,
   brigands: 0xb21a,
   mycelia: 0x14ce,

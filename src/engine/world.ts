@@ -127,7 +127,7 @@ import { regionKind, survivalResource, doodadGroundIds, LIQUID_CFG } from '../wo
 import { continentAt, continentSeedFrom, landfallFrom, type ContinentInfo } from '../world/continents';
 import { climateAt } from '../world/climate';
 import { VeilIndex, VEIL_DEFAULTS, type VeilPatch } from './veil';
-import { buildZoneFog, FOG_CFG, FogField } from './fog';
+import { buildZoneFog, FOG_BANKS, FOG_CFG, FogField } from './fog';
 import { buildZoneCreep, CREEP_CFG, CREEPS, CreepField } from './creep';
 import { buildZoneCollapse, COLLAPSE_CFG, type CollapseField } from './collapse';
 import { buildZoneFlux, CONJURE_CFG, ConjuredGround, FLUX_CFG, type ConjureGrant, type FluxField } from './flux';
@@ -1987,6 +1987,16 @@ export class World {
    *  reconciled each tick against myceliaField.transformedZones() — added as the bloom
    *  saturates, removed as it recedes). NOT per-loadZone (the warp follows the bloom). */
   private myceliaWarped = new Set<string>();
+  /** Frost-CONVERTED zones whose court packs (+ the Winter King, at the glacial
+   *  heart) were already fielded this visit — one muster per visit; cleared per
+   *  loadZone. The march/thaw is owned by the pure DeepwinterField overlay
+   *  (the conversion DRESSING — snow floor + whiteout — re-applies each entry). */
+  private materializedDeepwinter = new Set<string>();
+  /** Zones the Deepwinter front has WARPED cold (live BiomeField modifiers we
+   *  own, reconciled each tick against deepwinterField.convertedZones() —
+   *  added as the front takes ground, removed as the thaw retreats it). NOT
+   *  per-loadZone (the warp follows the front). */
+  private deepwinterWarped = new Set<string>();
   /** Zones whose Holdfast gate + wardens were already raised this visit (one per
    *  visit; cleared per loadZone). The durable lock STATE lives on HoldfastField. */
   private materializedHoldfasts = new Set<string>();
@@ -3320,8 +3330,10 @@ export class World {
     this.arenaWash = null;
     this.shake = 0;
     // Snow is per-visit: frozen biomes wake already blanketed (their floor),
-    // everyone else starts bare and lets the sky decide.
+    // everyone else starts bare and lets the sky decide. The runtime floor
+    // resets with it — whoever holds snow here (Deepwinter) re-pins on entry.
     this.snowCover = (this.zone.theme.heat ?? 0.5) <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
+    this.snowFloor = 0;
     this.tempGrounds = [];
     // THE LIVING FOG (engine/fog.ts): banks gather on a SALTED copy of the
     // layout seed — fog can never advance layout/spawn rng — and roam from
@@ -4148,6 +4160,15 @@ export class World {
         id: 'contagion',
         reset: () => { this.materializedContagion.clear(); },
         enter: (def) => this.materializeContagion(def),
+      },
+      {
+        // DEEPWINTER: a frost-converted zone wakes CONVERTED — snow held at
+        // the frozen floor, whiteout banks, court packs (+ the Winter King
+        // at the glacial heart). Dressing re-applies every entry; the muster
+        // is once per visit.
+        id: 'deepwinter',
+        reset: () => { this.materializedDeepwinter.clear(); },
+        enter: (def) => this.materializeDeepwinter(def),
       },
       {
         id: 'verminfall',
@@ -10632,6 +10653,87 @@ export class World {
     }
   }
 
+  // ------------------------------------------------------- deepwinter materialize
+  //
+  // Deepwinter is a frost FRONT marching the road graph, owned by the pure
+  // DeepwinterField overlay (the coldest-first march + the thaw). The engine
+  // reads frostOn() to CONVERT a held zone on entry — snow pinned at the
+  // frozen floor (snowFloor), WHITEOUT banks through the fogEnsure seam,
+  // intensity-scaled Rimebound packs — and kingIn() to raise the Winter King
+  // at the glacial heart. Dressing re-applies EVERY entry (cheap, transient);
+  // the muster is once per visit. Despawn-on-leave; re-fielded on re-entry
+  // while the ground stays held.
+
+  /** Convert + garrison a frost-held zone: the dressing (snow/whiteout), the
+   *  court packs (tag 'deepwinter' — ambient, never the zone's objective),
+   *  and the KING (tag 'winter_king' — the kill row that breaks the winter). */
+  private materializeDeepwinter(def: ZoneDef): void {
+    const df = this.sim.deepwinterField;
+    if (!df) return;
+    const info = df.frostOn(def.id);
+    if (!info) return;
+    const cfg = df.surge();
+    // CONVERSION DRESSING (idempotent, per entry): the ground wakes deep in
+    // snow and HOLDS it (the runtime floor), and the whiteout walks the zone.
+    this.snowCover = Math.max(this.snowCover, cfg.snow.cover);
+    this.snowFloor = Math.max(this.snowFloor, cfg.snow.floor);
+    const fog = this.fogEnsure();
+    const bankDef = FOG_BANKS[cfg.whiteout.kind];
+    if (fog && bankDef) {
+      const have = fog.banks.filter(b => b.def.id === cfg.whiteout.kind).length;
+      const want = randInt(cfg.whiteout.banks[0], cfg.whiteout.banks[1]);
+      for (let i = have; i < want; i++) {
+        const b = fog.spawnBank(bankDef);
+        b.age = rand(0, b.life * 0.6); // staggered — the white never breathes in unison
+      }
+    }
+    // THE MUSTER — once per zone visit.
+    if (this.materializedDeepwinter.has(def.id)) return;
+    this.materializedDeepwinter.add(def.id);
+    // DISCOVERY — walking held ground surfaces the Vault tuning (one-shot per
+    // front), exactly like the Contagion "you've stumbled in" bump.
+    if (df.markDiscovered(def.id)) bumpLedger(this.ledger, 'deepwinter_seen');
+    const lvl = Math.max(1, def.level);
+    const roster = FACTIONS[cfg.faction];
+    // The court: pack COUNT scales with intensity (thicker near the heart);
+    // the thaw fields HALF (a retreating army leaves rearguards, not hosts).
+    if (roster?.table?.length) {
+      let packs = Math.max(1, Math.round(
+        cfg.packCount[0] + (cfg.packCount[1] - cfg.packCount[0]) * clamp(info.intensity, 0, 1)));
+      if (info.thawing) packs = Math.max(1, Math.round(packs / 2));
+      for (let pk = 0; pk < packs; pk++) {
+        const at = this.farPoint(460);
+        const type = this.weightedPick(roster.table, lvl);
+        const n = randInt(cfg.packSize[0], cfg.packSize[1]);
+        for (let k = 0; k < n; k++) {
+          const m = this.createMonster(type, lvl, 'enemy');
+          m.faction = cfg.faction;
+          m.tag = 'deepwinter';
+          m.pos = this.clampPos(vec(at.x + rand(-80, 80), at.y + rand(-80, 80)), m.radius);
+          this.actors.push(m);
+        }
+      }
+    }
+    // THE WINTER KING holds the glacial heart — a tagged (Crowned) boss whose
+    // fall breaks the winter and starts the thaw.
+    const king = df.kingIn(def.id);
+    if (king && MONSTERS[king.bossDefId]) {
+      const boss = this.createMonster(king.bossDefId, lvl, 'enemy');
+      boss.faction = cfg.faction;
+      boss.tag = 'winter_king';
+      if (king.promote !== 'none') this.promoteRarity(boss, king.promote === 'crowned' ? 'crowned' : 'champion');
+      boss.pos = this.clampPos(this.farPoint(520, true), boss.radius);
+      this.actors.push(boss);
+      this.flashes.push({ pos: vec(boss.pos.x, boss.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
+      this.text(vec(boss.pos.x, boss.pos.y - 60),
+        `${boss.name} holds his court here — break the winter!`, cfg.color, 18);
+    } else if (roster?.table?.length) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 80),
+        info.thawing ? 'The frost here is in retreat — the court covers its withdrawal…'
+          : 'The winter holds this land — the air itself bites…', cfg.color, 15);
+    }
+  }
+
   // ------------------------------------------------------- verminfall materialize
   //
   // An INFESTATION is a warren claiming the town's near ring, owned by the pure
@@ -10923,6 +11025,47 @@ export class World {
       if (want.has(zid)) continue;
       bf.unwarp(`mycelia:${zid}`);
       this.myceliaWarped.delete(zid);
+    }
+  }
+
+  /** Reconcile the BiomeField warps the frost front owns against the zones it
+   *  holds (mycelia's exact pattern: warp as ground converts, unwarp as the
+   *  thaw retreats — frontier zones minted INSIDE the warp inherit the winter
+   *  at mint), drain the front's one-shot ignition news to the HUD, and graft
+   *  the glacial heart's frozen_lake landmark onto its zone def (once per
+   *  front; the persisted def rebuilds with the lake on the next visit —
+   *  the heart is a REAL place, and it keeps the scar after the thaw). */
+  private reconcileDeepwinter(): void {
+    const bf = this.sim.biomeField;
+    const df = this.sim.deepwinterField;
+    if (!df) return;
+    for (const line of df.consumeNews()) {
+      this.text(vec(this.player.pos.x, this.player.pos.y - 90), line, df.surge().color, 16);
+    }
+    const want = new Set<string>(df.convertedZones());
+    const wcfg = df.surge();
+    for (const zid of want) {
+      if (this.deepwinterWarped.has(zid)) continue;
+      const z = this.zoneMap[zid];
+      if (!z) continue;
+      bf.setWarp(`deepwinter:${zid}`, {
+        id: `deepwinter:${zid}`, center: { x: z.map.x, y: z.map.y },
+        radius: wcfg.warp.radius, biome: wcfg.warpBiome, strength: wcfg.warp.strength,
+        label: 'Deepwinter — the frost holds this land',
+      });
+      this.deepwinterWarped.add(zid);
+    }
+    for (const zid of [...this.deepwinterWarped]) {
+      if (want.has(zid)) continue;
+      bf.unwarp(`deepwinter:${zid}`);
+      this.deepwinterWarped.delete(zid);
+    }
+    const heartId = df.consumeHeartMark();
+    if (heartId) {
+      const def = this.zoneMap[heartId];
+      if (def && !def.landmarks?.some(l => l.landmark === 'frozen_lake' && l.chance >= 1)) {
+        (def.landmarks ??= []).push({ landmark: 'frozen_lake', chance: 1 });
+      }
     }
   }
 
@@ -24609,6 +24752,7 @@ export class World {
     // Advance the living world (day/night, weather drift, faction territory).
     this.sim.update(dt, this.simView());
     this.reconcileMyceliaWarps();
+    this.reconcileDeepwinter();
     this.updateStorm(dt);
     this.updateDemonStorm(dt);
     this.updateDeadwakeStream(dt);
@@ -27669,6 +27813,13 @@ export class World {
    *  the movement artery slows by it (SNOW_CFG). Transient per visit. */
   snowCover = 0;
 
+  /** A RUNTIME FLOOR under snowCover (0 = none), reset each loadZone — the
+   *  general lever any content can raise to HOLD snow on the ground beyond
+   *  what the biome's own heat would keep (Deepwinter pins converted zones
+   *  at the frozen baseline; a future rite or storm can lean on the same
+   *  seam). updateSnow floors at max(biome floor, this). */
+  snowFloor = 0;
+
   /** THE LIVING FOG this zone breathes (engine/fog.ts): roaming banks whose
    *  drawn lobes ARE the gameplay surface — statuses granted while inside,
    *  edges honest as they dissipate. Rebuilt each loadZone (ambient texture,
@@ -27694,6 +27845,21 @@ export class World {
       new Rng((this.currentZoneSeed ^ CREEP_CFG.salt) >>> 0),
       this.arena.w, this.arena.h);
     return this.creep;
+  }
+
+  /** The runtime seam every package/monster fog-bringer uses: get the zone's
+   *  fog field, building an empty one on demand — fog is a fabric ANY content
+   *  can breathe (Deepwinter's whiteout, a future miasma rite), not a theme
+   *  privilege. The twin of creepEnsure: same salted stream discipline (banks
+   *  spawned here roll the field's own rng, never the layout's), same
+   *  boundless refusal as buildZoneFog (no stable bounds to roam). */
+  fogEnsure(): FogField | null {
+    if (this.fog) return this.fog;
+    if (this.arena.boundless) return null;
+    this.fog = new FogField(
+      new Rng((this.currentZoneSeed ^ FOG_CFG.salt) >>> 0),
+      this.arena.w, this.arena.h);
+    return this.fog;
   }
 
   /** Tick the fog field: drift/coil/dissipate + dress occupants. A 'fog'
@@ -27728,7 +27894,9 @@ export class World {
     if (heat > 0.02) {
       this.snowCover -= dt * heat / SNOW_CFG.meltSecAtHeat1;
     }
-    const floor = heat <= 0.05 ? SNOW_CFG.frozenBaseline : 0;
+    // The biome's own floor OR the runtime floor (snowFloor — Deepwinter's
+    // conversion pin), whichever holds more snow.
+    const floor = Math.max(heat <= 0.05 ? SNOW_CFG.frozenBaseline : 0, this.snowFloor);
     this.snowCover = clamp(this.snowCover, floor, 1);
   }
 

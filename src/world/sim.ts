@@ -16,6 +16,7 @@ import { SKILLS } from '../data/skills';
 import { SUPPORTS } from '../data/supports';
 import type { ConclaveField } from '../packages/overlays/conclave';
 import type { ContagionField } from '../packages/overlays/contagion';
+import type { DeepwinterField } from '../packages/overlays/deepwinter';
 import type { AscentField } from '../packages/overlays/ascent';
 import type { DescentField } from '../packages/overlays/descent';
 import type { HoldfastField } from '../packages/overlays/holdfast';
@@ -163,6 +164,12 @@ export class WorldSim {
    *  Zero in an infected zone, and calls onPatientZeroSlain() to start the cure. It
    *  owns the cross-zone spread / reveal / recession. */
   readonly contagionField: ContagionField | null;
+  /** The deepwinter overlay if its package is in the manifest, else null — the engine
+   *  reads frostOn()/kingIn() to dress + field a frost-CONVERTED zone (snow floor,
+   *  whiteout via fogEnsure, Rimebound packs, the Winter King at the glacial heart),
+   *  reconciles biome warps against convertedZones(), grafts the heart's frozen_lake
+   *  off consumeHeartMark(), and calls onWinterKingSlain() back. It owns the march. */
+  readonly deepwinterField: DeepwinterField | null;
   /** The haunting overlay if its package is in the manifest, else null — the engine
    *  reads hauntOn() to field the grief-anchor + the apparition stream in a held zone;
    *  the kill-handler rows call onAnchorBroken()/resolveHaunt() back. It owns the
@@ -356,6 +363,7 @@ export class WorldSim {
     this.brigandField = surface<BrigandField>('brigands') ?? null;
     this.hauntField = surface<HauntField>('haunting') ?? null;
     this.contagionField = surface<ContagionField>('contagion') ?? null;
+    this.deepwinterField = surface<DeepwinterField>('deepwinter') ?? null;
     this.verminfallField = surface<VerminfallField>('verminfall') ?? null;
     this.longCandleField = surface<LongCandleField>('longcandle') ?? null;
     this.holdfastField = surface<HoldfastField>('holdfast') ?? null;
