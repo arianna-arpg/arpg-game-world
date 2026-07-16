@@ -67,6 +67,11 @@ export const eventsTab: DevTabDef = {
       forceEvent('World Boss (manifests here)', (w, v, z) =>
         w.sim.worldBossFieldFor(w.zone.dimension)?.devManifest(v, z) ?? false),
       forceEvent('World Boss Lair (grows here)', (w, v, z) => w.sim.worldBossField?.devLair(v, z) ?? false),
+      // WRAITHSAIL: summon puts (or moves) the ghost ship onto open water
+      // near this zone (watch the map — the ⛵ traces the sea); dock forces
+      // her alongside THIS port so the court walks ashore on the next frame.
+      forceEvent('Wraithsail (summon near)', (w, v, z) => w.sim.wraithsailField?.devSummon(v, z) ?? false),
+      forceEvent('Wraithsail (dock here)', (w, v, z) => w.sim.wraithsailField?.devDock(v, z) ?? false),
     );
 
     // Incursion + incubation have bespoke signatures (a far landing / a counter).

@@ -1684,6 +1684,21 @@ interface DashConjureStash {
   look?: string;
 }
 
+/** The live voyage's run state (named so a Wraithsail boarding can stash and
+ *  restore it whole — see wraithsailSeaStash). */
+interface VoyageRun {
+  /** The harbor cast off from — the searoute records the crossing on landing. */
+  fromPortId: string;
+  /** Linger-at-shore accumulator (make landfall). */
+  landDwell: number;
+  /** Where the coast was last streamed — restream after a chunk of travel. */
+  lastStreamAt: Vec2;
+  /** Landing suppression right after cast-off. */
+  grace: number;
+  /** The hull sailed this voyage (resolved from the account at cast-off). */
+  ship: ShipDef;
+}
+
 export class World {
   actors: Actor[] = [];
   /** THE TIMEFLOW FABRIC (engine/timeflow.ts): every bend on the sim's
@@ -2239,18 +2254,17 @@ export class World {
    *  a boundless pseudo-zone streaming the continent field as coast. Entered
    *  at a port dock (dwell); exited by LANDING on any shore. Host-side state
    *  (clients render by zone id — see the `sailing` getter). */
-  private voyage: {
-    /** The harbor cast off from — the searoute records the crossing on landing. */
-    fromPortId: string;
-    /** Linger-at-shore accumulator (make landfall). */
-    landDwell: number;
-    /** Where the coast was last streamed — restream after a chunk of travel. */
-    lastStreamAt: Vec2;
-    /** Landing suppression right after cast-off. */
-    grace: number;
-    /** The hull sailed this voyage (resolved from the account at cast-off). */
-    ship: ShipDef;
-  } | null = null;
+  private voyage: VoyageRun | null = null;
+  /** A WRAITHSAIL BOARDING suspends the voyage (any non-sea load nulls it):
+   *  the run + boat position stash here and restore when the way-home stack
+   *  pops back onto the sea (the resurfaceFromDescent idiom). Cleared by any
+   *  surface load — a boarder who dies ashore has abandoned the crossing. */
+  private wraithsailSeaStash: { run: VoyageRun; pos: Vec2 } | null = null;
+  /** One sighting toast/ledger per voyage (reset at cast-off). */
+  private wraithsailSighted = false;
+  /** Docked shore parties already walked ashore (keyed ship:dockSeq —
+   *  cleared per loadZone, the deadwake-visit idiom). */
+  private materializedDocks = new Set<string>();
   /** At sea right now? Zone-keyed so co-op CLIENTS (render shells with no
    *  voyage state) draw boats + sea exactly like the host. */
   get sailing(): boolean { return this.zone.id === VOYAGE_ZONE_ID; }
@@ -3165,6 +3179,13 @@ export class World {
       this.crusadeRealmContext = null; // …nor a crusade sanctum
       this.fractureRealmContext = null; // …nor a fracture rift chamber
       this.necropolisRealmContext = null; // …nor the Necropolis arena (so the gate can re-open as it drifts)
+      // A surface load with a WRAITHSAIL boarding stashed means the crossing
+      // was abandoned ashore (death, a portal home) — drop the stash and let
+      // her sail on (the re-board cooldown arms either way).
+      if (this.wraithsailSeaStash) {
+        this.wraithsailSeaStash = null;
+        this.sim.wraithsailField?.onBoardingLeft();
+      }
       // LEAVING a DEFEATED Necropolis → the seat finally crumbles: disperse the
       // active tides, reset the cycle, and the icon vanishes (the cycle begins anew).
       if (this.sim.deadwakeField?.necropolisInfo()?.defeated) {
@@ -4093,6 +4114,23 @@ export class World {
       // sets descentRun before loadZone, so this fires on the first descent frame.)
       if (this.descentRun && this.descentRun.caveId === def.id) this.enterDescentZone();
     }
+    // RESUME A SUSPENDED VOYAGE: stepping off the Wraithsail's decks pops the
+    // way-home stack back onto the sea — re-arm the stashed run exactly where
+    // the boat was left (the resurfaceFromDescent idiom: any non-sea load
+    // nulled `voyage`, so the stash IS the crossing). Fresh cast-off grace so
+    // the hull's shadow can't dwell you straight back aboard, and the ghost
+    // ship releases her boarding hold (the re-board cooldown arms).
+    if (zoneId === VOYAGE_ZONE_ID && this.wraithsailSeaStash) {
+      const stash = this.wraithsailSeaStash;
+      this.wraithsailSeaStash = null;
+      this.voyage = stash.run;
+      this.voyage.grace = VOYAGE_CFG.castOffGrace;
+      this.voyage.landDwell = 0;
+      this.voyage.lastStreamAt = vec(Infinity, Infinity);
+      this.player.pos = vec(stash.pos.x, stash.pos.y);
+      this.sim.wraithsailField?.onBoardingLeft();
+      this.streamCoast(true);
+    }
   }
 
   /** THE ZONE-RUNTIME REGISTRY — one row per package's in-zone runtime, built
@@ -4155,6 +4193,12 @@ export class World {
         // relentless stream while a tide covers this zone) — reset only.
         id: 'deadwake',
         reset: () => { this.materializedDeadwakes.clear(); this.deadwakeStreamTimer = 0; this.necropolisPortals.length = 0; },
+      },
+      {
+        // THE WRAITHSAIL alongside walks her court ashore via the per-frame
+        // updateWraithsailDock (once per layover, never a stream) — reset only.
+        id: 'wraithsail',
+        reset: () => { this.materializedDocks.clear(); },
       },
       {
         // The herd pours via updateMigrationStream — reset only.
@@ -13574,6 +13618,7 @@ export class World {
       lastStreamAt: vec(Infinity, Infinity), grace: VOYAGE_CFG.castOffGrace,
       ship: shipOf(this.account),
     };
+    this.wraithsailSighted = false; // one horizon-toast per voyage
     bumpLedger(this.ledger, 'voyages_sailed'); // surfaces the Shipwright tier
     this.loadZone(VOYAGE_ZONE_ID, from.id);
     const a = this.oceanBearing(from.map);
@@ -13707,6 +13752,7 @@ export class World {
     if (this.player.dead || this.player.downed) return;
     run.grace = Math.max(0, run.grace - dt);
     this.streamCoast(false);
+    this.updateWraithsailAtSea();
     const shore = this.nearestShore();
     const dwellNeed = VOYAGE_CFG.landingDwell * run.ship.landingMul;
     if (shore && shore.gap <= VOYAGE_CFG.landingProbe && run.grace <= 0 && this.playerIdle()) {
@@ -13714,6 +13760,132 @@ export class World {
       if (run.landDwell >= dwellNeed) { this.landAshore(shore.d); return; }
     } else {
       run.landDwell = 0;
+    }
+  }
+
+  /** THE WRAITHSAIL AT SEA (host, sailing only): keep her GHOST HULL doodad
+   *  standing at her live sea position (non-blocking by design — boarding is
+   *  sailing into her shadow; the streamCoast keep-filter leaves non-landmass
+   *  kinds alone, so we own its lifecycle here), and call the sighting the
+   *  first time a voyage brings her over the horizon. The boarding dwell
+   *  itself rides the realm-gate pass (one dwell fabric for every threshold). */
+  private updateWraithsailAtSea(): void {
+    const wf = this.sim.wraithsailField;
+    const ship = wf?.shipInfo();
+    const idx = this.doodads.findIndex(d => d.kind === 'ghost_hull');
+    if (!wf || !ship || ship.mode === 'docked') {
+      if (idx >= 0) this.doodads.splice(idx, 1); // she's elsewhere (or nowhere)
+      return;
+    }
+    const at = this.seaFromNode({ x: ship.x, y: ship.y });
+    const near = dist(at, this.player.pos) <= VOYAGE_CFG.streamRadius * 2;
+    if (!near) {
+      if (idx >= 0) this.doodads.splice(idx, 1);
+      return;
+    }
+    if (idx >= 0) {
+      const d = this.doodads[idx];
+      d.pos.x = at.x; d.pos.y = at.y;
+      d.rot = ship.heading;
+    } else {
+      this.doodads.push({ pos: vec(at.x, at.y), radius: 64, kind: 'ghost_hull', rot: ship.heading });
+    }
+    // 'A ghost sail crosses the horizon…' — once per voyage, and the ledger
+    // the Vault unlock reads (wraithsail_seen) is bumped on the spot.
+    const dNodes = Math.hypot(ship.x - this.nodeFromSea(this.player.pos).x, ship.y - this.nodeFromSea(this.player.pos).y);
+    if (!this.wraithsailSighted && dNodes <= wf.surge().sightRadius) {
+      this.wraithsailSighted = true;
+      bumpLedger(this.ledger, 'wraithsail_seen');
+      this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+        'a ghost sail crosses the horizon — the WRAITHSAIL is abroad', '#7ad8d8', 16);
+    }
+  }
+
+  /** BOARD THE WRAITHSAIL (the voyage interception): stash the live voyage
+   *  (any non-sea load nulls it — the resurfaceFromDescent idiom), mint her
+   *  three decks as a chained realm (weather deck → hold → great cabin, one
+   *  shipdeck tileset staged by layoutParams.deck, real exits between rungs),
+   *  seat the TIDEBOUND REGENT behind a boss objective on the cabin, and step
+   *  aboard. The way home is the sea itself: the deck's south exit pops the
+   *  cave-return back onto the boat, and loadZone's resume hook re-arms the
+   *  voyage where it left off. */
+  private beginWraithsailBoarding(): void {
+    const wf = this.sim.wraithsailField;
+    const run = this.voyage;
+    const ship = wf?.shipInfo();
+    if (!wf || !run || !ship || !wf.boardable()) return;
+    const cfg = wf.surge();
+    wf.onBoarded();
+    bumpLedger(this.ledger, 'wraithsail_boarded');
+    this.wraithsailSeaStash = { run, pos: vec(this.player.pos.x, this.player.pos.y) };
+    // Deck levels price by the interception's radial coord — a far-sea
+    // Wraithsail is a deep-water fight, wherever you sailed from.
+    const level = Math.max(1, Math.max(this.zone.level, this.eventLevel({ x: ship.x, y: ship.y })));
+    const base = `cave_${ship.id}`;
+    const ids = { deck: `${base}_deck`, hold: `${base}_hold`, cabin: `${base}_cabin` };
+    if (!this.caveMap[ids.deck]) {
+      const seed = (this.manifest.seed ^ hashStr(ship.id)) >>> 0;
+      const deck = mintCave(this.zone, seed, ids.deck, cfg.tileset,
+        { layoutParams: { deck: 'weather' }, name: 'The Wraithsail — Weather Deck' });
+      const hold = mintCave(deck, (seed ^ 0x5ea) >>> 0, ids.hold, cfg.tileset,
+        { layoutParams: { deck: 'hold', coffers: cfg.cofferBand }, name: 'The Wraithsail — Hold' });
+      const cabin = mintCave(hold, (seed ^ 0xcab) >>> 0, ids.cabin, cfg.tileset,
+        { layoutParams: { deck: 'cabin' }, name: 'The Wraithsail — Great Cabin' });
+      deck.level = level;
+      hold.level = level + 1;
+      cabin.level = level + 2;
+      // The chain: each rung's south exit is the way back, the north exit
+      // presses deeper. The cabin's boss objective seals nothing extra (its
+      // one exit is the one you entered) — you may always flee the Regent.
+      deck.exits = [{ to: VOYAGE_ZONE_ID, side: 's' }, { to: ids.hold, side: 'n' }];
+      hold.exits = [{ to: ids.deck, side: 's' }, { to: ids.cabin, side: 'n' }];
+      cabin.exits = [{ to: ids.hold, side: 's' }];
+      cabin.objective = { kind: 'boss', id: cfg.regentId, levelBonus: 1, promote: { rarity: 'crowned' } };
+      this.caveMap[ids.deck] = deck;
+      this.caveMap[ids.hold] = hold;
+      this.caveMap[ids.cabin] = cabin;
+    }
+    this.caveReturn = { zoneId: this.zone.id, pos: vec(this.player.pos.x, this.player.pos.y), entryFrom: this.entryFrom };
+    this.loadZone(ids.deck, this.zone.id); // deliberately NO onNodeCharted — her decks are off-graph
+    this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+      'you come alongside and board the WRAITHSAIL — her crew keeps the old courtesies', '#7ad8d8', 17);
+    this.flashes.push({ pos: vec(this.player.pos.x, this.player.pos.y), radius: 150, color: cfg.color, life: 0.8, maxLife: 0.8 });
+  }
+
+  /** THE DOCKING (her only landfall): while the Wraithsail lies alongside
+   *  this port, the Drowned Court walks ashore ONCE per layover (keyed
+   *  ship:dockSeq — the deadwake once-per-visit idiom) as an event-scoped
+   *  party near the harbor planks; break the party to the last body and she
+   *  slips her mooring early. Never a stream, never a pour — a visit. */
+  private updateWraithsailDock(): void {
+    const wf = this.sim.wraithsailField;
+    if (!wf || this.inCave || this.zone.special) return;
+    const dock = wf.dockedOn(this.zone.id);
+    if (!dock) return;
+    const key = `${dock.id}:${dock.dockSeq}`;
+    if (!this.materializedDocks.has(key)) {
+      this.materializedDocks.add(key);
+      bumpLedger(this.ledger, 'wraithsail_seen'); // ashore counts as sighting her
+      const lvl = Math.max(1, this.zone.level + dock.partyLevelBonus);
+      const at = this.portDock()?.pos ?? this.farPoint(320);
+      const herald = this.spawnEventActor([{ id: dock.heraldId, weight: 1 }], lvl, 'enemy', 'deep', 'wraithsail_ashore');
+      this.promoteRarity(herald, 'rare');
+      herald.pos = this.findFreeSpot(this.clampPos(vec(at.x, at.y), 24), herald.radius);
+      const n = randInt(dock.partyCount[0], dock.partyCount[1]);
+      for (let i = 0; i < n; i++) {
+        const a = this.spawnEventActor(dock.party, lvl, 'enemy', 'deep', 'wraithsail_ashore');
+        a.pos = this.findFreeSpot(this.clampPos(this.clampNear(at, 150), 24), a.radius);
+      }
+      this.flashes.push({ pos: vec(at.x, at.y), radius: 140, color: dock.color, life: 0.8, maxLife: 0.8 });
+      this.text(vec(this.player.pos.x, this.player.pos.y - 70),
+        `the WRAITHSAIL lies alongside ${this.zone.name} — the Drowned Court walks ashore!`, '#bfe8ec', 18);
+    } else if (!this.actors.some(a => !a.dead && a.tag === 'wraithsail_ashore')) {
+      // The party is broken to the last — she wants no more of this harbor.
+      if (wf.onPartyBroken(this.zone.id)) {
+        bumpLedger(this.ledger, 'wraithsail_repelled');
+        this.text(vec(this.player.pos.x, this.player.pos.y - 60),
+          'the court is driven back to the water — the Wraithsail slips her mooring', '#bfe8ec', 16);
+      }
     }
   }
 
@@ -25188,6 +25360,7 @@ export class World {
     this.updateDemonStorm(dt);
     this.updateDeadwakeStream(dt);
     this.updateHauntStream(dt);
+    this.updateWraithsailDock();
     this.updateLongNight(dt);
     this.updateNecropolis();
     this.updateMigrationStream(dt);
@@ -26230,6 +26403,25 @@ export class World {
         for (const cp of this.crusadePortals) gates.push({ pos: cp.pos, kind: 'crusade', key: `crusade:${cp.crusadeId}`, enter: () => this.enterCrusadeSanctum(cp.crusadeId, cp.pos) });
         for (const np of this.necropolisPortals) gates.push({ pos: np.pos, kind: 'necropolis', key: 'necropolis', enter: () => this.enterNecropolis(np.pos) });
         for (const fr of this.fractureRifts) gates.push({ pos: fr.pos, kind: 'fracture', key: `fracture:${fr.id}`, enter: () => this.enterFractureRift(fr) });
+        // THE WRAITHSAIL at sea: cross her under sail — nose into her shadow
+        // and hold fast to BOARD. The boarding is a realm gate like any other
+        // threshold (its 'realm_gate:wraithsail' transit row sizes the
+        // hull-wide reach); interceptRadius gates the listing so the dwell
+        // only ever arms on a genuine crossing.
+        if (this.sailing) {
+          const wf = this.sim.wraithsailField;
+          const ship = wf?.shipInfo();
+          if (wf && ship && wf.boardable()) {
+            const boat = this.nodeFromSea(this.player.pos);
+            if (Math.hypot(ship.x - boat.x, ship.y - boat.y) <= wf.surge().interceptRadius) {
+              gates.push({
+                pos: this.seaFromNode({ x: ship.x, y: ship.y }), kind: 'wraithsail',
+                key: `wraithsail:${ship.id}`,
+                enter: () => this.beginWraithsailBoarding(),
+              });
+            }
+          }
+        }
         // Radius + dwell are per-KIND transit rows ('realm_gate:demon' chains to
         // the 'realm_gate' family) — a heavier gate can ask a longer, wider linger
         // with one data row.

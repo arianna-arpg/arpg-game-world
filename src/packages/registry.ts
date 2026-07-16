@@ -38,6 +38,7 @@ import { VENDETTA } from './defs/vendetta';
 import { VERMINFALL } from './defs/verminfall';
 import { WARBANDS } from './defs/warbands';
 import { WORLDBOSS } from './defs/worldboss';
+import { WRAITHSAIL } from './defs/wraithsail';
 import type { EncounterDef } from './encounters';
 import type { HoldfastDef } from './holdfast';
 import type { ContentPackage, FurnishSpec, UnlockRequirement } from './types';
@@ -73,6 +74,7 @@ export const PACKAGES: ContentPackage[] = [
   WORLDBOSS,
   PIT,
   UNSEALING,
+  WRAITHSAIL,
   FACTION_POLITICS,
 ];
 
@@ -112,6 +114,7 @@ const PACKAGE_MAGIC: Record<string, number> = {
   pit: 0x9147,
   worldboss: 0xb055,
   unsealing: 0x5ea1,
+  wraithsail: 0xb0a7,
 };
 
 function hashId(id: string): number {

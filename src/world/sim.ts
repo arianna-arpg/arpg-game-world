@@ -49,6 +49,7 @@ import type { BreachField } from '../packages/overlays/breach';
 import type { ExtractionField } from '../packages/overlays/extraction';
 import type { VendettaField } from '../packages/overlays/vendetta';
 import type { WorldBossField } from '../packages/overlays/worldboss';
+import type { WraithsailField } from '../packages/overlays/wraithsail';
 import { biomeOf, validateBiomeField, validateBiomeLayouts, validateBiomeClimate, BIOME_FIELD, BIOMES } from './biomes';
 import { boundaryGateIds } from '../data/boundaryGates';
 import { setClimateOrigin } from './climate';
@@ -237,6 +238,14 @@ export class WorldSim {
    *  materialize the sovereigns and the serpent's road blockade; non-surface
    *  instances (Ashvein below) resolve via worldBossFieldFor/-All. */
   readonly worldBossField: WorldBossField | null;
+  /** The wraithsail overlay if its package is in the manifest, else null —
+   *  the engine reads shipInfo()/boardable() to arm the at-sea boarding dwell
+   *  (and the ghost-hull sighting), dockedOn() to walk the Drowned Court
+   *  ashore at a layover, and calls onBoarded()/onBoardingLeft()/
+   *  onRegentSlain()/onPartyBroken() back. The sim bridges the weather
+   *  field's fronts in each tick (setFronts) so she can RIDE the storm —
+   *  overlays never see the weather themselves. */
+  readonly wraithsailField: WraithsailField | null;
   /** Per-faction favor earned from events and warlord kills. Persists per run. */
   readonly reputation = new Reputation();
   /** FACTION/WORLD WANTS (world/drives.ts): named slow meters — dread,
@@ -391,6 +400,7 @@ export class WorldSim {
     this.boroughField = surface<BoroughField>('borough') ?? null;
     this.vendettaField = surface<VendettaField>('vendetta') ?? null;
     this.worldBossField = surface<WorldBossField>('worldboss') ?? null;
+    this.wraithsailField = surface<WraithsailField>('wraithsail') ?? null;
     this.invasion.gate = (f) => this.warlord.canInvade(f);
     // Per-faction invasion launch scale = the governing package's pressure (0 if
     // no package governs it, or its package is off / below its start level).
@@ -489,6 +499,14 @@ export class WorldSim {
         .filter(([key]) => key.endsWith(suffix) && !key.startsWith('*'))
         .map(([key, v]) => [key.slice(0, key.length - suffix.length), v] as [string, number]));
     }
+    // WRAITHSAIL's weather bridge: hand the ghost ship this tick's fronts
+    // (position/velocity/radius in node space) BEFORE the overlays tick —
+    // she aligns to whichever storm covers her and rides it. Overlays never
+    // see the weather field itself (the markBloodmoon rule).
+    this.wraithsailField?.setFronts(this.weather.fronts.map(f => ({
+      x: f.pos.x, y: f.pos.y, vx: f.vel.x, vy: f.vel.y,
+      radius: f.radius, intensity: f.intensity,
+    })));
     for (const o of this.overlays) o.update(dt, this.scopedView(view, o.dimension));
     // …and drain settled/expired writs back ONTO the meters after: a settled
     // (or abandoned) writ breaks that people's anger to the surge's floor.
