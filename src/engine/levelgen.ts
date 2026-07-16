@@ -72,6 +72,7 @@ export type KnownDoodadKind =
   | 'bone_arch'  // a colossus rib breaking the sand — the bonepan's architecture
   | 'sun_awning' // a traveler's cloth fly on poles — walk-under SHADE (the heat's mercy)
   | 'vault_gate' // stairs under a half-swallowed lintel — DOWN into the buried vault (sidezone)
+  | 'sepulcher_gate' // a gilt-doored tomb stair between flanking plinths — DOWN into the Sepulcher Sands (sidezone)
   // THE MIRAGE KIT — the desert's lie: distant promises that scatter into
   // hot air when approached (brittle 'near' pops them; one sometimes objects)
   | 'mirage_oasis'   // water and palms that were never there
@@ -1058,6 +1059,9 @@ const DOODAD_RULES: Record<KnownDoodadKind, DoodadRule> = {
   // The buried village's way DOWN (sidezones.ts mints the vault) — the
   // ruin_gate contract in sandstone.
   vault_gate: { overlap: 'trigger', spacing: 500 },
+  // The tomb-dynasty's way DOWN (sidezones.ts mints the Sepulcher Sands) —
+  // the same contract under a gilt lintel.
+  sepulcher_gate: { overlap: 'trigger', spacing: 500 },
   // THE MIRAGE KIT: inert light, not matter — bodies and shots pass clean
   // through; walking close enough to KNOW pops the lie (brittle 'near', the
   // whole existing machinery: text, poof tint, and the caravan's ambush on
@@ -4424,6 +4428,7 @@ registerStamp('glass_shard', stampSingle('glass_shard', [8, 14]));
 registerStamp('bone_arch', stampSingle('bone_arch', [22, 34]));
 registerStamp('sun_awning', stampSingle('sun_awning', [26, 36]));
 registerStamp('vault_gate', stampSingle('vault_gate', [26, 32]));
+registerStamp('sepulcher_gate', stampSingle('sepulcher_gate', [26, 32]));
 registerStamp('mirage_oasis', stampSingle('mirage_oasis', [44, 62]));
 registerStamp('mirage_bastion', stampSingle('mirage_bastion', [50, 70]));
 registerStamp('mirage_caravan', stampSingle('mirage_caravan', [44, 60]));

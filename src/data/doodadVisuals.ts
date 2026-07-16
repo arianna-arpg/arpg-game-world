@@ -299,6 +299,19 @@ export const DOODAD_VISUALS: Record<string, DoodadVisualDef> = {
     },
     light: { radius: -2.2, color: '#e8b060', intensity: 0.32, flicker: 1.8 },
   },
+  // The tomb-dynasty's descent: the same sandstone mouth wearing its RANK —
+  // paler dressed stone, a gilt votive burning steadier than the vault's
+  // (someone still tends these doors), the throat black as interment.
+  sepulcher_gate: {
+    painter: 'caveMouth', order: 55,
+    params: {
+      color: '#8a7448', edge: '#b09660', material: 'stone',
+      glow: '#f0cc70', throat: '#0a0703',
+      teeth: {}, rubble: {},
+      label: 'the Sepulcher Sands',
+    },
+    light: { radius: -2.2, color: '#f0cc70', intensity: 0.38, flicker: 0.9 },
+  },
   // THE MIRAGE KIT: light, not matter — no shadow on purpose (a shadow is
   // exactly what a mirage cannot afford), drawn late so the lie sits over
   // the terrain it's telling you about.

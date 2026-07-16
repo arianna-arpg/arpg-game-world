@@ -124,6 +124,22 @@ registerSidezone({
   mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'buried_vault', { rollVariant: true }),
 });
 
+// --- THE SEPULCHER SANDS -------------------------------------------------------
+// The tomb-dynasty's descent (the sepulcher_site composition plants the
+// stair): under the deep desert-band zones, dune-country washes into
+// bone-country — the blend fabric's first consumer — with the Sand
+// Sarcophate garrisoning the run between. Each stair rolls its own face
+// (drifts / processional / sand-choked), so two descents in one erg read
+// as two wings of one necropolis. The 'sepulcher_entered' ledger key is
+// the dynasty's GATEWAY SEAM (the vault_entered pattern): the Unsealing
+// and any future package or Vault unlock simply name it.
+registerSidezone({
+  kind: 'sepulcher_gate',
+  dwell: 0.7,
+  ledgerOnEnter: 'sepulcher_entered',
+  mint: ({ parent, seed, id }) => mintCave(parent, seed, id, 'sepulcher_sands', { rollVariant: true }),
+});
+
 // --- THE CREVICE (the hollows fabric's way down) -------------------------------
 // A hollow seam gives way and the wall confesses a SHAFT (the crevice_hollow
 // reveal, data/hollows.ts): a registered mouth descending ONE STRATUM deeper —

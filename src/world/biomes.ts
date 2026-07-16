@@ -214,6 +214,15 @@ export const BIOMES: Record<string, BiomeInfo> = {
   // these halls; what the green sends down keeps them company.
   ruin: { patronFaction: 'undead', mapColor: '#5c6a4e', label: 'Sunken Ruin', spacing: 64,
     allowedLayouts: { dungeon: 2, edifice: 1.5, labyrinth: 1, plains: 0.5 } },
+  // THE SEPULCHER: the tomb-dynasty's own country under the deep desert —
+  // pocket-only (no field seat, no climate row): the sepulcher_gate sidezone
+  // mints it (the ossuary/ruin pattern). Registering the tag seats its
+  // PATRON — the Sand Sarcophate garrisons and rouses as the landlord, the
+  // wildlife gate keeps surface fauna out of the vaults — so any future
+  // surface seat is one line. Dune-country washing into bone-country is the
+  // blend fabric's work, not a second tag.
+  sepulcher: { patronFaction: 'sarcophate', mapColor: '#c9b078', label: 'Sepulcher', spacing: 64,
+    allowedLayouts: { dungeon: 2, plains: 1.5, labyrinth: 1 } },
   // RIFT: the demon war's WOUND — war-scar fields under hate-green light,
   // siege castles, and GORE-veined riverland (the land bleeds where it was
   // cut). Deliberately NO lava and NO caldera/lava_coast rolls: fire country

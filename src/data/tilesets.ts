@@ -837,6 +837,9 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'oasis_haven', chance: 0.25 },
       { composition: 'caravan_graveyard', chance: 0.2 },
       { composition: 'buried_village', chance: 0.18 },
+      // The dynasty interred deeper than the villages ever built — its own
+      // biomeDepth gate (0.45) stands most rim mints down anyway.
+      { composition: 'sepulcher_site', chance: 0.14 },
     ],
     layoutParams: {
       duneGap: [360, 520], duneCrestW: [20, 32], dunePans: [1, 2],
@@ -961,6 +964,8 @@ export const TILESETS: Record<string, TilesetDef> = {
       { composition: 'oasis_haven', chance: 0.42 },
       { composition: 'caravan_graveyard', chance: 0.3 },
       { composition: 'buried_village', chance: 0.3 },
+      // The erg heart is the dynasty's own acreage: most descents open here.
+      { composition: 'sepulcher_site', chance: 0.24 },
     ],
     layoutParams: {
       duneGap: [260, 380], duneCrestW: [26, 42], duneLee: 56,
@@ -1091,6 +1096,8 @@ export const TILESETS: Record<string, TilesetDef> = {
     compositions: [
       { composition: 'caravan_graveyard', chance: 0.25 },
       { composition: 'buried_village', chance: 0.2 },
+      // Glass preserves better than sand: the pan keeps its tomb doors.
+      { composition: 'sepulcher_site', chance: 0.16 },
     ],
     layoutParams: {
       duneGap: [560, 800], duneCrestW: [16, 24], duneLee: 30,
@@ -1384,6 +1391,137 @@ export const TILESETS: Record<string, TilesetDef> = {
         { id: 'skeleton_warrior', weight: 3 },
         { id: 'skeleton_archer', weight: 2 },
         { id: 'maggot_queen', weight: 1, presence: { from: 10, fadeIn: 5 } },
+      ],
+    },
+    spawnerId: 'bone_altar',
+    objectives: [
+      { kind: 'clear', weight: 3 },
+      { kind: 'spawners', weight: 1 },
+    ],
+  },
+
+  // SEPULCHER SANDS — the tomb-dynasty's country under the deep desert, and
+  // THE FIRST CONSUMER OF THE BLEND FABRIC: every pocket is dune-country
+  // washing into bone-country in ONE zone. The tileset's own kit is the
+  // desert-tomb end (drifted sand, sun-dried masonry); the OSSUARY tileset
+  // arrives as the blend partner — its bone furniture, charnel formations,
+  // pale palette and graveland dead all fold in along the weight field, so
+  // nothing of the bone kit is duplicated here. Each face rolls its own
+  // blend GEOMETRY: the base ramp deepens away from the way home, drifts
+  // tessellate, the procession draws a hard front line. Heavily garrisoned
+  // by the Sarcophate (the packs' native tally); reached only through the
+  // sepulcher_gate sidezone — never the frontier, never the cave pool.
+  sepulcher_sands: {
+    id: 'sepulcher_sands',
+    frontier: false, perfProbe: true,
+    sky: 'sheltered', // a tomb keeps its own weather — no swelter reaches down here
+    // Dune-country → bone-country, deepening away from the south way home
+    // (pockets exit s; axisY reads 0 at the deep north wall, so invert).
+    blend: {
+      with: 'ossuary',
+      field: { kind: 'axisY', params: { from: 0.12, to: 0.88 }, invert: true },
+      packs: 0.3, // the graveland cousins co-garrison the bone end (allies)
+    },
+    caveLayouts: { dungeon: 2, plains: 1.5, labyrinth: 1 },
+    layoutParams: {
+      interiorWall: 'sunkstone_wall', floorStyle: 'flagstone',
+      rooms: [6, 10], doorChance: 0.6, corridorCells: 2,
+    },
+    // A dynasty inters its secrets: walled stores and processional bypasses.
+    hollows: {
+      count: [1, 2],
+      table: { cache_hollow: 3, ambush_hollow: 1.5, passage_hollow: 2 },
+    },
+    nameFirst: ['Sepulcher', 'Interred', 'Dune-Sealed', 'Gilded', 'Dynastic', 'Sandlocked', 'Old-Dynasty', 'Wrapped', 'Provisioned', 'Sun-Denied'],
+    nameSecond: ['Sands', 'Vaults', 'Galleries', 'Processional', 'Antechambers', 'Reliquary', 'Tomb-Halls', 'Interments', 'Underhalls', 'Court'],
+    theme: {
+      ground: {
+        // The DESERT-TOMB end of the gradient (the ossuary's pale bone
+        // palette arrives via the blend): warm buried sandstone.
+        palette: ['#1f1810', '#2e2414', '#40321a', '#554422', '#6a5630'],
+        bias: 0.54, alpha: 0.55, speckles: 0.6,
+      },
+      ambientDark: 0.34,
+      ambientFx: [{ kind: 'motes', intensity: 0.4 }],
+      // The bone end breathes its own air: an occasional grave-mist bank
+      // (the fog fabric roams it zone-wide; the blend owns the FLOOR).
+      fog: { banks: [0, 1], kinds: [{ id: 'grave_mist' }] },
+      floor: '#181206', grid: '#221a0c', border: '#6a583a',
+      obstacle: '#5a4826', obstacleEdge: '#8a7040', accent: '#e8c060',
+      wall: '#3e3220', sand: '#c9a86a', water: '#2a5a6a', mud: '#241c10', chasm: '#080604',
+    },
+    sizeW: [1250, 1650], sizeH: [950, 1250], biome: 'sepulcher',
+    // The desert-tomb kit (the 'base' blend side — the ossuary brings the
+    // bones): drifted sand, dry-village masonry, provisions for the dead.
+    common: [
+      { kind: 'sand', count: [2, 4] },
+      { kind: 'rubble', count: [2, 4] },
+      { kind: 'clay_pots', count: [1, 3] },
+      { kind: 'burial_urn', count: [2, 4] },
+      { kind: 'brazier', count: [1, 3] },
+      { kind: 'secret_wall', count: [1, 2] },
+    ],
+    layout: [
+      { kind: 'broken_column', count: [2, 4] },
+      { kind: 'ruin_plinth', count: [1, 3] },
+      { kind: 'rocks', count: [2, 4], radius: [14, 30] },
+    ],
+    variants: [
+      // Drifts of bone-country THROUGH the dunes: the pockets tessellation.
+      { name: 'bone drifts', layout: [
+        { kind: 'sand', count: [2, 4] },
+        { kind: 'dune_crest', count: [2, 4] },
+        { kind: 'broken_column', count: [1, 3] },
+        { kind: 'rocks', count: [2, 4], radius: [14, 30] },
+      ], blend: {
+        with: 'ossuary',
+        field: { kind: 'pockets', params: { span: 300, coverage: 0.45 } },
+        packs: 0.3,
+      } },
+      // The PROCESSIONAL: a hard front line mid-zone — sandstone right up to
+      // the threshold, then the dynasty's pale halls (band sharpens the ramp).
+      { name: 'processional deep', layout: [
+        { kind: 'broken_column', count: [3, 5] },
+        { kind: 'ruin_plinth', count: [2, 4] },
+        { kind: 'brazier', count: [1, 2] },
+        // The dynasty's own furniture claims the bone end by name (the
+        // 'blend' WHERE field — an authored set-piece, not scatter luck).
+        { kind: 'formation', count: [1, 2], formation: 'reliquary_rows',
+          where: { field: 'blend', min: 0.6 }, blend: 'any' },
+      ], blend: {
+        with: 'ossuary',
+        field: { kind: 'axisY', params: { from: 0.2, to: 0.8 }, band: [0.35, 0.65], invert: true },
+        packs: 0.35,
+      } },
+      // Sand-choked: the desert is WINNING — bone country survives as lobes.
+      { name: 'sand-choked reliquary', layout: [
+        { kind: 'sand', count: [3, 6] },
+        { kind: 'dune_crest', count: [1, 3] },
+        { kind: 'clay_pots', count: [2, 4] },
+        { kind: 'rocks', count: [2, 4], radius: [14, 30] },
+      ], blend: {
+        with: 'ossuary',
+        field: { kind: 'noise', params: { scale: 480, coverage: 0.32 } },
+        packs: 0.2,
+      } },
+    ],
+    packs: {
+      count: [5, 7], size: [3, 5],
+      archetypes: [
+        { weight: 2, size: [6, 10] }, { weight: 5, size: [3, 5] }, { weight: 2, size: [1, 2] },
+      ],
+      // The Sarcophate garrison (the native tally) + the vaults' own vermin;
+      // the blend folds the ossuary's graveland dead in at the bone end's
+      // share. The husk is deliberately ABSENT — it only ever steps out of a
+      // cracked case. HARD floors on the deep court, per the family law.
+      table: [
+        { id: 'tomb_scarab', weight: 4 },
+        { id: 'sarcophate_legionary', weight: 4 },
+        { id: 'canopic_bearer', weight: 2, presence: { from: 6 } },
+        { id: 'sarcophagus_warden', weight: 1, presence: { from: 9 } },
+        { id: 'bronze_scarab', weight: 2 },
+        { id: 'sand_skitterer', weight: 2, presence: { to: 12, fadeOut: 5 } },
+        { id: 'giant_maggot', weight: 1, presence: { to: 14, fadeOut: 6 } },
       ],
     },
     spawnerId: 'bone_altar',
@@ -5124,6 +5262,7 @@ export const BIOME_LORE: Record<string, BiomeLore> = {
   saltflat:       { title: 'Glasspan',          blurb: 'A dead lake remembered as a floor — cracked white hardpan, lightning fused to glass, salt pillars for a forest, and no shade anywhere the sun can reach.' },
   jungle:         { title: 'Jungle',            blurb: 'Choked living thicket — walls of growth that block step, shot AND sight, cuttable throats plugged with brush and dens waiting behind them.' },
   buried_vault:   { title: 'Buried Vault',      blurb: 'A dead village’s underworks below the erg — dressed sandstone halls the dunes preserved, garrisoned by vermin, the risen, and whatever the urns were keeping.' },
+  sepulcher_sands: { title: 'Sepulcher Sands',  blurb: 'The tomb-dynasty’s country under the deep desert: dune-drift washing into bone-country hall by hall, and the Sand Sarcophate standing its eternal watch between them.' },
   sunken_ruin:    { title: 'Sunken Ruins',      blurb: 'A drowned city that followed you down through a ruin-gate — flooded halls where something old still keeps to its rooms.' },
   mire:           { title: 'The Mire',          blurb: 'A drowned graveland of standing swamp, poison bog and rotted timber — footing that pulls at you and water that hides its teeth.' },
   wasteland:      { title: 'Wasteland',         blurb: "The war-wound: ground the demon war tore through and never gave back — hate-lit rents, vitrified glass, and the Legion's toll-road furniture under a dread pall." },

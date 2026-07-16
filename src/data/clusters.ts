@@ -134,6 +134,26 @@ registerCluster({
   poi: true,
 });
 
+// THE SEPULCHER COURT: a tomb-dynasty forecourt the dunes never quite took —
+// a processional of plinths and braziers converging on the gilt stair DOWN
+// (sepulcher_gate = the sidezone mouth; 'sepulcher_entered' is the gateway
+// ledger). Reads RICHER than the sunken court on purpose: somebody's rank
+// survived the sand, and the votives are still lit.
+registerCluster({
+  id: 'sepulcher_court',
+  anchor: { radius: 28, kind: 'sepulcher_gate' },
+  pieces: [
+    { kind: 'sepulcher_gate', radius: [26, 30], count: [1, 1], ring: [0, 1], centerpiece: true },
+    { kind: 'brazier', radius: [8, 11], count: [2, 2], ring: [42, 56], rot: true, centerpiece: true },
+    { kind: 'ruin_plinth', radius: [12, 16], count: [2, 4], ring: [96, 156], rot: true },
+    { kind: 'broken_column', radius: [12, 17], count: [2, 4], ring: [110, 176], rot: true },
+    { kind: 'burial_urn', radius: [11, 15], count: [2, 4], ring: [64, 110], rot: true },
+    { kind: 'bone_pile', radius: [10, 16], count: [1, 3], ring: [118, 184] },
+    { kind: 'sand', radius: [22, 34], count: [1, 2], ring: [120, 190] },
+  ],
+  poi: true,
+});
+
 // THE HEART COURT (the Sanguine's set-piece): the country's own heart at
 // chamber scale — ONE colossal heart dead center, the blood it still pumps
 // pooled at its foot (ONE broad lobe — the haven_court mud lesson), veins

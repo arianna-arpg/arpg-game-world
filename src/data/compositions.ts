@@ -475,6 +475,24 @@ registerComposition({
   ],
 });
 
+// THE SEPULCHER SITE: a tomb-dynasty forecourt the deep desert never buried
+// all the way — plinth processional, tended votives, and the gilt stair DOWN
+// into the Sepulcher Sands (the sepulcher_gate sidezone; entering sets
+// 'sepulcher_entered' — the dynasty's gateway seam, and the Unsealing's).
+// Deeper country than the buried village: the dynasty interred its estates
+// where the erg runs oldest.
+registerComposition({
+  id: 'sepulcher_site',
+  when: { biomeDepth: { min: 0.45 } },
+  sites: [{ id: 'forecourt', radius: [160, 200] }],
+  pre: [{ kind: 'clearing', at: 'forecourt', count: [1, 1], radius: [60, 80] }],
+  post: [
+    { kind: 'cluster', cluster: 'sepulcher_court', at: 'forecourt', count: [1, 1] },
+    { kind: 'bone_pile', count: [1, 3], where: { field: 'radial', max: 0.6 } },
+    { kind: 'ruin_plinth', count: [1, 2], where: { field: 'noise', max: 0.4, params: { scale: 360, seed: 41 } } },
+  ],
+});
+
 // THE CARAVAN GRAVEYARD: the trade that stopped mid-stride — a wreck line
 // keeled over in file, urns spilled between (brittle: looting pays, and
 // sometimes objects), vultures' leavings everywhere. No gate, no relief:
